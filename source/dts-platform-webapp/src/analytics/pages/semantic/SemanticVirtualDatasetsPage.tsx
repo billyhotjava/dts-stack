@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { Button, Card, Popconfirm, Space, Table, Tag } from "antd";
+import { Button, Card, Popconfirm, Space, Tag } from "antd";
+import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, DeploymentUnitOutlined, EditOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
@@ -41,6 +42,7 @@ export default function SemanticVirtualDatasetsPage() {
 	const canPromote = roleSet.has("BI_DATA_ENGINEER") || roleSet.has("OP_ADMIN");
 	const [state, setState] = useState<LoadState<SemanticVirtualDataset[]>>({ state: "loading" });
 	const [promoteState, setPromoteState] = useState<LoadState<SemanticPromoteResult> | null>(null);
+	const [detailRow, setDetailRow] = useState<SemanticVirtualDataset | null>(null);
 
 	const load = useCallback(() => {
 		setState({ state: "loading" });
@@ -54,7 +56,7 @@ export default function SemanticVirtualDatasetsPage() {
 		load();
 	}, [load]);
 
-	const columns: ColumnsType<SemanticVirtualDataset> = [
+	const baseColumns: ColumnsType<SemanticVirtualDataset> = [
 		{
 			title: "名称",
 			dataIndex: "name",
@@ -89,8 +91,10 @@ export default function SemanticVirtualDatasetsPage() {
 		},
 		{
 			title: "操作",
+			dataIndex: "actions",
 			key: "actions",
-			width: 260,
+			width: 320,
+			fixed: "right",
 			render: (_value, record) => (
 				<Space>
 					<Link to={`/bi/virtual-datasets/${encodeURIComponent(String(record.id ?? ""))}`}>
@@ -128,6 +132,12 @@ export default function SemanticVirtualDatasetsPage() {
 		},
 	];
 
+	const columns = useMemo(
+		() => appendDetailAction(baseColumns, (row) => setDetailRow(row)),
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[canModel, canPromote],
+	);
+
 	return (
 		<div className="space-y-4">
 			<PageHeader
@@ -147,14 +157,21 @@ export default function SemanticVirtualDatasetsPage() {
 			{promoteState?.state === "error" && <ErrorNotice locale={locale} error={promoteState.error} />}
 
 			<Card title="我的虚拟数据集">
-				<Table
+				<CompactTable<SemanticVirtualDataset>
 					rowKey={(record) => String(record.id ?? Math.random())}
 					loading={state.state === "loading"}
 					columns={columns}
 					dataSource={state.state === "loaded" ? state.value : []}
-					pagination={state.state === "loaded" && state.value.length > 10 ? { pageSize: 10 } : false}
+					pagination={state.state === "loaded" && state.value.length > 10 ? undefined : false}
 				/>
 			</Card>
+			<RecordDetailDrawer<SemanticVirtualDataset>
+				open={detailRow !== null}
+				onClose={() => setDetailRow(null)}
+				record={detailRow}
+				columns={baseColumns}
+				title="虚拟数据集详情"
+			/>
 
 			{promoteState?.state === "loaded" && (
 				<Card title="最新提升草案">

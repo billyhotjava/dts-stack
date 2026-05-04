@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
-import { Alert, Button, Card, Col, Empty, Form, Input, Modal, Row, Select, Space, Table, Tag, Typography, message } from "antd";
+import { Alert, Button, Card, Col, Empty, Form, Input, Modal, Row, Select, Space, Tag, Typography, message } from "antd";
+import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { EditOutlined, FunctionOutlined, SaveOutlined, TableOutlined } from "@ant-design/icons";
 import type { Node } from "@xyflow/react";
@@ -82,6 +83,8 @@ export default function SemanticMetricDesignerPage() {
 	const [modalType, setModalType] = useState<"dimension" | "metric" | null>(null);
 	const [editingDimension, setEditingDimension] = useState<SemanticDimension | null>(null);
 	const [editingMetric, setEditingMetric] = useState<SemanticMetric | null>(null);
+	const [detailDimension, setDetailDimension] = useState<SemanticDimension | null>(null);
+	const [detailMetric, setDetailMetric] = useState<SemanticMetric | null>(null);
 
 	const loadSemanticData = () => {
 		setLoading(true);
@@ -291,13 +294,15 @@ export default function SemanticMetricDesignerPage() {
 		[draftMetrics],
 	);
 
-	const dimensionColumns: ColumnsType<SemanticDimension> = [
+	const dimensionBaseColumns: ColumnsType<SemanticDimension> = [
 		{ title: "维度", dataIndex: "name" },
 		{ title: "字段", dataIndex: "fieldName", render: (value) => value || "-" },
 		{ title: "类型", dataIndex: "semanticType", width: 120, render: (value) => value || "-" },
 		{
 			title: "操作",
-			width: 90,
+			dataIndex: "actions",
+			width: 160,
+			fixed: "right",
 			render: (_, row) => (
 				<Button size="small" icon={<EditOutlined />} onClick={() => openModal("dimension", row)}>
 					编辑
@@ -306,14 +311,22 @@ export default function SemanticMetricDesignerPage() {
 		},
 	];
 
-	const metricColumns: ColumnsType<SemanticMetric> = [
+	const dimensionColumns = useMemo(
+		() => appendDetailAction(dimensionBaseColumns, (row) => setDetailDimension(row)),
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[],
+	);
+
+	const metricBaseColumns: ColumnsType<SemanticMetric> = [
 		{ title: "指标", dataIndex: "name" },
 		{ title: "公式类型", dataIndex: "formulaType", width: 130, render: (value) => value || "-" },
 		{ title: "格式", dataIndex: "format", width: 110, render: (value) => value || "-" },
 		{ title: "状态", dataIndex: "status", width: 100, render: (value) => value || "-" },
 		{
 			title: "操作",
-			width: 90,
+			dataIndex: "actions",
+			width: 160,
+			fixed: "right",
 			render: (_, row) => (
 				<Button size="small" icon={<EditOutlined />} onClick={() => openModal("metric", row)}>
 					编辑
@@ -321,6 +334,12 @@ export default function SemanticMetricDesignerPage() {
 			),
 		},
 	];
+
+	const metricColumns = useMemo(
+		() => appendDetailAction(metricBaseColumns, (row) => setDetailMetric(row)),
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[],
+	);
 
 	const openModal = (type: "dimension" | "metric", row?: SemanticDimension | SemanticMetric) => {
 		form.resetFields();
@@ -466,7 +485,7 @@ export default function SemanticMetricDesignerPage() {
 					<Row gutter={[16, 16]} className="mt-4">
 						<Col xs={24} lg={12}>
 							<Card title="已保存维度">
-								<Table<SemanticDimension>
+								<CompactTable<SemanticDimension>
 									rowKey="id"
 									size="small"
 									loading={loading}
@@ -478,7 +497,7 @@ export default function SemanticMetricDesignerPage() {
 						</Col>
 						<Col xs={24} lg={12}>
 							<Card title="已保存指标">
-								<Table<SemanticMetric>
+								<CompactTable<SemanticMetric>
 									rowKey="id"
 									size="small"
 									loading={loading}
@@ -552,6 +571,20 @@ export default function SemanticMetricDesignerPage() {
 					)}
 				</Form>
 			</Modal>
+			<RecordDetailDrawer<SemanticDimension>
+				open={detailDimension !== null}
+				onClose={() => setDetailDimension(null)}
+				record={detailDimension}
+				columns={dimensionBaseColumns}
+				title="维度详情"
+			/>
+			<RecordDetailDrawer<SemanticMetric>
+				open={detailMetric !== null}
+				onClose={() => setDetailMetric(null)}
+				record={detailMetric}
+				columns={metricBaseColumns}
+				title="指标详情"
+			/>
 		</div>
 	);
 }

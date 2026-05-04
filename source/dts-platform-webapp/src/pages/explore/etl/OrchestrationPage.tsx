@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Button, Card, Input, Select, Space, Table, Tag, Typography } from "antd";
+import { Button, Card, Input, Select, Space, Tag, Typography } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
@@ -494,7 +495,7 @@ export default function OrchestrationPage() {
 				}
 			>
 				{filteredJobs.length ? (
-					<Table
+					<CompactTable
 						rowKey="dagId"
 						loading={jobsLoading}
 						columns={jobColumns}
@@ -537,7 +538,7 @@ export default function OrchestrationPage() {
 					extra={selectedJob ? <Tag>{selectedJob.dagId}</Tag> : null}
 				>
 					{selectedDagId ? (
-						<Table
+						<CompactTable
 							rowKey="runId"
 							loading={runsLoading}
 							columns={runColumns}

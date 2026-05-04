@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Alert, Button, Card, Form, Input, Modal, Select, Space, Table, Tabs, Tag, Typography } from "antd";
+import { Alert, Button, Card, Form, Input, Modal, Select, Space, Tabs, Tag, Typography } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { BranchesOutlined, EyeOutlined, ProfileOutlined, ReloadOutlined } from "@ant-design/icons";
 import { EmptyState } from "@/components/empty-state";
@@ -649,7 +650,7 @@ export default function AssetDetailPage() {
 					</Button>
 				</div>
 				{records.length ? (
-					<Table
+					<CompactTable
 						rowKey="id"
 						columns={columns}
 						dataSource={records}
@@ -744,7 +745,7 @@ export default function AssetDetailPage() {
 											<Tag>其他 {columnStatusStats.other}</Tag>
 										</div>
 									</div>
-									<Table
+									<CompactTable
 										rowKey="key"
 										columns={columnColumns}
 										dataSource={columnRows}

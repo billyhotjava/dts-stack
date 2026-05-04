@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Card, Select, Space, Table, Tag } from "antd";
+import { Button, Card, Select, Space, Tag } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { EyeOutlined } from "@ant-design/icons";
 import { CheckCircle2, RefreshCw, Shield, Workflow } from "lucide-react";
@@ -177,7 +178,7 @@ export default function Page() {
 					</Button>
 				</div>
 				{filteredTodos.length ? (
-					<Table
+					<CompactTable
 						rowKey={(record) => `${record.type}-${record.taskId || record.requestId || record.datasetId || record.title}`}
 						columns={columns}
 						dataSource={filteredTodos}

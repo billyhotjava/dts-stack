@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Button, Progress, Space, Table, Tag, Timeline, Typography } from "antd";
+import { Alert, Button, Progress, Space, Tag, Timeline, Typography } from "antd";
+import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { CheckCircle2, ClipboardCheck, DatabaseZap, RadioTower, RefreshCw, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router";
@@ -86,6 +87,7 @@ export default function ReleaseGovernancePage() {
 	const [remoteReadyForRelease, setRemoteReadyForRelease] = useState<boolean | null>(null);
 	const [remoteCheckRows, setRemoteCheckRows] = useState<CheckRow[]>([]);
 	const [sources, setSources] = useState<Record<string, Sprint27SourceStatus>>({});
+	const [detailRow, setDetailRow] = useState<CheckRow | null>(null);
 
 	const loadData = async () => {
 		setLoading(true);
@@ -221,7 +223,7 @@ export default function ReleaseGovernancePage() {
 
 	const passedCount = checkRows.filter((row) => row.passed).length;
 
-	const columns: ColumnsType<CheckRow> = [
+	const baseColumns: ColumnsType<CheckRow> = [
 		{ title: "域", dataIndex: "area", key: "area", width: 110, render: (value) => <Tag>{value}</Tag> },
 		{ title: "检查项", dataIndex: "name", key: "name" },
 		{ title: "结果", dataIndex: "passed", key: "passed", width: 100, render: (value) => <Tag color={value ? "green" : "red"}>{value ? "通过" : "未通过"}</Tag> },
@@ -230,8 +232,10 @@ export default function ReleaseGovernancePage() {
 		{ title: "级别", dataIndex: "severity", key: "severity", width: 120, render: (value) => <Tag color={value === "BLOCKER" ? "red" : "orange"}>{value}</Tag> },
 		{
 			title: "操作",
+			dataIndex: "action",
 			key: "action",
-			width: 100,
+			width: 160,
+			fixed: "right",
 			render: (_, record) => (
 				<Button type="link" size="small" onClick={() => navigate(record.path)}>
 					进入
@@ -239,6 +243,12 @@ export default function ReleaseGovernancePage() {
 			),
 		},
 	];
+
+	const columns = useMemo(
+		() => appendDetailAction(baseColumns, (row) => setDetailRow(row)),
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[],
+	);
 
 	return (
 		<div className="space-y-6">
@@ -307,7 +317,7 @@ export default function ReleaseGovernancePage() {
 			</div>
 
 			<PlatformSectionCard title="发布检查清单" bodyClassName="pt-0">
-				<Table
+				<CompactTable<CheckRow>
 					rowKey="key"
 					loading={loading}
 					columns={columns}
@@ -317,6 +327,13 @@ export default function ReleaseGovernancePage() {
 				/>
 				{checkRows.length ? null : <Typography.Text type="secondary">暂无检查项。</Typography.Text>}
 			</PlatformSectionCard>
+			<RecordDetailDrawer<CheckRow>
+				open={detailRow !== null}
+				onClose={() => setDetailRow(null)}
+				record={detailRow}
+				columns={baseColumns}
+				title="检查项详情"
+			/>
 		</div>
 	);
 }

@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router";
 import { ApiOutlined, CodeOutlined, DatabaseOutlined, EyeOutlined, FunctionOutlined, UploadOutlined } from "@ant-design/icons";
-import { MarkerType, type Edge, type Node } from "@xyflow/react";
 import { Button, Descriptions, Drawer, Input, Segmented, Select, Space, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { toast } from "sonner";
@@ -420,46 +419,6 @@ export function useLineageData(impact: ImpactResult | null, keyword: string) {
 		return columnLineagesRaw.filter((row) => `${row.upstreamColumn || ""} ${row.downstreamColumn || ""} ${row.relationType || ""} ${row.lineageType || ""} ${row.confidence || ""} ${row.projectName || ""} ${row.expression || ""}`.toLowerCase().includes(keywordLower));
 	}, [columnLineagesRaw, keywordLower]);
 	return { nodes, edges, columnLineages };
-}
-
-export function buildFlowElements(nodes: ImpactNode[], edges: ImpactEdge[], layoutDirection: LayoutDirection, selectedNode?: ImpactNode | null) {
-	const positions = applyLayeredLayout(nodes, edges, layoutDirection);
-	const selectedId = selectedNode?.id;
-	const adjacent = new Set<string>();
-	if (selectedId) {
-		for (const edge of edges) {
-			const from = edgeEndpoint(edge, "from");
-			const to = edgeEndpoint(edge, "to");
-			if (from === selectedId && to) adjacent.add(to);
-			if (to === selectedId && from) adjacent.add(from);
-		}
-	}
-	const rfNodes: Node[] = nodes.map((n, idx) => {
-		const position = n.id ? positions.get(n.id) : undefined;
-		const tone = nodeTone(n);
-		const isDimmed = Boolean(selectedId) && n.id !== selectedId && !adjacent.has(n.id || "");
-		return {
-			id: n.id ?? (n.db && n.table ? `${n.db}.${n.table}` : `node-${idx}`),
-			position: position ?? { x: idx * 220, y: 0 },
-			data: { label: renderNodeLabel(n) },
-			style: { width: NODE_SIZE.width, minHeight: NODE_SIZE.height, background: tone.bg, border: `1px solid ${tone.border}`, borderRadius: n.kind === "job" ? 12 : 6, padding: "6px 8px", opacity: isDimmed ? 0.35 : 1, boxShadow: n.id === selectedId ? `0 0 0 2px ${tone.border}` : "none" },
-		};
-	});
-	const rfEdges: Edge[] = edges
-		.filter((e) => edgeEndpoint(e, "from") && edgeEndpoint(e, "to"))
-		.map((e, i) => ({
-			id: e.id ?? `e-${i}`,
-			source: edgeEndpoint(e, "from")!,
-			target: edgeEndpoint(e, "to")!,
-			type: "smoothstep",
-			label: edgeLabel(e),
-			labelStyle: { fontSize: 10, fill: "#595959", fontWeight: 600 },
-			labelBgPadding: [6, 3] as [number, number],
-			labelBgBorderRadius: 4,
-			style: { stroke: relationStroke(e.relationType), strokeWidth: e.relationType === "MANUAL" ? 1.2 : 1.8, strokeDasharray: String(e.verificationStatus || "").toUpperCase() === "KNOWN_UNVERIFIED" || e.relationType === "MANUAL" ? "4 4" : undefined },
-			markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
-		}));
-	return { rfNodes, rfEdges };
 }
 
 export const nodeColumns: ColumnsType<ImpactNode> = [

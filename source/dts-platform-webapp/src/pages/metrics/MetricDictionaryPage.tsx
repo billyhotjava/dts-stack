@@ -15,11 +15,11 @@ import {
 	Select,
 	Space,
 	Steps,
-	Table,
 	Tag,
 	Tabs,
 	Typography,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router";
@@ -1095,7 +1095,7 @@ export default function Page() {
 				<Divider />
 				<Typography.Text strong>最近 {overview.hours} 小时失败分类 TopN</Typography.Text>
 				{overview.failureTop.length > 0 ? (
-					<Table
+					<CompactTable
 						size="small"
 						pagination={false}
 						rowKey={(row) => `${row.category}-${row.count}`}
@@ -1111,7 +1111,7 @@ export default function Page() {
 				)}
 				<Divider />
 				<Typography.Text strong>最近 7 天校验趋势（按天）</Typography.Text>
-				<Table
+				<CompactTable
 					size="small"
 					pagination={{ pageSize: 7 }}
 					rowKey={(row) => String(row.bucketStart)}
@@ -1192,7 +1192,7 @@ export default function Page() {
 											新增指标
 										</Button>
 									</Space>
-									<Table
+									<CompactTable
 										rowKey={(record) => record.id}
 										columns={indicatorColumns}
 										dataSource={indicators}
@@ -1235,7 +1235,7 @@ export default function Page() {
 											新增维度
 										</Button>
 									</Space>
-									<Table
+									<CompactTable
 										rowKey={(record) => record.id}
 										columns={dimensionColumns}
 										dataSource={dimensions}
@@ -1491,7 +1491,7 @@ export default function Page() {
 						</>
 					) : null}
 					{previewRows.length > 0 ? (
-						<Table
+						<CompactTable
 							size="small"
 							rowKey={(row) => row.key}
 							columns={previewColumns}
@@ -1522,7 +1522,7 @@ export default function Page() {
 					{Array.isArray(publishPreviewPayload?.blockingIssues) && publishPreviewPayload.blockingIssues.length > 0 ? (
 						<>
 							<Typography.Text strong>阻断项</Typography.Text>
-							<Table
+							<CompactTable
 								size="small"
 								pagination={false}
 								rowKey={(_, index) => String(index)}
@@ -1540,7 +1540,7 @@ export default function Page() {
 					{Array.isArray(publishPreviewPayload?.warningIssues) && publishPreviewPayload.warningIssues.length > 0 ? (
 						<>
 							<Typography.Text strong>告警项</Typography.Text>
-							<Table
+							<CompactTable
 								size="small"
 								pagination={false}
 								rowKey={(_, index) => String(index)}
@@ -1565,7 +1565,7 @@ export default function Page() {
 					<Typography.Text strong>引用检查</Typography.Text>
 					{Array.isArray(publishPreviewPayload?.referenceCheck) &&
 					publishPreviewPayload.referenceCheck.length > 0 ? (
-						<Table
+						<CompactTable
 							size="small"
 							pagination={false}
 							rowKey={(_, index) => String(index)}
@@ -1593,7 +1593,7 @@ export default function Page() {
 					<Typography.Text strong>与上次发布差异</Typography.Text>
 					{Array.isArray(publishPreviewPayload?.changesSinceLastPublish) &&
 					publishPreviewPayload.changesSinceLastPublish.length > 0 ? (
-						<Table
+						<CompactTable
 							size="small"
 							pagination={false}
 							rowKey={(_, index) => String(index)}
@@ -1651,7 +1651,7 @@ export default function Page() {
 							比较
 						</Button>
 					</Space>
-					<Table
+					<CompactTable
 						size="small"
 						rowKey={(row, idx) => `${row.field || "f"}-${idx}`}
 						loading={versionDiffLoading}
@@ -1676,7 +1676,7 @@ export default function Page() {
 					/>
 					<Divider />
 					<Typography.Text strong>版本时间线</Typography.Text>
-					<Table
+					<CompactTable
 						size="small"
 						rowKey={(row) =>
 							String(row.id || `${row.version || "unknown"}-${row.createdDate || row.releasedAt || "0"}`)
@@ -1780,7 +1780,7 @@ export default function Page() {
 							</Button>
 						</Space>
 					</Form>
-					<Table
+					<CompactTable
 						size="small"
 						rowKey={(row) => String(row.id || `${row.refType || "ref"}-${row.refTarget || "unknown"}`)}
 						dataSource={references}

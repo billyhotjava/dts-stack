@@ -8,9 +8,9 @@ import {
 	Modal,
 	Select,
 	Space,
-	Table,
 	Tag,
 } from "antd";
+import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, EditOutlined, DeleteOutlined, ExperimentOutlined } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
@@ -43,6 +43,7 @@ export default function Page() {
 	const [datasets, setDatasets] = useState<{ id: string; name: string }[]>([]);
 	const [testResult, setTestResult] = useState<any>(null);
 	const [testModal, setTestModal] = useState(false);
+	const [detailRow, setDetailRow] = useState<ApiServiceSummary | null>(null);
 
 	const datasetOptions = useMemo(
 		() => datasets.map((item) => ({ label: item.name, value: item.id })),
@@ -131,7 +132,7 @@ export default function Page() {
 		}
 	};
 
-	const columns: ColumnsType<ApiServiceSummary> = [
+	const baseColumns: ColumnsType<ApiServiceSummary> = [
 		{ title: "名称", dataIndex: "name", render: (v) => v || "-" },
 		{ title: "方法", dataIndex: "method", width: 90, render: (v) => <Tag>{v || "-"}</Tag> },
 		{ title: "路径", dataIndex: "path", render: (v) => v || "-" },
@@ -140,7 +141,9 @@ export default function Page() {
 		{ title: "近7日调用", dataIndex: "recentCalls", width: 120, render: (v) => v ?? 0 },
 		{
 			title: "操作",
-			width: 260,
+			dataIndex: "actions",
+			width: 320,
+			fixed: "right",
 			render: (_, record) => (
 				<Space>
 					<Button size="small" icon={<ExperimentOutlined />} onClick={() => tryInvoke(record.id)}>
@@ -157,6 +160,12 @@ export default function Page() {
 		},
 	];
 
+	const columns = useMemo(
+		() => appendDetailAction(baseColumns, (row) => setDetailRow(row)),
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[],
+	);
+
 	return (
 		<div className="space-y-6">
 			<PageHeader
@@ -168,7 +177,7 @@ export default function Page() {
 				}
 			/>
 			<Card>
-				<Table rowKey={(record) => record.id} columns={columns} dataSource={services} loading={loading} />
+				<CompactTable rowKey={(record) => record.id} columns={columns} dataSource={services} loading={loading} />
 			</Card>
 
 			<Modal
@@ -220,6 +229,13 @@ export default function Page() {
 			>
 				<pre className="whitespace-pre-wrap text-xs">{JSON.stringify(testResult, null, 2)}</pre>
 			</Modal>
+			<RecordDetailDrawer<ApiServiceSummary>
+				open={detailRow !== null}
+				onClose={() => setDetailRow(null)}
+				record={detailRow}
+				columns={baseColumns}
+				title="API 服务详情"
+			/>
 		</div>
 	);
 }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Progress, Space, Table, Tag, Timeline, Typography } from "antd";
+import { Button, Progress, Space, Tag, Timeline, Typography } from "antd";
+import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { BarChart3, BookOpenCheck, Boxes, CheckCircle2, Database, GitBranch, RadioTower, RefreshCw, Rocket } from "lucide-react";
 import { useNavigate } from "react-router";
@@ -108,6 +109,7 @@ export default function MetricOperationsPage() {
 	const [models, setModels] = useState<SemanticModel[]>([]);
 	const [runs, setRuns] = useState<SemanticModelRun[]>([]);
 	const [sources, setSources] = useState<Record<string, Sprint27SourceStatus>>({});
+	const [detailRow, setDetailRow] = useState<ConsumptionItem | null>(null);
 
 	const loadSnapshot = async () => {
 		setLoading(true);
@@ -183,7 +185,7 @@ export default function MetricOperationsPage() {
 		[failedRuns, metrics.length, models.length, overview.validationFailed],
 	);
 
-	const consumptionColumns: ColumnsType<ConsumptionItem> = [
+	const consumptionBaseColumns: ColumnsType<ConsumptionItem> = [
 		{ title: "能力", dataIndex: "name", key: "name" },
 		{ title: "层级", dataIndex: "layer", key: "layer", width: 110 },
 		{ title: "责任域", dataIndex: "owner", key: "owner", width: 150 },
@@ -203,11 +205,19 @@ export default function MetricOperationsPage() {
 		},
 		{
 			title: "操作",
+			dataIndex: "action",
 			key: "action",
-			width: 90,
+			width: 160,
+			fixed: "right",
 			render: (_, record) => <Button type="link" size="small" onClick={() => navigate(record.path)}>进入</Button>,
 		},
 	];
+
+	const consumptionColumns = useMemo(
+		() => appendDetailAction(consumptionBaseColumns, (row) => setDetailRow(row)),
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[],
+	);
 
 	return (
 		<div className="space-y-6">
@@ -315,7 +325,7 @@ export default function MetricOperationsPage() {
 				</PlatformSectionCard>
 
 				<PlatformSectionCard title="消费链路" bodyClassName="pt-0">
-					<Table
+					<CompactTable<ConsumptionItem>
 						rowKey="key"
 						size="small"
 						columns={consumptionColumns}
@@ -324,6 +334,13 @@ export default function MetricOperationsPage() {
 					/>
 				</PlatformSectionCard>
 			</div>
+			<RecordDetailDrawer<ConsumptionItem>
+				open={detailRow !== null}
+				onClose={() => setDetailRow(null)}
+				record={detailRow}
+				columns={consumptionBaseColumns}
+				title="消费链路详情"
+			/>
 		</div>
 	);
 }

@@ -4,7 +4,8 @@ import { analyticsApi, type CardListItem, type DashboardListItem } from "../api/
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Button, Card, Input, Space, Spin, Table, Tag } from "antd";
+import { Button, Card, Input, Space, Spin, Tag } from "antd";
+import { CompactTable } from "@/components/table";
 import { PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
@@ -181,7 +182,7 @@ export default function CollectionsPage() {
 						{filteredCards.length === 0 ? (
 							<EmptyState title={t(locale, "common.empty")} />
 						) : (
-							<Table<CardListItem>
+							<CompactTable<CardListItem>
 								columns={cardColumns}
 								dataSource={filteredCards}
 								rowKey={(r) => r.id}
@@ -215,7 +216,7 @@ export default function CollectionsPage() {
 						{filteredDashboards.length === 0 ? (
 							<EmptyState title={t(locale, "common.empty")} />
 						) : (
-							<Table<DashboardListItem>
+							<CompactTable<DashboardListItem>
 								columns={dashColumns}
 								dataSource={filteredDashboards}
 								rowKey={(r) => r.id}

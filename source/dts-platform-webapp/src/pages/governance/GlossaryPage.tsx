@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Button, Card, Descriptions, Divider, Drawer, Form, Input, List, Modal, Space, Spin, Table, Typography } from "antd";
+import { Button, Card, Descriptions, Divider, Drawer, Form, Input, List, Modal, Space, Spin, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { EyeOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
+import { CompactTable } from "@/components/table";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import {
 	createGlossaryTerm,
@@ -213,6 +214,9 @@ export default function GlossaryPage() {
 		{ title: "负责人", dataIndex: "owner", render: (t) => t || "-" },
 		{
 			title: "操作",
+			dataIndex: "actions",
+			width: 240,
+			fixed: "right",
 			render: (_, row) => (
 				<Space>
 					<Button
@@ -269,13 +273,11 @@ export default function GlossaryPage() {
 				{items.length === 0 && !loading ? (
 					<EmptyState title="暂无术语" description="请先新增业务术语。" />
 				) : (
-					<Table
+					<CompactTable<GlossaryTerm>
 						rowKey={(row) => row.id || row.code || row.name || Math.random().toString(36)}
 						dataSource={items}
 						columns={columns}
 						loading={loading}
-						scroll={{ x: 1000 }}
-						pagination={{ pageSize: 10 }}
 					/>
 				)}
 			</Card>

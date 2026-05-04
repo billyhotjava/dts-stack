@@ -4,7 +4,8 @@ import { analyticsApi, type DashboardListItem } from "../api/analyticsApi";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Button, Card, Input, Modal, Space, Spin, Table, message } from "antd";
+import { Button, Card, Input, Modal, Space, Spin, message } from "antd";
+import { CompactTable } from "@/components/table";
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
@@ -149,7 +150,7 @@ export default function DashboardsPage() {
 					{filteredDashboards.length === 0 ? (
 						<EmptyState title={searchQuery ? t(locale, "common.noResults") : t(locale, "common.empty")} />
 					) : (
-						<Table<DashboardListItem>
+						<CompactTable<DashboardListItem>
 							columns={columns}
 							dataSource={filteredDashboards}
 							rowKey={(r) => r.id}

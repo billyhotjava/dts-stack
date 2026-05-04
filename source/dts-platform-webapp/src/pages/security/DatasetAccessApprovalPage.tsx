@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Button, Card, Descriptions, Drawer, Input, Modal, Select, Space, Table, Tabs, Tag, Typography } from "antd";
+import { Button, Card, Descriptions, Drawer, Input, Modal, Select, Space, Tabs, Tag, Typography } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { useCatalogManageAccess } from "@/hooks/useModuleManageAccess";
 import { PageHeader } from "@/components/page-header";
@@ -328,7 +329,7 @@ export default function Page() {
 											onChange={(value) => setRequestsQuery((prev) => ({ ...prev, page: 1, status: value || undefined }))}
 										/>
 									</Space>
-									<Table
+									<CompactTable
 										rowKey={(record) => record.id}
 										dataSource={requestsPage.content}
 										columns={requestColumns}
@@ -372,7 +373,7 @@ export default function Page() {
 											批量驳回
 										</Button>
 									</Space>
-									<Table
+									<CompactTable
 										rowKey={(record) => record.task?.id}
 										rowSelection={{
 											selectedRowKeys: selectedPendingRowKeys,
@@ -418,7 +419,7 @@ export default function Page() {
 											onChange={(value) => setDoneQuery((prev) => ({ ...prev, page: 1, status: value || undefined }))}
 										/>
 									</Space>
-									<Table
+									<CompactTable
 										rowKey={(record) => record.task?.id}
 										dataSource={donePage.content}
 										columns={doneColumns}
@@ -481,7 +482,7 @@ export default function Page() {
 					</Descriptions>
 
 					<Card title="审批链路" size="small" loading={detailLoading}>
-						<Table
+						<CompactTable
 							rowKey={(row) => row?.id || `${row?.stepOrder || 0}-${row?.approverRole || "NA"}`}
 							dataSource={Array.isArray(detail?.steps) ? detail?.steps : []}
 							pagination={false}

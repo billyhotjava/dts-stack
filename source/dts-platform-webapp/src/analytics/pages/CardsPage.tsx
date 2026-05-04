@@ -4,7 +4,8 @@ import { analyticsApi, type CardListItem } from "../api/analyticsApi";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Button, Card, Input, Modal, Select, Space, Spin, Table, Tag, message } from "antd";
+import { Button, Card, Input, Modal, Select, Space, Spin, Tag, message } from "antd";
+import { CompactTable } from "@/components/table";
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, UploadOutlined, FolderOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
@@ -145,7 +146,7 @@ function BatchImportCardsModal({
 			)}
 		>
 			{results ? (
-				<Table
+				<CompactTable
 					size="small"
 					dataSource={results}
 					rowKey="name"
@@ -192,7 +193,7 @@ function BatchImportCardsModal({
 						</Button>
 					</div>
 					{files.length > 0 && (
-						<Table
+						<CompactTable
 							size="small"
 							dataSource={files}
 							rowKey="name"
@@ -489,7 +490,7 @@ export default function CardsPage() {
 										}
 									/>
 								) : (
-									<Table<CardListItem>
+									<CompactTable<CardListItem>
 										columns={columns}
 										dataSource={filteredCards}
 										rowKey={(r) => r.id}

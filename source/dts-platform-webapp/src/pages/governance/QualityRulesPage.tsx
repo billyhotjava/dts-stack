@@ -14,11 +14,11 @@ import {
 	Select,
 	Switch,
 	Space,
-	Table,
 	Tabs,
 	Tag,
 	Typography,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, PlayCircleOutlined, DeleteOutlined, EditOutlined, EyeOutlined } from "@ant-design/icons";
 import { useSearchParams } from "react-router";
@@ -761,7 +761,7 @@ export default function Page() {
 				title="规则试跑结果"
 				width={980}
 			>
-				<Table
+				<CompactTable
 					rowKey={(row) => row.id || Math.random().toString(36)}
 					dataSource={dryRunRows}
 					pagination={false}
@@ -887,7 +887,7 @@ export default function Page() {
 						重置筛选
 					</Button>
 				</div>
-				<Table
+				<CompactTable
 					rowKey={(record) => record.id}
 					columns={columns}
 					dataSource={filteredRules}

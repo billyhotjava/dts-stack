@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Input, Progress, Select, Space, Table, Tag, Timeline, Typography } from "antd";
+import { Button, Input, Progress, Select, Space, Tag, Timeline, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import { AlertTriangle, Boxes, CheckCircle2, DatabaseZap, GitBranch, RadioTower, RefreshCw, Send, TimerReset } from "lucide-react";
 import { useNavigate } from "react-router";
 import {
@@ -63,6 +64,7 @@ export default function PlatformEventObservabilityPage() {
 	const [eventType, setEventType] = useState("");
 	const [status, setStatus] = useState("");
 	const [dispatchStatus, setDispatchStatus] = useState("");
+	const [detailRow, setDetailRow] = useState<PlatformEventDto | null>(null);
 
 	const loadData = async (
 		nextPage = 0,
@@ -147,7 +149,7 @@ export default function PlatformEventObservabilityPage() {
 		void loadData(0, page.size, { dispatchStatus: value });
 	};
 
-	const columns: ColumnsType<PlatformEventDto> = [
+	const baseColumns: ColumnsType<PlatformEventDto> = [
 		{
 			title: "事件",
 			dataIndex: "eventType",
@@ -169,6 +171,12 @@ export default function PlatformEventObservabilityPage() {
 		{ title: "发生时间", dataIndex: "occurredAt", key: "occurredAt", width: 190, render: formatDateTime },
 		{ title: "错误", dataIndex: "dispatchError", key: "dispatchError", width: 220, ellipsis: true, render: (v) => v || "-" },
 	];
+
+	const columns = useMemo(
+		() => appendDetailAction(baseColumns, (row) => setDetailRow(row)),
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[],
+	);
 
 	return (
 		<div className="space-y-6">
@@ -295,20 +303,26 @@ export default function PlatformEventObservabilityPage() {
 						重置
 					</Button>
 				</div>
-				<Table
+				<CompactTable<PlatformEventDto>
 					rowKey={(record) => record.id || record.eventId || ""}
 					loading={loading}
 					columns={columns}
 					dataSource={page.content || []}
 					pagination={{
 						current: (page.page || 0) + 1,
-						pageSize: page.size || 20,
+						pageSize: page.size || 10,
 						total: page.total || 0,
-						showSizeChanger: true,
 						onChange: (nextPage, nextSize) => void loadData(nextPage - 1, nextSize),
 					}}
 				/>
 			</PlatformSectionCard>
+			<RecordDetailDrawer<PlatformEventDto>
+				open={detailRow !== null}
+				onClose={() => setDetailRow(null)}
+				record={detailRow}
+				columns={baseColumns}
+				title="事件详情"
+			/>
 		</div>
 	);
 }

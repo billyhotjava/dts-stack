@@ -9,10 +9,10 @@ import {
 	Modal,
 	Select,
 	Space,
-	Table,
 	Tabs,
 	Tag,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import { InboxOutlined, UploadOutlined, DownloadOutlined } from "@ant-design/icons";
 import { Upload } from "@/components/upload";
 import type { UploadFile } from "antd/es/upload/interface";
@@ -371,7 +371,7 @@ const BatchImportModal = ({
 					</Button>
 				}
 			>
-				<Table
+				<CompactTable
 					dataSource={results.map((r, i) => ({ ...r, key: i }))}
 					columns={resultColumns}
 					size="small"
@@ -458,7 +458,7 @@ const BatchImportModal = ({
 									<Button icon={<UploadOutlined />}>选择 SQL 文件</Button>
 								</Upload>
 								{fileRows.length > 0 && (
-									<Table
+									<CompactTable
 										dataSource={fileRows}
 										columns={fileColumns}
 										size="small"

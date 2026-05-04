@@ -1,6 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Button, Card, DatePicker, Form, Input, Modal, Radio, Select, Space, Table, Tag, Popconfirm } from "antd";
+import { Button, Card, DatePicker, Form, Input, Modal, Radio, Select, Space, Tag, Popconfirm } from "antd";
+import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { listAssetGrants, createAssetGrant, deleteAssetGrant } from "@/api/platformApi";
 
@@ -44,6 +45,7 @@ export default function AssetGrantPage() {
 	const [searchType, setSearchType] = useState("TABLE");
 	const [searchId, setSearchId] = useState("");
 	const [grantModal, setGrantModal] = useState(false);
+	const [detailRow, setDetailRow] = useState<AssetGrant | null>(null);
 	const [form] = Form.useForm();
 
 	const loadGrants = useCallback(async () => {
@@ -92,7 +94,7 @@ export default function AssetGrantPage() {
 		}
 	};
 
-	const columns: ColumnsType<AssetGrant> = [
+	const baseColumns: ColumnsType<AssetGrant> = [
 		{ title: "被授权人类型", dataIndex: "granteeType", key: "granteeType", width: 100,
 			render: (v: string) => <Tag color={v === "USER" ? "blue" : v === "ROLE" ? "green" : "orange"}>{v}</Tag> },
 		{ title: "被授权人", dataIndex: "granteeId", key: "granteeId" },
@@ -102,13 +104,19 @@ export default function AssetGrantPage() {
 			render: (v?: string) => v ? new Date(v).toLocaleDateString() : "永久" },
 		{ title: "授权者", dataIndex: "grantedBy", key: "grantedBy", width: 120 },
 		{ title: "原因", dataIndex: "grantReason", key: "grantReason", ellipsis: true },
-		{ title: "操作", key: "action", width: 80,
+		{ title: "操作", dataIndex: "actions", key: "action", width: 160, fixed: "right",
 			render: (_: any, record: AssetGrant) => (
 				<Popconfirm title="确定要撤销此授权吗？" onConfirm={() => handleRevoke(record.id)}>
 					<Button type="link" size="small" danger>撤销</Button>
 				</Popconfirm>
 			)},
 	];
+
+	const columns = useMemo(
+		() => appendDetailAction(baseColumns, (row) => setDetailRow(row)),
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[],
+	);
 
 	return (
 		<div className="space-y-4">
@@ -126,7 +134,7 @@ export default function AssetGrantPage() {
 				</Space>
 
 				{searchId && (
-					<Table<AssetGrant>
+					<CompactTable<AssetGrant>
 						rowKey="id" columns={columns} dataSource={grants}
 						loading={loading} size="small" pagination={false}
 					/>
@@ -154,6 +162,13 @@ export default function AssetGrantPage() {
 					</Form.Item>
 				</Form>
 			</Modal>
+			<RecordDetailDrawer<AssetGrant>
+				open={detailRow !== null}
+				onClose={() => setDetailRow(null)}
+				record={detailRow}
+				columns={baseColumns}
+				title="授权详情"
+			/>
 		</div>
 	);
 }

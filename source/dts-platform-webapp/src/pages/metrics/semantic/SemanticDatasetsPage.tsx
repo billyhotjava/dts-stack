@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
-import { Alert, Button, Card, Col, Empty, Form, Input, Modal, Row, Segmented, Select, Space, Table, Tag, Typography, message } from "antd";
+import { Alert, Button, Card, Col, Empty, Form, Input, Modal, Row, Segmented, Select, Space, Tag, Typography, message } from "antd";
+import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { CodeOutlined, DashboardOutlined, EditOutlined, PartitionOutlined, PlayCircleOutlined, PlusOutlined, SaveOutlined } from "@ant-design/icons";
 import type { Node } from "@xyflow/react";
@@ -51,6 +52,7 @@ export default function SemanticDatasetsPage() {
 	const [modelMetrics, setModelMetrics] = useState<string[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [artifactLoading, setArtifactLoading] = useState(false);
+	const [detailRow, setDetailRow] = useState<SemanticModel | null>(null);
 	const [saving, setSaving] = useState(false);
 	const [modalOpen, setModalOpen] = useState(false);
 	const [previewLoading, setPreviewLoading] = useState(false);
@@ -207,14 +209,16 @@ export default function SemanticDatasetsPage() {
 		[metricNameById, modelMetrics],
 	);
 
-	const modelColumns: ColumnsType<SemanticModel> = [
+	const modelBaseColumns: ColumnsType<SemanticModel> = [
 		{ title: "模型", dataIndex: "name" },
 		{ title: "类型", dataIndex: "type", width: 90, render: (value) => value || "-" },
 		{ title: "表名", dataIndex: "tableName", render: (value) => value || "-" },
 		{ title: "状态", dataIndex: "status", width: 110, render: (value) => value || "-" },
 		{
 			title: "操作",
-			width: 90,
+			dataIndex: "actions",
+			width: 160,
+			fixed: "right",
 			render: (_, row) => (
 				<Button size="small" icon={<EditOutlined />} onClick={() => openModelModal(row)}>
 					编辑
@@ -222,6 +226,12 @@ export default function SemanticDatasetsPage() {
 			),
 		},
 	];
+
+	const modelColumns = useMemo(
+		() => appendDetailAction(modelBaseColumns, (row) => setDetailRow(row)),
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[],
+	);
 
 	const artifactColumns: ColumnsType<SemanticGeneratedArtifact> = [
 		{ title: "类型", dataIndex: "artifactType", width: 130, render: (value) => value || "-" },
@@ -379,7 +389,7 @@ export default function SemanticDatasetsPage() {
 								/>
 							</Form.Item>
 						</Form>
-						<Table<SemanticModel>
+						<CompactTable<SemanticModel>
 							rowKey="id"
 							size="small"
 							loading={loading}
@@ -461,7 +471,7 @@ export default function SemanticDatasetsPage() {
 
 					<Card className="mt-4" title="生成物">
 						{artifacts.length ? (
-							<Table<SemanticGeneratedArtifact>
+							<CompactTable<SemanticGeneratedArtifact>
 								rowKey="id"
 								size="small"
 								pagination={{ pageSize: 4 }}
@@ -532,7 +542,7 @@ export default function SemanticDatasetsPage() {
 						<Alert type="warning" showIcon message="预览执行失败" description={previewResult.errorMessage || "请检查来源表、Join 条件和字段口径。"} />
 					) : null}
 					<Input.TextArea readOnly rows={8} value={previewResult?.sql || ""} />
-					<Table<Record<string, any>>
+					<CompactTable<Record<string, any>>
 						size="small"
 						rowKey={(_, index) => String(index)}
 						columns={previewColumns}
@@ -545,6 +555,13 @@ export default function SemanticDatasetsPage() {
 					</Text>
 				</Space>
 			</Modal>
+			<RecordDetailDrawer<SemanticModel>
+				open={detailRow !== null}
+				onClose={() => setDetailRow(null)}
+				record={detailRow}
+				columns={modelBaseColumns}
+				title="模型详情"
+			/>
 		</div>
 	);
 }

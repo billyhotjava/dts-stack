@@ -37,7 +37,7 @@ public class PlatformInboundServiceAuthProperties {
     private Map<String, String> trustedServices = new LinkedHashMap<>();
 
     /**
-     * 兼容开关:开启时回退到 Sprint-27 行为(仅校验 X-DTS-Service header 在白名单内即注入 OP_ADMIN)。
+     * 兼容开关:开启时回退到 Sprint-27 行为(仅校验 X-DTS-Service header 在白名单内即注入服务 principal)。
      * 默认 false。production 严禁开启,启动时会输出 WARN。
      */
     private boolean legacyHeaderOnlyMode = false;

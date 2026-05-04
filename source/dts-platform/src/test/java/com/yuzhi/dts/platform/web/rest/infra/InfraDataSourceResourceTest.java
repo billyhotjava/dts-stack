@@ -92,7 +92,7 @@ class InfraDataSourceResourceTest {
     @Test
     void runtimeDetailRejectsServicePrincipalWithoutMatchingServiceToken() {
         UUID id = UUID.randomUUID();
-        authenticate("service:dts-ingestion", AuthoritiesConstants.OP_ADMIN);
+        authenticate("service:dts-ingestion", AuthoritiesConstants.SERVICE_INTERNAL);
 
         assertThatThrownBy(() -> resource.runtimeDetail(id, "wrong-secret"))
             .isInstanceOf(ResponseStatusException.class)
@@ -105,7 +105,7 @@ class InfraDataSourceResourceTest {
     @Test
     void runtimeDetailAllowsServicePrincipalWithServiceToken() {
         UUID id = UUID.randomUUID();
-        authenticate("service:dts-ingestion", AuthoritiesConstants.OP_ADMIN);
+        authenticate("service:dts-ingestion", AuthoritiesConstants.SERVICE_INTERNAL);
         InfraDataSourceDetailDto detail = new InfraDataSourceDetailDto(
             id,
             "erp-db",
@@ -133,7 +133,7 @@ class InfraDataSourceResourceTest {
     void runtimeDetailAllowsServicePrincipalWithDatabaseManagedServiceToken() {
         UUID id = UUID.randomUUID();
         properties.setSharedSecret(null);
-        authenticate("service:dts-ingestion", AuthoritiesConstants.OP_ADMIN);
+        authenticate("service:dts-ingestion", AuthoritiesConstants.SERVICE_INTERNAL);
         InfraDataSourceDetailDto detail = new InfraDataSourceDetailDto(
             id,
             "erp-db",

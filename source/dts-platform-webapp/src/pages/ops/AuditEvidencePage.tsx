@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Space, Table, Tag, Timeline, Typography } from "antd";
+import { Button, Space, Tag, Timeline, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import { CheckCircle2, FileSearch, RefreshCw, ShieldCheck, Sigma } from "lucide-react";
 import { useNavigate } from "react-router";
 import {
@@ -80,6 +81,7 @@ export default function AuditEvidencePage() {
 	const [rows, setRows] = useState<EvidenceRow[]>([]);
 	const [summary, setSummary] = useState<Record<string, any>>({});
 	const [sources, setSources] = useState<Record<string, Sprint27SourceStatus>>({});
+	const [detailRow, setDetailRow] = useState<EvidenceRow | null>(null);
 
 	const loadData = async () => {
 		setLoading(true);
@@ -141,7 +143,7 @@ export default function AuditEvidencePage() {
 		},
 	];
 
-	const columns: ColumnsType<EvidenceRow> = [
+	const baseColumns: ColumnsType<EvidenceRow> = [
 		{ title: "域", dataIndex: "domain", key: "domain", width: 120, render: (value) => <Tag>{value}</Tag> },
 		{ title: "动作", dataIndex: "action", key: "action", width: 140 },
 		{ title: "审计动作", dataIndex: "auditActionCode", key: "auditActionCode", ellipsis: true },
@@ -151,6 +153,12 @@ export default function AuditEvidencePage() {
 		{ title: "最近发生", dataIndex: "lastOccurredAt", key: "lastOccurredAt", width: 190, render: formatDateTime },
 		{ title: "最近事件", dataIndex: "lastEventId", key: "lastEventId", width: 220, ellipsis: true },
 	];
+
+	const columns = useMemo(
+		() => appendDetailAction(baseColumns, (row) => setDetailRow(row)),
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[],
+	);
 
 	return (
 		<div className="space-y-6">
@@ -198,15 +206,21 @@ export default function AuditEvidencePage() {
 			</div>
 
 			<PlatformSectionCard title="审计动作覆盖" bodyClassName="pt-0">
-				<Table
+				<CompactTable<EvidenceRow>
 					rowKey="key"
 					loading={loading}
 					columns={columns}
 					dataSource={rows}
-					pagination={{ pageSize: 20, showSizeChanger: true }}
 					scroll={{ x: 1100 }}
 				/>
 			</PlatformSectionCard>
+			<RecordDetailDrawer<EvidenceRow>
+				open={detailRow !== null}
+				onClose={() => setDetailRow(null)}
+				record={detailRow}
+				columns={baseColumns}
+				title="审计动作详情"
+			/>
 		</div>
 	);
 }

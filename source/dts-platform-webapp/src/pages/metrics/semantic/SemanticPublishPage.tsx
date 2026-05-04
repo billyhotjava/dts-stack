@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Button, Card, Col, Empty, Input, Modal, Row, Select, Space, Table, Tag, Typography, message } from "antd";
+import { Alert, Button, Card, Col, Empty, Input, Modal, Row, Select, Space, Tag, Typography, message } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { BranchesOutlined, CheckCircleOutlined, CloudUploadOutlined, DatabaseOutlined, SendOutlined, StopOutlined } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
@@ -243,7 +244,7 @@ export default function SemanticPublishPage() {
 								}))}
 								onChange={setSelectedModelId}
 							/>
-							<Table<SemanticModel>
+							<CompactTable<SemanticModel>
 								rowKey="id"
 								size="small"
 								pagination={{ pageSize: 6 }}
@@ -267,7 +268,7 @@ export default function SemanticPublishPage() {
 											<Text type="secondary">审核：{selectedModel.reviewedBy || "-"} {selectedModel.reviewedAt || ""}</Text>
 										</Space>
 										{selectedModel.reviewComment ? <Text>意见：{selectedModel.reviewComment}</Text> : null}
-										<Table<SemanticModelReviewLog>
+										<CompactTable<SemanticModelReviewLog>
 											rowKey="id"
 											size="small"
 											pagination={false}
@@ -282,7 +283,7 @@ export default function SemanticPublishPage() {
 									</Space>
 								</Card>
 							) : null}
-							<Table<SemanticGeneratedArtifact>
+							<CompactTable<SemanticGeneratedArtifact>
 								rowKey="id"
 								size="small"
 								pagination={false}

@@ -12,9 +12,9 @@ import {
 	Select,
 	Space,
 	Switch,
-	Table,
 	Tag,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import {
@@ -379,7 +379,7 @@ export default function ComplianceCenterPanel() {
 							: "当前账号为只读模式，仅可查看合规批次。"
 					}
 				/>
-				<Table rowKey={(record) => record.id || record.name || "batch"} columns={batchColumns} dataSource={batches} loading={loading} />
+				<CompactTable rowKey={(record) => record.id || record.name || "batch"} columns={batchColumns} dataSource={batches} loading={loading} />
 			</Space>
 
 			<Modal
@@ -437,7 +437,7 @@ export default function ComplianceCenterPanel() {
 							currentBatch?.failedItems || 0
 						}，待处理 ${currentBatch?.pendingItems || 0}`}
 					/>
-					<Table
+					<CompactTable
 						rowKey={(item) => item.id || item.ruleCode || Math.random().toString()}
 						columns={itemColumns}
 						dataSource={Array.isArray(currentBatch?.items) ? currentBatch?.items : []}

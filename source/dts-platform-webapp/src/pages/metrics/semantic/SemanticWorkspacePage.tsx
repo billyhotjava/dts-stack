@@ -15,11 +15,11 @@ import {
 	Space,
 	Statistic,
 	Steps,
-	Table,
 	Tag,
 	Typography,
 	message,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import {
 	BranchesOutlined,
@@ -1095,7 +1095,7 @@ export default function SemanticModelingCenterPage({ section = "overview" }: { s
 						)}
 					>
 						{domains.length ? (
-							<Table<SemanticSubjectDomain>
+							<CompactTable<SemanticSubjectDomain>
 								rowKey="id"
 								size="small"
 								loading={semanticLoading}
@@ -1125,7 +1125,7 @@ export default function SemanticModelingCenterPage({ section = "overview" }: { s
 				<Col xs={24} xl={17}>
 					<Card title="2. DWD 明细模型">
 						{dwdDatasets.length ? (
-							<Table<DatasetOption>
+							<CompactTable<DatasetOption>
 								rowKey="id"
 								size="small"
 								loading={datasetsLoading}
@@ -1340,7 +1340,7 @@ export default function SemanticModelingCenterPage({ section = "overview" }: { s
 						</Row>
 						{objects.length || dimensions.length ? (
 							<Space direction="vertical" className="w-full">
-								<Table<SemanticBusinessObject>
+								<CompactTable<SemanticBusinessObject>
 									rowKey="id"
 									size="small"
 									pagination={false}
@@ -1356,7 +1356,7 @@ export default function SemanticModelingCenterPage({ section = "overview" }: { s
 									]}
 									dataSource={objects}
 								/>
-								<Table<SemanticDimension>
+								<CompactTable<SemanticDimension>
 									rowKey="id"
 									size="small"
 									pagination={false}
@@ -1377,7 +1377,7 @@ export default function SemanticModelingCenterPage({ section = "overview" }: { s
 				<Col xs={24} xl={14}>
 					<Card title="4. 指标定义" extra={<Button size="small" type="primary" onClick={() => openModal("metric")}>新增指标</Button>}>
 						{visibleMetrics.length ? (
-							<Table<SemanticMetric>
+							<CompactTable<SemanticMetric>
 								rowKey="id"
 								size="small"
 								pagination={false}
@@ -1497,7 +1497,7 @@ export default function SemanticModelingCenterPage({ section = "overview" }: { s
 					</Col>
 					<Col xs={24} xl={16}>
 						{artifacts.length ? (
-							<Table<SemanticGeneratedArtifact>
+							<CompactTable<SemanticGeneratedArtifact>
 								rowKey="id"
 								size="small"
 								pagination={{ pageSize: 3 }}
@@ -1542,7 +1542,7 @@ export default function SemanticModelingCenterPage({ section = "overview" }: { s
 					>
 						{models.length || artifacts.length ? (
 							<Space direction="vertical" className="w-full">
-								<Table<SemanticModel>
+								<CompactTable<SemanticModel>
 									rowKey="id"
 									size="small"
 									pagination={false}
@@ -1572,7 +1572,7 @@ export default function SemanticModelingCenterPage({ section = "overview" }: { s
 												<Text type="secondary">审核：{selectedModel.reviewedBy || "-"} {selectedModel.reviewedAt || ""}</Text>
 											</Space>
 											{selectedModel.reviewComment ? <Text>意见：{selectedModel.reviewComment}</Text> : null}
-											<Table<SemanticModelReviewLog>
+											<CompactTable<SemanticModelReviewLog>
 												rowKey="id"
 												size="small"
 												pagination={false}
@@ -1587,7 +1587,7 @@ export default function SemanticModelingCenterPage({ section = "overview" }: { s
 										</Space>
 									</Card>
 								) : null}
-								<Table<SemanticGeneratedArtifact>
+								<CompactTable<SemanticGeneratedArtifact>
 									rowKey="id"
 									size="small"
 									pagination={false}
@@ -1654,7 +1654,7 @@ export default function SemanticModelingCenterPage({ section = "overview" }: { s
 					)}
 				>
 					{selectedModelId ? (
-						<Table<SemanticModelRun>
+						<CompactTable<SemanticModelRun>
 							rowKey="id"
 							size="small"
 							loading={runLoading}
@@ -1844,7 +1844,7 @@ export default function SemanticModelingCenterPage({ section = "overview" }: { s
 						<Alert type="warning" showIcon message="预览执行失败" description={previewResult.errorMessage || "请检查来源表、Join 条件和字段口径。"} />
 					) : null}
 					<Input.TextArea readOnly rows={8} value={previewResult?.sql || ""} />
-					<Table<Record<string, any>>
+					<CompactTable<Record<string, any>>
 						size="small"
 						rowKey={(_, index) => String(index)}
 						columns={previewColumns}

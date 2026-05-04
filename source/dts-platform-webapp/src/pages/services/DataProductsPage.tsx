@@ -8,10 +8,10 @@ import {
 	Modal,
 	Select,
 	Space,
-	Table,
 	Tag,
 	Typography,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, EditOutlined, DeleteOutlined, FileAddOutlined, EyeOutlined } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
@@ -203,7 +203,7 @@ export default function Page() {
 				}
 			/>
 			<Card>
-				<Table rowKey={(record) => record.id} columns={columns} dataSource={products} loading={loading} />
+				<CompactTable rowKey={(record) => record.id} columns={columns} dataSource={products} loading={loading} />
 			</Card>
 
 			<Modal

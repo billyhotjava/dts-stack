@@ -15,10 +15,10 @@ import {
 	Space,
 	Spin,
 	Switch,
-	Table,
 	Tag,
 	Typography,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { EmptyState } from "@/components/empty-state";
 import { useCatalogManageAccess } from "@/hooks/useModuleManageAccess";
@@ -884,7 +884,7 @@ export default function MetadataPage() {
 									) : null}
 									<div>
 										<Text type="secondary">字段列表</Text>
-										<Table
+										<CompactTable
 											size="small"
 											pagination={false}
 											columns={columnColumns}
@@ -906,7 +906,7 @@ export default function MetadataPage() {
 				title="采集历史"
 				extra={<Button onClick={() => selectedPipeline?.integration && loadRuns(selectedPipeline.integration)}>刷新</Button>}
 			>
-				<Table
+				<CompactTable
 					rowKey={(row) => row.id || `${row.startedAt}-${row.finishedAt}`}
 					columns={runColumns}
 					dataSource={runs}
@@ -982,7 +982,7 @@ export default function MetadataPage() {
 					</Space>
 				}
 			>
-				<Table
+				<CompactTable
 					rowKey={(row) => row.id || `${row.datasetId}-${row.hiveDatabase}-${row.hiveTable}-${row.createdDate}`}
 					columns={driftColumns}
 					dataSource={driftEvents}

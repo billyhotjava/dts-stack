@@ -15,6 +15,8 @@ import com.yuzhi.dts.platform.service.etl.DbtReleaseSubmissionService;
 import com.yuzhi.dts.platform.service.query.QueryGateway;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.sql.Types;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -401,15 +403,21 @@ public class SemanticModelingService {
 
     @Transactional(readOnly = true)
     public List<ModelDto> listModels(String type) {
+        String normalizedType = trimToNull(type);
+        String whereClause = normalizedType == null ? "" : " where upper(type) = upper(:type)";
+        MapSqlParameterSource queryParams = params();
+        if (normalizedType != null) {
+            queryParams.addValue("type", normalizedType);
+        }
         return jdbc.query(
-            """
+            ("""
             select id, object_id, type, name, table_name, description, grain, materialization, refresh_cycle, status,
                    review_status, submitted_by, submitted_at, reviewed_by, reviewed_at, review_comment
             from semantic_model
-            where (:type is null or upper(type) = upper(:type))
+            """ + whereClause + """
             order by last_modified_date desc nulls last, name asc
-            """,
-            params().addValue("type", trimToNull(type)),
+            """),
+            queryParams,
             (rs, rowNum) -> new ModelDto(
                 uuid(rs, "id"),
                 uuid(rs, "object_id"),
@@ -451,30 +459,93 @@ public class SemanticModelingService {
         );
         long dimensions = count("select count(*) from semantic_dimension");
         long metrics = count("select count(*) from semantic_metric");
+        long objectsWithDimensions = count("select count(distinct object_id) from semantic_dimension where object_id is not null");
+        long objectsWithMetrics = count("select count(distinct object_id) from semantic_metric where object_id is not null");
         long objectsWithVisualConfig = count(
             """
             select count(*) from (
-                select object_id from semantic_dimension
-                union
-                select object_id from semantic_metric
+                select distinct d.object_id
+                from semantic_dimension d
+                join semantic_metric m on m.object_id = d.object_id
+                where d.object_id is not null
             ) t
             """
         );
         long consumableModels = count("select count(*) from semantic_model where upper(type) in ('DWS','ADS')");
+        long modelsWithDimensionBindings = count("select count(distinct model_id) from semantic_model_dimension");
+        long modelsWithMetricBindings = count("select count(distinct model_id) from semantic_model_metric");
         long boundModels = count(
             """
             select count(*) from semantic_model m
-            where exists (select 1 from semantic_model_metric mm where mm.model_id = m.id)
+            where upper(m.type) in ('DWS','ADS')
+              and exists (select 1 from semantic_model_dimension md where md.model_id = m.id)
+              and exists (select 1 from semantic_model_metric mm where mm.model_id = m.id)
             """
         );
         long approvedModels = count("select count(*) from semantic_model where upper(coalesce(review_status, status, '')) in ('APPROVED','PUBLISHED')");
         long publishedModels = count("select count(*) from semantic_model where upper(coalesce(status, '')) = 'PUBLISHED'");
-        long biDatasets = count("select count(*) from semantic_generated_artifact where artifact_type = 'BI_DATASET' and status = 'REGISTERED'");
-        long lineages = count("select count(*) from semantic_generated_artifact where artifact_type = 'LINEAGE' and status = 'REGISTERED'");
+        long modelsWithDbtArtifacts = count(
+            """
+            select count(distinct model_id)
+            from semantic_generated_artifact
+            where artifact_type in ('DBT_SQL','DBT_SCHEMA_YML')
+              and upper(status) in ('GENERATED','PUBLISHED','REGISTERED')
+            """
+        );
+        long modelsWithPublishedDbt = count(
+            """
+            select count(distinct model_id)
+            from semantic_generated_artifact
+            where artifact_type in ('DBT_SQL','DBT_SCHEMA_YML')
+              and upper(status) = 'PUBLISHED'
+            """
+        );
+        long biDatasets = count("select count(*) from semantic_generated_artifact where artifact_type = 'BI_DATASET' and upper(status) = 'REGISTERED'");
+        long lineages = count("select count(*) from semantic_generated_artifact where artifact_type = 'LINEAGE' and upper(status) = 'REGISTERED'");
+        long modelsWithBiDataset = count(
+            """
+            select count(distinct model_id)
+            from semantic_generated_artifact
+            where artifact_type = 'BI_DATASET' and upper(status) = 'REGISTERED'
+            """
+        );
+        long modelsWithLineage = count(
+            """
+            select count(distinct model_id)
+            from semantic_generated_artifact
+            where artifact_type = 'LINEAGE' and upper(status) = 'REGISTERED'
+            """
+        );
+        long modelsWithReleaseClosure = count(
+            """
+            select count(*) from semantic_model m
+            where upper(m.type) in ('DWS','ADS')
+              and exists (
+                  select 1
+                  from semantic_generated_artifact a
+                  where a.model_id = m.id
+                    and a.artifact_type in ('DBT_SQL','DBT_SCHEMA_YML')
+                    and upper(a.status) = 'PUBLISHED'
+                  group by a.model_id
+                  having count(distinct a.artifact_type) >= 2
+              )
+              and exists (
+                  select 1
+                  from semantic_generated_artifact a
+                  where a.model_id = m.id and a.artifact_type = 'BI_DATASET' and upper(a.status) = 'REGISTERED'
+              )
+              and exists (
+                  select 1
+                  from semantic_generated_artifact a
+                  where a.model_id = m.id and a.artifact_type = 'LINEAGE' and upper(a.status) = 'REGISTERED'
+              )
+            """
+        );
         long runs = count("select count(*) from semantic_model_run");
         long failedRuns = count("select count(*) from semantic_model_run where upper(status) in ('FAILED','ERROR','BLOCKED','TIMEOUT')");
         long runningRuns = count("select count(*) from semantic_model_run where upper(status) in ('RUNNING','PENDING','SUBMITTED')");
         long modelsWithRuns = count("select count(distinct model_id) from semantic_model_run");
+        long modelsWithSuccessfulRuns = count("select count(distinct model_id) from semantic_model_run where upper(status) in ('SUCCESS','SUCCEEDED','COMPLETED')");
 
         List<Map<String, Object>> steps = List.of(
             step(
@@ -496,8 +567,8 @@ public class SemanticModelingService {
                 domains,
                 mappedDomains,
                 domains - mappedDomains,
-                domains > 0 ? "READY" : "EMPTY",
-                domains > 0 ? "主题域已接入语义建模" : "先创建或引用治理主题域"
+                domains > 0 && mappedDomains == domains ? "READY" : domains > 0 ? "PARTIAL" : "EMPTY",
+                mappedDomains == domains && domains > 0 ? "主题域已完成治理域映射" : "先创建或引用治理主题域，并补齐治理域映射"
             ),
             step(
                 "business-object-join",
@@ -507,7 +578,7 @@ public class SemanticModelingService {
                 objects,
                 objectsWithMappings,
                 Math.max(0, objects - objectsWithMainTable),
-                objectsWithMappings > 0 ? "READY" : objects > 0 ? "PARTIAL" : "EMPTY",
+                objects > 0 && objectsWithMappings == objects && objectsWithMainTable == objects ? "READY" : objectsWithMappings > 0 ? "PARTIAL" : "EMPTY",
                 objectsWithJoins > 0 ? "已有多表 JOIN 业务对象" : "至少为业务对象配置主表；多表对象需补 JOIN"
             ),
             step(
@@ -515,11 +586,11 @@ public class SemanticModelingService {
                 "指标可视化配置",
                 "/metrics/semantic/metrics",
                 "/api/semantic/metrics",
-                metrics,
+                objects,
                 objectsWithVisualConfig,
-                metrics == 0 ? 1 : 0,
-                metrics > 0 ? "READY" : "EMPTY",
-                metrics > 0 ? "指标与维度配置已接入" : "先拖拽或手工创建可视化指标"
+                Math.max(0, objects - objectsWithVisualConfig),
+                objects > 0 && objectsWithVisualConfig == objects ? "READY" : dimensions > 0 || metrics > 0 ? "PARTIAL" : "EMPTY",
+                objectsWithVisualConfig > 0 ? "业务对象已同时配置维度和指标" : "先为业务对象补齐维度与指标配置"
             ),
             step(
                 "dws-ads-datasets",
@@ -529,8 +600,8 @@ public class SemanticModelingService {
                 consumableModels,
                 boundModels,
                 Math.max(0, consumableModels - boundModels),
-                consumableModels > 0 ? "READY" : "EMPTY",
-                boundModels > 0 ? "已有可生成 dbt 的模型绑定" : "定义 DWS/ADS 并绑定指标"
+                consumableModels > 0 && boundModels == consumableModels ? "READY" : boundModels > 0 ? "PARTIAL" : "EMPTY",
+                boundModels > 0 ? "已有可生成 dbt 的模型绑定" : "定义 DWS/ADS 并同时绑定维度和指标"
             ),
             step(
                 "publish-lineage",
@@ -538,20 +609,20 @@ public class SemanticModelingService {
                 "/metrics/semantic/publish",
                 "/api/semantic/models/{id}/publish-dbt",
                 consumableModels,
-                publishedModels,
-                Math.max(0, consumableModels - approvedModels),
-                publishedModels > 0 ? "READY" : approvedModels > 0 ? "PARTIAL" : "EMPTY",
-                lineages > 0 && biDatasets > 0 ? "发布、BI 注册和血缘已形成闭环" : "审核通过后发布 dbt，并注册 BI/血缘"
+                modelsWithReleaseClosure,
+                Math.max(0, consumableModels - modelsWithReleaseClosure),
+                consumableModels > 0 && modelsWithReleaseClosure == consumableModels ? "READY" : approvedModels > 0 || modelsWithDbtArtifacts > 0 || modelsWithBiDataset > 0 || modelsWithLineage > 0 ? "PARTIAL" : "EMPTY",
+                modelsWithReleaseClosure > 0 ? "发布、BI 注册和血缘已形成闭环" : "审核通过后发布 dbt，并注册 BI/血缘"
             ),
             step(
                 "model-run-monitoring",
                 "模型运行监控",
                 "/metrics/semantic/runs",
                 "/api/semantic/models/{id}/runs",
-                runs,
-                modelsWithRuns,
+                consumableModels > 0 ? consumableModels : runs,
+                modelsWithSuccessfulRuns,
                 failedRuns,
-                runs > 0 ? (failedRuns > 0 ? "WARN" : "READY") : "EMPTY",
+                failedRuns > 0 ? "WARN" : consumableModels > 0 && modelsWithSuccessfulRuns == consumableModels ? "READY" : modelsWithRuns > 0 ? "PARTIAL" : "EMPTY",
                 runningRuns > 0 ? "存在运行中模型，关注调度结果" : "发布后触发模型运行形成监控记录"
             )
         );
@@ -564,13 +635,27 @@ public class SemanticModelingService {
                 "businessObjects", objects,
                 "dimensions", dimensions,
                 "metrics", metrics,
+                "objectsWithDimensions", objectsWithDimensions,
+                "objectsWithMetrics", objectsWithMetrics,
+                "objectsWithVisualConfig", objectsWithVisualConfig,
                 "consumableModels", consumableModels,
+                "modelsWithDimensionBindings", modelsWithDimensionBindings,
+                "modelsWithMetricBindings", modelsWithMetricBindings,
+                "boundModels", boundModels,
                 "approvedModels", approvedModels,
                 "publishedModels", publishedModels,
+                "modelsWithDbtArtifacts", modelsWithDbtArtifacts,
+                "modelsWithPublishedDbt", modelsWithPublishedDbt,
                 "biDatasets", biDatasets,
                 "lineages", lineages,
+                "modelsWithBiDataset", modelsWithBiDataset,
+                "modelsWithLineage", modelsWithLineage,
+                "modelsWithReleaseClosure", modelsWithReleaseClosure,
                 "runs", runs,
-                "failedRuns", failedRuns
+                "failedRuns", failedRuns,
+                "runningRuns", runningRuns,
+                "modelsWithRuns", modelsWithRuns,
+                "modelsWithSuccessfulRuns", modelsWithSuccessfulRuns
             ),
             "steps",
             steps,
@@ -865,6 +950,7 @@ public class SemanticModelingService {
 
     public RegisterBiDatasetResult registerBiDataset(UUID modelId) {
         ModelDto model = getModel(modelId);
+        validateModelPublished(model, "注册 BI 数据集");
         BusinessObjectDto object = model.objectId() == null ? null : getBusinessObject(model.objectId());
         if (object == null) {
             throw new IllegalArgumentException("模型未绑定业务对象，无法注册 BI 数据集");
@@ -903,6 +989,7 @@ public class SemanticModelingService {
 
     public RegisterLineageResult registerLineage(UUID modelId) {
         ModelDto model = getModel(modelId);
+        validateModelPublished(model, "写入血缘");
         BusinessObjectDto object = model.objectId() == null ? null : getBusinessObject(model.objectId());
         if (object == null) {
             throw new IllegalArgumentException("模型未绑定业务对象，无法写入血缘");
@@ -958,7 +1045,28 @@ public class SemanticModelingService {
             false,
             true
         );
-        DbtReleaseSubmissionService.DbtReleaseSubmitResult result = dbtReleaseSubmissionService.submit(submitRequest, activeDept);
+        DbtReleaseSubmissionService.DbtReleaseSubmitResult result;
+        try {
+            result = dbtReleaseSubmissionService.submit(submitRequest, activeDept);
+        } catch (IllegalArgumentException ex) {
+            UUID runId = insertModelRun(
+                modelId,
+                defaultValue(request == null ? null : request.runType(), "DBT_RUN"),
+                selector,
+                null,
+                null,
+                "BLOCKED",
+                actor,
+                ex.getMessage(),
+                toJson(Map.of(
+                    "selector", selector,
+                    "status", "BLOCKED",
+                    "blockers", List.of(ex.getMessage()),
+                    "warnings", List.of()
+                ))
+            );
+            return getModelRun(runId);
+        }
         String status = result.blocking() ? "BLOCKED" : defaultValue(result.status(), "SUBMITTED");
         String message = buildRunMessage(result);
         UUID runId = insertModelRun(
@@ -1407,7 +1515,7 @@ public class SemanticModelingService {
             return "{{ ref('" + safeIdentifier(object.mainTable()) + "') }}";
         }
         String primary = mappings.stream()
-            .filter(item -> "PRIMARY".equalsIgnoreCase(defaultValue(item.tableRole(), "")))
+            .filter(item -> isPrimaryMappingRole(item.tableRole()))
             .findFirst()
             .map(ObjectTableMappingDto::tableName)
             .orElse(object.mainTable());
@@ -1433,7 +1541,7 @@ public class SemanticModelingService {
 
     private void appendJoinClauses(StringBuilder from, List<ObjectTableMappingDto> mappings, boolean dbtRef) {
         for (ObjectTableMappingDto mapping : mappings) {
-            if ("PRIMARY".equalsIgnoreCase(defaultValue(mapping.tableRole(), ""))) continue;
+            if (isPrimaryMappingRole(mapping.tableRole())) continue;
             if (!StringUtils.hasText(mapping.tableName()) || !StringUtils.hasText(mapping.joinExpression())) continue;
             String joinType = joinKeyword(mapping.tableRole());
             String tableRef = dbtRef
@@ -1510,7 +1618,17 @@ public class SemanticModelingService {
             case "count_if" -> "sum(case when " + conditionSql(formula) + " then 1 else 0 end)";
             case "sum_if" -> "sum(case when " + conditionSql(formula) + " then " + safeField(required(readText(formula, "field"), "metric field")) + " else 0 end)";
             case "ratio" -> ratioSql(formula);
-            default -> "sum(" + safeField(required(readText(formula, "field"), "metric field")) + ")";
+            case "sql", "custom", "expression" -> safeMetricExpression(
+                firstText(formula, "expression", "sql", "expr", "formula"),
+                "metric expression"
+            );
+            default -> {
+                String expression = firstText(formula, "expression", "sql", "expr", "formula");
+                if (StringUtils.hasText(expression)) {
+                    yield safeMetricExpression(expression, "metric expression");
+                }
+                yield "sum(" + safeField(required(readText(formula, "field"), "metric field")) + ")";
+            }
         };
     }
 
@@ -1566,6 +1684,15 @@ public class SemanticModelingService {
         return node.get(field).asText();
     }
 
+    private String firstText(JsonNode node, String... fields) {
+        if (fields == null) return null;
+        for (String field : fields) {
+            String value = readText(node, field);
+            if (StringUtils.hasText(value)) return value;
+        }
+        return null;
+    }
+
     private boolean hasAggregateMetric(List<MetricDto> metrics) {
         return !metrics.isEmpty();
     }
@@ -1591,27 +1718,57 @@ public class SemanticModelingService {
     }
 
     private void updateModelReview(UUID modelId, String status, String reviewStatus, String submittedBy, String reviewedBy, String comment) {
-        jdbc.update(
+        String normalizedSubmittedBy = trimToNull(submittedBy);
+        String normalizedReviewedBy = trimToNull(reviewedBy);
+        StringBuilder sql = new StringBuilder(
             """
             update semantic_model
             set status = :status,
                 review_status = :reviewStatus,
-                submitted_by = coalesce(:submittedBy, submitted_by),
-                submitted_at = case when :submittedBy is null then submitted_at else :now end,
-                reviewed_by = :reviewedBy,
-                reviewed_at = case when :reviewedBy is null then null else :now end,
-                review_comment = :comment,
-                last_modified_date = :now
-            where id = :id
-            """,
-            params()
-                .addValue("id", modelId)
-                .addValue("status", status)
-                .addValue("reviewStatus", reviewStatus)
-                .addValue("submittedBy", trimToNull(submittedBy))
-                .addValue("reviewedBy", trimToNull(reviewedBy))
-                .addValue("comment", comment)
+            """
         );
+        MapSqlParameterSource updateParams = params()
+            .addValue("id", modelId)
+            .addValue("status", status)
+            .addValue("reviewStatus", reviewStatus)
+            .addValue("comment", comment, Types.VARCHAR);
+        if (normalizedSubmittedBy != null) {
+            sql.append(
+                """
+                    submitted_by = :submittedBy,
+                    submitted_at = cast(:now as timestamp),
+                    reviewed_by = null,
+                    reviewed_at = null,
+                """
+            );
+            updateParams.addValue("submittedBy", normalizedSubmittedBy, Types.VARCHAR);
+        }
+        if (normalizedReviewedBy != null) {
+            sql.append(
+                """
+                    reviewed_by = :reviewedBy,
+                    reviewed_at = cast(:now as timestamp),
+                """
+            );
+            updateParams.addValue("reviewedBy", normalizedReviewedBy, Types.VARCHAR);
+        }
+        sql.append(
+            """
+                review_comment = :comment,
+                last_modified_date = cast(:now as timestamp)
+            where id = :id
+            """
+        );
+        jdbc.update(
+            sql.toString(),
+            updateParams
+        );
+    }
+
+    private void validateModelPublished(ModelDto model, String action) {
+        if (model == null || !"PUBLISHED".equalsIgnoreCase(defaultValue(model.status(), ""))) {
+            throw new IllegalArgumentException("模型未发布，不能" + action);
+        }
     }
 
     private void appendReviewLog(UUID modelId, String action, String actor, String comment) {
@@ -1741,7 +1898,7 @@ public class SemanticModelingService {
     }
 
     private MapSqlParameterSource params() {
-        return new MapSqlParameterSource().addValue("now", Instant.now());
+        return new MapSqlParameterSource().addValue("now", Timestamp.from(Instant.now()));
     }
 
     private MapSqlParameterSource metricParams(UUID id, MetricRequest request) {
@@ -1840,6 +1997,28 @@ public class SemanticModelingService {
             throw new IllegalArgumentException("Join 条件包含不支持的字符");
         }
         return normalized;
+    }
+
+    private static String safeMetricExpression(String value, String fieldName) {
+        String normalized = required(value, fieldName);
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        if (
+            normalized.contains(";") ||
+            normalized.contains("--") ||
+            normalized.contains("/*") ||
+            lower.matches(".*\\b(insert|update|delete|drop|alter|truncate|create|grant|revoke)\\b.*")
+        ) {
+            throw new IllegalArgumentException("指标表达式不合法");
+        }
+        if (!normalized.matches("[A-Za-z0-9_\\.\\s=<>!()'\",+\\-*/]+")) {
+            throw new IllegalArgumentException("指标表达式包含不支持的字符");
+        }
+        return normalized;
+    }
+
+    private static boolean isPrimaryMappingRole(String tableRole) {
+        String role = defaultValue(tableRole, "").toUpperCase(Locale.ROOT);
+        return "PRIMARY".equals(role) || "FACT".equals(role) || "MAIN".equals(role);
     }
 
     private static String joinKeyword(String tableRole) {

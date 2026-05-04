@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Card, Col, Radio, Row, Select, Spin, Table, Tag, Typography } from "antd";
+import { Button, Card, Col, Radio, Row, Select, Spin, Tag, Typography } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { CheckCircleOutlined, CloseCircleOutlined, DownloadOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
@@ -133,7 +134,7 @@ function RuleHistoryInline({ ruleId }: { ruleId: string }) {
 	];
 
 	return (
-		<Table
+		<CompactTable
 			rowKey="runId"
 			dataSource={rows}
 			columns={cols}
@@ -379,7 +380,7 @@ export default function QualityReportTab() {
 
 			{/* Row 3: Rule Detail Table */}
 			<Card title="规则明细">
-				<Table
+				<CompactTable
 					rowKey="id"
 					columns={ruleColumns}
 					dataSource={filteredRules}

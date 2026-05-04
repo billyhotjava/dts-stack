@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Button, Card, DatePicker, Form, Input, Modal, Select, Table, Tag } from "antd";
+import { Button, Card, DatePicker, Form, Input, Modal, Select, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { PageHeader } from "@/components/page-header";
 import opsService, { type OpsBackfill } from "@/api/services/opsService";
 import { listAirflowJobs } from "@/api/platformApi";
+import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 
 const { RangePicker } = DatePicker;
 
@@ -23,6 +24,7 @@ export default function OpsBackfillPage() {
 	const [jobs, setJobs] = useState<AirflowJob[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [modalOpen, setModalOpen] = useState(false);
+	const [detailRow, setDetailRow] = useState<OpsBackfill | null>(null);
 	const [form] = Form.useForm();
 
 	const jobOptions = useMemo(
@@ -80,14 +82,16 @@ export default function OpsBackfillPage() {
 		}
 	};
 
-	const columns: ColumnsType<OpsBackfill> = [
+	const baseColumns: ColumnsType<OpsBackfill> = [
 		{ title: "DAG", dataIndex: "dagId", render: (v) => v || "-" },
-		{ title: "日期范围", render: (_, record) => `${record.dateFrom || "-"} ~ ${record.dateTo || "-"}` },
+		{ title: "日期范围", dataIndex: "dateFrom", render: (_, record) => `${record.dateFrom || "-"} ~ ${record.dateTo || "-"}` },
 		{ title: "状态", dataIndex: "status", render: (v) => <Tag>{v || "-"}</Tag> },
 		{ title: "触发时间", dataIndex: "triggeredAt", render: (v) => formatDate(v) },
 		{ title: "外部运行ID", dataIndex: "externalRunId", render: (v) => v || "-" },
 		{ title: "备注", dataIndex: "message", render: (v) => v || "-" },
 	];
+
+	const columns = useMemo(() => appendDetailAction(baseColumns, (row) => setDetailRow(row)), []);
 
 	return (
 		<div className="space-y-6 px-6 py-6">
@@ -99,8 +103,15 @@ export default function OpsBackfillPage() {
 					</Button>
 				}
 			>
-				<Table rowKey={(record) => record.id} columns={columns} dataSource={records} loading={loading} />
+				<CompactTable<OpsBackfill> rowKey={(record) => record.id} columns={columns} dataSource={records} loading={loading} />
 			</Card>
+			<RecordDetailDrawer<OpsBackfill>
+				open={detailRow !== null}
+				onClose={() => setDetailRow(null)}
+				record={detailRow}
+				columns={baseColumns}
+				title="补数详情"
+			/>
 
 			<Modal
 				open={modalOpen}

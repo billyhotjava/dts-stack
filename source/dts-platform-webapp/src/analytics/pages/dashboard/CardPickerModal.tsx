@@ -1,6 +1,7 @@
 // @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 import { useMemo, useState } from "react";
-import { Button, Input, Modal, Table, Tag } from "antd";
+import { Button, Input, Modal, Tag } from "antd";
+import { CompactTable } from "@/components/table";
 import { SearchOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import type { CardListItem } from "../../api/analyticsApi";
@@ -90,7 +91,7 @@ export function CardPickerModal({ open, onClose, onAdd, allCards, existingCardId
 					allowClear
 				/>
 			</div>
-			<Table<CardListItem>
+			<CompactTable<CardListItem>
 				columns={columns}
 				dataSource={available}
 				rowKey={(r) => r.id}

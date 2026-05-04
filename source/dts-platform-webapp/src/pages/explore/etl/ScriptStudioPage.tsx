@@ -1,4 +1,5 @@
-import { Badge, Button, Card, Input, Modal, Segmented, Select, Space, Table, Tabs, Tag, message } from "antd";
+import { Badge, Button, Card, Input, Modal, Segmented, Select, Space, Tabs, Tag, message } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/page-header";
@@ -428,7 +429,7 @@ export default function ScriptStudioPage() {
 									}
 								>
 									{filteredScripts.length ? (
-										<Table
+										<CompactTable
 											loading={scriptsLoading}
 											columns={scriptColumns}
 											dataSource={filteredScripts}
@@ -502,7 +503,7 @@ export default function ScriptStudioPage() {
 
 								<Card title="运行历史">
 									{runs.length ? (
-										<Table
+										<CompactTable
 											loading={runsLoading}
 											columns={runColumns}
 											dataSource={runs}

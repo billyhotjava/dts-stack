@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { Button, Card, Input, Select, Space, Table, Tag, Typography } from "antd";
+import { Button, Card, Input, Select, Space, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import opsService, { type ExternalRun } from "@/api/services/opsService";
 import { getDbtRunLog } from "@/api/platformApi";
 import { PageHeader } from "@/components/page-header";
+import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 
 const { Text } = Typography;
 
@@ -41,6 +42,7 @@ export default function OpsLogCenterPage() {
   const [logContent, setLogContent] = useState<Record<string, string>>({});
   const [logLoading, setLogLoading] = useState<Record<string, boolean>>({});
   const [logTryNumber, setLogTryNumber] = useState<Record<string, number>>({});
+  const [detailRow, setDetailRow] = useState<ExternalRun | null>(null);
   const logRef = useRef<HTMLPreElement>(null);
 
   const loadRecords = async () => {
@@ -95,7 +97,7 @@ export default function OpsLogCenterPage() {
     }
   };
 
-  const columns: ColumnsType<ExternalRun> = [
+  const baseColumns: ColumnsType<ExternalRun> = [
     { title: "任务名称", dataIndex: "artifactName", render: (v) => v || "-" },
     {
       title: "类型",
@@ -130,7 +132,9 @@ export default function OpsLogCenterPage() {
     },
     {
       title: "操作",
-      width: 160,
+      dataIndex: "actions",
+      width: 200,
+      fixed: "right",
       render: (_, record) => {
         const runId = record.externalRunId ?? record.id;
         const isExpanded = expandedRunId === runId;
@@ -159,6 +163,12 @@ export default function OpsLogCenterPage() {
       },
     },
   ];
+
+  const columns = useMemo(
+    () => appendDetailAction(baseColumns, (row) => setDetailRow(row)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [expandedRunId, logLoading, logContent],
+  );
 
   return (
     <div className="space-y-6 px-6 py-6">
@@ -189,7 +199,7 @@ export default function OpsLogCenterPage() {
           </Space>
         }
       >
-        <Table
+        <CompactTable<ExternalRun>
           rowKey={(r) => r.id}
           columns={columns}
           dataSource={records}
@@ -248,6 +258,13 @@ export default function OpsLogCenterPage() {
           }}
         />
       </Card>
+      <RecordDetailDrawer<ExternalRun>
+        open={detailRow !== null}
+        onClose={() => setDetailRow(null)}
+        record={detailRow}
+        columns={baseColumns}
+        title="运行详情"
+      />
     </div>
   );
 }

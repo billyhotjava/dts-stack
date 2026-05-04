@@ -16,7 +16,6 @@ import {
 	Modal,
 	Select,
 	Space,
-	Table,
 	Tabs,
 	Tag,
 	Tooltip,
@@ -25,6 +24,7 @@ import {
 	Segmented,
 	Skeleton,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import {
 	PlusOutlined,
 	DeleteOutlined,
@@ -2847,7 +2847,7 @@ export default function SqlModelingPage() {
 												{columnsLoading && modelColumns.length === 0 ? (
 													<Skeleton active paragraph={{ rows: 4 }} title={false} />
 												) : modelColumns.length ? (
-													<Table
+													<CompactTable
 														rowKey={(row, idx) => `${row.name || "col"}-${idx}`}
 														size="small"
 														pagination={false}
@@ -3003,7 +3003,7 @@ export default function SqlModelingPage() {
 													<Skeleton active paragraph={{ rows: 4 }} />
 												</div>
 											) : previewData ? (
-												<Table
+												<CompactTable
 													rowKey="_key"
 													size="small"
 													pagination={false}
@@ -3148,7 +3148,7 @@ export default function SqlModelingPage() {
 																总计 {tr.total ?? 0}，成功 {tr.success ?? 0}，失败 {tr.failed ?? 0}
 															</span>
 														</div>
-														<Table
+														<CompactTable
 															rowKey={(row, idx) => `${row.uniqueId || row.name || "t"}-${idx}`}
 															size="small"
 															pagination={false}
@@ -3241,7 +3241,7 @@ export default function SqlModelingPage() {
 											runs.length === 0 && !runsLoading ? (
 												<div className="p-4 text-sm text-muted-foreground">暂无运行记录。</div>
 											) : (
-												<Table
+												<CompactTable
 													rowKey={(row, index) => row.dag_run_id || `row-${index}`}
 													size="small"
 													pagination={false}
@@ -3352,7 +3352,7 @@ export default function SqlModelingPage() {
 												{auditLogs.length === 0 ? (
 													<div className="text-xs text-muted-foreground p-2">暂无回退记录</div>
 												) : (
-													<Table
+													<CompactTable
 														size="small"
 														rowKey="id"
 														dataSource={auditLogs}
@@ -3602,7 +3602,7 @@ export default function SqlModelingPage() {
 									清空
 								</Button>
 							</div>
-							<Table<SqlModel>
+							<CompactTable<SqlModel>
 								size="small"
 								rowKey={(record) => String(record.id || "")}
 								dataSource={runFilteredModels}

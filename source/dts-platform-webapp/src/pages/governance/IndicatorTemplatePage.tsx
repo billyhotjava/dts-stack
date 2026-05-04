@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
 	Button,
@@ -6,13 +6,13 @@ import {
 	Input,
 	Modal,
 	Space,
-	Table,
 	Tabs,
 	Tag,
 	Tooltip,
 	Typography,
 	Upload,
 } from "antd";
+import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, DeleteOutlined, EditOutlined, RocketOutlined, UploadOutlined } from "@ant-design/icons";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
@@ -38,6 +38,7 @@ export default function Page() {
 	const [editing, setEditing] = useState<Template | null>(null);
 	const [wizardOpen, setWizardOpen] = useState(false);
 	const [wizardTemplate, setWizardTemplate] = useState<Template | null>(null);
+	const [detailRow, setDetailRow] = useState<Template | null>(null);
 	const [form] = Form.useForm();
 	const canManage = useGovernanceManageAccess();
 
@@ -172,7 +173,7 @@ export default function Page() {
 		setWizardOpen(true);
 	};
 
-	const columns: ColumnsType<Template> = [
+	const baseColumns: ColumnsType<Template> = [
 		{
 			title: "编码",
 			dataIndex: "code",
@@ -214,8 +215,10 @@ export default function Page() {
 		},
 		{
 			title: "操作",
+			dataIndex: "actions",
 			key: "action",
-			width: 200,
+			width: 280,
+			fixed: "right",
 			render: (_: any, record: Template) => (
 				<Space size="small">
 					<Tooltip title="展开生成指标">
@@ -254,6 +257,12 @@ export default function Page() {
 		},
 	];
 
+	const columns = useMemo(
+		() => appendDetailAction(baseColumns, (row) => setDetailRow(row)),
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[canManage],
+	);
+
 	return (
 		<div style={{ padding: 24 }}>
 			<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -284,7 +293,7 @@ export default function Page() {
 				style={{ marginBottom: 16 }}
 			/>
 
-			<Table
+			<CompactTable
 				rowKey="id"
 				columns={columns}
 				dataSource={templates}
@@ -335,6 +344,13 @@ export default function Page() {
 					setWizardOpen(false);
 					toast.success("指标已生成");
 				}}
+			/>
+			<RecordDetailDrawer<Template>
+				open={detailRow !== null}
+				onClose={() => setDetailRow(null)}
+				record={detailRow}
+				columns={baseColumns}
+				title="模板详情"
 			/>
 		</div>
 	);

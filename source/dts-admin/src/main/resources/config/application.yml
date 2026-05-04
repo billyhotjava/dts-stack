@@ -256,8 +256,8 @@ auditing:
     batch-size: ${AUDIT_RETENTION_BATCH_SIZE:5000}
   ingest:
     # Whether /api/audit-events must validate a bearer service token.
-    # When true and service-tokens is empty, the endpoint accepts traffic but logs a WARN
-    # so existing deployments can roll out the rotation without an outage.
+    # When true and service-tokens is empty, the endpoint rejects traffic so sibling
+    # services cannot silently publish unauthenticated audit events.
     require-token: ${AUDIT_INGEST_REQUIRE_TOKEN:true}
     # Comma-separated list of accepted bearer tokens. By default we reuse the same
     # DTS_ADMIN_SERVICE_TOKEN that platform/analytics use to call admin.

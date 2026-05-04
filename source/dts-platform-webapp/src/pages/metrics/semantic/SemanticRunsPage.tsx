@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Alert, Button, Card, Empty, Input, Modal, Select, Space, Table, Tag, message } from "antd";
+import { Alert, Button, Card, Empty, Input, Modal, Select, Space, Tag, message } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { CheckCircleOutlined, CloseCircleOutlined, PlayCircleOutlined, ReloadOutlined, SyncOutlined } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
@@ -161,7 +162,7 @@ export default function SemanticRunsPage() {
 
 			<Card title="模型运行记录">
 				{selectedModelId ? (
-					<Table<SemanticModelRun>
+					<CompactTable<SemanticModelRun>
 						rowKey="id"
 						size="small"
 						loading={runLoading}

@@ -46,6 +46,7 @@ import com.yuzhi.dts.platform.service.governance.request.IssueTicketUpsertReques
 import com.yuzhi.dts.platform.service.governance.request.QualityRuleUpsertRequest;
 import com.yuzhi.dts.platform.service.governance.request.QualityRuleVersionStatusRequest;
 import com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest;
+import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -92,6 +93,8 @@ public class GovernanceResource {
 
     private static final String GOVERNANCE_MAINTAINER_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).GOVERNANCE_MAINTAINERS)";
+    private static final String INGESTION_SERVICE_EXPRESSION =
+        "hasAuthority('" + AuthoritiesConstants.SERVICE_INTERNAL + "') and authentication.name == 'service:dts-ingestion'";
 
     private final QualityRuleService qualityRuleService;
     private final QualityRunService qualityRunService;
@@ -314,7 +317,7 @@ public class GovernanceResource {
     }
 
     @PostMapping("/quality/runs")
-    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    @PreAuthorize("(" + GOVERNANCE_MAINTAINER_EXPRESSION + ") or (" + INGESTION_SERVICE_EXPRESSION + ")")
     public ApiResponse<List<QualityRunDto>> triggerQualityRun(@RequestBody QualityRunTriggerRequest request) {
         List<QualityRunDto> runs = qualityRunService.trigger(request, currentUser());
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -1226,6 +1229,7 @@ public class GovernanceResource {
      * against a staging table before data is committed to the target dataset.
      */
     @PostMapping("/quality/pre-check")
+    @PreAuthorize(INGESTION_SERVICE_EXPRESSION)
     public ApiResponse<PreCheckResult> preCheckStagingData(@RequestBody PreCheckRequest request) {
         log.info("Pre-check requested: staging={}, dataset={}, rows={}",
             request.stagingTableName(), request.datasetId(), request.totalRows());

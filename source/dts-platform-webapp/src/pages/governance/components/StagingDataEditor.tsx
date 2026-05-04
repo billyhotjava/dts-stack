@@ -5,11 +5,11 @@ import {
 	Checkbox,
 	Input,
 	Space,
-	Table,
 	Tag,
 	Tooltip,
 	Typography,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import {
 	WarningOutlined,
 	ReloadOutlined,
@@ -362,7 +362,7 @@ export default function StagingDataEditor({ taskId, onClose }: StagingDataEditor
 			</div>
 
 			{/* Data table */}
-			<Table
+			<CompactTable
 				rowKey={(record) => record._row_num ?? Math.random()}
 				columns={columns}
 				dataSource={data}

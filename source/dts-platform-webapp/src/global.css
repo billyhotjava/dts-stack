@@ -521,3 +521,26 @@
 		--color-red-700: oklch(50.5% 0.213 27.518);
 	}
 }
+
+/* CompactTable：统一表格风格 —— 单行高度 + 文字溢出省略 + 紧凑分页 */
+.dts-compact-table .ant-table-tbody > tr > td {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	vertical-align: middle;
+	max-width: 320px;
+}
+
+.dts-compact-table .ant-table-tbody > tr > td .ant-tag,
+.dts-compact-table .ant-table-tbody > tr > td .ant-badge {
+	white-space: nowrap;
+}
+
+.dts-compact-table .ant-table-tbody > tr > td > .ant-space {
+	flex-wrap: nowrap;
+}
+
+.dts-compact-table .ant-table-thead > tr > th {
+	white-space: nowrap;
+	font-weight: 600;
+}

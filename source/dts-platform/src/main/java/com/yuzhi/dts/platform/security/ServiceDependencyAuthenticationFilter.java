@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
+import org.springframework.http.HttpMethod;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
@@ -32,6 +33,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * </ol>
  * <p>
  * 兼容开关 {@code legacy-header-only-mode} 开启时退回 Sprint-27 行为(仅看 header)。production 严禁开启。
+ * 认证通过后只授予服务专用 authority,具体端点再按 service principal 收敛授权。
  */
 public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter {
 
@@ -65,7 +67,7 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                     "service:" + serviceName,
                     null,
-                    List.of(new SimpleGrantedAuthority(AuthoritiesConstants.OP_ADMIN))
+                    List.of(new SimpleGrantedAuthority(AuthoritiesConstants.SERVICE_INTERNAL))
                 );
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(authentication);
@@ -88,6 +90,15 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
             return null;
         }
         String canonical = authProperties.canonicalServiceName(declared);
+        if (!isServicePathAllowed(canonical, request)) {
+            log.warn(
+                "event=service_auth_denied service={} method={} path={} reason=endpoint_not_allowed",
+                canonical,
+                request.getMethod(),
+                request.getRequestURI()
+            );
+            return null;
+        }
 
         if (authProperties.isLegacyHeaderOnlyMode()) {
             // Sprint-27 兼容路径,仅 header 即放行。production 严禁开启。
@@ -109,5 +120,47 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
         }
         log.warn("event=service_auth_denied service={} reason=token_mismatch", canonical);
         return null;
+    }
+
+    private boolean isServicePathAllowed(String serviceName, HttpServletRequest request) {
+        if (!StringUtils.hasText(serviceName) || request == null) {
+            return false;
+        }
+        String method = request.getMethod();
+        String path = request.getRequestURI();
+        String service = serviceName.trim().toLowerCase(java.util.Locale.ROOT);
+        if ("dts-ingestion".equals(service)) {
+            return isGetRuntimeDetail(method, path)
+                || isPost(method, path, "/api/etl/dbt/run")
+                || isPost(method, path, "/api/governance/quality/pre-check")
+                || isPost(method, path, "/api/governance/quality/runs")
+                || isPost(method, path, "/api/catalog/lineage/ingestion-executions");
+        }
+        if ("dts-analytics".equals(service)) {
+            return isGet(method, path, "/api/infra/data-sources") || isGetInfraDataSourceDetail(method, path);
+        }
+        return false;
+    }
+
+    private boolean isGetRuntimeDetail(String method, String path) {
+        return HttpMethod.GET.matches(method)
+            && path != null
+            && path.startsWith("/api/infra/data-sources/")
+            && path.endsWith("/runtime-detail");
+    }
+
+    private boolean isGetInfraDataSourceDetail(String method, String path) {
+        return HttpMethod.GET.matches(method)
+            && path != null
+            && path.startsWith("/api/infra/data-sources/")
+            && path.endsWith("/detail");
+    }
+
+    private boolean isGet(String method, String path, String expectedPath) {
+        return HttpMethod.GET.matches(method) && expectedPath.equals(path);
+    }
+
+    private boolean isPost(String method, String path, String expectedPath) {
+        return HttpMethod.POST.matches(method) && expectedPath.equals(path);
     }
 }

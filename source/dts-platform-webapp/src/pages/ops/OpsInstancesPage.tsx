@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Button, Card, Input, Select, Space, Table, Tag, Typography } from "antd";
+import { useEffect, useMemo, useState } from "react";
+import { Button, Card, Input, Select, Space, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { useNavigate } from "react-router";
@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import opsService, { type OpsInstance } from "@/api/services/opsService";
 import { useLogPreview } from "@/components/log-preview/LogPreviewContext";
 import { listAirflowTaskInstances, type AirflowTaskInstance } from "@/api/platformApi";
+import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 
 const { Text } = Typography;
 
@@ -38,6 +39,7 @@ export default function OpsInstancesPage() {
 	const [entryKey, setEntryKey] = useState("ALL");
 	const [taskInstances, setTaskInstances] = useState<Record<string, AirflowTaskInstance[]>>({});
 	const [taskLoading, setTaskLoading] = useState<Record<string, boolean>>({});
+	const [detailRow, setDetailRow] = useState<OpsInstance | null>(null);
 
 	const { openLogPreview } = useLogPreview();
 	const navigate = useNavigate();
@@ -80,7 +82,7 @@ export default function OpsInstancesPage() {
 		}
 	};
 
-	const columns: ColumnsType<OpsInstance> = [
+	const baseColumns: ColumnsType<OpsInstance> = [
 		{ title: "任务", dataIndex: "artifactName", render: (v) => v || "-" },
 		{ title: "类型", dataIndex: "entryKey", width: 140, render: (v) => <Tag>{v || "-"}</Tag> },
 		{ title: "DAG", dataIndex: "dagId", width: 160, render: (v) => v || "-" },
@@ -100,7 +102,9 @@ export default function OpsInstancesPage() {
 		},
 		{
 			title: "操作",
-			width: 200,
+			dataIndex: "actions",
+			width: 240,
+			fixed: "right",
 			render: (_: unknown, record: OpsInstance) => {
 				const isDbt =
 					record.entryKey === "DBT_RUN" ||
@@ -141,6 +145,12 @@ export default function OpsInstancesPage() {
 		},
 	];
 
+	const columns = useMemo(
+		() => appendDetailAction(baseColumns, (row) => setDetailRow(row)),
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[],
+	);
+
 	return (
 		<div className="space-y-6 px-6 py-6">
 			<PageHeader title="任务实例监控" />
@@ -154,7 +164,7 @@ export default function OpsInstancesPage() {
 					</Space>
 				}
 			>
-				<Table
+				<CompactTable<OpsInstance>
 					rowKey={(record) => record.id}
 					columns={columns}
 					dataSource={records}
@@ -173,7 +183,7 @@ export default function OpsInstancesPage() {
 							const instances = taskInstances[record.id] ?? [];
 							const isLoading = taskLoading[record.id];
 							return (
-								<Table
+								<CompactTable<AirflowTaskInstance>
 									size="small"
 									rowKey="task_id"
 									loading={isLoading}
@@ -261,6 +271,13 @@ export default function OpsInstancesPage() {
 					}}
 				/>
 			</Card>
+			<RecordDetailDrawer<OpsInstance>
+				open={detailRow !== null}
+				onClose={() => setDetailRow(null)}
+				record={detailRow}
+				columns={baseColumns}
+				title="任务实例详情"
+			/>
 		</div>
 	);
 }

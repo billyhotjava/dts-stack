@@ -13,9 +13,9 @@ import {
 	Select,
 	Space,
 	Steps,
-	Table,
 	Typography,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import { CheckCircleOutlined, CodeOutlined } from "@ant-design/icons";
 import {
 	listIndicatorTemplates,
@@ -320,7 +320,7 @@ export default function IndicatorWizard({ open, template, onClose, onSuccess }: 
 					<Typography.Text strong style={{ display: "block", marginBottom: 8 }}>
 						字段映射
 					</Typography.Text>
-					<Table
+					<CompactTable
 						rowKey="field"
 						columns={mappingColumns}
 						dataSource={mappingData}

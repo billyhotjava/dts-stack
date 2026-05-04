@@ -1,22 +1,21 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Button, Card, Modal, Progress, Space, Table, Tag, Typography, message } from "antd";
+import { Alert, Button, Card, Modal, Progress, Space, Tag, Typography, message } from "antd";
+import { CompactTable } from "@/components/table";
+import type { ColumnsType } from "antd/es/table";
 import {
 	PlayCircleOutlined,
 	EditOutlined,
 	DeleteOutlined,
 	HistoryOutlined,
 	ReloadOutlined,
-	SyncOutlined,
 } from "@ant-design/icons";
 import { useRouter } from "@/routes/hooks";
 import {
 	ingestionTaskAPI,
 	type IngestionExecutionDTO,
-	type IngestionExecutionLog,
 	type IngestionExecutionObservabilityDTO,
 	type IngestionGovernanceOverviewDTO,
 	type IngestionTaskDTO,
-	type PreCheckResult,
 } from "@/api/ingestion";
 import { resolveAsyncRunSubmitFeedback, mapExecutionToProgressView } from "./transformCreateAsyncRun.helpers";
 import { formatTimestamp } from "@/utils/format";
@@ -36,15 +35,9 @@ export default function TransformPage() {
 	const [tasks, setTasks] = useState<IngestionTaskDTO[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [overviewLoading, setOverviewLoading] = useState(false);
-	const [preCheckingId, setPreCheckingId] = useState<number | null>(null);
-	const [retryingKey, setRetryingKey] = useState<string | null>(null);
 	const [latestExecutions, setLatestExecutions] = useState<Record<number, IngestionExecutionDTO | null>>({});
 	const [observability, setObservability] = useState<IngestionExecutionObservabilityDTO | null>(null);
 	const [governanceOverview, setGovernanceOverview] = useState<IngestionGovernanceOverviewDTO | null>(null);
-	const [logOpen, setLogOpen] = useState(false);
-	const [logLoading, setLogLoading] = useState(false);
-	const [logTitle, setLogTitle] = useState("");
-	const [logDetail, setLogDetail] = useState<IngestionExecutionLog | null>(null);
 	const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
 	const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
 	const [executeProgressOpen, setExecuteProgressOpen] = useState(false);
@@ -223,71 +216,6 @@ export default function TransformPage() {
 		});
 	};
 
-	const submitLatestRetry = async (record: IngestionTaskDTO, mode: "FAILED_ONLY" | "FULL_RERUN") => {
-		if (!record.id) return;
-		let latest = latestExecutions[record.id];
-		if (!latest) {
-			latest = await ingestionTaskAPI.getLatestExecution(record.id);
-		}
-		if (!latest?.id) {
-			message.info("该任务暂无可重跑的执行记录");
-			return;
-		}
-		const status = String(latest.status || "").toLowerCase();
-		if (status === "running" || status === "preparing") {
-			message.warning("最新执行仍在运行中，暂不能重跑");
-			return;
-		}
-		const key = `${record.id}:${mode}`;
-		setRetryingKey(key);
-		try {
-			const submit = await ingestionTaskAPI.retryExecutionAsync(record.id, latest.id, { mode });
-			message.success(mode === "FULL_RERUN" ? "已提交整批重跑任务" : "已提交失败重试任务");
-			startExecuteProgressPolling(record.id, record.name, submit?.pollIntervalMs);
-			void loadTasks();
-			void loadRunCenterOverview();
-		} catch (error: any) {
-			const feedback = resolveAsyncRunSubmitFeedback(error, "retry");
-			if (feedback.level === "warning") {
-				message.warning(feedback.message);
-				return;
-			}
-			message.error(feedback.message);
-		} finally {
-			setRetryingKey(null);
-		}
-	};
-
-	const handleRetryLatest = (record: IngestionTaskDTO, mode: "FAILED_ONLY" | "FULL_RERUN") => {
-		const title = mode === "FULL_RERUN" ? "确认整批重跑" : "确认失败重试";
-		const content =
-			mode === "FULL_RERUN"
-				? `将按当前配置重新执行任务 "${record.name}" 的整批作业，确认继续？`
-				: `将基于任务 "${record.name}" 的最新失败执行提交失败重试，确认继续？`;
-		Modal.confirm({
-			title,
-			content,
-			okText: mode === "FULL_RERUN" ? "确认重跑" : "确认重试",
-			onOk: () => submitLatestRetry(record, mode),
-		});
-	};
-
-	const handleRebuildDag = async (id: number, name: string) => {
-		Modal.confirm({
-			title: "强制重建 DAG",
-			content: `确定要重建任务 "${name}" 的 DAG 文件吗？`,
-			onOk: async () => {
-				try {
-					await ingestionTaskAPI.rebuildDag(id);
-					message.success("DAG 已重建");
-					void loadTasks();
-				} catch {
-					// error already shown by global interceptor
-				}
-			},
-		});
-	};
-
 	const handleDelete = async (id: number, name: string) => {
 		Modal.confirm({
 			title: "确认删除",
@@ -305,68 +233,6 @@ export default function TransformPage() {
 				}
 			},
 		});
-	};
-
-	const handleViewLog = async (record: IngestionTaskDTO) => {
-		if (!record.id) return;
-		let latest = latestExecutions[record.id];
-		if (!latest) {
-			latest = await ingestionTaskAPI.getLatestExecution(record.id);
-		}
-		if (!latest?.id) {
-			message.info("该任务暂无执行日志");
-			return;
-		}
-		setLogTitle(`${record.name} · 执行 #${latest.id}`);
-		setLogDetail(null);
-		setLogOpen(true);
-		setLogLoading(true);
-		try {
-			const log = await ingestionTaskAPI.getExecutionLog(record.id, latest.id, { scope: "all" });
-			setLogDetail(log);
-		} catch {
-			setLogDetail({
-				taskId: record.id,
-				executionId: latest.id,
-				message: latest.errorMessage || "日志读取失败",
-				failureCategory: latest.failureCategory,
-				failureAdvice: latest.failureAdvice,
-				log: latest.errorMessage,
-			});
-		} finally {
-			setLogLoading(false);
-		}
-	};
-
-	const handlePreCheck = async (record: IngestionTaskDTO) => {
-		if (!record.id) return;
-		setPreCheckingId(record.id);
-		try {
-			const result: PreCheckResult = await ingestionTaskAPI.preCheck(record.id);
-			const failedRows = result?.failedRows || 0;
-			const totalRows = result?.totalRows || 0;
-			const status = failedRows > 0 ? "WARN" : "PASS";
-			const details = (result?.errorsByRule || [])
-				.slice(0, 5)
-				.map((item) => `${item.ruleName || item.ruleType}: ${item.failCount}`)
-				.join("；");
-			Modal[failedRows > 0 ? "warning" : "success"]({
-				title: `预检 ${status}`,
-				content: (
-					<div className="space-y-2">
-						<div>
-							总行数 {totalRows.toLocaleString()}，通过 {(result?.passedRows || 0).toLocaleString()}，失败 {failedRows.toLocaleString()}。
-						</div>
-						{details ? <div className="text-xs text-slate-500">{details}</div> : null}
-					</div>
-				),
-			});
-			void loadTasks();
-		} catch (error: any) {
-			message.error(error?.message || "预检执行失败");
-		} finally {
-			setPreCheckingId(null);
-		}
 	};
 
 	const renderPreCheckStatus = (status?: string) => {
@@ -419,31 +285,13 @@ export default function TransformPage() {
 		return `${targets.slice(0, 2).join(", ")} 等 ${targets.length} 表`;
 	};
 
-	const parseTaskSyncConfig = (record: IngestionTaskDTO): Record<string, any> => {
-		const config = (record.syncConfig ?? {}) as any;
-		if (typeof config === "string") {
-			try {
-				return JSON.parse(config) || {};
-			} catch {
-				return {};
-			}
-		}
-		return config && typeof config === "object" ? config : {};
-	};
-
-	const supportsTimeWindowBackfill = (record: IngestionTaskDTO): boolean => {
-		if (String(record.syncMode || "").toLowerCase() !== "incremental") return false;
-		const type = String(parseTaskSyncConfig(record).incrementalType || "").trim().toLowerCase();
-		return !["number", "numeric", "integer", "bigint", "long", "int"].includes(type);
-	};
-
 	/** Whether a task is currently in a non-interruptible execution phase. */
 	const isTaskBusy = (record: IngestionTaskDTO): boolean => {
 		const lastStatus = (record.lastExecutionStatus || "").toLowerCase();
 		return lastStatus === "preparing" || lastStatus === "running" || executingTaskId === record.id;
 	};
 
-	const columns = [
+	const columns: ColumnsType<IngestionTaskDTO> = [
 		{
 			title: "任务名称",
 			dataIndex: "name",
@@ -550,105 +398,50 @@ export default function TransformPage() {
 		},
 			{
 				title: "操作",
+				dataIndex: "actions",
 				key: "action",
-				width: 620,
-				render: (_: any, record: IngestionTaskDTO) => {
-					const latest = record.id ? latestExecutions[record.id] : null;
-					const latestStatus = String(latest?.status || "").toLowerCase();
-					const canRetryFailed = latestStatus === "failed";
-					const canFullRerun = Boolean(latest?.id) && !["running", "preparing"].includes(latestStatus);
-					const canBackfill = supportsTimeWindowBackfill(record);
-					return (
-						<Space size="small" wrap>
-							<Button
-								size="small"
-								type="primary"
-								icon={<PlayCircleOutlined />}
-								onClick={() => handleExecute(record.id!, record.name)}
-								loading={isTaskBusy(record) && !executeProgress.terminal}
-								disabled={record.status === "deleted" || isTaskBusy(record)}
-							>
-								{isTaskBusy(record)
-									? (record.lastExecutionStatus || "").toLowerCase() === "preparing" ? "准备中" : "执行中"
-									: "执行"}
-							</Button>
-							<Button
-								size="small"
-								loading={preCheckingId === record.id}
-								onClick={() => handlePreCheck(record)}
-								disabled={record.status === "deleted" || isTaskBusy(record)}
-							>
-								预检
-							</Button>
-							{canRetryFailed ? (
-								<Button
-									size="small"
-									loading={retryingKey === `${record.id}:FAILED_ONLY`}
-									onClick={() => handleRetryLatest(record, "FAILED_ONLY")}
-									disabled={record.status === "deleted" || isTaskBusy(record)}
-								>
-									失败重试
-								</Button>
-							) : null}
-							<Button
-								size="small"
-								loading={retryingKey === `${record.id}:FULL_RERUN`}
-								onClick={() => handleRetryLatest(record, "FULL_RERUN")}
-								disabled={record.status === "deleted" || isTaskBusy(record) || !canFullRerun}
-							>
-								整批重跑
-							</Button>
-							{canBackfill ? (
-								<Button
-									size="small"
-									icon={<ReloadOutlined />}
-									onClick={() => router.push(`/explore/etl/transform/${record.id}/executions`)}
-									disabled={record.status === "deleted" || isTaskBusy(record)}
-								>
-									回填
-								</Button>
-							) : null}
-							<Button
-								size="small"
-								icon={<HistoryOutlined />}
-								onClick={() => router.push(`/explore/etl/transform/${record.id}/executions`)}
-							>
-								历史
-							</Button>
-							<Button size="small" onClick={() => handleViewLog(record)}>
-								日志
-							</Button>
-							<Button size="small" onClick={() => router.push("/catalog/lineage/impact")}>
-								血缘
-							</Button>
-							<Button
-								size="small"
-								icon={<EditOutlined />}
-								onClick={() => router.push(`/explore/etl/transform/${record.id}/edit`)}
-								disabled={record.status === "deleted" || isTaskBusy(record)}
-							>
-								编辑
-							</Button>
-							<Button
-								size="small"
-								icon={<SyncOutlined />}
-								onClick={() => handleRebuildDag(record.id!, record.name)}
-								disabled={record.status === "deleted" || record.airflowEnabled === false || isTaskBusy(record)}
-							>
-								重建 DAG
-							</Button>
-							<Button
-								size="small"
-								danger
-								icon={<DeleteOutlined />}
-								onClick={() => handleDelete(record.id!, record.name)}
-								disabled={record.status === "deleted"}
-							>
-								删除
-							</Button>
-						</Space>
-					);
-				},
+				width: 320,
+				fixed: "right",
+				render: (_: any, record: IngestionTaskDTO) => (
+					<Space size="small" wrap>
+						<Button
+							size="small"
+							type="primary"
+							icon={<PlayCircleOutlined />}
+							onClick={() => handleExecute(record.id!, record.name)}
+							loading={isTaskBusy(record) && !executeProgress.terminal}
+							disabled={record.status === "deleted" || isTaskBusy(record)}
+						>
+							{isTaskBusy(record)
+								? (record.lastExecutionStatus || "").toLowerCase() === "preparing" ? "准备中" : "执行中"
+								: "执行"}
+						</Button>
+						<Button
+							size="small"
+							icon={<HistoryOutlined />}
+							onClick={() => router.push(`/explore/etl/transform/${record.id}/executions`)}
+						>
+							历史
+						</Button>
+						<Button
+							size="small"
+							icon={<EditOutlined />}
+							onClick={() => router.push(`/explore/etl/transform/${record.id}/edit`)}
+							disabled={record.status === "deleted" || isTaskBusy(record)}
+						>
+							编辑
+						</Button>
+						<Button
+							size="small"
+							danger
+							icon={<DeleteOutlined />}
+							onClick={() => handleDelete(record.id!, record.name)}
+							disabled={record.status === "deleted"}
+						>
+							删除
+						</Button>
+					</Space>
+				),
 			},
 		];
 
@@ -730,7 +523,7 @@ export default function TransformPage() {
 					</div>
 				</div>
 				<div data-testid="platform-transform-table">
-					<Table
+					<CompactTable
 						columns={columns}
 						dataSource={tasks}
 						rowKey="id"
@@ -800,35 +593,6 @@ export default function TransformPage() {
 				</Space>
 			</Modal>
 
-			<Modal
-				open={logOpen}
-				title={logTitle || "执行日志"}
-				width={900}
-				onCancel={() => setLogOpen(false)}
-				footer={[
-					<Button key="close" onClick={() => setLogOpen(false)}>
-						关闭
-					</Button>,
-				]}
-			>
-				{logLoading ? (
-					<Progress percent={30} status="active" />
-				) : (
-					<div className="space-y-3">
-						{logDetail?.failureCategory || logDetail?.failureAdvice ? (
-							<Alert
-								type="error"
-								showIcon
-								message={logDetail?.failureCategory || "执行失败"}
-								description={logDetail?.failureAdvice || logDetail?.message}
-							/>
-						) : null}
-						<pre className="max-h-[520px] overflow-auto rounded bg-slate-950 p-3 text-xs text-slate-50">
-							{logDetail?.log || logDetail?.message || "暂无日志内容"}
-						</pre>
-					</div>
-				)}
-			</Modal>
 		</div>
 	);
 }

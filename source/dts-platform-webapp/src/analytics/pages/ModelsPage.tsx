@@ -3,7 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type CardListItem } from "../api/analyticsApi";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
-import { Button, Card, Input, Skeleton, Table, Tag } from "antd";
+import { Button, Card, Input, Skeleton, Tag } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { CardGrid } from "../components/DashboardGrid/DashboardGrid";
 import { ErrorNotice } from "../components/ErrorNotice";
@@ -228,7 +229,7 @@ export default function ModelsPage() {
 			{/* List View */}
 			{state.state === "loaded" && filteredModels.length > 0 && viewMode === "list" && (
 				<Card>
-					<Table
+					<CompactTable
 						rowKey={(record) => String(record.id)}
 						columns={modelColumns}
 						dataSource={filteredModels}

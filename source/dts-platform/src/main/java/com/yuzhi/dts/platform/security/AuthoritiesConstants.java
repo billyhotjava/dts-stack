@@ -14,6 +14,9 @@ public final class AuthoritiesConstants {
     // Business administrator (OP admin) — should have full platform access
     public static final String OP_ADMIN = "ROLE_OP_ADMIN";
 
+    // Authenticated service-to-service caller. Endpoint-level policies decide what each service may do.
+    public static final String SERVICE_INTERNAL = "ROLE_SERVICE_INTERNAL";
+
     public static final String USER = "ROLE_USER";
 
     public static final String ANONYMOUS = "ROLE_ANONYMOUS";

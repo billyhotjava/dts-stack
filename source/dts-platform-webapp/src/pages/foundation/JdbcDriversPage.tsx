@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Button, Card, Form, Input, Modal, Space, Table, Tag, Typography, message } from "antd";
+import { Alert, Button, Card, Form, Input, Modal, Space, Tag, Typography, message } from "antd";
+import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
+import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, InboxOutlined } from "@ant-design/icons";
 import { Upload } from "@/components/upload";
 type UploadRequestOption = Parameters<NonNullable<import("antd").UploadProps["customRequest"]>>[0];
@@ -21,6 +23,7 @@ export default function JdbcDriversPage() {
 	const [editing, setEditing] = useState<InfraJdbcDriver | null>(null);
 	const [editModalOpen, setEditModalOpen] = useState(false);
 	const [saving, setSaving] = useState(false);
+	const [detailRow, setDetailRow] = useState<InfraJdbcDriver | null>(null);
 	const [form] = Form.useForm();
 
 	const loadList = async () => {
@@ -113,7 +116,7 @@ export default function JdbcDriversPage() {
 		});
 	};
 
-	const columns = useMemo(
+	const baseColumns = useMemo<ColumnsType<InfraJdbcDriver>>(
 		() => [
 			{ title: "JAR 文件", dataIndex: "fileName", key: "fileName", width: 220 },
 			{ title: "驱动主类", dataIndex: "driverClass", key: "driverClass", width: 260, ellipsis: true },
@@ -142,8 +145,10 @@ export default function JdbcDriversPage() {
 			},
 			{
 				title: "操作",
+				dataIndex: "actions",
 				key: "action",
-				width: 180,
+				width: 220,
+				fixed: "right",
 				render: (_: any, record: InfraJdbcDriver) => (
 					<Space>
 						<Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
@@ -157,6 +162,11 @@ export default function JdbcDriversPage() {
 			},
 		],
 		[]
+	);
+
+	const columns = useMemo(
+		() => appendDetailAction(baseColumns, (row) => setDetailRow(row)),
+		[baseColumns],
 	);
 
 	return (
@@ -176,12 +186,11 @@ export default function JdbcDriversPage() {
 			<div className="mb-3 text-xs text-slate-500">
 				默认驱动目录：<Text code>services/dts-platform/drivers</Text>（上传后自动同步到该目录）
 			</div>
-			<Table
+			<CompactTable<InfraJdbcDriver>
 				rowKey="id"
-				columns={columns as any}
+				columns={columns}
 				dataSource={list}
 				loading={loading}
-				pagination={{ pageSize: 12 }}
 			/>
 
 			<Modal
@@ -242,6 +251,13 @@ export default function JdbcDriversPage() {
 					</Form.Item>
 				</Form>
 			</Modal>
+			<RecordDetailDrawer<InfraJdbcDriver>
+				open={detailRow !== null}
+				onClose={() => setDetailRow(null)}
+				record={detailRow}
+				columns={baseColumns}
+				title="驱动详情"
+			/>
 		</Card>
 	);
 }

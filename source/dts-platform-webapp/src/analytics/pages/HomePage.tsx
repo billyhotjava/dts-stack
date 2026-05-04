@@ -3,7 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { analyticsApi, type CurrentUser, type DashboardListItem, type CardListItem, type ScreenListItem } from "../api/analyticsApi";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Spin, Button, Card, Table, Tag } from "antd";
+import { Spin, Button, Card, Tag } from "antd";
+import { CompactTable } from "@/components/table";
 import { PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
@@ -257,7 +258,7 @@ export default function HomePage() {
 					<div className="error-state">{t(locale, "error")}</div>
 				)}
 				{screens.state === "loaded" && (
-					<Table<ScreenListItem>
+					<CompactTable<ScreenListItem>
 						columns={screenColumns}
 						dataSource={screens.value}
 						rowKey={(r) => String(r.id)}

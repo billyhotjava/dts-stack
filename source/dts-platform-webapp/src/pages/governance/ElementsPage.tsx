@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Breadcrumb, Button, Card, Descriptions, Divider, Drawer, Form, Input, List, Modal, Select, Space, Spin, Table, Tag, Typography } from "antd";
+import { Breadcrumb, Button, Card, Descriptions, Divider, Drawer, Form, Input, List, Modal, Select, Space, Spin, Tag, Typography } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { EyeOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router";
@@ -353,7 +354,7 @@ export default function ElementsPage() {
 				{content.length === 0 && !loading ? (
 					<EmptyState title="暂无数据元" description="请先新增数据元规范。" />
 				) : (
-					<Table
+					<CompactTable
 						rowKey={(row) => row.id || row.fieldNameEn || row.fieldNameCn || Math.random().toString(36)}
 						dataSource={content}
 						columns={columns}

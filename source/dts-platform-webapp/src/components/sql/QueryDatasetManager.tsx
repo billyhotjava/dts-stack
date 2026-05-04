@@ -10,11 +10,11 @@ import {
 	Select,
 	Space,
 	Spin,
-	Table,
 	Tag,
 	Tabs,
 	Typography,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { ExclamationCircleOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import reportsService, { type ReportLink } from "@/api/services/reportsService";
@@ -377,7 +377,7 @@ export function QueryDatasetManager() {
 
 			<div className="grid gap-4 lg:grid-cols-[45%_55%]">
 				<Card size="small" title={`查询数据集 (${filteredDatasets.length})`}>
-					<Table
+					<CompactTable
 						rowKey="id"
 						size="small"
 						loading={loadingDatasets}
@@ -440,7 +440,7 @@ export function QueryDatasetManager() {
 										key: "versions",
 										label: `版本 (${versions.length})`,
 										children: (
-											<Table
+											<CompactTable
 												rowKey="id"
 												size="small"
 												loading={loadingVersions}
@@ -454,7 +454,7 @@ export function QueryDatasetManager() {
 										key: "dependencies",
 										label: `看板依赖 (${reports.length})`,
 										children: (
-											<Table
+											<CompactTable
 												rowKey="id"
 												size="small"
 												loading={loadingReports}

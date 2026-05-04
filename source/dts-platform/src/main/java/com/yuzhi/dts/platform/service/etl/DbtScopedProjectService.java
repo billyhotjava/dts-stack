@@ -71,7 +71,6 @@ public class DbtScopedProjectService {
 
         List<ModelingSqlModel> allModels = modelingSqlModelRepository.findAll();
         Map<String, ModelingSqlModel> modelByName = buildModelByName(allModels);
-        validateRequestedModels(parsedSelector.modelNames(), modelByName);
 
         Map<String, Path> seedsByName = indexResourceFiles(workspaceDir.resolve("seeds"), Set.of(".csv", ".tsv"));
         Map<String, Path> snapshotsByName = indexResourceFiles(workspaceDir.resolve("snapshots"), Set.of(".sql"));
@@ -80,6 +79,7 @@ public class DbtScopedProjectService {
         // accept). DWD models that ref() them would otherwise fail dbt compilation with
         // "depends on a node named '...' which was not found".
         Map<String, Path> modelFilesByName = indexResourceFiles(workspaceDir.resolve("models"), Set.of(".sql"));
+        validateRequestedModels(parsedSelector.modelNames(), modelByName, modelFilesByName);
 
         Set<String> requestedModelNames = new LinkedHashSet<>(parsedSelector.modelNames());
         Set<String> includedModelNames = new LinkedHashSet<>();
@@ -169,14 +169,15 @@ public class DbtScopedProjectService {
         }
 
         List<String> requested = requestedModelNames.stream().toList();
-        List<String> included = includedModelNames.stream().toList();
+        List<String> included = new ArrayList<>(includedModelNames);
+        included.addAll(includedFilesystemModelNames);
         String externalProjectDir = toExternalProjectDir(workspaceDir, scopedProjectDir);
         LOG.info(
             "[dbt-scoped] prepared scoped project {} (external view: {}) with {} requested, {} DB-registered, {} filesystem-only models",
             scopedProjectDir,
             externalProjectDir,
             requested.size(),
-            included.size(),
+            includedModelNames.size(),
             includedFilesystemModelNames.size()
         );
         return Optional.of(new ScopedProject(externalProjectDir, requested, included));
@@ -290,16 +291,20 @@ public class DbtScopedProjectService {
         return modelByName;
     }
 
-    private void validateRequestedModels(List<String> requestedModelNames, Map<String, ModelingSqlModel> modelByName) {
+    private void validateRequestedModels(List<String> requestedModelNames, Map<String, ModelingSqlModel> modelByName, Map<String, Path> modelFilesByName) {
         List<String> missing = new ArrayList<>();
         for (String modelName : requestedModelNames) {
             String normalizedName = normalizeName(modelName);
-            if (StringUtils.hasText(normalizedName) && !modelByName.containsKey(normalizedName)) {
+            if (
+                StringUtils.hasText(normalizedName)
+                && !modelByName.containsKey(normalizedName)
+                && !modelFilesByName.containsKey(normalizedName)
+            ) {
                 missing.add(modelName);
             }
         }
         if (!missing.isEmpty()) {
-            throw new IllegalArgumentException("以下模型在逻辑建模中不存在，无法构造隔离编译工程: " + String.join(", ", missing));
+            throw new IllegalArgumentException("以下模型未在逻辑建模或 dbt 工作区中找到，无法构造隔离编译工程: " + String.join(", ", missing));
         }
     }
 

@@ -1,4 +1,5 @@
-import { Alert, Modal, Space, Table, Tag, Typography } from "antd";
+import { Alert, Modal, Space, Tag, Typography } from "antd";
+import { CompactTable } from "@/components/table";
 import type { SqlModelBatchDeleteDetail } from "../sqlModelBatchDeleteResult.helpers";
 
 const { Text } = Typography;
@@ -27,7 +28,7 @@ export default function BatchDeleteResultModal({ open, onClose, result, title = 
 					showIcon
 					message={`本次请求 ${result?.requested || 0} 个模型，成功 ${result?.deleted || 0} 个，失败 ${result?.failed || 0} 个，跳过 ${result?.skipped || 0} 个`}
 				/>
-				<Table
+				<CompactTable
 					size="small"
 					rowKey={(record) => record.modelId}
 					pagination={{ pageSize: 8, hideOnSinglePage: true }}

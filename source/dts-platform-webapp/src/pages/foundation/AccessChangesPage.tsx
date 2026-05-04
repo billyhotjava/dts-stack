@@ -12,10 +12,10 @@ import {
 	Row,
 	Select,
 	Space,
-	Table,
 	Tag,
 	Typography,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { PageHeader } from "@/components/page-header";
 import { ingestionTaskAPI, type IngestionChangeLogDTO, type IngestionTaskDTO } from "@/api/ingestion";
@@ -326,7 +326,7 @@ export default function AccessChangesPage() {
 						<Input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="关键字" />
 					</Col>
 				</Row>
-				<Table
+				<CompactTable
 					rowKey={(row) => row.id ?? `${row.taskId}-${row.createdDate}`}
 					columns={columns}
 					dataSource={changes}

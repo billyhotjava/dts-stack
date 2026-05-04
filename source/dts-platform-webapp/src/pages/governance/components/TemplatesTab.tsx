@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Button, Form, Input, Modal, Select, Space, Table, Tag } from "antd";
+import { Button, Form, Input, Modal, Select, Space, Tag } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from "@ant-design/icons";
 import {
@@ -191,7 +192,7 @@ export default function TemplatesTab({ canManage }: { canManage: boolean }) {
 					新增模板
 				</Button>
 			</div>
-			<Table
+			<CompactTable
 				rowKey={(r) => r.id || r.code || Math.random().toString(36)}
 				columns={columns}
 				dataSource={templates}

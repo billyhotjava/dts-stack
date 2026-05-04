@@ -833,6 +833,16 @@ generate_env_base(){
   : "${OAUTH2_PLATFORM_CLIENT_SECRET:=${SECRET}}"
   OIDC_ISSUER_URI="https://${HOST_SSO}/realms/${KC_REALM}"
 
+  # ---------- Service-to-service auth ----------
+  # 按调用方向命名,避免把 admin 身份、platform 入站、ingestion/analytics 出站混成一个全局 token。
+  # 复用 $SECRET 作为单机默认值;生产部署可独立轮换每一对。
+  : "${DTS_PLATFORM_TO_ADMIN_TOKEN:=${SECRET}}"
+  : "${DTS_INBOUND_FROM_INGESTION:=${SECRET}}"
+  : "${DTS_INBOUND_FROM_ANALYTICS:=${SECRET}}"
+  : "${DTS_INGESTION_TO_PLATFORM:=${DTS_INBOUND_FROM_INGESTION}}"
+  : "${DTS_ANALYTICS_TO_PLATFORM:=${DTS_INBOUND_FROM_ANALYTICS}}"
+  : "${AUDIT_INGEST_SERVICE_TOKENS:=${DTS_PLATFORM_TO_ADMIN_TOKEN}}"
+
   # ---------- Analytics ----------
   # Prefer your self-built image (offline/air-gapped friendly). Default aligns with other DTS app images.
   : "${IMAGE_DTS_ADMIN:=dts-admin:1.0.0}"
@@ -1097,6 +1107,15 @@ DTS_PKI_GATEWAY_ENDPOINT=${DTS_PKI_GATEWAY_ENDPOINT}
 DTS_PKI_DIGEST=${DTS_PKI_DIGEST}
 DTS_PKI_VENDOR_JAR=${DTS_PKI_VENDOR_JAR}
 DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA=${DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA_ESCAPED}
+
+# ====== Service-to-service auth ======
+# 按调用方向命名;DTS_ADMIN_SERVICE_TOKEN 仅保留在 application.yml fallback 中兼容旧部署,不再生成。
+DTS_PLATFORM_TO_ADMIN_TOKEN=${DTS_PLATFORM_TO_ADMIN_TOKEN}
+DTS_INBOUND_FROM_INGESTION=${DTS_INBOUND_FROM_INGESTION}
+DTS_INBOUND_FROM_ANALYTICS=${DTS_INBOUND_FROM_ANALYTICS}
+DTS_INGESTION_TO_PLATFORM=${DTS_INGESTION_TO_PLATFORM}
+DTS_ANALYTICS_TO_PLATFORM=${DTS_ANALYTICS_TO_PLATFORM}
+AUDIT_INGEST_SERVICE_TOKENS=${AUDIT_INGEST_SERVICE_TOKENS}
 
 # ====== Admin password-login IP allowlist (triad only; PKI unaffected) ======
 DTS_SECURITY_IP_ALLOWLIST_ENABLED=${DTS_SECURITY_IP_ALLOWLIST_ENABLED}

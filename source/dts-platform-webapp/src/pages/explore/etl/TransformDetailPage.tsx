@@ -18,8 +18,8 @@ import {
 	Drawer,
 	Progress,
 	Alert,
-	Table,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import {
 	PlayCircleOutlined,
 	EditOutlined,
@@ -761,7 +761,7 @@ export default function TransformDetailPage() {
 													<Alert className="mt-4" type="warning" showIcon message="暂无预检摘要" />
 												) : badRowSummary.errorRows ? (
 													<>
-														<Table<StagingRuleErrorSummary>
+														<CompactTable<StagingRuleErrorSummary>
 															className="mt-4"
 															rowKey={(record) => record.ruleName}
 															size="small"
@@ -915,7 +915,7 @@ export default function TransformDetailPage() {
 										{incrementalStale && (
 											<Alert type="warning" banner message="数据可能已过期，请点击刷新按钮重新加载" className="mb-2" />
 										)}
-										<Table<IngestionIncrementalStateDTO>
+										<CompactTable<IngestionIncrementalStateDTO>
 											rowKey={(record) => `${record.taskId}-${record.sourceTable}`}
 											size="small"
 											loading={incrementalStatesLoading}

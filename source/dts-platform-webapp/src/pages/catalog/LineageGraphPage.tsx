@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { DownloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Space } from "antd";
+import { Alert, Button, Card, Space, Switch, Typography } from "antd";
 import { toast } from "sonner";
-import { VisualFlowCanvas } from "@/components/visual-canvas/VisualFlowCanvas";
+import { LineageGraph } from "@/components/lineage";
 import { getCatalogLineageImpact } from "@/api/platformApi";
 import {
 	applyLayeredLayout,
-	buildFlowElements,
+	type ColumnLineage,
 	downloadBlob,
 	edgeEndpoint,
 	edgeLabel,
 	EmptyAction,
+	type ImpactEdge,
 	type ImpactNode,
 	type ImpactResult,
 	type LayoutDirection,
@@ -44,12 +45,25 @@ export default function LineageGraphPage() {
 	const [snapshotAt, setSnapshotAt] = useState("");
 	const [keyword, setKeyword] = useState("");
 	const [layoutDirection, setLayoutDirection] = useState<LayoutDirection>("LR");
+	const [showColumns, setShowColumns] = useState(false);
 	const [loading, setLoading] = useState(false);
 	const [impact, setImpact] = useState<ImpactResult | null>(null);
 	const [selectedNode, setSelectedNode] = useState<ImpactNode | null>(null);
 	const datasetOptions = useMemo(() => datasets.map((item) => ({ label: item.name, value: item.id })), [datasets]);
+	// 表格/导出 用 keyword 做数据级过滤；图渲染用全集 + highlightKeyword 做视觉高亮
 	const { nodes, edges } = useLineageData(impact, keyword);
-	const { rfNodes, rfEdges } = useMemo(() => buildFlowElements(nodes, edges, layoutDirection, selectedNode), [nodes, edges, layoutDirection, selectedNode]);
+	const lineageNodes: ImpactNode[] = useMemo(
+		() => (Array.isArray(impact?.nodes) ? (impact?.nodes ?? []) : []),
+		[impact?.nodes],
+	);
+	const lineageEdges: ImpactEdge[] = useMemo(
+		() => (Array.isArray(impact?.edges) ? (impact?.edges ?? []) : []),
+		[impact?.edges],
+	);
+	const lineageColumns: ColumnLineage[] = useMemo(
+		() => (Array.isArray(impact?.columnLineages) ? (impact?.columnLineages ?? []) : []),
+		[impact?.columnLineages],
+	);
 
 	const loadDatasets = async () => {
 		try {
@@ -222,21 +236,40 @@ ${svgNodes}
 			</Card>
 			{!selectedId ? <Alert type="info" message="请选择一个数据集查看血缘图谱。" showIcon action={<EmptyAction onReload={loadDatasets} />} /> : null}
 			{selectedId ? (
-				<Card loading={loading} bodyStyle={{ padding: 0 }}>
-					<VisualFlowCanvas
-						nodes={rfNodes}
-						edges={rfEdges}
+				<Card
+					loading={loading}
+					bodyStyle={{ padding: 0 }}
+					title={
+						<Space size={16}>
+							<Typography.Text>血缘图</Typography.Text>
+							<Space size={6}>
+								<Typography.Text type="secondary" className="text-xs">显示字段血缘</Typography.Text>
+								<Switch
+									size="small"
+									checked={showColumns}
+									onChange={setShowColumns}
+									disabled={!lineageColumns.length}
+								/>
+								{!lineageColumns.length ? (
+									<Typography.Text type="secondary" className="text-xs">（当前无字段血缘数据）</Typography.Text>
+								) : (
+									<Typography.Text type="secondary" className="text-xs">{lineageColumns.length} 条字段关系</Typography.Text>
+								)}
+							</Space>
+						</Space>
+					}
+				>
+					<LineageGraph
+						nodes={lineageNodes}
+						edges={lineageEdges}
+						columnLineages={lineageColumns}
+						showColumns={showColumns}
 						height={540}
-						showMiniMap
+						layoutDirection={layoutDirection}
+						selectedNodeId={selectedNode?.id ?? null}
+						highlightKeyword={keyword}
 						emptyText="暂无血缘节点"
-						onNodeClick={(node) => {
-							const matched = nodes.find((item) => (item.id || "") === node.id);
-							if (matched) setSelectedNode(matched);
-						}}
-						nodeColor={(node) => {
-							const matched = nodes.find((item) => (item.id || "") === node.id);
-							return nodeTone(matched || {}).bg;
-						}}
+						onNodeClick={(node) => setSelectedNode(node)}
 					/>
 				</Card>
 			) : null}

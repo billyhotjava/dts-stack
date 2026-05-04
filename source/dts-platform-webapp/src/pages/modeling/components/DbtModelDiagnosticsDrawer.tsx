@@ -1,4 +1,5 @@
-import { Alert, Button, Divider, Drawer, Empty, Skeleton, Space, Table, Tag, Typography } from "antd";
+import { Alert, Button, Divider, Drawer, Empty, Skeleton, Space, Tag, Typography } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { ReloadOutlined } from "@ant-design/icons";
 import { formatDateTime, normalizeText } from "@/utils/textUtils";
@@ -180,7 +181,7 @@ export default function DbtModelDiagnosticsDrawer({
 
 					<div>
 						<div className="mb-2 text-sm font-semibold">上游依赖</div>
-						<Table
+						<CompactTable
 							rowKey={(row, index) => `${row.dependency?.uniqueId || row.dependency?.name || "upstream"}-${index}`}
 							size="small"
 							pagination={false}

@@ -10,11 +10,11 @@ import {
 	Modal,
 	Select,
 	Space,
-	Table,
 	Tabs,
 	Tag,
 	Typography,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { DeleteOutlined, EditOutlined, PlusOutlined, SaveOutlined } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
@@ -429,7 +429,7 @@ export default function Page() {
 												) : null}
 											</Space>
 										) : null}
-										<Table
+										<CompactTable
 											rowKey={(record, idx) => record.id || `new-${idx}`}
 											columns={classificationColumns}
 											dataSource={classificationRows}
@@ -448,7 +448,7 @@ export default function Page() {
 											新增规则
 										</Button>
 									</Space>
-									<Table
+									<CompactTable
 										rowKey={(record) => record.id || record.column || "mask"}
 										columns={maskingColumns}
 										dataSource={maskingRules}

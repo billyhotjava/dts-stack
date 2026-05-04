@@ -8,9 +8,9 @@ import {
 	Input,
 	Select,
 	Switch,
-	Table,
 	Typography,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import type { IngestionFormContext } from "./types";
 import {
 	normalizeText,
@@ -98,7 +98,7 @@ export function UnifiedReviewStep({
 				className="mb-4"
 			/>
 			{tableMappingPreview.length > 0 ? (
-				<Table
+				<CompactTable
 					size="small"
 					dataSource={tableMappingPreview}
 					rowKey="source"
@@ -154,7 +154,7 @@ export function UnifiedReviewStep({
 				/>
 			) : null}
 			{tableMappingPreview.length > 0 ? (
-				<Table
+				<CompactTable
 					size="small"
 					dataSource={tableMappingPreview}
 					rowKey="source"

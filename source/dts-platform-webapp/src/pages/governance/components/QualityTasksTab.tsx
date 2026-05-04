@@ -9,9 +9,9 @@ import {
 	Progress,
 	Select,
 	Space,
-	Table,
 	Tag,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import {
 	EyeOutlined,
@@ -442,7 +442,7 @@ export default function QualityTasksTab() {
 					</Button>
 				}
 			>
-				<Table
+				<CompactTable
 					rowKey={(r) => r.id || `${r.datasetId}-${r.ruleId || "all"}`}
 					columns={scheduleColumns}
 					dataSource={tasks}
@@ -529,7 +529,7 @@ export default function QualityTasksTab() {
 					</Button>
 				</div>
 
-				<Table
+				<CompactTable
 					rowKey={(r) => r.id || Math.random().toString(36)}
 					columns={runColumns}
 					dataSource={runs}
@@ -621,7 +621,7 @@ export default function QualityTasksTab() {
 						{/* Failing rows sample */}
 						{failingSample.length > 0 && (
 							<Card size="small" title={`失败行预览 (前 ${failingSample.length} 条)`}>
-								<Table
+								<CompactTable
 									rowKey={(_, i) => String(i)}
 									columns={sampleColumns}
 									dataSource={failingSample}

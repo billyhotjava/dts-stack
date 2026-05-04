@@ -9,11 +9,11 @@ import {
 	Row,
 	Select,
 	Spin,
-	Table,
 	Tabs,
 	Tag,
 	Typography,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import { toast } from "sonner";
 import {
 	getIndicatorDashboard,
@@ -393,7 +393,7 @@ export default function IndicatorDashboardPage() {
 							{drillLoading ? (
 								<Spin />
 							) : drillRows.length > 0 ? (
-								<Table
+								<CompactTable
 									size="small"
 									dataSource={drillRows}
 									rowKey={(_, i) => String(i)}
@@ -422,7 +422,7 @@ export default function IndicatorDashboardPage() {
 								运行记录
 							</Text>
 							{detailData.history && detailData.history.length > 0 ? (
-								<Table
+								<CompactTable
 									size="small"
 									dataSource={detailData.history}
 									rowKey="id"

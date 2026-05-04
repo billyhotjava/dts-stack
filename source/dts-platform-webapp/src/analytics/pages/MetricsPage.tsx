@@ -3,7 +3,8 @@ import { analyticsApi, type Metric, type PlatformMetric } from "../api/analytics
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Spin, Card, Statistic, Tag, Table } from "antd";
+import { Spin, Card, Statistic, Tag } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 type LoadState<T> =
@@ -94,7 +95,7 @@ export default function MetricsPage() {
 						<EmptyState title={t(locale, "common.empty")} description={t(locale, "metrics.analyticsEmpty")} />
 					)}
 					{localMetrics.state === "loaded" && localMetrics.value.length > 0 && (
-						<Table columns={metricColumns} dataSource={localMetrics.value} rowKey={(m) => String(m.id)} pagination={false} size="small" />
+						<CompactTable columns={metricColumns} dataSource={localMetrics.value} rowKey={(m) => String(m.id)} pagination={false} size="small" />
 					)}
 			</Card>
 
@@ -116,7 +117,7 @@ export default function MetricsPage() {
 						<EmptyState title={t(locale, "common.empty")} description={t(locale, "metrics.platformEmpty")} />
 					)}
 					{platformMetrics.state === "loaded" && platformMetrics.value.length > 0 && (
-						<Table columns={platformMetricColumns} dataSource={platformMetrics.value} rowKey={(m) => String(m.id)} pagination={false} size="small" />
+						<CompactTable columns={platformMetricColumns} dataSource={platformMetrics.value} rowKey={(m) => String(m.id)} pagination={false} size="small" />
 					)}
 			</Card>
 		</div>

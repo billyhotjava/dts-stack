@@ -29,6 +29,7 @@ class ServiceDependencyAuthenticationFilterTest {
 
     private static final String SERVICE_HEADER = "X-DTS-Service";
     private static final String TOKEN_HEADER = "X-DTS-Service-Token";
+    private static final String INGESTION_RUNTIME_DETAIL = "/api/infra/data-sources/11111111-1111-1111-1111-111111111111/runtime-detail";
 
     private PlatformInboundServiceAuthProperties props;
     private SvcTokenAuthService svcTokenAuthService;
@@ -67,6 +68,8 @@ class ServiceDependencyAuthenticationFilterTest {
         ServiceDependencyAuthenticationFilter filter = new ServiceDependencyAuthenticationFilter(props, svcTokenAuthService);
         MockHttpServletRequest req = new MockHttpServletRequest();
         req.addHeader(SERVICE_HEADER, "dts-ingestion");
+        req.setMethod("GET");
+        req.setRequestURI(INGESTION_RUNTIME_DETAIL);
         // no token header
         filter.doFilter(req, new MockHttpServletResponse(), chain);
 
@@ -80,6 +83,8 @@ class ServiceDependencyAuthenticationFilterTest {
         MockHttpServletRequest req = new MockHttpServletRequest();
         req.addHeader(SERVICE_HEADER, "dts-ingestion");
         req.addHeader(TOKEN_HEADER, "wrong-token");
+        req.setMethod("GET");
+        req.setRequestURI(INGESTION_RUNTIME_DETAIL);
 
         filter.doFilter(req, new MockHttpServletResponse(), chain);
 
@@ -92,13 +97,15 @@ class ServiceDependencyAuthenticationFilterTest {
         MockHttpServletRequest req = new MockHttpServletRequest();
         req.addHeader(SERVICE_HEADER, "dts-ingestion");
         req.addHeader(TOKEN_HEADER, "ingestion-secret");
+        req.setMethod("GET");
+        req.setRequestURI(INGESTION_RUNTIME_DETAIL);
 
         filter.doFilter(req, new MockHttpServletResponse(), chain);
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         assertThat(auth).isNotNull();
         assertThat(auth.getPrincipal()).isEqualTo("service:dts-ingestion");
-        assertThat(auth.getAuthorities()).extracting(Object::toString).contains(AuthoritiesConstants.OP_ADMIN);
+        assertThat(auth.getAuthorities()).extracting(Object::toString).contains(AuthoritiesConstants.SERVICE_INTERNAL);
         // Other service's secret 不能用来认证 ingestion
     }
 
@@ -113,6 +120,8 @@ class ServiceDependencyAuthenticationFilterTest {
         MockHttpServletRequest req = new MockHttpServletRequest();
         req.addHeader(SERVICE_HEADER, "dts-ingestion");
         req.addHeader(TOKEN_HEADER, "shared-fallback");
+        req.setMethod("GET");
+        req.setRequestURI(INGESTION_RUNTIME_DETAIL);
 
         filter.doFilter(req, new MockHttpServletResponse(), chain);
 
@@ -129,6 +138,8 @@ class ServiceDependencyAuthenticationFilterTest {
         MockHttpServletRequest req = new MockHttpServletRequest();
         req.addHeader(SERVICE_HEADER, "dts-ingestion");
         req.addHeader(TOKEN_HEADER, "db-managed-token");
+        req.setMethod("GET");
+        req.setRequestURI(INGESTION_RUNTIME_DETAIL);
 
         filter.doFilter(req, new MockHttpServletResponse(), chain);
 
@@ -163,6 +174,8 @@ class ServiceDependencyAuthenticationFilterTest {
         MockHttpServletRequest req = new MockHttpServletRequest();
         req.addHeader(SERVICE_HEADER, "dts-ingestion");
         req.addHeader(TOKEN_HEADER, "ingestion-secret");
+        req.setMethod("GET");
+        req.setRequestURI(INGESTION_RUNTIME_DETAIL);
 
         filter.doFilter(req, new MockHttpServletResponse(), chain);
 
@@ -175,6 +188,8 @@ class ServiceDependencyAuthenticationFilterTest {
         ServiceDependencyAuthenticationFilter filter = new ServiceDependencyAuthenticationFilter(props, svcTokenAuthService);
         MockHttpServletRequest req = new MockHttpServletRequest();
         req.addHeader(SERVICE_HEADER, "dts-ingestion");
+        req.setMethod("GET");
+        req.setRequestURI(INGESTION_RUNTIME_DETAIL);
         // no token
 
         filter.doFilter(req, new MockHttpServletResponse(), chain);
@@ -203,9 +218,26 @@ class ServiceDependencyAuthenticationFilterTest {
         MockHttpServletRequest req = new MockHttpServletRequest();
         req.addHeader(SERVICE_HEADER, "dts-ingestion");
         req.addHeader(TOKEN_HEADER, "ingestion-secret");
+        req.setMethod("GET");
+        req.setRequestURI(INGESTION_RUNTIME_DETAIL);
 
         filter.doFilter(req, new MockHttpServletResponse(), chain);
 
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+    }
+
+    @Test
+    void matchingTokenOnDisallowedEndpoint_doesNotAuthenticate() throws Exception {
+        ServiceDependencyAuthenticationFilter filter = new ServiceDependencyAuthenticationFilter(props, svcTokenAuthService);
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.addHeader(SERVICE_HEADER, "dts-ingestion");
+        req.addHeader(TOKEN_HEADER, "ingestion-secret");
+        req.setMethod("GET");
+        req.setRequestURI("/api/services/tokens");
+
+        filter.doFilter(req, new MockHttpServletResponse(), chain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verify(svcTokenAuthService, never()).authenticateService(any(), any());
     }
 }

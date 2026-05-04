@@ -13,11 +13,11 @@ import {
 	Select,
 	Space,
 	Switch,
-	Table,
 	Tag,
 	Typography,
 	message,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import {
 	AppstoreOutlined,
 	PlusOutlined,
@@ -910,7 +910,7 @@ export default function DataSourcesPage() {
 			<details className="mt-2">
 				<summary className="cursor-pointer text-xs text-slate-600">字段选择、重命名和类型覆盖</summary>
 				<div className="mt-2">
-					<Table<SchemaDiscoverColumn>
+					<CompactTable<SchemaDiscoverColumn>
 						size="small"
 						rowKey="name"
 						pagination={false}
@@ -1444,7 +1444,7 @@ export default function DataSourcesPage() {
 				</Space>
 			}
 		>
-			<Table
+			<CompactTable
 				rowKey="id"
 				columns={columns as any}
 				dataSource={list}

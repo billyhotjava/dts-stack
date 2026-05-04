@@ -10,11 +10,11 @@ import {
 	Select,
 	Space,
 	Switch,
-	Table,
 	Tag,
 	Tooltip,
 	Typography,
 } from "antd";
+import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import {
 	DeleteOutlined,
@@ -178,6 +178,7 @@ export default function Page({ embedded }: Props) {
 	const [queryDatasets, setQueryDatasets] = useState<QueryDatasetAsset[]>([]);
 	const [editing, setEditing] = useState<ReportLink | null>(null);
 	const [modalOpen, setModalOpen] = useState(false);
+	const [detailRow, setDetailRow] = useState<ReportLink | null>(null);
 	const [form] = Form.useForm<FormValues>();
 	const queryDatasetMeta = useMemo(() => {
 		const map = new Map<string, QueryDatasetAsset>();
@@ -335,7 +336,7 @@ export default function Page({ embedded }: Props) {
 		}
 	};
 
-	const columns: ColumnsType<ReportLink> = useMemo(
+	const baseColumns: ColumnsType<ReportLink> = useMemo(
 		() => [
 			{
 				title: "名称",
@@ -428,8 +429,10 @@ export default function Page({ embedded }: Props) {
 			},
 			{
 				title: "操作",
+				dataIndex: "actions",
 				key: "actions",
-				width: 180,
+				width: 280,
+				fixed: "right",
 				render: (_value, record) => (
 					<Space>
 						<Tooltip title="打开">
@@ -453,6 +456,11 @@ export default function Page({ embedded }: Props) {
 			},
 		],
 		[hasPurgePermission, queryDatasetMeta],
+	);
+
+	const columns = useMemo(
+		() => appendDetailAction(baseColumns, (row) => setDetailRow(row)),
+		[baseColumns],
 	);
 
 	return (
@@ -513,7 +521,7 @@ export default function Page({ embedded }: Props) {
 					<Text type="secondary">共 {records.length} 条</Text>
 				</div>
 
-				<Table
+				<CompactTable
 					rowKey={(record) => record.id || record.code}
 					loading={loading}
 					dataSource={records}
@@ -635,6 +643,13 @@ export default function Page({ embedded }: Props) {
 					</Form.Item>
 				</Form>
 			</Modal>
+			<RecordDetailDrawer<ReportLink>
+				open={detailRow !== null}
+				onClose={() => setDetailRow(null)}
+				record={detailRow}
+				columns={baseColumns}
+				title="BI 链接详情"
+			/>
 		</div>
 	);
 }

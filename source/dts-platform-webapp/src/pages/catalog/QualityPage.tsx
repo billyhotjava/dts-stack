@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Card, Select, Space, Table, Tag } from "antd";
+import { Alert, Card, Select, Space, Tag } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
@@ -335,7 +336,7 @@ export default function QualityPage() {
 
 			<Card title="质量规则详情">
 				{cases.length ? (
-					<Table
+					<CompactTable
 						rowKey={(row, idx) => row.id || row.name || String(idx)}
 						columns={columns}
 						dataSource={cases}

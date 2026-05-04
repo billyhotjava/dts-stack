@@ -12,12 +12,12 @@ import {
 	Radio,
 	Select,
 	Space,
-	Table,
 	Tag,
 	Tooltip,
 	Typography,
 	Upload,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import {
 	CloudUploadOutlined,
@@ -362,7 +362,7 @@ function SqlRepairEditor({ runId }: { runId?: string }) {
 					<Typography.Text type="secondary" className="mb-1 block text-xs">
 						当前数据预览（修复前）
 					</Typography.Text>
-					<Table
+					<CompactTable
 						rowKey={(r) => String(r.rowId ?? Math.random())}
 						columns={previewColumns}
 						dataSource={samples}
@@ -584,7 +584,7 @@ function QualityFixMode({ initialRunId }: { initialRunId?: string }) {
 				{runs.length === 0 && !loading ? (
 					<Empty description="暂无失败的质量检查任务" />
 				) : (
-					<Table
+					<CompactTable
 						rowKey={(r) => r.id || Math.random().toString(36)}
 						columns={columns}
 						dataSource={runs}
@@ -649,7 +649,7 @@ function QualityFixMode({ initialRunId }: { initialRunId?: string }) {
 
 							{/* Preview table */}
 							{previewRows.length > 0 && (
-								<Table
+								<CompactTable
 									rowKey={(r) => r.rowId}
 									columns={previewColumns}
 									dataSource={previewRows}

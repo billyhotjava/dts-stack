@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Progress, Space, Table, Tag, Timeline, Typography } from "antd";
+import { Button, Progress, Space, Tag, Timeline, Typography } from "antd";
+import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { Activity, Boxes, CheckCircle2, Clock3, DatabaseZap, GitBranch, RadioTower, RefreshCw, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router";
@@ -89,6 +90,7 @@ export default function EltConsolePage() {
 	const [stages, setStages] = useState<PipelineStage[]>([]);
 	const [chainItems, setChainItems] = useState<ChainItem[]>([]);
 	const [sources, setSources] = useState<Record<string, Sprint27SourceStatus>>({});
+	const [detailRow, setDetailRow] = useState<ChainItem | null>(null);
 
 	const loadSnapshot = async () => {
 		setLoading(true);
@@ -168,7 +170,7 @@ export default function EltConsolePage() {
 		},
 	];
 
-	const chainColumns: ColumnsType<ChainItem> = [
+	const chainBaseColumns: ColumnsType<ChainItem> = [
 		{ title: "资产", dataIndex: "asset", key: "asset" },
 		{ title: "阶段", dataIndex: "stage", key: "stage", width: 100 },
 		{ title: "责任域", dataIndex: "owner", key: "owner", width: 150 },
@@ -188,8 +190,10 @@ export default function EltConsolePage() {
 		},
 		{
 			title: "操作",
+			dataIndex: "action",
 			key: "action",
-			width: 100,
+			width: 160,
+			fixed: "right",
 			render: (_, record) => (
 				<Button type="link" size="small" onClick={() => navigate(record.path)}>
 					进入
@@ -197,6 +201,12 @@ export default function EltConsolePage() {
 			),
 		},
 	];
+
+	const chainColumns = useMemo(
+		() => appendDetailAction(chainBaseColumns, (row) => setDetailRow(row)),
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[],
+	);
 
 	return (
 		<div className="space-y-6">
@@ -304,7 +314,7 @@ export default function EltConsolePage() {
 				</PlatformSectionCard>
 
 				<PlatformSectionCard title="资产链路" bodyClassName="pt-0">
-					<Table
+					<CompactTable<ChainItem>
 						rowKey="key"
 						size="small"
 						columns={chainColumns}
@@ -313,6 +323,13 @@ export default function EltConsolePage() {
 					/>
 				</PlatformSectionCard>
 			</div>
+			<RecordDetailDrawer<ChainItem>
+				open={detailRow !== null}
+				onClose={() => setDetailRow(null)}
+				record={detailRow}
+				columns={chainBaseColumns}
+				title="链路详情"
+			/>
 		</div>
 	);
 }

@@ -9,7 +9,8 @@ import {
 } from "../api/analyticsApi";
 import { PageSection } from "../components/PageContainer/PageContainer";
 import { PageHeader } from "@/components/page-header";
-import { Table, Tag, Button, Input, Modal, message, Space, Tooltip } from "antd";
+import { Tag, Button, Input, Modal, message, Space, Tooltip } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import UploadedDataEditor from "../components/UploadedDataEditor";
 
@@ -341,7 +342,7 @@ export default function DataPage() {
 					/>
 				}
 			>
-				<Table<DataLakeRow>
+				<CompactTable<DataLakeRow>
 					rowKey="id"
 					columns={lakeColumns}
 					dataSource={lakeRows}
@@ -375,7 +376,7 @@ export default function DataPage() {
 					</Space>
 				}
 			>
-				<Table<MyUploadItem>
+				<CompactTable<MyUploadItem>
 					rowKey="id"
 					columns={uploadColumns}
 					dataSource={filteredUploads}

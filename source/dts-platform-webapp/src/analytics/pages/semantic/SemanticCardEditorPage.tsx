@@ -16,10 +16,10 @@ import {
 	Select,
 	Space,
 	Spin,
-	Table,
 	Tag,
 	Typography,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
@@ -908,7 +908,7 @@ export default function SemanticCardEditorPage() {
 								{queryState?.state === "loaded" && currentChartData && (
 									<Space direction="vertical" size={16} style={{ width: "100%" }}>
 										<ChartRenderer display={displayType} data={currentChartData} />
-										<Table
+										<CompactTable
 											size="small"
 											pagination={resultRows.length > 20 ? { pageSize: 20 } : false}
 											columns={resultColumns}

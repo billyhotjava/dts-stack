@@ -128,7 +128,7 @@ public class SecurityConfiguration {
             if (isProduction) {
                 LOG.warn(
                     "SECURITY: dts.platform.inbound.service-auth.legacy-header-only-mode=true detected in PRODUCTION profile. " +
-                    "This bypasses X-DTS-Service-Token validation and exposes any OP_ADMIN endpoint to header forgery. " +
+                    "This bypasses X-DTS-Service-Token validation and exposes service-enabled endpoints to header forgery. " +
                     "Disable immediately unless this is an explicit emergency rollback."
                 );
             } else {

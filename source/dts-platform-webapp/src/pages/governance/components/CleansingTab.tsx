@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Button, Form, Input, InputNumber, Modal, Space, Table, Tag } from "antd";
+import { Button, Form, Input, InputNumber, Modal, Space, Tag } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import {
@@ -136,7 +137,7 @@ export default function CleansingTab({ canManage }: { canManage: boolean }) {
 					新增清洗函数
 				</Button>
 			</div>
-			<Table
+			<CompactTable
 				rowKey={(r) => r.id || r.code || Math.random().toString(36)}
 				columns={columns}
 				dataSource={items}

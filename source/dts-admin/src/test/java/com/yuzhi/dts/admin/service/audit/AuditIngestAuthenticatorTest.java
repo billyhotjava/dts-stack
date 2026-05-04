@@ -86,14 +86,14 @@ class AuditIngestAuthenticatorTest {
     }
 
     @Test
-    @DisplayName("require=true 但 token 列表空 → fail-soft 通过 + warn")
-    void emptyTokenListFailsSoft() {
+    @DisplayName("require=true 但 token 列表空 → fail-closed 拒绝")
+    void emptyTokenListFailsClosed() {
         AuditIngestAuthenticator auth = authenticatorWith(true, List.of());
 
         Decision decision = auth.authenticate("Bearer anything", "platform");
 
-        assertThat(decision.accepted()).isTrue();
-        assertThat(decision.reason()).contains("fail-soft");
+        assertThat(decision.accepted()).isFalse();
+        assertThat(decision.reason()).contains("no service tokens configured");
     }
 
     @Test

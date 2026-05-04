@@ -12,9 +12,9 @@ import {
 	Select,
 	Space,
 	Switch,
-	Table,
 	Tag,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { DeleteOutlined, EditOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import {
@@ -386,7 +386,7 @@ export default function QualityTasksPanel() {
 							: "当前账号为只读模式，仅可查看巡检计划。"
 					}
 				/>
-				<Table
+				<CompactTable
 					rowKey={(record) => record.id || `${record.datasetId}-${record.ruleId || "all"}`}
 					columns={columns}
 					dataSource={tasks}

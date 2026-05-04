@@ -48,6 +48,10 @@ public class InfraDataSourceResource {
 
     private static final String INFRA_MAINTAINER_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).INFRA_MAINTAINERS)";
+    private static final String ANALYTICS_SERVICE_EXPRESSION =
+        "hasAuthority('" + AuthoritiesConstants.SERVICE_INTERNAL + "') and authentication.name == 'service:dts-analytics'";
+    private static final String INTERNAL_SERVICE_EXPRESSION =
+        "hasAuthority('" + AuthoritiesConstants.SERVICE_INTERNAL + "')";
     private static final String SERVICE_TOKEN_HEADER = "X-DTS-Service-Token";
 
     private final InfraManagementService infraManagementService;
@@ -77,7 +81,7 @@ public class InfraDataSourceResource {
     }
 
     @GetMapping
-    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    @PreAuthorize("(" + INFRA_MAINTAINER_EXPRESSION + ") or (" + ANALYTICS_SERVICE_EXPRESSION + ")")
     public ApiResponse<List<InfraDataSourceDto>> list(
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
@@ -123,7 +127,7 @@ public class InfraDataSourceResource {
     }
 
     @GetMapping("/{id}/detail")
-    @PreAuthorize("hasAuthority('" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize("hasAuthority('" + AuthoritiesConstants.OP_ADMIN + "') or (" + ANALYTICS_SERVICE_EXPRESSION + ")")
     public ApiResponse<InfraDataSourceDetailDto> detailWithSecrets(@PathVariable UUID id) {
         InfraDataSourceDetailDto detail = infraManagementService.getDataSourceDetail(id);
         auditService.auditAction(
@@ -136,7 +140,7 @@ public class InfraDataSourceResource {
     }
 
     @GetMapping("/{id}/runtime-detail")
-    @PreAuthorize("hasAuthority('" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize("hasAuthority('" + AuthoritiesConstants.OP_ADMIN + "') or (" + INTERNAL_SERVICE_EXPRESSION + ")")
     public ApiResponse<InfraDataSourceDetailDto> runtimeDetail(
         @PathVariable UUID id,
         @RequestHeader(value = SERVICE_TOKEN_HEADER, required = false) String serviceToken

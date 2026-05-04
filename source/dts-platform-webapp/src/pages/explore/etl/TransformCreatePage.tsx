@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Button, Card, Divider, Form, Input, InputNumber, Modal, Progress, Select, Space, Steps, Table, Tag, Typography } from "antd";
+import { Alert, Button, Card, Divider, Form, Input, InputNumber, Modal, Progress, Select, Space, Steps, Tag, Typography } from "antd";
+import { CompactTable } from "@/components/table";
 import { SaveOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
@@ -1947,7 +1948,7 @@ export default function TransformCreatePage() {
 						刷新
 					</Button>
 				</Space>
-				<Table
+				<CompactTable
 					size="small"
 					rowKey={(record, index) => `${record?.rowIndex || "row"}-${index}`}
 					pagination={false}

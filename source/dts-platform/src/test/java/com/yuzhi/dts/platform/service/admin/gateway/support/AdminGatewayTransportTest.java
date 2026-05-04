@@ -67,8 +67,8 @@ class AdminGatewayTransportTest {
         server
             .expect(requestTo("http://dts-admin.test:8081/api/platform/orgs"))
             .andExpect(method(GET))
-            .andExpect(header("Authorization", "Bearer svc-token"))
             .andExpect(header("X-DTS-Service", "dts-platform"))
+            .andExpect(header("X-DTS-Service-Token", "svc-token"))
             .andExpect(header("X-Audit-Silent", "true"))
             .andExpect(header("X-Forwarded-For", "198.51.100.25"))
             .andRespond(

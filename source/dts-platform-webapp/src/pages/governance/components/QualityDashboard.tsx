@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Card, Col, Row, Spin, Statistic, Table } from "antd";
+import { Card, Col, Row, Spin, Statistic } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import {
 	CheckCircleOutlined,
@@ -153,7 +154,7 @@ export default function QualityDashboard() {
 			<Row gutter={[16, 16]}>
 				<Col xs={24} lg={12}>
 					<Card title="Top 5 问题数据集">
-						<Table
+						<CompactTable
 							rowKey="name"
 							dataSource={data.topFailingDatasets}
 							columns={failingDatasetColumns}
@@ -165,7 +166,7 @@ export default function QualityDashboard() {
 				</Col>
 				<Col xs={24} lg={12}>
 					<Card title="最近失败的检查">
-						<Table
+						<CompactTable
 							rowKey={(_, index) => String(index)}
 							dataSource={data.recentFailedRuns}
 							columns={recentFailedColumns}

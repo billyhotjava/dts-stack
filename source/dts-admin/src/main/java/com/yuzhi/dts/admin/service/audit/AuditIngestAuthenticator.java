@@ -52,7 +52,7 @@ public class AuditIngestAuthenticator {
         if (fingerprints.isEmpty()) {
             log.warn(
                 "Audit ingest is configured with require-token=true but service-tokens is empty; " +
-                "running in fail-soft mode. Configure DTS_ADMIN_SERVICE_TOKEN to lock down."
+                "requests will be rejected. Configure AUDIT_INGEST_SERVICE_TOKENS or DTS_ADMIN_SERVICE_TOKEN."
             );
             return;
         }
@@ -112,11 +112,11 @@ public class AuditIngestAuthenticator {
             long warnCount = faultyConfigWarnCount.incrementAndGet();
             if (warnCount == 1 || warnCount % 1000 == 0) {
                 log.warn(
-                    "auditing.ingest.service-tokens is empty while require-token=true; accepting events with WARN. " +
-                    "Configure DTS_ADMIN_SERVICE_TOKEN (or auditing.ingest.service-tokens) to enforce authentication."
+                    "auditing.ingest.service-tokens is empty while require-token=true; rejecting audit event. " +
+                    "Configure AUDIT_INGEST_SERVICE_TOKENS or DTS_ADMIN_SERVICE_TOKEN."
                 );
             }
-            return Decision.accept(serviceName, "fail-soft: no tokens configured");
+            return reject(serviceName, "no service tokens configured");
         }
 
         String presented = extractBearer(authorizationHeader);

@@ -9,10 +9,10 @@ import {
 	Modal,
 	Select,
 	Space,
-	Table,
 	Tag,
 	Typography,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import { EmptyState } from "@/components/empty-state";
@@ -363,7 +363,7 @@ export default function Page() {
 				{spaces.length === 0 && !loading ? (
 					<EmptyState title="暂无项目空间" description="先创建一个项目空间，配置仓库与环境信息。" />
 				) : (
-					<Table
+					<CompactTable
 						rowKey={(row) => row.id || row.name || Math.random().toString(36)}
 						columns={columns}
 						dataSource={spaces}

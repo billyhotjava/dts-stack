@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
 import type { EChartsOption } from "echarts";
-import { Alert, Button, Card, Col, Empty, InputNumber, Row, Select, Space, Statistic, Table, Tabs, Tag, Typography } from "antd";
+import { Alert, Button, Card, Col, Empty, InputNumber, Row, Select, Space, Statistic, Tabs, Tag, Typography } from "antd";
+import { CompactTable } from "@/components/table";
 import { ReloadOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { Chart } from "@/components/chart/chart";
@@ -340,7 +341,7 @@ export default function OpsOverviewPage() {
 			</Card>
 
 			<Card title="失败作业 Top 10">
-				<Table
+				<CompactTable
 					size="small"
 					pagination={false}
 					dataSource={topFailures}
@@ -356,7 +357,7 @@ export default function OpsOverviewPage() {
 
 			<Card title="告警概览">
 				{alerts.length ? (
-					<Table
+					<CompactTable
 						size="small"
 						pagination={false}
 						dataSource={alerts}
@@ -376,7 +377,7 @@ export default function OpsOverviewPage() {
 				extra={<Button size="small" onClick={() => void loadDagCards()}>刷新</Button>}
 			>
 				{runningDags.length > 0 ? (
-					<Table
+					<CompactTable
 						size="small"
 						pagination={false}
 						rowKey="id"
@@ -427,7 +428,7 @@ export default function OpsOverviewPage() {
 				loading={dagCardsLoading}
 			>
 				{failedDags.length > 0 ? (
-					<Table
+					<CompactTable
 						size="small"
 						pagination={false}
 						rowKey="id"
@@ -529,7 +530,7 @@ export default function OpsOverviewPage() {
 							<Col xs={12} md={6}><Statistic title="平均排队(秒)" value={governanceOverview.avgQueueWaitSeconds || 0} precision={2} /></Col>
 							<Col xs={12} md={6}><Statistic title="最长排队(秒)" value={governanceOverview.maxQueueWaitSeconds || 0} precision={2} /></Col>
 						</Row>
-						<Table
+						<CompactTable
 							size="small"
 							rowKey={(record) => `${record.sourceDataSourceId || "none"}-${record.sourceType || "unknown"}`}
 							pagination={false}
@@ -537,7 +538,7 @@ export default function OpsOverviewPage() {
 							dataSource={governanceOverview.sourceLoads || []}
 							locale={{ emptyText: "暂无来源负载数据" }}
 						/>
-						<Table
+						<CompactTable
 							size="small"
 							rowKey={(record) => record.projectKey || "default"}
 							pagination={false}
@@ -634,7 +635,7 @@ export default function OpsOverviewPage() {
 							<Col xs={24} lg={14}>
 								<Card size="small" title="日趋势">
 									{(observability.trend || []).length ? (
-										<Table size="small" rowKey="day" pagination={false} columns={ingestionTrendColumns} dataSource={observability.trend} />
+										<CompactTable size="small" rowKey="day" pagination={false} columns={ingestionTrendColumns} dataSource={observability.trend} />
 									) : (
 										<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前时间窗没有执行数据" />
 									)}

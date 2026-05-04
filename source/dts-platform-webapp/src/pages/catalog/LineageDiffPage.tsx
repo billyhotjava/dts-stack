@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Button, Card, Input, Select, Space, Statistic, Table } from "antd";
+import { Alert, Button, Card, Input, Select, Space, Statistic } from "antd";
+import { CompactTable } from "@/components/table";
 import { toast } from "sonner";
 import { getCatalogLineageDiff } from "@/api/platformApi";
 import {
@@ -104,10 +105,10 @@ export default function LineageDiffPage() {
 						</Space>
 					</Card>
 					<Card title="新增关系">
-						<Table rowKey={(row, idx) => row.id || `added-${idx}`} columns={edgeColumns} dataSource={diffResult?.addedEdges || []} loading={diffLoading} scroll={{ x: 1200 }} pagination={{ pageSize: 8 }} />
+						<CompactTable rowKey={(row, idx) => row.id || `added-${idx}`} columns={edgeColumns} dataSource={diffResult?.addedEdges || []} loading={diffLoading} scroll={{ x: 1200 }} pagination={{ pageSize: 8 }} />
 					</Card>
 					<Card title="移除关系">
-						<Table rowKey={(row, idx) => row.id || `removed-${idx}`} columns={edgeColumns} dataSource={diffResult?.removedEdges || []} loading={diffLoading} scroll={{ x: 1200 }} pagination={{ pageSize: 8 }} />
+						<CompactTable rowKey={(row, idx) => row.id || `removed-${idx}`} columns={edgeColumns} dataSource={diffResult?.removedEdges || []} loading={diffLoading} scroll={{ x: 1200 }} pagination={{ pageSize: 8 }} />
 					</Card>
 				</>
 			) : null}

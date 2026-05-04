@@ -11,10 +11,10 @@ import {
 	Radio,
 	Select,
 	Space,
-	Table,
 	Tag,
 	Typography,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import type { TableInfo } from "@/api/ingestion";
 import type { IngestionFormContext } from "./types";
 import { normalizeText } from "@/utils/textUtils";
@@ -419,7 +419,7 @@ export function DbUnifiedStep({
 				{discoverError ? (
 					<Alert type="warning" message={discoverError} showIcon className="mb-3" />
 				) : null}
-				<Table
+				<CompactTable
 					rowKey={(record) => buildTableKey(record)}
 					size="small"
 					loading={loadingTables}

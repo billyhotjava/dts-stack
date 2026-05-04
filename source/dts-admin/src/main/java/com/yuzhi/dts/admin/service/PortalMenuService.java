@@ -989,6 +989,7 @@ public class PortalMenuService {
             Set<Long> menuIds = new LinkedHashSet<>();
             for (PortalMenu m : targets) {
                 collectSubtree(menuIds, m);
+                collectAncestors(menuIds, m);
             }
             if (menuIds.isEmpty()) continue;
             // Apply requiredRoles as basic visibility (dataLevel INTERNAL)
@@ -1022,6 +1023,14 @@ public class PortalMenuService {
             for (PortalMenu c : menu.getChildren()) {
                 collectSubtree(ids, c);
             }
+        }
+    }
+
+    private void collectAncestors(Set<Long> ids, PortalMenu menu) {
+        PortalMenu parent = menu == null ? null : menu.getParent();
+        while (parent != null && parent.getId() != null) {
+            ids.add(parent.getId());
+            parent = parent.getParent();
         }
     }
 
@@ -1318,6 +1327,9 @@ public class PortalMenuService {
             .filter(m -> m != null && m.getId() != null)
             .collect(Collectors.toMap(PortalMenu::getId, m -> m));
         Set<Long> targetMenuIds = resolveMenuIdsForSections(allMenus, sections);
+        for (Long menuId : new ArrayList<>(targetMenuIds)) {
+            collectAncestors(targetMenuIds, menuIndex.get(menuId));
+        }
 
         List<PortalMenuVisibility> existing = visibilityRepo.findByRoleCode(normalizedRole);
         Set<Long> existingIds = existing

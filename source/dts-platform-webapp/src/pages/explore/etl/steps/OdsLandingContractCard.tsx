@@ -1,4 +1,5 @@
-import { Alert, Table, Tag, Typography } from "antd";
+import { Alert, Tag, Typography } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ExtraColumnDef } from "./types";
 import { normalizeText } from "../ingestionFormHelpers";
 
@@ -62,7 +63,7 @@ export function OdsLandingContractCard({
 					description={`新提交不会继续写入这些 ODS 字段改写规则：${legacyRules.join("；")}`}
 				/>
 			) : null}
-			<Table<TechnicalColumn>
+			<CompactTable<TechnicalColumn>
 				size="small"
 				rowKey="name"
 				pagination={false}

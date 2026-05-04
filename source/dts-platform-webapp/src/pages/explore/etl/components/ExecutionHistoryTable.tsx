@@ -13,12 +13,12 @@ import {
 	Select,
 	Space,
 	Spin,
-	Table,
 	Tag,
 	Tooltip,
 	Typography,
 	message,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import { PlayCircleOutlined, ReloadOutlined, EyeOutlined } from "@ant-design/icons";
 import {
 	ingestionTaskAPI,
@@ -874,7 +874,7 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 			</Card>
 
 			<Card title="执行记录" extra={<Tag color="blue">{pagination.total} 条记录</Tag>}>
-				<Table
+				<CompactTable
 					columns={columns}
 					dataSource={executions}
 					rowKey="id"
@@ -910,7 +910,7 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 						</Space>
 					}
 				>
-					<Table<IngestionIncrementalStateDTO>
+					<CompactTable<IngestionIncrementalStateDTO>
 						rowKey={(record) => `${record.taskId}-${record.sourceTable}`}
 						size="small"
 						loading={incrementalStatesLoading}
@@ -1106,7 +1106,7 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 						推进率：{auditDetailSummary.advanced}/{auditDetailSummary.total} ({auditDetailSummary.rate}%)， 未推进：
 						{auditDetailSummary.unchanged}
 					</Typography.Text>
-					<Table<IngestionIncrementalAuditDTO>
+					<CompactTable<IngestionIncrementalAuditDTO>
 						rowKey={(record) => String(record.id)}
 						size="small"
 						loading={auditDetailLoading}

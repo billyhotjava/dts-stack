@@ -13,6 +13,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogLineageJobRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
+import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.lineage.IngestionLineageWriter;
 import com.yuzhi.dts.platform.service.etl.OdsTableMappingSyncService;
@@ -51,6 +52,8 @@ public class CatalogLineageResource {
 
     private static final String CATALOG_MAINTAINER_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
+    private static final String INGESTION_SERVICE_EXPRESSION =
+        "hasAuthority('" + AuthoritiesConstants.SERVICE_INTERNAL + "') and authentication.name == 'service:dts-ingestion'";
 
     private final CatalogDatasetRepository datasetRepo;
     private final CatalogDatasetLineageRepository lineageRepo;
@@ -1123,7 +1126,7 @@ public class CatalogLineageResource {
     }
 
     @PostMapping("/ingestion-executions")
-    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    @PreAuthorize("(" + CATALOG_MAINTAINER_EXPRESSION + ") or (" + INGESTION_SERVICE_EXPRESSION + ")")
     public ApiResponse<OdsTableMappingSyncService.SyncResult> syncIngestionExecutionLineage(@RequestBody Map<String, Object> payload) {
         Map<String, Object> execution = payloadMap(payload == null ? null : payload.get("execution"));
         String status = stringValue(execution.get("status"));

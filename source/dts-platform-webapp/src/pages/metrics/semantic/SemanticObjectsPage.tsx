@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
-import { Alert, Button, Card, Col, Empty, Form, Input, Modal, Row, Select, Space, Table, Tag, Typography, message } from "antd";
+import { Alert, Button, Card, Col, Empty, Form, Input, Modal, Row, Select, Space, Tag, Typography, message } from "antd";
+import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { DatabaseOutlined, DeploymentUnitOutlined, EditOutlined, PlusOutlined, SaveOutlined } from "@ant-design/icons";
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
@@ -75,6 +76,7 @@ export default function SemanticObjectsPage() {
 	const [saving, setSaving] = useState(false);
 	const [modalOpen, setModalOpen] = useState(false);
 	const [editingObject, setEditingObject] = useState<SemanticBusinessObject | null>(null);
+	const [detailRow, setDetailRow] = useState<SemanticBusinessObject | null>(null);
 
 	const loadDomains = () => {
 		listSemanticSubjectDomains()
@@ -163,14 +165,16 @@ export default function SemanticObjectsPage() {
 		};
 	}, [selectedObjectId]);
 
-	const objectColumns: ColumnsType<SemanticBusinessObject> = [
+	const objectBaseColumns: ColumnsType<SemanticBusinessObject> = [
 		{ title: "业务对象", dataIndex: "name" },
 		{ title: "编码", dataIndex: "code", render: (value) => value || "-" },
 		{ title: "主表", dataIndex: "mainTable", render: (value) => value || "-" },
 		{ title: "主键", dataIndex: "primaryKey", width: 140, render: (value) => value || "-" },
 		{
 			title: "操作",
-			width: 90,
+			dataIndex: "actions",
+			width: 160,
+			fixed: "right",
 			render: (_, row) => (
 				<Button size="small" icon={<EditOutlined />} onClick={() => openModal(row)}>
 					编辑
@@ -178,6 +182,12 @@ export default function SemanticObjectsPage() {
 			),
 		},
 	];
+
+	const objectColumns = useMemo(
+		() => appendDetailAction(objectBaseColumns, (row) => setDetailRow(row)),
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[],
+	);
 
 	const addDatasetToJoinCanvas = (dataset: DatasetOption) => {
 		const name = dataset.table || dataset.name;
@@ -363,7 +373,7 @@ export default function SemanticObjectsPage() {
 			<Row gutter={[16, 16]}>
 				<Col xs={24} xl={8}>
 					<Card title="业务对象">
-						<Table<SemanticBusinessObject>
+						<CompactTable<SemanticBusinessObject>
 							rowKey="id"
 							size="small"
 							loading={objectsLoading}
@@ -516,6 +526,13 @@ export default function SemanticObjectsPage() {
 					</Form.Item>
 				</Form>
 			</Modal>
+			<RecordDetailDrawer<SemanticBusinessObject>
+				open={detailRow !== null}
+				onClose={() => setDetailRow(null)}
+				record={detailRow}
+				columns={objectBaseColumns}
+				title="业务对象详情"
+			/>
 		</div>
 	);
 }

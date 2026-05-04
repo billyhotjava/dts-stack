@@ -13,9 +13,9 @@ import {
 	Modal,
 	Select,
 	Space,
-	Table,
 	Tag,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { EditOutlined, FileTextOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import {
@@ -503,7 +503,7 @@ export default function IssueWorkflowPanel({ initialDatasetId, initialStatus }: 
 						)}% / 平均处理时长 ${Number(slaMetrics.avgHandlingHours || 0).toFixed(2)}h`}
 					/>
 				) : null}
-				<Table rowKey={(record) => record.id || record.title || "issue"} columns={columns} dataSource={issues} loading={loading} />
+				<CompactTable rowKey={(record) => record.id || record.title || "issue"} columns={columns} dataSource={issues} loading={loading} />
 			</Space>
 
 			<Modal
@@ -681,7 +681,7 @@ export default function IssueWorkflowPanel({ initialDatasetId, initialStatus }: 
 								<Descriptions.Item label="结束时间">{formatDateTime(linkedRun?.finishedAt)}</Descriptions.Item>
 							</Descriptions>
 							{Array.isArray(linkedRun?.metrics) && linkedRun.metrics.length > 0 ? (
-								<Table
+								<CompactTable
 									style={{ marginTop: 8 }}
 									size="small"
 									rowKey={(row: any, idx) => String(row?.id || row?.metricKey || idx)}
@@ -698,7 +698,7 @@ export default function IssueWorkflowPanel({ initialDatasetId, initialStatus }: 
 					) : null}
 					<div>
 						<div className="font-medium">处理记录</div>
-						<Table
+						<CompactTable
 							size="small"
 							rowKey={(item) => item.id || `${item.createdDate}-${item.actionType}`}
 							columns={[

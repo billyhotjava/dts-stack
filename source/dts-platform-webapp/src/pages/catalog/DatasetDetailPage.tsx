@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router";
-import { Alert, Button, Descriptions, Form, Input, Select, Spin, Switch, Table, Tabs, Tag, message } from "antd";
-import type { Node, Edge } from "@xyflow/react";
-import { VisualFlowCanvas } from "@/components/visual-canvas/VisualFlowCanvas";
+import { Alert, Button, Descriptions, Form, Input, Select, Spin, Switch, Tabs, Tag, message } from "antd";
+import { CompactTable } from "@/components/table";
+import { LineageGraph } from "@/components/lineage";
+import type { ImpactEdge, ImpactNode } from "./lineageShared";
 import { useRouter } from "@/routes/hooks";
 import {
 	getCatalogAssetV2,
@@ -363,7 +364,7 @@ function DatasetFieldsTab({ datasetId, columns }: { datasetId: string; columns?:
 	}
 
 	return (
-		<Table
+		<CompactTable
 			size="small"
 			rowKey={(_, idx) => String(idx)}
 			dataSource={fields}
@@ -424,7 +425,7 @@ function DatasetGovernanceTab({ datasetId }: { datasetId: string }) {
 			{indicators.length > 0 && (
 				<div>
 					<div className="mb-2 font-medium text-slate-700">关联指标（{indicators.length}）</div>
-					<Table
+					<CompactTable
 						size="small"
 						rowKey={(_, i) => String(i)}
 						dataSource={indicators}
@@ -491,7 +492,7 @@ function OpenMetadataLineageTab({ assetId }: { assetId: string }) {
 				<Tag color="blue">OpenMetadata血缘缓存</Tag>
 				<Button size="small" onClick={() => void syncLineage()} loading={syncing}>同步血缘</Button>
 			</div>
-			<Table
+			<CompactTable
 				size="small"
 				rowKey={(row: any, idx) => row.id || `${row.fromFqn}-${row.toFqn}-${idx}`}
 				dataSource={edges}
@@ -507,14 +508,6 @@ function OpenMetadataLineageTab({ assetId }: { assetId: string }) {
 	);
 }
 
-const LAYER_BG: Record<string, string> = {
-	ODS: "#f5f5f5",
-	DWD: "#e6f4ff",
-	DWS: "#e6fffb",
-	ADS: "#f6ffed",
-	DIM: "#f9f0ff",
-};
-
 function DatasetLineageTab({ datasetId }: { datasetId: string }) {
 	const [impact, setImpact] = useState<any>(null);
 	const [loading, setLoading] = useState(true);
@@ -526,51 +519,19 @@ function DatasetLineageTab({ datasetId }: { datasetId: string }) {
 			.finally(() => setLoading(false));
 	}, [datasetId]);
 
-	const rfNodes: Node[] = useMemo(() => {
-		const nodes = Array.isArray(impact?.nodes) ? impact.nodes : [];
-		if (!nodes.length) return [];
-		const layerX: Record<string, number> = { ODS: 0, DWD: 260, DWS: 520, ADS: 780, DIM: 1040 };
-		const layerCount: Record<string, number> = {};
-		return nodes.map((n: any, idx: number) => {
-			const layer = String(n.layer ?? "").toUpperCase();
-			const x = layerX[layer] ?? 900;
-			layerCount[layer] = (layerCount[layer] ?? 0) + 1;
-			const y = (layerCount[layer] - 1) * 80;
-			return {
-				id: n.id ?? (n.db && n.table ? `${n.db}.${n.table}` : `node-${idx}`),
-				position: { x, y },
-				data: { label: n.name ?? n.table ?? "未知" },
-				style: {
-					background: LAYER_BG[layer] ?? "#fff",
-					border: "1px solid #d9d9d9",
-					borderRadius: 6,
-					fontSize: 11,
-					padding: "4px 8px",
-					maxWidth: 180,
-					overflow: "hidden",
-					textOverflow: "ellipsis",
-					whiteSpace: "nowrap",
-				},
-			};
-		});
-	}, [impact]);
+	const lineageNodes: ImpactNode[] = useMemo(
+		() => (Array.isArray(impact?.nodes) ? (impact.nodes as ImpactNode[]) : []),
+		[impact],
+	);
 
-	const rfEdges: Edge[] = useMemo(() =>
-		(Array.isArray(impact?.edges) ? impact.edges : [])
-			.filter((e: any) => e.upstreamDatasetId && e.downstreamDatasetId)
-			.map((e: any, i: number) => ({
-				id: e.id ?? `e-${i}`,
-				source: e.upstreamDatasetId as string,
-				target: e.downstreamDatasetId as string,
-				animated: false,
-				style: { stroke: "#bfbfbf" },
-			})),
-		[impact]
+	const lineageEdges: ImpactEdge[] = useMemo(
+		() => (Array.isArray(impact?.edges) ? (impact.edges as ImpactEdge[]) : []),
+		[impact],
 	);
 
 	if (loading) return <div className="py-6"><Spin /></div>;
 
-	if (!rfNodes.length) {
+	if (!lineageNodes.length) {
 		return (
 			<div className="py-4 text-sm text-slate-500 space-y-2">
 				<div>暂无血缘数据。</div>
@@ -583,7 +544,15 @@ function DatasetLineageTab({ datasetId }: { datasetId: string }) {
 
 	return (
 		<div className="space-y-2">
-			<VisualFlowCanvas nodes={rfNodes} edges={rfEdges} height={400} emptyText="暂无血缘节点" />
+			<LineageGraph
+				nodes={lineageNodes}
+				edges={lineageEdges}
+				height={400}
+				layoutDirection="LR"
+				showMiniMap={false}
+				showToolbar={false}
+				emptyText="暂无血缘节点"
+			/>
 			<div className="text-right">
 				<a href={`/catalog/lineage/graph`} className="text-xs text-blue-500 hover:underline">
 					查看完整血缘分析 →

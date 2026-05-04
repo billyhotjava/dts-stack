@@ -25,8 +25,7 @@ public class AdminGatewayHeaders {
             headers.setContentType(MediaType.APPLICATION_JSON);
         }
         if (options != null && options.includeServiceAuthorization() && StringUtils.hasText(properties.getServiceToken())) {
-            String raw = properties.getServiceToken().trim();
-            headers.set(HttpHeaders.AUTHORIZATION, raw.startsWith("Bearer ") ? raw : "Bearer " + raw);
+            headers.set("X-DTS-Service-Token", stripBearerPrefix(properties.getServiceToken()));
         }
         if (StringUtils.hasText(properties.getServiceName())) {
             headers.set("X-DTS-Service", properties.getServiceName().trim());
@@ -93,5 +92,10 @@ public class AdminGatewayHeaders {
     private String currentRequestHeader(String name) {
         HttpServletRequest request = currentRequest();
         return request != null ? request.getHeader(name) : null;
+    }
+
+    private String stripBearerPrefix(String value) {
+        String raw = value == null ? "" : value.trim();
+        return raw.regionMatches(true, 0, "Bearer ", 0, "Bearer ".length()) ? raw.substring("Bearer ".length()).trim() : raw;
     }
 }

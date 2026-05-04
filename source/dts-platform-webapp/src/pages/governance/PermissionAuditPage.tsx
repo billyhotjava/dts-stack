@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
-import { Card, DatePicker, Input, Select, Space, Table, Tag } from "antd";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Card, DatePicker, Input, Select, Space, Tag } from "antd";
+import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { listPermissionAudit } from "@/api/platformApi";
 
@@ -38,6 +39,7 @@ export default function PermissionAuditPage() {
 	const [targetUser, setTargetUser] = useState("");
 	const [oaReference, setOaReference] = useState("");
 	const [dateRange, setDateRange] = useState<[any, any] | null>(null);
+	const [detailRow, setDetailRow] = useState<AuditEntry | null>(null);
 
 	const loadData = useCallback(async () => {
 		setLoading(true);
@@ -62,18 +64,24 @@ export default function PermissionAuditPage() {
 
 	useEffect(() => { loadData(); }, [loadData]);
 
-	const columns: ColumnsType<AuditEntry> = [
+	const baseColumns: ColumnsType<AuditEntry> = [
 		{ title: "时间", dataIndex: "createdDate", key: "time", width: 170,
 			render: (v?: string) => v ? new Date(v).toLocaleString() : "-" },
-		{ title: "操作", dataIndex: "action", key: "action", width: 140,
+		{ title: "操作", dataIndex: "action", key: "actionType", width: 140,
 			render: (v: string) => <Tag color={ACTION_COLORS[v] || "default"}>{v}</Tag> },
-		{ title: "资产", key: "asset", width: 200,
+		{ title: "资产", dataIndex: "assetId", key: "asset", width: 200,
 			render: (_: any, r: AuditEntry) => r.assetType ? `${r.assetType}:${r.assetId}` : "-" },
 		{ title: "目标用户", dataIndex: "targetUser", key: "targetUser", width: 120 },
 		{ title: "权限", dataIndex: "permission", key: "permission", width: 100 },
 		{ title: "操作者", dataIndex: "operator", key: "operator", width: 120 },
 		{ title: "OA 单号", dataIndex: "oaReference", key: "oaReference", width: 120 },
 	];
+
+	const columns = useMemo(
+		() => appendDetailAction(baseColumns, (row) => setDetailRow(row)),
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[],
+	);
 
 	return (
 		<Card title="权限审计日志">
@@ -88,13 +96,20 @@ export default function PermissionAuditPage() {
 					value={oaReference} onChange={(e) => setOaReference(e.target.value)} onPressEnter={() => loadData()} />
 				<DatePicker.RangePicker onChange={(dates) => setDateRange(dates as any)} />
 			</Space>
-			<Table<AuditEntry>
+			<CompactTable<AuditEntry>
 				rowKey="id" columns={columns} dataSource={items} loading={loading}
 				size="small"
 				pagination={{
-					current: page + 1, pageSize: 20, total,
-					onChange: (p) => setPage(p - 1), showTotal: (t) => `共 ${t} 条`,
+					current: page + 1, pageSize: 10, total,
+					onChange: (p) => setPage(p - 1),
 				}}
+			/>
+			<RecordDetailDrawer<AuditEntry>
+				open={detailRow !== null}
+				onClose={() => setDetailRow(null)}
+				record={detailRow}
+				columns={baseColumns}
+				title="审计详情"
 			/>
 		</Card>
 	);

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Button, Card, Col, Empty, Form, Input, Modal, Row, Select, Space, Table, Tag, Typography, message } from "antd";
+import { Alert, Button, Card, Col, Empty, Form, Input, Modal, Row, Select, Space, Tag, Typography, message } from "antd";
+import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { DatabaseOutlined, EditOutlined, ProjectOutlined, ReloadOutlined } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
@@ -72,6 +73,7 @@ export default function SemanticSubjectsPage() {
 	const [modalOpen, setModalOpen] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [editingDomain, setEditingDomain] = useState<SemanticSubjectDomain | null>(null);
+	const [detailRow, setDetailRow] = useState<SemanticSubjectDomain | null>(null);
 
 	const loadDomains = () => {
 		setDomainsLoading(true);
@@ -108,11 +110,12 @@ export default function SemanticSubjectsPage() {
 		[datasets],
 	);
 
-	const domainColumns: ColumnsType<SemanticSubjectDomain> = [
+	const domainBaseColumns: ColumnsType<SemanticSubjectDomain> = [
 		{ title: "名称", dataIndex: "name" },
 		{ title: "编码", dataIndex: "code", render: (value) => value || "-" },
 		{
 			title: "来源",
+			dataIndex: "governanceDomainId",
 			width: 160,
 			render: (_, row) =>
 				row.governanceDomainId ? (
@@ -125,7 +128,9 @@ export default function SemanticSubjectsPage() {
 		{ title: "说明", dataIndex: "description", ellipsis: true, render: (value) => value || "-" },
 		{
 			title: "操作",
-			width: 90,
+			dataIndex: "actions",
+			width: 160,
+			fixed: "right",
 			render: (_, row) => (
 				<Button size="small" icon={<EditOutlined />} onClick={() => openModal(row)}>
 					编辑
@@ -133,6 +138,12 @@ export default function SemanticSubjectsPage() {
 			),
 		},
 	];
+
+	const domainColumns = useMemo(
+		() => appendDetailAction(domainBaseColumns, (row) => setDetailRow(row)),
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[],
+	);
 
 	const datasetColumns: ColumnsType<DatasetOption> = [
 		{ title: "明细模型", dataIndex: "table", render: (value, row) => value || row.name },
@@ -217,7 +228,7 @@ export default function SemanticSubjectsPage() {
 						extra={<Tag color={domains.length ? "green" : "default"}>{domains.length ? "已接 API" : "暂无数据"}</Tag>}
 					>
 						{domains.length || domainsLoading ? (
-							<Table<SemanticSubjectDomain>
+							<CompactTable<SemanticSubjectDomain>
 								rowKey="id"
 								size="small"
 								loading={domainsLoading}
@@ -242,7 +253,7 @@ export default function SemanticSubjectsPage() {
 						)}
 					>
 						{dwdDatasets.length || datasetsLoading ? (
-							<Table<DatasetOption>
+							<CompactTable<DatasetOption>
 								rowKey="id"
 								size="small"
 								loading={datasetsLoading}
@@ -300,6 +311,13 @@ export default function SemanticSubjectsPage() {
 					</Form.Item>
 				</Form>
 			</Modal>
+			<RecordDetailDrawer<SemanticSubjectDomain>
+				open={detailRow !== null}
+				onClose={() => setDetailRow(null)}
+				record={detailRow}
+				columns={domainBaseColumns}
+				title="主题域详情"
+			/>
 		</div>
 	);
 }

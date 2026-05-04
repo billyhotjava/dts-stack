@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
 	Button,
@@ -6,10 +6,10 @@ import {
 	Modal,
 	Select,
 	Space,
-	Table,
 	Tag,
 	Typography,
 } from "antd";
+import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import {
 	CodeOutlined,
@@ -68,6 +68,7 @@ export default function Page() {
 	const [previewSql, setPreviewSql] = useState("");
 	const [previewOpen, setPreviewOpen] = useState(false);
 	const [generating, setGenerating] = useState(false);
+	const [detailRow, setDetailRow] = useState<Indicator | null>(null);
 	const canManage = useGovernanceManageAccess();
 
 	const fetchList = async () => {
@@ -171,7 +172,7 @@ export default function Page() {
 		});
 	};
 
-	const columns: ColumnsType<Indicator> = [
+	const baseColumns: ColumnsType<Indicator> = [
 		{
 			title: "编码",
 			dataIndex: "code",
@@ -211,8 +212,10 @@ export default function Page() {
 		},
 		{
 			title: "操作",
+			dataIndex: "actions",
 			key: "action",
-			width: 240,
+			width: 320,
+			fixed: "right",
 			render: (_: any, record: Indicator) => (
 				<Space size="small">
 					<Button
@@ -248,6 +251,12 @@ export default function Page() {
 			),
 		},
 	];
+
+	const columns = useMemo(
+		() => appendDetailAction(baseColumns, (row) => setDetailRow(row)),
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[canManage],
+	);
 
 	return (
 		<div style={{ padding: 24 }}>
@@ -291,7 +300,7 @@ export default function Page() {
 				/>
 			</Space>
 
-			<Table
+			<CompactTable
 				rowKey="id"
 				columns={columns}
 				dataSource={data}
@@ -314,6 +323,13 @@ export default function Page() {
 			>
 				<Input.TextArea value={previewSql} readOnly rows={18} style={{ fontFamily: "monospace" }} />
 			</Modal>
+			<RecordDetailDrawer<Indicator>
+				open={detailRow !== null}
+				onClose={() => setDetailRow(null)}
+				record={detailRow}
+				columns={baseColumns}
+				title="指标详情"
+			/>
 		</div>
 	);
 }

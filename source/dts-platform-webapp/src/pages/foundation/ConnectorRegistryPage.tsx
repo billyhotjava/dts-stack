@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AppstoreOutlined, ReloadOutlined, SyncOutlined } from "@ant-design/icons";
-import { Button, Card, Descriptions, Drawer, Select, Space, Switch, Table, Tag, Typography, message } from "antd";
+import { Button, Card, Descriptions, Drawer, Select, Space, Switch, Tag, Typography, message } from "antd";
+import { CompactTable } from "@/components/table";
 import type { TableProps } from "antd";
 import connectorsService, { type InfraConnector } from "@/api/services/connectorsService";
 import { formatTime } from "@/utils/textUtils";
@@ -217,7 +218,7 @@ export default function ConnectorRegistryPage() {
 				))}
 			</Space>
 
-			<Table
+			<CompactTable
 				rowKey="connectorKey"
 				columns={columns}
 				dataSource={list}

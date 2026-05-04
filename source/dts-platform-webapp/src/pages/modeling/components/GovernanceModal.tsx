@@ -1,4 +1,5 @@
-import { Button, Checkbox, Form, Input, Modal, Select, Space, Switch, Table, Tag } from "antd";
+import { Button, Checkbox, Form, Input, Modal, Select, Space, Switch, Tag } from "antd";
+import { CompactTable } from "@/components/table";
 import type { SqlModelGovernancePreviewItem, ProjectSpace } from "../sqlModeling.types";
 
 const layerTag = (layer?: string) => {
@@ -155,7 +156,7 @@ export default function GovernanceModal({
 						</Button>
 					</Space>
 				</div>
-				<Table<SqlModelGovernancePreviewItem>
+				<CompactTable<SqlModelGovernancePreviewItem>
 					size="small"
 					rowKey={(record, index) => record.modelId || record.modelPath || record.name || `record-${index}`}
 					loading={previewLoading}

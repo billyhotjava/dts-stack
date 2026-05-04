@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Button, Card, Input, Modal, Select, Space, Table, Tag } from "antd";
+import { Button, Card, Input, Modal, Select, Space, Tag } from "antd";
+import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import { EditOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { listAssetOwnership, updateAssetOwnership, batchUpdateAssetOwnership } from "@/api/platformApi";
@@ -41,6 +42,7 @@ export default function AssetOwnershipPage() {
 	const [editModal, setEditModal] = useState<{ open: boolean; record?: AssetOwnership }>({ open: false });
 	const [batchModal, setBatchModal] = useState(false);
 	const [editDept, setEditDept] = useState("");
+	const [detailRow, setDetailRow] = useState<AssetOwnership | null>(null);
 
 	const loadDepts = useCallback(async () => {
 		try {
@@ -101,7 +103,7 @@ export default function AssetOwnershipPage() {
 		}
 	};
 
-	const columns: ColumnsType<AssetOwnership> = [
+	const baseColumns: ColumnsType<AssetOwnership> = [
 		{ title: "资产 ID", dataIndex: "assetId", key: "assetId", ellipsis: true },
 		{ title: "类型", dataIndex: "assetType", key: "assetType", width: 120,
 			render: (v: string) => <Tag>{v}</Tag> },
@@ -112,7 +114,7 @@ export default function AssetOwnershipPage() {
 			}},
 		{ title: "来源", dataIndex: "sourceId", key: "sourceId", width: 120 },
 		{ title: "分配者", dataIndex: "assignedBy", key: "assignedBy", width: 120 },
-		{ title: "操作", key: "action", width: 80,
+		{ title: "操作", dataIndex: "actions", key: "action", width: 160, fixed: "right",
 			render: (_: any, record: AssetOwnership) => (
 				<Button type="link" size="small" icon={<EditOutlined />} onClick={() => {
 					setEditDept(record.ownerDeptCode);
@@ -120,6 +122,12 @@ export default function AssetOwnershipPage() {
 				}}>编辑</Button>
 			)},
 	];
+
+	const columns = useMemo(
+		() => appendDetailAction(baseColumns, (row) => setDetailRow(row)),
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[depts],
+	);
 
 	return (
 		<div className="space-y-4">
@@ -137,7 +145,7 @@ export default function AssetOwnershipPage() {
 						</Button>
 					)}
 				</Space>
-				<Table<AssetOwnership>
+				<CompactTable<AssetOwnership>
 					rowKey="id" columns={columns} dataSource={items} loading={loading}
 					rowSelection={{ selectedRowKeys, onChange: (keys) => setSelectedRowKeys(keys as number[]) }}
 					pagination={{
@@ -165,6 +173,13 @@ export default function AssetOwnershipPage() {
 						style={{ width: "100%" }} value={editDept} onChange={setEditDept} />
 				</div>
 			</Modal>
+			<RecordDetailDrawer<AssetOwnership>
+				open={detailRow !== null}
+				onClose={() => setDetailRow(null)}
+				record={detailRow}
+				columns={baseColumns}
+				title="所有权详情"
+			/>
 		</div>
 	);
 }

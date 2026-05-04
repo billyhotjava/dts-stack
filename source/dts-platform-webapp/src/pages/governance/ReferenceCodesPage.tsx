@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Alert, Button, Card, Form, Input, List, Modal, Select, Space, Table, Tag, Typography } from "antd";
+import { Alert, Button, Card, Form, Input, List, Modal, Select, Space, Tag, Typography } from "antd";
+import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router";
@@ -1011,7 +1012,7 @@ export default function ReferenceCodesPage() {
 				{content.length === 0 && !loading ? (
 					<EmptyState title="暂无码表" description="请先新增公共码表。" />
 				) : (
-					<Table
+					<CompactTable
 						rowKey={(row) => row.codeTypeId || row.codeTypeCode || row.codeTypeName || Math.random().toString(36)}
 						dataSource={content}
 						columns={columns}
@@ -1144,7 +1145,7 @@ export default function ReferenceCodesPage() {
 					</Button>
 					<Button onClick={() => refreshItems()}>刷新</Button>
 				</Space>
-				<Table
+				<CompactTable
 					rowKey={(row) => row.itemId || row.codeValue || Math.random().toString(36)}
 					dataSource={items}
 					columns={itemColumns}
@@ -1245,7 +1246,7 @@ export default function ReferenceCodesPage() {
 								<Card size="small">策略：{structuredPreview.conflictPolicy || "-"}</Card>
 								<Card size="small">预检ID：{structuredPreview.runId || "-"}</Card>
 							</div>
-							<Table
+							<CompactTable
 								size="small"
 								title={() => "冲突明细"}
 								rowKey={(row, idx) => `${row.codeValue || "c"}-${idx}`}
@@ -1253,7 +1254,7 @@ export default function ReferenceCodesPage() {
 								dataSource={Array.isArray(structuredPreview.conflicts) ? structuredPreview.conflicts : []}
 								pagination={{ pageSize: 5 }}
 							/>
-							<Table
+							<CompactTable
 								size="small"
 								title={() => "错误明细"}
 								rowKey={(row, idx) => `${row.codeValue || row.line || "e"}-${idx}`}
@@ -1290,7 +1291,7 @@ export default function ReferenceCodesPage() {
 							重试详情
 						</Button>
 					</Space>
-					<Table
+					<CompactTable
 						size="small"
 						rowKey={(row) => row.runId || Math.random().toString(36)}
 						loading={structuredHistoryLoading}
@@ -1309,7 +1310,7 @@ export default function ReferenceCodesPage() {
 									<Text>创建时间：{formatDateTime(structuredHistoryDetail.createdDate)}</Text>
 								</Space>
 							</Card>
-							<Table
+							<CompactTable
 								size="small"
 								title={() => "变更明细"}
 								rowKey={(row, idx) => `${row.codeValue || "diff"}-${idx}`}
@@ -1341,7 +1342,7 @@ export default function ReferenceCodesPage() {
 					</Button>
 					<Button onClick={() => refreshMappings()}>刷新</Button>
 				</Space>
-				<Table
+				<CompactTable
 					rowKey={(row) => row.mapId || `${row.sourceSys}-${row.srcCode}` || Math.random().toString(36)}
 					dataSource={mappings}
 					columns={mappingColumns}

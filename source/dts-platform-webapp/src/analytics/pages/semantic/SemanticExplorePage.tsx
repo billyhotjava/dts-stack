@@ -1,5 +1,6 @@
 import { BranchesOutlined, PlusOutlined } from "@ant-design/icons";
-import { Button, Card, Space, Spin, Table, Tag, Typography } from "antd";
+import { Button, Card, Space, Spin, Tag, Typography } from "antd";
+import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
@@ -28,6 +29,7 @@ export default function SemanticExplorePage() {
 	const canModel = useMemo(() => hasSemanticModelingMenuAccess(menus), [menus]);
 	const [metaState, setMetaState] = useState<LoadState<SemanticMetaResponse>>({ state: "loading" });
 	const [graphState, setGraphState] = useState<LoadState<SemanticGraphResponse>>({ state: "loading" });
+	const [detailRow, setDetailRow] = useState<SemanticModelMeta | null>(null);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -57,7 +59,7 @@ export default function SemanticExplorePage() {
 	}, []);
 
 	const models = metaState.state === "loaded" ? safeArray(metaState.value.models) : [];
-	const modelColumns: ColumnsType<SemanticModelMeta> = [
+	const modelBaseColumns: ColumnsType<SemanticModelMeta> = [
 		{
 			title: "主题模型",
 			dataIndex: "label",
@@ -99,8 +101,10 @@ export default function SemanticExplorePage() {
 		},
 		{
 			title: "操作",
+			dataIndex: "actions",
 			key: "actions",
-			width: 220,
+			width: 280,
+			fixed: "right",
 			render: (_value, record) => (
 				<Space>
 					{canModel && (
@@ -119,6 +123,12 @@ export default function SemanticExplorePage() {
 			),
 		},
 	];
+
+	const modelColumns = useMemo(
+		() => appendDetailAction(modelBaseColumns, (row) => setDetailRow(row)),
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[canModel],
+	);
 
 	return (
 		<div className="space-y-4">
@@ -173,16 +183,23 @@ export default function SemanticExplorePage() {
 						{models.length === 0 ? (
 							<SemanticModelingEmptyState title="当前还没有开放给分析师的语义模型" compact />
 						) : (
-							<Table
+							<CompactTable<SemanticModelMeta>
 								rowKey={(record) => String(record.id ?? Math.random())}
 								columns={modelColumns}
 								dataSource={models}
-								pagination={models.length > 10 ? { pageSize: 10 } : false}
+								pagination={models.length > 10 ? undefined : false}
 							/>
 						)}
 					</Card>
 				</>
 			)}
+			<RecordDetailDrawer<SemanticModelMeta>
+				open={detailRow !== null}
+				onClose={() => setDetailRow(null)}
+				record={detailRow}
+				columns={modelBaseColumns}
+				title="语义模型详情"
+			/>
 		</div>
 	);
 }

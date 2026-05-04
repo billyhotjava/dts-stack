@@ -11,10 +11,10 @@ import {
 	Radio,
 	Select,
 	Space,
-	Table,
 	Tag,
 	Typography,
 } from "antd";
+import { CompactTable } from "@/components/table";
 import { InboxOutlined, PlusOutlined, DeleteOutlined } from "@ant-design/icons";
 import { Upload } from "@/components/upload";
 import { toast } from "sonner";
@@ -384,7 +384,7 @@ export default function FileBasicStep({
 							</Space>
 						</div>
 					)}
-					<Table
+					<CompactTable
 						size="small"
 						dataSource={fileUploadResult.columns || []}
 						rowKey={(_: any, index: any) => String(index)}
@@ -604,7 +604,7 @@ export default function FileBasicStep({
 							<Divider orientation="left" className="mt-4">
 								预览数据（最多 {filePreviewRows} 行）
 							</Divider>
-							<Table
+							<CompactTable
 								size="small"
 								pagination={false}
 								rowKey="__row"
