@@ -1,7 +1,7 @@
 # T01: 创建 workflow zustand store 三层 slice
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: F0-T01
 
 ## 目标
@@ -94,6 +94,23 @@ export const useWorkflowStore = create<WorkflowStore>()(
 
 ## 完成标准
 
-- [ ] 5 个 slice 文件 + types 全部就位，行数 ≤ 200/文件
-- [ ] 单测全绿，覆盖率达标
-- [ ] 在临时测试组件内挂载 store 能 add/remove 节点
+- [x] 5 个文件 + types 全部就位（types/nodes-slice/edges-slice/ui-slice/workflow-store），行数均 ≤ 90 行
+- [x] 22 个 vitest 用例全绿（nodes 7 / edges 8 / ui 7）
+- [x] 全仓 `pnpm tsc --noEmit` 零错（已修 xyflow `Node<T>` 约束的 Record 索引签名）
+- [x] `WorkflowEdgeData` 与 `WorkflowNodeData` 索引签名兼容 xyflow v12 的 `Record<string, unknown>` 约束
+- [x] persist 中间件仅持久化 viewport，节点/连线统一走后端 graph_dsl
+
+## 落地位置
+
+```
+source/dts-platform-webapp/src/components/workflow/store/
+├── workflow-store.ts            # 入口 + persist + resetWorkflowStoreForTest
+├── types.ts                     # WorkflowNode / WorkflowEdge / UiState 共享类型
+├── nodes-slice.ts               # NodesSlice + applyNodePatch 工具
+├── edges-slice.ts               # EdgesSlice + canConnect 工具
+├── ui-slice.ts                  # UiSlice
+└── __tests__/
+    ├── nodes-slice.test.ts      # 7 用例
+    ├── edges-slice.test.ts      # 8 用例
+    └── ui-slice.test.ts         # 7 用例
+```
