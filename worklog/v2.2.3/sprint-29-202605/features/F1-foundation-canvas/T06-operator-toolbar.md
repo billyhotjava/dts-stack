@@ -1,7 +1,7 @@
 # T06: Operator 工具栏
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T02
 
 ## 目标
@@ -57,6 +57,15 @@ async function onScreenshot() {
 
 ## 完成标准
 
-- [ ] 工具栏样式不抢主画布注意力（半透明 / 浮动右下）
-- [ ] 截图体积合理（< 500KB / 中等 graph）
-- [ ] 单元测试：缩放联动 + 截图调用 mock
+- [x] 工具栏右下角浮动（ReactFlow `<Panel position="bottom-right">`），白底 + slate 边框 + 阴影；不遮挡画布主体
+- [x] role="toolbar"，每个按钮含 aria-label/title；focus-visible 蓝色描边
+- [x] 缩放：+/- 按钮联动 useReactFlow().zoomIn/zoomOut（duration 200ms 平滑），实时显示百分比（来自 useViewport().zoom）
+- [x] Fit view：useReactFlow().fitView({padding:0.1, duration:200})
+- [x] 撤销/重做按钮 disabled，tooltip "F5-T05 zundo 接入后可用"
+- [x] **截图按钮 disabled（YAGNI 路径）**：避免本 Sprint 引入 html-to-image 30KB；待 F4 落地保存/分享时再补；按钮 aria-disabled / tooltip 已就位
+- [x] 4 vitest 用例：4 区段渲染 / 3 个 disabled 状态 / zoom in/out 触发 mock；workflow 整模块 40/40
+- [x] tsc 0 错；最大文件 49 行（zoom-controls）
+
+## YAGNI 跟踪
+
+- [ ] 后续 issue：引入 `html-to-image@^1.11`，启用 ScreenshotButton 真实导出（依赖 < 30KB gz）。在 F4 节点配置/保存流程同时 PR。

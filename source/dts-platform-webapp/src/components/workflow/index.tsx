@@ -14,6 +14,7 @@ export {
 export type { ConnectionStatus } from "./custom-connection-line";
 export { HelpLine } from "./help-line";
 export { useHelpLine, detectAlignment } from "./hooks/use-help-line";
+export { Operator, ZoomControls, FitViewButton, ScreenshotButton, UndoRedoButtons } from "./operator";
 export { useWorkflowStore, resetWorkflowStoreForTest } from "./store/workflow-store";
 export type { WorkflowStore } from "./store/workflow-store";
 export type {

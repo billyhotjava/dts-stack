@@ -1,0 +1,72 @@
+/* WorkflowOperator — 右下角浮动工具栏 */
+
+.workflow-canvas .workflow-operator {
+	margin: 0 16px 16px 0;
+	padding: 0;
+	background: transparent;
+	border: none;
+	box-shadow: none;
+}
+
+.workflow-canvas .workflow-operator__bar {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 8px;
+	background-color: var(--wf-panel-bg);
+	border: 1px solid var(--wf-panel-border);
+	border-radius: 8px;
+	box-shadow: var(--wf-node-shadow);
+	font-size: 13px;
+	color: #475569;
+}
+
+.workflow-canvas .workflow-operator__group {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.workflow-canvas .workflow-operator__btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 28px;
+	height: 28px;
+	padding: 0 6px;
+	border: 1px solid transparent;
+	border-radius: 6px;
+	background-color: transparent;
+	color: #475569;
+	font-size: 14px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.workflow-canvas .workflow-operator__btn:hover:not([disabled]) {
+	background-color: #f1f5f9;
+	color: #0f172a;
+}
+
+.workflow-canvas .workflow-operator__btn:focus-visible {
+	outline: 2px solid #93c5fd;
+	outline-offset: 1px;
+}
+
+.workflow-canvas .workflow-operator__btn[disabled] {
+	color: #cbd5e1;
+	cursor: not-allowed;
+}
+
+.workflow-canvas .workflow-operator__zoom-display {
+	min-width: 44px;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+	color: #475569;
+}
+
+.workflow-canvas .workflow-operator__divider {
+	width: 1px;
+	height: 16px;
+	background-color: var(--wf-panel-border);
+}
