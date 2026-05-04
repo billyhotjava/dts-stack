@@ -20,13 +20,15 @@ import "@xyflow/react/dist/style.css";
 import { useWorkflowStore } from "./store/workflow-store";
 import type { WorkflowEdge, WorkflowNode } from "./store/types";
 import { WorkflowContextProvider, type WorkflowContextValue } from "./context";
+import { DEFAULT_EDGE_TYPE, workflowEdgeTypes } from "./custom-edge";
 import "./styles/canvas.css";
 
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 2;
 
 const EMPTY_NODE_TYPES: NodeTypes = {};
-const EMPTY_EDGE_TYPES: EdgeTypes = {};
+
+const DEFAULT_EDGE_OPTIONS = { type: DEFAULT_EDGE_TYPE } as const;
 
 export interface WorkflowCanvasProps extends Partial<WorkflowContextValue> {
 	nodeTypes?: NodeTypes;
@@ -85,6 +87,7 @@ function WorkflowCanvasInner({
 			const id = `edge-${connection.source}-${connection.target}-${Date.now()}`;
 			addEdge({
 				id,
+				type: DEFAULT_EDGE_TYPE,
 				source: connection.source,
 				target: connection.target,
 				sourceHandle: connection.sourceHandle ?? undefined,
@@ -102,7 +105,7 @@ function WorkflowCanvasInner({
 	);
 
 	const resolvedNodeTypes = nodeTypes ?? EMPTY_NODE_TYPES;
-	const resolvedEdgeTypes = edgeTypes ?? EMPTY_EDGE_TYPES;
+	const resolvedEdgeTypes = edgeTypes ?? workflowEdgeTypes;
 	const wrapperClass = useMemo(() => ["workflow-canvas", className].filter(Boolean).join(" "), [className]);
 
 	return (
@@ -116,6 +119,7 @@ function WorkflowCanvasInner({
 				onMoveEnd={handleMoveEnd}
 				nodeTypes={resolvedNodeTypes}
 				edgeTypes={resolvedEdgeTypes}
+				defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
 				defaultViewport={viewport}
 				minZoom={MIN_ZOOM}
 				maxZoom={MAX_ZOOM}

@@ -68,3 +68,40 @@
 .workflow-canvas[data-readonly="true"] .react-flow__pane {
 	cursor: default;
 }
+
+.workflow-edge-label {
+	font-size: 12px;
+	line-height: 1;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background-color: var(--wf-panel-bg);
+	border: 1px solid var(--wf-panel-border);
+	color: #475569;
+	white-space: nowrap;
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.workflow-edge-remove {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: 1px solid var(--wf-panel-border);
+	border-radius: 9px;
+	background-color: var(--wf-panel-bg);
+	color: #ef4444;
+	font-size: 14px;
+	line-height: 1;
+	cursor: pointer;
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.workflow-edge-remove:hover,
+.workflow-edge-remove:focus-visible {
+	background-color: #fef2f2;
+	color: #b91c1c;
+	outline: 2px solid #fecaca;
+	outline-offset: 1px;
+}

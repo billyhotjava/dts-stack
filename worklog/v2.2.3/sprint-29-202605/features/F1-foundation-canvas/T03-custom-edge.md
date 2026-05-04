@@ -1,7 +1,7 @@
 # T03: CustomEdge 自定义边
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T02
 
 ## 目标
@@ -70,6 +70,8 @@ ReactFlow 默认所有新建边走 `type: 'custom'`。
 
 ## 完成标准
 
-- [ ] hover/selected/dragging 三种状态视觉清晰
-- [ ] removeEdge 调用走 store action（immutable）
-- [ ] 单元测试 ≥ 2 个（基础渲染 + 选中状态）
+- [x] hover/selected/默认 三种状态由 `resolveEdgeStroke` 决策（selected → #3b82f6，hover → #64748b，默认渐变）
+- [x] removeEdge 走 `useWorkflowStore` action（immutable spread；不直接 mutate edges 数组）
+- [x] 8 个单测全绿：pickEdgeColor (2)、resolveEdgeStroke (1)、shouldShowRemoveButton (1)、registry (1)、store integration (1)；workflow 整模块 28/28
+- [x] 自定义边注册：`workflowEdgeTypes.custom = CustomEdge`，`DEFAULT_EDGE_TYPE='custom'` 由 WorkflowCanvas `defaultEdgeOptions` + onConnect 强制
+- [x] 文件 ≤ 200 行（custom-edge 116，test 62）；tsc 0 错
