@@ -21,6 +21,7 @@ import { useWorkflowStore } from "./store/workflow-store";
 import type { WorkflowEdge, WorkflowNode } from "./store/types";
 import { WorkflowContextProvider, type WorkflowContextValue } from "./context";
 import { DEFAULT_EDGE_TYPE, workflowEdgeTypes } from "./custom-edge";
+import { CustomConnectionLine, useIsValidWorkflowConnection } from "./custom-connection-line";
 import "./styles/canvas.css";
 
 const MIN_ZOOM = 0.2;
@@ -106,6 +107,7 @@ function WorkflowCanvasInner({
 
 	const resolvedNodeTypes = nodeTypes ?? EMPTY_NODE_TYPES;
 	const resolvedEdgeTypes = edgeTypes ?? workflowEdgeTypes;
+	const isValidConnection = useIsValidWorkflowConnection();
 	const wrapperClass = useMemo(() => ["workflow-canvas", className].filter(Boolean).join(" "), [className]);
 
 	return (
@@ -119,6 +121,8 @@ function WorkflowCanvasInner({
 				onMoveEnd={handleMoveEnd}
 				nodeTypes={resolvedNodeTypes}
 				edgeTypes={resolvedEdgeTypes}
+				connectionLineComponent={CustomConnectionLine}
+				isValidConnection={isValidConnection}
 				defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
 				defaultViewport={viewport}
 				minZoom={MIN_ZOOM}
