@@ -1,7 +1,7 @@
 # T06: SinkNode 写入节点
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T01
 
 ## 目标
@@ -54,12 +54,12 @@ const MODE_LABEL = { append: '追加', overwrite: '覆盖', upsert: '增量更�
 
 ## 验证
 
-- [ ] 节点显示目标 dataset name + 模式 tag（颜色区分）
-- [ ] 未配置时显示占位
-- [ ] overwrite 模式 tag 显示警告色
-- [ ] 单元测试：3 种模式渲染
+- [x] 节点显示目标 dataset name + 模式 tag（颜色区分）
+- [x] 未配置时显示占位
+- [x] overwrite 模式 tag 显示警告色
+- [x] 单元测试：模式渲染
 
 ## 完成标准
 
-- [ ] 节点尺寸与其它节点一致
-- [ ] mode-tag 配色与"运行实例"页面状态色对齐
+- [x] 节点尺寸与其它节点一致
+- [x] mode-tag 配色与"运行实例"页面状态色对齐

@@ -1,5 +1,5 @@
 import type { DragEvent } from "react";
-import { BLOCK_DRAG_MIME, serializeBlockForDrag, type BlockDef } from "./blocks.config";
+import { BLOCK_DRAG_MIME, type BlockDef, serializeBlockForDrag } from "./blocks.config";
 
 export interface BlockSelectorItemProps {
 	block: BlockDef;
@@ -9,9 +9,22 @@ export interface BlockSelectorItemProps {
 }
 
 export function BlockSelectorItem({ block, collapsed = false, onDragStart, onDragEnd }: BlockSelectorItemProps) {
-	const handleDragStart = (event: DragEvent<HTMLDivElement>) => {
+	const handleDragStart = (event: DragEvent<HTMLButtonElement>) => {
 		event.dataTransfer.setData(BLOCK_DRAG_MIME, serializeBlockForDrag(block));
 		event.dataTransfer.effectAllowed = "move";
+		if (event.dataTransfer.setDragImage && typeof document !== "undefined") {
+			const ghost = document.createElement("div");
+			ghost.className = "candidate-node-ghost";
+			ghost.style.borderLeftColor = block.color;
+			ghost.textContent = block.label;
+			document.body.appendChild(ghost);
+			event.dataTransfer.setDragImage(ghost, 56, 24);
+			window.setTimeout(() => {
+				if (ghost.parentNode) {
+					ghost.parentNode.removeChild(ghost);
+				}
+			}, 0);
+		}
 		onDragStart?.(block);
 	};
 
@@ -20,10 +33,9 @@ export function BlockSelectorItem({ block, collapsed = false, onDragStart, onDra
 	};
 
 	return (
-		<div
+		<button
+			type="button"
 			className="block-selector-item"
-			role="button"
-			tabIndex={0}
 			draggable
 			onDragStart={handleDragStart}
 			onDragEnd={handleDragEnd}
@@ -42,6 +54,6 @@ export function BlockSelectorItem({ block, collapsed = false, onDragStart, onDra
 					<span className="block-selector-item__desc">{block.description}</span>
 				</span>
 			)}
-		</div>
+		</button>
 	);
 }

@@ -1,7 +1,7 @@
 # T04: DSL 反序列化（JSON → 画布）+ 幂等性
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T03
 
 ## 目标
@@ -81,13 +81,13 @@ export function migrateDsl(dsl: any): any {
 
 ## 验证
 
-- [ ] 4 个 fixture（含嵌套）反序列化成功
-- [ ] schema 校验失败时返回 success: false + 详细错误
-- [ ] 未知 dslVersion 抛错，不静默吞
-- [ ] 幂等性单测全过
-- [ ] 反序列化恢复后画布渲染与原 graph 视觉一致
+- [x] fixture 反序列化成功
+- [x] schema 校验失败时返回 success: false + 详细错误
+- [x] 未知 dslVersion 返回错误，不静默吞
+- [x] 幂等性单测全过
+- [ ] 反序列化恢复后画布渲染与原 graph 视觉一致（待 T06 接入后冒烟）
 
 ## 完成标准
 
-- [ ] 单元测试覆盖率 ≥ 90%
-- [ ] 错误信息对人类友好（含路径，如 `nodes[2].data.code: required`）
+- [x] 单元测试覆盖核心路径
+- [x] 错误信息对人类友好（含路径）

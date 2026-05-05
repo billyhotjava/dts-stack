@@ -1,12 +1,16 @@
 import type { StateCreator } from "zustand";
+import { asHistoryState, withHistory } from "./history-slice";
 import type { WorkflowEdge, WorkflowEdgeData } from "./types";
 
 export interface EdgesSlice {
 	edges: WorkflowEdge[];
 	setEdges: (edges: WorkflowEdge[]) => void;
 	addEdge: (edge: WorkflowEdge) => void;
+	addEdges: (edges: WorkflowEdge[]) => void;
 	updateEdge: (id: string, patch: Partial<WorkflowEdge> & { data?: Partial<WorkflowEdgeData> }) => void;
 	removeEdge: (id: string) => void;
+	removeEdges: (ids: string[]) => void;
+	removeEdgesForNodes: (nodeIds: string[]) => void;
 }
 
 export interface ConnectionEndpoints {
@@ -48,8 +52,8 @@ export const createEdgesSlice: StateCreator<EdgesSlice, [], [], EdgesSlice> = (s
 	edges: [],
 
 	setEdges: (edges) =>
-		set(() => ({
-			edges: [...edges],
+		set((state) => ({
+			...withHistory(asHistoryState(state), { edges: [...edges] }),
 		})),
 
 	addEdge: (edge) =>
@@ -60,16 +64,51 @@ export const createEdgesSlice: StateCreator<EdgesSlice, [], [], EdgesSlice> = (s
 			if (state.edges.some((existing) => existing.id === edge.id)) {
 				return state;
 			}
-			return { edges: [...state.edges, edge] };
+			return withHistory(asHistoryState(state), { edges: [...state.edges, edge] });
+		}),
+
+	addEdges: (edges) =>
+		set((state) => {
+			const connectedEdges = [...state.edges];
+			const nextEdges = edges.reduce<WorkflowEdge[]>((acc, edge) => {
+				if (
+					state.edges.some((existing) => existing.id === edge.id) ||
+					acc.some((existing) => existing.id === edge.id)
+				) {
+					return acc;
+				}
+				if (!canConnect(connectedEdges, edge)) {
+					return acc;
+				}
+				acc.push(edge);
+				connectedEdges.push(edge);
+				return acc;
+			}, []);
+			if (nextEdges.length === 0) return state;
+			return withHistory(asHistoryState(state), { edges: [...state.edges, ...nextEdges] });
 		}),
 
 	updateEdge: (id, patch) =>
-		set((state) => ({
-			edges: state.edges.map((edge) => (edge.id === id ? applyEdgePatch(edge, patch) : edge)),
-		})),
+		set((state) =>
+			withHistory(asHistoryState(state), {
+				edges: state.edges.map((edge) => (edge.id === id ? applyEdgePatch(edge, patch) : edge)),
+			}),
+		),
 
 	removeEdge: (id) =>
-		set((state) => ({
-			edges: state.edges.filter((edge) => edge.id !== id),
-		})),
+		set((state) => withHistory(asHistoryState(state), { edges: state.edges.filter((edge) => edge.id !== id) })),
+
+	removeEdges: (ids) =>
+		set((state) => {
+			const idSet = new Set(ids);
+			return withHistory(asHistoryState(state), { edges: state.edges.filter((edge) => !idSet.has(edge.id)) });
+		}),
+
+	removeEdgesForNodes: (nodeIds) =>
+		set((state) => {
+			const idSet = new Set(nodeIds);
+			return withHistory(asHistoryState(state), {
+				edges: state.edges.filter((edge) => !idSet.has(edge.source) && !idSet.has(edge.target)),
+			});
+		}),
 });

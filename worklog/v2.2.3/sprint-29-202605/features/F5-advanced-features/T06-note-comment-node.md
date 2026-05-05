@@ -1,7 +1,7 @@
 # T06: NoteNode 便签节点
 
 **优先级**: P1
-**状态**: READY
+**状态**: PARTIAL
 **依赖**: F3-T01
 
 ## 目标
@@ -69,15 +69,21 @@ const NOTE_COLORS = ['#fef3c7' /*黄*/, '#dbeafe' /*蓝*/, '#fce7f3' /*粉*/, '#
 
 ## 验证
 
-- [ ] 拖出 NoteNode，双击进入编辑模式，markdown 渲染正确
-- [ ] 调整大小生效，DSL 中保存 width/height
-- [ ] 颜色切换通过右键菜单
-- [ ] 不能从 NoteNode 拖出连线
-- [ ] DSL 反序列化时 Note 完整还原（位置、大小、颜色、内容）
+- [x] 拖出 NoteNode，双击进入编辑模式，内容同步到 store
+- [x] 通过属性面板调整大小，DSL 中保存 width/height
+- [x] 颜色切换通过属性面板同步到 store
+- [x] 不能从 NoteNode 拖出连线
+- [x] DSL 反序列化时 Note 完整还原（位置、大小、颜色、内容）
 - [ ] 后端运行时跳过 Note 节点（不当作 ETL 步骤执行）
 
 ## 完成标准
 
 - [ ] NoteNode 视觉与"便签纸"接近（圆角、淡阴影）
 - [ ] 富文本一期支持加粗/斜体/列表/链接（react-markdown 默认能力）
-- [ ] 单元测试：编辑模式切换 + 内容同步 + 颜色切换
+- [x] 单元测试：编辑模式切换 + 内容同步 + 颜色切换
+
+## 当前实现说明
+
+- 已完成低耦合版本：`note` block、`NoteNode`、`NoteForm`、nodeTypes 注册、DSL schema 序列化/反序列化。
+- 本轮未接入右键菜单与 markdown 渲染；颜色与尺寸先通过属性面板配置。
+- 后端 `graph_dsl` 落库/运行时跳过需要等 F4-T05 进入后端链路后处理；当前 GitNexus impact 显示 `IngestionTask` 相关链路为 CRITICAL，不建议混入本前端批次。

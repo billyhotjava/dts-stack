@@ -1,27 +1,32 @@
-/**
- * Undo / Redo 按钮 — 占位实现。
- * 真正的撤销/重做逻辑放到 F5-T05（zundo 中间件接入），届时把 disabled 解除并接 store action。
- */
+import { useWorkflowStore } from "../store/workflow-store";
+
 export function UndoRedoButtons() {
+	const canUndo = useWorkflowStore((state) => state.canUndo);
+	const canRedo = useWorkflowStore((state) => state.canRedo);
+	const undo = useWorkflowStore((state) => state.undo);
+	const redo = useWorkflowStore((state) => state.redo);
+
 	return (
-		<div className="workflow-operator__group" role="group" aria-label="撤销与重做">
+		<div className="workflow-operator__group">
 			<button
 				type="button"
 				className="workflow-operator__btn"
-				disabled
-				aria-disabled="true"
-				aria-label="撤销（待 F5-T05 启用）"
-				title="撤销 — F5-T05 zundo 接入后可用"
+				disabled={!canUndo}
+				aria-disabled={!canUndo}
+				aria-label="撤销"
+				title="撤销"
+				onClick={undo}
 			>
 				↶
 			</button>
 			<button
 				type="button"
 				className="workflow-operator__btn"
-				disabled
-				aria-disabled="true"
-				aria-label="重做（待 F5-T05 启用）"
-				title="重做 — F5-T05 zundo 接入后可用"
+				disabled={!canRedo}
+				aria-disabled={!canRedo}
+				aria-label="重做"
+				title="重做"
+				onClick={redo}
 			>
 				↷
 			</button>

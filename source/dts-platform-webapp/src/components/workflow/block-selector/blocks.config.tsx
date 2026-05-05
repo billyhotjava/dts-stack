@@ -5,7 +5,7 @@ import type { WorkflowNodeData, WorkflowNodeKind } from "../store/types";
 /**
  * BlockDef — 节点库里每一个可拖出的"积木"。
  * 单一数据源（DRY）：BlockSelectorPanel + BlockSelectorPopover 共用。
- * 不抄 Dify 的 LLM/Tool 等领域无关节点；F5 接入时再加 iteration/loop/note。
+ * 不抄 Dify 的 LLM/Tool 等领域无关节点；F5 P0 再接入 iteration/loop。
  */
 export type BlockCategory = "basic" | "source" | "transform" | "validate" | "sink" | "advanced";
 
@@ -94,9 +94,54 @@ export const BLOCKS: ReadonlyArray<BlockDef> = [
 		description: "写入目标数据源（append / overwrite / merge）",
 		defaultData: { config: { mode: "append" } },
 	},
+	{
+		kind: "iteration",
+		category: "advanced",
+		label: "迭代",
+		color: "#0f766e",
+		icon: <Icon icon="lucide:repeat-2" style={iconStyle} aria-hidden="true" />,
+		description: "对数组逐项执行一段子流程",
+		defaultData: {
+			config: {
+				inputArray: "$.tables",
+				itemAlias: "item",
+				parallel: false,
+				maxParallel: 1,
+				children: [],
+				childEdges: [],
+			},
+		},
+	},
+	{
+		kind: "loop",
+		category: "advanced",
+		label: "循环",
+		color: "#7c3aed",
+		icon: <Icon icon="lucide:refresh-cw" style={iconStyle} aria-hidden="true" />,
+		description: "重复执行子流程直到退出条件成立",
+		defaultData: {
+			config: {
+				exitCondition: "!$.hasMore",
+				maxIterations: 1000,
+				iterationDelay: 0,
+				retryOnError: false,
+				children: [],
+				childEdges: [],
+			},
+		},
+	},
+	{
+		kind: "note",
+		category: "advanced",
+		label: "便签",
+		color: "#f59e0b",
+		icon: <Icon icon="lucide:sticky-note" style={iconStyle} aria-hidden="true" />,
+		description: "画布标注，不参与执行",
+		defaultData: { config: { content: "双击编辑便签", color: "#fef3c7", width: 220, height: 130 } },
+	},
 ];
 
-/** F5 节点集；T01 暂不暴露，留给 F5 直接 push 进 BLOCKS */
+/** F5 P0 节点集；T01/T02 暂不暴露，留给子流程实现时接入 */
 export const ADVANCED_BLOCKS: ReadonlyArray<BlockDef> = [];
 
 export interface FilterOptions {
@@ -107,11 +152,7 @@ export function filterBlocks(blocks: ReadonlyArray<BlockDef>, opts: FilterOption
 	const kw = (opts.keyword ?? "").trim().toLowerCase();
 	if (!kw) return [...blocks];
 	return blocks.filter((b) => {
-		return (
-			b.label.toLowerCase().includes(kw) ||
-			b.description.toLowerCase().includes(kw) ||
-			b.kind.includes(kw)
-		);
+		return b.label.toLowerCase().includes(kw) || b.description.toLowerCase().includes(kw) || b.kind.includes(kw);
 	});
 }
 

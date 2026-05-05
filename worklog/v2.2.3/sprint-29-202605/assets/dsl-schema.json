@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dts.local/schemas/workflow-dsl-v1.json",
+  "title": "DTS Workflow DSL",
+  "type": "object",
+  "required": ["dslVersion", "nodes", "edges", "viewport"],
+  "properties": {
+    "dslVersion": { "const": "1.0" },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "nodes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/node" }
+    },
+    "edges": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/edge" }
+    },
+    "viewport": { "$ref": "#/$defs/viewport" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "position": {
+      "type": "object",
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "viewport": {
+      "type": "object",
+      "required": ["x", "y", "zoom"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "zoom": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "node": {
+      "type": "object",
+      "required": ["id", "type", "position", "data"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "minLength": 1 },
+        "position": { "$ref": "#/$defs/position" },
+        "data": { "type": "object" },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/node" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "edge": {
+      "type": "object",
+      "required": ["id", "source", "target"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "source": { "type": "string", "minLength": 1 },
+        "target": { "type": "string", "minLength": 1 },
+        "sourceHandle": { "type": "string" },
+        "targetHandle": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

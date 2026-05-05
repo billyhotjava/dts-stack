@@ -49,11 +49,27 @@ export const EMPTY_HELP_LINE: Readonly<HelpLineState> = Object.freeze({
 export interface UiState {
 	selectedNodeId: string | null;
 	selectedEdgeId: string | null;
+	selectedNodeIds: string[];
+	selectedEdgeIds: string[];
 	viewport: Viewport;
 	panelOpen: boolean;
 	helpLine: HelpLineState;
+	contextMenu: WorkflowContextMenuState | null;
 }
 
 export const DEFAULT_VIEWPORT: Readonly<Viewport> = Object.freeze({ x: 0, y: 0, zoom: 1 });
 
 export type { XYPosition, Viewport };
+
+export type WorkflowContextMenuType = "pane" | "node" | "edge" | "multi";
+
+export interface WorkflowContextMenuState {
+	type: WorkflowContextMenuType;
+	x: number;
+	y: number;
+	flowPosition?: XYPosition;
+	nodeId?: string;
+	edgeId?: string;
+	nodeIds?: string[];
+	edgeIds?: string[];
+}

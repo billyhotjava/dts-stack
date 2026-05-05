@@ -1,7 +1,7 @@
 # T05: 撤销/重做（最多 50 步历史）
 
 **优先级**: P0
-**状态**: READY
+**状态**: PARTIAL
 **依赖**: F1-T01
 
 ## 目标
@@ -13,6 +13,8 @@
 ### 选型
 
 **优先 zundo**（zustand 官方时间旅行 middleware，~1KB），与现有 zustand 4.5.x 兼容；如不兼容则自实现 history slice。
+
+本轮采用自实现 `history-slice`，避免新增依赖和安装网络风险。
 
 ### zundo 集成
 
@@ -76,15 +78,21 @@ const canRedo = useWorkflowStore.temporal.getState().futureStates.length > 0;
 
 ## 验证
 
-- [ ] 增删节点/边后 Ctrl+Z 撤销，Ctrl+Shift+Z 重做
+- [x] 增删节点/边后 Ctrl+Z 撤销，Ctrl+Shift+Z 重做
 - [ ] 拖动节点节流：连续拖 5 秒只占 ~16 步而非 ~300 步
-- [ ] 50 步上限：超出后最早的丢弃
-- [ ] 切换 task 清空历史
-- [ ] Operator 按钮状态正确（无可撤销时 disabled）
-- [ ] DSL 反序列化时不入栈（避免初始加载占用栈）
+- [x] 50 步上限：超出后最早的丢弃
+- [x] 切换/重置 task 清空历史；DSL 初始加载 pause + clear
+- [x] Operator 按钮状态正确（无可撤销时 disabled）
+- [x] DSL 反序列化时不入栈（避免初始加载占用栈）
 
 ## 完成标准
 
-- [ ] zundo middleware 与 persist 中间件正常组合
-- [ ] 单元测试：基础 undo/redo + 节流 + 上限 + 清空
+- [x] 自实现 history slice 与 persist 中间件正常组合
+- [ ] 单元测试：基础 undo/redo + 节流 + 上限 + 清空（节流待补）
 - [ ] 性能：50 步历史的 graph 切换不卡顿
+
+## 当前实现说明
+
+- 新增 `store/history-slice.ts`，只记录 nodes/edges 快照，最多 50 步，不进入 localStorage。
+- `UndoRedoButtons` 已从占位按钮切换为真实 store action。
+- `WorkflowCanvas` 初始 DSL / initialNodes 加载时暂停历史并清空，避免初始状态占用撤销栈。

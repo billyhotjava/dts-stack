@@ -1,7 +1,7 @@
 # F5: 高级特性（iteration/loop subflow + 右键菜单 + 快捷键 + 撤销重做 + 便签）
 
 **优先级**: P0（用户场景已确认需要 iteration + loop）
-**状态**: READY
+**状态**: IN_PROGRESS
 **依赖**: F4
 
 ## 目标
@@ -39,19 +39,19 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| T01 | `IterationNode` 子流程节点（多表批量） | P0 | READY | F4-T06 |
-| T02 | `LoopNode` 条件循环节点（增量同步） | P0 | READY | F4-T06 |
-| T03 | 4 类右键菜单：画布 / 节点 / 连线 / 多选 | P0 | READY | F4-T01 |
-| T04 | 快捷键：复制/粘贴/删除/全选/撤销/重做 | P0 | READY | T03 |
-| T05 | 撤销/重做 store 集成（基于 zundo 或自实现 history slice） | P0 | READY | F1-T01 |
-| T06 | `NoteNode` 便签节点：纯标注用，无连线，可换色 | P1 | READY | F3-T01 |
+| T01 | `IterationNode` 子流程节点（多表批量） | P0 | PARTIAL | F4-T06 |
+| T02 | `LoopNode` 条件循环节点（增量同步） | P0 | PARTIAL | F4-T06 |
+| T03 | 4 类右键菜单：画布 / 节点 / 连线 / 多选 | P0 | PARTIAL | F4-T01 |
+| T04 | 快捷键：复制/粘贴/删除/全选/撤销/重做 | P0 | PARTIAL | T03 |
+| T05 | 撤销/重做 store 集成（基于 zundo 或自实现 history slice） | P0 | PARTIAL | F1-T01 |
+| T06 | `NoteNode` 便签节点：纯标注用，无连线，可换色 | P1 | PARTIAL | F3-T01 |
 
 ## 完成标准
 
-- [ ] iteration 节点能配置 `inputArray` 与 `itemAlias`，子流程内可拖入其它节点
-- [ ] loop 节点能配置 `exitCondition`（表达式或 max iterations），运行预览态能看到迭代次数
-- [ ] 子流程 DSL 序列化：嵌套结构以 `children: WorkflowNode[]` 表示，反序列化幂等
-- [ ] 右键菜单 4 个上下文均可触发，键盘 ESC 能关
-- [ ] 撤销/重做对所有节点/边操作均生效，最多 50 步历史
-- [ ] 便签节点不参与 DSL 执行（运行时跳过），只持久化在 graph_dsl
+- [x] iteration 节点能配置 `inputArray` 与 `itemAlias`；子流程画布编辑器待补
+- [x] loop 节点能配置 `exitCondition` 与 `maxIterations`；运行预览态待补
+- [x] 子流程 DSL 序列化：嵌套结构以 `children: WorkflowNode[]` / `childEdges` 表示，反序列化幂等
+- [x] 右键菜单 4 个上下文已接入前端触发，键盘 ESC / 外部点击能关；连线类型切换与 group 仍待补齐
+- [x] 撤销/重做对节点/边增删改批处理生效，最多 50 步历史；拖动节流仍待补齐
+- [x] 便签节点不参与前端连线，随 DSL 前端序列化持久化；后端运行时跳过仍待 T05 graph_dsl 落库后一并校验
 - [ ] Chrome 95：右键菜单、快捷键不崩

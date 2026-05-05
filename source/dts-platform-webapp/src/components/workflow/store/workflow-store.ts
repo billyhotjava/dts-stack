@@ -1,11 +1,12 @@
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
 import { createEdgesSlice, type EdgesSlice } from "./edges-slice";
+import { createHistorySlice, type HistorySlice } from "./history-slice";
 import { createNodesSlice, type NodesSlice } from "./nodes-slice";
-import { createUiSlice, type UiSlice } from "./ui-slice";
 import { DEFAULT_VIEWPORT, EMPTY_HELP_LINE } from "./types";
+import { createUiSlice, type UiSlice } from "./ui-slice";
 
-export type WorkflowStore = NodesSlice & EdgesSlice & UiSlice;
+export type WorkflowStore = NodesSlice & EdgesSlice & UiSlice & HistorySlice;
 
 const STORAGE_KEY = "workflow-canvas.viewport.v1";
 
@@ -21,6 +22,7 @@ export const useWorkflowStore = create<WorkflowStore>()(
 			...createNodesSlice(set, get, store),
 			...createEdgesSlice(set, get, store),
 			...createUiSlice(set, get, store),
+			...createHistorySlice(set, get, store),
 		}),
 		{
 			name: STORAGE_KEY,
@@ -38,9 +40,17 @@ export function resetWorkflowStoreForTest(): void {
 		edges: [],
 		selectedNodeId: null,
 		selectedEdgeId: null,
+		selectedNodeIds: [],
+		selectedEdgeIds: [],
 		viewport: { ...DEFAULT_VIEWPORT },
 		panelOpen: false,
 		helpLine: { ...EMPTY_HELP_LINE },
+		contextMenu: null,
+		historyPast: [],
+		historyFuture: [],
+		historyPaused: false,
+		canUndo: false,
+		canRedo: false,
 	}));
 	if (typeof window !== "undefined") {
 		try {

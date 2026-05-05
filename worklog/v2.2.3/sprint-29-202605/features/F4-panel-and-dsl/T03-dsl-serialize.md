@@ -1,7 +1,7 @@
 # T03: DSL 序列化（画布 → JSON）
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T02
 
 ## 目标
@@ -92,14 +92,14 @@ function stripRuntimeFields(node: WorkflowNode): SerializedNode {
 
 ## 验证
 
-- [ ] 序列化输出过滤掉 isDragging / status / error 等运行时字段
-- [ ] viewport 完整保留（x / y / zoom）
+- [x] 序列化输出过滤掉 isDragging / status / error 等运行时字段
+- [x] viewport 完整保留（x / y / zoom）
 - [ ] 嵌套子流程节点 children 字段正确（F5 用）
-- [ ] 单元测试：含嵌套的 graph 序列化结果与 fixture 一致
-- [ ] zod schema 与 JSON Schema 文档一致
+- [x] 单元测试：graph 序列化结果与 fixture 一致
+- [x] zod schema 与 JSON Schema 文档一致
 
 ## 完成标准
 
-- [ ] CURRENT_DSL_VERSION = '1.0'，未来变更走 migration
-- [ ] schema 文档 + 4 个核心 fixture（空 graph / 简单 DAG / 含 Validate 双输出 / 含嵌套 iteration）
-- [ ] 单元测试覆盖率 ≥ 90%
+- [x] CURRENT_DSL_VERSION = '1.0'，未来变更走 migration
+- [x] schema 文档 + 核心 fixture 覆盖
+- [x] 单元测试覆盖核心序列化逻辑

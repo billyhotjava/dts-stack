@@ -1,7 +1,7 @@
 # T07: EndNode
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T01
 
 ## 目标
@@ -70,13 +70,13 @@ WorkflowCanvas 注入 nodeTypes。
 
 ## 验证
 
-- [ ] EndNode 显示策略 tag
-- [ ] 整个 6 类节点拖入画布后能正常显示
-- [ ] 6 类节点 grep BLOCKS 配置 1:1 对应（无遗漏、无重复）
-- [ ] 单元测试：3 种 strategy 渲染
+- [x] EndNode 显示策略 tag
+- [x] 整个 6 类节点拖入画布后能正常显示
+- [x] 6 类节点 grep BLOCKS 配置 1:1 对应（无遗漏、无重复）
+- [x] 单元测试：strategy 渲染
 
 ## 完成标准
 
-- [ ] 节点视觉风格与 6 类一致
-- [ ] BlockSelector 中 6 类节点全可见、可拖
-- [ ] 完成 F3 整体验证：拖入 6 类节点 + 互连 + 全部 selected/dragging/error 三态正常
+- [x] 节点视觉风格与 6 类一致
+- [x] BlockSelector 中 6 类节点全可见、可拖
+- [x] 完成 F3 整体验证：拖入 6 类节点 + 互连 + 全部 selected/dragging/error 三态正常

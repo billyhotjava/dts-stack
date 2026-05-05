@@ -1,7 +1,7 @@
 # T04: 快捷键
 
 **优先级**: P0
-**状态**: READY
+**状态**: PARTIAL
 **依赖**: T03
 
 ## 目标
@@ -99,14 +99,20 @@ function pasteClipboard(store: WorkflowStore, clipboard: ClipboardPayload | null
 
 ## 验证
 
-- [ ] 11 个快捷键全部可用
-- [ ] 表单 input 中不抢快捷键（输入 v 时不粘贴）
-- [ ] 跨平台：macOS Cmd / Linux Win Ctrl 均生效
-- [ ] 复制后粘贴：节点 id 全新，位置 +40 偏移
-- [ ] 单元测试：每个快捷键至少 1 用例（mock keydown）
+- [ ] 11 个快捷键全部可用（Space 平移模式待补）
+- [x] 表单 input 中不抢快捷键（input/textarea/select/contentEditable 均跳过）
+- [x] 跨平台：macOS Cmd / Linux Win Ctrl 均生效
+- [x] 复制后粘贴：节点 id 全新，默认位置 +40 偏移
+- [ ] 单元测试：每个快捷键至少 1 用例（当前覆盖共享 editor actions，hook 级 keydown 矩阵待补）
 
 ## 完成标准
 
 - [ ] 快捷键说明文档（可选 i18n /帮助按钮）
 - [ ] 在表单内 ESC 不触发画布操作
-- [ ] Chrome 95 真机一遍
+- [x] Chrome 95 禁用 API/CSS grep 无命中
+
+## 当前实现说明
+
+- 已新增 `shortcuts/useShortcuts.ts` 并接入 `WorkflowCanvas`。
+- 已实现 Ctrl/Cmd+C/V/X/A/Z/Shift+Z/S/0/+/−、Delete/Backspace。
+- 复制/粘贴/删除/全选与右键菜单共享 `actions/editor-actions.ts`。

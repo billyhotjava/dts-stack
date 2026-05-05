@@ -1,7 +1,7 @@
 # T02: LoopNode 条件循环子流程节点
 
 **优先级**: P0
-**状态**: READY
+**状态**: PARTIAL
 **依赖**: F4-T06
 
 ## 目标
@@ -64,15 +64,21 @@ type LoopNodeData = {
 
 ## 验证
 
-- [ ] 拖出 Loop 节点后能配置 exitCondition + maxIterations
-- [ ] exitCondition 必填，maxIterations > 0 校验
+- [x] 拖出 Loop 节点后能配置 exitCondition + maxIterations
+- [x] maxIterations > 0 前端表单约束；exitCondition 必填后端/运行校验待补
 - [ ] 子流程可正常编辑
-- [ ] DSL 序列化/反序列化正确（与 iteration 类似但 type 不同）
-- [ ] Loop 内不允许再嵌 Loop / Iteration（一期限制，YAGNI）
-- [ ] 单元测试：节点字段校验 + 序列化
+- [x] DSL 序列化/反序列化正确（与 iteration 类似但 type 不同）
+- [x] Loop 内不允许再嵌 Loop / Iteration（一期限制，前端 schema 拒）
+- [x] 单元测试：节点摘要 + 嵌套序列化/拒绝
 
 ## 完成标准
 
-- [ ] Loop 节点能描述用户的两个核心场景（增量 / 重试）
-- [ ] 兜底 maxIterations 强制有值
-- [ ] 视觉与 iteration 区分（loop 用循环箭头 icon）
+- [x] Loop 节点能描述用户的两个核心场景（增量 / 重试）
+- [x] 兜底 maxIterations 强制有值
+- [x] 视觉与 iteration 区分（loop 用循环箭头 icon）
+
+## 当前实现说明
+
+- 已新增 `LoopNode`、`LoopForm`、BlockSelector 配置、nodeTypes 注册。
+- 已支持 `exitCondition`、`maxIterations`、`iterationDelay`、`retryOnError` 配置。
+- 本轮未实现子画布编辑与运行预览态。

@@ -1,14 +1,14 @@
 import { useMemo, useState } from "react";
+import { BlockSelectorItem } from "./BlockSelectorItem";
 import {
 	BLOCKS,
+	type BlockCategory,
+	type BlockDef,
 	CATEGORY_LABEL,
 	CATEGORY_ORDER,
 	filterBlocks,
 	groupByCategory,
-	type BlockCategory,
-	type BlockDef,
 } from "./blocks.config";
-import { BlockSelectorItem } from "./BlockSelectorItem";
 
 export interface BlockSelectorPanelProps {
 	blocks?: ReadonlyArray<BlockDef>;
@@ -34,11 +34,7 @@ export function BlockSelectorPanel({
 	const visibleCategories = CATEGORY_ORDER.filter((cat) => grouped[cat].length > 0);
 
 	return (
-		<aside
-			className="block-selector-panel"
-			data-collapsed={collapsed ? "true" : "false"}
-			aria-label="节点库"
-		>
+		<aside className="block-selector-panel" data-collapsed={collapsed ? "true" : "false"} aria-label="节点库">
 			<header className="block-selector-panel__header">
 				{collapsed ? null : (
 					<input

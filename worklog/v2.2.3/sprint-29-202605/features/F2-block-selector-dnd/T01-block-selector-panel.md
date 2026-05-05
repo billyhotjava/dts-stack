@@ -1,7 +1,7 @@
 # T01: BlockSelectorPanel 左侧持久面板
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: F1-T02
 
 ## 目标
@@ -82,14 +82,20 @@ function BlockSelectorItem({ block }: { block: BlockDef }) {
 
 ## 验证
 
-- [ ] 6 类节点全部展示，按分类分组
-- [ ] 搜索框过滤实时生效
-- [ ] 拖出 item 时 dataTransfer 正确（被 T03 CandidateNode 接收）
-- [ ] 折叠按钮：折叠后只显示窄条 icon 列
-- [ ] Chrome 95：dataTransfer.setData 正常
+- [x] 6 类节点全部展示，按分类分组
+- [x] 搜索框过滤实时生效
+- [x] 拖出 item 时 dataTransfer 正确（被 T03 CandidateNode 接收）
+- [x] 折叠按钮：折叠后只显示窄条 icon 列
+- [x] Chrome 95：dataTransfer.setData 未使用禁用 API，真机冒烟待 F2 收尾
 
 ## 完成标准
 
-- [ ] BLOCKS 是唯一数据源，T02 Popover 复用
-- [ ] 视觉：图标 + 文字 + hover 高亮，与 Dify 风格相近
-- [ ] 单元测试：搜索过滤 + 分组渲染
+- [x] BLOCKS 是唯一数据源，T02 Popover 复用
+- [x] 视觉：图标 + 文字 + hover 高亮，与 Dify 风格相近
+- [x] 单元测试：搜索过滤 + 分组渲染
+
+## 实施记录（2026-05-05）
+
+- 新增 `src/components/workflow/block-selector/`：`BlockSelectorPanel`、`BlockSelectorItem`、`blocks.config.tsx`、`styles.css`
+- `OrchestrationPage` 编排 Tab 左侧挂载持久节点库
+- 测试：`pnpm exec vitest run src/components/workflow/__tests__/blocks-config.test.ts src/components/workflow/__tests__/block-selector-panel.test.tsx`

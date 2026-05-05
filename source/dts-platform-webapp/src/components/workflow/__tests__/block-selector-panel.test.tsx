@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+
 import type { ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react-dom/test-utils";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { BlockSelectorPanel } from "../block-selector/BlockSelectorPanel";
 import { BLOCK_DRAG_MIME, BLOCKS } from "../block-selector/blocks.config";
 
@@ -19,9 +20,17 @@ function render(node: ReactNode) {
 	return host as HTMLDivElement;
 }
 
+function requireElement<T extends Element>(element: T | null, message: string): T {
+	if (!element) {
+		throw new Error(message);
+	}
+	return element;
+}
+
 afterEach(() => {
 	if (root && host) {
-		act(() => root!.unmount());
+		const currentRoot = root;
+		act(() => currentRoot.unmount());
 		document.body.removeChild(host);
 	}
 	root = null;
@@ -38,7 +47,7 @@ function setReactInputValue(input: HTMLInputElement, value: string) {
 }
 
 describe("BlockSelectorPanel", () => {
-	it("renders all 6 blocks grouped by category by default", () => {
+	it("renders all blocks grouped by category by default", () => {
 		const container = render(<BlockSelectorPanel />);
 		for (const block of BLOCKS) {
 			expect(container.querySelector(`[data-testid="block-${block.kind}"]`)).not.toBeNull();
@@ -49,20 +58,22 @@ describe("BlockSelectorPanel", () => {
 
 	it("filters blocks via the search input", () => {
 		const container = render(<BlockSelectorPanel />);
-		const input = container.querySelector<HTMLInputElement>('input[type="search"]');
-		expect(input).not.toBeNull();
-		setReactInputValue(input!, "transform");
+		const input = requireElement(
+			container.querySelector<HTMLInputElement>('input[type="search"]'),
+			"search input should render",
+		);
+		setReactInputValue(input, "transform");
 		expect(container.querySelector('[data-testid="block-transform"]')).not.toBeNull();
 		expect(container.querySelector('[data-testid="block-source"]')).toBeNull();
 	});
 
 	it("shows empty hint when no match", () => {
 		const container = render(<BlockSelectorPanel />);
-		const input = container.querySelector<HTMLInputElement>('input[type="search"]');
-		act(() => {
-			input!.value = "xyz-no-match";
-			input!.dispatchEvent(new Event("input", { bubbles: true }));
-		});
+		const input = requireElement(
+			container.querySelector<HTMLInputElement>('input[type="search"]'),
+			"search input should render",
+		);
+		setReactInputValue(input, "xyz-no-match");
 		expect(container.textContent).toContain("未找到匹配节点");
 	});
 
@@ -79,18 +90,29 @@ describe("BlockSelectorPanel", () => {
 	it("emits drag start callback with the dragged block", () => {
 		const onDragStart = vi.fn();
 		const container = render(<BlockSelectorPanel onBlockDragStart={onDragStart} />);
-		const item = container.querySelector<HTMLDivElement>('[data-testid="block-source"]');
-		expect(item).not.toBeNull();
+		const item = requireElement(
+			container.querySelector<HTMLButtonElement>('[data-testid="block-source"]'),
+			"source block should render",
+		);
 		const setDataMock = vi.fn();
+		const setDragImageMock = vi.fn();
 		const event = new Event("dragstart", { bubbles: true }) as unknown as DragEvent;
 		Object.defineProperty(event, "dataTransfer", {
-			value: { setData: setDataMock, get effectAllowed() { return ""; }, set effectAllowed(_v: string) {} },
+			value: {
+				setData: setDataMock,
+				setDragImage: setDragImageMock,
+				get effectAllowed() {
+					return "";
+				},
+				set effectAllowed(_v: string) {},
+			},
 		});
 		act(() => {
-			item!.dispatchEvent(event);
+			item.dispatchEvent(event);
 		});
 		expect(setDataMock).toHaveBeenCalledTimes(1);
 		expect(setDataMock.mock.calls[0][0]).toBe(BLOCK_DRAG_MIME);
+		expect(setDragImageMock).toHaveBeenCalledTimes(1);
 		expect(onDragStart).toHaveBeenCalledTimes(1);
 		expect(onDragStart.mock.calls[0][0].kind).toBe("source");
 	});

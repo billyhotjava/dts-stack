@@ -1,7 +1,7 @@
 # T05: ValidateNode 校验节点（双输出）
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T01
 
 ## 目标
@@ -57,12 +57,12 @@ T01 BaseNode 的 NodeHandles 需支持 outputs 多个 handle + 自定义 label/c
 
 ## 验证
 
-- [ ] 节点底部 2 个 handle 可视化区分（绿/红 + 文字）
-- [ ] 规则数 0 时显示"未配置规则"占位
-- [ ] 规则类型分布正确：完整性×3 · 范围×2 · 正则×1
-- [ ] 单元测试：规则汇总函数 + 节点渲染
+- [x] 节点底部 2 个 handle 可视化区分（绿/红 + 文字）
+- [x] 规则数 0 时显示"未配置规则"占位
+- [x] 规则类型分布正确：完整性×3 · 范围×2 · 正则×1
+- [x] 单元测试：规则汇总函数 + 节点渲染
 
 ## 完成标准
 
-- [ ] 双 handle 视觉清晰（位置不重叠）
-- [ ] CustomEdge / canConnect 支持多输出 handle
+- [x] 双 handle 视觉清晰（位置不重叠）
+- [x] CustomEdge / canConnect 支持多输出 handle

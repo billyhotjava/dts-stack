@@ -1,7 +1,7 @@
 # T04: TransformNode 转换节点
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T01
 
 ## 目标
@@ -48,12 +48,12 @@ export function TransformNode({ id, data }: NodeProps) {
 
 ## 验证
 
-- [ ] 节点摘要显示语言 + 行数
-- [ ] data.language 改变时 lang-tag 同步
-- [ ] data.hasExternalDeps=true 时显示警告 tag
-- [ ] 单元测试：3 种语言渲染
+- [x] 节点摘要显示语言 + 行数
+- [x] data.language 改变时 lang-tag 同步
+- [x] data.hasExternalDeps=true 时显示警告 tag
+- [x] 单元测试：语言 / 行数 / 外部依赖渲染
 
 ## 完成标准
 
-- [ ] 节点摘要不超 3 行
-- [ ] lang-tag 配色与 SQL IDE 一致
+- [x] 节点摘要不超 3 行
+- [x] lang-tag 使用 workflow 统一 tag 样式

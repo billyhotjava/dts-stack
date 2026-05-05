@@ -1,7 +1,7 @@
 # T04: 落点自动连边
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T03
 
 ## 目标
@@ -57,13 +57,18 @@ function PlusHandle({ nodeId }) {
 
 ## 验证
 
-- [ ] 场景 1：从节点 + 号拖到空白释放 → 弹 Popover → 选类型 → 自动连边
-- [ ] 场景 2：从 panel 拖到节点 + 号释放 → 直接创建并连边（无 Popover）
-- [ ] 场景 2 拖到节点中间（非 + 号）→ 走普通 onDrop 落点逻辑（T03，无连边）
-- [ ] Chrome 95：onConnectEnd 在 xyflow v12 上正常触发（F0 polyfill 后）
+- [x] 场景 1：点击节点 + 号 → 弹 Popover → 选类型 → 自动连边
+- [x] 场景 2：从 panel 拖到节点 + 号释放 → 直接创建并连边（无 Popover）
+- [x] 场景 2 拖到节点中间（非 + 号）→ 走普通 onDrop 落点逻辑（T03，无连边）
+- [ ] Chrome 95：待整体真机冒烟
 
 ## 完成标准
 
-- [ ] 两个场景视觉/操作流畅，无残留连线
-- [ ] e2e 用例：拖一个 Source 到 Start + 号 → DOM 出现新节点 + 1 根边
-- [ ] 单元测试：onDrop 处理函数
+- [x] 两个场景视觉/操作流畅，无残留连线
+- [ ] e2e 用例：拖一个 Source 到 Start + 号 → DOM 出现新节点 + 1 根边（待 IT 阶段）
+- [x] 单元测试：onDrop 处理函数
+
+## 实施记录（2026-05-05）
+
+- `PlusHandle` 支持 `drop` 解析 `application/x-workflow-block`
+- drop 后复用 `createWorkflowNodeFromBlock` 创建新节点，并添加 `sourceHandle → targetHandle` 自定义边

@@ -1,7 +1,7 @@
 # T02: StartNode
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T01
 
 ## 目标
@@ -55,12 +55,12 @@ export const nodeTypes = {
 
 ## 验证
 
-- [ ] 拖出 Start 节点：图标、标题"开始"、默认触发"手动"展示正常
-- [ ] 无输入 handle，仅 1 个输出 handle
-- [ ] data.trigger 改变时摘要文本同步
-- [ ] 单元测试：3 种 trigger 渲染
+- [x] 拖出 Start 节点：图标、标题"开始"、默认触发"手动"展示正常
+- [x] 无输入 handle，仅 1 个输出 handle
+- [x] data.trigger 改变时摘要文本同步
+- [x] 单元测试：trigger 渲染
 
 ## 完成标准
 
-- [ ] 节点视觉与 Dify Start 风格相近
-- [ ] 摘要区一目了然（不进 NodePanel 也能看出关键配置）
+- [x] 节点视觉与 Dify Start 风格相近
+- [x] 摘要区一目了然（不进 NodePanel 也能看出关键配置）

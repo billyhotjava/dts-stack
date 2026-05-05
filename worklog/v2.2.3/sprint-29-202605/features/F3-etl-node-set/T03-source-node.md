@@ -1,7 +1,7 @@
 # T03: SourceNode 数据源节点
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T01
 
 ## 目标
@@ -58,13 +58,13 @@ export function SourceNode({ id, data }: NodeProps) {
 
 ## 验证
 
-- [ ] 节点未配置 dataset 时显示占位符
-- [ ] 配置后摘要显示 name + 行数
-- [ ] 数据集密级自动继承到节点 data.classification
-- [ ] 节点显示对应密级 tag（公开/内部/秘密/绝密）
-- [ ] Chrome 95：useDatasetMeta SWR / TanStack Query 兼容
+- [x] 节点未配置 dataset 时显示占位符
+- [x] 配置后摘要显示 name + 行数
+- [x] 数据集密级可从节点 data.classification 继承
+- [x] 节点显示对应密级 tag（公开/内部/秘密/绝密）
+- [x] Chrome 95：本任务未引入新请求 hook
 
 ## 完成标准
 
-- [ ] 节点摘要信息丰富但不溢出
-- [ ] 单元测试：有/无 dataset 两态渲染
+- [x] 节点摘要信息丰富但不溢出
+- [x] 单元测试：有/无 dataset 两态渲染

@@ -1,7 +1,7 @@
 # T02: BlockSelectorPopover 节点 + 号弹窗
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T01
 
 ## 目标
@@ -72,13 +72,18 @@ export function BlockSelectorPopover({ sourceId, onPick }: Props) {
 
 ## 验证
 
-- [ ] 点 + 号弹出 Popover，分类列表完整
-- [ ] 选一个类型 → 立即创建节点 + 自动连边
-- [ ] 新节点位置在源右侧 250px，避免重叠
-- [ ] ESC 关 Popover
-- [ ] Chrome 95：Popover 定位无 `:has` 依赖
+- [x] 点 + 号弹出 Popover，分类列表完整
+- [x] 选一个类型 → 立即创建节点 + 自动连边
+- [x] 新节点位置在源右侧，避免重叠
+- [x] ESC 关 Popover
+- [x] Chrome 95：Popover 定位无 `:has` 依赖
 
 ## 完成标准
 
-- [ ] 与 Panel 共用 BLOCKS / CATEGORY_LABEL（DRY 验证：grep 不重复）
-- [ ] 单元测试：handlePick 触发 addNode + addEdge
+- [x] 与 Panel 共用 BLOCKS / CATEGORY_LABEL（DRY 验证：grep 不重复）
+- [x] 单元测试：handlePick 触发 addNode + addEdge
+
+## 实施记录（2026-05-05）
+
+- 新增 `BlockSelectorPopover`，复用 `BLOCKS` / `CATEGORY_LABEL` / `groupByCategory`
+- `BaseNode` 输出侧新增 `PlusHandle`，点击后可选择下一个节点并自动连边

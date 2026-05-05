@@ -1,7 +1,7 @@
 # T03: 4 类右键菜单（画布 / 节点 / 连线 / 多选）
 
 **优先级**: P0
-**状态**: READY
+**状态**: PARTIAL
 **依赖**: F4-T01
 
 ## 目标
@@ -90,14 +90,20 @@ function ContextMenu() {
 
 ## 验证
 
-- [ ] 4 个上下文均可触发对应菜单
-- [ ] ESC + 点击外部均能关闭
-- [ ] 菜单超出视口边界时自动反转方向
-- [ ] 复制/粘贴/删除等操作走 store action（与 T04 快捷键共享逻辑）
-- [ ] role/aria 完整：role="menu" / "menuitem"
-- [ ] Chrome 95：onContextMenu 事件 + position 计算正常
+- [x] 4 个上下文均已接入触发：pane / node / edge / multi-selection
+- [x] ESC + 点击外部均能关闭
+- [x] 菜单超出视口边界时做基础 clamp，避免溢出窗口
+- [x] 复制/粘贴/删除等操作走共享 editor action（与 T04 快捷键共享）
+- [x] role/aria 完整：role="menu" / "menuitem"
+- [x] Chrome 95 禁用 API/CSS grep 无命中
 
 ## 完成标准
 
-- [ ] 4 类菜单结构清晰，互不干扰
+- [x] 4 类菜单结构清晰，互不干扰
 - [ ] 单元测试：每类菜单 ≥ 2 用例
+
+## 当前实现说明
+
+- 已新增 `context-menu/ContextMenu.tsx`，由 `WorkflowCanvas` 注入 ReactFlow 右键事件。
+- 已覆盖画布粘贴/全选/fit view/添加便签，节点复制/剪切/删除/重命名/详情/添加便签，连线删除，多选复制/删除/对齐。
+- 未完成项：连线类型切换、组合 group、菜单专项单测矩阵。
