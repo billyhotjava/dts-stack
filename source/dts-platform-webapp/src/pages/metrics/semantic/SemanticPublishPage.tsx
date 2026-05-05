@@ -2,7 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Card, Col, Empty, Input, Modal, Row, Select, Space, Tag, Typography, message } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { BranchesOutlined, CheckCircleOutlined, CloudUploadOutlined, DatabaseOutlined, SendOutlined, StopOutlined } from "@ant-design/icons";
+import {
+	BranchesOutlined,
+	CheckCircleOutlined,
+	CloudUploadOutlined,
+	DatabaseOutlined,
+	SendOutlined,
+	StopOutlined,
+} from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
 import {
 	approveSemanticModelReview,
@@ -23,9 +30,7 @@ import { asArray, isConsumableSemanticModel, semanticSectionMeta } from "./seman
 
 const { Paragraph, Text } = Typography;
 
-const backendGaps = [
-	"Superset 远端 Dataset 同步",
-];
+const backendGaps = ["Superset 远端 Dataset 同步"];
 
 const reviewStatusColor = (status?: string) => {
 	const value = (status || "DRAFT").toUpperCase();
@@ -46,31 +51,45 @@ export default function SemanticPublishPage() {
 	const [reviewAction, setReviewAction] = useState<"submit" | "approve" | "reject" | null>(null);
 	const [reviewComment, setReviewComment] = useState("");
 
-	const selectedModel = useMemo(
-		() => models.find((item) => item.id === selectedModelId),
-		[models, selectedModelId],
-	);
-	const consumableModels = useMemo(
-		() => models.filter(isConsumableSemanticModel),
-		[models],
-	);
+	const selectedModel = useMemo(() => models.find((item) => item.id === selectedModelId), [models, selectedModelId]);
+	const consumableModels = useMemo(() => models.filter(isConsumableSemanticModel), [models]);
 
 	const selectedModelReviewStatus = (selectedModel?.reviewStatus || selectedModel?.status || "DRAFT").toUpperCase();
+	const selectedModelStatus = (selectedModel?.status || "").toUpperCase();
 	const selectedModelIsConsumable = Boolean(selectedModel && isConsumableSemanticModel(selectedModel));
-	const canSubmitReview = Boolean(selectedModelId && !["IN_REVIEW", "APPROVED", "PUBLISHED"].includes(selectedModelReviewStatus));
+	const canSubmitReview = Boolean(
+		selectedModelId && !["IN_REVIEW", "APPROVED", "PUBLISHED"].includes(selectedModelReviewStatus),
+	);
 	const canApproveReview = Boolean(selectedModelId && selectedModelReviewStatus === "IN_REVIEW");
 	const canRejectReview = canApproveReview;
-	const canPublishModel = Boolean(selectedModelId && selectedModelIsConsumable && ["APPROVED", "PUBLISHED"].includes(selectedModelReviewStatus));
-	const publishedDbtCount = artifacts.filter((item) => String(item.status || "").toUpperCase() === "PUBLISHED").length;
-	const biDatasetRegistered = artifacts.some((item) => String(item.artifactType || "").toUpperCase() === "BI_DATASET" && String(item.status || "").toUpperCase() === "REGISTERED");
-	const lineageRegistered = artifacts.some((item) => String(item.artifactType || "").toUpperCase() === "LINEAGE" && String(item.status || "").toUpperCase() === "REGISTERED");
+	const canPublishModel = Boolean(
+		selectedModelId && selectedModelIsConsumable && ["APPROVED", "PUBLISHED"].includes(selectedModelReviewStatus),
+	);
+	const publishedDbtCount = artifacts.filter(
+		(item) =>
+			["DBT_SQL", "DBT_SCHEMA_YML"].includes(String(item.artifactType || "").toUpperCase()) &&
+			String(item.status || "").toUpperCase() === "PUBLISHED",
+	).length;
+	const dbtPublished = selectedModelStatus === "PUBLISHED" && publishedDbtCount >= 2;
+	const biDatasetRegistered = artifacts.some(
+		(item) =>
+			String(item.artifactType || "").toUpperCase() === "BI_DATASET" &&
+			String(item.status || "").toUpperCase() === "REGISTERED",
+	);
+	const lineageRegistered = artifacts.some(
+		(item) =>
+			String(item.artifactType || "").toUpperCase() === "LINEAGE" &&
+			String(item.status || "").toUpperCase() === "REGISTERED",
+	);
+	const canRegisterBiDataset = Boolean(canPublishModel && dbtPublished);
+	const canRegisterLineage = Boolean(canRegisterBiDataset && biDatasetRegistered);
 	const publishNextAction = !selectedModelId
 		? "先选择 DWS/ADS 模型"
 		: !selectedModelIsConsumable
 			? "请选择 DWS 或 ADS 模型"
 			: !["APPROVED", "PUBLISHED"].includes(selectedModelReviewStatus)
 				? "先提交并审核通过"
-				: !publishedDbtCount
+				: !dbtPublished
 					? "发布 dbt 产物"
 					: !biDatasetRegistered
 						? "注册 BI 数据集"
@@ -88,15 +107,14 @@ export default function SemanticPublishPage() {
 
 	const loadModelArtifacts = (modelId: string) => {
 		setArtifactLoading(true);
-		Promise.allSettled([
-			listSemanticGeneratedArtifacts({ modelId }),
-			listSemanticModelReviewLogs(modelId),
-		]).then((results) => {
-			const artifactsResp = results[0].status === "fulfilled" ? results[0].value : [];
-			const logsResp = results[1].status === "fulfilled" ? results[1].value : [];
-			setArtifacts(asArray<SemanticGeneratedArtifact>(artifactsResp));
-			setReviewLogs(asArray<SemanticModelReviewLog>(logsResp));
-		}).finally(() => setArtifactLoading(false));
+		Promise.allSettled([listSemanticGeneratedArtifacts({ modelId }), listSemanticModelReviewLogs(modelId)])
+			.then((results) => {
+				const artifactsResp = results[0].status === "fulfilled" ? results[0].value : [];
+				const logsResp = results[1].status === "fulfilled" ? results[1].value : [];
+				setArtifacts(asArray<SemanticGeneratedArtifact>(artifactsResp));
+				setReviewLogs(asArray<SemanticModelReviewLog>(logsResp));
+			})
+			.finally(() => setArtifactLoading(false));
 	};
 
 	useEffect(() => {
@@ -163,6 +181,10 @@ export default function SemanticPublishPage() {
 			message.warning("请选择 DWS 公共汇总模型或 ADS 应用数据集");
 			return;
 		}
+		if (!canRegisterBiDataset) {
+			message.warning("请先发布 dbt 产物，再注册 BI 数据集");
+			return;
+		}
 		setArtifactLoading(true);
 		try {
 			const result = await registerSemanticBiDataset(selectedModelId);
@@ -176,6 +198,10 @@ export default function SemanticPublishPage() {
 	const registerLineage = async () => {
 		if (!selectedModelId || !selectedModelIsConsumable) {
 			message.warning("请选择 DWS 公共汇总模型或 ADS 应用数据集");
+			return;
+		}
+		if (!canRegisterLineage) {
+			message.warning("请先发布 dbt 并注册 BI 数据集，再写入血缘");
 			return;
 		}
 		setArtifactLoading(true);
@@ -192,7 +218,14 @@ export default function SemanticPublishPage() {
 		{ title: "模型", dataIndex: "name" },
 		{ title: "类型", dataIndex: "type", width: 90, render: (value) => value || "-" },
 		{ title: "表名", dataIndex: "tableName", render: (value) => value || "-" },
-		{ title: "审核", dataIndex: "reviewStatus", width: 120, render: (value, row) => <Tag color={reviewStatusColor(value || row.status)}>{value || row.status || "DRAFT"}</Tag> },
+		{
+			title: "审核",
+			dataIndex: "reviewStatus",
+			width: 120,
+			render: (value, row) => (
+				<Tag color={reviewStatusColor(value || row.status)}>{value || row.status || "DRAFT"}</Tag>
+			),
+		},
 		{ title: "发布", dataIndex: "status", width: 110, render: (value) => value || "-" },
 	];
 
@@ -206,16 +239,61 @@ export default function SemanticPublishPage() {
 		<div className="space-y-5 p-5" data-testid="semantic-publish-page">
 			<PageHeader
 				title={semanticSectionMeta.publish.title}
-				actions={(
+				actions={
 					<Space wrap>
-						<Button icon={<SendOutlined />} onClick={() => openReviewDialog("submit")} loading={reviewLoading} disabled={!canSubmitReview}>提交审核</Button>
-						<Button type="primary" icon={<CheckCircleOutlined />} onClick={() => openReviewDialog("approve")} loading={reviewLoading} disabled={!canApproveReview}>审核通过</Button>
-						<Button danger icon={<StopOutlined />} onClick={() => openReviewDialog("reject")} loading={reviewLoading} disabled={!canRejectReview}>驳回</Button>
-						<Button type="primary" icon={<CloudUploadOutlined />} onClick={publishArtifacts} loading={artifactLoading} disabled={!canPublishModel}>发布 dbt</Button>
-						<Button icon={<DatabaseOutlined />} onClick={registerBiDataset} loading={artifactLoading} disabled={!canPublishModel}>注册 BI</Button>
-						<Button icon={<BranchesOutlined />} onClick={registerLineage} loading={artifactLoading} disabled={!canPublishModel}>写血缘</Button>
+						<Button
+							icon={<SendOutlined />}
+							onClick={() => openReviewDialog("submit")}
+							loading={reviewLoading}
+							disabled={!canSubmitReview}
+						>
+							提交审核
+						</Button>
+						<Button
+							type="primary"
+							icon={<CheckCircleOutlined />}
+							onClick={() => openReviewDialog("approve")}
+							loading={reviewLoading}
+							disabled={!canApproveReview}
+						>
+							审核通过
+						</Button>
+						<Button
+							danger
+							icon={<StopOutlined />}
+							onClick={() => openReviewDialog("reject")}
+							loading={reviewLoading}
+							disabled={!canRejectReview}
+						>
+							驳回
+						</Button>
+						<Button
+							type="primary"
+							icon={<CloudUploadOutlined />}
+							onClick={publishArtifacts}
+							loading={artifactLoading}
+							disabled={!canPublishModel}
+						>
+							发布 dbt
+						</Button>
+						<Button
+							icon={<DatabaseOutlined />}
+							onClick={registerBiDataset}
+							loading={artifactLoading}
+							disabled={!canRegisterBiDataset}
+						>
+							注册 BI
+						</Button>
+						<Button
+							icon={<BranchesOutlined />}
+							onClick={registerLineage}
+							loading={artifactLoading}
+							disabled={!canRegisterLineage}
+						>
+							写血缘
+						</Button>
 					</Space>
-				)}
+				}
 			/>
 
 			<SemanticSectionNav activeSection="publish" />
@@ -264,8 +342,12 @@ export default function SemanticPublishPage() {
 											<Tag color={reviewStatusColor(selectedModel.reviewStatus || selectedModel.status)}>
 												{selectedModel.reviewStatus || selectedModel.status || "DRAFT"}
 											</Tag>
-											<Text type="secondary">提交：{selectedModel.submittedBy || "-"} {selectedModel.submittedAt || ""}</Text>
-											<Text type="secondary">审核：{selectedModel.reviewedBy || "-"} {selectedModel.reviewedAt || ""}</Text>
+											<Text type="secondary">
+												提交：{selectedModel.submittedBy || "-"} {selectedModel.submittedAt || ""}
+											</Text>
+											<Text type="secondary">
+												审核：{selectedModel.reviewedBy || "-"} {selectedModel.reviewedAt || ""}
+											</Text>
 										</Space>
 										{selectedModel.reviewComment ? <Text>意见：{selectedModel.reviewComment}</Text> : null}
 										<CompactTable<SemanticModelReviewLog>
@@ -298,12 +380,18 @@ export default function SemanticPublishPage() {
 					<Card title="发布闭环检查">
 						<Space direction="vertical" className="w-full">
 							<Space wrap>
-								<Tag color={["APPROVED", "PUBLISHED"].includes(selectedModelReviewStatus) ? "green" : "default"}>审核</Tag>
-								<Tag color={publishedDbtCount ? "green" : "default"}>dbt {publishedDbtCount}</Tag>
+								<Tag color={["APPROVED", "PUBLISHED"].includes(selectedModelReviewStatus) ? "green" : "default"}>
+									审核
+								</Tag>
+								<Tag color={dbtPublished ? "green" : "default"}>dbt {publishedDbtCount}/2</Tag>
 								<Tag color={biDatasetRegistered ? "green" : "default"}>BI</Tag>
 								<Tag color={lineageRegistered ? "green" : "default"}>血缘</Tag>
 							</Space>
-							<Alert type={publishNextAction === "发布闭环已完成" ? "success" : "info"} showIcon message={publishNextAction} />
+							<Alert
+								type={publishNextAction === "发布闭环已完成" ? "success" : "info"}
+								showIcon
+								message={publishNextAction}
+							/>
 						</Space>
 					</Card>
 					<Card title="后续 API 缺口">
@@ -326,11 +414,13 @@ export default function SemanticPublishPage() {
 
 			<Modal
 				open={Boolean(reviewAction)}
-				title={{
-					submit: "提交模型审核",
-					approve: "审核通过",
-					reject: "驳回模型",
-				}[reviewAction || "submit"]}
+				title={
+					{
+						submit: "提交模型审核",
+						approve: "审核通过",
+						reject: "驳回模型",
+					}[reviewAction || "submit"]
+				}
 				onCancel={closeReviewDialog}
 				onOk={submitReviewAction}
 				confirmLoading={reviewLoading}
@@ -342,7 +432,13 @@ export default function SemanticPublishPage() {
 					<Alert
 						type={reviewAction === "reject" ? "warning" : "info"}
 						showIcon
-						message={reviewAction === "submit" ? "提交后模型进入待审核状态，审核通过前不能发布 dbt。" : reviewAction === "approve" ? "审核通过后可以发布 dbt、注册 BI 和写入血缘。" : "驳回后模型需要修改并重新提交审核。"}
+						message={
+							reviewAction === "submit"
+								? "提交后模型进入待审核状态，审核通过前不能发布 dbt。"
+								: reviewAction === "approve"
+									? "审核通过后先发布 dbt，模型进入已发布状态后再注册 BI 和写入血缘。"
+									: "驳回后模型需要修改并重新提交审核。"
+						}
 					/>
 					<Input.TextArea
 						rows={4}

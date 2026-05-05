@@ -15,6 +15,26 @@ export type { ConnectionStatus } from "./custom-connection-line";
 export { HelpLine } from "./help-line";
 export { useHelpLine, detectAlignment } from "./hooks/use-help-line";
 export { Operator, ZoomControls, FitViewButton, ScreenshotButton, UndoRedoButtons } from "./operator";
+export {
+	BlockSelectorPanel,
+	BlockSelectorItem,
+	BLOCKS,
+	BLOCK_DRAG_MIME,
+	CATEGORY_LABEL,
+	CATEGORY_ORDER,
+	filterBlocks,
+	groupByCategory,
+	serializeBlockForDrag,
+	parseDraggedBlock,
+} from "./block-selector";
+export type {
+	BlockDef,
+	BlockCategory,
+	BlockSelectorPanelProps,
+	BlockSelectorItemProps,
+	DraggedBlockPayload,
+	FilterOptions,
+} from "./block-selector";
 export { useWorkflowStore, resetWorkflowStoreForTest } from "./store/workflow-store";
 export type { WorkflowStore } from "./store/workflow-store";
 export type {

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Tabs } from "antd";
-import { WorkflowCanvas } from "@/components/workflow";
+import { BlockSelectorPanel, WorkflowCanvas } from "@/components/workflow";
+import "@/components/workflow/block-selector/styles.css";
 import OrchestrationRunsTab from "./OrchestrationRunsTab";
 
 type OrchestrationTabKey = "canvas" | "runs";
@@ -21,8 +22,21 @@ export default function OrchestrationPage() {
 				label: "编排画布",
 				// destroyInactiveTabPane=false 默认行为；保留 viewport / store
 				children: (
-					<div style={{ height: "calc(100vh - 220px)", minHeight: 480 }}>
-						<WorkflowCanvas readonly={false} />
+					<div
+						style={{
+							display: "flex",
+							height: "calc(100vh - 220px)",
+							minHeight: 480,
+							border: "1px solid #e2e8f0",
+							borderRadius: 8,
+							overflow: "hidden",
+							background: "#ffffff",
+						}}
+					>
+						<BlockSelectorPanel />
+						<div style={{ flex: 1, minWidth: 0 }}>
+							<WorkflowCanvas readonly={false} />
+						</div>
 					</div>
 				),
 			},

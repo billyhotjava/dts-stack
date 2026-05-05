@@ -36,8 +36,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -52,6 +55,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/semantic")
 public class SemanticModelingResource {
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(SemanticModelingResource.class);
+
+    private static final String SEMANTIC_VALIDATION_FAILED = "SEMANTIC_VALIDATION_FAILED";
 
     private static final String MODELING_MAINTAINER_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
@@ -400,6 +405,12 @@ public class SemanticModelingResource {
             "SEMANTIC_MODEL_REGISTER_LINEAGE"
         );
         return ApiResponses.ok(result);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<Object>> handleSemanticValidationFailure(IllegalArgumentException ex) {
+        LOG.debug("Semantic modeling validation failed: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponses.error(SEMANTIC_VALIDATION_FAILED, ex.getMessage()));
     }
 
     private Map<String, Object> eventPayload(Object... values) {

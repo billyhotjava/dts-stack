@@ -1,0 +1,153 @@
+/* BlockSelectorPanel — 左侧节点库面板 */
+
+.block-selector-panel {
+	display: flex;
+	flex-direction: column;
+	width: 240px;
+	height: 100%;
+	background-color: #ffffff;
+	border-right: 1px solid #e2e8f0;
+	font-size: 13px;
+	color: #0f172a;
+	transition: width 200ms ease;
+}
+
+.block-selector-panel[data-collapsed="true"] {
+	width: 56px;
+}
+
+.block-selector-panel__header {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 10px;
+	border-bottom: 1px solid #e2e8f0;
+	background-color: #f8fafc;
+}
+
+.block-selector-panel__search {
+	flex: 1;
+	min-width: 0;
+	padding: 6px 10px;
+	border: 1px solid #cbd5e1;
+	border-radius: 6px;
+	font-size: 13px;
+	background-color: #ffffff;
+}
+
+.block-selector-panel__search:focus-visible {
+	outline: 2px solid #93c5fd;
+	outline-offset: 1px;
+	border-color: #3b82f6;
+}
+
+.block-selector-panel__toggle {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border: 1px solid #e2e8f0;
+	border-radius: 6px;
+	background-color: #ffffff;
+	color: #475569;
+	cursor: pointer;
+}
+
+.block-selector-panel__toggle:hover {
+	background-color: #f1f5f9;
+	color: #0f172a;
+}
+
+.block-selector-panel__body {
+	flex: 1;
+	overflow-y: auto;
+	padding: 8px;
+}
+
+.block-selector-panel__empty {
+	padding: 16px;
+	color: #64748b;
+	text-align: center;
+}
+
+.block-selector-panel__group {
+	margin-bottom: 12px;
+}
+
+.block-selector-panel__group:last-child {
+	margin-bottom: 0;
+}
+
+.block-selector-panel__group-title {
+	margin: 8px 4px 6px;
+	font-size: 11px;
+	font-weight: 600;
+	color: #94a3b8;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.block-selector-item {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 8px 10px;
+	margin-bottom: 4px;
+	background-color: #ffffff;
+	border: 1px solid #e2e8f0;
+	border-left: 3px solid #cbd5e1;
+	border-radius: 6px;
+	cursor: grab;
+	transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.block-selector-item:hover {
+	background-color: #f8fafc;
+	border-color: #cbd5e1;
+}
+
+.block-selector-item:active {
+	cursor: grabbing;
+}
+
+.block-selector-item:focus-visible {
+	outline: 2px solid #93c5fd;
+	outline-offset: 1px;
+}
+
+.block-selector-panel[data-collapsed="true"] .block-selector-item {
+	justify-content: center;
+	padding: 8px 4px;
+	border-left-width: 3px;
+}
+
+.block-selector-item__icon {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	margin-top: 1px;
+}
+
+.block-selector-item__body {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.block-selector-item__label {
+	font-weight: 500;
+	color: #0f172a;
+}
+
+.block-selector-item__desc {
+	font-size: 12px;
+	color: #64748b;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
