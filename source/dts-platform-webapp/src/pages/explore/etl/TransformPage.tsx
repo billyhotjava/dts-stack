@@ -297,6 +297,7 @@ export default function TransformPage() {
 			dataIndex: "name",
 			key: "name",
 			width: 200,
+			sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 			render: (text: string, record: IngestionTaskDTO) => (
 				<a onClick={() => router.push(`/explore/etl/transform/${record.id}`)}>{text}</a>
 			),
@@ -306,12 +307,14 @@ export default function TransformPage() {
 			dataIndex: "sourceType",
 			key: "sourceType",
 			width: 150,
+			sorter: (a, b) => (a.sourceType || "").localeCompare(b.sourceType || ""),
 		},
 		{
 			title: "目标表",
 			dataIndex: "tableMapping",
 			key: "tableMapping",
 			width: 220,
+			sorter: (a, b) => (a.tableMapping?.length || 0) - (b.tableMapping?.length || 0),
 			render: renderTargets,
 		},
 		{
@@ -319,6 +322,7 @@ export default function TransformPage() {
 			dataIndex: "syncMode",
 			key: "syncMode",
 			width: 120,
+			sorter: (a, b) => (a.syncMode || "").localeCompare(b.syncMode || ""),
 			render: (mode: string) => {
 				if (mode === "full_refresh") return <Tag color="blue">全量</Tag>;
 				if (mode === "incremental") return <Tag color="green">增量</Tag>;
@@ -330,6 +334,7 @@ export default function TransformPage() {
 			dataIndex: "preCheckStatus",
 			key: "preCheckStatus",
 			width: 100,
+			sorter: (a, b) => (a.preCheckStatus || "").localeCompare(b.preCheckStatus || ""),
 			render: renderPreCheckStatus,
 		},
 		{
@@ -337,6 +342,7 @@ export default function TransformPage() {
 			dataIndex: "status",
 			key: "status",
 			width: 100,
+			sorter: (a, b) => (a.status || "").localeCompare(b.status || ""),
 			render: renderStatus,
 		},
 		{
@@ -344,6 +350,7 @@ export default function TransformPage() {
 			dataIndex: "lastExecutionStatus",
 			key: "lastExecutionStatus",
 			width: 120,
+			sorter: (a, b) => (a.lastExecutionStatus || "").localeCompare(b.lastExecutionStatus || ""),
 			render: renderExecutionStatus,
 		},
 		{
@@ -351,12 +358,22 @@ export default function TransformPage() {
 			dataIndex: "lastExecutedAt",
 			key: "lastExecutedAt",
 			width: 180,
+			sorter: (a, b) => {
+				const ta = a.lastExecutedAt ? new Date(a.lastExecutedAt).getTime() : 0;
+				const tb = b.lastExecutedAt ? new Date(b.lastExecutedAt).getTime() : 0;
+				return ta - tb;
+			},
 			render: (text: string) => (text ? formatTimestamp(text) : "-"),
 		},
 		{
 			title: "行数",
 			key: "rows",
 			width: 150,
+			sorter: (a, b) => {
+				const va = (a.id ? latestExecutions[a.id]?.rowsWritten : 0) || 0;
+				const vb = (b.id ? latestExecutions[b.id]?.rowsWritten : 0) || 0;
+				return va - vb;
+			},
 			render: (_: any, record: IngestionTaskDTO) => {
 				const latest = record.id ? latestExecutions[record.id] : null;
 				return `${renderNumber(latest?.rowsRead)} / ${renderNumber(latest?.rowsWritten)}`;
@@ -366,12 +383,30 @@ export default function TransformPage() {
 			title: "耗时",
 			key: "duration",
 			width: 100,
+			sorter: (a, b) => {
+				const ea = a.id ? latestExecutions[a.id] : null;
+				const eb = b.id ? latestExecutions[b.id] : null;
+				const da = ea?.startTime && ea?.endTime
+					? new Date(ea.endTime).getTime() - new Date(ea.startTime).getTime()
+					: 0;
+				const db = eb?.startTime && eb?.endTime
+					? new Date(eb.endTime).getTime() - new Date(eb.startTime).getTime()
+					: 0;
+				return da - db;
+			},
 			render: (_: any, record: IngestionTaskDTO) => renderDuration(record.id ? latestExecutions[record.id] : null),
 		},
 		{
 			title: "错误摘要",
 			key: "errorSummary",
 			width: 240,
+			sorter: (a, b) => {
+				const ea = a.id ? latestExecutions[a.id] : null;
+				const eb = b.id ? latestExecutions[b.id] : null;
+				const va = ea?.failureCategory || ea?.errorMessage || "";
+				const vb = eb?.failureCategory || eb?.errorMessage || "";
+				return va.localeCompare(vb);
+			},
 			render: (_: any, record: IngestionTaskDTO) => {
 				const latest = record.id ? latestExecutions[record.id] : null;
 				if (!latest?.errorMessage && !latest?.failureCategory) return "-";
@@ -388,6 +423,11 @@ export default function TransformPage() {
 			dataIndex: "createdDate",
 			key: "createdDate",
 			width: 180,
+			sorter: (a, b) => {
+				const ta = a.createdDate ? new Date(a.createdDate).getTime() : 0;
+				const tb = b.createdDate ? new Date(b.createdDate).getTime() : 0;
+				return ta - tb;
+			},
 			render: (text: string) => (text ? formatTimestamp(text) : "-"),
 		},
 		{
@@ -395,6 +435,7 @@ export default function TransformPage() {
 			dataIndex: "createdBy",
 			key: "createdBy",
 			width: 120,
+			sorter: (a, b) => (a.createdBy || "").localeCompare(b.createdBy || ""),
 		},
 			{
 				title: "操作",

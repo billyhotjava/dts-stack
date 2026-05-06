@@ -650,8 +650,8 @@ export default function DataSourcesPage() {
 	};
 
 	const handleTest = async (record: InfraDataSource) => {
-		if (!record.jdbcUrl) {
-			message.warning("非 JDBC 数据源无需测试连接");
+		if (!record.jdbcUrl && !isApiSourceType(record.type)) {
+			message.warning("当前数据源类型暂不支持连接测试");
 			return;
 		}
 		try {
@@ -1026,7 +1026,7 @@ export default function DataSourcesPage() {
 
 	const handleSchemaDiscover = async (record: InfraDataSource, forceRefresh = false) => {
 		if (!record.jdbcUrl) {
-			message.warning("非 JDBC 数据源暂不支持 JDBC Schema Discover");
+			message.info("API / 文件数据源不适用 JDBC Schema 探测，请在入湖任务中配置资源路径后测试执行。");
 			return;
 		}
 		setSchemaDiscoveringId(record.id);
@@ -1344,15 +1344,18 @@ export default function DataSourcesPage() {
 				width: 220,
 				render: (_: any, record: InfraDataSource) => {
 					const adminManaged = isAdminManagedSource(record);
+					const apiSource = isApiSourceType(record.type);
 					return (
 						<Space>
-							<Button
-								size="small"
-								loading={schemaDiscoveringId === record.id}
-								onClick={() => handleSchemaDiscover(record)}
-							>
-								探测
-							</Button>
+							{!apiSource && (
+								<Button
+									size="small"
+									loading={schemaDiscoveringId === record.id}
+									onClick={() => handleSchemaDiscover(record)}
+								>
+									探测
+								</Button>
+							)}
 							<Button size="small" icon={<ExperimentOutlined />} loading={testingId === record.id} onClick={() => handleTest(record)}>
 								测试
 							</Button>

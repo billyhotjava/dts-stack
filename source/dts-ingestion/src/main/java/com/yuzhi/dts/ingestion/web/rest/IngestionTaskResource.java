@@ -266,9 +266,6 @@ public class IngestionTaskResource {
             if (request.source() == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少源端配置");
             }
-            if (!isDraft && request.destination() == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少目标端配置");
-            }
 
             String syncMode = resolveSyncMode(request.sync());
             boolean isFileSource = isFileSourceType(normalize(request.source().type()));
@@ -284,11 +281,8 @@ public class IngestionTaskResource {
             );
             validateSyncModeCapability(connectorType, syncMode);
             boolean isApiSource = ApiConnectorTypes.CONNECTOR_TYPE.equals(connectorType);
-            // API ingestion uses a self-contained PythonOperator DAG (no Addax writer config).
-            // Force the create path through the draft branch; executing the task is done via the
-            // dedicated execute endpoint which knows how to skip Addax for API tasks.
-            if (isApiSource) {
-                isDraft = true;
+            if (!isDraft && !isApiSource && request.destination() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少目标端配置");
             }
             List<String> streamTables = resolveStreamTables(request.streams());
             com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource =
@@ -332,6 +326,65 @@ public class IngestionTaskResource {
             }
             Map<String, Object> resolvedReaderConfig = resolvedSource != null ? resolvedSource.readerConfig() : safeMap(request.source().config());
             Map<String, Object> mergedReaderConfig = mergeReaderOverrides(safeMap(resolvedReaderConfig), sourceOverrides);
+            if (isApiSource) {
+                Map<String, Object> apiRuntimeConfig = ApiSourceConfigNormalizer.normalize(
+                    mergedReaderConfig,
+                    request.source().dataSourceId(),
+                    request.name()
+                );
+                AirflowAdapter.AirflowRequest airflowRequest = buildAirflowRequest(request.airflow());
+                com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO taskDTO =
+                    new com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO();
+                taskDTO.setName(request.name());
+                taskDTO.setDescription(request.description());
+                taskDTO.setSourceType(ApiConnectorTypes.DEFAULT_READER_TYPE);
+                taskDTO.setSourceDataSourceId(request.source().dataSourceId());
+                taskDTO.setSourceConfig(toJsonNode(apiRuntimeConfig));
+                taskDTO.setSyncMode(syncMode);
+                taskDTO.setSyncSchedule(resolveSyncSchedule(request.sync()));
+                taskDTO.setSyncConfig(toJsonNode(buildSyncConfig(request.sync())));
+                taskDTO.setAirflowEnabled(airflowRequest == null ? null : airflowRequest.enabled());
+                taskDTO.setAirflowDagId(airflowRequest == null ? null : normalize(airflowRequest.dagId()));
+                List<Map<String, String>> apiTableMapping = ApiSourceConfigNormalizer.deriveOdsMappings(
+                    apiRuntimeConfig,
+                    request.source().dataSourceId(),
+                    request.name()
+                );
+                if (!apiTableMapping.isEmpty()) {
+                    taskDTO.setTableMapping(toJsonNode(apiTableMapping));
+                }
+
+                com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO createdTask =
+                    ingestionTaskService.create(taskDTO, resolvedSource, true);
+                Map<String, Object> result = new LinkedHashMap<>();
+                result.put("task", createdTask);
+                if (runNow) {
+                    ingestionTaskService.executeAsync(createdTask.getId());
+                    Map<String, Object> submitted = new LinkedHashMap<>();
+                    submitted.put("taskId", createdTask.getId());
+                    submitted.put("status", "submitted");
+                    submitted.put("async", true);
+                    submitted.put("pollIntervalMs", resolveExecutionPollIntervalMs());
+                    submitted.put("message", "任务已提交，正在后台触发执行");
+                    result.put("execution", submitted);
+                }
+                auditService.auditAction(
+                    "INGESTION_TASK_CREATE",
+                    AuditStage.SUCCESS,
+                    request.name(),
+                    Map.of(
+                        "summary",
+                        "创建 API 入湖任务",
+                        "name",
+                        request.name(),
+                        "taskId",
+                        createdTask.getId(),
+                        "operator",
+                        operator
+                    )
+                );
+                return ApiResponses.ok(result);
+            }
             if (StringUtils.hasText(readerType)) {
                 mergedReaderConfig.putIfAbsent("readerType", readerType);
                 if (resolvedReaderConfig != null && resolvedReaderConfig instanceof java.util.LinkedHashMap) {
@@ -1948,6 +2001,12 @@ public class IngestionTaskResource {
             ? safeMap(jsonNodeToMap(taskDTO.getSourceConfig()))
             : sanitizeSourceOverrides(jsonNodeToMap(taskDTO.getSourceConfig()));
         if (isApiSourceUpdate) {
+            com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource apiResolvedSource =
+                taskDTO.getSourceDataSourceId() == null ? null : sourceResolver.resolve(taskDTO.getSourceDataSourceId(), List.of());
+            sourceOverrides = mergeReaderOverrides(
+                apiResolvedSource == null ? Map.of() : safeMap(apiResolvedSource.readerConfig()),
+                sourceOverrides
+            );
             sourceOverrides = ApiSourceConfigNormalizer.normalize(
                 sourceOverrides,
                 taskDTO.getSourceDataSourceId(),
@@ -2014,7 +2073,6 @@ public class IngestionTaskResource {
             taskDTO.setTableMapping(tableMapping.isEmpty() ? null : toJsonNode(tableMapping));
             taskDTO.setDestinationType(null);
             taskDTO.setDestinationConfig(null);
-            taskDTO.setAirflowEnabled(false);
             taskDTO.setDbtModelSelector(null);
             taskDTO.setDbtDagSelector(null);
         } else if (rebuildMapping) {

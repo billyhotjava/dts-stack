@@ -1216,6 +1216,10 @@ export default function TransformCreatePage() {
 			if (isApiSource) {
 				const readerConfig = buildApiReaderConfig(mergedValues);
 				applyReaderTypeToConfig(readerConfig, "httpreader");
+				const apiResource = (readerConfig.resource || {}) as Record<string, any>;
+				const apiResourceId = normalizeText(apiResource.resourceId) || "api_resource";
+				const apiSyncConfig = buildSyncConfigFromValues(mergedValues, false);
+				const apiAirflowEnabled = mergedValues.airflowEnabled ?? editingTask?.airflowEnabled ?? true;
 				if (isEdit && editId) {
 					const governanceSyncFields = buildGovernanceSyncFields(mergedValues);
 					const updatePayload: IngestionTaskDTO = {
@@ -1230,21 +1234,51 @@ export default function TransformCreatePage() {
 						destinationConfig: undefined,
 						syncMode: mergedValues.syncMode || editingTask?.syncMode || "full_refresh",
 						syncSchedule: buildSyncScheduleText(mergedValues),
-						syncConfig: Object.keys(governanceSyncFields).length ? { governance: governanceSyncFields } : undefined,
+						syncConfig: {
+							...(apiSyncConfig || {}),
+							...(Object.keys(governanceSyncFields).length ? { governance: governanceSyncFields } : {}),
+						},
 						syncPrefix: undefined,
 						addaxJobPath: undefined,
 						addaxConfig: undefined,
-						airflowEnabled: false,
-						airflowDagId: undefined,
+						airflowEnabled: Boolean(apiAirflowEnabled),
+						airflowDagId: editingTask?.airflowDagId,
+						tableMapping: [{ source: apiResourceId, target: normalizeText(apiResource.targetTable) || `ods_api_${apiResourceId}` }],
 						dbtModelSelector: undefined,
 						dbtDagSelector: undefined,
-						status: "DRAFT",
 					};
 					await ingestionTaskAPI.updateTask(editId, updatePayload);
-					toast.success("API 入湖草稿已更新");
+					toast.success("API 入湖任务已更新");
 					router.push(`/explore/etl/transform/${editId}`);
 				} else {
-					await handleSaveDraft();
+					const payload = {
+						taskName,
+						name: taskName,
+						description: normalizeText(mergedValues.description) || undefined,
+						owner: userInfo?.username || userInfo?.login,
+						ownerDept: normalizeText(mergedValues.ownerDept) || undefined,
+						source: {
+							dataSourceId: sourceDataSourceId,
+							type: "httpreader",
+							config: readerConfig,
+						},
+						sync: {
+							mode: normalizeText(mergedValues.syncMode) || "full_refresh",
+							schedule: buildSyncScheduleSpec(mergedValues),
+							incrementalColumn: apiSyncConfig?.incrementalColumn,
+							incrementalType: apiSyncConfig?.incrementalType,
+							initialWatermark: apiSyncConfig?.initialWatermark,
+							...buildGovernanceSyncFields(mergedValues),
+						},
+						streams: {
+							selection: "manual",
+							include: [apiResourceId],
+						},
+						airflow: { enabled: Boolean(apiAirflowEnabled) },
+						runNow: Boolean(mergedValues.runNow),
+					};
+					const createResult = await createIngestionTask(payload);
+					handleCreateTaskResult(createResult, Boolean(payload.runNow), taskName);
 				}
 				return;
 			}
@@ -1585,8 +1619,8 @@ export default function TransformCreatePage() {
 							mode: normalizeText(mergedValues.syncMode) || "full_refresh",
 							schedule: buildSyncScheduleSpec(mergedValues),
 						},
-						airflow: { enabled: false },
-						draft: true,
+						airflow: { enabled: mergedValues.airflowEnabled ?? true },
+						draft: false,
 					},
 					error: "",
 				};

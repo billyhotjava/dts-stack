@@ -24,6 +24,14 @@ import com.yuzhi.dts.platform.service.services.SvcTokenAuthService;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
 import jakarta.validation.Valid;
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -348,7 +356,20 @@ public class InfraDataSourceResource {
     ) {
         InfraDataSourceDto dto = infraManagementService.getDataSource(id, activeDept);
         if (!StringUtils.hasText(dto.jdbcUrl())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "非 JDBC 数据源无需测试连接");
+            if (isApiDataSource(dto)) {
+                HiveConnectionTestResult result = testApiConnection(id, dto);
+                if (result.success()) {
+                    infraManagementService.markDataSourceVerified(id);
+                }
+                auditService.auditAction(
+                    "FOUNDATION_DATASOURCE_TEST",
+                    result.success() ? AuditStage.SUCCESS : AuditStage.FAIL,
+                    id.toString(),
+                    Map.of("summary", "测试 API 数据源连接", "id", id.toString(), "result", result.success() ? "SUCCESS" : "FAILED")
+                );
+                return ApiResponses.ok(result);
+            }
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "当前数据源类型不支持连接测试");
         }
         // Use existing JDBC test endpoint by mapping dto into request
         JdbcConnectionTestRequest request = new JdbcConnectionTestRequest();
@@ -385,6 +406,193 @@ public class InfraDataSourceResource {
             Map.of("summary", "测试数据源连接", "id", id.toString(), "result", result.success() ? "SUCCESS" : "FAILED")
         );
         return ApiResponses.ok(result);
+    }
+
+    private HiveConnectionTestResult testApiConnection(UUID id, InfraDataSourceDto dto) {
+        InfraDataSourceDetailDto detail = infraManagementService.getDataSourceRuntimeDetail(id);
+        Map<String, Object> props = detail.props() != null ? detail.props() : Map.of();
+        Map<String, Object> secrets = detail.secrets() != null ? detail.secrets() : Map.of();
+        String baseUrl = extractApiBaseUrl(props);
+        if (!StringUtils.hasText(baseUrl)) {
+            return HiveConnectionTestResult.failure("API 数据源 baseUrl 为空，无法测试连接。", 0, "CONFIG", "请编辑 API 数据源并填写 http/https baseUrl。");
+        }
+
+        Instant startedAt = Instant.now();
+        try {
+            HttpURLConnection connection = (HttpURLConnection) buildApiProbeUri(baseUrl, props, secrets).toURL().openConnection();
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(5000);
+            connection.setRequestMethod("GET");
+            applyApiHeaders(connection, props, secrets);
+            int status = connection.getResponseCode();
+            long elapsed = Duration.between(startedAt, Instant.now()).toMillis();
+            return apiProbeResult(status, elapsed);
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (IOException ex) {
+            long elapsed = Duration.between(startedAt, Instant.now()).toMillis();
+            return HiveConnectionTestResult.failure(
+                "API 连接失败：" + ex.getMessage(),
+                elapsed,
+                "NETWORK",
+                "请确认 baseUrl 可由 dts-platform 容器访问，并检查 DNS、端口、防火墙和代理配置。"
+            );
+        }
+    }
+
+    private HiveConnectionTestResult apiProbeResult(int status, long elapsed) {
+        if (status >= 200 && status < 400) {
+            return HiveConnectionTestResult.success("API 基础地址连接成功，HTTP 状态码：" + status, elapsed, null, null, List.of());
+        }
+        if (status == 401 || status == 403) {
+            return HiveConnectionTestResult.failure(
+                "API 基础地址可达，但鉴权失败，HTTP 状态码：" + status,
+                elapsed,
+                "AUTH",
+                "请检查 API 数据源连接的鉴权方式、密钥字段和默认请求头。"
+            );
+        }
+        if (status < 500) {
+            return HiveConnectionTestResult.success(
+                "API 基础地址可达，HTTP 状态码：" + status + "。具体资源路径请在 API 入湖任务中配置后再执行。",
+                elapsed,
+                null,
+                null,
+                List.of("基础地址返回 4xx，通常表示需要配置具体资源 path、查询参数或业务鉴权。")
+            );
+        }
+        return HiveConnectionTestResult.failure(
+            "API 服务返回异常，HTTP 状态码：" + status,
+            elapsed,
+            "HTTP_" + status,
+            "请确认外部 API 服务健康，或在资源配置中使用可正常响应的 path。"
+        );
+    }
+
+    private boolean isApiDataSource(InfraDataSourceDto dto) {
+        String type = dto.type() == null ? "" : dto.type().trim().toLowerCase();
+        Object connectorType = dto.props() != null ? dto.props().get("connectorType") : null;
+        return List.of("api", "http", "https", "http_api", "api_http", "rest", "rest_api", "httpreader").contains(type)
+            || "api".equalsIgnoreCase(String.valueOf(connectorType));
+    }
+
+    private String extractApiBaseUrl(Map<String, Object> props) {
+        String direct = asText(props.get("baseUrl"));
+        if (StringUtils.hasText(direct)) {
+            return direct.trim();
+        }
+        Map<String, Object> api = asMap(props.get("api"));
+        direct = api != null ? asText(api.get("baseUrl")) : null;
+        if (StringUtils.hasText(direct)) {
+            return direct.trim();
+        }
+        Map<String, Object> readerConfig = asMap(props.get("readerConfig"));
+        direct = readerConfig != null ? asText(readerConfig.get("baseUrl")) : null;
+        return StringUtils.hasText(direct) ? direct.trim() : null;
+    }
+
+    private URI buildApiProbeUri(String baseUrl, Map<String, Object> props, Map<String, Object> secrets) {
+        try {
+            URI uri = URI.create(baseUrl.trim());
+            if (!"http".equalsIgnoreCase(uri.getScheme()) && !"https".equalsIgnoreCase(uri.getScheme())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "API 数据源 baseUrl 仅支持 http/https");
+            }
+            Map<String, Object> auth = extractApiAuth(props);
+            String provider = asText(auth.get("provider"));
+            Map<String, Object> config = asMap(auth.get("config"));
+            if ("apikey".equalsIgnoreCase(provider) && "query".equalsIgnoreCase(asText(config != null ? config.get("location") : null))) {
+                String name = asText(config.get("name"));
+                String value = asText(secrets.get("value"));
+                if (StringUtils.hasText(name) && StringUtils.hasText(value)) {
+                    String query = uri.getRawQuery();
+                    String nextQuery = (StringUtils.hasText(query) ? query + "&" : "")
+                        + URLEncoder.encode(name, StandardCharsets.UTF_8)
+                        + "="
+                        + URLEncoder.encode(value, StandardCharsets.UTF_8);
+                    return new URI(uri.getScheme(), uri.getRawAuthority(), uri.getRawPath(), nextQuery, uri.getRawFragment());
+                }
+            }
+            return uri;
+        } catch (IllegalArgumentException | java.net.URISyntaxException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "API 数据源 baseUrl 格式不合法");
+        }
+    }
+
+    private void applyApiHeaders(HttpURLConnection connection, Map<String, Object> props, Map<String, Object> secrets) {
+        applyHeaderMap(connection, asMap(props.get("defaultHeaders")));
+        Map<String, Object> api = asMap(props.get("api"));
+        if (api != null) {
+            applyHeaderMap(connection, asMap(api.get("defaultHeaders")));
+        }
+        Map<String, Object> readerConfig = asMap(props.get("readerConfig"));
+        if (readerConfig != null) {
+            applyHeaderMap(connection, asMap(readerConfig.get("defaultHeaders")));
+        }
+
+        Map<String, Object> auth = extractApiAuth(props);
+        String provider = asText(auth.get("provider"));
+        Map<String, Object> config = asMap(auth.get("config"));
+        String normalizedProvider = provider == null ? "" : provider.trim().toLowerCase();
+        if ("bearertoken".equals(normalizedProvider) || "bearer".equals(normalizedProvider)) {
+            String token = asText(secrets.get("token"));
+            if (StringUtils.hasText(token)) {
+                connection.setRequestProperty("Authorization", "Bearer " + token.trim());
+            }
+        } else if ("basic".equals(normalizedProvider)) {
+            String username = asText(config != null ? config.get("username") : null);
+            String password = asText(secrets.get("password"));
+            if (StringUtils.hasText(username) && StringUtils.hasText(password)) {
+                String token = Base64.getEncoder().encodeToString((username + ":" + password).getBytes(StandardCharsets.UTF_8));
+                connection.setRequestProperty("Authorization", "Basic " + token);
+            }
+        } else if ("apikey".equals(normalizedProvider) && !"query".equalsIgnoreCase(asText(config != null ? config.get("location") : null))) {
+            String name = asText(config != null ? config.get("name") : null);
+            String value = asText(secrets.get("value"));
+            if (StringUtils.hasText(name) && StringUtils.hasText(value)) {
+                connection.setRequestProperty(name.trim(), value.trim());
+            }
+        }
+    }
+
+    private void applyHeaderMap(HttpURLConnection connection, Map<String, Object> headers) {
+        if (headers == null) {
+            return;
+        }
+        headers.forEach((key, value) -> {
+            String headerName = key == null ? "" : key.trim();
+            String headerValue = asText(value);
+            if (StringUtils.hasText(headerName) && StringUtils.hasText(headerValue)) {
+                connection.setRequestProperty(headerName, headerValue.trim());
+            }
+        });
+    }
+
+    private Map<String, Object> extractApiAuth(Map<String, Object> props) {
+        Map<String, Object> direct = asMap(props.get("auth"));
+        if (direct != null) {
+            return direct;
+        }
+        Map<String, Object> api = asMap(props.get("api"));
+        Map<String, Object> apiAuth = api != null ? asMap(api.get("auth")) : null;
+        if (apiAuth != null) {
+            return apiAuth;
+        }
+        Map<String, Object> readerConfig = asMap(props.get("readerConfig"));
+        Map<String, Object> readerAuth = readerConfig != null ? asMap(readerConfig.get("auth")) : null;
+        if (readerAuth != null) {
+            return readerAuth;
+        }
+        String provider = asText(props.get("authProvider"));
+        return StringUtils.hasText(provider) ? Map.of("provider", provider) : Map.of("provider", "none");
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> asMap(Object value) {
+        return value instanceof Map<?, ?> map ? (Map<String, Object>) map : null;
+    }
+
+    private String asText(Object value) {
+        return value == null ? null : String.valueOf(value);
     }
 
     @PostMapping("/{id}/schema-discover")
