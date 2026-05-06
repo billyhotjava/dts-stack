@@ -432,6 +432,11 @@ export default function IndicatorDashboardPage() {
 											title: "运行时间",
 											dataIndex: "runAt",
 											width: 170,
+											sorter: (a, b) => {
+												const ta = a.runAt ? new Date(a.runAt).getTime() : 0;
+												const tb = b.runAt ? new Date(b.runAt).getTime() : 0;
+												return ta - tb;
+											},
 											render: (v: string) =>
 												v
 													? new Date(v).toLocaleString()
