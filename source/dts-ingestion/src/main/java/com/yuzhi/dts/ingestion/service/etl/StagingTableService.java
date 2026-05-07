@@ -8,6 +8,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import com.yuzhi.dts.ingestion.service.dto.CellError;
 import com.yuzhi.dts.ingestion.service.dto.ColumnInfo;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -437,6 +442,12 @@ public class StagingTableService {
                 "Target table must start with 'ods_' and contain only safe characters: " + targetTable);
         }
 
+        JsonNode destinationConfig = task.getDestinationConfig();
+        String jdbcUrl = text(destinationConfig, "jdbcUrl");
+        if (jdbcUrl != null && !jdbcUrl.isBlank()) {
+            return transferToExternalTarget(stagingTable, targetTable, destinationConfig, task);
+        }
+
         // 2. Get data columns from staging table (exclude internal columns prefixed with _)
         List<String> columns = jdbcTemplate.queryForList(
             "SELECT column_name FROM information_schema.columns "
@@ -498,9 +509,95 @@ public class StagingTableService {
 
         log.info("Transferring data from {} to {} (columns: {})", stagingTable, targetTable, colList);
 
+        if (isFullRefresh(task)) {
+            jdbcTemplate.execute("TRUNCATE TABLE " + targetTable);
+        }
         int rows = jdbcTemplate.update(insertSql);
         log.info("Transferred {} rows from {} to {}", rows, stagingTable, targetTable);
         return rows;
+    }
+
+    private int transferToExternalTarget(String stagingTable, String targetTable, JsonNode destinationConfig, IngestionTask task) {
+        List<String> columns = stagingDataColumns(stagingTable);
+        if (columns.isEmpty()) {
+            throw new IllegalStateException("No data columns found in staging table " + stagingTable);
+        }
+
+        String jdbcUrl = requireText(destinationConfig, "jdbcUrl");
+        String username = text(destinationConfig, "username");
+        String password = text(destinationConfig, "password");
+        String colList = columns.stream()
+            .map(c -> "\"" + c + "\"")
+            .collect(Collectors.joining(", "));
+        String placeholders = columns.stream().map(c -> "?").collect(Collectors.joining(", "));
+        String insertSql = "INSERT INTO " + targetTable + " (" + colList + ") VALUES (" + placeholders + ")";
+        String selectSql = "SELECT " + colList + " FROM " + stagingTable + " ORDER BY _row_num";
+
+        log.info("Transferring data from {} to external target {} via {}", stagingTable, targetTable, jdbcUrl);
+        try (Connection targetConn = username == null
+            ? DriverManager.getConnection(jdbcUrl)
+            : DriverManager.getConnection(jdbcUrl, username, password == null ? "" : password)) {
+            targetConn.setAutoCommit(false);
+            try {
+                ensureTargetTableExists(targetConn, targetTable);
+                if (isFullRefresh(task)) {
+                    try (Statement truncate = targetConn.createStatement()) {
+                        truncate.execute("TRUNCATE TABLE " + targetTable);
+                    }
+                }
+                final int[] rows = {0};
+                try (PreparedStatement insert = targetConn.prepareStatement(insertSql)) {
+                    jdbcTemplate.query(selectSql, (ResultSet rs) -> {
+                        int batchCount = 0;
+                        while (rs.next()) {
+                            for (int i = 0; i < columns.size(); i++) {
+                                insert.setString(i + 1, rs.getString(columns.get(i)));
+                            }
+                            insert.addBatch();
+                            batchCount++;
+                            rows[0]++;
+                            if (batchCount >= BATCH_SIZE) {
+                                insert.executeBatch();
+                                batchCount = 0;
+                            }
+                        }
+                        if (batchCount > 0) {
+                            insert.executeBatch();
+                        }
+                        return null;
+                    });
+                }
+                targetConn.commit();
+                log.info("Transferred {} rows from {} to external target {}", rows[0], stagingTable, targetTable);
+                return rows[0];
+            } catch (Exception e) {
+                targetConn.rollback();
+                throw e;
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to transfer staging data to target " + targetTable + ": " + e.getMessage(), e);
+        }
+    }
+
+    private List<String> stagingDataColumns(String stagingTable) {
+        return jdbcTemplate.queryForList(
+            "SELECT column_name FROM information_schema.columns "
+                + "WHERE table_name = ? AND column_name NOT LIKE '\\_%' "
+                + "ORDER BY ordinal_position",
+            String.class, stagingTable);
+    }
+
+    private void ensureTargetTableExists(Connection conn, String targetTable) throws Exception {
+        try (PreparedStatement ps = conn.prepareStatement(
+            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = ?")) {
+            ps.setString(1, targetTable);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next() && rs.getLong(1) > 0) {
+                    return;
+                }
+            }
+        }
+        throw new IllegalStateException("Target table does not exist: " + targetTable);
     }
 
     /**
@@ -537,6 +634,27 @@ public class StagingTableService {
         }
 
         return null;
+    }
+
+    private boolean isFullRefresh(IngestionTask task) {
+        String mode = task == null ? null : task.getSyncMode();
+        return mode != null && ("full_refresh".equalsIgnoreCase(mode) || "full".equalsIgnoreCase(mode));
+    }
+
+    private String requireText(JsonNode node, String field) {
+        String value = text(node, field);
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException("Missing destination config field: " + field);
+        }
+        return value;
+    }
+
+    private String text(JsonNode node, String field) {
+        if (node == null || field == null) {
+            return null;
+        }
+        JsonNode value = node.get(field);
+        return value != null && !value.isNull() ? value.asText(null) : null;
     }
 
     /**

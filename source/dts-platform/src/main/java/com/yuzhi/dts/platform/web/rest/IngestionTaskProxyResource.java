@@ -81,7 +81,7 @@ public class IngestionTaskProxyResource {
             }
         }
         Map<String, Object> resolvedPayload = payload;
-        if (!draft) {
+        if (!draft || usesPlatformDefaultDestination(payload)) {
             DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot = destinationSyncService.ensureDefaultDestination();
             resolvedPayload = applyDefaultDestinationPayload(payload, snapshot);
         }
@@ -559,6 +559,18 @@ public class IngestionTaskProxyResource {
         Map<String, Object> merged = new LinkedHashMap<>(payload);
         merged.put("destination", destination);
         return merged;
+    }
+
+    private boolean usesPlatformDefaultDestination(Map<String, Object> payload) {
+        if (payload == null) {
+            return false;
+        }
+        Object destinationObj = payload.get("destination");
+        if (!(destinationObj instanceof Map<?, ?> destinationMap)) {
+            return false;
+        }
+        Object flag = destinationMap.get("usePlatformDefault");
+        return flag instanceof Boolean bool ? bool : Boolean.parseBoolean(String.valueOf(flag));
     }
 
     private Map<String, Object> applyDefaultDestinationUpdatePayload(

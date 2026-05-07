@@ -80,6 +80,14 @@ type CleansingPreviewRow = {
 	after: string;
 };
 
+type RepairDatasetOption = {
+	id: string;
+	name: string;
+	sourceId?: string;
+	hiveDatabase?: string;
+	hiveTable?: string;
+};
+
 const normalizeFileBaseName = (name?: string) => {
 	const raw = String(name || "file").replace(/\.[^.]+$/, "");
 	const normalized = raw
@@ -106,7 +114,11 @@ const extractCreatedTaskId = (result: any): number | undefined => {
 
 function PreCheckMode({ initialTaskId }: { initialTaskId?: number }) {
 	const [taskId, setTaskId] = useState<number | undefined>(initialTaskId);
-	const [datasets, setDatasets] = useState<{ id: string; name: string }[]>([]);
+	const [datasets, setDatasets] = useState<RepairDatasetOption[]>([]);
+	const [defaultDataSourceId, setDefaultDataSourceId] = useState<string>();
+	const [defaultDestinationName, setDefaultDestinationName] = useState<string>();
+	const [defaultWriterType, setDefaultWriterType] = useState<string>();
+	const [datasetLoading, setDatasetLoading] = useState(false);
 	const [selectedDataset, setSelectedDataset] = useState<string>();
 	const [uploading, setUploading] = useState(false);
 	const [checking, setChecking] = useState(false);
@@ -124,19 +136,62 @@ function PreCheckMode({ initialTaskId }: { initialTaskId?: number }) {
 		}
 	}, [initialTaskId]);
 
+	const selectedDatasetMeta = useMemo(
+		() => datasets.find((item) => item.id === selectedDataset),
+		[datasets, selectedDataset],
+	);
+
+	const resolveTargetTable = (dataset?: RepairDatasetOption) => {
+		const raw = String(dataset?.hiveTable || "").trim();
+		return raw || undefined;
+	};
+
 	const loadDatasets = async () => {
+		setDatasetLoading(true);
 		try {
-			const resp: any = await listDatasets({ page: 0, size: 200 });
+			const destination = await ingestionTaskAPI.getDefaultDestinationStatus();
+			const lakeSourceId = destination?.dataSourceId ? String(destination.dataSourceId) : undefined;
+			setDefaultDataSourceId(lakeSourceId);
+			setDefaultDestinationName(destination?.destinationName);
+			setDefaultWriterType(destination?.writerType);
+			if (!destination?.available || !lakeSourceId) {
+				setDatasets([]);
+				return;
+			}
+			const resp: any = await listDatasets(lakeSourceId
+				? { page: 0, size: 200, sourceId: lakeSourceId }
+				: { page: 0, size: 200 });
 			const list = Array.isArray(resp?.content) ? resp.content : [];
-			setDatasets(list.map((item: any) => ({ id: String(item.id), name: item.name || item.id })));
+			setDatasets(list.map((item: any) => ({
+				id: String(item.id),
+				name: item.name || item.id,
+				sourceId: item.sourceId ? String(item.sourceId) : undefined,
+				hiveDatabase: item.hiveDatabase,
+				hiveTable: item.hiveTable,
+			})));
 		} catch {
 			// non-critical
+		} finally {
+			setDatasetLoading(false);
 		}
 	};
 
 	const handleUpload = async (file: File) => {
-		if (!selectedDataset) {
+		if (!selectedDataset || !selectedDatasetMeta) {
 			toast.error("请先选择目标数据集");
+			return false;
+		}
+		if (!defaultDataSourceId) {
+			toast.error("未识别默认数据湖数据源，无法创建预检任务");
+			return false;
+		}
+		if (selectedDatasetMeta.sourceId && selectedDatasetMeta.sourceId !== defaultDataSourceId) {
+			toast.error("所选数据集未关联默认数据湖数据源，请重新选择");
+			return false;
+		}
+		const targetTable = resolveTargetTable(selectedDatasetMeta);
+		if (!targetTable) {
+			toast.error("所选数据集缺少物理表名，无法作为入湖提交目标");
 			return false;
 		}
 		setUploading(true);
@@ -157,7 +212,17 @@ function PreCheckMode({ initialTaskId }: { initialTaskId?: number }) {
 						_fileColumns: result.columns || [],
 						_originalName: result.originalName || file.name,
 						_datasetId: selectedDataset,
+						_targetDataSourceId: selectedDatasetMeta.sourceId || defaultDataSourceId,
+						_targetTable: targetTable,
 						_autoId: true,
+					},
+				},
+				destination: {
+					usePlatformDefault: true,
+					definitionId: defaultWriterType || "postgresqlwriter",
+					config: {
+						table: targetTable,
+						tables: [targetTable],
 					},
 				},
 				sync: {
@@ -244,6 +309,15 @@ function PreCheckMode({ initialTaskId }: { initialTaskId?: number }) {
 
 			{/* Target dataset + generated task */}
 			<Card title="预检配置" size="small">
+				{!datasetLoading && !defaultDataSourceId && (
+					<Alert
+						type="warning"
+						showIcon
+						message="未识别默认数据湖数据源"
+						description="请先确认平台默认数据湖已配置，并能映射到本地数据源；数据修复只允许选择默认数据湖下的数据集。"
+						className="mb-3"
+					/>
+				)}
 				<div className="flex flex-wrap items-end gap-4">
 					<div>
 						<Typography.Text className="mb-1 block text-xs text-gray-500">
@@ -254,12 +328,24 @@ function PreCheckMode({ initialTaskId }: { initialTaskId?: number }) {
 							placeholder="选择目标数据集"
 							options={datasets.map((d) => ({ label: d.name, value: d.id }))}
 							value={selectedDataset}
-							onChange={setSelectedDataset}
+							onChange={(value) => {
+								setSelectedDataset(value);
+								setTaskId(undefined);
+								setUploadedFileName(undefined);
+								setShowEditor(false);
+							}}
 							allowClear
 							showSearch
+							loading={datasetLoading}
 							optionFilterProp="label"
 						/>
 					</div>
+					<Typography.Text type="secondary">
+						默认数据源：{defaultDestinationName || defaultDataSourceId || "未识别"}
+					</Typography.Text>
+					{selectedDatasetMeta?.hiveTable && (
+						<Tag color="cyan">目标表：{selectedDatasetMeta.hiveTable}</Tag>
+					)}
 					<Button
 						type="primary"
 						icon={<SearchOutlined />}
