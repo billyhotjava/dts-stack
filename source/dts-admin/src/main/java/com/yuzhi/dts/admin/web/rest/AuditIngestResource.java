@@ -7,6 +7,8 @@ import com.yuzhi.dts.admin.service.audit.AuditOperationKind;
 import com.yuzhi.dts.admin.service.audit.AuditResultStatus;
 import com.yuzhi.dts.admin.service.audit.AuditV2Service;
 import com.yuzhi.dts.admin.service.audit.ButtonCodes;
+import com.yuzhi.dts.admin.domain.AdminKeycloakUser;
+import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
 import com.yuzhi.dts.common.net.IpAddressUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import java.lang.reflect.Array;
@@ -42,10 +44,16 @@ public class AuditIngestResource {
 
     private final AuditV2Service auditV2Service;
     private final AuditIngestAuthenticator authenticator;
+    private final AdminKeycloakUserRepository userRepository;
 
-    public AuditIngestResource(AuditV2Service auditV2Service, AuditIngestAuthenticator authenticator) {
+    public AuditIngestResource(
+        AuditV2Service auditV2Service,
+        AuditIngestAuthenticator authenticator,
+        AdminKeycloakUserRepository userRepository
+    ) {
         this.auditV2Service = Objects.requireNonNull(auditV2Service, "auditV2Service required");
         this.authenticator = Objects.requireNonNull(authenticator, "auditIngestAuthenticator required");
+        this.userRepository = Objects.requireNonNull(userRepository, "userRepository required");
     }
 
     @PostMapping
@@ -61,7 +69,7 @@ public class AuditIngestResource {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         try {
-            AuditPayload payload = AuditPayload.from(body, request);
+            AuditPayload payload = AuditPayload.from(body, request, userRepository);
             AuditActionRequest.Builder builder = AuditActionRequest
                 .builder(payload.actor(), payload.buttonCode())
                 .occurredAt(payload.occurredAt())
@@ -113,13 +121,24 @@ public class AuditIngestResource {
 
             auditV2Service.record(builder.build());
             return ResponseEntity.accepted().build();
+        } catch (NonUserActorException ex) {
+            log.warn("Skipped audit ingest with non-user actor: {}", ex.getMessage());
+            return ResponseEntity.accepted().build();
         } catch (Exception ex) {
             log.warn("Failed to ingest audit event from platform: {}", ex.getMessage(), ex);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
         }
     }
 
+    private static final class NonUserActorException extends RuntimeException {
+        private NonUserActorException(String message) {
+            super(message);
+        }
+    }
+
     private record TargetRecord(String table, Object id, String label) {}
+
+    private record ActorResolution(String username, String displayName) {}
 
     private record AuditPayload(
         String actor,
@@ -146,7 +165,7 @@ public class AuditIngestResource {
         List<TargetRecord> targets,
         Map<String, Object> details
     ) {
-        static AuditPayload from(Map<String, Object> body, HttpServletRequest request) {
+        static AuditPayload from(Map<String, Object> body, HttpServletRequest request, AdminKeycloakUserRepository userRepository) {
             Map<String, Object> sanitizedBody = body == null ? Map.of() : new LinkedHashMap<>(body);
             String sourceSystem = text(sanitizedBody.get("sourceSystem"), "platform");
             String moduleKey = firstNonBlank(
@@ -156,8 +175,13 @@ public class AuditIngestResource {
             );
             String moduleName = firstNonBlank(text(sanitizedBody.get("moduleName")), moduleKey);
 
-            String actor = normalizeActor(sanitizedBody, sourceSystem);
-            String actorName = text(sanitizedBody.get("actorName"), actor);
+            ActorResolution actorResolution = normalizeActor(sanitizedBody, sourceSystem, userRepository);
+            String actor = actorResolution.username();
+            String actorName = firstNonBlank(
+                actorResolution.displayName(),
+                sanitizeHumanLabel(text(sanitizedBody.get("actorName"))),
+                actor
+            );
             List<String> actorRoles = extractStringList(
                 sanitizedBody.get("actorRoles"),
                 sanitizedBody.get("operatorRoles"),
@@ -369,7 +393,11 @@ public class AuditIngestResource {
             return List.copyOf(normalized);
         }
 
-        private static String normalizeActor(Map<String, Object> body, String sourceSystem) {
+        private static ActorResolution normalizeActor(
+            Map<String, Object> body,
+            String sourceSystem,
+            AdminKeycloakUserRepository userRepository
+        ) {
             List<Object> candidates = collectValues(
                 body.get("actor"),
                 body.get("username"),
@@ -391,15 +419,42 @@ public class AuditIngestResource {
             for (Object candidate : candidates) {
                 if (candidate == null) continue;
                 String text = candidate.toString().trim();
-                if (!text.isEmpty() && !isAnonymous(text)) {
-                    return text;
+                if (text.isEmpty() || isAnonymous(text) || isMachineActor(text)) {
+                    continue;
+                }
+                ActorResolution resolved = resolveExistingUser(text, userRepository);
+                if (resolved != null) {
+                    return resolved;
                 }
             }
-            // BUG-C fix: never return a bare "platform" — that mis-renders as a real account
-            // in the audit UI. Tag the fallback explicitly so auditors can spot async/system
-            // events that lost their SecurityContext (e.g. @Scheduled, event listeners).
             String origin = sourceSystem != null && !sourceSystem.isBlank() ? sourceSystem.trim() : "unknown";
-            return "_system:" + origin.toLowerCase(Locale.ROOT);
+            throw new NonUserActorException("source=" + origin + " candidates=" + candidates);
+        }
+
+        private static ActorResolution resolveExistingUser(String candidate, AdminKeycloakUserRepository userRepository) {
+            if (userRepository == null || StringUtils.isBlank(candidate)) {
+                return null;
+            }
+            String trimmed = candidate.trim();
+            return userRepository
+                .findByUsernameIgnoreCase(trimmed)
+                .or(() -> userRepository.findByEmailIgnoreCase(trimmed))
+                .map(AuditPayload::toActorResolution)
+                .orElse(null);
+        }
+
+        private static ActorResolution toActorResolution(AdminKeycloakUser user) {
+            if (user == null || StringUtils.isBlank(user.getUsername())) {
+                return null;
+            }
+            return new ActorResolution(user.getUsername().trim(), firstNonBlank(user.getFullName(), user.getUsername()));
+        }
+
+        private static String sanitizeHumanLabel(String value) {
+            if (StringUtils.isBlank(value) || isMachineActor(value) || isAnonymous(value)) {
+                return null;
+            }
+            return value.trim();
         }
 
         private static boolean isAnonymous(String value) {
@@ -410,12 +465,72 @@ public class AuditIngestResource {
             return norm.isEmpty() || norm.equals("anonymous") || norm.equals("anonymoususer") || norm.equals("unknown");
         }
 
+        private static boolean isMachineActor(String value) {
+            if (value == null) {
+                return true;
+            }
+            String norm = value.trim().toLowerCase(Locale.ROOT);
+            if (norm.isEmpty()) {
+                return true;
+            }
+            if (
+                norm.startsWith("service:") ||
+                norm.startsWith("_system:") ||
+                norm.equals("system") ||
+                norm.equals("liquibase") ||
+                norm.contains("liquibase") ||
+                norm.startsWith("dts-") ||
+                norm.equals("postgresql") ||
+                norm.equals("success") ||
+                norm.equals("failed") ||
+                norm.equals("execute")
+            ) {
+                return true;
+            }
+            return norm.matches("\\d+");
+        }
+
         private static String resolveClientIp(Map<String, Object> body, HttpServletRequest request) {
             String fromBody = text(body.get("clientIp"), text(body.get("ip")));
+            String forwardedCombined = request != null ? request.getHeader("Forwarded") : null;
             String forwarded = request != null ? request.getHeader("X-Forwarded-For") : null;
             String realIp = request != null ? request.getHeader("X-Real-IP") : null;
             String remote = request != null ? request.getRemoteAddr() : null;
-            return IpAddressUtils.resolveClientIp(fromBody, forwarded, realIp, remote);
+            return firstNonContainerClientIp(forwardedCombined, forwarded, realIp, fromBody, remote);
+        }
+
+        private static String firstNonContainerClientIp(String... candidates) {
+            if (candidates == null) {
+                return null;
+            }
+            for (String candidate : candidates) {
+                String resolved = IpAddressUtils.resolveClientIp(candidate);
+                if (StringUtils.isNotBlank(resolved) && !isContainerAddress(resolved)) {
+                    return resolved;
+                }
+            }
+            return null;
+        }
+
+        private static boolean isContainerAddress(String ip) {
+            if (StringUtils.isBlank(ip)) {
+                return true;
+            }
+            String normalized = ip.trim();
+            if (normalized.equals("127.0.0.1") || normalized.equals("::1") || normalized.equals("0:0:0:0:0:0:0:1")) {
+                return true;
+            }
+            String[] parts = normalized.split("\\.");
+            if (parts.length == 4) {
+                try {
+                    int first = Integer.parseInt(parts[0]);
+                    int second = Integer.parseInt(parts[1]);
+                    return first == 172 && second >= 16 && second <= 31;
+                } catch (NumberFormatException ignored) {
+                    return false;
+                }
+            }
+            return false;
         }
 
         private static String resolveClientAgent(Map<String, Object> body, HttpServletRequest request) {
@@ -531,10 +646,11 @@ public class AuditIngestResource {
             }
             if (
                 normalized.startsWith("UPDATE") ||
+                normalized.startsWith("WRITE") ||
                 normalized.startsWith("MODIFY") ||
                 normalized.startsWith("EDIT") ||
                 normalized.startsWith("SAVE") ||
-                containsAny(lower, "修改", "更新", "调整", "保存", "编辑", "配置")
+                containsAny(lower, "修改", "更新", "调整", "保存", "编辑", "配置", "写入")
             ) {
                 return AuditOperationKind.UPDATE;
             }

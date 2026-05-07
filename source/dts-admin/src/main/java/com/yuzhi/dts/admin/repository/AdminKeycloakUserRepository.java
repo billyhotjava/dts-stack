@@ -16,6 +16,8 @@ public interface AdminKeycloakUserRepository extends JpaRepository<AdminKeycloak
 
     Optional<AdminKeycloakUser> findByUsernameIgnoreCase(String username);
 
+    Optional<AdminKeycloakUser> findByEmailIgnoreCase(String email);
+
     Page<AdminKeycloakUser> findByUsernameContainingIgnoreCase(String username, Pageable pageable);
 
     Page<AdminKeycloakUser> findByMdmEnabled(int mdmEnabled, Pageable pageable);

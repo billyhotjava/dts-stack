@@ -6,7 +6,6 @@ import { Calendar as CalendarIcon, Clock3 } from "lucide-react";
 import { toast } from "sonner";
 import { AuditLogService } from "@/api/services/auditLogService";
 import type { AuditLog, AuditLogPageResponse, AuditLogDetail } from "#/entity";
-import { GLOBAL_CONFIG } from "@/global-config";
 import { Badge } from "@/ui/badge";
 import { Calendar } from "@/ui/calendar";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/ui/card";
@@ -470,15 +469,7 @@ export default function AuditCenterView() {
 		try {
 			setExporting(true);
 			const params = buildQuery(filters);
-			const query = new URLSearchParams(params).toString();
-			const exportUrl = buildExportUrl(query);
-			const response = await fetch(exportUrl, {
-				credentials: "include",
-			});
-			if (!response.ok) {
-				throw new Error(`导出失败: ${response.status}`);
-			}
-			const blob = await response.blob();
+			const blob = await AuditLogService.exportAuditLogs(params);
 			downloadBlob(blob, `audit-logs-${Date.now()}.csv`);
 			toast.success("已导出筛选后的审计日志");
 		} catch (error) {
@@ -1274,12 +1265,6 @@ function deriveFieldLabel(field: string | undefined): string {
 		.filter((token) => token.length > 0)
 		.map((token) => token.charAt(0).toUpperCase() + token.slice(1))
 		.join(" ");
-}
-
-function buildExportUrl(query: string): string {
-	const base = GLOBAL_CONFIG.apiBaseUrl?.trim() || "/api";
-	const normalizedBase = base.endsWith("/") ? base.slice(0, -1) : base;
-	return `${normalizedBase}/audit-entries/export${query ? `?${query}` : ""}`;
 }
 
 function formatDateTime(value: string) {

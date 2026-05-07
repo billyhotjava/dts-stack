@@ -69,7 +69,7 @@ public enum AuditOperationType {
     private static AuditOperationType mapLegacy(String normalized) {
         return switch (normalized) {
             case "新增", "CREATE" -> CREATE;
-            case "修改", "UPDATE" -> UPDATE;
+            case "修改", "UPDATE", "WRITE", "写入" -> UPDATE;
             case "删除", "DELETE" -> DELETE;
             case "清理", "清洁", "清除", "清空", "CLEAN", "CLEANUP", "PURGE" -> CLEAN;
             case "归档", "ARCHIVE" -> ARCHIVE;
