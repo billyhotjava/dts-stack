@@ -341,6 +341,7 @@ export default function Page({ embedded }: Props) {
 			{
 				title: "名称",
 				dataIndex: "title",
+				sorter: (a, b) => (a.title || "").localeCompare(b.title || ""),
 				render: (value: string, record) => (
 					<Space direction="vertical" size={2}>
 						<Text strong>{value || "-"}</Text>
@@ -418,12 +419,22 @@ export default function Page({ embedded }: Props) {
 			{
 				title: "有效期",
 				dataIndex: "expiresAt",
+				sorter: (a, b) => {
+					const ta = a.expiresAt ? new Date(a.expiresAt as any).getTime() : 0;
+					const tb = b.expiresAt ? new Date(b.expiresAt as any).getTime() : 0;
+					return ta - tb;
+				},
 				width: 180,
 				render: (value: string) => (value ? new Date(value).toLocaleString() : "长期"),
 			},
 			{
 				title: "更新时间",
 				dataIndex: "updatedAt",
+				sorter: (a, b) => {
+					const ta = a.updatedAt ? new Date(a.updatedAt as any).getTime() : 0;
+					const tb = b.updatedAt ? new Date(b.updatedAt as any).getTime() : 0;
+					return ta - tb;
+				},
 				width: 180,
 				render: (value: string) => (value ? new Date(value).toLocaleString() : "-"),
 			},

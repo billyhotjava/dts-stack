@@ -102,6 +102,7 @@ export default function Page() {
 		{
 			title: "事项",
 			dataIndex: "title",
+			sorter: (a, b) => (a.title || "").localeCompare(b.title || ""),
 			render: (value, record) => (
 				<div className="space-y-1">
 					<div className="font-medium text-foreground">{value || "-"}</div>
@@ -118,6 +119,11 @@ export default function Page() {
 		{
 			title: "时间",
 			dataIndex: "createdAt",
+			sorter: (a, b) => {
+				const ta = a.createdAt ? new Date(a.createdAt as any).getTime() : 0;
+				const tb = b.createdAt ? new Date(b.createdAt as any).getTime() : 0;
+				return ta - tb;
+			},
 			width: 200,
 			render: (value) => formatDate(value),
 		},

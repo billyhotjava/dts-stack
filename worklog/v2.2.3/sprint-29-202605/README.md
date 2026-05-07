@@ -100,3 +100,4 @@
 - 集成测试: `worklog/v2.2.3/sprint-29-202605/it/README.md`
 - 设计资产: `worklog/v2.2.3/sprint-29-202605/assets/`
 - 评审记录: `worklog/v2.2.3/sprint-29-202605/review/`
+- Sprint-29 后前端逐页 review 约束: `worklog/v2.2.3/sprint-29-202605/review/frontend-page-review-after-sprint-29.md`

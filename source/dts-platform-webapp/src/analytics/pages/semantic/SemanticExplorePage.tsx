@@ -63,6 +63,7 @@ export default function SemanticExplorePage() {
 		{
 			title: "主题模型",
 			dataIndex: "label",
+			sorter: (a, b) => (a.label || "").localeCompare(b.label || ""),
 			key: "label",
 			render: (_value, record) => (
 				<div className="flex flex-col">

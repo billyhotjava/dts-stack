@@ -215,9 +215,9 @@ export default function SemanticPublishPage() {
 	};
 
 	const modelColumns: ColumnsType<SemanticModel> = [
-		{ title: "模型", dataIndex: "name" },
+		{ title: "模型", dataIndex: "name" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 		{ title: "类型", dataIndex: "type", width: 90, render: (value) => value || "-" },
-		{ title: "表名", dataIndex: "tableName", render: (value) => value || "-" },
+		{ title: "表名", dataIndex: "tableName", render: (value) => value || "-" , sorter: (a, b) => (a.tableName || "").localeCompare(b.tableName || "") },
 		{
 			title: "审核",
 			dataIndex: "reviewStatus",
@@ -358,7 +358,7 @@ export default function SemanticPublishPage() {
 												{ title: "动作", dataIndex: "action", width: 100 },
 												{ title: "人员", dataIndex: "actor", width: 140, render: (value) => value || "-" },
 												{ title: "意见", dataIndex: "comment", render: (value) => value || "-" },
-												{ title: "时间", dataIndex: "createdDate", width: 190, render: (value) => value || "-" },
+												{ title: "时间", dataIndex: "createdDate", width: 190, render: (value) => value || "-" , sorter: (a, b) => { const ta = a.createdDate ? new Date(a.createdDate as any).getTime() : 0; const tb = b.createdDate ? new Date(b.createdDate as any).getTime() : 0; return ta - tb; } },
 											]}
 											dataSource={reviewLogs}
 										/>

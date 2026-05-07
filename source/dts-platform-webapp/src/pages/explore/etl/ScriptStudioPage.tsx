@@ -292,6 +292,7 @@ export default function ScriptStudioPage() {
 		{
 			title: "脚本名称",
 			dataIndex: "name",
+			sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 			key: "name",
 			width: 240,
 			render: (_, row) => (
@@ -325,6 +326,11 @@ export default function ScriptStudioPage() {
 		{
 			title: "更新时间",
 			dataIndex: "lastModifiedDate",
+			sorter: (a, b) => {
+				const ta = a.lastModifiedDate ? new Date(a.lastModifiedDate as any).getTime() : 0;
+				const tb = b.lastModifiedDate ? new Date(b.lastModifiedDate as any).getTime() : 0;
+				return ta - tb;
+			},
 			key: "lastModifiedDate",
 			width: 200,
 			render: (v) => formatTime(v),
@@ -350,6 +356,11 @@ export default function ScriptStudioPage() {
 		{
 			title: "触发时间",
 			dataIndex: "createdDate",
+			sorter: (a, b) => {
+				const ta = a.createdDate ? new Date(a.createdDate as any).getTime() : 0;
+				const tb = b.createdDate ? new Date(b.createdDate as any).getTime() : 0;
+				return ta - tb;
+			},
 			key: "createdDate",
 			width: 200,
 			render: (v) => formatTime(v),

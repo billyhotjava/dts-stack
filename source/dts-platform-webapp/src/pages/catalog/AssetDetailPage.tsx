@@ -486,7 +486,7 @@ export default function AssetDetailPage() {
 	};
 
 	const columnColumns: ColumnsType<ColumnRow> = [
-		{ title: "字段", dataIndex: "name" },
+		{ title: "字段", dataIndex: "name" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 		{ title: "类型", dataIndex: "type" },
 		{
 			title: "状态",
@@ -506,6 +506,7 @@ export default function AssetDetailPage() {
 		{
 			title: "资产名称",
 			dataIndex: "name",
+			sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 			render: (value) => value || "-",
 		},
 		{
@@ -541,11 +542,21 @@ export default function AssetDetailPage() {
 		{
 			title: "更新时间",
 			dataIndex: "updatedAt",
+			sorter: (a, b) => {
+				const ta = a.updatedAt ? new Date(a.updatedAt as any).getTime() : 0;
+				const tb = b.updatedAt ? new Date(b.updatedAt as any).getTime() : 0;
+				return ta - tb;
+			},
 			render: (value) => value || "-",
 		},
 		{
 			title: "最近同步",
 			dataIndex: "snapshotTime",
+			sorter: (a, b) => {
+				const ta = a.snapshotTime ? new Date(a.snapshotTime as any).getTime() : 0;
+				const tb = b.snapshotTime ? new Date(b.snapshotTime as any).getTime() : 0;
+				return ta - tb;
+			},
 			render: (value) => value || "-",
 		},
 		{

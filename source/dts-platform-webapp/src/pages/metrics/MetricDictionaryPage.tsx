@@ -755,8 +755,8 @@ export default function Page() {
 	};
 
 	const indicatorColumns: ColumnsType<Indicator> = [
-		{ title: "名称", dataIndex: "name", render: (v) => v || "-" },
-		{ title: "编码", dataIndex: "code", width: 140, render: (v) => v || "-" },
+		{ title: "名称", dataIndex: "name", render: (v) => v || "-" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
+		{ title: "编码", dataIndex: "code", width: 140, render: (v) => v || "-" , sorter: (a, b) => (a.code || "").localeCompare(b.code || "") },
 		{ title: "状态", dataIndex: "status", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
 		{ title: "数据集", dataIndex: "datasetId", render: (v) => datasets.find((d) => d.id === v)?.name || v || "-" },
 		{
@@ -874,8 +874,8 @@ export default function Page() {
 	];
 
 	const dimensionColumns: ColumnsType<Dimension> = [
-		{ title: "名称", dataIndex: "name", render: (v) => v || "-" },
-		{ title: "编码", dataIndex: "code", width: 140, render: (v) => v || "-" },
+		{ title: "名称", dataIndex: "name", render: (v) => v || "-" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
+		{ title: "编码", dataIndex: "code", width: 140, render: (v) => v || "-" , sorter: (a, b) => (a.code || "").localeCompare(b.code || "") },
 		{ title: "状态", dataIndex: "status", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
 		{ title: "描述", dataIndex: "description", render: (v) => v || "-" },
 		{
@@ -1527,7 +1527,7 @@ export default function Page() {
 								pagination={false}
 								rowKey={(_, index) => String(index)}
 								columns={[
-									{ title: "编码", dataIndex: "code", width: 180 },
+									{ title: "编码", dataIndex: "code", width: 180 , sorter: (a: PublishIssue, b: PublishIssue) => (a.code || "").localeCompare(b.code || "") },
 									{ title: "说明", dataIndex: "message" },
 									{ title: "建议", dataIndex: "suggestion" },
 								]}
@@ -1545,7 +1545,7 @@ export default function Page() {
 								pagination={false}
 								rowKey={(_, index) => String(index)}
 								columns={[
-									{ title: "编码", dataIndex: "code", width: 180 },
+									{ title: "编码", dataIndex: "code", width: 180 , sorter: (a: PublishIssue, b: PublishIssue) => (a.code || "").localeCompare(b.code || "") },
 									{ title: "说明", dataIndex: "message" },
 									{ title: "建议", dataIndex: "suggestion" },
 								]}
@@ -1657,7 +1657,7 @@ export default function Page() {
 						loading={versionDiffLoading}
 						dataSource={(versionDiffPayload?.diffs || []) as VersionDiffRow[]}
 						columns={[
-							{ title: "字段", dataIndex: "label", width: 160, render: (_, row) => row.label || row.field || "-" },
+							{ title: "字段", dataIndex: "label", width: 160, render: (_, row) => row.label || row.field || "-" , sorter: (a, b) => (a.label || "").localeCompare(b.label || "") },
 							{ title: "左版本", dataIndex: "before", render: (value) => prettyJson(value) || "-" },
 							{ title: "右版本", dataIndex: "after", render: (value) => prettyJson(value) || "-" },
 							{
@@ -1686,8 +1686,8 @@ export default function Page() {
 							{ title: "版本", dataIndex: "version", width: 100 },
 							{ title: "状态", dataIndex: "status", width: 120, render: (value) => <Tag>{value || "-"}</Tag> },
 							{ title: "变更说明", dataIndex: "changeSummary", render: (value) => value || "-" },
-							{ title: "创建时间", dataIndex: "createdDate", width: 180, render: (value) => formatDateTime(value) },
-							{ title: "发布时间", dataIndex: "releasedAt", width: 180, render: (value) => formatDateTime(value) },
+							{ title: "创建时间", dataIndex: "createdDate", width: 180, render: (value) => formatDateTime(value) , sorter: (a, b) => { const ta = a.createdDate ? new Date(a.createdDate as any).getTime() : 0; const tb = b.createdDate ? new Date(b.createdDate as any).getTime() : 0; return ta - tb; } },
+							{ title: "发布时间", dataIndex: "releasedAt", width: 180, render: (value) => formatDateTime(value) , sorter: (a, b) => { const ta = a.releasedAt ? new Date(a.releasedAt as any).getTime() : 0; const tb = b.releasedAt ? new Date(b.releasedAt as any).getTime() : 0; return ta - tb; } },
 							{
 								title: "操作",
 								width: 220,

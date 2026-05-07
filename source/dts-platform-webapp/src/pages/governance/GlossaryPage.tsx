@@ -207,8 +207,8 @@ export default function GlossaryPage() {
 	};
 
 	const columns: ColumnsType<GlossaryTerm> = [
-		{ title: "术语名称", dataIndex: "name", render: (t) => <Text strong className="text-blue-600">{t}</Text> },
-		{ title: "标准编码", dataIndex: "code", render: (c) => <Text className="font-mono text-xs">{c || "-"}</Text> },
+		{ title: "术语名称", dataIndex: "name", render: (t) => <Text strong className="text-blue-600">{t}</Text> , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
+		{ title: "标准编码", dataIndex: "code", render: (c) => <Text className="font-mono text-xs">{c || "-"}</Text> , sorter: (a, b) => (a.code || "").localeCompare(b.code || "") },
 		{ title: "口径定义", dataIndex: "definition", ellipsis: true, render: (t) => t || "-" },
 		{ title: "主题域", dataIndex: "domain", render: (t) => t || "-" },
 		{ title: "负责人", dataIndex: "owner", render: (t) => t || "-" },

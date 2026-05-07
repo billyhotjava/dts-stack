@@ -433,7 +433,7 @@ export function DbUnifiedStep({
 					}}
 					columns={[
 						{ title: "模式", dataIndex: "schema", width: 140 },
-						{ title: "表名", dataIndex: "name" },
+						{ title: "表名", dataIndex: "name" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 						{ title: "类型", dataIndex: "type", width: 120 },
 					]}
 					pagination={{

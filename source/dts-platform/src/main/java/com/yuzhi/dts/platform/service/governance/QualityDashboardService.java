@@ -65,7 +65,7 @@ public class QualityDashboardService {
         int todayPassed = 0;
         int todayFailed = 0;
         for (GovQualityRun run : todayRuns) {
-            if ("SUCCESS".equalsIgnoreCase(run.getStatus())) {
+            if (isPassed(run.getStatus())) {
                 todayPassed++;
             } else if ("FAILED".equalsIgnoreCase(run.getStatus())) {
                 todayFailed++;
@@ -120,9 +120,7 @@ public class QualityDashboardService {
             List<GovQualityRun> dayRuns = byDay.get(day);
             if (dayRuns != null && !dayRuns.isEmpty()) {
                 long total = dayRuns.size();
-                long passed = dayRuns.stream()
-                    .filter(r -> "SUCCESS".equalsIgnoreCase(r.getStatus()))
-                    .count();
+                long passed = dayRuns.stream().filter(r -> isPassed(r.getStatus())).count();
                 double passRate = Math.round((double) passed / total * 10000.0) / 100.0;
                 trend.add(new TrendPoint(day.format(fmt), passRate));
             } else {
@@ -175,5 +173,9 @@ public class QualityDashboardService {
         String time = run.getFinishedAt() != null ? run.getFinishedAt().toString() : "";
         String status = run.getStatus() != null ? run.getStatus() : "";
         return new RecentRun(ruleName, dataset, time, status);
+    }
+
+    private boolean isPassed(String status) {
+        return "SUCCESS".equalsIgnoreCase(status) || "SUCCEEDED".equalsIgnoreCase(status) || "PASSED".equalsIgnoreCase(status);
     }
 }

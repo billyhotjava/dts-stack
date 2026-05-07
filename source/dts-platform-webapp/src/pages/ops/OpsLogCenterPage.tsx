@@ -115,12 +115,22 @@ export default function OpsLogCenterPage() {
     {
       title: "开始时间",
       dataIndex: "startedAt",
+      sorter: (a, b) => {
+      	const ta = a.startedAt ? new Date(a.startedAt as any).getTime() : 0;
+      	const tb = b.startedAt ? new Date(b.startedAt as any).getTime() : 0;
+      	return ta - tb;
+      },
       width: 170,
       render: (v) => (v ? dayjs(v).format("MM-DD HH:mm:ss") : "-"),
     },
     {
       title: "结束时间",
       dataIndex: "finishedAt",
+      sorter: (a, b) => {
+      	const ta = a.finishedAt ? new Date(a.finishedAt as any).getTime() : 0;
+      	const tb = b.finishedAt ? new Date(b.finishedAt as any).getTime() : 0;
+      	return ta - tb;
+      },
       width: 170,
       render: (v) => (v ? dayjs(v).format("MM-DD HH:mm:ss") : "-"),
     },

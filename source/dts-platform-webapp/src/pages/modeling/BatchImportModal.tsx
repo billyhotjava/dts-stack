@@ -242,6 +242,7 @@ const BatchImportModal = ({
 		{
 			title: "模型名称",
 			dataIndex: "name",
+			sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 			render: (val: string, record: FileRow) => (
 				<Input
 					size="small"
@@ -307,7 +308,7 @@ const BatchImportModal = ({
 	];
 
 	const resultColumns: ColumnsType<ResultRow> = [
-		{ title: "模型名称", dataIndex: "name" },
+		{ title: "模型名称", dataIndex: "name" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 		{ title: "分层", dataIndex: "layer", width: 80 },
 		{
 			title: "状态",

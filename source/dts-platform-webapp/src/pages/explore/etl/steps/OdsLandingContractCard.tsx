@@ -72,6 +72,7 @@ export function OdsLandingContractCard({
 					{
 						title: "DTS 技术字段",
 						dataIndex: "name",
+						sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 						key: "name",
 						render: (value: string) => <Text code>{value}</Text>,
 					},

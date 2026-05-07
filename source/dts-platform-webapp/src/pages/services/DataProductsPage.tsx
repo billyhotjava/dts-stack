@@ -167,7 +167,7 @@ export default function Page() {
 	};
 
 	const columns: ColumnsType<DataProductSummary> = [
-		{ title: "名称", dataIndex: "name", render: (v) => v || "-" },
+		{ title: "名称", dataIndex: "name", render: (v) => v || "-" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 		{ title: "类型", dataIndex: "productType", render: (v) => v || "-" },
 		{ title: "状态", dataIndex: "status", render: (v) => <Tag>{v || "-"}</Tag> },
 		{ title: "版本", dataIndex: "currentVersion", width: 120, render: (v) => v || "-" },

@@ -268,7 +268,7 @@ export default function QualityTasksPanel() {
 	};
 
 	const columns: ColumnsType<QualityTask> = [
-		{ title: "计划名称", dataIndex: "name", render: (value) => value || "-" },
+		{ title: "计划名称", dataIndex: "name", render: (value) => value || "-" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 		{
 			title: "数据集",
 			dataIndex: "datasetId",
@@ -317,6 +317,11 @@ export default function QualityTasksPanel() {
 		{
 			title: "最后触发时间",
 			dataIndex: "lastTriggeredAt",
+			sorter: (a, b) => {
+				const ta = a.lastTriggeredAt ? new Date(a.lastTriggeredAt as any).getTime() : 0;
+				const tb = b.lastTriggeredAt ? new Date(b.lastTriggeredAt as any).getTime() : 0;
+				return ta - tb;
+			},
 			width: 200,
 			render: (value) => value || "-",
 		},

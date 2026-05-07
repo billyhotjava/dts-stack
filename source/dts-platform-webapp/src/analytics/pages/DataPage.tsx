@@ -194,6 +194,7 @@ export default function DataPage() {
 			{
 				title: "名称",
 				dataIndex: "name",
+				sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 				key: "name",
 				ellipsis: true,
 				render: (name: string | undefined) => name ?? "-",
@@ -270,6 +271,7 @@ export default function DataPage() {
 			{
 				title: "表名",
 				dataIndex: "name",
+				sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 				key: "name",
 				ellipsis: true,
 			},

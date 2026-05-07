@@ -62,6 +62,8 @@ public class SqlRepairService {
         UUID auditLogId
     ) {}
 
+    private record SetAssignment(String columnName, String columnExpression, String valueExpression) {}
+
     // ---- public API ---------------------------------------------------------
 
     /**
@@ -88,8 +90,7 @@ public class SqlRepairService {
             whereClause = whereClause.replaceAll(";\\s*$", "").trim();
         }
 
-        // Extract SET column names for "newValues" simulation
-        List<String> setColumns = parseSetColumns(sql);
+        List<SetAssignment> assignments = parseSetAssignments(sql);
 
         // 1. Count affected rows using the same WHERE clause
         String countSql = "SELECT count(*) FROM " + quoteIdentifier(tableName);
@@ -99,30 +100,43 @@ public class SqlRepairService {
         Long affectedRows = jdbcTemplate.queryForObject(countSql, Long.class);
         if (affectedRows == null) affectedRows = 0L;
 
-        // 2. Fetch sample "before" rows
-        String selectSql = "SELECT * FROM " + quoteIdentifier(tableName);
-        if (whereClause != null && !whereClause.isEmpty()) {
-            selectSql += " WHERE " + whereClause;
+        // 2. Fetch sample before/after rows by evaluating SET expressions in SELECT.
+        StringBuilder selectSql = new StringBuilder("SELECT id");
+        for (int i = 0; i < assignments.size(); i++) {
+            SetAssignment assignment = assignments.get(i);
+            selectSql
+                .append(", ")
+                .append(assignment.columnExpression())
+                .append(" AS before_")
+                .append(i)
+                .append(", ")
+                .append(assignment.valueExpression())
+                .append(" AS after_")
+                .append(i);
         }
-        selectSql += " LIMIT " + limit;
+        selectSql.append(" FROM ").append(quoteIdentifier(tableName));
+        if (whereClause != null && !whereClause.isEmpty()) {
+            selectSql.append(" WHERE ").append(whereClause);
+        }
+        selectSql.append(" LIMIT ").append(limit);
 
-        List<Map<String, Object>> rawRows = jdbcTemplate.queryForList(selectSql);
+        List<Map<String, Object>> rawRows = jdbcTemplate.queryForList(selectSql.toString());
         List<Map<String, Object>> samples = new ArrayList<>();
         for (Map<String, Object> rawRow : rawRows) {
             Map<String, Object> sample = new LinkedHashMap<>();
             Object rowId = rawRow.get("id");
             Map<String, Object> columnValues = new LinkedHashMap<>();
-            for (var entry : rawRow.entrySet()) {
-                String colName = entry.getKey();
-                if ("id".equalsIgnoreCase(colName)) {
-                    rowId = entry.getValue();
-                }
-                if (setColumns.isEmpty() || setColumns.stream().anyMatch(c -> c.equalsIgnoreCase(colName))) {
-                    columnValues.put(colName, entry.getValue() == null ? null : entry.getValue().toString());
-                }
+            Map<String, Object> newValues = new LinkedHashMap<>();
+            for (int i = 0; i < assignments.size(); i++) {
+                SetAssignment assignment = assignments.get(i);
+                Object before = rawRow.get("before_" + i);
+                Object after = rawRow.get("after_" + i);
+                columnValues.put(assignment.columnName(), before == null ? null : before.toString());
+                newValues.put(assignment.columnName(), after == null ? null : after.toString());
             }
             sample.put("rowId", rowId);
             sample.put("columnValues", columnValues);
+            sample.put("newValues", newValues);
             samples.add(sample);
         }
 
@@ -200,19 +214,74 @@ public class SqlRepairService {
     // ---- helpers ------------------------------------------------------------
 
     private List<String> parseSetColumns(String sql) {
-        List<String> columns = new ArrayList<>();
+        return parseSetAssignments(sql).stream().map(SetAssignment::columnName).toList();
+    }
+
+    private List<SetAssignment> parseSetAssignments(String sql) {
+        List<SetAssignment> assignments = new ArrayList<>();
         Matcher setMatcher = SET_CLAUSE.matcher(sql);
         if (setMatcher.find()) {
             String setBody = setMatcher.group(1).trim();
-            // Split on commas, extract column names (before the = sign)
-            for (String assignment : setBody.split(",")) {
-                String col = assignment.strip().split("\\s*=")[0].strip();
-                if (!col.isEmpty()) {
-                    columns.add(col);
+            for (String assignment : splitAssignments(setBody)) {
+                int equals = assignment.indexOf('=');
+                if (equals <= 0 || equals >= assignment.length() - 1) {
+                    continue;
+                }
+                String rawColumn = assignment.substring(0, equals).strip();
+                String valueExpression = assignment.substring(equals + 1).strip();
+                String columnName = normalizeColumnName(rawColumn);
+                if (!columnName.isEmpty() && !valueExpression.isEmpty()) {
+                    assignments.add(new SetAssignment(columnName, rawColumn, valueExpression));
                 }
             }
         }
-        return columns;
+        return assignments;
+    }
+
+    private List<String> splitAssignments(String setBody) {
+        List<String> parts = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        int depth = 0;
+        boolean inString = false;
+        for (int i = 0; i < setBody.length(); i++) {
+            char ch = setBody.charAt(i);
+            if (ch == '\'') {
+                if (inString && i + 1 < setBody.length() && setBody.charAt(i + 1) == '\'') {
+                    current.append(ch).append(setBody.charAt(i + 1));
+                    i++;
+                    continue;
+                }
+                inString = !inString;
+                current.append(ch);
+                continue;
+            }
+            if (!inString) {
+                if (ch == '(') depth++;
+                if (ch == ')' && depth > 0) depth--;
+                if (ch == ',' && depth == 0) {
+                    parts.add(current.toString().strip());
+                    current.setLength(0);
+                    continue;
+                }
+            }
+            current.append(ch);
+        }
+        if (!current.isEmpty()) {
+            parts.add(current.toString().strip());
+        }
+        return parts;
+    }
+
+    private String normalizeColumnName(String rawColumn) {
+        String column = rawColumn.strip();
+        if (column.startsWith("\"") && column.endsWith("\"") && column.length() >= 2) {
+            column = column.substring(1, column.length() - 1).replace("\"\"", "\"");
+        }
+        int dot = column.lastIndexOf('.');
+        if (dot >= 0 && dot < column.length() - 1) {
+            column = column.substring(dot + 1);
+        }
+        return column;
     }
 
     /** Double-quote an identifier to prevent SQL injection while allowing reserved words. */

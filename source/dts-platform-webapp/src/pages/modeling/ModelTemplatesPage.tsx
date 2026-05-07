@@ -248,7 +248,7 @@ export default function Page() {
 
 	const columns: ColumnsType<ProjectSpace> = useMemo(
 		() => [
-			{ title: "项目空间", dataIndex: "name", key: "name", width: 200 },
+			{ title: "项目空间", dataIndex: "name", key: "name", width: 200 , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 			{ title: "业务域", dataIndex: "domain", key: "domain", width: 140, render: (v) => v || "-" },
 			{ title: "范围说明", dataIndex: "scope", key: "scope", ellipsis: true, render: (v) => v || "-" },
 			{ title: "负责人", dataIndex: "owner", key: "owner", width: 120, render: (v) => v || "-" },
@@ -264,7 +264,7 @@ export default function Page() {
 				},
 			},
 			{ title: "版本", dataIndex: "version", key: "version", width: 100, render: (v) => v || "-" },
-			{ title: "更新时间", dataIndex: "lastModifiedDate", key: "lastModifiedDate", width: 180, render: (v) => formatDateTime(v) },
+			{ title: "更新时间", dataIndex: "lastModifiedDate", key: "lastModifiedDate", width: 180, render: (v) => formatDateTime(v) , sorter: (a, b) => { const ta = a.lastModifiedDate ? new Date(a.lastModifiedDate as any).getTime() : 0; const tb = b.lastModifiedDate ? new Date(b.lastModifiedDate as any).getTime() : 0; return ta - tb; } },
 			{
 				title: "操作",
 				key: "actions",

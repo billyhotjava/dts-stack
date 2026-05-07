@@ -137,8 +137,8 @@ export default function SemanticRunsPage() {
 		{ title: "DAG", dataIndex: "dagId", render: (value) => value || "-" },
 		{ title: "外部运行 ID", dataIndex: "externalRunId", render: (value) => value || "-" },
 		{ title: "触发人", dataIndex: "triggeredBy", width: 120, render: (value) => value || "-" },
-		{ title: "开始时间", dataIndex: "startedAt", width: 190, render: (value) => value || "-" },
-		{ title: "结束时间", dataIndex: "finishedAt", width: 190, render: (value) => value || "-" },
+		{ title: "开始时间", dataIndex: "startedAt", width: 190, render: (value) => value || "-" , sorter: (a, b) => { const ta = a.startedAt ? new Date(a.startedAt as any).getTime() : 0; const tb = b.startedAt ? new Date(b.startedAt as any).getTime() : 0; return ta - tb; } },
+		{ title: "结束时间", dataIndex: "finishedAt", width: 190, render: (value) => value || "-" , sorter: (a, b) => { const ta = a.finishedAt ? new Date(a.finishedAt as any).getTime() : 0; const tb = b.finishedAt ? new Date(b.finishedAt as any).getTime() : 0; return ta - tb; } },
 		{ title: "耗时(ms)", dataIndex: "durationMs", width: 110, render: (value) => value ?? "-" },
 		{ title: "消息", dataIndex: "message", render: (value) => value || "-" },
 		{

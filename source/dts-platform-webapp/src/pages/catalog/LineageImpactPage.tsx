@@ -95,7 +95,7 @@ export default function LineageImpactPage() {
 					size="small"
 					rowKey={(row, idx) => row.id || `${row.db || "db"}.${row.table || "tb"}-${idx}`}
 					columns={[
-						{ title: "节点", dataIndex: "name", render: (v, r) => v || `${r.db || "-"}.${r.table || "-"}` },
+						{ title: "节点", dataIndex: "name", render: (v, r) => v || `${r.db || "-"}.${r.table || "-"}` , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 						{ title: "模式.表", render: (_, r) => `${r.db || "-"}.${r.table || "-"}` },
 						{ title: "负责人", render: (_, r) => r.owner || r.ownerDept || "-" },
 						{ title: "最近变更", render: (_, r) => formatTs(r.lastModifiedAt) },

@@ -67,6 +67,7 @@ export default function DashboardsPage() {
 		{
 			title: t(locale, "common.name"),
 			dataIndex: "name",
+			sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 			key: "name",
 			ellipsis: true,
 			render: (name: string, record) => (

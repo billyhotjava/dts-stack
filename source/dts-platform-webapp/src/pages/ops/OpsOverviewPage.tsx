@@ -26,7 +26,7 @@ import {
 // ─── Dev-center table columns ────────────────────────────────────────
 const alertColumns: ColumnsType<OpsAlert> = [
 	{ title: "类型", dataIndex: "type", width: 120 },
-	{ title: "规则", dataIndex: "ruleName", render: (value) => value || "-" },
+	{ title: "规则", dataIndex: "ruleName", render: (value) => value || "-" , sorter: (a, b) => (a.ruleName || "").localeCompare(b.ruleName || "") },
 	{ title: "状态", dataIndex: "status", width: 120 },
 	{ title: "严重性", dataIndex: "severity", width: 120, render: (value) => value || "-" },
 	{ title: "描述", dataIndex: "message", render: (value) => value || "-" },
@@ -388,6 +388,11 @@ export default function OpsOverviewPage() {
 							{
 								title: "开始时间",
 								dataIndex: "startedAt",
+								sorter: (a, b) => {
+									const ta = a.startedAt ? new Date(a.startedAt as any).getTime() : 0;
+									const tb = b.startedAt ? new Date(b.startedAt as any).getTime() : 0;
+									return ta - tb;
+								},
 								render: (v) => (v ? dayjs(v).format("MM-DD HH:mm:ss") : "-"),
 							},
 							{
@@ -439,6 +444,11 @@ export default function OpsOverviewPage() {
 							{
 								title: "结束时间",
 								dataIndex: "finishedAt",
+								sorter: (a, b) => {
+									const ta = a.finishedAt ? new Date(a.finishedAt as any).getTime() : 0;
+									const tb = b.finishedAt ? new Date(b.finishedAt as any).getTime() : 0;
+									return ta - tb;
+								},
 								render: (v) => (v ? dayjs(v).format("MM-DD HH:mm:ss") : "-"),
 							},
 							{

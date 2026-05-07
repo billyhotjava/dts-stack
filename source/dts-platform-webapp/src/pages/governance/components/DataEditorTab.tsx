@@ -173,11 +173,11 @@ export default function DataEditorTab({ canManage }: { canManage: boolean }) {
 	];
 
 	const logColumns: ColumnsType<AuditLog> = [
-		{ title: "表", dataIndex: "tableName", width: 160, render: (v) => v || "-" },
+		{ title: "表", dataIndex: "tableName", width: 160, render: (v) => v || "-" , sorter: (a, b) => (a.tableName || "").localeCompare(b.tableName || "") },
 		{ title: "行ID", dataIndex: "rowId", width: 120, render: (v) => v || "-" },
 		{ title: "操作", dataIndex: "action", width: 100, render: (v) => <Tag>{v || "-"}</Tag> },
 		{ title: "操作人", dataIndex: "changedBy", width: 120, render: (v) => v || "-" },
-		{ title: "时间", dataIndex: "changedAt", width: 180, render: (v) => v || "-" },
+		{ title: "时间", dataIndex: "changedAt", width: 180, render: (v) => v || "-" , sorter: (a, b) => { const ta = a.changedAt ? new Date(a.changedAt as any).getTime() : 0; const tb = b.changedAt ? new Date(b.changedAt as any).getTime() : 0; return ta - tb; } },
 		{ title: "详情", dataIndex: "details", ellipsis: true, render: (v) => v || "-" },
 	];
 

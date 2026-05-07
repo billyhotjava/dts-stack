@@ -1,10 +1,22 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+
 import type { ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react-dom/test-utils";
+import { MemoryRouter } from "react-router";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/components/workflow", () => ({
+	BlockSelectorPanel: () => <div data-testid="block-selector-panel">blocks</div>,
+	deserializeDsl: () => ({ success: true }),
+	serializeDsl: () => ({ dslVersion: "1.0", nodes: [], edges: [] }),
+	useWorkflowStore: {
+		getState: () => ({
+			edges: [],
+			nodes: [],
+			viewport: { x: 0, y: 0, zoom: 1 },
+		}),
+	},
 	WorkflowCanvas: () => <div data-testid="workflow-canvas">canvas</div>,
 }));
 
@@ -29,7 +41,7 @@ function render(node: ReactNode): HTMLDivElement {
 
 afterEach(() => {
 	if (root && host) {
-		act(() => root!.unmount());
+		act(() => root?.unmount());
 		document.body.removeChild(host);
 	}
 	root = null;
@@ -38,7 +50,11 @@ afterEach(() => {
 
 describe("OrchestrationPage", () => {
 	it("renders both tab labels and defaults to canvas", () => {
-		const container = render(<OrchestrationPage />);
+		const container = render(
+			<MemoryRouter>
+				<OrchestrationPage />
+			</MemoryRouter>,
+		);
 		expect(container.textContent).toContain("编排画布");
 		expect(container.textContent).toContain("运行实例");
 		// 默认激活 canvas tab
@@ -46,9 +62,13 @@ describe("OrchestrationPage", () => {
 	});
 
 	it("switches to runs tab when 运行实例 is clicked", () => {
-		const container = render(<OrchestrationPage />);
-		const runsTab = Array.from(container.querySelectorAll('[role="tab"]')).find(
-			(el) => el.textContent?.includes("运行实例"),
+		const container = render(
+			<MemoryRouter>
+				<OrchestrationPage />
+			</MemoryRouter>,
+		);
+		const runsTab = Array.from(container.querySelectorAll('[role="tab"]')).find((el) =>
+			el.textContent?.includes("运行实例"),
 		) as HTMLElement | undefined;
 		expect(runsTab).not.toBeUndefined();
 		act(() => {

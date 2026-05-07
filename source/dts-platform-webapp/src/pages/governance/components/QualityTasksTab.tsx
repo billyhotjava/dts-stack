@@ -6,22 +6,32 @@ import {
 	DatePicker,
 	Descriptions,
 	Drawer,
+	Form,
+	Input,
+	InputNumber,
+	Modal,
+	Popconfirm,
 	Progress,
 	Select,
 	Space,
+	Switch,
 	Tag,
 } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import {
+	DeleteOutlined,
 	EyeOutlined,
 	PauseCircleOutlined,
 	PlayCircleOutlined,
 	EditOutlined,
+	PlusOutlined,
 	ReloadOutlined,
 } from "@ant-design/icons";
 import { useSearchParams } from "react-router";
 import {
+	createQualityTask,
+	deleteQualityTask,
 	getQualityRun,
 	listDatasets,
 	listQualityRules,
@@ -29,7 +39,9 @@ import {
 	listQualityTasks,
 	toggleQualityTask,
 	triggerQualityTask,
+	updateQualityTask,
 } from "@/api/platformApi";
+import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { formatTime } from "@/utils/textUtils";
 
 const { RangePicker } = DatePicker;
@@ -41,9 +53,19 @@ type QualityTask = {
 	name?: string;
 	datasetId?: string;
 	ruleId?: string;
+	ownerDept?: string;
 	intervalMinutes?: number;
 	enabled?: boolean;
 	lastTriggeredAt?: string;
+};
+
+type QualityTaskForm = {
+	name: string;
+	datasetId: string;
+	ruleId?: string;
+	intervalMinutes: number;
+	enabled: boolean;
+	ownerDept?: string;
 };
 
 type QualityRunRow = {
@@ -80,9 +102,13 @@ type RunFilters = {
 
 const STATUS_COLOR: Record<string, string> = {
 	SUCCESS: "green",
+	SUCCEEDED: "green",
+	PASSED: "green",
 	FAILED: "red",
+	ERROR: "red",
 	RUNNING: "blue",
 	QUEUED: "default",
+	SKIPPED: "default",
 };
 
 const TRIGGER_LABEL: Record<string, string> = {
@@ -102,13 +128,17 @@ const STATUS_OPTIONS = [
 	{ label: "排队中", value: "QUEUED" },
 	{ label: "运行中", value: "RUNNING" },
 	{ label: "成功", value: "SUCCESS" },
+	{ label: "成功", value: "SUCCEEDED" },
 	{ label: "失败", value: "FAILED" },
 ];
+
+const ALL_RULES_VALUE = "__ALL_RULES__";
 
 /* ---------- component ---------- */
 
 export default function QualityTasksTab() {
 	const [, setSearchParams] = useSearchParams();
+	const canManage = useGovernanceManageAccess();
 
 	/* --- reference data --- */
 	const [datasets, setDatasets] = useState<{ id: string; name: string }[]>([]);
@@ -118,6 +148,10 @@ export default function QualityTasksTab() {
 	const [tasks, setTasks] = useState<QualityTask[]>([]);
 	const [tasksLoading, setTasksLoading] = useState(false);
 	const [actionTaskId, setActionTaskId] = useState("");
+	const [taskModalOpen, setTaskModalOpen] = useState(false);
+	const [editingTask, setEditingTask] = useState<QualityTask | null>(null);
+	const [savingTask, setSavingTask] = useState(false);
+	const [taskForm] = Form.useForm<QualityTaskForm>();
 
 	/* --- execution history --- */
 	const [runs, setRuns] = useState<QualityRunRow[]>([]);
@@ -153,6 +187,10 @@ export default function QualityTasksTab() {
 		() => rules.map((r) => ({ label: r.name, value: r.id })),
 		[rules],
 	);
+	const taskRuleOptions = useMemo(
+		() => [{ label: "自动匹配数据集全部规则", value: ALL_RULES_VALUE }, ...ruleOptions],
+		[ruleOptions],
+	);
 
 	/* --- loaders --- */
 
@@ -186,21 +224,22 @@ export default function QualityTasksTab() {
 	const loadRuns = useCallback(async () => {
 		setRunsLoading(true);
 		try {
+			const requestLimit = Math.max(runPage * runPageSize, runPageSize);
 			const params: Record<string, any> = {
-				page: runPage - 1,
-				size: runPageSize,
+				limit: requestLimit,
 			};
 			if (runFilters.triggerType) params.triggerType = runFilters.triggerType;
 			if (runFilters.status) params.status = runFilters.status;
 			if (runFilters.ruleId) params.ruleId = runFilters.ruleId;
 			if (runFilters.datasetId) params.datasetId = runFilters.datasetId;
-			if (runFilters.dateRange?.[0]) params.startFrom = runFilters.dateRange[0].format("YYYY-MM-DD");
-			if (runFilters.dateRange?.[1]) params.startTo = runFilters.dateRange[1].format("YYYY-MM-DD");
+			if (runFilters.dateRange?.[0]) params.startedFrom = runFilters.dateRange[0].startOf("day").toISOString();
+			if (runFilters.dateRange?.[1]) params.startedTo = runFilters.dateRange[1].endOf("day").toISOString();
 
 			const resp: any = await listQualityRuns(params);
 			// API may return paginated or plain array
 			if (Array.isArray(resp)) {
-				setRuns(resp);
+				const start = (runPage - 1) * runPageSize;
+				setRuns(resp.slice(start, start + runPageSize));
 				setRunTotal(resp.length);
 			} else if (resp?.content) {
 				setRuns(Array.isArray(resp.content) ? resp.content : []);
@@ -256,6 +295,62 @@ export default function QualityTasksTab() {
 		}
 	};
 
+	const openTaskModal = (task?: QualityTask) => {
+		setEditingTask(task || null);
+		taskForm.setFieldsValue({
+			name: String(task?.name || ""),
+			datasetId: String(task?.datasetId || ""),
+			ruleId: task?.ruleId ? String(task.ruleId) : ALL_RULES_VALUE,
+			intervalMinutes: task?.intervalMinutes || 60,
+			enabled: task?.enabled !== false,
+			ownerDept: String(task?.ownerDept || ""),
+		});
+		setTaskModalOpen(true);
+	};
+
+	const saveTask = async () => {
+		try {
+			const values = await taskForm.validateFields();
+			setSavingTask(true);
+			const payload = {
+				name: values.name,
+				datasetId: values.datasetId,
+				ruleId: values.ruleId && values.ruleId !== ALL_RULES_VALUE ? values.ruleId : undefined,
+				intervalMinutes: Number(values.intervalMinutes || 60),
+				enabled: values.enabled !== false,
+				ownerDept: values.ownerDept?.trim() || undefined,
+			};
+			if (editingTask?.id) {
+				await updateQualityTask(editingTask.id, payload);
+				toast.success("调度计划已更新");
+			} else {
+				await createQualityTask(payload);
+				toast.success("调度计划已创建");
+			}
+			setTaskModalOpen(false);
+			await loadTasks();
+		} catch (err: any) {
+			if (err?.errorFields) return;
+			toast.error(err?.message || "调度计划保存失败");
+		} finally {
+			setSavingTask(false);
+		}
+	};
+
+	const handleDeleteTask = async (task: QualityTask) => {
+		if (!task.id) return;
+		try {
+			setActionTaskId(task.id);
+			await deleteQualityTask(task.id);
+			toast.success("调度计划已删除");
+			await loadTasks();
+		} catch (err: any) {
+			toast.error(err?.message || "调度计划删除失败");
+		} finally {
+			setActionTaskId("");
+		}
+	};
+
 	/* --- detail drawer --- */
 
 	const openDetail = async (run: QualityRunRow) => {
@@ -284,11 +379,11 @@ export default function QualityTasksTab() {
 	/* --- schedule columns --- */
 
 	const scheduleColumns: ColumnsType<QualityTask> = [
-		{ title: "名称", dataIndex: "name", render: (v) => v || "-" },
+		{ title: "名称", dataIndex: "name", render: (v) => v || "-" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 		{
 			title: "关联规则",
 			dataIndex: "ruleId",
-			render: (v) => (v ? ruleMap.get(String(v)) || v : "全部"),
+			render: (v) => (v ? ruleMap.get(String(v)) || v : "自动匹配全规则"),
 		},
 		{
 			title: "数据集",
@@ -309,14 +404,15 @@ export default function QualityTasksTab() {
 		},
 		{
 			title: "操作",
-			width: 220,
+			width: 320,
 			render: (_, record) => {
 				const busy = actionTaskId === record.id;
 				return (
-					<Space>
+					<Space wrap>
 						<Button
 							size="small"
 							icon={record.enabled ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
+							disabled={!canManage}
 							loading={busy}
 							onClick={() => handleToggleTask(record)}
 						>
@@ -325,14 +421,26 @@ export default function QualityTasksTab() {
 						<Button
 							size="small"
 							icon={<PlayCircleOutlined />}
+							disabled={!canManage}
 							loading={busy}
 							onClick={() => handleTriggerTask(record)}
 						>
 							立即执行
 						</Button>
-						<Button size="small" icon={<EditOutlined />} disabled>
+						<Button size="small" icon={<EditOutlined />} disabled={!canManage} onClick={() => openTaskModal(record)}>
 							编辑
 						</Button>
+						<Popconfirm
+							title="确认删除该调度计划？"
+							okText="删除"
+							cancelText="取消"
+							disabled={!canManage}
+							onConfirm={() => handleDeleteTask(record)}
+						>
+							<Button size="small" danger icon={<DeleteOutlined />} disabled={!canManage || busy}>
+								删除
+							</Button>
+						</Popconfirm>
 					</Space>
 				);
 			},
@@ -377,6 +485,11 @@ export default function QualityTasksTab() {
 		{
 			title: "开始时间",
 			dataIndex: "startedAt",
+			sorter: (a, b) => {
+				const ta = a.startedAt ? new Date(a.startedAt as any).getTime() : 0;
+				const tb = b.startedAt ? new Date(b.startedAt as any).getTime() : 0;
+				return ta - tb;
+			},
 			width: 180,
 			render: formatTime,
 		},
@@ -437,9 +550,14 @@ export default function QualityTasksTab() {
 			<Card
 				title="调度计划"
 				extra={
-					<Button icon={<ReloadOutlined />} onClick={() => void loadTasks()}>
-						刷新
-					</Button>
+					<Space>
+						<Button icon={<ReloadOutlined />} onClick={() => void loadTasks()}>
+							刷新
+						</Button>
+						<Button type="primary" icon={<PlusOutlined />} disabled={!canManage} onClick={() => openTaskModal()}>
+							新增计划
+						</Button>
+					</Space>
 				}
 			>
 				<CompactTable
@@ -452,6 +570,38 @@ export default function QualityTasksTab() {
 					locale={{ emptyText: "暂无调度计划" }}
 				/>
 			</Card>
+
+			<Modal
+				open={taskModalOpen}
+				title={editingTask ? "编辑调度计划" : "新增调度计划"}
+				onCancel={() => setTaskModalOpen(false)}
+				onOk={saveTask}
+				okText="保存"
+				destroyOnClose
+				confirmLoading={savingTask}
+				width={720}
+			>
+				<Form form={taskForm} layout="vertical" initialValues={{ intervalMinutes: 60, enabled: true, ruleId: ALL_RULES_VALUE }}>
+					<Form.Item label="计划名称" name="name" rules={[{ required: true, message: "请输入计划名称" }]}>
+						<Input placeholder="例如：客户表每日巡检" />
+					</Form.Item>
+					<Form.Item label="数据集" name="datasetId" rules={[{ required: true, message: "请选择数据集" }]}>
+						<Select options={datasetOptions} showSearch optionFilterProp="label" />
+					</Form.Item>
+					<Form.Item label="规则范围" name="ruleId">
+						<Select options={taskRuleOptions} showSearch optionFilterProp="label" />
+					</Form.Item>
+					<Form.Item label="执行间隔(分钟)" name="intervalMinutes" rules={[{ required: true, message: "请输入执行间隔" }]}>
+						<InputNumber min={1} max={1440} style={{ width: "100%" }} />
+					</Form.Item>
+					<Form.Item label="归属部门(可选)" name="ownerDept">
+						<Input placeholder="默认按当前上下文自动填充" />
+					</Form.Item>
+					<Form.Item label="启用状态" name="enabled" valuePropName="checked">
+						<Switch />
+					</Form.Item>
+				</Form>
+			</Modal>
 
 			{/* Section 2: Execution History */}
 			<Card

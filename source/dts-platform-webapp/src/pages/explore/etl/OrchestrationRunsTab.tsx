@@ -286,6 +286,7 @@ export default function OrchestrationRunsTab() {
 		{
 			title: "DAG",
 			dataIndex: "dagId",
+			sorter: (a, b) => (a.dagId || "").localeCompare(b.dagId || ""),
 			key: "dagId",
 			width: 320,
 			render: (_, row) => (
@@ -361,6 +362,11 @@ export default function OrchestrationRunsTab() {
 		{
 			title: "调度时间",
 			dataIndex: "logicalDate",
+			sorter: (a, b) => {
+				const ta = a.logicalDate ? new Date(a.logicalDate as any).getTime() : 0;
+				const tb = b.logicalDate ? new Date(b.logicalDate as any).getTime() : 0;
+				return ta - tb;
+			},
 			key: "logicalDate",
 			width: 200,
 			render: (value) => formatDateTime(value),
@@ -368,6 +374,11 @@ export default function OrchestrationRunsTab() {
 		{
 			title: "开始时间",
 			dataIndex: "startDate",
+			sorter: (a, b) => {
+				const ta = a.startDate ? new Date(a.startDate as any).getTime() : 0;
+				const tb = b.startDate ? new Date(b.startDate as any).getTime() : 0;
+				return ta - tb;
+			},
 			key: "startDate",
 			width: 200,
 			render: (value) => formatDateTime(value),

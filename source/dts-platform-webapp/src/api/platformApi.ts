@@ -660,7 +660,7 @@ export const executeCleansing = (data: { runId: string; functionId: string }) =>
 
 // SQL Repair
 export const previewSqlRepair = (data: { sql: string; limit?: number }) =>
-	api.post<{ affectedRows: number; samples: { rowId: any; columnValues: Record<string, string> }[] }>({
+	api.post<{ affectedRows: number; samples: { rowId: any; columnValues: Record<string, string>; newValues?: Record<string, string> }[] }>({
 		url: "/governance/quality/sql-repair/preview",
 		data,
 	});

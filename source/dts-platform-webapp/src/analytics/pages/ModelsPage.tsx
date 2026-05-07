@@ -87,6 +87,7 @@ export default function ModelsPage() {
 		{
 			title: t(locale, "common.name"),
 			dataIndex: "name",
+			sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 			key: "name",
 			render: (name: string, record) => (
 				<>

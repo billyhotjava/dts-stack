@@ -168,6 +168,7 @@ export default function HomePage() {
 		{
 			title: t(locale, "common.name"),
 			dataIndex: "name",
+			sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 			key: "name",
 			ellipsis: true,
 			render: (name: string, record) => (
@@ -200,6 +201,11 @@ export default function HomePage() {
 		{
 			title: t(locale, "common.updatedAt"),
 			dataIndex: "updatedAt",
+			sorter: (a, b) => {
+				const ta = a.updatedAt ? new Date(a.updatedAt as any).getTime() : 0;
+				const tb = b.updatedAt ? new Date(b.updatedAt as any).getTime() : 0;
+				return ta - tb;
+			},
 			key: "updatedAt",
 			width: 150,
 			render: (v: string) => <span style={{ color: "var(--color-text-secondary)", fontSize: 12 }}>{fmtTime(v)}</span>,

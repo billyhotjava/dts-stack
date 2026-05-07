@@ -87,8 +87,8 @@ export default function OpsInstancesPage() {
 		{ title: "类型", dataIndex: "entryKey", width: 140, render: (v) => <Tag>{v || "-"}</Tag> },
 		{ title: "DAG", dataIndex: "dagId", width: 160, render: (v) => v || "-" },
 		{ title: "状态", dataIndex: "status", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
-		{ title: "开始时间", dataIndex: "startedAt", render: (v) => formatDate(v) },
-		{ title: "结束时间", dataIndex: "finishedAt", render: (v) => formatDate(v) },
+		{ title: "开始时间", dataIndex: "startedAt", render: (v) => formatDate(v) , sorter: (a, b) => { const ta = a.startedAt ? new Date(a.startedAt as any).getTime() : 0; const tb = b.startedAt ? new Date(b.startedAt as any).getTime() : 0; return ta - tb; } },
+		{ title: "结束时间", dataIndex: "finishedAt", render: (v) => formatDate(v) , sorter: (a, b) => { const ta = a.finishedAt ? new Date(a.finishedAt as any).getTime() : 0; const tb = b.finishedAt ? new Date(b.finishedAt as any).getTime() : 0; return ta - tb; } },
 		{ title: "耗时(ms)", dataIndex: "durationMs", render: (v) => v ?? "-" },
 		{
 			title: "日志/备注",

@@ -211,6 +211,7 @@ export function QueryDatasetManager() {
 		{
 			title: "名称",
 			dataIndex: "name",
+			sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 			width: 220,
 			render: (_, record) => (
 				<div>
@@ -254,6 +255,11 @@ export function QueryDatasetManager() {
 		{
 			title: "更新时间",
 			dataIndex: "lastModifiedDate",
+			sorter: (a, b) => {
+				const ta = a.lastModifiedDate ? new Date(a.lastModifiedDate as any).getTime() : 0;
+				const tb = b.lastModifiedDate ? new Date(b.lastModifiedDate as any).getTime() : 0;
+				return ta - tb;
+			},
 			width: 180,
 			render: (value) => formatTime(value),
 		},
@@ -275,6 +281,11 @@ export function QueryDatasetManager() {
 		{
 			title: "发布时间",
 			dataIndex: "publishedAt",
+			sorter: (a, b) => {
+				const ta = a.publishedAt ? new Date(a.publishedAt as any).getTime() : 0;
+				const tb = b.publishedAt ? new Date(b.publishedAt as any).getTime() : 0;
+				return ta - tb;
+			},
 			width: 180,
 			render: (value) => formatTime(value),
 		},
@@ -313,6 +324,7 @@ export function QueryDatasetManager() {
 		{
 			title: "看板名称",
 			dataIndex: "title",
+			sorter: (a, b) => (a.title || "").localeCompare(b.title || ""),
 			render: (_, record) => (
 				<div>
 					<div className="font-medium">{record.title || "-"}</div>

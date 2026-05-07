@@ -296,6 +296,20 @@ public class GovernanceResource {
         return ApiResponses.ok(dto);
     }
 
+    @GetMapping("/quality/rules/{id}/history")
+    public ApiResponse<List<Map<String, Object>>> getRuleHistory(
+        @PathVariable UUID id,
+        @RequestParam(value = "limit", defaultValue = "10") int limit
+    ) {
+        int safeLimit = Math.max(1, Math.min(limit, 100));
+        List<Map<String, Object>> history = qualityRunService
+            .recentByRule(id, safeLimit)
+            .stream()
+            .map(this::toRuleHistoryItem)
+            .toList();
+        return ApiResponses.ok(history);
+    }
+
     @PostMapping("/quality/rules/{id}/versions/{version}/status")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<QualityRuleVersionDto> changeRuleVersionStatus(
@@ -314,6 +328,32 @@ public class GovernanceResource {
                 activeDept
             )
         );
+    }
+
+    private Map<String, Object> toRuleHistoryItem(QualityRunDto run) {
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("runId", run.getId());
+        item.put("time", run.getFinishedAt() != null ? run.getFinishedAt() : run.getStartedAt());
+        item.put("status", isQualityRunPassed(run.getStatus()) ? "PASSED" : "FAILED");
+        item.put("passRate", calculatePassRate(run));
+        item.put("failingRows", run.getFailingRowCount() != null ? run.getFailingRowCount() : 0);
+        return item;
+    }
+
+    private boolean isQualityRunPassed(String status) {
+        return "SUCCESS".equalsIgnoreCase(status) || "SUCCEEDED".equalsIgnoreCase(status) || "PASSED".equalsIgnoreCase(status);
+    }
+
+    private Integer calculatePassRate(QualityRunDto run) {
+        Integer total = run.getRowsTotal();
+        if (total != null && total > 0) {
+            int failing = run.getFailingRowCount() != null ? run.getFailingRowCount() : 0;
+            return Math.max(0, Math.min(100, Math.round(((total - failing) * 100.0f) / total)));
+        }
+        if (run.getStatus() == null) {
+            return null;
+        }
+        return isQualityRunPassed(run.getStatus()) ? 100 : 0;
     }
 
     @PostMapping("/quality/runs")
@@ -395,11 +435,16 @@ public class GovernanceResource {
         @RequestParam(value = "ruleId", required = false) UUID ruleId,
         @RequestParam(value = "datasetId", required = false) UUID datasetId,
         @RequestParam(value = "status", required = false) String status,
+        @RequestParam(value = "triggerType", required = false) String triggerType,
         @RequestParam(value = "startedFrom", required = false) Instant startedFrom,
         @RequestParam(value = "startedTo", required = false) Instant startedTo,
+        @RequestParam(value = "startFrom", required = false) Instant startFrom,
+        @RequestParam(value = "startTo", required = false) Instant startTo,
         @RequestParam(value = "limit", defaultValue = "10") int limit
     ) {
-        List<QualityRunDto> runs = qualityRunService.listRuns(ruleId, datasetId, status, startedFrom, startedTo, limit);
+        Instant effectiveStartedFrom = startedFrom != null ? startedFrom : startFrom;
+        Instant effectiveStartedTo = startedTo != null ? startedTo : startTo;
+        List<QualityRunDto> runs = qualityRunService.listRuns(ruleId, datasetId, status, triggerType, effectiveStartedFrom, effectiveStartedTo, limit);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("summary", "查看质量运行记录");
         payload.put("limit", limit);
@@ -413,11 +458,14 @@ public class GovernanceResource {
         if (StringUtils.hasText(status)) {
             payload.put("status", status.trim().toUpperCase(Locale.ROOT));
         }
-        if (startedFrom != null) {
-            payload.put("startedFrom", startedFrom.toString());
+        if (StringUtils.hasText(triggerType)) {
+            payload.put("triggerType", triggerType.trim().toUpperCase(Locale.ROOT));
         }
-        if (startedTo != null) {
-            payload.put("startedTo", startedTo.toString());
+        if (effectiveStartedFrom != null) {
+            payload.put("startedFrom", effectiveStartedFrom.toString());
+        }
+        if (effectiveStartedTo != null) {
+            payload.put("startedTo", effectiveStartedTo.toString());
         }
         String resourceId = ruleId != null
             ? ruleId.toString()
@@ -1076,6 +1124,148 @@ public class GovernanceResource {
         return ApiResponses.ok(result);
     }
 
+    @PostMapping("/quality/cleansing/preview")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> previewQualityCleansing(@RequestBody Map<String, Object> body) {
+        UUID runId = UUID.fromString(String.valueOf(body.get("runId")));
+        UUID functionId = UUID.fromString(String.valueOf(body.get("functionId")));
+        int limit = body.containsKey("limit") ? Math.max(1, Math.min(((Number) body.get("limit")).intValue(), 100)) : 20;
+        GovCleansingFunction function = resolveCleansingFunction(functionId);
+        validateCleansingFunctionReady(function);
+        List<Map<String, Object>> samples = new ArrayList<>();
+        long affectedRows = 0;
+        long unresolvableRows = 0;
+        for (GovQualityFailingRow row : failingRowRepository.findByRunId(runId)) {
+            try {
+                Map<String, Object> sample = previewCleansingRow(row, function);
+                if (sample == null) {
+                    unresolvableRows++;
+                    continue;
+                }
+                if (!String.valueOf(sample.get("before")).equals(String.valueOf(sample.get("after")))) {
+                    affectedRows++;
+                    if (samples.size() < limit) {
+                        samples.add(sample);
+                    }
+                }
+            } catch (Exception ex) {
+                unresolvableRows++;
+                log.debug("Failed to preview cleansing row {}: {}", row.getId(), ex.getMessage());
+            }
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("affectedRows", affectedRows);
+        result.put("unresolvableRows", unresolvableRows);
+        result.put("samples", samples);
+        return ApiResponses.ok(result);
+    }
+
+    @PostMapping("/quality/cleansing/execute")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> executeQualityCleansing(@RequestBody Map<String, Object> body) {
+        UUID runId = UUID.fromString(String.valueOf(body.get("runId")));
+        UUID functionId = UUID.fromString(String.valueOf(body.get("functionId")));
+        GovCleansingFunction function = resolveCleansingFunction(functionId);
+        validateCleansingFunctionReady(function);
+        int affectedRows = 0;
+        int unresolvableRows = 0;
+        for (GovQualityFailingRow row : failingRowRepository.findByRunId(runId)) {
+            try {
+                affectedRows += executeCleansingRow(row, function);
+            } catch (Exception ex) {
+                unresolvableRows++;
+                log.debug("Failed to execute cleansing row {}: {}", row.getId(), ex.getMessage());
+            }
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("affectedRows", affectedRows);
+        result.put("unresolvableRows", unresolvableRows);
+        return ApiResponses.ok(result);
+    }
+
+    private GovCleansingFunction resolveCleansingFunction(UUID functionId) {
+        GovCleansingFunction function = cleansingFunctionRepository
+            .findById(functionId)
+            .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("清洗函数不存在"));
+        if (!Boolean.TRUE.equals(function.getEnabled())) {
+            throw new IllegalArgumentException("清洗函数未启用");
+        }
+        return function;
+    }
+
+    private void validateCleansingFunctionReady(GovCleansingFunction function) {
+        String expression = function.getSqlExpression();
+        if (!StringUtils.hasText(expression)) {
+            throw new IllegalArgumentException("清洗函数 SQL 表达式为空");
+        }
+        String unresolved = expression.replace("{{column}}", "");
+        if (unresolved.contains("{{") || unresolved.contains("}}")) {
+            throw new IllegalArgumentException("清洗函数包含未配置参数，请先在清洗函数管理中补齐参数化表达式");
+        }
+    }
+
+    private Map<String, Object> previewCleansingRow(GovQualityFailingRow row, GovCleansingFunction function) throws java.sql.SQLException {
+        String tableName = safeIdentifier(row.getTableName(), "表名");
+        String columnName = safeIdentifier(row.getColumnName(), "字段名");
+        String expression = renderCleansingExpression(function, columnName);
+        String sql = "SELECT " + quoteIdentifier(columnName) + " AS before_value, " + expression + " AS after_value FROM "
+            + quoteIdentifier(tableName) + " WHERE id::text = ? LIMIT 1";
+        try (Connection conn = dataSource.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, row.getRowId());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return null;
+                }
+                Object before = rs.getObject("before_value");
+                Object after = rs.getObject("after_value");
+                Map<String, Object> sample = new LinkedHashMap<>();
+                sample.put("rowId", row.getRowId());
+                sample.put("before", before != null ? String.valueOf(before) : "");
+                sample.put("after", after != null ? String.valueOf(after) : "");
+                return sample;
+            }
+        }
+    }
+
+    private int executeCleansingRow(GovQualityFailingRow row, GovCleansingFunction function) throws java.sql.SQLException {
+        String tableName = safeIdentifier(row.getTableName(), "表名");
+        String columnName = safeIdentifier(row.getColumnName(), "字段名");
+        String expression = renderCleansingExpression(function, columnName);
+        String sql = "UPDATE " + quoteIdentifier(tableName)
+            + " SET " + quoteIdentifier(columnName) + " = " + expression
+            + " WHERE id::text = ?"
+            + " AND " + quoteIdentifier(columnName) + "::text IS DISTINCT FROM (" + expression + ")::text";
+        try (Connection conn = dataSource.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, row.getRowId());
+            return ps.executeUpdate();
+        }
+    }
+
+    private String renderCleansingExpression(GovCleansingFunction function, String columnName) {
+        String rawExpression = function.getSqlExpression();
+        if (!StringUtils.hasText(rawExpression)) {
+            throw new IllegalArgumentException("清洗函数 SQL 表达式为空");
+        }
+        String normalized = rawExpression.trim();
+        if (normalized.matches("(?is).*\\b(INSERT|DELETE|DROP|TRUNCATE|ALTER|CREATE|GRANT|REVOKE|COPY|EXEC|EXECUTE|INTO|FROM|UNION)\\b.*")
+            || normalized.contains(";")
+            || normalized.contains("--")) {
+            throw new IllegalArgumentException("清洗函数 SQL 表达式包含危险关键字");
+        }
+        return normalized.replace("{{column}}", quoteIdentifier(columnName));
+    }
+
+    private String safeIdentifier(String value, String label) {
+        if (!StringUtils.hasText(value) || !value.matches("^[a-zA-Z_][a-zA-Z0-9_]*$")) {
+            throw new IllegalArgumentException(label + "不合法");
+        }
+        return value;
+    }
+
+    private String quoteIdentifier(String identifier) {
+        return "\"" + identifier.replace("\"", "\"\"") + "\"";
+    }
+
     // Cleansing function CRUD APIs ------------------------------------------
 
     @GetMapping("/cleansing/functions")
@@ -1169,9 +1359,13 @@ public class GovernanceResource {
         @RequestBody Map<String, String> body
     ) {
         String reason = body.remove("_reason");
+        String failingRowId = body.remove("_failingRowId");
         String actor = SecurityUtils.getCurrentUserLogin().orElseThrow(() ->
             new IllegalStateException("无法获取当前用户"));
         odsDataEditorService.updateRow(tableName, rowId, body, reason, actor);
+        if (StringUtils.hasText(failingRowId)) {
+            failingRowRepository.deleteById(UUID.fromString(failingRowId));
+        }
         return ApiResponses.ok(Boolean.TRUE);
     }
 

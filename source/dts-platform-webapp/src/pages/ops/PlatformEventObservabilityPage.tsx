@@ -168,7 +168,7 @@ export default function PlatformEventObservabilityPage() {
 		{ title: "次数", dataIndex: "dispatchAttempts", key: "dispatchAttempts", width: 80, render: (v) => v ?? 0 },
 		{ title: "动作", dataIndex: "action", key: "action", width: 100, render: (v) => v || "-" },
 		{ title: "审计动作", dataIndex: "auditActionCode", key: "auditActionCode", width: 180, ellipsis: true, render: (v) => v || "-" },
-		{ title: "发生时间", dataIndex: "occurredAt", key: "occurredAt", width: 190, render: formatDateTime },
+		{ title: "发生时间", dataIndex: "occurredAt", key: "occurredAt", width: 190, render: formatDateTime , sorter: (a, b) => { const ta = a.occurredAt ? new Date(a.occurredAt as any).getTime() : 0; const tb = b.occurredAt ? new Date(b.occurredAt as any).getTime() : 0; return ta - tb; } },
 		{ title: "错误", dataIndex: "dispatchError", key: "dispatchError", width: 220, ellipsis: true, render: (v) => v || "-" },
 	];
 

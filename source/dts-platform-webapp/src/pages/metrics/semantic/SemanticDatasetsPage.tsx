@@ -210,9 +210,9 @@ export default function SemanticDatasetsPage() {
 	);
 
 	const modelBaseColumns: ColumnsType<SemanticModel> = [
-		{ title: "模型", dataIndex: "name" },
+		{ title: "模型", dataIndex: "name" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 		{ title: "类型", dataIndex: "type", width: 90, render: (value) => value || "-" },
-		{ title: "表名", dataIndex: "tableName", render: (value) => value || "-" },
+		{ title: "表名", dataIndex: "tableName", render: (value) => value || "-" , sorter: (a, b) => (a.tableName || "").localeCompare(b.tableName || "") },
 		{ title: "状态", dataIndex: "status", width: 110, render: (value) => value || "-" },
 		{
 			title: "操作",

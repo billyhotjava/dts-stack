@@ -225,7 +225,7 @@ export default function ReleaseGovernancePage() {
 
 	const baseColumns: ColumnsType<CheckRow> = [
 		{ title: "域", dataIndex: "area", key: "area", width: 110, render: (value) => <Tag>{value}</Tag> },
-		{ title: "检查项", dataIndex: "name", key: "name" },
+		{ title: "检查项", dataIndex: "name", key: "name" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 		{ title: "结果", dataIndex: "passed", key: "passed", width: 100, render: (value) => <Tag color={value ? "green" : "red"}>{value ? "通过" : "未通过"}</Tag> },
 		{ title: "当前值", dataIndex: "actual", key: "actual", width: 140 },
 		{ title: "阈值", dataIndex: "threshold", key: "threshold", width: 120 },

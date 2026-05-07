@@ -932,6 +932,7 @@ export default function DataSourcesPage() {
 							{
 								title: "源字段",
 								dataIndex: "name",
+								sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 								key: "name",
 								width: 180,
 								render: (value: string, column: SchemaDiscoverColumn) => (
@@ -1303,10 +1304,11 @@ export default function DataSourcesPage() {
 
 	const columns = useMemo(
 			() => [
-				{ title: "名称", dataIndex: "name", key: "name", width: 180 },
+				{ title: "名称", dataIndex: "name", key: "name", width: 180 , sorter: (a: InfraDataSource, b: InfraDataSource) => (a.name || "").localeCompare(b.name || "") },
 				{
 					title: "连接器",
 					dataIndex: "connectorName",
+					sorter: (a: InfraDataSource, b: InfraDataSource) => (a.connectorName || "").localeCompare(b.connectorName || ""),
 					key: "connectorName",
 					width: 180,
 					render: (value: string, record: InfraDataSource) => value || record.connectorKey || inferConnectorKey(record.type, record.props) || "-",
@@ -1320,7 +1322,7 @@ export default function DataSourcesPage() {
 				render: (value: string, record: InfraDataSource) =>
 					isApiSourceType(record.type) ? readApiBaseUrl(record.props) || "-" : value || "-",
 			},
-			{ title: "用户名", dataIndex: "username", key: "username", width: 140 },
+			{ title: "用户名", dataIndex: "username", key: "username", width: 140 , sorter: (a: InfraDataSource, b: InfraDataSource) => (a.username || "").localeCompare(b.username || "") },
 			{
 				title: "状态",
 				dataIndex: "status",
@@ -1334,6 +1336,11 @@ export default function DataSourcesPage() {
 			{
 				title: "最近验证",
 				dataIndex: "lastVerifiedAt",
+				sorter: (a: InfraDataSource, b: InfraDataSource) => {
+					const ta = a.lastVerifiedAt ? new Date(a.lastVerifiedAt as any).getTime() : 0;
+					const tb = b.lastVerifiedAt ? new Date(b.lastVerifiedAt as any).getTime() : 0;
+					return ta - tb;
+				},
 				key: "lastVerifiedAt",
 				width: 180,
 				render: (value: string) => formatTime(value),

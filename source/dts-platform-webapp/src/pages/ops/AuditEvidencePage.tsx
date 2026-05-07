@@ -150,7 +150,7 @@ export default function AuditEvidencePage() {
 		{ title: "事件数", dataIndex: "count", key: "count", width: 100 },
 		{ title: "业务状态", dataIndex: "status", key: "status", width: 110, render: (value) => <Tag color={tagColor(value)}>{value || "-"}</Tag> },
 		{ title: "分发状态", dataIndex: "dispatchStatus", key: "dispatchStatus", width: 110, render: (value) => <Tag color={tagColor(value)}>{value || "-"}</Tag> },
-		{ title: "最近发生", dataIndex: "lastOccurredAt", key: "lastOccurredAt", width: 190, render: formatDateTime },
+		{ title: "最近发生", dataIndex: "lastOccurredAt", key: "lastOccurredAt", width: 190, render: formatDateTime , sorter: (a, b) => { const ta = a.lastOccurredAt ? new Date(a.lastOccurredAt as any).getTime() : 0; const tb = b.lastOccurredAt ? new Date(b.lastOccurredAt as any).getTime() : 0; return ta - tb; } },
 		{ title: "最近事件", dataIndex: "lastEventId", key: "lastEventId", width: 220, ellipsis: true },
 	];
 

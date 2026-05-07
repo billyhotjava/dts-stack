@@ -370,7 +370,7 @@ export default function IssueWorkflowPanel({ initialDatasetId, initialStatus }: 
 	};
 
 	const columns: ColumnsType<IssueTicket> = [
-		{ title: "标题", dataIndex: "title", render: (value) => value || "-" },
+		{ title: "标题", dataIndex: "title", render: (value) => value || "-" , sorter: (a, b) => (a.title || "").localeCompare(b.title || "") },
 		{
 			title: "状态",
 			dataIndex: "status",
@@ -392,7 +392,7 @@ export default function IssueWorkflowPanel({ initialDatasetId, initialStatus }: 
 		{ title: "责任人", dataIndex: "assignedTo", width: 120, render: (value) => value || "-" },
 		{ title: "归属部门", dataIndex: "ownerDept", width: 140, render: (value) => value || "-" },
 		{ title: "来源", dataIndex: "sourceType", width: 120, render: (value) => value || "-" },
-		{ title: "最后更新", dataIndex: "lastModifiedDate", width: 200, render: (value) => formatDateTime(value) },
+		{ title: "最后更新", dataIndex: "lastModifiedDate", width: 200, render: (value) => formatDateTime(value) , sorter: (a, b) => { const ta = a.lastModifiedDate ? new Date(a.lastModifiedDate as any).getTime() : 0; const tb = b.lastModifiedDate ? new Date(b.lastModifiedDate as any).getTime() : 0; return ta - tb; } },
 		{
 			title: "操作",
 			width: 260,
@@ -705,7 +705,7 @@ export default function IssueWorkflowPanel({ initialDatasetId, initialStatus }: 
 								{ title: "动作", dataIndex: "actionType", width: 120 },
 								{ title: "备注", dataIndex: "notes", render: (value) => value || "-" },
 								{ title: "执行人", dataIndex: "actor", width: 140, render: (value) => value || "-" },
-								{ title: "时间", dataIndex: "createdDate", width: 200, render: (value) => formatDateTime(value) },
+								{ title: "时间", dataIndex: "createdDate", width: 200, render: (value) => formatDateTime(value) , sorter: (a, b) => { const ta = a.createdDate ? new Date(a.createdDate as any).getTime() : 0; const tb = b.createdDate ? new Date(b.createdDate as any).getTime() : 0; return ta - tb; } },
 							]}
 							dataSource={Array.isArray(detailIssue?.actions) ? detailIssue?.actions : []}
 							pagination={false}

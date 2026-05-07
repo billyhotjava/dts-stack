@@ -98,8 +98,8 @@ export default function CleansingTab({ canManage }: { canManage: boolean }) {
 	};
 
 	const columns: ColumnsType<CleansingFn> = [
-		{ title: "编码", dataIndex: "code", width: 160, render: (v) => v || "-" },
-		{ title: "名称", dataIndex: "name", render: (v) => v || "-" },
+		{ title: "编码", dataIndex: "code", width: 160, render: (v) => v || "-" , sorter: (a, b) => (a.code || "").localeCompare(b.code || "") },
+		{ title: "名称", dataIndex: "name", render: (v) => v || "-" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 		{ title: "SQL 表达式", dataIndex: "sqlExpression", ellipsis: true, render: (v) => v || "-" },
 		{ title: "执行顺序", dataIndex: "displayOrder", width: 100, render: (v) => v ?? "-" },
 		{

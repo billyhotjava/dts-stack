@@ -776,6 +776,11 @@ export interface ParseResult {
 }
 
 export interface PreCheckResult {
+	status?: string;
+	totalRules?: number;
+	passedRules?: number;
+	failedRules?: number;
+	failedRuleNames?: string[];
 	totalRows: number;
 	passedRows: number;
 	failedRows: number;

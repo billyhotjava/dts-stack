@@ -370,10 +370,10 @@ function DatasetFieldsTab({ datasetId, columns }: { datasetId: string; columns?:
 			dataSource={fields}
 			pagination={false}
 			columns={[
-				{ title: "字段名", dataIndex: "name", render: (v) => <span className="font-mono text-xs">{v}</span> },
+				{ title: "字段名", dataIndex: "name", render: (v) => <span className="font-mono text-xs">{v}</span> , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 				{ title: "类型", dataIndex: "dataType", width: 120 },
 				{ title: "描述", dataIndex: "comment", render: (v) => v ?? "-" },
-				{ title: "所属表", dataIndex: "tableName", render: (v) => v ?? "-" },
+				{ title: "所属表", dataIndex: "tableName", render: (v) => v ?? "-" , sorter: (a, b) => (a.tableName || "").localeCompare(b.tableName || "") },
 			]}
 		/>
 	);
@@ -431,7 +431,7 @@ function DatasetGovernanceTab({ datasetId }: { datasetId: string }) {
 						dataSource={indicators}
 						pagination={false}
 						columns={[
-							{ title: "指标名称", dataIndex: "name", render: (v: any) => v ?? "-" },
+							{ title: "指标名称", dataIndex: "name", render: (v: any) => v ?? "-" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 							{ title: "类型", dataIndex: "type", width: 100, render: (v: any) => v ? <Tag>{v}</Tag> : "-" },
 							{ title: "状态", dataIndex: "status", width: 90, render: (v: any) => v ? <Tag color={v === "PUBLISHED" ? "green" : "default"}>{v}</Tag> : "-" },
 						]}

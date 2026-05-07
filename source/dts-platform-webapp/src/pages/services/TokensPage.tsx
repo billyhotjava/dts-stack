@@ -68,8 +68,8 @@ export default function Page() {
 
 	const columns: ColumnsType<TokenInfo> = [
 		{ title: "令牌提示", dataIndex: "tokenHint", render: (v) => v || "-" },
-		{ title: "创建时间", dataIndex: "createdAt", render: (v) => formatDate(v) },
-		{ title: "过期时间", dataIndex: "expiresAt", render: (v) => formatDate(v) },
+		{ title: "创建时间", dataIndex: "createdAt", render: (v) => formatDate(v) , sorter: (a, b) => { const ta = a.createdAt ? new Date(a.createdAt as any).getTime() : 0; const tb = b.createdAt ? new Date(b.createdAt as any).getTime() : 0; return ta - tb; } },
+		{ title: "过期时间", dataIndex: "expiresAt", render: (v) => formatDate(v) , sorter: (a, b) => { const ta = a.expiresAt ? new Date(a.expiresAt as any).getTime() : 0; const tb = b.expiresAt ? new Date(b.expiresAt as any).getTime() : 0; return ta - tb; } },
 		{ title: "状态", dataIndex: "revoked", render: (v) => <Tag color={v ? "default" : "green"}>{v ? "已吊销" : "有效"}</Tag> },
 		{
 			title: "操作",

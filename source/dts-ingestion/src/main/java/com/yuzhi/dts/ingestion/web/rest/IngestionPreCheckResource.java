@@ -172,7 +172,10 @@ public class IngestionPreCheckResource {
         taskRepository.save(task);
 
         try {
-            UUID datasetId = task.getSourceDataSourceId();
+            UUID datasetId = extractPreCheckDatasetId(task);
+            if (datasetId == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No target dataset configured for pre-check");
+            }
             // Count rows via staging table query
             int totalRows = countStagingRows(tableName);
 
@@ -204,6 +207,10 @@ public class IngestionPreCheckResource {
                 failedRuleNames.size(),
                 failedRuleNames
             ));
+        } catch (ResponseStatusException e) {
+            task.setPreCheckStatus("FAILED");
+            taskRepository.save(task);
+            throw e;
         } catch (Exception e) {
             log.error("Pre-check failed for task {} via platform API: {}", id, e.getMessage());
             task.setPreCheckStatus("FAILED");
@@ -421,5 +428,23 @@ public class IngestionPreCheckResource {
             filePathNode = sourceConfig.get("path");
         }
         return filePathNode != null ? filePathNode.asText() : null;
+    }
+
+    private UUID extractPreCheckDatasetId(IngestionTask task) {
+        JsonNode sourceConfig = task.getSourceConfig();
+        if (sourceConfig != null) {
+            JsonNode datasetNode = sourceConfig.get("_datasetId");
+            if (datasetNode == null) {
+                datasetNode = sourceConfig.get("datasetId");
+            }
+            if (datasetNode != null && !datasetNode.asText("").isBlank()) {
+                try {
+                    return UUID.fromString(datasetNode.asText());
+                } catch (IllegalArgumentException e) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid target dataset id for pre-check");
+                }
+            }
+        }
+        return task.getSourceDataSourceId();
     }
 }

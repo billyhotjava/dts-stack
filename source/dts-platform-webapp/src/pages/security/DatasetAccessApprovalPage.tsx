@@ -208,7 +208,7 @@ export default function Page() {
 	};
 
 	const requestColumns: ColumnsType<AccessRequest> = [
-		{ title: "数据集", dataIndex: "datasetName", render: (v) => v || "-" },
+		{ title: "数据集", dataIndex: "datasetName", render: (v) => v || "-" , sorter: (a, b) => (a.datasetName || "").localeCompare(b.datasetName || "") },
 		{ title: "申请人", dataIndex: "requesterName", render: (v) => v || "-" },
 		{ title: "目标用户", dataIndex: "targetName", render: (v) => v || "-" },
 		{
@@ -492,7 +492,7 @@ export default function Page() {
 								{ title: "部门", dataIndex: "deptCode", width: 140, render: (v) => v || "-" },
 								{ title: "状态", dataIndex: "status", width: 120, render: (v) => <Tag color={statusColor(v)}>{v || "-"}</Tag> },
 								{ title: "审批人", dataIndex: "decidedBy", width: 140, render: (v) => v || "-" },
-								{ title: "时间", dataIndex: "decidedAt", width: 180, render: (v) => formatDate(v) },
+								{ title: "时间", dataIndex: "decidedAt", width: 180, render: (v) => formatDate(v) , sorter: (a, b) => { const ta = a.decidedAt ? new Date(a.decidedAt as any).getTime() : 0; const tb = b.decidedAt ? new Date(b.decidedAt as any).getTime() : 0; return ta - tb; } },
 								{ title: "意见", dataIndex: "decisionNotes", render: (v) => v || "-" },
 							]}
 						/>
