@@ -134,7 +134,6 @@ axiosInstance.interceptors.request.use(
 let isRefreshing = false;
 let pendingQueue: Array<() => void> = [];
 const ADMIN_TOKEN_SYNC_KEY = "dts.admin.session.tokenSync";
-const SERVICE_UNAVAILABLE = new Set([502, 503, 504]);
 
 const parseRefreshTokenFromRequest = (config: AxiosRequestConfig | undefined): string | null => {
 	const data = config?.data;
@@ -344,8 +343,6 @@ axiosInstance.interceptors.response.use(
 			!import.meta.env?.DEV &&
 			Boolean(userStore.getState().userToken?.refreshToken) &&
 			!(error.config as any)?._retry;
-
-		const isServiceUnavailable = SERVICE_UNAVAILABLE.has(response?.status ?? 0);
 
 		// session-expired / session-conflict 场景由 AdminGuard 统一弹 toast 并跳转，避免双 toast
 		const hasSessionSignalHeader =
