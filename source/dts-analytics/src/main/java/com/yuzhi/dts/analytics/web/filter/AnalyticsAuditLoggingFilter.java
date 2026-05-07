@@ -166,7 +166,41 @@ public class AnalyticsAuditLoggingFilter extends OncePerRequestFilter {
         if (lowerUri.contains("export") || lowerUri.contains("download") || lowerUri.endsWith("/csv") || lowerUri.endsWith("/xlsx")) {
             return "导出" + friendly;
         }
-        if (lowerUri.contains("query") || lowerUri.contains("run") || lowerUri.contains("execute")) {
+        if (containsAny(lowerUri, "/import", "/upload")) {
+            return "导入" + friendly;
+        }
+        if (containsAny(lowerUri, "/save", "/save-as", "/copy", "/clone")) {
+            return "保存" + friendly;
+        }
+        if (containsAny(lowerUri, "/sync", "/sync-schema", "/sync_schema", "/rescan", "/refresh", "/rebuild")) {
+            return "同步" + friendly;
+        }
+        if (containsAny(lowerUri, "/publish", "/submit", "/release")) {
+            return "发布" + friendly;
+        }
+        if (containsAny(lowerUri, "/archive", "/offline")) {
+            return "归档" + friendly;
+        }
+        if (containsAny(lowerUri, "/restore", "/rollback", "/revert")) {
+            return "回滚" + friendly;
+        }
+        if (containsAny(lowerUri, "/approve", "/decide")) {
+            return "审批" + friendly;
+        }
+        if (containsAny(lowerUri, "/reject", "/cancel", "/close")) {
+            return "驳回" + friendly;
+        }
+        if (containsAny(lowerUri, "/grant", "/public_link", "/public-link")) {
+            return "授权" + friendly;
+        }
+        if (containsAny(lowerUri, "/revoke", "/ungrant")) {
+            return "撤销授权" + friendly;
+        }
+        if (containsAny(lowerUri, "/query", "/preview", "/explain", "/search", "/validate", "/diagnostics", "/diff", "/impact")) {
+            return "查询" + friendly;
+        }
+        if (lowerUri.contains("query") || lowerUri.contains("run") || lowerUri.contains("execute") ||
+            containsAny(lowerUri, "/trigger", "/apply", "/test", "/compile", "/docs", "/generate")) {
             return "执行" + friendly;
         }
         return switch (method == null ? "" : method.toUpperCase(Locale.ROOT)) {
@@ -183,7 +217,38 @@ public class AnalyticsAuditLoggingFilter extends OncePerRequestFilter {
         if (lowerUri.contains("export") || lowerUri.contains("download") || lowerUri.endsWith("/csv") || lowerUri.endsWith("/xlsx")) {
             return "EXPORT";
         }
-        if (lowerUri.contains("query") || lowerUri.contains("run") || lowerUri.contains("execute")) {
+        if (containsAny(lowerUri, "/import", "/upload")) {
+            return "IMPORT";
+        }
+        if (containsAny(lowerUri, "/save", "/save-as", "/copy", "/clone", "/restore", "/rollback", "/revert")) {
+            return "UPDATE";
+        }
+        if (containsAny(lowerUri, "/sync", "/sync-schema", "/sync_schema", "/rescan", "/refresh", "/rebuild")) {
+            return "REFRESH";
+        }
+        if (containsAny(lowerUri, "/publish", "/submit", "/release")) {
+            return "PUBLISH";
+        }
+        if (containsAny(lowerUri, "/archive", "/offline")) {
+            return "ARCHIVE";
+        }
+        if (containsAny(lowerUri, "/approve", "/decide")) {
+            return "APPROVE";
+        }
+        if (containsAny(lowerUri, "/reject", "/cancel", "/close")) {
+            return "REJECT";
+        }
+        if (containsAny(lowerUri, "/grant", "/public_link", "/public-link")) {
+            return "GRANT";
+        }
+        if (containsAny(lowerUri, "/revoke", "/ungrant")) {
+            return "REVOKE";
+        }
+        if (containsAny(lowerUri, "/query", "/preview", "/explain", "/search", "/validate", "/diagnostics", "/diff", "/impact")) {
+            return "READ";
+        }
+        if (lowerUri.contains("query") || lowerUri.contains("run") || lowerUri.contains("execute") ||
+            containsAny(lowerUri, "/trigger", "/apply", "/test", "/compile", "/docs", "/generate")) {
             return "EXECUTE";
         }
         return switch (method == null ? "" : method.toUpperCase(Locale.ROOT)) {
@@ -209,14 +274,33 @@ public class AnalyticsAuditLoggingFilter extends OncePerRequestFilter {
                 Map.entry("marketplace", "组件市场"),
                 Map.entry("semantic", "语义模型"),
                 Map.entry("metric", "指标"),
+                Map.entry("metrics", "指标"),
+                Map.entry("metric-lens", "指标分析"),
                 Map.entry("segment", "分群"),
                 Map.entry("alert", "告警"),
                 Map.entry("pulse", "订阅"),
                 Map.entry("bookmark", "收藏"),
                 Map.entry("query-trace", "查询追踪"),
-                Map.entry("explore-session", "探索会话")
+                Map.entry("explore-session", "探索会话"),
+                Map.entry("report-factory", "报告工厂"),
+                Map.entry("nl2sql-eval", "NL2SQL评测"),
+                Map.entry("project-cockpit", "项目驾驶舱"),
+                Map.entry("field", "字段"),
+                Map.entry("table", "数据表")
             )
             .getOrDefault(key, key);
+    }
+
+    private boolean containsAny(String source, String... needles) {
+        if (!StringUtils.hasText(source) || needles == null) {
+            return false;
+        }
+        for (String needle : needles) {
+            if (StringUtils.hasText(needle) && source.contains(needle)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String firstSegment(String uri) {

@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.web.filter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -53,6 +54,61 @@ class AuditLoggingFilterTest {
     }
 
     @Test
+    void shouldRecordPriorityExportEvenWhenEndpointIsOtherwiseSupplementary() throws Exception {
+        AuditForwarderService forwarder = mock(AuditForwarderService.class);
+        AuditLoggingFilter filter = new AuditLoggingFilter(mockProvider(forwarder), mock(AuditFlowManager.class), false);
+        authenticate("opadmin");
+
+        AuditForwarderService.PendingAuditEvent event = perform(filter, forwarder, "GET", "/api/catalog/classification-mapping/export");
+
+        assertThat(event.action).isEqualTo("导出密级映射");
+        assertThat(event.operationType).isEqualTo("EXPORT");
+        assertThat(event.resourceType).isEqualTo("classification-mapping");
+    }
+
+    @Test
+    void shouldClassifyPriorityWriteOperationsWithChineseActionTypes() throws Exception {
+        AuditForwarderService forwarder = mock(AuditForwarderService.class);
+        AuditLoggingFilter filter = new AuditLoggingFilter(mockProvider(forwarder), mock(AuditFlowManager.class), false);
+        authenticate("opadmin");
+
+        AuditForwarderService.PendingAuditEvent sync = perform(filter, forwarder, "POST", "/api/catalog/sync");
+        assertThat(sync.action).isEqualTo("同步同步任务");
+        assertThat(sync.operationType).isEqualTo("REFRESH");
+        reset(forwarder);
+
+        AuditForwarderService.PendingAuditEvent approve = perform(filter, forwarder, "POST", "/api/catalog/access/tasks/7/approve");
+        assertThat(approve.action).isEqualTo("审批数据集访问审批");
+        assertThat(approve.operationType).isEqualTo("APPROVE");
+        assertThat(approve.resourceId).isEqualTo("7");
+        reset(forwarder);
+
+        AuditForwarderService.PendingAuditEvent publish = perform(filter, forwarder, "POST", "/api/governance/indicators/42/publish");
+        assertThat(publish.action).isEqualTo("发布指标");
+        assertThat(publish.operationType).isEqualTo("PUBLISH");
+        assertThat(publish.resourceId).isEqualTo("42");
+    }
+
+    @Test
+    void shouldKeepSpecificExplorePreviewSemanticBeforeGenericQueryHint() throws Exception {
+        AuditForwarderService forwarder = mock(AuditForwarderService.class);
+        AuditLoggingFilter filter = new AuditLoggingFilter(mockProvider(forwarder), mock(AuditFlowManager.class), false);
+        authenticate("opadmin");
+
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/explore/query/preview");
+        request.setContentType("application/json");
+        request.setContent("{\"datasetId\":\"ds-1\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        filter.doFilter(request, new MockHttpServletResponse(), (req, res) -> req.getInputStream().readAllBytes());
+
+        ArgumentCaptor<AuditForwarderService.PendingAuditEvent> captor = ArgumentCaptor.forClass(
+            AuditForwarderService.PendingAuditEvent.class
+        );
+        verify(forwarder).record(captor.capture());
+        assertThat(captor.getValue().action).isEqualTo("预览数据集");
+        assertThat(captor.getValue().resourceId).isEqualTo("ds-1");
+    }
+
+    @Test
     void shouldKeepSupplementaryReadsOutOfFallbackAudit() throws Exception {
         AuditForwarderService forwarder = mock(AuditForwarderService.class);
         AuditLoggingFilter filter = new AuditLoggingFilter(mockProvider(forwarder), mock(AuditFlowManager.class), false);
@@ -65,6 +121,23 @@ class AuditLoggingFilterTest {
         filter.doFilter(request, new MockHttpServletResponse(), (req, res) -> {});
 
         verify(forwarder, never()).record(org.mockito.ArgumentMatchers.any(AuditForwarderService.PendingAuditEvent.class));
+    }
+
+    private AuditForwarderService.PendingAuditEvent perform(
+        AuditLoggingFilter filter,
+        AuditForwarderService forwarder,
+        String method,
+        String uri
+    ) throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest(method, uri);
+        request.addHeader("X-Forwarded-For", "223.86.189.127, 172.19.0.11");
+        filter.doFilter(request, new MockHttpServletResponse(), (req, res) -> {});
+
+        ArgumentCaptor<AuditForwarderService.PendingAuditEvent> captor = ArgumentCaptor.forClass(
+            AuditForwarderService.PendingAuditEvent.class
+        );
+        verify(forwarder).record(captor.capture());
+        return captor.getValue();
     }
 
     @SuppressWarnings("unchecked")

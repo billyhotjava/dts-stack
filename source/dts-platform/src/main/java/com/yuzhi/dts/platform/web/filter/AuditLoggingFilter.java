@@ -374,6 +374,27 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         if (!"GET".equalsIgnoreCase(method)) {
             return false;
         }
+        String lowerUri = uri.toLowerCase(Locale.ROOT);
+        if (
+            containsAny(
+                lowerUri,
+                "/export",
+                "/download",
+                "/csv",
+                "/xlsx",
+                "/excel",
+                "/query",
+                "/preview",
+                "/explain",
+                "/search",
+                "/validate",
+                "/diagnostics",
+                "/diff",
+                "/impact"
+            )
+        ) {
+            return false;
+        }
         if (
             uri.startsWith("/api/catalog/config") ||
             uri.startsWith("/api/catalog/summary") ||
@@ -829,6 +850,10 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
             return;
         }
 
+        if (applyPriorityOperationHint(event, uri, method)) {
+            return;
+        }
+
         if ("GET".equals(method) && paged) {
             String friendly = friendlyName(event.resourceType);
             setAction(event, "查看" + friendly + "列表", null, true, true);
@@ -843,6 +868,126 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
                 return;
             }
         }
+    }
+
+    private boolean applyPriorityOperationHint(PendingAuditEvent event, String uri, String method) {
+        if (event == null || !StringUtils.hasText(uri)) {
+            return false;
+        }
+        String lowerUri = uri.toLowerCase(Locale.ROOT);
+        String friendly = friendlyName(event.resourceType);
+        String id = extractLastMeaningfulSegment(uri);
+
+        if (containsAny(lowerUri, "/export", "/download", "/csv", "/xlsx", "/excel")) {
+            setAction(event, "导出" + friendly, id, false, false);
+            event.operationType = "EXPORT";
+            return true;
+        }
+        if (containsAny(lowerUri, "/import", "/upload")) {
+            setAction(event, "导入" + friendly, id, false, false);
+            event.operationType = "IMPORT";
+            return true;
+        }
+        if (containsAny(lowerUri, "/save", "/save-result", "/save-as", "/copy", "/clone")) {
+            setAction(event, "保存" + friendly, id, false, false);
+            event.operationType = "UPDATE";
+            return true;
+        }
+        if (containsAny(lowerUri, "/sync", "/sync-schema", "/sync_schema", "/rescan", "/refresh", "/rebuild")) {
+            setAction(event, "同步" + friendly, id, false, false);
+            event.operationType = "REFRESH";
+            return true;
+        }
+        if (containsAny(lowerUri, "/publish", "/submit", "/release")) {
+            setAction(event, "发布" + friendly, id, false, false);
+            event.operationType = "PUBLISH";
+            return true;
+        }
+        if (containsAny(lowerUri, "/archive", "/offline")) {
+            setAction(event, "归档" + friendly, id, false, false);
+            event.operationType = "ARCHIVE";
+            return true;
+        }
+        if (containsAny(lowerUri, "/restore", "/rollback", "/revert")) {
+            setAction(event, "回滚" + friendly, id, false, false);
+            event.operationType = "UPDATE";
+            return true;
+        }
+        if (containsAny(lowerUri, "/approve", "/decide")) {
+            setAction(event, "审批" + friendly, id, false, false);
+            event.operationType = "APPROVE";
+            return true;
+        }
+        if (containsAny(lowerUri, "/reject", "/cancel", "/close")) {
+            setAction(event, "驳回" + friendly, id, false, false);
+            event.operationType = "REJECT";
+            return true;
+        }
+        if (containsAny(lowerUri, "/grant", "/public_link", "/public-link")) {
+            setAction(event, "授权" + friendly, id, false, false);
+            event.operationType = "GRANT";
+            return true;
+        }
+        if (containsAny(lowerUri, "/revoke", "/ungrant")) {
+            setAction(event, "撤销授权" + friendly, id, false, false);
+            event.operationType = "REVOKE";
+            return true;
+        }
+        if (containsAny(lowerUri, "/execute", "/run", "/trigger", "/apply", "/test", "/compile", "/docs", "/generate")) {
+            setAction(event, "执行" + friendly, id, false, false);
+            event.operationType = "EXECUTE";
+            return true;
+        }
+        if (containsAny(lowerUri, "/query", "/preview", "/explain", "/search", "/validate", "/diagnostics", "/diff", "/impact")) {
+            setAction(event, "查询" + friendly, id, "GET".equals(method), false);
+            event.operationType = "READ";
+            return true;
+        }
+        return false;
+    }
+
+    private boolean containsAny(String source, String... needles) {
+        if (!StringUtils.hasText(source) || needles == null) {
+            return false;
+        }
+        for (String needle : needles) {
+            if (StringUtils.hasText(needle) && source.contains(needle)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String extractLastMeaningfulSegment(String uri) {
+        if (!StringUtils.hasText(uri)) {
+            return null;
+        }
+        String working = uri;
+        int queryIdx = working.indexOf('?');
+        if (queryIdx >= 0) {
+            working = working.substring(0, queryIdx);
+        }
+        String[] parts = working.split("/");
+        for (int i = parts.length - 1; i >= 0; i--) {
+            String part = parts[i] == null ? "" : parts[i].trim();
+            if (!StringUtils.hasText(part) || isPriorityOperationSegment(part.toLowerCase(Locale.ROOT))) {
+                continue;
+            }
+            return part;
+        }
+        return null;
+    }
+
+    private boolean isPriorityOperationSegment(String segment) {
+        return switch (segment) {
+            case "export", "download", "csv", "xlsx", "excel", "import", "upload", "save", "save-result", "save-as",
+                "copy", "clone", "sync", "sync-schema", "sync_schema", "rescan", "refresh", "rebuild", "publish",
+                "submit", "release", "archive", "offline", "restore", "rollback", "revert", "approve", "decide",
+                "reject", "cancel", "close", "grant", "public_link", "public-link", "revoke", "ungrant", "execute",
+                "run", "trigger", "apply", "test", "compile", "docs", "generate", "query", "preview", "explain",
+                "search", "validate", "diagnostics", "diff", "impact" -> true;
+            default -> false;
+        };
     }
 
     private void setAction(
@@ -929,6 +1074,29 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
             case "governance.quality.rule", "quality.rule" -> "质量规则";
             case "modeling.standard", "modeling.standard.definition" -> "数据标准";
             case "modeling.standard.attachment", "standard.attachment" -> "数据标准附件";
+            case "catalog", "catalogs" -> "数据目录";
+            case "classification-mapping" -> "密级映射";
+            case "masking-rules" -> "脱敏规则";
+            case "domains" -> "主题域";
+            case "access" -> "数据集访问审批";
+            case "indicators" -> "指标";
+            case "dimensions" -> "维度";
+            case "tasks", "task" -> "任务";
+            case "standards" -> "数据标准";
+            case "models", "sql-models" -> "模型";
+            case "dbt" -> "dbt模型";
+            case "files", "file" -> "文件";
+            case "tokens", "token" -> "令牌";
+            case "permissions", "permission" -> "权限";
+            case "requests", "request" -> "申请";
+            case "grants", "grant" -> "授权";
+            case "asset-grants" -> "资产授权";
+            case "asset-ownership" -> "资产负责人";
+            case "quality" -> "质量";
+            case "issues", "issue" -> "问题";
+            case "templates", "template" -> "模板";
+            case "lineage" -> "血缘";
+            case "sync" -> "同步任务";
             default -> resourceType;
         };
     }
