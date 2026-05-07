@@ -598,6 +598,33 @@ export function ScreenHeader({
             }
 
             if (id) {
+                // Sprint-24 F3：classification 必须走专属 PATCH 端点（owner-only / 降级 reason / 独立审计），
+                // PUT /{id} 故意不接受 classification 字段。检测到 classification 相对 baseline 有变化时，
+                // 先调 PATCH /classification 完成密级落库，再调 PUT 同步其它结构变更。
+                const upper = (v: unknown): string | null => {
+                    if (typeof v !== 'string') return null;
+                    const t = v.trim().toUpperCase();
+                    return t === 'PUBLIC' || t === 'INTERNAL' || t === 'SECRET' || t === 'CONFIDENTIAL' ? t : null;
+                };
+                const baseClassification = upper((baseline as { classification?: string | null } | undefined)?.classification);
+                const nextClassification = upper(persistedConfig.classification);
+                if (nextClassification && nextClassification !== baseClassification) {
+                    try {
+                        await analyticsApi.updateScreenClassification(id, nextClassification);
+                    } catch (err) {
+                        if (err instanceof HttpError) {
+                            if (err.status === 403) {
+                                throw new Error('密级修改失败：仅大屏 owner 可设置密级，请联系 owner 协助补登。');
+                            }
+                            if (err.status === 400) {
+                                // 后端在「降级路径未带 reason」「不是合法枚举」等场景返回 400
+                                throw new Error(`密级修改失败：${err.bodyText || '请检查输入'}`);
+                            }
+                        }
+                        throw err;
+                    }
+                }
+
                 const updated = await analyticsApi.updateScreen(id, payload);
                 const normalized = normalizeScreenConfig(updated, { id: updated.id });
                 const resolvedTheme = resolveScreenTheme(normalized.config.theme, normalized.config.backgroundColor);

@@ -44,3 +44,20 @@ test("ScreenHeader shows a non-blocking notice when classification is missing", 
 	assert.match(source, /analytics-screen-header-classification-missing/);
 	assert.match(source, /!config\.classification && permissions\.canEdit/);
 });
+
+// Sprint-24 F3：classification 走专属 PATCH 端点。后端 PUT /{id} 故意不接受
+// classification（owner-only / 降级 reason / 独立审计），所以前端 saveScreen 必须
+// 在检测到 classification 相对 baseline 有变化时，先调 PATCH /classification，
+// 否则用户在属性面板改的密级不会落库 → 看起来「保存失败」。
+test("ScreenHeader saveScreen patches classification before PUT when changed", async () => {
+	const source = await readFile(screenHeaderPath, "utf8");
+
+	// 必须从 baseline 读取原 classification 做 diff
+	assert.match(source, /baseline as \{[^}]*classification[^}]*\}/);
+	// 必须比较新值与基线值
+	assert.match(source, /nextClassification && nextClassification !== baseClassification/);
+	// 必须调用 updateScreenClassification PATCH 端点
+	assert.match(source, /analyticsApi\.updateScreenClassification\(\s*id\s*,\s*nextClassification/);
+	// 403 / 400 必须有友好的错误引导，不能让 owner-only / reason 缺失把用户卡住没提示
+	assert.match(source, /密级修改失败：仅大屏 owner/);
+});
