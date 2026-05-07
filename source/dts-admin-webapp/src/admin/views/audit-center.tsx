@@ -358,7 +358,7 @@ export default function AuditCenterView() {
 				setSize(response.size);
 				setTotalElements(response.totalElements);
 				// totalPages is not used in UI; skip storing
-				// Note: 功能模块下拉仅使用审计目录（/audit-logs/modules），不再从日志内容动态补全，
+				// Note: 功能模块下拉仅使用审计目录（/audit-entries/modules），不再从日志内容动态补全，
 				// 以确保不同角色（含 auditadmin）看到一致的大类选项。
 			} catch (error) {
 				console.error("Failed to load audit logs", error);
@@ -1279,7 +1279,7 @@ function deriveFieldLabel(field: string | undefined): string {
 function buildExportUrl(query: string): string {
 	const base = GLOBAL_CONFIG.apiBaseUrl?.trim() || "/api";
 	const normalizedBase = base.endsWith("/") ? base.slice(0, -1) : base;
-	return `${normalizedBase}/audit-logs/export${query ? `?${query}` : ""}`;
+	return `${normalizedBase}/audit-entries/export${query ? `?${query}` : ""}`;
 }
 
 function formatDateTime(value: string) {

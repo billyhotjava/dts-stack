@@ -6,7 +6,7 @@ import { GLOBAL_CONFIG } from "@/global-config";
  * 审计日志API服务
  */
 export class AuditLogService {
-	private static readonly BASE_URL = "/audit-logs";
+	private static readonly BASE_URL = "/audit-entries";
 
 	/**
 	 * 获取审计日志列表
