@@ -3,6 +3,7 @@
   "id": "gpmc-drill-execution-v3",
   "name": "执行层-项目执行详情",
   "description": "项目执行监控钻取页面，展示关键任务节点、资源负载及延期项目排行。",
+  "classification": "INTERNAL",
   "width": 1920,
   "height": 1080,
   "backgroundColor": "#115AAD",

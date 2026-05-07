@@ -3,6 +3,7 @@
   "id": "gpmc-drill-risk-v3",
   "name": "执行层-风险与预警中心明细",
   "description": "风险预警钻取页面，展示风险清单、风险分类摘要及应对措施。",
+  "classification": "INTERNAL",
   "width": 1920,
   "height": 1080,
   "backgroundColor": "#115AAD",

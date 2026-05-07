@@ -3,6 +3,7 @@
   "id": "gpmc-tech-state-board-v3",
   "name": "GPMC 技术状态与跟进",
   "description": "管控层技术状态看板模板，覆盖技术状态变更、签署完成率和措施闭环。",
+  "classification": "INTERNAL",
   "width": 1920,
   "height": 1080,
   "backgroundColor": "#115AAD",

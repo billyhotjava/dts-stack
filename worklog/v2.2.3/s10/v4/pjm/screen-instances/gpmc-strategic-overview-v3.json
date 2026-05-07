@@ -3,6 +3,7 @@
   "id": "gpmc-strategic-overview-v3",
   "name": "GPMC 战略层大屏",
   "description": "项目综合态势总览模板，面向集团领导的一屏全局态势感知。",
+  "classification": "INTERNAL",
   "width": 1920,
   "height": 1080,
   "backgroundColor": "#115AAD",

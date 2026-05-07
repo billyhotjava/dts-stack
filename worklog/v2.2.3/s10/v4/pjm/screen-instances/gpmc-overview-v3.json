@@ -3,6 +3,7 @@
   "id": "gpmc-overview-v3",
   "name": "项目综合看板",
   "description": "一级看板：项目综合态势总览，进度为主轴 + 异常标红，核心维度：项目 + 科室。",
+  "classification": "INTERNAL",
   "width": 1920,
   "height": 1080,
   "backgroundColor": "#115AAD",

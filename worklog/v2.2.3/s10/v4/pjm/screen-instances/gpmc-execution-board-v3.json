@@ -3,6 +3,7 @@
   "id": "gpmc-execution-board-v3",
   "name": "GPMC 项目执行监控",
   "description": "管控层项目执行监控模板，覆盖进度、里程碑、甘特和延期项目。",
+  "classification": "INTERNAL",
   "width": 1920,
   "height": 1080,
   "backgroundColor": "#115AAD",

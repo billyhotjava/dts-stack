@@ -3,6 +3,7 @@
   "id": "gpmc-drill-quality-v3",
   "name": "执行层-质量问题与跟进明细",
   "description": "质量问题钻取页面，展示质量问题清单、闭环摘要及跟进措施。",
+  "classification": "INTERNAL",
   "width": 1920,
   "height": 1080,
   "backgroundColor": "#115AAD",

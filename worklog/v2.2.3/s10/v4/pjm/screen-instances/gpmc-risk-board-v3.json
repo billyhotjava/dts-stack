@@ -3,6 +3,7 @@
   "id": "gpmc-risk-board-v3",
   "name": "GPMC 风险与预警中心",
   "description": "管控层风险看板模板，覆盖风险矩阵、分类分布、清单和措施摘要。",
+  "classification": "INTERNAL",
   "width": 1920,
   "height": 1080,
   "backgroundColor": "#115AAD",

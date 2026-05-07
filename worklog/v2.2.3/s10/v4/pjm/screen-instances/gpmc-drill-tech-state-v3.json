@@ -3,6 +3,7 @@
   "id": "gpmc-drill-tech-state-v3",
   "name": "执行层-技术状态与跟进明细",
   "description": "技术状态变更钻取页面，展示变更清单、状态分布及跟进措施。",
+  "classification": "INTERNAL",
   "width": 1920,
   "height": 1080,
   "backgroundColor": "#115AAD",
