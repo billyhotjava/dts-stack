@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.service.audit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -51,6 +52,23 @@ class AuditForwarderServiceTest {
         service.retryFailedEvents();
 
         verify(gateway, times(2)).recordEvent(anyMap());
+        assertThat(queue(service)).isEmpty();
+    }
+
+    @Test
+    void recordShouldSkipMachineActors() {
+        AdminAuditGateway gateway = mock(AdminAuditGateway.class);
+        when(gateway.isEnabled()).thenReturn(true);
+
+        AuditForwarderService service = new AuditForwarderService(enabledProperties(), gateway);
+        AuditForwarderService.PendingAuditEvent event = new AuditForwarderService.PendingAuditEvent();
+        event.actor = "service:dts-analytics";
+        event.action = "查看数据源列表";
+        event.module = "platform.infra";
+
+        service.record(event);
+
+        verify(gateway, never()).recordEvent(anyMap());
         assertThat(queue(service)).isEmpty();
     }
 

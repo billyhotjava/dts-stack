@@ -350,7 +350,20 @@ public class AuditForwarderService {
             return true;
         }
         String lower = normalized.toLowerCase(Locale.ROOT);
-        return "anonymous".equals(lower) || "anonymoususer".equals(lower) || "unknown".equals(lower);
+        return "anonymous".equals(lower) ||
+            "anonymoususer".equals(lower) ||
+            "unknown".equals(lower) ||
+            "system".equals(lower) ||
+            "liquibase".equals(lower) ||
+            "postgresql".equals(lower) ||
+            "success".equals(lower) ||
+            "failed".equals(lower) ||
+            "execute".equals(lower) ||
+            lower.startsWith("service:") ||
+            lower.startsWith("_system:") ||
+            lower.startsWith("dts-") ||
+            lower.contains("liquibase") ||
+            lower.chars().allMatch(Character::isDigit);
     }
 
     private String defaultString(String value, String fallback) {

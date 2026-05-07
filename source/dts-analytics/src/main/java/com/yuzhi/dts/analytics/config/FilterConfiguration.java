@@ -1,6 +1,7 @@
 package com.yuzhi.dts.analytics.config;
 
 import com.yuzhi.dts.analytics.web.filter.DtsRequestContextFilter;
+import com.yuzhi.dts.analytics.web.filter.AnalyticsAuditLoggingFilter;
 import com.yuzhi.dts.analytics.web.filter.PlatformSessionBridgeFilter;
 import com.yuzhi.dts.analytics.web.filter.RequestIdFilter;
 import com.yuzhi.dts.analytics.web.filter.RequestLoggingFilter;
@@ -51,6 +52,17 @@ public class FilterConfiguration {
         registration.setOrder(4);
         registration.addUrlPatterns("/*");
         registration.setName("requestLoggingFilter");
+        return registration;
+    }
+
+    @Bean
+    public FilterRegistrationBean<AnalyticsAuditLoggingFilter> analyticsAuditLoggingFilterRegistration(
+            AnalyticsAuditLoggingFilter filter) {
+        FilterRegistrationBean<AnalyticsAuditLoggingFilter> registration = new FilterRegistrationBean<>();
+        registration.setFilter(filter);
+        registration.setOrder(5);
+        registration.addUrlPatterns("/*");
+        registration.setName("analyticsAuditLoggingFilter");
         return registration;
     }
 

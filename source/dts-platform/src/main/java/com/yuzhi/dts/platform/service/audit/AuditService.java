@@ -67,6 +67,15 @@ public class AuditService {
         "requester"
     );
 
+    private static final Set<String> MACHINE_ACTOR_VALUES = Set.of(
+        "system",
+        "liquibase",
+        "postgresql",
+        "success",
+        "failed",
+        "execute"
+    );
+
 
     private final ObjectProvider<AuditForwarderService> auditForwarderServiceProvider;
     private final AuditActionCatalog actionCatalog;
@@ -342,7 +351,7 @@ public class AuditService {
             return null;
         }
         if (source instanceof String s) {
-            return sanitizeActorString(s);
+            return null;
         }
         if (source instanceof Map<?, ?> map) {
             if (!visited.add(map)) {
@@ -350,13 +359,16 @@ public class AuditService {
             }
             for (String key : ACTOR_HINT_KEYS) {
                 if (map.containsKey(key)) {
-                    String candidate = extractActorFromPayloadInternal(map.get(key), visited);
+                    String candidate = extractActorHintValue(map.get(key), visited);
                     if (candidate != null) {
                         return candidate;
                     }
                 }
             }
             for (Object value : map.values()) {
+                if (!(value instanceof Map<?, ?>) && !(value instanceof Collection<?>) && (value == null || !value.getClass().isArray())) {
+                    continue;
+                }
                 String candidate = extractActorFromPayloadInternal(value, visited);
                 if (candidate != null) {
                     return candidate;
@@ -379,14 +391,31 @@ public class AuditService {
         if (source.getClass().isArray()) {
             int length = Array.getLength(source);
             for (int i = 0; i < length; i++) {
-                String candidate = extractActorFromPayloadInternal(Array.get(source, i), visited);
+                Object value = Array.get(source, i);
+                if (!(value instanceof Map<?, ?>) && !(value instanceof Collection<?>) && (value == null || !value.getClass().isArray())) {
+                    continue;
+                }
+                String candidate = extractActorFromPayloadInternal(value, visited);
                 if (candidate != null) {
                     return candidate;
                 }
             }
             return null;
         }
-        return sanitizeActorString(source.toString());
+        return null;
+    }
+
+    private String extractActorHintValue(Object value, Set<Object> visited) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String s) {
+            return sanitizeActorString(s);
+        }
+        if (value instanceof Number || value instanceof Boolean || value instanceof Character) {
+            return sanitizeActorString(String.valueOf(value));
+        }
+        return extractActorFromPayloadInternal(value, visited);
     }
 
     private String sanitizeActorString(String candidate) {
@@ -404,7 +433,27 @@ public class AuditService {
         if (lower.equals("anonymous") || lower.equals("anonymoususer") || lower.equals("unknown")) {
             return null;
         }
+        if (isMachineActor(lower)) {
+            return null;
+        }
         return text;
+    }
+
+    private boolean isMachineActor(String normalized) {
+        if (!StringUtils.hasText(normalized)) {
+            return true;
+        }
+        String lower = normalized.trim().toLowerCase(Locale.ROOT);
+        if (MACHINE_ACTOR_VALUES.contains(lower)) {
+            return true;
+        }
+        if (lower.startsWith("service:") || lower.startsWith("_system:") || lower.startsWith("dts-")) {
+            return true;
+        }
+        if (lower.contains("liquibase")) {
+            return true;
+        }
+        return lower.chars().allMatch(Character::isDigit);
     }
 
     private Map<String, Object> toPayloadMap(Object payload) {

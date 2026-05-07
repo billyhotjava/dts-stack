@@ -148,6 +148,8 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
                     if ("POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method)
                             || "DELETE".equalsIgnoreCase(method) || "PATCH".equalsIgnoreCase(method)) {
                         fallbackRequested = true;
+                    } else if (shouldRecordReadFallback(wrapper, event)) {
+                        fallbackRequested = true;
                     }
                 }
                 if (fallbackRequested && !alreadyAudited && !suppressed) {
@@ -255,6 +257,20 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
             return false;
         }
         return false;
+    }
+
+    private boolean shouldRecordReadFallback(ContentCachingRequestWrapper request, PendingAuditEvent event) {
+        if (request == null || event == null || !"GET".equalsIgnoreCase(request.getMethod())) {
+            return false;
+        }
+        String uri = request.getRequestURI();
+        if (!StringUtils.hasText(uri) || !uri.startsWith("/api/")) {
+            return false;
+        }
+        if (isSupplementaryQuery(request)) {
+            return false;
+        }
+        return StringUtils.hasText(event.action) && StringUtils.hasText(event.module);
     }
 
     private boolean consumeFallbackRequest() {

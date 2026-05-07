@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Alert, Button, Card, Collapse, Input, Layout, Pagination, Progress, Select, Space, Spin, Tag, Tooltip, Tree } from "antd";
+import { Alert, Button, Card, Collapse, Input, Layout, Pagination, Select, Space, Spin, Tabs, Tag, Tooltip, Tree } from "antd";
 import {
 	ApartmentOutlined,
 	BranchesOutlined,
@@ -60,17 +60,6 @@ const CLASSIFICATION_OPTIONS = [
 	{ label: "内部", value: "INTERNAL" },
 	{ label: "秘密", value: "SECRET" },
 	{ label: "机密", value: "CONFIDENTIAL" },
-];
-
-const LAYER_OPTIONS = [
-	{ label: "全部分层", value: "ALL" },
-	{ label: "SOURCE", value: "SOURCE" },
-	{ label: "ODS", value: "ODS" },
-	{ label: "STG", value: "STG" },
-	{ label: "DWD", value: "DWD" },
-	{ label: "DIM", value: "DIM" },
-	{ label: "DWS", value: "DWS" },
-	{ label: "ADS", value: "ADS" },
 ];
 
 const GOVERNANCE_OPTIONS = [
@@ -363,35 +352,17 @@ export default function Page() {
 
 	const selectedDomainName = domain === UNASSIGNED_DOMAIN_KEY ? "未归域" : domain ? domainMap.get(domain) || "当前主题域" : "全部主题域";
 
-	const layerLanes = useMemo(() => {
-		const grouped = new Map<string, AssetRow[]>();
-		for (const key of LAYER_ORDER) {
-			grouped.set(key, []);
-		}
-		for (const row of records) {
-			const key = normalizeLayer(row.warehouseLayer);
-			grouped.set(key, [...(grouped.get(key) || []), row]);
-		}
-		return LAYER_ORDER.map((key) => ({ key, meta: LAYER_META[key], items: grouped.get(key) || [] }));
-	}, [records]);
-
-	const typeStats = useMemo(() => {
-		const map = new Map<string, number>();
-		records.forEach((row) => {
-			const key = row.type || "未知";
-			map.set(key, (map.get(key) || 0) + 1);
-		});
-		return [...map.entries()].sort((a, b) => b[1] - a[1]);
-	}, [records]);
-
-	const domainStats = useMemo(() => {
-		const map = new Map<string, number>();
-		records.forEach((row) => {
-			const key = row.domain || (row.domainId ? domainMap.get(row.domainId) : undefined) || "未归域";
-			map.set(key, (map.get(key) || 0) + 1);
-		});
-		return [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
-	}, [records, domainMap]);
+	const layerTabItems = useMemo(
+		() => [
+			{ key: "ALL", label: "全部" },
+			...LAYER_ORDER.filter((key) => key !== "OTHER").map((key) => ({
+				key,
+				label: LAYER_META[key].label,
+			})),
+			{ key: "OTHER", label: "未分层" },
+		],
+		[],
+	);
 
 	const unclassifiedCount = records.filter((row) => !row.classification).length;
 	const missingDomainCount = records.filter((row) => !row.domain && !row.domainId).length;
@@ -633,14 +604,6 @@ export default function Page() {
 							/>
 							<Select
 								allowClear
-								placeholder="分层"
-								style={{ minWidth: 150 }}
-								value={warehouseLayer}
-								onChange={(value) => setWarehouseLayer(value || "ALL")}
-								options={LAYER_OPTIONS}
-							/>
-							<Select
-								allowClear
 								placeholder="治理状态"
 								style={{ minWidth: 150 }}
 								value={governanceStatus}
@@ -712,77 +675,15 @@ export default function Page() {
 							/>
 						}
 					>
+						<Tabs
+							activeKey={warehouseLayer}
+							onChange={(value) => setWarehouseLayer(value || "ALL")}
+							items={layerTabItems}
+							tabBarStyle={{ marginBottom: 12 }}
+						/>
 						{records.length ? (
-							<div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-								<div className="overflow-x-auto">
-									<div className="grid min-w-[1120px] grid-cols-8 gap-3">
-										{layerLanes.map((lane) => (
-											<div key={lane.key} className={`rounded-lg border px-2 py-2 ${lane.meta.tone}`}>
-												<div className="mb-2 flex items-center justify-between gap-2">
-													<Tag color={lane.meta.color}>{lane.meta.label}</Tag>
-													<span className="text-xs font-semibold text-slate-600">{lane.items.length}</span>
-												</div>
-												<div className="min-h-[360px] space-y-2">
-													{lane.items.length ? (
-														lane.items.map(renderAssetCard)
-													) : (
-														<div className="rounded-lg border border-dashed border-slate-200 bg-white/70 px-2 py-6 text-center text-xs text-slate-400">
-															暂无资产
-														</div>
-													)}
-												</div>
-											</div>
-										))}
-									</div>
-								</div>
-								<div className="space-y-3">
-									<div className="rounded-lg border border-slate-200 bg-white p-3">
-										<div className="mb-3 text-sm font-semibold text-slate-800">类型分布</div>
-										<Space direction="vertical" size={10} className="w-full">
-											{typeStats.length ? (
-												typeStats.map(([type, count]) => (
-													<div key={type}>
-														<div className="mb-1 flex items-center justify-between text-xs text-slate-600">
-															<span>{type}</span>
-															<span>{count}</span>
-														</div>
-														<Progress percent={Math.round((count / Math.max(records.length, 1)) * 100)} size="small" showInfo={false} />
-													</div>
-												))
-											) : (
-												<div className="text-xs text-slate-500">暂无类型分布</div>
-											)}
-										</Space>
-									</div>
-									<div className="rounded-lg border border-slate-200 bg-white p-3">
-										<div className="mb-3 text-sm font-semibold text-slate-800">主题域热点</div>
-										<Space direction="vertical" size={8} className="w-full">
-											{domainStats.map(([name, count]) => (
-												<div key={name} className="flex items-center justify-between gap-3 text-xs">
-													<span className="min-w-0 truncate text-slate-600">{name}</span>
-													<Tag color="blue">{count}</Tag>
-												</div>
-											))}
-										</Space>
-									</div>
-									<div className="rounded-lg border border-slate-200 bg-white p-3">
-										<div className="mb-2 text-sm font-semibold text-slate-800">治理缺口</div>
-										<Space direction="vertical" size={8} className="w-full">
-											<div className="flex items-center justify-between text-xs text-slate-600">
-												<span>未归域</span>
-												<Tag color={missingDomainCount ? "orange" : "green"}>{missingDomainCount}</Tag>
-											</div>
-											<div className="flex items-center justify-between text-xs text-slate-600">
-												<span>未定密</span>
-												<Tag color={unclassifiedCount ? "orange" : "green"}>{unclassifiedCount}</Tag>
-											</div>
-											<div className="flex items-center justify-between text-xs text-slate-600">
-												<span>同步失效</span>
-												<Tag color={staleCount ? "red" : "green"}>{staleCount}</Tag>
-											</div>
-										</Space>
-									</div>
-								</div>
+							<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+								{records.map(renderAssetCard)}
 							</div>
 						) : (
 							<EmptyState title="暂无资产地图" description="请先完成元数据采集或同步资产数据。" />
