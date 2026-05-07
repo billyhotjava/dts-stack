@@ -37,6 +37,7 @@ import {
     QUICK_ACTION_RECENT_STORAGE_KEY,
     PRIMARY_ACTION_STORAGE_KEY,
     BATCH_ACTION_OPTIONS,
+    THEME_OPTIONS,
     findNextEnabledQuickActionIndex,
     buildPublishNoticeStorageKey,
     buildComponentConflictMeta,
@@ -1842,6 +1843,22 @@ export function ScreenHeader({
                 <div className="px-4 py-3 text-xs text-[#f59e0b] border-b border-white/[0.08] shrink-0 bg-[rgba(245,158,11,0.12)]">
                     编辑锁提示：当前由 {lockOwnerText} 编辑中，保存/发布已被保护性禁用。
                     {lockErrorText ? ` (${lockErrorText})` : ''}
+                </div>
+            )}
+            {/* Sprint-24 F3：历史大屏 / 模板复制等路径可能落到 classification=null。
+                此处给所有具备编辑权限的人一条黄色非阻塞提示，引导补登；不影响打开/查看/编辑。
+                没有 id（全新创建草稿）也保留提示，避免用户保存时再被后端 400 打断。 */}
+            {!config.classification && permissions.canEdit && (
+                <div
+                    data-testid="analytics-screen-header-classification-missing"
+                    className="px-4 py-2.5 text-xs text-[#f59e0b] border-b border-white/[0.08] shrink-0 bg-[rgba(245,158,11,0.12)] flex items-center gap-2"
+                >
+                    <span style={{ fontSize: 14, lineHeight: 1 }}>⚠</span>
+                    <span>
+                        本大屏尚未设置密级。未设密级时大屏对所有登录用户可见，建议在右侧
+                        <strong style={{ margin: '0 4px' }}>属性面板 → 密级</strong>
+                        中补登（公开 / 内部 / 秘密 / 机密 之一），保存后将按密级管控可见范围。
+                    </span>
                 </div>
             )}
             {headerActionNotice && (

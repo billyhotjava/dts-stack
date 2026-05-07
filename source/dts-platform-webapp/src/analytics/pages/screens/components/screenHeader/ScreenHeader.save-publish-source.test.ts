@@ -22,3 +22,25 @@ test("ScreenHeader does not expose editor security governance placeholders", asy
 	assert.equal(source.includes("ScreenAuditPanel"), false);
 	assert.equal(source.includes("ScreenCompliancePanel"), false);
 });
+
+// 回归：ScreenHeader.tsx 含 @ts-nocheck，TypeScript 不会查 ReferenceError。
+// 用过的 helpers 必须显式 import，否则运行时 ReferenceError 把整个编辑器打挂。
+test("ScreenHeader explicitly imports every helper symbol it references", async () => {
+	const source = await readFile(screenHeaderPath, "utf8");
+
+	// THEME_OPTIONS 在 normalizeTheme + themeLabel 处使用，必须列在 from './helpers' 的 import 里
+	assert.match(source, /THEME_OPTIONS/);
+	assert.match(
+		source,
+		/import\s*\{[^}]*\bTHEME_OPTIONS\b[^}]*\}\s*from\s*['"]\.\/helpers['"];?/,
+	);
+});
+
+// Sprint-24 F3：未设密级的大屏（含历史老大屏）应给出非阻塞提示，引导补登。
+// 不能再用「打不开就报 ReferenceError」这种破体验作为提醒。
+test("ScreenHeader shows a non-blocking notice when classification is missing", async () => {
+	const source = await readFile(screenHeaderPath, "utf8");
+
+	assert.match(source, /analytics-screen-header-classification-missing/);
+	assert.match(source, /!config\.classification && permissions\.canEdit/);
+});
