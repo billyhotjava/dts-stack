@@ -403,6 +403,14 @@ axiosInstance.interceptors.response.use(
 		// We still reject the promise so callers can handle it; only the toast is suppressed.
 		const isSqlTabRaceCondition =
 			typeof requestUrl === "string" && requestUrl.includes("/sql/v2/tabs") && response?.status === 404;
+		// SQL IDE stale executionId on hydrate: tabs persist `lastExecutionId` but the
+		// underlying result_set / execution row may have been cleaned up between sessions.
+		// Result endpoints throw 404 "result set not available for execution". The bottom
+		// panel already renders `<Empty description="加载失败" />`; the global toast is pure noise.
+		const isStaleExecutionResult =
+			typeof requestUrl === "string" &&
+			/\/sql\/v2\/executions\/[^/]+\/(meta|page|log)/.test(requestUrl) &&
+			response?.status === 404;
 		if (!(isLoginRequest && response?.status === 401)) {
 			logApiResponseError(error);
 		}
@@ -522,7 +530,8 @@ axiosInstance.interceptors.response.use(
 				!shouldSuppressAuthHandling &&
 				!isLoginRequest &&
 				!isSqlTabRaceCondition &&
-				!isSqlTabOptimisticConflict
+				!isSqlTabOptimisticConflict &&
+				!isStaleExecutionResult
 			) {
 				const isServiceUnavailable = !response || SERVICE_UNAVAILABLE_STATUSES.has(response.status ?? 0);
 				if (isServiceUnavailable) {

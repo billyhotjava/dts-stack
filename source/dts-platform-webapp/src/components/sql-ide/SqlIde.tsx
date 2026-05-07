@@ -22,6 +22,7 @@ import { SubQueryButton } from "./result/SubQueryButton";
 import { SavedPanel } from "./saved/SavedPanel";
 import { SaveQueryDialog } from "./saved/SaveQueryDialog";
 import { listSavedQueries } from "./api/sqlIdeSaved";
+import { getExecutionMeta } from "./api/sqlIdeExecution";
 import { useSqlExecution } from "./hooks/useSqlExecution";
 
 export const SqlIde: FC = () => {
@@ -108,6 +109,30 @@ export const SqlIde: FC = () => {
   }, [hydrated, tabs.length, openTab]);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
+
+  // Validate the active tab's persisted lastExecutionId once. If the result_set has
+  // been cleaned up between sessions, the meta endpoint 404s with "result set not
+  // available". Clear it so the bottom panel falls back to the empty placeholder
+  // instead of repeatedly hitting a doomed endpoint on every tab switch / re-render.
+  const validatedExecutionsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const tabId = activeTab?.id;
+    const execId = activeTab?.lastExecutionId;
+    if (!tabId || !execId) return;
+    if (validatedExecutionsRef.current.has(execId)) return;
+    validatedExecutionsRef.current.add(execId);
+    let aborted = false;
+    void getExecutionMeta(execId)
+      .catch((err: any) => {
+        if (aborted) return;
+        if (err?.response?.status === 404) {
+          updateTab(tabId, { lastExecutionId: null });
+        }
+      });
+    return () => {
+      aborted = true;
+    };
+  }, [activeTab?.id, activeTab?.lastExecutionId, updateTab]);
 
   const uiMode = useUiModeStore((s) => s.mode);
 
