@@ -583,7 +583,7 @@ export type ScreenListItem = {
 	canDelete?: boolean;
 	isOwner?: boolean;
 	// Sprint-24 F2：后端 toListResponse 已经回吐 classification，
-	// 列表卡片密级 Tag 直接消费。null 表示历史"裸屏"。
+	// 列表卡片密级 Tag 直接消费。null 表示历史未设密级的大屏。
 	classification?: string | null;
 	ownerDeptCode?: string | null;
 };
@@ -2284,9 +2284,10 @@ export const analyticsApi = {
 	revokeScreenGrant: (screenId: string | number, grantId: string | number) =>
 		requestJson<void>(`/bi/api/screens/${encodeURIComponent(String(screenId))}/grants/${encodeURIComponent(String(grantId))}`, "DELETE"),
 	/**
-	 * Sprint-24 F4：裸屏盘点。返回所有 archived=false 且 classification 为 null/空的大屏。
-	 * 仅 superuser / OP_ADMIN 可调，其它角色 403。端点本身写一条
-	 * screen.compliance.audit_unclassified 审计到 dts-admin。
+	 * Sprint-24 F4：大屏密级合规盘点。返回所有 archived=false 且 classification
+	 * 为 null/空的大屏。允许角色：superuser / OP_ADMIN / 所级或部门数据管理员 /
+	 * 所级或部门领导（与后端 SCREEN_AUDITOR_ROLES 对齐），其它角色 403。
+	 * 端点本身写一条 screen.compliance.audit_unclassified 审计到 dts-admin。
 	 */
 	listUnclassifiedScreens: () =>
 		fetchJson<{

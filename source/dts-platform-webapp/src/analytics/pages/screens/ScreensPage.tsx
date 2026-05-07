@@ -67,19 +67,26 @@ export default function ScreensPage() {
 	const [intakeOpen, setIntakeOpen] = useState(false);
 	const [pendingClassification, setPendingClassification] = useState<CreateScreenIntakePayload['classification'] | null>(null);
 	const [pendingScreenName, setPendingScreenName] = useState<string>('');
-	// Sprint-24 F4：裸屏盘点入口仅 superuser / OP_ADMIN 可见
+	// Sprint-24 F4：大屏密级合规盘点入口对治理角色开放（与后端 SCREEN_AUDITOR_ROLES 对齐）。
 	const [unclassifiedOpen, setUnclassifiedOpen] = useState(false);
 	const userRoles = useUserRoles();
 	const canSeeUnclassifiedAudit = (() => {
 		if (!Array.isArray(userRoles) || userRoles.length === 0) return false;
-		const upper = userRoles.map((r) => String(r).toUpperCase());
-		return upper.some(
-			(r) =>
-				r === 'ROLE_OP_ADMIN' ||
-				r === 'OP_ADMIN' ||
-				r === 'SUPERUSER' ||
-				r === 'ROLE_SUPERUSER',
-		);
+		// 必须与后端 MetabaseAuth.SCREEN_AUDITOR_ROLES 保持一致：
+		// OP_ADMIN / 所级或部门数据管理员 / 所级或部门领导 / superuser。
+		const SCREEN_AUDITOR_ROLES = new Set([
+			'OP_ADMIN',
+			'INST_DATA_OWNER',
+			'DEPT_DATA_OWNER',
+			'INST_LEADER',
+			'DEPT_LEADER',
+		]);
+		const normalize = (raw: unknown) =>
+			String(raw || '').trim().toUpperCase().replace(/^ROLE_/, '');
+		return userRoles.some((r) => {
+			const norm = normalize(r);
+			return norm === 'SUPERUSER' || SCREEN_AUDITOR_ROLES.has(norm);
+		});
 	})();
 
 	const [showAiGenerator, setShowAiGenerator] = useState(false);
@@ -103,6 +110,9 @@ export default function ScreensPage() {
 		inlinedResourceCount: number;
 	} | null>(null);
 	const [isImporting, setIsImporting] = useState(false);
+	// Sprint-24 F3：导入流程也要带 classification。若 JSON 文件未包含合法密级，
+	// 弹出 IntakeModal 由用户补选，避免后端 400。
+	const [importIntakeOpen, setImportIntakeOpen] = useState(false);
 	const importInputRef = useRef<HTMLInputElement | null>(null);
 	const [searchKeyword, setSearchKeyword] = useState(() => {
 		if (typeof window === 'undefined') return '';
@@ -576,31 +586,61 @@ export default function ScreensPage() {
 		}
 	}, []);
 
-	const handleImportConfirm = useCallback(async (action: 'replace' | 'create-screen' | 'register-template') => {
-		if (!importPreview) return;
-		if (action !== 'create-screen') {
-			toast.error('大屏列表仅支持创建新大屏，请在模板资产中心注册模板');
-			return;
-		}
-		const { parsedSpec } = importPreview;
-		setIsImporting(true);
-		try {
-			const spec = buildScreenPayload({
-				...parsedSpec,
-				name: importPreview.templateMeta?.name || parsedSpec.name || '导入大屏',
-				description: importPreview.templateMeta?.description || parsedSpec.description || '',
-			});
-			const created = await analyticsApi.createScreen(spec);
-			setImportPreview(null);
-			toast.success('已导入大屏草稿');
-			navigate(`/bi/screens/${created.id}/edit`);
-		} catch (err) {
-			console.error('Failed to import screen:', err);
-			toast.error(err instanceof Error ? err.message : '导入失败');
-		} finally {
-			setIsImporting(false);
-		}
-	}, [importPreview, navigate]);
+	const performImportCreate = useCallback(
+		async (override?: { classification?: CreateScreenIntakePayload['classification']; name?: string }) => {
+			if (!importPreview) return;
+			const { parsedSpec } = importPreview;
+			setIsImporting(true);
+			try {
+				const trimmedName = override?.name?.trim();
+				const spec = buildScreenPayload({
+					...parsedSpec,
+					...(override?.classification ? { classification: override.classification } : {}),
+					name: trimmedName || importPreview.templateMeta?.name || parsedSpec.name || '导入大屏',
+					description: importPreview.templateMeta?.description || parsedSpec.description || '',
+				});
+				const created = await analyticsApi.createScreen(spec);
+				setImportPreview(null);
+				toast.success('已导入大屏草稿');
+				navigate(`/bi/screens/${created.id}/edit`);
+			} catch (err) {
+				console.error('Failed to import screen:', err);
+				toast.error(err instanceof Error ? err.message : '导入失败');
+			} finally {
+				setIsImporting(false);
+			}
+		},
+		[importPreview, navigate],
+	);
+
+	const handleImportConfirm = useCallback(
+		async (action: 'replace' | 'create-screen' | 'register-template') => {
+			if (!importPreview) return;
+			if (action !== 'create-screen') {
+				toast.error('大屏列表仅支持创建新大屏，请在模板资产中心注册模板');
+				return;
+			}
+			// Sprint-24 F3：后端强制 classification，先看 JSON 自带密级是否合法，
+			// 否则弹 IntakeModal 让用户补选，避免直接 400。
+			const existing = (importPreview.parsedSpec as { classification?: string | null }).classification;
+			const upper = typeof existing === 'string' ? existing.trim().toUpperCase() : '';
+			const validSet = new Set(['PUBLIC', 'INTERNAL', 'SECRET', 'CONFIDENTIAL']);
+			if (upper && validSet.has(upper)) {
+				await performImportCreate();
+				return;
+			}
+			setImportIntakeOpen(true);
+		},
+		[importPreview, performImportCreate],
+	);
+
+	const handleImportIntakeSubmit = useCallback(
+		async (payload: CreateScreenIntakePayload) => {
+			setImportIntakeOpen(false);
+			await performImportCreate({ classification: payload.classification, name: payload.name });
+		},
+		[performImportCreate],
+	);
 
 	const formatDate = (dateStr?: string) => {
 		if (!dateStr) return '-';
@@ -624,9 +664,9 @@ export default function ScreensPage() {
 							<button
 								className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-warning rounded-md bg-surface-card text-warning cursor-pointer transition-all duration-200 whitespace-nowrap hover:bg-warning/10"
 								onClick={() => setUnclassifiedOpen(true)}
-								title="盘点 classification 为空的裸屏（仅 OP_ADMIN / superuser）"
+								title="盘点 classification 为空的大屏（数据管理员 / 部门领导 / 所级领导 / OP_ADMIN / superuser）"
 							>
-								裸屏盘点
+								大屏盘点
 							</button>
 						)}
 						<button
@@ -759,7 +799,7 @@ export default function ScreensPage() {
 										<th className="text-left font-medium px-4 py-3">名称</th>
 										<th className="text-left font-medium px-4 py-3">描述</th>
 										<th className="text-left font-medium px-4 py-3 whitespace-nowrap">分辨率</th>
-										{/* Sprint-24 F2/T02：密级列，便于一眼扫到 classification=null 的裸屏 */}
+										{/* Sprint-24 F2/T02：密级列，便于一眼扫到 classification=null 的大屏 */}
 										<th className="text-left font-medium px-4 py-3 whitespace-nowrap">密级</th>
 										<th className="text-left font-medium px-4 py-3 whitespace-nowrap">状态</th>
 										<th className="text-left font-medium px-4 py-3 whitespace-nowrap">更新时间</th>
@@ -917,7 +957,20 @@ export default function ScreensPage() {
 					onSubmit={handleIntakeSubmit}
 				/>
 
-			{/* Sprint-24 F4：裸屏盘点入口 */}
+				{/* Sprint-24 F3：导入 JSON 流程的 intake，仅在 JSON 未携带合法密级时弹出。 */}
+				<CreateScreenIntakeModal
+					open={importIntakeOpen}
+					title="导入大屏"
+					description="所选 JSON 文件未指定合法的大屏密级，请为本次导入补选密级。"
+					defaultName={
+						importPreview?.templateMeta?.name || importPreview?.parsedSpec.name || '导入大屏'
+					}
+					okText="确认导入"
+					onCancel={() => setImportIntakeOpen(false)}
+					onSubmit={handleImportIntakeSubmit}
+				/>
+
+			{/* Sprint-24 F4：大屏密级合规盘点入口 */}
 			<UnclassifiedScreensModal
 				open={unclassifiedOpen}
 				onClose={() => setUnclassifiedOpen(false)}

@@ -18,9 +18,10 @@ public interface AnalyticsScreenRepository extends JpaRepository<AnalyticsScreen
     List<AnalyticsScreen> findAllByOrderByIdDesc();
 
     /**
-     * Sprint-24 F4：裸屏盘点。返回所有未归档且未设密级的大屏，供 OP_ADMIN
-     * 通过 /admin/unclassified 端点收敛存量裸屏。空字符串视为已设：
-     * 历史 column 类型是 varchar 可能存空串，用 IS NULL OR LENGTH(TRIM())=0 兜底。
+     * Sprint-24 F4：大屏密级合规盘点。返回所有未归档且未设密级的大屏，供数据治理
+     * 角色（见 MetabaseAuth.SCREEN_AUDITOR_ROLES）通过 /admin/unclassified 端点收敛
+     * 存量未设密大屏。空字符串视为已设：历史 column 类型是 varchar 可能存空串，
+     * 用 IS NULL OR LENGTH(TRIM())=0 兜底。
      */
     @Query(
         "SELECT s FROM AnalyticsScreen s " +

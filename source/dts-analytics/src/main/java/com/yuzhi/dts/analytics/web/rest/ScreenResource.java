@@ -744,7 +744,7 @@ public class ScreenResource {
             name = "未命名大屏";
         }
 
-        // Sprint-24 F3/T03：创建大屏强制选择密级，从源头消除 classification=null 裸屏。
+        // Sprint-24 F3/T03：创建大屏强制选择密级，从源头消除 classification=null 的大屏。
         // 历史数据通过 F4 盘点入口暴露 + owner 主动补登，不在此回填。
         String rawClassification = body == null ? null : body.path("classification").asText(null);
         String classificationUpper;
@@ -1323,7 +1323,7 @@ public class ScreenResource {
             return ResponseEntity.ok(Map.of("classification", upper, "changed", false));
         }
         // Sprint-24 F5：降级路径强制 reason >=10 字符。
-        // before 为 null（裸屏）时视为最低级 PUBLIC，所以任何修改都不算降级，
+        // before 为 null（未设密的大屏）时视为最低级 PUBLIC，所以任何修改都不算降级，
         // 鼓励 owner 尽快补登而不被 reason 流程阻塞。
         String reason = body == null ? null : trimToNull(body.path("reason").asText(null));
         boolean isDowngrade = isDowngrade(before, upper);
@@ -1364,7 +1364,7 @@ public class ScreenResource {
      * Sprint-24 F5：判定密级修改是否为"降级"。
      *
      * 阶梯：PUBLIC(0) &lt; INTERNAL(1) &lt; SECRET(2) &lt; CONFIDENTIAL(3)。
-     * before 为 null/blank（历史裸屏）视作 PUBLIC（最低）→ 任何修改都不算降级，
+     * before 为 null/blank（历史未设密大屏）视作 PUBLIC（最低）→ 任何修改都不算降级，
      * 鼓励 owner 补登；不在阶梯里的值视作 PUBLIC（保守）。
      *
      * 抽 package-private static 便于单元测试。
@@ -2450,7 +2450,7 @@ public class ScreenResource {
     /**
      * Sprint-24 F3/T03：校验创建大屏请求中的 classification 字段。
      *
-     * 创建路径强制必填，从源头消除 classification=null 裸屏；老数据走 F4 盘点回收。
+     * 创建路径强制必填，从源头消除 classification=null 的大屏；老数据走 F4 盘点回收。
      * 抽成 package-private static 便于单元测试，避免为每条分支启动 Spring 上下文。
      *
      * @return normalized 大写值（PUBLIC/INTERNAL/SECRET/CONFIDENTIAL）
@@ -2505,11 +2505,12 @@ public class ScreenResource {
     }
 
     /**
-     * Sprint-24 F4：裸屏盘点端点。列出所有 archived=false 且 classification 为 null
-     * 或空白的大屏，供 OP_ADMIN / superuser 通知 owner 去补登密级，收敛存量裸屏。
+     * Sprint-24 F4：大屏密级合规盘点端点。列出所有 archived=false 且 classification
+     * 为 null 或空白的大屏，供数据治理人员通知 owner 去补登密级，收敛存量未设密大屏。
      *
-     * 鉴权：复用 MetabaseAuth.requireSuperuser，与同文件下的 backfill-grants 端点
-     * 一致；这是合规盘点工具，仅 superuser 可调。
+     * 鉴权：使用 MetabaseAuth.requireScreenAuditor —— superuser、OP_ADMIN、所级/部门
+     * 数据管理员、所级/部门领导均可调。和同文件 backfill-grants（仅 superuser）刻意
+     * 区分：盘点是治理协同动作，不是"修复历史脏数据"那种危险操作。
      *
      * 不静默回填默认密级 —— 那会误判真实 SECRET 数据为 INTERNAL。回填由 owner
      * 在编辑器属性面板（F1 入口）手动完成，每次改动都会写一条
@@ -2520,7 +2521,7 @@ public class ScreenResource {
      */
     @GetMapping(path = "/admin/unclassified", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> listUnclassified(HttpServletRequest request) {
-        Optional<ResponseEntity<String>> authError = MetabaseAuth.requireSuperuser(sessionService, request);
+        Optional<ResponseEntity<String>> authError = MetabaseAuth.requireScreenAuditor(sessionService, request);
         if (authError.isPresent()) {
             return authError.orElseThrow();
         }
