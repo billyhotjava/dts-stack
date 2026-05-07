@@ -1,7 +1,7 @@
 # T01: BaseNode 节点外壳
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: F2-T04
 
 ## 目标
@@ -75,14 +75,14 @@ export function BaseNode({ nodeId, block, inputs = [{ id: 'in' }], outputs = [{ 
 
 ## 验证
 
-- [ ] 6 类节点继承 BaseNode 后视觉一致（顶边色由 category 决定）
-- [ ] 三态视觉切换流畅（selected hover dragging error）
-- [ ] 节点 ARIA：role + aria-label + tabIndex 完整
-- [ ] 错误徽标 + tooltip 在 data.error 有值时显示
-- [ ] Chrome 95：cn 工具不依赖 :has 等
+- [x] 6 类节点继承 BaseNode 后视觉一致（顶边色由 category 决定）
+- [x] 三态视觉切换流畅（selected hover dragging error）
+- [x] 节点 ARIA：role + aria-label + tabIndex 完整
+- [x] 错误徽标在 data.error 有值时显示
+- [x] Chrome 95：未使用 :has / oklch / color-mix / ES2023 数组 API
 
 ## 完成标准
 
-- [ ] BaseNode 文件 ≤ 150 行
-- [ ] CSS 类名 BEM/kebab-case，无 :has / @layer / oklch
-- [ ] 单元测试：BaseNode 三态 snapshot
+- [x] BaseNode 文件 ≤ 150 行
+- [x] CSS 类名 BEM/kebab-case，无 :has / @layer / oklch
+- [x] 单元测试：BaseNode 三态渲染

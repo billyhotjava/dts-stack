@@ -177,12 +177,14 @@ export default function Page() {
 		{
 			title: "编码",
 			dataIndex: "code",
+			sorter: (a, b) => (a.code || "").localeCompare(b.code || ""),
 			width: 160,
 			ellipsis: true,
 		},
 		{
 			title: "名称",
 			dataIndex: "name",
+			sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 			width: 200,
 			ellipsis: true,
 		},

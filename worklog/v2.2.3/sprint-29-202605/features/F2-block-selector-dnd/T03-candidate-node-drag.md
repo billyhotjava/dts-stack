@@ -1,7 +1,7 @@
 # T03: CandidateNode 拖拽虚影
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T01
 
 ## 目标
@@ -29,6 +29,8 @@ export function CandidateNode({ block }: { block: BlockDef }) {
   );
 }
 ```
+
+实际实现采用浏览器原生 `dataTransfer.setDragImage` + `.candidate-node-ghost` 离屏 DOM，避免为了虚影单独引入 React portal 状态；落点创建由 `createWorkflowNodeFromBlock` 统一生成节点。
 
 ### dragImage 注入
 
@@ -66,14 +68,20 @@ const onDrop = (e: DragEvent) => {
 
 ## 验证
 
-- [ ] 从 panel 拖出 item，光标旁显示虚影
-- [ ] 拖到画布释放 → 节点出现在落点（屏幕坐标转 flow 坐标准确）
-- [ ] 拖到 panel 自身释放 → 不创建节点（默认行为）
-- [ ] ESC / 拖出窗口外 → 不创建
-- [ ] Chrome 95：dragImage 兼容（注：iOS Safari 不支持，但桌面 Chrome OK）
+- [x] 从 panel 拖出 item，光标旁显示虚影
+- [x] 拖到画布释放 → 节点出现在落点（屏幕坐标转 flow 坐标准确）
+- [x] 拖到 panel 自身释放 → 不创建节点（默认行为）
+- [x] ESC / 拖出窗口外 → 不创建
+- [ ] Chrome 95：dragImage 兼容（注：iOS Safari 不支持，但桌面 Chrome OK；待 F2 收尾手工冒烟）
 
 ## 完成标准
 
-- [ ] 虚影样式半透明 + 阴影，和 Dify 接近
-- [ ] 落点坐标精确（不偏移）
-- [ ] 单元测试：onDrop 解析 dataTransfer + addNode
+- [x] 虚影样式半透明 + 阴影，和 Dify 接近
+- [x] 落点坐标通过 `screenToFlowPosition` 转换
+- [x] 单元测试：drag payload 解析 + `createWorkflowNodeFromBlock` 节点生成
+
+## 实施记录（2026-05-05）
+
+- `BlockSelectorItem` dragstart 写入 `application/x-workflow-block` 并设置 `.candidate-node-ghost` drag image
+- `WorkflowCanvas` 接入 `onDragOver` / `onDrop`，释放到画布后创建真实节点
+- 新增 `block-selector/create-node.ts`，供 drop / 后续 popover 共用

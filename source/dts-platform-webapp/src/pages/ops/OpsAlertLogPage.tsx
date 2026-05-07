@@ -30,7 +30,7 @@ export default function OpsAlertLogPage() {
 
 	const baseColumns: ColumnsType<OpsAlert> = [
 		{ title: "类型", dataIndex: "type", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
-		{ title: "规则", dataIndex: "ruleName", render: (v) => v || "-" },
+		{ title: "规则", dataIndex: "ruleName", render: (v) => v || "-" , sorter: (a, b) => (a.ruleName || "").localeCompare(b.ruleName || "") },
 		{ title: "状态", dataIndex: "status", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
 		{ title: "严重性", dataIndex: "severity", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
 		{ title: "描述", dataIndex: "message", render: (v) => <Text type="secondary">{v || "-"}</Text> },

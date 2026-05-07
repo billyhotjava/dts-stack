@@ -213,7 +213,7 @@ public class QualityRunService {
     }
 
     @Transactional(readOnly = true)
-    public List<QualityRunDto> listRuns(UUID ruleId, UUID datasetId, String status, Instant startedFrom, Instant startedTo, int limit) {
+    public List<QualityRunDto> listRuns(UUID ruleId, UUID datasetId, String status, String triggerType, Instant startedFrom, Instant startedTo, int limit) {
         int safeLimit = Math.max(1, Math.min(limit, 500));
         int querySize = Math.max(safeLimit, 200);
         Pageable pageable = PageRequest.of(0, querySize, Sort.Direction.DESC, "createdDate");
@@ -226,9 +226,11 @@ public class QualityRunService {
             candidates = runRepository.findAll(pageable).getContent();
         }
         String normalizedStatus = StringUtils.trimToNull(status);
+        String normalizedTriggerType = StringUtils.trimToNull(triggerType);
         return candidates
             .stream()
             .filter(run -> normalizedStatus == null || normalizedStatus.equalsIgnoreCase(StringUtils.trimToEmpty(run.getStatus())))
+            .filter(run -> normalizedTriggerType == null || normalizedTriggerType.equalsIgnoreCase(StringUtils.trimToEmpty(run.getTriggerType())))
             .filter(run -> {
                 Instant pivot = run.getStartedAt() != null ? run.getStartedAt() : run.getCreatedDate();
                 if (startedFrom != null && (pivot == null || pivot.isBefore(startedFrom))) {

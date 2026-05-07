@@ -178,12 +178,14 @@ export default function Page() {
 			dataIndex: "code",
 			width: 160,
 			ellipsis: true,
+			sorter: (a, b) => (a.code || "").localeCompare(b.code || ""),
 		},
 		{
 			title: "名称",
 			dataIndex: "name",
 			width: 200,
 			ellipsis: true,
+			sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 		},
 		{
 			title: "领域",
@@ -202,6 +204,7 @@ export default function Page() {
 			dataIndex: "sourceTable",
 			width: 180,
 			ellipsis: true,
+			sorter: (a, b) => (a.sourceTable || "").localeCompare(b.sourceTable || ""),
 			render: (v: string) => v ?? "-",
 		},
 		{

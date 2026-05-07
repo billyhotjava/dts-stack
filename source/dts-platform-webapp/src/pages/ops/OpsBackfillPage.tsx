@@ -86,7 +86,7 @@ export default function OpsBackfillPage() {
 		{ title: "DAG", dataIndex: "dagId", render: (v) => v || "-" },
 		{ title: "日期范围", dataIndex: "dateFrom", render: (_, record) => `${record.dateFrom || "-"} ~ ${record.dateTo || "-"}` },
 		{ title: "状态", dataIndex: "status", render: (v) => <Tag>{v || "-"}</Tag> },
-		{ title: "触发时间", dataIndex: "triggeredAt", render: (v) => formatDate(v) },
+		{ title: "触发时间", dataIndex: "triggeredAt", render: (v) => formatDate(v) , sorter: (a, b) => { const ta = a.triggeredAt ? new Date(a.triggeredAt as any).getTime() : 0; const tb = b.triggeredAt ? new Date(b.triggeredAt as any).getTime() : 0; return ta - tb; } },
 		{ title: "外部运行ID", dataIndex: "externalRunId", render: (v) => v || "-" },
 		{ title: "备注", dataIndex: "message", render: (v) => v || "-" },
 	];

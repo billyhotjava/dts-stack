@@ -81,7 +81,7 @@ public class IngestionTaskProxyResource {
             }
         }
         Map<String, Object> resolvedPayload = payload;
-        if (!draft) {
+        if (!draft || usesPlatformDefaultDestination(payload)) {
             DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot = destinationSyncService.ensureDefaultDestination();
             resolvedPayload = applyDefaultDestinationPayload(payload, snapshot);
         }
@@ -384,6 +384,82 @@ public class IngestionTaskProxyResource {
         return ResponseEntity.ok(ingestionClient.getRealtimeStatus(id));
     }
 
+    @PostMapping("/tasks/{id}/parse")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> parseStagingFile(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(ingestionClient.parseStagingFile(id));
+    }
+
+    @PostMapping("/tasks/{id}/pre-check")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> preCheckStaging(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(ingestionClient.preCheckStaging(id));
+    }
+
+    @PutMapping("/tasks/{id}/staging/{rowNum}")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> updateStagingCell(
+        @PathVariable("id") Long id,
+        @PathVariable("rowNum") Integer rowNum,
+        @RequestBody Map<String, Object> payload
+    ) {
+        return ResponseEntity.ok(ingestionClient.updateStagingCell(id, rowNum, payload));
+    }
+
+    @PostMapping("/tasks/{id}/re-check")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> reCheckStaging(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(ingestionClient.reCheckStaging(id));
+    }
+
+    @PostMapping("/tasks/{id}/submit")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> submitStaging(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(ingestionClient.submitStaging(id));
+    }
+
+    @DeleteMapping("/tasks/{id}/staging")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> dropStaging(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(ingestionClient.dropStaging(id));
+    }
+
+    @GetMapping("/tasks/{id}/staging")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> getStagingData(
+        @PathVariable("id") Long id,
+        @RequestParam Map<String, String> params
+    ) {
+        Map<String, Object> query = new LinkedHashMap<>();
+        if (params != null) {
+            query.putAll(params);
+        }
+        return ResponseEntity.ok(ingestionClient.getStagingData(id, query));
+    }
+
+    @GetMapping("/tasks/{id}/staging/errors/summary")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> getStagingErrorSummary(
+        @PathVariable("id") Long id,
+        @RequestParam Map<String, String> params
+    ) {
+        Map<String, Object> query = new LinkedHashMap<>();
+        if (params != null) {
+            query.putAll(params);
+        }
+        return ResponseEntity.ok(ingestionClient.getStagingErrorSummary(id, query));
+    }
+
+    @GetMapping("/tasks/{id}/staging/errors/download")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<byte[]> downloadStagingErrors(@PathVariable("id") Long id) {
+        ResponseEntity<byte[]> response = ingestionClient.downloadStagingErrors(id);
+        return ResponseEntity
+            .status(response.getStatusCode())
+            .headers(response.getHeaders())
+            .body(response.getBody());
+    }
+
     @PostMapping(value = "/files/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> uploadFile(@RequestPart("file") MultipartFile file) {
@@ -483,6 +559,18 @@ public class IngestionTaskProxyResource {
         Map<String, Object> merged = new LinkedHashMap<>(payload);
         merged.put("destination", destination);
         return merged;
+    }
+
+    private boolean usesPlatformDefaultDestination(Map<String, Object> payload) {
+        if (payload == null) {
+            return false;
+        }
+        Object destinationObj = payload.get("destination");
+        if (!(destinationObj instanceof Map<?, ?> destinationMap)) {
+            return false;
+        }
+        Object flag = destinationMap.get("usePlatformDefault");
+        return flag instanceof Boolean bool ? bool : Boolean.parseBoolean(String.valueOf(flag));
     }
 
     private Map<String, Object> applyDefaultDestinationUpdatePayload(

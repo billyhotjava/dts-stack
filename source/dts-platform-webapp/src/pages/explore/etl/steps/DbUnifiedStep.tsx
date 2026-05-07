@@ -176,11 +176,11 @@ export function DbUnifiedStep({
 			</Form.Item>
 			{apiFlow ? (
 				<Alert
-					type="warning"
+					type="info"
 					showIcon
 					className="mb-4"
-					message="API 入湖运行时尚未启用"
-					description="当前页面先支持 API 数据源选择和接口资源配置，并保存为草稿；不会生成 Addax/Airflow 作业，也不会立即执行。"
+					message="API 入湖运行时已启用"
+					description="API 任务将由 Airflow PythonOperator 执行，按资源配置写入 ODS 原始记录表；可保存草稿或提交后立即运行。"
 				/>
 			) : null}
 
@@ -433,7 +433,7 @@ export function DbUnifiedStep({
 					}}
 					columns={[
 						{ title: "模式", dataIndex: "schema", width: 140 },
-						{ title: "表名", dataIndex: "name" },
+						{ title: "表名", dataIndex: "name" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 						{ title: "类型", dataIndex: "type", width: 120 },
 					]}
 					pagination={{

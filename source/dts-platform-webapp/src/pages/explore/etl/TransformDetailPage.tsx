@@ -771,6 +771,7 @@ export default function TransformDetailPage() {
 																{
 																	title: "规则",
 																	dataIndex: "ruleName",
+																	sorter: (a, b) => (a.ruleName || "").localeCompare(b.ruleName || ""),
 																	key: "ruleName",
 																	render: (value?: string) => value || "-",
 																},
@@ -944,6 +945,11 @@ export default function TransformDetailPage() {
 												{
 													title: "更新时间",
 													dataIndex: "updatedAt",
+													sorter: (a, b) => {
+														const ta = a.updatedAt ? new Date(a.updatedAt as any).getTime() : 0;
+														const tb = b.updatedAt ? new Date(b.updatedAt as any).getTime() : 0;
+														return ta - tb;
+													},
 													key: "updatedAt",
 													render: (value?: string) => (value ? new Date(value).toLocaleString("zh-CN") : "-"),
 												},

@@ -152,7 +152,7 @@ function BatchImportCardsModal({
 					rowKey="name"
 					pagination={false}
 					columns={[
-						{ title: '卡片名称', dataIndex: 'name', key: 'name' },
+						{ title: '卡片名称', dataIndex: 'name', key: 'name' , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 						{ title: '状态', dataIndex: 'status', key: 'status', width: 100,
 							render: (s: string) => <Tag color={s === 'OK' ? 'green' : 'red'}>{s}</Tag> },
 					]}
@@ -200,8 +200,8 @@ function BatchImportCardsModal({
 							pagination={false}
 							scroll={{ y: 300 }}
 							columns={[
-								{ title: '文件名', dataIndex: 'name', key: 'name', width: 200, ellipsis: true },
-								{ title: '卡片名称', dataIndex: 'cardName', key: 'cardName', width: 180, ellipsis: true },
+								{ title: '文件名', dataIndex: 'name', key: 'name', width: 200, ellipsis: true , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
+								{ title: '卡片名称', dataIndex: 'cardName', key: 'cardName', width: 180, ellipsis: true , sorter: (a, b) => (a.cardName || "").localeCompare(b.cardName || "") },
 								{ title: '对应大屏', dataIndex: 'screen', key: 'screen', width: 120, ellipsis: true },
 								{ title: '用途', dataIndex: 'description', key: 'description', ellipsis: true },
 							]}
@@ -330,6 +330,7 @@ export default function CardsPage() {
 		{
 			title: t(locale, "common.name"),
 			dataIndex: "name",
+			sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 			key: "name",
 			ellipsis: true,
 			render: (name: string, record) => (

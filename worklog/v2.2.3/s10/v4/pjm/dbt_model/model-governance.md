@@ -103,6 +103,8 @@ stg
 - `source_row_num`
 - `imported_at`
 
+ODS 物理表的来源技术字段以入湖统一字段为准：`_dts_source_system` 映射到 STG 的 `source_system`，`_dts_import_time` 映射到 STG 的 `imported_at`。不要在 STG 中直接读取旧字段 `source_system` 或 `import_time`。
+
 ## 7. 当前语义链路
 
 ### STG

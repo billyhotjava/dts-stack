@@ -243,6 +243,7 @@ export default function QualityPage() {
 		{
 			title: "规则",
 			dataIndex: "name",
+			sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 			render: (value) => value || "-",
 		},
 		{
@@ -268,6 +269,11 @@ export default function QualityPage() {
 		{
 			title: "最近运行",
 			dataIndex: "lastRunAt",
+			sorter: (a, b) => {
+				const ta = a.lastRunAt ? new Date(a.lastRunAt as any).getTime() : 0;
+				const tb = b.lastRunAt ? new Date(b.lastRunAt as any).getTime() : 0;
+				return ta - tb;
+			},
 			render: (value) => value || "-",
 		},
 		{

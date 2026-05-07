@@ -69,6 +69,7 @@ export default function CollectionsPage() {
 		{
 			title: t(locale, "common.name"),
 			dataIndex: "name",
+			sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 			key: "name",
 			render: (name: string, record) => (
 				<Link to={`/bi/questions/${record.id}`} className="text-brand hover:underline font-medium">
@@ -111,6 +112,7 @@ export default function CollectionsPage() {
 		{
 			title: t(locale, "common.name"),
 			dataIndex: "name",
+			sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 			key: "name",
 			render: (name: string, record) => (
 				<Link to={`/bi/dashboards/${record.id}`} className="text-brand hover:underline font-medium">

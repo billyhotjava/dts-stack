@@ -1,7 +1,7 @@
 # F4: Panel 配置抽屉 + DSL 序列化 + 接入点
 
 **优先级**: P0
-**状态**: READY
+**状态**: IN_PROGRESS
 **依赖**: F3（节点已就绪）
 
 ## 目标
@@ -27,17 +27,27 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| T01 | `NodePanel` 抽屉壳 + 关闭/锁定/表单容器 | P0 | READY | F3-T07 |
-| T02 | 6 类节点的配置表单（每节点自带 schema） | P0 | READY | T01 |
-| T03 | DSL 序列化：画布 → JSON（含 viewport） | P0 | READY | T02 |
-| T04 | DSL 反序列化：JSON → 画布；幂等性单测 | P0 | READY | T03 |
-| T05 | dts-platform 后端：`IngestionTask.graph_dsl jsonb` 字段 + Liquibase + GET/PUT API | P0 | READY | T03 |
-| T06 | OrchestrationPage 接入：拆 Tab「编排画布 / 运行实例」+ 顶部"保存 DSL"按钮 | P0 | READY | T04, T05 |
+| T01 | `NodePanel` 抽屉壳 + 关闭/锁定/表单容器 | P0 | DONE | F3-T07 |
+| T02 | 6 类节点的配置表单（每节点自带 schema） | P0 | DONE | T01 |
+| T03 | DSL 序列化：画布 → JSON（含 viewport） | P0 | DONE | T02 |
+| T04 | DSL 反序列化：JSON → 画布；幂等性单测 | P0 | DONE | T03 |
+| T05 | dts-platform 后端：`IngestionTask.graph_dsl jsonb` 字段 + Liquibase + GET/PUT API | P0 | PARTIAL | T03 |
+| T06 | OrchestrationPage 接入：拆 Tab「编排画布 / 运行实例」+ 顶部"保存 DSL"按钮 | P0 | PARTIAL | T04, T05 |
 
 ## 完成标准
 
-- [ ] 选中任意节点 → 右侧 NodePanel 自动打开 → 改参数 → 实时同步到 store
-- [ ] 点保存 → 后端 graph_dsl 字段成功写入；刷新页面后画布 100% 还原（节点位置、连线、参数、viewport）
-- [ ] DSL JSON schema 在 `assets/dsl-schema.json` 文档化，包含 `dslVersion` 字段
-- [ ] OrchestrationPage 老的 Airflow DAG 列表保留为「运行实例」Tab，老链接不破
+- [x] 选中任意节点 → 右侧 NodePanel 自动打开 → 改参数 → 实时同步到 store
+- [x] 点保存 → 后端 graph_dsl 字段成功写入；刷新页面后画布 100% 还原（通过 `?taskId=<id>` 绑定任务；无 taskId 时保存本地草稿；真实环境冒烟待补）
+- [x] 后端字段落地前，本地 DSL 草稿保存/刷新还原可用
+- [x] DSL JSON schema 在 `assets/dsl-schema.json` 文档化，包含 `dslVersion` 字段
+- [x] OrchestrationPage 老的 Airflow DAG 列表保留为「运行实例」Tab，老链接不破
 - [ ] 后端 IT 测试：保存 → 读取 → 反序列化 三步均通过；单测覆盖率 ≥ 80%
+
+## 实施记录（2026-05-05）
+
+- 前端完成 `NodePanel`、6 类节点配置表单、DSL `serializeDsl` / `deserializeDsl`
+- `WorkflowCanvas` 已监听 ReactFlow selection，选中节点会打开配置面板
+- `assets/dsl-schema.json` 已补 DSL v1 JSON Schema
+- 后端落点实际为 `source/dts-ingestion` 的 `IngestionTask`，GitNexus impact 返回 CRITICAL（80 affected / 47 direct）
+- 已补 `graph_dsl jsonb` 最小持久化链路：Liquibase + entity + DTO + mapper + mapper test；未改执行链路
+- `OrchestrationPage` 已支持 `?taskId=<id>` 加载/保存 `task.graphDsl`，并保留无 taskId 时的本地 DSL 草稿闭环

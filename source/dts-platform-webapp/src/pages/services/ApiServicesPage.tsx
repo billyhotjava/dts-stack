@@ -133,7 +133,7 @@ export default function Page() {
 	};
 
 	const baseColumns: ColumnsType<ApiServiceSummary> = [
-		{ title: "名称", dataIndex: "name", render: (v) => v || "-" },
+		{ title: "名称", dataIndex: "name", render: (v) => v || "-" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 		{ title: "方法", dataIndex: "method", width: 90, render: (v) => <Tag>{v || "-"}</Tag> },
 		{ title: "路径", dataIndex: "path", render: (v) => v || "-" },
 		{ title: "分类", dataIndex: "classification", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },

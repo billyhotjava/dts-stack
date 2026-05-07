@@ -50,6 +50,7 @@ export function CardPickerModal({ open, onClose, onAdd, allCards, existingCardId
 		{
 			title: "名称",
 			dataIndex: "name",
+			sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 			key: "name",
 			ellipsis: true,
 			render: (name: string) => <span className="font-medium">{name || "-"}</span>,

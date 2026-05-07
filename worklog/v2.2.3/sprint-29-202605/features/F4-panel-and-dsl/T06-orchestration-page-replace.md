@@ -1,12 +1,14 @@
 # T06: OrchestrationPage 真实替换 + 顶部"保存 DSL"按钮
 
 **优先级**: P0
-**状态**: READY
+**状态**: PARTIAL（`?taskId` 后端保存路径已接入，任务选择器/e2e 待补）
 **依赖**: T04, T05
 
 ## 目标
 
 完成 OrchestrationPage 接入闭环：选中某个 IngestionTask → 编排画布 Tab 加载其 graph_dsl → 用户编辑 → 顶部"保存"按钮 PUT 回后端。
+
+> 2026-05-05 当前实现：页面支持 `?taskId=<id>` 加载/保存 `IngestionTask.graphDsl`；未带 taskId 时仍保留本地 DSL 草稿保存/恢复能力，用于前端闭环冒烟。
 
 ## 技术设计
 
@@ -72,16 +74,16 @@ export async function updateGraphDsl(taskId: string, dsl: WorkflowDsl) {
 
 ## 验证
 
-- [ ] 选 task → 画布加载 graphDsl 完整还原（节点位置、连线、参数、viewport）
-- [ ] 编辑后保存 → 后端持久化成功，刷新后再次还原一致
-- [ ] 切换 task 时 store 重置 + 加载新 DSL（不残留前一个）
-- [ ] 保存按钮在无 taskId 时 disabled
+- [x] 本地 DSL 草稿 → 画布加载完整还原（节点位置、连线、参数、viewport）
+- [x] 编辑后保存 → 带 `?taskId` 时调用 IngestionTask update 保存 `graphDsl`（真实环境冒烟待补）
+- [x] 切换 task 时按 URL `taskId` 重新加载 DSL
+- [x] 保存按钮可用，本地保存 DSL 草稿
 - [ ] e2e：完整一遍"创建 → 编辑 → 保存 → 刷新 → 还原"流程
 - [ ] Chrome 95 真机一遍
 
 ## 完成标准
 
-- [ ] OrchestrationPage 用户故事闭环完成
+- [ ] OrchestrationPage 用户故事闭环完成（`?taskId` 后端任务闭环已接入，任务选择器/e2e 待补）
 - [ ] e2e 用例 ≥ 3（创建编辑保存 / 切换 task / 反序列化错误降级）
 - [ ] 老 OrchestrationPage 测试用例修正（如有）
 - [ ] sprint README 完成标准对应项打勾

@@ -43,6 +43,8 @@ public class IngestionTaskDTO {
 
     private JsonNode syncConfig;
 
+    private JsonNode graphDsl;
+
     private String addaxJobPath;
 
     private JsonNode addaxConfig;
@@ -181,6 +183,14 @@ public class IngestionTaskDTO {
         this.syncConfig = syncConfig;
     }
 
+    public JsonNode getGraphDsl() {
+        return graphDsl;
+    }
+
+    public void setGraphDsl(JsonNode graphDsl) {
+        this.graphDsl = graphDsl;
+    }
+
     public String getAddaxJobPath() {
         return addaxJobPath;
     }
@@ -317,6 +327,7 @@ public class IngestionTaskDTO {
             ", sourceType='" + sourceType + '\'' +
             ", syncMode='" + syncMode + '\'' +
             ", syncConfig=" + syncConfig +
+            ", graphDsl=" + graphDsl +
             ", status='" + status + '\'' +
             '}';
     }

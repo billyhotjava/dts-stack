@@ -151,8 +151,8 @@ export default function AccessChangesPage() {
 	}, [taskId, changeType, status, assigneeKeyword, keyword]);
 
 	const columns: ColumnsType<IngestionChangeLogDTO> = [
-		{ title: "时间", dataIndex: "createdDate", render: (value) => formatDateTime(value) || "-" },
-		{ title: "任务", dataIndex: "taskName", render: (_, row) => row.taskName || `任务 #${row.taskId}` },
+		{ title: "时间", dataIndex: "createdDate", render: (value) => formatDateTime(value) || "-" , sorter: (a, b) => { const ta = a.createdDate ? new Date(a.createdDate as any).getTime() : 0; const tb = b.createdDate ? new Date(b.createdDate as any).getTime() : 0; return ta - tb; } },
+		{ title: "任务", dataIndex: "taskName", render: (_, row) => row.taskName || `任务 #${row.taskId}` , sorter: (a, b) => (a.taskName || "").localeCompare(b.taskName || "") },
 		{
 			title: "类型",
 			dataIndex: "changeType",
@@ -165,6 +165,11 @@ export default function AccessChangesPage() {
 		{
 			title: "处理时间",
 			dataIndex: "handledAt",
+			sorter: (a, b) => {
+				const ta = a.handledAt ? new Date(a.handledAt as any).getTime() : 0;
+				const tb = b.handledAt ? new Date(b.handledAt as any).getTime() : 0;
+				return ta - tb;
+			},
 			render: (value) => formatDateTime(value) || "-",
 		},
 		{

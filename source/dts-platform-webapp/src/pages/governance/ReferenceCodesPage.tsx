@@ -760,8 +760,8 @@ export default function ReferenceCodesPage() {
 	};
 
 	const columns: ColumnsType<ReferenceCodeDirectory> = [
-		{ title: "码表名称", dataIndex: "codeTypeName", render: (t) => <Text strong>{t}</Text> },
-		{ title: "码表编码", dataIndex: "codeTypeCode", render: (c) => <Tag>{c}</Tag> },
+		{ title: "码表名称", dataIndex: "codeTypeName", render: (t) => <Text strong>{t}</Text> , sorter: (a, b) => (a.codeTypeName || "").localeCompare(b.codeTypeName || "") },
+		{ title: "码表编码", dataIndex: "codeTypeCode", render: (c) => <Tag>{c}</Tag> , sorter: (a, b) => (a.codeTypeCode || "").localeCompare(b.codeTypeCode || "") },
 		{ title: "业务分类", dataIndex: "bizCatalog", render: (t) => t || "-" },
 		{ title: "数据类型", dataIndex: "dataType", render: (t) => t || "-" },
 		{ title: "码值数量", dataIndex: "itemCount", render: (t) => t ?? 0 },
@@ -800,8 +800,8 @@ export default function ReferenceCodesPage() {
 
 	const itemColumns: ColumnsType<ReferenceCodeItem> = useMemo(
 		() => [
-			{ title: "代码值", dataIndex: "codeValue", render: (t) => <Tag>{t}</Tag> },
-			{ title: "名称", dataIndex: "codeName", render: (t) => <Text strong>{t}</Text> },
+			{ title: "代码值", dataIndex: "codeValue", render: (t) => <Tag>{t}</Tag> , sorter: (a, b) => (a.codeValue || "").localeCompare(b.codeValue || "") },
+			{ title: "名称", dataIndex: "codeName", render: (t) => <Text strong>{t}</Text> , sorter: (a, b) => (a.codeName || "").localeCompare(b.codeName || "") },
 			{ title: "业务定义", dataIndex: "description", ellipsis: true, render: (t) => t || "-" },
 			{ title: "排序", dataIndex: "sortNum", render: (t) => (t == null ? "-" : t) },
 			{ title: "父级", dataIndex: "parentCode", render: (t) => t || "-" },
@@ -850,7 +850,7 @@ export default function ReferenceCodesPage() {
 	);
 
 	const conflictColumns: ColumnsType<Record<string, any>> = [
-		{ title: "码值", dataIndex: "codeValue", width: 160, render: (value) => value || "-" },
+		{ title: "码值", dataIndex: "codeValue", width: 160, render: (value) => value || "-" , sorter: (a, b) => (a.codeValue || "").localeCompare(b.codeValue || "") },
 		{ title: "当前名称", dataIndex: "currentName", render: (value) => value || "-" },
 		{ title: "导入名称", dataIndex: "incomingName", render: (value) => value || "-" },
 		{ title: "原因", dataIndex: "reason", render: (value) => value || "-" },
@@ -858,7 +858,7 @@ export default function ReferenceCodesPage() {
 
 	const errorColumns: ColumnsType<Record<string, any>> = [
 		{ title: "行号", dataIndex: "line", width: 100, render: (value) => value ?? "-" },
-		{ title: "码值", dataIndex: "codeValue", width: 160, render: (value) => value || "-" },
+		{ title: "码值", dataIndex: "codeValue", width: 160, render: (value) => value || "-" , sorter: (a, b) => (a.codeValue || "").localeCompare(b.codeValue || "") },
 		{ title: "原因", dataIndex: "reason", render: (value) => value || "-" },
 	];
 
@@ -870,7 +870,7 @@ export default function ReferenceCodesPage() {
 		{ title: "更新", dataIndex: "updateCount", width: 80, render: (value) => value ?? 0 },
 		{ title: "冲突", dataIndex: "conflictCount", width: 80, render: (value) => value ?? 0 },
 		{ title: "错误", dataIndex: "errorCount", width: 80, render: (value) => value ?? 0 },
-		{ title: "创建时间", dataIndex: "createdDate", width: 170, render: (value) => formatDateTime(value) },
+		{ title: "创建时间", dataIndex: "createdDate", width: 170, render: (value) => formatDateTime(value) , sorter: (a, b) => { const ta = a.createdDate ? new Date(a.createdDate as any).getTime() : 0; const tb = b.createdDate ? new Date(b.createdDate as any).getTime() : 0; return ta - tb; } },
 		{
 			title: "操作",
 			width: 180,
@@ -895,7 +895,7 @@ export default function ReferenceCodesPage() {
 
 	const importDiffColumns: ColumnsType<Record<string, any>> = [
 		{ title: "类型", dataIndex: "changeType", width: 100, render: (value) => <Tag>{value || "-"}</Tag> },
-		{ title: "码值", dataIndex: "codeValue", width: 160, render: (value) => <Text className="font-mono text-xs">{value || "-"}</Text> },
+		{ title: "码值", dataIndex: "codeValue", width: 160, render: (value) => <Text className="font-mono text-xs">{value || "-"}</Text> , sorter: (a, b) => (a.codeValue || "").localeCompare(b.codeValue || "") },
 		{
 			title: "变更前",
 			dataIndex: "before",

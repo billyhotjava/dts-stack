@@ -13,6 +13,7 @@ export interface IngestionTaskDTO {
 	syncSchedule?: string;
 	syncPrefix?: string;
 	syncConfig?: Record<string, any>;
+	graphDsl?: Record<string, any>;
 	tableMapping?: Array<{ source: string; target: string }>;
 	addaxJobPath?: string;
 	addaxConfig?: Record<string, any>;
@@ -732,11 +733,7 @@ class IngestionTaskAPI {
 		return api.post({ url: `/ingestion/tasks/${taskId}/pre-check` });
 	}
 
-	async updateStagingCell(
-		taskId: number,
-		rowNum: number,
-		data: { column: string; value: string },
-	): Promise<void> {
+	async updateStagingCell(taskId: number, rowNum: number, data: { column: string; value: string }): Promise<void> {
 		return api.put({ url: `/ingestion/tasks/${taskId}/staging/${rowNum}`, data });
 	}
 
@@ -779,6 +776,11 @@ export interface ParseResult {
 }
 
 export interface PreCheckResult {
+	status?: string;
+	totalRules?: number;
+	passedRules?: number;
+	failedRules?: number;
+	failedRuleNames?: string[];
 	totalRows: number;
 	passedRows: number;
 	failedRows: number;

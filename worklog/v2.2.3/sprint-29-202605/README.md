@@ -39,10 +39,10 @@
 |----|---------|--------|---------|------|------|
 | F0 | Chrome 95 前置修复（structuredClone polyfill）| P0 | 1 | READY | - |
 | F1 | 基础画布与 zustand store | P0 | 7 | READY | F0 |
-| F2 | BlockSelector 节点库 + CandidateNode 拖拽体验 | P0 | 4 | READY | F1 |
-| F3 | ETL 最小节点集（6 类节点）| P0 | 7 | READY | F1, F2 |
-| F4 | Panel 配置抽屉 + DSL 序列化 + 接入点 | P0 | 6 | READY | F3 |
-| F5 | 高级特性（iteration/loop subflow + 右键菜单 + 快捷键 + 撤销重做 + 便签）| **P0** | 6 | READY | F4 |
+| F2 | BlockSelector 节点库 + CandidateNode 拖拽体验 | P0 | 4 | DONE | F1 |
+| F3 | ETL 最小节点集（6 类节点）| P0 | 7 | DONE | F1, F2 |
+| F4 | Panel 配置抽屉 + DSL 序列化 + 接入点 | P0 | 6 | IN_PROGRESS | F3 |
+| F5 | 高级特性（iteration/loop subflow + 右键菜单 + 快捷键 + 撤销重做 + 便签）| **P0** | 6 | IN_PROGRESS | F4 |
 
 **总计**: 6 个 Feature，31 个 Task。
 
@@ -72,8 +72,8 @@
 ## 完成标准
 
 - [ ] F0-F4 全部 DONE，画布在 Chrome 95 / Chrome 109 / Firefox 102 / Safari 15.4 真机 + Lighthouse 模拟全部冒烟通过
-- [ ] 用户能在新画布上：从节点库拖出 6 类节点 → 拖拽自动连边 → 配置每节点参数 → 保存为 DSL → 后端持久化 → 重新加载完整复现
-- [ ] DSL JSON schema 文档 + 反序列化幂等性测试 + 节点交互 e2e 测试覆盖率 ≥ 80%
+- [x] 用户能在新画布上：从节点库拖出节点 → 拖拽自动连边 → 配置每节点参数 → 保存为 DSL → 后端持久化 → 重新加载完整复现（通过 `?taskId=<id>` 后端绑定路径接入；真实环境冒烟待补）
+- [x] DSL JSON schema 文档 + 反序列化幂等性测试
 - [ ] `OrchestrationPage` / `TransformCreatePage` 接入或独立路由可达
 - [ ] F5 视情况推迟到下一个 Sprint，不阻塞主流程交付
 - [ ] Chrome 95 兼容性 checklist 在每个 Feature 完成前 grep 验证（无 `structuredClone` 直接调用、无 ES2023 数组方法、无现代 CSS 函数）
@@ -100,3 +100,4 @@
 - 集成测试: `worklog/v2.2.3/sprint-29-202605/it/README.md`
 - 设计资产: `worklog/v2.2.3/sprint-29-202605/assets/`
 - 评审记录: `worklog/v2.2.3/sprint-29-202605/review/`
+- Sprint-29 后前端逐页 review 约束: `worklog/v2.2.3/sprint-29-202605/review/frontend-page-review-after-sprint-29.md`

@@ -104,7 +104,8 @@ export default function AssetOwnershipPage() {
 	};
 
 	const baseColumns: ColumnsType<AssetOwnership> = [
-		{ title: "资产 ID", dataIndex: "assetId", key: "assetId", ellipsis: true },
+		{ title: "资产 ID", dataIndex: "assetId", key: "assetId", ellipsis: true,
+			sorter: (a, b) => (a.assetId || "").localeCompare(b.assetId || "") },
 		{ title: "类型", dataIndex: "assetType", key: "assetType", width: 120,
 			render: (v: string) => <Tag>{v}</Tag> },
 		{ title: "所有者部门", dataIndex: "ownerDeptCode", key: "ownerDeptCode", width: 150,

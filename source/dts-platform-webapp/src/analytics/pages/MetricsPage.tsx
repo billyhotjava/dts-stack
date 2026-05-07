@@ -55,12 +55,12 @@ export default function MetricsPage() {
 	}, []);
 
 	const metricColumns: ColumnsType<Metric> = [
-		{ title: t(locale, "common.name"), dataIndex: "name", key: "name", render: (v: string | undefined) => v ?? "-" },
+		{ title: t(locale, "common.name"), dataIndex: "name", key: "name", render: (v: string | undefined) => v ?? "-" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 		{ title: t(locale, "common.id"), dataIndex: "id", key: "id" },
 	];
 
 	const platformMetricColumns: ColumnsType<PlatformMetric> = [
-		{ title: t(locale, "common.name"), dataIndex: "name", key: "name", render: (v: string | undefined) => v ?? "-" },
+		{ title: t(locale, "common.name"), dataIndex: "name", key: "name", render: (v: string | undefined) => v ?? "-" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 		{ title: t(locale, "common.id"), dataIndex: "id", key: "id" },
 	];
 

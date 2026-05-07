@@ -139,6 +139,7 @@ export default function ConnectorRegistryPage() {
 			{
 				title: "连接器",
 				dataIndex: "name",
+				sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 				key: "name",
 				width: 220,
 				render: (_: string, record) => (
@@ -182,6 +183,11 @@ export default function ConnectorRegistryPage() {
 			{
 				title: "更新时间",
 				dataIndex: "lastUpdatedAt",
+				sorter: (a, b) => {
+					const ta = a.lastUpdatedAt ? new Date(a.lastUpdatedAt as any).getTime() : 0;
+					const tb = b.lastUpdatedAt ? new Date(b.lastUpdatedAt as any).getTime() : 0;
+					return ta - tb;
+				},
 				key: "lastUpdatedAt",
 				width: 180,
 				render: (value: string) => formatTime(value),

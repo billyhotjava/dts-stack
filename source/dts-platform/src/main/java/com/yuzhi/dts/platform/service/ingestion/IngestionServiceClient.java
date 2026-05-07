@@ -199,6 +199,59 @@ public class IngestionServiceClient {
         return exchangeObject("/api/ingestion/tasks/" + taskId + "/realtime-status", HttpMethod.GET, null, null, restTemplate);
     }
 
+    public ApiResponse<Object> parseStagingFile(Long taskId) {
+        return exchangeObject("/api/ingestion/tasks/" + taskId + "/parse", HttpMethod.POST, null, null, longRestTemplate);
+    }
+
+    public ApiResponse<Object> preCheckStaging(Long taskId) {
+        return exchangeObject("/api/ingestion/tasks/" + taskId + "/pre-check", HttpMethod.POST, null, null, longRestTemplate);
+    }
+
+    public ApiResponse<Object> updateStagingCell(Long taskId, Integer rowNum, Object payload) {
+        return exchangeObject("/api/ingestion/tasks/" + taskId + "/staging/" + rowNum, HttpMethod.PUT, payload, null, restTemplate);
+    }
+
+    public ApiResponse<Object> reCheckStaging(Long taskId) {
+        return exchangeObject("/api/ingestion/tasks/" + taskId + "/re-check", HttpMethod.POST, null, null, longRestTemplate);
+    }
+
+    public ApiResponse<Object> submitStaging(Long taskId) {
+        return exchangeObject("/api/ingestion/tasks/" + taskId + "/submit", HttpMethod.POST, null, null, longRestTemplate);
+    }
+
+    public ApiResponse<Object> dropStaging(Long taskId) {
+        return exchangeObject("/api/ingestion/tasks/" + taskId + "/staging", HttpMethod.DELETE, null, null, restTemplate);
+    }
+
+    public ApiResponse<Object> getStagingData(Long taskId, Map<String, ?> params) {
+        return exchangeObject("/api/ingestion/tasks/" + taskId + "/staging", HttpMethod.GET, null, params, restTemplate);
+    }
+
+    public ApiResponse<Object> getStagingErrorSummary(Long taskId, Map<String, ?> params) {
+        return exchangeObject("/api/ingestion/tasks/" + taskId + "/staging/errors/summary", HttpMethod.GET, null, params, restTemplate);
+    }
+
+    public ResponseEntity<byte[]> downloadStagingErrors(Long taskId) {
+        if (!isEnabled()) {
+            return ResponseEntity.status(503).body(null);
+        }
+        URI uri = buildAbsoluteUri("/api/ingestion/tasks/" + taskId + "/staging/errors/download");
+        try {
+            return longRestTemplate.exchange(
+                uri,
+                HttpMethod.GET,
+                new HttpEntity<>(defaultHeaders()),
+                byte[].class
+            );
+        } catch (HttpStatusCodeException ex) {
+            LOG.warn("Ingestion staging error download failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            return ResponseEntity.status(ex.getStatusCode()).body(ex.getResponseBodyAsByteArray());
+        } catch (Exception ex) {
+            LOG.warn("Ingestion staging error download error: {}", ex.getMessage());
+            return ResponseEntity.status(500).body(null);
+        }
+    }
+
     public ApiResponse<Object> getExecutionsObservability(Map<String, ?> params) {
         return exchangeObject("/api/ingestion/tasks/executions/observability", HttpMethod.GET, null, params, restTemplate);
     }

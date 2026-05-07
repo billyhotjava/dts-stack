@@ -2249,7 +2249,7 @@ export default function SqlModelingPage() {
 
 	const modelColumnColumns: ColumnsType<ModelColumn> = useMemo(
 		() => [
-			{ title: "字段", dataIndex: "name", key: "name", ellipsis: true },
+			{ title: "字段", dataIndex: "name", key: "name", ellipsis: true , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 			{ title: "类型", dataIndex: "dataType", key: "dataType", width: 120, ellipsis: true },
 			{
 				title: "状态",
@@ -3116,7 +3116,7 @@ export default function SqlModelingPage() {
 											}> | undefined;
 											if (testDetails && testDetails.length > 0) {
 												const testTableColumns: ColumnsType<typeof testDetails[number]> = [
-													{ title: "测试名称", dataIndex: "name", key: "name", ellipsis: true, width: 200 },
+													{ title: "测试名称", dataIndex: "name", key: "name", ellipsis: true, width: 200 , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 													{ title: "类型", dataIndex: "testType", key: "testType", width: 100,
 														render: (v) => <Tag>{v || "generic"}</Tag>,
 													},
@@ -3359,7 +3359,7 @@ export default function SqlModelingPage() {
 														pagination={false}
 														scroll={{ y: 160 }}
 														columns={[
-															{ title: "时间", dataIndex: "executedAt", key: "executedAt", width: 170, render: formatDateTime },
+															{ title: "时间", dataIndex: "executedAt", key: "executedAt", width: 170, render: formatDateTime , sorter: (a, b) => { const ta = a.executedAt ? new Date(a.executedAt as any).getTime() : 0; const tb = b.executedAt ? new Date(b.executedAt as any).getTime() : 0; return ta - tb; } },
 															{ title: "级别", dataIndex: "level", key: "level", width: 80, render: (v: number) => <Tag color={v >= 2 ? "red" : "orange"}>Level {v}</Tag> },
 															{ title: "范围", dataIndex: "scope", key: "scope", width: 80 },
 															{ title: "表", dataIndex: "tables", key: "tables", ellipsis: true, render: (v: string[]) => (v || []).join(", ") },
@@ -3617,6 +3617,7 @@ export default function SqlModelingPage() {
 									{
 										title: "模型名",
 										dataIndex: "name",
+										sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 										key: "name",
 										ellipsis: true,
 										render: (value: string) => <span style={{ fontFamily: "monospace" }}>{value}</span>,

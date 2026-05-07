@@ -86,7 +86,7 @@ public class ScreenAuditService {
     }
 
     /**
-     * Sprint-24 F4：跨大屏的合规事件审计（如「裸屏盘点」端点访问），没有具体 screen
+     * Sprint-24 F4：跨大屏的合规事件审计（如「大屏密级合规盘点」端点访问），没有具体 screen
      * 上下文。`analytics_screen_audit_log.screen_id` 是 NOT NULL，所以这条不进本地表，
      * 仅同步到 dts-admin 中央审计中心，那里 sourceSystem=analytics+module=SCREEN+
      * action 已能唯一定位事件。

@@ -1,7 +1,7 @@
 # T01: IterationNode 迭代子流程节点
 
 **优先级**: P0
-**状态**: READY
+**状态**: PARTIAL
 **依赖**: F4-T06
 
 ## 目标
@@ -66,15 +66,21 @@ type IterationNodeData = {
 
 ## 验证
 
-- [ ] 拖出 Iteration 节点显示子画布占位
+- [x] 拖出 Iteration 节点显示子流程摘要
 - [ ] 双击节点 → 进入子画布编辑模式（或抽屉打开子画布编辑器）
 - [ ] 子流程能添加 Source/Transform/Sink 等节点 + 互连
-- [ ] DSL 保存 + 还原后子流程完整
-- [ ] 校验：iteration 内不允许再嵌 iteration（前端拦 + 后端 schema 拒）
-- [ ] 单元测试：序列化嵌套 + 反序列化 + 校验拒绝
+- [x] DSL 保存 + 还原后子流程完整
+- [x] 校验：iteration 内不允许再嵌 iteration/loop（前端 schema 拒）
+- [x] 单元测试：序列化嵌套 + 反序列化 + 校验拒绝
 
 ## 完成标准
 
-- [ ] iteration 节点能在画布展示 + 编辑子流程
-- [ ] 子流程 DSL 嵌套结构正确
-- [ ] 一层嵌套限制清晰提示
+- [ ] iteration 节点能在画布展示 + 编辑子流程（展示/配置已完成，子画布编辑待补）
+- [x] 子流程 DSL 嵌套结构正确
+- [x] 一层嵌套限制清晰提示
+
+## 当前实现说明
+
+- 已新增 `IterationNode`、`IterationForm`、BlockSelector 配置、nodeTypes 注册。
+- DSL 已支持 `children` / `childEdges` 顶层字段，并在反序列化时还原到 `config` 供节点摘要使用。
+- 本轮未实现内嵌子画布编辑器；当前可通过 DSL 结构保存/还原子流程。

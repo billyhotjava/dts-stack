@@ -231,10 +231,20 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                 ))}
                             </select>
                         </div>
-                        <div className="property-row flex items-center mb-3">
-                            <label className="property-label w-20 text-xs text-text-secondary">密级</label>
+                        <div className="property-row flex items-center mb-1">
+                            <label className="property-label w-20 text-xs text-text-secondary">
+                                密级
+                                {!config.classification && (
+                                    <span style={{ color: '#f59e0b', marginLeft: 4 }} title="未设置密级">⚠</span>
+                                )}
+                            </label>
                             <select
-                                className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
+                                className="property-input flex-1 px-2.5 py-1.5 border rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
+                                style={
+                                    !config.classification
+                                        ? { borderColor: '#f59e0b', background: 'rgba(245,158,11,0.08)' }
+                                        : undefined
+                                }
                                 value={config.classification || ''}
                                 onChange={(e) => {
                                     const next = e.target.value as typeof config.classification | '';
@@ -247,6 +257,20 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                 <option value="SECRET">秘密</option>
                                 <option value="CONFIDENTIAL">机密</option>
                             </select>
+                        </div>
+                        {/* Sprint-24 F3：未设密级时给一段说明，提醒补登；选完即隐藏，不打扰已设密级的大屏。 */}
+                        <div
+                            className="mb-3"
+                            style={{
+                                fontSize: 11,
+                                color: !config.classification ? '#b45309' : 'var(--color-text-tertiary, #6b7280)',
+                                paddingLeft: 80,
+                                lineHeight: 1.5,
+                            }}
+                        >
+                            {!config.classification
+                                ? '未设置密级时本大屏对所有登录用户可见。请尽快补登，保存时也会按此密级管控可见范围。'
+                                : '密级决定哪些人员可访问本大屏，可随时调整。'}
                         </div>
                         {isCustom && (
                             <>

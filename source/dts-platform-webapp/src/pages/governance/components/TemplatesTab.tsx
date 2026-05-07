@@ -140,8 +140,8 @@ export default function TemplatesTab({ canManage }: { canManage: boolean }) {
 	};
 
 	const columns: ColumnsType<Template> = [
-		{ title: "编码", dataIndex: "code", width: 160, render: (v) => v || "-" },
-		{ title: "名称", dataIndex: "name", render: (v) => v || "-" },
+		{ title: "编码", dataIndex: "code", width: 160, render: (v) => v || "-" , sorter: (a, b) => (a.code || "").localeCompare(b.code || "") },
+		{ title: "名称", dataIndex: "name", render: (v) => v || "-" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 		{ title: "分类", dataIndex: "category", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
 		{ title: "默认严重性", dataIndex: "severityDefault", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
 		{

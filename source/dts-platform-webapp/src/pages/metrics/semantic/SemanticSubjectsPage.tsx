@@ -111,8 +111,8 @@ export default function SemanticSubjectsPage() {
 	);
 
 	const domainBaseColumns: ColumnsType<SemanticSubjectDomain> = [
-		{ title: "名称", dataIndex: "name" },
-		{ title: "编码", dataIndex: "code", render: (value) => value || "-" },
+		{ title: "名称", dataIndex: "name" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
+		{ title: "编码", dataIndex: "code", render: (value) => value || "-" , sorter: (a, b) => (a.code || "").localeCompare(b.code || "") },
 		{
 			title: "来源",
 			dataIndex: "governanceDomainId",

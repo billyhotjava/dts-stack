@@ -60,6 +60,7 @@ export default function SemanticVirtualDatasetsPage() {
 		{
 			title: "名称",
 			dataIndex: "name",
+			sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 			key: "name",
 			render: (_value, record) => (
 				<div className="flex flex-col">

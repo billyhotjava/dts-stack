@@ -1,8 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Card, Empty, Input, Modal, Select, Space, Tag, message } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { CheckCircleOutlined, CloseCircleOutlined, PlayCircleOutlined, ReloadOutlined, SyncOutlined } from "@ant-design/icons";
+import {
+	CheckCircleOutlined,
+	CloseCircleOutlined,
+	PlayCircleOutlined,
+	ReloadOutlined,
+	SyncOutlined,
+} from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
 import {
 	listSemanticModelRuns,
@@ -13,14 +19,20 @@ import {
 	updateSemanticModelRun,
 } from "@/api/semanticModelingApi";
 import { SemanticSectionNav } from "./SemanticSectionNav";
-import { asArray, semanticSectionMeta } from "./semanticModelingShared";
+import { asArray, isConsumableSemanticModel, semanticSectionMeta } from "./semanticModelingShared";
 
 const statusColor = (status?: string) => {
 	const value = (status || "").toUpperCase();
 	if (value === "SUCCESS" || value === "SUCCEEDED" || value === "COMPLETED") return "green";
-	if (value === "RUNNING" || value === "PENDING") return "blue";
+	if (value === "RUNNING" || value === "PENDING" || value === "SUBMITTED") return "blue";
+	if (value === "BLOCKED" || value === "TIMEOUT") return "orange";
 	if (value === "FAILED" || value === "ERROR") return "red";
 	return "default";
+};
+
+const isRunnableModel = (model: SemanticModel) => {
+	const status = String(model.status || "").toUpperCase();
+	return isConsumableSemanticModel(model) && (status === "PUBLISHED" || status === "RUN_FAILED");
 };
 
 export default function SemanticRunsPage() {
@@ -33,6 +45,9 @@ export default function SemanticRunsPage() {
 	const [selectedRun, setSelectedRun] = useState<SemanticModelRun | null>(null);
 	const [nextStatus, setNextStatus] = useState<string>("SUCCESS");
 	const [statusMessage, setStatusMessage] = useState("");
+	const runnableModels = useMemo(() => models.filter(isRunnableModel), [models]);
+	const selectedModel = useMemo(() => models.find((item) => item.id === selectedModelId), [models, selectedModelId]);
+	const selectedModelRunnable = Boolean(selectedModel && isRunnableModel(selectedModel));
 
 	const loadModels = () => {
 		setModelsLoading(true);
@@ -66,6 +81,10 @@ export default function SemanticRunsPage() {
 	const triggerRun = async () => {
 		if (!selectedModelId) {
 			message.warning("请选择语义模型");
+			return;
+		}
+		if (!selectedModelRunnable) {
+			message.warning("请选择已发布或运行失败的 DWS/ADS 模型");
 			return;
 		}
 		setRunLoading(true);
@@ -108,13 +127,18 @@ export default function SemanticRunsPage() {
 	};
 
 	const columns: ColumnsType<SemanticModelRun> = [
-		{ title: "状态", dataIndex: "status", width: 120, render: (value) => <Tag color={statusColor(value)}>{value || "-"}</Tag> },
+		{
+			title: "状态",
+			dataIndex: "status",
+			width: 120,
+			render: (value) => <Tag color={statusColor(value)}>{value || "-"}</Tag>,
+		},
 		{ title: "Selector", dataIndex: "selector", render: (value) => value || "-" },
 		{ title: "DAG", dataIndex: "dagId", render: (value) => value || "-" },
 		{ title: "外部运行 ID", dataIndex: "externalRunId", render: (value) => value || "-" },
 		{ title: "触发人", dataIndex: "triggeredBy", width: 120, render: (value) => value || "-" },
-		{ title: "开始时间", dataIndex: "startedAt", width: 190, render: (value) => value || "-" },
-		{ title: "结束时间", dataIndex: "finishedAt", width: 190, render: (value) => value || "-" },
+		{ title: "开始时间", dataIndex: "startedAt", width: 190, render: (value) => value || "-" , sorter: (a, b) => { const ta = a.startedAt ? new Date(a.startedAt as any).getTime() : 0; const tb = b.startedAt ? new Date(b.startedAt as any).getTime() : 0; return ta - tb; } },
+		{ title: "结束时间", dataIndex: "finishedAt", width: 190, render: (value) => value || "-" , sorter: (a, b) => { const ta = a.finishedAt ? new Date(a.finishedAt as any).getTime() : 0; const tb = b.finishedAt ? new Date(b.finishedAt as any).getTime() : 0; return ta - tb; } },
 		{ title: "耗时(ms)", dataIndex: "durationMs", width: 110, render: (value) => value ?? "-" },
 		{ title: "消息", dataIndex: "message", render: (value) => value || "-" },
 		{
@@ -123,9 +147,15 @@ export default function SemanticRunsPage() {
 			fixed: "right",
 			render: (_, row) => (
 				<Space size={4} wrap>
-					<Button size="small" icon={<SyncOutlined />} onClick={() => openStatusModal(row, "RUNNING")}>运行中</Button>
-					<Button size="small" icon={<CheckCircleOutlined />} onClick={() => openStatusModal(row, "SUCCESS")}>成功</Button>
-					<Button size="small" danger icon={<CloseCircleOutlined />} onClick={() => openStatusModal(row, "FAILED")}>失败</Button>
+					<Button size="small" icon={<SyncOutlined />} onClick={() => openStatusModal(row, "RUNNING")}>
+						运行中
+					</Button>
+					<Button size="small" icon={<CheckCircleOutlined />} onClick={() => openStatusModal(row, "SUCCESS")}>
+						成功
+					</Button>
+					<Button size="small" danger icon={<CloseCircleOutlined />} onClick={() => openStatusModal(row, "FAILED")}>
+						失败
+					</Button>
 				</Space>
 			),
 		},
@@ -135,20 +165,40 @@ export default function SemanticRunsPage() {
 		<div className="space-y-5 p-5" data-testid="semantic-runs-page">
 			<PageHeader
 				title={semanticSectionMeta.runs.title}
-				actions={(
+				actions={
 					<Space wrap>
 						<Select
 							placeholder="选择模型"
 							style={{ minWidth: 260 }}
 							loading={modelsLoading}
 							value={selectedModelId}
-							options={models.map((item) => ({ label: `${item.name}${item.tableName ? ` / ${item.tableName}` : ""}`, value: item.id }))}
+							allowClear
+							showSearch
+							optionFilterProp="label"
+							options={runnableModels.map((item) => ({
+								label: `${item.name}${item.tableName ? ` / ${item.tableName}` : ""}`,
+								value: item.id,
+							}))}
 							onChange={setSelectedModelId}
 						/>
-						<Button icon={<PlayCircleOutlined />} onClick={triggerRun} loading={runLoading} disabled={!selectedModelId}>触发运行</Button>
-						<Button icon={<ReloadOutlined />} onClick={() => loadRuns()} loading={runLoading} disabled={!selectedModelId}>刷新</Button>
+						<Button
+							icon={<PlayCircleOutlined />}
+							onClick={triggerRun}
+							loading={runLoading}
+							disabled={!selectedModelRunnable}
+						>
+							触发运行
+						</Button>
+						<Button
+							icon={<ReloadOutlined />}
+							onClick={() => loadRuns()}
+							loading={runLoading}
+							disabled={!selectedModelId}
+						>
+							刷新
+						</Button>
 					</Space>
-				)}
+				}
 			/>
 
 			<SemanticSectionNav activeSection="runs" />
@@ -157,7 +207,7 @@ export default function SemanticRunsPage() {
 				type="info"
 				showIcon
 				message="运行监控边界"
-				description="这里仅处理语义模型对应 dbt/调度运行记录，模型结构和发布审核分别在 DWS/ADS 与发布页面完成。"
+				description="这里仅处理已发布或运行失败的 DWS/ADS 模型对应 dbt/调度运行记录，模型结构和发布审核分别在 DWS/ADS 与发布页面完成。"
 			/>
 
 			<Card title="模型运行记录">
@@ -172,7 +222,10 @@ export default function SemanticRunsPage() {
 						scroll={{ x: 1280 }}
 					/>
 				) : (
-					<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择模型查看运行记录" />
+					<Empty
+						image={Empty.PRESENTED_IMAGE_SIMPLE}
+						description={runnableModels.length ? "请选择模型查看运行记录" : "暂无可运行的已发布 DWS/ADS 模型"}
+					/>
 				)}
 			</Card>
 

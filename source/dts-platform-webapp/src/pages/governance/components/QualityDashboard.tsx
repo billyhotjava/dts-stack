@@ -66,7 +66,7 @@ export default function QualityDashboard() {
 	};
 
 	const failingDatasetColumns: ColumnsType<{ name: string; failingRows: number }> = [
-		{ title: "数据集", dataIndex: "name" },
+		{ title: "数据集", dataIndex: "name" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 		{
 			title: "失败行数",
 			dataIndex: "failingRows",
@@ -81,7 +81,7 @@ export default function QualityDashboard() {
 		time: string;
 		status: string;
 	}> = [
-		{ title: "规则", dataIndex: "ruleName" },
+		{ title: "规则", dataIndex: "ruleName" , sorter: (a, b) => (a.ruleName || "").localeCompare(b.ruleName || "") },
 		{ title: "数据集", dataIndex: "dataset" },
 		{ title: "时间", dataIndex: "time", render: formatTime },
 		{ title: "状态", dataIndex: "status" },

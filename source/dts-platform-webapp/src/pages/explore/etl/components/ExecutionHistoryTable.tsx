@@ -583,6 +583,7 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 		{
 			title: "执行ID",
 			dataIndex: "executionId",
+			sorter: (a: IngestionExecutionDTO, b: IngestionExecutionDTO) => (a.executionId || "").localeCompare(b.executionId || ""),
 			key: "executionId",
 			width: 200,
 		},
@@ -625,6 +626,11 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 		{
 			title: "开始时间",
 			dataIndex: "startTime",
+			sorter: (a: IngestionExecutionDTO, b: IngestionExecutionDTO) => {
+				const ta = a.startTime ? new Date(a.startTime as any).getTime() : 0;
+				const tb = b.startTime ? new Date(b.startTime as any).getTime() : 0;
+				return ta - tb;
+			},
 			key: "startTime",
 			width: 180,
 			render: formatTimestamp,
@@ -632,6 +638,11 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 		{
 			title: "结束时间",
 			dataIndex: "endTime",
+			sorter: (a: IngestionExecutionDTO, b: IngestionExecutionDTO) => {
+				const ta = a.endTime ? new Date(a.endTime as any).getTime() : 0;
+				const tb = b.endTime ? new Date(b.endTime as any).getTime() : 0;
+				return ta - tb;
+			},
 			key: "endTime",
 			width: 180,
 			render: formatTimestamp,
@@ -939,6 +950,11 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 							{
 								title: "更新时间",
 								dataIndex: "updatedAt",
+								sorter: (a, b) => {
+									const ta = a.updatedAt ? new Date(a.updatedAt as any).getTime() : 0;
+									const tb = b.updatedAt ? new Date(b.updatedAt as any).getTime() : 0;
+									return ta - tb;
+								},
 								key: "updatedAt",
 								render: (value?: string) => (value ? formatTimestamp(value) : "-"),
 							},
@@ -1148,6 +1164,11 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 							{
 								title: "记录时间",
 								dataIndex: "createdAt",
+								sorter: (a, b) => {
+									const ta = a.createdAt ? new Date(a.createdAt as any).getTime() : 0;
+									const tb = b.createdAt ? new Date(b.createdAt as any).getTime() : 0;
+									return ta - tb;
+								},
 								key: "createdAt",
 								render: (value?: string) => (value ? formatTimestamp(value) : "-"),
 							},

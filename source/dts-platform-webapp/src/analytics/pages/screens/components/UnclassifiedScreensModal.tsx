@@ -3,11 +3,12 @@ import { Modal, Button, Empty, Spin, Tag, message } from 'antd';
 import { analyticsApi } from '../../../api/analyticsApi';
 
 /**
- * 裸屏盘点对话框（Sprint-24 F4/T03）
+ * 大屏密级合规盘点对话框（Sprint-24 F4/T03）
  *
- * 仅 OP_ADMIN / superuser 入口可触发。展示所有 classification=null / 空白的大屏，
- * 帮运维一眼盘点出存量裸屏并联系 owner 补登。每个条目带「去补登」按钮直接跳到
- * 编辑器属性面板，配合 F1 的入口前移完成补登。
+ * 入口对治理角色开放：superuser / OP_ADMIN / 所级或部门数据管理员 / 所级或部门领导
+ * （后端 MetabaseAuth.SCREEN_AUDITOR_ROLES）。展示所有 classification=null / 空白的
+ * 大屏，帮治理人员一眼盘点出存量未设密大屏并联系 owner 补登。每个条目带「去补登」
+ * 按钮直接跳到编辑器属性面板，配合 F1 的入口前移完成补登。
  *
  * 端点本身在 dts-admin 中央审计写一条 screen.compliance.audit_unclassified，
  * 无需前端再触发。
@@ -54,10 +55,10 @@ export function UnclassifiedScreensModal({ open, onClose, onJumpToScreen }: Uncl
 			const result = await analyticsApi.listUnclassifiedScreens();
 			setItems(result.items || []);
 		} catch (e) {
-			const msg = e instanceof Error ? e.message : '加载裸屏列表失败';
+			const msg = e instanceof Error ? e.message : '加载大屏盘点列表失败';
 			// 403 / Forbidden 给一个更友好的引导
 			const friendly = /403|forbidden|unauth/i.test(msg)
-				? '权限不足：仅 OP_ADMIN / superuser 可访问裸屏盘点。'
+				? '权限不足：仅数据管理员 / 部门领导 / 所级领导 / OP_ADMIN / superuser 可访问大屏盘点。'
 				: msg;
 			setError(friendly);
 			setItems([]);
@@ -83,7 +84,7 @@ export function UnclassifiedScreensModal({ open, onClose, onJumpToScreen }: Uncl
 	return (
 		<Modal
 			open={open}
-			title="裸屏盘点（Sprint-24 合规检查）"
+			title="合规盘点"
 			width={720}
 			footer={
 				<Button onClick={onClose}>关闭</Button>
@@ -115,7 +116,7 @@ export function UnclassifiedScreensModal({ open, onClose, onJumpToScreen }: Uncl
 					<div style={{ marginBottom: 12, fontSize: 13 }}>
 						<Tag color="orange">未设密级 {items.length} 张</Tag>
 						<span style={{ marginLeft: 8, color: 'var(--color-text-tertiary, #6b7280)' }}>
-							裸屏对所有登录用户可见。请联系 owner 在编辑器属性面板补登密级。
+							未设密级的大屏对所有登录用户可见。请联系 owner 在编辑器属性面板补登密级。
 						</span>
 					</div>
 					<div

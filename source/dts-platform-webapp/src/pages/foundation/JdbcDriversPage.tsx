@@ -118,7 +118,7 @@ export default function JdbcDriversPage() {
 
 	const baseColumns = useMemo<ColumnsType<InfraJdbcDriver>>(
 		() => [
-			{ title: "JAR 文件", dataIndex: "fileName", key: "fileName", width: 220 },
+			{ title: "JAR 文件", dataIndex: "fileName", key: "fileName", width: 220 , sorter: (a, b) => (a.fileName || "").localeCompare(b.fileName || "") },
 			{ title: "驱动主类", dataIndex: "driverClass", key: "driverClass", width: 260, ellipsis: true },
 			{ title: "版本号", dataIndex: "version", key: "version", width: 120 },
 			{
@@ -139,6 +139,11 @@ export default function JdbcDriversPage() {
 			{
 				title: "更新时间",
 				dataIndex: "lastUpdatedAt",
+				sorter: (a, b) => {
+					const ta = a.lastUpdatedAt ? new Date(a.lastUpdatedAt as any).getTime() : 0;
+					const tb = b.lastUpdatedAt ? new Date(b.lastUpdatedAt as any).getTime() : 0;
+					return ta - tb;
+				},
 				key: "lastUpdatedAt",
 				width: 180,
 				render: (value: string) => formatTime(value),

@@ -440,7 +440,7 @@ export default function Page() {
 	};
 
 	const columns: ColumnsType<Rule> = [
-		{ title: "规则名称", dataIndex: "name", render: (v) => v || "-" },
+		{ title: "规则名称", dataIndex: "name", render: (v) => v || "-" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 		{ title: "类型", dataIndex: "type", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
 		{ title: "严重性", dataIndex: "severity", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
 		{
@@ -769,8 +769,8 @@ export default function Page() {
 						{ title: "运行ID", dataIndex: "id", width: 220, render: (v) => v || "-" },
 						{ title: "状态", dataIndex: "status", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
 						{ title: "触发方式", dataIndex: "triggerType", width: 120, render: (v) => v || "-" },
-						{ title: "开始时间", dataIndex: "startedAt", width: 180, render: formatTime },
-						{ title: "结束时间", dataIndex: "finishedAt", width: 180, render: formatTime },
+						{ title: "开始时间", dataIndex: "startedAt", width: 180, render: formatTime , sorter: (a, b) => { const ta = a.startedAt ? new Date(a.startedAt as any).getTime() : 0; const tb = b.startedAt ? new Date(b.startedAt as any).getTime() : 0; return ta - tb; } },
+						{ title: "结束时间", dataIndex: "finishedAt", width: 180, render: formatTime , sorter: (a, b) => { const ta = a.finishedAt ? new Date(a.finishedAt as any).getTime() : 0; const tb = b.finishedAt ? new Date(b.finishedAt as any).getTime() : 0; return ta - tb; } },
 						{ title: "说明", dataIndex: "message", render: (v) => v || "-" },
 					]}
 				/>

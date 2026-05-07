@@ -344,6 +344,7 @@ export default function FileUnifiedStep({
 							{
 								title: "显示名称",
 								dataIndex: "label",
+								sorter: (a, b) => (a.label || "").localeCompare(b.label || ""),
 								render: (value: string, _: any, index: number) => (
 									<Input
 										size="small"
@@ -360,6 +361,7 @@ export default function FileUnifiedStep({
 							{
 								title: "字段名",
 								dataIndex: "name",
+								sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 								render: (value: string, record: any, index: number) => (
 									<Space size={4}>
 										<Input

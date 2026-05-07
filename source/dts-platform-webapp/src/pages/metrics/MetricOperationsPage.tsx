@@ -186,7 +186,7 @@ export default function MetricOperationsPage() {
 	);
 
 	const consumptionBaseColumns: ColumnsType<ConsumptionItem> = [
-		{ title: "能力", dataIndex: "name", key: "name" },
+		{ title: "能力", dataIndex: "name", key: "name" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 		{ title: "层级", dataIndex: "layer", key: "layer", width: 110 },
 		{ title: "责任域", dataIndex: "owner", key: "owner", width: 150 },
 		{

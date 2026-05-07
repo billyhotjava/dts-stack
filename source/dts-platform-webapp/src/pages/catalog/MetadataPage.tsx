@@ -564,8 +564,8 @@ export default function MetadataPage() {
 	};
 
 	const runColumns: ColumnsType<SyncRun> = [
-		{ title: "开始时间", dataIndex: "startedAt" },
-		{ title: "结束时间", dataIndex: "finishedAt" },
+		{ title: "开始时间", dataIndex: "startedAt" , sorter: (a, b) => { const ta = a.startedAt ? new Date(a.startedAt as any).getTime() : 0; const tb = b.startedAt ? new Date(b.startedAt as any).getTime() : 0; return ta - tb; } },
+		{ title: "结束时间", dataIndex: "finishedAt" , sorter: (a, b) => { const ta = a.finishedAt ? new Date(a.finishedAt as any).getTime() : 0; const tb = b.finishedAt ? new Date(b.finishedAt as any).getTime() : 0; return ta - tb; } },
 		{ title: "状态", dataIndex: "status", render: statusTag },
 		{ title: "发现表", dataIndex: "tablesDiscovered" },
 		{ title: "新增表", dataIndex: "tablesCreated" },
@@ -587,7 +587,7 @@ export default function MetadataPage() {
 	];
 
 	const columnColumns: ColumnsType<ColumnRow> = [
-		{ title: "字段", dataIndex: "name" },
+		{ title: "字段", dataIndex: "name" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 		{ title: "类型", dataIndex: "type" },
 		{
 			title: "状态",
@@ -604,7 +604,7 @@ export default function MetadataPage() {
 	];
 
 	const driftColumns: ColumnsType<SchemaDriftEvent> = [
-		{ title: "时间", dataIndex: "createdDate", render: (value) => value || "-" },
+		{ title: "时间", dataIndex: "createdDate", render: (value) => value || "-" , sorter: (a, b) => { const ta = a.createdDate ? new Date(a.createdDate as any).getTime() : 0; const tb = b.createdDate ? new Date(b.createdDate as any).getTime() : 0; return ta - tb; } },
 		{
 			title: "对象",
 			render: (_, row) => {

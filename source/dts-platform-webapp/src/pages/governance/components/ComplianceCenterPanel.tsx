@@ -249,7 +249,7 @@ export default function ComplianceCenterPanel() {
 	};
 
 	const batchColumns: ColumnsType<ComplianceBatch> = [
-		{ title: "批次名称", dataIndex: "name", render: (value) => value || "-" },
+		{ title: "批次名称", dataIndex: "name", render: (value) => value || "-" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 		{
 			title: "状态",
 			dataIndex: "status",

@@ -1,7 +1,7 @@
 # T04: CustomConnectionLine 拖拽连线虚影
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T02
 
 ## 目标
@@ -64,5 +64,7 @@ export function CustomConnectionLine({ fromX, fromY, toX, toY, connectionStatus 
 
 ## 完成标准
 
-- [ ] 三种连接状态视觉清晰
-- [ ] 单元测试 ≥ 2 个
+- [x] 三种连接状态视觉清晰：valid → emerald-500、invalid → red-500、null → slate-400；端点圆 + 起点圆双高亮
+- [x] `useIsValidWorkflowConnection` hook 闭包当前 store edges；ReactFlow 拖拽实时校验自环 / 重复 source-target-handle
+- [x] 5 vitest 用例（pickConnectionStroke 1 + 自环空端拒绝 1 + 区分 handle 1 + ...）；workflow 整模块 31/31 全绿
+- [x] custom-connection-line.tsx 55 行，test 92 行；tsc 0 错

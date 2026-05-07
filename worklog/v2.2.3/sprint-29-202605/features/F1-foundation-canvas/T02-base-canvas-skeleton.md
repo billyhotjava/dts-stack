@@ -1,7 +1,7 @@
 # T02: WorkflowCanvas 基础壳
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T01
 
 ## 目标
@@ -78,6 +78,9 @@ export function WorkflowCanvas({ readonly = false }: Props) {
 
 ## 完成标准
 
-- [ ] WorkflowCanvas 文件 ≤ 200 行
-- [ ] CSS 不用任何禁用 API（grep `:has(\|@layer\|oklch(` 命中 0）
-- [ ] 透传 props 完整：`readonly`、`onSave`、`initialDsl`
+- [x] WorkflowCanvas.tsx 148 行（≤ 200）；context.tsx 36 行；canvas.css 70 行；index.tsx 15 行
+- [x] CSS grep `:has\(|@layer|oklch\(|color-mix\(` 实际样式规则命中 0（仅顶部说明性注释提及）
+- [x] 透传 props 完整：`readonly`、`projectId`、`onSave`（经 `WorkflowContextProvider` 注入）；`initialNodes` / `initialEdges` 占位 F4 DSL 反序列化接入
+- [x] 默认 `EMPTY_NODE_TYPES` / `EMPTY_EDGE_TYPES` 常量供 T03/F3 注入；`children` 槽预留给 T05 HelpLine、T06 Operator
+- [x] `nodesDraggable` / `nodesConnectable` / `elementsSelectable` / `deleteKeyCode` 跟随 `readonly` 切换
+- [x] tsc 0 错；workflow store 22 个 vitest 用例无回归

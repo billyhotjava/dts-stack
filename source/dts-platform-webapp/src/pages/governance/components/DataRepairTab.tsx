@@ -6,7 +6,6 @@ import {
 	Card,
 	Empty,
 	Input,
-	InputNumber,
 	Modal,
 	Popconfirm,
 	Radio,
@@ -29,6 +28,7 @@ import {
 } from "@ant-design/icons";
 import { useSearchParams } from "react-router";
 import {
+	createIngestionTask,
 	listQualityRuns,
 	listCleansingFunctions,
 	previewCleansing,
@@ -36,6 +36,8 @@ import {
 	listDatasets,
 	previewSqlRepair,
 	executeSqlRepair,
+	listFailingRows,
+	updateOdsRow,
 } from "@/api/platformApi";
 import { ingestionTaskAPI } from "@/api/ingestion";
 import { formatTime } from "@/utils/textUtils";
@@ -58,6 +60,8 @@ type QualityRunRow = {
 	message?: string;
 	totalRows?: number;
 	failedRows?: number;
+	rowsTotal?: number;
+	failingRowCount?: number;
 	ruleName?: string;
 	datasetName?: string;
 };
@@ -76,15 +80,50 @@ type CleansingPreviewRow = {
 	after: string;
 };
 
+type RepairDatasetOption = {
+	id: string;
+	name: string;
+	sourceId?: string;
+	hiveDatabase?: string;
+	hiveTable?: string;
+};
+
+const normalizeFileBaseName = (name?: string) => {
+	const raw = String(name || "file").replace(/\.[^.]+$/, "");
+	const normalized = raw
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9_]+/g, "_")
+		.replace(/^_+|_+$/g, "");
+	return normalized || "file";
+};
+
+const resolveUploadedFileType = (file: File, result: any) => {
+	const raw = String(result?.sourceFileType || result?.fileType || file.name.split(".").pop() || "").toLowerCase();
+	if (["xlsx", "xls", "excel", "excelreader"].includes(raw)) return "excel";
+	return "csv";
+};
+
+const extractCreatedTaskId = (result: any): number | undefined => {
+	const id = result?.task?.id ?? result?.taskId ?? result?.data?.task?.id ?? result?.data?.taskId;
+	const numeric = Number(id);
+	return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined;
+};
+
 /* ========== PreCheckMode ========== */
 
 function PreCheckMode({ initialTaskId }: { initialTaskId?: number }) {
 	const [taskId, setTaskId] = useState<number | undefined>(initialTaskId);
-	const [datasets, setDatasets] = useState<{ id: string; name: string }[]>([]);
+	const [datasets, setDatasets] = useState<RepairDatasetOption[]>([]);
+	const [defaultDataSourceId, setDefaultDataSourceId] = useState<string>();
+	const [defaultDestinationName, setDefaultDestinationName] = useState<string>();
+	const [defaultWriterType, setDefaultWriterType] = useState<string>();
+	const [datasetLoading, setDatasetLoading] = useState(false);
 	const [selectedDataset, setSelectedDataset] = useState<string>();
 	const [uploading, setUploading] = useState(false);
 	const [checking, setChecking] = useState(false);
 	const [showEditor, setShowEditor] = useState(!!initialTaskId);
+	const [uploadedFileName, setUploadedFileName] = useState<string>();
 
 	useEffect(() => {
 		void loadDatasets();
@@ -97,23 +136,109 @@ function PreCheckMode({ initialTaskId }: { initialTaskId?: number }) {
 		}
 	}, [initialTaskId]);
 
+	const selectedDatasetMeta = useMemo(
+		() => datasets.find((item) => item.id === selectedDataset),
+		[datasets, selectedDataset],
+	);
+
+	const resolveTargetTable = (dataset?: RepairDatasetOption) => {
+		const raw = String(dataset?.hiveTable || "").trim();
+		return raw || undefined;
+	};
+
 	const loadDatasets = async () => {
+		setDatasetLoading(true);
 		try {
-			const resp: any = await listDatasets({ page: 0, size: 200 });
+			const destination = await ingestionTaskAPI.getDefaultDestinationStatus();
+			const lakeSourceId = destination?.dataSourceId ? String(destination.dataSourceId) : undefined;
+			setDefaultDataSourceId(lakeSourceId);
+			setDefaultDestinationName(destination?.destinationName);
+			setDefaultWriterType(destination?.writerType);
+			if (!destination?.available || !lakeSourceId) {
+				setDatasets([]);
+				return;
+			}
+			const resp: any = await listDatasets(lakeSourceId
+				? { page: 0, size: 200, sourceId: lakeSourceId }
+				: { page: 0, size: 200 });
 			const list = Array.isArray(resp?.content) ? resp.content : [];
-			setDatasets(list.map((item: any) => ({ id: String(item.id), name: item.name || item.id })));
+			setDatasets(list.map((item: any) => ({
+				id: String(item.id),
+				name: item.name || item.id,
+				sourceId: item.sourceId ? String(item.sourceId) : undefined,
+				hiveDatabase: item.hiveDatabase,
+				hiveTable: item.hiveTable,
+			})));
 		} catch {
 			// non-critical
+		} finally {
+			setDatasetLoading(false);
 		}
 	};
 
 	const handleUpload = async (file: File) => {
+		if (!selectedDataset || !selectedDatasetMeta) {
+			toast.error("请先选择目标数据集");
+			return false;
+		}
+		if (!defaultDataSourceId) {
+			toast.error("未识别默认数据湖数据源，无法创建预检任务");
+			return false;
+		}
+		if (selectedDatasetMeta.sourceId && selectedDatasetMeta.sourceId !== defaultDataSourceId) {
+			toast.error("所选数据集未关联默认数据湖数据源，请重新选择");
+			return false;
+		}
+		const targetTable = resolveTargetTable(selectedDatasetMeta);
+		if (!targetTable) {
+			toast.error("所选数据集缺少物理表名，无法作为入湖提交目标");
+			return false;
+		}
 		setUploading(true);
 		try {
 			const result = await ingestionTaskAPI.uploadFile(file);
-			toast.success(`文件上传成功：${result.originalName}，${result.rowCount ?? 0} 行`);
-			// NOTE: In a full integration, the upload would create/associate with an ingestion task.
-			// For now we show a note about connecting to the ingestion flow.
+			const fileType = resolveUploadedFileType(file, result);
+			const taskName = `quality_precheck_${normalizeFileBaseName(result.originalName || file.name)}_${Date.now()}`;
+			const createResult: any = await createIngestionTask({
+				name: taskName,
+				taskName,
+				description: `质量管控数据修复预检：${result.originalName || file.name}`,
+				source: {
+					type: fileType,
+					config: {
+						_filePath: result.hostPath,
+						_containerPath: result.containerPath,
+						_fileType: fileType,
+						_fileColumns: result.columns || [],
+						_originalName: result.originalName || file.name,
+						_datasetId: selectedDataset,
+						_targetDataSourceId: selectedDatasetMeta.sourceId || defaultDataSourceId,
+						_targetTable: targetTable,
+						_autoId: true,
+					},
+				},
+				destination: {
+					usePlatformDefault: true,
+					definitionId: defaultWriterType || "postgresqlwriter",
+					config: {
+						table: targetTable,
+						tables: [targetTable],
+					},
+				},
+				sync: {
+					mode: "full_refresh",
+					prefix: `ods_${normalizeFileBaseName(result.originalName || file.name)}_`,
+				},
+				airflow: { enabled: false },
+				draft: true,
+			});
+			const createdTaskId = extractCreatedTaskId(createResult);
+			if (!createdTaskId) {
+				throw new Error("文件已上传，但未返回入湖任务 ID");
+			}
+			setTaskId(createdTaskId);
+			setUploadedFileName(result.originalName || file.name);
+			toast.success(`文件上传成功，已创建预检任务 #${createdTaskId}`);
 		} catch (error: any) {
 			toast.error(error?.message || "文件上传失败");
 		} finally {
@@ -129,8 +254,13 @@ function PreCheckMode({ initialTaskId }: { initialTaskId?: number }) {
 		}
 		setChecking(true);
 		try {
+			await ingestionTaskAPI.parseExcel(taskId);
 			const result = await ingestionTaskAPI.preCheck(taskId);
-			toast.success(`预检完成：${result.passedRows} 通过, ${result.failedRows} 失败`);
+			if (result.failedRules != null || result.totalRules != null) {
+				toast.success(`预检完成：${result.passedRules ?? 0}/${result.totalRules ?? 0} 条规则通过`);
+			} else {
+				toast.success(`预检完成：${result.passedRows ?? 0} 通过, ${result.failedRows ?? 0} 失败`);
+			}
 			setShowEditor(true);
 		} catch (error: any) {
 			toast.error(error?.message || "预检失败");
@@ -155,7 +285,7 @@ function PreCheckMode({ initialTaskId }: { initialTaskId?: number }) {
 				showIcon
 				icon={<InfoCircleOutlined />}
 				message="入湖预检说明"
-				description="上传 Excel/CSV 文件后，系统会根据目标数据集绑定的质量规则进行预检。检出的错误数据可在暂存编辑器中逐条修复后再提交入湖。当前模式需要先创建入湖任务，后续将与接入流程深度集成。"
+				description="先选择目标数据集，再上传 Excel/CSV 文件。系统会自动创建并关联一个预检入湖任务，随后可开始检查；检出的错误数据可在暂存编辑器中逐条修复后再提交入湖。"
 				className="mb-2"
 			/>
 
@@ -165,18 +295,29 @@ function PreCheckMode({ initialTaskId }: { initialTaskId?: number }) {
 					accept=".xlsx,.xls,.csv"
 					showUploadList={false}
 					beforeUpload={handleUpload}
-					disabled={uploading}
+					disabled={uploading || !selectedDataset}
 				>
 					<p className="ant-upload-drag-icon">
 						<CloudUploadOutlined style={{ fontSize: 40, color: "#1677ff" }} />
 					</p>
 					<p className="ant-upload-text">点击或拖拽 Excel / CSV 文件到此区域</p>
-					<p className="ant-upload-hint">支持 .xlsx, .xls, .csv 格式</p>
+					<p className="ant-upload-hint">
+						{selectedDataset ? "支持 .xlsx, .xls, .csv 格式" : "请先在下方选择目标数据集"}
+					</p>
 				</Upload.Dragger>
 			</Card>
 
-			{/* Target dataset + task ID */}
+			{/* Target dataset + generated task */}
 			<Card title="预检配置" size="small">
+				{!datasetLoading && !defaultDataSourceId && (
+					<Alert
+						type="warning"
+						showIcon
+						message="未识别默认数据湖数据源"
+						description="请先确认平台默认数据湖已配置，并能映射到本地数据源；数据修复只允许选择默认数据湖下的数据集。"
+						className="mb-3"
+					/>
+				)}
 				<div className="flex flex-wrap items-end gap-4">
 					<div>
 						<Typography.Text className="mb-1 block text-xs text-gray-500">
@@ -187,24 +328,24 @@ function PreCheckMode({ initialTaskId }: { initialTaskId?: number }) {
 							placeholder="选择目标数据集"
 							options={datasets.map((d) => ({ label: d.name, value: d.id }))}
 							value={selectedDataset}
-							onChange={setSelectedDataset}
+							onChange={(value) => {
+								setSelectedDataset(value);
+								setTaskId(undefined);
+								setUploadedFileName(undefined);
+								setShowEditor(false);
+							}}
 							allowClear
 							showSearch
+							loading={datasetLoading}
 							optionFilterProp="label"
 						/>
 					</div>
-					<div>
-						<Typography.Text className="mb-1 block text-xs text-gray-500">
-							入湖任务 ID
-						</Typography.Text>
-						<InputNumber
-							style={{ width: 180 }}
-							placeholder="输入任务ID"
-							value={taskId}
-							onChange={(v) => setTaskId(v ?? undefined)}
-							min={1}
-						/>
-					</div>
+					<Typography.Text type="secondary">
+						默认数据源：{defaultDestinationName || defaultDataSourceId || "未识别"}
+					</Typography.Text>
+					{selectedDatasetMeta?.hiveTable && (
+						<Tag color="cyan">目标表：{selectedDatasetMeta.hiveTable}</Tag>
+					)}
 					<Button
 						type="primary"
 						icon={<SearchOutlined />}
@@ -214,6 +355,12 @@ function PreCheckMode({ initialTaskId }: { initialTaskId?: number }) {
 					>
 						开始检查
 					</Button>
+					{uploadedFileName && taskId && (
+						<Tag color="blue">已绑定任务 #{taskId}：{uploadedFileName}</Tag>
+					)}
+					{!taskId && (
+						<Typography.Text type="secondary">上传文件后会自动生成预检任务</Typography.Text>
+					)}
 				</div>
 			</Card>
 		</div>
@@ -225,6 +372,17 @@ function PreCheckMode({ initialTaskId }: { initialTaskId?: number }) {
 type SqlPreviewSample = {
 	rowId: any;
 	columnValues: Record<string, string>;
+	newValues?: Record<string, string>;
+};
+
+type FailingRowItem = {
+	id?: string;
+	rowId?: string;
+	tableName?: string;
+	columnName?: string;
+	actualValue?: string;
+	failReason?: string;
+	rowData?: Record<string, any>;
 };
 
 function SqlRepairEditor({ runId }: { runId?: string }) {
@@ -297,7 +455,18 @@ function SqlRepairEditor({ runId }: { runId?: string }) {
 				title: key,
 				dataIndex: ["columnValues", key],
 				ellipsis: true,
-				render: (_: any, record: SqlPreviewSample) => record.columnValues?.[key] ?? "-",
+				render: (_: any, record: SqlPreviewSample) => {
+					const before = record.columnValues?.[key] ?? "";
+					const after = record.newValues?.[key];
+					if (after == null) return before || "-";
+					const changed = String(before) !== String(after);
+					return (
+						<div className="space-y-1">
+							<div className={changed ? "text-red-500 line-through" : undefined}>{before || "-"}</div>
+							<div className={changed ? "font-medium text-green-600" : "text-gray-500"}>{after || "-"}</div>
+						</div>
+					);
+				},
 			});
 		}
 		return cols;
@@ -360,7 +529,7 @@ function SqlRepairEditor({ runId }: { runId?: string }) {
 			{samples.length > 0 && (
 				<div>
 					<Typography.Text type="secondary" className="mb-1 block text-xs">
-						当前数据预览（修复前）
+						修复预览（上方为当前值，下方为执行后）
 					</Typography.Text>
 					<CompactTable
 						rowKey={(r) => String(r.rowId ?? Math.random())}
@@ -372,6 +541,121 @@ function SqlRepairEditor({ runId }: { runId?: string }) {
 					/>
 				</div>
 			)}
+		</div>
+	);
+}
+
+function ManualFailingRowsEditor({ runId, onSaved }: { runId?: string; onSaved?: () => void }) {
+	const [rows, setRows] = useState<FailingRowItem[]>([]);
+	const [loading, setLoading] = useState(false);
+	const [savingKey, setSavingKey] = useState("");
+	const [draftValues, setDraftValues] = useState<Record<string, string>>({});
+
+	const loadRows = useCallback(async () => {
+		if (!runId) return;
+		setLoading(true);
+		try {
+			const resp: any = await listFailingRows(runId, { page: 0, size: 50 });
+			const list = Array.isArray(resp?.content) ? resp.content : [];
+			setRows(list as FailingRowItem[]);
+			const nextDrafts: Record<string, string> = {};
+			for (const row of list as FailingRowItem[]) {
+				const key = String(row.id || `${row.tableName}-${row.rowId}-${row.columnName}`);
+				const current = row.columnName ? row.rowData?.[row.columnName] ?? row.actualValue ?? "" : "";
+				nextDrafts[key] = current != null ? String(current) : "";
+			}
+			setDraftValues(nextDrafts);
+		} catch (error: any) {
+			toast.error(error?.message || "失败行加载失败");
+		} finally {
+			setLoading(false);
+		}
+	}, [runId]);
+
+	useEffect(() => {
+		void loadRows();
+	}, [loadRows]);
+
+	const saveRow = async (row: FailingRowItem) => {
+		if (!row.tableName || !row.rowId || !row.columnName) {
+			toast.error("失败行缺少表名、行ID或字段名，无法保存");
+			return;
+		}
+		const key = String(row.id || `${row.tableName}-${row.rowId}-${row.columnName}`);
+		setSavingKey(key);
+		try {
+			await updateOdsRow(row.tableName, row.rowId, {
+				[row.columnName]: draftValues[key] ?? "",
+				_reason: `质量问题修复${runId ? `：${runId}` : ""}`,
+				_failingRowId: row.id ?? "",
+			});
+			toast.success("字段已修复，失败明细已移除；重新运行质量校验后可确认规则通过");
+			onSaved?.();
+			await loadRows();
+		} catch (error: any) {
+			toast.error(error?.message || "字段保存失败");
+		} finally {
+			setSavingKey("");
+		}
+	};
+
+	const columns: ColumnsType<FailingRowItem> = [
+		{ title: "表", dataIndex: "tableName", width: 180, ellipsis: true },
+		{ title: "行ID", dataIndex: "rowId", width: 120, ellipsis: true },
+		{ title: "字段", dataIndex: "columnName", width: 140, ellipsis: true },
+		{
+			title: "原因",
+			dataIndex: "failReason",
+			width: 180,
+			ellipsis: true,
+			render: (value) => value || "-",
+		},
+		{
+			title: "修复值",
+			width: 220,
+			render: (_, row) => {
+				const key = String(row.id || `${row.tableName}-${row.rowId}-${row.columnName}`);
+				return (
+					<Input
+						size="small"
+						value={draftValues[key]}
+						onChange={(event) => setDraftValues((prev) => ({ ...prev, [key]: event.target.value }))}
+					/>
+				);
+			},
+		},
+		{
+			title: "操作",
+			width: 90,
+			render: (_, row) => {
+				const key = String(row.id || `${row.tableName}-${row.rowId}-${row.columnName}`);
+				return (
+					<Button size="small" type="primary" loading={savingKey === key} onClick={() => saveRow(row)}>
+						保存
+					</Button>
+				);
+			},
+		},
+	];
+
+	return (
+		<div className="space-y-2 rounded border border-solid border-gray-200 p-3">
+			<div className="flex items-center justify-between">
+				<Typography.Text strong>人工编辑</Typography.Text>
+				<Button size="small" icon={<SearchOutlined />} loading={loading} onClick={() => void loadRows()}>
+					刷新失败行
+				</Button>
+			</div>
+			<CompactTable
+				rowKey={(row) => row.id || `${row.tableName}-${row.rowId}-${row.columnName}`}
+				columns={columns}
+				dataSource={rows}
+				loading={loading}
+				size="small"
+				pagination={{ pageSize: 10 }}
+				scroll={{ x: 900 }}
+				locale={{ emptyText: "暂无失败行明细" }}
+			/>
 		</div>
 	);
 }
@@ -389,6 +673,8 @@ function QualityFixMode({ initialRunId }: { initialRunId?: string }) {
 	const [cleansingFunctions, setCleansingFunctions] = useState<CleansingFn[]>([]);
 	const [selectedFnId, setSelectedFnId] = useState<string>();
 	const [previewRows, setPreviewRows] = useState<CleansingPreviewRow[]>([]);
+	const [previewAffectedRows, setPreviewAffectedRows] = useState<number | null>(null);
+	const [previewUnresolvableRows, setPreviewUnresolvableRows] = useState<number>(0);
 	const [previewLoading, setPreviewLoading] = useState(false);
 	const [executing, setExecuting] = useState(false);
 
@@ -401,7 +687,7 @@ function QualityFixMode({ initialRunId }: { initialRunId?: string }) {
 	const loadRuns = useCallback(async () => {
 		setLoading(true);
 		try {
-			const resp: any = await listQualityRuns({ status: "FAILED" });
+			const resp: any = await listQualityRuns({ status: "FAILED", limit: 200 });
 			const list = Array.isArray(resp?.content) ? resp.content : Array.isArray(resp) ? resp : [];
 			setRuns(list as QualityRunRow[]);
 		} catch (error: any) {
@@ -450,6 +736,8 @@ function QualityFixMode({ initialRunId }: { initialRunId?: string }) {
 		setSelectedRunId(runId);
 		setSelectedFnId(undefined);
 		setPreviewRows([]);
+		setPreviewAffectedRows(null);
+		setPreviewUnresolvableRows(0);
 		setCleansingModalOpen(true);
 	};
 
@@ -466,7 +754,14 @@ function QualityFixMode({ initialRunId }: { initialRunId?: string }) {
 				limit: 20,
 			});
 			setPreviewRows(resp?.samples ?? []);
-			toast.success(`预览完成：影响 ${resp?.affectedRows ?? 0} 行`);
+			setPreviewAffectedRows(resp?.affectedRows ?? 0);
+			setPreviewUnresolvableRows(resp?.unresolvableRows ?? 0);
+			const unresolved = Number(resp?.unresolvableRows ?? 0);
+			if (unresolved > 0) {
+				toast.warning(`预览完成：预计影响 ${resp?.affectedRows ?? 0} 行，${unresolved} 行无法解析`);
+			} else {
+				toast.success(`预览完成：预计影响 ${resp?.affectedRows ?? 0} 行`);
+			}
 		} catch (error: any) {
 			toast.error(error?.message || "预览失败");
 		} finally {
@@ -482,7 +777,12 @@ function QualityFixMode({ initialRunId }: { initialRunId?: string }) {
 				runId: selectedRunId,
 				functionId: selectedFnId,
 			});
-			toast.success(`清洗完成：影响 ${resp?.affectedRows ?? 0} 行`);
+			const unresolved = Number(resp?.unresolvableRows ?? 0);
+			if (unresolved > 0) {
+				toast.warning(`清洗完成：影响 ${resp?.affectedRows ?? 0} 行，${unresolved} 行无法解析`);
+			} else {
+				toast.success(`清洗完成：影响 ${resp?.affectedRows ?? 0} 行`);
+			}
 			setCleansingModalOpen(false);
 			void loadRuns();
 		} catch (error: any) {
@@ -495,6 +795,19 @@ function QualityFixMode({ initialRunId }: { initialRunId?: string }) {
 	const handleIgnore = (run: QualityRunRow) => {
 		toast.info(`已忽略运行 ${run.id}`);
 		setRuns((prev) => prev.filter((r) => r.id !== run.id));
+	};
+
+	const handleManualRowSaved = () => {
+		if (!selectedRunId) return;
+		setRuns((prev) =>
+			prev.map((run) => {
+				if (run.id !== selectedRunId) return run;
+				const nextFailedRows = run.failedRows != null ? Math.max(0, run.failedRows - 1) : run.failedRows;
+				const nextFailingRowCount =
+					run.failingRowCount != null ? Math.max(0, run.failingRowCount - 1) : run.failingRowCount;
+				return { ...run, failedRows: nextFailedRows, failingRowCount: nextFailingRowCount };
+			}),
+		);
 	};
 
 	const columns: ColumnsType<QualityRunRow> = [
@@ -514,6 +827,7 @@ function QualityFixMode({ initialRunId }: { initialRunId?: string }) {
 		{
 			title: "规则",
 			dataIndex: "ruleName",
+			sorter: (a, b) => (a.ruleName || "").localeCompare(b.ruleName || ""),
 			width: 160,
 			render: (v, record) => v || record.ruleId || "-",
 		},
@@ -527,11 +841,19 @@ function QualityFixMode({ initialRunId }: { initialRunId?: string }) {
 			title: "失败行数",
 			dataIndex: "failedRows",
 			width: 100,
-			render: (v) => (v != null ? <Tag color="red">{v}</Tag> : "-"),
+			render: (v, record) => {
+				const count = v ?? record.failingRowCount;
+				return count != null ? <Tag color="red">{count}</Tag> : "-";
+			},
 		},
 		{
 			title: "时间",
 			dataIndex: "finishedAt",
+			sorter: (a, b) => {
+				const ta = a.finishedAt ? new Date(a.finishedAt as any).getTime() : 0;
+				const tb = b.finishedAt ? new Date(b.finishedAt as any).getTime() : 0;
+				return ta - tb;
+			},
 			width: 180,
 			render: formatTime,
 		},
@@ -626,7 +948,12 @@ function QualityFixMode({ initialRunId }: { initialRunId?: string }) {
 											value: fn.id,
 										}))}
 										value={selectedFnId}
-										onChange={setSelectedFnId}
+										onChange={(value) => {
+											setSelectedFnId(value);
+											setPreviewRows([]);
+											setPreviewAffectedRows(null);
+											setPreviewUnresolvableRows(0);
+										}}
 										allowClear
 									/>
 								</div>
@@ -641,11 +968,22 @@ function QualityFixMode({ initialRunId }: { initialRunId?: string }) {
 									type="primary"
 									loading={executing}
 									onClick={handleExecute}
-									disabled={!selectedFnId || previewRows.length === 0}
+									disabled={!selectedFnId || !previewAffectedRows}
 								>
 									执行清洗
 								</Button>
 							</div>
+
+							{previewAffectedRows != null && (
+								<Space>
+									<Tag color={previewAffectedRows > 0 ? "orange" : "default"}>
+										预计影响：{previewAffectedRows} 行
+									</Tag>
+									{previewUnresolvableRows > 0 && (
+										<Tag color="red">无法解析：{previewUnresolvableRows} 行</Tag>
+									)}
+								</Space>
+							)}
 
 							{/* Preview table */}
 							{previewRows.length > 0 && (
@@ -662,11 +1000,7 @@ function QualityFixMode({ initialRunId }: { initialRunId?: string }) {
 							{/* SQL repair */}
 							<SqlRepairEditor runId={selectedRunId} />
 
-							{/* Manual edit - placeholder */}
-							<div className="rounded border border-dashed border-gray-300 p-3 text-center text-gray-400">
-								<ToolOutlined className="mr-1" />
-								人工编辑 — 即将支持
-							</div>
+							<ManualFailingRowsEditor runId={selectedRunId} onSaved={handleManualRowSaved} />
 						</div>
 					</Card>
 				</div>

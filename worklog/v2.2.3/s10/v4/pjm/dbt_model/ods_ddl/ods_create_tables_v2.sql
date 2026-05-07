@@ -43,8 +43,8 @@ CREATE TABLE ods_project_subject_domain_v2 (
     last_update_week     varchar(500),   -- 最后更新周数
     filled_by            varchar(500),   -- 填写人
     highlight            varchar(2000),  -- 亮点工作
-    source_system        varchar(200) DEFAULT 'excel',
-    import_time          timestamp DEFAULT now()
+    _dts_source_system   varchar(500) DEFAULT 'excel',
+    _dts_import_time     timestamp DEFAULT now()
 );
 
 -- ─── 1. 进度跟进措施表（23个业务字段） ───
@@ -74,8 +74,8 @@ CREATE TABLE ods_progress_measure_v2 (
     last_update_week         varchar(500),   -- 最后更新周数
     remark                   varchar(2000),  -- 备注
     filled_by                varchar(500),   -- 填写人
-    source_system            varchar(200) DEFAULT 'excel',
-    import_time              timestamp DEFAULT now()
+    _dts_source_system       varchar(500) DEFAULT 'excel',
+    _dts_import_time         timestamp DEFAULT now()
 );
 
 -- ─── 2. 质量信息汇总表（21个业务字段） ───
@@ -103,8 +103,8 @@ CREATE TABLE ods_quality_issue_v2 (
     last_update_week         varchar(500),   -- 最后更新周数
     project_manager          varchar(500),   -- 项目主管（下拉选择）
     filled_by                varchar(500),   -- 填写人
-    source_system            varchar(200) DEFAULT 'excel',
-    import_time              timestamp DEFAULT now()
+    _dts_source_system       varchar(500) DEFAULT 'excel',
+    _dts_import_time         timestamp DEFAULT now()
 );
 
 -- ─── 3. 质量跟进措施表（33个业务字段） ───
@@ -144,8 +144,8 @@ CREATE TABLE ods_quality_measure_v2 (
     last_update_week         varchar(500),   -- 最后更新周数
     remark                   varchar(2000),  -- 备注
     filled_by                varchar(500),   -- 填写人
-    source_system            varchar(200) DEFAULT 'excel',
-    import_time              timestamp DEFAULT now()
+    _dts_source_system       varchar(500) DEFAULT 'excel',
+    _dts_import_time         timestamp DEFAULT now()
 );
 
 -- ─── 4. 技术状态信息汇总表（33个业务字段） ───
@@ -185,8 +185,8 @@ CREATE TABLE ods_tech_state_v2 (
     last_update_week         varchar(500),   -- 最后更新周数
     filled_by                varchar(500),   -- 填写人
     remark                   varchar(2000),  -- 备注
-    source_system            varchar(200) DEFAULT 'excel',
-    import_time              timestamp DEFAULT now()
+    _dts_source_system       varchar(500) DEFAULT 'excel',
+    _dts_import_time         timestamp DEFAULT now()
 );
 
 -- ─── 5. 技术状态跟进措施表（41个业务字段） ───
@@ -234,8 +234,8 @@ CREATE TABLE ods_tech_state_measure_v2 (
     last_update_week         varchar(500),   -- 最后更新周数
     remark                   varchar(2000),  -- 备注
     filled_by                varchar(500),   -- 填写人
-    source_system            varchar(200) DEFAULT 'excel',
-    import_time              timestamp DEFAULT now()
+    _dts_source_system       varchar(500) DEFAULT 'excel',
+    _dts_import_time         timestamp DEFAULT now()
 );
 
 -- ─── 6. 风险信息汇总表（31个业务字段） ───
@@ -273,8 +273,8 @@ CREATE TABLE ods_risk_info_v2 (
     last_update_time         varchar(500),   -- 最后更新时间（格式：XXXX-XX-XX）
     last_update_week         varchar(500),   -- 最后更新周数
     filled_by                varchar(500),   -- 填写人
-    source_system            varchar(200) DEFAULT 'excel',
-    import_time              timestamp DEFAULT now()
+    _dts_source_system       varchar(500) DEFAULT 'excel',
+    _dts_import_time         timestamp DEFAULT now()
 );
 
 -- ─── 7. 风险跟进措施表（42个业务字段） ───
@@ -323,8 +323,8 @@ CREATE TABLE ods_risk_measure_v2 (
     last_update_week         varchar(500),   -- 最后更新周数
     remark                   varchar(2000),  -- 备注
     filled_by                varchar(500),   -- 填写人
-    source_system            varchar(200) DEFAULT 'excel',
-    import_time              timestamp DEFAULT now()
+    _dts_source_system       varchar(500) DEFAULT 'excel',
+    _dts_import_time         timestamp DEFAULT now()
 );
 
 -- ─── 8. 重要物料信息表（29个业务字段） ───
@@ -360,6 +360,6 @@ CREATE TABLE ods_material_info_v2 (
     last_update_time         varchar(500),   -- 最后更新时间（格式：XXXX-XX-XX）
     last_update_week         varchar(500),   -- 最后更新周数
     remark                   varchar(2000),  -- 备注
-    source_system            varchar(200) DEFAULT 'excel',
-    import_time              timestamp DEFAULT now()
+    _dts_source_system       varchar(500) DEFAULT 'excel',
+    _dts_import_time         timestamp DEFAULT now()
 );

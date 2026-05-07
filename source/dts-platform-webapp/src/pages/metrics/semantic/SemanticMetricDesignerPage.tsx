@@ -295,7 +295,7 @@ export default function SemanticMetricDesignerPage() {
 	);
 
 	const dimensionBaseColumns: ColumnsType<SemanticDimension> = [
-		{ title: "维度", dataIndex: "name" },
+		{ title: "维度", dataIndex: "name" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 		{ title: "字段", dataIndex: "fieldName", render: (value) => value || "-" },
 		{ title: "类型", dataIndex: "semanticType", width: 120, render: (value) => value || "-" },
 		{
@@ -318,7 +318,7 @@ export default function SemanticMetricDesignerPage() {
 	);
 
 	const metricBaseColumns: ColumnsType<SemanticMetric> = [
-		{ title: "指标", dataIndex: "name" },
+		{ title: "指标", dataIndex: "name" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 		{ title: "公式类型", dataIndex: "formulaType", width: 130, render: (value) => value || "-" },
 		{ title: "格式", dataIndex: "format", width: 110, render: (value) => value || "-" },
 		{ title: "状态", dataIndex: "status", width: 100, render: (value) => value || "-" },

@@ -47,6 +47,8 @@ type RuleRow = {
 	latestRun?: { status?: string; passRate?: number; failingRows?: number };
 };
 
+const isPassedStatus = (status?: string) => ["PASSED", "SUCCESS", "SUCCEEDED", "COMPLETED"].includes(String(status || "").toUpperCase());
+
 /* ---------- Score Card ---------- */
 function ScoreCard({
 	label,
@@ -247,7 +249,7 @@ export default function QualityReportTab() {
 
 	/* ---------- Rule Table Columns ---------- */
 	const ruleColumns: ColumnsType<RuleRow> = [
-		{ title: "规则名称", dataIndex: "name", render: (v) => v || "-" },
+		{ title: "规则名称", dataIndex: "name", render: (v) => v || "-" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 		{
 			title: "类型",
 			dataIndex: "type",
@@ -264,7 +266,7 @@ export default function QualityReportTab() {
 			render: (_, record) => {
 				const status = record.latestRun?.status;
 				if (!status) return <span className="text-gray-400">-</span>;
-				return status === "PASSED" ? (
+				return isPassedStatus(status) ? (
 					<CheckCircleOutlined className="text-lg text-green-500" />
 				) : (
 					<CloseCircleOutlined className="text-lg text-red-500" />

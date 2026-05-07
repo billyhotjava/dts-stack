@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 阶梯：PUBLIC(0) < INTERNAL(1) < SECRET(2) < CONFIDENTIAL(3)。
  * 降级 = next_rank < before_rank；同级 / 升级 不算降级。
  * 边界规则：null / blank / 不在阶梯的值都视作 PUBLIC（最低），
- * 让历史裸屏的 owner 能不受 reason 阻塞地补登。
+ * 让历史未设密大屏的 owner 能不受 reason 阻塞地补登。
  */
 class ScreenResourceClassificationDowngradeTest {
 
@@ -58,7 +58,7 @@ class ScreenResourceClassificationDowngradeTest {
     }
 
     @Test
-    @DisplayName("before=null（历史裸屏）→ 任何修改都不算降级，鼓励 owner 补登")
+    @DisplayName("before=null（历史未设密大屏）→ 任何修改都不算降级，鼓励 owner 补登")
     void nullBefore_neverDowngrade() {
         assertThat(ScreenResource.isDowngrade(null, "PUBLIC")).isFalse();
         assertThat(ScreenResource.isDowngrade(null, "INTERNAL")).isFalse();
@@ -67,7 +67,7 @@ class ScreenResourceClassificationDowngradeTest {
     }
 
     @Test
-    @DisplayName("blank before（空字符串裸屏）→ 与 null 同等待遇")
+    @DisplayName("blank before（空字符串未设密）→ 与 null 同等待遇")
     void blankBefore_neverDowngrade() {
         assertThat(ScreenResource.isDowngrade("", "INTERNAL")).isFalse();
         assertThat(ScreenResource.isDowngrade("   ", "SECRET")).isFalse();

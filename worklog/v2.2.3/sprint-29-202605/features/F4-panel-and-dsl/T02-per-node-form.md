@@ -1,7 +1,7 @@
 # T02: 6 类节点的配置表单
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T01
 
 ## 目标
@@ -84,13 +84,13 @@ ValidateRule[] 编辑器：每行一条规则（type / column / params），支�
 
 ## 验证
 
-- [ ] 6 类节点选中后均能正常显示对应 Form
-- [ ] 表单变更 200ms 内反映到节点摘要
-- [ ] zod 校验失败时表单 highlight
-- [ ] TransformForm 的 SQL IDE 正常工作（高亮、行号、补全）
-- [ ] ValidateForm 规则增删改顺序操作正常
+- [x] 6 类节点选中后均能正常显示对应 Form
+- [x] 表单变更实时反映到 store，节点摘要跟随 store 更新
+- [ ] zod 校验失败时表单 highlight（后续随复杂表单补）
+- [ ] TransformForm 的 SQL IDE 正常工作（F4 当前先用 textarea，SQL IDE 后续嵌入）
+- [x] ValidateForm 规则 JSON 增删改可写回 store
 
 ## 完成标准
 
-- [ ] 表单 → store → 节点摘要 三段联动正常
-- [ ] 单元测试：每类 Form 至少 1 用例验证字段同步
+- [x] 表单 → store → 节点摘要 三段联动正常
+- [x] 单元测试：Panel 表单字段同步

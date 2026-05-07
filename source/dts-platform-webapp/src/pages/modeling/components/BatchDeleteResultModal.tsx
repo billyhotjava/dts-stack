@@ -37,6 +37,7 @@ export default function BatchDeleteResultModal({ open, onClose, result, title = 
 						{
 							title: "模型",
 							dataIndex: "name",
+							sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 							render: (_, record) => (
 								<div>
 									<div className="font-medium">{record.name}</div>

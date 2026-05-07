@@ -10,7 +10,7 @@ import { Modal, Input, Select } from 'antd';
  *
  * 提交后通过 onSubmit 透传给 caller，让 caller 决定走 v2 直接创建还是
  * 跳到模板选择 / 设计器。配合后端 normalizeRequiredClassification（F3/T03）
- * 形成前后端双重防线，从源头消除 classification=null 裸屏。
+ * 形成前后端双重防线，从源头消除 classification=null 的大屏。
  *
  * 设计取舍：
  * - **不给 classification 默认值**：避免用户盲点确认。INTERNAL 听上去是
@@ -26,6 +26,10 @@ export interface CreateScreenIntakePayload {
 export interface CreateScreenIntakeModalProps {
 	open: boolean;
 	defaultName?: string;
+	/** 弹窗标题，默认「新建大屏」；导入流程可改成「导入大屏」。 */
+	title?: string;
+	/** 标题下方说明文案；用于解释当前 intake 的来源（例：JSON 缺密级）。 */
+	description?: string;
 	/** 提交标签，默认「下一步」；handleCreateV2 这种直接创建可改成「创建」 */
 	okText?: string;
 	onCancel: () => void;
@@ -42,6 +46,8 @@ const LEVEL_OPTIONS: Array<{ label: string; value: CreateScreenIntakePayload['cl
 export function CreateScreenIntakeModal({
 	open,
 	defaultName = '',
+	title = '新建大屏',
+	description,
 	okText = '下一步',
 	onCancel,
 	onSubmit,
@@ -75,7 +81,7 @@ export function CreateScreenIntakeModal({
 	return (
 		<Modal
 			open={open}
-			title="新建大屏"
+			title={title}
 			width={460}
 			onCancel={onCancel}
 			onOk={handleOk}
@@ -85,6 +91,11 @@ export function CreateScreenIntakeModal({
 			destroyOnClose
 		>
 			<div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 4 }}>
+				{description && (
+					<div style={{ fontSize: 13, color: 'var(--color-text-secondary, #6b7280)', lineHeight: 1.5 }}>
+						{description}
+					</div>
+				)}
 				<div>
 					<div style={{ fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
 						大屏名称 <span style={{ color: '#ff4d4f' }}>*</span>

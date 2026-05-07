@@ -1,0 +1,107 @@
+/* WorkflowCanvas 配色 — 仅使用 Chrome 95 兼容的 CSS（无 :has / @layer / oklch / color-mix） */
+
+.workflow-canvas {
+	--wf-bg: #fafbfc;
+	--wf-grid: #e5e7eb;
+	--wf-edge: #94a3b8;
+	--wf-edge-selected: #3b82f6;
+	--wf-node-shadow: 0 1px 2px rgba(15, 23, 42, 0.08), 0 4px 10px rgba(15, 23, 42, 0.06);
+	--wf-panel-bg: #ffffff;
+	--wf-panel-border: #e2e8f0;
+
+	position: relative;
+	width: 100%;
+	height: 100%;
+	min-height: 480px;
+	background-color: var(--wf-bg);
+	color: #0f172a;
+}
+
+.workflow-canvas .react-flow__renderer {
+	background-color: transparent;
+}
+
+.workflow-canvas .react-flow__background {
+	color: var(--wf-grid);
+}
+
+.workflow-canvas .react-flow__edge-path {
+	stroke: var(--wf-edge);
+	stroke-width: 1.5;
+}
+
+.workflow-canvas .react-flow__edge.selected .react-flow__edge-path,
+.workflow-canvas .react-flow__edge:focus .react-flow__edge-path {
+	stroke: var(--wf-edge-selected);
+	stroke-width: 2;
+}
+
+.workflow-canvas .react-flow__minimap {
+	background-color: var(--wf-panel-bg);
+	border: 1px solid var(--wf-panel-border);
+	border-radius: 6px;
+	box-shadow: var(--wf-node-shadow);
+}
+
+.workflow-canvas .react-flow__controls {
+	background-color: var(--wf-panel-bg);
+	border: 1px solid var(--wf-panel-border);
+	border-radius: 6px;
+	box-shadow: var(--wf-node-shadow);
+	overflow: hidden;
+}
+
+.workflow-canvas .react-flow__controls-button {
+	background-color: var(--wf-panel-bg);
+	border-bottom: 1px solid var(--wf-panel-border);
+	color: #475569;
+}
+
+.workflow-canvas .react-flow__controls-button:hover {
+	background-color: #f1f5f9;
+}
+
+.workflow-canvas[data-readonly="true"] {
+	cursor: default;
+}
+
+.workflow-canvas[data-readonly="true"] .react-flow__pane {
+	cursor: default;
+}
+
+.workflow-edge-label {
+	font-size: 12px;
+	line-height: 1;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background-color: var(--wf-panel-bg);
+	border: 1px solid var(--wf-panel-border);
+	color: #475569;
+	white-space: nowrap;
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.workflow-edge-remove {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: 1px solid var(--wf-panel-border);
+	border-radius: 9px;
+	background-color: var(--wf-panel-bg);
+	color: #ef4444;
+	font-size: 14px;
+	line-height: 1;
+	cursor: pointer;
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.workflow-edge-remove:hover,
+.workflow-edge-remove:focus-visible {
+	background-color: #fef2f2;
+	color: #b91c1c;
+	outline: 2px solid #fecaca;
+	outline-offset: 1px;
+}

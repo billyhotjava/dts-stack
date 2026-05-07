@@ -69,6 +69,10 @@ public class IngestionTask extends AbstractAuditingEntity {
     @Column(name = "sync_config", columnDefinition = "jsonb")
     private JsonNode syncConfig; // 增量等同步扩展配置
 
+    @Type(JsonType.class)
+    @Column(name = "graph_dsl", columnDefinition = "jsonb")
+    private JsonNode graphDsl; // 可视化编排 DSL（仅持久化，执行链路暂不消费）
+
     // Addax配置
     @Size(max = 500)
     @Column(name = "addax_job_path", length = 500)
@@ -216,6 +220,14 @@ public class IngestionTask extends AbstractAuditingEntity {
         this.syncConfig = syncConfig;
     }
 
+    public JsonNode getGraphDsl() {
+        return graphDsl;
+    }
+
+    public void setGraphDsl(JsonNode graphDsl) {
+        this.graphDsl = graphDsl;
+    }
+
     public String getAddaxJobPath() {
         return addaxJobPath;
     }
@@ -333,6 +345,7 @@ public class IngestionTask extends AbstractAuditingEntity {
             ", sourceType='" + sourceType + '\'' +
             ", syncMode='" + syncMode + '\'' +
             ", syncConfig=" + syncConfig +
+            ", graphDsl=" + graphDsl +
             ", status='" + status + '\'' +
             '}';
     }
