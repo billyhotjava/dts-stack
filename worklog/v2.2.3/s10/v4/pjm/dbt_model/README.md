@@ -36,6 +36,7 @@ ODS → STG → DWD → DWS → ADS
 
 - `dwd/*`、`dws/*`、`ads/*` 禁止直接 `source(...)`，必须经 `stg_pm__*` 进入
 - STG 强制保留来源元数据：`source_row_id / source_table / source_system / source_file / source_sheet_name / source_batch_id / source_row_num / imported_at`
+- ODS 物理表使用入湖统一技术字段 `_dts_source_system / _dts_import_time`；STG 负责映射为下游标准字段 `source_system / imported_at`
 - 详细规则见 `model-governance.md`
 
 ## 部署流程

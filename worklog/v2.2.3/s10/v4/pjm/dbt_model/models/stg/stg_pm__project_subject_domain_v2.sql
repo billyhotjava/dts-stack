@@ -3,8 +3,8 @@
 SELECT
   o.id AS source_row_id,
   'ods_project_subject_domain_v2'::text AS source_table,
-  COALESCE({{ nullif_placeholder("o.source_system") }}, 'excel') AS source_system,
-  o.import_time AS imported_at,
+  COALESCE({{ nullif_placeholder("o._dts_source_system") }}, 'excel') AS source_system,
+  o._dts_import_time AS imported_at,
 
   {{ nullif_placeholder("o.project_no") }} AS project_no,
   {{ nullif_placeholder("o.subsystem") }} AS subsystem,
