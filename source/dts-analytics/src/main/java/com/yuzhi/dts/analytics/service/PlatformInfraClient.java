@@ -75,7 +75,8 @@ public class PlatformInfraClient {
         if (id == null) {
             throw new IllegalArgumentException("dataSourceId不能为空");
         }
-        URI uri = buildUri("/infra/data-sources/" + id + "/detail");
+        // Dataset SQL execution needs runtime secrets to build the JDBC connection pool.
+        URI uri = buildUri("/infra/data-sources/" + id + "/runtime-detail");
         HttpHeaders headers = buildHeaders();
         try {
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, new HttpEntity<>(headers), Map.class);

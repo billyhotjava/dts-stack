@@ -2,24 +2,22 @@
 target/
 logs/
 dbt_packages/
+.dts-scoped-runs/
 
 # local runtime/config state
+profiles/profiles.yml
 profiles/.user.yml
 .user.yml
+.git/
 
 # business-generated files (created by platform at runtime)
-models/ads/
-models/dwd/
-models/dws/
-models/ods/
-models/model/
-models/__topic_bindings/
-models/ods_sources.yml
-models/project_cockpit_schema.yml
-models/project_management_sources.yml
+models/**
+!models/
+!models/.gitkeep
 macros/parse_date_safe.sql
-seeds/*.csv
-deploy/project-cockpit/
+seeds/**
+deploy/
+docs/semantic/
 
 # editor/system noise
 .DS_Store

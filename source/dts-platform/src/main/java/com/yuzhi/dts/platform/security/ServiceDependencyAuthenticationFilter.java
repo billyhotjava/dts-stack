@@ -137,7 +137,9 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
                 || isPost(method, path, "/api/catalog/lineage/ingestion-executions");
         }
         if ("dts-analytics".equals(service)) {
-            return isGet(method, path, "/api/infra/data-sources") || isGetInfraDataSourceDetail(method, path);
+            return isGet(method, path, "/api/infra/data-sources")
+                || isGetInfraDataSourceDetail(method, path)
+                || isGetRuntimeDetail(method, path);
         }
         return false;
     }

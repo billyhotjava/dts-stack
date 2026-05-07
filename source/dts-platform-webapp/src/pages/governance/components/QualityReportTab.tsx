@@ -1,17 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Card, Col, Radio, Row, Select, Spin, Tag, Typography } from "antd";
-import { CompactTable } from "@/components/table";
-import type { ColumnsType } from "antd/es/table";
 import { CheckCircleOutlined, CloseCircleOutlined, DownloadOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Col, Radio, Row, Select, Spin, Tag, Typography } from "antd";
+import type { ColumnsType } from "antd/es/table";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Chart } from "@/components/chart/chart";
-import {
-	getQualityScore,
-	listQualityRules,
-	getRuleHistory,
-	listDatasets,
-} from "@/api/platformApi";
+import { type DefaultDestinationStatus, ingestionTaskAPI } from "@/api/ingestion";
 import type { QualityScoreResult, RuleRunHistory } from "@/api/platformApi";
+import { getQualityScore, getRuleHistory, listDatasets, listQualityRules } from "@/api/platformApi";
+import { Chart } from "@/components/chart/chart";
+import { CompactTable } from "@/components/table";
 import { formatTime } from "@/utils/textUtils";
 
 const DIMENSION_LABELS: Record<string, string> = {
@@ -47,24 +43,19 @@ type RuleRow = {
 	latestRun?: { status?: string; passRate?: number; failingRows?: number };
 };
 
-const isPassedStatus = (status?: string) => ["PASSED", "SUCCESS", "SUCCEEDED", "COMPLETED"].includes(String(status || "").toUpperCase());
+const isPassedStatus = (status?: string) =>
+	["PASSED", "SUCCESS", "SUCCEEDED", "COMPLETED"].includes(String(status || "").toUpperCase());
 
 /* ---------- Score Card ---------- */
-function ScoreCard({
-	label,
-	score,
-	delta,
-}: {
-	label: string;
-	score: number;
-	delta: number | null;
-}) {
+function ScoreCard({ label, score, delta }: { label: string; score: number; delta: number | null }) {
 	return (
 		<Card className="text-center" hoverable>
 			<div className="text-3xl font-bold">{score}</div>
 			<div className="mt-1 text-sm text-gray-500">{label}</div>
 			{delta != null ? (
-				<div className={`mt-1 text-sm font-medium ${delta > 0 ? "text-green-500" : delta < 0 ? "text-red-500" : "text-gray-400"}`}>
+				<div
+					className={`mt-1 text-sm font-medium ${delta > 0 ? "text-green-500" : delta < 0 ? "text-red-500" : "text-gray-400"}`}
+				>
 					{delta > 0 ? "↑" : delta < 0 ? "↓" : "—"}
 					{delta !== 0 ? Math.abs(delta) : ""}
 				</div>
@@ -128,28 +119,19 @@ function RuleHistoryInline({ ruleId }: { ruleId: string }) {
 		{
 			title: "操作",
 			width: 80,
-			render: (_, record) =>
-				record.status === "FAILED" ? (
-					<Typography.Link>去修复</Typography.Link>
-				) : null,
+			render: (_, record) => (record.status === "FAILED" ? <Typography.Link>去修复</Typography.Link> : null),
 		},
 	];
 
-	return (
-		<CompactTable
-			rowKey="runId"
-			dataSource={rows}
-			columns={cols}
-			pagination={false}
-			size="small"
-		/>
-	);
+	return <CompactTable rowKey="runId" dataSource={rows} columns={cols} pagination={false} size="small" />;
 }
 
 /* ---------- Main Component ---------- */
 export default function QualityReportTab() {
 	const [datasets, setDatasets] = useState<DatasetOption[]>([]);
 	const [datasetId, setDatasetId] = useState<string>();
+	const [defaultLake, setDefaultLake] = useState<DefaultDestinationStatus | null>(null);
+	const [datasetLoadMessage, setDatasetLoadMessage] = useState<string>();
 	const [periodDays, setPeriodDays] = useState(30);
 	const [scoreData, setScoreData] = useState<QualityScoreResult | null>(null);
 	const [scoreLoading, setScoreLoading] = useState(false);
@@ -159,18 +141,52 @@ export default function QualityReportTab() {
 
 	/* load datasets */
 	useEffect(() => {
-		listDatasets({ page: 0, size: 200 })
-			.then((resp: any) => {
+		let cancelled = false;
+		const loadDefaultLakeDatasets = async () => {
+			try {
+				const lake = await ingestionTaskAPI.getDefaultDestinationStatus();
+				if (cancelled) return;
+				setDefaultLake(lake);
+				if (!lake?.available || !lake.dataSourceId) {
+					setDatasets([]);
+					setDatasetId(undefined);
+					setDatasetLoadMessage(lake?.message || "未解析到默认数据湖连接");
+					return;
+				}
+				const resp: any = await listDatasets({
+					page: 0,
+					size: 200,
+					enabledOnly: true,
+					sourceId: lake.dataSourceId,
+				});
+				if (cancelled) return;
 				const list = Array.isArray(resp?.content) ? resp.content : [];
-				setDatasets(list.map((d: any) => ({ id: String(d.id), name: d.name || d.id })));
-			})
-			.catch(() => {});
+				const options = list.map((d: any) => ({ id: String(d.id), name: d.name || d.id }));
+				setDatasets(options);
+				setDatasetLoadMessage(options.length ? undefined : "默认数据湖连接下暂无可用数据集");
+			} catch (err: any) {
+				if (cancelled) return;
+				setDefaultLake(null);
+				setDatasets([]);
+				setDatasetId(undefined);
+				setDatasetLoadMessage(err?.message || "默认数据湖连接读取失败");
+			}
+		};
+		void loadDefaultLakeDatasets();
+		return () => {
+			cancelled = true;
+		};
 	}, []);
 
-	/* auto-select first dataset */
+	/* auto-select first dataset from default data lake only */
 	useEffect(() => {
-		if (!datasetId && datasets.length > 0) {
+		if (datasetId && datasets.some((item) => item.id === datasetId)) {
+			return;
+		}
+		if (datasets.length > 0) {
 			setDatasetId(datasets[0].id);
+		} else if (datasetId) {
+			setDatasetId(undefined);
 		}
 	}, [datasets, datasetId]);
 
@@ -249,16 +265,17 @@ export default function QualityReportTab() {
 
 	/* ---------- Rule Table Columns ---------- */
 	const ruleColumns: ColumnsType<RuleRow> = [
-		{ title: "规则名称", dataIndex: "name", render: (v) => v || "-" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
+		{
+			title: "规则名称",
+			dataIndex: "name",
+			render: (v) => v || "-",
+			sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
+		},
 		{
 			title: "类型",
 			dataIndex: "type",
 			width: 100,
-			render: (v: string) => (
-				<Tag color={DIMENSION_COLORS[v] || undefined}>
-					{DIMENSION_LABELS[v] || v || "-"}
-				</Tag>
-			),
+			render: (v: string) => <Tag color={DIMENSION_COLORS[v] || undefined}>{DIMENSION_LABELS[v] || v || "-"}</Tag>,
 		},
 		{
 			title: "最近结果",
@@ -296,9 +313,7 @@ export default function QualityReportTab() {
 				<Typography.Link
 					onClick={() =>
 						setExpandedKeys((prev) =>
-							prev.includes(record.id)
-								? prev.filter((k) => k !== record.id)
-								: [...prev, record.id],
+							prev.includes(record.id) ? prev.filter((k) => k !== record.id) : [...prev, record.id],
 						)
 					}
 				>
@@ -330,14 +345,20 @@ export default function QualityReportTab() {
 					value={periodDays}
 					onChange={(e) => setPeriodDays(e.target.value)}
 				/>
-				<Button
-					icon={<DownloadOutlined />}
-					disabled={!datasetId}
-					onClick={handleExport}
-				>
+				<Button icon={<DownloadOutlined />} disabled={!datasetId} onClick={handleExport}>
 					导出报告
 				</Button>
 			</div>
+			<Alert
+				type={datasetLoadMessage ? "warning" : "info"}
+				showIcon
+				message={
+					defaultLake?.destinationName
+						? `当前数据来源：默认数据湖（${defaultLake.destinationName}）`
+						: "当前数据来源：默认数据湖"
+				}
+				description={datasetLoadMessage}
+			/>
 
 			{/* Row 1: Score Cards */}
 			{scoreLoading ? (
@@ -347,19 +368,11 @@ export default function QualityReportTab() {
 			) : scoreData ? (
 				<Row gutter={[16, 16]}>
 					<Col xs={24} sm={12} md={8} lg={4}>
-						<ScoreCard
-							label="综合评分"
-							score={scoreData.overall}
-							delta={scoreData.overallDelta}
-						/>
+						<ScoreCard label="综合评分" score={scoreData.overall} delta={scoreData.overallDelta} />
 					</Col>
 					{scoreData.dimensions.map((dim) => (
 						<Col key={dim.type} xs={24} sm={12} md={8} lg={4}>
-							<ScoreCard
-								label={DIMENSION_LABELS[dim.type] || dim.type}
-								score={dim.score}
-								delta={dim.delta}
-							/>
+							<ScoreCard label={DIMENSION_LABELS[dim.type] || dim.type} score={dim.score} delta={dim.delta} />
 						</Col>
 					))}
 				</Row>
@@ -374,9 +387,7 @@ export default function QualityReportTab() {
 				{trendOption ? (
 					<Chart option={trendOption} height={300} />
 				) : (
-					<div className="flex items-center justify-center py-12 text-gray-400">
-						暂无趋势数据
-					</div>
+					<div className="flex items-center justify-center py-12 text-gray-400">暂无趋势数据</div>
 				)}
 			</Card>
 

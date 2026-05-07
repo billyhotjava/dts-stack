@@ -30,6 +30,7 @@ class ServiceDependencyAuthenticationFilterTest {
     private static final String SERVICE_HEADER = "X-DTS-Service";
     private static final String TOKEN_HEADER = "X-DTS-Service-Token";
     private static final String INGESTION_RUNTIME_DETAIL = "/api/infra/data-sources/11111111-1111-1111-1111-111111111111/runtime-detail";
+    private static final String ANALYTICS_RUNTIME_DETAIL = "/api/infra/data-sources/22222222-2222-2222-2222-222222222222/runtime-detail";
 
     private PlatformInboundServiceAuthProperties props;
     private SvcTokenAuthService svcTokenAuthService;
@@ -107,6 +108,23 @@ class ServiceDependencyAuthenticationFilterTest {
         assertThat(auth.getPrincipal()).isEqualTo("service:dts-ingestion");
         assertThat(auth.getAuthorities()).extracting(Object::toString).contains(AuthoritiesConstants.SERVICE_INTERNAL);
         // Other service's secret 不能用来认证 ingestion
+    }
+
+    @Test
+    void analyticsMatchingToken_canAccessRuntimeDataSourceDetail() throws Exception {
+        ServiceDependencyAuthenticationFilter filter = new ServiceDependencyAuthenticationFilter(props, svcTokenAuthService);
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.addHeader(SERVICE_HEADER, "dts-analytics");
+        req.addHeader(TOKEN_HEADER, "analytics-secret");
+        req.setMethod("GET");
+        req.setRequestURI(ANALYTICS_RUNTIME_DETAIL);
+
+        filter.doFilter(req, new MockHttpServletResponse(), chain);
+
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        assertThat(auth).isNotNull();
+        assertThat(auth.getPrincipal()).isEqualTo("service:dts-analytics");
+        assertThat(auth.getAuthorities()).extracting(Object::toString).contains(AuthoritiesConstants.SERVICE_INTERNAL);
     }
 
     @Test
