@@ -15,6 +15,7 @@ mkdir -p "${FAKE_BIN}" "${NGINX_ROOT}" "${HTML_ROOT}" "${NGINX_ROOT}/http.d" "${
 cat > "${NGINX_ROOT}/http.d/default.conf.template" <<'EOF_TEMPLATE'
 ACTIVE-CONFIG
 proxy_pass ${UPSTREAM};
+admin-upstream ${ADMIN_UPSTREAM};
 admin ${ADMIN_UPSTREAM_API};
 analytics ${ANALYTICS_API_UPSTREAM};
 EOF_TEMPLATE

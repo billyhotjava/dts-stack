@@ -13,6 +13,8 @@ export UPSTREAM
 #   -e ADMIN_API_PROXY_TARGET=http://host.docker.internal:8081
 #   -e ADMIN_API_PROXY_TARGET=http://dts-admin:8081
 ADMIN_BASE="${ADMIN_API_PROXY_TARGET:-http://dts-admin:8081}"
+ADMIN_UPSTREAM="$(printf '%s' "$ADMIN_BASE" | sed 's:/*$::')"
+export ADMIN_UPSTREAM
 # Normalize trailing slashes and append "/api/" for path rewriting.
 ADMIN_UPSTREAM_API="$(printf '%s' "$ADMIN_BASE" | sed 's:/*$::')/api/"
 export ADMIN_UPSTREAM_API
@@ -31,9 +33,9 @@ ANALYTICS_HEALTHCHECK_URL="${ANALYTICS_HEALTHCHECK_URL:-$(printf '%s' "$ANALYTIC
 
 render_active_nginx_config() {
   if [ -f "$NGINX_TEMPLATE_PATH" ]; then
-    echo "[entrypoint] Rendering active Nginx config with UPSTREAM=$UPSTREAM ADMIN_UPSTREAM_API=$ADMIN_UPSTREAM_API ANALYTICS_API_UPSTREAM=$ANALYTICS_API_UPSTREAM"
+    echo "[entrypoint] Rendering active Nginx config with UPSTREAM=$UPSTREAM ADMIN_UPSTREAM=$ADMIN_UPSTREAM ADMIN_UPSTREAM_API=$ADMIN_UPSTREAM_API ANALYTICS_API_UPSTREAM=$ANALYTICS_API_UPSTREAM"
     # shellcheck disable=SC2016
-    envsubst '${UPSTREAM} ${ADMIN_UPSTREAM_API} ${ANALYTICS_API_UPSTREAM}' < "$NGINX_TEMPLATE_PATH" > "$NGINX_CONFIG_PATH"
+    envsubst '${UPSTREAM} ${ADMIN_UPSTREAM} ${ADMIN_UPSTREAM_API} ${ANALYTICS_API_UPSTREAM}' < "$NGINX_TEMPLATE_PATH" > "$NGINX_CONFIG_PATH"
   fi
 }
 

@@ -11,13 +11,16 @@ server {
     set_real_ip_from fc00::/7;
     set_real_ip_from ::1;
 
+    resolver 127.0.0.11 valid=10s ipv6=off;
+
     # Frontend build output
     root /usr/share/nginx/html;
     index index.html;
 
     # Proxy API to backend (keeps the /api prefix)
-    # UPSTREAM is injected by entrypoint via envsubst from API_PROXY_TARGET
+    # Use a variable proxy_pass so Nginx re-resolves Docker service DNS after backend containers are recreated.
     location /api/ {
+        set $platform_upstream ${UPSTREAM};
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Host $host;
@@ -29,12 +32,13 @@ server {
         proxy_set_header Cookie $http_cookie;
         # Strip internal service header to prevent external spoofing
         proxy_set_header X-DTS-Service "";
-        proxy_pass $UPSTREAM;
+        proxy_pass $platform_upstream;
     }
 
     # Proxy admin APIs (mounted under /admin/api) to dts-admin (/api)
     # Used by PKI challenge/login, realm role listing, org listing fallbacks, etc.
     location /admin/api/ {
+        set $admin_upstream ${ADMIN_UPSTREAM};
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Host $host;
@@ -44,13 +48,14 @@ server {
         proxy_set_header Authorization $http_authorization;
         proxy_set_header Cookie $http_cookie;
 
-        # Trailing slash rewrites /admin/api/* -> /api/* on upstream
-        proxy_pass $ADMIN_UPSTREAM_API;
+        rewrite ^/admin/api/(.*)$ /api/$1 break;
+        proxy_pass $admin_upstream;
     }
 
     # Proxy BI analytics APIs to dts-analytics backend service.
     # API path stays /analytics/api/ (backend service name, not a frontend route).
     location /analytics/api/ {
+        set $analytics_upstream ${ANALYTICS_API_UPSTREAM};
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Host $host;
@@ -62,13 +67,14 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         rewrite ^/analytics/api/(.*)$ /api/$1 break;
-        proxy_pass $ANALYTICS_API_UPSTREAM;
+        proxy_pass $analytics_upstream;
     }
 
     # Proxy BI API calls (/bi/api/*) to dts-analytics backend.
     # Must appear before the /bi/ SPA fallback so API requests are proxied,
     # not served as index.html.
     location /bi/api/ {
+        set $analytics_upstream ${ANALYTICS_API_UPSTREAM};
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Host $host;
@@ -80,7 +86,7 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         rewrite ^/bi/api/(.*)$ /api/$1 break;
-        proxy_pass $ANALYTICS_API_UPSTREAM;
+        proxy_pass $analytics_upstream;
     }
 
     # BI pages are embedded in platform-webapp — SPA fallback for /bi/*
