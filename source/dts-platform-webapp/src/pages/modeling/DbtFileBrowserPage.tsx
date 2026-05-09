@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 import { toast } from "sonner";
+import { configureMonacoLoader } from "@/components/monaco/configureMonaco";
 import { registerDbtLanguage, DBT_SQL_LANGUAGE_ID } from "./dbt-monaco-lang";
 import {
 	Button,
@@ -49,6 +50,8 @@ import {
 	uploadDbtArchive,
 } from "@/api/platformApi";
 import { useRouter } from "@/routes/hooks";
+
+configureMonacoLoader();
 
 const { Text } = Typography;
 

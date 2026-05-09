@@ -3,11 +3,6 @@ import "./global.css";
 import "./theme/theme.css";
 import "./locales/i18n";
 
-// Configure Monaco Editor to load from local bundle instead of CDN (jsdelivr).
-// Without this, offline/air-gapped environments will hang waiting for CDN.
-import { loader } from "@monaco-editor/react";
-import * as monaco from "monaco-editor";
-loader.config({ monaco });
 import ReactDOM from "react-dom/client";
 import { createBrowserRouter, createHashRouter, Outlet, RouterProvider } from "react-router";
 import App from "./App";

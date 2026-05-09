@@ -148,15 +148,19 @@ public class SemanticModelingService {
 
     @Transactional(readOnly = true)
     public List<BusinessObjectDto> listBusinessObjects(UUID domainId) {
-        MapSqlParameterSource p = params().addValue("domainId", domainId);
+        String whereClause = domainId == null ? "" : " where domain_id = :domainId";
+        MapSqlParameterSource queryParams = params();
+        if (domainId != null) {
+            queryParams.addValue("domainId", domainId);
+        }
         return jdbc.query(
-            """
+            ("""
             select id, domain_id, code, name, description, primary_key, main_table, status, owner_dept
             from semantic_business_object
-            where (:domainId is null or domain_id = :domainId)
+            """ + whereClause + """
             order by name asc, code asc
-            """,
-            p,
+            """),
+            queryParams,
             (rs, rowNum) -> new BusinessObjectDto(
                 uuid(rs, "id"),
                 uuid(rs, "domain_id"),
@@ -273,14 +277,19 @@ public class SemanticModelingService {
 
     @Transactional(readOnly = true)
     public List<DimensionDto> listDimensions(UUID objectId) {
+        String whereClause = objectId == null ? "" : " where object_id = :objectId";
+        MapSqlParameterSource queryParams = params();
+        if (objectId != null) {
+            queryParams.addValue("objectId", objectId);
+        }
         return jdbc.query(
-            """
+            ("""
             select id, object_id, code, name, field_name, data_type, semantic_type, status
             from semantic_dimension
-            where (:objectId is null or object_id = :objectId)
+            """ + whereClause + """
             order by name asc, code asc
-            """,
-            params().addValue("objectId", objectId),
+            """),
+            queryParams,
             (rs, rowNum) -> new DimensionDto(
                 uuid(rs, "id"),
                 uuid(rs, "object_id"),
@@ -345,14 +354,19 @@ public class SemanticModelingService {
 
     @Transactional(readOnly = true)
     public List<MetricDto> listMetrics(UUID objectId) {
+        String whereClause = objectId == null ? "" : " where object_id = :objectId";
+        MapSqlParameterSource queryParams = params();
+        if (objectId != null) {
+            queryParams.addValue("objectId", objectId);
+        }
         return jdbc.query(
-            """
+            ("""
             select id, object_id, code, name, formula_type, formula_json, format, unit, status
             from semantic_metric
-            where (:objectId is null or object_id = :objectId)
+            """ + whereClause + """
             order by name asc, code asc
-            """,
-            params().addValue("objectId", objectId),
+            """),
+            queryParams,
             (rs, rowNum) -> new MetricDto(
                 uuid(rs, "id"),
                 uuid(rs, "object_id"),
@@ -840,14 +854,19 @@ public class SemanticModelingService {
 
     @Transactional(readOnly = true)
     public List<GeneratedArtifactDto> listGeneratedArtifacts(UUID modelId) {
+        String whereClause = modelId == null ? "" : " where model_id = :modelId";
+        MapSqlParameterSource queryParams = params();
+        if (modelId != null) {
+            queryParams.addValue("modelId", modelId);
+        }
         return jdbc.query(
-            """
+            ("""
             select id, model_id, artifact_type, path, content, status
             from semantic_generated_artifact
-            where (:modelId is null or model_id = :modelId)
+            """ + whereClause + """
             order by last_modified_date desc nulls last, path asc
-            """,
-            params().addValue("modelId", modelId),
+            """),
+            queryParams,
             (rs, rowNum) -> new GeneratedArtifactDto(
                 uuid(rs, "id"),
                 uuid(rs, "model_id"),

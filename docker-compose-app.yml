@@ -1325,7 +1325,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=dts-core
-      - traefik.http.routers.dts-platform-ui.rule=Host(`${HOST_PLATFORM_UI}`) && !PathPrefix(`/analytics`) && !PathPrefix(`/bi/api`) && !PathPrefix(`/screen`) && !PathPrefix(`/dashboards`) && !PathPrefix(`/system`) && !PathPrefix(`/tdv`) && !PathPrefix(`/account`) && !PathPrefix(`/hetu`) && !PathPrefix(`/static`)
+      - traefik.http.routers.dts-platform-ui.rule=Host(`${HOST_PLATFORM_UI}`) && !PathPrefix(`/api`) && !PathPrefix(`/admin/api`) && !PathPrefix(`/analytics`) && !PathPrefix(`/bi/api`) && !PathPrefix(`/screen`) && !PathPrefix(`/dashboards`) && !PathPrefix(`/system`) && !PathPrefix(`/tdv`) && !PathPrefix(`/account`) && !PathPrefix(`/hetu`) && !PathPrefix(`/static`)
       - traefik.http.routers.dts-platform-ui.priority=100
       - traefik.http.routers.dts-platform-ui.entrypoints=websecure
       - traefik.http.routers.dts-platform-ui.tls=true

@@ -1,9 +1,12 @@
 import Editor, { useMonaco, type BeforeMount, type OnMount } from "@monaco-editor/react";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
 import type { editor as MonacoEditor } from "monaco-editor";
+import { configureMonacoLoader } from "@/components/monaco/configureMonaco";
 import { NOOP_CATALOG, registerSqlCatalogCompletion, type CatalogSource } from "./completion/catalogProvider";
 import { SQLIDE_DARK, SQLIDE_LIGHT, registerSqlIdeThemes } from "./themes";
 import { findStatementAt } from "./statementSplitter";
+
+configureMonacoLoader();
 
 export type Engine = "trino" | "hive" | "postgresql" | "generic";
 export type EditorMode = "simple" | "advanced";

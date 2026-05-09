@@ -3,10 +3,10 @@ import type { ReactNode } from "react";
 import { toast } from "sonner";
 import reportsService from "@/api/services/reportsService";
 import type { LeaderOverviewResponse } from "@/api/services/workbenchService";
+import { ClassificationTag } from "@/analytics/pages/screens/components/ClassificationTag";
 import { resolveAppHref } from "@/routes/constants";
 import { resolveBiLinkForOpen } from "@/utils/biLinkUrl";
 import { humanizeBizDomain } from "../hooks/bizDomain";
-import { classificationColor } from "../hooks/classification";
 import { relativeTime } from "../hooks/relativeTime";
 import type { WorkbenchRole } from "../hooks/useWorkbenchRole";
 
@@ -101,7 +101,7 @@ export function TopReportsBlock({ role, items, loading, onEmpty }: TopReportsBlo
 									const label = humanizeBizDomain(r.bizDomain);
 									return label ? <Tag color="geekblue">{label}</Tag> : null;
 								})()}
-								<Tag color={classificationColor(r.classification)}>{r.classification}</Tag>
+								<ClassificationTag value={r.classification} size="small" />
 							</div>
 						</List.Item>
 					)}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "DTS Default Lake Constraint"
+  short_description: "Guard default data lake processing"
+  default_prompt: "Use $dts-default-lake-constraint to review this DTS data-source or analytics change."

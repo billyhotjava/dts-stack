@@ -12,6 +12,10 @@ import { Tag, Tooltip } from 'antd';
  * - SECRET        → 黄色「秘密」
  * - CONFIDENTIAL  → 红色「机密」
  * - null/缺失     → 橙色「未设密级」+ tooltip 警示，便于运维一眼扫
+ *
+ * Sprint-15 leader-overview API 把同一密级映射成 S1-S4 透传到前端
+ * （ClassificationMapper：CONFIDENTIAL→S1, SECRET→S2, INTERNAL→S3, PUBLIC→S4）。
+ * 本组件同时接受这两套词汇表，调用方拿到哪种值都能直接传入。
  */
 export interface ClassificationTagProps {
 	value?: string | null;
@@ -26,6 +30,10 @@ const COLOR: Record<string, string> = {
 	INTERNAL: 'blue',
 	SECRET: 'gold',
 	CONFIDENTIAL: 'red',
+	S1: 'red',
+	S2: 'gold',
+	S3: 'blue',
+	S4: 'default',
 };
 
 const LABEL: Record<string, string> = {
@@ -33,6 +41,10 @@ const LABEL: Record<string, string> = {
 	INTERNAL: '内部',
 	SECRET: '秘密',
 	CONFIDENTIAL: '机密',
+	S1: '机密',
+	S2: '秘密',
+	S3: '内部',
+	S4: '公开',
 };
 
 const UNCLASSIFIED_TOOLTIP =
