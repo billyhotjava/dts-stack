@@ -48,6 +48,7 @@ public class QualityTaskService {
     private final DataStandardSecurity security;
     private final OrganizationVisibilityService organizationVisibilityService;
     private final AccessChecker accessChecker;
+    private final DefaultLakeDatasetGuard defaultLakeDatasetGuard;
 
     public QualityTaskService(
         GovQualityTaskRepository taskRepository,
@@ -58,7 +59,8 @@ public class QualityTaskService {
         IssueTicketService issueTicketService,
         DataStandardSecurity security,
         OrganizationVisibilityService organizationVisibilityService,
-        AccessChecker accessChecker
+        AccessChecker accessChecker,
+        DefaultLakeDatasetGuard defaultLakeDatasetGuard
     ) {
         this.taskRepository = taskRepository;
         this.bindingRepository = bindingRepository;
@@ -69,12 +71,14 @@ public class QualityTaskService {
         this.security = security;
         this.organizationVisibilityService = organizationVisibilityService;
         this.accessChecker = accessChecker;
+        this.defaultLakeDatasetGuard = defaultLakeDatasetGuard;
     }
 
     @Transactional(readOnly = true)
     public List<GovQualityTask> list(String activeDeptHeader) {
         String activeDept = security.resolveActiveDept(activeDeptHeader);
         boolean instituteScope = security.hasInstituteScope();
+        UUID defaultLakeSourceId = defaultLakeDatasetGuard.currentDefaultLakeSourceId().orElse(null);
         return taskRepository
             .findAll()
             .stream()
@@ -84,6 +88,7 @@ public class QualityTaskService {
                 datasetRepository
                     .findById(task.getDatasetId())
                     .filter(accessChecker::canRead)
+                    .filter(dataset -> defaultLakeDatasetGuard.isDefaultLakeDataset(dataset, defaultLakeSourceId))
                     .filter(dataset -> instituteScope || accessChecker.departmentAllowed(dataset, activeDept))
                     .isPresent()
             )
@@ -286,9 +291,7 @@ public class QualityTaskService {
         if (request.getDatasetId() == null) {
             throw new IllegalArgumentException("datasetId 不能为空");
         }
-        var dataset = datasetRepository
-            .findById(request.getDatasetId())
-            .orElseThrow(() -> new IllegalArgumentException("数据集不存在"));
+        var dataset = defaultLakeDatasetGuard.requireDefaultLakeDataset(request.getDatasetId());
         if (!accessChecker.canRead(dataset)) {
             throw new AccessDeniedException("无权限访问该数据集");
         }

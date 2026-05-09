@@ -1,6 +1,8 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Modal, Button, Empty, Spin, Tag, message } from 'antd';
 import { analyticsApi } from '../../../api/analyticsApi';
+import { SortableHeader } from '../../../components/SortableHeader';
+import { dateComparator, stringComparator, useTableSort } from '../../../hooks/useTableSort';
 
 /**
  * 大屏密级合规盘点对话框（Sprint-24 F4/T03）
@@ -47,6 +49,22 @@ export function UnclassifiedScreensModal({ open, onClose, onJumpToScreen }: Uncl
 	const [loading, setLoading] = useState(false);
 	const [items, setItems] = useState<UnclassifiedItem[]>([]);
 	const [error, setError] = useState<string | null>(null);
+
+	const itemSortColumns = useMemo(
+		() => ({
+			name: stringComparator<UnclassifiedItem>((it) => String(it.name ?? '')),
+			creator: stringComparator<UnclassifiedItem>(
+				(it) => it.creatorPlatformUsername || it.creatorEmail || `user ${it.creatorId ?? '-'}`,
+			),
+			createdAt: dateComparator<UnclassifiedItem>((it) => it.createdAt),
+		}),
+		[],
+	);
+	const { sortedItems: sortedItemsList, sortState: itemSortState, requestSort: requestItemSort } =
+		useTableSort(items, {
+			columns: itemSortColumns,
+			defaultSort: { key: 'createdAt', direction: 'desc' },
+		});
 
 	const load = useCallback(async () => {
 		setLoading(true);
@@ -130,18 +148,37 @@ export function UnclassifiedScreensModal({ open, onClose, onJumpToScreen }: Uncl
 						<table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
 							<thead>
 								<tr style={{ background: 'var(--color-surface-secondary, rgba(0,0,0,0.04))' }}>
-									<th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600 }}>名称</th>
-									<th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600 }}>创建者</th>
-									<th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, whiteSpace: 'nowrap' }}>
+									<SortableHeader
+										sortKey="name"
+										sortState={itemSortState}
+										onSort={requestItemSort}
+										style={{ padding: '8px 12px', fontWeight: 600 }}
+									>
+										名称
+									</SortableHeader>
+									<SortableHeader
+										sortKey="creator"
+										sortState={itemSortState}
+										onSort={requestItemSort}
+										style={{ padding: '8px 12px', fontWeight: 600 }}
+									>
+										创建者
+									</SortableHeader>
+									<SortableHeader
+										sortKey="createdAt"
+										sortState={itemSortState}
+										onSort={requestItemSort}
+										style={{ padding: '8px 12px', fontWeight: 600, whiteSpace: 'nowrap' }}
+									>
 										创建时间
-									</th>
+									</SortableHeader>
 									<th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 600, whiteSpace: 'nowrap' }}>
 										操作
 									</th>
 								</tr>
 							</thead>
 							<tbody>
-								{items.map((it) => (
+								{sortedItemsList.map((it) => (
 									<tr key={String(it.id)} style={{ borderTop: '1px solid var(--color-border, rgba(0,0,0,0.06))' }}>
 										<td style={{ padding: '8px 12px' }}>
 											<div style={{ fontWeight: 500 }}>{it.name || `大屏 ${it.id}`}</div>

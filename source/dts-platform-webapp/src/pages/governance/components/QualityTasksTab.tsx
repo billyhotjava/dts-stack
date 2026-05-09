@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
+	Alert,
 	Button,
 	Card,
 	DatePicker,
@@ -41,6 +42,7 @@ import {
 	triggerQualityTask,
 	updateQualityTask,
 } from "@/api/platformApi";
+import { ingestionTaskAPI } from "@/api/ingestion";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { formatTime } from "@/utils/textUtils";
 
@@ -142,6 +144,7 @@ export default function QualityTasksTab() {
 
 	/* --- reference data --- */
 	const [datasets, setDatasets] = useState<{ id: string; name: string }[]>([]);
+	const [datasetLoadMessage, setDatasetLoadMessage] = useState<string>();
 	const [rules, setRules] = useState<{ id: string; name: string }[]>([]);
 
 	/* --- schedule section --- */
@@ -196,15 +199,27 @@ export default function QualityTasksTab() {
 
 	const loadRefData = useCallback(async () => {
 		try {
+			const lake = await ingestionTaskAPI.getDefaultDestinationStatus();
+			const datasetPromise = lake?.available && lake.dataSourceId
+				? listDatasets({ page: 0, size: 300, enabledOnly: true, sourceId: lake.dataSourceId })
+				: Promise.resolve({ content: [] });
+			if (!lake?.available || !lake.dataSourceId) {
+				setDatasetLoadMessage(lake?.message || "未识别默认数据湖连接");
+			}
 			const [dsResp, ruleResp] = await Promise.all([
-				listDatasets({ page: 0, size: 300 }),
+				datasetPromise,
 				listQualityRules(),
 			]);
 			const dsList = Array.isArray((dsResp as any)?.content) ? (dsResp as any).content : [];
 			setDatasets(dsList.map((d: any) => ({ id: String(d.id), name: d.name || String(d.id) })));
+			if (lake?.available && lake.dataSourceId) {
+				setDatasetLoadMessage(dsList.length ? undefined : "默认数据湖连接下暂无可用数据集");
+			}
 			const rList = Array.isArray(ruleResp) ? (ruleResp as any[]) : [];
 			setRules(rList.map((r) => ({ id: String(r.id), name: String(r.name || r.id) })));
 		} catch (err: any) {
+			setDatasets([]);
+			setDatasetLoadMessage(err?.message || "默认数据湖连接读取失败");
 			toast.error(err?.message || "参考数据加载失败");
 		}
 	}, []);
@@ -586,8 +601,17 @@ export default function QualityTasksTab() {
 						<Input placeholder="例如：客户表每日巡检" />
 					</Form.Item>
 					<Form.Item label="数据集" name="datasetId" rules={[{ required: true, message: "请选择数据集" }]}>
-						<Select options={datasetOptions} showSearch optionFilterProp="label" />
+						<Select options={datasetOptions} showSearch optionFilterProp="label" disabled={!!datasetLoadMessage} />
 					</Form.Item>
+					{datasetLoadMessage && (
+						<Alert
+							className="mb-4"
+							type="warning"
+							showIcon
+							message="质量巡检仅允许选择默认数据湖下的数据集"
+							description={datasetLoadMessage}
+						/>
+					)}
 					<Form.Item label="规则范围" name="ruleId">
 						<Select options={taskRuleOptions} showSearch optionFilterProp="label" />
 					</Form.Item>

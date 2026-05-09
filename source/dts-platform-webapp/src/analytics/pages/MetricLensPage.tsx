@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type MetricLensCompare, type MetricLensDetail, type MetricLensSummary } from "../api/analyticsApi";
 import { ErrorNotice } from "../components/ErrorNotice";
+import { SortableHeader } from "../components/SortableHeader";
+import { stringComparator, useTableSort } from "../hooks/useTableSort";
 import { PageHeader } from "@/components/page-header";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { Spin, Button, Card, Tag, Select } from "antd";
@@ -23,6 +25,44 @@ export default function MetricLensPage() {
 	const [selectedMetricId, setSelectedMetricId] = useState("");
 	const [leftVersion, setLeftVersion] = useState("");
 	const [rightVersion, setRightVersion] = useState("");
+
+	const metricRows = listState.state === "loaded" ? listState.value : [];
+	const metricSortColumns = useMemo(
+		() => ({
+			name: stringComparator<MetricLensSummary>((m) => m.name),
+			aggregation: stringComparator<MetricLensSummary>((m) => m.aggregation),
+			timeGrain: stringComparator<MetricLensSummary>((m) => m.timeGrain),
+		}),
+		[],
+	);
+	const {
+		sortedItems: sortedMetrics,
+		sortState: metricSortState,
+		requestSort: requestMetricSort,
+	} = useTableSort(metricRows, {
+		columns: metricSortColumns,
+		defaultSort: { key: "name", direction: "asc" },
+	});
+
+	const conflictRows = conflictState.state === "loaded" ? conflictState.value : [];
+	const conflictSortColumns = useMemo(
+		() => ({
+			metricName: stringComparator<Record<string, unknown>>((r) => String(r.metricName ?? "")),
+			conflictLevel: stringComparator<Record<string, unknown>>((r) => String(r.conflictLevel ?? "")),
+			type: stringComparator<Record<string, unknown>>(
+				(r) => (Array.isArray(r.type) ? r.type.map(String).join(", ") : ""),
+			),
+		}),
+		[],
+	);
+	const {
+		sortedItems: sortedConflicts,
+		sortState: conflictSortState,
+		requestSort: requestConflictSort,
+	} = useTableSort(conflictRows, {
+		columns: conflictSortColumns,
+		defaultSort: { key: "conflictLevel", direction: "desc" },
+	});
 
 	const loadList = async () => {
 		try {
@@ -136,13 +176,19 @@ export default function MetricLensPage() {
 								<table style={{ marginTop: "var(--spacing-md)" }}>
 									<thead>
 										<tr>
-											<th>{t(locale, "common.name")}</th>
-											<th>聚合</th>
-											<th>时间口径</th>
+											<SortableHeader sortKey="name" sortState={metricSortState} onSort={requestMetricSort}>
+												{t(locale, "common.name")}
+											</SortableHeader>
+											<SortableHeader sortKey="aggregation" sortState={metricSortState} onSort={requestMetricSort}>
+												聚合
+											</SortableHeader>
+											<SortableHeader sortKey="timeGrain" sortState={metricSortState} onSort={requestMetricSort}>
+												时间口径
+											</SortableHeader>
 										</tr>
 									</thead>
 									<tbody>
-										{listState.value.map((row, idx) => {
+										{sortedMetrics.map((row, idx) => {
 											const rowId = toIdString(row.metricId);
 											return (
 												<tr
@@ -176,13 +222,19 @@ export default function MetricLensPage() {
 							<table>
 								<thead>
 									<tr>
-										<th>指标名</th>
-										<th>等级</th>
-										<th>冲突类型</th>
+										<SortableHeader sortKey="metricName" sortState={conflictSortState} onSort={requestConflictSort}>
+											指标名
+										</SortableHeader>
+										<SortableHeader sortKey="conflictLevel" sortState={conflictSortState} onSort={requestConflictSort}>
+											等级
+										</SortableHeader>
+										<SortableHeader sortKey="type" sortState={conflictSortState} onSort={requestConflictSort}>
+											冲突类型
+										</SortableHeader>
 									</tr>
 								</thead>
 								<tbody>
-									{conflictState.value.map((row, idx) => (
+									{sortedConflicts.map((row, idx) => (
 										<tr key={`conflict-${idx}`}>
 											<td>{String(row.metricName || "-")}</td>
 											<td>{String(row.conflictLevel || "-")}</td>

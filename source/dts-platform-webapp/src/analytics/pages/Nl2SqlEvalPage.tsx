@@ -8,6 +8,8 @@ import {
 	type Nl2SqlEvalRunSummary,
 } from "../api/analyticsApi";
 import { ErrorNotice } from "../components/ErrorNotice";
+import { SortableHeader } from "../components/SortableHeader";
+import { numberComparator, stringComparator, useTableSort } from "../hooks/useTableSort";
 import { PageHeader } from "@/components/page-header";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { Input, Spin, Button, Card, Tag, Select } from "antd";
@@ -65,6 +67,46 @@ export default function Nl2SqlEvalPage() {
 	const [saving, setSaving] = useState(false);
 	const [actionError, setActionError] = useState<unknown>(null);
 	const [actionMessage, setActionMessage] = useState("");
+
+	const caseRows = casesState.state === "loaded" ? casesState.value : [];
+	const caseSortColumns = useMemo(
+		() => ({
+			id: stringComparator<Nl2SqlEvalCaseItem>((c) => toIdString(c.id)),
+			name: stringComparator<Nl2SqlEvalCaseItem>((c) => c.name),
+			domain: stringComparator<Nl2SqlEvalCaseItem>((c) => c.domain),
+			enabled: numberComparator<Nl2SqlEvalCaseItem>((c) => (c.enabled ? 1 : 0)),
+		}),
+		[],
+	);
+	const {
+		sortedItems: sortedCases,
+		sortState: caseSortState,
+		requestSort: requestCaseSort,
+	} = useTableSort(caseRows, {
+		columns: caseSortColumns,
+		defaultSort: { key: "id", direction: "asc" },
+	});
+
+	const runRows = runsState.state === "loaded" ? runsState.value : [];
+	const runSortColumns = useMemo(
+		() => ({
+			id: stringComparator<Nl2SqlEvalRunRecord>((r) => toIdString(r.id)),
+			passRate: numberComparator<Nl2SqlEvalRunRecord>((r) => r.passRate),
+			averageScore: numberComparator<Nl2SqlEvalRunRecord>((r) => r.averageScore),
+			gatePassed: numberComparator<Nl2SqlEvalRunRecord>(
+				(r) => (r.gatePassed == null ? null : r.gatePassed ? 1 : 0),
+			),
+		}),
+		[],
+	);
+	const {
+		sortedItems: sortedRuns,
+		sortState: runSortState,
+		requestSort: requestRunSort,
+	} = useTableSort(runRows, {
+		columns: runSortColumns,
+		defaultSort: { key: "id", direction: "desc" },
+	});
 
 	const loadCases = async () => {
 		try {
@@ -294,14 +336,22 @@ export default function Nl2SqlEvalPage() {
 						<table>
 							<thead>
 								<tr>
-									<th>ID</th>
-									<th>{t(locale, "common.name")}</th>
-									<th>Domain</th>
-									<th>Enabled</th>
+									<SortableHeader sortKey="id" sortState={caseSortState} onSort={requestCaseSort}>
+										ID
+									</SortableHeader>
+									<SortableHeader sortKey="name" sortState={caseSortState} onSort={requestCaseSort}>
+										{t(locale, "common.name")}
+									</SortableHeader>
+									<SortableHeader sortKey="domain" sortState={caseSortState} onSort={requestCaseSort}>
+										Domain
+									</SortableHeader>
+									<SortableHeader sortKey="enabled" sortState={caseSortState} onSort={requestCaseSort}>
+										Enabled
+									</SortableHeader>
 								</tr>
 							</thead>
 							<tbody>
-								{casesState.value.map((item, idx) => (
+								{sortedCases.map((item, idx) => (
 									<tr key={`${toIdString(item.id)}-${idx}`}>
 										<td>{toIdString(item.id)}</td>
 										<td>{item.name || "-"}</td>
@@ -343,14 +393,22 @@ export default function Nl2SqlEvalPage() {
 								<table>
 									<thead>
 										<tr>
-											<th>ID</th>
-											<th>PassRate</th>
-											<th>AvgScore</th>
-											<th>Gate</th>
+											<SortableHeader sortKey="id" sortState={runSortState} onSort={requestRunSort}>
+												ID
+											</SortableHeader>
+											<SortableHeader sortKey="passRate" sortState={runSortState} onSort={requestRunSort}>
+												PassRate
+											</SortableHeader>
+											<SortableHeader sortKey="averageScore" sortState={runSortState} onSort={requestRunSort}>
+												AvgScore
+											</SortableHeader>
+											<SortableHeader sortKey="gatePassed" sortState={runSortState} onSort={requestRunSort}>
+												Gate
+											</SortableHeader>
 										</tr>
 									</thead>
 									<tbody>
-										{runsState.value.map((run, idx) => (
+										{sortedRuns.map((run, idx) => (
 											<tr key={`${toIdString(run.id)}-${idx}`}>
 												<td>{toIdString(run.id)}</td>
 												<td>{run.passRate == null ? "-" : run.passRate.toFixed(3)}</td>

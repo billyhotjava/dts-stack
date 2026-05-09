@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { analyticsApi, type ScreenAclEntry, type PlatformUser, type PlatformRole } from '../../../api/analyticsApi';
+import { SortableHeader } from '../../../components/SortableHeader';
+import { stringComparator, useTableSort } from '../../../hooks/useTableSort';
 
 interface ScreenGrantManagerProps {
 	screenId?: string | number;
@@ -156,6 +158,24 @@ export function ScreenGrantManager({ screenId, isOwner = false }: ScreenGrantMan
 		return row.subjectId;
 	};
 
+	const grantSortColumns = useMemo(
+		() => ({
+			subjectType: stringComparator<ScreenAclEntry>(
+				(r) => GRANTEE_TYPE_LABELS[r.subjectType] || r.subjectType,
+			),
+			label: stringComparator<ScreenAclEntry>((r) => resolveGrantLabel(r)),
+			perm: stringComparator<ScreenAclEntry>((r) => PERM_LABELS[r.perm] || r.perm),
+		}),
+		// resolveGrantLabel depends on user/role maps; recompute when those change.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[userDisplayMap, roleDisplayMap],
+	);
+	const { sortedItems: sortedGrants, sortState: grantSortState, requestSort: requestGrantSort } =
+		useTableSort(rows, {
+			columns: grantSortColumns,
+			defaultSort: { key: 'subjectType', direction: 'asc' },
+		});
+
 	const candidateList: (PlatformUser | PlatformRole)[] = granteeType === 'USER' ? platformUsers : filteredRoles;
 	const totalItems = candidateList.length;
 	const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
@@ -267,14 +287,35 @@ export function ScreenGrantManager({ screenId, isOwner = false }: ScreenGrantMan
 						<table className="w-full border-collapse">
 							<thead>
 								<tr>
-									<th className={headerCls}>类型</th>
-									<th className={headerCls}>名称</th>
-									<th className={headerCls}>权限</th>
+									<SortableHeader
+										sortKey="subjectType"
+										sortState={grantSortState}
+										onSort={requestGrantSort}
+										className="text-sm text-text-secondary bg-surface-secondary"
+									>
+										类型
+									</SortableHeader>
+									<SortableHeader
+										sortKey="label"
+										sortState={grantSortState}
+										onSort={requestGrantSort}
+										className="text-sm text-text-secondary bg-surface-secondary"
+									>
+										名称
+									</SortableHeader>
+									<SortableHeader
+										sortKey="perm"
+										sortState={grantSortState}
+										onSort={requestGrantSort}
+										className="text-sm text-text-secondary bg-surface-secondary"
+									>
+										权限
+									</SortableHeader>
 									<th className={`${headerCls} text-right`}>操作</th>
 								</tr>
 							</thead>
 							<tbody>
-								{rows.map((row, idx) => (
+								{sortedGrants.map((row, idx) => (
 									<tr key={row.id ?? idx} className="border-t border-border-default">
 										<td className={cellCls}>{GRANTEE_TYPE_LABELS[row.subjectType] || row.subjectType}</td>
 										<td className={cellCls}>{resolveGrantLabel(row)}</td>

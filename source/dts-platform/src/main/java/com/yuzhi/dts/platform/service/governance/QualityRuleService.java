@@ -54,6 +54,7 @@ public class QualityRuleService {
     private final GovRuleVersionRepository versionRepository;
     private final GovRuleBindingRepository bindingRepository;
     private final CatalogDatasetRepository datasetRepository;
+    private final DefaultLakeDatasetGuard defaultLakeDatasetGuard;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
     private final GovernanceProperties properties;
@@ -65,6 +66,7 @@ public class QualityRuleService {
         GovRuleVersionRepository versionRepository,
         GovRuleBindingRepository bindingRepository,
         CatalogDatasetRepository datasetRepository,
+        DefaultLakeDatasetGuard defaultLakeDatasetGuard,
         AuditService auditService,
         ObjectMapper objectMapper,
         GovernanceProperties properties,
@@ -75,6 +77,7 @@ public class QualityRuleService {
         this.versionRepository = versionRepository;
         this.bindingRepository = bindingRepository;
         this.datasetRepository = datasetRepository;
+        this.defaultLakeDatasetGuard = defaultLakeDatasetGuard;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
         this.properties = properties;
@@ -86,15 +89,16 @@ public class QualityRuleService {
     public List<QualityRuleDto> listAll(String activeDeptHeader) {
         String activeDept = resolveActiveDept(activeDeptHeader);
         boolean instituteScope = hasInstituteScope();
+        UUID defaultLakeSourceId = defaultLakeDatasetGuard.currentDefaultLakeSourceId().orElse(null);
         return ruleRepository
             .findAll()
             .stream()
-            .filter(rule -> isRuleVisible(rule, activeDept, instituteScope))
+            .filter(rule -> isRuleVisible(rule, activeDept, instituteScope, defaultLakeSourceId))
             .map(GovernanceMapper::toDto)
             .collect(Collectors.toList());
     }
 
-    private boolean isRuleVisible(GovRule rule, String activeDept, boolean instituteScope) {
+    private boolean isRuleVisible(GovRule rule, String activeDept, boolean instituteScope, UUID defaultLakeSourceId) {
         if (rule == null) {
             return false;
         }
@@ -107,6 +111,7 @@ public class QualityRuleService {
         return datasetRepository
             .findById(rule.getDatasetId())
             .filter(accessChecker::canRead)
+            .filter(dataset -> defaultLakeDatasetGuard.isDefaultLakeDataset(dataset, defaultLakeSourceId))
             .filter(dataset -> instituteScope || accessChecker.departmentAllowed(dataset, activeDept))
             .isPresent();
     }
@@ -310,11 +315,12 @@ public class QualityRuleService {
     public List<QualityRuleDto> findByDataset(UUID datasetId, String activeDeptHeader) {
         String activeDept = resolveActiveDept(activeDeptHeader);
         boolean instituteScope = hasInstituteScope();
+        UUID defaultLakeSourceId = defaultLakeDatasetGuard.currentDefaultLakeSourceId().orElse(null);
         return ruleRepository
             .findAll()
             .stream()
             .filter(rule -> datasetId == null || datasetId.equals(rule.getDatasetId()))
-            .filter(rule -> isRuleVisible(rule, activeDept, instituteScope))
+            .filter(rule -> isRuleVisible(rule, activeDept, instituteScope, defaultLakeSourceId))
             .map(GovernanceMapper::toDto)
             .collect(Collectors.toList());
     }
@@ -536,6 +542,7 @@ public class QualityRuleService {
 
         List<QualityRuleBindingRequest> bindings = request.getBindings() != null ? request.getBindings() : Collections.emptyList();
         bindings.stream().filter(binding -> binding.getDatasetId() != null).forEach(binding -> {
+            defaultLakeDatasetGuard.requireDefaultLakeDataset(binding.getDatasetId());
             GovRuleBinding entity = new GovRuleBinding();
             entity.setRuleVersion(version);
             entity.setDatasetId(binding.getDatasetId());
@@ -636,7 +643,7 @@ public class QualityRuleService {
         if (datasetId == null) {
             return;
         }
-        datasetRepository.findById(datasetId).orElseThrow(() -> new IllegalArgumentException("数据集不存在"));
+        defaultLakeDatasetGuard.requireDefaultLakeDataset(datasetId);
     }
 
     private String resolveRuleCode(String code) {

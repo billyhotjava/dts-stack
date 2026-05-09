@@ -47,6 +47,7 @@ Use this skill whenever work touches data sources, datasets, modeling, metrics, 
 - Default destination status and local mapping: `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/infra/DefaultDestinationSyncService.java`
 - Platform data source list merge: `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/infra/InfraManagementService.java`
 - Ingestion default writer enforcement: `source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/rest/IngestionTaskProxyResource.java`
+- Default-lake dataset enforcement: `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/governance/DefaultLakeDatasetGuard.java`
 - dbt/modeling source resolution: `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/ModelingSqlModelService.java`
 - Generated model source resolution: `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/ModelGenerationService.java`
 - Quality rules/tasks: `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/governance/QualityRuleService.java`, `QualityTaskService.java`

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
+	Alert,
 	Button,
 	Card,
 
@@ -37,6 +38,7 @@ import {
 	listQualityTemplates,
 	previewTemplateSQL,
 } from "@/api/platformApi";
+import { ingestionTaskAPI } from "@/api/ingestion";
 import { formatTime } from "@/utils/textUtils";
 import QualityDashboard from "./components/QualityDashboard";
 import QualityTasksTab from "./components/QualityTasksTab";
@@ -171,6 +173,7 @@ export default function Page() {
 	const [editing, setEditing] = useState<Rule | null>(null);
 	const [form] = Form.useForm<RuleForm>();
 	const [datasets, setDatasets] = useState<{ id: string; name: string }[]>([]);
+	const [datasetLoadMessage, setDatasetLoadMessage] = useState<string>();
 	const canManage = useGovernanceManageAccess();
 	const [templateOptions, setTemplateOptions] = useState<TemplateOption[]>([]);
 	const [previewedSql, setPreviewedSql] = useState<string>("");
@@ -233,10 +236,19 @@ export default function Page() {
 
 	const loadDatasets = async () => {
 		try {
-			const resp: any = await listDatasets({ page: 0, size: 200 });
+			const lake = await ingestionTaskAPI.getDefaultDestinationStatus();
+			if (!lake?.available || !lake.dataSourceId) {
+				setDatasets([]);
+				setDatasetLoadMessage(lake?.message || "未识别默认数据湖连接");
+				return;
+			}
+			const resp: any = await listDatasets({ page: 0, size: 200, enabledOnly: true, sourceId: lake.dataSourceId });
 			const list = Array.isArray(resp?.content) ? resp.content : [];
 			setDatasets(list.map((item: any) => ({ id: String(item.id), name: item.name || item.id })));
+			setDatasetLoadMessage(list.length ? undefined : "默认数据湖连接下暂无可用数据集");
 		} catch (error: any) {
+			setDatasets([]);
+			setDatasetLoadMessage(error?.message || "默认数据湖连接读取失败");
 			toast.error(error?.message || "数据集加载失败");
 		}
 	};
@@ -638,8 +650,17 @@ export default function Page() {
 						<Select options={SEVERITY_OPTIONS} />
 					</Form.Item>
 					<Form.Item label="数据集" name="datasetId">
-						<Select options={datasetOptions} allowClear />
+						<Select options={datasetOptions} allowClear disabled={!!datasetLoadMessage} />
 					</Form.Item>
+					{datasetLoadMessage && (
+						<Alert
+							className="mb-4"
+							type="warning"
+							showIcon
+							message="数据质量仅允许选择默认数据湖下的数据集"
+							description={datasetLoadMessage}
+						/>
+					)}
 					<Form.Item label="失败策略" name="actionOnFail">
 						<Select options={ACTION_ON_FAIL_OPTIONS} />
 					</Form.Item>

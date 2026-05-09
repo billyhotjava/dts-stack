@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type ReportRunItem, type ReportTemplateItem } from "../api/analyticsApi";
 import { ErrorNotice } from "../components/ErrorNotice";
+import { SortableHeader } from "../components/SortableHeader";
+import { dateComparator, numberComparator, stringComparator, useTableSort } from "../hooks/useTableSort";
 import { PageHeader } from "@/components/page-header";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { Input, Spin, Button, Card, Tag, Select } from "antd";
@@ -28,6 +30,43 @@ export default function ReportFactoryPage() {
 
 	const [templateName, setTemplateName] = useState("");
 	const [templateDesc, setTemplateDesc] = useState("");
+
+	const templateRows = templates.state === "loaded" ? templates.value : [];
+	const templateSortColumns = useMemo(
+		() => ({
+			name: stringComparator<ReportTemplateItem>((r) => r.name),
+			versionNo: numberComparator<ReportTemplateItem>((r) => r.versionNo),
+			published: numberComparator<ReportTemplateItem>((r) => (r.published ? 1 : 0)),
+			updatedAt: dateComparator<ReportTemplateItem>((r) => r.updatedAt),
+		}),
+		[],
+	);
+	const {
+		sortedItems: sortedTemplates,
+		sortState: templateSortState,
+		requestSort: requestTemplateSort,
+	} = useTableSort(templateRows, {
+		columns: templateSortColumns,
+		defaultSort: { key: "updatedAt", direction: "desc" },
+	});
+
+	const runRows = runs.state === "loaded" ? runs.value : [];
+	const runSortColumns = useMemo(
+		() => ({
+			id: stringComparator<ReportRunItem>((r) => toIdString(r.id)),
+			source: stringComparator<ReportRunItem>((r) => `${r.sourceType || ""}:${r.sourceId || ""}`),
+			status: stringComparator<ReportRunItem>((r) => r.status),
+		}),
+		[],
+	);
+	const {
+		sortedItems: sortedRuns,
+		sortState: runSortState,
+		requestSort: requestRunSort,
+	} = useTableSort(runRows, {
+		columns: runSortColumns,
+		defaultSort: { key: "id", direction: "desc" },
+	});
 	const [templateSections, setTemplateSections] = useState("问题背景,关键洞察,风险与建议");
 
 	const [generateTemplateId, setGenerateTemplateId] = useState("");
@@ -300,14 +339,22 @@ export default function ReportFactoryPage() {
 						<table>
 							<thead>
 								<tr>
-									<th>{t(locale, "common.name")}</th>
-									<th>版本</th>
-									<th>发布</th>
-									<th>更新时间</th>
+									<SortableHeader sortKey="name" sortState={templateSortState} onSort={requestTemplateSort}>
+										{t(locale, "common.name")}
+									</SortableHeader>
+									<SortableHeader sortKey="versionNo" sortState={templateSortState} onSort={requestTemplateSort}>
+										版本
+									</SortableHeader>
+									<SortableHeader sortKey="published" sortState={templateSortState} onSort={requestTemplateSort}>
+										发布
+									</SortableHeader>
+									<SortableHeader sortKey="updatedAt" sortState={templateSortState} onSort={requestTemplateSort}>
+										更新时间
+									</SortableHeader>
 								</tr>
 							</thead>
 							<tbody>
-								{templates.value.map((row, idx) => (
+								{sortedTemplates.map((row, idx) => (
 									<tr key={`${toIdString(row.id)}-${idx}`}>
 										<td>{row.name || "未命名模板"}</td>
 										<td>{row.versionNo ?? 1}</td>
@@ -338,14 +385,20 @@ export default function ReportFactoryPage() {
 							<table>
 								<thead>
 									<tr>
-										<th>ID</th>
-										<th>来源</th>
-										<th>状态</th>
-										<th>{t(locale, "common.actions")}</th>
+										<SortableHeader sortKey="id" sortState={runSortState} onSort={requestRunSort}>
+											ID
+										</SortableHeader>
+										<SortableHeader sortKey="source" sortState={runSortState} onSort={requestRunSort}>
+											来源
+										</SortableHeader>
+										<SortableHeader sortKey="status" sortState={runSortState} onSort={requestRunSort}>
+											状态
+										</SortableHeader>
+										<th className="text-left font-medium px-4 py-3">{t(locale, "common.actions")}</th>
 									</tr>
 								</thead>
 								<tbody>
-									{runs.value.map((row, idx) => {
+									{sortedRuns.map((row, idx) => {
 										const id = toIdString(row.id);
 										return (
 											<tr key={`${id}-${idx}`}>

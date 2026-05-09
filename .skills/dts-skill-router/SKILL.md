@@ -33,6 +33,10 @@ Use this skill first when the request is about DTS but the correct specialist sk
 - Frontend pages, menus, routes, permissions UI, SQL IDE, dashboards:
   - Primary: `dts-frontend-product-consistency`
   - Secondary: `dts-security-compliance` when auth visibility or permissions are touched.
+- Metric visualization, semantic metrics, DWD to DWS/ADS design, BI datasets, dashboards, big screens, metric口径, and dbt-backed visualization datasets:
+  - Primary: `dts-metric-visualization-development`
+  - Secondary: `dts-dbt-modeling-governance` for dbt, SQL, DWS/ADS publication, or lineage.
+  - Secondary: `dts-frontend-product-consistency` for product pages, dashboards, and analytics UI.
 - Production stability, incidents, diagnostics, SLOs, health checks, monitoring:
   - Primary: `dts-observability-sre`
   - Secondary: `dts-devops-runbook` for container-level triage.
@@ -45,6 +49,7 @@ Use this skill first when the request is about DTS but the correct specialist sk
 - Keycloak `dept_code` issue: `dts-security-compliance` + `dts-devops-runbook` + `dts-quality-gate`
 - Customer offline upgrade failure: `dts-release-offline-upgrade` + `dts-devops-runbook` + `dts-observability-sre`
 - SQL IDE UI change: `dts-frontend-product-consistency` + `dts-quality-gate`
+- Metric dashboard dataset: `dts-metric-visualization-development` + `dts-dbt-modeling-governance` + `dts-frontend-product-consistency` + `dts-quality-gate`
 - API publish permission bug: `dts-architecture-navigator` + `dts-security-compliance` + `dts-quality-gate`
 
 ## Avoid

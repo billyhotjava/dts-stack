@@ -13,6 +13,8 @@ import { SCREEN_SCHEMA_VERSION, normalizeScreenConfig, validateScreenPayload, bu
 import { resolveRouteForOpen } from '../../../helpers/resolveAnalyticsUrl';
 import { inlineResources } from '../utils/resourceInliner';
 import { ImportPreviewModal } from './ImportPreviewModal';
+import { SortableHeader } from '../../../components/SortableHeader';
+import { dateComparator, stringComparator, useTableSort } from '../../../hooks/useTableSort';
 import { countInlinedResources } from '../utils/resourceRestorer';
 import type { ScreenConfig } from '../types';
 import '../ScreenDesigner.css';
@@ -300,6 +302,26 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
             return true;
         });
     }, [industryAuditAction, industryAuditResult, industryAuditRows]);
+
+    const industryAuditSortColumns = useMemo(
+        () => ({
+            createdAt: dateComparator<ScreenIndustryPackAuditRow>((r) => r.createdAt),
+            action: stringComparator<ScreenIndustryPackAuditRow>((r) => r.action),
+            result: stringComparator<ScreenIndustryPackAuditRow>((r) => r.result),
+            actorId: stringComparator<ScreenIndustryPackAuditRow>((r) => String(r.actorId ?? '')),
+            source: stringComparator<ScreenIndustryPackAuditRow>((r) => r.source),
+            requestId: stringComparator<ScreenIndustryPackAuditRow>((r) => r.requestId),
+        }),
+        [],
+    );
+    const {
+        sortedItems: sortedIndustryAuditRows,
+        sortState: industryAuditSortState,
+        requestSort: requestIndustryAuditSort,
+    } = useTableSort(filteredIndustryAuditRows, {
+        columns: industryAuditSortColumns,
+        defaultSort: { key: 'createdAt', direction: 'desc' },
+    });
 
     const allCategories = useMemo(() => {
         const values = new Set<string>();
@@ -1137,17 +1159,17 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                                 <table className="w-full border-collapse text-xs text-text-primary [&_th]:sticky [&_th]:top-0 [&_th]:z-[1] [&_th]:text-left [&_th]:p-2 [&_th]:border-b [&_th]:border-border-strong [&_th]:bg-surface-muted [&_th]:text-text-secondary [&_td]:p-2 [&_td]:border-b [&_td]:border-border-default [&_td]:align-top [&_td]:break-all">
                                     <thead>
                                         <tr>
-                                            <th>时间</th>
-                                            <th>动作</th>
-                                            <th>结果</th>
-                                            <th>操作者</th>
-                                            <th>来源</th>
-                                            <th>requestId</th>
+                                            <SortableHeader sortKey="createdAt" sortState={industryAuditSortState} onSort={requestIndustryAuditSort}>时间</SortableHeader>
+                                            <SortableHeader sortKey="action" sortState={industryAuditSortState} onSort={requestIndustryAuditSort}>动作</SortableHeader>
+                                            <SortableHeader sortKey="result" sortState={industryAuditSortState} onSort={requestIndustryAuditSort}>结果</SortableHeader>
+                                            <SortableHeader sortKey="actorId" sortState={industryAuditSortState} onSort={requestIndustryAuditSort}>操作者</SortableHeader>
+                                            <SortableHeader sortKey="source" sortState={industryAuditSortState} onSort={requestIndustryAuditSort}>来源</SortableHeader>
+                                            <SortableHeader sortKey="requestId" sortState={industryAuditSortState} onSort={requestIndustryAuditSort}>requestId</SortableHeader>
                                             <th>详情</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredIndustryAuditRows.map((row) => (
+                                        {sortedIndustryAuditRows.map((row) => (
                                             <tr key={String(row.id ?? `${row.requestId}-${row.createdAt}`)}>
                                                 <td>{formatAuditTime(row.createdAt)}</td>
                                                 <td>{row.action || '-'}</td>

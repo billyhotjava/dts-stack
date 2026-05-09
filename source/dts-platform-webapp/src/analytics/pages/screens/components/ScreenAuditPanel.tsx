@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { analyticsApi, type ScreenAuditEntry } from '../../../api/analyticsApi';
+import { SortableHeader } from '../../../components/SortableHeader';
+import { dateComparator, stringComparator, useTableSort } from '../../../hooks/useTableSort';
 import { Modal } from 'antd';
 
 interface ScreenAuditPanelProps {
@@ -78,6 +80,21 @@ export function ScreenAuditPanel({ open, screenId, onClose }: ScreenAuditPanelPr
 			return haystack.includes(kw);
 		});
 	}, [actionFilter, keyword, onlyExportActions, rows]);
+
+	const auditSortColumns = useMemo(
+		() => ({
+			createdAt: dateComparator<ScreenAuditEntry>((r) => r.createdAt as string | null | undefined),
+			actorId: stringComparator<ScreenAuditEntry>((r) => String(r.actorId ?? '')),
+			action: stringComparator<ScreenAuditEntry>((r) => String(r.action ?? '')),
+			requestId: stringComparator<ScreenAuditEntry>((r) => String(r.requestId ?? '')),
+		}),
+		[],
+	);
+	const { sortedItems: sortedAuditRows, sortState: auditSortState, requestSort: requestAuditSort } =
+		useTableSort(filteredRows, {
+			columns: auditSortColumns,
+			defaultSort: { key: 'createdAt', direction: 'desc' },
+		});
 
 	const exportActionCount = useMemo(
 		() => rows.filter((row) => String(row.action || '').startsWith('screen.export')).length,
@@ -175,14 +192,14 @@ export function ScreenAuditPanel({ open, screenId, onClose }: ScreenAuditPanelPr
 				<table className="w-full border-collapse text-xs">
 					<thead>
 						<tr className="sticky top-0 bg-surface-card">
-							<th style={thStyle}>时间</th>
-							<th style={thStyle}>操作者</th>
-							<th style={thStyle}>动作</th>
-							<th style={thStyle}>RequestId</th>
+							<SortableHeader sortKey="createdAt" sortState={auditSortState} onSort={requestAuditSort} style={thStyle}>时间</SortableHeader>
+							<SortableHeader sortKey="actorId" sortState={auditSortState} onSort={requestAuditSort} style={thStyle}>操作者</SortableHeader>
+							<SortableHeader sortKey="action" sortState={auditSortState} onSort={requestAuditSort} style={thStyle}>动作</SortableHeader>
+							<SortableHeader sortKey="requestId" sortState={auditSortState} onSort={requestAuditSort} style={thStyle}>RequestId</SortableHeader>
 						</tr>
 					</thead>
 					<tbody>
-						{filteredRows.map((row) => (
+						{sortedAuditRows.map((row) => (
 							<tr key={String(row.id)}>
 								<td style={tdStyle}>{String(row.createdAt ?? '-')}</td>
 								<td style={tdStyle}>{String(row.actorId ?? '-')}</td>

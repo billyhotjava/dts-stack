@@ -4,6 +4,8 @@ import {
 	type ScreenCompliancePolicy,
 	type ScreenComplianceReport,
 } from '../../../api/analyticsApi';
+import { SortableHeader } from '../../../components/SortableHeader';
+import { dateComparator, stringComparator, useTableSort } from '../../../hooks/useTableSort';
 import { Modal } from 'antd';
 
 interface ScreenCompliancePanelProps {
@@ -22,6 +24,26 @@ export function ScreenCompliancePanel({ open, screenId, onClose }: ScreenComplia
 	const [days, setDays] = useState<number>(30);
 	const [limit, setLimit] = useState<number>(200);
 	const [scope, setScope] = useState<'current' | 'all'>('current');
+
+	const complianceRows = report?.rows ?? [];
+	const complianceSortColumns = useMemo(
+		() => ({
+			createdAt: dateComparator<Record<string, unknown>>((r) => r.createdAt as string | null | undefined),
+			screenId: stringComparator<Record<string, unknown>>((r) => String(r.screenId ?? '')),
+			actorId: stringComparator<Record<string, unknown>>((r) => String(r.actorId ?? '')),
+			action: stringComparator<Record<string, unknown>>((r) => String(r.action ?? '')),
+			requestId: stringComparator<Record<string, unknown>>((r) => String(r.requestId ?? '')),
+		}),
+		[],
+	);
+	const {
+		sortedItems: sortedComplianceRows,
+		sortState: complianceSortState,
+		requestSort: requestComplianceSort,
+	} = useTableSort(complianceRows, {
+		columns: complianceSortColumns,
+		defaultSort: { key: 'createdAt', direction: 'desc' },
+	});
 
 	const resolvedScope = useMemo(() => {
 		if (!screenId) return 'all';
@@ -275,15 +297,15 @@ export function ScreenCompliancePanel({ open, screenId, onClose }: ScreenComplia
 					<table className="w-full border-collapse text-xs">
 						<thead>
 							<tr className="sticky top-0 bg-surface-card">
-								<th style={thStyle}>时间</th>
-								<th style={thStyle}>屏幕ID</th>
-								<th style={thStyle}>操作者</th>
-								<th style={thStyle}>动作</th>
-								<th style={thStyle}>RequestId</th>
+								<SortableHeader sortKey="createdAt" sortState={complianceSortState} onSort={requestComplianceSort} style={thStyle}>时间</SortableHeader>
+								<SortableHeader sortKey="screenId" sortState={complianceSortState} onSort={requestComplianceSort} style={thStyle}>屏幕ID</SortableHeader>
+								<SortableHeader sortKey="actorId" sortState={complianceSortState} onSort={requestComplianceSort} style={thStyle}>操作者</SortableHeader>
+								<SortableHeader sortKey="action" sortState={complianceSortState} onSort={requestComplianceSort} style={thStyle}>动作</SortableHeader>
+								<SortableHeader sortKey="requestId" sortState={complianceSortState} onSort={requestComplianceSort} style={thStyle}>RequestId</SortableHeader>
 							</tr>
 						</thead>
 						<tbody>
-							{(report?.rows ?? []).map((row, idx) => (
+							{sortedComplianceRows.map((row, idx) => (
 								<tr key={String((row.id as string | number | undefined) ?? idx)}>
 									<td style={tdStyle}>{String(row.createdAt ?? '-')}</td>
 									<td style={tdStyle}>{String(row.screenId ?? '-')}</td>

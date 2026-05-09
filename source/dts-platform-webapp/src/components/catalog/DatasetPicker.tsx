@@ -15,6 +15,7 @@ type Props = {
 	placeholder?: string;
 	style?: React.CSSProperties;
 	disabled?: boolean;
+	sourceId?: string;
 };
 
 const LAYER_COLOR: Record<string, string> = {
@@ -24,7 +25,7 @@ const LAYER_COLOR: Record<string, string> = {
 	ADS: "green",
 };
 
-export function DatasetPicker({ value, onChange, onFieldsLoaded, placeholder, style, disabled }: Props) {
+export function DatasetPicker({ value, onChange, onFieldsLoaded, placeholder, style, disabled, sourceId }: Props) {
 	const [options, setOptions] = useState<DatasetOption[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [fieldsLoading, setFieldsLoading] = useState(false);
@@ -60,6 +61,7 @@ export function DatasetPicker({ value, onChange, onFieldsLoaded, placeholder, st
 			const params: any = { page: 0, size: 50, enabledOnly: true };
 			if (kw) params.keyword = kw;
 			if (dId) params.domainId = dId;
+			if (sourceId) params.sourceId = sourceId;
 			const resp: any = await listDatasets(params);
 			const content = Array.isArray(resp?.content) ? resp.content : [];
 			setOptions(
@@ -74,7 +76,7 @@ export function DatasetPicker({ value, onChange, onFieldsLoaded, placeholder, st
 		} finally {
 			setLoading(false);
 		}
-	}, []);
+	}, [sourceId]);
 
 	useEffect(() => {
 		void loadDatasets(keyword, selectedDomainId);

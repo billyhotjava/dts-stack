@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type ExploreSessionItem } from "../api/analyticsApi";
 import { PageHeader } from "@/components/page-header";
 import { ErrorNotice } from "../components/ErrorNotice";
+import { SortableHeader } from "../components/SortableHeader";
+import { dateComparator, numberComparator, stringComparator, useTableSort } from "../hooks/useTableSort";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { Input, Spin, Button, Card, Tag } from "antd";
 type LoadState<T> =
@@ -73,6 +75,22 @@ export default function ExploreSessionsPage() {
 	const [saving, setSaving] = useState(false);
 	const [actionError, setActionError] = useState<unknown>(null);
 	const [actionMessage, setActionMessage] = useState<string>("");
+
+	const sessionRows = sessions.state === "loaded" ? sessions.value : [];
+	const sessionSortColumns = useMemo(
+		() => ({
+			title: stringComparator<ExploreSessionItem>((s) => s.title),
+			stepCount: numberComparator<ExploreSessionItem>(
+				(s) => (s.stepCount ?? (Array.isArray(s.steps) ? s.steps.length : 0)),
+			),
+			updatedAt: dateComparator<ExploreSessionItem>((s) => s.updatedAt),
+		}),
+		[],
+	);
+	const { sortedItems: sortedSessions, sortState, requestSort } = useTableSort(sessionRows, {
+		columns: sessionSortColumns,
+		defaultSort: { key: "updatedAt", direction: "desc" },
+	});
 
 	const loadSessions = async (keepSelection = true) => {
 		try {
@@ -363,13 +381,19 @@ export default function ExploreSessionsPage() {
 							<table>
 								<thead>
 									<tr>
-										<th>{t(locale, "common.name")}</th>
-										<th>步骤</th>
-										<th>更新时间</th>
+										<SortableHeader sortKey="title" sortState={sortState} onSort={requestSort}>
+											{t(locale, "common.name")}
+										</SortableHeader>
+										<SortableHeader sortKey="stepCount" sortState={sortState} onSort={requestSort}>
+											步骤
+										</SortableHeader>
+										<SortableHeader sortKey="updatedAt" sortState={sortState} onSort={requestSort}>
+											更新时间
+										</SortableHeader>
 									</tr>
 								</thead>
 								<tbody>
-									{sessions.value.map((row, idx) => {
+									{sortedSessions.map((row, idx) => {
 										const id = toIdString(row.id);
 										const active = id === selectedId;
 										return (

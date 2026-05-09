@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { toast } from "sonner";
 import {
+	Alert,
 	Button,
 	Form,
 	Input,
@@ -21,6 +22,7 @@ import {
 	createQualityRule,
 } from "@/api/platformApi";
 import { DatasetPicker } from "@/components/catalog/DatasetPicker";
+import { ingestionTaskAPI } from "@/api/ingestion";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -118,6 +120,8 @@ export default function RuleCreateWizard({ open, onClose, onSuccess, editingRule
 	const [templates, setTemplates] = useState<TemplateOption[]>([]);
 	const [previewSql, setPreviewSql] = useState("");
 	const [saving, setSaving] = useState(false);
+	const [defaultLakeSourceId, setDefaultLakeSourceId] = useState<string>();
+	const [defaultLakeMessage, setDefaultLakeMessage] = useState<string>();
 
 	const [form] = Form.useForm();
 
@@ -130,9 +134,35 @@ export default function RuleCreateWizard({ open, onClose, onSuccess, editingRule
 		setMethod(null);
 		setSelectedTemplate(null);
 		setPreviewSql("");
+		setDefaultLakeSourceId(undefined);
+		setDefaultLakeMessage(undefined);
 		form.resetFields();
 
 		void loadTemplates();
+	}, [open]);
+
+	useEffect(() => {
+		if (!open) return;
+		let cancelled = false;
+		void ingestionTaskAPI.getDefaultDestinationStatus()
+			.then((lake) => {
+				if (cancelled) return;
+				if (!lake?.available || !lake.dataSourceId) {
+					setDefaultLakeSourceId(undefined);
+					setDefaultLakeMessage(lake?.message || "未识别默认数据湖连接");
+					return;
+				}
+				setDefaultLakeSourceId(lake.dataSourceId);
+				setDefaultLakeMessage(undefined);
+			})
+			.catch((err: any) => {
+				if (cancelled) return;
+				setDefaultLakeSourceId(undefined);
+				setDefaultLakeMessage(err?.message || "默认数据湖连接读取失败");
+			});
+		return () => {
+			cancelled = true;
+		};
 	}, [open]);
 
 	const loadTemplates = async () => {
@@ -390,12 +420,25 @@ export default function RuleCreateWizard({ open, onClose, onSuccess, editingRule
 	const renderStep2 = () => (
 		<div className="py-4">
 			<Form form={form} layout="vertical" className="mx-auto max-w-lg">
+				{defaultLakeMessage && (
+					<Alert
+						className="mb-4"
+						type="warning"
+						showIcon
+						message="质量规则仅允许绑定默认数据湖下的数据集"
+						description={defaultLakeMessage}
+					/>
+				)}
 				<Form.Item
 					label="绑定数据集"
 					name="datasetId"
 					extra="选择此规则绑定的数据集"
 				>
-					<DatasetPicker placeholder="选择数据集（支持域筛选和关键字搜索）" />
+					<DatasetPicker
+						placeholder="选择默认数据湖数据集（支持域筛选和关键字搜索）"
+						sourceId={defaultLakeSourceId}
+						disabled={!defaultLakeSourceId}
+					/>
 				</Form.Item>
 			</Form>
 		</div>

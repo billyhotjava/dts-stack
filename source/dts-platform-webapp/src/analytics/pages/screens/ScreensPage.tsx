@@ -11,6 +11,13 @@ import { ClassificationTag } from './components/ClassificationTag';
 import { CreateScreenIntakeModal, type CreateScreenIntakePayload } from './components/CreateScreenIntakeModal';
 import { UnclassifiedScreensModal } from './components/UnclassifiedScreensModal';
 import { ImportPreviewModal } from './components/ImportPreviewModal';
+import { SortableHeader } from '../../components/SortableHeader';
+import {
+	dateComparator,
+	numberComparator,
+	stringComparator,
+	useTableSort,
+} from '../../hooks/useTableSort';
 import { useUserRoles } from '@/store/userStore';
 import { createConfigFromTemplate } from './screenTemplates';
 import { buildScreenPayload, normalizeScreenConfig, validateScreenPayload } from './screenSpec';
@@ -136,20 +143,6 @@ export default function ScreensPage() {
 			return 'all';
 		}
 	});
-	const [sortMode, setSortMode] = useState<'updated-desc' | 'updated-asc' | 'name-asc' | 'name-desc'>(() => {
-		if (typeof window === 'undefined') return 'updated-desc';
-		try {
-			const raw = window.localStorage.getItem(SCREEN_LIST_PREF_KEY);
-			if (!raw) return 'updated-desc';
-			const parsed = JSON.parse(raw) as { sortMode?: string };
-			if (parsed.sortMode === 'updated-asc' || parsed.sortMode === 'name-asc' || parsed.sortMode === 'name-desc') {
-				return parsed.sortMode;
-			}
-			return 'updated-desc';
-		} catch {
-			return 'updated-desc';
-		}
-	});
 	const searchInputRef = useRef<HTMLInputElement | null>(null);
 
 	useEffect(() => {
@@ -179,9 +172,9 @@ export default function ScreensPage() {
 		if (typeof window === 'undefined') return;
 		window.localStorage.setItem(
 			SCREEN_LIST_PREF_KEY,
-			JSON.stringify({ searchKeyword, publishFilter, sortMode }),
+			JSON.stringify({ searchKeyword, publishFilter }),
 		);
-	}, [publishFilter, searchKeyword, sortMode]);
+	}, [publishFilter, searchKeyword]);
 	useEffect(() => {
 		const isTypingTarget = (target: EventTarget | null): boolean => {
 			const node = target as HTMLElement | null;
@@ -245,7 +238,7 @@ export default function ScreensPage() {
 	}, [aclScreenId, screens]);
 	const visibleScreens = useMemo(() => {
 		const keyword = searchKeyword.trim().toLowerCase();
-		const filtered = screens.filter((item) => {
+		return screens.filter((item) => {
 			const published = Number(item.publishedVersionNo || 0) > 0;
 			if (publishFilter === 'published' && !published) return false;
 			if (publishFilter === 'draft' && published) return false;
@@ -254,20 +247,25 @@ export default function ScreensPage() {
 			const desc = String(item.description || '').toLowerCase();
 			return name.includes(keyword) || desc.includes(keyword);
 		});
-		filtered.sort((a, b) => {
-			if (sortMode === 'updated-asc') {
-				return (new Date(a.updatedAt || 0).getTime()) - (new Date(b.updatedAt || 0).getTime());
-			}
-			if (sortMode === 'name-asc') {
-				return String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN');
-			}
-			if (sortMode === 'name-desc') {
-				return String(b.name || '').localeCompare(String(a.name || ''), 'zh-CN');
-			}
-			return (new Date(b.updatedAt || 0).getTime()) - (new Date(a.updatedAt || 0).getTime());
-		});
-		return filtered;
-	}, [publishFilter, screens, searchKeyword, sortMode]);
+	}, [publishFilter, screens, searchKeyword]);
+
+	// Table sort columns: 操作列不参与排序，所以只覆盖前 6 列。密级用 classification 字典序
+	// （CONFIDENTIAL/INTERNAL/PUBLIC/SECRET 或 S1-S4 都是稳定可比的字符串）。
+	const sortColumns = useMemo(
+		() => ({
+			name: stringComparator<ScreenListItem>((s) => s.name),
+			description: stringComparator<ScreenListItem>((s) => s.description),
+			width: numberComparator<ScreenListItem>((s) => s.width),
+			classification: stringComparator<ScreenListItem>((s) => s.classification),
+			published: numberComparator<ScreenListItem>((s) => Number(s.publishedVersionNo || 0)),
+			updatedAt: dateComparator<ScreenListItem>((s) => s.updatedAt),
+		}),
+		[],
+	);
+	const { sortedItems: sortedScreens, sortState, requestSort } = useTableSort(visibleScreens, {
+		columns: sortColumns,
+		defaultSort: { key: 'updatedAt', direction: 'desc' },
+	});
 
 	const handleCreate = () => {
 		// Sprint-24 F3：先弹 intake 收集名称 + 密级，提交后再开模板库。
@@ -723,32 +721,14 @@ export default function ScreensPage() {
 								<option value="published">仅已发布</option>
 								<option value="draft">仅未发布</option>
 							</select>
-							<select
-								className="border border-border-default rounded-lg px-2.5 py-2 bg-surface-card text-text-primary text-[13px]"
-								value={sortMode}
-								onChange={(e) => {
-									const next = e.target.value;
-									if (next === 'updated-asc' || next === 'name-asc' || next === 'name-desc') {
-										setSortMode(next);
-										return;
-									}
-									setSortMode('updated-desc');
-								}}
-							>
-								<option value="updated-desc">按更新时间(新→旧)</option>
-								<option value="updated-asc">按更新时间(旧→新)</option>
-								<option value="name-asc">按名称(A→Z)</option>
-								<option value="name-desc">按名称(Z→A)</option>
-							</select>
 							<button
 								type="button"
 								className="border border-border-default rounded-lg px-2.5 py-2 bg-surface-card text-text-primary text-[13px] cursor-pointer hover:border-brand hover:bg-brand/10"
 								onClick={() => {
 									setSearchKeyword('');
 									setPublishFilter('all');
-									setSortMode('updated-desc');
 								}}
-								title="恢复默认筛选与排序"
+								title="恢复默认筛选"
 							>
 								重置
 							</button>
@@ -796,18 +776,18 @@ export default function ScreensPage() {
 							<table className="w-full border-collapse text-sm">
 								<thead>
 									<tr className="bg-surface-secondary text-text-secondary text-xs">
-										<th className="text-left font-medium px-4 py-3">名称</th>
-										<th className="text-left font-medium px-4 py-3">描述</th>
-										<th className="text-left font-medium px-4 py-3 whitespace-nowrap">分辨率</th>
+										<SortableHeader sortKey="name" sortState={sortState} onSort={requestSort}>名称</SortableHeader>
+										<SortableHeader sortKey="description" sortState={sortState} onSort={requestSort}>描述</SortableHeader>
+										<SortableHeader sortKey="width" sortState={sortState} onSort={requestSort} className="whitespace-nowrap">分辨率</SortableHeader>
 										{/* Sprint-24 F2/T02：密级列，便于一眼扫到 classification=null 的大屏 */}
-										<th className="text-left font-medium px-4 py-3 whitespace-nowrap">密级</th>
-										<th className="text-left font-medium px-4 py-3 whitespace-nowrap">状态</th>
-										<th className="text-left font-medium px-4 py-3 whitespace-nowrap">更新时间</th>
+										<SortableHeader sortKey="classification" sortState={sortState} onSort={requestSort} className="whitespace-nowrap">密级</SortableHeader>
+										<SortableHeader sortKey="published" sortState={sortState} onSort={requestSort} className="whitespace-nowrap">状态</SortableHeader>
+										<SortableHeader sortKey="updatedAt" sortState={sortState} onSort={requestSort} className="whitespace-nowrap">更新时间</SortableHeader>
 										<th className="text-right font-medium px-4 py-3 whitespace-nowrap">操作</th>
 									</tr>
 								</thead>
 								<tbody>
-									{visibleScreens.map((screen) => {
+									{sortedScreens.map((screen) => {
 										const rowPermissions = resolveScreenRowPermissions(screen);
 										const showMoreMenu = rowPermissions.canEdit || rowPermissions.canDelete;
 										return (

@@ -73,6 +73,7 @@ public class QualityRunService {
     private final ObjectMapper objectMapper;
     private final GovernanceProperties properties;
     private final TransactionTemplate runTransactionTemplate;
+    private final DefaultLakeDatasetGuard defaultLakeDatasetGuard;
 
     public QualityRunService(
         GovRuleRepository ruleRepository,
@@ -88,7 +89,8 @@ public class QualityRunService {
         IssueTicketService issueTicketService,
         ObjectMapper objectMapper,
         GovernanceProperties properties,
-        PlatformTransactionManager transactionManager
+        PlatformTransactionManager transactionManager,
+        DefaultLakeDatasetGuard defaultLakeDatasetGuard
     ) {
         this.ruleRepository = ruleRepository;
         this.versionRepository = versionRepository;
@@ -103,6 +105,7 @@ public class QualityRunService {
         this.issueTicketService = issueTicketService;
         this.objectMapper = objectMapper;
         this.properties = properties;
+        this.defaultLakeDatasetGuard = defaultLakeDatasetGuard;
         TransactionTemplate template = new TransactionTemplate(transactionManager);
         template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.runTransactionTemplate = template;
@@ -117,6 +120,7 @@ public class QualityRunService {
         GovRule rule = resolveRule(request.getRuleId());
         GovRuleVersion version = resolveVersion(rule);
         List<GovRuleBinding> bindings = resolveBindings(version, request.getBindingId(), request.getDatasetId());
+        bindings.forEach(binding -> defaultLakeDatasetGuard.requireDefaultLakeDataset(binding.getDatasetId()));
         if (bindings.isEmpty()) {
             throw new IllegalArgumentException("该规则尚未绑定数据集");
         }
@@ -184,15 +188,18 @@ public class QualityRunService {
     @Transactional(readOnly = true)
     public List<QualityRunDto> recentByRule(UUID ruleId, int limit) {
         Pageable pageable = PageRequest.of(0, limit, Sort.Direction.DESC, "createdDate");
+        UUID defaultLakeSourceId = defaultLakeDatasetGuard.currentDefaultLakeSourceId().orElse(null);
         return runRepository
             .findByRuleId(ruleId, pageable)
             .stream()
+            .filter(run -> isDefaultLakeRun(run, defaultLakeSourceId))
             .map(run -> GovernanceMapper.toDto(run, metricRepository.findByRunId(run.getId())))
             .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
     public List<QualityRunDto> recentByDataset(UUID datasetId, int limit) {
+        defaultLakeDatasetGuard.requireDefaultLakeDataset(datasetId);
         Pageable pageable = PageRequest.of(0, limit, Sort.Direction.DESC, "createdDate");
         return runRepository
             .findByDatasetId(datasetId, pageable)
@@ -204,10 +211,12 @@ public class QualityRunService {
     @Transactional(readOnly = true)
     public List<QualityRunDto> recent(int limit) {
         Pageable pageable = PageRequest.of(0, limit, Sort.Direction.DESC, "createdDate");
+        UUID defaultLakeSourceId = defaultLakeDatasetGuard.currentDefaultLakeSourceId().orElse(null);
         return runRepository
             .findAll(pageable)
             .getContent()
             .stream()
+            .filter(run -> isDefaultLakeRun(run, defaultLakeSourceId))
             .map(run -> GovernanceMapper.toDto(run, metricRepository.findByRunId(run.getId())))
             .collect(Collectors.toList());
     }
@@ -221,14 +230,17 @@ public class QualityRunService {
         if (ruleId != null) {
             candidates = runRepository.findByRuleId(ruleId, pageable);
         } else if (datasetId != null) {
+            defaultLakeDatasetGuard.requireDefaultLakeDataset(datasetId);
             candidates = runRepository.findByDatasetId(datasetId, pageable);
         } else {
             candidates = runRepository.findAll(pageable).getContent();
         }
+        UUID defaultLakeSourceId = defaultLakeDatasetGuard.currentDefaultLakeSourceId().orElse(null);
         String normalizedStatus = StringUtils.trimToNull(status);
         String normalizedTriggerType = StringUtils.trimToNull(triggerType);
         return candidates
             .stream()
+            .filter(run -> isDefaultLakeRun(run, defaultLakeSourceId))
             .filter(run -> normalizedStatus == null || normalizedStatus.equalsIgnoreCase(StringUtils.trimToEmpty(run.getStatus())))
             .filter(run -> normalizedTriggerType == null || normalizedTriggerType.equalsIgnoreCase(StringUtils.trimToEmpty(run.getTriggerType())))
             .filter(run -> {
@@ -534,11 +546,7 @@ public class QualityRunService {
         if (run.getDatasetId() == null) {
             return null;
         }
-        Optional<CatalogDataset> datasetOpt = datasetRepository.findById(run.getDatasetId());
-        if (datasetOpt.isEmpty()) {
-            return null;
-        }
-        CatalogDataset dataset = datasetOpt.orElseThrow();
+        CatalogDataset dataset = defaultLakeDatasetGuard.requireDefaultLakeDataset(run.getDatasetId());
         String db = dataset.getHiveDatabase();
         String table = dataset.getHiveTable();
         if (StringUtils.isBlank(table)) {
@@ -548,6 +556,16 @@ public class QualityRunService {
             return db + "." + table;
         }
         return table;
+    }
+
+    private boolean isDefaultLakeRun(GovQualityRun run, UUID defaultLakeSourceId) {
+        if (run == null || run.getDatasetId() == null) {
+            return false;
+        }
+        return datasetRepository
+            .findById(run.getDatasetId())
+            .filter(dataset -> defaultLakeDatasetGuard.isDefaultLakeDataset(dataset, defaultLakeSourceId))
+            .isPresent();
     }
 
     private GovRule resolveRule(UUID ruleId) {
