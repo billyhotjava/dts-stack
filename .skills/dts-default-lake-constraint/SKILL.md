@@ -49,6 +49,7 @@ Use this skill whenever work touches data sources, datasets, modeling, metrics, 
 - Ingestion default writer enforcement: `source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/rest/IngestionTaskProxyResource.java`
 - Default-lake dataset enforcement: `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/governance/DefaultLakeDatasetGuard.java`
 - dbt/modeling source resolution: `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/ModelingSqlModelService.java`
+- dbt source picker enforcement: `source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/rest/ModelingSqlModelResource.java`
 - Generated model source resolution: `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/ModelGenerationService.java`
 - Quality rules/tasks: `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/governance/QualityRuleService.java`, `QualityTaskService.java`
 - Dataset selectors: `source/dts-platform-webapp/src/components/catalog/DatasetPicker.tsx`, governance quality pages, metric pages, and analytics data pages.

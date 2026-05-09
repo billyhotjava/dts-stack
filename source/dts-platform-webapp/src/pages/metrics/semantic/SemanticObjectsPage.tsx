@@ -35,18 +35,17 @@ import { PageHeader } from "@/components/page-header";
 import { appendDetailAction, CompactTable, RecordDetailDrawer } from "@/components/table";
 import { VisualFlowCanvas, type VisualFlowDropEvent } from "@/components/visual-canvas/VisualFlowCanvas";
 import { SemanticSectionNav } from "./SemanticSectionNav";
-import { asArray, isDwdSemanticInput, semanticSectionMeta } from "./semanticModelingShared";
+import {
+	isDwdSemanticDataset,
+	normalizeSemanticDataset,
+	splitQualifiedField,
+	type SemanticDatasetOption,
+} from "./semanticModeling.helpers";
+import { asArray, semanticSectionMeta } from "./semanticModelingShared";
 
 const { Text } = Typography;
 
-type DatasetOption = {
-	id: string;
-	name: string;
-	table?: string;
-	layer?: string;
-	database?: string;
-	schema?: string;
-};
+type DatasetOption = SemanticDatasetOption;
 
 type JoinTable = {
 	id: string;
@@ -59,21 +58,6 @@ type JoinRule = {
 	rightTable?: string;
 	rightField?: string;
 	joinType?: string;
-};
-
-const normalizeDataset = (item: any): DatasetOption => ({
-	id: String(item.id || item.key || item.name || item.tableName || item.hiveTable),
-	name: String(item.name || item.displayName || item.hiveTable || item.tableName || item.id || ""),
-	table: String(item.hiveTable || item.tableName || item.name || ""),
-	layer: String(item.warehouseLayer || item.layer || ""),
-	database: String(item.databaseName || item.database || ""),
-	schema: String(item.schemaName || item.schema || ""),
-});
-
-const splitQualifiedField = (value?: string) => {
-	const parts = String(value || "").split(".");
-	if (parts.length < 2) return { table: undefined, field: value };
-	return { table: parts.slice(0, -1).join("."), field: parts[parts.length - 1] };
 };
 
 export default function SemanticObjectsPage() {
@@ -110,7 +94,7 @@ export default function SemanticObjectsPage() {
 	const loadDatasets = useCallback(() => {
 		setDatasetsLoading(true);
 		listDatasets({ page: 0, size: 120 })
-			.then((resp: any) => setDatasets(asArray<any>(resp).map(normalizeDataset)))
+			.then((resp: any) => setDatasets(asArray<any>(resp).map(normalizeSemanticDataset)))
 			.catch(() => setDatasets([]))
 			.finally(() => setDatasetsLoading(false));
 	}, []);
@@ -121,7 +105,7 @@ export default function SemanticObjectsPage() {
 		loadDatasets();
 	}, [loadDatasets, loadDomains, loadObjects]);
 
-	const dwdDatasets = useMemo(() => datasets.filter(isDwdSemanticInput), [datasets]);
+	const dwdDatasets = useMemo(() => datasets.filter(isDwdSemanticDataset), [datasets]);
 
 	const selectedObject = useMemo(
 		() => objects.find((item) => item.id === selectedObjectId),

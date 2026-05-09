@@ -48,11 +48,21 @@ public class DefaultLakeDatasetGuard {
         }
     }
 
-    private UUID requireDefaultLakeSourceId() {
+    public UUID requireDefaultLakeSourceId() {
         return resolveDefaultLakeSourceId(true)
             .orElseThrow(() ->
                 new IllegalStateException("未识别默认数据湖数据源，请先在管理端配置默认数据湖并确认平台已映射本地数据源")
             );
+    }
+
+    public void requireDefaultLakeSource(UUID sourceId, String message) {
+        if (sourceId == null) {
+            throw new IllegalArgumentException("sourceId 不能为空");
+        }
+        UUID defaultLakeSourceId = requireDefaultLakeSourceId();
+        if (!defaultLakeSourceId.equals(sourceId)) {
+            throw new IllegalArgumentException(StringUtils.hasText(message) ? message : "仅允许选择默认数据湖数据源");
+        }
     }
 
     private Optional<UUID> resolveDefaultLakeSourceId(boolean required) {

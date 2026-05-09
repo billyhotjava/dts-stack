@@ -90,6 +90,7 @@ import {
 	getRollbackAuditLog,
 } from "@/api/platformApi";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
+import { ingestionTaskAPI } from "@/api/ingestion";
 import BatchImportModal from "./BatchImportModal";
 import BatchDeleteResultModal from "./components/BatchDeleteResultModal";
 import GovernanceModal from "./components/GovernanceModal";
@@ -462,9 +463,26 @@ export default function SqlModelingPage() {
 
 	const loadSources = useCallback(async () => {
 		try {
-			const resp = await dataSourcesService.list();
-			setDataSources(Array.isArray(resp) ? resp : []);
+			const [resp, lake] = await Promise.all([
+				dataSourcesService.list(),
+				ingestionTaskAPI.getDefaultDestinationStatus(),
+			]);
+			if (!lake?.available || !lake.dataSourceId) {
+				setDataSources([]);
+				toast.error(lake?.message || "未识别默认数据湖连接");
+				return;
+			}
+			const list = Array.isArray(resp) ? resp : [];
+			const defaultLakeSource = list.find((item) => String(item?.id || "") === String(lake.dataSourceId));
+			setDataSources(defaultLakeSource ? [defaultLakeSource] : [{
+				id: String(lake.dataSourceId),
+				name: lake.destinationName || "默认数据湖",
+				type: lake.writerType || "DATA_LAKE",
+				status: "ACTIVE",
+			} as InfraDataSource]);
 		} catch (err: any) {
+			setDataSources([]);
+			toast.error(err?.message || "默认数据湖连接读取失败");
 		}
 	}, []);
 

@@ -1634,7 +1634,7 @@ public class SemanticModelingService {
             case "avg" -> "avg(" + safeField(required(readText(formula, "field"), "metric field")) + ")";
             case "max" -> "max(" + safeField(required(readText(formula, "field"), "metric field")) + ")";
             case "min" -> "min(" + safeField(required(readText(formula, "field"), "metric field")) + ")";
-            case "count_if" -> "sum(case when " + conditionSql(formula) + " then 1 else 0 end)";
+            case "count_if" -> countIfSql(formula);
             case "sum_if" -> "sum(case when " + conditionSql(formula) + " then " + safeField(required(readText(formula, "field"), "metric field")) + " else 0 end)";
             case "ratio" -> ratioSql(formula);
             case "sql", "custom", "expression" -> safeMetricExpression(
@@ -1664,7 +1664,10 @@ public class SemanticModelingService {
 
     private String aggregateSql(JsonNode node) {
         if (node == null || node.isNull()) return "null";
-        String type = defaultValue(readText(node, "type"), "sum").toLowerCase(Locale.ROOT);
+        String type = defaultValue(readText(node, "aggregation"), defaultValue(readText(node, "type"), "sum")).toLowerCase(Locale.ROOT);
+        if ("aggregation".equals(type)) {
+            type = "sum";
+        }
         String field = safeField(required(readText(node, "field"), "metric field"));
         return switch (type) {
             case "count" -> "count(" + field + ")";
@@ -1676,14 +1679,39 @@ public class SemanticModelingService {
         };
     }
 
+    private String countIfSql(JsonNode formula) {
+        String condition = conditionSql(formula);
+        boolean distinct = formula != null && formula.has("distinct") && formula.get("distinct").asBoolean(false);
+        if (!distinct) {
+            return "sum(case when " + condition + " then 1 else 0 end)";
+        }
+        String field = safeField(required(readText(formula, "field"), "metric field"));
+        return "count(distinct case when " + condition + " then " + field + " end)";
+    }
+
     private String conditionSql(JsonNode formula) {
         String direct = readText(formula, "condition");
         if (StringUtils.hasText(direct)) return direct;
+        JsonNode condition = formula == null ? null : formula.get("condition");
+        if (condition != null && condition.isObject()) {
+            return conditionObjectSql(condition);
+        }
         String field = safeField(required(readText(formula, "field"), "condition field"));
         String operator = defaultValue(readText(formula, "operator"), "=");
         String value = readText(formula, "value");
         if (!StringUtils.hasText(value) && formula != null && formula.has("value")) {
             JsonNode node = formula.get("value");
+            if (node.isBoolean() || node.isNumber()) return field + " " + operator + " " + node.asText();
+        }
+        return field + " " + operator + " '" + escapeSql(defaultValue(value, "")) + "'";
+    }
+
+    private String conditionObjectSql(JsonNode condition) {
+        String field = safeField(required(readText(condition, "field"), "condition field"));
+        String operator = defaultValue(readText(condition, "operator"), "=");
+        String value = readText(condition, "value");
+        if (!StringUtils.hasText(value) && condition.has("value")) {
+            JsonNode node = condition.get("value");
             if (node.isBoolean() || node.isNumber()) return field + " " + operator + " " + node.asText();
         }
         return field + " " + operator + " '" + escapeSql(defaultValue(value, "")) + "'";

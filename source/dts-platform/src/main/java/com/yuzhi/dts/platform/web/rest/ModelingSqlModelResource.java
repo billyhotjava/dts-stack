@@ -1,6 +1,5 @@
 package com.yuzhi.dts.platform.web.rest;
 
-import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.infra.InfraOdsTableMapping;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
@@ -21,7 +20,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelG
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelOdsGenerateRequest;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelOdsGenerateResult;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelRequest;
-import com.yuzhi.dts.platform.service.infra.DataSourceScorer;
+import com.yuzhi.dts.platform.service.governance.DefaultLakeDatasetGuard;
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import jakarta.validation.Valid;
@@ -61,7 +60,6 @@ public class ModelingSqlModelResource {
 
     private static final String MODELING_MAINTAINER_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
-    private static final String STATUS_ACTIVE = "ACTIVE";
     private static final Logger LOG = LoggerFactory.getLogger(ModelingSqlModelResource.class);
 
     private final ModelingSqlModelService sqlModelService;
@@ -73,6 +71,7 @@ public class ModelingSqlModelResource {
     private final AuditService auditService;
     private final DataStandardSecurity security;
     private final SemanticContractPublishService semanticContractPublishService;
+    private final DefaultLakeDatasetGuard defaultLakeDatasetGuard;
 
     public ModelingSqlModelResource(
         ModelingSqlModelService sqlModelService,
@@ -83,7 +82,8 @@ public class ModelingSqlModelResource {
         InfraDataSourceRepository dataSourceRepository,
         AuditService auditService,
         DataStandardSecurity security,
-        SemanticContractPublishService semanticContractPublishService
+        SemanticContractPublishService semanticContractPublishService,
+        DefaultLakeDatasetGuard defaultLakeDatasetGuard
     ) {
         this.sqlModelService = sqlModelService;
         this.generationService = generationService;
@@ -94,6 +94,7 @@ public class ModelingSqlModelResource {
         this.auditService = auditService;
         this.security = security;
         this.semanticContractPublishService = semanticContractPublishService;
+        this.defaultLakeDatasetGuard = defaultLakeDatasetGuard;
     }
 
     @GetMapping
@@ -323,7 +324,15 @@ public class ModelingSqlModelResource {
     ) {
         List<InfraOdsTableMapping> mappings = odsTableMappingRepository.findByEnabledTrueOrderByOdsSchemaAscOdsTableAsc();
         String kw = StringUtils.hasText(keyword) ? keyword.trim().toLowerCase(Locale.ROOT) : null;
-        UUID fallbackSourceId = resolveFallbackSourceId();
+        UUID defaultLakeSourceId = defaultLakeDatasetGuard.currentDefaultLakeSourceId().orElse(null);
+        if (defaultLakeSourceId == null) {
+            LOG.warn("[dbt-sources] default lake source id is unavailable; returning empty source list");
+            return ApiResponses.ok(List.of());
+        }
+        if (sourceDataSourceId != null && !defaultLakeSourceId.equals(sourceDataSourceId)) {
+            LOG.warn("[dbt-sources] rejected non-default sourceDataSourceId={} defaultLakeSourceId={}", sourceDataSourceId, defaultLakeSourceId);
+            return ApiResponses.ok(List.of());
+        }
         Map<UUID, String> sourceNameCache = new HashMap<>();
         Map<String, Boolean> activeOdsCache = new HashMap<>();
         int staleSkipped = 0;
@@ -334,22 +343,7 @@ public class ModelingSqlModelResource {
             String schema = StringUtils.hasText(mapping.getOdsSchema()) ? mapping.getOdsSchema().trim() : "public";
             String table = StringUtils.hasText(mapping.getOdsTable()) ? mapping.getOdsTable().trim() : null;
             if (!StringUtils.hasText(table)) continue;
-            UUID resolvedSourceId = resolveExistingSourceId(resolveDatasetSourceId(schema, table));
-            UUID mappingSourceId = resolveExistingSourceId(mapping.getConnectionId());
-            List<UUID> sourceCandidates = new ArrayList<>(3);
-            if (resolvedSourceId != null) {
-                sourceCandidates.add(resolvedSourceId);
-            }
-            if (mappingSourceId != null && !mappingSourceId.equals(resolvedSourceId)) {
-                sourceCandidates.add(mappingSourceId);
-            }
-            if (sourceCandidates.isEmpty() && fallbackSourceId != null) {
-                sourceCandidates.add(fallbackSourceId);
-            }
-            UUID effectiveSourceId = pickEffectiveSourceId(sourceCandidates, sourceDataSourceId);
-            if (sourceDataSourceId != null && effectiveSourceId == null) {
-                continue;
-            }
+            UUID effectiveSourceId = defaultLakeSourceId;
             if (!hasActiveOdsDataset(schema, table, effectiveSourceId, activeOdsCache)) {
                 staleSkipped++;
                 continue;
@@ -406,21 +400,6 @@ public class ModelingSqlModelResource {
         return ApiResponses.ok(result);
     }
 
-    private UUID pickEffectiveSourceId(List<UUID> sourceCandidates, UUID requestedSourceId) {
-        if (sourceCandidates == null || sourceCandidates.isEmpty()) {
-            return null;
-        }
-        if (requestedSourceId != null) {
-            for (UUID candidate : sourceCandidates) {
-                if (requestedSourceId.equals(candidate)) {
-                    return candidate;
-                }
-            }
-            return null;
-        }
-        return sourceCandidates.get(0);
-    }
-
     private boolean hasActiveOdsDataset(String schema, String table, UUID sourceId, Map<String, Boolean> cache) {
         if (!StringUtils.hasText(schema) || !StringUtils.hasText(table)) {
             return false;
@@ -463,24 +442,6 @@ public class ModelingSqlModelResource {
         return exists;
     }
 
-    private UUID resolveDatasetSourceId(String schema, String table) {
-        if (!StringUtils.hasText(schema) || !StringUtils.hasText(table)) {
-            return null;
-        }
-        List<CatalogDataset> datasets = datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(schema.trim(), table.trim());
-        if (datasets == null || datasets.isEmpty()) {
-            return null;
-        }
-        for (CatalogDataset dataset : datasets) {
-            if (dataset == null) continue;
-            if (dataset.getEnabled() != null && !dataset.getEnabled().booleanValue()) continue;
-            if (dataset.getSourceId() != null) {
-                return dataset.getSourceId();
-            }
-        }
-        return null;
-    }
-
     private String resolveSourceName(UUID sourceId) {
         if (sourceId == null) {
             return null;
@@ -500,38 +461,6 @@ public class ModelingSqlModelResource {
             cache.put(sourceId, resolved);
         }
         return resolved;
-    }
-
-    private UUID resolveExistingSourceId(UUID sourceId) {
-        if (sourceId == null) {
-            return null;
-        }
-        return dataSourceRepository.existsById(sourceId) ? sourceId : null;
-    }
-
-    private UUID resolveFallbackSourceId() {
-        List<com.yuzhi.dts.platform.domain.service.InfraDataSource> candidates = dataSourceRepository.findByStatusIgnoreCase(STATUS_ACTIVE);
-        if (candidates == null || candidates.isEmpty()) {
-            candidates = dataSourceRepository.findAll();
-        }
-        UUID bestId = null;
-        int bestScore = Integer.MIN_VALUE;
-        for (com.yuzhi.dts.platform.domain.service.InfraDataSource source : candidates) {
-            if (source == null || source.getId() == null) continue;
-            int score = scoreSource(source);
-            if (score > bestScore) {
-                bestScore = score;
-                bestId = source.getId();
-            }
-        }
-        return bestId;
-    }
-
-    private int scoreSource(com.yuzhi.dts.platform.domain.service.InfraDataSource source) {
-        if (source == null) {
-            return Integer.MIN_VALUE;
-        }
-        return DataSourceScorer.scoreDataSource(source.getName(), source.getJdbcUrl(), source.getType(), source.getStatus());
     }
 
     /**

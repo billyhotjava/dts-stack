@@ -12,12 +12,6 @@ export const semanticSectionMeta: Record<SemanticModelingSection, { title: strin
 
 export const semanticSections = Object.keys(semanticSectionMeta) as SemanticModelingSection[];
 
-export const isDwdSemanticInput = (item: { layer?: string; warehouseLayer?: string; table?: string; name?: string }) => {
-	const layer = String(item.warehouseLayer || item.layer || "").toUpperCase();
-	const table = String(item.table || item.name || "").toLowerCase();
-	return layer === "DWD" || table.startsWith("dwd_");
-};
-
 export const isConsumableSemanticModel = (item: { type?: string }) => {
 	const type = String(item.type || "").toUpperCase();
 	return type === "DWS" || type === "ADS";

@@ -67,6 +67,26 @@ class DefaultLakeDatasetGuardTest {
             .hasMessageContaining("未识别默认数据湖数据源");
     }
 
+    @Test
+    void requireDefaultLakeSource_acceptsDefaultSource() {
+        UUID defaultSourceId = UUID.randomUUID();
+
+        when(defaultDestinationSyncService.checkDefaultDestinationStatus()).thenReturn(defaultStatus(defaultSourceId));
+
+        guard.requireDefaultLakeSource(defaultSourceId, "仅允许默认数据湖");
+    }
+
+    @Test
+    void requireDefaultLakeSource_rejectsExternalSource() {
+        UUID defaultSourceId = UUID.randomUUID();
+
+        when(defaultDestinationSyncService.checkDefaultDestinationStatus()).thenReturn(defaultStatus(defaultSourceId));
+
+        assertThatThrownBy(() -> guard.requireDefaultLakeSource(UUID.randomUUID(), "仅允许默认数据湖"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("仅允许默认数据湖");
+    }
+
     private CatalogDataset dataset(UUID datasetId, UUID sourceId) {
         CatalogDataset dataset = new CatalogDataset();
         dataset.setId(datasetId);

@@ -16,6 +16,7 @@ import com.yuzhi.dts.platform.repository.explore.QueryDatasetVersionRepository;
 import com.yuzhi.dts.platform.service.etl.DbtFileService;
 import com.yuzhi.dts.platform.service.etl.DbtReleaseSubmissionService;
 import com.yuzhi.dts.platform.service.query.QueryGateway;
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -82,6 +83,64 @@ class SemanticModelingServiceTest {
         assertThat(artifactsQuery.params().getValue("modelId")).isEqualTo(modelId);
     }
 
+    @Test
+    void metricExpressionSupportsSkillFormulaJsonForRatioAndConditionalCount() throws Exception {
+        String ratio = buildMetricExpression(
+            new SemanticModelingService.MetricDto(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "project_share_rate",
+                "项目占比",
+                "ratio",
+                """
+                {
+                  "type": "ratio",
+                  "numerator": {
+                    "type": "aggregation",
+                    "aggregation": "count_distinct",
+                    "field": "project_id"
+                  },
+                  "denominator": {
+                    "type": "aggregation",
+                    "aggregation": "count_distinct",
+                    "field": "dept_id"
+                  }
+                }
+                """,
+                "percent",
+                "%",
+                "ACTIVE"
+            )
+        );
+        assertThat(ratio).isEqualTo("case when count(distinct dept_id) = 0 then null else count(distinct project_id) / count(distinct dept_id) end");
+
+        String countIf = buildMetricExpression(
+            new SemanticModelingService.MetricDto(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "active_project_cnt",
+                "在研项目数",
+                "count_if",
+                """
+                {
+                  "type": "conditional_count",
+                  "field": "project_id",
+                  "condition": {
+                    "field": "project_status",
+                    "operator": "=",
+                    "value": "在研"
+                  },
+                  "distinct": true
+                }
+                """,
+                "integer",
+                "个",
+                "ACTIVE"
+            )
+        );
+        assertThat(countIf).isEqualTo("count(distinct case when project_status = '在研' then project_id end)");
+    }
+
     @SuppressWarnings({ "unchecked", "rawtypes" })
     private void stubQuery() {
         doReturn(List.of()).when(jdbc).query(anyString(), any(MapSqlParameterSource.class), any(RowMapper.class));
@@ -94,6 +153,12 @@ class SemanticModelingServiceTest {
         verify(jdbc).query(sqlCaptor.capture(), paramsCaptor.capture(), any(RowMapper.class));
         clearInvocations(jdbc);
         return new CapturedQuery(sqlCaptor.getValue(), paramsCaptor.getValue());
+    }
+
+    private String buildMetricExpression(SemanticModelingService.MetricDto metric) throws Exception {
+        Method method = SemanticModelingService.class.getDeclaredMethod("buildMetricExpression", SemanticModelingService.MetricDto.class);
+        method.setAccessible(true);
+        return (String) method.invoke(service, metric);
     }
 
     private record CapturedQuery(String sql, MapSqlParameterSource params) {}

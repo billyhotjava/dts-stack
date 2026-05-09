@@ -12,55 +12,18 @@ import {
 	updateSemanticSubjectDomain,
 } from "@/api/semanticModelingApi";
 import { SemanticSectionNav } from "./SemanticSectionNav";
-import { asArray, isDwdSemanticInput, semanticSectionMeta } from "./semanticModelingShared";
+import {
+	flattenGovernanceDomains,
+	isDwdSemanticDataset,
+	normalizeSemanticDataset,
+	type GovernanceDomainOption,
+	type SemanticDatasetOption,
+} from "./semanticModeling.helpers";
+import { asArray, semanticSectionMeta } from "./semanticModelingShared";
 
 const { Text } = Typography;
 
-type DatasetOption = {
-	id: string;
-	name: string;
-	table?: string;
-	layer?: string;
-	database?: string;
-	schema?: string;
-};
-
-type GovernanceDomainOption = {
-	id: string;
-	code?: string;
-	name: string;
-	label: string;
-};
-
-const flattenGovernanceDomains = (nodes: any[], path: string[] = [], out: GovernanceDomainOption[] = []) => {
-	nodes.forEach((node) => {
-		if (!node || typeof node !== "object") return;
-		const id = String(node.id || node.key || "");
-		const name = String(node.name || "");
-		if (!id || !name) return;
-		const code = node.code ? String(node.code) : undefined;
-		const nextPath = [...path, name];
-		out.push({
-			id,
-			code,
-			name,
-			label: nextPath.join(" / "),
-		});
-		if (Array.isArray(node.children) && node.children.length) {
-			flattenGovernanceDomains(node.children, nextPath, out);
-		}
-	});
-	return out;
-};
-
-const normalizeDataset = (item: any): DatasetOption => ({
-	id: String(item.id || item.key || item.name || item.tableName || item.hiveTable),
-	name: String(item.name || item.displayName || item.hiveTable || item.tableName || item.id || ""),
-	table: String(item.hiveTable || item.tableName || item.name || ""),
-	layer: String(item.warehouseLayer || item.layer || ""),
-	database: String(item.databaseName || item.database || ""),
-	schema: String(item.schemaName || item.schema || ""),
-});
+type DatasetOption = SemanticDatasetOption;
 
 export default function SemanticSubjectsPage() {
 	const [form] = Form.useForm();
@@ -94,7 +57,7 @@ export default function SemanticSubjectsPage() {
 	const loadDatasets = () => {
 		setDatasetsLoading(true);
 		listDatasets({ page: 0, size: 120 })
-			.then((resp: any) => setDatasets(asArray<any>(resp).map(normalizeDataset)))
+			.then((resp: any) => setDatasets(asArray<any>(resp).map(normalizeSemanticDataset)))
 			.catch(() => setDatasets([]))
 			.finally(() => setDatasetsLoading(false));
 	};
@@ -106,7 +69,7 @@ export default function SemanticSubjectsPage() {
 	}, []);
 
 	const dwdDatasets = useMemo(
-		() => datasets.filter(isDwdSemanticInput),
+		() => datasets.filter(isDwdSemanticDataset),
 		[datasets],
 	);
 

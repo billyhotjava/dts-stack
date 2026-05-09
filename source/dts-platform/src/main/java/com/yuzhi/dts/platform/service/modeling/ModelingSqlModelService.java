@@ -23,6 +23,7 @@ import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService.ColumnSpec;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
+import com.yuzhi.dts.platform.service.governance.DefaultLakeDatasetGuard;
 import com.yuzhi.dts.platform.service.infra.AdminInfraClient;
 import com.yuzhi.dts.platform.service.infra.DataSourceScorer;
 import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
@@ -47,6 +48,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.regex.Pattern;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -91,6 +93,7 @@ public class ModelingSqlModelService {
     private final ModelFileService fileService;
     private final Executor taskExecutor;
     private final TransactionTemplate batchDeleteTransactionTemplate;
+    private DefaultLakeDatasetGuard defaultLakeDatasetGuard;
 
     public ModelingSqlModelService(
         ModelingSqlModelRepository repo,
@@ -132,6 +135,11 @@ public class ModelingSqlModelService {
         TransactionTemplate template = new TransactionTemplate(transactionManager);
         template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.batchDeleteTransactionTemplate = template;
+    }
+
+    @Autowired(required = false)
+    public void setDefaultLakeDatasetGuard(DefaultLakeDatasetGuard defaultLakeDatasetGuard) {
+        this.defaultLakeDatasetGuard = defaultLakeDatasetGuard;
     }
 
     // ── Public CRUD operations ─────────────────────────────────────────
@@ -383,6 +391,7 @@ public class ModelingSqlModelService {
 
     InfraDataSource resolveSource(UUID sourceId, String activeDeptHeader) {
         InfraDataSource source = resolveSourceEntity(sourceId).orElseThrow(() -> new EntityNotFoundException("来源数据源不存在"));
+        assertDefaultLakeSource(sourceId);
         String activeDept = security.resolveActiveDept(activeDeptHeader);
         boolean instituteScope = security.hasInstituteScope();
         if (!isOwnerDeptVisible(source.getOwnerDept(), activeDept, instituteScope)) {
@@ -710,6 +719,9 @@ public class ModelingSqlModelService {
             sourceId = resolveFallbackSourceId(activeDeptHeader);
         }
         if (sourceId == null) {
+            if (defaultLakeDatasetGuard != null) {
+                throw new IllegalArgumentException("未识别默认数据湖数据源，请先在管理端配置默认数据湖并确认平台已映射本地数据源");
+            }
             throw new IllegalArgumentException("来源数据源不存在，请先配置可用数据源");
         }
 
@@ -803,6 +815,9 @@ public class ModelingSqlModelService {
     }
 
     private UUID resolveFallbackSourceId(String activeDeptHeader) {
+        if (defaultLakeDatasetGuard != null) {
+            return defaultLakeDatasetGuard.currentDefaultLakeSourceId().orElse(null);
+        }
         List<InfraDataSource> candidates = dataSourceRepository.findByStatusIgnoreCase(STATUS_ACTIVE);
         if (candidates == null || candidates.isEmpty()) {
             candidates = dataSourceRepository.findAll();
@@ -829,6 +844,16 @@ public class ModelingSqlModelService {
             }
         }
         return bestId;
+    }
+
+    private void assertDefaultLakeSource(UUID sourceId) {
+        if (defaultLakeDatasetGuard == null) {
+            return;
+        }
+        defaultLakeDatasetGuard.requireDefaultLakeSource(
+            sourceId,
+            "数仓建模仅允许使用默认数据湖数据源，请先将外部数据源入湖到 ODS 后再进行建模分析"
+        );
     }
 
     private UUID resolveUsableSourceId(UUID sourceId, String activeDeptHeader) {

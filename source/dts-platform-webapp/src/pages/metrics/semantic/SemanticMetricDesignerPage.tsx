@@ -21,18 +21,21 @@ import {
 	updateSemanticMetric,
 } from "@/api/semanticModelingApi";
 import { SemanticSectionNav } from "./SemanticSectionNav";
-import { asArray, isDwdSemanticInput, semanticSectionMeta } from "./semanticModelingShared";
+import {
+	buildDefaultMetricFormula,
+	buildMetricFormulaTemplate,
+	isDwdSemanticDataset,
+	normalizeSemanticDataset,
+	safeSemanticCode,
+	type MetricFormulaAggregation,
+	type MetricFormulaType,
+	type SemanticDatasetOption,
+} from "./semanticModeling.helpers";
+import { asArray, semanticSectionMeta } from "./semanticModelingShared";
 
 const { Text } = Typography;
 
-type DatasetOption = {
-	id: string;
-	name: string;
-	table?: string;
-	layer?: string;
-	database?: string;
-	schema?: string;
-};
+type DatasetOption = SemanticDatasetOption;
 
 type DragFieldPayload = {
 	id?: string;
@@ -41,28 +44,25 @@ type DragFieldPayload = {
 	tableName?: string;
 };
 
-const normalizeDataset = (item: any): DatasetOption => ({
-	id: String(item.id || item.key || item.name || item.tableName || item.hiveTable),
-	name: String(item.name || item.displayName || item.hiveTable || item.tableName || item.id || ""),
-	table: String(item.hiveTable || item.tableName || item.name || ""),
-	layer: String(item.warehouseLayer || item.layer || ""),
-	database: String(item.databaseName || item.database || ""),
-	schema: String(item.schemaName || item.schema || ""),
-});
+const metricFormulaTypes: MetricFormulaType[] = ["sum", "count", "count_distinct", "avg", "max", "min", "count_if", "sum_if", "ratio"];
+const metricAggregationTypes: MetricFormulaAggregation[] = ["sum", "count", "count_distinct", "avg", "max", "min"];
+const conditionOperators = ["=", "!=", ">", ">=", "<", "<="];
 
-const safeCode = (value: string) =>
-	value
-		.trim()
-		.replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-		.replace(/[^a-zA-Z0-9_]+/g, "_")
-		.replace(/^_+|_+$/g, "")
-		.toLowerCase();
-
-const isNumericField = (field: DragFieldPayload) => {
-	const dataType = (field.dataType || "").toLowerCase();
-	return ["int", "integer", "bigint", "smallint", "decimal", "numeric", "number", "double", "float", "real"].some((item) =>
-		dataType.includes(item),
-	);
+const stripMetricFormulaDraft = (values: any) => {
+	const {
+		formulaField,
+		conditionField,
+		conditionOperator,
+		conditionValue,
+		formulaDistinct,
+		numeratorField,
+		numeratorAggregation,
+		denominatorField,
+		denominatorAggregation,
+		formulaMultiply,
+		...payload
+	} = values;
+	return payload;
 };
 
 export default function SemanticMetricDesignerPage() {
@@ -85,6 +85,8 @@ export default function SemanticMetricDesignerPage() {
 	const [editingMetric, setEditingMetric] = useState<SemanticMetric | null>(null);
 	const [detailDimension, setDetailDimension] = useState<SemanticDimension | null>(null);
 	const [detailMetric, setDetailMetric] = useState<SemanticMetric | null>(null);
+	const metricFormulaType = Form.useWatch("formulaType", form) as MetricFormulaType | undefined;
+	const metricFormulaJson = Form.useWatch("formulaJson", form) as string | undefined;
 
 	const loadSemanticData = () => {
 		setLoading(true);
@@ -103,7 +105,7 @@ export default function SemanticMetricDesignerPage() {
 	const loadDatasets = () => {
 		setDatasetsLoading(true);
 		listDatasets({ page: 0, size: 120 })
-			.then((resp: any) => setDatasets(asArray<any>(resp).map(normalizeDataset)))
+			.then((resp: any) => setDatasets(asArray<any>(resp).map(normalizeSemanticDataset)))
 			.catch(() => setDatasets([]))
 			.finally(() => setDatasetsLoading(false));
 	};
@@ -114,7 +116,7 @@ export default function SemanticMetricDesignerPage() {
 	}, []);
 
 	const dwdDatasets = useMemo(
-		() => datasets.filter(isDwdSemanticInput),
+		() => datasets.filter(isDwdSemanticDataset),
 		[datasets],
 	);
 
@@ -137,6 +139,23 @@ export default function SemanticMetricDesignerPage() {
 		() => selectedObjectId ? metrics.filter((item) => item.objectId === selectedObjectId) : metrics,
 		[metrics, selectedObjectId],
 	);
+
+	const formulaFieldOptions = useMemo(
+		() => datasetFields.map((field) => ({
+			label: `${field.name}${field.comment ? ` / ${field.comment}` : ""}`,
+			value: field.name,
+		})),
+		[datasetFields],
+	);
+
+	const formattedFormulaJson = useMemo(() => {
+		if (!metricFormulaJson) return "";
+		try {
+			return JSON.stringify(JSON.parse(metricFormulaJson), null, 2);
+		} catch {
+			return metricFormulaJson;
+		}
+	}, [metricFormulaJson]);
 
 	useEffect(() => {
 		if (!selectedDataset?.id) {
@@ -186,7 +205,7 @@ export default function SemanticMetricDesignerPage() {
 		setSaving(true);
 		try {
 			for (const field of draftDimensions) {
-				const code = safeCode(field.name);
+				const code = safeSemanticCode(field.name);
 				const duplicated = dimensions.some((item) => item.objectId === selectedObjectId && (item.fieldName === field.name || item.code === code));
 				if (duplicated) continue;
 				await createSemanticDimension({
@@ -218,17 +237,17 @@ export default function SemanticMetricDesignerPage() {
 		setSaving(true);
 		try {
 			for (const field of draftMetrics) {
-				const code = safeCode(field.name);
+				const code = safeSemanticCode(field.name);
 				const duplicated = metrics.some((item) => item.objectId === selectedObjectId && (item.code === code || item.name === field.name));
 				if (duplicated) continue;
-				const formulaType = isNumericField(field) ? "sum" : "count_distinct";
+				const formula = buildDefaultMetricFormula(field);
 				await createSemanticMetric({
 					objectId: selectedObjectId,
 					code,
 					name: field.name,
-					formulaType,
-					formulaJson: JSON.stringify({ type: formulaType, field: field.name }),
-					format: isNumericField(field) ? "number" : "integer",
+					formulaType: formula.formulaType,
+					formulaJson: formula.formulaJson,
+					format: formula.format,
 				});
 			}
 			setDraftMetrics([]);
@@ -294,6 +313,15 @@ export default function SemanticMetricDesignerPage() {
 		[draftMetrics],
 	);
 
+	const draftMetricFormulaPreview = useMemo(
+		() =>
+			draftMetrics.map((field) => ({
+				name: field.name,
+				...buildDefaultMetricFormula(field),
+			})),
+		[draftMetrics],
+	);
+
 	const dimensionBaseColumns: ColumnsType<SemanticDimension> = [
 		{ title: "维度", dataIndex: "name" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 		{ title: "字段", dataIndex: "fieldName", render: (value) => value || "-" },
@@ -345,7 +373,8 @@ export default function SemanticMetricDesignerPage() {
 		form.resetFields();
 		setEditingDimension(type === "dimension" ? (row as SemanticDimension | undefined) || null : null);
 		setEditingMetric(type === "metric" ? (row as SemanticMetric | undefined) || null : null);
-		form.setFieldsValue(row ? row : { objectId: selectedObjectId });
+		const initialValues = row ? row : { objectId: selectedObjectId };
+		form.setFieldsValue(type === "metric" && !row ? { ...initialValues, formulaType: "sum", format: "number" } : initialValues);
 		setModalType(type);
 	};
 
@@ -365,14 +394,43 @@ export default function SemanticMetricDesignerPage() {
 				else await createSemanticDimension(values);
 			}
 			if (modalType === "metric") {
-				if (editingMetric?.id) await updateSemanticMetric(editingMetric.id, values);
-				else await createSemanticMetric(values);
+				const payload = stripMetricFormulaDraft(values);
+				if (editingMetric?.id) await updateSemanticMetric(editingMetric.id, payload);
+				else await createSemanticMetric(payload);
 			}
 			message.success("已保存");
 			closeModal();
 			loadSemanticData();
 		} finally {
 			setSaving(false);
+		}
+	};
+
+	const applyMetricFormulaTemplate = () => {
+		const values = form.getFieldsValue();
+		const formulaMultiply = Number(values.formulaMultiply);
+		try {
+			const formula = buildMetricFormulaTemplate({
+				formulaType: values.formulaType,
+				field: values.formulaField,
+				conditionField: values.conditionField,
+				conditionOperator: values.conditionOperator,
+				conditionValue: values.conditionValue,
+				distinct: values.formulaDistinct,
+				numeratorField: values.numeratorField,
+				numeratorAggregation: values.numeratorAggregation,
+				denominatorField: values.denominatorField,
+				denominatorAggregation: values.denominatorAggregation,
+				multiply: Number.isFinite(formulaMultiply) ? formulaMultiply : undefined,
+			});
+			form.setFieldsValue({
+				formulaType: formula.formulaType,
+				formulaJson: formula.formulaJson,
+				format: formula.format,
+			});
+			message.success("已生成公式 JSON");
+		} catch {
+			message.warning("请先补齐公式模板中的字段、分子分母或条件");
 		}
 	};
 
@@ -469,6 +527,19 @@ export default function SemanticMetricDesignerPage() {
 								title="拖拽到指标区"
 								extra={<Button size="small" icon={<SaveOutlined />} loading={saving} disabled={!selectedObjectId || !draftMetrics.length} onClick={saveDraftMetrics}>保存指标</Button>}
 							>
+								{draftMetricFormulaPreview.length ? (
+									<Alert
+										type="success"
+										showIcon
+										className="mb-3"
+										message="默认指标公式"
+										description={
+											<pre className="m-0 max-h-24 overflow-auto text-xs">
+												{JSON.stringify(draftMetricFormulaPreview, null, 2)}
+											</pre>
+										}
+									/>
+								) : null}
 								<VisualFlowCanvas
 									nodes={draftMetricNodes}
 									height={260}
@@ -552,9 +623,87 @@ export default function SemanticMetricDesignerPage() {
 							<Form.Item name="formulaType" label="公式类型">
 								<Select
 									allowClear
-									options={["sum", "count", "count_distinct", "avg", "count_if", "sum_if", "ratio"].map((item) => ({ label: item, value: item }))}
+									options={metricFormulaTypes.map((item) => ({ label: item, value: item }))}
 								/>
 							</Form.Item>
+							<Card size="small" title="可视化公式模板" className="mb-4">
+								<Space direction="vertical" className="w-full">
+									{metricFormulaType === "ratio" ? (
+										<Row gutter={12}>
+											<Col span={12}>
+												<Form.Item name="numeratorField" label="分子字段">
+													<Select allowClear showSearch optionFilterProp="label" options={formulaFieldOptions} />
+												</Form.Item>
+											</Col>
+											<Col span={12}>
+												<Form.Item name="denominatorField" label="分母字段">
+													<Select allowClear showSearch optionFilterProp="label" options={formulaFieldOptions} />
+												</Form.Item>
+											</Col>
+											<Col span={12}>
+												<Form.Item name="numeratorAggregation" label="分子聚合" initialValue="sum">
+													<Select options={metricAggregationTypes.map((item) => ({ label: item, value: item }))} />
+												</Form.Item>
+											</Col>
+											<Col span={12}>
+												<Form.Item name="denominatorAggregation" label="分母聚合" initialValue="sum">
+													<Select options={metricAggregationTypes.map((item) => ({ label: item, value: item }))} />
+												</Form.Item>
+											</Col>
+											<Col span={12}>
+												<Form.Item name="formulaMultiply" label="倍数" initialValue={100}>
+													<Input />
+												</Form.Item>
+											</Col>
+										</Row>
+									) : (
+										<Row gutter={12}>
+											<Col span={12}>
+												<Form.Item name="formulaField" label="来源字段">
+													<Select allowClear showSearch optionFilterProp="label" options={formulaFieldOptions} />
+												</Form.Item>
+											</Col>
+											{metricFormulaType === "count_if" ? (
+												<Col span={12}>
+													<Form.Item name="formulaDistinct" label="去重计数" initialValue={true}>
+														<Select options={[{ label: "是", value: true }, { label: "否", value: false }]} />
+													</Form.Item>
+												</Col>
+											) : null}
+										</Row>
+									)}
+									{metricFormulaType === "count_if" || metricFormulaType === "sum_if" ? (
+										<Row gutter={12}>
+											<Col span={10}>
+												<Form.Item name="conditionField" label="条件字段">
+													<Select allowClear showSearch optionFilterProp="label" options={formulaFieldOptions} />
+												</Form.Item>
+											</Col>
+											<Col span={6}>
+												<Form.Item name="conditionOperator" label="条件" initialValue="=">
+													<Select options={conditionOperators.map((item) => ({ label: item, value: item }))} />
+												</Form.Item>
+											</Col>
+											<Col span={8}>
+												<Form.Item name="conditionValue" label="条件值">
+													<Input />
+												</Form.Item>
+											</Col>
+										</Row>
+									) : null}
+									<Button size="small" icon={<FunctionOutlined />} onClick={applyMetricFormulaTemplate}>
+										生成公式 JSON
+									</Button>
+									{formattedFormulaJson ? (
+										<Alert
+											type="success"
+											showIcon
+											message="公式预览"
+											description={<pre className="m-0 max-h-32 overflow-auto text-xs">{formattedFormulaJson}</pre>}
+										/>
+									) : null}
+								</Space>
+							</Card>
 							<Form.Item name="formulaJson" label="公式 JSON">
 								<Input.TextArea rows={4} />
 							</Form.Item>
