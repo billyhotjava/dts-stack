@@ -76,9 +76,16 @@ export function DesignerCanvas() {
         };
 
         updateFitScale();
+        const resizeObserver = typeof ResizeObserver !== 'undefined'
+            ? new ResizeObserver(onResize)
+            : null;
+        if (node && resizeObserver) {
+            resizeObserver.observe(node);
+        }
         window.addEventListener('resize', onResize);
         return () => {
             window.removeEventListener('resize', onResize);
+            resizeObserver?.disconnect();
             cancelAnimationFrame(rafId);
         };
     }, [config.width, config.height]);

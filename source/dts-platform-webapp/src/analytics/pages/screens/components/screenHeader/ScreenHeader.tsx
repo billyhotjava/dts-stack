@@ -25,6 +25,13 @@ import { toast } from 'sonner';
 import { buildExploreSessionSteps } from '../ScreenHeader.helpers';
 import { buildScreenPayload, normalizeScreenConfig, validateScreenPayload } from '../../screenSpec';
 import { commitScreenPageDraft, materializeScreenPage } from '../../screenPageState';
+import {
+    buildScreenDraftRecoveryKey,
+    clearScreenDraftRecovery,
+    hasScreenDraftChanges,
+    readScreenDraftRecovery,
+    saveScreenDraftRecovery,
+} from '../../screenDraftRecovery';
 import { resolveScreenTheme, applyThemeToComponents, getThemeTokens, type ThemeComponentApplyMode } from '../../screenThemes';
 import type { ScreenTheme } from '../../types';
 import { LinkageGraphPanel } from '../LinkageGraphPanel';
@@ -91,6 +98,19 @@ export function ScreenHeader({
         () => commitScreenPageDraft(config, currentPageIndex),
         [config, currentPageIndex],
     );
+    const baselineConfigForCurrentPage = useMemo(
+        () => materializeScreenPage(state.baselineConfig, currentPageIndex),
+        [currentPageIndex, state.baselineConfig],
+    );
+    const hasUnsavedChanges = useMemo(
+        () => hasScreenDraftChanges(baselineConfigForCurrentPage, persistedConfig),
+        [baselineConfigForCurrentPage, persistedConfig],
+    );
+    const draftRecoveryKey = useMemo(
+        () => buildScreenDraftRecoveryKey(id || config.id || 'new'),
+        [config.id, id],
+    );
+    const recoveryPromptedKeyRef = useRef<string | null>(null);
     // DEBUG: expose live config on window so we can inspect in Console.
     useEffect(() => {
         (window as any)._dtsScreenState = {
@@ -335,6 +355,80 @@ export function ScreenHeader({
         setEditorReadonly(lockedByOther);
         return () => setEditorReadonly(false);
     }, [lockedByOther, setEditorReadonly]);
+
+    useEffect(() => {
+        if (!hasUnsavedChanges || lockedByOther) {
+            return;
+        }
+        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+            event.preventDefault();
+            event.returnValue = '';
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [hasUnsavedChanges, lockedByOther]);
+
+    useEffect(() => {
+        if (lockedByOther) {
+            return;
+        }
+        if (!hasUnsavedChanges) {
+            try {
+                clearScreenDraftRecovery(draftRecoveryKey);
+            } catch {
+                // ignore local cache failures
+            }
+            return;
+        }
+        const timer = window.setTimeout(() => {
+            try {
+                saveScreenDraftRecovery(draftRecoveryKey, {
+                    screenId: String(id || config.id || 'new'),
+                    savedAt: Date.now(),
+                    config: persistedConfig,
+                });
+            } catch {
+                // ignore quota/private-mode failures
+            }
+        }, 800);
+        return () => window.clearTimeout(timer);
+    }, [config.id, draftRecoveryKey, hasUnsavedChanges, id, lockedByOther, persistedConfig]);
+
+    useEffect(() => {
+        const isExistingScreenReady = !id || String(config.id || '') === String(id);
+        if (!isExistingScreenReady || lockedByOther || hasUnsavedChanges) {
+            return;
+        }
+        if (recoveryPromptedKeyRef.current === draftRecoveryKey) {
+            return;
+        }
+        recoveryPromptedKeyRef.current = draftRecoveryKey;
+        let recovered;
+        try {
+            recovered = readScreenDraftRecovery(draftRecoveryKey);
+        } catch {
+            clearScreenDraftRecovery(draftRecoveryKey);
+            return;
+        }
+        if (!recovered || !hasScreenDraftChanges(persistedConfig, recovered.config)) {
+            clearScreenDraftRecovery(draftRecoveryKey);
+            return;
+        }
+        const savedAt = new Date(recovered.savedAt).toLocaleString();
+        Modal.confirm({
+            title: '发现未保存的本地草稿',
+            content: `检测到 ${savedAt} 自动保存的编辑内容，是否恢复到编辑器？`,
+            okText: '恢复草稿',
+            cancelText: '丢弃草稿',
+            onOk: () => {
+                updateConfig(recovered.config);
+                toast.success('已恢复本地草稿');
+            },
+            onCancel: () => {
+                clearScreenDraftRecovery(draftRecoveryKey);
+            },
+        });
+    }, [config.id, draftRecoveryKey, hasUnsavedChanges, id, lockedByOther, persistedConfig, updateConfig]);
 
     useEffect(() => {
         if (!id || typeof window === 'undefined') {
@@ -637,10 +731,12 @@ export function ScreenHeader({
                 const synced = materializeScreenPage({ ...normalized.config, theme: resolvedTheme }, currentPageIndex);
                 updateConfig(synced);
                 markBaseline(synced);
+                clearScreenDraftRecovery(draftRecoveryKey);
                 return id;
             }
 
             const result = await analyticsApi.createScreen(payload);
+            clearScreenDraftRecovery(draftRecoveryKey);
             if (result.id) {
                 navigate(`/bi/screens/${result.id}/edit`, { replace: true });
             }
@@ -648,7 +744,7 @@ export function ScreenHeader({
         } finally {
             setIsSaving(false);
         }
-    }, [currentPageIndex, id, isSaving, markBaseline, navigate, persistedConfig, setIsSaving, state.baselineConfig, updateConfig]);
+    }, [currentPageIndex, draftRecoveryKey, id, isSaving, markBaseline, navigate, persistedConfig, setIsSaving, state.baselineConfig, updateConfig]);
 
     const handleLockHttpError = useCallback((error: unknown, fallbackMessage: string): string => {
         if (error instanceof HttpError && error.code === 'SCREEN_EDIT_LOCKED') {
@@ -1369,6 +1465,9 @@ export function ScreenHeader({
     }, [config, exploreSessionForm]);
 
     const handleBack = () => {
+        if (hasUnsavedChanges && !window.confirm('当前大屏有未保存改动，确认返回列表并放弃这些改动？')) {
+            return;
+        }
         navigate('/bi/screens');
     };
 
@@ -1656,6 +1755,19 @@ export function ScreenHeader({
                             ) : (
                                 <span className="text-base font-semibold text-[var(--color-text-primary)] cursor-pointer px-2 py-1 rounded transition-[background] duration-200 max-w-[min(42vw,420px)] overflow-hidden text-ellipsis whitespace-nowrap hover:bg-[var(--color-surface-hover)]" onClick={handleNameClick} title="点击编辑名称">
                                     {config.name}
+                                </span>
+                            )}
+                            {hasUnsavedChanges && (
+                                <span
+                                    className="ml-1 shrink-0 rounded border px-1.5 py-0.5 text-[11px]"
+                                    style={{
+                                        color: '#fbbf24',
+                                        borderColor: 'rgba(251,191,36,0.45)',
+                                        background: 'rgba(251,191,36,0.10)',
+                                    }}
+                                    title="当前大屏存在未保存改动，本地恢复点会自动更新"
+                                >
+                                    未保存
                                 </span>
                             )}
                         </div>
