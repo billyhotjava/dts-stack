@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.web.rest.errors;
 
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.dao.ConcurrencyFailureException;
@@ -45,6 +46,11 @@ public class ExceptionTranslatorTestController {
     @GetMapping("/response-status")
     public void exceptionWithResponseStatus() {
         throw new TestResponseStatusException();
+    }
+
+    @GetMapping("/entity-not-found")
+    public void entityNotFound() {
+        throw new EntityNotFoundException("test entity not found!");
     }
 
     @GetMapping("/internal-server-error")

@@ -103,3 +103,8 @@ management:
   health:
     mail:
       enabled: false
+
+# Dummy signing secret for IT bootstrap — production sets DATA_STANDARD_ENCRYPTION_KEY.
+# Both PkiSessionTicketService and PortalSessionCookieService fall back to this key,
+# so without it every IT context refresh fails on bean instantiation.
+DATA_STANDARD_ENCRYPTION_KEY: dGVzdC1pbnRlZ3JhdGlvbi1lbmNyeXB0aW9uLWtleS1ub3QtZm9yLXByb2R1Y3Rpb24=

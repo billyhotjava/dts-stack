@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.web.rest.errors;
 
 import static org.springframework.core.annotation.AnnotatedElementUtils.findMergedAnnotation;
 
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.util.Arrays;
@@ -208,6 +209,11 @@ public class ExceptionTranslator extends ResponseEntityExceptionHandler {
         if (err instanceof AccessDeniedException) return HttpStatus.FORBIDDEN;
         if (err instanceof ConcurrencyFailureException) return HttpStatus.CONFLICT;
         if (err instanceof BadCredentialsException) return HttpStatus.UNAUTHORIZED;
+        // jakarta.persistence.EntityNotFoundException carries no @ResponseStatus and is
+        // not in Spring's default mapping table, so without this it falls through to 500.
+        // Services across the codebase (SqlIdeTabServiceImpl, ModelingAuxResource, …)
+        // throw it expecting a 404 to reach the client.
+        if (err instanceof EntityNotFoundException) return HttpStatus.NOT_FOUND;
         return null;
     }
 

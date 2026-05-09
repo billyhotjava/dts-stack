@@ -99,6 +99,17 @@ class ExceptionTranslatorIT {
     }
 
     @Test
+    void testEntityNotFound() throws Exception {
+        mockMvc
+            .perform(get("/api/exception-translator-test/entity-not-found").with(csrf()))
+            .andExpect(status().isNotFound())
+            .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.message").value("error.http.404"))
+            .andExpect(jsonPath("$.title").value("Not Found"))
+            .andExpect(jsonPath("$.detail").value("test entity not found!"));
+    }
+
+    @Test
     void testExceptionWithResponseStatus() throws Exception {
         mockMvc
             .perform(get("/api/exception-translator-test/response-status").with(csrf()))
