@@ -19,7 +19,7 @@ type ContextMenuState = {
 } | null;
 
 export function DesignerCanvas() {
-    const { state, addComponent, selectComponents, snapGuides, dispatch, deleteComponents, copyComponents, pasteComponents, duplicateSelected, undo, redo, clipboard } = useScreen();
+    const { state, addComponent, selectComponents, snapGuides, dispatch, deleteComponents, copyComponents, pasteComponents, duplicateSelected, undo, redo, clipboard, editorReadonly } = useScreen();
     const { config, selectedIds, zoom, showGrid } = state;
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLDivElement>(null);
@@ -107,6 +107,9 @@ export function DesignerCanvas() {
     const [{ isOver }, drop] = useDrop(() => ({
         accept: 'COMPONENT',
         drop: (item: ComponentItem, monitor) => {
+            if (editorReadonly) {
+                return;
+            }
             const offset = monitor.getClientOffset();
             const canvasRect = canvasRef.current?.getBoundingClientRect();
 
@@ -174,7 +177,7 @@ export function DesignerCanvas() {
         collect: (monitor) => ({
             isOver: monitor.isOver(),
         }),
-    }), [zoom, fitScale, addComponent]);
+    }), [zoom, fitScale, addComponent, editorReadonly]);
 
     const handleCanvasClick = useCallback((e: React.MouseEvent) => {
         // Deselect all when clicking on empty canvas area
@@ -356,17 +359,17 @@ export function DesignerCanvas() {
                 >
                     {ctxMenu.componentId && selectedIds.length > 0 ? (
                         <>
-                            <button type="button" className="ctx-menu-item" onClick={() => { duplicateSelected(); closeMenu(); }}>
+                            <button type="button" className="ctx-menu-item" onClick={() => { duplicateSelected(); closeMenu(); }} disabled={editorReadonly}>
                                 复制组件
                             </button>
                             <button type="button" className="ctx-menu-item" onClick={() => { copyComponents(); closeMenu(); }}>
                                 拷贝 (Ctrl+C)
                             </button>
-                            <button type="button" className="ctx-menu-item" onClick={() => { deleteComponents(selectedIds); closeMenu(); }}>
+                            <button type="button" className="ctx-menu-item" onClick={() => { deleteComponents(selectedIds); closeMenu(); }} disabled={editorReadonly}>
                                 删除
                             </button>
                             <div className="ctx-menu-divider" />
-                            <button type="button" className="ctx-menu-item" onClick={() => {
+                            <button type="button" className="ctx-menu-item" disabled={editorReadonly} onClick={() => {
                                 selectedIds.forEach(id => {
                                     const c = config.components.find(c => c.id === id);
                                     if (c) dispatch({ type: 'REORDER_LAYER', payload: { id, direction: 'top' } });
@@ -375,7 +378,7 @@ export function DesignerCanvas() {
                             }}>
                                 置顶
                             </button>
-                            <button type="button" className="ctx-menu-item" onClick={() => {
+                            <button type="button" className="ctx-menu-item" disabled={editorReadonly} onClick={() => {
                                 selectedIds.forEach(id => {
                                     dispatch({ type: 'REORDER_LAYER', payload: { id, direction: 'bottom' } });
                                 });
@@ -384,7 +387,7 @@ export function DesignerCanvas() {
                                 置底
                             </button>
                             <div className="ctx-menu-divider" />
-                            <button type="button" className="ctx-menu-item" onClick={() => {
+                            <button type="button" className="ctx-menu-item" disabled={editorReadonly} onClick={() => {
                                 selectedIds.forEach(id => {
                                     const c = config.components.find(c => c.id === id);
                                     if (c) {
@@ -395,7 +398,7 @@ export function DesignerCanvas() {
                             }}>
                                 {config.components.find(c => c.id === selectedIds[0])?.locked ? '解锁' : '锁定'}
                             </button>
-                            <button type="button" className="ctx-menu-item" onClick={() => {
+                            <button type="button" className="ctx-menu-item" disabled={editorReadonly} onClick={() => {
                                 selectedIds.forEach(id => {
                                     const c = config.components.find(c => c.id === id);
                                     if (c) {
@@ -409,14 +412,14 @@ export function DesignerCanvas() {
                         </>
                     ) : (
                         <>
-                            <button type="button" className="ctx-menu-item" onClick={() => { pasteComponents(); closeMenu(); }} disabled={!clipboard?.length}>
+                            <button type="button" className="ctx-menu-item" onClick={() => { pasteComponents(); closeMenu(); }} disabled={!clipboard?.length || editorReadonly}>
                                 粘贴 (Ctrl+V)
                             </button>
                             <div className="ctx-menu-divider" />
-                            <button type="button" className="ctx-menu-item" onClick={() => { undo(); closeMenu(); }}>
+                            <button type="button" className="ctx-menu-item" onClick={() => { undo(); closeMenu(); }} disabled={editorReadonly}>
                                 撤销 (Ctrl+Z)
                             </button>
-                            <button type="button" className="ctx-menu-item" onClick={() => { redo(); closeMenu(); }}>
+                            <button type="button" className="ctx-menu-item" onClick={() => { redo(); closeMenu(); }} disabled={editorReadonly}>
                                 重做 (Ctrl+Y)
                             </button>
                             <div className="ctx-menu-divider" />

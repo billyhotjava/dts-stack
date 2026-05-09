@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { useScreen } from '../ScreenContext';
 
 export function LayerPanel() {
-	const { state, dispatch, selectComponents } = useScreen();
+	const { state, dispatch, selectComponents, editorReadonly } = useScreen();
 	const { config, selectedIds } = state;
 	const [keyword, setKeyword] = useState('');
 	const [bulkAction, setBulkAction] = useState<'show' | 'hide' | 'lock' | 'unlock' | 'top' | 'bottom'>('show');
@@ -79,23 +79,30 @@ export function LayerPanel() {
 	};
 
 	const handleReorder = (id: string, direction: 'up' | 'down' | 'top' | 'bottom') => {
+		if (editorReadonly) return;
 		dispatch({ type: 'REORDER_LAYER', payload: { id, direction } });
 	};
 
 	const handleVisibilityToggle = (id: string, visible: boolean) => {
+		if (editorReadonly) return;
 		dispatch({ type: 'UPDATE_COMPONENT', payload: { id, updates: { visible: !visible } } });
 	};
 
 	const handleLockToggle = (id: string, locked: boolean) => {
+		if (editorReadonly) return;
 		dispatch({ type: 'UPDATE_COMPONENT', payload: { id, updates: { locked: !locked } } });
 	};
 
 	const handleDragStart = useCallback((e: React.DragEvent, id: string) => {
+		if (editorReadonly) {
+			e.preventDefault();
+			return;
+		}
 		dragSourceId.current = id;
 		e.dataTransfer.effectAllowed = 'move';
 		e.dataTransfer.setData('text/plain', id);
 		(e.currentTarget as HTMLElement).style.opacity = '0.4';
-	}, []);
+	}, [editorReadonly]);
 
 	const handleDragEnd = useCallback((e: React.DragEvent) => {
 		(e.currentTarget as HTMLElement).style.opacity = '1';
@@ -113,6 +120,7 @@ export function LayerPanel() {
 
 	const handleDrop = useCallback((e: React.DragEvent, targetId: string) => {
 		e.preventDefault();
+		if (editorReadonly) return;
 		setDragOverId(null);
 		const sourceId = dragSourceId.current;
 		if (!sourceId || sourceId === targetId) return;
@@ -127,7 +135,7 @@ export function LayerPanel() {
 			zIndex: sorted.length - i,
 		}));
 		dispatch({ type: 'SET_CONFIG', payload: { ...config, components: nextComponents } });
-	}, [config, dispatch]);
+	}, [config, dispatch, editorReadonly]);
 
 	const getComponentIcon = (type: string): string => {
 		const iconMap: Record<string, string> = {
@@ -176,6 +184,7 @@ export function LayerPanel() {
 	}, [layered, normalizedKeyword]);
 
 	const applySelectedUpdates = (updates: Partial<typeof config.components[number]>) => {
+		if (editorReadonly) return;
 		if (selectedIds.length === 0) return;
 		for (const id of selectedIds) {
 			dispatch({ type: 'UPDATE_COMPONENT', payload: { id, updates } });
@@ -183,6 +192,7 @@ export function LayerPanel() {
 	};
 
 	const reorderSelected = (direction: 'top' | 'bottom') => {
+		if (editorReadonly) return;
 		if (selectedIds.length === 0) return;
 		const selected = config.components
 			.filter((item) => selectedIds.includes(item.id))
@@ -197,8 +207,9 @@ export function LayerPanel() {
 		selectComponents(filteredLayered.map((item) => item.component.id));
 	};
 	const hasSelected = selectedIds.length > 0;
+	const canBulkEdit = hasSelected && !editorReadonly;
 	const executeBulkAction = () => {
-		if (!hasSelected) return;
+		if (!canBulkEdit) return;
 		if (bulkAction === 'show') {
 			applySelectedUpdates({ visible: true });
 			return;
@@ -303,11 +314,11 @@ export function LayerPanel() {
 							border: '1px solid rgba(255,255,255,0.1)',
 							background: 'rgba(255,255,255,0.06)',
 							borderRadius: 12,
-							opacity: hasSelected ? 1 : 0.45,
+							opacity: canBulkEdit ? 1 : 0.45,
 						}}
 						onClick={executeBulkAction}
 						title="执行批量动作"
-						disabled={!hasSelected}
+						disabled={!canBulkEdit}
 					>
 						执行
 					</button>
@@ -348,7 +359,7 @@ export function LayerPanel() {
 									transition: 'all 0.2s ease',
 								}}
 								onClick={(e) => handleLayerClick(component.id, e)}
-								draggable
+								draggable={!editorReadonly}
 								onDragStart={(e) => handleDragStart(e, component.id)}
 								onDragEnd={handleDragEnd}
 								onDragOver={(e) => handleDragOver(e, component.id)}
@@ -374,6 +385,7 @@ export function LayerPanel() {
 											setOpenMenuId(null);
 										}}
 										title={component.visible ? '隐藏' : '显示'}
+										disabled={editorReadonly}
 									>
 										{component.visible ? '👁️' : '👁️‍🗨️'}
 									</button>
@@ -386,6 +398,7 @@ export function LayerPanel() {
 											setOpenMenuId(null);
 										}}
 										title={component.locked ? '解锁' : '锁定'}
+										disabled={editorReadonly}
 									>
 										{component.locked ? '🔒' : '🔓'}
 									</button>
@@ -431,6 +444,7 @@ export function LayerPanel() {
 													handleReorder(component.id, 'up');
 													setOpenMenuId(null);
 												}}
+												disabled={editorReadonly}
 											>
 												上移一层
 											</button>
@@ -448,6 +462,7 @@ export function LayerPanel() {
 													handleReorder(component.id, 'down');
 													setOpenMenuId(null);
 												}}
+												disabled={editorReadonly}
 											>
 												下移一层
 											</button>
@@ -465,6 +480,7 @@ export function LayerPanel() {
 													handleReorder(component.id, 'top');
 													setOpenMenuId(null);
 												}}
+												disabled={editorReadonly}
 											>
 												置顶图层
 											</button>
@@ -482,6 +498,7 @@ export function LayerPanel() {
 													handleReorder(component.id, 'bottom');
 													setOpenMenuId(null);
 												}}
+												disabled={editorReadonly}
 											>
 												置底图层
 											</button>

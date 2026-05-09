@@ -45,6 +45,7 @@ function ScreenDesignerContent() {
         dispatch,
         selectComponents,
         updateConfig,
+        editorReadonly,
     } = useScreen();
     const { selectedIds } = state;
     const { config } = state;
@@ -255,16 +256,19 @@ function ScreenDesignerContent() {
             // Ctrl/Cmd+Z: Undo
             if (hotkey && e.key.toLowerCase() === 'z' && !e.shiftKey) {
                 e.preventDefault();
+                if (editorReadonly) return;
                 undo();
             }
             // Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z: Redo
             if ((hotkey && e.key.toLowerCase() === 'y') || (hotkey && e.shiftKey && e.key.toLowerCase() === 'z')) {
                 e.preventDefault();
+                if (editorReadonly) return;
                 redo();
             }
             // Delete/Backspace: Delete selected
             if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length > 0) {
                 e.preventDefault();
+                if (editorReadonly) return;
                 deleteComponents(selectedIds);
             }
             // Ctrl/Cmd+C: Copy
@@ -275,11 +279,13 @@ function ScreenDesignerContent() {
             // Ctrl/Cmd+V: Paste
             if (hotkey && e.key.toLowerCase() === 'v' && clipboard.length > 0) {
                 e.preventDefault();
+                if (editorReadonly) return;
                 pasteComponents();
             }
             // Ctrl/Cmd+D: Duplicate (atomic action in reducer, no race condition)
             if (hotkey && e.key.toLowerCase() === 'd' && selectedIds.length > 0) {
                 e.preventDefault();
+                if (editorReadonly) return;
                 duplicateSelected();
             }
             // Ctrl/Cmd+A: Select all components
@@ -334,6 +340,7 @@ function ScreenDesignerContent() {
             // Arrow keys: nudge selected components (Shift = 10px)
             if ((e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') && selectedIds.length > 0) {
                 e.preventDefault();
+                if (editorReadonly) return;
                 const step = e.shiftKey ? 10 : 1;
                 const dx = e.key === 'ArrowLeft' ? -step : (e.key === 'ArrowRight' ? step : 0);
                 const dy = e.key === 'ArrowUp' ? -step : (e.key === 'ArrowDown' ? step : 0);
@@ -360,7 +367,7 @@ function ScreenDesignerContent() {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [undo, redo, deleteComponents, copyComponents, pasteComponents, duplicateSelected, selectedIds, clipboard, dispatch, selectComponents, state.config.components, state.config.height, state.config.width, state.zoom]);
+    }, [undo, redo, deleteComponents, copyComponents, pasteComponents, duplicateSelected, selectedIds, clipboard, dispatch, editorReadonly, selectComponents, state.config.components, state.config.height, state.config.width, state.zoom]);
 
     return (
         <>

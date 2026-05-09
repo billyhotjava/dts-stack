@@ -1,0 +1,226 @@
+{
+  "info": {
+    "url": "https://bi.yuzhicloud.com/#/auth/login",
+    "title": "BI数智平台",
+    "readyState": "complete",
+    "bodyText": "机密\nBI数智平台\n\n(业务端)\n\n账号\n密码\n记住我\n登录证书登录",
+    "bodyHtml": "\n    <noscript>You need to enable JavaScript to run this app.</noscript>\n    <div id=\"root\"><div class=\"css-1fuffhm ant-app\"><div class=\"sc-Qotzb cuxEXG\"><section aria-label=\"Notifications alt+T\" tabindex=\"-1\" aria-live=\"polite\" aria-relevant=\"additions text\" aria-atomic=\"false\"></section></div><div style=\"height: 100%;\"> <div class=\"relative grid min-h-screen lg:grid-cols-2 bg-background\"><div class=\"relative hidden bg-background lg:block\"><img src=\"/assets/tech-data-platform-light-D7wrD1Ue.svg\" alt=\"科技氛围大数据平台插画\" class=\"absolute inset-0 h-full w-full object-cover dark:hidden\"><img src=\"/assets/tech-data-platform-C56bEMr9.svg\" alt=\"科技氛围大数据平台插画\" class=\"absolute inset-0 h-full w-full object-cover hidden dark:block\"></div><div class=\"flex flex-col gap-4 p-6 md:p-10\"><div class=\"flex justify-center gap-2 md:justify-start\"><div class=\"flex items-center gap-3 font-medium cursor-default\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"currentColor\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-star h-8 w-8 text-red-600\"><path d=\"M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z\"></path></svg><span class=\"text-2xl font-semibold leading-tight text-foreground\">机密</span></div></div><div class=\"flex flex-1 items-center justify-center\"><div class=\"w-full max-w-xs\"><div class=\"flex flex-col gap-6\"><form class=\"space-y-4\"><div class=\"flex flex-col items-center gap-1 text-center\"><h1 class=\"text-2xl font-bold\">BI数智平台</h1><p class=\"text-sm text-muted-foreground\">(业务端)</p></div><div data-slot=\"form-item\" class=\"grid gap-2\"><label data-slot=\"form-label\" class=\"flex items-center gap-2 text-sm leading-none font-medium select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 data-[error=true]:text-destructive\" data-error=\"false\" for=\":r1:-form-item\">账号</label><input data-slot=\"form-control\" class=\"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive\" placeholder=\"请输入账号\" name=\"username\" id=\":r1:-f",
+    "scripts": [
+      {
+        "src": "https://bi.yuzhicloud.com/assets/polyfills-Bmb0gZTa.js",
+        "type": "module",
+        "nomodule": false
+      },
+      {
+        "src": "https://bi.yuzhicloud.com/assets/index-CZAYbdi-.js",
+        "type": "module",
+        "nomodule": false
+      },
+      {
+        "src": "https://bi.yuzhicloud.com/runtime-config.js",
+        "type": "",
+        "nomodule": false
+      },
+      {
+        "src": "",
+        "type": "",
+        "nomodule": false
+      }
+    ],
+    "links": [
+      {
+        "rel": "modulepreload",
+        "href": "https://bi.yuzhicloud.com/assets/vendor-core-DoZhssrG.js"
+      },
+      {
+        "rel": "modulepreload",
+        "href": "https://bi.yuzhicloud.com/assets/vendor-utils-a_GwIqY2.js"
+      },
+      {
+        "rel": "modulepreload",
+        "href": "https://bi.yuzhicloud.com/assets/vendor-ui-BRjDVfk0.js"
+      },
+      {
+        "rel": "stylesheet",
+        "href": "https://bi.yuzhicloud.com/assets/index-dvXf_7nj.css"
+      },
+      {
+        "rel": "icon",
+        "href": "https://bi.yuzhicloud.com/assets/ic-logo-badge-CznoAOYk.svg"
+      },
+      {
+        "rel": "modulepreload",
+        "href": "https://bi.yuzhicloud.com/assets/index-Doux0rlZ.js"
+      },
+      {
+        "rel": "modulepreload",
+        "href": "https://bi.yuzhicloud.com/assets/input-D-tcbNon.js"
+      }
+    ],
+    "appHtml": null,
+    "perf": [
+      {
+        "name": "https://bi.yuzhicloud.com/assets/polyfills-Bmb0gZTa.js",
+        "initiatorType": "script",
+        "duration": 416,
+        "transferSize": 140489
+      },
+      {
+        "name": "https://bi.yuzhicloud.com/assets/index-CZAYbdi-.js",
+        "initiatorType": "script",
+        "duration": 694,
+        "transferSize": 4621399
+      },
+      {
+        "name": "https://bi.yuzhicloud.com/assets/vendor-utils-a_GwIqY2.js",
+        "initiatorType": "other",
+        "duration": 417,
+        "transferSize": 106461
+      },
+      {
+        "name": "https://bi.yuzhicloud.com/assets/vendor-core-DoZhssrG.js",
+        "initiatorType": "other",
+        "duration": 419,
+        "transferSize": 226763
+      },
+      {
+        "name": "https://bi.yuzhicloud.com/assets/index-dvXf_7nj.css",
+        "initiatorType": "link",
+        "duration": 519,
+        "transferSize": 345279
+      },
+      {
+        "name": "https://bi.yuzhicloud.com/assets/vendor-ui-BRjDVfk0.js",
+        "initiatorType": "other",
+        "duration": 630,
+        "transferSize": 1300998
+      },
+      {
+        "name": "https://bi.yuzhicloud.com/runtime-config.js",
+        "initiatorType": "script",
+        "duration": 232,
+        "transferSize": 1333
+      },
+      {
+        "name": "https://bi.yuzhicloud.com/assets/index-Doux0rlZ.js",
+        "initiatorType": "script",
+        "duration": 269,
+        "transferSize": 72567
+      },
+      {
+        "name": "https://bi.yuzhicloud.com/assets/input-D-tcbNon.js",
+        "initiatorType": "script",
+        "duration": 181,
+        "transferSize": 1184
+      },
+      {
+        "name": "https://bi.yuzhicloud.com/favicon.ico",
+        "initiatorType": "other",
+        "duration": 179,
+        "transferSize": 1450
+      },
+      {
+        "name": "https://bi.yuzhicloud.com/assets/ic-logo-badge-CznoAOYk.svg",
+        "initiatorType": "other",
+        "duration": 179,
+        "transferSize": 4750
+      },
+      {
+        "name": "https://bi.yuzhicloud.com/assets/tech-data-platform-light-D7wrD1Ue.svg",
+        "initiatorType": "img",
+        "duration": 179,
+        "transferSize": 5958
+      },
+      {
+        "name": "https://bi.yuzhicloud.com/assets/tech-data-platform-C56bEMr9.svg",
+        "initiatorType": "img",
+        "duration": 179,
+        "transferSize": 5931
+      },
+      {
+        "name": "https://bi.yuzhicloud.com/api/session/status",
+        "initiatorType": "xmlhttprequest",
+        "duration": 180,
+        "transferSize": 417
+      }
+    ]
+  },
+  "events": [
+    {
+      "kind": "response",
+      "status": 200,
+      "url": "https://bi.yuzhicloud.com/",
+      "contentType": "text/html"
+    },
+    {
+      "kind": "response",
+      "status": 200,
+      "url": "https://bi.yuzhicloud.com/runtime-config.js",
+      "contentType": "application/javascript"
+    },
+    {
+      "kind": "response",
+      "status": 200,
+      "url": "https://bi.yuzhicloud.com/assets/index-dvXf_7nj.css",
+      "contentType": "text/css"
+    },
+    {
+      "kind": "response",
+      "status": 200,
+      "url": "https://bi.yuzhicloud.com/assets/polyfills-Bmb0gZTa.js",
+      "contentType": "application/javascript"
+    },
+    {
+      "kind": "response",
+      "status": 200,
+      "url": "https://bi.yuzhicloud.com/assets/vendor-utils-a_GwIqY2.js",
+      "contentType": "application/javascript"
+    },
+    {
+      "kind": "response",
+      "status": 200,
+      "url": "https://bi.yuzhicloud.com/assets/vendor-core-DoZhssrG.js",
+      "contentType": "application/javascript"
+    },
+    {
+      "kind": "response",
+      "status": 200,
+      "url": "https://bi.yuzhicloud.com/assets/vendor-ui-BRjDVfk0.js",
+      "contentType": "application/javascript"
+    },
+    {
+      "kind": "response",
+      "status": 200,
+      "url": "https://bi.yuzhicloud.com/assets/index-CZAYbdi-.js",
+      "contentType": "application/javascript"
+    },
+    {
+      "kind": "response",
+      "status": 200,
+      "url": "https://bi.yuzhicloud.com/assets/input-D-tcbNon.js",
+      "contentType": "application/javascript"
+    },
+    {
+      "kind": "response",
+      "status": 200,
+      "url": "https://bi.yuzhicloud.com/assets/index-Doux0rlZ.js",
+      "contentType": "application/javascript"
+    },
+    {
+      "kind": "console",
+      "type": "verbose",
+      "text": "[DOM] Input elements should have autocomplete attributes (suggested: \"current-password\"): (More info: https://goo.gl/9p2vKq) %o",
+      "location": {
+        "url": "https://bi.yuzhicloud.com/#/auth/login",
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "kind": "response",
+      "status": 200,
+      "url": "https://bi.yuzhicloud.com/api/session/status",
+      "contentType": "application/json"
+    }
+  ]
+}

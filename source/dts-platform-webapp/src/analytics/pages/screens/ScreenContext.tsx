@@ -397,6 +397,8 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
 interface ScreenContextValue {
     state: ScreenState;
     dispatch: React.Dispatch<ScreenAction>;
+    editorReadonly: boolean;
+    setEditorReadonly: (isReadonly: boolean) => void;
     addComponent: (component: ScreenComponent) => void;
     updateComponent: (
         id: string,
@@ -440,6 +442,7 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
     const [state, dispatch] = useReducer(screenReducer, initialState);
     const [clipboard, setClipboard] = useState<ScreenComponent[]>([]);
     const [formatSource, setFormatSource] = useState<Record<string, unknown> | null>(null);
+    const [editorReadonly, setEditorReadonly] = useState(false);
 
     const pickFormatSource = useCallback(() => {
         if (state.selectedIds.length !== 1) return;
@@ -453,6 +456,7 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
     }, [state.selectedIds, state.config.components]);
 
     const applyFormatToSelected = useCallback(() => {
+        if (editorReadonly) return;
         if (!formatSource || state.selectedIds.length === 0) return;
         for (const id of state.selectedIds) {
             const comp = state.config.components.find((c) => c.id === id);
@@ -461,39 +465,44 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
         }
         dispatch({ type: 'SNAPSHOT' });
         setFormatSource(null);
-    }, [formatSource, state.selectedIds, state.config.components, dispatch]);
+    }, [editorReadonly, formatSource, state.selectedIds, state.config.components, dispatch]);
     const [isSaving, setIsSaving] = useState(false);
     const [snapGuides, setSnapGuidesState] = useState<{ x: number[]; y: number[] }>({ x: [], y: [] });
 
     const addComponent = useCallback((component: ScreenComponent) => {
+        if (editorReadonly) return;
         dispatch({ type: 'ADD_COMPONENT', payload: component });
-    }, []);
+    }, [editorReadonly]);
 
     const updateComponent = useCallback(
         (
             id: string,
             updates: Partial<ScreenComponent> | ((prev: ScreenComponent) => Partial<ScreenComponent>),
         ) => {
+            if (editorReadonly) return;
             dispatch({ type: 'UPDATE_COMPONENT', payload: { id, updates } });
         },
-        [],
+        [editorReadonly],
     );
 
     const deleteComponents = useCallback((ids: string[]) => {
+        if (editorReadonly) return;
         dispatch({ type: 'DELETE_COMPONENTS', payload: ids });
-    }, []);
+    }, [editorReadonly]);
 
     const selectComponents = useCallback((ids: string[]) => {
         dispatch({ type: 'SELECT_COMPONENTS', payload: ids });
     }, []);
 
     const undo = useCallback(() => {
+        if (editorReadonly) return;
         dispatch({ type: 'UNDO' });
-    }, []);
+    }, [editorReadonly]);
 
     const redo = useCallback(() => {
+        if (editorReadonly) return;
         dispatch({ type: 'REDO' });
-    }, []);
+    }, [editorReadonly]);
 
     const copyComponents = useCallback(() => {
         const selectedComps = state.config.components.filter(c => state.selectedIds.includes(c.id));
@@ -503,10 +512,11 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
     }, [state.config.components, state.selectedIds]);
 
     const pasteComponents = useCallback(() => {
+        if (editorReadonly) return;
         if (clipboard.length > 0) {
             dispatch({ type: 'PASTE_COMPONENTS', payload: { components: clipboard } });
         }
-    }, [clipboard]);
+    }, [clipboard, editorReadonly]);
 
     const loadConfig = useCallback((config: ScreenConfig) => {
         dispatch({ type: 'LOAD_CONFIG', payload: config });
@@ -514,23 +524,26 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
 
     // Phase 1.3: updateConfig dispatches MERGE_CONFIG to avoid stale closure
     const updateConfig = useCallback((updates: Partial<ScreenConfig>) => {
+        if (editorReadonly) return;
         dispatch({ type: 'MERGE_CONFIG', payload: updates });
-    }, []);
+    }, [editorReadonly]);
 
     const markBaseline = useCallback((config: ScreenConfig) => {
         dispatch({ type: 'MARK_BASELINE', payload: config });
     }, []);
 
     const updateSelectedComponents = useCallback((updates: Partial<ScreenComponent>) => {
+        if (editorReadonly) return;
         if (state.selectedIds.length === 0) return;
         const idSet = new Set(state.selectedIds);
         const newComponents = state.config.components.map((comp) =>
             idSet.has(comp.id) ? { ...comp, ...updates } : comp,
         );
         dispatch({ type: 'SET_CONFIG', payload: { ...state.config, components: newComponents } });
-    }, [state.config, state.selectedIds]);
+    }, [editorReadonly, state.config, state.selectedIds]);
 
     const groupSelected = useCallback(() => {
+        if (editorReadonly) return;
         if (state.selectedIds.length < 2) return;
         const idSet = new Set(state.selectedIds);
         const groupId = generateId('grp');
@@ -538,9 +551,10 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
             idSet.has(comp.id) ? { ...comp, groupId } : comp,
         );
         dispatch({ type: 'SET_CONFIG', payload: { ...state.config, components: newComponents } });
-    }, [state.config, state.selectedIds]);
+    }, [editorReadonly, state.config, state.selectedIds]);
 
     const ungroupSelected = useCallback(() => {
+        if (editorReadonly) return;
         if (state.selectedIds.length === 0) return;
         const idSet = new Set(state.selectedIds);
         const newComponents = state.config.components.map((comp) => {
@@ -551,9 +565,10 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
             return rest;
         });
         dispatch({ type: 'SET_CONFIG', payload: { ...state.config, components: newComponents } });
-    }, [state.config, state.selectedIds]);
+    }, [editorReadonly, state.config, state.selectedIds]);
 
     const alignSelected = useCallback((mode: 'left' | 'right' | 'top' | 'bottom' | 'h-center' | 'v-center') => {
+        if (editorReadonly) return;
         const selected = state.config.components.filter((comp) => state.selectedIds.includes(comp.id));
         if (selected.length < 2) return;
 
@@ -580,9 +595,10 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
         });
 
         dispatch({ type: 'SET_CONFIG', payload: { ...state.config, components: newComponents } });
-    }, [state.config, state.selectedIds]);
+    }, [editorReadonly, state.config, state.selectedIds]);
 
     const distributeSelected = useCallback((mode: 'horizontal' | 'vertical') => {
+        if (editorReadonly) return;
         const selected = state.config.components.filter((comp) => state.selectedIds.includes(comp.id));
         if (selected.length < 3) return;
 
@@ -619,13 +635,14 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
             nextPos.has(comp.id) ? { ...comp, y: nextPos.get(comp.id) as number } : comp,
         );
         dispatch({ type: 'SET_CONFIG', payload: { ...state.config, components: newComponents } });
-    }, [state.config, state.selectedIds]);
+    }, [editorReadonly, state.config, state.selectedIds]);
 
     // Phase 4.3: atomic duplicate – no clipboard race condition
     const duplicateSelected = useCallback(() => {
+        if (editorReadonly) return;
         if (state.selectedIds.length === 0) return;
         dispatch({ type: 'DUPLICATE_COMPONENTS', payload: { sourceIds: state.selectedIds } });
-    }, [state.selectedIds]);
+    }, [editorReadonly, state.selectedIds]);
 
     const snapshotTransform = useCallback(() => {
         dispatch({ type: 'SNAPSHOT' });
@@ -649,6 +666,8 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
     const contextValue = useMemo<ScreenContextValue>(() => ({
         state,
         dispatch,
+        editorReadonly,
+        setEditorReadonly,
         addComponent,
         updateComponent,
         deleteComponents,
@@ -679,7 +698,7 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
         isSaving,
         setIsSaving,
     }), [
-        state, canUndo, canRedo, clipboard, formatSource, snapGuides, isSaving,
+        state, canUndo, canRedo, clipboard, formatSource, snapGuides, isSaving, editorReadonly,
         // useCallback refs are stable and won't trigger extra renders
         addComponent, updateComponent, deleteComponents, selectComponents,
         undo, redo, copyComponents, pasteComponents, pickFormatSource, applyFormatToSelected, loadConfig,

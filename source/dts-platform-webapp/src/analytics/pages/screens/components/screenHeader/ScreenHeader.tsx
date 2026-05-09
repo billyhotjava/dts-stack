@@ -84,6 +84,7 @@ export function ScreenHeader({
         clipboard,
         deleteComponents,
         updateSelectedComponents,
+        setEditorReadonly,
     } = useScreen();
     const { config } = state;
     const persistedConfig = useMemo(
@@ -329,6 +330,11 @@ export function ScreenHeader({
     const cycleWarnings = useMemo(() => detectInteractionCycles(config), [config]);
     const lockedByOther = !!(editLock?.active && !editLock?.mine);
     const lockOwnerText = String(editLock?.ownerName || editLock?.ownerId || '其他用户');
+
+    useEffect(() => {
+        setEditorReadonly(lockedByOther);
+        return () => setEditorReadonly(false);
+    }, [lockedByOther, setEditorReadonly]);
 
     useEffect(() => {
         if (!id || typeof window === 'undefined') {

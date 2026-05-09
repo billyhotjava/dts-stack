@@ -14,6 +14,17 @@ interface CanvasComponentProps {
 type ResizeDirection = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 const SNAP_TOLERANCE = 5;
 
+export function resolveInteractionScale(element: HTMLElement | null, designWidth: number): number {
+    if (!element || !Number.isFinite(designWidth) || designWidth <= 0) {
+        return 1;
+    }
+    const renderedWidth = element.getBoundingClientRect().width;
+    if (!Number.isFinite(renderedWidth) || renderedWidth <= 0) {
+        return 1;
+    }
+    return Math.max(0.1, renderedWidth / designWidth);
+}
+
 function findSnapOffset(points: number[], candidates: number[]): { offset: number; guide: number } | null {
     let best: { offset: number; guide: number } | null = null;
     for (const point of points) {
@@ -84,7 +95,7 @@ function clampGroupDelta(
 }
 
 export function CanvasComponent({ component, isSelected, theme }: CanvasComponentProps) {
-    const { state, dispatch, selectComponents, updateComponent, snapshotTransform, setSnapGuides, clearSnapGuides } = useScreen();
+    const { state, dispatch, selectComponents, updateComponent, snapshotTransform, setSnapGuides, clearSnapGuides, editorReadonly } = useScreen();
     const { config, selectedIds } = state;
     const [isDragging, setIsDragging] = useState(false);
     const [isResizing, setIsResizing] = useState(false);
@@ -92,10 +103,12 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
     const startSize = useRef({ width: 0, height: 0 });
     const startCompPos = useRef({ x: 0, y: 0 });
     const resizeDirection = useRef<ResizeDirection | null>(null);
+    const interactionScale = useRef(1);
 
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
-        if (component.locked) return;
+        if (component.locked || editorReadonly) return;
         e.stopPropagation();
+        interactionScale.current = resolveInteractionScale(e.currentTarget as HTMLElement, component.width);
 
         const groupedIds = component.groupId
             ? config.components.filter((item) => item.groupId === component.groupId).map((item) => item.id)
@@ -118,8 +131,9 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
         );
 
         const handleMouseMove = (moveEvent: MouseEvent) => {
-            const deltaX = moveEvent.clientX - startPos.current.x;
-            const deltaY = moveEvent.clientY - startPos.current.y;
+            const scale = interactionScale.current || 1;
+            const deltaX = (moveEvent.clientX - startPos.current.x) / scale;
+            const deltaY = (moveEvent.clientY - startPos.current.y) / scale;
 
             if (moveIds.length > 1) {
                 clearSnapGuides();
@@ -205,11 +219,12 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
 
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('mouseup', handleMouseUp);
-    }, [clearSnapGuides, component.groupId, component.height, component.id, component.locked, component.width, component.x, component.y, config.components, config.height, config.width, dispatch, selectedIds, selectComponents, setSnapGuides, snapshotTransform]);
+    }, [clearSnapGuides, component.groupId, component.height, component.id, component.locked, component.width, component.x, component.y, config.components, config.height, config.width, dispatch, editorReadonly, selectedIds, selectComponents, setSnapGuides, snapshotTransform]);
 
     const handleResizeStart = useCallback((e: React.MouseEvent, direction: ResizeDirection) => {
-        if (component.locked) return;
+        if (component.locked || editorReadonly) return;
         e.stopPropagation();
+        interactionScale.current = resolveInteractionScale((e.currentTarget as HTMLElement).parentElement, component.width);
 
         const groupedIds = component.groupId
             ? config.components.filter((item) => item.groupId === component.groupId).map((item) => item.id)
@@ -241,8 +256,9 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
         );
 
         const handleMouseMove = (moveEvent: MouseEvent) => {
-            const deltaX = moveEvent.clientX - startPos.current.x;
-            const deltaY = moveEvent.clientY - startPos.current.y;
+            const scale = interactionScale.current || 1;
+            const deltaX = (moveEvent.clientX - startPos.current.x) / scale;
+            const deltaY = (moveEvent.clientY - startPos.current.y) / scale;
             const dir = resizeDirection.current;
 
             if (resizeIds.length > 1) {
@@ -343,7 +359,7 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
 
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('mouseup', handleMouseUp);
-    }, [clearSnapGuides, component.groupId, component.id, component.locked, component.width, component.height, component.x, component.y, config.components, dispatch, selectComponents, snapshotTransform]);
+    }, [clearSnapGuides, component.groupId, component.id, component.locked, component.width, component.height, component.x, component.y, config.components, dispatch, editorReadonly, selectComponents, snapshotTransform]);
 
     // Stable ref for config to avoid recreating callback on every config change
     const configRef = useRef(component.config);
@@ -360,21 +376,21 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
     return (
         <div
             data-component-id={component.id}
-            className={`absolute select-none ${isSelected ? 'outline-2 outline-[var(--color-primary)] outline-offset-2' : ''} ${component.locked ? 'cursor-not-allowed' : ''}`}
+            className={`absolute select-none ${isSelected ? 'outline-2 outline-[var(--color-primary)] outline-offset-2' : ''} ${component.locked || editorReadonly ? 'cursor-not-allowed' : ''}`}
             style={{
                 left: component.x,
                 top: component.y,
                 width: component.width,
                 height: component.height,
                 zIndex: component.zIndex,
-                cursor: isDragging ? 'grabbing' : isResizing ? 'default' : (component.locked ? 'not-allowed' : 'move'),
+                cursor: isDragging ? 'grabbing' : isResizing ? 'default' : (component.locked || editorReadonly ? 'not-allowed' : 'move'),
                 ...resolveComponentAppearanceStyle(component.config),
             }}
             onMouseDown={handleMouseDown}
         >
             <ComponentRenderer component={component} mode="designer" theme={theme} onConfigMeta={handleConfigMeta} />
 
-            {isSelected && !component.locked && (
+            {isSelected && !component.locked && !editorReadonly && (
                 <>
                     {resizeHandles.map((dir) => (
                         <div

@@ -1,0 +1,187 @@
+{
+  "when": "2026-05-09T04:16:09.082Z",
+  "checks": [
+    {
+      "route": "workbench",
+      "hash": "#/workbench",
+      "ok": true,
+      "isLogin": false,
+      "blank": false,
+      "summary": {
+        "url": "https://bi.yuzhicloud.com/#/workbench",
+        "title": "BI数智平台",
+        "textLength": 921,
+        "head": "BI数智平台\n机密 (CONFIDENTIAL)\n工作台\n我的概览\n待办事项\n数据集成\n数据接入中心\n数据开发中心\n治理与资产\n数据治理中心\n数据资产门户\n运维与服务\n任务运维中心\n数据服务中心\nBI 分析\n语义与指标中心\n工作台\n搜索模块与页面\nK\nCommand Palette\n\nSearch for a command to run...\n\n本部门：信息化\n全部业务域\n本月\n执行层-技术状态与跟进明细\n项目综合看板\nGPMC 项目执行监控\nxxx质量信息与跟进措施\n项目综合看板\nGPMC 技术状态与跟进\n更多 →\n我常用的大屏\n10\n近 30 天访问过\n本月访问\n12\n我常用的资产\n414\n近 30 天访问过\n我常用的大屏\n查看全部 →\n项目综合看板\n访问 8 · 1 天前\nS3\n辅助余额大屏\n访问 1 · 1 天前\nS3\nGPMC 质量信息与跟进措施\n访问 1 · 1 天前\nS3\n0423风险与预警中心\n访问 7 · 1 天前\nS3\nGPMC 技术状态与跟进\n访问 7 · 2 天前\nS3\n辅助余额表_个人维度\n访问 6 · 2 天前\nS3\n项目经费表1\n访问 1 · 8 天前\n",
+        "headings": [
+          "Command Palette"
+        ],
+        "alerts": []
+      },
+      "newEvents": []
+    },
+    {
+      "route": "todo",
+      "hash": "#/workbench/todo",
+      "ok": true,
+      "isLogin": false,
+      "blank": false,
+      "summary": {
+        "url": "https://bi.yuzhicloud.com/#/workbench/todo",
+        "title": "BI数智平台",
+        "textLength": 1118,
+        "head": "BI数智平台\n机密 (CONFIDENTIAL)\n工作台\n我的概览\n待办事项\n数据集成\n数据接入中心\n数据开发中心\n治理与资产\n数据治理中心\n数据资产门户\n运维与服务\n任务运维中心\n数据服务中心\nBI 分析\n语义与指标中心\n工作台\n待办事项\n搜索模块与页面\nK\nCommand Palette\n\nSearch for a command to run...\n\n待办中心\n返回工作台\n刷新待办\n全部待办\n20\n工作台统一待办池\n权限审批\n0\n数据访问与授权\n质量工单\n0\n规则异常与质量核查\n结构漂移\n20\n元数据与结构变化提醒\n待办清单\n20 条\n全部\n审批入口\n质量规则\n类型\t\n事项\n\t状态\t\n时间\n\t操作\n\n \n\t\n \n\t\n \n\t\n \n\t\n \n\nSCHEMA_DRIFT\t\npublic.ods_tech_state_v2\n\tPENDING\t2026/5/9 11:20:58\t\n查看详情\n\nSCHEMA_DRIFT\t\npublic.ods_tech_state_measure_v2\n\tPENDING\t2026/5/9 11:20:58\t\n查看详情\n\nSCHEMA_DRIFT\t\npublic",
+        "headings": [
+          "Command Palette"
+        ],
+        "alerts": []
+      },
+      "newEvents": []
+    },
+    {
+      "route": "etl",
+      "hash": "#/explore/etl",
+      "ok": true,
+      "isLogin": false,
+      "blank": false,
+      "summary": {
+        "url": "https://bi.yuzhicloud.com/#/explore/etl",
+        "title": "BI数智平台",
+        "textLength": 575,
+        "head": "BI数智平台\n机密 (CONFIDENTIAL)\n工作台\n我的概览\n待办事项\n数据集成\n数据接入中心\n数据开发中心\n治理与资产\n数据治理中心\n数据资产门户\n运维与服务\n任务运维中心\n数据服务中心\nBI 分析\n语义与指标中心\n搜索模块与页面\nK\nCommand Palette\n\nSearch for a command to run...\n\nELT 控制台\n事件观测\n发布治理\n刷新\n新建任务\n近 7 天执行\n11\n成功率 9091%\n运行中\n0\n队列 0\n失败/超时\n1/0\n超时率 0%\n平均耗时\n17s\n平均排队 -\n数据源状态\ngovernance: READY\nobservability: READY\n链路态势\n血缘图谱\n数据接入\n0\n队列调度\n0\n加工转换\n0\n质量校验\n0\n血缘影响\n11\n运行诊断\n任务列表\nRUNTIME_ERROR\n1\n治理闭环\n编排与调度\n质量门禁\n影响分析\n审计证据链\n资产链路\n资产\t阶段\t责任域\t状态\t操作\n\n \n\t\n \n\t\n \n\t\n \n\t\n \n\n采集任务\t接入\tdts-ingestion\t正常\t\n详情\n进入\n\n转换模型\t加工\tdts-platform",
+        "headings": [
+          "Command Palette",
+          "ELT 控制台"
+        ],
+        "alerts": []
+      },
+      "newEvents": []
+    },
+    {
+      "route": "lineage",
+      "hash": "#/catalog/lineage",
+      "ok": true,
+      "isLogin": false,
+      "blank": false,
+      "summary": {
+        "url": "https://bi.yuzhicloud.com/#/catalog/lineage",
+        "title": "BI数智平台",
+        "textLength": 711,
+        "head": "BI数智平台\n机密 (CONFIDENTIAL)\n工作台\n数据集成\n数据接入中心\n数据开发中心\n治理与资产\n数据治理中心\n数据资产门户\n运维与服务\n任务运维中心\n数据服务中心\nBI 分析\n语义与指标中心\n数据资产门户\n血缘与影响分析\n搜索模块与页面\nK\nCommand Palette\n\nSearch for a command to run...\n\n血缘与影响分析 / 影响分析\n导出结果\n影响分析\n血缘图谱\n字段血缘\n血缘导入\n快照对比\nods_ptr_mysql_t_recovery_info_item\n双向\n深度 3\n层级过滤\n全部变更\n影响概览\n节点数\n1\n边数\n0\n变更节点\n1\n数据源\n0\n任务节点\n0\n字段血缘\n0\n方向\nBOTH\n深度\n3\n快照\n当前\n分层影响\nUNKNOWN\n1 个节点\n节点\n\t模式.表\t负责人\t最近变更\n\n \n\t\n \n\t\n \n\t\n \n\nods_ptr_mysql_t_recovery_info_item\tpublic.ods_ptr_mysql_t_recovery_info_item\tbiadmin\t2026/5/9 11:20:58\n节点与关系\n节点",
+        "headings": [
+          "Command Palette"
+        ],
+        "alerts": []
+      },
+      "newEvents": []
+    },
+    {
+      "route": "semantic",
+      "hash": "#/metrics/semantic",
+      "ok": true,
+      "isLogin": false,
+      "blank": false,
+      "summary": {
+        "url": "https://bi.yuzhicloud.com/#/metrics/semantic",
+        "title": "BI数智平台",
+        "textLength": 1163,
+        "head": "BI数智平台\n机密 (CONFIDENTIAL)\n工作台\n数据集成\n数据接入中心\n数据开发中心\n治理与资产\n数据治理中心\n数据资产门户\n运维与服务\n任务运维中心\n数据服务中心\nBI 分析\n语义与指标中心\n搜索模块与页面\nK\nCommand Palette\n\nSearch for a command to run...\n\n语义建模流程\n指标工作台\n指标字典\n语义建模流程\n主题域映射\n业务对象 Join\n指标可视化配置\nDWS/ADS 数据集\n审核发布与血缘\n模型运行监控\n设计口径\n指标可视化设计从 DWD 明细模型开始做业务对象、Join、维度和指标定义；面向 BI、大屏和 API 消费时，只发布 DWS 公共汇总模型或 ADS 应用数据集。DWD 是建模输入，不直接作为可视化消费层。\n端到端流程\n治理主题域\n优先复用治理中心主题域\nDWD 业务对象\n选择明细模型并配置 Join\n指标定义\n字段拖拽生成维度和指标\nDWS/ADS\n生成可消费数据集\n发布消费\ndbt、BI、API、血缘\n当前资产\n主题域\n6\n业务对象\n0\n指标\n0\n菜单与后端能力诊断\n3/7 READY\n指标工作台\nEMP",
+        "headings": [
+          "Command Palette",
+          "语义建模流程"
+        ],
+        "alerts": [
+          "设计口径\n指标可视化设计从 DWD 明细模型开始做业务对象、Join、维度和指标定义；面向 BI、大屏和 API 消费时，只发布 DWS 公共汇总模型或 ADS 应用数据集。DWD 是建模输入，不直接作为可视化消费层。"
+        ]
+      },
+      "newEvents": [
+        {
+          "kind": "badResponse",
+          "status": 500,
+          "url": "https://bi.yuzhicloud.com/api/semantic/metrics"
+        },
+        {
+          "kind": "console",
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 ()",
+          "url": "https://bi.yuzhicloud.com/api/semantic/metrics"
+        },
+        {
+          "kind": "badResponse",
+          "status": 500,
+          "url": "https://bi.yuzhicloud.com/api/semantic/business-objects"
+        },
+        {
+          "kind": "console",
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 ()",
+          "url": "https://bi.yuzhicloud.com/api/semantic/business-objects"
+        }
+      ]
+    },
+    {
+      "route": "screens",
+      "hash": "#/bi/screens",
+      "ok": true,
+      "isLogin": false,
+      "blank": false,
+      "summary": {
+        "url": "https://bi.yuzhicloud.com/#/bi/screens",
+        "title": "BI数智平台",
+        "textLength": 1322,
+        "head": "BI数智平台\n机密 (CONFIDENTIAL)\n工作台\n数据集成\n数据接入中心\n数据开发中心\n治理与资产\n数据治理中心\n数据资产门户\n运维与服务\n任务运维中心\n数据服务中心\nBI 分析\n语义与指标中心\nBI 分析\n数据大屏\n搜索模块与页面\nK\nCommand Palette\n\nSearch for a command to run...\n\n大屏管理\n大屏盘点\n导入 JSON\n新建大屏\n全部状态\n仅已发布\n仅未发布\n按更新时间(新→旧)\n按更新时间(旧→新)\n按名称(A→Z)\n按名称(Z→A)\n重置\n总计 10 · 已发布 5 · 未发布 5 · 当前 10\n名称\t描述\t分辨率\t密级\t状态\t更新时间\t操作\n\n项目综合看板\n\t\n一级看板：项目综合态势总览，进度为主轴 + 异常标红，核心维度：项目 + 科室。\n\t1920 × 1080\t内部\t已发布 v1\t2026/05/07 18:21\t\n查看\n编辑\n权限\n更多\n\n\n执行层-技术状态与跟进明细\n\t\n技术状态变更钻取页面，展示变更清单、状态分布及跟进措施。\n\t1920 × 1080\t内部\t已发布 v2\t2026/05/07 18:17\t\n查",
+        "headings": [
+          "Command Palette",
+          "大屏管理"
+        ],
+        "alerts": []
+      },
+      "newEvents": []
+    },
+    {
+      "route": "bi-data",
+      "hash": "#/bi/data",
+      "ok": true,
+      "isLogin": false,
+      "blank": false,
+      "summary": {
+        "url": "https://bi.yuzhicloud.com/#/bi/data",
+        "title": "BI数智平台",
+        "textLength": 567,
+        "head": "BI数智平台\n机密 (CONFIDENTIAL)\n工作台\n数据集成\n数据接入中心\n数据开发中心\n治理与资产\n数据治理中心\n数据资产门户\n运维与服务\n任务运维中心\n数据服务中心\nBI 分析\n语义与指标中心\nBI 分析\n数据管理\n搜索模块与页面\nK\nCommand Palette\n\nSearch for a command to run...\n\n数据管理\n数据湖列表\n\n平台已注册的数据源列表\n\n名称\n\t类型\t连接地址\t状态\t操作\n\n \n\t\n \n\t\n \n\t\n \n\t\n \n\nptr_mysql\tmysql\tjdbc:mysql://39.106.43.56:3307/rs_cloud_flower?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai\tACTIVE\t\n同步元数据\n查看表\n\n数据仓库 (biadmin)\tPOSTGRESQL\tjdbc:postgresql://dts-pg:5432/biadmin\tACTIVE\t\n同步元数据\n查看表\n我的上传\n\n您上传的 CSV / Exc",
+        "headings": [
+          "Command Palette",
+          "数据管理",
+          "数据湖列表",
+          "我的上传"
+        ],
+        "alerts": []
+      },
+      "newEvents": []
+    }
+  ],
+  "events": [
+    {
+      "kind": "badResponse",
+      "status": 500,
+      "url": "https://bi.yuzhicloud.com/api/semantic/metrics"
+    },
+    {
+      "kind": "console",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 ()",
+      "url": "https://bi.yuzhicloud.com/api/semantic/metrics"
+    },
+    {
+      "kind": "badResponse",
+      "status": 500,
+      "url": "https://bi.yuzhicloud.com/api/semantic/business-objects"
+    },
+    {
+      "kind": "console",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 ()",
+      "url": "https://bi.yuzhicloud.com/api/semantic/business-objects"
+    }
+  ],
+  "outDir": "Z:/opt/prod/s10/v2.2.3/reports/prod-smoke-20260509"
+}
