@@ -11,9 +11,14 @@ import { resolveScreenTheme } from './screenThemes';
 import { normalizeScreenConfig } from './screenSpec';
 import { commitScreenPageDraft, materializeScreenPage, resolveScreenPages, switchScreenPage } from './screenPageState';
 import {
+    clampSidePanelWidth,
+    getSidePanelVisibilityStorageKey,
+    getSidePanelWidthStorageKey,
     resolveInitialFocusMode,
     resolveInitialRightPanelTab,
     resolveInitialSidePanelVisibility,
+    resolveInitialSidePanelWidths,
+    type SidePanelKey,
     type RightPanelTab,
 } from './screenDesignerLayoutState';
 import {
@@ -60,6 +65,10 @@ function ScreenDesignerContent() {
     );
     const [showLibraryPanel, setShowLibraryPanel] = useState<boolean>(initialSidePanels.showLibraryPanel);
     const [showInspectorPanel, setShowInspectorPanel] = useState<boolean>(initialSidePanels.showInspectorPanel);
+    const initialSidePanelWidths = resolveInitialSidePanelWidths(
+        typeof window !== 'undefined' ? window.localStorage : undefined,
+    );
+    const [sidePanelWidths, setSidePanelWidths] = useState(initialSidePanelWidths);
     const [hasLoadedInitialState, setHasLoadedInitialState] = useState(false);
 
     useEffect(() => {
@@ -72,12 +81,43 @@ function ScreenDesignerContent() {
     }, [focusMode]);
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        window.localStorage.setItem('dts.analytics.screenDesigner.showLibraryPanel', showLibraryPanel ? 'true' : 'false');
+        window.localStorage.setItem(getSidePanelVisibilityStorageKey('library'), showLibraryPanel ? 'true' : 'false');
     }, [showLibraryPanel]);
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        window.localStorage.setItem('dts.analytics.screenDesigner.showInspectorPanel', showInspectorPanel ? 'true' : 'false');
+        window.localStorage.setItem(getSidePanelVisibilityStorageKey('inspector'), showInspectorPanel ? 'true' : 'false');
     }, [showInspectorPanel]);
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        window.localStorage.setItem(getSidePanelWidthStorageKey('library'), String(sidePanelWidths.libraryWidth));
+        window.localStorage.setItem(getSidePanelWidthStorageKey('inspector'), String(sidePanelWidths.inspectorWidth));
+    }, [sidePanelWidths]);
+
+    const handleSidePanelResizeStart = useCallback((panel: SidePanelKey, event: React.PointerEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const startX = event.clientX;
+        const startWidth = panel === 'library' ? sidePanelWidths.libraryWidth : sidePanelWidths.inspectorWidth;
+        const handleMove = (moveEvent: PointerEvent) => {
+            moveEvent.preventDefault();
+            const delta = moveEvent.clientX - startX;
+            const rawWidth = panel === 'library' ? startWidth + delta : startWidth - delta;
+            const nextWidth = clampSidePanelWidth(panel, rawWidth);
+            setSidePanelWidths((current) => (
+                panel === 'library'
+                    ? { ...current, libraryWidth: nextWidth }
+                    : { ...current, inspectorWidth: nextWidth }
+            ));
+        };
+        const handleEnd = () => {
+            window.removeEventListener('pointermove', handleMove);
+            window.removeEventListener('pointerup', handleEnd);
+            window.removeEventListener('pointercancel', handleEnd);
+        };
+        window.addEventListener('pointermove', handleMove, { passive: false });
+        window.addEventListener('pointerup', handleEnd);
+        window.addEventListener('pointercancel', handleEnd);
+    }, [sidePanelWidths.inspectorWidth, sidePanelWidths.libraryWidth]);
     // --- Multi-page management ---
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
     const [showShortcuts, setShowShortcuts] = useState(false);
@@ -390,8 +430,19 @@ function ScreenDesignerContent() {
 
                 <div className="flex flex-1 min-h-0 overflow-hidden">
                     {!focusMode && showLibraryPanel ? (
-                        <div className="designer-side-rail designer-side-rail--library flex min-h-0 overflow-hidden shrink-0 border-r border-[var(--color-border)]" style={{ width: 'clamp(280px, 18vw, 320px)', flex: '0 0 clamp(280px, 18vw, 320px)' }}>
+                        <div
+                            className="designer-side-rail designer-side-rail--library flex min-h-0 overflow-hidden shrink-0 border-r border-[var(--color-border)] relative"
+                            style={{ width: sidePanelWidths.libraryWidth, flex: `0 0 ${sidePanelWidths.libraryWidth}px` }}
+                        >
                             <ComponentLibraryPanel />
+                            <div
+                                data-testid="analytics-screen-library-resizer"
+                                role="separator"
+                                aria-orientation="vertical"
+                                aria-label="调整组件库宽度"
+                                className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-[rgba(80,158,227,0.28)]"
+                                onPointerDown={(event) => handleSidePanelResizeStart('library', event)}
+                            />
                         </div>
                     ) : null}
 
@@ -413,7 +464,18 @@ function ScreenDesignerContent() {
                     </div>
 
                     {!focusMode && showInspectorPanel ? (
-                        <div className="designer-side-rail designer-side-rail--inspector flex min-h-0 overflow-hidden shrink-0 border-l border-[var(--color-border)]" style={{ width: 'clamp(320px, 22vw, 360px)', flex: '0 0 clamp(320px, 22vw, 360px)' }}>
+                        <div
+                            className="designer-side-rail designer-side-rail--inspector flex min-h-0 overflow-hidden shrink-0 border-l border-[var(--color-border)] relative"
+                            style={{ width: sidePanelWidths.inspectorWidth, flex: `0 0 ${sidePanelWidths.inspectorWidth}px` }}
+                        >
+                            <div
+                                data-testid="analytics-screen-inspector-resizer"
+                                role="separator"
+                                aria-orientation="vertical"
+                                aria-label="调整属性面板宽度"
+                                className="absolute top-0 left-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-[rgba(80,158,227,0.28)] z-10"
+                                onPointerDown={(event) => handleSidePanelResizeStart('inspector', event)}
+                            />
                             <div className="designer-right-panel">
                                 <div className="designer-right-panel-tabs">
                                     {([

@@ -252,7 +252,26 @@ export function DesignerCanvas() {
     }, [config.height, rulerStep]);
 
     return (
-        <div className="flex-1 min-h-0 overflow-auto grid place-items-center p-10" ref={containerRef} style={{ background: 'var(--color-surface)' }}>
+        <div
+            data-testid="analytics-screen-canvas-shell"
+            className="flex-1 min-h-0 overflow-auto grid place-items-center p-10 relative"
+            ref={containerRef}
+            style={{ background: 'var(--color-surface)' }}
+        >
+            {editorReadonly && (
+                <div
+                    data-testid="analytics-screen-canvas-readonly-banner"
+                    className="absolute top-3 left-1/2 -translate-x-1/2 z-20 rounded-md border px-3 py-1.5 text-xs"
+                    style={{
+                        color: '#fbbf24',
+                        borderColor: 'rgba(251,191,36,0.38)',
+                        background: 'rgba(24,24,27,0.88)',
+                        boxShadow: '0 10px 24px rgba(0,0,0,0.24)',
+                    }}
+                >
+                    只读模式：当前大屏由其他用户编辑，画布操作已禁用。
+                </div>
+            )}
             {/* Horizontal ruler */}
             <div className="canvas-ruler canvas-ruler--h shrink-0 relative overflow-hidden h-[22px]" style={{ paddingLeft: 30, background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
                 <div style={{ position: 'relative', width: config.width * scale, height: '100%', overflow: 'hidden' }}>
@@ -283,6 +302,9 @@ export function DesignerCanvas() {
                         drop(node);
                         (canvasRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
                     }}
+                    data-testid="analytics-screen-canvas"
+                    data-scale={scale}
+                    aria-readonly={editorReadonly}
                     className="relative overflow-hidden"
                     style={{
                         width: config.width,

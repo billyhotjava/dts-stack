@@ -61,3 +61,13 @@ test("ScreenHeader saveScreen patches classification before PUT when changed", a
 	// 403 / 400 必须有友好的错误引导，不能让 owner-only / reason 缺失把用户卡住没提示
 	assert.match(source, /密级修改失败：仅大屏 owner/);
 });
+
+test("ScreenHeader exposes save failure retry and local recovery status", async () => {
+	const source = await readFile(screenHeaderPath, "utf8");
+
+	assert.match(source, /saveFailure/);
+	assert.match(source, /analytics-screen-save-retry-notice/);
+	assert.match(source, /重试保存/);
+	assert.match(source, /analytics-screen-local-recovery-status/);
+	assert.match(source, /setLastRecoverySavedAt\(savedAt\)/);
+});

@@ -1,6 +1,33 @@
 // @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import {
+	Box,
+	ChartColumn,
+	ChartLine,
+	ChartPie,
+	CircleDot,
+	Container,
+	Eye,
+	EyeOff,
+	FileText,
+	Gauge,
+	Globe,
+	Hash,
+	Image,
+	Layers,
+	LayoutPanelTop,
+	ListFilter,
+	Lock,
+	Map,
+	MoreHorizontal,
+	Table2,
+	Type,
+	Unlock,
+	Video,
+} from 'lucide-react';
 import { useScreen } from '../ScreenContext';
+
+const LAYER_ICON_SIZE = 14;
 
 export function LayerPanel() {
 	const { state, dispatch, selectComponents, editorReadonly } = useScreen();
@@ -137,39 +164,40 @@ export function LayerPanel() {
 		dispatch({ type: 'SET_CONFIG', payload: { ...config, components: nextComponents } });
 	}, [config, dispatch, editorReadonly]);
 
-	const getComponentIcon = (type: string): string => {
-		const iconMap: Record<string, string> = {
-			'line-chart': '📈',
-			'bar-chart': '📊',
-			'pie-chart': '🥧',
-			'gauge-chart': '🎯',
-			'radar-chart': '🕸️',
-			'funnel-chart': '🔽',
-			'map-chart': '🗺️',
-			'number-card': '🔢',
-			'title': '🔤',
-			'markdown-text': '📄',
-			'countdown': '⏳',
-			'marquee': '📢',
-			'shape': '🔷',
-			'container': '🗂️',
-			'datetime': '🕐',
-			'progress-bar': '📏',
-			'image': '🖼️',
-			'video': '🎬',
-			'iframe': '🌐',
-			'table': '🗂️',
-			'filter-input': '⌨️',
-			'filter-select': '🔽',
-			'filter-date-range': '📅',
-			'border-box': '🔲',
-			'decoration': '💠',
-			'scroll-board': '📜',
-			'scroll-ranking': '🏆',
-			'water-level': '💧',
-			'digital-flop': '🔄',
+	const getComponentIcon = (type: string) => {
+		const iconProps = { size: LAYER_ICON_SIZE, strokeWidth: 1.8 };
+		const iconMap: Record<string, JSX.Element> = {
+			'line-chart': <ChartLine {...iconProps} />,
+			'bar-chart': <ChartColumn {...iconProps} />,
+			'pie-chart': <ChartPie {...iconProps} />,
+			'gauge-chart': <Gauge {...iconProps} />,
+			'radar-chart': <CircleDot {...iconProps} />,
+			'funnel-chart': <ChartPie {...iconProps} />,
+			'map-chart': <Map {...iconProps} />,
+			'number-card': <Hash {...iconProps} />,
+			'title': <Type {...iconProps} />,
+			'markdown-text': <FileText {...iconProps} />,
+			'countdown': <Gauge {...iconProps} />,
+			'marquee': <Type {...iconProps} />,
+			'shape': <CircleDot {...iconProps} />,
+			'container': <Container {...iconProps} />,
+			'datetime': <Hash {...iconProps} />,
+			'progress-bar': <Gauge {...iconProps} />,
+			'image': <Image {...iconProps} />,
+			'video': <Video {...iconProps} />,
+			'iframe': <Globe {...iconProps} />,
+			'table': <Table2 {...iconProps} />,
+			'filter-input': <ListFilter {...iconProps} />,
+			'filter-select': <ListFilter {...iconProps} />,
+			'filter-date-range': <ListFilter {...iconProps} />,
+			'border-box': <LayoutPanelTop {...iconProps} />,
+			'decoration': <Layers {...iconProps} />,
+			'scroll-board': <FileText {...iconProps} />,
+			'scroll-ranking': <ChartColumn {...iconProps} />,
+			'water-level': <Gauge {...iconProps} />,
+			'digital-flop': <Hash {...iconProps} />,
 		};
-		return iconMap[type] || '📦';
+		return iconMap[type] || <Box {...iconProps} />;
 	};
 
 	const normalizedKeyword = keyword.trim().toLowerCase();
@@ -366,7 +394,11 @@ export function LayerPanel() {
 								onDrop={(e) => handleDrop(e, component.id)}
 								onDragLeave={() => setDragOverId(null)}
 							>
-								<span style={{ width: 20, height: 20, marginRight: 8 }} className="text-secondary">
+								<span
+									style={{ width: 20, height: 20, marginRight: 8 }}
+									className="inline-flex items-center justify-center text-secondary"
+									aria-hidden="true"
+								>
 									{getComponentIcon(component.type)}
 								</span>
 								<span className="flex-1 text-sm text-primary font-semibold truncate">
@@ -387,7 +419,9 @@ export function LayerPanel() {
 										title={component.visible ? '隐藏' : '显示'}
 										disabled={editorReadonly}
 									>
-										{component.visible ? '👁️' : '👁️‍🗨️'}
+										{component.visible
+											? <Eye size={LAYER_ICON_SIZE} strokeWidth={1.8} />
+											: <EyeOff size={LAYER_ICON_SIZE} strokeWidth={1.8} />}
 									</button>
 									<button
 										className="inline-flex items-center justify-center bg-transparent border-0 cursor-pointer text-secondary text-xs"
@@ -400,7 +434,9 @@ export function LayerPanel() {
 										title={component.locked ? '解锁' : '锁定'}
 										disabled={editorReadonly}
 									>
-										{component.locked ? '🔒' : '🔓'}
+										{component.locked
+											? <Lock size={LAYER_ICON_SIZE} strokeWidth={1.8} />
+											: <Unlock size={LAYER_ICON_SIZE} strokeWidth={1.8} />}
 									</button>
 									<button
 										className="inline-flex items-center justify-center bg-transparent border-0 cursor-pointer text-secondary text-xs"
@@ -411,7 +447,7 @@ export function LayerPanel() {
 										}}
 										title="更多动作"
 									>
-										⋯
+										<MoreHorizontal size={LAYER_ICON_SIZE} strokeWidth={1.8} />
 									</button>
 									{openMenuId === component.id ? (
 										<div

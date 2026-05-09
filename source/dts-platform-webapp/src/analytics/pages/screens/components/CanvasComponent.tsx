@@ -4,6 +4,7 @@ import { ComponentRenderer } from './ComponentRenderer';
 import type { ScreenComponent, ScreenTheme } from '../types';
 import { collectContainerSubtreeIds } from '../componentHierarchy';
 import { resolveComponentAppearanceStyle } from '../componentAppearance';
+import { resolveInteractionScale, resolveScaledPointerDelta } from '../canvasInteraction';
 
 interface CanvasComponentProps {
     component: ScreenComponent;
@@ -13,17 +14,6 @@ interface CanvasComponentProps {
 
 type ResizeDirection = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 const SNAP_TOLERANCE = 5;
-
-export function resolveInteractionScale(element: HTMLElement | null, designWidth: number): number {
-    if (!element || !Number.isFinite(designWidth) || designWidth <= 0) {
-        return 1;
-    }
-    const renderedWidth = element.getBoundingClientRect().width;
-    if (!Number.isFinite(renderedWidth) || renderedWidth <= 0) {
-        return 1;
-    }
-    return Math.max(0.1, renderedWidth / designWidth);
-}
 
 function findSnapOffset(points: number[], candidates: number[]): { offset: number; guide: number } | null {
     let best: { offset: number; guide: number } | null = null;
@@ -104,11 +94,30 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
     const startCompPos = useRef({ x: 0, y: 0 });
     const resizeDirection = useRef<ResizeDirection | null>(null);
     const interactionScale = useRef(1);
+    const activePointerId = useRef<number | null>(null);
+    const activePointerTarget = useRef<HTMLElement | null>(null);
 
-    const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    const endPointerCapture = useCallback(() => {
+        const target = activePointerTarget.current;
+        const pointerId = activePointerId.current;
+        if (target && pointerId !== null && target.hasPointerCapture?.(pointerId)) {
+            target.releasePointerCapture(pointerId);
+        }
+        activePointerId.current = null;
+        activePointerTarget.current = null;
+    }, []);
+
+    const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
         if (component.locked || editorReadonly) return;
+        if (!e.isPrimary || activePointerId.current !== null) return;
         e.stopPropagation();
-        interactionScale.current = resolveInteractionScale(e.currentTarget as HTMLElement, component.width);
+        e.preventDefault();
+
+        const target = e.currentTarget;
+        activePointerId.current = e.pointerId;
+        activePointerTarget.current = target;
+        target.setPointerCapture?.(e.pointerId);
+        interactionScale.current = resolveInteractionScale(target, component.width);
 
         const groupedIds = component.groupId
             ? config.components.filter((item) => item.groupId === component.groupId).map((item) => item.id)
@@ -130,10 +139,16 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
             }),
         );
 
-        const handleMouseMove = (moveEvent: MouseEvent) => {
-            const scale = interactionScale.current || 1;
-            const deltaX = (moveEvent.clientX - startPos.current.x) / scale;
-            const deltaY = (moveEvent.clientY - startPos.current.y) / scale;
+        const handlePointerMove = (moveEvent: PointerEvent) => {
+            if (moveEvent.pointerId !== activePointerId.current) return;
+            moveEvent.preventDefault();
+            const delta = resolveScaledPointerDelta(
+                startPos.current,
+                { x: moveEvent.clientX, y: moveEvent.clientY },
+                interactionScale.current,
+            );
+            const deltaX = delta.x;
+            const deltaY = delta.y;
 
             if (moveIds.length > 1) {
                 clearSnapGuides();
@@ -209,22 +224,34 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
             });
         };
 
-        const handleMouseUp = () => {
+        const handlePointerEnd = (event: PointerEvent) => {
+            if (event.pointerId !== activePointerId.current) return;
             setIsDragging(false);
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
+            document.removeEventListener('pointermove', handlePointerMove);
+            document.removeEventListener('pointerup', handlePointerEnd);
+            document.removeEventListener('pointercancel', handlePointerEnd);
             clearSnapGuides();
+            endPointerCapture();
             snapshotTransform();
         };
 
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', handleMouseUp);
-    }, [clearSnapGuides, component.groupId, component.height, component.id, component.locked, component.width, component.x, component.y, config.components, config.height, config.width, dispatch, editorReadonly, selectedIds, selectComponents, setSnapGuides, snapshotTransform]);
+        document.addEventListener('pointermove', handlePointerMove, { passive: false });
+        document.addEventListener('pointerup', handlePointerEnd);
+        document.addEventListener('pointercancel', handlePointerEnd);
+    }, [activePointerId, clearSnapGuides, component.groupId, component.height, component.id, component.locked, component.width, component.x, component.y, config.components, config.height, config.width, dispatch, editorReadonly, endPointerCapture, selectedIds, selectComponents, setSnapGuides, snapshotTransform]);
 
-    const handleResizeStart = useCallback((e: React.MouseEvent, direction: ResizeDirection) => {
+    const handleResizeStart = useCallback((e: React.PointerEvent<HTMLDivElement>, direction: ResizeDirection) => {
         if (component.locked || editorReadonly) return;
+        if (!e.isPrimary || activePointerId.current !== null) return;
         e.stopPropagation();
-        interactionScale.current = resolveInteractionScale((e.currentTarget as HTMLElement).parentElement, component.width);
+        e.preventDefault();
+
+        const handleElement = e.currentTarget;
+        const target = handleElement.parentElement;
+        activePointerId.current = e.pointerId;
+        activePointerTarget.current = handleElement;
+        handleElement.setPointerCapture?.(e.pointerId);
+        interactionScale.current = resolveInteractionScale(target, component.width);
 
         const groupedIds = component.groupId
             ? config.components.filter((item) => item.groupId === component.groupId).map((item) => item.id)
@@ -255,10 +282,16 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
             }),
         );
 
-        const handleMouseMove = (moveEvent: MouseEvent) => {
-            const scale = interactionScale.current || 1;
-            const deltaX = (moveEvent.clientX - startPos.current.x) / scale;
-            const deltaY = (moveEvent.clientY - startPos.current.y) / scale;
+        const handlePointerMove = (moveEvent: PointerEvent) => {
+            if (moveEvent.pointerId !== activePointerId.current) return;
+            moveEvent.preventDefault();
+            const delta = resolveScaledPointerDelta(
+                startPos.current,
+                { x: moveEvent.clientX, y: moveEvent.clientY },
+                interactionScale.current,
+            );
+            const deltaX = delta.x;
+            const deltaY = delta.y;
             const dir = resizeDirection.current;
 
             if (resizeIds.length > 1) {
@@ -348,18 +381,22 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
             }
         };
 
-        const handleMouseUp = () => {
+        const handlePointerEnd = (event: PointerEvent) => {
+            if (event.pointerId !== activePointerId.current) return;
             setIsResizing(false);
             resizeDirection.current = null;
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
+            document.removeEventListener('pointermove', handlePointerMove);
+            document.removeEventListener('pointerup', handlePointerEnd);
+            document.removeEventListener('pointercancel', handlePointerEnd);
             clearSnapGuides();
+            endPointerCapture();
             snapshotTransform();
         };
 
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', handleMouseUp);
-    }, [clearSnapGuides, component.groupId, component.id, component.locked, component.width, component.height, component.x, component.y, config.components, dispatch, editorReadonly, selectComponents, snapshotTransform]);
+        document.addEventListener('pointermove', handlePointerMove, { passive: false });
+        document.addEventListener('pointerup', handlePointerEnd);
+        document.addEventListener('pointercancel', handlePointerEnd);
+    }, [clearSnapGuides, component.groupId, component.id, component.locked, component.width, component.height, component.x, component.y, config.components, dispatch, editorReadonly, endPointerCapture, selectComponents, snapshotTransform]);
 
     // Stable ref for config to avoid recreating callback on every config change
     const configRef = useRef(component.config);
@@ -371,11 +408,26 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
         });
     }, [component.id, updateComponent]);
 
+    const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+        if (event.key !== 'Enter' && event.key !== ' ') {
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        selectComponents([component.id]);
+    }, [component.id, selectComponents]);
+
     const resizeHandles: ResizeDirection[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 
     return (
         <div
             data-component-id={component.id}
+            data-testid={`analytics-screen-component-${component.id}`}
+            role="button"
+            tabIndex={0}
+            aria-label={`${component.name || component.type} 组件`}
+            aria-selected={isSelected}
+            aria-disabled={component.locked || editorReadonly}
             className={`absolute select-none ${isSelected ? 'outline-2 outline-[var(--color-primary)] outline-offset-2' : ''} ${component.locked || editorReadonly ? 'cursor-not-allowed' : ''}`}
             style={{
                 left: component.x,
@@ -383,10 +435,12 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
                 width: component.width,
                 height: component.height,
                 zIndex: component.zIndex,
+                touchAction: 'none',
                 cursor: isDragging ? 'grabbing' : isResizing ? 'default' : (component.locked || editorReadonly ? 'not-allowed' : 'move'),
                 ...resolveComponentAppearanceStyle(component.config),
             }}
-            onMouseDown={handleMouseDown}
+            onPointerDown={handlePointerDown}
+            onKeyDown={handleKeyDown}
         >
             <ComponentRenderer component={component} mode="designer" theme={theme} onConfigMeta={handleConfigMeta} />
 
@@ -396,7 +450,8 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
                         <div
                             key={dir}
                             className={`resize-handle ${dir}`}
-                            onMouseDown={(e) => handleResizeStart(e, dir)}
+                            onPointerDown={(e) => handleResizeStart(e, dir)}
+                            style={{ touchAction: 'none' }}
                         />
                     ))}
                 </>
