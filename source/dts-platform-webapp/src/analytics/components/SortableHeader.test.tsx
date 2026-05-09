@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
+
 import type { ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react-dom/test-utils";
+import { describe, expect, it, vi } from "vitest";
 import type { SortState } from "../hooks/useTableSort";
 import { SortableHeader } from "./SortableHeader";
 
@@ -115,12 +116,7 @@ describe("SortableHeader", () => {
 
 	it("supports right-aligned variant", () => {
 		const { container, unmount } = renderTH(
-			<SortableHeader
-				sortKey="visits"
-				sortState={{ key: null, direction: null }}
-				onSort={() => {}}
-				align="right"
-			>
+			<SortableHeader sortKey="visits" sortState={{ key: null, direction: null }} onSort={() => {}} align="right">
 				访问量
 			</SortableHeader>,
 		);

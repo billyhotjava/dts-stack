@@ -5,8 +5,8 @@ import {
 	cycleSortState,
 	dateComparator,
 	numberComparator,
-	stringComparator,
 	type SortState,
+	stringComparator,
 } from "./useTableSort";
 
 interface Row {

@@ -43,11 +43,7 @@ export function cycleSortState(prev: SortState, key: string): SortState {
 }
 
 /** Pure sort: stable, returns input identity when no active sort/comparator. */
-export function applySort<T>(
-	items: T[],
-	sortState: SortState,
-	columns: Record<string, Comparator<T>>,
-): T[] {
+export function applySort<T>(items: T[], sortState: SortState, columns: Record<string, Comparator<T>>): T[] {
 	if (!sortState.key || !sortState.direction) return items;
 	const comparator = columns[sortState.key];
 	if (!comparator) return items;
@@ -72,10 +68,7 @@ export function useTableSort<T>(items: T[], options: UseTableSortOptions<T>): Us
 		setSortState((prev) => cycleSortState(prev, key));
 	}, []);
 
-	const sortedItems = useMemo(
-		() => applySort(items, sortState, options.columns),
-		[items, options.columns, sortState],
-	);
+	const sortedItems = useMemo(() => applySort(items, sortState, options.columns), [items, options.columns, sortState]);
 
 	return { sortedItems, sortState, requestSort };
 }
@@ -117,9 +110,7 @@ export function numberComparator<T>(extract: (item: T) => number | null | undefi
 	};
 }
 
-export function dateComparator<T>(
-	extract: (item: T) => string | number | Date | null | undefined,
-): Comparator<T> {
+export function dateComparator<T>(extract: (item: T) => string | number | Date | null | undefined): Comparator<T> {
 	return (a, b) => {
 		const va = extract(a);
 		const vb = extract(b);
