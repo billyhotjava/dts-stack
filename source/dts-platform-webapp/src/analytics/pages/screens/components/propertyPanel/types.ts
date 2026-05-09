@@ -1,4 +1,3 @@
-// @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 import type { ComponentType, ScreenComponent } from '../../types';
 import type { ExplainabilityResponse } from '../../../../api/analyticsApi';
 

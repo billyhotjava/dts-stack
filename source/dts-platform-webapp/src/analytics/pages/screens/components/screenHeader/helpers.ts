@@ -1,4 +1,3 @@
-// @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 import type { ScreenUpdateConflictMeta } from '../../contracts';
 import type { ScreenConfig, ScreenTheme } from '../../types';
 

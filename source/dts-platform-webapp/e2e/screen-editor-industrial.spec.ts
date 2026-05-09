@@ -176,9 +176,11 @@ test.describe("screen editor · industrial interaction regression", () => {
 		await page.goto(`/#/bi/screens/${SCREEN_ID}/edit`);
 		await expect(page.getByTestId("analytics-screen-canvas-readonly-banner")).toBeVisible({ timeout: 15_000 });
 		await expect(page.getByText("编辑锁提示：当前由 并发编辑者 编辑中")).toBeVisible();
+		await expect(page.getByTestId("analytics-screen-library-readonly-note")).toBeVisible();
 		await expect(page.getByTestId("analytics-screen-primary-action-button")).toBeDisabled();
 		await expect(page.getByTestId("analytics-screen-canvas")).toHaveAttribute("aria-readonly", "true");
 		await expect(page.getByTestId("analytics-screen-component-hero-title")).toHaveAttribute("aria-disabled", "true");
+		await expect(page.getByTestId("analytics-screen-property-readonly-note")).toBeVisible();
 	});
 
 	test("local recovery draft can be restored before editing continues", async ({ page }) => {

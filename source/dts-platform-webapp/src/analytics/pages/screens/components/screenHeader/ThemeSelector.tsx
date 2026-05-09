@@ -1,10 +1,10 @@
-// @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
+import type { ChangeEvent } from 'react';
 import type { ScreenTheme } from '../../types';
 import { THEME_OPTIONS } from './helpers';
 
 interface ThemeSelectorProps {
     value: ScreenTheme;
-    onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+    onChange: (e: ChangeEvent<HTMLSelectElement>) => void;
 }
 
 export function ThemeSelector({ value, onChange }: ThemeSelectorProps) {

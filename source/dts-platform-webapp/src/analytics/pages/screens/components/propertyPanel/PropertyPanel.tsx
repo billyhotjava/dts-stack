@@ -85,6 +85,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
         distributeSelected,
         groupSelected,
         ungroupSelected,
+        editorReadonly,
     } = useScreen();
     const { config, selectedIds } = state;
     useScreenPluginRuntime();
@@ -207,10 +208,23 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
         };
         const isCustom = config.theme === 'brand-custom';
         return (
-            <div className="flex flex-col h-full">
+            <div className="flex flex-col h-full" aria-readonly={editorReadonly}>
                 <div className="property-panel-header px-4 py-3 border-b border-border-default">
                     <h3>画布设置</h3>
                     <p className="text-xs text-text-muted mt-1">全局主题与画布属性</p>
+                    {editorReadonly && (
+                        <div
+                            data-testid="analytics-screen-property-readonly-note"
+                            className="mt-2 rounded border px-2 py-1.5 text-[11px]"
+                            style={{
+                                color: '#fbbf24',
+                                borderColor: 'rgba(251,191,36,0.28)',
+                                background: 'rgba(251,191,36,0.08)',
+                            }}
+                        >
+                            只读模式：画布设置仅供查看。
+                        </div>
+                    )}
                 </div>
                 <div className="property-panel-content flex-1 overflow-y-auto px-4 py-2">
                     <div className="property-section py-3 border-b border-border-default">
@@ -345,13 +359,26 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
         const grouped = selectedComponents.filter((item) => Boolean(item.groupId)).length;
         const primarySelected = selectedComponents[0];
         return (
-            <div className="flex flex-col h-full">
+            <div className="flex flex-col h-full" aria-readonly={editorReadonly}>
                 <div className="property-panel-header px-4 py-3 border-b border-border-default">
                     <h3>批量属性 ({total})</h3>
                     <p className="text-xs text-text-muted mt-1">
                         统一处理 {primarySelected?.type || 'selected'} 组件。
                         {grouped > 0 ? ` 当前包含 ${grouped} 个已编组组件。` : ''}
                     </p>
+                    {editorReadonly && (
+                        <div
+                            data-testid="analytics-screen-property-readonly-note"
+                            className="mt-2 rounded border px-2 py-1.5 text-[11px]"
+                            style={{
+                                color: '#fbbf24',
+                                borderColor: 'rgba(251,191,36,0.28)',
+                                background: 'rgba(251,191,36,0.08)',
+                            }}
+                        >
+                            只读模式：批量编辑已被保护，当前面板仅用于查看。
+                        </div>
+                    )}
                 </div>
                 <div className="property-panel-content flex-1 overflow-y-auto px-4 py-2">
                     <div className="property-section py-3 border-b border-border-default">
@@ -706,12 +733,25 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
     const TAB_LABELS: Record<PropertyPanelTab, string> = { style: '样式', data: '数据', interaction: '交互', advanced: '高级' };
 
     return (
-        <div className={`property-panel property-panel--${panelDensity}`}>
+        <div className={`property-panel property-panel--${panelDensity}`} aria-readonly={editorReadonly}>
             <div className="property-panel-header border-b border-border-default">
                 <h3>{selectedComponent.name}</h3>
                 <p className="text-xs text-text-muted mt-1">
                     {selectedComponent.type} · {selectedComponent.width} × {selectedComponent.height} · {TAB_LABELS[activeTab]}
                 </p>
+                {editorReadonly && (
+                    <div
+                        data-testid="analytics-screen-property-readonly-note"
+                        className="mt-2 rounded border px-2 py-1.5 text-[11px]"
+                        style={{
+                            color: '#fbbf24',
+                            borderColor: 'rgba(251,191,36,0.28)',
+                            background: 'rgba(251,191,36,0.08)',
+                        }}
+                    >
+                        只读模式：属性编辑已被保护，当前面板仅用于查看。
+                    </div>
+                )}
             </div>
             <div className="property-panel-content flex-1 overflow-y-auto">
                 {isStyleTab && <div className="property-section py-3 border-b border-border-default">

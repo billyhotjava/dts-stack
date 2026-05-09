@@ -1,41 +1,92 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDrag } from 'react-dnd';
+import {
+    Box,
+    ChartColumn,
+    ChartLine,
+    ChartPie,
+    ChevronDown,
+    CircleDot,
+    Clock3,
+    Container,
+    Gauge,
+    Image,
+    Layers,
+    ListFilter,
+    Map,
+    Maximize2,
+    Minimize2,
+    Plug,
+    Star,
+    Table2,
+    Type,
+    Video,
+} from 'lucide-react';
 import { componentLibrary } from '../componentLibrary';
+import { useScreen } from '../ScreenContext';
 import type { ScreenPluginManifest } from '../../../api/analyticsApi';
 import { mapPluginManifestToCategory } from '../componentLibraryPlugins';
 import type { ComponentCategory, ComponentItem } from '../types';
 import { loadScreenPluginManifests, SCREEN_PLUGIN_MANIFESTS_UPDATED_EVENT } from '../plugins/manifestLoader';
 
+const LIBRARY_ICON_SIZE = 14;
+const ITEM_ICON_SIZE = 18;
+
 interface DraggableComponentItemProps {
     item: ComponentItem;
     favorite: boolean;
+    disabled?: boolean;
     onToggleFavorite: (item: ComponentItem) => void;
     onUse: (item: ComponentItem) => void;
 }
 
-function DraggableComponentItem({ item, favorite, onToggleFavorite, onUse }: DraggableComponentItemProps) {
+function renderLibraryIcon(item: Pick<ComponentItem, 'type' | 'name'> | ComponentCategory, size = LIBRARY_ICON_SIZE) {
+    const type = 'type' in item ? String(item.type || '') : '';
+    const name = String(item.name || '');
+    const props = { size, strokeWidth: 1.8 };
+    if (type.includes('line')) return <ChartLine {...props} />;
+    if (type.includes('bar') || type.includes('gantt') || type.includes('ranking')) return <ChartColumn {...props} />;
+    if (type.includes('pie') || type.includes('funnel')) return <ChartPie {...props} />;
+    if (type.includes('gauge') || type.includes('progress') || type.includes('water') || type.includes('digital')) return <Gauge {...props} />;
+    if (type.includes('map') || type.includes('flyline') || name.includes('地图') || name.includes('3D')) return <Map {...props} />;
+    if (type.includes('table') || type.includes('board') || name.includes('数据展示')) return <Table2 {...props} />;
+    if (type.includes('filter') || name.includes('筛选')) return <ListFilter {...props} />;
+    if (type.includes('text') || type.includes('title') || type.includes('datetime') || name.includes('文本')) return <Type {...props} />;
+    if (type.includes('image') || name.includes('媒体')) return <Image {...props} />;
+    if (type.includes('video')) return <Video {...props} />;
+    if (type.includes('container') || name.includes('边框')) return <Container {...props} />;
+    if (type.includes('shape') || type.includes('decoration') || name.includes('装饰')) return <Layers {...props} />;
+    if (name.includes('图表')) return <ChartColumn {...props} />;
+    return type ? <CircleDot {...props} /> : <Box {...props} />;
+}
+
+function DraggableComponentItem({ item, favorite, disabled, onToggleFavorite, onUse }: DraggableComponentItemProps) {
     const [{ isDragging }, drag] = useDrag(() => ({
         type: 'COMPONENT',
+        canDrag: !disabled,
         item: () => {
+            if (disabled) return null;
             onUse(item);
             return item;
         },
         collect: (monitor) => ({
             isDragging: monitor.isDragging(),
         }),
-    }), [item, onUse]);
+    }), [disabled, item, onUse]);
 
     return (
         <div
             ref={(node) => {
                 drag(node);
             }}
-            className="relative flex flex-col items-center pt-2.5 px-1 pb-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg cursor-grab overflow-hidden transition-all duration-150 hover:border-[var(--color-primary)] hover:shadow-[0_2px_8px_rgba(80,158,227,0.12)] hover:-translate-y-px active:cursor-grabbing active:translate-y-0"
-            style={{ opacity: isDragging ? 0.5 : 1 }}
+            data-testid={`analytics-screen-library-item-${String(item.type)}`}
+            aria-disabled={disabled}
+            className={`relative flex flex-col items-center pt-2.5 px-1 pb-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg overflow-hidden transition-all duration-150 ${disabled ? 'cursor-not-allowed' : 'cursor-grab hover:border-[var(--color-primary)] hover:shadow-[0_2px_8px_rgba(80,158,227,0.12)] hover:-translate-y-px active:cursor-grabbing active:translate-y-0'}`}
+            style={{ opacity: disabled ? 0.45 : (isDragging ? 0.5 : 1) }}
         >
             <button
                 type="button"
-                className="absolute top-0.5 right-0.5 border-none bg-transparent text-amber-400 cursor-pointer text-[10px] leading-none p-0.5 z-[1]"
+                className="absolute top-0.5 right-0.5 border-none bg-transparent text-amber-400 cursor-pointer leading-none p-0.5 z-[1]"
                 onClick={(e) => {
                     e.stopPropagation();
                     e.preventDefault();
@@ -43,9 +94,11 @@ function DraggableComponentItem({ item, favorite, onToggleFavorite, onUse }: Dra
                 }}
                 title={favorite ? '取消常用' : '加入常用'}
             >
-                {favorite ? '★' : '☆'}
+                <Star size={12} strokeWidth={1.8} fill={favorite ? 'currentColor' : 'none'} />
             </button>
-            <div className="w-9 h-9 flex items-center justify-center text-[22px] text-[var(--color-primary)] mb-0.5 bg-[var(--color-primary-light,rgba(80,158,227,0.08))] rounded-lg">{item.icon}</div>
+            <div className="w-9 h-9 flex items-center justify-center text-[var(--color-primary)] mb-0.5 bg-[var(--color-primary-light,rgba(80,158,227,0.08))] rounded-lg">
+                {renderLibraryIcon(item, ITEM_ICON_SIZE)}
+            </div>
             <span className="text-[10px] text-[var(--color-text-secondary)] text-center leading-tight max-w-full overflow-hidden text-ellipsis whitespace-nowrap">{item.name}</span>
         </div>
     );
@@ -70,6 +123,7 @@ function toComponentKey(item: ComponentItem): string {
 }
 
 export function ComponentLibraryPanel() {
+    const { editorReadonly } = useScreen();
     const searchInputRef = useRef<HTMLInputElement | null>(null);
     const [plugins, setPlugins] = useState<ScreenPluginManifest[]>([]);
     const [pluginError, setPluginError] = useState<string | null>(null);
@@ -218,7 +272,7 @@ export function ComponentLibraryPanel() {
             return byQuery;
         }
         return byQuery.filter((category) => {
-            const isPlugin = category.icon === '🔌' || category.name.includes('@');
+            const isPlugin = category.name.includes('@');
             return activeScope === 'plugin' ? isPlugin : !isPlugin;
         });
     }, [activeScope, mergedCategories, queryText]);
@@ -231,7 +285,7 @@ export function ComponentLibraryPanel() {
         if (items.length === 0) {
             return null;
         }
-        return { name: '常用组件', icon: '⭐', items };
+        return { name: '常用组件', icon: '', items };
     }, [componentIndex, favorites]);
 
     const recentCategory = useMemo<ComponentCategory | null>(() => {
@@ -242,7 +296,7 @@ export function ComponentLibraryPanel() {
         if (items.length === 0) {
             return null;
         }
-        return { name: '最近使用', icon: '🕘', items };
+        return { name: '最近使用', icon: '', items };
     }, [componentIndex, recent]);
 
     const handleToggleFavorite = (item: ComponentItem) => {
@@ -313,10 +367,27 @@ export function ComponentLibraryPanel() {
                 <div className="flex items-center justify-between">
                     <h3 className="m-0 text-sm font-semibold text-[var(--color-text-primary)]">组件库</h3>
                     <div className="flex gap-1 text-[10px]">
-                        <button type="button" className="component-library-scope-btn" onClick={expandVisibleCategories} title="展开分类">▼</button>
-                        <button type="button" className="component-library-scope-btn" onClick={collapseVisibleCategories} title="收起分类">▲</button>
+                        <button type="button" className="component-library-scope-btn inline-flex items-center justify-center" onClick={expandVisibleCategories} title="展开分类">
+                            <Maximize2 size={LIBRARY_ICON_SIZE} strokeWidth={1.8} />
+                        </button>
+                        <button type="button" className="component-library-scope-btn inline-flex items-center justify-center" onClick={collapseVisibleCategories} title="收起分类">
+                            <Minimize2 size={LIBRARY_ICON_SIZE} strokeWidth={1.8} />
+                        </button>
                     </div>
                 </div>
+                {editorReadonly && (
+                    <div
+                        data-testid="analytics-screen-library-readonly-note"
+                        className="mt-1.5 rounded border px-2 py-1 text-[11px]"
+                        style={{
+                            color: '#fbbf24',
+                            borderColor: 'rgba(251,191,36,0.28)',
+                            background: 'rgba(251,191,36,0.08)',
+                        }}
+                    >
+                        只读模式下不可拖入新组件。
+                    </div>
+                )}
                 <input
                     ref={searchInputRef}
                     type="text"
@@ -327,9 +398,17 @@ export function ComponentLibraryPanel() {
                 />
                 <div className="flex flex-wrap gap-1.5 mt-1.5">
                     <button type="button" className={`component-library-scope-btn ${activeScope === 'all' ? 'active' : ''}`} onClick={() => setActiveScope('all')}>全部</button>
-                    <button type="button" className={`component-library-scope-btn ${activeScope === 'favorites' ? 'active' : ''}`} onClick={() => setActiveScope('favorites')}>★{favorites.length}</button>
-                    <button type="button" className={`component-library-scope-btn ${activeScope === 'recent' ? 'active' : ''}`} onClick={() => setActiveScope('recent')}>⏱{recent.length}</button>
-                    <button type="button" className={`component-library-scope-btn ${activeScope === 'plugin' ? 'active' : ''}`} onClick={() => setActiveScope('plugin')}>🔌</button>
+                    <button type="button" className={`component-library-scope-btn inline-flex items-center gap-1 ${activeScope === 'favorites' ? 'active' : ''}`} onClick={() => setActiveScope('favorites')} title="常用组件">
+                        <Star size={LIBRARY_ICON_SIZE} strokeWidth={1.8} />
+                        {favorites.length}
+                    </button>
+                    <button type="button" className={`component-library-scope-btn inline-flex items-center gap-1 ${activeScope === 'recent' ? 'active' : ''}`} onClick={() => setActiveScope('recent')} title="最近使用">
+                        <Clock3 size={LIBRARY_ICON_SIZE} strokeWidth={1.8} />
+                        {recent.length}
+                    </button>
+                    <button type="button" className={`component-library-scope-btn inline-flex items-center justify-center ${activeScope === 'plugin' ? 'active' : ''}`} onClick={() => setActiveScope('plugin')} title="插件组件">
+                        <Plug size={LIBRARY_ICON_SIZE} strokeWidth={1.8} />
+                    </button>
                 </div>
                 <div className="component-library-tags flex flex-wrap gap-1 mt-1">
                     {CATEGORY_TAGS.map(tag => (
@@ -351,7 +430,10 @@ export function ComponentLibraryPanel() {
                 {activeScope === 'all' && filteredFavoriteCategory && (
                     <div className="mb-4">
                         <div className="text-xs font-semibold text-[var(--color-text-secondary)] mb-2 uppercase tracking-wide">
-                            {filteredFavoriteCategory.icon} {filteredFavoriteCategory.name}
+                            <span className="inline-flex items-center gap-1.5">
+                                <Star size={LIBRARY_ICON_SIZE} strokeWidth={1.8} />
+                                {filteredFavoriteCategory.name}
+                            </span>
                         </div>
                         <div className="grid grid-cols-3 gap-1.5">
                             {filteredFavoriteCategory.items.map((item: ComponentItem, idx: number) => (
@@ -359,6 +441,7 @@ export function ComponentLibraryPanel() {
                                     key={`favorite-${item.name}-${idx}`}
                                     item={item}
                                     favorite={favoriteSet.has(toComponentKey(item))}
+                                    disabled={editorReadonly}
                                     onToggleFavorite={handleToggleFavorite}
                                     onUse={handleUse}
                                 />
@@ -369,7 +452,10 @@ export function ComponentLibraryPanel() {
                 {activeScope === 'all' && filteredRecentCategory && (
                     <div className="mb-4">
                         <div className="text-xs font-semibold text-[var(--color-text-secondary)] mb-2 uppercase tracking-wide">
-                            {filteredRecentCategory.icon} {filteredRecentCategory.name}
+                            <span className="inline-flex items-center gap-1.5">
+                                <Clock3 size={LIBRARY_ICON_SIZE} strokeWidth={1.8} />
+                                {filteredRecentCategory.name}
+                            </span>
                         </div>
                         <div className="grid grid-cols-3 gap-1.5">
                             {filteredRecentCategory.items.map((item: ComponentItem, idx: number) => (
@@ -377,6 +463,7 @@ export function ComponentLibraryPanel() {
                                     key={`recent-${item.name}-${idx}`}
                                     item={item}
                                     favorite={favoriteSet.has(toComponentKey(item))}
+                                    disabled={editorReadonly}
                                     onToggleFavorite={handleToggleFavorite}
                                     onUse={handleUse}
                                 />
@@ -386,9 +473,17 @@ export function ComponentLibraryPanel() {
                 )}
                 {tagFilteredCategories.map((category: ComponentCategory) => (
                     <div key={category.name} className="mb-4">
-                        <div className="text-xs font-semibold text-[var(--color-text-secondary)] mb-2 uppercase tracking-wide cursor-pointer" onClick={() => toggleCategory(category.name)}>
-                            {collapsedCategories.includes(category.name) ? '▸' : '▾'} {category.icon} {category.name}
-                        </div>
+                        <button
+                            type="button"
+                            className="w-full text-xs font-semibold text-[var(--color-text-secondary)] mb-2 uppercase tracking-wide cursor-pointer bg-transparent border-0 p-0 flex items-center gap-1.5 text-left"
+                            onClick={() => toggleCategory(category.name)}
+                        >
+                            {collapsedCategories.includes(category.name)
+                                ? <ChevronDown size={LIBRARY_ICON_SIZE} strokeWidth={1.8} style={{ transform: 'rotate(-90deg)' }} />
+                                : <ChevronDown size={LIBRARY_ICON_SIZE} strokeWidth={1.8} />}
+                            {renderLibraryIcon(category)}
+                            <span className="truncate">{category.name}</span>
+                        </button>
                         {!collapsedCategories.includes(category.name) ? (
                             <div className="grid grid-cols-3 gap-1.5">
                                 {category.items.map((item: ComponentItem, idx: number) => (
@@ -396,6 +491,7 @@ export function ComponentLibraryPanel() {
                                         key={`${category.name}-${item.name}-${idx}`}
                                         item={item}
                                         favorite={favoriteSet.has(toComponentKey(item))}
+                                        disabled={editorReadonly}
                                         onToggleFavorite={handleToggleFavorite}
                                         onUse={handleUse}
                                     />
