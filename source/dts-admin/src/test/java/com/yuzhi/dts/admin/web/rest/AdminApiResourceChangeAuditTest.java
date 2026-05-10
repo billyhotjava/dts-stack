@@ -3,6 +3,8 @@ package com.yuzhi.dts.admin.web.rest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import com.yuzhi.dts.admin.domain.AdminApprovalItem;
+import com.yuzhi.dts.admin.domain.AdminApprovalRequest;
 import com.yuzhi.dts.admin.domain.ChangeRequest;
 import com.yuzhi.dts.admin.repository.AdminApprovalRequestRepository;
 import com.yuzhi.dts.admin.repository.AdminCustomRoleRepository;
@@ -19,17 +21,21 @@ import com.yuzhi.dts.admin.service.ChangeRequestService;
 import com.yuzhi.dts.admin.service.OrganizationService;
 import com.yuzhi.dts.admin.service.OrganizationSyncService;
 import com.yuzhi.dts.admin.service.PortalMenuService;
-import com.yuzhi.dts.admin.service.audit.ChangeSnapshotFormatter;
+import com.yuzhi.dts.admin.service.audit.AdminAuditService;
 import com.yuzhi.dts.admin.service.audit.AuditV2Service;
+import com.yuzhi.dts.admin.service.audit.ChangeSnapshotFormatter;
 import com.yuzhi.dts.admin.service.notify.DtsCommonNotifyClient;
 import com.yuzhi.dts.admin.service.user.AdminUserService;
+import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
 import com.yuzhi.dts.common.audit.AuditStage;
-import com.yuzhi.dts.admin.service.audit.AdminAuditService;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.PlatformTransactionManager;
 
 @ExtendWith(MockitoExtension.class)
@@ -142,5 +148,29 @@ class AdminApiResourceChangeAuditTest {
         AuditStage stage = resource.resolveStageForChangeOutcome(cr, true);
 
         assertThat(stage).isEqualTo(AuditStage.FAIL);
+    }
+
+    @Test
+    void changeRequestsHonorsStatusAndTypeWhenAugmentingApprovalViews() {
+        AdminApprovalRequest approval = new AdminApprovalRequest();
+        approval.setId(7101L);
+        approval.setType("USER_CREATE");
+        approval.setStatus("APPLIED");
+        approval.setRequester("sysadmin");
+
+        AdminApprovalItem item = new AdminApprovalItem();
+        item.setTargetKind("USER");
+        item.setTargetId("ptrdemo");
+        item.setSeqNumber(1);
+        item.setPayloadJson("{\"action\":\"create\",\"changeRequestId\":7052}");
+        approval.addItem(item);
+
+        when(changeRequestRepository.findByStatusAndResourceType("PENDING", "ROLE")).thenReturn(java.util.List.of());
+        when(approvalRepository.findAll()).thenReturn(java.util.List.of(approval));
+
+        ResponseEntity<ApiResponse<List<Map<String, Object>>>> response = resource.changeRequests("PENDING", "ROLE", null);
+
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getData()).isEmpty();
     }
 }

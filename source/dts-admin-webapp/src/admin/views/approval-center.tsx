@@ -1,4 +1,5 @@
 import { useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useNavigate, useParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -460,6 +461,8 @@ function normalizeStatus(status?: string | null): DecisionStatus {
 }
 export default function ApprovalCenterView() {
 	const queryClient = useQueryClient();
+	const navigate = useNavigate();
+	const { requestId } = useParams<{ requestId?: string }>();
 	const sessionContext = useContext(AdminSessionContext);
 	const userInfo = useUserInfo();
 	const session = sessionContext ?? {
@@ -469,6 +472,11 @@ export default function ApprovalCenterView() {
 	};
 	const normalizedRole = String(session.role ?? "").toUpperCase();
 	const isSysAdmin = normalizedRole === "SYSADMIN";
+	const routeTaskId = useMemo(() => {
+		if (!requestId) return null;
+		const parsed = Number(requestId);
+		return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+	}, [requestId]);
 	const {
 		data: changeRequestsData,
 		isLoading: isChangeRequestsLoading,
@@ -891,6 +899,15 @@ export default function ApprovalCenterView() {
 		[augmentedRequests, activeTaskId],
 	);
 
+	useEffect(() => {
+		if (routeTaskId == null || activeTaskId === routeTaskId) {
+			return;
+		}
+		if (augmentedRequests.some((item) => item.id === routeTaskId)) {
+			setActiveTaskId(routeTaskId);
+		}
+	}, [activeTaskId, augmentedRequests, routeTaskId]);
+
 	// 加载“操作人”的中文姓名（fullName），缓存到 operatorNameMap
 	useEffect(() => {
 		const usernames = new Set<string>();
@@ -1143,6 +1160,9 @@ export default function ApprovalCenterView() {
 		} finally {
 			setDecisionLoading(false);
 			setActiveTaskId(null);
+			if (routeTaskId != null) {
+				navigate("/admin/approval", { replace: true });
+			}
 		}
 	};
 
@@ -1308,6 +1328,9 @@ function renderChangeRequestBasics(
 const handleCloseDialog = () => {
 	if (!decisionLoading) {
 		setActiveTaskId(null);
+		if (routeTaskId != null) {
+			navigate("/admin/approval", { replace: true });
+		}
 	}
 };
 

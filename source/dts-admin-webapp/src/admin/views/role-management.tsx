@@ -728,6 +728,7 @@ function DeleteRoleDialog({ target, onClose, onSubmitted }: DeleteRoleDialogProp
             return null;
         }
         for (const change of pendingChangeList) {
+            if (!isPendingRoleChange(change)) continue;
             if (resolveChangeRoleId(change) === canonical) {
                 return change;
             }
@@ -878,6 +879,13 @@ function canonicalRole(value: string | null | undefined): string {
         return "";
     }
     return trimmed.toUpperCase().replace(/^ROLE[_-]?/, "").replace(/_/g, "");
+}
+
+function isPendingRoleChange(change: ChangeRequest | undefined | null): boolean {
+    if (!change) return false;
+    const status = String(change.status || "").trim().toUpperCase();
+    const resourceType = String(change.resourceType || "").trim().toUpperCase();
+    return status === "PENDING" && (resourceType === "ROLE" || resourceType === "CUSTOM_ROLE");
 }
 
 function resolveChangeRoleId(change: ChangeRequest | undefined | null): string {

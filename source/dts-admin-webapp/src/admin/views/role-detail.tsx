@@ -66,6 +66,7 @@ export default function RoleDetailView() {
 	const pendingChange = useMemo<ChangeRequest | null>(() => {
 		if (!pendingChangeList?.length || !canonical) return null;
 		for (const item of pendingChangeList) {
+			if (!isPendingRoleChange(item)) continue;
 			if (resolveChangeRoleId(item) === canonical) {
 				return item;
 			}
@@ -740,6 +741,13 @@ function canonicalRole(value: string | null | undefined): string {
 		return "";
 	}
 	return trimmed.toUpperCase().replace(/^ROLE[_-]?/, "").replace(/_/g, "");
+}
+
+function isPendingRoleChange(change: ChangeRequest | undefined | null): boolean {
+	if (!change) return false;
+	const status = String(change.status || "").trim().toUpperCase();
+	const resourceType = String(change.resourceType || "").trim().toUpperCase();
+	return status === "PENDING" && (resourceType === "ROLE" || resourceType === "CUSTOM_ROLE");
 }
 
 function resolveChangeRoleId(change: ChangeRequest | undefined | null): string {

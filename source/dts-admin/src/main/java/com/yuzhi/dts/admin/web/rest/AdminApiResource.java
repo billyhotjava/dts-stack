@@ -1813,7 +1813,12 @@ public class AdminApiResource {
             viewById.put(cr.getId(), vm);
         }
         augmentChangeRequestViewsFromApprovals(viewById);
-        List<Map<String, Object>> responseList = new ArrayList<>(viewById.values());
+        List<Map<String, Object>> responseList = new ArrayList<>();
+        for (Map<String, Object> view : viewById.values()) {
+            if (matchesChangeRequestFilters(view, status, resourceType)) {
+                responseList.add(view);
+            }
+        }
         responseList.sort((a, b) -> compareByRequestedAtDesc(a, b));
         applyChangeRequestDisplayNames(responseList);
         String actor = SecurityUtils.getCurrentAuditableLogin();
@@ -6910,6 +6915,23 @@ public class AdminApiResource {
                 viewById.put(crId, vm);
             }
         }
+    }
+
+    private boolean matchesChangeRequestFilters(Map<String, Object> view, String status, String resourceType) {
+        return (
+            matchesChangeRequestFilterValue(view.get("status"), status) &&
+            matchesChangeRequestFilterValue(view.get("resourceType"), resourceType)
+        );
+    }
+
+    private boolean matchesChangeRequestFilterValue(Object actual, String expected) {
+        if (!StringUtils.hasText(expected)) {
+            return true;
+        }
+        if (actual == null) {
+            return false;
+        }
+        return expected.trim().equalsIgnoreCase(Objects.toString(actual, "").trim());
     }
 
     private int compareByRequestedAtDesc(Map<String, Object> left, Map<String, Object> right) {

@@ -53,6 +53,7 @@ export const adminRoutes: RouteObject[] = [
 			{ path: "data-lake/:id", element: <DataLakeEditorView /> },
 			{ path: "infra-settings", element: <InfraSettingsView /> },
 			{ path: "approval", element: <ApprovalCenterView /> },
+			{ path: "approval/:requestId", element: <ApprovalCenterView /> },
 			{ path: "audit", element: <AuditCenterView /> },
 			{ path: "ops", element: <OpsConfigView /> },
 			{ path: "workflows", element: <WorkflowConfigView /> },
