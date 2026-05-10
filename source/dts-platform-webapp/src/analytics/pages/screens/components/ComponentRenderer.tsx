@@ -14,6 +14,7 @@ import type { RendererPlugin } from '../plugins/types';
 import type { ReactEChartsComponent, ComponentRendererProps } from '../renderers/types';
 import { renderMarkdownToHtml } from '../renderers/shared/markdownUtils';
 import { ANNOTATABLE_TYPES, injectChartAnnotations } from '../renderers/shared/chartAnnotations';
+import { resolveSourceColumnsMeta, shouldPersistSourceColumns } from '../renderers/shared/sourceColumns';
 import {
     resolveTextColor, estimateVisualTextWidth, truncateTextByVisualWidth,
     resolveFilterOptions, resolveTabOptions,
@@ -189,22 +190,14 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         clearChartDragHandlers();
     }, [clearChartDragHandlers, clearLegendDragHandlers, clearTitleDragHandlers, component.id]);
 
-    const sourceColsKey = (config._sourceColumns as Array<{ name: string }> | undefined)
-        ?.map(c => c.name).join(',');
-
     useEffect(() => {
-        if (!onConfigMetaRef.current || !cardData?.cols?.length) return;
-        const newCols = cardData.cols.map((c) => ({
-            name: c.name,
-            displayName: c.display_name || c.name,
-            baseType: c.base_type,
-        }));
-        const newKey = newCols.map(c => c.name).join(',');
+        if (!onConfigMetaRef.current) return;
+        const newCols = resolveSourceColumnsMeta(cardData);
         // Only update if columns actually changed (avoid infinite loop)
-        if (sourceColsKey !== newKey) {
+        if (shouldPersistSourceColumns(config._sourceColumns as Array<{ name?: string }> | undefined, newCols)) {
             onConfigMetaRef.current({ _sourceColumns: newCols });
         }
-    }, [cardData, sourceColsKey]);
+    }, [cardData, config._sourceColumns]);
 
     // For datetime component, update every second
     const [currentTime, setCurrentTime] = useState(new Date());

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { resolveDateRangeDefaultValues, resolveFilterDefaultValue } from './chartUtils';
+import { resolveDateRangeDefaultValues, resolveFilterDefaultValue } from './chartUtils.ts';
 
 test('resolveFilterDefaultValue prefers current runtime value when present', () => {
     assert.equal(resolveFilterDefaultValue('QMS二期', 'PLM整合', [

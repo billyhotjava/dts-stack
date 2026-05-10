@@ -1,4 +1,3 @@
-// @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 import type { ReactNode } from 'react';
 import type { EChartsRendererProps } from './types';
 
@@ -50,8 +49,7 @@ export function renderHierarchyChart(type: string, props: EChartsRendererProps):
             }, echartsClickHandler);
 
         case 'sankey-chart': {
-            /* eslint-disable @typescript-eslint/no-explicit-any */
-            const sankeyRows = Array.isArray(c.rows) ? (c.rows as Array<Record<string, any>>) : [];
+            const sankeyRows = Array.isArray(c.rows) ? (c.rows as Array<Record<string, unknown>>) : [];
             const sankeyNodeSet = new Set<string>();
             const sankeyLinks: Array<{ source: string; target: string; value: number }> = [];
             for (const row of sankeyRows) {
@@ -83,16 +81,19 @@ export function renderHierarchyChart(type: string, props: EChartsRendererProps):
                     label: { color: t.textPrimary, fontSize: seriesLabelFontSize },
                 }],
             }, echartsClickHandler);
-            /* eslint-enable @typescript-eslint/no-explicit-any */
         }
 
         case 'tree-chart': {
-            /* eslint-disable @typescript-eslint/no-explicit-any */
-            let treeData: Record<string, any> = { name: 'root', children: [] };
+            let treeData: Record<string, unknown> = { name: 'root', children: [] };
             if (typeof c.data === 'string') {
-                try { treeData = JSON.parse(c.data as string); } catch { /* use default */ }
-            } else if (c.data && typeof c.data === 'object') {
-                treeData = c.data as any;
+                try {
+                    const parsed: unknown = JSON.parse(c.data);
+                    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                        treeData = parsed as Record<string, unknown>;
+                    }
+                } catch { /* use default */ }
+            } else if (c.data && typeof c.data === 'object' && !Array.isArray(c.data)) {
+                treeData = c.data as Record<string, unknown>;
             }
             return renderEChartWithHandles({
                 ...themeOptions,
@@ -125,7 +126,6 @@ export function renderHierarchyChart(type: string, props: EChartsRendererProps):
                     animationDurationUpdate: 750,
                 }],
             }, echartsClickHandler);
-            /* eslint-enable @typescript-eslint/no-explicit-any */
         }
 
         default:

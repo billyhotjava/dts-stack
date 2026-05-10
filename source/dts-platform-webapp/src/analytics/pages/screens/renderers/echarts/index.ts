@@ -1,4 +1,3 @@
-// @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 import type { ReactNode } from 'react';
 import { renderAxisChart } from './axisCharts';
 import { renderPieChart } from './pieCharts';

@@ -1,29 +1,19 @@
-// @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link2 } from 'lucide-react';
 import { message } from 'antd';
 import { toast } from 'sonner';
 import { useScreen } from '../../ScreenContext';
-import type {
-    ChartMarkArea,
-    ChartMarkLine,
-    ScreenComponent,
-    ScreenGlobalVariable,
-    SeriesConditionalColor,
-} from '../../types';
-import { DRILLABLE_TYPES } from '../../types';
+import type { ScreenComponent } from '../../types';
 import { getRendererPlugin } from '../../plugins/registry';
 import { readComponentPluginMeta, resolveRuntimePluginId } from '../../plugins/runtime';
 import { useScreenPluginRuntime } from '../../plugins/useScreenPluginRuntime';
-import { analyticsApi, type ScreenListItem } from '../../../../api/analyticsApi';
+import { analyticsApi } from '../../../../api/analyticsApi';
 import { writeTextToClipboard } from '../../../../hooks/clipboard';
 import {
     applyChartPresetConfig,
     isChartComponentType,
     type ChartPreset,
 } from '../../chartPresets';
-import { PROVINCE_PRESETS } from '../../renderers/shared/geoJsonCache';
-import { COLOR_SCHEMES, recommendColorSchemes, type ColorScheme } from '../../colorSchemes';
 import { getThemeTokens } from '../../screenThemes';
 
 // Extracted modules (F4-Step3 split)
@@ -36,18 +26,11 @@ import {
     PROPERTY_SECTION_ESSENTIAL_COLLAPSED,
     PROPERTY_SECTION_KEYS,
     STYLE_CLIPBOARD_KEY,
-    applyLegendHeuristicLayout,
-    buildScreenJumpUrl,
     buildStyleClipboardPayload,
     deepMergeConfig,
-    extractScreenIdFromJumpUrl,
-    isVisualConfigKey,
-    renderChartTitleLayoutRows,
     resolveExplainCardId,
-    resolveLegendHeuristicLayout,
 } from './helpers';
 import { renderActionConfig, renderDrillDownConfig, renderInteractionConfig } from './BehaviorConfigSection';
-import { CardSourceColumnBindingsEditor } from './CardSourceColumnBindingsEditor';
 import { renderDataSourceConfig } from './DataSourceConfigSection';
 import { renderPluginSchemaFields } from './PluginSchemaFieldsSection';
 import { renderAnimationConfig } from './AnimationConfigSection';
@@ -65,11 +48,20 @@ import { BackgroundImageRow } from './BackgroundImageRow';
 import { SectionToggle } from './SectionToggle';
 import { THEME_OPTIONS } from '../screenHeader/helpers';
 import type {
-    ColumnEntry,
     ExplainState,
     LayoutClipboardPayload,
     StyleClipboardPayload,
 } from './types';
+import {
+    readCollapsedSections,
+    readLayoutClipboard,
+    readPanelDensity,
+    readStyleClipboard,
+    writeCollapsedSections,
+    writeNullableJson,
+    writePanelDensity,
+    type PropertyPanelDensity,
+} from './propertyPanelPersistence';
 
 export type PropertyPanelTab = 'style' | 'data' | 'interaction' | 'advanced';
 
@@ -96,17 +88,9 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
     const [styleClipboard, setStyleClipboard] = useState<StyleClipboardPayload | null>(null);
     const [layoutClipboard, setLayoutClipboard] = useState<LayoutClipboardPayload | null>(null);
     const [quickActionMode, setQuickActionMode] = useState<QuickActionMode>('core');
-    const [panelDensity, setPanelDensity] = useState<'focus' | 'full'>(() => {
-        if (typeof window === 'undefined') {
-            return 'focus';
-        }
-        try {
-            const raw = window.localStorage.getItem(PROPERTY_PANEL_DENSITY_KEY);
-            return raw === 'full' ? 'full' : 'focus';
-        } catch {
-            return 'focus';
-        }
-    });
+    const [panelDensity, setPanelDensity] = useState<PropertyPanelDensity>(() => (
+        readPanelDensity(typeof window === 'undefined' ? null : window.localStorage, PROPERTY_PANEL_DENSITY_KEY)
+    ));
     const [collapsedSections, setCollapsedSections] = useState<string[]>([]);
 
     const selectedComponents = config.components.filter((c) => selectedIds.includes(c.id));
@@ -119,85 +103,43 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
     }, [selectedComponent?.id]);
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        try {
-            window.localStorage.setItem(PROPERTY_PANEL_DENSITY_KEY, panelDensity);
-        } catch {
-            // ignore storage failure
-        }
+        writePanelDensity(window.localStorage, PROPERTY_PANEL_DENSITY_KEY, panelDensity);
     }, [panelDensity]);
     useEffect(() => {
-        try {
-            const raw = localStorage.getItem(PROPERTY_SECTION_COLLAPSE_KEY);
-            if (!raw) {
-                setCollapsedSections([...PROPERTY_SECTION_ESSENTIAL_COLLAPSED]);
-                return;
-            }
-            const parsed = JSON.parse(raw) as unknown;
-            if (!Array.isArray(parsed)) {
-                setCollapsedSections([...PROPERTY_SECTION_ESSENTIAL_COLLAPSED]);
-                return;
-            }
-            setCollapsedSections(parsed.filter((item) => typeof item === 'string'));
-        } catch {
-            setCollapsedSections([...PROPERTY_SECTION_ESSENTIAL_COLLAPSED]);
-        }
+        setCollapsedSections(readCollapsedSections(
+            typeof window === 'undefined' ? null : window.localStorage,
+            PROPERTY_SECTION_COLLAPSE_KEY,
+            PROPERTY_SECTION_ESSENTIAL_COLLAPSED,
+        ));
     }, []);
     useEffect(() => {
-        try {
-            localStorage.setItem(PROPERTY_SECTION_COLLAPSE_KEY, JSON.stringify(collapsedSections));
-        } catch {
-            // ignore storage failure
-        }
+        writeCollapsedSections(
+            typeof window === 'undefined' ? null : window.localStorage,
+            PROPERTY_SECTION_COLLAPSE_KEY,
+            collapsedSections,
+        );
     }, [collapsedSections]);
 
     useEffect(() => {
-        try {
-            const raw = sessionStorage.getItem(STYLE_CLIPBOARD_KEY);
-            if (!raw) return;
-            const parsed = JSON.parse(raw) as StyleClipboardPayload;
-            if (!parsed || typeof parsed !== 'object' || !parsed.type || !parsed.config) return;
-            setStyleClipboard(parsed);
-        } catch {
-            // ignore invalid cache
-        }
+        setStyleClipboard(readStyleClipboard(
+            typeof window === 'undefined' ? null : window.sessionStorage,
+            STYLE_CLIPBOARD_KEY,
+        ));
     }, []);
     useEffect(() => {
-        try {
-            const raw = sessionStorage.getItem(LAYOUT_CLIPBOARD_KEY);
-            if (!raw) return;
-            const parsed = JSON.parse(raw) as LayoutClipboardPayload;
-            if (!parsed || typeof parsed !== 'object') return;
-            if (!Number.isFinite(parsed.x) || !Number.isFinite(parsed.y)) return;
-            if (!Number.isFinite(parsed.width) || !Number.isFinite(parsed.height)) return;
-            setLayoutClipboard(parsed);
-        } catch {
-            // ignore invalid cache
-        }
+        setLayoutClipboard(readLayoutClipboard(
+            typeof window === 'undefined' ? null : window.sessionStorage,
+            LAYOUT_CLIPBOARD_KEY,
+        ));
     }, []);
 
     const persistStyleClipboard = (payload: StyleClipboardPayload | null) => {
         setStyleClipboard(payload);
-        try {
-            if (!payload) {
-                sessionStorage.removeItem(STYLE_CLIPBOARD_KEY);
-                return;
-            }
-            sessionStorage.setItem(STYLE_CLIPBOARD_KEY, JSON.stringify(payload));
-        } catch {
-            // ignore storage failure
-        }
+        writeNullableJson(typeof window === 'undefined' ? null : window.sessionStorage, STYLE_CLIPBOARD_KEY, payload);
     };
     const persistLayoutClipboard = (payload: LayoutClipboardPayload | null) => {
         setLayoutClipboard(payload);
-        try {
-            if (!payload) {
-                sessionStorage.removeItem(LAYOUT_CLIPBOARD_KEY);
-                return;
-            }
-            sessionStorage.setItem(LAYOUT_CLIPBOARD_KEY, JSON.stringify(payload));
-        } catch {
-            // ignore storage failure
-        }
+        writeNullableJson(typeof window === 'undefined' ? null : window.sessionStorage, LAYOUT_CLIPBOARD_KEY, payload);
     };
 
     if (selectedComponents.length === 0) {

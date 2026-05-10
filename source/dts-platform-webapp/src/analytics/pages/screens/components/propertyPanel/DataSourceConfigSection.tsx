@@ -1,4 +1,3 @@
-// @ts-nocheck — extracted from PropertyPanel, pending typed cleanup
 import { message } from 'antd';
 import type {
     CardParameterBinding,
@@ -24,15 +23,13 @@ export function renderDataSourceConfig(
     updateComponent: (id: string, updates: Partial<ScreenComponent>) => void,
     globalVariables: ScreenGlobalVariable[],
 ) {
-    const ds = component.dataSource as DataSourceConfig | undefined;
+    const ds = component.dataSource;
     const dsType = resolveDataSourceType(ds);
     const sqlConfig = resolveSqlConfig(ds);
 
     const cardBindings: CardParameterBinding[] = ds?.type === 'card' ? (ds.cardConfig?.parameterBindings ?? []) : [];
     const metricBindings: CardParameterBinding[] = dsType === 'metric' ? (ds?.metricConfig?.parameterBindings ?? []) : [];
     const sqlBindings: CardParameterBinding[] = dsType === 'sql' ? (sqlConfig?.parameterBindings ?? []) : [];
-    const variableOptions = (globalVariables ?? []).map((item) => ({ key: item.key, label: item.label || item.key }));
-
     const updateCardBindings = (bindings: CardParameterBinding[]) => {
         setDataSource({
             type: 'card',
@@ -673,4 +670,3 @@ export function renderDataSourceConfig(
         </>
     );
 }
-

@@ -1,4 +1,3 @@
-// @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 // Shared helpers used across ECharts family renderers.
 
 export const SCREEN_UI_FONT_FAMILY = '"Lato", "Open Sans Variable", "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans", sans-serif';

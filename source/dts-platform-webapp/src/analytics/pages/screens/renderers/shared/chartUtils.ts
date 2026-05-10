@@ -1,4 +1,3 @@
-// @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 /** Shared utility functions for screen component rendering. */
 
 import type { CardData, CardParameterBinding, ComponentInteractionMapping, ScreenComponent } from '../../types';

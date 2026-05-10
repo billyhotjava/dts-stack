@@ -3,12 +3,7 @@ import test from "node:test";
 import { readdir, readFile } from "node:fs/promises";
 
 const propertyPanelDir = new URL("./", import.meta.url);
-const allowedUncheckedModules = new Set([
-    "DataSourceConfigSection.tsx",
-    "PropertyPanel.tsx",
-]);
-
-test("property panel TypeScript debt is pinned to the known large modules", async () => {
+test("property panel modules stay under TypeScript checking", async () => {
     const entries = await readdir(propertyPanelDir);
     const uncheckedFiles: string[] = [];
 
@@ -20,8 +15,5 @@ test("property panel TypeScript debt is pinned to the known large modules", asyn
         }
     }
 
-    assert.deepEqual(
-        uncheckedFiles.sort(),
-        Array.from(allowedUncheckedModules).sort(),
-    );
+    assert.deepEqual(uncheckedFiles.sort(), []);
 });

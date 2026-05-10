@@ -1,4 +1,3 @@
-// @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { analyticsApi, fetchWithPlatformAuth, HttpError } from '../../../api/analyticsApi';
 import { resolveAnalyticsErrorCodeMessage } from '../../../api/errorCodeMessages';
@@ -65,7 +64,7 @@ function normalizeColumns(
         for (const item of fallbackRows as Array<Record<string, unknown>>) {
             Object.keys(item || {}).forEach((k) => keySet.add(k));
         }
-        return Array.from(keySet).map((key, index) => ({
+        return Array.from(keySet).map((key) => ({
             name: key,
             display_name: key,
             base_type: 'type/Text',

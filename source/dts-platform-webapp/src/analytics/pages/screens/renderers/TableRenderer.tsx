@@ -1,9 +1,9 @@
-// @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 /**
  * Table-family renderer: table, scroll-board, scroll-ranking.
  * Extracted verbatim from ComponentRenderer.tsx — do not modify rendering logic.
  */
-import type { ReactNode, ComponentType, Dispatch, SetStateAction } from 'react';
+import type { ReactNode, Dispatch, SetStateAction } from 'react';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import type { CardData, ScreenComponent } from '../types';
 import type { ScreenThemeTokens } from '../screenThemes';
 import type { ScreenTheme } from '../types';
@@ -72,7 +72,6 @@ export function renderTable(props: TableRendererProps): ReactNode {
         drillRuntimeEnabled,
         componentActions,
         executeComponentActions,
-        renderUnavailableState,
     } = props;
 
     // 抽出的"滚动表格"渲染逻辑 —— 供 legacy `type='scroll-board'` 与
@@ -312,7 +311,9 @@ export function renderTable(props: TableRendererProps): ReactNode {
                                                     <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 2 }} title="此列数据已脱敏">*</span>
                                                 )}
                                                 {tableSort?.colIndex === i ? (
-                                                    <span style={{ fontSize: 10 }}>{tableSort.order === 'asc' ? '▲' : '▼'}</span>
+                                                    tableSort.order === 'asc'
+                                                        ? <ArrowUp size={10} strokeWidth={1.8} aria-hidden="true" />
+                                                        : <ArrowDown size={10} strokeWidth={1.8} aria-hidden="true" />
                                                 ) : null}
                                             </button>
                                         </th>

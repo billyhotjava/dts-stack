@@ -1,5 +1,4 @@
-// @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type MutableRefObject } from 'react';
 import { useDrop } from 'react-dnd';
 import apiClient from '@/api/apiClient';
 import { useScreen } from '../ScreenContext';
@@ -17,6 +16,24 @@ type ContextMenuState = {
     y: number;
     componentId?: string;
 } | null;
+
+type ScreenFontAsset = {
+    fontFamily: string;
+    url: string;
+    format?: string;
+};
+
+type ScreenFontResponse = ScreenFontAsset[] | { data?: ScreenFontAsset[] };
+
+function resolveScreenFontAssets(response: ScreenFontResponse): ScreenFontAsset[] {
+    const items = Array.isArray(response) ? response : response.data;
+    if (!Array.isArray(items)) return [];
+    return items.filter((item) => (
+        item
+        && typeof item.fontFamily === 'string'
+        && typeof item.url === 'string'
+    ));
+}
 
 export function DesignerCanvas() {
     const { state, addComponent, selectComponents, snapGuides, dispatch, deleteComponents, copyComponents, pasteComponents, duplicateSelected, undo, redo, clipboard, editorReadonly } = useScreen();
@@ -39,14 +56,14 @@ export function DesignerCanvas() {
     // Inject @font-face for uploaded custom fonts so they're available everywhere
     useEffect(() => {
         const styleId = 'screen-custom-fonts';
-        apiClient.get<any>({ url: '/infra/screen-fonts' })
+        apiClient.get<ScreenFontResponse>({ url: '/infra/screen-fonts' })
             .then(res => {
-                const fonts = res?.data ?? res ?? [];
+                const fonts = resolveScreenFontAssets(res);
                 if (!Array.isArray(fonts) || fonts.length === 0) return;
                 let el = document.getElementById(styleId) as HTMLStyleElement | null;
                 if (!el) { el = document.createElement('style'); el.id = styleId; document.head.appendChild(el); }
                 const formatMap: Record<string, string> = { ttf: 'truetype', otf: 'opentype', woff: 'woff', woff2: 'woff2' };
-                el.textContent = fonts.map((f: any) =>
+                el.textContent = fonts.map((f) =>
                     `@font-face { font-family: "${f.fontFamily}"; src: url("${f.url}") format("${formatMap[f.format] || 'truetype'}"); font-display: swap; }`
                 ).join('\n');
             })
@@ -186,7 +203,7 @@ export function DesignerCanvas() {
         }),
     }), [zoom, fitScale, addComponent, editorReadonly]);
 
-    const handleCanvasClick = useCallback((e: React.MouseEvent) => {
+    const handleCanvasClick = useCallback((e: MouseEvent<HTMLDivElement>) => {
         // Deselect all when clicking on empty canvas area
         if (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains('canvas-grid')) {
             selectComponents([]);
@@ -209,7 +226,7 @@ export function DesignerCanvas() {
         }
     }, [ctxMenu]);
 
-    const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    const handleContextMenu = useCallback((e: MouseEvent<HTMLDivElement>) => {
         e.preventDefault();
         e.stopPropagation();
         // Find which component was right-clicked (walk up from target)
@@ -300,7 +317,7 @@ export function DesignerCanvas() {
                 <div
                     ref={(node) => {
                         drop(node);
-                        (canvasRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+                        (canvasRef as MutableRefObject<HTMLDivElement | null>).current = node;
                     }}
                     data-testid="analytics-screen-canvas"
                     data-scale={scale}

@@ -1,5 +1,4 @@
-// @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent, type ReactNode } from 'react';
 import {
 	Box,
 	ChartColumn,
@@ -26,6 +25,7 @@ import {
 	Video,
 } from 'lucide-react';
 import { useScreen } from '../ScreenContext';
+import type { ScreenComponent } from '../types';
 
 const LAYER_ICON_SIZE = 14;
 
@@ -70,8 +70,8 @@ export function LayerPanel() {
 		.filter((item) => !item.parentContainerId || !componentMap.has(item.parentContainerId))
 		.sort((a, b) => b.zIndex - a.zIndex);
 
-	const layered: Array<{ component: typeof config.components[number]; depth: number }> = [];
-	const walk = (component: typeof config.components[number], depth: number) => {
+	const layered: Array<{ component: ScreenComponent; depth: number }> = [];
+	const walk = (component: ScreenComponent, depth: number) => {
 		if (visited.has(component.id)) return;
 		visited.add(component.id);
 		layered.push({ component, depth });
@@ -88,11 +88,11 @@ export function LayerPanel() {
 	for (const component of topLevelComponents) {
 		walk(component, 0);
 	}
-	for (const component of config.components.sort((a, b) => b.zIndex - a.zIndex)) {
+	for (const component of config.components.slice().sort((a, b) => b.zIndex - a.zIndex)) {
 		walk(component, 0);
 	}
 
-	const handleLayerClick = (id: string, e: React.MouseEvent) => {
+	const handleLayerClick = (id: string, e: MouseEvent<HTMLDivElement>) => {
 		if (e.ctrlKey || e.metaKey) {
 			// Multi-select with Ctrl/Cmd
 			if (selectedIds.includes(id)) {
@@ -120,7 +120,7 @@ export function LayerPanel() {
 		dispatch({ type: 'UPDATE_COMPONENT', payload: { id, updates: { locked: !locked } } });
 	};
 
-	const handleDragStart = useCallback((e: React.DragEvent, id: string) => {
+	const handleDragStart = useCallback((e: DragEvent<HTMLDivElement>, id: string) => {
 		if (editorReadonly) {
 			e.preventDefault();
 			return;
@@ -131,13 +131,13 @@ export function LayerPanel() {
 		(e.currentTarget as HTMLElement).style.opacity = '0.4';
 	}, [editorReadonly]);
 
-	const handleDragEnd = useCallback((e: React.DragEvent) => {
+	const handleDragEnd = useCallback((e: DragEvent<HTMLDivElement>) => {
 		(e.currentTarget as HTMLElement).style.opacity = '1';
 		dragSourceId.current = null;
 		setDragOverId(null);
 	}, []);
 
-	const handleDragOver = useCallback((e: React.DragEvent, id: string) => {
+	const handleDragOver = useCallback((e: DragEvent<HTMLDivElement>, id: string) => {
 		e.preventDefault();
 		e.dataTransfer.dropEffect = 'move';
 		if (id !== dragSourceId.current) {
@@ -145,7 +145,7 @@ export function LayerPanel() {
 		}
 	}, []);
 
-	const handleDrop = useCallback((e: React.DragEvent, targetId: string) => {
+	const handleDrop = useCallback((e: DragEvent<HTMLDivElement>, targetId: string) => {
 		e.preventDefault();
 		if (editorReadonly) return;
 		setDragOverId(null);
@@ -164,9 +164,9 @@ export function LayerPanel() {
 		dispatch({ type: 'SET_CONFIG', payload: { ...config, components: nextComponents } });
 	}, [config, dispatch, editorReadonly]);
 
-	const getComponentIcon = (type: string) => {
+	const getComponentIcon = (type: string): ReactNode => {
 		const iconProps = { size: LAYER_ICON_SIZE, strokeWidth: 1.8 };
-		const iconMap: Record<string, JSX.Element> = {
+		const iconMap: Record<string, ReactNode> = {
 			'line-chart': <ChartLine {...iconProps} />,
 			'bar-chart': <ChartColumn {...iconProps} />,
 			'pie-chart': <ChartPie {...iconProps} />,
@@ -211,7 +211,7 @@ export function LayerPanel() {
 		});
 	}, [layered, normalizedKeyword]);
 
-	const applySelectedUpdates = (updates: Partial<typeof config.components[number]>) => {
+	const applySelectedUpdates = (updates: Partial<ScreenComponent>) => {
 		if (editorReadonly) return;
 		if (selectedIds.length === 0) return;
 		for (const id of selectedIds) {
