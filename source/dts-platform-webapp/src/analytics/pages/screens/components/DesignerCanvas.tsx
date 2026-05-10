@@ -75,13 +75,13 @@ export function DesignerCanvas() {
     // Phase 4.4: resize debounce with requestAnimationFrame
     useEffect(() => {
         let rafId = 0;
+        const containerNode = containerRef.current;
         const updateFitScale = () => {
-            const node = containerRef.current;
-            if (!node) {
+            if (!containerNode) {
                 return;
             }
-            const availableWidth = Math.max(node.clientWidth - 24, 320);
-            const availableHeight = Math.max(node.clientHeight - 24, 240);
+            const availableWidth = Math.max(containerNode.clientWidth - 24, 320);
+            const availableHeight = Math.max(containerNode.clientHeight - 24, 240);
             const baseWidth = Math.max(config.width || 1920, 1);
             const baseHeight = Math.max(config.height || 1080, 1);
             const next = Math.max(0.1, Math.min(1, availableWidth / baseWidth, availableHeight / baseHeight));
@@ -96,8 +96,8 @@ export function DesignerCanvas() {
         const resizeObserver = typeof ResizeObserver !== 'undefined'
             ? new ResizeObserver(onResize)
             : null;
-        if (node && resizeObserver) {
-            resizeObserver.observe(node);
+        if (containerNode && resizeObserver) {
+            resizeObserver.observe(containerNode);
         }
         window.addEventListener('resize', onResize);
         return () => {
