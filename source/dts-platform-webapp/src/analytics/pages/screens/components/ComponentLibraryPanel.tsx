@@ -13,7 +13,7 @@ import {
     Image,
     Layers,
     ListFilter,
-    Map,
+    Map as MapIcon,
     Maximize2,
     Minimize2,
     Plug,
@@ -48,7 +48,7 @@ function renderLibraryIcon(item: Pick<ComponentItem, 'type' | 'name'> | Componen
     if (type.includes('bar') || type.includes('gantt') || type.includes('ranking')) return <ChartColumn {...props} />;
     if (type.includes('pie') || type.includes('funnel')) return <ChartPie {...props} />;
     if (type.includes('gauge') || type.includes('progress') || type.includes('water') || type.includes('digital')) return <Gauge {...props} />;
-    if (type.includes('map') || type.includes('flyline') || name.includes('地图') || name.includes('3D')) return <Map {...props} />;
+    if (type.includes('map') || type.includes('flyline') || name.includes('地图') || name.includes('3D')) return <MapIcon {...props} />;
     if (type.includes('table') || type.includes('board') || name.includes('数据展示')) return <Table2 {...props} />;
     if (type.includes('filter') || name.includes('筛选')) return <ListFilter {...props} />;
     if (type.includes('text') || type.includes('title') || type.includes('datetime') || name.includes('文本')) return <Type {...props} />;
