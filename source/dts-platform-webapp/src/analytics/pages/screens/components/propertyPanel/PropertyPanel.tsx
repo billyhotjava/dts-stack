@@ -1,5 +1,6 @@
 // @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 import { useCallback, useEffect, useState } from 'react';
+import { Link2 } from 'lucide-react';
 import { message } from 'antd';
 import { toast } from 'sonner';
 import { useScreen } from '../../ScreenContext';
@@ -61,6 +62,7 @@ import { ScrollBoardConfig } from './ScrollBoardConfig';
 import { ChartAnnotationConfig } from './ChartAnnotationConfig';
 import { TableConfig } from './TableConfig';
 import { BackgroundImageRow } from './BackgroundImageRow';
+import { SectionToggle } from './SectionToggle';
 import { THEME_OPTIONS } from '../screenHeader/helpers';
 import type {
     ColumnEntry,
@@ -756,13 +758,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
             <div className="property-panel-content flex-1 overflow-y-auto">
                 {isStyleTab && <div className="property-section py-3 border-b border-border-default">
                     <div className="property-section-title property-section-title-collapsible text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
-                        <button
-                            type="button"
-                            className="property-section-toggle text-[10px] text-text-muted transition-transform duration-200"
-                            onClick={() => toggleSection('quick-filter')}
-                        >
-                            {isSectionCollapsed('quick-filter') ? '▸' : '▾'} 快速定位
-                        </button>
+                        <SectionToggle
+                            collapsed={isSectionCollapsed('quick-filter')}
+                            label="快速定位"
+                            onToggle={() => toggleSection('quick-filter')}
+                        />
                     </div>
                     {!isSectionCollapsed('quick-filter') ? (
                         <>
@@ -866,13 +866,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                 {isStyleTab && runtimePlugin?.propertySchema?.fields?.length && shouldRenderSection('plugin-config', '插件', 'plugin', runtimePlugin.name) ? (
                     <div className="property-section py-3 border-b border-border-default">
                         <div className="property-section-title property-section-title-collapsible text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
-                            <button
-                                type="button"
-                                className="property-section-toggle text-[10px] text-text-muted transition-transform duration-200"
-                                onClick={() => toggleSection('plugin-config')}
-                            >
-                                {isSectionCollapsed('plugin-config') ? '▸' : '▾'} 插件配置 ({runtimePlugin.name})
-                            </button>
+                            <SectionToggle
+                                collapsed={isSectionCollapsed('plugin-config')}
+                                label={`插件配置 (${runtimePlugin.name})`}
+                                onToggle={() => toggleSection('plugin-config')}
+                            />
                         </div>
                         {!isSectionCollapsed('plugin-config')
                             ? renderPluginSchemaFields(selectedComponent, runtimePlugin.propertySchema.fields, handleConfigChange)
@@ -892,13 +890,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                 {isDataTab && shouldRenderSection('data-source', '数据', 'sql', 'card', 'api', 'dataset', 'metric') && (
                     <div className="property-section border-b border-border-default">
                         <div className="property-section-title property-section-title-collapsible text-xs font-semibold text-text-secondary uppercase tracking-wide flex items-center justify-between cursor-pointer select-none">
-                            <button
-                                type="button"
-                                className="property-section-toggle text-[10px] text-text-muted transition-transform duration-200"
-                                onClick={() => toggleSection('data-source')}
-                            >
-                                {isSectionCollapsed('data-source') ? '▸' : '▾'} 数据源
-                            </button>
+                            <SectionToggle
+                                collapsed={isSectionCollapsed('data-source')}
+                                label="数据源"
+                                onToggle={() => toggleSection('data-source')}
+                            />
                         </div>
                         {!isSectionCollapsed('data-source')
                             ? renderDataSourceConfig(selectedComponent, updateComponent, config.globalVariables ?? [])
@@ -927,13 +923,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                 {isStyleTab && shouldRenderSection('component-config', '标注', '辅助线', 'markLine', 'threshold') && (selectedComponent.type === 'line-chart' || selectedComponent.type === 'bar-chart' || selectedComponent.type === 'scatter-chart' || selectedComponent.type === 'combo-chart' || selectedComponent.type === 'waterfall-chart') && (
                     <div className="property-section py-3 border-b border-border-default">
                         <div className="property-section-title property-section-title-collapsible text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
-                            <button
-                                type="button"
-                                className="property-section-toggle text-[10px] text-text-muted transition-transform duration-200"
-                                onClick={() => toggleSection('annotations')}
-                            >
-                                {isSectionCollapsed('annotations') ? '▸' : '▾'} 标注 / 阈值线
-                            </button>
+                            <SectionToggle
+                                collapsed={isSectionCollapsed('annotations')}
+                                label="标注 / 阈值线"
+                                onToggle={() => toggleSection('annotations')}
+                            />
                         </div>
                         {!isSectionCollapsed('annotations') && (
                             <ChartAnnotationConfig
@@ -948,13 +942,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                 {isInteractionTab && drillDownContent ? (
                     <div className="property-section py-3 border-b border-border-default">
                         <div className="property-section-title property-section-title-collapsible text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
-                            <button
-                                type="button"
-                                className="property-section-toggle text-[10px] text-text-muted transition-transform duration-200"
-                                onClick={() => toggleSection('drill-down')}
-                            >
-                                {isSectionCollapsed('drill-down') ? '▸' : '▾'} 下钻配置
-                            </button>
+                            <SectionToggle
+                                collapsed={isSectionCollapsed('drill-down')}
+                                label="下钻配置"
+                                onToggle={() => toggleSection('drill-down')}
+                            />
                         </div>
                         {!isSectionCollapsed('drill-down') ? drillDownContent : null}
                     </div>
@@ -963,13 +955,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                 {isInteractionTab && interactionContent ? (
                     <div className="property-section py-3 border-b border-border-default">
                         <div className="property-section-title property-section-title-collapsible text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
-                            <button
-                                type="button"
-                                className="property-section-toggle text-[10px] text-text-muted transition-transform duration-200"
-                                onClick={() => toggleSection('interaction')}
-                            >
-                                {isSectionCollapsed('interaction') ? '▸' : '▾'} 联动配置
-                            </button>
+                            <SectionToggle
+                                collapsed={isSectionCollapsed('interaction')}
+                                label="联动配置"
+                                onToggle={() => toggleSection('interaction')}
+                            />
                         </div>
                         {!isSectionCollapsed('interaction') ? interactionContent : null}
                     </div>
@@ -978,13 +968,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                 {isInteractionTab && actionContent ? (
                     <div className="property-section py-3 border-b border-border-default">
                         <div className="property-section-title property-section-title-collapsible text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
-                            <button
-                                type="button"
-                                className="property-section-toggle text-[10px] text-text-muted transition-transform duration-200"
-                                onClick={() => toggleSection('actions')}
-                            >
-                                {isSectionCollapsed('actions') ? '▸' : '▾'} 动作入口
-                            </button>
+                            <SectionToggle
+                                collapsed={isSectionCollapsed('actions')}
+                                label="动作入口"
+                                onToggle={() => toggleSection('actions')}
+                            />
                         </div>
                         {!isSectionCollapsed('actions') ? actionContent : null}
                     </div>
@@ -1003,7 +991,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
 
                 {isInteractionTab && !drillDownContent && !interactionContent && !actionContent && (
                     <div className="flex flex-col items-center justify-center text-xs text-text-muted" style={{ minHeight: 220, padding: 24 }}>
-                        <div className="text-3xl opacity-30 mb-2">🔗</div>
+                        <Link2 size={28} strokeWidth={1.6} className="opacity-30 mb-2" aria-hidden="true" />
                         <div className="text-xs text-text-muted">当前组件暂无交互配置</div>
                         <div className="text-xs text-text-muted text-center mt-2">图表类组件支持下钻、联动和动作配置</div>
                     </div>

@@ -1,4 +1,3 @@
-// @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 import { toast } from 'sonner';
 import type { DataSourceConfig, ScreenComponent } from '../../types';
 import { CardSourceColumnBindingsEditor } from './CardSourceColumnBindingsEditor';

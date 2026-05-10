@@ -2,6 +2,7 @@ import SchemaConfigRenderer from '../../configSchema/editors/SchemaConfigRendere
 import { COMPONENT_CONFIG_SCHEMAS } from '../../configSchema/schemas';
 import type { ScreenComponent, ScreenConfig } from '../../types';
 import { setByPath } from './helpers';
+import { SectionToggle } from './SectionToggle';
 
 interface ComponentConfigSectionOptions {
     selectedComponent: ScreenComponent;
@@ -29,13 +30,7 @@ export function renderComponentConfigSection({
                 className="property-section-title property-section-title-collapsible text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none"
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
             >
-                <button
-                    type="button"
-                    className="property-section-toggle text-[10px] text-text-muted transition-transform duration-200"
-                    onClick={() => toggleSection('component-config')}
-                >
-                    {isCollapsed ? '▸' : '▾'} 组件配置
-                </button>
+                <SectionToggle collapsed={isCollapsed} label="组件配置" onToggle={() => toggleSection('component-config')} />
             </div>
 
             {!isCollapsed ? renderComponentConfigBody(selectedComponent, theme, updateComponent) : null}

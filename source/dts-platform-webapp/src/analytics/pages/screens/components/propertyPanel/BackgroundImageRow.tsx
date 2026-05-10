@@ -1,13 +1,25 @@
-// @ts-nocheck — extracted from PropertyPanel, pending typed cleanup
+import type { ChangeEvent } from 'react';
 import { useRef, useState } from 'react';
 import { message } from 'antd';
+import { X } from 'lucide-react';
 import apiClient from '@/api/apiClient';
+
+type UploadImageResponse = {
+    data?: {
+        url?: string;
+    };
+    url?: string;
+};
+
+function getErrorMessage(err: unknown) {
+    return err instanceof Error ? err.message : '上传失败';
+}
 
 export function BackgroundImageRow({ value, onChange }: { value: string; onChange: (url: string) => void }) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
 
-    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleUpload = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
         if (file.size > 10 * 1024 * 1024) { message.error('文件大小不能超过 10MB'); return; }
@@ -15,11 +27,11 @@ export function BackgroundImageRow({ value, onChange }: { value: string; onChang
         formData.append('file', file);
         setUploading(true);
         try {
-            const res = await apiClient.post<{ data: { url: string } }>({ url: '/infra/screen-images/upload', data: formData });
-            const url = (res as any)?.data?.url ?? (res as any)?.url;
+            const res = await apiClient.post<UploadImageResponse>({ url: '/infra/screen-images/upload', data: formData });
+            const url = res.data?.url ?? res.url;
             if (url) { onChange(url); message.success('上传成功'); }
             else { message.error('上传返回格式异常'); }
-        } catch (err: any) { message.error(err?.message || '上传失败'); }
+        } catch (err: unknown) { message.error(getErrorMessage(err)); }
         finally { setUploading(false); if (fileInputRef.current) fileInputRef.current.value = ''; }
     };
 
@@ -47,9 +59,10 @@ export function BackgroundImageRow({ value, onChange }: { value: string; onChang
                         type="button"
                         className="px-1.5 py-1.5 text-xs border border-border-default rounded bg-surface-card text-text-primary hover:bg-surface-hover"
                         title="清除背景图"
+                        aria-label="清除背景图"
                         onClick={() => onChange('')}
                     >
-                        ✕
+                        <X size={14} aria-hidden="true" />
                     </button>
                 )}
                 <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }}

@@ -1,5 +1,6 @@
 import type { ExplainabilityResponse } from '../../../../api/analyticsApi';
 import { writeTextToClipboard } from '../../../../hooks/clipboard';
+import { SectionToggle } from './SectionToggle';
 import type { ExplainState } from './types';
 
 interface ExplainConfigSectionOptions {
@@ -24,13 +25,7 @@ export function renderExplainConfig({
     return (
         <div className="property-section py-3 border-b border-border-default">
             <div className="property-section-title property-section-title-collapsible text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
-                <button
-                    type="button"
-                    className="property-section-toggle text-[10px] text-text-muted transition-transform duration-200"
-                    onClick={() => toggleSection('explain')}
-                >
-                    {isCollapsed ? '▸' : '▾'} 解释
-                </button>
+                <SectionToggle collapsed={isCollapsed} label="解释" onToggle={() => toggleSection('explain')} />
             </div>
             {!isCollapsed ? (
                 canExplain ? (

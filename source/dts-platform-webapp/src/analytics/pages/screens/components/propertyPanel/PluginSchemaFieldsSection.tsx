@@ -1,4 +1,3 @@
-// @ts-nocheck — extracted from PropertyPanel, pending typed cleanup
 import { toast } from 'sonner';
 import type { ScreenComponent } from '../../types';
 import type { PropertySchemaField } from '../../plugins/types';

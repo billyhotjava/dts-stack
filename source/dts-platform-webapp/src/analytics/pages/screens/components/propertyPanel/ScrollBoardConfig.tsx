@@ -1,4 +1,3 @@
-// @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 import type { DataSourceConfig, ScreenComponent } from '../../types';
 import { CardSourceColumnBindingsEditor } from './CardSourceColumnBindingsEditor';
 import { resolveDataSourceType } from './helpers';

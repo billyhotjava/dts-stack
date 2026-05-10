@@ -1,6 +1,8 @@
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp } from 'lucide-react';
 import type { ChartPreset } from '../../chartPresets';
 import { CHART_COMPONENT_TYPES } from '../../chartPresets';
 import type { ScreenComponent } from '../../types';
+import { SectionToggle } from './SectionToggle';
 import type { LayoutClipboardPayload, StyleClipboardPayload } from './types';
 
 export type QuickActionMode = 'core' | 'layout' | 'nudge' | 'clipboard' | 'all';
@@ -68,13 +70,7 @@ export function renderQuickActionsConfig({
     return (
         <div className="property-section py-3 border-b border-border-default">
             <div className="property-section-title property-section-title-collapsible text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
-                <button
-                    type="button"
-                    className="property-section-toggle text-[10px] text-text-muted transition-transform duration-200"
-                    onClick={() => toggleSection('quick-actions')}
-                >
-                    {isCollapsed ? '▸' : '▾'} 快捷操作
-                </button>
+                <SectionToggle collapsed={isCollapsed} label="快捷操作" onToggle={() => toggleSection('quick-actions')} />
             </div>
             {!isCollapsed ? (
                 <>
@@ -103,14 +99,14 @@ export function renderQuickActionsConfig({
                     ) : null}
                     {showGroup('nudge') ? (
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 6, marginTop: 6 }}>
-                            <button type="button" className={buttonClassName} onClick={() => nudgePosition(-1, 0)} title="X -1">←1</button>
-                            <button type="button" className={buttonClassName} onClick={() => nudgePosition(1, 0)} title="X +1">→1</button>
-                            <button type="button" className={buttonClassName} onClick={() => nudgePosition(0, -1)} title="Y -1">↑1</button>
-                            <button type="button" className={buttonClassName} onClick={() => nudgePosition(0, 1)} title="Y +1">↓1</button>
-                            <button type="button" className={buttonClassName} onClick={() => nudgePosition(-10, 0)} title="X -10">←10</button>
-                            <button type="button" className={buttonClassName} onClick={() => nudgePosition(10, 0)} title="X +10">→10</button>
-                            <button type="button" className={buttonClassName} onClick={() => nudgePosition(0, -10)} title="Y -10">↑10</button>
-                            <button type="button" className={buttonClassName} onClick={() => nudgePosition(0, 10)} title="Y +10">↓10</button>
+                            <button type="button" className={buttonClassName} onClick={() => nudgePosition(-1, 0)} title="X -1"><ArrowLeft size={13} aria-hidden="true" />1</button>
+                            <button type="button" className={buttonClassName} onClick={() => nudgePosition(1, 0)} title="X +1"><ArrowRight size={13} aria-hidden="true" />1</button>
+                            <button type="button" className={buttonClassName} onClick={() => nudgePosition(0, -1)} title="Y -1"><ArrowUp size={13} aria-hidden="true" />1</button>
+                            <button type="button" className={buttonClassName} onClick={() => nudgePosition(0, 1)} title="Y +1"><ArrowDown size={13} aria-hidden="true" />1</button>
+                            <button type="button" className={buttonClassName} onClick={() => nudgePosition(-10, 0)} title="X -10"><ArrowLeft size={13} aria-hidden="true" />10</button>
+                            <button type="button" className={buttonClassName} onClick={() => nudgePosition(10, 0)} title="X +10"><ArrowRight size={13} aria-hidden="true" />10</button>
+                            <button type="button" className={buttonClassName} onClick={() => nudgePosition(0, -10)} title="Y -10"><ArrowUp size={13} aria-hidden="true" />10</button>
+                            <button type="button" className={buttonClassName} onClick={() => nudgePosition(0, 10)} title="Y +10"><ArrowDown size={13} aria-hidden="true" />10</button>
                             <button type="button" className={buttonClassName} onClick={() => nudgeSize(-10, 0)} title="宽度 -10">宽-10</button>
                             <button type="button" className={buttonClassName} onClick={() => nudgeSize(10, 0)} title="宽度 +10">宽+10</button>
                             <button type="button" className={buttonClassName} onClick={() => nudgeSize(0, -10)} title="高度 -10">高-10</button>

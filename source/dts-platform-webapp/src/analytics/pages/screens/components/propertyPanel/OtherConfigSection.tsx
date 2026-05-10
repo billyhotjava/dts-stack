@@ -7,6 +7,7 @@ import {
     resolveTabSwitcherOptionValues,
     serializeVisibilityMatchValues,
 } from './helpers';
+import { SectionToggle } from './SectionToggle';
 
 interface OtherConfigSectionOptions {
     selectedComponent: ScreenComponent;
@@ -123,13 +124,7 @@ export function renderOtherConfig({
     return (
         <div className="property-section py-3 border-b border-border-default">
             <div className="property-section-title property-section-title-collapsible text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
-                <button
-                    type="button"
-                    className="property-section-toggle text-[10px] text-text-muted transition-transform duration-200"
-                    onClick={() => toggleSection('other')}
-                >
-                    {isCollapsed ? '▸' : '▾'} 其他
-                </button>
+                <SectionToggle collapsed={isCollapsed} label="其他" onToggle={() => toggleSection('other')} />
             </div>
             {!isCollapsed ? (
                 <>

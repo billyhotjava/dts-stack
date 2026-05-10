@@ -1,5 +1,5 @@
-// @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 import { useCallback, useEffect, useState } from 'react';
+import { Check, ChevronDown } from 'lucide-react';
 import type { ScreenListItem } from '../../../../api/analyticsApi';
 import {
     SCREEN_PREVIEW_URL_RE,
@@ -10,7 +10,12 @@ import {
     fetchScreenList,
 } from './helpers';
 
-export function ScreenJumpPicker({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+interface ScreenJumpPickerProps {
+    value: string;
+    onChange: (url: string) => void;
+}
+
+export function ScreenJumpPicker({ value, onChange }: ScreenJumpPickerProps) {
     // "Screen" mode covers both the canonical id-based URL and the legacy
     // screen-ref:{name}|... form (kept for back-compat reading only).
     const isScreenJump = !value
@@ -78,15 +83,27 @@ export function ScreenJumpPicker({ value, onChange }: { value: string; onChange:
                             type="button"
                             className={inputCls + ' w-full text-left cursor-pointer flex items-center justify-between'}
                             onClick={() => { setOpen(!open); if (!open) void loadScreens(); }}
+                            aria-expanded={open}
+                            aria-haspopup="listbox"
                         >
                             <span className={selectedName ? 'text-text-primary' : 'text-text-tertiary'}>
                                 {selectedName || '点击选择大屏...'}
                             </span>
-                            <span className="text-text-tertiary">{open ? '▲' : '▼'}</span>
+                            <ChevronDown
+                                size={14}
+                                strokeWidth={1.8}
+                                className="text-text-tertiary"
+                                style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.16s ease' }}
+                                aria-hidden="true"
+                            />
                         </button>
 
                         {open && (
-                            <div className="absolute top-full left-0 right-0 z-[999] max-h-60 overflow-y-auto border border-border-default rounded-md bg-surface-card shadow-lg mt-1">
+                            <div
+                                className="absolute top-full left-0 right-0 z-[999] max-h-60 overflow-y-auto border border-border-default rounded-md bg-surface-card shadow-lg mt-1"
+                                role="listbox"
+                                aria-label="选择目标大屏"
+                            >
                                 <div className="px-2 py-1.5 border-b border-border-default">
                                     <input
                                         type="text"
@@ -108,18 +125,22 @@ export function ScreenJumpPicker({ value, onChange }: { value: string; onChange:
                                         const isSelected = selectedScreenId != null && String(s.id) === selectedScreenId;
                                         const isPublished = s.publishedVersionNo != null && s.publishedVersionNo > 0;
                                         return (
-                                            <div
+                                            <button
                                                 key={String(s.id)}
+                                                type="button"
                                                 onClick={() => { onChange(buildScreenJumpUrl(s)); setOpen(false); setSearch(''); }}
-                                                className={`flex items-center justify-between gap-2 px-3.5 py-2 cursor-pointer text-xs hover:bg-brand/[0.06] ${isSelected ? 'bg-brand/[0.08]' : ''}`}
+                                                className={`w-full flex items-center justify-between gap-2 px-3.5 py-2 cursor-pointer text-left text-xs hover:bg-brand/[0.06] ${isSelected ? 'bg-brand/[0.08]' : ''}`}
+                                                role="option"
+                                                aria-selected={isSelected}
                                             >
                                                 <span className={`flex-1 min-w-0 truncate ${isSelected ? 'font-semibold' : ''}`}>
-                                                    {isSelected ? '✓ ' : ''}{s.name || `大屏 #${s.id}`}
+                                                    {isSelected && <Check size={13} className="mr-1 inline-block text-brand" aria-hidden="true" />}
+                                                    {s.name || `大屏 #${s.id}`}
                                                 </span>
                                                 <span className={`flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded ${isPublished ? 'bg-emerald-500/10 text-emerald-500' : 'bg-slate-400/10 text-text-tertiary'}`}>
                                                     {isPublished ? '已发布' : '草稿'}
                                                 </span>
-                                            </div>
+                                            </button>
                                         );
                                     })
                                 )}

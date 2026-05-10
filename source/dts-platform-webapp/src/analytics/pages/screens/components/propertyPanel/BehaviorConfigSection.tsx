@@ -1,6 +1,8 @@
-// @ts-nocheck — extracted from PropertyPanel, pending typed cleanup
+import { Plus, Trash2 } from 'lucide-react';
 import type {
+    ComponentInteractionConfig,
     ComponentInteractionMapping,
+    DrillDownConfig,
     DrillLevel,
     ScreenComponent,
     ScreenComponentAction,
@@ -25,13 +27,14 @@ export function renderInteractionConfig(
         return null;
     }
 
-    const interaction = component.interaction ?? {
+    const defaultInteraction: ComponentInteractionConfig = {
         enabled: false,
-        mappings: [] as ComponentInteractionMapping[],
+        mappings: [],
         jumpEnabled: false,
         jumpUrlTemplate: '',
-        jumpOpenMode: 'new-tab' as const,
+        jumpOpenMode: 'new-tab',
     };
+    const interaction: ComponentInteractionConfig = component.interaction ?? defaultInteraction;
     const mappings = interaction.mappings ?? [];
     const sourcePathCandidates = (() => {
         const t = component.type;
@@ -44,7 +47,7 @@ export function renderInteractionConfig(
         return ['name', 'seriesName', 'value', 'data.name', 'data.value', 'data.code'];
     })();
 
-    const setInteraction = (next: typeof interaction) => {
+    const setInteraction = (next: ComponentInteractionConfig) => {
         updateComponent(component.id, { interaction: next });
     };
 
@@ -141,16 +144,19 @@ export function renderInteractionConfig(
                             </div>
 
                             <button
+                                type="button"
                                 className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 onClick={() => setInteraction({ ...interaction, mappings: mappings.filter((_, i) => i !== index) })}
-                                style={{ width: '100%', cursor: 'pointer', textAlign: 'center', color: '#ef4444' }}
+                                style={{ width: '100%', cursor: 'pointer', textAlign: 'center', color: '#ef4444', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                             >
+                                <Trash2 size={13} aria-hidden="true" />
                                 删除联动规则
                             </button>
                         </div>
                     ))}
 
                     <button
+                        type="button"
                         className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                         onClick={() => setInteraction({
                             ...interaction,
@@ -161,9 +167,10 @@ export function renderInteractionConfig(
                                 fallbackValue: '',
                             }],
                         })}
-                        style={{ width: '100%', cursor: 'pointer', textAlign: 'center', color: '#6366f1' }}
+                        style={{ width: '100%', cursor: 'pointer', textAlign: 'center', color: '#6366f1', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                     >
-                        + 添加联动规则
+                        <Plus size={13} aria-hidden="true" />
+                        添加联动规则
                     </button>
                     <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 6, lineHeight: 1.5 }}>
                         支持自定义路径，例如 <code>data.code</code>；可对值做数值/大小写转换，并设置空值回退。
@@ -233,7 +240,7 @@ export function renderActionConfig(
         return null;
     }
 
-    const actions = component.actions ?? [];
+    const actions: ScreenComponentAction[] = component.actions ?? [];
     const sourcePathCandidates = getActionSourcePathCandidates(component.type);
 
     const setActions = (next: ScreenComponentAction[]) => {
@@ -356,8 +363,9 @@ export function renderActionConfig(
                                             type="button"
                                             className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                             onClick={() => updateMappings(index, mappings.filter((_, i) => i !== mappingIndex))}
-                                            style={{ width: '100%', textAlign: 'center', cursor: 'pointer', color: '#ef4444' }}
+                                            style={{ width: '100%', textAlign: 'center', cursor: 'pointer', color: '#ef4444', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                                         >
+                                            <Trash2 size={13} aria-hidden="true" />
                                             删除映射
                                         </button>
                                     </div>
@@ -370,9 +378,10 @@ export function renderActionConfig(
                                         ...mappings,
                                         { variableKey: '', sourcePath: 'name', transform: 'raw', fallbackValue: '' },
                                     ])}
-                                    style={{ width: '100%', textAlign: 'center', cursor: 'pointer', color: '#2563eb' }}
+                                    style={{ width: '100%', textAlign: 'center', cursor: 'pointer', color: '#2563eb', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                                 >
-                                    + 添加变量映射
+                                    <Plus size={13} aria-hidden="true" />
+                                    添加变量映射
                                 </button>
                             </>
                         ) : null}
@@ -459,8 +468,9 @@ export function renderActionConfig(
                             type="button"
                             className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             onClick={() => setActions(actions.filter((_, i) => i !== index))}
-                            style={{ width: '100%', textAlign: 'center', cursor: 'pointer', color: '#ef4444', marginTop: 8 }}
+                            style={{ width: '100%', textAlign: 'center', cursor: 'pointer', color: '#ef4444', marginTop: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                         >
+                            <Trash2 size={13} aria-hidden="true" />
                             删除动作
                         </button>
                     </div>
@@ -474,9 +484,10 @@ export function renderActionConfig(
                     ...actions,
                     { type: 'open-panel', label: '查看详情', panelTitle: '{{name}}', panelBodyTemplate: '{{name}}' },
                 ])}
-                style={{ width: '100%', textAlign: 'center', cursor: 'pointer', color: '#2563eb' }}
+                style={{ width: '100%', textAlign: 'center', cursor: 'pointer', color: '#2563eb', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
             >
-                + 添加动作入口
+                <Plus size={13} aria-hidden="true" />
+                添加动作入口
             </button>
         </>
     );
@@ -507,7 +518,7 @@ export function renderDrillDownConfig(
     const enabled = drillDown?.enabled ?? false;
     const levels = drillDown?.levels ?? [];
 
-    const setDrillDown = (updates: Partial<typeof drillDown>) => {
+    const setDrillDown = (updates: Partial<DrillDownConfig>) => {
         updateComponent(component.id, {
             drillDown: { enabled, levels, ...drillDown, ...updates },
         });
@@ -557,13 +568,15 @@ export function renderDrillDownConfig(
                             }}>
                                 <span>层级 {i + 1}</span>
                                 <button
+                                    type="button"
                                     className="property-btn-small inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed"
                                     onClick={() => removeLevel(i)}
                                     style={{
                                         background: 'none', border: 'none',
-                                        color: '#ef4444', cursor: 'pointer', fontSize: 11,
+                                        color: '#ef4444', cursor: 'pointer', fontSize: 11, gap: 4,
                                     }}
                                 >
+                                    <Trash2 size={12} aria-hidden="true" />
                                     删除
                                 </button>
                             </div>
@@ -599,14 +612,17 @@ export function renderDrillDownConfig(
                     ))}
 
                     <button
+                        type="button"
                         className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                         onClick={addLevel}
                         style={{
                             width: '100%', cursor: 'pointer',
                             textAlign: 'center', color: '#6366f1',
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                         }}
                     >
-                        + 添加下钻层级
+                        <Plus size={13} aria-hidden="true" />
+                        添加下钻层级
                     </button>
                 </>
             )}

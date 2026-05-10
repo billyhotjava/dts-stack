@@ -1,4 +1,5 @@
 import type { ScreenComponent } from '../../types';
+import { SectionToggle } from './SectionToggle';
 
 interface PositionSizeSectionOptions {
     selectedComponent: ScreenComponent;
@@ -26,13 +27,7 @@ export function renderPositionSizeConfig({
     return (
         <div className="property-section py-3 border-b border-border-default">
             <div className="property-section-title property-section-title-collapsible text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
-                <button
-                    type="button"
-                    className="property-section-toggle text-[10px] text-text-muted transition-transform duration-200"
-                    onClick={() => toggleSection('position-size')}
-                >
-                    {isCollapsed ? '▸' : '▾'} 位置与尺寸
-                </button>
+                <SectionToggle collapsed={isCollapsed} label="位置与尺寸" onToggle={() => toggleSection('position-size')} />
             </div>
             {!isCollapsed ? (
                 <>

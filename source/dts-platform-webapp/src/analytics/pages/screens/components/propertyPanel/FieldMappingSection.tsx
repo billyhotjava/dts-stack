@@ -1,6 +1,7 @@
 import type { DataSourceConfig, FieldMapping, ScreenComponent } from '../../types';
 import { FieldMappingPanel, isMappable } from '../FieldMappingPanel';
 import { resolveDataSourceType } from './helpers';
+import { SectionToggle } from './SectionToggle';
 
 interface FieldMappingSectionOptions {
     selectedComponent: ScreenComponent;
@@ -32,13 +33,7 @@ export function renderFieldMappingConfig({
     return (
         <div className="property-section py-3 border-b border-border-default">
             <div className="property-section-title property-section-title-collapsible text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
-                <button
-                    type="button"
-                    className="property-section-toggle text-[10px] text-text-muted transition-transform duration-200"
-                    onClick={() => toggleSection('field-mapping')}
-                >
-                    {isCollapsed ? '▸' : '▾'} 字段映射
-                </button>
+                <SectionToggle collapsed={isCollapsed} label="字段映射" onToggle={() => toggleSection('field-mapping')} />
                 <label style={{ fontSize: 11, color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>
                     <input
                         type="checkbox"

@@ -1,4 +1,5 @@
 import type { ScreenComponent, ScreenConfig } from '../../types';
+import { SectionToggle } from './SectionToggle';
 
 interface AnimationConfigSectionOptions {
     selectedComponent: ScreenComponent;
@@ -22,13 +23,7 @@ export function renderAnimationConfig({
     return (
         <div className="property-section py-3 border-b border-border-default" style={{ marginTop: 8 }}>
             <div className="property-section-title property-section-title-collapsible text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
-                <button
-                    type="button"
-                    className="property-section-toggle text-[10px] text-text-muted transition-transform duration-200"
-                    onClick={() => toggleSection('animation')}
-                >
-                    {isCollapsed ? '▸' : '▾'} 入场动画
-                </button>
+                <SectionToggle collapsed={isCollapsed} label="入场动画" onToggle={() => toggleSection('animation')} />
             </div>
             {!isCollapsed && (
                 <>

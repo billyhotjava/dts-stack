@@ -15,4 +15,7 @@ test("PropertyPanel delegates background image upload to the extracted row compo
 	assert.equal(propertyPanelSource.includes("function BackgroundImageRow("), false);
 	assert.match(backgroundRowSource, /export function BackgroundImageRow/);
 	assert.match(backgroundRowSource, /\/infra\/screen-images\/upload/);
+	assert.match(backgroundRowSource, /import \{ X \} from 'lucide-react'/);
+	assert.equal(backgroundRowSource.includes("@ts-nocheck"), false);
+	assert.equal(backgroundRowSource.includes("✕"), false);
 });

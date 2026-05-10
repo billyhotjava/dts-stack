@@ -1,4 +1,5 @@
 import type { ScreenComponent } from '../../types';
+import { SectionToggle } from './SectionToggle';
 
 interface ComponentAppearanceSectionOptions {
     selectedComponent: ScreenComponent;
@@ -19,13 +20,7 @@ export function renderComponentAppearanceConfig({
     return (
         <div className="property-section py-3 border-b border-border-default">
             <div className="property-section-title property-section-title-collapsible text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
-                <button
-                    type="button"
-                    className="property-section-toggle text-[10px] text-text-muted transition-transform duration-200"
-                    onClick={() => toggleSection('component-appearance')}
-                >
-                    {isCollapsed ? '▸' : '▾'} 组件外观
-                </button>
+                <SectionToggle collapsed={isCollapsed} label="组件外观" onToggle={() => toggleSection('component-appearance')} />
             </div>
             {!isCollapsed ? (
                 <>

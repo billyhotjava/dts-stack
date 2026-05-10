@@ -1,5 +1,5 @@
-// @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 import { useState } from 'react';
+import { Plus, X } from 'lucide-react';
 import type { ScreenComponent } from '../../types';
 
 // Default templates per component type
@@ -130,10 +130,12 @@ export function StaticDataEditor({ component, updateComponent }: {
 
     const applyJson = () => {
         try {
-            const parsed = JSON.parse(jsonText);
-            if (!Array.isArray(parsed) || parsed.length < 1) throw new Error('需要至少一行（表头）');
+            const parsed: unknown = JSON.parse(jsonText);
+            if (!Array.isArray(parsed) || parsed.length < 1 || !Array.isArray(parsed[0])) {
+                throw new Error('需要至少一行（表头）');
+            }
             const h = parsed[0].map(String);
-            const d = parsed.slice(1).map((r: unknown[]) => {
+            const d = parsed.slice(1).map((r: unknown) => {
                 const row = Array.isArray(r) ? r.map(String) : [];
                 while (row.length < h.length) row.push('');
                 return row.slice(0, h.length);
@@ -185,15 +187,19 @@ export function StaticDataEditor({ component, updateComponent }: {
                                         />
                                         {headers.length > 1 && (
                                             <button type="button" onClick={() => deleteColumn(ci)}
-                                                style={{ position: 'absolute', top: 0, right: 2, background: 'none', border: 'none', color: 'var(--color-text-tertiary)', cursor: 'pointer', fontSize: 10, lineHeight: 1 }}
-                                                title="删除列">×</button>
+                                                style={{ position: 'absolute', top: 0, right: 2, background: 'none', border: 'none', color: 'var(--color-text-tertiary)', cursor: 'pointer', lineHeight: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                title="删除列" aria-label="删除列">
+                                                <X size={11} aria-hidden="true" />
+                                            </button>
                                         )}
                                     </th>
                                 ))}
                                 <th className="bg-surface-card" style={{ width: 28, padding: 0, borderBottom: '1px solid var(--color-border, rgba(255,255,255,0.1))' }}>
                                     <button type="button" onClick={addColumn}
-                                        style={{ background: 'none', border: 'none', color: 'var(--color-primary, #509EE3)', cursor: 'pointer', fontSize: 14, padding: '2px 6px' }}
-                                        title="添加列">+</button>
+                                        style={{ background: 'none', border: 'none', color: 'var(--color-primary, #509EE3)', cursor: 'pointer', padding: '2px 6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                        title="添加列" aria-label="添加列">
+                                        <Plus size={14} aria-hidden="true" />
+                                    </button>
                                 </th>
                             </tr>
                         </thead>
@@ -216,8 +222,10 @@ export function StaticDataEditor({ component, updateComponent }: {
                                     <td style={{ padding: 0, textAlign: 'center', borderBottom: '1px solid var(--color-border, rgba(255,255,255,0.1))' }}>
                                         {rows.length > 1 && (
                                             <button type="button" onClick={() => deleteRow(ri)}
-                                                style={{ background: 'none', border: 'none', color: 'var(--color-text-tertiary)', cursor: 'pointer', fontSize: 12 }}
-                                                title="删除行">×</button>
+                                                style={{ background: 'none', border: 'none', color: 'var(--color-text-tertiary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                title="删除行" aria-label="删除行">
+                                                <X size={12} aria-hidden="true" />
+                                            </button>
                                         )}
                                     </td>
                                 </tr>
@@ -227,8 +235,11 @@ export function StaticDataEditor({ component, updateComponent }: {
                     <div className="bg-surface-card" style={{ padding: '4px 8px', borderTop: '1px solid var(--color-border, rgba(255,255,255,0.1))' }}>
                         <button type="button" onClick={addRow}
                             className="bg-surface-card"
-                            style={{ border: '1px dashed var(--color-border, rgba(255,255,255,0.15))', borderRadius: 4, padding: '3px 12px', cursor: 'pointer', fontSize: 11, color: 'var(--color-primary, #509EE3)', width: '100%' }}
-                        >+ 添加行</button>
+                            style={{ border: '1px dashed var(--color-border, rgba(255,255,255,0.15))', borderRadius: 4, padding: '3px 12px', cursor: 'pointer', fontSize: 11, color: 'var(--color-primary, #509EE3)', width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                        >
+                            <Plus size={13} aria-hidden="true" />
+                            添加行
+                        </button>
                     </div>
                 </div>
             ) : (

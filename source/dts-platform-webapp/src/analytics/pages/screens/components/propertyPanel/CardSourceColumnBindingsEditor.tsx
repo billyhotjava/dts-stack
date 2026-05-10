@@ -1,5 +1,5 @@
-// @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 import { message } from 'antd';
+import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 import type { ColumnEntry, SourceColumnOption } from './types';
 
 export function CardSourceColumnBindingsEditor({
@@ -15,7 +15,7 @@ export function CardSourceColumnBindingsEditor({
     defaultAlign: NonNullable<ColumnEntry['align']>;
     onColumnsChange: (value: ColumnEntry[] | undefined) => void;
 }) {
-    const fallbackColumns = sourceCols.map((item) => ({ source: item.name } as ColumnEntry));
+    const fallbackColumns: ColumnEntry[] = sourceCols.map((item) => ({ source: item.name }));
     const effectiveColumns = columns ?? fallbackColumns;
     const usedSourceSet = new Set(effectiveColumns.map((item) => item.source));
     const unboundSources = sourceCols.filter((item) => !usedSourceSet.has(item.name));
@@ -63,7 +63,8 @@ export function CardSourceColumnBindingsEditor({
                     disabled={unboundSources.length === 0}
                     title="追加一个未绑定字段"
                 >
-                    + 添加列
+                    <Plus size={13} aria-hidden="true" />
+                    添加列
                 </button>
                 <button
                     type="button"
@@ -109,7 +110,7 @@ export function CardSourceColumnBindingsEditor({
                                     disabled={index === 0}
                                     title="上移"
                                 >
-                                    ↑
+                                    <ArrowUp size={13} aria-hidden="true" />
                                 </button>
                                 <button
                                     type="button"
@@ -118,7 +119,7 @@ export function CardSourceColumnBindingsEditor({
                                     disabled={index >= effectiveColumns.length - 1}
                                     title="下移"
                                 >
-                                    ↓
+                                    <ArrowDown size={13} aria-hidden="true" />
                                 </button>
                                 <button
                                     type="button"
@@ -126,6 +127,7 @@ export function CardSourceColumnBindingsEditor({
                                     onClick={() => handleRemove(index)}
                                     title="删除该列"
                                 >
+                                    <Trash2 size={13} aria-hidden="true" />
                                     删除
                                 </button>
                             </div>
