@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import apiClient from '@/api/apiClient';
 import {
     getScreenImageUploadErrorMessage,
+    resolveScreenImageUploadUrl,
     SCREEN_IMAGE_UPLOAD_LIMIT_BYTES,
     SCREEN_IMAGE_UPLOAD_LIMIT_LABEL,
 } from '../../utils/screenImageUpload';
@@ -37,7 +38,7 @@ export function BackgroundImageRow({ value, onChange }: { value: string; onChang
                 data: formData,
                 _skipErrorToast: true,
             } as any);
-            const url = res.data?.url ?? res.url;
+            const url = resolveScreenImageUploadUrl(res);
             if (url) { onChange(url); message.success('上传成功'); }
             else { message.error('上传返回格式异常'); }
         } catch (err: unknown) { message.error(getScreenImageUploadErrorMessage(err)); }

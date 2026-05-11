@@ -4,6 +4,7 @@ import { UploadOutlined } from '@ant-design/icons';
 import apiClient from '../../../../../api/apiClient';
 import {
     getScreenImageUploadErrorMessage,
+    resolveScreenImageUploadUrl,
     SCREEN_IMAGE_UPLOAD_LIMIT_BYTES,
     SCREEN_IMAGE_UPLOAD_LIMIT_LABEL,
 } from '../../utils/screenImageUpload';
@@ -117,7 +118,7 @@ const ImageUrlField: React.FC<ImageUrlFieldProps> = ({ value, onChange }) => {
                 data: formData,
                 _skipErrorToast: true,
             } as any);
-            const url = (res as any)?.data?.url ?? (res as any)?.url;
+            const url = resolveScreenImageUploadUrl(res);
             if (url) { onChange(url); message.success('上传成功'); }
             else { message.error('上传返回格式异常'); }
         } catch (err: unknown) { message.error(getScreenImageUploadErrorMessage(err)); }

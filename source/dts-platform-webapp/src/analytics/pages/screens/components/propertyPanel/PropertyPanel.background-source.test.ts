@@ -16,6 +16,7 @@ test("PropertyPanel delegates background image upload to the extracted row compo
 	assert.match(backgroundRowSource, /export function BackgroundImageRow/);
 	assert.match(backgroundRowSource, /\/infra\/screen-images\/upload/);
 	assert.match(backgroundRowSource, /getScreenImageUploadErrorMessage/);
+	assert.match(backgroundRowSource, /resolveScreenImageUploadUrl/);
 	assert.match(backgroundRowSource, /SCREEN_IMAGE_UPLOAD_LIMIT_BYTES/);
 	assert.match(backgroundRowSource, /_skipErrorToast:\s*true/);
 	assert.match(backgroundRowSource, /import \{ X \} from 'lucide-react'/);

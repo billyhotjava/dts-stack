@@ -32,6 +32,21 @@ function normalizeResponseMessage(message: string): string {
 	return quotedProblemDetail?.[1]?.trim() || trimmed;
 }
 
+export function resolveScreenImageUploadUrl(response: unknown): string | undefined {
+	if (!response || typeof response !== "object") return undefined;
+	const record = response as Record<string, unknown>;
+	const directUrl = record.url;
+	if (typeof directUrl === "string" && directUrl.trim().length > 0) {
+		return directUrl.trim();
+	}
+
+	for (const key of ["data", "response"]) {
+		const nested = resolveScreenImageUploadUrl(record[key]);
+		if (nested) return nested;
+	}
+	return undefined;
+}
+
 export function getScreenImageUploadErrorMessage(error: unknown): string {
 	const uploadError = error as UploadError | undefined;
 	let rawMessage: string | undefined;

@@ -10,6 +10,7 @@ test("image config field uses the shared screen image upload guard and readable 
 	assert.match(source, /screenImageUpload/);
 	assert.match(source, /SCREEN_IMAGE_UPLOAD_LIMIT_BYTES/);
 	assert.match(source, /getScreenImageUploadErrorMessage/);
+	assert.match(source, /resolveScreenImageUploadUrl/);
 	assert.match(source, /\/infra\/screen-images\/upload/);
 	assert.match(source, /_skipErrorToast:\s*true/);
 	assert.equal(source.includes("Request failed with status code"), false);

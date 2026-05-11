@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
 	getScreenImageUploadErrorMessage,
+	resolveScreenImageUploadUrl,
 	SCREEN_IMAGE_UPLOAD_LIMIT_BYTES,
 	SCREEN_IMAGE_UPLOAD_LIMIT_LABEL,
 } from "./screenImageUpload";
@@ -32,4 +33,14 @@ test("screen image uploads preserve backend validation messages when present", (
 		}),
 		"文件大小不能超过 10MB",
 	);
+});
+
+test("screen image uploads resolve URL from supported response shapes", () => {
+	const url = "/api/infra/screen-images/demo.png";
+
+	assert.equal(resolveScreenImageUploadUrl({ url }), url);
+	assert.equal(resolveScreenImageUploadUrl({ data: { url } }), url);
+	assert.equal(resolveScreenImageUploadUrl({ data: { data: { url } } }), url);
+	assert.equal(resolveScreenImageUploadUrl({ response: { data: { data: { url } } } }), url);
+	assert.equal(resolveScreenImageUploadUrl({ data: { filename: "demo.png" } }), undefined);
 });
