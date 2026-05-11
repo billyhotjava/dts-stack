@@ -13,10 +13,15 @@ import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
+import com.yuzhi.dts.platform.domain.visualization.BiReportLink;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.visualization.BiReportLinkRepository;
 import com.yuzhi.dts.platform.repository.visualization.BiReportVisitRepository;
+import com.yuzhi.dts.platform.service.permission.DashboardAccessGuard;
+import com.yuzhi.dts.platform.service.permission.DashboardAccessGuard.AccessDecision;
+import com.yuzhi.dts.platform.service.permission.DashboardAccessGuard.Caller;
+import com.yuzhi.dts.platform.service.permission.DashboardCallerResolver;
 import com.yuzhi.dts.platform.service.workbench.dto.DomainAggregateRow;
 import com.yuzhi.dts.platform.service.workbench.dto.LeaderOverviewResponse;
 import com.yuzhi.dts.platform.service.workbench.dto.ReportVisitAggregateRow;
@@ -37,6 +42,8 @@ class WorkbenchLeaderOverviewServiceTest {
     @Mock CatalogDatasetRepository datasetRepo;
     @Mock CatalogDomainRepository catalogDomainRepo;
     @Mock TopReportsFallbackService fallbackService;
+    @Mock DashboardAccessGuard dashboardAccessGuard;
+    @Mock DashboardCallerResolver dashboardCallerResolver;
 
     private WorkbenchLeaderOverviewService service;
 
@@ -49,7 +56,9 @@ class WorkbenchLeaderOverviewServiceTest {
             datasetRepo,
             catalogDomainRepo,
             new WorkbenchLeaderOverviewProperties(),
-            fallbackService
+            fallbackService,
+            dashboardAccessGuard,
+            dashboardCallerResolver
         );
         // Make stubs lenient so tests that only care about scope/deptCode
         // still work when downstream queries return defaults.
@@ -308,6 +317,25 @@ class WorkbenchLeaderOverviewServiceTest {
         verify(visitRepo, never()).aggregateTopReportsAll(any(), any(), any(), any());
     }
 
+    @Test
+    void computeTopReports_MINE_fallback_filters_through_dashboard_access_guard() {
+        BiReportLink publicLink = reportLink("公开大屏", "PUBLIC");
+        BiReportLink internalLink = reportLink("内部大屏", "INTERNAL");
+        Caller caller = Caller.of("alice", java.util.Set.of("PUBLIC"), java.util.Set.of("ROLE_EMPLOYEE"), "D001");
+        when(fallbackService.tryFetchFallback(any(), any())).thenReturn(List.of(publicLink, internalLink));
+        when(dashboardCallerResolver.current()).thenReturn(caller);
+        when(dashboardAccessGuard.canView(publicLink, caller)).thenReturn(AccessDecision.allow("PUBLIC"));
+        when(dashboardAccessGuard.canView(internalLink, caller)).thenReturn(AccessDecision.deny("DENY_NO_BASE_ACCESS"));
+
+        LeaderOverviewResponse res = service.build(
+            "alice", List.of("ROLE_EMPLOYEE"), "D001", null, null, null, "MONTH"
+        );
+
+        assertThat(res.topReports()).hasSize(1);
+        assertThat(res.topReports().get(0).title()).isEqualTo("公开大屏");
+        assertThat(res.topReports().get(0).classification()).isEqualTo("S4");
+    }
+
     // =========================================================== T05: TOP assets
 
     @Test
@@ -428,5 +456,16 @@ class WorkbenchLeaderOverviewServiceTest {
             "dan", List.of("ROLE_INST_LEADER"), "D001", "ALL", null, null, "MONTH"
         );
         assertThat(res.domainMatrix().get(0).domainName()).isEqualTo("财务");
+    }
+
+    private BiReportLink reportLink(String title, String classification) {
+        BiReportLink link = new BiReportLink();
+        link.setId(UUID.randomUUID());
+        link.setCode("screen-" + title.hashCode());
+        link.setTitle(title);
+        link.setClassification(classification);
+        link.setUrl("/bi/screens/1/preview");
+        link.setEngine("DTS_BI");
+        return link;
     }
 }

@@ -133,18 +133,29 @@ class DashboardAccessGuardTest {
     }
 
     @Test
-    @DisplayName("裸大屏（roleCodes/deptCodes 都为空）+ 密级达标 → 任意已登录用户可见")
-    void unrestrictedReport_anyUserCanView() {
-        // 历史语义：listPublished 把"未配置 roleCodes/deptCodes"视为不设限。
-        // Guard 必须保留这条行为，否则现网"裸大屏"会全部不可见。
+    @DisplayName("内部裸大屏（roleCodes/deptCodes 都为空）不可全员可见")
+    void unrestrictedInternalReport_deniedWithoutGrant() {
         BiReportLink report = report("INTERNAL", null, null, "alice");
         Caller bob = caller("bob", GENERAL_LEVELS, Set.of(), null);
         when(grantRepository.findActiveUserGrants(any(), any(), any(), any())).thenReturn(List.of());
 
         AccessDecision decision = guard.canView(report, bob);
 
+        assertThat(decision.allow()).isFalse();
+        assertThat(decision.reason()).isEqualTo("DENY_NO_BASE_ACCESS");
+    }
+
+    @Test
+    @DisplayName("公开大屏即便未命中 role/dept 也允许查看")
+    void publicReport_anyUserCanView() {
+        BiReportLink report = report("PUBLIC", "ROLE_FINANCE", "DEPT_A", "alice");
+        Caller bob = caller("bob", Set.of("PUBLIC"), Set.of("ROLE_OTHER"), "DEPT_B");
+        when(grantRepository.findActiveUserGrants(any(), any(), any(), any())).thenReturn(List.of());
+
+        AccessDecision decision = guard.canView(report, bob);
+
         assertThat(decision.allow()).isTrue();
-        assertThat(decision.reason()).isEqualTo("BASE_ACCESS_PLUS_LEVEL");
+        assertThat(decision.reason()).isEqualTo("PUBLIC");
     }
 
     @Test
@@ -169,9 +180,9 @@ class DashboardAccessGuardTest {
     }
 
     @Test
-    @DisplayName("无角色 / 无部门 / 无共享 → DENY_NO_BASE_ACCESS")
+    @DisplayName("内部大屏无角色 / 无部门 / 无共享 → DENY_NO_BASE_ACCESS")
     void noBase_deny() {
-        BiReportLink report = report("PUBLIC", "ROLE_FINANCE", null, "alice");
+        BiReportLink report = report("INTERNAL", "ROLE_FINANCE", null, "alice");
         Caller bob = caller("bob", IMPORTANT_LEVELS, Set.of("ROLE_OTHER"), null);
         when(grantRepository.findActiveUserGrants(any(), any(), any(), any())).thenReturn(List.of());
 

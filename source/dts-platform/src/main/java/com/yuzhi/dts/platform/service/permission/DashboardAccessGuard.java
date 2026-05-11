@@ -13,19 +13,20 @@ import org.springframework.stereotype.Service;
 /**
  * 大屏密级与共享门禁。集中决定一个用户能不能查看 / 管理 / 共享指定大屏。
  *
- * 决策树（canView）—— 与 BiReportLinkService.listPublished 历史语义对齐：
+ * 决策树（canView）：
  *   1. superAdmin / report.createdBy == caller / 持有 MANAGE grant → ALLOW
- *   2. roleOk = roleCodes 为空 OR roleCodes 命中 caller.roles
+ *   2. classification=PUBLIC → ALLOW
+ *   3. roleOk = roleCodes 为空 OR roleCodes 命中 caller.roles
  *      deptOk = deptCodes 为空 OR caller.institutePrivileged OR deptCodes 命中 caller.deptCode
- *      baseAccess = (roleOk AND deptOk) OR 持有 VIEW grant
+ *      baseAccess = ((配置了 role/dept 约束) AND roleOk AND deptOk) OR 持有 VIEW grant
  *      若 baseAccess=false → DENY (DENY_NO_BASE_ACCESS)
- *   3. 用户人员密级允许 report.classification → ALLOW (BASE_ACCESS_PLUS_LEVEL)
- *   4. 否则若持有 level_override=true 的 VIEW grant → ALLOW (OVERRIDE_USED)
+ *   4. 用户人员密级允许 report.classification → ALLOW (BASE_ACCESS_PLUS_LEVEL)
+ *   5. 否则若持有 level_override=true 的 VIEW grant → ALLOW (OVERRIDE_USED)
  *      否则 DENY (DENY_LEVEL_BLOCKED)
  *
- * 重要：roleCodes/deptCodes 为 null/空字符串时视为"该维度不限制"，与 listPublished
- * 历史行为一致（裸大屏=任何已登录用户密级达标即可见）。institutePrivileged
- * 仅豁免 dept 维度，不豁免 role 维度。
+ * 重要：roleCodes/deptCodes 为 null/空字符串时视为"该维度不限制"，但只有公开大屏
+ * 可以无共享全员可见；内部及以上密级仍必须有 role/dept 约束命中或显式 VIEW grant。
+ * institutePrivileged 仅豁免 dept 维度，不豁免 role 维度。
  *
  * canManage：owner / superAdmin / 持有 MANAGE grant。
  * canGrant：策略 1（不传递）—— 授 MANAGE 仅 owner / superAdmin；授 VIEW 任何 manager。
@@ -60,15 +61,17 @@ public class DashboardAccessGuard {
         if (hasManageGrant(grants)) {
             return AccessDecision.allow("MANAGE_GRANT");
         }
+        if (isPublicClassification(report.getClassification())) {
+            return AccessDecision.allow("PUBLIC");
+        }
 
-        // role/dept 维度对齐 BiReportLinkService.listPublished 历史语义：
-        // 限制为空视作不设限；institutePrivileged 仅豁免部门门禁。
         boolean roleOk = isBlank(report.getRoleCodes()) || matchRole(report.getRoleCodes(), caller.roles());
         boolean deptOk = isBlank(report.getDeptCodes())
             || caller.institutePrivileged()
             || matchDept(report.getDeptCodes(), caller.deptCode());
         boolean viewGrant = hasViewGrant(grants);
-        boolean baseAccess = (roleOk && deptOk) || viewGrant;
+        boolean configuredBaseAccess = !isBlank(report.getRoleCodes()) || !isBlank(report.getDeptCodes());
+        boolean baseAccess = (configuredBaseAccess && roleOk && deptOk) || viewGrant;
         if (!baseAccess) {
             return AccessDecision.deny("DENY_NO_BASE_ACCESS");
         }
@@ -148,6 +151,10 @@ public class DashboardAccessGuard {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private boolean isPublicClassification(String classification) {
+        return classification != null && "PUBLIC".equalsIgnoreCase(classification.trim());
     }
 
     /**

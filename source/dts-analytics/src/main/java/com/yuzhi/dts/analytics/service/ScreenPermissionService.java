@@ -22,7 +22,8 @@ import org.springframework.stereotype.Service;
  *   <li>MANAGER → {@link PermissionSnapshot#managerOnly()} (canRead + canEdit + isOwner; granted manager,
  *       structurally identical to OWNER but tracked separately in the grant table)</li>
  *   <li>VIEWER  → {@link PermissionSnapshot#readOnly()} (canRead only)</li>
- *   <li>no grant → {@link PermissionSnapshot#none()}</li>
+ *   <li>PUBLIC screen without grant → {@link PermissionSnapshot#readOnly()} (canRead only)</li>
+ *   <li>non-PUBLIC screen without grant → {@link PermissionSnapshot#none()}</li>
  * </ul>
  *
  * <p>Superuser bypass: {@code analytics_user.superuser = true} → skip table, full access.
@@ -101,11 +102,9 @@ public class ScreenPermissionService {
     /**
      * Build a permission snapshot by querying the local access table.
      *
-     * <p>this overload does <strong>not</strong> apply the classification gate
-     * because caller's personnel-level is unknown without {@link PlatformContext}.
-     * Treated as "callerClassification = null" → no clearance check (caller's
-     * responsibility to use the {@link PlatformContext} overload when classification
-     * matters).
+     * <p>This overload has no caller personnel-level. For classified screens,
+     * callers should use the {@link PlatformContext} overload so VIEWER grants
+     * can pass the classification gate.
      *
      * @param roles list of role names from X-DTS-Roles header; may be empty
      */
@@ -161,7 +160,7 @@ public class ScreenPermissionService {
         }
         boolean hasViewer = grants.stream().anyMatch(g -> "VIEWER".equalsIgnoreCase(g.getPermission()));
         if (!hasViewer) {
-            return PermissionSnapshot.none();
+            return isPublic(screen.getClassification()) ? PermissionSnapshot.readOnly() : PermissionSnapshot.none();
         }
 
         // VIEWER path → classification gate applies.
@@ -234,6 +233,7 @@ public class ScreenPermissionService {
         if (user.getId() != null) {
             ids.addAll(screenRepository.findIdsByCreatorIdAndArchivedFalse(user.getId()));
         }
+        ids.addAll(screenRepository.findPublicIds());
         ids.addAll(accessRepository.findAccessibleScreenIds(userId, safeRoles));
         return ids.isEmpty() ? Collections.emptyList() : List.copyOf(ids);
     }
@@ -252,6 +252,10 @@ public class ScreenPermissionService {
             return List.of(NO_ROLE_PLACEHOLDER);
         }
         return roles;
+    }
+
+    private boolean isPublic(String classification) {
+        return classification != null && "PUBLIC".equalsIgnoreCase(classification.trim());
     }
 
     /**

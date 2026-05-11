@@ -3,6 +3,7 @@ package com.yuzhi.dts.analytics.web.support;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 
 public record PlatformContext(String dept, String classification, String roles) {
 
@@ -11,8 +12,8 @@ public record PlatformContext(String dept, String classification, String roles) 
             return new PlatformContext(null, null, null);
         }
         return new PlatformContext(
-                trimToNull(request.getHeader("X-DTS-Dept")),
-                trimToNull(request.getHeader("X-DTS-Classification")),
+                firstHeader(request, "X-DTS-Dept", "X-DTS-Dept-Code"),
+                resolveClassification(request),
                 trimToNull(request.getHeader("X-DTS-Roles")));
     }
 
@@ -27,6 +28,24 @@ public record PlatformContext(String dept, String classification, String roles) 
                 .toList();
     }
 
+    private static String resolveClassification(HttpServletRequest request) {
+        String explicit = trimToNull(request.getHeader("X-DTS-Classification"));
+        if (explicit != null) {
+            return explicit;
+        }
+        return mapPersonnelLevelToMaxClassification(request.getHeader("X-DTS-Personnel-Level"));
+    }
+
+    private static String firstHeader(HttpServletRequest request, String... names) {
+        for (String name : names) {
+            String value = trimToNull(request.getHeader(name));
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
+    }
+
     private static String trimToNull(String v) {
         if (v == null) {
             return null;
@@ -34,5 +53,28 @@ public record PlatformContext(String dept, String classification, String roles) 
         String t = v.trim();
         return t.isBlank() ? null : t;
     }
-}
 
+    private static String mapPersonnelLevelToMaxClassification(String value) {
+        String token = normalizeToken(value);
+        if (token == null) {
+            return null;
+        }
+        return switch (token) {
+            case "0", "GENERAL", "GN", "GE", "G" -> "SECRET";
+            case "1", "IMPORTANT", "IMPORTAN", "IM", "I", "2", "CORE", "CO", "C" -> "CONFIDENTIAL";
+            case "PUBLIC", "DATA_PUBLIC" -> "PUBLIC";
+            case "INTERNAL", "DATA_INTERNAL" -> "INTERNAL";
+            case "SECRET", "DATA_SECRET" -> "SECRET";
+            case "CONFIDENTIAL", "TOP_SECRET", "DATA_CONFIDENTIAL", "DATA_TOP_SECRET" -> "CONFIDENTIAL";
+            default -> null;
+        };
+    }
+
+    private static String normalizeToken(String value) {
+        String trimmed = trimToNull(value);
+        if (trimmed == null) {
+            return null;
+        }
+        return trimmed.toUpperCase(Locale.ROOT).replace('-', '_').replace(' ', '_');
+    }
+}

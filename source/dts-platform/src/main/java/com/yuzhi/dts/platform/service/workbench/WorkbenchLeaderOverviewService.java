@@ -8,6 +8,8 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.visualization.BiReportLinkRepository;
 import com.yuzhi.dts.platform.repository.visualization.BiReportVisitRepository;
 import com.yuzhi.dts.platform.service.integration.ScreenReportLinkSyncService;
+import com.yuzhi.dts.platform.service.permission.DashboardAccessGuard;
+import com.yuzhi.dts.platform.service.permission.DashboardCallerResolver;
 import com.yuzhi.dts.platform.service.workbench.WorkbenchRoleResolver.Role;
 import com.yuzhi.dts.platform.service.workbench.dto.DomainAggregateRow;
 import com.yuzhi.dts.platform.service.workbench.dto.LeaderOverviewResponse;
@@ -59,6 +61,8 @@ public class WorkbenchLeaderOverviewService {
     private final CatalogDomainRepository catalogDomainRepo;
     private final WorkbenchLeaderOverviewProperties props;
     private final TopReportsFallbackService fallbackService;
+    private final DashboardAccessGuard dashboardAccessGuard;
+    private final DashboardCallerResolver dashboardCallerResolver;
 
     public WorkbenchLeaderOverviewService(
         WorkbenchRoleResolver roleResolver,
@@ -67,7 +71,9 @@ public class WorkbenchLeaderOverviewService {
         CatalogDatasetRepository datasetRepo,
         CatalogDomainRepository catalogDomainRepo,
         WorkbenchLeaderOverviewProperties props,
-        TopReportsFallbackService fallbackService
+        TopReportsFallbackService fallbackService,
+        DashboardAccessGuard dashboardAccessGuard,
+        DashboardCallerResolver dashboardCallerResolver
     ) {
         this.roleResolver = roleResolver;
         this.reportRepo = reportRepo;
@@ -76,6 +82,8 @@ public class WorkbenchLeaderOverviewService {
         this.catalogDomainRepo = catalogDomainRepo;
         this.props = props;
         this.fallbackService = fallbackService;
+        this.dashboardAccessGuard = dashboardAccessGuard;
+        this.dashboardCallerResolver = dashboardCallerResolver;
     }
 
     private Pageable topNPageable() {
@@ -261,6 +269,7 @@ public class WorkbenchLeaderOverviewService {
                 );
                 return fallback
                     .stream()
+                    .filter(this::canCurrentUserViewFallbackReport)
                     .map(link -> new TopReport(
                         link.getId() != null ? link.getId().toString() : null,
                         link.getTitle(),
@@ -278,6 +287,11 @@ public class WorkbenchLeaderOverviewService {
             }
         }
         return mapped;
+    }
+
+    private boolean canCurrentUserViewFallbackReport(BiReportLink link) {
+        DashboardAccessGuard.Caller caller = dashboardCallerResolver.current();
+        return dashboardAccessGuard.canView(link, caller).allow();
     }
 
     // =============================================================================================

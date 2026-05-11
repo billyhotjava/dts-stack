@@ -16,6 +16,7 @@ const visitMock = reportsService.visit as ReturnType<typeof vi.fn>;
 interface HarnessProps {
 	screenId: string | number | null | undefined;
 	title?: string;
+	classification?: string | null;
 	enabled: boolean;
 }
 
@@ -69,6 +70,20 @@ describe("useScreenVisitTracker", () => {
 			classification: "INTERNAL",
 			url: "/bi/screens/1/preview",
 		});
+		unmount(root, container);
+	});
+
+	it("uses the screen classification when recording the visit", async () => {
+		const { root, container } = mount({ screenId: 3, title: "Public", classification: "PUBLIC", enabled: true });
+
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(3000);
+		});
+
+		expect(visitMock).toHaveBeenCalledWith(expect.objectContaining({
+			code: "screen-3",
+			classification: "PUBLIC",
+		}));
 		unmount(root, container);
 	});
 

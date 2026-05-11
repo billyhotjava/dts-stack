@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import reportsService from "@/api/services/reportsService";
+import type { ScreenConfig } from "../types";
 
 /**
  * Sprint-17 / F2 — fires {@code reportsService.visit({ code: "screen-{id}" })}
@@ -22,10 +23,11 @@ const STORAGE_KEY = "dts.bi.screenVisit.lastFired.v1";
 interface UseScreenVisitTrackerArgs {
 	screenId: string | number | null | undefined;
 	title?: string;
+	classification?: ScreenConfig["classification"] | string | null;
 	enabled: boolean;
 }
 
-export function useScreenVisitTracker({ screenId, title, enabled }: UseScreenVisitTrackerArgs): void {
+export function useScreenVisitTracker({ screenId, title, classification, enabled }: UseScreenVisitTrackerArgs): void {
 	const timerRef = useRef<number | null>(null);
 
 	useEffect(() => {
@@ -35,7 +37,7 @@ export function useScreenVisitTracker({ screenId, title, enabled }: UseScreenVis
 		if (recentlyFired(code)) return;
 
 		timerRef.current = window.setTimeout(() => {
-			void fire(code, title, screenId);
+			void fire(code, title, screenId, classification);
 		}, STAY_MS);
 
 		return () => {
@@ -44,7 +46,7 @@ export function useScreenVisitTracker({ screenId, title, enabled }: UseScreenVis
 				timerRef.current = null;
 			}
 		};
-	}, [enabled, screenId, title]);
+	}, [enabled, screenId, title, classification]);
 }
 
 function recentlyFired(code: string): boolean {
@@ -70,17 +72,31 @@ function markFired(code: string): void {
 	}
 }
 
-async function fire(code: string, title: string | undefined, id: string | number): Promise<void> {
+async function fire(
+	code: string,
+	title: string | undefined,
+	id: string | number,
+	classification: UseScreenVisitTrackerArgs["classification"],
+): Promise<void> {
 	try {
 		await reportsService.visit({
 			code,
 			title: title ?? "",
 			engine: "DTS_BI",
-			classification: "INTERNAL",
+			classification: normalizeClassification(classification) ?? "INTERNAL",
 			url: `/bi/screens/${id}/preview`,
 		});
 		markFired(code);
 	} catch {
 		/* visit is auxiliary — never block preview rendering */
 	}
+}
+
+function normalizeClassification(value: UseScreenVisitTrackerArgs["classification"]): ScreenConfig["classification"] | null {
+	if (typeof value !== "string") return null;
+	const upper = value.trim().toUpperCase();
+	if (upper === "PUBLIC" || upper === "INTERNAL" || upper === "SECRET" || upper === "CONFIDENTIAL") {
+		return upper;
+	}
+	return null;
 }

@@ -140,6 +140,7 @@ export default function ScreenPreviewPage() {
 	useScreenVisitTracker({
 		screenId: id,
 		title: screen?.name,
+		classification: screen?.classification,
 		enabled: !loading && !error && screen != null,
 	});
 

@@ -53,6 +53,7 @@ class ScreenPermissionServiceTest {
     void setUp() {
         repo = Mockito.mock(AnalyticsScreenAccessRepository.class);
         screenRepository = Mockito.mock(AnalyticsScreenRepository.class);
+        when(screenRepository.findPublicIds()).thenReturn(List.of());
         service = new ScreenPermissionService(repo, screenRepository);
     }
 
@@ -142,6 +143,34 @@ class ScreenPermissionServiceTest {
     }
 
     @Test
+    void role_grant_with_platform_clearance_can_read_internal_screen() {
+        AnalyticsUser u = user(61L, false);
+        when(repo.findGrantsForUser(eq(10L), eq("61"), eq(List.of("ROLE_PTR_DEMO")))).thenReturn(
+            List.of(access(10L, "ROLE", "ROLE_PTR_DEMO", "VIEWER")));
+
+        PermissionSnapshot snap = service.snapshot(
+            screenWithLevel(10L, "INTERNAL"),
+            u,
+            new PlatformContext(null, "SECRET", "ROLE_PTR_DEMO")
+        );
+
+        assertThat(snap.canRead()).isTrue();
+        assertThat(snap.canEdit()).isFalse();
+    }
+
+    @Test
+    void public_screen_without_grant_is_read_only() {
+        AnalyticsUser u = user(62L, false);
+        when(repo.findGrantsForUser(eq(10L), eq("62"), any())).thenReturn(List.of());
+
+        PermissionSnapshot snap = service.snapshot(screenWithLevel(10L, "PUBLIC"), u, ctx(null));
+
+        assertThat(snap.canRead()).isTrue();
+        assertThat(snap.canEdit()).isFalse();
+        assertThat(snap.isOwner()).isFalse();
+    }
+
+    @Test
     void platform_context_roles_are_parsed_before_permission_lookup() {
         AnalyticsUser u = user(8L, false);
         when(repo.findGrantsForUser(eq(10L), eq("8"), eq(List.of("ROLE_ANALYST", "ROLE_OWNER")))).thenReturn(
@@ -174,6 +203,18 @@ class ScreenPermissionServiceTest {
         List<Long> ids = service.listAccessibleScreenIds(u, List.of());
 
         assertThat(ids).containsExactly(101L, 202L);
+    }
+
+    @Test
+    void list_accessible_includes_public_screens_even_without_grant() {
+        AnalyticsUser u = user(21L, false);
+        when(screenRepository.findIdsByCreatorIdAndArchivedFalse(21L)).thenReturn(List.of());
+        when(screenRepository.findPublicIds()).thenReturn(List.of(303L));
+        when(repo.findAccessibleScreenIds(eq("21"), eq(List.of("__NO_ROLE__")))).thenReturn(List.of());
+
+        List<Long> ids = service.listAccessibleScreenIds(u, List.of());
+
+        assertThat(ids).containsExactly(303L);
     }
 
     @Test
