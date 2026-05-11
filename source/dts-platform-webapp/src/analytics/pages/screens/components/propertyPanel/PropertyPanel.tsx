@@ -1,32 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Link2 } from 'lucide-react';
-import { message } from 'antd';
-import { toast } from 'sonner';
 import { useScreen } from '../../ScreenContext';
-import type { ScreenComponent, ScreenCustomTheme } from '../../types';
+import type { ScreenCustomTheme } from '../../types';
 import { getRendererPlugin } from '../../plugins/registry';
 import { readComponentPluginMeta, resolveRuntimePluginId } from '../../plugins/runtime';
 import { useScreenPluginRuntime } from '../../plugins/useScreenPluginRuntime';
 import { analyticsApi } from '../../../../api/analyticsApi';
-import { writeTextToClipboard } from '../../../../hooks/clipboard';
-import {
-    applyChartPresetConfig,
-    isChartComponentType,
-    type ChartPreset,
-} from '../../chartPresets';
 import { getThemeTokens } from '../../screenThemes';
 
 // Extracted modules (F4-Step3 split)
 import {
-    LAYOUT_CLIPBOARD_KEY,
-    PROPERTY_FOCUS_SECTION_KEYS,
-    PROPERTY_PANEL_DENSITY_KEY,
     PROPERTY_SECTION_COLLAPSE_KEY,
-    PROPERTY_SECTION_ESSENTIAL_COLLAPSED,
-    PROPERTY_SECTION_KEYS,
-    STYLE_CLIPBOARD_KEY,
-    buildStyleClipboardPayload,
-    deepMergeConfig,
     resolveExplainCardId,
 } from './helpers';
 import { renderActionConfig, renderDrillDownConfig, renderInteractionConfig } from './BehaviorConfigSection';
@@ -39,25 +23,15 @@ import { renderPositionSizeConfig } from './PositionSizeSection';
 import { renderComponentConfigSection } from './ComponentConfigSection';
 import { renderFieldMappingConfig } from './FieldMappingSection';
 import { renderExplainConfig } from './ExplainConfigSection';
-import { renderQuickActionsConfig, type CanvasAlignMode, type QuickActionMode } from './QuickActionsSection';
 import { ChartAnnotationConfig } from './ChartAnnotationConfig';
 import { BackgroundImageRow } from './BackgroundImageRow';
+import { ColorPickerInput } from './ColorPickerInput';
 import { SectionToggle } from './SectionToggle';
 import { THEME_OPTIONS } from '../screenHeader/helpers';
-import type {
-    ExplainState,
-    LayoutClipboardPayload,
-    StyleClipboardPayload,
-} from './types';
+import type { ExplainState } from './types';
 import {
     readCollapsedSections,
-    readLayoutClipboard,
-    readPanelDensity,
-    readStyleClipboard,
     writeCollapsedSections,
-    writeNullableJson,
-    writePanelDensity,
-    type PropertyPanelDensity,
 } from './propertyPanelPersistence';
 
 export type PropertyPanelTab = 'style' | 'data' | 'interaction' | 'advanced';
@@ -79,7 +53,6 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
         updateComponent,
         updateConfig,
         updateSelectedComponents,
-        deleteComponents,
         alignSelected,
         distributeSelected,
         groupSelected,
@@ -89,13 +62,6 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
     const { config, selectedIds } = state;
     useScreenPluginRuntime();
     const [explainState, setExplainState] = useState<ExplainState | null>(null);
-    const [panelFilter, setPanelFilter] = useState('');
-    const [styleClipboard, setStyleClipboard] = useState<StyleClipboardPayload | null>(null);
-    const [layoutClipboard, setLayoutClipboard] = useState<LayoutClipboardPayload | null>(null);
-    const [quickActionMode, setQuickActionMode] = useState<QuickActionMode>('core');
-    const [panelDensity, setPanelDensity] = useState<PropertyPanelDensity>(() => (
-        readPanelDensity(typeof window === 'undefined' ? null : window.localStorage, PROPERTY_PANEL_DENSITY_KEY)
-    ));
     const [collapsedSections, setCollapsedSections] = useState<string[]>([]);
 
     const selectedComponents = config.components.filter((c) => selectedIds.includes(c.id));
@@ -107,14 +73,10 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
         setExplainState(null);
     }, [selectedComponent?.id]);
     useEffect(() => {
-        if (typeof window === 'undefined') return;
-        writePanelDensity(window.localStorage, PROPERTY_PANEL_DENSITY_KEY, panelDensity);
-    }, [panelDensity]);
-    useEffect(() => {
         setCollapsedSections(readCollapsedSections(
             typeof window === 'undefined' ? null : window.localStorage,
             PROPERTY_SECTION_COLLAPSE_KEY,
-            PROPERTY_SECTION_ESSENTIAL_COLLAPSED,
+            [],
         ));
     }, []);
     useEffect(() => {
@@ -124,28 +86,6 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
             collapsedSections,
         );
     }, [collapsedSections]);
-
-    useEffect(() => {
-        setStyleClipboard(readStyleClipboard(
-            typeof window === 'undefined' ? null : window.sessionStorage,
-            STYLE_CLIPBOARD_KEY,
-        ));
-    }, []);
-    useEffect(() => {
-        setLayoutClipboard(readLayoutClipboard(
-            typeof window === 'undefined' ? null : window.sessionStorage,
-            LAYOUT_CLIPBOARD_KEY,
-        ));
-    }, []);
-
-    const persistStyleClipboard = (payload: StyleClipboardPayload | null) => {
-        setStyleClipboard(payload);
-        writeNullableJson(typeof window === 'undefined' ? null : window.sessionStorage, STYLE_CLIPBOARD_KEY, payload);
-    };
-    const persistLayoutClipboard = (payload: LayoutClipboardPayload | null) => {
-        setLayoutClipboard(payload);
-        writeNullableJson(typeof window === 'undefined' ? null : window.sessionStorage, LAYOUT_CLIPBOARD_KEY, payload);
-    };
 
     if (selectedComponents.length === 0) {
         const customTheme = config.customTheme;
@@ -241,11 +181,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                 {CUSTOM_THEME_FIELDS.map(({ key, label, fallback }) => (
                                     <div className="property-row flex items-center mb-3" key={key}>
                                         <label className="property-label w-20 text-xs text-text-secondary">{label}</label>
-                                        <input
-                                            type="color"
-                                            className="property-color-input w-8 h-7 border border-border-default rounded cursor-pointer p-0"
+                                        <ColorPickerInput
                                             value={customTheme?.[key] || fallback}
-                                            onChange={(e) => handleCustomThemeChange(key, e.target.value)}
+                                            fallback={fallback}
+                                            onChange={(value) => handleCustomThemeChange(key, value)}
+                                            ariaLabel={label}
                                         />
                                     </div>
                                 ))}
@@ -274,11 +214,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                         </div>
                         <div className="property-row flex items-center mb-3">
                             <label className="property-label w-20 text-xs text-text-secondary">背景色</label>
-                            <input
-                                type="color"
-                                className="property-color-input w-8 h-7 border border-border-default rounded cursor-pointer p-0"
+                            <ColorPickerInput
                                 value={config.backgroundColor || '#1e1f26'}
-                                onChange={(e) => updateConfig({ backgroundColor: e.target.value })}
+                                fallback="#1e1f26"
+                                onChange={(value) => updateConfig({ backgroundColor: value })}
+                                ariaLabel="背景色"
                             />
                         </div>
                         <BackgroundImageRow
@@ -432,17 +372,8 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
         }));
     };
 
-    const canvasWidth = Number(config.width) || 1920;
-    const canvasHeight = Number(config.height) || 1080;
-    const normalizedPanelFilter = panelFilter.trim().toLowerCase();
-    const sectionVisible = (...aliases: string[]) => {
-        if (!normalizedPanelFilter) return true;
-        return aliases.some((item) => item.toLowerCase().includes(normalizedPanelFilter));
-    };
     const isSectionCollapsedStored = (sectionKey: string) => collapsedSections.includes(sectionKey);
-    const isSectionCollapsed = (sectionKey: string) => (
-        normalizedPanelFilter ? false : isSectionCollapsedStored(sectionKey)
-    );
+    const isSectionCollapsed = (sectionKey: string) => isSectionCollapsedStored(sectionKey);
     const toggleSection = (sectionKey: string) => {
         setCollapsedSections((prev) => {
             if (prev.includes(sectionKey)) {
@@ -451,195 +382,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
             return [...prev, sectionKey];
         });
     };
-    const collapseAllSections = () => {
-        setCollapsedSections([...PROPERTY_SECTION_KEYS]);
-    };
-    const expandAllSections = () => {
-        setCollapsedSections([]);
-    };
-    const collapseToEssential = () => {
-        setCollapsedSections([...PROPERTY_SECTION_ESSENTIAL_COLLAPSED]);
-    };
-    const applyPanelPreset = (
-        preset: '' | '位置' | '组件' | '数据' | '联动' | '下钻' | '解释' | '其他' | '常用',
-    ) => {
-        if (!preset) {
-            setPanelFilter('');
-            return;
-        }
-        if (preset === '常用') {
-            setPanelFilter('');
-            setPanelDensity('focus');
-            collapseToEssential();
-            return;
-        }
-        setPanelFilter(preset);
-        setPanelDensity('full');
-    };
-    const shouldRenderSection = (sectionKey: string, ...aliases: string[]) => {
-        if (!sectionVisible(...aliases)) {
-            return false;
-        }
-        if (panelDensity === 'full') {
-            return true;
-        }
-        if (normalizedPanelFilter) {
-            return true;
-        }
-        return PROPERTY_FOCUS_SECTION_KEYS.has(sectionKey);
-    };
-    const alignToCanvas = (mode: CanvasAlignMode) => {
-        if (mode === 'left') {
-            handleChange('x', 0);
-            return;
-        }
-        if (mode === 'right') {
-            handleChange('x', Math.max(0, canvasWidth - selectedComponent.width));
-            return;
-        }
-        if (mode === 'top') {
-            handleChange('y', 0);
-            return;
-        }
-        if (mode === 'bottom') {
-            handleChange('y', Math.max(0, canvasHeight - selectedComponent.height));
-            return;
-        }
-        if (mode === 'h-center') {
-            handleChange('x', Math.max(0, Math.round((canvasWidth - selectedComponent.width) / 2)));
-            return;
-        }
-        handleChange('y', Math.max(0, Math.round((canvasHeight - selectedComponent.height) / 2)));
-    };
-
-    const duplicateCurrentComponent = () => {
-        const nextId = `comp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-        const maxZ = config.components.length > 0
-            ? Math.max(...config.components.map((item) => item.zIndex))
-            : 0;
-        const maxX = Math.max(0, canvasWidth - selectedComponent.width);
-        const maxY = Math.max(0, canvasHeight - selectedComponent.height);
-        const clone: ScreenComponent = {
-            ...selectedComponent,
-            id: nextId,
-            x: Math.min(maxX, selectedComponent.x + 20),
-            y: Math.min(maxY, selectedComponent.y + 20),
-            zIndex: maxZ + 1,
-            name: `${selectedComponent.name}-副本`,
-        };
-        updateConfig({ components: [...config.components, clone] });
-    };
-
-    const copyCurrentStyle = () => {
-        const payload = buildStyleClipboardPayload(selectedComponent);
-        persistStyleClipboard(payload);
-        message.success(`已复制样式（${Object.keys(payload.config).length} 个外观字段）`);
-    };
-
-    const applyCopiedStyle = () => {
-        if (!styleClipboard) {
-            message.warning('样式剪贴板为空，请先复制一个组件样式');
-            return;
-        }
-        if (styleClipboard.type !== selectedComponent.type) {
-            const confirmed = window.confirm(
-                `样式来源类型为「${styleClipboard.type}」，当前为「${selectedComponent.type}」。\n继续应用可能只部分生效，是否继续？`
-            );
-            if (!confirmed) return;
-        }
-        updateComponent(selectedComponent.id, {
-            width: Math.max(50, Number(styleClipboard.width) || selectedComponent.width),
-            height: Math.max(50, Number(styleClipboard.height) || selectedComponent.height),
-            // 用 deepMerge：如 style / xAxis / legend 等嵌套对象，只想覆盖其中一部分子字段时，
-            // 避免把剪贴板里没有的子字段直接清零。
-            config: deepMergeConfig(
-                selectedComponent.config as Record<string, unknown>,
-                styleClipboard.config as Record<string, unknown>,
-            ),
-        });
-    };
-
-    const copyLayoutSnapshot = () => {
-        persistLayoutClipboard({
-            x: selectedComponent.x,
-            y: selectedComponent.y,
-            width: selectedComponent.width,
-            height: selectedComponent.height,
-            copiedAt: new Date().toISOString(),
-        });
-        message.success('布局已复制（位置 + 尺寸）');
-    };
-
-    const pasteLayoutSnapshot = () => {
-        if (!layoutClipboard) {
-            message.warning('布局剪贴板为空，请先复制布局');
-            return;
-        }
-        const nextWidth = Math.max(50, Math.round(layoutClipboard.width));
-        const nextHeight = Math.max(50, Math.round(layoutClipboard.height));
-        const maxX = Math.max(0, canvasWidth - nextWidth);
-        const maxY = Math.max(0, canvasHeight - nextHeight);
-        updateComponent(selectedComponent.id, {
-            x: Math.min(maxX, Math.max(0, Math.round(layoutClipboard.x))),
-            y: Math.min(maxY, Math.max(0, Math.round(layoutClipboard.y))),
-            width: nextWidth,
-            height: nextHeight,
-        });
-    };
-
-    const nudgePosition = (dx: number, dy: number) => {
-        const maxX = Math.max(0, canvasWidth - selectedComponent.width);
-        const maxY = Math.max(0, canvasHeight - selectedComponent.height);
-        updateComponent(selectedComponent.id, {
-            x: Math.min(maxX, Math.max(0, selectedComponent.x + dx)),
-            y: Math.min(maxY, Math.max(0, selectedComponent.y + dy)),
-        });
-    };
-
-    const nudgeSize = (dw: number, dh: number) => {
-        const nextWidth = Math.min(canvasWidth, Math.max(50, selectedComponent.width + dw));
-        const nextHeight = Math.min(canvasHeight, Math.max(50, selectedComponent.height + dh));
-        const maxX = Math.max(0, canvasWidth - nextWidth);
-        const maxY = Math.max(0, canvasHeight - nextHeight);
-        updateComponent(selectedComponent.id, {
-            width: nextWidth,
-            height: nextHeight,
-            x: Math.min(maxX, Math.max(0, selectedComponent.x)),
-            y: Math.min(maxY, Math.max(0, selectedComponent.y)),
-        });
-    };
-    const applyChartPreset = (preset: ChartPreset) => {
-        if (!isChartComponentType(selectedComponent.type)) {
-            message.warning('当前组件不是图表类型，无法应用图表预设');
-            return;
-        }
-        updateComponent(selectedComponent.id, {
-            config: applyChartPresetConfig(selectedComponent.config, preset),
-        });
-    };
-
-    const copyConfigJson = async () => {
-        const text = JSON.stringify(selectedComponent.config || {}, null, 2);
-        const copied = await writeTextToClipboard(text);
-        if (copied) { message.success('组件配置JSON已复制'); } else { message.warning('复制失败，请重试'); }
-    };
-
-    const pasteConfigJson = () => {
-        const current = JSON.stringify(selectedComponent.config || {}, null, 2);
-        const input = window.prompt('粘贴组件配置 JSON（将覆盖当前组件配置）', current);
-        if (input == null) return;
-        try {
-            const parsed = JSON.parse(input);
-            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-                toast.error('配置必须是 JSON 对象');
-                return;
-            }
-            updateComponent(selectedComponent.id, { config: parsed as Record<string, unknown> });
-            message.success('组件配置已更新');
-        } catch {
-            toast.error('JSON 格式错误，请检查后重试');
-        }
-    };
+    const shouldRenderSection = (_sectionKey: string, ..._aliases: string[]) => true;
 
     const pluginMeta = readComponentPluginMeta(selectedComponent.config);
     const runtimePlugin = pluginMeta ? getRendererPlugin(resolveRuntimePluginId(pluginMeta)) : undefined;
@@ -675,7 +418,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
     const TAB_LABELS: Record<PropertyPanelTab, string> = { style: '样式', data: '数据', interaction: '交互', advanced: '高级' };
 
     return (
-        <div className={`property-panel property-panel--${panelDensity}`} aria-readonly={editorReadonly}>
+        <div className="property-panel" aria-readonly={editorReadonly}>
             <div className="property-panel-header border-b border-border-default">
                 <h3>{selectedComponent.name}</h3>
                 <p className="text-xs text-text-muted mt-1">
@@ -696,96 +439,6 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                 )}
             </div>
             <div className="property-panel-content flex-1 overflow-y-auto">
-                {isStyleTab && <div className="property-section py-3 border-b border-border-default">
-                    <div className="property-section-title property-section-title-collapsible text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
-                        <SectionToggle
-                            collapsed={isSectionCollapsed('quick-filter')}
-                            label="快速定位"
-                            onToggle={() => toggleSection('quick-filter')}
-                        />
-                    </div>
-                    {!isSectionCollapsed('quick-filter') ? (
-                        <>
-                            <div className="property-row flex items-center mb-3">
-                                <label className="property-label w-20 text-xs text-text-secondary">筛选</label>
-                                <input
-                                    type="text"
-                                    className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
-                                    value={panelFilter}
-                                    onChange={(e) => setPanelFilter(e.target.value)}
-                                    placeholder="输入：位置/样式/数据/联动/可见..."
-                                />
-                            </div>
-                            <div className="property-quick-filter-row flex flex-wrap items-center gap-1.5">
-                                <button type="button" className="property-btn-small inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => applyPanelPreset('')}>清空</button>
-                                <select
-                                    className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
-                                    style={{ maxWidth: 160, padding: '4px 8px' }}
-                                    defaultValue=""
-                                    onChange={(event) => {
-                                        const next = event.target.value as '' | '位置' | '组件' | '数据' | '联动' | '下钻' | '解释' | '其他' | '常用';
-                                        applyPanelPreset(next);
-                                        event.currentTarget.value = '';
-                                    }}
-                                >
-                                    <option value="">快速定位到...</option>
-                                    <option value="位置">位置与尺寸</option>
-                                    <option value="组件">组件配置</option>
-                                    <option value="数据">数据源</option>
-                                    <option value="联动">联动配置</option>
-                                    <option value="下钻">下钻配置</option>
-                                    <option value="解释">解释</option>
-                                    <option value="其他">其他</option>
-                                    <option value="常用">常用视图</option>
-                                </select>
-                                <button
-                                    type="button"
-                                    className={`property-btn-small ${panelDensity === 'focus' ? 'is-active' : ''}`}
-                                    onClick={() => setPanelDensity('focus')}
-                                >
-                                    高频
-                                </button>
-                                <button
-                                    type="button"
-                                    className={`property-btn-small ${panelDensity === 'full' ? 'is-active' : ''}`}
-                                    onClick={() => setPanelDensity('full')}
-                                >
-                                    全部
-                                </button>
-                            </div>
-                            <div className="property-quick-filter-row flex flex-wrap items-center gap-1.5">
-                                <button type="button" className="property-btn-small inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={collapseToEssential}>常用视图</button>
-                                <button type="button" className="property-btn-small inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={expandAllSections}>全部展开</button>
-                                <button type="button" className="property-btn-small inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={collapseAllSections}>全部收起</button>
-                            </div>
-                        </>
-                    ) : null}
-                </div>}
-
-                {isStyleTab && shouldRenderSection('quick-actions', '快捷', '操作', '样式', '复制', '对齐') && renderQuickActionsConfig({
-                    selectedComponent,
-                    quickActionMode,
-                    setQuickActionMode,
-                    styleClipboard,
-                    layoutClipboard,
-                    duplicateCurrentComponent,
-                    deleteCurrentComponent: () => deleteComponents([selectedComponent.id]),
-                    alignToCanvas,
-                    nudgePosition,
-                    nudgeSize,
-                    copyCurrentStyle,
-                    applyCopiedStyle,
-                    copyLayoutSnapshot,
-                    pasteLayoutSnapshot,
-                    copyConfigJson,
-                    pasteConfigJson,
-                    clearStyleClipboard: () => persistStyleClipboard(null),
-                    clearLayoutClipboard: () => persistLayoutClipboard(null),
-                    applyChartPreset,
-                    isSectionCollapsed,
-                    toggleSection,
-                })}
-
                 {/* Component Appearance */}
                 {isStyleTab && shouldRenderSection('component-appearance', '外观', '背景', '圆角', '边框', '透明') && renderComponentAppearanceConfig({
                     selectedComponent,

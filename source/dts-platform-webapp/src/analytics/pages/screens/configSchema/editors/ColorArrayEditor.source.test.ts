@@ -12,6 +12,8 @@ test("ColorArrayEditor keeps color rows inside narrow property panels", async ()
   assert.match(source, /gridTemplateColumns: '28px minmax\(0, 1fr\) 24px'/);
   assert.match(source, /style=\{\{ width: '100%', minWidth: 0 \}\}/);
   assert.match(source, /style=\{\{ width: 24, minWidth: 24, padding: 0 \}\}/);
+  assert.match(source, /key=\{`color-\$\{idx\}`\}/);
+  assert.equal(source.includes("key={`${idx}-${color}`}"), false);
   assert.equal(source.includes("style={{ width: 100 }}"), false);
 });
 

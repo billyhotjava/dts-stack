@@ -97,8 +97,24 @@ function applyAutoContainerBinding(components: ScreenComponent[], movedIds: stri
     });
 }
 
+function toInteger(value: unknown, fallback: number, min?: number): number {
+    const numeric = Number(value);
+    const rounded = Number.isFinite(numeric) ? Math.round(numeric) : fallback;
+    return typeof min === 'number' ? Math.max(min, rounded) : rounded;
+}
+
+function normalizeComponentGeometry(component: ScreenComponent): ScreenComponent {
+    return {
+        ...component,
+        x: toInteger(component.x, 0),
+        y: toInteger(component.y, 0),
+        width: toInteger(component.width, 50, 1),
+        height: toInteger(component.height, 50, 1),
+    };
+}
+
 function sanitizeComponents(components: ScreenComponent[]): ScreenComponent[] {
-    return sanitizeParentContainerIds(components);
+    return sanitizeParentContainerIds(components.map(normalizeComponentGeometry));
 }
 
 // ── Reducer ─────────────────────────────────────────────────────────────────

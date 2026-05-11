@@ -5,6 +5,7 @@ import type {
     ScreenComponent,
     SeriesConditionalColor,
 } from '../../types';
+import { ColorPickerInput, toRgbaColor } from './ColorPickerInput';
 
 /** Chart annotation config: markLines, markAreas, conditionalColors */
 export function ChartAnnotationConfig({ component, onChange }: {
@@ -62,7 +63,7 @@ export function ChartAnnotationConfig({ component, onChange }: {
                             onChange={(e) => updateMarkLine(idx, { value: Number(e.target.value) })} />
                     ) : <span />}
                     <input type="text" className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ fontSize: 11, padding: '3px 4px' }} placeholder="标签" value={ml.name ?? ''} onChange={(e) => updateMarkLine(idx, { name: e.target.value })} />
-                    <input type="color" className="property-color-input w-8 h-7 border border-border-default rounded cursor-pointer p-0" value={ml.color ?? '#ff6b6b'} onChange={(e) => updateMarkLine(idx, { color: e.target.value })} />
+                    <ColorPickerInput value={ml.color ?? '#ff6b6b'} fallback="#ff6b6b" onChange={(value) => updateMarkLine(idx, { color: value })} ariaLabel="辅助线颜色" />
                     <button type="button" className="property-btn-small inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" style={{ padding: '2px 6px', fontSize: 11 }} onClick={() => removeMarkLine(idx)} title="删除辅助线" aria-label="删除辅助线"><Trash2 size={13} aria-hidden="true" /></button>
                 </div>
             ))}
@@ -76,8 +77,7 @@ export function ChartAnnotationConfig({ component, onChange }: {
                     <input type="number" className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ fontSize: 11, padding: '3px 4px' }} placeholder="起始" value={ma.from} onChange={(e) => updateMarkArea(idx, { from: Number(e.target.value) })} />
                     <input type="number" className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ fontSize: 11, padding: '3px 4px' }} placeholder="结束" value={ma.to} onChange={(e) => updateMarkArea(idx, { to: Number(e.target.value) })} />
                     <input type="text" className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ fontSize: 11, padding: '3px 4px' }} placeholder="标签" value={ma.name ?? ''} onChange={(e) => updateMarkArea(idx, { name: e.target.value })} />
-                    <input type="color" className="property-color-input w-8 h-7 border border-border-default rounded cursor-pointer p-0" value={ma.color?.startsWith('rgba') ? '#ff6b6b' : (ma.color ?? '#ff6b6b')}
-                        onChange={(e) => { const h = e.target.value; const r = parseInt(h.slice(1, 3), 16); const g = parseInt(h.slice(3, 5), 16); const b = parseInt(h.slice(5, 7), 16); updateMarkArea(idx, { color: `rgba(${r},${g},${b},0.15)` }); }} />
+                    <ColorPickerInput value={ma.color ?? '#ff6b6b'} fallback="#ff6b6b" onChange={(value) => updateMarkArea(idx, { color: toRgbaColor(value, 0.15) })} ariaLabel="标记区域颜色" />
                     <button type="button" className="property-btn-small inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" style={{ padding: '2px 6px', fontSize: 11 }} onClick={() => removeMarkArea(idx)} title="删除标记区域" aria-label="删除标记区域"><Trash2 size={13} aria-hidden="true" /></button>
                 </div>
             ))}
@@ -99,7 +99,7 @@ export function ChartAnnotationConfig({ component, onChange }: {
                         <input type="number" className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ fontSize: 11, padding: '3px 4px' }} placeholder="上限" value={cc.valueTo ?? 0}
                             onChange={(e) => updateConditionalColor(idx, { valueTo: Number(e.target.value) })} />
                     ) : <span />}
-                    <input type="color" className="property-color-input w-8 h-7 border border-border-default rounded cursor-pointer p-0" value={cc.color} onChange={(e) => updateConditionalColor(idx, { color: e.target.value })} />
+                    <ColorPickerInput value={cc.color} fallback="#ef4444" onChange={(value) => updateConditionalColor(idx, { color: value })} ariaLabel="条件颜色" />
                     <button type="button" className="property-btn-small inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" style={{ padding: '2px 6px', fontSize: 11 }} onClick={() => removeConditionalColor(idx)} title="删除条件着色" aria-label="删除条件着色"><Trash2 size={13} aria-hidden="true" /></button>
                 </div>
             ))}

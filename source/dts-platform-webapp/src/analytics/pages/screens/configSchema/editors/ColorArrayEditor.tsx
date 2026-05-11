@@ -120,9 +120,8 @@ const ColorArrayEditor: React.FC<ColorArrayEditorProps> = ({ value = [], onChang
   return (
     <div style={{ width: '100%', minWidth: 0 }}>
       {value.map((color, idx) => (
-        // 使用 idx + color 作为 key 有助于"删除中间一项后其他项保持各自状态"
         <ColorSlot
-          key={`${idx}-${color}`}
+          key={`color-${idx}`}
           idx={idx}
           value={color}
           onCommit={updateAt}

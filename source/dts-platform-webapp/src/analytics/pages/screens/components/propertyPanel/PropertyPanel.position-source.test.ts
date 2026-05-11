@@ -16,6 +16,9 @@ test("PropertyPanel delegates position and size config to the extracted module",
 	assert.equal(propertyPanelSource.includes("handleChange('height'"), false);
 	assert.match(positionSource, /export function renderPositionSizeConfig/);
 	assert.match(positionSource, /位置与尺寸/);
+	assert.match(positionSource, /parseIntegerInput/);
+	assert.match(positionSource, /Math\.round/);
+	assert.match(positionSource, /step=\{1\}/);
 	assert.match(positionSource, /handleChange\('width'/);
 	assert.match(positionSource, /handleChange\('height'/);
 });

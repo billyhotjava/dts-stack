@@ -1356,22 +1356,6 @@
   cursor: not-allowed;
 }
 
-.property-quick-filter-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-
-.property-quick-filter-row .property-input {
-  min-width: 120px;
-  flex: 1 1 120px;
-}
-
-.property-quick-filter-row .property-btn-small {
-  flex: 0 0 auto;
-}
-
 @media (max-width: 1360px) {
   .property-panel {
     width: 280px;

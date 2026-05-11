@@ -10,7 +10,6 @@ const sectionFiles = [
 	"ComponentAppearanceSection.tsx",
 	"FieldMappingSection.tsx",
 	"AnimationConfigSection.tsx",
-	"QuickActionsSection.tsx",
 	"ComponentConfigSection.tsx",
 	"ExplainConfigSection.tsx",
 	"OtherConfigSection.tsx",

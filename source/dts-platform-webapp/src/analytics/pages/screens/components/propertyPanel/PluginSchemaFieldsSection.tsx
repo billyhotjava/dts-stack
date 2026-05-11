@@ -1,6 +1,7 @@
 import { toast } from 'sonner';
 import type { ScreenComponent } from '../../types';
 import type { PropertySchemaField } from '../../plugins/types';
+import { ColorPickerInput } from './ColorPickerInput';
 
 export function renderPluginSchemaFields(
     component: ScreenComponent,
@@ -128,11 +129,11 @@ export function renderPluginSchemaFields(
                         <div className="property-row flex items-center mb-3" key={key}>
                             <label className="property-label w-20 text-xs text-text-secondary">{label}</label>
                             <div style={{ flex: 1 }}>
-                                <input
-                                    type="color"
-                                    className="property-color-input w-8 h-7 border border-border-default rounded cursor-pointer p-0"
+                                <ColorPickerInput
                                     value={fallback}
-                                    onChange={(e) => applyPluginFieldChange(key, e.target.value)}
+                                    fallback="#3b82f6"
+                                    onChange={(next) => applyPluginFieldChange(key, next)}
+                                    ariaLabel={label}
                                 />
                                 {descriptionNode}
                             </div>

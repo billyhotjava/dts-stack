@@ -1,4 +1,5 @@
 import type { ScreenComponent } from '../../types';
+import { ColorPickerInput } from './ColorPickerInput';
 import { SectionToggle } from './SectionToggle';
 
 interface ComponentAppearanceSectionOptions {
@@ -27,11 +28,11 @@ export function renderComponentAppearanceConfig({
                     <div className="property-row flex items-center mb-3">
                         <label className="property-label w-20 text-xs text-text-secondary">背景色</label>
                         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                            <input
-                                type="color"
-                                className="property-color-input w-8 h-7 border border-border-default rounded cursor-pointer p-0"
-                                value={String(config.componentBgColor || 'transparent') === 'transparent' ? '#000000' : String(config.componentBgColor || '#000000')}
-                                onChange={(e) => handleConfigChange('componentBgColor', e.target.value)}
+                            <ColorPickerInput
+                                value={String(config.componentBgColor || '')}
+                                fallback="#000000"
+                                onChange={(value) => handleConfigChange('componentBgColor', value)}
+                                ariaLabel="背景色"
                             />
                             <input
                                 type="text"
@@ -92,11 +93,11 @@ export function renderComponentAppearanceConfig({
                                 max={20}
                                 placeholder="0"
                             />
-                            <input
-                                type="color"
-                                className="property-color-input w-8 h-7 border border-border-default rounded cursor-pointer p-0"
+                            <ColorPickerInput
                                 value={String(config.componentBorderColor || '#ffffff')}
-                                onChange={(e) => handleConfigChange('componentBorderColor', e.target.value)}
+                                fallback="#ffffff"
+                                onChange={(value) => handleConfigChange('componentBorderColor', value)}
+                                ariaLabel="边框颜色"
                             />
                             <select
                                 className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"

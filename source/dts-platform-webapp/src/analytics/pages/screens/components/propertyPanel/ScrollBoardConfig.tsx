@@ -1,5 +1,6 @@
 import type { DataSourceConfig, ScreenComponent } from '../../types';
 import { CardSourceColumnBindingsEditor } from './CardSourceColumnBindingsEditor';
+import { ColorPickerInput } from './ColorPickerInput';
 import { resolveDataSourceType } from './helpers';
 import type { ColumnEntry } from './types';
 
@@ -46,20 +47,20 @@ export function ScrollBoardConfig({ component, onChange }: {
             </div>
             <div className="property-row flex items-center mb-3">
                 <label className="property-label w-20 text-xs text-text-secondary">表头颜色</label>
-                <input
-                    type="color"
-                    className="property-color-input w-8 h-7 border border-border-default rounded cursor-pointer p-0"
+                <ColorPickerInput
                     value={(config.headerColor as string) || '#ffffff'}
-                    onChange={(e) => onChange('headerColor', e.target.value)}
+                    fallback="#ffffff"
+                    onChange={(value) => onChange('headerColor', value)}
+                    ariaLabel="表头颜色"
                 />
             </div>
             <div className="property-row flex items-center mb-3">
                 <label className="property-label w-20 text-xs text-text-secondary">表头背景</label>
-                <input
-                    type="color"
-                    className="property-color-input w-8 h-7 border border-border-default rounded cursor-pointer p-0"
+                <ColorPickerInput
                     value={(config.headerBGC as string) || '#003366'}
-                    onChange={(e) => onChange('headerBGC', e.target.value)}
+                    fallback="#003366"
+                    onChange={(value) => onChange('headerBGC', value)}
+                    ariaLabel="表头背景"
                 />
             </div>
 

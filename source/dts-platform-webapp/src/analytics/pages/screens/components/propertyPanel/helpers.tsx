@@ -11,35 +11,11 @@ import type { StyleClipboardPayload, LegendHeuristicLayout } from './types';
 export const STYLE_CLIPBOARD_KEY = 'dts.analytics.screen.styleClipboard.v1';
 export const LAYOUT_CLIPBOARD_KEY = 'dts.analytics.screen.layoutClipboard.v1';
 export const PROPERTY_SECTION_COLLAPSE_KEY = 'dts.analytics.screen.propertySectionCollapse.v1';
-export const PROPERTY_PANEL_DENSITY_KEY = 'dts.analytics.screen.propertyPanelDensity.v1';
 export const PROPERTY_SECTION_KEYS = [
-    'quick-filter',
-    'quick-actions',
     'position-size',
     'plugin-config',
     'component-config',
     'data-source',
-    'explain',
-    'drill-down',
-    'interaction',
-    'actions',
-    'other',
-] as const;
-export const PROPERTY_FOCUS_SECTION_KEYS = new Set<string>([
-    'quick-filter',
-    'quick-actions',
-    'position-size',
-    'plugin-config',
-    'component-config',
-    'data-source',
-    // Allow Interaction tab sections in focus mode — without these, switching
-    // to the 交互 tab on a basic component (shape/title/...) shows an empty pane.
-    'interaction',
-    'actions',
-    'drill-down',
-]);
-export const PROPERTY_SECTION_ESSENTIAL_COLLAPSED = [
-    'plugin-config',
     'explain',
     'drill-down',
     'interaction',

@@ -1,6 +1,7 @@
 import { toast } from 'sonner';
 import type { DataSourceConfig, ScreenComponent } from '../../types';
 import { CardSourceColumnBindingsEditor } from './CardSourceColumnBindingsEditor';
+import { ColorPickerInput } from './ColorPickerInput';
 import { resolveDataSourceType } from './helpers';
 import type { ColumnEntry } from './types';
 
@@ -57,38 +58,38 @@ export function TableConfig({ component, onChange }: {
             </div>
             <div className="property-row flex items-center mb-3">
                 <label className="property-label w-20 text-xs text-text-secondary">表头颜色</label>
-                <input
-                    type="color"
-                    className="property-color-input w-8 h-7 border border-border-default rounded cursor-pointer p-0"
+                <ColorPickerInput
                     value={(config.headerColor as string) || '#e5e7eb'}
-                    onChange={(e) => onChange('headerColor', e.target.value)}
+                    fallback="#e5e7eb"
+                    onChange={(value) => onChange('headerColor', value)}
+                    ariaLabel="表头颜色"
                 />
             </div>
             <div className="property-row flex items-center mb-3">
                 <label className="property-label w-20 text-xs text-text-secondary">表头背景</label>
-                <input
-                    type="color"
-                    className="property-color-input w-8 h-7 border border-border-default rounded cursor-pointer p-0"
+                <ColorPickerInput
                     value={(config.headerBackground as string) || '#64748b'}
-                    onChange={(e) => onChange('headerBackground', e.target.value)}
+                    fallback="#64748b"
+                    onChange={(value) => onChange('headerBackground', value)}
+                    ariaLabel="表头背景"
                 />
             </div>
             <div className="property-row flex items-center mb-3">
                 <label className="property-label w-20 text-xs text-text-secondary">正文颜色</label>
-                <input
-                    type="color"
-                    className="property-color-input w-8 h-7 border border-border-default rounded cursor-pointer p-0"
+                <ColorPickerInput
                     value={(config.bodyColor as string) || '#d1d5db'}
-                    onChange={(e) => onChange('bodyColor', e.target.value)}
+                    fallback="#d1d5db"
+                    onChange={(value) => onChange('bodyColor', value)}
+                    ariaLabel="正文颜色"
                 />
             </div>
             <div className="property-row flex items-center mb-3">
                 <label className="property-label w-20 text-xs text-text-secondary">边框颜色</label>
-                <input
-                    type="color"
-                    className="property-color-input w-8 h-7 border border-border-default rounded cursor-pointer p-0"
+                <ColorPickerInput
                     value={(config.borderColor as string) || '#94a3b8'}
-                    onChange={(e) => onChange('borderColor', e.target.value)}
+                    fallback="#94a3b8"
+                    onChange={(value) => onChange('borderColor', value)}
+                    ariaLabel="边框颜色"
                 />
             </div>
             <div className="property-row flex items-center mb-3">
@@ -210,23 +211,23 @@ export function TableConfig({ component, onChange }: {
             <div className="text-xs text-text-secondary mb-1">样式</div>
             <div className="property-row flex items-center mb-3">
                 <label className="property-label w-20 text-xs text-text-secondary">表头背景</label>
-                <input type="color" className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={(config.headerBackground as string) || '#112238'} onChange={(e) => onChange('headerBackground', e.target.value)} />
+                <ColorPickerInput value={(config.headerBackground as string) || '#112238'} fallback="#112238" onChange={(value) => onChange('headerBackground', value)} ariaLabel="表头背景" />
             </div>
             <div className="property-row flex items-center mb-3">
                 <label className="property-label w-20 text-xs text-text-secondary">行背景</label>
-                <input type="color" className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={(config.bodyBackground as string) || '#0d1b2d'} onChange={(e) => onChange('bodyBackground', e.target.value)} />
+                <ColorPickerInput value={(config.bodyBackground as string) || '#0d1b2d'} fallback="#0d1b2d" onChange={(value) => onChange('bodyBackground', value)} ariaLabel="行背景" />
             </div>
             <div className="property-row flex items-center mb-3">
                 <label className="property-label w-20 text-xs text-text-secondary">交替行背景</label>
-                <input type="color" className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={(config.oddRowBackground as string) || '#10233a'} onChange={(e) => onChange('oddRowBackground', e.target.value)} />
+                <ColorPickerInput value={(config.oddRowBackground as string) || '#10233a'} fallback="#10233a" onChange={(value) => onChange('oddRowBackground', value)} ariaLabel="交替行背景" />
             </div>
             <div className="property-row flex items-center mb-3">
                 <label className="property-label w-20 text-xs text-text-secondary">文字颜色</label>
-                <input type="color" className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={(config.bodyColor as string) || '#c8ddf5'} onChange={(e) => onChange('bodyColor', e.target.value)} />
+                <ColorPickerInput value={(config.bodyColor as string) || '#c8ddf5'} fallback="#c8ddf5" onChange={(value) => onChange('bodyColor', value)} ariaLabel="文字颜色" />
             </div>
             <div className="property-row flex items-center mb-3">
                 <label className="property-label w-20 text-xs text-text-secondary">边框颜色</label>
-                <input type="color" className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={(config.borderColor as string) || '#1e3a5f'} onChange={(e) => onChange('borderColor', e.target.value)} />
+                <ColorPickerInput value={(config.borderColor as string) || '#1e3a5f'} fallback="#1e3a5f" onChange={(value) => onChange('borderColor', value)} ariaLabel="边框颜色" />
             </div>
         </>
     );
