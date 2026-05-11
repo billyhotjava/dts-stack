@@ -67,7 +67,7 @@ public class PlatformPermissionClient {
     }
 
     public PermissionResult check(String username, String roles, String deptCode, String assetType, String assetId) {
-        String cacheKey = username + ":" + assetType + ":" + assetId;
+        String cacheKey = checkCacheKey(username, roles, deptCode, assetType, assetId);
         PermissionResult cached = checkCache.getIfPresent(cacheKey);
         if (cached != null) {
             return cached;
@@ -150,7 +150,7 @@ public class PlatformPermissionClient {
                 // Populate single-check cache as well
                 String[] parts = key.split(":", 2);
                 if (parts.length == 2) {
-                    checkCache.put(username + ":" + key, pr);
+                    checkCache.put(checkCacheKey(username, roles, deptCode, parts[0], parts[1]), pr);
                 }
             }
             return results;
@@ -162,7 +162,7 @@ public class PlatformPermissionClient {
 
     public AccessibleAssetsResult listAccessibleAssetIds(String username, String roles, String deptCode,
                                                           String assetType, int page, int size) {
-        String cacheKey = username + ":" + assetType + ":" + page + ":" + size;
+        String cacheKey = listCacheKey(username, roles, deptCode, assetType, page, size);
         AccessibleAssetsResult cached = listCache.getIfPresent(cacheKey);
         if (cached != null) {
             return cached;
@@ -207,8 +207,9 @@ public class PlatformPermissionClient {
     }
 
     public void invalidateCache(String username) {
-        checkCache.asMap().keySet().removeIf(k -> k.startsWith(username + ":"));
-        listCache.asMap().keySet().removeIf(k -> k.startsWith(username + ":"));
+        String prefix = safeKey(username) + "|";
+        checkCache.asMap().keySet().removeIf(k -> k.startsWith(prefix));
+        listCache.asMap().keySet().removeIf(k -> k.startsWith(prefix));
     }
 
     private URI buildUri(String path) {
@@ -229,6 +230,37 @@ public class PlatformPermissionClient {
             headers.set(SERVICE_TOKEN_HEADER, outboundProps.getServiceToken().trim());
         }
         return headers;
+    }
+
+    private String checkCacheKey(String username, String roles, String deptCode, String assetType, String assetId) {
+        return String.join(
+            "|",
+            safeKey(username),
+            rolesCachePart(roles),
+            safeKey(deptCode),
+            safeKey(assetType),
+            safeKey(assetId)
+        );
+    }
+
+    private String listCacheKey(String username, String roles, String deptCode, String assetType, int page, int size) {
+        return String.join(
+            "|",
+            safeKey(username),
+            rolesCachePart(roles),
+            safeKey(deptCode),
+            safeKey(assetType),
+            String.valueOf(page),
+            String.valueOf(size)
+        );
+    }
+
+    private String rolesCachePart(String rolesCsv) {
+        return String.join(",", parseRoles(rolesCsv).stream().sorted(String.CASE_INSENSITIVE_ORDER).toList());
+    }
+
+    private String safeKey(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private List<String> parseRoles(String rolesCsv) {

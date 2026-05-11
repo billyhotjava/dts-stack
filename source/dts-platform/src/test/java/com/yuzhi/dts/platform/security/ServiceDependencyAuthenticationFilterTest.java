@@ -31,6 +31,9 @@ class ServiceDependencyAuthenticationFilterTest {
     private static final String TOKEN_HEADER = "X-DTS-Service-Token";
     private static final String INGESTION_RUNTIME_DETAIL = "/api/infra/data-sources/11111111-1111-1111-1111-111111111111/runtime-detail";
     private static final String ANALYTICS_RUNTIME_DETAIL = "/api/infra/data-sources/22222222-2222-2222-2222-222222222222/runtime-detail";
+    private static final String ANALYTICS_ASSET_PERMISSION_CHECK = "/api/internal/asset-permission/check";
+    private static final String ANALYTICS_ASSET_PERMISSION_BATCH_CHECK = "/api/internal/asset-permission/batch-check";
+    private static final String ANALYTICS_ASSET_PERMISSION_ACCESSIBLE_IDS = "/api/internal/asset-permission/accessible-ids";
 
     private PlatformInboundServiceAuthProperties props;
     private SvcTokenAuthService svcTokenAuthService;
@@ -125,6 +128,28 @@ class ServiceDependencyAuthenticationFilterTest {
         assertThat(auth).isNotNull();
         assertThat(auth.getPrincipal()).isEqualTo("service:dts-analytics");
         assertThat(auth.getAuthorities()).extracting(Object::toString).contains(AuthoritiesConstants.SERVICE_INTERNAL);
+    }
+
+    @Test
+    void analyticsMatchingToken_canAccessAssetPermissionCheckEndpoints() throws Exception {
+        assertAnalyticsCanAccessPost(ANALYTICS_ASSET_PERMISSION_CHECK);
+        assertAnalyticsCanAccessPost(ANALYTICS_ASSET_PERMISSION_BATCH_CHECK);
+        assertAnalyticsCanAccessPost(ANALYTICS_ASSET_PERMISSION_ACCESSIBLE_IDS);
+    }
+
+    @Test
+    void analyticsMatchingToken_cannotAccessArbitraryInternalEndpoint() throws Exception {
+        ServiceDependencyAuthenticationFilter filter = new ServiceDependencyAuthenticationFilter(props, svcTokenAuthService);
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.addHeader(SERVICE_HEADER, "dts-analytics");
+        req.addHeader(TOKEN_HEADER, "analytics-secret");
+        req.setMethod("POST");
+        req.setRequestURI("/api/internal/not-allowed");
+
+        filter.doFilter(req, new MockHttpServletResponse(), chain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verify(svcTokenAuthService, never()).authenticateService(any(), any());
     }
 
     @Test
@@ -257,5 +282,24 @@ class ServiceDependencyAuthenticationFilterTest {
 
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         verify(svcTokenAuthService, never()).authenticateService(any(), any());
+    }
+
+    private void assertAnalyticsCanAccessPost(String path) throws Exception {
+        SecurityContextHolder.clearContext();
+        FilterChain localChain = mock(FilterChain.class);
+        ServiceDependencyAuthenticationFilter filter = new ServiceDependencyAuthenticationFilter(props, svcTokenAuthService);
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.addHeader(SERVICE_HEADER, "dts-analytics");
+        req.addHeader(TOKEN_HEADER, "analytics-secret");
+        req.setMethod("POST");
+        req.setRequestURI(path);
+
+        filter.doFilter(req, new MockHttpServletResponse(), localChain);
+
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        assertThat(auth).isNotNull();
+        assertThat(auth.getPrincipal()).isEqualTo("service:dts-analytics");
+        assertThat(auth.getAuthorities()).extracting(Object::toString).contains(AuthoritiesConstants.SERVICE_INTERNAL);
+        verify(localChain).doFilter(any(), any());
     }
 }
