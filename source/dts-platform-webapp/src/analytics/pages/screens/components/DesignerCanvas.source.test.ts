@@ -10,6 +10,8 @@ test("DesignerCanvas keeps core canvas code under TypeScript checks", async () =
 	assert.equal(source.includes("@ts-nocheck"), false);
 	assert.equal(source.includes("apiClient.get<any>"), false);
 	assert.equal(source.includes("(f: any)"), false);
+	assert.equal(source.includes("if (node && resizeObserver)"), false);
+	assert.match(source, /resizeObserver\.observe\(containerNode\)/);
 	assert.match(source, /type ScreenFontAsset =/);
 	assert.match(source, /function resolveScreenFontAssets/);
 	assert.match(source, /type MouseEvent, type MutableRefObject/);

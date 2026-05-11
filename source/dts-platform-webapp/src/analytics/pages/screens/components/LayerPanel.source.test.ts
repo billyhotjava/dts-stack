@@ -8,7 +8,9 @@ test("LayerPanel stays type-checked and avoids mutating component order while re
 	const source = await readFile(layerPanelPath, "utf8");
 
 	assert.equal(source.includes("@ts-nocheck"), false);
-	assert.match(source, /type DragEvent, type MouseEvent, type ReactNode/);
+	assert.match(source, /type DragEvent/);
+	assert.match(source, /type MouseEvent(?: as ReactMouseEvent)?/);
+	assert.match(source, /type ReactNode/);
 	assert.match(source, /import type \{ ScreenComponent \} from '\.\.\/types'/);
 	assert.equal(source.includes("config.components.sort("), false);
 	assert.match(source, /config\.components\.slice\(\)\.sort/);

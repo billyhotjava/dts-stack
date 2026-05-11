@@ -70,7 +70,7 @@ const FieldRow: React.FC<{ label: string; children: React.ReactNode }> = ({ labe
     >
       {label}
     </span>
-    <div style={{ flex: 1 }}>{children}</div>
+    <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
   </div>
 );
 

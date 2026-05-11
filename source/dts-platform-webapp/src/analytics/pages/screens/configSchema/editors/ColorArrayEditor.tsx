@@ -23,10 +23,28 @@ function isValidColor(text: string): boolean {
   );
 }
 
+const colorSlotRowStyle: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: '52px minmax(0, 1fr)',
+  columnGap: 8,
+  alignItems: 'center',
+  width: '100%',
+  minWidth: 0,
+  marginBottom: 6,
+};
+
+const colorSlotControlsStyle: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: '28px minmax(0, 1fr) 24px',
+  columnGap: 6,
+  alignItems: 'center',
+  minWidth: 0,
+};
+
 const LabelRow: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
-  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-    <span style={{ fontSize: 12 }}>{label}</span>
-    <div style={{ maxWidth: '60%' }}>{children}</div>
+  <div style={colorSlotRowStyle}>
+    <span style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{label}</span>
+    <div style={colorSlotControlsStyle}>{children}</div>
   </div>
 );
 
@@ -57,28 +75,29 @@ const ColorSlot: React.FC<ColorSlotProps> = ({ idx, value, onCommit, onRemove })
 
   return (
     <LabelRow label={`颜色 ${idx + 1}`}>
-      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-        <ColorPicker
-          size="small"
-          value={value}
-          onChange={(_, hex) => onCommit(idx, hex)}
-        />
-        <Input
-          size="small"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onPressEnter={commit}
-          style={{ width: 100 }}
-        />
-        <Button
-          size="small"
-          type="text"
-          icon={<DeleteOutlined />}
-          onClick={() => onRemove(idx)}
-          danger
-        />
-      </div>
+      <ColorPicker
+        size="small"
+        value={value}
+        onChange={(_, hex) => onCommit(idx, hex)}
+        style={{ width: 28 }}
+      />
+      <Input
+        size="small"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onPressEnter={commit}
+        style={{ width: '100%', minWidth: 0 }}
+      />
+      <Button
+        size="small"
+        type="text"
+        icon={<DeleteOutlined />}
+        onClick={() => onRemove(idx)}
+        danger
+        style={{ width: 24, minWidth: 24, padding: 0 }}
+        aria-label={`删除颜色 ${idx + 1}`}
+      />
     </LabelRow>
   );
 };
@@ -99,7 +118,7 @@ const ColorArrayEditor: React.FC<ColorArrayEditorProps> = ({ value = [], onChang
   };
 
   return (
-    <div>
+    <div style={{ width: '100%', minWidth: 0 }}>
       {value.map((color, idx) => (
         // 使用 idx + color 作为 key 有助于"删除中间一项后其他项保持各自状态"
         <ColorSlot
@@ -116,7 +135,7 @@ const ColorArrayEditor: React.FC<ColorArrayEditorProps> = ({ value = [], onChang
         icon={<PlusOutlined />}
         onClick={add}
         block
-        style={{ marginTop: 4 }}
+        style={{ marginTop: 4, minWidth: 0 }}
       >
         添加颜色
       </Button>
