@@ -17,6 +17,10 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # Screen assets are validated by backend (images 10MB, fonts 20MB);
+    # keep the proxy limit above that so Nginx does not return a raw 413 first.
+    client_max_body_size 25m;
+
     # Proxy API to backend (keeps the /api prefix)
     # Use a variable proxy_pass so Nginx re-resolves Docker service DNS after backend containers are recreated.
     location /api/ {

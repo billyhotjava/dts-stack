@@ -2,6 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Button, ColorPicker, Input, InputNumber, message, Radio, Select, Slider, Switch } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import apiClient from '../../../../../api/apiClient';
+import {
+    getScreenImageUploadErrorMessage,
+    SCREEN_IMAGE_UPLOAD_LIMIT_BYTES,
+    SCREEN_IMAGE_UPLOAD_LIMIT_LABEL,
+} from '../../utils/screenImageUpload';
 
 import type { ConfigField } from '../types';
 
@@ -98,16 +103,24 @@ const ImageUrlField: React.FC<ImageUrlFieldProps> = ({ value, onChange }) => {
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        if (file.size > 10 * 1024 * 1024) { message.error('文件大小不能超过 10MB'); return; }
+        if (file.size > SCREEN_IMAGE_UPLOAD_LIMIT_BYTES) {
+            message.error(`文件大小不能超过 ${SCREEN_IMAGE_UPLOAD_LIMIT_LABEL}`);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
         const formData = new FormData();
         formData.append('file', file);
         setUploading(true);
         try {
-            const res = await apiClient.post<{ data: { url: string } }>({ url: '/infra/screen-images/upload', data: formData });
+            const res = await apiClient.post<{ data: { url: string } }>({
+                url: '/infra/screen-images/upload',
+                data: formData,
+                _skipErrorToast: true,
+            } as any);
             const url = (res as any)?.data?.url ?? (res as any)?.url;
             if (url) { onChange(url); message.success('上传成功'); }
             else { message.error('上传返回格式异常'); }
-        } catch (err: any) { message.error(err?.message || '上传失败'); }
+        } catch (err: unknown) { message.error(getScreenImageUploadErrorMessage(err)); }
         finally { setUploading(false); if (fileInputRef.current) fileInputRef.current.value = ''; }
     };
 

@@ -3,6 +3,11 @@ import { useRef, useState } from 'react';
 import { message } from 'antd';
 import { X } from 'lucide-react';
 import apiClient from '@/api/apiClient';
+import {
+    getScreenImageUploadErrorMessage,
+    SCREEN_IMAGE_UPLOAD_LIMIT_BYTES,
+    SCREEN_IMAGE_UPLOAD_LIMIT_LABEL,
+} from '../../utils/screenImageUpload';
 
 type UploadImageResponse = {
     data?: {
@@ -11,10 +16,6 @@ type UploadImageResponse = {
     url?: string;
 };
 
-function getErrorMessage(err: unknown) {
-    return err instanceof Error ? err.message : '上传失败';
-}
-
 export function BackgroundImageRow({ value, onChange }: { value: string; onChange: (url: string) => void }) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
@@ -22,16 +23,24 @@ export function BackgroundImageRow({ value, onChange }: { value: string; onChang
     const handleUpload = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        if (file.size > 10 * 1024 * 1024) { message.error('文件大小不能超过 10MB'); return; }
+        if (file.size > SCREEN_IMAGE_UPLOAD_LIMIT_BYTES) {
+            message.error(`文件大小不能超过 ${SCREEN_IMAGE_UPLOAD_LIMIT_LABEL}`);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
         const formData = new FormData();
         formData.append('file', file);
         setUploading(true);
         try {
-            const res = await apiClient.post<UploadImageResponse>({ url: '/infra/screen-images/upload', data: formData });
+            const res = await apiClient.post<UploadImageResponse>({
+                url: '/infra/screen-images/upload',
+                data: formData,
+                _skipErrorToast: true,
+            } as any);
             const url = res.data?.url ?? res.url;
             if (url) { onChange(url); message.success('上传成功'); }
             else { message.error('上传返回格式异常'); }
-        } catch (err: unknown) { message.error(getErrorMessage(err)); }
+        } catch (err: unknown) { message.error(getScreenImageUploadErrorMessage(err)); }
         finally { setUploading(false); if (fileInputRef.current) fileInputRef.current.value = ''; }
     };
 
