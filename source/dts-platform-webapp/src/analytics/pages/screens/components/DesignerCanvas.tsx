@@ -64,7 +64,7 @@ export function DesignerCanvas() {
                 if (!el) { el = document.createElement('style'); el.id = styleId; document.head.appendChild(el); }
                 const formatMap: Record<string, string> = { ttf: 'truetype', otf: 'opentype', woff: 'woff', woff2: 'woff2' };
                 el.textContent = fonts.map((f) =>
-                    `@font-face { font-family: "${f.fontFamily}"; src: url("${f.url}") format("${formatMap[f.format] || 'truetype'}"); font-display: swap; }`
+                    `@font-face { font-family: "${f.fontFamily}"; src: url("${f.url}") format("${formatMap[f.format ?? ''] || 'truetype'}"); font-display: swap; }`
                 ).join('\n');
             })
             .catch(() => {});
@@ -195,7 +195,7 @@ export function DesignerCanvas() {
                 // Apply current theme colors to the new component so text/lines
                 // are visible on the dark canvas (e.g., white text, light axes)
                 const [themed] = applyThemeToComponents([newComponent], config.theme, 'safe');
-                addComponent(themed);
+                addComponent({ ...newComponent, config: themed?.config ?? newComponent.config });
             }
         },
         collect: (monitor) => ({

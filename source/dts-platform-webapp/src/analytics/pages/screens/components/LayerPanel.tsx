@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import {
 	Box,
 	ChartColumn,
@@ -17,7 +17,7 @@ import {
 	LayoutPanelTop,
 	ListFilter,
 	Lock,
-	Map,
+	Map as MapIcon,
 	MoreHorizontal,
 	Table2,
 	Type,
@@ -39,7 +39,7 @@ export function LayerPanel() {
 	const dragSourceId = useRef<string | null>(null);
 
 	useEffect(() => {
-		const handlePointerDown = (event: MouseEvent) => {
+		const handlePointerDown = (event: globalThis.MouseEvent) => {
 			const target = event.target as Element | null;
 			if (!target) {
 				setOpenMenuId(null);
@@ -92,7 +92,7 @@ export function LayerPanel() {
 		walk(component, 0);
 	}
 
-	const handleLayerClick = (id: string, e: MouseEvent<HTMLDivElement>) => {
+	const handleLayerClick = (id: string, e: ReactMouseEvent<HTMLDivElement>) => {
 		if (e.ctrlKey || e.metaKey) {
 			// Multi-select with Ctrl/Cmd
 			if (selectedIds.includes(id)) {
@@ -173,7 +173,7 @@ export function LayerPanel() {
 			'gauge-chart': <Gauge {...iconProps} />,
 			'radar-chart': <CircleDot {...iconProps} />,
 			'funnel-chart': <ChartPie {...iconProps} />,
-			'map-chart': <Map {...iconProps} />,
+			'map-chart': <MapIcon {...iconProps} />,
 			'number-card': <Hash {...iconProps} />,
 			'title': <Type {...iconProps} />,
 			'markdown-text': <FileText {...iconProps} />,

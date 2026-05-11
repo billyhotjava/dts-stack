@@ -3,7 +3,7 @@ import { Link2 } from 'lucide-react';
 import { message } from 'antd';
 import { toast } from 'sonner';
 import { useScreen } from '../../ScreenContext';
-import type { ScreenComponent } from '../../types';
+import type { ScreenComponent, ScreenCustomTheme } from '../../types';
 import { getRendererPlugin } from '../../plugins/registry';
 import { readComponentPluginMeta, resolveRuntimePluginId } from '../../plugins/runtime';
 import { useScreenPluginRuntime } from '../../plugins/useScreenPluginRuntime';
@@ -18,7 +18,6 @@ import { getThemeTokens } from '../../screenThemes';
 
 // Extracted modules (F4-Step3 split)
 import {
-    DEFAULT_SERIES_COLORS,
     LAYOUT_CLIPBOARD_KEY,
     PROPERTY_FOCUS_SECTION_KEYS,
     PROPERTY_PANEL_DENSITY_KEY,
@@ -41,9 +40,7 @@ import { renderComponentConfigSection } from './ComponentConfigSection';
 import { renderFieldMappingConfig } from './FieldMappingSection';
 import { renderExplainConfig } from './ExplainConfigSection';
 import { renderQuickActionsConfig, type CanvasAlignMode, type QuickActionMode } from './QuickActionsSection';
-import { ScrollBoardConfig } from './ScrollBoardConfig';
 import { ChartAnnotationConfig } from './ChartAnnotationConfig';
-import { TableConfig } from './TableConfig';
 import { BackgroundImageRow } from './BackgroundImageRow';
 import { SectionToggle } from './SectionToggle';
 import { THEME_OPTIONS } from '../screenHeader/helpers';
@@ -65,6 +62,14 @@ import {
 
 export type PropertyPanelTab = 'style' | 'data' | 'interaction' | 'advanced';
 
+const CUSTOM_THEME_FIELDS: Array<{ key: keyof ScreenCustomTheme; label: string; fallback: string }> = [
+    { key: 'primaryColor', label: '主色', fallback: '#409eff' },
+    { key: 'backgroundColor', label: '背景色', fallback: '#1e1f26' },
+    { key: 'textPrimary', label: '主文字', fallback: '#e2e8f0' },
+    { key: 'textSecondary', label: '副文字', fallback: '#94a3b8' },
+    { key: 'borderColor', label: '边框', fallback: '#1e293b' },
+    { key: 'cardBackground', label: '卡片背景', fallback: '#1a2332' },
+];
 
 // ── PropertyPanel ────────────────────────────────────────────────────
 
@@ -144,7 +149,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
 
     if (selectedComponents.length === 0) {
         const customTheme = config.customTheme;
-        const handleCustomThemeChange = (key: string, value: string) => {
+        const handleCustomThemeChange = (key: keyof ScreenCustomTheme, value: string) => {
             updateConfig({
                 customTheme: { ...(customTheme || {}), [key]: value },
                 ...(key === 'backgroundColor' ? { backgroundColor: value } : {}),
@@ -233,14 +238,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                         {isCustom && (
                             <>
                                 <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '8px 0 4px' }}>自定义主题颜色</div>
-                                {[
-                                    ['primaryColor', '主色', '#409eff'],
-                                    ['backgroundColor', '背景色', '#1e1f26'],
-                                    ['textPrimary', '主文字', '#e2e8f0'],
-                                    ['textSecondary', '副文字', '#94a3b8'],
-                                    ['borderColor', '边框', '#1e293b'],
-                                    ['cardBackground', '卡片背景', '#1a2332'],
-                                ].map(([key, label, fallback]) => (
+                                {CUSTOM_THEME_FIELDS.map(({ key, label, fallback }) => (
                                     <div className="property-row flex items-center mb-3" key={key}>
                                         <label className="property-label w-20 text-xs text-text-secondary">{label}</label>
                                         <input
