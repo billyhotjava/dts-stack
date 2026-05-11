@@ -1,11 +1,17 @@
 import type { ScreenPluginManifest } from '../../api/analyticsApi';
 import type { ComponentCategory, ComponentItem, ComponentType } from './types';
 
+const HIDDEN_COMPONENT_LIBRARY_PLUGIN_IDS = new Set(['finance-kit']);
+
 function isPluginComponentVisible(component: NonNullable<ScreenPluginManifest['components']>[number]): boolean {
     return component.installed !== false;
 }
 
 export function mapPluginManifestToCategory(plugin: ScreenPluginManifest): ComponentCategory | null {
+    if (HIDDEN_COMPONENT_LIBRARY_PLUGIN_IDS.has(String(plugin.id || '').trim())) {
+        return null;
+    }
+
     const list = Array.isArray(plugin.components) ? plugin.components : [];
     if (list.length === 0) {
         return null;
