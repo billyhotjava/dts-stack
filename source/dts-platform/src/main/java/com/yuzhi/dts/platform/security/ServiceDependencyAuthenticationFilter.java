@@ -140,15 +140,26 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
             return isGet(method, path, "/api/infra/data-sources")
                 || isGetInfraDataSourceDetail(method, path)
                 || isGetRuntimeDetail(method, path)
-                || isPostAnalyticsAssetPermission(method, path);
+                || isAnalyticsAssetPermission(method, path);
         }
         return false;
     }
 
-    private boolean isPostAnalyticsAssetPermission(String method, String path) {
+    private boolean isAnalyticsAssetPermission(String method, String path) {
         return isPost(method, path, "/api/internal/asset-permission/check")
             || isPost(method, path, "/api/internal/asset-permission/batch-check")
-            || isPost(method, path, "/api/internal/asset-permission/accessible-ids");
+            || isPost(method, path, "/api/internal/asset-permission/accessible-ids")
+            || isGet(method, path, "/api/internal/asset-permission/grants")
+            || isPost(method, path, "/api/internal/asset-permission/grants")
+            || isDelete(method, path, "/api/internal/asset-permission/grants/by-asset")
+            || isDeleteAnalyticsGrant(method, path);
+    }
+
+    private boolean isDeleteAnalyticsGrant(String method, String path) {
+        return HttpMethod.DELETE.matches(method)
+            && path != null
+            && path.startsWith("/api/internal/asset-permission/grants/")
+            && !path.endsWith("/by-asset");
     }
 
     private boolean isGetRuntimeDetail(String method, String path) {
@@ -171,5 +182,9 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
 
     private boolean isPost(String method, String path, String expectedPath) {
         return HttpMethod.POST.matches(method) && expectedPath.equals(path);
+    }
+
+    private boolean isDelete(String method, String path, String expectedPath) {
+        return HttpMethod.DELETE.matches(method) && expectedPath.equals(path);
     }
 }

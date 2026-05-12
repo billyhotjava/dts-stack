@@ -1,9 +1,12 @@
 package com.yuzhi.dts.platform.web.rest.internal;
 
+import com.yuzhi.dts.platform.domain.permission.AssetGrant;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService.AccessibleAssetsResult;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService.AssetRef;
+import com.yuzhi.dts.platform.service.permission.AssetPermissionService.GrantCommand;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService.PermissionResult;
+import com.yuzhi.dts.platform.service.permission.dto.AssetGrantDto;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -32,7 +35,9 @@ public class AssetPermissionInternalResource {
             request.userRoles(),
             request.userDeptCode(),
             request.asset().type(),
-            request.asset().id()
+            request.asset().id(),
+            request.userClassification(),
+            request.assetClassification()
         );
         return ResponseEntity.ok(new CheckResponse(result.allowed(), result.permission(), result.reason()));
     }
@@ -50,7 +55,7 @@ public class AssetPermissionInternalResource {
             .toList();
 
         Map<String, PermissionResult> results = permissionService.batchCheck(
-            request.username(), request.userRoles(), request.userDeptCode(), refs
+            request.username(), request.userRoles(), request.userDeptCode(), refs, request.userClassification()
         );
 
         Map<String, CheckResponse> responseMap = new java.util.LinkedHashMap<>();
@@ -67,7 +72,7 @@ public class AssetPermissionInternalResource {
 
         AccessibleAssetsResult result = permissionService.listAccessibleAssetIds(
             request.username(), request.userRoles(), request.userDeptCode(),
-            request.assetType(), PageRequest.of(page, size)
+            request.assetType(), PageRequest.of(page, size), request.userClassification()
         );
 
         return ResponseEntity.ok(new AccessibleIdsResponse(
@@ -75,14 +80,83 @@ public class AssetPermissionInternalResource {
         ));
     }
 
+    @GetMapping("/grants")
+    public ResponseEntity<List<AssetGrantDto>> grants(
+        @RequestParam String assetType,
+        @RequestParam String assetId
+    ) {
+        return ResponseEntity.ok(permissionService.listGrants(assetType, assetId).stream().map(AssetGrantDto::from).toList());
+    }
+
+    @PostMapping("/grants")
+    public ResponseEntity<AssetGrantDto> upsertGrant(@RequestBody GrantRequest request) {
+        AssetGrant grant = permissionService.upsertGrant(new GrantCommand(
+            request.assetType(),
+            request.assetId(),
+            request.granteeType(),
+            request.granteeId(),
+            request.permission(),
+            request.levelOverride(),
+            request.validFrom(),
+            request.validTo(),
+            request.grantReason(),
+            request.grantedBy()
+        ));
+        return ResponseEntity.ok(AssetGrantDto.from(grant));
+    }
+
+    @DeleteMapping("/grants/{grantId}")
+    public ResponseEntity<?> revokeGrant(
+        @PathVariable Long grantId,
+        @RequestParam String assetType,
+        @RequestParam String assetId
+    ) {
+        boolean deleted = permissionService.revokeGrant(assetType, assetId, grantId);
+        return deleted ? ResponseEntity.ok(Map.of("deleted", true)) : ResponseEntity.notFound().build();
+    }
+
+    @DeleteMapping("/grants/by-asset")
+    public ResponseEntity<Map<String, Integer>> revokeByAsset(
+        @RequestParam String assetType,
+        @RequestParam String assetId
+    ) {
+        int deleted = permissionService.revokeAllGrants(assetType, assetId);
+        return ResponseEntity.ok(Map.of("deleted", deleted));
+    }
+
     // --- Request/Response DTOs ---
 
-    public record CheckRequest(String username, List<String> userRoles, String userDeptCode, AssetRefDto asset) {}
-    public record BatchCheckRequest(String username, List<String> userRoles, String userDeptCode, List<AssetRefDto> assets) {}
+    public record CheckRequest(
+        String username,
+        List<String> userRoles,
+        String userDeptCode,
+        String userClassification,
+        String assetClassification,
+        AssetRefDto asset
+    ) {}
+    public record BatchCheckRequest(
+        String username,
+        List<String> userRoles,
+        String userDeptCode,
+        String userClassification,
+        List<AssetRefDto> assets
+    ) {}
     public record AccessibleIdsRequest(String username, List<String> userRoles, String userDeptCode,
-                                        String assetType, Integer page, Integer size) {}
+                                        String userClassification, String assetType, Integer page, Integer size) {}
 
     public record AssetRefDto(String type, String id) {}
     public record CheckResponse(boolean allowed, String permission, String reason) {}
     public record AccessibleIdsResponse(List<String> assetIds, long total, String scope) {}
+    public record GrantRequest(
+        String assetType,
+        String assetId,
+        String granteeType,
+        String granteeId,
+        String permission,
+        Boolean levelOverride,
+        java.time.Instant validFrom,
+        java.time.Instant validTo,
+        String grantReason,
+        String grantedBy
+    ) {}
 }

@@ -15,6 +15,24 @@ public interface BiReportLinkRepository extends JpaRepository<BiReportLink, UUID
     Optional<BiReportLink> findFirstByCodeIgnoreCase(String code);
 
     /**
+     * Platform-side permission checks for analytics screens use the synced
+     * report-link row as the authoritative metadata copy.
+     */
+    @Query(
+        "select r from BiReportLink r " +
+        "where r.enabled = true and upper(r.reportType) = 'SCREEN' " +
+        "  and lower(r.code) = lower(:code)"
+    )
+    Optional<BiReportLink> findEnabledScreenByCode(@Param("code") String code);
+
+    @Query(
+        "select r from BiReportLink r " +
+        "where r.enabled = true and upper(r.reportType) = 'SCREEN' " +
+        "  and lower(r.code) like 'screen-%'"
+    )
+    List<BiReportLink> findEnabledScreensForPermission();
+
+    /**
      * Sprint-17/F1 — used by ScreenReportLinkSyncService to scope reconcile to auto-synced
      * rows only. Sprint-17.1 hotfix: matches by code prefix (e.g. {@code screen-}) instead
      * of the {@code source} column so older databases without the

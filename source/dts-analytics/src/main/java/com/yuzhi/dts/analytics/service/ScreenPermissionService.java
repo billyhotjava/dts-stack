@@ -10,11 +10,16 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
- * Screen permission service — all decisions delegated to local analytics_screen_access table,
- * with an optional security-clearance gate on top.
+ * Screen permission service — platform asset_grant is the source of truth.
+ * The local analytics_screen_access table is retained only as a read-only fallback
+ * during the migration window.
  *
  * <p>Permission levels:
  * <ul>
@@ -40,6 +45,9 @@ import org.springframework.stereotype.Service;
 @Service
 public class ScreenPermissionService {
 
+    private static final Logger LOG = LoggerFactory.getLogger(ScreenPermissionService.class);
+    private static final String SCREEN_ASSET_TYPE = "SCREEN";
+
     /** Sentinel list: first element is -1L, indicates access to ALL screens (superuser). */
     private static final List<Long> ALL_MARKER = List.of(-1L);
 
@@ -55,12 +63,28 @@ public class ScreenPermissionService {
 
     private final AnalyticsScreenAccessRepository accessRepository;
     private final AnalyticsScreenRepository screenRepository;
+    private final PlatformPermissionClient platformClient;
+    private final boolean platformSourceEnabled;
+    private final boolean localFallbackEnabled;
 
     public ScreenPermissionService(
             AnalyticsScreenAccessRepository accessRepository,
             AnalyticsScreenRepository screenRepository) {
+        this(accessRepository, screenRepository, null, false, true);
+    }
+
+    @Autowired
+    public ScreenPermissionService(
+            AnalyticsScreenAccessRepository accessRepository,
+            AnalyticsScreenRepository screenRepository,
+            PlatformPermissionClient platformClient,
+            @Value("${dts.analytics.screen-permission.platform-source-enabled:true}") boolean platformSourceEnabled,
+            @Value("${dts.analytics.screen-permission.local-fallback-enabled:true}") boolean localFallbackEnabled) {
         this.accessRepository = accessRepository;
         this.screenRepository = screenRepository;
+        this.platformClient = platformClient;
+        this.platformSourceEnabled = platformSourceEnabled;
+        this.localFallbackEnabled = localFallbackEnabled;
     }
 
     // ---- Permission snapshot ----
@@ -100,7 +124,7 @@ public class ScreenPermissionService {
     // ---- Main permission check ----
 
     /**
-     * Build a permission snapshot by querying the local access table.
+     * Build a permission snapshot through platform first, with local fallback when enabled.
      *
      * <p>This overload has no caller personnel-level. For classified screens,
      * callers should use the {@link PlatformContext} overload so VIEWER grants
@@ -113,10 +137,11 @@ public class ScreenPermissionService {
     }
 
     public PermissionSnapshot snapshot(AnalyticsScreen screen, AnalyticsUser user, PlatformContext context) {
-        return snapshot(
+        return snapshotWithPlatformContext(
                 screen,
                 user,
                 context == null ? List.of() : context.rolesList(),
+                context == null ? null : context.dept(),
                 context == null ? null : context.classification());
     }
 
@@ -130,13 +155,61 @@ public class ScreenPermissionService {
             AnalyticsUser user,
             List<String> roles,
             String callerClassification) {
+        return snapshotWithPlatformContext(screen, user, roles, null, callerClassification);
+    }
+
+    private PermissionSnapshot snapshotWithPlatformContext(
+            AnalyticsScreen screen,
+            AnalyticsUser user,
+            List<String> roles,
+            String deptCode,
+            String callerClassification) {
         if (screen == null || user == null) {
             return PermissionSnapshot.none();
         }
-        // Superuser / creator bypass — including classification gate.
         if (user.isSuperuser()) {
             return PermissionSnapshot.all();
         }
+
+        if (platformEnabled()) {
+            String userId = resolveUserId(user);
+            String rolesCsv = rolesCsv(roles);
+            PlatformPermissionClient.PermissionResult result = platformClient.check(
+                userId,
+                rolesCsv,
+                deptCode,
+                SCREEN_ASSET_TYPE,
+                String.valueOf(screen.getId()),
+                callerClassification,
+                screen.getClassification()
+            );
+            if (result.allowed()) {
+                return fromPlatformResult(result);
+            }
+            if (!localFallbackEnabled) {
+                return PermissionSnapshot.none();
+            }
+            PermissionSnapshot fallback = localSnapshot(screen, user, roles, callerClassification);
+            if (fallback.canRead()) {
+                LOG.warn(
+                    "event=analytics_permission_fallback action=snapshot screenId={} user={} platformReason={} fallback=local",
+                    screen.getId(),
+                    userId,
+                    result.reason()
+                );
+            }
+            return fallback;
+        }
+
+        return localSnapshot(screen, user, roles, callerClassification);
+    }
+
+    private PermissionSnapshot localSnapshot(
+            AnalyticsScreen screen,
+            AnalyticsUser user,
+            List<String> roles,
+            String callerClassification) {
+        // Local fallback preserves legacy creator bypass while the migration is active.
         if (screen.getCreatorId() != null && screen.getCreatorId().equals(user.getId())) {
             return PermissionSnapshot.all();
         }
@@ -215,10 +288,19 @@ public class ScreenPermissionService {
      * @param roles list of role names from X-DTS-Roles header; may be empty
      */
     public List<Long> listAccessibleScreenIds(AnalyticsUser user, PlatformContext context) {
-        return listAccessibleScreenIds(user, context == null ? List.of() : context.rolesList());
+        return listAccessibleScreenIds(
+            user,
+            context == null ? List.of() : context.rolesList(),
+            context == null ? null : context.dept(),
+            context == null ? null : context.classification()
+        );
     }
 
     public List<Long> listAccessibleScreenIds(AnalyticsUser user, List<String> roles) {
+        return listAccessibleScreenIds(user, roles, null, null);
+    }
+
+    private List<Long> listAccessibleScreenIds(AnalyticsUser user, List<String> roles, String deptCode, String callerClassification) {
         if (user == null) {
             return Collections.emptyList();
         }
@@ -226,6 +308,53 @@ public class ScreenPermissionService {
             return ALL_MARKER;
         }
 
+        if (platformEnabled()) {
+            String userId = resolveUserId(user);
+            PlatformPermissionClient.AccessibleAssetsResult result = platformClient.listAccessibleAssetIds(
+                userId,
+                rolesCsv(roles),
+                deptCode,
+                SCREEN_ASSET_TYPE,
+                0,
+                10000,
+                callerClassification
+            );
+            if (result.isAll()) {
+                return ALL_MARKER;
+            }
+
+            LinkedHashSet<Long> ids = new LinkedHashSet<>();
+            if (!result.isError()) {
+                for (String id : result.assetIds()) {
+                    Long parsed = parseLong(id);
+                    if (parsed != null) {
+                        ids.add(parsed);
+                    }
+                }
+            }
+
+            if (localFallbackEnabled) {
+                List<Long> localIds = localAccessibleScreenIds(user, roles);
+                boolean usedFallback = localIds.stream().anyMatch(id -> !ids.contains(id));
+                ids.addAll(localIds);
+                if (usedFallback || result.isError()) {
+                    LOG.warn(
+                        "event=analytics_permission_fallback action=list_accessible user={} platformScope={} fallback=local",
+                        userId,
+                        result.scope()
+                    );
+                }
+            } else if (result.isError()) {
+                return Collections.emptyList();
+            }
+
+            return ids.isEmpty() ? Collections.emptyList() : List.copyOf(ids);
+        }
+
+        return localAccessibleScreenIds(user, roles);
+    }
+
+    private List<Long> localAccessibleScreenIds(AnalyticsUser user, List<String> roles) {
         String userId = resolveUserId(user);
         List<String> safeRoles = safeRoles(roles);
 
@@ -267,5 +396,41 @@ public class ScreenPermissionService {
     private String resolveUserId(AnalyticsUser user) {
         String pn = user.getPlatformUsername();
         return (pn != null && !pn.isBlank()) ? pn : String.valueOf(user.getId());
+    }
+
+    private boolean platformEnabled() {
+        return platformSourceEnabled && platformClient != null;
+    }
+
+    private PermissionSnapshot fromPlatformResult(PlatformPermissionClient.PermissionResult result) {
+        String permission = result.permission() == null ? "" : result.permission().trim().toUpperCase(Locale.ROOT);
+        if ("MANAGE".equals(permission) || "EDIT".equals(permission)) {
+            return PermissionSnapshot.managerOnly();
+        }
+        if ("READ".equals(permission) && "level_override".equalsIgnoreCase(result.reason())) {
+            return PermissionSnapshot.readOnlyOverride();
+        }
+        if ("READ".equals(permission)) {
+            return PermissionSnapshot.readOnly();
+        }
+        return result.allowed() ? PermissionSnapshot.readOnly() : PermissionSnapshot.none();
+    }
+
+    private String rolesCsv(List<String> roles) {
+        if (roles == null || roles.isEmpty()) {
+            return "";
+        }
+        return String.join(",", roles);
+    }
+
+    private Long parseLong(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
 }

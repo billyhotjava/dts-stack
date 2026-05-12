@@ -43,6 +43,25 @@ test("ScreensPage import flow gates on classification before calling createScree
 	assert.match(source, /open=\{importIntakeOpen\}/);
 });
 
+// 大屏列表分页：默认 10 条/页，过滤变化重置到第 1 页，越界自动 clamp，
+// 渲染时切片为 pagedScreens 而不是直接渲染 sortedScreens。
+test("ScreensPage paginates the list at 10 rows per page by default", async () => {
+	const source = await readFile(screensPagePath, "utf8");
+
+	// 默认页大小是 10
+	assert.match(source, /useState\(10\)/);
+	// 切片后用 pagedScreens 渲染，而不是 sortedScreens 直出
+	assert.match(source, /pagedScreens\.map\(/);
+	assert.match(source, /sortedScreens\.slice\(start,\s*start\s*\+\s*pageSize\)/);
+	// 过滤条件变化时回到第 1 页
+	assert.match(source, /setCurrentPage\(1\)[\s\S]*?\[searchKeyword,\s*publishFilter\]/);
+	// 越界自动 clamp
+	assert.match(source, /Math\.min\(currentPage,\s*totalPages\)/);
+	// 分页器 UI 存在且 total > 0 时显示
+	assert.match(source, /totalCount\s*>\s*0\s*\?[\s\S]*?<Pagination/);
+	assert.match(source, /data-testid="analytics-screen-pagination"/);
+});
+
 // Sprint-24 F4 回归：大屏密级合规盘点入口必须对治理角色开放，
 // 与后端 MetabaseAuth.SCREEN_AUDITOR_ROLES 保持一致。
 test("ScreensPage unclassified audit gate accepts all governance roles", async () => {

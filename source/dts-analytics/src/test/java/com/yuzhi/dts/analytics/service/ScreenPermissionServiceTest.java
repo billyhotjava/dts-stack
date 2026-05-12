@@ -15,6 +15,8 @@ import org.mockito.Mockito;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class ScreenPermissionServiceTest {
@@ -215,6 +217,54 @@ class ScreenPermissionServiceTest {
         List<Long> ids = service.listAccessibleScreenIds(u, List.of());
 
         assertThat(ids).containsExactly(303L);
+    }
+
+    @Test
+    void platform_permission_allows_read_without_local_lookup() {
+        PlatformPermissionClient client = Mockito.mock(PlatformPermissionClient.class);
+        ScreenPermissionService platformService = new ScreenPermissionService(repo, screenRepository, client, true, true);
+        AnalyticsUser u = user(41L, false);
+        u.setPlatformUsername("ptrdemo");
+        AnalyticsScreen s = screenWithLevel(10L, "INTERNAL");
+        when(client.check("ptrdemo", "ROLE_PTR", "D01", "SCREEN", "10", "INTERNAL", "INTERNAL"))
+            .thenReturn(new PlatformPermissionClient.PermissionResult(true, "READ", "explicit_grant"));
+
+        PermissionSnapshot snap = platformService.snapshot(s, u, new PlatformContext("D01", "INTERNAL", "ROLE_PTR"));
+
+        assertThat(snap.canRead()).isTrue();
+        assertThat(snap.canEdit()).isFalse();
+        verify(repo, never()).findGrantsForUser(any(), any(), any());
+    }
+
+    @Test
+    void platform_permission_denied_can_fallback_to_local_read_only_grant() {
+        PlatformPermissionClient client = Mockito.mock(PlatformPermissionClient.class);
+        ScreenPermissionService platformService = new ScreenPermissionService(repo, screenRepository, client, true, true);
+        AnalyticsUser u = user(42L, false);
+        when(client.check("42", "", null, "SCREEN", "10", "INTERNAL", "INTERNAL"))
+            .thenReturn(PlatformPermissionClient.PermissionResult.DENIED);
+        when(repo.findGrantsForUser(eq(10L), eq("42"), eq(List.of("__NO_ROLE__")))).thenReturn(
+            List.of(access(10L, "USER", "42", "VIEWER")));
+
+        PermissionSnapshot snap = platformService.snapshot(screenWithLevel(10L, "INTERNAL"), u, List.of(), "INTERNAL");
+
+        assertThat(snap.canRead()).isTrue();
+        assertThat(snap.canEdit()).isFalse();
+    }
+
+    @Test
+    void platform_accessible_ids_are_used_when_platform_source_enabled() {
+        PlatformPermissionClient client = Mockito.mock(PlatformPermissionClient.class);
+        ScreenPermissionService platformService = new ScreenPermissionService(repo, screenRepository, client, true, false);
+        AnalyticsUser u = user(43L, false);
+        u.setPlatformUsername("ptrdemo");
+        when(client.listAccessibleAssetIds("ptrdemo", "ROLE_PTR", "D01", "SCREEN", 0, 10000, "INTERNAL"))
+            .thenReturn(new PlatformPermissionClient.AccessibleAssetsResult(List.of("101", "bad-id"), 1, "FILTERED"));
+
+        List<Long> ids = platformService.listAccessibleScreenIds(u, new PlatformContext("D01", "INTERNAL", "ROLE_PTR"));
+
+        assertThat(ids).containsExactly(101L);
+        verify(repo, never()).findAccessibleScreenIds(any(), any());
     }
 
     @Test

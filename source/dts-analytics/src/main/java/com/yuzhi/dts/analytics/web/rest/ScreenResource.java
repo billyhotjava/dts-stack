@@ -1170,7 +1170,7 @@ public class ScreenResource {
         return ResponseEntity.noContent().build();
     }
 
-    // ── Grant management (local analytics_screen_access table) ──────────
+    // ── Grant management (platform asset_grant first, local table fallback) ──────────
 
     @GetMapping(path = "/{id}/grants", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> getGrants(@PathVariable("id") long id, HttpServletRequest request) {
@@ -2573,7 +2573,7 @@ public class ScreenResource {
     }
 
     /**
-     * One-time admin endpoint: backfill OWNER grants in the local analytics_screen_access table
+     * One-time admin endpoint: backfill OWNER grants through ScreenOwnershipService.
      * for screens created before the local permission table was introduced.
      */
     @PostMapping(path = "/admin/backfill-grants", produces = MediaType.APPLICATION_JSON_VALUE)

@@ -22,3 +22,12 @@ test("SchemaConfigRenderer allows nested editors to shrink", async () => {
 
   assert.match(source, /style=\{\{ flex: 1, minWidth: 0 \}\}/);
 });
+
+test("SchemaConfigRenderer gives image URL fields full property-panel width", async () => {
+  const source = await readFile(schemaConfigRendererPath, "utf8");
+
+  assert.match(source, /fullWidth\?: boolean/);
+  assert.match(source, /fullWidth=\{field\.type === 'image-url'\}/);
+  assert.match(source, /style=\{\{ width: '100%', minWidth: 0 \}\}/);
+  assert.match(source, /display: 'grid', gap: 6, marginBottom: 10/);
+});

@@ -6,8 +6,10 @@ import static org.mockito.Mockito.*;
 
 import com.yuzhi.dts.platform.domain.permission.AssetGrant;
 import com.yuzhi.dts.platform.domain.permission.AssetOwnership;
+import com.yuzhi.dts.platform.domain.visualization.BiReportLink;
 import com.yuzhi.dts.platform.repository.permission.AssetGrantRepository;
 import com.yuzhi.dts.platform.repository.permission.AssetOwnershipRepository;
+import com.yuzhi.dts.platform.repository.visualization.BiReportLinkRepository;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService.AccessibleAssetsResult;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService.AssetRef;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService.PermissionResult;
@@ -29,6 +31,8 @@ class AssetPermissionServiceTest {
     private AssetOwnershipRepository ownershipRepository;
     @Mock
     private AssetGrantRepository grantRepository;
+    @Mock
+    private BiReportLinkRepository reportLinkRepository;
 
     private AssetPermissionService service;
 
@@ -198,6 +202,76 @@ class AssetPermissionServiceTest {
         assertThat(result.total()).isEqualTo(4);
     }
 
+    @Test
+    void screenPublic_shouldAllowReadWithoutGrant() {
+        AssetPermissionService screenService = new AssetPermissionService(ownershipRepository, grantRepository, reportLinkRepository);
+        when(reportLinkRepository.findEnabledScreenByCode("screen-10")).thenReturn(Optional.of(screenLink("screen-10", "PUBLIC")));
+
+        PermissionResult result = screenService.check("ptrdemo", List.of(), null, "SCREEN", "10", null, null);
+
+        assertThat(result.allowed()).isTrue();
+        assertThat(result.permission()).isEqualTo("READ");
+        assertThat(result.reason()).isEqualTo("public");
+        verifyNoInteractions(ownershipRepository);
+        verifyNoMoreInteractions(grantRepository);
+    }
+
+    @Test
+    void screenInternalViewerGrant_shouldRequireClassification() {
+        AssetPermissionService screenService = new AssetPermissionService(ownershipRepository, grantRepository, reportLinkRepository);
+        when(reportLinkRepository.findEnabledScreenByCode("screen-10")).thenReturn(Optional.of(screenLink("screen-10", "INTERNAL")));
+        AssetGrant grant = new AssetGrant();
+        grant.setPermission("READ");
+        grant.setLevelOverride(false);
+        when(grantRepository.findActiveGrantsForUser(eq("SCREEN"), eq("10"), eq("ptrdemo"), eq(List.of("ROLE_PTR")), eq("D01"), any(Instant.class)))
+            .thenReturn(List.of(grant));
+
+        PermissionResult result = screenService.check("ptrdemo", List.of("ROLE_PTR"), "D01", "SCREEN", "10", "PUBLIC", null);
+
+        assertThat(result.allowed()).isFalse();
+        assertThat(result.reason()).isEqualTo("classification_denied");
+    }
+
+    @Test
+    void screenViewerLevelOverride_shouldAllowReadAcrossClassification() {
+        AssetPermissionService screenService = new AssetPermissionService(ownershipRepository, grantRepository, reportLinkRepository);
+        when(reportLinkRepository.findEnabledScreenByCode("screen-10")).thenReturn(Optional.of(screenLink("screen-10", "CONFIDENTIAL")));
+        AssetGrant grant = new AssetGrant();
+        grant.setPermission("READ");
+        grant.setLevelOverride(true);
+        when(grantRepository.findActiveGrantsForUser(eq("SCREEN"), eq("10"), eq("ptrdemo"), eq(List.of("ROLE_PTR")), eq("D01"), any(Instant.class)))
+            .thenReturn(List.of(grant));
+
+        PermissionResult result = screenService.check("ptrdemo", List.of("ROLE_PTR"), "D01", "SCREEN", "10", "INTERNAL", null);
+
+        assertThat(result.allowed()).isTrue();
+        assertThat(result.permission()).isEqualTo("READ");
+        assertThat(result.reason()).isEqualTo("level_override");
+    }
+
+    @Test
+    void screenAccessibleIds_shouldIncludePublicAndAllowedExplicitGrants() {
+        AssetPermissionService screenService = new AssetPermissionService(ownershipRepository, grantRepository, reportLinkRepository);
+        when(reportLinkRepository.findEnabledScreensForPermission()).thenReturn(List.of(
+            screenLink("screen-10", "PUBLIC"),
+            screenLink("screen-11", "INTERNAL")
+        ));
+        when(reportLinkRepository.findEnabledScreenByCode("screen-11")).thenReturn(Optional.of(screenLink("screen-11", "INTERNAL")));
+        when(grantRepository.findAccessibleAssetIdsByGrant(eq("SCREEN"), eq("ptrdemo"), eq(List.of("ROLE_PTR")), eq("D01"), any(Instant.class)))
+            .thenReturn(List.of("11"));
+        AssetGrant grant = new AssetGrant();
+        grant.setPermission("READ");
+        when(grantRepository.findActiveGrantsForUser(eq("SCREEN"), eq("11"), eq("ptrdemo"), eq(List.of("ROLE_PTR")), eq("D01"), any(Instant.class)))
+            .thenReturn(List.of(grant));
+
+        AccessibleAssetsResult result = screenService.listAccessibleAssetIds(
+            "ptrdemo", List.of("ROLE_PTR"), "D01", "SCREEN", PageRequest.of(0, 100), "INTERNAL"
+        );
+
+        assertThat(result.assetIds()).containsExactly("10", "11");
+        assertThat(result.total()).isEqualTo(2);
+    }
+
     // --- Null / edge cases ---
 
     @Test
@@ -208,5 +282,16 @@ class AssetPermissionServiceTest {
 
         PermissionResult result = service.check("user", null, null, "TABLE", "1");
         assertThat(result.allowed()).isFalse();
+    }
+
+    private BiReportLink screenLink(String code, String classification) {
+        BiReportLink link = new BiReportLink();
+        link.setCode(code);
+        link.setReportType("SCREEN");
+        link.setEnabled(true);
+        link.setClassification(classification);
+        link.setTitle(code);
+        link.setUrl("/bi/screens/" + code);
+        return link;
     }
 }

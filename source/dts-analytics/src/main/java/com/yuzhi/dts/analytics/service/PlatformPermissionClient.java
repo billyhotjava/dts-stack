@@ -67,7 +67,19 @@ public class PlatformPermissionClient {
     }
 
     public PermissionResult check(String username, String roles, String deptCode, String assetType, String assetId) {
-        String cacheKey = checkCacheKey(username, roles, deptCode, assetType, assetId);
+        return check(username, roles, deptCode, assetType, assetId, null, null);
+    }
+
+    public PermissionResult check(
+        String username,
+        String roles,
+        String deptCode,
+        String assetType,
+        String assetId,
+        String userClassification,
+        String assetClassification
+    ) {
+        String cacheKey = checkCacheKey(username, roles, deptCode, assetType, assetId, userClassification, assetClassification);
         PermissionResult cached = checkCache.getIfPresent(cacheKey);
         if (cached != null) {
             return cached;
@@ -79,6 +91,8 @@ public class PlatformPermissionClient {
             body.put("username", username);
             body.put("userRoles", parseRoles(roles));
             body.put("userDeptCode", deptCode);
+            body.put("userClassification", userClassification);
+            body.put("assetClassification", assetClassification);
             body.put("asset", Map.of("type", assetType, "id", assetId));
 
             ResponseEntity<Map> response = restTemplate.exchange(
@@ -101,13 +115,19 @@ public class PlatformPermissionClient {
             return result;
         } catch (Exception ex) {
             LOG.warn("Permission check failed for {}:{} user={}: {}", assetType, assetId, username, ex.getMessage());
-            return PermissionResult.DENIED;
+            return PermissionResult.ERROR;
         }
     }
 
     @SuppressWarnings("unchecked")
     public Map<String, PermissionResult> batchCheck(String username, String roles, String deptCode,
                                                      List<AssetRef> assets) {
+        return batchCheck(username, roles, deptCode, assets, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, PermissionResult> batchCheck(String username, String roles, String deptCode,
+                                                     List<AssetRef> assets, String userClassification) {
         try {
             URI uri = buildUri("/api/internal/asset-permission/batch-check");
             List<Map<String, String>> assetDtos = assets.stream()
@@ -118,6 +138,7 @@ public class PlatformPermissionClient {
             body.put("username", username);
             body.put("userRoles", parseRoles(roles));
             body.put("userDeptCode", deptCode);
+            body.put("userClassification", userClassification);
             body.put("assets", assetDtos);
 
             ResponseEntity<Map> response = restTemplate.exchange(
@@ -150,7 +171,7 @@ public class PlatformPermissionClient {
                 // Populate single-check cache as well
                 String[] parts = key.split(":", 2);
                 if (parts.length == 2) {
-                    checkCache.put(checkCacheKey(username, roles, deptCode, parts[0], parts[1]), pr);
+                    checkCache.put(checkCacheKey(username, roles, deptCode, parts[0], parts[1], userClassification, null), pr);
                 }
             }
             return results;
@@ -162,7 +183,19 @@ public class PlatformPermissionClient {
 
     public AccessibleAssetsResult listAccessibleAssetIds(String username, String roles, String deptCode,
                                                           String assetType, int page, int size) {
-        String cacheKey = listCacheKey(username, roles, deptCode, assetType, page, size);
+        return listAccessibleAssetIds(username, roles, deptCode, assetType, page, size, null);
+    }
+
+    public AccessibleAssetsResult listAccessibleAssetIds(
+        String username,
+        String roles,
+        String deptCode,
+        String assetType,
+        int page,
+        int size,
+        String userClassification
+    ) {
+        String cacheKey = listCacheKey(username, roles, deptCode, assetType, page, size, userClassification);
         AccessibleAssetsResult cached = listCache.getIfPresent(cacheKey);
         if (cached != null) {
             return cached;
@@ -174,6 +207,7 @@ public class PlatformPermissionClient {
             body.put("username", username);
             body.put("userRoles", parseRoles(roles));
             body.put("userDeptCode", deptCode);
+            body.put("userClassification", userClassification);
             body.put("assetType", assetType);
             body.put("page", page);
             body.put("size", size);
@@ -202,7 +236,109 @@ public class PlatformPermissionClient {
             return result;
         } catch (Exception ex) {
             LOG.warn("Accessible assets query failed user={} type={}: {}", username, assetType, ex.getMessage());
-            return AccessibleAssetsResult.EMPTY;
+            return AccessibleAssetsResult.ERROR;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> listGrants(String assetType, String assetId) {
+        try {
+            URI uri = UriComponentsBuilder.fromUri(buildUri("/api/internal/asset-permission/grants"))
+                .queryParam("assetType", assetType)
+                .queryParam("assetId", assetId)
+                .build(true)
+                .toUri();
+            ResponseEntity<List> response = restTemplate.exchange(
+                uri,
+                HttpMethod.GET,
+                new HttpEntity<>(buildHeaders()),
+                List.class
+            );
+            Object body = response.getBody();
+            if (!(body instanceof List<?> rows)) {
+                return List.of();
+            }
+            return rows.stream()
+                .map(row -> objectMapper.convertValue(row, new TypeReference<Map<String, Object>>() {}))
+                .toList();
+        } catch (Exception ex) {
+            LOG.warn("List platform grants failed type={} id={}: {}", assetType, assetId, ex.getMessage());
+            throw new PlatformPermissionException("list platform grants failed", ex);
+        }
+    }
+
+    public Map<String, Object> upsertGrant(
+        String assetType,
+        String assetId,
+        String granteeType,
+        String granteeId,
+        String permission,
+        boolean levelOverride,
+        String grantedBy,
+        String grantReason
+    ) {
+        try {
+            URI uri = buildUri("/api/internal/asset-permission/grants");
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("assetType", assetType);
+            body.put("assetId", assetId);
+            body.put("granteeType", granteeType);
+            body.put("granteeId", granteeId);
+            body.put("permission", permission);
+            body.put("levelOverride", levelOverride);
+            body.put("grantedBy", grantedBy);
+            body.put("grantReason", grantReason);
+            ResponseEntity<Map> response = restTemplate.exchange(
+                uri,
+                HttpMethod.POST,
+                new HttpEntity<>(body, buildHeaders()),
+                Map.class
+            );
+            clearAllPermissionCaches();
+            Map<?, ?> responseBody = response.getBody();
+            if (responseBody == null) {
+                return Map.of();
+            }
+            return objectMapper.convertValue(responseBody, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception ex) {
+            LOG.warn("Upsert platform grant failed type={} id={} grantee={}: {}", assetType, assetId, granteeId, ex.getMessage());
+            throw new PlatformPermissionException("upsert platform grant failed", ex);
+        }
+    }
+
+    public boolean revokeGrant(String assetType, String assetId, Long grantId) {
+        try {
+            URI uri = UriComponentsBuilder.fromUri(buildUri("/api/internal/asset-permission/grants/" + grantId))
+                .queryParam("assetType", assetType)
+                .queryParam("assetId", assetId)
+                .build(true)
+                .toUri();
+            restTemplate.exchange(uri, HttpMethod.DELETE, new HttpEntity<>(buildHeaders()), Map.class);
+            clearAllPermissionCaches();
+            return true;
+        } catch (org.springframework.web.client.HttpClientErrorException.NotFound ex) {
+            return false;
+        } catch (Exception ex) {
+            LOG.warn("Revoke platform grant failed type={} id={} grantId={}: {}", assetType, assetId, grantId, ex.getMessage());
+            throw new PlatformPermissionException("revoke platform grant failed", ex);
+        }
+    }
+
+    public int revokeAllGrants(String assetType, String assetId) {
+        try {
+            URI uri = UriComponentsBuilder.fromUri(buildUri("/api/internal/asset-permission/grants/by-asset"))
+                .queryParam("assetType", assetType)
+                .queryParam("assetId", assetId)
+                .build(true)
+                .toUri();
+            ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.DELETE, new HttpEntity<>(buildHeaders()), Map.class);
+            clearAllPermissionCaches();
+            Map<?, ?> responseBody = response.getBody();
+            Object deleted = responseBody == null ? null : responseBody.get("deleted");
+            return deleted instanceof Number n ? n.intValue() : 0;
+        } catch (Exception ex) {
+            LOG.warn("Revoke all platform grants failed type={} id={}: {}", assetType, assetId, ex.getMessage());
+            throw new PlatformPermissionException("revoke all platform grants failed", ex);
         }
     }
 
@@ -210,6 +346,11 @@ public class PlatformPermissionClient {
         String prefix = safeKey(username) + "|";
         checkCache.asMap().keySet().removeIf(k -> k.startsWith(prefix));
         listCache.asMap().keySet().removeIf(k -> k.startsWith(prefix));
+    }
+
+    public void clearAllPermissionCaches() {
+        checkCache.invalidateAll();
+        listCache.invalidateAll();
     }
 
     private URI buildUri(String path) {
@@ -232,18 +373,28 @@ public class PlatformPermissionClient {
         return headers;
     }
 
-    private String checkCacheKey(String username, String roles, String deptCode, String assetType, String assetId) {
+    private String checkCacheKey(
+        String username,
+        String roles,
+        String deptCode,
+        String assetType,
+        String assetId,
+        String userClassification,
+        String assetClassification
+    ) {
         return String.join(
             "|",
             safeKey(username),
             rolesCachePart(roles),
             safeKey(deptCode),
             safeKey(assetType),
-            safeKey(assetId)
+            safeKey(assetId),
+            safeKey(userClassification),
+            safeKey(assetClassification)
         );
     }
 
-    private String listCacheKey(String username, String roles, String deptCode, String assetType, int page, int size) {
+    private String listCacheKey(String username, String roles, String deptCode, String assetType, int page, int size, String userClassification) {
         return String.join(
             "|",
             safeKey(username),
@@ -251,7 +402,8 @@ public class PlatformPermissionClient {
             safeKey(deptCode),
             safeKey(assetType),
             String.valueOf(page),
-            String.valueOf(size)
+            String.valueOf(size),
+            safeKey(userClassification)
         );
     }
 
@@ -283,15 +435,31 @@ public class PlatformPermissionClient {
 
     public record PermissionResult(boolean allowed, String permission, String reason) {
         public static final PermissionResult DENIED = new PermissionResult(false, null, "denied");
+        public static final PermissionResult ERROR = new PermissionResult(false, null, "client_error");
+
+        public boolean clientError() {
+            return "client_error".equals(reason);
+        }
     }
 
     public record AssetRef(String type, String id) {}
 
     public record AccessibleAssetsResult(List<String> assetIds, long total, String scope) {
         public static final AccessibleAssetsResult EMPTY = new AccessibleAssetsResult(List.of(), 0, "FILTERED");
+        public static final AccessibleAssetsResult ERROR = new AccessibleAssetsResult(List.of(), 0, "ERROR");
 
         public boolean isAll() {
             return "ALL".equals(scope);
+        }
+
+        public boolean isError() {
+            return "ERROR".equals(scope);
+        }
+    }
+
+    public static class PlatformPermissionException extends RuntimeException {
+        public PlatformPermissionException(String message, Throwable cause) {
+            super(message, cause);
         }
     }
 }

@@ -19,6 +19,10 @@ test("PropertyPanel delegates background image upload to the extracted row compo
 	assert.match(backgroundRowSource, /resolveScreenImageUploadUrl/);
 	assert.match(backgroundRowSource, /SCREEN_IMAGE_UPLOAD_LIMIT_BYTES/);
 	assert.match(backgroundRowSource, /_skipErrorToast:\s*true/);
+	assert.match(backgroundRowSource, /display: 'grid'/);
+	assert.match(backgroundRowSource, /className="property-row mb-3"/);
+	assert.match(backgroundRowSource, /title=\{value\}/);
+	assert.match(backgroundRowSource, /width: '100%'/);
 	assert.match(backgroundRowSource, /import \{ X \} from 'lucide-react'/);
 	assert.equal(backgroundRowSource.includes("@ts-nocheck"), false);
 	assert.equal(backgroundRowSource.includes("✕"), false);

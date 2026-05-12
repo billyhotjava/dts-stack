@@ -125,24 +125,29 @@ const ImageUrlField: React.FC<ImageUrlFieldProps> = ({ value, onChange }) => {
         finally { setUploading(false); if (fileInputRef.current) fileInputRef.current.value = ''; }
     };
 
+    const urlText = typeof value === 'string' ? value : '';
+
     return (
-        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        <div style={{ display: 'grid', gap: 6, width: '100%', minWidth: 0 }}>
             <Input
                 size="small"
-                value={value as string}
+                value={urlText}
                 onChange={(e) => onChange(e.target.value)}
                 placeholder="图片 URL 或点击上传"
                 allowClear
-                style={{ flex: 1 }}
+                title={urlText}
+                style={{ width: '100%', minWidth: 0 }}
             />
-            <Button
-                size="small"
-                icon={<UploadOutlined />}
-                loading={uploading}
-                onClick={() => fileInputRef.current?.click()}
-            >
-                上传
-            </Button>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <Button
+                    size="small"
+                    icon={<UploadOutlined />}
+                    loading={uploading}
+                    onClick={() => fileInputRef.current?.click()}
+                >
+                    上传
+                </Button>
+            </div>
             <input
                 ref={fileInputRef}
                 type="file"

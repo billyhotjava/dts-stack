@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router';
-import { message } from 'antd';
+import { Pagination, message } from 'antd';
 import { toast } from 'sonner';
 import { analyticsApi, type ScreenListItem, type ScreenAiGenerationResponse } from '../../api/analyticsApi';
 import { resolveRouteForOpen } from '../../helpers/resolveAnalyticsUrl';
@@ -266,6 +266,25 @@ export default function ScreensPage() {
 		columns: sortColumns,
 		defaultSort: { key: 'updatedAt', direction: 'desc' },
 	});
+
+	// 列表分页：默认 10 条/页，过滤条件变化时回到第 1 页，越界自动回正。
+	const [currentPage, setCurrentPage] = useState(1);
+	const [pageSize, setPageSize] = useState(10);
+	useEffect(() => {
+		setCurrentPage(1);
+	}, [searchKeyword, publishFilter]);
+	const totalCount = sortedScreens.length;
+	const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+	const safePage = Math.min(currentPage, totalPages);
+	useEffect(() => {
+		if (currentPage !== safePage) {
+			setCurrentPage(safePage);
+		}
+	}, [currentPage, safePage]);
+	const pagedScreens = useMemo(() => {
+		const start = (safePage - 1) * pageSize;
+		return sortedScreens.slice(start, start + pageSize);
+	}, [sortedScreens, safePage, pageSize]);
 
 	const handleCreate = () => {
 		// Sprint-24 F3：先弹 intake 收集名称 + 密级，提交后再开模板库。
@@ -787,7 +806,7 @@ export default function ScreensPage() {
 									</tr>
 								</thead>
 								<tbody>
-									{sortedScreens.map((screen) => {
+									{pagedScreens.map((screen) => {
 										const rowPermissions = resolveScreenRowPermissions(screen);
 										const showMoreMenu = rowPermissions.canEdit || rowPermissions.canDelete;
 										return (
@@ -912,6 +931,25 @@ export default function ScreensPage() {
 							</table>
 						</div>
 					)}
+					{totalCount > 0 ? (
+						<div className="mt-4 flex justify-end" data-testid="analytics-screen-pagination">
+							<Pagination
+								current={safePage}
+								pageSize={pageSize}
+								total={totalCount}
+								onChange={(p, ps) => {
+									setCurrentPage(p);
+									if (ps && ps !== pageSize) {
+										setPageSize(ps);
+									}
+								}}
+								showSizeChanger
+								pageSizeOptions={['10', '20', '50', '100']}
+								showTotal={(t, [from, to]) => `${from}-${to} / 共 ${t} 条`}
+								size="small"
+							/>
+						</div>
+					) : null}
 				</div>
 			</div>
 

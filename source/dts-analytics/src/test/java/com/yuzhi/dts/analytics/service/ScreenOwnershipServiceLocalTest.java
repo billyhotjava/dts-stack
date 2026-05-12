@@ -13,6 +13,7 @@ import org.mockito.Mockito;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -87,5 +88,73 @@ class ScreenOwnershipServiceLocalTest {
     void revokeGrant_deletes_by_id() {
         service.revokeGrant(10L);
         verify(repo).deleteById(10L);
+    }
+
+    @Test
+    void platform_mode_createGrant_writes_platform_asset_grant_only() {
+        PlatformPermissionClient client = Mockito.mock(PlatformPermissionClient.class);
+        ScreenOwnershipService platformService = new ScreenOwnershipService(repo, client, true, true, false);
+        when(client.upsertGrant(
+            "SCREEN",
+            "1",
+            "ROLE",
+            "ROLE_PTR",
+            "READ",
+            true,
+            "7",
+            "analytics_screen_permission:VIEWER"
+        )).thenReturn(Map.of(
+            "id", 99L,
+            "granteeType", "ROLE",
+            "granteeId", "ROLE_PTR",
+            "permission", "READ",
+            "levelOverride", true,
+            "grantedBy", "7",
+            "grantReason", "analytics_screen_permission:VIEWER",
+            "grantedAt", Instant.parse("2026-05-11T00:00:00Z")
+        ));
+
+        AnalyticsScreenAccess grant = platformService.createGrant(1L, "ROLE", "ROLE_PTR", "VIEWER", 7L, true);
+
+        assertThat(grant.getId()).isEqualTo(99L);
+        assertThat(grant.getScreenId()).isEqualTo(1L);
+        assertThat(grant.getPermission()).isEqualTo("VIEWER");
+        assertThat(grant.isLevelOverride()).isTrue();
+        verify(repo, never()).save(any());
+    }
+
+    @Test
+    void platform_mode_listGrants_maps_manage_owner_reason_to_owner() {
+        PlatformPermissionClient client = Mockito.mock(PlatformPermissionClient.class);
+        ScreenOwnershipService platformService = new ScreenOwnershipService(repo, client, true, true, false);
+        when(client.listGrants("SCREEN", "1")).thenReturn(List.of(Map.of(
+            "id", 99L,
+            "granteeType", "USER",
+            "granteeId", "xiezm",
+            "permission", "MANAGE",
+            "levelOverride", false,
+            "grantedBy", "7",
+            "grantReason", "analytics_screen_permission:OWNER",
+            "grantedAt", Instant.parse("2026-05-11T00:00:00Z")
+        )));
+
+        List<Map<String, Object>> grants = platformService.listGrants(1L);
+
+        assertThat(grants).hasSize(1);
+        assertThat(grants.getFirst()).containsEntry("permission", "OWNER");
+        assertThat(grants.getFirst()).containsEntry("screenId", 1L);
+        verify(repo, never()).findByScreenId(any());
+    }
+
+    @Test
+    void platform_mode_revokeGrantForScreen_deletes_platform_grant() {
+        PlatformPermissionClient client = Mockito.mock(PlatformPermissionClient.class);
+        ScreenOwnershipService platformService = new ScreenOwnershipService(repo, client, true, true, false);
+        when(client.revokeGrant("SCREEN", "1", 99L)).thenReturn(true);
+
+        boolean deleted = platformService.revokeGrantForScreen(99L, 1L);
+
+        assertThat(deleted).isTrue();
+        verify(repo, never()).deleteByIdAndScreenId(any(), any());
     }
 }

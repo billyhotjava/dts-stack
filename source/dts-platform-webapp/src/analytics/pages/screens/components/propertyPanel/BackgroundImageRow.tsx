@@ -46,35 +46,39 @@ export function BackgroundImageRow({ value, onChange }: { value: string; onChang
     };
 
     return (
-        <div className="property-row flex items-center mb-3">
-            <label className="property-label w-20 text-xs text-text-secondary">背景图</label>
-            <div style={{ display: 'flex', gap: 4, alignItems: 'center', flex: 1 }}>
+        <div className="property-row mb-3" style={{ display: 'grid', gap: 6 }}>
+            <label className="property-label text-xs text-text-secondary">背景图</label>
+            <div style={{ display: 'grid', gap: 6, width: '100%', minWidth: 0 }}>
                 <input
                     type="text"
                     className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
                     placeholder="图片 URL 或点击上传"
+                    title={value}
+                    style={{ width: '100%', minWidth: 0 }}
                 />
-                <button
-                    type="button"
-                    className="px-2 py-1.5 text-xs border border-border-default rounded bg-surface-card text-text-primary hover:bg-surface-hover"
-                    disabled={uploading}
-                    onClick={() => fileInputRef.current?.click()}
-                >
-                    {uploading ? '...' : '上传'}
-                </button>
-                {value && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4 }}>
                     <button
                         type="button"
-                        className="px-1.5 py-1.5 text-xs border border-border-default rounded bg-surface-card text-text-primary hover:bg-surface-hover"
-                        title="清除背景图"
-                        aria-label="清除背景图"
-                        onClick={() => onChange('')}
+                        className="px-2 py-1.5 text-xs border border-border-default rounded bg-surface-card text-text-primary hover:bg-surface-hover"
+                        disabled={uploading}
+                        onClick={() => fileInputRef.current?.click()}
                     >
-                        <X size={14} aria-hidden="true" />
+                        {uploading ? '...' : '上传'}
                     </button>
-                )}
+                    {value && (
+                        <button
+                            type="button"
+                            className="px-1.5 py-1.5 text-xs border border-border-default rounded bg-surface-card text-text-primary hover:bg-surface-hover"
+                            title="清除背景图"
+                            aria-label="清除背景图"
+                            onClick={() => onChange('')}
+                        >
+                            <X size={14} aria-hidden="true" />
+                        </button>
+                    )}
+                </div>
                 <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }}
                     onChange={handleUpload} />
             </div>

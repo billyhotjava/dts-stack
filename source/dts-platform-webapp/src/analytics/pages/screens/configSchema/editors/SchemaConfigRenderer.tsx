@@ -57,22 +57,45 @@ function resolveTokenValue(tokens: ScreenThemeTokens | undefined, tokenKey: stri
 // FieldRow — label + content wrapper for simple fields
 // ---------------------------------------------------------------------------
 
-const FieldRow: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
-  <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: 8 }}>
-    <span
-      style={{
-        width: 80,
-        flexShrink: 0,
-        fontSize: 12,
-        color: 'var(--color-text-secondary)',
-        lineHeight: '28px',
-      }}
-    >
-      {label}
-    </span>
-    <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
-  </div>
-);
+const FieldRow: React.FC<{ label: string; children: React.ReactNode; fullWidth?: boolean }> = ({
+  label,
+  children,
+  fullWidth = false,
+}) => {
+  if (fullWidth) {
+    return (
+      <div style={{ display: 'grid', gap: 6, marginBottom: 10 }}>
+        <span
+          style={{
+            fontSize: 12,
+            color: 'var(--color-text-secondary)',
+            lineHeight: '18px',
+          }}
+        >
+          {label}
+        </span>
+        <div style={{ width: '100%', minWidth: 0 }}>{children}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: 8 }}>
+      <span
+        style={{
+          width: 80,
+          flexShrink: 0,
+          fontSize: 12,
+          color: 'var(--color-text-secondary)',
+          lineHeight: '28px',
+        }}
+      >
+        {label}
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
+    </div>
+  );
+};
 
 // ---------------------------------------------------------------------------
 // Component
@@ -164,7 +187,7 @@ const SchemaConfigRenderer: React.FC<SchemaConfigRendererProps> = ({ schema, con
 
     // Default — FieldEditor
     return (
-      <FieldRow key={field.key} label={field.label}>
+      <FieldRow key={field.key} label={field.label} fullWidth={field.type === 'image-url'}>
         <FieldEditor
           field={field}
           value={val}
