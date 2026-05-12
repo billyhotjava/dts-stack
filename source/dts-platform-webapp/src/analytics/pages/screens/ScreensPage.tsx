@@ -795,14 +795,15 @@ export default function ScreensPage() {
 							<table className="w-full border-collapse text-sm">
 								<thead>
 									<tr className="bg-surface-secondary text-text-secondary text-xs">
-										<SortableHeader sortKey="name" sortState={sortState} onSort={requestSort}>名称</SortableHeader>
-										<SortableHeader sortKey="description" sortState={sortState} onSort={requestSort}>描述</SortableHeader>
-										<SortableHeader sortKey="width" sortState={sortState} onSort={requestSort} className="whitespace-nowrap">分辨率</SortableHeader>
+										{/* 大屏管理表头：居中 + 加粗（font-bold 覆盖 SortableHeader 默认 font-semibold） */}
+										<SortableHeader sortKey="name" sortState={sortState} onSort={requestSort} className="font-bold">名称</SortableHeader>
+										<SortableHeader sortKey="description" sortState={sortState} onSort={requestSort} className="font-bold">描述</SortableHeader>
+										<SortableHeader sortKey="width" sortState={sortState} onSort={requestSort} className="font-bold whitespace-nowrap">分辨率</SortableHeader>
 										{/* Sprint-24 F2/T02：密级列，便于一眼扫到 classification=null 的大屏 */}
-										<SortableHeader sortKey="classification" sortState={sortState} onSort={requestSort} className="whitespace-nowrap">密级</SortableHeader>
-										<SortableHeader sortKey="published" sortState={sortState} onSort={requestSort} className="whitespace-nowrap">状态</SortableHeader>
-										<SortableHeader sortKey="updatedAt" sortState={sortState} onSort={requestSort} className="whitespace-nowrap">更新时间</SortableHeader>
-										<th className="text-right font-medium px-4 py-3 whitespace-nowrap">操作</th>
+										<SortableHeader sortKey="classification" sortState={sortState} onSort={requestSort} className="font-bold whitespace-nowrap">密级</SortableHeader>
+										<SortableHeader sortKey="published" sortState={sortState} onSort={requestSort} className="font-bold whitespace-nowrap">状态</SortableHeader>
+										<SortableHeader sortKey="updatedAt" sortState={sortState} onSort={requestSort} className="font-bold whitespace-nowrap">更新时间</SortableHeader>
+										<th className="text-center font-bold px-4 py-3 whitespace-nowrap">操作</th>
 									</tr>
 								</thead>
 								<tbody>

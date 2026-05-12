@@ -57,6 +57,11 @@
 		font-weight: 600 !important;
 	}
 
+	/* Table header: center-aligned by default; respects explicit column.align="right"/"left" */
+	.ant-table-thead > tr > th:not(.ant-table-cell-align-right):not(.ant-table-cell-align-left) {
+		text-align: center;
+	}
+
 	/* Table body: inherit content size */
 	:where(.ant-table-wrapper) :where(.ant-table-tbody > tr > td) {
 		font-size: 0.875rem !important;

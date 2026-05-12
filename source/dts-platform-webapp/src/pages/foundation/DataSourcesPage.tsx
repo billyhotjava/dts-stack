@@ -1310,7 +1310,9 @@ export default function DataSourcesPage() {
 					dataIndex: "connectorName",
 					sorter: (a: InfraDataSource, b: InfraDataSource) => (a.connectorName || "").localeCompare(b.connectorName || ""),
 					key: "connectorName",
-					width: 180,
+					// connector 名称（如 "PostgreSQL JDBC Connector"）常常 25+ 字符，原 180 不够，调到 280
+					width: 280,
+					ellipsis: { showTitle: true },
 					render: (value: string, record: InfraDataSource) => value || record.connectorKey || inferConnectorKey(record.type, record.props) || "-",
 				},
 				{ title: "类型", dataIndex: "type", key: "type", width: 120 },

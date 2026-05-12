@@ -24,11 +24,11 @@ export interface SortableHeaderProps {
 	className?: string;
 	/** Inline style applied to the `<th>` — for pages using CSS-var styling. */
 	style?: CSSProperties;
-	/** Right-align the header text + caret (matches the action-column pattern). */
-	align?: "left" | "right";
+	/** Header text alignment. Defaults to "center" (project-wide convention). */
+	align?: "left" | "center" | "right";
 }
 
-const BASE_TH = "font-medium px-4 py-3 select-none";
+const BASE_TH = "font-semibold px-4 py-3 select-none";
 const BASE_BUTTON =
 	"inline-flex items-center gap-1 cursor-pointer bg-transparent border-0 p-0 text-inherit font-inherit text-xs hover:text-text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
 
@@ -49,11 +49,12 @@ export function SortableHeader({
 	children,
 	className,
 	style,
-	align = "left",
+	align = "center",
 }: SortableHeaderProps) {
 	const active = sortState.key === sortKey;
 	const direction = active ? sortState.direction : null;
-	const alignmentTh = align === "right" ? "text-right" : "text-left";
+	const alignmentTh =
+		align === "right" ? "text-right" : align === "left" ? "text-left" : "text-center";
 
 	const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>): void => {
 		if (event.key === "Enter" || event.key === " ") {
