@@ -142,6 +142,34 @@ class AirflowDagServiceTest {
         assertThat(dag).contains("_dts_batch_id");
     }
 
+    @Test
+    void shouldDeduplicateFileSourceColumnsInInitTableDdl() throws Exception {
+        IngestionTask task = new IngestionTask();
+        task.setName("file-duplicate-columns");
+        task.setSourceType("txtfilereader");
+        task.setSyncSchedule("manual");
+        task.setAirflowDagId("file_duplicate_columns");
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        task.setTableMapping(mapper.readTree("[{\"target\":\"ods_duplicate_columns\"}]"));
+        task.setSourceConfig(mapper.readTree(
+            "{\"_autoId\":true,\"_fileColumns\":["
+            + "{\"name\":\"id\",\"type\":\"string\"},"
+            + "{\"name\":\"newcolumn\",\"type\":\"string\"},"
+            + "{\"name\":\"newcolumn\",\"type\":\"string\"},"
+            + "{\"name\":\"_dts_source_system\",\"type\":\"string\"}"
+            + "]}"
+        ));
+
+        dagService.rebuildDagForTask(task);
+
+        String dag = readDag("file_duplicate_columns");
+        assertThat(dag).contains("\\\"id_2\\\" varchar(500)");
+        assertThat(dag).contains("\\\"newcolumn\\\" varchar(500)");
+        assertThat(dag).contains("\\\"newcolumn_2\\\" varchar(500)");
+        assertThat(dag).contains("\\\"_dts_source_system_2\\\" varchar(500)");
+        assertThat(dag).doesNotContain("\\\"_dts_source_system\\\" varchar(500)");
+    }
+
     private IngestionTask task(String syncSchedule, String dagId) {
         IngestionTask task = new IngestionTask();
         task.setName("dm8test");

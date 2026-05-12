@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
 	Alert,
 	Button,
@@ -30,6 +30,7 @@ import {
 	normalizeTableName,
 	buildFileBaseName,
 } from "../ingestionFormHelpers";
+import { filterBusinessFileMappingColumns } from "../fileColumnSystemFields.helpers";
 import OdsLandingContractCard from "./OdsLandingContractCard";
 
 const { Text } = Typography;
@@ -143,11 +144,13 @@ export default function FileUnifiedStep({
 	const [manualOdsMatchApplied, setManualOdsMatchApplied] = useState(false);
 	const [manualMatchedCount, setManualMatchedCount] = useState(0);
 	const [manualUnmatchedOdsFields, setManualUnmatchedOdsFields] = useState<string[]>([]);
+	const businessOdsColumns = useMemo(() => filterBusinessFileMappingColumns(odsColumns), [odsColumns]);
+	const hiddenOdsSystemColumnCount = Math.max(0, odsColumns.length - businessOdsColumns.length);
 
 	const normalizedScheduleType = String(scheduleType || "manual").trim() || "manual";
 	const effectiveOdsMatchApplied = odsMatchApplied || manualOdsMatchApplied;
 	const effectiveMatchedCount = odsMatchApplied
-		? Math.min(odsColumns.length, fileUploadResult?.columns?.length || 0)
+		? Math.min(businessOdsColumns.length, fileUploadResult?.columns?.length || 0)
 		: manualMatchedCount;
 	const effectiveUnmatchedFields = odsMatchApplied
 		? unmatchedOdsFields.map((column) => column?.name).filter((name): name is string => Boolean(name))
@@ -310,7 +313,7 @@ export default function FileUnifiedStep({
 										size="small"
 										type="primary"
 										loading={odsColumnsLoading}
-										disabled={!odsColumns.length}
+										disabled={!businessOdsColumns.length}
 										onClick={() => {
 											setManualOdsMatchApplied(false);
 											setManualMatchedCount(0);
@@ -320,6 +323,9 @@ export default function FileUnifiedStep({
 									>
 										自动匹配
 									</Button>
+								) : null}
+								{hiddenOdsSystemColumnCount > 0 ? (
+									<Tag color="default">系统字段已隐藏 {hiddenOdsSystemColumnCount}</Tag>
 								) : null}
 								<Button
 									size="small"

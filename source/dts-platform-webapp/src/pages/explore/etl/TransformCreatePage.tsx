@@ -28,6 +28,7 @@ import { resolveAsyncRunPollHint, resolveCreatedTaskId } from "./transformCreate
 import { loadTransformCreateBootstrap } from "./transformCreateBootstrap.helpers";
 import { buildTransformCreateDraftPayload } from "./transformCreateDraft.helpers";
 import { buildTransformFileUploadResult } from "./transformCreateFileFlow.helpers";
+import { filterBusinessFileMappingColumns } from "./fileColumnSystemFields.helpers";
 import {
 	buildPreparedFileParseInput,
 	buildRefreshFileParseInput,
@@ -943,9 +944,8 @@ export default function TransformCreatePage() {
 
 	const applyOdsMapping = useCallback(() => {
 		if (!odsColumns.length || !fileUploadResult?.columns?.length) return;
-		// 过滤系统自动生成的字段，只保留业务字段参与匹配
-		const systemFields = new Set(['id', 'source_system', 'import_time']);
-		const bizOdsColumns = odsColumns.filter(c => !systemFields.has(c.name?.toLowerCase() ?? ''));
+		const bizOdsColumns = filterBusinessFileMappingColumns(odsColumns);
+		if (!bizOdsColumns.length) return;
 		const excelCols = [...fileUploadResult.columns];
 		const odsLen = bizOdsColumns.length;
 		const excelLen = excelCols.length;
@@ -961,8 +961,7 @@ export default function TransformCreatePage() {
 
 	const unmatchedOdsFields = useMemo(() => {
 		if (!odsMatchApplied || !odsColumns.length) return [];
-		const systemFields = new Set(['id', 'source_system', 'import_time']);
-		const bizOdsColumns = odsColumns.filter(c => !systemFields.has(c.name?.toLowerCase() ?? ''));
+		const bizOdsColumns = filterBusinessFileMappingColumns(odsColumns);
 		const excelLen = fileUploadResult?.columns?.length || 0;
 		if (bizOdsColumns.length <= excelLen) return [];
 		return bizOdsColumns.slice(excelLen);

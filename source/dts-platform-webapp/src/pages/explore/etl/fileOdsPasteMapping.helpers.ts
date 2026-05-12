@@ -1,3 +1,5 @@
+import { filterBusinessFileMappingFieldNames } from "./fileColumnSystemFields.helpers";
+
 export type FileColumnLike = {
 	name?: string;
 	_odsMatched?: boolean;
@@ -22,11 +24,12 @@ export function applyPastedOdsFieldsToFileColumns<T extends FileColumnLike>(
 	columns: T[],
 	pastedFields: string[]
 ): PastedOdsMappingResult<T> {
+	const businessFields = filterBusinessFileMappingFieldNames(pastedFields);
 	const nextColumns = (Array.isArray(columns) ? columns : []).map((column, index) => {
-		if (index < pastedFields.length) {
+		if (index < businessFields.length) {
 			return {
 				...column,
-				name: pastedFields[index],
+				name: businessFields[index],
 				_odsMatched: true,
 				_odsExtra: false,
 			};
@@ -40,7 +43,7 @@ export function applyPastedOdsFieldsToFileColumns<T extends FileColumnLike>(
 
 	return {
 		columns: nextColumns,
-		matchedCount: Math.min(nextColumns.length, pastedFields.length),
-		unmatchedFields: pastedFields.slice(nextColumns.length),
+		matchedCount: Math.min(nextColumns.length, businessFields.length),
+		unmatchedFields: businessFields.slice(nextColumns.length),
 	};
 }

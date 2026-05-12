@@ -524,6 +524,52 @@ class AddaxJobServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void shouldDeduplicateFileSourceWriterColumnsAndReserveTechnicalColumns() throws Exception {
+        Map<String, Object> readerConfig = Map.of(
+            "_fileColumns", java.util.List.of(
+                Map.of("safeName", "newcolumn", "type", "string"),
+                Map.of("safeName", "newcolumn", "type", "string"),
+                Map.of("safeName", "_dts_source_system", "type", "string")
+            ),
+            "_originalName", "duplicate-columns.xlsx",
+            "path", java.util.List.of("/opt/airflow/dags/exchange/excel/demo/source.xlsx")
+        );
+        Map<String, Object> writerConfig = Map.of(
+            "jdbcUrl", "jdbc:postgresql://127.0.0.1:5432/biadmin",
+            "username", "biadmin",
+            "password", "Devops123@",
+            "table", "ods_duplicate_columns"
+        );
+
+        AddaxJobService.AddaxJobResult result = addaxJobService.createJob(
+            "file-duplicate-columns-test",
+            "excelreader",
+            readerConfig,
+            "postgresqlwriter",
+            writerConfig,
+            null
+        );
+
+        Map<String, Object> job = (Map<String, Object>) result.jobConfig().get("job");
+        Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
+        Map<String, Object> writer = (Map<String, Object>) content.get("writer");
+        Map<String, Object> writerParams = (Map<String, Object>) writer.get("parameter");
+        java.util.List<String> writerColumns = (java.util.List<String>) writerParams.get("column");
+        java.util.List<String> preSql = (java.util.List<String>) writerParams.get("preSql");
+        String createSql = preSql.stream()
+            .filter(sql -> sql.startsWith("CREATE TABLE IF NOT EXISTS"))
+            .findFirst()
+            .orElseThrow();
+
+        assertThat(writerColumns).containsExactly("\"newcolumn\"", "\"newcolumn_2\"", "\"_dts_source_system_2\"");
+        assertThat(createSql).contains("\"newcolumn\" varchar(500)");
+        assertThat(createSql).contains("\"newcolumn_2\" varchar(500)");
+        assertThat(createSql).contains("\"_dts_source_system_2\" varchar(500)");
+        assertThat(createSql).contains("\"_dts_source_system\" VARCHAR(500) DEFAULT");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void shouldKeepDropAndCreatePreSqlForFileSourceFullRefresh() throws Exception {
         // Given
         Map<String, Object> readerConfig = Map.of(

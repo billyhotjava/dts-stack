@@ -14,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
@@ -1483,11 +1484,21 @@ public class AddaxJobService {
         }
         // Source columns (with prefix/suffix applied)
         List<String> writerColNames = new java.util.ArrayList<>();
+        Set<String> sourceColumnNames = FileSourceColumnNames.reservedTechnicalNames();
+        Set<String> ddlColumnNames = new java.util.LinkedHashSet<>();
+        if (autoId && isPostgresWriter(writerType)) {
+            sourceColumnNames.add("id");
+            ddlColumnNames.add("id");
+        }
         for (Map<String, Object> col : fileColumns) {
-            String colName = resolveFileColumnName(col);
+            String colName = FileSourceColumnNames.resolveName(col);
             String colType = normalizeText(col.get("type"));
             if (!StringUtils.hasText(colName)) continue;
-            String targetColName = (safeColPrefix + colName + safeColSuffix).toLowerCase(Locale.ROOT);
+            String targetColName = FileSourceColumnNames.uniqueColumnName(
+                safeColPrefix + colName + safeColSuffix,
+                sourceColumnNames
+            );
+            ddlColumnNames.add(targetColName);
             if (!first) ddl.append(", ");
             first = false;
             ddl.append(quoteIdentifier(targetColName))
@@ -1503,9 +1514,11 @@ public class AddaxJobService {
                 String extraType = normalizeText(extraMap.get("type"));
                 String extraDefault = normalizeText(extraMap.get("defaultValue"));
                 if (!StringUtils.hasText(extraName)) continue;
+                String extraColumnName = extraName.toLowerCase(Locale.ROOT);
+                if (!ddlColumnNames.add(extraColumnName)) continue;
                 if (!first) ddl.append(", ");
                 first = false;
-                ddl.append(quoteIdentifier(extraName.toLowerCase(Locale.ROOT)))
+                ddl.append(quoteIdentifier(extraColumnName))
                    .append(" ").append(mapExtraColumnType(extraType, (Map<?, ?>) item));
                 String renderedDefault = renderExtraDefaultValue(extraDefault, tableName, sourceTableName);
                 if (StringUtils.hasText(renderedDefault)) {
@@ -2108,18 +2121,6 @@ public class AddaxJobService {
             if ("false".equalsIgnoreCase(text)) return false;
         }
         return false;
-    }
-
-    private String resolveFileColumnName(Map<String, Object> col) {
-        if (col == null) return "";
-        String name = normalizeText(col.get("safeName"));
-        if (!StringUtils.hasText(name)) {
-            name = normalizeText(col.get("name"));
-        }
-        if (!StringUtils.hasText(name)) {
-            name = normalizeText(col.get("label"));
-        }
-        return name;
     }
 
     private boolean isPostgresWriter(String writerType) {
