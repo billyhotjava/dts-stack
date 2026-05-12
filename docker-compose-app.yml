@@ -298,6 +298,7 @@ services:
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
       ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
+      ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
       DTS_TARGET_DB_HOST: ${PG_HOST:-dts-pg}
       DTS_TARGET_DB_PORT: ${PG_PORT:-5432}
       DTS_TARGET_DB_NAME: ${PG_DB_BIADMIN:-biadmin}
@@ -383,6 +384,7 @@ services:
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
       ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
+      ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
       DTS_TARGET_DB_HOST: ${PG_HOST:-dts-pg}
       DTS_TARGET_DB_PORT: ${PG_PORT:-5432}
       DTS_TARGET_DB_NAME: ${PG_DB_BIADMIN:-biadmin}
@@ -464,6 +466,7 @@ services:
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
       ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
+      ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
       DTS_TARGET_DB_HOST: ${PG_HOST:-dts-pg}
       DTS_TARGET_DB_PORT: ${PG_PORT:-5432}
       DTS_TARGET_DB_NAME: ${PG_DB_BIADMIN:-biadmin}
@@ -1200,6 +1203,10 @@ services:
       JHIPSTER_CORS_ALLOWED_HEADERS: '*'
       JHIPSTER_CORS_ALLOWED_METHODS: GET,POST,PUT,PATCH,DELETE,OPTIONS
       JHIPSTER_CORS_ALLOWED_ORIGINS: https://${HOST_PLATFORM_UI},https://${HOST_ADMIN_UI},https://${HOST_API}
+      # App-mode remote clients may open the BI UI through http://<host> or a LAN IP.
+      # Keep canonical domains explicit, and allow operators to replace the LAN patterns
+      # through DTS_CORS_ALLOWED_ORIGIN_PATTERNS when deploying behind a stricter gateway.
+      JHIPSTER_CORS_ALLOWED_ORIGIN_PATTERNS: ${DTS_CORS_ALLOWED_ORIGIN_PATTERNS:-https://${HOST_PLATFORM_UI},http://${HOST_PLATFORM_UI},https://${HOST_ADMIN_UI},http://${HOST_ADMIN_UI},https://${HOST_API},http://${HOST_API},http://localhost,http://localhost:[*],http://127.0.0.1,http://127.0.0.1:[*],http://192.168.*,http://192.168.*:[*],https://192.168.*,https://192.168.*:[*],http://10.*,http://10.*:[*],https://10.*,https://10.*:[*],http://172.*,http://172.*:[*],https://172.*,https://172.*:[*]}
       LOG_ROOT: /logs
       PG_DB_BIADMIN: ${PG_DB_BIADMIN:-biadmin}
       PG_HOST: ${PG_HOST:-dts-pg}
