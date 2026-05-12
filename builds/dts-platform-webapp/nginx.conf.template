@@ -17,6 +17,24 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # Keep the SPA shell fresh after container upgrades. The JS/CSS bundles are
+    # content-hashed, so those can be cached aggressively below.
+    location = /index.html {
+        add_header Cache-Control "no-store";
+        try_files /index.html =404;
+    }
+
+    location = /runtime-config.js {
+        add_header Cache-Control "no-store";
+        try_files $uri =404;
+    }
+
+    location /assets/ {
+        try_files $uri =404;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        access_log off;
+    }
+
     # Screen assets are validated by backend (images 10MB, fonts 20MB);
     # keep the proxy limit above that so Nginx does not return a raw 413 first.
     client_max_body_size 25m;
@@ -95,14 +113,17 @@ server {
 
     # BI pages are embedded in platform-webapp — SPA fallback for /bi/*
     location /bi/ {
+        add_header Cache-Control "no-store";
         try_files $uri $uri/ /index.html;
     }
     location = /bi {
+        add_header Cache-Control "no-store";
         try_files $uri /index.html;
     }
 
     # SPA fallback
     location / {
+        add_header Cache-Control "no-store";
         try_files $uri $uri/ /index.html;
     }
 }
