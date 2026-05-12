@@ -18,4 +18,11 @@ describe("AdminGuard session resilience contract", () => {
 		expect(guardSource.includes("retry: false")).toBe(false);
 		expect(guardSource.includes("if (isError && isRecoverableWhoamiError(error))")).toBe(true);
 	});
+
+	it("redirects protected admin routes when the local access token is missing", () => {
+		const guardSource = source();
+
+		expect(guardSource.includes('redirectToLogin("signed-out")')).toBe(true);
+		expect(guardSource.includes("guardState !== \"idle\" || token?.accessToken")).toBe(true);
+	});
 });

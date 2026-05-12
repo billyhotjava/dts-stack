@@ -237,6 +237,27 @@ class ScreenPermissionServiceTest {
     }
 
     @Test
+    void platform_mode_creator_keeps_owner_permissions_even_when_platform_returns_read() {
+        PlatformPermissionClient client = Mockito.mock(PlatformPermissionClient.class);
+        ScreenPermissionService platformService = new ScreenPermissionService(repo, screenRepository, client, true, false);
+        AnalyticsUser u = user(44L, false);
+        u.setPlatformUsername("creator");
+        AnalyticsScreen s = screenWithLevel(10L, "CONFIDENTIAL");
+        s.setCreatorId(44L);
+        when(client.check("creator", "ROLE_PTR", "D01", "SCREEN", "10", "PUBLIC", "CONFIDENTIAL"))
+            .thenReturn(new PlatformPermissionClient.PermissionResult(true, "READ", "explicit_grant"));
+
+        PermissionSnapshot snap = platformService.snapshot(s, u, new PlatformContext("D01", "PUBLIC", "ROLE_PTR"));
+
+        assertThat(snap.canRead()).isTrue();
+        assertThat(snap.canEdit()).isTrue();
+        assertThat(snap.isOwner()).isTrue();
+        assertThat(snap.overrideUsed()).isFalse();
+        verify(client, never()).check(any(), any(), any(), any(), any(), any(), any());
+        verify(repo, never()).findGrantsForUser(any(), any(), any());
+    }
+
+    @Test
     void platform_permission_denied_can_fallback_to_local_read_only_grant() {
         PlatformPermissionClient client = Mockito.mock(PlatformPermissionClient.class);
         ScreenPermissionService platformService = new ScreenPermissionService(repo, screenRepository, client, true, true);

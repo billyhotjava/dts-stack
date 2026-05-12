@@ -170,6 +170,9 @@ public class ScreenPermissionService {
         if (user.isSuperuser()) {
             return PermissionSnapshot.all();
         }
+        if (screen.getCreatorId() != null && screen.getCreatorId().equals(user.getId())) {
+            return PermissionSnapshot.all();
+        }
 
         if (platformEnabled()) {
             String userId = resolveUserId(user);

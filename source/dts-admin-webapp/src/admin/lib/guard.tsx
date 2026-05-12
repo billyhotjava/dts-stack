@@ -110,6 +110,13 @@ export default function AdminGuard({ children }: Props) {
 	);
 
 	useEffect(() => {
+		if (guardState !== "idle" || token?.accessToken) {
+			return;
+		}
+		redirectToLogin("signed-out");
+	}, [guardState, redirectToLogin, token?.accessToken]);
+
+	useEffect(() => {
 		if (guardState !== "idle") return;
 		if (isLoading) return;
 
