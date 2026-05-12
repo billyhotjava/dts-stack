@@ -27,7 +27,7 @@ function ResetForm() {
 				<form onSubmit={form.handleSubmit(onFinish)} className="space-y-4">
 					<div className="flex flex-col items-center gap-2 text-center">
 						<h1 className="text-2xl font-bold">{bilingual("sys.login.forgetFormTitle")}</h1>
-						<p className="text-balance text-sm text-muted-foreground">{bilingual("sys.login.forgetFormSecondTitle")}</p>
+						<p className="max-w-sm text-sm text-muted-foreground">{bilingual("sys.login.forgetFormSecondTitle")}</p>
 					</div>
 
 					<FormField
