@@ -27,6 +27,8 @@ import {
 	ExperimentOutlined,
 	CheckCircleOutlined,
 	CloseCircleOutlined,
+	SearchOutlined,
+	RollbackOutlined,
 } from "@ant-design/icons";
 import { Upload } from "@/components/upload";
 import RollbackImpactModal, { type RollbackRequest } from "@/components/rollback/RollbackImpactModal";
@@ -1304,7 +1306,7 @@ export default function DataSourcesPage() {
 
 	const columns = useMemo(
 			() => [
-				{ title: "名称", dataIndex: "name", key: "name", width: 180 , sorter: (a: InfraDataSource, b: InfraDataSource) => (a.name || "").localeCompare(b.name || "") },
+				{ title: "名称", dataIndex: "name", key: "name", width: 180, fixed: "left" as const, sorter: (a: InfraDataSource, b: InfraDataSource) => (a.name || "").localeCompare(b.name || "") },
 				{
 					title: "连接器",
 					dataIndex: "connectorName",
@@ -1320,7 +1322,8 @@ export default function DataSourcesPage() {
 				title: "连接地址",
 				dataIndex: "jdbcUrl",
 				key: "jdbcUrl",
-				ellipsis: true,
+				width: 240,
+				ellipsis: { showTitle: true },
 				render: (value: string, record: InfraDataSource) =>
 					isApiSourceType(record.type) ? readApiBaseUrl(record.props) || "-" : value || "-",
 			},
@@ -1350,32 +1353,64 @@ export default function DataSourcesPage() {
 			{
 				title: "操作",
 				key: "action",
-				width: 220,
+				width: 540,
+				fixed: "right" as const,
 				render: (_: any, record: InfraDataSource) => {
 					const adminManaged = isAdminManagedSource(record);
 					const apiSource = isApiSourceType(record.type);
+					const actionBtnStyle = { width: 96 } as const;
 					return (
-						<Space>
+						<Space size={4} wrap={false}>
 							{!apiSource && (
 								<Button
 									size="small"
+									icon={<SearchOutlined />}
+									style={actionBtnStyle}
 									loading={schemaDiscoveringId === record.id}
 									onClick={() => handleSchemaDiscover(record)}
 								>
 									探测
 								</Button>
 							)}
-							<Button size="small" icon={<ExperimentOutlined />} loading={testingId === record.id} onClick={() => handleTest(record)}>
+							<Button
+								size="small"
+								icon={<ExperimentOutlined />}
+								style={actionBtnStyle}
+								loading={testingId === record.id}
+								onClick={() => handleTest(record)}
+							>
 								测试
 							</Button>
-							<Button size="small" icon={<EditOutlined />} disabled={adminManaged} onClick={() => openEdit(record)}>
+							<Button
+								size="small"
+								icon={<EditOutlined />}
+								style={actionBtnStyle}
+								disabled={adminManaged}
+								onClick={() => openEdit(record)}
+							>
 								编辑
 							</Button>
-							<Button size="small" danger icon={<DeleteOutlined />} disabled={adminManaged} onClick={() => handleDelete(record)}>
+							<Button
+								size="small"
+								danger
+								icon={<DeleteOutlined />}
+								style={actionBtnStyle}
+								disabled={adminManaged}
+								onClick={() => handleDelete(record)}
+							>
 								删除
 							</Button>
 							{record.id && (
-								<Button size="small" danger onClick={() => { setRollbackRequest({ level: 3, scope: "datasource", dataSourceId: record.id }); setRollbackOpen(true); }}>
+								<Button
+									size="small"
+									danger
+									icon={<RollbackOutlined />}
+									style={actionBtnStyle}
+									onClick={() => {
+										setRollbackRequest({ level: 3, scope: "datasource", dataSourceId: record.id });
+										setRollbackOpen(true);
+									}}
+								>
 									全链路回退
 								</Button>
 							)}
@@ -1461,7 +1496,7 @@ export default function DataSourcesPage() {
 				columns={columns as any}
 				dataSource={list}
 				loading={loading}
-				scroll={{ x: 1100 }}
+				scroll={{ x: 1820 }}
 				pagination={{ pageSize: 12 }}
 			/>
 
