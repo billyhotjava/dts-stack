@@ -465,6 +465,23 @@
       ]
     },
     {
+      "key": "app-pack",
+      "path": "app-pack",
+      "icon": "solar:layers-bold-duotone",
+      "titleKey": "sys.nav.portal.appPack",
+      "title": "行业业务开发(App-Pack)",
+      "children": [
+        {
+          "key": "metro",
+          "path": "metro",
+          "icon": "solar:map-point-bold-duotone",
+          "titleKey": "sys.nav.portal.appPackMetro",
+          "title": "地铁应用",
+          "externalLink": "/expert/metro/dashboard"
+        }
+      ]
+    },
+    {
       "key": "services",
       "path": "services",
       "icon": "solar:settings-minimalistic-bold-duotone",

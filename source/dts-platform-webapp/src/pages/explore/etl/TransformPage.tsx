@@ -38,7 +38,7 @@ export default function TransformPage() {
 	const [latestExecutions, setLatestExecutions] = useState<Record<number, IngestionExecutionDTO | null>>({});
 	const [observability, setObservability] = useState<IngestionExecutionObservabilityDTO | null>(null);
 	const [governanceOverview, setGovernanceOverview] = useState<IngestionGovernanceOverviewDTO | null>(null);
-	const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
+	const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 });
 	const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
 	const [executeProgressOpen, setExecuteProgressOpen] = useState(false);
 	const [executeProgress, setExecuteProgress] = useState<ExecutionProgressView>({
@@ -578,7 +578,7 @@ export default function TransformPage() {
 							showQuickJumper: true,
 							showTotal: (total) => `共 ${total} 条`,
 							onChange: (page, pageSize) => {
-								setPagination((prev) => ({ ...prev, current: page, pageSize: pageSize || 20 }));
+								setPagination((prev) => ({ ...prev, current: page, pageSize: pageSize || 10 }));
 							},
 						}}
 					/>
