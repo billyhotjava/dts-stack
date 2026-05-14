@@ -86,12 +86,21 @@ PYTHONPATH=backend/src .venv/bin/python -m unittest discover -s backend/tests -p
 - [ ] Run DTS upload/precheck, dbt parse/run, snapshot export, metro validate, metro train.
 - [ ] Save evidence under `worklog/v2.2.3/sprint-30-202605/it/evidence/`.
 
+### Task 9: Large CSV Performance Gate
+
+- [ ] Align upload limits across web Nginx, platform, ingestion, compose/env, and frontend copy to no less than 600MB.
+- [ ] Replace full-memory CSV precheck with streaming parse, sampled type inference, and memory-bounded staging write.
+- [ ] Verify Addax `txtfilereader`, dbt run, and CSV snapshot export with 100MB sample first.
+- [ ] Verify 500MB or 1,000,000-row sample before formal delivery.
+- [ ] Save timing, row-count, memory, file-list, and known-limit evidence under `it/evidence/large-csv/`.
+
 ## Verification Gates
 
 - DTS Java focused tests pass for touched services.
 - metro-stack Python contract tests pass.
 - metro-stack frontend `pnpm build` passes.
 - DTS webapp module build passes if UI is touched.
+- Large CSV performance evidence exists for 100MB and formal target scale before Sprint-30 DONE.
 - `worklog/v2.2.3/sprint-30-202605/it/README.md` contains real evidence before marking DONE.
 
 ## Self-Review

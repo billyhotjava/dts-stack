@@ -42,6 +42,17 @@
 | `lineage.json` | 是 | ODS、dbt 模型、导出任务、metro 训练任务血缘 |
 | `data.csv` | 是 | 治理后的 LSTM 训练快照数据，不是原始 CSV 原样转存 |
 
+## 性能要求
+
+正式版地铁小模型链路需要支撑运营商常见 CSV 文件规模：
+
+- 单文件大小：100MB-500MB。
+- 单文件行数：几十万到 1,000,000 行。
+- 上传链路、预检链路、入湖链路、dbt 建模和 `data.csv` 快照导出都必须有明确性能边界。
+- 验收证据至少覆盖 100MB 样例；正式交付前覆盖 500MB 或 1,000,000 行样例。
+
+当前评估见 `assets/large-csv-performance-assessment.md`。结论是当前 DTS 不能直接承诺完整支撑 500MB/百万行 CSV，需要完成 F5 性能准入后再对外承诺。
+
 ## Feature 列表
 
 | ID | Feature | 优先级 | Task 数 | 状态 | 依赖 |
@@ -49,9 +60,10 @@
 | F1 | CSV 训练快照契约与 dbt 包 | P0 | 2 | DONE | - |
 | F2 | DTS 训练快照导出服务/API | P0 | 3 | READY | F1 |
 | F3 | metro-stack 真实快照消费 | P0 | 3 | IN_PROGRESS | F1, F2 |
-| F4 | 端到端集成验收 | P0 | 2 | READY | F1, F2, F3 |
+| F4 | 端到端集成验收 | P0 | 3 | READY | F1, F2, F3, F5 |
+| F5 | 大 CSV 性能准入 | P0 | 5 | IN_PROGRESS | F1, F2, F3 |
 
-**统计**: READY=7, IN_PROGRESS=0, DONE=3, BLOCKED=0
+**统计**: READY=12, IN_PROGRESS=0, DONE=4, BLOCKED=0
 
 ## 非目标
 
@@ -66,6 +78,7 @@
 - [ ] DTS 后端提供训练快照导出 API，能产出五件套快照包。
 - [ ] metro-stack 后端支持真实 snapshot package 目录校验和 `data.csv` 读取。
 - [ ] metro-stack 前端 `数据与特征` 页面展示真实快照契约，而非固定 demo contract。
+- [ ] 100MB-500MB / 百万行 CSV 性能准入完成并有可复验证据。
 - [ ] 用一份运营商 CSV 样例跑通端到端，并在 `it/README.md` 记录命令、接口、输出文件和已知限制。
 
 ## 相关路径
@@ -75,4 +88,5 @@
 - DTS 前端: `source/dts-platform-webapp/`
 - metro-stack: `/opt/prod/metro-app/sources/metro-stack/`
 - 实施计划: `worklog/v2.2.3/sprint-30-202605/assets/implementation-plan.md`
+- 性能评估: `worklog/v2.2.3/sprint-30-202605/assets/large-csv-performance-assessment.md`
 - 集成测试: `worklog/v2.2.3/sprint-30-202605/it/README.md`

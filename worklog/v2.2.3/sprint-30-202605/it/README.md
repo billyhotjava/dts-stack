@@ -17,6 +17,7 @@
 | snapshot package 文件清单 | `it/evidence/snapshot-package/` | READY |
 | metro-stack 契约校验结果 | `it/evidence/metro-contract/` | PARTIAL |
 | 训练任务与产物摘要 | `it/evidence/metro-training/` | READY |
+| 大 CSV 性能压测 | `it/evidence/large-csv/` | READY |
 
 ## 验收命令草案
 
@@ -43,3 +44,4 @@ curl -sS -X POST http://127.0.0.1:50080/api/ml/data-contract/validate \
 - 2026-05-14：`dbt parse --project-dir worklog/v2.2.3/thales/v1/dbt_model --profiles-dir services/dts-dbt/profiles` 通过。
 - 2026-05-14：`unzip -t worklog/v2.2.3/thales/v1/thales-metro-dbt-model.zip` 通过。
 - 2026-05-14：metro-stack 契约测试 `PYTHONPATH=backend/src .venv/bin/python -m unittest discover -s backend/tests -p 'test_contract_*.py'` 通过，7 tests OK。
+- 2026-05-14：已补充 100MB-500MB / 百万行 CSV 性能准入要求。当前评估结论：DTS 现有上传限制、预检 100,000 行上限和全量内存解析模型尚不能支撑正式现场规模。

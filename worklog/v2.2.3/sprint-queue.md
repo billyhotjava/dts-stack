@@ -420,9 +420,11 @@
 | F1-csv-snapshot-contract | P0 | 2 | DONE |
 | F2-dts-snapshot-export | P0 | 3 | READY |
 | F3-metro-stack-snapshot-consumer | P0 | 3 | IN_PROGRESS |
-| F4-end-to-end-it | P0 | 2 | READY |
+| F4-end-to-end-it | P0 | 3 | READY |
+| F5-large-csv-performance | P0 | 5 | IN_PROGRESS |
 
-**统计**: READY=7, IN_PROGRESS=0, DONE=3, BLOCKED=0
+**统计**: READY=12, IN_PROGRESS=0, DONE=4, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-30-202605/README.md`
 **实施计划**: `worklog/v2.2.3/sprint-30-202605/assets/implementation-plan.md`
+**性能要求**: 正式链路需支撑 100MB-500MB / 几十万到 1,000,000 行 CSV；当前 DTS 需完成 F5 性能准入后才能对外承诺。
 **关键决策**: Sprint-30 不做 Parquet；正式版交换格式为治理后的 CSV 训练快照包，包含 `manifest.json`、`schema.json`、`quality_report.json`、`lineage.json`、`data.csv`。
