@@ -1,0 +1,26 @@
+version: 2
+
+sources:
+  - name: "metro_ods"
+    schema: "public"
+    description: "地铁信号设备 App-Pack demo ODS 源表。ODS 保留现场采集、专家治理和模型反馈的原始追溯字段。"
+    tables:
+      - name: "signal_telemetry_point"
+        identifier: "ods_metro_signal_telemetry_point"
+        description: "现场信号设备时序明细点，适合作为后续增量采样和质量核验入口。"
+
+      - name: "signal_feature_window"
+        identifier: "ods_metro_signal_feature_window"
+        description: "面向 LSTM 的窗口级特征样本，包含原始特征 JSON、质量特征和专家特征。"
+
+      - name: "expert_event_label"
+        identifier: "ods_metro_signal_expert_event_label"
+        description: "专家对异常窗口、事件或误报的治理标注。"
+
+      - name: "expert_rule"
+        identifier: "ods_metro_signal_expert_rule"
+        description: "专家规则、阈值条件和适用设备范围。"
+
+      - name: "threshold_policy"
+        identifier: "ods_metro_signal_threshold_policy"
+        description: "模型阈值、评分阈值和人工调参策略。"

@@ -1,8 +1,8 @@
 import { Card, Empty, List, Skeleton, Tag } from "antd";
 import type { LeaderOverviewResponse } from "@/api/services/workbenchService";
+import { ClassificationTag } from "@/analytics/pages/screens/components/ClassificationTag";
 import { resolveAppHref } from "@/routes/constants";
 import { humanizeBizDomain } from "../hooks/bizDomain";
-import { classificationColor } from "../hooks/classification";
 import { relativeTime } from "../hooks/relativeTime";
 import type { WorkbenchRole } from "../hooks/useWorkbenchRole";
 
@@ -73,7 +73,7 @@ export function CoreAssetsBlock({ role, items, loading }: CoreAssetsBlockProps) 
 									);
 								})()}
 							/>
-							<Tag color={classificationColor(a.classification)}>{a.classification}</Tag>
+							<ClassificationTag value={a.classification} size="small" />
 						</List.Item>
 					)}
 				/>

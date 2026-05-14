@@ -1,0 +1,65 @@
+version: 2
+
+models:
+  - name: stg_metro__signal_feature_window
+    description: "地铁 App-Pack LSTM 窗口特征 STG，保留 JSON 特征并补齐 DTS 追溯字段。"
+    columns:
+      - name: window_id
+        tests:
+          - not_null:
+              config:
+                severity: warn
+
+  - name: stg_metro__expert_event_label
+    description: "专家事件治理标注 STG，统一置信度和严重度评分。"
+    columns:
+      - name: event_id
+        tests:
+          - not_null:
+              config:
+                severity: warn
+
+  - name: stg_metro__expert_rule
+    description: "专家规则 STG，统一适用设备、特征阈值和规则状态。"
+    columns:
+      - name: rule_id
+        tests:
+          - not_null:
+              config:
+                severity: warn
+
+  - name: stg_metro__threshold_policy
+    description: "模型阈值策略 STG，用于记录人工调参和上线策略。"
+    columns:
+      - name: policy_id
+        tests:
+          - not_null:
+              config:
+                severity: warn
+
+  - name: metro_dwd_lstm_training_window
+    description: "地铁 LSTM 训练窗口 DWD，把专家标注和规则覆盖转成模型训练维度。"
+    columns:
+      - name: window_id
+        tests:
+          - not_null:
+              config:
+                severity: warn
+
+  - name: metro_dwd_expert_governance_signal
+    description: "专家治理统一事实表，整合标注、规则和阈值策略。"
+    columns:
+      - name: governance_id
+        tests:
+          - not_null:
+              config:
+                severity: warn
+
+  - name: metro_ads_app_pack_demo_summary
+    description: "App-Pack 端到端 demo 汇总表，用于展示 DTS 治理数据进入模型训练链路的结果。"
+    columns:
+      - name: batch_id
+        tests:
+          - not_null:
+              config:
+                severity: warn

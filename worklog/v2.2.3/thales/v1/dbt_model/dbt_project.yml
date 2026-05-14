@@ -1,0 +1,23 @@
+name: "thales_metro_v1"
+version: "1.0.0"
+config-version: 2
+profile: "dts"
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+clean-targets: ["target", "dbt_packages", "logs"]
+
+models:
+  thales_metro_v1:
+    +persist_docs:
+      relation: true
+      columns: true
+    stg:
+      +materialized: view
+      +tags: ["thales-metro", "stg"]
+    dwd:
+      +materialized: table
+      +tags: ["thales-metro", "dwd"]
+    ads:
+      +materialized: table
+      +tags: ["thales-metro", "ads"]
