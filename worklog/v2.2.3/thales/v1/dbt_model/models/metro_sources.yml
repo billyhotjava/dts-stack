@@ -24,3 +24,19 @@ sources:
       - name: "threshold_policy"
         identifier: "ods_metro_signal_threshold_policy"
         description: "模型阈值、评分阈值和人工调参策略。"
+
+      - name: "training_snapshot_manifest"
+        identifier: "ods_metro_training_snapshot_manifest"
+        description: "DTS 交付给 metro-stack 的训练数据快照清单，记录 Parquet 路径、窗口参数、dbt 模型版本和契约版本。"
+
+      - name: "training_snapshot_schema"
+        identifier: "ods_metro_training_snapshot_schema"
+        description: "训练快照字段契约，一行一个字段，用于校验必填字段、特征字段、类型和枚举。"
+
+      - name: "training_snapshot_quality"
+        identifier: "ods_metro_training_snapshot_quality"
+        description: "训练快照质量检查结果，包括字段完整性、类型一致性、时序连续性和专家覆盖率。"
+
+      - name: "training_snapshot_lineage"
+        identifier: "ods_metro_training_snapshot_lineage"
+        description: "训练快照血缘，记录 ODS、dbt DWD、专家治理表和导出作业之间的来源关系。"

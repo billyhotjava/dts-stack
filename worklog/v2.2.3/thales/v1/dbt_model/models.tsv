@@ -3,6 +3,12 @@ stg_metro__signal_feature_window	STG	models/stg/stg_metro__signal_feature_window
 stg_metro__expert_event_label	STG	models/stg/stg_metro__expert_event_label.sql			public	view	thales-metro,metro-app-pack,stg,expert-governance	DRAFT	true		专家事件治理标注 STG：统一专家判定、严重度、置信度和来源文件	
 stg_metro__expert_rule	STG	models/stg/stg_metro__expert_rule.sql			public	view	thales-metro,metro-app-pack,stg,expert-governance	DRAFT	true		专家规则 STG：统一规则适用范围、设备类型、特征阈值、规则状态与规则 JSON	
 stg_metro__threshold_policy	STG	models/stg/stg_metro__threshold_policy.sql			public	view	thales-metro,metro-app-pack,stg,expert-governance	DRAFT	true		阈值策略 STG：记录模型阈值、人工调参策略和策略来源	
+stg_metro__training_snapshot_manifest	STG	models/stg/stg_metro__training_snapshot_manifest.sql			public	view	thales-metro,metro-app-pack,stg,training-contract	DRAFT	true		训练快照 manifest STG：记录 DTS Parquet 快照、dbt 版本、窗口参数和契约版本	
+stg_metro__training_snapshot_schema	STG	models/stg/stg_metro__training_snapshot_schema.sql			public	view	thales-metro,metro-app-pack,stg,training-contract	DRAFT	true		训练快照字段契约 STG：记录字段角色、类型、必填约束和特征序号	
+stg_metro__training_snapshot_quality	STG	models/stg/stg_metro__training_snapshot_quality.sql			public	view	thales-metro,metro-app-pack,stg,training-contract	DRAFT	true		训练快照质量检查 STG：记录字段完整性、类型一致性、时序连续性和专家覆盖率	
+stg_metro__training_snapshot_lineage	STG	models/stg/stg_metro__training_snapshot_lineage.sql			public	view	thales-metro,metro-app-pack,stg,training-contract	DRAFT	true		训练快照血缘 STG：记录 ODS、dbt 模型、专家治理表和 Parquet 导出之间的来源关系	
 metro_dwd_lstm_training_window	DWD	models/dwd/metro_dwd_lstm_training_window.sql			public	table	thales-metro,metro-app-pack,dwd,lstm	DRAFT	true		地铁 LSTM 训练窗口 DWD：把专家标注、规则覆盖、弱标签和样本权重合并成训练维度	
+metro_dwd_lstm_training_contract	DWD	models/dwd/metro_dwd_lstm_training_contract.sql			public	table	thales-metro,metro-app-pack,dwd,training-contract	DRAFT	true		训练快照契约门禁 DWD：汇总 manifest、schema、quality、lineage 并输出 passed/warning/blocked	
+metro_dwd_lstm_training_snapshot	DWD	models/dwd/metro_dwd_lstm_training_snapshot.sql			public	table	thales-metro,metro-app-pack,dwd,lstm,training-snapshot	DRAFT	true		面向 metro-stack 导出的 LSTM 训练快照 DWD：合并窗口样本、专家维度和契约门禁元数据，可由 DTS 导出为 Parquet	
 metro_dwd_expert_governance_signal	DWD	models/dwd/metro_dwd_expert_governance_signal.sql			public	table	thales-metro,metro-app-pack,dwd,expert-governance	DRAFT	true		专家治理统一事实表：整合事件标注、专家规则和阈值策略，形成可回流 DTS 治理资产	
 metro_ads_app_pack_demo_summary	ADS	models/ads/metro_ads_app_pack_demo_summary.sql			public	table	thales-metro,metro-app-pack,ads,demo	DRAFT	true		App-Pack 演示汇总 ADS：按批次汇总训练窗口、专家标注、异常窗口和治理规则覆盖情况	

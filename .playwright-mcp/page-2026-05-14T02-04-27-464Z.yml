@@ -1,0 +1,108 @@
+- generic [ref=e4]:
+  - complementary [ref=e5]:
+    - menu [ref=e7]:
+      - menuitem "总览图表" [ref=e8] [cursor=pointer]:
+        - generic [ref=e9]: 总览图表
+      - menuitem "流水线进度" [ref=e10] [cursor=pointer]:
+        - generic [ref=e11]: 流水线进度
+      - menuitem "一键重跑" [ref=e12] [cursor=pointer]:
+        - generic [ref=e13]: 一键重跑
+      - menuitem "最近运行" [ref=e14] [cursor=pointer]:
+        - generic [ref=e15]: 最近运行
+      - menuitem "演进路线" [active] [ref=e16] [cursor=pointer]:
+        - generic [ref=e17]: 演进路线
+      - menuitem "批次重算" [ref=e18] [cursor=pointer]:
+        - generic [ref=e19]: 批次重算
+      - menuitem "批次结果" [ref=e20] [cursor=pointer]:
+        - generic [ref=e21]: 批次结果
+  - main [ref=e22]:
+    - generic [ref=e23]:
+      - generic [ref=e27]:
+        - generic [ref=e28]:
+          - heading "Metro AppPack · 算法运行面板" [level=3] [ref=e30]
+          - generic [ref=e31]: LSTM-AE 异常检测 · 阈值调优 · 反馈驱动评估（一键重跑 + 数据上传）
+          - generic [ref=e33]:
+            - generic [ref=e35]: 包标识：metro-pack
+            - generic [ref=e37]: 版本：3.0.1
+            - generic [ref=e39]: 行业：地铁
+        - button "reload 刷新" [ref=e40] [cursor=pointer]:
+          - img "reload" [ref=e1277]:
+            - img [ref=e1278]
+          - generic [ref=e45]: 刷新
+      - generic [ref=e47]:
+        - generic [ref=e51]:
+          - generic [ref=e52]: 目标分（target_score）
+          - generic [ref=e54]: 67.7%
+        - generic [ref=e57]:
+          - generic [ref=e58]:
+            - generic [ref=e60]:
+              - generic [ref=e62]: 当前最佳代理F1
+              - img "info-circle" [ref=e64]:
+                - img [ref=e65]
+            - generic [ref=e69]: 100.0%
+          - generic [ref=e70]: 差距：0.3230
+        - generic [ref=e73]:
+          - generic [ref=e74]:
+            - generic [ref=e75]: 最新离线事件数
+            - generic [ref=e77]: "2"
+          - generic [ref=e78]: 训练阈值：3.030
+        - generic [ref=e81]:
+          - generic [ref=e82]:
+            - generic [ref=e83]: 训练验证损失
+            - generic [ref=e85]: "0.299009"
+          - generic [ref=e86]: 最佳候选：trial-01
+      - tabpanel [ref=e1420]:
+        - generic [ref=e1421]:
+          - alert [ref=e1423]:
+            - img "info-circle" [ref=e1424]:
+              - img [ref=e1425]
+            - generic [ref=e1427]:
+              - generic [ref=e1428]: 当前阶段：实验室验证（PoC）
+              - generic [ref=e1429]: 离线 pipeline 已打通（LSTM-AE 重构误差 → 阈值 → 告警窗口 → 弱标签 F1 评估）。样本仍少（真实事件 2 / 闭环 1）；下面是向生产级演进的三步。
+          - generic [ref=e1431]:
+            - generic [ref=e1434]: 第一步 · 历史预训练（现在）
+            - generic [ref=e1435]:
+              - list [ref=e1437]:
+                - listitem [ref=e1438]:
+                  - text: 数据：建议
+                  - strong [ref=e1440]: 2–3 个月
+                  - text: 正常数据（覆盖高峰/平峰/夜间/检修）
+                - listitem [ref=e1441]: 模型：LSTM-AE 重构误差
+                - listitem [ref=e1442]: 阈值：static / EWMA / POT 三选一（代码已支持）
+                - listitem [ref=e1443]: 产物：本 UI 的"批次重算"已覆盖
+              - generic [ref=e1444]: ✅ 已具备
+          - generic [ref=e1446]:
+            - generic [ref=e1449]: 第二步 · 线上影子运行（下一步）
+            - generic [ref=e1450]:
+              - list [ref=e1452]:
+                - listitem [ref=e1453]:
+                  - text: 实时打分写日志，
+                  - strong [ref=e1455]: 不触发真实工单
+                - listitem [ref=e1456]: 每日报表：score 分布 / 告警窗口数 / TOP-N 异常段
+                - listitem [ref=e1457]: 漂移监控：p50/p95/p99、缺失率、特征相关性
+                - listitem [ref=e1458]: 阈值校准：用这周分位数定基线 + 告警预算反推
+              - generic [ref=e1459]: ⚠ 未实现（Flink 模板有，但无影子 / 漂移监控模块）
+          - generic [ref=e1461]:
+            - generic [ref=e1464]: 第三步 · 灰度 + 闭环
+            - generic [ref=e1465]:
+              - list [ref=e1467]:
+                - listitem [ref=e1468]: 小范围触发"建议工单"，人工确认后形成反馈标签
+                - listitem [ref=e1469]:
+                  - text: 累积
+                  - strong [ref=e1471]: ≥ 20–50 个
+                  - text: 闭环事件，weak_f1 才有统计意义
+                - listitem [ref=e1472]: 滚动评估：每日 / 每周 F1，看波动范围
+                - listitem [ref=e1473]: 阈值随漂移自动微调（P3-06 滚动调参已具备）
+              - generic [ref=e1474]: 未达到
+          - generic [ref=e1476]:
+            - generic [ref=e1479]: 风险与假设
+            - list [ref=e1481]:
+              - listitem [ref=e1482]:
+                - strong [ref=e1484]: event_count=2：
+                - text: 当前 weak_f1 ≈ 70% 仅代表"策略空间内存在可行参数"，不能等同线上泛化能力。
+              - listitem [ref=e1485]:
+                - strong [ref=e1487]: 弱标签自举：
+                - text: "训练标签来自 `bootstrap_weak_labels.py` 自动打标，不是人工工单；P/R 都在\"弱标签口径\"下。"
+              - listitem [ref=e1488]:
+                - strong [ref=e1490]: 归一化一致性：
+                - text: 上线前必须固化训练期的 scaler（均值/方差/分位数），线上复用，否则分数会漂。

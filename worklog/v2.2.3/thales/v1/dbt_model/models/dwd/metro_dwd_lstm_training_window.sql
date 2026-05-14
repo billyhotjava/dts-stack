@@ -33,6 +33,7 @@ SELECT
   w.dts_batch_id,
   w.dts_execution_id,
   w.dts_task_id,
+  COALESCE(w.dts_batch_id, w.batch_id) AS training_snapshot_id,
   w.window_id,
   w.batch_id,
   w.line_code,

@@ -1,0 +1,36 @@
+{{ config(materialized='view', tags=['metro-app-pack', 'stg', 'training-contract']) }}
+
+SELECT
+  o.id AS source_row_id,
+  'ods_metro_training_snapshot_manifest'::text AS source_table,
+  COALESCE({{ nullif_placeholder("o._dts_source_system") }}, 'dts') AS source_system,
+  o._dts_import_time AS imported_at,
+  {{ nullif_placeholder("o._dts_batch_id") }} AS dts_batch_id,
+  {{ nullif_placeholder("o._dts_execution_id") }} AS dts_execution_id,
+  {{ nullif_placeholder("o._dts_task_id") }} AS dts_task_id,
+
+  {{ nullif_placeholder("o.snapshot_id") }} AS snapshot_id,
+  {{ nullif_placeholder("o.dataset_id") }} AS dataset_id,
+  {{ nullif_placeholder("o.dataset_name") }} AS dataset_name,
+  {{ nullif_placeholder("o.dbt_model_name") }} AS dbt_model_name,
+  {{ nullif_placeholder("o.dbt_model_version") }} AS dbt_model_version,
+  COALESCE(lower({{ nullif_placeholder("o.data_format") }}), 'parquet') AS data_format,
+  {{ nullif_placeholder("o.parquet_uri") }} AS parquet_uri,
+  {{ nullif_placeholder("o.schema_uri") }} AS schema_uri,
+  {{ nullif_placeholder("o.lineage_uri") }} AS lineage_uri,
+  {{ nullif_placeholder("o.quality_report_uri") }} AS quality_report_uri,
+  {{ nullif_placeholder("o.entity_column") }} AS entity_column,
+  {{ nullif_placeholder("o.time_column") }} AS time_column,
+  {{ nullif_placeholder("o.split_column") }} AS split_column,
+  {{ parse_numeric_safe("o.window_size") }}::int AS window_size,
+  {{ parse_numeric_safe("o.step_size") }}::int AS step_size,
+  {{ parse_numeric_safe("o.feature_count") }}::int AS feature_count,
+  {{ parse_numeric_safe("o.row_count") }}::bigint AS row_count,
+  {{ parse_numeric_safe("o.window_count") }}::bigint AS window_count,
+  NULLIF(o.generated_at::text, '')::timestamptz AS generated_at,
+  NULLIF(o.data_start_time::text, '')::timestamptz AS data_start_time,
+  NULLIF(o.data_end_time::text, '')::timestamptz AS data_end_time,
+  COALESCE({{ nullif_placeholder("o.contract_version") }}, 'metro-lstm-contract-v1') AS contract_version,
+  COALESCE({{ nullif_placeholder("o.status") }}, 'draft') AS snapshot_status,
+  o.manifest_payload::jsonb AS manifest_payload
+FROM {{ source('metro_ods', 'training_snapshot_manifest') }} o

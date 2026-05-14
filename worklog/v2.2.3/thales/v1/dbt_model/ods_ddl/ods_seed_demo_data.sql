@@ -18,6 +18,18 @@ WHERE batch_id = 'demo-metro-20260513';
 DELETE FROM public.ods_metro_signal_expert_rule
 WHERE _dts_batch_id = 'demo-metro-20260513';
 
+DELETE FROM public.ods_metro_training_snapshot_manifest
+WHERE snapshot_id = 'demo-metro-20260513';
+
+DELETE FROM public.ods_metro_training_snapshot_schema
+WHERE snapshot_id = 'demo-metro-20260513';
+
+DELETE FROM public.ods_metro_training_snapshot_quality
+WHERE snapshot_id = 'demo-metro-20260513';
+
+DELETE FROM public.ods_metro_training_snapshot_lineage
+WHERE snapshot_id = 'demo-metro-20260513';
+
 WITH sample(
   n,
   start_ts,
@@ -262,5 +274,147 @@ INSERT INTO public.ods_metro_signal_threshold_policy (
 VALUES
   ('demo-metro-static-quantile', 'demo-metro-20260513', 'lstm-ae', 'reconstruction_score', 'STATIC_QUANTILE', 0.995, '', 'expert_override', '{"reason":"演示阶段降低误报，先用高分位静态阈值"}'::jsonb, 'expert.zhang', '2026-05-13T09:30:00+08:00', 'metro-stack', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed'),
   ('demo-metro-min-windows',     'demo-metro-20260513', 'lstm-ae', 'alert_event',          'MIN_EVENT_WINDOWS', 2.000, 'window', 'expert_override', '{"reason":"至少连续 2 个窗口异常才生成事件"}'::jsonb,      'expert.li',    '2026-05-13T09:30:00+08:00', 'metro-stack', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed');
+
+INSERT INTO public.ods_metro_training_snapshot_manifest (
+  snapshot_id,
+  dataset_id,
+  dataset_name,
+  dbt_model_name,
+  dbt_model_version,
+  data_format,
+  parquet_uri,
+  schema_uri,
+  lineage_uri,
+  quality_report_uri,
+  entity_column,
+  time_column,
+  split_column,
+  window_size,
+  step_size,
+  feature_count,
+  row_count,
+  window_count,
+  generated_at,
+  data_start_time,
+  data_end_time,
+  contract_version,
+  status,
+  manifest_payload,
+  _dts_source_system,
+  _dts_source_table,
+  _dts_batch_id,
+  _dts_execution_id,
+  _dts_task_id
+)
+VALUES (
+  'demo-metro-20260513',
+  'dts.dataset.metro.lstm.training.window',
+  '地铁 LSTM 训练窗口快照',
+  'metro_dwd_lstm_training_snapshot',
+  'v1',
+  'parquet',
+  'dts://datasets/metro/lstm/demo-metro-20260513/data/',
+  'dts://datasets/metro/lstm/demo-metro-20260513/schema.json',
+  'dts://datasets/metro/lstm/demo-metro-20260513/lineage.json',
+  'dts://datasets/metro/lstm/demo-metro-20260513/quality_report.json',
+  'equipment_id',
+  'start_time',
+  'split',
+  120,
+  20,
+  8,
+  12,
+  12,
+  '2026-05-13T09:35:00+08:00',
+  '2026-05-13T09:00:00+08:00',
+  '2026-05-13T09:12:00+08:00',
+  'metro-lstm-contract-v1',
+  'ready',
+  '{"exporter":"dts-parquet","partition_by":["split","equipment_type"],"compression":"snappy"}'::jsonb,
+  'dts',
+  'ods_seed_demo_data.sql',
+  'demo-metro-20260513',
+  'demo-exec-20260513',
+  'demo-seed'
+);
+
+INSERT INTO public.ods_metro_training_snapshot_schema (
+  snapshot_id,
+  field_name,
+  field_role,
+  data_type,
+  is_required,
+  nullable,
+  ordinal_position,
+  feature_index,
+  enum_values,
+  description,
+  _dts_source_system,
+  _dts_source_table,
+  _dts_batch_id,
+  _dts_execution_id,
+  _dts_task_id
+)
+VALUES
+  ('demo-metro-20260513', 'window_id',       'key',     'string',    true,  false,  1, NULL, NULL, '窗口唯一标识', 'dts', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed'),
+  ('demo-metro-20260513', 'equipment_id',    'entity',  'string',    true,  false,  2, NULL, NULL, '设备唯一标识', 'dts', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed'),
+  ('demo-metro-20260513', 'start_time',      'time',    'timestamp', true,  false,  3, NULL, NULL, '窗口开始时间', 'dts', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed'),
+  ('demo-metro-20260513', 'end_time',        'time',    'timestamp', true,  false,  4, NULL, NULL, '窗口结束时间', 'dts', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed'),
+  ('demo-metro-20260513', 'split',           'split',   'string',    true,  false,  5, NULL, '["train","valid","test"]'::jsonb, '训练/验证/测试分区', 'dts', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed'),
+  ('demo-metro-20260513', 'current_a',       'feature', 'double',    true,  false,  6,    0, NULL, '动作电流', 'dts', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed'),
+  ('demo-metro-20260513', 'voltage_v',       'feature', 'double',    true,  false,  7,    1, NULL, '动作电压', 'dts', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed'),
+  ('demo-metro-20260513', 'temperature_c',   'feature', 'double',    true,  false,  8,    2, NULL, '设备温度', 'dts', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed'),
+  ('demo-metro-20260513', 'switch_gap_mm',   'feature', 'double',    true,  false,  9,    3, NULL, '转辙机缺口', 'dts', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed'),
+  ('demo-metro-20260513', 'vibration_g',     'feature', 'double',    true,  false, 10,    4, NULL, '振动强度', 'dts', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed'),
+  ('demo-metro-20260513', 'response_ms',     'feature', 'double',    true,  false, 11,    5, NULL, '动作响应时延', 'dts', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed'),
+  ('demo-metro-20260513', 'rule_hits',       'feature', 'double',    true,  false, 12,    6, NULL, '专家规则命中数', 'dts', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed'),
+  ('demo-metro-20260513', 'expert_risk',     'feature', 'double',    true,  false, 13,    7, NULL, '专家风险评分', 'dts', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed'),
+  ('demo-metro-20260513', 'training_label',  'label',   'string',    false, true,  14, NULL, '["normal","watch","expert_anomaly","unlabeled"]'::jsonb, '弱标签或专家标签', 'dts', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed'),
+  ('demo-metro-20260513', 'sample_weight',   'weight',  'double',    false, true,  15, NULL, NULL, '样本权重', 'dts', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed');
+
+INSERT INTO public.ods_metro_training_snapshot_quality (
+  snapshot_id,
+  check_name,
+  check_type,
+  check_status,
+  severity,
+  metric_value,
+  threshold_value,
+  failed_count,
+  sample_count,
+  message,
+  checked_at,
+  quality_payload,
+  _dts_source_system,
+  _dts_source_table,
+  _dts_batch_id,
+  _dts_execution_id,
+  _dts_task_id
+)
+VALUES
+  ('demo-metro-20260513', 'required_fields_present', 'schema', 'passed', 'info', 1.0, 1.0, 0, 15, '必填字段已满足训练契约', '2026-05-13T09:35:00+08:00', '{}'::jsonb, 'dts', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed'),
+  ('demo-metro-20260513', 'feature_count_match', 'schema', 'passed', 'info', 8.0, 8.0, 0, 8, 'manifest feature_count 与 schema feature 字段数一致', '2026-05-13T09:35:00+08:00', '{}'::jsonb, 'dts', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed'),
+  ('demo-metro-20260513', 'time_order_continuity', 'timeseries', 'passed', 'info', 1.0, 1.0, 0, 12, '设备内时间顺序可排序，演示样本无断点', '2026-05-13T09:35:00+08:00', '{"window_size":120,"step_size":20}'::jsonb, 'dts', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed'),
+  ('demo-metro-20260513', 'expert_governance_coverage', 'governance', 'passed', 'info', 0.25, 0.10, 0, 12, '专家标注和规则可追溯', '2026-05-13T09:35:00+08:00', '{}'::jsonb, 'dts', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed');
+
+INSERT INTO public.ods_metro_training_snapshot_lineage (
+  snapshot_id,
+  upstream_asset,
+  upstream_type,
+  upstream_version,
+  relation_type,
+  owner,
+  lineage_payload,
+  _dts_source_system,
+  _dts_source_table,
+  _dts_batch_id,
+  _dts_execution_id,
+  _dts_task_id
+)
+VALUES
+  ('demo-metro-20260513', 'public.ods_metro_signal_feature_window', 'ods_table', 'v1', 'derived_from', 'DTS 数据治理', '{}'::jsonb, 'dts', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed'),
+  ('demo-metro-20260513', 'public.ods_metro_signal_expert_event_label', 'expert_governance', 'v1', 'joined_with', '地铁信号专家', '{}'::jsonb, 'dts', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed'),
+  ('demo-metro-20260513', 'public.metro_dwd_lstm_training_window', 'dbt_model', 'v1', 'materialized_as', 'DTS dbt', '{}'::jsonb, 'dts', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed'),
+  ('demo-metro-20260513', 'dts://datasets/metro/lstm/demo-metro-20260513/data/', 'parquet_snapshot', 'v1', 'exported_to', 'DTS 数据集服务', '{"format":"parquet","compression":"snappy"}'::jsonb, 'dts', 'ods_seed_demo_data.sql', 'demo-metro-20260513', 'demo-exec-20260513', 'demo-seed');
 
 COMMIT;

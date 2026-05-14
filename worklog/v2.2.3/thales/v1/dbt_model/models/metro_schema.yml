@@ -37,10 +37,74 @@ models:
               config:
                 severity: warn
 
+  - name: stg_metro__training_snapshot_manifest
+    description: "训练快照 manifest STG，记录 DTS Parquet 快照、dbt 版本、窗口参数和契约版本。"
+    columns:
+      - name: snapshot_id
+        tests:
+          - not_null:
+              config:
+                severity: warn
+
+  - name: stg_metro__training_snapshot_schema
+    description: "训练快照字段契约 STG，记录字段角色、类型、必填约束和特征序号。"
+    columns:
+      - name: snapshot_id
+        tests:
+          - not_null:
+              config:
+                severity: warn
+      - name: field_name
+        tests:
+          - not_null:
+              config:
+                severity: warn
+
+  - name: stg_metro__training_snapshot_quality
+    description: "训练快照质量检查 STG，记录字段完整性、类型一致性、时序连续性和专家覆盖率等检查结果。"
+    columns:
+      - name: snapshot_id
+        tests:
+          - not_null:
+              config:
+                severity: warn
+      - name: check_name
+        tests:
+          - not_null:
+              config:
+                severity: warn
+
+  - name: stg_metro__training_snapshot_lineage
+    description: "训练快照血缘 STG，记录 ODS、dbt 模型、专家治理表和 Parquet 导出之间的来源关系。"
+    columns:
+      - name: snapshot_id
+        tests:
+          - not_null:
+              config:
+                severity: warn
+
   - name: metro_dwd_lstm_training_window
     description: "地铁 LSTM 训练窗口 DWD，把专家标注和规则覆盖转成模型训练维度。"
     columns:
       - name: window_id
+        tests:
+          - not_null:
+              config:
+                severity: warn
+
+  - name: metro_dwd_lstm_training_contract
+    description: "训练快照契约门禁 DWD，汇总 manifest、schema、quality、lineage 并输出 passed/warning/blocked。"
+    columns:
+      - name: snapshot_id
+        tests:
+          - not_null:
+              config:
+                severity: warn
+
+  - name: metro_dwd_lstm_training_snapshot
+    description: "面向 metro-stack 导出的 LSTM 训练快照 DWD，合并窗口样本、专家维度和契约门禁元数据，可由 DTS 导出为 Parquet。"
+    columns:
+      - name: training_snapshot_id
         tests:
           - not_null:
               config:
@@ -56,7 +120,7 @@ models:
                 severity: warn
 
   - name: metro_ads_app_pack_demo_summary
-    description: "App-Pack 端到端 demo 汇总表，用于展示 DTS 治理数据进入模型训练链路的结果。"
+    description: "App-Pack 端到端 demo 汇总表，用于展示 DTS 治理数据进入模型训练链路、训练快照契约和模型导出链路的结果。"
     columns:
       - name: batch_id
         tests:
