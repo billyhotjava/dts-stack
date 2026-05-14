@@ -53,7 +53,11 @@ SELECT
   m.dbt_model_version,
   m.contract_version,
   m.data_format,
-  m.parquet_uri,
+  m.data_uri,
+  m.data_file_name,
+  m.csv_delimiter,
+  m.csv_encoding,
+  m.csv_header,
   m.schema_uri,
   m.lineage_uri,
   m.quality_report_uri,
@@ -86,8 +90,10 @@ SELECT
   COALESCE(lc.expert_lineage_count, 0) AS expert_lineage_count,
   CASE
     WHEN m.snapshot_id IS NULL THEN 'blocked'
-    WHEN m.data_format <> 'parquet' THEN 'blocked'
-    WHEN m.parquet_uri IS NULL THEN 'blocked'
+    WHEN m.data_format <> 'csv' THEN 'blocked'
+    WHEN m.data_uri IS NULL THEN 'blocked'
+    WHEN lower(COALESCE(m.data_file_name, '')) <> 'data.csv' THEN 'blocked'
+    WHEN COALESCE(m.csv_header, true) = false THEN 'blocked'
     WHEN m.window_size IS NULL OR m.window_size < 2 THEN 'blocked'
     WHEN m.feature_count IS NULL OR m.feature_count < 1 THEN 'blocked'
     WHEN COALESCE(sc.has_window_id, false) = false THEN 'blocked'
@@ -102,8 +108,10 @@ SELECT
     ELSE 'passed'
   END AS contract_status,
   CASE
-    WHEN m.data_format <> 'parquet' THEN 'training snapshot must be exported as parquet'
-    WHEN m.parquet_uri IS NULL THEN 'parquet_uri is required'
+    WHEN m.data_format <> 'csv' THEN 'training snapshot must be exported as csv'
+    WHEN m.data_uri IS NULL THEN 'data_uri is required'
+    WHEN lower(COALESCE(m.data_file_name, '')) <> 'data.csv' THEN 'data_file_name must be data.csv'
+    WHEN COALESCE(m.csv_header, true) = false THEN 'csv header row is required'
     WHEN m.window_size IS NULL OR m.window_size < 2 THEN 'window_size is invalid'
     WHEN m.feature_count IS NULL OR m.feature_count < 1 THEN 'feature_count is invalid'
     WHEN COALESCE(sc.has_window_id, false) = false THEN 'window_id is required'

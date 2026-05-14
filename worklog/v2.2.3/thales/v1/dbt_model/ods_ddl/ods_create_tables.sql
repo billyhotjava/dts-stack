@@ -125,8 +125,12 @@ CREATE TABLE IF NOT EXISTS public.ods_metro_training_snapshot_manifest (
   dataset_name TEXT,
   dbt_model_name TEXT,
   dbt_model_version TEXT,
-  data_format TEXT DEFAULT 'parquet',
-  parquet_uri TEXT,
+  data_format TEXT DEFAULT 'csv',
+  data_uri TEXT,
+  data_file_name TEXT DEFAULT 'data.csv',
+  csv_delimiter TEXT DEFAULT ',',
+  csv_encoding TEXT DEFAULT 'utf-8',
+  csv_header BOOLEAN DEFAULT true,
   schema_uri TEXT,
   lineage_uri TEXT,
   quality_report_uri TEXT,
@@ -151,6 +155,16 @@ CREATE TABLE IF NOT EXISTS public.ods_metro_training_snapshot_manifest (
   _dts_execution_id TEXT,
   _dts_task_id TEXT
 );
+
+ALTER TABLE public.ods_metro_training_snapshot_manifest
+  ALTER COLUMN data_format SET DEFAULT 'csv';
+
+ALTER TABLE public.ods_metro_training_snapshot_manifest
+  ADD COLUMN IF NOT EXISTS data_uri TEXT,
+  ADD COLUMN IF NOT EXISTS data_file_name TEXT DEFAULT 'data.csv',
+  ADD COLUMN IF NOT EXISTS csv_delimiter TEXT DEFAULT ',',
+  ADD COLUMN IF NOT EXISTS csv_encoding TEXT DEFAULT 'utf-8',
+  ADD COLUMN IF NOT EXISTS csv_header BOOLEAN DEFAULT true;
 
 CREATE TABLE IF NOT EXISTS public.ods_metro_training_snapshot_schema (
   id BIGSERIAL PRIMARY KEY,

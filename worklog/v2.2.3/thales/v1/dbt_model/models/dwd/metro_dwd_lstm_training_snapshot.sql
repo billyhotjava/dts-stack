@@ -19,7 +19,11 @@ SELECT
   c.dbt_model_version,
   c.contract_version,
   c.data_format,
-  c.parquet_uri,
+  c.data_uri,
+  c.data_file_name,
+  c.csv_delimiter,
+  c.csv_encoding,
+  c.csv_header,
   c.entity_column,
   c.time_column,
   c.split_column,
@@ -56,7 +60,7 @@ SELECT
   w.expert_rule_severity_score,
   w.expert_rule_confidence,
   w.training_label,
-  CONCAT(COALESCE(w.split, 'train'), '/', COALESCE(w.equipment_type, 'unknown')) AS parquet_partition_key
+  CONCAT(COALESCE(w.split, 'train'), '/', COALESCE(w.equipment_type, 'unknown')) AS snapshot_segment_key
 FROM training_windows w
 LEFT JOIN contracts c
   ON c.snapshot_id IS NOT DISTINCT FROM w.training_snapshot_id

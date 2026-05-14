@@ -18,10 +18,10 @@ dbt_model/ods_ddl/ods_create_tables.sql
 dbt_model/ods_ddl/ods_seed_demo_data.sql
 ```
 
-本版 dbt 包已补齐 DTS Parquet 训练快照契约模型：
+本版 dbt 包已补齐 DTS CSV 训练快照契约模型：
 
 - `metro_dwd_lstm_training_contract`：训练前门禁，输出 `passed` / `warning` / `blocked`。
-- `metro_dwd_lstm_training_snapshot`：面向 metro-stack 的训练快照明细，可由 DTS 导出为 Parquet。
+- `metro_dwd_lstm_training_snapshot`：面向 metro-stack 的训练快照明细，可由 DTS 导出为 CSV 训练快照包。
 - ODS 初始化 SQL 已包含 manifest、schema、quality、lineage 四类训练快照契约表。
 
 业务 App 端口约定：

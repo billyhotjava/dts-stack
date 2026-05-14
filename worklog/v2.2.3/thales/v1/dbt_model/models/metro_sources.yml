@@ -27,7 +27,7 @@ sources:
 
       - name: "training_snapshot_manifest"
         identifier: "ods_metro_training_snapshot_manifest"
-        description: "DTS 交付给 metro-stack 的训练数据快照清单，记录 Parquet 路径、窗口参数、dbt 模型版本和契约版本。"
+        description: "DTS 交付给 metro-stack 的训练数据快照清单，记录 CSV 数据文件、窗口参数、dbt 模型版本和契约版本。"
 
       - name: "training_snapshot_schema"
         identifier: "ods_metro_training_snapshot_schema"
@@ -39,4 +39,4 @@ sources:
 
       - name: "training_snapshot_lineage"
         identifier: "ods_metro_training_snapshot_lineage"
-        description: "训练快照血缘，记录 ODS、dbt DWD、专家治理表和导出作业之间的来源关系。"
+        description: "训练快照血缘，记录 ODS、dbt DWD、专家治理表和 CSV 快照导出作业之间的来源关系。"

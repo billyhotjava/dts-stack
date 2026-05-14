@@ -68,13 +68,13 @@ metro_ads_app_pack_demo_summary
 
 ## 给 metro-stack 的导出
 
-构建成功后，优先导出 `metro_dwd_lstm_training_snapshot` 为 Parquet，供 metro-stack 的 DTS 训练任务入口读取。
+构建成功后，优先导出 `metro_dwd_lstm_training_snapshot` 为 CSV 训练快照包，供 metro-stack 的 DTS 训练任务入口读取。快照包固定包含 `manifest.json`、`schema.json`、`quality_report.json`、`lineage.json` 和 `data.csv`。
 
 `metro_dwd_lstm_training_contract` 是训练前契约门禁，输出：
 
 - `contract_status`: `passed` / `warning` / `blocked`
 - `contract_message`: 阻断或告警原因
-- `data_format`、`parquet_uri`、`window_size`、`feature_count`
+- `data_format`、`data_uri`、`data_file_name`、`window_size`、`feature_count`
 - schema / quality / lineage 覆盖统计
 
-演示或调试阶段仍可导出 CSV，但正式产品口径以 DTS Parquet 快照为准。
+正式产品 v1 口径以 DTS 治理后的 CSV 训练快照包为准；Parquet 适配不在本版本范围内。

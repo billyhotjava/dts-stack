@@ -38,7 +38,7 @@ models:
                 severity: warn
 
   - name: stg_metro__training_snapshot_manifest
-    description: "训练快照 manifest STG，记录 DTS Parquet 快照、dbt 版本、窗口参数和契约版本。"
+    description: "训练快照 manifest STG，记录 DTS CSV 快照、dbt 版本、窗口参数和契约版本。"
     columns:
       - name: snapshot_id
         tests:
@@ -75,7 +75,7 @@ models:
                 severity: warn
 
   - name: stg_metro__training_snapshot_lineage
-    description: "训练快照血缘 STG，记录 ODS、dbt 模型、专家治理表和 Parquet 导出之间的来源关系。"
+    description: "训练快照血缘 STG，记录 ODS、dbt 模型、专家治理表和 CSV 导出之间的来源关系。"
     columns:
       - name: snapshot_id
         tests:
@@ -102,7 +102,7 @@ models:
                 severity: warn
 
   - name: metro_dwd_lstm_training_snapshot
-    description: "面向 metro-stack 导出的 LSTM 训练快照 DWD，合并窗口样本、专家维度和契约门禁元数据，可由 DTS 导出为 Parquet。"
+    description: "面向 metro-stack 导出的 LSTM 训练快照 DWD，合并窗口样本、专家维度和契约门禁元数据，可由 DTS 导出为 CSV 快照包。"
     columns:
       - name: training_snapshot_id
         tests:

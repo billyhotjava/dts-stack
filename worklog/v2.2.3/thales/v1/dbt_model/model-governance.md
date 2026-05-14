@@ -15,7 +15,7 @@
   - `expert_rule_confidence`
   - `training_label`
 - 训练快照契约由 `metro_dwd_lstm_training_contract` 承载，统一校验 manifest、schema、quality、lineage。
-- `metro_dwd_lstm_training_snapshot` 是给 metro-stack 导出的训练快照模型，正式口径由 DTS 导出为 Parquet。
+- `metro_dwd_lstm_training_snapshot` 是给 metro-stack 导出的训练快照模型，正式口径由 DTS 导出为 CSV 训练快照包。
 - ADS 仅用于演示汇总，不承载训练明细。
 
 ## 命名约定
@@ -29,10 +29,10 @@
 
 DTS 向 metro-stack 交付训练数据时，需要同时交付四类契约资产：
 
-- `ods_metro_training_snapshot_manifest`：快照 ID、Parquet URI、dbt 模型版本、窗口长度、特征数。
+- `ods_metro_training_snapshot_manifest`：快照 ID、CSV 数据 URI、dbt 模型版本、窗口长度、特征数。
 - `ods_metro_training_snapshot_schema`：字段角色、类型、必填约束和特征序号。
 - `ods_metro_training_snapshot_quality`：字段完整性、类型一致性、时序连续性、专家覆盖率等检查。
-- `ods_metro_training_snapshot_lineage`：ODS、dbt 模型、专家治理表和 Parquet 导出作业血缘。
+- `ods_metro_training_snapshot_lineage`：ODS、dbt 模型、专家治理表和 CSV 快照导出作业血缘。
 
 `metro_dwd_lstm_training_contract.contract_status` 作为训练前门禁：
 
