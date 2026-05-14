@@ -1,34 +1,16 @@
 # v5 大屏实例生成说明
 
-已 review v4/pjm/screen-instances：v4 包含综合、执行、质量、技术状态、风险和下钻页 JSON。与截图最接近的是 imgs/project_overview_dashboard.html，因此 v5 先生成项目总览主屏实例。
+本目录用于存放从 v4 大屏迁移出的 v5 实例。迁移原则：以 v4 JSON 为结构基准，保留组件数量、组件类型、坐标尺寸、指标布局和数据源，只替换视觉样式。
 
-## 输出
+## 当前输出
 
-- gpmc-project-overview-v5.json：1920x1080 可导入大屏 JSON。
+- gpmc-project-overview-v5.json：由 v4/pjm/screen-instances/gpmc-overview-v3.json 生成，结构保持 v4 原样，样式改为 project_dashboard_blue_bg.html 的企业蓝背景 + 白色卡片风格。
+- gpmc-execution-board-v5.json：待按同一原则从 v4 执行监控页重构。
+- gpmc-quality-board-v5.json：待按同一原则从 v4 质量跟进页重构。
+- gpmc-tech-state-board-v5.json：待按同一原则从 v4 技术状态页重构。
 
-## 风格处理
+## 2026-05-14 overview 样式纠偏
 
-- 顶部采用居中大标题、双侧斜角导航、弧线与白色装饰条。
-- KPI 区改为 5 张横向科技蓝指标卡，保留项目总数、完成率、质量、技术变更和高风险指标。
-- 中部改为 4 + 4 面板网格，覆盖项目节点、质量趋势、技术变更趋势、项目风险、科室节点、质量占比、科室技术变更、风险类型占比。
-- 底部使用项目进度详情甘特组件，复用 v4 的项目节点 SQL。
-
-## 数据源
-
-- KPI 与项目节点/风险/甘特复用 gpmc-overview-v3 的 SQL。
-- 质量占比/趋势复用或改写 gpmc-quality-board-v3 的 SQL。
-- 技术变更趋势/科室技术变更复用 gpmc-tech-state-board-v3 的数据表字段。
-
-## 2026-05-13 专题页补充
-
-- gpmc-execution-board-v5.json：按执行监控截图生成，复用执行专题 SQL 数据源。
-- gpmc-quality-board-v5.json：按质量信息与跟进措施截图生成，复用质量专题 SQL 数据源。
-- gpmc-tech-state-board-v5.json：按技术状态与跟进截图生成，复用技术状态专题 SQL 数据源。
-
-三份实例现已重构为现代企业浅色版：浅灰蓝背景、白色圆角卡片、柔和阴影、胶囊导航/筛选和蓝绿橙红紫业务强调色。
-
-## 2026-05-13 浅色版重构
-
-- 参考“项目组合管理驾驶舱 - 现代企业浅色版”HTML，三份专题页改为浅灰蓝页面背景、白色圆角卡片、柔和阴影和胶囊导航/筛选。
-- 保留原 v5 专题页的数据源与组件结构，重构执行、质量、技术状态三个大屏的视觉层。
-- 指标与图表统一使用蓝、绿、橙、红、紫作为业务强调色，适配客户提出的亮色展示需求。
+- 已重新生成 gpmc-project-overview-v5.json：以 v4/gpmc-overview-v3.json 为结构基准，仅更改企业蓝背景版视觉样式。
+- 校验结果：保持 v4 的 64 个组件、组件类型、坐标尺寸、指标布局和数据源不变。
+- 后续批量迁移其他 v4 大屏时也采用同一原则：保留布局和组件，只替换视觉样式。

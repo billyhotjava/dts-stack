@@ -1,257 +1,346 @@
 {
   "schemaVersion": 3,
   "id": "gpmc-project-overview-v5",
-  "name": "项目总览看板 v5",
-  "description": "v5 科技蓝项目总览实例：按截图风格重排 KPI、项目节点、质量趋势、技术变更、风险统计与项目进度详情，复用 v4 SQL 数据源。",
+  "name": "项目综合看板 v5",
+  "description": "基于 v4/gpmc-overview-v3，仅重构视觉样式为 project_dashboard_blue_bg.html 企业蓝背景版；组件布局、组件类型、坐标尺寸和数据源保持 v4 原样。",
   "classification": "INTERNAL",
   "width": 1920,
   "height": 1080,
-  "backgroundColor": "#031026",
-  "theme": "dark-command-tech-blue-v5",
+  "backgroundColor": "#10568A",
+  "theme": "enterprise-blue-bg-v5-layout-preserved",
   "globalVariables": [
     {
       "key": "dateFrom",
       "label": "开始日期",
       "type": "date",
-      "defaultValue": "2025-01-01"
+      "defaultValue": "2024-01-01"
     },
     {
       "key": "dateTo",
       "label": "结束日期",
       "type": "date",
       "defaultValue": "2026-12-31"
-    },
-    {
-      "key": "deptId",
-      "label": "事业部/科室",
-      "type": "string",
-      "defaultValue": ""
-    },
-    {
-      "key": "projectNo",
-      "label": "项目编号/项目名称",
-      "type": "string",
-      "defaultValue": ""
-    },
-    {
-      "key": "riskLevel",
-      "label": "风险等级",
-      "type": "string",
-      "defaultValue": ""
     }
   ],
   "components": [
     {
-      "id": "v5-bg-base",
-      "type": "shape",
-      "name": "深蓝背景",
+      "id": "ov3-header-clock",
+      "type": "datetime",
+      "name": "ov3-header-clock",
+      "x": 1710,
+      "y": 24,
+      "width": 180,
+      "height": 22,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "format": "YYYY-MM-DD HH:mm:ss",
+        "fontSize": 12,
+        "color": "#e2ffff"
+      }
+    },
+    {
+      "id": "ov3-bg-overlay",
+      "type": "richtext",
+      "name": "ov3-bg-overlay",
       "x": 0,
       "y": 0,
       "width": 1920,
       "height": 1080,
-      "zIndex": -30,
-      "locked": false,
+      "zIndex": -19,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "content": "<div style=\"width:100%;height:100%;background:radial-gradient(circle at 10% 0%, rgba(255,255,255,.16), transparent 24%),radial-gradient(circle at 86% 10%, rgba(125,211,252,.18), transparent 26%),linear-gradient(180deg,#10568A 0%,#0f5b90 46%,#0c4c7a 100%);\"></div>",
+        "padding": 0,
+        "overflow": "hidden"
+      }
+    },
+    {
+      "id": "ov3-bg-base",
+      "type": "shape",
+      "name": "ov3-bg-base",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 1080,
+      "zIndex": -20,
+      "locked": true,
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "#031026",
-        "borderColor": "transparent",
+        "fillColor": "#10568A",
+        "borderColor": "#10568A",
         "borderWidth": 0,
         "radius": 0
       }
     },
     {
-      "id": "v5-bg-grid",
+      "id": "ov3-header-bar",
+      "type": "shape",
+      "name": "ov3-header-bar",
+      "x": 10,
+      "y": 10,
+      "width": 1900,
+      "height": 62,
+      "zIndex": 5,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255,255,255,.10)",
+        "borderColor": "rgba(255,255,255,.22)",
+        "borderWidth": 1,
+        "radius": 18
+      }
+    },
+    {
+      "id": "ov3-header-deco",
       "type": "richtext",
-      "name": "透视网格背景",
-      "x": 0,
-      "y": 0,
-      "width": 1920,
-      "height": 1080,
-      "zIndex": -29,
+      "name": "ov3-header-deco",
+      "x": 10,
+      "y": 10,
+      "width": 1900,
+      "height": 62,
+      "zIndex": 55,
       "locked": true,
       "visible": true,
       "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;overflow:hidden;background:radial-gradient(circle at 50% -8%, rgba(48,132,255,.34), transparent 32%),radial-gradient(circle at 50% 110%, rgba(48,160,255,.22), transparent 30%),linear-gradient(180deg,#061933 0%,#031026 50%,#020817 100%);\"><div style=\"position:absolute;inset:0;background-image:linear-gradient(rgba(52,136,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(52,136,255,.08) 1px,transparent 1px);background-size:60px 60px;opacity:.72;\"></div><div style=\"position:absolute;left:-8%;right:-8%;bottom:-13%;height:42%;background:radial-gradient(ellipse at center,rgba(60,173,255,.20),transparent 62%);transform:perspective(900px) rotateX(74deg);transform-origin:center bottom;\"></div><div style=\"position:absolute;inset:0;background:linear-gradient(180deg,rgba(24,88,180,.18),transparent 18%,transparent 72%,rgba(23,93,186,.14));\"></div></div>",
+        "content": "<div style=\"width:100%;height:100%;position:relative;font-family:Inter,Segoe UI,Microsoft YaHei,sans-serif;\"><div style=\"position:absolute;left:24px;top:12px;color:rgba(255,255,255,.78);font-size:13px;\">集团研发中心 · 2026 年度重点项目 · 数据更新时间 2026-04-22 21:26</div><div style=\"position:absolute;right:24px;top:10px;display:flex;gap:12px;\"><span style=\"padding:8px 14px;border-radius:14px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.24);color:rgba(255,255,255,.92);font-size:13px;\">组织：全部科室</span><span style=\"padding:8px 14px;border-radius:14px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.24);color:rgba(255,255,255,.92);font-size:13px;\">周期：近 12 个月</span><span style=\"padding:8px 14px;border-radius:14px;background:#fff;color:#10568A;font-weight:800;font-size:13px;\">管理视图</span></div></div>",
         "padding": 0,
         "overflow": "hidden"
       }
     },
     {
-      "id": "v5-header-clock",
-      "type": "datetime",
-      "name": "当前时间",
-      "x": 1690,
-      "y": 24,
-      "width": 190,
-      "height": 24,
-      "zIndex": 80,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "format": "YYYY-MM-DD HH:mm:ss",
-        "fontSize": 13,
-        "color": "#bfe8ff"
-      }
-    },
-    {
-      "id": "v5-header-deco",
-      "type": "richtext",
-      "name": "顶部装饰曲线",
-      "x": 0,
-      "y": 0,
-      "width": 1920,
-      "height": 120,
-      "zIndex": 10,
-      "locked": true,
-      "visible": true,
-      "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;pointer-events:none;\"><div style=\"position:absolute;left:0;right:0;top:0;height:6px;background:linear-gradient(90deg,transparent,#1d79ff 30%,#39d7ff 50%,#1d79ff 70%,transparent);box-shadow:0 0 20px rgba(55,151,255,.7);\"></div><svg viewBox=\"0 0 1920 120\" width=\"100%\" height=\"120\" preserveAspectRatio=\"none\" style=\"position:absolute;left:0;top:0;\"><path d=\"M120 10 C360 0 390 100 720 88 S1110 88 1200 88 C1530 100 1560 0 1800 10\" fill=\"none\" stroke=\"rgba(122,202,255,.56)\" stroke-width=\"3\"/><path d=\"M40 24 C330 4 380 94 715 99 S1110 99 1205 99 C1540 94 1590 4 1880 24\" fill=\"none\" stroke=\"rgba(122,202,255,.25)\" stroke-width=\"2\"/><path d=\"M760 103 Q960 118 1160 103\" fill=\"none\" stroke=\"rgba(255,255,255,.88)\" stroke-width=\"7\" stroke-linecap=\"round\" stroke-dasharray=\"2 10\"/></svg></div>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-nav-执行监控",
-      "type": "richtext",
-      "name": "执行监控",
-      "x": 38,
-      "y": 52,
-      "width": 132,
-      "height": 34,
-      "zIndex": 30,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<div style=\"width:100%;height:100%;clip-path:polygon(0 0,90% 0,100% 100%,10% 100%);background:linear-gradient(180deg,rgba(58,126,225,.88),rgba(18,72,150,.84));border:1px solid rgba(119,204,255,.85);box-shadow:inset 0 0 14px rgba(59,182,255,.35),0 0 10px rgba(39,138,255,.35);color:#eaf7ff;font:700 18px Microsoft YaHei, sans-serif;text-align:center;line-height:34px;text-shadow:0 2px 4px #001b42;\">执行监控</div>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-nav-质量跟进",
-      "type": "richtext",
-      "name": "质量跟进",
-      "x": 200,
-      "y": 52,
-      "width": 132,
-      "height": 34,
-      "zIndex": 30,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<div style=\"width:100%;height:100%;clip-path:polygon(0 0,90% 0,100% 100%,10% 100%);background:linear-gradient(180deg,rgba(58,126,225,.88),rgba(18,72,150,.84));border:1px solid rgba(119,204,255,.85);box-shadow:inset 0 0 14px rgba(59,182,255,.35),0 0 10px rgba(39,138,255,.35);color:#eaf7ff;font:700 18px Microsoft YaHei, sans-serif;text-align:center;line-height:34px;text-shadow:0 2px 4px #001b42;\">质量跟进</div>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-nav-技术状态",
-      "type": "richtext",
-      "name": "技术状态",
-      "x": 1586,
-      "y": 52,
-      "width": 132,
-      "height": 34,
-      "zIndex": 30,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<div style=\"width:100%;height:100%;clip-path:polygon(0 0,90% 0,100% 100%,10% 100%);background:linear-gradient(180deg,rgba(58,126,225,.88),rgba(18,72,150,.84));border:1px solid rgba(119,204,255,.85);box-shadow:inset 0 0 14px rgba(59,182,255,.35),0 0 10px rgba(39,138,255,.35);color:#eaf7ff;font:700 18px Microsoft YaHei, sans-serif;text-align:center;line-height:34px;text-shadow:0 2px 4px #001b42;\">技术状态</div>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-nav-风险预警",
-      "type": "richtext",
-      "name": "风险预警",
-      "x": 1748,
-      "y": 52,
-      "width": 132,
-      "height": 34,
-      "zIndex": 30,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<div style=\"width:100%;height:100%;clip-path:polygon(0 0,90% 0,100% 100%,10% 100%);background:linear-gradient(180deg,rgba(58,126,225,.88),rgba(18,72,150,.84));border:1px solid rgba(119,204,255,.85);box-shadow:inset 0 0 14px rgba(59,182,255,.35),0 0 10px rgba(39,138,255,.35);color:#eaf7ff;font:700 18px Microsoft YaHei, sans-serif;text-align:center;line-height:34px;text-shadow:0 2px 4px #001b42;\">风险预警</div>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-main-title",
+      "id": "ov3-title",
       "type": "title",
-      "name": "项目总览看板",
+      "name": "项目综合看板",
       "x": 660,
-      "y": 22,
+      "y": 18,
       "width": 600,
-      "height": 56,
-      "zIndex": 90,
+      "height": 40,
+      "zIndex": 70,
       "locked": false,
       "visible": true,
       "config": {
-        "text": "项目总览看板",
-        "fontSize": 42,
-        "fontWeight": "900",
+        "text": "项目综合看板",
+        "fontSize": 30,
+        "fontWeight": "780",
         "color": "#ffffff",
         "textAlign": "center"
       }
     },
     {
-      "id": "v5-title-glow",
-      "type": "richtext",
-      "name": "标题辉光",
-      "x": 740,
-      "y": 60,
-      "width": 440,
-      "height": 18,
-      "zIndex": 40,
-      "locked": true,
-      "visible": true,
+      "id": "ov3-nav-overview-shape",
+      "type": "shape",
+      "name": "综合看板",
+      "x": 600,
+      "y": 14,
+      "width": 120,
+      "height": 32,
+      "zIndex": 24,
+      "locked": false,
+      "visible": false,
       "config": {
-        "content": "<div style=\"width:100%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.95),transparent);border-radius:18px;filter:drop-shadow(0 0 8px rgba(255,255,255,.6));\"></div>",
-        "padding": 0,
-        "overflow": "hidden"
+        "shapeType": "rect",
+        "fillColor": "rgba(255,255,255,.14)",
+        "borderColor": "rgba(255,255,255,.24)",
+        "borderWidth": 1,
+        "radius": 14
       }
     },
     {
-      "id": "v5-kpi-frame-1",
-      "type": "richtext",
-      "name": "项目总数-外框",
-      "x": 50,
-      "y": 126,
-      "width": 350,
-      "height": 112,
-      "zIndex": 18,
+      "id": "ov3-nav-overview-label",
+      "type": "title",
+      "name": "综合看板",
+      "x": 24,
+      "y": 28,
+      "width": 340,
+      "height": 18,
+      "zIndex": 60,
       "locked": false,
       "visible": true,
       "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;background:linear-gradient(135deg,rgba(10,39,86,.76),rgba(17,73,139,.52));border:1px solid rgba(64,171,255,.72);box-shadow:inset 0 0 24px rgba(46,143,255,.23),0 0 20px rgba(0,0,0,.18);clip-path:polygon(0 0,96% 0,100% 92%,98% 100%,0 100%);\"><i style=\"position:absolute;left:0;top:0;width:56px;height:4px;background:#1ed4ff;box-shadow:34px 0 0 rgba(30,212,255,.8),48px 0 0 rgba(30,212,255,.5);\"></i><i style=\"position:absolute;right:0;bottom:0;border-left:10px solid transparent;border-bottom:10px solid #28bfff;\"></i></div>",
-        "padding": 0,
-        "overflow": "hidden"
+        "text": "Decision Twins · Project Command Center",
+        "fontSize": 11,
+        "fontWeight": "500",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
       }
     },
     {
-      "id": "v5-kpi-1",
+      "id": "ov3-nav-progress-shape",
+      "type": "shape",
+      "name": "进度看板",
+      "x": 730,
+      "y": 14,
+      "width": 120,
+      "height": 32,
+      "zIndex": 24,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255,255,255,.14)",
+        "borderColor": "rgba(255,255,255,.24)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "ov3-nav-progress-label",
+      "type": "title",
+      "name": "进度看板",
+      "x": 730,
+      "y": 14,
+      "width": 120,
+      "height": 32,
+      "zIndex": 25,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "text": "进度看板",
+        "fontSize": 16,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "ov3-nav-quality-shape",
+      "type": "shape",
+      "name": "质量看板",
+      "x": 860,
+      "y": 14,
+      "width": 120,
+      "height": 32,
+      "zIndex": 24,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255,255,255,.14)",
+        "borderColor": "rgba(255,255,255,.24)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "ov3-nav-quality-label",
+      "type": "title",
+      "name": "质量看板",
+      "x": 860,
+      "y": 14,
+      "width": 120,
+      "height": 32,
+      "zIndex": 25,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "text": "质量看板",
+        "fontSize": 16,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "ov3-nav-techstate-shape",
+      "type": "shape",
+      "name": "技术状态",
+      "x": 990,
+      "y": 14,
+      "width": 120,
+      "height": 32,
+      "zIndex": 24,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255,255,255,.14)",
+        "borderColor": "rgba(255,255,255,.24)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "ov3-nav-techstate-label",
+      "type": "title",
+      "name": "技术状态",
+      "x": 990,
+      "y": 14,
+      "width": 120,
+      "height": 32,
+      "zIndex": 25,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "text": "技术状态",
+        "fontSize": 16,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "ov3-nav-risk-shape",
+      "type": "shape",
+      "name": "风险看板",
+      "x": 1120,
+      "y": 14,
+      "width": 120,
+      "height": 32,
+      "zIndex": 24,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255,255,255,.14)",
+        "borderColor": "rgba(255,255,255,.24)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "ov3-nav-risk-label",
+      "type": "title",
+      "name": "风险看板",
+      "x": 1120,
+      "y": 14,
+      "width": 120,
+      "height": 32,
+      "zIndex": 25,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "text": "风险看板",
+        "fontSize": 16,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "ov3-kpi-project-total",
       "type": "number-card",
       "name": "项目总数",
-      "x": 70,
-      "y": 150,
-      "width": 220,
-      "height": 70,
-      "zIndex": 28,
+      "x": 122,
+      "y": 90,
+      "width": 264,
+      "height": 88,
+      "zIndex": 25,
       "locked": false,
       "visible": true,
       "config": {
         "title": "项目总数",
-        "value": 2,
+        "value": 8,
         "suffix": "",
         "precision": 0,
-        "titleFontSize": 18,
-        "valueFontSize": 32,
-        "titleColor": "#a9c3dc",
-        "valueColor": "#ffffff",
+        "titleFontSize": 14,
+        "valueFontSize": 34,
+        "titleColor": "#64748b",
+        "valueColor": "#2563eb",
         "backgroundColor": "transparent",
         "valueField": "项目总数"
       },
@@ -276,59 +365,25 @@
       }
     },
     {
-      "id": "v5-kpi-icon-1",
-      "type": "richtext",
-      "name": "项目总数-图标",
-      "x": 298,
-      "y": 148,
-      "width": 80,
-      "height": 80,
-      "zIndex": 35,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<svg viewBox=\"0 0 64 64\" width=\"64\" height=\"64\"><circle cx=\"32\" cy=\"32\" r=\"29\" fill=\"rgba(0,130,255,.14)\" stroke=\"#0098ff\" stroke-width=\"2\"/><circle cx=\"32\" cy=\"32\" r=\"23\" fill=\"none\" stroke=\"rgba(63,203,255,.35)\" stroke-width=\"1\"/><ellipse cx=\"32\" cy=\"20\" rx=\"14\" ry=\"6\" fill=\"#0ba9ff\"/><path stroke=\"#0fd0ff\" stroke-width=\"3\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M18 20v22c0 4 28 4 28 0V20M18 31c0 4 28 4 28 0\"/><circle cx=\"53\" cy=\"51\" r=\"3\" fill=\"#ff9d28\"/></svg>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-kpi-frame-2",
-      "type": "richtext",
-      "name": "项目完成率-外框",
-      "x": 416,
-      "y": 126,
-      "width": 350,
-      "height": 112,
-      "zIndex": 18,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;background:linear-gradient(135deg,rgba(10,39,86,.76),rgba(17,73,139,.52));border:1px solid rgba(64,171,255,.72);box-shadow:inset 0 0 24px rgba(46,143,255,.23),0 0 20px rgba(0,0,0,.18);clip-path:polygon(0 0,96% 0,100% 92%,98% 100%,0 100%);\"><i style=\"position:absolute;left:0;top:0;width:56px;height:4px;background:#1ed4ff;box-shadow:34px 0 0 rgba(30,212,255,.8),48px 0 0 rgba(30,212,255,.5);\"></i><i style=\"position:absolute;right:0;bottom:0;border-left:10px solid transparent;border-bottom:10px solid #28bfff;\"></i></div>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-kpi-2",
+      "id": "ov3-kpi-completion-rate",
       "type": "number-card",
       "name": "项目完成率",
-      "x": 436,
-      "y": 150,
-      "width": 220,
-      "height": 70,
-      "zIndex": 28,
+      "x": 498,
+      "y": 90,
+      "width": 264,
+      "height": 88,
+      "zIndex": 25,
       "locked": false,
       "visible": true,
       "config": {
         "title": "项目完成率",
-        "value": 66.7,
+        "value": 67.5,
         "suffix": "%",
         "precision": 1,
-        "titleFontSize": 18,
-        "valueFontSize": 32,
-        "titleColor": "#a9c3dc",
-        "valueColor": "#ffffff",
+        "titleFontSize": 14,
+        "valueFontSize": 34,
+        "titleColor": "#64748b",
+        "valueColor": "#16a34a",
         "backgroundColor": "transparent",
         "valueField": "项目完成率"
       },
@@ -353,59 +408,25 @@
       }
     },
     {
-      "id": "v5-kpi-icon-2",
-      "type": "richtext",
-      "name": "项目完成率-图标",
-      "x": 664,
-      "y": 148,
-      "width": 80,
-      "height": 80,
-      "zIndex": 35,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<svg viewBox=\"0 0 64 64\" width=\"64\" height=\"64\"><circle cx=\"32\" cy=\"32\" r=\"29\" fill=\"rgba(0,130,255,.14)\" stroke=\"#0098ff\" stroke-width=\"2\"/><circle cx=\"32\" cy=\"32\" r=\"23\" fill=\"none\" stroke=\"rgba(63,203,255,.35)\" stroke-width=\"1\"/><path stroke=\"#0fd0ff\" stroke-width=\"3\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M32 14 48 23 32 32 16 23 32 14Z\"/><path stroke=\"#0fd0ff\" stroke-width=\"3\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M16 34 32 43 48 34\"/><path stroke=\"#0fd0ff\" stroke-width=\"3\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M16 44 32 53 48 44\"/><circle cx=\"53\" cy=\"51\" r=\"3\" fill=\"#ff9d28\"/></svg>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-kpi-frame-3",
-      "type": "richtext",
-      "name": "未闭环质量问题-外框",
-      "x": 782,
-      "y": 126,
-      "width": 350,
-      "height": 112,
-      "zIndex": 18,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;background:linear-gradient(135deg,rgba(10,39,86,.76),rgba(17,73,139,.52));border:1px solid rgba(64,171,255,.72);box-shadow:inset 0 0 24px rgba(46,143,255,.23),0 0 20px rgba(0,0,0,.18);clip-path:polygon(0 0,96% 0,100% 92%,98% 100%,0 100%);\"><i style=\"position:absolute;left:0;top:0;width:56px;height:4px;background:#1ed4ff;box-shadow:34px 0 0 rgba(30,212,255,.8),48px 0 0 rgba(30,212,255,.5);\"></i><i style=\"position:absolute;right:0;bottom:0;border-left:10px solid transparent;border-bottom:10px solid #28bfff;\"></i></div>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-kpi-3",
+      "id": "ov3-kpi-quality-open",
       "type": "number-card",
-      "name": "未闭环质量问题",
-      "x": 802,
-      "y": 150,
-      "width": 220,
-      "height": 70,
-      "zIndex": 28,
+      "name": "未归零质量问题数",
+      "x": 874,
+      "y": 90,
+      "width": 264,
+      "height": 88,
+      "zIndex": 25,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "未闭环质量问题",
-        "value": 0,
+        "title": "未归零质量问题数",
+        "value": 5,
         "suffix": "",
         "precision": 0,
-        "titleFontSize": 18,
-        "valueFontSize": 32,
-        "titleColor": "#a9c3dc",
-        "valueColor": "#ffffff",
+        "titleFontSize": 14,
+        "valueFontSize": 34,
+        "titleColor": "#64748b",
+        "valueColor": "#d97706",
         "backgroundColor": "transparent",
         "valueField": "未闭环质量问题数"
       },
@@ -430,59 +451,25 @@
       }
     },
     {
-      "id": "v5-kpi-icon-3",
-      "type": "richtext",
-      "name": "未闭环质量问题-图标",
-      "x": 1030,
-      "y": 148,
-      "width": 80,
-      "height": 80,
-      "zIndex": 35,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<svg viewBox=\"0 0 64 64\" width=\"64\" height=\"64\"><circle cx=\"32\" cy=\"32\" r=\"29\" fill=\"rgba(0,130,255,.14)\" stroke=\"#0098ff\" stroke-width=\"2\"/><circle cx=\"32\" cy=\"32\" r=\"23\" fill=\"none\" stroke=\"rgba(63,203,255,.35)\" stroke-width=\"1\"/><circle cx=\"32\" cy=\"32\" r=\"7\" fill=\"#0ba9ff\"/><path stroke=\"#0fd0ff\" stroke-width=\"3\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M32 12v8M32 44v8M12 32h8M44 32h8M18 18l6 6M40 40l6 6M46 18l-6 6M24 40l-6 6\"/><circle cx=\"53\" cy=\"51\" r=\"3\" fill=\"#ff9d28\"/></svg>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-kpi-frame-4",
-      "type": "richtext",
-      "name": "未落实更改单-外框",
-      "x": 1148,
-      "y": 126,
-      "width": 350,
-      "height": 112,
-      "zIndex": 18,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;background:linear-gradient(135deg,rgba(10,39,86,.76),rgba(17,73,139,.52));border:1px solid rgba(64,171,255,.72);box-shadow:inset 0 0 24px rgba(46,143,255,.23),0 0 20px rgba(0,0,0,.18);clip-path:polygon(0 0,96% 0,100% 92%,98% 100%,0 100%);\"><i style=\"position:absolute;left:0;top:0;width:56px;height:4px;background:#1ed4ff;box-shadow:34px 0 0 rgba(30,212,255,.8),48px 0 0 rgba(30,212,255,.5);\"></i><i style=\"position:absolute;right:0;bottom:0;border-left:10px solid transparent;border-bottom:10px solid #28bfff;\"></i></div>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-kpi-4",
+      "id": "ov3-kpi-tech-reform",
       "type": "number-card",
-      "name": "未落实更改单",
-      "x": 1168,
-      "y": 150,
-      "width": 220,
-      "height": 70,
-      "zIndex": 28,
+      "name": "中高风险数",
+      "x": 1250,
+      "y": 90,
+      "width": 264,
+      "height": 88,
+      "zIndex": 25,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "未落实更改单",
-        "value": 5,
+        "title": "中高风险数",
+        "value": 6,
         "suffix": "",
         "precision": 0,
-        "titleFontSize": 18,
-        "valueFontSize": 32,
-        "titleColor": "#a9c3dc",
-        "valueColor": "#ffffff",
+        "titleFontSize": 14,
+        "valueFontSize": 34,
+        "titleColor": "#64748b",
+        "valueColor": "#7c3aed",
         "backgroundColor": "transparent",
         "valueField": "未整改落实技术更改单数"
       },
@@ -507,59 +494,25 @@
       }
     },
     {
-      "id": "v5-kpi-icon-4",
-      "type": "richtext",
-      "name": "未落实更改单-图标",
-      "x": 1396,
-      "y": 148,
-      "width": 80,
-      "height": 80,
-      "zIndex": 35,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<svg viewBox=\"0 0 64 64\" width=\"64\" height=\"64\"><circle cx=\"32\" cy=\"32\" r=\"29\" fill=\"rgba(0,130,255,.14)\" stroke=\"#0098ff\" stroke-width=\"2\"/><circle cx=\"32\" cy=\"32\" r=\"23\" fill=\"none\" stroke=\"rgba(63,203,255,.35)\" stroke-width=\"1\"/><path stroke=\"#0fd0ff\" stroke-width=\"3\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M22 13h17l7 7v31H22zM38 13v9h8M28 31h12M28 39h12\"/><circle cx=\"53\" cy=\"51\" r=\"3\" fill=\"#ff9d28\"/></svg>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-kpi-frame-5",
-      "type": "richtext",
-      "name": "高风险数量-外框",
-      "x": 1514,
-      "y": 126,
-      "width": 350,
-      "height": 112,
-      "zIndex": 18,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;background:linear-gradient(135deg,rgba(10,39,86,.76),rgba(17,73,139,.52));border:1px solid rgba(64,171,255,.72);box-shadow:inset 0 0 24px rgba(46,143,255,.23),0 0 20px rgba(0,0,0,.18);clip-path:polygon(0 0,96% 0,100% 92%,98% 100%,0 100%);\"><i style=\"position:absolute;left:0;top:0;width:56px;height:4px;background:#1ed4ff;box-shadow:34px 0 0 rgba(30,212,255,.8),48px 0 0 rgba(30,212,255,.5);\"></i><i style=\"position:absolute;right:0;bottom:0;border-left:10px solid transparent;border-bottom:10px solid #28bfff;\"></i></div>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-kpi-5",
+      "id": "ov3-kpi-high-risk",
       "type": "number-card",
-      "name": "高风险数量",
-      "x": 1534,
-      "y": 150,
-      "width": 220,
-      "height": 70,
-      "zIndex": 28,
+      "name": "未闭环技术状态变更",
+      "x": 1626,
+      "y": 90,
+      "width": 264,
+      "height": 88,
+      "zIndex": 25,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "高风险数量",
-        "value": 3,
+        "title": "未闭环技术状态变更",
+        "value": 4,
         "suffix": "",
         "precision": 0,
-        "titleFontSize": 18,
-        "valueFontSize": 32,
-        "titleColor": "#a9c3dc",
-        "valueColor": "#ffffff",
+        "titleFontSize": 14,
+        "valueFontSize": 34,
+        "titleColor": "#64748b",
+        "valueColor": "#dc2626",
         "backgroundColor": "transparent",
         "valueField": "高风险数量"
       },
@@ -584,126 +537,76 @@
       }
     },
     {
-      "id": "v5-kpi-icon-5",
-      "type": "richtext",
-      "name": "高风险数量-图标",
-      "x": 1762,
-      "y": 148,
-      "width": 80,
-      "height": 80,
-      "zIndex": 35,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<svg viewBox=\"0 0 64 64\" width=\"64\" height=\"64\"><circle cx=\"32\" cy=\"32\" r=\"29\" fill=\"rgba(0,130,255,.14)\" stroke=\"#0098ff\" stroke-width=\"2\"/><circle cx=\"32\" cy=\"32\" r=\"23\" fill=\"none\" stroke=\"rgba(63,203,255,.35)\" stroke-width=\"1\"/><circle cx=\"32\" cy=\"18\" r=\"5\" fill=\"#0ba9ff\"/><path stroke=\"#0fd0ff\" stroke-width=\"3\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M32 24v18M18 50l14-8 14 8M18 50l-8 4M46 50l8 4\"/><circle cx=\"53\" cy=\"51\" r=\"3\" fill=\"#ff9d28\"/></svg>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-panel-progress-project-header",
-      "type": "richtext",
-      "name": "项目节点统计-标题条",
-      "x": 32,
-      "y": 266,
-      "width": 424,
-      "height": 34,
-      "zIndex": 25,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;color:#eaf7ff;font:800 20px Microsoft YaHei,sans-serif;line-height:31px;text-shadow:0 2px 5px #001b42;\"><div style=\"position:absolute;left:0;right:0;top:8px;height:24px;background:linear-gradient(90deg,rgba(38,126,228,.86),rgba(18,77,151,.58),rgba(18,77,151,0));clip-path:polygon(18px 0,100% 0,100% 100%,0 100%);\"></div><div style=\"position:absolute;left:4px;top:0;width:8px;height:33px;background:#d9ecff;transform:skewX(-35deg);box-shadow:10px 0 0 #20bfff;\"></div><span style=\"position:absolute;left:42px;top:0;\">项目节点统计</span></div>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-panel-progress-project-body-frame",
-      "type": "richtext",
-      "name": "项目节点统计-面板背景",
-      "x": 32,
-      "y": 304,
-      "width": 424,
-      "height": 200,
-      "zIndex": 9,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;background:linear-gradient(180deg,rgba(5,28,66,.22),rgba(7,38,85,.10));border-top:1px solid rgba(77,180,255,.12);\"><div style=\"position:absolute;inset:0;background-image:linear-gradient(rgba(121,184,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(121,184,255,.05) 1px,transparent 1px);background-size:64px 34px;opacity:.65;\"></div></div>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-progress-by-project",
+      "id": "ov3-progress-by-project",
       "type": "bar-chart",
       "name": "项目节点统计",
-      "x": 54,
-      "y": 318,
-      "width": 380,
-      "height": 170,
+      "x": 468,
+      "y": 226,
+      "width": 339,
+      "height": 237,
       "zIndex": 20,
       "locked": false,
       "visible": true,
       "config": {
         "title": "",
+        "stackMode": "stack",
+        "series": [
+          {
+            "name": "已完成",
+            "data": [],
+            "color": "#2563eb"
+          },
+          {
+            "name": "未完成",
+            "data": [],
+            "color": "#60a5fa"
+          },
+          {
+            "name": "正常待完成",
+            "data": [],
+            "color": "#16a34a"
+          }
+        ],
+        "seriesColors": [
+          "#2563eb",
+          "#60a5fa",
+          "#16a34a",
+          "#d97706",
+          "#dc2626",
+          "#7c3aed"
+        ],
         "titleFontSize": 0,
-        "chartPaddingTop": 16,
-        "chartPaddingRight": 18,
-        "chartPaddingBottom": 34,
-        "chartPaddingLeft": 52,
-        "axisLabelColor": "#9cc7ef",
+        "chartPaddingTop": 8,
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 40,
+        "chartPaddingLeft": 72,
         "legend": {
           "show": true,
           "position": "bottom",
           "fontSize": 11
         },
+        "horizontal": false,
         "xAxis": {
           "show": true,
           "labelFontSize": 11,
-          "labelRotate": 0
+          "labelRotate": -20,
+          "labelColor": "#64748b"
         },
         "yAxis": {
           "show": true,
           "labelFontSize": 11,
-          "nameTruncate": false
+          "nameTruncate": false,
+          "labelColor": "#64748b"
         },
-        "horizontal": true,
-        "stackMode": "stack",
-        "categoryKey": "项目",
-        "seriesColors": [
-          "#20d17a",
-          "#2f8cff",
-          "#ffcb3d",
-          "#ff5b2f"
-        ],
+        "axisLabelColor": "#64748b",
+        "backgroundColor": "transparent",
         "colors": [
-          "#20d17a",
-          "#2f8cff",
-          "#ffcb3d",
-          "#ff5b2f"
-        ],
-        "series": [
-          {
-            "name": "按时完成",
-            "dataKey": "按时完成",
-            "data": []
-          },
-          {
-            "name": "正常待完成",
-            "dataKey": "正常待完成",
-            "data": []
-          },
-          {
-            "name": "超期完成",
-            "dataKey": "超期完成",
-            "data": []
-          },
-          {
-            "name": "超期未完成",
-            "dataKey": "超期未完成",
-            "data": []
-          }
+          "#2563eb",
+          "#60a5fa",
+          "#16a34a",
+          "#d97706",
+          "#dc2626",
+          "#7c3aed"
         ]
       },
       "dataSource": {
@@ -727,395 +630,45 @@
       }
     },
     {
-      "id": "v5-panel-quality-trend-header",
-      "type": "richtext",
-      "name": "质量问题趋势（近12个月）-标题条",
-      "x": 492,
-      "y": 266,
-      "width": 424,
-      "height": 34,
-      "zIndex": 25,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;color:#eaf7ff;font:800 20px Microsoft YaHei,sans-serif;line-height:31px;text-shadow:0 2px 5px #001b42;\"><div style=\"position:absolute;left:0;right:0;top:8px;height:24px;background:linear-gradient(90deg,rgba(38,126,228,.86),rgba(18,77,151,.58),rgba(18,77,151,0));clip-path:polygon(18px 0,100% 0,100% 100%,0 100%);\"></div><div style=\"position:absolute;left:4px;top:0;width:8px;height:33px;background:#d9ecff;transform:skewX(-35deg);box-shadow:10px 0 0 #20bfff;\"></div><span style=\"position:absolute;left:42px;top:0;\">质量问题趋势（近12个月）</span></div>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-panel-quality-trend-body-frame",
-      "type": "richtext",
-      "name": "质量问题趋势（近12个月）-面板背景",
-      "x": 492,
-      "y": 304,
-      "width": 424,
-      "height": 200,
-      "zIndex": 9,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;background:linear-gradient(180deg,rgba(5,28,66,.22),rgba(7,38,85,.10));border-top:1px solid rgba(77,180,255,.12);\"><div style=\"position:absolute;inset:0;background-image:linear-gradient(rgba(121,184,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(121,184,255,.05) 1px,transparent 1px);background-size:64px 34px;opacity:.65;\"></div></div>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-quality-trend",
-      "type": "line-chart",
-      "name": "质量问题趋势",
-      "x": 514,
-      "y": 318,
-      "width": 380,
-      "height": 170,
-      "zIndex": 20,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "",
-        "titleFontSize": 0,
-        "chartPaddingTop": 16,
-        "chartPaddingRight": 18,
-        "chartPaddingBottom": 34,
-        "chartPaddingLeft": 52,
-        "axisLabelColor": "#9cc7ef",
-        "legend": {
-          "show": true,
-          "position": "top",
-          "fontSize": 11
-        },
-        "xAxis": {
-          "show": true,
-          "labelFontSize": 11,
-          "labelRotate": 0
-        },
-        "yAxis": {
-          "show": true,
-          "labelFontSize": 11,
-          "nameTruncate": false
-        },
-        "colors": [
-          "#2f8cff",
-          "#33d6ff"
-        ],
-        "categoryKey": "月份",
-        "series": [
-          {
-            "name": "质量问题总数",
-            "dataKey": "质量问题总数",
-            "color": "#2f8cff"
-          },
-          {
-            "name": "未闭环问题",
-            "dataKey": "未闭环问题",
-            "color": "#33d6ff"
-          }
-        ]
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT s.period_month AS \"月份\", SUM(s.new_issue_cnt) AS \"质量问题总数\", SUM(s.open_issue_cnt) AS \"未闭环问题\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char(current_date - INTERVAL '11 months','YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]] GROUP BY s.period_month ORDER BY s.period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "v5-panel-tech-trend-header",
-      "type": "richtext",
-      "name": "技术变更趋势（近12个月）-标题条",
-      "x": 972,
-      "y": 266,
-      "width": 424,
-      "height": 34,
-      "zIndex": 25,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;color:#eaf7ff;font:800 20px Microsoft YaHei,sans-serif;line-height:31px;text-shadow:0 2px 5px #001b42;\"><div style=\"position:absolute;left:0;right:0;top:8px;height:24px;background:linear-gradient(90deg,rgba(38,126,228,.86),rgba(18,77,151,.58),rgba(18,77,151,0));clip-path:polygon(18px 0,100% 0,100% 100%,0 100%);\"></div><div style=\"position:absolute;left:4px;top:0;width:8px;height:33px;background:#d9ecff;transform:skewX(-35deg);box-shadow:10px 0 0 #20bfff;\"></div><span style=\"position:absolute;left:42px;top:0;\">技术变更趋势（近12个月）</span></div>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-panel-tech-trend-body-frame",
-      "type": "richtext",
-      "name": "技术变更趋势（近12个月）-面板背景",
-      "x": 972,
-      "y": 304,
-      "width": 424,
-      "height": 200,
-      "zIndex": 9,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;background:linear-gradient(180deg,rgba(5,28,66,.22),rgba(7,38,85,.10));border-top:1px solid rgba(77,180,255,.12);\"><div style=\"position:absolute;inset:0;background-image:linear-gradient(rgba(121,184,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(121,184,255,.05) 1px,transparent 1px);background-size:64px 34px;opacity:.65;\"></div></div>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-tech-change-trend",
-      "type": "line-chart",
-      "name": "技术变更趋势",
-      "x": 994,
-      "y": 318,
-      "width": 380,
-      "height": 170,
-      "zIndex": 20,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "",
-        "titleFontSize": 0,
-        "chartPaddingTop": 16,
-        "chartPaddingRight": 18,
-        "chartPaddingBottom": 34,
-        "chartPaddingLeft": 52,
-        "axisLabelColor": "#9cc7ef",
-        "legend": {
-          "show": true,
-          "position": "top",
-          "fontSize": 11
-        },
-        "xAxis": {
-          "show": true,
-          "labelFontSize": 11,
-          "labelRotate": 0
-        },
-        "yAxis": {
-          "show": true,
-          "labelFontSize": 11,
-          "nameTruncate": false
-        },
-        "colors": [
-          "#2f8cff",
-          "#33d6ff",
-          "#ff6b2d"
-        ],
-        "categoryKey": "月份",
-        "series": [
-          {
-            "name": "变更总数",
-            "dataKey": "变更总数",
-            "color": "#2f8cff"
-          },
-          {
-            "name": "未签署变更",
-            "dataKey": "未签署变更",
-            "color": "#33d6ff"
-          },
-          {
-            "name": "未落实变更",
-            "dataKey": "未落实变更",
-            "color": "#ff6b2d"
-          }
-        ]
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT s.period_month AS \"月份\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"未签署变更\", SUM(s.reform_pending_i_ii) AS \"未落实变更\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char(current_date - INTERVAL '11 months','YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]] GROUP BY s.period_month ORDER BY s.period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "v5-panel-risk-project-header",
-      "type": "richtext",
-      "name": "项目风险统计-标题条",
-      "x": 1452,
-      "y": 266,
-      "width": 424,
-      "height": 34,
-      "zIndex": 25,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;color:#eaf7ff;font:800 20px Microsoft YaHei,sans-serif;line-height:31px;text-shadow:0 2px 5px #001b42;\"><div style=\"position:absolute;left:0;right:0;top:8px;height:24px;background:linear-gradient(90deg,rgba(38,126,228,.86),rgba(18,77,151,.58),rgba(18,77,151,0));clip-path:polygon(18px 0,100% 0,100% 100%,0 100%);\"></div><div style=\"position:absolute;left:4px;top:0;width:8px;height:33px;background:#d9ecff;transform:skewX(-35deg);box-shadow:10px 0 0 #20bfff;\"></div><span style=\"position:absolute;left:42px;top:0;\">项目风险统计</span></div>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-panel-risk-project-body-frame",
-      "type": "richtext",
-      "name": "项目风险统计-面板背景",
-      "x": 1452,
-      "y": 304,
-      "width": 424,
-      "height": 200,
-      "zIndex": 9,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;background:linear-gradient(180deg,rgba(5,28,66,.22),rgba(7,38,85,.10));border-top:1px solid rgba(77,180,255,.12);\"><div style=\"position:absolute;inset:0;background-image:linear-gradient(rgba(121,184,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(121,184,255,.05) 1px,transparent 1px);background-size:64px 34px;opacity:.65;\"></div></div>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-risk-by-project",
-      "type": "bar-chart",
-      "name": "项目风险统计",
-      "x": 1474,
-      "y": 318,
-      "width": 380,
-      "height": 170,
-      "zIndex": 20,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "",
-        "titleFontSize": 0,
-        "chartPaddingTop": 16,
-        "chartPaddingRight": 18,
-        "chartPaddingBottom": 34,
-        "chartPaddingLeft": 52,
-        "axisLabelColor": "#9cc7ef",
-        "legend": {
-          "show": true,
-          "position": "bottom",
-          "fontSize": 11
-        },
-        "xAxis": {
-          "show": true,
-          "labelFontSize": 11,
-          "labelRotate": 0
-        },
-        "yAxis": {
-          "show": true,
-          "labelFontSize": 11,
-          "nameTruncate": false
-        },
-        "horizontal": true,
-        "stackMode": "stack",
-        "categoryKey": "项目",
-        "seriesColors": [
-          "#ff5b2f",
-          "#ffcb3d",
-          "#2f8cff"
-        ],
-        "colors": [
-          "#ff5b2f",
-          "#ffcb3d",
-          "#2f8cff"
-        ],
-        "series": [
-          {
-            "name": "高风险",
-            "dataKey": "高风险",
-            "data": []
-          },
-          {
-            "name": "中风险",
-            "dataKey": "中风险",
-            "data": []
-          },
-          {
-            "name": "低风险",
-            "dataKey": "低风险",
-            "data": []
-          }
-        ]
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT s.project_no AS \"项目\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') GROUP BY s.project_no ORDER BY SUM(s.total_risk_cnt) DESC LIMIT 10",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "v5-panel-progress-dept-header",
-      "type": "richtext",
-      "name": "科室项目节点统计-标题条",
-      "x": 32,
-      "y": 526,
-      "width": 424,
-      "height": 34,
-      "zIndex": 25,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;color:#eaf7ff;font:800 20px Microsoft YaHei,sans-serif;line-height:31px;text-shadow:0 2px 5px #001b42;\"><div style=\"position:absolute;left:0;right:0;top:8px;height:24px;background:linear-gradient(90deg,rgba(38,126,228,.86),rgba(18,77,151,.58),rgba(18,77,151,0));clip-path:polygon(18px 0,100% 0,100% 100%,0 100%);\"></div><div style=\"position:absolute;left:4px;top:0;width:8px;height:33px;background:#d9ecff;transform:skewX(-35deg);box-shadow:10px 0 0 #20bfff;\"></div><span style=\"position:absolute;left:42px;top:0;\">科室项目节点统计</span></div>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-panel-progress-dept-body-frame",
-      "type": "richtext",
-      "name": "科室项目节点统计-面板背景",
-      "x": 32,
-      "y": 564,
-      "width": 424,
-      "height": 200,
-      "zIndex": 9,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;background:linear-gradient(180deg,rgba(5,28,66,.22),rgba(7,38,85,.10));border-top:1px solid rgba(77,180,255,.12);\"><div style=\"position:absolute;inset:0;background-image:linear-gradient(rgba(121,184,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(121,184,255,.05) 1px,transparent 1px);background-size:64px 34px;opacity:.65;\"></div></div>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-progress-by-dept",
+      "id": "ov3-progress-by-dept",
       "type": "bar-chart",
       "name": "科室项目节点统计",
-      "x": 54,
-      "y": 578,
-      "width": 380,
-      "height": 170,
+      "x": 468,
+      "y": 519,
+      "width": 339,
+      "height": 237,
       "zIndex": 20,
       "locked": false,
       "visible": true,
       "config": {
         "title": "",
+        "horizontal": false,
+        "stackMode": "stack",
+        "series": [
+          {
+            "name": "已完成",
+            "data": [],
+            "color": "#2563eb"
+          },
+          {
+            "name": "未完成",
+            "data": [],
+            "color": "#60a5fa"
+          }
+        ],
+        "seriesColors": [
+          "#2563eb",
+          "#60a5fa",
+          "#16a34a",
+          "#d97706",
+          "#dc2626",
+          "#7c3aed"
+        ],
         "titleFontSize": 0,
-        "chartPaddingTop": 16,
-        "chartPaddingRight": 18,
-        "chartPaddingBottom": 34,
-        "chartPaddingLeft": 52,
-        "axisLabelColor": "#9cc7ef",
+        "chartPaddingTop": 8,
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 40,
+        "chartPaddingLeft": 72,
         "legend": {
           "show": true,
           "position": "bottom",
@@ -1124,49 +677,24 @@
         "xAxis": {
           "show": true,
           "labelFontSize": 11,
-          "labelRotate": 0
+          "labelRotate": -20,
+          "labelColor": "#64748b"
         },
         "yAxis": {
           "show": true,
           "labelFontSize": 11,
-          "nameTruncate": false
+          "nameTruncate": false,
+          "labelColor": "#64748b"
         },
-        "horizontal": false,
-        "stackMode": "group",
-        "categoryKey": "科室",
-        "seriesColors": [
-          "#20d17a",
-          "#2f8cff",
-          "#ffcb3d",
-          "#ff5b2f"
-        ],
+        "axisLabelColor": "#64748b",
+        "backgroundColor": "transparent",
         "colors": [
-          "#20d17a",
-          "#2f8cff",
-          "#ffcb3d",
-          "#ff5b2f"
-        ],
-        "series": [
-          {
-            "name": "按时完成",
-            "dataKey": "按时完成",
-            "data": []
-          },
-          {
-            "name": "正常待完成",
-            "dataKey": "正常待完成",
-            "data": []
-          },
-          {
-            "name": "超期完成",
-            "dataKey": "超期完成",
-            "data": []
-          },
-          {
-            "name": "超期未完成",
-            "dataKey": "超期未完成",
-            "data": []
-          }
+          "#2563eb",
+          "#60a5fa",
+          "#16a34a",
+          "#d97706",
+          "#dc2626",
+          "#7c3aed"
         ]
       },
       "dataSource": {
@@ -1190,212 +718,134 @@
       }
     },
     {
-      "id": "v5-panel-quality-pie-header",
+      "id": "ov3-quality-by-project",
       "type": "richtext",
-      "name": "质量问题占比-标题条",
-      "x": 492,
-      "y": 526,
-      "width": 424,
-      "height": 34,
-      "zIndex": 25,
+      "name": "质量问题统计",
+      "x": 833,
+      "y": 226,
+      "width": 339,
+      "height": 237,
+      "zIndex": 20,
       "locked": false,
       "visible": true,
       "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;color:#eaf7ff;font:800 20px Microsoft YaHei,sans-serif;line-height:31px;text-shadow:0 2px 5px #001b42;\"><div style=\"position:absolute;left:0;right:0;top:8px;height:24px;background:linear-gradient(90deg,rgba(38,126,228,.86),rgba(18,77,151,.58),rgba(18,77,151,0));clip-path:polygon(18px 0,100% 0,100% 100%,0 100%);\"></div><div style=\"position:absolute;left:4px;top:0;width:8px;height:33px;background:#d9ecff;transform:skewX(-35deg);box-shadow:10px 0 0 #20bfff;\"></div><span style=\"position:absolute;left:42px;top:0;\">质量问题占比</span></div>",
+        "content": "<div style=\"width:100%;height:100%;display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:22px 18px 12px;font-family:Inter,Segoe UI,Microsoft YaHei,sans-serif;color:#0f172a;\"><div style=\"display:flex;flex-direction:column;gap:12px;justify-content:center;\"><div style=\"font-size:13px;color:#64748b;\">现存问题</div><div style=\"font-size:34px;font-weight:820;color:#dc2626;\">7</div><div style=\"height:10px;background:#eef2f7;border-radius:999px;overflow:hidden;\"><div style=\"height:100%;width:76%;background:#dc2626;border-radius:999px;\"></div></div></div><div style=\"display:flex;flex-direction:column;gap:12px;justify-content:center;\"><div style=\"font-size:13px;color:#64748b;\">闭环进度</div><div style=\"font-size:34px;font-weight:820;color:#16a34a;\">82%</div><div style=\"height:10px;background:#eef2f7;border-radius:999px;overflow:hidden;\"><div style=\"height:100%;width:82%;background:#16a34a;border-radius:999px;\"></div></div></div></div>",
         "padding": 0,
         "overflow": "hidden"
       }
     },
     {
-      "id": "v5-panel-quality-pie-body-frame",
+      "id": "ov3-techstate-by-project",
       "type": "richtext",
-      "name": "质量问题占比-面板背景",
-      "x": 492,
-      "y": 564,
-      "width": 424,
-      "height": 200,
-      "zIndex": 9,
+      "name": "技术状态",
+      "x": 1563,
+      "y": 226,
+      "width": 339,
+      "height": 237,
+      "zIndex": 20,
       "locked": false,
       "visible": true,
       "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;background:linear-gradient(180deg,rgba(5,28,66,.22),rgba(7,38,85,.10));border-top:1px solid rgba(77,180,255,.12);\"><div style=\"position:absolute;inset:0;background-image:linear-gradient(rgba(121,184,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(121,184,255,.05) 1px,transparent 1px);background-size:64px 34px;opacity:.65;\"></div></div>",
+        "content": "<div style=\"width:100%;height:100%;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:32px 18px 18px;font-family:Inter,Segoe UI,Microsoft YaHei,sans-serif;\"><div style=\"border-radius:18px;background:#dbeafe;padding:16px;\"><div style=\"font-size:12px;color:#64748b;\">已签署</div><div style=\"margin-top:8px;font-size:28px;font-weight:820;color:#2563eb;\">62%</div></div><div style=\"border-radius:18px;background:#ede9fe;padding:16px;\"><div style=\"font-size:12px;color:#64748b;\">待签发</div><div style=\"margin-top:8px;font-size:28px;font-weight:820;color:#7c3aed;\">5</div></div><div style=\"border-radius:18px;background:#dcfce7;padding:16px;\"><div style=\"font-size:12px;color:#64748b;\">整改中</div><div style=\"margin-top:8px;font-size:28px;font-weight:820;color:#16a34a;\">3</div></div></div>",
         "padding": 0,
         "overflow": "hidden"
       }
     },
     {
-      "id": "v5-quality-category",
-      "type": "pie-chart",
-      "name": "质量问题占比",
-      "x": 514,
-      "y": 574,
-      "width": 380,
-      "height": 178,
+      "id": "ov3-techstate-by-dept",
+      "type": "richtext",
+      "name": "经费成本（预留）",
+      "x": 1198,
+      "y": 519,
+      "width": 339,
+      "height": 237,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "content": "<div style=\"width:100%;height:100%;display:grid;place-items:center;font-family:Inter,Segoe UI,Microsoft YaHei,sans-serif;color:#64748b;\"><div style=\"text-align:center;\"><div style=\"font-size:28px;font-weight:820;color:#2563eb;margin-bottom:8px;\">预留</div><div style=\"font-size:13px;\">后续接入经费成本数据</div></div></div>",
+        "padding": 0,
+        "overflow": "hidden"
+      }
+    },
+    {
+      "id": "ov3-risk-by-project",
+      "type": "bar-chart",
+      "name": "项目风险统计",
+      "x": 1198,
+      "y": 226,
+      "width": 339,
+      "height": 237,
       "zIndex": 20,
       "locked": false,
       "visible": true,
       "config": {
         "title": "",
-        "legend": {
-          "show": true,
-          "position": "right",
-          "fontSize": 12
-        },
-        "colors": [
-          "#2f8cff",
-          "#6cbcff",
-          "#24d26f",
-          "#ffcb3d",
-          "#c9d7e5",
-          "#7247ff",
-          "#27d8ff",
-          "#ff8f45"
+        "stackMode": "stack",
+        "series": [
+          {
+            "name": "高风险",
+            "data": [],
+            "color": "#2563eb"
+          },
+          {
+            "name": "中风险",
+            "data": [],
+            "color": "#60a5fa"
+          },
+          {
+            "name": "低风险",
+            "data": [],
+            "color": "#16a34a"
+          }
         ],
-        "categoryKey": "类别",
-        "valueKey": "数量",
+        "seriesColors": [
+          "#2563eb",
+          "#60a5fa",
+          "#16a34a",
+          "#d97706",
+          "#dc2626",
+          "#7c3aed"
+        ],
         "titleFontSize": 0,
         "chartPaddingTop": 8,
-        "chartPaddingBottom": 8,
-        "chartPaddingLeft": 8,
-        "chartPaddingRight": 8,
-        "seriesColors": [
-          "#2f8cff",
-          "#6cbcff",
-          "#24d26f",
-          "#ffcb3d",
-          "#c9d7e5",
-          "#7247ff",
-          "#27d8ff",
-          "#ff8f45"
-        ],
-        "pieInnerRadius": 0,
-        "pieOuterRadius": 78
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT v.\"类别\", v.\"数量\" FROM (SELECT '设计' AS \"类别\", SUM(s.open_cat_design) AS \"数量\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]] UNION ALL SELECT '工艺', SUM(s.open_cat_process) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]] UNION ALL SELECT '管理', SUM(s.open_cat_management) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]] UNION ALL SELECT '元器件', SUM(s.open_cat_component) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]] UNION ALL SELECT '操作', SUM(s.open_cat_operation) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]] UNION ALL SELECT '外协外购', SUM(s.open_cat_outsource) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]] UNION ALL SELECT '软件', SUM(s.open_cat_software) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]] UNION ALL SELECT '其他', SUM(s.open_cat_other) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]) v WHERE v.\"数量\" > 0",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "v5-panel-tech-dept-header",
-      "type": "richtext",
-      "name": "科室技术变更-标题条",
-      "x": 972,
-      "y": 526,
-      "width": 424,
-      "height": 34,
-      "zIndex": 25,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;color:#eaf7ff;font:800 20px Microsoft YaHei,sans-serif;line-height:31px;text-shadow:0 2px 5px #001b42;\"><div style=\"position:absolute;left:0;right:0;top:8px;height:24px;background:linear-gradient(90deg,rgba(38,126,228,.86),rgba(18,77,151,.58),rgba(18,77,151,0));clip-path:polygon(18px 0,100% 0,100% 100%,0 100%);\"></div><div style=\"position:absolute;left:4px;top:0;width:8px;height:33px;background:#d9ecff;transform:skewX(-35deg);box-shadow:10px 0 0 #20bfff;\"></div><span style=\"position:absolute;left:42px;top:0;\">科室技术变更</span></div>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-panel-tech-dept-body-frame",
-      "type": "richtext",
-      "name": "科室技术变更-面板背景",
-      "x": 972,
-      "y": 564,
-      "width": 424,
-      "height": 200,
-      "zIndex": 9,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;background:linear-gradient(180deg,rgba(5,28,66,.22),rgba(7,38,85,.10));border-top:1px solid rgba(77,180,255,.12);\"><div style=\"position:absolute;inset:0;background-image:linear-gradient(rgba(121,184,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(121,184,255,.05) 1px,transparent 1px);background-size:64px 34px;opacity:.65;\"></div></div>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-tech-dept-change",
-      "type": "bar-chart",
-      "name": "科室技术变更",
-      "x": 994,
-      "y": 578,
-      "width": 380,
-      "height": 170,
-      "zIndex": 20,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "",
-        "titleFontSize": 0,
-        "chartPaddingTop": 16,
-        "chartPaddingRight": 18,
-        "chartPaddingBottom": 34,
-        "chartPaddingLeft": 52,
-        "axisLabelColor": "#9cc7ef",
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 40,
+        "chartPaddingLeft": 40,
         "legend": {
           "show": true,
           "position": "bottom",
           "fontSize": 11
         },
+        "horizontal": false,
         "xAxis": {
           "show": true,
           "labelFontSize": 11,
-          "labelRotate": 0
+          "labelRotate": -20,
+          "labelColor": "#64748b"
         },
         "yAxis": {
           "show": true,
           "labelFontSize": 11,
+          "labelColor": "#64748b",
           "nameTruncate": false
         },
-        "horizontal": false,
-        "stackMode": "group",
-        "categoryKey": "科室",
-        "seriesColors": [
-          "#2f8cff",
-          "#33d6ff"
-        ],
+        "axisLabelColor": "#64748b",
+        "backgroundColor": "transparent",
         "colors": [
-          "#2f8cff",
-          "#33d6ff"
-        ],
-        "series": [
-          {
-            "name": "未签署",
-            "dataKey": "未签署",
-            "data": []
-          },
-          {
-            "name": "未落实整改",
-            "dataKey": "未落实整改",
-            "data": []
-          }
+          "#2563eb",
+          "#60a5fa",
+          "#16a34a",
+          "#d97706",
+          "#dc2626",
+          "#7c3aed"
         ]
       },
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COALESCE(s.dept,'未填') AS \"科室\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"未签署\", SUM(s.reform_pending_i_ii) AS \"未落实整改\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.project_no = {{projectNo}}]] GROUP BY s.dept ORDER BY SUM(s.total_change_cnt) DESC LIMIT 10",
+          "query": "SELECT s.project_no AS \"项目\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') GROUP BY s.project_no ORDER BY SUM(s.total_risk_cnt) DESC LIMIT 10",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1406,57 +856,19 @@
             {
               "name": "dateTo",
               "variableKey": "dateTo"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
             }
           ]
         }
       }
     },
     {
-      "id": "v5-panel-risk-pie-header",
-      "type": "richtext",
-      "name": "风险类型占比-标题条",
-      "x": 1452,
-      "y": 526,
-      "width": 424,
-      "height": 34,
-      "zIndex": 25,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;color:#eaf7ff;font:800 20px Microsoft YaHei,sans-serif;line-height:31px;text-shadow:0 2px 5px #001b42;\"><div style=\"position:absolute;left:0;right:0;top:8px;height:24px;background:linear-gradient(90deg,rgba(38,126,228,.86),rgba(18,77,151,.58),rgba(18,77,151,0));clip-path:polygon(18px 0,100% 0,100% 100%,0 100%);\"></div><div style=\"position:absolute;left:4px;top:0;width:8px;height:33px;background:#d9ecff;transform:skewX(-35deg);box-shadow:10px 0 0 #20bfff;\"></div><span style=\"position:absolute;left:42px;top:0;\">风险类型占比</span></div>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-panel-risk-pie-body-frame",
-      "type": "richtext",
-      "name": "风险类型占比-面板背景",
-      "x": 1452,
-      "y": 564,
-      "width": 424,
-      "height": 200,
-      "zIndex": 9,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;background:linear-gradient(180deg,rgba(5,28,66,.22),rgba(7,38,85,.10));border-top:1px solid rgba(77,180,255,.12);\"><div style=\"position:absolute;inset:0;background-image:linear-gradient(rgba(121,184,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(121,184,255,.05) 1px,transparent 1px);background-size:64px 34px;opacity:.65;\"></div></div>",
-        "padding": 0,
-        "overflow": "hidden"
-      }
-    },
-    {
-      "id": "v5-risk-category",
+      "id": "ov3-risk-by-dept",
       "type": "pie-chart",
       "name": "风险类型占比",
-      "x": 1474,
-      "y": 574,
-      "width": 380,
-      "height": 178,
+      "x": 1563,
+      "y": 519,
+      "width": 339,
+      "height": 237,
       "zIndex": 20,
       "locked": false,
       "visible": true,
@@ -1464,33 +876,46 @@
         "title": "",
         "titleFontSize": 0,
         "chartPaddingTop": 8,
-        "chartPaddingRight": 8,
-        "chartPaddingBottom": 8,
-        "chartPaddingLeft": 8,
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 16,
+        "chartPaddingLeft": 16,
         "legend": {
           "show": true,
           "position": "right",
-          "fontSize": 12
+          "fontSize": 11
         },
         "seriesColors": [
-          "#33d6ff",
-          "#2f8cff",
-          "#ffcb3d",
-          "#20d17a",
-          "#d8dee8",
-          "#ff5b2f"
+          "#2563eb",
+          "#60a5fa",
+          "#16a34a",
+          "#d97706",
+          "#dc2626",
+          "#7c3aed"
         ],
         "categoryKey": "风险类型",
         "valueKey": "数量",
-        "pieInnerRadius": 48,
-        "pieOuterRadius": 74,
+        "pieInnerRadius": 50,
+        "pieOuterRadius": 75,
+        "backgroundColor": "transparent",
+        "axisLabelColor": "#64748b",
+        "xAxis": {
+          "show": true,
+          "labelFontSize": 11,
+          "labelColor": "#64748b"
+        },
+        "yAxis": {
+          "show": true,
+          "labelFontSize": 11,
+          "labelColor": "#64748b",
+          "nameTruncate": false
+        },
         "colors": [
-          "#33d6ff",
-          "#2f8cff",
-          "#ffcb3d",
-          "#20d17a",
-          "#d8dee8",
-          "#ff5b2f"
+          "#2563eb",
+          "#60a5fa",
+          "#16a34a",
+          "#d97706",
+          "#dc2626",
+          "#7c3aed"
         ]
       },
       "dataSource": {
@@ -1514,47 +939,108 @@
       }
     },
     {
-      "id": "v5-panel-progress-detail-header",
-      "type": "richtext",
-      "name": "项目进度详情-标题条",
-      "x": 32,
-      "y": 794,
-      "width": 1844,
-      "height": 34,
-      "zIndex": 25,
+      "id": "ov3-gantt-panel",
+      "type": "shape",
+      "name": "ov3-gantt-panel",
+      "x": 10,
+      "y": 774,
+      "width": 1900,
+      "height": 296,
+      "zIndex": 1,
       "locked": false,
       "visible": true,
       "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;color:#eaf7ff;font:800 20px Microsoft YaHei,sans-serif;line-height:31px;text-shadow:0 2px 5px #001b42;\"><div style=\"position:absolute;left:0;right:0;top:8px;height:24px;background:linear-gradient(90deg,rgba(38,126,228,.86),rgba(18,77,151,.58),rgba(18,77,151,0));clip-path:polygon(18px 0,100% 0,100% 100%,0 100%);\"></div><div style=\"position:absolute;left:4px;top:0;width:8px;height:33px;background:#d9ecff;transform:skewX(-35deg);box-shadow:10px 0 0 #20bfff;\"></div><span style=\"position:absolute;left:42px;top:0;\">项目进度详情</span></div>",
-        "padding": 0,
-        "overflow": "hidden"
+        "shapeType": "rect",
+        "fillColor": "rgba(255,255,255,.96)",
+        "borderColor": "rgba(255,255,255,.65)",
+        "borderWidth": 1,
+        "radius": 22
       }
     },
     {
-      "id": "v5-panel-progress-detail-body-frame",
-      "type": "richtext",
-      "name": "项目进度详情-面板背景",
-      "x": 32,
-      "y": 832,
-      "width": 1844,
-      "height": 224,
-      "zIndex": 9,
+      "id": "ov3-gantt-title",
+      "type": "title",
+      "name": "下月重点计划",
+      "x": 26,
+      "y": 784,
+      "width": 520,
+      "height": 28,
+      "zIndex": 20,
       "locked": false,
       "visible": true,
       "config": {
-        "content": "<div style=\"width:100%;height:100%;position:relative;background:linear-gradient(180deg,rgba(5,28,66,.22),rgba(7,38,85,.10));border-top:1px solid rgba(77,180,255,.12);\"><div style=\"position:absolute;inset:0;background-image:linear-gradient(rgba(121,184,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(121,184,255,.05) 1px,transparent 1px);background-size:64px 34px;opacity:.65;\"></div></div>",
-        "padding": 0,
-        "overflow": "hidden"
+        "text": "下月重点计划",
+        "fontSize": 20,
+        "fontWeight": "780",
+        "color": "#0f172a",
+        "textAlign": "flex-start"
       }
     },
     {
-      "id": "v5-project-progress-detail",
+      "id": "ov3-gantt-legend-plan",
+      "type": "title",
+      "name": "图例-计划",
+      "x": 1310,
+      "y": 786,
+      "width": 80,
+      "height": 24,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "日",
+        "fontSize": 11,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "ov3-gantt-legend-normal",
+      "type": "title",
+      "name": "图例-正常",
+      "x": 1700,
+      "y": 786,
+      "width": 80,
+      "height": 24,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "周",
+        "fontSize": 11,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "ov3-gantt-legend-delayed",
+      "type": "title",
+      "name": "图例-延期",
+      "x": 1790,
+      "y": 786,
+      "width": 90,
+      "height": 24,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "月",
+        "fontSize": 11,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "ov3-gantt-chart",
       "type": "gantt-chart",
-      "name": "项目进度详情",
-      "x": 44,
-      "y": 844,
-      "width": 1818,
-      "height": 202,
+      "name": "下月重点计划甘特",
+      "x": 22,
+      "y": 820,
+      "width": 1876,
+      "height": 240,
       "zIndex": 20,
       "locked": false,
       "visible": true,
@@ -1562,10 +1048,10 @@
         "title": "",
         "renderMode": "board-hierarchical",
         "drillMode": "modal",
-        "defaultZoom": "quarter",
-        "sideTextColor": "#e9f4ff",
-        "backgroundColor": "transparent",
-        "titleColor": "#e6f6ff"
+        "defaultZoom": "month",
+        "sideTextColor": "#0f172a",
+        "backgroundColor": "#ffffff",
+        "titleColor": "#0f172a"
       },
       "dataSource": {
         "type": "sql",
@@ -1588,20 +1074,726 @@
       }
     },
     {
-      "id": "v5-corner-tools",
+      "id": "ov3-kpi-ring-1",
       "type": "richtext",
-      "name": "右下工具按钮",
-      "x": 1826,
-      "y": 900,
-      "width": 60,
-      "height": 60,
-      "zIndex": 55,
+      "name": "ov3-kpi-ring-1",
+      "x": 32,
+      "y": 92,
+      "width": 78,
+      "height": 78,
+      "zIndex": 30,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "content": "<div style=\"width:100%;height:100%;display:grid;place-items:center;pointer-events:none;\"><div style=\"width:62px;height:62px;border-radius:18px;background:#dbeafe;color:#2563eb;display:grid;place-items:center;font:800 24px Inter,Segoe UI,Microsoft YaHei,sans-serif;box-shadow:0 8px 22px rgba(15,23,42,.08);\">项</div></div>",
+        "padding": 0,
+        "overflow": "hidden"
+      }
+    },
+    {
+      "id": "ov3-kpi-ring-2",
+      "type": "richtext",
+      "name": "ov3-kpi-ring-2",
+      "x": 408,
+      "y": 92,
+      "width": 78,
+      "height": 78,
+      "zIndex": 30,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "content": "<div style=\"width:100%;height:100%;display:grid;place-items:center;pointer-events:none;\"><div style=\"width:62px;height:62px;border-radius:18px;background:#dcfce7;color:#16a34a;display:grid;place-items:center;font:800 24px Inter,Segoe UI,Microsoft YaHei,sans-serif;box-shadow:0 8px 22px rgba(15,23,42,.08);\">%</div></div>",
+        "padding": 0,
+        "overflow": "hidden"
+      }
+    },
+    {
+      "id": "ov3-kpi-ring-3",
+      "type": "richtext",
+      "name": "ov3-kpi-ring-3",
+      "x": 784,
+      "y": 92,
+      "width": 78,
+      "height": 78,
+      "zIndex": 30,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "content": "<div style=\"width:100%;height:100%;display:grid;place-items:center;pointer-events:none;\"><div style=\"width:62px;height:62px;border-radius:18px;background:#fef3c7;color:#d97706;display:grid;place-items:center;font:800 24px Inter,Segoe UI,Microsoft YaHei,sans-serif;box-shadow:0 8px 22px rgba(15,23,42,.08);\">Q</div></div>",
+        "padding": 0,
+        "overflow": "hidden"
+      }
+    },
+    {
+      "id": "ov3-kpi-ring-4",
+      "type": "richtext",
+      "name": "ov3-kpi-ring-4",
+      "x": 1160,
+      "y": 92,
+      "width": 78,
+      "height": 78,
+      "zIndex": 30,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "content": "<div style=\"width:100%;height:100%;display:grid;place-items:center;pointer-events:none;\"><div style=\"width:62px;height:62px;border-radius:18px;background:#ede9fe;color:#7c3aed;display:grid;place-items:center;font:800 24px Inter,Segoe UI,Microsoft YaHei,sans-serif;box-shadow:0 8px 22px rgba(15,23,42,.08);\">变</div></div>",
+        "padding": 0,
+        "overflow": "hidden"
+      }
+    },
+    {
+      "id": "ov3-kpi-ring-5",
+      "type": "richtext",
+      "name": "ov3-kpi-ring-5",
+      "x": 1536,
+      "y": 92,
+      "width": 78,
+      "height": 78,
+      "zIndex": 30,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "content": "<div style=\"width:100%;height:100%;display:grid;place-items:center;pointer-events:none;\"><div style=\"width:62px;height:62px;border-radius:18px;background:#fee2e2;color:#dc2626;display:grid;place-items:center;font:800 24px Inter,Segoe UI,Microsoft YaHei,sans-serif;box-shadow:0 8px 22px rgba(15,23,42,.08);\">!</div></div>",
+        "padding": 0,
+        "overflow": "hidden"
+      }
+    },
+    {
+      "id": "ov3-kpi-bg-1",
+      "type": "shape",
+      "name": "ov3-kpi-bg-1",
+      "x": 24,
+      "y": 84,
+      "width": 370,
+      "height": 100,
+      "zIndex": 15,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255,255,255,.96)",
+        "borderColor": "rgba(255,255,255,.65)",
+        "borderWidth": 1,
+        "radius": 22
+      }
+    },
+    {
+      "id": "ov3-kpi-bg-2",
+      "type": "shape",
+      "name": "ov3-kpi-bg-2",
+      "x": 400,
+      "y": 84,
+      "width": 370,
+      "height": 100,
+      "zIndex": 15,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255,255,255,.96)",
+        "borderColor": "rgba(255,255,255,.65)",
+        "borderWidth": 1,
+        "radius": 22
+      }
+    },
+    {
+      "id": "ov3-kpi-bg-3",
+      "type": "shape",
+      "name": "ov3-kpi-bg-3",
+      "x": 776,
+      "y": 84,
+      "width": 370,
+      "height": 100,
+      "zIndex": 15,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255,255,255,.96)",
+        "borderColor": "rgba(255,255,255,.65)",
+        "borderWidth": 1,
+        "radius": 22
+      }
+    },
+    {
+      "id": "ov3-kpi-bg-4",
+      "type": "shape",
+      "name": "ov3-kpi-bg-4",
+      "x": 1152,
+      "y": 84,
+      "width": 370,
+      "height": 100,
+      "zIndex": 15,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255,255,255,.96)",
+        "borderColor": "rgba(255,255,255,.65)",
+        "borderWidth": 1,
+        "radius": 22
+      }
+    },
+    {
+      "id": "ov3-kpi-bg-5",
+      "type": "shape",
+      "name": "ov3-kpi-bg-5",
+      "x": 1528,
+      "y": 84,
+      "width": 370,
+      "height": 100,
+      "zIndex": 15,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255,255,255,.96)",
+        "borderColor": "rgba(255,255,255,.65)",
+        "borderWidth": 1,
+        "radius": 22
+      }
+    },
+    {
+      "id": "ov3-info-list-panel",
+      "type": "shape",
+      "name": "ov3-info-list-panel",
+      "x": 10,
+      "y": 188,
+      "width": 440,
+      "height": 576,
+      "zIndex": 10,
       "locked": false,
       "visible": true,
       "config": {
-        "content": "<div style=\"width:60px;height:60px;border-radius:50%;background:linear-gradient(180deg,#61a9ee,#3477bf);box-shadow:0 0 24px rgba(66,158,240,.45);color:white;font:900 26px Arial;text-align:center;line-height:60px;\">*</div>",
-        "padding": 0,
-        "overflow": "hidden"
+        "shapeType": "rect",
+        "fillColor": "rgba(255,255,255,.96)",
+        "borderColor": "rgba(255,255,255,.65)",
+        "borderWidth": 1,
+        "radius": 22
+      }
+    },
+    {
+      "id": "ov3-info-list-panel-title",
+      "type": "title",
+      "name": "项目基本信息",
+      "x": 24,
+      "y": 198,
+      "width": 412,
+      "height": 22,
+      "zIndex": 21,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "项目基本信息",
+        "fontSize": 14,
+        "fontWeight": "780",
+        "color": "#0f172a",
+        "textAlign": "left"
+      }
+    },
+    {
+      "id": "ov3-info-list",
+      "type": "table",
+      "name": "项目基本信息列表",
+      "x": 22,
+      "y": 232,
+      "width": 416,
+      "height": 520,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "showHeader": true,
+        "headerBGC": "#f8fafc",
+        "oddRowBGC": "#ffffff",
+        "evenRowBGC": "#f8fafc",
+        "rowNum": 8,
+        "waitTime": 2500,
+        "headerHeight": 36,
+        "fontSize": 13,
+        "color": "#334155",
+        "header": [
+          "项目名称",
+          "项目两总",
+          "项目经费(万)"
+        ],
+        "columnWidth": [
+          180,
+          130,
+          106
+        ],
+        "align": [
+          "left",
+          "left",
+          "right"
+        ],
+        "data": [
+          [
+            "S10-A 总体型号",
+            "张三 / 李四",
+            "12,800"
+          ],
+          [
+            "S10-B 配套子系统",
+            "王五 / 赵六",
+            "8,640"
+          ],
+          [
+            "S10-C 关键单机",
+            "陈七 / 周八",
+            "5,920"
+          ],
+          [
+            "S10-D 改进型号",
+            "吴九 / 郑十",
+            "4,150"
+          ],
+          [
+            "S10-E 平台预研",
+            "孙十一 / 钱十二",
+            "3,200"
+          ],
+          [
+            "S10-F 关键技术攻关",
+            "杨十三 / 朱十四",
+            "2,860"
+          ],
+          [
+            "S10-G 试验保障",
+            "高十五 / 林十六",
+            "1,920"
+          ],
+          [
+            "S10-H 维护升级",
+            "黄十七 / 何十八",
+            "1,150"
+          ]
+        ],
+        "sourceType": "static",
+        "headerColor": "#334155",
+        "stripeColor": "#f8fafc",
+        "backgroundColor": "#ffffff",
+        "bodyColor": "#334155",
+        "titleFontSize": 0,
+        "freezeHeader": true
+      }
+    },
+    {
+      "id": "ov3-cell-c1r1",
+      "type": "shape",
+      "name": "ov3-cell-c1r1",
+      "x": 460,
+      "y": 188,
+      "width": 355,
+      "height": 283,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255,255,255,.96)",
+        "borderColor": "rgba(255,255,255,.65)",
+        "borderWidth": 1,
+        "radius": 22
+      }
+    },
+    {
+      "id": "ov3-cell-c1r1-title",
+      "type": "title",
+      "name": "项目节点统计",
+      "x": 474,
+      "y": 198,
+      "width": 327,
+      "height": 22,
+      "zIndex": 21,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "项目节点统计",
+        "fontSize": 14,
+        "fontWeight": "780",
+        "color": "#0f172a",
+        "textAlign": "left"
+      }
+    },
+    {
+      "id": "ov3-cell-c1r2",
+      "type": "shape",
+      "name": "ov3-cell-c1r2",
+      "x": 460,
+      "y": 481,
+      "width": 355,
+      "height": 283,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255,255,255,.96)",
+        "borderColor": "rgba(255,255,255,.65)",
+        "borderWidth": 1,
+        "radius": 22
+      }
+    },
+    {
+      "id": "ov3-cell-c1r2-title",
+      "type": "title",
+      "name": "科室任务完成统计",
+      "x": 474,
+      "y": 491,
+      "width": 327,
+      "height": 22,
+      "zIndex": 21,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "科室任务完成统计",
+        "fontSize": 14,
+        "fontWeight": "780",
+        "color": "#0f172a",
+        "textAlign": "left"
+      }
+    },
+    {
+      "id": "ov3-cell-c2r1",
+      "type": "shape",
+      "name": "ov3-cell-c2r1",
+      "x": 825,
+      "y": 188,
+      "width": 355,
+      "height": 283,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255,255,255,.96)",
+        "borderColor": "rgba(255,255,255,.65)",
+        "borderWidth": 1,
+        "radius": 22
+      }
+    },
+    {
+      "id": "ov3-cell-c2r1-title",
+      "type": "title",
+      "name": "质量问题统计",
+      "x": 839,
+      "y": 198,
+      "width": 327,
+      "height": 22,
+      "zIndex": 21,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "质量问题统计",
+        "fontSize": 14,
+        "fontWeight": "780",
+        "color": "#0f172a",
+        "textAlign": "left"
+      }
+    },
+    {
+      "id": "ov3-cell-c2r2",
+      "type": "shape",
+      "name": "ov3-cell-c2r2",
+      "x": 825,
+      "y": 481,
+      "width": 355,
+      "height": 283,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255,255,255,.96)",
+        "borderColor": "rgba(255,255,255,.65)",
+        "borderWidth": 1,
+        "radius": 22
+      }
+    },
+    {
+      "id": "ov3-cell-c2r2-title",
+      "type": "title",
+      "name": "物料采购",
+      "x": 839,
+      "y": 491,
+      "width": 327,
+      "height": 22,
+      "zIndex": 21,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "物料采购",
+        "fontSize": 14,
+        "fontWeight": "780",
+        "color": "#0f172a",
+        "textAlign": "left"
+      }
+    },
+    {
+      "id": "ov3-cell-c3r1",
+      "type": "shape",
+      "name": "ov3-cell-c3r1",
+      "x": 1190,
+      "y": 188,
+      "width": 355,
+      "height": 283,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255,255,255,.96)",
+        "borderColor": "rgba(255,255,255,.65)",
+        "borderWidth": 1,
+        "radius": 22
+      }
+    },
+    {
+      "id": "ov3-cell-c3r1-title",
+      "type": "title",
+      "name": "项目风险统计",
+      "x": 1204,
+      "y": 198,
+      "width": 327,
+      "height": 22,
+      "zIndex": 21,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "项目风险统计",
+        "fontSize": 14,
+        "fontWeight": "780",
+        "color": "#0f172a",
+        "textAlign": "left"
+      }
+    },
+    {
+      "id": "ov3-cell-c3r2",
+      "type": "shape",
+      "name": "ov3-cell-c3r2",
+      "x": 1190,
+      "y": 481,
+      "width": 355,
+      "height": 283,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255,255,255,.96)",
+        "borderColor": "rgba(255,255,255,.65)",
+        "borderWidth": 1,
+        "radius": 22
+      }
+    },
+    {
+      "id": "ov3-cell-c3r2-title",
+      "type": "title",
+      "name": "经费成本（预留）",
+      "x": 1204,
+      "y": 491,
+      "width": 327,
+      "height": 22,
+      "zIndex": 21,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "经费成本（预留）",
+        "fontSize": 14,
+        "fontWeight": "780",
+        "color": "#0f172a",
+        "textAlign": "left"
+      }
+    },
+    {
+      "id": "ov3-cell-c4r1",
+      "type": "shape",
+      "name": "ov3-cell-c4r1",
+      "x": 1555,
+      "y": 188,
+      "width": 355,
+      "height": 283,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255,255,255,.96)",
+        "borderColor": "rgba(255,255,255,.65)",
+        "borderWidth": 1,
+        "radius": 22
+      }
+    },
+    {
+      "id": "ov3-cell-c4r1-title",
+      "type": "title",
+      "name": "技术状态",
+      "x": 1569,
+      "y": 198,
+      "width": 327,
+      "height": 22,
+      "zIndex": 21,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "技术状态",
+        "fontSize": 14,
+        "fontWeight": "780",
+        "color": "#0f172a",
+        "textAlign": "left"
+      }
+    },
+    {
+      "id": "ov3-cell-c4r2",
+      "type": "shape",
+      "name": "ov3-cell-c4r2",
+      "x": 1555,
+      "y": 481,
+      "width": 355,
+      "height": 283,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255,255,255,.96)",
+        "borderColor": "rgba(255,255,255,.65)",
+        "borderWidth": 1,
+        "radius": 22
+      }
+    },
+    {
+      "id": "ov3-cell-c4r2-title",
+      "type": "title",
+      "name": "风险类型占比",
+      "x": 1569,
+      "y": 491,
+      "width": 327,
+      "height": 22,
+      "zIndex": 21,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "风险类型占比",
+        "fontSize": 14,
+        "fontWeight": "780",
+        "color": "#0f172a",
+        "textAlign": "left"
+      }
+    },
+    {
+      "id": "ov3-procurement-by-dept",
+      "type": "bar-chart",
+      "name": "物料采购",
+      "x": 833,
+      "y": 519,
+      "width": 339,
+      "height": 237,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "stackMode": "group",
+        "horizontal": false,
+        "seriesColors": [
+          "#2563eb",
+          "#60a5fa",
+          "#16a34a",
+          "#d97706",
+          "#dc2626",
+          "#7c3aed"
+        ],
+        "chartPaddingTop": 24,
+        "chartPaddingRight": 12,
+        "chartPaddingBottom": 28,
+        "chartPaddingLeft": 40,
+        "legend": {
+          "show": true,
+          "position": "top",
+          "fontSize": 11
+        },
+        "xAxis": {
+          "show": true,
+          "labelFontSize": 11,
+          "labelRotate": -15,
+          "labelColor": "#64748b"
+        },
+        "yAxis": {
+          "show": true,
+          "labelFontSize": 11,
+          "labelColor": "#64748b",
+          "nameTruncate": false
+        },
+        "axisLabelColor": "#64748b",
+        "series": [
+          {
+            "name": "合同签订数",
+            "data": [],
+            "color": "#2563eb"
+          },
+          {
+            "name": "合同延期数",
+            "data": [],
+            "color": "#60a5fa"
+          },
+          {
+            "name": "应付未付项",
+            "data": [],
+            "color": "#16a34a"
+          }
+        ],
+        "sourceType": "static",
+        "staticData": [
+          {
+            "科室": "总体设计",
+            "合同签订数": 12,
+            "合同延期数": 1,
+            "应付未付项": 2
+          },
+          {
+            "科室": "结构机构",
+            "合同签订数": 8,
+            "合同延期数": 0,
+            "应付未付项": 1
+          },
+          {
+            "科室": "控制电气",
+            "合同签订数": 10,
+            "合同延期数": 2,
+            "应付未付项": 3
+          },
+          {
+            "科室": "动力推进",
+            "合同签订数": 6,
+            "合同延期数": 1,
+            "应付未付项": 1
+          },
+          {
+            "科室": "测试保障",
+            "合同签订数": 9,
+            "合同延期数": 0,
+            "应付未付项": 0
+          },
+          {
+            "科室": "工艺制造",
+            "合同签订数": 14,
+            "合同延期数": 3,
+            "应付未付项": 4
+          }
+        ],
+        "categoryKey": "科室",
+        "titleFontSize": 0,
+        "backgroundColor": "transparent",
+        "colors": [
+          "#2563eb",
+          "#60a5fa",
+          "#16a34a",
+          "#d97706",
+          "#dc2626",
+          "#7c3aed"
+        ]
       }
     }
   ],
