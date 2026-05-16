@@ -16,8 +16,7 @@ management:
 
 dts:
   metrics:
-    enabled: ${DTS_METRICS_ENABLED:true}
-    edition: ${DTS_EDITION:professional}
+    edition: ${DTS_EDITION:foundation}
     service-name: ${DTS_METRICS_SERVICE_NAME:dts-metrics}
     platform:
       base-url: ${DTS_PLATFORM_BASE_URL:http://dts-platform:8081}

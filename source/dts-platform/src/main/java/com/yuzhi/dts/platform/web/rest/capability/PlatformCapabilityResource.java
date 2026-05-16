@@ -21,11 +21,11 @@ public class PlatformCapabilityResource {
     @GetMapping("/capabilities")
     public Map<String, Object> capabilities() {
         Map<String, Object> metrics = new LinkedHashMap<>();
-        metrics.put("enabled", metricsProperties.isEnabled());
+        metrics.put("enabled", true);
         metrics.put("edition", metricsProperties.getEdition());
         metrics.put("apiBasePath", metricsProperties.getApiBasePath());
         metrics.put("serviceName", metricsProperties.getServiceName());
-        metrics.put("mode", metricsProperties.isEnabled() ? "remote-service" : "disabled");
+        metrics.put("mode", "remote-service");
 
         Map<String, Object> capabilities = new LinkedHashMap<>();
         capabilities.put("edition", metricsProperties.getEdition());

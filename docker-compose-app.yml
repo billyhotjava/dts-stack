@@ -796,8 +796,7 @@ services:
         condition: service_healthy
         required: true
     environment:
-      DTS_EDITION: ${DTS_EDITION:-professional}
-      DTS_METRICS_ENABLED: ${DTS_METRICS_ENABLED:-true}
+      DTS_EDITION: ${DTS_EDITION:-foundation}
       DTS_METRICS_SERVICE_NAME: ${DTS_METRICS_SERVICE_NAME:-dts-metrics}
       DTS_METRICS_TO_PLATFORM: ${DTS_METRICS_TO_PLATFORM:-${DTS_ADMIN_SERVICE_TOKEN:-}}
       DTS_PLATFORM_API_PATH: ${DTS_PLATFORM_API_PATH:-/api}
@@ -827,9 +826,6 @@ services:
     networks:
       dts-core: null
     ports: []
-    profiles:
-      - professional
-      - enterprise
     restart: unless-stopped
     security_opt:
       - seccomp=unconfined
@@ -1235,7 +1231,6 @@ services:
       DTS_INGESTION_SERVICE_NAME: ${DTS_INGESTION_SERVICE_NAME:-dts-platform}
       DTS_METRICS_API_BASE_PATH: ${DTS_METRICS_API_BASE_PATH:-/api/metrics}
       DTS_METRICS_EDITION: ${DTS_EDITION:-foundation}
-      DTS_METRICS_ENABLED: ${DTS_METRICS_ENABLED:-false}
       DTS_METRICS_SERVICE_NAME: ${DTS_METRICS_SERVICE_NAME:-dts-metrics}
       DTS_JDBC_DRIVER_CLASS: org.apache.hive.jdbc.HiveDriver
       DTS_JDBC_DRIVER_JAR: quark-driver-8.37.3.jar

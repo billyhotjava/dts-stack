@@ -5,21 +5,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "dts.metrics")
 public class DtsMetricsCapabilityProperties {
 
-    private boolean enabled = false;
-
     private String edition = "foundation";
 
     private String apiBasePath = "/api/metrics";
 
     private String serviceName = "dts-metrics";
-
-    public boolean isEnabled() {
-        return enabled;
-    }
-
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
-    }
 
     public String getEdition() {
         return edition;

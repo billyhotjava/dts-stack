@@ -847,7 +847,6 @@ generate_env_base(){
 
   # ---------- Edition / optional service capabilities ----------
   : "${DTS_EDITION:=foundation}"
-  : "${DTS_METRICS_ENABLED:=false}"
   : "${DTS_METRICS_SERVICE_NAME:=dts-metrics}"
   : "${DTS_METRICS_API_BASE_PATH:=/api/metrics}"
 
@@ -1279,7 +1278,6 @@ IMAGE_DTS_ANALYTICS=${IMAGE_DTS_ANALYTICS}
 
 # ====== 可选能力 ======
 DTS_EDITION=${DTS_EDITION}
-DTS_METRICS_ENABLED=${DTS_METRICS_ENABLED}
 DTS_METRICS_SERVICE_NAME=${DTS_METRICS_SERVICE_NAME}
 DTS_METRICS_API_BASE_PATH=${DTS_METRICS_API_BASE_PATH}
 EOF

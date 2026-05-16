@@ -3,10 +3,10 @@
 ## 设计原则
 
 1. platform 是唯一事实源：IAM、资产、数据源、权限、审计、审批、事件和 dbt 发布入口都保留在 platform。
-2. dts-metrics 是可选增值服务：负责指标语义建模、行业指标包、DWS/ADS 生成和 BI Dataset 注册。
+2. dts-metrics 是独立增值服务：负责指标语义建模、行业指标包、DWS/ADS 生成和 BI Dataset 注册；当前版本默认部署，授权限制后续由 license 模块统一处理。
 3. 合作方不接触平台源码：合作方通过 `metric-pack`、配置台和审核流程交付行业指标。
 4. SQL 由 `dts-metrics` 受控生成、由 platform/dbt 发布门禁审核：第一版不接受合作方任意 SQL，只接受受控 DSL。
-5. 基础版可独立交付：关闭 metrics 后，数据源、ELT、dbt、资产目录和 SQL/dbt 工作流不受影响。
+5. 平台主链路可独立演进：数据源、ELT、dbt、资产目录和 SQL/dbt 工作流不依赖 metrics 内部实现。
 
 ## 服务边界
 
@@ -112,6 +112,6 @@ metric-pack/
 ## 回滚策略
 
 - platform 保留 `/api/semantic/**` 兼容代理一个 Sprint。
-- 代理优先转发到 `dts-metrics`，服务不可用时按配置返回友好禁用状态，不默认执行旧逻辑。
+- 代理优先转发到 `dts-metrics`，服务不可用时返回明确服务异常，不默认执行旧逻辑。
 - 已发布 dbt artifact 保留版本记录，回滚时按 publish record 恢复上一版。
 - metric-pack 发布必须可撤销，撤销动作只影响指标配置和生成物，不删除底层明细资产。

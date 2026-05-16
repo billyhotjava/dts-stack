@@ -8,23 +8,13 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "dts.metrics")
 public class DtsMetricsProperties {
 
-    private boolean enabled = true;
-
     @NotBlank
-    private String edition = "professional";
+    private String edition = "foundation";
 
     @NotBlank
     private String serviceName = "dts-metrics";
 
     private final Platform platform = new Platform();
-
-    public boolean isEnabled() {
-        return enabled;
-    }
-
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
-    }
 
     public String getEdition() {
         return edition;
