@@ -428,3 +428,23 @@
 **实施计划**: `worklog/v2.2.3/sprint-30-202605/assets/implementation-plan.md`
 **性能要求**: 正式链路需支撑 100MB-500MB / 几十万到 1,000,000 行 CSV；当前 DTS 需完成 F5 性能准入后才能对外承诺。
 **关键决策**: Sprint-30 不做 Parquet；正式版交换格式为治理后的 CSV 训练快照包，包含 `manifest.json`、`schema.json`、`quality_report.json`、`lineage.json`、`data.csv`。
+
+## Sprint-31: 企业级数据平台主链路补齐 (202605)
+**状态**: READY
+**类型**: Architecture / Implementation（dts-platform + dts-ingestion + dts-analytics + dts-platform-webapp）
+**目标**: 基于全量模块评审，把 DTS 从“数据接入、dbt 建模、资产目录、语义指标、大屏消费的初级功能集合”收敛成一条可验收的企业级数据产品主链路：连接器接入、ODS/DWD/DWS/ADS、发布门禁、运行血缘、资产治理、语义指标、BI/大屏消费、platform 统一权限。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-golden-path-contract | P0 | 5 | READY |
+| F2-connector-center-hardening | P0 | 5 | READY |
+| F3-runtime-lineage-governance | P0 | 6 | READY |
+| F4-dbt-release-gate | P0 | 5 | READY |
+| F5-semantic-metric-productization | P0 | 6 | READY |
+| F6-platform-permission-consumption | P0 | 5 | READY |
+| F7-observability-performance-admission | P1 | 5 | READY |
+
+**统计**: READY=37, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**设计文档**: `worklog/v2.2.3/sprint-31-202605/README.md`
+**评审报告**: `worklog/v2.2.3/sprint-31-202605/assets/full-code-review.md`
+**集成测试**: `worklog/v2.2.3/sprint-31-202605/it/README.md`

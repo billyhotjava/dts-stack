@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import { getOrgTree, type OrgNode } from "@/api/services/directoryService";
 import {
 	Alert,
 	Button,
 	Card,
 	Divider,
+	Dropdown,
 	Form,
 	Input,
 	InputNumber,
@@ -27,6 +28,7 @@ import {
 	ExperimentOutlined,
 	CheckCircleOutlined,
 	CloseCircleOutlined,
+	MoreOutlined,
 	SearchOutlined,
 	RollbackOutlined,
 } from "@ant-design/icons";
@@ -132,12 +134,12 @@ const isFileSource = (type?: string) => {
 
 const API_TYPES = new Set(["api", "http", "https", "http_api", "api_http", "rest", "rest_api", "httpreader"]);
 
-const isApiSourceType = (type?: string) => {
+export const isApiSourceType = (type?: string) => {
 	const normalized = normalizeType(type);
 	return Boolean(normalized && API_TYPES.has(normalized));
 };
 
-const isAdminManagedSource = (source?: InfraDataSource | null) => {
+export const isAdminManagedSource = (source?: InfraDataSource | null) => {
 	if (!source) return false;
 	// Check props flag (set by BiadminDataSourceInitializer)
 	if (source.props?.source === "admin-data-lake") return true;
@@ -349,6 +351,8 @@ const defaultOdsWizardConfig = (record?: InfraDataSource | null): OdsWizardConfi
 
 export default function DataSourcesPage() {
 	const navigate = useNavigate();
+	const [searchParams, setSearchParams] = useSearchParams();
+	const autoEditHandledRef = useRef<string | null>(null);
 	const [list, setList] = useState<InfraDataSource[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [connectors, setConnectors] = useState<InfraConnector[]>([]);
@@ -487,6 +491,27 @@ export default function DataSourcesPage() {
 		loadDrivers();
 		loadDepts();
 	}, []);
+
+	// 详情页『编辑』按钮通过 ?edit=:id 回跳到此页 → 列表加载完成后自动弹编辑 Modal
+	useEffect(() => {
+		const editId = searchParams.get("edit");
+		if (!editId || list.length === 0) return;
+		if (autoEditHandledRef.current === editId) return;
+		const record = list.find((item) => String(item.id) === editId);
+		if (!record) return;
+		autoEditHandledRef.current = editId;
+		openEdit(record);
+		setSearchParams(
+			(prev) => {
+				const next = new URLSearchParams(prev);
+				next.delete("edit");
+				return next;
+			},
+			{ replace: true },
+		);
+		// openEdit/setSearchParams 是 stable 引用，列表 + searchParams 是真正的触发源
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [searchParams, list]);
 
 	useEffect(() => {
 		if (!editing || drivers.length === 0) return;
@@ -1306,7 +1331,22 @@ export default function DataSourcesPage() {
 
 	const columns = useMemo(
 			() => [
-				{ title: "名称", dataIndex: "name", key: "name", width: 180, fixed: "left" as const, sorter: (a: InfraDataSource, b: InfraDataSource) => (a.name || "").localeCompare(b.name || "") },
+				{
+					title: "名称",
+					dataIndex: "name",
+					key: "name",
+					width: 180,
+					fixed: "left" as const,
+					sorter: (a: InfraDataSource, b: InfraDataSource) => (a.name || "").localeCompare(b.name || ""),
+					render: (value: string, record: InfraDataSource) =>
+						record.id ? (
+							<a onClick={() => navigate(`/foundation/data-sources/${encodeURIComponent(String(record.id))}`)}>
+								{value || "—"}
+							</a>
+						) : (
+							value || "—"
+						),
+				},
 				{
 					title: "连接器",
 					dataIndex: "connectorName",
@@ -1353,29 +1393,46 @@ export default function DataSourcesPage() {
 			{
 				title: "操作",
 				key: "action",
-				width: 540,
+				width: 240,
 				fixed: "right" as const,
 				render: (_: any, record: InfraDataSource) => {
 					const adminManaged = isAdminManagedSource(record);
 					const apiSource = isApiSourceType(record.type);
-					const actionBtnStyle = { width: 96 } as const;
+					// 高频按钮留在行内；低频/危险操作收进 ⋯ 下拉，把操作列从 540px 压缩到 240px
+					const moreItems = [
+						...(!apiSource
+							? [
+									{
+										key: "schema-discover",
+										icon: <SearchOutlined />,
+										label: schemaDiscoveringId === record.id ? "探测中..." : "Schema 探测",
+										disabled: schemaDiscoveringId === record.id,
+										onClick: () => {
+											void handleSchemaDiscover(record);
+										},
+									},
+								]
+							: []),
+						...(record.id
+							? [
+									{
+										key: "rollback",
+										icon: <RollbackOutlined />,
+										label: "全链路回退",
+										danger: true,
+										onClick: () => {
+											setRollbackRequest({ level: 3, scope: "datasource", dataSourceId: record.id });
+											setRollbackOpen(true);
+										},
+									},
+								]
+							: []),
+					];
 					return (
 						<Space size={4} wrap={false}>
-							{!apiSource && (
-								<Button
-									size="small"
-									icon={<SearchOutlined />}
-									style={actionBtnStyle}
-									loading={schemaDiscoveringId === record.id}
-									onClick={() => handleSchemaDiscover(record)}
-								>
-									探测
-								</Button>
-							)}
 							<Button
 								size="small"
 								icon={<ExperimentOutlined />}
-								style={actionBtnStyle}
 								loading={testingId === record.id}
 								onClick={() => handleTest(record)}
 							>
@@ -1384,9 +1441,8 @@ export default function DataSourcesPage() {
 							<Button
 								size="small"
 								icon={<EditOutlined />}
-								style={actionBtnStyle}
 								disabled={adminManaged}
-								onClick={() => openEdit(record)}
+								onClick={() => navigate(`/foundation/data-sources/${encodeURIComponent(String(record.id))}`)}
 							>
 								编辑
 							</Button>
@@ -1394,25 +1450,15 @@ export default function DataSourcesPage() {
 								size="small"
 								danger
 								icon={<DeleteOutlined />}
-								style={actionBtnStyle}
 								disabled={adminManaged}
 								onClick={() => handleDelete(record)}
 							>
 								删除
 							</Button>
-							{record.id && (
-								<Button
-									size="small"
-									danger
-									icon={<RollbackOutlined />}
-									style={actionBtnStyle}
-									onClick={() => {
-										setRollbackRequest({ level: 3, scope: "datasource", dataSourceId: record.id });
-										setRollbackOpen(true);
-									}}
-								>
-									全链路回退
-								</Button>
+							{moreItems.length > 0 && (
+								<Dropdown menu={{ items: moreItems }} trigger={["click"]} placement="bottomRight">
+									<Button size="small" icon={<MoreOutlined />} aria-label="更多操作" />
+								</Dropdown>
 							)}
 						</Space>
 					);
