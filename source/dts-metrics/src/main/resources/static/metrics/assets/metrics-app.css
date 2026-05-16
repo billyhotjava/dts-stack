@@ -1,0 +1,327 @@
+:root {
+	color-scheme: light;
+	font-family:
+		Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	background: #f5f7fb;
+	color: #1f2937;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	min-width: 320px;
+	background: #f5f7fb;
+}
+
+a {
+	color: inherit;
+	text-decoration: none;
+}
+
+.app-shell {
+	min-height: 100vh;
+}
+
+.topbar {
+	position: sticky;
+	top: 0;
+	z-index: 10;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 24px;
+	padding: 18px 28px;
+	border-bottom: 1px solid #d9e2ef;
+	background: rgba(255, 255, 255, 0.96);
+	backdrop-filter: blur(8px);
+}
+
+.topbar h1,
+.hero h2,
+.panel h3 {
+	margin: 0;
+	font-weight: 700;
+	letter-spacing: 0;
+}
+
+.topbar h1 {
+	font-size: 22px;
+}
+
+.eyebrow {
+	margin: 0 0 6px;
+	color: #64748b;
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+}
+
+.service-pill {
+	display: inline-flex;
+	align-items: center;
+	min-height: 32px;
+	padding: 0 12px;
+	border: 1px solid #cbd5e1;
+	border-radius: 18px;
+	background: #ffffff;
+	color: #475569;
+	font-size: 13px;
+	white-space: nowrap;
+}
+
+.service-pill.ok {
+	border-color: #86efac;
+	background: #f0fdf4;
+	color: #166534;
+}
+
+.service-pill.warn {
+	border-color: #fdba74;
+	background: #fff7ed;
+	color: #9a3412;
+}
+
+.layout {
+	display: grid;
+	grid-template-columns: 244px minmax(0, 1fr);
+	align-items: start;
+}
+
+.side-nav {
+	position: sticky;
+	top: 73px;
+	height: calc(100vh - 73px);
+	padding: 18px 14px;
+	overflow: auto;
+	border-right: 1px solid #d9e2ef;
+	background: #ffffff;
+}
+
+.nav-group {
+	margin-bottom: 18px;
+}
+
+.nav-group-title {
+	margin: 0 0 8px;
+	padding: 0 10px;
+	color: #64748b;
+	font-size: 12px;
+	font-weight: 700;
+}
+
+.nav-link {
+	display: block;
+	margin-bottom: 4px;
+	padding: 9px 10px;
+	border-radius: 6px;
+	color: #475569;
+	font-size: 14px;
+}
+
+.nav-link:hover,
+.nav-link.active {
+	background: #e8f0fe;
+	color: #1d4ed8;
+}
+
+.content {
+	min-width: 0;
+	padding: 24px;
+}
+
+.hero,
+.panel,
+.card {
+	border: 1px solid #d9e2ef;
+	border-radius: 8px;
+	background: #ffffff;
+}
+
+.hero {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 20px;
+	padding: 24px;
+}
+
+.hero h2 {
+	font-size: 28px;
+}
+
+.hero p {
+	max-width: 760px;
+	margin: 8px 0 0;
+	color: #475569;
+	line-height: 1.7;
+}
+
+.hero-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	justify-content: flex-end;
+}
+
+.button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 34px;
+	padding: 0 12px;
+	border: 1px solid #cbd5e1;
+	border-radius: 6px;
+	background: #ffffff;
+	color: #334155;
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.button.primary {
+	border-color: #2563eb;
+	background: #2563eb;
+	color: #ffffff;
+}
+
+.grid {
+	display: grid;
+	gap: 16px;
+}
+
+.cards {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	margin: 18px 0;
+}
+
+.card {
+	padding: 16px;
+}
+
+.card-label {
+	margin: 0 0 8px;
+	color: #64748b;
+	font-size: 12px;
+	font-weight: 700;
+}
+
+.card-value {
+	margin: 0;
+	color: #0f172a;
+	font-size: 22px;
+	font-weight: 700;
+	overflow-wrap: anywhere;
+}
+
+.panel {
+	padding: 22px;
+}
+
+.panel h3 {
+	font-size: 18px;
+}
+
+.panel p {
+	color: #475569;
+	line-height: 1.7;
+}
+
+.steps {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 12px;
+	margin-top: 16px;
+}
+
+.step {
+	padding: 14px;
+	border: 1px solid #d9e2ef;
+	border-radius: 8px;
+	background: #f8fafc;
+}
+
+.step strong {
+	display: block;
+	margin-bottom: 6px;
+	color: #1f2937;
+}
+
+.step span {
+	color: #64748b;
+	font-size: 13px;
+	line-height: 1.6;
+}
+
+.manifest-grid {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 16px;
+	margin-top: 16px;
+}
+
+textarea,
+pre {
+	width: 100%;
+	min-height: 320px;
+	margin: 0;
+	padding: 14px;
+	border: 1px solid #cbd5e1;
+	border-radius: 8px;
+	background: #0f172a;
+	color: #e2e8f0;
+	font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+	overflow: auto;
+}
+
+textarea {
+	background: #ffffff;
+	color: #1f2937;
+	resize: vertical;
+}
+
+.toolbar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 12px;
+}
+
+.message {
+	margin-top: 12px;
+	padding: 10px 12px;
+	border-radius: 6px;
+	background: #f1f5f9;
+	color: #475569;
+	font-size: 13px;
+}
+
+@media (max-width: 960px) {
+	.layout {
+		grid-template-columns: 1fr;
+	}
+
+	.side-nav {
+		position: static;
+		height: auto;
+		border-right: 0;
+		border-bottom: 1px solid #d9e2ef;
+	}
+
+	.cards,
+	.steps,
+	.manifest-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.hero,
+	.topbar {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.hero-actions {
+		justify-content: flex-start;
+	}
+}

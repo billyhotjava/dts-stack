@@ -46,10 +46,10 @@ platform-webapp shell
 | F2 | platform 契约、服务鉴权与事实源边界 | P0 | 5 | IN_PROGRESS | F1 |
 | F3 | 指标领域模型、DSL 与安全生成 | P0 | 6 | READY | F1, F2 |
 | F4 | metric-pack 合作方交付工作流 | P0 | 5 | READY | F3 |
-| F5 | platform-webapp 入口、版本开关与兼容代理 | P0 | 5 | READY | F1, F2 |
+| F5 | platform-webapp 入口、版本开关与兼容代理 | P0 | 5 | IN_PROGRESS | F1, F2 |
 | F6 | 迁移、回滚、集成测试与运维验收 | P0 | 6 | READY | F1-F5 |
 
-**统计**: READY=22, IN_PROGRESS=10, DONE=0, BLOCKED=0
+**统计**: READY=17, IN_PROGRESS=15, DONE=0, BLOCKED=0
 
 ## 交付分级
 

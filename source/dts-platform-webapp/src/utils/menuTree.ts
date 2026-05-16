@@ -74,6 +74,7 @@ export const isExternalPath = (path: string): boolean => {
 	return (
 		lower.startsWith("/dashboards") ||
 		lower.startsWith("/screen") ||
+		lower.startsWith("/metrics") ||
 		lower.startsWith("/dashboard/hetu")
 	);
 };

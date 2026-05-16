@@ -1,5 +1,5 @@
-import { lazy, Suspense } from "react";
-import type { RouteObject } from "react-router";
+import { lazy, Suspense, useEffect } from "react";
+import { useLocation, type RouteObject } from "react-router";
 import { LineLoading } from "@/components/loading";
 
 // ── Platform pages ──
@@ -13,23 +13,6 @@ const AssetOwnershipPage = lazy(() => import("@/pages/governance/AssetOwnershipP
 const AssetGrantPage = lazy(() => import("@/pages/governance/AssetGrantPage"));
 const MyGrantsPage = lazy(() => import("@/pages/governance/MyGrantsPage"));
 const PermissionAuditPage = lazy(() => import("@/pages/governance/PermissionAuditPage"));
-const MetricOperationsPage = lazy(() => import("@/pages/metrics/MetricOperationsPage"));
-const MetricCenterPage = lazy(() => import("@/pages/metrics/MetricCenterPage"));
-const MetricDictionaryPage = lazy(() => import("@/pages/metrics/MetricDictionaryPage"));
-const SemanticModelingCenterPage = lazy(() => import("@/pages/modeling/SemanticModelingCenterPage"));
-const SemanticSubjectsPage = lazy(() => import("@/pages/modeling/SemanticSubjectsPage"));
-const SemanticObjectsPage = lazy(() => import("@/pages/modeling/SemanticObjectsPage"));
-const SemanticMetricsPage = lazy(() => import("@/pages/modeling/SemanticMetricsPage"));
-const SemanticModelsPage = lazy(() => import("@/pages/modeling/SemanticModelsPage"));
-const SemanticPublishPage = lazy(() => import("@/pages/modeling/SemanticPublishPage"));
-const SemanticRunsPage = lazy(() => import("@/pages/modeling/SemanticRunsPage"));
-const MetricsSemanticOverviewPage = lazy(() => import("@/pages/metrics/semantic/SemanticOverviewPage"));
-const MetricsSemanticSubjectsPage = lazy(() => import("@/pages/metrics/semantic/SemanticSubjectsPage"));
-const MetricsSemanticObjectsPage = lazy(() => import("@/pages/metrics/semantic/SemanticObjectsPage"));
-const MetricsSemanticDesignerPage = lazy(() => import("@/pages/metrics/semantic/SemanticMetricDesignerPage"));
-const MetricsSemanticDatasetsPage = lazy(() => import("@/pages/metrics/semantic/SemanticDatasetsPage"));
-const MetricsSemanticPublishPage = lazy(() => import("@/pages/metrics/semantic/SemanticPublishPage"));
-const MetricsSemanticRunsPage = lazy(() => import("@/pages/metrics/semantic/SemanticRunsPage"));
 const LineagePage = lazy(() => import("@/pages/catalog/LineagePage"));
 const PlatformEventObservabilityPage = lazy(() => import("@/pages/ops/PlatformEventObservabilityPage"));
 const AuditEvidencePage = lazy(() => import("@/pages/ops/AuditEvidencePage"));
@@ -69,6 +52,30 @@ const S = ({ children }: { children: React.ReactNode }) => (
 	<Suspense fallback={<LineLoading />}>{children}</Suspense>
 );
 
+const legacyMetricsPath = (pathname: string) => {
+	if (pathname === "/modeling/semantic-center") return "/metrics/semantic";
+	if (pathname.startsWith("/modeling/semantic-center/")) {
+		return pathname.replace("/modeling/semantic-center", "/metrics/semantic");
+	}
+	if (pathname === "/bi/semantic-modeling") return "/metrics/semantic";
+	return pathname;
+};
+
+const MetricsServiceRedirect = () => {
+	const location = useLocation();
+
+	useEffect(() => {
+		const targetPath = legacyMetricsPath(location.pathname);
+		const target = `${targetPath}${location.search}${location.hash}`;
+		const marker = `dts-metrics-redirect:${target}`;
+		if (window.sessionStorage.getItem(marker) === "1") return;
+		window.sessionStorage.setItem(marker, "1");
+		window.location.assign(target);
+	}, [location.hash, location.pathname, location.search]);
+
+	return <LineLoading />;
+};
+
 export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	// ── Platform ──
 	{ path: "explore/etl", element: <S><EltConsolePage /></S> },
@@ -90,31 +97,17 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{ path: "catalog/lineage/columns", element: <S><LineagePage section="columns" /></S> },
 	{ path: "catalog/lineage/import", element: <S><LineagePage section="import" /></S> },
 	{ path: "catalog/lineage/diff", element: <S><LineagePage section="diff" /></S> },
-	{ path: "metrics", element: <S><MetricOperationsPage /></S> },
-	{ path: "metrics/operations", element: <S><MetricOperationsPage /></S> },
-	{ path: "metrics/center", element: <S><MetricCenterPage /></S> },
-	{ path: "metrics/dictionary", element: <S><MetricDictionaryPage /></S> },
-	{ path: "metrics/semantic", element: <S><MetricsSemanticOverviewPage /></S> },
-	{ path: "metrics/semantic/subjects", element: <S><MetricsSemanticSubjectsPage /></S> },
-	{ path: "metrics/semantic/objects", element: <S><MetricsSemanticObjectsPage /></S> },
-	{ path: "metrics/semantic/metrics", element: <S><MetricsSemanticDesignerPage /></S> },
-	{ path: "metrics/semantic/models", element: <S><MetricsSemanticDatasetsPage /></S> },
-	{ path: "metrics/semantic/publish", element: <S><MetricsSemanticPublishPage /></S> },
-	{ path: "metrics/semantic/runs", element: <S><MetricsSemanticRunsPage /></S> },
+	{ path: "metrics", element: <MetricsServiceRedirect /> },
+	{ path: "metrics/*", element: <MetricsServiceRedirect /> },
 	{ path: "ops/events", element: <S><PlatformEventObservabilityPage /></S> },
 	{ path: "platform/events", element: <S><PlatformEventObservabilityPage /></S> },
 	{ path: "ops/audit-evidence", element: <S><AuditEvidencePage /></S> },
 	{ path: "platform/audit-evidence", element: <S><AuditEvidencePage /></S> },
 	{ path: "ops/release-governance", element: <S><ReleaseGovernancePage /></S> },
 	{ path: "platform/release-governance", element: <S><ReleaseGovernancePage /></S> },
-	{ path: "modeling/semantic-center", element: <S><SemanticModelingCenterPage /></S> },
-	{ path: "modeling/semantic-center/subjects", element: <S><SemanticSubjectsPage /></S> },
-	{ path: "modeling/semantic-center/objects", element: <S><SemanticObjectsPage /></S> },
-	{ path: "modeling/semantic-center/metrics", element: <S><SemanticMetricsPage /></S> },
-	{ path: "modeling/semantic-center/models", element: <S><SemanticModelsPage /></S> },
-	{ path: "modeling/semantic-center/publish", element: <S><SemanticPublishPage /></S> },
-	{ path: "modeling/semantic-center/runs", element: <S><SemanticRunsPage /></S> },
-	{ path: "bi/semantic-modeling", element: <S><SemanticModelingCenterPage /></S> },
+	{ path: "modeling/semantic-center", element: <MetricsServiceRedirect /> },
+	{ path: "modeling/semantic-center/*", element: <MetricsServiceRedirect /> },
+	{ path: "bi/semantic-modeling", element: <MetricsServiceRedirect /> },
 
 	// ── Analytics (all routes statically registered — no dependency on menu API) ──
 	{ path: "bi", element: <S><AnalyticsHomePage /></S> },

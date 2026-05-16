@@ -1,5 +1,10 @@
-import MetricCenterPage from "@/pages/metrics/MetricCenterPage";
+import { useEffect } from "react";
+import { LineLoading } from "@/components/loading";
 
 export default function IndicatorCenterPage() {
-	return <MetricCenterPage />;
+	useEffect(() => {
+		window.location.assign("/metrics/center");
+	}, []);
+
+	return <LineLoading />;
 }

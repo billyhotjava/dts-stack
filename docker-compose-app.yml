@@ -823,6 +823,12 @@ services:
       - traefik.http.routers.dts-metrics-api.priority=260
       - traefik.http.services.dts-metrics-api.loadbalancer.server.port=8084
       - traefik.http.routers.dts-metrics-api.middlewares=platform-forward-auth@file,cors-allow@file,security-headers@file
+      - traefik.http.routers.dts-metrics-ui.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/metrics`)
+      - traefik.http.routers.dts-metrics-ui.entrypoints=websecure
+      - traefik.http.routers.dts-metrics-ui.tls=true
+      - traefik.http.routers.dts-metrics-ui.priority=255
+      - traefik.http.routers.dts-metrics-ui.service=dts-metrics-api
+      - traefik.http.routers.dts-metrics-ui.middlewares=platform-forward-auth@file,cors-allow@file,security-headers@file
     networks:
       dts-core: null
     ports: []
@@ -1382,7 +1388,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=dts-core
-      - traefik.http.routers.dts-platform-ui.rule=Host(`${HOST_PLATFORM_UI}`) && !PathPrefix(`/api`) && !PathPrefix(`/admin/api`) && !PathPrefix(`/analytics`) && !PathPrefix(`/bi/api`) && !PathPrefix(`/screen`) && !PathPrefix(`/dashboards`) && !PathPrefix(`/system`) && !PathPrefix(`/tdv`) && !PathPrefix(`/account`) && !PathPrefix(`/hetu`) && !PathPrefix(`/static`)
+      - traefik.http.routers.dts-platform-ui.rule=Host(`${HOST_PLATFORM_UI}`) && !PathPrefix(`/api`) && !PathPrefix(`/admin/api`) && !PathPrefix(`/analytics`) && !PathPrefix(`/bi/api`) && !PathPrefix(`/screen`) && !PathPrefix(`/dashboards`) && !PathPrefix(`/system`) && !PathPrefix(`/tdv`) && !PathPrefix(`/account`) && !PathPrefix(`/hetu`) && !PathPrefix(`/metrics`) && !PathPrefix(`/static`)
       - traefik.http.routers.dts-platform-ui.priority=100
       - traefik.http.routers.dts-platform-ui.entrypoints=websecure
       - traefik.http.routers.dts-platform-ui.tls=true

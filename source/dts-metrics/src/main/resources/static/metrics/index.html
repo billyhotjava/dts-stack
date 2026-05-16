@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>DTS 指标与语义中心</title>
+		<link rel="stylesheet" href="/metrics/assets/metrics-app.css" />
+		<script src="/metrics/assets/metrics-app.js" defer></script>
+	</head>
+	<body>
+		<div class="app-shell">
+			<header class="topbar">
+				<div>
+					<p class="eyebrow">DTS Metrics Service</p>
+					<h1>指标与语义中心</h1>
+				</div>
+				<div class="service-pill" id="service-status">检查服务中</div>
+			</header>
+
+			<div class="layout">
+				<nav class="side-nav" aria-label="指标与语义中心导航" id="route-nav"></nav>
+				<main class="content">
+					<section class="hero">
+						<div>
+							<p class="eyebrow" id="route-stage">Metric Modeling</p>
+							<h2 id="route-title">指标工作台</h2>
+							<p id="route-description">加载中</p>
+						</div>
+						<div class="hero-actions">
+							<a class="button" href="/metrics/dictionary">指标字典</a>
+							<a class="button primary" href="/metrics/semantic/metrics">配置指标</a>
+						</div>
+					</section>
+
+					<section class="grid cards" id="summary-cards"></section>
+
+					<section class="panel" id="route-panel"></section>
+				</main>
+			</div>
+		</div>
+	</body>
+</html>

@@ -1,5 +1,10 @@
-import MetricDictionaryPage from "@/pages/metrics/MetricDictionaryPage";
+import { useEffect } from "react";
+import { LineLoading } from "@/components/loading";
 
 export default function IndicatorsPage() {
-	return <MetricDictionaryPage />;
+	useEffect(() => {
+		window.location.assign("/metrics/dictionary");
+	}, []);
+
+	return <LineLoading />;
 }
