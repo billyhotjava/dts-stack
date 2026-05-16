@@ -1,0 +1,19 @@
+dashboards:
+  - dashboard_code: flower_rental_overview
+    dashboard_name: 花卉租赁经营总览
+    dataset_code: flower_rental_overview_dataset
+    charts:
+      - chart_code: contract_amount_kpi
+        chart_name: 合同金额
+        chart_type: kpi
+        metric: contract_amount
+      - chart_code: collection_rate_trend
+        chart_name: 回款率趋势
+        chart_type: line
+        x_axis: stat_month
+        y_axis: collection_rate
+      - chart_code: dept_contract_rank
+        chart_name: 部门合同金额排名
+        chart_type: bar
+        x_axis: dept_id
+        y_axis: contract_amount

@@ -1,0 +1,38 @@
+pack_id: flower-rental
+pack_name: 花卉租赁经营指标包
+version: 0.1.0
+industry: flower_rental
+author: partner-demo
+compatible_dts_versions:
+  - ">=2.2.3"
+edition_required: professional
+description: 用于验证 metric-pack v0.1 的最小行业包草案，覆盖合同、项目、费用和风险总览。
+files:
+  domains: domains.yml
+  business_objects: business-objects.yml
+  dimensions: dimensions.yml
+  metrics: metrics.yml
+  models: models.yml
+  datasets: datasets.yml
+  dashboards: dashboards.yml
+dependencies:
+  platform_assets:
+    - asset_code: dwd_flower_contract_detail
+      asset_type: DATASET
+      required_columns:
+        - contract_id
+        - customer_id
+        - dept_id
+        - contract_amount
+        - received_amount
+        - contract_status
+        - sign_date
+    - asset_code: dwd_flower_project_detail
+      asset_type: DATASET
+      required_columns:
+        - project_id
+        - contract_id
+        - dept_id
+        - project_status
+        - risk_level
+        - plan_end_date

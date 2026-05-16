@@ -1,0 +1,53 @@
+models:
+  - model_code: dws_flower_contract_month_summary
+    model_name: 花卉租赁合同月度汇总
+    model_type: DWS
+    source_assets:
+      - dwd_flower_contract_detail
+    grain:
+      - stat_month
+      - dept_id
+      - contract_status
+    dimensions:
+      - stat_month
+      - dept_id
+      - contract_status
+    metrics:
+      - contract_cnt
+      - contract_amount
+      - collection_rate
+    materialization: table
+  - model_code: dws_flower_project_risk_month_summary
+    model_name: 花卉租赁项目风险月度汇总
+    model_type: DWS
+    source_assets:
+      - dwd_flower_project_detail
+    grain:
+      - stat_month
+      - dept_id
+      - risk_level
+    dimensions:
+      - stat_month
+      - dept_id
+      - risk_level
+    metrics:
+      - high_risk_project_cnt
+    materialization: table
+  - model_code: ads_flower_rental_overview
+    model_name: 花卉租赁经营总览数据集
+    model_type: ADS
+    source_models:
+      - dws_flower_contract_month_summary
+      - dws_flower_project_risk_month_summary
+    grain:
+      - stat_month
+      - dept_id
+    dimensions:
+      - stat_month
+      - dept_id
+    metrics:
+      - contract_cnt
+      - contract_amount
+      - collection_rate
+      - high_risk_project_cnt
+    materialization: table

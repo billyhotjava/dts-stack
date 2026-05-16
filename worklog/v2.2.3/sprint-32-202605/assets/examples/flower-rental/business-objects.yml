@@ -1,0 +1,11 @@
+business_objects:
+  - object_code: rental_contract
+    object_name: 租赁合同
+    domain_code: flower_rental
+    primary_asset_code: dwd_flower_contract_detail
+    primary_key: contract_id
+  - object_code: rental_project
+    object_name: 租赁项目
+    domain_code: flower_rental
+    primary_asset_code: dwd_flower_project_detail
+    primary_key: project_id

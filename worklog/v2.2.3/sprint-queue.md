@@ -449,3 +449,23 @@
 **设计文档**: `worklog/v2.2.3/sprint-31-202605/README.md`
 **评审报告**: `worklog/v2.2.3/sprint-31-202605/assets/full-code-review.md`
 **集成测试**: `worklog/v2.2.3/sprint-31-202605/it/README.md`
+
+## Sprint-32: dts-metrics 独立服务落地 (202605)
+**状态**: READY
+**类型**: Architecture / Implementation（dts-metrics + dts-platform + dts-platform-webapp）
+**目标**: 在 Sprint-31 完成基础链路和拆分边界后，把语义指标中心抽出为可选 `dts-metrics` 服务，让基础版保留 ELT + 数据资产 + SQL/dbt，专业版启用指标语义建模和合作方行业指标包。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-service-shell-and-deployment | P0 | 5 | READY |
+| F2-platform-contracts-and-auth | P0 | 5 | READY |
+| F3-metric-domain-and-dsl | P0 | 6 | READY |
+| F4-metric-pack-partner-workflow | P0 | 5 | READY |
+| F5-webapp-routing-and-editions | P0 | 5 | READY |
+| F6-migration-compatibility-and-it | P0 | 6 | READY |
+
+**统计**: READY=32, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**设计文档**: `worklog/v2.2.3/sprint-32-202605/README.md`
+**服务拆分设计**: `worklog/v2.2.3/sprint-32-202605/assets/dts-metrics-service-design.md`
+**规划评审**: `worklog/v2.2.3/sprint-32-202605/assets/sprint-32-review.md`
+**集成测试**: `worklog/v2.2.3/sprint-32-202605/it/README.md`

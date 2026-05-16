@@ -1,0 +1,5 @@
+domains:
+  - domain_code: flower_rental
+    domain_name: 花卉租赁
+    owner: 经营管理部
+    description: 面向花卉租赁业务的经营、合同、费用和项目风险分析。

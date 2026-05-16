@@ -26,9 +26,9 @@
   -> dbt STG / DWD / DWS / ADS
   -> 发布门禁（compile/test/build + schema contract + lineage diff）
   -> Catalog / OpenMetadata / OpenLineage
-  -> 语义指标中心（业务对象 + 维度 + 指标 + 应用数据集）
-  -> BI Dataset / 大屏 / API
   -> platform asset_grant / 数据密级 / 审计 / 运行观测
+  -> platform-webapp 基础版入口
+  -> 可选增值能力：dts-metrics / dts-analytics
 ```
 
 ## Feature 列表
@@ -39,7 +39,7 @@
 | F2 | Connector Center 企业级补齐 | P0 | 5 | READY | F1 |
 | F3 | 运行血缘与资产治理闭环 | P0 | 6 | READY | F1, F2 |
 | F4 | dbt 发布门禁与模型资产同步 | P0 | 5 | READY | F1, F3 |
-| F5 | 语义指标中心产品化 | P0 | 6 | READY | F1, F4 |
+| F5 | 语义指标服务拆分准备 | P0 | 6 | READY | F1, F4 |
 | F6 | 消费层发布与 platform 权限统一 | P0 | 5 | READY | F5 |
 | F7 | 观测、审计与性能准入 | P1 | 5 | READY | F1-F6 |
 
@@ -59,7 +59,7 @@
 - [ ] Connector Center 对 JDBC / 文件 / API 的能力边界在页面和 API 上明确，JDBC 主链路无 silent failure，文件/API 有可追踪任务契约。
 - [ ] OpenLineage / dbt manifest / Addax lineage 统一写入 Catalog，自动创建的资产必须有治理状态，不能默默成为可用资产。
 - [ ] dbt 发布从 warning-only 升级为可配置阻断门禁，至少对生产模式阻断失败测试、缺失 schema 合约和过期构建证据。
-- [ ] 语义指标中心支持标准指标公式 DSL、DWS/ADS 生成、预览、审核、发布、BI 注册、血缘注册的完整闭环。
+- [ ] 语义指标能力从 platform 基础链路中抽出清晰边界：基础版可关闭，platform 只保留入口、权限、资产、审计和发布契约，完整 `dts-metrics` 独立服务进入 Sprint-32。
 - [ ] analytics 大屏读写权限以 platform `asset_grant` 为唯一事实源；本地 fallback 命中必须有告警和迁移报表。
 - [ ] 关键链路具备审计、运行指标、性能边界和 IT 证据。
 
