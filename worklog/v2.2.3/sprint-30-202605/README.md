@@ -1,9 +1,15 @@
 # Sprint-30: 地铁小模型 CSV 训练快照正式版 (202605)
 
 **时间**: 2026-05  
-**状态**: IN_PROGRESS  
+**状态**: ABANDONED（废弃）
 **类型**: Implementation（dts-ingestion / dts-platform / dbt package / metro-stack）  
 **目标**: 把演示版地铁 LSTM 小模型链路升级为可交付的 CSV 训练快照闭环：运营商 CSV 经 DTS 入湖、dbt 治理建模和专家经验融合后，导出标准训练快照包，metro-stack 按契约读取快照并训练。
+
+## 废弃说明
+
+2026-05-16 决策：正式实现需要同时完成 DTS 训练快照导出、metro-stack 真实快照消费、端到端验收和 100MB-500MB / 百万行 CSV 性能准入，复杂度已超出 v2.2.3 维护分支目标。本 Sprint 在 v2.2.3 分支废弃，不再继续作为交付范围推进。
+
+后续新 feature 统一回到 `main` 主干重新规划和开发，`v2.2.3` 分支仅保留维护、缺陷修复和必要兼容性调整。
 
 ## 背景
 
@@ -57,13 +63,13 @@
 
 | ID | Feature | 优先级 | Task 数 | 状态 | 依赖 |
 |----|---------|--------|---------|------|------|
-| F1 | CSV 训练快照契约与 dbt 包 | P0 | 2 | DONE | - |
-| F2 | DTS 训练快照导出服务/API | P0 | 3 | READY | F1 |
-| F3 | metro-stack 真实快照消费 | P0 | 3 | IN_PROGRESS | F1, F2 |
-| F4 | 端到端集成验收 | P0 | 3 | READY | F1, F2, F3, F5 |
-| F5 | 大 CSV 性能准入 | P0 | 5 | IN_PROGRESS | F1, F2, F3 |
+| F1 | CSV 训练快照契约与 dbt 包 | P0 | 2 | DONE（已归档） | - |
+| F2 | DTS 训练快照导出服务/API | P0 | 3 | ABANDONED | F1 |
+| F3 | metro-stack 真实快照消费 | P0 | 3 | ABANDONED | F1, F2 |
+| F4 | 端到端集成验收 | P0 | 3 | ABANDONED | F1, F2, F3, F5 |
+| F5 | 大 CSV 性能准入 | P0 | 5 | ABANDONED | F1, F2, F3 |
 
-**统计**: READY=12, IN_PROGRESS=0, DONE=4, BLOCKED=0
+**统计**: ABANDONED=1 sprint；已完成并归档=F1；不再继续推进=F2/F3/F4/F5
 
 ## 非目标
 
@@ -73,6 +79,8 @@
 - 不把 demo contract 当正式数据源。
 
 ## 完成标准
+
+> 本 Sprint 已废弃，下列条目仅作为历史范围记录，不再作为 v2.2.3 交付验收标准。
 
 - [x] `thales/v1` dbt 包中的地铁训练模型明确输出 CSV snapshot contract 所需字段。
 - [ ] DTS 后端提供训练快照导出 API，能产出五件套快照包。

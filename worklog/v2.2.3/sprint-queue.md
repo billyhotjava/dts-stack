@@ -411,22 +411,23 @@
 **F0 复核**: polyfill 在历史 `fix:chrome95` 提交链已落地，证据见 `worklog/v2.2.3/sprint-29-202605/assets/chrome95-polyfill-test-evidence.md`，本 Sprint 无新增代码，直接进入 F1。
 
 ## Sprint-30: 地铁小模型 CSV 训练快照正式版 (202605)
-**状态**: IN_PROGRESS
+**状态**: ABANDONED（废弃）
 **类型**: Implementation（dts-ingestion / dts-platform / dbt package / metro-stack）
 **目标**: 把演示版地铁 LSTM 小模型链路升级为正式 CSV 训练快照闭环：运营商 CSV 经 DTS 入湖、dbt 治理建模和专家经验融合后，导出标准训练快照包，metro-stack 按契约读取快照并训练。
+**废弃说明**: 2026-05-16 决策，正式实现复杂度超出 v2.2.3 维护分支目标；Sprint-30 在 v2.2.3 废弃，后续新 feature 统一回到 `main` 主干重新规划和开发，`v2.2.3` 分支仅保留维护、缺陷修复和必要兼容性调整。
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
-| F1-csv-snapshot-contract | P0 | 2 | DONE |
-| F2-dts-snapshot-export | P0 | 3 | READY |
-| F3-metro-stack-snapshot-consumer | P0 | 3 | IN_PROGRESS |
-| F4-end-to-end-it | P0 | 3 | READY |
-| F5-large-csv-performance | P0 | 5 | IN_PROGRESS |
+| F1-csv-snapshot-contract | P0 | 2 | DONE（已归档） |
+| F2-dts-snapshot-export | P0 | 3 | ABANDONED |
+| F3-metro-stack-snapshot-consumer | P0 | 3 | ABANDONED |
+| F4-end-to-end-it | P0 | 3 | ABANDONED |
+| F5-large-csv-performance | P0 | 5 | ABANDONED |
 
-**统计**: READY=12, IN_PROGRESS=0, DONE=4, BLOCKED=0
+**统计**: ABANDONED=1 sprint；已完成并归档=F1；不再继续推进=F2/F3/F4/F5
 **设计文档**: `worklog/v2.2.3/sprint-30-202605/README.md`
 **实施计划**: `worklog/v2.2.3/sprint-30-202605/assets/implementation-plan.md`
-**性能要求**: 正式链路需支撑 100MB-500MB / 几十万到 1,000,000 行 CSV；当前 DTS 需完成 F5 性能准入后才能对外承诺。
+**性能要求**: 正式链路需支撑 100MB-500MB / 几十万到 1,000,000 行 CSV；该能力转入 `main` 后续规划，v2.2.3 不再承诺 Sprint-30 完成交付。
 **关键决策**: Sprint-30 不做 Parquet；正式版交换格式为治理后的 CSV 训练快照包，包含 `manifest.json`、`schema.json`、`quality_report.json`、`lineage.json`、`data.csv`。
 
 ## Sprint-31: 企业级数据平台主链路补齐 (202605)
