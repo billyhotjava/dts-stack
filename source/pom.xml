@@ -20,6 +20,7 @@
         <module>dts-common</module>
         <module>dts-platform</module>
         <module>dts-ingestion</module>
+        <module>dts-metrics</module>
         <module>dts-admin</module>
         <module>dts-analytics</module>
     </modules>

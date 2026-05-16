@@ -1,7 +1,7 @@
 # Sprint Queue — v2.2.3
 
 ## Sprint-1: 架构加固 -- 高可用、安全、可观测性 (202604)
-**状态**: READY
+**状态**: IN_PROGRESS
 **类型**: Design Only（仅设计，不实施）
 
 | Feature | Task 数 | 状态 |
@@ -457,14 +457,14 @@
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
-| F1-service-shell-and-deployment | P0 | 5 | READY |
-| F2-platform-contracts-and-auth | P0 | 5 | READY |
+| F1-service-shell-and-deployment | P0 | 5 | IN_PROGRESS |
+| F2-platform-contracts-and-auth | P0 | 5 | IN_PROGRESS |
 | F3-metric-domain-and-dsl | P0 | 6 | READY |
 | F4-metric-pack-partner-workflow | P0 | 5 | READY |
 | F5-webapp-routing-and-editions | P0 | 5 | READY |
 | F6-migration-compatibility-and-it | P0 | 6 | READY |
 
-**统计**: READY=32, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=22, IN_PROGRESS=10, DONE=0, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-32-202605/README.md`
 **服务拆分设计**: `worklog/v2.2.3/sprint-32-202605/assets/dts-metrics-service-design.md`
 **规划评审**: `worklog/v2.2.3/sprint-32-202605/assets/sprint-32-review.md`

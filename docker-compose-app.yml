@@ -790,6 +790,56 @@ services:
         source: ${STACK_ROOT}/services/dts-platform/drivers
         target: ${STACK_ROOT}/services/dts-platform/drivers
         type: bind
+  dts-metrics:
+    depends_on:
+      dts-platform:
+        condition: service_healthy
+        required: true
+    environment:
+      DTS_EDITION: ${DTS_EDITION:-professional}
+      DTS_METRICS_ENABLED: ${DTS_METRICS_ENABLED:-true}
+      DTS_METRICS_SERVICE_NAME: ${DTS_METRICS_SERVICE_NAME:-dts-metrics}
+      DTS_METRICS_TO_PLATFORM: ${DTS_METRICS_TO_PLATFORM:-${DTS_ADMIN_SERVICE_TOKEN:-}}
+      DTS_PLATFORM_API_PATH: ${DTS_PLATFORM_API_PATH:-/api}
+      DTS_PLATFORM_BASE_URL: ${DTS_PLATFORM_BASE_URL:-http://dts-platform:8081}
+      JAVA_OPTS: ${DTS_METRICS_JAVA_OPTS:--Djava.security.egd=file:/dev/./urandom -XX:MaxRAMPercentage=75.0}
+      LOG_ROOT: /logs
+      SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-prod}
+      TZ: ${TZ:-Asia/Shanghai}
+    healthcheck:
+      interval: 10s
+      retries: 60
+      start_period: 30s
+      test:
+        - CMD-SHELL
+        - curl -fsS http://127.0.0.1:8084/management/health >/dev/null 2>&1 || grep -qE ':[0]*1F94 .* 0A ' /proc/net/tcp || grep -qE ':[0]*1F94 .* 0A ' /proc/net/tcp6
+      timeout: 10s
+    image: ${IMAGE_DTS_METRICS:-dts-metrics:1.0.0}
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dts-core
+      - traefik.http.routers.dts-metrics-api.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/api/metrics`)
+      - traefik.http.routers.dts-metrics-api.entrypoints=websecure
+      - traefik.http.routers.dts-metrics-api.tls=true
+      - traefik.http.routers.dts-metrics-api.priority=260
+      - traefik.http.services.dts-metrics-api.loadbalancer.server.port=8084
+      - traefik.http.routers.dts-metrics-api.middlewares=platform-forward-auth@file,cors-allow@file,security-headers@file
+    networks:
+      dts-core: null
+    ports: []
+    profiles:
+      - professional
+      - enterprise
+    restart: unless-stopped
+    security_opt:
+      - seccomp=unconfined
+    volumes:
+      - bind:
+          create_host_path: true
+          selinux: z
+        source: ./logs/dts-metrics
+        target: /logs/dts-metrics
+        type: bind
   dts-keycloak:
     command:
       - start
@@ -1170,6 +1220,7 @@ services:
       DTS_ADMIN_BASE_URL: http://dts-admin:8081
       DTS_INBOUND_FROM_ANALYTICS: ${DTS_INBOUND_FROM_ANALYTICS:-${DTS_ADMIN_SERVICE_TOKEN:-}}
       DTS_INBOUND_FROM_INGESTION: ${DTS_INBOUND_FROM_INGESTION:-${DTS_ADMIN_SERVICE_TOKEN:-}}
+      DTS_INBOUND_FROM_METRICS: ${DTS_INBOUND_FROM_METRICS:-${DTS_ADMIN_SERVICE_TOKEN:-}}
       DTS_PLATFORM_TO_ADMIN_TOKEN: ${DTS_PLATFORM_TO_ADMIN_TOKEN:-${DTS_ADMIN_SERVICE_TOKEN:-}}
       DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL:-http://dts-airflow-webserver:8080}
       DTS_AIRFLOW_DAG_ID: ${DTS_AIRFLOW_DAG_ID:-dbt_load}
@@ -1182,6 +1233,10 @@ services:
       DTS_FEATURE_PLATFORM_KC_LOCALIZATION: "true"
       DTS_INGESTION_BASE_URL: ${DTS_INGESTION_BASE_URL:-http://dts-ingestion:8083}
       DTS_INGESTION_SERVICE_NAME: ${DTS_INGESTION_SERVICE_NAME:-dts-platform}
+      DTS_METRICS_API_BASE_PATH: ${DTS_METRICS_API_BASE_PATH:-/api/metrics}
+      DTS_METRICS_EDITION: ${DTS_EDITION:-foundation}
+      DTS_METRICS_ENABLED: ${DTS_METRICS_ENABLED:-false}
+      DTS_METRICS_SERVICE_NAME: ${DTS_METRICS_SERVICE_NAME:-dts-metrics}
       DTS_JDBC_DRIVER_CLASS: org.apache.hive.jdbc.HiveDriver
       DTS_JDBC_DRIVER_JAR: quark-driver-8.37.3.jar
       DTS_JDBC_LOAD_EXTERNAL_DRIVERS: "true"

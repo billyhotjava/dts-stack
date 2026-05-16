@@ -1,7 +1,7 @@
 # F1: dts-metrics 服务骨架与部署 profile
 
 **优先级**: P0
-**状态**: READY
+**状态**: IN_PROGRESS
 **目标**: 新建可独立构建、启动、健康检查和按 profile 启用的 `dts-metrics` 服务骨架。
 
 ## 任务

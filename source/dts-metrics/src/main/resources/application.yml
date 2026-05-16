@@ -1,0 +1,25 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: dts-metrics
+
+management:
+  endpoints:
+    web:
+      base-path: /management
+      exposure:
+        include:
+          - health
+          - info
+
+dts:
+  metrics:
+    enabled: ${DTS_METRICS_ENABLED:true}
+    edition: ${DTS_EDITION:professional}
+    service-name: ${DTS_METRICS_SERVICE_NAME:dts-metrics}
+    platform:
+      base-url: ${DTS_PLATFORM_BASE_URL:http://dts-platform:8081}
+      api-path: ${DTS_PLATFORM_API_PATH:/api}
+      service-token: ${DTS_METRICS_TO_PLATFORM:${DTS_ADMIN_SERVICE_TOKEN:}}

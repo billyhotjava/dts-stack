@@ -1,7 +1,7 @@
 # F2: platform 契约、服务鉴权与事实源边界
 
 **优先级**: P0
-**状态**: READY
+**状态**: IN_PROGRESS
 **目标**: 让 `dts-metrics` 只通过 platform 明确 API 使用资产、权限、审计、数据源和 dbt 发布能力。
 
 ## 任务

@@ -1,7 +1,7 @@
 # Sprint-32: dts-metrics 独立服务落地（202605）
 
 **时间**: 2026-05
-**状态**: READY
+**状态**: IN_PROGRESS
 **类型**: Architecture / Implementation（dts-metrics + dts-platform + dts-platform-webapp）
 **目标**: 在 Sprint-31 完成基础链路和拆分边界后，把语义指标中心从 platform 增值业务中抽出为独立 `dts-metrics` 服务，让基础版 DTS 可以只交付 ELT + 数据资产 + SQL/dbt，让专业版通过可选容器启用指标语义建模和合作方行业指标包。
 
@@ -42,14 +42,14 @@ platform-webapp shell
 
 | ID | Feature | 优先级 | Task 数 | 状态 | 依赖 |
 |----|---------|--------|---------|------|------|
-| F1 | dts-metrics 服务骨架与部署 profile | P0 | 5 | READY | Sprint-31 F5 |
-| F2 | platform 契约、服务鉴权与事实源边界 | P0 | 5 | READY | F1 |
+| F1 | dts-metrics 服务骨架与部署 profile | P0 | 5 | IN_PROGRESS | Sprint-31 F5 |
+| F2 | platform 契约、服务鉴权与事实源边界 | P0 | 5 | IN_PROGRESS | F1 |
 | F3 | 指标领域模型、DSL 与安全生成 | P0 | 6 | READY | F1, F2 |
 | F4 | metric-pack 合作方交付工作流 | P0 | 5 | READY | F3 |
 | F5 | platform-webapp 入口、版本开关与兼容代理 | P0 | 5 | READY | F1, F2 |
 | F6 | 迁移、回滚、集成测试与运维验收 | P0 | 6 | READY | F1-F5 |
 
-**统计**: READY=32, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=22, IN_PROGRESS=10, DONE=0, BLOCKED=0
 
 ## 交付分级
 
