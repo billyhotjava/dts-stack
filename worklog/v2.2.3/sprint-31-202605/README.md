@@ -28,7 +28,7 @@
   -> Catalog / OpenMetadata / OpenLineage
   -> platform asset_grant / 数据密级 / 审计 / 运行观测
   -> platform-webapp 基础版入口
-  -> 可选增值能力：dts-metrics / dts-analytics
+  -> 独立增值服务：dts-metrics / dts-analytics
 ```
 
 ## Feature 列表
@@ -59,7 +59,7 @@
 - [ ] Connector Center 对 JDBC / 文件 / API 的能力边界在页面和 API 上明确，JDBC 主链路无 silent failure，文件/API 有可追踪任务契约。
 - [ ] OpenLineage / dbt manifest / Addax lineage 统一写入 Catalog，自动创建的资产必须有治理状态，不能默默成为可用资产。
 - [ ] dbt 发布从 warning-only 升级为可配置阻断门禁，至少对生产模式阻断失败测试、缺失 schema 合约和过期构建证据。
-- [ ] 语义指标能力从 platform 基础链路中抽出清晰边界：基础版可关闭，platform 只保留入口、权限、资产、审计和发布契约，完整 `dts-metrics` 独立服务进入 Sprint-32。
+- [ ] 语义指标能力从 platform 基础链路中抽出清晰边界：platform 只保留入口、权限、资产、审计和发布契约，完整 `dts-metrics` 独立服务进入 Sprint-32；当前版本不在配置层关闭 metrics，商务限制后续交给 license 模块。
 - [ ] analytics 大屏读写权限以 platform `asset_grant` 为唯一事实源；本地 fallback 命中必须有告警和迁移报表。
 - [ ] 关键链路具备审计、运行指标、性能边界和 IT 证据。
 

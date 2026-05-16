@@ -2,7 +2,7 @@
 
 ## 目标
 
-验证 DTS 企业级数据平台黄金链路，并证明语义指标增值能力可从基础版关闭：
+验证 DTS 企业级数据平台黄金链路，并证明语义指标增值能力从 platform 主链路中解耦：
 
 ```text
 数据源 -> ODS -> dbt DWD/DWS/ADS -> Catalog/OpenMetadata/OpenLineage -> platform 权限/资产/审计
@@ -17,7 +17,7 @@
 | Connector ODS 预检/应用结果 | `it/evidence/connector-center/` | READY |
 | Addax/Airflow/OpenLineage 运行血缘 | `it/evidence/runtime-lineage/` | READY |
 | dbt compile/test/build + release gate | `it/evidence/dbt-release-gate/` | READY |
-| 语义指标 capability flag 和服务边界 | `it/evidence/semantic-boundary/` | READY |
+| 语义指标 capability 和服务边界 | `it/evidence/semantic-boundary/` | READY |
 | BI Dataset 和大屏权限验收 | `it/evidence/consumption-permission/` | READY |
 | 性能/审计/告警基线 | `it/evidence/observability-performance/` | READY |
 
@@ -57,6 +57,6 @@ curl -sS -X POST http://127.0.0.1:18082/api/internal/asset-permission/check \
 - dbt strict release gate 未通过。
 - 运行血缘不能落库，且没有明确 fallback 告警。
 - 非 PUBLIC 大屏在无授权用户列表中可见。
-- 关闭语义指标 capability 后，基础版菜单/API 仍暴露不可用入口。
+- metrics 服务边界不清，导致 platform 主链路必须依赖 metrics 内部实现才能完成数据源、ELT、dbt、资产目录主流程。
 - 语义模型未审核通过仍可发布。
 - Connector 预检对大表执行无超时 `count(*)`。

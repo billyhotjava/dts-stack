@@ -20,6 +20,15 @@ public class PlatformCapabilityResource {
 
     @GetMapping("/capabilities")
     public Map<String, Object> capabilities() {
+        return buildCapabilities();
+    }
+
+    @GetMapping("/internal/capabilities")
+    public Map<String, Object> internalCapabilities() {
+        return buildCapabilities();
+    }
+
+    private Map<String, Object> buildCapabilities() {
         Map<String, Object> metrics = new LinkedHashMap<>();
         metrics.put("enabled", true);
         metrics.put("edition", metricsProperties.getEdition());

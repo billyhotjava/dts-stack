@@ -9,7 +9,7 @@
 | 证据 | 路径 | 状态 |
 |---|---|---|
 | 默认 metrics 启动证据 | `it/evidence/default-metrics/` | READY |
-| 服务鉴权和 platform 契约 | `it/evidence/platform-contracts/` | READY |
+| 服务鉴权和 platform 契约 | `it/evidence/platform-contracts/` | DONE |
 | metric-pack 导入/校验/差异报告 | `it/evidence/metric-pack/` | READY |
 | DSL SQL 生成和安全预览 | `it/evidence/dsl-preview/` | READY |
 | dbt 候选 artifact 提交和门禁 | `it/evidence/dbt-publish/` | READY |

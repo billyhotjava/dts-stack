@@ -18,4 +18,5 @@
 
 - [ ] `dts-metrics` 不持有数据源密码。
 - [ ] `dts-metrics` 不实现本地用户/角色/权限事实源。
-- [ ] platform 内部 API 有服务鉴权失败用例。
+- [x] platform 内部 API 有服务鉴权失败用例。
+- [x] `dts-metrics` 只能访问 internal capabilities 和 asset-permission 只读/校验端点，不能写 grant 或读取数据源运行密钥。
