@@ -1,6 +1,6 @@
 # Final Review Test Evidence
 
-**状态**: READY
+**状态**: RX_FOCUSED_TESTS_RECORDED
 
 ## 目标
 
@@ -19,4 +19,8 @@ Sprint-31A、Sprint-31、Sprint-32 全部完成后，在这里记录统一 revie
 
 ## 当前说明
 
-按当前执行约束，本目录先占位，不伪造测试结果。
+按当前执行约束，本目录不记录完整 build / Docker / live IT 通过。RX 运行时 enforcement 的 focused contract/unit test 证据已单独归档。
+
+## 已归档证据
+
+- `rx-runtime-enforcement-20260517.md`: CodeAssetGrantWriter、CatalogAssetIdentityResolver、asset permission policy、metric artifact RLS 注入的 focused test 证据。

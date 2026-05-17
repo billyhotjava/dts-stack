@@ -32,6 +32,7 @@ class ServiceDependencyAuthenticationFilterTest {
     private static final String INGESTION_RUNTIME_DETAIL = "/api/infra/data-sources/11111111-1111-1111-1111-111111111111/runtime-detail";
     private static final String ANALYTICS_RUNTIME_DETAIL = "/api/infra/data-sources/22222222-2222-2222-2222-222222222222/runtime-detail";
     private static final String ANALYTICS_ASSET_PERMISSION_CHECK = "/api/internal/asset-permission/check";
+    private static final String METRICS_ASSET_PERMISSION_POLICY = "/api/internal/asset-permission/policy";
     private static final String ANALYTICS_ASSET_PERMISSION_BATCH_CHECK = "/api/internal/asset-permission/batch-check";
     private static final String ANALYTICS_ASSET_PERMISSION_ACCESSIBLE_IDS = "/api/internal/asset-permission/accessible-ids";
     private static final String INTERNAL_CAPABILITIES = "/api/internal/capabilities";
@@ -164,6 +165,7 @@ class ServiceDependencyAuthenticationFilterTest {
     @Test
     void metricsMatchingToken_canReadAndCheckAssetPermissionsOnly() throws Exception {
         assertMetricsCanAccess("POST", ANALYTICS_ASSET_PERMISSION_CHECK);
+        assertMetricsCanAccess("POST", METRICS_ASSET_PERMISSION_POLICY);
         assertMetricsCanAccess("POST", ANALYTICS_ASSET_PERMISSION_BATCH_CHECK);
         assertMetricsCanAccess("POST", ANALYTICS_ASSET_PERMISSION_ACCESSIBLE_IDS);
         assertMetricsCanAccess("GET", "/api/internal/asset-permission/grants");

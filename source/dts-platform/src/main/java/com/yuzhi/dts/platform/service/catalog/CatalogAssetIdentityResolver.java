@@ -3,10 +3,22 @@ package com.yuzhi.dts.platform.service.catalog;
 import com.yuzhi.dts.platform.domain.catalog.CatalogAssetMapping;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.OpenMetadataAssetCache;
+import com.yuzhi.dts.platform.domain.governance.GovIndicatorDefinition;
+import com.yuzhi.dts.platform.domain.modeling.DataStandard;
+import com.yuzhi.dts.platform.domain.modeling.ModelingGlossaryTerm;
+import com.yuzhi.dts.platform.domain.modeling.ModelingSqlModel;
 import com.yuzhi.dts.platform.repository.catalog.CatalogAssetMappingRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataAssetCacheRepository;
+import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
+import com.yuzhi.dts.platform.repository.modeling.DataStandardRepository;
+import com.yuzhi.dts.platform.repository.modeling.ModelingGlossaryTermRepository;
+import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,15 +31,27 @@ public class CatalogAssetIdentityResolver {
     private final OpenMetadataAssetCacheRepository assetRepository;
     private final CatalogAssetMappingRepository mappingRepository;
     private final CatalogDatasetRepository datasetRepository;
+    private final GovIndicatorDefinitionRepository indicatorRepository;
+    private final ModelingSqlModelRepository sqlModelRepository;
+    private final DataStandardRepository dataStandardRepository;
+    private final ModelingGlossaryTermRepository glossaryTermRepository;
 
     public CatalogAssetIdentityResolver(
         OpenMetadataAssetCacheRepository assetRepository,
         CatalogAssetMappingRepository mappingRepository,
-        CatalogDatasetRepository datasetRepository
+        CatalogDatasetRepository datasetRepository,
+        GovIndicatorDefinitionRepository indicatorRepository,
+        ModelingSqlModelRepository sqlModelRepository,
+        DataStandardRepository dataStandardRepository,
+        ModelingGlossaryTermRepository glossaryTermRepository
     ) {
         this.assetRepository = assetRepository;
         this.mappingRepository = mappingRepository;
         this.datasetRepository = datasetRepository;
+        this.indicatorRepository = indicatorRepository;
+        this.sqlModelRepository = sqlModelRepository;
+        this.dataStandardRepository = dataStandardRepository;
+        this.glossaryTermRepository = glossaryTermRepository;
     }
 
     public Optional<ResolvedAsset> resolve(String ref) {
@@ -70,7 +94,11 @@ public class CatalogAssetIdentityResolver {
     }
 
     public Optional<CatalogAssetIdentity> resolveIdentity(String ref) {
-        return resolve(ref).map(this::toIdentity);
+        Optional<CatalogAssetIdentity> catalogIdentity = resolve(ref).map(this::toIdentity);
+        if (catalogIdentity.isPresent()) {
+            return catalogIdentity;
+        }
+        return resolveCodeAssetIdentity(ref);
     }
 
     private CatalogDataset resolveLegacy(CatalogAssetMapping mapping) {
@@ -110,6 +138,203 @@ public class CatalogAssetIdentityResolver {
             );
         }
         throw new IllegalArgumentException("resolved asset has no catalog identity");
+    }
+
+    private Optional<CatalogAssetIdentity> resolveCodeAssetIdentity(String ref) {
+        if (!StringUtils.hasText(ref)) {
+            return Optional.empty();
+        }
+        String trimmed = ref.trim();
+        if (trimmed.toLowerCase(Locale.ROOT).contains("/metric-pack:")) {
+            return Optional.of(new CatalogAssetIdentity(CatalogAssetType.METRIC_PACK, trimmed, trimmed, "metric-pack-ref"));
+        }
+
+        UUID uuid = parseUuid(trimmed);
+        if (uuid != null) {
+            Optional<CatalogAssetIdentity> byId = resolveCodeAssetById(uuid);
+            if (byId.isPresent()) {
+                return byId;
+            }
+        }
+
+        String typeHint = typeHint(trimmed);
+        String naturalKey = naturalKey(trimmed);
+        return switch (typeHint) {
+            case "glossary", "glossary_term" -> resolveGlossaryTerm(naturalKey);
+            case "data_standard", "standard" -> resolveDataStandard(naturalKey);
+            case "gov_indicator", "indicator", "metric" -> resolveGovIndicator(naturalKey);
+            case "modeling_sql_model", "sql_model", "dbt_model" -> resolveModelingSqlModel(naturalKey);
+            case "metric_pack" -> Optional.of(metricPackIdentity(trimmed));
+            default -> resolveCodeAssetByCode(naturalKey);
+        };
+    }
+
+    private Optional<CatalogAssetIdentity> resolveCodeAssetById(UUID id) {
+        Optional<GovIndicatorDefinition> indicator = indicatorRepository.findById(id);
+        if (indicator.isPresent()) {
+            return Optional.of(govIndicatorIdentity(indicator.orElseThrow()));
+        }
+        Optional<ModelingSqlModel> sqlModel = sqlModelRepository.findById(id);
+        if (sqlModel.isPresent()) {
+            return Optional.of(modelingSqlModelIdentity(sqlModel.orElseThrow()));
+        }
+        Optional<DataStandard> standard = dataStandardRepository.findById(id);
+        if (standard.isPresent()) {
+            return Optional.of(dataStandardIdentity(standard.orElseThrow()));
+        }
+        Optional<ModelingGlossaryTerm> glossaryTerm = glossaryTermRepository.findById(id);
+        return glossaryTerm.map(this::glossaryTermIdentity);
+    }
+
+    private Optional<CatalogAssetIdentity> resolveCodeAssetByCode(String code) {
+        Optional<CatalogAssetIdentity> indicator = resolveGovIndicator(code);
+        if (indicator.isPresent()) {
+            return indicator;
+        }
+        Optional<CatalogAssetIdentity> model = resolveModelingSqlModel(code);
+        if (model.isPresent()) {
+            return model;
+        }
+        Optional<CatalogAssetIdentity> standard = resolveDataStandard(code);
+        if (standard.isPresent()) {
+            return standard;
+        }
+        return resolveGlossaryTerm(code);
+    }
+
+    private Optional<CatalogAssetIdentity> resolveGovIndicator(String code) {
+        if (!StringUtils.hasText(code)) {
+            return Optional.empty();
+        }
+        return indicatorRepository.findFirstByCodeIgnoreCase(code).map(this::govIndicatorIdentity);
+    }
+
+    private Optional<CatalogAssetIdentity> resolveModelingSqlModel(String code) {
+        if (!StringUtils.hasText(code)) {
+            return Optional.empty();
+        }
+        String expected = code.trim();
+        return sqlModelRepository
+            .findAll()
+            .stream()
+            .filter(model -> matches(expected, model.getName()) || matches(expected, model.getAlias()))
+            .findFirst()
+            .map(this::modelingSqlModelIdentity);
+    }
+
+    private Optional<CatalogAssetIdentity> resolveDataStandard(String code) {
+        if (!StringUtils.hasText(code)) {
+            return Optional.empty();
+        }
+        return dataStandardRepository.findByCodeIgnoreCase(code).map(this::dataStandardIdentity);
+    }
+
+    private Optional<CatalogAssetIdentity> resolveGlossaryTerm(String code) {
+        List<ModelingGlossaryTerm> terms = glossaryTermRepository.findByCodeLowerIn(List.copyOf(codeCandidates(code)));
+        return terms.stream().findFirst().map(this::glossaryTermIdentity);
+    }
+
+    private CatalogAssetIdentity govIndicatorIdentity(GovIndicatorDefinition indicator) {
+        String naturalKey = firstText(indicator.getCode(), idText(indicator.getId()));
+        return codeAssetIdentity(CatalogAssetType.GOV_INDICATOR, naturalKey, idText(indicator.getId()), "gov-indicator:" + naturalKey);
+    }
+
+    private CatalogAssetIdentity modelingSqlModelIdentity(ModelingSqlModel model) {
+        String naturalKey = firstText(model.getName(), model.getAlias(), idText(model.getId()));
+        return codeAssetIdentity(CatalogAssetType.MODELING_SQL_MODEL, naturalKey, idText(model.getId()), "modeling-sql-model:" + naturalKey);
+    }
+
+    private CatalogAssetIdentity dataStandardIdentity(DataStandard standard) {
+        String naturalKey = firstText(standard.getCode(), idText(standard.getId()));
+        return codeAssetIdentity(CatalogAssetType.DATA_STANDARD, naturalKey, idText(standard.getId()), "data-standard:" + naturalKey);
+    }
+
+    private CatalogAssetIdentity glossaryTermIdentity(ModelingGlossaryTerm term) {
+        String naturalKey = firstText(term.getCode(), idText(term.getId()));
+        return codeAssetIdentity(CatalogAssetType.GLOSSARY_TERM, naturalKey, idText(term.getId()), "glossary-term:" + naturalKey);
+    }
+
+    private CatalogAssetIdentity codeAssetIdentity(CatalogAssetType type, String naturalKey, String assetId, String sourceRef) {
+        return new CatalogAssetIdentity(type, CatalogAssetKey.codeAsset(type, "default", naturalKey), assetId, sourceRef);
+    }
+
+    private CatalogAssetIdentity metricPackIdentity(String ref) {
+        return new CatalogAssetIdentity(CatalogAssetType.METRIC_PACK, ref, ref, "metric-pack-ref");
+    }
+
+    private static Set<String> codeCandidates(String ref) {
+        String value = ref == null ? null : ref.trim();
+        if (!StringUtils.hasText(value)) {
+            return Set.of();
+        }
+        String normalized = value.toLowerCase(Locale.ROOT);
+        LinkedHashSet<String> candidates = new LinkedHashSet<>();
+        candidates.add(normalized);
+        int colon = normalized.lastIndexOf(':');
+        if (colon >= 0 && colon + 1 < normalized.length()) {
+            candidates.add(normalized.substring(colon + 1));
+        }
+        int slash = normalized.lastIndexOf('/');
+        if (slash >= 0 && slash + 1 < normalized.length()) {
+            candidates.add(normalized.substring(slash + 1));
+        }
+        if (normalized.startsWith("glossary.")) {
+            candidates.add(normalized.substring("glossary.".length()));
+        }
+        if (normalized.startsWith("data_standard.")) {
+            candidates.add(normalized.substring("data_standard.".length()));
+        }
+        return candidates;
+    }
+
+    private static String typeHint(String ref) {
+        String normalized = ref.trim().toLowerCase(Locale.ROOT);
+        int colon = normalized.indexOf(':');
+        if (colon > 0) {
+            return normalized.substring(0, colon).replace('-', '_');
+        }
+        int dot = normalized.indexOf('.');
+        if (dot > 0) {
+            return normalized.substring(0, dot).replace('-', '_');
+        }
+        return "";
+    }
+
+    private static String naturalKey(String ref) {
+        String normalized = ref.trim();
+        int colon = normalized.lastIndexOf(':');
+        if (colon >= 0 && colon + 1 < normalized.length()) {
+            return normalized.substring(colon + 1);
+        }
+        int slash = normalized.lastIndexOf('/');
+        if (slash >= 0 && slash + 1 < normalized.length()) {
+            return normalized.substring(slash + 1);
+        }
+        int dot = normalized.indexOf('.');
+        if (dot > 0 && dot + 1 < normalized.length()) {
+            return normalized.substring(dot + 1);
+        }
+        return normalized;
+    }
+
+    private static boolean matches(String expected, String value) {
+        return StringUtils.hasText(value) && expected.equalsIgnoreCase(value.trim());
+    }
+
+    private static String firstText(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value.trim();
+            }
+        }
+        return null;
+    }
+
+    private static String idText(UUID id) {
+        return id == null ? null : id.toString();
     }
 
     public record ResolvedAsset(

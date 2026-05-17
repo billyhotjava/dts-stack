@@ -164,6 +164,7 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
 
     private boolean isMetricsAssetPermission(String method, String path) {
         return isPost(method, path, "/api/internal/asset-permission/check")
+            || isPost(method, path, "/api/internal/asset-permission/policy")
             || isPost(method, path, "/api/internal/asset-permission/batch-check")
             || isPost(method, path, "/api/internal/asset-permission/accessible-ids")
             || isGet(method, path, "/api/internal/asset-permission/grants");

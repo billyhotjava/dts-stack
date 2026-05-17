@@ -63,6 +63,7 @@ public class PlatformCapabilityResource {
             "/api/internal/domains/resolve",
             "/api/internal/data-standards/resolve",
             "/api/internal/asset-permission/check",
+            "/api/internal/asset-permission/policy",
             "/api/etl/dbt/release/submit",
             "platform-audit"
         ));
@@ -109,7 +110,21 @@ public class PlatformCapabilityResource {
     private Map<String, Object> catalogCapabilities(boolean internal) {
         Map<String, Object> catalog = new LinkedHashMap<>();
         catalog.put("contractVersion", "2026-05-sprint31a");
-        catalog.put("assetTypes", List.of("DATASET", "DBT_MODEL", "BI_DATASET", "SCREEN", "METRIC", "SEMANTIC_MODEL", "DATA_PRODUCT"));
+        catalog.put("assetTypes", List.of(
+            "DATASET",
+            "DBT_MODEL",
+            "BI_DATASET",
+            "SCREEN",
+            "METRIC",
+            "METRIC_PACK",
+            "SEMANTIC_MODEL",
+            "DATA_PRODUCT",
+            "MODELING_SQL_MODEL",
+            "DATA_STANDARD",
+            "GLOSSARY_TERM",
+            "GOV_INDICATOR",
+            "API_SERVICE"
+        ));
         catalog.put("identity", "assetType + assetKey + grantAssetId");
         catalog.put("lifecycleStatuses", List.of("DISCOVERED", "PENDING_GOVERNANCE", "ACTIVE", "DEPRECATED", "ARCHIVED", "BLOCKED", "PENDING_REVIEW"));
         catalog.put("governanceStatuses", List.of("GOVERNED", "PENDING_GOVERNANCE", "PENDING_CLAIM", "PENDING_CLASSIFICATION", "PENDING_DOMAIN", "DISABLED"));
@@ -143,6 +158,7 @@ public class PlatformCapabilityResource {
         if (internal) {
             permissions.put("endpoints", List.of(
                 "/api/internal/asset-permission/check",
+                "/api/internal/asset-permission/policy",
                 "/api/internal/asset-permission/batch-check",
                 "/api/internal/asset-permission/accessible-ids",
                 "/api/internal/asset-permission/grants"

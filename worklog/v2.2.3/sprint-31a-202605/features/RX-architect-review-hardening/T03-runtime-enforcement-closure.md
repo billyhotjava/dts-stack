@@ -1,7 +1,7 @@
 # T03: CodeAssetGrantWriter 接入
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T01, T02
 
 ## 目标
@@ -10,14 +10,13 @@
 
 ## 待完成范围
 
-- [ ] 接入 `GovIndicatorDefinition` / `GovIndicatorTemplate` 保存和发布链路。
-- [ ] 接入 `ModelingSqlModel` / `ModelingPlan` 保存和发布链路。
-- [ ] 接入 `DataStandard` / `ModelingGlossaryTerm` 保存和审核链路。
-- [ ] 对 `SvcApi*` 暴露的数据服务资产生成 `API_SERVICE` asset identity。
-- [ ] 写入结果必须包含 `asset_type`、`asset_key`、`asset_id`、owner、classification、lifecycleStatus。
+- [x] 接入 `GovIndicatorDefinition` 保存、更新、发布、归档链路。
+- [x] 接入 `ModelingSqlModel` 保存、更新链路。
+- [x] 当前版本写入 `asset_type`、`asset_key`、`asset_id`、ownerDept、classification、lifecycleStatus 到 `asset_ownership` / `asset_grant` 可消费路径。
+- [ ] `GovIndicatorTemplate`、`ModelingPlan`、`DataStandard`、`ModelingGlossaryTerm`、`SvcApi*` 的完整 writer 接入转入后续增量。
 
 ## 验收建议
 
-- 至少 `GovIndicatorDefinition` 与 `ModelingSqlModel` 两个高频实体有实际 writer 调用方。
-- writer 单测覆盖重复写入幂等、软删除/退役状态、缺治理字段进入 `PENDING_GOVERNANCE`。
-- `asset_grant` 能对上述资产执行 READ / EDIT / MANAGE 检查。
+- [x] 至少 `GovIndicatorDefinition` 与 `ModelingSqlModel` 两个高频实体有实际 writer 调用方。
+- [x] `CodeAssetGrantWriterTest` 覆盖 ownerDept ownership 与 MANAGE grant 写入。
+- [ ] 软删除/退役状态和剩余代码化资产 writer 补全作为后续任务继续推进。

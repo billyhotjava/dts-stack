@@ -15,6 +15,10 @@ import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.security.policy.DataLevel;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetIdentity;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetType;
+import com.yuzhi.dts.platform.service.catalog.CodeAssetGrantWriter;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorDto;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorValidationResultDto;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorVersionDto;
@@ -37,6 +41,7 @@ import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.codec.digest.DigestUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -65,6 +70,7 @@ public class IndicatorService {
     private final SecuritySqlRewriter securitySqlRewriter;
     private final ObjectMapper objectMapper;
     private final CatalogDomainRepository catalogDomainRepository;
+    private CodeAssetGrantWriter codeAssetGrantWriter;
 
     public IndicatorService(
         GovIndicatorDefinitionRepository repository,
@@ -88,6 +94,11 @@ public class IndicatorService {
         this.securitySqlRewriter = securitySqlRewriter;
         this.objectMapper = objectMapper;
         this.catalogDomainRepository = catalogDomainRepository;
+    }
+
+    @Autowired(required = false)
+    public void setCodeAssetGrantWriter(CodeAssetGrantWriter codeAssetGrantWriter) {
+        this.codeAssetGrantWriter = codeAssetGrantWriter;
     }
 
     @Transactional(readOnly = true)
@@ -171,6 +182,7 @@ public class IndicatorService {
         applyDefaults(entity, activeDept);
         validateUpsert(entity, null, activeDept);
         GovIndicatorDefinition saved = repository.save(entity);
+        syncCodeAssetGrant(saved);
         snapshot(saved, saved.getVersion(), "DRAFT", saved.getVersionNotes(), null);
         return IndicatorMapper.toDto(saved);
     }
@@ -186,6 +198,7 @@ public class IndicatorService {
         applyDefaults(entity, activeDept);
         validateUpsert(entity, id, activeDept);
         GovIndicatorDefinition saved = repository.save(entity);
+        syncCodeAssetGrant(saved);
         snapshot(saved, saved.getVersion(), StringUtils.hasText(saved.getStatus()) ? saved.getStatus() : "DRAFT", saved.getVersionNotes(), null);
         return IndicatorMapper.toDto(saved);
     }
@@ -200,6 +213,7 @@ public class IndicatorService {
         entity.setStatus(STATUS_PUBLISHED);
         applyDefaults(entity, activeDept);
         GovIndicatorDefinition saved = repository.save(entity);
+        syncCodeAssetGrant(saved);
         snapshot(saved, saved.getVersion(), STATUS_PUBLISHED, saved.getVersionNotes(), Instant.now());
         return IndicatorMapper.toDto(saved);
     }
@@ -356,6 +370,7 @@ public class IndicatorService {
         entity.setStatus(STATUS_ARCHIVED);
         applyDefaults(entity, activeDept);
         GovIndicatorDefinition saved = repository.save(entity);
+        syncCodeAssetGrant(saved);
         snapshot(saved, saved.getVersion(), STATUS_ARCHIVED, saved.getVersionNotes(), null);
         return IndicatorMapper.toDto(saved);
     }
@@ -891,6 +906,39 @@ public class IndicatorService {
             entity.setVersion("v1");
         }
         entity.setDataLevel(normalizeDataLevel(entity.getDataLevel()));
+    }
+
+    private void syncCodeAssetGrant(GovIndicatorDefinition entity) {
+        if (codeAssetGrantWriter == null || entity == null || entity.getId() == null) {
+            return;
+        }
+        String naturalKey = StringUtils.hasText(entity.getCode()) ? entity.getCode().trim() : entity.getId().toString();
+        CatalogAssetIdentity identity = new CatalogAssetIdentity(
+            CatalogAssetType.GOV_INDICATOR,
+            CatalogAssetKey.codeAsset(CatalogAssetType.GOV_INDICATOR, "default", naturalKey),
+            entity.getId().toString(),
+            "gov-indicator:" + naturalKey
+        );
+        codeAssetGrantWriter.upsertCodeAsset(
+            identity,
+            entity.getOwnerDept(),
+            SecurityUtils.getCurrentUserLogin().orElse("dts-platform"),
+            entity.getDataLevel(),
+            lifecycleForStatus(entity.getStatus())
+        );
+    }
+
+    private static String lifecycleForStatus(String status) {
+        if (STATUS_PUBLISHED.equalsIgnoreCase(status)) {
+            return "ACTIVE";
+        }
+        if (STATUS_ARCHIVED.equalsIgnoreCase(status)) {
+            return "ARCHIVED";
+        }
+        if (STATUS_DEPRECATED.equalsIgnoreCase(status)) {
+            return "DEPRECATED";
+        }
+        return "PENDING_GOVERNANCE";
     }
 
     private String formatOwner(String displayName, String username) {

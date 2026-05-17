@@ -32,7 +32,7 @@ Sprint-31 已经把 DTS 的企业级主链路定义为：
 3. 自动发现或自动创建的资产必须有治理状态，不能默默成为可用资产。
 4. 资产列表和详情都必须遵守密级、授权和治理可见性规则。
 5. 本 Sprint 不迁出 IAM，不重写 OpenMetadata，不完成完整 `dts-metrics` 运行时迁移。
-6. 按用户约束，本批工作在 Sprint-31A、Sprint-31、Sprint-32 全部实现前不做编译；最终统一 review、测试和构建。
+6. 按用户约束，本批工作在 Sprint-31A、Sprint-31、Sprint-32 全部实现前不做完整编译、镜像构建和容器重建；如评审问题需要代码级闭环，允许执行 focused contract/unit tests，并把证据归档到最终验收目录。
 
 ## Feature 列表
 
@@ -46,7 +46,7 @@ Sprint-31 已经把 DTS 的企业级主链路定义为：
 | F6 | 迁移、兼容和验收闭环 | P0 | 5 | DONE | F1-F5 |
 | RX | 架构评审追补项 | P0 | 5 | CONTRACT_DONE / ENFORCEMENT_IN_PROGRESS | F1-F6, Sprint-32 |
 
-**统计**: READY=2, IN_PROGRESS=1, CONTRACT_DONE=0, DONE=30, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=2, CONTRACT_DONE=1, DONE=32, BLOCKED=0
 
 ## Sprint-31 / Sprint-32 关系
 
@@ -59,6 +59,7 @@ dts-metrics
   -> GET platform catalog assets / schema / columns / classification
   -> POST platform glossary term resolve
   -> POST platform asset permission check
+  -> POST platform asset permission policy
   -> POST platform audit events
   -> POST platform dbt publish request
   -> POST platform BI dataset candidate/register

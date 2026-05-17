@@ -2,7 +2,9 @@
 
 ## 测试策略
 
-按用户约束，Sprint-31A、Sprint-31、Sprint-32 实现过程中不做中间编译。所有测试、构建和容器重建统一放到三段任务完成后的最终 review/test 阶段。
+按用户约束，Sprint-31A、Sprint-31、Sprint-32 实现过程中不做完整中间编译、镜像构建和容器重建。所有完整测试、构建和容器重建统一放到三段任务完成后的最终 review/test 阶段。
+
+例外：针对架构评审追补项 RX 的运行时 enforcement，允许执行 focused contract/unit tests，用于证明代码级 guardrail 已生效；该类证据不等同于最终全量 build / Docker / live IT 通过。
 
 本文件先定义最终验收清单和证据目录。
 
@@ -30,7 +32,7 @@
 | 权限和密级一致性 | `it/evidence/permission-classification/` | READY |
 | 资产门户体验 | `it/evidence/asset-portal/` | READY |
 | 兼容和迁移 dry-run | `it/evidence/migration-compatibility/` | READY |
-| 最终统一 build/test | `it/evidence/final-review-test/` | READY |
+| 最终统一 build/test | `it/evidence/final-review-test/` | RX_FOCUSED_TESTS_RECORDED |
 
 ## 最终测试命令占位
 
@@ -53,7 +55,7 @@ docker compose -f docker-compose-app.yml up -d --force-recreate --no-deps dts-pl
 
 ## 当前阶段禁止项
 
-- 不在每个任务后运行 `mvn test` / `pnpm build` / `docker build`。
+- 不在每个任务后运行完整 `mvn test` / `pnpm build` / `docker build`。
 - 不做中间容器重建。
 - 不把 smoke 结果伪造为已通过。
 - 不把文档 READY 误标为代码 DONE。

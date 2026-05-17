@@ -20,10 +20,12 @@
 - [x] metrics internal service principal 通过 `dts.metrics.service-name` 配置判断，不再在 endpoint SpEL 中硬编码。
 - [x] artifact preview / import 前通过 platform internal resolver 校验数据域引用，`domains.yml` 只作为行业包映射，不作为数据域事实源。
 - [x] artifact preview / import 前通过 platform internal resolver 校验数据标准引用，缺失、歧义或非 `ACTIVE` 均阻断候选 artifact 生成。
+- [x] platform 新增 `/api/internal/asset-permission/policy` 只读策略接口，metrics service principal 可访问。
+- [x] dts-metrics artifact preview 调用 platform policy contract，生成 SQL 时注入 platform row-filter predicate。
 
 ## 待完成范围
 
-- [ ] SQL 生成器根据 platform policy 注入 RLS predicate 或 security view。
+- [x] SQL 生成器根据 platform policy 注入 RLS predicate。
 - [ ] publish gate 复用同一 RLS / masking 策略，禁止 preview 与 publish 口径不同。
 - [ ] manifest 的 `security.apply_rls=true` 降级为声明，不再被视作已经生效。
 - [ ] live IT 覆盖无授权 asset 无法 preview/publish，且错误不泄露资产详情。
@@ -32,4 +34,5 @@
 
 - `MetricArtifactGenerationServiceTest` 覆盖无授权 preview、platform outage、glossary ambiguous、domain missing、data-standard inactive、source model suffix 边界。
 - `PlatformContractClientTest` 覆盖 glossary/domain/data-standard resolver、glossary batch split 和 transport exception wrap。
-- 后续补充 SQL RLS golden file，验证生成 SQL 包含 platform policy 输出的 predicate。
+- `MetricArtifactGenerationServiceTest.injectsPlatformRlsPredicateIntoGeneratedDbtSql` 验证生成 SQL 包含 platform policy 输出的 predicate。
+- 后续补充 publish gate 与 live IT，验证发布阶段复用同一策略。

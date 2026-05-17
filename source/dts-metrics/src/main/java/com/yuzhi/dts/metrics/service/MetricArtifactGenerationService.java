@@ -56,17 +56,21 @@ public class MetricArtifactGenerationService {
         String sourceModel;
         List<String> dimensions;
         List<MetricColumn> metrics;
+        PlatformContractClient.RlsPolicyResult rlsPolicy = PlatformContractClient.RlsPolicyResult.empty();
         Map<String, String> artifacts = new LinkedHashMap<>();
         try {
             sourceModel = safeRefName(String.valueOf(manifest.getOrDefault("source_model", "replace_with_dwd_model")));
             PlatformAssetDeclaration sourceAsset = requireSourceModelPlatformAsset(manifest, sourceModel);
             requirePreviewPermission(actor, sourceAsset);
+            if (applyRls(manifest) && sourceAsset != null) {
+                rlsPolicy = requireRlsPolicy(actor, sourceAsset);
+            }
             requireActivePlatformDomains(manifest);
             requireActiveDataStandards(manifest);
             requireActiveGlossaryTerms(manifest);
             dimensions = readDimensions(manifest.get("dimensions"));
             metrics = readMetrics(manifest.get("metrics"));
-            artifacts.put("dbtModelSql", dbtModelSql(modelName, sourceModel, dimensions, metrics));
+            artifacts.put("dbtModelSql", dbtModelSql(modelName, sourceModel, dimensions, metrics, rlsPolicy));
             artifacts.put("schemaYml", schemaYml(modelName, metrics));
             artifacts.put("metricDoc", metricDoc(packId, dimensions, metrics));
         } catch (IllegalArgumentException e) {
@@ -76,6 +80,8 @@ public class MetricArtifactGenerationService {
             String message;
             if (raw.contains("asset permission")) {
                 message = "platform contract unavailable while checking asset permissions; retry later";
+            } else if (raw.contains("security policy")) {
+                message = "platform contract unavailable while resolving security policy; retry later";
             } else if (raw.contains("domains resolve")) {
                 message = "platform contract unavailable while resolving data domains; retry later";
             } else if (raw.contains("data standards resolve")) {
@@ -101,7 +107,13 @@ public class MetricArtifactGenerationService {
         return MetricArtifactPreviewResult.valid(summary, artifacts, warnings);
     }
 
-    private String dbtModelSql(String modelName, String sourceModel, List<String> dimensions, List<MetricColumn> metrics) {
+    private String dbtModelSql(
+        String modelName,
+        String sourceModel,
+        List<String> dimensions,
+        List<MetricColumn> metrics,
+        PlatformContractClient.RlsPolicyResult rlsPolicy
+    ) {
         List<String> selectRows = new ArrayList<>();
         for (String dimension : dimensions) {
             selectRows.add("    " + dimension);
@@ -119,6 +131,7 @@ public class MetricArtifactGenerationService {
         sql.append("select\n");
         sql.append(String.join(",\n", selectRows));
         sql.append("\nfrom {{ ref('").append(sourceModel).append("') }}\n");
+        appendRlsWhere(sql, rlsPolicy);
         if (!dimensions.isEmpty()) {
             sql.append("group by\n");
             for (int i = 0; i < dimensions.size(); i++) {
@@ -127,6 +140,23 @@ public class MetricArtifactGenerationService {
             }
         }
         return sql.toString();
+    }
+
+    private static void appendRlsWhere(StringBuilder sql, PlatformContractClient.RlsPolicyResult rlsPolicy) {
+        if (rlsPolicy == null || rlsPolicy.predicates() == null || rlsPolicy.predicates().isEmpty()) {
+            return;
+        }
+        String source = StringUtils.hasText(rlsPolicy.policySource()) ? rlsPolicy.policySource() : "platform-policy";
+        sql.append("-- dts-platform RLS: ").append(source).append("\n");
+        sql.append("where\n");
+        for (int i = 0; i < rlsPolicy.predicates().size(); i++) {
+            String predicate = rlsPolicy.predicates().get(i);
+            if (!StringUtils.hasText(predicate)) {
+                continue;
+            }
+            sql.append("    (").append(predicate.trim()).append(")");
+            sql.append(i + 1 < rlsPolicy.predicates().size() ? " and\n" : "\n");
+        }
     }
 
     private String schemaYml(String modelName, List<MetricColumn> metrics) {
@@ -258,6 +288,31 @@ public class MetricArtifactGenerationService {
         if (result == null || !result.allowed()) {
             throw new IllegalArgumentException("platform asset permission check failed before artifact preview");
         }
+    }
+
+    private PlatformContractClient.RlsPolicyResult requireRlsPolicy(PreviewActor actor, PlatformAssetDeclaration asset) {
+        PreviewActor effectiveActor = actor != null ? actor : PreviewActor.system();
+        PlatformContractClient.RlsPolicyResult result = platformContractClient.resolveRlsPolicy(
+            new PlatformContractClient.RlsPolicyRequest(
+                effectiveActor.username(),
+                effectiveActor.userRoles(),
+                effectiveActor.userDeptCode(),
+                effectiveActor.userClassification(),
+                asset.assetClassification(),
+                "PREVIEW",
+                new PlatformContractClient.PermissionAsset(asset.type(), asset.id(), asset.key())
+            )
+        );
+        return result != null ? result : PlatformContractClient.RlsPolicyResult.empty();
+    }
+
+    private static boolean applyRls(Map<String, Object> manifest) {
+        Object securityRaw = manifest.get("security");
+        if (!(securityRaw instanceof Map<?, ?> security)) {
+            return false;
+        }
+        Object applyRls = security.get("apply_rls");
+        return Boolean.TRUE.equals(applyRls);
     }
 
     private void requireActivePlatformDomains(Map<String, Object> manifest) {

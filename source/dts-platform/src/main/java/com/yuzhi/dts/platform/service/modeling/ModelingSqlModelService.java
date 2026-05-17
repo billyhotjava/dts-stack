@@ -20,8 +20,12 @@ import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.repository.visualization.BiReportLinkRepository;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetIdentity;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetType;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService.ColumnSpec;
+import com.yuzhi.dts.platform.service.catalog.CodeAssetGrantWriter;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
 import com.yuzhi.dts.platform.service.governance.DefaultLakeDatasetGuard;
 import com.yuzhi.dts.platform.service.infra.AdminInfraClient;
@@ -94,6 +98,7 @@ public class ModelingSqlModelService {
     private final Executor taskExecutor;
     private final TransactionTemplate batchDeleteTransactionTemplate;
     private DefaultLakeDatasetGuard defaultLakeDatasetGuard;
+    private CodeAssetGrantWriter codeAssetGrantWriter;
 
     public ModelingSqlModelService(
         ModelingSqlModelRepository repo,
@@ -140,6 +145,11 @@ public class ModelingSqlModelService {
     @Autowired(required = false)
     public void setDefaultLakeDatasetGuard(DefaultLakeDatasetGuard defaultLakeDatasetGuard) {
         this.defaultLakeDatasetGuard = defaultLakeDatasetGuard;
+    }
+
+    @Autowired(required = false)
+    public void setCodeAssetGrantWriter(CodeAssetGrantWriter codeAssetGrantWriter) {
+        this.codeAssetGrantWriter = codeAssetGrantWriter;
     }
 
     // ── Public CRUD operations ─────────────────────────────────────────
@@ -307,6 +317,7 @@ public class ModelingSqlModelService {
         ModelingSqlModel model = new ModelingSqlModel();
         apply(model, request, activeDeptHeader, true);
         ModelingSqlModel saved = repo.save(model);
+        syncCodeAssetGrant(saved);
         fileService.writeModelFile(saved);
         syncDraftColumns(saved);
         return toDto(saved);
@@ -319,6 +330,7 @@ public class ModelingSqlModelService {
         String oldPath = model.getModelPath();
         apply(model, request, activeDeptHeader, false);
         ModelingSqlModel saved = repo.save(model);
+        syncCodeAssetGrant(saved);
         fileService.writeModelFile(saved);
         fileService.deleteFileIfChanged(oldPath, saved.getModelPath());
         syncDraftColumns(saved);
@@ -785,6 +797,36 @@ public class ModelingSqlModelService {
             .ifPresent(existing -> {
                 throw new IllegalArgumentException("同一项目空间下模型名已存在: " + normalizedName);
             });
+    }
+
+    private void syncCodeAssetGrant(ModelingSqlModel model) {
+        if (codeAssetGrantWriter == null || model == null || model.getId() == null) {
+            return;
+        }
+        String naturalKey = StringUtils.hasText(model.getName()) ? model.getName().trim() : model.getId().toString();
+        CatalogAssetIdentity identity = new CatalogAssetIdentity(
+            CatalogAssetType.MODELING_SQL_MODEL,
+            CatalogAssetKey.codeAsset(CatalogAssetType.MODELING_SQL_MODEL, "default", naturalKey),
+            model.getId().toString(),
+            "modeling-sql-model:" + naturalKey
+        );
+        codeAssetGrantWriter.upsertCodeAsset(
+            identity,
+            model.getOwnerDept(),
+            "dts-platform",
+            null,
+            lifecycleForModel(model)
+        );
+    }
+
+    private static String lifecycleForModel(ModelingSqlModel model) {
+        if (model != null && Boolean.FALSE.equals(model.getEnabled())) {
+            return "ARCHIVED";
+        }
+        if (model != null && STATUS_ACTIVE.equalsIgnoreCase(model.getStatus())) {
+            return "ACTIVE";
+        }
+        return "PENDING_GOVERNANCE";
     }
 
     private Optional<InfraDataSource> resolveSourceEntity(UUID sourceId) {

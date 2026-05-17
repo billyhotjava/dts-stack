@@ -84,6 +84,25 @@ class MetricArtifactGenerationServiceTest {
     }
 
     @Test
+    void injectsPlatformRlsPredicateIntoGeneratedDbtSql() {
+        String manifest = manifestWithSourceAsset("dwd_demo_detail");
+
+        MetricArtifactPreviewResult result = serviceWithPlatform(
+            glossaryResult("glossary.contract_amount"),
+            allowedPermission(),
+            null,
+            null,
+            new PlatformContractClient.RlsPolicyResult(true, List.of("dept_code = 'D01'"), List.of(), "platform-row-filter")
+        ).preview(manifest, new MetricArtifactGenerationService.PreviewActor("ptrdemo", List.of("ROLE_PTR"), "D01", "INTERNAL"));
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.artifacts().get("dbtModelSql"))
+            .contains("-- dts-platform RLS: platform-row-filter")
+            .contains("where\n    (dept_code = 'D01')\n")
+            .contains("group by\n    stat_month");
+    }
+
+    @Test
     void invalidManifestDoesNotGenerateArtifacts() {
         MetricArtifactPreviewResult result = serviceWithActiveTerms().preview("pack_id: unsafe\nraw_sql: drop table users");
 
@@ -500,10 +519,20 @@ class MetricArtifactGenerationServiceTest {
         PlatformContractClient.DomainResolveResult domains,
         PlatformContractClient.DataStandardResolveResult standards
     ) {
+        return serviceWithPlatform(result, permission, domains, standards, PlatformContractClient.RlsPolicyResult.empty());
+    }
+
+    private static MetricArtifactGenerationService serviceWithPlatform(
+        PlatformContractClient.GlossaryResolveResult result,
+        PlatformContractClient.PermissionCheckResult permission,
+        PlatformContractClient.DomainResolveResult domains,
+        PlatformContractClient.DataStandardResolveResult standards,
+        PlatformContractClient.RlsPolicyResult rlsPolicy
+    ) {
         return new MetricArtifactGenerationService(
             new MetricPackValidationService(),
             new MetricFormulaSqlGenerator(),
-            new StubPlatformContractClient(result, permission, domains, standards)
+            new StubPlatformContractClient(result, permission, domains, standards, rlsPolicy)
         );
     }
 
@@ -536,18 +565,21 @@ class MetricArtifactGenerationServiceTest {
         private final PermissionCheckResult permission;
         private final DomainResolveResult domains;
         private final DataStandardResolveResult standards;
+        private final RlsPolicyResult rlsPolicy;
 
         private StubPlatformContractClient(
             GlossaryResolveResult result,
             PermissionCheckResult permission,
             DomainResolveResult domains,
-            DataStandardResolveResult standards
+            DataStandardResolveResult standards,
+            RlsPolicyResult rlsPolicy
         ) {
             super(new DtsMetricsProperties(), RestClient.builder().build());
             this.result = result;
             this.permission = permission;
             this.domains = domains;
             this.standards = standards;
+            this.rlsPolicy = rlsPolicy;
         }
 
         @Override
@@ -558,6 +590,11 @@ class MetricArtifactGenerationServiceTest {
         @Override
         public PermissionCheckResult checkPermission(PermissionCheckRequest request) {
             return permission;
+        }
+
+        @Override
+        public RlsPolicyResult resolveRlsPolicy(RlsPolicyRequest request) {
+            return rlsPolicy != null ? rlsPolicy : RlsPolicyResult.empty();
         }
 
         @Override
@@ -611,6 +648,11 @@ class MetricArtifactGenerationServiceTest {
                 "ALLOWED",
                 "explicit_grant"
             );
+        }
+
+        @Override
+        public RlsPolicyResult resolveRlsPolicy(RlsPolicyRequest request) {
+            return RlsPolicyResult.empty();
         }
 
         @Override

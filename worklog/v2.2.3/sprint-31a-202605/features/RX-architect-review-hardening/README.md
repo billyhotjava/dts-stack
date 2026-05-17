@@ -13,8 +13,8 @@
 |----|------|--------|------|------|
 | T01 | 整合裂缝评审与低风险契约追补 | P0 | CONTRACT_DONE | F1-F6, Sprint-32 |
 | T02 | 测试边界与 metric-pack 外部引用收窄 | P0 | DONE | T01 |
-| T03 | CodeAssetGrantWriter 接入 | P0 | READY | T01, T02 |
-| T04 | CatalogAssetIdentityResolver 扩展 | P0 | READY | T03 |
+| T03 | CodeAssetGrantWriter 接入 | P0 | DONE | T01, T02 |
+| T04 | CatalogAssetIdentityResolver 扩展 | P0 | IN_PROGRESS | T03 |
 | T05 | Metric artifact preview / RLS enforcement | P0 | IN_PROGRESS | T01, T02 |
 
 ## 完成标准
@@ -26,4 +26,7 @@
 - [x] 有针对性单测、negative IT fixture 和静态检查。
 - [x] Glossary existence / ACTIVE 状态检查已进入 artifact preview/import 运行时。
 - [x] Artifact preview 已执行 source asset platform permission check，未授权时不暴露资产细节。
-- [ ] CodeAssetGrantWriter 调用方、resolver 扩展和 SQL RLS 注入继续独立闭环。
+- [x] CodeAssetGrantWriter 已接入 `GovIndicatorDefinition` 与 `ModelingSqlModel` 高频保存/发布链路。
+- [x] Resolver 已覆盖 `GLOSSARY_TERM` / `DATA_STANDARD` / `GOV_INDICATOR` / `MODELING_SQL_MODEL` / `METRIC_PACK` 当前版本身份解析。
+- [x] Metric artifact preview 已从 platform `/api/internal/asset-permission/policy` 获取 RLS predicate，并注入候选 dbt SQL。
+- [ ] API_SERVICE / scopedDataset 反向解析、publish gate 复用同一 RLS/masking 策略和 live IT 继续独立闭环。

@@ -71,6 +71,22 @@ public class PlatformContractClient {
         }
     }
 
+    public RlsPolicyResult resolveRlsPolicy(RlsPolicyRequest request) {
+        try {
+            RestClient.RequestBodySpec spec = restClient
+                .post()
+                .uri(internalUrl("/internal/asset-permission/policy"))
+                .header("X-DTS-Service", properties.getServiceName());
+            if (StringUtils.hasText(properties.getPlatform().getServiceToken())) {
+                spec = spec.header("X-DTS-Service-Token", properties.getPlatform().getServiceToken());
+            }
+            RlsPolicyResult result = spec.body(request).retrieve().body(RlsPolicyResult.class);
+            return result != null ? result : RlsPolicyResult.empty();
+        } catch (RestClientException e) {
+            throw new PlatformContractException("platform contract call failed: security policy resolve", e);
+        }
+    }
+
     public GlossaryResolveResult resolveGlossaryTerms(List<String> refs) {
         List<String> requestedRefs = refs != null ? refs : List.of();
         if (requestedRefs.isEmpty()) {
@@ -292,6 +308,22 @@ public class PlatformContractClient {
     ) {
         public static PermissionCheckResult denied(String reason) {
             return new PermissionCheckResult(false, null, reason, null, null, null, null, null, null, null);
+        }
+    }
+
+    public record RlsPolicyRequest(
+        String username,
+        java.util.List<String> userRoles,
+        String userDeptCode,
+        String userClassification,
+        String assetClassification,
+        String action,
+        PermissionAsset asset
+    ) {}
+
+    public record RlsPolicyResult(boolean applyRls, List<String> predicates, List<String> maskedColumns, String policySource) {
+        public static RlsPolicyResult empty() {
+            return new RlsPolicyResult(true, List.of(), List.of(), "platform-permission");
         }
     }
 

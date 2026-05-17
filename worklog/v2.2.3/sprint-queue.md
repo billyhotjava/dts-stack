@@ -434,7 +434,7 @@
 **状态**: CONTRACT_DONE / ENFORCEMENT_IN_PROGRESS
 **类型**: Architecture / Implementation（dts-platform + dts-platform-webapp）
 **目标**: 在 Sprint-31 主链路补齐和 Sprint-32 `dts-metrics` 独立服务之前，先把 `dts-platform` 的数据资产模块收敛为企业级唯一事实源，统一资产身份、生命周期、治理字段、权限校验、血缘入口和对外读取契约。
-**执行约束**: 按当前执行决策，Sprint-31A -> Sprint-31 -> Sprint-32 过程中不做中间编译；所有 review、测试、build 和容器重建放到三段任务完成后统一执行。
+**执行约束**: 按当前执行决策，Sprint-31A -> Sprint-31 -> Sprint-32 过程中不做完整中间编译、镜像构建和容器重建；评审问题需要代码级闭环时允许执行 focused contract/unit tests，并将证据归档到最终验收目录。
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
@@ -446,7 +446,7 @@
 | F6-migration-compatibility | P0 | 5 | DONE |
 | RX-architect-review-hardening | P0 | 5 | CONTRACT_DONE / ENFORCEMENT_IN_PROGRESS |
 
-**统计**: READY=2, IN_PROGRESS=1, CONTRACT_DONE=0, DONE=30, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=2, CONTRACT_DONE=1, DONE=32, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-31a-202605/README.md`
 **能力契约**: `worklog/v2.2.3/sprint-31a-202605/assets/asset-capability-contract.md`
 **集成测试**: `worklog/v2.2.3/sprint-31a-202605/it/README.md`
