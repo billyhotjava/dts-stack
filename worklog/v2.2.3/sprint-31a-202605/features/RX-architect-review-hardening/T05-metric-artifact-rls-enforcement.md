@@ -18,6 +18,8 @@
 - [x] platform contract 不可达时返回可读预览错误，不向界面透出底层 RestClient 异常。
 - [x] artifact preview 阶段调用 `/api/internal/asset-permission/check`，无权访问 source asset 时拒绝生成，错误不暴露资产名称。
 - [x] metrics internal service principal 通过 `dts.metrics.service-name` 配置判断，不再在 endpoint SpEL 中硬编码。
+- [x] artifact preview / import 前通过 platform internal resolver 校验数据域引用，`domains.yml` 只作为行业包映射，不作为数据域事实源。
+- [x] artifact preview / import 前通过 platform internal resolver 校验数据标准引用，缺失、歧义或非 `ACTIVE` 均阻断候选 artifact 生成。
 
 ## 待完成范围
 
@@ -28,6 +30,6 @@
 
 ## 验收建议
 
-- `MetricArtifactGenerationServiceTest` 覆盖无授权 preview、platform outage、glossary ambiguous、source model suffix 边界。
-- `PlatformContractClientTest` 覆盖 glossary batch split 和 transport exception wrap。
+- `MetricArtifactGenerationServiceTest` 覆盖无授权 preview、platform outage、glossary ambiguous、domain missing、data-standard inactive、source model suffix 边界。
+- `PlatformContractClientTest` 覆盖 glossary/domain/data-standard resolver、glossary batch split 和 transport exception wrap。
 - 后续补充 SQL RLS golden file，验证生成 SQL 包含 platform policy 输出的 predicate。

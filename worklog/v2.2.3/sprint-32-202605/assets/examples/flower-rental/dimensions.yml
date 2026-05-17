@@ -1,6 +1,7 @@
 dimensions:
   - dimension_code: stat_month
     dimension_name: 统计月份
+    standard_code: stat_month
     source_fields:
       rental_contract: sign_date
       rental_project: plan_end_date
@@ -10,15 +11,18 @@ dimensions:
     data_type: string
   - dimension_code: dept_id
     dimension_name: 部门
+    standard_code: dept_id
     source_field: dept_id
     data_type: string
   - dimension_code: contract_status
     dimension_name: 合同状态
+    standard_code: contract_status
     source_field: contract_status
     business_object: rental_contract
     data_type: string
   - dimension_code: risk_level
     dimension_name: 风险等级
+    standard_code: risk_level
     source_field: risk_level
     business_object: rental_project
     data_type: string

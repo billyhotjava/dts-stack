@@ -13,7 +13,7 @@ import org.springframework.web.client.RestClientException;
 @Component
 public class PlatformContractClient {
 
-    private static final int GLOSSARY_RESOLVE_BATCH_SIZE = 200;
+    private static final int RESOLVE_BATCH_SIZE = 200;
 
     private final DtsMetricsProperties properties;
     private final RestClient restClient;
@@ -80,8 +80,8 @@ public class PlatformContractClient {
         List<String> missing = new ArrayList<>();
         List<String> inactive = new ArrayList<>();
         List<String> ambiguous = new ArrayList<>();
-        for (int start = 0; start < requestedRefs.size(); start += GLOSSARY_RESOLVE_BATCH_SIZE) {
-            int end = Math.min(start + GLOSSARY_RESOLVE_BATCH_SIZE, requestedRefs.size());
+        for (int start = 0; start < requestedRefs.size(); start += RESOLVE_BATCH_SIZE) {
+            int end = Math.min(start + RESOLVE_BATCH_SIZE, requestedRefs.size());
             GlossaryResolveResult batch = resolveGlossaryTermsBatch(requestedRefs.subList(start, end));
             if (batch.terms() != null) {
                 terms.addAll(batch.terms());
@@ -99,6 +99,58 @@ public class PlatformContractClient {
         return new GlossaryResolveResult(List.copyOf(terms), List.copyOf(missing), List.copyOf(inactive), List.copyOf(ambiguous));
     }
 
+    public DomainResolveResult resolveDomains(List<String> refs) {
+        List<String> requestedRefs = refs != null ? refs : List.of();
+        if (requestedRefs.isEmpty()) {
+            return DomainResolveResult.empty();
+        }
+        List<DomainContract> domains = new ArrayList<>();
+        List<String> missing = new ArrayList<>();
+        List<String> ambiguous = new ArrayList<>();
+        for (int start = 0; start < requestedRefs.size(); start += RESOLVE_BATCH_SIZE) {
+            int end = Math.min(start + RESOLVE_BATCH_SIZE, requestedRefs.size());
+            DomainResolveResult batch = resolveDomainsBatch(requestedRefs.subList(start, end));
+            if (batch.domains() != null) {
+                domains.addAll(batch.domains());
+            }
+            if (batch.missing() != null) {
+                missing.addAll(batch.missing());
+            }
+            if (batch.ambiguous() != null) {
+                ambiguous.addAll(batch.ambiguous());
+            }
+        }
+        return new DomainResolveResult(List.copyOf(domains), List.copyOf(missing), List.copyOf(ambiguous));
+    }
+
+    public DataStandardResolveResult resolveDataStandards(List<String> refs) {
+        List<String> requestedRefs = refs != null ? refs : List.of();
+        if (requestedRefs.isEmpty()) {
+            return DataStandardResolveResult.empty();
+        }
+        List<DataStandardContract> standards = new ArrayList<>();
+        List<String> missing = new ArrayList<>();
+        List<String> inactive = new ArrayList<>();
+        List<String> ambiguous = new ArrayList<>();
+        for (int start = 0; start < requestedRefs.size(); start += RESOLVE_BATCH_SIZE) {
+            int end = Math.min(start + RESOLVE_BATCH_SIZE, requestedRefs.size());
+            DataStandardResolveResult batch = resolveDataStandardsBatch(requestedRefs.subList(start, end));
+            if (batch.standards() != null) {
+                standards.addAll(batch.standards());
+            }
+            if (batch.missing() != null) {
+                missing.addAll(batch.missing());
+            }
+            if (batch.inactive() != null) {
+                inactive.addAll(batch.inactive());
+            }
+            if (batch.ambiguous() != null) {
+                ambiguous.addAll(batch.ambiguous());
+            }
+        }
+        return new DataStandardResolveResult(List.copyOf(standards), List.copyOf(missing), List.copyOf(inactive), List.copyOf(ambiguous));
+    }
+
     private GlossaryResolveResult resolveGlossaryTermsBatch(List<String> refs) {
         try {
             RestClient.RequestBodySpec spec = restClient
@@ -112,6 +164,38 @@ public class PlatformContractClient {
             return result != null ? result : GlossaryResolveResult.empty();
         } catch (RestClientException e) {
             throw new PlatformContractException("platform contract call failed: glossary terms resolve", e);
+        }
+    }
+
+    private DomainResolveResult resolveDomainsBatch(List<String> refs) {
+        try {
+            RestClient.RequestBodySpec spec = restClient
+                .post()
+                .uri(internalUrl("/internal/domains/resolve"))
+                .header("X-DTS-Service", properties.getServiceName());
+            if (StringUtils.hasText(properties.getPlatform().getServiceToken())) {
+                spec = spec.header("X-DTS-Service-Token", properties.getPlatform().getServiceToken());
+            }
+            DomainResolveResult result = spec.body(Map.of("refs", refs)).retrieve().body(DomainResolveResult.class);
+            return result != null ? result : DomainResolveResult.empty();
+        } catch (RestClientException e) {
+            throw new PlatformContractException("platform contract call failed: domains resolve", e);
+        }
+    }
+
+    private DataStandardResolveResult resolveDataStandardsBatch(List<String> refs) {
+        try {
+            RestClient.RequestBodySpec spec = restClient
+                .post()
+                .uri(internalUrl("/internal/data-standards/resolve"))
+                .header("X-DTS-Service", properties.getServiceName());
+            if (StringUtils.hasText(properties.getPlatform().getServiceToken())) {
+                spec = spec.header("X-DTS-Service-Token", properties.getPlatform().getServiceToken());
+            }
+            DataStandardResolveResult result = spec.body(Map.of("refs", refs)).retrieve().body(DataStandardResolveResult.class);
+            return result != null ? result : DataStandardResolveResult.empty();
+        } catch (RestClientException e) {
+            throw new PlatformContractException("platform contract call failed: data standards resolve", e);
         }
     }
 
@@ -142,6 +226,20 @@ public class PlatformContractClient {
 
     public record GlossaryTermContract(String ref, String id, String code, String name, String status, boolean active) {}
 
+    public record DomainContract(String ref, String id, String code, String name, String owner) {}
+
+    public record DataStandardContract(
+        String ref,
+        String id,
+        String code,
+        String name,
+        String domain,
+        String dataType,
+        Boolean nullable,
+        String status,
+        boolean active
+    ) {}
+
     public record GlossaryResolveResult(
         List<GlossaryTermContract> terms,
         List<String> missing,
@@ -150,6 +248,23 @@ public class PlatformContractClient {
     ) {
         public static GlossaryResolveResult empty() {
             return new GlossaryResolveResult(List.of(), List.of(), List.of(), List.of());
+        }
+    }
+
+    public record DomainResolveResult(List<DomainContract> domains, List<String> missing, List<String> ambiguous) {
+        public static DomainResolveResult empty() {
+            return new DomainResolveResult(List.of(), List.of(), List.of());
+        }
+    }
+
+    public record DataStandardResolveResult(
+        List<DataStandardContract> standards,
+        List<String> missing,
+        List<String> inactive,
+        List<String> ambiguous
+    ) {
+        public static DataStandardResolveResult empty() {
+            return new DataStandardResolveResult(List.of(), List.of(), List.of(), List.of());
         }
     }
 

@@ -252,6 +252,92 @@ class MetricArtifactGenerationServiceTest {
     }
 
     @Test
+    void platformDomainMustResolveBeforeGeneratingArtifacts() {
+        String manifest = manifestWithSourceAsset("dwd_demo_detail");
+
+        MetricArtifactPreviewResult result = serviceWithPlatform(
+            glossaryResult("glossary.contract_amount"),
+            allowedPermission(),
+            new PlatformContractClient.DomainResolveResult(List.of(), List.of("demo"), List.of()),
+            null
+        ).preview(manifest);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.artifacts()).isEmpty();
+        assertThat(result.errors()).contains("data domains are missing in platform: demo");
+    }
+
+    @Test
+    void dataStandardsMustResolveToActivePlatformStandardsBeforeGeneratingArtifacts() {
+        String manifest = """
+            pack_id: inactive-standard
+            pack_name: Inactive Standard Pack
+            version: 0.1.0
+            industry: demo
+            edition_required: professional
+            tenant_namespace: demo
+            security:
+              apply_rls: true
+            source_model: dwd_demo_detail
+            dimensions:
+              - field: contract_amount
+                standard_code: contract_amount
+            metrics:
+              - metric_code: contract_amount
+                metric_name: Contract Amount
+                term_ids:
+                  - glossary.contract_amount
+                formula:
+                  type: aggregation
+                  aggregation: sum
+                  field: contract_amount
+            files:
+              domains: domains.yml
+              business_objects: business-objects.yml
+              dimensions: dimensions.yml
+              metrics: metrics.yml
+              models: models.yml
+              datasets: datasets.yml
+            dependencies:
+              data_standards:
+                - contract_amount
+                - draft_amount
+              platform_assets:
+                - type: DATASET
+                  id: dwd_demo_detail
+                  asset_classification: INTERNAL
+                - type: GLOSSARY_TERM
+                  id: glossary.contract_amount
+            """;
+
+        MetricArtifactPreviewResult result = serviceWithPlatform(
+            glossaryResult("glossary.contract_amount"),
+            allowedPermission(),
+            null,
+            new PlatformContractClient.DataStandardResolveResult(
+                List.of(new PlatformContractClient.DataStandardContract(
+                    "contract_amount",
+                    null,
+                    "contract_amount",
+                    "合同金额",
+                    "flower_rental",
+                    "DECIMAL",
+                    false,
+                    "ACTIVE",
+                    true
+                )),
+                List.of(),
+                List.of("draft_amount"),
+                List.of()
+            )
+        ).preview(manifest);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.artifacts()).isEmpty();
+        assertThat(result.errors()).contains("data standards are not ACTIVE in platform: draft_amount");
+    }
+
+    @Test
     void glossaryTermsMustResolveToActivePlatformTermsBeforeGeneratingArtifacts() {
         String manifest = """
             pack_id: inactive-term
@@ -405,10 +491,34 @@ class MetricArtifactGenerationServiceTest {
         PlatformContractClient.GlossaryResolveResult result,
         PlatformContractClient.PermissionCheckResult permission
     ) {
+        return serviceWithPlatform(result, permission, null, null);
+    }
+
+    private static MetricArtifactGenerationService serviceWithPlatform(
+        PlatformContractClient.GlossaryResolveResult result,
+        PlatformContractClient.PermissionCheckResult permission,
+        PlatformContractClient.DomainResolveResult domains,
+        PlatformContractClient.DataStandardResolveResult standards
+    ) {
         return new MetricArtifactGenerationService(
             new MetricPackValidationService(),
             new MetricFormulaSqlGenerator(),
-            new StubPlatformContractClient(result, permission)
+            new StubPlatformContractClient(result, permission, domains, standards)
+        );
+    }
+
+    private static PlatformContractClient.PermissionCheckResult allowedPermission() {
+        return new PlatformContractClient.PermissionCheckResult(
+            true,
+            "READ",
+            "explicit_grant",
+            "READ",
+            "PREVIEW",
+            "DATASET",
+            "dwd_demo_detail",
+            null,
+            "ALLOWED",
+            "explicit_grant"
         );
     }
 
@@ -424,11 +534,20 @@ class MetricArtifactGenerationServiceTest {
 
         private final GlossaryResolveResult result;
         private final PermissionCheckResult permission;
+        private final DomainResolveResult domains;
+        private final DataStandardResolveResult standards;
 
-        private StubPlatformContractClient(GlossaryResolveResult result, PermissionCheckResult permission) {
+        private StubPlatformContractClient(
+            GlossaryResolveResult result,
+            PermissionCheckResult permission,
+            DomainResolveResult domains,
+            DataStandardResolveResult standards
+        ) {
             super(new DtsMetricsProperties(), RestClient.builder().build());
             this.result = result;
             this.permission = permission;
+            this.domains = domains;
+            this.standards = standards;
         }
 
         @Override
@@ -439,6 +558,31 @@ class MetricArtifactGenerationServiceTest {
         @Override
         public PermissionCheckResult checkPermission(PermissionCheckRequest request) {
             return permission;
+        }
+
+        @Override
+        public DomainResolveResult resolveDomains(List<String> refs) {
+            if (domains != null) {
+                return domains;
+            }
+            return new DomainResolveResult(
+                refs.stream().map(ref -> new DomainContract(ref, null, ref, ref, null)).toList(),
+                List.of(),
+                List.of()
+            );
+        }
+
+        @Override
+        public DataStandardResolveResult resolveDataStandards(List<String> refs) {
+            if (standards != null) {
+                return standards;
+            }
+            return new DataStandardResolveResult(
+                refs.stream().map(ref -> new DataStandardContract(ref, null, ref, ref, null, "STRING", true, "ACTIVE", true)).toList(),
+                List.of(),
+                List.of(),
+                List.of()
+            );
         }
     }
 
@@ -467,6 +611,20 @@ class MetricArtifactGenerationServiceTest {
                 "ALLOWED",
                 "explicit_grant"
             );
+        }
+
+        @Override
+        public DomainResolveResult resolveDomains(List<String> refs) {
+            return new DomainResolveResult(
+                refs.stream().map(ref -> new DomainContract(ref, null, ref, ref, null)).toList(),
+                List.of(),
+                List.of()
+            );
+        }
+
+        @Override
+        public DataStandardResolveResult resolveDataStandards(List<String> refs) {
+            return DataStandardResolveResult.empty();
         }
     }
 

@@ -147,4 +147,91 @@ class PlatformContractClientTest {
             .isInstanceOf(PlatformContractClient.PlatformContractException.class)
             .hasMessageContaining("glossary terms resolve");
     }
+
+    @Test
+    void resolveDomainsCallsPlatformInternalContractWithServiceAuth() {
+        DtsMetricsProperties properties = new DtsMetricsProperties();
+        properties.getPlatform().setBaseUrl("http://dts-platform:8081/");
+        properties.getPlatform().setApiPath("/api");
+        properties.getPlatform().setServiceToken("metrics-secret");
+
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PlatformContractClient client = new PlatformContractClient(properties, builder.build());
+
+        server
+            .expect(requestTo("http://dts-platform:8081/api/internal/domains/resolve"))
+            .andExpect(method(HttpMethod.POST))
+            .andExpect(header("X-DTS-Service", "dts-metrics"))
+            .andExpect(header("X-DTS-Service-Token", "metrics-secret"))
+            .andExpect(content().json("{\"refs\":[\"flower_rental\",\"missing_domain\"]}"))
+            .andRespond(withSuccess("""
+                {
+                  "domains": [
+                    {
+                      "ref": "flower_rental",
+                      "code": "flower_rental",
+                      "name": "花卉租赁"
+                    }
+                  ],
+                  "missing": ["missing_domain"],
+                  "ambiguous": []
+                }
+                """, MediaType.APPLICATION_JSON));
+
+        PlatformContractClient.DomainResolveResult result = client.resolveDomains(List.of("flower_rental", "missing_domain"));
+
+        assertThat(result.domains()).extracting(PlatformContractClient.DomainContract::ref).containsExactly("flower_rental");
+        assertThat(result.missing()).containsExactly("missing_domain");
+        server.verify();
+    }
+
+    @Test
+    void resolveDataStandardsCallsPlatformInternalContractWithServiceAuth() {
+        DtsMetricsProperties properties = new DtsMetricsProperties();
+        properties.getPlatform().setBaseUrl("http://dts-platform:8081/");
+        properties.getPlatform().setApiPath("/api");
+        properties.getPlatform().setServiceToken("metrics-secret");
+
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PlatformContractClient client = new PlatformContractClient(properties, builder.build());
+
+        server
+            .expect(requestTo("http://dts-platform:8081/api/internal/data-standards/resolve"))
+            .andExpect(method(HttpMethod.POST))
+            .andExpect(header("X-DTS-Service", "dts-metrics"))
+            .andExpect(header("X-DTS-Service-Token", "metrics-secret"))
+            .andExpect(content().json("{\"refs\":[\"contract_amount\",\"draft_amount\"]}"))
+            .andRespond(withSuccess("""
+                {
+                  "standards": [
+                    {
+                      "ref": "contract_amount",
+                      "code": "contract_amount",
+                      "name": "合同金额",
+                      "status": "ACTIVE",
+                      "active": true
+                    },
+                    {
+                      "ref": "draft_amount",
+                      "code": "draft_amount",
+                      "name": "草稿金额",
+                      "status": "DRAFT",
+                      "active": false
+                    }
+                  ],
+                  "missing": [],
+                  "inactive": ["draft_amount"],
+                  "ambiguous": []
+                }
+                """, MediaType.APPLICATION_JSON));
+
+        PlatformContractClient.DataStandardResolveResult result = client.resolveDataStandards(List.of("contract_amount", "draft_amount"));
+
+        assertThat(result.standards()).extracting(PlatformContractClient.DataStandardContract::ref)
+            .containsExactly("contract_amount", "draft_amount");
+        assertThat(result.inactive()).containsExactly("draft_amount");
+        server.verify();
+    }
 }

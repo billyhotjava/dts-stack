@@ -60,6 +60,8 @@ GET  /api/platform/catalog/assets/{assetId}
 GET  /api/platform/catalog/datasets/{datasetId}/schema
 POST /api/internal/asset-permission/check
 POST /api/internal/glossary/terms/resolve
+POST /api/internal/domains/resolve
+POST /api/internal/data-standards/resolve
 POST /api/internal/audit-events
 POST /api/internal/dbt/publish-requests
 POST /api/internal/bi/datasets/register
@@ -107,11 +109,14 @@ metric-pack/
 - `manifest.yml` 必须声明 pack id、版本、行业、作者、兼容 DTS 版本、依赖资产标签。
 - 指标必须声明业务含义、公式、单位、格式、统计粒度、过滤条件、负责人和版本。
 - 指标必须绑定至少一个 platform glossary term，inline 指标用 `term_ids` 表达，并在 `dependencies.platform_assets` 中声明对应 `GLOSSARY_TERM`。
+- 数据域必须解析到 platform `CatalogDomain`；`domains.yml` 仅表达行业包内部语义映射，不创建或覆盖 platform 数据域事实源。
+- 数据标准引用必须解析到 platform `DataStandard` 且状态为 `ACTIVE`；行业包可以声明 `dependencies.data_standards[]` 或在维度上声明 `standard_code`。
 - 模型必须引用 platform 已登记资产，不允许引用未登记物理表。
 - 第一版不允许 `raw_sql`，只允许受控公式 DSL。
 - 维度和指标必须能解析到具体业务对象和来源资产，跨对象指标必须在模型中显式声明来源模型。
 - 引用 platform asset 时必须声明 `tenant_namespace` 或资产级 `owner_namespace`，并显式 `security.apply_rls=true`。
 - artifact preview / import 必须用 forward-auth 注入的 `X-DTS-User`、`X-DTS-Roles`、`X-DTS-Dept-Code`、`X-DTS-Personnel-Level` 调用 `/api/internal/asset-permission/check`；无权访问 source asset 时拒绝生成，错误不暴露资产名称。
+- artifact preview / import 必须调用 platform internal resolver 校验数据域、数据标准和 glossary term；platform 不可达时返回可重试错误，不生成候选 artifact。
 - metric-pack 可引用的 platform asset 类型只开放 `DATASET`、`DBT_MODEL`、`BI_DATASET`、`SEMANTIC_MODEL`、`METRIC`、`GLOSSARY_TERM`；`SECURITY_POLICY`、`BACKFILL_REQUEST`、`QUALITY_RULE` 等仅为 platform 内部资产类型，不暴露给合作方包引用。
 - 行业包复用通过 `dependencies.pack_dependencies[]` 声明，不允许隐式引用其他 pack 的私有维度或指标。
 

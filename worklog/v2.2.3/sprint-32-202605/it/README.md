@@ -54,8 +54,12 @@ curl -sS http://127.0.0.1:18082/api/metrics/migration/semantic-dry-run
 ```
 
 ```bash
+RUN_LIVE=1 \
+DTS_AUTH_HEADER='Authorization: Bearer <token>' \
 bash worklog/v2.2.3/sprint-32-202605/it/scripts/metrics-mvp-admission-check.sh
 ```
+
+默认 `RUN_LIVE=0` 只执行静态契约扫描；`RUN_LIVE=1` 会请求真实 `dts-metrics` API，并断言未知 platform 数据域会阻断 artifact 预览。若现场已经种好 `flower_rental` 数据域、ACTIVE 数据标准、术语和资产授权，可追加 `REQUIRE_POSITIVE_PREVIEW=1`，把正向 inline 包预览也纳入强断言。
 
 ## 阻断条件
 
@@ -63,6 +67,7 @@ bash worklog/v2.2.3/sprint-32-202605/it/scripts/metrics-mvp-admission-check.sh
 - metrics 默认部署后导致数据源、ELT、dbt、资产目录主链路不可用。
 - metric-pack 可以携带任意 SQL 或引用未登记物理表。
 - 预览绕过 platform asset_grant。
+- 预览绕过 platform 数据域、数据标准或术语事实源。
 - 发布绕过 dbt release gate。
 - Sprint-32 MVP 误把 Superset 远端注册或完整大屏自动生成纳入交付准入。
 - 兼容代理返回模糊 403/404，导致用户无法判断是未授权还是服务异常。

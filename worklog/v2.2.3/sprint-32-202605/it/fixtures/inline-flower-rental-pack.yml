@@ -42,6 +42,8 @@ files:
   models: models.yml
   datasets: datasets.yml
 dependencies:
+  platform_domains:
+    - flower_rental
   platform_assets:
     - asset_type: DATASET
       asset_code: dwd_flower_contract_detail

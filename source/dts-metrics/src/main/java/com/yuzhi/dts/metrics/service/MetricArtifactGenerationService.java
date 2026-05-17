@@ -61,6 +61,8 @@ public class MetricArtifactGenerationService {
             sourceModel = safeRefName(String.valueOf(manifest.getOrDefault("source_model", "replace_with_dwd_model")));
             PlatformAssetDeclaration sourceAsset = requireSourceModelPlatformAsset(manifest, sourceModel);
             requirePreviewPermission(actor, sourceAsset);
+            requireActivePlatformDomains(manifest);
+            requireActiveDataStandards(manifest);
             requireActiveGlossaryTerms(manifest);
             dimensions = readDimensions(manifest.get("dimensions"));
             metrics = readMetrics(manifest.get("metrics"));
@@ -70,9 +72,17 @@ public class MetricArtifactGenerationService {
         } catch (IllegalArgumentException e) {
             return MetricArtifactPreviewResult.invalid(List.of(e.getMessage()), validation.summary());
         } catch (PlatformContractClient.PlatformContractException e) {
-            String message = e.getMessage() != null && e.getMessage().contains("asset permission")
-                ? "platform contract unavailable while checking asset permissions; retry later"
-                : "platform contract unavailable while resolving glossary terms; retry later";
+            String raw = e.getMessage() != null ? e.getMessage() : "";
+            String message;
+            if (raw.contains("asset permission")) {
+                message = "platform contract unavailable while checking asset permissions; retry later";
+            } else if (raw.contains("domains resolve")) {
+                message = "platform contract unavailable while resolving data domains; retry later";
+            } else if (raw.contains("data standards resolve")) {
+                message = "platform contract unavailable while resolving data standards; retry later";
+            } else {
+                message = "platform contract unavailable while resolving glossary terms; retry later";
+            }
             return MetricArtifactPreviewResult.invalid(List.of(message), validation.summary());
         }
 
@@ -250,6 +260,52 @@ public class MetricArtifactGenerationService {
         }
     }
 
+    private void requireActivePlatformDomains(Map<String, Object> manifest) {
+        List<String> refs = platformDomainRefs(manifest);
+        if (refs.isEmpty()) {
+            return;
+        }
+        PlatformContractClient.DomainResolveResult result = platformContractClient.resolveDomains(refs);
+        List<String> missing = result != null && result.missing() != null ? result.missing() : refs;
+        if (!missing.isEmpty()) {
+            throw new IllegalArgumentException("data domains are missing in platform: " + String.join(", ", missing));
+        }
+        List<String> ambiguous = result != null && result.ambiguous() != null ? result.ambiguous() : List.of();
+        if (!ambiguous.isEmpty()) {
+            throw new IllegalArgumentException("data domains are ambiguous in platform: " + String.join(", ", ambiguous));
+        }
+    }
+
+    private void requireActiveDataStandards(Map<String, Object> manifest) {
+        List<String> refs = dataStandardRefs(manifest);
+        if (refs.isEmpty()) {
+            return;
+        }
+        PlatformContractClient.DataStandardResolveResult result = platformContractClient.resolveDataStandards(refs);
+        List<String> missing = result != null && result.missing() != null ? result.missing() : refs;
+        if (!missing.isEmpty()) {
+            throw new IllegalArgumentException("data standards are missing in platform: " + String.join(", ", missing));
+        }
+        List<String> ambiguous = result != null && result.ambiguous() != null ? result.ambiguous() : List.of();
+        if (!ambiguous.isEmpty()) {
+            throw new IllegalArgumentException("data standards are ambiguous in platform: " + String.join(", ", ambiguous));
+        }
+        List<String> inactive = new ArrayList<>();
+        if (result.inactive() != null) {
+            inactive.addAll(result.inactive());
+        }
+        if (result.standards() != null) {
+            for (PlatformContractClient.DataStandardContract standard : result.standards()) {
+                if (standard != null && !standard.active() && StringUtils.hasText(standard.ref()) && !inactive.contains(standard.ref())) {
+                    inactive.add(standard.ref());
+                }
+            }
+        }
+        if (!inactive.isEmpty()) {
+            throw new IllegalArgumentException("data standards are not ACTIVE in platform: " + String.join(", ", inactive));
+        }
+    }
+
     private void requireActiveGlossaryTerms(Map<String, Object> manifest) {
         List<String> termRefs = inlineGlossaryTermRefs(manifest);
         if (termRefs.isEmpty()) {
@@ -302,6 +358,55 @@ public class MetricArtifactGenerationService {
             }
         }
         return List.copyOf(refs);
+    }
+
+    private static List<String> platformDomainRefs(Map<String, Object> manifest) {
+        LinkedHashSet<String> refs = new LinkedHashSet<>();
+        Object dependenciesRaw = manifest.get("dependencies");
+        if (dependenciesRaw instanceof Map<?, ?> dependencies) {
+            addRefs(refs, dependencies.get("platform_domains"), "domain_code", "code", "id", "domain");
+        }
+        addRefs(refs, manifest.get("domains"), "domain_code", "code", "id", "domain");
+        if (refs.isEmpty()) {
+            addRef(refs, manifest.get("industry"));
+        }
+        return List.copyOf(refs);
+    }
+
+    private static List<String> dataStandardRefs(Map<String, Object> manifest) {
+        LinkedHashSet<String> refs = new LinkedHashSet<>();
+        Object dependenciesRaw = manifest.get("dependencies");
+        if (dependenciesRaw instanceof Map<?, ?> dependencies) {
+            addRefs(refs, dependencies.get("data_standards"), "standard_code", "code", "id", "data_standard", "standard");
+            addRefs(refs, dependencies.get("standards"), "standard_code", "code", "id", "data_standard", "standard");
+        }
+        addRefs(refs, manifest.get("data_standards"), "standard_code", "code", "id", "data_standard", "standard");
+        addRefs(refs, manifest.get("dimensions"), "standard_code", "code", "id", "data_standard", "standard");
+        addRefs(refs, manifest.get("metrics"), "standard_code", "data_standard", "standard");
+        return List.copyOf(refs);
+    }
+
+    private static void addRefs(Set<String> refs, Object raw, String... mapKeys) {
+        if (raw instanceof Iterable<?> iterable) {
+            for (Object item : iterable) {
+                addRefs(refs, item, mapKeys);
+            }
+            return;
+        }
+        if (raw instanceof Map<?, ?> map) {
+            for (String key : mapKeys) {
+                addRef(refs, map.get(key));
+            }
+            return;
+        }
+        addRef(refs, raw);
+    }
+
+    private static void addRef(Set<String> refs, Object raw) {
+        String ref = valueOf(raw);
+        if (StringUtils.hasText(ref)) {
+            refs.add(ref);
+        }
     }
 
     private static boolean assetRefMatches(Object raw, String sourceModel) {

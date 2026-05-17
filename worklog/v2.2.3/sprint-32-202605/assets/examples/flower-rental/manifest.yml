@@ -19,6 +19,13 @@ files:
   datasets: datasets.yml
   dashboards: dashboards.yml
 dependencies:
+  platform_domains:
+    - flower_rental
+  data_standards:
+    - stat_month
+    - dept_id
+    - contract_status
+    - risk_level
   platform_assets:
     - asset_code: dwd_flower_contract_detail
       asset_type: DATASET

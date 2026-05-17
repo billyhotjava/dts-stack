@@ -1,0 +1,32 @@
+pack_id: broken-unknown-domain
+pack_name: Broken Unknown Domain Pack
+version: 0.1.0
+industry: zz_missing_domain_20260517
+edition_required: professional
+tenant_namespace: demo
+security:
+  apply_rls: true
+dimensions:
+  - field: stat_month
+metrics:
+  - metric_code: contract_amount
+    metric_name: Contract Amount
+    term_ids:
+      - glossary.contract_amount
+    formula:
+      type: aggregation
+      aggregation: sum
+      field: contract_amount
+files:
+  domains: domains.yml
+  business_objects: business-objects.yml
+  dimensions: dimensions.yml
+  metrics: metrics.yml
+  models: models.yml
+  datasets: datasets.yml
+dependencies:
+  platform_domains:
+    - zz_missing_domain_20260517
+  platform_assets:
+    - asset_type: GLOSSARY_TERM
+      asset_code: glossary.contract_amount
