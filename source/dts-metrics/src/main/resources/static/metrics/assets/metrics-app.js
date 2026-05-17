@@ -8,12 +8,12 @@ const routes = [
 				stage: "Metric Hub",
 				description: "集中查看 dts-metrics 服务能力、平台权限契约和指标包交付状态。",
 			},
-				{
-					path: "/metrics/dictionary",
-					title: "指标资产",
-					stage: "Metric Dictionary",
-					description: "沉淀指标名称、口径、公式、单位、负责人、版本和下游消费关系。",
-				},
+			{
+				path: "/metrics/dictionary",
+				title: "指标资产",
+				stage: "Metric Dictionary",
+				description: "沉淀指标名称、口径、公式、单位、负责人、版本和下游消费关系。",
+			},
 			{
 				path: "/metrics/packs",
 				title: "指标包",
@@ -25,6 +25,12 @@ const routes = [
 				title: "迁移与回滚",
 				stage: "Migration",
 				description: "查看 platform 旧语义数据到 dts-metrics 的 dry-run 映射、阻断项和回滚边界。",
+			},
+			{
+				path: "/metrics/operations",
+				title: "运行与告警",
+				stage: "Operations",
+				description: "查看模型运行、新鲜度、发布预检和平台观测回传状态。",
 			},
 		],
 	},
@@ -41,7 +47,7 @@ const routes = [
 				path: "/metrics/semantic/subjects",
 				title: "主题域映射",
 				stage: "Subject Domain",
-				description: "管理项目、采购、库存、质量、财务等业务主题，后续将与数据资产目录做权限校验。",
+				description: "管理项目、采购、库存、质量、财务等业务主题，并通过 platform 数据资产目录做权限校验。",
 			},
 			{
 				path: "/metrics/semantic/objects",
@@ -173,7 +179,7 @@ const routeBlueprints = {
 		items: [
 			["事实源", "通过 /api/internal/domains/resolve 校验主题域是否存在且可用。"],
 			["指标包", "manifest.dependencies.platform_domains 必须显式声明所引用主题域。"],
-			["后续页面", "下一步补齐主题域列表、引用指标数、缺口提示和跳转到平台资产域详情。"],
+			["页面闭环", "当前页面展示主题域列表、引用指标数、缺口提示，并可读取 platform capability。"],
 		],
 	},
 	"/metrics/semantic/objects": {
@@ -181,13 +187,13 @@ const routeBlueprints = {
 		intro: "业务对象 Join 只生成候选链路，发布前必须回到平台资产 contract 和权限校验。",
 		items: [
 			["来源模型", "source_model 必须在 dependencies.platform_assets 中声明为 DATASET、DBT_MODEL 或 SEMANTIC_MODEL。"],
-			["Join 约束", "后续补齐 join_type、grain assertion、SCD 策略和一致性维度引用。"],
+			["Join 约束", "Join 设计必须声明 join_type、grain assertion、SCD 策略和一致性维度引用。"],
 			["安全", "预览阶段使用 forward-auth 用户身份检查资产 READ 权限。"],
 		],
 	},
 	"/metrics/semantic/metrics": {
 		title: "指标可视化配置",
-		intro: "当前先以指标包 DSL 承接合作方交付；可视化配置页后续基于同一 manifest contract 落地。",
+		intro: "当前以指标包 DSL 承接合作方交付；可视化配置页基于同一 manifest contract 发起候选生成物预览。",
 		items: [
 			["公式", "支持 aggregation、conditional_count、conditional_sum、ratio、case_when、date_trunc 等基础 DSL。"],
 			["术语", "每个指标必须绑定 glossary term，且 term 必须在 dependencies.platform_assets 中显式声明。"],
@@ -214,11 +220,11 @@ const routeBlueprints = {
 	},
 	"/metrics/semantic/runs": {
 		title: "模型运行监控",
-		intro: "运行状态后续应回传 platform 观测与审计，避免 metrics 服务形成新的运行孤岛。",
+		intro: "运行状态以 platform 观测与审计为最终事实源，避免 metrics 服务形成新的运行孤岛。",
 		items: [
 			["运行事件", "metric_run_event、dbt run 结果、preview 失败原因进入平台审计链。"],
 			["SLA", "结合 freshness、lastObservedAt 和 maxStalenessMinutes 展示指标新鲜度。"],
-			["告警", "异常检测和订阅推送放到后续企业级功能完善。"],
+			["告警", "异常检测和订阅推送由运行与告警页统一承接。"],
 		],
 	},
 	};
@@ -543,6 +549,7 @@ function renderPanel() {
 
 	if (activeRoute.path === "/metrics/dictionary") {
 		panel.innerHTML = renderMetricAssetsPage();
+		bindButton("refresh-dictionary-contract", () => loadCapabilitiesInto("dictionary-contract-output"));
 		return;
 	}
 
@@ -566,31 +573,43 @@ function renderPanel() {
 
 	if (activeRoute.path === "/metrics/semantic/subjects") {
 		panel.innerHTML = renderSubjectMappingPage();
+		bindButton("refresh-subject-contract", () => loadCapabilitiesInto("subject-contract-output"));
 		return;
 	}
 
 	if (activeRoute.path === "/metrics/semantic/objects") {
 		panel.innerHTML = renderBusinessObjectJoinPage();
+		bindButton("preview-object-manifest", () => submitStaticManifest("/api/metrics/packs/preview-artifacts", "object-preview-output"));
 		return;
 	}
 
 	if (activeRoute.path === "/metrics/semantic/metrics") {
 		panel.innerHTML = renderFormulaConfigPage();
+		bindButton("preview-formula-artifacts", () => submitStaticManifest("/api/metrics/packs/preview-artifacts", "formula-preview-output"));
 		return;
 	}
 
 	if (activeRoute.path === "/metrics/semantic/models") {
 		panel.innerHTML = renderModelGenerationPage();
+		bindButton("generate-model-candidates", () => submitStaticManifest("/api/metrics/packs/preview-artifacts", "model-generation-output"));
 		return;
 	}
 
 	if (activeRoute.path === "/metrics/semantic/publish") {
 		panel.innerHTML = renderPublishPage();
+		bindButton("dry-run-publish", () => submitStaticManifest("/api/metrics/packs/import", "publish-output"));
 		return;
 	}
 
 	if (activeRoute.path === "/metrics/semantic/runs") {
 		panel.innerHTML = renderRunMonitorPage();
+		bindButton("refresh-run-status", () => loadCapabilitiesInto("run-status-output"));
+		return;
+	}
+
+	if (activeRoute.path === "/metrics/operations") {
+		panel.innerHTML = renderRunMonitorPage();
+		bindButton("refresh-run-status", () => loadCapabilitiesInto("run-status-output"));
 		return;
 	}
 
@@ -711,7 +730,10 @@ function renderMetricAssetsPage() {
 				<h3>指标资产列表</h3>
 				<p>指标资产以 code 和 version 为主键，下游大屏/BI 应固定到版本，避免口径变更自动漂移。</p>
 			</div>
-			<a class="button primary" href="${routeHref("/metrics/semantic/metrics")}">新建指标</a>
+			<div class="toolbar">
+				<button class="button" type="button" id="refresh-dictionary-contract">读取平台契约</button>
+				<a class="button primary" href="${routeHref("/metrics/semantic/metrics")}">新建指标</a>
+			</div>
 		</div>
 		<div class="toolbar filters">
 			<span class="chip active">全部 ${metricAssets.length}</span>
@@ -760,6 +782,7 @@ function renderMetricAssetsPage() {
 			<h4>绑定要求</h4>
 			<p>每个指标必须声明 glossary term、source_model、platform asset dependency、统计粒度和默认展示格式。预览和发布阶段都要走 platform 权限与审计链。</p>
 		</div>
+		<pre id="dictionary-contract-output">等待读取平台契约</pre>
 	`;
 }
 
@@ -770,7 +793,10 @@ function renderSubjectMappingPage() {
 				<h3>主题域映射</h3>
 				<p>主题域不是 metrics 本地事实源，页面只展示引用、缺口和指标包声明状态，真实治理字段仍在 platform 数据资产中维护。</p>
 			</div>
-			<a class="button" href="${routeHref("/metrics/packs")}">查看 manifest</a>
+			<div class="toolbar">
+				<button class="button" type="button" id="refresh-subject-contract">读取 platform capability</button>
+				<a class="button" href="${routeHref("/metrics/packs")}">查看 manifest</a>
+			</div>
 		</div>
 		<div class="page-grid three-columns">
 			${subjectMappings
@@ -793,6 +819,7 @@ function renderSubjectMappingPage() {
 				)
 				.join("")}
 		</div>
+		<pre id="subject-contract-output">等待读取主题域契约</pre>
 	`;
 }
 
@@ -803,11 +830,15 @@ function renderBusinessObjectJoinPage() {
 				<h3>业务对象 Join 设计</h3>
 				<p>Join 页面强调统计粒度和 fanout 防护。所有来源模型必须先在 manifest dependencies.platform_assets 中声明。</p>
 			</div>
-			<a class="button primary" href="${routeHref("/metrics/semantic/models")}">生成 DWS/ADS</a>
+			<div class="toolbar">
+				<button class="button" type="button" id="preview-object-manifest">预览 Join 生成物</button>
+				<a class="button primary" href="${routeHref("/metrics/semantic/models")}">生成 DWS/ADS</a>
+			</div>
 		</div>
 		<div class="page-grid two-columns">
 			${objectJoins.map(renderObjectJoinCard).join("")}
 		</div>
+		<pre id="object-preview-output">等待预览 Join 候选物</pre>
 	`;
 }
 
@@ -848,9 +879,12 @@ function renderFormulaConfigPage() {
 		<div class="section-head">
 			<div>
 				<h3>指标公式配置</h3>
-				<p>页面展示业务表达、DSL 表达和治理约束。后续保存动作会落到 dts-metrics 自有指标表，再经 platform 发布门禁上线。</p>
+				<p>页面展示业务表达、DSL 表达和治理约束，并可调用生成物预览接口；发布仍必须经过 platform 门禁。</p>
 			</div>
-			<a class="button" href="${routeHref("/metrics/packs")}">从指标包导入</a>
+			<div class="toolbar">
+				<button class="button primary" type="button" id="preview-formula-artifacts">预览当前公式生成物</button>
+				<a class="button" href="${routeHref("/metrics/packs")}">从指标包导入</a>
+			</div>
 		</div>
 		<div class="split-layout">
 			<section class="section">
@@ -874,6 +908,7 @@ function renderFormulaConfigPage() {
 				<pre class="code-preview">${escapeHtml(active.dsl)}</pre>
 			</section>
 		</div>
+		<pre id="formula-preview-output">等待公式预览</pre>
 	`;
 }
 
@@ -884,7 +919,7 @@ function renderModelGenerationPage() {
 				<h3>DWS/ADS 生成</h3>
 				<p>DWS 以复用为目标，ADS 以具体页面消费为目标。生成物只是候选，必须经过平台 dbt 门禁和治理审核。</p>
 			</div>
-			<button class="button primary" type="button" disabled>生成候选物</button>
+			<button class="button primary" type="button" id="generate-model-candidates">生成候选物</button>
 		</div>
 		<div class="page-grid two-columns">
 			${modelCandidates
@@ -908,6 +943,7 @@ function renderModelGenerationPage() {
 				)
 				.join("")}
 		</div>
+		<pre id="model-generation-output">等待生成 DWS/ADS 候选物</pre>
 	`;
 }
 
@@ -918,7 +954,7 @@ function renderPublishPage() {
 				<h3>审核发布与血缘</h3>
 				<p>发布页把 metrics 生成物推回 platform 的统一发布治理链，不在 metrics 本地绕开审批、审计或资产授权。</p>
 			</div>
-			<button class="button primary" type="button" disabled>提交平台门禁</button>
+			<button class="button primary" type="button" id="dry-run-publish">发布预检</button>
 		</div>
 		<div class="page-grid two-columns">
 			<section class="section">
@@ -947,6 +983,7 @@ function renderPublishPage() {
 				<p>血缘注册以 platform asset identity 为准，metric code 只作为可读业务标识。</p>
 			</section>
 		</div>
+		<pre id="publish-output">等待发布预检</pre>
 	`;
 }
 
@@ -955,9 +992,12 @@ function renderRunMonitorPage() {
 		<div class="section-head">
 			<div>
 				<h3>模型运行监控</h3>
-				<p>运行页关注新鲜度、耗时、失败原因和平台观测回传。后续接入真实 metric_run_event 后替换当前示例数据。</p>
+				<p>运行页关注新鲜度、耗时、失败原因和平台观测回传，可刷新 dts-metrics 服务观测状态。</p>
 			</div>
-			<a class="button" href="${routeHref("/metrics/semantic/publish")}">查看发布门禁</a>
+			<div class="toolbar">
+				<button class="button" type="button" id="refresh-run-status">刷新服务观测</button>
+				<a class="button" href="${routeHref("/metrics/semantic/publish")}">查看发布门禁</a>
+			</div>
 		</div>
 		<div class="run-board">
 			${[
@@ -972,6 +1012,7 @@ function renderRunMonitorPage() {
 		<div class="table-wrap">
 			${renderKeyTable(["模型", "层级", "状态", "最近运行", "耗时", "说明"], runRecords)}
 		</div>
+		<pre id="run-status-output">等待刷新运行观测</pre>
 	`;
 }
 
@@ -979,7 +1020,7 @@ function renderManifestPanel() {
 	return `
 		<section class="section">
 			<h3>指标包校验</h3>
-			<p>合作方可以先按指标包契约提交 YAML/JSON，dts-metrics 做结构校验；后续导入会落到指标语义中心自己的数据表。</p>
+			<p>合作方按指标包契约提交 YAML/JSON，dts-metrics 做结构校验、候选生成和导入预检；发布事实仍回到 platform。</p>
 			<div class="manifest-grid">
 				<div>
 					<textarea id="manifest-input" spellcheck="false" aria-label="指标包内容"></textarea>
@@ -1125,6 +1166,42 @@ async function loadMigrationDryRun() {
 		output.textContent = String(error?.message || error);
 	} finally {
 		if (button) button.disabled = false;
+	}
+}
+
+function bindButton(id, handler) {
+	const button = document.getElementById(id);
+	if (!button) return;
+	button.addEventListener("click", () => {
+		void handler();
+	});
+}
+
+async function loadCapabilitiesInto(outputId) {
+	const output = document.getElementById(outputId);
+	if (!output) return;
+	output.textContent = "读取中...";
+	try {
+		const result = await fetchJson("/api/metrics/capabilities");
+		output.textContent = JSON.stringify(result, null, 2);
+	} catch (error) {
+		output.textContent = String(error?.message || error);
+	}
+}
+
+async function submitStaticManifest(url, outputId) {
+	const output = document.getElementById(outputId);
+	if (!output) return;
+	output.textContent = "提交中...";
+	try {
+		const result = await fetchJson(url, {
+			method: "POST",
+			headers: { "Content-Type": "text/yaml" },
+			body: sampleManifest,
+		});
+		output.textContent = JSON.stringify(result, null, 2);
+	} catch (error) {
+		output.textContent = String(error?.message || error);
 	}
 }
 
