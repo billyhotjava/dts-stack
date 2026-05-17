@@ -35,6 +35,14 @@ type ChainItem = {
 	path: string;
 };
 
+const openPlatformOrMetricsPath = (navigate: ReturnType<typeof useNavigate>, path: string) => {
+	if (path === "/metrics" || path.startsWith("/metrics/")) {
+		window.location.assign(path);
+		return;
+	}
+	navigate(path);
+};
+
 const FALLBACK_OBSERVABILITY: IngestionExecutionObservabilityDTO = {
 	total: 0,
 	success: 0,
@@ -134,7 +142,7 @@ export default function EltConsolePage() {
 		() => [
 			{ key: "task", asset: "采集任务", stage: "接入", owner: "dts-ingestion", status: governance.running ? "processing" : "success", path: "/explore/etl/transform" },
 			{ key: "model", asset: "转换模型", stage: "加工", owner: "dts-platform", status: observability.failed ? "warning" : "success", path: "/modeling/dbt-files" },
-			{ key: "metric", asset: "指标口径", stage: "消费", owner: "dts-platform", status: "success", path: "/bi-apps/metrics/center" },
+			{ key: "metric", asset: "指标口径", stage: "消费", owner: "dts-metrics", status: "success", path: "/metrics/center" },
 			{ key: "bi", asset: "分析看板", stage: "发布", owner: "dts-analytics", status: "success", path: "/bi/project-cockpit" },
 		],
 		[governance.running, observability.failed],
@@ -195,7 +203,7 @@ export default function EltConsolePage() {
 			width: 160,
 			fixed: "right",
 			render: (_, record) => (
-				<Button type="link" size="small" onClick={() => navigate(record.path)}>
+				<Button type="link" size="small" onClick={() => openPlatformOrMetricsPath(navigate, record.path)}>
 					进入
 				</Button>
 			),
@@ -252,7 +260,7 @@ export default function EltConsolePage() {
 							<button
 								key={stage.key}
 								type="button"
-								onClick={() => navigate(stage.path)}
+								onClick={() => openPlatformOrMetricsPath(navigate, stage.path)}
 								className="rounded-lg border border-border/70 bg-background p-4 text-left transition hover:border-primary/60 hover:bg-primary/5"
 							>
 								<div className="mb-3 flex items-center justify-between gap-2">

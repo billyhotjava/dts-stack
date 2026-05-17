@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from "react";
 import { useLocation, type RouteObject } from "react-router";
 import { LineLoading } from "@/components/loading";
+import { metricsServiceHrefFromPlatformLocation } from "./metricsServiceRoutes";
 
 // ── Platform pages ──
 const TransformPage = lazy(() => import("@/pages/explore/etl/TransformPage"));
@@ -17,7 +18,6 @@ const LineagePage = lazy(() => import("@/pages/catalog/LineagePage"));
 const PlatformEventObservabilityPage = lazy(() => import("@/pages/ops/PlatformEventObservabilityPage"));
 const AuditEvidencePage = lazy(() => import("@/pages/ops/AuditEvidencePage"));
 const ReleaseGovernancePage = lazy(() => import("@/pages/ops/ReleaseGovernancePage"));
-const MetricsBridgePage = lazy(() => import("@/pages/metrics/MetricsBridgePage"));
 
 // ── Analytics pages (static routes — registered statically for reliability; menu controls visibility) ──
 const AnalyticsHomePage = lazy(() => import("@/analytics/pages/HomePage"));
@@ -53,29 +53,12 @@ const S = ({ children }: { children: React.ReactNode }) => (
 	<Suspense fallback={<LineLoading />}>{children}</Suspense>
 );
 
-const legacyMetricsPath = (pathname: string) => {
-	if (pathname === "/metrics") return "/bi-apps/metrics/center";
-	if (pathname.startsWith("/metrics/")) {
-		return pathname.replace("/metrics", "/bi-apps/metrics");
-	}
-	if (pathname === "/modeling/semantic-center") return "/bi-apps/metrics/semantic";
-	if (pathname.startsWith("/modeling/semantic-center/")) {
-		return pathname.replace("/modeling/semantic-center", "/bi-apps/metrics/semantic");
-	}
-	if (pathname === "/bi/semantic-modeling") return "/bi-apps/metrics/semantic";
-	return pathname;
-};
-
 const MetricsServiceRedirect = () => {
 	const location = useLocation();
 
 	useEffect(() => {
-		const targetPath = legacyMetricsPath(location.pathname);
-		const target = `${targetPath}${location.search}${location.hash}`;
-		const marker = `dts-metrics-redirect:${target}`;
-		if (window.sessionStorage.getItem(marker) === "1") return;
-		window.sessionStorage.setItem(marker, "1");
-		window.location.assign(target);
+		const target = metricsServiceHrefFromPlatformLocation(location.pathname, location.search, location.hash);
+		window.location.replace(target);
 	}, [location.hash, location.pathname, location.search]);
 
 	return <LineLoading />;
@@ -102,10 +85,8 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{ path: "catalog/lineage/columns", element: <S><LineagePage section="columns" /></S> },
 	{ path: "catalog/lineage/import", element: <S><LineagePage section="import" /></S> },
 	{ path: "catalog/lineage/diff", element: <S><LineagePage section="diff" /></S> },
-	{ path: "bi-apps/metrics", element: <S><MetricsBridgePage /></S> },
-	{ path: "bi-apps/metrics/*", element: <S><MetricsBridgePage /></S> },
-	{ path: "metrics", element: <MetricsServiceRedirect /> },
-	{ path: "metrics/*", element: <MetricsServiceRedirect /> },
+	{ path: "bi-apps/metrics", element: <MetricsServiceRedirect /> },
+	{ path: "bi-apps/metrics/*", element: <MetricsServiceRedirect /> },
 	{ path: "ops/events", element: <S><PlatformEventObservabilityPage /></S> },
 	{ path: "platform/events", element: <S><PlatformEventObservabilityPage /></S> },
 	{ path: "ops/audit-evidence", element: <S><AuditEvidencePage /></S> },

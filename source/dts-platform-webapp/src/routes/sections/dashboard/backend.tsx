@@ -3,7 +3,7 @@ import { Navigate } from "react-router";
 import { getMenus } from "@/store/menuStore";
 import type { MenuMetaInfo, MenuTree } from "@/types/entity";
 import { PermissionType } from "@/types/enum";
-import { parseMenuMetadata } from "@/utils/menuTree";
+import { isExternalPath, parseMenuMetadata } from "@/utils/menuTree";
 import { convertFlatToTree } from "@/utils/tree";
 import { DynamicMenuResolver, resolveDashboardComponentOverride } from "./dynamic-resolver";
 import { Component } from "./utils";
@@ -76,8 +76,8 @@ const convertToRoute = (items: MenuTree[], parent?: MenuTree): RouteObject[] => 
 		if (item.type === PermissionType.CATALOGUE) {
 			const children = item.children || [];
 			if (children.length > 0) {
-				const firstChild = children[0];
-				if (firstChild.path) {
+				const firstChild = children.find((child) => child.path && !isExternalPath(child.path || ""));
+				if (firstChild?.path) {
 					routes.push({
 						path: getRoutePath(item.path, parent?.path),
 						children: [
@@ -94,6 +94,9 @@ const convertToRoute = (items: MenuTree[], parent?: MenuTree): RouteObject[] => 
 
 		// if menu, create route
 		if (item.type === PermissionType.MENU) {
+			if (isExternalPath(item.path || "")) {
+				return;
+			}
 			const props = generateProps(item);
 			const component = resolveDashboardComponentOverride(item.path) || item.component;
 

@@ -5,6 +5,7 @@ import {
 	findBestMenuMatch,
 	firstAccessibleChildPath,
 	firstAccessibleMenuPath,
+	isExternalPath,
 	resolveMenuPath,
 } from "./menuTree.ts";
 
@@ -59,4 +60,9 @@ test("findBestMenuMatch matches nested BI routes using canonical joined path", (
 	const match = findBestMenuMatch(BI_MENU_TREE, "/bi/screens");
 
 	assert.equal(match?.id, "bi-screens");
+});
+
+test("metrics service paths are treated as reverse-proxy external navigation", () => {
+	assert.equal(isExternalPath("/metrics/center"), true);
+	assert.equal(isExternalPath("/metrics/semantic/publish"), true);
 });

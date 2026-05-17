@@ -90,6 +90,11 @@ const SearchBar = () => {
 
 	const handleSelect = useCallback(
 		(path: string) => {
+			if (path === "/metrics" || path.startsWith("/metrics/")) {
+				window.location.assign(path);
+				setOpen(false);
+				return;
+			}
 			replace(path);
 			setOpen(false);
 		},

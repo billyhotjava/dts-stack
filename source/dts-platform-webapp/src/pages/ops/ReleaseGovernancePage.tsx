@@ -42,6 +42,14 @@ type CheckRow = {
 	path: string;
 };
 
+const openPlatformOrMetricsPath = (navigate: ReturnType<typeof useNavigate>, path: string) => {
+	if (path === "/metrics" || path.startsWith("/metrics/")) {
+		window.location.assign(path);
+		return;
+	}
+	navigate(path);
+};
+
 const EMPTY_INGESTION: IngestionExecutionObservabilityDTO = {
 	total: 0,
 	success: 0,
@@ -195,7 +203,7 @@ export default function ReleaseGovernancePage() {
 				actual: String(indicatorFailed),
 				threshold: "=0",
 				severity: "BLOCKER",
-				path: "/bi-apps/metrics/operations",
+				path: "/metrics/operations",
 			},
 			{
 				key: "event-dispatch",
@@ -237,7 +245,7 @@ export default function ReleaseGovernancePage() {
 			width: 160,
 			fixed: "right",
 			render: (_, record) => (
-				<Button type="link" size="small" onClick={() => navigate(record.path)}>
+				<Button type="link" size="small" onClick={() => openPlatformOrMetricsPath(navigate, record.path)}>
 					进入
 				</Button>
 			),
@@ -306,7 +314,7 @@ export default function ReleaseGovernancePage() {
 						<Button block icon={<DatabaseZap className="h-4 w-4" />} onClick={() => navigate("/explore/etl")}>
 							ELT 控制台
 						</Button>
-						<Button block icon={<CheckCircle2 className="h-4 w-4" />} onClick={() => navigate("/bi-apps/metrics/operations")}>
+						<Button block icon={<CheckCircle2 className="h-4 w-4" />} onClick={() => openPlatformOrMetricsPath(navigate, "/metrics/operations")}>
 							指标运营台
 						</Button>
 						<Button block icon={<RadioTower className="h-4 w-4" />} onClick={() => navigate("/ops/events")}>
