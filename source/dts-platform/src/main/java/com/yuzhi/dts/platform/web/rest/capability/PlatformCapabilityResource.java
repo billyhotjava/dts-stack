@@ -147,6 +147,7 @@ public class PlatformCapabilityResource {
             "/api/catalog/assets-v2/{id}/schema-contract",
             "/api/catalog/assets-v2/governance-gaps",
             "/api/catalog/assets-v2/lineage-failures",
+            "/api/catalog/assets-v2/resolution-failures",
             "/api/catalog/assets-v2/migration/dry-run"
         ));
         catalog.put("migrationDryRunEndpoint", "/api/catalog/assets-v2/migration/dry-run");

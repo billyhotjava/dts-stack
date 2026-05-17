@@ -21,6 +21,8 @@ class PlatformCapabilityResourceTest {
         assertThat(map(capabilities.get("catalog"))).containsEntry("contractVersion", "2026-05-sprint31a");
         assertThat(map(capabilities.get("catalog")))
             .containsEntry("migrationDryRunEndpoint", "/api/catalog/assets-v2/migration/dry-run");
+        assertThat(map(capabilities.get("catalog")).get("readEndpoints").toString())
+            .contains("/api/catalog/assets-v2/resolution-failures");
         assertThat(map(capabilities.get("permissions"))).containsEntry("source", "platform-asset-grant");
         assertThat(map(capabilities.get("dbtPublish"))).containsEntry("mode", "platform-gated");
         assertThat(map(capabilities.get("metrics"))).containsEntry("serviceBoundary", "optional-value-added-service");
