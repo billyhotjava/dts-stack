@@ -42,7 +42,8 @@ class MetricsFrontendResourceContractTest {
             .contains(
                 "\"/api/metrics/capabilities\"",
                 "\"/api/metrics/packs/preview-artifacts\"",
-                "\"/api/metrics/packs/import\""
+                "\"/api/metrics/packs/import\"",
+                "\"/api/metrics/packs/publish-dry-run\""
             );
     }
 

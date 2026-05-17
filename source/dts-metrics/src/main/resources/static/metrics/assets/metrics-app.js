@@ -597,7 +597,7 @@ function renderPanel() {
 
 	if (activeRoute.path === "/metrics/semantic/publish") {
 		panel.innerHTML = renderPublishPage();
-		bindButton("dry-run-publish", () => submitStaticManifest("/api/metrics/packs/import", "publish-output"));
+		bindButton("dry-run-publish", () => submitStaticManifest("/api/metrics/packs/publish-dry-run", "publish-output"));
 		return;
 	}
 

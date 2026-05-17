@@ -11,6 +11,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import com.yuzhi.dts.metrics.config.DtsMetricsProperties;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
@@ -295,6 +296,55 @@ class PlatformContractClientTest {
         assertThat(result.predicates()).containsExactly("dept_code = 'D01'");
         assertThat(result.maskedColumns()).containsExactly("customer_phone");
         assertThat(result.policySource()).isEqualTo("platform-row-filter");
+        server.verify();
+    }
+
+    @Test
+    void checkDbtReleaseGateCallsPlatformWithAppliedPolicyMetadata() {
+        DtsMetricsProperties properties = new DtsMetricsProperties();
+        properties.getPlatform().setBaseUrl("http://dts-platform:8081/");
+        properties.getPlatform().setApiPath("/api");
+        properties.getPlatform().setServiceToken("metrics-secret");
+
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PlatformContractClient client = new PlatformContractClient(properties, builder.build());
+
+        server
+            .expect(requestTo("http://dts-platform:8081/api/etl/dbt/release-gate/check"))
+            .andExpect(method(HttpMethod.POST))
+            .andExpect(header("X-DTS-Service", "dts-metrics"))
+            .andExpect(header("X-DTS-Service-Token", "metrics-secret"))
+            .andExpect(content().json("""
+                {
+                  "models": "dws_publish_policy_summary",
+                  "strictMode": true,
+                  "appliedPolicySource": "platform-row-filter",
+                  "appliedPredicateHash": "sha256:abc123"
+                }
+                """))
+            .andRespond(withSuccess("""
+                {
+                  "decision": "PASS",
+                  "appliedPolicySource": "platform-row-filter",
+                  "appliedPredicateHash": "sha256:abc123"
+                }
+                """, MediaType.APPLICATION_JSON));
+
+        Map<String, Object> result = client.checkDbtReleaseGate(
+            new PlatformContractClient.DbtReleaseGateRequest(
+                "dws_publish_policy_summary",
+                null,
+                null,
+                true,
+                "platform-row-filter",
+                "sha256:abc123"
+            )
+        );
+
+        assertThat(result).containsEntry("decision", "PASS");
+        assertThat(result).containsEntry("appliedPolicySource", "platform-row-filter");
+        assertThat(result).containsEntry("appliedPredicateHash", "sha256:abc123");
         server.verify();
     }
 }

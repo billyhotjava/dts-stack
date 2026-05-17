@@ -87,6 +87,23 @@ public class PlatformContractClient {
         }
     }
 
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> checkDbtReleaseGate(DbtReleaseGateRequest request) {
+        try {
+            RestClient.RequestBodySpec spec = restClient
+                .post()
+                .uri(internalUrl("/etl/dbt/release-gate/check"))
+                .header("X-DTS-Service", properties.getServiceName());
+            if (StringUtils.hasText(properties.getPlatform().getServiceToken())) {
+                spec = spec.header("X-DTS-Service-Token", properties.getPlatform().getServiceToken());
+            }
+            Map<String, Object> result = spec.body(request).retrieve().body(Map.class);
+            return result != null ? result : Map.of();
+        } catch (RestClientException e) {
+            throw new PlatformContractException("platform contract call failed: dbt release gate check", e);
+        }
+    }
+
     public GlossaryResolveResult resolveGlossaryTerms(List<String> refs) {
         List<String> requestedRefs = refs != null ? refs : List.of();
         if (requestedRefs.isEmpty()) {
@@ -326,6 +343,15 @@ public class PlatformContractClient {
             return new RlsPolicyResult(true, List.of(), List.of(), "platform-permission");
         }
     }
+
+    public record DbtReleaseGateRequest(
+        String models,
+        String gitRef,
+        String commitSha,
+        Boolean strictMode,
+        String appliedPolicySource,
+        String appliedPredicateHash
+    ) {}
 
     public static class PlatformContractException extends RuntimeException {
         public PlatformContractException(String message, Throwable cause) {

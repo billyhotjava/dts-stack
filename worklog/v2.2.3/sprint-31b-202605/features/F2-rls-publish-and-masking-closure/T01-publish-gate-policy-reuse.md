@@ -1,7 +1,7 @@
 # T01: publish gate 复用 policy contract
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: Sprint-31A RX/T05
 
 ## 目标
@@ -39,12 +39,14 @@ Sprint-31A RX/T05 已经在 preview 阶段做了：
 
 ## 验证
 
-- [ ] `MetricArtifactGenerationServiceTest.publish_reusesPreviewPolicy` 验证 publish 重新调 policy contract
-- [ ] `MetricArtifactPublishServiceTest.policyHashChange_regeneratesArtifact`
-- [ ] preview / publish 输出 SQL diff 仅在 policy 变化时存在
+- [x] `MetricArtifactPublishServiceTest.publishDryRunReResolvesPlatformPolicyAndChangesPredicateHash` 验证发布预检重新调 policy contract
+- [x] `PlatformContractClientTest.checkDbtReleaseGateCallsPlatformWithAppliedPolicyMetadata` 验证 release gate 请求携带 `appliedPolicySource` / `appliedPredicateHash`
+- [x] `MetricPackResourceTest.publishDryRunUsesForwardAuthHeadersAsPublishActor` 验证发布预检沿用 forward-auth 用户上下文
+- [x] `MetricsFrontendResourceContractTest.metricsPagesExposeRealApiActions` 验证发布页调用 `/api/metrics/packs/publish-dry-run`
+- [x] preview / publish-dry-run 输出 SQL diff 仅随 platform policy 变化而变化
 
 ## 完成标准
 
-- [ ] preview 与 publish 共享 `MetricSqlGenerator`。
-- [ ] publish 始终重新调 policy，不依赖缓存。
-- [ ] publish response 含 policy source 与 hash。
+- [x] preview 与 publish-dry-run 共享 `MetricArtifactGenerationService` 生成路径。
+- [x] publish-dry-run 始终重新调 policy，不依赖缓存。
+- [x] publish-dry-run response 含 policy source 与 hash。

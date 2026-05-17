@@ -502,20 +502,21 @@
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
 | F1-rx-runtime-closure | P0 | 6 | DONE |
-| F2-rls-publish-and-masking-closure | P0 | 5 | IN_PROGRESS（T02/T03 DONE；publish gate / audit 待接入） |
+| F2-rls-publish-and-masking-closure | P0 | 5 | IN_PROGRESS（T01/T02/T03 DONE；audit / live IT 待接入） |
 | F3-code-quality-and-security-hardening | P0 | 5 | DONE |
 | F4-sprint-31a-gap-and-status-rectification | P1 | 4 | DONE |
 | F5-sprint-31-cheap-compile-verification | P0 | 4 | READY |
 | F6-frontend-acceptance-recovery | P0 | 5 | DONE |
 
-**统计**: READY=7, IN_PROGRESS=0, DONE=22, BLOCKED=0
+**统计**: READY=6, IN_PROGRESS=0, DONE=23, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-31b-202605/README.md`
 **集成测试**: `worklog/v2.2.3/sprint-31b-202605/it/README.md`
 **关键决策**:
 - 把 Sprint-31A RX/T03-T05 未闭环的运行时项收尾，包括 `findAll().stream()` hot path 替换、IdentityResolver 兼容代理、policy publish gate 复用与 column masking。
 - 修正 Sprint-31A 状态口径：契约 DONE / 运行时 PARTIAL（由 Sprint-31B 收口）。
 - 本 Sprint 结束时跑 cheap compile-only 验证（platform + metrics + webapp tsc），把跨模块签名漂移在最低成本暴露。
-- 2026-05-17 已完成 hot path 索引化、`urn:uuid` 旧引用解析、DataStandard/Glossary/SvcApi writer、policy v1 + 403、service-auth/capability 同步、dataset miss warn+counter、`apply_rls=true` 空策略失败；publish gate、SQL masking、strict policy miss、audit 和 full cheap compile 仍未闭环。
+- 2026-05-17 已完成 hot path 索引化、`urn:uuid` 旧引用解析、DataStandard/Glossary/SvcApi writer、policy v1 + 403、service-auth/capability 同步、dataset miss warn+counter、`apply_rls=true` 空策略失败；SQL masking 已接入，strict policy miss 与 full cheap compile 仍未闭环。
+- 2026-05-18 完成 dts-metrics 发布预检路径：重新解析 platform policy、计算 predicate hash、调用 platform release gate，并在响应返回 `appliedPolicySource` / `appliedPredicateHash`。
 - 2026-05-18 新增前端验收口径：数据资产、语义指标、BI 消费能力必须以“页面可操作”为 DONE 标准；已先补资产解析失败报告入口，其余 assets-v2 详情、数据产品成员配置、治理缺口处置、dts-metrics 真实页面仍待闭环。
 
 ## v2.3 Backlog: 企业级资产与指标增强

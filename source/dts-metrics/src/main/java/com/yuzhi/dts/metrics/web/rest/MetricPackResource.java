@@ -1,8 +1,10 @@
 package com.yuzhi.dts.metrics.web.rest;
 
 import com.yuzhi.dts.metrics.service.MetricArtifactGenerationService;
+import com.yuzhi.dts.metrics.service.MetricArtifactPublishService;
 import com.yuzhi.dts.metrics.service.MetricPackValidationService;
 import com.yuzhi.dts.metrics.service.dto.MetricArtifactPreviewResult;
+import com.yuzhi.dts.metrics.service.dto.MetricArtifactPublishResult;
 import com.yuzhi.dts.metrics.service.dto.MetricPackValidationResult;
 import java.time.Instant;
 import java.util.Arrays;
@@ -26,13 +28,16 @@ public class MetricPackResource {
 
     private final MetricPackValidationService validationService;
     private final MetricArtifactGenerationService artifactGenerationService;
+    private final MetricArtifactPublishService artifactPublishService;
 
     public MetricPackResource(
         MetricPackValidationService validationService,
-        MetricArtifactGenerationService artifactGenerationService
+        MetricArtifactGenerationService artifactGenerationService,
+        MetricArtifactPublishService artifactPublishService
     ) {
         this.validationService = validationService;
         this.artifactGenerationService = artifactGenerationService;
+        this.artifactPublishService = artifactPublishService;
     }
 
     @PostMapping(value = "/validate", consumes = { "application/yaml", "text/yaml", MediaType.TEXT_PLAIN_VALUE, MediaType.APPLICATION_JSON_VALUE })
@@ -65,6 +70,17 @@ public class MetricPackResource {
         }
         MetricArtifactPreviewResult preview = artifactGenerationService.preview(manifestContent, previewActor(headers));
         return preview.valid() ? ResponseEntity.ok(preview) : ResponseEntity.badRequest().body(preview);
+    }
+
+    @PostMapping(value = "/publish-dry-run", consumes = { "application/yaml", "text/yaml", MediaType.TEXT_PLAIN_VALUE, MediaType.APPLICATION_JSON_VALUE })
+    public ResponseEntity<MetricArtifactPublishResult> publishDryRun(@RequestBody String manifestContent, @RequestHeader HttpHeaders headers) {
+        if (!hasForwardAuthIdentity(headers)) {
+            return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(MetricArtifactPublishResult.invalid(List.of("forward-auth identity headers are required"), Map.of()));
+        }
+        MetricArtifactPublishResult result = artifactPublishService.publishDryRun(manifestContent, previewActor(headers));
+        return result.valid() ? ResponseEntity.ok(result) : ResponseEntity.badRequest().body(result);
     }
 
     private boolean hasForwardAuthIdentity(HttpHeaders headers) {
