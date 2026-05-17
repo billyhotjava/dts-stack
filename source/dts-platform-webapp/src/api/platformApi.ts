@@ -1081,6 +1081,11 @@ export type DataProduct = {
 	description?: string;
 	datasetIds?: string;
 	indicatorCodes?: string;
+	classification?: string;
+	freshnessSla?: string;
+	lifecycleStatus?: string;
+	visibility?: string;
+	consumerEntry?: string;
 	status?: "DRAFT" | "PUBLISHED" | "OFFLINE";
 };
 

@@ -1,7 +1,7 @@
 # T03: 数据产品成员配置 UI
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: Sprint-31A F1/F4
 
 ## 目标
@@ -28,9 +28,11 @@
 
 ## 验证
 
-- [ ] 前端 build 通过。
-- [ ] 数据产品创建、编辑、删除和成员显示均可操作。
+- [x] source-level test 通过：`./node_modules/.bin/tsx --test src/pages/catalog/DataProductsPage.source-contract.test.ts`。
+- [x] 前端 build 通过：`pnpm build` from `source/dts-platform-webapp`。
+- [x] 后端编译通过：`./mvnw -q -pl dts-platform -DskipTests compile` from `source`。
+- [x] 数据产品创建、编辑、删除和成员显示均可操作；成员资产、核心指标、密级、SLA、生命周期、可见性和消费入口已进入表单与卡片展示。
 
 ## 完成标准
 
-- [ ] 数据产品真正能把资产和指标打包，而不是仅保存文字信息。
+- [x] 数据产品真正能把资产和指标打包，而不是仅保存文字信息。

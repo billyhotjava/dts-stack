@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button, Card, Form, Input, Modal, Space, Tag, Typography } from "antd";
+import { Alert, Button, Card, Form, Input, Modal, Select, Space, Tag, Typography } from "antd";
 import { PlusOutlined, DeleteOutlined, EditOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/empty-state";
@@ -7,7 +7,9 @@ import {
 	type DataProduct,
 	createDataProduct,
 	deleteDataProduct,
+	listCatalogAssetsV2,
 	listDataProducts,
+	listIndicators,
 	updateDataProduct,
 } from "@/api/platformApi";
 
@@ -19,6 +21,72 @@ const STATUS_CONFIG = {
 	OFFLINE: { label: "已下线", color: "orange" },
 } as const;
 
+const CLASSIFICATION_OPTIONS = [
+	{ label: "公开", value: "PUBLIC" },
+	{ label: "内部", value: "INTERNAL" },
+	{ label: "敏感", value: "SENSITIVE" },
+	{ label: "机密", value: "CONFIDENTIAL" },
+];
+
+const LIFECYCLE_OPTIONS = [
+	{ label: "建设中", value: "BUILDING" },
+	{ label: "可用", value: "ACTIVE" },
+	{ label: "待治理", value: "PENDING_GOVERNANCE" },
+	{ label: "退役中", value: "DEPRECATED" },
+	{ label: "已归档", value: "ARCHIVED" },
+];
+
+const VISIBILITY_OPTIONS = [
+	{ label: "仅负责人", value: "PRIVATE" },
+	{ label: "内部可见", value: "INTERNAL" },
+	{ label: "公开可见", value: "PUBLIC" },
+];
+
+const STATUS_OPTIONS = Object.entries(STATUS_CONFIG).map(([value, item]) => ({
+	label: item.label,
+	value,
+}));
+
+type CandidateOption = {
+	label: string;
+	value: string;
+	meta?: string;
+};
+
+const parseList = (value?: string | null): string[] => {
+	const raw = String(value || "").trim();
+	if (!raw) return [];
+	try {
+		const parsed = JSON.parse(raw);
+		if (Array.isArray(parsed)) {
+			return parsed.map((item) => String(item || "").trim()).filter(Boolean);
+		}
+	} catch {
+		// Fall back to delimiter parsing below.
+	}
+	return raw
+		.split(/[\n,，;；]+/)
+		.map((item) => item.trim())
+		.filter(Boolean);
+};
+
+const serializeList = (value?: string[]): string =>
+	(value || [])
+		.map((item) => String(item || "").trim())
+		.filter(Boolean)
+		.join("\n");
+
+const productMemberSummary = (product: DataProduct) => {
+	const datasetIds = parseList(product.datasetIds);
+	const indicatorCodes = parseList(product.indicatorCodes);
+	return {
+		datasetIds,
+		indicatorCodes,
+		datasetCount: datasetIds.length,
+		indicatorCount: indicatorCodes.length,
+	};
+};
+
 export default function DataProductsPage() {
 	const [products, setProducts] = useState<DataProduct[]>([]);
 	const [total, setTotal] = useState(0);
@@ -26,10 +94,14 @@ export default function DataProductsPage() {
 	const [modalOpen, setModalOpen] = useState(false);
 	const [editTarget, setEditTarget] = useState<DataProduct | null>(null);
 	const [saving, setSaving] = useState(false);
+	const [assetOptions, setAssetOptions] = useState<CandidateOption[]>([]);
+	const [indicatorOptions, setIndicatorOptions] = useState<CandidateOption[]>([]);
+	const [candidateLoading, setCandidateLoading] = useState(false);
 	const [form] = Form.useForm();
 
 	useEffect(() => {
 		void load();
+		void loadCandidates();
 	}, []);
 
 	const load = async () => {
@@ -46,9 +118,63 @@ export default function DataProductsPage() {
 		}
 	};
 
+	const loadCandidates = async () => {
+		setCandidateLoading(true);
+		try {
+			const [assetResp, indicatorResp]: any[] = await Promise.all([
+				listCatalogAssetsV2({ page: 0, size: 200 }),
+				listIndicators({ page: 0, size: 200 }),
+			]);
+			const assets = Array.isArray(assetResp?.content) ? assetResp.content : [];
+			const indicators = Array.isArray(indicatorResp?.content) ? indicatorResp.content : [];
+			setAssetOptions(
+				assets
+					.map((asset: any) => {
+						const value = String(asset.id || asset.assetKey || asset.fqn || "").trim();
+						if (!value) return null;
+						const name = asset.displayName || asset.name || asset.table || asset.fqn || value;
+						const meta = [asset.warehouseLayer, asset.classification, asset.governanceStatus].filter(Boolean).join(" / ");
+						return {
+							value,
+							label: meta ? `${name}（${meta}）` : name,
+							meta,
+						};
+					})
+					.filter(Boolean) as CandidateOption[],
+			);
+			setIndicatorOptions(
+				indicators
+					.map((indicator: any) => {
+						const value = String(indicator.code || indicator.metricCode || indicator.id || "").trim();
+						if (!value) return null;
+						const name = indicator.name || indicator.metricName || value;
+						const meta = [indicator.domain, indicator.status].filter(Boolean).join(" / ");
+						return {
+							value,
+							label: meta ? `${name}（${value}，${meta}）` : `${name}（${value}）`,
+							meta,
+						};
+					})
+					.filter(Boolean) as CandidateOption[],
+			);
+		} catch {
+			// global interceptor
+		} finally {
+			setCandidateLoading(false);
+		}
+	};
+
 	const openCreate = () => {
 		setEditTarget(null);
 		form.resetFields();
+		form.setFieldsValue({
+			status: "DRAFT",
+			classification: "INTERNAL",
+			lifecycleStatus: "BUILDING",
+			visibility: "PRIVATE",
+			datasetIds: [],
+			indicatorCodes: [],
+		});
 		setModalOpen(true);
 	};
 
@@ -60,19 +186,31 @@ export default function DataProductsPage() {
 			ownerDept: product.ownerDept,
 			description: product.description,
 			status: product.status ?? "DRAFT",
+			classification: product.classification ?? "INTERNAL",
+			freshnessSla: product.freshnessSla,
+			lifecycleStatus: product.lifecycleStatus ?? "ACTIVE",
+			visibility: product.visibility ?? "PRIVATE",
+			consumerEntry: product.consumerEntry,
+			datasetIds: parseList(product.datasetIds),
+			indicatorCodes: parseList(product.indicatorCodes),
 		});
 		setModalOpen(true);
 	};
 
 	const handleSave = async () => {
 		const values = await form.validateFields();
+		const payload: Omit<DataProduct, "id"> = {
+			...values,
+			datasetIds: serializeList(values.datasetIds),
+			indicatorCodes: serializeList(values.indicatorCodes),
+		};
 		setSaving(true);
 		try {
 			if (editTarget?.id) {
-				await updateDataProduct(editTarget.id, values);
+				await updateDataProduct(editTarget.id, payload);
 				toast.success("数据产品已更新");
 			} else {
-				await createDataProduct(values);
+				await createDataProduct(payload);
 				toast.success("数据产品已创建");
 			}
 			setModalOpen(false);
@@ -109,14 +247,19 @@ export default function DataProductsPage() {
 			<Card
 				title={`数据产品（${total}）`}
 				extra={
-					<Button
-						type="primary"
-						icon={<PlusOutlined />}
-						className="rounded-2xl"
-						onClick={openCreate}
-					>
-						新建数据产品
-					</Button>
+					<Space>
+						<Button onClick={() => void loadCandidates()} loading={candidateLoading}>
+							刷新候选资产
+						</Button>
+						<Button
+							type="primary"
+							icon={<PlusOutlined />}
+							className="rounded-2xl"
+							onClick={openCreate}
+						>
+							新建数据产品
+						</Button>
+					</Space>
 				}
 				loading={loading}
 			>
@@ -129,40 +272,47 @@ export default function DataProductsPage() {
 					<div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
 						{products.map((product) => {
 							const status = STATUS_CONFIG[product.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.DRAFT;
+							const members = productMemberSummary(product);
 							return (
 								<div
 									key={product.id}
-									className="rounded-[20px] border border-slate-200 bg-white p-4 space-y-2 hover:border-blue-200 hover:shadow-sm transition-all"
+									className="space-y-3 rounded-[20px] border border-slate-200 bg-white p-4 transition-all hover:border-blue-200 hover:shadow-sm"
 								>
 									<div className="flex items-start justify-between gap-2">
-										<div>
-											<div className="font-semibold text-sm text-slate-900">{product.name}</div>
-											{product.code && (
-												<Text code className="text-xs">{product.code}</Text>
-											)}
+										<div className="min-w-0">
+											<div className="truncate text-sm font-semibold text-slate-900">{product.name}</div>
+											{product.code && <Text code className="text-xs">{product.code}</Text>}
 										</div>
 										<Tag color={status.color}>{status.label}</Tag>
 									</div>
-									{product.ownerDept && (
-										<div className="text-xs text-slate-500">负责部门：{product.ownerDept}</div>
-									)}
+									<div className="grid grid-cols-2 gap-2 text-xs">
+										<div className="rounded-lg bg-slate-50 px-3 py-2">
+											<div className="text-slate-500">成员资产</div>
+											<div className="mt-1 font-semibold text-slate-900">{members.datasetCount}</div>
+										</div>
+										<div className="rounded-lg bg-slate-50 px-3 py-2">
+											<div className="text-slate-500">核心指标</div>
+											<div className="mt-1 font-semibold text-slate-900">{members.indicatorCount}</div>
+										</div>
+									</div>
+									<div className="flex flex-wrap gap-1">
+										<Tag>{product.classification || "未定密"}</Tag>
+										<Tag color="blue">{product.lifecycleStatus || "未定生命周期"}</Tag>
+										<Tag color={product.visibility === "PUBLIC" ? "green" : "default"}>{product.visibility || "PRIVATE"}</Tag>
+									</div>
+									<div className="space-y-1 text-xs text-slate-500">
+										<div>负责部门：{product.ownerDept || "-"}</div>
+										<div>刷新 SLA：{product.freshnessSla || "未配置"}</div>
+										<div>消费入口：{product.consumerEntry || "未配置"}</div>
+									</div>
 									{product.description && (
-										<div className="text-xs text-slate-600 line-clamp-2">{product.description}</div>
+										<div className="line-clamp-2 text-xs text-slate-600">{product.description}</div>
 									)}
-									<div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
-										<Button
-											size="small"
-											icon={<EditOutlined />}
-											onClick={() => openEdit(product)}
-										>
+									<div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-1">
+										<Button size="small" icon={<EditOutlined />} onClick={() => openEdit(product)}>
 											编辑
 										</Button>
-										<Button
-											size="small"
-											danger
-											icon={<DeleteOutlined />}
-											onClick={() => handleDelete(product)}
-										>
+										<Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(product)}>
 											删除
 										</Button>
 									</div>
@@ -179,10 +329,16 @@ export default function DataProductsPage() {
 				onOk={() => void handleSave()}
 				onCancel={() => setModalOpen(false)}
 				confirmLoading={saving}
-				width={560}
+				width={780}
 				destroyOnClose
 			>
 				<Form form={form} layout="vertical" className="mt-4">
+					<Alert
+						type="info"
+						showIcon
+						className="mb-4"
+						message="数据产品应明确成员资产、核心指标、负责人、刷新 SLA 和消费边界；发布前仍需处理资产治理缺口与权限审批。"
+					/>
 					<Form.Item
 						name="name"
 						label="产品名称"
@@ -190,28 +346,66 @@ export default function DataProductsPage() {
 					>
 						<Input placeholder="例：项目进度数据产品" />
 					</Form.Item>
-					<Form.Item name="code" label="产品代码">
-						<Input placeholder="例：pjm_progress_product（全局唯一）" />
+					<div className="grid gap-3 md:grid-cols-2">
+						<Form.Item name="code" label="产品代码">
+							<Input placeholder="例：pjm_progress_product（全局唯一）" />
+						</Form.Item>
+						<Form.Item name="ownerDept" label="负责部门">
+							<Input placeholder="例：数字化部门" />
+						</Form.Item>
+					</div>
+					<div className="grid gap-3 md:grid-cols-3">
+						<Form.Item name="status" label="发布状态" initialValue="DRAFT">
+							<Select options={STATUS_OPTIONS} />
+						</Form.Item>
+						<Form.Item name="classification" label="产品密级" initialValue="INTERNAL">
+							<Select options={CLASSIFICATION_OPTIONS} />
+						</Form.Item>
+						<Form.Item name="lifecycleStatus" label="生命周期" initialValue="BUILDING">
+							<Select options={LIFECYCLE_OPTIONS} />
+						</Form.Item>
+					</div>
+					<div className="grid gap-3 md:grid-cols-3">
+						<Form.Item name="freshnessSla" label="刷新 SLA">
+							<Input placeholder="例：T+1 09:00 前 / 24h" />
+						</Form.Item>
+						<Form.Item name="visibility" label="消费可见性" initialValue="PRIVATE">
+							<Select options={VISIBILITY_OPTIONS} />
+						</Form.Item>
+						<Form.Item name="consumerEntry" label="消费入口">
+							<Input placeholder="BI 看板、API 或数据集链接" />
+						</Form.Item>
+					</div>
+					<Form.Item
+						name="datasetIds"
+						label="成员资产"
+						tooltip="候选项来自 assets-v2；也可以手工粘贴资产 ID / assetKey。"
+					>
+						<Select
+							mode="tags"
+							allowClear
+							showSearch
+							loading={candidateLoading}
+							options={assetOptions}
+							placeholder="选择或输入要打包的数据集、模型、BI 数据集"
+						/>
 					</Form.Item>
-					<Form.Item name="ownerDept" label="负责部门">
-						<Input placeholder="例：数字化部门" />
+					<Form.Item
+						name="indicatorCodes"
+						label="核心指标"
+						tooltip="候选项来自治理指标中心；也可以手工输入 metric code。"
+					>
+						<Select
+							mode="tags"
+							allowClear
+							showSearch
+							loading={candidateLoading}
+							options={indicatorOptions}
+							placeholder="选择或输入产品对外承诺的核心指标"
+						/>
 					</Form.Item>
 					<Form.Item name="description" label="描述">
-						<Input.TextArea rows={3} placeholder="数据产品的用途和包含内容" />
-					</Form.Item>
-					<Form.Item name="status" label="状态" initialValue="DRAFT">
-						<Space>
-							{(["DRAFT", "PUBLISHED", "OFFLINE"] as const).map((s) => (
-								<Button
-									key={s}
-									size="small"
-									type={form.getFieldValue("status") === s ? "primary" : "default"}
-									onClick={() => form.setFieldValue("status", s)}
-								>
-									{STATUS_CONFIG[s].label}
-								</Button>
-							))}
-						</Space>
+						<Input.TextArea rows={3} placeholder="数据产品的用途、消费对象和包含内容" />
 					</Form.Item>
 				</Form>
 			</Modal>

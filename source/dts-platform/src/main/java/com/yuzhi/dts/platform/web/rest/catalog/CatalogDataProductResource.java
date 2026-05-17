@@ -66,6 +66,11 @@ public class CatalogDataProductResource {
 		existing.setDescription(body.getDescription());
 		existing.setDatasetIds(body.getDatasetIds());
 		existing.setIndicatorCodes(body.getIndicatorCodes());
+		existing.setClassification(body.getClassification());
+		existing.setFreshnessSla(body.getFreshnessSla());
+		existing.setLifecycleStatus(body.getLifecycleStatus());
+		existing.setVisibility(body.getVisibility());
+		existing.setConsumerEntry(body.getConsumerEntry());
 		existing.setStatus(body.getStatus());
 		CatalogDataProduct saved = repo.save(existing);
 		audit.auditAction("CATALOG_DATA_PRODUCT_UPDATE", AuditStage.SUCCESS, id.toString(), null);

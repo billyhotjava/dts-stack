@@ -160,4 +160,5 @@
     <include file="config/liquibase/changelog/20260517_01_catalog_column_lineage_time_window.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260517_02_catalog_asset_resolution_failure.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260517_03_code_asset_lifecycle_backfill.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260518_01_catalog_data_product_contract.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

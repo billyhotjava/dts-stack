@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                                       http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+  <changeSet id="20260518_01_1" author="codex">
+    <preConditions onFail="MARK_RAN">
+      <not>
+        <columnExists tableName="catalog_data_product" columnName="classification"/>
+      </not>
+    </preConditions>
+    <addColumn tableName="catalog_data_product">
+      <column name="classification" type="varchar(32)"/>
+    </addColumn>
+  </changeSet>
+
+  <changeSet id="20260518_01_2" author="codex">
+    <preConditions onFail="MARK_RAN">
+      <not>
+        <columnExists tableName="catalog_data_product" columnName="freshness_sla"/>
+      </not>
+    </preConditions>
+    <addColumn tableName="catalog_data_product">
+      <column name="freshness_sla" type="varchar(64)"/>
+    </addColumn>
+  </changeSet>
+
+  <changeSet id="20260518_01_3" author="codex">
+    <preConditions onFail="MARK_RAN">
+      <not>
+        <columnExists tableName="catalog_data_product" columnName="lifecycle_status"/>
+      </not>
+    </preConditions>
+    <addColumn tableName="catalog_data_product">
+      <column name="lifecycle_status" type="varchar(32)"/>
+    </addColumn>
+  </changeSet>
+
+  <changeSet id="20260518_01_4" author="codex">
+    <preConditions onFail="MARK_RAN">
+      <not>
+        <columnExists tableName="catalog_data_product" columnName="visibility"/>
+      </not>
+    </preConditions>
+    <addColumn tableName="catalog_data_product">
+      <column name="visibility" type="varchar(32)"/>
+    </addColumn>
+  </changeSet>
+
+  <changeSet id="20260518_01_5" author="codex">
+    <preConditions onFail="MARK_RAN">
+      <not>
+        <columnExists tableName="catalog_data_product" columnName="consumer_entry"/>
+      </not>
+    </preConditions>
+    <addColumn tableName="catalog_data_product">
+      <column name="consumer_entry" type="varchar(512)"/>
+    </addColumn>
+  </changeSet>
+
+</databaseChangeLog>

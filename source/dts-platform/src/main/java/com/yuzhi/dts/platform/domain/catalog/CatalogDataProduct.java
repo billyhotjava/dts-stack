@@ -32,6 +32,21 @@ public class CatalogDataProduct extends AbstractAuditingEntity<UUID> implements 
 	@Column(name = "indicator_codes", columnDefinition = "text")
 	private String indicatorCodes;
 
+	@Column(name = "classification", length = 32)
+	private String classification;
+
+	@Column(name = "freshness_sla", length = 64)
+	private String freshnessSla;
+
+	@Column(name = "lifecycle_status", length = 32)
+	private String lifecycleStatus;
+
+	@Column(name = "visibility", length = 32)
+	private String visibility;
+
+	@Column(name = "consumer_entry", length = 512)
+	private String consumerEntry;
+
 	@Column(name = "status", length = 32)
 	private String status = "DRAFT";
 
@@ -50,6 +65,16 @@ public class CatalogDataProduct extends AbstractAuditingEntity<UUID> implements 
 	public void setDatasetIds(String datasetIds) { this.datasetIds = datasetIds; }
 	public String getIndicatorCodes() { return indicatorCodes; }
 	public void setIndicatorCodes(String indicatorCodes) { this.indicatorCodes = indicatorCodes; }
+	public String getClassification() { return classification; }
+	public void setClassification(String classification) { this.classification = classification; }
+	public String getFreshnessSla() { return freshnessSla; }
+	public void setFreshnessSla(String freshnessSla) { this.freshnessSla = freshnessSla; }
+	public String getLifecycleStatus() { return lifecycleStatus; }
+	public void setLifecycleStatus(String lifecycleStatus) { this.lifecycleStatus = lifecycleStatus; }
+	public String getVisibility() { return visibility; }
+	public void setVisibility(String visibility) { this.visibility = visibility; }
+	public String getConsumerEntry() { return consumerEntry; }
+	public void setConsumerEntry(String consumerEntry) { this.consumerEntry = consumerEntry; }
 	public String getStatus() { return status; }
 	public void setStatus(String status) { this.status = status; }
 }
