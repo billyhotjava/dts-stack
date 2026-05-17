@@ -57,7 +57,7 @@ Result: exit 0.
 - `/metrics/dictionary` and `/metrics/semantic/subjects` can call `/api/metrics/capabilities`.
 - `/metrics/**` loads `/api/metrics/workspace/snapshot` for workspace data instead of relying only on local JS arrays.
 - `/metrics/semantic/objects`, `/metrics/semantic/metrics`, and `/metrics/semantic/models` can call `/api/metrics/packs/preview-artifacts`.
-- `/metrics/semantic/publish` can call `/api/metrics/packs/import` as publish dry-run.
+- `/metrics/semantic/publish` can call `/api/metrics/packs/publish-dry-run` as publish dry-run.
 - `/metrics/semantic/runs` and `/metrics/operations` can refresh metrics service observability.
 - Platform legacy routes and navigation leave the platform React router and redirect to `/metrics/**`.
 - `/catalog/data-products` is now reachable from the `数据资产门户` menu and has a matching `role-menu-defaults` entry.

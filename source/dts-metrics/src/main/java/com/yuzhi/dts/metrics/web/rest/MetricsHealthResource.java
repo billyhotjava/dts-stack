@@ -54,7 +54,8 @@ public class MetricsHealthResource {
                 "metric-dsl-sql-render",
                 "dws-ads-candidate-artifact-preview",
                 "metric-pack-import-dry-run",
-                "semantic-migration-dry-run"
+                "semantic-migration-dry-run",
+                "workspace-snapshot"
             ),
             "platformContract",
             platformContractClient.describeContract()

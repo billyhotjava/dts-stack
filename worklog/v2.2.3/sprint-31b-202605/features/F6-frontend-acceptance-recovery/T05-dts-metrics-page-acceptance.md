@@ -51,7 +51,7 @@
 - `/metrics/dictionary`、`/metrics/semantic/subjects` 可读取 `/api/metrics/capabilities`，用于展示 platform contract/capability 错误态。
 - `/metrics/**` 启动时读取 `/api/metrics/workspace/snapshot`，指标资产、主题域映射、业务对象 Join、公式块、DWS/ADS 候选、发布门禁和运行记录不再只依赖 JS 本地静态数组。
 - `/metrics/semantic/objects`、`/metrics/semantic/metrics`、`/metrics/semantic/models` 可提交样例 manifest 到 `/api/metrics/packs/preview-artifacts`，触发真实候选生成物预览。
-- `/metrics/semantic/publish` 可调用 `/api/metrics/packs/import` 做发布预检。
+- `/metrics/semantic/publish` 可调用 `/api/metrics/packs/publish-dry-run` 做发布预检。
 - `/metrics/semantic/runs` 与 `/metrics/operations` 可刷新服务观测状态。
 - `dts-platform-webapp` 的 legacy metrics/semantic 路由只执行浏览器跳转到 `/metrics/**`，不再承载指标业务页面。
 
