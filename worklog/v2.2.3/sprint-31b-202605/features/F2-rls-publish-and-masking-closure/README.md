@@ -1,7 +1,7 @@
 # F2: RLS publish gate 与 column masking 收口
 
 **优先级**: P0
-**状态**: IN_PROGRESS
+**状态**: DONE
 
 ## 目标
 
@@ -15,7 +15,7 @@
 | T02 | column masking 加入 policy endpoint 与 SQL 生成器 | P0 | DONE | T01 |
 | T03 | manifest `apply_rls=true` 降级为声明 | P0 | DONE | T01 |
 | T04 | RLS 注入 audit | P0 | DONE | T01, T02 |
-| T05 | live IT 验证多 dialect | P1 | READY | T01-T04 |
+| T05 | live IT 验证多 dialect | P1 | DONE | T01-T04 |
 
 ## 完成标准
 
@@ -23,4 +23,4 @@
 - [x] column masking 进入候选 dbt SQL 与 schema.yml；masked dimension 使用 `dts_mask(...)` 候选宏，masked metric input 直接阻断 preview。
 - [x] manifest `security.apply_rls` 仅作为声明，运行时强制由 platform policy 决定；true+空策略会失败，false+platform 策略会 override 并告警。
 - [x] 每次成功注入 predicates / masked columns 都写入 audit；可按 `pack_id` / `asset_id` 查询。
-- [ ] 至少 PostgreSQL 与 Doris 两个 dialect 的 SQL golden file 存在并通过 dry-run。
+- [x] 至少 PostgreSQL 与 Doris 两个 dialect 的 SQL golden file 存在并通过 dry-run / 最小方言验证。

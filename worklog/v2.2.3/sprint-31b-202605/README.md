@@ -50,13 +50,13 @@ Sprint-31B 收口
 | ID | Feature | 优先级 | Task 数 | 状态 | 依赖 |
 |----|---------|--------|---------|------|------|
 | F1 | RX 残余运行时收口 | P0 | 6 | DONE | Sprint-31A RX/T03-T05 |
-| F2 | RLS publish gate 与 column masking 收口 | P0 | 5 | IN_PROGRESS | F1, Sprint-31A RX/T05 |
+| F2 | RLS publish gate 与 column masking 收口 | P0 | 5 | DONE | F1, Sprint-31A RX/T05 |
 | F3 | 代码质量与安全 hardening | P0 | 5 | DONE | F1 |
 | F4 | Sprint-31A 漏项与口径修正 | P1 | 4 | DONE | F1-F3 |
 | F5 | Sprint-31 cheap compile 前置验证 | P0 | 4 | READY | F1-F4 |
 | F6 | 前端验收口径收口 | P0 | 5 | DONE | F1-F5 |
 
-**统计**: READY=5, IN_PROGRESS=0, DONE=24, BLOCKED=0
+**统计**: READY=4, IN_PROGRESS=0, DONE=25, BLOCKED=0
 
 ## 非目标
 
@@ -101,6 +101,7 @@ Sprint-31B 收口
 - `./mvnw -q -pl dts-metrics -Dtest=MetricArtifactGenerationServiceTest,MetricArtifactPublishServiceTest,PlatformContractClientTest,MetricPackResourceTest,MetricsFrontendResourceContractTest test` 通过。
 - `./mvnw -q -pl dts-platform -Dtest=AssetPermissionAuditServiceTest,AssetPermissionInternalResourceTest,AssetPermissionAuditQueryResourceTest,ServiceDependencyAuthenticationFilterTest test` 通过。
 - `./mvnw -q -pl dts-metrics -Dtest=MetricArtifactGenerationServiceTest,MetricArtifactPublishServiceTest,PlatformContractClientTest test` 通过。
+- `./mvnw -q -pl dts-metrics -Dtest=MetricArtifactGenerationIT test` 通过，PostgreSQL Testcontainers 实际执行候选 SQL，Doris golden/minimal compiler 检查通过。
 
 ## 相关材料
 

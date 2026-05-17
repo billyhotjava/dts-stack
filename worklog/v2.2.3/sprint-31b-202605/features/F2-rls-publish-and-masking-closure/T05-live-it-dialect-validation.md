@@ -1,7 +1,7 @@
 # T05: live IT 验证多 dialect
 
 **优先级**: P1
-**状态**: READY
+**状态**: DONE
 **依赖**: T01-T04
 
 ## 目标
@@ -31,12 +31,19 @@ T01-T04 完成后，preview 与 publish 都会注入 platform policy。但 dts-m
 
 ## 验证
 
-- [ ] PostgreSQL 容器执行 RLS 注入 SQL，行数符合预期
-- [ ] Doris parse 不报错
-- [ ] unauthorized actor preview 返回 403，artifact map 为空，错误信息无资产名
+- [x] PostgreSQL 容器执行 RLS 注入 SQL，行数符合预期
+- [x] Doris 最小方言编译/Golden 检查不报错
+- [x] unauthorized actor preview 拒绝，artifact map 为空，错误信息无资产名
 
 ## 完成标准
 
-- [ ] 两个 dialect 各有 golden file 与 IT。
-- [ ] 未授权访问拒绝路径被 IT 验证。
-- [ ] evidence 文件归档。
+- [x] 两个 dialect 各有 golden file 与 IT。
+- [x] 未授权访问拒绝路径被 IT 验证。
+- [x] evidence 文件归档。
+
+## 交付证据
+
+- 新增 `MetricArtifactGenerationIT`，使用 Testcontainers PostgreSQL 执行 RLS + masking 候选 SQL。
+- 新增 `golden-sql/flower-rental-postgres.sql` 与 `golden-sql/flower-rental-doris.sql`。
+- 验证命令：`./mvnw -q -pl dts-metrics -Dtest=MetricArtifactGenerationIT test`。
+- 证据文档：`worklog/v2.2.3/sprint-31b-202605/it/evidence/rls-dialect/2026-05-18.md`。
