@@ -29,4 +29,19 @@ public interface AssetPermissionAuditRepository extends JpaRepository<AssetPermi
         @Param("dateTo") Instant dateTo,
         Pageable pageable
     );
+
+    @Query("""
+        select a from AssetPermissionAudit a
+        where a.action = 'CHECK_DENY'
+          and (:reasonCode is null or a.reasonCode = :reasonCode)
+          and (:assetId is null or a.assetId = :assetId)
+          and (:since is null or a.createdDate >= :since)
+        order by a.createdDate desc
+    """)
+    Page<AssetPermissionAudit> findDeniedAudits(
+        @Param("reasonCode") String reasonCode,
+        @Param("assetId") String assetId,
+        @Param("since") Instant since,
+        Pageable pageable
+    );
 }

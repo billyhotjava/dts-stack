@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260518_02_asset_permission_audit_reason" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="asset_permission_audit"/>
+            <not>
+                <columnExists tableName="asset_permission_audit" columnName="reason_code"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="asset_permission_audit">
+            <column name="reason_code" type="varchar(64)"/>
+            <column name="reason_detail" type="text"/>
+        </addColumn>
+        <createIndex tableName="asset_permission_audit" indexName="idx_asset_permission_audit_reason_code">
+            <column name="reason_code"/>
+            <column name="created_date"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

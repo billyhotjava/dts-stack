@@ -212,6 +212,10 @@ class AssetPermissionServiceTest {
 
         assertThat(result.allowed()).isFalse();
         assertThat(result.reason()).isEqualTo("insufficient_permission");
+        assertThat(result.reasonCode()).isEqualTo("INSUFFICIENT_PERMISSION");
+        assertThat(result.reasonDetail()).contains("requires MANAGE");
+        assertThat(result.suggestedRemediation()).contains("grant");
+        assertThat(result.deniedAt()).isNotNull();
         assertThat(result.requiredPermission()).isEqualTo("MANAGE");
         assertThat(result.permission()).isEqualTo("READ");
     }
@@ -230,6 +234,8 @@ class AssetPermissionServiceTest {
 
         assertThat(result.allowed()).isFalse();
         assertThat(result.reason()).isEqualTo("classification_denied");
+        assertThat(result.reasonCode()).isEqualTo("CLASSIFICATION_MISMATCH");
+        assertThat(result.reasonDetail()).contains("PUBLIC", "INTERNAL");
         assertThat(result.classificationDecision()).isEqualTo("DENIED");
     }
 
@@ -247,7 +253,38 @@ class AssetPermissionServiceTest {
 
         assertThat(result.allowed()).isFalse();
         assertThat(result.reason()).isEqualTo("classification_required");
+        assertThat(result.reasonCode()).isEqualTo("CLASSIFICATION_REQUIRED");
+        assertThat(result.suggestedRemediation()).contains("classification");
         assertThat(result.classificationDecision()).isEqualTo("MISSING_ASSET_CLASSIFICATION");
+    }
+
+    @Test
+    void checkAction_shouldDenyWithNoGrantReasonCode() {
+        when(ownershipRepository.findByAssetTypeAndAssetId("DATASET", "1")).thenReturn(Optional.empty());
+        when(grantRepository.findActiveGrantsForUser(eq("DATASET"), eq("1"), eq("emp"), anyList(), eq("DEPT_A"), any(Instant.class)))
+            .thenReturn(List.of());
+
+        PermissionDecision result = service.checkAction(
+            new PermissionCheckCommand("emp", List.of("ROLE_EMPLOYEE"), "DEPT_A", "INTERNAL", "DATASET", "1", null, "READ", "INTERNAL")
+        );
+
+        assertThat(result.allowed()).isFalse();
+        assertThat(result.reason()).isEqualTo("denied");
+        assertThat(result.reasonCode()).isEqualTo("NO_GRANT");
+        assertThat(result.reasonDetail()).contains("No active grant");
+        assertThat(result.suggestedRemediation()).contains("grant");
+    }
+
+    @Test
+    void checkAction_shouldDenyUnsupportedActionWithReasonCode() {
+        PermissionDecision result = service.checkAction(
+            new PermissionCheckCommand("emp", List.of("ROLE_EMPLOYEE"), "DEPT_A", "INTERNAL", "DATASET", "1", null, "EXPORT_RAW", "INTERNAL")
+        );
+
+        assertThat(result.allowed()).isFalse();
+        assertThat(result.reason()).isEqualTo("unsupported_action");
+        assertThat(result.reasonCode()).isEqualTo("UNSUPPORTED_ACTION");
+        assertThat(result.reasonDetail()).contains("EXPORT_RAW");
     }
 
     // --- Batch check ---

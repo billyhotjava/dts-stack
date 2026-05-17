@@ -1,7 +1,7 @@
 # T02: F4/T05 拒绝原因提级到 P0
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: 无
 
 ## 目标
@@ -43,12 +43,25 @@ Sprint-31A F4/T05 标记 P1，但在企业级数据平台里这是 mandatory com
 
 ## 验证
 
-- [ ] `AssetPermissionServiceTest.deny_setsReasonCode` 覆盖 5 个 reasonCode
-- [ ] `AssetPermissionAuditServiceTest.persistsStructuredReason`
-- [ ] CSV 导出 schema review
+- [x] `AssetPermissionServiceTest` 覆盖 `NO_GRANT` / `CLASSIFICATION_MISMATCH` / `CLASSIFICATION_REQUIRED` / `INSUFFICIENT_PERMISSION` / `UNSUPPORTED_ACTION`
+- [x] `AssetPermissionAuditServiceTest.recordDecisionPersistsDenialReasonAndGrantSource` 验证 `reasonCode` / `reasonDetail` 持久化
+- [x] `AssetPermissionAuditQueryResourceTest.deniedCsvUsesStableComplianceSchema` 固定 CSV 导出 schema
+- [x] `ServiceDependencyAuthenticationFilterTest.metricsMatchingToken_canReadCatalogContractsAndUseDbtGateway` 验证 `dts-metrics` 可只读查询拒绝审计
+
+## 实现证据
+
+- `PermissionDecision` 保留原 `reason()` 兼容字段，新增 `reasonCode` / `reasonDetail` / `suggestedRemediation` / `deniedAt`。
+- `asset_permission_audit` 新增 `reason_code` / `reason_detail`，并建立 `(reason_code, created_date)` 查询索引。
+- 新增内部接口：
+  - `GET /api/internal/v1/asset-permission/audit/denied?since=&reasonCode=&assetId=&limit=`
+  - `GET /api/internal/v1/asset-permission/audit/denied.csv?since=&reasonCode=&assetId=&limit=`
+- 验证命令：
+  ```bash
+  ./mvnw -q -pl dts-platform -Dtest=AssetPermissionServiceTest,AssetPermissionAuditServiceTest,AssetPermissionInternalResourceTest,AssetPermissionAuditQueryResourceTest,ServiceDependencyAuthenticationFilterTest test
+  ```
 
 ## 完成标准
 
-- [ ] `PermissionDecision` 结构化 reason。
-- [ ] audit 表持久化 reasonCode。
-- [ ] 合规导出可用。
+- [x] `PermissionDecision` 结构化 reason。
+- [x] audit 表持久化 reasonCode。
+- [x] 合规导出可用。

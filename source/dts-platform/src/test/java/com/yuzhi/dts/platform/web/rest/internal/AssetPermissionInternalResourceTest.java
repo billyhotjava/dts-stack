@@ -148,6 +148,55 @@ class AssetPermissionInternalResourceTest {
     }
 
     @Test
+    void checkReturnsStructuredDenialReason() {
+        when(permissionService.checkAction(any()))
+            .thenReturn(
+                PermissionDecision.denied(
+                    "DATASET",
+                    "dataset-001",
+                    "dataset:key",
+                    "PREVIEW",
+                    null,
+                    "READ",
+                    "classification_denied",
+                    "DENIED",
+                    "explicit_grant"
+                )
+            );
+
+        AssetPermissionInternalResource resource = new AssetPermissionInternalResource(
+            permissionService,
+            auditService,
+            datasetRepository,
+            rowFilterRuleRepository,
+            maskingRuleRepository,
+            meterRegistry
+        );
+
+        AssetPermissionInternalResource.CheckResponse response = resource
+            .check(
+                new AssetPermissionInternalResource.CheckRequest(
+                    "ptrdemo",
+                    List.of("ROLE_PTR"),
+                    "D01",
+                    "PUBLIC",
+                    "INTERNAL",
+                    "PREVIEW",
+                    new AssetPermissionInternalResource.AssetRefDto("DATASET", "dataset-001", "dataset:key")
+                )
+            )
+            .getBody();
+
+        assertThat(response).isNotNull();
+        assertThat(response.allowed()).isFalse();
+        assertThat(response.reason()).isEqualTo("classification_denied");
+        assertThat(response.reasonCode()).isEqualTo("CLASSIFICATION_MISMATCH");
+        assertThat(response.reasonDetail()).contains("classification");
+        assertThat(response.suggestedRemediation()).contains("classification");
+        assertThat(response.deniedAt()).isNotNull();
+    }
+
+    @Test
     void policyResolvesDatasetByIndexedTableLookupWithoutFullScan() {
         CatalogDataset dataset = new CatalogDataset();
         dataset.setId(UUID.fromString("11111111-2222-3333-4444-555555555555"));

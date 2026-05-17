@@ -44,7 +44,10 @@ class AssetPermissionAuditServiceTest {
         assertThat(audit.getAssetId()).isEqualTo("asset-1");
         assertThat(audit.getTargetUser()).isEqualTo("ptrdemo");
         assertThat(audit.getOperator()).isEqualTo("service:dts-metrics");
+        assertThat(audit.getReasonCode()).isEqualTo("CLASSIFICATION_MISMATCH");
+        assertThat(audit.getReasonDetail()).contains("classification");
         assertThat(audit.getDetail()).contains("\"reason\":\"classification_denied\"");
+        assertThat(audit.getDetail()).contains("\"reasonCode\":\"CLASSIFICATION_MISMATCH\"");
         assertThat(audit.getDetail()).contains("\"grantSource\":\"explicit_grant\"");
     }
 }

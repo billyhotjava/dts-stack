@@ -68,12 +68,18 @@ public class AssetPermissionAuditService {
         audit.setTargetUser(targetUser);
         audit.setPermission(decision.permission());
         audit.setOperator(normalizeOperator(operator));
+        audit.setReasonCode(decision.reasonCode());
+        audit.setReasonDetail(decision.reasonDetail());
         audit.setDetail(
             "{" +
             "\"allowed\":" + decision.allowed() +
             ",\"action\":\"" + json(decision.action()) + "\"" +
             ",\"requiredPermission\":\"" + json(decision.requiredPermission()) + "\"" +
             ",\"reason\":\"" + json(decision.reason()) + "\"" +
+            ",\"reasonCode\":\"" + json(decision.reasonCode()) + "\"" +
+            ",\"reasonDetail\":\"" + json(decision.reasonDetail()) + "\"" +
+            ",\"suggestedRemediation\":\"" + json(decision.suggestedRemediation()) + "\"" +
+            ",\"deniedAt\":\"" + json(decision.deniedAt() == null ? null : decision.deniedAt().toString()) + "\"" +
             ",\"grantSource\":\"" + json(decision.grantSource()) + "\"" +
             ",\"classificationDecision\":\"" + json(decision.classificationDecision()) + "\"" +
             ",\"assetKey\":\"" + json(decision.assetKey()) + "\"" +

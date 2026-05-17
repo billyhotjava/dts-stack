@@ -17,6 +17,7 @@ import com.yuzhi.dts.platform.service.permission.AssetPermissionService.Permissi
 import com.yuzhi.dts.platform.service.permission.dto.AssetGrantDto;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionAuditService;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -88,7 +89,11 @@ public class AssetPermissionInternalResource {
                 result.assetId(),
                 result.assetKey(),
                 result.classificationDecision(),
-                result.grantSource()
+                result.grantSource(),
+                result.reasonCode(),
+                result.reasonDetail(),
+                result.suggestedRemediation(),
+                result.deniedAt()
             )
         );
     }
@@ -175,7 +180,22 @@ public class AssetPermissionInternalResource {
 
         Map<String, CheckResponse> responseMap = new java.util.LinkedHashMap<>();
         results.forEach((key, pr) -> responseMap.put(key,
-            new CheckResponse(pr.allowed(), pr.permission(), pr.reason(), null, null, null, null, null, null, pr.reason())));
+            new CheckResponse(
+                pr.allowed(),
+                pr.permission(),
+                pr.reason(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                pr.reason(),
+                pr.allowed() ? "ALLOWED" : null,
+                pr.reason(),
+                null,
+                null
+            )));
 
         return ResponseEntity.ok(Map.of("results", responseMap));
     }
@@ -271,7 +291,11 @@ public class AssetPermissionInternalResource {
         String assetId,
         String assetKey,
         String classificationDecision,
-        String grantSource
+        String grantSource,
+        String reasonCode,
+        String reasonDetail,
+        String suggestedRemediation,
+        Instant deniedAt
     ) {}
     public record PolicyResponse(boolean applyRls, List<String> predicates, List<String> maskedColumns, String policySource) {}
     public record AccessibleIdsResponse(List<String> assetIds, long total, String scope) {}

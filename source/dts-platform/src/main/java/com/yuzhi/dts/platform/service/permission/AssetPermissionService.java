@@ -233,7 +233,9 @@ public class AssetPermissionService {
                 requiredPermission,
                 "classification_required",
                 classificationDecision,
-                base.reason()
+                base.reason(),
+                "Asset classification is missing for " + assetType + ":" + assetId + ".",
+                "Set the asset classification in platform governance metadata."
             );
         }
         if ("DENIED".equals(classificationDecision)) {
@@ -246,7 +248,10 @@ public class AssetPermissionService {
                 requiredPermission,
                 "classification_denied",
                 classificationDecision,
-                base.reason()
+                base.reason(),
+                "User classification " + firstNonBlank(command.userClassification(), "<none>") +
+                " is lower than asset classification " + firstNonBlank(command.assetClassification(), "<none>") + ".",
+                "Request a classification review or use a lower-sensitivity asset."
             );
         }
         if (!permissionCovers(base.permission(), requiredPermission)) {
@@ -626,7 +631,7 @@ public class AssetPermissionService {
         return text == null ? null : text.toUpperCase(Locale.ROOT);
     }
 
-    private String firstNonBlank(String... values) {
+    private static String firstNonBlank(String... values) {
         if (values == null) {
             return null;
         }
@@ -639,7 +644,7 @@ public class AssetPermissionService {
         return null;
     }
 
-    private String trimToNull(String value) {
+    private static String trimToNull(String value) {
         if (value == null) {
             return null;
         }
@@ -717,9 +722,43 @@ public class AssetPermissionService {
         String assetId,
         String assetKey,
         String classificationDecision,
-        String grantSource
+        String grantSource,
+        String reasonCode,
+        String reasonDetail,
+        String suggestedRemediation,
+        Instant deniedAt
     ) {
-        static PermissionDecision allowed(
+        public PermissionDecision(
+            boolean allowed,
+            String permission,
+            String reason,
+            String requiredPermission,
+            String action,
+            String assetType,
+            String assetId,
+            String assetKey,
+            String classificationDecision,
+            String grantSource
+        ) {
+            this(
+                allowed,
+                permission,
+                reason,
+                requiredPermission,
+                action,
+                assetType,
+                assetId,
+                assetKey,
+                classificationDecision,
+                grantSource,
+                allowed ? "ALLOWED" : reasonCodeFor(reason),
+                allowed ? reason : reasonDetailFor(reason, action, permission, requiredPermission, classificationDecision),
+                allowed ? null : suggestedRemediationFor(reason),
+                allowed ? null : Instant.now()
+            );
+        }
+
+        public static PermissionDecision allowed(
             String assetType,
             String assetId,
             String assetKey,
@@ -740,11 +779,15 @@ public class AssetPermissionService {
                 assetId,
                 assetKey,
                 classificationDecision,
-                grantSource
+                grantSource,
+                "ALLOWED",
+                reason,
+                null,
+                null
             );
         }
 
-        static PermissionDecision denied(
+        public static PermissionDecision denied(
             String assetType,
             String assetId,
             String assetKey,
@@ -754,6 +797,34 @@ public class AssetPermissionService {
             String reason,
             String classificationDecision,
             String grantSource
+        ) {
+            return denied(
+                assetType,
+                assetId,
+                assetKey,
+                action,
+                permission,
+                requiredPermission,
+                reason,
+                classificationDecision,
+                grantSource,
+                null,
+                null
+            );
+        }
+
+        public static PermissionDecision denied(
+            String assetType,
+            String assetId,
+            String assetKey,
+            String action,
+            String permission,
+            String requiredPermission,
+            String reason,
+            String classificationDecision,
+            String grantSource,
+            String reasonDetail,
+            String suggestedRemediation
         ) {
             return new PermissionDecision(
                 false,
@@ -765,8 +836,61 @@ public class AssetPermissionService {
                 assetId,
                 assetKey,
                 classificationDecision,
-                grantSource
+                grantSource,
+                reasonCodeFor(reason),
+                firstNonBlank(reasonDetail, reasonDetailFor(reason, action, permission, requiredPermission, classificationDecision)),
+                firstNonBlank(suggestedRemediation, suggestedRemediationFor(reason)),
+                Instant.now()
             );
+        }
+
+        private static String reasonCodeFor(String reason) {
+            String normalized = reason == null ? "" : reason.trim().toLowerCase(Locale.ROOT);
+            return switch (normalized) {
+                case "request_required", "asset_required" -> "INVALID_REQUEST";
+                case "unsupported_action" -> "UNSUPPORTED_ACTION";
+                case "classification_required" -> "CLASSIFICATION_REQUIRED";
+                case "classification_denied" -> "CLASSIFICATION_MISMATCH";
+                case "insufficient_permission" -> "INSUFFICIENT_PERMISSION";
+                case "denied", "missing_grant", "no_grant" -> "NO_GRANT";
+                default -> "PERMISSION_DENIED";
+            };
+        }
+
+        private static String reasonDetailFor(
+            String reason,
+            String action,
+            String permission,
+            String requiredPermission,
+            String classificationDecision
+        ) {
+            String normalized = reason == null ? "" : reason.trim().toLowerCase(Locale.ROOT);
+            return switch (normalized) {
+                case "request_required" -> "Permission check request is required.";
+                case "asset_required" -> "Asset type and asset id or key are required for the permission check.";
+                case "unsupported_action" -> "Action " + firstNonBlank(action, "<unknown>") + " is not supported by the asset permission contract.";
+                case "classification_required" -> "Asset classification is required before applying protected data access.";
+                case "classification_denied" -> "User classification is lower than the asset classification.";
+                case "insufficient_permission" -> "Action " + firstNonBlank(action, "<unknown>") + " requires " +
+                firstNonBlank(requiredPermission, "<unknown>") + " but current permission is " + firstNonBlank(permission, "<none>") + ".";
+                case "denied", "missing_grant", "no_grant" -> "No active grant covers this asset for the requested user, roles, or department.";
+                default -> "Permission decision was denied by platform policy: " + firstNonBlank(reason, "unknown") +
+                ", classification decision=" + firstNonBlank(classificationDecision, "NOT_APPLIED") + ".";
+            };
+        }
+
+        private static String suggestedRemediationFor(String reason) {
+            String normalized = reason == null ? "" : reason.trim().toLowerCase(Locale.ROOT);
+            return switch (normalized) {
+                case "request_required" -> "Retry with a complete permission check request.";
+                case "asset_required" -> "Resolve the platform asset identity and retry with asset type plus id or key.";
+                case "unsupported_action" -> "Use a supported action or extend the platform permission action matrix first.";
+                case "classification_required" -> "Set the asset classification in platform governance metadata.";
+                case "classification_denied" -> "Request a classification review or use a lower-sensitivity asset.";
+                case "insufficient_permission" -> "Request or grant the required platform asset permission.";
+                case "denied", "missing_grant", "no_grant" -> "Create or approve a platform asset grant for the target principal.";
+                default -> "Review the platform asset permission policy and grant configuration.";
+            };
         }
     }
 

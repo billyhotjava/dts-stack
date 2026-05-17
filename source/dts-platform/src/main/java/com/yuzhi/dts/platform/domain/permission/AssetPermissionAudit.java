@@ -37,6 +37,12 @@ public class AssetPermissionAudit implements Serializable {
     @Column(name = "oa_reference", length = 128)
     private String oaReference;
 
+    @Column(name = "reason_code", length = 64)
+    private String reasonCode;
+
+    @Column(name = "reason_detail", columnDefinition = "text")
+    private String reasonDetail;
+
     @Column(name = "detail", columnDefinition = "text")
     private String detail;
 
@@ -112,6 +118,22 @@ public class AssetPermissionAudit implements Serializable {
 
     public void setOaReference(String oaReference) {
         this.oaReference = oaReference;
+    }
+
+    public String getReasonCode() {
+        return reasonCode;
+    }
+
+    public void setReasonCode(String reasonCode) {
+        this.reasonCode = reasonCode;
+    }
+
+    public String getReasonDetail() {
+        return reasonDetail;
+    }
+
+    public void setReasonDetail(String reasonDetail) {
+        this.reasonDetail = reasonDetail;
     }
 
     public String getDetail() {
