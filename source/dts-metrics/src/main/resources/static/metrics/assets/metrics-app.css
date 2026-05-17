@@ -618,6 +618,20 @@ body.embedded .panel {
 	font-weight: 700;
 }
 
+.live-contract {
+	margin-top: 16px;
+	padding-top: 14px;
+	border-top: 1px solid #e2e8f0;
+}
+
+.live-contract h5 {
+	margin: 0 0 10px;
+	color: #0f172a;
+	font-size: 13px;
+	font-weight: 800;
+	letter-spacing: 0;
+}
+
 .model-card p {
 	min-height: 52px;
 }

@@ -81,6 +81,10 @@ const routeItems = routes.flatMap((group) => group.items);
 const isEmbedded = new URLSearchParams(window.location.search).get("embedded") === "1";
 const currentPath = normalizePath(window.location.pathname);
 const activeRoute = routeItems.find((item) => item.path === currentPath) || routeItems[0];
+const serviceSnapshot = {
+	health: null,
+	capabilities: null,
+};
 
 document.documentElement.classList.toggle("embedded", isEmbedded);
 document.body.classList.toggle("embedded", isEmbedded);
@@ -622,6 +626,7 @@ function renderCenterPage() {
 			<section class="section">
 				<h4>平台契约状态</h4>
 				${renderKeyTable(["能力", "接口/事实源", "状态"], platformContracts)}
+				<div id="live-contract-panel">${renderLiveContractPanel(serviceSnapshot.capabilities)}</div>
 			</section>
 			<section class="section">
 				<h4>交付漏斗</h4>
@@ -644,6 +649,25 @@ function renderCenterPage() {
 						.join("")}
 				</div>
 			</section>
+		</div>
+	`;
+}
+
+function renderLiveContractPanel(capabilities) {
+	const contract = capabilities?.platformContract || {};
+	const rows = [
+		["metrics 服务", capabilities?.service || "等待响应"],
+		["platform 地址", contract.platformBaseUrl || "等待响应"],
+		["platform API 前缀", contract.apiPath || "等待响应"],
+		["服务 Token", contract.serviceTokenConfigured === true ? "已配置" : contract.serviceTokenConfigured === false ? "未配置" : "等待响应"],
+		["认证头", contract.authHeaders ? `${contract.authHeaders.service} + ${contract.authHeaders.token}` : "等待响应"],
+	];
+	const mvp = Array.isArray(capabilities?.mvp) ? capabilities.mvp : [];
+	return `
+		<div class="live-contract">
+			<h5>实时能力响应</h5>
+			${renderKeyTable(["字段", "值"], rows)}
+			${mvp.length ? `<div class="field-tags">${mvp.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>` : ""}
 		</div>
 	`;
 }
@@ -1048,19 +1072,32 @@ async function loadServiceStatus() {
 	const statusNode = document.getElementById("service-status");
 	try {
 		const [health, capabilities] = await Promise.all([fetchJson("/api/metrics/health"), fetchJson("/api/metrics/capabilities")]);
+		serviceSnapshot.health = health;
+		serviceSnapshot.capabilities = capabilities;
 		if (statusNode) {
 			statusNode.textContent = `${health.service || "dts-metrics"} ${health.status || "UP"}`;
 			statusNode.classList.remove("warn");
 			statusNode.classList.add("ok");
 		}
 		renderSummaryCards(capabilities);
+		refreshLivePanels();
 	} catch (error) {
 		if (statusNode) {
 			statusNode.textContent = "服务状态不可用";
 			statusNode.classList.remove("ok");
 			statusNode.classList.add("warn");
 		}
+		serviceSnapshot.health = null;
+		serviceSnapshot.capabilities = null;
 		renderSummaryCards(null);
+		refreshLivePanels();
+	}
+}
+
+function refreshLivePanels() {
+	const liveContractPanel = document.getElementById("live-contract-panel");
+	if (liveContractPanel) {
+		liveContractPanel.innerHTML = renderLiveContractPanel(serviceSnapshot.capabilities);
 	}
 }
 
