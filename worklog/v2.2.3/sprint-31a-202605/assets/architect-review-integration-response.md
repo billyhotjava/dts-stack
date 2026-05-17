@@ -1,6 +1,6 @@
 # 架构评审整合响应
 
-**状态**: CONTRACT_DONE / ENFORCEMENT_IN_PROGRESS
+**状态**: CONTRACT_DONE / RUNTIME_PARTIAL（运行时收口见 Sprint-31B）
 **日期**: 2026-05-17
 **范围**: Sprint-31A / Sprint-31 / Sprint-32 post-review hardening
 

@@ -1,7 +1,7 @@
 # T01: Sprint-31A 状态口径修正
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: F1-F3 进入开发
 
 ## 目标
@@ -39,10 +39,17 @@
 
 ## 验证
 
-- [ ] 三处状态口径一致（grep 验证）。
-- [ ] 外部 reader 能从 Sprint-31A README 直接跳到 Sprint-31B。
+- [x] 三处状态口径一致（Sprint-31A README / RX README / sprint-queue 均使用 CONTRACT_DONE / RUNTIME_PARTIAL）。
+- [x] 外部 reader 能从 Sprint-31A README 直接跳到 Sprint-31B。
 
 ## 完成标准
 
-- [ ] 状态口径修正完成。
-- [ ] rationale 文档归档。
+- [x] 状态口径修正完成。
+- [x] rationale 文档归档。
+
+## 实现记录
+
+- Sprint-31A README 顶部状态改为 `CONTRACT_DONE / RUNTIME_PARTIAL（运行时收口见 Sprint-31B）`。
+- RX README 增加状态口径说明，明确哪些属于当前版本契约完成、哪些由 Sprint-31B 收口。
+- `sprint-queue.md` 同步 Sprint-31A 状态和 RX 行状态。
+- Rationale: `worklog/v2.2.3/sprint-31a-202605/assets/sprint31a-status-rectification-20260518.md`。

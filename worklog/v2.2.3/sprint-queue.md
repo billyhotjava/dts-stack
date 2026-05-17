@@ -431,7 +431,7 @@
 **关键决策**: Sprint-30 不做 Parquet；正式版交换格式为治理后的 CSV 训练快照包，包含 `manifest.json`、`schema.json`、`quality_report.json`、`lineage.json`、`data.csv`。
 
 ## Sprint-31A: 企业级数据资产事实源重构 (202605)
-**状态**: CONTRACT_DONE / ENFORCEMENT_IN_PROGRESS
+**状态**: CONTRACT_DONE / RUNTIME_PARTIAL（运行时收口见 Sprint-31B）
 **类型**: Architecture / Implementation（dts-platform + dts-platform-webapp）
 **目标**: 在 Sprint-31 主链路补齐和 Sprint-32 `dts-metrics` 独立服务之前，先把 `dts-platform` 的数据资产模块收敛为企业级唯一事实源，统一资产身份、生命周期、治理字段、权限校验、血缘入口和对外读取契约。
 **执行约束**: 按当前执行决策，Sprint-31A -> Sprint-31 -> Sprint-32 过程中不做完整中间编译、镜像构建和容器重建；评审问题需要代码级闭环时允许执行 focused contract/unit tests，并将证据归档到最终验收目录。
@@ -444,9 +444,9 @@
 | F4-permission-classification | P0 | 5 | DONE |
 | F5-asset-portal-ux | P1 | 4 | DONE |
 | F6-migration-compatibility | P0 | 5 | DONE |
-| RX-architect-review-hardening | P0 | 5 | CONTRACT_DONE / ENFORCEMENT_IN_PROGRESS |
+| RX-architect-review-hardening | P0 | 5 | CONTRACT: DONE / RUNTIME: PARTIAL（Sprint-31B 收口） |
 
-**统计**: READY=0, IN_PROGRESS=1, CONTRACT_DONE=1, DONE=33, BLOCKED=0
+**统计**: READY=0, RUNTIME_PARTIAL=1, CONTRACT_DONE=1, DONE=33, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-31a-202605/README.md`
 **能力契约**: `worklog/v2.2.3/sprint-31a-202605/assets/asset-capability-contract.md`
 **集成测试**: `worklog/v2.2.3/sprint-31a-202605/it/README.md`
@@ -504,11 +504,11 @@
 | F1-rx-runtime-closure | P0 | 6 | DONE |
 | F2-rls-publish-and-masking-closure | P0 | 5 | IN_PROGRESS（T02/T03 DONE；publish gate / audit 待接入） |
 | F3-code-quality-and-security-hardening | P0 | 5 | DONE |
-| F4-sprint-31a-gap-and-status-rectification | P1 | 4 | IN_PROGRESS（T04 DONE；T01-T03 待处理） |
+| F4-sprint-31a-gap-and-status-rectification | P1 | 4 | IN_PROGRESS（T01/T04 DONE；T02-T03 待处理） |
 | F5-sprint-31-cheap-compile-verification | P0 | 4 | READY |
 | F6-frontend-acceptance-recovery | P0 | 5 | DONE |
 
-**统计**: READY=10, IN_PROGRESS=0, DONE=19, BLOCKED=0
+**统计**: READY=9, IN_PROGRESS=0, DONE=20, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-31b-202605/README.md`
 **集成测试**: `worklog/v2.2.3/sprint-31b-202605/it/README.md`
 **关键决策**:

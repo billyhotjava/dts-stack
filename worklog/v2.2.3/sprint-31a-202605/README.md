@@ -1,7 +1,7 @@
 # Sprint-31A: 企业级数据资产事实源重构（202605）
 
 **时间**: 2026-05
-**状态**: CONTRACT_DONE / ENFORCEMENT_IN_PROGRESS
+**状态**: CONTRACT_DONE / RUNTIME_PARTIAL（运行时收口见 Sprint-31B）
 **类型**: Architecture / Implementation（dts-platform + dts-platform-webapp）
 **目标**: 在 Sprint-31 主链路补齐和 Sprint-32 `dts-metrics` 独立服务之前，先把 `dts-platform` 的数据资产模块收敛为企业级唯一事实源，统一资产身份、生命周期、治理字段、权限校验、血缘入口和对外读取契约。
 
@@ -44,9 +44,18 @@ Sprint-31 已经把 DTS 的企业级主链路定义为：
 | F4 | 资产权限和密级一致性 | P0 | 5 | DONE | F1, F2 |
 | F5 | 数据资产门户体验收敛 | P1 | 4 | DONE | F2, F4 |
 | F6 | 迁移、兼容和验收闭环 | P0 | 5 | DONE | F1-F5 |
-| RX | 架构评审追补项 | P0 | 5 | CONTRACT_DONE / ENFORCEMENT_IN_PROGRESS | F1-F6, Sprint-32 |
+| RX | 架构评审追补项 | P0 | 5 | CONTRACT: DONE / RUNTIME: PARTIAL（Sprint-31B 收口） | F1-F6, Sprint-32 |
 
-**统计**: READY=0, IN_PROGRESS=1, CONTRACT_DONE=1, DONE=33, BLOCKED=0
+**统计**: READY=0, RUNTIME_PARTIAL=1, CONTRACT_DONE=1, DONE=33, BLOCKED=0
+
+## 运行时收口口径
+
+Sprint-31A 的基础资产事实源契约已经完成，包含资产身份、治理字段、血缘入口、权限密级、资产门户和迁移兼容主链路。RX 架构评审追补项采用拆分状态：
+
+- `CONTRACT: DONE`: 当前版本已完成资产类型、asset key、metric-pack guardrail、resolver、code asset writer、preview 阶段 RLS/masking 契约。
+- `RUNTIME: PARTIAL`: platform/dbt publish gate 二次复核、RLS 注入 audit、live dialect IT、状态 evidence 等运行时闭环由 Sprint-31B 继续完成。
+
+外部评审读取 Sprint-31A 时，应按“契约完成、运行时增强转入 Sprint-31B”的口径判断，不再把 RX 视为未定义或完全交付。
 
 ## Sprint-31 / Sprint-32 关系
 

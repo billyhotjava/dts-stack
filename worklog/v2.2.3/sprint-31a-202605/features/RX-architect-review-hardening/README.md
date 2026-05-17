@@ -1,7 +1,7 @@
 # RX: 架构评审追补项
 
 **优先级**: P0
-**状态**: CONTRACT_DONE / ENFORCEMENT_IN_PROGRESS
+**状态**: CONTRACT_DONE / RUNTIME_PARTIAL（运行时收口见 Sprint-31B）
 
 ## 目标
 
@@ -16,6 +16,11 @@
 | T03 | CodeAssetGrantWriter 接入 | P0 | DONE | T01, T02 |
 | T04 | CatalogAssetIdentityResolver 扩展 | P0 | DONE | T03 |
 | T05 | Metric artifact preview / RLS enforcement | P0 | IN_PROGRESS | T01, T02 |
+
+## 状态口径
+
+- `CONTRACT_DONE`: RX 已把评审提出的资产类型、asset key、metric-pack guardrail、resolver 扩展、code asset writer 和 preview 阶段 RLS/masking 契约落到当前版本。
+- `RUNTIME_PARTIAL`: platform/dbt publish gate 二次复核、RLS/masking audit、live dialect IT 仍由 Sprint-31B F2/F5 收口，不在 Sprint-31A 内伪标 DONE。
 
 ## 完成标准
 
