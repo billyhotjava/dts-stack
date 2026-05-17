@@ -35,6 +35,53 @@ class MetricPackResourceTest {
         assertThat(artifactService.actor.userClassification()).isEqualTo("INTERNAL");
     }
 
+    @Test
+    void previewArtifactsRejectsMissingForwardAuthIdentity() {
+        CapturingArtifactService artifactService = new CapturingArtifactService();
+        MetricPackResource resource = new MetricPackResource(new MetricPackValidationService(), artifactService);
+
+        var response = resource.previewArtifacts("pack_id: demo", new HttpHeaders());
+
+        assertThat(response.getStatusCode().value()).isEqualTo(403);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().valid()).isFalse();
+        assertThat(response.getBody().errors()).contains("forward-auth identity headers are required");
+        assertThat(artifactService.actor).isNull();
+    }
+
+    @Test
+    void importPackRejectsMissingForwardAuthIdentity() {
+        CapturingArtifactService artifactService = new CapturingArtifactService();
+        MetricPackResource resource = new MetricPackResource(new MetricPackValidationService(), artifactService);
+
+        var response = resource.importPack(validMinimalManifest(), new HttpHeaders());
+
+        assertThat(response.getStatusCode().value()).isEqualTo(403);
+        assertThat(response.getBody()).containsEntry("accepted", false);
+        assertThat(response.getBody()).containsEntry("error", "forward-auth identity headers are required");
+        assertThat(artifactService.actor).isNull();
+    }
+
+    private static String validMinimalManifest() {
+        return """
+            pack_id: demo
+            pack_name: Demo Pack
+            version: 0.1.0
+            industry: demo
+            edition_required: professional
+            tenant_namespace: demo
+            files:
+              domains: domains.yml
+              business_objects: business-objects.yml
+              dimensions: dimensions.yml
+              metrics: metrics.yml
+              models: models.yml
+              datasets: datasets.yml
+            dependencies:
+              platform_assets: []
+            """;
+    }
+
     private static final class CapturingArtifactService extends MetricArtifactGenerationService {
 
         private PreviewActor actor;

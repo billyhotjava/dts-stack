@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
@@ -41,6 +42,9 @@ public class MetricPackResource {
 
     @PostMapping(value = "/import", consumes = { "application/yaml", "text/yaml", MediaType.TEXT_PLAIN_VALUE, MediaType.APPLICATION_JSON_VALUE })
     public ResponseEntity<Map<String, Object>> importPack(@RequestBody String manifestContent, @RequestHeader HttpHeaders headers) {
+        if (!hasForwardAuthIdentity(headers)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(importDenied("forward-auth identity headers are required"));
+        }
         MetricPackValidationResult validation = validationService.validateManifest(manifestContent);
         if (!validation.valid()) {
             return ResponseEntity.badRequest().body(importResult(false, validation, null));
@@ -54,15 +58,21 @@ public class MetricPackResource {
 
     @PostMapping(value = "/preview-artifacts", consumes = { "application/yaml", "text/yaml", MediaType.TEXT_PLAIN_VALUE, MediaType.APPLICATION_JSON_VALUE })
     public ResponseEntity<MetricArtifactPreviewResult> previewArtifacts(@RequestBody String manifestContent, @RequestHeader HttpHeaders headers) {
+        if (!hasForwardAuthIdentity(headers)) {
+            return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(MetricArtifactPreviewResult.invalid(List.of("forward-auth identity headers are required"), Map.of()));
+        }
         MetricArtifactPreviewResult preview = artifactGenerationService.preview(manifestContent, previewActor(headers));
         return preview.valid() ? ResponseEntity.ok(preview) : ResponseEntity.badRequest().body(preview);
     }
 
+    private boolean hasForwardAuthIdentity(HttpHeaders headers) {
+        return StringUtils.hasText(firstHeader(headers, "X-DTS-User"));
+    }
+
     private MetricArtifactGenerationService.PreviewActor previewActor(HttpHeaders headers) {
         String username = firstHeader(headers, "X-DTS-User");
-        if (!StringUtils.hasText(username)) {
-            return MetricArtifactGenerationService.PreviewActor.system();
-        }
         return new MetricArtifactGenerationService.PreviewActor(
             username,
             roles(firstHeader(headers, "X-DTS-Roles")),
@@ -84,6 +94,15 @@ public class MetricPackResource {
 
     private static String firstHeader(HttpHeaders headers, String name) {
         return headers != null ? headers.getFirst(name) : null;
+    }
+
+    private Map<String, Object> importDenied(String error) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("accepted", false);
+        result.put("mode", "DRY_RUN");
+        result.put("error", error);
+        result.put("importedAt", Instant.now().toString());
+        return result;
     }
 
     private Map<String, Object> importResult(

@@ -25,6 +25,9 @@ class PlatformCapabilityResourceTest {
         assertThat(map(capabilities.get("dbtPublish"))).containsEntry("mode", "platform-gated");
         assertThat(map(capabilities.get("metrics"))).containsEntry("serviceBoundary", "optional-value-added-service");
         assertThat(map(capabilities.get("metrics"))).containsEntry("partnerDelivery", "metric-pack");
+        assertThat(map(capabilities.get("metrics")).get("requiredPlatformContracts").toString())
+            .contains("/api/internal/domains/resolve")
+            .contains("/api/internal/data-standards/resolve");
     }
 
     @SuppressWarnings("unchecked")

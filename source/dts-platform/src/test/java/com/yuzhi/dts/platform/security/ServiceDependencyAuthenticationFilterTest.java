@@ -36,6 +36,8 @@ class ServiceDependencyAuthenticationFilterTest {
     private static final String ANALYTICS_ASSET_PERMISSION_ACCESSIBLE_IDS = "/api/internal/asset-permission/accessible-ids";
     private static final String INTERNAL_CAPABILITIES = "/api/internal/capabilities";
     private static final String INTERNAL_GLOSSARY_TERMS_RESOLVE = "/api/internal/glossary/terms/resolve";
+    private static final String INTERNAL_DOMAINS_RESOLVE = "/api/internal/domains/resolve";
+    private static final String INTERNAL_DATA_STANDARDS_RESOLVE = "/api/internal/data-standards/resolve";
     private static final String METRICS_ASSET_CONTRACT = "/api/catalog/assets-v2/33333333-3333-3333-3333-333333333333/contract";
     private static final String METRICS_ASSET_SCHEMA_CONTRACT = "/api/catalog/assets-v2/33333333-3333-3333-3333-333333333333/schema-contract";
 
@@ -179,6 +181,12 @@ class ServiceDependencyAuthenticationFilterTest {
     @Test
     void metricsMatchingToken_canResolveGlossaryTerms() throws Exception {
         assertMetricsCanAccess("POST", INTERNAL_GLOSSARY_TERMS_RESOLVE);
+    }
+
+    @Test
+    void metricsMatchingToken_canResolvePlatformDomainsAndDataStandards() throws Exception {
+        assertMetricsCanAccess("POST", INTERNAL_DOMAINS_RESOLVE);
+        assertMetricsCanAccess("POST", INTERNAL_DATA_STANDARDS_RESOLVE);
     }
 
     @Test

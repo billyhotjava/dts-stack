@@ -60,6 +60,8 @@ public class PlatformCapabilityResource {
             "/api/internal/capabilities",
             "/api/catalog/assets-v2/{id}/contract",
             "/api/internal/glossary/terms/resolve",
+            "/api/internal/domains/resolve",
+            "/api/internal/data-standards/resolve",
             "/api/internal/asset-permission/check",
             "/api/etl/dbt/release/submit",
             "platform-audit"
