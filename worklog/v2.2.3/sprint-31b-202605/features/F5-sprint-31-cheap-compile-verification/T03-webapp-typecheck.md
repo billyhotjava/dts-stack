@@ -1,7 +1,7 @@
 # T03: webapp `pnpm tsc --noEmit`
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: F1-F4
 
 ## 目标
@@ -31,10 +31,10 @@ webapp 通过 OpenAPI / 手写 type 调用 platform internal API。Sprint-31A �
 
 ## 验证
 
-- [ ] exit code 0
-- [ ] OpenAPI 同步任务（如有）执行成功
+- [x] exit code 0
+- [x] OpenAPI 同步任务（如有）无需执行
 
 ## 完成标准
 
-- [ ] webapp typecheck 通过。
-- [ ] evidence 文档存在。
+- [x] webapp typecheck 通过。
+- [x] evidence 文档存在：`worklog/v2.2.3/sprint-31b-202605/it/evidence/cheap-compile/dts-platform-webapp-2026-05-18.md`。

@@ -1,7 +1,7 @@
 # T02: `mvn -pl dts-metrics compile`
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: F1-F4
 
 ## 目标
@@ -28,10 +28,10 @@ dts-metrics 通过 internal HTTP 契约依赖 dts-platform，contract 漂移不�
 
 ## 验证
 
-- [ ] exit code 0
-- [ ] 与 platform 共享 contract 字段无 type mismatch
+- [x] exit code 0
+- [x] 与 platform 共享 contract 字段无 type mismatch
 
 ## 完成标准
 
-- [ ] metrics 编译通过。
-- [ ] evidence 文档存在。
+- [x] metrics 编译通过。
+- [x] evidence 文档存在：`worklog/v2.2.3/sprint-31b-202605/it/evidence/cheap-compile/dts-metrics-2026-05-18.md`。

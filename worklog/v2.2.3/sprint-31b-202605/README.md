@@ -1,7 +1,7 @@
 # Sprint-31B: Sprint-31A RX 运行时收口与代码质量加固（202605）
 
 **时间**: 2026-05
-**状态**: IN_PROGRESS
+**状态**: DONE
 **类型**: Implementation / Hardening（dts-platform + dts-metrics + dts-platform-webapp）
 **目标**: 收尾 Sprint-31A 的 RX 运行时强制（T03/T04/T05 后半段），修复 Sprint-31A 阶段性提交的性能与安全 review 发现，统一 Sprint-31A 的状态口径与 evidence，并为 Sprint-32 最终统一 IT 提供 cheap compile 前置验证。
 
@@ -53,10 +53,10 @@ Sprint-31B 收口
 | F2 | RLS publish gate 与 column masking 收口 | P0 | 5 | DONE | F1, Sprint-31A RX/T05 |
 | F3 | 代码质量与安全 hardening | P0 | 5 | DONE | F1 |
 | F4 | Sprint-31A 漏项与口径修正 | P1 | 4 | DONE | F1-F3 |
-| F5 | Sprint-31 cheap compile 前置验证 | P0 | 4 | READY | F1-F4 |
+| F5 | Sprint-31 cheap compile 前置验证 | P0 | 4 | DONE | F1-F4 |
 | F6 | 前端验收口径收口 | P0 | 5 | DONE | F1-F5 |
 
-**统计**: READY=4, IN_PROGRESS=0, DONE=25, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=29, BLOCKED=0
 
 ## 非目标
 
@@ -84,7 +84,7 @@ Sprint-31B 收口
 - [x] `lifecycleForModel` / `lifecycleForStatus` 状态映射与既有数据对齐，不批量打 `PENDING_GOVERNANCE`；公共 mapper 已覆盖 Indicator / ModelingSqlModel / ApiService / DataStandard / Glossary，历史 backfill 与仪表板基线已补。
 - [x] Sprint-31A README / RX README / sprint-queue 状态口径统一；Sprint-31A IT evidence 5 个空目录已补齐 README 与 owner。
 - [x] 权限拒绝原因结构化：`PermissionDecision` / `asset_permission_audit` / internal denied audit JSON + CSV 查询已闭环。
-- [ ] `mvn -pl dts-platform compile` + `mvn -pl dts-metrics compile` + `pnpm tsc --noEmit` 全绿，跨模块签名漂移在 cheap stage 修复。
+- [x] `mvn -pl dts-platform compile` + `mvn -pl dts-metrics compile` + `pnpm tsc --noEmit` 全绿，跨模块签名漂移在 cheap stage 已验证。
 - [x] 数据资产中心、数据产品和 dts-metrics 页面按 F6 完成前端可操作验收。
 
 ## 当前实现证据（2026-05-17）
@@ -102,6 +102,9 @@ Sprint-31B 收口
 - `./mvnw -q -pl dts-platform -Dtest=AssetPermissionAuditServiceTest,AssetPermissionInternalResourceTest,AssetPermissionAuditQueryResourceTest,ServiceDependencyAuthenticationFilterTest test` 通过。
 - `./mvnw -q -pl dts-metrics -Dtest=MetricArtifactGenerationServiceTest,MetricArtifactPublishServiceTest,PlatformContractClientTest test` 通过。
 - `./mvnw -q -pl dts-metrics -Dtest=MetricArtifactGenerationIT test` 通过，PostgreSQL Testcontainers 实际执行候选 SQL，Doris golden/minimal compiler 检查通过。
+- `./mvnw -pl dts-platform -am -DskipTests compile` 通过。
+- `./mvnw -pl dts-metrics -am -DskipTests compile` 通过。
+- `VITE_CACHE_DIR=.vite-cache pnpm exec tsc --noEmit` 通过。
 
 ## 相关材料
 

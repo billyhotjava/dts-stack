@@ -1,7 +1,7 @@
 # T01: `mvn -pl dts-platform compile`
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: F1-F4
 
 ## 目标
@@ -37,11 +37,11 @@ Sprint-31A 阶段做了 `CatalogAssetIdentityResolver` 7 参构造器变更、`A
 
 ## 验证
 
-- [ ] exit code 0
-- [ ] 无 ERROR
-- [ ] WARNING 列表归档
+- [x] exit code 0
+- [x] 无 ERROR
+- [x] WARNING 列表归档
 
 ## 完成标准
 
-- [ ] platform 编译通过。
-- [ ] evidence 文档存在。
+- [x] platform 编译通过。
+- [x] evidence 文档存在：`worklog/v2.2.3/sprint-31b-202605/it/evidence/cheap-compile/dts-platform-2026-05-18.md`。
