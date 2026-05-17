@@ -36,6 +36,7 @@
 
 ## 验证
 
+- [x] workspace snapshot API 测试通过：`./mvnw -q -pl dts-metrics -Dtest=MetricWorkspaceResourceTest,MetricsFrontendResourceContractTest,MetricPackResourceTest test`。
 - [x] dts-metrics 当前无独立前端构建链，静态入口已通过 `node --check source/dts-metrics/src/main/resources/static/metrics/assets/metrics-app.js`。
 - [x] platform 菜单/旧路由跳转到 `/metrics/**` 的 smoke test 通过：`./node_modules/.bin/tsx --test src/routes/sections/dashboard/metricsServiceRoutes.test.ts src/routes/components/router-link.metrics-boundary.source.test.ts src/layouts/components/search-bar.metrics-boundary.source.test.ts`。
 - [x] 页面级契约测试覆盖指标公式配置、模型生成和发布动作：`./mvnw -q -pl dts-metrics -Dtest=MetricsFrontendResourceContractTest,MetricPackResourceTest test`。
@@ -48,7 +49,12 @@
 ## 实现记录
 
 - `/metrics/dictionary`、`/metrics/semantic/subjects` 可读取 `/api/metrics/capabilities`，用于展示 platform contract/capability 错误态。
+- `/metrics/**` 启动时读取 `/api/metrics/workspace/snapshot`，指标资产、主题域映射、业务对象 Join、公式块、DWS/ADS 候选、发布门禁和运行记录不再只依赖 JS 本地静态数组。
 - `/metrics/semantic/objects`、`/metrics/semantic/metrics`、`/metrics/semantic/models` 可提交样例 manifest 到 `/api/metrics/packs/preview-artifacts`，触发真实候选生成物预览。
 - `/metrics/semantic/publish` 可调用 `/api/metrics/packs/import` 做发布预检。
 - `/metrics/semantic/runs` 与 `/metrics/operations` 可刷新服务观测状态。
 - `dts-platform-webapp` 的 legacy metrics/semantic 路由只执行浏览器跳转到 `/metrics/**`，不再承载指标业务页面。
+
+## 后续限制
+
+当前 `/api/metrics/workspace/snapshot` 是服务端工作台契约和默认工作集，不是最终持久化 CRUD。真正的企业级指标资产管理仍需要后续把主题域、业务对象、Join、指标公式和 DWS/ADS 模型落为 dts-metrics 持久化实体。

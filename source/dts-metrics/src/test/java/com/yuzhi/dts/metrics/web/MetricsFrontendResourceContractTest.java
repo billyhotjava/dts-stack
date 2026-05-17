@@ -40,11 +40,13 @@ class MetricsFrontendResourceContractTest {
             );
         assertThat(script)
             .contains(
+                "\"/api/metrics/workspace/snapshot\"",
                 "\"/api/metrics/capabilities\"",
                 "\"/api/metrics/packs/preview-artifacts\"",
                 "\"/api/metrics/packs/import\"",
                 "\"/api/metrics/packs/publish-dry-run\""
             );
+        assertThat(script).contains("loadWorkspaceSnapshot", "applyWorkspaceSnapshot");
     }
 
     @Test

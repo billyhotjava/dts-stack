@@ -229,7 +229,7 @@ const routeBlueprints = {
 	},
 	};
 
-const platformContracts = [
+let platformContracts = [
 	["登录态", "platform-forward-auth", "已接入"],
 	["资产权限", "/api/internal/asset-permission/check", "已接入"],
 	["主题域", "/api/internal/domains/resolve", "已接入"],
@@ -238,7 +238,7 @@ const platformContracts = [
 	["发布门禁", "/api/etl/dbt/release/submit", "待联调"],
 ];
 
-const metricAssets = [
+let metricAssets = [
 	{
 		code: "project_cnt",
 		name: "项目总数",
@@ -289,7 +289,7 @@ const metricAssets = [
 	},
 ];
 
-const subjectMappings = [
+let subjectMappings = [
 	{
 		domain: "项目管理",
 		code: "project",
@@ -319,7 +319,7 @@ const subjectMappings = [
 	},
 ];
 
-const objectJoins = [
+let objectJoins = [
 	{
 		object: "项目",
 		source: "dwd_project_detail",
@@ -345,7 +345,7 @@ const objectJoins = [
 	},
 ];
 
-const formulaBlocks = [
+let formulaBlocks = [
 	{
 		code: "project_cnt",
 		name: "项目总数",
@@ -401,7 +401,7 @@ const formulaBlocks = [
 	},
 ];
 
-const modelCandidates = [
+let modelCandidates = [
 	{
 		layer: "DWS",
 		name: "dws_project_month_summary",
@@ -442,7 +442,7 @@ group by s.stat_month`,
 	},
 ];
 
-const publishGates = [
+let publishGates = [
 	["结构校验", "PASS", "指标包 schema、依赖声明和文件引用通过"],
 	["平台权限", "PASS", "当前用户具备来源资产 READ 权限"],
 	["术语绑定", "PASS", "指标绑定的 glossary term 已在 platform 激活"],
@@ -451,7 +451,7 @@ const publishGates = [
 	["dbt 门禁", "PENDING", "等待提交 /api/etl/dbt/release/submit"],
 ];
 
-const runRecords = [
+let runRecords = [
 	["dws_project_month_summary", "DWS", "SUCCESS", "2026-05-17 02:32", "48s", "fresh"],
 	["ads_project_dashboard_overview", "ADS", "SUCCESS", "2026-05-17 03:04", "23s", "fresh"],
 	["dws_supplier_month_summary", "DWS", "WARNING", "2026-05-17 02:41", "55s", "late source rows"],
@@ -1135,6 +1135,29 @@ async function loadServiceStatus() {
 	}
 }
 
+async function loadWorkspaceSnapshot() {
+	try {
+		const snapshot = await fetchJson("/api/metrics/workspace/snapshot");
+		applyWorkspaceSnapshot(snapshot);
+		renderPanel();
+		preserveEmbeddedLinks();
+	} catch (error) {
+		console.warn("[dts-metrics] workspace snapshot unavailable:", error?.message || error);
+	}
+}
+
+function applyWorkspaceSnapshot(snapshot) {
+	if (!snapshot || typeof snapshot !== "object") return;
+	if (Array.isArray(snapshot.platformContracts)) platformContracts = snapshot.platformContracts;
+	if (Array.isArray(snapshot.metricAssets)) metricAssets = snapshot.metricAssets;
+	if (Array.isArray(snapshot.subjectMappings)) subjectMappings = snapshot.subjectMappings;
+	if (Array.isArray(snapshot.objectJoins)) objectJoins = snapshot.objectJoins;
+	if (Array.isArray(snapshot.formulaBlocks)) formulaBlocks = snapshot.formulaBlocks;
+	if (Array.isArray(snapshot.modelCandidates)) modelCandidates = snapshot.modelCandidates;
+	if (Array.isArray(snapshot.publishGates)) publishGates = snapshot.publishGates;
+	if (Array.isArray(snapshot.runRecords)) runRecords = snapshot.runRecords;
+}
+
 function refreshLivePanels() {
 	const liveContractPanel = document.getElementById("live-contract-panel");
 	if (liveContractPanel) {
@@ -1268,4 +1291,5 @@ renderNavigation();
 renderRouteHeader();
 renderPanel();
 preserveEmbeddedLinks();
+loadWorkspaceSnapshot();
 loadServiceStatus();

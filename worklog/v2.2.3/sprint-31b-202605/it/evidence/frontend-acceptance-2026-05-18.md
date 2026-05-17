@@ -20,6 +20,12 @@ Result: exit 0.
 Result: exit 0.
 
 ```bash
+./mvnw -q -pl dts-metrics -Dtest=MetricWorkspaceResourceTest,MetricsFrontendResourceContractTest,MetricPackResourceTest test
+```
+
+Result: exit 0.
+
+```bash
 ./node_modules/.bin/tsx --test \
   src/routes/sections/dashboard/metricsServiceRoutes.test.ts \
   src/routes/components/router-link.metrics-boundary.source.test.ts \
@@ -49,6 +55,7 @@ Result: exit 0.
 ## Acceptance Notes
 
 - `/metrics/dictionary` and `/metrics/semantic/subjects` can call `/api/metrics/capabilities`.
+- `/metrics/**` loads `/api/metrics/workspace/snapshot` for workspace data instead of relying only on local JS arrays.
 - `/metrics/semantic/objects`, `/metrics/semantic/metrics`, and `/metrics/semantic/models` can call `/api/metrics/packs/preview-artifacts`.
 - `/metrics/semantic/publish` can call `/api/metrics/packs/import` as publish dry-run.
 - `/metrics/semantic/runs` and `/metrics/operations` can refresh metrics service observability.
