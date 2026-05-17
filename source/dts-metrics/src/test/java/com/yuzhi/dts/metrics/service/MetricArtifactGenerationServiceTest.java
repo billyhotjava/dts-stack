@@ -20,6 +20,9 @@ class MetricArtifactGenerationServiceTest {
             version: 0.1.0
             industry: flower_rental
             edition_required: professional
+            tenant_namespace: flowerbiz
+            security:
+              apply_rls: true
             source_model: dwd_flower_contract_detail
             dimensions:
               - stat_month
@@ -27,12 +30,16 @@ class MetricArtifactGenerationServiceTest {
             metrics:
               - metric_code: contract_amount
                 metric_name: 合同金额
+                term_ids:
+                  - glossary.contract_amount
                 formula:
                   type: aggregation
                   aggregation: sum
                   field: contract_amount
               - metric_code: direct_cost_execution_rate
                 metric_name: 直接成本执行率
+                term_ids:
+                  - glossary.direct_cost_execution_rate
                 formula:
                   type: ratio
                   numerator:

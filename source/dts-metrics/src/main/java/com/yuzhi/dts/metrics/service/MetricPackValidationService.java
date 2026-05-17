@@ -21,7 +21,29 @@ public class MetricPackValidationService {
     private static final Pattern PACK_ID_PATTERN = Pattern.compile("^[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$");
     private static final Pattern VERSION_PATTERN = Pattern.compile("^\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$");
     private static final Pattern ASSET_REF_PATTERN = Pattern.compile("^[A-Za-z0-9_.:-]+$");
+    private static final Pattern NAMESPACE_PATTERN = Pattern.compile("^[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$");
     private static final Set<String> ALLOWED_EDITIONS = Set.of("foundation", "professional", "enterprise");
+    private static final Set<String> ALLOWED_ASSET_TYPES = Set.of(
+        "DATASET",
+        "DBT_MODEL",
+        "BI_DATASET",
+        "SCREEN",
+        "METRIC",
+        "METRIC_PACK",
+        "SEMANTIC_MODEL",
+        "DATA_PRODUCT",
+        "MODELING_SQL_MODEL",
+        "MODELING_PLAN",
+        "DATA_STANDARD",
+        "METADATA_STANDARD",
+        "GLOSSARY_TERM",
+        "GOV_INDICATOR",
+        "GOV_INDICATOR_TEMPLATE",
+        "QUALITY_RULE",
+        "SECURITY_POLICY",
+        "API_SERVICE",
+        "BACKFILL_REQUEST"
+    );
     private static final List<String> REQUIRED_FILES = List.of("domains", "business_objects", "dimensions", "metrics", "models", "datasets");
 
     private final ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
@@ -45,6 +67,7 @@ public class MetricPackValidationService {
         String editionRequired = requireString(manifest, "edition_required", errors);
         requireMap(manifest, "files", errors);
         requireMap(manifest, "dependencies", errors);
+        String tenantNamespace = firstText(manifest.get("tenant_namespace"), manifest.get("tenant"));
 
         if (StringUtils.hasText(packId) && !PACK_ID_PATTERN.matcher(packId).matches()) {
             errors.add("pack_id must be lowercase ASCII letters, numbers, hyphen or underscore, and start with a letter");
@@ -54,6 +77,9 @@ public class MetricPackValidationService {
         }
         if (StringUtils.hasText(editionRequired) && !ALLOWED_EDITIONS.contains(editionRequired.toLowerCase(Locale.ROOT))) {
             errors.add("edition_required must be one of foundation, professional, enterprise");
+        }
+        if (StringUtils.hasText(tenantNamespace) && !NAMESPACE_PATTERN.matcher(tenantNamespace).matches()) {
+            errors.add("tenant_namespace must be lowercase ASCII letters, numbers, hyphen or underscore, and start with a letter");
         }
 
         Object files = manifest.get("files");
@@ -74,15 +100,21 @@ public class MetricPackValidationService {
         if (containsRawSql(manifest)) {
             errors.add("raw_sql is not allowed in metric-pack v0.1");
         }
-        int platformAssetCount = validatePlatformAssets(manifest, errors);
+        int platformAssetCount = validatePlatformAssets(manifest, tenantNamespace, errors);
+        int packDependencyCount = validatePackDependencies(manifest, errors);
+        int inlineMetricCount = validateInlineMetrics(manifest, errors);
+        validateSecurityPolicy(manifest, platformAssetCount, errors);
 
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("packId", manifest.getOrDefault("pack_id", ""));
         summary.put("version", manifest.getOrDefault("version", ""));
         summary.put("industry", manifest.getOrDefault("industry", ""));
         summary.put("editionRequired", manifest.getOrDefault("edition_required", ""));
+        summary.put("tenantNamespace", tenantNamespace);
         summary.put("fileCount", files instanceof Map<?, ?> fileMap ? fileMap.size() : 0);
         summary.put("platformAssetCount", platformAssetCount);
+        summary.put("packDependencyCount", packDependencyCount);
+        summary.put("inlineMetricCount", inlineMetricCount);
 
         return errors.isEmpty() ? MetricPackValidationResult.valid(summary) : MetricPackValidationResult.invalid(errors, summary);
     }
@@ -123,7 +155,7 @@ public class MetricPackValidationService {
         return false;
     }
 
-    private static int validatePlatformAssets(Map<String, Object> manifest, List<String> errors) {
+    private static int validatePlatformAssets(Map<String, Object> manifest, String tenantNamespace, List<String> errors) {
         Object dependenciesRaw = manifest.get("dependencies");
         if (!(dependenciesRaw instanceof Map<?, ?> dependencies)) {
             return 0;
@@ -141,10 +173,11 @@ public class MetricPackValidationService {
             String type = firstText(asset.get("type"), asset.get("asset_type"));
             String id = firstText(asset.get("id"), asset.get("asset_code"));
             String key = firstText(asset.get("key"), asset.get("asset_key"));
+            String ownerNamespace = firstText(asset.get("owner_namespace"), asset.get("tenant_namespace"));
             if (!StringUtils.hasText(type)) {
                 errors.add("dependencies.platform_assets[" + i + "].type is required");
-            } else if (!type.matches("^[A-Z_]+$")) {
-                errors.add("dependencies.platform_assets[" + i + "].type must be an uppercase asset type");
+            } else if (!ALLOWED_ASSET_TYPES.contains(type.trim().toUpperCase(Locale.ROOT))) {
+                errors.add("dependencies.platform_assets[" + i + "].type must be a supported uppercase platform asset type");
             }
             if (!StringUtils.hasText(id) && !StringUtils.hasText(key)) {
                 errors.add("dependencies.platform_assets[" + i + "] must declare id or key");
@@ -155,8 +188,84 @@ public class MetricPackValidationService {
             if (StringUtils.hasText(key) && !ASSET_REF_PATTERN.matcher(key).matches()) {
                 errors.add("dependencies.platform_assets[" + i + "].key must be a safe asset reference");
             }
+            if (!StringUtils.hasText(tenantNamespace) && !StringUtils.hasText(ownerNamespace)) {
+                errors.add("dependencies.platform_assets[" + i + "] must declare owner_namespace or inherit top-level tenant_namespace");
+            }
+            if (StringUtils.hasText(ownerNamespace) && !NAMESPACE_PATTERN.matcher(ownerNamespace).matches()) {
+                errors.add("dependencies.platform_assets[" + i + "].owner_namespace must be lowercase ASCII letters, numbers, hyphen or underscore");
+            }
         }
         return assets.size();
+    }
+
+    private static int validatePackDependencies(Map<String, Object> manifest, List<String> errors) {
+        Object dependenciesRaw = manifest.get("dependencies");
+        if (!(dependenciesRaw instanceof Map<?, ?> dependencies)) {
+            return 0;
+        }
+        Object dependenciesList = dependencies.get("pack_dependencies");
+        if (!(dependenciesList instanceof List<?> packs)) {
+            return 0;
+        }
+        for (int i = 0; i < packs.size(); i++) {
+            Object item = packs.get(i);
+            if (!(item instanceof Map<?, ?> pack)) {
+                errors.add("dependencies.pack_dependencies[" + i + "] must be an object");
+                continue;
+            }
+            String packId = firstText(pack.get("pack_id"), pack.get("id"));
+            String version = firstText(pack.get("version"), pack.get("version_constraint"));
+            if (!StringUtils.hasText(packId) || !PACK_ID_PATTERN.matcher(packId).matches()) {
+                errors.add("dependencies.pack_dependencies[" + i + "].pack_id must be a safe pack id");
+            }
+            if (!StringUtils.hasText(version)) {
+                errors.add("dependencies.pack_dependencies[" + i + "].version or version_constraint is required");
+            } else if (!version.matches("^[0-9A-Za-z.*+<>=~^|, -]+$")) {
+                errors.add("dependencies.pack_dependencies[" + i + "].version must be a safe semantic version constraint");
+            }
+        }
+        return packs.size();
+    }
+
+    private static int validateInlineMetrics(Map<String, Object> manifest, List<String> errors) {
+        Object rawMetrics = manifest.get("metrics");
+        if (!(rawMetrics instanceof List<?> metrics)) {
+            return 0;
+        }
+        for (int i = 0; i < metrics.size(); i++) {
+            Object item = metrics.get(i);
+            if (!(item instanceof Map<?, ?> metric)) {
+                errors.add("metrics[" + i + "] must be an object");
+                continue;
+            }
+            Object terms = metric.get("term_ids") != null ? metric.get("term_ids") : metric.get("terms");
+            if (!(terms instanceof List<?> termList) || termList.isEmpty()) {
+                errors.add("metrics[" + i + "] must bind at least one glossary term via term_ids");
+            } else {
+                for (int j = 0; j < termList.size(); j++) {
+                    String term = valueOf(termList.get(j));
+                    if (!StringUtils.hasText(term) || !ASSET_REF_PATTERN.matcher(term).matches()) {
+                        errors.add("metrics[" + i + "].term_ids[" + j + "] must be a safe glossary term reference");
+                    }
+                }
+            }
+        }
+        return metrics.size();
+    }
+
+    private static void validateSecurityPolicy(Map<String, Object> manifest, int platformAssetCount, List<String> errors) {
+        if (platformAssetCount == 0) {
+            return;
+        }
+        Object securityRaw = manifest.get("security");
+        if (!(securityRaw instanceof Map<?, ?> security)) {
+            errors.add("security.apply_rls must be true when platform assets are referenced");
+            return;
+        }
+        Object applyRls = security.get("apply_rls");
+        if (!(applyRls instanceof Boolean enabled) || !enabled) {
+            errors.add("security.apply_rls must be true when platform assets are referenced");
+        }
     }
 
     private static boolean isSafeRelativePackPath(String path) {

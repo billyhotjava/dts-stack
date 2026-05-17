@@ -105,9 +105,20 @@ metric-pack/
 
 - `manifest.yml` 必须声明 pack id、版本、行业、作者、兼容 DTS 版本、依赖资产标签。
 - 指标必须声明业务含义、公式、单位、格式、统计粒度、过滤条件、负责人和版本。
+- 指标必须绑定至少一个 platform glossary term，inline 指标用 `term_ids` 表达。
 - 模型必须引用 platform 已登记资产，不允许引用未登记物理表。
 - 第一版不允许 `raw_sql`，只允许受控公式 DSL。
 - 维度和指标必须能解析到具体业务对象和来源资产，跨对象指标必须在模型中显式声明来源模型。
+- 引用 platform asset 时必须声明 `tenant_namespace` 或资产级 `owner_namespace`，并显式 `security.apply_rls=true`。
+- 行业包复用通过 `dependencies.pack_dependencies[]` 声明，不允许隐式引用其他 pack 的私有维度或指标。
+
+## 当前版本追补边界
+
+当前版本补齐契约和 guardrail，不把所有高级语义能力一次性做成运行时：
+
+- 承接：资产类型枚举扩展、tenant/env/dialect key 规则、Glossary term binding、pack dependency、RLS 声明、旧 Gov/semantic 映射。
+- 承接为设计/校验：freshness/SLA、quality seed、backfill plan、metric run event、notification channel、consumer lock。
+- 推迟到 v2.3：SCD 运行时、window/time intelligence 全量 DSL、cube 缓存、cost-based routing、GraphQL/OData、向量语义搜索、差分隐私。
 
 ## 回滚策略
 

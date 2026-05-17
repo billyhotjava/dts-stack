@@ -33,6 +33,8 @@ class CatalogAssetKeyTest {
     @Test
     void explicitAssetTypesNormalizeHyphenatedNames() {
         assertThat(CatalogAssetType.from("bi-dataset")).isEqualTo(CatalogAssetType.BI_DATASET);
+        assertThat(CatalogAssetType.from("modeling-sql-model")).isEqualTo(CatalogAssetType.MODELING_SQL_MODEL);
+        assertThat(CatalogAssetType.from("api-service")).isEqualTo(CatalogAssetType.API_SERVICE);
     }
 
     @Test
@@ -66,5 +68,19 @@ class CatalogAssetKeyTest {
 
         assertThat(sourceRef.stableRef()).isEqualTo("openmetadata:om-entity-id");
         assertThat(sourceRef.fqn()).isEqualTo("service.database.public.table");
+    }
+
+    @Test
+    void scopedDatasetKeyIncludesTenantEnvironmentAndDialect() {
+        String key = CatalogAssetKey.scopedDataset("flowerbiz", "uat", "dm", "ptr-mysql", "DWD", "Project Detail");
+
+        assertThat(key).isEqualTo("tenant:flowerbiz/env:uat/dialect:dm/source:ptr-mysql/schema:dwd/table:project_detail");
+    }
+
+    @Test
+    void codeAssetKeySupportsExistingModelingAndGovernanceDomains() {
+        String key = CatalogAssetKey.codeAsset(CatalogAssetType.GOV_INDICATOR, "flowerbiz", "collection-rate");
+
+        assertThat(key).isEqualTo("tenant:flowerbiz/env:prod/dialect:generic/gov_indicator:collection-rate");
     }
 }

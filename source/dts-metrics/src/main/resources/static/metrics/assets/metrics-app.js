@@ -90,6 +90,9 @@ pack_name: 项目管理核心指标包
 version: 0.1.0
 industry: project
 edition_required: professional
+tenant_namespace: demo
+security:
+  apply_rls: true
 source_model: dwd_project_detail
 dimensions:
   - stat_month
@@ -97,12 +100,16 @@ dimensions:
 metrics:
   - metric_code: project_cnt
     metric_name: 项目总数
+    term_ids:
+      - glossary.project
     formula:
       type: aggregation
       aggregation: count_distinct
       field: project_id
   - metric_code: direct_cost_execution_rate
     metric_name: 直接成本执行率
+    term_ids:
+      - glossary.direct_cost_execution_rate
     formula:
       type: ratio
       numerator:

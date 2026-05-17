@@ -3,6 +3,9 @@ pack_name: 花卉租赁经营指标包 Inline IT Fixture
 version: 0.1.0
 industry: flower_rental
 edition_required: professional
+tenant_namespace: flowerbiz
+security:
+  apply_rls: true
 source_model: dwd_flower_contract_detail
 dimensions:
   - stat_month
@@ -10,12 +13,16 @@ dimensions:
 metrics:
   - metric_code: contract_amount
     metric_name: 合同金额
+    term_ids:
+      - glossary.contract_amount
     formula:
       type: aggregation
       aggregation: sum
       field: contract_amount
   - metric_code: collection_rate
     metric_name: 回款率
+    term_ids:
+      - glossary.collection_rate
     formula:
       type: ratio
       numerator:

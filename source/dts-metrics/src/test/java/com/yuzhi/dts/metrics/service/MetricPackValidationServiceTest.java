@@ -17,6 +17,9 @@ class MetricPackValidationServiceTest {
             version: 0.1.0
             industry: flower_rental
             edition_required: professional
+            tenant_namespace: flowerbiz
+            security:
+              apply_rls: true
             files:
               domains: domains.yml
               business_objects: business-objects.yml
@@ -26,6 +29,7 @@ class MetricPackValidationServiceTest {
               datasets: datasets.yml
             dependencies:
               platform_assets: []
+              pack_dependencies: []
             """;
 
         MetricPackValidationResult result = service.validateManifest(manifest);
@@ -42,6 +46,9 @@ class MetricPackValidationServiceTest {
             version: 0.1.0
             industry: demo
             edition_required: professional
+            tenant_namespace: demo
+            security:
+              apply_rls: true
             files:
               domains: domains.yml
               business_objects: business-objects.yml
@@ -67,6 +74,9 @@ class MetricPackValidationServiceTest {
             version: v1
             industry: flower_rental
             edition_required: premium
+            tenant_namespace: 花卉
+            security:
+              apply_rls: true
             files:
               domains: ../domains.yml
               business_objects: business-objects.yml
@@ -85,6 +95,7 @@ class MetricPackValidationServiceTest {
                 "pack_id must be lowercase ASCII letters, numbers, hyphen or underscore, and start with a letter",
                 "version must use semantic version format, for example 0.1.0",
                 "edition_required must be one of foundation, professional, enterprise",
+                "tenant_namespace must be lowercase ASCII letters, numbers, hyphen or underscore, and start with a letter",
                 "files.domains must be a relative .yml/.yaml/.json file path inside the metric pack"
             );
     }
@@ -97,6 +108,9 @@ class MetricPackValidationServiceTest {
             version: 0.1.0
             industry: demo
             edition_required: professional
+            tenant_namespace: demo
+            security:
+              apply_rls: true
             files:
               domains: domains.yml
               business_objects: business-objects.yml
@@ -122,6 +136,9 @@ class MetricPackValidationServiceTest {
             version: 0.1.0
             industry: demo
             edition_required: professional
+            tenant_namespace: demo
+            security:
+              apply_rls: true
             files:
               domains: domains.yml
               business_objects: business-objects.yml
@@ -139,5 +156,104 @@ class MetricPackValidationServiceTest {
 
         assertThat(result.valid()).isFalse();
         assertThat(result.errors()).contains("dependencies.platform_assets[0].id must be a safe asset reference");
+    }
+
+    @Test
+    void rejectsInlineMetricsWithoutGlossaryTerms() {
+        String manifest = """
+            pack_id: missing-terms
+            pack_name: Missing Terms Pack
+            version: 0.1.0
+            industry: demo
+            edition_required: professional
+            tenant_namespace: demo
+            security:
+              apply_rls: true
+            metrics:
+              - metric_code: contract_amount
+                metric_name: 合同金额
+                formula:
+                  type: aggregation
+                  aggregation: sum
+                  field: contract_amount
+            files:
+              domains: domains.yml
+              business_objects: business-objects.yml
+              dimensions: dimensions.yml
+              metrics: metrics.yml
+              models: models.yml
+              datasets: datasets.yml
+            dependencies:
+              platform_assets: []
+            """;
+
+        MetricPackValidationResult result = service.validateManifest(manifest);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.errors()).contains("metrics[0] must bind at least one glossary term via term_ids");
+    }
+
+    @Test
+    void requiresRlsAndTenantScopeForPlatformAssets() {
+        String manifest = """
+            pack_id: missing-scope
+            pack_name: Missing Scope Pack
+            version: 0.1.0
+            industry: demo
+            edition_required: professional
+            files:
+              domains: domains.yml
+              business_objects: business-objects.yml
+              dimensions: dimensions.yml
+              metrics: metrics.yml
+              models: models.yml
+              datasets: datasets.yml
+            dependencies:
+              platform_assets:
+                - type: DATASET
+                  id: dwd_demo
+            """;
+
+        MetricPackValidationResult result = service.validateManifest(manifest);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.errors())
+            .contains(
+                "dependencies.platform_assets[0] must declare owner_namespace or inherit top-level tenant_namespace",
+                "security.apply_rls must be true when platform assets are referenced"
+            );
+    }
+
+    @Test
+    void validatesPackDependencies() {
+        String manifest = """
+            pack_id: flower-extension
+            pack_name: Flower Extension Pack
+            version: 0.1.0
+            industry: flower_rental
+            edition_required: professional
+            tenant_namespace: flowerbiz
+            security:
+              apply_rls: true
+            files:
+              domains: domains.yml
+              business_objects: business-objects.yml
+              dimensions: dimensions.yml
+              metrics: metrics.yml
+              models: models.yml
+              datasets: datasets.yml
+            dependencies:
+              platform_assets:
+                - type: DATASET
+                  id: dwd_demo
+              pack_dependencies:
+                - pack_id: common-customer
+                  version_constraint: ">=0.1.0 <1.0.0"
+            """;
+
+        MetricPackValidationResult result = service.validateManifest(manifest);
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.summary()).containsEntry("packDependencyCount", 1);
     }
 }

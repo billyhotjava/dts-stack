@@ -444,8 +444,9 @@
 | F4-permission-classification | P0 | 5 | DONE |
 | F5-asset-portal-ux | P1 | 4 | DONE |
 | F6-migration-compatibility | P0 | 5 | DONE |
+| RX-architect-review-hardening | P0 | 1 | DONE |
 
-**统计**: READY=0, IN_PROGRESS=0, DONE=29, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=30, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-31a-202605/README.md`
 **能力契约**: `worklog/v2.2.3/sprint-31a-202605/assets/asset-capability-contract.md`
 **集成测试**: `worklog/v2.2.3/sprint-31a-202605/it/README.md`

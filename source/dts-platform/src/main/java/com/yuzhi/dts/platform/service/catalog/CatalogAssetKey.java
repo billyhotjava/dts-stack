@@ -39,6 +39,20 @@ public final class CatalogAssetKey {
         return scope + "/schema:" + segment(normalizedSchema) + "/table:" + segment(normalizedTable);
     }
 
+    public static String scopedDataset(
+        String tenantNamespace,
+        String environment,
+        String dialect,
+        String sourceFqn,
+        String schema,
+        String table
+    ) {
+        return scopePrefix(tenantNamespace, environment, dialect)
+            + "/source:" + segment(required(sourceFqn, "source fqn"))
+            + "/schema:" + segment(firstText(schema, "default"))
+            + "/table:" + segment(required(table, "table"));
+    }
+
     public static String dbtModel(String uniqueId, String relationName) {
         return "dbt:" + segment(firstText(uniqueId, relationName));
     }
@@ -62,8 +76,29 @@ public final class CatalogAssetKey {
         return "metric:" + segment(firstText(packId, "local")) + "/" + segment(required(metricCode, "metric code"));
     }
 
+    public static String metricPack(String tenantNamespace, String packId, String version) {
+        return scopePrefix(tenantNamespace, null, null)
+            + "/metric-pack:" + segment(required(packId, "pack id"))
+            + "/version:" + segment(required(version, "version"));
+    }
+
     public static String semanticModel(String modelIdOrCode) {
         return "semantic-model:" + segment(required(modelIdOrCode, "semantic model id or code"));
+    }
+
+    public static String codeAsset(CatalogAssetType type, String tenantNamespace, String naturalKey) {
+        if (type == null) {
+            throw new IllegalArgumentException("asset type is required");
+        }
+        return scopePrefix(tenantNamespace, null, null)
+            + "/" + segment(type.name().toLowerCase(Locale.ROOT)) + ":" + segment(required(naturalKey, "natural key"));
+    }
+
+    private static String scopePrefix(String tenantNamespace, String environment, String dialect) {
+        String tenant = segment(firstText(tenantNamespace, "default"));
+        String env = segment(firstText(environment, "prod"));
+        String sqlDialect = segment(firstText(dialect, "generic"));
+        return "tenant:" + tenant + "/env:" + env + "/dialect:" + sqlDialect;
     }
 
     private static String required(String value, String label) {
