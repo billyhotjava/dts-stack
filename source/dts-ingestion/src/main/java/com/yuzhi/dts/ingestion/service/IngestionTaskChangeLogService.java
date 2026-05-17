@@ -35,6 +35,7 @@ public class IngestionTaskChangeLogService {
     public static final String CHANGE_TASK_UPDATE = "TASK_UPDATE";
 
     public static final String STATUS_PENDING = "PENDING";
+    public static final String STATUS_NEEDS_REVIEW = "NEEDS_REVIEW";
     public static final String STATUS_APPROVAL = "APPROVAL";
     public static final String STATUS_DONE = "DONE";
     public static final String STATUS_REJECTED = "REJECTED";
@@ -281,7 +282,7 @@ public class IngestionTaskChangeLogService {
         if (!StringUtils.hasText(normalizedAction)) {
             return null;
         }
-        if (ACTION_SUBMIT.equals(normalizedAction) && STATUS_PENDING.equals(current)) {
+        if (ACTION_SUBMIT.equals(normalizedAction) && (STATUS_PENDING.equals(current) || STATUS_NEEDS_REVIEW.equals(current))) {
             return STATUS_APPROVAL;
         }
         if (ACTION_APPROVE.equals(normalizedAction) && STATUS_APPROVAL.equals(current)) {

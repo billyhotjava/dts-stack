@@ -160,6 +160,121 @@ public class AssetPermissionService {
         return PermissionResult.denied();
     }
 
+    public PermissionDecision checkAction(PermissionCheckCommand command) {
+        if (command == null) {
+            return PermissionDecision.denied(null, null, null, null, null, "READ", "request_required", "NOT_APPLIED", null);
+        }
+        String assetType = normalizeAssetType(command.assetType());
+        String assetId = firstNonBlank(command.assetId(), command.assetKey());
+        String action = normalizeAction(command.action());
+        String requiredPermission = requiredPermission(action);
+        if (assetType == null || assetId == null) {
+            return PermissionDecision.denied(
+                assetType,
+                assetId,
+                command.assetKey(),
+                action,
+                null,
+                requiredPermission,
+                "asset_required",
+                "NOT_APPLIED",
+                null
+            );
+        }
+        if (requiredPermission == null) {
+            return PermissionDecision.denied(
+                assetType,
+                assetId,
+                command.assetKey(),
+                action,
+                null,
+                null,
+                "unsupported_action",
+                "NOT_APPLIED",
+                null
+            );
+        }
+
+        PermissionResult base = check(
+            command.username(),
+            command.userRoles(),
+            command.userDeptCode(),
+            assetType,
+            assetId,
+            command.userClassification(),
+            command.assetClassification()
+        );
+        String classificationDecision = classificationDecision(
+            command.userRoles(),
+            base.reason(),
+            command.userClassification(),
+            command.assetClassification()
+        );
+        if (!base.allowed()) {
+            return PermissionDecision.denied(
+                assetType,
+                assetId,
+                command.assetKey(),
+                action,
+                base.permission(),
+                requiredPermission,
+                base.reason(),
+                classificationDecision,
+                base.reason()
+            );
+        }
+        if ("MISSING_ASSET_CLASSIFICATION".equals(classificationDecision)) {
+            return PermissionDecision.denied(
+                assetType,
+                assetId,
+                command.assetKey(),
+                action,
+                base.permission(),
+                requiredPermission,
+                "classification_required",
+                classificationDecision,
+                base.reason()
+            );
+        }
+        if ("DENIED".equals(classificationDecision)) {
+            return PermissionDecision.denied(
+                assetType,
+                assetId,
+                command.assetKey(),
+                action,
+                base.permission(),
+                requiredPermission,
+                "classification_denied",
+                classificationDecision,
+                base.reason()
+            );
+        }
+        if (!permissionCovers(base.permission(), requiredPermission)) {
+            return PermissionDecision.denied(
+                assetType,
+                assetId,
+                command.assetKey(),
+                action,
+                base.permission(),
+                requiredPermission,
+                "insufficient_permission",
+                classificationDecision,
+                base.reason()
+            );
+        }
+        return PermissionDecision.allowed(
+            assetType,
+            assetId,
+            command.assetKey(),
+            action,
+            base.permission(),
+            requiredPermission,
+            base.reason(),
+            classificationDecision,
+            base.reason()
+        );
+    }
+
     public Map<String, PermissionResult> batchCheck(String username, List<String> roles, String deptCode,
                                                      List<AssetRef> assets) {
         return batchCheck(username, roles, deptCode, assets, null);
@@ -471,9 +586,57 @@ public class AssetPermissionService {
         };
     }
 
+    private String normalizeAction(String value) {
+        String token = normalizeToken(value);
+        return token == null ? "READ" : token;
+    }
+
+    private String requiredPermission(String action) {
+        if (action == null) {
+            return null;
+        }
+        return switch (action) {
+            case "READ", "VIEW", "PREVIEW" -> "READ";
+            case "EDIT", "UPDATE" -> "EDIT";
+            case "PUBLISH", "GRANT", "MANAGE", "ADMIN" -> "MANAGE";
+            default -> null;
+        };
+    }
+
+    private boolean permissionCovers(String grantedPermission, String requiredPermission) {
+        return PERMISSION_RANK.getOrDefault(grantedPermission, 0) >= PERMISSION_RANK.getOrDefault(requiredPermission, 0);
+    }
+
+    private String classificationDecision(List<String> roles, String grantSource, String userClassification, String assetClassification) {
+        if (hasAny(roles, SUPERUSER_ROLES)) {
+            return "SUPERUSER";
+        }
+        String assetLevel = trimToNull(assetClassification);
+        if (assetLevel == null) {
+            return "MISSING_ASSET_CLASSIFICATION";
+        }
+        if ("level_override".equalsIgnoreCase(trimToNull(grantSource))) {
+            return "OVERRIDDEN";
+        }
+        return isClassificationAllowed(userClassification, assetLevel) ? "ALLOWED" : "DENIED";
+    }
+
     private String normalizeToken(String value) {
         String text = trimToNull(value);
         return text == null ? null : text.toUpperCase(Locale.ROOT);
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            String text = trimToNull(value);
+            if (text != null) {
+                return text;
+            }
+        }
+        return null;
     }
 
     private String trimToNull(String value) {
@@ -488,7 +651,20 @@ public class AssetPermissionService {
         if (roles == null || roles.isEmpty()) {
             return List.of(NO_ROLE_PLACEHOLDER);
         }
-        return roles;
+        Set<String> expanded = new LinkedHashSet<>();
+        for (String role : roles) {
+            if (role == null || role.isBlank()) {
+                continue;
+            }
+            String trimmed = role.trim();
+            expanded.add(trimmed);
+            if (trimmed.toUpperCase(Locale.ROOT).startsWith("ROLE_") && trimmed.length() > 5) {
+                expanded.add(trimmed.substring(5));
+            } else {
+                expanded.add("ROLE_" + trimmed);
+            }
+        }
+        return expanded.isEmpty() ? List.of(NO_ROLE_PLACEHOLDER) : List.copyOf(expanded);
     }
 
     private static boolean hasAny(List<String> userRoles, Set<String> targetRoles) {
@@ -518,6 +694,81 @@ public class AssetPermissionService {
     }
 
     public record AssetRef(String type, String id) {}
+
+    public record PermissionCheckCommand(
+        String username,
+        List<String> userRoles,
+        String userDeptCode,
+        String userClassification,
+        String assetType,
+        String assetId,
+        String assetKey,
+        String action,
+        String assetClassification
+    ) {}
+
+    public record PermissionDecision(
+        boolean allowed,
+        String permission,
+        String reason,
+        String requiredPermission,
+        String action,
+        String assetType,
+        String assetId,
+        String assetKey,
+        String classificationDecision,
+        String grantSource
+    ) {
+        static PermissionDecision allowed(
+            String assetType,
+            String assetId,
+            String assetKey,
+            String action,
+            String permission,
+            String requiredPermission,
+            String reason,
+            String classificationDecision,
+            String grantSource
+        ) {
+            return new PermissionDecision(
+                true,
+                permission,
+                reason,
+                requiredPermission,
+                action,
+                assetType,
+                assetId,
+                assetKey,
+                classificationDecision,
+                grantSource
+            );
+        }
+
+        static PermissionDecision denied(
+            String assetType,
+            String assetId,
+            String assetKey,
+            String action,
+            String permission,
+            String requiredPermission,
+            String reason,
+            String classificationDecision,
+            String grantSource
+        ) {
+            return new PermissionDecision(
+                false,
+                permission,
+                reason,
+                requiredPermission,
+                action,
+                assetType,
+                assetId,
+                assetKey,
+                classificationDecision,
+                grantSource
+            );
+        }
+    }
 
     public record GrantCommand(
         String assetType,

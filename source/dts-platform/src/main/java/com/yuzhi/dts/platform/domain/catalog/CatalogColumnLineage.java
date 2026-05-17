@@ -61,6 +61,12 @@ public class CatalogColumnLineage extends AbstractAuditingEntity<UUID> implement
     @Column(name = "last_observed_at")
     private Instant lastObservedAt;
 
+    @Column(name = "valid_from")
+    private Instant validFrom;
+
+    @Column(name = "valid_to")
+    private Instant validTo;
+
     @Override
     public UUID getId() {
         return id;
@@ -180,5 +186,21 @@ public class CatalogColumnLineage extends AbstractAuditingEntity<UUID> implement
 
     public void setLastObservedAt(Instant lastObservedAt) {
         this.lastObservedAt = lastObservedAt;
+    }
+
+    public Instant getValidFrom() {
+        return validFrom;
+    }
+
+    public void setValidFrom(Instant validFrom) {
+        this.validFrom = validFrom;
+    }
+
+    public Instant getValidTo() {
+        return validTo;
+    }
+
+    public void setValidTo(Instant validTo) {
+        this.validTo = validTo;
     }
 }

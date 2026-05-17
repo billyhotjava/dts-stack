@@ -185,7 +185,7 @@ export default function PlatformEventObservabilityPage() {
 				actions={
 					<Space wrap>
 						<Button onClick={() => navigate("/explore/etl")}>ELT 控制台</Button>
-						<Button onClick={() => navigate("/metrics/operations")}>指标运营台</Button>
+						<Button onClick={() => navigate("/bi-apps/metrics/operations")}>指标运营台</Button>
 						<Button onClick={() => navigate("/ops/audit-evidence")}>审计证据链</Button>
 						<Button onClick={() => navigate("/ops/release-governance")}>发布治理</Button>
 						<Button icon={<RefreshCw className="h-4 w-4" />} loading={loading} onClick={() => void loadData(page.page)}>
@@ -250,7 +250,7 @@ export default function PlatformEventObservabilityPage() {
 						<Button block icon={<DatabaseZap className="h-4 w-4" />} onClick={() => navigate("/explore/etl")}>
 							ELT 链路
 						</Button>
-						<Button block icon={<Boxes className="h-4 w-4" />} onClick={() => navigate("/metrics/operations")}>
+						<Button block icon={<Boxes className="h-4 w-4" />} onClick={() => navigate("/bi-apps/metrics/operations")}>
 							指标链路
 						</Button>
 						<Button block icon={<GitBranch className="h-4 w-4" />} onClick={() => navigate("/catalog/lineage/impact")}>

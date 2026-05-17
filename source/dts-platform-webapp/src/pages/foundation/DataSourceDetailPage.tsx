@@ -35,17 +35,18 @@ import dataSourcesService, {
 	type SchemaDiscoverTable,
 } from "@/api/services/dataSourcesService";
 import { formatTime } from "@/utils/textUtils";
-import { isAdminManagedSource, isApiSourceType } from "./DataSourcesPage";
+import DataSourceFormModal from "./DataSourceFormModal";
+import { isAdminManagedSource, isApiSourceType } from "./dataSources/helpers";
 
 const { Text } = Typography;
 
 const LIST_PATH = "/foundation/data-sources";
 
 /**
- * 数据源详情页（Sprint：列表页瘦行配套）
+ * 数据源详情页
  *
  * - 只读 Descriptions + Schema 探测 Tab
- * - 编辑入口本地不弹 Modal，跳回列表页 ?edit=:id 由列表统一承载（避免 Form 重复）
+ * - 编辑直接在本页弹 <DataSourceFormModal/>，保存后 reload 详情
  * - 测试 / 删除 / 全链路回退 与列表行能力对齐
  */
 export default function DataSourceDetailPage() {
@@ -61,6 +62,7 @@ export default function DataSourceDetailPage() {
 	const [schemaError, setSchemaError] = useState<string | null>(null);
 	const [rollbackOpen, setRollbackOpen] = useState(false);
 	const [rollbackRequest, setRollbackRequest] = useState<RollbackRequest | null>(null);
+	const [editOpen, setEditOpen] = useState(false);
 
 	const loadDetail = useCallback(async () => {
 		if (!id) {
@@ -89,9 +91,8 @@ export default function DataSourceDetailPage() {
 	const apiSource = isApiSourceType(source?.type);
 
 	const handleEdit = () => {
-		if (!source?.id) return;
-		// 编辑能力暂由列表页 Modal 统一承载（MVP）；详情页跳回列表 ?edit 自动弹出
-		navigate(`${LIST_PATH}?edit=${encodeURIComponent(String(source.id))}`);
+		if (!source?.id || adminManaged) return;
+		setEditOpen(true);
 	};
 
 	const handleTest = async () => {
@@ -270,6 +271,13 @@ export default function DataSourceDetailPage() {
 					setRollbackOpen(false);
 					setRollbackRequest(null);
 				}}
+			/>
+
+			<DataSourceFormModal
+				open={editOpen}
+				editing={source}
+				onClose={() => setEditOpen(false)}
+				onSaved={() => void loadDetail()}
 			/>
 		</Card>
 	);

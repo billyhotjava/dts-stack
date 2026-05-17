@@ -1,6 +1,10 @@
 package com.yuzhi.dts.platform.web.rest.catalog;
 
 import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetContract;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetMappingReportService;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSchemaContract;
+import com.yuzhi.dts.platform.service.catalog.CatalogLineageFailureReport;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetPortalService;
 import com.yuzhi.dts.platform.service.catalog.OpenMetadataAssetSyncService;
@@ -28,17 +32,20 @@ import static com.yuzhi.dts.platform.web.rest.catalog.CatalogResourceHelper.CATA
 public class CatalogAssetPortalResource {
 
     private final CatalogAssetPortalService assetPortalService;
+    private final CatalogAssetMappingReportService mappingReportService;
     private final OpenMetadataAssetSyncService syncService;
     private final AuditService audit;
     private final CatalogResourceHelper helper;
 
     public CatalogAssetPortalResource(
         CatalogAssetPortalService assetPortalService,
+        CatalogAssetMappingReportService mappingReportService,
         OpenMetadataAssetSyncService syncService,
         AuditService audit,
         CatalogResourceHelper helper
     ) {
         this.assetPortalService = assetPortalService;
+        this.mappingReportService = mappingReportService;
         this.syncService = syncService;
         this.audit = audit;
         this.helper = helper;
@@ -95,6 +102,124 @@ public class CatalogAssetPortalResource {
         return ApiResponses.ok(result);
     }
 
+    @GetMapping("/governance-gaps")
+    @Transactional(readOnly = true)
+    public ApiResponse<CatalogAssetPortalService.GovernanceGapReport> governanceGaps(
+        @RequestParam(value = "keyword", required = false) String keyword,
+        @RequestParam(value = "service", required = false) String service,
+        @RequestParam(value = "type", required = false) String type,
+        @RequestParam(value = "database", required = false) String database,
+        @RequestParam(value = "schema", required = false) String schema,
+        @RequestParam(value = "syncStatus", required = false) String syncStatus,
+        @RequestParam(value = "classification", required = false) String classification,
+        @RequestParam(value = "warehouseLayer", required = false) String warehouseLayer,
+        @RequestParam(value = "ownerDept", required = false) String ownerDept,
+        @RequestParam(value = "governanceStatus", required = false) String governanceStatus,
+        @RequestParam(value = "matchStatus", required = false) String matchStatus,
+        @RequestParam(value = "domainId", required = false) UUID domainId,
+        @RequestParam(value = "domainUnassigned", required = false, defaultValue = "false") boolean domainUnassigned,
+        @RequestParam(value = "page", required = false, defaultValue = "0") int page,
+        @RequestParam(value = "size", required = false, defaultValue = "50") int size,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        String effDept = activeDept != null ? activeDept : helper.claim("dept_code");
+        CatalogAssetPortalService.GovernanceGapReport result = assetPortalService.governanceGaps(
+            new CatalogAssetPortalService.AssetQuery(
+                keyword,
+                service,
+                type,
+                database,
+                schema,
+                syncStatus,
+                classification,
+                warehouseLayer,
+                ownerDept,
+                governanceStatus,
+                matchStatus,
+                domainId,
+                domainUnassigned,
+                page,
+                size
+            ),
+            effDept
+        );
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("summary", "查看Catalog资产治理缺口报告");
+        payload.put("returned", result.content().size());
+        payload.put("inspected", result.inspected());
+        payload.put("skipped", result.skipped());
+        helper.putIfHasText(payload, "activeDept", effDept);
+        audit.auditAction("CATALOG_GOVERNANCE_GAP_VIEW", AuditStage.SUCCESS, "assets-v2-governance-gaps", payload);
+        return ApiResponses.ok(result);
+    }
+
+    @GetMapping("/lineage-failures")
+    @Transactional(readOnly = true)
+    public ApiResponse<CatalogLineageFailureReport> lineageFailures(
+        @RequestParam(value = "keyword", required = false) String keyword,
+        @RequestParam(value = "service", required = false) String service,
+        @RequestParam(value = "type", required = false) String type,
+        @RequestParam(value = "database", required = false) String database,
+        @RequestParam(value = "schema", required = false) String schema,
+        @RequestParam(value = "syncStatus", required = false) String syncStatus,
+        @RequestParam(value = "classification", required = false) String classification,
+        @RequestParam(value = "warehouseLayer", required = false) String warehouseLayer,
+        @RequestParam(value = "ownerDept", required = false) String ownerDept,
+        @RequestParam(value = "governanceStatus", required = false) String governanceStatus,
+        @RequestParam(value = "matchStatus", required = false) String matchStatus,
+        @RequestParam(value = "domainId", required = false) UUID domainId,
+        @RequestParam(value = "domainUnassigned", required = false, defaultValue = "false") boolean domainUnassigned,
+        @RequestParam(value = "page", required = false, defaultValue = "0") int page,
+        @RequestParam(value = "size", required = false, defaultValue = "50") int size,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        String effDept = activeDept != null ? activeDept : helper.claim("dept_code");
+        CatalogLineageFailureReport result = assetPortalService.lineageFailures(
+            new CatalogAssetPortalService.AssetQuery(
+                keyword,
+                service,
+                type,
+                database,
+                schema,
+                syncStatus,
+                classification,
+                warehouseLayer,
+                ownerDept,
+                governanceStatus,
+                matchStatus,
+                domainId,
+                domainUnassigned,
+                page,
+                size
+            ),
+            effDept
+        );
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("summary", "查看Catalog血缘失败和发布阻断报告");
+        payload.put("returned", result.content().size());
+        payload.put("inspected", result.inspected());
+        payload.put("skipped", result.skipped());
+        payload.put("blocking", result.severityCounts().getOrDefault("BLOCKING", 0L));
+        payload.put("warning", result.severityCounts().getOrDefault("WARNING", 0L));
+        helper.putIfHasText(payload, "activeDept", effDept);
+        audit.auditAction("CATALOG_LINEAGE_FAILURE_REPORT_VIEW", AuditStage.SUCCESS, "assets-v2-lineage-failures", payload);
+        return ApiResponses.ok(result);
+    }
+
+    @GetMapping("/migration/dry-run")
+    @Transactional(readOnly = true)
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    public ApiResponse<CatalogAssetMappingReportService.MappingReport> migrationDryRun() {
+        CatalogAssetMappingReportService.MappingReport result = mappingReportService.dryRun();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("summary", "执行Catalog历史资产映射dry-run");
+        payload.put("candidateCount", result.candidateCount());
+        payload.put("existingMappingCount", result.existingMappingCount());
+        payload.put("conflictCount", result.conflictCount());
+        audit.auditAction("CATALOG_ASSET_MIGRATION_DRY_RUN", AuditStage.SUCCESS, "assets-v2-migration-dry-run", payload);
+        return ApiResponses.ok(result);
+    }
+
     @GetMapping("/{id}")
     @Transactional(readOnly = true)
     public ApiResponse<CatalogAssetPortalService.AssetDetail> getAsset(
@@ -111,6 +236,44 @@ public class CatalogAssetPortalResource {
         return ApiResponses.ok(result);
     }
 
+    @GetMapping("/{id}/contract")
+    @Transactional(readOnly = true)
+    public ApiResponse<CatalogAssetContract> getAssetContract(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        String effDept = activeDept != null ? activeDept : helper.claim("dept_code");
+        CatalogAssetContract result = assetPortalService.getAssetContract(id, effDept);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("summary", "查看Catalog资产稳定读取契约");
+        payload.put("assetId", id.toString());
+        payload.put("grantAssetType", result.grantAssetType());
+        payload.put("grantAssetId", result.grantAssetId());
+        helper.putIfHasText(payload, "activeDept", effDept);
+        audit.auditAction("CATALOG_ASSET_CONTRACT_VIEW", AuditStage.SUCCESS, id.toString(), payload);
+        return ApiResponses.ok(result);
+    }
+
+    @GetMapping("/{id}/schema-contract")
+    @Transactional(readOnly = true)
+    public ApiResponse<CatalogAssetSchemaContract> getAssetSchemaContract(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        String effDept = activeDept != null ? activeDept : helper.claim("dept_code");
+        CatalogAssetSchemaContract result = assetPortalService.getAssetSchemaContract(id, effDept);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("summary", "查看Catalog资产字段读取契约");
+        payload.put("assetId", id.toString());
+        payload.put("grantAssetType", result.asset().grantAssetType());
+        payload.put("grantAssetId", result.asset().grantAssetId());
+        payload.put("schemaSource", result.schemaSource());
+        payload.put("columnCount", result.columnCount());
+        helper.putIfHasText(payload, "activeDept", effDept);
+        audit.auditAction("CATALOG_ASSET_SCHEMA_CONTRACT_VIEW", AuditStage.SUCCESS, id.toString(), payload);
+        return ApiResponses.ok(result);
+    }
+
     @PatchMapping("/{id}/governance")
     @Transactional
     @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
@@ -124,6 +287,19 @@ public class CatalogAssetPortalResource {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("summary", "更新OpenMetadata资产治理扩展");
         payload.put("assetId", id.toString());
+        if (body != null) {
+            helper.putIfHasText(payload, "classification", body.classification());
+            helper.putIfHasText(payload, "warehouseLayer", body.warehouseLayer());
+            helper.putIfHasText(payload, "ownerDept", body.ownerDept());
+            helper.putIfHasText(payload, "businessOwner", body.businessOwner());
+            helper.putIfHasText(payload, "lifecycleStatus", body.lifecycleStatus());
+            if (body.domainId() != null) {
+                payload.put("domainId", body.domainId().toString());
+            }
+            if (body.enabled() != null) {
+                payload.put("enabled", body.enabled());
+            }
+        }
         helper.putIfHasText(payload, "activeDept", effDept);
         audit.auditAction("CATALOG_ASSET_UPDATE", AuditStage.SUCCESS, id.toString(), payload);
         return ApiResponses.ok(result);

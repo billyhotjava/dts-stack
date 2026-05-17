@@ -525,6 +525,8 @@ public class CatalogLineageResource {
         dto.put("projectName", lineage.getProjectName());
         dto.put("lineageJobId", lineage.getLineageJobId() != null ? lineage.getLineageJobId().toString() : null);
         dto.put("lastObservedAt", lineage.getLastObservedAt());
+        dto.put("validFrom", lineage.getValidFrom());
+        dto.put("validTo", lineage.getValidTo());
         dto.put("lastModifiedAt", lineage.getLastModifiedDate());
         return dto;
     }

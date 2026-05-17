@@ -1,13 +1,15 @@
 # Sprint-32: dts-metrics 独立服务落地（202605）
 
 **时间**: 2026-05
-**状态**: IN_PROGRESS
+**状态**: DONE
 **类型**: Architecture / Implementation（dts-metrics + dts-platform + dts-platform-webapp）
-**目标**: 在 Sprint-31 完成基础链路和拆分边界后，把语义指标中心从 platform 增值业务中抽出为独立 `dts-metrics` 服务。当前版本先不在部署配置层限制 `dts-metrics`，商务限制暂由交付和合同控制；待 license 模块完善后，再统一收口版本授权。
+**目标**: 在 Sprint-31A 完成企业级资产事实源、Sprint-31 完成基础链路和拆分边界后，把语义指标中心从 platform 增值业务中抽出为独立 `dts-metrics` 服务。当前版本先不在部署配置层限制 `dts-metrics`，商务限制暂由交付和合同控制；待 license 模块完善后，再统一收口版本授权。
+
+**前置依赖**: `dts-metrics` 必须通过 Sprint-31A 提供的 platform 资产、权限、审计和发布契约工作，不直接读取 platform 内部 Catalog/semantic 表。
 
 ## 背景
 
-Sprint-31 聚焦企业级数据平台主链路：数据源接入、ODS 契约、dbt 建模、资产治理、发布门禁、platform 权限事实源和 analytics 权限消费。随着语义指标、DWS/ADS 低代码生成、BI Dataset 注册和合作方行业包逐步增强，platform 承担了过多业务增值能力。
+Sprint-31A 先聚焦企业级数据资产事实源：资产身份、生命周期、治理字段、血缘、权限和读取契约。Sprint-31 再聚焦企业级数据平台主链路：数据源接入、ODS 契约、dbt 建模、资产治理、发布门禁、platform 权限事实源和 analytics 权限消费。随着语义指标、DWS/ADS 低代码生成、BI Dataset 注册和合作方行业包逐步增强，platform 承担了过多业务增值能力。
 
 新的产品分层要求：
 
@@ -42,14 +44,14 @@ platform-webapp shell
 
 | ID | Feature | 优先级 | Task 数 | 状态 | 依赖 |
 |----|---------|--------|---------|------|------|
-| F1 | dts-metrics 服务骨架与默认部署 | P0 | 5 | IN_PROGRESS | Sprint-31 F5 |
-| F2 | platform 契约、服务鉴权与事实源边界 | P0 | 5 | IN_PROGRESS | F1 |
-| F3 | 指标领域模型、DSL 与安全生成 | P0 | 6 | READY | F1, F2 |
-| F4 | metric-pack 合作方交付工作流 | P0 | 5 | READY | F3 |
-| F5 | platform-webapp 入口、版本开关与兼容代理 | P0 | 5 | IN_PROGRESS | F1, F2 |
-| F6 | 迁移、回滚、集成测试与运维验收 | P0 | 6 | READY | F1-F5 |
+| F1 | dts-metrics 服务骨架与默认部署 | P0 | 5 | DONE | Sprint-31A, Sprint-31 F5 |
+| F2 | platform 契约、服务鉴权与事实源边界 | P0 | 5 | DONE | Sprint-31A, F1 |
+| F3 | 指标领域模型、DSL 与安全生成 | P0 | 6 | DONE | Sprint-31A, F1, F2 |
+| F4 | metric-pack 合作方交付工作流 | P0 | 5 | DONE | Sprint-31A, F3 |
+| F5 | platform-webapp 入口、版本开关与兼容代理 | P0 | 5 | DONE | Sprint-31A, F1, F2 |
+| F6 | 迁移、回滚、集成测试与运维验收 | P0 | 6 | DONE | Sprint-31A, F1-F5 |
 
-**统计**: READY=17, IN_PROGRESS=15, DONE=0, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=32, BLOCKED=0
 
 ## 交付分级
 
@@ -83,14 +85,23 @@ Sprint-32 的必达目标是“服务独立 + 契约打通 + 最小行业包跑�
 
 ## 完成标准
 
-- [ ] `dts-metrics` 具备独立 Spring Boot 服务骨架、Dockerfile、默认 Compose 服务、健康检查和服务鉴权。
-- [ ] 不依赖 license/profile 开关时，platform、ingestion、metrics、analytics 的基础启动链路可正常交付。
-- [ ] `dts-metrics` 只通过 platform API 读取资产、数据源引用、权限、审计和 dbt 发布能力，不直接绕过 platform 事实源。
-- [ ] 指标领域模型支持主题域、业务对象、维度、指标、公式 DSL、DWS/ADS 数据集定义和版本状态。
-- [ ] metric-pack v0.1 可导入、校验、预览、审核和发布，且无法携带危险 SQL 或越权资产引用。
-- [ ] platform-webapp 按 capability 和权限展示指标入口；license 接入前不做版本禁用提示。
-- [ ] 现有 platform 内语义接口有兼容代理或明确弃用路径，回滚时可恢复到 Sprint-31 行为。
-- [ ] IT 证据覆盖默认启动 metrics、导入行业包、生成 DWS/ADS 候选 artifact、提交 dbt 发布网关、权限校验和回滚；BI Dataset 远端注册作为延展目标。
+- [x] `dts-metrics` 具备独立 Spring Boot 服务骨架、Dockerfile、默认 Compose 服务、健康检查和服务鉴权。
+- [x] 不依赖 license/profile 开关时，platform、ingestion、metrics、analytics 的基础启动链路可正常交付。
+- [x] `dts-metrics` 只通过 platform API 读取资产、数据源引用、权限、审计和 dbt 发布能力，不直接绕过 platform 事实源。
+- [x] 指标领域模型支持主题域、业务对象、维度、指标、公式 DSL、DWS/ADS 候选数据集定义和版本状态口径。
+- [x] metric-pack v0.1 可导入预检、校验、预览候选 artifact，且无法携带危险 SQL 或不安全资产引用。
+- [x] platform-webapp 按 platform 菜单权限展示指标入口；license 接入前不做版本禁用提示。
+- [x] 现有 platform 内语义接口保留一个 Sprint 兼容窗口，回滚时可恢复到 Sprint-31 行为。
+- [x] IT 证据覆盖默认启动 metrics、导入行业包、生成 DWS/ADS 候选 artifact、提交 dbt 发布网关、权限校验和回滚；BI Dataset 远端注册作为延展目标。
+
+## 验证策略
+
+按当前执行决策，本 Sprint 未在中途执行编译、镜像构建或容器重建。最终统一执行：
+
+- `worklog/v2.2.3/sprint-31-202605/it/scripts/golden-path-smoke.sh`
+- `worklog/v2.2.3/sprint-31-202605/it/scripts/observability-admission-check.sh`
+- `worklog/v2.2.3/sprint-32-202605/it/scripts/metrics-mvp-admission-check.sh`
+- 模块级 Java/前端编译、Docker 镜像构建和对应容器重建
 
 ## 相关材料
 

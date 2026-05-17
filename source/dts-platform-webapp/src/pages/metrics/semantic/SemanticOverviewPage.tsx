@@ -111,8 +111,8 @@ export default function SemanticOverviewPage() {
 				title={semanticSectionMeta.overview.title}
 				actions={(
 					<Space wrap>
-						<Button icon={<DashboardOutlined />} onClick={() => router.push("/metrics/center")}>指标工作台</Button>
-						<Button icon={<FunctionOutlined />} onClick={() => router.push("/metrics/dictionary")}>指标字典</Button>
+						<Button icon={<DashboardOutlined />} onClick={() => router.push("/bi-apps/metrics/center")}>指标工作台</Button>
+						<Button icon={<FunctionOutlined />} onClick={() => router.push("/bi-apps/metrics/dictionary")}>指标字典</Button>
 					</Space>
 				)}
 			/>

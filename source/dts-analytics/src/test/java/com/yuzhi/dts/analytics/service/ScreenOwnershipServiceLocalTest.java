@@ -12,6 +12,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -156,5 +157,26 @@ class ScreenOwnershipServiceLocalTest {
 
         assertThat(deleted).isTrue();
         verify(repo, never()).deleteByIdAndScreenId(any(), any());
+    }
+
+    @Test
+    void local_iam_read_only_blocks_local_write_when_platform_unavailable() {
+        PlatformPermissionClient client = Mockito.mock(PlatformPermissionClient.class);
+        ScreenOwnershipService platformService = new ScreenOwnershipService(repo, client, true, true, true, true);
+        when(client.upsertGrant(
+            "SCREEN",
+            "1",
+            "ROLE",
+            "ROLE_PTR",
+            "READ",
+            false,
+            "7",
+            "analytics_screen_permission:VIEWER"
+        )).thenThrow(new PlatformPermissionClient.PlatformPermissionException("platform down", new RuntimeException("boom")));
+
+        assertThatThrownBy(() -> platformService.createGrant(1L, "ROLE", "ROLE_PTR", "VIEWER", 7L, false))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("platform permission service unavailable");
+        verify(repo, never()).save(any());
     }
 }

@@ -3,7 +3,7 @@ import { LineLoading } from "@/components/loading";
 
 export default function IndicatorsPage() {
 	useEffect(() => {
-		window.location.assign("/metrics/dictionary");
+		window.location.assign("/bi-apps/metrics/dictionary");
 	}, []);
 
 	return <LineLoading />;

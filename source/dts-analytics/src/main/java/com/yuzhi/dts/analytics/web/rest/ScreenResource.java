@@ -10,6 +10,7 @@ import com.yuzhi.dts.analytics.domain.AnalyticsScreenAccess;
 import com.yuzhi.dts.analytics.domain.AnalyticsScreenVersion;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenRepository;
+import com.yuzhi.dts.analytics.repository.AnalyticsScreenAccessRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenVersionRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsUserRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
@@ -70,6 +71,7 @@ public class ScreenResource {
 
     private final AnalyticsSessionService sessionService;
     private final AnalyticsScreenRepository screenRepository;
+    private final AnalyticsScreenAccessRepository screenAccessRepository;
     private final AnalyticsScreenVersionRepository screenVersionRepository;
     private final AnalyticsUserRepository userRepository;
     private final ScreenPermissionService screenPermissionService;
@@ -87,6 +89,7 @@ public class ScreenResource {
     public ScreenResource(
             AnalyticsSessionService sessionService,
             AnalyticsScreenRepository screenRepository,
+            AnalyticsScreenAccessRepository screenAccessRepository,
             AnalyticsScreenVersionRepository screenVersionRepository,
             AnalyticsUserRepository userRepository,
             ScreenPermissionService screenPermissionService,
@@ -102,6 +105,7 @@ public class ScreenResource {
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.screenRepository = screenRepository;
+        this.screenAccessRepository = screenAccessRepository;
         this.screenVersionRepository = screenVersionRepository;
         this.userRepository = userRepository;
         this.screenPermissionService = screenPermissionService;
@@ -2615,6 +2619,67 @@ public class ScreenResource {
     }
 
     /**
+     * Sprint-31/F6: migrate legacy local analytics_screen_access rows into
+     * platform asset_grant. The operation is intentionally idempotent because
+     * ScreenOwnershipService writes through platform upsert semantics when the
+     * platform source is enabled.
+     */
+    @PostMapping(path = "/admin/migrate-local-grants", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> migrateLocalGrants(HttpServletRequest request) {
+        Optional<ResponseEntity<String>> authError = MetabaseAuth.requireSuperuser(sessionService, request);
+        if (authError.isPresent()) {
+            return authError.orElseThrow();
+        }
+
+        List<AnalyticsScreenAccess> rows = screenAccessRepository.findAll();
+        int migrated = 0;
+        int skipped = 0;
+        List<Map<String, Object>> conflicts = new ArrayList<>();
+
+        for (AnalyticsScreenAccess row : rows) {
+            if (row == null || row.getScreenId() == null) {
+                skipped++;
+                continue;
+            }
+            AnalyticsScreen screen = screenRepository.findById(row.getScreenId()).orElse(null);
+            if (screen == null || screen.isArchived()) {
+                skipped++;
+                continue;
+            }
+            try {
+                screenOwnershipService.createGrant(
+                    row.getScreenId(),
+                    row.getGranteeType(),
+                    row.getGranteeId(),
+                    row.getPermission(),
+                    row.getGrantedBy(),
+                    row.isLevelOverride()
+                );
+                migrated++;
+            } catch (Exception ex) {
+                conflicts.add(Map.of(
+                    "localGrantId", row.getId() == null ? "" : row.getId(),
+                    "screenId", row.getScreenId(),
+                    "granteeType", nullToEmpty(row.getGranteeType()),
+                    "granteeId", nullToEmpty(row.getGranteeId()),
+                    "permission", nullToEmpty(row.getPermission()),
+                    "reason", ex.getClass().getSimpleName()
+                ));
+            }
+        }
+
+        return ResponseEntity.ok(Map.of(
+            "source", "analytics_screen_access",
+            "target", "platform.asset_grant",
+            "total", rows.size(),
+            "migrated", migrated,
+            "skipped", skipped,
+            "conflicts", conflicts.size(),
+            "conflictItems", conflicts
+        ));
+    }
+
+    /**
      * One-time admin endpoint: rewrite legacy `screen-ref:{name}|...` jump-url
      * action templates in every draft screen's components_json into the new
      * canonical id-based form `/bi/screens/{id}/preview`.
@@ -2827,6 +2892,10 @@ public class ScreenResource {
         }
         String trimmed = value.trim();
         return trimmed.isBlank() ? null : trimmed;
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value;
     }
 
     private static double normalizeExportPixelRatio(double raw, String format) {

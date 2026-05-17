@@ -12,6 +12,8 @@ import com.yuzhi.dts.platform.repository.permission.AssetOwnershipRepository;
 import com.yuzhi.dts.platform.repository.visualization.BiReportLinkRepository;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService.AccessibleAssetsResult;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService.AssetRef;
+import com.yuzhi.dts.platform.service.permission.AssetPermissionService.PermissionCheckCommand;
+import com.yuzhi.dts.platform.service.permission.AssetPermissionService.PermissionDecision;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService.PermissionResult;
 import java.time.Instant;
 import java.util.List;
@@ -159,6 +161,95 @@ class AssetPermissionServiceTest {
         assertThat(result.permission()).isEqualTo("EDIT");
     }
 
+    @Test
+    void checkAction_shouldUseAssetKeyWhenAssetIdIsMissing() {
+        when(ownershipRepository.findByAssetTypeAndAssetId("DATASET", "source:demo/schema:dwd/table:orders")).thenReturn(Optional.empty());
+        AssetGrant grant = new AssetGrant();
+        grant.setPermission("READ");
+        when(
+            grantRepository.findActiveGrantsForUser(
+                eq("DATASET"),
+                eq("source:demo/schema:dwd/table:orders"),
+                eq("emp"),
+                anyList(),
+                eq("DEPT_A"),
+                any(Instant.class)
+            )
+        ).thenReturn(List.of(grant));
+
+        PermissionDecision result = service.checkAction(
+            new PermissionCheckCommand(
+                "emp",
+                List.of("ROLE_EMPLOYEE"),
+                "DEPT_A",
+                "INTERNAL",
+                "DATASET",
+                null,
+                "source:demo/schema:dwd/table:orders",
+                "PREVIEW",
+                "INTERNAL"
+            )
+        );
+
+        assertThat(result.allowed()).isTrue();
+        assertThat(result.assetId()).isEqualTo("source:demo/schema:dwd/table:orders");
+        assertThat(result.requiredPermission()).isEqualTo("READ");
+        assertThat(result.grantSource()).isEqualTo("explicit_grant");
+        assertThat(result.classificationDecision()).isEqualTo("ALLOWED");
+    }
+
+    @Test
+    void checkAction_shouldDenyWhenActionRequiresHigherPermission() {
+        when(ownershipRepository.findByAssetTypeAndAssetId("DATASET", "1")).thenReturn(Optional.empty());
+        AssetGrant grant = new AssetGrant();
+        grant.setPermission("READ");
+        when(grantRepository.findActiveGrantsForUser(eq("DATASET"), eq("1"), eq("emp"), anyList(), eq("DEPT_A"), any(Instant.class)))
+            .thenReturn(List.of(grant));
+
+        PermissionDecision result = service.checkAction(
+            new PermissionCheckCommand("emp", List.of("ROLE_EMPLOYEE"), "DEPT_A", "INTERNAL", "DATASET", "1", null, "PUBLISH", "INTERNAL")
+        );
+
+        assertThat(result.allowed()).isFalse();
+        assertThat(result.reason()).isEqualTo("insufficient_permission");
+        assertThat(result.requiredPermission()).isEqualTo("MANAGE");
+        assertThat(result.permission()).isEqualTo("READ");
+    }
+
+    @Test
+    void checkAction_shouldDenyWhenClassificationIsTooLow() {
+        when(ownershipRepository.findByAssetTypeAndAssetId("DATASET", "1")).thenReturn(Optional.empty());
+        AssetGrant grant = new AssetGrant();
+        grant.setPermission("READ");
+        when(grantRepository.findActiveGrantsForUser(eq("DATASET"), eq("1"), eq("emp"), anyList(), eq("DEPT_A"), any(Instant.class)))
+            .thenReturn(List.of(grant));
+
+        PermissionDecision result = service.checkAction(
+            new PermissionCheckCommand("emp", List.of("ROLE_EMPLOYEE"), "DEPT_A", "PUBLIC", "DATASET", "1", null, "READ", "INTERNAL")
+        );
+
+        assertThat(result.allowed()).isFalse();
+        assertThat(result.reason()).isEqualTo("classification_denied");
+        assertThat(result.classificationDecision()).isEqualTo("DENIED");
+    }
+
+    @Test
+    void checkAction_shouldDenyWhenAssetClassificationIsMissing() {
+        when(ownershipRepository.findByAssetTypeAndAssetId("DATASET", "1")).thenReturn(Optional.empty());
+        AssetGrant grant = new AssetGrant();
+        grant.setPermission("READ");
+        when(grantRepository.findActiveGrantsForUser(eq("DATASET"), eq("1"), eq("emp"), anyList(), eq("DEPT_A"), any(Instant.class)))
+            .thenReturn(List.of(grant));
+
+        PermissionDecision result = service.checkAction(
+            new PermissionCheckCommand("emp", List.of("ROLE_EMPLOYEE"), "DEPT_A", "INTERNAL", "DATASET", "1", null, "READ", null)
+        );
+
+        assertThat(result.allowed()).isFalse();
+        assertThat(result.reason()).isEqualTo("classification_required");
+        assertThat(result.classificationDecision()).isEqualTo("MISSING_ASSET_CLASSIFICATION");
+    }
+
     // --- Batch check ---
 
     @Test
@@ -223,7 +314,7 @@ class AssetPermissionServiceTest {
         AssetGrant grant = new AssetGrant();
         grant.setPermission("READ");
         grant.setLevelOverride(false);
-        when(grantRepository.findActiveGrantsForUser(eq("SCREEN"), eq("10"), eq("ptrdemo"), eq(List.of("ROLE_PTR")), eq("D01"), any(Instant.class)))
+        when(grantRepository.findActiveGrantsForUser(eq("SCREEN"), eq("10"), eq("ptrdemo"), anyList(), eq("D01"), any(Instant.class)))
             .thenReturn(List.of(grant));
 
         PermissionResult result = screenService.check("ptrdemo", List.of("ROLE_PTR"), "D01", "SCREEN", "10", "PUBLIC", null);
@@ -239,7 +330,7 @@ class AssetPermissionServiceTest {
         AssetGrant grant = new AssetGrant();
         grant.setPermission("READ");
         grant.setLevelOverride(true);
-        when(grantRepository.findActiveGrantsForUser(eq("SCREEN"), eq("10"), eq("ptrdemo"), eq(List.of("ROLE_PTR")), eq("D01"), any(Instant.class)))
+        when(grantRepository.findActiveGrantsForUser(eq("SCREEN"), eq("10"), eq("ptrdemo"), anyList(), eq("D01"), any(Instant.class)))
             .thenReturn(List.of(grant));
 
         PermissionResult result = screenService.check("ptrdemo", List.of("ROLE_PTR"), "D01", "SCREEN", "10", "INTERNAL", null);
@@ -257,11 +348,11 @@ class AssetPermissionServiceTest {
             screenLink("screen-11", "INTERNAL")
         ));
         when(reportLinkRepository.findEnabledScreenByCode("screen-11")).thenReturn(Optional.of(screenLink("screen-11", "INTERNAL")));
-        when(grantRepository.findAccessibleAssetIdsByGrant(eq("SCREEN"), eq("ptrdemo"), eq(List.of("ROLE_PTR")), eq("D01"), any(Instant.class)))
+        when(grantRepository.findAccessibleAssetIdsByGrant(eq("SCREEN"), eq("ptrdemo"), anyList(), eq("D01"), any(Instant.class)))
             .thenReturn(List.of("11"));
         AssetGrant grant = new AssetGrant();
         grant.setPermission("READ");
-        when(grantRepository.findActiveGrantsForUser(eq("SCREEN"), eq("11"), eq("ptrdemo"), eq(List.of("ROLE_PTR")), eq("D01"), any(Instant.class)))
+        when(grantRepository.findActiveGrantsForUser(eq("SCREEN"), eq("11"), eq("ptrdemo"), anyList(), eq("D01"), any(Instant.class)))
             .thenReturn(List.of(grant));
 
         AccessibleAssetsResult result = screenService.listAccessibleAssetIds(

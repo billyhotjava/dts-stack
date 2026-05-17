@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { Button, Card, DatePicker, Form, Input, Modal, Radio, Select, Space, Tag, Popconfirm } from "antd";
 import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
@@ -40,10 +41,13 @@ const ASSET_TYPE_OPTIONS = [
 ];
 
 export default function AssetGrantPage() {
+	const [searchParams] = useSearchParams();
+	const initialAssetType = searchParams.get("assetType") || "TABLE";
+	const initialAssetId = searchParams.get("assetId") || "";
 	const [grants, setGrants] = useState<AssetGrant[]>([]);
 	const [loading, setLoading] = useState(false);
-	const [searchType, setSearchType] = useState("TABLE");
-	const [searchId, setSearchId] = useState("");
+	const [searchType, setSearchType] = useState(initialAssetType);
+	const [searchId, setSearchId] = useState(initialAssetId);
 	const [grantModal, setGrantModal] = useState(false);
 	const [detailRow, setDetailRow] = useState<AssetGrant | null>(null);
 	const [form] = Form.useForm();
@@ -60,6 +64,14 @@ export default function AssetGrantPage() {
 			setLoading(false);
 		}
 	}, [searchType, searchId]);
+
+	useEffect(() => {
+		if (!searchId) {
+			setGrants([]);
+			return;
+		}
+		void loadGrants();
+	}, [loadGrants, searchId]);
 
 	const handleCreate = async () => {
 		try {
@@ -125,6 +137,7 @@ export default function AssetGrantPage() {
 					<Select options={ASSET_TYPE_OPTIONS} value={searchType} onChange={setSearchType}
 						style={{ width: 140 }} />
 					<Input.Search placeholder="输入资产 ID" style={{ width: 220 }}
+						defaultValue={searchId}
 						onSearch={(v) => { setSearchId(v); }} />
 					{searchId && (
 						<Button type="primary" onClick={() => { form.resetFields(); setGrantModal(true); }}>

@@ -34,8 +34,16 @@ application:
     version: 2.2.3-SNAPSHOT
     environment: dev
 
+analytics:
+  local-iam:
+    read-only: ${ANALYTICS_LOCAL_IAM_READ_ONLY:true}
+
 dts:
   analytics:
+    screen-permission:
+      platform-source-enabled: ${DTS_ANALYTICS_SCREEN_PERMISSION_PLATFORM_SOURCE_ENABLED:true}
+      local-fallback-enabled: ${DTS_ANALYTICS_SCREEN_PERMISSION_LOCAL_FALLBACK_ENABLED:true}
+      local-write-enabled: ${DTS_ANALYTICS_SCREEN_PERMISSION_LOCAL_WRITE_ENABLED:false}
     jdbc:
       drivers-dir: ${ANALYTICS_JDBC_DRIVERS_DIR:}
     # @deprecated Sprint-28 起 dts.analytics.platform.* 仅作为旧 env 兼容入口,

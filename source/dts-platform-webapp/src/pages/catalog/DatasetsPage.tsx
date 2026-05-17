@@ -15,6 +15,8 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import {
 	getCatalogAssetsV2Diagnostics,
+	getCatalogAssetsV2GovernanceGaps,
+	getCatalogAssetsV2LineageFailures,
 	getCatalogReconciliation,
 	getDomainTree,
 	listCatalogAssetsV2,
@@ -23,6 +25,7 @@ import {
 	syncCatalogAssetsV2,
 } from "@/api/platformApi";
 import { useRouter } from "@/routes/hooks";
+import { resolveAssetReadiness } from "./assetPortalUx.helpers";
 
 type AssetRow = {
 	id: string;
@@ -38,6 +41,8 @@ type AssetRow = {
 	ownerDept?: string;
 	governanceStatus?: string;
 	matchStatus?: string;
+	metadataSource?: string;
+	legacyDatasetId?: string;
 	description?: string;
 	hiveDatabase?: string;
 	hiveTable?: string;
@@ -188,6 +193,9 @@ export default function Page() {
 	const [domains, setDomains] = useState<{ id: string; name: string }[]>([]);
 	const [reconciliation, setReconciliation] = useState<ReconciliationResult | null>(null);
 	const [reconciliationLoading, setReconciliationLoading] = useState(false);
+	const [governanceGapReport, setGovernanceGapReport] = useState<any | null>(null);
+	const [lineageFailureReport, setLineageFailureReport] = useState<any | null>(null);
+	const [signalsLoading, setSignalsLoading] = useState(false);
 	const [domainTree, setDomainTree] = useState<DomainNode[]>([]);
 	const [treeLoading, setTreeLoading] = useState(false);
 	const requestSeqRef = useRef(0);
@@ -235,6 +243,7 @@ export default function Page() {
 	useEffect(() => {
 		const timer = window.setTimeout(() => {
 			void loadDatasets(1, pageState.size);
+			void loadGovernanceSignals();
 		}, 280);
 		return () => window.clearTimeout(timer);
 	}, [keyword, domain, assetType, classification, warehouseLayer, governanceStatus, matchStatus, pageState.size]);
@@ -280,22 +289,40 @@ export default function Page() {
 		}
 	};
 
+	const buildAssetQuery = (page = 1, size = 18) => ({
+		page: page - 1,
+		size,
+		keyword: keyword.trim() || undefined,
+		domainId: domain && domain !== "ALL" && domain !== UNASSIGNED_DOMAIN_KEY ? domain : undefined,
+		domainUnassigned: domain === UNASSIGNED_DOMAIN_KEY || undefined,
+		type: assetType === "ALL" ? undefined : assetType,
+		classification: classification === "ALL" ? undefined : classification,
+		warehouseLayer: warehouseLayer === "ALL" ? undefined : warehouseLayer,
+		governanceStatus: governanceStatus === "ALL" ? undefined : governanceStatus,
+		matchStatus: matchStatus === "ALL" ? undefined : matchStatus,
+	});
+
+	const loadGovernanceSignals = async () => {
+		if (!ASSET_PORTAL_V2_ENABLED) return;
+		setSignalsLoading(true);
+		try {
+			const query = buildAssetQuery(1, 20);
+			const [gapResult, lineageResult] = await Promise.allSettled([
+				getCatalogAssetsV2GovernanceGaps(query),
+				getCatalogAssetsV2LineageFailures(query),
+			]);
+			setGovernanceGapReport(gapResult.status === "fulfilled" ? gapResult.value || null : null);
+			setLineageFailureReport(lineageResult.status === "fulfilled" ? lineageResult.value || null : null);
+		} finally {
+			setSignalsLoading(false);
+		}
+	};
+
 	const loadDatasets = async (page = 1, size = 18) => {
 		const reqId = ++requestSeqRef.current;
 		setLoading(true);
 		try {
-			const resp: any = ASSET_PORTAL_V2_ENABLED ? await listCatalogAssetsV2({
-				page: page - 1,
-				size,
-				keyword: keyword.trim() || undefined,
-				domainId: domain && domain !== "ALL" && domain !== UNASSIGNED_DOMAIN_KEY ? domain : undefined,
-				domainUnassigned: domain === UNASSIGNED_DOMAIN_KEY || undefined,
-				type: assetType === "ALL" ? undefined : assetType,
-				classification: classification === "ALL" ? undefined : classification,
-				warehouseLayer: warehouseLayer === "ALL" ? undefined : warehouseLayer,
-				governanceStatus: governanceStatus === "ALL" ? undefined : governanceStatus,
-				matchStatus: matchStatus === "ALL" ? undefined : matchStatus,
-			}) : await listDatasets({
+			const resp: any = ASSET_PORTAL_V2_ENABLED ? await listCatalogAssetsV2(buildAssetQuery(page, size)) : await listDatasets({
 				page: page - 1,
 				size,
 				keyword: keyword.trim() || undefined,
@@ -323,6 +350,8 @@ export default function Page() {
 					lifecycleStatus: item.lifecycleStatus || undefined,
 					governanceStatus: item.governanceStatus || undefined,
 					matchStatus: item.matchStatus || undefined,
+					metadataSource: item.metadataSource || undefined,
+					legacyDatasetId: item.legacyDatasetId ? String(item.legacyDatasetId) : undefined,
 					owner: item.owner || undefined,
 					ownerDept: item.ownerDept || undefined,
 					description: item.description || undefined,
@@ -368,7 +397,14 @@ export default function Page() {
 	const missingDomainCount = records.filter((row) => !row.domain && !row.domainId).length;
 	const staleCount = records.filter((row) => String(row.lifecycleStatus || "").toUpperCase() === "STALE" || row.status === "停用").length;
 	const activeCount = records.filter((row) => row.status === "启用").length;
+	const readinessCounts = records.reduce<Record<string, number>>((acc, row) => {
+		const state = resolveAssetReadiness(row).state;
+		acc[state] = (acc[state] || 0) + 1;
+		return acc;
+	}, {});
 	const governanceCoverage = records.length ? Math.round(((records.length - unclassifiedCount - missingDomainCount) / Math.max(records.length, 1)) * 100) : 0;
+	const blockingGapCount = Number(governanceGapReport?.severityCounts?.BLOCKING || 0);
+	const lineageFailureCount = Array.isArray(lineageFailureReport?.content) ? lineageFailureReport.content.length : 0;
 
 	const treeData = useMemo(
 		() => [
@@ -480,6 +516,7 @@ export default function Page() {
 		const layer = normalizeLayer(row.warehouseLayer);
 		const meta = LAYER_META[layer];
 		const isStale = String(row.lifecycleStatus || "").toUpperCase() === "STALE" || row.status === "停用";
+		const readiness = resolveAssetReadiness(row);
 		return (
 			<button
 				key={row.id}
@@ -499,6 +536,9 @@ export default function Page() {
 				</div>
 				<div className="mt-2 flex flex-wrap gap-1">
 					<Tag style={{ fontSize: 11 }}>{row.type || "未知"}</Tag>
+					<Tag color={readiness.color} style={{ fontSize: 11 }}>
+						{readiness.label}
+					</Tag>
 					<Tag color={row.classification ? "orange" : "default"} style={{ fontSize: 11 }}>
 						{classificationText(row.classification)}
 					</Tag>
@@ -514,6 +554,11 @@ export default function Page() {
 						</Tag>
 					) : null}
 				</div>
+				{readiness.reasons.length ? (
+					<div className="mt-2 rounded border border-amber-100 bg-amber-50 px-2 py-1 text-[11px] text-amber-700">
+						{readiness.reasons.slice(0, 2).join(" / ")}
+					</div>
+				) : null}
 				<div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-slate-500">
 					<span className="truncate">{row.owner || row.ownerDept || "未指定负责人"}</span>
 					<span className="shrink-0">{formatTime(row.snapshotTime || row.updatedAt)}</span>
@@ -643,10 +688,34 @@ export default function Page() {
 						/>
 					) : null}
 
-					<div className="grid gap-3 md:grid-cols-4">
+					{ASSET_PORTAL_V2_ENABLED ? (
+						<Alert
+							type={blockingGapCount || lineageFailureCount ? "warning" : "success"}
+							showIcon
+							message={
+								blockingGapCount || lineageFailureCount
+									? `当前筛选存在治理阻断 ${blockingGapCount} 项、血缘证据缺口 ${lineageFailureCount} 项`
+									: "当前筛选未发现治理阻断和血缘证据缺口"
+							}
+							description={
+								signalsLoading
+									? "正在刷新治理信号..."
+									: "资产是否可用于指标、宽表和 BI 发布，以密级、主题域、归属部门、生命周期、映射状态和血缘证据共同判断。"
+							}
+						/>
+					) : null}
+
+					<div className="grid gap-3 md:grid-cols-5">
 						<MetricTile icon={<DatabaseOutlined />} label="资产总量" value={pageState.total} footnote={selectedDomainName} />
 						<MetricTile icon={<TableOutlined />} label="当前页资产" value={records.length} footnote={`启用 ${activeCount} 个`} />
 						<MetricTile icon={<ApartmentOutlined />} label="主题域覆盖" value={domains.length} footnote={`未归域 ${missingDomainCount} 个`} />
+						<MetricTile
+							icon={<SafetyCertificateOutlined />}
+							label="可引用资产"
+							value={Number(readinessCounts.READY || 0)}
+							footnote={`阻断 ${Number(readinessCounts.BLOCKED || 0)} 个 / 待确认 ${Number(readinessCounts.WARNING || 0)} 个`}
+							tone={Number(readinessCounts.BLOCKED || 0) > 0 ? "text-amber-600" : "text-green-600"}
+						/>
 						<MetricTile
 							icon={<SafetyCertificateOutlined />}
 							label="治理覆盖率"
@@ -686,7 +755,7 @@ export default function Page() {
 								{records.map(renderAssetCard)}
 							</div>
 						) : (
-							<EmptyState title="暂无资产地图" description="请先完成元数据采集或同步资产数据。" />
+							<EmptyState title="未发现当前账号可见资产" description="可能还未完成元数据采集，也可能当前密级、主题域或资产授权限制了可见范围。" />
 						)}
 					</Card>
 

@@ -2,13 +2,17 @@ package com.yuzhi.dts.platform.service.catalog;
 
 import com.yuzhi.dts.platform.domain.catalog.CatalogAssetExtension;
 import com.yuzhi.dts.platform.domain.catalog.CatalogAssetMapping;
+import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import com.yuzhi.dts.platform.domain.catalog.OpenMetadataAssetCache;
 import com.yuzhi.dts.platform.domain.catalog.OpenMetadataColumnCache;
 import com.yuzhi.dts.platform.domain.catalog.OpenMetadataLineageCache;
 import com.yuzhi.dts.platform.repository.catalog.CatalogAssetExtensionRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogAssetMappingRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataAssetCacheRepository;
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataColumnCacheRepository;
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataLineageCacheRepository;
@@ -43,6 +47,8 @@ public class CatalogAssetPortalService {
     private final CatalogAssetExtensionRepository extensionRepository;
     private final CatalogAssetMappingRepository mappingRepository;
     private final CatalogDatasetRepository datasetRepository;
+    private final CatalogTableSchemaRepository tableSchemaRepository;
+    private final CatalogColumnSchemaRepository catalogColumnSchemaRepository;
     private final AccessChecker accessChecker;
 
     public CatalogAssetPortalService(
@@ -52,6 +58,8 @@ public class CatalogAssetPortalService {
         CatalogAssetExtensionRepository extensionRepository,
         CatalogAssetMappingRepository mappingRepository,
         CatalogDatasetRepository datasetRepository,
+        CatalogTableSchemaRepository tableSchemaRepository,
+        CatalogColumnSchemaRepository catalogColumnSchemaRepository,
         AccessChecker accessChecker
     ) {
         this.assetRepository = assetRepository;
@@ -60,6 +68,8 @@ public class CatalogAssetPortalService {
         this.extensionRepository = extensionRepository;
         this.mappingRepository = mappingRepository;
         this.datasetRepository = datasetRepository;
+        this.tableSchemaRepository = tableSchemaRepository;
+        this.catalogColumnSchemaRepository = catalogColumnSchemaRepository;
         this.accessChecker = accessChecker;
     }
 
@@ -76,19 +86,23 @@ public class CatalogAssetPortalService {
             CatalogDataset legacy = extension != null && extension.getLegacyDatasetId() != null
                 ? datasetRepository.findById(extension.getLegacyDatasetId()).orElse(null)
                 : null;
+            if (!canRead(extension, legacy, activeDept)) {
+                continue;
+            }
             items.add(toSummary(asset, extension, mapping, legacy));
             if (legacy != null && legacy.getId() != null) {
                 visibleLegacyIds.add(legacy.getId());
             }
         }
+        int openMetadataReturned = items.size();
         AssetPage legacyPage = listLegacyAssets(query, activeDept, page, size, visibleLegacyIds, Math.max(0, size - items.size()));
         if (!legacyPage.content().isEmpty()) {
             items.addAll(legacyPage.content());
         }
-        long total = pageData.getTotalElements() + legacyPage.total();
-        String source = pageData.getTotalElements() > 0 && legacyPage.total() > 0
+        long total = items.size();
+        String source = openMetadataReturned > 0 && legacyPage.returned() > 0
             ? "openmetadata-cache+dts-catalog"
-            : pageData.getTotalElements() > 0 ? "openmetadata-cache" : "dts-catalog";
+            : openMetadataReturned > 0 ? "openmetadata-cache" : "dts-catalog";
         return new AssetPage(items, total, page, size, items.size(), source);
     }
 
@@ -101,7 +115,7 @@ public class CatalogAssetPortalService {
         int remainingSlots
     ) {
         if (remainingSlots <= 0) {
-            return new AssetPage(List.of(), datasetRepository.count(buildLegacySpec(query)), page, size, 0, "dts-catalog");
+            return new AssetPage(List.of(), 0, page, size, 0, "dts-catalog");
         }
         var pageable = PageRequest.of(
             page,
@@ -113,10 +127,11 @@ public class CatalogAssetPortalService {
             .getContent()
             .stream()
             .filter(dataset -> dataset.getId() == null || excludedIds == null || !excludedIds.contains(dataset.getId()))
+            .filter(dataset -> canRead(null, dataset, activeDept))
             .limit(remainingSlots)
             .map(this::toLegacySummary)
             .toList();
-        return new AssetPage(items, legacyPage.getTotalElements(), page, size, items.size(), "dts-catalog");
+        return new AssetPage(items, items.size(), page, size, items.size(), "dts-catalog");
     }
 
     public AssetDetail getAsset(UUID id, String activeDept) {
@@ -133,6 +148,114 @@ public class CatalogAssetPortalService {
         }
         List<ColumnSummary> columns = columnRepository.findByAssetOrderByOrdinalPositionAsc(asset).stream().map(this::toColumn).toList();
         return new AssetDetail(toSummary(asset, extension, mapping, legacy), columns, asset.getRawJson(), asset.getProfileJson());
+    }
+
+    public CatalogAssetContract getAssetContract(UUID id, String activeDept) {
+        Optional<OpenMetadataAssetCache> assetOptional = assetRepository.findById(id);
+        if (assetOptional.isPresent()) {
+            OpenMetadataAssetCache asset = assetOptional.orElseThrow();
+            CatalogAssetExtension extension = extensionRepository.findFirstByOmAsset(asset).orElse(null);
+            CatalogAssetMapping mapping = mappingRepository.findFirstByFqnIgnoreCase(asset.getFqn()).orElse(null);
+            CatalogDataset legacy = resolveContractLegacy(extension, mapping);
+            if (!canRead(extension, legacy, activeDept)) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "资产不存在或无权访问");
+            }
+            return CatalogAssetContractMapper.fromOpenMetadata(asset, extension, mapping, legacy);
+        }
+
+        CatalogDataset legacy = datasetRepository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "资产不存在"));
+        if (!canRead(null, legacy, activeDept)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "资产不存在或无权访问");
+        }
+        return CatalogAssetContractMapper.fromLegacy(legacy);
+    }
+
+    public CatalogAssetSchemaContract getAssetSchemaContract(UUID id, String activeDept) {
+        Optional<OpenMetadataAssetCache> assetOptional = assetRepository.findById(id);
+        if (assetOptional.isPresent()) {
+            OpenMetadataAssetCache asset = assetOptional.orElseThrow();
+            CatalogAssetExtension extension = extensionRepository.findFirstByOmAsset(asset).orElse(null);
+            CatalogAssetMapping mapping = mappingRepository.findFirstByFqnIgnoreCase(asset.getFqn()).orElse(null);
+            CatalogDataset legacy = resolveContractLegacy(extension, mapping);
+            if (!canRead(extension, legacy, activeDept)) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "资产不存在或无权访问");
+            }
+            CatalogAssetContract contract = CatalogAssetContractMapper.fromOpenMetadata(asset, extension, mapping, legacy);
+            List<OpenMetadataColumnCache> columns = columnRepository.findByAssetOrderByOrdinalPositionAsc(asset);
+            if (!columns.isEmpty() || legacy == null) {
+                return CatalogAssetSchemaContractMapper.fromOpenMetadata(contract, columns);
+            }
+            return buildLegacySchemaContract(contract, legacy);
+        }
+
+        CatalogDataset legacy = datasetRepository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "资产不存在"));
+        if (!canRead(null, legacy, activeDept)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "资产不存在或无权访问");
+        }
+        return buildLegacySchemaContract(CatalogAssetContractMapper.fromLegacy(legacy), legacy);
+    }
+
+    public GovernanceGapReport governanceGaps(AssetQuery query, String activeDept) {
+        AssetPage page = listAssets(query, activeDept);
+        List<GovernanceGapAsset> content = new ArrayList<>();
+        Map<String, Long> severityCounts = new LinkedHashMap<>();
+        Map<String, Long> gapCounts = new LinkedHashMap<>();
+        long inspected = 0;
+        long skipped = 0;
+        for (AssetSummary summary : page.content()) {
+            try {
+                CatalogAssetContract asset = getAssetContract(summary.id(), activeDept);
+                CatalogAssetSchemaContract schema = getAssetSchemaContract(summary.id(), activeDept);
+                CatalogGovernanceGapEvaluation evaluation = CatalogGovernanceGapEvaluator.evaluate(asset, schema, hasLineageEvidence(asset));
+                inspected++;
+                increment(severityCounts, evaluation.severity());
+                for (String gap : evaluation.blockingGaps()) {
+                    increment(gapCounts, "blocking:" + gap);
+                }
+                for (String gap : evaluation.warningGaps()) {
+                    increment(gapCounts, "warning:" + gap);
+                }
+                if (!"READY".equals(evaluation.severity())) {
+                    content.add(
+                        new GovernanceGapAsset(
+                            asset.id(),
+                            asset.displayName(),
+                            asset.fqn(),
+                            asset.assetKey(),
+                            asset.grantAssetType(),
+                            asset.grantAssetId(),
+                            asset.lifecycleStatus(),
+                            asset.governanceStatus(),
+                            evaluation.severity(),
+                            evaluation.blockingGaps(),
+                            evaluation.warningGaps(),
+                            asset.metadataSource()
+                        )
+                    );
+                }
+            } catch (ResponseStatusException ex) {
+                if (HttpStatus.NOT_FOUND.equals(ex.getStatusCode())) {
+                    skipped++;
+                    continue;
+                }
+                throw ex;
+            }
+        }
+        return new GovernanceGapReport(
+            content,
+            severityCounts,
+            gapCounts,
+            inspected,
+            skipped,
+            page.total(),
+            page.page(),
+            page.size(),
+            page.metadataSource()
+        );
+    }
+
+    public CatalogLineageFailureReport lineageFailures(AssetQuery query, String activeDept) {
+        return CatalogLineageFailureReportBuilder.fromGovernanceGapReport(governanceGaps(query, activeDept));
     }
 
     @Transactional
@@ -497,19 +620,60 @@ public class CatalogAssetPortalService {
     }
 
     private String resolveLegacyGovernanceStatus(CatalogDataset dataset) {
-        if (dataset == null || Boolean.FALSE.equals(dataset.getEnabled())) {
-            return "DISABLED";
+        return CatalogAssetGovernancePolicy.resolveGovernanceStatus(dataset);
+    }
+
+    private CatalogDataset resolveContractLegacy(CatalogAssetExtension extension, CatalogAssetMapping mapping) {
+        UUID legacyDatasetId = extension != null ? extension.getLegacyDatasetId() : null;
+        if (legacyDatasetId == null && mapping != null) {
+            legacyDatasetId = mapping.getLegacyDatasetId();
         }
-        if (!StringUtils.hasText(dataset.getOwner()) && !StringUtils.hasText(dataset.getOwnerDept())) {
-            return "PENDING_CLAIM";
+        return legacyDatasetId == null ? null : datasetRepository.findById(legacyDatasetId).orElse(null);
+    }
+
+    private CatalogAssetSchemaContract buildLegacySchemaContract(CatalogAssetContract contract, CatalogDataset dataset) {
+        CatalogTableSchema table = resolveLegacyTable(dataset);
+        if (table == null) {
+            return CatalogAssetSchemaContractMapper.fromLegacy(contract, List.of());
         }
-        if (!StringUtils.hasText(dataset.getClassification())) {
-            return "PENDING_CLASSIFICATION";
+        List<CatalogColumnSchema> columns = catalogColumnSchemaRepository.findByTable(table);
+        return CatalogAssetSchemaContractMapper.fromLegacy(contract, columns);
+    }
+
+    private CatalogTableSchema resolveLegacyTable(CatalogDataset dataset) {
+        List<CatalogTableSchema> tables = tableSchemaRepository.findByDataset(dataset);
+        if (tables.isEmpty()) {
+            return null;
         }
-        if (dataset.getDomain() == null || dataset.getDomain().getId() == null) {
-            return "PENDING_DOMAIN";
+        String hiveTable = blankToNull(dataset.getHiveTable());
+        if (hiveTable != null) {
+            return tables
+                .stream()
+                .filter(table -> table != null && hiveTable.equalsIgnoreCase(blankToNull(table.getName())))
+                .findFirst()
+                .orElse(tables.get(0));
         }
-        return "GOVERNED";
+        return tables.get(0);
+    }
+
+    private boolean hasLineageEvidence(CatalogAssetContract asset) {
+        if (asset == null || (!StringUtils.hasText(asset.omEntityId()) && !StringUtils.hasText(asset.fqn()))) {
+            return false;
+        }
+        return !lineageRepository
+            .findByFromOmEntityIdOrToOmEntityIdOrFromFqnIgnoreCaseOrToFqnIgnoreCase(
+                asset.omEntityId(),
+                asset.omEntityId(),
+                asset.fqn(),
+                asset.fqn()
+            )
+            .isEmpty();
+    }
+
+    private void increment(Map<String, Long> counts, String key) {
+        if (StringUtils.hasText(key)) {
+            counts.merge(key, 1L, Long::sum);
+        }
     }
 
     private ColumnSummary toColumn(OpenMetadataColumnCache column) {
@@ -626,6 +790,33 @@ public class CatalogAssetPortalService {
     ) {}
 
     public record AssetDetail(AssetSummary asset, List<ColumnSummary> columns, String rawJson, String profileJson) {}
+
+    public record GovernanceGapAsset(
+        UUID id,
+        String displayName,
+        String fqn,
+        String assetKey,
+        String grantAssetType,
+        String grantAssetId,
+        String lifecycleStatus,
+        String governanceStatus,
+        String severity,
+        List<String> blockingGaps,
+        List<String> warningGaps,
+        String metadataSource
+    ) {}
+
+    public record GovernanceGapReport(
+        List<GovernanceGapAsset> content,
+        Map<String, Long> severityCounts,
+        Map<String, Long> gapCounts,
+        long inspected,
+        long skipped,
+        long totalCandidates,
+        int page,
+        int size,
+        String metadataSource
+    ) {}
 
     public record GovernanceUpdate(
         UUID domainId,

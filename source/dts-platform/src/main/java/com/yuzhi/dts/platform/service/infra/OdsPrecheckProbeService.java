@@ -281,30 +281,45 @@ public class OdsPrecheckProbeService {
             return;
         }
 
-        Long totalRows = queryLong(connection, "SELECT COUNT(*) FROM " + tableName, timeoutSeconds);
-        if (totalRows == null) {
-            rules.add(
-                rule(
-                    "SOURCE_ROW_COUNT",
-                    "WARN",
-                    false,
-                    sourceName,
-                    "源表行数探测未完成：" + sourceName,
-                    "可调大 props.precheckQueryTimeoutSeconds，或在大表场景关闭深度探测"
-                )
-            );
+        Long totalRows = null;
+        boolean exactRowCount = boolProp(sourceProps, "precheckExactRowCount", false);
+        if (exactRowCount) {
+            totalRows = queryLong(connection, "SELECT COUNT(*) FROM " + tableName, timeoutSeconds);
+            if (totalRows == null) {
+                rules.add(
+                    rule(
+                        "SOURCE_ROW_COUNT",
+                        "WARN",
+                        false,
+                        sourceName,
+                        "源表精确行数探测未完成：" + sourceName,
+                        "可调大 props.precheckQueryTimeoutSeconds，或关闭 props.precheckExactRowCount 避免大表阻塞"
+                    )
+                );
+            } else {
+                rules.add(
+                    rule(
+                        "SOURCE_ROW_COUNT",
+                        "INFO",
+                        true,
+                        sourceName,
+                        "源表当前精确行数：" + totalRows,
+                        "继续校验数据量基线和波动阈值"
+                    )
+                );
+                probeRowVolumeBaseline(plan, sourceName, totalRows, sourceProps, rules);
+            }
         } else {
             rules.add(
                 rule(
-                    "SOURCE_ROW_COUNT",
+                    "SOURCE_ROW_COUNT_ESTIMATE",
                     "INFO",
                     true,
                     sourceName,
-                    "源表当前行数：" + totalRows,
-                    "继续校验数据量基线和波动阈值"
+                    "默认跳过源表精确 count(*)：" + sourceName,
+                    "大表场景优先通过 Schema 探测、权限预检和任务运行指标观察数据量；如需精确行数和行数基线校验，设置 props.precheckExactRowCount=true"
                 )
             );
-            probeRowVolumeBaseline(plan, sourceName, totalRows, sourceProps, rules);
         }
 
         probePrimaryKey(connection, plan, tableName, sourceName, timeoutSeconds, rules);

@@ -12,6 +12,8 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogLineageJobRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetGovernancePolicy;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -123,7 +125,7 @@ public class IngestionLineageWriter {
         );
         if (existing.isPresent()) {
             CatalogDatasetLineage link = existing.orElseThrow();
-            link.setNotes(buildNotes(mapping, source, effectiveObservation));
+            link.setNotes(buildNotes(mapping, source, effectiveObservation, sourceDataset.dataset(), odsDataset.dataset()));
             link.setUpstreamAssetType("EXTERNAL_TABLE");
             link.setDownstreamAssetType("DATASET");
             link.setDirection("UPSTREAM_TO_DOWNSTREAM");
@@ -147,7 +149,7 @@ public class IngestionLineageWriter {
         if (lineageJob != null) {
             link.setLineageJobId(lineageJob.getId());
         }
-        link.setNotes(buildNotes(mapping, source, effectiveObservation));
+        link.setNotes(buildNotes(mapping, source, effectiveObservation, sourceDataset.dataset(), odsDataset.dataset()));
         applyObservation(link, effectiveObservation);
         if (link.getValidFrom() == null) {
             link.setValidFrom(effectiveObservation.observedAt() == null ? Instant.now() : effectiveObservation.observedAt());
@@ -255,6 +257,7 @@ public class IngestionLineageWriter {
         dataset.setHiveDatabase(defaultIfBlank(mapping.getStreamNamespace(), "source"));
         dataset.setHiveTable(mapping.getStreamName());
         dataset.setWarehouseLayer(LAYER_SOURCE);
+        dataset.setLifecycleStatus(CatalogAssetGovernancePolicy.lifecycleForDiscoveredAsset());
         dataset.setOwner(mapping.getOwner());
         dataset.setOwnerDept(firstNonBlank(mapping.getOwnerDept(), source != null ? source.getOwnerDept() : null));
         dataset.setDescription(truncate("External source table imported from Addax mapping: " + physicalName(mapping.getStreamNamespace(), mapping.getStreamName()), 2048));
@@ -279,6 +282,11 @@ public class IngestionLineageWriter {
                 dataset.setOwnerDept(firstNonBlank(mapping.getOwnerDept(), source != null ? source.getOwnerDept() : null));
                 changed = true;
             }
+            if (!StringUtils.hasText(dataset.getLifecycleStatus())) {
+                dataset.setLifecycleStatus(CatalogAssetGovernancePolicy.lifecycleForDiscoveredAsset());
+                changed = true;
+            }
+            dataset.setSnapshotTime(Instant.now());
             return new DatasetResolveResult(changed ? datasetRepository.save(dataset) : dataset, 0);
         }
         CatalogDataset dataset = new CatalogDataset();
@@ -288,6 +296,7 @@ public class IngestionLineageWriter {
         dataset.setHiveDatabase(defaultIfBlank(mapping.getOdsSchema(), "ods"));
         dataset.setHiveTable(mapping.getOdsTable());
         dataset.setWarehouseLayer(LAYER_ODS);
+        dataset.setLifecycleStatus(CatalogAssetGovernancePolicy.lifecycleForDiscoveredAsset());
         dataset.setOwner(mapping.getOwner());
         dataset.setOwnerDept(firstNonBlank(mapping.getOwnerDept(), source != null ? source.getOwnerDept() : null));
         dataset.setDescription(truncate("ODS table loaded by Addax mapping: " + physicalName(mapping.getOdsSchema(), mapping.getOdsTable()), 2048));
@@ -367,7 +376,13 @@ public class IngestionLineageWriter {
         }
     }
 
-    private String buildNotes(InfraOdsTableMapping mapping, InfraDataSource source, LineageObservation observation) {
+    private String buildNotes(
+        InfraOdsTableMapping mapping,
+        InfraDataSource source,
+        LineageObservation observation,
+        CatalogDataset sourceDataset,
+        CatalogDataset targetDataset
+    ) {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("engine", RELATION_ADDAX);
         data.put("mappingId", mapping.getId() != null ? mapping.getId().toString() : null);
@@ -375,6 +390,8 @@ public class IngestionLineageWriter {
         data.put("sourceName", source != null ? source.getName() : null);
         data.put("sourceTable", physicalName(mapping.getStreamNamespace(), mapping.getStreamName()));
         data.put("targetTable", physicalName(mapping.getOdsSchema(), mapping.getOdsTable()));
+        data.put("sourceAssetKey", safeAssetKey(sourceDataset));
+        data.put("targetAssetKey", safeAssetKey(targetDataset));
         data.put("task", resolveTaskName(mapping));
         LineageObservation effective = observation == null ? LineageObservation.declared() : observation;
         data.put("verificationStatus", normalizeStatus(effective.verificationStatus()));
@@ -383,6 +400,14 @@ public class IngestionLineageWriter {
         data.put("batchId", effective.batchId());
         data.values().removeIf(value -> value == null || !StringUtils.hasText(String.valueOf(value)));
         return data.toString();
+    }
+
+    private String safeAssetKey(CatalogDataset dataset) {
+        try {
+            return CatalogAssetKey.dataset(dataset);
+        } catch (IllegalArgumentException ignored) {
+            return dataset != null && dataset.getId() != null ? "dataset:" + dataset.getId() : null;
+        }
     }
 
     private String normalizeStatus(String status) {

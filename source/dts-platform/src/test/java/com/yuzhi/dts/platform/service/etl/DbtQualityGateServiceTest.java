@@ -62,7 +62,7 @@ class DbtQualityGateServiceTest {
     }
 
     @Test
-    void shouldWarnInsteadOfBlockWhenLatestFailedBuildMissesRelations() {
+    void shouldBlockWhenLatestFailedBuildMissesRelations() {
         ModelingSqlModelRepository repository = mock(ModelingSqlModelRepository.class);
         DbtConfigService dbtConfigService = mock(DbtConfigService.class);
         DbtRunResultService runResultService = mock(DbtRunResultService.class);
@@ -101,9 +101,8 @@ class DbtQualityGateServiceTest {
 
         DbtQualityGateService.DbtQualityGateResult result = service.evaluate("tag:project-management");
 
-        assertThat(result.blocking()).isFalse();
-        assertThat(result.warning()).isTrue();
-        assertThat(result.warnings()).contains("最近一次质量构建失败（dbt build --select tag:project-management），建议修复后再上线");
+        assertThat(result.blocking()).isTrue();
+        assertThat(result.blockers()).contains("最近一次质量构建失败（dbt build --select tag:project-management），请修复后再上线");
     }
 
     @Test
@@ -123,8 +122,12 @@ class DbtQualityGateServiceTest {
               - name: biz_dwd_quality_issue
                 columns:
                   - name: issue_id
+                    expected_data_type: bigint
                     tests:
                       - not_null
+                meta:
+                  owner: data-team
+                  classification: INTERNAL
             """
         );
 

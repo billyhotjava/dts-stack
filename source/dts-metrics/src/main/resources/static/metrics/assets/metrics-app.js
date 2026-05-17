@@ -10,7 +10,7 @@ const routes = [
 			},
 			{
 				path: "/metrics/dictionary",
-				title: "指标字典",
+				title: "指标资产",
 				stage: "Metric Dictionary",
 				description: "沉淀指标名称、口径、公式、单位、负责人和版本。当前阶段先承接指标包校验与导入入口。",
 			},
@@ -19,6 +19,12 @@ const routes = [
 				title: "指标包",
 				stage: "Metric Pack",
 				description: "以 YAML/JSON 描述主题域、业务对象、维度、指标和发布物，供合作方独立交付。",
+			},
+			{
+				path: "/metrics/migration",
+				title: "迁移与回滚",
+				stage: "Migration",
+				description: "查看 platform 旧语义数据到 dts-metrics 的 dry-run 映射、阻断项和回滚边界。",
 			},
 		],
 	},
@@ -72,14 +78,42 @@ const routes = [
 ];
 
 const routeItems = routes.flatMap((group) => group.items);
+const isEmbedded = new URLSearchParams(window.location.search).get("embedded") === "1";
 const currentPath = normalizePath(window.location.pathname);
 const activeRoute = routeItems.find((item) => item.path === currentPath) || routeItems[0];
+
+document.documentElement.classList.toggle("embedded", isEmbedded);
+document.body.classList.toggle("embedded", isEmbedded);
 
 const sampleManifest = `pack_id: project-management-core
 pack_name: 项目管理核心指标包
 version: 0.1.0
 industry: project
 edition_required: professional
+source_model: dwd_project_detail
+dimensions:
+  - stat_month
+  - dept_name
+metrics:
+  - metric_code: project_cnt
+    metric_name: 项目总数
+    formula:
+      type: aggregation
+      aggregation: count_distinct
+      field: project_id
+  - metric_code: direct_cost_execution_rate
+    metric_name: 直接成本执行率
+    formula:
+      type: ratio
+      numerator:
+        type: aggregation
+        aggregation: sum
+        field: direct_cost_amount
+      denominator:
+        type: aggregation
+        aggregation: sum
+        field: direct_cost_control_amount
+      multiply: 100
 files:
   domains: domains.yml
   business_objects: business_objects.yml
@@ -87,7 +121,10 @@ files:
   metrics: metrics.yml
   models: models.yml
   datasets: datasets.yml
-dependencies: {}`;
+dependencies:
+  platform_assets:
+    - type: DATASET
+      id: dwd_project_detail`;
 
 function normalizePath(pathname) {
 	const value = String(pathname || "/metrics/center").replace(/\/+$/, "");
@@ -100,22 +137,43 @@ function setText(id, value) {
 	if (node) node.textContent = value;
 }
 
+function setMessage(node, text, tone) {
+	if (!node) return;
+	node.textContent = text;
+	node.classList.remove("ok", "warn");
+	if (tone) node.classList.add(tone);
+}
+
+function routeHref(path) {
+	if (!isEmbedded) return path;
+	const url = new URL(path, window.location.origin);
+	url.searchParams.set("embedded", "1");
+	return `${url.pathname}${url.search}${url.hash}`;
+}
+
+function preserveEmbeddedLinks() {
+	if (!isEmbedded) return;
+	document.querySelectorAll("a[href^='/metrics']").forEach((anchor) => {
+		anchor.setAttribute("href", routeHref(anchor.getAttribute("href") || ""));
+	});
+}
+
 function renderNavigation() {
 	const nav = document.getElementById("route-nav");
 	if (!nav) return;
 	nav.innerHTML = routes
 		.map(
 			(group) => `
-			<div class="nav-group">
-				<p class="nav-group-title">${escapeHtml(group.group)}</p>
-				${group.items
-					.map(
-						(item) =>
-							`<a class="nav-link ${item.path === activeRoute.path ? "active" : ""}" href="${item.path}">${escapeHtml(
-								item.title,
-							)}</a>`,
-					)
-					.join("")}
+				<div class="nav-group">
+					<p class="nav-group-title">${escapeHtml(group.group)}</p>
+					${group.items
+						.map(
+							(item) =>
+								`<a class="nav-link ${item.path === activeRoute.path ? "active" : ""}" href="${routeHref(item.path)}">${escapeHtml(
+									item.title,
+								)}</a>`,
+						)
+						.join("")}
 			</div>
 		`,
 		)
@@ -158,6 +216,24 @@ function renderPanel() {
 		if (input) input.value = sampleManifest;
 		const button = document.getElementById("validate-manifest");
 		if (button) button.addEventListener("click", validateManifest);
+		const previewButton = document.getElementById("preview-artifacts");
+		if (previewButton) previewButton.addEventListener("click", previewArtifacts);
+		const importButton = document.getElementById("dry-run-import");
+		if (importButton) importButton.addEventListener("click", dryRunImport);
+		return;
+	}
+
+	if (activeRoute.path === "/metrics/migration") {
+		panel.innerHTML = `
+			<h3>迁移 dry-run</h3>
+			<p>当前版本只提供映射报告和回滚边界，不自动迁移生产数据。旧语义接口保留兼容窗口，最终切换必须经过平台权限和 dbt 发布门禁。</p>
+			<div class="toolbar">
+				<button class="button primary" type="button" id="load-migration">读取 dry-run 报告</button>
+			</div>
+			<pre id="migration-output">等待读取</pre>
+		`;
+		const button = document.getElementById("load-migration");
+		if (button) button.addEventListener("click", loadMigrationDryRun);
 		return;
 	}
 
@@ -188,7 +264,9 @@ function renderManifestPanel() {
 				<textarea id="manifest-input" spellcheck="false" aria-label="指标包内容"></textarea>
 				<div class="toolbar">
 					<button class="button primary" type="button" id="validate-manifest">校验指标包</button>
-					<a class="button" href="/metrics/semantic/metrics">进入指标配置</a>
+					<button class="button" type="button" id="preview-artifacts">预览生成物</button>
+					<button class="button" type="button" id="dry-run-import">导入预检</button>
+					<a class="button" href="${routeHref("/metrics/semantic/metrics")}">进入指标配置</a>
 				</div>
 				<div class="message" id="manifest-message">等待校验</div>
 			</div>
@@ -203,12 +281,14 @@ async function loadServiceStatus() {
 		const [health, capabilities] = await Promise.all([fetchJson("/api/metrics/health"), fetchJson("/api/metrics/capabilities")]);
 		if (statusNode) {
 			statusNode.textContent = `${health.service || "dts-metrics"} ${health.status || "UP"}`;
+			statusNode.classList.remove("warn");
 			statusNode.classList.add("ok");
 		}
 		renderSummaryCards(capabilities);
 	} catch (error) {
 		if (statusNode) {
 			statusNode.textContent = "服务状态不可用";
+			statusNode.classList.remove("ok");
 			statusNode.classList.add("warn");
 		}
 		renderSummaryCards(null);
@@ -216,22 +296,58 @@ async function loadServiceStatus() {
 }
 
 async function validateManifest() {
+	await submitManifest("/api/metrics/packs/validate", "校验中", "校验通过", "校验未通过，请查看结果", "校验请求失败");
+}
+
+async function previewArtifacts() {
+	await submitManifest("/api/metrics/packs/preview-artifacts", "生成预览中", "候选生成物已生成", "候选生成物未生成，请查看结果", "预览请求失败");
+}
+
+async function dryRunImport() {
+	await submitManifest("/api/metrics/packs/import", "导入预检中", "导入预检通过", "导入预检未通过，请查看结果", "导入预检失败");
+}
+
+async function loadMigrationDryRun() {
+	const output = document.getElementById("migration-output");
+	const button = document.getElementById("load-migration");
+	if (!output) return;
+	if (button) button.disabled = true;
+	try {
+		const result = await fetchJson("/api/metrics/migration/semantic-dry-run");
+		output.textContent = JSON.stringify(result, null, 2);
+	} catch (error) {
+		output.textContent = String(error?.message || error);
+	} finally {
+		if (button) button.disabled = false;
+	}
+}
+
+async function submitManifest(url, loadingText, successText, invalidText, errorText) {
 	const input = document.getElementById("manifest-input");
 	const output = document.getElementById("manifest-output");
 	const message = document.getElementById("manifest-message");
 	if (!input || !output || !message) return;
-	message.textContent = "校验中";
+	const buttons = document.querySelectorAll("#validate-manifest, #preview-artifacts, #dry-run-import");
+	setMessage(message, loadingText, "");
+	buttons.forEach((button) => {
+		button.disabled = true;
+	});
 	try {
-		const result = await fetchJson("/api/metrics/packs/validate", {
+		const result = await fetchJson(url, {
 			method: "POST",
 			headers: { "Content-Type": "text/yaml" },
 			body: input.value,
 		});
 		output.textContent = JSON.stringify(result, null, 2);
-		message.textContent = result.valid ? "校验通过" : "校验未通过，请查看结果";
+		const ok = result.valid === true || result.accepted === true;
+		setMessage(message, ok ? successText : invalidText, ok ? "ok" : "warn");
 	} catch (error) {
 		output.textContent = String(error?.message || error);
-		message.textContent = "校验请求失败";
+		setMessage(message, errorText, "warn");
+	} finally {
+		buttons.forEach((button) => {
+			button.disabled = false;
+		});
 	}
 }
 
@@ -239,10 +355,21 @@ async function fetchJson(url, options) {
 	const response = await fetch(url, { credentials: "same-origin", ...options });
 	const text = await response.text();
 	if (!response.ok) {
-		throw new Error(text || `${response.status} ${response.statusText}`);
+		throw new Error(compactError(text) || `${response.status} ${response.statusText}`);
 	}
 	if (!text) return {};
-	return JSON.parse(text);
+	try {
+		return JSON.parse(text);
+	} catch (error) {
+		throw new Error(`响应不是合法 JSON: ${compactError(text) || String(error?.message || error)}`);
+	}
+}
+
+function compactError(text) {
+	return String(text || "")
+		.replace(/\s+/g, " ")
+		.trim()
+		.slice(0, 240);
 }
 
 function escapeHtml(value) {
@@ -257,4 +384,5 @@ function escapeHtml(value) {
 renderNavigation();
 renderRouteHeader();
 renderPanel();
+preserveEmbeddedLinks();
 loadServiceStatus();

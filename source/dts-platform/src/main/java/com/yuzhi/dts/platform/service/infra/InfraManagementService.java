@@ -160,32 +160,26 @@ public class InfraManagementService {
     }
 
     public List<InfraDataSourceDto> listDataSources(String activeDeptHeader) {
-        try {
-            boolean isMaintainer = SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.DATA_MAINTAINER_ROLES);
-            boolean canViewAll = isInstituteMaintainer();
-            List<InfraDataSource> sources = (canViewAll || isMaintainer)
-                ? dataSourceRepository.findAll()
-                : dataSourceRepository.findByStatusIgnoreCase(STATUS_ACTIVE);
+        boolean isMaintainer = SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.DATA_MAINTAINER_ROLES);
+        boolean canViewAll = isInstituteMaintainer();
+        List<InfraDataSource> sources = (canViewAll || isMaintainer)
+            ? dataSourceRepository.findAll()
+            : dataSourceRepository.findByStatusIgnoreCase(STATUS_ACTIVE);
 
-            // Dept maintainers: only see global sources + their own department sources
-            if (!canViewAll && isMaintainer) {
-                String dept = normalizeDept(resolveActiveDept(activeDeptHeader));
-                sources = sources
-                    .stream()
-                    .filter(ds -> {
-                        String owner = normalizeDept(ds.getOwnerDept());
-                        return owner.isEmpty() || (!dept.isEmpty() && owner.equalsIgnoreCase(dept));
-                    })
-                    .toList();
-            }
-            List<InfraDataSourceDto> result = new java.util.ArrayList<>(sources.stream().map(this::toDto).toList());
-            mergeAdminDataLake(result);
-            return result;
-        } catch (RuntimeException ex) {
-            // If Liquibase hasn't created infra tables yet, return empty to keep UI usable
-            LOG.warn("listDataSources failed (likely missing table). Returning empty list. cause={}", ex.getMessage());
-            return List.of();
+        // Dept maintainers: only see global sources + their own department sources
+        if (!canViewAll && isMaintainer) {
+            String dept = normalizeDept(resolveActiveDept(activeDeptHeader));
+            sources = sources
+                .stream()
+                .filter(ds -> {
+                    String owner = normalizeDept(ds.getOwnerDept());
+                    return owner.isEmpty() || (!dept.isEmpty() && owner.equalsIgnoreCase(dept));
+                })
+                .toList();
         }
+        List<InfraDataSourceDto> result = new java.util.ArrayList<>(sources.stream().map(this::toDto).toList());
+        mergeAdminDataLake(result);
+        return result;
     }
 
     /**
@@ -888,10 +882,10 @@ public class InfraManagementService {
             payload.put("taskId", task.id());
             payload.put("taskName", task.name());
             payload.put("changeType", "CONN_PARAM");
-            payload.put("summary", "数据源连接已更新，请确认入湖任务");
+            payload.put("summary", "数据源连接已更新，入湖任务需要复核");
             payload.put("detail", toJson(detail));
-            payload.put("riskLevel", "M");
-            payload.put("status", "PENDING");
+            payload.put("riskLevel", "H");
+            payload.put("status", "NEEDS_REVIEW");
             ApiResponse<Map<String, Object>> result = ingestionServiceClient.createChangeLog(payload);
             if (result != null && result.getStatus() >= 200 && result.getStatus() < 300) {
                 created++;

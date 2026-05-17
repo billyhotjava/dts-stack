@@ -195,7 +195,7 @@ export default function ReleaseGovernancePage() {
 				actual: String(indicatorFailed),
 				threshold: "=0",
 				severity: "BLOCKER",
-				path: "/metrics/operations",
+				path: "/bi-apps/metrics/operations",
 			},
 			{
 				key: "event-dispatch",
@@ -306,7 +306,7 @@ export default function ReleaseGovernancePage() {
 						<Button block icon={<DatabaseZap className="h-4 w-4" />} onClick={() => navigate("/explore/etl")}>
 							ELT 控制台
 						</Button>
-						<Button block icon={<CheckCircle2 className="h-4 w-4" />} onClick={() => navigate("/metrics/operations")}>
+						<Button block icon={<CheckCircle2 className="h-4 w-4" />} onClick={() => navigate("/bi-apps/metrics/operations")}>
 							指标运营台
 						</Button>
 						<Button block icon={<RadioTower className="h-4 w-4" />} onClick={() => navigate("/ops/events")}>

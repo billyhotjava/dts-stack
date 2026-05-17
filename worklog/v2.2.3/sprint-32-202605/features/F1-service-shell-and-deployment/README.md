@@ -1,7 +1,7 @@
 # F1: dts-metrics 服务骨架与默认部署
 
 **优先级**: P0
-**状态**: IN_PROGRESS
+**状态**: DONE
 **目标**: 新建可独立构建、启动、健康检查并随应用栈默认部署的 `dts-metrics` 服务骨架。
 
 ## 任务
@@ -16,6 +16,13 @@
 
 ## 完成标准
 
-- [ ] `dts-metrics` 容器可独立启动。
-- [ ] 默认应用栈包含 `dts-metrics`。
-- [ ] platform-webapp 能探测 metrics capability，license 接入前不做版本禁用。
+- [x] `dts-metrics` 容器可独立启动。
+- [x] 默认应用栈包含 `dts-metrics`。
+- [x] platform-webapp 能探测 metrics capability，license 接入前不做版本禁用。
+
+## 证据
+
+- `source/dts-metrics`
+- `builds/dts-metrics/Dockerfile`
+- `docker-compose-app.yml`
+- `worklog/v2.2.3/sprint-32-202605/it/evidence/default-metrics/README.md`

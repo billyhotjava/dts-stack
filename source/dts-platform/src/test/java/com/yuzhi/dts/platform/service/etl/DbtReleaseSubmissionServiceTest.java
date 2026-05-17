@@ -122,7 +122,7 @@ class DbtReleaseSubmissionServiceTest {
     }
 
     @Test
-    void submitShouldDowngradeQualityGateBlockersToWarningUntilConfirmed() {
+    void submitShouldBlockQualityGateBlockers() {
         DbtQualityGateService qualityGateService = mock(DbtQualityGateService.class);
         DbtReleaseGateService releaseGateService = mock(DbtReleaseGateService.class);
         DbtDagService dbtDagService = mock(DbtDagService.class);
@@ -180,14 +180,14 @@ class DbtReleaseSubmissionServiceTest {
             "BIADMIN"
         );
 
-        assertThat(result.status()).isEqualTo("WARNING");
-        assertThat(result.warning()).isTrue();
-        assertThat(result.warnings()).contains("以下模型未发现测试模板: biz_dwd_quality_issue");
+        assertThat(result.status()).isEqualTo("BLOCKED");
+        assertThat(result.blocking()).isTrue();
+        assertThat(result.blockers()).contains("以下模型未发现测试模板: biz_dwd_quality_issue");
         verify(airflowClient, never()).triggerDag(eq("dwh_biadmin_dbt_manual"), any());
     }
 
     @Test
-    void submitShouldDowngradeReleaseGateBlockersToWarningUntilConfirmed() {
+    void submitShouldBlockReleaseGateBlockers() {
         DbtQualityGateService qualityGateService = mock(DbtQualityGateService.class);
         DbtReleaseGateService releaseGateService = mock(DbtReleaseGateService.class);
         DbtDagService dbtDagService = mock(DbtDagService.class);
@@ -245,14 +245,14 @@ class DbtReleaseSubmissionServiceTest {
             "BIADMIN"
         );
 
-        assertThat(result.status()).isEqualTo("WARNING");
-        assertThat(result.warning()).isTrue();
-        assertThat(result.warnings()).contains("最近一次构建状态为 FAILED，不允许发布");
+        assertThat(result.status()).isEqualTo("BLOCKED");
+        assertThat(result.blocking()).isTrue();
+        assertThat(result.blockers()).contains("最近一次构建状态为 FAILED，不允许发布");
         verify(airflowClient, never()).triggerDag(eq("dwh_biadmin_dbt_manual"), any());
     }
 
     @Test
-    void submitShouldTriggerDagWhenFormerBlockersAreConfirmed() {
+    void submitShouldNotTriggerDagWhenBlockersAreConfirmed() {
         DbtQualityGateService qualityGateService = mock(DbtQualityGateService.class);
         DbtReleaseGateService releaseGateService = mock(DbtReleaseGateService.class);
         DbtDagService dbtDagService = mock(DbtDagService.class);
@@ -312,11 +312,11 @@ class DbtReleaseSubmissionServiceTest {
             "BIADMIN"
         );
 
-        assertThat(result.status()).isEqualTo("SUBMITTED");
-        assertThat(result.dagRunId()).isEqualTo("run-1");
+        assertThat(result.status()).isEqualTo("BLOCKED");
+        assertThat(result.dagRunId()).isNull();
         assertThat(result.dagId()).isEqualTo("dwh_biadmin_dbt_manual");
-        assertThat(result.warnings()).contains("以下模型未发现测试模板: biz_dwd_quality_issue", "最近一次构建状态为 FAILED，不允许发布");
-        verify(airflowClient).triggerDag(eq("dwh_biadmin_dbt_manual"), any());
+        assertThat(result.blockers()).contains("以下模型未发现测试模板: biz_dwd_quality_issue", "最近一次构建状态为 FAILED，不允许发布");
+        verify(airflowClient, never()).triggerDag(eq("dwh_biadmin_dbt_manual"), any());
     }
 
     private DbtReleaseSubmissionService newService(

@@ -1,7 +1,7 @@
 # F6: 迁移、回滚、集成测试与运维验收
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **目标**: 保证现有语义指标数据和 API 可以平滑迁移到 `dts-metrics`，并具备回滚和可验收证据。
 
 ## 任务
@@ -17,6 +17,12 @@
 
 ## 完成标准
 
-- [ ] IT 证据放入 `worklog/v2.2.3/sprint-32-202605/it/evidence/`。
-- [ ] migration dry-run 输出可审计；生产级自动迁移作为后续延展，不作为 Sprint-32 必达。
-- [ ] 回滚后默认入口、服务异常态和权限行为都可验证。
+- [x] IT 证据放入 `worklog/v2.2.3/sprint-32-202605/it/evidence/`。
+- [x] migration dry-run 输出可审计；生产级自动迁移作为后续延展，不作为 Sprint-32 必达。
+- [x] 回滚后默认入口、服务异常态和权限行为都有验证口径。
+
+## 证据
+
+- `source/dts-metrics/src/main/java/com/yuzhi/dts/metrics/web/rest/MetricsMigrationResource.java`
+- `worklog/v2.2.3/sprint-32-202605/it/evidence/migration-rollback/README.md`
+- `worklog/v2.2.3/sprint-32-202605/it/scripts/metrics-mvp-admission-check.sh`

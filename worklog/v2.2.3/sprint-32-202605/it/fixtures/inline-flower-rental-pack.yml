@@ -1,0 +1,40 @@
+pack_id: flower-rental-inline
+pack_name: 花卉租赁经营指标包 Inline IT Fixture
+version: 0.1.0
+industry: flower_rental
+edition_required: professional
+source_model: dwd_flower_contract_detail
+dimensions:
+  - stat_month
+  - dept_id
+metrics:
+  - metric_code: contract_amount
+    metric_name: 合同金额
+    formula:
+      type: aggregation
+      aggregation: sum
+      field: contract_amount
+  - metric_code: collection_rate
+    metric_name: 回款率
+    formula:
+      type: ratio
+      numerator:
+        type: aggregation
+        aggregation: sum
+        field: received_amount
+      denominator:
+        type: aggregation
+        aggregation: sum
+        field: contract_amount
+      multiply: 100
+files:
+  domains: domains.yml
+  business_objects: business-objects.yml
+  dimensions: dimensions.yml
+  metrics: metrics.yml
+  models: models.yml
+  datasets: datasets.yml
+dependencies:
+  platform_assets:
+    - asset_type: DATASET
+      asset_code: dwd_flower_contract_detail

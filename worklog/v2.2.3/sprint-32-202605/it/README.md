@@ -11,11 +11,12 @@
 | 默认 metrics 启动证据 | `it/evidence/default-metrics/` | READY |
 | 服务鉴权和 platform 契约 | `it/evidence/platform-contracts/` | DONE |
 | metrics 前端路由拆分 | `it/evidence/metrics-frontend/` | DONE |
-| metric-pack 导入/校验/差异报告 | `it/evidence/metric-pack/` | READY |
-| DSL SQL 生成和安全预览 | `it/evidence/dsl-preview/` | READY |
-| dbt 候选 artifact 提交和门禁 | `it/evidence/dbt-publish/` | READY |
-| BI Dataset 候选注册和权限校验 | `it/evidence/bi-permission/` | READY |
-| 迁移 dry-run 和回滚 | `it/evidence/migration-rollback/` | READY |
+| 商业智能应用菜单重组 | `it/evidence/menu-regroup/` | DONE |
+| metric-pack 导入/校验/差异报告 | `it/evidence/metric-pack/` | READY（实现已补齐，最终统一执行） |
+| DSL SQL 生成和安全预览 | `it/evidence/dsl-preview/` | READY（实现已补齐，最终统一执行） |
+| dbt 候选 artifact 提交和门禁 | `it/evidence/dbt-publish/` | READY（候选生成已补齐，发布调用待统一执行） |
+| BI Dataset 候选注册和权限校验 | `it/evidence/bi-permission/` | READY（权限边界已补齐，远端注册为延展目标） |
+| 迁移 dry-run 和回滚 | `it/evidence/migration-rollback/` | READY（dry-run 端点已补齐，最终统一执行） |
 
 ## 验收命令草案
 
@@ -35,9 +36,9 @@ curl -sS -X POST http://127.0.0.1:18082/api/metrics/packs/import \
 ```
 
 ```bash
-curl -sS -X POST http://127.0.0.1:18082/api/metrics/models/{id}/generate-artifacts
-curl -sS -X POST http://127.0.0.1:18082/api/metrics/models/{id}/preview
-curl -sS -X POST http://127.0.0.1:18082/api/metrics/models/{id}/publish
+curl -sS -X POST http://127.0.0.1:18082/api/metrics/packs/preview-artifacts \
+  -H 'Content-Type: application/yaml' \
+  --data-binary @worklog/v2.2.3/sprint-32-202605/it/fixtures/inline-flower-rental-pack.yml
 ```
 
 ```bash
@@ -46,6 +47,14 @@ curl -sS -X POST http://127.0.0.1:18082/api/internal/asset-permission/check \
   -H 'X-DTS-Service: dts-metrics' \
   -H 'X-DTS-Service-Token: <token>' \
   -d '{"username":"ptrdemo","asset":{"type":"DATASET","id":"ads_flower_rental_overview"},"action":"VIEW"}'
+```
+
+```bash
+curl -sS http://127.0.0.1:18082/api/metrics/migration/semantic-dry-run
+```
+
+```bash
+bash worklog/v2.2.3/sprint-32-202605/it/scripts/metrics-mvp-admission-check.sh
 ```
 
 ## 阻断条件

@@ -79,7 +79,20 @@ public class PlatformPermissionClient {
         String userClassification,
         String assetClassification
     ) {
-        String cacheKey = checkCacheKey(username, roles, deptCode, assetType, assetId, userClassification, assetClassification);
+        return check(username, roles, deptCode, assetType, assetId, userClassification, assetClassification, "READ");
+    }
+
+    public PermissionResult check(
+        String username,
+        String roles,
+        String deptCode,
+        String assetType,
+        String assetId,
+        String userClassification,
+        String assetClassification,
+        String action
+    ) {
+        String cacheKey = checkCacheKey(username, roles, deptCode, assetType, assetId, userClassification, assetClassification, action);
         PermissionResult cached = checkCache.getIfPresent(cacheKey);
         if (cached != null) {
             return cached;
@@ -93,6 +106,7 @@ public class PlatformPermissionClient {
             body.put("userDeptCode", deptCode);
             body.put("userClassification", userClassification);
             body.put("assetClassification", assetClassification);
+            body.put("action", StringUtils.hasText(action) ? action.trim().toUpperCase() : "READ");
             body.put("asset", Map.of("type", assetType, "id", assetId));
 
             ResponseEntity<Map> response = restTemplate.exchange(
@@ -171,7 +185,7 @@ public class PlatformPermissionClient {
                 // Populate single-check cache as well
                 String[] parts = key.split(":", 2);
                 if (parts.length == 2) {
-                    checkCache.put(checkCacheKey(username, roles, deptCode, parts[0], parts[1], userClassification, null), pr);
+                    checkCache.put(checkCacheKey(username, roles, deptCode, parts[0], parts[1], userClassification, null, "READ"), pr);
                 }
             }
             return results;
@@ -380,7 +394,8 @@ public class PlatformPermissionClient {
         String assetType,
         String assetId,
         String userClassification,
-        String assetClassification
+        String assetClassification,
+        String action
     ) {
         return String.join(
             "|",
@@ -390,7 +405,8 @@ public class PlatformPermissionClient {
             safeKey(assetType),
             safeKey(assetId),
             safeKey(userClassification),
-            safeKey(assetClassification)
+            safeKey(assetClassification),
+            safeKey(action)
         );
     }
 

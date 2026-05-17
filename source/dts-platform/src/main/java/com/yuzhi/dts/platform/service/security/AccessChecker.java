@@ -71,6 +71,16 @@ public class AccessChecker {
     private boolean levelAllowed(CatalogDataset dataset) {
         // Normalize dataset level to new DATA_*; accept legacy values
         String levelStr = dataset.getClassification();
+        if (!StringUtils.hasText(levelStr)) {
+            if (log.isDebugEnabled()) {
+                log.debug(
+                    "Dataset {}({}) rejected by level gate: missing classification",
+                    dataset.getName(),
+                    dataset.getId()
+                );
+            }
+            return false;
+        }
         DataLevel resourceLevel = DataLevel.normalize(levelStr);
         // No level info on resource → fall back to legacy behavior
         if (resourceLevel == null) {

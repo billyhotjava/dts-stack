@@ -16,6 +16,12 @@ body {
 	background: #f5f7fb;
 }
 
+html.embedded,
+body.embedded {
+	min-width: 0;
+	background: transparent;
+}
+
 a {
 	color: inherit;
 	text-decoration: none;
@@ -23,6 +29,10 @@ a {
 
 .app-shell {
 	min-height: 100vh;
+}
+
+body.embedded .app-shell {
+	min-height: auto;
 }
 
 .topbar {
@@ -132,6 +142,33 @@ a {
 	padding: 24px;
 }
 
+body.embedded .topbar,
+body.embedded .side-nav {
+	display: none;
+}
+
+body.embedded .layout {
+	display: block;
+}
+
+body.embedded .content {
+	padding: 0;
+}
+
+body.embedded .hero {
+	display: none;
+}
+
+body.embedded .cards {
+	margin-top: 0;
+}
+
+body.embedded .panel {
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
+}
+
 .hero,
 .panel,
 .card {
@@ -184,6 +221,11 @@ a {
 	border-color: #2563eb;
 	background: #2563eb;
 	color: #ffffff;
+}
+
+.button:disabled {
+	cursor: not-allowed;
+	opacity: 0.65;
 }
 
 .grid {
@@ -283,6 +325,7 @@ textarea {
 
 .toolbar {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	gap: 8px;
 	margin-top: 12px;
@@ -295,6 +338,16 @@ textarea {
 	background: #f1f5f9;
 	color: #475569;
 	font-size: 13px;
+}
+
+.message.ok {
+	background: #f0fdf4;
+	color: #166534;
+}
+
+.message.warn {
+	background: #fff7ed;
+	color: #9a3412;
 }
 
 @media (max-width: 960px) {

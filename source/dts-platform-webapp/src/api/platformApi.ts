@@ -71,6 +71,16 @@ export type CatalogAssetV2Query = {
 export const listCatalogAssetsV2 = (params: CatalogAssetV2Query = {}) =>
 	api.get({ url: "/catalog/assets-v2", params });
 export const getCatalogAssetV2 = (id: string) => api.get({ url: `/catalog/assets-v2/${id}` });
+export const getCatalogAssetV2Contract = (id: string) =>
+	api.get<Record<string, any>>({ url: `/catalog/assets-v2/${id}/contract` });
+export const getCatalogAssetV2SchemaContract = (id: string) =>
+	api.get<Record<string, any>>({ url: `/catalog/assets-v2/${id}/schema-contract` });
+export const getCatalogAssetsV2GovernanceGaps = (params: CatalogAssetV2Query = {}) =>
+	api.get<Record<string, any>>({ url: "/catalog/assets-v2/governance-gaps", params });
+export const getCatalogAssetsV2LineageFailures = (params: CatalogAssetV2Query = {}) =>
+	api.get<Record<string, any>>({ url: "/catalog/assets-v2/lineage-failures", params });
+export const getCatalogAssetsV2MigrationDryRun = () =>
+	api.get<Record<string, any>>({ url: "/catalog/assets-v2/migration/dry-run" });
 export const updateCatalogAssetV2Governance = (id: string, data: any) =>
 	api.patch({ url: `/catalog/assets-v2/${id}/governance`, data });
 export const getCatalogAssetV2Lineage = (id: string) => api.get({ url: `/catalog/assets-v2/${id}/lineage` });

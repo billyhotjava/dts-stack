@@ -30,7 +30,14 @@ public class PlatformContractClient {
 
     public String internalUrl(String path) {
         String normalizedPath = path.startsWith("/") ? path : "/" + path;
-        return normalizeBaseUrl() + normalizeApiPath() + normalizedPath;
+        String apiPath = normalizeApiPath();
+        if (StringUtils.hasText(apiPath) && normalizedPath.equals(apiPath)) {
+            return normalizeBaseUrl() + apiPath;
+        }
+        if (StringUtils.hasText(apiPath) && normalizedPath.startsWith(apiPath + "/")) {
+            return normalizeBaseUrl() + normalizedPath;
+        }
+        return normalizeBaseUrl() + apiPath + normalizedPath;
     }
 
     public RestClient.RequestHeadersSpec<?> withServiceAuth(RestClient.RequestHeadersUriSpec<?> request, String path) {
@@ -41,6 +48,18 @@ public class PlatformContractClient {
             spec = spec.header("X-DTS-Service-Token", properties.getPlatform().getServiceToken());
         }
         return spec;
+    }
+
+    public PermissionCheckResult checkPermission(PermissionCheckRequest request) {
+        RestClient.RequestBodySpec spec = restClient
+            .post()
+            .uri(internalUrl("/internal/asset-permission/check"))
+            .header("X-DTS-Service", properties.getServiceName());
+        if (StringUtils.hasText(properties.getPlatform().getServiceToken())) {
+            spec = spec.header("X-DTS-Service-Token", properties.getPlatform().getServiceToken());
+        }
+        PermissionCheckResult result = spec.body(request).retrieve().body(PermissionCheckResult.class);
+        return result != null ? result : PermissionCheckResult.denied("empty_response");
     }
 
     private String normalizeBaseUrl() {
@@ -64,5 +83,34 @@ public class PlatformContractClient {
             result = result.substring(0, result.length() - 1);
         }
         return result;
+    }
+
+    public record PermissionAsset(String type, String id, String key) {}
+
+    public record PermissionCheckRequest(
+        String username,
+        java.util.List<String> userRoles,
+        String userDeptCode,
+        String userClassification,
+        String assetClassification,
+        String action,
+        PermissionAsset asset
+    ) {}
+
+    public record PermissionCheckResult(
+        boolean allowed,
+        String permission,
+        String reason,
+        String requiredPermission,
+        String action,
+        String assetType,
+        String assetId,
+        String assetKey,
+        String classificationDecision,
+        String grantSource
+    ) {
+        public static PermissionCheckResult denied(String reason) {
+            return new PermissionCheckResult(false, null, reason, null, null, null, null, null, null, null);
+        }
     }
 }

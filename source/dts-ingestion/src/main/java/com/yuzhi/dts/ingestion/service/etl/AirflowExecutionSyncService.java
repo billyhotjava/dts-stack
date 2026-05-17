@@ -269,7 +269,25 @@ public class AirflowExecutionSyncService {
         }
         taskRepository.save(task);
         LOG.info("[airflow] synced execution {} status={}", execution.getId(), status);
-        platformInfraClient.syncIngestionExecutionLineage(task, execution);
+        try {
+            boolean lineageSynced = platformInfraClient.syncIngestionExecutionLineage(task, execution);
+            if (!lineageSynced) {
+                auditService.auditAction(
+                    "INGESTION_LINEAGE_SYNC",
+                    AuditStage.FAIL,
+                    task.getName(),
+                    lineageFailureMeta(task, execution, "platform-sync-returned-false")
+                );
+            }
+        } catch (Exception ex) {
+            LOG.warn("[airflow] failed to sync execution lineage task={} execution={}: {}", task.getId(), execution.getId(), ex.getMessage());
+            auditService.auditAction(
+                "INGESTION_LINEAGE_SYNC",
+                AuditStage.FAIL,
+                task.getName(),
+                lineageFailureMeta(task, execution, ex.getMessage())
+            );
+        }
         if ("success".equalsIgnoreCase(status)) {
             incrementalSyncService.updateCheckpointOnSuccess(task, execution);
             triggerDbtIfConfigured(task, execution);
@@ -294,6 +312,17 @@ public class AirflowExecutionSyncService {
             }
             auditService.auditAction("INGESTION_TASK_EXECUTE", AuditStage.FAIL, task.getName(), meta);
         }
+    }
+
+    private Map<String, Object> lineageFailureMeta(IngestionTask task, IngestionExecution execution, String reason) {
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("taskId", task != null ? task.getId() : null);
+        meta.put("taskName", task != null ? task.getName() : null);
+        meta.put("executionId", execution != null ? execution.getId() : null);
+        meta.put("batchId", execution != null ? execution.getBatchId() : null);
+        meta.put("status", execution != null ? execution.getStatus() : null);
+        if (StringUtils.hasText(reason)) meta.put("reason", reason);
+        return meta;
     }
 
     private String resolveAirflowFailureMessage(String dagId, String dagRunId, String dagState) {

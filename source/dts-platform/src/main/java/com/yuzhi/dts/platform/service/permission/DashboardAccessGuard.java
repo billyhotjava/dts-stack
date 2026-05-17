@@ -27,6 +27,8 @@ import org.springframework.stereotype.Service;
  * 重要：roleCodes/deptCodes 为 null/空字符串时视为"该维度不限制"，但只有公开大屏
  * 可以无共享全员可见；内部及以上密级仍必须有 role/dept 约束命中或显式 VIEW grant。
  * institutePrivileged 仅豁免 dept 维度，不豁免 role 维度。
+ * 同步自 analytics 的 screen-* 大屏不再使用 roleCodes/deptCodes 做非公开放行；
+ * 它们统一读取 platform asset_grant 的 SCREEN:{id} 授权。
  *
  * canManage：owner / superAdmin / 持有 MANAGE grant。
  * canGrant：策略 1（不传递）—— 授 MANAGE 仅 owner / superAdmin；授 VIEW 任何 manager。
@@ -36,9 +38,14 @@ import org.springframework.stereotype.Service;
 public class DashboardAccessGuard {
 
     public static final String ASSET_TYPE = "DASHBOARD";
+    public static final String SCREEN_ASSET_TYPE = "SCREEN";
     public static final String PERM_VIEW = "VIEW";
+    public static final String PERM_READ = "READ";
     public static final String PERM_MANAGE = "MANAGE";
+    public static final String PERM_EDIT = "EDIT";
     public static final String GRANTEE_USER = "USER";
+    private static final String SCREEN_CODE_PREFIX = "screen-";
+    private static final String NO_ROLE_PLACEHOLDER = "__NO_ROLE__";
 
     private final AssetGrantRepository grantRepository;
 
@@ -71,7 +78,9 @@ public class DashboardAccessGuard {
             || matchDept(report.getDeptCodes(), caller.deptCode());
         boolean viewGrant = hasViewGrant(grants);
         boolean configuredBaseAccess = !isBlank(report.getRoleCodes()) || !isBlank(report.getDeptCodes());
-        boolean baseAccess = (configuredBaseAccess && roleOk && deptOk) || viewGrant;
+        boolean baseAccess = isScreenReport(report)
+            ? viewGrant
+            : (configuredBaseAccess && roleOk && deptOk) || viewGrant;
         if (!baseAccess) {
             return AccessDecision.deny("DENY_NO_BASE_ACCESS");
         }
@@ -132,21 +141,88 @@ public class DashboardAccessGuard {
     private List<AssetGrant> activeUserGrants(BiReportLink report, Caller caller) {
         if (caller.username() == null || caller.username().isBlank()) return List.of();
         if (report.getCode() == null || report.getCode().isBlank()) return List.of();
-        return grantRepository.findActiveUserGrants(ASSET_TYPE, report.getCode(), caller.username(), Instant.now());
+        GrantAssetRef ref = grantAssetRef(report);
+        if (SCREEN_ASSET_TYPE.equals(ref.assetType())) {
+            return grantRepository.findActiveGrantsForUser(
+                ref.assetType(),
+                ref.assetId(),
+                caller.username(),
+                safeRoles(caller.roles()),
+                caller.deptCode() == null ? "" : caller.deptCode(),
+                Instant.now()
+            );
+        }
+        return grantRepository.findActiveUserGrants(ref.assetType(), ref.assetId(), caller.username(), Instant.now());
     }
 
     private boolean hasManageGrant(List<AssetGrant> grants) {
-        return grants.stream().anyMatch(g -> PERM_MANAGE.equalsIgnoreCase(g.getPermission()) && g.isValid());
+        return grants.stream().anyMatch(g -> isManagePermission(g.getPermission()) && g.isValid());
     }
 
     private boolean hasViewGrant(List<AssetGrant> grants) {
-        return grants.stream().anyMatch(g -> PERM_VIEW.equalsIgnoreCase(g.getPermission()) && g.isValid());
+        return grants.stream().anyMatch(g -> isViewPermission(g.getPermission()) && g.isValid());
     }
 
     private boolean hasOverrideViewGrant(List<AssetGrant> grants) {
         return grants
             .stream()
-            .anyMatch(g -> PERM_VIEW.equalsIgnoreCase(g.getPermission()) && g.isValid() && g.isLevelOverride());
+            .anyMatch(g -> isViewPermission(g.getPermission()) && g.isValid() && g.isLevelOverride());
+    }
+
+    private boolean isViewPermission(String permission) {
+        return PERM_VIEW.equalsIgnoreCase(permission) || PERM_READ.equalsIgnoreCase(permission);
+    }
+
+    private boolean isManagePermission(String permission) {
+        return PERM_MANAGE.equalsIgnoreCase(permission) || PERM_EDIT.equalsIgnoreCase(permission);
+    }
+
+    private GrantAssetRef grantAssetRef(BiReportLink report) {
+        String screenId = screenId(report);
+        if (screenId != null) {
+            return new GrantAssetRef(SCREEN_ASSET_TYPE, screenId);
+        }
+        return new GrantAssetRef(ASSET_TYPE, report.getCode());
+    }
+
+    private boolean isScreenReport(BiReportLink report) {
+        return screenId(report) != null;
+    }
+
+    private String screenId(BiReportLink report) {
+        if (report == null) {
+            return null;
+        }
+        String code = report.getCode();
+        if (code != null && code.toLowerCase(Locale.ROOT).startsWith(SCREEN_CODE_PREFIX)) {
+            String id = code.substring(SCREEN_CODE_PREFIX.length()).trim();
+            return id.isEmpty() ? null : id;
+        }
+        String type = report.getReportType();
+        if (type != null && "SCREEN".equalsIgnoreCase(type.trim()) && code != null && !code.isBlank()) {
+            return code.trim();
+        }
+        return null;
+    }
+
+    private List<String> safeRoles(Set<String> roles) {
+        if (roles == null || roles.isEmpty()) {
+            return List.of(NO_ROLE_PLACEHOLDER);
+        }
+        Set<String> expanded = new java.util.LinkedHashSet<>();
+        for (String role : roles) {
+            if (role == null || role.isBlank()) {
+                continue;
+            }
+            String trimmed = role.trim();
+            expanded.add(trimmed);
+            if (trimmed.toUpperCase(Locale.ROOT).startsWith("ROLE_") && trimmed.length() > 5) {
+                expanded.add(trimmed.substring(5));
+            } else {
+                expanded.add("ROLE_" + trimmed);
+            }
+        }
+        return expanded.isEmpty() ? List.of(NO_ROLE_PLACEHOLDER) : List.copyOf(expanded);
     }
 
     private boolean isBlank(String value) {
@@ -257,4 +333,6 @@ public class DashboardAccessGuard {
             return new AccessDecision(false, reason, false);
         }
     }
+
+    private record GrantAssetRef(String assetType, String assetId) {}
 }

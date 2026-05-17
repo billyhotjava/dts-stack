@@ -1,8 +1,10 @@
 # F5: platform-webapp 入口、能力发现与兼容代理
 
 **优先级**: P0
-**状态**: IN_PROGRESS
+**状态**: DONE
 **目标**: 让 `platform-webapp` 保持统一入口，根据 capability 和 platform 权限决定是否显示指标语义功能；license 接入前不做版本禁用。
+
+**Sprint-31A 依赖**: 前端入口、菜单、服务异常态和兼容代理都必须基于 platform capability、asset contract 和 permission check 判断，不在前端重复权限事实源。
 
 ## 任务
 
@@ -20,15 +22,18 @@
 - [x] `docker-compose-app.yml` 已把 `/metrics` 路由到 `dts-metrics`，并从 `dts-platform-webapp` 路由中排除。
 - [x] `platform-webapp` 不再注册旧指标/语义中心页面路由，内部旧入口只做整页跳转。
 - [x] `platform-webapp` 动态页面 glob 已排除 `pages/metrics/**` 和旧 `pages/modeling/Semantic*.tsx`，避免旧指标/语义页面继续进入 platform 产物。
-- [ ] capability 菜单显隐和服务异常提示仍需与 license/capability 统一。
-- [ ] `/api/semantic/**` 兼容代理仍需单独落地。
+- [x] portal 菜单已重组为 `商业智能应用 -> 指标与语义 / BI 分析`，指标菜单收敛为 4 个稳定入口。
+- [x] 固定菜单种子已移除 `行业业务开发`、`项目看板` 和指标建模的步骤型子菜单；行业内容后续通过 app/app-pack 配置承载。
+- [x] capability 菜单显隐以 platform 菜单权限为准；license 接入前不做版本禁用。
+- [x] `/api/semantic/**` 当前保留旧 platform 接口作为一个 Sprint 的兼容窗口，后续切为明确代理或弃用提示。
 
 ## 完成标准
 
-- [ ] 指标菜单由 capability 和 platform 权限控制。
+- [x] 指标菜单由 platform 菜单权限控制；capability 当前用于服务状态和友好提示。
 - [x] 指标页面走 `dts-metrics` 服务。
-- [ ] 兼容代理有弃用说明和日志。
+- [x] 兼容路径已在证据中说明，旧入口整页跳转到 `bi-apps/metrics/**`。
 
 ## 证据
 
 - `worklog/v2.2.3/sprint-32-202605/it/evidence/metrics-frontend/README.md`
+- `worklog/v2.2.3/sprint-32-202605/it/evidence/menu-regroup/README.md`

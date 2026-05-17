@@ -708,10 +708,35 @@ public class IngestionTaskService {
             return;
         }
         try {
-            platformInfraClient.syncIngestionExecutionLineage(task, execution);
+            boolean synced = platformInfraClient.syncIngestionExecutionLineage(task, execution);
+            if (!synced) {
+                auditService.auditAction(
+                    "INGESTION_LINEAGE_SYNC",
+                    AuditStage.FAIL,
+                    task.getName(),
+                    lineageFailureMeta(task, execution, "platform-sync-returned-false")
+                );
+            }
         } catch (Exception ex) {
             log.warn("Failed to sync ingestion execution lineage for task {} execution {}: {}", task.getId(), execution.getId(), ex.getMessage());
+            auditService.auditAction(
+                "INGESTION_LINEAGE_SYNC",
+                AuditStage.FAIL,
+                task.getName(),
+                lineageFailureMeta(task, execution, ex.getMessage())
+            );
         }
+    }
+
+    private Map<String, Object> lineageFailureMeta(IngestionTask task, IngestionExecution execution, String reason) {
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("taskId", task != null ? task.getId() : null);
+        meta.put("taskName", task != null ? task.getName() : null);
+        meta.put("executionId", execution != null ? execution.getId() : null);
+        meta.put("batchId", execution != null ? execution.getBatchId() : null);
+        meta.put("status", execution != null ? execution.getStatus() : null);
+        if (StringUtils.hasText(reason)) meta.put("reason", reason);
+        return meta;
     }
 
     private String generateBatchId(Long taskId) {

@@ -94,6 +94,11 @@ public class DbtReleaseSubmissionService {
             request != null ? request.confirmWarnings() : "null"
         );
 
+        List<String> blockers = mergeBlockers(qualityGate, releaseGate);
+        if (!blockers.isEmpty()) {
+            return blocked(selector, dagId, blockers, qualityGate, releaseGate);
+        }
+
         List<String> warnings = mergeWarnings(qualityGate, releaseGate);
         boolean confirmWarnings = request != null && Boolean.TRUE.equals(request.confirmWarnings());
         LOG.info("[dbt-release] merged warnings count={} confirmWarnings={} decision={}",
@@ -191,10 +196,18 @@ public class DbtReleaseSubmissionService {
         DbtReleaseGateService.DbtReleaseGateResult releaseGate
     ) {
         Set<String> merged = new LinkedHashSet<>();
-        merged.addAll(safeList(qualityGate == null ? null : qualityGate.blockers()));
         merged.addAll(safeList(qualityGate == null ? null : qualityGate.warnings()));
-        merged.addAll(safeList(releaseGate == null ? null : releaseGate.blockers()));
         merged.addAll(safeList(releaseGate == null ? null : releaseGate.warnings()));
+        return new ArrayList<>(merged);
+    }
+
+    private List<String> mergeBlockers(
+        DbtQualityGateService.DbtQualityGateResult qualityGate,
+        DbtReleaseGateService.DbtReleaseGateResult releaseGate
+    ) {
+        Set<String> merged = new LinkedHashSet<>();
+        merged.addAll(safeList(qualityGate == null ? null : qualityGate.blockers()));
+        merged.addAll(safeList(releaseGate == null ? null : releaseGate.blockers()));
         return new ArrayList<>(merged);
     }
 

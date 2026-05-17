@@ -47,7 +47,15 @@ public class MetricsHealthResource {
             "edition",
             properties.getEdition(),
             "mvp",
-            List.of("service-shell", "platform-contract", "metric-pack-v0.1-validation"),
+            List.of(
+                "service-shell",
+                "platform-contract",
+                "metric-pack-v0.1-validation",
+                "metric-dsl-sql-render",
+                "dws-ads-candidate-artifact-preview",
+                "metric-pack-import-dry-run",
+                "semantic-migration-dry-run"
+            ),
             "platformContract",
             platformContractClient.describeContract()
         );

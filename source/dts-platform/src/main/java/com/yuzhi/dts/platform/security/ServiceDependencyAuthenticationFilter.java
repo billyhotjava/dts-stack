@@ -144,7 +144,9 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
         }
         if ("dts-metrics".equals(service)) {
             return isGet(method, path, "/api/internal/capabilities")
-                || isMetricsAssetPermission(method, path);
+                || isMetricsAssetPermission(method, path)
+                || isMetricsCatalogRead(method, path)
+                || isMetricsDbtPublishGateway(method, path);
         }
         return false;
     }
@@ -164,6 +166,22 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
             || isPost(method, path, "/api/internal/asset-permission/batch-check")
             || isPost(method, path, "/api/internal/asset-permission/accessible-ids")
             || isGet(method, path, "/api/internal/asset-permission/grants");
+    }
+
+    private boolean isMetricsCatalogRead(String method, String path) {
+        if (!HttpMethod.GET.matches(method) || path == null) {
+            return false;
+        }
+        if ("/api/catalog/assets-v2".equals(path)) {
+            return true;
+        }
+        return path.startsWith("/api/catalog/assets-v2/")
+            && (path.endsWith("/contract") || path.endsWith("/schema-contract"));
+    }
+
+    private boolean isMetricsDbtPublishGateway(String method, String path) {
+        return isPost(method, path, "/api/etl/dbt/release-gate/check")
+            || isPost(method, path, "/api/etl/dbt/release/submit");
     }
 
     private boolean isDeleteAnalyticsGrant(String method, String path) {

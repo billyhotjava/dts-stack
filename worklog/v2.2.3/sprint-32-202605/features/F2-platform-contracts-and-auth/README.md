@@ -1,8 +1,10 @@
 # F2: platform 契约、服务鉴权与事实源边界
 
 **优先级**: P0
-**状态**: IN_PROGRESS
+**状态**: DONE
 **目标**: 让 `dts-metrics` 只通过 platform 明确 API 使用资产、权限、审计、数据源和 dbt 发布能力。
+
+**Sprint-31A 依赖**: 本 Feature 的能力发现、Catalog 只读、权限校验、审计和发布网关全部以 Sprint-31A 的 platform capability 为准。
 
 ## 任务
 
@@ -16,7 +18,16 @@
 
 ## 完成标准
 
-- [ ] `dts-metrics` 不持有数据源密码。
-- [ ] `dts-metrics` 不实现本地用户/角色/权限事实源。
+- [x] `dts-metrics` 不持有数据源密码。
+- [x] `dts-metrics` 不实现本地用户/角色/权限事实源。
 - [x] platform 内部 API 有服务鉴权失败用例。
 - [x] `dts-metrics` 只能访问 internal capabilities 和 asset-permission 只读/校验端点，不能写 grant 或读取数据源运行密钥。
+- [x] `dts-metrics` 可读取 platform Catalog 稳定契约，并通过 platform/dbt release gate 提交候选发布。
+
+## 证据
+
+- `source/dts-platform/src/main/java/com/yuzhi/dts/platform/security/ServiceDependencyAuthenticationFilter.java`
+- `source/dts-platform/src/test/java/com/yuzhi/dts/platform/security/ServiceDependencyAuthenticationFilterTest.java`
+- `source/dts-metrics/src/main/java/com/yuzhi/dts/metrics/service/PlatformContractClient.java`
+- `source/dts-metrics/src/test/java/com/yuzhi/dts/metrics/service/PlatformContractClientTest.java`
+- `worklog/v2.2.3/sprint-32-202605/it/evidence/platform-contracts/README.md`

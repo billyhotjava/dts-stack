@@ -68,6 +68,9 @@ public class PortalMenuService {
         "security",
         "ops",
         "services",
+        "bi",
+        "metrics",
+        "app-pack",
         "iam"
     );
     private static final Set<String> BASE_READ_SECTIONS = Set.of("workbench", "portal", "services", "visual-analytics");
@@ -813,9 +816,24 @@ public class PortalMenuService {
                 continue;
             }
             if (LEGACY_SECTION_KEYS.contains(normalized)) {
-                root.setDeleted(true);
-                menuRepo.save(root);
+                markDeletedSubtree(root);
             }
+        }
+    }
+
+    private void markDeletedSubtree(PortalMenu menu) {
+        if (menu == null) {
+            return;
+        }
+        if (!menu.isDeleted()) {
+            menu.setDeleted(true);
+            menuRepo.save(menu);
+        }
+        if (menu.getChildren() == null || menu.getChildren().isEmpty()) {
+            return;
+        }
+        for (PortalMenu child : menu.getChildren()) {
+            markDeletedSubtree(child);
         }
     }
 

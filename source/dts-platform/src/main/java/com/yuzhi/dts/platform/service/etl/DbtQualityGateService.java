@@ -41,6 +41,8 @@ public class DbtQualityGateService {
         List<ModelingSqlModel> allModels = sqlModelRepository.findAll();
         Set<String> missingTests = new LinkedHashSet<>();
         Set<String> missingTypeMeta = new LinkedHashSet<>();
+        Set<String> missingOwnerMeta = new LinkedHashSet<>();
+        Set<String> missingClassificationMeta = new LinkedHashSet<>();
         if (!selectedModels.isEmpty()) {
             String projectDir = resolveProjectDir();
             for (String modelName : selectedModels) {
@@ -56,6 +58,12 @@ public class DbtQualityGateService {
                 if (!StringUtils.hasText(content) || !content.contains("expected_data_type")) {
                     missingTypeMeta.add(modelName);
                 }
+                if (!containsGovernanceKey(content, "owner")) {
+                    missingOwnerMeta.add(modelName);
+                }
+                if (!containsGovernanceKey(content, "classification")) {
+                    missingClassificationMeta.add(modelName);
+                }
             }
         }
 
@@ -70,11 +78,18 @@ public class DbtQualityGateService {
         boolean blocking = latestFailed && qualityCommand && !missingUnbuiltRelations;
 
         List<String> warnings = new ArrayList<>();
+        List<String> blockers = new ArrayList<>();
         if (!missingTests.isEmpty()) {
-            warnings.add("以下模型未发现测试模板: " + String.join(", ", missingTests));
+            blockers.add("以下模型未发现 schema.yml 测试: " + String.join(", ", missingTests));
         }
         if (!missingTypeMeta.isEmpty()) {
-            warnings.add("以下模型缺少类型元信息(expected_data_type): " + String.join(", ", missingTypeMeta));
+            blockers.add("以下模型缺少类型元信息(expected_data_type): " + String.join(", ", missingTypeMeta));
+        }
+        if (!missingOwnerMeta.isEmpty()) {
+            blockers.add("以下模型缺少 owner 治理元信息: " + String.join(", ", missingOwnerMeta));
+        }
+        if (!missingClassificationMeta.isEmpty()) {
+            blockers.add("以下模型缺少 classification 治理元信息: " + String.join(", ", missingClassificationMeta));
         }
         if (missingUnbuiltRelations) {
             warnings.add("最近一次 dbt test 失败是因为目标关系尚未生成，首次上线可继续执行 dbt build");
@@ -82,11 +97,8 @@ public class DbtQualityGateService {
         if (latestFailed && !qualityCommand) {
             warnings.add("最近一次构建状态为 FAILED，但不是测试命令，请确认是否继续上线");
         }
-
-        List<String> blockers = new ArrayList<>();
-        // 质量门不阻塞上线，所有检查项降级为 warning
         if (blocking) {
-            warnings.add("最近一次质量构建失败（" + defaultText(command, "unknown command") + "），建议修复后再上线");
+            blockers.add("最近一次质量构建失败（" + defaultText(command, "unknown command") + "），请修复后再上线");
         }
 
         return new DbtQualityGateResult(
@@ -274,6 +286,15 @@ public class DbtQualityGateService {
         }
         Pattern pattern = Pattern.compile("(?m)^\\s*-?\\s*name:\\s*[\"']?" + Pattern.quote(modelName.trim()) + "[\"']?\\s*$");
         return pattern.matcher(content).find();
+    }
+
+    private boolean containsGovernanceKey(String content, String key) {
+        if (!StringUtils.hasText(content) || !StringUtils.hasText(key)) {
+            return false;
+        }
+        Pattern direct = Pattern.compile("(?m)^\\s*" + Pattern.quote(key) + "\\s*:");
+        Pattern meta = Pattern.compile("(?m)^\\s*" + Pattern.quote(key) + "_name\\s*:");
+        return direct.matcher(content).find() || meta.matcher(content).find();
     }
 
     private String defaultText(String value, String fallback) {

@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router";
-import { Alert, Button, Descriptions, Form, Input, Select, Spin, Switch, Tabs, Tag, message } from "antd";
+import { Alert, Button, Descriptions, Form, Input, Select, Space, Spin, Switch, Tabs, Tag, message } from "antd";
 import { CompactTable } from "@/components/table";
 import { LineageGraph } from "@/components/lineage";
 import type { ImpactEdge, ImpactNode } from "./lineageShared";
 import { useRouter } from "@/routes/hooks";
 import {
 	getCatalogAssetV2,
+	getCatalogAssetV2Contract,
 	getCatalogAssetV2Lineage,
+	getCatalogAssetV2SchemaContract,
 	getCatalogLineageImpact,
 	getDataset,
 	getDatasetFields,
@@ -16,12 +18,16 @@ import {
 	syncCatalogAssetV2Lineage,
 	updateCatalogAssetV2Governance,
 } from "@/api/platformApi";
+import { buildAssetGrantUrl, resolveAssetReadiness } from "./assetPortalUx.helpers";
 
 export default function DatasetDetailPage() {
 	const { id } = useParams<{ id: string }>();
 	const router = useRouter();
 	const [dataset, setDataset] = useState<Record<string, any> | null>(null);
 	const [loading, setLoading] = useState(true);
+	const [assetContract, setAssetContract] = useState<Record<string, any> | null>(null);
+	const [schemaContract, setSchemaContract] = useState<Record<string, any> | null>(null);
+	const [contractLoading, setContractLoading] = useState(false);
 
 	useEffect(() => {
 		if (!id) return;
@@ -67,6 +73,21 @@ export default function DatasetDetailPage() {
 			.finally(() => setLoading(false));
 	}, [id]);
 
+	useEffect(() => {
+		if (!id || !dataset) return;
+		const assetId = String(dataset.id || id);
+		setContractLoading(true);
+		void Promise.allSettled([
+			getCatalogAssetV2Contract(assetId),
+			getCatalogAssetV2SchemaContract(assetId),
+		])
+			.then(([contractResult, schemaResult]) => {
+				setAssetContract(contractResult.status === "fulfilled" ? contractResult.value || null : null);
+				setSchemaContract(schemaResult.status === "fulfilled" ? schemaResult.value || null : null);
+			})
+			.finally(() => setContractLoading(false));
+	}, [id, dataset?.id]);
+
 	if (loading) {
 		return (
 			<div className="flex h-64 items-center justify-center">
@@ -101,12 +122,24 @@ export default function DatasetDetailPage() {
 					{
 						key: "overview",
 						label: "概览",
-						children: <DatasetOverviewTab dataset={dataset} />,
+						children: (
+							<DatasetOverviewTab
+								dataset={dataset}
+								assetContract={assetContract}
+								schemaContract={schemaContract}
+								contractLoading={contractLoading}
+							/>
+						),
 					},
 					{
 						key: "fields",
 						label: "字段详情",
-						children: <DatasetFieldsTab datasetId={String(dataset.__legacyDatasetId || id)} columns={dataset.__columns} />,
+						children: (
+							<DatasetFieldsTab
+								datasetId={String(dataset.__legacyDatasetId || id)}
+								columns={Array.isArray(schemaContract?.columns) ? schemaContract?.columns : dataset.__columns}
+							/>
+						),
 					},
 					{
 						key: "lineage",
@@ -122,7 +155,7 @@ export default function DatasetDetailPage() {
 					{
 						key: "technical",
 						label: "技术详情",
-						children: <DatasetTechnicalTab dataset={dataset} />,
+						children: <DatasetTechnicalTab dataset={dataset} assetContract={assetContract} schemaContract={schemaContract} />,
 					},
 					{
 						key: "governance",
@@ -138,11 +171,7 @@ export default function DatasetDetailPage() {
 					{
 						key: "access",
 						label: "权限申请",
-						children: (
-							<div className="py-4 text-sm text-slate-500">
-								权限申请功能将在后续版本开放，请联系数据管理员。
-							</div>
-						),
+						children: <AssetAccessTab dataset={dataset} assetContract={assetContract} contractLoading={contractLoading} />,
 					},
 				]}
 			/>
@@ -150,12 +179,48 @@ export default function DatasetDetailPage() {
 	);
 }
 
-function DatasetOverviewTab({ dataset }: { dataset: Record<string, any> }) {
+function DatasetOverviewTab({
+	dataset,
+	assetContract,
+	schemaContract,
+	contractLoading,
+}: {
+	dataset: Record<string, any>;
+	assetContract?: Record<string, any> | null;
+	schemaContract?: Record<string, any> | null;
+	contractLoading?: boolean;
+}) {
+	const asset = assetContract || dataset;
+	const readiness = resolveAssetReadiness({
+		classification: asset.classification,
+		domainId: asset.domainId,
+		domain: dataset.domainName ?? dataset.domain,
+		owner: asset.owner,
+		ownerDept: asset.ownerDept,
+		lifecycleStatus: asset.lifecycleStatus,
+		governanceStatus: asset.governanceStatus,
+		matchStatus: asset.matchStatus,
+		metadataSource: asset.metadataSource,
+		legacyDatasetId: asset.legacyDatasetId ?? dataset.__legacyDatasetId,
+	});
+	const missingFields = Array.isArray(assetContract?.missingGovernanceFields) ? assetContract?.missingGovernanceFields : [];
 	return (
 		<div className="space-y-3 py-2">
 			{dataset.__source === "openmetadata" && (
 				<Tag color="blue">OpenMetadata主目录</Tag>
 			)}
+			<Alert
+				type={readiness.state === "BLOCKED" ? "warning" : readiness.state === "READY" ? "success" : "info"}
+				showIcon
+				message={`资产状态：${readiness.label}`}
+				description={
+					contractLoading
+						? "正在读取资产治理合同..."
+						: readiness.reasons.length
+							? readiness.reasons.join("；")
+							: "密级、主题域、归属部门和生命周期满足引用前置条件。"
+				}
+			/>
 			<Descriptions bordered size="small" column={2}>
 				<Descriptions.Item label="仓库分层">{dataset.warehouseLayer ?? "-"}</Descriptions.Item>
 				<Descriptions.Item label="密级">{dataset.classification ?? "-"}</Descriptions.Item>
@@ -167,7 +232,12 @@ function DatasetOverviewTab({ dataset }: { dataset: Record<string, any> }) {
 				<Descriptions.Item label="主题域">{dataset.domainName ?? dataset.domain ?? "-"}</Descriptions.Item>
 				<Descriptions.Item label="治理状态">{dataset.governanceStatus ?? "-"}</Descriptions.Item>
 				<Descriptions.Item label="映射状态">{dataset.matchStatus ?? "-"}</Descriptions.Item>
+				<Descriptions.Item label="字段合同">{schemaContract?.columnCount ?? dataset.columnCount ?? "-"}</Descriptions.Item>
+				<Descriptions.Item label="资产来源">{assetContract?.metadataSource ?? dataset.__source ?? "-"}</Descriptions.Item>
 			</Descriptions>
+			{missingFields.length ? (
+				<Alert type="warning" showIcon message="治理字段待补齐" description={missingFields.join("、")} />
+			) : null}
 			{dataset.matchReason ? <Alert type="info" showIcon message="映射说明" description={dataset.matchReason} /> : null}
 			{dataset.description && (
 				<div className="text-sm text-slate-600 rounded border border-slate-100 bg-slate-50 p-3">
@@ -178,13 +248,25 @@ function DatasetOverviewTab({ dataset }: { dataset: Record<string, any> }) {
 	);
 }
 
-function DatasetTechnicalTab({ dataset }: { dataset: Record<string, any> }) {
+function DatasetTechnicalTab({
+	dataset,
+	assetContract,
+	schemaContract,
+}: {
+	dataset: Record<string, any>;
+	assetContract?: Record<string, any> | null;
+	schemaContract?: Record<string, any> | null;
+}) {
 	const metadataRows = [
+		{ key: "assetKey", label: "资产键", value: assetContract?.assetKey },
+		{ key: "grantAsset", label: "授权资产", value: assetContract?.grantAssetType && assetContract?.grantAssetId ? `${assetContract.grantAssetType}:${assetContract.grantAssetId}` : undefined },
+		{ key: "sourceRef", label: "来源引用", value: assetContract?.sourceRef },
 		{ key: "service", label: "Service", value: dataset.service },
 		{ key: "database", label: "Database", value: dataset.hiveDatabase },
 		{ key: "schema", label: "Schema", value: dataset.schema },
 		{ key: "table", label: "Table", value: dataset.hiveTable },
-		{ key: "columnCount", label: "字段数", value: dataset.columnCount },
+		{ key: "columnCount", label: "字段数", value: schemaContract?.columnCount ?? dataset.columnCount },
+		{ key: "schemaSource", label: "字段来源", value: schemaContract?.schemaSource },
 		{ key: "syncStatus", label: "同步状态", value: dataset.syncStatus },
 		{ key: "syncMessage", label: "同步说明", value: dataset.syncMessage },
 	].filter((item) => item.value !== undefined && item.value !== null && item.value !== "");
@@ -204,6 +286,67 @@ function DatasetTechnicalTab({ dataset }: { dataset: Record<string, any> }) {
 			)}
 			<MetadataJsonBlock title="Profile JSON" value={dataset.__profileJson} />
 			<MetadataJsonBlock title="Raw Metadata JSON" value={dataset.__rawJson} />
+		</div>
+	);
+}
+
+function AssetAccessTab({
+	dataset,
+	assetContract,
+	contractLoading,
+}: {
+	dataset: Record<string, any>;
+	assetContract?: Record<string, any> | null;
+	contractLoading?: boolean;
+}) {
+	const router = useRouter();
+	const asset = assetContract || dataset;
+	const grantAssetType = assetContract?.grantAssetType || "TABLE";
+	const grantAssetId = assetContract?.grantAssetId || assetContract?.assetKey || dataset.id;
+	const readiness = resolveAssetReadiness({
+		classification: asset.classification,
+		domainId: asset.domainId,
+		domain: dataset.domainName ?? dataset.domain,
+		owner: asset.owner,
+		ownerDept: asset.ownerDept,
+		lifecycleStatus: asset.lifecycleStatus,
+		governanceStatus: asset.governanceStatus,
+		matchStatus: asset.matchStatus,
+		metadataSource: asset.metadataSource,
+		legacyDatasetId: asset.legacyDatasetId ?? dataset.__legacyDatasetId,
+	});
+
+	return (
+		<div className="space-y-4 py-2">
+			<Alert
+				type={readiness.state === "BLOCKED" ? "warning" : "info"}
+				showIcon
+				message={readiness.state === "BLOCKED" ? "当前资产需要先完成治理再授权使用" : "资产权限由 platform 统一管理"}
+				description={
+					contractLoading
+						? "正在读取资产权限合同..."
+						: readiness.reasons.length
+							? readiness.reasons.join("；")
+							: "申请或授予权限时，应使用下方授权资产标识，避免按 OpenMetadata 临时 ID 授权。"
+				}
+			/>
+			<Descriptions bordered size="small" column={2}>
+				<Descriptions.Item label="授权资产类型">{grantAssetType}</Descriptions.Item>
+				<Descriptions.Item label="授权资产ID">{grantAssetId || "-"}</Descriptions.Item>
+				<Descriptions.Item label="所需基础权限">READ / EDIT / MANAGE</Descriptions.Item>
+				<Descriptions.Item label="密级约束">{asset.classification || "未定级，默认不可访问"}</Descriptions.Item>
+			</Descriptions>
+			<Space wrap>
+				<Button
+					type="primary"
+					disabled={!grantAssetId}
+					onClick={() => router.push(buildAssetGrantUrl({ assetType: grantAssetType, assetId: grantAssetId }))}
+				>
+					打开资产授权
+				</Button>
+				<Button onClick={() => router.push("/my/asset-grants")}>查看我的授权</Button>
+				<Button onClick={() => router.push("/governance/permission-audit")}>查看权限审计</Button>
+			</Space>
 		</div>
 	);
 }
@@ -346,7 +489,7 @@ function DatasetFieldsTab({ datasetId, columns }: { datasetId: string; columns?:
 					name: item.name,
 					dataType: item.dataType,
 					comment: item.description,
-					tableName: item.omColumnFqn,
+					tableName: item.omColumnFqn || item.source,
 				})),
 			);
 			setLoading(false);

@@ -34,6 +34,7 @@ const CHANGE_TYPE_LABELS: Record<string, string> = {
 const STATUS_LABELS: Record<string, string> = {
 	DONE: "已完成",
 	PENDING: "待处理",
+	NEEDS_REVIEW: "需复核",
 	APPROVAL: "待审批",
 	REJECTED: "已驳回",
 };
@@ -51,6 +52,7 @@ const statusOptions = [
 	{ label: "全部状态", value: "ALL" },
 	{ label: "已完成", value: "DONE" },
 	{ label: "待处理", value: "PENDING" },
+	{ label: "需复核", value: "NEEDS_REVIEW" },
 	{ label: "待审批", value: "APPROVAL" },
 	{ label: "已驳回", value: "REJECTED" },
 ];
@@ -66,6 +68,7 @@ const statusTag = (status?: string) => {
 	const label = status ? STATUS_LABELS[status] || status : "未知";
 	if (status === "DONE") return <Tag color="green">{label}</Tag>;
 	if (status === "APPROVAL") return <Tag color="gold">{label}</Tag>;
+	if (status === "NEEDS_REVIEW") return <Tag color="volcano">{label}</Tag>;
 	if (status === "PENDING") return <Tag color="blue">{label}</Tag>;
 	if (status === "REJECTED") return <Tag color="red">{label}</Tag>;
 	return <Tag>{label}</Tag>;
@@ -179,7 +182,7 @@ export default function AccessChangesPage() {
 					<Button type="link" onClick={() => setSelected(row)}>
 						查看
 					</Button>
-					{row.status === "PENDING" ? (
+					{row.status === "PENDING" || row.status === "NEEDS_REVIEW" ? (
 						<Button type="link" onClick={() => openActionModal(row, "SUBMIT")}>
 							提交审批
 						</Button>

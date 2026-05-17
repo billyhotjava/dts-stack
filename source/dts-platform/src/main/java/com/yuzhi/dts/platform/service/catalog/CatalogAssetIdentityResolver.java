@@ -69,6 +69,10 @@ public class CatalogAssetIdentityResolver {
         return Optional.empty();
     }
 
+    public Optional<CatalogAssetIdentity> resolveIdentity(String ref) {
+        return resolve(ref).map(this::toIdentity);
+    }
+
     private CatalogDataset resolveLegacy(CatalogAssetMapping mapping) {
         if (mapping == null || mapping.getLegacyDatasetId() == null) {
             return null;
@@ -82,6 +86,30 @@ public class CatalogAssetIdentityResolver {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private CatalogAssetIdentity toIdentity(ResolvedAsset resolved) {
+        if (resolved.legacyDataset() != null) {
+            CatalogDataset dataset = resolved.legacyDataset();
+            CatalogAssetSourceReference sourceRef = CatalogAssetSourceReference.legacyDataset(dataset, resolved.resolvedBy());
+            return new CatalogAssetIdentity(
+                CatalogAssetType.DATASET,
+                CatalogAssetKey.dataset(dataset),
+                dataset.getId() == null ? null : dataset.getId().toString(),
+                sourceRef.stableRef()
+            );
+        }
+        if (resolved.omAsset() != null) {
+            OpenMetadataAssetCache asset = resolved.omAsset();
+            CatalogAssetSourceReference sourceRef = CatalogAssetSourceReference.openMetadata(asset, resolved.resolvedBy());
+            return new CatalogAssetIdentity(
+                CatalogAssetType.DATASET,
+                CatalogAssetKey.openMetadataDataset(asset),
+                asset.getId() == null ? null : asset.getId().toString(),
+                sourceRef.stableRef()
+            );
+        }
+        throw new IllegalArgumentException("resolved asset has no catalog identity");
     }
 
     public record ResolvedAsset(

@@ -9,10 +9,15 @@
 允许 `dts-metrics` 访问：
 
 - `GET /api/internal/capabilities`
+- `GET /api/catalog/assets-v2`
+- `GET /api/catalog/assets-v2/{id}/contract`
+- `GET /api/catalog/assets-v2/{id}/schema-contract`
 - `POST /api/internal/asset-permission/check`
 - `POST /api/internal/asset-permission/batch-check`
 - `POST /api/internal/asset-permission/accessible-ids`
 - `GET /api/internal/asset-permission/grants`
+- `POST /api/etl/dbt/release-gate/check`
+- `POST /api/etl/dbt/release/submit`
 
 明确不允许：
 
@@ -34,8 +39,8 @@
 - `dts-metrics` 可访问 `/api/internal/capabilities`。
 - `dts-metrics` 可做 asset permission 校验和只读 grants 查询。
 - `dts-metrics` 尝试写入 asset grant 时被 `endpoint_not_allowed` 拒绝。
-- platform 编译通过，metrics 单测通过。
+- platform 编译和 metrics 单测需要在 Sprint-31A/31/32 全部完成后统一重跑。
 
 ## Notes
 
-该证据只覆盖服务鉴权边界。后续还需要让 `dts-metrics` 业务客户端实际调用这些 internal API，并把成功/失败结果写入导入、预览、发布流程。
+该证据只覆盖服务鉴权边界。当前已补齐 metrics 客户端 URL 拼接测试，防止 `/api/api/internal/...` 双前缀；真实 internal API 调用输出待最终统一 IT 归档。

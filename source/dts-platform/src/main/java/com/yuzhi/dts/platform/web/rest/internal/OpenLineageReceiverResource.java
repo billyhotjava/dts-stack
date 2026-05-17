@@ -6,6 +6,8 @@ import com.yuzhi.dts.platform.domain.catalog.CatalogLineageJob;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetLineageRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogLineageJobRepository;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetGovernancePolicy;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -58,14 +60,16 @@ public class OpenLineageReceiverResource {
         Instant observedAt = parseInstant(firstNonBlank(stringValue(payload.get("eventTime")), stringValue(payload.get("event_time")), null));
 
         CatalogLineageJob job = upsertJob(namespace, jobName, runId, eventType, observedAt, payload);
-        List<CatalogDataset> inputs = resolveDatasets(listOfMaps(payload.get("inputs")), "UPSTREAM");
-        List<CatalogDataset> outputs = resolveDatasets(listOfMaps(payload.get("outputs")), "DOWNSTREAM");
+        List<DatasetResolution> inputs = resolveDatasets(listOfMaps(payload.get("inputs")), "UPSTREAM", jobName, runId);
+        List<DatasetResolution> outputs = resolveDatasets(listOfMaps(payload.get("outputs")), "DOWNSTREAM", jobName, runId);
 
         int created = 0;
         int updated = 0;
-        for (CatalogDataset input : inputs) {
-            for (CatalogDataset output : outputs) {
-                if (input.getId() == null || output.getId() == null || input.getId().equals(output.getId())) {
+        for (DatasetResolution inputResolution : inputs) {
+            for (DatasetResolution outputResolution : outputs) {
+                CatalogDataset input = inputResolution.dataset();
+                CatalogDataset output = outputResolution.dataset();
+                if (input == null || output == null || input.getId() == null || output.getId() == null || input.getId().equals(output.getId())) {
                     continue;
                 }
                 CatalogDatasetLineage lineage = lineageRepository
@@ -94,7 +98,18 @@ public class OpenLineageReceiverResource {
                 if ("VERIFIED".equals(lineage.getVerificationStatus())) {
                     lineage.setLastVerifiedAt(observedAt);
                 }
-                lineage.setNotes("openlineage:" + namespace + "/" + jobName);
+                lineage.setNotes(
+                    "openlineage:" +
+                    namespace +
+                    "/" +
+                    jobName +
+                    " upstreamKey=" +
+                    inputResolution.assetKey() +
+                    " downstreamKey=" +
+                    outputResolution.assetKey() +
+                    " runId=" +
+                    Objects.toString(runId, "")
+                );
                 lineageRepository.save(lineage);
                 if (isNew) {
                     created++;
@@ -108,6 +123,8 @@ public class OpenLineageReceiverResource {
         result.put("jobId", job.getId() != null ? job.getId().toString() : null);
         result.put("inputs", inputs.size());
         result.put("outputs", outputs.size());
+        result.put("createdAssets", countCreated(inputs) + countCreated(outputs));
+        result.put("assetEvidence", evidence(inputs, outputs));
         result.put("created", created);
         result.put("updated", updated);
         result.put("eventType", eventType);
@@ -136,29 +153,51 @@ public class OpenLineageReceiverResource {
         return lineageJobRepository.save(job);
     }
 
-    private List<CatalogDataset> resolveDatasets(List<Map<String, Object>> datasets, String role) {
-        List<CatalogDataset> result = new ArrayList<>();
+    private List<DatasetResolution> resolveDatasets(List<Map<String, Object>> datasets, String role, String jobName, String runId) {
+        List<DatasetResolution> result = new ArrayList<>();
         for (Map<String, Object> payload : datasets) {
             DatasetName name = datasetName(payload);
             if (!StringUtils.hasText(name.table())) {
                 continue;
             }
-            CatalogDataset dataset = datasetRepository
-                .findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(name.schema(), name.table())
-                .orElseGet(() -> createDataset(name, role));
-            result.add(dataset);
+            List<CatalogDataset> matches = datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(name.schema(), name.table());
+            if (!matches.isEmpty()) {
+                CatalogDataset dataset = matches.get(0);
+                result.add(new DatasetResolution(dataset, role, name.namespace(), name.rawName(), safeDatasetKey(dataset), false, "schema_table"));
+                continue;
+            }
+            CatalogDataset dataset = createDataset(name, payload, role, jobName, runId);
+            result.add(new DatasetResolution(dataset, role, name.namespace(), name.rawName(), safeDatasetKey(dataset), true, "openlineage_discovery"));
         }
         return result;
     }
 
-    private CatalogDataset createDataset(DatasetName name, String role) {
+    private CatalogDataset createDataset(DatasetName name, Map<String, Object> payload, String role, String jobName, String runId) {
         CatalogDataset dataset = new CatalogDataset();
         dataset.setName(truncate(name.table(), 128));
         dataset.setType("DATASET");
         dataset.setHiveDatabase(truncate(name.schema(), 128));
         dataset.setHiveTable(truncate(name.table(), 128));
-        dataset.setWarehouseLayer(inferLayer(name.table(), role));
-        dataset.setDescription(truncate("Discovered from OpenLineage namespace=" + name.namespace(), 2048));
+        dataset.setWarehouseLayer(firstNonBlank(inferLayer(name.table(), role), "UNKNOWN"));
+        dataset.setLifecycleStatus(CatalogAssetGovernancePolicy.lifecycleForDiscoveredAsset());
+        dataset.setOwner(truncate(ownerFacet(payload), 64));
+        dataset.setOwnerDept(truncate(ownerDeptFacet(payload), 64));
+        dataset.setClassification(truncate(classificationFacet(payload), 32));
+        dataset.setDescription(
+            truncate(
+                "Discovered from OpenLineage namespace=" +
+                name.namespace() +
+                ", rawName=" +
+                name.rawName() +
+                ", role=" +
+                role +
+                ", job=" +
+                jobName +
+                ", runId=" +
+                Objects.toString(runId, ""),
+                2048
+            )
+        );
         dataset.setSnapshotTime(Instant.now());
         return datasetRepository.save(dataset);
     }
@@ -173,13 +212,96 @@ public class OpenLineageReceiverResource {
             table = parts[parts.length - 1];
             schema = parts.length > 1 ? parts[parts.length - 2] : schema;
         }
-        return new DatasetName(cleanName(namespace), cleanName(schema), cleanName(table));
+        return new DatasetName(cleanName(namespace), cleanName(schema), cleanName(table), firstNonBlank(rawName, ""));
+    }
+
+    private long countCreated(List<DatasetResolution> resolutions) {
+        return resolutions.stream().filter(DatasetResolution::created).count();
+    }
+
+    private List<Map<String, Object>> evidence(List<DatasetResolution> inputs, List<DatasetResolution> outputs) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (DatasetResolution item : inputs) {
+            result.add(evidenceItem(item));
+        }
+        for (DatasetResolution item : outputs) {
+            result.add(evidenceItem(item));
+        }
+        return result;
+    }
+
+    private Map<String, Object> evidenceItem(DatasetResolution item) {
+        Map<String, Object> evidence = new LinkedHashMap<>();
+        CatalogDataset dataset = item.dataset();
+        evidence.put("role", item.role());
+        evidence.put("datasetId", dataset != null && dataset.getId() != null ? dataset.getId().toString() : null);
+        evidence.put("namespace", item.namespace());
+        evidence.put("rawName", item.rawName());
+        evidence.put("assetKey", item.assetKey());
+        evidence.put("created", item.created());
+        evidence.put("resolvedBy", item.resolvedBy());
+        evidence.put("warehouseLayer", dataset != null ? dataset.getWarehouseLayer() : null);
+        evidence.put("lifecycleStatus", dataset != null ? dataset.getLifecycleStatus() : null);
+        evidence.put("governanceStatus", CatalogAssetGovernancePolicy.resolveGovernanceStatus(dataset));
+        evidence.put("owner", dataset != null ? dataset.getOwner() : null);
+        evidence.put("ownerDept", dataset != null ? dataset.getOwnerDept() : null);
+        evidence.put("classification", dataset != null ? dataset.getClassification() : null);
+        return evidence;
+    }
+
+    private String safeDatasetKey(CatalogDataset dataset) {
+        try {
+            return CatalogAssetKey.dataset(dataset);
+        } catch (IllegalArgumentException ignored) {
+            return "dataset:" + (dataset != null && dataset.getId() != null ? dataset.getId() : "unknown");
+        }
     }
 
     private String schemaFacet(Map<String, Object> payload) {
         Map<String, Object> facets = payloadMap(payload.get("facets"));
         Map<String, Object> schema = payloadMap(facets.get("schema"));
         return stringValue(schema.get("schemaName"));
+    }
+
+    private String ownerFacet(Map<String, Object> payload) {
+        Map<String, Object> facets = payloadMap(payload.get("facets"));
+        Map<String, Object> ownership = payloadMap(firstNonNull(facets.get("ownership"), facets.get("owners")));
+        Object owners = firstNonNull(ownership.get("owners"), ownership.get("owner"));
+        if (owners instanceof List<?> list) {
+            for (Object item : list) {
+                Map<String, Object> owner = payloadMap(item);
+                String value = firstNonBlank(stringValue(owner.get("name")), stringValue(owner.get("owner")), stringValue(owner.get("email")));
+                if (StringUtils.hasText(value)) {
+                    return value;
+                }
+            }
+        }
+        return firstNonBlank(stringValue(ownership.get("name")), stringValue(ownership.get("owner")), stringValue(payload.get("owner")));
+    }
+
+    private String ownerDeptFacet(Map<String, Object> payload) {
+        Map<String, Object> facets = payloadMap(payload.get("facets"));
+        Map<String, Object> governance = payloadMap(firstNonNull(facets.get("governance"), facets.get("dtsGovernance")));
+        return firstNonBlank(
+            stringValue(governance.get("ownerDept")),
+            stringValue(governance.get("department")),
+            stringValue(payload.get("ownerDept")),
+            stringValue(payload.get("department"))
+        );
+    }
+
+    private String classificationFacet(Map<String, Object> payload) {
+        Map<String, Object> facets = payloadMap(payload.get("facets"));
+        Map<String, Object> governance = payloadMap(firstNonNull(facets.get("governance"), facets.get("dtsGovernance")));
+        Map<String, Object> classification = payloadMap(firstNonNull(facets.get("classification"), facets.get("securityLevel")));
+        return firstNonBlank(
+            stringValue(classification.get("name")),
+            stringValue(classification.get("level")),
+            stringValue(classification.get("classification")),
+            stringValue(governance.get("classification")),
+            stringValue(governance.get("securityLevel")),
+            stringValue(payload.get("classification"))
+        );
     }
 
     private String verificationStatus(String eventType) {
@@ -239,6 +361,18 @@ public class OpenLineageReceiverResource {
         return null;
     }
 
+    private Object firstNonNull(Object... values) {
+        if (values == null) {
+            return null;
+        }
+        for (Object value : values) {
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
+    }
+
     private String stringValue(Object value) {
         return value == null ? null : String.valueOf(value);
     }
@@ -261,5 +395,15 @@ public class OpenLineageReceiverResource {
         return value.substring(0, Math.max(0, maxLength));
     }
 
-    private record DatasetName(String namespace, String schema, String table) {}
+    private record DatasetName(String namespace, String schema, String table, String rawName) {}
+
+    private record DatasetResolution(
+        CatalogDataset dataset,
+        String role,
+        String namespace,
+        String rawName,
+        String assetKey,
+        boolean created,
+        String resolvedBy
+    ) {}
 }

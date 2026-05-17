@@ -2,7 +2,7 @@
 
 ## Scope
 
-验证 `dts-metrics` MVP 指标包接口可以接收 YAML Manifest，并完成基础结构校验，为后续合作方交付指标包提供受控入口。
+验证 `dts-metrics` MVP 指标包接口可以接收 YAML Manifest，并完成基础结构校验、dry-run 导入和候选 artifact 预览，为后续合作方交付指标包提供受控入口。
 
 ## Command
 
@@ -11,6 +11,20 @@ curl -fsS -X POST \
   http://127.0.0.1:18084/api/metrics/packs/validate \
   -H 'Content-Type: application/yaml' \
   --data-binary @worklog/v2.2.3/sprint-32-202605/assets/examples/flower-rental/manifest.yml
+```
+
+```bash
+curl -fsS -X POST \
+  http://127.0.0.1:18084/api/metrics/packs/import \
+  -H 'Content-Type: application/yaml' \
+  --data-binary @worklog/v2.2.3/sprint-32-202605/assets/examples/flower-rental/manifest.yml
+```
+
+```bash
+curl -fsS -X POST \
+  http://127.0.0.1:18084/api/metrics/packs/preview-artifacts \
+  -H 'Content-Type: application/yaml' \
+  --data-binary @worklog/v2.2.3/sprint-32-202605/it/fixtures/inline-flower-rental-pack.yml
 ```
 
 ## Result
@@ -28,6 +42,9 @@ curl -fsS -X POST \
 - Manifest 必须包含 `files` 和 `dependencies` 对象。
 - `files` 必须声明 `domains`、`business_objects`、`dimensions`、`metrics`、`models`、`datasets`。
 - 当前校验拒绝 `raw_sql`，避免合作方指标包绕过平台受控建模边界。
+- 当前校验拒绝不安全的 platform asset 引用。
+- `import` 当前为 dry-run，不写入数据库。
+- `preview-artifacts` 可输出候选 `dbtModelSql`、`schemaYml` 和 `metricDoc`。
 
 ## Notes
 

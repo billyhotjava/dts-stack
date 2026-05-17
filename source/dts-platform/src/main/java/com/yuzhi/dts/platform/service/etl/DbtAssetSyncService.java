@@ -19,6 +19,8 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogLineageJobRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetGovernancePolicy;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService.ColumnSpec;
 import java.io.File;
@@ -194,6 +196,8 @@ public class DbtAssetSyncService {
                     stats.lineageRemoved,
                     "columnsUpdated",
                     stats.columnsUpdated,
+                    "manifestEvidenceUpdated",
+                    stats.manifestEvidenceUpdated,
                     "columnLineageCreated",
                     stats.columnLineageCreated,
                     "columnLineageUpdated",
@@ -271,11 +275,13 @@ public class DbtAssetSyncService {
                     lineageRepository.findFirstByUpstreamDatasetIdAndDownstreamDatasetIdAndRelationTypeIgnoreCaseAndValidToIsNull(upstream, downstream, "DBT");
                 if (present.isPresent()) {
                     CatalogDatasetLineage link = present.orElseThrow();
+                    link.setLastObservedAt(Instant.now());
+                    link.setNotes(buildDbtLineageEvidence(model, upstream, downstream));
                     if (lineageJob != null && !lineageJob.getId().equals(link.getLineageJobId())) {
                         link.setLineageJobId(lineageJob.getId());
                         link.setProjectName(resolveDbtProjectName(model.uniqueId));
-                        lineageRepository.save(link);
                     }
+                    lineageRepository.save(link);
                     continue;
                 }
                 CatalogDatasetLineage link = new CatalogDatasetLineage();
@@ -288,6 +294,8 @@ public class DbtAssetSyncService {
                 link.setProjectName(resolveDbtProjectName(model.uniqueId));
                 link.setVerificationStatus("DECLARED");
                 link.setValidFrom(Instant.now());
+                link.setLastObservedAt(Instant.now());
+                link.setNotes(buildDbtLineageEvidence(model, upstream, downstream));
                 if (lineageJob != null) {
                     link.setLineageJobId(lineageJob.getId());
                 }
@@ -397,8 +405,12 @@ public class DbtAssetSyncService {
             }
             for (Map.Entry<String, CatalogColumnLineage> entry : existing.entrySet()) {
                 if (!desiredKeys.contains(entry.getKey())) {
-                    columnLineageRepository.delete(entry.getValue());
-                    removed++;
+                    CatalogColumnLineage stale = entry.getValue();
+                    if (stale.getValidTo() == null) {
+                        stale.setValidTo(observedAt);
+                        columnLineageRepository.save(stale);
+                        removed++;
+                    }
                 }
             }
         }
@@ -440,6 +452,10 @@ public class DbtAssetSyncService {
         columnLineage.setProjectName(projectName);
         columnLineage.setLineageJobId(tableLineage.getLineageJobId());
         columnLineage.setLastObservedAt(observedAt);
+        if (columnLineage.getValidFrom() == null) {
+            columnLineage.setValidFrom(observedAt);
+        }
+        columnLineage.setValidTo(null);
         columnLineageRepository.save(columnLineage);
         return isNew;
     }
@@ -733,16 +749,21 @@ public class DbtAssetSyncService {
         if (!StringUtils.hasText(dataset.getWarehouseLayer()) && StringUtils.hasText(layer)) {
             dataset.setWarehouseLayer(layer);
         }
+        if (!StringUtils.hasText(dataset.getLifecycleStatus())) {
+            dataset.setLifecycleStatus(CatalogAssetGovernancePolicy.lifecycleForDiscoveredAsset());
+        }
         if (dataset.getSourceId() == null && meta.sourceId != null) {
             dataset.setSourceId(meta.sourceId);
         }
         if (!StringUtils.hasText(dataset.getType())) {
             dataset.setType(resolveDatasetType(view));
         }
-        if (!StringUtils.hasText(dataset.getDescription()) && StringUtils.hasText(meta.description)) {
-            dataset.setDescription(meta.description);
+        if (!StringUtils.hasText(dataset.getDescription())) {
+            dataset.setDescription(defaultIfBlank(meta.description, buildDbtManifestEvidence(meta, layer)));
         }
+        dataset.setSnapshotTime(Instant.now());
         CatalogDataset saved = datasetRepository.save(dataset);
+        stats.manifestEvidenceUpdated++;
         if (created) {
             stats.created++;
         } else {
@@ -865,6 +886,44 @@ public class DbtAssetSyncService {
         return data.toString();
     }
 
+    private String buildDbtManifestEvidence(NodeMeta meta, String layer) {
+        if (meta == null) {
+            return null;
+        }
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("source", "dbt-manifest");
+        data.put("uniqueId", meta.uniqueId);
+        data.put("schema", meta.schema);
+        data.put("table", meta.table);
+        data.put("layer", layer);
+        data.put("assetKey", safeAssetKey(meta));
+        data.put("originalFilePath", meta.originalFilePath);
+        data.values().removeIf(value -> value == null || !StringUtils.hasText(String.valueOf(value)));
+        return data.toString();
+    }
+
+    private String buildDbtLineageEvidence(ModelMeta model, UUID upstream, UUID downstream) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("source", "dbt-manifest");
+        data.put("uniqueId", model != null ? model.uniqueId : null);
+        data.put("project", model != null ? resolveDbtProjectName(model.uniqueId) : null);
+        data.put("upstreamDatasetId", upstream);
+        data.put("downstreamDatasetId", downstream);
+        data.values().removeIf(value -> value == null || !StringUtils.hasText(String.valueOf(value)));
+        return data.toString();
+    }
+
+    private String safeAssetKey(NodeMeta meta) {
+        if (meta == null) {
+            return null;
+        }
+        try {
+            return CatalogAssetKey.dataset(meta.sourceId, meta.schema, meta.schema, meta.table, meta.table);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
     private String resolveDatasetType(DbtConfigService.DbtConfigView view) {
         if (view != null && view.target() != null && StringUtils.hasText(view.target().type())) {
             return view.target().type().toUpperCase(Locale.ROOT);
@@ -976,6 +1035,7 @@ public class DbtAssetSyncService {
         int lineageRemoved = 0;
         int odsUpdated = 0;
         int columnsUpdated = 0;
+        int manifestEvidenceUpdated = 0;
         int columnLineageCreated = 0;
         int columnLineageUpdated = 0;
         int columnLineageRemoved = 0;
@@ -1002,6 +1062,10 @@ public class DbtAssetSyncService {
 
         public int getColumnsUpdated() {
             return columnsUpdated;
+        }
+
+        public int getManifestEvidenceUpdated() {
+            return manifestEvidenceUpdated;
         }
 
         public int getColumnLineageCreated() {

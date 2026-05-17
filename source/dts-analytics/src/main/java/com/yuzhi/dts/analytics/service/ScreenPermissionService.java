@@ -66,11 +66,21 @@ public class ScreenPermissionService {
     private final PlatformPermissionClient platformClient;
     private final boolean platformSourceEnabled;
     private final boolean localFallbackEnabled;
+    private final ScreenAuditService auditService;
 
     public ScreenPermissionService(
             AnalyticsScreenAccessRepository accessRepository,
             AnalyticsScreenRepository screenRepository) {
-        this(accessRepository, screenRepository, null, false, true);
+        this(accessRepository, screenRepository, null, false, true, null);
+    }
+
+    public ScreenPermissionService(
+            AnalyticsScreenAccessRepository accessRepository,
+            AnalyticsScreenRepository screenRepository,
+            PlatformPermissionClient platformClient,
+            boolean platformSourceEnabled,
+            boolean localFallbackEnabled) {
+        this(accessRepository, screenRepository, platformClient, platformSourceEnabled, localFallbackEnabled, null);
     }
 
     @Autowired
@@ -79,12 +89,14 @@ public class ScreenPermissionService {
             AnalyticsScreenRepository screenRepository,
             PlatformPermissionClient platformClient,
             @Value("${dts.analytics.screen-permission.platform-source-enabled:true}") boolean platformSourceEnabled,
-            @Value("${dts.analytics.screen-permission.local-fallback-enabled:true}") boolean localFallbackEnabled) {
+            @Value("${dts.analytics.screen-permission.local-fallback-enabled:true}") boolean localFallbackEnabled,
+            ScreenAuditService auditService) {
         this.accessRepository = accessRepository;
         this.screenRepository = screenRepository;
         this.platformClient = platformClient;
         this.platformSourceEnabled = platformSourceEnabled;
         this.localFallbackEnabled = localFallbackEnabled;
+        this.auditService = auditService;
     }
 
     // ---- Permission snapshot ----
@@ -200,6 +212,7 @@ public class ScreenPermissionService {
                     userId,
                     result.reason()
                 );
+                recordFallbackEvent("snapshot", userId, String.valueOf(screen.getId()), result.reason());
             }
             return fallback;
         }
@@ -258,7 +271,7 @@ public class ScreenPermissionService {
      * PUBLIC &lt; INTERNAL &lt; SECRET &lt; CONFIDENTIAL ladder.
      *
      * <ul>
-     *   <li>screen has no classification (null/blank/unknown) → treat as PUBLIC, allow.</li>
+     *   <li>screen has no classification (null/blank/unknown) → deny; missing classification must be remediated in platform.</li>
      *   <li>caller has no classification (null/blank/unknown) → conservative deny.</li>
      *   <li>both recognized → caller_rank ≥ screen_rank.</li>
      * </ul>
@@ -266,7 +279,7 @@ public class ScreenPermissionService {
     private boolean isClassificationAllowed(String callerLevel, String screenLevel) {
         int screenRank = ladderRank(screenLevel);
         if (screenRank < 0) {
-            return true; // unknown / blank screen classification → permissive
+            return false;
         }
         int callerRank = ladderRank(callerLevel);
         if (callerRank < 0) {
@@ -346,6 +359,7 @@ public class ScreenPermissionService {
                         userId,
                         result.scope()
                     );
+                    recordFallbackEvent("list_accessible", userId, null, result.scope());
                 }
             } else if (result.isError()) {
                 return Collections.emptyList();
@@ -403,6 +417,23 @@ public class ScreenPermissionService {
 
     private boolean platformEnabled() {
         return platformSourceEnabled && platformClient != null;
+    }
+
+    private void recordFallbackEvent(String action, String userId, String screenId, String reason) {
+        if (auditService == null) {
+            return;
+        }
+        try {
+            java.util.LinkedHashMap<String, Object> payload = new java.util.LinkedHashMap<>();
+            payload.put("action", action);
+            payload.put("user", userId);
+            payload.put("screenId", screenId == null ? "" : screenId);
+            payload.put("reason", reason == null ? "" : reason);
+            payload.put("migrationTarget", "platform.asset_grant");
+            auditService.logCrossScreenEvent(null, "screen.permission.local_fallback", payload, null);
+        } catch (Exception ex) {
+            LOG.warn("analytics permission fallback audit failed action={} user={}: {}", action, userId, ex.getMessage());
+        }
     }
 
     private PermissionSnapshot fromPlatformResult(PlatformPermissionClient.PermissionResult result) {

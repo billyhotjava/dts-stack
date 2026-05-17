@@ -18,12 +18,16 @@ type AuditEntry = {
 };
 
 const ACTION_OPTIONS = [
+	{ label: "CHECK_ALLOW", value: "CHECK_ALLOW" },
+	{ label: "CHECK_DENY", value: "CHECK_DENY" },
 	{ label: "GRANT", value: "GRANT" },
 	{ label: "REVOKE", value: "REVOKE" },
 	{ label: "CHANGE_OWNERSHIP", value: "CHANGE_OWNERSHIP" },
 ];
 
 const ACTION_COLORS: Record<string, string> = {
+	CHECK_ALLOW: "green",
+	CHECK_DENY: "volcano",
 	GRANT: "green",
 	REVOKE: "red",
 	CHANGE_OWNERSHIP: "blue",

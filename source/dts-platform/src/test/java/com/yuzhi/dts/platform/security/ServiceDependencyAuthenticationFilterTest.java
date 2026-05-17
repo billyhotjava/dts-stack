@@ -35,6 +35,8 @@ class ServiceDependencyAuthenticationFilterTest {
     private static final String ANALYTICS_ASSET_PERMISSION_BATCH_CHECK = "/api/internal/asset-permission/batch-check";
     private static final String ANALYTICS_ASSET_PERMISSION_ACCESSIBLE_IDS = "/api/internal/asset-permission/accessible-ids";
     private static final String INTERNAL_CAPABILITIES = "/api/internal/capabilities";
+    private static final String METRICS_ASSET_CONTRACT = "/api/catalog/assets-v2/33333333-3333-3333-3333-333333333333/contract";
+    private static final String METRICS_ASSET_SCHEMA_CONTRACT = "/api/catalog/assets-v2/33333333-3333-3333-3333-333333333333/schema-contract";
 
     private PlatformInboundServiceAuthProperties props;
     private SvcTokenAuthService svcTokenAuthService;
@@ -162,6 +164,15 @@ class ServiceDependencyAuthenticationFilterTest {
         assertMetricsCanAccess("POST", ANALYTICS_ASSET_PERMISSION_BATCH_CHECK);
         assertMetricsCanAccess("POST", ANALYTICS_ASSET_PERMISSION_ACCESSIBLE_IDS);
         assertMetricsCanAccess("GET", "/api/internal/asset-permission/grants");
+    }
+
+    @Test
+    void metricsMatchingToken_canReadCatalogContractsAndUseDbtGateway() throws Exception {
+        assertMetricsCanAccess("GET", "/api/catalog/assets-v2");
+        assertMetricsCanAccess("GET", METRICS_ASSET_CONTRACT);
+        assertMetricsCanAccess("GET", METRICS_ASSET_SCHEMA_CONTRACT);
+        assertMetricsCanAccess("POST", "/api/etl/dbt/release-gate/check");
+        assertMetricsCanAccess("POST", "/api/etl/dbt/release/submit");
     }
 
     @Test

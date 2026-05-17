@@ -18,7 +18,7 @@
 **统计**: READY=20, IN_PROGRESS=0, DONE=0, BLOCKED=0
 
 ## Sprint-2: BI 分析卡片文件夹管理 (202604)
-**状态**: READY
+**状态**: IN_PROGRESS
 **类型**: Implementation（实施型）
 
 | Feature | Task 数 | 状态 |
@@ -430,41 +430,63 @@
 **性能要求**: 正式链路需支撑 100MB-500MB / 几十万到 1,000,000 行 CSV；该能力转入 `main` 后续规划，v2.2.3 不再承诺 Sprint-30 完成交付。
 **关键决策**: Sprint-30 不做 Parquet；正式版交换格式为治理后的 CSV 训练快照包，包含 `manifest.json`、`schema.json`、`quality_report.json`、`lineage.json`、`data.csv`。
 
-## Sprint-31: 企业级数据平台主链路补齐 (202605)
-**状态**: READY
-**类型**: Architecture / Implementation（dts-platform + dts-ingestion + dts-analytics + dts-platform-webapp）
-**目标**: 基于全量模块评审，把 DTS 从“数据接入、dbt 建模、资产目录、语义指标、大屏消费的初级功能集合”收敛成一条可验收的企业级数据产品主链路：连接器接入、ODS/DWD/DWS/ADS、发布门禁、运行血缘、资产治理、语义指标、BI/大屏消费、platform 统一权限。
+## Sprint-31A: 企业级数据资产事实源重构 (202605)
+**状态**: DONE
+**类型**: Architecture / Implementation（dts-platform + dts-platform-webapp）
+**目标**: 在 Sprint-31 主链路补齐和 Sprint-32 `dts-metrics` 独立服务之前，先把 `dts-platform` 的数据资产模块收敛为企业级唯一事实源，统一资产身份、生命周期、治理字段、权限校验、血缘入口和对外读取契约。
+**执行约束**: 按当前执行决策，Sprint-31A -> Sprint-31 -> Sprint-32 过程中不做中间编译；所有 review、测试、build 和容器重建放到三段任务完成后统一执行。
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
-| F1-golden-path-contract | P0 | 5 | READY |
-| F2-connector-center-hardening | P0 | 5 | READY |
-| F3-runtime-lineage-governance | P0 | 6 | READY |
-| F4-dbt-release-gate | P0 | 5 | READY |
-| F5-semantic-metric-productization | P0 | 6 | READY |
-| F6-platform-permission-consumption | P0 | 5 | READY |
-| F7-observability-performance-admission | P1 | 5 | READY |
+| F1-asset-identity-lifecycle | P0 | 5 | DONE |
+| F2-governance-contract | P0 | 5 | DONE |
+| F3-lineage-provenance | P0 | 5 | DONE |
+| F4-permission-classification | P0 | 5 | DONE |
+| F5-asset-portal-ux | P1 | 4 | DONE |
+| F6-migration-compatibility | P0 | 5 | DONE |
 
-**统计**: READY=37, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=29, BLOCKED=0
+**设计文档**: `worklog/v2.2.3/sprint-31a-202605/README.md`
+**能力契约**: `worklog/v2.2.3/sprint-31a-202605/assets/asset-capability-contract.md`
+**集成测试**: `worklog/v2.2.3/sprint-31a-202605/it/README.md`
+
+## Sprint-31: 企业级数据平台主链路补齐 (202605)
+**状态**: DONE
+**类型**: Architecture / Implementation（dts-platform + dts-ingestion + dts-analytics + dts-platform-webapp）
+**目标**: 基于 Sprint-31A 的企业级资产事实源，把 DTS 从“数据接入、dbt 建模、资产目录、语义指标、大屏消费的初级功能集合”收敛成一条可验收的企业级数据产品主链路：连接器接入、ODS/DWD/DWS/ADS、发布门禁、运行血缘、资产治理、语义指标、BI/大屏消费、platform 统一权限。
+**依赖**: Sprint-31A 先提供资产身份、治理字段、血缘、权限和读取契约；Sprint-31 不再重新定义资产事实源。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-golden-path-contract | P0 | 5 | DONE |
+| F2-connector-center-hardening | P0 | 5 | DONE |
+| F3-runtime-lineage-governance | P0 | 6 | DONE |
+| F4-dbt-release-gate | P0 | 5 | DONE |
+| F5-semantic-metric-productization | P0 | 6 | DONE |
+| F6-platform-permission-consumption | P0 | 5 | DONE |
+| F7-observability-performance-admission | P1 | 5 | DONE |
+
+**统计**: READY=0, IN_PROGRESS=0, DONE=37, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-31-202605/README.md`
 **评审报告**: `worklog/v2.2.3/sprint-31-202605/assets/full-code-review.md`
 **集成测试**: `worklog/v2.2.3/sprint-31-202605/it/README.md`
 
 ## Sprint-32: dts-metrics 独立服务落地 (202605)
-**状态**: IN_PROGRESS
+**状态**: DONE
 **类型**: Architecture / Implementation（dts-metrics + dts-platform + dts-platform-webapp）
-**目标**: 在 Sprint-31 完成主链路和拆分边界后，把语义指标中心抽出为独立 `dts-metrics` 服务。当前版本默认部署 metrics，商务限制暂不落到配置层，待 license 模块完善后统一收口授权。
+**目标**: 在 Sprint-31A 完成资产事实源、Sprint-31 完成主链路和拆分边界后，把语义指标中心抽出为独立 `dts-metrics` 服务。当前版本默认部署 metrics，商务限制暂不落到配置层，待 license 模块完善后统一收口授权。
+**依赖**: `dts-metrics` 只能消费 platform 的资产、权限、审计和发布契约，不直接读取 platform 内部 Catalog/semantic 表。
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
-| F1-service-shell-and-deployment | P0 | 5 | IN_PROGRESS |
-| F2-platform-contracts-and-auth | P0 | 5 | IN_PROGRESS |
-| F3-metric-domain-and-dsl | P0 | 6 | READY |
-| F4-metric-pack-partner-workflow | P0 | 5 | READY |
-| F5-webapp-routing-and-capabilities | P0 | 5 | READY |
-| F6-migration-compatibility-and-it | P0 | 6 | READY |
+| F1-service-shell-and-deployment | P0 | 5 | DONE |
+| F2-platform-contracts-and-auth | P0 | 5 | DONE |
+| F3-metric-domain-and-dsl | P0 | 6 | DONE |
+| F4-metric-pack-partner-workflow | P0 | 5 | DONE |
+| F5-webapp-routing-and-capabilities | P0 | 5 | DONE |
+| F6-migration-compatibility-and-it | P0 | 6 | DONE |
 
-**统计**: READY=22, IN_PROGRESS=10, DONE=0, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=32, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-32-202605/README.md`
 **服务拆分设计**: `worklog/v2.2.3/sprint-32-202605/assets/dts-metrics-service-design.md`
 **规划评审**: `worklog/v2.2.3/sprint-32-202605/assets/sprint-32-review.md`

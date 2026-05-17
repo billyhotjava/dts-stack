@@ -168,18 +168,18 @@ export default function MetricOperationsPage() {
 	];
 
 	const flowItems = [
-		{ key: "dictionary", title: "指标字典", count: overview.total, path: "/metrics/dictionary", status: overview.draft ? "warning" : "success" },
-		{ key: "semantic", title: "语义建模", count: metrics.length, path: "/metrics/semantic", status: metrics.length ? "success" : "default" },
-		{ key: "models", title: "DWS/ADS", count: models.length, path: "/metrics/semantic/models", status: models.length ? "success" : "default" },
-		{ key: "publish", title: "发布治理", count: overview.published, path: "/metrics/semantic/publish", status: overview.published ? "success" : "default" },
+		{ key: "dictionary", title: "指标字典", count: overview.total, path: "/bi-apps/metrics/dictionary", status: overview.draft ? "warning" : "success" },
+		{ key: "semantic", title: "语义建模", count: metrics.length, path: "/bi-apps/metrics/semantic", status: metrics.length ? "success" : "default" },
+		{ key: "models", title: "DWS/ADS", count: models.length, path: "/bi-apps/metrics/semantic/models", status: models.length ? "success" : "default" },
+		{ key: "publish", title: "发布治理", count: overview.published, path: "/bi-apps/metrics/publish", status: overview.published ? "success" : "default" },
 		{ key: "consume", title: "BI 消费", count: trendRows.length, path: "/bi/metrics", status: failedRuns ? "warning" : "success" },
 	];
 
 	const consumptionItems = useMemo<ConsumptionItem[]>(
 		() => [
-			{ key: "dictionary", name: "指标字典", layer: "Governance", owner: "dts-platform", status: overview.validationFailed ? "warning" : "success", path: "/metrics/dictionary" },
-			{ key: "semantic", name: "语义模型", layer: "Semantic", owner: "dts-platform", status: metrics.length ? "success" : "warning", path: "/metrics/semantic" },
-			{ key: "dataset", name: "公共数据集", layer: "DWS/ADS", owner: "dts-platform", status: models.length ? "success" : "warning", path: "/metrics/semantic/models" },
+			{ key: "dictionary", name: "指标字典", layer: "Governance", owner: "dts-platform", status: overview.validationFailed ? "warning" : "success", path: "/bi-apps/metrics/dictionary" },
+			{ key: "semantic", name: "语义模型", layer: "Semantic", owner: "dts-platform", status: metrics.length ? "success" : "warning", path: "/bi-apps/metrics/semantic" },
+			{ key: "dataset", name: "公共数据集", layer: "DWS/ADS", owner: "dts-platform", status: models.length ? "success" : "warning", path: "/bi-apps/metrics/semantic/models" },
 			{ key: "analytics", name: "BI 指标消费", layer: "BI", owner: "dts-analytics", status: failedRuns ? "warning" : "success", path: "/bi/metrics" },
 		],
 		[failedRuns, metrics.length, models.length, overview.validationFailed],
@@ -234,7 +234,7 @@ export default function MetricOperationsPage() {
 						<Button icon={<RefreshCw className="h-4 w-4" />} loading={loading} onClick={() => void loadSnapshot()}>
 							刷新
 						</Button>
-						<Button type="primary" onClick={() => navigate("/metrics/dictionary")}>
+						<Button type="primary" onClick={() => navigate("/bi-apps/metrics/dictionary")}>
 							管理指标
 						</Button>
 					</Space>
@@ -256,7 +256,7 @@ export default function MetricOperationsPage() {
 			<div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
 				<PlatformSectionCard
 					title="指标链路"
-					action={<Button size="small" onClick={() => navigate("/metrics/semantic")}>语义建模</Button>}
+					action={<Button size="small" onClick={() => navigate("/bi-apps/metrics/semantic")}>语义建模</Button>}
 				>
 					<div className="grid gap-3 md:grid-cols-5">
 						{flowItems.map((item) => (
@@ -284,7 +284,7 @@ export default function MetricOperationsPage() {
 
 				<PlatformSectionCard
 					title="异常分布"
-					action={<Button size="small" onClick={() => navigate("/metrics/dictionary")}>校验记录</Button>}
+					action={<Button size="small" onClick={() => navigate("/bi-apps/metrics/dictionary")}>校验记录</Button>}
 				>
 					{overview.failureTop.length ? (
 						<Timeline
@@ -309,10 +309,10 @@ export default function MetricOperationsPage() {
 			<div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
 				<PlatformSectionCard title="发布闭环">
 					<Space direction="vertical" size={12} className="w-full">
-						<Button block icon={<Boxes className="h-4 w-4" />} onClick={() => navigate("/metrics/semantic/metrics")}>
+						<Button block icon={<Boxes className="h-4 w-4" />} onClick={() => navigate("/bi-apps/metrics/semantic/metrics")}>
 							指标配置
 						</Button>
-						<Button block icon={<Rocket className="h-4 w-4" />} onClick={() => navigate("/metrics/semantic/publish")}>
+						<Button block icon={<Rocket className="h-4 w-4" />} onClick={() => navigate("/bi-apps/metrics/publish")}>
 							审核发布
 						</Button>
 						<Button block icon={<GitBranch className="h-4 w-4" />} onClick={() => navigate("/catalog/lineage/impact")}>

@@ -193,9 +193,9 @@ public class PlatformInfraClient {
         }
     }
 
-    public void syncIngestionExecutionLineage(IngestionTask task, IngestionExecution execution) {
+    public boolean syncIngestionExecutionLineage(IngestionTask task, IngestionExecution execution) {
         if (task == null || execution == null) {
-            return;
+            return false;
         }
         URI uri = buildUri("/catalog/lineage/ingestion-executions");
         Map<String, Object> taskPayload = new LinkedHashMap<>();
@@ -230,12 +230,15 @@ public class PlatformInfraClient {
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.POST, new HttpEntity<>(payload, headers), Map.class);
             if (!response.getStatusCode().is2xxSuccessful()) {
                 LOG.warn("Platform ingestion lineage sync returned status={}", response.getStatusCode().value());
+                return false;
             }
+            return true;
         } catch (HttpStatusCodeException ex) {
             LOG.warn("Platform ingestion lineage sync failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
         } catch (Exception ex) {
             LOG.warn("Platform ingestion lineage sync failed: {}", ex.getMessage());
         }
+        return false;
     }
 
     private void applyServiceHeaders(HttpHeaders headers) {

@@ -13,15 +13,21 @@
 
 | 证据 | 路径 | 状态 |
 |---|---|---|
-| 黄金链路 smoke 脚本输出 | `it/evidence/golden-path/` | READY |
-| Connector ODS 预检/应用结果 | `it/evidence/connector-center/` | READY |
+| 黄金链路 smoke 脚本输出 | `it/evidence/golden-path/` | READY（脚本已定义，待最终执行） |
+| Connector ODS 预检/应用结果 | `it/evidence/connector-center/` | READY（F2 契约已定义，待最终执行） |
 | Addax/Airflow/OpenLineage 运行血缘 | `it/evidence/runtime-lineage/` | READY |
 | dbt compile/test/build + release gate | `it/evidence/dbt-release-gate/` | READY |
 | 语义指标 capability 和服务边界 | `it/evidence/semantic-boundary/` | READY |
 | BI Dataset 和大屏权限验收 | `it/evidence/consumption-permission/` | READY |
-| 性能/审计/告警基线 | `it/evidence/observability-performance/` | READY |
+| 性能/审计/告警基线 | `it/evidence/observability-performance/` | READY（脚本和证据口径已定义，待最终统一执行） |
 
 ## 验收命令草案
+
+推荐统一入口：
+
+```bash
+bash worklog/v2.2.3/sprint-31-202605/it/scripts/golden-path-smoke.sh
+```
 
 ```bash
 curl -sS http://127.0.0.1:18082/api/infra/data-sources
@@ -45,11 +51,22 @@ curl -sS http://127.0.0.1:18082/api/semantic/health
 ```
 
 ```bash
+curl -sS http://127.0.0.1:18082/api/catalog/assets-v2/{id}/contract
+curl -sS http://127.0.0.1:18082/api/catalog/assets-v2/{id}/schema-contract
+curl -sS http://127.0.0.1:18082/api/catalog/assets-v2/governance-gaps
+curl -sS http://127.0.0.1:18082/api/catalog/assets-v2/lineage-failures
+```
+
+```bash
 curl -sS -X POST http://127.0.0.1:18082/api/internal/asset-permission/check \
   -H 'Content-Type: application/json' \
   -H 'X-DTS-Service: dts-analytics' \
   -H 'X-DTS-Service-Token: <token>' \
   -d '{"username":"ptrdemo","userRoles":["花卉租赁PTR"],"userClassification":"INTERNAL","asset":{"type":"SCREEN","id":"1"}}'
+```
+
+```bash
+bash worklog/v2.2.3/sprint-31-202605/it/scripts/observability-admission-check.sh
 ```
 
 ## 阻断条件

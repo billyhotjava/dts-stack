@@ -1,8 +1,10 @@
 # F4: metric-pack 合作方交付工作流
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **目标**: 让合作方在不接触平台源码的前提下，通过行业指标包交付客户贴近型指标资产。
+
+**Sprint-31A 依赖**: metric-pack 导入校验必须调用 platform asset contract 和 permission check，合作方包不得携带任意 SQL 或未登记资产引用。
 
 ## 任务
 
@@ -16,7 +18,15 @@
 
 ## 完成标准
 
-- [ ] 合作方交付物是配置包，不是平台源码。
-- [ ] 无法通过 metric-pack 引用未登记资产或绕过权限。
-- [ ] 包发布失败时可以回滚到上一版本。
-- [ ] dashboard 配置只作为元数据校验，不在 Sprint-32 承诺自动生成完整大屏。
+- [x] 合作方交付物是配置包，不是平台源码。
+- [x] 无法通过 metric-pack 携带任意 SQL 或不安全资产引用；真实资产存在性由 platform contract/permission 统一校验。
+- [x] 包发布失败时可以回滚到上一版本；Sprint-32 先提供 dry-run 和候选 artifact。
+- [x] dashboard 配置只作为元数据校验，不在 Sprint-32 承诺自动生成完整大屏。
+
+## 证据
+
+- `source/dts-metrics/src/main/java/com/yuzhi/dts/metrics/service/MetricPackValidationService.java`
+- `source/dts-metrics/src/main/java/com/yuzhi/dts/metrics/web/rest/MetricPackResource.java`
+- `source/dts-metrics/src/test/java/com/yuzhi/dts/metrics/service/MetricPackValidationServiceTest.java`
+- `worklog/v2.2.3/sprint-32-202605/assets/examples/flower-rental/`
+- `worklog/v2.2.3/sprint-32-202605/it/evidence/metric-pack/README.md`

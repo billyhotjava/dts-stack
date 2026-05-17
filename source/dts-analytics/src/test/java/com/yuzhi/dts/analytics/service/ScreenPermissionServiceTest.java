@@ -118,7 +118,7 @@ class ScreenPermissionServiceTest {
         AnalyticsUser u = user(4L, false);
         when(repo.findGrantsForUser(eq(10L), eq("4"), any())).thenReturn(
             List.of(access(10L, "USER", "4", "VIEWER")));
-        PermissionSnapshot snap = service.snapshot(screen(10L), u, List.of());
+        PermissionSnapshot snap = service.snapshot(screenWithLevel(10L, "PUBLIC"), u, ctx("PUBLIC"));
         assertThat(snap.canRead()).isTrue();
         assertThat(snap.canEdit()).isFalse();
         assertThat(snap.isOwner()).isFalse();
@@ -139,7 +139,7 @@ class ScreenPermissionServiceTest {
         AnalyticsUser u = user(6L, false);
         when(repo.findGrantsForUser(eq(10L), eq("6"), eq(List.of("ROLE_ANALYST")))).thenReturn(
             List.of(access(10L, "ROLE", "ROLE_ANALYST", "VIEWER")));
-        PermissionSnapshot snap = service.snapshot(screen(10L), u, List.of("ROLE_ANALYST"));
+        PermissionSnapshot snap = service.snapshot(screenWithLevel(10L, "INTERNAL"), u, List.of("ROLE_ANALYST"), "INTERNAL");
         assertThat(snap.canRead()).isTrue();
         assertThat(snap.canEdit()).isFalse();
     }
@@ -179,9 +179,9 @@ class ScreenPermissionServiceTest {
                 List.of(access(10L, "ROLE", "ROLE_ANALYST", "VIEWER")));
 
         PermissionSnapshot snap = service.snapshot(
-                screen(10L),
+                screenWithLevel(10L, "INTERNAL"),
                 u,
-                new PlatformContext(null, null, " ROLE_ANALYST, ROLE_OWNER , ROLE_ANALYST "));
+                new PlatformContext(null, "INTERNAL", " ROLE_ANALYST, ROLE_OWNER , ROLE_ANALYST "));
 
         assertThat(snap.canRead()).isTrue();
         assertThat(snap.canEdit()).isFalse();
@@ -354,14 +354,14 @@ class ScreenPermissionServiceTest {
     }
 
     @Test
-    void screen_classification_null_treated_as_public_allows_viewer() {
+    void screen_classification_null_denies_viewer() {
         AnalyticsUser u = user(14L, false);
         when(repo.findGrantsForUser(eq(10L), eq("14"), any()))
             .thenReturn(List.of(viewerAccess(10L, "14", false)));
 
         PermissionSnapshot snap = service.snapshot(screenWithLevel(10L, null), u, ctx(null));
 
-        assertThat(snap.canRead()).isTrue();
+        assertThat(snap.canRead()).isFalse();
         assertThat(snap.overrideUsed()).isFalse();
     }
 

@@ -1,13 +1,13 @@
 export type SemanticModelingSection = "overview" | "subjects" | "objects" | "metrics" | "models" | "publish" | "runs";
 
 export const semanticSectionMeta: Record<SemanticModelingSection, { title: string; path: string }> = {
-	overview: { title: "语义建模流程", path: "/metrics/semantic" },
-	subjects: { title: "主题域映射", path: "/metrics/semantic/subjects" },
-	objects: { title: "业务对象 Join", path: "/metrics/semantic/objects" },
-	metrics: { title: "指标可视化配置", path: "/metrics/semantic/metrics" },
-	models: { title: "DWS/ADS 数据集", path: "/metrics/semantic/models" },
-	publish: { title: "审核发布与血缘", path: "/metrics/semantic/publish" },
-	runs: { title: "模型运行监控", path: "/metrics/semantic/runs" },
+	overview: { title: "语义建模流程", path: "/bi-apps/metrics/semantic" },
+	subjects: { title: "主题域映射", path: "/bi-apps/metrics/semantic/subjects" },
+	objects: { title: "业务对象 Join", path: "/bi-apps/metrics/semantic/objects" },
+	metrics: { title: "指标可视化配置", path: "/bi-apps/metrics/semantic/metrics" },
+	models: { title: "DWS/ADS 数据集", path: "/bi-apps/metrics/semantic/models" },
+	publish: { title: "审核发布与血缘", path: "/bi-apps/metrics/publish" },
+	runs: { title: "模型运行监控", path: "/bi-apps/metrics/semantic/runs" },
 };
 
 export const semanticSections = Object.keys(semanticSectionMeta) as SemanticModelingSection[];

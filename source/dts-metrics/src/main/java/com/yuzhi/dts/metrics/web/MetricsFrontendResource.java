@@ -21,6 +21,7 @@ public class MetricsFrontendResource {
             "/metrics/semantic/models",
             "/metrics/semantic/publish",
             "/metrics/semantic/runs",
+            "/metrics/migration",
         }
     )
     public String frontend() {

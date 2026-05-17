@@ -57,7 +57,46 @@ public class AssetPermissionAuditService {
         auditRepository.save(audit);
     }
 
+    public void recordDecision(AssetPermissionService.PermissionDecision decision, String targetUser, String operator) {
+        if (decision == null) {
+            return;
+        }
+        AssetPermissionAudit audit = new AssetPermissionAudit();
+        audit.setAction(decision.allowed() ? "CHECK_ALLOW" : "CHECK_DENY");
+        audit.setAssetType(decision.assetType());
+        audit.setAssetId(decision.assetId());
+        audit.setTargetUser(targetUser);
+        audit.setPermission(decision.permission());
+        audit.setOperator(normalizeOperator(operator));
+        audit.setDetail(
+            "{" +
+            "\"allowed\":" + decision.allowed() +
+            ",\"action\":\"" + json(decision.action()) + "\"" +
+            ",\"requiredPermission\":\"" + json(decision.requiredPermission()) + "\"" +
+            ",\"reason\":\"" + json(decision.reason()) + "\"" +
+            ",\"grantSource\":\"" + json(decision.grantSource()) + "\"" +
+            ",\"classificationDecision\":\"" + json(decision.classificationDecision()) + "\"" +
+            ",\"assetKey\":\"" + json(decision.assetKey()) + "\"" +
+            "}"
+        );
+        auditRepository.save(audit);
+    }
+
     private String currentOperator() {
         return SecurityUtils.getCurrentUserLogin().orElse("system");
+    }
+
+    private String normalizeOperator(String operator) {
+        if (operator == null || operator.isBlank()) {
+            return currentOperator();
+        }
+        return operator.trim();
+    }
+
+    private String json(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }

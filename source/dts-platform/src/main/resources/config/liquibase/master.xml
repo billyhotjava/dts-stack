@@ -157,4 +157,5 @@
     <include file="config/liquibase/changelog/20260501_03_catalog_lineage_relation_key.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260501_04_catalog_lineage_time_travel.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260502_01_platform_event_outbox.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260517_01_catalog_column_lineage_time_window.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

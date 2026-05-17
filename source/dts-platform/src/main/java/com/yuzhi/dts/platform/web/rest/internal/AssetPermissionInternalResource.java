@@ -5,14 +5,18 @@ import com.yuzhi.dts.platform.service.permission.AssetPermissionService;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService.AccessibleAssetsResult;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService.AssetRef;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService.GrantCommand;
+import com.yuzhi.dts.platform.service.permission.AssetPermissionService.PermissionCheckCommand;
+import com.yuzhi.dts.platform.service.permission.AssetPermissionService.PermissionDecision;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService.PermissionResult;
 import com.yuzhi.dts.platform.service.permission.dto.AssetGrantDto;
+import com.yuzhi.dts.platform.service.permission.AssetPermissionAuditService;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -23,23 +27,43 @@ public class AssetPermissionInternalResource {
     private static final int MAX_BATCH_SIZE = 200;
 
     private final AssetPermissionService permissionService;
+    private final AssetPermissionAuditService auditService;
 
-    public AssetPermissionInternalResource(AssetPermissionService permissionService) {
+    public AssetPermissionInternalResource(AssetPermissionService permissionService, AssetPermissionAuditService auditService) {
         this.permissionService = permissionService;
+        this.auditService = auditService;
     }
 
     @PostMapping("/check")
     public ResponseEntity<CheckResponse> check(@RequestBody CheckRequest request) {
-        PermissionResult result = permissionService.check(
-            request.username(),
-            request.userRoles(),
-            request.userDeptCode(),
-            request.asset().type(),
-            request.asset().id(),
-            request.userClassification(),
-            request.assetClassification()
+        PermissionDecision result = permissionService.checkAction(
+            new PermissionCheckCommand(
+                request.username(),
+                request.userRoles(),
+                request.userDeptCode(),
+                request.userClassification(),
+                request.asset() != null ? request.asset().type() : null,
+                request.asset() != null ? request.asset().id() : null,
+                request.asset() != null ? request.asset().key() : null,
+                request.action(),
+                request.assetClassification()
+            )
         );
-        return ResponseEntity.ok(new CheckResponse(result.allowed(), result.permission(), result.reason()));
+        auditService.recordDecision(result, request.username(), currentActor());
+        return ResponseEntity.ok(
+            new CheckResponse(
+                result.allowed(),
+                result.permission(),
+                result.reason(),
+                result.requiredPermission(),
+                result.action(),
+                result.assetType(),
+                result.assetId(),
+                result.assetKey(),
+                result.classificationDecision(),
+                result.grantSource()
+            )
+        );
     }
 
     @PostMapping("/batch-check")
@@ -60,7 +84,7 @@ public class AssetPermissionInternalResource {
 
         Map<String, CheckResponse> responseMap = new java.util.LinkedHashMap<>();
         results.forEach((key, pr) -> responseMap.put(key,
-            new CheckResponse(pr.allowed(), pr.permission(), pr.reason())));
+            new CheckResponse(pr.allowed(), pr.permission(), pr.reason(), null, null, null, null, null, null, pr.reason())));
 
         return ResponseEntity.ok(Map.of("results", responseMap));
     }
@@ -132,6 +156,7 @@ public class AssetPermissionInternalResource {
         String userDeptCode,
         String userClassification,
         String assetClassification,
+        String action,
         AssetRefDto asset
     ) {}
     public record BatchCheckRequest(
@@ -144,8 +169,19 @@ public class AssetPermissionInternalResource {
     public record AccessibleIdsRequest(String username, List<String> userRoles, String userDeptCode,
                                         String userClassification, String assetType, Integer page, Integer size) {}
 
-    public record AssetRefDto(String type, String id) {}
-    public record CheckResponse(boolean allowed, String permission, String reason) {}
+    public record AssetRefDto(String type, String id, String key) {}
+    public record CheckResponse(
+        boolean allowed,
+        String permission,
+        String reason,
+        String requiredPermission,
+        String action,
+        String assetType,
+        String assetId,
+        String assetKey,
+        String classificationDecision,
+        String grantSource
+    ) {}
     public record AccessibleIdsResponse(List<String> assetIds, long total, String scope) {}
     public record GrantRequest(
         String assetType,
@@ -159,4 +195,9 @@ public class AssetPermissionInternalResource {
         String grantReason,
         String grantedBy
     ) {}
+
+    private String currentActor() {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication == null ? null : authentication.getName();
+    }
 }

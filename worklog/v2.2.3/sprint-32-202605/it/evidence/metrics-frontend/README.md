@@ -80,6 +80,6 @@ dependencies: {}
 
 ## 剩余范围
 
-- capability 驱动的菜单显隐仍需在后续任务统一处理。
-- `/api/semantic/**` 兼容代理仍需单独实现和记录弃用日志。
-- 完整指标语义 CRUD、DWS/ADS 生成、dbt 发布网关仍属于 F3/F4/F6 后续范围。
+- capability 驱动的菜单显隐以 platform 菜单权限为准；license 接入前不做版本禁用。
+- `/api/semantic/**` 当前保留旧 platform 接口作为一个 Sprint 的兼容窗口，后续切为明确代理或弃用提示。
+- 完整指标语义 CRUD、Superset 远端注册和完整大屏自动生成仍属于后续延展范围。

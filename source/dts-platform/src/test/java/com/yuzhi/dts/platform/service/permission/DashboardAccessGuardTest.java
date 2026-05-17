@@ -205,6 +205,59 @@ class DashboardAccessGuardTest {
         assertThat(decision.reason()).isEqualTo("BASE_ACCESS_PLUS_LEVEL");
     }
 
+    @Test
+    @DisplayName("同步大屏公开密级无需授权即可查看")
+    void syncedScreenPublic_canViewWithoutGrant() {
+        BiReportLink report = screenReport("PUBLIC", "ROLE_PTR", "DEPT_A", "xiezm");
+        Caller ptrdemo = caller("ptrdemo", Set.of("PUBLIC"), Set.of("ROLE_OTHER"), "DEPT_B");
+        when(grantRepository.findActiveGrantsForUser(eq("SCREEN"), eq("7"), eq("ptrdemo"), any(), any(), any(Instant.class)))
+            .thenReturn(List.of());
+
+        AccessDecision decision = guard.canView(report, ptrdemo);
+
+        assertThat(decision.allow()).isTrue();
+        assertThat(decision.reason()).isEqualTo("PUBLIC");
+    }
+
+    @Test
+    @DisplayName("同步大屏内部密级不再靠 roleCodes/deptCodes 放行，必须有 SCREEN grant")
+    void syncedScreenInternal_requiresPlatformGrant() {
+        BiReportLink report = screenReport("INTERNAL", "ROLE_PTR", "DEPT_A", "xiezm");
+        Caller ptrdemo = caller("ptrdemo", GENERAL_LEVELS, Set.of("ROLE_PTR"), "DEPT_A");
+        when(grantRepository.findActiveGrantsForUser(eq("SCREEN"), eq("7"), eq("ptrdemo"), any(), any(), any(Instant.class)))
+            .thenReturn(List.of());
+
+        AccessDecision decision = guard.canView(report, ptrdemo);
+
+        assertThat(decision.allow()).isFalse();
+        assertThat(decision.reason()).isEqualTo("DENY_NO_BASE_ACCESS");
+    }
+
+    @Test
+    @DisplayName("同步大屏 ROLE 类型 SCREEN:7 READ 授权可见")
+    void syncedScreenRoleGrant_canView() {
+        BiReportLink report = screenReport("INTERNAL", null, null, "xiezm");
+        Caller ptrdemo = caller("ptrdemo", GENERAL_LEVELS, Set.of("ROLE_PTR"), "DEPT_A");
+        AssetGrant grant = grant("READ", false);
+        grant.setAssetType("SCREEN");
+        grant.setAssetId("7");
+        grant.setGranteeType("ROLE");
+        grant.setGranteeId("ROLE_PTR");
+        when(grantRepository.findActiveGrantsForUser(
+            eq("SCREEN"),
+            eq("7"),
+            eq("ptrdemo"),
+            any(),
+            eq("DEPT_A"),
+            any(Instant.class)
+        )).thenReturn(List.of(grant));
+
+        AccessDecision decision = guard.canView(report, ptrdemo);
+
+        assertThat(decision.allow()).isTrue();
+        assertThat(decision.reason()).isEqualTo("BASE_ACCESS_PLUS_LEVEL");
+    }
+
     // ---------------------------------------------------------------------
     // canManage / canGrant / canRevoke — 关键策略 1 检查
     // ---------------------------------------------------------------------
@@ -325,6 +378,13 @@ class DashboardAccessGuardTest {
         r.setDeptCodes(deptCodes);
         r.setCreatedBy(createdBy);
         r.setEnabled(true);
+        return r;
+    }
+
+    private BiReportLink screenReport(String classification, String roleCodes, String deptCodes, String createdBy) {
+        BiReportLink r = report(classification, roleCodes, deptCodes, createdBy);
+        r.setCode("screen-7");
+        r.setReportType("SCREEN");
         return r;
     }
 

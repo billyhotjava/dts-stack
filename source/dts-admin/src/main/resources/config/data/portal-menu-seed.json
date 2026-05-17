@@ -1,46 +1,93 @@
 {
   "portalNavSections": [
     {
-      "key": "bi",
-      "path": "bi",
+      "key": "bi-apps",
+      "path": "bi-apps",
       "icon": "solar:chart-2-bold-duotone",
-      "titleKey": "sys.nav.portal.bi",
-      "title": "BI 分析",
+      "titleKey": "sys.nav.portal.businessIntelligenceApps",
+      "title": "商业智能应用",
       "children": [
         {
-          "key": "screens",
-          "path": "screens",
-          "icon": "solar:monitor-bold-duotone",
-          "titleKey": "sys.nav.portal.analyticsScreens",
-          "title": "数据大屏"
+          "key": "metrics",
+          "path": "metrics",
+          "icon": "solar:function-bold-duotone",
+          "titleKey": "sys.nav.portal.metricsCenter",
+          "title": "指标与语义",
+          "children": [
+            {
+              "key": "metric-center",
+              "path": "center",
+              "icon": "solar:chart-square-bold-duotone",
+              "titleKey": "sys.nav.portal.metricsWorkbench",
+              "title": "指标工作台",
+              "externalLink": "/bi-apps/metrics/center"
+            },
+            {
+              "key": "metric-assets",
+              "path": "assets",
+              "icon": "solar:clipboard-list-bold-duotone",
+              "titleKey": "sys.nav.portal.metricsDictionary",
+              "title": "指标资产",
+              "externalLink": "/bi-apps/metrics/dictionary"
+            },
+            {
+              "key": "semantic-modeling",
+              "path": "semantic",
+              "icon": "solar:diagram-up-bold-duotone",
+              "titleKey": "sys.nav.portal.metricsSemantic",
+              "title": "语义建模",
+              "externalLink": "/bi-apps/metrics/semantic"
+            },
+            {
+              "key": "metric-publish",
+              "path": "publish",
+              "icon": "solar:rocket-bold-duotone",
+              "titleKey": "sys.nav.portal.metricsPublish",
+              "title": "发布与运行",
+              "externalLink": "/bi-apps/metrics/publish"
+            }
+          ]
         },
         {
-          "key": "dashboards",
-          "path": "dashboards",
+          "key": "bi",
+          "path": "bi",
           "icon": "solar:widget-3-bold-duotone",
-          "titleKey": "sys.nav.portal.analyticsDashboards",
-          "title": "分析看板"
-        },
-        {
-          "key": "questions",
-          "path": "questions",
-          "icon": "solar:clipboard-list-bold-duotone",
-          "titleKey": "sys.nav.portal.analyticsQuestions",
-          "title": "分析卡片"
-        },
-        {
-          "key": "data",
-          "path": "data",
-          "icon": "solar:database-bold-duotone",
-          "titleKey": "sys.nav.portal.analyticsData",
-          "title": "数据管理"
-        },
-        {
-          "key": "projectCockpit",
-          "path": "project-cockpit",
-          "icon": "solar:chart-square-bold-duotone",
-          "titleKey": "sys.nav.portal.analyticsProjectCockpit",
-          "title": "项目看板"
+          "titleKey": "sys.nav.portal.bi",
+          "title": "BI 分析",
+          "children": [
+            {
+              "key": "screens",
+              "path": "screens",
+              "icon": "solar:monitor-bold-duotone",
+              "titleKey": "sys.nav.portal.biScreens",
+              "title": "数据大屏",
+              "externalLink": "/bi/screens"
+            },
+            {
+              "key": "dashboards",
+              "path": "dashboards",
+              "icon": "solar:widget-3-bold-duotone",
+              "titleKey": "sys.nav.portal.biDashboards",
+              "title": "分析看板",
+              "externalLink": "/bi/dashboards"
+            },
+            {
+              "key": "questions",
+              "path": "questions",
+              "icon": "solar:clipboard-list-bold-duotone",
+              "titleKey": "sys.nav.portal.biQuestions",
+              "title": "分析卡片",
+              "externalLink": "/bi/questions"
+            },
+            {
+              "key": "data",
+              "path": "data",
+              "icon": "solar:database-bold-duotone",
+              "titleKey": "sys.nav.portal.biData",
+              "title": "BI 数据集",
+              "externalLink": "/bi/data"
+            }
+          ]
         }
       ]
     },
@@ -178,79 +225,6 @@
           "titleKey": "sys.nav.portal.studioDbtFiles",
           "title": "项目文件浏览",
           "externalLink": "/modeling/dbt-files"
-        }
-      ]
-    },
-    {
-      "key": "metrics",
-      "path": "metrics",
-      "icon": "solar:chart-2-bold-duotone",
-      "titleKey": "sys.nav.portal.metricsCenter",
-      "title": "语义与指标中心",
-      "children": [
-        {
-          "key": "metric-center",
-          "path": "center",
-          "icon": "solar:chart-square-bold-duotone",
-          "titleKey": "sys.nav.portal.metricsWorkbench",
-          "title": "指标工作台",
-          "externalLink": "/metrics/center"
-        },
-        {
-          "key": "metric-dictionary",
-          "path": "dictionary",
-          "icon": "solar:clipboard-list-bold-duotone",
-          "titleKey": "sys.nav.portal.metricsDictionary",
-          "title": "指标字典",
-          "externalLink": "/metrics/dictionary"
-        },
-        {
-          "key": "semantic-subjects",
-          "path": "subjects",
-          "icon": "solar:map-point-bold-duotone",
-          "titleKey": "sys.nav.portal.metricsSubjects",
-          "title": "主题域映射",
-          "externalLink": "/metrics/semantic/subjects"
-        },
-        {
-          "key": "semantic-objects",
-          "path": "objects",
-          "icon": "solar:diagram-up-bold-duotone",
-          "titleKey": "sys.nav.portal.metricsObjects",
-          "title": "业务对象 Join",
-          "externalLink": "/metrics/semantic/objects"
-        },
-        {
-          "key": "semantic-metrics",
-          "path": "metrics",
-          "icon": "solar:function-bold-duotone",
-          "titleKey": "sys.nav.portal.metricsDesigner",
-          "title": "指标可视化配置",
-          "externalLink": "/metrics/semantic/metrics"
-        },
-        {
-          "key": "semantic-models",
-          "path": "models",
-          "icon": "solar:layers-bold-duotone",
-          "titleKey": "sys.nav.portal.metricsModels",
-          "title": "DWS/ADS 数据集",
-          "externalLink": "/metrics/semantic/models"
-        },
-        {
-          "key": "semantic-publish",
-          "path": "publish",
-          "icon": "solar:rocket-bold-duotone",
-          "titleKey": "sys.nav.portal.metricsPublish",
-          "title": "审核发布与血缘",
-          "externalLink": "/metrics/semantic/publish"
-        },
-        {
-          "key": "semantic-runs",
-          "path": "runs",
-          "icon": "solar:play-circle-bold-duotone",
-          "titleKey": "sys.nav.portal.metricsRuns",
-          "title": "模型运行监控",
-          "externalLink": "/metrics/semantic/runs"
         }
       ]
     },
@@ -461,23 +435,6 @@
           "icon": "solar:refresh-bold-duotone",
           "titleKey": "sys.nav.portal.opsBackfill",
           "title": "补数管理"
-        }
-      ]
-    },
-    {
-      "key": "app-pack",
-      "path": "app-pack",
-      "icon": "solar:layers-bold-duotone",
-      "titleKey": "sys.nav.portal.appPack",
-      "title": "行业业务开发(App-Pack)",
-      "children": [
-        {
-          "key": "metro",
-          "path": "metro",
-          "icon": "solar:map-point-bold-duotone",
-          "titleKey": "sys.nav.portal.appPackMetro",
-          "title": "地铁应用",
-          "externalLink": "/expert/metro/dashboard"
         }
       ]
     },
