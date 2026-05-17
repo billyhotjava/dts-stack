@@ -20,6 +20,39 @@ import {
 } from "@/api/platformApi";
 import { buildAssetGrantUrl, resolveAssetReadiness } from "./assetPortalUx.helpers";
 
+const toDatasetFromAssetV2Detail = (id: string, detail: any) => {
+	const asset = detail?.asset || {};
+	return {
+		id: asset.id || id,
+		name: asset.displayName || asset.table || asset.fqn || "-",
+		type: asset.type || "-",
+		warehouseLayer: asset.warehouseLayer,
+		classification: asset.classification,
+		owner: asset.owner,
+		ownerDept: asset.ownerDept,
+		lifecycleStatus: asset.lifecycleStatus,
+		hiveDatabase: asset.database || asset.schema,
+		hiveTable: asset.table,
+		domainId: asset.domainId,
+		description: asset.description || asset.fqn,
+		governanceStatus: asset.governanceStatus,
+		matchStatus: asset.matchStatus,
+		matchReason: asset.matchReason,
+		syncStatus: asset.syncStatus,
+		syncMessage: asset.syncMessage,
+		service: asset.service,
+		schema: asset.schema,
+		columnCount: asset.columnCount,
+		securityPolicyRefs: asset.securityPolicyRefs,
+		__source: "openmetadata",
+		__fqn: asset.fqn,
+		__legacyDatasetId: asset.legacyDatasetId,
+		__columns: Array.isArray(detail?.columns) ? detail.columns : [],
+		__rawJson: detail?.rawJson,
+		__profileJson: detail?.profileJson,
+	};
+};
+
 export default function DatasetDetailPage() {
 	const { id } = useParams<{ id: string }>();
 	const router = useRouter();
@@ -32,40 +65,14 @@ export default function DatasetDetailPage() {
 	useEffect(() => {
 		if (!id) return;
 		setLoading(true);
-		void getDataset(id)
-			.then((d: any) => setDataset(d))
+		void getCatalogAssetV2(id)
+			.then((detail: any) => {
+				setDataset(toDatasetFromAssetV2Detail(id, detail));
+			})
 			.catch(async () => {
 				try {
-					const detail: any = await getCatalogAssetV2(id);
-					const asset = detail?.asset || {};
-					setDataset({
-						id: asset.id || id,
-						name: asset.displayName || asset.table || asset.fqn || "-",
-						type: asset.type || "-",
-						warehouseLayer: asset.warehouseLayer,
-						classification: asset.classification,
-						owner: asset.owner,
-						ownerDept: asset.ownerDept,
-						lifecycleStatus: asset.lifecycleStatus,
-						hiveDatabase: asset.database || asset.schema,
-						hiveTable: asset.table,
-						domainId: asset.domainId,
-						description: asset.fqn,
-						governanceStatus: asset.governanceStatus,
-						matchStatus: asset.matchStatus,
-						matchReason: asset.matchReason,
-						syncStatus: asset.syncStatus,
-						syncMessage: asset.syncMessage,
-						service: asset.service,
-						schema: asset.schema,
-						columnCount: asset.columnCount,
-						securityPolicyRefs: asset.securityPolicyRefs,
-						__source: "openmetadata",
-						__legacyDatasetId: asset.legacyDatasetId,
-						__columns: Array.isArray(detail?.columns) ? detail.columns : [],
-						__rawJson: detail?.rawJson,
-						__profileJson: detail?.profileJson,
-					});
+					const legacyDataset: any = await getDataset(id);
+					setDataset({ ...legacyDataset, __source: "dts-catalog" });
 				} catch {
 					setDataset(null);
 				}
@@ -98,23 +105,58 @@ export default function DatasetDetailPage() {
 	if (!dataset) {
 		return <div className="p-8 text-slate-500">数据集不存在或无权访问。</div>;
 	}
+	const grantAssetType = assetContract?.grantAssetType || (dataset.__source === "openmetadata" ? "DATASET" : "TABLE");
+	const grantAssetId = assetContract?.grantAssetId || assetContract?.assetKey || dataset.id || "-";
+	const assetKey = assetContract?.assetKey || dataset.__fqn || dataset.id || "-";
+	const contractState = assetContract?.consumable === false ? "不可引用" : assetContract ? "可引用" : "合同读取中";
+	const schemaCount = schemaContract?.columnCount ?? dataset.columnCount ?? "-";
+	const schemaCountLabel = schemaCount === "-" ? "未同步" : `${schemaCount} 个字段`;
 
 	return (
 		<div className="space-y-4 p-4">
-			<div className="flex items-center gap-3">
-				<Button type="text" onClick={() => router.back()}>← 返回</Button>
-				<h2 className="text-lg font-bold text-slate-900">{dataset.name ?? "-"}</h2>
-				{dataset.warehouseLayer && (
-					<Tag color={
-						dataset.warehouseLayer === "ODS" ? "default" :
-						dataset.warehouseLayer === "STG" ? "gold" :
-						dataset.warehouseLayer === "DWD" ? "blue" :
-						dataset.warehouseLayer === "DWS" ? "cyan" :
-						dataset.warehouseLayer === "ADS" ? "green" : "default"
-					}>
-						{dataset.warehouseLayer}
+			<div className="space-y-3 border-b border-slate-200 pb-4">
+				<div className="flex flex-wrap items-center gap-3">
+					<Button type="text" onClick={() => router.back()}>← 返回</Button>
+					<div className="min-w-0 flex-1">
+						<div className="text-xs text-slate-500">企业级资产工作台</div>
+						<h2 className="truncate text-xl font-bold text-slate-900">{dataset.name ?? "-"}</h2>
+					</div>
+					<Tag color={dataset.__source === "openmetadata" ? "blue" : "default"}>
+						{dataset.__source === "openmetadata" ? "assets-v2" : "legacy dataset"}
 					</Tag>
-				)}
+					{dataset.warehouseLayer && (
+						<Tag color={
+							dataset.warehouseLayer === "ODS" ? "default" :
+							dataset.warehouseLayer === "STG" ? "gold" :
+							dataset.warehouseLayer === "DWD" ? "blue" :
+							dataset.warehouseLayer === "DWS" ? "cyan" :
+							dataset.warehouseLayer === "ADS" ? "green" : "default"
+						}>
+							{dataset.warehouseLayer}
+						</Tag>
+					)}
+				</div>
+				<div className="grid gap-3 md:grid-cols-4">
+					<div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+						<div className="text-xs text-slate-500">授权资产</div>
+						<div className="mt-1 truncate font-mono text-xs text-slate-800">{grantAssetType}:{grantAssetId}</div>
+					</div>
+					<div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+						<div className="text-xs text-slate-500">资产键</div>
+						<div className="mt-1 truncate font-mono text-xs text-slate-800">{assetKey}</div>
+					</div>
+					<div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+						<div className="text-xs text-slate-500">字段契约</div>
+						<div className="mt-1 text-sm font-semibold text-slate-900">{schemaCountLabel}</div>
+					</div>
+					<div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+						<div className="text-xs text-slate-500">治理状态</div>
+						<div className="mt-1 flex items-center gap-2">
+							<Tag color={assetContract?.consumable === false ? "orange" : "green"}>{contractState}</Tag>
+							<span className="truncate text-xs text-slate-500">{assetContract?.governanceStatus || dataset.governanceStatus || "-"}</span>
+						</div>
+					</div>
+				</div>
 			</div>
 			<Tabs
 				defaultActiveKey="overview"

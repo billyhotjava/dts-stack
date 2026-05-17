@@ -12,7 +12,7 @@
 | ID | Task | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
 | T01 | 资产解析失败报告前端闭环 | P0 | DONE | F1/T05 |
-| T02 | assets-v2 资产详情工作台替换旧 dataset 详情 | P0 | READY | T01 |
+| T02 | assets-v2 资产详情工作台替换旧 dataset 详情 | P0 | DONE | T01 |
 | T03 | 数据产品成员配置 UI | P0 | READY | Sprint-31A F1/F4 |
 | T04 | 治理缺口和血缘失败的前端处置流 | P0 | READY | Sprint-31A F2/F3 |
 | T05 | dts-metrics 页面真实功能验收 | P0 | READY | Sprint-32 F5 |
@@ -20,7 +20,7 @@
 ## 完成标准
 
 - [x] 资产地图能查看 resolver failure，用户可定位资产事实源解析失败原因。
-- [ ] `/catalog/datasets/:id` 优先读取 assets-v2 contract/schema/governance/lineage，而不是旧 dataset API。
+- [x] `/catalog/datasets/:id` 优先读取 assets-v2 contract/schema/governance/lineage，而不是旧 dataset API。（2026-05-18 已切为 assets-v2 优先读取，增加顶部资产合同摘要，并补 source-level UI contract test）
 - [ ] 数据产品页面能配置成员资产、指标、负责人、SLA 与状态，不只是名称说明。
 - [ ] 治理缺口和血缘失败报告能从列表跳转到对应处置动作。
 - [ ] dts-metrics 独立服务页面具备真实 API 调用和操作路径，platform-webapp 只保留菜单链接。

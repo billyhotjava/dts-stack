@@ -1,7 +1,7 @@
 # T02: assets-v2 资产详情工作台替换旧 dataset 详情
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T01
 
 ## 目标
@@ -25,13 +25,20 @@
 - `source/dts-platform-webapp/src/api/platformApi.ts`
 - 可能复用 `AssetDetailPage.tsx` 中已有治理健康与脱敏联动组件。
 
+## 当前进展
+
+- [x] 详情页读取顺序已调整为 assets-v2 优先，旧 `catalog/datasets` 仅作为 fallback。
+- [x] 页面顶部已增加“企业级资产工作台”摘要，展示授权资产、资产键、字段契约和治理状态。
+- [x] 保留字段、血缘、治理扩展、权限申请 Tab，继续复用已接入的 contract/schema/lineage API。
+- [x] 已补 source-level UI contract test，锁定 assets-v2 优先读取、旧 dataset fallback、资产合同摘要展示与资产键来源。
+
 ## 验证
 
-- [ ] 前端 build 通过。
-- [ ] 至少一个 assets-v2 mock/source-level test 覆盖 contract/schema 渲染。
-- [ ] 无权限资产显示友好错误，不进入 403 白页。
+- [x] 前端 build 通过：`pnpm build` from `source/dts-platform-webapp`。
+- [x] source-level test 通过：`./node_modules/.bin/tsx --test src/pages/catalog/DatasetDetailPage.source-contract.test.ts`。
+- [x] 无权限 / 不存在资产保留友好空态：`数据集不存在或无权访问。`
 
 ## 完成标准
 
-- [ ] 资产详情页不再只展示旧 `catalog/datasets` 信息。
-- [ ] 用户能从页面看到资产事实源、字段契约、治理缺口和权限状态。
+- [x] 资产详情页不再只展示旧 `catalog/datasets` 信息。
+- [x] 用户能从页面看到资产事实源、字段契约、治理缺口和权限状态。

@@ -56,7 +56,7 @@ Sprint-31B 收口
 | F5 | Sprint-31 cheap compile 前置验证 | P0 | 4 | READY | F1-F4 |
 | F6 | 前端验收口径收口 | P0 | 5 | IN_PROGRESS | F1-F5 |
 
-**统计**: READY=15, IN_PROGRESS=0, DONE=14, BLOCKED=0
+**统计**: READY=14, IN_PROGRESS=0, DONE=15, BLOCKED=0
 
 ## 非目标
 
