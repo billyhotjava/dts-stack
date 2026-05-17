@@ -28,6 +28,24 @@ Result: exit 0.
 
 Result: 5 tests passed.
 
+```bash
+node -e "JSON.parse(require('fs').readFileSync('source/dts-admin/src/main/resources/config/data/portal-menu-seed.json','utf8')); JSON.parse(require('fs').readFileSync('source/dts-admin/src/main/resources/config/data/role-menu-defaults.json','utf8')); console.log('json ok')"
+```
+
+Result: exit 0.
+
+```bash
+pnpm exec tsx --test src/pages/catalog/DataProductsPage.source-contract.test.ts
+```
+
+Result: 3 tests passed.
+
+```bash
+VITE_CACHE_DIR=.vite-cache pnpm exec tsc --noEmit
+```
+
+Result: exit 0.
+
 ## Acceptance Notes
 
 - `/metrics/dictionary` and `/metrics/semantic/subjects` can call `/api/metrics/capabilities`.
@@ -35,3 +53,4 @@ Result: 5 tests passed.
 - `/metrics/semantic/publish` can call `/api/metrics/packs/import` as publish dry-run.
 - `/metrics/semantic/runs` and `/metrics/operations` can refresh metrics service observability.
 - Platform legacy routes and navigation leave the platform React router and redirect to `/metrics/**`.
+- `/catalog/data-products` is now reachable from the `数据资产门户` menu and has a matching `role-menu-defaults` entry.

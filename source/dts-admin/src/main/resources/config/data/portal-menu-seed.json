@@ -334,6 +334,14 @@
           "externalLink": "/catalog/search"
         },
         {
+          "key": "products",
+          "path": "products",
+          "icon": "solar:box-bold-duotone",
+          "titleKey": "sys.nav.portal.dataPortalProducts",
+          "title": "数据产品",
+          "externalLink": "/catalog/data-products"
+        },
+        {
           "key": "detail",
           "path": "detail",
           "icon": "solar:document-text-bold-duotone",

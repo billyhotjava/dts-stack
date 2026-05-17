@@ -28,6 +28,8 @@
 
 ## 验证
 
+- [x] 数据产品页面已挂入数据资产门户菜单：`sys.nav.portal.dataPortalProducts` -> `/catalog/data-products`，角色默认菜单同步授权。
+- [x] source-level test 通过：`pnpm exec tsx --test src/pages/catalog/DataProductsPage.source-contract.test.ts`。
 - [x] source-level test 通过：`./node_modules/.bin/tsx --test src/pages/catalog/DataProductsPage.source-contract.test.ts`。
 - [x] 前端 build 通过：`pnpm build` from `source/dts-platform-webapp`。
 - [x] 后端编译通过：`./mvnw -q -pl dts-platform -DskipTests compile` from `source`。
