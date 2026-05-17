@@ -1,7 +1,7 @@
 # T04: RLS 注入 audit
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T01, T02
 
 ## 目标
@@ -21,7 +21,8 @@
    `PolicyInjectionAuditEvent` 字段：`actor, assetType, assetId, action, predicates, maskedColumns, policySource, predicateHash, occurredAt`。
 2. `AssetPermissionInternalResource.policy(...)` 在返回前调用上述方法。
 3. `MetricArtifactGenerationService` / `MetricArtifactPublishService` 收到 `RlsPolicyResult` 后 echo 一条 audit，标记 `direction=consumer, packId=...`。
-4. 新增 `GET /api/internal/v1/asset-permission/audit/policy-injection?asset_id=...&since=...&limit=...` 查询接口（service principal 可访问）。
+4. 新增 `GET /api/internal/v1/asset-permission/audit/policy-injection?assetId=...&packId=...&since=...&limit=...` 查询接口（service principal 可访问）。
+5. 新增 `POST /api/internal/v1/asset-permission/audit/policy-injection`，供 `dts-metrics` 回写 consumer 侧审计。
 5. audit 表 schema：
    ```sql
    create table asset_permission_policy_injection (
@@ -51,12 +52,21 @@
 
 ## 验证
 
-- [ ] `AssetPermissionAuditServiceTest.recordPolicyInjection_persistsPredicates`
-- [ ] `AssetPermissionInternalResourceTest.policy_writesAuditOnSuccess`
-- [ ] `MetricArtifactGenerationServiceTest.preview_writesConsumerAudit`
+- [x] `AssetPermissionAuditServiceTest.recordPolicyInjectionPersistsPredicatesAndStableHash`
+- [x] `AssetPermissionInternalResourceTest.policyReturnsMaskingColumnsForDataset`
+- [x] `MetricArtifactGenerationServiceTest.includesPlatformSecurityPolicyArtifactForReleaseGate`
+- [x] `PlatformContractClientTest.recordPolicyInjectionCallsPlatformWithServiceAuth`
+- [x] `AssetPermissionAuditQueryResourceTest.policyInjectionReturnsProviderAndConsumerRows`
 
 ## 完成标准
 
-- [ ] 每次 policy 命中都有 provider + consumer 两条 audit。
-- [ ] 查询接口可按 asset_id / pack_id 检索。
-- [ ] predicate_hash 与 publish gateway response 一致，便于追溯。
+- [x] 每次成功 policy preview 命中都有 provider + consumer 两条 audit。
+- [x] 查询接口可按 assetId / packId 检索。
+- [x] predicate_hash 与 publish gateway response 一致，便于追溯。
+
+## 交付证据
+
+- 平台端新增 `asset_permission_policy_injection` 表、repository、查询/回写 internal API，并将 `dts-metrics` service token 白名单扩展到 policy-injection GET/POST。
+- `AssetPermissionInternalResource.policy(...)` 返回 RLS/Mask 策略前写 provider 审计。
+- `MetricArtifactGenerationService.preview(...)` 在成功生成 artifact 后回写 consumer 审计，`MetricArtifactPublishService` 复用同一 `MetricPolicyAuditSupport` 计算 predicate hash。
+- 证据文档：`worklog/v2.2.3/sprint-31b-202605/assets/rls-injection-audit-20260518.md`。

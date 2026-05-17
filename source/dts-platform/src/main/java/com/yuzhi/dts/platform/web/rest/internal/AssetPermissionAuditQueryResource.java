@@ -1,17 +1,24 @@
 package com.yuzhi.dts.platform.web.rest.internal;
 
 import com.yuzhi.dts.platform.domain.permission.AssetPermissionAudit;
+import com.yuzhi.dts.platform.domain.permission.AssetPermissionPolicyInjection;
 import com.yuzhi.dts.platform.repository.permission.AssetPermissionAuditRepository;
+import com.yuzhi.dts.platform.repository.permission.AssetPermissionPolicyInjectionRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
+import com.yuzhi.dts.platform.service.permission.AssetPermissionAuditService;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -23,9 +30,17 @@ public class AssetPermissionAuditQueryResource {
     private static final int MAX_LIMIT = 200;
 
     private final AssetPermissionAuditRepository auditRepository;
+    private final AssetPermissionPolicyInjectionRepository policyInjectionRepository;
+    private final AssetPermissionAuditService auditService;
 
-    public AssetPermissionAuditQueryResource(AssetPermissionAuditRepository auditRepository) {
+    public AssetPermissionAuditQueryResource(
+        AssetPermissionAuditRepository auditRepository,
+        AssetPermissionPolicyInjectionRepository policyInjectionRepository,
+        AssetPermissionAuditService auditService
+    ) {
         this.auditRepository = auditRepository;
+        this.policyInjectionRepository = policyInjectionRepository;
+        this.auditService = auditService;
     }
 
     @GetMapping("/denied")
@@ -60,6 +75,42 @@ public class AssetPermissionAuditQueryResource {
             .ok()
             .contentType(new MediaType("text", "csv"))
             .body(toCsv(rows));
+    }
+
+    @GetMapping("/policy-injection")
+    public ResponseEntity<List<PolicyInjectionAuditResponse>> policyInjection(
+        @RequestParam(required = false) String assetId,
+        @RequestParam(required = false) String packId,
+        @RequestParam(required = false) Instant since,
+        @RequestParam(required = false) Integer limit
+    ) {
+        PageRequest pageable = PageRequest.of(0, normalizeLimit(limit));
+        List<PolicyInjectionAuditResponse> rows = policyInjectionRepository
+            .findByFilters(trimToNull(assetId), trimToNull(packId), since, pageable)
+            .getContent()
+            .stream()
+            .map(PolicyInjectionAuditResponse::from)
+            .toList();
+        return ResponseEntity.ok(rows);
+    }
+
+    @PostMapping("/policy-injection")
+    public ResponseEntity<Map<String, Boolean>> recordPolicyInjection(@RequestBody RecordPolicyInjectionRequest request) {
+        auditService.recordPolicyInjection(
+            new AssetPermissionAuditService.PolicyInjectionAuditEvent(
+                request.actor(),
+                request.assetType(),
+                request.assetId(),
+                request.action(),
+                request.predicates(),
+                request.maskedColumns(),
+                request.policySource(),
+                request.predicateHash(),
+                request.direction(),
+                request.packId()
+            )
+        );
+        return ResponseEntity.ok(Map.of("recorded", true));
     }
 
     private static String toCsv(List<AssetPermissionAudit> rows) {
@@ -141,6 +192,51 @@ public class AssetPermissionAuditQueryResource {
                 audit.getReasonCode(),
                 audit.getReasonDetail(),
                 audit.getCreatedDate()
+            );
+        }
+    }
+
+    public record RecordPolicyInjectionRequest(
+        String actor,
+        String assetType,
+        String assetId,
+        String action,
+        List<String> predicates,
+        List<String> maskedColumns,
+        String policySource,
+        String predicateHash,
+        String direction,
+        String packId
+    ) {}
+
+    public record PolicyInjectionAuditResponse(
+        UUID id,
+        String actor,
+        String assetType,
+        String assetId,
+        String action,
+        String predicates,
+        String maskedColumns,
+        String policySource,
+        String predicateHash,
+        String direction,
+        String packId,
+        Instant occurredAt
+    ) {
+        static PolicyInjectionAuditResponse from(AssetPermissionPolicyInjection audit) {
+            return new PolicyInjectionAuditResponse(
+                audit.getId(),
+                audit.getActor(),
+                audit.getAssetType(),
+                audit.getAssetId(),
+                audit.getAction(),
+                audit.getPredicates(),
+                audit.getMaskedColumns(),
+                audit.getPolicySource(),
+                audit.getPredicateHash(),
+                audit.getDirection(),
+                audit.getPackId(),
+                audit.getOccurredAt()
             );
         }
     }

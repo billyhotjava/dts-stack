@@ -347,4 +347,54 @@ class PlatformContractClientTest {
         assertThat(result).containsEntry("appliedPredicateHash", "sha256:abc123");
         server.verify();
     }
+
+    @Test
+    void recordPolicyInjectionCallsPlatformWithServiceAuth() {
+        DtsMetricsProperties properties = new DtsMetricsProperties();
+        properties.getPlatform().setBaseUrl("http://dts-platform:8081/");
+        properties.getPlatform().setApiPath("/api");
+        properties.getPlatform().setServiceToken("metrics-secret");
+
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PlatformContractClient client = new PlatformContractClient(properties, builder.build());
+
+        server
+            .expect(requestTo("http://dts-platform:8081/api/internal/v1/asset-permission/audit/policy-injection"))
+            .andExpect(method(HttpMethod.POST))
+            .andExpect(header("X-DTS-Service", "dts-metrics"))
+            .andExpect(header("X-DTS-Service-Token", "metrics-secret"))
+            .andExpect(content().json("""
+                {
+                  "actor": "ptrdemo",
+                  "assetType": "DATASET",
+                  "assetId": "dataset-001",
+                  "action": "PREVIEW",
+                  "predicates": ["dept_code = 'D01'"],
+                  "maskedColumns": ["customer_phone"],
+                  "policySource": "platform-row-filter+masking",
+                  "predicateHash": "sha256:abc123",
+                  "direction": "CONSUMER",
+                  "packId": "flower-rental"
+                }
+                """))
+            .andRespond(withSuccess("{\"recorded\":true}", MediaType.APPLICATION_JSON));
+
+        client.recordPolicyInjection(
+            new PlatformContractClient.PolicyInjectionAuditRequest(
+                "ptrdemo",
+                "DATASET",
+                "dataset-001",
+                "PREVIEW",
+                List.of("dept_code = 'D01'"),
+                List.of("customer_phone"),
+                "platform-row-filter+masking",
+                "sha256:abc123",
+                "CONSUMER",
+                "flower-rental"
+            )
+        );
+
+        server.verify();
+    }
 }

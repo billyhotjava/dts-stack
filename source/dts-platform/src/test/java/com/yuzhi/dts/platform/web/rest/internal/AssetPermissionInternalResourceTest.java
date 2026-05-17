@@ -20,6 +20,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
@@ -99,6 +100,18 @@ class AssetPermissionInternalResourceTest {
         assertThat(response).isNotNull();
         assertThat(response.maskedColumns()).containsExactly("customer_name");
         assertThat(response.policySource()).isEqualTo("platform-masking");
+
+        ArgumentCaptor<AssetPermissionAuditService.PolicyInjectionAuditEvent> captor =
+            ArgumentCaptor.forClass(AssetPermissionAuditService.PolicyInjectionAuditEvent.class);
+        verify(auditService).recordPolicyInjection(captor.capture());
+        AssetPermissionAuditService.PolicyInjectionAuditEvent audit = captor.getValue();
+        assertThat(audit.actor()).isEqualTo("ptrdemo");
+        assertThat(audit.assetType()).isEqualTo("DATASET");
+        assertThat(audit.assetId()).isEqualTo(datasetId.toString());
+        assertThat(audit.action()).isEqualTo("PREVIEW");
+        assertThat(audit.maskedColumns()).containsExactly("customer_name");
+        assertThat(audit.policySource()).isEqualTo("platform-masking");
+        assertThat(audit.direction()).isEqualTo("PROVIDER");
     }
 
     @Test

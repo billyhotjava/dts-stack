@@ -171,7 +171,9 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
             || isPost(method, path, "/api/internal/asset-permission/accessible-ids")
             || isGet(method, path, "/api/internal/asset-permission/grants")
             || isGet(method, path, "/api/internal/v1/asset-permission/audit/denied")
-            || isGet(method, path, "/api/internal/v1/asset-permission/audit/denied.csv");
+            || isGet(method, path, "/api/internal/v1/asset-permission/audit/denied.csv")
+            || isGet(method, path, "/api/internal/v1/asset-permission/audit/policy-injection")
+            || isPost(method, path, "/api/internal/v1/asset-permission/audit/policy-injection");
     }
 
     private boolean isMetricsCatalogRead(String method, String path) {

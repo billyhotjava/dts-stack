@@ -84,6 +84,7 @@ public class MetricArtifactGenerationService {
             artifacts.put("securityPolicyJson", securityPolicyJson(rlsPolicy));
             artifacts.put("schemaYml", schemaYml(modelName, dimensions, metrics, rlsPolicy));
             artifacts.put("metricDoc", metricDoc(packId, dimensions, metrics));
+            recordConsumerPolicyInjection(packId, actor, sourceAsset, sourceModel, rlsPolicy);
         } catch (IllegalArgumentException e) {
             return MetricArtifactPreviewResult.invalid(List.of(e.getMessage()), validation.summary());
         } catch (PlatformContractClient.PlatformContractException e) {
@@ -97,6 +98,8 @@ public class MetricArtifactGenerationService {
                 message = "platform contract unavailable while resolving data domains; retry later";
             } else if (raw.contains("data standards resolve")) {
                 message = "platform contract unavailable while resolving data standards; retry later";
+            } else if (raw.contains("policy injection audit")) {
+                message = "platform contract unavailable while writing security policy audit; retry later";
             } else {
                 message = "platform contract unavailable while resolving glossary terms; retry later";
             }
@@ -122,6 +125,36 @@ public class MetricArtifactGenerationService {
         summary.put("dimensionCount", dimensions.size());
         summary.put("metricCount", metrics.size());
         return MetricArtifactPreviewResult.valid(summary, artifacts, warnings);
+    }
+
+    private void recordConsumerPolicyInjection(
+        String packId,
+        PreviewActor actor,
+        PlatformAssetDeclaration asset,
+        String sourceModel,
+        PlatformContractClient.RlsPolicyResult rlsPolicy
+    ) {
+        if (asset == null) {
+            return;
+        }
+        PreviewActor effectiveActor = actor != null ? actor : PreviewActor.system();
+        PlatformContractClient.RlsPolicyResult effective = rlsPolicy != null
+            ? rlsPolicy
+            : PlatformContractClient.RlsPolicyResult.empty();
+        platformContractClient.recordPolicyInjection(
+            new PlatformContractClient.PolicyInjectionAuditRequest(
+                effectiveActor.username(),
+                asset.type(),
+                firstText(asset.id(), asset.key(), sourceModel),
+                "PREVIEW",
+                effective.predicates() != null ? effective.predicates() : List.of(),
+                effective.maskedColumns() != null ? effective.maskedColumns() : List.of(),
+                StringUtils.hasText(effective.policySource()) ? effective.policySource() : "platform-permission",
+                MetricPolicyAuditSupport.predicateHash(effective),
+                "CONSUMER",
+                packId
+            )
+        );
     }
 
     private String dbtModelSql(
@@ -624,6 +657,11 @@ public class MetricArtifactGenerationService {
     private static String firstText(Object first, Object second) {
         String value = valueOf(first);
         return StringUtils.hasText(value) ? value : valueOf(second);
+    }
+
+    private static String firstText(Object first, Object second, Object third) {
+        String value = firstText(first, second);
+        return StringUtils.hasText(value) ? value : valueOf(third);
     }
 
     private static String valueOf(Object value) {

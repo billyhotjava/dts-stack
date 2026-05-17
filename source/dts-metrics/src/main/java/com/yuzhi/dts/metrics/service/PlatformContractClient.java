@@ -104,6 +104,21 @@ public class PlatformContractClient {
         }
     }
 
+    public void recordPolicyInjection(PolicyInjectionAuditRequest request) {
+        try {
+            RestClient.RequestBodySpec spec = restClient
+                .post()
+                .uri(internalUrl("/internal/v1/asset-permission/audit/policy-injection"))
+                .header("X-DTS-Service", properties.getServiceName());
+            if (StringUtils.hasText(properties.getPlatform().getServiceToken())) {
+                spec = spec.header("X-DTS-Service-Token", properties.getPlatform().getServiceToken());
+            }
+            spec.body(request).retrieve().toBodilessEntity();
+        } catch (RestClientException e) {
+            throw new PlatformContractException("platform contract call failed: policy injection audit", e);
+        }
+    }
+
     public GlossaryResolveResult resolveGlossaryTerms(List<String> refs) {
         List<String> requestedRefs = refs != null ? refs : List.of();
         if (requestedRefs.isEmpty()) {
@@ -351,6 +366,19 @@ public class PlatformContractClient {
         Boolean strictMode,
         String appliedPolicySource,
         String appliedPredicateHash
+    ) {}
+
+    public record PolicyInjectionAuditRequest(
+        String actor,
+        String assetType,
+        String assetId,
+        String action,
+        List<String> predicates,
+        List<String> maskedColumns,
+        String policySource,
+        String predicateHash,
+        String direction,
+        String packId
     ) {}
 
     public static class PlatformContractException extends RuntimeException {

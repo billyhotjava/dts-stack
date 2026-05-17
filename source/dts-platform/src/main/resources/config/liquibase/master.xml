@@ -162,4 +162,5 @@
     <include file="config/liquibase/changelog/20260517_03_code_asset_lifecycle_backfill.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260518_01_catalog_data_product_contract.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260518_02_asset_permission_audit_reason.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260518_03_asset_permission_policy_injection.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

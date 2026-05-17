@@ -105,8 +105,7 @@ class MetricArtifactGenerationServiceTest {
     @Test
     void includesPlatformSecurityPolicyArtifactForReleaseGate() {
         String manifest = manifestWithSourceAsset("dwd_demo_detail");
-
-        MetricArtifactPreviewResult result = serviceWithPlatform(
+        StubPlatformContractClient platform = stubPlatform(
             glossaryResult("glossary.contract_amount"),
             allowedPermission(),
             null,
@@ -117,7 +116,10 @@ class MetricArtifactGenerationServiceTest {
                 List.of("customer_name"),
                 "platform-row-filter"
             )
-        ).preview(manifest, new MetricArtifactGenerationService.PreviewActor("ptrdemo", List.of("ROLE_PTR"), "D01", "INTERNAL"));
+        );
+
+        MetricArtifactPreviewResult result = serviceWithPlatform(platform)
+            .preview(manifest, new MetricArtifactGenerationService.PreviewActor("ptrdemo", List.of("ROLE_PTR"), "D01", "INTERNAL"));
 
         assertThat(result.valid()).isTrue();
         assertThat(result.artifacts()).containsKey("securityPolicyJson");
@@ -126,6 +128,18 @@ class MetricArtifactGenerationServiceTest {
             .contains("customer_name")
             .contains("dept_code = 'D01'");
         assertThat(result.warnings()).contains("security.apply_rls is a manifest declaration; effective RLS and masking policy is resolved from dts-platform.");
+        assertThat(platform.policyInjectionAudits).hasSize(1);
+        PlatformContractClient.PolicyInjectionAuditRequest audit = platform.policyInjectionAudits.get(0);
+        assertThat(audit.actor()).isEqualTo("ptrdemo");
+        assertThat(audit.assetType()).isEqualTo("DATASET");
+        assertThat(audit.assetId()).isEqualTo("dwd_demo_detail");
+        assertThat(audit.action()).isEqualTo("PREVIEW");
+        assertThat(audit.predicates()).containsExactly("dept_code = 'D01'");
+        assertThat(audit.maskedColumns()).containsExactly("customer_name");
+        assertThat(audit.policySource()).isEqualTo("platform-row-filter");
+        assertThat(audit.predicateHash()).startsWith("sha256:");
+        assertThat(audit.direction()).isEqualTo("CONSUMER");
+        assertThat(audit.packId()).isEqualTo("permission-check");
     }
 
     @Test
@@ -701,11 +715,25 @@ class MetricArtifactGenerationServiceTest {
         PlatformContractClient.DataStandardResolveResult standards,
         PlatformContractClient.RlsPolicyResult rlsPolicy
     ) {
+        return serviceWithPlatform(stubPlatform(result, permission, domains, standards, rlsPolicy));
+    }
+
+    private static MetricArtifactGenerationService serviceWithPlatform(StubPlatformContractClient platform) {
         return new MetricArtifactGenerationService(
             new MetricPackValidationService(),
             new MetricFormulaSqlGenerator(),
-            new StubPlatformContractClient(result, permission, domains, standards, rlsPolicy)
+            platform
         );
+    }
+
+    private static StubPlatformContractClient stubPlatform(
+        PlatformContractClient.GlossaryResolveResult result,
+        PlatformContractClient.PermissionCheckResult permission,
+        PlatformContractClient.DomainResolveResult domains,
+        PlatformContractClient.DataStandardResolveResult standards,
+        PlatformContractClient.RlsPolicyResult rlsPolicy
+    ) {
+        return new StubPlatformContractClient(result, permission, domains, standards, rlsPolicy);
     }
 
     private static PlatformContractClient.PermissionCheckResult allowedPermission() {
@@ -742,6 +770,7 @@ class MetricArtifactGenerationServiceTest {
         private final DomainResolveResult domains;
         private final DataStandardResolveResult standards;
         private final RlsPolicyResult rlsPolicy;
+        private final java.util.ArrayList<PolicyInjectionAuditRequest> policyInjectionAudits = new java.util.ArrayList<>();
 
         private StubPlatformContractClient(
             GlossaryResolveResult result,
@@ -771,6 +800,11 @@ class MetricArtifactGenerationServiceTest {
         @Override
         public RlsPolicyResult resolveRlsPolicy(RlsPolicyRequest request) {
             return rlsPolicy != null ? rlsPolicy : RlsPolicyResult.empty();
+        }
+
+        @Override
+        public void recordPolicyInjection(PolicyInjectionAuditRequest request) {
+            policyInjectionAudits.add(request);
         }
 
         @Override

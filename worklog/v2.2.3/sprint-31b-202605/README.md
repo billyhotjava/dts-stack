@@ -56,7 +56,7 @@ Sprint-31B 收口
 | F5 | Sprint-31 cheap compile 前置验证 | P0 | 4 | READY | F1-F4 |
 | F6 | 前端验收口径收口 | P0 | 5 | DONE | F1-F5 |
 
-**统计**: READY=6, IN_PROGRESS=0, DONE=23, BLOCKED=0
+**统计**: READY=5, IN_PROGRESS=0, DONE=24, BLOCKED=0
 
 ## 非目标
 
@@ -78,7 +78,7 @@ Sprint-31B 收口
 - [x] platform `/api/internal/v1/asset-permission/policy` 在未授权时返回 HTTP 403；deprecated legacy path 继续 fail-closed 200 以兼容旧客户端。
 - [x] `MetricArtifactGenerationService` publish-dry-run gate 与 preview 复用同一 RLS 策略；column masking 已写入候选 SQL/schema。
 - [x] manifest `security.apply_rls` 从「视为已生效」降级为「仅声明」，RLS 实际生效由 platform policy 决定；当前已输出声明 warning、`securityPolicyJson`，true+空策略失败，false+platform 策略 override。
-- [ ] RLS 注入的 predicates / masked columns 落入 audit 记录，可回溯；当前 dataset miss 已输出 warn + counter，v1 严格策略缺 dataset 时返回 422。
+- [x] RLS 注入的 predicates / masked columns 落入 provider/consumer audit 记录，可按 assetId / packId 回溯；当前 dataset miss 已输出 warn + counter，v1 严格策略缺 dataset 时返回 422。
 - [x] `IndicatorService` / `ModelingSqlModelService` / `ApiCatalogService` 改回构造器注入；当前 focused tests 已覆盖构造器签名，完整 Spring context 验证留给 F5。
 - [x] policy endpoint 版本化（`/api/internal/v1/asset-permission/policy`），capability 与 service-auth 白名单同步更新。
 - [x] `lifecycleForModel` / `lifecycleForStatus` 状态映射与既有数据对齐，不批量打 `PENDING_GOVERNANCE`；公共 mapper 已覆盖 Indicator / ModelingSqlModel / ApiService / DataStandard / Glossary，历史 backfill 与仪表板基线已补。
@@ -99,6 +99,8 @@ Sprint-31B 收口
 - `./node_modules/.bin/tsx --test src/routes/sections/dashboard/metricsServiceRoutes.test.ts src/routes/components/router-link.metrics-boundary.source.test.ts src/layouts/components/search-bar.metrics-boundary.source.test.ts` 通过。
 - `./mvnw -q -pl dts-platform -Dtest=AssetPermissionServiceTest,AssetPermissionAuditServiceTest,AssetPermissionInternalResourceTest,AssetPermissionAuditQueryResourceTest,ServiceDependencyAuthenticationFilterTest test` 通过。
 - `./mvnw -q -pl dts-metrics -Dtest=MetricArtifactGenerationServiceTest,MetricArtifactPublishServiceTest,PlatformContractClientTest,MetricPackResourceTest,MetricsFrontendResourceContractTest test` 通过。
+- `./mvnw -q -pl dts-platform -Dtest=AssetPermissionAuditServiceTest,AssetPermissionInternalResourceTest,AssetPermissionAuditQueryResourceTest,ServiceDependencyAuthenticationFilterTest test` 通过。
+- `./mvnw -q -pl dts-metrics -Dtest=MetricArtifactGenerationServiceTest,MetricArtifactPublishServiceTest,PlatformContractClientTest test` 通过。
 
 ## 相关材料
 

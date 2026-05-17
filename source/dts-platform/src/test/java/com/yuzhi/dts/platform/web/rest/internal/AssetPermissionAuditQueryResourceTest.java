@@ -6,10 +6,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.domain.permission.AssetPermissionAudit;
+import com.yuzhi.dts.platform.domain.permission.AssetPermissionPolicyInjection;
 import com.yuzhi.dts.platform.repository.permission.AssetPermissionAuditRepository;
+import com.yuzhi.dts.platform.repository.permission.AssetPermissionPolicyInjectionRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
+import com.yuzhi.dts.platform.service.permission.AssetPermissionAuditService;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -23,6 +27,12 @@ class AssetPermissionAuditQueryResourceTest {
 
     @Mock
     private AssetPermissionAuditRepository auditRepository;
+
+    @Mock
+    private AssetPermissionPolicyInjectionRepository policyInjectionRepository;
+
+    @Mock
+    private AssetPermissionAuditService auditService;
 
     @Test
     void deniedReturnsStructuredReasonRows() {
@@ -40,7 +50,7 @@ class AssetPermissionAuditQueryResourceTest {
         when(auditRepository.findDeniedAudits(eq("CLASSIFICATION_MISMATCH"), eq("asset-1"), eq(since), eq(PageRequest.of(0, 50))))
             .thenReturn(new PageImpl<>(List.of(audit)));
 
-        AssetPermissionAuditQueryResource resource = new AssetPermissionAuditQueryResource(auditRepository);
+        AssetPermissionAuditQueryResource resource = resource();
 
         var response = resource.denied("CLASSIFICATION_MISMATCH", "asset-1", since, 50);
 
@@ -59,7 +69,7 @@ class AssetPermissionAuditQueryResourceTest {
         when(auditRepository.findDeniedAudits(eq(null), eq(null), eq(null), eq(PageRequest.of(0, 200))))
             .thenReturn(new PageImpl<>(List.of()));
 
-        AssetPermissionAuditQueryResource resource = new AssetPermissionAuditQueryResource(auditRepository);
+        AssetPermissionAuditQueryResource resource = resource();
 
         resource.denied(null, null, null, 500);
 
@@ -82,7 +92,7 @@ class AssetPermissionAuditQueryResourceTest {
         when(auditRepository.findDeniedAudits(eq("NO_GRANT"), eq(null), eq(null), eq(PageRequest.of(0, 100))))
             .thenReturn(new PageImpl<>(List.of(audit)));
 
-        AssetPermissionAuditQueryResource resource = new AssetPermissionAuditQueryResource(auditRepository);
+        AssetPermissionAuditQueryResource resource = resource();
 
         var response = resource.deniedCsv("NO_GRANT", null, null, null);
 
@@ -91,10 +101,81 @@ class AssetPermissionAuditQueryResourceTest {
     }
 
     @Test
+    void policyInjectionReturnsProviderAndConsumerRows() {
+        Instant occurredAt = Instant.parse("2026-05-18T00:02:00Z");
+        AssetPermissionPolicyInjection row = new AssetPermissionPolicyInjection();
+        row.setId(UUID.fromString("11111111-2222-3333-4444-555555555555"));
+        row.setActor("ptrdemo");
+        row.setAssetType("DATASET");
+        row.setAssetId("asset-1");
+        row.setAction("PREVIEW");
+        row.setPredicates("[\"dept_code = 'D01'\"]");
+        row.setMaskedColumns("[\"customer_phone\"]");
+        row.setPolicySource("platform-row-filter+masking");
+        row.setPredicateHash("sha256:abc123");
+        row.setDirection("CONSUMER");
+        row.setPackId("flower-rental");
+        row.setOccurredAt(occurredAt);
+        when(policyInjectionRepository.findByFilters(eq("asset-1"), eq("flower-rental"), eq(occurredAt.minusSeconds(60)), eq(PageRequest.of(0, 25))))
+            .thenReturn(new PageImpl<>(List.of(row)));
+
+        var response = resource().policyInjection("asset-1", "flower-rental", occurredAt.minusSeconds(60), 25);
+
+        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(response.getBody()).hasSize(1);
+        AssetPermissionAuditQueryResource.PolicyInjectionAuditResponse body = response.getBody().get(0);
+        assertThat(body.assetId()).isEqualTo("asset-1");
+        assertThat(body.predicates()).isEqualTo("[\"dept_code = 'D01'\"]");
+        assertThat(body.maskedColumns()).isEqualTo("[\"customer_phone\"]");
+        assertThat(body.predicateHash()).isEqualTo("sha256:abc123");
+        assertThat(body.direction()).isEqualTo("CONSUMER");
+        assertThat(body.packId()).isEqualTo("flower-rental");
+    }
+
+    @Test
+    void recordPolicyInjectionDelegatesToAuditService() {
+        AssetPermissionAuditQueryResource.RecordPolicyInjectionRequest request =
+            new AssetPermissionAuditQueryResource.RecordPolicyInjectionRequest(
+                "ptrdemo",
+                "DATASET",
+                "asset-1",
+                "PREVIEW",
+                List.of("dept_code = 'D01'"),
+                List.of("customer_phone"),
+                "platform-row-filter+masking",
+                "sha256:abc123",
+                "CONSUMER",
+                "flower-rental"
+            );
+
+        var response = resource().recordPolicyInjection(request);
+
+        assertThat(response.getBody()).containsEntry("recorded", true);
+        verify(auditService).recordPolicyInjection(
+            new AssetPermissionAuditService.PolicyInjectionAuditEvent(
+                "ptrdemo",
+                "DATASET",
+                "asset-1",
+                "PREVIEW",
+                List.of("dept_code = 'D01'"),
+                List.of("customer_phone"),
+                "platform-row-filter+masking",
+                "sha256:abc123",
+                "CONSUMER",
+                "flower-rental"
+            )
+        );
+    }
+
+    @Test
     void requiresServiceInternalAuthority() {
         PreAuthorize preAuthorize = AssetPermissionAuditQueryResource.class.getAnnotation(PreAuthorize.class);
 
         assertThat(preAuthorize).isNotNull();
         assertThat(preAuthorize.value()).contains(AuthoritiesConstants.SERVICE_INTERNAL);
+    }
+
+    private AssetPermissionAuditQueryResource resource() {
+        return new AssetPermissionAuditQueryResource(auditRepository, policyInjectionRepository, auditService);
     }
 }

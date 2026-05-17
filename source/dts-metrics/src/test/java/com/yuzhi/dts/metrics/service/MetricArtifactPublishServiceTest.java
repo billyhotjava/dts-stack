@@ -84,6 +84,7 @@ class MetricArtifactPublishServiceTest {
 
         private int policyResolveCount;
         private final java.util.ArrayList<DbtReleaseGateRequest> releaseGateRequests = new java.util.ArrayList<>();
+        private final java.util.ArrayList<PolicyInjectionAuditRequest> policyInjectionAudits = new java.util.ArrayList<>();
 
         private CountingPlatformContractClient() {
             super(new DtsMetricsProperties(), RestClient.builder().build());
@@ -151,6 +152,11 @@ class MetricArtifactPublishServiceTest {
                 "appliedPredicateHash",
                 request.appliedPredicateHash()
             );
+        }
+
+        @Override
+        public void recordPolicyInjection(PolicyInjectionAuditRequest request) {
+            policyInjectionAudits.add(request);
         }
     }
 }

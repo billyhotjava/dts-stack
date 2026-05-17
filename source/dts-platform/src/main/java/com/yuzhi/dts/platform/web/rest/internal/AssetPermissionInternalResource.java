@@ -159,6 +159,25 @@ public class AssetPermissionInternalResource {
             }
         }
         String source = policySource(predicates, maskedColumns);
+        auditService.recordPolicyInjection(
+            new AssetPermissionAuditService.PolicyInjectionAuditEvent(
+                request.username(),
+                request.asset() != null ? request.asset().type() : decision.assetType(),
+                firstText(
+                    request.asset() != null ? request.asset().id() : null,
+                    request.asset() != null ? request.asset().key() : null,
+                    decision.assetId(),
+                    decision.assetKey()
+                ),
+                request.action(),
+                List.copyOf(predicates),
+                List.copyOf(maskedColumns),
+                source,
+                null,
+                "PROVIDER",
+                null
+            )
+        );
         return ResponseEntity.ok(new PolicyResponse(true, List.copyOf(predicates), List.copyOf(maskedColumns), source));
     }
 
