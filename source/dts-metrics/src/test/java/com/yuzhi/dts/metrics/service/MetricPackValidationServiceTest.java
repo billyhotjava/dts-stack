@@ -129,6 +129,45 @@ class MetricPackValidationServiceTest {
     }
 
     @Test
+    void rejectsNestedRawSqlInsideLists() {
+        String manifest = """
+            pack_id: nested-unsafe
+            pack_name: Nested Unsafe Pack
+            version: 0.1.0
+            industry: demo
+            edition_required: professional
+            tenant_namespace: demo
+            security:
+              apply_rls: true
+            files:
+              domains: domains.yml
+              business_objects: business-objects.yml
+              dimensions: dimensions.yml
+              metrics: metrics.yml
+              models: models.yml
+              datasets: datasets.yml
+            metrics:
+              - metric_code: demo_metric
+                metric_name: Demo Metric
+                term_ids:
+                  - glossary:demo
+                formula:
+                  type: aggregation
+                  aggregation: sum
+                  field: amount
+                nested:
+                  - raw_sql: drop table asset_grant
+            dependencies:
+              platform_assets: []
+            """;
+
+        MetricPackValidationResult result = service.validateManifest(manifest);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.errors()).contains("raw_sql is not allowed in metric-pack v0.1");
+    }
+
+    @Test
     void rejectsUnsafePlatformAssetReference() {
         String manifest = """
             pack_id: unsafe-asset
@@ -156,6 +195,36 @@ class MetricPackValidationServiceTest {
 
         assertThat(result.valid()).isFalse();
         assertThat(result.errors()).contains("dependencies.platform_assets[0].id must be a safe asset reference");
+    }
+
+    @Test
+    void rejectsPlatformInternalAssetTypesInMetricPacks() {
+        String manifest = """
+            pack_id: unsafe-platform-asset
+            pack_name: Unsafe Platform Asset Pack
+            version: 0.1.0
+            industry: demo
+            edition_required: professional
+            tenant_namespace: demo
+            security:
+              apply_rls: true
+            files:
+              domains: domains.yml
+              business_objects: business-objects.yml
+              dimensions: dimensions.yml
+              metrics: metrics.yml
+              models: models.yml
+              datasets: datasets.yml
+            dependencies:
+              platform_assets:
+                - type: SECURITY_POLICY
+                  id: policy.demo
+            """;
+
+        MetricPackValidationResult result = service.validateManifest(manifest);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.errors()).contains("dependencies.platform_assets[0].type is not allowed for metric-pack references");
     }
 
     @Test
@@ -191,6 +260,81 @@ class MetricPackValidationServiceTest {
 
         assertThat(result.valid()).isFalse();
         assertThat(result.errors()).contains("metrics[0] must bind at least one glossary term via term_ids");
+    }
+
+    @Test
+    void rejectsUnsafeGlossaryTermReference() {
+        String manifest = """
+            pack_id: unsafe-term
+            pack_name: Unsafe Term Pack
+            version: 0.1.0
+            industry: demo
+            edition_required: professional
+            tenant_namespace: demo
+            security:
+              apply_rls: true
+            metrics:
+              - metric_code: contract_amount
+                metric_name: 合同金额
+                term_ids:
+                  - bad;drop table
+                formula:
+                  type: aggregation
+                  aggregation: sum
+                  field: contract_amount
+            files:
+              domains: domains.yml
+              business_objects: business-objects.yml
+              dimensions: dimensions.yml
+              metrics: metrics.yml
+              models: models.yml
+              datasets: datasets.yml
+            dependencies:
+              platform_assets: []
+            """;
+
+        MetricPackValidationResult result = service.validateManifest(manifest);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.errors()).contains("metrics[0].term_ids[0] must be a safe glossary term reference");
+    }
+
+    @Test
+    void rejectsInlineMetricTermNotDeclaredAsPlatformGlossaryAsset() {
+        String manifest = """
+            pack_id: undeclared-term
+            pack_name: Undeclared Term Pack
+            version: 0.1.0
+            industry: demo
+            edition_required: professional
+            tenant_namespace: demo
+            security:
+              apply_rls: true
+            metrics:
+              - metric_code: contract_amount
+                metric_name: 合同金额
+                term_ids:
+                  - glossary.contract_amount
+                formula:
+                  type: aggregation
+                  aggregation: sum
+                  field: contract_amount
+            files:
+              domains: domains.yml
+              business_objects: business-objects.yml
+              dimensions: dimensions.yml
+              metrics: metrics.yml
+              models: models.yml
+              datasets: datasets.yml
+            dependencies:
+              platform_assets: []
+            """;
+
+        MetricPackValidationResult result = service.validateManifest(manifest);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.errors())
+            .contains("metrics[0].term_ids[0] must be declared as GLOSSARY_TERM in dependencies.platform_assets");
     }
 
     @Test

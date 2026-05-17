@@ -34,10 +34,16 @@ curl -sS -X POST "${BASE_URL}/api/metrics/packs/preview-artifacts" \
   -H 'Content-Type: text/yaml' \
   --data-binary @worklog/v2.2.3/sprint-32-202605/it/fixtures/inline-flower-rental-pack.yml \
   > /tmp/dts-s32-metric-pack-preview.json
+curl -sS -X POST "${BASE_URL}/api/metrics/packs/validate" \
+  -H 'Content-Type: text/yaml' \
+  --data-binary @worklog/v2.2.3/sprint-32-202605/it/fixtures/broken-no-terms-pack.yml \
+  > /tmp/dts-s32-broken-no-terms-validation.json
+grep -q '"valid":false' /tmp/dts-s32-broken-no-terms-validation.json
 curl -sS "${BASE_URL}/api/metrics/migration/semantic-dry-run" > /tmp/dts-s32-migration-dry-run.json
 
 echo "Wrote:"
 echo "  /tmp/dts-s32-metrics-health.json"
 echo "  /tmp/dts-s32-metrics-capabilities.json"
 echo "  /tmp/dts-s32-metric-pack-preview.json"
+echo "  /tmp/dts-s32-broken-no-terms-validation.json"
 echo "  /tmp/dts-s32-migration-dry-run.json"

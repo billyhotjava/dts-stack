@@ -7,6 +7,7 @@ import com.yuzhi.dts.metrics.service.dto.MetricPackValidationResult;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -23,26 +24,13 @@ public class MetricPackValidationService {
     private static final Pattern ASSET_REF_PATTERN = Pattern.compile("^[A-Za-z0-9_.:-]+$");
     private static final Pattern NAMESPACE_PATTERN = Pattern.compile("^[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$");
     private static final Set<String> ALLOWED_EDITIONS = Set.of("foundation", "professional", "enterprise");
-    private static final Set<String> ALLOWED_ASSET_TYPES = Set.of(
+    private static final Set<String> ALLOWED_METRIC_PACK_ASSET_TYPES = Set.of(
         "DATASET",
         "DBT_MODEL",
         "BI_DATASET",
-        "SCREEN",
         "METRIC",
-        "METRIC_PACK",
         "SEMANTIC_MODEL",
-        "DATA_PRODUCT",
-        "MODELING_SQL_MODEL",
-        "MODELING_PLAN",
-        "DATA_STANDARD",
-        "METADATA_STANDARD",
-        "GLOSSARY_TERM",
-        "GOV_INDICATOR",
-        "GOV_INDICATOR_TEMPLATE",
-        "QUALITY_RULE",
-        "SECURITY_POLICY",
-        "API_SERVICE",
-        "BACKFILL_REQUEST"
+        "GLOSSARY_TERM"
     );
     private static final List<String> REQUIRED_FILES = List.of("domains", "business_objects", "dimensions", "metrics", "models", "datasets");
 
@@ -102,7 +90,8 @@ public class MetricPackValidationService {
         }
         int platformAssetCount = validatePlatformAssets(manifest, tenantNamespace, errors);
         int packDependencyCount = validatePackDependencies(manifest, errors);
-        int inlineMetricCount = validateInlineMetrics(manifest, errors);
+        Set<String> declaredGlossaryTerms = declaredPlatformAssetRefs(manifest, "GLOSSARY_TERM");
+        int inlineMetricCount = validateInlineMetrics(manifest, declaredGlossaryTerms, errors);
         validateSecurityPolicy(manifest, platformAssetCount, errors);
 
         Map<String, Object> summary = new LinkedHashMap<>();
@@ -176,8 +165,8 @@ public class MetricPackValidationService {
             String ownerNamespace = firstText(asset.get("owner_namespace"), asset.get("tenant_namespace"));
             if (!StringUtils.hasText(type)) {
                 errors.add("dependencies.platform_assets[" + i + "].type is required");
-            } else if (!ALLOWED_ASSET_TYPES.contains(type.trim().toUpperCase(Locale.ROOT))) {
-                errors.add("dependencies.platform_assets[" + i + "].type must be a supported uppercase platform asset type");
+            } else if (!ALLOWED_METRIC_PACK_ASSET_TYPES.contains(type.trim().toUpperCase(Locale.ROOT))) {
+                errors.add("dependencies.platform_assets[" + i + "].type is not allowed for metric-pack references");
             }
             if (!StringUtils.hasText(id) && !StringUtils.hasText(key)) {
                 errors.add("dependencies.platform_assets[" + i + "] must declare id or key");
@@ -196,6 +185,39 @@ public class MetricPackValidationService {
             }
         }
         return assets.size();
+    }
+
+    private static Set<String> declaredPlatformAssetRefs(Map<String, Object> manifest, String assetType) {
+        Object dependenciesRaw = manifest.get("dependencies");
+        if (!(dependenciesRaw instanceof Map<?, ?> dependencies)) {
+            return Set.of();
+        }
+        Object assetsRaw = dependencies.get("platform_assets");
+        if (!(assetsRaw instanceof List<?> assets)) {
+            return Set.of();
+        }
+        Set<String> refs = new LinkedHashSet<>();
+        for (Object item : assets) {
+            if (!(item instanceof Map<?, ?> asset)) {
+                continue;
+            }
+            String type = firstText(asset.get("type"), asset.get("asset_type"));
+            if (!assetType.equalsIgnoreCase(type)) {
+                continue;
+            }
+            addRef(refs, asset.get("id"));
+            addRef(refs, asset.get("asset_code"));
+            addRef(refs, asset.get("key"));
+            addRef(refs, asset.get("asset_key"));
+        }
+        return refs;
+    }
+
+    private static void addRef(Set<String> refs, Object raw) {
+        String value = valueOf(raw);
+        if (StringUtils.hasText(value)) {
+            refs.add(value);
+        }
     }
 
     private static int validatePackDependencies(Map<String, Object> manifest, List<String> errors) {
@@ -227,7 +249,7 @@ public class MetricPackValidationService {
         return packs.size();
     }
 
-    private static int validateInlineMetrics(Map<String, Object> manifest, List<String> errors) {
+    private static int validateInlineMetrics(Map<String, Object> manifest, Set<String> declaredGlossaryTerms, List<String> errors) {
         Object rawMetrics = manifest.get("metrics");
         if (!(rawMetrics instanceof List<?> metrics)) {
             return 0;
@@ -246,6 +268,8 @@ public class MetricPackValidationService {
                     String term = valueOf(termList.get(j));
                     if (!StringUtils.hasText(term) || !ASSET_REF_PATTERN.matcher(term).matches()) {
                         errors.add("metrics[" + i + "].term_ids[" + j + "] must be a safe glossary term reference");
+                    } else if (!isDeclaredAssetRef(term, declaredGlossaryTerms)) {
+                        errors.add("metrics[" + i + "].term_ids[" + j + "] must be declared as GLOSSARY_TERM in dependencies.platform_assets");
                     }
                 }
             }
@@ -266,6 +290,19 @@ public class MetricPackValidationService {
         if (!(applyRls instanceof Boolean enabled) || !enabled) {
             errors.add("security.apply_rls must be true when platform assets are referenced");
         }
+    }
+
+    private static boolean isDeclaredAssetRef(String expected, Set<String> declaredRefs) {
+        for (String ref : declaredRefs) {
+            String normalized = ref.trim();
+            if (normalized.equals(expected)
+                || normalized.endsWith(":" + expected)
+                || normalized.endsWith("/" + expected)
+                || normalized.endsWith("/glossary_term:" + expected)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean isSafeRelativePackPath(String path) {

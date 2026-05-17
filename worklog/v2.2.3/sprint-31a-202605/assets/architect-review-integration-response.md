@@ -1,6 +1,6 @@
 # 架构评审整合响应
 
-**状态**: IN_PROGRESS
+**状态**: CONTRACT_DONE / ENFORCEMENT_IN_PROGRESS
 **日期**: 2026-05-17
 **范围**: Sprint-31A / Sprint-31 / Sprint-32 post-review hardening
 
@@ -8,7 +8,7 @@
 
 评审意见的核心判断成立：当前缺口主要不是从零建设，而是已有 `Glossary`、`DataStandard`、`GovIndicator*`、`MetadataStandard`、`CatalogMaskingService`、`SecurityPolicy`、`OpsBackfillRequest`、`DatasetDataAccessApproval` 等能力没有全部纳入新的 platform asset 事实源和 dts-metrics 契约。
 
-本轮不把所有高级能力做成运行时。当前版本只补企业级 GA 的契约裂缝和导入/发布 guardrail；v2.3 再做完整运行时增强。
+本轮不把所有高级能力做成运行时。当前版本先补企业级 GA 的契约裂缝、导入/发布 guardrail 和关键测试反例；运行时强制闭环进入 `RX/T03`。
 
 ## 当前版本承接项
 
@@ -22,13 +22,25 @@
 
 ## 本轮代码 guardrail
 
-1. `CatalogAssetType` 扩展已有代码化资产类型，避免 Gov/Modeling/Service/Policy 继续绕过 `asset_grant`。
-2. `CatalogAssetKey` 增加 tenant/env/dialect scoped key，支持多客户、多环境、国产/开源方言隔离。
+1. `CatalogAssetType` 扩展已有代码化资产类型，作为 platform 内部统一资产类型集合。
+2. `CatalogAssetKey` 增加 tenant/env/dialect scoped key，且新 scoped dataset 禁止空 tenant。
 3. `MetricPackValidationService` 增加：
    - `tenant_namespace` / `owner_namespace` 隔离检查；
    - `security.apply_rls=true` 检查；
-   - inline `metrics[].term_ids` 强制术语绑定；
+   - inline `metrics[].term_ids` 强制术语绑定，并要求声明对应 `GLOSSARY_TERM` platform asset；
    - `dependencies.pack_dependencies[]` 安全版本约束。
+   - metric-pack 外部可引用资产类型收窄为 `DATASET` / `DBT_MODEL` / `BI_DATASET` / `SEMANTIC_MODEL` / `METRIC` / `GLOSSARY_TERM`。
+4. `broken-no-terms-pack.yml` 作为 negative IT fixture，证明无术语绑定的指标包会被校验拒绝。
+5. platform 新增 `POST /api/internal/glossary/terms/resolve`，`dts-metrics` 预览/导入 artifact 前必须校验术语存在且状态为 `ACTIVE`。
+
+## 当前未闭环项
+
+| 问题 | 状态 |
+|---|---|
+| `CatalogAssetIdentityResolver` 只解析 DATASET | ENFORCEMENT_PENDING |
+| 代码化资产尚无实际 grant writer 调用方 | ENFORCEMENT_PENDING |
+| Glossary term 声明、platform API 存在性和发布状态检查 | DONE |
+| `security.apply_rls=true` 尚未转成 SQL/publish 阶段强制策略 | ENFORCEMENT_PENDING |
 
 ## v2.3 排期项
 
@@ -45,3 +57,4 @@
 - platform: `CatalogAssetKeyTest`
 - metrics: `MetricPackValidationServiceTest`, `MetricArtifactGenerationServiceTest`
 - static: `git diff --check`
+- IT: `broken-no-terms-pack.yml` negative fixture

@@ -3,6 +3,8 @@ metrics:
     metric_name: 合同数
     business_object: rental_contract
     source_asset_code: dwd_flower_contract_detail
+    term_ids:
+      - glossary.contract_count
     description: 统计租赁合同数量。
     formula:
       type: aggregation
@@ -17,6 +19,8 @@ metrics:
     metric_name: 合同金额
     business_object: rental_contract
     source_asset_code: dwd_flower_contract_detail
+    term_ids:
+      - glossary.contract_amount
     description: 统计租赁合同金额。
     formula:
       type: aggregation
@@ -31,6 +35,8 @@ metrics:
     metric_name: 回款率
     business_object: rental_contract
     source_asset_code: dwd_flower_contract_detail
+    term_ids:
+      - glossary.collection_rate
     description: 已回款金额占合同金额的比例。
     formula:
       type: ratio
@@ -53,6 +59,8 @@ metrics:
     metric_name: 高风险项目数
     business_object: rental_project
     source_asset_code: dwd_flower_project_detail
+    term_ids:
+      - glossary.high_risk_project
     description: 风险等级为高的租赁项目数量。
     formula:
       type: conditional_count

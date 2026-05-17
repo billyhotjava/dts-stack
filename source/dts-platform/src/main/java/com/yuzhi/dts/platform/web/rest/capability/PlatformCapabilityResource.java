@@ -59,6 +59,7 @@ public class PlatformCapabilityResource {
         metrics.put("requiredPlatformContracts", List.of(
             "/api/internal/capabilities",
             "/api/catalog/assets-v2/{id}/contract",
+            "/api/internal/glossary/terms/resolve",
             "/api/internal/asset-permission/check",
             "/api/etl/dbt/release/submit",
             "platform-audit"

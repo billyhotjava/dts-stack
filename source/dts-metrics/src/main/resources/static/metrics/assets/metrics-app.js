@@ -131,7 +131,11 @@ files:
 dependencies:
   platform_assets:
     - type: DATASET
-      id: dwd_project_detail`;
+      id: dwd_project_detail
+    - type: GLOSSARY_TERM
+      id: glossary.project
+    - type: GLOSSARY_TERM
+      id: glossary.direct_cost_execution_rate`;
 
 function normalizePath(pathname) {
 	const value = String(pathname || "/metrics/center").replace(/\/+$/, "");

@@ -38,7 +38,7 @@
 **统计**: READY=3, IN_PROGRESS=0, DONE=1, BLOCKED=0
 
 ## Sprint-4: 数据质量管控体系重构 (202604)
-**状态**: DONE
+**状态**: CONTRACT_DONE / ENFORCEMENT_IN_PROGRESS
 **类型**: Implementation（实施型）
 
 | Feature | Task 数 | 状态 |
@@ -444,9 +444,9 @@
 | F4-permission-classification | P0 | 5 | DONE |
 | F5-asset-portal-ux | P1 | 4 | DONE |
 | F6-migration-compatibility | P0 | 5 | DONE |
-| RX-architect-review-hardening | P0 | 1 | DONE |
+| RX-architect-review-hardening | P0 | 3 | CONTRACT_DONE / ENFORCEMENT_IN_PROGRESS |
 
-**统计**: READY=0, IN_PROGRESS=0, DONE=30, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=1, CONTRACT_DONE=0, DONE=30, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-31a-202605/README.md`
 **能力契约**: `worklog/v2.2.3/sprint-31a-202605/assets/asset-capability-contract.md`
 **集成测试**: `worklog/v2.2.3/sprint-31a-202605/it/README.md`

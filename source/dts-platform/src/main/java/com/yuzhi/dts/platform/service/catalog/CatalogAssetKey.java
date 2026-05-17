@@ -47,7 +47,7 @@ public final class CatalogAssetKey {
         String schema,
         String table
     ) {
-        return scopePrefix(tenantNamespace, environment, dialect)
+        return scopePrefix(required(tenantNamespace, "tenant namespace"), environment, dialect)
             + "/source:" + segment(required(sourceFqn, "source fqn"))
             + "/schema:" + segment(firstText(schema, "default"))
             + "/table:" + segment(required(table, "table"));

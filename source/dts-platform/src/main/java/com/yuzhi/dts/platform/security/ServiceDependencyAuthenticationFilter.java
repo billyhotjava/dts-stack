@@ -144,6 +144,7 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
         }
         if ("dts-metrics".equals(service)) {
             return isGet(method, path, "/api/internal/capabilities")
+                || isMetricsGlossaryRead(method, path)
                 || isMetricsAssetPermission(method, path)
                 || isMetricsCatalogRead(method, path)
                 || isMetricsDbtPublishGateway(method, path);
@@ -177,6 +178,10 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
         }
         return path.startsWith("/api/catalog/assets-v2/")
             && (path.endsWith("/contract") || path.endsWith("/schema-contract"));
+    }
+
+    private boolean isMetricsGlossaryRead(String method, String path) {
+        return isPost(method, path, "/api/internal/glossary/terms/resolve");
     }
 
     private boolean isMetricsDbtPublishGateway(String method, String path) {

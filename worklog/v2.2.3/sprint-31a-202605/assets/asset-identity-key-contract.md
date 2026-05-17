@@ -69,7 +69,7 @@ asset_type + asset_key + asset_id
 - `CatalogAssetIdentity`: 统一资产身份 record。
 - `CatalogAssetKey`: 稳定 key 工厂，含 `scopedDataset`、`metricPack`、`codeAsset`。
 - `CatalogAssetIdentityResolver.resolveIdentity`: 基于当前 OM/cache/legacy 解析结果输出统一资产身份。
-- `CatalogAssetKeyTest`: key 规则回归测试，按执行约束暂不运行。
+- `CatalogAssetKeyTest`: key 规则回归测试，覆盖 scoped tenant、code asset 和异常边界。
 
 ## 风险和后续
 

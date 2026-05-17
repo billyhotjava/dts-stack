@@ -2,6 +2,7 @@ package com.yuzhi.dts.metrics.service;
 
 import com.yuzhi.dts.metrics.config.DtsMetricsProperties;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -62,6 +63,18 @@ public class PlatformContractClient {
         return result != null ? result : PermissionCheckResult.denied("empty_response");
     }
 
+    public GlossaryResolveResult resolveGlossaryTerms(List<String> refs) {
+        RestClient.RequestBodySpec spec = restClient
+            .post()
+            .uri(internalUrl("/internal/glossary/terms/resolve"))
+            .header("X-DTS-Service", properties.getServiceName());
+        if (StringUtils.hasText(properties.getPlatform().getServiceToken())) {
+            spec = spec.header("X-DTS-Service-Token", properties.getPlatform().getServiceToken());
+        }
+        GlossaryResolveResult result = spec.body(Map.of("refs", refs != null ? refs : List.of())).retrieve().body(GlossaryResolveResult.class);
+        return result != null ? result : GlossaryResolveResult.empty();
+    }
+
     private String normalizeBaseUrl() {
         return stripTrailingSlash(properties.getPlatform().getBaseUrl());
     }
@@ -86,6 +99,14 @@ public class PlatformContractClient {
     }
 
     public record PermissionAsset(String type, String id, String key) {}
+
+    public record GlossaryTermContract(String ref, String id, String code, String name, String status, boolean active) {}
+
+    public record GlossaryResolveResult(List<GlossaryTermContract> terms, List<String> missing, List<String> inactive) {
+        public static GlossaryResolveResult empty() {
+            return new GlossaryResolveResult(List.of(), List.of(), List.of());
+        }
+    }
 
     public record PermissionCheckRequest(
         String username,

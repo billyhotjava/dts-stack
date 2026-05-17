@@ -78,9 +78,23 @@ class CatalogAssetKeyTest {
     }
 
     @Test
+    void scopedDatasetRequiresTenantNamespace() {
+        assertThatThrownBy(() -> CatalogAssetKey.scopedDataset(null, "uat", "dm", "ptr-mysql", "DWD", "Project Detail"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("tenant namespace is required");
+    }
+
+    @Test
     void codeAssetKeySupportsExistingModelingAndGovernanceDomains() {
         String key = CatalogAssetKey.codeAsset(CatalogAssetType.GOV_INDICATOR, "flowerbiz", "collection-rate");
 
         assertThat(key).isEqualTo("tenant:flowerbiz/env:prod/dialect:generic/gov_indicator:collection-rate");
+    }
+
+    @Test
+    void codeAssetRequiresAssetType() {
+        assertThatThrownBy(() -> CatalogAssetKey.codeAsset(null, "flowerbiz", "collection-rate"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("asset type is required");
     }
 }

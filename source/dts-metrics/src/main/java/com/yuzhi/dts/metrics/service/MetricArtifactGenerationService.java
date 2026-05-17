@@ -8,9 +8,11 @@ import com.yuzhi.dts.metrics.service.dto.MetricPackValidationResult;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -19,14 +21,18 @@ public class MetricArtifactGenerationService {
 
     private final MetricPackValidationService validationService;
     private final MetricFormulaSqlGenerator formulaSqlGenerator;
+    private final PlatformContractClient platformContractClient;
     private final ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
+    private static final Set<String> SOURCE_MODEL_ASSET_TYPES = Set.of("DATASET", "DBT_MODEL", "SEMANTIC_MODEL");
 
     public MetricArtifactGenerationService(
         MetricPackValidationService validationService,
-        MetricFormulaSqlGenerator formulaSqlGenerator
+        MetricFormulaSqlGenerator formulaSqlGenerator,
+        PlatformContractClient platformContractClient
     ) {
         this.validationService = validationService;
         this.formulaSqlGenerator = formulaSqlGenerator;
+        this.platformContractClient = platformContractClient;
     }
 
     public MetricArtifactPreviewResult preview(String manifestContent) {
@@ -49,6 +55,8 @@ public class MetricArtifactGenerationService {
         Map<String, String> artifacts = new LinkedHashMap<>();
         try {
             sourceModel = safeRefName(String.valueOf(manifest.getOrDefault("source_model", "replace_with_dwd_model")));
+            requireSourceModelPlatformAsset(manifest, sourceModel);
+            requireActiveGlossaryTerms(manifest);
             dimensions = readDimensions(manifest.get("dimensions"));
             metrics = readMetrics(manifest.get("metrics"));
             artifacts.put("dbtModelSql", dbtModelSql(modelName, sourceModel, dimensions, metrics));
@@ -172,6 +180,112 @@ public class MetricArtifactGenerationService {
             metrics.add(new MetricColumn(code, name, formulaSqlGenerator.render(map.get("formula"))));
         }
         return metrics;
+    }
+
+    private static void requireSourceModelPlatformAsset(Map<String, Object> manifest, String sourceModel) {
+        Object sourceModelRaw = manifest.get("source_model");
+        if (sourceModelRaw == null || !StringUtils.hasText(String.valueOf(sourceModelRaw))) {
+            return;
+        }
+        Object dependenciesRaw = manifest.get("dependencies");
+        if (!(dependenciesRaw instanceof Map<?, ?> dependencies)) {
+            throw new IllegalArgumentException("source_model must be declared in dependencies.platform_assets before artifact preview");
+        }
+        Object assetsRaw = dependencies.get("platform_assets");
+        if (!(assetsRaw instanceof List<?> assets)) {
+            throw new IllegalArgumentException("source_model must be declared in dependencies.platform_assets before artifact preview");
+        }
+        for (Object item : assets) {
+            if (!(item instanceof Map<?, ?> asset)) {
+                continue;
+            }
+            Object typeRaw = asset.get("type") != null ? asset.get("type") : asset.get("asset_type");
+            String type = String.valueOf(typeRaw).trim().toUpperCase(Locale.ROOT);
+            if (!SOURCE_MODEL_ASSET_TYPES.contains(type)) {
+                continue;
+            }
+            if (
+                assetRefMatches(asset.get("id"), sourceModel) ||
+                assetRefMatches(asset.get("asset_code"), sourceModel) ||
+                assetRefMatches(asset.get("key"), sourceModel) ||
+                assetRefMatches(asset.get("asset_key"), sourceModel)
+            ) {
+                return;
+            }
+        }
+        throw new IllegalArgumentException("source_model must be declared in dependencies.platform_assets before artifact preview");
+    }
+
+    private void requireActiveGlossaryTerms(Map<String, Object> manifest) {
+        List<String> termRefs = inlineGlossaryTermRefs(manifest);
+        if (termRefs.isEmpty()) {
+            return;
+        }
+        PlatformContractClient.GlossaryResolveResult result = platformContractClient.resolveGlossaryTerms(termRefs);
+        List<String> missing = result != null && result.missing() != null ? result.missing() : termRefs;
+        if (!missing.isEmpty()) {
+            throw new IllegalArgumentException("glossary terms are missing in platform: " + String.join(", ", missing));
+        }
+        List<String> inactive = new ArrayList<>();
+        if (result.inactive() != null) {
+            inactive.addAll(result.inactive());
+        }
+        if (result.terms() != null) {
+            for (PlatformContractClient.GlossaryTermContract term : result.terms()) {
+                if (term != null && !term.active() && StringUtils.hasText(term.ref()) && !inactive.contains(term.ref())) {
+                    inactive.add(term.ref());
+                }
+            }
+        }
+        if (!inactive.isEmpty()) {
+            throw new IllegalArgumentException("glossary terms are not ACTIVE in platform: " + String.join(", ", inactive));
+        }
+    }
+
+    private static List<String> inlineGlossaryTermRefs(Map<String, Object> manifest) {
+        Object rawMetrics = manifest.get("metrics");
+        if (!(rawMetrics instanceof List<?> metrics)) {
+            return List.of();
+        }
+        LinkedHashSet<String> refs = new LinkedHashSet<>();
+        for (Object item : metrics) {
+            if (!(item instanceof Map<?, ?> metric)) {
+                continue;
+            }
+            Object terms = metric.get("term_ids") != null ? metric.get("term_ids") : metric.get("terms");
+            if (!(terms instanceof List<?> termList)) {
+                continue;
+            }
+            for (Object term : termList) {
+                String ref = String.valueOf(term == null ? "" : term).trim();
+                if (StringUtils.hasText(ref)) {
+                    refs.add(ref);
+                }
+            }
+        }
+        return List.copyOf(refs);
+    }
+
+    private static boolean assetRefMatches(Object raw, String sourceModel) {
+        if (raw == null || !StringUtils.hasText(String.valueOf(raw))) {
+            return false;
+        }
+        String value = String.valueOf(raw).trim();
+        if (value.equals(sourceModel)) {
+            return true;
+        }
+        try {
+            if (safeRefName(value).equals(sourceModel)) {
+                return true;
+            }
+        } catch (IllegalArgumentException ignored) {
+            // Full platform asset keys may contain separators that are not dbt identifiers.
+        }
+        String normalized = value.toLowerCase(Locale.ROOT).replace('-', '_');
+        return normalized.endsWith(":" + sourceModel)
+            || normalized.endsWith("/" + sourceModel)
+            || normalized.endsWith("/table:" + sourceModel)
+            || normalized.endsWith("/model:" + sourceModel);
     }
 
     private static String safeRefName(String value) {

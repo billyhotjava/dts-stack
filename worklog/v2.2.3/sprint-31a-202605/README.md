@@ -1,7 +1,7 @@
 # Sprint-31A: 企业级数据资产事实源重构（202605）
 
 **时间**: 2026-05
-**状态**: DONE
+**状态**: CONTRACT_DONE / ENFORCEMENT_IN_PROGRESS
 **类型**: Architecture / Implementation（dts-platform + dts-platform-webapp）
 **目标**: 在 Sprint-31 主链路补齐和 Sprint-32 `dts-metrics` 独立服务之前，先把 `dts-platform` 的数据资产模块收敛为企业级唯一事实源，统一资产身份、生命周期、治理字段、权限校验、血缘入口和对外读取契约。
 
@@ -44,9 +44,9 @@ Sprint-31 已经把 DTS 的企业级主链路定义为：
 | F4 | 资产权限和密级一致性 | P0 | 5 | DONE | F1, F2 |
 | F5 | 数据资产门户体验收敛 | P1 | 4 | DONE | F2, F4 |
 | F6 | 迁移、兼容和验收闭环 | P0 | 5 | DONE | F1-F5 |
-| RX | 架构评审追补项 | P0 | 1 | DONE | F1-F6, Sprint-32 |
+| RX | 架构评审追补项 | P0 | 3 | CONTRACT_DONE / ENFORCEMENT_IN_PROGRESS | F1-F6, Sprint-32 |
 
-**统计**: READY=0, IN_PROGRESS=0, DONE=30, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=1, CONTRACT_DONE=0, DONE=30, BLOCKED=0
 
 ## Sprint-31 / Sprint-32 关系
 
@@ -57,6 +57,7 @@ Sprint-32 的 `dts-metrics` 必须只依赖 Sprint-31A 提供的 platform 资产
 ```text
 dts-metrics
   -> GET platform catalog assets / schema / columns / classification
+  -> POST platform glossary term resolve
   -> POST platform asset permission check
   -> POST platform audit events
   -> POST platform dbt publish request

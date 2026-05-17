@@ -1,7 +1,7 @@
 # RX: 架构评审追补项
 
 **优先级**: P0
-**状态**: DONE
+**状态**: CONTRACT_DONE / ENFORCEMENT_IN_PROGRESS
 
 ## 目标
 
@@ -11,7 +11,9 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| T01 | 整合裂缝评审与低风险契约追补 | P0 | DONE | F1-F6, Sprint-32 |
+| T01 | 整合裂缝评审与低风险契约追补 | P0 | CONTRACT_DONE | F1-F6, Sprint-32 |
+| T02 | 测试边界与 metric-pack 外部引用收窄 | P0 | DONE | T01 |
+| T03 | 运行时 enforcement 闭环 | P0 | IN_PROGRESS | T01, T02 |
 
 ## 完成标准
 
@@ -19,4 +21,6 @@
 - [x] 资产类型覆盖已存在的 Modeling / Governance / Standard / Service / Policy 实体。
 - [x] asset key 契约声明 tenant/env/dialect 维度。
 - [x] metric-pack 校验强制 glossary term、tenant/owner namespace、RLS 和 pack dependency。
-- [x] 有针对性单测和静态检查。
+- [x] 有针对性单测、negative IT fixture 和静态检查。
+- [x] Glossary existence / ACTIVE 状态检查已进入 artifact preview/import 运行时。
+- [ ] Resolver / grant writer / SQL RLS 注入进入运行时 enforcement。

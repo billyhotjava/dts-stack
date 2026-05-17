@@ -6,7 +6,10 @@ author: partner-demo
 compatible_dts_versions:
   - ">=2.2.3"
 edition_required: professional
+tenant_namespace: flowerbiz
 description: 用于验证 metric-pack v0.1 的最小行业包草案，覆盖合同、项目、费用和风险总览。
+security:
+  apply_rls: true
 files:
   domains: domains.yml
   business_objects: business-objects.yml
@@ -36,3 +39,11 @@ dependencies:
         - project_status
         - risk_level
         - plan_end_date
+    - asset_code: glossary.contract_count
+      asset_type: GLOSSARY_TERM
+    - asset_code: glossary.contract_amount
+      asset_type: GLOSSARY_TERM
+    - asset_code: glossary.collection_rate
+      asset_type: GLOSSARY_TERM
+    - asset_code: glossary.high_risk_project
+      asset_type: GLOSSARY_TERM
