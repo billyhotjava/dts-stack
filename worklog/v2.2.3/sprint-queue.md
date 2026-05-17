@@ -446,7 +446,7 @@
 | F6-migration-compatibility | P0 | 5 | DONE |
 | RX-architect-review-hardening | P0 | 5 | CONTRACT_DONE / ENFORCEMENT_IN_PROGRESS |
 
-**统计**: READY=0, IN_PROGRESS=2, CONTRACT_DONE=1, DONE=32, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=1, CONTRACT_DONE=1, DONE=33, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-31a-202605/README.md`
 **能力契约**: `worklog/v2.2.3/sprint-31a-202605/assets/asset-capability-contract.md`
 **集成测试**: `worklog/v2.2.3/sprint-31a-202605/it/README.md`

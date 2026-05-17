@@ -103,6 +103,32 @@ class MetricArtifactGenerationServiceTest {
     }
 
     @Test
+    void includesPlatformSecurityPolicyArtifactForReleaseGate() {
+        String manifest = manifestWithSourceAsset("dwd_demo_detail");
+
+        MetricArtifactPreviewResult result = serviceWithPlatform(
+            glossaryResult("glossary.contract_amount"),
+            allowedPermission(),
+            null,
+            null,
+            new PlatformContractClient.RlsPolicyResult(
+                true,
+                List.of("dept_code = 'D01'"),
+                List.of("customer_name"),
+                "platform-row-filter"
+            )
+        ).preview(manifest, new MetricArtifactGenerationService.PreviewActor("ptrdemo", List.of("ROLE_PTR"), "D01", "INTERNAL"));
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.artifacts()).containsKey("securityPolicyJson");
+        assertThat(result.artifacts().get("securityPolicyJson"))
+            .contains("\"maskedColumns\"")
+            .contains("customer_name")
+            .contains("dept_code = 'D01'");
+        assertThat(result.warnings()).contains("security.apply_rls is a manifest declaration; effective RLS and masking policy is resolved from dts-platform.");
+    }
+
+    @Test
     void invalidManifestDoesNotGenerateArtifacts() {
         MetricArtifactPreviewResult result = serviceWithActiveTerms().preview("pack_id: unsafe\nraw_sql: drop table users");
 

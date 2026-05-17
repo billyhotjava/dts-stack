@@ -2,8 +2,10 @@ package com.yuzhi.dts.platform.web.rest.internal;
 
 import com.yuzhi.dts.platform.domain.permission.AssetGrant;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.platform.domain.catalog.CatalogMaskingRule;
 import com.yuzhi.dts.platform.domain.catalog.CatalogRowFilterRule;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogMaskingRuleRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogRowFilterRuleRepository;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService.AccessibleAssetsResult;
@@ -38,17 +40,20 @@ public class AssetPermissionInternalResource {
     private final AssetPermissionAuditService auditService;
     private final CatalogDatasetRepository datasetRepository;
     private final CatalogRowFilterRuleRepository rowFilterRuleRepository;
+    private final CatalogMaskingRuleRepository maskingRuleRepository;
 
     public AssetPermissionInternalResource(
         AssetPermissionService permissionService,
         AssetPermissionAuditService auditService,
         CatalogDatasetRepository datasetRepository,
-        CatalogRowFilterRuleRepository rowFilterRuleRepository
+        CatalogRowFilterRuleRepository rowFilterRuleRepository,
+        CatalogMaskingRuleRepository maskingRuleRepository
     ) {
         this.permissionService = permissionService;
         this.auditService = auditService;
         this.datasetRepository = datasetRepository;
         this.rowFilterRuleRepository = rowFilterRuleRepository;
+        this.maskingRuleRepository = maskingRuleRepository;
     }
 
     @PostMapping("/check")
@@ -103,6 +108,7 @@ public class AssetPermissionInternalResource {
             return ResponseEntity.ok(new PolicyResponse(true, List.of("1 = 0"), List.of(), decision.reason()));
         }
         List<String> predicates = new ArrayList<>();
+        List<String> maskedColumns = new ArrayList<>();
         Optional<CatalogDataset> dataset = resolveDataset(request.asset());
         if (dataset.isPresent()) {
             for (CatalogRowFilterRule rule : rowFilterRuleRepository.findByDataset(dataset.orElseThrow())) {
@@ -114,9 +120,15 @@ public class AssetPermissionInternalResource {
                     predicates.add(expression);
                 }
             }
+            for (CatalogMaskingRule rule : maskingRuleRepository.findByDataset(dataset.orElseThrow())) {
+                String column = rule != null ? trimToNull(rule.getColumn()) : null;
+                if (column != null && safeIdentifier(column)) {
+                    maskedColumns.add(column);
+                }
+            }
         }
-        String source = predicates.isEmpty() ? "platform-permission" : "platform-row-filter";
-        return ResponseEntity.ok(new PolicyResponse(true, List.copyOf(predicates), List.of(), source));
+        String source = policySource(predicates, maskedColumns);
+        return ResponseEntity.ok(new PolicyResponse(true, List.copyOf(predicates), List.copyOf(maskedColumns), source));
     }
 
     @PostMapping("/batch-check")
@@ -312,6 +324,25 @@ public class AssetPermissionInternalResource {
         return trimmed;
     }
 
+    private static String policySource(List<String> predicates, List<String> maskedColumns) {
+        boolean hasPredicates = predicates != null && !predicates.isEmpty();
+        boolean hasMasking = maskedColumns != null && !maskedColumns.isEmpty();
+        if (hasPredicates && hasMasking) {
+            return "platform-row-filter+masking";
+        }
+        if (hasPredicates) {
+            return "platform-row-filter";
+        }
+        if (hasMasking) {
+            return "platform-masking";
+        }
+        return "platform-permission";
+    }
+
+    private static boolean safeIdentifier(String value) {
+        return value != null && value.matches("[A-Za-z_][A-Za-z0-9_]*");
+    }
+
     private static String tableNameFromRef(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -358,5 +389,12 @@ public class AssetPermissionInternalResource {
 
     private static boolean equalsIgnoreCase(String expected, String value) {
         return expected != null && value != null && expected.equalsIgnoreCase(value.trim());
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 }

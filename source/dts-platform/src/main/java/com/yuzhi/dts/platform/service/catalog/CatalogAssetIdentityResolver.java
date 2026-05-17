@@ -7,6 +7,7 @@ import com.yuzhi.dts.platform.domain.governance.GovIndicatorDefinition;
 import com.yuzhi.dts.platform.domain.modeling.DataStandard;
 import com.yuzhi.dts.platform.domain.modeling.ModelingGlossaryTerm;
 import com.yuzhi.dts.platform.domain.modeling.ModelingSqlModel;
+import com.yuzhi.dts.platform.domain.service.SvcApi;
 import com.yuzhi.dts.platform.repository.catalog.CatalogAssetMappingRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataAssetCacheRepository;
@@ -14,6 +15,7 @@ import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionReposi
 import com.yuzhi.dts.platform.repository.modeling.DataStandardRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingGlossaryTermRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
+import com.yuzhi.dts.platform.repository.service.SvcApiRepository;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -35,6 +37,7 @@ public class CatalogAssetIdentityResolver {
     private final ModelingSqlModelRepository sqlModelRepository;
     private final DataStandardRepository dataStandardRepository;
     private final ModelingGlossaryTermRepository glossaryTermRepository;
+    private final SvcApiRepository svcApiRepository;
 
     public CatalogAssetIdentityResolver(
         OpenMetadataAssetCacheRepository assetRepository,
@@ -43,7 +46,8 @@ public class CatalogAssetIdentityResolver {
         GovIndicatorDefinitionRepository indicatorRepository,
         ModelingSqlModelRepository sqlModelRepository,
         DataStandardRepository dataStandardRepository,
-        ModelingGlossaryTermRepository glossaryTermRepository
+        ModelingGlossaryTermRepository glossaryTermRepository,
+        SvcApiRepository svcApiRepository
     ) {
         this.assetRepository = assetRepository;
         this.mappingRepository = mappingRepository;
@@ -52,6 +56,7 @@ public class CatalogAssetIdentityResolver {
         this.sqlModelRepository = sqlModelRepository;
         this.dataStandardRepository = dataStandardRepository;
         this.glossaryTermRepository = glossaryTermRepository;
+        this.svcApiRepository = svcApiRepository;
     }
 
     public Optional<ResolvedAsset> resolve(String ref) {
@@ -148,6 +153,9 @@ public class CatalogAssetIdentityResolver {
         if (trimmed.toLowerCase(Locale.ROOT).contains("/metric-pack:")) {
             return Optional.of(new CatalogAssetIdentity(CatalogAssetType.METRIC_PACK, trimmed, trimmed, "metric-pack-ref"));
         }
+        if (isScopedDatasetKey(trimmed)) {
+            return Optional.of(new CatalogAssetIdentity(CatalogAssetType.DATASET, trimmed, trimmed, "scoped-dataset-ref"));
+        }
 
         UUID uuid = parseUuid(trimmed);
         if (uuid != null) {
@@ -164,6 +172,7 @@ public class CatalogAssetIdentityResolver {
             case "data_standard", "standard" -> resolveDataStandard(naturalKey);
             case "gov_indicator", "indicator", "metric" -> resolveGovIndicator(naturalKey);
             case "modeling_sql_model", "sql_model", "dbt_model" -> resolveModelingSqlModel(naturalKey);
+            case "api_service", "svc_api", "api" -> resolveApiService(naturalKey);
             case "metric_pack" -> Optional.of(metricPackIdentity(trimmed));
             default -> resolveCodeAssetByCode(naturalKey);
         };
@@ -183,7 +192,11 @@ public class CatalogAssetIdentityResolver {
             return Optional.of(dataStandardIdentity(standard.orElseThrow()));
         }
         Optional<ModelingGlossaryTerm> glossaryTerm = glossaryTermRepository.findById(id);
-        return glossaryTerm.map(this::glossaryTermIdentity);
+        if (glossaryTerm.isPresent()) {
+            return glossaryTerm.map(this::glossaryTermIdentity);
+        }
+        Optional<SvcApi> api = svcApiRepository.findById(id);
+        return api.map(this::apiServiceIdentity);
     }
 
     private Optional<CatalogAssetIdentity> resolveCodeAssetByCode(String code) {
@@ -199,7 +212,11 @@ public class CatalogAssetIdentityResolver {
         if (standard.isPresent()) {
             return standard;
         }
-        return resolveGlossaryTerm(code);
+        Optional<CatalogAssetIdentity> glossary = resolveGlossaryTerm(code);
+        if (glossary.isPresent()) {
+            return glossary;
+        }
+        return resolveApiService(code);
     }
 
     private Optional<CatalogAssetIdentity> resolveGovIndicator(String code) {
@@ -234,6 +251,13 @@ public class CatalogAssetIdentityResolver {
         return terms.stream().findFirst().map(this::glossaryTermIdentity);
     }
 
+    private Optional<CatalogAssetIdentity> resolveApiService(String code) {
+        if (!StringUtils.hasText(code)) {
+            return Optional.empty();
+        }
+        return svcApiRepository.findFirstByCodeIgnoreCase(code).map(this::apiServiceIdentity);
+    }
+
     private CatalogAssetIdentity govIndicatorIdentity(GovIndicatorDefinition indicator) {
         String naturalKey = firstText(indicator.getCode(), idText(indicator.getId()));
         return codeAssetIdentity(CatalogAssetType.GOV_INDICATOR, naturalKey, idText(indicator.getId()), "gov-indicator:" + naturalKey);
@@ -252,6 +276,11 @@ public class CatalogAssetIdentityResolver {
     private CatalogAssetIdentity glossaryTermIdentity(ModelingGlossaryTerm term) {
         String naturalKey = firstText(term.getCode(), idText(term.getId()));
         return codeAssetIdentity(CatalogAssetType.GLOSSARY_TERM, naturalKey, idText(term.getId()), "glossary-term:" + naturalKey);
+    }
+
+    private CatalogAssetIdentity apiServiceIdentity(SvcApi api) {
+        String naturalKey = firstText(api.getCode(), idText(api.getId()));
+        return codeAssetIdentity(CatalogAssetType.API_SERVICE, naturalKey, idText(api.getId()), "api-service:" + naturalKey);
     }
 
     private CatalogAssetIdentity codeAssetIdentity(CatalogAssetType type, String naturalKey, String assetId, String sourceRef) {
@@ -298,6 +327,16 @@ public class CatalogAssetIdentityResolver {
             return normalized.substring(0, dot).replace('-', '_');
         }
         return "";
+    }
+
+    private static boolean isScopedDatasetKey(String ref) {
+        String normalized = ref.trim().toLowerCase(Locale.ROOT);
+        return normalized.startsWith("tenant:")
+            && normalized.contains("/env:")
+            && normalized.contains("/dialect:")
+            && normalized.contains("/source:")
+            && normalized.contains("/schema:")
+            && normalized.contains("/table:");
     }
 
     private static String naturalKey(String ref) {

@@ -7,6 +7,7 @@ import com.yuzhi.dts.platform.domain.governance.GovIndicatorDefinition;
 import com.yuzhi.dts.platform.domain.modeling.DataStandard;
 import com.yuzhi.dts.platform.domain.modeling.ModelingGlossaryTerm;
 import com.yuzhi.dts.platform.domain.modeling.ModelingSqlModel;
+import com.yuzhi.dts.platform.domain.service.SvcApi;
 import com.yuzhi.dts.platform.repository.catalog.CatalogAssetMappingRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataAssetCacheRepository;
@@ -14,6 +15,7 @@ import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionReposi
 import com.yuzhi.dts.platform.repository.modeling.DataStandardRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingGlossaryTermRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
+import com.yuzhi.dts.platform.repository.service.SvcApiRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -47,6 +49,9 @@ class CatalogAssetIdentityResolverTest {
     @Mock
     private ModelingGlossaryTermRepository glossaryTermRepository;
 
+    @Mock
+    private SvcApiRepository svcApiRepository;
+
     private CatalogAssetIdentityResolver resolver;
 
     @BeforeEach
@@ -58,7 +63,8 @@ class CatalogAssetIdentityResolverTest {
             indicatorRepository,
             sqlModelRepository,
             dataStandardRepository,
-            glossaryTermRepository
+            glossaryTermRepository,
+            svcApiRepository
         );
     }
 
@@ -132,5 +138,31 @@ class CatalogAssetIdentityResolverTest {
         assertThat(identity.type()).isEqualTo(CatalogAssetType.DATA_STANDARD);
         assertThat(identity.assetId()).isEqualTo(id.toString());
         assertThat(identity.assetKey()).isEqualTo(CatalogAssetKey.codeAsset(CatalogAssetType.DATA_STANDARD, "default", "contract_amount"));
+    }
+
+    @Test
+    void resolvesApiServiceByCode() {
+        UUID id = UUID.randomUUID();
+        SvcApi api = new SvcApi();
+        api.setId(id);
+        api.setCode("contract_summary_api");
+        when(svcApiRepository.findFirstByCodeIgnoreCase("contract_summary_api")).thenReturn(Optional.of(api));
+
+        CatalogAssetIdentity identity = resolver.resolveIdentity("api_service:contract_summary_api").orElseThrow();
+
+        assertThat(identity.type()).isEqualTo(CatalogAssetType.API_SERVICE);
+        assertThat(identity.assetId()).isEqualTo(id.toString());
+        assertThat(identity.assetKey()).isEqualTo(CatalogAssetKey.codeAsset(CatalogAssetType.API_SERVICE, "default", "contract_summary_api"));
+    }
+
+    @Test
+    void resolvesScopedDatasetKeyWithoutRepositoryHit() {
+        String key = CatalogAssetKey.scopedDataset("flowerbiz", "uat", "dm", "ptr-mysql", "dwd", "contract_detail");
+
+        CatalogAssetIdentity identity = resolver.resolveIdentity(key).orElseThrow();
+
+        assertThat(identity.type()).isEqualTo(CatalogAssetType.DATASET);
+        assertThat(identity.assetId()).isEqualTo(key);
+        assertThat(identity.assetKey()).isEqualTo(key);
     }
 }

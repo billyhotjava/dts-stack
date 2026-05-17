@@ -1,6 +1,7 @@
 package com.yuzhi.dts.metrics.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.yuzhi.dts.metrics.service.dto.MetricArtifactPreviewResult;
@@ -23,6 +24,7 @@ public class MetricArtifactGenerationService {
     private final MetricFormulaSqlGenerator formulaSqlGenerator;
     private final PlatformContractClient platformContractClient;
     private final ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
+    private final ObjectMapper jsonMapper = new ObjectMapper();
     private static final Set<String> SOURCE_MODEL_ASSET_TYPES = Set.of("DATASET", "DBT_MODEL", "SEMANTIC_MODEL");
 
     public MetricArtifactGenerationService(
@@ -71,6 +73,7 @@ public class MetricArtifactGenerationService {
             dimensions = readDimensions(manifest.get("dimensions"));
             metrics = readMetrics(manifest.get("metrics"));
             artifacts.put("dbtModelSql", dbtModelSql(modelName, sourceModel, dimensions, metrics, rlsPolicy));
+            artifacts.put("securityPolicyJson", securityPolicyJson(rlsPolicy));
             artifacts.put("schemaYml", schemaYml(modelName, metrics));
             artifacts.put("metricDoc", metricDoc(packId, dimensions, metrics));
         } catch (IllegalArgumentException e) {
@@ -98,6 +101,9 @@ public class MetricArtifactGenerationService {
             warnings.add("No inline metrics were found; generated placeholder artifact requires metric files to be imported later.");
         }
         warnings.add("Platform asset existence and permission checks must pass before preview or publish.");
+        if (applyRls(manifest)) {
+            warnings.add("security.apply_rls is a manifest declaration; effective RLS and masking policy is resolved from dts-platform.");
+        }
 
         Map<String, Object> summary = new LinkedHashMap<>(validation.summary());
         summary.put("modelName", modelName);
@@ -146,16 +152,31 @@ public class MetricArtifactGenerationService {
         if (rlsPolicy == null || rlsPolicy.predicates() == null || rlsPolicy.predicates().isEmpty()) {
             return;
         }
+        List<String> predicates = rlsPolicy.predicates().stream().filter(StringUtils::hasText).map(String::trim).toList();
+        if (predicates.isEmpty()) {
+            return;
+        }
         String source = StringUtils.hasText(rlsPolicy.policySource()) ? rlsPolicy.policySource() : "platform-policy";
         sql.append("-- dts-platform RLS: ").append(source).append("\n");
         sql.append("where\n");
-        for (int i = 0; i < rlsPolicy.predicates().size(); i++) {
-            String predicate = rlsPolicy.predicates().get(i);
-            if (!StringUtils.hasText(predicate)) {
-                continue;
-            }
-            sql.append("    (").append(predicate.trim()).append(")");
-            sql.append(i + 1 < rlsPolicy.predicates().size() ? " and\n" : "\n");
+        for (int i = 0; i < predicates.size(); i++) {
+            sql.append("    (").append(predicates.get(i)).append(")");
+            sql.append(i + 1 < predicates.size() ? " and\n" : "\n");
+        }
+    }
+
+    private String securityPolicyJson(PlatformContractClient.RlsPolicyResult rlsPolicy) {
+        PlatformContractClient.RlsPolicyResult effective = rlsPolicy != null ? rlsPolicy : PlatformContractClient.RlsPolicyResult.empty();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("applyRls", effective.applyRls());
+        payload.put("predicates", effective.predicates() != null ? effective.predicates() : List.of());
+        payload.put("maskedColumns", effective.maskedColumns() != null ? effective.maskedColumns() : List.of());
+        payload.put("policySource", StringUtils.hasText(effective.policySource()) ? effective.policySource() : "platform-permission");
+        payload.put("releaseGate", "platform/dbt release gate must re-resolve and compare this policy before publishing");
+        try {
+            return jsonMapper.writeValueAsString(payload);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("failed to render security policy artifact", e);
         }
     }
 

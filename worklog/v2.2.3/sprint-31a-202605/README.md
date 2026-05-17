@@ -46,7 +46,7 @@ Sprint-31 已经把 DTS 的企业级主链路定义为：
 | F6 | 迁移、兼容和验收闭环 | P0 | 5 | DONE | F1-F5 |
 | RX | 架构评审追补项 | P0 | 5 | CONTRACT_DONE / ENFORCEMENT_IN_PROGRESS | F1-F6, Sprint-32 |
 
-**统计**: READY=0, IN_PROGRESS=2, CONTRACT_DONE=1, DONE=32, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=1, CONTRACT_DONE=1, DONE=33, BLOCKED=0
 
 ## Sprint-31 / Sprint-32 关系
 

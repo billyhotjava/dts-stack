@@ -9,6 +9,10 @@ import com.yuzhi.dts.platform.domain.service.SvcApiMetricHourly;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.service.SvcApiMetricHourlyRepository;
 import com.yuzhi.dts.platform.repository.service.SvcApiRepository;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetIdentity;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetType;
+import com.yuzhi.dts.platform.service.catalog.CodeAssetGrantWriter;
 import com.yuzhi.dts.platform.service.services.dto.*;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
@@ -24,6 +28,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
@@ -39,6 +44,7 @@ public class ApiCatalogService {
     private final SvcApiMetricHourlyRepository metricRepository;
     private final CatalogDatasetRepository datasetRepository;
     private final ObjectMapper objectMapper;
+    private CodeAssetGrantWriter codeAssetGrantWriter;
 
     public ApiCatalogService(
         SvcApiRepository apiRepository,
@@ -50,6 +56,11 @@ public class ApiCatalogService {
         this.metricRepository = metricRepository;
         this.datasetRepository = datasetRepository;
         this.objectMapper = objectMapper;
+    }
+
+    @Autowired(required = false)
+    public void setCodeAssetGrantWriter(CodeAssetGrantWriter codeAssetGrantWriter) {
+        this.codeAssetGrantWriter = codeAssetGrantWriter;
     }
 
     public List<ApiServiceSummaryDto> list(String keyword, String method, String status) {
@@ -136,7 +147,8 @@ public class ApiCatalogService {
         api.setStatus("PUBLISHED");
         api.setLastPublishedAt(Instant.now());
         api.setLastModifiedBy(username);
-        apiRepository.save(api);
+        SvcApi saved = apiRepository.save(api);
+        syncCodeAssetGrant(saved, username);
         return toDetail(api, Instant.now().minus(24, ChronoUnit.HOURS));
     }
 
@@ -159,7 +171,8 @@ public class ApiCatalogService {
         SvcApi api = new SvcApi();
         applyUpsert(api, request, username);
         api.setStatus("DRAFT");
-        apiRepository.save(api);
+        SvcApi saved = apiRepository.save(api);
+        syncCodeAssetGrant(saved, username);
         return toDetail(api, Instant.now().minus(24, ChronoUnit.HOURS));
     }
 
@@ -179,7 +192,8 @@ public class ApiCatalogService {
             });
         }
         applyUpsert(api, request, username);
-        apiRepository.save(api);
+        SvcApi saved = apiRepository.save(api);
+        syncCodeAssetGrant(saved, username);
         return toDetail(api, Instant.now().minus(24, ChronoUnit.HOURS));
     }
 
@@ -188,8 +202,39 @@ public class ApiCatalogService {
         SvcApi api = apiRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("API not found"));
         api.setStatus("DISABLED");
         api.setLastModifiedBy(username);
-        apiRepository.save(api);
+        SvcApi saved = apiRepository.save(api);
+        syncCodeAssetGrant(saved, username);
         return toDetail(api, Instant.now().minus(24, ChronoUnit.HOURS));
+    }
+
+    private void syncCodeAssetGrant(SvcApi api, String username) {
+        if (codeAssetGrantWriter == null || api == null || api.getId() == null) {
+            return;
+        }
+        String naturalKey = StringUtils.hasText(api.getCode()) ? api.getCode().trim() : api.getId().toString();
+        CatalogAssetIdentity identity = new CatalogAssetIdentity(
+            CatalogAssetType.API_SERVICE,
+            CatalogAssetKey.codeAsset(CatalogAssetType.API_SERVICE, "default", naturalKey),
+            api.getId().toString(),
+            "api-service:" + naturalKey
+        );
+        codeAssetGrantWriter.upsertCodeAsset(
+            identity,
+            "PLATFORM",
+            StringUtils.hasText(username) ? username : "dts-platform",
+            api.getClassification(),
+            lifecycleForStatus(api.getStatus())
+        );
+    }
+
+    private static String lifecycleForStatus(String status) {
+        if ("PUBLISHED".equalsIgnoreCase(status)) {
+            return "ACTIVE";
+        }
+        if ("DISABLED".equalsIgnoreCase(status)) {
+            return "ARCHIVED";
+        }
+        return "PENDING_GOVERNANCE";
     }
 
     private void applyUpsert(SvcApi api, ApiServiceUpsertRequest request, String username) {
