@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router";
+import { useParams, useSearchParams } from "react-router";
 import { Alert, Button, Descriptions, Form, Input, Select, Space, Spin, Switch, Tabs, Tag, message } from "antd";
 import { CompactTable } from "@/components/table";
 import { LineageGraph } from "@/components/lineage";
@@ -19,6 +19,11 @@ import {
 	updateCatalogAssetV2Governance,
 } from "@/api/platformApi";
 import { buildAssetGrantUrl, resolveAssetReadiness } from "./assetPortalUx.helpers";
+
+const DETAIL_TAB_KEYS = ["overview", "fields", "lineage", "technical", "governance", "access"] as const;
+
+const resolveDetailTabKey = (value?: string | null) =>
+	DETAIL_TAB_KEYS.includes(value as any) ? String(value) : "overview";
 
 const toDatasetFromAssetV2Detail = (id: string, detail: any) => {
 	const asset = detail?.asset || {};
@@ -55,7 +60,10 @@ const toDatasetFromAssetV2Detail = (id: string, detail: any) => {
 
 export default function DatasetDetailPage() {
 	const { id } = useParams<{ id: string }>();
+	const [searchParams] = useSearchParams();
 	const router = useRouter();
+	const requestedTab = searchParams.get("tab");
+	const [activeTab, setActiveTab] = useState(() => resolveDetailTabKey(requestedTab));
 	const [dataset, setDataset] = useState<Record<string, any> | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [assetContract, setAssetContract] = useState<Record<string, any> | null>(null);
@@ -79,6 +87,10 @@ export default function DatasetDetailPage() {
 			})
 			.finally(() => setLoading(false));
 	}, [id]);
+
+	useEffect(() => {
+		setActiveTab(resolveDetailTabKey(requestedTab));
+	}, [requestedTab]);
 
 	useEffect(() => {
 		if (!id || !dataset) return;
@@ -159,7 +171,8 @@ export default function DatasetDetailPage() {
 				</div>
 			</div>
 			<Tabs
-				defaultActiveKey="overview"
+				activeKey={activeTab}
+				onChange={setActiveTab}
 				items={[
 					{
 						key: "overview",

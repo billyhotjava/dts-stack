@@ -22,3 +22,10 @@ test("dataset detail page keeps asset identity separate from business descriptio
 	assert.match(SOURCE, /const assetKey = assetContract\?\.assetKey \|\| dataset\.__fqn \|\| dataset\.id \|\| "-"/);
 	assert.doesNotMatch(SOURCE, /assetContract\?\.assetKey \|\| dataset\.description \|\| "-"/);
 });
+
+test("dataset detail page can deep-link to remediation tabs", () => {
+	assert.match(SOURCE, /useSearchParams/);
+	assert.match(SOURCE, /DETAIL_TAB_KEYS/);
+	assert.match(SOURCE, /activeKey=\{activeTab\}/);
+	assert.match(SOURCE, /onChange=\{setActiveTab\}/);
+});

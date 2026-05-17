@@ -506,9 +506,9 @@
 | F3-code-quality-and-security-hardening | P0 | 5 | DONE |
 | F4-sprint-31a-gap-and-status-rectification | P1 | 4 | READY |
 | F5-sprint-31-cheap-compile-verification | P0 | 4 | READY |
-| F6-frontend-acceptance-recovery | P0 | 5 | IN_PROGRESS（T01-T03 DONE；T04-T05 待实现） |
+| F6-frontend-acceptance-recovery | P0 | 5 | IN_PROGRESS（T01-T04 DONE；T05 待实现） |
 
-**统计**: READY=13, IN_PROGRESS=0, DONE=16, BLOCKED=0
+**统计**: READY=12, IN_PROGRESS=0, DONE=17, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-31b-202605/README.md`
 **集成测试**: `worklog/v2.2.3/sprint-31b-202605/it/README.md`
 **关键决策**:

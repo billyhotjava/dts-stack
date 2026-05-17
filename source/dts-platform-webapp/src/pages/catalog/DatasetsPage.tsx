@@ -24,6 +24,7 @@ import {
 	listDatasets,
 	listDomains,
 	syncCatalogAssetsV2,
+	syncCatalogAssetV2Lineage,
 } from "@/api/platformApi";
 import { useRouter } from "@/routes/hooks";
 import { resolveAssetReadiness } from "./assetPortalUx.helpers";
@@ -136,6 +137,28 @@ type ResolutionFailureRow = {
 	reason?: string;
 };
 
+type GovernanceGapRow = {
+	id?: string;
+	displayName?: string;
+	fqn?: string;
+	assetKey?: string;
+	grantAssetType?: string;
+	grantAssetId?: string;
+	lifecycleStatus?: string;
+	governanceStatus?: string;
+	severity?: string;
+	blockingGaps?: string[];
+	warningGaps?: string[];
+	metadataSource?: string;
+};
+
+type LineageFailureRow = GovernanceGapRow & {
+	blocking?: boolean;
+	reason?: string;
+	evidenceSource?: string;
+	nextAction?: string;
+};
+
 const normalizeLayer = (value?: string) => {
 	const normalized = String(value || "").trim().toUpperCase();
 	return normalized && LAYER_META[normalized] ? normalized : "OTHER";
@@ -201,6 +224,8 @@ export default function Page() {
 	const [resolutionFailuresOpen, setResolutionFailuresOpen] = useState(false);
 	const [resolutionFailuresLoading, setResolutionFailuresLoading] = useState(false);
 	const [resolutionFailures, setResolutionFailures] = useState<ResolutionFailureRow[]>([]);
+	const [remediationOpen, setRemediationOpen] = useState(false);
+	const [remediationLoading, setRemediationLoading] = useState<string | null>(null);
 	const [records, setRecords] = useState<AssetRow[]>([]);
 	const [pageState, setPageState] = useState({ page: 1, size: 18, total: 0 });
 	const [domains, setDomains] = useState<{ id: string; name: string }[]>([]);
@@ -418,6 +443,8 @@ export default function Page() {
 	const governanceCoverage = records.length ? Math.round(((records.length - unclassifiedCount - missingDomainCount) / Math.max(records.length, 1)) * 100) : 0;
 	const blockingGapCount = Number(governanceGapReport?.severityCounts?.BLOCKING || 0);
 	const lineageFailureCount = Array.isArray(lineageFailureReport?.content) ? lineageFailureReport.content.length : 0;
+	const governanceGapRows: GovernanceGapRow[] = Array.isArray(governanceGapReport?.content) ? governanceGapReport.content : [];
+	const lineageFailureRows: LineageFailureRow[] = Array.isArray(lineageFailureReport?.content) ? lineageFailureReport.content : [];
 
 	const treeData = useMemo(
 		() => [
@@ -536,6 +563,27 @@ export default function Page() {
 			setResolutionFailures([]);
 		} finally {
 			setResolutionFailuresLoading(false);
+		}
+	};
+
+	const openRemediationWorkbench = async () => {
+		setRemediationOpen(true);
+		await loadGovernanceSignals();
+	};
+
+	const openGovernanceRemediation = (assetId?: string) => {
+		if (!assetId) return;
+		router.push(`/catalog/datasets/${assetId}?tab=governance`);
+	};
+
+	const syncLineageForRow = async (assetId?: string) => {
+		if (!assetId) return;
+		setRemediationLoading(assetId);
+		try {
+			await syncCatalogAssetV2Lineage(assetId, { upstreamDepth: 2, downstreamDepth: 2 });
+			await Promise.all([loadGovernanceSignals(), loadDatasets(pageState.page, pageState.size)]);
+		} finally {
+			setRemediationLoading(null);
 		}
 	};
 
@@ -734,6 +782,16 @@ export default function Page() {
 									? "正在刷新治理信号..."
 									: "资产是否可用于指标、宽表和 BI 发布，以密级、主题域、归属部门、生命周期、映射状态和血缘证据共同判断。"
 							}
+							action={
+								<Space>
+									<Button size="small" onClick={() => void openRemediationWorkbench()} loading={signalsLoading}>
+										处置缺口
+									</Button>
+									<Button size="small" onClick={() => void loadGovernanceSignals()} loading={signalsLoading}>
+										刷新信号
+									</Button>
+								</Space>
+							}
 						/>
 					) : null}
 
@@ -816,6 +874,180 @@ export default function Page() {
 					/>
 				</div>
 			</Layout.Content>
+			<Modal
+				title="治理缺口处置工作台"
+				open={remediationOpen}
+				onCancel={() => setRemediationOpen(false)}
+				footer={
+					<Space>
+						<Button onClick={() => void loadGovernanceSignals()} loading={signalsLoading}>
+							刷新报告
+						</Button>
+						<Button onClick={() => setRemediationOpen(false)}>关闭</Button>
+					</Space>
+				}
+				width={1120}
+			>
+				<Alert
+					type={governanceGapRows.length || lineageFailureRows.length ? "warning" : "success"}
+					showIcon
+					className="mb-3"
+					message={
+						governanceGapRows.length || lineageFailureRows.length
+							? `当前筛选发现治理缺口 ${governanceGapRows.length} 条、血缘失败 ${lineageFailureRows.length} 条`
+							: "当前筛选没有需要处置的治理缺口"
+					}
+					description="点击补治理字段会进入资产详情的治理扩展页；点击同步血缘会重新拉取当前资产的上下游证据并刷新报告。"
+				/>
+				<Tabs
+					items={[
+						{
+							key: "governance-gaps",
+							label: `治理缺口（${governanceGapRows.length}）`,
+							children: (
+								<Table<GovernanceGapRow>
+									rowKey={(row) => row.id || row.assetKey || row.fqn || row.displayName || "asset"}
+									size="small"
+									loading={signalsLoading}
+									dataSource={governanceGapRows}
+									pagination={{ pageSize: 6, showSizeChanger: false }}
+									scroll={{ x: 980 }}
+									columns={[
+										{
+											title: "资产",
+											dataIndex: "displayName",
+											width: 220,
+											render: (value, row) => (
+												<div>
+													<div className="font-medium text-slate-900">{value || row.fqn || "-"}</div>
+													<div className="truncate font-mono text-[11px] text-slate-500">{row.assetKey || row.fqn || "-"}</div>
+												</div>
+											),
+										},
+										{
+											title: "严重度",
+											dataIndex: "severity",
+											width: 100,
+											render: (value) => <Tag color={value === "BLOCKING" ? "red" : value === "READY" ? "green" : "orange"}>{value || "-"}</Tag>,
+										},
+										{
+											title: "阻断项",
+											dataIndex: "blockingGaps",
+											width: 220,
+											render: (value: string[]) => value?.length ? value.map((item) => <Tag color="red" key={item}>{item}</Tag>) : "-",
+										},
+										{
+											title: "提示项",
+											dataIndex: "warningGaps",
+											width: 220,
+											render: (value: string[]) => value?.length ? value.map((item) => <Tag color="orange" key={item}>{item}</Tag>) : "-",
+										},
+										{
+											title: "状态",
+											width: 160,
+											render: (_, row) => (
+												<Space direction="vertical" size={2}>
+													<Tag>{row.governanceStatus || "-"}</Tag>
+													<span className="text-xs text-slate-500">{row.lifecycleStatus || "-"}</span>
+												</Space>
+											),
+										},
+										{
+											title: "操作",
+											width: 180,
+											fixed: "right",
+											render: (_, row) => (
+												<Space>
+													<Button size="small" onClick={() => openGovernanceRemediation(row.id)}>
+														补治理字段
+													</Button>
+													<Button size="small" onClick={() => router.push(`/catalog/datasets/${row.id}`)}>
+														详情
+													</Button>
+												</Space>
+											),
+										},
+									]}
+								/>
+							),
+						},
+						{
+							key: "lineage-failures",
+							label: `血缘失败（${lineageFailureRows.length}）`,
+							children: (
+								<Table<LineageFailureRow>
+									rowKey={(row) => row.id || row.assetKey || row.fqn || row.displayName || "asset"}
+									size="small"
+									loading={signalsLoading}
+									dataSource={lineageFailureRows}
+									pagination={{ pageSize: 6, showSizeChanger: false }}
+									scroll={{ x: 1020 }}
+									columns={[
+										{
+											title: "资产",
+											dataIndex: "displayName",
+											width: 220,
+											render: (value, row) => (
+												<div>
+													<div className="font-medium text-slate-900">{value || row.fqn || "-"}</div>
+													<div className="truncate font-mono text-[11px] text-slate-500">{row.assetKey || row.fqn || "-"}</div>
+												</div>
+											),
+										},
+										{
+											title: "严重度",
+											dataIndex: "severity",
+											width: 100,
+											render: (value, row) => <Tag color={row.blocking ? "red" : "orange"}>{value || "-"}</Tag>,
+										},
+										{
+											title: "原因",
+											dataIndex: "reason",
+											width: 220,
+											render: (value) => value ? <Tag color="orange">{value}</Tag> : "-",
+										},
+										{
+											title: "下一步",
+											dataIndex: "nextAction",
+											width: 220,
+											render: (value) => value || "同步血缘或补齐治理字段",
+										},
+										{
+											title: "证据源",
+											dataIndex: "evidenceSource",
+											width: 160,
+											render: (value) => value || "-",
+										},
+										{
+											title: "操作",
+											width: 220,
+											fixed: "right",
+											render: (_, row) => (
+												<Space>
+													<Button
+														size="small"
+														type="primary"
+														loading={remediationLoading === row.id}
+														onClick={() => void syncLineageForRow(row.id)}
+													>
+														同步血缘
+													</Button>
+													<Button size="small" onClick={() => openGovernanceRemediation(row.id)}>
+														治理
+													</Button>
+													<Button size="small" onClick={() => router.push(`/catalog/datasets/${row.id}?tab=lineage`)}>
+														详情
+													</Button>
+												</Space>
+											),
+										},
+									]}
+								/>
+							),
+						},
+					]}
+				/>
+			</Modal>
 			<Modal
 				title="资产身份解析失败"
 				open={resolutionFailuresOpen}
