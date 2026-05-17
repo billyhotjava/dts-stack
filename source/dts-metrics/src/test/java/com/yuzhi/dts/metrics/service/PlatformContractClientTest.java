@@ -234,4 +234,67 @@ class PlatformContractClientTest {
         assertThat(result.inactive()).containsExactly("draft_amount");
         server.verify();
     }
+
+    @Test
+    void resolveRlsPolicyCallsVersionedPlatformContractWithServiceAuth() {
+        DtsMetricsProperties properties = new DtsMetricsProperties();
+        properties.getPlatform().setBaseUrl("http://dts-platform:8081/");
+        properties.getPlatform().setApiPath("/api");
+        properties.getPlatform().setServiceToken("metrics-secret");
+
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PlatformContractClient client = new PlatformContractClient(properties, builder.build());
+
+        server
+            .expect(requestTo("http://dts-platform:8081/api/internal/v1/asset-permission/policy"))
+            .andExpect(method(HttpMethod.POST))
+            .andExpect(header("X-DTS-Service", "dts-metrics"))
+            .andExpect(header("X-DTS-Service-Token", "metrics-secret"))
+            .andExpect(content().json("""
+                {
+                  "username": "xiezm",
+                  "userRoles": ["ROLE_USER"],
+                  "userDeptCode": "D01",
+                  "userClassification": "INTERNAL",
+                  "assetClassification": "INTERNAL",
+                  "action": "PREVIEW",
+                  "asset": {
+                    "type": "DATASET",
+                    "id": "dataset-001",
+                    "key": "source:ptr/schema:dwd/table:contract_detail"
+                  }
+                }
+                """))
+            .andRespond(withSuccess("""
+                {
+                  "applyRls": true,
+                  "predicates": ["dept_code = 'D01'"],
+                  "maskedColumns": ["customer_phone"],
+                  "policySource": "platform-row-filter"
+                }
+                """, MediaType.APPLICATION_JSON));
+
+        PlatformContractClient.RlsPolicyResult result = client.resolveRlsPolicy(
+            new PlatformContractClient.RlsPolicyRequest(
+                "xiezm",
+                List.of("ROLE_USER"),
+                "D01",
+                "INTERNAL",
+                "INTERNAL",
+                "PREVIEW",
+                new PlatformContractClient.PermissionAsset(
+                    "DATASET",
+                    "dataset-001",
+                    "source:ptr/schema:dwd/table:contract_detail"
+                )
+            )
+        );
+
+        assertThat(result.applyRls()).isTrue();
+        assertThat(result.predicates()).containsExactly("dept_code = 'D01'");
+        assertThat(result.maskedColumns()).containsExactly("customer_phone");
+        assertThat(result.policySource()).isEqualTo("platform-row-filter");
+        server.verify();
+    }
 }

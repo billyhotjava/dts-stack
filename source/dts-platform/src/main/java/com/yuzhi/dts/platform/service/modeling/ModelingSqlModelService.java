@@ -25,6 +25,7 @@ import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetType;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService.ColumnSpec;
+import com.yuzhi.dts.platform.service.catalog.CodeAssetLifecycleMapper;
 import com.yuzhi.dts.platform.service.catalog.CodeAssetGrantWriter;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
 import com.yuzhi.dts.platform.service.governance.DefaultLakeDatasetGuard;
@@ -52,7 +53,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.regex.Pattern;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -97,8 +97,8 @@ public class ModelingSqlModelService {
     private final ModelFileService fileService;
     private final Executor taskExecutor;
     private final TransactionTemplate batchDeleteTransactionTemplate;
-    private DefaultLakeDatasetGuard defaultLakeDatasetGuard;
-    private CodeAssetGrantWriter codeAssetGrantWriter;
+    private final DefaultLakeDatasetGuard defaultLakeDatasetGuard;
+    private final CodeAssetGrantWriter codeAssetGrantWriter;
 
     public ModelingSqlModelService(
         ModelingSqlModelRepository repo,
@@ -118,7 +118,9 @@ public class ModelingSqlModelService {
         ObjectMapper objectMapper,
         ModelFileService fileService,
         @Qualifier("taskExecutor") Executor taskExecutor,
-        PlatformTransactionManager transactionManager
+        PlatformTransactionManager transactionManager,
+        DefaultLakeDatasetGuard defaultLakeDatasetGuard,
+        CodeAssetGrantWriter codeAssetGrantWriter
     ) {
         this.repo = repo;
         this.planRepo = planRepo;
@@ -137,19 +139,11 @@ public class ModelingSqlModelService {
         this.objectMapper = objectMapper;
         this.fileService = fileService;
         this.taskExecutor = taskExecutor;
+        this.defaultLakeDatasetGuard = defaultLakeDatasetGuard;
+        this.codeAssetGrantWriter = codeAssetGrantWriter;
         TransactionTemplate template = new TransactionTemplate(transactionManager);
         template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.batchDeleteTransactionTemplate = template;
-    }
-
-    @Autowired(required = false)
-    public void setDefaultLakeDatasetGuard(DefaultLakeDatasetGuard defaultLakeDatasetGuard) {
-        this.defaultLakeDatasetGuard = defaultLakeDatasetGuard;
-    }
-
-    @Autowired(required = false)
-    public void setCodeAssetGrantWriter(CodeAssetGrantWriter codeAssetGrantWriter) {
-        this.codeAssetGrantWriter = codeAssetGrantWriter;
     }
 
     // ── Public CRUD operations ─────────────────────────────────────────
@@ -815,18 +809,8 @@ public class ModelingSqlModelService {
             model.getOwnerDept(),
             "dts-platform",
             null,
-            lifecycleForModel(model)
+            CodeAssetLifecycleMapper.fromModelingSqlModelStatus(model.getStatus(), model.getEnabled())
         );
-    }
-
-    private static String lifecycleForModel(ModelingSqlModel model) {
-        if (model != null && Boolean.FALSE.equals(model.getEnabled())) {
-            return "ARCHIVED";
-        }
-        if (model != null && STATUS_ACTIVE.equalsIgnoreCase(model.getStatus())) {
-            return "ACTIVE";
-        }
-        return "PENDING_GOVERNANCE";
     }
 
     private Optional<InfraDataSource> resolveSourceEntity(UUID sourceId) {

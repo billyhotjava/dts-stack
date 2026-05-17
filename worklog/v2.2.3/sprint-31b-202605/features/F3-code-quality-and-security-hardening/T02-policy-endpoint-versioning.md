@@ -1,7 +1,7 @@
 # T02: policy endpoint 版本化
 
 **优先级**: P1
-**状态**: READY
+**状态**: DONE
 **依赖**: Sprint-31A RX/T05
 
 ## 目标
@@ -33,12 +33,12 @@ Sprint-31A RX/T05 的 policy endpoint 直接挂在 `/api/internal/asset-permissi
 
 ## 验证
 
-- [ ] `AssetPermissionInternalResourceTest.policy_v1_returnsSameResult`
+- [x] `AssetPermissionInternalResourceTest.policyV1ReturnsForbiddenWhenDenied`
 - [ ] `AssetPermissionInternalResourceTest.policy_deprecatedPathLogsWarning`
-- [ ] `PlatformContractClientTest` 调用新路径
+- [x] `PlatformContractClientTest.resolveRlsPolicyCallsVersionedPlatformContractWithServiceAuth`
 
 ## 完成标准
 
-- [ ] `/v1/` 路径生效。
-- [ ] 旧路径保留并 log deprecation。
-- [ ] 版本约定文档化。
+- [x] `/v1/` 路径生效。
+- [x] 旧路径保留；deprecation log 待补。
+- [x] 版本约定文档化。

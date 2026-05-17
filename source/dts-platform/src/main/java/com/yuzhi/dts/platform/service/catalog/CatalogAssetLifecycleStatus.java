@@ -5,6 +5,8 @@ import java.util.Locale;
 public enum CatalogAssetLifecycleStatus {
     DISCOVERED,
     PENDING_GOVERNANCE,
+    DRAFT_GOVERNANCE,
+    TESTING,
     ACTIVE,
     DEPRECATED,
     ARCHIVED,

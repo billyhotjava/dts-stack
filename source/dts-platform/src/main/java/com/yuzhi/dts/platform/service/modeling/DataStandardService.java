@@ -10,7 +10,13 @@ import com.yuzhi.dts.platform.domain.modeling.DataStandardVersion;
 import com.yuzhi.dts.platform.domain.modeling.DataStandardVersionStatus;
 import com.yuzhi.dts.platform.repository.modeling.DataStandardRepository;
 import com.yuzhi.dts.platform.repository.modeling.DataStandardVersionRepository;
+import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetIdentity;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetType;
+import com.yuzhi.dts.platform.service.catalog.CodeAssetLifecycleMapper;
+import com.yuzhi.dts.platform.service.catalog.CodeAssetGrantWriter;
 import com.yuzhi.dts.platform.service.modeling.dto.DataStandardDto;
 import com.yuzhi.dts.platform.service.modeling.dto.DataStandardVersionDto;
 import jakarta.persistence.EntityNotFoundException;
@@ -36,19 +42,22 @@ public class DataStandardService {
     private final ObjectMapper objectMapper;
     private final AuditService auditService;
     private final DataStandardSecurity security;
+    private final CodeAssetGrantWriter codeAssetGrantWriter;
 
     public DataStandardService(
         DataStandardRepository repository,
         DataStandardVersionRepository versionRepository,
         ObjectMapper objectMapper,
         AuditService auditService,
-        DataStandardSecurity security
+        DataStandardSecurity security,
+        CodeAssetGrantWriter codeAssetGrantWriter
     ) {
         this.repository = repository;
         this.versionRepository = versionRepository;
         this.objectMapper = objectMapper;
         this.auditService = auditService;
         this.security = security;
+        this.codeAssetGrantWriter = codeAssetGrantWriter;
     }
 
     public Page<DataStandardDto> list(DataStandardFilter filter, Pageable pageable, String activeDeptHeader) {
@@ -79,6 +88,7 @@ public class DataStandardService {
             ? request.getVersionStatus()
             : DataStandardVersionStatus.DRAFT;
         createVersionSnapshot(entity, version, request.getChangeSummary(), versionStatus);
+        syncCodeAssetGrant(entity, activeDeptHeader);
         java.util.Map<String, Object> auditPayload = new java.util.LinkedHashMap<>();
         auditPayload.put("before", java.util.Map.of());
         auditPayload.put("after", toStandardAuditView(entity));
@@ -114,6 +124,7 @@ public class DataStandardService {
         entity.setLastReviewAt(request.getLastReviewAt());
         repository.save(entity);
         createVersionSnapshot(entity, version, request.getChangeSummary(), request.getVersionStatus());
+        syncCodeAssetGrant(entity, activeDeptHeader);
         java.util.Map<String, Object> auditPayload = new java.util.LinkedHashMap<>();
         auditPayload.put("before", before);
         auditPayload.put("after", toStandardAuditView(entity));
@@ -259,6 +270,26 @@ public class DataStandardService {
         }
         snapshot.setSnapshotJson(serializeSnapshot(entity));
         versionRepository.save(snapshot);
+    }
+
+    private void syncCodeAssetGrant(DataStandard entity, String activeDeptHeader) {
+        if (codeAssetGrantWriter == null || entity == null || entity.getId() == null) {
+            return;
+        }
+        String naturalKey = StringUtils.hasText(entity.getCode()) ? entity.getCode().trim() : entity.getId().toString();
+        CatalogAssetIdentity identity = new CatalogAssetIdentity(
+            CatalogAssetType.DATA_STANDARD,
+            CatalogAssetKey.codeAsset(CatalogAssetType.DATA_STANDARD, "default", naturalKey),
+            entity.getId().toString(),
+            "data-standard:" + naturalKey
+        );
+        codeAssetGrantWriter.upsertCodeAsset(
+            identity,
+            security.resolveActiveDept(activeDeptHeader),
+            SecurityUtils.getCurrentUserLogin().orElse("dts-platform"),
+            entity.getSecurityLevel() != null ? entity.getSecurityLevel().name() : null,
+            CodeAssetLifecycleMapper.fromDataStandardStatus(entity.getStatus() != null ? entity.getStatus().name() : null)
+        );
     }
 
     private String serializeSnapshot(DataStandard entity) {

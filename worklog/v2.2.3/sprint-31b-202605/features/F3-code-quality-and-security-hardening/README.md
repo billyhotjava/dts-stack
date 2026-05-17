@@ -1,7 +1,7 @@
 # F3: 代码质量与安全 hardening
 
 **优先级**: P0
-**状态**: READY
+**状态**: IN_PROGRESS
 
 ## 目标
 
@@ -11,16 +11,16 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| T01 | setter 注入改构造器注入（`@Lazy` 解循环依赖） | P0 | READY | - |
-| T02 | policy endpoint 版本化 | P1 | READY | Sprint-31A RX/T05 |
-| T03 | 未授权 policy 调用返回 HTTP 403 | P0 | READY | T02 |
-| T04 | policy observability（warn + metric） | P0 | READY | F1/T02 |
-| T05 | lifecycle 状态映射对齐既有数据 | P0 | READY | F1/T06 |
+| T01 | setter 注入改构造器注入（`@Lazy` 解循环依赖） | P0 | DONE | - |
+| T02 | policy endpoint 版本化 | P1 | DONE | Sprint-31A RX/T05 |
+| T03 | 未授权 policy 调用返回 HTTP 403 | P0 | DONE | T02 |
+| T04 | policy observability（warn + metric） | P0 | DONE | F1/T02 |
+| T05 | lifecycle 状态映射对齐既有数据 | P0 | IN_PROGRESS | F1/T06 |
 
 ## 完成标准
 
-- [ ] `IndicatorService` / `ModelingSqlModelService` 全部回到构造器注入；循环依赖用 `@Lazy` 解。
-- [ ] policy endpoint 路径携带 `/v1/`。
-- [ ] policy 未授权返回 HTTP 403，不再 silent 200 + `"1=0"`。
-- [ ] policy dataset 未命中时输出 warn + metric counter。
-- [ ] code asset writer 不会把现有 ACTIVE 状态 model 误打成 `PENDING_GOVERNANCE`。
+- [x] `IndicatorService` / `ModelingSqlModelService` / `ApiCatalogService` 全部回到构造器注入；当前未新增 `@Lazy`，完整 Spring context 验证留给 F5。
+- [x] policy endpoint 路径携带 `/v1/`。
+- [x] v1 policy 未授权返回 HTTP 403；legacy path 保留 silent 200 + `"1=0"` 兼容旧客户端。
+- [x] policy dataset 未命中时输出 warn + metric counter；v1 严格策略缺 dataset 时返回 HTTP 422，legacy path 继续 200 兼容旧客户端。
+- [ ] code asset writer 不会把现有 ACTIVE 状态 model 误打成 `PENDING_GOVERNANCE`；DataStandard/Glossary 基础映射已补，公共 mapper 与 backfill 未补。

@@ -27,7 +27,11 @@ class PlatformCapabilityResourceTest {
         assertThat(map(capabilities.get("metrics"))).containsEntry("partnerDelivery", "metric-pack");
         assertThat(map(capabilities.get("metrics")).get("requiredPlatformContracts").toString())
             .contains("/api/internal/domains/resolve")
-            .contains("/api/internal/data-standards/resolve");
+            .contains("/api/internal/data-standards/resolve")
+            .contains("/api/internal/v1/asset-permission/policy");
+        assertThat(map(capabilities.get("permissions")).get("endpoints").toString())
+            .contains("/api/internal/v1/asset-permission/policy")
+            .contains("/api/internal/asset-permission/policy");
     }
 
     @SuppressWarnings("unchecked")

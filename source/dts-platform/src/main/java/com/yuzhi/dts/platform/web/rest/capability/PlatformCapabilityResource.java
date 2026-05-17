@@ -63,7 +63,7 @@ public class PlatformCapabilityResource {
             "/api/internal/domains/resolve",
             "/api/internal/data-standards/resolve",
             "/api/internal/asset-permission/check",
-            "/api/internal/asset-permission/policy",
+            "/api/internal/v1/asset-permission/policy",
             "/api/etl/dbt/release/submit",
             "platform-audit"
         ));
@@ -126,7 +126,20 @@ public class PlatformCapabilityResource {
             "API_SERVICE"
         ));
         catalog.put("identity", "assetType + assetKey + grantAssetId");
-        catalog.put("lifecycleStatuses", List.of("DISCOVERED", "PENDING_GOVERNANCE", "ACTIVE", "DEPRECATED", "ARCHIVED", "BLOCKED", "PENDING_REVIEW"));
+        catalog.put(
+            "lifecycleStatuses",
+            List.of(
+                "DISCOVERED",
+                "PENDING_GOVERNANCE",
+                "DRAFT_GOVERNANCE",
+                "TESTING",
+                "ACTIVE",
+                "DEPRECATED",
+                "ARCHIVED",
+                "BLOCKED",
+                "PENDING_REVIEW"
+            )
+        );
         catalog.put("governanceStatuses", List.of("GOVERNED", "PENDING_GOVERNANCE", "PENDING_CLAIM", "PENDING_CLASSIFICATION", "PENDING_DOMAIN", "DISABLED"));
         catalog.put("readEndpoints", List.of(
             "/api/catalog/assets-v2",
@@ -158,6 +171,7 @@ public class PlatformCapabilityResource {
         if (internal) {
             permissions.put("endpoints", List.of(
                 "/api/internal/asset-permission/check",
+                "/api/internal/v1/asset-permission/policy",
                 "/api/internal/asset-permission/policy",
                 "/api/internal/asset-permission/batch-check",
                 "/api/internal/asset-permission/accessible-ids",

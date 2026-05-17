@@ -16,6 +16,7 @@ import com.yuzhi.dts.platform.service.permission.AssetPermissionService.Permissi
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService.PermissionResult;
 import com.yuzhi.dts.platform.service.permission.dto.AssetGrantDto;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionAuditService;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -25,6 +26,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -41,19 +43,22 @@ public class AssetPermissionInternalResource {
     private final CatalogDatasetRepository datasetRepository;
     private final CatalogRowFilterRuleRepository rowFilterRuleRepository;
     private final CatalogMaskingRuleRepository maskingRuleRepository;
+    private final MeterRegistry meterRegistry;
 
     public AssetPermissionInternalResource(
         AssetPermissionService permissionService,
         AssetPermissionAuditService auditService,
         CatalogDatasetRepository datasetRepository,
         CatalogRowFilterRuleRepository rowFilterRuleRepository,
-        CatalogMaskingRuleRepository maskingRuleRepository
+        CatalogMaskingRuleRepository maskingRuleRepository,
+        MeterRegistry meterRegistry
     ) {
         this.permissionService = permissionService;
         this.auditService = auditService;
         this.datasetRepository = datasetRepository;
         this.rowFilterRuleRepository = rowFilterRuleRepository;
         this.maskingRuleRepository = maskingRuleRepository;
+        this.meterRegistry = meterRegistry;
     }
 
     @PostMapping("/check")
@@ -90,6 +95,14 @@ public class AssetPermissionInternalResource {
 
     @PostMapping("/policy")
     public ResponseEntity<PolicyResponse> policy(@RequestBody CheckRequest request) {
+        return policyInternal(request, false);
+    }
+
+    public ResponseEntity<PolicyResponse> policyV1(@RequestBody CheckRequest request) {
+        return policyInternal(request, true);
+    }
+
+    ResponseEntity<PolicyResponse> policyInternal(CheckRequest request, boolean forbiddenOnDenied) {
         PermissionDecision decision = permissionService.checkAction(
             new PermissionCheckCommand(
                 request.username(),
@@ -105,13 +118,19 @@ public class AssetPermissionInternalResource {
         );
         auditService.recordDecision(decision, request.username(), currentActor());
         if (!decision.allowed()) {
+            if (forbiddenOnDenied) {
+                return ResponseEntity
+                    .status(HttpStatus.FORBIDDEN)
+                    .body(new PolicyResponse(false, List.of(), List.of(), firstText(decision.reason(), "permission_denied")));
+            }
             return ResponseEntity.ok(new PolicyResponse(true, List.of("1 = 0"), List.of(), decision.reason()));
         }
         List<String> predicates = new ArrayList<>();
         List<String> maskedColumns = new ArrayList<>();
         Optional<CatalogDataset> dataset = resolveDataset(request.asset());
         if (dataset.isPresent()) {
-            for (CatalogRowFilterRule rule : rowFilterRuleRepository.findByDataset(dataset.orElseThrow())) {
+            CatalogDataset resolvedDataset = dataset.orElseThrow();
+            for (CatalogRowFilterRule rule : rowFilterRuleRepository.findByDataset(resolvedDataset)) {
                 if (!rolesMatch(rule.getRoles(), request.userRoles())) {
                     continue;
                 }
@@ -120,11 +139,18 @@ public class AssetPermissionInternalResource {
                     predicates.add(expression);
                 }
             }
-            for (CatalogMaskingRule rule : maskingRuleRepository.findByDataset(dataset.orElseThrow())) {
+            for (CatalogMaskingRule rule : maskingRuleRepository.findByDataset(resolvedDataset)) {
                 String column = rule != null ? trimToNull(rule.getColumn()) : null;
                 if (column != null && safeIdentifier(column)) {
                     maskedColumns.add(column);
                 }
+            }
+        } else if (isDatasetAsset(request.asset())) {
+            recordDatasetMiss(request);
+            if (forbiddenOnDenied) {
+                return ResponseEntity
+                    .status(HttpStatus.UNPROCESSABLE_ENTITY)
+                    .body(new PolicyResponse(false, List.of(), List.of(), "dataset_not_resolved"));
             }
         }
         String source = policySource(predicates, maskedColumns);
@@ -283,11 +309,30 @@ public class AssetPermissionInternalResource {
         if (table == null) {
             return Optional.empty();
         }
-        return datasetRepository
-            .findAll()
-            .stream()
-            .filter(dataset -> equalsIgnoreCase(table, dataset.getHiveTable()) || equalsIgnoreCase(table, dataset.getName()))
-            .findFirst();
+        Optional<CatalogDataset> byHiveTable = datasetRepository.findFirstByHiveTableIgnoreCase(table);
+        if (byHiveTable.isPresent()) {
+            return byHiveTable;
+        }
+        return datasetRepository.findFirstByNameIgnoreCase(table);
+    }
+
+    private void recordDatasetMiss(CheckRequest request) {
+        if (meterRegistry != null) {
+            meterRegistry.counter("dts.platform.asset_permission.policy.dataset_miss").increment();
+        }
+        AssetRefDto asset = request != null ? request.asset() : null;
+        log.warn(
+            "event=asset_permission_policy_dataset_miss actor={} action={} assetType={} assetIdPresent={} assetKeyPresent={}",
+            request != null ? request.username() : null,
+            request != null ? request.action() : null,
+            asset != null ? asset.type() : null,
+            asset != null && trimToNull(asset.id()) != null,
+            asset != null && trimToNull(asset.key()) != null
+        );
+    }
+
+    private static boolean isDatasetAsset(AssetRefDto asset) {
+        return asset != null && "DATASET".equalsIgnoreCase(asset.type());
     }
 
     private static boolean rolesMatch(String rolesCsv, List<String> userRoles) {

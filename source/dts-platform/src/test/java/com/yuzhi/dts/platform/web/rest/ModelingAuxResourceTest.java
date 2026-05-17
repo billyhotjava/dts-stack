@@ -10,6 +10,8 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.domain.modeling.ModelingPlan;
+import com.yuzhi.dts.platform.domain.modeling.ModelingGlossaryTerm;
+import com.yuzhi.dts.platform.domain.modeling.ModelingGlossaryTermVersion;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
@@ -23,14 +25,18 @@ import com.yuzhi.dts.platform.repository.modeling.ModelingPlanVersionRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingTemplateRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingTemplateVersionRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetIdentity;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetType;
+import com.yuzhi.dts.platform.service.catalog.CodeAssetGrantWriter;
 import com.yuzhi.dts.platform.service.modeling.DataStandardSecurity;
 import com.yuzhi.dts.platform.service.modeling.ModelingAssetReferenceService;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
+import com.yuzhi.dts.platform.web.rest.errors.BadRequestAlertException;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.server.ResponseStatusException;
+import org.mockito.ArgumentCaptor;
 
 class ModelingAuxResourceTest {
 
@@ -80,16 +86,84 @@ class ModelingAuxResourceTest {
             catalogTableRepo,
             catalogColumnRepo,
             catalogAccessChecker,
-            referenceService
+            referenceService,
+            mock(CodeAssetGrantWriter.class)
         );
 
         ModelingPlan request = new ModelingPlan();
         request.setName("PRJ1");
 
         assertThatThrownBy(() -> resource.createPlan(request, "D1"))
-            .isInstanceOf(ResponseStatusException.class)
-            .hasMessageContaining("项目空间名称已存在");
+            .isInstanceOf(BadRequestAlertException.class)
+            .hasMessageContaining("已存在同名项目空间");
 
         verify(planRepo, never()).save(any(ModelingPlan.class));
+    }
+
+    @Test
+    void createGlossaryTermSyncsCodeAssetGrant() {
+        ModelingPlanRepository planRepo = mock(ModelingPlanRepository.class);
+        ModelingPlanVersionRepository planVersionRepo = mock(ModelingPlanVersionRepository.class);
+        ModelingPlanReviewRepository planReviewRepo = mock(ModelingPlanReviewRepository.class);
+        ModelingGlossaryTermRepository glossaryRepo = mock(ModelingGlossaryTermRepository.class);
+        ModelingGlossaryTermVersionRepository glossaryVersionRepo = mock(ModelingGlossaryTermVersionRepository.class);
+        ModelingGlossaryTermReviewRepository glossaryReviewRepo = mock(ModelingGlossaryTermReviewRepository.class);
+        ModelingTemplateRepository templateRepo = mock(ModelingTemplateRepository.class);
+        ModelingTemplateVersionRepository templateVersionRepo = mock(ModelingTemplateVersionRepository.class);
+        AuditService auditService = mock(AuditService.class);
+        DataStandardSecurity security = mock(DataStandardSecurity.class);
+        OrganizationVisibilityService organizationVisibilityService = mock(OrganizationVisibilityService.class);
+        DataStandardRepository dataStandardRepository = mock(DataStandardRepository.class);
+        GovIndicatorDefinitionRepository indicatorRepository = mock(GovIndicatorDefinitionRepository.class);
+        CatalogTableSchemaRepository catalogTableRepo = mock(CatalogTableSchemaRepository.class);
+        CatalogColumnSchemaRepository catalogColumnRepo = mock(CatalogColumnSchemaRepository.class);
+        AccessChecker catalogAccessChecker = mock(AccessChecker.class);
+        ModelingAssetReferenceService referenceService = mock(ModelingAssetReferenceService.class);
+        CodeAssetGrantWriter codeAssetGrantWriter = mock(CodeAssetGrantWriter.class);
+
+        when(security.resolveActiveDept("D01")).thenReturn("D01");
+        when(glossaryRepo.save(any(ModelingGlossaryTerm.class))).thenAnswer(invocation -> {
+            ModelingGlossaryTerm term = invocation.getArgument(0);
+            term.setId(UUID.fromString("11111111-2222-3333-4444-555555555555"));
+            return term;
+        });
+        when(glossaryVersionRepo.findByTermAndVersion(any(ModelingGlossaryTerm.class), anyString())).thenReturn(Optional.empty());
+        when(glossaryVersionRepo.save(any(ModelingGlossaryTermVersion.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ModelingAuxResource resource = new ModelingAuxResource(
+            planRepo,
+            planVersionRepo,
+            planReviewRepo,
+            glossaryRepo,
+            glossaryVersionRepo,
+            glossaryReviewRepo,
+            templateRepo,
+            templateVersionRepo,
+            auditService,
+            security,
+            organizationVisibilityService,
+            new ObjectMapper(),
+            dataStandardRepository,
+            indicatorRepository,
+            catalogTableRepo,
+            catalogColumnRepo,
+            catalogAccessChecker,
+            referenceService,
+            codeAssetGrantWriter
+        );
+
+        ModelingGlossaryTerm request = new ModelingGlossaryTerm();
+        request.setCode("contract_amount");
+        request.setName("合同金额");
+        request.setOwnerDept("D01");
+        request.setStatus("ACTIVE");
+
+        resource.createGlossaryTerm(request, "D01");
+
+        ArgumentCaptor<CatalogAssetIdentity> identityCaptor = ArgumentCaptor.forClass(CatalogAssetIdentity.class);
+        verify(codeAssetGrantWriter).upsertCodeAsset(identityCaptor.capture(), anyString(), anyString(), anyString(), anyString());
+        CatalogAssetIdentity identity = identityCaptor.getValue();
+        org.assertj.core.api.Assertions.assertThat(identity.type()).isEqualTo(CatalogAssetType.GLOSSARY_TERM);
+        org.assertj.core.api.Assertions.assertThat(identity.assetId()).isEqualTo("11111111-2222-3333-4444-555555555555");
     }
 }

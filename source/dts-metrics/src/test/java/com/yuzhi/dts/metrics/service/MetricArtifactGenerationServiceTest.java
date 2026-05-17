@@ -129,6 +129,152 @@ class MetricArtifactGenerationServiceTest {
     }
 
     @Test
+    void masksPlatformMaskedDimensionsInGeneratedSqlAndSchema() {
+        String manifest = """
+            pack_id: masking-check
+            pack_name: Masking Check Pack
+            version: 0.1.0
+            industry: demo
+            edition_required: professional
+            tenant_namespace: demo
+            security:
+              apply_rls: true
+            source_model: dwd_demo_detail
+            dimensions:
+              - stat_month
+              - customer_name
+            metrics:
+              - metric_code: contract_amount
+                metric_name: Contract Amount
+                term_ids:
+                  - glossary.contract_amount
+                formula:
+                  type: aggregation
+                  aggregation: sum
+                  field: contract_amount
+            files:
+              domains: domains.yml
+              business_objects: business-objects.yml
+              dimensions: dimensions.yml
+              metrics: metrics.yml
+              models: models.yml
+              datasets: datasets.yml
+            dependencies:
+              platform_assets:
+                - type: DATASET
+                  id: dwd_demo_detail
+                  asset_classification: INTERNAL
+                - type: GLOSSARY_TERM
+                  id: glossary.contract_amount
+            """;
+
+        MetricArtifactPreviewResult result = serviceWithPlatform(
+            glossaryResult("glossary.contract_amount"),
+            allowedPermission(),
+            null,
+            null,
+            new PlatformContractClient.RlsPolicyResult(true, List.of("dept_code = 'D01'"), List.of("customer_name"), "platform-masking")
+        ).preview(manifest, new MetricArtifactGenerationService.PreviewActor("ptrdemo", List.of("ROLE_PTR"), "D01", "INTERNAL"));
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.artifacts().get("maskingMacroSql")).contains("{% macro dts_mask(column_name) -%}");
+        assertThat(result.artifacts().get("dbtModelSql"))
+            .contains("{{ dts_mask('customer_name') }} as customer_name")
+            .contains("group by\n    stat_month,\n    {{ dts_mask('customer_name') }}");
+        assertThat(result.artifacts().get("schemaYml"))
+            .contains("name: customer_name")
+            .contains("Masked by dts-platform policy.");
+    }
+
+    @Test
+    void maskedMetricInputStopsPreviewBeforeGeneratingSql() {
+        String manifest = manifestWithSourceAsset("dwd_demo_detail");
+
+        MetricArtifactPreviewResult result = serviceWithPlatform(
+            glossaryResult("glossary.contract_amount"),
+            allowedPermission(),
+            null,
+            null,
+            new PlatformContractClient.RlsPolicyResult(true, List.of(), List.of("contract_amount"), "platform-masking")
+        ).preview(manifest, new MetricArtifactGenerationService.PreviewActor("ptrdemo", List.of("ROLE_PTR"), "D01", "INTERNAL"));
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.artifacts()).isEmpty();
+        assertThat(result.errors())
+            .contains("masked column contract_amount is used by metric contract_amount; configure a non-sensitive surrogate or remove it from the metric formula");
+    }
+
+    @Test
+    void declaresApplyRlsButPlatformPolicyEmptyFailsPreview() {
+        String manifest = manifestWithSourceAsset("dwd_demo_detail");
+
+        MetricArtifactPreviewResult result = serviceWithPlatform(
+            glossaryResult("glossary.contract_amount"),
+            allowedPermission(),
+            null,
+            null,
+            PlatformContractClient.RlsPolicyResult.empty()
+        ).preview(manifest, new MetricArtifactGenerationService.PreviewActor("ptrdemo", List.of("ROLE_PTR"), "D01", "INTERNAL"));
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.artifacts()).isEmpty();
+        assertThat(result.errors())
+            .contains("metric-pack declares apply_rls=true but platform policy returned empty; ask platform admin to configure row-filter or column-mask for asset");
+    }
+
+    @Test
+    void platformPolicyOverridesApplyRlsFalseManifestDeclaration() {
+        String manifest = """
+            pack_id: rls-override
+            pack_name: RLS Override Pack
+            version: 0.1.0
+            industry: demo
+            edition_required: professional
+            tenant_namespace: demo
+            security:
+              apply_rls: false
+            source_model: dwd_demo_detail
+            dimensions:
+              - stat_month
+            metrics:
+              - metric_code: contract_amount
+                metric_name: Contract Amount
+                term_ids:
+                  - glossary.contract_amount
+                formula:
+                  type: aggregation
+                  aggregation: sum
+                  field: contract_amount
+            files:
+              domains: domains.yml
+              business_objects: business-objects.yml
+              dimensions: dimensions.yml
+              metrics: metrics.yml
+              models: models.yml
+              datasets: datasets.yml
+            dependencies:
+              platform_assets:
+                - type: DATASET
+                  id: dwd_demo_detail
+                  asset_classification: INTERNAL
+                - type: GLOSSARY_TERM
+                  id: glossary.contract_amount
+            """;
+
+        MetricArtifactPreviewResult result = serviceWithPlatform(
+            glossaryResult("glossary.contract_amount"),
+            allowedPermission(),
+            null,
+            null,
+            new PlatformContractClient.RlsPolicyResult(true, List.of("dept_code = 'D01'"), List.of(), "platform-row-filter")
+        ).preview(manifest, new MetricArtifactGenerationService.PreviewActor("ptrdemo", List.of("ROLE_PTR"), "D01", "INTERNAL"));
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.artifacts().get("dbtModelSql")).contains("-- dts-platform RLS: platform-row-filter");
+        assertThat(result.warnings()).contains("Platform security policy overrides manifest security.apply_rls=false.");
+    }
+
+    @Test
     void invalidManifestDoesNotGenerateArtifacts() {
         MetricArtifactPreviewResult result = serviceWithActiveTerms().preview("pack_id: unsafe\nraw_sql: drop table users");
 
@@ -545,7 +691,7 @@ class MetricArtifactGenerationServiceTest {
         PlatformContractClient.DomainResolveResult domains,
         PlatformContractClient.DataStandardResolveResult standards
     ) {
-        return serviceWithPlatform(result, permission, domains, standards, PlatformContractClient.RlsPolicyResult.empty());
+        return serviceWithPlatform(result, permission, domains, standards, nonEmptyRlsPolicy());
     }
 
     private static MetricArtifactGenerationService serviceWithPlatform(
@@ -575,6 +721,10 @@ class MetricArtifactGenerationServiceTest {
             "ALLOWED",
             "explicit_grant"
         );
+    }
+
+    private static PlatformContractClient.RlsPolicyResult nonEmptyRlsPolicy() {
+        return new PlatformContractClient.RlsPolicyResult(true, List.of("dept_code is not null"), List.of(), "test-row-filter");
     }
 
     private static MetricArtifactGenerationService serviceWithThrowingPlatform() {
@@ -678,7 +828,7 @@ class MetricArtifactGenerationServiceTest {
 
         @Override
         public RlsPolicyResult resolveRlsPolicy(RlsPolicyRequest request) {
-            return RlsPolicyResult.empty();
+            return nonEmptyRlsPolicy();
         }
 
         @Override

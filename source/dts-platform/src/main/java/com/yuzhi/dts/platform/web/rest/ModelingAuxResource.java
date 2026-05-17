@@ -32,6 +32,10 @@ import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetIdentity;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetType;
+import com.yuzhi.dts.platform.service.catalog.CodeAssetGrantWriter;
 import com.yuzhi.dts.platform.service.modeling.ModelingAssetReferenceService;
 import com.yuzhi.dts.platform.service.modeling.DataStandardSecurity;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
@@ -95,6 +99,7 @@ public class ModelingAuxResource {
     private final CatalogColumnSchemaRepository catalogColumnRepo;
     private final AccessChecker catalogAccessChecker;
     private final ModelingAssetReferenceService referenceService;
+    private final CodeAssetGrantWriter codeAssetGrantWriter;
 
     public ModelingAuxResource(
         ModelingPlanRepository planRepo,
@@ -114,7 +119,8 @@ public class ModelingAuxResource {
         CatalogTableSchemaRepository catalogTableRepo,
         CatalogColumnSchemaRepository catalogColumnRepo,
         AccessChecker catalogAccessChecker,
-        ModelingAssetReferenceService referenceService
+        ModelingAssetReferenceService referenceService,
+        CodeAssetGrantWriter codeAssetGrantWriter
     ) {
         this.planRepo = planRepo;
         this.planVersionRepo = planVersionRepo;
@@ -134,6 +140,7 @@ public class ModelingAuxResource {
         this.catalogColumnRepo = catalogColumnRepo;
         this.catalogAccessChecker = catalogAccessChecker;
         this.referenceService = referenceService;
+        this.codeAssetGrantWriter = codeAssetGrantWriter;
     }
 
     @GetMapping("/plans")
@@ -481,6 +488,7 @@ public class ModelingAuxResource {
         ensureGlossaryDefaults(term);
         ModelingGlossaryTerm saved = glossaryRepo.save(term);
         upsertGlossaryVersionSnapshot(saved, saved.getVersionNotes(), null);
+        syncGlossaryCodeAssetGrant(saved, activeDeptHeader);
         auditService.auditAction("MODELING_GLOSSARY_CREATE", AuditStage.SUCCESS, saved.getId().toString(), null);
         return ApiResponses.ok(saved);
     }
@@ -497,6 +505,7 @@ public class ModelingAuxResource {
         ensureGlossaryDefaults(term);
         ModelingGlossaryTerm saved = glossaryRepo.save(term);
         upsertGlossaryVersionSnapshot(saved, saved.getVersionNotes(), null);
+        syncGlossaryCodeAssetGrant(saved, activeDeptHeader);
         auditService.auditAction("MODELING_GLOSSARY_UPDATE", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(saved);
     }
@@ -534,6 +543,7 @@ public class ModelingAuxResource {
         }
         ModelingGlossaryTerm saved = glossaryRepo.save(term);
         upsertGlossaryVersionSnapshot(saved, StringUtils.trimToNull(body != null ? body.changeSummary() : null), "ACTIVE");
+        syncGlossaryCodeAssetGrant(saved, activeDeptHeader);
 
         Map<String, Object> auditPayload = new LinkedHashMap<>();
         auditPayload.put("before", before);
@@ -616,6 +626,7 @@ public class ModelingAuxResource {
         ensureGlossaryDefaults(term);
         ModelingGlossaryTerm saved = glossaryRepo.save(term);
         upsertGlossaryVersionSnapshot(saved, StringUtils.trimToNull(body != null ? body.notes() : null), "ACTIVE");
+        syncGlossaryCodeAssetGrant(saved, activeDeptHeader);
 
         Map<String, Object> auditPayload = new LinkedHashMap<>();
         auditPayload.put("before", before);
@@ -1341,6 +1352,40 @@ public class ModelingAuxResource {
         glossaryVersionRepo.save(snapshot);
     }
 
+    private void syncGlossaryCodeAssetGrant(ModelingGlossaryTerm term, String activeDeptHeader) {
+        if (codeAssetGrantWriter == null || term == null || term.getId() == null) {
+            return;
+        }
+        String naturalKey = org.springframework.util.StringUtils.hasText(term.getCode()) ? term.getCode().trim() : term.getId().toString();
+        CatalogAssetIdentity identity = new CatalogAssetIdentity(
+            CatalogAssetType.GLOSSARY_TERM,
+            CatalogAssetKey.codeAsset(CatalogAssetType.GLOSSARY_TERM, "default", naturalKey),
+            term.getId().toString(),
+            "glossary-term:" + naturalKey
+        );
+        codeAssetGrantWriter.upsertCodeAsset(
+            identity,
+            firstText(term.getOwnerDept(), security.resolveActiveDept(activeDeptHeader)),
+            SecurityUtils.getCurrentUserLogin().orElse("dts-platform"),
+            "INTERNAL",
+            glossaryLifecycle(term.getStatus())
+        );
+    }
+
+    private static String glossaryLifecycle(String status) {
+        String normalized = StringUtils.trimToEmpty(status).toUpperCase(Locale.ROOT);
+        if ("ACTIVE".equals(normalized)) {
+            return "ACTIVE";
+        }
+        if ("ARCHIVED".equals(normalized) || "RETIRED".equals(normalized)) {
+            return "ARCHIVED";
+        }
+        if ("DEPRECATED".equals(normalized)) {
+            return "DEPRECATED";
+        }
+        return "PENDING_GOVERNANCE";
+    }
+
     private String serializeGlossarySnapshot(ModelingGlossaryTerm term) {
         try {
             return objectMapper.writeValueAsString(toGlossaryAuditView(term));
@@ -1644,5 +1689,17 @@ public class ModelingAuxResource {
             case "timestamp", "datetime" -> "timestamp";
             default -> t;
         };
+    }
+
+    private static String firstText(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (org.springframework.util.StringUtils.hasText(value)) {
+                return value.trim();
+            }
+        }
+        return null;
     }
 }

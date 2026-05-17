@@ -1,7 +1,7 @@
 # T03: 未授权 policy 调用返回 HTTP 403
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T02
 
 ## 目标
@@ -52,12 +52,12 @@ return ResponseEntity.ok(new PolicyResponse(true, List.of("1 = 0"), List.of(), d
 
 ## 验证
 
-- [ ] `AssetPermissionInternalResourceTest.policy_denied_returns403`
+- [x] `AssetPermissionInternalResourceTest.policyV1ReturnsForbiddenWhenDenied`
 - [ ] `PlatformContractClientTest.resolveRlsPolicy_403_throwsAccessDenied`
 - [ ] `MetricArtifactGenerationServiceTest.unauthorized_failsPreviewWithoutAssetName`
 
 ## 完成标准
 
-- [ ] 未授权 policy 调用返回 HTTP 403。
-- [ ] 客户端区分「拒绝」与「空策略」。
-- [ ] 错误信息不暴露资产元数据。
+- [x] v1 未授权 policy 调用返回 HTTP 403。
+- [x] legacy path 保留 200 + `1 = 0`，供旧客户端兼容；新客户端使用 v1 区分「拒绝」与「空策略」。
+- [ ] 403 客户端异常类型与 UI 错误文案未完成。

@@ -494,26 +494,27 @@
 **集成测试**: `worklog/v2.2.3/sprint-32-202605/it/README.md`
 
 ## Sprint-31B: Sprint-31A RX 运行时收口与代码质量加固 (202605)
-**状态**: READY
+**状态**: IN_PROGRESS
 **类型**: Implementation / Hardening（dts-platform + dts-metrics + dts-platform-webapp）
 **目标**: 收尾 Sprint-31A 的 RX 运行时强制（T03/T04/T05 后半段），修复阶段性提交的性能与安全 review 发现，统一 Sprint-31A 状态口径与 evidence，并为 Sprint-32 最终统一 IT 提供 cheap compile 前置验证。
 **前置依赖**: Sprint-31A RX/T03 主体 + T04/T05 部分已完成；本 Sprint 完成后立即跑 cheap compile-only，完整 IT 仍统一留给 Sprint-32 最终阶段。
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
-| F1-rx-runtime-closure | P0 | 6 | READY |
-| F2-rls-publish-and-masking-closure | P0 | 5 | READY |
-| F3-code-quality-and-security-hardening | P0 | 5 | READY |
+| F1-rx-runtime-closure | P0 | 6 | IN_PROGRESS（T01/T02/T03/T04/T06 DONE） |
+| F2-rls-publish-and-masking-closure | P0 | 5 | IN_PROGRESS（T02/T03 DONE；publish gate / audit 待接入） |
+| F3-code-quality-and-security-hardening | P0 | 5 | IN_PROGRESS（T01/T02/T03/T04 DONE） |
 | F4-sprint-31a-gap-and-status-rectification | P1 | 4 | READY |
 | F5-sprint-31-cheap-compile-verification | P0 | 4 | READY |
 
-**统计**: READY=24, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=12, IN_PROGRESS=1, DONE=11, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-31b-202605/README.md`
 **集成测试**: `worklog/v2.2.3/sprint-31b-202605/it/README.md`
 **关键决策**:
 - 把 Sprint-31A RX/T03-T05 未闭环的运行时项收尾，包括 `findAll().stream()` hot path 替换、IdentityResolver 兼容代理、policy publish gate 复用与 column masking。
 - 修正 Sprint-31A 状态口径：契约 DONE / 运行时 PARTIAL（由 Sprint-31B 收口）。
 - 本 Sprint 结束时跑 cheap compile-only 验证（platform + metrics + webapp tsc），把跨模块签名漂移在最低成本暴露。
+- 2026-05-17 已完成 hot path 索引化、`urn:uuid` 旧引用解析、DataStandard/Glossary/SvcApi writer、policy v1 + 403、service-auth/capability 同步、dataset miss warn+counter、`apply_rls=true` 空策略失败；publish gate、SQL masking、strict policy miss、audit 和 full cheap compile 仍未闭环。
 
 ## v2.3 Backlog: 企业级资产与指标增强
 

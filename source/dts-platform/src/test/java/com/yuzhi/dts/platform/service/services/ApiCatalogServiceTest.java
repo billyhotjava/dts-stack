@@ -39,8 +39,7 @@ class ApiCatalogServiceTest {
 
     @Test
     void createSyncsApiServiceAsCodeAsset() {
-        ApiCatalogService service = new ApiCatalogService(apiRepository, metricRepository, datasetRepository, new ObjectMapper());
-        service.setCodeAssetGrantWriter(codeAssetGrantWriter);
+        ApiCatalogService service = new ApiCatalogService(apiRepository, metricRepository, datasetRepository, new ObjectMapper(), codeAssetGrantWriter);
         when(apiRepository.findByCode("contract_summary_api")).thenReturn(Optional.empty());
         when(apiRepository.save(any(SvcApi.class))).thenAnswer(invocation -> {
             SvcApi api = invocation.getArgument(0);

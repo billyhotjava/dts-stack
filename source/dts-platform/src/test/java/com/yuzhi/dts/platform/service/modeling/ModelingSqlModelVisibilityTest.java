@@ -79,7 +79,7 @@ class ModelingSqlModelVisibilityTest {
             datasetRepository, tableRepository, columnRepository,
             queryDatasetAssetRepository, biReportLinkRepository,
             columnSyncService, auditService, objectMapper, fileService,
-            taskExecutor, txManager
+            taskExecutor, txManager, null, null
         );
 
         lenient().when(organizationVisibilityService.isRoot(anyString())).thenReturn(false);

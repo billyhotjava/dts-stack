@@ -115,10 +115,22 @@ public class CatalogAssetIdentityResolver {
 
     private UUID parseUuid(String value) {
         try {
-            return UUID.fromString(value);
+            String normalized = normalizeUuid(value);
+            return normalized == null ? null : UUID.fromString(normalized);
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private String normalizeUuid(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String trimmed = value.trim();
+        if (trimmed.regionMatches(true, 0, "urn:uuid:", 0, "urn:uuid:".length())) {
+            return trimmed.substring("urn:uuid:".length()).trim();
+        }
+        return trimmed;
     }
 
     private CatalogAssetIdentity toIdentity(ResolvedAsset resolved) {
@@ -231,12 +243,11 @@ public class CatalogAssetIdentityResolver {
             return Optional.empty();
         }
         String expected = code.trim();
-        return sqlModelRepository
-            .findAll()
-            .stream()
-            .filter(model -> matches(expected, model.getName()) || matches(expected, model.getAlias()))
-            .findFirst()
-            .map(this::modelingSqlModelIdentity);
+        Optional<ModelingSqlModel> byName = sqlModelRepository.findFirstByNameIgnoreCase(expected);
+        if (byName.isPresent()) {
+            return byName.map(this::modelingSqlModelIdentity);
+        }
+        return sqlModelRepository.findFirstByAliasIgnoreCase(expected).map(this::modelingSqlModelIdentity);
     }
 
     private Optional<CatalogAssetIdentity> resolveDataStandard(String code) {

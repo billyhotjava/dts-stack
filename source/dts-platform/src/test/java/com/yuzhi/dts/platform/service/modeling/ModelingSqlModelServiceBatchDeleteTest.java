@@ -92,7 +92,9 @@ class ModelingSqlModelServiceBatchDeleteTest {
                 objectMapper,
                 fileService,
                 taskExecutor,
-                transactionManager
+                transactionManager,
+                null,
+                null
             );
         lenient().when(security.resolveActiveDept(anyString())).thenReturn("D1");
         lenient().when(security.hasInstituteScope()).thenReturn(false);

@@ -161,7 +161,9 @@ class ModelingSqlModelServiceTest {
                 objectMapper,
                 fileService,
                 taskExecutor,
-                transactionManager
+                transactionManager,
+                null,
+                null
             );
         generationService =
             new ModelGenerationService(

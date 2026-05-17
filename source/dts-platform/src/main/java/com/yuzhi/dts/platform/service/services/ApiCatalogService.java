@@ -12,6 +12,7 @@ import com.yuzhi.dts.platform.repository.service.SvcApiRepository;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetIdentity;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetType;
+import com.yuzhi.dts.platform.service.catalog.CodeAssetLifecycleMapper;
 import com.yuzhi.dts.platform.service.catalog.CodeAssetGrantWriter;
 import com.yuzhi.dts.platform.service.services.dto.*;
 import jakarta.persistence.EntityNotFoundException;
@@ -28,7 +29,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
@@ -44,22 +44,19 @@ public class ApiCatalogService {
     private final SvcApiMetricHourlyRepository metricRepository;
     private final CatalogDatasetRepository datasetRepository;
     private final ObjectMapper objectMapper;
-    private CodeAssetGrantWriter codeAssetGrantWriter;
+    private final CodeAssetGrantWriter codeAssetGrantWriter;
 
     public ApiCatalogService(
         SvcApiRepository apiRepository,
         SvcApiMetricHourlyRepository metricRepository,
         CatalogDatasetRepository datasetRepository,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        CodeAssetGrantWriter codeAssetGrantWriter
     ) {
         this.apiRepository = apiRepository;
         this.metricRepository = metricRepository;
         this.datasetRepository = datasetRepository;
         this.objectMapper = objectMapper;
-    }
-
-    @Autowired(required = false)
-    public void setCodeAssetGrantWriter(CodeAssetGrantWriter codeAssetGrantWriter) {
         this.codeAssetGrantWriter = codeAssetGrantWriter;
     }
 
@@ -223,18 +220,8 @@ public class ApiCatalogService {
             "PLATFORM",
             StringUtils.hasText(username) ? username : "dts-platform",
             api.getClassification(),
-            lifecycleForStatus(api.getStatus())
+            CodeAssetLifecycleMapper.fromApiServiceStatus(api.getStatus())
         );
-    }
-
-    private static String lifecycleForStatus(String status) {
-        if ("PUBLISHED".equalsIgnoreCase(status)) {
-            return "ACTIVE";
-        }
-        if ("DISABLED".equalsIgnoreCase(status)) {
-            return "ARCHIVED";
-        }
-        return "PENDING_GOVERNANCE";
     }
 
     private void applyUpsert(SvcApi api, ApiServiceUpsertRequest request, String username) {

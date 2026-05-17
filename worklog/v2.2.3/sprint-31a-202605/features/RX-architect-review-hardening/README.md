@@ -26,9 +26,9 @@
 - [x] 有针对性单测、negative IT fixture 和静态检查。
 - [x] Glossary existence / ACTIVE 状态检查已进入 artifact preview/import 运行时。
 - [x] Artifact preview 已执行 source asset platform permission check，未授权时不暴露资产细节。
-- [x] CodeAssetGrantWriter 已接入 `GovIndicatorDefinition` 与 `ModelingSqlModel` 高频保存/发布链路。
+- [x] CodeAssetGrantWriter 已接入 `GovIndicatorDefinition`、`ModelingSqlModel`、`DataStandard`、`ModelingGlossaryTerm` 与 `SvcApi` 高频保存/发布链路。
 - [x] Resolver 已覆盖 `GLOSSARY_TERM` / `DATA_STANDARD` / `GOV_INDICATOR` / `MODELING_SQL_MODEL` / `METRIC_PACK` 当前版本身份解析。
 - [x] Resolver 已覆盖 `API_SERVICE` 和 `scopedDataset(...)` key 的当前版本反向解析。
-- [x] Metric artifact preview 已从 platform `/api/internal/asset-permission/policy` 获取 RLS predicate，并注入候选 dbt SQL。
+- [x] Metric artifact preview 已从 platform `/api/internal/v1/asset-permission/policy` 获取 RLS predicate，并注入候选 dbt SQL；legacy path 保留兼容。
 - [x] Metric artifact preview 已输出 `securityPolicyJson`，携带 RLS predicate、masking columns 和 release gate 复核提示。
 - [ ] platform/dbt gate 运行时二次比对同一 RLS/masking 策略和 live IT 继续独立闭环。

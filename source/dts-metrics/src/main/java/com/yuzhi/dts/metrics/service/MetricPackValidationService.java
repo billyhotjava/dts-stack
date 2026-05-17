@@ -283,12 +283,12 @@ public class MetricPackValidationService {
         }
         Object securityRaw = manifest.get("security");
         if (!(securityRaw instanceof Map<?, ?> security)) {
-            errors.add("security.apply_rls must be true when platform assets are referenced");
+            errors.add("security.apply_rls must be declared as a boolean when platform assets are referenced");
             return;
         }
         Object applyRls = security.get("apply_rls");
-        if (!(applyRls instanceof Boolean enabled) || !enabled) {
-            errors.add("security.apply_rls must be true when platform assets are referenced");
+        if (!(applyRls instanceof Boolean)) {
+            errors.add("security.apply_rls must be declared as a boolean when platform assets are referenced");
         }
     }
 

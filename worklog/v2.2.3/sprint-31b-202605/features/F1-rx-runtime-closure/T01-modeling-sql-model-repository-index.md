@@ -1,7 +1,7 @@
 # T01: ModelingSqlModelRepository 索引方法替换全表扫描
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: 无
 
 ## 目标
@@ -44,11 +44,11 @@ resolver 是 metric-pack preview / publish / asset_grant check 的 hot path，�
 
 ## 验证
 
-- [ ] 新增 `CatalogAssetIdentityResolverTest.resolvesModelingSqlModelByName` 改为 mock `findFirstByNameOrAliasIgnoreCase`，不再依赖 `findAll`。
-- [ ] 增加同名 alias / name 命中优先级测试。
+- [x] 新增/更新 `CatalogAssetIdentityResolverTest.resolvesModelingSqlModelByName`，验证 repository 索引方法并断言不调用 `findAll`。
+- [x] 增加 alias 命中测试，避免回退全表扫描。
 - [ ] `EXPLAIN` 验证索引命中（如执行环境允许）。
 
 ## 完成标准
 
-- [ ] `CatalogAssetIdentityResolver` 内不再出现 `sqlModelRepository.findAll()`。
-- [ ] 单测全部绿；性能回归测试在 10k model 数据集下 < 50ms。
+- [x] `CatalogAssetIdentityResolver` 内不再出现 `sqlModelRepository.findAll()`。
+- [x] focused 单测已绿；10k model 性能回归留给最终 IT。

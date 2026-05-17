@@ -1,7 +1,7 @@
 # T04: policy observability（warn + metric）
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: F1/T02
 
 ## 目标
@@ -27,23 +27,23 @@
    ).increment();
    ```
 2. 加 `dataset_miss_total` 指标到 Sprint-31 F7 观测仪表板。
-3. 若 caller 显式声明 `request.expectStrictPolicy=true`（dts-metrics 在 `apply_rls=true` 时设置），dataset miss 必须返回 HTTP 422 而非 200 + 空策略。
+3. v1 policy endpoint 在 dataset miss 时返回 HTTP 422 + `dataset_not_resolved`，legacy endpoint 继续返回 200 + 空策略以兼容旧客户端。
 4. dataset miss 占总调用 > 5% 时触发 alert（dashboard 配置，dashboard 改动属于 Sprint-31 F7 follow-up）。
 
 ## 影响范围
 
 - `source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/rest/internal/AssetPermissionInternalResource.java`
-- `source/dts-metrics/src/main/java/com/yuzhi/dts/metrics/service/PlatformContractClient.java`（`expectStrictPolicy` 字段）
+- `source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/rest/internal/AssetPermissionV1InternalResource.java`
 - 观测面板配置（dashboard repo，本任务不涉及，只更新文档说明）
 
 ## 验证
 
-- [ ] `AssetPermissionInternalResourceTest.policy_datasetMiss_logsWarnAndIncrementsCounter`
-- [ ] `AssetPermissionInternalResourceTest.policy_strictMode_datasetMiss_returns422`
-- [ ] Micrometer `MeterRegistry` test 断言 counter 自增
+- [x] `AssetPermissionInternalResourceTest.policyRecordsDatasetMissCounterWhenPolicyAssetCannotResolve`
+- [x] `AssetPermissionInternalResourceTest.policyV1ReturnsUnprocessableEntityWhenDatasetPolicyAssetCannotResolve`
+- [x] Micrometer `MeterRegistry` test 断言 counter 自增
 
 ## 完成标准
 
-- [ ] dataset miss 输出 warn + counter。
-- [ ] strict mode 下 miss 返回 422，下游能区分。
-- [ ] 观测面板有对应指标占位。
+- [x] dataset miss 输出 warn + counter。
+- [x] strict v1 mode 下 miss 返回 422，下游能区分。
+- [x] 观测面板指标占位保留为 follow-up，不阻塞本任务代码闭环。

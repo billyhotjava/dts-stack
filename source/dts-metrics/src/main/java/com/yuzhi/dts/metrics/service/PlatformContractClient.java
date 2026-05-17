@@ -75,7 +75,7 @@ public class PlatformContractClient {
         try {
             RestClient.RequestBodySpec spec = restClient
                 .post()
-                .uri(internalUrl("/internal/asset-permission/policy"))
+                .uri(internalUrl("/internal/v1/asset-permission/policy"))
                 .header("X-DTS-Service", properties.getServiceName());
             if (StringUtils.hasText(properties.getPlatform().getServiceToken())) {
                 spec = spec.header("X-DTS-Service-Token", properties.getPlatform().getServiceToken());

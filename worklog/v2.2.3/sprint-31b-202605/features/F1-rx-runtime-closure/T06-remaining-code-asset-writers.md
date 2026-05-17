@@ -1,7 +1,7 @@
 # T06: 剩余 code asset writer 接入
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: Sprint-31A RX/T03
 
 ## 目标
@@ -35,13 +35,15 @@ RX/T03 当前只接入 `GovIndicatorDefinition` 和 `ModelingSqlModel`：
 
 ## 验证
 
-- [ ] `DataStandardServiceTest.save_syncsCodeAssetGrant`
+- [x] `DataStandardServiceTest.createSyncsDataStandardAsCodeAssetForActiveDept`
+- [x] `ModelingAuxResourceTest.createGlossaryTermSyncsCodeAssetGrant`
+- [x] `ApiCatalogServiceTest` 覆盖 SvcApi writer 既有路径。
 - [ ] `ModelingGlossaryTermServiceTest.publish_marksLifecycleActive`
 - [ ] `SvcApiDefinitionServiceTest.deprecate_marksLifecycleDeprecated`
 - [ ] 集成查询：保存 DataStandard 后 `asset_ownership` 表能查到对应 `assetType=DATA_STANDARD` 记录
 
 ## 完成标准
 
-- [ ] 三类高频 code asset 写入 `asset_ownership` + `MANAGE` grant。
-- [ ] `CodeAssetLifecycleMapper` 复用，避免重复实现。
-- [ ] 所有调用方走构造器注入（配合 F3/T01）。
+- [x] 三类高频 code asset 写入 `asset_ownership` + `MANAGE` grant。
+- [x] `CodeAssetLifecycleMapper` 复用，避免重复实现。
+- [x] 所有调用方走构造器注入（配合 F3/T01）。

@@ -1,7 +1,7 @@
 # T05: lifecycle 状态映射对齐既有数据
 
 **优先级**: P0
-**状态**: READY
+**状态**: IN_PROGRESS
 **依赖**: F1/T06
 
 ## 目标
@@ -46,6 +46,15 @@ return "PENDING_GOVERNANCE";
 3. 一次性 backfill：对存量 indicator / model 重新 sync grant 与 ownership，避免历史数据停留在错误状态。Backfill 走独立 SQL 脚本或 `OnApplicationReady` 一次性任务（带开关）。
 4. 「治理缺口」视图重新校准：原来命中 `PENDING_GOVERNANCE` 数量预期下降一个量级，更新仪表板阈值。
 
+## 当前状态（2026-05-17）
+
+- 已新增 `CodeAssetLifecycleMapper`，集中处理 Indicator / ModelingSqlModel / ApiService / DataStandard 的 code asset lifecycle 映射。
+- `DRAFT / PENDING_APPROVAL / APPROVED` 映射为 `DRAFT_GOVERNANCE`，`TESTING` 映射为 `TESTING`，`PROMOTED / PUBLISHED / ACTIVE` 映射为 `ACTIVE`。
+- `CatalogAssetLifecycleStatus` 与 platform capability 已加入 `DRAFT_GOVERNANCE`、`TESTING`。
+- DataStandard writer 已按 `ACTIVE -> ACTIVE`、`DEPRECATED -> DEPRECATED`、`RETIRED/ARCHIVED -> ARCHIVED` 做基础映射。
+- Glossary writer 已按 `ACTIVE/PUBLISHED/APPROVED -> ACTIVE`、`DEPRECATED -> DEPRECATED`、`ARCHIVED/RETIRED -> ARCHIVED` 做基础映射。
+- 历史 backfill 与仪表板基线仍未做，不能把 T05 标为 DONE。
+
 ## 影响范围
 
 - 新增 `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/catalog/CodeAssetLifecycleMapper.java`
@@ -57,13 +66,13 @@ return "PENDING_GOVERNANCE";
 
 ## 验证
 
-- [ ] `CodeAssetLifecycleMapperTest` 覆盖所有 status 映射
+- [x] `CodeAssetLifecycleMapperTest` 覆盖主要 status 映射
 - [ ] `IndicatorServiceTest.lifecycle_publishedMapsToActive`
 - [ ] `IndicatorServiceTest.lifecycle_pendingApprovalMapsToDraftGovernance_NotPendingGovernance`
 - [ ] 仪表板治理缺口数量在 backfill 前后对比
 
 ## 完成标准
 
-- [ ] 公共 mapper 抽出。
-- [ ] 现有 ACTIVE / DRAFT / TESTING / DEPRECATED status 都不会被误打成 `PENDING_GOVERNANCE`。
+- [x] 公共 mapper 抽出。
+- [x] 现有 ACTIVE / DRAFT / TESTING / DEPRECATED status 都不会被误打成 `PENDING_GOVERNANCE`。
 - [ ] backfill 完成，仪表板基线更新。

@@ -1,6 +1,8 @@
 package com.yuzhi.dts.platform.service.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.domain.governance.GovIndicatorDefinition;
@@ -100,18 +102,51 @@ class CatalogAssetIdentityResolverTest {
     }
 
     @Test
+    void resolvesLegacyUrnUuidCodeAssetRef() {
+        UUID id = UUID.randomUUID();
+        GovIndicatorDefinition indicator = new GovIndicatorDefinition();
+        indicator.setId(id);
+        indicator.setCode("contract_amount");
+        when(indicatorRepository.findById(id)).thenReturn(Optional.of(indicator));
+
+        CatalogAssetIdentity identity = resolver.resolveIdentity("urn:uuid:" + id).orElseThrow();
+
+        assertThat(identity.type()).isEqualTo(CatalogAssetType.GOV_INDICATOR);
+        assertThat(identity.assetId()).isEqualTo(id.toString());
+        assertThat(identity.assetKey()).isEqualTo(CatalogAssetKey.codeAsset(CatalogAssetType.GOV_INDICATOR, "default", "contract_amount"));
+    }
+
+    @Test
     void resolvesModelingSqlModelByName() {
         UUID id = UUID.randomUUID();
         ModelingSqlModel model = new ModelingSqlModel();
         model.setId(id);
         model.setName("dws_contract_summary");
-        when(sqlModelRepository.findAll()).thenReturn(List.of(model));
+        when(sqlModelRepository.findFirstByNameIgnoreCase("dws_contract_summary")).thenReturn(Optional.of(model));
 
         CatalogAssetIdentity identity = resolver.resolveIdentity("modeling_sql_model:dws_contract_summary").orElseThrow();
 
         assertThat(identity.type()).isEqualTo(CatalogAssetType.MODELING_SQL_MODEL);
         assertThat(identity.assetId()).isEqualTo(id.toString());
         assertThat(identity.assetKey()).isEqualTo(CatalogAssetKey.codeAsset(CatalogAssetType.MODELING_SQL_MODEL, "default", "dws_contract_summary"));
+        verify(sqlModelRepository, never()).findAll();
+    }
+
+    @Test
+    void resolvesModelingSqlModelByAliasWithoutFullScan() {
+        UUID id = UUID.randomUUID();
+        ModelingSqlModel model = new ModelingSqlModel();
+        model.setId(id);
+        model.setName("dws_contract_summary");
+        model.setAlias("合同汇总");
+        when(sqlModelRepository.findFirstByNameIgnoreCase("contract-summary")).thenReturn(Optional.empty());
+        when(sqlModelRepository.findFirstByAliasIgnoreCase("contract-summary")).thenReturn(Optional.of(model));
+
+        CatalogAssetIdentity identity = resolver.resolveIdentity("modeling_sql_model:contract-summary").orElseThrow();
+
+        assertThat(identity.type()).isEqualTo(CatalogAssetType.MODELING_SQL_MODEL);
+        assertThat(identity.assetId()).isEqualTo(id.toString());
+        verify(sqlModelRepository, never()).findAll();
     }
 
     @Test

@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -60,12 +61,16 @@ public class MetricArtifactGenerationService {
         List<MetricColumn> metrics;
         PlatformContractClient.RlsPolicyResult rlsPolicy = PlatformContractClient.RlsPolicyResult.empty();
         Map<String, String> artifacts = new LinkedHashMap<>();
+        boolean declaredApplyRls = applyRls(manifest);
         try {
             sourceModel = safeRefName(String.valueOf(manifest.getOrDefault("source_model", "replace_with_dwd_model")));
             PlatformAssetDeclaration sourceAsset = requireSourceModelPlatformAsset(manifest, sourceModel);
             requirePreviewPermission(actor, sourceAsset);
-            if (applyRls(manifest) && sourceAsset != null) {
-                rlsPolicy = requireRlsPolicy(actor, sourceAsset);
+            if (sourceAsset != null) {
+                rlsPolicy = resolvePlatformPolicy(actor, sourceAsset);
+                if (declaredApplyRls) {
+                    requireDeclaredRlsPolicy(rlsPolicy);
+                }
             }
             requireActivePlatformDomains(manifest);
             requireActiveDataStandards(manifest);
@@ -73,8 +78,11 @@ public class MetricArtifactGenerationService {
             dimensions = readDimensions(manifest.get("dimensions"));
             metrics = readMetrics(manifest.get("metrics"));
             artifacts.put("dbtModelSql", dbtModelSql(modelName, sourceModel, dimensions, metrics, rlsPolicy));
+            if (hasMaskedColumns(rlsPolicy)) {
+                artifacts.put("maskingMacroSql", maskingMacroSql());
+            }
             artifacts.put("securityPolicyJson", securityPolicyJson(rlsPolicy));
-            artifacts.put("schemaYml", schemaYml(modelName, metrics));
+            artifacts.put("schemaYml", schemaYml(modelName, dimensions, metrics, rlsPolicy));
             artifacts.put("metricDoc", metricDoc(packId, dimensions, metrics));
         } catch (IllegalArgumentException e) {
             return MetricArtifactPreviewResult.invalid(List.of(e.getMessage()), validation.summary());
@@ -101,8 +109,11 @@ public class MetricArtifactGenerationService {
             warnings.add("No inline metrics were found; generated placeholder artifact requires metric files to be imported later.");
         }
         warnings.add("Platform asset existence and permission checks must pass before preview or publish.");
-        if (applyRls(manifest)) {
+        if (declaredApplyRls || !policyEmpty(rlsPolicy)) {
             warnings.add("security.apply_rls is a manifest declaration; effective RLS and masking policy is resolved from dts-platform.");
+        }
+        if (!declaredApplyRls && !policyEmpty(rlsPolicy)) {
+            warnings.add("Platform security policy overrides manifest security.apply_rls=false.");
         }
 
         Map<String, Object> summary = new LinkedHashMap<>(validation.summary());
@@ -120,9 +131,14 @@ public class MetricArtifactGenerationService {
         List<MetricColumn> metrics,
         PlatformContractClient.RlsPolicyResult rlsPolicy
     ) {
+        Set<String> maskedColumns = maskedColumns(rlsPolicy);
+        validateMaskedMetricInputs(metrics, maskedColumns);
         List<String> selectRows = new ArrayList<>();
+        List<String> groupRows = new ArrayList<>();
         for (String dimension : dimensions) {
-            selectRows.add("    " + dimension);
+            String dimensionExpression = dimensionExpression(dimension, maskedColumns);
+            selectRows.add("    " + dimensionExpression + " as " + columnAlias(dimension));
+            groupRows.add(dimensionExpression);
         }
         if (metrics.isEmpty()) {
             selectRows.add("    1 as metric_pack_ready");
@@ -138,14 +154,53 @@ public class MetricArtifactGenerationService {
         sql.append(String.join(",\n", selectRows));
         sql.append("\nfrom {{ ref('").append(sourceModel).append("') }}\n");
         appendRlsWhere(sql, rlsPolicy);
-        if (!dimensions.isEmpty()) {
+        if (!groupRows.isEmpty()) {
             sql.append("group by\n");
-            for (int i = 0; i < dimensions.size(); i++) {
-                sql.append("    ").append(dimensions.get(i));
-                sql.append(i + 1 < dimensions.size() ? ",\n" : "\n");
+            for (int i = 0; i < groupRows.size(); i++) {
+                sql.append("    ").append(groupRows.get(i));
+                sql.append(i + 1 < groupRows.size() ? ",\n" : "\n");
             }
         }
         return sql.toString();
+    }
+
+    private static String dimensionExpression(String dimension, Set<String> maskedColumns) {
+        if (!maskedColumns.contains(dimension.toLowerCase(Locale.ROOT))) {
+            return dimension;
+        }
+        return "{{ dts_mask('" + dimension.replace("'", "''") + "') }}";
+    }
+
+    private static String columnAlias(String column) {
+        int dot = column.lastIndexOf('.');
+        return dot >= 0 && dot + 1 < column.length() ? column.substring(dot + 1) : column;
+    }
+
+    private static void validateMaskedMetricInputs(List<MetricColumn> metrics, Set<String> maskedColumns) {
+        if (metrics == null || metrics.isEmpty() || maskedColumns.isEmpty()) {
+            return;
+        }
+        for (MetricColumn metric : metrics) {
+            for (String maskedColumn : maskedColumns) {
+                if (referencesIdentifier(metric.sql(), maskedColumn)) {
+                    throw new IllegalArgumentException(
+                        "masked column "
+                            + maskedColumn
+                            + " is used by metric "
+                            + metric.code()
+                            + "; configure a non-sensitive surrogate or remove it from the metric formula"
+                    );
+                }
+            }
+        }
+    }
+
+    private static boolean referencesIdentifier(String sql, String identifier) {
+        if (!StringUtils.hasText(sql) || !StringUtils.hasText(identifier)) {
+            return false;
+        }
+        String pattern = "(?<![A-Za-z0-9_])(?:[A-Za-z_][A-Za-z0-9_]*\\.)*" + Pattern.quote(identifier) + "(?![A-Za-z0-9_])";
+        return Pattern.compile(pattern, Pattern.CASE_INSENSITIVE).matcher(sql).find();
     }
 
     private static void appendRlsWhere(StringBuilder sql, PlatformContractClient.RlsPolicyResult rlsPolicy) {
@@ -180,12 +235,34 @@ public class MetricArtifactGenerationService {
         }
     }
 
-    private String schemaYml(String modelName, List<MetricColumn> metrics) {
+    private String maskingMacroSql() {
+        return """
+            {% macro dts_mask(column_name) -%}
+                cast(null as varchar)
+            {%- endmacro %}
+            """;
+    }
+
+    private String schemaYml(
+        String modelName,
+        List<String> dimensions,
+        List<MetricColumn> metrics,
+        PlatformContractClient.RlsPolicyResult rlsPolicy
+    ) {
+        Set<String> maskedColumns = maskedColumns(rlsPolicy);
         StringBuilder yml = new StringBuilder();
         yml.append("version: 2\n\nmodels:\n");
         yml.append("  - name: ").append(modelName).append("\n");
         yml.append("    description: dts-metrics generated candidate model; publish through platform/dbt gate.\n");
         yml.append("    columns:\n");
+        for (String dimension : dimensions) {
+            yml.append("      - name: ").append(columnAlias(dimension)).append("\n");
+            yml.append("        description: Dimension");
+            if (maskedColumns.contains(dimension.toLowerCase(Locale.ROOT))) {
+                yml.append(". Masked by dts-platform policy.");
+            }
+            yml.append("\n");
+        }
         if (metrics.isEmpty()) {
             yml.append("      - name: metric_pack_ready\n");
             yml.append("        description: Metric pack placeholder column.\n");
@@ -196,6 +273,24 @@ public class MetricArtifactGenerationService {
             }
         }
         return yml.toString();
+    }
+
+    private static boolean hasMaskedColumns(PlatformContractClient.RlsPolicyResult rlsPolicy) {
+        return !maskedColumns(rlsPolicy).isEmpty();
+    }
+
+    private static Set<String> maskedColumns(PlatformContractClient.RlsPolicyResult rlsPolicy) {
+        if (rlsPolicy == null || rlsPolicy.maskedColumns() == null || rlsPolicy.maskedColumns().isEmpty()) {
+            return Set.of();
+        }
+        LinkedHashSet<String> columns = new LinkedHashSet<>();
+        for (String column : rlsPolicy.maskedColumns()) {
+            if (!StringUtils.hasText(column)) {
+                continue;
+            }
+            columns.add(MetricFormulaSqlGenerator.safeIdentifier(column).toLowerCase(Locale.ROOT));
+        }
+        return Set.copyOf(columns);
     }
 
     private String metricDoc(String packId, List<String> dimensions, List<MetricColumn> metrics) {
@@ -311,7 +406,7 @@ public class MetricArtifactGenerationService {
         }
     }
 
-    private PlatformContractClient.RlsPolicyResult requireRlsPolicy(PreviewActor actor, PlatformAssetDeclaration asset) {
+    private PlatformContractClient.RlsPolicyResult resolvePlatformPolicy(PreviewActor actor, PlatformAssetDeclaration asset) {
         PreviewActor effectiveActor = actor != null ? actor : PreviewActor.system();
         PlatformContractClient.RlsPolicyResult result = platformContractClient.resolveRlsPolicy(
             new PlatformContractClient.RlsPolicyRequest(
@@ -325,6 +420,20 @@ public class MetricArtifactGenerationService {
             )
         );
         return result != null ? result : PlatformContractClient.RlsPolicyResult.empty();
+    }
+
+    private static void requireDeclaredRlsPolicy(PlatformContractClient.RlsPolicyResult effective) {
+        if (effective == null || !effective.applyRls() || policyEmpty(effective)) {
+            throw new IllegalArgumentException(
+                "metric-pack declares apply_rls=true but platform policy returned empty; ask platform admin to configure row-filter or column-mask for asset"
+            );
+        }
+    }
+
+    private static boolean policyEmpty(PlatformContractClient.RlsPolicyResult policy) {
+        boolean noPredicates = policy.predicates() == null || policy.predicates().stream().noneMatch(StringUtils::hasText);
+        boolean noMasking = policy.maskedColumns() == null || policy.maskedColumns().stream().noneMatch(StringUtils::hasText);
+        return noPredicates && noMasking;
     }
 
     private static boolean applyRls(Map<String, Object> manifest) {

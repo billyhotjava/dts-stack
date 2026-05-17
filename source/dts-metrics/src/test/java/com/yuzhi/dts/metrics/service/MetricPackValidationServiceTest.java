@@ -39,6 +39,35 @@ class MetricPackValidationServiceTest {
     }
 
     @Test
+    void treatsApplyRlsAsDeclarationOnlyForPlatformAssets() {
+        String manifest = """
+            pack_id: declaration-only
+            pack_name: Declaration Only Pack
+            version: 0.1.0
+            industry: demo
+            edition_required: professional
+            tenant_namespace: demo
+            security:
+              apply_rls: false
+            files:
+              domains: domains.yml
+              business_objects: business-objects.yml
+              dimensions: dimensions.yml
+              metrics: metrics.yml
+              models: models.yml
+              datasets: datasets.yml
+            dependencies:
+              platform_assets:
+                - type: DATASET
+                  id: dwd_demo
+            """;
+
+        MetricPackValidationResult result = service.validateManifest(manifest);
+
+        assertThat(result.valid()).isTrue();
+    }
+
+    @Test
     void rejectsRawSql() {
         String manifest = """
             pack_id: unsafe
@@ -364,7 +393,7 @@ class MetricPackValidationServiceTest {
         assertThat(result.errors())
             .contains(
                 "dependencies.platform_assets[0] must declare owner_namespace or inherit top-level tenant_namespace",
-                "security.apply_rls must be true when platform assets are referenced"
+                "security.apply_rls must be declared as a boolean when platform assets are referenced"
             );
     }
 

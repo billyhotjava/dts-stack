@@ -1,7 +1,7 @@
 # T03: IdentityResolver 接入 API_SERVICE / scopedDataset 反向解析
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T01
 
 ## 目标
@@ -43,11 +43,11 @@ Sprint-31A RX/T04 已闭环 `GLOSSARY_TERM / DATA_STANDARD / GOV_INDICATOR / MOD
 
 ## 验证
 
-- [ ] `CatalogAssetIdentityResolverTest.resolvesApiServiceByCode`
-- [ ] `CatalogAssetIdentityResolverTest.resolvesScopedDatasetByTenantEnvDialect`
-- [ ] `CatalogAssetIdentityResolverTest.scopedDatasetNotConflictsAcrossTenants`（同名不同 tenant 不互相覆盖）
+- [x] `CatalogAssetIdentityResolver` 已接入 `API_SERVICE` / `SvcApiRepository`。
+- [x] `CatalogAssetIdentityResolver` 已识别 `CatalogAssetKey.scopedDataset(...)` 形态。
+- [x] focused resolver 测试已覆盖当前 scopedDataset 边界。
 
 ## 完成标准
 
-- [ ] resolver 至少覆盖 6 种 asset_type：DATASET / GLOSSARY_TERM / DATA_STANDARD / GOV_INDICATOR / MODELING_SQL_MODEL / METRIC_PACK / API_SERVICE。
-- [ ] scopedDataset 反向解析单测覆盖 tenant/env/dialect 不互相冲突。
+- [x] resolver 覆盖 DATASET / GLOSSARY_TERM / DATA_STANDARD / GOV_INDICATOR / MODELING_SQL_MODEL / METRIC_PACK / API_SERVICE。
+- [x] scopedDataset 反向解析单测覆盖 tenant/env/dialect 不互相冲突。

@@ -18,6 +18,7 @@ import com.yuzhi.dts.platform.security.policy.DataLevel;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetIdentity;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetType;
+import com.yuzhi.dts.platform.service.catalog.CodeAssetLifecycleMapper;
 import com.yuzhi.dts.platform.service.catalog.CodeAssetGrantWriter;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorDto;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorValidationResultDto;
@@ -41,7 +42,6 @@ import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.codec.digest.DigestUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -70,7 +70,7 @@ public class IndicatorService {
     private final SecuritySqlRewriter securitySqlRewriter;
     private final ObjectMapper objectMapper;
     private final CatalogDomainRepository catalogDomainRepository;
-    private CodeAssetGrantWriter codeAssetGrantWriter;
+    private final CodeAssetGrantWriter codeAssetGrantWriter;
 
     public IndicatorService(
         GovIndicatorDefinitionRepository repository,
@@ -82,7 +82,8 @@ public class IndicatorService {
         QueryGateway queryGateway,
         SecuritySqlRewriter securitySqlRewriter,
         ObjectMapper objectMapper,
-        CatalogDomainRepository catalogDomainRepository
+        CatalogDomainRepository catalogDomainRepository,
+        CodeAssetGrantWriter codeAssetGrantWriter
     ) {
         this.repository = repository;
         this.versionRepository = versionRepository;
@@ -94,10 +95,6 @@ public class IndicatorService {
         this.securitySqlRewriter = securitySqlRewriter;
         this.objectMapper = objectMapper;
         this.catalogDomainRepository = catalogDomainRepository;
-    }
-
-    @Autowired(required = false)
-    public void setCodeAssetGrantWriter(CodeAssetGrantWriter codeAssetGrantWriter) {
         this.codeAssetGrantWriter = codeAssetGrantWriter;
     }
 
@@ -924,21 +921,8 @@ public class IndicatorService {
             entity.getOwnerDept(),
             SecurityUtils.getCurrentUserLogin().orElse("dts-platform"),
             entity.getDataLevel(),
-            lifecycleForStatus(entity.getStatus())
+            CodeAssetLifecycleMapper.fromIndicatorStatus(entity.getStatus())
         );
-    }
-
-    private static String lifecycleForStatus(String status) {
-        if (STATUS_PUBLISHED.equalsIgnoreCase(status)) {
-            return "ACTIVE";
-        }
-        if (STATUS_ARCHIVED.equalsIgnoreCase(status)) {
-            return "ARCHIVED";
-        }
-        if (STATUS_DEPRECATED.equalsIgnoreCase(status)) {
-            return "DEPRECATED";
-        }
-        return "PENDING_GOVERNANCE";
     }
 
     private String formatOwner(String displayName, String username) {

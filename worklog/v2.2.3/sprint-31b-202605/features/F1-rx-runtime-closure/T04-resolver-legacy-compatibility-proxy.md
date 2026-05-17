@@ -1,7 +1,7 @@
 # T04: IdentityResolver 历史兼容代理
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T01, T03
 
 ## 目标
@@ -45,7 +45,12 @@ Sprint-31A RX/T04 已支持新 ref 格式，但历史数据中存在：
 - [ ] `CatalogAssetIdentityResolverTest.modelNameAmbiguousPrefersSqlModelOverDataset`
 - [ ] grep 搜索 `assets-v2/migration/dry-run` 输出确认历史 ref 覆盖率
 
+## 当前状态（2026-05-17）
+
+- 已覆盖 UUID、`urn:uuid:`、OpenMetadata entity id/FQN、纯 dbt/model 名称、metric-pack ref 的主路径。
+- 冲突优先级审计和 failure report 证据转入 F1/T05。
+
 ## 完成标准
 
-- [ ] 4 类历史 ref 形态均有解析路径与单测。
-- [ ] 解析优先级有文档记录，无 silent fallback。
+- [x] 4 类历史 ref 形态均有解析路径与单测。
+- [x] 解析优先级有文档记录；失败审计转入 F1/T05。

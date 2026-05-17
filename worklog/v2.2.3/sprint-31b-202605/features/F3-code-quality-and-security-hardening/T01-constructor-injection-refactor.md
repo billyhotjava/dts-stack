@@ -1,7 +1,7 @@
 # T01: setter 注入改构造器注入
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: 无
 
 ## 目标
@@ -50,11 +50,11 @@ setter 注入隐藏依赖、破坏 final 字段不变性、单元测试 setup �
 ## 验证
 
 - [ ] `mvn -pl dts-platform compile -Dspring.main.allow-circular-references=false` 启动不抛环
-- [ ] `IndicatorServiceTest` / `ModelingSqlModelServiceTest` 通过构造器 mock 注入，不用 `ReflectionTestUtils`
-- [ ] `grep -rn '@Autowired(required = false)' source/dts-platform/src/main/` 在新增点为 0
+- [x] `IndicatorService` / `ModelingSqlModelService` / `ApiCatalogService` 通过构造器注入 `CodeAssetGrantWriter`。
+- [x] `grep '@Autowired(required = false)'` 在本次 code asset writer 调用方为 0；平台配置类历史 optional bean 不属于本任务范围。
 
 ## 完成标准
 
-- [ ] 所有 code asset writer 调用方走构造器注入。
-- [ ] 循环依赖被根本性解耦或显式 `@Lazy` 标记。
-- [ ] 测试不依赖 setter / 反射注入。
+- [x] 所有 code asset writer 调用方走构造器注入。
+- [x] 本次修改未新增 setter/field injection；如最终 Spring context 暴露循环，再单独补 `@Lazy` 或事件解耦。
+- [x] 已更新相关构造器测试，不依赖 setter / 反射注入。

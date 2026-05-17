@@ -1,7 +1,7 @@
 # T03: manifest `apply_rls=true` 降级为声明
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T01
 
 ## 目标
@@ -11,6 +11,13 @@
 ## 背景
 
 Sprint-31A RX/T05 当前的 `applyRls(manifest)` 检查只决定要不要调 policy contract；如果 platform 返回空 policy，preview 仍照常出 artifact，等于 manifest 自己声明 `apply_rls=true` 就被信任了。这是 self-attestation 反模式。
+
+当前已完成的基础收口：
+
+- preview 已提示 `security.apply_rls` 是 declaration，实际策略来自 dts-platform。
+- artifact 输出 `securityPolicyJson`，包含 predicates、maskedColumns、policySource 和 releaseGate 复核提示。
+- manifest 声明 `apply_rls=true` 但 platform policy 为空时，preview 已显式失败。
+- 已补齐：manifest=false 但 platform 有策略时强制 override；validation 只要求 `security.apply_rls` 是 boolean declaration，不再要求必须为 true。
 
 ## 技术设计
 
@@ -35,12 +42,12 @@ Sprint-31A RX/T05 当前的 `applyRls(manifest)` 检查只决定要不要调 pol
 
 ## 验证
 
-- [ ] `MetricArtifactGenerationServiceTest.declaresApplyRlsButPlatformEmpty_failsPreview`
-- [ ] `MetricArtifactGenerationServiceTest.declaresApplyRlsFalseButPlatformHasPolicy_overrides`
-- [ ] `MetricArtifactGenerationServiceTest.platformPolicyTrustedOverManifest`
+- [x] `MetricArtifactGenerationServiceTest.declaresApplyRlsButPlatformPolicyEmptyFailsPreview`
+- [x] `MetricArtifactGenerationServiceTest.platformPolicyOverridesApplyRlsFalseManifestDeclaration`
+- [x] `MetricPackValidationServiceTest.treatsApplyRlsAsDeclarationOnlyForPlatformAssets`
 
 ## 完成标准
 
-- [ ] manifest `apply_rls` 不再被独立 trust，仅作声明。
-- [ ] 声明与 platform policy 冲突时显式 fail / override 并告警。
-- [ ] 文档更新。
+- [x] manifest `apply_rls` 不再被独立 trust，仅作声明。
+- [x] 声明与 platform policy 冲突时显式 fail / override 并告警。
+- [x] 文档更新。

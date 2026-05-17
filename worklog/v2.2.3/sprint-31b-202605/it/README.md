@@ -24,9 +24,11 @@ Sprint-31A RX 主体
 | cheap compile（dts-metrics） | `it/evidence/cheap-compile/dts-metrics-{date}.md` | F5/T02 |
 | cheap compile（webapp tsc） | `it/evidence/cheap-compile/dts-platform-webapp-{date}.md` | F5/T03 |
 | RLS dialect IT | `it/evidence/rls-dialect/postgres-{date}.log` `doris-{date}.log` | F2/T05 |
+| RLS masking 单测证据 | `it/evidence/rls-masking-{date}.md` | F2/T02 |
 | resolver failure 审计 | `it/evidence/resolver-failure/{date}.md` | F1/T05 |
 | code asset writer 增量 | `it/evidence/code-asset-writer/{date}.md` | F1/T06 |
 | policy 端点版本切换 | `it/evidence/policy-versioning/{date}.md` | F3/T02 |
+| lifecycle 映射 | `it/evidence/lifecycle-mapping-{date}.md` | F3/T05 |
 
 ## 收尾命令（按顺序）
 
