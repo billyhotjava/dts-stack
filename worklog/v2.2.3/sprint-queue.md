@@ -504,11 +504,11 @@
 | F1-rx-runtime-closure | P0 | 6 | DONE |
 | F2-rls-publish-and-masking-closure | P0 | 5 | IN_PROGRESS（T02/T03 DONE；publish gate / audit 待接入） |
 | F3-code-quality-and-security-hardening | P0 | 5 | DONE |
-| F4-sprint-31a-gap-and-status-rectification | P1 | 4 | IN_PROGRESS（T01/T04 DONE；T02-T03 待处理） |
+| F4-sprint-31a-gap-and-status-rectification | P1 | 4 | IN_PROGRESS（T01/T03/T04 DONE；T02 待处理） |
 | F5-sprint-31-cheap-compile-verification | P0 | 4 | READY |
 | F6-frontend-acceptance-recovery | P0 | 5 | DONE |
 
-**统计**: READY=9, IN_PROGRESS=0, DONE=20, BLOCKED=0
+**统计**: READY=8, IN_PROGRESS=0, DONE=21, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-31b-202605/README.md`
 **集成测试**: `worklog/v2.2.3/sprint-31b-202605/it/README.md`
 **关键决策**:

@@ -147,6 +147,7 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
                 || isMetricsReferenceResolve(method, path)
                 || isMetricsAssetPermission(method, path)
                 || isMetricsCatalogRead(method, path)
+                || isMetricsLineageDryRun(method, path)
                 || isMetricsDbtPublishGateway(method, path);
         }
         return false;
@@ -186,6 +187,10 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
         return isPost(method, path, "/api/internal/glossary/terms/resolve")
             || isPost(method, path, "/api/internal/domains/resolve")
             || isPost(method, path, "/api/internal/data-standards/resolve");
+    }
+
+    private boolean isMetricsLineageDryRun(String method, String path) {
+        return isGet(method, path, "/api/internal/v1/lineage/backfill/dry-run");
     }
 
     private boolean isMetricsDbtPublishGateway(String method, String path) {

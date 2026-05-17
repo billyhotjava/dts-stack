@@ -42,6 +42,7 @@ class ServiceDependencyAuthenticationFilterTest {
     private static final String INTERNAL_DATA_STANDARDS_RESOLVE = "/api/internal/data-standards/resolve";
     private static final String METRICS_ASSET_CONTRACT = "/api/catalog/assets-v2/33333333-3333-3333-3333-333333333333/contract";
     private static final String METRICS_ASSET_SCHEMA_CONTRACT = "/api/catalog/assets-v2/33333333-3333-3333-3333-333333333333/schema-contract";
+    private static final String METRICS_LINEAGE_BACKFILL_DRY_RUN = "/api/internal/v1/lineage/backfill/dry-run";
 
     private PlatformInboundServiceAuthProperties props;
     private SvcTokenAuthService svcTokenAuthService;
@@ -178,6 +179,7 @@ class ServiceDependencyAuthenticationFilterTest {
         assertMetricsCanAccess("GET", "/api/catalog/assets-v2");
         assertMetricsCanAccess("GET", METRICS_ASSET_CONTRACT);
         assertMetricsCanAccess("GET", METRICS_ASSET_SCHEMA_CONTRACT);
+        assertMetricsCanAccess("GET", METRICS_LINEAGE_BACKFILL_DRY_RUN);
         assertMetricsCanAccess("POST", "/api/etl/dbt/release-gate/check");
         assertMetricsCanAccess("POST", "/api/etl/dbt/release/submit");
     }

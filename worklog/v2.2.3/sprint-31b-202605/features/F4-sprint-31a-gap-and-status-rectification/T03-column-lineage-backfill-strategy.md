@@ -1,7 +1,7 @@
 # T03: F3/T04 字段血缘 backfill 策略
 
 **优先级**: P1
-**状态**: READY
+**状态**: DONE
 **依赖**: 无
 
 ## 目标
@@ -44,11 +44,18 @@ Sprint-32 的 metric artifact 已经开始想依赖字段血缘做 impact analys
 
 ## 验证
 
-- [ ] backfill strategy 文档 review
-- [ ] dry-run endpoint 返回结构化预估（不修改数据）
+- [x] backfill strategy 文档 review。
+- [x] dry-run endpoint 返回结构化预估（不修改数据）。
 
 ## 完成标准
 
-- [ ] backfill 策略文档定稿。
-- [ ] dry-run endpoint 占位可调用。
-- [ ] Sprint-31A F3/T04 文档闭环。
+- [x] backfill 策略文档定稿。
+- [x] dry-run endpoint 占位可调用。
+- [x] Sprint-31A F3/T04 文档闭环。
+
+## 实现记录
+
+- 策略文档：`worklog/v2.2.3/sprint-31b-202605/assets/column-lineage-backfill-strategy.md`。
+- dry-run endpoint：`GET /api/internal/v1/lineage/backfill/dry-run?type=DBT_MODEL&since=...`。
+- endpoint 只返回非变更计划，`mutatesData=false`，不写 lineage 表。
+- `dts-metrics` service principal 可访问该 dry-run endpoint。

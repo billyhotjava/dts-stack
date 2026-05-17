@@ -13,12 +13,12 @@
 |----|------|--------|------|------|
 | T01 | Sprint-31A 状态口径修正 | P0 | DONE | F1-F3 进入开发 |
 | T02 | F4/T05 拒绝原因提级到 P0 | P0 | READY | - |
-| T03 | F3/T04 字段血缘 backfill 策略 | P1 | READY | - |
+| T03 | F3/T04 字段血缘 backfill 策略 | P1 | DONE | - |
 | T04 | 5 个空 evidence 目录补齐 | P1 | DONE | - |
 
 ## 完成标准
 
 - [x] Sprint-31A README / RX README / sprint-queue.md 三处状态用同一口径表达。
 - [ ] F4/T05 拒绝原因任务升级到 P0 并追加 audit schema 描述。
-- [ ] 字段血缘历史 backfill 有书面策略与 dry-run 报告。
+- [x] 字段血缘历史 backfill 有书面策略与 dry-run 报告。
 - [x] Sprint-31A IT evidence 5 个空目录补齐占位 README 与 owner。

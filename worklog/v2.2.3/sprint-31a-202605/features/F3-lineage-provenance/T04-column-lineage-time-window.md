@@ -22,11 +22,13 @@
 - dbt manifest import
 - `source/dts-platform/src/main/resources/config/liquibase/changelog/20260517_01_catalog_column_lineage_time_window.xml`
 - `worklog/v2.2.3/sprint-31a-202605/assets/column-lineage-time-window.md`
+- Backfill strategy: `worklog/v2.2.3/sprint-31b-202605/assets/column-lineage-backfill-strategy.md`
 
 ## 验证
 
 - [x] 字段级关系缺失时不影响表级展示。
 - [x] 时间窗口不会物理删除历史关系。
+- [x] 历史 backfill 策略和 dry-run scaffold 已转入 Sprint-31B F4/T03。
 - [ ] 统一测试在 Sprint-31A/31/32 完成后执行。
 
 ## 完成标准
