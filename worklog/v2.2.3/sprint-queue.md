@@ -431,7 +431,7 @@
 **关键决策**: Sprint-30 不做 Parquet；正式版交换格式为治理后的 CSV 训练快照包，包含 `manifest.json`、`schema.json`、`quality_report.json`、`lineage.json`、`data.csv`。
 
 ## Sprint-31A: 企业级数据资产事实源重构 (202605)
-**状态**: DONE
+**状态**: CONTRACT_DONE / ENFORCEMENT_IN_PROGRESS
 **类型**: Architecture / Implementation（dts-platform + dts-platform-webapp）
 **目标**: 在 Sprint-31 主链路补齐和 Sprint-32 `dts-metrics` 独立服务之前，先把 `dts-platform` 的数据资产模块收敛为企业级唯一事实源，统一资产身份、生命周期、治理字段、权限校验、血缘入口和对外读取契约。
 **执行约束**: 按当前执行决策，Sprint-31A -> Sprint-31 -> Sprint-32 过程中不做中间编译；所有 review、测试、build 和容器重建放到三段任务完成后统一执行。
@@ -444,9 +444,9 @@
 | F4-permission-classification | P0 | 5 | DONE |
 | F5-asset-portal-ux | P1 | 4 | DONE |
 | F6-migration-compatibility | P0 | 5 | DONE |
-| RX-architect-review-hardening | P0 | 3 | CONTRACT_DONE / ENFORCEMENT_IN_PROGRESS |
+| RX-architect-review-hardening | P0 | 5 | CONTRACT_DONE / ENFORCEMENT_IN_PROGRESS |
 
-**统计**: READY=0, IN_PROGRESS=1, CONTRACT_DONE=0, DONE=30, BLOCKED=0
+**统计**: READY=2, IN_PROGRESS=1, CONTRACT_DONE=0, DONE=30, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-31a-202605/README.md`
 **能力契约**: `worklog/v2.2.3/sprint-31a-202605/assets/asset-capability-contract.md`
 **集成测试**: `worklog/v2.2.3/sprint-31a-202605/it/README.md`
@@ -492,3 +492,14 @@
 **服务拆分设计**: `worklog/v2.2.3/sprint-32-202605/assets/dts-metrics-service-design.md`
 **规划评审**: `worklog/v2.2.3/sprint-32-202605/assets/sprint-32-review.md`
 **集成测试**: `worklog/v2.2.3/sprint-32-202605/it/README.md`
+
+## v2.3 Backlog: 企业级资产与指标增强
+
+| Item | Owner | 来源 | 状态 |
+|------|-------|------|------|
+| schema_version / metric_version_pin / breaking change review | Platform Catalog + Metrics Service | Sprint-31A RX / X4 | BACKLOG |
+| SCD / conformed dimension / hierarchy 运行时 | Metrics Service | Sprint-32 F3 follow-up | BACKLOG |
+| window / time intelligence / cohort / funnel DSL | Metrics Service | Sprint-32 F3 follow-up | BACKLOG |
+| cube cache / cost-based routing | Platform Architecture | Sprint-31 F7 follow-up | BACKLOG |
+| GraphQL / OData / semantic query API | Platform Architecture | Sprint-31/32 consumption follow-up | BACKLOG |
+| differential privacy / k-anonymity | Security Architecture | Sprint-31A X5 follow-up | BACKLOG |

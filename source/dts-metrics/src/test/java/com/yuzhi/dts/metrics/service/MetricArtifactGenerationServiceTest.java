@@ -179,6 +179,79 @@ class MetricArtifactGenerationServiceTest {
     }
 
     @Test
+    void sourceModelDoesNotMatchSimilarSuffixPlatformAssetRef() {
+        String manifest = """
+            pack_id: similar-source-asset
+            pack_name: Similar Source Asset Pack
+            version: 0.1.0
+            industry: demo
+            edition_required: professional
+            tenant_namespace: demo
+            security:
+              apply_rls: true
+            source_model: foo
+            dimensions:
+              - stat_month
+            metrics:
+              - metric_code: contract_amount
+                metric_name: Contract Amount
+                term_ids:
+                  - glossary.contract_amount
+                formula:
+                  type: aggregation
+                  aggregation: sum
+                  field: contract_amount
+            files:
+              domains: domains.yml
+              business_objects: business-objects.yml
+              dimensions: dimensions.yml
+              metrics: metrics.yml
+              models: models.yml
+              datasets: datasets.yml
+            dependencies:
+              platform_assets:
+                - type: DATASET
+                  id: other_foo
+                - type: GLOSSARY_TERM
+                  id: glossary.contract_amount
+            """;
+
+        MetricArtifactPreviewResult result = serviceWithActiveTerms("glossary.contract_amount").preview(manifest);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.artifacts()).isEmpty();
+        assertThat(result.errors()).contains("source_model must be declared in dependencies.platform_assets before artifact preview");
+    }
+
+    @Test
+    void previewChecksSourceAssetPermissionForCallerBeforeGeneratingArtifacts() {
+        String manifest = manifestWithSourceAsset("dwd_demo_detail");
+
+        MetricArtifactPreviewResult result = serviceWithPlatform(
+            glossaryResult("glossary.contract_amount"),
+            PlatformContractClient.PermissionCheckResult.denied("denied")
+        ).preview(manifest, new MetricArtifactGenerationService.PreviewActor("ptrdemo", List.of("ROLE_PTR"), "D01", "INTERNAL"));
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.artifacts()).isEmpty();
+        assertThat(result.errors()).contains("platform asset permission check failed before artifact preview");
+    }
+
+    @Test
+    void previewHidesAssetDetailsWhenPermissionCheckFails() {
+        String manifest = manifestWithSourceAsset("dwd_top_secret_table");
+
+        MetricArtifactPreviewResult result = serviceWithPlatform(
+            glossaryResult("glossary.contract_amount"),
+            PlatformContractClient.PermissionCheckResult.denied("denied")
+        ).preview(manifest, new MetricArtifactGenerationService.PreviewActor("ptrdemo", List.of("ROLE_PTR"), "D01", "INTERNAL"));
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.errors()).containsExactly("platform asset permission check failed before artifact preview");
+        assertThat(String.join("\n", result.errors())).doesNotContain("dwd_top_secret_table");
+    }
+
+    @Test
     void glossaryTermsMustResolveToActivePlatformTermsBeforeGeneratingArtifacts() {
         String manifest = """
             pack_id: inactive-term
@@ -230,7 +303,8 @@ class MetricArtifactGenerationServiceTest {
                     true
                 )),
                 List.of(),
-                List.of("glossary.draft_rate")
+                List.of("glossary.draft_rate"),
+                List.of()
             )
         ).preview(manifest);
 
@@ -278,7 +352,7 @@ class MetricArtifactGenerationServiceTest {
             """;
 
         MetricArtifactPreviewResult result = serviceWithGlossaryResult(
-            new PlatformContractClient.GlossaryResolveResult(List.of(), List.of("glossary.missing"), List.of())
+            new PlatformContractClient.GlossaryResolveResult(List.of(), List.of("glossary.missing"), List.of(), List.of())
         ).preview(manifest);
 
         assertThat(result.valid()).isFalse();
@@ -286,34 +360,152 @@ class MetricArtifactGenerationServiceTest {
         assertThat(result.errors()).contains("glossary terms are missing in platform: glossary.missing");
     }
 
+    @Test
+    void platformContractOutageStopsPreviewWithReadableMessage() {
+        String manifest = manifestWithSourceAsset("dwd_demo_detail");
+
+        MetricArtifactPreviewResult result = serviceWithThrowingPlatform().preview(manifest);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.artifacts()).isEmpty();
+        assertThat(result.errors()).contains("platform contract unavailable while resolving glossary terms; retry later");
+    }
+
     private static MetricArtifactGenerationService serviceWithActiveTerms(String... refs) {
+        return serviceWithGlossaryResult(glossaryResult(refs));
+    }
+
+    private static MetricArtifactGenerationService serviceWithGlossaryResult(PlatformContractClient.GlossaryResolveResult result) {
+        return serviceWithPlatform(
+            result,
+            new PlatformContractClient.PermissionCheckResult(
+                true,
+                "READ",
+                "explicit_grant",
+                "READ",
+                "PREVIEW",
+                "DATASET",
+                "dwd_demo_detail",
+                null,
+                "ALLOWED",
+                "explicit_grant"
+            )
+        );
+    }
+
+    private static PlatformContractClient.GlossaryResolveResult glossaryResult(String... refs) {
         List<PlatformContractClient.GlossaryTermContract> terms = Arrays
             .stream(refs)
             .map(ref -> new PlatformContractClient.GlossaryTermContract(ref, null, ref, ref, "ACTIVE", true))
             .toList();
-        return serviceWithGlossaryResult(new PlatformContractClient.GlossaryResolveResult(terms, List.of(), List.of()));
+        return new PlatformContractClient.GlossaryResolveResult(terms, List.of(), List.of(), List.of());
     }
 
-    private static MetricArtifactGenerationService serviceWithGlossaryResult(PlatformContractClient.GlossaryResolveResult result) {
+    private static MetricArtifactGenerationService serviceWithPlatform(
+        PlatformContractClient.GlossaryResolveResult result,
+        PlatformContractClient.PermissionCheckResult permission
+    ) {
         return new MetricArtifactGenerationService(
             new MetricPackValidationService(),
             new MetricFormulaSqlGenerator(),
-            new StubPlatformContractClient(result)
+            new StubPlatformContractClient(result, permission)
+        );
+    }
+
+    private static MetricArtifactGenerationService serviceWithThrowingPlatform() {
+        return new MetricArtifactGenerationService(
+            new MetricPackValidationService(),
+            new MetricFormulaSqlGenerator(),
+            new ThrowingPlatformContractClient()
         );
     }
 
     private static final class StubPlatformContractClient extends PlatformContractClient {
 
         private final GlossaryResolveResult result;
+        private final PermissionCheckResult permission;
 
-        private StubPlatformContractClient(GlossaryResolveResult result) {
+        private StubPlatformContractClient(GlossaryResolveResult result, PermissionCheckResult permission) {
             super(new DtsMetricsProperties(), RestClient.builder().build());
             this.result = result;
+            this.permission = permission;
         }
 
         @Override
         public GlossaryResolveResult resolveGlossaryTerms(List<String> refs) {
             return result;
         }
+
+        @Override
+        public PermissionCheckResult checkPermission(PermissionCheckRequest request) {
+            return permission;
+        }
+    }
+
+    private static final class ThrowingPlatformContractClient extends PlatformContractClient {
+
+        private ThrowingPlatformContractClient() {
+            super(new DtsMetricsProperties(), RestClient.builder().build());
+        }
+
+        @Override
+        public GlossaryResolveResult resolveGlossaryTerms(List<String> refs) {
+            throw new PlatformContractClient.PlatformContractException("glossary terms resolve");
+        }
+
+        @Override
+        public PermissionCheckResult checkPermission(PermissionCheckRequest request) {
+            return new PermissionCheckResult(
+                true,
+                "READ",
+                "explicit_grant",
+                "READ",
+                "PREVIEW",
+                "DATASET",
+                "dwd_demo_detail",
+                null,
+                "ALLOWED",
+                "explicit_grant"
+            );
+        }
+    }
+
+    private static String manifestWithSourceAsset(String sourceModel) {
+        return """
+            pack_id: permission-check
+            pack_name: Permission Check Pack
+            version: 0.1.0
+            industry: demo
+            edition_required: professional
+            tenant_namespace: demo
+            security:
+              apply_rls: true
+            source_model: %s
+            dimensions:
+              - stat_month
+            metrics:
+              - metric_code: contract_amount
+                metric_name: Contract Amount
+                term_ids:
+                  - glossary.contract_amount
+                formula:
+                  type: aggregation
+                  aggregation: sum
+                  field: contract_amount
+            files:
+              domains: domains.yml
+              business_objects: business-objects.yml
+              dimensions: dimensions.yml
+              metrics: metrics.yml
+              models: models.yml
+              datasets: datasets.yml
+            dependencies:
+              platform_assets:
+                - type: DATASET
+                  id: %s
+                  asset_classification: INTERNAL
+                - type: GLOSSARY_TERM
+                  id: glossary.contract_amount
+            """.formatted(sourceModel, sourceModel);
     }
 }

@@ -32,6 +32,10 @@
    - metric-pack 外部可引用资产类型收窄为 `DATASET` / `DBT_MODEL` / `BI_DATASET` / `SEMANTIC_MODEL` / `METRIC` / `GLOSSARY_TERM`。
 4. `broken-no-terms-pack.yml` 作为 negative IT fixture，证明无术语绑定的指标包会被校验拒绝。
 5. platform 新增 `POST /api/internal/glossary/terms/resolve`，`dts-metrics` 预览/导入 artifact 前必须校验术语存在且状态为 `ACTIVE`。
+6. glossary resolver 对别名冲突返回 `ambiguous`，避免 `glossary.contract_amount` / `contract_amount` 同时存在时出现未定义解析结果。
+7. `PlatformContractClient` 对 glossary resolve 自动分批，并把平台不可达包装为可读 contract error。
+8. `MetricArtifactGenerationService` 在 artifact preview 阶段调用 `/api/internal/asset-permission/check`，无授权 source asset 直接拒绝，且错误不暴露资产名称。
+9. metrics internal endpoint 的服务身份校验改为读取 `dts.metrics.service-name`，不再在 SpEL 中硬编码 `service:dts-metrics`。
 
 ## 当前未闭环项
 
@@ -40,21 +44,22 @@
 | `CatalogAssetIdentityResolver` 只解析 DATASET | ENFORCEMENT_PENDING |
 | 代码化资产尚无实际 grant writer 调用方 | ENFORCEMENT_PENDING |
 | Glossary term 声明、platform API 存在性和发布状态检查 | DONE |
-| `security.apply_rls=true` 尚未转成 SQL/publish 阶段强制策略 | ENFORCEMENT_PENDING |
+| artifact preview 资产权限校验 | DONE |
+| `security.apply_rls=true` 尚未转成 SQL/publish 阶段强制策略 | PARTIAL: preview 已校权限，SQL RLS 注入待 T05 完成 |
 
 ## v2.3 排期项
 
-| 类别 | 推迟原因 |
-|---|---|
-| SCD / conformed dimension / hierarchy 运行时 | 需要 metric_* 实体迁移和生成器重构 |
-| window / time intelligence / cohort / funnel DSL | 需要方言矩阵和 SQL 生成器重构 |
-| schema_version / metric_version_pin / breaking change review | 需要资产版本表和消费者绑定表 |
-| cube cache / cost-based routing / GraphQL / OData | 需要消费层和查询路由层独立设计 |
-| 差分隐私 / k-anonymity | 需要安全策略和审计策略一起设计 |
+| 类别 | Owner | 推迟原因 |
+|---|---|---|
+| SCD / conformed dimension / hierarchy 运行时 | Metrics Service | 需要 metric_* 实体迁移和生成器重构 |
+| window / time intelligence / cohort / funnel DSL | Metrics Service | 需要方言矩阵和 SQL 生成器重构 |
+| schema_version / metric_version_pin / breaking change review | Platform Catalog + Metrics Service | 需要资产版本表和消费者绑定表 |
+| cube cache / cost-based routing / GraphQL / OData | Platform Architecture | 需要消费层和查询路由层独立设计 |
+| 差分隐私 / k-anonymity | Security Architecture | 需要安全策略和审计策略一起设计 |
 
 ## 验收
 
 - platform: `CatalogAssetKeyTest`
-- metrics: `MetricPackValidationServiceTest`, `MetricArtifactGenerationServiceTest`
+- metrics: `MetricPackValidationServiceTest`, `MetricArtifactGenerationServiceTest`, `PlatformContractClientTest`
 - static: `git diff --check`
 - IT: `broken-no-terms-pack.yml` negative fixture

@@ -27,7 +27,7 @@ public class PlatformCapabilityResource {
     }
 
     @GetMapping("/internal/capabilities")
-    @PreAuthorize("hasAuthority('" + AuthoritiesConstants.SERVICE_INTERNAL + "') and authentication.name == 'service:dts-metrics'")
+    @PreAuthorize("hasAuthority('" + AuthoritiesConstants.SERVICE_INTERNAL + "') and @metricsInternalAccess.isMetricsService(authentication)")
     public Map<String, Object> internalCapabilities() {
         return buildCapabilities(true);
     }

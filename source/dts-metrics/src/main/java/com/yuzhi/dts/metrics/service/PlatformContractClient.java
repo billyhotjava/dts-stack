@@ -1,15 +1,19 @@
 package com.yuzhi.dts.metrics.service;
 
 import com.yuzhi.dts.metrics.config.DtsMetricsProperties;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 @Component
 public class PlatformContractClient {
+
+    private static final int GLOSSARY_RESOLVE_BATCH_SIZE = 200;
 
     private final DtsMetricsProperties properties;
     private final RestClient restClient;
@@ -52,27 +56,63 @@ public class PlatformContractClient {
     }
 
     public PermissionCheckResult checkPermission(PermissionCheckRequest request) {
-        RestClient.RequestBodySpec spec = restClient
-            .post()
-            .uri(internalUrl("/internal/asset-permission/check"))
-            .header("X-DTS-Service", properties.getServiceName());
-        if (StringUtils.hasText(properties.getPlatform().getServiceToken())) {
-            spec = spec.header("X-DTS-Service-Token", properties.getPlatform().getServiceToken());
+        try {
+            RestClient.RequestBodySpec spec = restClient
+                .post()
+                .uri(internalUrl("/internal/asset-permission/check"))
+                .header("X-DTS-Service", properties.getServiceName());
+            if (StringUtils.hasText(properties.getPlatform().getServiceToken())) {
+                spec = spec.header("X-DTS-Service-Token", properties.getPlatform().getServiceToken());
+            }
+            PermissionCheckResult result = spec.body(request).retrieve().body(PermissionCheckResult.class);
+            return result != null ? result : PermissionCheckResult.denied("empty_response");
+        } catch (RestClientException e) {
+            throw new PlatformContractException("platform contract call failed: asset permission check", e);
         }
-        PermissionCheckResult result = spec.body(request).retrieve().body(PermissionCheckResult.class);
-        return result != null ? result : PermissionCheckResult.denied("empty_response");
     }
 
     public GlossaryResolveResult resolveGlossaryTerms(List<String> refs) {
-        RestClient.RequestBodySpec spec = restClient
-            .post()
-            .uri(internalUrl("/internal/glossary/terms/resolve"))
-            .header("X-DTS-Service", properties.getServiceName());
-        if (StringUtils.hasText(properties.getPlatform().getServiceToken())) {
-            spec = spec.header("X-DTS-Service-Token", properties.getPlatform().getServiceToken());
+        List<String> requestedRefs = refs != null ? refs : List.of();
+        if (requestedRefs.isEmpty()) {
+            return GlossaryResolveResult.empty();
         }
-        GlossaryResolveResult result = spec.body(Map.of("refs", refs != null ? refs : List.of())).retrieve().body(GlossaryResolveResult.class);
-        return result != null ? result : GlossaryResolveResult.empty();
+        List<GlossaryTermContract> terms = new ArrayList<>();
+        List<String> missing = new ArrayList<>();
+        List<String> inactive = new ArrayList<>();
+        List<String> ambiguous = new ArrayList<>();
+        for (int start = 0; start < requestedRefs.size(); start += GLOSSARY_RESOLVE_BATCH_SIZE) {
+            int end = Math.min(start + GLOSSARY_RESOLVE_BATCH_SIZE, requestedRefs.size());
+            GlossaryResolveResult batch = resolveGlossaryTermsBatch(requestedRefs.subList(start, end));
+            if (batch.terms() != null) {
+                terms.addAll(batch.terms());
+            }
+            if (batch.missing() != null) {
+                missing.addAll(batch.missing());
+            }
+            if (batch.inactive() != null) {
+                inactive.addAll(batch.inactive());
+            }
+            if (batch.ambiguous() != null) {
+                ambiguous.addAll(batch.ambiguous());
+            }
+        }
+        return new GlossaryResolveResult(List.copyOf(terms), List.copyOf(missing), List.copyOf(inactive), List.copyOf(ambiguous));
+    }
+
+    private GlossaryResolveResult resolveGlossaryTermsBatch(List<String> refs) {
+        try {
+            RestClient.RequestBodySpec spec = restClient
+                .post()
+                .uri(internalUrl("/internal/glossary/terms/resolve"))
+                .header("X-DTS-Service", properties.getServiceName());
+            if (StringUtils.hasText(properties.getPlatform().getServiceToken())) {
+                spec = spec.header("X-DTS-Service-Token", properties.getPlatform().getServiceToken());
+            }
+            GlossaryResolveResult result = spec.body(Map.of("refs", refs)).retrieve().body(GlossaryResolveResult.class);
+            return result != null ? result : GlossaryResolveResult.empty();
+        } catch (RestClientException e) {
+            throw new PlatformContractException("platform contract call failed: glossary terms resolve", e);
+        }
     }
 
     private String normalizeBaseUrl() {
@@ -102,9 +142,14 @@ public class PlatformContractClient {
 
     public record GlossaryTermContract(String ref, String id, String code, String name, String status, boolean active) {}
 
-    public record GlossaryResolveResult(List<GlossaryTermContract> terms, List<String> missing, List<String> inactive) {
+    public record GlossaryResolveResult(
+        List<GlossaryTermContract> terms,
+        List<String> missing,
+        List<String> inactive,
+        List<String> ambiguous
+    ) {
         public static GlossaryResolveResult empty() {
-            return new GlossaryResolveResult(List.of(), List.of(), List.of());
+            return new GlossaryResolveResult(List.of(), List.of(), List.of(), List.of());
         }
     }
 
@@ -132,6 +177,16 @@ public class PlatformContractClient {
     ) {
         public static PermissionCheckResult denied(String reason) {
             return new PermissionCheckResult(false, null, reason, null, null, null, null, null, null, null);
+        }
+    }
+
+    public static class PlatformContractException extends RuntimeException {
+        public PlatformContractException(String message, Throwable cause) {
+            super(message, cause);
+        }
+
+        public PlatformContractException(String message) {
+            super(message);
         }
     }
 }

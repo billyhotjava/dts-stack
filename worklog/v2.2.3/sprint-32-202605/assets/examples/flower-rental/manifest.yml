@@ -22,6 +22,7 @@ dependencies:
   platform_assets:
     - asset_code: dwd_flower_contract_detail
       asset_type: DATASET
+      asset_classification: INTERNAL
       required_columns:
         - contract_id
         - customer_id
@@ -32,6 +33,7 @@ dependencies:
         - sign_date
     - asset_code: dwd_flower_project_detail
       asset_type: DATASET
+      asset_classification: INTERNAL
       required_columns:
         - project_id
         - contract_id

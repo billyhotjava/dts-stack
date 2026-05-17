@@ -44,9 +44,9 @@ Sprint-31 已经把 DTS 的企业级主链路定义为：
 | F4 | 资产权限和密级一致性 | P0 | 5 | DONE | F1, F2 |
 | F5 | 数据资产门户体验收敛 | P1 | 4 | DONE | F2, F4 |
 | F6 | 迁移、兼容和验收闭环 | P0 | 5 | DONE | F1-F5 |
-| RX | 架构评审追补项 | P0 | 3 | CONTRACT_DONE / ENFORCEMENT_IN_PROGRESS | F1-F6, Sprint-32 |
+| RX | 架构评审追补项 | P0 | 5 | CONTRACT_DONE / ENFORCEMENT_IN_PROGRESS | F1-F6, Sprint-32 |
 
-**统计**: READY=0, IN_PROGRESS=1, CONTRACT_DONE=0, DONE=30, BLOCKED=0
+**统计**: READY=2, IN_PROGRESS=1, CONTRACT_DONE=0, DONE=30, BLOCKED=0
 
 ## Sprint-31 / Sprint-32 关系
 

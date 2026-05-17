@@ -36,6 +36,10 @@ public class MetricArtifactGenerationService {
     }
 
     public MetricArtifactPreviewResult preview(String manifestContent) {
+        return preview(manifestContent, PreviewActor.system());
+    }
+
+    public MetricArtifactPreviewResult preview(String manifestContent, PreviewActor actor) {
         MetricPackValidationResult validation = validationService.validateManifest(manifestContent);
         if (!validation.valid()) {
             return MetricArtifactPreviewResult.invalid(validation.errors(), validation.summary());
@@ -55,7 +59,8 @@ public class MetricArtifactGenerationService {
         Map<String, String> artifacts = new LinkedHashMap<>();
         try {
             sourceModel = safeRefName(String.valueOf(manifest.getOrDefault("source_model", "replace_with_dwd_model")));
-            requireSourceModelPlatformAsset(manifest, sourceModel);
+            PlatformAssetDeclaration sourceAsset = requireSourceModelPlatformAsset(manifest, sourceModel);
+            requirePreviewPermission(actor, sourceAsset);
             requireActiveGlossaryTerms(manifest);
             dimensions = readDimensions(manifest.get("dimensions"));
             metrics = readMetrics(manifest.get("metrics"));
@@ -64,6 +69,11 @@ public class MetricArtifactGenerationService {
             artifacts.put("metricDoc", metricDoc(packId, dimensions, metrics));
         } catch (IllegalArgumentException e) {
             return MetricArtifactPreviewResult.invalid(List.of(e.getMessage()), validation.summary());
+        } catch (PlatformContractClient.PlatformContractException e) {
+            String message = e.getMessage() != null && e.getMessage().contains("asset permission")
+                ? "platform contract unavailable while checking asset permissions; retry later"
+                : "platform contract unavailable while resolving glossary terms; retry later";
+            return MetricArtifactPreviewResult.invalid(List.of(message), validation.summary());
         }
 
         List<String> warnings = new ArrayList<>();
@@ -182,10 +192,10 @@ public class MetricArtifactGenerationService {
         return metrics;
     }
 
-    private static void requireSourceModelPlatformAsset(Map<String, Object> manifest, String sourceModel) {
+    private static PlatformAssetDeclaration requireSourceModelPlatformAsset(Map<String, Object> manifest, String sourceModel) {
         Object sourceModelRaw = manifest.get("source_model");
         if (sourceModelRaw == null || !StringUtils.hasText(String.valueOf(sourceModelRaw))) {
-            return;
+            return null;
         }
         Object dependenciesRaw = manifest.get("dependencies");
         if (!(dependenciesRaw instanceof Map<?, ?> dependencies)) {
@@ -210,10 +220,34 @@ public class MetricArtifactGenerationService {
                 assetRefMatches(asset.get("key"), sourceModel) ||
                 assetRefMatches(asset.get("asset_key"), sourceModel)
             ) {
-                return;
+                String id = firstText(asset.get("id"), asset.get("asset_code"));
+                String key = firstText(asset.get("key"), asset.get("asset_key"));
+                String classification = firstText(asset.get("asset_classification"), asset.get("classification"));
+                return new PlatformAssetDeclaration(type, id, key, classification);
             }
         }
         throw new IllegalArgumentException("source_model must be declared in dependencies.platform_assets before artifact preview");
+    }
+
+    private void requirePreviewPermission(PreviewActor actor, PlatformAssetDeclaration asset) {
+        if (asset == null) {
+            return;
+        }
+        PreviewActor effectiveActor = actor != null ? actor : PreviewActor.system();
+        PlatformContractClient.PermissionCheckResult result = platformContractClient.checkPermission(
+            new PlatformContractClient.PermissionCheckRequest(
+                effectiveActor.username(),
+                effectiveActor.userRoles(),
+                effectiveActor.userDeptCode(),
+                effectiveActor.userClassification(),
+                asset.assetClassification(),
+                "PREVIEW",
+                new PlatformContractClient.PermissionAsset(asset.type(), asset.id(), asset.key())
+            )
+        );
+        if (result == null || !result.allowed()) {
+            throw new IllegalArgumentException("platform asset permission check failed before artifact preview");
+        }
     }
 
     private void requireActiveGlossaryTerms(Map<String, Object> manifest) {
@@ -225,6 +259,10 @@ public class MetricArtifactGenerationService {
         List<String> missing = result != null && result.missing() != null ? result.missing() : termRefs;
         if (!missing.isEmpty()) {
             throw new IllegalArgumentException("glossary terms are missing in platform: " + String.join(", ", missing));
+        }
+        List<String> ambiguous = result != null && result.ambiguous() != null ? result.ambiguous() : List.of();
+        if (!ambiguous.isEmpty()) {
+            throw new IllegalArgumentException("glossary terms are ambiguous in platform: " + String.join(", ", ambiguous));
         }
         List<String> inactive = new ArrayList<>();
         if (result.inactive() != null) {
@@ -292,6 +330,23 @@ public class MetricArtifactGenerationService {
         String text = String.valueOf(value == null ? "" : value).trim().toLowerCase(Locale.ROOT).replace('-', '_');
         return MetricFormulaSqlGenerator.safeIdentifier(text);
     }
+
+    private static String firstText(Object first, Object second) {
+        String value = valueOf(first);
+        return StringUtils.hasText(value) ? value : valueOf(second);
+    }
+
+    private static String valueOf(Object value) {
+        return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    public record PreviewActor(String username, List<String> userRoles, String userDeptCode, String userClassification) {
+        public static PreviewActor system() {
+            return new PreviewActor("system", List.of("ROLE_ADMIN"), null, "INTERNAL");
+        }
+    }
+
+    private record PlatformAssetDeclaration(String type, String id, String key, String assetClassification) {}
 
     private record MetricColumn(String code, String name, String sql) {}
 }

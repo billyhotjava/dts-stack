@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/internal/glossary/terms")
-@PreAuthorize("hasAuthority('" + AuthoritiesConstants.SERVICE_INTERNAL + "') and authentication.name == 'service:dts-metrics'")
+@PreAuthorize("hasAuthority('" + AuthoritiesConstants.SERVICE_INTERNAL + "') and @metricsInternalAccess.isMetricsService(authentication)")
 public class GlossaryInternalResource {
 
     private static final int MAX_REFS = 200;
@@ -37,21 +37,27 @@ public class GlossaryInternalResource {
     public ResponseEntity<ResolveResponse> resolve(@RequestBody(required = false) ResolveRequest request) {
         List<String> requestedRefs = normalizeRequestedRefs(request != null ? request.refs() : null);
         if (requestedRefs.isEmpty()) {
-            return ResponseEntity.ok(new ResolveResponse(List.of(), List.of(), List.of()));
+            return ResponseEntity.ok(new ResolveResponse(List.of(), List.of(), List.of(), List.of()));
         }
         if (requestedRefs.size() > MAX_REFS) {
-            return ResponseEntity.badRequest().body(new ResolveResponse(List.of(), requestedRefs, List.of()));
+            return ResponseEntity.badRequest().body(new ResolveResponse(List.of(), requestedRefs, List.of(), List.of()));
         }
 
         Set<String> lookupCodes = new LinkedHashSet<>();
         requestedRefs.forEach(ref -> lookupCodes.addAll(codeCandidates(ref)));
-        Map<String, ModelingGlossaryTerm> termsByCandidate = indexTerms(glossaryTermRepository.findByCodeLowerIn(lookupCodes));
+        Map<String, List<ModelingGlossaryTerm>> termsByCandidate = indexTerms(glossaryTermRepository.findByCodeLowerIn(lookupCodes));
 
         List<TermContract> terms = new ArrayList<>();
         List<String> missing = new ArrayList<>();
         List<String> inactive = new ArrayList<>();
+        List<String> ambiguous = new ArrayList<>();
         for (String ref : requestedRefs) {
-            ModelingGlossaryTerm term = findTerm(ref, termsByCandidate);
+            TermResolution resolved = findTerm(ref, termsByCandidate);
+            if (resolved.ambiguous()) {
+                ambiguous.add(ref);
+                continue;
+            }
+            ModelingGlossaryTerm term = resolved.term();
             if (term == null) {
                 missing.add(ref);
                 continue;
@@ -62,7 +68,7 @@ public class GlossaryInternalResource {
                 inactive.add(ref);
             }
         }
-        return ResponseEntity.ok(new ResolveResponse(terms, missing, inactive));
+        return ResponseEntity.ok(new ResolveResponse(terms, missing, inactive, ambiguous));
     }
 
     private static List<String> normalizeRequestedRefs(Collection<String> refs) {
@@ -79,8 +85,8 @@ public class GlossaryInternalResource {
         return List.copyOf(normalized);
     }
 
-    private static Map<String, ModelingGlossaryTerm> indexTerms(Collection<ModelingGlossaryTerm> terms) {
-        Map<String, ModelingGlossaryTerm> index = new LinkedHashMap<>();
+    private static Map<String, List<ModelingGlossaryTerm>> indexTerms(Collection<ModelingGlossaryTerm> terms) {
+        Map<String, List<ModelingGlossaryTerm>> index = new LinkedHashMap<>();
         if (terms == null) {
             return index;
         }
@@ -89,20 +95,37 @@ public class GlossaryInternalResource {
                 continue;
             }
             for (String candidate : codeCandidates(term.getCode())) {
-                index.putIfAbsent(candidate, term);
+                index.computeIfAbsent(candidate, ignored -> new ArrayList<>()).add(term);
             }
         }
         return index;
     }
 
-    private static ModelingGlossaryTerm findTerm(String ref, Map<String, ModelingGlossaryTerm> termsByCandidate) {
+    private static TermResolution findTerm(String ref, Map<String, List<ModelingGlossaryTerm>> termsByCandidate) {
         for (String candidate : codeCandidates(ref)) {
-            ModelingGlossaryTerm term = termsByCandidate.get(candidate);
-            if (term != null) {
-                return term;
+            List<ModelingGlossaryTerm> terms = distinctTerms(termsByCandidate.get(candidate));
+            if (terms.size() == 1) {
+                return new TermResolution(terms.get(0), false);
+            }
+            if (terms.size() > 1) {
+                return new TermResolution(null, true);
             }
         }
-        return null;
+        return new TermResolution(null, false);
+    }
+
+    private static List<ModelingGlossaryTerm> distinctTerms(List<ModelingGlossaryTerm> terms) {
+        if (terms == null || terms.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, ModelingGlossaryTerm> byId = new LinkedHashMap<>();
+        for (ModelingGlossaryTerm term : terms) {
+            if (term == null || term.getId() == null) {
+                continue;
+            }
+            byId.putIfAbsent(term.getId(), term);
+        }
+        return List.copyOf(byId.values());
     }
 
     private static Set<String> codeCandidates(String ref) {
@@ -139,6 +162,8 @@ public class GlossaryInternalResource {
     }
 
     public record ResolveRequest(List<String> refs) {}
-    public record ResolveResponse(List<TermContract> terms, List<String> missing, List<String> inactive) {}
+    private record TermResolution(ModelingGlossaryTerm term, boolean ambiguous) {}
+
+    public record ResolveResponse(List<TermContract> terms, List<String> missing, List<String> inactive, List<String> ambiguous) {}
     public record TermContract(String ref, UUID id, String code, String name, String status, boolean active) {}
 }

@@ -6,8 +6,10 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 
 import com.yuzhi.dts.metrics.config.DtsMetricsProperties;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
@@ -91,5 +93,58 @@ class PlatformContractClientTest {
         assertThat(result.missing()).containsExactly("glossary.missing");
         assertThat(result.inactive()).containsExactly("glossary.draft_rate");
         server.verify();
+    }
+
+    @Test
+    void resolveGlossaryTermsSplitsLargeRequestsIntoPlatformBatches() {
+        DtsMetricsProperties properties = new DtsMetricsProperties();
+        properties.getPlatform().setBaseUrl("http://dts-platform:8081/");
+        properties.getPlatform().setApiPath("/api");
+
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PlatformContractClient client = new PlatformContractClient(properties, builder.build());
+
+        List<String> refs = new ArrayList<>();
+        for (int i = 0; i < 201; i++) {
+            refs.add("glossary.term_" + i);
+        }
+
+        server
+            .expect(requestTo("http://dts-platform:8081/api/internal/glossary/terms/resolve"))
+            .andExpect(method(HttpMethod.POST))
+            .andRespond(withSuccess("""
+                {"terms":[],"missing":["glossary.term_0"],"inactive":[],"ambiguous":[]}
+                """, MediaType.APPLICATION_JSON));
+        server
+            .expect(requestTo("http://dts-platform:8081/api/internal/glossary/terms/resolve"))
+            .andExpect(method(HttpMethod.POST))
+            .andRespond(withSuccess("""
+                {"terms":[],"missing":["glossary.term_200"],"inactive":[],"ambiguous":[]}
+                """, MediaType.APPLICATION_JSON));
+
+        PlatformContractClient.GlossaryResolveResult result = client.resolveGlossaryTerms(refs);
+
+        assertThat(result.missing()).containsExactly("glossary.term_0", "glossary.term_200");
+        server.verify();
+    }
+
+    @Test
+    void resolveGlossaryTermsWrapsPlatformTransportFailures() {
+        DtsMetricsProperties properties = new DtsMetricsProperties();
+        properties.getPlatform().setBaseUrl("http://dts-platform:8081/");
+        properties.getPlatform().setApiPath("/api");
+
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PlatformContractClient client = new PlatformContractClient(properties, builder.build());
+
+        server
+            .expect(requestTo("http://dts-platform:8081/api/internal/glossary/terms/resolve"))
+            .andRespond(withServerError());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> client.resolveGlossaryTerms(List.of("glossary.contract_amount")))
+            .isInstanceOf(PlatformContractClient.PlatformContractException.class)
+            .hasMessageContaining("glossary terms resolve");
     }
 }

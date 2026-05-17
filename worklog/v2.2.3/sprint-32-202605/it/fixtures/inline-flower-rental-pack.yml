@@ -45,6 +45,7 @@ dependencies:
   platform_assets:
     - asset_type: DATASET
       asset_code: dwd_flower_contract_detail
+      asset_classification: INTERNAL
     - asset_type: GLOSSARY_TERM
       asset_code: glossary.contract_amount
     - asset_type: GLOSSARY_TERM

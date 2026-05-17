@@ -46,6 +46,24 @@ class GlossaryInternalResourceTest {
             .contains("glossary.contract_amount", "contract_amount", "glossary.draft_rate", "draft_rate", "glossary.missing", "missing");
     }
 
+    @Test
+    void reportsAmbiguousAliasRefsWithoutDependingOnRepositoryOrder() {
+        ModelingGlossaryTermRepository repository = mock(ModelingGlossaryTermRepository.class);
+        ModelingGlossaryTerm qualified = term("glossary.contract_amount", "合同金额", "ACTIVE");
+        ModelingGlossaryTerm shortCode = term("contract_amount", "合同额", "ACTIVE");
+        when(repository.findByCodeLowerIn(anyCollection())).thenReturn(List.of(shortCode, qualified));
+
+        GlossaryInternalResource resource = new GlossaryInternalResource(repository);
+        GlossaryInternalResource.ResolveResponse response = resource
+            .resolve(new GlossaryInternalResource.ResolveRequest(List.of("glossary:contract_amount")))
+            .getBody();
+
+        assertThat(response).isNotNull();
+        assertThat(response.terms()).isEmpty();
+        assertThat(response.missing()).isEmpty();
+        assertThat(response.ambiguous()).containsExactly("glossary:contract_amount");
+    }
+
     private static ModelingGlossaryTerm term(String code, String name, String status) {
         ModelingGlossaryTerm term = new ModelingGlossaryTerm();
         term.setId(UUID.randomUUID());

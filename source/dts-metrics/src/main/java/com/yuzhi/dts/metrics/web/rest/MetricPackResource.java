@@ -5,13 +5,17 @@ import com.yuzhi.dts.metrics.service.MetricPackValidationService;
 import com.yuzhi.dts.metrics.service.dto.MetricArtifactPreviewResult;
 import com.yuzhi.dts.metrics.service.dto.MetricPackValidationResult;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -36,12 +40,12 @@ public class MetricPackResource {
     }
 
     @PostMapping(value = "/import", consumes = { "application/yaml", "text/yaml", MediaType.TEXT_PLAIN_VALUE, MediaType.APPLICATION_JSON_VALUE })
-    public ResponseEntity<Map<String, Object>> importPack(@RequestBody String manifestContent) {
+    public ResponseEntity<Map<String, Object>> importPack(@RequestBody String manifestContent, @RequestHeader HttpHeaders headers) {
         MetricPackValidationResult validation = validationService.validateManifest(manifestContent);
         if (!validation.valid()) {
             return ResponseEntity.badRequest().body(importResult(false, validation, null));
         }
-        MetricArtifactPreviewResult preview = artifactGenerationService.preview(manifestContent);
+        MetricArtifactPreviewResult preview = artifactGenerationService.preview(manifestContent, previewActor(headers));
         if (!preview.valid()) {
             return ResponseEntity.badRequest().body(importResult(false, validation, preview));
         }
@@ -49,9 +53,37 @@ public class MetricPackResource {
     }
 
     @PostMapping(value = "/preview-artifacts", consumes = { "application/yaml", "text/yaml", MediaType.TEXT_PLAIN_VALUE, MediaType.APPLICATION_JSON_VALUE })
-    public ResponseEntity<MetricArtifactPreviewResult> previewArtifacts(@RequestBody String manifestContent) {
-        MetricArtifactPreviewResult preview = artifactGenerationService.preview(manifestContent);
+    public ResponseEntity<MetricArtifactPreviewResult> previewArtifacts(@RequestBody String manifestContent, @RequestHeader HttpHeaders headers) {
+        MetricArtifactPreviewResult preview = artifactGenerationService.preview(manifestContent, previewActor(headers));
         return preview.valid() ? ResponseEntity.ok(preview) : ResponseEntity.badRequest().body(preview);
+    }
+
+    private MetricArtifactGenerationService.PreviewActor previewActor(HttpHeaders headers) {
+        String username = firstHeader(headers, "X-DTS-User");
+        if (!StringUtils.hasText(username)) {
+            return MetricArtifactGenerationService.PreviewActor.system();
+        }
+        return new MetricArtifactGenerationService.PreviewActor(
+            username,
+            roles(firstHeader(headers, "X-DTS-Roles")),
+            firstHeader(headers, "X-DTS-Dept-Code"),
+            firstHeader(headers, "X-DTS-Personnel-Level")
+        );
+    }
+
+    private static List<String> roles(String rawRoles) {
+        if (!StringUtils.hasText(rawRoles)) {
+            return List.of();
+        }
+        return Arrays
+            .stream(rawRoles.split(","))
+            .map(String::trim)
+            .filter(StringUtils::hasText)
+            .toList();
+    }
+
+    private static String firstHeader(HttpHeaders headers, String name) {
+        return headers != null ? headers.getFirst(name) : null;
     }
 
     private Map<String, Object> importResult(
