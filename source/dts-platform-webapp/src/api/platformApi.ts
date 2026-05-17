@@ -87,6 +87,15 @@ export const getCatalogAssetV2Lineage = (id: string) => api.get({ url: `/catalog
 export const syncCatalogAssetV2Lineage = (id: string, params?: { upstreamDepth?: number; downstreamDepth?: number }) =>
 	api.post({ url: `/catalog/assets-v2/${id}/lineage/sync`, params });
 export const getCatalogAssetsV2Diagnostics = () => api.get({ url: "/catalog/assets-v2/diagnostics" });
+export const listCatalogAssetResolutionFailures = (params: { since?: string; limit?: number } = {}) =>
+	api.get<Array<{
+		id?: string;
+		ref?: string;
+		requestedAt?: string;
+		caller?: string;
+		typeHintGuess?: string;
+		reason?: string;
+	}>>({ url: "/catalog/assets-v2/resolution-failures", params });
 export const syncCatalogAssetsV2 = (limit?: number) =>
 	api.post({ url: "/catalog/assets-v2/sync", params: limit ? { limit } : undefined });
 export type SchemaDriftEvent = {

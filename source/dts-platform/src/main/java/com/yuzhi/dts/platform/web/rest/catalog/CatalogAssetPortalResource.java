@@ -1,7 +1,9 @@
 package com.yuzhi.dts.platform.web.rest.catalog;
 
 import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.platform.domain.catalog.CatalogAssetResolutionFailure;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetContract;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetIdentityResolutionAuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetMappingReportService;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetSchemaContract;
 import com.yuzhi.dts.platform.service.catalog.CatalogLineageFailureReport;
@@ -10,7 +12,9 @@ import com.yuzhi.dts.platform.service.catalog.CatalogAssetPortalService;
 import com.yuzhi.dts.platform.service.catalog.OpenMetadataAssetSyncService;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
+import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,6 +37,7 @@ public class CatalogAssetPortalResource {
 
     private final CatalogAssetPortalService assetPortalService;
     private final CatalogAssetMappingReportService mappingReportService;
+    private final CatalogAssetIdentityResolutionAuditService resolutionAuditService;
     private final OpenMetadataAssetSyncService syncService;
     private final AuditService audit;
     private final CatalogResourceHelper helper;
@@ -40,12 +45,14 @@ public class CatalogAssetPortalResource {
     public CatalogAssetPortalResource(
         CatalogAssetPortalService assetPortalService,
         CatalogAssetMappingReportService mappingReportService,
+        CatalogAssetIdentityResolutionAuditService resolutionAuditService,
         OpenMetadataAssetSyncService syncService,
         AuditService audit,
         CatalogResourceHelper helper
     ) {
         this.assetPortalService = assetPortalService;
         this.mappingReportService = mappingReportService;
+        this.resolutionAuditService = resolutionAuditService;
         this.syncService = syncService;
         this.audit = audit;
         this.helper = helper;
@@ -326,6 +333,26 @@ public class CatalogAssetPortalResource {
         return ApiResponses.ok(result);
     }
 
+    @GetMapping("/resolution-failures")
+    @Transactional(readOnly = true)
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    public ApiResponse<List<ResolutionFailureResponse>> resolutionFailures(
+        @RequestParam(name = "since", required = false) Instant since,
+        @RequestParam(name = "limit", required = false, defaultValue = "100") int limit
+    ) {
+        List<ResolutionFailureResponse> result = resolutionAuditService.recentFailures(since, limit).stream()
+            .map(ResolutionFailureResponse::from)
+            .toList();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("summary", "查看Catalog资产身份解析失败记录");
+        payload.put("returned", result.size());
+        if (since != null) {
+            payload.put("since", since.toString());
+        }
+        audit.auditAction("CATALOG_ASSET_RESOLUTION_FAILURE_VIEW", AuditStage.SUCCESS, "assets-v2-resolution-failures", payload);
+        return ApiResponses.ok(result);
+    }
+
     @PostMapping("/sync")
     @Transactional
     @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
@@ -359,5 +386,25 @@ public class CatalogAssetPortalResource {
         payload.put("lineageEdgeCount", result.lineageEdgeCount());
         audit.auditAction("CATALOG_LINEAGE_SYNC", AuditStage.SUCCESS, id.toString(), payload);
         return ApiResponses.ok(result);
+    }
+
+    public record ResolutionFailureResponse(
+        UUID id,
+        String ref,
+        Instant requestedAt,
+        String caller,
+        String typeHintGuess,
+        String reason
+    ) {
+        static ResolutionFailureResponse from(CatalogAssetResolutionFailure failure) {
+            return new ResolutionFailureResponse(
+                failure.getId(),
+                failure.getRef(),
+                failure.getRequestedAt(),
+                failure.getCaller(),
+                failure.getTypeHintGuess(),
+                failure.getReason()
+            );
+        }
     }
 }

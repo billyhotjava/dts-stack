@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Alert, Button, Card, Collapse, Input, Layout, Pagination, Select, Space, Spin, Tabs, Tag, Tooltip, Tree } from "antd";
+import { Alert, Button, Card, Collapse, Input, Layout, Modal, Pagination, Select, Space, Spin, Table, Tabs, Tag, Tooltip, Tree } from "antd";
 import {
 	ApartmentOutlined,
 	BranchesOutlined,
@@ -19,6 +19,7 @@ import {
 	getCatalogAssetsV2LineageFailures,
 	getCatalogReconciliation,
 	getDomainTree,
+	listCatalogAssetResolutionFailures,
 	listCatalogAssetsV2,
 	listDatasets,
 	listDomains,
@@ -126,6 +127,15 @@ type ReconciliationResult = {
 	regressionChecklist?: Array<{ code?: string; name?: string; route?: string; description?: string }>;
 };
 
+type ResolutionFailureRow = {
+	id?: string;
+	ref?: string;
+	requestedAt?: string;
+	caller?: string;
+	typeHintGuess?: string;
+	reason?: string;
+};
+
 const normalizeLayer = (value?: string) => {
 	const normalized = String(value || "").trim().toUpperCase();
 	return normalized && LAYER_META[normalized] ? normalized : "OTHER";
@@ -188,6 +198,9 @@ export default function Page() {
 	const [syncing, setSyncing] = useState(false);
 	const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
 	const [diagnostics, setDiagnostics] = useState<any | null>(null);
+	const [resolutionFailuresOpen, setResolutionFailuresOpen] = useState(false);
+	const [resolutionFailuresLoading, setResolutionFailuresLoading] = useState(false);
+	const [resolutionFailures, setResolutionFailures] = useState<ResolutionFailureRow[]>([]);
 	const [records, setRecords] = useState<AssetRow[]>([]);
 	const [pageState, setPageState] = useState({ page: 1, size: 18, total: 0 });
 	const [domains, setDomains] = useState<{ id: string; name: string }[]>([]);
@@ -512,6 +525,20 @@ export default function Page() {
 		}
 	};
 
+	const loadResolutionFailures = async () => {
+		if (!ASSET_PORTAL_V2_ENABLED) return;
+		setResolutionFailuresOpen(true);
+		setResolutionFailuresLoading(true);
+		try {
+			const result = await listCatalogAssetResolutionFailures({ limit: 100 });
+			setResolutionFailures(Array.isArray(result) ? (result as ResolutionFailureRow[]) : []);
+		} catch {
+			setResolutionFailures([]);
+		} finally {
+			setResolutionFailuresLoading(false);
+		}
+	};
+
 	const renderAssetCard = (row: AssetRow) => {
 		const layer = normalizeLayer(row.warehouseLayer);
 		const meta = LAYER_META[layer];
@@ -625,6 +652,11 @@ export default function Page() {
 								{ASSET_PORTAL_V2_ENABLED ? (
 									<Button icon={<WarningOutlined />} onClick={() => void loadDiagnostics()} loading={diagnosticsLoading}>
 										映射诊断
+									</Button>
+								) : null}
+								{ASSET_PORTAL_V2_ENABLED ? (
+									<Button icon={<WarningOutlined />} onClick={() => void loadResolutionFailures()} loading={resolutionFailuresLoading}>
+										解析失败
 									</Button>
 								) : null}
 							</Space>
@@ -784,6 +816,61 @@ export default function Page() {
 					/>
 				</div>
 			</Layout.Content>
+			<Modal
+				title="资产身份解析失败"
+				open={resolutionFailuresOpen}
+				onCancel={() => setResolutionFailuresOpen(false)}
+				footer={<Button onClick={() => setResolutionFailuresOpen(false)}>关闭</Button>}
+				width={920}
+			>
+				<Alert
+					type={resolutionFailures.length ? "warning" : "success"}
+					showIcon
+					className="mb-3"
+					message={resolutionFailures.length ? `最近发现 ${resolutionFailures.length} 条解析失败` : "最近没有资产身份解析失败"}
+					description="这些记录会影响指标包、治理指标、代码化资产和资产授权的事实源闭环。请优先处理 ref 命名、资产类型映射和历史兼容代理。"
+				/>
+				<Table<ResolutionFailureRow>
+					rowKey={(row) => row.id || `${row.ref || "ref"}-${row.requestedAt || "time"}`}
+					size="small"
+					loading={resolutionFailuresLoading}
+					dataSource={resolutionFailures}
+					pagination={{ pageSize: 8, showSizeChanger: false }}
+					scroll={{ x: 900 }}
+					columns={[
+						{
+							title: "引用",
+							dataIndex: "ref",
+							width: 280,
+							render: (value) => <span className="font-mono text-xs">{value || "-"}</span>,
+						},
+						{
+							title: "类型猜测",
+							dataIndex: "typeHintGuess",
+							width: 120,
+							render: (value) => value ? <Tag>{value}</Tag> : "-",
+						},
+						{
+							title: "原因",
+							dataIndex: "reason",
+							width: 180,
+							render: (value) => value ? <Tag color="orange">{value}</Tag> : "-",
+						},
+						{
+							title: "调用方",
+							dataIndex: "caller",
+							width: 150,
+							render: (value) => value || "-",
+						},
+						{
+							title: "发生时间",
+							dataIndex: "requestedAt",
+							width: 180,
+							render: (value) => formatTime(value),
+						},
+					]}
+				/>
+			</Modal>
 		</Layout>
 	);
 }
