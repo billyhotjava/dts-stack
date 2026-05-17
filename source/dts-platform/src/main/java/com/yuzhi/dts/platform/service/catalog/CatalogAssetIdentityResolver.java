@@ -38,6 +38,7 @@ public class CatalogAssetIdentityResolver {
     private final DataStandardRepository dataStandardRepository;
     private final ModelingGlossaryTermRepository glossaryTermRepository;
     private final SvcApiRepository svcApiRepository;
+    private final CatalogAssetIdentityResolutionAuditService resolutionAuditService;
 
     public CatalogAssetIdentityResolver(
         OpenMetadataAssetCacheRepository assetRepository,
@@ -47,7 +48,8 @@ public class CatalogAssetIdentityResolver {
         ModelingSqlModelRepository sqlModelRepository,
         DataStandardRepository dataStandardRepository,
         ModelingGlossaryTermRepository glossaryTermRepository,
-        SvcApiRepository svcApiRepository
+        SvcApiRepository svcApiRepository,
+        CatalogAssetIdentityResolutionAuditService resolutionAuditService
     ) {
         this.assetRepository = assetRepository;
         this.mappingRepository = mappingRepository;
@@ -57,6 +59,7 @@ public class CatalogAssetIdentityResolver {
         this.dataStandardRepository = dataStandardRepository;
         this.glossaryTermRepository = glossaryTermRepository;
         this.svcApiRepository = svcApiRepository;
+        this.resolutionAuditService = resolutionAuditService;
     }
 
     public Optional<ResolvedAsset> resolve(String ref) {
@@ -103,7 +106,16 @@ public class CatalogAssetIdentityResolver {
         if (catalogIdentity.isPresent()) {
             return catalogIdentity;
         }
-        return resolveCodeAssetIdentity(ref);
+        Optional<CatalogAssetIdentity> codeIdentity = resolveCodeAssetIdentity(ref);
+        if (codeIdentity.isPresent()) {
+            return codeIdentity;
+        }
+        resolutionAuditService.recordFailure(
+            StringUtils.trimWhitespace(ref),
+            "CatalogAssetIdentityResolver",
+            failureReason(ref)
+        );
+        return Optional.empty();
     }
 
     private CatalogDataset resolveLegacy(CatalogAssetMapping mapping) {
@@ -259,6 +271,9 @@ public class CatalogAssetIdentityResolver {
 
     private Optional<CatalogAssetIdentity> resolveGlossaryTerm(String code) {
         List<ModelingGlossaryTerm> terms = glossaryTermRepository.findByCodeLowerIn(List.copyOf(codeCandidates(code)));
+        if (terms == null || terms.isEmpty()) {
+            return Optional.empty();
+        }
         return terms.stream().findFirst().map(this::glossaryTermIdentity);
     }
 
@@ -348,6 +363,50 @@ public class CatalogAssetIdentityResolver {
             && normalized.contains("/source:")
             && normalized.contains("/schema:")
             && normalized.contains("/table:");
+    }
+
+    private String failureReason(String ref) {
+        if (!StringUtils.hasText(ref)) {
+            return CatalogAssetIdentityResolutionAuditService.REASON_LEGACY_FORMAT_NOT_RECOGNIZED;
+        }
+        String trimmed = ref.trim();
+        if (trimmed.regionMatches(true, 0, "urn:uuid:", 0, "urn:uuid:".length()) && parseUuid(trimmed) == null) {
+            return CatalogAssetIdentityResolutionAuditService.REASON_LEGACY_FORMAT_NOT_RECOGNIZED;
+        }
+        String explicitHint = explicitColonTypeHint(trimmed);
+        if (StringUtils.hasText(explicitHint) && !isKnownTypeHint(explicitHint)) {
+            return CatalogAssetIdentityResolutionAuditService.REASON_UNKNOWN_TYPE_HINT;
+        }
+        return CatalogAssetIdentityResolutionAuditService.REASON_TYPE_REPOSITORY_MISS;
+    }
+
+    private static String explicitColonTypeHint(String ref) {
+        String normalized = ref.trim().toLowerCase(Locale.ROOT);
+        int colon = normalized.indexOf(':');
+        if (colon > 0) {
+            return normalized.substring(0, colon).replace('-', '_');
+        }
+        return "";
+    }
+
+    private static boolean isKnownTypeHint(String typeHint) {
+        return switch (typeHint) {
+            case "glossary",
+                "glossary_term",
+                "data_standard",
+                "standard",
+                "gov_indicator",
+                "indicator",
+                "metric",
+                "modeling_sql_model",
+                "sql_model",
+                "dbt_model",
+                "api_service",
+                "svc_api",
+                "api",
+                "metric_pack" -> true;
+            default -> false;
+        };
     }
 
     private static String naturalKey(String ref) {

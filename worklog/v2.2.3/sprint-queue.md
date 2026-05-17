@@ -501,13 +501,13 @@
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
-| F1-rx-runtime-closure | P0 | 6 | IN_PROGRESS（T01/T02/T03/T04/T06 DONE） |
+| F1-rx-runtime-closure | P0 | 6 | DONE |
 | F2-rls-publish-and-masking-closure | P0 | 5 | IN_PROGRESS（T02/T03 DONE；publish gate / audit 待接入） |
-| F3-code-quality-and-security-hardening | P0 | 5 | IN_PROGRESS（T01/T02/T03/T04 DONE） |
+| F3-code-quality-and-security-hardening | P0 | 5 | DONE |
 | F4-sprint-31a-gap-and-status-rectification | P1 | 4 | READY |
 | F5-sprint-31-cheap-compile-verification | P0 | 4 | READY |
 
-**统计**: READY=12, IN_PROGRESS=1, DONE=11, BLOCKED=0
+**统计**: READY=11, IN_PROGRESS=0, DONE=13, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-31b-202605/README.md`
 **集成测试**: `worklog/v2.2.3/sprint-31b-202605/it/README.md`
 **关键决策**:

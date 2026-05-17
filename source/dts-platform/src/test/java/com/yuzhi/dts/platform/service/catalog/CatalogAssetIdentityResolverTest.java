@@ -54,6 +54,9 @@ class CatalogAssetIdentityResolverTest {
     @Mock
     private SvcApiRepository svcApiRepository;
 
+    @Mock
+    private CatalogAssetIdentityResolutionAuditService resolutionAuditService;
+
     private CatalogAssetIdentityResolver resolver;
 
     @BeforeEach
@@ -66,7 +69,8 @@ class CatalogAssetIdentityResolverTest {
             sqlModelRepository,
             dataStandardRepository,
             glossaryTermRepository,
-            svcApiRepository
+            svcApiRepository,
+            resolutionAuditService
         );
     }
 
@@ -199,5 +203,16 @@ class CatalogAssetIdentityResolverTest {
         assertThat(identity.type()).isEqualTo(CatalogAssetType.DATASET);
         assertThat(identity.assetId()).isEqualTo(key);
         assertThat(identity.assetKey()).isEqualTo(key);
+    }
+
+    @Test
+    void recordsFailureAuditForUnknownTypeHint() {
+        assertThat(resolver.resolveIdentity("unknown_asset:contract_amount")).isEmpty();
+
+        verify(resolutionAuditService).recordFailure(
+            "unknown_asset:contract_amount",
+            "CatalogAssetIdentityResolver",
+            "UNKNOWN_TYPE_HINT"
+        );
     }
 }

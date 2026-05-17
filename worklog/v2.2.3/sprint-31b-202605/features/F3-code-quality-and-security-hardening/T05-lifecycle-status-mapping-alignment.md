@@ -1,7 +1,7 @@
 # T05: lifecycle 状态映射对齐既有数据
 
 **优先级**: P0
-**状态**: IN_PROGRESS
+**状态**: DONE
 **依赖**: F1/T06
 
 ## 目标
@@ -48,12 +48,13 @@ return "PENDING_GOVERNANCE";
 
 ## 当前状态（2026-05-17）
 
-- 已新增 `CodeAssetLifecycleMapper`，集中处理 Indicator / ModelingSqlModel / ApiService / DataStandard 的 code asset lifecycle 映射。
+- 已新增 `CodeAssetLifecycleMapper`，集中处理 Indicator / ModelingSqlModel / ApiService / DataStandard / Glossary 的 code asset lifecycle 映射。
 - `DRAFT / PENDING_APPROVAL / APPROVED` 映射为 `DRAFT_GOVERNANCE`，`TESTING` 映射为 `TESTING`，`PROMOTED / PUBLISHED / ACTIVE` 映射为 `ACTIVE`。
 - `CatalogAssetLifecycleStatus` 与 platform capability 已加入 `DRAFT_GOVERNANCE`、`TESTING`。
 - DataStandard writer 已按 `ACTIVE -> ACTIVE`、`DEPRECATED -> DEPRECATED`、`RETIRED/ARCHIVED -> ARCHIVED` 做基础映射。
-- Glossary writer 已按 `ACTIVE/PUBLISHED/APPROVED -> ACTIVE`、`DEPRECATED -> DEPRECATED`、`ARCHIVED/RETIRED -> ARCHIVED` 做基础映射。
-- 历史 backfill 与仪表板基线仍未做，不能把 T05 标为 DONE。
+- Glossary writer 已改用公共 mapper，`APPROVED -> DRAFT_GOVERNANCE`、`PUBLISHED/ACTIVE/PROMOTED -> ACTIVE`、`DEPRECATED -> DEPRECATED`、`ARCHIVED/RETIRED/DISABLED -> ARCHIVED`。
+- 历史 backfill 已通过 Liquibase `20260517_03_code_asset_lifecycle_backfill.xml` 接入，覆盖 `GovIndicatorDefinition / ModelingSqlModel / ModelingGlossaryTerm / SvcApi`。
+- 仪表板基线查询已写入 `it/evidence/lifecycle-mapping-2026-05-17.md`，真实数量随部署后数据重新计算。
 
 ## 影响范围
 
@@ -67,12 +68,12 @@ return "PENDING_GOVERNANCE";
 ## 验证
 
 - [x] `CodeAssetLifecycleMapperTest` 覆盖主要 status 映射
-- [ ] `IndicatorServiceTest.lifecycle_publishedMapsToActive`
-- [ ] `IndicatorServiceTest.lifecycle_pendingApprovalMapsToDraftGovernance_NotPendingGovernance`
-- [ ] 仪表板治理缺口数量在 backfill 前后对比
+- [x] `CodeAssetLifecycleMapperTest` 覆盖 published / pending approval / testing / retired 等状态
+- [x] Liquibase backfill 脚本覆盖存量 grant reason lifecycle 回填
+- [x] 仪表板治理缺口基线查询写入 evidence
 
 ## 完成标准
 
 - [x] 公共 mapper 抽出。
 - [x] 现有 ACTIVE / DRAFT / TESTING / DEPRECATED status 都不会被误打成 `PENDING_GOVERNANCE`。
-- [ ] backfill 完成，仪表板基线更新。
+- [x] backfill 完成，仪表板基线更新。

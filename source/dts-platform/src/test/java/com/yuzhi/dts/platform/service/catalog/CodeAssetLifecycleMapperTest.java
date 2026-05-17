@@ -35,5 +35,8 @@ class CodeAssetLifecycleMapperTest {
         assertThat(CodeAssetLifecycleMapper.fromDataStandardStatus("ACTIVE")).isEqualTo("ACTIVE");
         assertThat(CodeAssetLifecycleMapper.fromDataStandardStatus("DEPRECATED")).isEqualTo("DEPRECATED");
         assertThat(CodeAssetLifecycleMapper.fromDataStandardStatus("RETIRED")).isEqualTo("ARCHIVED");
+        assertThat(CodeAssetLifecycleMapper.fromGlossaryStatus("APPROVED")).isEqualTo("DRAFT_GOVERNANCE");
+        assertThat(CodeAssetLifecycleMapper.fromGlossaryStatus("PUBLISHED")).isEqualTo("ACTIVE");
+        assertThat(CodeAssetLifecycleMapper.fromGlossaryStatus("RETIRED")).isEqualTo("ARCHIVED");
     }
 }

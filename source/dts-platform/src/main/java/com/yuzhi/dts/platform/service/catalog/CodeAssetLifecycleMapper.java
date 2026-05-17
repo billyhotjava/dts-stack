@@ -53,6 +53,17 @@ public final class CodeAssetLifecycleMapper {
         };
     }
 
+    public static String fromGlossaryStatus(String status) {
+        return switch (normalize(status)) {
+            case "DRAFT", "PENDING_APPROVAL", "APPROVED" -> "DRAFT_GOVERNANCE";
+            case "PUBLISHED", "ACTIVE", "PROMOTED" -> "ACTIVE";
+            case "TESTING" -> "TESTING";
+            case "ARCHIVED", "RETIRED", "DISABLED" -> "ARCHIVED";
+            case "DEPRECATED" -> "DEPRECATED";
+            default -> "PENDING_GOVERNANCE";
+        };
+    }
+
     private static String normalize(String status) {
         if (status == null || status.isBlank()) {
             return "";

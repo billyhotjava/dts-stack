@@ -36,6 +36,7 @@ import com.yuzhi.dts.platform.service.catalog.CatalogAssetIdentity;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetType;
 import com.yuzhi.dts.platform.service.catalog.CodeAssetGrantWriter;
+import com.yuzhi.dts.platform.service.catalog.CodeAssetLifecycleMapper;
 import com.yuzhi.dts.platform.service.modeling.ModelingAssetReferenceService;
 import com.yuzhi.dts.platform.service.modeling.DataStandardSecurity;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
@@ -1368,22 +1369,8 @@ public class ModelingAuxResource {
             firstText(term.getOwnerDept(), security.resolveActiveDept(activeDeptHeader)),
             SecurityUtils.getCurrentUserLogin().orElse("dts-platform"),
             "INTERNAL",
-            glossaryLifecycle(term.getStatus())
+            CodeAssetLifecycleMapper.fromGlossaryStatus(term.getStatus())
         );
-    }
-
-    private static String glossaryLifecycle(String status) {
-        String normalized = StringUtils.trimToEmpty(status).toUpperCase(Locale.ROOT);
-        if ("ACTIVE".equals(normalized)) {
-            return "ACTIVE";
-        }
-        if ("ARCHIVED".equals(normalized) || "RETIRED".equals(normalized)) {
-            return "ARCHIVED";
-        }
-        if ("DEPRECATED".equals(normalized)) {
-            return "DEPRECATED";
-        }
-        return "PENDING_GOVERNANCE";
     }
 
     private String serializeGlossarySnapshot(ModelingGlossaryTerm term) {

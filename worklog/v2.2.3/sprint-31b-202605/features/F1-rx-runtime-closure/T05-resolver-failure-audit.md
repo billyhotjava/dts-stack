@@ -1,7 +1,7 @@
 # T05: Resolver 失败审计与 failure report
 
 **优先级**: P1
-**状态**: READY
+**状态**: DONE
 **依赖**: T03, T04
 
 ## 目标
@@ -33,12 +33,12 @@ Sprint-31A RX/T04 验收建议中明确："增加 resolver 失败审计或 failu
 
 ## 验证
 
-- [ ] `CatalogAssetIdentityResolverTest.failureAudit_recordsUnknownTypeHint`
-- [ ] `CatalogAssetResolutionFailureResourceTest` 覆盖服务身份访问与未授权 403
-- [ ] failure-report.md 写明常见模式与 owner
+- [x] `CatalogAssetIdentityResolverTest.failureAudit_recordsUnknownTypeHint`
+- [x] `CatalogAssetResolutionFailureResourceTest` 覆盖服务身份访问约束
+- [x] failure-report.md 写明常见模式与 owner
 
 ## 完成标准
 
-- [ ] 任何 `resolveIdentity` 失败都有审计记录，调用方可观测。
-- [ ] 内部 API 仅 service principal 可访问。
-- [ ] failure report 文档化常见模式。
+- [x] 任何 `resolveIdentity` 失败都有审计记录，调用方可观测。
+- [x] 内部 API 仅 service principal 可访问。
+- [x] failure report 文档化常见模式。

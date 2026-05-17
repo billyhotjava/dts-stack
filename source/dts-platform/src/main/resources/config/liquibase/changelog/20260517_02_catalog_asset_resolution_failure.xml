@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260517-02-catalog-asset-resolution-failure" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="catalog_asset_resolution_failure"/>
+            </not>
+        </preConditions>
+        <createTable tableName="catalog_asset_resolution_failure">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" primaryKeyName="pk_catalog_asset_resolution_failure" nullable="false"/>
+            </column>
+            <column name="ref" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <column name="requested_at" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="caller" type="varchar(128)"/>
+            <column name="type_hint_guess" type="varchar(64)"/>
+            <column name="reason" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="20260517-03-index-catalog-asset-resolution-failure-requested" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="catalog_asset_resolution_failure"/>
+                <not>
+                    <indexExists tableName="catalog_asset_resolution_failure" indexName="idx_catalog_asset_resolution_failure_requested"/>
+                </not>
+            </and>
+        </preConditions>
+        <createIndex tableName="catalog_asset_resolution_failure" indexName="idx_catalog_asset_resolution_failure_requested">
+            <column name="requested_at"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260517-04-index-catalog-asset-resolution-failure-reason" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="catalog_asset_resolution_failure"/>
+                <not>
+                    <indexExists tableName="catalog_asset_resolution_failure" indexName="idx_catalog_asset_resolution_failure_reason"/>
+                </not>
+            </and>
+        </preConditions>
+        <createIndex tableName="catalog_asset_resolution_failure" indexName="idx_catalog_asset_resolution_failure_reason">
+            <column name="reason"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

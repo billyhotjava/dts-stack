@@ -49,13 +49,13 @@ Sprint-31B 收口
 
 | ID | Feature | 优先级 | Task 数 | 状态 | 依赖 |
 |----|---------|--------|---------|------|------|
-| F1 | RX 残余运行时收口 | P0 | 6 | IN_PROGRESS | Sprint-31A RX/T03-T05 |
+| F1 | RX 残余运行时收口 | P0 | 6 | DONE | Sprint-31A RX/T03-T05 |
 | F2 | RLS publish gate 与 column masking 收口 | P0 | 5 | IN_PROGRESS | F1, Sprint-31A RX/T05 |
-| F3 | 代码质量与安全 hardening | P0 | 5 | IN_PROGRESS | F1 |
+| F3 | 代码质量与安全 hardening | P0 | 5 | DONE | F1 |
 | F4 | Sprint-31A 漏项与口径修正 | P1 | 4 | READY | F1-F3 |
 | F5 | Sprint-31 cheap compile 前置验证 | P0 | 4 | READY | F1-F4 |
 
-**统计**: READY=12, IN_PROGRESS=1, DONE=11, BLOCKED=0
+**统计**: READY=11, IN_PROGRESS=0, DONE=13, BLOCKED=0
 
 ## 非目标
 
@@ -68,7 +68,7 @@ Sprint-31B 收口
 ## 完成标准
 
 - [x] `CatalogAssetIdentityResolver` 与 `AssetPermissionInternalResource` 当前 hot path 不再有 `findAll().stream().filter(...)`；命中 repository 索引方法。
-- [x] `CatalogAssetIdentityResolver` 支持 `API_SERVICE`、`scopedDataset(...)` 与 `urn:uuid:` 旧引用当前版本反向解析；resolver 失败审计仍待补。
+- [x] `CatalogAssetIdentityResolver` 支持 `API_SERVICE`、`scopedDataset(...)` 与 `urn:uuid:` 旧引用当前版本反向解析；resolver 失败写入 `catalog_asset_resolution_failure`，并提供内部 failure report。
 - [x] 剩余高频 code asset（DataStandard / Glossary / SvcApi）接入 `CodeAssetGrantWriter`。
 - [x] platform `/api/internal/v1/asset-permission/policy` 在未授权时返回 HTTP 403；deprecated legacy path 继续 fail-closed 200 以兼容旧客户端。
 - [ ] `MetricArtifactGenerationService` publish gate 与 preview 复用同一 RLS 策略；column masking 已写入候选 SQL/schema，publish gate 仍待接入。
@@ -76,7 +76,7 @@ Sprint-31B 收口
 - [ ] RLS 注入的 predicates / masked columns 落入 audit 记录，可回溯；当前 dataset miss 已输出 warn + counter，v1 严格策略缺 dataset 时返回 422。
 - [x] `IndicatorService` / `ModelingSqlModelService` / `ApiCatalogService` 改回构造器注入；当前 focused tests 已覆盖构造器签名，完整 Spring context 验证留给 F5。
 - [x] policy endpoint 版本化（`/api/internal/v1/asset-permission/policy`），capability 与 service-auth 白名单同步更新。
-- [ ] `lifecycleForModel` / `lifecycleForStatus` 状态映射与既有数据对齐，不批量打 `PENDING_GOVERNANCE`；公共 mapper 已覆盖 Indicator / ModelingSqlModel / ApiService / DataStandard，历史 backfill 与仪表板基线未完成。
+- [x] `lifecycleForModel` / `lifecycleForStatus` 状态映射与既有数据对齐，不批量打 `PENDING_GOVERNANCE`；公共 mapper 已覆盖 Indicator / ModelingSqlModel / ApiService / DataStandard / Glossary，历史 backfill 与仪表板基线已补。
 - [ ] Sprint-31A README / RX README 状态口径统一，evidence 5 个空目录补齐。
 - [ ] `mvn -pl dts-platform compile` + `mvn -pl dts-metrics compile` + `pnpm tsc --noEmit` 全绿，跨模块签名漂移在 cheap stage 修复。
 
