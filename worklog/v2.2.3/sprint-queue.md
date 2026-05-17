@@ -506,8 +506,9 @@
 | F3-code-quality-and-security-hardening | P0 | 5 | DONE |
 | F4-sprint-31a-gap-and-status-rectification | P1 | 4 | READY |
 | F5-sprint-31-cheap-compile-verification | P0 | 4 | READY |
+| F6-frontend-acceptance-recovery | P0 | 5 | IN_PROGRESS（T01 DONE；T02-T05 待实现） |
 
-**统计**: READY=11, IN_PROGRESS=0, DONE=13, BLOCKED=0
+**统计**: READY=15, IN_PROGRESS=0, DONE=14, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-31b-202605/README.md`
 **集成测试**: `worklog/v2.2.3/sprint-31b-202605/it/README.md`
 **关键决策**:
@@ -515,6 +516,7 @@
 - 修正 Sprint-31A 状态口径：契约 DONE / 运行时 PARTIAL（由 Sprint-31B 收口）。
 - 本 Sprint 结束时跑 cheap compile-only 验证（platform + metrics + webapp tsc），把跨模块签名漂移在最低成本暴露。
 - 2026-05-17 已完成 hot path 索引化、`urn:uuid` 旧引用解析、DataStandard/Glossary/SvcApi writer、policy v1 + 403、service-auth/capability 同步、dataset miss warn+counter、`apply_rls=true` 空策略失败；publish gate、SQL masking、strict policy miss、audit 和 full cheap compile 仍未闭环。
+- 2026-05-18 新增前端验收口径：数据资产、语义指标、BI 消费能力必须以“页面可操作”为 DONE 标准；已先补资产解析失败报告入口，其余 assets-v2 详情、数据产品成员配置、治理缺口处置、dts-metrics 真实页面仍待闭环。
 
 ## v2.3 Backlog: 企业级资产与指标增强
 
