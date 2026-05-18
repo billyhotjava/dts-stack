@@ -1,0 +1,8 @@
+target/
+src/main/resources/static/assets/
+src/main/resources/static/index.html
+src/main/resources/static/vite.svg
+src/main/webapp/node_modules/
+src/main/webapp/.vite-cache/
+src/main/webapp/dist/
+*.log
