@@ -21,6 +21,7 @@ import { useRef, type CSSProperties } from "react";
 import type { ScreenThemeTokens } from "../../screenThemes";
 import { resolveTextColor } from "../shared/chartUtils";
 import { useContainerFontSize } from "../../hooks/useContainerFontSize";
+import { MetricNoteBadge, ThresholdBar, type MetricNote } from "../shared/MetricNote";
 
 function pickFontSize(
     c: Record<string, unknown>,
@@ -110,6 +111,10 @@ export function NumberCardBasic({
     const valueFontSize = valueCfg.ratio > 0 ? valueAdaptive : valueCfg.fallback;
     const titleFontSize = titleCfg.ratio > 0 ? titleAdaptive : titleCfg.fallback;
 
+    const metricNote = c.metricNote as MetricNote | undefined;
+    const titleColor = resolveTextColor(c.titleColor as string | undefined, t.numberCard.titleColor);
+    const numericValue = c.value != null && !Number.isNaN(Number(c.value)) ? Number(c.value) : null;
+
     return (
         <div
             ref={ref}
@@ -132,11 +137,15 @@ export function NumberCardBasic({
                 style={{
                     fontSize: titleFontSize,
                     fontWeight: 600,
-                    color: resolveTextColor(c.titleColor as string | undefined, t.numberCard.titleColor),
+                    color: titleColor,
                     marginBottom: 8,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                 }}
             >
-                {c.title as string}
+                <span>{c.title as string}</span>
+                {metricNote ? <MetricNoteBadge note={metricNote} iconColor={titleColor} iconSize={Math.max(11, Math.round(titleFontSize * 0.7))} /> : null}
             </div>
             <div
                 style={{
@@ -150,6 +159,14 @@ export function NumberCardBasic({
                 {c.value != null ? Number(c.value).toLocaleString("zh-CN") : "-"}
                 {(c.suffix as string) || ""}
             </div>
+            {metricNote?.thresholds ? (
+                <ThresholdBar
+                    value={numericValue}
+                    thresholds={metricNote.thresholds}
+                    direction={metricNote.direction}
+                    unit={metricNote.unit || (c.suffix as string) || ""}
+                />
+            ) : null}
         </div>
     );
 }
@@ -261,6 +278,13 @@ export function StatCardBasic({
                     >
                         {title}
                     </span>
+                    {(c.metricNote as MetricNote | undefined) ? (
+                        <MetricNoteBadge
+                            note={c.metricNote as MetricNote}
+                            iconColor={titleColor}
+                            iconSize={Math.max(11, Math.round(titleFontSize * 0.85))}
+                        />
+                    ) : null}
                 </div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
                     {prefix && <span style={{ fontSize: Math.max(12, titleFontSize + 1), color: titleColor }}>{prefix}</span>}

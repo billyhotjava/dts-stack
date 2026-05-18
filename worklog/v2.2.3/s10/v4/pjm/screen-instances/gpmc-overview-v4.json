@@ -342,7 +342,23 @@
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "项目总数"
+        "valueField": "项目总数",
+        "metricNote": {
+          "code": "pjm_project_total",
+          "displayName": "项目总数",
+          "domain": "综合",
+          "category": "基础",
+          "unit": "个",
+          "direction": "NEUTRAL",
+          "definition": "周期内有进度数据上报的不同项目数(去重)",
+          "formula": "周期内出现过的不同项目编号去重计数",
+          "scope": "进度信息汇总表中 plan_month 落在周期内的项目",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "(衍生)项目编号去重计数"
+        },
+        "metricCode": "pjm_project_total"
       },
       "dataSource": {
         "type": "sql",
@@ -376,7 +392,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "项目完成率",
+        "title": "节点完成百分比",
         "value": 67.5,
         "suffix": "%",
         "precision": 1,
@@ -385,7 +401,27 @@
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "项目完成率"
+        "valueField": "项目完成率",
+        "metricNote": {
+          "code": "pjm_prog_completion_rate",
+          "displayName": "节点完成百分比",
+          "domain": "进度",
+          "category": "完成率",
+          "unit": "%",
+          "direction": "UP",
+          "definition": "周期内已到时间的节点中,已完成节点的占比(含周期外完成)",
+          "formula": "(按时完成节点数 + 超期完成节点数 + 周期外完成节点数) ÷ (已到时间节点数 + 周期外完成节点数) × 100%",
+          "scope": "已到时间节点 = 周期内总节点 - 正常待完成节点",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 85.0,
+            "critical": 75.0,
+            "rule": "<"
+          },
+          "excelRef": "原始指标 #9 节点完成百分比"
+        },
+        "metricCode": "pjm_prog_completion_rate"
       },
       "dataSource": {
         "type": "sql",
@@ -419,7 +455,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "未归零质量问题数",
+        "title": "现存质量问题数",
         "value": 5,
         "suffix": "",
         "precision": 0,
@@ -428,7 +464,23 @@
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "未闭环质量问题数"
+        "valueField": "未闭环质量问题数",
+        "metricNote": {
+          "code": "pjm_qual_open_issues",
+          "displayName": "现存质量问题数",
+          "domain": "质量",
+          "category": "基础",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "目前状态为'未完成归零'的质量问题总数",
+          "formula": "状态='未完成归零' 的质量问题计数",
+          "scope": "全量统计,不受时间筛选限制",
+          "sourceTable": "质量信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "原始指标 #35"
+        },
+        "metricCode": "pjm_qual_open_issues"
       },
       "dataSource": {
         "type": "sql",
@@ -462,7 +514,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "中高风险数",
+        "title": "未落实整改(I, II类)",
         "value": 6,
         "suffix": "",
         "precision": 0,
@@ -471,7 +523,23 @@
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "未整改落实技术更改单数"
+        "valueField": "未整改落实技术更改单数",
+        "metricNote": {
+          "code": "pjm_tech_reform_pending_i_ii",
+          "displayName": "未落实整改(I, II类)",
+          "domain": "技术状态",
+          "category": "整改",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "I/II 类技术状态变更单中尚未落实整改的数量",
+          "formula": "更改类别∈(I, II) 且 整改落实状态='未落实整改' 的变更单计数",
+          "scope": "全量,截止结束时间",
+          "sourceTable": "技术状态信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "原始指标 #65"
+        },
+        "metricCode": "pjm_tech_reform_pending_i_ii"
       },
       "dataSource": {
         "type": "sql",
@@ -505,7 +573,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "未闭环技术状态变更",
+        "title": "高风险数",
         "value": 4,
         "suffix": "",
         "precision": 0,
@@ -514,7 +582,23 @@
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "高风险数量"
+        "valueField": "高风险数量",
+        "metricNote": {
+          "code": "pjm_risk_high",
+          "displayName": "高风险数",
+          "domain": "风险",
+          "category": "等级",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "风险等级为'高'的风险总数",
+          "formula": "风险等级='高' 的风险计数",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "(衍生)高风险计数"
+        },
+        "metricCode": "pjm_risk_high"
       },
       "dataSource": {
         "type": "sql",

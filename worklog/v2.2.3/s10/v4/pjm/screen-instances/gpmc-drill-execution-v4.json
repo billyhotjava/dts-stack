@@ -149,7 +149,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "整体完成率",
+        "title": "节点完成百分比",
         "value": "72.4",
         "unit": "%",
         "precision": 1,
@@ -157,7 +157,27 @@
         "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
-        "fontSize": 36
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_prog_completion_rate",
+          "displayName": "节点完成百分比",
+          "domain": "进度",
+          "category": "完成率",
+          "unit": "%",
+          "direction": "UP",
+          "definition": "周期内已到时间的节点中,已完成节点的占比(含周期外完成)",
+          "formula": "(按时完成节点数 + 超期完成节点数 + 周期外完成节点数) ÷ (已到时间节点数 + 周期外完成节点数) × 100%",
+          "scope": "已到时间节点 = 周期内总节点 - 正常待完成节点",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 85.0,
+            "critical": 75.0,
+            "rule": "<"
+          },
+          "excelRef": "原始指标 #9 节点完成百分比"
+        },
+        "metricCode": "pjm_prog_completion_rate"
       },
       "dataSource": {
         "type": "sql",
@@ -199,7 +219,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "里程碑达成率",
+        "title": "里程碑节点完成总百分比",
         "value": "68",
         "unit": "%",
         "precision": 0,
@@ -207,7 +227,27 @@
         "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
-        "fontSize": 36
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_prog_milestone_completion_rate",
+          "displayName": "里程碑节点完成总百分比",
+          "domain": "进度",
+          "category": "里程碑",
+          "unit": "%",
+          "direction": "UP",
+          "definition": "里程碑节点中已完成的占比(含按时和超期完成)",
+          "formula": "(里程碑按时完成数 + 里程碑超期完成数) ÷ (未完成里程碑数 + 里程碑按时完成数 + 里程碑超期完成数) × 100%",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 90.0,
+            "critical": 80.0,
+            "rule": "<"
+          },
+          "excelRef": "原始指标 #26 里程碑节点完成总百分比"
+        },
+        "metricCode": "pjm_prog_milestone_completion_rate"
       },
       "dataSource": {
         "type": "sql",
@@ -249,7 +289,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "异常率",
+        "title": "节点不正常率",
         "value": "4.6",
         "unit": "%",
         "precision": 1,
@@ -257,7 +297,27 @@
         "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
-        "fontSize": 36
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_prog_abnormal_rate",
+          "displayName": "节点不正常率",
+          "domain": "进度",
+          "category": "异常",
+          "unit": "%",
+          "direction": "DOWN",
+          "definition": "已到时间节点中,处于危险状态但尚未走变更流程的节点占比",
+          "formula": "(不正常待变更 + 超期未完成未变更) ÷ 已到时间节点数 × 100%",
+          "scope": "不含一般节点",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 20.0,
+            "critical": 30.0,
+            "rule": ">"
+          },
+          "excelRef": "二次指标 #3 pjm_prog_abnormal_rate"
+        },
+        "metricCode": "pjm_prog_abnormal_rate"
       },
       "dataSource": {
         "type": "sql",
@@ -303,7 +363,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "风险预警指数",
+        "title": "项目风险预警指数",
         "value": "37",
         "unit": "",
         "precision": 0,
@@ -311,7 +371,27 @@
         "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
-        "fontSize": 36
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_risk_warning_index",
+          "displayName": "项目风险预警指数",
+          "domain": "综合",
+          "category": "预警",
+          "unit": "点",
+          "direction": "DOWN",
+          "definition": "加权风险暴露指数,值越低风险越小",
+          "formula": "未完成里程碑数 × 3 + 高风险未完成节点数 × 2 + 超期未完成节点数 × 1",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 10.0,
+            "critical": 20.0,
+            "rule": ">"
+          },
+          "excelRef": "二次指标 #18 pjm_risk_warning_index"
+        },
+        "metricCode": "pjm_risk_warning_index"
       },
       "dataSource": {
         "type": "sql",

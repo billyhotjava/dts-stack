@@ -36,6 +36,7 @@ import {
 import { renderFilter } from '../renderers/FilterRenderer';
 import { renderECharts } from '../renderers/EChartsRenderer';
 import { renderBasic } from '../renderers/BasicRenderer';
+import { MetricNoteBadge, type MetricNote } from '../renderers/shared/MetricNote';
 import { renderDataV } from '../renderers/DataVRenderer';
 import { renderTable } from '../renderers/TableRenderer';
 import { WaterLevel } from '../renderers/datav/WaterLevel';
@@ -1314,7 +1315,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             case 'line3D-chart':
             case 'surface-chart':
             case 'map3D-chart':
-                return renderECharts({
+            {
+                const chartNode = renderECharts({
                     type, c, t, width, height, mode, componentId: component.id, runtime,
                     EChart, renderEChartWithHandles,
                     themeOptions, chartMotionOption, chartTitleLayout, legendConfig, axisGrid, seriesColors,
@@ -1332,6 +1334,25 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     mapDrillRegion, setMapDrillRegion, mapReadyVersion, hasMapFn,
                     cardData,
                 });
+                const metricNote = c.metricNote as MetricNote | undefined;
+                if (!metricNote) return chartNode;
+                return (
+                    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                        {chartNode}
+                        <div
+                            style={{
+                                position: 'absolute',
+                                top: 4,
+                                right: 6,
+                                zIndex: 5,
+                                pointerEvents: 'auto',
+                            }}
+                        >
+                            <MetricNoteBadge note={metricNote} iconColor="rgba(255,255,255,0.7)" iconSize={12} />
+                        </div>
+                    </div>
+                );
+            }
 
             // ==================== 基础 + 形状 + 媒体组件 ====================
             case 'number-card':

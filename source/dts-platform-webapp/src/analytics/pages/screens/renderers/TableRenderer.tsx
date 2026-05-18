@@ -8,6 +8,7 @@ import type { CardData, ScreenComponent } from '../types';
 import type { ScreenThemeTokens } from '../screenThemes';
 import type { ScreenTheme } from '../types';
 import { resolveTextColor } from './shared/chartUtils';
+import { MetricNoteBadge, type MetricNote } from './shared/MetricNote';
 import {
     compareTableValues, estimateTablePlaceholderRowCount, resolveTableConditionalStyle,
     ThemedScrollTable, resolveBoundTableData,
@@ -308,6 +309,19 @@ export function renderTable(props: TableRendererProps): ReactNode {
                                                 {columnMeta[i]?.masked && (
                                                     <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 2 }} title="此列数据已脱敏">*</span>
                                                 )}
+                                                {columnMeta[i]?.metricNote ? (
+                                                    <span
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        onMouseDown={(e) => e.stopPropagation()}
+                                                        style={{ display: 'inline-flex', marginLeft: 2 }}
+                                                    >
+                                                        <MetricNoteBadge
+                                                            note={columnMeta[i].metricNote as MetricNote}
+                                                            iconColor={headerColor}
+                                                            iconSize={Math.max(9, Math.round(headerFontSize * 0.75))}
+                                                        />
+                                                    </span>
+                                                ) : null}
                                                 {tableSort?.colIndex === i ? (
                                                     tableSort.order === 'asc'
                                                         ? <ArrowUp size={10} strokeWidth={1.8} aria-hidden="true" />

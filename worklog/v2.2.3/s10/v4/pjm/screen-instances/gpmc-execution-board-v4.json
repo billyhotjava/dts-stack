@@ -913,7 +913,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "未完成数",
+        "title": "项目本周期节点未完成总数",
         "value": 0,
         "suffix": "",
         "precision": 0,
@@ -921,7 +921,23 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "transparent"
+        "backgroundColor": "transparent",
+        "metricNote": {
+          "code": "pjm_prog_incomplete_cnt",
+          "displayName": "项目本周期节点未完成总数",
+          "domain": "进度",
+          "category": "基础",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "周期内处于未完成状态的节点总数",
+          "formula": "状态为'不正常待变更'+'超期未完成未变更'+'超期未完成已变更'的节点计数",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "原始指标 #5"
+        },
+        "metricCode": "pjm_prog_incomplete_cnt"
       },
       "dataSource": {
         "type": "sql",
@@ -963,7 +979,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "整体完成率",
+        "title": "节点完成百分比",
         "value": 0,
         "suffix": "%",
         "precision": 2,
@@ -971,7 +987,27 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "transparent"
+        "backgroundColor": "transparent",
+        "metricNote": {
+          "code": "pjm_prog_completion_rate",
+          "displayName": "节点完成百分比",
+          "domain": "进度",
+          "category": "完成率",
+          "unit": "%",
+          "direction": "UP",
+          "definition": "周期内已到时间的节点中,已完成节点的占比(含周期外完成)",
+          "formula": "(按时完成节点数 + 超期完成节点数 + 周期外完成节点数) ÷ (已到时间节点数 + 周期外完成节点数) × 100%",
+          "scope": "已到时间节点 = 周期内总节点 - 正常待完成节点",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 85.0,
+            "critical": 75.0,
+            "rule": "<"
+          },
+          "excelRef": "原始指标 #9 节点完成百分比"
+        },
+        "metricCode": "pjm_prog_completion_rate"
       },
       "dataSource": {
         "type": "sql",
@@ -1013,7 +1049,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "里程碑达成率",
+        "title": "里程碑节点完成总百分比",
         "value": 0,
         "suffix": "%",
         "precision": 2,
@@ -1021,7 +1057,27 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "transparent"
+        "backgroundColor": "transparent",
+        "metricNote": {
+          "code": "pjm_prog_milestone_completion_rate",
+          "displayName": "里程碑节点完成总百分比",
+          "domain": "进度",
+          "category": "里程碑",
+          "unit": "%",
+          "direction": "UP",
+          "definition": "里程碑节点中已完成的占比(含按时和超期完成)",
+          "formula": "(里程碑按时完成数 + 里程碑超期完成数) ÷ (未完成里程碑数 + 里程碑按时完成数 + 里程碑超期完成数) × 100%",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 90.0,
+            "critical": 80.0,
+            "rule": "<"
+          },
+          "excelRef": "原始指标 #26 里程碑节点完成总百分比"
+        },
+        "metricCode": "pjm_prog_milestone_completion_rate"
       },
       "dataSource": {
         "type": "sql",
@@ -1071,7 +1127,27 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "transparent"
+        "backgroundColor": "transparent",
+        "metricNote": {
+          "code": "pjm_prog_overdue_rate",
+          "displayName": "节点超期率",
+          "domain": "进度",
+          "category": "异常",
+          "unit": "%",
+          "direction": "DOWN",
+          "definition": "已到时间节点中,超期未完成的节点占比(不含一般节点)",
+          "formula": "(超期未完成未变更 + 超期未完成已变更) ÷ 已到时间节点数 × 100%",
+          "scope": "不含一般节点;已到时间节点 = 周期内总节点 - 正常待完成",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 15.0,
+            "critical": 25.0,
+            "rule": ">"
+          },
+          "excelRef": "二次指标 #2 pjm_prog_overdue_rate"
+        },
+        "metricCode": "pjm_prog_overdue_rate"
       },
       "dataSource": {
         "type": "sql",
@@ -1121,7 +1197,27 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "transparent"
+        "backgroundColor": "transparent",
+        "metricNote": {
+          "code": "pjm_prog_overdue_completion_rate",
+          "displayName": "超期完成率",
+          "domain": "进度",
+          "category": "完成率",
+          "unit": "%",
+          "direction": "DOWN",
+          "definition": "全部节点中超期完成节点的占比(含周期外完成)",
+          "formula": "(超期完成节点数 + 周期外完成节点数) ÷ (周期内节点总数 + 周期外完成节点数) × 100%",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 10.0,
+            "critical": 20.0,
+            "rule": ">"
+          },
+          "excelRef": "原始指标 #11 超期完成节点百分比"
+        },
+        "metricCode": "pjm_prog_overdue_completion_rate"
       },
       "dataSource": {
         "type": "sql",
@@ -1171,7 +1267,23 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "transparent"
+        "backgroundColor": "transparent",
+        "metricNote": {
+          "code": "pjm_prog_overdue_cnt",
+          "displayName": "超期任务数",
+          "domain": "进度",
+          "category": "基础",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "周期内已超期且未完成的节点总数(含已走变更流程)",
+          "formula": "(超期未完成未变更 + 超期未完成已变更) 的节点计数",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "原始指标 #13+#14"
+        },
+        "metricCode": "pjm_prog_overdue_cnt"
       },
       "dataSource": {
         "type": "sql",
@@ -1213,7 +1325,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "高风险未完成",
+        "title": "截止目前未完成高风险节点数",
         "value": 0,
         "suffix": "",
         "precision": 0,
@@ -1221,7 +1333,23 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "transparent"
+        "backgroundColor": "transparent",
+        "metricNote": {
+          "code": "pjm_prog_high_risk_incomplete",
+          "displayName": "截止目前未完成高风险节点数",
+          "domain": "进度",
+          "category": "风险",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "目前未完成的节点中风险等级为'高'的数量",
+          "formula": "风险等级='高' 且 状态∈('不正常待变更','超期未完成未变更','超期未完成已变更') 的节点计数",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "原始指标 #18"
+        },
+        "metricCode": "pjm_prog_high_risk_incomplete"
       },
       "dataSource": {
         "type": "sql",

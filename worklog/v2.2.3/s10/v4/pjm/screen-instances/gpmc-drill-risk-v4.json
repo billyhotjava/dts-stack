@@ -157,7 +157,23 @@
         "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
-        "fontSize": 36
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_risk_total",
+          "displayName": "风险总数",
+          "domain": "风险",
+          "category": "基础",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "周期内提出的风险总数(高+中+低)",
+          "formula": "风险提出时间在[开始日期,结束日期]内的风险计数",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "(衍生)新增风险计数"
+        },
+        "metricCode": "pjm_risk_total"
       },
       "dataSource": {
         "type": "sql",
@@ -199,7 +215,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "高风险",
+        "title": "高风险数",
         "value": "14",
         "unit": "",
         "precision": 0,
@@ -207,7 +223,23 @@
         "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
-        "fontSize": 36
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_risk_high",
+          "displayName": "高风险数",
+          "domain": "风险",
+          "category": "等级",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "风险等级为'高'的风险总数",
+          "formula": "风险等级='高' 的风险计数",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "(衍生)高风险计数"
+        },
+        "metricCode": "pjm_risk_high"
       },
       "dataSource": {
         "type": "sql",
@@ -249,7 +281,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "中风险",
+        "title": "中风险数",
         "value": "31",
         "unit": "",
         "precision": 0,
@@ -257,7 +289,23 @@
         "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
-        "fontSize": 36
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_risk_mid",
+          "displayName": "中风险数",
+          "domain": "风险",
+          "category": "等级",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "风险等级为'中'的风险总数",
+          "formula": "风险等级='中' 的风险计数",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "(衍生)中风险计数"
+        },
+        "metricCode": "pjm_risk_mid"
       },
       "dataSource": {
         "type": "sql",
@@ -299,7 +347,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "低风险",
+        "title": "低风险数",
         "value": "44",
         "unit": "",
         "precision": 0,
@@ -307,7 +355,23 @@
         "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
-        "fontSize": 36
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_risk_low",
+          "displayName": "低风险数",
+          "domain": "风险",
+          "category": "等级",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "风险等级为'低'的风险总数",
+          "formula": "风险等级='低' 的风险计数",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "(衍生)低风险计数"
+        },
+        "metricCode": "pjm_risk_low"
       },
       "dataSource": {
         "type": "sql",
@@ -440,7 +504,99 @@
         "enableSort": true,
         "enablePagination": true,
         "pageSize": 8,
-        "freezeHeader": true
+        "freezeHeader": true,
+        "columnNotes": {
+          "风险总数": {
+            "code": "pjm_risk_total",
+            "displayName": "风险总数",
+            "domain": "风险",
+            "category": "基础",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "周期内提出的风险总数(高+中+低)",
+            "formula": "风险提出时间在[开始日期,结束日期]内的风险计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "风险信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "(衍生)新增风险计数"
+          },
+          "高风险": {
+            "code": "pjm_risk_high",
+            "displayName": "高风险数",
+            "domain": "风险",
+            "category": "等级",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "风险等级为'高'的风险总数",
+            "formula": "风险等级='高' 的风险计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "风险信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "(衍生)高风险计数"
+          },
+          "中风险": {
+            "code": "pjm_risk_mid",
+            "displayName": "中风险数",
+            "domain": "风险",
+            "category": "等级",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "风险等级为'中'的风险总数",
+            "formula": "风险等级='中' 的风险计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "风险信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "(衍生)中风险计数"
+          },
+          "低风险": {
+            "code": "pjm_risk_low",
+            "displayName": "低风险数",
+            "domain": "风险",
+            "category": "等级",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "风险等级为'低'的风险总数",
+            "formula": "风险等级='低' 的风险计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "风险信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "(衍生)低风险计数"
+          },
+          "已释放": {
+            "code": "pjm_risk_released",
+            "displayName": "已释放风险数",
+            "domain": "风险",
+            "category": "状态",
+            "unit": "个",
+            "direction": "UP",
+            "definition": "目前状态为'已释放'(已闭环)的风险数",
+            "formula": "风险状态='已释放' 的风险计数",
+            "scope": "全量,截止结束时间",
+            "sourceTable": "风险信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "(衍生)已释放风险计数"
+          },
+          "未释放": {
+            "code": "pjm_risk_open",
+            "displayName": "未释放风险数",
+            "domain": "风险",
+            "category": "状态",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "目前状态为'未释放'的风险总数",
+            "formula": "风险状态='未释放' 的风险计数",
+            "scope": "全量,截止结束时间",
+            "sourceTable": "风险信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "(衍生)未释放风险计数"
+          }
+        }
       },
       "dataSource": {
         "type": "sql",

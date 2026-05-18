@@ -632,7 +632,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "质量问题总数",
+        "title": "新增质量问题数",
         "value": 0,
         "suffix": "",
         "precision": 0,
@@ -640,7 +640,23 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "metricNote": {
+          "code": "pjm_qual_new_issues",
+          "displayName": "新增质量问题数",
+          "domain": "质量",
+          "category": "基础",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "周期内新发生的质量问题总数",
+          "formula": "质量问题发生时间在[开始日期,结束日期]内的问题计数",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "质量信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "原始指标 #34"
+        },
+        "metricCode": "pjm_qual_new_issues"
       },
       "dataSource": {
         "type": "sql",
@@ -682,7 +698,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "未闭环质量问题数",
+        "title": "现存质量问题数",
         "value": 0,
         "suffix": "",
         "precision": 0,
@@ -690,7 +706,23 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "metricNote": {
+          "code": "pjm_qual_open_issues",
+          "displayName": "现存质量问题数",
+          "domain": "质量",
+          "category": "基础",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "目前状态为'未完成归零'的质量问题总数",
+          "formula": "状态='未完成归零' 的质量问题计数",
+          "scope": "全量统计,不受时间筛选限制",
+          "sourceTable": "质量信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "原始指标 #35"
+        },
+        "metricCode": "pjm_qual_open_issues"
       },
       "dataSource": {
         "type": "sql",
@@ -732,7 +764,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "质量问题闭环率",
+        "title": "质量问题归零率",
         "value": 0,
         "suffix": "%",
         "precision": 2,
@@ -740,7 +772,27 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "metricNote": {
+          "code": "pjm_qual_zero_rate",
+          "displayName": "质量问题归零率",
+          "domain": "质量",
+          "category": "归零率",
+          "unit": "%",
+          "direction": "UP",
+          "definition": "周期内新增质量问题中已完成归零的占比",
+          "formula": "已完成归零数 ÷ 新增质量问题数 × 100%",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "质量信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 60.0,
+            "critical": 50.0,
+            "rule": "<"
+          },
+          "excelRef": "二次指标 #7 pjm_qual_zero_rate"
+        },
+        "metricCode": "pjm_qual_zero_rate"
       },
       "dataSource": {
         "type": "sql",
@@ -782,7 +834,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "TOP1质量问题数",
+        "title": "TOP1 质量问题分类数量",
         "value": 0,
         "suffix": "",
         "precision": 0,
@@ -790,7 +842,23 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "metricNote": {
+          "code": "pjm_qual_top1_count",
+          "displayName": "TOP1 质量问题分类数量",
+          "domain": "质量",
+          "category": "分类",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "现存质量问题中数量最多的一个分类的问题数",
+          "formula": "MAX(各原因分类的现存问题数),含设计/工艺/管理/元器件/操作/外协外购/软件/其他",
+          "scope": "全量未归零质量问题",
+          "sourceTable": "质量信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "原始指标 #41-#48"
+        },
+        "metricCode": "pjm_qual_top1_count"
       },
       "dataSource": {
         "type": "sql",

@@ -149,7 +149,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "归零率",
+        "title": "质量问题归零率",
         "value": "68.3",
         "unit": "%",
         "precision": 1,
@@ -157,7 +157,27 @@
         "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
-        "fontSize": 36
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_qual_zero_rate",
+          "displayName": "质量问题归零率",
+          "domain": "质量",
+          "category": "归零率",
+          "unit": "%",
+          "direction": "UP",
+          "definition": "周期内新增质量问题中已完成归零的占比",
+          "formula": "已完成归零数 ÷ 新增质量问题数 × 100%",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "质量信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 60.0,
+            "critical": 50.0,
+            "rule": "<"
+          },
+          "excelRef": "二次指标 #7 pjm_qual_zero_rate"
+        },
+        "metricCode": "pjm_qual_zero_rate"
       },
       "dataSource": {
         "type": "sql",
@@ -199,7 +219,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "现存率",
+        "title": "现存质量问题比率",
         "value": "47",
         "unit": "%",
         "precision": 1,
@@ -207,7 +227,27 @@
         "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
-        "fontSize": 36
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_qual_remaining_ratio",
+          "displayName": "现存质量问题比率",
+          "domain": "质量",
+          "category": "现存率",
+          "unit": "%",
+          "direction": "DOWN",
+          "definition": "现存未归零问题相对新增问题的比率,反映问题积压情况",
+          "formula": "现存质量问题数 ÷ 新增质量问题数 × 100%",
+          "scope": "受顶部时间筛选器控制(分母);分子为全量未归零",
+          "sourceTable": "质量信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 50.0,
+            "critical": 80.0,
+            "rule": ">"
+          },
+          "excelRef": "二次指标 #8 pjm_qual_remaining_ratio"
+        },
+        "metricCode": "pjm_qual_remaining_ratio"
       },
       "dataSource": {
         "type": "sql",
@@ -249,7 +289,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "计划提交率",
+        "title": "归零计划提交率",
         "value": "80.0",
         "unit": "%",
         "precision": 1,
@@ -257,7 +297,27 @@
         "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
-        "fontSize": 36
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_qual_plan_submit_rate",
+          "displayName": "归零计划提交率",
+          "domain": "质量",
+          "category": "管理响应",
+          "unit": "%",
+          "direction": "UP",
+          "definition": "新增质量问题中已制定归零计划的占比",
+          "formula": "(新增质量问题数 − 未提交归零计划数) ÷ 新增质量问题数 × 100%",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "质量信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 80.0,
+            "critical": 60.0,
+            "rule": "<"
+          },
+          "excelRef": "二次指标 #9 pjm_qual_plan_submit_rate"
+        },
+        "metricCode": "pjm_qual_plan_submit_rate"
       },
       "dataSource": {
         "type": "sql",
@@ -299,7 +359,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "质量健康度",
+        "title": "质量健康度评分",
         "value": "72",
         "unit": "",
         "precision": 0,
@@ -307,7 +367,27 @@
         "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
-        "fontSize": 36
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_qual_health_score",
+          "displayName": "质量健康度评分",
+          "domain": "质量",
+          "category": "健康度",
+          "unit": "分",
+          "direction": "UP",
+          "definition": "综合 3 个质量子指标的加权评分,满分 100 分",
+          "formula": "归零率 × 50% + 归零计划提交率 × 30% + (100 − 现存率) × 20%",
+          "scope": "需质量三项子指标均有数据",
+          "sourceTable": "质量信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 80.0,
+            "critical": 70.0,
+            "rule": "<"
+          },
+          "excelRef": "二次指标 #11 pjm_qual_health_score"
+        },
+        "metricCode": "pjm_qual_health_score"
       },
       "dataSource": {
         "type": "sql",
@@ -436,7 +516,114 @@
         "enableSort": true,
         "enablePagination": true,
         "pageSize": 8,
-        "freezeHeader": true
+        "freezeHeader": true,
+        "columnNotes": {
+          "新增质量问题": {
+            "code": "pjm_qual_new_issues",
+            "displayName": "新增质量问题数",
+            "domain": "质量",
+            "category": "基础",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "周期内新发生的质量问题总数",
+            "formula": "质量问题发生时间在[开始日期,结束日期]内的问题计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "质量信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #34"
+          },
+          "现存质量问题": {
+            "code": "pjm_qual_open_issues",
+            "displayName": "现存质量问题数",
+            "domain": "质量",
+            "category": "基础",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "目前状态为'未完成归零'的质量问题总数",
+            "formula": "状态='未完成归零' 的质量问题计数",
+            "scope": "全量统计,不受时间筛选限制",
+            "sourceTable": "质量信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #35"
+          },
+          "已归零数": {
+            "code": "pjm_qual_zero_completed",
+            "displayName": "已完成归零数",
+            "domain": "质量",
+            "category": "基础",
+            "unit": "个",
+            "direction": "UP",
+            "definition": "周期内完成归零(含技术/管理/两者)的质量问题数",
+            "formula": "已完成技术归零 + 已完成管理归零 + 已完成技术和管理归零",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "质量信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #39"
+          },
+          "未提交归零计划": {
+            "code": "pjm_qual_no_plan",
+            "displayName": "未提交归零计划数",
+            "domain": "质量",
+            "category": "管理响应",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "周期内已发生但尚未提交归零计划的质量问题数",
+            "formula": "归零计划='无' 的质量问题计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "质量信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #40"
+          },
+          "技术归零": {
+            "code": "pjm_qual_tech_zero",
+            "displayName": "已完成技术归零数",
+            "domain": "质量",
+            "category": "归零",
+            "unit": "个",
+            "direction": "UP",
+            "definition": "周期内通过技术手段完成归零的质量问题数",
+            "formula": "状态='已完成技术归零' 的质量问题计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "质量信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #36"
+          },
+          "管理归零": {
+            "code": "pjm_qual_mgmt_zero",
+            "displayName": "已完成管理归零数",
+            "domain": "质量",
+            "category": "归零",
+            "unit": "个",
+            "direction": "UP",
+            "definition": "周期内通过管理手段完成归零的质量问题数",
+            "formula": "状态='已完成管理归零' 的质量问题计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "质量信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #37"
+          },
+          "双归零": {
+            "code": "pjm_qual_both_zero",
+            "displayName": "已完成技术和管理归零数",
+            "domain": "质量",
+            "category": "归零",
+            "unit": "个",
+            "direction": "UP",
+            "definition": "周期内同时完成技术归零和管理归零的质量问题数",
+            "formula": "状态='已完成技术和管理归零' 的质量问题计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "质量信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #38"
+          }
+        }
       },
       "dataSource": {
         "type": "sql",

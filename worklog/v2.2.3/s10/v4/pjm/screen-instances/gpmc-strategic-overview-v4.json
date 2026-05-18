@@ -652,7 +652,23 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "metricNote": {
+          "code": "pjm_project_total",
+          "displayName": "项目总数",
+          "domain": "综合",
+          "category": "基础",
+          "unit": "个",
+          "direction": "NEUTRAL",
+          "definition": "周期内有进度数据上报的不同项目数(去重)",
+          "formula": "周期内出现过的不同项目编号去重计数",
+          "scope": "进度信息汇总表中 plan_month 落在周期内的项目",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "(衍生)项目编号去重计数"
+        },
+        "metricCode": "pjm_project_total"
       },
       "actions": [],
       "dataSource": {
@@ -703,7 +719,23 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "metricNote": {
+          "code": "pjm_project_active",
+          "displayName": "进行中项目",
+          "domain": "综合",
+          "category": "基础",
+          "unit": "个",
+          "direction": "NEUTRAL",
+          "definition": "存在未完成节点的项目数",
+          "formula": "周期内未完成节点数 > 0 的项目编号去重计数",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "(衍生)有未完成的项目计数"
+        },
+        "metricCode": "pjm_project_active"
       },
       "actions": [],
       "dataSource": {
@@ -746,7 +778,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "延期项目",
+        "title": "延期项目数",
         "value": 11,
         "suffix": "",
         "precision": 0,
@@ -754,7 +786,23 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "metricNote": {
+          "code": "pjm_project_delay",
+          "displayName": "延期项目数",
+          "domain": "综合",
+          "category": "基础",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "存在超期未完成节点的项目数",
+          "formula": "周期内 (超期未完成未变更 + 超期未完成已变更) > 0 的项目编号去重计数",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "(衍生)有超期未完成的项目计数"
+        },
+        "metricCode": "pjm_project_delay"
       },
       "actions": [],
       "dataSource": {
@@ -805,7 +853,27 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "metricNote": {
+          "code": "pjm_prog_on_time_rate",
+          "displayName": "节点按时完成率",
+          "domain": "进度",
+          "category": "完成率",
+          "unit": "%",
+          "direction": "UP",
+          "definition": "已到时间节点中,按时完成的节点占比",
+          "formula": "按时完成节点数 ÷ (已到时间节点数 + 周期外完成节点数) × 100%",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 80.0,
+            "critical": 70.0,
+            "rule": "<"
+          },
+          "excelRef": "二次指标 #1 pjm_prog_on_time_rate"
+        },
+        "metricCode": "pjm_prog_on_time_rate"
       },
       "actions": [],
       "dataSource": {
@@ -848,7 +916,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "风险预警指数",
+        "title": "项目风险预警指数",
         "value": 9.4,
         "suffix": "",
         "precision": 1,
@@ -856,7 +924,27 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "metricNote": {
+          "code": "pjm_risk_warning_index",
+          "displayName": "项目风险预警指数",
+          "domain": "综合",
+          "category": "预警",
+          "unit": "点",
+          "direction": "DOWN",
+          "definition": "加权风险暴露指数,值越低风险越小",
+          "formula": "未完成里程碑数 × 3 + 高风险未完成节点数 × 2 + 超期未完成节点数 × 1",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 10.0,
+            "critical": 20.0,
+            "rule": ">"
+          },
+          "excelRef": "二次指标 #18 pjm_risk_warning_index"
+        },
+        "metricCode": "pjm_risk_warning_index"
       },
       "actions": [],
       "dataSource": {
@@ -1053,7 +1141,133 @@
         "enableSort": true,
         "enablePagination": true,
         "pageSize": 6,
-        "freezeHeader": true
+        "freezeHeader": true,
+        "columnNotes": {
+          "设计": {
+            "code": "pjm_qual_cat_design",
+            "displayName": "设计类质量问题数",
+            "domain": "质量",
+            "category": "原因分类",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "现存质量问题中归类为'设计'原因的数量",
+            "formula": "状态='未完成归零' 且 原因分类='设计' 的质量问题计数",
+            "scope": "全量未归零",
+            "sourceTable": "质量信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": {
+              "warning": 40.0,
+              "critical": null,
+              "rule": ">"
+            },
+            "excelRef": "原始指标 #41"
+          },
+          "工艺": {
+            "code": "pjm_qual_cat_process",
+            "displayName": "工艺类质量问题数",
+            "domain": "质量",
+            "category": "原因分类",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "现存质量问题中归类为'工艺'原因的数量",
+            "formula": "状态='未完成归零' 且 原因分类='工艺' 的质量问题计数",
+            "scope": "全量未归零",
+            "sourceTable": "质量信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #42"
+          },
+          "管理": {
+            "code": "pjm_qual_cat_management",
+            "displayName": "管理类质量问题数",
+            "domain": "质量",
+            "category": "原因分类",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "现存质量问题中归类为'管理'原因的数量",
+            "formula": "状态='未完成归零' 且 原因分类='管理' 的质量问题计数",
+            "scope": "全量未归零",
+            "sourceTable": "质量信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #43"
+          },
+          "元器件": {
+            "code": "pjm_qual_cat_component",
+            "displayName": "元器件类质量问题数",
+            "domain": "质量",
+            "category": "原因分类",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "现存质量问题中归类为'元器件'原因的数量",
+            "formula": "状态='未完成归零' 且 原因分类='元器件' 的质量问题计数",
+            "scope": "全量未归零",
+            "sourceTable": "质量信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #44"
+          },
+          "操作": {
+            "code": "pjm_qual_cat_operation",
+            "displayName": "操作类质量问题数",
+            "domain": "质量",
+            "category": "原因分类",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "现存质量问题中归类为'操作'原因的数量",
+            "formula": "状态='未完成归零' 且 原因分类='操作' 的质量问题计数",
+            "scope": "全量未归零",
+            "sourceTable": "质量信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #45"
+          },
+          "外协外购": {
+            "code": "pjm_qual_cat_outsource",
+            "displayName": "外协外购类质量问题数",
+            "domain": "质量",
+            "category": "原因分类",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "现存质量问题中归类为'外协外购'原因的数量",
+            "formula": "状态='未完成归零' 且 原因分类='外协外购' 的质量问题计数",
+            "scope": "全量未归零",
+            "sourceTable": "质量信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #46"
+          },
+          "软件": {
+            "code": "pjm_qual_cat_software",
+            "displayName": "软件类质量问题数",
+            "domain": "质量",
+            "category": "原因分类",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "现存质量问题中归类为'软件'原因的数量",
+            "formula": "状态='未完成归零' 且 原因分类='软件' 的质量问题计数",
+            "scope": "全量未归零",
+            "sourceTable": "质量信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #47"
+          },
+          "其他": {
+            "code": "pjm_qual_cat_other",
+            "displayName": "其他类质量问题数",
+            "domain": "质量",
+            "category": "原因分类",
+            "unit": "个",
+            "direction": "NEUTRAL",
+            "definition": "现存质量问题中归类为'其他'原因的数量",
+            "formula": "状态='未完成归零' 且 原因分类='其他' 的质量问题计数",
+            "scope": "全量未归零",
+            "sourceTable": "质量信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #48"
+          }
+        }
       },
       "actions": [],
       "dataSource": {
@@ -1156,10 +1370,30 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "综合健康度",
+        "title": "项目综合健康度",
         "value": 84.6,
         "min": 0,
-        "max": 100
+        "max": 100,
+        "metricNote": {
+          "code": "pjm_composite_health",
+          "displayName": "项目综合健康度",
+          "domain": "综合",
+          "category": "健康度",
+          "unit": "分",
+          "direction": "UP",
+          "definition": "进度/质量/技术状态三域加权综合评分,顶层健康度",
+          "formula": "进度健康度 × 40% + 质量健康度 × 30% + 技术状态健康度 × 30%",
+          "scope": "需三域子指标均有数据",
+          "sourceTable": "三域汇总",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 80.0,
+            "critical": 70.0,
+            "rule": "<"
+          },
+          "excelRef": "二次指标 #17 pjm_composite_health"
+        },
+        "metricCode": "pjm_composite_health"
       },
       "dataSource": {
         "type": "sql",
@@ -1201,7 +1435,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "进度健康分",
+        "title": "进度健康度评分",
         "value": 78,
         "suffix": "%",
         "precision": 0,
@@ -1209,7 +1443,27 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "metricNote": {
+          "code": "pjm_prog_health_score",
+          "displayName": "进度健康度评分",
+          "domain": "进度",
+          "category": "健康度",
+          "unit": "分",
+          "direction": "UP",
+          "definition": "综合 3 个进度子指标的加权评分,满分 100 分",
+          "formula": "节点按时完成率 × 40% + 里程碑按时完成率 × 30% + (100 − 节点不正常率) × 30%",
+          "scope": "需进度三项子指标均有数据;受顶部时间筛选器控制",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 80.0,
+            "critical": 70.0,
+            "rule": "<"
+          },
+          "excelRef": "二次指标 #6 pjm_prog_health_score"
+        },
+        "metricCode": "pjm_prog_health_score"
       },
       "dataSource": {
         "type": "sql",
@@ -1251,7 +1505,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "质量健康分",
+        "title": "质量健康度评分",
         "value": 76,
         "suffix": "%",
         "precision": 0,
@@ -1259,7 +1513,27 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "metricNote": {
+          "code": "pjm_qual_health_score",
+          "displayName": "质量健康度评分",
+          "domain": "质量",
+          "category": "健康度",
+          "unit": "分",
+          "direction": "UP",
+          "definition": "综合 3 个质量子指标的加权评分,满分 100 分",
+          "formula": "归零率 × 50% + 归零计划提交率 × 30% + (100 − 现存率) × 20%",
+          "scope": "需质量三项子指标均有数据",
+          "sourceTable": "质量信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 80.0,
+            "critical": 70.0,
+            "rule": "<"
+          },
+          "excelRef": "二次指标 #11 pjm_qual_health_score"
+        },
+        "metricCode": "pjm_qual_health_score"
       },
       "dataSource": {
         "type": "sql",
@@ -1301,7 +1575,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "技术状态健康分",
+        "title": "技术状态健康度评分",
         "value": 62,
         "suffix": "%",
         "precision": 0,
@@ -1309,7 +1583,27 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "metricNote": {
+          "code": "pjm_tech_health_score",
+          "displayName": "技术状态健康度评分",
+          "domain": "技术状态",
+          "category": "健康度",
+          "unit": "分",
+          "direction": "UP",
+          "definition": "综合签署率/整改率/未签署比率得出的健康度评分",
+          "formula": "签署完成率 × 40% + 整改落实率 × 40% + (100 − 未签署比率) × 20%",
+          "scope": "需技术状态三项子指标均有数据",
+          "sourceTable": "技术状态信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 80.0,
+            "critical": 70.0,
+            "rule": "<"
+          },
+          "excelRef": "二次指标 #16 pjm_tech_health_score"
+        },
+        "metricCode": "pjm_tech_health_score"
       },
       "dataSource": {
         "type": "sql",
@@ -1629,7 +1923,99 @@
         "enableSort": true,
         "enablePagination": false,
         "pageSize": 6,
-        "freezeHeader": true
+        "freezeHeader": true,
+        "columnNotes": {
+          "风险总数": {
+            "code": "pjm_risk_total",
+            "displayName": "风险总数",
+            "domain": "风险",
+            "category": "基础",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "周期内提出的风险总数(高+中+低)",
+            "formula": "风险提出时间在[开始日期,结束日期]内的风险计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "风险信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "(衍生)新增风险计数"
+          },
+          "高风险": {
+            "code": "pjm_risk_high",
+            "displayName": "高风险数",
+            "domain": "风险",
+            "category": "等级",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "风险等级为'高'的风险总数",
+            "formula": "风险等级='高' 的风险计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "风险信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "(衍生)高风险计数"
+          },
+          "中风险": {
+            "code": "pjm_risk_mid",
+            "displayName": "中风险数",
+            "domain": "风险",
+            "category": "等级",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "风险等级为'中'的风险总数",
+            "formula": "风险等级='中' 的风险计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "风险信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "(衍生)中风险计数"
+          },
+          "低风险": {
+            "code": "pjm_risk_low",
+            "displayName": "低风险数",
+            "domain": "风险",
+            "category": "等级",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "风险等级为'低'的风险总数",
+            "formula": "风险等级='低' 的风险计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "风险信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "(衍生)低风险计数"
+          },
+          "已释放": {
+            "code": "pjm_risk_released",
+            "displayName": "已释放风险数",
+            "domain": "风险",
+            "category": "状态",
+            "unit": "个",
+            "direction": "UP",
+            "definition": "目前状态为'已释放'(已闭环)的风险数",
+            "formula": "风险状态='已释放' 的风险计数",
+            "scope": "全量,截止结束时间",
+            "sourceTable": "风险信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "(衍生)已释放风险计数"
+          },
+          "未释放": {
+            "code": "pjm_risk_open",
+            "displayName": "未释放风险数",
+            "domain": "风险",
+            "category": "状态",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "目前状态为'未释放'的风险总数",
+            "formula": "风险状态='未释放' 的风险计数",
+            "scope": "全量,截止结束时间",
+            "sourceTable": "风险信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "(衍生)未释放风险计数"
+          }
+        }
       },
       "actions": [],
       "dataSource": {
@@ -1691,7 +2077,84 @@
         "enableSort": true,
         "enablePagination": true,
         "pageSize": 6,
-        "freezeHeader": true
+        "freezeHeader": true,
+        "columnNotes": {
+          "按时完成": {
+            "code": "pjm_prog_on_time_cnt",
+            "displayName": "按时完成节点数",
+            "domain": "进度",
+            "category": "完成状态",
+            "unit": "个",
+            "direction": "UP",
+            "definition": "周期内在计划时间内完成的节点数",
+            "formula": "完成情况='按时完成' 的节点计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "进度信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #6"
+          },
+          "超期完成": {
+            "code": "pjm_prog_overdue_done_cnt",
+            "displayName": "超期完成节点数",
+            "domain": "进度",
+            "category": "完成状态",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "周期内超过计划时间但已完成的节点数(含已变更/未变更)",
+            "formula": "完成情况∈('超期已完成已变更','超期已完成未变更') 的节点计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "进度信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #7"
+          },
+          "未完成": {
+            "code": "pjm_prog_incomplete_cnt",
+            "displayName": "项目本周期节点未完成总数",
+            "domain": "进度",
+            "category": "基础",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "周期内处于未完成状态的节点总数",
+            "formula": "状态为'不正常待变更'+'超期未完成未变更'+'超期未完成已变更'的节点计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "进度信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #5"
+          },
+          "正常待完成": {
+            "code": "pjm_prog_pending_normal_cnt",
+            "displayName": "正常待完成节点数",
+            "domain": "进度",
+            "category": "完成状态",
+            "unit": "个",
+            "direction": "NEUTRAL",
+            "definition": "节点计划时间未到、状态正常的节点数",
+            "formula": "完成情况='正常待完成' 的节点计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "进度信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #2"
+          },
+          "异常": {
+            "code": "pjm_prog_abnormal_cnt",
+            "displayName": "异常节点数",
+            "domain": "进度",
+            "category": "完成状态",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "处于异常状态(不正常待变更 + 超期未完成未变更)的节点数",
+            "formula": "完成情况∈('不正常待变更','超期未完成未变更') 的节点计数",
+            "scope": "受顶部时间筛选器控制,不含一般节点",
+            "sourceTable": "进度信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #12 + #13"
+          }
+        }
       },
       "actions": [],
       "dataSource": {

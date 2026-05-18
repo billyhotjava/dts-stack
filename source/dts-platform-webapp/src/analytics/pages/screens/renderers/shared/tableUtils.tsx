@@ -27,6 +27,12 @@ function resolveTextColor(candidate: string | undefined, fallback: string): stri
 export type ColumnAlign = 'left' | 'center' | 'right';
 export type ColumnFormatter = 'auto' | 'string' | 'number' | 'percent' | 'date';
 
+/**
+ * 列级指标说明 — 与组件 metricNote 同形,用于在列头渲染 ℹ️。
+ * 数据形态最终消费方为 renderers/shared/MetricNote.tsx 中的 MetricNote interface。
+ */
+export type ColumnMetricNote = Record<string, unknown>;
+
 export interface ColumnEntry {
     source: string;
     alias?: string;
@@ -35,6 +41,8 @@ export interface ColumnEntry {
     width?: number;
     wrap?: boolean;
     formatter?: ColumnFormatter;
+    /** 列级指标说明,鼠标悬浮列头时弹出。 */
+    metricNote?: ColumnMetricNote;
 }
 
 export interface SourceColumnMeta {
@@ -56,6 +64,8 @@ export interface ResolvedColumnMeta {
     baseType?: string;
     /** Whether this column contains masked/desensitized data (from backend RLS/masking policy). */
     masked?: boolean;
+    /** 列级指标说明 — 列头渲染 ℹ️ 时使用。 */
+    metricNote?: ColumnMetricNote;
 }
 
 export interface ResolvedTableData {
@@ -412,6 +422,10 @@ export function resolveBoundTableData(
     const sourceCols = config._sourceColumns as SourceColumnMeta[] | undefined;
     const columnsConfig = config.columns as ColumnEntry[] | undefined;
     const allData = (config.data as Array<Array<unknown>> | undefined) || [];
+    // columnNotes 是按列标题映射的指标说明 — 用于"SQL 自动推断列"无 columns 配置的场景。
+    const columnNotes = (config.columnNotes as Record<string, ColumnMetricNote> | undefined) || undefined;
+    const resolveColumnNote = (col: ColumnEntry | undefined, title: string): ColumnMetricNote | undefined =>
+        col?.metricNote || columnNotes?.[title] || columnNotes?.[col?.source || ''] || undefined;
 
     if (sourceCols?.length) {
         const effectiveColumns = columnsConfig
@@ -424,9 +438,10 @@ export function resolveBoundTableData(
             const sc = sourceMetaByName.get(col.source);
             const colHeaderAlign = col.headerAlign === 'left' || col.headerAlign === 'center' || col.headerAlign === 'right'
                 ? col.headerAlign : undefined;
+            const title = col.alias || sc?.displayName || col.source;
             return {
                 key: col.source,
-                title: col.alias || sc?.displayName || col.source,
+                title,
                 align: normalizeColumnAlign(col.align, defaultAlign),
                 headerAlign: colHeaderAlign ?? globalHeaderAlign,
                 width: clampColumnWidth(col.width),
@@ -434,6 +449,7 @@ export function resolveBoundTableData(
                 formatter: normalizeColumnFormatter(col.formatter),
                 baseType: sc?.baseType,
                 masked: sc?.masked === true,
+                metricNote: resolveColumnNote(col, title),
             };
         });
         const data = allData.map((row) =>
@@ -467,6 +483,7 @@ export function resolveBoundTableData(
         headerAlign: globalHeaderAlign,
         wrap: false,
         formatter: 'auto',
+        metricNote: resolveColumnNote(undefined, title),
     }));
     const data = allData.map((row) =>
         columnMeta.map((col, idx) => formatTableCell(row[idx], col.formatter)),

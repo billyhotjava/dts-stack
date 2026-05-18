@@ -632,7 +632,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "变更单总数",
+        "title": "技术状态变更单总数",
         "value": 0,
         "suffix": "",
         "precision": 0,
@@ -640,7 +640,23 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "metricNote": {
+          "code": "pjm_tech_total_changes",
+          "displayName": "技术状态变更单总数",
+          "domain": "技术状态",
+          "category": "基础",
+          "unit": "个",
+          "direction": "NEUTRAL",
+          "definition": "周期内新增的全部 I/II/III 类技术状态更改单总数",
+          "formula": "新增 I 类更改 + 新增 II 类更改 + 新增 III 类更改",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "技术状态信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "原始指标 #49+#50+#51"
+        },
+        "metricCode": "pjm_tech_total_changes"
       },
       "dataSource": {
         "type": "sql",
@@ -682,7 +698,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "未签署数",
+        "title": "技术状态变更单未完成签署(I, II, III类)",
         "value": 0,
         "suffix": "",
         "precision": 0,
@@ -690,7 +706,23 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "metricNote": {
+          "code": "pjm_tech_unsigned_total",
+          "displayName": "技术状态变更单未完成签署(I, II, III类)",
+          "domain": "技术状态",
+          "category": "签署",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "尚未完成签署的全部技术状态变更单数",
+          "formula": "完成签署='否' 的变更单计数 = I 类未签 + II 类未签 + III 类未签",
+          "scope": "全量,截止结束时间",
+          "sourceTable": "技术状态信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "原始指标 #63"
+        },
+        "metricCode": "pjm_tech_unsigned_total"
       },
       "dataSource": {
         "type": "sql",
@@ -732,7 +764,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "签署率",
+        "title": "技术状态变更单签署完成率",
         "value": 0,
         "suffix": "%",
         "precision": 2,
@@ -740,7 +772,27 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "metricNote": {
+          "code": "pjm_tech_signature_rate",
+          "displayName": "技术状态变更单签署完成率",
+          "domain": "技术状态",
+          "category": "签署率",
+          "unit": "%",
+          "direction": "UP",
+          "definition": "变更单中已完成签署的占比",
+          "formula": "已完成签署数 ÷ (已完成签署数 + 未完成签署 I+II+III) × 100%",
+          "scope": "全量,截止结束时间",
+          "sourceTable": "技术状态信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 80.0,
+            "critical": 70.0,
+            "rule": "<"
+          },
+          "excelRef": "二次指标 #12 pjm_tech_signature_rate"
+        },
+        "metricCode": "pjm_tech_signature_rate"
       },
       "dataSource": {
         "type": "sql",
@@ -782,7 +834,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "未整改数",
+        "title": "未落实整改(I, II类)",
         "value": 0,
         "suffix": "",
         "precision": 0,
@@ -790,7 +842,23 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "metricNote": {
+          "code": "pjm_tech_reform_pending_i_ii",
+          "displayName": "未落实整改(I, II类)",
+          "domain": "技术状态",
+          "category": "整改",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "I/II 类技术状态变更单中尚未落实整改的数量",
+          "formula": "更改类别∈(I, II) 且 整改落实状态='未落实整改' 的变更单计数",
+          "scope": "全量,截止结束时间",
+          "sourceTable": "技术状态信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "原始指标 #65"
+        },
+        "metricCode": "pjm_tech_reform_pending_i_ii"
       },
       "dataSource": {
         "type": "sql",
@@ -832,7 +900,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "整改完成率",
+        "title": "整改落实完成率(I, II类)",
         "value": 0,
         "suffix": "%",
         "precision": 2,
@@ -840,7 +908,27 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "metricNote": {
+          "code": "pjm_tech_reform_rate",
+          "displayName": "整改落实完成率(I, II类)",
+          "domain": "技术状态",
+          "category": "整改率",
+          "unit": "%",
+          "direction": "UP",
+          "definition": "I/II 类变更单中已落实整改的占比(III 类不涉及整改)",
+          "formula": "已落实整改(I,II类) ÷ (已落实整改 + 未落实整改) × 100%",
+          "scope": "仅 I/II 类变更单,截止结束时间",
+          "sourceTable": "技术状态信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 80.0,
+            "critical": 70.0,
+            "rule": "<"
+          },
+          "excelRef": "二次指标 #13 pjm_tech_reform_rate"
+        },
+        "metricCode": "pjm_tech_reform_rate"
       },
       "dataSource": {
         "type": "sql",

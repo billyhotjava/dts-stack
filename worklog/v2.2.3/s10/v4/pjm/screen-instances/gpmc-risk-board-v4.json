@@ -640,7 +640,23 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "metricNote": {
+          "code": "pjm_risk_total",
+          "displayName": "风险总数",
+          "domain": "风险",
+          "category": "基础",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "周期内提出的风险总数(高+中+低)",
+          "formula": "风险提出时间在[开始日期,结束日期]内的风险计数",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "(衍生)新增风险计数"
+        },
+        "metricCode": "pjm_risk_total"
       },
       "dataSource": {
         "type": "sql",
@@ -690,7 +706,23 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "metricNote": {
+          "code": "pjm_risk_high",
+          "displayName": "高风险数",
+          "domain": "风险",
+          "category": "等级",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "风险等级为'高'的风险总数",
+          "formula": "风险等级='高' 的风险计数",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "(衍生)高风险计数"
+        },
+        "metricCode": "pjm_risk_high"
       },
       "dataSource": {
         "type": "sql",
@@ -740,7 +772,23 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "metricNote": {
+          "code": "pjm_risk_mid",
+          "displayName": "中风险数",
+          "domain": "风险",
+          "category": "等级",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "风险等级为'中'的风险总数",
+          "formula": "风险等级='中' 的风险计数",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "(衍生)中风险计数"
+        },
+        "metricCode": "pjm_risk_mid"
       },
       "dataSource": {
         "type": "sql",
@@ -790,7 +838,23 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "metricNote": {
+          "code": "pjm_risk_open",
+          "displayName": "未释放风险数",
+          "domain": "风险",
+          "category": "状态",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "目前状态为'未释放'的风险总数",
+          "formula": "风险状态='未释放' 的风险计数",
+          "scope": "全量,截止结束时间",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "(衍生)未释放风险计数"
+        },
+        "metricCode": "pjm_risk_open"
       },
       "dataSource": {
         "type": "sql",
@@ -840,7 +904,27 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "metricNote": {
+          "code": "pjm_risk_release_rate",
+          "displayName": "风险释放率",
+          "domain": "风险",
+          "category": "释放率",
+          "unit": "%",
+          "direction": "UP",
+          "definition": "周期内已释放风险占总风险的比率",
+          "formula": "已释放风险数 ÷ 风险总数 × 100%",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 60.0,
+            "critical": 50.0,
+            "rule": "<"
+          },
+          "excelRef": "(衍生)释放率"
+        },
+        "metricCode": "pjm_risk_release_rate"
       },
       "dataSource": {
         "type": "sql",
