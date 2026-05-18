@@ -3,11 +3,14 @@ import {
   applyConfigAction,
   createPlan,
   getRuntime,
+  getWorkspaceStatus,
   listContainers,
   listJobEvents,
   listJobs,
   listPackages,
+  loadWorkspaceImages,
   precheckConfig,
+  recreateWorkspaceContainers,
   registerPackagePath,
   uploadPackage
 } from "./api";
@@ -21,7 +24,9 @@ import type {
   PackageRegistration,
   RuntimeStatus,
   UpgradeJob,
-  UploadResult
+  UploadResult,
+  WorkspaceOperationResult,
+  WorkspaceStatus
 } from "./types";
 
 type TabKey = "overview" | "packages" | "config" | "jobs" | "containers";
@@ -41,6 +46,8 @@ export function App() {
   const [jobs, setJobs] = useState<UpgradeJob[]>([]);
   const [events, setEvents] = useState<Record<string, JobEvent[]>>({});
   const [containers, setContainers] = useState<DockerContainersResponse | null>(null);
+  const [workspace, setWorkspace] = useState<WorkspaceStatus | null>(null);
+  const [workspaceResult, setWorkspaceResult] = useState<WorkspaceOperationResult | null>(null);
   const [serverPath, setServerPath] = useState("");
   const [selectedPackage, setSelectedPackage] = useState("");
   const [planNote, setPlanNote] = useState("dry-run plan created");
@@ -70,11 +77,12 @@ export function App() {
   async function refreshAll() {
     setError("");
     try {
-      const [runtimeResult, packagesResult, jobsResult, containersResult] = await Promise.all([getRuntime(), listPackages(), listJobs(), listContainers()]);
+      const [runtimeResult, packagesResult, jobsResult, containersResult, workspaceResult] = await Promise.all([getRuntime(), listPackages(), listJobs(), listContainers(), getWorkspaceStatus()]);
       setRuntime(runtimeResult);
       setPackages(packagesResult);
       setJobs(jobsResult);
       setContainers(containersResult);
+      setWorkspace(workspaceResult);
     } catch (caught) {
       setError(toErrorMessage(caught));
     }
@@ -180,6 +188,33 @@ export function App() {
     }
   }
 
+  async function onLoadWorkspaceImages() {
+    setBusy(true);
+    setError("");
+    try {
+      setWorkspaceResult(await loadWorkspaceImages());
+      setWorkspace(await getWorkspaceStatus());
+      setContainers(await listContainers());
+    } catch (caught) {
+      setError(toErrorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onRecreateWorkspaceContainers() {
+    setBusy(true);
+    setError("");
+    try {
+      setWorkspaceResult(await recreateWorkspaceContainers());
+      setContainers(await listContainers());
+    } catch (caught) {
+      setError(toErrorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="shell">
       <header className="topbar">
@@ -203,7 +238,9 @@ export function App() {
       {error ? <div className="alert">{error}</div> : null}
 
       <main>
-        {activeTab === "overview" ? <Overview runtime={runtime} packages={packages} jobs={jobs} /> : null}
+        {activeTab === "overview" ? (
+          <Overview runtime={runtime} packages={packages} jobs={jobs} workspace={workspace} workspaceResult={workspaceResult} busy={busy} onLoadImages={onLoadWorkspaceImages} onRecreateContainers={onRecreateWorkspaceContainers} />
+        ) : null}
         {activeTab === "packages" ? (
           <PackagesView
             packages={packages}
@@ -246,7 +283,16 @@ export function App() {
   );
 }
 
-function Overview(props: { runtime: RuntimeStatus | null; packages: PackageRegistration[]; jobs: UpgradeJob[] }) {
+function Overview(props: {
+  runtime: RuntimeStatus | null;
+  packages: PackageRegistration[];
+  jobs: UpgradeJob[];
+  workspace: WorkspaceStatus | null;
+  workspaceResult: WorkspaceOperationResult | null;
+  busy: boolean;
+  onLoadImages: () => void;
+  onRecreateContainers: () => void;
+}) {
   const runtime = props.runtime;
   return (
     <section className="grid two">
@@ -274,7 +320,41 @@ function Overview(props: { runtime: RuntimeStatus | null; packages: PackageRegis
           <Stat label="计划任务" value={String(props.jobs.length)} />
         </div>
       </div>
+      <div className="panel wide">
+        <h2>升级工作区</h2>
+        <dl className="facts">
+          <Fact label="根目录" value={props.workspace?.packageRoot || "-"} state={props.workspace?.packageRootExists ? "ok" : "bad"} />
+          <Fact label="images" value={props.workspace?.imagesDir || "-"} state={props.workspace?.imagesDirExists ? "ok" : "bad"} />
+          <Fact label="dts-stack" value={props.workspace?.stackDir || "-"} state={props.workspace?.stackDirExists ? "ok" : "bad"} />
+          <Fact label="misc" value={props.workspace?.miscDir || "-"} state={props.workspace?.miscDirExists ? "ok" : "bad"} />
+        </dl>
+        <div className="runtimeLine">
+          <span className="badge neutral">镜像 tar {props.workspace?.images.length || 0}</span>
+          <button type="button" disabled={props.busy || !props.workspace?.images.length} onClick={props.onLoadImages}>
+            加载镜像
+          </button>
+          <button className="secondary" type="button" disabled={props.busy || !runtime?.composeAvailable} onClick={props.onRecreateContainers}>
+            重建容器
+          </button>
+        </div>
+        {props.workspaceResult ? <OperationResult result={props.workspaceResult} /> : null}
+      </div>
     </section>
+  );
+}
+
+function OperationResult(props: { result: WorkspaceOperationResult }) {
+  return (
+    <div className={props.result.success ? "notice" : "alert inline"}>
+      <strong>{props.result.message}</strong>
+      {props.result.commands.map(command => (
+        <div key={command.command.join(" ")} className="commandLine">
+          <span className={command.success ? "ok" : "bad"}>{command.success ? "OK" : "FAIL"}</span>
+          <code>{command.command.join(" ")}</code>
+          {command.message ? <em>{command.message}</em> : null}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -297,9 +377,9 @@ function PackagesView(props: {
   return (
     <section className="stack">
       <div className="panel">
-        <h2>登记升级包</h2>
+        <h2>登记升级工作区</h2>
         <form className="formRow" onSubmit={props.onRegisterPath}>
-          <input value={props.serverPath} onChange={event => props.onServerPathChange(event.target.value)} placeholder="/var/lib/dts-opmanager/packages/dts-2.2.4-arm64" />
+          <input value={props.serverPath} onChange={event => props.onServerPathChange(event.target.value)} placeholder="/var/lib/dts-opmanager/packages" />
           <button type="submit" disabled={props.busy || !props.serverPath.trim()}>
             登记
           </button>
@@ -316,7 +396,7 @@ function PackagesView(props: {
           <select value={props.selectedPackage} onChange={event => props.onSelectedPackageChange(event.target.value)}>
             {props.validPackages.map(item => (
               <option key={item.id} value={item.id}>
-                {item.validation.packageId} / {item.validation.version}
+                {item.validation.packageId || item.id} / {item.validation.version || "未声明版本"}
               </option>
             ))}
           </select>
@@ -329,7 +409,7 @@ function PackagesView(props: {
           <button className="secondary" type="button" disabled={props.busy || !props.selectedPackage} onClick={() => props.onConfigPrecheck()}>
             配置预检
           </button>
-          <span>生成升级计划前先处理 .env、compose 和 MDM 配置差异。</span>
+          <span>工作区固定使用 images、dts-stack、misc；配置预检对比 dts-stack 与现场目录。</span>
         </div>
       </div>
 
@@ -346,7 +426,7 @@ function PackageTable(props: { packages: PackageRegistration[] }) {
         <table>
           <thead>
             <tr>
-              <th>包</th>
+              <th>工作区</th>
               <th>版本</th>
               <th>架构</th>
               <th>状态</th>
@@ -394,11 +474,12 @@ function ConfigPrecheckView(props: {
           <select value={props.selectedPackage} onChange={event => props.onSelectedPackageChange(event.target.value)}>
             {props.packages.map(item => (
               <option key={item.id} value={item.id}>
-                {item.validation.packageId} / {item.validation.version}
+                {item.validation.packageId || item.id} / {item.validation.version || "未声明版本"}
               </option>
             ))}
           </select>
           <input value={props.precheck?.targetStackDir || ""} readOnly placeholder="目标 DTS 目录" />
+          <input value={props.precheck?.packageStackDir || ""} readOnly placeholder="工作区 dts-stack 目录" />
           <button type="submit" disabled={props.busy || !props.selectedPackage}>
             预检
           </button>

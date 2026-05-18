@@ -62,25 +62,25 @@
   {
     "code": "sys.nav.portal.metricsWorkbench",
     "title": "指标工作台",
-    "route": "/metrics/center",
+    "route": "/bi-apps/metrics/center",
     "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
   },
   {
     "code": "sys.nav.portal.metricsDictionary",
     "title": "指标资产",
-    "route": "/metrics/dictionary",
+    "route": "/bi-apps/metrics/assets",
     "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
   },
   {
     "code": "sys.nav.portal.metricsSemantic",
     "title": "语义建模",
-    "route": "/metrics/semantic",
+    "route": "/bi-apps/metrics/semantic",
     "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
   },
   {
     "code": "sys.nav.portal.metricsPublish",
     "title": "发布与运行",
-    "route": "/metrics/semantic/publish",
+    "route": "/bi-apps/metrics/publish",
     "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
   },
   {
@@ -175,8 +175,8 @@
   },
   {
     "code": "sys.nav.portal.dataPortalDetail",
-    "title": "资产详情",
-    "route": "/catalog/asset-detail",
+    "title": "资产台账",
+    "route": "/catalog/assets?view=table",
     "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
   },
   {

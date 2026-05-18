@@ -48,6 +48,43 @@ class UpgradePackageServiceTest {
     }
 
     @Test
+    void validatesOpmanagerWorkspaceWithoutManifest() throws Exception {
+        Path packageRoot = tempDir.resolve("packages");
+        Files.createDirectories(packageRoot.resolve("images"));
+        Files.createDirectories(packageRoot.resolve("dts-stack"));
+        Files.createDirectories(packageRoot.resolve("misc"));
+        Files.writeString(packageRoot.resolve("images/dts-admin.tar"), "fake image tar");
+        Files.writeString(packageRoot.resolve("dts-stack/docker-compose-app.yml"), "services: {}\n");
+
+        UpgradePackageService service = newService(packageRoot);
+
+        PackageRegistration registration = service.registerServerPath(packageRoot);
+
+        assertThat(registration.validation().valid()).isTrue();
+        assertThat(registration.validation().packageId()).isEqualTo("packages");
+        assertThat(registration.validation().product()).isEqualTo("dts-stack");
+        assertThat(registration.validation().messages()).isEmpty();
+        assertThat(Files.exists(packageRoot.resolve("registry"))).isFalse();
+        assertThat(Files.exists(packageRoot.resolve("uploads"))).isFalse();
+    }
+
+    @Test
+    void rejectsOpmanagerWorkspaceWithUnexpectedTopLevelDirectory() throws Exception {
+        Path packageRoot = tempDir.resolve("packages");
+        Files.createDirectories(packageRoot.resolve("images"));
+        Files.createDirectories(packageRoot.resolve("dts-stack"));
+        Files.createDirectories(packageRoot.resolve("misc"));
+        Files.createDirectories(packageRoot.resolve("source"));
+
+        UpgradePackageService service = newService(packageRoot);
+
+        PackageRegistration registration = service.registerServerPath(packageRoot);
+
+        assertThat(registration.validation().valid()).isFalse();
+        assertThat(registration.validation().messages()).anyMatch(message -> message.contains("unexpected top-level directory"));
+    }
+
+    @Test
     void rejectsManifestPathTraversal() throws Exception {
         Path packageRoot = tempDir.resolve("incoming/bad-package");
         Files.createDirectories(packageRoot);

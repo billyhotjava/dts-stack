@@ -7,7 +7,9 @@ import type {
   PackageRegistration,
   RuntimeStatus,
   UpgradeJob,
-  UploadResult
+  UploadResult,
+  WorkspaceOperationResult,
+  WorkspaceStatus
 } from "./types";
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
@@ -82,5 +84,21 @@ export function applyConfigAction(packageRegistrationId: string, path: string, a
   return request<ConfigApplyResult>("/api/opmanager/config/apply", {
     method: "POST",
     body: JSON.stringify({ packageRegistrationId, path, action })
+  });
+}
+
+export function getWorkspaceStatus(): Promise<WorkspaceStatus> {
+  return request<WorkspaceStatus>("/api/opmanager/workspace");
+}
+
+export function loadWorkspaceImages(): Promise<WorkspaceOperationResult> {
+  return request<WorkspaceOperationResult>("/api/opmanager/workspace/load-images", {
+    method: "POST"
+  });
+}
+
+export function recreateWorkspaceContainers(): Promise<WorkspaceOperationResult> {
+  return request<WorkspaceOperationResult>("/api/opmanager/workspace/recreate-containers", {
+    method: "POST"
   });
 }

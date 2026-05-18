@@ -65,4 +65,5 @@ test("findBestMenuMatch matches nested BI routes using canonical joined path", (
 test("metrics service paths are treated as reverse-proxy external navigation", () => {
 	assert.equal(isExternalPath("/metrics/center"), true);
 	assert.equal(isExternalPath("/metrics/semantic/publish"), true);
+	assert.equal(isExternalPath("/bi-apps/metrics/center"), false);
 });

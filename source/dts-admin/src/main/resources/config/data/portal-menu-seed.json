@@ -20,7 +20,7 @@
               "icon": "solar:chart-square-bold-duotone",
               "titleKey": "sys.nav.portal.metricsWorkbench",
               "title": "指标工作台",
-              "externalLink": "/metrics/center"
+              "externalLink": "/bi-apps/metrics/center"
             },
             {
               "key": "metric-assets",
@@ -28,7 +28,7 @@
               "icon": "solar:clipboard-list-bold-duotone",
               "titleKey": "sys.nav.portal.metricsDictionary",
               "title": "指标资产",
-              "externalLink": "/metrics/dictionary"
+              "externalLink": "/bi-apps/metrics/assets"
             },
             {
               "key": "semantic-modeling",
@@ -36,7 +36,7 @@
               "icon": "solar:diagram-up-bold-duotone",
               "titleKey": "sys.nav.portal.metricsSemantic",
               "title": "语义建模",
-              "externalLink": "/metrics/semantic"
+              "externalLink": "/bi-apps/metrics/semantic"
             },
             {
               "key": "metric-publish",
@@ -44,7 +44,7 @@
               "icon": "solar:rocket-bold-duotone",
               "titleKey": "sys.nav.portal.metricsPublish",
               "title": "发布与运行",
-              "externalLink": "/metrics/semantic/publish"
+              "externalLink": "/bi-apps/metrics/publish"
             }
           ]
         },
@@ -346,8 +346,8 @@
           "path": "detail",
           "icon": "solar:document-text-bold-duotone",
           "titleKey": "sys.nav.portal.dataPortalDetail",
-          "title": "资产详情",
-          "externalLink": "/catalog/asset-detail"
+          "title": "资产台账",
+          "externalLink": "/catalog/assets?view=table"
         },
         {
           "key": "lineage",

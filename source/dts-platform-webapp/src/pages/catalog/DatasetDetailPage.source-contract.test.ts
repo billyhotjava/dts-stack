@@ -26,6 +26,20 @@ test("dataset detail page keeps asset identity separate from business descriptio
 test("dataset detail page can deep-link to remediation tabs", () => {
 	assert.match(SOURCE, /useSearchParams/);
 	assert.match(SOURCE, /DETAIL_TAB_KEYS/);
+	assert.match(SOURCE, /DETAIL_TAB_ALIASES/);
+	assert.match(SOURCE, /lineage-impact/);
+	assert.match(SOURCE, /schema-contract/);
+	assert.match(SOURCE, /quality-sla/);
 	assert.match(SOURCE, /activeKey=\{activeTab\}/);
-	assert.match(SOURCE, /onChange=\{setActiveTab\}/);
+	assert.match(SOURCE, /setSearchParams\(\{ tab: next \}\)/);
+});
+
+test("dataset detail page exposes enterprise asset workbench tabs", () => {
+	assert.match(SOURCE, /label: "字段契约"/);
+	assert.match(SOURCE, /label: "治理责任"/);
+	assert.match(SOURCE, /label: "质量与SLA"/);
+	assert.match(SOURCE, /label: "血缘与影响"/);
+	assert.match(SOURCE, /DatasetSchemaContractTab/);
+	assert.match(SOURCE, /DatasetQualitySlaTab/);
+	assert.match(SOURCE, /DatasetLineageImpactTab/);
 });

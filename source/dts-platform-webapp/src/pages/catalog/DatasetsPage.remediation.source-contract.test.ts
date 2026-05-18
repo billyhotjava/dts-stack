@@ -19,3 +19,14 @@ test("remediation actions route to detail tabs and refresh lineage evidence", ()
 	assert.match(SOURCE, /\/catalog\/datasets\/\$\{row\.id\}\?tab=lineage/);
 	assert.match(SOURCE, /loadGovernanceSignals/);
 });
+
+test("asset map supports both visual cards and operational ledger table", () => {
+	assert.match(SOURCE, /DATASET_VIEW_MODE_STORAGE_KEY/);
+	assert.match(SOURCE, /new URLSearchParams\(window\.location\.search\)\.get\("view"\) === "table"/);
+	assert.match(SOURCE, /Segmented/);
+	assert.match(SOURCE, /renderAssetTable/);
+	assert.match(SOURCE, /label: "台账"/);
+	assert.match(SOURCE, /title: "治理状态"/);
+	assert.match(SOURCE, /tab=lineage-impact/);
+	assert.doesNotMatch(SOURCE, /router\.push\("\/catalog\/asset-detail"\)/);
+});

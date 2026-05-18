@@ -34,6 +34,10 @@
 - [x] 前端 build 通过：`pnpm build` from `source/dts-platform-webapp`。
 - [x] 后端编译通过：`./mvnw -q -pl dts-platform -DskipTests compile` from `source`。
 - [x] 数据产品创建、编辑、删除和成员显示均可操作；成员资产、核心指标、密级、SLA、生命周期、可见性和消费入口已进入表单与卡片展示。
+- [x] 产品卡片已增加发布就绪/待补齐判断、成员资产预览、核心指标预览。
+- [x] 已增加只读“数据产品合同”视图，用户无需进入编辑态即可查看成员资产、核心指标、密级、SLA 和消费入口。
+- [x] 2026-05-18 复核通过：`source/dts-platform-webapp/node_modules/.bin/tsx --test source/dts-platform-webapp/src/pages/catalog/DataProductsPage.source-contract.test.ts`。
+- [x] 2026-05-18 复核通过：`pnpm exec tsc --noEmit` from `source/dts-platform-webapp`。
 
 ## 完成标准
 

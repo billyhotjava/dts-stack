@@ -13,9 +13,12 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Stream;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -23,6 +26,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class UpgradePackageService {
 
     private static final DateTimeFormatter ID_TIME = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS").withZone(ZoneOffset.UTC);
+    private static final Set<String> WORKSPACE_DIRS = Set.of("images", "dts-stack", "misc");
 
     private final OpManagerProperties properties;
     private final ObjectMapper objectMapper;
@@ -96,17 +100,27 @@ public class UpgradePackageService {
         }
     }
 
+    public Path resolveStackRoot(PackageRegistration registration) {
+        Path packageRoot = Path.of(registration.sourcePath()).toAbsolutePath().normalize();
+        Path stackRoot = packageRoot.resolve("dts-stack").normalize();
+        return Files.isDirectory(stackRoot) && stackRoot.startsWith(packageRoot) ? stackRoot : packageRoot;
+    }
+
     private PackageValidationResult validateDirectoryPackage(Path packageRoot) {
-        List<String> messages = new ArrayList<>();
         if (!Files.isDirectory(packageRoot)) {
             return new PackageValidationResult(false, null, null, null, null, packageRoot.toString(), List.of("package path is not a directory"));
         }
 
         Path manifestPath = packageRoot.resolve("manifest.json");
         if (!Files.isRegularFile(manifestPath)) {
-            return new PackageValidationResult(false, null, null, null, null, packageRoot.toString(), List.of("manifest.json is missing"));
+            return validateOpmanagerWorkspace(packageRoot);
         }
 
+        return validateManifestPackage(packageRoot, manifestPath);
+    }
+
+    private PackageValidationResult validateManifestPackage(Path packageRoot, Path manifestPath) {
+        List<String> messages = new ArrayList<>();
         PackageManifest manifest;
         try {
             manifest = objectMapper.readValue(manifestPath.toFile(), PackageManifest.class);
@@ -130,6 +144,41 @@ public class UpgradePackageService {
             packageRoot.toString(),
             List.copyOf(messages)
         );
+    }
+
+    private PackageValidationResult validateOpmanagerWorkspace(Path packageRoot) {
+        LinkedHashSet<String> messages = new LinkedHashSet<>();
+        validateWorkspaceTopLevel(packageRoot, messages);
+        for (String requiredDir : WORKSPACE_DIRS) {
+            Path dir = packageRoot.resolve(requiredDir).normalize();
+            if (!Files.isDirectory(dir) || !dir.startsWith(packageRoot)) {
+                messages.add(requiredDir + " directory is missing");
+            }
+        }
+        return new PackageValidationResult(
+            messages.isEmpty(),
+            packageRoot.getFileName().toString(),
+            "dts-stack",
+            null,
+            null,
+            packageRoot.toString(),
+            List.copyOf(messages)
+        );
+    }
+
+    private void validateWorkspaceTopLevel(Path packageRoot, Set<String> messages) {
+        try (Stream<Path> stream = Files.list(packageRoot)) {
+            stream.forEach(
+                path -> {
+                    String name = path.getFileName().toString();
+                    if (!WORKSPACE_DIRS.contains(name)) {
+                        messages.add("unexpected top-level directory or file: " + name);
+                    }
+                }
+            );
+        } catch (IOException e) {
+            messages.add("cannot read package workspace");
+        }
     }
 
     private void validateRequired(PackageManifest manifest, List<String> messages) {

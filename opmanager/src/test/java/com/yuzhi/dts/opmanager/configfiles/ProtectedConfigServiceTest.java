@@ -20,14 +20,15 @@ class ProtectedConfigServiceTest {
     void precheckFindsProtectedConfigDifferences() throws Exception {
         TestContext context = newContext();
         Files.writeString(context.targetDir().resolve(".env"), "BASE_DOMAIN=site.local\nDB_PASSWORD=local-secret\n");
-        Files.writeString(context.packageDir().resolve(".env"), "BASE_DOMAIN=package.local\nDB_PASSWORD=package-secret\nNEW_FLAG=true\n");
+        Files.writeString(context.packageStackDir().resolve(".env"), "BASE_DOMAIN=package.local\nDB_PASSWORD=package-secret\nNEW_FLAG=true\n");
         Files.writeString(context.targetDir().resolve("docker-compose-app.yml"), "services:\n  app:\n    image: old\n");
-        Files.writeString(context.packageDir().resolve("docker-compose-app.yml"), "services:\n  app:\n    image: new\n");
+        Files.writeString(context.packageStackDir().resolve("docker-compose-app.yml"), "services:\n  app:\n    image: new\n");
         registerPackage(context);
 
         ConfigPrecheckResponse response = context.service().precheck(context.registrationId());
 
         assertThat(response.files()).extracting(ConfigFileReview::path).contains(".env", "docker-compose-app.yml");
+        assertThat(response.packageStackDir()).isEqualTo(context.packageStackDir().toAbsolutePath().normalize().toString());
         ConfigFileReview env = response.files().stream().filter(file -> file.path().equals(".env")).findFirst().orElseThrow();
         assertThat(env.status()).isEqualTo(ConfigFileStatus.MODIFIED);
         assertThat(env.risk()).isEqualTo(ConfigRisk.HIGH);
@@ -38,7 +39,7 @@ class ProtectedConfigServiceTest {
     void mergeEnvAddsOnlyMissingPackageKeysAndKeepsLocalValues() throws Exception {
         TestContext context = newContext();
         Files.writeString(context.targetDir().resolve(".env"), "BASE_DOMAIN=site.local\nDB_PASSWORD=local-secret\n");
-        Files.writeString(context.packageDir().resolve(".env"), "BASE_DOMAIN=package.local\nDB_PASSWORD=package-secret\nNEW_FLAG=true\n");
+        Files.writeString(context.packageStackDir().resolve(".env"), "BASE_DOMAIN=package.local\nDB_PASSWORD=package-secret\nNEW_FLAG=true\n");
         registerPackage(context);
 
         ConfigApplyResult result = context.service().apply(context.registrationId(), ".env", ConfigApplyAction.MERGE_ENV_ADD_KEYS);
@@ -53,7 +54,7 @@ class ProtectedConfigServiceTest {
     void packageCopyDoesNotOverwriteProtectedComposeFile() throws Exception {
         TestContext context = newContext();
         Files.writeString(context.targetDir().resolve("docker-compose-app.yml"), "services:\n  app:\n    image: old\n");
-        Files.writeString(context.packageDir().resolve("docker-compose-app.yml"), "services:\n  app:\n    image: new\n");
+        Files.writeString(context.packageStackDir().resolve("docker-compose-app.yml"), "services:\n  app:\n    image: new\n");
         registerPackage(context);
 
         ConfigApplyResult result = context.service().apply(context.registrationId(), "docker-compose-app.yml", ConfigApplyAction.WRITE_PACKAGE_COPY);
@@ -67,8 +68,16 @@ class ProtectedConfigServiceTest {
     private TestContext newContext() throws Exception {
         Path targetDir = tempDir.resolve("target");
         Path packageRoot = tempDir.resolve("packages/package-1");
+        Path packageStackDir = packageRoot.resolve("dts-stack");
         Files.createDirectories(targetDir);
-        Files.createDirectories(packageRoot);
+        Files.createDirectories(packageRoot.resolve("images"));
+        Files.createDirectories(packageStackDir);
+        Files.createDirectories(packageRoot.resolve("misc"));
+        Files.writeString(packageRoot.resolve("images/dts-admin.tar"), "fake image tar");
+        Files.writeString(
+            packageStackDir.resolve("imgversion.conf"),
+            "IMAGE_DTS_ADMIN=dts-admin:2.2.4\n"
+        );
         Files.writeString(
             packageRoot.resolve("manifest.json"),
             """
@@ -78,7 +87,9 @@ class ProtectedConfigServiceTest {
               "product": "dts-stack",
               "version": "2.2.4",
               "targetArch": "arm64",
-              "files": []
+              "files": [
+                { "path": "dts-stack/imgversion.conf" }
+              ]
             }
             """
         );
@@ -89,7 +100,7 @@ class ProtectedConfigServiceTest {
         ObjectMapper objectMapper = new ObjectMapper();
         UpgradePackageService packageService = new UpgradePackageService(properties, objectMapper);
         ProtectedConfigService service = new ProtectedConfigService(properties, packageService);
-        return new TestContext(targetDir, packageRoot, packageService, service);
+        return new TestContext(targetDir, packageRoot, packageStackDir, packageService, service);
     }
 
     private void registerPackage(TestContext context) {
@@ -99,13 +110,15 @@ class ProtectedConfigServiceTest {
     private static final class TestContext {
         private final Path targetDir;
         private final Path packageDir;
+        private final Path packageStackDir;
         private final UpgradePackageService packageService;
         private final ProtectedConfigService service;
         private String registrationId;
 
-        private TestContext(Path targetDir, Path packageDir, UpgradePackageService packageService, ProtectedConfigService service) {
+        private TestContext(Path targetDir, Path packageDir, Path packageStackDir, UpgradePackageService packageService, ProtectedConfigService service) {
             this.targetDir = targetDir;
             this.packageDir = packageDir;
+            this.packageStackDir = packageStackDir;
             this.packageService = packageService;
             this.service = service;
         }
@@ -116,6 +129,10 @@ class ProtectedConfigServiceTest {
 
         Path packageDir() {
             return packageDir;
+        }
+
+        Path packageStackDir() {
+            return packageStackDir;
         }
 
         UpgradePackageService packageService() {

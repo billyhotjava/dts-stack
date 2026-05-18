@@ -141,6 +141,10 @@ th {
   margin-bottom: 16px;
 }
 
+.alert.inline {
+  margin: 12px 0 0;
+}
+
 .grid {
   display: grid;
   gap: 16px;
@@ -164,6 +168,10 @@ th {
   border-radius: 8px;
   background: #fff;
   padding: 18px;
+}
+
+.panel.wide {
+  grid-column: 1 / -1;
 }
 
 .panel h2 {
@@ -222,12 +230,12 @@ th {
 
 .formRow {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) minmax(180px, 0.4fr) auto;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 10px;
 }
 
-.formRow input:first-child:only-child {
-  grid-column: span 2;
+.formRow button {
+  justify-self: start;
 }
 
 .uploadLine,
@@ -325,6 +333,25 @@ th {
   background: #effaf4;
   color: #19613f;
   padding: 10px 12px;
+  overflow-wrap: anywhere;
+}
+
+.commandLine {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 8px 10px;
+  align-items: start;
+  margin-top: 8px;
+}
+
+.commandLine code {
+  overflow-wrap: anywhere;
+}
+
+.commandLine em {
+  grid-column: 2;
+  color: #5d6b7c;
+  font-style: normal;
   overflow-wrap: anywhere;
 }
 

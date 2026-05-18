@@ -1,0 +1,96 @@
+package com.yuzhi.dts.opmanager.workspace;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.yuzhi.dts.opmanager.config.OpManagerProperties;
+import com.yuzhi.dts.opmanager.runtime.CommandResult;
+import com.yuzhi.dts.opmanager.runtime.CommandRunner;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+class WorkspaceServiceTest {
+
+    @TempDir
+    Path tempDir;
+
+    @Test
+    void layoutListsFixedWorkspaceDirectoriesAndImageTars() throws Exception {
+        TestContext context = newContext();
+        Files.writeString(context.packageRoot().resolve("images/dts-admin.tar"), "admin");
+        Files.writeString(context.packageRoot().resolve("images/readme.txt"), "ignored");
+
+        WorkspaceStatus status = context.service().status();
+
+        assertThat(status.packageRoot()).isEqualTo(context.packageRoot().toString());
+        assertThat(status.imagesDirExists()).isTrue();
+        assertThat(status.stackDirExists()).isTrue();
+        assertThat(status.miscDirExists()).isTrue();
+        assertThat(status.images()).extracting(WorkspaceImage::fileName).containsExactly("dts-admin.tar");
+    }
+
+    @Test
+    void loadImagesRunsDockerLoadForEachTar() throws Exception {
+        TestContext context = newContext();
+        Files.writeString(context.packageRoot().resolve("images/dts-admin.tar"), "admin");
+        Files.writeString(context.packageRoot().resolve("images/dts-platform.tar"), "platform");
+
+        WorkspaceOperationResult result = context.service().loadImages();
+
+        assertThat(result.success()).isTrue();
+        assertThat(context.runner().commands()).containsExactly(
+            List.of("docker", "load", "-i", context.packageRoot().resolve("images/dts-admin.tar").toString()),
+            List.of("docker", "load", "-i", context.packageRoot().resolve("images/dts-platform.tar").toString())
+        );
+    }
+
+    @Test
+    void recreateContainersUsesTargetComposeAndEnvFile() throws Exception {
+        TestContext context = newContext();
+        Files.writeString(context.targetStack().resolve(".env"), "BASE_DOMAIN=site.local\n");
+        Files.writeString(context.targetStack().resolve("docker-compose-app.yml"), "services: {}\n");
+
+        WorkspaceOperationResult result = context.service().recreateContainers();
+
+        assertThat(result.success()).isTrue();
+        assertThat(context.runner().commands()).containsExactly(
+            List.of("docker", "compose", "version", "--short"),
+            List.of("docker", "compose", "--env-file", context.targetStack().resolve(".env").toString(), "-f", context.targetStack().resolve("docker-compose-app.yml").toString(), "up", "-d", "--force-recreate")
+        );
+    }
+
+    private TestContext newContext() throws Exception {
+        Path packageRoot = tempDir.resolve("packages");
+        Path targetStack = tempDir.resolve("target-stack");
+        Files.createDirectories(packageRoot.resolve("images"));
+        Files.createDirectories(packageRoot.resolve("dts-stack"));
+        Files.createDirectories(packageRoot.resolve("misc"));
+        Files.createDirectories(targetStack);
+        OpManagerProperties properties = new OpManagerProperties();
+        properties.setPackageRoots(List.of(packageRoot));
+        properties.setTargetStackDir(targetStack);
+        properties.setDockerEnabled(true);
+        RecordingRunner runner = new RecordingRunner();
+        return new TestContext(packageRoot, targetStack, runner, new WorkspaceService(properties, runner));
+    }
+
+    private record TestContext(Path packageRoot, Path targetStack, RecordingRunner runner, WorkspaceService service) {}
+
+    private static final class RecordingRunner implements CommandRunner {
+        private final List<List<String>> commands = new ArrayList<>();
+
+        @Override
+        public CommandResult run(List<String> command, Duration timeout) {
+            commands.add(command);
+            return new CommandResult(command, 0, "ok", "", false, Duration.ofMillis(1));
+        }
+
+        List<List<String>> commands() {
+            return commands;
+        }
+    }
+}

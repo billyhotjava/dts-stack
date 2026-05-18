@@ -1,7 +1,7 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense } from "react";
 import { useLocation, type RouteObject } from "react-router";
 import { LineLoading } from "@/components/loading";
-import { metricsServiceHrefFromPlatformLocation } from "./metricsServiceRoutes";
+import { metricsServiceEmbeddedHrefFromPlatformLocation } from "./metricsServiceRoutes";
 
 // ── Platform pages ──
 const TransformPage = lazy(() => import("@/pages/explore/etl/TransformPage"));
@@ -53,15 +53,23 @@ const S = ({ children }: { children: React.ReactNode }) => (
 	<Suspense fallback={<LineLoading />}>{children}</Suspense>
 );
 
-const MetricsServiceRedirect = () => {
+const MetricsServiceFrame = () => {
 	const location = useLocation();
+	const target = metricsServiceEmbeddedHrefFromPlatformLocation(location.pathname, location.search, location.hash);
 
-	useEffect(() => {
-		const target = metricsServiceHrefFromPlatformLocation(location.pathname, location.search, location.hash);
-		window.location.replace(target);
-	}, [location.hash, location.pathname, location.search]);
-
-	return <LineLoading />;
+	return (
+		<iframe
+			src={target}
+			title="指标与语义中心"
+			style={{
+				width: "100%",
+				minHeight: "calc(100vh - 132px)",
+				border: 0,
+				borderRadius: 8,
+				background: "transparent",
+			}}
+		/>
+	);
 };
 
 export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
@@ -85,17 +93,17 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{ path: "catalog/lineage/columns", element: <S><LineagePage section="columns" /></S> },
 	{ path: "catalog/lineage/import", element: <S><LineagePage section="import" /></S> },
 	{ path: "catalog/lineage/diff", element: <S><LineagePage section="diff" /></S> },
-	{ path: "bi-apps/metrics", element: <MetricsServiceRedirect /> },
-	{ path: "bi-apps/metrics/*", element: <MetricsServiceRedirect /> },
+	{ path: "bi-apps/metrics", element: <MetricsServiceFrame /> },
+	{ path: "bi-apps/metrics/*", element: <MetricsServiceFrame /> },
 	{ path: "ops/events", element: <S><PlatformEventObservabilityPage /></S> },
 	{ path: "platform/events", element: <S><PlatformEventObservabilityPage /></S> },
 	{ path: "ops/audit-evidence", element: <S><AuditEvidencePage /></S> },
 	{ path: "platform/audit-evidence", element: <S><AuditEvidencePage /></S> },
 	{ path: "ops/release-governance", element: <S><ReleaseGovernancePage /></S> },
 	{ path: "platform/release-governance", element: <S><ReleaseGovernancePage /></S> },
-	{ path: "modeling/semantic-center", element: <MetricsServiceRedirect /> },
-	{ path: "modeling/semantic-center/*", element: <MetricsServiceRedirect /> },
-	{ path: "bi/semantic-modeling", element: <MetricsServiceRedirect /> },
+	{ path: "modeling/semantic-center", element: <MetricsServiceFrame /> },
+	{ path: "modeling/semantic-center/*", element: <MetricsServiceFrame /> },
+	{ path: "bi/semantic-modeling", element: <MetricsServiceFrame /> },
 
 	// ── Analytics (all routes statically registered — no dependency on menu API) ──
 	{ path: "bi", element: <S><AnalyticsHomePage /></S> },

@@ -95,6 +95,7 @@ export type ConfigPrecheckResponse = {
   packageRegistrationId: string;
   packageId: string;
   targetStackDir: string;
+  packageStackDir: string;
   total: number;
   changed: number;
   highRisk: number;
@@ -108,4 +109,34 @@ export type ConfigApplyResult = {
   message: string;
   backupPath: string;
   writtenPath: string;
+};
+
+export type WorkspaceImage = {
+  fileName: string;
+  path: string;
+  size: number;
+};
+
+export type WorkspaceStatus = {
+  packageRoot: string;
+  imagesDir: string;
+  stackDir: string;
+  miscDir: string;
+  packageRootExists: boolean;
+  imagesDirExists: boolean;
+  stackDirExists: boolean;
+  miscDirExists: boolean;
+  images: WorkspaceImage[];
+};
+
+export type WorkspaceCommandOutput = {
+  command: string[];
+  success: boolean;
+  message: string;
+};
+
+export type WorkspaceOperationResult = {
+  success: boolean;
+  message: string;
+  commands: WorkspaceCommandOutput[];
 };

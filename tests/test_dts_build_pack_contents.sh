@@ -8,8 +8,12 @@ trap 'rm -rf "${TMP_DIR}"' EXIT
 TEST_REPO="${TMP_DIR}/repo"
 FAKE_BIN="${TMP_DIR}/bin"
 PACKAGE_PATH="${TMP_DIR}/dts-deploy.tar.gz"
+OPMANAGER_OUTPUT="${TMP_DIR}/opmanager-package"
+OPMANAGER_ENV_OUTPUT="${TMP_DIR}/opmanager-package-env"
 mkdir -p \
   "${TEST_REPO}/builds" \
+  "${TEST_REPO}/builds/dist" \
+  "${TEST_REPO}/builds/legacy-dist" \
   "${TEST_REPO}/bin/lib" \
   "${TEST_REPO}/services/dts-dbt/models" \
   "${TEST_REPO}/services/dts-dbt/macros" \
@@ -66,6 +70,14 @@ EOF_FILE
 
 cat > "${TEST_REPO}/.dockerignore" <<'EOF_FILE'
 target
+EOF_FILE
+
+cat > "${TEST_REPO}/builds/dist/dts-admin_test.tar" <<'EOF_FILE'
+normal image
+EOF_FILE
+
+cat > "${TEST_REPO}/builds/legacy-dist/dts-platform_test.tar" <<'EOF_FILE'
+legacy image
 EOF_FILE
 
 cat > "${TEST_REPO}/services/dts-dbt/dbt_project.yml" <<'EOF_FILE'
@@ -222,3 +234,38 @@ do
     exit 1
   fi
 done
+
+PATH="${FAKE_BIN}:${PATH}" "${TEST_REPO}/builds/dts-build.sh" --opmanager-output "${OPMANAGER_OUTPUT}" >/dev/null
+
+TOP_LEVEL="$(find "${OPMANAGER_OUTPUT}" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort | tr '\n' ' ')"
+if [[ "${TOP_LEVEL}" != "dts-stack images misc " ]]; then
+  echo "expected opmanager output to contain only dts-stack images misc, got: ${TOP_LEVEL}" >&2
+  exit 1
+fi
+
+if [[ ! -f "${OPMANAGER_OUTPUT}/images/dts-admin_test.tar" ]]; then
+  echo "expected opmanager output to include normal image tar" >&2
+  exit 1
+fi
+
+if [[ ! -f "${OPMANAGER_OUTPUT}/images/dts-platform_test.tar" ]]; then
+  echo "expected opmanager output to include legacy image tar" >&2
+  exit 1
+fi
+
+if [[ ! -f "${OPMANAGER_OUTPUT}/dts-stack/bin/dts-upgrade-lite" ]]; then
+  echo "expected opmanager output to include stripped dts-stack tree" >&2
+  exit 1
+fi
+
+if [[ ! -f "${OPMANAGER_OUTPUT}/misc/merge-rules.yml" ]]; then
+  echo "expected opmanager output to move extra metadata into misc" >&2
+  exit 1
+fi
+
+PATH="${FAKE_BIN}:${PATH}" OPMANAGER_PACKAGE_ROOTS="${OPMANAGER_ENV_OUTPUT}" "${TEST_REPO}/builds/dts-build.sh" --opmanager-package >/dev/null
+
+if [[ ! -d "${OPMANAGER_ENV_OUTPUT}/images" || ! -d "${OPMANAGER_ENV_OUTPUT}/dts-stack" || ! -d "${OPMANAGER_ENV_OUTPUT}/misc" ]]; then
+  echo "expected --opmanager-package to write fixed directories under OPMANAGER_PACKAGE_ROOTS" >&2
+  exit 1
+fi

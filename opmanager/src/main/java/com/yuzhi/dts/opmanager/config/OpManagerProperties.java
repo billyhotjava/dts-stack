@@ -59,11 +59,11 @@ public class OpManagerProperties {
     }
 
     public Path packageRegistryDir() {
-        return dataDir.resolve("packages/registry");
+        return dataDir.resolve("state/package-registry");
     }
 
     public Path uploadDir() {
-        return dataDir.resolve("packages/uploads");
+        return dataDir.resolve("uploads");
     }
 
     public Path jobsDir() {

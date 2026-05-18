@@ -20,9 +20,11 @@
 ## 完成标准
 
 - [x] 资产地图能查看 resolver failure，用户可定位资产事实源解析失败原因。
-- [x] `/catalog/datasets/:id` 优先读取 assets-v2 contract/schema/governance/lineage，而不是旧 dataset API。（2026-05-18 已切为 assets-v2 优先读取，增加顶部资产合同摘要，并补 source-level UI contract test）
-- [x] 数据产品页面能配置成员资产、指标、负责人、SLA 与状态，不只是名称说明。
-- [x] 治理缺口和血缘失败报告能从列表跳转到对应处置动作。
+- [x] `/catalog/datasets/:id` 优先读取 assets-v2 contract/schema/governance/lineage，而不是旧 dataset API。（2026-05-18 已切为六个企业资产工作台 tab，并补 source-level UI contract test）
+- [x] 数据产品页面能配置成员资产、指标、负责人、SLA 与状态，不只是名称说明；同时提供只读“数据产品合同”视图。
+- [x] 治理缺口和血缘失败报告能从列表跳转到对应处置动作；资产地图同时支持卡片视图和可操作台账视图。
+- [x] 数据搜索页能合并 assets-v2 主目录结果，并与资产地图共用 `catalog.asset.filter.v2` 筛选缓存。
+- [x] 数据资产门户“资产台账”菜单指向 `/catalog/assets?view=table`，不再默认进入旧 `/catalog/asset-detail`。
 - [x] dts-metrics 独立服务页面具备真实 API 调用和操作路径，platform-webapp 只保留菜单链接。
 
 ## 验收规则

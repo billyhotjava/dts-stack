@@ -19,6 +19,7 @@ IMAGE_ONLY=()
 PACK_MODE=""
 PACK_OUTPUT=""
 PACK_INCLUDE_IMAGES="true"
+OPMANAGER_OUTPUT=""
 SAVE_IMAGE_TARS="${SAVE_IMAGE_TARS:-true}"
 LEGACY_ONLY="false"
 
@@ -30,6 +31,9 @@ Usage:
   ${0##*/} --image <name> [<name> ...]
   ${0##*/} --image <name> [<name> ...] --legacy
   ${0##*/} -all --no-save
+  ${0##*/} -all --opmanager-package
+  ${0##*/} -all --opmanager-output <dir>
+  ${0##*/} --opmanager-output <dir>
   ${0##*/} --pack [--output <path>] [--no-images]
   ${0##*/} --bg -all              (run in background, safe for SSH)
 
@@ -40,6 +44,10 @@ Options:
   --no-save             Build images but skip docker save tarball export (reduces disk pressure).
   --pack                Package dts-stack for deployment (excludes source, logs, git, etc.).
   --output <path>       Output path for the package tarball (default: ./dts-stack-<timestamp>.tar.gz).
+  --opmanager-output <dir>
+                        Export fixed opmanager workspace directories: images/, dts-stack/, misc/.
+  --opmanager-package   Export opmanager workspace to \$OPMANAGER_PACKAGE_ROOTS
+                        (default: /var/lib/dts-opmanager/packages).
   --no-images           Exclude image tarballs from package (smaller package, images loaded separately).
   --bg                  Run build in background via nohup. Safe for SSH sessions.
                         Log output goes to builds/dts-build.log. Use 'tail -f builds/dts-build.log' to follow.
@@ -58,6 +66,8 @@ Examples:
   ${0##*/} --pack
   ${0##*/} --pack --output /tmp/dts-deploy.tar.gz
   ${0##*/} --pack --no-images
+  ${0##*/} -all --opmanager-package
+  ${0##*/} -all --opmanager-output /var/lib/dts-opmanager/packages
 USAGE
 }
 
@@ -108,6 +118,18 @@ while [[ $# -gt 0 ]]; do
         exit 1
       fi
       shift 2
+      ;;
+    --opmanager-output)
+      OPMANAGER_OUTPUT="${2:-}"
+      if [[ -z "${OPMANAGER_OUTPUT}" ]]; then
+        echo "[dts-build] ERROR: --opmanager-output requires a value" >&2
+        exit 1
+      fi
+      shift 2
+      ;;
+    --opmanager-package)
+      OPMANAGER_OUTPUT="${OPMANAGER_PACKAGE_ROOTS:-/var/lib/dts-opmanager/packages}"
+      shift
       ;;
     --no-images)
       PACK_INCLUDE_IMAGES="false"
@@ -264,6 +286,11 @@ preflight_check() {
 }
 
 required_min_disk_gb() {
+  if [[ -n "${OPMANAGER_OUTPUT}" ]]; then
+    echo 12
+    return 0
+  fi
+
   if [[ -n "${PACK_MODE}" ]]; then
     if [[ "${PACK_INCLUDE_IMAGES}" == "true" ]]; then
       echo 12
@@ -1282,6 +1309,69 @@ ROLLBACK_MANIFEST
   echo "[dts-build] Done!"
 }
 
+export_opmanager_workspace() {
+  if [[ -z "${OPMANAGER_OUTPUT}" ]]; then
+    return 0
+  fi
+
+  local output_dir="${OPMANAGER_OUTPUT}"
+  if [[ "${output_dir}" != /* ]]; then
+    output_dir="$(pwd)/${output_dir}"
+  fi
+
+  echo "[dts-build] Exporting opmanager workspace: ${output_dir}"
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  local previous_pack_output="${PACK_OUTPUT}"
+  local previous_pack_include_images="${PACK_INCLUDE_IMAGES}"
+  local pack_path="${tmp_dir}/dts-stack.tar.gz"
+  local extract_dir="${tmp_dir}/extract"
+
+  PACK_OUTPUT="${pack_path}"
+  PACK_INCLUDE_IMAGES="false"
+  pack_deployment
+  PACK_OUTPUT="${previous_pack_output}"
+  PACK_INCLUDE_IMAGES="${previous_pack_include_images}"
+
+  rm -rf "${output_dir}/images" "${output_dir}/dts-stack" "${output_dir}/misc"
+  mkdir -p "${output_dir}/images" "${output_dir}/misc" "${extract_dir}"
+  tar -xzf "${pack_path}" -C "${extract_dir}"
+
+  if [[ ! -d "${extract_dir}/dts-stack" ]]; then
+    echo "[dts-build] ERROR: generated deployment package does not contain dts-stack/" >&2
+    rm -rf "${tmp_dir}"
+    exit 1
+  fi
+  mv "${extract_dir}/dts-stack" "${output_dir}/dts-stack"
+
+  if [[ -d "${extract_dir}/extra" ]]; then
+    cp -a "${extract_dir}/extra/." "${output_dir}/misc/"
+  fi
+
+  local copied_images=0
+  if [[ -d "${NORMAL_DIST}" ]]; then
+    for tar_file in "${NORMAL_DIST}"/*.tar; do
+      [[ -f "${tar_file}" ]] || continue
+      cp "${tar_file}" "${output_dir}/images/"
+      copied_images=$((copied_images + 1))
+    done
+  fi
+  if [[ -d "${LEGACY_DIST}" ]]; then
+    for tar_file in "${LEGACY_DIST}"/*.tar; do
+      [[ -f "${tar_file}" ]] || continue
+      cp "${tar_file}" "${output_dir}/images/"
+      copied_images=$((copied_images + 1))
+    done
+  fi
+
+  mkdir -p "${output_dir}/misc"
+  rm -rf "${tmp_dir}"
+  echo "[dts-build]   + dts-stack/"
+  echo "[dts-build]   + misc/"
+  echo "[dts-build]   + images/*.tar (${copied_images})"
+  echo "[dts-build] OpManager workspace ready: ${output_dir}"
+}
+
 attempt_git_pull() {
   if ! command -v git >/dev/null 2>&1; then
     echo "[dts-build] WARN: git not found in PATH; skipping git pull"
@@ -1320,7 +1410,11 @@ elif [[ "${#IMAGE_ONLY[@]}" -gt 0 ]]; then
   for image in "${IMAGE_ONLY[@]}"; do
     build_single_image "$image" "$LEGACY_ONLY"
   done
+elif [[ -n "${OPMANAGER_OUTPUT}" ]]; then
+  echo "[dts-build] No image build mode selected; exporting opmanager workspace from existing build artifacts."
 else
   usage
   exit 1
 fi
+
+export_opmanager_workspace

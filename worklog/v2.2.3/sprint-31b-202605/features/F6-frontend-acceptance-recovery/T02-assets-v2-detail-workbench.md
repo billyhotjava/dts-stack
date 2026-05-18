@@ -29,13 +29,19 @@
 
 - [x] 详情页读取顺序已调整为 assets-v2 优先，旧 `catalog/datasets` 仅作为 fallback。
 - [x] 页面顶部已增加“企业级资产工作台”摘要，展示授权资产、资产键、字段契约和治理状态。
-- [x] 保留字段、血缘、治理扩展、权限申请 Tab，继续复用已接入的 contract/schema/lineage API。
+- [x] Tab 已重构为企业资产工作台结构：概览、字段契约、治理责任、质量与 SLA、血缘与影响、权限申请。
+- [x] 旧深链兼容：`tab=fields|technical|lineage|quality|sla` 会映射到新的字段契约、血缘与影响、质量与 SLA。
+- [x] 字段契约页统一展示 assets-v2 contract/schema-contract、授权资产、字段清单和技术同步摘要。
+- [x] 质量与 SLA 页显式承接 legacy 治理健康、质量运行和指标依赖；未映射资产给出阻断说明。
+- [x] 血缘与影响页同时承接 OpenMetadata 血缘缓存和 DTS 本地影响分析。
 - [x] 已补 source-level UI contract test，锁定 assets-v2 优先读取、旧 dataset fallback、资产合同摘要展示与资产键来源。
 
 ## 验证
 
 - [x] 前端 build 通过：`pnpm build` from `source/dts-platform-webapp`。
 - [x] source-level test 通过：`./node_modules/.bin/tsx --test src/pages/catalog/DatasetDetailPage.source-contract.test.ts`。
+- [x] 2026-05-18 复核通过：`source/dts-platform-webapp/node_modules/.bin/tsx --test source/dts-platform-webapp/src/pages/catalog/DatasetDetailPage.source-contract.test.ts`。
+- [x] 2026-05-18 复核通过：`pnpm exec tsc --noEmit` from `source/dts-platform-webapp`。
 - [x] 无权限 / 不存在资产保留友好空态：`数据集不存在或无权访问。`
 
 ## 完成标准

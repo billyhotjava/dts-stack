@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+	metricsServiceEmbeddedHrefFromPlatformLocation,
 	metricsServiceHrefFromPlatformLocation,
 	metricsServicePathFromPlatformPath,
 } from "./metricsServiceRoutes.ts";
@@ -24,5 +25,16 @@ test("preserves query and hash while redirecting to dts-metrics", () => {
 	assert.equal(
 		metricsServiceHrefFromPlatformLocation("/bi-apps/metrics/semantic/metrics", "?draft=1", "#formula"),
 		"/metrics/semantic/metrics?draft=1#formula",
+	);
+});
+
+test("builds embedded dts-metrics iframe links for platform bridge routes", () => {
+	assert.equal(
+		metricsServiceEmbeddedHrefFromPlatformLocation("/bi-apps/metrics/semantic/metrics", "?draft=1", "#formula"),
+		"/metrics/semantic/metrics?draft=1&embedded=1#formula",
+	);
+	assert.equal(
+		metricsServiceEmbeddedHrefFromPlatformLocation("/bi-apps/metrics/publish"),
+		"/metrics/semantic/publish?embedded=1",
 	);
 });

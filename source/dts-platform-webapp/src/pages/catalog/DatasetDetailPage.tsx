@@ -20,10 +20,17 @@ import {
 } from "@/api/platformApi";
 import { buildAssetGrantUrl, resolveAssetReadiness } from "./assetPortalUx.helpers";
 
-const DETAIL_TAB_KEYS = ["overview", "fields", "lineage", "technical", "governance", "access"] as const;
+const DETAIL_TAB_KEYS = ["overview", "schema-contract", "governance", "quality-sla", "lineage-impact", "access"] as const;
+const DETAIL_TAB_ALIASES: Record<string, (typeof DETAIL_TAB_KEYS)[number]> = {
+	fields: "schema-contract",
+	technical: "schema-contract",
+	lineage: "lineage-impact",
+	quality: "quality-sla",
+	sla: "quality-sla",
+};
 
 const resolveDetailTabKey = (value?: string | null) =>
-	DETAIL_TAB_KEYS.includes(value as any) ? String(value) : "overview";
+	DETAIL_TAB_KEYS.includes(value as any) ? String(value) : DETAIL_TAB_ALIASES[String(value || "")] || "overview";
 
 const toDatasetFromAssetV2Detail = (id: string, detail: any) => {
 	const asset = detail?.asset || {};
@@ -60,7 +67,7 @@ const toDatasetFromAssetV2Detail = (id: string, detail: any) => {
 
 export default function DatasetDetailPage() {
 	const { id } = useParams<{ id: string }>();
-	const [searchParams] = useSearchParams();
+	const [searchParams, setSearchParams] = useSearchParams();
 	const router = useRouter();
 	const requestedTab = searchParams.get("tab");
 	const [activeTab, setActiveTab] = useState(() => resolveDetailTabKey(requestedTab));
@@ -172,7 +179,11 @@ export default function DatasetDetailPage() {
 			</div>
 			<Tabs
 				activeKey={activeTab}
-				onChange={setActiveTab}
+				onChange={(key) => {
+					const next = resolveDetailTabKey(key);
+					setActiveTab(next);
+					setSearchParams({ tab: next });
+				}}
 				items={[
 					{
 						key: "overview",
@@ -187,41 +198,46 @@ export default function DatasetDetailPage() {
 						),
 					},
 					{
-						key: "fields",
-						label: "字段详情",
+						key: "schema-contract",
+						label: "字段契约",
 						children: (
-							<DatasetFieldsTab
+							<DatasetSchemaContractTab
+								dataset={dataset}
+								assetContract={assetContract}
+								schemaContract={schemaContract}
+								contractLoading={contractLoading}
 								datasetId={String(dataset.__legacyDatasetId || id)}
 								columns={Array.isArray(schemaContract?.columns) ? schemaContract?.columns : dataset.__columns}
 							/>
 						),
 					},
 					{
-						key: "lineage",
-						label: "血缘图",
-						children: dataset.__legacyDatasetId ? (
-							<DatasetLineageTab datasetId={String(dataset.__legacyDatasetId)} />
-						) : dataset.__source === "openmetadata" ? (
-							<OpenMetadataLineageTab assetId={String(dataset.id)} />
-						) : (
-							<div className="py-4 text-sm text-slate-500">未映射到DTS治理资产，暂无本地血缘图。</div>
-						),
-					},
-					{
-						key: "technical",
-						label: "技术详情",
-						children: <DatasetTechnicalTab dataset={dataset} assetContract={assetContract} schemaContract={schemaContract} />,
-					},
-					{
 						key: "governance",
-						label: "治理扩展",
+						label: "治理责任",
 						children: dataset.__source === "openmetadata" ? (
 							<OpenMetadataGovernanceTab dataset={dataset} onChanged={setDataset} />
 						) : dataset.__legacyDatasetId ? (
-							<DatasetGovernanceTab datasetId={String(dataset.__legacyDatasetId)} />
+							<LegacyGovernanceNotice dataset={dataset} />
 						) : (
-							<div className="py-4 text-sm text-slate-500">暂无治理健康数据。</div>
+							<div className="py-4 text-sm text-slate-500">暂无治理责任数据。</div>
 						),
+					},
+					{
+						key: "quality-sla",
+						label: "质量与SLA",
+						children: (
+							<DatasetQualitySlaTab
+								dataset={dataset}
+								assetContract={assetContract}
+								schemaContract={schemaContract}
+								datasetId={String(dataset.__legacyDatasetId || id)}
+							/>
+						),
+					},
+					{
+						key: "lineage-impact",
+						label: "血缘与影响",
+						children: <DatasetLineageImpactTab dataset={dataset} />,
 					},
 					{
 						key: "access",
@@ -303,6 +319,52 @@ function DatasetOverviewTab({
 	);
 }
 
+function DatasetSchemaContractTab({
+	dataset,
+	assetContract,
+	schemaContract,
+	contractLoading,
+	datasetId,
+	columns,
+}: {
+	dataset: Record<string, any>;
+	assetContract?: Record<string, any> | null;
+	schemaContract?: Record<string, any> | null;
+	contractLoading?: boolean;
+	datasetId: string;
+	columns?: any[];
+}) {
+	const missingFields = Array.isArray(assetContract?.missingGovernanceFields) ? assetContract?.missingGovernanceFields : [];
+	const schemaSource = schemaContract?.schemaSource || dataset.__source || "-";
+	const columnCount = schemaContract?.columnCount ?? dataset.columnCount ?? (Array.isArray(columns) ? columns.length : undefined);
+	return (
+		<div className="space-y-4 py-2">
+			<Alert
+				type={missingFields.length ? "warning" : "info"}
+				showIcon
+				message={missingFields.length ? "字段契约暂不可作为生产引用" : "字段契约是指标、DWS/ADS 和 BI 消费的读取边界"}
+				description={
+					contractLoading
+						? "正在读取资产合同和字段合同..."
+						: missingFields.length
+							? `仍缺少治理字段：${missingFields.join("、")}。发布指标或数据产品前需要先补齐。`
+							: "下游应通过资产合同中的授权资产标识和字段清单引用该资产，避免直接依赖临时元数据 ID。"
+				}
+			/>
+			<Descriptions bordered size="small" column={2}>
+				<Descriptions.Item label="合同状态">{assetContract?.consumable === false ? "不可引用" : assetContract ? "可引用" : "读取中"}</Descriptions.Item>
+				<Descriptions.Item label="字段来源">{schemaSource}</Descriptions.Item>
+				<Descriptions.Item label="字段数量">{columnCount ?? "未同步"}</Descriptions.Item>
+				<Descriptions.Item label="资产键">{assetContract?.assetKey || dataset.__fqn || dataset.id || "-"}</Descriptions.Item>
+				<Descriptions.Item label="授权资产">{assetContract?.grantAssetType && assetContract?.grantAssetId ? `${assetContract.grantAssetType}:${assetContract.grantAssetId}` : "-"}</Descriptions.Item>
+				<Descriptions.Item label="物理对象">{dataset.hiveDatabase && dataset.hiveTable ? `${dataset.hiveDatabase}.${dataset.hiveTable}` : dataset.__fqn || "-"}</Descriptions.Item>
+			</Descriptions>
+			<DatasetFieldsTab datasetId={datasetId} columns={columns} />
+			<DatasetTechnicalTab dataset={dataset} assetContract={assetContract} schemaContract={schemaContract} />
+		</div>
+	);
+}
+
 function DatasetTechnicalTab({
 	dataset,
 	assetContract,
@@ -341,6 +403,79 @@ function DatasetTechnicalTab({
 			)}
 			<MetadataJsonBlock title="Profile JSON" value={dataset.__profileJson} />
 			<MetadataJsonBlock title="Raw Metadata JSON" value={dataset.__rawJson} />
+		</div>
+	);
+}
+
+function LegacyGovernanceNotice({ dataset }: { dataset: Record<string, any> }) {
+	return (
+		<div className="space-y-4 py-2">
+			<Alert
+				type="info"
+				showIcon
+				message="这是 DTS 原生资产"
+				description="当前资产未进入 OpenMetadata 主目录扩展编辑链路；基础属性仍由原数据资产台账维护，质量和指标关系请在“质量与SLA”页查看。"
+			/>
+			<Descriptions bordered size="small" column={2}>
+				<Descriptions.Item label="密级">{dataset.classification || "-"}</Descriptions.Item>
+				<Descriptions.Item label="仓库分层">{dataset.warehouseLayer || "-"}</Descriptions.Item>
+				<Descriptions.Item label="负责人">{dataset.owner || "-"}</Descriptions.Item>
+				<Descriptions.Item label="归属部门">{dataset.ownerDept || "-"}</Descriptions.Item>
+				<Descriptions.Item label="生命周期">{dataset.lifecycleStatus || "-"}</Descriptions.Item>
+				<Descriptions.Item label="治理状态">{dataset.governanceStatus || "-"}</Descriptions.Item>
+			</Descriptions>
+		</div>
+	);
+}
+
+function DatasetQualitySlaTab({
+	dataset,
+	assetContract,
+	schemaContract,
+	datasetId,
+}: {
+	dataset: Record<string, any>;
+	assetContract?: Record<string, any> | null;
+	schemaContract?: Record<string, any> | null;
+	datasetId: string;
+}) {
+	const hasLegacyDataset = Boolean(dataset.__legacyDatasetId);
+	const freshnessLabel = assetContract?.maxStalenessMinutes
+		? `${assetContract.maxStalenessMinutes} 分钟内`
+		: assetContract?.expectedRefreshIntervalMinutes
+			? `${assetContract.expectedRefreshIntervalMinutes} 分钟刷新`
+			: "未配置";
+	return (
+		<div className="space-y-4 py-2">
+			<Alert
+				type={hasLegacyDataset ? "info" : "warning"}
+				showIcon
+				message="质量与 SLA 决定资产是否可以进入指标和数据产品"
+				description={
+					hasLegacyDataset
+						? "这里展示 legacy 治理资产上的质量运行、治理问题和关联指标；后续应由 assets-v2 直接输出统一 SLA 合同。"
+						: "当前资产尚未映射到 DTS 治理资产，暂时没有质量规则、运行记录和指标依赖。"
+				}
+			/>
+			<div className="grid gap-3 md:grid-cols-3">
+				<div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+					<div className="text-xs text-slate-500">刷新 SLA</div>
+					<div className="mt-1 text-sm font-semibold text-slate-900">{freshnessLabel}</div>
+				</div>
+				<div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+					<div className="text-xs text-slate-500">字段合同</div>
+					<div className="mt-1 text-sm font-semibold text-slate-900">{schemaContract?.columnCount ?? dataset.columnCount ?? "未同步"}</div>
+				</div>
+				<div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+					<div className="text-xs text-slate-500">发布前状态</div>
+					<div className="mt-1 text-sm font-semibold text-slate-900">{assetContract?.consumable === false ? "治理阻断" : "待质量校验"}</div>
+				</div>
+			</div>
+			{hasLegacyDataset ? (
+				<DatasetGovernanceTab datasetId={datasetId} />
+			) : (
+				<Alert type="warning" showIcon message="未映射治理资产" description="请先在治理责任页补齐映射、密级、主题域和负责人，再配置质量规则与 SLA。" />
+			)}
 		</div>
 	);
 }
@@ -525,9 +660,9 @@ function OpenMetadataGovernanceTab({
 				</Button>
 			</Form>
 			{dataset.__legacyDatasetId ? (
-				<DatasetGovernanceTab datasetId={String(dataset.__legacyDatasetId)} />
+				<Alert type="info" showIcon message="质量运行、治理健康和关联指标已移到“质量与SLA”页。" />
 			) : (
-				<Alert type="warning" showIcon message="未映射到 legacy dataset，治理健康和权限规则只能展示 DTS 扩展层。" />
+				<Alert type="warning" showIcon message="未映射到 legacy dataset，治理健康和质量规则暂不可用。" />
 			)}
 		</div>
 	);
@@ -702,6 +837,44 @@ function OpenMetadataLineageTab({ assetId }: { assetId: string }) {
 					{ title: "类型", dataIndex: "edgeType", width: 120, render: (v: any) => v || "TABLE" },
 				]}
 			/>
+		</div>
+	);
+}
+
+function DatasetLineageImpactTab({ dataset }: { dataset: Record<string, any> }) {
+	const hasOpenMetadataAsset = dataset.__source === "openmetadata" && dataset.id;
+	const hasLegacyDataset = Boolean(dataset.__legacyDatasetId);
+	return (
+		<div className="space-y-4 py-2">
+			<Alert
+				type={hasOpenMetadataAsset || hasLegacyDataset ? "info" : "warning"}
+				showIcon
+				message="血缘与影响用于判断资产变更会影响哪些指标、数据产品和看板"
+				description={
+					hasOpenMetadataAsset && hasLegacyDataset
+						? "当前资产同时具备 OpenMetadata 血缘缓存和 DTS 本地治理资产影响链路。"
+						: hasOpenMetadataAsset
+							? "当前仅有 OpenMetadata 血缘缓存，尚未映射到 DTS 本地治理影响链路。"
+							: hasLegacyDataset
+								? "当前使用 DTS 本地治理资产影响链路。"
+								: "当前资产没有可用血缘证据。"
+				}
+			/>
+			{hasOpenMetadataAsset ? (
+				<div>
+					<div className="mb-2 text-sm font-medium text-slate-700">OpenMetadata 血缘缓存</div>
+					<OpenMetadataLineageTab assetId={String(dataset.id)} />
+				</div>
+			) : null}
+			{hasLegacyDataset ? (
+				<div>
+					<div className="mb-2 text-sm font-medium text-slate-700">DTS 本地影响分析</div>
+					<DatasetLineageTab datasetId={String(dataset.__legacyDatasetId)} />
+				</div>
+			) : null}
+			{!hasOpenMetadataAsset && !hasLegacyDataset ? (
+				<div className="py-4 text-sm text-slate-500">未映射到DTS治理资产，暂无本地血缘图。</div>
+			) : null}
 		</div>
 	);
 }

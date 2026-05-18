@@ -62,3 +62,15 @@ export const metricsServiceHrefFromPlatformLocation = (
 	search = "",
 	hash = "",
 ) => `${metricsServicePathFromPlatformPath(pathname)}${search || ""}${hash || ""}`;
+
+export const metricsServiceEmbeddedHrefFromPlatformLocation = (
+	pathname: string,
+	search = "",
+	hash = "",
+) => {
+	const target = new URL(metricsServicePathFromPlatformPath(pathname), "http://dts.local");
+	const params = new URLSearchParams((search || "").replace(/^\?/, ""));
+	params.set("embedded", "1");
+	const query = params.toString();
+	return `${target.pathname}${query ? `?${query}` : ""}${hash || ""}`;
+};

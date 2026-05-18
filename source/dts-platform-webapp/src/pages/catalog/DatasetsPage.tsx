@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Alert, Button, Card, Collapse, Input, Layout, Modal, Pagination, Select, Space, Spin, Table, Tabs, Tag, Tooltip, Tree } from "antd";
+import { Alert, Button, Card, Collapse, Input, Layout, Modal, Pagination, Segmented, Select, Space, Spin, Table, Tabs, Tag, Tooltip, Tree } from "antd";
 import {
 	ApartmentOutlined,
 	BranchesOutlined,
@@ -86,6 +86,7 @@ const MATCH_OPTIONS = [
 ];
 
 const DATASET_FILTER_STORAGE_KEY = "catalog.asset.filter.v2";
+const DATASET_VIEW_MODE_STORAGE_KEY = "catalog.asset.view-mode.v2";
 const ASSET_PORTAL_V2_ENABLED = import.meta.env.VITE_CATALOG_ASSET_PORTAL_V2 !== "false";
 const UNASSIGNED_DOMAIN_KEY = "__UNASSIGNED__";
 
@@ -211,6 +212,16 @@ const MetricTile = ({
 export default function Page() {
 	const router = useRouter();
 	const [keyword, setKeyword] = useState("");
+	const [viewMode, setViewMode] = useState<"cards" | "table">(() => {
+		try {
+			if (new URLSearchParams(window.location.search).get("view") === "table") {
+				return "table";
+			}
+			return localStorage.getItem(DATASET_VIEW_MODE_STORAGE_KEY) === "table" ? "table" : "cards";
+		} catch {
+			return "cards";
+		}
+	});
 	const [domain, setDomain] = useState<string | undefined>();
 	const [assetType, setAssetType] = useState<string>("ALL");
 	const [classification, setClassification] = useState<string>("ALL");
@@ -297,6 +308,10 @@ export default function Page() {
 		};
 		localStorage.setItem(DATASET_FILTER_STORAGE_KEY, JSON.stringify(payload));
 	}, [keyword, assetType, classification, warehouseLayer, governanceStatus, matchStatus]);
+
+	useEffect(() => {
+		localStorage.setItem(DATASET_VIEW_MODE_STORAGE_KEY, viewMode);
+	}, [viewMode]);
 
 	const domainMap = useMemo(() => new Map(domains.map((item) => [item.id, item.name])), [domains]);
 
@@ -642,6 +657,95 @@ export default function Page() {
 		);
 	};
 
+	const renderAssetTable = () => (
+		<Table<AssetRow>
+			size="small"
+			rowKey="id"
+			dataSource={records}
+			pagination={false}
+			scroll={{ x: 1180 }}
+			onRow={(row) => ({
+				onClick: () => router.push(`/catalog/datasets/${row.id}`),
+			})}
+			columns={[
+				{
+					title: "资产",
+					dataIndex: "name",
+					width: 280,
+					render: (value, row) => (
+						<div className="min-w-0">
+							<div className="truncate font-medium text-slate-900">{value || "-"}</div>
+							<div className="truncate font-mono text-[11px] text-slate-500">
+								{row.hiveDatabase && row.hiveTable ? `${row.hiveDatabase}.${row.hiveTable}` : row.description || row.id}
+							</div>
+						</div>
+					),
+				},
+				{
+					title: "类型/分层",
+					width: 150,
+					render: (_, row) => (
+						<Space direction="vertical" size={2}>
+							<Tag>{row.type || "未知"}</Tag>
+							<Tag color={LAYER_META[normalizeLayer(row.warehouseLayer)].color}>{LAYER_META[normalizeLayer(row.warehouseLayer)].label}</Tag>
+						</Space>
+					),
+				},
+				{
+					title: "治理状态",
+					width: 180,
+					render: (_, row) => {
+						const readiness = resolveAssetReadiness(row);
+						return (
+							<Space direction="vertical" size={2}>
+								<Tag color={readiness.color}>{readiness.label}</Tag>
+								<span className="text-xs text-slate-500">{readiness.reasons.slice(0, 2).join(" / ") || row.governanceStatus || "-"}</span>
+							</Space>
+						);
+					},
+				},
+				{
+					title: "密级/主题域",
+					width: 180,
+					render: (_, row) => (
+						<Space direction="vertical" size={2}>
+							<Tag color={row.classification ? "orange" : "default"}>{classificationText(row.classification)}</Tag>
+							<span className="text-xs text-slate-500">{row.domain || (row.domainId ? domainMap.get(row.domainId) : undefined) || "未归域"}</span>
+						</Space>
+					),
+				},
+				{
+					title: "负责人",
+					width: 160,
+					render: (_, row) => row.owner || row.ownerDept || "-",
+				},
+				{
+					title: "更新时间",
+					width: 170,
+					render: (_, row) => formatTime(row.snapshotTime || row.updatedAt),
+				},
+				{
+					title: "操作",
+					width: 230,
+					fixed: "right",
+					render: (_, row) => (
+						<Space onClick={(event) => event.stopPropagation()}>
+							<Button size="small" onClick={() => router.push(`/catalog/datasets/${row.id}`)}>
+								详情
+							</Button>
+							<Button size="small" onClick={() => openGovernanceRemediation(row.id)}>
+								治理
+							</Button>
+							<Button size="small" onClick={() => router.push(`/catalog/datasets/${row.id}?tab=lineage-impact`)}>
+								血缘
+							</Button>
+						</Space>
+					),
+				},
+			]}
+		/>
+	);
+
 	return (
 		<Layout className="min-h-full" style={{ background: "transparent" }}>
 			<Layout.Sider
@@ -683,8 +787,8 @@ export default function Page() {
 						}
 						extra={
 							<Space wrap>
-								<Button icon={<ProfileOutlined />} onClick={() => router.push("/catalog/asset-detail")}>
-									明细台账
+								<Button icon={<ProfileOutlined />} onClick={() => setViewMode("table")}>
+									切换台账
 								</Button>
 								<Button icon={<ReloadOutlined />} onClick={() => void loadDatasets(1, pageState.size)} loading={loading}>
 									刷新资产
@@ -834,16 +938,31 @@ export default function Page() {
 							/>
 						}
 					>
-						<Tabs
-							activeKey={warehouseLayer}
-							onChange={(value) => setWarehouseLayer(value || "ALL")}
-							items={layerTabItems}
-							tabBarStyle={{ marginBottom: 12 }}
-						/>
+						<div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+							<Tabs
+								activeKey={warehouseLayer}
+								onChange={(value) => setWarehouseLayer(value || "ALL")}
+								items={layerTabItems}
+								tabBarStyle={{ marginBottom: 0 }}
+							/>
+							<Segmented
+								size="small"
+								value={viewMode}
+								onChange={(value) => setViewMode(value === "table" ? "table" : "cards")}
+								options={[
+									{ label: "卡片", value: "cards" },
+									{ label: "台账", value: "table" },
+								]}
+							/>
+						</div>
 						{records.length ? (
-							<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-								{records.map(renderAssetCard)}
-							</div>
+							viewMode === "table" ? (
+								renderAssetTable()
+							) : (
+								<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+									{records.map(renderAssetCard)}
+								</div>
+							)
 						) : (
 							<EmptyState title="未发现当前账号可见资产" description="可能还未完成元数据采集，也可能当前密级、主题域或资产授权限制了可见范围。" />
 						)}

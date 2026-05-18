@@ -39,7 +39,7 @@ public class ProtectedConfigService {
 
     public ConfigPrecheckResponse precheck(String packageRegistrationId) {
         PackageRegistration registration = resolveRegistration(packageRegistrationId);
-        Path packageRoot = Path.of(registration.sourcePath()).toAbsolutePath().normalize();
+        Path packageRoot = packageService.resolveStackRoot(registration);
         Path targetRoot = properties.getTargetStackDir().toAbsolutePath().normalize();
         List<ConfigFileReview> files = collectProtectedPaths(targetRoot, packageRoot).stream().map(path -> reviewFile(targetRoot, packageRoot, path)).toList();
         int changed = (int) files.stream().filter(file -> file.status() == ConfigFileStatus.MODIFIED || file.status() == ConfigFileStatus.PACKAGE_ONLY).count();
@@ -48,6 +48,7 @@ public class ProtectedConfigService {
             registration.id(),
             registration.validation().packageId(),
             targetRoot.toString(),
+            packageRoot.toString(),
             files.size(),
             changed,
             highRisk,
@@ -58,7 +59,7 @@ public class ProtectedConfigService {
     public ConfigApplyResult apply(String packageRegistrationId, String relativePath, ConfigApplyAction action) {
         PackageRegistration registration = resolveRegistration(packageRegistrationId);
         Path safePath = safeRelativePath(relativePath);
-        Path packageRoot = Path.of(registration.sourcePath()).toAbsolutePath().normalize();
+        Path packageRoot = packageService.resolveStackRoot(registration);
         Path targetRoot = properties.getTargetStackDir().toAbsolutePath().normalize();
         ConfigFileReview review = reviewFile(targetRoot, packageRoot, safePath.toString().replace('\\', '/'));
         if (!review.allowedActions().contains(action)) {

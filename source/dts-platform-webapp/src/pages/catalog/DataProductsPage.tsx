@@ -12,6 +12,7 @@ import {
 	listIndicators,
 	updateDataProduct,
 } from "@/api/platformApi";
+import { useRouter } from "@/routes/hooks";
 
 const { Text } = Typography;
 
@@ -87,7 +88,23 @@ const productMemberSummary = (product: DataProduct) => {
 	};
 };
 
+const resolveProductReadiness = (product: DataProduct) => {
+	const members = productMemberSummary(product);
+	const blockers: string[] = [];
+	if (!members.datasetCount) blockers.push("未配置成员资产");
+	if (!members.indicatorCount) blockers.push("未配置核心指标");
+	if (!product.ownerDept) blockers.push("未配置负责部门");
+	if (!product.classification) blockers.push("未配置产品密级");
+	if (!product.freshnessSla) blockers.push("未配置刷新 SLA");
+	return {
+		blockers,
+		ready: blockers.length === 0,
+		members,
+	};
+};
+
 export default function DataProductsPage() {
+	const router = useRouter();
 	const [products, setProducts] = useState<DataProduct[]>([]);
 	const [total, setTotal] = useState(0);
 	const [loading, setLoading] = useState(false);
@@ -97,6 +114,7 @@ export default function DataProductsPage() {
 	const [assetOptions, setAssetOptions] = useState<CandidateOption[]>([]);
 	const [indicatorOptions, setIndicatorOptions] = useState<CandidateOption[]>([]);
 	const [candidateLoading, setCandidateLoading] = useState(false);
+	const [detailTarget, setDetailTarget] = useState<DataProduct | null>(null);
 	const [form] = Form.useForm();
 
 	useEffect(() => {
@@ -272,7 +290,8 @@ export default function DataProductsPage() {
 					<div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
 						{products.map((product) => {
 							const status = STATUS_CONFIG[product.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.DRAFT;
-							const members = productMemberSummary(product);
+							const readiness = resolveProductReadiness(product);
+							const members = readiness.members;
 							return (
 								<div
 									key={product.id}
@@ -283,7 +302,10 @@ export default function DataProductsPage() {
 											<div className="truncate text-sm font-semibold text-slate-900">{product.name}</div>
 											{product.code && <Text code className="text-xs">{product.code}</Text>}
 										</div>
-										<Tag color={status.color}>{status.label}</Tag>
+										<Space direction="vertical" size={2} align="end">
+											<Tag color={status.color}>{status.label}</Tag>
+											<Tag color={readiness.ready ? "green" : "orange"}>{readiness.ready ? "发布就绪" : "待补齐"}</Tag>
+										</Space>
 									</div>
 									<div className="grid grid-cols-2 gap-2 text-xs">
 										<div className="rounded-lg bg-slate-50 px-3 py-2">
@@ -305,10 +327,34 @@ export default function DataProductsPage() {
 										<div>刷新 SLA：{product.freshnessSla || "未配置"}</div>
 										<div>消费入口：{product.consumerEntry || "未配置"}</div>
 									</div>
+									{readiness.blockers.length ? (
+										<div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+											{readiness.blockers.join(" / ")}
+										</div>
+									) : null}
+									<div className="space-y-1">
+										<div className="text-xs font-medium text-slate-600">成员预览</div>
+										<Space wrap size={[4, 4]}>
+											{members.datasetIds.slice(0, 3).map((item) => <Tag key={item}>{item}</Tag>)}
+											{members.datasetIds.length > 3 ? <Tag>+{members.datasetIds.length - 3}</Tag> : null}
+											{!members.datasetIds.length ? <span className="text-xs text-slate-400">暂无成员资产</span> : null}
+										</Space>
+									</div>
+									<div className="space-y-1">
+										<div className="text-xs font-medium text-slate-600">核心指标预览</div>
+										<Space wrap size={[4, 4]}>
+											{members.indicatorCodes.slice(0, 3).map((item) => <Tag color="blue" key={item}>{item}</Tag>)}
+											{members.indicatorCodes.length > 3 ? <Tag color="blue">+{members.indicatorCodes.length - 3}</Tag> : null}
+											{!members.indicatorCodes.length ? <span className="text-xs text-slate-400">暂无核心指标</span> : null}
+										</Space>
+									</div>
 									{product.description && (
 										<div className="line-clamp-2 text-xs text-slate-600">{product.description}</div>
 									)}
 									<div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-1">
+										<Button size="small" onClick={() => setDetailTarget(product)}>
+											合同
+										</Button>
 										<Button size="small" icon={<EditOutlined />} onClick={() => openEdit(product)}>
 											编辑
 										</Button>
@@ -409,6 +455,78 @@ export default function DataProductsPage() {
 					</Form.Item>
 				</Form>
 			</Modal>
+			<DataProductContractModal
+				product={detailTarget}
+				onClose={() => setDetailTarget(null)}
+				onOpenAsset={(assetId) => router.push(`/catalog/datasets/${assetId}`)}
+			/>
 		</div>
+	);
+}
+
+function DataProductContractModal({
+	product,
+	onClose,
+	onOpenAsset,
+}: {
+	product: DataProduct | null;
+	onClose: () => void;
+	onOpenAsset: (assetId: string) => void;
+}) {
+	if (!product) return null;
+	const readiness = resolveProductReadiness(product);
+	const members = readiness.members;
+	return (
+		<Modal
+			title="数据产品合同"
+			open
+			onCancel={onClose}
+			footer={<Button onClick={onClose}>关闭</Button>}
+			width={820}
+		>
+			<Space direction="vertical" size={16} className="w-full">
+				<Alert
+					type={readiness.ready ? "success" : "warning"}
+					showIcon
+					message={readiness.ready ? "产品合同已具备发布前置条件" : "产品合同仍有缺口"}
+					description={readiness.ready ? "成员资产、核心指标、密级、负责人和 SLA 已配置。" : readiness.blockers.join("；")}
+				/>
+				<div className="grid gap-3 md:grid-cols-3">
+					<div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+						<div className="text-xs text-slate-500">产品代码</div>
+						<div className="mt-1 font-mono text-xs text-slate-900">{product.code || "-"}</div>
+					</div>
+					<div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+						<div className="text-xs text-slate-500">密级</div>
+						<div className="mt-1 text-sm font-semibold text-slate-900">{product.classification || "未配置"}</div>
+					</div>
+					<div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+						<div className="text-xs text-slate-500">刷新 SLA</div>
+						<div className="mt-1 text-sm font-semibold text-slate-900">{product.freshnessSla || "未配置"}</div>
+					</div>
+				</div>
+				<div>
+					<div className="mb-2 text-sm font-medium text-slate-700">成员资产</div>
+					<Space wrap>
+						{members.datasetIds.map((item) => (
+							<Button size="small" key={item} onClick={() => onOpenAsset(item)}>
+								{item}
+							</Button>
+						))}
+						{!members.datasetIds.length ? <span className="text-sm text-slate-500">暂无成员资产</span> : null}
+					</Space>
+				</div>
+				<div>
+					<div className="mb-2 text-sm font-medium text-slate-700">核心指标</div>
+					<Space wrap>
+						{members.indicatorCodes.map((item) => <Tag color="blue" key={item}>{item}</Tag>)}
+						{!members.indicatorCodes.length ? <span className="text-sm text-slate-500">暂无核心指标</span> : null}
+					</Space>
+				</div>
+				{product.consumerEntry ? (
+					<Alert type="info" showIcon message="消费入口" description={product.consumerEntry} />
+				) : null}
+			</Space>
+		</Modal>
 	);
 }

@@ -8,12 +8,14 @@ import com.yuzhi.dts.platform.domain.permission.AssetPermissionPolicyInjection;
 import com.yuzhi.dts.platform.repository.permission.AssetPermissionAuditRepository;
 import com.yuzhi.dts.platform.repository.permission.AssetPermissionPolicyInjectionRepository;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService.PermissionDecision;
+import java.lang.reflect.Constructor;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @ExtendWith(MockitoExtension.class)
 class AssetPermissionAuditServiceTest {
@@ -23,6 +25,16 @@ class AssetPermissionAuditServiceTest {
 
     @Mock
     private AssetPermissionPolicyInjectionRepository policyInjectionRepository;
+
+    @Test
+    void productionConstructorIsExplicitAutowiredForSpring() throws NoSuchMethodException {
+        Constructor<AssetPermissionAuditService> constructor = AssetPermissionAuditService.class.getConstructor(
+            AssetPermissionAuditRepository.class,
+            AssetPermissionPolicyInjectionRepository.class
+        );
+
+        assertThat(constructor.isAnnotationPresent(Autowired.class)).isTrue();
+    }
 
     @Test
     void recordDecisionPersistsDenialReasonAndGrantSource() {

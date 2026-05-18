@@ -32,6 +32,9 @@
 - [x] source-level test 通过：`./node_modules/.bin/tsx --test src/pages/catalog/DatasetsPage.remediation.source-contract.test.ts src/pages/catalog/DatasetDetailPage.source-contract.test.ts`。
 - [x] 前端 build 通过：`pnpm build` from `source/dts-platform-webapp`。
 - [x] 缺口列表、跳转和刷新已有前端源码契约：治理缺口弹窗、血缘失败弹窗、资产详情 tab 深链和单资产 lineage sync。
+- [x] 资产地图已增加“卡片 / 台账”视图切换；台账视图可直接打开详情、治理责任页和血缘与影响页。
+- [x] 2026-05-18 复核通过：`source/dts-platform-webapp/node_modules/.bin/tsx --test source/dts-platform-webapp/src/pages/catalog/DatasetsPage.remediation.source-contract.test.ts source/dts-platform-webapp/src/pages/catalog/DatasetDetailPage.source-contract.test.ts`。
+- [x] 2026-05-18 复核通过：`pnpm exec tsc --noEmit` from `source/dts-platform-webapp`。
 
 ## 完成标准
 

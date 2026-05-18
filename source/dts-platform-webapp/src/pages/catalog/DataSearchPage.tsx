@@ -1,25 +1,30 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Button, Card, Input, Select, Space, Tabs, Tag } from "antd";
+import { Alert, Button, Card, Input, Select, Space, Tabs, Tag } from "antd";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
-import { listDomains, searchCatalog } from "@/api/platformApi";
+import { listCatalogAssetsV2, listDomains, searchCatalog } from "@/api/platformApi";
 import { useRouter } from "@/routes/hooks";
 
 type SearchRow = {
 	id: string;
 	name: string;
 	type: string;
-	assetKind: "DATASET" | "TABLE" | "COLUMN";
+	assetKind: "ASSET" | "DATASET" | "TABLE" | "COLUMN";
 	domainId?: string;
 	domain?: string;
 	owner?: string;
 	datasetName?: string;
+	assetKey?: string;
+	classification?: string;
+	warehouseLayer?: string;
+	source?: string;
 	updatedAt?: string;
 };
 
 const TYPE_OPTIONS = [
 	{ label: "全部类型", value: "ALL" },
+	{ label: "资产", value: "ASSET" },
 	{ label: "数据集", value: "DATASET" },
 	{ label: "表", value: "TABLE" },
 	{ label: "字段", value: "COLUMN" },
@@ -49,7 +54,7 @@ const LAYER_OPTIONS = [
 ];
 
 const SEARCH_FORM_STORAGE_KEY = "catalog.search.form.v1";
-const DATASET_FILTER_STORAGE_KEY = "catalog.asset.filter.v1";
+const DATASET_FILTER_STORAGE_KEY = "catalog.asset.filter.v2";
 
 export default function DataSearchPage() {
 	const router = useRouter();
@@ -90,6 +95,7 @@ export default function DataSearchPage() {
 	}, [domains]);
 
 	const grouped = useMemo(() => ({
+		ASSET: results.filter((r) => r.assetKind === "ASSET"),
 		DATASET: results.filter((r) => r.assetKind === "DATASET"),
 		TABLE: results.filter((r) => r.assetKind === "TABLE"),
 		COLUMN: results.filter((r) => r.assetKind === "COLUMN"),
@@ -150,8 +156,9 @@ export default function DataSearchPage() {
 				return;
 			}
 			const saved = JSON.parse(raw);
-			setDomain(typeof saved?.domain === "string" && saved.domain ? saved.domain : undefined);
-			setDatasetType(typeof saved?.assetType === "string" && saved.assetType ? saved.assetType : "ALL");
+			setKeyword(typeof saved?.keyword === "string" ? saved.keyword : keyword);
+			setDomain(undefined);
+			setAssetType(typeof saved?.assetType === "string" && saved.assetType ? saved.assetType : "ALL");
 			setClassification(typeof saved?.classification === "string" && saved.classification ? saved.classification : "ALL");
 			setWarehouseLayer(typeof saved?.warehouseLayer === "string" && saved.warehouseLayer ? saved.warehouseLayer : "ALL");
 			toast.success("已应用资产列表筛选条件");
@@ -209,6 +216,24 @@ export default function DataSearchPage() {
 		return rows;
 	};
 
+	const normalizeAssetRows = (payload: any): SearchRow[] => {
+		const content = Array.isArray(payload?.content) ? payload.content : [];
+		return content.map((item: any, index: number) => ({
+			id: String(item.id || item.assetKey || item.fqn || `asset-${index}`),
+			name: String(item.displayName || item.name || item.table || item.fqn || "-"),
+			type: item.type ? String(item.type) : "ASSET",
+			assetKind: "ASSET",
+			domainId: item.domainId ? String(item.domainId) : undefined,
+			domain: item.domainName || undefined,
+			owner: item.owner || item.ownerDept || undefined,
+			assetKey: item.assetKey || item.fqn || undefined,
+			classification: item.classification || undefined,
+			warehouseLayer: item.warehouseLayer || undefined,
+			source: item.metadataSource || "assets-v2",
+			updatedAt: item.lastSyncedAt || item.lastModifiedDate || item.createdDate || undefined,
+		}));
+	};
+
 	const handleSearch = async () => {
 		const trimmed = keyword.trim();
 		if (!trimmed) {
@@ -218,17 +243,36 @@ export default function DataSearchPage() {
 		setLoading(true);
 		setSearched(true);
 		try {
-			const resp: any = await searchCatalog({
-				keyword: trimmed,
-				types: assetType === "ALL" ? undefined : assetType,
-				domainId: domain && domain !== "ALL" ? domain : undefined,
-				classification: classification === "ALL" ? undefined : classification,
-				warehouseLayer: warehouseLayer === "ALL" ? undefined : warehouseLayer,
-				datasetType: datasetType === "ALL" ? undefined : datasetType,
-				enabledOnly: true,
-				limit: 200,
-			});
-			setResults(normalizeRows(resp || {}));
+			const shouldSearchAssetsV2 = assetType === "ALL" || assetType === "ASSET" || assetType === "DATASET" || assetType === "TABLE";
+			const shouldSearchLegacyCatalog = assetType !== "ASSET";
+			const [assetsResult, legacyResult] = await Promise.allSettled([
+				shouldSearchAssetsV2
+					? listCatalogAssetsV2({
+						keyword: trimmed,
+						domainId: domain && domain !== "ALL" ? domain : undefined,
+						classification: classification === "ALL" ? undefined : classification,
+						warehouseLayer: warehouseLayer === "ALL" ? undefined : warehouseLayer,
+						type: datasetType === "ALL" ? undefined : datasetType,
+						page: 0,
+						size: 100,
+					})
+					: Promise.resolve({ content: [] }),
+				shouldSearchLegacyCatalog
+					? searchCatalog({
+						keyword: trimmed,
+						types: assetType === "ALL" ? undefined : assetType,
+						domainId: domain && domain !== "ALL" ? domain : undefined,
+						classification: classification === "ALL" ? undefined : classification,
+						warehouseLayer: warehouseLayer === "ALL" ? undefined : warehouseLayer,
+						datasetType: datasetType === "ALL" ? undefined : datasetType,
+						enabledOnly: true,
+						limit: 200,
+					})
+					: Promise.resolve({ datasets: [], tables: [], columns: [] }),
+			]);
+			const assetRows = assetsResult.status === "fulfilled" ? normalizeAssetRows(assetsResult.value || {}) : [];
+			const legacyRows = legacyResult.status === "fulfilled" ? normalizeRows(legacyResult.value || {}) : [];
+			setResults([...assetRows, ...legacyRows]);
 			saveCurrentQuery();
 		} catch {
 			setResults([]);
@@ -307,6 +351,32 @@ export default function DataSearchPage() {
 				{searched ? (
 					<Tabs
 						items={[
+							{
+								key: "ASSET",
+								label: `资产（${grouped.ASSET.length}）`,
+								children: grouped.ASSET.length ? (
+									<div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+										{grouped.ASSET.map((row) => (
+											<div
+												key={row.id}
+												className="cursor-pointer rounded-lg border border-slate-200 bg-white px-4 py-3 transition-all hover:border-blue-300 hover:shadow-sm"
+												onClick={() => router.push(`/catalog/datasets/${row.id}`)}
+											>
+												<div className="font-semibold text-sm text-slate-900">{row.name}</div>
+												<div className="mt-1 truncate font-mono text-xs text-slate-500">{row.assetKey || row.id}</div>
+												<div className="mt-2 flex flex-wrap gap-1">
+													<Tag style={{ fontSize: 10 }}>{row.type || "ASSET"}</Tag>
+													<Tag color={row.classification ? "orange" : "default"} style={{ fontSize: 10 }}>{row.classification || "未定密"}</Tag>
+													<Tag color={row.warehouseLayer ? "blue" : "default"} style={{ fontSize: 10 }}>{row.warehouseLayer || "未分层"}</Tag>
+													<Tag color="blue" style={{ fontSize: 10 }}>{row.source || "assets-v2"}</Tag>
+												</div>
+											</div>
+										))}
+									</div>
+								) : (
+									<Alert type="info" showIcon message="无匹配 assets-v2 资产" description="如果旧数据集有结果但 assets-v2 无结果，请先同步 OpenMetadata 或补资产映射。" />
+								),
+							},
 							{
 								key: "DATASET",
 								label: `数据集（${grouped.DATASET.length}）`,

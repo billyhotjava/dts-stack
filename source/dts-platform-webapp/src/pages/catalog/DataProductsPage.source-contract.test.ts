@@ -31,6 +31,15 @@ test("data products page exposes enterprise product contract fields", () => {
 	assert.match(SOURCE, /消费可见性/);
 });
 
+test("data products page shows a readable product contract without entering edit mode", () => {
+	assert.match(SOURCE, /resolveProductReadiness/);
+	assert.match(SOURCE, /DataProductContractModal/);
+	assert.match(SOURCE, /数据产品合同/);
+	assert.match(SOURCE, /发布就绪/);
+	assert.match(SOURCE, /成员预览/);
+	assert.match(SOURCE, /核心指标预览/);
+});
+
 test("data products page is reachable from the data asset portal menu", () => {
 	assert.match(MENU_SEED, /"title": "数据产品"/);
 	assert.match(MENU_SEED, /"externalLink": "\/catalog\/data-products"/);
