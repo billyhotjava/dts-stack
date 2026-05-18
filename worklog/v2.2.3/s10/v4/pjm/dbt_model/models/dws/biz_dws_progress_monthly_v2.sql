@@ -57,7 +57,7 @@ period_stats AS (
     SUM(CASE WHEN is_milestone_node AND is_overdue_completed THEN 1 ELSE 0 END)      AS milestone_overdue_completed_cnt,
     SUM(CASE WHEN is_milestone_node AND is_pending_normal THEN 1 ELSE 0 END)         AS milestone_pending_cnt,
 
-    -- 业务 4 大分类（gpmc-overview-v3 口径：不正常待变更合并入"超期未完成"）
+    -- 业务 4 大分类（gpmc-overview-v4 口径：不正常待变更合并入"超期未完成"）
     SUM(CASE WHEN is_on_time                      THEN 1 ELSE 0 END)                 AS on_time_cnt_v2,
     SUM(CASE WHEN is_pending_normal               THEN 1 ELSE 0 END)                 AS pending_normal_cnt_v2,
     SUM(CASE WHEN is_overdue_completed_effective  THEN 1 ELSE 0 END)                 AS overdue_completed_effective_cnt,
@@ -136,7 +136,7 @@ SELECT
   p.major_total_cnt,
   p.important_total_cnt,
 
-  -- 业务 4 大分类（对齐 gpmc-overview-v3 口径）
+  -- 业务 4 大分类（对齐 gpmc-overview-v4 口径）
   p.on_time_cnt_v2,
   p.pending_normal_cnt_v2,
   p.overdue_completed_effective_cnt,

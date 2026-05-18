@@ -16,6 +16,8 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
+import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import com.yuzhi.dts.platform.domain.infra.InfraOdsTableMapping;
 import com.yuzhi.dts.platform.domain.modeling.ModelingPlan;
 import com.yuzhi.dts.platform.domain.modeling.ModelingSqlModel;
@@ -23,6 +25,7 @@ import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.repository.explore.QueryDatasetAssetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingPlanRepository;
@@ -95,6 +98,9 @@ class ModelingSqlModelServiceTest {
     private CatalogDatasetRepository datasetRepository;
 
     @Mock
+    private CatalogDomainRepository catalogDomainRepository;
+
+    @Mock
     private CatalogTableSchemaRepository tableRepository;
 
     @Mock
@@ -152,6 +158,7 @@ class ModelingSqlModelServiceTest {
                 security,
                 dbtConfigService,
                 datasetRepository,
+                catalogDomainRepository,
                 tableRepository,
                 columnRepository,
                 queryDatasetAssetRepository,
@@ -258,6 +265,43 @@ class ModelingSqlModelServiceTest {
             new DbtConfigService.DbtWorkspaceStatus(true, "ok", Map.of())
         );
         lenient().when(dbtConfigService.loadConfig()).thenReturn(view);
+    }
+
+    @Test
+    void syncDraftColumns_shouldUsePlanDomainIdWhenCreatingCatalogDataset() {
+        UUID domainId = UUID.randomUUID();
+        CatalogDomain domain = new CatalogDomain();
+        domain.setId(domainId);
+        domain.setName("销售主题域");
+        plan.setDomain("销售域文本");
+        plan.setDomainId(domainId);
+
+        ModelingSqlModel model = new ModelingSqlModel();
+        model.setId(UUID.randomUUID());
+        model.setPlanId(planId);
+        model.setName("dwd_sales_order");
+        model.setSchemaName("dwd");
+        model.setLayer("DWD");
+        model.setOwnerDept("D1");
+        model.setModelPath("models/dwd/dwd_sales_order.sql");
+
+        when(catalogDomainRepository.findById(domainId)).thenReturn(Optional.of(domain));
+        when(datasetRepository.findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("dwd", "dwd_sales_order"))
+            .thenReturn(Optional.empty());
+        when(datasetRepository.save(any(CatalogDataset.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(tableRepository.findFirstByDatasetAndNameIgnoreCase(any(CatalogDataset.class), eq("dwd_sales_order")))
+            .thenReturn(Optional.empty());
+        when(tableRepository.save(any(CatalogTableSchema.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(columnSyncService.parseCsv(any(Path.class))).thenReturn(
+            List.of(new CatalogColumnSyncService.ColumnSpec("id", "varchar", false, "ID", null, null, null, null))
+        );
+        when(columnSyncService.upsertColumns(any(CatalogTableSchema.class), any(), anyString())).thenReturn(1);
+
+        service.syncDraftColumns(model);
+
+        ArgumentCaptor<CatalogDataset> datasetCaptor = ArgumentCaptor.forClass(CatalogDataset.class);
+        verify(datasetRepository).save(datasetCaptor.capture());
+        assertThat(datasetCaptor.getValue().getDomain()).isEqualTo(domain);
     }
 
     @Test

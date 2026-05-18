@@ -76,7 +76,7 @@ class ModelingSqlModelVisibilityTest {
         service = new ModelingSqlModelService(
             repo, planRepo, dataSourceRepository, adminInfraClient,
             organizationVisibilityService, security, dbtConfigService,
-            datasetRepository, tableRepository, columnRepository,
+            datasetRepository, null, tableRepository, columnRepository,
             queryDatasetAssetRepository, biReportLinkRepository,
             columnSyncService, auditService, objectMapper, fileService,
             taskExecutor, txManager, null, null

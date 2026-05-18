@@ -1,8 +1,8 @@
 {
   "schemaVersion": 3,
-  "id": "gpmc-tech-state-board-v3",
-  "name": "GPMC 技术状态与跟进",
-  "description": "管控层技术状态看板模板，覆盖技术状态变更、签署完成率和措施闭环。",
+  "id": "gpmc-risk-board-v4",
+  "name": "GPMC 风险与预警中心",
+  "description": "管控层风险看板模板，覆盖风险矩阵、分类分布、清单和措施摘要。",
   "classification": "INTERNAL",
   "width": 1920,
   "height": 1080,
@@ -42,9 +42,9 @@
   ],
   "components": [
     {
-      "id": "gpmc-tech-top",
+      "id": "gpmc-risk-top",
       "type": "shape",
-      "name": "gpmc-tech-top",
+      "name": "gpmc-risk-top",
       "x": 36,
       "y": 110,
       "width": 1848,
@@ -61,13 +61,13 @@
       }
     },
     {
-      "id": "gpmc-tech-left",
+      "id": "gpmc-risk-left",
       "type": "shape",
-      "name": "gpmc-tech-left",
+      "name": "gpmc-risk-left",
       "x": 36,
       "y": 268,
-      "width": 450,
-      "height": 540,
+      "width": 936,
+      "height": 316,
       "zIndex": 1,
       "locked": false,
       "visible": true,
@@ -80,13 +80,13 @@
       }
     },
     {
-      "id": "gpmc-tech-mid",
+      "id": "gpmc-risk-right",
       "type": "shape",
-      "name": "gpmc-tech-mid",
-      "x": 498,
+      "name": "gpmc-risk-right",
+      "x": 984,
       "y": 268,
-      "width": 450,
-      "height": 540,
+      "width": 900,
+      "height": 316,
       "zIndex": 1,
       "locked": false,
       "visible": true,
@@ -99,9 +99,9 @@
       }
     },
     {
-      "id": "gpmc-tech-bottom",
+      "id": "gpmc-risk-bottom",
       "type": "shape",
-      "name": "gpmc-tech-bottom",
+      "name": "gpmc-risk-bottom",
       "x": 36,
       "y": 838,
       "width": 1848,
@@ -118,9 +118,9 @@
       }
     },
     {
-      "id": "技术状态与跟进-header-bar",
+      "id": "风险与预警中心-header-bar",
       "type": "shape",
-      "name": "技术状态与跟进-header-bar",
+      "name": "风险与预警中心-header-bar",
       "x": 0,
       "y": 0,
       "width": 1920,
@@ -137,9 +137,9 @@
       }
     },
     {
-      "id": "技术状态与跟进-title",
+      "id": "风险与预警中心-title",
       "type": "title",
-      "name": "技术状态与跟进",
+      "name": "风险与预警中心",
       "x": 44,
       "y": 24,
       "width": 720,
@@ -148,7 +148,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "技术状态与跟进",
+        "text": "风险与预警中心",
         "fontSize": 32,
         "fontWeight": "800",
         "color": "#ffffff",
@@ -156,7 +156,7 @@
       }
     },
     {
-      "id": "tech-state-topic-overview-shape",
+      "id": "risk-topic-overview-shape",
       "type": "shape",
       "name": "综合态势",
       "x": 44,
@@ -176,7 +176,7 @@
       "actions": []
     },
     {
-      "id": "tech-state-topic-overview-label",
+      "id": "risk-topic-overview-label",
       "type": "title",
       "name": "综合态势",
       "x": 44,
@@ -196,7 +196,7 @@
       "actions": []
     },
     {
-      "id": "tech-state-topic-execution-shape",
+      "id": "risk-topic-execution-shape",
       "type": "shape",
       "name": "执行监控",
       "x": 188,
@@ -216,7 +216,7 @@
       "actions": []
     },
     {
-      "id": "tech-state-topic-execution-label",
+      "id": "risk-topic-execution-label",
       "type": "title",
       "name": "执行监控",
       "x": 188,
@@ -236,7 +236,7 @@
       "actions": []
     },
     {
-      "id": "tech-state-topic-quality-shape",
+      "id": "risk-topic-quality-shape",
       "type": "shape",
       "name": "质量跟进",
       "x": 332,
@@ -256,7 +256,7 @@
       "actions": []
     },
     {
-      "id": "tech-state-topic-quality-label",
+      "id": "risk-topic-quality-label",
       "type": "title",
       "name": "质量跟进",
       "x": 332,
@@ -276,7 +276,7 @@
       "actions": []
     },
     {
-      "id": "tech-state-topic-tech-state-shape",
+      "id": "risk-topic-tech-state-shape",
       "type": "shape",
       "name": "技术状态",
       "x": 476,
@@ -288,15 +288,15 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(88, 180, 255, 0.24)",
-        "borderColor": "rgba(39, 216, 255, 0.22)",
+        "fillColor": "rgba(88, 180, 255, 0.16)",
+        "borderColor": "rgba(88, 180, 255, 0.30)",
         "borderWidth": 1,
         "radius": 12
       },
       "actions": []
     },
     {
-      "id": "tech-state-topic-tech-state-label",
+      "id": "risk-topic-tech-state-label",
       "type": "title",
       "name": "技术状态",
       "x": 476,
@@ -309,14 +309,14 @@
       "config": {
         "text": "技术状态",
         "fontSize": 17,
-        "fontWeight": "700",
+        "fontWeight": "600",
         "color": "#ffffff",
         "textAlign": "center"
       },
       "actions": []
     },
     {
-      "id": "tech-state-topic-cost-shape",
+      "id": "risk-topic-cost-shape",
       "type": "shape",
       "name": "成本控制",
       "x": 620,
@@ -336,7 +336,7 @@
       "actions": []
     },
     {
-      "id": "tech-state-topic-cost-label",
+      "id": "risk-topic-cost-label",
       "type": "title",
       "name": "成本控制",
       "x": 620,
@@ -356,7 +356,7 @@
       "actions": []
     },
     {
-      "id": "tech-state-topic-risk-shape",
+      "id": "risk-topic-risk-shape",
       "type": "shape",
       "name": "风险预警",
       "x": 764,
@@ -368,15 +368,15 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(88, 180, 255, 0.16)",
-        "borderColor": "rgba(88, 180, 255, 0.30)",
+        "fillColor": "rgba(88, 180, 255, 0.24)",
+        "borderColor": "rgba(39, 216, 255, 0.22)",
         "borderWidth": 1,
         "radius": 12
       },
       "actions": []
     },
     {
-      "id": "tech-state-topic-risk-label",
+      "id": "risk-topic-risk-label",
       "type": "title",
       "name": "风险预警",
       "x": 764,
@@ -389,14 +389,14 @@
       "config": {
         "text": "风险预警",
         "fontSize": 17,
-        "fontWeight": "600",
+        "fontWeight": "700",
         "color": "#ffffff",
         "textAlign": "center"
       },
       "actions": []
     },
     {
-      "id": "技术状态与跟进-date",
+      "id": "风险与预警中心-date",
       "type": "filter-date-range",
       "name": "统计周期",
       "x": 1260,
@@ -417,7 +417,7 @@
       }
     },
     {
-      "id": "技术状态与跟进-dept",
+      "id": "风险与预警中心-dept",
       "type": "filter-select",
       "name": "事业部/科室",
       "x": 940,
@@ -453,7 +453,7 @@
       }
     },
     {
-      "id": "技术状态与跟进-project",
+      "id": "风险与预警中心-project",
       "type": "filter-select",
       "name": "项目编号",
       "x": 1104,
@@ -489,7 +489,7 @@
       }
     },
     {
-      "id": "技术状态与跟进-risk",
+      "id": "风险与预警中心-risk",
       "type": "filter-select",
       "name": "风险等级",
       "x": 1596,
@@ -517,7 +517,7 @@
       }
     },
     {
-      "id": "技术状态与跟进-explanation-shape",
+      "id": "风险与预警中心-explanation-shape",
       "type": "shape",
       "name": "说明",
       "x": 1732,
@@ -538,12 +538,12 @@
         {
           "type": "open-panel",
           "panelTitle": "说明卡",
-          "panelBodyTemplate": "聚焦技术状态变更、签署进度、未闭环项和专项跟进动作。\n• 先看状态变更数、签署完成率和未闭环项。\n• 再看变更类别分布和跟进措施摘要。\n• 技术状态看板用于判断变更是否受控，而不是只看变更多寡。"
+          "panelBodyTemplate": "聚焦风险等级、分布、矩阵位置和措施闭环效果。\n• 先看风险总数、高风险数和闭环率。\n• 再看风险矩阵、分类分布和重点风险清单。\n• 措施摘要用于判断高风险是否有明确应对路径。"
         }
       ]
     },
     {
-      "id": "技术状态与跟进-explanation-label",
+      "id": "风险与预警中心-explanation-label",
       "type": "title",
       "name": "说明",
       "x": 1732,
@@ -564,12 +564,12 @@
         {
           "type": "open-panel",
           "panelTitle": "说明卡",
-          "panelBodyTemplate": "聚焦技术状态变更、签署进度、未闭环项和专项跟进动作。\n• 先看状态变更数、签署完成率和未闭环项。\n• 再看变更类别分布和跟进措施摘要。\n• 技术状态看板用于判断变更是否受控，而不是只看变更多寡。"
+          "panelBodyTemplate": "聚焦风险等级、分布、矩阵位置和措施闭环效果。\n• 先看风险总数、高风险数和闭环率。\n• 再看风险矩阵、分类分布和重点风险清单。\n• 措施摘要用于判断高风险是否有明确应对路径。"
         }
       ]
     },
     {
-      "id": "技术状态与跟进-guide-shape",
+      "id": "风险与预警中心-guide-shape",
       "type": "shape",
       "name": "导览",
       "x": 1808,
@@ -590,12 +590,12 @@
         {
           "type": "open-panel",
           "panelTitle": "导览卡",
-          "panelBodyTemplate": "建议按“状态变更 → 签署完成率 → 未闭环项 → 措施”讲解。\n• 先用变更数和签署完成率说明变更是否受控。\n• 再下钻到执行层查看技术状态对象和措施细节。\n• 技术状态与质量相邻，可串联说明两类问题的差异。\n\n→ 进入技术状态详情：查看状态对象、签署情况和跟进措施。\n→ 查看质量看板：切换到质量专题，串联说明问题与状态。"
+          "panelBodyTemplate": "建议按“风险等级 → 矩阵分布 → 重点风险 → 措施闭环”讲解。\n• 先用高风险数和矩阵解释风险集中在哪些象限。\n• 再聚焦重点风险清单和措施摘要，说明是否受控。\n• 执行层详情承载风险对象与应对措施的只读明细。\n\n→ 进入风险详情：查看风险对象、等级、责任人和措施明细。\n→ 返回战略层大屏：回到全局态势继续讲战略层健康度。"
         }
       ]
     },
     {
-      "id": "技术状态与跟进-guide-label",
+      "id": "风险与预警中心-guide-label",
       "type": "title",
       "name": "导览",
       "x": 1808,
@@ -616,14 +616,14 @@
         {
           "type": "open-panel",
           "panelTitle": "导览卡",
-          "panelBodyTemplate": "建议按“状态变更 → 签署完成率 → 未闭环项 → 措施”讲解。\n• 先用变更数和签署完成率说明变更是否受控。\n• 再下钻到执行层查看技术状态对象和措施细节。\n• 技术状态与质量相邻，可串联说明两类问题的差异。\n\n→ 进入技术状态详情：查看状态对象、签署情况和跟进措施。\n→ 查看质量看板：切换到质量专题，串联说明问题与状态。"
+          "panelBodyTemplate": "建议按“风险等级 → 矩阵分布 → 重点风险 → 措施闭环”讲解。\n• 先用高风险数和矩阵解释风险集中在哪些象限。\n• 再聚焦重点风险清单和措施摘要，说明是否受控。\n• 执行层详情承载风险对象与应对措施的只读明细。\n\n→ 进入风险详情：查看风险对象、等级、责任人和措施明细。\n→ 返回战略层大屏：回到全局态势继续讲战略层健康度。"
         }
       ]
     },
     {
-      "id": "gpmc-tech-kpi-total",
+      "id": "gpmc-risk-kpi-total",
       "type": "number-card",
-      "name": "变更单总数",
+      "name": "风险总数",
       "x": 44,
       "y": 126,
       "width": 350,
@@ -632,7 +632,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "变更单总数",
+        "title": "风险总数",
         "value": 0,
         "suffix": "",
         "precision": 0,
@@ -646,7 +646,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COALESCE(SUM(s.total_change_cnt),0) AS v FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
+          "query": "SELECT COALESCE(SUM(s.total_risk_cnt),0) AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -671,9 +671,9 @@
       }
     },
     {
-      "id": "gpmc-tech-kpi-unsigned",
+      "id": "gpmc-risk-kpi-high",
       "type": "number-card",
-      "name": "未签署数",
+      "name": "高风险数",
       "x": 414,
       "y": 126,
       "width": 350,
@@ -682,7 +682,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "未签署数",
+        "title": "高风险数",
         "value": 0,
         "suffix": "",
         "precision": 0,
@@ -696,7 +696,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COALESCE(SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii),0) AS v FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
+          "query": "SELECT COALESCE(SUM(s.high_cnt),0) AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -721,9 +721,9 @@
       }
     },
     {
-      "id": "gpmc-tech-kpi-sign-rate",
+      "id": "gpmc-risk-kpi-mid",
       "type": "number-card",
-      "name": "签署率",
+      "name": "中风险数",
       "x": 784,
       "y": 126,
       "width": 350,
@@ -732,57 +732,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "签署率",
-        "value": 0,
-        "suffix": "%",
-        "precision": 2,
-        "titleFontSize": 17,
-        "valueFontSize": 34,
-        "titleColor": "#ffffff",
-        "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff"
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT CASE WHEN SUM(s.total_change_cnt)=0 THEN 0 ELSE ROUND(SUM(s.order_signed_cnt)::numeric/NULLIF(SUM(s.total_change_cnt),0)::numeric*100,2) END AS v FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "gpmc-tech-kpi-reform-pending",
-      "type": "number-card",
-      "name": "未整改数",
-      "x": 1154,
-      "y": 126,
-      "width": 350,
-      "height": 118,
-      "zIndex": 12,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "未整改数",
+        "title": "中风险数",
         "value": 0,
         "suffix": "",
         "precision": 0,
@@ -796,7 +746,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COALESCE(SUM(s.reform_pending_i_ii),0) AS v FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
+          "query": "SELECT COALESCE(SUM(s.mid_cnt),0) AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -821,9 +771,59 @@
       }
     },
     {
-      "id": "gpmc-tech-kpi-reform-rate",
+      "id": "gpmc-risk-kpi-open",
       "type": "number-card",
-      "name": "整改完成率",
+      "name": "未释放风险数",
+      "x": 1154,
+      "y": 126,
+      "width": 350,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "未释放风险数",
+        "value": 0,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(SUM(s.open_cnt),0) AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-risk-kpi-release-rate",
+      "type": "number-card",
+      "name": "风险释放率",
       "x": 1524,
       "y": 126,
       "width": 350,
@@ -832,7 +832,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "整改完成率",
+        "title": "风险释放率",
         "value": 0,
         "suffix": "%",
         "precision": 2,
@@ -846,7 +846,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT CASE WHEN (SUM(s.reform_pending_i_ii)+SUM(s.reform_done_i_ii))=0 THEN 0 ELSE ROUND(SUM(s.reform_done_i_ii)::numeric/NULLIF(SUM(s.reform_pending_i_ii)+SUM(s.reform_done_i_ii),0)::numeric*100,2) END AS v FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
+          "query": "SELECT CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/NULLIF(SUM(s.total_risk_cnt),0)::numeric*100,2) END AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -871,51 +871,51 @@
       }
     },
     {
-      "id": "gpmc-tech-project-sign",
+      "id": "gpmc-risk-project",
       "type": "bar-chart",
-      "name": "项目变更签署率",
-      "x": 52,
-      "y": 288,
-      "width": 418,
-      "height": 510,
+      "name": "项目风险统计",
+      "x": 48,
+      "y": 278,
+      "width": 912,
+      "height": 296,
       "zIndex": 15,
       "locked": false,
       "visible": true,
       "config": {
         "title": "",
         "xAxis": {
-          "type": "category",
-          "name": "项目"
-        },
-        "yAxis": {
           "type": "value",
           "name": "数量"
         },
-        "orientation": "vertical",
+        "yAxis": {
+          "type": "category",
+          "name": "项目"
+        },
+        "orientation": "horizontal",
         "legend": {
           "show": true
         },
         "colors": [
           "#8fa7c4",
-          "#ffc645",
-          "#2ee6a6"
+          "#ff5d73",
+          "#ffc645"
         ],
         "categoryKey": "项目编号",
         "series": [
           {
-            "name": "变更总数",
-            "dataKey": "变更总数",
+            "name": "风险总数",
+            "dataKey": "风险总数",
             "color": "#8fa7c4"
           },
           {
-            "name": "未签署",
-            "dataKey": "未签署",
-            "color": "#ffc645"
+            "name": "高风险数",
+            "dataKey": "高风险数",
+            "color": "#ff5d73"
           },
           {
-            "name": "已签署",
-            "dataKey": "已签署",
-            "color": "#2ee6a6"
+            "name": "未释放风险数",
+            "dataKey": "未释放风险数",
+            "color": "#ffc645"
           }
         ],
         "titleFontSize": 0,
@@ -926,7 +926,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT s.project_no AS \"项目编号\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"未签署\", SUM(s.order_signed_cnt) AS \"已签署\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]] GROUP BY s.project_no ORDER BY SUM(s.total_change_cnt) DESC LIMIT 12",
+          "query": "SELECT s.project_no AS \"项目编号\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险数\", SUM(s.open_cnt) AS \"未释放风险数\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]] GROUP BY s.project_no ORDER BY SUM(s.total_risk_cnt) DESC LIMIT 12",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -951,13 +951,76 @@
       }
     },
     {
-      "id": "gpmc-tech-dept-review",
+      "id": "gpmc-risk-category",
+      "type": "pie-chart",
+      "name": "风险分类分布",
+      "x": 972,
+      "y": 278,
+      "width": 896,
+      "height": 296,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#45a4ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#27d8ff",
+          "#ff8f45",
+          "#8fa7c4"
+        ],
+        "categoryKey": "风险类型",
+        "valueKey": "数量",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(d.risk_category,'未分类') AS \"风险类型\", COUNT(*) AS \"数量\" FROM biz_dwd_risk_info_v2 d WHERE to_char(d.risk_submit_date,'YYYY-MM') >= to_char({{dateFrom}}::date,'YYYY-MM') AND to_char(d.risk_submit_date,'YYYY-MM') <= to_char({{dateTo}}::date,'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.risk_level = {{riskLevel}}]] GROUP BY COALESCE(d.risk_category,'未分类') ORDER BY COUNT(*) DESC",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-risk-dept",
       "type": "bar-chart",
-      "name": "科室变更签署审查",
-      "x": 514,
-      "y": 288,
-      "width": 418,
-      "height": 510,
+      "name": "科室风险统计",
+      "x": 48,
+      "y": 586,
+      "width": 1820,
+      "height": 250,
       "zIndex": 15,
       "locked": false,
       "visible": true,
@@ -976,32 +1039,26 @@
           "show": true
         },
         "colors": [
-          "#45a4ff",
-          "#ffc645",
-          "#2ee6a6",
-          "#ff5d73"
+          "#8fa7c4",
+          "#ff5d73",
+          "#ffc645"
         ],
         "categoryKey": "责任科室",
         "series": [
           {
-            "name": "已提出",
-            "dataKey": "已提出",
-            "color": "#45a4ff"
+            "name": "风险总数",
+            "dataKey": "风险总数",
+            "color": "#8fa7c4"
           },
           {
-            "name": "未提出",
-            "dataKey": "未提出",
+            "name": "高风险数",
+            "dataKey": "高风险数",
+            "color": "#ff5d73"
+          },
+          {
+            "name": "未释放风险数",
+            "dataKey": "未释放风险数",
             "color": "#ffc645"
-          },
-          {
-            "name": "已评估评审",
-            "dataKey": "已评估评审",
-            "color": "#2ee6a6"
-          },
-          {
-            "name": "未评估评审",
-            "dataKey": "未评估评审",
-            "color": "#ff5d73"
           }
         ],
         "titleFontSize": 0,
@@ -1012,7 +1069,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT s.dept AS \"责任科室\", SUM(s.requirement_submitted_cnt) AS \"已提出\", SUM(s.requirement_not_submitted_cnt) AS \"未提出\", SUM(s.review_done_cnt) AS \"已评估评审\", SUM(s.review_pending_cnt) AS \"未评估评审\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.project_no = {{projectNo}}]] AND s.dept IS NOT NULL GROUP BY s.dept ORDER BY SUM(s.total_change_cnt) DESC LIMIT 12",
+          "query": "SELECT s.dept AS \"责任科室\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险数\", SUM(s.open_cnt) AS \"未释放风险数\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.project_no = {{projectNo}}]] AND s.dept IS NOT NULL GROUP BY s.dept ORDER BY SUM(s.total_risk_cnt) DESC LIMIT 12",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1033,156 +1090,9 @@
       }
     },
     {
-      "id": "gpmc-tech-dept-trend",
-      "type": "line-chart",
-      "name": "科室变更趋势",
-      "x": 976,
-      "y": 288,
-      "width": 418,
-      "height": 510,
-      "zIndex": 15,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "",
-        "xAxis": {
-          "type": "category",
-          "name": "月份"
-        },
-        "yAxis": {
-          "type": "value",
-          "name": "数量"
-        },
-        "legend": {
-          "show": true
-        },
-        "colors": [
-          "#45a4ff",
-          "#2ee6a6",
-          "#ff5d73"
-        ],
-        "categoryKey": "月份",
-        "series": [
-          {
-            "name": "变更总数",
-            "dataKey": "变更总数",
-            "color": "#45a4ff"
-          },
-          {
-            "name": "已签署",
-            "dataKey": "已签署",
-            "color": "#2ee6a6"
-          },
-          {
-            "name": "未签署",
-            "dataKey": "未签署",
-            "color": "#ff5d73"
-          }
-        ],
-        "titleFontSize": 0,
-        "chartPaddingTop": 36,
-        "axisLabelColor": "#ffffff"
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT s.period_month AS \"月份\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.order_signed_cnt) AS \"已签署\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"未签署\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]] GROUP BY s.period_month ORDER BY s.period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "gpmc-tech-project-count",
-      "type": "bar-chart",
-      "name": "项目变更次数",
-      "x": 1438,
-      "y": 288,
-      "width": 430,
-      "height": 510,
-      "zIndex": 15,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "",
-        "xAxis": {
-          "type": "category",
-          "name": "项目"
-        },
-        "yAxis": {
-          "type": "value",
-          "name": "次数"
-        },
-        "orientation": "vertical",
-        "legend": {
-          "show": false
-        },
-        "colors": [
-          "#45a4ff"
-        ],
-        "categoryKey": "项目编号",
-        "series": [
-          {
-            "name": "变更次数",
-            "dataKey": "变更次数",
-            "color": "#45a4ff"
-          }
-        ],
-        "titleFontSize": 0,
-        "chartPaddingTop": 36,
-        "axisLabelColor": "#ffffff"
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT s.project_no AS \"项目编号\", SUM(s.total_change_cnt) AS \"变更次数\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]] GROUP BY s.project_no ORDER BY SUM(s.total_change_cnt) DESC LIMIT 12",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "gpmc-tech-change-list",
+      "id": "gpmc-risk-detail",
       "type": "table",
-      "name": "技术状态变更清单",
+      "name": "项目风险汇总列表",
       "x": 36,
       "y": 848,
       "width": 1848,
@@ -1199,18 +1109,43 @@
             "width": 100
           },
           {
-            "source": "变更单号",
-            "alias": "变更单号",
-            "width": 160
+            "source": "分系统/分任务",
+            "alias": "分系统/分任务",
+            "width": 130
           },
           {
-            "source": "变更内容",
-            "alias": "变更内容",
-            "width": 240
+            "source": "风险名称",
+            "alias": "风险名称",
+            "width": 200
           },
           {
-            "source": "责任人",
-            "alias": "责任人",
+            "source": "风险等级",
+            "alias": "风险等级",
+            "width": 80
+          },
+          {
+            "source": "风险分类",
+            "alias": "风险分类",
+            "width": 100
+          },
+          {
+            "source": "风险状态",
+            "alias": "风险状态",
+            "width": 100
+          },
+          {
+            "source": "提出时间",
+            "alias": "提出时间",
+            "width": 110
+          },
+          {
+            "source": "计划释放时间",
+            "alias": "计划释放时间",
+            "width": 120
+          },
+          {
+            "source": "负责人",
+            "alias": "负责人",
             "width": 90
           },
           {
@@ -1219,29 +1154,14 @@
             "width": 130
           },
           {
-            "source": "发起时间",
-            "alias": "发起时间",
-            "width": 110
-          },
-          {
-            "source": "签署状态",
-            "alias": "签署状态",
-            "width": 110
-          },
-          {
-            "source": "签署完成时间",
-            "alias": "签署完成时间",
+            "source": "实际释放时间",
+            "alias": "实际释放时间",
             "width": 120
           },
           {
-            "source": "整改状态",
-            "alias": "整改状态",
-            "width": 110
-          },
-          {
-            "source": "整改完成时间",
-            "alias": "整改完成时间",
-            "width": 120
+            "source": "滞留天数",
+            "alias": "滞留天数",
+            "width": 90
           }
         ],
         "pageSize": 20,
@@ -1258,7 +1178,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT d.project_no AS \"项目编号\", COALESCE(d.tech_state_name,'-') AS \"变更单号\", COALESCE(d.change_item,'-') AS \"变更内容\", COALESCE(d.owner,'-') AS \"责任人\", d.dept AS \"责任科室\", to_char(d.change_submit_time,'YYYY-MM-DD') AS \"发起时间\", CASE WHEN d.is_signature_completed THEN '已签署' ELSE '未签署' END AS \"签署状态\", to_char(d.signature_closure_date,'YYYY-MM-DD') AS \"签署完成时间\", COALESCE(d.reform_status,'-') AS \"整改状态\", to_char(d.reform_date,'YYYY-MM-DD') AS \"整改完成时间\" FROM biz_dwd_tech_state_v2 d WHERE to_char(d.change_submit_time,'YYYY-MM') >= to_char({{dateFrom}}::date,'YYYY-MM') AND to_char(d.change_submit_time,'YYYY-MM') <= to_char({{dateTo}}::date,'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] ORDER BY d.change_submit_time DESC LIMIT 500",
+          "query": "SELECT d.project_no AS \"项目编号\", COALESCE(d.subsystem,'') AS \"分系统/分任务\", d.risk_name AS \"风险名称\", COALESCE(d.risk_level,'-') AS \"风险等级\", COALESCE(d.risk_category,'-') AS \"风险分类\", COALESCE(d.risk_status,'-') AS \"风险状态\", to_char(d.risk_submit_date,'YYYY-MM-DD') AS \"提出时间\", to_char(d.final_release_date,'YYYY-MM-DD') AS \"计划释放时间\", COALESCE(d.response_owner,'-') AS \"负责人\", COALESCE(d.dept,'-') AS \"责任科室\", to_char(d.risk_release_date,'YYYY-MM-DD') AS \"实际释放时间\", d.pending_days AS \"滞留天数\" FROM biz_dwd_risk_info_v2 d WHERE to_char(d.risk_submit_date,'YYYY-MM') >= to_char({{dateFrom}}::date,'YYYY-MM') AND to_char(d.risk_submit_date,'YYYY-MM') <= to_char({{dateTo}}::date,'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.risk_level = {{riskLevel}}]] ORDER BY d.risk_rank DESC, d.risk_submit_date DESC LIMIT 500",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1277,19 +1197,23 @@
             {
               "name": "projectNo",
               "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
             }
           ]
         }
       }
     },
     {
-      "id": "gpmc-tech-mid2",
+      "id": "gpmc-risk-mid2-left",
       "type": "shape",
-      "name": "gpmc-tech-mid2",
-      "x": 960,
-      "y": 268,
-      "width": 450,
-      "height": 540,
+      "name": "gpmc-risk-mid2-left",
+      "x": 36,
+      "y": 576,
+      "width": 1848,
+      "height": 254,
       "zIndex": 1,
       "locked": false,
       "visible": true,
@@ -1302,16 +1226,16 @@
       }
     },
     {
-      "id": "gpmc-tech-right",
+      "id": "gpmc-risk-mid2-right",
       "type": "shape",
-      "name": "gpmc-tech-right",
-      "x": 1422,
-      "y": 268,
-      "width": 462,
-      "height": 540,
+      "name": "gpmc-risk-mid2-right",
+      "x": 984,
+      "y": 576,
+      "width": 900,
+      "height": 254,
       "zIndex": 1,
       "locked": false,
-      "visible": true,
+      "visible": false,
       "config": {
         "shapeType": "rect",
         "fillColor": "rgba(12, 38, 82, 0.18)",
@@ -1321,18 +1245,18 @@
       }
     },
     {
-      "id": "gpmc-tech-project-sign-overlay-title",
+      "id": "gpmc-risk-project-overlay-title",
       "type": "title",
-      "name": "项目变更签署率-标题",
-      "x": 52,
-      "y": 276,
+      "name": "项目风险统计-标题",
+      "x": 64,
+      "y": 286,
       "width": 360,
       "height": 28,
       "zIndex": 20,
       "locked": false,
       "visible": true,
       "config": {
-        "text": "项目变更签署率",
+        "text": "项目风险统计（按风险总数排序）",
         "fontSize": 20,
         "fontWeight": "700",
         "color": "#ffffff",
@@ -1340,18 +1264,18 @@
       }
     },
     {
-      "id": "gpmc-tech-dept-review-overlay-title",
+      "id": "gpmc-risk-category-overlay-title",
       "type": "title",
-      "name": "科室变更签署审查-标题",
-      "x": 514,
-      "y": 276,
+      "name": "风险分类分布-标题",
+      "x": 988,
+      "y": 286,
       "width": 360,
       "height": 28,
       "zIndex": 20,
       "locked": false,
       "visible": true,
       "config": {
-        "text": "科室变更签署审查",
+        "text": "风险分类分布（按风险类型统计）",
         "fontSize": 20,
         "fontWeight": "700",
         "color": "#ffffff",
@@ -1359,18 +1283,18 @@
       }
     },
     {
-      "id": "gpmc-tech-dept-trend-overlay-title",
+      "id": "gpmc-risk-dept-overlay-title",
       "type": "title",
-      "name": "科室变更趋势-标题",
-      "x": 976,
-      "y": 276,
+      "name": "科室风险统计-标题",
+      "x": 64,
+      "y": 594,
       "width": 360,
       "height": 28,
       "zIndex": 20,
       "locked": false,
       "visible": true,
       "config": {
-        "text": "科室变更趋势",
+        "text": "科室风险统计（按风险总数排序）",
         "fontSize": 20,
         "fontWeight": "700",
         "color": "#ffffff",
@@ -1378,28 +1302,9 @@
       }
     },
     {
-      "id": "gpmc-tech-project-count-overlay-title",
+      "id": "gpmc-risk-detail-overlay-title",
       "type": "title",
-      "name": "项目变更次数-标题",
-      "x": 1438,
-      "y": 276,
-      "width": 360,
-      "height": 28,
-      "zIndex": 20,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "text": "项目变更次数",
-        "fontSize": 20,
-        "fontWeight": "700",
-        "color": "#ffffff",
-        "textAlign": "flex-start"
-      }
-    },
-    {
-      "id": "gpmc-tech-change-list-overlay-title",
-      "type": "title",
-      "name": "技术状态变更清单-标题",
+      "name": "项目风险汇总列表-标题",
       "x": 52,
       "y": 856,
       "width": 360,
@@ -1408,7 +1313,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "技术状态变更清单（按更改提出时间倒序）",
+        "text": "项目风险汇总列表（按风险级别·提出时间倒序）",
         "fontSize": 20,
         "fontWeight": "700",
         "color": "#ffffff",

@@ -1,8 +1,8 @@
 {
   "schemaVersion": 3,
-  "id": "gpmc-drill-quality-v3",
-  "name": "执行层-质量问题与跟进明细",
-  "description": "质量问题钻取页面，展示质量问题清单、闭环摘要及跟进措施。",
+  "id": "gpmc-drill-tech-state-v4",
+  "name": "执行层-技术状态与跟进明细",
+  "description": "技术状态变更钻取页面，展示变更清单、状态分布及跟进措施。",
   "classification": "INTERNAL",
   "width": 1920,
   "height": 1080,
@@ -39,9 +39,9 @@
   ],
   "components": [
     {
-      "id": "drill-quality-header-bar",
+      "id": "drill-tech-header-bar",
       "type": "shape",
-      "name": "drill-quality-header-bar",
+      "name": "drill-tech-header-bar",
       "x": 0,
       "y": 0,
       "width": 1920,
@@ -58,9 +58,9 @@
       }
     },
     {
-      "id": "drill-quality-title",
+      "id": "drill-tech-title",
       "type": "title",
-      "name": "执行层-质量问题与跟进明细",
+      "name": "执行层-技术状态与跟进明细",
       "x": 20,
       "y": 12,
       "width": 500,
@@ -69,7 +69,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "执行层-质量问题与跟进明细",
+        "text": "执行层-技术状态与跟进明细",
         "fontSize": 22,
         "fontWeight": "700",
         "color": "#ffffff",
@@ -77,7 +77,7 @@
       }
     },
     {
-      "id": "drill-quality-badge",
+      "id": "drill-tech-badge",
       "type": "title",
       "name": "只读执行页",
       "x": 1760,
@@ -98,9 +98,9 @@
       }
     },
     {
-      "id": "drill-quality-back-shape",
+      "id": "drill-tech-back-shape",
       "type": "shape",
-      "name": "返回质量看板",
+      "name": "返回技术状态看板",
       "x": 1600,
       "y": 14,
       "width": 150,
@@ -118,9 +118,9 @@
       "actions": []
     },
     {
-      "id": "drill-quality-back-label",
+      "id": "drill-tech-back-label",
       "type": "title",
-      "name": "返回质量看板",
+      "name": "返回技术状态看板",
       "x": 1600,
       "y": 14,
       "width": 150,
@@ -129,7 +129,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "← 返回质量看板",
+        "text": "← 返回技术状态看板",
         "fontSize": 13,
         "fontWeight": "600",
         "color": "#ffffff",
@@ -138,9 +138,9 @@
       "actions": []
     },
     {
-      "id": "drill-quality-kpi-1",
+      "id": "drill-tech-kpi-1",
       "type": "number-card",
-      "name": "归零率",
+      "name": "签署完成率",
       "x": 20,
       "y": 70,
       "width": 456,
@@ -149,8 +149,8 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "归零率",
-        "value": "68.3",
+        "title": "签署完成率",
+        "value": "66.7",
         "unit": "%",
         "precision": 1,
         "titleColor": "#ffffff",
@@ -163,7 +163,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH agg AS (SELECT SUM(new_issue_cnt) AS new_issue_cnt, SUM(zero_completed_cnt) AS zero_completed_cnt, SUM(open_issue_cnt) AS open_issue_cnt, SUM(no_zero_plan_cnt) AS no_zero_plan_cnt FROM biz_dws_quality_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]) SELECT CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND(zero_completed_cnt::numeric/new_issue_cnt::numeric*100,2) END AS \"归零率\", CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND(open_issue_cnt::numeric/new_issue_cnt::numeric*100,2) END AS \"现存率\", CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND((new_issue_cnt-no_zero_plan_cnt)::numeric/new_issue_cnt::numeric*100,2) END AS \"计划提交率\", ROUND((CASE WHEN new_issue_cnt=0 THEN 0 ELSE zero_completed_cnt::numeric/new_issue_cnt::numeric*100 END)*0.5 + (CASE WHEN new_issue_cnt=0 THEN 0 ELSE (new_issue_cnt-no_zero_plan_cnt)::numeric/new_issue_cnt::numeric*100 END)*0.3 + (100 - CASE WHEN new_issue_cnt=0 THEN 0 ELSE open_issue_cnt::numeric/new_issue_cnt::numeric*100 END)*0.2, 2) AS \"质量健康度\" FROM agg",
+          "query": "SELECT CASE WHEN (SUM(order_signed_cnt)+SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(order_signed_cnt)::numeric/(SUM(order_signed_cnt)+SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", CASE WHEN (SUM(reform_done_i_ii)+SUM(reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(reform_done_i_ii)::numeric/(SUM(reform_done_i_ii)+SUM(reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\", CASE WHEN SUM(total_change_cnt)=0 THEN 0 ELSE ROUND((SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii))::numeric/SUM(total_change_cnt)::numeric*100,2) END AS \"未签署比率\" FROM biz_dws_tech_state_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -188,9 +188,9 @@
       }
     },
     {
-      "id": "drill-quality-kpi-2",
+      "id": "drill-tech-kpi-2",
       "type": "number-card",
-      "name": "现存率",
+      "name": "整改完成率",
       "x": 490,
       "y": 70,
       "width": 456,
@@ -199,8 +199,8 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "现存率",
-        "value": "47",
+        "title": "整改完成率",
+        "value": "75.0",
         "unit": "%",
         "precision": 1,
         "titleColor": "#ffffff",
@@ -213,7 +213,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH agg AS (SELECT SUM(new_issue_cnt) AS new_issue_cnt, SUM(zero_completed_cnt) AS zero_completed_cnt, SUM(open_issue_cnt) AS open_issue_cnt, SUM(no_zero_plan_cnt) AS no_zero_plan_cnt FROM biz_dws_quality_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]) SELECT CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND(zero_completed_cnt::numeric/new_issue_cnt::numeric*100,2) END AS \"归零率\", CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND(open_issue_cnt::numeric/new_issue_cnt::numeric*100,2) END AS \"现存率\", CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND((new_issue_cnt-no_zero_plan_cnt)::numeric/new_issue_cnt::numeric*100,2) END AS \"计划提交率\", ROUND((CASE WHEN new_issue_cnt=0 THEN 0 ELSE zero_completed_cnt::numeric/new_issue_cnt::numeric*100 END)*0.5 + (CASE WHEN new_issue_cnt=0 THEN 0 ELSE (new_issue_cnt-no_zero_plan_cnt)::numeric/new_issue_cnt::numeric*100 END)*0.3 + (100 - CASE WHEN new_issue_cnt=0 THEN 0 ELSE open_issue_cnt::numeric/new_issue_cnt::numeric*100 END)*0.2, 2) AS \"质量健康度\" FROM agg",
+          "query": "SELECT CASE WHEN (SUM(order_signed_cnt)+SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(order_signed_cnt)::numeric/(SUM(order_signed_cnt)+SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", CASE WHEN (SUM(reform_done_i_ii)+SUM(reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(reform_done_i_ii)::numeric/(SUM(reform_done_i_ii)+SUM(reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\", CASE WHEN SUM(total_change_cnt)=0 THEN 0 ELSE ROUND((SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii))::numeric/SUM(total_change_cnt)::numeric*100,2) END AS \"未签署比率\" FROM biz_dws_tech_state_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -238,9 +238,9 @@
       }
     },
     {
-      "id": "drill-quality-kpi-3",
+      "id": "drill-tech-kpi-3",
       "type": "number-card",
-      "name": "计划提交率",
+      "name": "未签署比率",
       "x": 960,
       "y": 70,
       "width": 456,
@@ -249,8 +249,8 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "计划提交率",
-        "value": "80.0",
+        "title": "未签署比率",
+        "value": "22.2",
         "unit": "%",
         "precision": 1,
         "titleColor": "#ffffff",
@@ -263,7 +263,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH agg AS (SELECT SUM(new_issue_cnt) AS new_issue_cnt, SUM(zero_completed_cnt) AS zero_completed_cnt, SUM(open_issue_cnt) AS open_issue_cnt, SUM(no_zero_plan_cnt) AS no_zero_plan_cnt FROM biz_dws_quality_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]) SELECT CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND(zero_completed_cnt::numeric/new_issue_cnt::numeric*100,2) END AS \"归零率\", CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND(open_issue_cnt::numeric/new_issue_cnt::numeric*100,2) END AS \"现存率\", CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND((new_issue_cnt-no_zero_plan_cnt)::numeric/new_issue_cnt::numeric*100,2) END AS \"计划提交率\", ROUND((CASE WHEN new_issue_cnt=0 THEN 0 ELSE zero_completed_cnt::numeric/new_issue_cnt::numeric*100 END)*0.5 + (CASE WHEN new_issue_cnt=0 THEN 0 ELSE (new_issue_cnt-no_zero_plan_cnt)::numeric/new_issue_cnt::numeric*100 END)*0.3 + (100 - CASE WHEN new_issue_cnt=0 THEN 0 ELSE open_issue_cnt::numeric/new_issue_cnt::numeric*100 END)*0.2, 2) AS \"质量健康度\" FROM agg",
+          "query": "SELECT CASE WHEN (SUM(order_signed_cnt)+SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(order_signed_cnt)::numeric/(SUM(order_signed_cnt)+SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", CASE WHEN (SUM(reform_done_i_ii)+SUM(reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(reform_done_i_ii)::numeric/(SUM(reform_done_i_ii)+SUM(reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\", CASE WHEN SUM(total_change_cnt)=0 THEN 0 ELSE ROUND((SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii))::numeric/SUM(total_change_cnt)::numeric*100,2) END AS \"未签署比率\" FROM biz_dws_tech_state_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -288,9 +288,9 @@
       }
     },
     {
-      "id": "drill-quality-kpi-4",
+      "id": "drill-tech-kpi-4",
       "type": "number-card",
-      "name": "质量健康度",
+      "name": "技术健康度",
       "x": 1430,
       "y": 70,
       "width": 470,
@@ -299,8 +299,8 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "质量健康度",
-        "value": "72",
+        "title": "技术健康度",
+        "value": "74",
         "unit": "",
         "precision": 0,
         "titleColor": "#ffffff",
@@ -313,7 +313,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH agg AS (SELECT SUM(new_issue_cnt) AS new_issue_cnt, SUM(zero_completed_cnt) AS zero_completed_cnt, SUM(open_issue_cnt) AS open_issue_cnt, SUM(no_zero_plan_cnt) AS no_zero_plan_cnt FROM biz_dws_quality_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]) SELECT CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND(zero_completed_cnt::numeric/new_issue_cnt::numeric*100,2) END AS \"归零率\", CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND(open_issue_cnt::numeric/new_issue_cnt::numeric*100,2) END AS \"现存率\", CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND((new_issue_cnt-no_zero_plan_cnt)::numeric/new_issue_cnt::numeric*100,2) END AS \"计划提交率\", ROUND((CASE WHEN new_issue_cnt=0 THEN 0 ELSE zero_completed_cnt::numeric/new_issue_cnt::numeric*100 END)*0.5 + (CASE WHEN new_issue_cnt=0 THEN 0 ELSE (new_issue_cnt-no_zero_plan_cnt)::numeric/new_issue_cnt::numeric*100 END)*0.3 + (100 - CASE WHEN new_issue_cnt=0 THEN 0 ELSE open_issue_cnt::numeric/new_issue_cnt::numeric*100 END)*0.2, 2) AS \"质量健康度\" FROM agg",
+          "query": "WITH agg AS (SELECT SUM(order_signed_cnt) AS order_signed_cnt, SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii) AS order_unsigned_total, SUM(reform_done_i_ii) AS reform_done_i_ii, SUM(reform_pending_i_ii) AS reform_pending_i_ii, SUM(total_change_cnt) AS total_change_cnt FROM biz_dws_tech_state_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]) SELECT ROUND((CASE WHEN (order_signed_cnt+order_unsigned_total)=0 THEN 0 ELSE order_signed_cnt::numeric/(order_signed_cnt+order_unsigned_total)::numeric*100 END)*0.4 + (CASE WHEN (reform_done_i_ii+reform_pending_i_ii)=0 THEN 0 ELSE reform_done_i_ii::numeric/(reform_done_i_ii+reform_pending_i_ii)::numeric*100 END)*0.4 + (100 - CASE WHEN total_change_cnt=0 THEN 0 ELSE order_unsigned_total::numeric/total_change_cnt::numeric*100 END)*0.2, 2) AS \"技术健康度\" FROM agg",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -338,9 +338,9 @@
       }
     },
     {
-      "id": "drill-quality-detail-table",
+      "id": "drill-tech-detail-table",
       "type": "table",
-      "name": "质量问题清单",
+      "name": "技术状态变更清单",
       "x": 20,
       "y": 175,
       "width": 1145,
@@ -349,19 +349,19 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "质量问题清单",
+        "title": "技术状态变更清单",
         "header": [
           "项目编号",
-          "分系统",
-          "问题名称",
+          "技术状态名称",
+          "更改项目",
+          "负责人",
           "责任科室",
-          "问题分类",
-          "归零计划",
-          "状态",
-          "当前进展",
-          "问题日期",
-          "归零完成日期",
-          "滞留天数"
+          "更改类别",
+          "文件签署状态",
+          "整改状态",
+          "签署完成",
+          "提交时间",
+          "签署闭环日期"
         ],
         "data": [],
         "fontSize": 16,
@@ -382,7 +382,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT project_no AS \"项目编号\", subsystem AS \"分系统\", issue_name AS \"问题名称\", dept AS \"责任科室\", issue_category AS \"问题分类\", zero_plan AS \"归零计划\", status AS \"状态\", current_progress AS \"当前进展\", issue_date AS \"问题日期\", zero_complete_date AS \"归零完成日期\", pending_days AS \"滞留天数\" FROM biz_dwd_quality_issue_v2 WHERE issue_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND issue_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] ORDER BY pending_days DESC NULLS LAST",
+          "query": "SELECT project_no AS \"项目编号\", tech_state_name AS \"技术状态名称\", change_item AS \"更改项目\", owner AS \"负责人\", dept AS \"责任科室\", change_category AS \"更改类别\", file_signature_status AS \"文件签署状态\", reform_status AS \"整改状态\", CASE WHEN is_signature_completed THEN '是' ELSE '否' END AS \"签署完成\", change_submit_time AS \"提交时间\", signature_closure_date AS \"签署闭环日期\" FROM biz_dwd_tech_state_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] ORDER BY change_submit_time DESC NULLS LAST",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -407,9 +407,9 @@
       }
     },
     {
-      "id": "drill-quality-side-panel",
+      "id": "drill-tech-side-panel",
       "type": "table",
-      "name": "质量闭环摘要",
+      "name": "状态分布摘要",
       "x": 1185,
       "y": 175,
       "width": 715,
@@ -418,7 +418,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "质量闭环摘要",
+        "title": "状态分布摘要",
         "header": [
           "指标",
           "数值"
@@ -442,7 +442,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT SUM(new_issue_cnt) AS \"新增质量问题\", SUM(open_issue_cnt) AS \"现存质量问题\", SUM(zero_completed_cnt) AS \"已归零数\", SUM(no_zero_plan_cnt) AS \"未提交归零计划\", SUM(tech_zero_cnt) AS \"技术归零\", SUM(mgmt_zero_cnt) AS \"管理归零\", SUM(both_zero_cnt) AS \"双归零\" FROM biz_dws_quality_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]",
+          "query": "SELECT SUM(total_change_cnt) AS \"变更总数\", SUM(new_cat_i) AS \"I类\", SUM(new_cat_ii) AS \"II类\", SUM(new_cat_iii) AS \"III类\", SUM(order_signed_cnt) AS \"已签署\", SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii) AS \"未签署\", SUM(reform_done_i_ii) AS \"已整改\", SUM(reform_pending_i_ii) AS \"待整改\" FROM biz_dws_tech_state_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -467,7 +467,7 @@
       }
     },
     {
-      "id": "drill-quality-support-table",
+      "id": "drill-tech-support-table",
       "type": "table",
       "name": "跟进措施摘要",
       "x": 20,
@@ -481,16 +481,16 @@
         "title": "跟进措施摘要",
         "header": [
           "项目编号",
-          "分系统",
-          "问题名称",
+          "技术状态名称",
+          "更改项目",
+          "负责人",
           "责任科室",
-          "问题分类",
-          "归零计划",
-          "状态",
-          "当前进展",
-          "问题日期",
-          "归零完成日期",
-          "滞留天数"
+          "更改类别",
+          "文件签署状态",
+          "整改状态",
+          "签署完成",
+          "提交时间",
+          "签署闭环日期"
         ],
         "data": [],
         "fontSize": 16,
@@ -511,7 +511,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT project_no AS \"项目编号\", subsystem AS \"分系统\", issue_name AS \"问题名称\", dept AS \"责任科室\", issue_category AS \"问题分类\", zero_plan AS \"归零计划\", status AS \"状态\", current_progress AS \"当前进展\", issue_date AS \"问题日期\", zero_complete_date AS \"归零完成日期\", pending_days AS \"滞留天数\" FROM biz_dwd_quality_issue_v2 WHERE issue_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND issue_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] ORDER BY pending_days DESC NULLS LAST",
+          "query": "SELECT project_no AS \"项目编号\", tech_state_name AS \"技术状态名称\", change_item AS \"更改项目\", owner AS \"负责人\", dept AS \"责任科室\", change_category AS \"更改类别\", file_signature_status AS \"文件签署状态\", reform_status AS \"整改状态\", CASE WHEN is_signature_completed THEN '是' ELSE '否' END AS \"签署完成\", change_submit_time AS \"提交时间\", signature_closure_date AS \"签署闭环日期\" FROM biz_dwd_tech_state_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] ORDER BY change_submit_time DESC NULLS LAST",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [

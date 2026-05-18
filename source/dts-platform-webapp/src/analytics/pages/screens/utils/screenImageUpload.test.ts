@@ -9,8 +9,8 @@ import {
 } from "./screenImageUpload";
 
 test("screen image uploads keep the UI limit aligned to the backend image cap", () => {
-	assert.equal(SCREEN_IMAGE_UPLOAD_LIMIT_BYTES, 10 * 1024 * 1024);
-	assert.equal(SCREEN_IMAGE_UPLOAD_LIMIT_LABEL, "10MB");
+	assert.equal(SCREEN_IMAGE_UPLOAD_LIMIT_BYTES, 20 * 1024 * 1024);
+	assert.equal(SCREEN_IMAGE_UPLOAD_LIMIT_LABEL, "20MB");
 });
 
 test("screen image uploads show a readable message for gateway 413 responses", () => {
@@ -19,7 +19,7 @@ test("screen image uploads show a readable message for gateway 413 responses", (
 		message: "Request failed with status code 413",
 	});
 
-	assert.equal(message, "图片文件超过上传限制，请压缩到 10MB 以内后重试");
+	assert.equal(message, "图片文件超过上传限制（20MB），请压缩后重试");
 	assert.doesNotMatch(message, /Request failed/);
 });
 
@@ -28,10 +28,10 @@ test("screen image uploads preserve backend validation messages when present", (
 		getScreenImageUploadErrorMessage({
 			response: {
 				status: 400,
-				data: { detail: '400 BAD_REQUEST "文件大小不能超过 10MB"' },
+				data: { detail: '400 BAD_REQUEST "文件大小不能超过 20MB"' },
 			},
 		}),
-		"文件大小不能超过 10MB",
+		"文件大小不能超过 20MB",
 	);
 });
 

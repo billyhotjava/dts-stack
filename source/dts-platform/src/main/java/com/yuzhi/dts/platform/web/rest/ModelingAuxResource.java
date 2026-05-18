@@ -18,6 +18,7 @@ import com.yuzhi.dts.platform.domain.modeling.ModelingTemplate;
 import com.yuzhi.dts.platform.domain.modeling.ModelingTemplateVersion;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.modeling.DataStandardRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingGlossaryTermRepository;
@@ -98,6 +99,7 @@ public class ModelingAuxResource {
     private final GovIndicatorDefinitionRepository indicatorRepository;
     private final CatalogTableSchemaRepository catalogTableRepo;
     private final CatalogColumnSchemaRepository catalogColumnRepo;
+    private final CatalogDomainRepository catalogDomainRepo;
     private final AccessChecker catalogAccessChecker;
     private final ModelingAssetReferenceService referenceService;
     private final CodeAssetGrantWriter codeAssetGrantWriter;
@@ -119,6 +121,7 @@ public class ModelingAuxResource {
         GovIndicatorDefinitionRepository indicatorRepository,
         CatalogTableSchemaRepository catalogTableRepo,
         CatalogColumnSchemaRepository catalogColumnRepo,
+        CatalogDomainRepository catalogDomainRepo,
         AccessChecker catalogAccessChecker,
         ModelingAssetReferenceService referenceService,
         CodeAssetGrantWriter codeAssetGrantWriter
@@ -139,6 +142,7 @@ public class ModelingAuxResource {
         this.indicatorRepository = indicatorRepository;
         this.catalogTableRepo = catalogTableRepo;
         this.catalogColumnRepo = catalogColumnRepo;
+        this.catalogDomainRepo = catalogDomainRepo;
         this.catalogAccessChecker = catalogAccessChecker;
         this.referenceService = referenceService;
         this.codeAssetGrantWriter = codeAssetGrantWriter;
@@ -159,7 +163,7 @@ public class ModelingAuxResource {
             .stream()
             .filter(plan -> isOwnerDeptVisible(plan != null ? plan.getOwnerDept() : null, activeDept, instituteScope))
             .filter(plan -> statusFilter == null || statusFilter.equalsIgnoreCase(StringUtils.trimToEmpty(plan != null ? plan.getStatus() : null)))
-            .filter(plan -> kw == null || matchKeyword(plan.getName(), kw) || matchKeyword(plan.getDomain(), kw) || matchKeyword(plan.getOwner(), kw))
+            .filter(plan -> kw == null || matchKeyword(plan.getName(), kw) || matchKeyword(plan.getOwner(), kw))
             .sorted(Comparator.comparing(plan -> String.valueOf(plan.getName()).toLowerCase(Locale.ROOT)))
             .toList();
         auditService.auditAction("MODELING_PLAN_READ", AuditStage.SUCCESS, "list", null);
@@ -1092,7 +1096,12 @@ public class ModelingAuxResource {
     private void applyPlanUpsert(ModelingPlan plan, ModelingPlan request, String activeDeptHeader) {
         if (plan == null || request == null) return;
         plan.setName(StringUtils.trimToNull(request.getName()));
-        plan.setDomain(StringUtils.trimToNull(request.getDomain()));
+        UUID domainId = request.getDomainId();
+        if (domainId != null && catalogDomainRepo != null && !catalogDomainRepo.existsById(domainId)) {
+            throw new BadRequestAlertException("主题域不存在", "modelingPlan", "domainNotFound");
+        }
+        plan.setDomainId(domainId);
+        plan.setDomain(null);
         plan.setScope(StringUtils.trimToNull(request.getScope()));
         plan.setVersion(StringUtils.trimToNull(request.getVersion()));
         plan.setVersionNotes(StringUtils.trimToNull(request.getVersionNotes()));
@@ -1273,7 +1282,7 @@ public class ModelingAuxResource {
         Map<String, Object> view = new LinkedHashMap<>();
         view.put("id", plan.getId());
         view.put("name", plan.getName());
-        view.put("domain", plan.getDomain());
+        view.put("domainId", plan.getDomainId());
         view.put("scope", plan.getScope());
         view.put("status", plan.getStatus());
         view.put("version", plan.getVersion());

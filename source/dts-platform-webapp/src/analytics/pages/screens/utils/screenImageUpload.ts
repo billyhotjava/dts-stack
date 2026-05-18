@@ -1,5 +1,5 @@
-export const SCREEN_IMAGE_UPLOAD_LIMIT_BYTES = 10 * 1024 * 1024;
-export const SCREEN_IMAGE_UPLOAD_LIMIT_LABEL = "10MB";
+export const SCREEN_IMAGE_UPLOAD_LIMIT_BYTES = 20 * 1024 * 1024;
+export const SCREEN_IMAGE_UPLOAD_LIMIT_LABEL = "20MB";
 
 type UploadError = {
 	response?: {
@@ -57,7 +57,7 @@ export function getScreenImageUploadErrorMessage(error: unknown): string {
 	}
 
 	if (uploadError?.response?.status === 413 || rawMessage?.includes("status code 413")) {
-		return `图片文件超过上传限制，请压缩到 ${SCREEN_IMAGE_UPLOAD_LIMIT_LABEL} 以内后重试`;
+		return `图片文件超过上传限制（${SCREEN_IMAGE_UPLOAD_LIMIT_LABEL}），请压缩后重试`;
 	}
 
 	return readResponseMessage(uploadError?.response?.data) ?? rawMessage ?? "上传失败";

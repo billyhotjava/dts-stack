@@ -1,6 +1,6 @@
 {
   "schemaVersion": 3,
-  "id": "gpmc-overview-v3",
+  "id": "gpmc-overview-v4",
   "name": "项目综合看板",
   "description": "一级看板：项目综合态势总览，进度为主轴 + 异常标红，核心维度：项目 + 科室。",
   "classification": "INTERNAL",
@@ -24,9 +24,9 @@
   ],
   "components": [
     {
-      "id": "ov3-header-clock",
+      "id": "ov4-header-clock",
       "type": "datetime",
-      "name": "ov3-header-clock",
+      "name": "ov4-header-clock",
       "x": 1710,
       "y": 24,
       "width": 180,
@@ -41,9 +41,9 @@
       }
     },
     {
-      "id": "ov3-bg-overlay",
+      "id": "ov4-bg-overlay",
       "type": "richtext",
-      "name": "ov3-bg-overlay",
+      "name": "ov4-bg-overlay",
       "x": 0,
       "y": 0,
       "width": 1920,
@@ -58,9 +58,9 @@
       }
     },
     {
-      "id": "ov3-bg-base",
+      "id": "ov4-bg-base",
       "type": "shape",
-      "name": "ov3-bg-base",
+      "name": "ov4-bg-base",
       "x": 0,
       "y": 0,
       "width": 1920,
@@ -77,9 +77,9 @@
       }
     },
     {
-      "id": "ov3-header-bar",
+      "id": "ov4-header-bar",
       "type": "shape",
-      "name": "ov3-header-bar",
+      "name": "ov4-header-bar",
       "x": 10,
       "y": 10,
       "width": 1900,
@@ -96,9 +96,9 @@
       }
     },
     {
-      "id": "ov3-header-deco",
+      "id": "ov4-header-deco",
       "type": "richtext",
-      "name": "ov3-header-deco",
+      "name": "ov4-header-deco",
       "x": 10,
       "y": 10,
       "width": 1900,
@@ -113,7 +113,7 @@
       }
     },
     {
-      "id": "ov3-title",
+      "id": "ov4-title",
       "type": "title",
       "name": "项目综合看板",
       "x": 660,
@@ -132,7 +132,7 @@
       }
     },
     {
-      "id": "ov3-nav-overview-shape",
+      "id": "ov4-nav-overview-shape",
       "type": "shape",
       "name": "综合看板",
       "x": 600,
@@ -151,7 +151,7 @@
       }
     },
     {
-      "id": "ov3-nav-overview-label",
+      "id": "ov4-nav-overview-label",
       "type": "title",
       "name": "综合看板",
       "x": 24,
@@ -170,7 +170,7 @@
       }
     },
     {
-      "id": "ov3-nav-progress-shape",
+      "id": "ov4-nav-progress-shape",
       "type": "shape",
       "name": "进度看板",
       "x": 730,
@@ -189,7 +189,7 @@
       }
     },
     {
-      "id": "ov3-nav-progress-label",
+      "id": "ov4-nav-progress-label",
       "type": "title",
       "name": "进度看板",
       "x": 730,
@@ -208,7 +208,7 @@
       }
     },
     {
-      "id": "ov3-nav-quality-shape",
+      "id": "ov4-nav-quality-shape",
       "type": "shape",
       "name": "质量看板",
       "x": 860,
@@ -227,7 +227,7 @@
       }
     },
     {
-      "id": "ov3-nav-quality-label",
+      "id": "ov4-nav-quality-label",
       "type": "title",
       "name": "质量看板",
       "x": 860,
@@ -246,7 +246,7 @@
       }
     },
     {
-      "id": "ov3-nav-techstate-shape",
+      "id": "ov4-nav-techstate-shape",
       "type": "shape",
       "name": "技术状态",
       "x": 990,
@@ -265,7 +265,7 @@
       }
     },
     {
-      "id": "ov3-nav-techstate-label",
+      "id": "ov4-nav-techstate-label",
       "type": "title",
       "name": "技术状态",
       "x": 990,
@@ -284,7 +284,7 @@
       }
     },
     {
-      "id": "ov3-nav-risk-shape",
+      "id": "ov4-nav-risk-shape",
       "type": "shape",
       "name": "风险看板",
       "x": 1120,
@@ -303,7 +303,7 @@
       }
     },
     {
-      "id": "ov3-nav-risk-label",
+      "id": "ov4-nav-risk-label",
       "type": "title",
       "name": "风险看板",
       "x": 1120,
@@ -322,7 +322,7 @@
       }
     },
     {
-      "id": "ov3-kpi-project-total",
+      "id": "ov4-kpi-project-total",
       "type": "number-card",
       "name": "项目总数",
       "x": 122,
@@ -365,7 +365,7 @@
       }
     },
     {
-      "id": "ov3-kpi-completion-rate",
+      "id": "ov4-kpi-completion-rate",
       "type": "number-card",
       "name": "项目完成率",
       "x": 498,
@@ -408,7 +408,7 @@
       }
     },
     {
-      "id": "ov3-kpi-quality-open",
+      "id": "ov4-kpi-quality-open",
       "type": "number-card",
       "name": "未归零质量问题数",
       "x": 874,
@@ -451,7 +451,7 @@
       }
     },
     {
-      "id": "ov3-kpi-tech-reform",
+      "id": "ov4-kpi-tech-reform",
       "type": "number-card",
       "name": "中高风险数",
       "x": 1250,
@@ -494,7 +494,7 @@
       }
     },
     {
-      "id": "ov3-kpi-high-risk",
+      "id": "ov4-kpi-high-risk",
       "type": "number-card",
       "name": "未闭环技术状态变更",
       "x": 1626,
@@ -537,7 +537,7 @@
       }
     },
     {
-      "id": "ov3-progress-by-project",
+      "id": "ov4-progress-by-project",
       "type": "bar-chart",
       "name": "项目节点统计",
       "x": 468,
@@ -614,7 +614,7 @@
       }
     },
     {
-      "id": "ov3-progress-by-dept",
+      "id": "ov4-progress-by-dept",
       "type": "bar-chart",
       "name": "科室项目节点统计",
       "x": 468,
@@ -687,7 +687,7 @@
       }
     },
     {
-      "id": "ov3-quality-by-project",
+      "id": "ov4-quality-by-project",
       "type": "richtext",
       "name": "质量问题统计",
       "x": 833,
@@ -704,7 +704,7 @@
       }
     },
     {
-      "id": "ov3-techstate-by-project",
+      "id": "ov4-techstate-by-project",
       "type": "richtext",
       "name": "技术状态",
       "x": 1563,
@@ -721,7 +721,7 @@
       }
     },
     {
-      "id": "ov3-techstate-by-dept",
+      "id": "ov4-techstate-by-dept",
       "type": "richtext",
       "name": "经费成本（预留）",
       "x": 1198,
@@ -738,7 +738,7 @@
       }
     },
     {
-      "id": "ov3-risk-by-project",
+      "id": "ov4-risk-by-project",
       "type": "bar-chart",
       "name": "项目风险统计",
       "x": 1198,
@@ -813,7 +813,7 @@
       }
     },
     {
-      "id": "ov3-risk-by-dept",
+      "id": "ov4-risk-by-dept",
       "type": "pie-chart",
       "name": "风险类型占比",
       "x": 1563,
@@ -869,9 +869,9 @@
       }
     },
     {
-      "id": "ov3-gantt-panel",
+      "id": "ov4-gantt-panel",
       "type": "shape",
-      "name": "ov3-gantt-panel",
+      "name": "ov4-gantt-panel",
       "x": 10,
       "y": 774,
       "width": 1900,
@@ -888,7 +888,7 @@
       }
     },
     {
-      "id": "ov3-gantt-title",
+      "id": "ov4-gantt-title",
       "type": "title",
       "name": "下月重点计划",
       "x": 26,
@@ -907,7 +907,7 @@
       }
     },
     {
-      "id": "ov3-gantt-legend-plan",
+      "id": "ov4-gantt-legend-plan",
       "type": "title",
       "name": "图例-计划",
       "x": 1310,
@@ -926,7 +926,7 @@
       }
     },
     {
-      "id": "ov3-gantt-legend-normal",
+      "id": "ov4-gantt-legend-normal",
       "type": "title",
       "name": "图例-正常",
       "x": 1700,
@@ -945,7 +945,7 @@
       }
     },
     {
-      "id": "ov3-gantt-legend-delayed",
+      "id": "ov4-gantt-legend-delayed",
       "type": "title",
       "name": "图例-延期",
       "x": 1790,
@@ -964,7 +964,7 @@
       }
     },
     {
-      "id": "ov3-gantt-chart",
+      "id": "ov4-gantt-chart",
       "type": "gantt-chart",
       "name": "下月重点计划甘特",
       "x": 22,
@@ -1004,9 +1004,9 @@
       }
     },
     {
-      "id": "ov3-kpi-ring-1",
+      "id": "ov4-kpi-ring-1",
       "type": "richtext",
-      "name": "ov3-kpi-ring-1",
+      "name": "ov4-kpi-ring-1",
       "x": 32,
       "y": 92,
       "width": 78,
@@ -1021,9 +1021,9 @@
       }
     },
     {
-      "id": "ov3-kpi-ring-2",
+      "id": "ov4-kpi-ring-2",
       "type": "richtext",
-      "name": "ov3-kpi-ring-2",
+      "name": "ov4-kpi-ring-2",
       "x": 408,
       "y": 92,
       "width": 78,
@@ -1038,9 +1038,9 @@
       }
     },
     {
-      "id": "ov3-kpi-ring-3",
+      "id": "ov4-kpi-ring-3",
       "type": "richtext",
-      "name": "ov3-kpi-ring-3",
+      "name": "ov4-kpi-ring-3",
       "x": 784,
       "y": 92,
       "width": 78,
@@ -1055,9 +1055,9 @@
       }
     },
     {
-      "id": "ov3-kpi-ring-4",
+      "id": "ov4-kpi-ring-4",
       "type": "richtext",
-      "name": "ov3-kpi-ring-4",
+      "name": "ov4-kpi-ring-4",
       "x": 1160,
       "y": 92,
       "width": 78,
@@ -1072,9 +1072,9 @@
       }
     },
     {
-      "id": "ov3-kpi-ring-5",
+      "id": "ov4-kpi-ring-5",
       "type": "richtext",
-      "name": "ov3-kpi-ring-5",
+      "name": "ov4-kpi-ring-5",
       "x": 1536,
       "y": 92,
       "width": 78,
@@ -1089,9 +1089,9 @@
       }
     },
     {
-      "id": "ov3-kpi-bg-1",
+      "id": "ov4-kpi-bg-1",
       "type": "shape",
-      "name": "ov3-kpi-bg-1",
+      "name": "ov4-kpi-bg-1",
       "x": 24,
       "y": 84,
       "width": 370,
@@ -1108,9 +1108,9 @@
       }
     },
     {
-      "id": "ov3-kpi-bg-2",
+      "id": "ov4-kpi-bg-2",
       "type": "shape",
-      "name": "ov3-kpi-bg-2",
+      "name": "ov4-kpi-bg-2",
       "x": 400,
       "y": 84,
       "width": 370,
@@ -1127,9 +1127,9 @@
       }
     },
     {
-      "id": "ov3-kpi-bg-3",
+      "id": "ov4-kpi-bg-3",
       "type": "shape",
-      "name": "ov3-kpi-bg-3",
+      "name": "ov4-kpi-bg-3",
       "x": 776,
       "y": 84,
       "width": 370,
@@ -1146,9 +1146,9 @@
       }
     },
     {
-      "id": "ov3-kpi-bg-4",
+      "id": "ov4-kpi-bg-4",
       "type": "shape",
-      "name": "ov3-kpi-bg-4",
+      "name": "ov4-kpi-bg-4",
       "x": 1152,
       "y": 84,
       "width": 370,
@@ -1165,9 +1165,9 @@
       }
     },
     {
-      "id": "ov3-kpi-bg-5",
+      "id": "ov4-kpi-bg-5",
       "type": "shape",
-      "name": "ov3-kpi-bg-5",
+      "name": "ov4-kpi-bg-5",
       "x": 1528,
       "y": 84,
       "width": 370,
@@ -1184,9 +1184,9 @@
       }
     },
     {
-      "id": "ov3-info-list-panel",
+      "id": "ov4-info-list-panel",
       "type": "shape",
-      "name": "ov3-info-list-panel",
+      "name": "ov4-info-list-panel",
       "x": 10,
       "y": 188,
       "width": 440,
@@ -1203,7 +1203,7 @@
       }
     },
     {
-      "id": "ov3-info-list-panel-title",
+      "id": "ov4-info-list-panel-title",
       "type": "title",
       "name": "项目基本信息",
       "x": 24,
@@ -1222,7 +1222,7 @@
       }
     },
     {
-      "id": "ov3-info-list",
+      "id": "ov4-info-list",
       "type": "table",
       "name": "项目基本信息列表",
       "x": 22,
@@ -1303,9 +1303,9 @@
       }
     },
     {
-      "id": "ov3-cell-c1r1",
+      "id": "ov4-cell-c1r1",
       "type": "shape",
-      "name": "ov3-cell-c1r1",
+      "name": "ov4-cell-c1r1",
       "x": 460,
       "y": 188,
       "width": 355,
@@ -1322,7 +1322,7 @@
       }
     },
     {
-      "id": "ov3-cell-c1r1-title",
+      "id": "ov4-cell-c1r1-title",
       "type": "title",
       "name": "项目节点统计",
       "x": 474,
@@ -1341,9 +1341,9 @@
       }
     },
     {
-      "id": "ov3-cell-c1r2",
+      "id": "ov4-cell-c1r2",
       "type": "shape",
-      "name": "ov3-cell-c1r2",
+      "name": "ov4-cell-c1r2",
       "x": 460,
       "y": 481,
       "width": 355,
@@ -1360,7 +1360,7 @@
       }
     },
     {
-      "id": "ov3-cell-c1r2-title",
+      "id": "ov4-cell-c1r2-title",
       "type": "title",
       "name": "科室任务完成统计",
       "x": 474,
@@ -1379,9 +1379,9 @@
       }
     },
     {
-      "id": "ov3-cell-c2r1",
+      "id": "ov4-cell-c2r1",
       "type": "shape",
-      "name": "ov3-cell-c2r1",
+      "name": "ov4-cell-c2r1",
       "x": 825,
       "y": 188,
       "width": 355,
@@ -1398,7 +1398,7 @@
       }
     },
     {
-      "id": "ov3-cell-c2r1-title",
+      "id": "ov4-cell-c2r1-title",
       "type": "title",
       "name": "质量问题统计",
       "x": 839,
@@ -1417,9 +1417,9 @@
       }
     },
     {
-      "id": "ov3-cell-c2r2",
+      "id": "ov4-cell-c2r2",
       "type": "shape",
-      "name": "ov3-cell-c2r2",
+      "name": "ov4-cell-c2r2",
       "x": 825,
       "y": 481,
       "width": 355,
@@ -1436,7 +1436,7 @@
       }
     },
     {
-      "id": "ov3-cell-c2r2-title",
+      "id": "ov4-cell-c2r2-title",
       "type": "title",
       "name": "物料采购",
       "x": 839,
@@ -1455,9 +1455,9 @@
       }
     },
     {
-      "id": "ov3-cell-c3r1",
+      "id": "ov4-cell-c3r1",
       "type": "shape",
-      "name": "ov3-cell-c3r1",
+      "name": "ov4-cell-c3r1",
       "x": 1190,
       "y": 188,
       "width": 355,
@@ -1474,7 +1474,7 @@
       }
     },
     {
-      "id": "ov3-cell-c3r1-title",
+      "id": "ov4-cell-c3r1-title",
       "type": "title",
       "name": "项目风险统计",
       "x": 1204,
@@ -1493,9 +1493,9 @@
       }
     },
     {
-      "id": "ov3-cell-c3r2",
+      "id": "ov4-cell-c3r2",
       "type": "shape",
-      "name": "ov3-cell-c3r2",
+      "name": "ov4-cell-c3r2",
       "x": 1190,
       "y": 481,
       "width": 355,
@@ -1512,7 +1512,7 @@
       }
     },
     {
-      "id": "ov3-cell-c3r2-title",
+      "id": "ov4-cell-c3r2-title",
       "type": "title",
       "name": "经费成本（预留）",
       "x": 1204,
@@ -1531,9 +1531,9 @@
       }
     },
     {
-      "id": "ov3-cell-c4r1",
+      "id": "ov4-cell-c4r1",
       "type": "shape",
-      "name": "ov3-cell-c4r1",
+      "name": "ov4-cell-c4r1",
       "x": 1555,
       "y": 188,
       "width": 355,
@@ -1550,7 +1550,7 @@
       }
     },
     {
-      "id": "ov3-cell-c4r1-title",
+      "id": "ov4-cell-c4r1-title",
       "type": "title",
       "name": "技术状态",
       "x": 1569,
@@ -1569,9 +1569,9 @@
       }
     },
     {
-      "id": "ov3-cell-c4r2",
+      "id": "ov4-cell-c4r2",
       "type": "shape",
-      "name": "ov3-cell-c4r2",
+      "name": "ov4-cell-c4r2",
       "x": 1555,
       "y": 481,
       "width": 355,
@@ -1588,7 +1588,7 @@
       }
     },
     {
-      "id": "ov3-cell-c4r2-title",
+      "id": "ov4-cell-c4r2-title",
       "type": "title",
       "name": "风险类型占比",
       "x": 1569,
@@ -1607,7 +1607,7 @@
       }
     },
     {
-      "id": "ov3-procurement-by-dept",
+      "id": "ov4-procurement-by-dept",
       "type": "bar-chart",
       "name": "物料采购",
       "x": 833,

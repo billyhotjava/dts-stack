@@ -1,6 +1,6 @@
 {
   "schemaVersion": 3,
-  "id": "gpmc-quality-board-v3",
+  "id": "gpmc-quality-board-v4",
   "name": "GPMC 质量信息与跟进措施",
   "description": "管控层质量看板模板，覆盖问题规模、分类分布、闭环率与措施清单。",
   "classification": "INTERNAL",

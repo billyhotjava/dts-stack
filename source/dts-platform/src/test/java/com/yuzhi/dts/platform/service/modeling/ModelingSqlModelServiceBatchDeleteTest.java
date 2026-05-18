@@ -83,6 +83,7 @@ class ModelingSqlModelServiceBatchDeleteTest {
                 security,
                 dbtConfigService,
                 datasetRepository,
+                null,
                 tableRepository,
                 columnRepository,
                 queryDatasetAssetRepository,

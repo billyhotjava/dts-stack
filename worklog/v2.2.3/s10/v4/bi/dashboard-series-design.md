@@ -15,12 +15,12 @@
 
 `../pjm/screen-instances/` 中值得复用的是指标口径和下钻关系：
 
-- `gpmc-strategic-overview-v3.json`: 战略层总览，包含项目运营、质量、延期、风险、成本、技术状态等综合指标。
-- `gpmc-overview-v3.json`: 项目综合看板，包含项目总数、完成率、质量问题、技术变更、高风险数量等首页指标。
-- `gpmc-execution-board-v3.json`: 执行监控，包含里程碑、超期、未完成、高风险未完成等交付指标。
-- `gpmc-quality-board-v3.json`: 质量跟进，包含质量问题总数、未闭环数、闭环率、问题分布和趋势。
-- `gpmc-tech-state-board-v3.json`: 技术状态，包含变更单、签署率、整改率、科室变更和变更清单。
-- `gpmc-risk-board-v3.json`: 风险预警，包含风险总数、高中风险、未释放、释放率、分类和项目汇总。
+- `gpmc-strategic-overview-v4.json`: 战略层总览，包含项目运营、质量、延期、风险、成本、技术状态等综合指标。
+- `gpmc-overview-v4.json`: 项目综合看板，包含项目总数、完成率、质量问题、技术变更、高风险数量等首页指标。
+- `gpmc-execution-board-v4.json`: 执行监控，包含里程碑、超期、未完成、高风险未完成等交付指标。
+- `gpmc-quality-board-v4.json`: 质量跟进，包含质量问题总数、未闭环数、闭环率、问题分布和趋势。
+- `gpmc-tech-state-board-v4.json`: 技术状态，包含变更单、签署率、整改率、科室变更和变更清单。
+- `gpmc-risk-board-v4.json`: 风险预警，包含风险总数、高中风险、未释放、释放率、分类和项目汇总。
 - `gpmc-drill-*.json`: 底层明细页，可作为 L2 明细看板的数据字段参考。
 
 不建议复用旧实例的视觉样式。旧实例适合做平台组件能力验证，但领导驾驶舱需要更清晰、更克制、更稳定的表达。

@@ -359,6 +359,25 @@ function mergeWorkspace(snapshot: WorkspaceSnapshot): WorkspaceState {
 	};
 }
 
+function countByStatus(items: Array<{ status: string }>, status: string): number {
+	return items.filter((item) => item.status === status).length;
+}
+
+function statusLabel(value?: boolean): string {
+	if (value === false) return "未启用";
+	if (value === true) return "已启用";
+	return "待确认";
+}
+
+function currentTimeLabel(): string {
+	return new Intl.DateTimeFormat("zh-CN", {
+		month: "2-digit",
+		day: "2-digit",
+		hour: "2-digit",
+		minute: "2-digit",
+	}).format(new Date());
+}
+
 export default function App() {
 	const embedded = new URLSearchParams(window.location.search).get("embedded") === "1";
 	const activePath = normalizePath(window.location.pathname);
@@ -483,7 +502,7 @@ export default function App() {
 	const summaryCards = useMemo(
 		() => [
 			["服务归属", capabilities?.service || "dts-metrics"],
-			["启用状态", capabilities?.enabled === false ? "未启用" : "已启用"],
+			["启用状态", statusLabel(capabilities?.enabled)],
 			["当前版本", capabilities?.edition || "foundation"],
 			["权限事实源", "dts-platform"],
 		],
@@ -626,17 +645,104 @@ function RoutePanel(props: RoutePanelProps) {
 }
 
 function CenterPage({ capabilities, embedded, workspace }: RoutePanelProps) {
+	const published = countByStatus(workspace.metricAssets, "PUBLISHED");
+	const review = countByStatus(workspace.metricAssets, "REVIEW");
+	const draft = countByStatus(workspace.metricAssets, "DRAFT");
+	const connectedContracts = workspace.platformContracts.filter(([, , status]) => status === "connected" || status === "已接入").length;
+	const totalContracts = workspace.platformContracts.length || 1;
+	const readyModels = workspace.modelCandidates.length;
+
 	return (
 		<>
 			<div className="section-head">
 				<div>
-					<h3>运行与平台契约</h3>
-					<p>dts-metrics 独立承接语义建模和候选生成物，平台继续负责身份、权限、资产和发布事实。</p>
+					<h3>指标交付工作台</h3>
+					<p>把 Sprint-31A 的资产事实源、Sprint-31 的发布门禁和 Sprint-32 的 metrics 服务收拢成一条可执行路径。</p>
 				</div>
-				<a className="button primary" href={routeHref("/metrics/packs", embedded)}>
-					提交指标包
-				</a>
+				<div className="toolbar">
+					<a className="button" href={routeHref("/metrics/dictionary", embedded)}>
+						查看指标资产
+					</a>
+					<a className="button primary" href={routeHref("/metrics/packs", embedded)}>
+						提交指标包
+					</a>
+				</div>
 			</div>
+
+			<div className="command-strip">
+				<div>
+					<span>服务</span>
+					<strong>{capabilities?.service || "dts-metrics"}</strong>
+				</div>
+				<div>
+					<span>契约接入</span>
+					<strong>
+						{connectedContracts}/{totalContracts}
+					</strong>
+				</div>
+				<div>
+					<span>指标资产</span>
+					<strong>{workspace.metricAssets.length}</strong>
+				</div>
+				<div>
+					<span>DWS/ADS 候选</span>
+					<strong>{readyModels}</strong>
+				</div>
+				<div>
+					<span>刷新</span>
+					<strong>{currentTimeLabel()}</strong>
+				</div>
+			</div>
+
+			<div className="workbench-grid">
+				<section className="section focus-panel">
+					<div className="section-title-row">
+						<h4>当前交付状态</h4>
+						<StatusPill value={review > 0 ? "REVIEW" : "PASS"} />
+					</div>
+					<div className="metric-ring" aria-label="指标资产状态概览">
+						<div>
+							<strong>{workspace.metricAssets.length}</strong>
+							<span>指标资产</span>
+						</div>
+					</div>
+					<div className="status-breakdown">
+						<div>
+							<span className="dot ok-dot" />
+							已发布 {published}
+						</div>
+						<div>
+							<span className="dot warn-dot" />
+							审核中 {review}
+						</div>
+						<div>
+							<span className="dot neutral-dot" />
+							草稿 {draft}
+						</div>
+					</div>
+					<p>发布态指标可进入 BI/大屏消费；审核中和草稿需要先补齐术语、权限和 dbt 门禁材料。</p>
+				</section>
+
+				<section className="section flow-board">
+					<h4>黄金路径</h4>
+					<div className="flow-lanes">
+						{[
+							["资产事实源", "platform asset contract", "31A"],
+							["指标定义", "metric-pack / DSL", "32"],
+							["候选生成", "DWS/ADS artifact", "32"],
+							["发布门禁", "platform dbt gate", "31"],
+							["消费发布", "BI Dataset / Screen", "31"],
+						].map(([title, desc, sprint]) => (
+							<div className="flow-lane" key={title}>
+								<span>{sprint}</span>
+								<strong>{title}</strong>
+								<em>{desc}</em>
+							</div>
+						))}
+					</div>
+				</section>
+			</div>
+
 			<div className="page-grid two-columns">
 				<section className="section">
 					<h4>平台契约状态</h4>
@@ -693,6 +799,21 @@ function LiveContract({ capabilities }: { capabilities: MetricsCapabilities | nu
 
 function MetricAssetsPage({ embedded, workspace, outputs, busy, loadCapabilitiesInto }: RoutePanelProps) {
 	const assets = workspace.metricAssets;
+	const [query, setQuery] = useState("");
+	const [statusFilter, setStatusFilter] = useState("ALL");
+	const visibleAssets = useMemo(() => {
+		const normalized = query.trim().toLowerCase();
+		return assets.filter((item) => {
+			const statusMatched = statusFilter === "ALL" || item.status === statusFilter;
+			if (!statusMatched) return false;
+			if (!normalized) return true;
+			return [item.name, item.code, item.domain, item.owner, item.consumer, item.type].some((field) =>
+				String(field || "").toLowerCase().includes(normalized),
+			);
+		});
+	}, [assets, query, statusFilter]);
+	const selected = visibleAssets[0] ?? assets[0];
+
 	return (
 		<>
 			<div className="section-head">
@@ -709,32 +830,102 @@ function MetricAssetsPage({ embedded, workspace, outputs, busy, loadCapabilities
 					</a>
 				</div>
 			</div>
-			<div className="toolbar filters">
-				<span className="chip active">全部 {assets.length}</span>
-				<span className="chip">已发布 {assets.filter((item) => item.status === "PUBLISHED").length}</span>
-				<span className="chip">审核中 {assets.filter((item) => item.status === "REVIEW").length}</span>
-				<span className="chip">草稿 {assets.filter((item) => item.status === "DRAFT").length}</span>
+
+			<div className="list-toolbar">
+				<label className="search-field">
+					<span>搜索</span>
+					<input
+						placeholder="指标名、编码、负责人、消费方"
+						value={query}
+						onChange={(event) => setQuery(event.target.value)}
+					/>
+				</label>
+				<div className="toolbar filters" aria-label="指标状态筛选">
+					{[
+						["ALL", `全部 ${assets.length}`],
+						["PUBLISHED", `已发布 ${countByStatus(assets, "PUBLISHED")}`],
+						["REVIEW", `审核中 ${countByStatus(assets, "REVIEW")}`],
+						["DRAFT", `草稿 ${countByStatus(assets, "DRAFT")}`],
+					].map(([value, label]) => (
+						<button
+							className={`chip ${statusFilter === value ? "active" : ""}`}
+							key={value}
+							type="button"
+							onClick={() => setStatusFilter(value)}
+						>
+							{label}
+						</button>
+					))}
+				</div>
 			</div>
-			<div className="table-wrap">
-				<table className="data-table">
-					<thead>
-						<tr>
-							<th>指标</th>
-							<th>主题域</th>
-							<th>类型</th>
-							<th>统计粒度</th>
-							<th>版本</th>
-							<th>状态</th>
-							<th>负责人</th>
-							<th>消费方</th>
-						</tr>
-					</thead>
-					<tbody>
-						{assets.map((item) => (
-							<MetricAssetRow item={item} key={item.code} />
-						))}
-					</tbody>
-				</table>
+
+			<div className="detail-layout">
+				<div className="table-wrap">
+					<table className="data-table">
+						<thead>
+							<tr>
+								<th>指标</th>
+								<th>主题域</th>
+								<th>类型</th>
+								<th>统计粒度</th>
+								<th>版本</th>
+								<th>状态</th>
+								<th>负责人</th>
+								<th>消费方</th>
+							</tr>
+						</thead>
+						<tbody>
+							{visibleAssets.length ? (
+								visibleAssets.map((item) => <MetricAssetRow item={item} key={item.code} />)
+							) : (
+								<tr>
+									<td colSpan={8}>
+										<EmptyState title="没有匹配的指标" description="换一个关键词或状态筛选即可恢复列表。" />
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
+				</div>
+				{selected ? (
+					<section className="section inspector">
+						<div className="section-title-row">
+							<h4>{selected.name}</h4>
+							<StatusPill value={selected.status} />
+						</div>
+						<dl className="meta-list">
+							<div>
+								<dt>指标编码</dt>
+								<dd>{selected.code}</dd>
+							</div>
+							<div>
+								<dt>版本</dt>
+								<dd>{selected.version}</dd>
+							</div>
+							<div>
+								<dt>负责人</dt>
+								<dd>{selected.owner}</dd>
+							</div>
+							<div>
+								<dt>消费方</dt>
+								<dd>{selected.consumer}</dd>
+							</div>
+						</dl>
+						<div className="field-tags">
+							{selected.terms.map((term) => (
+								<span key={term}>{term}</span>
+							))}
+						</div>
+						<div className="action-stack">
+							<a className="button primary" href={routeHref("/metrics/semantic/metrics", embedded)}>
+								进入公式配置
+							</a>
+							<a className="button" href={routeHref("/metrics/semantic/publish", embedded)}>
+								查看发布门禁
+							</a>
+						</div>
+					</section>
+				) : null}
 			</div>
 			<section className="section muted-section">
 				<h4>绑定要求</h4>
@@ -844,7 +1035,7 @@ function SemanticFlowPage({ embedded }: { embedded: boolean }) {
 			<div className="section-head">
 				<div>
 					<h3>从指标口径到数据应用</h3>
-					<p>页面按真实建模顺序组织，避免业务人员直接面对 SQL，也避免绕开 platform 的治理和权限。</p>
+					<p>把原语义中心的主题域、业务对象、指标配置、模型生成和发布运行拆成可操作节点，每一步都有对应 API 动作。</p>
 				</div>
 				<a className="button" href={routeHref("/metrics/semantic/metrics", embedded)}>
 					进入公式配置
@@ -852,23 +1043,41 @@ function SemanticFlowPage({ embedded }: { embedded: boolean }) {
 			</div>
 			<div className="workflow">
 				{[
-					["主题域", "选择 platform 中已治理的业务域，绑定数据标准和术语。"],
-					["业务对象", "声明主对象、来源明细模型、Join 路径、统计粒度。"],
-					["指标公式", "配置聚合、条件聚合、比率、预警和展示格式。"],
-					["DWS/ADS", "生成公共汇总模型和应用数据集候选物。"],
-					["审核发布", "提交 dbt 门禁，注册资产、血缘和 BI Dataset。"],
-				].map(([title, text], index) => (
-					<div className="workflow-step" key={title}>
+					["主题域", "选择 platform 中已治理的业务域，绑定数据标准和术语。", "/metrics/semantic/subjects"],
+					["业务对象", "声明主对象、来源明细模型、Join 路径、统计粒度。", "/metrics/semantic/objects"],
+					["指标公式", "配置聚合、条件聚合、比率、预警和展示格式。", "/metrics/semantic/metrics"],
+					["DWS/ADS", "生成公共汇总模型和应用数据集候选物。", "/metrics/semantic/models"],
+					["审核发布", "提交 dbt 门禁，注册资产、血缘和 BI Dataset。", "/metrics/semantic/publish"],
+				].map(([title, text, href], index) => (
+					<a className="workflow-step" href={routeHref(href, embedded)} key={title}>
 						<span>{String(index + 1).padStart(2, "0")}</span>
 						<strong>{title}</strong>
 						<p>{text}</p>
-					</div>
+					</a>
 				))}
 			</div>
-			<section className="section">
-				<h3>语义建模流程</h3>
-				<p>输入来自 platform 数据资产、数据标准、业务术语和权限上下文；输出 dbt SQL、schema.yml、BI Dataset 建议和发布门禁材料。</p>
-			</section>
+			<div className="page-grid two-columns">
+				<section className="section">
+					<h3>输入事实源</h3>
+					<div className="field-tags">
+						<span>asset contract</span>
+						<span>asset_grant</span>
+						<span>glossary term</span>
+						<span>data standard</span>
+						<span>dbt publish gateway</span>
+					</div>
+				</section>
+				<section className="section">
+					<h3>输出材料</h3>
+					<div className="field-tags">
+						<span>dbt SQL</span>
+						<span>schema.yml</span>
+						<span>lineage hint</span>
+						<span>BI Dataset candidate</span>
+						<span>publish record</span>
+					</div>
+				</section>
+			</div>
 		</>
 	);
 }
@@ -999,13 +1208,15 @@ function ObjectJoinCard({ item }: { item: ObjectJoin }) {
 }
 
 function FormulaConfigPage({ embedded, workspace, outputs, busy, submitStaticManifest }: RoutePanelProps) {
-	const active = workspace.formulaBlocks[1] ?? workspace.formulaBlocks[0];
+	const [activeCode, setActiveCode] = useState(workspace.formulaBlocks[1]?.code ?? workspace.formulaBlocks[0]?.code ?? "");
+	const active = workspace.formulaBlocks.find((item) => item.code === activeCode) ?? workspace.formulaBlocks[0];
+
 	return (
 		<>
 			<div className="section-head">
 				<div>
 					<h3>指标公式配置</h3>
-					<p>页面展示业务表达、DSL 表达和治理约束，并可调用生成物预览接口；发布仍必须经过 platform 门禁。</p>
+					<p>沿用原语义建模的维度、指标、模型绑定思路，但只允许受控 DSL，预览和发布都回到 platform 权限链。</p>
 				</div>
 				<div className="toolbar">
 					<button
@@ -1023,11 +1234,26 @@ function FormulaConfigPage({ embedded, workspace, outputs, busy, submitStaticMan
 			</div>
 			<div className="split-layout">
 				<section className="section">
-					<h4>指标清单</h4>
-					<KeyTable
-						headers={["指标", "指标编码", "单位", "预警"]}
-						rows={workspace.formulaBlocks.map((item) => [item.name, item.code, item.unit, item.warning])}
-					/>
+					<div className="section-title-row">
+						<h4>指标清单</h4>
+						<span className="chip">{workspace.formulaBlocks.length} items</span>
+					</div>
+					<div className="formula-list">
+						{workspace.formulaBlocks.map((item) => (
+							<button
+								className={`formula-item ${active?.code === item.code ? "active" : ""}`}
+								key={item.code}
+								type="button"
+								onClick={() => setActiveCode(item.code)}
+							>
+								<strong>{item.name}</strong>
+								<span>{item.code}</span>
+								<em>
+									{item.unit} / {item.warning}
+								</em>
+							</button>
+						))}
+					</div>
 				</section>
 				{active ? <FormulaEditor active={active} /> : null}
 			</div>
@@ -1061,12 +1287,28 @@ function FormulaEditor({ active }: { active: FormulaBlock }) {
 					<input readOnly value="dwd_project_detail" />
 				</label>
 			</div>
+			<div className="builder-canvas">
+				{[
+					["来源模型", "dwd_project_detail"],
+					["统计粒度", "stat_month + dept_id + project_type"],
+					["公式类型", active.format === "percent" ? "ratio" : "aggregation"],
+					["治理动作", "term + standard + asset permission"],
+				].map(([label, value]) => (
+					<div className="builder-node" key={label}>
+						<span>{label}</span>
+						<strong>{value}</strong>
+					</div>
+				))}
+			</div>
 			<pre className="code-preview">{active.dsl}</pre>
 		</section>
 	);
 }
 
 function ModelGenerationPage({ workspace, outputs, busy, submitStaticManifest }: RoutePanelProps) {
+	const [activeModelName, setActiveModelName] = useState(workspace.modelCandidates[0]?.name ?? "");
+	const activeModel = workspace.modelCandidates.find((model) => model.name === activeModelName) ?? workspace.modelCandidates[0];
+
 	return (
 		<>
 			<div className="section-head">
@@ -1083,10 +1325,25 @@ function ModelGenerationPage({ workspace, outputs, busy, submitStaticManifest }:
 					生成候选物
 				</button>
 			</div>
-			<div className="page-grid two-columns">
-				{workspace.modelCandidates.map((model) => (
-					<ModelCandidateCard model={model} key={model.name} />
-				))}
+			<div className="generator-layout">
+				<section className="section">
+					<h4>候选模型</h4>
+					<div className="model-selector">
+						{workspace.modelCandidates.map((model) => (
+							<button
+								className={`model-selector-item ${activeModel?.name === model.name ? "active" : ""}`}
+								key={model.name}
+								type="button"
+								onClick={() => setActiveModelName(model.name)}
+							>
+								<span>{model.layer}</span>
+								<strong>{model.name}</strong>
+								<em>{model.grain}</em>
+							</button>
+						))}
+					</div>
+				</section>
+				{activeModel ? <ModelCandidateCard model={activeModel} /> : <EmptyState title="暂无候选模型" description="导入指标包并生成候选物后会显示在这里。" />}
 			</div>
 			<JsonOutput value={outputs.modelGeneration || "等待生成 DWS/ADS 候选物"} />
 		</>
@@ -1126,6 +1383,9 @@ function ModelCandidateCard({ model }: { model: ModelCandidate }) {
 }
 
 function PublishPage({ workspace, outputs, busy, submitStaticManifest }: RoutePanelProps) {
+	const readyGates = workspace.publishGates.filter(([, status]) => status === "PASS").length;
+	const allGates = workspace.publishGates.length || 1;
+
 	return (
 		<>
 			<div className="section-head">
@@ -1141,6 +1401,26 @@ function PublishPage({ workspace, outputs, busy, submitStaticManifest }: RoutePa
 				>
 					发布预检
 				</button>
+			</div>
+			<div className="release-summary">
+				<div>
+					<span>门禁通过</span>
+					<strong>
+						{readyGates}/{allGates}
+					</strong>
+				</div>
+				<div>
+					<span>发布方式</span>
+					<strong>dry-run</strong>
+				</div>
+				<div>
+					<span>事实源</span>
+					<strong>platform/dbt gate</strong>
+				</div>
+				<div>
+					<span>血缘身份</span>
+					<strong>asset identity</strong>
+				</div>
 			</div>
 			<div className="page-grid two-columns">
 				<section className="section">
@@ -1174,6 +1454,10 @@ function PublishPage({ workspace, outputs, busy, submitStaticManifest }: RoutePa
 }
 
 function RunMonitorPage({ embedded, workspace, outputs, busy, loadCapabilitiesInto }: RoutePanelProps) {
+	const successCount = workspace.runRecords.filter((record) => record[2] === "SUCCESS").length;
+	const warningCount = workspace.runRecords.filter((record) => record[2] === "WARNING").length;
+	const pendingCount = workspace.runRecords.filter((record) => record[2] === "PENDING").length;
+
 	return (
 		<>
 			<div className="section-head">
@@ -1192,10 +1476,10 @@ function RunMonitorPage({ embedded, workspace, outputs, busy, loadCapabilitiesIn
 			</div>
 			<div className="run-board">
 				{[
-					["今日成功", "2"],
-					["等待治理", "1"],
+					["今日成功", String(successCount)],
+					["等待治理", String(pendingCount)],
 					["平均耗时", "42s"],
-					["SLA 风险", "1"],
+					["SLA 风险", String(warningCount)],
 				].map(([label, value]) => (
 					<div key={label}>
 						<span>{label}</span>
@@ -1223,6 +1507,15 @@ function MigrationPage({ outputs, busy, loadMigrationDryRun }: RoutePanelProps) 
 			</div>
 			<JsonOutput value={outputs.migration || "等待读取"} />
 		</section>
+	);
+}
+
+function EmptyState({ title, description }: { title: string; description: string }) {
+	return (
+		<div className="empty-state">
+			<strong>{title}</strong>
+			<span>{description}</span>
+		</div>
 	);
 }
 

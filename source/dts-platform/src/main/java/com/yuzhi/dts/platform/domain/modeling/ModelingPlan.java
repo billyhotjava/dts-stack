@@ -24,6 +24,9 @@ public class ModelingPlan extends AbstractAuditingEntity<UUID> implements Serial
     @Column(name = "domain", length = 128)
     private String domain;
 
+    @Column(name = "domain_id", columnDefinition = "uuid")
+    private UUID domainId;
+
     @Column(name = "scope", length = 256)
     private String scope;
 
@@ -71,6 +74,14 @@ public class ModelingPlan extends AbstractAuditingEntity<UUID> implements Serial
 
     public void setDomain(String domain) {
         this.domain = domain;
+    }
+
+    public UUID getDomainId() {
+        return domainId;
+    }
+
+    public void setDomainId(UUID domainId) {
+        this.domainId = domainId;
     }
 
     public String getScope() {
@@ -137,4 +148,3 @@ public class ModelingPlan extends AbstractAuditingEntity<UUID> implements Serial
         this.content = content;
     }
 }
-

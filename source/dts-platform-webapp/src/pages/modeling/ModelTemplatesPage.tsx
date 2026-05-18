@@ -17,10 +17,12 @@ import type { ColumnsType } from "antd/es/table";
 import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
+import { useRouter } from "@/routes/hooks";
 import {
 	archiveModelingPlan,
 	createModelingPlan,
 	deleteModelingPlan,
+	listDomains,
 	listModelingPlans,
 	publishModelingPlan,
 	restoreModelingPlan,
@@ -35,6 +37,7 @@ const normalizeUpper = (value?: string) => normalizeText(value).toUpperCase();
 type ProjectSpace = {
 	id?: string;
 	name?: string;
+	domainId?: string;
 	domain?: string;
 	scope?: string;
 	status?: string;
@@ -48,6 +51,12 @@ type ProjectSpace = {
 	lastModifiedDate?: string;
 };
 
+type CatalogDomainOption = {
+	id: string;
+	name?: string;
+	code?: string;
+};
+
 const STATUS_OPTIONS = ["DRAFT", "PUBLISHED", "ARCHIVED"];
 
 const statusColor = (status?: string) => {
@@ -58,8 +67,11 @@ const statusColor = (status?: string) => {
 };
 
 export default function Page() {
+	const router = useRouter();
 	const [loading, setLoading] = useState(false);
+	const [domainsLoading, setDomainsLoading] = useState(false);
 	const [spaces, setSpaces] = useState<ProjectSpace[]>([]);
+	const [domains, setDomains] = useState<CatalogDomainOption[]>([]);
 	const [keyword, setKeyword] = useState("");
 	const [status, setStatus] = useState<string | null>(null);
 	const [editOpen, setEditOpen] = useState(false);
@@ -71,6 +83,23 @@ export default function Page() {
 	const [publishTarget, setPublishTarget] = useState<ProjectSpace | null>(null);
 	const [form] = Form.useForm();
 	const [publishForm] = Form.useForm();
+
+	const loadDomains = useCallback(async () => {
+		setDomainsLoading(true);
+		try {
+			const resp = (await listDomains(0, 500, "")) as any;
+			const content = Array.isArray(resp?.content) ? resp.content : Array.isArray(resp) ? resp : [];
+			setDomains(
+				content
+					.filter((item: any) => item?.id)
+					.map((item: any) => ({ id: String(item.id), name: item.name, code: item.code })),
+			);
+		} catch {
+			setDomains([]);
+		} finally {
+			setDomainsLoading(false);
+		}
+	}, []);
 
 	const loadSpaces = useCallback(async () => {
 		setLoading(true);
@@ -90,6 +119,23 @@ export default function Page() {
 	useEffect(() => {
 		void loadSpaces();
 	}, [loadSpaces]);
+
+	useEffect(() => {
+		void loadDomains();
+	}, [loadDomains]);
+
+	const domainNameById = useMemo(() => {
+		return new Map(domains.map((item) => [item.id, item.name || item.code || item.id]));
+	}, [domains]);
+
+	const domainOptions = useMemo(
+		() =>
+			domains.map((item) => ({
+				value: item.id,
+				label: item.name ? (item.code ? `${item.name} (${item.code})` : item.name) : item.code || item.id,
+			})),
+		[domains],
+	);
 
 	const stats = useMemo(() => {
 		const total = spaces.length;
@@ -113,7 +159,7 @@ export default function Page() {
 		form.resetFields();
 		form.setFieldsValue({
 			name: row.name,
-			domain: row.domain,
+			domainId: row.domainId,
 			scope: row.scope,
 			status: row.status,
 			version: row.version,
@@ -129,10 +175,10 @@ export default function Page() {
 	const submitEdit = async () => {
 		setSaving(true);
 		try {
-			const values = await form.validateFields(["name"]);
+			const values = await form.validateFields(["name", "domainId"]);
 			const payload: ProjectSpace = {
 				name: normalizeText(values.name),
-				domain: normalizeText(form.getFieldValue("domain")) || undefined,
+				domainId: values.domainId,
 				scope: normalizeText(form.getFieldValue("scope")) || undefined,
 				status: normalizeUpper(form.getFieldValue("status")) || undefined,
 				version: normalizeText(form.getFieldValue("version")) || undefined,
@@ -249,7 +295,13 @@ export default function Page() {
 	const columns: ColumnsType<ProjectSpace> = useMemo(
 		() => [
 			{ title: "项目空间", dataIndex: "name", key: "name", width: 200 , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
-			{ title: "业务域", dataIndex: "domain", key: "domain", width: 140, render: (v) => v || "-" },
+			{
+				title: "主题域",
+				dataIndex: "domainId",
+				key: "domainId",
+				width: 160,
+				render: (_, row) => (row.domainId ? domainNameById.get(row.domainId) || "未分类" : "未分类"),
+			},
 			{ title: "范围说明", dataIndex: "scope", key: "scope", ellipsis: true, render: (v) => v || "-" },
 			{ title: "负责人", dataIndex: "owner", key: "owner", width: 120, render: (v) => v || "-" },
 			{ title: "部门", dataIndex: "ownerDept", key: "ownerDept", width: 120, render: (v) => v || "-" },
@@ -294,7 +346,7 @@ export default function Page() {
 				),
 			},
 		],
-		[],
+		[domainNameById],
 	);
 
 	return (
@@ -350,7 +402,7 @@ export default function Page() {
 			>
 				<Space wrap className="mb-4">
 					<Input
-						placeholder="搜索项目/域/负责人"
+						placeholder="搜索项目/负责人"
 						value={keyword}
 						onChange={(e) => setKeyword(e.target.value)}
 						allowClear
@@ -377,7 +429,7 @@ export default function Page() {
 			<Alert
 				type="info"
 				showIcon
-				message="项目空间作为开发入口，后续将关联 SQL 建模、脚本开发与任务编排。"
+				message="项目空间作为开发入口，必须绑定治理中心主题域；旧项目空间中的文本业务域将按未分类处理。"
 			/>
 
 			<Modal
@@ -395,10 +447,33 @@ export default function Page() {
 						<Form.Item name="name" label="项目空间名称" rules={[{ required: true, message: "请输入名称" }]}>
 							<Input placeholder="例如：ERP 经营分析" />
 						</Form.Item>
-						<Form.Item name="domain" label="业务域">
-							<Input placeholder="例如：销售、库存" />
+						<Form.Item name="domainId" label="主题域" rules={[{ required: true, message: "请选择主题域" }]}>
+							<Select
+								placeholder={domains.length > 0 ? "请选择主题域" : "请先新建主题域"}
+								loading={domainsLoading}
+								disabled={!domainsLoading && domains.length === 0}
+								options={domainOptions}
+								showSearch
+								optionFilterProp="label"
+							/>
 						</Form.Item>
 					</div>
+					{!domainsLoading && domains.length === 0 ? (
+						<Alert
+							type="warning"
+							showIcon
+							className="mb-4"
+							message="暂无可选主题域"
+							description={
+								<Space size={4} wrap>
+									<span>请先在数据治理中心创建主题域，再回到这里新建项目空间。</span>
+									<Button type="link" size="small" onClick={() => router.push("/governance/subjects")}>
+										主题域管理
+									</Button>
+								</Space>
+							}
+						/>
+					) : null}
 					<Form.Item name="scope" label="范围说明">
 						<Input.TextArea rows={2} placeholder="描述该项目覆盖的主题、表范围或业务边界" />
 					</Form.Item>

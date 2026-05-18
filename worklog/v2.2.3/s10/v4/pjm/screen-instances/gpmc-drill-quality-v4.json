@@ -1,8 +1,8 @@
 {
   "schemaVersion": 3,
-  "id": "gpmc-drill-execution-v3",
-  "name": "执行层-项目执行详情",
-  "description": "项目执行监控钻取页面，展示关键任务节点、资源负载及延期项目排行。",
+  "id": "gpmc-drill-quality-v4",
+  "name": "执行层-质量问题与跟进明细",
+  "description": "质量问题钻取页面，展示质量问题清单、闭环摘要及跟进措施。",
   "classification": "INTERNAL",
   "width": 1920,
   "height": 1080,
@@ -39,9 +39,9 @@
   ],
   "components": [
     {
-      "id": "drill-exec-header-bar",
+      "id": "drill-quality-header-bar",
       "type": "shape",
-      "name": "drill-exec-header-bar",
+      "name": "drill-quality-header-bar",
       "x": 0,
       "y": 0,
       "width": 1920,
@@ -58,9 +58,9 @@
       }
     },
     {
-      "id": "drill-exec-title",
+      "id": "drill-quality-title",
       "type": "title",
-      "name": "执行层-项目执行详情",
+      "name": "执行层-质量问题与跟进明细",
       "x": 20,
       "y": 12,
       "width": 500,
@@ -69,7 +69,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "执行层-项目执行详情",
+        "text": "执行层-质量问题与跟进明细",
         "fontSize": 22,
         "fontWeight": "700",
         "color": "#ffffff",
@@ -77,7 +77,7 @@
       }
     },
     {
-      "id": "drill-exec-badge",
+      "id": "drill-quality-badge",
       "type": "title",
       "name": "只读执行页",
       "x": 1760,
@@ -98,9 +98,9 @@
       }
     },
     {
-      "id": "drill-exec-back-shape",
+      "id": "drill-quality-back-shape",
       "type": "shape",
-      "name": "返回执行监控",
+      "name": "返回质量看板",
       "x": 1600,
       "y": 14,
       "width": 150,
@@ -118,9 +118,9 @@
       "actions": []
     },
     {
-      "id": "drill-exec-back-label",
+      "id": "drill-quality-back-label",
       "type": "title",
-      "name": "返回执行监控",
+      "name": "返回质量看板",
       "x": 1600,
       "y": 14,
       "width": 150,
@@ -129,7 +129,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "← 返回执行监控",
+        "text": "← 返回质量看板",
         "fontSize": 13,
         "fontWeight": "600",
         "color": "#ffffff",
@@ -138,9 +138,9 @@
       "actions": []
     },
     {
-      "id": "drill-exec-kpi-1",
+      "id": "drill-quality-kpi-1",
       "type": "number-card",
-      "name": "整体完成率",
+      "name": "归零率",
       "x": 20,
       "y": 70,
       "width": 456,
@@ -149,8 +149,8 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "整体完成率",
-        "value": "72.4",
+        "title": "归零率",
+        "value": "68.3",
         "unit": "%",
         "precision": 1,
         "titleColor": "#ffffff",
@@ -163,7 +163,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH agg AS (SELECT SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_due THEN 1 ELSE 0 END) AS due_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_on_time THEN 1 ELSE 0 END) AS on_time_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_overdue_completed THEN 1 ELSE 0 END) AS overdue_completed_cnt, SUM(CASE WHEN d.actual_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.actual_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_completed AND (d.plan_year != d.actual_year OR d.plan_month != d.actual_month) THEN 1 ELSE 0 END) AS outside_completed_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_incomplete AND d.is_milestone_node THEN 1 ELSE 0 END) AS incomplete_milestone_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_milestone_node AND d.is_on_time THEN 1 ELSE 0 END) AS milestone_on_time_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_milestone_node AND d.is_overdue_completed THEN 1 ELSE 0 END) AS milestone_overdue_completed_cnt FROM biz_dwd_project_node_v2 d WHERE ((d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM')) OR (d.actual_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.actual_month <= to_char({{dateTo}}::date, 'YYYY-MM'))) [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]]) SELECT CASE WHEN (agg.due_cnt+agg.outside_completed_cnt)=0 THEN 0 ELSE ROUND((agg.on_time_cnt+agg.overdue_completed_cnt+agg.outside_completed_cnt)::numeric/(agg.due_cnt+agg.outside_completed_cnt)::numeric*100,2) END AS \"完成率\", CASE WHEN (agg.incomplete_milestone_cnt+agg.milestone_on_time_cnt+agg.milestone_overdue_completed_cnt)=0 THEN 0 ELSE ROUND((agg.milestone_on_time_cnt+agg.milestone_overdue_completed_cnt)::numeric/(agg.incomplete_milestone_cnt+agg.milestone_on_time_cnt+agg.milestone_overdue_completed_cnt)::numeric*100,2) END AS \"里程碑完成率\" FROM agg",
+          "query": "WITH agg AS (SELECT SUM(new_issue_cnt) AS new_issue_cnt, SUM(zero_completed_cnt) AS zero_completed_cnt, SUM(open_issue_cnt) AS open_issue_cnt, SUM(no_zero_plan_cnt) AS no_zero_plan_cnt FROM biz_dws_quality_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]) SELECT CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND(zero_completed_cnt::numeric/new_issue_cnt::numeric*100,2) END AS \"归零率\", CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND(open_issue_cnt::numeric/new_issue_cnt::numeric*100,2) END AS \"现存率\", CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND((new_issue_cnt-no_zero_plan_cnt)::numeric/new_issue_cnt::numeric*100,2) END AS \"计划提交率\", ROUND((CASE WHEN new_issue_cnt=0 THEN 0 ELSE zero_completed_cnt::numeric/new_issue_cnt::numeric*100 END)*0.5 + (CASE WHEN new_issue_cnt=0 THEN 0 ELSE (new_issue_cnt-no_zero_plan_cnt)::numeric/new_issue_cnt::numeric*100 END)*0.3 + (100 - CASE WHEN new_issue_cnt=0 THEN 0 ELSE open_issue_cnt::numeric/new_issue_cnt::numeric*100 END)*0.2, 2) AS \"质量健康度\" FROM agg",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -188,9 +188,9 @@
       }
     },
     {
-      "id": "drill-exec-kpi-2",
+      "id": "drill-quality-kpi-2",
       "type": "number-card",
-      "name": "里程碑达成率",
+      "name": "现存率",
       "x": 490,
       "y": 70,
       "width": 456,
@@ -199,58 +199,8 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "里程碑达成率",
-        "value": "68",
-        "unit": "%",
-        "precision": 0,
-        "titleColor": "#ffffff",
-        "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
-        "borderRadius": 12,
-        "fontSize": 36
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH agg AS (SELECT SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_due THEN 1 ELSE 0 END) AS due_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_on_time THEN 1 ELSE 0 END) AS on_time_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_overdue_completed THEN 1 ELSE 0 END) AS overdue_completed_cnt, SUM(CASE WHEN d.actual_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.actual_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_completed AND (d.plan_year != d.actual_year OR d.plan_month != d.actual_month) THEN 1 ELSE 0 END) AS outside_completed_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_incomplete AND d.is_milestone_node THEN 1 ELSE 0 END) AS incomplete_milestone_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_milestone_node AND d.is_on_time THEN 1 ELSE 0 END) AS milestone_on_time_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_milestone_node AND d.is_overdue_completed THEN 1 ELSE 0 END) AS milestone_overdue_completed_cnt FROM biz_dwd_project_node_v2 d WHERE ((d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM')) OR (d.actual_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.actual_month <= to_char({{dateTo}}::date, 'YYYY-MM'))) [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]]) SELECT CASE WHEN (agg.due_cnt+agg.outside_completed_cnt)=0 THEN 0 ELSE ROUND((agg.on_time_cnt+agg.overdue_completed_cnt+agg.outside_completed_cnt)::numeric/(agg.due_cnt+agg.outside_completed_cnt)::numeric*100,2) END AS \"完成率\", CASE WHEN (agg.incomplete_milestone_cnt+agg.milestone_on_time_cnt+agg.milestone_overdue_completed_cnt)=0 THEN 0 ELSE ROUND((agg.milestone_on_time_cnt+agg.milestone_overdue_completed_cnt)::numeric/(agg.incomplete_milestone_cnt+agg.milestone_on_time_cnt+agg.milestone_overdue_completed_cnt)::numeric*100,2) END AS \"里程碑完成率\" FROM agg",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "drill-exec-kpi-3",
-      "type": "number-card",
-      "name": "异常率",
-      "x": 960,
-      "y": 70,
-      "width": 456,
-      "height": 90,
-      "zIndex": 10,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "异常率",
-        "value": "4.6",
+        "title": "现存率",
+        "value": "47",
         "unit": "%",
         "precision": 1,
         "titleColor": "#ffffff",
@@ -263,7 +213,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT CASE WHEN SUM(CASE WHEN d.is_due THEN 1 ELSE 0 END)=0 THEN 0 ELSE ROUND((SUM(CASE WHEN d.is_abnormal_pending AND NOT d.is_general_node THEN 1 ELSE 0 END)+SUM(CASE WHEN d.is_overdue_unchanged AND NOT d.is_general_node THEN 1 ELSE 0 END))::numeric/SUM(CASE WHEN d.is_due THEN 1 ELSE 0 END)::numeric*100,2) END AS \"异常率\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.risk_level = {{riskLevel}}]]",
+          "query": "WITH agg AS (SELECT SUM(new_issue_cnt) AS new_issue_cnt, SUM(zero_completed_cnt) AS zero_completed_cnt, SUM(open_issue_cnt) AS open_issue_cnt, SUM(no_zero_plan_cnt) AS no_zero_plan_cnt FROM biz_dws_quality_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]) SELECT CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND(zero_completed_cnt::numeric/new_issue_cnt::numeric*100,2) END AS \"归零率\", CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND(open_issue_cnt::numeric/new_issue_cnt::numeric*100,2) END AS \"现存率\", CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND((new_issue_cnt-no_zero_plan_cnt)::numeric/new_issue_cnt::numeric*100,2) END AS \"计划提交率\", ROUND((CASE WHEN new_issue_cnt=0 THEN 0 ELSE zero_completed_cnt::numeric/new_issue_cnt::numeric*100 END)*0.5 + (CASE WHEN new_issue_cnt=0 THEN 0 ELSE (new_issue_cnt-no_zero_plan_cnt)::numeric/new_issue_cnt::numeric*100 END)*0.3 + (100 - CASE WHEN new_issue_cnt=0 THEN 0 ELSE open_issue_cnt::numeric/new_issue_cnt::numeric*100 END)*0.2, 2) AS \"质量健康度\" FROM agg",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -282,19 +232,65 @@
             {
               "name": "projectNo",
               "variableKey": "projectNo"
-            },
-            {
-              "name": "riskLevel",
-              "variableKey": "riskLevel"
             }
           ]
         }
       }
     },
     {
-      "id": "drill-exec-kpi-4",
+      "id": "drill-quality-kpi-3",
       "type": "number-card",
-      "name": "风险预警指数",
+      "name": "计划提交率",
+      "x": 960,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "计划提交率",
+        "value": "80.0",
+        "unit": "%",
+        "precision": 1,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "#ffffff",
+        "borderRadius": 12,
+        "fontSize": 36
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "WITH agg AS (SELECT SUM(new_issue_cnt) AS new_issue_cnt, SUM(zero_completed_cnt) AS zero_completed_cnt, SUM(open_issue_cnt) AS open_issue_cnt, SUM(no_zero_plan_cnt) AS no_zero_plan_cnt FROM biz_dws_quality_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]) SELECT CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND(zero_completed_cnt::numeric/new_issue_cnt::numeric*100,2) END AS \"归零率\", CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND(open_issue_cnt::numeric/new_issue_cnt::numeric*100,2) END AS \"现存率\", CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND((new_issue_cnt-no_zero_plan_cnt)::numeric/new_issue_cnt::numeric*100,2) END AS \"计划提交率\", ROUND((CASE WHEN new_issue_cnt=0 THEN 0 ELSE zero_completed_cnt::numeric/new_issue_cnt::numeric*100 END)*0.5 + (CASE WHEN new_issue_cnt=0 THEN 0 ELSE (new_issue_cnt-no_zero_plan_cnt)::numeric/new_issue_cnt::numeric*100 END)*0.3 + (100 - CASE WHEN new_issue_cnt=0 THEN 0 ELSE open_issue_cnt::numeric/new_issue_cnt::numeric*100 END)*0.2, 2) AS \"质量健康度\" FROM agg",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-quality-kpi-4",
+      "type": "number-card",
+      "name": "质量健康度",
       "x": 1430,
       "y": 70,
       "width": 470,
@@ -303,8 +299,8 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "风险预警指数",
-        "value": "37",
+        "title": "质量健康度",
+        "value": "72",
         "unit": "",
         "precision": 0,
         "titleColor": "#ffffff",
@@ -317,7 +313,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT CASE WHEN SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END)=0 THEN 0 ELSE ROUND(SUM(CASE WHEN d.is_incomplete AND d.is_high_risk THEN 1 ELSE 0 END)::numeric/SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END)::numeric*100,2) END AS \"风险预警指数\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.risk_level = {{riskLevel}}]]",
+          "query": "WITH agg AS (SELECT SUM(new_issue_cnt) AS new_issue_cnt, SUM(zero_completed_cnt) AS zero_completed_cnt, SUM(open_issue_cnt) AS open_issue_cnt, SUM(no_zero_plan_cnt) AS no_zero_plan_cnt FROM biz_dws_quality_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]) SELECT CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND(zero_completed_cnt::numeric/new_issue_cnt::numeric*100,2) END AS \"归零率\", CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND(open_issue_cnt::numeric/new_issue_cnt::numeric*100,2) END AS \"现存率\", CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND((new_issue_cnt-no_zero_plan_cnt)::numeric/new_issue_cnt::numeric*100,2) END AS \"计划提交率\", ROUND((CASE WHEN new_issue_cnt=0 THEN 0 ELSE zero_completed_cnt::numeric/new_issue_cnt::numeric*100 END)*0.5 + (CASE WHEN new_issue_cnt=0 THEN 0 ELSE (new_issue_cnt-no_zero_plan_cnt)::numeric/new_issue_cnt::numeric*100 END)*0.3 + (100 - CASE WHEN new_issue_cnt=0 THEN 0 ELSE open_issue_cnt::numeric/new_issue_cnt::numeric*100 END)*0.2, 2) AS \"质量健康度\" FROM agg",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -336,19 +332,15 @@
             {
               "name": "projectNo",
               "variableKey": "projectNo"
-            },
-            {
-              "name": "riskLevel",
-              "variableKey": "riskLevel"
             }
           ]
         }
       }
     },
     {
-      "id": "drill-exec-detail-table",
+      "id": "drill-quality-detail-table",
       "type": "table",
-      "name": "关键任务与节点明细",
+      "name": "质量问题清单",
       "x": 20,
       "y": 175,
       "width": 1145,
@@ -357,20 +349,19 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "关键任务与节点明细",
+        "title": "质量问题清单",
         "header": [
           "项目编号",
           "分系统",
-          "节点任务",
-          "节点类型",
-          "负责人",
+          "问题名称",
           "责任科室",
-          "完成情况",
-          "风险等级",
-          "计划时间",
-          "实际完成",
-          "延期天数",
-          "未完成原因"
+          "问题分类",
+          "归零计划",
+          "状态",
+          "当前进展",
+          "问题日期",
+          "归零完成日期",
+          "滞留天数"
         ],
         "data": [],
         "fontSize": 16,
@@ -391,7 +382,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT project_no AS \"项目编号\", subsystem AS \"分系统\", node_task AS \"节点任务\", node_type AS \"节点类型\", owner AS \"负责人\", dept AS \"责任科室\", completion_status AS \"完成情况\", risk_level AS \"风险等级\", plan_date AS \"计划时间\", actual_date AS \"实际完成\", delay_days AS \"延期天数\", incomplete_reason AS \"未完成原因\" FROM biz_dwd_project_node_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] [[AND risk_level = {{riskLevel}}]] ORDER BY delay_days DESC NULLS LAST",
+          "query": "SELECT project_no AS \"项目编号\", subsystem AS \"分系统\", issue_name AS \"问题名称\", dept AS \"责任科室\", issue_category AS \"问题分类\", zero_plan AS \"归零计划\", status AS \"状态\", current_progress AS \"当前进展\", issue_date AS \"问题日期\", zero_complete_date AS \"归零完成日期\", pending_days AS \"滞留天数\" FROM biz_dwd_quality_issue_v2 WHERE issue_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND issue_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] ORDER BY pending_days DESC NULLS LAST",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -410,19 +401,15 @@
             {
               "name": "projectNo",
               "variableKey": "projectNo"
-            },
-            {
-              "name": "riskLevel",
-              "variableKey": "riskLevel"
             }
           ]
         }
       }
     },
     {
-      "id": "drill-exec-side-panel",
+      "id": "drill-quality-side-panel",
       "type": "table",
-      "name": "责任科室负载",
+      "name": "质量闭环摘要",
       "x": 1185,
       "y": 175,
       "width": 715,
@@ -431,12 +418,10 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "责任科室负载",
+        "title": "质量闭环摘要",
         "header": [
-          "责任科室",
-          "节点总数",
-          "已完成",
-          "未完成"
+          "指标",
+          "数值"
         ],
         "data": [],
         "fontSize": 16,
@@ -457,7 +442,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT dept AS \"责任科室\", COUNT(*) AS \"节点总数\", SUM(CASE WHEN is_completed THEN 1 ELSE 0 END) AS \"已完成\", SUM(CASE WHEN is_incomplete THEN 1 ELSE 0 END) AS \"未完成\" FROM biz_dwd_project_node_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] AND dept IS NOT NULL GROUP BY dept ORDER BY SUM(CASE WHEN is_incomplete THEN 1 ELSE 0 END) DESC",
+          "query": "SELECT SUM(new_issue_cnt) AS \"新增质量问题\", SUM(open_issue_cnt) AS \"现存质量问题\", SUM(zero_completed_cnt) AS \"已归零数\", SUM(no_zero_plan_cnt) AS \"未提交归零计划\", SUM(tech_zero_cnt) AS \"技术归零\", SUM(mgmt_zero_cnt) AS \"管理归零\", SUM(both_zero_cnt) AS \"双归零\" FROM biz_dws_quality_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -482,9 +467,9 @@
       }
     },
     {
-      "id": "drill-exec-support-table",
+      "id": "drill-quality-support-table",
       "type": "table",
-      "name": "延期项目排行",
+      "name": "跟进措施摘要",
       "x": 20,
       "y": 610,
       "width": 1880,
@@ -493,20 +478,19 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "延期项目排行",
+        "title": "跟进措施摘要",
         "header": [
           "项目编号",
           "分系统",
-          "节点任务",
-          "节点类型",
-          "负责人",
+          "问题名称",
           "责任科室",
-          "完成情况",
-          "风险等级",
-          "计划时间",
-          "实际完成",
-          "延期天数",
-          "未完成原因"
+          "问题分类",
+          "归零计划",
+          "状态",
+          "当前进展",
+          "问题日期",
+          "归零完成日期",
+          "滞留天数"
         ],
         "data": [],
         "fontSize": 16,
@@ -527,7 +511,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT project_no AS \"项目编号\", subsystem AS \"分系统\", node_task AS \"节点任务\", node_type AS \"节点类型\", owner AS \"负责人\", dept AS \"责任科室\", completion_status AS \"完成情况\", risk_level AS \"风险等级\", plan_date AS \"计划时间\", actual_date AS \"实际完成\", delay_days AS \"延期天数\", incomplete_reason AS \"未完成原因\" FROM biz_dwd_project_node_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] [[AND risk_level = {{riskLevel}}]] AND is_incomplete = true ORDER BY delay_days DESC NULLS LAST",
+          "query": "SELECT project_no AS \"项目编号\", subsystem AS \"分系统\", issue_name AS \"问题名称\", dept AS \"责任科室\", issue_category AS \"问题分类\", zero_plan AS \"归零计划\", status AS \"状态\", current_progress AS \"当前进展\", issue_date AS \"问题日期\", zero_complete_date AS \"归零完成日期\", pending_days AS \"滞留天数\" FROM biz_dwd_quality_issue_v2 WHERE issue_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND issue_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] ORDER BY pending_days DESC NULLS LAST",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -546,10 +530,6 @@
             {
               "name": "projectNo",
               "variableKey": "projectNo"
-            },
-            {
-              "name": "riskLevel",
-              "variableKey": "riskLevel"
             }
           ]
         }

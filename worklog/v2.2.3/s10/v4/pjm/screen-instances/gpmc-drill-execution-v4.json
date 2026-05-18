@@ -1,8 +1,8 @@
 {
   "schemaVersion": 3,
-  "id": "gpmc-drill-risk-v3",
-  "name": "执行层-风险与预警中心明细",
-  "description": "风险预警钻取页面，展示风险清单、风险分类摘要及应对措施。",
+  "id": "gpmc-drill-execution-v4",
+  "name": "执行层-项目执行详情",
+  "description": "项目执行监控钻取页面，展示关键任务节点、资源负载及延期项目排行。",
   "classification": "INTERNAL",
   "width": 1920,
   "height": 1080,
@@ -39,9 +39,9 @@
   ],
   "components": [
     {
-      "id": "drill-risk-header-bar",
+      "id": "drill-exec-header-bar",
       "type": "shape",
-      "name": "drill-risk-header-bar",
+      "name": "drill-exec-header-bar",
       "x": 0,
       "y": 0,
       "width": 1920,
@@ -58,9 +58,9 @@
       }
     },
     {
-      "id": "drill-risk-title",
+      "id": "drill-exec-title",
       "type": "title",
-      "name": "执行层-风险与预警中心明细",
+      "name": "执行层-项目执行详情",
       "x": 20,
       "y": 12,
       "width": 500,
@@ -69,7 +69,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "执行层-风险与预警中心明细",
+        "text": "执行层-项目执行详情",
         "fontSize": 22,
         "fontWeight": "700",
         "color": "#ffffff",
@@ -77,7 +77,7 @@
       }
     },
     {
-      "id": "drill-risk-badge",
+      "id": "drill-exec-badge",
       "type": "title",
       "name": "只读执行页",
       "x": 1760,
@@ -98,9 +98,9 @@
       }
     },
     {
-      "id": "drill-risk-back-shape",
+      "id": "drill-exec-back-shape",
       "type": "shape",
-      "name": "返回风险看板",
+      "name": "返回执行监控",
       "x": 1600,
       "y": 14,
       "width": 150,
@@ -118,9 +118,9 @@
       "actions": []
     },
     {
-      "id": "drill-risk-back-label",
+      "id": "drill-exec-back-label",
       "type": "title",
-      "name": "返回风险看板",
+      "name": "返回执行监控",
       "x": 1600,
       "y": 14,
       "width": 150,
@@ -129,7 +129,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "← 返回风险看板",
+        "text": "← 返回执行监控",
         "fontSize": 13,
         "fontWeight": "600",
         "color": "#ffffff",
@@ -138,9 +138,9 @@
       "actions": []
     },
     {
-      "id": "drill-risk-kpi-1",
+      "id": "drill-exec-kpi-1",
       "type": "number-card",
-      "name": "风险总数",
+      "name": "整体完成率",
       "x": 20,
       "y": 70,
       "width": 456,
@@ -149,10 +149,10 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "风险总数",
-        "value": "89",
-        "unit": "",
-        "precision": 0,
+        "title": "整体完成率",
+        "value": "72.4",
+        "unit": "%",
+        "precision": 1,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
@@ -163,7 +163,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT SUM(total_risk_cnt) AS \"风险总数\", SUM(high_cnt) AS \"高风险\", SUM(mid_cnt) AS \"中风险\", SUM(low_cnt) AS \"低风险\", SUM(released_cnt) AS \"已释放\", SUM(open_cnt) AS \"未释放\" FROM biz_dws_risk_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]",
+          "query": "WITH agg AS (SELECT SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_due THEN 1 ELSE 0 END) AS due_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_on_time THEN 1 ELSE 0 END) AS on_time_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_overdue_completed THEN 1 ELSE 0 END) AS overdue_completed_cnt, SUM(CASE WHEN d.actual_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.actual_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_completed AND (d.plan_year != d.actual_year OR d.plan_month != d.actual_month) THEN 1 ELSE 0 END) AS outside_completed_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_incomplete AND d.is_milestone_node THEN 1 ELSE 0 END) AS incomplete_milestone_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_milestone_node AND d.is_on_time THEN 1 ELSE 0 END) AS milestone_on_time_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_milestone_node AND d.is_overdue_completed THEN 1 ELSE 0 END) AS milestone_overdue_completed_cnt FROM biz_dwd_project_node_v2 d WHERE ((d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM')) OR (d.actual_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.actual_month <= to_char({{dateTo}}::date, 'YYYY-MM'))) [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]]) SELECT CASE WHEN (agg.due_cnt+agg.outside_completed_cnt)=0 THEN 0 ELSE ROUND((agg.on_time_cnt+agg.overdue_completed_cnt+agg.outside_completed_cnt)::numeric/(agg.due_cnt+agg.outside_completed_cnt)::numeric*100,2) END AS \"完成率\", CASE WHEN (agg.incomplete_milestone_cnt+agg.milestone_on_time_cnt+agg.milestone_overdue_completed_cnt)=0 THEN 0 ELSE ROUND((agg.milestone_on_time_cnt+agg.milestone_overdue_completed_cnt)::numeric/(agg.incomplete_milestone_cnt+agg.milestone_on_time_cnt+agg.milestone_overdue_completed_cnt)::numeric*100,2) END AS \"里程碑完成率\" FROM agg",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -188,9 +188,9 @@
       }
     },
     {
-      "id": "drill-risk-kpi-2",
+      "id": "drill-exec-kpi-2",
       "type": "number-card",
-      "name": "高风险",
+      "name": "里程碑达成率",
       "x": 490,
       "y": 70,
       "width": 456,
@@ -199,9 +199,9 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "高风险",
-        "value": "14",
-        "unit": "",
+        "title": "里程碑达成率",
+        "value": "68",
+        "unit": "%",
         "precision": 0,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
@@ -213,7 +213,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT SUM(total_risk_cnt) AS \"风险总数\", SUM(high_cnt) AS \"高风险\", SUM(mid_cnt) AS \"中风险\", SUM(low_cnt) AS \"低风险\", SUM(released_cnt) AS \"已释放\", SUM(open_cnt) AS \"未释放\" FROM biz_dws_risk_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]",
+          "query": "WITH agg AS (SELECT SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_due THEN 1 ELSE 0 END) AS due_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_on_time THEN 1 ELSE 0 END) AS on_time_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_overdue_completed THEN 1 ELSE 0 END) AS overdue_completed_cnt, SUM(CASE WHEN d.actual_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.actual_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_completed AND (d.plan_year != d.actual_year OR d.plan_month != d.actual_month) THEN 1 ELSE 0 END) AS outside_completed_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_incomplete AND d.is_milestone_node THEN 1 ELSE 0 END) AS incomplete_milestone_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_milestone_node AND d.is_on_time THEN 1 ELSE 0 END) AS milestone_on_time_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_milestone_node AND d.is_overdue_completed THEN 1 ELSE 0 END) AS milestone_overdue_completed_cnt FROM biz_dwd_project_node_v2 d WHERE ((d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM')) OR (d.actual_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.actual_month <= to_char({{dateTo}}::date, 'YYYY-MM'))) [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]]) SELECT CASE WHEN (agg.due_cnt+agg.outside_completed_cnt)=0 THEN 0 ELSE ROUND((agg.on_time_cnt+agg.overdue_completed_cnt+agg.outside_completed_cnt)::numeric/(agg.due_cnt+agg.outside_completed_cnt)::numeric*100,2) END AS \"完成率\", CASE WHEN (agg.incomplete_milestone_cnt+agg.milestone_on_time_cnt+agg.milestone_overdue_completed_cnt)=0 THEN 0 ELSE ROUND((agg.milestone_on_time_cnt+agg.milestone_overdue_completed_cnt)::numeric/(agg.incomplete_milestone_cnt+agg.milestone_on_time_cnt+agg.milestone_overdue_completed_cnt)::numeric*100,2) END AS \"里程碑完成率\" FROM agg",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -238,9 +238,9 @@
       }
     },
     {
-      "id": "drill-risk-kpi-3",
+      "id": "drill-exec-kpi-3",
       "type": "number-card",
-      "name": "中风险",
+      "name": "异常率",
       "x": 960,
       "y": 70,
       "width": 456,
@@ -249,10 +249,10 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "中风险",
-        "value": "31",
-        "unit": "",
-        "precision": 0,
+        "title": "异常率",
+        "value": "4.6",
+        "unit": "%",
+        "precision": 1,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
@@ -263,126 +263,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT SUM(total_risk_cnt) AS \"风险总数\", SUM(high_cnt) AS \"高风险\", SUM(mid_cnt) AS \"中风险\", SUM(low_cnt) AS \"低风险\", SUM(released_cnt) AS \"已释放\", SUM(open_cnt) AS \"未释放\" FROM biz_dws_risk_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "drill-risk-kpi-4",
-      "type": "number-card",
-      "name": "低风险",
-      "x": 1430,
-      "y": 70,
-      "width": 470,
-      "height": 90,
-      "zIndex": 10,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "低风险",
-        "value": "44",
-        "unit": "",
-        "precision": 0,
-        "titleColor": "#ffffff",
-        "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
-        "borderRadius": 12,
-        "fontSize": 36
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT SUM(total_risk_cnt) AS \"风险总数\", SUM(high_cnt) AS \"高风险\", SUM(mid_cnt) AS \"中风险\", SUM(low_cnt) AS \"低风险\", SUM(released_cnt) AS \"已释放\", SUM(open_cnt) AS \"未释放\" FROM biz_dws_risk_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "drill-risk-detail-table",
-      "type": "table",
-      "name": "风险清单",
-      "x": 20,
-      "y": 175,
-      "width": 1145,
-      "height": 420,
-      "zIndex": 15,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "风险清单",
-        "header": [
-          "项目编号",
-          "风险名称",
-          "分系统",
-          "责任科室",
-          "风险等级",
-          "风险类别",
-          "风险状态",
-          "应对措施",
-          "提交日期",
-          "释放日期",
-          "滞留天数"
-        ],
-        "data": [],
-        "fontSize": 16,
-        "headerAlign": "center",
-        "headerColor": "#d9eeff",
-        "headerBackground": "#0f2a55",
-        "bodyColor": "#8cb9df",
-        "bodyBackground": "rgba(9, 36, 90, 0.86)",
-        "oddRowBackground": "rgba(9, 36, 90, 0.86)",
-        "evenRowBackground": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
-        "enableSort": true,
-        "enablePagination": true,
-        "pageSize": 8,
-        "freezeHeader": true
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT project_no AS \"项目编号\", risk_name AS \"风险名称\", subsystem AS \"分系统\", dept AS \"责任科室\", risk_level AS \"风险等级\", risk_category AS \"风险类别\", risk_status AS \"风险状态\", response_measure AS \"应对措施\", risk_submit_date AS \"提交日期\", final_release_date AS \"释放日期\", pending_days AS \"滞留天数\" FROM biz_dwd_risk_info_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] [[AND risk_level = {{riskLevel}}]] ORDER BY pending_days DESC NULLS LAST",
+          "query": "SELECT CASE WHEN SUM(CASE WHEN d.is_due THEN 1 ELSE 0 END)=0 THEN 0 ELSE ROUND((SUM(CASE WHEN d.is_abnormal_pending AND NOT d.is_general_node THEN 1 ELSE 0 END)+SUM(CASE WHEN d.is_overdue_unchanged AND NOT d.is_general_node THEN 1 ELSE 0 END))::numeric/SUM(CASE WHEN d.is_due THEN 1 ELSE 0 END)::numeric*100,2) END AS \"异常率\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.risk_level = {{riskLevel}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -411,21 +292,85 @@
       }
     },
     {
-      "id": "drill-risk-side-panel",
+      "id": "drill-exec-kpi-4",
+      "type": "number-card",
+      "name": "风险预警指数",
+      "x": 1430,
+      "y": 70,
+      "width": 470,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "风险预警指数",
+        "value": "37",
+        "unit": "",
+        "precision": 0,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "#ffffff",
+        "borderRadius": 12,
+        "fontSize": 36
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT CASE WHEN SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END)=0 THEN 0 ELSE ROUND(SUM(CASE WHEN d.is_incomplete AND d.is_high_risk THEN 1 ELSE 0 END)::numeric/SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END)::numeric*100,2) END AS \"风险预警指数\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.risk_level = {{riskLevel}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-exec-detail-table",
       "type": "table",
-      "name": "风险分类摘要",
-      "x": 1185,
+      "name": "关键任务与节点明细",
+      "x": 20,
       "y": 175,
-      "width": 715,
+      "width": 1145,
       "height": 420,
       "zIndex": 15,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "风险分类摘要",
+        "title": "关键任务与节点明细",
         "header": [
-          "指标",
-          "数值"
+          "项目编号",
+          "分系统",
+          "节点任务",
+          "节点类型",
+          "负责人",
+          "责任科室",
+          "完成情况",
+          "风险等级",
+          "计划时间",
+          "实际完成",
+          "延期天数",
+          "未完成原因"
         ],
         "data": [],
         "fontSize": 16,
@@ -446,7 +391,73 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT SUM(total_risk_cnt) AS \"风险总数\", SUM(high_cnt) AS \"高风险\", SUM(mid_cnt) AS \"中风险\", SUM(low_cnt) AS \"低风险\", SUM(released_cnt) AS \"已释放\", SUM(open_cnt) AS \"未释放\" FROM biz_dws_risk_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]",
+          "query": "SELECT project_no AS \"项目编号\", subsystem AS \"分系统\", node_task AS \"节点任务\", node_type AS \"节点类型\", owner AS \"负责人\", dept AS \"责任科室\", completion_status AS \"完成情况\", risk_level AS \"风险等级\", plan_date AS \"计划时间\", actual_date AS \"实际完成\", delay_days AS \"延期天数\", incomplete_reason AS \"未完成原因\" FROM biz_dwd_project_node_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] [[AND risk_level = {{riskLevel}}]] ORDER BY delay_days DESC NULLS LAST",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-exec-side-panel",
+      "type": "table",
+      "name": "责任科室负载",
+      "x": 1185,
+      "y": 175,
+      "width": 715,
+      "height": 420,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "责任科室负载",
+        "header": [
+          "责任科室",
+          "节点总数",
+          "已完成",
+          "未完成"
+        ],
+        "data": [],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#d9eeff",
+        "headerBackground": "#0f2a55",
+        "bodyColor": "#8cb9df",
+        "bodyBackground": "rgba(9, 36, 90, 0.86)",
+        "oddRowBackground": "rgba(9, 36, 90, 0.86)",
+        "evenRowBackground": "rgba(9, 36, 90, 0.82)",
+        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT dept AS \"责任科室\", COUNT(*) AS \"节点总数\", SUM(CASE WHEN is_completed THEN 1 ELSE 0 END) AS \"已完成\", SUM(CASE WHEN is_incomplete THEN 1 ELSE 0 END) AS \"未完成\" FROM biz_dwd_project_node_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] AND dept IS NOT NULL GROUP BY dept ORDER BY SUM(CASE WHEN is_incomplete THEN 1 ELSE 0 END) DESC",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -471,9 +482,9 @@
       }
     },
     {
-      "id": "drill-risk-support-table",
+      "id": "drill-exec-support-table",
       "type": "table",
-      "name": "风险措施摘要",
+      "name": "延期项目排行",
       "x": 20,
       "y": 610,
       "width": 1880,
@@ -482,19 +493,20 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "风险措施摘要",
+        "title": "延期项目排行",
         "header": [
           "项目编号",
-          "风险名称",
           "分系统",
+          "节点任务",
+          "节点类型",
+          "负责人",
           "责任科室",
+          "完成情况",
           "风险等级",
-          "风险类别",
-          "风险状态",
-          "应对措施",
-          "提交日期",
-          "释放日期",
-          "滞留天数"
+          "计划时间",
+          "实际完成",
+          "延期天数",
+          "未完成原因"
         ],
         "data": [],
         "fontSize": 16,
@@ -515,7 +527,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT project_no AS \"项目编号\", risk_name AS \"风险名称\", subsystem AS \"分系统\", dept AS \"责任科室\", risk_level AS \"风险等级\", risk_category AS \"风险类别\", risk_status AS \"风险状态\", response_measure AS \"应对措施\", risk_submit_date AS \"提交日期\", final_release_date AS \"释放日期\", pending_days AS \"滞留天数\" FROM biz_dwd_risk_info_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] [[AND risk_level = {{riskLevel}}]] ORDER BY pending_days DESC NULLS LAST",
+          "query": "SELECT project_no AS \"项目编号\", subsystem AS \"分系统\", node_task AS \"节点任务\", node_type AS \"节点类型\", owner AS \"负责人\", dept AS \"责任科室\", completion_status AS \"完成情况\", risk_level AS \"风险等级\", plan_date AS \"计划时间\", actual_date AS \"实际完成\", delay_days AS \"延期天数\", incomplete_reason AS \"未完成原因\" FROM biz_dwd_project_node_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] [[AND risk_level = {{riskLevel}}]] AND is_incomplete = true ORDER BY delay_days DESC NULLS LAST",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [

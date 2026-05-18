@@ -6,12 +6,14 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
 import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import com.yuzhi.dts.platform.domain.modeling.ModelingPlan;
 import com.yuzhi.dts.platform.domain.modeling.ModelingSqlModel;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.explore.QueryDatasetAssetRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingPlanRepository;
@@ -87,6 +89,7 @@ public class ModelingSqlModelService {
     private final DataStandardSecurity security;
     private final DbtConfigService dbtConfigService;
     private final CatalogDatasetRepository datasetRepository;
+    private final CatalogDomainRepository catalogDomainRepository;
     private final CatalogTableSchemaRepository tableRepository;
     private final CatalogColumnSchemaRepository columnRepository;
     private final QueryDatasetAssetRepository queryDatasetAssetRepository;
@@ -109,6 +112,7 @@ public class ModelingSqlModelService {
         DataStandardSecurity security,
         DbtConfigService dbtConfigService,
         CatalogDatasetRepository datasetRepository,
+        CatalogDomainRepository catalogDomainRepository,
         CatalogTableSchemaRepository tableRepository,
         CatalogColumnSchemaRepository columnRepository,
         QueryDatasetAssetRepository queryDatasetAssetRepository,
@@ -130,6 +134,7 @@ public class ModelingSqlModelService {
         this.security = security;
         this.dbtConfigService = dbtConfigService;
         this.datasetRepository = datasetRepository;
+        this.catalogDomainRepository = catalogDomainRepository;
         this.tableRepository = tableRepository;
         this.columnRepository = columnRepository;
         this.queryDatasetAssetRepository = queryDatasetAssetRepository;
@@ -489,6 +494,10 @@ public class ModelingSqlModelService {
             if (!StringUtils.hasText(dataset.getOwnerDept()) && StringUtils.hasText(model.getOwnerDept())) {
                 dataset.setOwnerDept(model.getOwnerDept());
             }
+            Optional<CatalogDomain> planDomain = resolvePlanDomain(model);
+            if (dataset.getDomain() == null && planDomain.isPresent()) {
+                dataset.setDomain(planDomain.orElseThrow());
+            }
             CatalogDataset savedDataset = datasetRepository.save(dataset);
 
             CatalogTableSchema table = tableRepository
@@ -688,6 +697,17 @@ public class ModelingSqlModelService {
             return view.config().schema().trim();
         }
         return "public";
+    }
+
+    private Optional<CatalogDomain> resolvePlanDomain(ModelingSqlModel model) {
+        if (model == null || model.getPlanId() == null || catalogDomainRepository == null) {
+            return Optional.empty();
+        }
+        return planRepo
+            .findById(model.getPlanId())
+            .map(ModelingPlan::getDomainId)
+            .filter(Objects::nonNull)
+            .flatMap(catalogDomainRepository::findById);
     }
 
     private String resolveModelTable(ModelingSqlModel model) {

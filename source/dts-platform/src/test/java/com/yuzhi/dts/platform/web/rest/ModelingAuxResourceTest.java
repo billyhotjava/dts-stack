@@ -13,6 +13,7 @@ import com.yuzhi.dts.platform.domain.modeling.ModelingPlan;
 import com.yuzhi.dts.platform.domain.modeling.ModelingGlossaryTerm;
 import com.yuzhi.dts.platform.domain.modeling.ModelingGlossaryTermVersion;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
 import com.yuzhi.dts.platform.repository.modeling.DataStandardRepository;
@@ -85,6 +86,7 @@ class ModelingAuxResourceTest {
             indicatorRepository,
             catalogTableRepo,
             catalogColumnRepo,
+            mock(CatalogDomainRepository.class),
             catalogAccessChecker,
             referenceService,
             mock(CodeAssetGrantWriter.class)
@@ -98,6 +100,75 @@ class ModelingAuxResourceTest {
             .hasMessageContaining("已存在同名项目空间");
 
         verify(planRepo, never()).save(any(ModelingPlan.class));
+    }
+
+    @Test
+    void createPlan_shouldPersistDomainIdAndIgnoreLegacyDomainText() {
+        ModelingPlanRepository planRepo = mock(ModelingPlanRepository.class);
+        ModelingPlanVersionRepository planVersionRepo = mock(ModelingPlanVersionRepository.class);
+        ModelingPlanReviewRepository planReviewRepo = mock(ModelingPlanReviewRepository.class);
+        ModelingGlossaryTermRepository glossaryRepo = mock(ModelingGlossaryTermRepository.class);
+        ModelingGlossaryTermVersionRepository glossaryVersionRepo = mock(ModelingGlossaryTermVersionRepository.class);
+        ModelingGlossaryTermReviewRepository glossaryReviewRepo = mock(ModelingGlossaryTermReviewRepository.class);
+        ModelingTemplateRepository templateRepo = mock(ModelingTemplateRepository.class);
+        ModelingTemplateVersionRepository templateVersionRepo = mock(ModelingTemplateVersionRepository.class);
+        AuditService auditService = mock(AuditService.class);
+        DataStandardSecurity security = mock(DataStandardSecurity.class);
+        OrganizationVisibilityService organizationVisibilityService = mock(OrganizationVisibilityService.class);
+        DataStandardRepository dataStandardRepository = mock(DataStandardRepository.class);
+        GovIndicatorDefinitionRepository indicatorRepository = mock(GovIndicatorDefinitionRepository.class);
+        CatalogTableSchemaRepository catalogTableRepo = mock(CatalogTableSchemaRepository.class);
+        CatalogColumnSchemaRepository catalogColumnRepo = mock(CatalogColumnSchemaRepository.class);
+        CatalogDomainRepository catalogDomainRepo = mock(CatalogDomainRepository.class);
+        AccessChecker catalogAccessChecker = mock(AccessChecker.class);
+        ModelingAssetReferenceService referenceService = mock(ModelingAssetReferenceService.class);
+        UUID domainId = UUID.randomUUID();
+
+        when(security.hasInstituteScope()).thenReturn(false);
+        when(security.resolveActiveDept(anyString())).thenReturn("D1");
+        when(planRepo.findFirstByNameIgnoreCase("ERP Plan")).thenReturn(Optional.empty());
+        when(catalogDomainRepo.existsById(domainId)).thenReturn(true);
+        when(planRepo.save(any(ModelingPlan.class))).thenAnswer(invocation -> {
+            ModelingPlan plan = invocation.getArgument(0);
+            plan.setId(UUID.randomUUID());
+            return plan;
+        });
+
+        ModelingAuxResource resource = new ModelingAuxResource(
+            planRepo,
+            planVersionRepo,
+            planReviewRepo,
+            glossaryRepo,
+            glossaryVersionRepo,
+            glossaryReviewRepo,
+            templateRepo,
+            templateVersionRepo,
+            auditService,
+            security,
+            organizationVisibilityService,
+            new ObjectMapper(),
+            dataStandardRepository,
+            indicatorRepository,
+            catalogTableRepo,
+            catalogColumnRepo,
+            catalogDomainRepo,
+            catalogAccessChecker,
+            referenceService,
+            mock(CodeAssetGrantWriter.class)
+        );
+
+        ModelingPlan request = new ModelingPlan();
+        request.setName("ERP Plan");
+        request.setDomain("销售域");
+        request.setDomainId(domainId);
+        request.setOwnerDept("D1");
+
+        resource.createPlan(request, "D1");
+
+        ArgumentCaptor<ModelingPlan> planCaptor = ArgumentCaptor.forClass(ModelingPlan.class);
+        verify(planRepo).save(planCaptor.capture());
+        org.assertj.core.api.Assertions.assertThat(planCaptor.getValue().getDomainId()).isEqualTo(domainId);
+        org.assertj.core.api.Assertions.assertThat(planCaptor.getValue().getDomain()).isNull();
     }
 
     @Test
@@ -147,6 +218,7 @@ class ModelingAuxResourceTest {
             indicatorRepository,
             catalogTableRepo,
             catalogColumnRepo,
+            mock(CatalogDomainRepository.class),
             catalogAccessChecker,
             referenceService,
             codeAssetGrantWriter

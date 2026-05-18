@@ -34,7 +34,7 @@ public class ScreenImageResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(ScreenImageResource.class);
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of("png", "jpg", "jpeg", "gif", "svg", "webp", "ico");
-    private static final long MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+    private static final long MAX_FILE_SIZE = 20L * 1024 * 1024; // 20 MB
 
     private final Path storageDir;
 
@@ -55,7 +55,7 @@ public class ScreenImageResource {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "文件不能为空");
         }
         if (file.getSize() > MAX_FILE_SIZE) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "文件大小不能超过 10MB");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "文件大小不能超过 20MB");
         }
         String originalName = file.getOriginalFilename();
         String ext = extractExtension(originalName);
