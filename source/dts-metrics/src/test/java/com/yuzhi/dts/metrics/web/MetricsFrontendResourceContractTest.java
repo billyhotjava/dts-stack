@@ -9,15 +9,30 @@ import org.junit.jupiter.api.Test;
 
 class MetricsFrontendResourceContractTest {
 
-    private static final Path APP_SCRIPT = Path.of(
-        "src/main/resources/static/metrics/assets/metrics-app.js"
-    );
+    private static final Path WEBAPP_ROOT = Path.of("../dts-metrics-webapp");
+    private static final Path STATIC_ROOT = Path.of("src/main/resources/static/metrics");
 
     @Test
-    void metricsPagesExposeRealApiActions() throws IOException {
-        String script = Files.readString(APP_SCRIPT);
+    void metricsFrontendIsAReactViteApplication() throws IOException {
+        Path packageJson = WEBAPP_ROOT.resolve("package.json");
+        Path viteConfig = WEBAPP_ROOT.resolve("vite.config.ts");
+        Path main = WEBAPP_ROOT.resolve("src/main.tsx");
 
-        assertThat(script)
+        assertThat(packageJson).exists();
+        assertThat(viteConfig).exists();
+        assertThat(main).exists();
+
+        assertThat(Files.readString(packageJson))
+            .contains("\"name\": \"dts-metrics-webapp\"", "\"react\"", "\"react-dom\"", "\"build\"");
+        assertThat(Files.readString(viteConfig))
+            .contains("base: \"/metrics/\"", "outDir: \"../dts-metrics/src/main/resources/static/metrics\"");
+    }
+
+    @Test
+    void metricsReactAppKeepsTheRequiredPagesAndApiActions() throws IOException {
+        String appSource = Files.readString(WEBAPP_ROOT.resolve("src/App.tsx"));
+
+        assertThat(appSource)
             .contains(
                 "\"/metrics/dictionary\"",
                 "\"/metrics/semantic/subjects\"",
@@ -28,32 +43,25 @@ class MetricsFrontendResourceContractTest {
                 "\"/metrics/semantic/runs\"",
                 "\"/metrics/operations\""
             );
-        assertThat(script)
-            .contains(
-                "refresh-dictionary-contract",
-                "refresh-subject-contract",
-                "preview-object-manifest",
-                "preview-formula-artifacts",
-                "generate-model-candidates",
-                "dry-run-publish",
-                "refresh-run-status"
-            );
-        assertThat(script)
+        assertThat(appSource)
             .contains(
                 "\"/api/metrics/workspace/snapshot\"",
                 "\"/api/metrics/capabilities\"",
                 "\"/api/metrics/packs/preview-artifacts\"",
                 "\"/api/metrics/packs/import\"",
-                "\"/api/metrics/packs/publish-dry-run\""
+                "\"/api/metrics/packs/publish-dry-run\"",
+                "\"/api/metrics/migration/semantic-dry-run\""
             );
-        assertThat(script).contains("loadWorkspaceSnapshot", "applyWorkspaceSnapshot");
     }
 
     @Test
-    void modelGenerationAndPublishActionsAreNotDisabledPlaceholders() throws IOException {
-        String script = Files.readString(APP_SCRIPT);
+    void metricsStaticBundleIsGeneratedFromReactBuild() throws IOException {
+        Path indexHtml = STATIC_ROOT.resolve("index.html");
+        Path legacyScript = STATIC_ROOT.resolve("assets/metrics-app.js");
 
-        assertThat(script).doesNotContain("disabled>生成候选物", "disabled>提交平台门禁");
-        assertThat(script).contains("id=\"generate-model-candidates\"", "id=\"dry-run-publish\"");
+        assertThat(legacyScript).doesNotExist();
+        assertThat(indexHtml).exists();
+        assertThat(Files.readString(indexHtml))
+            .contains("id=\"root\"", "type=\"module\"", "/metrics/assets/");
     }
 }

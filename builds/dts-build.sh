@@ -449,6 +449,69 @@ create_temp_context_from_repo_paths() {
 
 # build_analytics_modern_image removed — analytics UI is now embedded in platform-webapp.
 
+build_metrics_webapp() {
+  local webapp_dir="${REPO_ROOT}/source/dts-metrics-webapp"
+  local output_dir="${REPO_ROOT}/source/dts-metrics/src/main/resources/static/metrics"
+  if [[ ! -f "${webapp_dir}/package.json" ]]; then
+    return 0
+  fi
+
+  echo "[dts-build] Building dts-metrics React webapp"
+  local tmp_context
+  tmp_context="$(mktemp -d)"
+  mkdir -p "${tmp_context}/source" "${tmp_context}/source/dts-metrics/src/main/resources/static"
+  (
+    cd "${REPO_ROOT}/source"
+    tar --exclude='dts-metrics-webapp/node_modules' \
+      --exclude='dts-metrics-webapp/.vite-cache' \
+      -cf - dts-metrics-webapp
+  ) | (
+    cd "${tmp_context}/source"
+    tar -xf -
+  )
+
+  local npm_env=()
+  if [[ -n "${NPM_REGISTRY:-}" ]]; then
+    npm_env+=(-e "NPM_REGISTRY=${NPM_REGISTRY}")
+  fi
+  if [[ -n "${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}" ]]; then
+    npm_env+=(-e "NPM_HTTP_PROXY=${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}")
+  fi
+  if [[ -n "${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}" ]]; then
+    npm_env+=(-e "NPM_HTTPS_PROXY=${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}")
+  fi
+
+  if ! docker run --rm \
+    "${npm_env[@]}" \
+    -e "PNPM_VERSION=${PNPM_VERSION}" \
+    -e "WEBAPP_BUILD_CMD=${WEBAPP_BUILD_CMD}" \
+    -v "${tmp_context}/source:/workspace/source" \
+    -w /workspace/source/dts-metrics-webapp \
+    "${NODE_IMAGE}" \
+    sh -lc 'set -eux; \
+      if [ -n "${NPM_REGISTRY:-}" ]; then export npm_config_registry="${NPM_REGISTRY}"; fi; \
+      if [ -n "${NPM_HTTP_PROXY:-}${NPM_HTTPS_PROXY:-}" ]; then \
+        export http_proxy="${NPM_HTTP_PROXY:-${NPM_HTTPS_PROXY:-}}"; \
+        export https_proxy="${NPM_HTTPS_PROXY:-${NPM_HTTP_PROXY:-}}"; \
+        export npm_config_proxy="${http_proxy}"; \
+        export npm_config_https_proxy="${https_proxy}"; \
+      fi; \
+      npm install -g "pnpm@${PNPM_VERSION}"; \
+      pnpm install --frozen-lockfile --ignore-scripts; \
+      pnpm "${WEBAPP_BUILD_CMD}"; \
+      chmod -R a+rwX /workspace/source/dts-metrics/src/main/resources/static/metrics; \
+      rm -rf node_modules .vite-cache /workspace/source/.pnpm-store'; then
+    rm -rf "${tmp_context}"
+    return 1
+  fi
+
+  rm -rf "${output_dir}"
+  mkdir -p "${output_dir}"
+  cp -a "${tmp_context}/source/dts-metrics/src/main/resources/static/metrics/." "${output_dir}/"
+  chmod -R u+rwX,go+rX,go-w "${output_dir}"
+  rm -rf "${tmp_context}"
+}
+
 build_maven_module() {
   local module="$1"
   local jar_glob="$2"
@@ -686,6 +749,7 @@ build_all_normal() {
     build_maven_module "dts-admin" "dts-admin-*.jar" "${REPO_ROOT}/builds/dts-admin/dts-admin.jar"
     build_maven_module "dts-platform" "dts-platform-*.jar" "${REPO_ROOT}/builds/dts-platform/dts-platform.jar"
     build_maven_module "dts-ingestion" "dts-ingestion-*.jar" "${REPO_ROOT}/builds/dts-ingestion/dts-ingestion.jar"
+    build_metrics_webapp
     build_maven_module "dts-metrics" "dts-metrics-*.jar" "${REPO_ROOT}/builds/dts-metrics/dts-metrics.jar"
     build_maven_module "dts-analytics" "dts-analytics-*.jar" "${REPO_ROOT}/builds/dts-analytics/dts-analytics.jar"
     enable_maven_build_arg="false"
@@ -747,6 +811,7 @@ build_all_legacy() {
     build_maven_module "dts-admin" "dts-admin-*.jar" "${REPO_ROOT}/builds/dts-admin/dts-admin.jar"
     build_maven_module "dts-platform" "dts-platform-*.jar" "${REPO_ROOT}/builds/dts-platform/dts-platform.jar"
     build_maven_module "dts-ingestion" "dts-ingestion-*.jar" "${REPO_ROOT}/builds/dts-ingestion/dts-ingestion.jar"
+    build_metrics_webapp
     build_maven_module "dts-metrics" "dts-metrics-*.jar" "${REPO_ROOT}/builds/dts-metrics/dts-metrics.jar"
     build_maven_module "dts-analytics" "dts-analytics-*.jar" "${REPO_ROOT}/builds/dts-analytics/dts-analytics.jar"
   else
@@ -814,6 +879,7 @@ build_single_image() {
         enable_maven_build_arg="false"
         ;;
       dts-metrics)
+        build_metrics_webapp
         build_maven_module "dts-metrics" "dts-metrics-*.jar" "${REPO_ROOT}/builds/dts-metrics/dts-metrics.jar"
         enable_maven_build_arg="false"
         ;;
