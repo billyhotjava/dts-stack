@@ -205,6 +205,15 @@ export interface PortalMenuCollection {
 	allMenus?: PortalMenuItem[];
 }
 
+export type PortalMenuBulkVisibilityMode = "APPEND" | "REMOVE" | "REPLACE";
+
+export interface PortalMenuBulkVisibilityPayload {
+	menuIds: number[];
+	roles: string[];
+	mode: PortalMenuBulkVisibilityMode;
+	reason?: string;
+}
+
 export type SecurityLevel = "GENERAL" | "IMPORTANT" | "CORE";
 export type OrgDataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_SECRET" | "DATA_CONFIDENTIAL";
 

@@ -1,7 +1,11 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { adminApi } from "@/admin/api/adminApi";
-import type { AdminRoleDetail, PortalMenuCollection, PortalMenuItem } from "@/admin/types";
+import type { AdminRoleDetail, PortalMenuBulkVisibilityMode, PortalMenuCollection, PortalMenuItem } from "@/admin/types";
+import {
+	collectSelectableMenuIds,
+	resolveMenuSelectionState,
+} from "@/admin/lib/portal-menu-bulk";
 import { isReservedBusinessRoleName } from "@/constants/keycloak-roles";
 import { setPortalMenus } from "@/store/portalMenuStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
@@ -64,12 +68,20 @@ export default function PortalMenusView() {
 		parentId: "",
 	});
 	const [quickAddBusy, setQuickAddBusy] = useState(false);
+	const [selectedMenuIds, setSelectedMenuIds] = useState<Set<number>>(new Set());
+	const [bulkRolesOpen, setBulkRolesOpen] = useState(false);
+	const [bulkRolesBusy, setBulkRolesBusy] = useState(false);
 
 	const filteredTreeMenus = useMemo(() => {
 		const trimmed = keyword.trim();
 		if (!trimmed) return treeMenus;
 		return filterMenusByKeyword(treeMenus, trimmed);
 	}, [keyword, treeMenus]);
+	const filteredSelectableMenuIds = useMemo(
+		() => collectSelectableMenuIds(filteredTreeMenus),
+		[filteredTreeMenus],
+	);
+	const allSelectableMenuIds = useMemo(() => collectSelectableMenuIds(treeMenus), [treeMenus]);
 
 	const menuStats = useMemo(() => {
 		let total = 0;
@@ -114,6 +126,14 @@ export default function PortalMenusView() {
 		setExpanded(collectFolderIds(filteredTreeMenus));
 	}, [keyword, filteredTreeMenus]);
 
+	useEffect(() => {
+		const validIds = new Set(allSelectableMenuIds);
+		setSelectedMenuIds((prev) => {
+			const next = new Set(Array.from(prev).filter((id) => validIds.has(id)));
+			return next.size === prev.size ? prev : next;
+		});
+	}, [allSelectableMenuIds]);
+
 	const refresh = () => queryClient.invalidateQueries({ queryKey: ["admin", "portal-menus"] });
 
 	const updateCache = (next: PortalMenuCollection) => {
@@ -121,6 +141,11 @@ export default function PortalMenusView() {
 	};
 
 	const menuIndex = useMemo(() => buildMenuIndex(treeMenus), [treeMenus]);
+	const selectedMenuLabels = useMemo(() => {
+		return Array.from(selectedMenuIds)
+			.map((id) => menuIndex.get(id)?.fullPath || `菜单 #${id}`)
+			.slice(0, 5);
+	}, [menuIndex, selectedMenuIds]);
 	const parentOptions = useMemo(() => buildParentSelectOptions(treeMenus), [treeMenus]);
 	const defaultQuickAddParentId = useMemo(
 		() => resolvePortalSectionId(treeMenus, "visualization"),
@@ -320,6 +345,75 @@ export default function PortalMenusView() {
 	};
 
 	const disableBusy = disableTarget?.menu.id != null ? Boolean(pending[disableTarget.menu.id]) : false;
+	const filteredSelectedCount = filteredSelectableMenuIds.filter((id) => selectedMenuIds.has(id)).length;
+	const filteredSelectionChecked =
+		filteredSelectableMenuIds.length > 0 && filteredSelectedCount === filteredSelectableMenuIds.length
+			? true
+			: filteredSelectedCount > 0
+				? "indeterminate"
+				: false;
+
+	const handleToggleMenuSelection = (menu: PortalMenuItem, checked: boolean) => {
+		const ids = collectSelectableMenuIds(menu);
+		if (ids.length === 0) return;
+		setSelectedMenuIds((prev) => {
+			const next = new Set(prev);
+			for (const id of ids) {
+				if (checked) next.add(id);
+				else next.delete(id);
+			}
+			return next;
+		});
+	};
+
+	const handleToggleFilteredSelection = (checked: boolean) => {
+		if (filteredSelectableMenuIds.length === 0) return;
+		setSelectedMenuIds((prev) => {
+			const next = new Set(prev);
+			for (const id of filteredSelectableMenuIds) {
+				if (checked) next.add(id);
+				else next.delete(id);
+			}
+			return next;
+		});
+	};
+
+	const handleSubmitBulkRoles = async (mode: PortalMenuBulkVisibilityMode, roles: string[], reason: string) => {
+		const menuIds = Array.from(selectedMenuIds);
+		if (menuIds.length === 0) {
+			toast.error("请先选择菜单");
+			return false;
+		}
+		if (roles.length === 0) {
+			toast.error("请选择角色");
+			return false;
+		}
+		setBulkRolesBusy(true);
+		try {
+			const result = await adminApi.batchUpdatePortalMenuVisibility({
+				menuIds,
+				roles,
+				mode,
+				reason: reason.trim() || undefined,
+			});
+			if (result && typeof result === "object" && (result as any).menus) {
+				updateCache(result as PortalMenuCollection);
+			} else {
+				await queryClient.invalidateQueries({ queryKey: ["admin", "change-requests"] });
+				await refresh();
+			}
+			toast.success(`批量菜单角色已提交审批，共 ${menuIds.length} 个菜单`);
+			setSelectedMenuIds(new Set());
+			setBulkRolesOpen(false);
+			return true;
+		} catch (error: any) {
+			toast.error(error?.message || "批量配置失败，请稍后重试");
+			await refresh();
+			return false;
+		} finally {
+			setBulkRolesBusy(false);
+		}
+	};
 
 	const handleReset = async () => {
 		setResetting(true);
@@ -427,6 +521,13 @@ export default function PortalMenusView() {
 					</div>
 				</div>
 				<div className="flex items-center gap-2">
+					<Button
+						type="primary"
+						onClick={() => setBulkRolesOpen(true)}
+						disabled={selectedMenuIds.size === 0 || rolesLoading || bulkRolesBusy}
+					>
+						批量配置角色
+					</Button>
 					<Button type="default" onClick={handleOpenQuickAdd}>
 						添加菜单
 					</Button>
@@ -467,41 +568,74 @@ export default function PortalMenusView() {
 					) : filteredTreeMenus.length === 0 ? (
 						<Text variant="body3">暂无菜单数据</Text>
 					) : (
-						<div className="overflow-x-auto rounded-lg border">
-							<table className="min-w-full table-auto border-collapse text-sm">
-								<thead className="bg-muted/40 text-left text-xs text-muted-foreground">
-									<tr>
-										<th className="px-3 py-2 font-medium">菜单名称</th>
-										<th className="px-3 py-2 font-medium">状态</th>
-										<th className="px-3 py-2 font-medium">关联角色</th>
-										<th className="px-3 py-2 font-medium text-right">操作</th>
-									</tr>
-								</thead>
-								<tbody>
-									{filteredTreeMenus.map((item) => (
-										<MenuRow
-											key={item.id}
-											item={item}
-											level={0}
-											pathNames={[]}
-											expanded={expanded}
-											setExpanded={setExpanded}
-											pending={pending}
-											onToggle={handleToggle}
-											onEditCustom={handleOpenCustomEdit}
-											onDeleteCustom={handleOpenCustomDelete}
-											keyword={keyword}
-											onEditRoles={handleOpenRolesDialog}
-											resolveRoleLabel={resolveRoleLabel}
-											rolesLoading={rolesLoading}
-										/>
-									))}
-								</tbody>
-							</table>
+						<div className="space-y-3">
+							{selectedMenuIds.size > 0 ? (
+								<div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/20 px-3 py-2 text-sm">
+									<span className="text-muted-foreground">已选择 {selectedMenuIds.size} 个菜单</span>
+									<Button size="small" type="primary" onClick={() => setBulkRolesOpen(true)} disabled={rolesLoading}>
+										批量配置角色
+									</Button>
+									<Button size="small" type="text" onClick={() => setSelectedMenuIds(new Set())}>
+										清空选择
+									</Button>
+								</div>
+							) : null}
+							<div className="overflow-x-auto rounded-lg border">
+								<table className="min-w-full table-auto border-collapse text-sm">
+									<thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+										<tr>
+											<th className="w-10 px-3 py-2 font-medium">
+												<Checkbox
+													checked={filteredSelectionChecked}
+													onCheckedChange={(value) => handleToggleFilteredSelection(value === true)}
+													disabled={filteredSelectableMenuIds.length === 0}
+													aria-label="选择当前筛选结果中的菜单"
+												/>
+											</th>
+											<th className="px-3 py-2 font-medium">菜单名称</th>
+											<th className="px-3 py-2 font-medium">状态</th>
+											<th className="px-3 py-2 font-medium">关联角色</th>
+											<th className="px-3 py-2 font-medium text-right">操作</th>
+										</tr>
+									</thead>
+									<tbody>
+										{filteredTreeMenus.map((item) => (
+											<MenuRow
+												key={item.id}
+												item={item}
+												level={0}
+												pathNames={[]}
+												expanded={expanded}
+												setExpanded={setExpanded}
+												pending={pending}
+												selectedMenuIds={selectedMenuIds}
+												onSelect={handleToggleMenuSelection}
+												onToggle={handleToggle}
+												onEditCustom={handleOpenCustomEdit}
+												onDeleteCustom={handleOpenCustomDelete}
+												keyword={keyword}
+												onEditRoles={handleOpenRolesDialog}
+												resolveRoleLabel={resolveRoleLabel}
+												rolesLoading={rolesLoading}
+											/>
+										))}
+									</tbody>
+								</table>
+							</div>
 						</div>
 					)}
 				</CardContent>
 			</Card>
+			<BulkMenuRoleDialog
+				open={bulkRolesOpen}
+				selectedCount={selectedMenuIds.size}
+				selectedLabels={selectedMenuLabels}
+				onClose={() => (bulkRolesBusy ? null : setBulkRolesOpen(false))}
+				onSubmit={handleSubmitBulkRoles}
+				roleOptions={roleOptions}
+				rolesLoading={rolesLoading}
+				busy={bulkRolesBusy}
+			/>
 			<MenuRoleDialog
 				menu={editTarget}
 				onClose={handleCloseRolesDialog}
@@ -632,6 +766,8 @@ type MenuRowProps = {
 	expanded: Set<number>;
 	setExpanded: (next: Set<number>) => void;
 	pending: Record<number, boolean>;
+	selectedMenuIds: Set<number>;
+	onSelect: (menu: PortalMenuItem, checked: boolean) => void;
 	onToggle: (menu: PortalMenuItem) => void;
 	onEditCustom: (menu: PortalMenuItem) => void;
 	onDeleteCustom: (menu: PortalMenuItem) => void;
@@ -648,6 +784,8 @@ function MenuRow({
 	expanded,
 	setExpanded,
 	pending,
+	selectedMenuIds,
+	onSelect,
 	onToggle,
 	onEditCustom,
 	onDeleteCustom,
@@ -672,6 +810,9 @@ function MenuRow({
 	const remainingRoles = allowedAuthorities.length - previewRoles.length;
 	const fullPath = [...pathNames, name];
 	const fullPathLabel = `/${fullPath.join("/")}`;
+	const selectableIds = collectSelectableMenuIds(item);
+	const selectionState = resolveMenuSelectionState(item, selectedMenuIds);
+	const selectionChecked = selectionState === "checked" ? true : selectionState === "indeterminate" ? "indeterminate" : false;
 
 	const toggleExpand = () => {
 		if (!isFolder) return;
@@ -684,6 +825,14 @@ function MenuRow({
 	return (
 		<Fragment>
 			<tr className="border-b last:border-none hover:bg-accent/5">
+				<td className="px-3 py-2">
+					<Checkbox
+						checked={selectionChecked}
+						onCheckedChange={(value) => onSelect(item, value === true)}
+						disabled={selectableIds.length === 0 || Boolean(busy)}
+						aria-label="选择菜单"
+					/>
+				</td>
 				<td className="px-3 py-2">
 					<div className="flex items-start gap-2">
 						<span style={{ width: level * 16 }} className="shrink-0" />
@@ -783,6 +932,8 @@ function MenuRow({
 						expanded={expanded}
 						setExpanded={setExpanded}
 						pending={pending}
+						selectedMenuIds={selectedMenuIds}
+						onSelect={onSelect}
 						onToggle={onToggle}
 						onEditCustom={onEditCustom}
 						onDeleteCustom={onDeleteCustom}
@@ -883,6 +1034,189 @@ function CustomDeleteMenuDialog(props: {
 					</Button>
 					<Button danger type="primary" onClick={props.onConfirm} disabled={props.busy}>
 						{props.busy ? "删除中.." : "确认删除"}
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	);
+}
+
+interface BulkMenuRoleDialogProps {
+	open: boolean;
+	selectedCount: number;
+	selectedLabels: string[];
+	onClose: () => void;
+	onSubmit: (mode: PortalMenuBulkVisibilityMode, roles: string[], reason: string) => Promise<boolean>;
+	roleOptions: RoleOption[];
+	rolesLoading: boolean;
+	busy: boolean;
+}
+
+function BulkMenuRoleDialog({
+	open,
+	selectedCount,
+	selectedLabels,
+	onClose,
+	onSubmit,
+	roleOptions,
+	rolesLoading,
+	busy,
+}: BulkMenuRoleDialogProps) {
+	const [mode, setMode] = useState<PortalMenuBulkVisibilityMode>("APPEND");
+	const [selected, setSelected] = useState<Set<string>>(new Set());
+	const [filter, setFilter] = useState("");
+	const [reason, setReason] = useState("");
+	const [saving, setSaving] = useState(false);
+
+	useEffect(() => {
+		if (!open) {
+			setMode("APPEND");
+			setSelected(new Set());
+			setFilter("");
+			setReason("");
+			setSaving(false);
+		}
+	}, [open]);
+
+	const filteredOptions = useMemo(() => {
+		const keyword = filter.trim().toLowerCase();
+		const sorted = [...roleOptions].sort((a, b) => a.label.localeCompare(b.label, "zh-CN"));
+		if (!keyword) return sorted;
+		return sorted.filter((option) => {
+			return option.label.toLowerCase().includes(keyword) || option.authority.toLowerCase().includes(keyword);
+		});
+	}, [filter, roleOptions]);
+
+	const handleToggle = (authority: string, checked: boolean) => {
+		setSelected((prev) => {
+			const next = new Set(prev);
+			if (checked) next.add(authority);
+			else next.delete(authority);
+			return next;
+		});
+	};
+
+	const handleSave = async () => {
+		setSaving(true);
+		const ok = await onSubmit(mode, Array.from(selected), reason);
+		setSaving(false);
+		if (ok) {
+			setSelected(new Set());
+			setReason("");
+		}
+	};
+
+	const disabled = rolesLoading || busy || saving;
+	const selectedRoleCount = selected.size;
+	const extraLabelCount = Math.max(0, selectedCount - selectedLabels.length);
+
+	return (
+		<Dialog open={open} onOpenChange={(next) => (!next ? onClose() : null)}>
+			<DialogContent className="max-w-xl">
+				<DialogHeader>
+					<DialogTitle>批量配置菜单角色</DialogTitle>
+					<Text variant="body3" className="text-muted-foreground">
+						已选择 {selectedCount} 个菜单
+					</Text>
+				</DialogHeader>
+				<div className="space-y-3 text-sm">
+					{selectedLabels.length > 0 ? (
+						<div className="flex flex-wrap gap-1">
+							{selectedLabels.map((label) => (
+								<Badge key={label} variant="outline" className="max-w-[180px] truncate">
+									{label}
+								</Badge>
+							))}
+							{extraLabelCount > 0 ? <Badge variant="outline">+{extraLabelCount}</Badge> : null}
+						</div>
+					) : null}
+					<div className="grid gap-3 sm:grid-cols-[160px_minmax(0,1fr)]">
+						<div className="space-y-1.5">
+							<Text variant="body3" className="text-muted-foreground">
+								操作方式
+							</Text>
+							<Select value={mode} onValueChange={(value) => setMode(value as PortalMenuBulkVisibilityMode)}>
+								<SelectTrigger className="w-full" disabled={disabled}>
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="APPEND">追加角色</SelectItem>
+									<SelectItem value="REMOVE">移除角色</SelectItem>
+									<SelectItem value="REPLACE">覆盖角色</SelectItem>
+								</SelectContent>
+							</Select>
+						</div>
+						<div className="space-y-1.5">
+							<Text variant="body3" className="text-muted-foreground">
+								审批说明
+							</Text>
+							<Input
+								value={reason}
+								onChange={(event) => setReason(event.target.value)}
+								placeholder="可填写本次批量配置原因"
+								disabled={disabled}
+							/>
+						</div>
+					</div>
+					<Input
+						value={filter}
+						onChange={(event) => setFilter(event.target.value)}
+						placeholder="搜索角色名称或编码"
+						disabled={rolesLoading}
+					/>
+					<div className="rounded-md border">
+						{rolesLoading && filteredOptions.length === 0 ? (
+							<Text variant="body3" className="px-3 py-4 text-muted-foreground">
+								角色列表加载中…
+							</Text>
+						) : filteredOptions.length === 0 ? (
+							<Text variant="body3" className="px-3 py-4 text-muted-foreground">
+								未找到匹配的角色。
+							</Text>
+						) : (
+							<div className="max-h-72 space-y-2 overflow-y-auto px-2 py-3">
+								{filteredOptions.map((option) => {
+									const checked = selected.has(option.authority);
+									return (
+										<label
+											key={option.authority}
+											className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-1 hover:bg-accent/40"
+										>
+											<Checkbox
+												checked={checked}
+												onCheckedChange={(value) => handleToggle(option.authority, value === true)}
+												disabled={disabled}
+											/>
+											<div className="flex flex-1 flex-col">
+												<span className="text-sm font-medium">{option.label}</span>
+												<span className="text-xs text-muted-foreground">{option.authority}</span>
+											</div>
+										</label>
+									);
+								})}
+							</div>
+						)}
+					</div>
+					<div className="flex items-center justify-between text-xs text-muted-foreground">
+						<span>已选择 {selectedRoleCount} 个角色</span>
+						{selectedRoleCount > 0 ? (
+							<Button size="small" type="text" onClick={() => setSelected(new Set())} disabled={disabled}>
+								清空选择
+							</Button>
+						) : null}
+					</div>
+					{mode === "REPLACE" ? (
+						<Text variant="body3" color="warning">
+							覆盖会把所选菜单的原有角色替换为本次选择的角色。
+						</Text>
+					) : null}
+				</div>
+				<DialogFooter className="flex justify-end gap-2">
+					<Button type="default" onClick={onClose} disabled={saving}>
+						取消
+					</Button>
+					<Button type="primary" onClick={handleSave} disabled={disabled || selectedRoleCount === 0 || selectedCount === 0}>
+						{saving ? "提交中…" : "提交"}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

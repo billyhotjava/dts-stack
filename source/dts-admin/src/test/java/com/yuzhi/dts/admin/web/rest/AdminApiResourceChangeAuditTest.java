@@ -1,11 +1,15 @@
 package com.yuzhi.dts.admin.web.rest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.admin.domain.AdminApprovalItem;
 import com.yuzhi.dts.admin.domain.AdminApprovalRequest;
 import com.yuzhi.dts.admin.domain.ChangeRequest;
+import com.yuzhi.dts.admin.domain.PortalMenu;
 import com.yuzhi.dts.admin.repository.AdminApprovalRequestRepository;
 import com.yuzhi.dts.admin.repository.AdminCustomRoleRepository;
 import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
@@ -31,10 +35,13 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 
 @ExtendWith(MockitoExtension.class)
@@ -169,5 +176,57 @@ class AdminApiResourceChangeAuditTest {
 
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getData()).isEmpty();
+    }
+
+    @Test
+    void batchUpdateMenuVisibilityCreatesOneApprovalForManyMenus() {
+        ReflectionTestUtils.setField(resource, "requireMenuVisibilityApproval", true);
+        PortalMenu first = portalMenu(101L, "workbench.overview", "workbench/overview", "我的概览");
+        PortalMenu second = portalMenu(102L, "portal.search", "catalog/search", "数据搜索");
+        when(portalMenuRepository.findById(101L)).thenReturn(java.util.Optional.of(first));
+        when(portalMenuRepository.findById(102L)).thenReturn(java.util.Optional.of(second));
+        ChangeRequest pending = new ChangeRequest();
+        pending.setId(9001L);
+        pending.setResourceType("PORTAL_MENU");
+        pending.setAction("BATCH_UPDATE");
+        pending.setStatus("PENDING");
+        pending.setRequestedBy("sysadmin");
+        pending.setPayloadJson(
+            "{\"updates\":[{\"id\":101,\"allowedRoles\":[\"ROLE_EMPLOYEE\"]},{\"id\":102,\"allowedRoles\":[\"ROLE_EMPLOYEE\"]}]}"
+        );
+        when(changeRequestService.draft(eq("PORTAL_MENU"), eq("BATCH_UPDATE"), eq(null), org.mockito.Mockito.any(), org.mockito.Mockito.any(), eq("批量配置角色")))
+            .thenReturn(pending);
+
+        ResponseEntity<ApiResponse<Map<String, Object>>> response = resource.batchUpdateMenuVisibility(
+            Map.of(
+                "menuIds",
+                List.of(101, 102),
+                "roles",
+                List.of("ROLE_EMPLOYEE"),
+                "mode",
+                "REPLACE",
+                "reason",
+                "批量配置角色"
+            ),
+            new MockHttpServletRequest()
+        );
+
+        assertThat(response.getStatusCode().value()).isEqualTo(202);
+        ArgumentCaptor<Object> afterCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(changeRequestService, times(1))
+            .draft(eq("PORTAL_MENU"), eq("BATCH_UPDATE"), eq(null), afterCaptor.capture(), org.mockito.Mockito.any(), eq("批量配置角色"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> after = (Map<String, Object>) afterCaptor.getValue();
+        assertThat(after).containsEntry("mode", "REPLACE");
+        assertThat(after.get("updates")).asList().hasSize(2);
+    }
+
+    private PortalMenu portalMenu(Long id, String name, String path, String title) {
+        PortalMenu menu = new PortalMenu();
+        menu.setId(id);
+        menu.setName(name);
+        menu.setPath(path);
+        menu.setMetadata("{\"title\":\"" + title + "\"}");
+        return menu;
     }
 }

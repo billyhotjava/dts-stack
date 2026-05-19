@@ -22,6 +22,14 @@ import {
     normalizeFilterDebounceMs, normalizeCarouselItems, resolveCarouselItemsFromData,
     resolveFilterDefaultValue, resolveDateRangeDefaultValues,
 } from '../renderers/shared/chartUtils';
+import {
+    clampNumber as toNumber,
+    pickFiniteNumber as pickNum,
+    readPositivePaddingOverride,
+    resolveAxisStyleConfig,
+    resolveLegendStyleConfig,
+    resolveSeriesColors,
+} from '../renderers/shared/chartStyleConfig';
 import { resolveChartTitleLayout } from '../renderers/shared/chartTitleLayout';
 import {
     buildTableRowActionParams,
@@ -39,11 +47,6 @@ import { renderBasic } from '../renderers/BasicRenderer';
 import { MetricNoteBadge, type MetricNote } from '../renderers/shared/MetricNote';
 import { renderDataV } from '../renderers/DataVRenderer';
 import { renderTable } from '../renderers/TableRenderer';
-import { WaterLevel } from '../renderers/datav/WaterLevel';
-import { DigitalFlop as DigitalFlopComponent } from '../renderers/datav/DigitalFlop';
-import { PercentPond } from '../renderers/datav/PercentPond';
-import { ScrollRanking } from '../renderers/datav/ScrollRanking';
-import { FlylineChart } from '../renderers/datav/FlylineChart';
 import {
     useEChartsLoader, isWebGLSupported,
     ECHART_COMPONENT_TYPES, ECHART_3D_TYPES,
@@ -394,88 +397,19 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 </PluginRenderBoundary>
             );
         }
-        // Axis-config compat shim: nested `c.xAxis.{labelFontSize,labelRotate,labelColor,show,splitLineShow,splitLineColor}`
-        // (AxisConfigEditor output) wins over legacy flat keys `c.axisFontSize/c.axisLabelColor/c.xAxisLabelRotate`.
-        const xAxisCfg = (c.xAxis && typeof c.xAxis === 'object' ? c.xAxis : {}) as Record<string, unknown>;
-        const yAxisCfg = (c.yAxis && typeof c.yAxis === 'object' ? c.yAxis : {}) as Record<string, unknown>;
-        const pickNum = (v: unknown): number | undefined => {
-            const n = Number(v);
-            return Number.isFinite(n) ? n : undefined;
-        };
-        const pickStr = (v: unknown): string | undefined =>
-            (typeof v === 'string' && v.trim()) ? v.trim() : undefined;
-        const axisFontSize = pickNum(xAxisCfg.labelFontSize) ?? pickNum(yAxisCfg.labelFontSize) ?? pickNum(c.axisFontSize) ?? 15;
-        const axisLabelColor = pickStr(xAxisCfg.labelColor) ?? pickStr(yAxisCfg.labelColor) ?? pickStr(c.axisLabelColor);
-        const yAxisLabelRotate = pickNum(yAxisCfg.labelRotate) ?? 0;
-        // AxisConfigEditor 额外字段 (show / splitLineShow / splitLineColor / min / max / type)
-        // 之前只读 label 相关，导致 UI 勾选"隐藏轴/分割线/设置 min-max"完全不生效。
-        const pickBool = (v: unknown): boolean | undefined =>
-            (typeof v === 'boolean') ? v : undefined;
-        const pickAxisBound = (v: unknown): number | string | undefined => {
-            if (typeof v === 'number' && Number.isFinite(v)) return v;
-            if (typeof v === 'string' && v.trim()) return v.trim();
-            return undefined;
-        };
-        const axisOverrides = {
-            x: {
-                show: pickBool(xAxisCfg.show),
-                splitLineShow: pickBool(xAxisCfg.splitLineShow),
-                splitLineColor: pickStr(xAxisCfg.splitLineColor),
-                min: pickAxisBound(xAxisCfg.min),
-                max: pickAxisBound(xAxisCfg.max),
-                type: pickStr(xAxisCfg.type),
-            },
-            y: {
-                show: pickBool(yAxisCfg.show),
-                splitLineShow: pickBool(yAxisCfg.splitLineShow),
-                splitLineColor: pickStr(yAxisCfg.splitLineColor),
-                min: pickAxisBound(yAxisCfg.min),
-                max: pickAxisBound(yAxisCfg.max),
-                type: pickStr(yAxisCfg.type),
-            },
-        };
-        // Legend compat shim: nested `c.legend.{show,position,fontSize,color,reserveSize,itemGap}`
-        // (new schema) wins over legacy flat keys `c.legendDisplay/legendPosition/legendFontSize/
-        // legendReserveSize/legendItemGap`. Presets/heuristics still write the legacy shape, so we
-        // fall back to them when the nested object is unset.
-        const legendNested = (c.legend && typeof c.legend === 'object' ? c.legend : {}) as Partial<{
-            show: boolean;
-            position: 'top' | 'bottom' | 'left' | 'right';
-            fontSize: number;
-            color: string;
-            reserveSize: number;
-            itemGap: number;
-        }>;
-        const legendDisplayOverride: 'show' | 'hide' | undefined =
-            legendNested.show === true ? 'show'
-            : legendNested.show === false ? 'hide'
-            : undefined;
-        const legendPositionOverride = legendNested.position;
-        const legendColorOverride = typeof legendNested.color === 'string' && legendNested.color.trim()
-            ? legendNested.color.trim()
-            : undefined;
-        const legendFontSize = (typeof legendNested.fontSize === 'number' && legendNested.fontSize > 0
-            ? legendNested.fontSize
-            : (c.legendFontSize as number)) || 15;
-        const legendReserveOverrideFromNested = typeof legendNested.reserveSize === 'number' && legendNested.reserveSize >= 0
-            ? legendNested.reserveSize
-            : undefined;
-        const legendItemGapOverrideFromNested = typeof legendNested.itemGap === 'number' && legendNested.itemGap >= 0
-            ? legendNested.itemGap
-            : undefined;
-        const seriesColors = Array.isArray(c.seriesColors)
-            ? (c.seriesColors as string[]).filter((color) => typeof color === 'string' && color.trim().length > 0)
-            : [];
-        const toNumber = (raw: unknown, fallback: number, min: number, max: number) => {
-            const parsed = Number(raw);
-            if (!Number.isFinite(parsed)) return fallback;
-            return Math.min(max, Math.max(min, parsed));
-        };
-        const readPaddingOverride = (key: 'chartPaddingTop' | 'chartPaddingRight' | 'chartPaddingBottom' | 'chartPaddingLeft') => {
-            const parsed = Number(c[key]);
-            if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
-            return Math.round(Math.max(0, parsed));
-        };
+        const {
+            xAxisCfg, yAxisCfg, axisFontSize, axisLabelColor, yAxisLabelRotate, axisOverrides,
+        } = resolveAxisStyleConfig(c);
+        const {
+            legendDisplayOverride,
+            legendPositionOverride,
+            legendColorOverride,
+            legendFontSize,
+            legendReserveOverrideFromNested,
+            legendItemGapOverrideFromNested,
+        } = resolveLegendStyleConfig(c);
+        const seriesColors = resolveSeriesColors(c);
+        const readPaddingOverride = (key) => readPositivePaddingOverride(c, key);
         const compactPresetRaw = String(c.compactLayoutPreset ?? 'auto').trim().toLowerCase();
         const compactPresetEnabled = compactPresetRaw !== 'off';
         const isCompactCanvas = compactPresetEnabled && (width < 560 || height < 320);
@@ -1393,7 +1327,12 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             // ==================== DataV 组件 (delegated to DataVRenderer) ====================
             case 'border-box':
             case 'decoration':
-                return renderDataV({ type, c, width, height });
+            case 'scroll-ranking':
+            case 'water-level':
+            case 'digital-flop':
+            case 'percent-pond':
+            case 'flyline-chart':
+                return renderDataV({ type, c, width, height, t });
 
             // ==================== Table-family (delegated to TableRenderer) ====================
             case 'scroll-board':
@@ -1420,68 +1359,6 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     executeComponentActions,
                     renderUnavailableState,
                 });
-
-            case 'scroll-ranking':
-                return (
-                    <ScrollRanking
-                        data={c.data as Array<{ name: string; value: number }>}
-                        color={c.color as string[] | undefined}
-                        textColor={c.textColor as string | undefined}
-                        backgroundColor={c.backgroundColor as string | undefined}
-                        duration={c.duration as number | undefined}
-                        rowCount={c.rowNum as number | undefined}
-                        style={{ width: '100%', height: '100%' }}
-                    />
-                );
-
-            case 'water-level':
-                return (
-                    <WaterLevel
-                        value={c.value as number}
-                        shape={c.shape as string}
-                        color={c.color as string[]}
-                        textColor={c.textColor as string | undefined}
-                        backgroundColor={c.backgroundColor as string | undefined}
-                        width={component.width}
-                        height={component.height}
-                    />
-                );
-
-            case 'digital-flop':
-                return (
-                    <DigitalFlopComponent
-                        number={Array.isArray(c.number) ? (c.number as number[])[0] : (c.number as number)}
-                        content={c.content as string}
-                        style={c.style as { fontSize?: number; fill?: string }}
-                        backgroundColor={c.backgroundColor as string | undefined}
-                    />
-                );
-
-            case 'percent-pond':
-                return (
-                    <PercentPond
-                        value={c.value as number}
-                        colors={c.colors as string[] || [t.progressBar.fillGradient[0], t.progressBar.fillGradient[1]]}
-                        textColor={c.textColor as string | undefined}
-                        backgroundColor={c.backgroundColor as string | undefined}
-                        borderRadius={c.borderRadius as number}
-                        borderWidth={c.borderWidth as number}
-                        width={width}
-                        height={height}
-                    />
-                );
-
-            case 'flyline-chart':
-                return (
-                    <FlylineChart
-                        points={c.points as Array<{ from: [number, number]; to: [number, number] }>}
-                        color={c.color as string[]}
-                        backgroundColor={c.backgroundColor as string | undefined}
-                        duration={c.duration as number}
-                        width={width}
-                        height={height}
-                    />
-                );
 
             // ==================== 3D 可视化 (echarts-gl) ====================
             case 'globe-chart': {

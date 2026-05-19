@@ -681,6 +681,111 @@ public class AdminApiResource {
         return portalMenus(null);
     }
 
+    @PostMapping("/portal/menus/batch-visibility")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> batchUpdateMenuVisibility(
+        @RequestBody Map<String, Object> body,
+        HttpServletRequest request
+    ) {
+        List<Long> menuIds = readMenuIdList(body == null ? null : body.get("menuIds"));
+        if (menuIds.isEmpty()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("请选择需要配置的菜单"));
+        }
+        List<String> requestedRoles = filterReservedRoles(
+            readStringList(body != null && body.containsKey("roles") ? body.get("roles") : body == null ? null : body.get("allowedRoles"))
+        );
+        if (requestedRoles.isEmpty()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("请选择需要配置的角色"));
+        }
+        String mode = normalizeMenuVisibilityBatchMode(body == null ? null : body.get("mode"));
+        List<PortalMenu> menus = new ArrayList<>();
+        for (Long menuId : menuIds) {
+            PortalMenu menu = portalMenuRepo.findById(menuId).orElse(null);
+            if (menu != null) {
+                menus.add(menu);
+            }
+        }
+        if (menus.isEmpty()) {
+            return ResponseEntity.status(404).body(ApiResponse.error("未找到可配置的菜单"));
+        }
+
+        Map<String, Object> before = new LinkedHashMap<>();
+        Map<String, Object> after = new LinkedHashMap<>();
+        before.put("mode", mode);
+        after.put("mode", mode);
+        List<Map<String, Object>> beforeUpdates = new ArrayList<>();
+        List<Map<String, Object>> afterUpdates = new ArrayList<>();
+        for (PortalMenu menu : menus) {
+            List<String> currentRoles = currentMenuAllowedRoles(menu);
+            List<String> nextRoles = applyMenuVisibilityBatchMode(currentRoles, requestedRoles, mode);
+            beforeUpdates.add(toBatchMenuVisibilityUpdate(menu, currentRoles));
+            afterUpdates.add(toBatchMenuVisibilityUpdate(menu, nextRoles));
+        }
+        before.put("updates", beforeUpdates);
+        after.put("updates", afterUpdates);
+
+        String reason = Objects.toString(body == null ? null : body.get("reason"), null);
+        String actor = SecurityUtils.getCurrentAuditableLogin();
+        if (requireMenuVisibilityApproval) {
+            ChangeRequest cr = changeRequestService.draft("PORTAL_MENU", "BATCH_UPDATE", null, after, before, reason);
+            Map<String, Object> approvalDetail = new LinkedHashMap<>();
+            approvalDetail.put("status", "APPROVAL_PENDING");
+            approvalDetail.put("changeRequestId", cr.getId());
+            approvalDetail.put("mode", mode);
+            approvalDetail.put("menuIds", menuIds.stream().map(String::valueOf).toList());
+            approvalDetail.put("roleCodes", requestedRoles);
+            attachChangeRequestMetadata(approvalDetail, cr);
+            recordPortalMenuActionV2(
+                actor,
+                MenuAuditContext.Operation.SUBMIT_APPROVAL,
+                AuditResultStatus.SUCCESS,
+                null,
+                "批量配置菜单角色",
+                cr,
+                new LinkedHashMap<>(approvalDetail),
+                request,
+                "/api/admin/portal/menus/batch-visibility",
+                "POST",
+                "提交批量菜单角色配置审批（" + menus.size() + " 个菜单）"
+            );
+            cr.setSummary("提交批量菜单角色配置审批（" + menus.size() + " 个菜单）");
+            crRepo.save(cr);
+            return ResponseEntity.status(202).body(ApiResponse.ok(withDisplayNames(toChangeView(cr))));
+        }
+
+        for (Map<String, Object> update : afterUpdates) {
+            Long menuId = parseLongSafe(update.get("id"));
+            if (menuId == null) {
+                continue;
+            }
+            PortalMenu target = portalMenuRepo.findById(menuId).orElse(null);
+            if (target == null) {
+                continue;
+            }
+            List<PortalMenuVisibility> visibilities = buildVisibilityEntities(update, target);
+            portalMenuService.replaceVisibilities(target, visibilities);
+        }
+        try {
+            notifyClient.trySend(
+                "portal_menu_updated",
+                Map.of("action", "binding-update", "ids", menuIds.stream().map(String::valueOf).toList())
+            );
+        } catch (Exception ignored) {}
+        recordPortalMenuActionV2(
+            actor,
+            MenuAuditContext.Operation.UPDATE,
+            AuditResultStatus.SUCCESS,
+            null,
+            "批量配置菜单角色",
+            null,
+            new LinkedHashMap<>(Map.of("before", before, "after", after, "mode", mode)),
+            request,
+            "/api/admin/portal/menus/batch-visibility",
+            "POST",
+            "批量配置菜单角色（" + menus.size() + " 个菜单）"
+        );
+        return ResponseEntity.ok(ApiResponse.ok(buildPortalMenuCollection()));
+    }
+
     @PutMapping("/portal/menus/{id}")
     public ResponseEntity<ApiResponse<Map<String, Object>>> updateMenu(@PathVariable String id, @RequestBody Map<String, Object> body, HttpServletRequest request) {
         Long menuId = Long.valueOf(id);
@@ -2816,6 +2921,78 @@ public class AdminApiResource {
         return false;
     }
 
+    private List<Long> readMenuIdList(Object value) {
+        if (!(value instanceof Collection<?> collection)) {
+            return List.of();
+        }
+        LinkedHashSet<Long> result = new LinkedHashSet<>();
+        for (Object item : collection) {
+            Long parsed = parseLongSafe(item);
+            if (parsed != null) {
+                result.add(parsed);
+            }
+        }
+        return new ArrayList<>(result);
+    }
+
+    private String normalizeMenuVisibilityBatchMode(Object raw) {
+        String mode = raw == null ? "APPEND" : raw.toString().trim().toUpperCase(Locale.ROOT);
+        if ("ADD".equals(mode)) {
+            return "APPEND";
+        }
+        if ("DELETE".equals(mode) || "DELETE_ROLE".equals(mode)) {
+            return "REMOVE";
+        }
+        if ("OVERWRITE".equals(mode) || "SET".equals(mode)) {
+            return "REPLACE";
+        }
+        if ("APPEND".equals(mode) || "REMOVE".equals(mode) || "REPLACE".equals(mode)) {
+            return mode;
+        }
+        return "APPEND";
+    }
+
+    private List<String> currentMenuAllowedRoles(PortalMenu menu) {
+        if (menu == null || menu.getVisibilities() == null || menu.getVisibilities().isEmpty()) {
+            return List.of();
+        }
+        return filterReservedRoles(
+            menu
+                .getVisibilities()
+                .stream()
+                .map(PortalMenuVisibility::getRoleCode)
+                .filter(Objects::nonNull)
+                .toList()
+        );
+    }
+
+    private List<String> applyMenuVisibilityBatchMode(List<String> currentRoles, List<String> requestedRoles, String mode) {
+        LinkedHashSet<String> next = new LinkedHashSet<>();
+        if (!"REPLACE".equals(mode)) {
+            next.addAll(currentRoles == null ? List.of() : currentRoles);
+        }
+        if ("REMOVE".equals(mode)) {
+            Set<String> removal = new LinkedHashSet<>(requestedRoles == null ? List.of() : requestedRoles);
+            next.removeIf(removal::contains);
+        } else {
+            next.addAll(requestedRoles == null ? List.of() : requestedRoles);
+        }
+        return new ArrayList<>(next);
+    }
+
+    private Map<String, Object> toBatchMenuVisibilityUpdate(PortalMenu menu, List<String> allowedRoles) {
+        Map<String, Object> update = new LinkedHashMap<>();
+        update.put("id", menu.getId());
+        update.put("name", menu.getName());
+        update.put("path", menu.getPath());
+        String displayName = resolveMenuDisplayName(menu);
+        if (StringUtils.hasText(displayName)) {
+            update.put("displayName", displayName);
+        }
+        update.put("allowedRoles", allowedRoles == null ? List.of() : new ArrayList<>(allowedRoles));
+        return update;
+    }
+
     private Map<String, Object> readPortalMenuPayload(Map<String, Object> body) {
         Map<String, Object> m = new LinkedHashMap<>();
         if (body == null) {
@@ -2844,7 +3021,7 @@ public class AdminApiResource {
             }
         }
         List<String> allowedRoles = filterReservedRoles(readStringList(body.get("allowedRoles")));
-        if (!allowedRoles.isEmpty()) {
+        if (body.containsKey("allowedRoles")) {
             m.put("allowedRoles", allowedRoles);
         }
         List<String> allowedPermissions = readStringList(body.get("allowedPermissions"));
@@ -2930,6 +3107,11 @@ public class AdminApiResource {
 
     private List<PortalMenuVisibility> buildVisibilityEntities(Map<String, Object> payload, PortalMenu menu) {
         List<PortalMenuVisibility> visibilities = new ArrayList<>();
+        boolean visibilityExplicitlyTouched =
+            payload.containsKey("visibilityRules") ||
+            payload.containsKey("allowedRoles") ||
+            payload.containsKey("allowedPermissions") ||
+            payload.containsKey("maxDataLevel");
         Object rulesObj = payload.get("visibilityRules");
         List<Map<String, Object>> rules = rulesObj instanceof List<?> list ? (List<Map<String, Object>>) rulesObj : List.of();
         if (!rules.isEmpty()) {
@@ -2972,7 +3154,7 @@ public class AdminApiResource {
                 }
             }
         }
-        if (visibilities.isEmpty()) {
+        if (visibilities.isEmpty() && !visibilityExplicitlyTouched) {
             visibilities = defaultVisibilities(menu);
         }
         // 基础数据功能：强制包含 OP_ADMIN 可见性，且忽略其它角色
@@ -2997,6 +3179,8 @@ public class AdminApiResource {
         private final LinkedHashSet<String> allowedPermissions = new LinkedHashSet<>();
         private String maxDataLevel;
         private boolean hasExplicitRules = false;
+        private boolean allowedRolesTouched = false;
+        private boolean allowedPermissionsTouched = false;
 
         MenuVisibilityBatch(PortalMenu menu) {
             this.menu = menu;
@@ -3026,7 +3210,13 @@ public class AdminApiResource {
                     explicitRuleMap.put(key, normalized);
                 }
             }
+            if (raw.containsKey("allowedRoles")) {
+                allowedRolesTouched = true;
+            }
             mergeRoles(raw.get("allowedRoles"));
+            if (raw.containsKey("allowedPermissions")) {
+                allowedPermissionsTouched = true;
+            }
             mergePermissions(raw.get("allowedPermissions"));
             if (raw.containsKey("maxDataLevel")) {
                 String level = normalizeDataLevelForVisibility(raw.get("maxDataLevel"));
@@ -3096,10 +3286,10 @@ public class AdminApiResource {
                 payload.put("visibilityRules", new ArrayList<>(explicitRuleMap.values()));
                 return payload;
             }
-            if (!allowedRoles.isEmpty()) {
+            if (allowedRolesTouched || !allowedRoles.isEmpty()) {
                 payload.put("allowedRoles", new ArrayList<>(allowedRoles));
             }
-            if (!allowedPermissions.isEmpty()) {
+            if (allowedPermissionsTouched || !allowedPermissions.isEmpty()) {
                 payload.put("allowedPermissions", new ArrayList<>(allowedPermissions));
             }
             if (maxDataLevel != null) {

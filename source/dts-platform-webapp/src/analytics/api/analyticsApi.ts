@@ -2389,21 +2389,6 @@ export const analyticsApi = {
 		requestJson<void>(`/bi/api/screens/${encodeURIComponent(String(id))}/public_link`, "DELETE"),
 	getPublicScreen: (uuid: string) =>
 		fetchJson<PublicScreenDetail>(`/bi/api/public/screen/${encodeURIComponent(uuid)}`),
-	// Snapshot API
-	createSnapshot: (id: string | number, body: unknown) =>
-		sendJson<unknown>(`/bi/api/screens/${encodeURIComponent(String(id))}/snapshot`, body),
-	getSnapshotTask: (taskId: string) =>
-		fetchJson<unknown>(`/bi/api/screens/snapshot-tasks/${encodeURIComponent(taskId)}`),
-	listSnapshotSchedules: (id: string | number) =>
-		fetchJson<unknown[]>(`/bi/api/screens/${encodeURIComponent(String(id))}/snapshot-schedules`),
-	createSnapshotSchedule: (id: string | number, body: unknown) =>
-		sendJson<unknown>(`/bi/api/screens/${encodeURIComponent(String(id))}/snapshot-schedules`, body),
-	updateSnapshotSchedule: (id: string | number, scheduleId: string, body: unknown) =>
-		requestJson<unknown>(`/bi/api/screens/${encodeURIComponent(String(id))}/snapshot-schedules/${encodeURIComponent(scheduleId)}`, "PUT", body),
-	deleteSnapshotSchedule: (id: string | number, scheduleId: string) =>
-		requestJson<void>(`/bi/api/screens/${encodeURIComponent(String(id))}/snapshot-schedules/${encodeURIComponent(scheduleId)}`, "DELETE"),
-	listSnapshotTasks: (id: string | number) =>
-		fetchJson<unknown[]>(`/bi/api/screens/${encodeURIComponent(String(id))}/snapshot-tasks`),
 	// Marketplace API
 	listMarketplaceComponents: (params?: { search?: string; category?: string }) => {
 		const qs = new URLSearchParams();

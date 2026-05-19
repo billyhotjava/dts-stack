@@ -11,18 +11,9 @@ import {
     type ScreenVersion,
     type ScreenVersionDiff,
 } from '../../../../api/analyticsApi';
-import { GlobalVariableManager } from '../GlobalVariableManager';
-import { PublishResultModal } from '../PublishResultModal';
-import { InteractionDebugPanel } from '../InteractionDebugPanel';
-import { ScreenConflictPanel, type ScreenUpdateConflict } from '../ScreenConflictPanel';
-import { ScreenVersionComparePanel } from '../ScreenVersionComparePanel';
-import { ScreenVersionComparePickerPanel } from '../ScreenVersionComparePickerPanel';
-import { ScreenVersionRollbackPanel } from '../ScreenVersionRollbackPanel';
-import { VersionHistoryPanel } from '../VersionHistoryPanel';
-import { ScreenSnapshotPanel } from '../ScreenSnapshotPanel';
+import type { ScreenUpdateConflict } from '../ScreenConflictPanel';
 import { Modal, message } from 'antd';
 import { toast } from 'sonner';
-import { buildExploreSessionSteps } from '../ScreenHeader.helpers';
 import { buildScreenPayload, normalizeScreenConfig, validateScreenPayload } from '../../screenSpec';
 import { commitScreenPageDraft, materializeScreenPage } from '../../screenPageState';
 import {
@@ -34,24 +25,22 @@ import {
 } from '../../screenDraftRecovery';
 import { resolveScreenTheme, applyThemeToComponents, getThemeTokens, type ThemeComponentApplyMode } from '../../screenThemes';
 import type { ScreenTheme } from '../../types';
-import { LinkageGraphPanel } from '../LinkageGraphPanel';
-import { writeTextToClipboard } from '../../../../hooks/clipboard';
 import { resolveRouteForOpen, resolveRouteHref } from '../../../../helpers/resolveAnalyticsUrl';
-import { HeaderMenu } from './HeaderMenu';
-import { ThemeSelector } from './ThemeSelector';
+import {
+    ScreenHeaderMenus,
+    type HeaderActiveMenu,
+    type PreviewDeviceMode,
+    type ScreenHeaderPermissions,
+} from './ScreenHeaderMenus';
+import { ScreenHeaderNotices } from './ScreenHeaderNotices';
+import { ScreenHeaderPanels } from './ScreenHeaderPanels';
+import { useScreenExportActions } from './useScreenExportActions';
 import {
     VERSION_ACTION_STORAGE_KEY,
-    QUICK_ACTION_RECENT_STORAGE_KEY,
-    PRIMARY_ACTION_STORAGE_KEY,
-    BATCH_ACTION_OPTIONS,
     THEME_OPTIONS,
-    findNextEnabledQuickActionIndex,
     buildPublishNoticeStorageKey,
     buildComponentConflictMeta,
     type PublishInfo,
-    type HeaderActionNotice,
-    type QuickActionItem,
-    type BatchAction,
 } from './helpers';
 
 interface ScreenHeaderProps {
@@ -86,11 +75,6 @@ export function ScreenHeader({
         selectComponents,
         isSaving,
         setIsSaving,
-        copyComponents,
-        pasteComponents,
-        clipboard,
-        deleteComponents,
-        updateSelectedComponents,
         setEditorReadonly,
     } = useScreen();
     const { config } = state;
@@ -129,103 +113,25 @@ export function ScreenHeader({
     const [saveFailure, setSaveFailure] = useState<{ message: string; failedAt: number } | null>(null);
     const [lastRecoverySavedAt, setLastRecoverySavedAt] = useState<number | null>(null);
     const [showVariableManager, setShowVariableManager] = useState(false);
-    const [showInteractionDebugPanel, setShowInteractionDebugPanel] = useState(false);
     const [showConflictPanel, setShowConflictPanel] = useState(false);
     const [showVersionComparePanel, setShowVersionComparePanel] = useState(false);
     const [showVersionComparePicker, setShowVersionComparePicker] = useState(false);
     const [showVersionRollbackPanel, setShowVersionRollbackPanel] = useState(false);
     const [showVersionHistoryPanel, setShowVersionHistoryPanel] = useState(false);
-    const [showSnapshotPanel, setShowSnapshotPanel] = useState(false);
-    const [showQuickActions, setShowQuickActions] = useState(false);
-    const [quickKeyword, setQuickKeyword] = useState('');
-    const [quickActiveIndex, setQuickActiveIndex] = useState(-1);
-    const [quickRecentIds, setQuickRecentIds] = useState<string[]>(() => {
-        if (typeof window === 'undefined') return [];
-        try {
-            const raw = window.localStorage.getItem(QUICK_ACTION_RECENT_STORAGE_KEY);
-            if (!raw) return [];
-            const parsed = JSON.parse(raw);
-            if (!Array.isArray(parsed)) return [];
-            return parsed
-                .map((item) => String(item || '').trim())
-                .filter((item) => item.length > 0)
-                .slice(0, 8);
-        } catch {
-            return [];
-        }
-    });
     // designAction state removed — "编辑" menu uses direct buttons now
     // governanceAction state removed — "安全" menu uses direct buttons now
-    const [previewDeviceMode, setPreviewDeviceMode] = useState<'auto' | 'pc' | 'tablet' | 'mobile'>('auto');
+    const [previewDeviceMode, setPreviewDeviceMode] = useState<PreviewDeviceMode>('auto');
     const [versionAction, setVersionAction] = useState<'history' | 'compare'>(() => {
         if (typeof window === 'undefined') return 'history';
         const raw = window.localStorage.getItem(VERSION_ACTION_STORAGE_KEY);
         return raw === 'compare' ? 'compare' : 'history';
     });
-    const [primaryAction, setPrimaryAction] = useState<'preview' | 'publish' | 'save'>(() => {
-        if (typeof window === 'undefined') return 'save';
-        const raw = window.localStorage.getItem(PRIMARY_ACTION_STORAGE_KEY);
-        if (raw === 'preview' || raw === 'publish' || raw === 'save') {
-            return raw;
-        }
-        return 'save';
-    });
     // toolsSection removed — toolbox split into 3 independent header menus
-    const [isSavingTemplate, setIsSavingTemplate] = useState(false);
-    const [headerActionNotice, setHeaderActionNotice] = useState<HeaderActionNotice | null>(null);
-    const [showSaveTemplateDialog, setShowSaveTemplateDialog] = useState(false);
-    const [templateForm, setTemplateForm] = useState({
-        name: `${config.name || '未命名大屏'}-模板`,
-        description: config.description || '',
-        visibilityScope: 'team' as 'personal' | 'team' | 'global',
-    });
-    const [showExploreSessionDialog, setShowExploreSessionDialog] = useState(false);
-    const [exploreSessionForm, setExploreSessionForm] = useState({
-        title: `${config.name || '未命名大屏'} 分析会话`,
-        question: `围绕大屏「${config.name || '未命名大屏'}」展开分析`,
-        conclusion: '',
-        tagsInput: '大屏,复盘',
-    });
     // --- Merged toolbar state (from CanvasToolbar "更多工具") ---
-    const [batchAction, setBatchAction] = useState<BatchAction>('duplicate');
     const [themeApplyMode, setThemeApplyMode] = useState<ThemeComponentApplyMode>('force');
     const [showLinkageGraph, setShowLinkageGraph] = useState(false);
     const themeInputRef = useRef<HTMLInputElement | null>(null);
-    const { selectedIds, showGrid, zoom } = state;
-
-    const canExecuteBatch = (() => {
-        if (batchAction === 'paste') return clipboard.length > 0;
-        if (batchAction === 'copy' || batchAction === 'duplicate') return selectedIds.length > 0;
-        return selectedIds.length > 0;
-    })();
-
-    const executeBatchAction = useCallback(() => {
-        if (batchAction === 'copy') { if (selectedIds.length > 0) copyComponents(); return; }
-        if (batchAction === 'paste') { if (clipboard.length > 0) pasteComponents(); return; }
-        if (batchAction === 'duplicate') {
-            if (selectedIds.length === 0) return;
-            copyComponents();
-            setTimeout(() => pasteComponents(), 0);
-            return;
-        }
-        if (batchAction === 'bring-top') {
-            if (selectedIds.length === 0) return;
-            const selected = config.components.filter(c => selectedIds.includes(c.id)).sort((a, b) => a.zIndex - b.zIndex);
-            for (const item of selected) dispatch({ type: 'REORDER_LAYER', payload: { id: item.id, direction: 'top' } });
-            return;
-        }
-        if (batchAction === 'send-bottom') {
-            if (selectedIds.length === 0) return;
-            const selected = config.components.filter(c => selectedIds.includes(c.id)).sort((a, b) => b.zIndex - a.zIndex);
-            for (const item of selected) dispatch({ type: 'REORDER_LAYER', payload: { id: item.id, direction: 'bottom' } });
-            return;
-        }
-        if (batchAction === 'show') { if (selectedIds.length > 0) updateSelectedComponents({ visible: true }); return; }
-        if (batchAction === 'hide') { if (selectedIds.length > 0) updateSelectedComponents({ visible: false }); return; }
-        if (batchAction === 'unlock') { if (selectedIds.length > 0) updateSelectedComponents({ locked: false }); return; }
-        if (batchAction === 'lock') { if (selectedIds.length > 0) updateSelectedComponents({ locked: true }); return; }
-        if (batchAction === 'delete') { if (selectedIds.length > 0) deleteComponents(selectedIds); }
-    }, [batchAction, selectedIds, clipboard, copyComponents, pasteComponents, deleteComponents, updateSelectedComponents, dispatch, config.components]);
+    const { selectedIds, showGrid } = state;
 
     const handleToolbarThemeChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
         const theme = e.target.value as ScreenTheme;
@@ -321,7 +227,7 @@ export function ScreenHeader({
             'Ctrl/Cmd + C / V：复制 / 粘贴', 'Ctrl/Cmd + D：复制一份',
             'Ctrl/Cmd + A：全选', 'Ctrl/Cmd + \\：聚焦模式',
             'Ctrl/Cmd + Alt + 1/2：左栏/右栏', 'Ctrl/Cmd + 1/2：属性/图层',
-            'Ctrl/Cmd + K：命令面板', 'Delete / Backspace：删除',
+            'Delete / Backspace：删除',
             '方向键：移动 1px', 'Shift+方向键：移动 10px',
             'Ctrl/Cmd + =/- ：缩放', 'Ctrl/Cmd + 0：100%',
         ].join('\n'));
@@ -336,11 +242,9 @@ export function ScreenHeader({
     const [lockErrorText, setLockErrorText] = useState<string | null>(null);
     const [publishModalOpen, setPublishModalOpen] = useState(false);
     const [publishInfo, setPublishInfo] = useState<PublishInfo | null>(null);
-    const quickInputRef = useRef<HTMLInputElement | null>(null);
-    const quickActionRefs = useRef<Array<HTMLButtonElement | null>>([]);
     const menuContainerRef = useRef<HTMLDivElement | null>(null);
-    const [activeMenu, setActiveMenu] = useState<'primary' | 'tools-view' | 'tools-edit' | 'tools-theme' | 'tools-io' | 'tools-release' | null>(null);
-    const [permissions, setPermissions] = useState({
+    const [activeMenu, setActiveMenu] = useState<HeaderActiveMenu>(null);
+    const [permissions, setPermissions] = useState<ScreenHeaderPermissions>({
         canRead: true,
         canEdit: true,
         canPublish: true,
@@ -476,27 +380,7 @@ export function ScreenHeader({
         window.localStorage.setItem(VERSION_ACTION_STORAGE_KEY, versionAction);
     }, [versionAction]);
 
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        window.localStorage.setItem(PRIMARY_ACTION_STORAGE_KEY, primaryAction);
-    }, [primaryAction]);
-
     // toolsSection localStorage persistence removed — no longer needed
-
-    useEffect(() => {
-        if (!id && primaryAction === 'publish') {
-            setPrimaryAction('save');
-        }
-    }, [id, primaryAction]);
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        if (!quickRecentIds.length) {
-            window.localStorage.removeItem(QUICK_ACTION_RECENT_STORAGE_KEY);
-            return;
-        }
-        window.localStorage.setItem(QUICK_ACTION_RECENT_STORAGE_KEY, JSON.stringify(quickRecentIds.slice(0, 8)));
-    }, [quickRecentIds]);
 
     useEffect(() => {
         if (!activeMenu) {
@@ -848,21 +732,6 @@ export function ScreenHeader({
     }, [handleLockHttpError, handleUpdateConflictError, saveScreen]);
 
     useEffect(() => {
-        setTemplateForm((current) => ({
-            ...current,
-            name: current.name === `${config.name || '未命名大屏'}-模板` || !current.name
-                ? `${config.name || '未命名大屏'}-模板`
-                : current.name,
-            description: showSaveTemplateDialog ? current.description : (config.description || ''),
-        }));
-        setExploreSessionForm((current) => ({
-            ...current,
-            title: showExploreSessionDialog ? current.title : `${config.name || '未命名大屏'} 分析会话`,
-            question: showExploreSessionDialog ? current.question : `围绕大屏「${config.name || '未命名大屏'}」展开分析`,
-        }));
-    }, [config.description, config.name, showExploreSessionDialog, showSaveTemplateDialog]);
-
-    useEffect(() => {
         const isTypingTarget = (target: EventTarget | null): boolean => {
             const node = target as HTMLElement | null;
             if (!node) return false;
@@ -887,63 +756,6 @@ export function ScreenHeader({
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [handleSave, isSaving, lockedByOther, permissions.canEdit]);
-
-    const handleSaveAsTemplate = useCallback(() => {
-        setTemplateForm({
-            name: `${config.name || '未命名大屏'}-模板`,
-            description: config.description || '',
-            visibilityScope: 'team',
-        });
-        setShowSaveTemplateDialog(true);
-    }, [config.description, config.name]);
-
-    const handleSubmitSaveAsTemplate = useCallback(async () => {
-        if (isSavingTemplate) return;
-        setIsSavingTemplate(true);
-        try {
-            const screenId = await saveScreen();
-            if (!screenId) {
-                setHeaderActionNotice({
-                    tone: 'error',
-                    title: '模板保存失败',
-                    message: '请先保存大屏后再存为模板。',
-                });
-                return;
-            }
-            const templateName = templateForm.name.trim();
-            if (!templateName) {
-                return;
-            }
-            const visibilityScope = templateForm.visibilityScope;
-            await analyticsApi.createScreenTemplateFromScreen(screenId, {
-                name: templateName,
-                description: templateForm.description,
-                category: 'custom',
-                thumbnail: '🧩',
-                visibilityScope,
-                listed: true,
-            });
-            const scopeText = visibilityScope === 'personal' ? '个人' : visibilityScope === 'global' ? '全局' : '团队';
-            setShowSaveTemplateDialog(false);
-            setHeaderActionNotice({
-                tone: 'success',
-                title: '模板已保存',
-                message: `已保存到${scopeText}模板，可在模板资产中心继续上架、恢复版本和导出。`,
-            });
-        } catch (error) {
-            console.error('Failed to save screen as template:', error);
-            const message = error instanceof HttpError && error.code === 'SCREEN_UPDATE_CONFLICT'
-                ? handleUpdateConflictError(error, '存模板失败，存在并发冲突')
-                : handleLockHttpError(error, '存模板失败');
-            setHeaderActionNotice({
-                tone: 'error',
-                title: '模板保存失败',
-                message,
-            });
-        } finally {
-            setIsSavingTemplate(false);
-        }
-    }, [handleLockHttpError, handleUpdateConflictError, isSavingTemplate, saveScreen, templateForm]);
 
     const handlePublish = useCallback(async () => {
         if (isPublishing) return;
@@ -1116,48 +928,6 @@ export function ScreenHeader({
         }
     };
 
-    const canExecutePrimaryAction = useMemo(() => {
-        if (primaryAction === 'preview') {
-            return Boolean(id);
-        }
-        if (primaryAction === 'publish') {
-            return Boolean(id) && !isPublishing && permissions.canPublish && !lockedByOther;
-        }
-        return !isSaving && permissions.canEdit && !lockedByOther;
-    }, [id, isPublishing, isSaving, lockedByOther, permissions.canEdit, permissions.canPublish, primaryAction]);
-
-    const pageCount = Math.max(config.pages?.length ?? 0, 1);
-    const themeLabel = THEME_OPTIONS.find((item) => item.value === (config.theme || 'legacy-dark'))?.label ?? '经典深蓝';
-
-    const executePrimaryAction = useCallback(() => {
-        if (primaryAction === 'preview') {
-            handlePreview();
-            return;
-        }
-        if (primaryAction === 'publish') {
-            if (!id || isPublishing || !permissions.canPublish || lockedByOther) {
-                return;
-            }
-            void handlePublish();
-            return;
-        }
-        if (isSaving || !permissions.canEdit || lockedByOther) {
-            return;
-        }
-        void handleSave();
-    }, [
-        handlePreview,
-        handlePublish,
-        handleSave,
-        id,
-        isPublishing,
-        isSaving,
-        lockedByOther,
-        permissions.canEdit,
-        permissions.canPublish,
-        primaryAction,
-    ]);
-
     useEffect(() => {
         const isTypingTarget = (target: EventTarget | null): boolean => {
             const node = target as HTMLElement | null;
@@ -1181,295 +951,12 @@ export function ScreenHeader({
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [handlePreview]);
 
-    const ensureExportAllowed = useCallback(async (format: 'json' | 'png' | 'pdf') => {
-        if (!id) {
-            return null;
-        }
-        try {
-            return await analyticsApi.prepareScreenExport(id, {
-                format,
-                mode: 'draft',
-                ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
-            });
-        } catch (error) {
-            if (error instanceof HttpError) {
-                let detail: string | null = null;
-                try {
-                    const payload = JSON.parse(error.bodyText) as { message?: string };
-                    if (payload?.message) {
-                        detail = payload.message;
-                    }
-                } catch {
-                    // no-op
-                }
-                throw new Error(detail || error.message || '导出失败');
-            }
-            throw new Error(error instanceof Error ? error.message : '导出失败');
-        }
-    }, [id, previewDeviceMode]);
-
-    const openExportWindow = useCallback((format: 'png' | 'pdf') => {
-        if (!id) {
-            throw new Error('请先保存大屏后再导出');
-        }
-        const browserRatio = Number.isFinite(window.devicePixelRatio)
-            ? Math.max(1, Math.min(window.devicePixelRatio, 3))
-            : 1;
-        const baseRatio = format === 'pdf'
-            ? Math.max(1.5, Math.min(browserRatio, 2))
-            : Math.max(2, Math.min(browserRatio, 3));
-        const pixelRatio = previewDeviceMode === 'mobile'
-            ? Math.min(3, baseRatio + 0.5)
-            : (previewDeviceMode === 'tablet' ? Math.min(3, baseRatio + 0.25) : baseRatio);
-        const params = new URLSearchParams();
-        params.set('format', format);
-        params.set('mode', 'draft');
-        params.set('pixelRatio', String(Number(pixelRatio.toFixed(2))));
-        if (previewDeviceMode !== 'auto') {
-            params.set('device', previewDeviceMode);
-        }
-        const url = resolveRouteForOpen(`/bi/screens/${id}/export?${params.toString()}`);
-        const popup = window.open(url, '_blank', 'noopener,noreferrer');
-        if (!popup) {
-            throw new Error('请允许弹窗后重试导出');
-        }
-    }, [id, previewDeviceMode]);
-
-    const downloadBlob = useCallback((blob: Blob, fileName: string) => {
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    }, []);
-
-    const resolveServerRenderPixelRatio = useCallback((format: 'png' | 'pdf') => {
-        const browserRatio = typeof window !== 'undefined' && Number.isFinite(window.devicePixelRatio)
-            ? Math.max(1, Math.min(window.devicePixelRatio, 3))
-            : 1;
-        const baseRatio = format === 'pdf'
-            ? Math.max(1.5, Math.min(browserRatio, 2))
-            : Math.max(2, Math.min(browserRatio, 3));
-        let tunedRatio = baseRatio;
-        if (previewDeviceMode === 'mobile') {
-            tunedRatio = Math.min(3, baseRatio + 0.5);
-        } else if (previewDeviceMode === 'tablet') {
-            tunedRatio = Math.min(3, baseRatio + 0.25);
-        }
-        return Number(tunedRatio.toFixed(2));
-    }, [previewDeviceMode]);
-
-    const renderExportByServer = useCallback(async (format: 'png' | 'pdf') => {
-        if (!id) {
-            throw new Error('请先保存大屏后再导出');
-        }
-        const pixelRatio = resolveServerRenderPixelRatio(format);
-        const rendered = await analyticsApi.renderScreenExport(id, {
-            format,
-            mode: 'draft',
-            ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
-            pixelRatio,
-            screenSpec: buildScreenPayload(persistedConfig),
-        });
-        const fallbackName = `${config.name || 'screen'}.${format}`;
-        downloadBlob(rendered.blob, rendered.fileName || fallbackName);
-        return rendered;
-    }, [config.name, downloadBlob, id, persistedConfig, previewDeviceMode, resolveServerRenderPixelRatio]);
-
-    const handleExportPng = async () => {
-        let preparedRequestId: string | undefined;
-        let preparedSpecDigest: string | undefined;
-        try {
-            const prepared = await ensureExportAllowed('png');
-            preparedRequestId = prepared?.requestId || undefined;
-            preparedSpecDigest = prepared?.specDigest || undefined;
-        } catch (error) {
-            if (id) {
-                void analyticsApi.reportScreenExport(id, {
-                    status: 'failed',
-                    format: 'png',
-                    mode: 'draft',
-                    resolvedMode: 'draft',
-                    ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
-                    requestId: preparedRequestId,
-                    specDigest: preparedSpecDigest,
-                    message: error instanceof Error ? error.message : 'prepare_failed',
-                });
-            }
-            toast.error(error instanceof Error ? error.message : 'PNG 导出失败');
-            return;
-        }
-        try {
-            const rendered = await renderExportByServer('png');
-            if (id) {
-                void analyticsApi.reportScreenExport(id, {
-                    status: 'success',
-                    format: 'png',
-                    mode: 'draft',
-                    resolvedMode: rendered.resolvedMode || 'draft',
-                    ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
-                    requestId: rendered.requestId || preparedRequestId,
-                    specDigest: rendered.specDigest || preparedSpecDigest,
-                });
-            }
-        } catch (error) {
-            console.warn('Failed to export png by server render, fallback to export page:', error);
-            try {
-                openExportWindow('png');
-                if (id) {
-                    void analyticsApi.reportScreenExport(id, {
-                        status: 'fallback',
-                        format: 'png',
-                        mode: 'draft',
-                        resolvedMode: 'draft',
-                        ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
-                        requestId: preparedRequestId,
-                        specDigest: preparedSpecDigest,
-                        message: error instanceof Error ? error.message : 'server_render_failed',
-                    });
-                }
-            } catch (fallbackError) {
-                console.error('Failed to export png:', fallbackError);
-                if (id) {
-                    void analyticsApi.reportScreenExport(id, {
-                        status: 'failed',
-                        format: 'png',
-                        mode: 'draft',
-                        resolvedMode: 'draft',
-                        ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
-                        requestId: preparedRequestId,
-                        specDigest: preparedSpecDigest,
-                        message: fallbackError instanceof Error ? fallbackError.message : 'export_failed',
-                    });
-                }
-                toast.error(fallbackError instanceof Error ? fallbackError.message : 'PNG 导出失败');
-            }
-        }
-    };
-
-    const handleExportPdf = async () => {
-        let preparedRequestId: string | undefined;
-        let preparedSpecDigest: string | undefined;
-        try {
-            const prepared = await ensureExportAllowed('pdf');
-            preparedRequestId = prepared?.requestId || undefined;
-            preparedSpecDigest = prepared?.specDigest || undefined;
-        } catch (error) {
-            if (id) {
-                void analyticsApi.reportScreenExport(id, {
-                    status: 'failed',
-                    format: 'pdf',
-                    mode: 'draft',
-                    resolvedMode: 'draft',
-                    ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
-                    requestId: preparedRequestId,
-                    specDigest: preparedSpecDigest,
-                    message: error instanceof Error ? error.message : 'prepare_failed',
-                });
-            }
-            toast.error(error instanceof Error ? error.message : 'PDF 导出失败');
-            return;
-        }
-        try {
-            const rendered = await renderExportByServer('pdf');
-            if (id) {
-                void analyticsApi.reportScreenExport(id, {
-                    status: 'success',
-                    format: 'pdf',
-                    mode: 'draft',
-                    resolvedMode: rendered.resolvedMode || 'draft',
-                    ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
-                    requestId: rendered.requestId || preparedRequestId,
-                    specDigest: rendered.specDigest || preparedSpecDigest,
-                });
-            }
-        } catch (error) {
-            console.warn('Failed to export pdf by server render, fallback to export page:', error);
-            try {
-                openExportWindow('pdf');
-                if (id) {
-                    void analyticsApi.reportScreenExport(id, {
-                        status: 'fallback',
-                        format: 'pdf',
-                        mode: 'draft',
-                        resolvedMode: 'draft',
-                        ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
-                        requestId: preparedRequestId,
-                        specDigest: preparedSpecDigest,
-                        message: error instanceof Error ? error.message : 'server_render_failed',
-                    });
-                }
-            } catch (fallbackError) {
-                console.error('Failed to export pdf:', fallbackError);
-                if (id) {
-                    void analyticsApi.reportScreenExport(id, {
-                        status: 'failed',
-                        format: 'pdf',
-                        mode: 'draft',
-                        resolvedMode: 'draft',
-                        ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
-                        requestId: preparedRequestId,
-                        specDigest: preparedSpecDigest,
-                        message: fallbackError instanceof Error ? fallbackError.message : 'export_failed',
-                    });
-                }
-                toast.error(fallbackError instanceof Error ? fallbackError.message : 'PDF 导出失败');
-            }
-        }
-    };
-
-    const handleCreateExploreSession = useCallback(() => {
-        if (!permissions.canRead) {
-            setHeaderActionNotice({
-                tone: 'error',
-                title: '无法创建分析会话',
-                message: '当前账号没有读权限，无法沉淀分析会话。',
-            });
-            return;
-        }
-        setExploreSessionForm({
-            title: `${config.name || '未命名大屏'} 分析会话`,
-            question: `围绕大屏「${config.name || '未命名大屏'}」展开分析`,
-            conclusion: '',
-            tagsInput: '大屏,复盘',
-        });
-        setShowExploreSessionDialog(true);
-    }, [config.name, permissions.canRead]);
-
-    const handleSubmitCreateExploreSession = useCallback(async () => {
-        try {
-            const defaultTitle = `${config.name || '未命名大屏'} 分析会话`;
-            const tags = exploreSessionForm.tagsInput
-                .split(',')
-                .map((item) => item.trim())
-                .filter((item) => item.length > 0)
-                .slice(0, 20);
-            const created = await analyticsApi.createExploreSession({
-                title: exploreSessionForm.title.trim() || defaultTitle,
-                question: exploreSessionForm.question.trim() || null,
-                conclusion: exploreSessionForm.conclusion.trim() || null,
-                tags,
-                steps: buildExploreSessionSteps(config),
-            });
-            const createdId = created?.id != null ? `#${created.id}` : '';
-            setShowExploreSessionDialog(false);
-            setHeaderActionNotice({
-                tone: 'success',
-                title: '分析会话已创建',
-                message: `已创建分析会话 ${createdId || ''}。如需继续编排步骤或分享，请前往分析会话中心。`.trim(),
-            });
-        } catch (error) {
-            console.error('Failed to create explore session:', error);
-            setHeaderActionNotice({
-                tone: 'error',
-                title: '分析会话创建失败',
-                message: error instanceof Error ? error.message : '创建分析会话失败，请稍后重试。',
-            });
-        }
-    }, [config, exploreSessionForm]);
+    const { handleExportPng, handleExportPdf } = useScreenExportActions({
+        id,
+        persistedConfig,
+        previewDeviceMode,
+        screenName: config.name,
+    });
 
     const handleBack = () => {
         if (hasUnsavedChanges && !window.confirm('当前大屏有未保存改动，确认返回列表并放弃这些改动？')) {
@@ -1477,15 +964,6 @@ export function ScreenHeader({
         }
         navigate('/bi/screens');
     };
-
-    const handleCopyUrl = useCallback(async (url: string) => {
-        const copied = await writeTextToClipboard(url);
-        setHeaderActionNotice({
-            tone: copied ? 'success' : 'error',
-            title: copied ? '链接已复制' : '复制失败',
-            message: copied ? url : `复制失败，请手工复制：\n${url}`,
-        });
-    }, []);
 
     const executeMenuAction = useCallback((action: () => void | Promise<void>) => {
         setActiveMenu(null);
@@ -1520,225 +998,6 @@ export function ScreenHeader({
 
     // canExecuteDesignAction / executeDesignAction / canExecuteGovernanceAction / executeGovernanceAction
     // removed — menus now use direct onClick buttons instead of select+execute pattern
-
-    const quickActions: QuickActionItem[] = useMemo(() => {
-        return [
-            {
-                id: 'save',
-                label: isSaving ? '保存中...' : '保存草稿',
-                keywords: 'save 保存 草稿',
-                disabled: isSaving || !permissions.canEdit || lockedByOther,
-                hotkey: 'Ctrl/Cmd + S',
-                run: handleSave,
-            },
-            {
-                id: 'preview',
-                label: '预览大屏',
-                keywords: 'preview 预览',
-                disabled: !id,
-                hotkey: 'Ctrl/Cmd + Shift + P',
-                run: handlePreview,
-            },
-            {
-                id: 'publish',
-                label: isPublishing ? '发布中...' : '发布版本',
-                keywords: 'publish 发布 版本',
-                disabled: isPublishing || !permissions.canPublish || lockedByOther || !id,
-                run: handlePublish,
-            },
-            {
-                id: 'save-template',
-                label: isSavingTemplate ? '模板保存中...' : '保存为模板',
-                keywords: '模板 template 保存',
-                disabled: isSavingTemplate || !permissions.canEdit || lockedByOther,
-                run: handleSaveAsTemplate,
-            },
-            {
-                id: 'version-history',
-                label: isLoadingVersions ? '版本处理中...' : '版本历史/回滚',
-                keywords: '版本 回滚 history rollback',
-                disabled: isLoadingVersions || !permissions.canPublish || !id,
-                run: handleVersionHistory,
-            },
-            {
-                id: 'version-compare',
-                label: isLoadingVersions ? '版本处理中...' : '版本对比',
-                keywords: '版本 对比 compare diff',
-                disabled: isLoadingVersions || !permissions.canRead || !id,
-                run: handleVersionCompare,
-            },
-            {
-                id: 'snapshot',
-                label: '快照与报告',
-                keywords: '快照 截图 定时 报告 snapshot report',
-                disabled: !id,
-                run: () => setShowSnapshotPanel(true),
-            },
-            {
-                id: 'variables',
-                label: '变量管理',
-                keywords: '变量 variable',
-                disabled: false,
-                run: () => setShowVariableManager(true),
-            },
-            {
-                id: 'export-png',
-                label: '导出 PNG',
-                keywords: '导出 export png',
-                disabled: false,
-                run: handleExportPng,
-            },
-            {
-                id: 'export-pdf',
-                label: '导出 PDF',
-                keywords: '导出 export pdf',
-                disabled: false,
-                run: handleExportPdf,
-            },
-            {
-                id: 'command-help',
-                label: '命令面板帮助',
-                keywords: '命令 面板 help 快捷键',
-                disabled: false,
-                hotkey: 'Ctrl/Cmd + K',
-                run: () => message.info('可输入关键词，使用 ↑/↓ 选择，Enter 执行。'),
-            },
-        ];
-    }, [
-        handleExportPdf,
-        handleExportPng,
-        handlePreview,
-        handlePublish,
-        handleSave,
-        handleSaveAsTemplate,
-        handleVersionCompare,
-        handleVersionHistory,
-        id,
-        isPublishing,
-        isSaving,
-        isSavingTemplate,
-        isLoadingVersions,
-        lockedByOther,
-        permissions.canEdit,
-        permissions.canPublish,
-        permissions.canRead,
-    ]);
-
-    const quickRecentOrder = useMemo(() => {
-        const mapping = new Map<string, number>();
-        quickRecentIds.forEach((id, index) => {
-            mapping.set(id, index);
-        });
-        return mapping;
-    }, [quickRecentIds]);
-
-    const filteredQuickActions = useMemo(() => {
-        const keyword = quickKeyword.trim().toLowerCase();
-        const matched = keyword
-            ? quickActions.filter((item) => {
-                const label = item.label.toLowerCase();
-                const extra = String(item.keywords || '').toLowerCase();
-                const hotkey = String(item.hotkey || '').toLowerCase();
-                return label.includes(keyword) || extra.includes(keyword) || hotkey.includes(keyword);
-            })
-            : quickActions.slice();
-        return matched.sort((a, b) => {
-            const aRecent = quickRecentOrder.has(a.id) ? quickRecentOrder.get(a.id)! : Number.MAX_SAFE_INTEGER;
-            const bRecent = quickRecentOrder.has(b.id) ? quickRecentOrder.get(b.id)! : Number.MAX_SAFE_INTEGER;
-            if (aRecent !== bRecent) {
-                return aRecent - bRecent;
-            }
-            const label = a.label.toLowerCase();
-            const labelB = b.label.toLowerCase();
-            return label.localeCompare(labelB, 'zh-CN');
-        });
-    }, [quickActions, quickKeyword, quickRecentOrder]);
-
-    const runQuickAction = useCallback((actionId: string, action: () => void | Promise<void>) => {
-        setShowQuickActions(false);
-        setQuickKeyword('');
-        setQuickActiveIndex(-1);
-        setActiveMenu(null);
-        setQuickRecentIds((prev) => [actionId, ...prev.filter((item) => item !== actionId)].slice(0, 8));
-        window.setTimeout(() => {
-            void Promise.resolve(action()).catch((error) => {
-                console.error('Failed to run quick action:', error);
-            });
-        }, 0);
-    }, []);
-
-    useEffect(() => {
-        if (!showQuickActions) {
-            return;
-        }
-        setQuickActiveIndex((prev) => {
-            const firstEnabled = filteredQuickActions.findIndex((item) => !item.disabled);
-            if (firstEnabled < 0) {
-                return -1;
-            }
-            if (
-                prev >= 0
-                && prev < filteredQuickActions.length
-                && !filteredQuickActions[prev]?.disabled
-            ) {
-                return prev;
-            }
-            return firstEnabled;
-        });
-    }, [filteredQuickActions, showQuickActions]);
-
-    useEffect(() => {
-        if (!showQuickActions || quickActiveIndex < 0) {
-            return;
-        }
-        quickActionRefs.current[quickActiveIndex]?.scrollIntoView({ block: 'nearest' });
-    }, [quickActiveIndex, showQuickActions]);
-
-    useEffect(() => {
-        if (!showQuickActions) {
-            return;
-        }
-        const timer = window.setTimeout(() => {
-            quickInputRef.current?.focus();
-            quickInputRef.current?.select();
-        }, 0);
-        return () => window.clearTimeout(timer);
-    }, [showQuickActions]);
-
-    useEffect(() => {
-        const isTypingTarget = (target: EventTarget | null): boolean => {
-            const node = target as HTMLElement | null;
-            if (!node) return false;
-            const tag = node.tagName;
-            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
-            return node.isContentEditable;
-        };
-        const handleKeyDown = (event: KeyboardEvent) => {
-            const hotkey = event.ctrlKey || event.metaKey;
-            if (hotkey && event.key.toLowerCase() === 'k') {
-                if (isTypingTarget(event.target)) {
-                    return;
-                }
-                event.preventDefault();
-                setShowQuickActions((prev) => {
-                    const next = !prev;
-                    if (next) {
-                        setQuickKeyword('');
-                        setQuickActiveIndex(-1);
-                    }
-                    return next;
-                });
-                return;
-            }
-            if (event.key === 'Escape' && showQuickActions) {
-                event.preventDefault();
-                setShowQuickActions(false);
-                setQuickActiveIndex(-1);
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [showQuickActions]);
 
     return (
         <>
@@ -1782,181 +1041,52 @@ export function ScreenHeader({
                 </div>
 
                 <div className="flex items-center gap-2 min-w-0 shrink">
-                    <div className="flex items-center gap-2 shrink-0" ref={menuContainerRef}>
-                        <div className="header-mobile-primary-menu hidden">
-                            <HeaderMenu
-                                label="操作"
-                                open={activeMenu === 'primary'}
-                                onToggle={() => setActiveMenu((prev) => (prev === 'primary' ? null : 'primary'))}
-                            >
-                                <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
-                                    <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">快捷操作</div>
-                                    <button
-                                        type="button"
-                                        className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
-                                        onClick={() => executeMenuAction(handlePreview)}
-                                        title={`预览大屏（${previewDeviceMode === 'auto' ? '自动' : previewDeviceMode}）`}
-                                    >
-                                        预览
-                                    </button>
-                                    {id && (
-                                        <button
-                                            type="button"
-                                            className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
-                                            onClick={() => executeMenuAction(handlePublish)}
-                                            disabled={isPublishing || !permissions.canPublish || lockedByOther}
-                                            title={lockedByOther ? `当前由 ${lockOwnerText} 持有编辑锁` : '发布当前草稿'}
-                                        >
-                                            {isPublishing ? '发布中...' : '发布'}
-                                        </button>
-                                    )}
-                                    <button
-                                        type="button"
-                                        className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
-                                        onClick={() => executeMenuAction(handleSave)}
-                                        disabled={isSaving || !permissions.canEdit || lockedByOther}
-                                        title={lockedByOther ? `当前由 ${lockOwnerText} 持有编辑锁` : '保存草稿'}
-                                    >
-                                        {isSaving ? '保存中...' : '保存'}
-                                    </button>
-                                </div>
-                            </HeaderMenu>
-                        </div>
-                        {/* --- 1. 视图 --- */}
-                        <HeaderMenu
-                            label="视图"
-                            open={activeMenu === 'tools-view'}
-                            onToggle={() => setActiveMenu((prev) => (prev === 'tools-view' ? null : 'tools-view'))}
-                        >
-                            {onToggleFocusMode && (
-                                <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
-                                    <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">面板</div>
-                                    <button type="button" className={`flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed ${focusMode ? 'border-[var(--color-primary)] bg-[var(--color-primary-light)]' : ''}`} onClick={() => { onToggleFocusMode(); setActiveMenu(null); }} title="Ctrl/Cmd + \\">
-                                        {focusMode ? '退出聚焦' : '聚焦模式'}
-                                    </button>
-                                    {!focusMode && onToggleLibraryPanel && (
-                                        <button type="button" className={`flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed ${showLibraryPanel ? 'border-[var(--color-primary)] bg-[var(--color-primary-light)]' : ''}`} onClick={onToggleLibraryPanel} title="Ctrl/Cmd+Alt+1">
-                                            {showLibraryPanel ? '隐藏左栏' : '显示左栏'}
-                                        </button>
-                                    )}
-                                    {!focusMode && onToggleInspectorPanel && (
-                                        <button type="button" className={`flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed ${showInspectorPanel ? 'border-[var(--color-primary)] bg-[var(--color-primary-light)]' : ''}`} onClick={onToggleInspectorPanel} title="Ctrl/Cmd+Alt+2">
-                                            {showInspectorPanel ? '隐藏右栏' : '显示右栏'}
-                                        </button>
-                                    )}
-                                </div>
-                            )}
-                            <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
-                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">视图</div>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleZoomReset} title="缩放重置为 100%">缩放100%</button>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleZoomFit} title="按当前窗口自动适配缩放">缩放适配</button>
-                                <button type="button" className={`flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed ${showGrid ? 'border-[var(--color-primary)] bg-[var(--color-primary-light)]' : ''}`} onClick={() => dispatch({ type: 'TOGGLE_GRID' })} title="显示/隐藏网格">
-                                    {showGrid ? '隐藏网格' : '显示网格'}
-                                </button>
-                            </div>
-                            <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
-                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">帮助</div>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleShortcutHelp} title="查看快捷键">快捷键</button>
-                            </div>
-                        </HeaderMenu>
-                        {/* --- 2. 编辑 --- */}
-                        <HeaderMenu
-                            label={`编辑${cycleWarnings.length > 0 ? `(${cycleWarnings.length})` : ''}`}
-                            open={activeMenu === 'tools-edit'}
-                            onToggle={() => setActiveMenu((prev) => (prev === 'tools-edit' ? null : 'tools-edit'))}
-                        >
-                            <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
-                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">批量动作</div>
-                                <select className="px-2.5 py-[7px] border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium min-w-[110px] w-full focus:outline-none focus:border-[var(--color-primary)]" value={batchAction} onChange={(e) => setBatchAction(e.target.value as BatchAction)} title="批量动作">
-                                    {BATCH_ACTION_OPTIONS.map((item) => (<option key={item.value} value={item.value}>{item.label}</option>))}
-                                </select>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={executeBatchAction} disabled={!canExecuteBatch} title={canExecuteBatch ? '执行批量动作' : '请先选择组件'}>执行动作</button>
-                            </div>
-                            <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
-                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">联动与设计</div>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => { setActiveMenu(null); setShowLinkageGraph(prev => !prev); }} title="查看组件联动关系图">联动关系图</button>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => setShowVariableManager(true))} title="管理全局变量">变量管理</button>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => setShowInteractionDebugPanel(true))} title="联动调试面板">联动调试</button>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => { setQuickKeyword(''); setShowQuickActions(true); })} title="命令面板 Ctrl/Cmd+K">命令面板</button>
-                            </div>
-                            <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
-                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">更多</div>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(handleCreateExploreSession)} disabled={!permissions.canRead} title="沉淀分析会话">沉淀会话</button>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(handleSaveAsTemplate)} disabled={!permissions.canEdit || isSavingTemplate} title="保存为模板">{isSavingTemplate ? '模板保存中...' : '保存模板'}</button>
-                            </div>
-                        </HeaderMenu>
-                        {/* --- 3. 主题 --- */}
-                        <HeaderMenu
-                            label="主题"
-                            open={activeMenu === 'tools-theme'}
-                            onToggle={() => setActiveMenu((prev) => (prev === 'tools-theme' ? null : 'tools-theme'))}
-                        >
-                            <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
-                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">主题选择</div>
-                                <ThemeSelector value={config.theme || 'legacy-dark'} onChange={handleToolbarThemeChange} />
-                            </div>
-                            <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
-                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">应用与主题包</div>
-                                <select className="px-2.5 py-[7px] border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium min-w-[110px] w-full focus:outline-none focus:border-[var(--color-primary)]" value={themeApplyMode} onChange={(e) => setThemeApplyMode(e.target.value === 'safe' ? 'safe' : 'force')} title="组件样式应用策略">
-                                    <option value="force">强制覆盖</option>
-                                    <option value="safe">仅补缺省</option>
-                                </select>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => applyThemeToAllComponents(themeApplyMode)} title="按当前主题批量刷新组件样式">应用样式</button>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleExportThemePack} title="导出主题包">导出主题</button>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleImportThemePackClick} title="导入主题包">导入主题</button>
-                            </div>
-                        </HeaderMenu>
-                        {/* --- 导出快照（JSON 导入导出已迁移至大屏列表页） --- */}
-                        <HeaderMenu
-                            label="导出"
-                            open={activeMenu === 'tools-io'}
-                            onToggle={() => setActiveMenu((prev) => (prev === 'tools-io' ? null : 'tools-io'))}
-                        >
-                            <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
-                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">导出快照</div>
-                                <label className="text-xs text-[var(--color-text-secondary)] px-1" htmlFor="screen-io-device-mode">预览设备</label>
-                                <select id="screen-io-device-mode" className="px-2.5 py-[7px] border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium min-w-[110px] w-full focus:outline-none focus:border-[var(--color-primary)]" value={previewDeviceMode} onChange={(e) => { const next = e.target.value; if (next === 'pc' || next === 'tablet' || next === 'mobile') { setPreviewDeviceMode(next); return; } setPreviewDeviceMode('auto'); }} title="预览设备模式">
-                                    <option value="auto">自动</option>
-                                    <option value="pc">PC</option>
-                                    <option value="tablet">平板</option>
-                                    <option value="mobile">手机</option>
-                                </select>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(handleExportPng)} disabled={!id} title="导出 PNG 图片">导出 PNG</button>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(handleExportPdf)} disabled={!id} title="导出 PDF 文档">导出 PDF</button>
-                                <div className="text-[11px] text-[var(--color-text-secondary)] px-1 py-0.5">JSON 导入/导出请前往「大屏列表」。</div>
-                            </div>
-                        </HeaderMenu>
-                        {/* --- 4. 版本导出 (kept as-is) --- */}
-                        <HeaderMenu
-                            label="版本"
-                            open={activeMenu === 'tools-release'}
-                            onToggle={() => setActiveMenu((prev) => (prev === 'tools-release' ? null : 'tools-release'))}
-                        >
-                            <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
-                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">版本管理</div>
-                                <label className="text-xs text-[var(--color-text-secondary)] px-1" htmlFor="screen-preview-device-mode">预览设备</label>
-                                <select id="screen-preview-device-mode" className="px-2.5 py-[7px] border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium min-w-[110px] w-full focus:outline-none focus:border-[var(--color-primary)]" value={previewDeviceMode} onChange={(e) => { const next = e.target.value; if (next === 'pc' || next === 'tablet' || next === 'mobile') { setPreviewDeviceMode(next); return; } setPreviewDeviceMode('auto'); }} title="预览设备模式">
-                                    <option value="auto">自动</option>
-                                    <option value="pc">PC</option>
-                                    <option value="tablet">平板</option>
-                                    <option value="mobile">手机</option>
-                                </select>
-                                {id ? (
-                                    <>
-                                        <label className="text-xs text-[var(--color-text-secondary)] px-1" htmlFor="screen-version-action">版本动作</label>
-                                        <select id="screen-version-action" className="px-2.5 py-[7px] border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium min-w-[110px] w-full focus:outline-none focus:border-[var(--color-primary)]" value={versionAction} onChange={(e) => { setVersionAction(e.target.value === 'compare' ? 'compare' : 'history'); }} title="选择版本动作">
-                                            <option value="history">版本历史/回滚</option>
-                                            <option value="compare">版本对比</option>
-                                        </select>
-                                        <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={executeVersionAction} disabled={isLoadingVersions || (versionAction === 'history' ? !permissions.canPublish : !permissions.canRead)} title={versionAction === 'history' ? '查看版本历史并回滚' : '查看版本差异摘要'}>
-                                            {isLoadingVersions ? '加载中...' : '执行版本动作'}
-                                        </button>
-                                    </>
-                                ) : null}
-                            </div>
-                        </HeaderMenu>
-                        <input ref={themeInputRef} type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={handleThemePackFileChange} />
-                    </div>
+                    <ScreenHeaderMenus
+                        menuContainerRef={menuContainerRef}
+                        activeMenu={activeMenu}
+                        setActiveMenu={setActiveMenu}
+                        id={id}
+                        focusMode={focusMode}
+                        showLibraryPanel={showLibraryPanel}
+                        showInspectorPanel={showInspectorPanel}
+                        onToggleFocusMode={onToggleFocusMode}
+                        onToggleLibraryPanel={onToggleLibraryPanel}
+                        onToggleInspectorPanel={onToggleInspectorPanel}
+                        previewDeviceMode={previewDeviceMode}
+                        setPreviewDeviceMode={setPreviewDeviceMode}
+                        versionAction={versionAction}
+                        setVersionAction={setVersionAction}
+                        themeApplyMode={themeApplyMode}
+                        setThemeApplyMode={setThemeApplyMode}
+                        theme={config.theme || 'legacy-dark'}
+                        showGrid={showGrid}
+                        cycleWarningCount={cycleWarnings.length}
+                        permissions={permissions}
+                        lockedByOther={lockedByOther}
+                        lockOwnerText={lockOwnerText}
+                        isPublishing={isPublishing}
+                        isSaving={isSaving}
+                        isLoadingVersions={isLoadingVersions}
+                        themeInputRef={themeInputRef}
+                        executeMenuAction={executeMenuAction}
+                        executeVersionAction={executeVersionAction}
+                        onPreview={handlePreview}
+                        onPublish={handlePublish}
+                        onSave={handleSave}
+                        onThemeChange={handleToolbarThemeChange}
+                        onApplyThemeToAllComponents={applyThemeToAllComponents}
+                        onExportThemePack={handleExportThemePack}
+                        onImportThemePackClick={handleImportThemePackClick}
+                        onThemePackFileChange={handleThemePackFileChange}
+                        onZoomReset={handleZoomReset}
+                        onZoomFit={handleZoomFit}
+                        onToggleGrid={() => dispatch({ type: 'TOGGLE_GRID' })}
+                        onShortcutHelp={handleShortcutHelp}
+                        onToggleLinkageGraph={() => setShowLinkageGraph((prev) => !prev)}
+                        onOpenVariableManager={() => setShowVariableManager(true)}
+                        onExportPng={handleExportPng}
+                        onExportPdf={handleExportPdf}
+                    />
                     <div className="flex items-center gap-2 min-w-0 overflow-visible whitespace-nowrap">
                         <button
                             type="button"
@@ -1991,427 +1121,56 @@ export function ScreenHeader({
                     </div>
                 </div>
             </div>
-            {lockedByOther && (
-                <div className="px-4 py-3 text-xs text-[#f59e0b] border-b border-white/[0.08] shrink-0 bg-[rgba(245,158,11,0.12)]">
-                    编辑锁提示：当前由 {lockOwnerText} 编辑中，保存/发布已被保护性禁用。
-                    {lockErrorText ? ` (${lockErrorText})` : ''}
-                </div>
-            )}
-            {saveFailure && (
-                <div
-                    data-testid="analytics-screen-save-retry-notice"
-                    className="px-4 py-2.5 text-xs border-b border-white/[0.08] shrink-0 flex items-center gap-3"
-                    style={{ color: '#fecaca', background: 'rgba(239,68,68,0.12)' }}
-                >
-                    <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
-                        保存失败：{saveFailure.message}。本地恢复点仍会保留，可修正后重试。
-                    </span>
-                    <span className="text-[11px] text-white/55 shrink-0">
-                        {new Date(saveFailure.failedAt).toLocaleTimeString()}
-                    </span>
-                    <button
-                        type="button"
-                        className="header-btn flex items-center gap-1.5 px-3 py-1.5 border border-white/[0.18] rounded-md bg-white/[0.08] text-white text-[12px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 hover:bg-white/[0.14] disabled:opacity-50 disabled:cursor-not-allowed"
-                        onClick={() => void handleSave()}
-                        disabled={isSaving || !permissions.canEdit || lockedByOther}
-                    >
-                        重试保存
-                    </button>
-                </div>
-            )}
-            {!saveFailure && hasUnsavedChanges && lastRecoverySavedAt && !lockedByOther && (
-                <div
-                    data-testid="analytics-screen-local-recovery-status"
-                    className="px-4 py-2 text-xs text-[#a7f3d0] border-b border-white/[0.08] shrink-0 bg-[rgba(16,185,129,0.08)]"
-                >
-                    本地恢复点已更新：{new Date(lastRecoverySavedAt).toLocaleTimeString()}。异常关闭后可恢复当前编辑内容。
-                </div>
-            )}
-            {/* Sprint-24 F3：历史大屏 / 模板复制等路径可能落到 classification=null。
-                此处给所有具备编辑权限的人一条黄色非阻塞提示，引导补登；不影响打开/查看/编辑。
-                没有 id（全新创建草稿）也保留提示，避免用户保存时再被后端 400 打断。 */}
-            {!config.classification && permissions.canEdit && (
-                <div
-                    data-testid="analytics-screen-header-classification-missing"
-                    className="px-4 py-2.5 text-xs text-[#f59e0b] border-b border-white/[0.08] shrink-0 bg-[rgba(245,158,11,0.12)] flex items-center gap-2"
-                >
-                    <span style={{ fontSize: 14, lineHeight: 1 }}>⚠</span>
-                    <span>
-                        本大屏尚未设置密级。未设密级时大屏对所有登录用户可见，建议在右侧
-                        <strong style={{ margin: '0 4px' }}>属性面板 → 密级</strong>
-                        中补登（公开 / 内部 / 秘密 / 机密 之一），保存后将按密级管控可见范围。
-                    </span>
-                </div>
-            )}
-            {headerActionNotice && (
-                <div
-                    data-testid="analytics-screen-header-action-notice"
-                    style={{
-                        marginTop: 10,
-                        padding: '12px 14px',
-                        borderRadius: 10,
-                        border: headerActionNotice.tone === 'success'
-                            ? '1px solid rgba(16,185,129,0.28)'
-                            : '1px solid rgba(239,68,68,0.28)',
-                        background: headerActionNotice.tone === 'success'
-                            ? 'rgba(16,185,129,0.08)'
-                            : 'rgba(239,68,68,0.08)',
-                        color: headerActionNotice.tone === 'success' ? '#047857' : '#b91c1c',
-                        display: 'grid',
-                        gap: 4,
-                    }}
-                >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-                        <strong>{headerActionNotice.title}</strong>
-                        <button
-                            type="button"
-                            className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={() => setHeaderActionNotice(null)}
-                        >
-                            收起
-                        </button>
-                    </div>
-                    <div style={{ fontSize: 12, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
-                        {headerActionNotice.message}
-                    </div>
-                </div>
-            )}
-
-            {showQuickActions ? (
-                <div
-                    style={{
-                        position: 'fixed',
-                        inset: 0,
-                        zIndex: 21000,
-                        background: 'rgba(10,18,32,0.55)',
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        justifyContent: 'center',
-                        paddingTop: 'min(12vh, 92px)',
-                        paddingLeft: 12,
-                        paddingRight: 12,
-                    }}
-                    onClick={() => {
-                        setShowQuickActions(false);
-                        setQuickActiveIndex(-1);
-                    }}
-                >
-                    <div
-                        style={{
-                            width: 'min(680px, 96vw)',
-                            maxHeight: '70vh',
-                            overflow: 'hidden',
-                            background: '#1e2330',
-                            border: '1px solid rgba(255,255,255,0.1)',
-                            borderRadius: 10,
-                            boxShadow: '0 20px 70px rgba(0,0,0,0.6)',
-                            display: 'grid',
-                            gridTemplateRows: 'auto auto 1fr',
-                            color: '#e2e8f0',
-                        }}
-                        onClick={(event) => event.stopPropagation()}
-                    >
-                        <div style={{ padding: '10px 12px 0', fontSize: 12, color: '#94a3b8' }}>
-                            命令面板（Ctrl/Cmd + K，↑/↓选择，Enter执行，Ctrl/Cmd + Shift + P 预览）
-                        </div>
-                        <div style={{ padding: '8px 12px 10px' }}>
-                            <input
-                                ref={quickInputRef}
-                                type="text"
-                                className="text-base font-semibold text-[var(--color-text-primary)] bg-[var(--color-surface)] border border-[var(--color-primary)] rounded px-2 py-1 outline-none min-w-[200px]"
-                                style={{ width: '100%', minWidth: 0, background: 'rgba(255,255,255,0.06)', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.15)' }}
-                                value={quickKeyword}
-                                onChange={(event) => {
-                                    setQuickKeyword(event.target.value);
-                                    setQuickActiveIndex(-1);
-                                }}
-                                onKeyDown={(event) => {
-                                    if (event.key === 'ArrowDown') {
-                                        event.preventDefault();
-                                        setQuickActiveIndex((prev) => (
-                                            findNextEnabledQuickActionIndex(filteredQuickActions, prev, 1)
-                                        ));
-                                        return;
-                                    }
-                                    if (event.key === 'ArrowUp') {
-                                        event.preventDefault();
-                                        setQuickActiveIndex((prev) => {
-                                            const seed = prev < 0 ? 0 : prev;
-                                            return findNextEnabledQuickActionIndex(filteredQuickActions, seed, -1);
-                                        });
-                                        return;
-                                    }
-                                    if (event.key !== 'Enter') return;
-                                    const selected = quickActiveIndex >= 0
-                                        ? filteredQuickActions[quickActiveIndex]
-                                        : null;
-                                    const fallback = filteredQuickActions.find((item) => !item.disabled);
-                                    const target = selected && !selected.disabled ? selected : fallback;
-                                    if (!target) return;
-                                    event.preventDefault();
-                                    runQuickAction(target.id, target.run);
-                                }}
-                                placeholder="输入关键词：保存 / 预览 / 发布 / 变量 / 导出 ..."
-                            />
-                        </div>
-                        <div style={{ overflowY: 'auto', padding: '0 12px 12px', display: 'grid', gap: 6 }}>
-                            {filteredQuickActions.length === 0 ? (
-                                <div style={{ padding: '20px 12px', fontSize: 13, color: '#94a3b8' }}>
-                                    未匹配到动作，请换个关键词。
-                                </div>
-                            ) : (
-                                filteredQuickActions.map((item, index) => {
-                                    const isRecent = quickRecentOrder.has(item.id);
-                                    return (
-                                    <button
-                                        key={item.id}
-                                        ref={(node) => {
-                                            quickActionRefs.current[index] = node;
-                                        }}
-                                        type="button"
-                                        className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
-                                        style={{
-                                            width: '100%',
-                                            justifyContent: 'flex-start',
-                                            background: index === quickActiveIndex ? 'rgba(99,130,255,0.2)' : undefined,
-                                            borderColor: index === quickActiveIndex ? 'rgba(99,130,255,0.5)' : undefined,
-                                        }}
-                                        disabled={item.disabled}
-                                        onMouseEnter={() => setQuickActiveIndex(index)}
-                                        onClick={() => runQuickAction(item.id, item.run)}
-                                        title={item.label}
-                                    >
-                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                                            <span>{item.label}</span>
-                                            {isRecent ? (
-                                                <span style={{
-                                                    fontSize: 11,
-                                                    padding: '1px 6px',
-                                                    borderRadius: 999,
-                                                    background: 'rgba(56,189,248,0.15)',
-                                                    color: '#38bdf8',
-                                                }}
-                                                >
-                                                    最近
-                                                </span>
-                                            ) : null}
-                                        </span>
-                                        {item.hotkey ? (
-                                            <span style={{ marginLeft: 'auto', fontSize: 11, color: '#94a3b8' }}>
-                                                {item.hotkey}
-                                            </span>
-                                        ) : null}
-                                    </button>
-                                    );
-                                })
-                            )}
-                        </div>
-                    </div>
-                </div>
-            ) : null}
-
-            <GlobalVariableManager
-                open={showVariableManager}
-                variables={config.globalVariables ?? []}
-                cycleWarnings={cycleWarnings}
-                onClose={() => setShowVariableManager(false)}
-                onChange={(next) => updateConfig({ globalVariables: next })}
+            <ScreenHeaderNotices
+                lockedByOther={lockedByOther}
+                lockOwnerText={lockOwnerText}
+                lockErrorText={lockErrorText}
+                saveFailure={saveFailure}
+                hasUnsavedChanges={hasUnsavedChanges}
+                lastRecoverySavedAt={lastRecoverySavedAt}
+                hasClassification={!!config.classification}
+                canEdit={permissions.canEdit}
+                isSaving={isSaving}
+                onRetrySave={handleSave}
             />
 
-            <InteractionDebugPanel
-                open={showInteractionDebugPanel}
+            <ScreenHeaderPanels
+                config={config}
+                selectedIds={selectedIds}
                 cycleWarnings={cycleWarnings}
-                onClose={() => setShowInteractionDebugPanel(false)}
-            />
-
-            <PublishResultModal
-                open={publishModalOpen}
-                onClose={() => setPublishModalOpen(false)}
+                showVariableManager={showVariableManager}
+                onCloseVariableManager={() => setShowVariableManager(false)}
+                onChangeVariables={(next) => updateConfig({ globalVariables: next })}
+                publishModalOpen={publishModalOpen}
+                onClosePublishModal={() => setPublishModalOpen(false)}
                 publishInfo={publishInfo}
                 isOwner={permissions.isOwner}
-            />
-
-            <ScreenConflictPanel
-                open={showConflictPanel}
-                conflict={lastConflict}
-                loading={conflictLoading}
-                onClose={() => setShowConflictPanel(false)}
-                onReloadLatest={handleReloadLatestDraft}
+                showConflictPanel={showConflictPanel}
+                lastConflict={lastConflict}
+                conflictLoading={conflictLoading}
+                onCloseConflictPanel={() => setShowConflictPanel(false)}
+                onReloadLatestDraft={handleReloadLatestDraft}
                 onSelectConflictComponents={(ids) => {
                     const idSet = new Set((config.components ?? []).map((item) => item.id));
                     const filtered = ids.filter((item) => idSet.has(item));
                     selectComponents(filtered);
                 }}
+                showVersionComparePanel={showVersionComparePanel}
+                versionDiff={versionDiff}
+                onCloseVersionComparePanel={() => setShowVersionComparePanel(false)}
+                showVersionComparePicker={showVersionComparePicker}
+                versionCandidates={versionCandidates}
+                isLoadingVersions={isLoadingVersions}
+                onCloseVersionComparePicker={() => setShowVersionComparePicker(false)}
+                onConfirmVersionCompare={handleConfirmVersionCompare}
+                showVersionRollbackPanel={showVersionRollbackPanel}
+                onCloseVersionRollbackPanel={() => setShowVersionRollbackPanel(false)}
+                onConfirmVersionRollback={handleConfirmVersionRollback}
+                showVersionHistoryPanel={showVersionHistoryPanel}
+                onCloseVersionHistoryPanel={() => setShowVersionHistoryPanel(false)}
+                showLinkageGraph={showLinkageGraph}
+                onCloseLinkageGraph={() => setShowLinkageGraph(false)}
             />
-
-            <ScreenVersionComparePanel
-                open={showVersionComparePanel}
-                diff={versionDiff}
-                onClose={() => setShowVersionComparePanel(false)}
-            />
-
-            <ScreenVersionComparePickerPanel
-                open={showVersionComparePicker}
-                versions={versionCandidates}
-                loading={isLoadingVersions}
-                onClose={() => setShowVersionComparePicker(false)}
-                onCompare={handleConfirmVersionCompare}
-            />
-
-            <ScreenVersionRollbackPanel
-                open={showVersionRollbackPanel}
-                versions={versionCandidates}
-                loading={isLoadingVersions}
-                onClose={() => setShowVersionRollbackPanel(false)}
-                onRollback={handleConfirmVersionRollback}
-            />
-
-            <VersionHistoryPanel
-                open={showVersionHistoryPanel}
-                versions={versionCandidates}
-                currentConfig={config}
-                loading={isLoadingVersions}
-                onClose={() => setShowVersionHistoryPanel(false)}
-                onRollback={handleConfirmVersionRollback}
-                onCompare={handleConfirmVersionCompare}
-            />
-
-            <ScreenSnapshotPanel
-                open={showSnapshotPanel}
-                screenId={id}
-                onClose={() => setShowSnapshotPanel(false)}
-            />
-
-            <Modal
-                open={showSaveTemplateDialog}
-                onCancel={() => setShowSaveTemplateDialog(false)}
-                title="保存为模板"
-                width={520}
-                footer={(
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                        <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => setShowSaveTemplateDialog(false)}>
-                            取消
-                        </button>
-                        <button
-                            type="button"
-                            className="header-btn save-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-primary)] rounded-md bg-[var(--color-primary)] text-white text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 hover:bg-[var(--color-primary-dark)] disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={() => void handleSubmitSaveAsTemplate()}
-                            disabled={isSavingTemplate || !templateForm.name.trim()}
-                        >
-                            {isSavingTemplate ? '保存中...' : '确认保存'}
-                        </button>
-                    </div>
-                )}
-            >
-                <div style={{ display: 'grid', gap: 12 }}>
-                    <label style={{ display: 'grid', gap: 6 }}>
-                        <span>模板名称</span>
-                        <input
-                            className="text-base font-semibold text-[var(--color-text-primary)] bg-[var(--color-surface)] border border-[var(--color-primary)] rounded px-2 py-1 outline-none min-w-[200px]"
-                            value={templateForm.name}
-                            onChange={(event) => setTemplateForm((current) => ({ ...current, name: event.target.value }))}
-                            placeholder="输入模板名称"
-                        />
-                    </label>
-                    <label style={{ display: 'grid', gap: 6 }}>
-                        <span>模板描述</span>
-                        <textarea
-                            className="text-base font-semibold text-[var(--color-text-primary)] bg-[var(--color-surface)] border border-[var(--color-primary)] rounded px-2 py-1 outline-none min-w-[200px]"
-                            value={templateForm.description}
-                            onChange={(event) => setTemplateForm((current) => ({ ...current, description: event.target.value }))}
-                            placeholder="输入模板描述"
-                            rows={4}
-                            style={{ resize: 'vertical' }}
-                        />
-                    </label>
-                    <label style={{ display: 'grid', gap: 6 }}>
-                        <span>可见范围</span>
-                        <select
-                            className="px-2.5 py-[7px] border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium min-w-[110px] w-full focus:outline-none focus:border-[var(--color-primary)]"
-                            value={templateForm.visibilityScope}
-                            onChange={(event) => setTemplateForm((current) => ({
-                                ...current,
-                                visibilityScope: event.target.value as 'personal' | 'team' | 'global',
-                            }))}
-                        >
-                            <option value="personal">个人</option>
-                            <option value="team">团队</option>
-                            <option value="global">全局</option>
-                        </select>
-                    </label>
-                </div>
-            </Modal>
-
-            <Modal
-                open={showExploreSessionDialog}
-                onCancel={() => setShowExploreSessionDialog(false)}
-                title="沉淀分析会话"
-                width={720}
-                footer={(
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                        <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => setShowExploreSessionDialog(false)}>
-                            取消
-                        </button>
-                        <button
-                            type="button"
-                            className="header-btn save-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-primary)] rounded-md bg-[var(--color-primary)] text-white text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 hover:bg-[var(--color-primary-dark)] disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={() => void handleSubmitCreateExploreSession()}
-                            disabled={!exploreSessionForm.title.trim()}
-                        >
-                            创建会话
-                        </button>
-                    </div>
-                )}
-            >
-                <div style={{ display: 'grid', gap: 12 }}>
-                    <label style={{ display: 'grid', gap: 6 }}>
-                        <span>会话标题</span>
-                        <input
-                            className="text-base font-semibold text-[var(--color-text-primary)] bg-[var(--color-surface)] border border-[var(--color-primary)] rounded px-2 py-1 outline-none min-w-[200px]"
-                            value={exploreSessionForm.title}
-                            onChange={(event) => setExploreSessionForm((current) => ({ ...current, title: event.target.value }))}
-                            placeholder="输入会话标题"
-                        />
-                    </label>
-                    <label style={{ display: 'grid', gap: 6 }}>
-                        <span>问题描述</span>
-                        <textarea
-                            className="text-base font-semibold text-[var(--color-text-primary)] bg-[var(--color-surface)] border border-[var(--color-primary)] rounded px-2 py-1 outline-none min-w-[200px]"
-                            value={exploreSessionForm.question}
-                            onChange={(event) => setExploreSessionForm((current) => ({ ...current, question: event.target.value }))}
-                            rows={3}
-                            style={{ resize: 'vertical' }}
-                        />
-                    </label>
-                    <label style={{ display: 'grid', gap: 6 }}>
-                        <span>阶段结论</span>
-                        <textarea
-                            className="text-base font-semibold text-[var(--color-text-primary)] bg-[var(--color-surface)] border border-[var(--color-primary)] rounded px-2 py-1 outline-none min-w-[200px]"
-                            value={exploreSessionForm.conclusion}
-                            onChange={(event) => setExploreSessionForm((current) => ({ ...current, conclusion: event.target.value }))}
-                            rows={3}
-                            style={{ resize: 'vertical' }}
-                        />
-                    </label>
-                    <label style={{ display: 'grid', gap: 6 }}>
-                        <span>标签</span>
-                        <input
-                            className="text-base font-semibold text-[var(--color-text-primary)] bg-[var(--color-surface)] border border-[var(--color-primary)] rounded px-2 py-1 outline-none min-w-[200px]"
-                            value={exploreSessionForm.tagsInput}
-                            onChange={(event) => setExploreSessionForm((current) => ({ ...current, tagsInput: event.target.value }))}
-                            placeholder="逗号分隔，如：大屏,复盘"
-                        />
-                    </label>
-                </div>
-            </Modal>
-
-            {showLinkageGraph && (
-                <LinkageGraphPanel
-                    config={config}
-                    selectedIds={selectedIds}
-                    onClose={() => setShowLinkageGraph(false)}
-                />
-            )}
         </>
     );
 }

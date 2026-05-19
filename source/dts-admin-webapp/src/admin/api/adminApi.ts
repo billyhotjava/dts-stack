@@ -11,6 +11,7 @@ import type {
 	OrganizationUpdatePayload,
 	PagedResult,
 	PermissionCatalogSection,
+	PortalMenuBulkVisibilityPayload,
 	PortalMenuCollection,
 	PortalMenuItem,
 	RoleAssignmentUser,
@@ -223,6 +224,12 @@ export const adminApi = {
 		apiClient.put<PortalMenuCollection>({
 			url: `/admin/portal/menus/${id}`,
 			data: menu,
+		}),
+
+	batchUpdatePortalMenuVisibility: (payload: PortalMenuBulkVisibilityPayload) =>
+		apiClient.post<PortalMenuCollection | ChangeRequest>({
+			url: "/admin/portal/menus/batch-visibility",
+			data: payload,
 		}),
 
 	deletePortalMenu: (id: number) =>

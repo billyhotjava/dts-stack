@@ -238,6 +238,9 @@ load_env_runtime_exports() {
 
     key="$(printf '%s' "$key" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
     value="${value%$'\r'}"
+    if [[ "$value" =~ ^\"(.*)\"$ ]] || [[ "$value" =~ ^\'(.*)\'$ ]]; then
+      value="${BASH_REMATCH[1]}"
+    fi
 
     if [[ -z "$key" ]]; then
       continue

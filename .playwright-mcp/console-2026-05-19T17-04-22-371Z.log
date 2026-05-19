@@ -1,0 +1,15 @@
+[     345ms] [LOG] i18next: languageChanged zh_CN @ http://127.0.0.1:18011/node_modules/.vite/deps/i18next.js?v=cf77bd26:203
+[     346ms] [LOG] i18next: initialized {debug: true, initImmediate: true, ns: Array(1), defaultNS: Array(1), fallbackLng: Array(1)} @ http://127.0.0.1:18011/node_modules/.vite/deps/i18next.js?v=cf77bd26:203
+[     369ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:18011/node_modules/.vite/deps/chunk-3VTW7PKX.js?v=cf77bd26:21608
+[     761ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://127.0.0.1:18011/auth/login?reason=signed-out:0
+[  110920ms] [LOG] [vite] server connection lost. Polling for restart... @ http://127.0.0.1:18011/@vite/client:963
+[  110921ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:18011/' failed: Error during WebSocket handshake: net::ERR_CONNECTION_RESET @ http://127.0.0.1:18011/@vite/client:1034
+[  111923ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:18011/' failed: Error during WebSocket handshake: net::ERR_CONNECTION_RESET @ http://127.0.0.1:18011/@vite/client:1034
+[  112924ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:18011/' failed: Error during WebSocket handshake: net::ERR_CONNECTION_RESET @ http://127.0.0.1:18011/@vite/client:1034
+[  113925ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:18011/' failed: Error during WebSocket handshake: net::ERR_CONNECTION_RESET @ http://127.0.0.1:18011/@vite/client:1034
+[  114927ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:18011/' failed: Error during WebSocket handshake: net::ERR_CONNECTION_RESET @ http://127.0.0.1:18011/@vite/client:1034
+[  115928ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:18011/' failed: Error during WebSocket handshake: net::ERR_CONNECTION_RESET @ http://127.0.0.1:18011/@vite/client:1034
+[  118931ms] [LOG] i18next: languageChanged zh_CN @ http://127.0.0.1:18011/node_modules/.vite/deps/i18next.js?v=cf77bd26:203
+[  118931ms] [LOG] i18next: initialized {debug: true, initImmediate: true, ns: Array(1), defaultNS: Array(1), fallbackLng: Array(1)} @ http://127.0.0.1:18011/node_modules/.vite/deps/i18next.js?v=cf77bd26:203
+[  118934ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:18011/node_modules/.vite/deps/chunk-3VTW7PKX.js?v=cf77bd26:21608
+[  119425ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://127.0.0.1:18011/auth/login?reason=signed-out:0

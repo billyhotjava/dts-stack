@@ -3,6 +3,8 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 
 const screenHeaderPath = new URL("./ScreenHeader.tsx", import.meta.url);
+const screenHeaderNoticesPath = new URL("./ScreenHeaderNotices.tsx", import.meta.url);
+const screenExportActionsPath = new URL("./useScreenExportActions.ts", import.meta.url);
 
 test("ScreenHeader validates and saves the draft before publishing", async () => {
 	const source = await readFile(screenHeaderPath, "utf8");
@@ -28,7 +30,7 @@ test("ScreenHeader does not expose editor security governance placeholders", asy
 test("ScreenHeader explicitly imports every helper symbol it references", async () => {
 	const source = await readFile(screenHeaderPath, "utf8");
 
-	// THEME_OPTIONS 在 normalizeTheme + themeLabel 处使用，必须列在 from './helpers' 的 import 里
+	// THEME_OPTIONS 在主题包导入校验中使用，必须列在 from './helpers' 的 import 里
 	assert.match(source, /THEME_OPTIONS/);
 	assert.match(
 		source,
@@ -39,10 +41,13 @@ test("ScreenHeader explicitly imports every helper symbol it references", async 
 // Sprint-24 F3：未设密级的大屏（含历史老大屏）应给出非阻塞提示，引导补登。
 // 不能再用「打不开就报 ReferenceError」这种破体验作为提醒。
 test("ScreenHeader shows a non-blocking notice when classification is missing", async () => {
-	const source = await readFile(screenHeaderPath, "utf8");
+	const screenHeaderSource = await readFile(screenHeaderPath, "utf8");
+	const noticesSource = await readFile(screenHeaderNoticesPath, "utf8");
 
-	assert.match(source, /analytics-screen-header-classification-missing/);
-	assert.match(source, /!config\.classification && permissions\.canEdit/);
+	assert.match(screenHeaderSource, /hasClassification=\{!!config\.classification\}/);
+	assert.match(screenHeaderSource, /canEdit=\{permissions\.canEdit\}/);
+	assert.match(noticesSource, /analytics-screen-header-classification-missing/);
+	assert.match(noticesSource, /!hasClassification && canEdit/);
 });
 
 // Sprint-24 F3：classification 走专属 PATCH 端点。后端 PUT /{id} 故意不接受
@@ -63,11 +68,30 @@ test("ScreenHeader saveScreen patches classification before PUT when changed", a
 });
 
 test("ScreenHeader exposes save failure retry and local recovery status", async () => {
-	const source = await readFile(screenHeaderPath, "utf8");
+	const screenHeaderSource = await readFile(screenHeaderPath, "utf8");
+	const noticesSource = await readFile(screenHeaderNoticesPath, "utf8");
 
-	assert.match(source, /saveFailure/);
-	assert.match(source, /analytics-screen-save-retry-notice/);
-	assert.match(source, /重试保存/);
-	assert.match(source, /analytics-screen-local-recovery-status/);
-	assert.match(source, /setLastRecoverySavedAt\(savedAt\)/);
+	assert.match(screenHeaderSource, /saveFailure=\{saveFailure\}/);
+	assert.match(noticesSource, /analytics-screen-save-retry-notice/);
+	assert.match(noticesSource, /重试保存/);
+	assert.match(noticesSource, /analytics-screen-local-recovery-status/);
+	assert.match(screenHeaderSource, /setLastRecoverySavedAt\(savedAt\)/);
+});
+
+test("ScreenHeader delegates export preparation, render, fallback, and report flow to a typed hook", async () => {
+	const screenHeaderSource = await readFile(screenHeaderPath, "utf8");
+	const exportActionsSource = await readFile(screenExportActionsPath, "utf8");
+
+	assert.match(screenHeaderSource, /useScreenExportActions\(\{/);
+	assert.match(screenHeaderSource, /handleExportPng/);
+	assert.match(screenHeaderSource, /handleExportPdf/);
+	assert.equal(screenHeaderSource.includes("prepareScreenExport"), false);
+	assert.equal(screenHeaderSource.includes("renderScreenExport"), false);
+	assert.equal(screenHeaderSource.includes("reportScreenExport"), false);
+
+	assert.match(exportActionsSource, /prepareScreenExport/);
+	assert.match(exportActionsSource, /renderScreenExport/);
+	assert.match(exportActionsSource, /reportScreenExport/);
+	assert.match(exportActionsSource, /openExportWindow/);
+	assert.match(exportActionsSource, /status,\s*format,\s*mode: 'draft'/);
 });
