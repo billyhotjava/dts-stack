@@ -45,13 +45,13 @@ React Flow draft
 | ID | Feature | 优先级 | Task 数 | 状态 | 依赖 |
 |----|---------|--------|---------|------|------|
 | F1 | platform 契约与 dbt 验证网关 | P0 | 5 | IN_PROGRESS | Sprint-31A, Sprint-31 |
-| F2 | React Flow 语义图画布 | P0 | 5 | READY | F1 |
+| F2 | React Flow 语义图画布 | P0 | 5 | IN_PROGRESS | F1 |
 | F3 | 指标公式与口径设计器 | P0 | 5 | READY | F1, F2 |
 | F4 | DWS/ADS 模型编排与 artifact 生成 | P0 | 5 | READY | F1, F2, F3 |
 | F5 | 验证、发布、血缘与消费闭环 | P0 | 5 | READY | F1-F4 |
 | F6 | 兼容迁移、IT 与回滚 | P0 | 4 | READY | F1-F5 |
 
-**统计**: READY=28, IN_PROGRESS=1, DONE=0, BLOCKED=0
+**统计**: READY=27, IN_PROGRESS=1, DONE=1, BLOCKED=0
 
 ## 已完成基线
 

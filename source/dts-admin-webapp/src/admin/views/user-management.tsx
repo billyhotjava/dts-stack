@@ -1,5 +1,4 @@
 import { Button, Table } from "antd";
-import { EditOutlined, EyeOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -381,13 +380,12 @@ export default function UserManagementView() {
         onCell: () => ({ style: { verticalAlign: "middle" } }),
         render: (_, record) => (
           <div className="flex items-center gap-2 justify-end">
-            <Button size="small" type="default" icon={<EditOutlined />} onClick={() => setModalState({ open: true, mode: "edit", target: toKeycloakUser(record) })}>
+            <Button size="small" type="default" onClick={() => setModalState({ open: true, mode: "edit", target: toKeycloakUser(record) })}>
               编辑
             </Button>
             <Button
               size="small"
               type="text"
-              icon={<EyeOutlined />}
               onClick={() => {
                 const id = record.keycloakId || record.username;
                 if (!id) return;
@@ -445,11 +443,9 @@ export default function UserManagementView() {
                 setPagination((prev) => ({ ...prev, current: 1 }));
               }}
             >
-              <Icon icon="solar:magnifer-linear" className="mr-1 h-4 w-4" />
               搜索
             </Button>
             <Button type="primary" onClick={() => setModalState({ open: true, mode: "create" })}>
-              <Icon icon="solar:add-circle-bold" className="mr-1 h-4 w-4" />
               新建用户
             </Button>
           </div>

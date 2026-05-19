@@ -1,7 +1,7 @@
 # F2: React Flow 语义图画布
 
 **优先级**: P0
-**状态**: READY
+**状态**: IN_PROGRESS
 
 ## 目标
 
@@ -11,7 +11,7 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| T01 | React Flow 基础架构 | P0 | READY | F1 |
+| T01 | React Flow 基础架构 | P0 | DONE | F1 |
 | T02 | 节点池和字段树 | P0 | READY | T01 |
 | T03 | Join 边与 fanout 风险 | P0 | READY | T02 |
 | T04 | Graph draft 保存与加载 | P0 | READY | T03 |

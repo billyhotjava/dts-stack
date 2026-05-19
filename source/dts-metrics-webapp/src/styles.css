@@ -1800,6 +1800,14 @@ pre {
 	text-align: left;
 }
 
+.semantic-field-row[draggable="true"] {
+	cursor: grab;
+}
+
+.semantic-field-row[draggable="true"]:active {
+	cursor: grabbing;
+}
+
 .semantic-field-row strong,
 .semantic-field-row em {
 	display: block;
@@ -1850,58 +1858,126 @@ pre {
 }
 
 .semantic-canvas {
-	position: relative;
-	overflow: auto;
+	display: flex;
+	min-height: 430px;
+	overflow: hidden;
+	flex-direction: column;
 	border: 1px solid #e4ebf4;
 	border-radius: 8px;
-	background:
-		linear-gradient(#f8fafc 1px, transparent 1px),
-		linear-gradient(90deg, #f8fafc 1px, transparent 1px),
-		#fff;
-	background-size: 20px 20px;
+	background: #fff;
 }
 
-.semantic-canvas-edges {
-	position: absolute;
-	inset: 0;
-	width: 100%;
-	height: 100%;
-	min-width: 760px;
-	pointer-events: none;
-}
-
-.semantic-canvas-edges text {
-	font-size: 12px;
-	font-weight: 700;
-}
-
-.semantic-node {
-	position: absolute;
+.semantic-flow-toolbar {
 	display: flex;
-	min-height: 108px;
-	cursor: pointer;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	border-bottom: 1px solid #e4ebf4;
+	background: linear-gradient(180deg, #f8fbff, #fff);
+	padding: 10px 14px;
+}
+
+.semantic-flow-toolbar > div:first-child {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.semantic-flow-toolbar strong {
+	color: #061126;
+	font-size: 14px;
+}
+
+.semantic-flow-toolbar span {
+	color: #526789;
+	font-size: 12px;
+}
+
+.semantic-flow-legend {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	gap: 8px;
+}
+
+.semantic-flow-legend span,
+.semantic-flow-selected .chip {
+	border: 1px solid #d8e2ef;
+	border-radius: 999px;
+	background: #fff;
+	padding: 4px 9px;
+	color: #526789;
+	font-size: 12px;
+}
+
+.semantic-flow-legend .legend-base {
+	border-color: #86bce8;
+	background: #eef8ff;
+	color: #176fa9;
+}
+
+.semantic-flow-legend .legend-selected {
+	border-color: #6fc7b6;
+	background: #effbf8;
+	color: #0f766e;
+}
+
+.semantic-flow-surface {
+	height: 360px;
+	min-height: 360px;
+	background: #f9fbfe;
+}
+
+.semantic-flow-surface .react-flow__node {
+	border-radius: 8px;
+	color: #061126;
+	font-family: inherit;
+}
+
+.semantic-flow-node {
+	display: flex;
 	flex-direction: column;
 	gap: 7px;
-	border: 1px solid #9fb1c8;
-	border-radius: 8px;
-	background: #fff;
-	box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
-	padding: 12px;
 	text-align: left;
 }
 
-.semantic-node:disabled {
-	cursor: default;
+.semantic-flow-node.field-node {
+	min-height: 72px;
 }
 
-.semantic-node.base {
-	border-color: #288dd2;
-	background: #eef8ff;
+.semantic-flow-node.field-node.metric .semantic-node-head em {
+	background: #d9f8ef;
+	color: #0f766e;
 }
 
-.semantic-node.selected {
-	border-color: #0f9f83;
-	background: #effbf8;
+.semantic-flow-node.field-node.dimension .semantic-node-head em {
+	background: #e2f2ff;
+	color: #176fa9;
+}
+
+.semantic-flow-selected {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	border-top: 1px solid #edf2f7;
+	padding: 10px 12px;
+}
+
+.semantic-flow-selected .chip {
+	cursor: pointer;
+}
+
+.semantic-flow-selected .chip.warn {
+	border-color: #f0bd62;
+	background: #fff7e8;
+	color: #9a5b00;
+}
+
+.semantic-flow-selected .chip.approval {
+	border-color: #c4b5fd;
+	background: #f5f3ff;
+	color: #6d28d9;
 }
 
 .semantic-node-head {
@@ -1925,19 +2001,17 @@ pre {
 }
 
 .semantic-node-meta,
-.semantic-node > span:not(.semantic-node-head):not(.semantic-node-security) {
+.semantic-flow-node > span:not(.semantic-node-head):not(.semantic-node-security) {
 	color: #526789;
 	font-size: 12px;
 }
 
 .semantic-canvas-warnings {
-	position: absolute;
-	right: 12px;
-	bottom: 12px;
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
-	max-width: 360px;
+	border-top: 1px solid #edf2f7;
+	padding: 10px 12px 12px;
 }
 
 .semantic-canvas-warnings span {

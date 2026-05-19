@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import type { DragEvent } from "react";
 import {
 	buildSemanticFieldExplorerTree,
 	collectSemanticFieldExplorerExpandedKeys,
@@ -6,6 +7,8 @@ import {
 	type SemanticFieldExplorerNode,
 } from "./semanticFieldExplorer.helpers";
 import type { SemanticModelMeta } from "./semanticTypes";
+
+const FIELD_DRAG_MIME = "application/vnd.dts-metrics-field";
 
 type Props = {
 	models: SemanticModelMeta[];
@@ -30,16 +33,38 @@ function SemanticFieldNode({
 	onToggleDimension: (fieldId: string) => void;
 }) {
 	if (node.type === "field") {
+		const draggable = canEdit && Boolean(node.fieldId && node.fieldKind);
+		const handleDragStart = (event: DragEvent<HTMLButtonElement>) => {
+			if (!node.fieldId || !node.fieldKind) return;
+			event.dataTransfer.setData(
+				FIELD_DRAG_MIME,
+				JSON.stringify({
+					fieldId: node.fieldId,
+					fieldKind: node.fieldKind,
+					name: node.fieldId,
+					label: node.label,
+					role: node.fieldKind,
+					tableName: node.modelId ?? "",
+					modelId: node.modelId,
+				}),
+			);
+			event.dataTransfer.effectAllowed = "copy";
+		};
+
 		return (
 			<button
 				type="button"
 				className={`semantic-field-row ${node.selected ? "selected" : ""}`}
+				data-field-id={node.fieldId}
+				data-field-kind={node.fieldKind}
 				disabled={!canEdit || !node.fieldId}
+				draggable={draggable}
 				onClick={() => {
 					if (!node.fieldId) return;
 					if (node.fieldKind === "metric") onToggleMeasure(node.fieldId);
 					else onToggleDimension(node.fieldId);
 				}}
+				onDragStart={handleDragStart}
 			>
 				<span className={`field-kind ${node.fieldKind}`}>{node.fieldKind === "metric" ? "指标" : "维度"}</span>
 				<span>

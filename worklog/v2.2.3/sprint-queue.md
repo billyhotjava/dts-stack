@@ -481,13 +481,13 @@
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
 | F1-platform-contracts-and-dbt-validation | P0 | 5 | IN_PROGRESS |
-| F2-react-flow-semantic-canvas | P0 | 5 | READY |
+| F2-react-flow-semantic-canvas | P0 | 5 | IN_PROGRESS |
 | F3-metric-formula-designer | P0 | 5 | READY |
 | F4-dws-ads-model-composer | P0 | 5 | READY |
 | F5-validation-publish-consumption | P0 | 5 | READY |
 | F6-compatibility-it-rollout | P0 | 4 | READY |
 
-**统计**: READY=28, IN_PROGRESS=1, DONE=0, BLOCKED=0
+**统计**: READY=27, IN_PROGRESS=1, DONE=1, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-32-202605/README.md`
 **服务拆分设计**: `worklog/v2.2.3/sprint-32-202605/assets/dts-metrics-service-design.md`
 **React Flow 契约**: `worklog/v2.2.3/sprint-32-202605/assets/react-flow-metrics-contract.md`

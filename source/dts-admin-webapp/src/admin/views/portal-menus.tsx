@@ -7,7 +7,6 @@ import { setPortalMenus } from "@/store/portalMenuStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Text } from "@/ui/typography";
 import { Button, Dropdown, Tag } from "antd";
-import { MoreOutlined } from "@ant-design/icons";
 import { Badge } from "@/ui/badge";
 import { Input } from "@/ui/input";
 import { Checkbox } from "@/ui/checkbox";
@@ -766,7 +765,7 @@ function MenuRow({
 										],
 									}}
 								>
-									<Button size="small" type="text" icon={<MoreOutlined />} disabled={busy} />
+									<Button size="small" type="text" disabled={busy}>更多</Button>
 								</Dropdown>
 							) : null}
 						</div>

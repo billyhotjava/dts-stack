@@ -46,4 +46,35 @@ describe("metrics webapp source migration contract", () => {
 		assert.match(semanticApi, /\/bi\/api\/semantic\/query\/preview-sql/);
 		assert.match(semanticApi, /\/api\/semantic\/metrics/);
 	});
+
+	it("renders the semantic relation canvas with React Flow instead of the legacy SVG canvas", () => {
+		const packageJson = JSON.parse(assertFile("package.json"));
+		const canvasComponent = assertFile("src/features/semantic/SemanticModelCanvas.tsx");
+
+		assert.equal(packageJson.dependencies["@xyflow/react"], "^12.10.2");
+		assert.match(canvasComponent, /from "@xyflow\/react"/);
+		assert.match(canvasComponent, /<ReactFlow/);
+		assert.match(canvasComponent, /<Background/);
+		assert.match(canvasComponent, /<Controls/);
+		assert.match(canvasComponent, /@xyflow\/react\/dist\/style\.css/);
+		assert.doesNotMatch(canvasComponent, /<svg/);
+		assert.doesNotMatch(canvasComponent, /semantic-canvas-edges/);
+	});
+
+	it("lets the migrated field tree drag metrics and dimensions into the React Flow canvas", () => {
+		const explorerComponent = assertFile("src/features/semantic/SemanticFieldExplorer.tsx");
+		const canvasComponent = assertFile("src/features/semantic/SemanticModelCanvas.tsx");
+		const designerPage = assertFile("src/pages/semantic/SemanticDesignerPage.tsx");
+
+		assert.match(explorerComponent, /application\/vnd\.dts-metrics-field/);
+		assert.match(explorerComponent, /onDragStart/);
+		assert.match(explorerComponent, /draggable=/);
+		assert.match(canvasComponent, /onDropField/);
+		assert.match(canvasComponent, /onDrop=/);
+		assert.match(canvasComponent, /field:metric:/);
+		assert.match(canvasComponent, /field:dimension:/);
+		assert.match(designerPage, /onDropField=\{handleDropField\}/);
+		assert.match(designerPage, /selectedMeasures=\{selectedMeasures\}/);
+		assert.match(designerPage, /selectedDimensions=\{selectedDimensions\}/);
+	});
 });

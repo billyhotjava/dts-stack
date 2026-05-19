@@ -1,0 +1,69 @@
+[     773ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-UUAH3ILG.js?v=3b44e68c:21606
+[     925ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:5173/bi/api/semantic/meta?exposed_to_modeler=true:0
+[     926ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:5173/api/metrics/health:0
+[     926ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:5173/api/metrics/capabilities:0
+[     926ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:5173/bi/api/semantic/meta?exposed_to_modeler=true:0
+[     926ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:5173/api/metrics/health:0
+[     926ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:5173/api/metrics/workspace/snapshot:0
+[     927ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:5173/api/metrics/capabilities:0
+[     927ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:5173/api/metrics/workspace/snapshot:0
+[     930ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:5173/favicon.ico:0
+[  287054ms] TypeError: Cannot read properties of undefined (reading 'map')
+    at http://127.0.0.1:5173/metrics/src/features/semantic/SemanticModelCanvas.tsx?t=1779185506691:144:31
+    at updateMemo (http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-UUAH3ILG.js?v=3b44e68c:12256:27)
+    at Object.useMemo (http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-UUAH3ILG.js?v=3b44e68c:12772:24)
+    at useMemo (http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-JTR2U2B6.js?v=3b44e68c:1116:29)
+    at SemanticModelCanvas (http://127.0.0.1:5173/metrics/src/features/semantic/SemanticModelCanvas.tsx?t=1779185506691:69:21)
+    at renderWithHooks (http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-UUAH3ILG.js?v=3b44e68c:11594:26)
+    at updateFunctionComponent (http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-UUAH3ILG.js?v=3b44e68c:14628:28)
+    at beginWork (http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-UUAH3ILG.js?v=3b44e68c:15970:22)
+    at HTMLUnknownElement.callCallback2 (http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-UUAH3ILG.js?v=3b44e68c:3678:22)
+    at Object.invokeGuardedCallbackDev (http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-UUAH3ILG.js?v=3b44e68c:3703:24)
+[  287057ms] TypeError: Cannot read properties of undefined (reading 'map')
+    at http://127.0.0.1:5173/metrics/src/features/semantic/SemanticModelCanvas.tsx?t=1779185506691:144:31
+    at updateMemo (http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-UUAH3ILG.js?v=3b44e68c:12256:27)
+    at Object.useMemo (http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-UUAH3ILG.js?v=3b44e68c:12772:24)
+    at useMemo (http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-JTR2U2B6.js?v=3b44e68c:1116:29)
+    at SemanticModelCanvas (http://127.0.0.1:5173/metrics/src/features/semantic/SemanticModelCanvas.tsx?t=1779185506691:69:21)
+    at renderWithHooks (http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-UUAH3ILG.js?v=3b44e68c:11594:26)
+    at updateFunctionComponent (http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-UUAH3ILG.js?v=3b44e68c:14628:28)
+    at beginWork (http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-UUAH3ILG.js?v=3b44e68c:15970:22)
+    at HTMLUnknownElement.callCallback2 (http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-UUAH3ILG.js?v=3b44e68c:3678:22)
+    at Object.invokeGuardedCallbackDev (http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-UUAH3ILG.js?v=3b44e68c:3703:24)
+[  287060ms] [ERROR] The above error occurred in the <SemanticModelCanvas> component:
+
+    at SemanticModelCanvas (http://127.0.0.1:5173/metrics/src/features/semantic/SemanticModelCanvas.tsx?t=1779185506691:54:3)
+    at div
+    at section
+    at div
+    at div
+    at SemanticDesignerPage (http://127.0.0.1:5173/metrics/src/pages/semantic/SemanticDesignerPage.tsx:161:48)
+    at RoutePanel (http://127.0.0.1:5173/metrics/src/app/MetricsShell.tsx:1132:11)
+    at section
+    at main
+    at div
+    at div
+    at App (http://127.0.0.1:5173/metrics/src/app/MetricsShell.tsx:824:37)
+    at App
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries. @ http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-UUAH3ILG.js?v=3b44e68c:14077
+[  287061ms] TypeError: Cannot read properties of undefined (reading 'map')
+    at http://127.0.0.1:5173/metrics/src/features/semantic/SemanticModelCanvas.tsx?t=1779185506691:144:31
+    at updateMemo (http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-UUAH3ILG.js?v=3b44e68c:12256:27)
+    at Object.useMemo (http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-UUAH3ILG.js?v=3b44e68c:12772:24)
+    at useMemo (http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-JTR2U2B6.js?v=3b44e68c:1116:29)
+    at SemanticModelCanvas (http://127.0.0.1:5173/metrics/src/features/semantic/SemanticModelCanvas.tsx?t=1779185506691:69:21)
+    at renderWithHooks (http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-UUAH3ILG.js?v=3b44e68c:11594:26)
+    at updateFunctionComponent (http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-UUAH3ILG.js?v=3b44e68c:14628:28)
+    at beginWork (http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-UUAH3ILG.js?v=3b44e68c:15970:22)
+    at beginWork$1 (http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-UUAH3ILG.js?v=3b44e68c:19804:22)
+    at performUnitOfWork (http://127.0.0.1:5173/metrics/node_modules/.vite/deps/chunk-UUAH3ILG.js?v=3b44e68c:19249:20)
+[  298044ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:5173/bi/api/semantic/meta?exposed_to_modeler=true:0
+[  298044ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:5173/api/metrics/health:0
+[  298044ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:5173/api/metrics/capabilities:0
+[  298045ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:5173/api/metrics/workspace/snapshot:0
+[  298045ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:5173/bi/api/semantic/meta?exposed_to_modeler=true:0
+[  298046ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:5173/api/metrics/health:0
+[  298046ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:5173/api/metrics/capabilities:0
+[  298046ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:5173/api/metrics/workspace/snapshot:0

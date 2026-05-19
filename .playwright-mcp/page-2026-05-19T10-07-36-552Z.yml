@@ -1,0 +1,238 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: DTS Metrics Service
+      - heading "指标与语义中心" [level=1] [ref=e7]
+    - generic "The server is configured with a public base URL of /metrics/ - did you mean to visit /metrics/api/metrics/health instead?" [ref=e8]: 服务状态不可用
+  - generic [ref=e9]:
+    - navigation "指标与语义中心导航" [ref=e10]:
+      - generic [ref=e11]:
+        - paragraph [ref=e12]: 工作台
+        - link "指标工作台" [ref=e13] [cursor=pointer]:
+          - /url: /metrics/center
+        - link "指标资产" [ref=e14] [cursor=pointer]:
+          - /url: /metrics/dictionary
+        - link "指标包" [ref=e15] [cursor=pointer]:
+          - /url: /metrics/packs
+        - link "迁移与回滚" [ref=e16] [cursor=pointer]:
+          - /url: /metrics/migration
+        - link "运行与告警" [ref=e17] [cursor=pointer]:
+          - /url: /metrics/operations
+      - generic [ref=e18]:
+        - paragraph [ref=e19]: 语义建模
+        - link "语义建模流程" [ref=e20] [cursor=pointer]:
+          - /url: /metrics/semantic
+        - link "主题域映射" [ref=e21] [cursor=pointer]:
+          - /url: /metrics/semantic/subjects
+        - link "业务对象 Join" [ref=e22] [cursor=pointer]:
+          - /url: /metrics/semantic/objects
+        - link "指标公式配置" [ref=e23] [cursor=pointer]:
+          - /url: /metrics/semantic/metrics
+        - link "DWS/ADS 数据集" [ref=e24] [cursor=pointer]:
+          - /url: /metrics/semantic/models
+        - link "审核发布与血缘" [ref=e25] [cursor=pointer]:
+          - /url: /metrics/semantic/publish
+        - link "模型运行监控" [ref=e26] [cursor=pointer]:
+          - /url: /metrics/semantic/runs
+    - main [ref=e27]:
+      - generic [ref=e28]:
+        - generic [ref=e29]:
+          - paragraph [ref=e30]: Metric Designer
+          - heading "指标公式配置" [level=2] [ref=e31]
+          - paragraph [ref=e32]: 用可视化方式配置 count、sum、count_if、sum_if、ratio 等指标公式。
+        - generic [ref=e33]:
+          - link "指标字典" [ref=e34] [cursor=pointer]:
+            - /url: /metrics/dictionary
+          - link "配置指标" [ref=e35] [cursor=pointer]:
+            - /url: /metrics/semantic/metrics
+      - generic [ref=e36]:
+        - article [ref=e37]:
+          - paragraph [ref=e38]: 服务归属
+          - paragraph [ref=e39]: dts-metrics
+        - article [ref=e40]:
+          - paragraph [ref=e41]: 启用状态
+          - paragraph [ref=e42]: 待确认
+        - article [ref=e43]:
+          - paragraph [ref=e44]: 当前版本
+          - paragraph [ref=e45]: foundation
+        - article [ref=e46]:
+          - paragraph [ref=e47]: 权限事实源
+          - paragraph [ref=e48]: dts-platform
+      - generic [ref=e50]:
+        - generic [ref=e51]:
+          - generic [ref=e52]:
+            - heading "语义指标设计器" [level=3] [ref=e53]
+            - paragraph [ref=e54]: 迁入 platform 原语义建模链路：基础模型、Join 画布、指标/维度树、筛选、派生指标和 SQL 预览。
+          - generic [ref=e55]:
+            - button "预览 SQL" [ref=e56] [cursor=pointer]
+            - button "保存指标草稿" [ref=e57] [cursor=pointer]
+        - generic [ref=e58]: 语义元数据读取失败：The server is configured with a public base URL of /metrics/ - did you mean to visit /metrics/bi/api/semantic/meta?exposed_to_modeler=true instead?
+        - generic [ref=e59]:
+          - complementary [ref=e60]:
+            - generic [ref=e61]: 基础模型
+            - combobox "基础模型" [ref=e62]:
+              - option "项目明细主体 / 项目管理" [selected]
+              - option "合同明细主体 / 合同管理"
+            - generic [ref=e101]:
+              - strong [ref=e102]: 项目明细主体
+              - generic [ref=e103]: platform 已开放给指标建模的项目明细模型
+              - code [ref=e104]: dwd.dwd_project_detail
+            - generic [ref=e63]:
+              - generic [ref=e105]:
+                - generic [ref=e106]: 2 个模型
+                - generic [ref=e107]: 指标 0
+                - generic [ref=e108]: 维度 0
+                - generic [ref=e109]: 展开 8
+              - textbox "搜索模型、指标、维度" [ref=e110]
+              - generic [ref=e111]:
+                - group [ref=e203]:
+                  - generic "合同管理 4 项" [ref=e204] [cursor=pointer]:
+                    - strong [ref=e205]: 合同管理
+                    - generic [ref=e206]: 4 项
+                  - group [ref=e208]:
+                    - generic "合同明细主体 0 项" [ref=e209] [cursor=pointer]:
+                      - strong [ref=e210]: 合同明细主体
+                      - generic [ref=e211]: 0 项
+                    - generic [ref=e212]:
+                      - group [ref=e213]:
+                        - generic "指标 2 项" [ref=e214] [cursor=pointer]:
+                          - strong [ref=e215]: 指标
+                          - generic [ref=e216]: 2 项
+                        - generic [ref=e217]:
+                          - button "指标 合同金额" [ref=e218] [cursor=pointer]:
+                            - generic [ref=e219]: 指标
+                            - strong [ref=e221]: 合同金额
+                          - button "指标 合同数" [ref=e222] [cursor=pointer]:
+                            - generic [ref=e223]: 指标
+                            - strong [ref=e225]: 合同数
+                      - group [ref=e226]:
+                        - generic "维度 2 项" [ref=e227] [cursor=pointer]:
+                          - strong [ref=e228]: 维度
+                          - generic [ref=e229]: 2 项
+                        - generic [ref=e230]:
+                          - button "维度 供应商" [ref=e231] [cursor=pointer]:
+                            - generic [ref=e232]: 维度
+                            - strong [ref=e234]: 供应商
+                          - button "维度 合同状态" [ref=e235] [cursor=pointer]:
+                            - generic [ref=e236]: 维度
+                            - strong [ref=e238]: 合同状态
+                - group [ref=e112]:
+                  - generic "项目管理 6 项" [ref=e113] [cursor=pointer]:
+                    - strong [ref=e114]: 项目管理
+                    - generic [ref=e115]: 6 项
+                  - group [ref=e117]:
+                    - generic "项目明细主体 0 项 Base" [ref=e118] [cursor=pointer]:
+                      - strong [ref=e119]: 项目明细主体
+                      - generic [ref=e120]: 0 项
+                      - generic [ref=e121]: Base
+                    - generic [ref=e122]:
+                      - group [ref=e123]:
+                        - generic "指标 3 项" [ref=e124] [cursor=pointer]:
+                          - strong [ref=e125]: 指标
+                          - generic [ref=e126]: 3 项
+                        - generic [ref=e127]:
+                          - button "指标 项目数" [ref=e128] [cursor=pointer]:
+                            - generic [ref=e129]: 指标
+                            - strong [ref=e131]: 项目数
+                          - button "指标 延期项目数" [ref=e132] [cursor=pointer]:
+                            - generic [ref=e133]: 指标
+                            - strong [ref=e135]: 延期项目数
+                          - button "指标 直接成本" [ref=e136] [cursor=pointer]:
+                            - generic [ref=e137]: 指标
+                            - strong [ref=e139]: 直接成本
+                      - group [ref=e140]:
+                        - generic "维度 3 项" [ref=e141] [cursor=pointer]:
+                          - strong [ref=e142]: 维度
+                          - generic [ref=e143]: 3 项
+                        - generic [ref=e144]:
+                          - button "维度 统计月份" [ref=e145] [cursor=pointer]:
+                            - generic [ref=e146]: 维度
+                            - strong [ref=e148]: 统计月份
+                          - button "维度 项目类型" [ref=e149] [cursor=pointer]:
+                            - generic [ref=e150]: 维度
+                            - strong [ref=e152]: 项目类型
+                          - button "维度 责任科室" [ref=e153] [cursor=pointer]:
+                            - generic [ref=e154]: 维度
+                            - strong [ref=e156]: 责任科室
+          - generic [ref=e64]:
+            - generic [ref=e65]:
+              - generic [ref=e66]:
+                - heading "模型关系画布" [level=4] [ref=e67]
+                - generic [ref=e68]: 1 条 Join
+              - generic [ref=e69]:
+                - generic [ref=e157]:
+                  - generic [ref=e158]:
+                    - strong [ref=e159]: 关系画布
+                    - generic [ref=e160]: 拖拽节点整理布局，点击候选模型加入 Join
+                  - generic "画布节点状态" [ref=e161]:
+                    - generic [ref=e162]: Base
+                    - generic [ref=e163]: 已选
+                    - generic [ref=e164]: 候选
+                - application [ref=e166]:
+                  - generic [ref=e168]:
+                    - generic:
+                      - generic:
+                        - img
+                        - img:
+                          - group "Edge from dwd_project_detail to dwd_contract_detail" [ref=e239] [cursor=pointer]:
+                            - generic [ref=e242]:
+                              - generic: many_to_one
+                      - generic:
+                        - group [ref=e174] [cursor=pointer]:
+                          - generic [ref=e175]:
+                            - generic [ref=e176]:
+                              - strong [ref=e177]: 项目明细主体
+                              - emphasis [ref=e178]: Base
+                            - generic [ref=e179]: 项目管理
+                            - generic [ref=e180]: 指标 3 / 维度 3
+                            - generic [ref=e181]: CONFIDENTIAL
+                        - group [active] [ref=e182]:
+                          - generic [ref=e183]:
+                            - generic [ref=e184]:
+                              - strong [ref=e185]: 合同明细主体
+                              - emphasis [ref=e186]: 已选
+                            - generic [ref=e187]: 合同管理
+                            - generic [ref=e188]: 指标 2 / 维度 2
+                            - generic [ref=e189]: INTERNAL
+                  - img
+                  - generic "Control Panel" [ref=e190]:
+                    - button "Zoom In" [ref=e191] [cursor=pointer]:
+                      - img [ref=e192]
+                    - button "Zoom Out" [ref=e194] [cursor=pointer]:
+                      - img [ref=e195]
+                    - button "Fit View" [ref=e197] [cursor=pointer]:
+                      - img [ref=e198]
+                  - link "React Flow attribution" [ref=e201] [cursor=pointer]:
+                    - /url: https://reactflow.dev
+                    - text: React Flow
+                - generic "已选 Join" [ref=e244]:
+                  - button "项目明细主体 -> 合同明细主体" [ref=e245] [cursor=pointer]
+                - generic [ref=e247]: "项目明细主体 -> 合同明细主体: fanout 风险"
+            - generic [ref=e70]:
+              - generic [ref=e71]:
+                - heading "SQL / DSL 预览" [level=4] [ref=e72]
+                - generic [ref=e73]: LOCAL_DSL
+              - textbox [ref=e74]: "{ \"base\": \"dwd_project_detail\", \"joins\": [ { \"to\": \"dwd_contract_detail\", \"via\": \"project_id\", \"type\": \"many_to_one\" } ], \"measures\": [], \"dimensions\": [], \"filters\": [], \"derived_metrics\": [ { \"id\": \"direct_cost_execution_rate\", \"label\": \"直接成本执行率\", \"expression\": \"[direct_cost_amount] / [contract_amount]\" } ], \"limit\": 200, \"format\": \"json\" }"
+          - complementary [ref=e75]:
+            - generic [ref=e76]:
+              - heading "属性面板" [level=4] [ref=e77]
+              - generic [ref=e78]: standalone
+            - generic [ref=e79]:
+              - heading "已选指标" [level=4] [ref=e80]
+              - generic [ref=e82]: 从左侧字段树选择
+            - generic [ref=e83]:
+              - heading "已选维度" [level=4] [ref=e84]
+              - generic [ref=e86]: 从左侧字段树选择
+            - generic [ref=e88]:
+              - heading "筛选器" [level=4] [ref=e89]
+              - button "新增" [ref=e90] [cursor=pointer]
+            - generic [ref=e91]:
+              - generic [ref=e92]:
+                - heading "派生指标" [level=4] [ref=e93]
+                - button "新增" [ref=e94] [cursor=pointer]
+              - generic [ref=e95]:
+                - textbox [ref=e96]: 直接成本执行率
+                - textbox [ref=e97]: "[direct_cost_amount] / [contract_amount]"
+                - button "删除" [ref=e98] [cursor=pointer]
+            - generic [ref=e99]: 结果限制
+            - spinbutton "结果限制" [ref=e100]: "200"

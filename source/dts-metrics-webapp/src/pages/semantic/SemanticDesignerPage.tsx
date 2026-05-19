@@ -295,6 +295,13 @@ export default function SemanticDesignerPage({ embedded }: { embedded: boolean }
 			current.includes(dimensionId) ? current.filter((item) => item !== dimensionId) : [...current, dimensionId],
 		);
 	}, []);
+	const handleDropField = useCallback((fieldId: string, fieldKind: "metric" | "dimension") => {
+		if (fieldKind === "metric") {
+			setSelectedMeasures((current) => (current.includes(fieldId) ? current : [...current, fieldId]));
+			return;
+		}
+		setSelectedDimensions((current) => (current.includes(fieldId) ? current : [...current, fieldId]));
+	}, []);
 
 	const previewSql = async () => {
 		if (!currentQuery.base) return;
@@ -395,8 +402,11 @@ export default function SemanticDesignerPage({ embedded }: { embedded: boolean }
 							models={models}
 							baseModelId={baseModelId}
 							selectedJoinTargets={selectedJoinTargets}
+							selectedMeasures={selectedMeasures}
+							selectedDimensions={selectedDimensions}
 							canEdit
 							onToggleJoin={toggleJoinTarget}
+							onDropField={handleDropField}
 						/>
 					</div>
 

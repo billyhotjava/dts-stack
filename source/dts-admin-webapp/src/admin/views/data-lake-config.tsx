@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, Button, Select, Space, Table, Tag } from "antd";
-import { EyeOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { adminApi } from "@/admin/api/adminApi";
 import type { ConnectionTestLog, HiveConnectionTestResult, InfraDataSource } from "@/types/infra";
@@ -144,7 +143,6 @@ export default function DataLakeConfigView() {
 						</Button>
 						<Button
 							size="small"
-							icon={<EyeOutlined />}
 							onClick={() => {
 								if (!record.id) return;
 								navigate(`/admin/data-lake/${record.id}?view=detail`);
@@ -154,7 +152,6 @@ export default function DataLakeConfigView() {
 						</Button>
 						<Button
 							size="small"
-							icon={<EditOutlined />}
 							onClick={() => {
 								if (!record.id) return;
 								navigate(`/admin/data-lake/${record.id}`);
@@ -166,7 +163,6 @@ export default function DataLakeConfigView() {
 							<Button
 								size="small"
 								danger
-								icon={<DeleteOutlined />}
 								onClick={async () => {
 									if (!record.id) return;
 									try {

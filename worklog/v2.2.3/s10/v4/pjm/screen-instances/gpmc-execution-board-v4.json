@@ -801,6 +801,198 @@
       }
     },
     {
+      "id": "gpmc-execution-top-overdue",
+      "type": "table",
+      "name": "超期项目高风险TOP",
+      "x": 1280,
+      "y": 328,
+      "width": 584,
+      "height": 420,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "columns": [
+          {
+            "source": "项目编号",
+            "alias": "项目编号",
+            "width": 16
+          },
+          {
+            "source": "节点任务及目标",
+            "alias": "节点任务及目标",
+            "width": 32
+          },
+          {
+            "source": "节点类型",
+            "alias": "节点类型",
+            "width": 14
+          },
+          {
+            "source": "责任人",
+            "alias": "责任人",
+            "width": 12
+          },
+          {
+            "source": "超期天数",
+            "alias": "超期天数",
+            "align": "right",
+            "headerAlign": "right",
+            "width": 12,
+            "formatter": "number",
+            "metricNote": {
+              "code": "pjm_prog_delay_days",
+              "displayName": "超期天数",
+              "definition": "截至统计结束日期,节点计划完成日期已超过且尚未完成的自然日数。",
+              "sourceTable": "进度信息汇总表",
+              "excelRef": "(派生)delay_days"
+            }
+          },
+          {
+            "source": "超期时长",
+            "alias": "超期时长",
+            "align": "center",
+            "headerAlign": "center",
+            "width": 14,
+            "metricNote": {
+              "displayName": "超期时长分段",
+              "definition": "按超期天数折算为演示分段: 90天及以上、30-89天、1-29天。",
+              "sourceTable": "进度信息汇总表"
+            }
+          }
+        ],
+        "pageSize": 10,
+        "minColumnWidth": 80,
+        "showHeader": true,
+        "headerColor": "#ffffff",
+        "stripeColor": "rgba(88,180,255,0.08)",
+        "backgroundColor": "rgba(9,36,90,0.50)",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "bodyColor": "#ffffff",
+        "freezeHeader": true,
+        "conditionalRules": [
+          {
+            "columnKey": "超期天数",
+            "operator": ">=",
+            "value": 90,
+            "color": "#ffffff",
+            "background": "rgba(239, 68, 68, 0.72)"
+          },
+          {
+            "columnKey": "超期天数",
+            "operator": ">=",
+            "value": 30,
+            "color": "#fff7ed",
+            "background": "rgba(245, 158, 11, 0.62)"
+          },
+          {
+            "columnKey": "超期天数",
+            "operator": "<",
+            "value": 30,
+            "color": "#e0f2fe",
+            "background": "rgba(14, 165, 233, 0.42)"
+          },
+          {
+            "columnKey": "超期时长",
+            "operator": "=",
+            "value": "超3个月",
+            "color": "#ffffff",
+            "background": "rgba(239, 68, 68, 0.72)"
+          },
+          {
+            "columnKey": "超期时长",
+            "operator": "=",
+            "value": "1-3个月",
+            "color": "#fff7ed",
+            "background": "rgba(245, 158, 11, 0.62)"
+          },
+          {
+            "columnKey": "超期时长",
+            "operator": "=",
+            "value": "1个月以内",
+            "color": "#e0f2fe",
+            "background": "rgba(14, 165, 233, 0.42)"
+          }
+        ],
+        "columnNotes": {
+          "节点类型": {
+            "kind": "field",
+            "displayName": "节点类型",
+            "definition": "节点在项目中的重要等级,影响考核权重与异常判定。",
+            "enumValues": [
+              {
+                "code": "里程碑节点",
+                "label": "里程碑节点",
+                "description": "项目对外承诺的关键交付点,权重最高,单独考核完成率"
+              },
+              {
+                "code": "重大节点",
+                "label": "重大节点",
+                "description": "影响项目交付的关键节点"
+              },
+              {
+                "code": "重要节点",
+                "label": "重要节点",
+                "description": "重要技术或管理节点"
+              },
+              {
+                "code": "一般节点",
+                "label": "一般节点",
+                "description": "常规工作节点,通常不参与超期/不正常率统计"
+              }
+            ],
+            "sourceTable": "进度信息汇总表",
+            "note": "重要程度: 里程碑 > 重大 > 重要 > 一般"
+          },
+          "超期天数": {
+            "kind": "metric",
+            "code": "pjm_prog_delay_days",
+            "displayName": "超期天数",
+            "definition": "截至统计结束日期,节点计划完成日期已超过且尚未完成的自然日数。",
+            "sourceTable": "进度信息汇总表",
+            "note": "列表按该字段降序排列。"
+          },
+          "超期时长": {
+            "kind": "field",
+            "displayName": "超期时长分段",
+            "definition": "按超期天数分为超3个月、1-3个月、1个月以内,用于客户演示时颜色区分。",
+            "sourceTable": "进度信息汇总表",
+            "note": "超3个月=90天及以上;1-3个月=30-89天;1个月以内=1-29天。"
+          }
+        },
+        "headerBackground": "#0f2a55"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT d.project_no AS \"项目编号\", COALESCE(d.node_task,'') AS \"节点任务及目标\", d.node_type AS \"节点类型\", d.owner AS \"责任人\", COALESCE(d.delay_days,0) AS \"超期天数\", CASE WHEN COALESCE(d.delay_days,0) >= 90 THEN '超3个月' WHEN COALESCE(d.delay_days,0) >= 30 THEN '1-3个月' ELSE '1个月以内' END AS \"超期时长\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date,'YYYY-MM') AND d.is_incomplete = true AND COALESCE(d.delay_days,0) > 0 [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] ORDER BY COALESCE(d.delay_days,0) DESC, d.plan_date ASC LIMIT 20",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
       "id": "gpmc-execution-kpi-incomplete",
       "type": "number-card",
       "name": "未完成数",
@@ -1374,6 +1566,25 @@
       "visible": true,
       "config": {
         "text": "项目状态分布图",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "gpmc-execution-top-overdue-overlay-title",
+      "type": "title",
+      "name": "超期项目高风险TOP-标题",
+      "x": 1296,
+      "y": 296,
+      "width": 440,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "超期项目高风险TOP列表",
         "fontSize": 20,
         "fontWeight": "700",
         "color": "#ffffff",

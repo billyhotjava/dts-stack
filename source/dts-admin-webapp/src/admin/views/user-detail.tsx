@@ -1,6 +1,5 @@
 import { CUSTOM_USER_ATTRIBUTE_KEYS } from "@/constants/user";
 import { Button, Table } from "antd";
-import { EditOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useState } from "react";
 import type { KeycloakGroup, KeycloakRole, KeycloakUser, UserProfileConfig } from "#/keycloak";
@@ -325,14 +324,14 @@ export default function UserDetailView() {
 		<div className="mx-auto w-full max-w-[1200px] px-6 py-6 space-y-6">
 			<div className="flex items-center gap-3">
 				<Button type="default" onClick={back}>
-					<Icon icon="mdi:arrow-left" className="mr-1" /> 返回
+					返回
 				</Button>
 				<h1 className="text-xl font-semibold">用户详情</h1>
 				<div className="ml-auto flex items-center gap-2">
 					{/* <Button variant="outline" onClick={() => setResetPasswordModal(true)}>
             <Icon icon="solar:lock-password-unlocked-broken" className="mr-1" /> 重置密码
           </Button> */}
-					<Button type="primary" icon={<EditOutlined />} onClick={() => setEditModal(true)}>
+					<Button type="primary" onClick={() => setEditModal(true)}>
 						编辑
 					</Button>
 				</div>

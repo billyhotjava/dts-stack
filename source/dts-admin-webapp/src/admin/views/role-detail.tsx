@@ -3,7 +3,6 @@ import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Table, TreeSelect } from "antd";
-import { EditOutlined } from "@ant-design/icons";
 import type { TreeSelectProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { adminApi } from "@/admin/api/adminApi";
@@ -551,7 +550,6 @@ export default function RoleDetailView() {
 				{!isEditMode ? (
 					<Button
 						type="primary"
-						icon={<EditOutlined />}
 						onClick={() => navigate(`/admin/roles/${encodeURIComponent(roleKey)}/edit`)}
 					>
 						编辑角色

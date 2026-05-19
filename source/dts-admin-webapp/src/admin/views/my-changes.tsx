@@ -2,7 +2,6 @@ import { useCallback, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnsType } from "antd/es/table";
 import { Button, Table } from "antd";
-import { EyeOutlined } from "@ant-design/icons";
 import { adminApi } from "@/admin/api/adminApi";
 import type { ChangeRequest } from "@/admin/types";
 import { useAdminLocale } from "@/admin/lib/locale";
@@ -184,7 +183,7 @@ export default function MyChangesView() {
 			key: "actions",
 			width: 120,
 			render: (_: unknown, record) => (
-				<Button type="text" size="small" icon={<EyeOutlined />} onClick={() => handleOpenChange(record)}>
+				<Button type="text" size="small" onClick={() => handleOpenChange(record)}>
 					查看详情
 				</Button>
 			),
