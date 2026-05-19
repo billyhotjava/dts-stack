@@ -2,7 +2,7 @@
   "schemaVersion": 3,
   "id": "gpmc-drill-risk-v4",
   "name": "执行层-风险与预警中心明细",
-  "description": "风险预警钻取页面，展示风险清单、风险分类摘要及应对措施。",
+  "description": "风险预警钻取页面，分区展示风险全量清单、风险分类释放摘要及未释放风险应对措施。",
   "classification": "INTERNAL",
   "width": 1920,
   "height": 1080,
@@ -404,16 +404,16 @@
     {
       "id": "drill-risk-detail-table",
       "type": "table",
-      "name": "风险清单",
-      "x": 20,
-      "y": 175,
-      "width": 1145,
-      "height": 420,
-      "zIndex": 15,
+      "name": "风险全量清单",
+      "x": 38,
+      "y": 244,
+      "width": 1144,
+      "height": 342,
+      "zIndex": 18,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "风险清单",
+        "title": "风险全量清单",
         "header": [
           "项目编号",
           "风险名称",
@@ -428,15 +428,15 @@
           "滞留天数"
         ],
         "data": [],
-        "fontSize": 16,
+        "fontSize": 14,
         "headerAlign": "center",
         "headerColor": "#ffffff",
-        "headerBackground": "#0f2a55",
+        "headerBackground": "#092657",
         "bodyColor": "#ffffff",
-        "bodyBackground": "rgba(9, 36, 90, 0.86)",
-        "oddRowBackground": "rgba(9, 36, 90, 0.86)",
-        "evenRowBackground": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
         "enableSort": true,
         "enablePagination": true,
         "pageSize": 8,
@@ -455,8 +455,8 @@
             "sourceTable": "质量信息汇总表 / 风险信息汇总表 / 技术状态信息汇总表",
             "frequency": "每日 01:00 刷新",
             "thresholds": {
-              "warning": 30.0,
-              "critical": 60.0,
+              "warning": 30,
+              "critical": 60,
               "rule": ">"
             },
             "excelRef": "(派生)aging_days"
@@ -543,7 +543,14 @@
             "sourceTable": "风险信息汇总表",
             "note": "数据规范化: 仅'已释放'是显式标识,其余值统一归为'未释放'"
           }
-        }
+        },
+        "description": "事实明细表：展示统计周期内风险事实、等级、类别、状态、应对措施和滞留天数。",
+        "tableRole": "事实明细表",
+        "headerFontSize": 14,
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "autoPageSize": true,
+        "minColumnWidth": 126,
+        "freezeFirstColumn": true
       },
       "dataSource": {
         "type": "sql",
@@ -580,30 +587,31 @@
     {
       "id": "drill-risk-side-panel",
       "type": "table",
-      "name": "风险分类摘要",
-      "x": 1185,
-      "y": 175,
-      "width": 715,
-      "height": 420,
-      "zIndex": 15,
+      "name": "风险分类与释放摘要",
+      "x": 1238,
+      "y": 244,
+      "width": 644,
+      "height": 342,
+      "zIndex": 18,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "风险分类摘要",
+        "title": "风险分类与释放摘要",
         "header": [
           "指标",
-          "数值"
+          "数值",
+          "说明"
         ],
         "data": [],
-        "fontSize": 16,
+        "fontSize": 14,
         "headerAlign": "center",
         "headerColor": "#ffffff",
-        "headerBackground": "#0f2a55",
+        "headerBackground": "#092657",
         "bodyColor": "#ffffff",
-        "bodyBackground": "rgba(9, 36, 90, 0.86)",
-        "oddRowBackground": "rgba(9, 36, 90, 0.86)",
-        "evenRowBackground": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
         "enableSort": true,
         "enablePagination": true,
         "pageSize": 8,
@@ -699,13 +707,20 @@
             "thresholds": null,
             "excelRef": "(衍生)未释放风险计数"
           }
-        }
+        },
+        "description": "指标摘要表：按风险月度汇总展示总量、等级分布、已释放和未释放规模。",
+        "tableRole": "指标摘要表",
+        "headerFontSize": 14,
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "autoPageSize": true,
+        "minColumnWidth": 116,
+        "freezeFirstColumn": true
       },
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT SUM(total_risk_cnt) AS \"风险总数\", SUM(high_cnt) AS \"高风险\", SUM(mid_cnt) AS \"中风险\", SUM(low_cnt) AS \"低风险\", SUM(released_cnt) AS \"已释放\", SUM(open_cnt) AS \"未释放\" FROM biz_dws_risk_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]",
+          "query": "WITH agg AS (SELECT COALESCE(SUM(total_risk_cnt),0)::numeric AS total_risk_cnt, COALESCE(SUM(high_cnt),0)::numeric AS high_cnt, COALESCE(SUM(mid_cnt),0)::numeric AS mid_cnt, COALESCE(SUM(low_cnt),0)::numeric AS low_cnt, COALESCE(SUM(released_cnt),0)::numeric AS released_cnt, COALESCE(SUM(open_cnt),0)::numeric AS open_cnt FROM biz_dws_risk_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]) SELECT v.metric AS \"指标\", v.value AS \"数值\", v.note AS \"说明\" FROM agg CROSS JOIN LATERAL (VALUES ('风险总数', agg.total_risk_cnt, '统计周期内登记风险总量'), ('高风险', agg.high_cnt, '高等级风险数量'), ('中风险', agg.mid_cnt, '中等级风险数量'), ('低风险', agg.low_cnt, '低等级风险数量'), ('已释放', agg.released_cnt, '已完成释放闭环的风险数量'), ('未释放', agg.open_cnt, '截至统计周期仍未释放的风险数量')) AS v(metric,value,note)",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -732,39 +747,39 @@
     {
       "id": "drill-risk-support-table",
       "type": "table",
-      "name": "风险措施摘要",
-      "x": 20,
-      "y": 610,
-      "width": 1880,
-      "height": 440,
-      "zIndex": 15,
+      "name": "未释放风险应对措施表",
+      "x": 38,
+      "y": 704,
+      "width": 1844,
+      "height": 320,
+      "zIndex": 18,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "风险措施摘要",
+        "title": "未释放风险应对措施表",
         "header": [
           "项目编号",
           "风险名称",
           "分系统",
           "责任科室",
           "风险等级",
-          "风险类别",
           "风险状态",
           "应对措施",
-          "提交日期",
-          "释放日期",
+          "月度管控计划",
+          "周度释放计划",
+          "责任人",
           "滞留天数"
         ],
         "data": [],
-        "fontSize": 16,
+        "fontSize": 14,
         "headerAlign": "center",
         "headerColor": "#ffffff",
-        "headerBackground": "#0f2a55",
+        "headerBackground": "#092657",
         "bodyColor": "#ffffff",
-        "bodyBackground": "rgba(9, 36, 90, 0.86)",
-        "oddRowBackground": "rgba(9, 36, 90, 0.86)",
-        "evenRowBackground": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
         "enableSort": true,
         "enablePagination": true,
         "pageSize": 8,
@@ -783,8 +798,8 @@
             "sourceTable": "质量信息汇总表 / 风险信息汇总表 / 技术状态信息汇总表",
             "frequency": "每日 01:00 刷新",
             "thresholds": {
-              "warning": 30.0,
-              "critical": 60.0,
+              "warning": 30,
+              "critical": 60,
               "rule": ">"
             },
             "excelRef": "(派生)aging_days"
@@ -871,13 +886,20 @@
             "sourceTable": "风险信息汇总表",
             "note": "数据规范化: 仅'已释放'是显式标识,其余值统一归为'未释放'"
           }
-        }
+        },
+        "description": "跟进处置表：聚焦仍未释放风险的应对措施、月度管控和周度释放计划。",
+        "tableRole": "跟进处置表",
+        "headerFontSize": 14,
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "autoPageSize": true,
+        "minColumnWidth": 130,
+        "freezeFirstColumn": true
       },
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT project_no AS \"项目编号\", risk_name AS \"风险名称\", subsystem AS \"分系统\", dept AS \"责任科室\", risk_level AS \"风险等级\", risk_category AS \"风险类别\", risk_status AS \"风险状态\", response_measure AS \"应对措施\", risk_submit_date AS \"提交日期\", final_release_date AS \"释放日期\", pending_days AS \"滞留天数\" FROM biz_dwd_risk_info_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] [[AND risk_level = {{riskLevel}}]] ORDER BY pending_days DESC NULLS LAST",
+          "query": "SELECT project_no AS \"项目编号\", risk_name AS \"风险名称\", subsystem AS \"分系统\", dept AS \"责任科室\", risk_level AS \"风险等级\", risk_status AS \"风险状态\", response_measure AS \"应对措施\", monthly_control_plan AS \"月度管控计划\", weekly_release_plan AS \"周度释放计划\", response_owner AS \"责任人\", pending_days AS \"滞留天数\" FROM biz_dwd_risk_info_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND COALESCE(risk_status,'未释放') <> '已释放' [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] [[AND risk_level = {{riskLevel}}]] ORDER BY pending_days DESC NULLS LAST, risk_submit_date ASC",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -903,6 +925,177 @@
             }
           ]
         }
+      }
+    },
+    {
+      "id": "drill-risk-detail-section-bg",
+      "type": "shape",
+      "name": "主明细区",
+      "x": 20,
+      "y": 176,
+      "width": 1180,
+      "height": 438,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-risk-detail-section-title",
+      "type": "title",
+      "name": "风险全量清单",
+      "x": 38,
+      "y": 190,
+      "width": 540,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "风险全量清单",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-risk-detail-section-desc",
+      "type": "title",
+      "name": "风险全量清单说明",
+      "x": 38,
+      "y": 218,
+      "width": 1124,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "事实明细表：展示统计周期内风险事实、等级、类别、状态、应对措施和滞留天数。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-risk-side-section-bg",
+      "type": "shape",
+      "name": "摘要洞察区",
+      "x": 1220,
+      "y": 176,
+      "width": 680,
+      "height": 438,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-risk-side-section-title",
+      "type": "title",
+      "name": "风险分类与释放摘要",
+      "x": 1238,
+      "y": 190,
+      "width": 420,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "风险分类与释放摘要",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-risk-side-section-desc",
+      "type": "title",
+      "name": "风险分类与释放摘要说明",
+      "x": 1238,
+      "y": 218,
+      "width": 624,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "指标摘要表：按风险月度汇总展示总量、等级分布、已释放和未释放规模。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-risk-support-section-bg",
+      "type": "shape",
+      "name": "跟进处置区",
+      "x": 20,
+      "y": 632,
+      "width": 1880,
+      "height": 420,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-risk-support-section-title",
+      "type": "title",
+      "name": "未释放风险应对措施表",
+      "x": 38,
+      "y": 646,
+      "width": 620,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "未释放风险应对措施表",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-risk-support-section-desc",
+      "type": "title",
+      "name": "未释放风险应对措施表说明",
+      "x": 38,
+      "y": 674,
+      "width": 1760,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "跟进处置表：聚焦仍未释放风险的应对措施、月度管控和周度释放计划。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
       }
     }
   ]

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Table, TreeSelect } from "antd";
+import { Button, Modal, Table, TreeSelect } from "antd";
 import type { TreeSelectProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { adminApi } from "@/admin/api/adminApi";
@@ -14,7 +14,6 @@ import { Text } from "@/ui/typography";
 import { Badge } from "@/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/ui/alert";
 import { toast } from "sonner";
-import { Icon } from "@/components/icon";
 
 type OrgTreeOption = {
 	value: string;
@@ -22,17 +21,54 @@ type OrgTreeOption = {
 	children?: OrgTreeOption[];
 };
 
-type RealmMember = { username: string; displayName?: string };
 type PendingMember = { username: string; displayName: string; keycloakId?: string };
 type AssignmentFilters = { deptPath: string; fullName: string; username: string };
 type AssignmentPagination = { current: number; pageSize: number };
-type MemberView = {
-	username: string;
-	displayName: string;
-	status: "existing" | "add" | "remove";
-	origin: "existing" | "new";
-	keycloakId?: string;
+type RoleEditSubmissionSummary = {
+	roleLabel: string;
+	roleName: string;
+	displayChanged: boolean;
+	scopeChanged: boolean;
+	descriptionChanged: boolean;
+	memberAddsCount: number;
+	memberRemovesCount: number;
 };
+
+function pendingMemberFromAssignmentUser(user: RoleAssignmentUser): PendingMember | null {
+	const username = user.username?.trim();
+	if (!username) return null;
+	return {
+		username,
+		displayName: user.fullName?.trim() || username,
+		keycloakId: user.keycloakId,
+	};
+}
+
+function confirmRoleEditSubmission(summary: RoleEditSubmissionSummary): Promise<boolean> {
+	const changedItems = [
+		summary.displayChanged ? "角色名称" : null,
+		summary.scopeChanged ? "所属域" : null,
+		summary.descriptionChanged ? "角色描述" : null,
+		summary.memberAddsCount > 0 ? `新增成员 ${summary.memberAddsCount} 人` : null,
+		summary.memberRemovesCount > 0 ? `移除成员 ${summary.memberRemovesCount} 人` : null,
+	].filter(Boolean);
+	return new Promise((resolve) => {
+		Modal.confirm({
+			title: "确认提交角色编辑？",
+			content: (
+				<div className="space-y-2 text-sm">
+					<p>角色：{summary.roleLabel || summary.roleName}</p>
+					<p>变更内容：{changedItems.join("、")}</p>
+					<p className="text-muted-foreground">提交后将进入审批流程，审批完成前不能再次编辑该角色。</p>
+				</div>
+			),
+			okText: "确认提交",
+			cancelText: "取消",
+			onOk: () => resolve(true),
+			onCancel: () => resolve(false),
+		});
+	});
+}
 
 export default function RoleDetailView() {
 	const { roleId = "" } = useParams();
@@ -85,41 +121,6 @@ export default function RoleDetailView() {
 	}, [targetRole, canonical]);
 	const roleName = useMemo(() => toRoleName(authorityName), [authorityName]);
 
-	const [realmMembers, setRealmMembers] = useState<RealmMember[]>([]);
-	const [membersLoading, setMembersLoading] = useState(false);
-
-	useEffect(() => {
-		let cancelled = false;
-		if (!roleName) {
-			setRealmMembers([]);
-			return;
-		}
-		setMembersLoading(true);
-		(async () => {
-			try {
-				const list = await adminApi.getRoleMembers(roleName);
-				if (!cancelled) {
-					setRealmMembers(
-						(list ?? []).map((item) => ({
-							username: item.username,
-							displayName: item.displayName,
-						})),
-					);
-				}
-			} catch (error) {
-				if (!cancelled) {
-					console.warn("Failed to load realm members:", error);
-					setRealmMembers([]);
-				}
-			} finally {
-				if (!cancelled) setMembersLoading(false);
-			}
-		})();
-		return () => {
-			cancelled = true;
-		};
-	}, [roleName]);
-
 	const [displayLabel, setDisplayLabel] = useState("");
 	const [scope, setScope] = useState<"DEPARTMENT" | "INSTITUTE">("DEPARTMENT");
 	const [description, setDescription] = useState("");
@@ -142,18 +143,20 @@ export default function RoleDetailView() {
 	const [assignmentFilters, setAssignmentFilters] = useState<AssignmentFilters>(emptyAssignmentFilters);
 	const [assignmentPagination, setAssignmentPagination] = useState<AssignmentPagination>({
 		current: 1,
-		pageSize: 20,
+		pageSize: 10,
 	});
 	const [pendingAdds, setPendingAdds] = useState<Map<string, PendingMember>>(new Map());
 	const [pendingRemovals, setPendingRemovals] = useState<Set<string>>(new Set());
+	const [knownRoleMembers, setKnownRoleMembers] = useState<Map<string, PendingMember>>(new Map());
 
 	useEffect(() => {
 		if (!isEditMode) {
 			setPendingAdds(new Map());
 			setPendingRemovals(new Set());
+			setKnownRoleMembers(new Map());
 			setAssignmentFiltersDraft(emptyAssignmentFilters);
 			setAssignmentFilters(emptyAssignmentFilters);
-			setAssignmentPagination({ current: 1, pageSize: 20 });
+			setAssignmentPagination({ current: 1, pageSize: 10 });
 		}
 	}, [emptyAssignmentFilters, isEditMode]);
 
@@ -161,47 +164,6 @@ export default function RoleDetailView() {
 	const orgOptions = orgOptionResult.options;
 	const normalizeOrgPath = orgOptionResult.normalize;
 
-	const baseMembersMap = useMemo(() => {
-		const map = new Map<string, RealmMember>();
-		realmMembers.forEach((member) => {
-			if (member?.username) {
-				map.set(member.username.toLowerCase(), member);
-			}
-		});
-		return map;
-	}, [realmMembers]);
-
-	const memberStatusMap = useMemo(() => {
-		const map = new Map<string, MemberView>();
-		baseMembersMap.forEach((member, key) => {
-			const displayName = member.displayName?.trim() || member.username;
-			map.set(key, {
-				username: member.username,
-				displayName,
-				status: pendingRemovals.has(key) ? "remove" : "existing",
-				origin: "existing",
-			});
-		});
-		pendingAdds.forEach((draft, key) => {
-			map.set(key, {
-				username: draft.username,
-				displayName: draft.displayName,
-				status: "add",
-				origin: "new",
-				keycloakId: draft.keycloakId,
-			});
-		});
-		return map;
-	}, [baseMembersMap, pendingAdds, pendingRemovals]);
-
-	const memberViews = useMemo(
-		() => Array.from(memberStatusMap.values()).sort((a, b) => a.displayName.localeCompare(b.displayName, "zh-CN")),
-		[memberStatusMap],
-	);
-	const visibleMemberCount = useMemo(
-		() => memberViews.filter((member) => member.status !== "remove").length,
-		[memberViews],
-	);
 	const hasPendingMemberChange = pendingAdds.size > 0 || pendingRemovals.size > 0;
 
 	const {
@@ -268,30 +230,46 @@ export default function RoleDetailView() {
 	const handleAssignmentSelect = useCallback(
 		(user: RoleAssignmentUser, selected: boolean) => {
 			if (!isEditMode || hasPendingChange) return;
-			const username = user.username?.trim();
-			if (!username) return;
-			const key = username.toLowerCase();
-			const nextAdds = new Map(pendingAdds);
-			const nextRemovals = new Set(pendingRemovals);
-			if (selected) {
-				nextRemovals.delete(key);
-				if (!user.inRole) {
-					nextAdds.set(key, {
-						username,
-						displayName: user.fullName?.trim() || username,
-						keycloakId: user.keycloakId,
-					});
-				}
-			} else {
-				nextAdds.delete(key);
-				if (user.inRole) {
-					nextRemovals.add(key);
-				}
+			const draft = pendingMemberFromAssignmentUser(user);
+			if (!draft) return;
+			const key = draft.username.toLowerCase();
+			if (user.inRole) {
+				setKnownRoleMembers((prev) => {
+					const existing = prev.get(key);
+					if (
+						existing?.username === draft.username &&
+						existing.displayName === draft.displayName &&
+						existing.keycloakId === draft.keycloakId
+					) {
+						return prev;
+					}
+					const next = new Map(prev);
+					next.set(key, draft);
+					return next;
+				});
 			}
-			setPendingAdds(nextAdds);
-			setPendingRemovals(nextRemovals);
+			setPendingAdds((prev) => {
+				const next = new Map(prev);
+				if (selected && !user.inRole) {
+					next.set(key, draft);
+				} else {
+					next.delete(key);
+				}
+				return next;
+			});
+			setPendingRemovals((prev) => {
+				const next = new Set(prev);
+				if (selected) {
+					next.delete(key);
+				} else if (user.inRole) {
+					next.add(key);
+				} else {
+					next.delete(key);
+				}
+				return next;
+			});
 		},
-		[hasPendingChange, isEditMode, pendingAdds, pendingRemovals],
+		[hasPendingChange, isEditMode],
 	);
 
 	const assignmentColumns = useMemo<ColumnsType<RoleAssignmentUser>>(
@@ -362,27 +340,6 @@ export default function RoleDetailView() {
 		[pendingAdds, pendingRemovals],
 	);
 
-	const handleToggleMember = useCallback(
-		(member: MemberView) => {
-			if (!isEditMode || hasPendingChange) return;
-			const key = member.username.toLowerCase();
-			if (member.origin === "new") {
-				const next = new Map(pendingAdds);
-				next.delete(key);
-				setPendingAdds(next);
-				return;
-			}
-			const nextRemovals = new Set(pendingRemovals);
-			if (nextRemovals.has(key)) {
-				nextRemovals.delete(key);
-			} else {
-				nextRemovals.add(key);
-			}
-			setPendingRemovals(nextRemovals);
-		},
-		[hasPendingChange, isEditMode, pendingAdds, pendingRemovals],
-	);
-
 	const handleSubmitChanges = useCallback(async () => {
 		if (!targetRole) return;
 		if (pendingChange) {
@@ -406,22 +363,12 @@ export default function RoleDetailView() {
 			keycloakId: draft.keycloakId,
 		}));
 		const memberRemovesPayload = Array.from(effectiveRemovals).map((key) => {
-			const base = baseMembersMap.get(key);
+			const base = knownRoleMembers.get(key);
 			const username = base?.username ?? key;
-			const displayName = base?.displayName?.trim() || base?.username || username;
-			return { username, displayName, keycloakId: undefined };
+			const displayName = base?.displayName?.trim() || username;
+			return { username, displayName, keycloakId: base?.keycloakId };
 		});
-
-		const finalMembers = new Map(baseMembersMap);
-		effectiveRemovals.forEach((key) => {
-			finalMembers.delete(key);
-		});
-		effectiveAdds.forEach((draft, key) => {
-			finalMembers.set(key, { username: draft.username, displayName: draft.displayName });
-		});
-		const memberAdded = Array.from(finalMembers.keys()).some((key) => !baseMembersMap.has(key));
-		const memberRemoved = Array.from(baseMembersMap.keys()).some((key) => !finalMembers.has(key));
-		const membersChanged = memberAdded || memberRemoved;
+		const membersChanged = memberAddsPayload.length > 0 || memberRemovesPayload.length > 0;
 
 		if (!scopeChanged && !descriptionChanged && !displayChanged && !membersChanged) {
 			toast.info("未检测到变更，无需提交审批");
@@ -433,12 +380,25 @@ export default function RoleDetailView() {
 			return;
 		}
 
+		const submitRoleName = toRoleName(authorityName);
+		const confirmed = await confirmRoleEditSubmission({
+			roleLabel: trimmedDisplay || targetRole.displayName || targetRole.name || authorityName || submitRoleName,
+			roleName: submitRoleName,
+			displayChanged,
+			scopeChanged,
+			descriptionChanged,
+			memberAddsCount: memberAddsPayload.length,
+			memberRemovesCount: memberRemovesPayload.length,
+		});
+		if (!confirmed) {
+			return;
+		}
+
 		setUpdating(true);
 		try {
-			const roleName = toRoleName(authorityName);
 			const payload: Record<string, unknown> = {
 				id: targetRole.id,
-				name: roleName,
+				name: submitRoleName,
 				scope,
 				description: description.trim() || undefined,
 			};
@@ -453,27 +413,27 @@ export default function RoleDetailView() {
 			}
 			const diffBefore = {
 				id: targetRole.id ?? null,
-				name: roleName,
+				name: submitRoleName,
 				displayName: targetRole.displayName || targetRole.name || null,
 				scope: targetRole.scope ?? null,
 				description: targetRole.description ?? null,
-				members: Array.from(baseMembersMap.values()).map((member) => member.username),
+				memberCount: targetRole.memberCount ?? null,
 			};
 			const diffAfter = {
 				id: targetRole.id ?? null,
-				name: roleName,
+				name: submitRoleName,
 				displayName: trimmedDisplay || null,
 				scope,
 				description: description.trim() || null,
 				memberAdds: memberAddsPayload.map((item) => item.username),
 				memberRemoves: memberRemovesPayload.map((item) => item.username),
-				members: Array.from(finalMembers.values()).map((member) => member.username),
+				memberCount: Math.max(0, (targetRole.memberCount ?? 0) + memberAddsPayload.length - memberRemovesPayload.length),
 			};
 
 			const change = await adminApi.createChangeRequest({
 				resourceType: "ROLE",
 				action: "UPDATE",
-				resourceId: roleName || authorityName,
+				resourceId: submitRoleName || authorityName,
 				payloadJson: JSON.stringify(payload),
 				diffJson: JSON.stringify({ before: diffBefore, after: diffAfter }),
 				reason: updateReason.trim() || undefined,
@@ -484,6 +444,7 @@ export default function RoleDetailView() {
 			setDisplayLabel(nextLabel);
 			setPendingAdds(new Map());
 			setPendingRemovals(new Set());
+			setKnownRoleMembers(new Map());
 			await queryClient.invalidateQueries({ queryKey: ["admin", "role-change-pending", canonical] });
 			await queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
 			navigate("/admin/roles");
@@ -494,11 +455,11 @@ export default function RoleDetailView() {
 		}
 	}, [
 		authorityName,
-		baseMembersMap,
 		description,
 		pendingAdds,
 		displayLabel,
 		pendingRemovals,
+		knownRoleMembers,
 		queryClient,
 		scope,
 		targetRole,
@@ -588,40 +549,40 @@ export default function RoleDetailView() {
 					authorityName={authorityName}
 					scope={scope}
 					onScopeChange={setScope}
-					visibleMemberCount={visibleMemberCount}
+					memberCount={targetRole.memberCount ?? 0}
 					hasPendingMemberChange={hasPendingMemberChange}
+					pendingAddsCount={pendingAdds.size}
+					pendingRemovalsCount={pendingRemovals.size}
 					description={description}
 					roleDescription={targetRole.description}
 					onDescriptionChange={setDescription}
 					updateReason={updateReason}
 					onUpdateReasonChange={setUpdateReason}
 				>
-					<RoleMemberAssignmentSection
-						isEditMode={isEditMode}
-						realmMemberCount={realmMembers.length}
-						hasPendingMemberChange={hasPendingMemberChange}
-						pendingAddsCount={pendingAdds.size}
-						pendingRemovalsCount={pendingRemovals.size}
-						assignmentFiltersDraft={assignmentFiltersDraft}
-						onAssignmentFiltersDraftChange={setAssignmentFiltersDraft}
-						normalizeOrgPath={normalizeOrgPath}
-						orgOptions={orgOptions}
-						onApplyAssignmentFilters={handleApplyAssignmentFilters}
-						onResetAssignmentFilters={handleResetAssignmentFilters}
-						assignmentUsersError={assignmentUsersError}
-						assignmentColumns={assignmentColumns}
-						assignmentUsers={assignmentUsers}
-						assignmentUsersLoading={assignmentUsersLoading}
-						selectedAssignmentRowKeys={selectedAssignmentRowKeys}
-						canEditMembers={!hasPendingChange}
-						onAssignmentSelect={handleAssignmentSelect}
-						assignmentPagination={assignmentPagination}
-						assignmentUsersTotal={assignmentUsersTotal}
-						onAssignmentPageChange={handleAssignmentPageChange}
-						membersLoading={membersLoading}
-						memberViews={memberViews}
-						onToggleMember={handleToggleMember}
-					/>
+					{isEditMode ? (
+						<RoleMemberAssignmentSection
+							isEditMode={isEditMode}
+							hasPendingMemberChange={hasPendingMemberChange}
+							pendingAddsCount={pendingAdds.size}
+							pendingRemovalsCount={pendingRemovals.size}
+							assignmentFiltersDraft={assignmentFiltersDraft}
+							onAssignmentFiltersDraftChange={setAssignmentFiltersDraft}
+							normalizeOrgPath={normalizeOrgPath}
+							orgOptions={orgOptions}
+							onApplyAssignmentFilters={handleApplyAssignmentFilters}
+							onResetAssignmentFilters={handleResetAssignmentFilters}
+							assignmentUsersError={assignmentUsersError}
+							assignmentColumns={assignmentColumns}
+							assignmentUsers={assignmentUsers}
+							assignmentUsersLoading={assignmentUsersLoading}
+							selectedAssignmentRowKeys={selectedAssignmentRowKeys}
+							canEditMembers={!hasPendingChange}
+							onAssignmentSelect={handleAssignmentSelect}
+							assignmentPagination={assignmentPagination}
+							assignmentUsersTotal={assignmentUsersTotal}
+							onAssignmentPageChange={handleAssignmentPageChange}
+						/>
+					) : null}
 					{isEditMode ? (
 						<div className="flex justify-end border-t border-slate-200 pt-4">
 							<Button type="primary" onClick={handleSubmitChanges} disabled={updating || hasPendingChange}>
@@ -643,8 +604,10 @@ function RoleBasicInfoSection({
 	authorityName,
 	scope,
 	onScopeChange,
-	visibleMemberCount,
+	memberCount,
 	hasPendingMemberChange,
+	pendingAddsCount,
+	pendingRemovalsCount,
 	description,
 	roleDescription,
 	onDescriptionChange,
@@ -659,8 +622,10 @@ function RoleBasicInfoSection({
 	authorityName: string;
 	scope: "DEPARTMENT" | "INSTITUTE";
 	onScopeChange: (value: "DEPARTMENT" | "INSTITUTE") => void;
-	visibleMemberCount: number;
+	memberCount: number;
 	hasPendingMemberChange: boolean;
+	pendingAddsCount: number;
+	pendingRemovalsCount: number;
 	description: string;
 	roleDescription?: string | null;
 	onDescriptionChange: (value: string) => void;
@@ -710,7 +675,10 @@ function RoleBasicInfoSection({
 							角色成员数
 						</Text>
 						<Text variant="body3" className="text-muted-foreground">
-							{visibleMemberCount} 人{hasPendingMemberChange ? "（含待审批变更）" : ""}
+							{memberCount} 人
+							{hasPendingMemberChange
+								? `，待新增 ${pendingAddsCount} 人，待移除 ${pendingRemovalsCount} 人`
+								: ""}
 						</Text>
 					</div>
 				</section>
@@ -755,7 +723,6 @@ function RoleBasicInfoSection({
 
 function RoleMemberAssignmentSection({
 	isEditMode,
-	realmMemberCount,
 	hasPendingMemberChange,
 	pendingAddsCount,
 	pendingRemovalsCount,
@@ -775,12 +742,8 @@ function RoleMemberAssignmentSection({
 	assignmentPagination,
 	assignmentUsersTotal,
 	onAssignmentPageChange,
-	membersLoading,
-	memberViews,
-	onToggleMember,
 }: {
 	isEditMode: boolean;
-	realmMemberCount: number;
 	hasPendingMemberChange: boolean;
 	pendingAddsCount: number;
 	pendingRemovalsCount: number;
@@ -800,9 +763,6 @@ function RoleMemberAssignmentSection({
 	assignmentPagination: AssignmentPagination;
 	assignmentUsersTotal: number;
 	onAssignmentPageChange: (current: number, pageSize: number) => void;
-	membersLoading: boolean;
-	memberViews: MemberView[];
-	onToggleMember: (member: MemberView) => void;
 }) {
 	return (
 		<section className="space-y-4 border-t border-slate-200 pt-4">
@@ -811,19 +771,17 @@ function RoleMemberAssignmentSection({
 					角色成员
 				</Text>
 				<Text variant="body3" className="text-muted-foreground">
-					Keycloak 成员 {realmMemberCount} 人{hasPendingMemberChange ? "，当前包含待审批的新增/移除" : ""}
+					待新增 {pendingAddsCount} 人，待移除 {pendingRemovalsCount} 人
+					{hasPendingMemberChange ? "，提交后进入审批" : ""}
 				</Text>
 			</div>
 
 			{isEditMode ? (
 				<div className="space-y-4 rounded-lg border border-dashed border-slate-200 p-4">
 					<div className="flex flex-wrap items-center justify-between gap-3">
-						<div className="flex items-center gap-2">
-							<Icon icon="mdi:account-multiple-plus-outline" className="h-5 w-5 text-primary" />
-							<Text variant="body3" className="font-medium">
-								成员分配
-							</Text>
-						</div>
+						<Text variant="body3" className="font-medium">
+							成员分配
+						</Text>
 						<Text variant="body3" className="text-muted-foreground">
 							待新增 {pendingAddsCount} 人，待移除 {pendingRemovalsCount} 人
 						</Text>
@@ -925,53 +883,6 @@ function RoleMemberAssignmentSection({
 					/>
 				</div>
 			) : null}
-
-			<section className="space-y-3">
-				<Text variant="body3" className="font-medium">
-					当前成员
-				</Text>
-				{membersLoading ? (
-					<Text variant="body3" className="text-muted-foreground">
-						加载中…
-					</Text>
-				) : memberViews.length === 0 ? (
-					<Text variant="body3" className="text-muted-foreground">
-						暂无成员。
-					</Text>
-				) : (
-					memberViews.map((member) => (
-						<div key={member.username} className="rounded-lg border px-4 py-3">
-							<div className="flex flex-wrap items-start justify-between gap-2">
-								<div>
-									<Text variant="body2" className="font-medium">
-										{member.displayName}
-									</Text>
-									<Text variant="body3" className="text-muted-foreground">
-										{member.username}
-									</Text>
-								</div>
-								<div className="flex items-center gap-2">
-									{member.status === "add" ? (
-										<Badge variant="secondary" className="border-emerald-500 text-emerald-600">
-											新增
-										</Badge>
-									) : null}
-									{member.status === "remove" ? (
-										<Badge variant="destructive" className="bg-red-50 text-red-600">
-											待移除
-										</Badge>
-									) : null}
-									{isEditMode && canEditMembers ? (
-										<Button size="small" type="default" onClick={() => onToggleMember(member)}>
-											{member.origin === "new" ? "撤销新增" : member.status === "remove" ? "恢复" : "移除"}
-										</Button>
-									) : null}
-								</div>
-							</div>
-						</div>
-					))
-				)}
-			</section>
 		</section>
 	);
 }

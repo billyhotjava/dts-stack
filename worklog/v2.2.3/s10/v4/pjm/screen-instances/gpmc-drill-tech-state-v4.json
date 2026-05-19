@@ -2,7 +2,7 @@
   "schemaVersion": 3,
   "id": "gpmc-drill-tech-state-v4",
   "name": "执行层-技术状态与跟进明细",
-  "description": "技术状态变更钻取页面，展示变更清单、状态分布及跟进措施。",
+  "description": "技术状态变更钻取页面，分区展示变更全量清单、签署整改摘要及未闭环变更跟进表。",
   "classification": "INTERNAL",
   "width": 1920,
   "height": 1080,
@@ -171,8 +171,8 @@
           "sourceTable": "技术状态信息汇总表",
           "frequency": "每日 01:00 刷新",
           "thresholds": {
-            "warning": 80.0,
-            "critical": 70.0,
+            "warning": 80,
+            "critical": 70,
             "rule": "<"
           },
           "excelRef": "二次指标 #12 pjm_tech_signature_rate"
@@ -241,8 +241,8 @@
           "sourceTable": "技术状态信息汇总表",
           "frequency": "每日 01:00 刷新",
           "thresholds": {
-            "warning": 80.0,
-            "critical": 70.0,
+            "warning": 80,
+            "critical": 70,
             "rule": "<"
           },
           "excelRef": "二次指标 #13 pjm_tech_reform_rate"
@@ -311,8 +311,8 @@
           "sourceTable": "技术状态信息汇总表",
           "frequency": "每日 01:00 刷新",
           "thresholds": {
-            "warning": 20.0,
-            "critical": 35.0,
+            "warning": 20,
+            "critical": 35,
             "rule": ">"
           },
           "excelRef": "二次指标 #15 pjm_tech_unsigned_ratio"
@@ -381,8 +381,8 @@
           "sourceTable": "技术状态信息汇总表",
           "frequency": "每日 01:00 刷新",
           "thresholds": {
-            "warning": 80.0,
-            "critical": 70.0,
+            "warning": 80,
+            "critical": 70,
             "rule": "<"
           },
           "excelRef": "二次指标 #16 pjm_tech_health_score"
@@ -420,16 +420,16 @@
     {
       "id": "drill-tech-detail-table",
       "type": "table",
-      "name": "技术状态变更清单",
-      "x": 20,
-      "y": 175,
-      "width": 1145,
-      "height": 420,
-      "zIndex": 15,
+      "name": "技术状态变更全量清单",
+      "x": 38,
+      "y": 244,
+      "width": 1144,
+      "height": 342,
+      "zIndex": 18,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "技术状态变更清单",
+        "title": "技术状态变更全量清单",
         "header": [
           "项目编号",
           "技术状态名称",
@@ -444,15 +444,15 @@
           "签署闭环日期"
         ],
         "data": [],
-        "fontSize": 16,
+        "fontSize": 14,
         "headerAlign": "center",
         "headerColor": "#ffffff",
-        "headerBackground": "#0f2a55",
+        "headerBackground": "#092657",
         "bodyColor": "#ffffff",
-        "bodyBackground": "rgba(9, 36, 90, 0.86)",
-        "oddRowBackground": "rgba(9, 36, 90, 0.86)",
-        "evenRowBackground": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
         "enableSort": true,
         "enablePagination": true,
         "pageSize": 8,
@@ -559,7 +559,14 @@
             "sourceTable": "通用",
             "note": "数据规范化: Y/YES/TRUE/已*/是 → 是; N/NO/FALSE/未*/否 → 否"
           }
-        }
+        },
+        "description": "事实明细表：展示统计周期内技术状态变更事实、签署状态、整改状态和闭环日期。",
+        "tableRole": "事实明细表",
+        "headerFontSize": 14,
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "autoPageSize": true,
+        "minColumnWidth": 130,
+        "freezeFirstColumn": true
       },
       "dataSource": {
         "type": "sql",
@@ -592,30 +599,31 @@
     {
       "id": "drill-tech-side-panel",
       "type": "table",
-      "name": "状态分布摘要",
-      "x": 1185,
-      "y": 175,
-      "width": 715,
-      "height": 420,
-      "zIndex": 15,
+      "name": "技术状态签署整改摘要",
+      "x": 1238,
+      "y": 244,
+      "width": 644,
+      "height": 342,
+      "zIndex": 18,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "状态分布摘要",
+        "title": "技术状态签署整改摘要",
         "header": [
           "指标",
-          "数值"
+          "数值",
+          "说明"
         ],
         "data": [],
-        "fontSize": 16,
+        "fontSize": 14,
         "headerAlign": "center",
         "headerColor": "#ffffff",
-        "headerBackground": "#0f2a55",
+        "headerBackground": "#092657",
         "bodyColor": "#ffffff",
-        "bodyBackground": "rgba(9, 36, 90, 0.86)",
-        "oddRowBackground": "rgba(9, 36, 90, 0.86)",
-        "evenRowBackground": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
         "enableSort": true,
         "enablePagination": true,
         "pageSize": 8,
@@ -741,13 +749,20 @@
             "thresholds": null,
             "excelRef": "原始指标 #65"
           }
-        }
+        },
+        "description": "指标摘要表：按月度汇总展示变更类别、签署完成和整改落实情况。",
+        "tableRole": "指标摘要表",
+        "headerFontSize": 14,
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "autoPageSize": true,
+        "minColumnWidth": 116,
+        "freezeFirstColumn": true
       },
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT SUM(total_change_cnt) AS \"变更总数\", SUM(new_cat_i) AS \"I类\", SUM(new_cat_ii) AS \"II类\", SUM(new_cat_iii) AS \"III类\", SUM(order_signed_cnt) AS \"已签署\", SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii) AS \"未签署\", SUM(reform_done_i_ii) AS \"已整改\", SUM(reform_pending_i_ii) AS \"待整改\" FROM biz_dws_tech_state_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]",
+          "query": "WITH agg AS (SELECT COALESCE(SUM(total_change_cnt),0)::numeric AS total_change_cnt, COALESCE(SUM(new_cat_i),0)::numeric AS new_cat_i, COALESCE(SUM(new_cat_ii),0)::numeric AS new_cat_ii, COALESCE(SUM(new_cat_iii),0)::numeric AS new_cat_iii, COALESCE(SUM(order_signed_cnt),0)::numeric AS order_signed_cnt, (COALESCE(SUM(order_unsigned_cat_i),0)+COALESCE(SUM(order_unsigned_cat_ii),0)+COALESCE(SUM(order_unsigned_cat_iii),0))::numeric AS order_unsigned_cnt, COALESCE(SUM(reform_done_i_ii),0)::numeric AS reform_done_i_ii, COALESCE(SUM(reform_pending_i_ii),0)::numeric AS reform_pending_i_ii FROM biz_dws_tech_state_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]) SELECT v.metric AS \"指标\", v.value AS \"数值\", v.note AS \"说明\" FROM agg CROSS JOIN LATERAL (VALUES ('变更总数', agg.total_change_cnt, '统计周期内技术状态变更单总量'), ('I类', agg.new_cat_i, '新增I类技术状态变更数'), ('II类', agg.new_cat_ii, '新增II类技术状态变更数'), ('III类', agg.new_cat_iii, '新增III类技术状态变更数'), ('已签署', agg.order_signed_cnt, '已完成文件签署的变更单数'), ('未签署', agg.order_unsigned_cnt, '截至统计周期仍未完成签署的变更单数'), ('已整改', agg.reform_done_i_ii, 'I/II类已落实整改的变更单数'), ('待整改', agg.reform_pending_i_ii, 'I/II类尚未落实整改的变更单数')) AS v(metric,value,note)",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -774,16 +789,16 @@
     {
       "id": "drill-tech-support-table",
       "type": "table",
-      "name": "跟进措施摘要",
-      "x": 20,
-      "y": 610,
-      "width": 1880,
-      "height": 440,
-      "zIndex": 15,
+      "name": "未闭环技术状态跟进表",
+      "x": 38,
+      "y": 704,
+      "width": 1844,
+      "height": 320,
+      "zIndex": 18,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "跟进措施摘要",
+        "title": "未闭环技术状态跟进表",
         "header": [
           "项目编号",
           "技术状态名称",
@@ -793,20 +808,21 @@
           "更改类别",
           "文件签署状态",
           "整改状态",
-          "签署完成",
-          "提交时间",
-          "签署闭环日期"
+          "受影响文件",
+          "受影响对象",
+          "计划签署闭环",
+          "计划整改闭环"
         ],
         "data": [],
-        "fontSize": 16,
+        "fontSize": 14,
         "headerAlign": "center",
         "headerColor": "#ffffff",
-        "headerBackground": "#0f2a55",
+        "headerBackground": "#092657",
         "bodyColor": "#ffffff",
-        "bodyBackground": "rgba(9, 36, 90, 0.86)",
-        "oddRowBackground": "rgba(9, 36, 90, 0.86)",
-        "evenRowBackground": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
         "enableSort": true,
         "enablePagination": true,
         "pageSize": 8,
@@ -913,13 +929,20 @@
             "sourceTable": "通用",
             "note": "数据规范化: Y/YES/TRUE/已*/是 → 是; N/NO/FALSE/未*/否 → 否"
           }
-        }
+        },
+        "description": "跟进处置表：聚焦未签署或待整改变更单，展示受影响文件、对象和计划闭环时间。",
+        "tableRole": "跟进处置表",
+        "headerFontSize": 14,
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "autoPageSize": true,
+        "minColumnWidth": 132,
+        "freezeFirstColumn": true
       },
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT project_no AS \"项目编号\", tech_state_name AS \"技术状态名称\", change_item AS \"更改项目\", owner AS \"负责人\", dept AS \"责任科室\", change_category AS \"更改类别\", file_signature_status AS \"文件签署状态\", reform_status AS \"整改状态\", CASE WHEN is_signature_completed THEN '是' ELSE '否' END AS \"签署完成\", change_submit_time AS \"提交时间\", signature_closure_date AS \"签署闭环日期\" FROM biz_dwd_tech_state_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] ORDER BY change_submit_time DESC NULLS LAST",
+          "query": "SELECT project_no AS \"项目编号\", tech_state_name AS \"技术状态名称\", change_item AS \"更改项目\", owner AS \"负责人\", dept AS \"责任科室\", change_category AS \"更改类别\", file_signature_status AS \"文件签署状态\", reform_status AS \"整改状态\", affected_files AS \"受影响文件\", affected_objects AS \"受影响对象\", plan_file_closure_date AS \"计划签署闭环\", plan_reform_date AS \"计划整改闭环\" FROM biz_dwd_tech_state_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND (COALESCE(is_signature_completed,false) = false OR COALESCE(is_reform_pending,false) = true) [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] ORDER BY change_submit_time DESC NULLS LAST",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -941,6 +964,177 @@
             }
           ]
         }
+      }
+    },
+    {
+      "id": "drill-tech-detail-section-bg",
+      "type": "shape",
+      "name": "主明细区",
+      "x": 20,
+      "y": 176,
+      "width": 1180,
+      "height": 438,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-tech-detail-section-title",
+      "type": "title",
+      "name": "技术状态变更全量清单",
+      "x": 38,
+      "y": 190,
+      "width": 540,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "技术状态变更全量清单",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-tech-detail-section-desc",
+      "type": "title",
+      "name": "技术状态变更全量清单说明",
+      "x": 38,
+      "y": 218,
+      "width": 1124,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "事实明细表：展示统计周期内技术状态变更事实、签署状态、整改状态和闭环日期。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-tech-side-section-bg",
+      "type": "shape",
+      "name": "摘要洞察区",
+      "x": 1220,
+      "y": 176,
+      "width": 680,
+      "height": 438,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-tech-side-section-title",
+      "type": "title",
+      "name": "技术状态签署整改摘要",
+      "x": 1238,
+      "y": 190,
+      "width": 420,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "技术状态签署整改摘要",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-tech-side-section-desc",
+      "type": "title",
+      "name": "技术状态签署整改摘要说明",
+      "x": 1238,
+      "y": 218,
+      "width": 624,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "指标摘要表：按月度汇总展示变更类别、签署完成和整改落实情况。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-tech-support-section-bg",
+      "type": "shape",
+      "name": "跟进处置区",
+      "x": 20,
+      "y": 632,
+      "width": 1880,
+      "height": 420,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-tech-support-section-title",
+      "type": "title",
+      "name": "未闭环技术状态跟进表",
+      "x": 38,
+      "y": 646,
+      "width": 620,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "未闭环技术状态跟进表",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-tech-support-section-desc",
+      "type": "title",
+      "name": "未闭环技术状态跟进表说明",
+      "x": 38,
+      "y": 674,
+      "width": 1760,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "跟进处置表：聚焦未签署或待整改变更单，展示受影响文件、对象和计划闭环时间。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
       }
     }
   ]

@@ -44,9 +44,6 @@ public class PortalMenuService {
     private static final Logger log = LoggerFactory.getLogger(PortalMenuService.class);
     private static final String MENU_SEED_HASH_KEY = "portal.menu.seed.hash";
 
-    // Default roles that can see menus when no explicit visibility is defined.
-    // Note: Do NOT include ROLE_USER here; otherwise all authenticated users would see all menus.
-    private static final List<String> DEFAULT_MENU_ROLES = List.of("ROLE_OP_ADMIN");
     // NOTE: security.threeAdmins 同理（已在管理端实现）。
     private static final Set<String> DISABLED_SECTIONS = Set.of("iam");
     private static final Set<String> LEGACY_SECTION_KEYS = Set.of(
@@ -318,10 +315,7 @@ public class PortalMenuService {
         } catch (Exception ignore) {}
         List<PortalMenuVisibility> visibilities = menu.getVisibilities();
         if (visibilities == null || visibilities.isEmpty()) {
-            if (CollectionUtils.isEmpty(roleCodes)) {
-                return false;
-            }
-            return roleCodes.stream().anyMatch(DEFAULT_MENU_ROLES::contains);
+            return false;
         }
 
         for (PortalMenuVisibility visibility : visibilities) {
@@ -340,10 +334,6 @@ public class PortalMenuService {
     }
 
     private boolean matchesRole(PortalMenuVisibility visibility, Set<String> roleCodes) {
-        // Unconditional bypass for operator admin: OP_ADMIN must see all menus permanently
-        if (!CollectionUtils.isEmpty(roleCodes) && roleCodes.contains(AuthoritiesConstants.OP_ADMIN)) {
-            return true;
-        }
         String rawRequiredRole = visibility.getRoleCode();
         if (!StringUtils.hasText(rawRequiredRole)) {
             return true;
@@ -1301,18 +1291,7 @@ public class PortalMenuService {
     }
 
     private List<PortalMenuVisibility> defaultVisibilities(PortalMenu menu) {
-        List<PortalMenuVisibility> defaults = new ArrayList<>();
-        String section = null;
-        try {
-            section = extractSectionKey(menu);
-        } catch (Exception ignore) {}
-        // By default, only grant OP_ADMIN; end-users see menus only when their roles are explicitly bound.
-        PortalMenuVisibility op = new PortalMenuVisibility();
-        op.setMenu(menu);
-        op.setRoleCode(AuthoritiesConstants.OP_ADMIN);
-        op.setDataLevel(SecurityLevelCatalog.DEFAULT_DATA_SECURITY_LEVEL.code());
-        defaults.add(op);
-        return defaults;
+        return new ArrayList<>();
     }
 
     private PortalMenuVisibility copyVisibility(PortalMenu targetMenu, PortalMenuVisibility source) {

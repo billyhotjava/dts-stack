@@ -2,7 +2,7 @@
   "schemaVersion": 3,
   "id": "gpmc-drill-quality-v4",
   "name": "执行层-质量问题与跟进明细",
-  "description": "质量问题钻取页面，展示质量问题清单、闭环摘要及跟进措施。",
+  "description": "质量问题钻取页面，分区展示质量问题全量清单、闭环指标摘要及未归零问题跟进表。",
   "classification": "INTERNAL",
   "width": 1920,
   "height": 1080,
@@ -171,8 +171,8 @@
           "sourceTable": "质量信息汇总表",
           "frequency": "每日 01:00 刷新",
           "thresholds": {
-            "warning": 60.0,
-            "critical": 50.0,
+            "warning": 60,
+            "critical": 50,
             "rule": "<"
           },
           "excelRef": "二次指标 #7 pjm_qual_zero_rate"
@@ -241,8 +241,8 @@
           "sourceTable": "质量信息汇总表",
           "frequency": "每日 01:00 刷新",
           "thresholds": {
-            "warning": 50.0,
-            "critical": 80.0,
+            "warning": 50,
+            "critical": 80,
             "rule": ">"
           },
           "excelRef": "二次指标 #8 pjm_qual_remaining_ratio"
@@ -311,8 +311,8 @@
           "sourceTable": "质量信息汇总表",
           "frequency": "每日 01:00 刷新",
           "thresholds": {
-            "warning": 80.0,
-            "critical": 60.0,
+            "warning": 80,
+            "critical": 60,
             "rule": "<"
           },
           "excelRef": "二次指标 #9 pjm_qual_plan_submit_rate"
@@ -381,8 +381,8 @@
           "sourceTable": "质量信息汇总表",
           "frequency": "每日 01:00 刷新",
           "thresholds": {
-            "warning": 80.0,
-            "critical": 70.0,
+            "warning": 80,
+            "critical": 70,
             "rule": "<"
           },
           "excelRef": "二次指标 #11 pjm_qual_health_score"
@@ -420,16 +420,16 @@
     {
       "id": "drill-quality-detail-table",
       "type": "table",
-      "name": "质量问题清单",
-      "x": 20,
-      "y": 175,
-      "width": 1145,
-      "height": 420,
-      "zIndex": 15,
+      "name": "质量问题全量清单",
+      "x": 38,
+      "y": 244,
+      "width": 1144,
+      "height": 342,
+      "zIndex": 18,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "质量问题清单",
+        "title": "质量问题全量清单",
         "header": [
           "项目编号",
           "分系统",
@@ -444,15 +444,15 @@
           "滞留天数"
         ],
         "data": [],
-        "fontSize": 16,
+        "fontSize": 14,
         "headerAlign": "center",
         "headerColor": "#ffffff",
-        "headerBackground": "#0f2a55",
+        "headerBackground": "#092657",
         "bodyColor": "#ffffff",
-        "bodyBackground": "rgba(9, 36, 90, 0.86)",
-        "oddRowBackground": "rgba(9, 36, 90, 0.86)",
-        "evenRowBackground": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
         "enableSort": true,
         "enablePagination": true,
         "pageSize": 8,
@@ -471,8 +471,8 @@
             "sourceTable": "质量信息汇总表 / 风险信息汇总表 / 技术状态信息汇总表",
             "frequency": "每日 01:00 刷新",
             "thresholds": {
-              "warning": 30.0,
-              "critical": 60.0,
+              "warning": 30,
+              "critical": 60,
               "rule": ">"
             },
             "excelRef": "(派生)aging_days"
@@ -579,7 +579,14 @@
             "sourceTable": "质量信息汇总表",
             "note": "数据规范化: '处理中'/'进行中'/'未闭环'等统一归为'未完成归零'"
           }
-        }
+        },
+        "description": "事实明细表：展示统计周期内质量问题的项目、分类、归零状态、当前进展和滞留天数。",
+        "tableRole": "事实明细表",
+        "headerFontSize": 14,
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "autoPageSize": true,
+        "minColumnWidth": 126,
+        "freezeFirstColumn": true
       },
       "dataSource": {
         "type": "sql",
@@ -612,30 +619,31 @@
     {
       "id": "drill-quality-side-panel",
       "type": "table",
-      "name": "质量闭环摘要",
-      "x": 1185,
-      "y": 175,
-      "width": 715,
-      "height": 420,
-      "zIndex": 15,
+      "name": "质量闭环指标摘要",
+      "x": 1238,
+      "y": 244,
+      "width": 644,
+      "height": 342,
+      "zIndex": 18,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "质量闭环摘要",
+        "title": "质量闭环指标摘要",
         "header": [
           "指标",
-          "数值"
+          "数值",
+          "说明"
         ],
         "data": [],
-        "fontSize": 16,
+        "fontSize": 14,
         "headerAlign": "center",
         "headerColor": "#ffffff",
-        "headerBackground": "#0f2a55",
+        "headerBackground": "#092657",
         "bodyColor": "#ffffff",
-        "bodyBackground": "rgba(9, 36, 90, 0.86)",
-        "oddRowBackground": "rgba(9, 36, 90, 0.86)",
-        "evenRowBackground": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
         "enableSort": true,
         "enablePagination": true,
         "pageSize": 8,
@@ -746,13 +754,20 @@
             "thresholds": null,
             "excelRef": "原始指标 #38"
           }
-        }
+        },
+        "description": "指标摘要表：将质量月度汇总指标转成纵向摘要，快速判断新增、现存、归零和计划提交情况。",
+        "tableRole": "指标摘要表",
+        "headerFontSize": 14,
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "autoPageSize": true,
+        "minColumnWidth": 116,
+        "freezeFirstColumn": true
       },
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT SUM(new_issue_cnt) AS \"新增质量问题\", SUM(open_issue_cnt) AS \"现存质量问题\", SUM(zero_completed_cnt) AS \"已归零数\", SUM(no_zero_plan_cnt) AS \"未提交归零计划\", SUM(tech_zero_cnt) AS \"技术归零\", SUM(mgmt_zero_cnt) AS \"管理归零\", SUM(both_zero_cnt) AS \"双归零\" FROM biz_dws_quality_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]",
+          "query": "WITH agg AS (SELECT COALESCE(SUM(new_issue_cnt),0)::numeric AS new_issue_cnt, COALESCE(SUM(open_issue_cnt),0)::numeric AS open_issue_cnt, COALESCE(SUM(zero_completed_cnt),0)::numeric AS zero_completed_cnt, COALESCE(SUM(no_zero_plan_cnt),0)::numeric AS no_zero_plan_cnt, COALESCE(SUM(tech_zero_cnt),0)::numeric AS tech_zero_cnt, COALESCE(SUM(mgmt_zero_cnt),0)::numeric AS mgmt_zero_cnt, COALESCE(SUM(both_zero_cnt),0)::numeric AS both_zero_cnt FROM biz_dws_quality_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]) SELECT v.metric AS \"指标\", v.value AS \"数值\", v.note AS \"说明\" FROM agg CROSS JOIN LATERAL (VALUES ('新增质量问题', agg.new_issue_cnt, '统计周期内新增质量问题数量'), ('现存质量问题', agg.open_issue_cnt, '截至统计周期仍未归零的问题数量'), ('已归零数', agg.zero_completed_cnt, '统计周期内完成归零闭环的问题数量'), ('未提交归零计划', agg.no_zero_plan_cnt, '尚未形成归零计划的问题数量'), ('技术归零', agg.tech_zero_cnt, '按技术归零方式闭环的问题数量'), ('管理归零', agg.mgmt_zero_cnt, '按管理归零方式闭环的问题数量'), ('双归零', agg.both_zero_cnt, '同时完成技术与管理归零的问题数量')) AS v(metric,value,note)",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -779,16 +794,16 @@
     {
       "id": "drill-quality-support-table",
       "type": "table",
-      "name": "跟进措施摘要",
-      "x": 20,
-      "y": 610,
-      "width": 1880,
-      "height": 440,
-      "zIndex": 15,
+      "name": "未归零质量问题跟进表",
+      "x": 38,
+      "y": 704,
+      "width": 1844,
+      "height": 320,
+      "zIndex": 18,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "跟进措施摘要",
+        "title": "未归零质量问题跟进表",
         "header": [
           "项目编号",
           "分系统",
@@ -799,19 +814,18 @@
           "状态",
           "当前进展",
           "问题日期",
-          "归零完成日期",
           "滞留天数"
         ],
         "data": [],
-        "fontSize": 16,
+        "fontSize": 14,
         "headerAlign": "center",
         "headerColor": "#ffffff",
-        "headerBackground": "#0f2a55",
+        "headerBackground": "#092657",
         "bodyColor": "#ffffff",
-        "bodyBackground": "rgba(9, 36, 90, 0.86)",
-        "oddRowBackground": "rgba(9, 36, 90, 0.86)",
-        "evenRowBackground": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
         "enableSort": true,
         "enablePagination": true,
         "pageSize": 8,
@@ -830,8 +844,8 @@
             "sourceTable": "质量信息汇总表 / 风险信息汇总表 / 技术状态信息汇总表",
             "frequency": "每日 01:00 刷新",
             "thresholds": {
-              "warning": 30.0,
-              "critical": 60.0,
+              "warning": 30,
+              "critical": 60,
               "rule": ">"
             },
             "excelRef": "(派生)aging_days"
@@ -938,13 +952,20 @@
             "sourceTable": "质量信息汇总表",
             "note": "数据规范化: '处理中'/'进行中'/'未闭环'等统一归为'未完成归零'"
           }
-        }
+        },
+        "description": "跟进处置表：聚焦未归零问题的归零计划和当前进展，按滞留天数倒序推进闭环。",
+        "tableRole": "跟进处置表",
+        "headerFontSize": 14,
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "autoPageSize": true,
+        "minColumnWidth": 126,
+        "freezeFirstColumn": true
       },
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT project_no AS \"项目编号\", subsystem AS \"分系统\", issue_name AS \"问题名称\", dept AS \"责任科室\", issue_category AS \"问题分类\", zero_plan AS \"归零计划\", status AS \"状态\", current_progress AS \"当前进展\", issue_date AS \"问题日期\", zero_complete_date AS \"归零完成日期\", pending_days AS \"滞留天数\" FROM biz_dwd_quality_issue_v2 WHERE issue_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND issue_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] ORDER BY pending_days DESC NULLS LAST",
+          "query": "SELECT project_no AS \"项目编号\", subsystem AS \"分系统\", issue_name AS \"问题名称\", dept AS \"责任科室\", issue_category AS \"问题分类\", zero_plan AS \"归零计划\", status AS \"状态\", current_progress AS \"当前进展\", issue_date AS \"问题日期\", pending_days AS \"滞留天数\" FROM biz_dwd_quality_issue_v2 WHERE issue_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND issue_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND COALESCE(is_zero_completed,false) = false [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] ORDER BY pending_days DESC NULLS LAST, issue_date ASC",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -966,6 +987,177 @@
             }
           ]
         }
+      }
+    },
+    {
+      "id": "drill-quality-detail-section-bg",
+      "type": "shape",
+      "name": "主明细区",
+      "x": 20,
+      "y": 176,
+      "width": 1180,
+      "height": 438,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-quality-detail-section-title",
+      "type": "title",
+      "name": "质量问题全量清单",
+      "x": 38,
+      "y": 190,
+      "width": 540,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "质量问题全量清单",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-quality-detail-section-desc",
+      "type": "title",
+      "name": "质量问题全量清单说明",
+      "x": 38,
+      "y": 218,
+      "width": 1124,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "事实明细表：展示统计周期内质量问题的项目、分类、归零状态、当前进展和滞留天数。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-quality-side-section-bg",
+      "type": "shape",
+      "name": "摘要洞察区",
+      "x": 1220,
+      "y": 176,
+      "width": 680,
+      "height": 438,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-quality-side-section-title",
+      "type": "title",
+      "name": "质量闭环指标摘要",
+      "x": 1238,
+      "y": 190,
+      "width": 420,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "质量闭环指标摘要",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-quality-side-section-desc",
+      "type": "title",
+      "name": "质量闭环指标摘要说明",
+      "x": 1238,
+      "y": 218,
+      "width": 624,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "指标摘要表：将质量月度汇总指标转成纵向摘要，快速判断新增、现存、归零和计划提交情况。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-quality-support-section-bg",
+      "type": "shape",
+      "name": "跟进处置区",
+      "x": 20,
+      "y": 632,
+      "width": 1880,
+      "height": 420,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-quality-support-section-title",
+      "type": "title",
+      "name": "未归零质量问题跟进表",
+      "x": 38,
+      "y": 646,
+      "width": 620,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "未归零质量问题跟进表",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-quality-support-section-desc",
+      "type": "title",
+      "name": "未归零质量问题跟进表说明",
+      "x": 38,
+      "y": 674,
+      "width": 1760,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "跟进处置表：聚焦未归零问题的归零计划和当前进展，按滞留天数倒序推进闭环。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
       }
     }
   ]

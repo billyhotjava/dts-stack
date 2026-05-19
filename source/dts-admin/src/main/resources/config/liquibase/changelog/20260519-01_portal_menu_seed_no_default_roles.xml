@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260519-01-portal-menu-seed-no-default-roles" author="codex">
+        <preConditions onFail="MARK_RAN" onError="MARK_RAN">
+            <and>
+                <tableExists tableName="portal_menu_visibility"/>
+                <tableExists tableName="system_config"/>
+                <sqlCheck expectedResult="0">
+                    SELECT COUNT(*) FROM system_config WHERE cfg_key = 'portal.menu.seed.hash'
+                </sqlCheck>
+            </and>
+        </preConditions>
+
+        <comment>
+            Fresh menu seeds must start without role bindings; onsite administrators bind menu roles explicitly.
+        </comment>
+        <sql>DELETE FROM portal_menu_visibility;</sql>
+    </changeSet>
+
+</databaseChangeLog>

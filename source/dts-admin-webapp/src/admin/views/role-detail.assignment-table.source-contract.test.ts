@@ -48,6 +48,23 @@ describe("role detail assignment table contract", () => {
 
 		expect(detailSource.includes("canEditMembers={!hasPendingChange}")).toBe(true);
 		expect(detailSource.includes("if (!isEditMode || hasPendingChange) return;")).toBe(true);
-		expect(detailSource.includes("isEditMode && canEditMembers")).toBe(true);
+		expect(detailSource.includes("disabled: !canEditMembers")).toBe(true);
+	});
+
+	it("does not render the duplicate current-members module or load role members separately", () => {
+		const detailSource = readSource("./role-detail.tsx");
+
+		expect(detailSource.includes("getRoleMembers")).toBe(false);
+		expect(detailSource.includes("当前成员")).toBe(false);
+		expect(detailSource.includes("memberViews")).toBe(false);
+		expect(detailSource.includes("membersLoading")).toBe(false);
+	});
+
+	it("confirms role edit submission and defaults the assignment table to ten rows", () => {
+		const detailSource = readSource("./role-detail.tsx");
+
+		expect(detailSource.includes("Modal.confirm")).toBe(true);
+		expect(detailSource.includes("pageSize: 10")).toBe(true);
+		expect(detailSource.includes("pageSize: 20")).toBe(false);
 	});
 });
