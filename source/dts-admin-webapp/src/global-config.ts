@@ -4,7 +4,12 @@ import packageJson from "../package.json";
  * Global application configuration type definition
  */
 declare global {
-    interface Window { __RUNTIME_CONFIG__?: { koalPkiEndpoints?: string[] } }
+	interface Window {
+		__RUNTIME_CONFIG__?: {
+			koalPkiEndpoints?: string[];
+			showClassifiedLoginBadge?: string | boolean;
+		};
+	}
 }
 
 export type GlobalConfig = {
@@ -30,6 +35,8 @@ export type GlobalConfig = {
 	hideDefaultRoles: boolean;
 	/** Local Koal middleware endpoints, used for PKI login */
 	koalPkiEndpoints: string[];
+	/** Show the classified login mark: red star + 机密 text */
+	showClassifiedLoginBadge: boolean;
 };
 
 /**
@@ -111,6 +118,25 @@ const resolveKoalPkiEndpoints = (): string[] => {
 		.filter(Boolean);
 };
 
+const parseBooleanFlag = (value: unknown): boolean | undefined => {
+	if (typeof value === "boolean") return value;
+	if (typeof value !== "string") return undefined;
+	const normalized = value.trim().toLowerCase();
+	if (["true", "1", "yes", "y", "on"].includes(normalized)) return true;
+	if (["false", "0", "no", "n", "off"].includes(normalized)) return false;
+	return undefined;
+};
+
+const resolveShowClassifiedLoginBadge = (): boolean => {
+	try {
+		const runtimeValue = typeof window !== "undefined" ? window.__RUNTIME_CONFIG__?.showClassifiedLoginBadge : undefined;
+		const parsed = parseBooleanFlag(runtimeValue);
+		if (typeof parsed === "boolean") return parsed;
+	} catch {}
+	const env = import.meta.env as Record<string, string | boolean | undefined>;
+	return parseBooleanFlag(env.WEBAPP_SHOW_CLASSIFIED_LOGIN_BADGE ?? env.VITE_SHOW_CLASSIFIED_LOGIN_BADGE) ?? true;
+};
+
 export const GLOBAL_CONFIG: GlobalConfig = {
 	appName: import.meta.env.VITE_APP_NAME || "BI数智平台(机密)",
 	appVersion: packageJson.version,
@@ -123,4 +149,5 @@ export const GLOBAL_CONFIG: GlobalConfig = {
 	hideBuiltinRoles: String(import.meta.env.VITE_HIDE_BUILTIN_ROLES ?? "true").toLowerCase() === "true",
 	hideDefaultRoles: String(import.meta.env.VITE_HIDE_DEFAULT_ROLES ?? "true").toLowerCase() === "true",
 	koalPkiEndpoints: resolveKoalPkiEndpoints(),
+	showClassifiedLoginBadge: resolveShowClassifiedLoginBadge(),
 };

@@ -73,6 +73,8 @@ export function DesignerCanvas() {
     const [fitScale, setFitScale] = useState(1);
 
     // Phase 4.4: resize debounce with requestAnimationFrame
+    // 增加阈值过滤(避免滚动条出现/消失这种 ~16px 抖动反复触发 fitScale 变化,
+    // 进而和 zoom 变化产生反馈循环造成画布抖动)
     useEffect(() => {
         let rafId = 0;
         const containerNode = containerRef.current;
@@ -85,7 +87,8 @@ export function DesignerCanvas() {
             const baseWidth = Math.max(config.width || 1920, 1);
             const baseHeight = Math.max(config.height || 1080, 1);
             const next = Math.max(0.1, Math.min(1, availableWidth / baseWidth, availableHeight / baseHeight));
-            setFitScale(next);
+            // 阈值过滤: 仅在变化 > 1% 时才更新,防止滚动条引起的 ±16px 反复触发
+            setFitScale((prev) => (Math.abs(next - prev) > 0.01 ? next : prev));
         };
         const onResize = () => {
             cancelAnimationFrame(rafId);
@@ -392,12 +395,18 @@ export function DesignerCanvas() {
                         ))}
                     </div>
                 </div>
-            <div className="flex-1 overflow-auto relative">
+            {/*
+              使用 overflow:scroll 而非 auto,让滚动条永久占位,避免出现/消失反复触发 ResizeObserver
+              缩放反馈循环 (用户体验上"按 + 抖动"的根因之一)
+            */}
+            <div className="flex-1 relative" style={{ overflow: 'scroll', scrollbarGutter: 'stable' }}>
             <div
                 className="relative shadow-[0_4px_20px_rgba(0,0,0,0.5)] origin-center"
                 style={{
                     width: config.width * scale,
                     height: config.height * scale,
+                    // 缩放过渡 — 让按 +/- 25% 的变化看起来平滑,而非生硬跳变
+                    transition: 'width 160ms ease-out, height 160ms ease-out',
                 }}
             >
                 <div
@@ -419,6 +428,8 @@ export function DesignerCanvas() {
                         backgroundRepeat: 'no-repeat',
                         transform: `scale(${scale})`,
                         transformOrigin: 'top left',
+                        // 与 wrapper 同步过渡,缩放更平滑
+                        transition: 'transform 160ms ease-out',
                     }}
                     onClick={handleCanvasClick}
                     onContextMenu={handleContextMenu}

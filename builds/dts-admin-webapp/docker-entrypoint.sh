@@ -6,6 +6,7 @@ set -eu
 #   - KOAL_PKI_ENDPOINTS: comma-separated list for Koal local agent endpoints
 #   - WEBAPP_PASSWORD_LOGIN_ENABLED: flag to enable password login UI
 #   - VITE_HIDE_PASSWORD_LOGIN: flag to hide password login UI
+#   - WEBAPP_SHOW_CLASSIFIED_LOGIN_BADGE: show red star + 机密 login mark
 #   - PKI_DEBUG: enable verbose PKI logs in browser (true/false)
 RUNTIME_JS="/usr/share/nginx/html/runtime-config.js"
 # Initialize file to ensure it's present (safe if empty)
@@ -29,6 +30,12 @@ if [ -n "${VITE_HIDE_PASSWORD_LOGIN:-}" ]; then
   val=$(printf '%s' "$VITE_HIDE_PASSWORD_LOGIN" | tr '[:upper:]' '[:lower:]')
   printf '%s\n' "(function(w){w.__RUNTIME_CONFIG__=w.__RUNTIME_CONFIG__||{};w.__RUNTIME_CONFIG__.hidePasswordLogin='${val}';})(window);" >> "$RUNTIME_JS"
   echo "[entrypoint] runtime-config.js: hidePasswordLogin=${VITE_HIDE_PASSWORD_LOGIN}"
+fi
+
+if [ -n "${WEBAPP_SHOW_CLASSIFIED_LOGIN_BADGE:-}" ]; then
+  val=$(printf '%s' "$WEBAPP_SHOW_CLASSIFIED_LOGIN_BADGE" | tr '[:upper:]' '[:lower:]')
+  printf '%s\n' "(function(w){w.__RUNTIME_CONFIG__=w.__RUNTIME_CONFIG__||{};w.__RUNTIME_CONFIG__.showClassifiedLoginBadge='${val}';})(window);" >> "$RUNTIME_JS"
+  echo "[entrypoint] runtime-config.js: showClassifiedLoginBadge=${WEBAPP_SHOW_CLASSIFIED_LOGIN_BADGE}"
 fi
 
 if [ -n "${PKI_DEBUG:-}" ]; then

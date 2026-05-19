@@ -180,6 +180,7 @@ export default defineConfig(({ mode }) => {
       .filter(Boolean);
     const enableRaw = (env as any).WEBAPP_PASSWORD_LOGIN_ENABLED ?? "";
     const hideRaw = (env as any).VITE_HIDE_PASSWORD_LOGIN ?? "";
+    const classifiedBadgeRaw = (env as any).WEBAPP_SHOW_CLASSIFIED_LOGIN_BADGE ?? "";
     const vendorBase = (env as any).KOAL_VENDOR_BASE || (env as any).VITE_KOAL_VENDOR_BASE || "";
     const platformBase = (env as any).PLATFORM_PUBLIC_BASE_URL || (env as any).VITE_PLATFORM_PUBLIC_BASE_URL || "";
     const allowedExternalHostsRaw =
@@ -192,6 +193,7 @@ export default defineConfig(({ mode }) => {
     const sqlIdeV2Raw = (env as any).VITE_ENABLE_SQL_IDE_V2 ?? (env as any).WEBAPP_ENABLE_SQL_IDE_V2 ?? "";
     const enable = String(enableRaw).trim().toLowerCase();
     const hide = String(hideRaw).trim().toLowerCase();
+    const classifiedBadge = String(classifiedBadgeRaw).trim().toLowerCase();
     const sqlWorkbench = String(sqlWorkbenchRaw).trim().toLowerCase();
     const sqlIdeV2 = String(sqlIdeV2Raw).trim().toLowerCase();
     return {
@@ -209,6 +211,9 @@ export default defineConfig(({ mode }) => {
             }
             if (hide) {
               js += `w.__RUNTIME_CONFIG__.hidePasswordLogin=${JSON.stringify(hide)};`;
+            }
+            if (classifiedBadge) {
+              js += `w.__RUNTIME_CONFIG__.showClassifiedLoginBadge=${JSON.stringify(classifiedBadge)};`;
             }
             if (sqlWorkbench) {
               js += `w.__RUNTIME_CONFIG__.enableSqlWorkbench=${JSON.stringify(sqlWorkbench)};`;

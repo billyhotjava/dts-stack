@@ -738,6 +738,7 @@ services:
       # Runtime password-login toggles (admin webapp)
       WEBAPP_PASSWORD_LOGIN_ENABLED: ${ADMIN_WEBAPP_PASSWORD_LOGIN_ENABLED:-}
       VITE_HIDE_PASSWORD_LOGIN: ${ADMIN_VITE_HIDE_PASSWORD_LOGIN:-}
+      WEBAPP_SHOW_CLASSIFIED_LOGIN_BADGE: ${WEBAPP_SHOW_CLASSIFIED_LOGIN_BADGE:-true}
     ports: []
     networks:
       - dts-core
@@ -786,6 +787,7 @@ services:
       # Runtime password-login toggles (platform webapp)
       WEBAPP_PASSWORD_LOGIN_ENABLED: ${PLATFORM_WEBAPP_PASSWORD_LOGIN_ENABLED:-}
       VITE_HIDE_PASSWORD_LOGIN: ${PLATFORM_VITE_HIDE_PASSWORD_LOGIN:-}
+      WEBAPP_SHOW_CLASSIFIED_LOGIN_BADGE: ${WEBAPP_SHOW_CLASSIFIED_LOGIN_BADGE:-true}
     networks:
       - dts-core
     restart: unless-stopped

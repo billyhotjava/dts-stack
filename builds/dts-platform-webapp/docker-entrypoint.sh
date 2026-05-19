@@ -110,6 +110,7 @@ fi
 #   - KOAL_PKI_ENDPOINTS: comma-separated local agent endpoints
 #   - WEBAPP_PASSWORD_LOGIN_ENABLED: enable password login UI
 #   - VITE_HIDE_PASSWORD_LOGIN: hide password login UI
+#   - WEBAPP_SHOW_CLASSIFIED_LOGIN_BADGE: show red star + 机密 login mark
 #   - VITE_ENABLE_SQL_WORKBENCH: enable SQL Workbench at runtime
 #   - PLATFORM_PUBLIC_BASE_URL: preferred absolute domain for BI links (e.g., https://bi.example.com)
 #   - ALLOWED_EXTERNAL_REDIRECT_HOSTS: comma-separated allowlist for post-login external relay
@@ -136,6 +137,12 @@ if [ -n "${VITE_HIDE_PASSWORD_LOGIN:-}" ]; then
   val=$(printf '%s' "$VITE_HIDE_PASSWORD_LOGIN" | tr '[:upper:]' '[:lower:]')
   printf '%s\n' "(function(w){w.__RUNTIME_CONFIG__=w.__RUNTIME_CONFIG__||{};w.__RUNTIME_CONFIG__.hidePasswordLogin='${val}';})(window);" >> "$RUNTIME_JS"
   echo "[entrypoint] runtime-config.js: hidePasswordLogin=${VITE_HIDE_PASSWORD_LOGIN}"
+fi
+
+if [ -n "${WEBAPP_SHOW_CLASSIFIED_LOGIN_BADGE:-}" ]; then
+  val=$(printf '%s' "$WEBAPP_SHOW_CLASSIFIED_LOGIN_BADGE" | tr '[:upper:]' '[:lower:]')
+  printf '%s\n' "(function(w){w.__RUNTIME_CONFIG__=w.__RUNTIME_CONFIG__||{};w.__RUNTIME_CONFIG__.showClassifiedLoginBadge='${val}';})(window);" >> "$RUNTIME_JS"
+  echo "[entrypoint] runtime-config.js: showClassifiedLoginBadge=${WEBAPP_SHOW_CLASSIFIED_LOGIN_BADGE}"
 fi
 
 if [ -n "${VITE_ENABLE_SQL_WORKBENCH:-}" ]; then

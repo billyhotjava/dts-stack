@@ -6,6 +6,7 @@ import { getPortalSessionStatus, type PortalSessionStatus } from "@/api/platform
 import TechDataBackground from "@/assets/images/background/tech-data-platform.svg";
 import TechDataBackgroundLight from "@/assets/images/background/tech-data-platform-light.svg";
 import LocalePicker from "@/components/locale-picker";
+import { GLOBAL_CONFIG } from "@/global-config";
 import { useBilingualText } from "@/hooks/useBilingualText";
 import SettingButton from "@/layouts/components/setting-button";
 import { resolvePostLoginRedirect } from "@/routes/constants";
@@ -184,6 +185,7 @@ function LoginPage() {
 
 	const brandLabel = bilingual("sys.login.brandName");
 	const brandIllustrationAlt = bilingual("sys.login.brandIllustrationAlt");
+	const showClassifiedLoginBadge = GLOBAL_CONFIG.showClassifiedLoginBadge;
 
 	return (
 		<div className="relative grid min-h-screen lg:grid-cols-2 bg-background">
@@ -203,12 +205,14 @@ function LoginPage() {
 
 			{/* Login form on the right */}
 			<div className="flex flex-col gap-4 p-6 md:p-10">
-				<div className="flex justify-center gap-2 md:justify-start">
-					<div className="flex items-center gap-3 font-medium cursor-default">
-						<Star className="h-8 w-8 text-red-600" fill="currentColor" strokeWidth={1.5} />
-						<span className="text-2xl font-semibold leading-tight text-foreground">{brandLabel}</span>
+				{showClassifiedLoginBadge ? (
+					<div className="flex justify-center gap-2 md:justify-start">
+						<div className="flex items-center gap-3 font-medium cursor-default">
+							<Star className="h-8 w-8 text-red-600" fill="currentColor" strokeWidth={1.5} />
+							<span className="text-2xl font-semibold leading-tight text-foreground">{brandLabel}</span>
+						</div>
 					</div>
-				</div>
+				) : null}
 				<div className="flex flex-1 items-center justify-center">
 					<div className="w-full max-w-xs">
 						<LoginProvider>

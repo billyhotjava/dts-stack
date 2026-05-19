@@ -872,7 +872,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COALESCE(SUM(q.new_issue_cnt), 0) AS \"质量问题总数\", COALESCE(SUM(CASE WHEN q.period_month = to_char({{dateTo}}::date, 'YYYY-MM') THEN q.new_issue_cnt ELSE 0 END), 0) AS \"当月新增\", COALESCE(SUM(CASE WHEN q.period_month = to_char({{dateTo}}::date, 'YYYY-MM') THEN q.open_issue_cnt ELSE 0 END), 0) AS \"未归零\" FROM biz_ads_quality_kpi_v2 q WHERE q.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND q.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')",
+          "query": "SELECT COALESCE(SUM(q.new_issue_cnt), 0) AS \"质量问题总数\" FROM biz_ads_quality_kpi_v2 q WHERE q.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND q.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')",
           "queryTimeoutSeconds": 30,
           "maxRows": 1,
           "parameterBindings": [
@@ -916,7 +916,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COALESCE(SUM(q.new_issue_cnt), 0) AS \"质量问题总数\", COALESCE(SUM(CASE WHEN q.period_month = to_char({{dateTo}}::date, 'YYYY-MM') THEN q.new_issue_cnt ELSE 0 END), 0) AS \"当月新增\", COALESCE(SUM(CASE WHEN q.period_month = to_char({{dateTo}}::date, 'YYYY-MM') THEN q.open_issue_cnt ELSE 0 END), 0) AS \"未归零\" FROM biz_ads_quality_kpi_v2 q WHERE q.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND q.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')",
+          "query": "WITH latest_month AS (SELECT MAX(q.period_month) AS period_month FROM biz_ads_quality_kpi_v2 q WHERE q.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND q.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')) SELECT COALESCE(SUM(q.new_issue_cnt), 0) AS \"当月新增\" FROM latest_month lm LEFT JOIN biz_ads_quality_kpi_v2 q ON q.period_month = lm.period_month",
           "queryTimeoutSeconds": 30,
           "maxRows": 1,
           "parameterBindings": [
@@ -960,7 +960,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COALESCE(SUM(q.new_issue_cnt), 0) AS \"质量问题总数\", COALESCE(SUM(CASE WHEN q.period_month = to_char({{dateTo}}::date, 'YYYY-MM') THEN q.new_issue_cnt ELSE 0 END), 0) AS \"当月新增\", COALESCE(SUM(CASE WHEN q.period_month = to_char({{dateTo}}::date, 'YYYY-MM') THEN q.open_issue_cnt ELSE 0 END), 0) AS \"未归零\" FROM biz_ads_quality_kpi_v2 q WHERE q.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND q.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')",
+          "query": "WITH latest_month AS (SELECT MAX(q.period_month) AS period_month FROM biz_ads_quality_kpi_v2 q WHERE q.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND q.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')) SELECT COALESCE(SUM(q.open_issue_cnt), 0) AS \"未归零\" FROM latest_month lm LEFT JOIN biz_ads_quality_kpi_v2 q ON q.period_month = lm.period_month",
           "queryTimeoutSeconds": 30,
           "maxRows": 1,
           "parameterBindings": [
@@ -1004,7 +1004,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COALESCE(SUM(t.total_change_cnt), 0) AS \"技术状态变更总数\", COALESCE(SUM(CASE WHEN t.period_month = to_char({{dateTo}}::date, 'YYYY-MM') THEN t.file_unsigned_i_ii + t.file_unsigned_iii ELSE 0 END), 0) AS \"未签署\", COALESCE(SUM(CASE WHEN t.period_month = to_char({{dateTo}}::date, 'YYYY-MM') THEN t.reform_pending_i_ii ELSE 0 END), 0) AS \"未落实整改\" FROM biz_ads_tech_state_kpi_v2 t WHERE t.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND t.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')",
+          "query": "SELECT COALESCE(SUM(t.total_change_cnt), 0) AS \"技术状态变更总数\" FROM biz_ads_tech_state_kpi_v2 t WHERE t.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND t.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')",
           "queryTimeoutSeconds": 30,
           "maxRows": 1,
           "parameterBindings": [
@@ -1048,7 +1048,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COALESCE(SUM(t.total_change_cnt), 0) AS \"技术状态变更总数\", COALESCE(SUM(CASE WHEN t.period_month = to_char({{dateTo}}::date, 'YYYY-MM') THEN t.file_unsigned_i_ii + t.file_unsigned_iii ELSE 0 END), 0) AS \"未签署\", COALESCE(SUM(CASE WHEN t.period_month = to_char({{dateTo}}::date, 'YYYY-MM') THEN t.reform_pending_i_ii ELSE 0 END), 0) AS \"未落实整改\" FROM biz_ads_tech_state_kpi_v2 t WHERE t.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND t.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')",
+          "query": "WITH latest_month AS (SELECT MAX(t.period_month) AS period_month FROM biz_ads_tech_state_kpi_v2 t WHERE t.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND t.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')) SELECT COALESCE(SUM(COALESCE(t.file_unsigned_i_ii, 0) + COALESCE(t.file_unsigned_iii, 0)), 0) AS \"未签署\" FROM latest_month lm LEFT JOIN biz_ads_tech_state_kpi_v2 t ON t.period_month = lm.period_month",
           "queryTimeoutSeconds": 30,
           "maxRows": 1,
           "parameterBindings": [
@@ -1092,7 +1092,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COALESCE(SUM(t.total_change_cnt), 0) AS \"技术状态变更总数\", COALESCE(SUM(CASE WHEN t.period_month = to_char({{dateTo}}::date, 'YYYY-MM') THEN t.file_unsigned_i_ii + t.file_unsigned_iii ELSE 0 END), 0) AS \"未签署\", COALESCE(SUM(CASE WHEN t.period_month = to_char({{dateTo}}::date, 'YYYY-MM') THEN t.reform_pending_i_ii ELSE 0 END), 0) AS \"未落实整改\" FROM biz_ads_tech_state_kpi_v2 t WHERE t.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND t.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')",
+          "query": "WITH latest_month AS (SELECT MAX(t.period_month) AS period_month FROM biz_ads_tech_state_kpi_v2 t WHERE t.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND t.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')) SELECT COALESCE(SUM(t.reform_pending_i_ii), 0) AS \"未落实整改\" FROM latest_month lm LEFT JOIN biz_ads_tech_state_kpi_v2 t ON t.period_month = lm.period_month",
           "queryTimeoutSeconds": 30,
           "maxRows": 1,
           "parameterBindings": [

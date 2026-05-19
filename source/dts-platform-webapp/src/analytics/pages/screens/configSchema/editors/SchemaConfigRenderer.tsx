@@ -175,11 +175,17 @@ const SchemaConfigRenderer: React.FC<SchemaConfigRendererProps> = ({ schema, con
     }
 
     if (field.type === 'column-style') {
+      // 从组件 config 上提取 SQL 数据源派生的列(由 ComponentRenderer 执行 SQL 后回写)。
+      // 当存在 _sourceColumns 时,ColumnStyleEditor 自动启用"字段下拉" + "一键同步列"。
+      const sourceColumns = (config as Record<string, unknown>)?._sourceColumns as
+        | Array<{ name: string; displayName?: string; baseType?: string }>
+        | undefined;
       return (
         <FieldRow key={field.key} label={field.label}>
           <ColumnStyleEditor
             value={val as ColumnConfig[] | undefined}
             onChange={(v) => onChange(field.key, v)}
+            sourceColumns={sourceColumns}
           />
         </FieldRow>
       );
