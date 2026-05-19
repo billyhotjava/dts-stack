@@ -1663,7 +1663,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT p.project_name AS \"项目名称\", COALESCE(NULLIF(p.project_leads, ''), '--') AS \"项目两总\", COALESCE(to_char(p.project_budget_wan, 'FM999G999G990D0'), '--') AS \"项目经费(万)\" FROM biz_ads_project_basic_info_v2 p WHERE EXISTS (SELECT 1 FROM biz_dwd_project_node_v2 d WHERE d.project_no = p.project_no AND d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM')) ORDER BY p.node_cnt DESC, p.project_no LIMIT 8",
+          "query": "WITH project_rollup AS (SELECT d.project_no, MAX(NULLIF(btrim(d.project_manager), '')) AS project_manager, MAX(NULLIF(btrim(d.institute_leader), '')) AS institute_leader, COUNT(*) AS node_cnt FROM biz_dwd_project_node_v2 d WHERE d.project_no IS NOT NULL AND d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') GROUP BY d.project_no) SELECT r.project_no AS \"项目名称\", COALESCE(NULLIF(concat_ws(' / ', r.project_manager, r.institute_leader), ''), '--') AS \"项目两总\", '--' AS \"项目经费(万)\" FROM project_rollup r ORDER BY r.node_cnt DESC, r.project_no LIMIT 8",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [

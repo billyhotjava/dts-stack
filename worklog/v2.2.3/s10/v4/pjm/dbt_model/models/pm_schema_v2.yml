@@ -434,18 +434,6 @@ models:
   - name: biz_ads_risk_kpi_v2
     description: "风险域KPI — 风险总数/高中低/释放率月度聚合"
 
-  - name: biz_ads_project_basic_info_v2
-    description: "项目基础信息ADS — 项目负责人/所领导/节点数等看板基础信息"
-    columns:
-      - name: project_no
-        tests:
-          - unique:
-              config:
-                severity: warn
-          - not_null:
-              config:
-                severity: warn
-
   # ═══ ADS 二次指标 (derived) ═══
   - name: biz_ads_progress_derived_v2
     description: "进度域二次指标 — 6个（按时完成率/超期率/异常率/里程碑率/高风险占比/健康分）"
