@@ -73,9 +73,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(255, 255, 255, 0.16)",
-        "borderColor": "rgba(255, 255, 255, 0.24)",
-        "borderWidth": 1,
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 18
       }
     },
@@ -878,38 +878,17 @@
         "minColumnWidth": 80,
         "showHeader": true,
         "headerColor": "#ffffff",
-        "stripeColor": "rgba(88,180,255,0.08)",
+        "stripeColor": "rgba(72, 170, 255, 0.42)",
         "backgroundColor": "rgba(9,36,90,0.50)",
         "titleFontSize": 0,
         "chartPaddingTop": 36,
         "bodyColor": "#ffffff",
+        "bodyBackground": "rgba(72, 170, 255, 0.42)",
+        "oddRowBackground": "rgba(72, 170, 255, 0.42)",
+        "evenRowBackground": "rgba(72, 170, 255, 0.42)",
+        "rowHoverBackground": "rgba(96, 190, 255, 0.50)",
         "freezeHeader": true,
-        "conditionalRules": [
-          {
-            "scope": "row",
-            "columnKey": "超期天数",
-            "operator": ">=",
-            "value": 90,
-            "color": "#ffffff",
-            "background": "rgba(239, 68, 68, 0.72)"
-          },
-          {
-            "scope": "row",
-            "columnKey": "超期天数",
-            "operator": ">=",
-            "value": 30,
-            "color": "#fff7ed",
-            "background": "rgba(245, 158, 11, 0.62)"
-          },
-          {
-            "scope": "row",
-            "columnKey": "超期天数",
-            "operator": "<",
-            "value": 30,
-            "color": "#e0f2fe",
-            "background": "rgba(14, 165, 233, 0.42)"
-          }
-        ],
+        "conditionalRules": [],
         "columnNotes": {
           "节点类型": {
             "kind": "field",

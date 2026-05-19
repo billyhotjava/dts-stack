@@ -500,6 +500,63 @@ public class PortalMenuService {
         persistSeedHash(seedHash);
     }
 
+    public void clearSeedMenuRoleBindings() {
+        Set<String> seedSectionKeys = seedSectionKeys(menuSeed());
+        if (seedSectionKeys.isEmpty()) {
+            return;
+        }
+        List<PortalMenu> allMenus = menuRepo.findAll();
+        if (allMenus == null || allMenus.isEmpty()) {
+            return;
+        }
+
+        boolean dirty = false;
+        for (PortalMenu menu : allMenus) {
+            if (!isSeedManagedMenu(menu, seedSectionKeys)) {
+                continue;
+            }
+            List<PortalMenuVisibility> existing = menu.getVisibilities() == null
+                ? List.of()
+                : new ArrayList<>(menu.getVisibilities());
+            for (PortalMenuVisibility visibility : existing) {
+                removeVisibility(visibility);
+                dirty = true;
+            }
+        }
+        if (dirty) {
+            menuRepo.flush();
+        }
+    }
+
+    private Set<String> seedSectionKeys(MenuSeed seed) {
+        if (seed == null || seed.portalNavSections() == null || seed.portalNavSections().isEmpty()) {
+            return Set.of();
+        }
+        return seed
+            .portalNavSections()
+            .stream()
+            .map(MenuNode::key)
+            .filter(StringUtils::hasText)
+            .map(key -> key.trim().toLowerCase(Locale.ROOT))
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private boolean isSeedManagedMenu(PortalMenu menu, Set<String> seedSectionKeys) {
+        if (menu == null || seedSectionKeys == null || seedSectionKeys.isEmpty()) {
+            return false;
+        }
+        String sectionKey = extractSectionKey(menu);
+        if (StringUtils.hasText(sectionKey) && seedSectionKeys.contains(sectionKey.trim().toLowerCase(Locale.ROOT))) {
+            return true;
+        }
+        String metadataKey = extractMetadataKey(menu);
+        return (
+            menu.getParent() == null &&
+            StringUtils.hasText(metadataKey) &&
+            seedSectionKeys.contains(metadataKey.trim().toLowerCase(Locale.ROOT))
+        );
+    }
+
     private void performMenuReset(MenuSeed seed) {
         visibilityRepo.deleteAllInBatch();
         menuRepo.deleteAllInBatch();

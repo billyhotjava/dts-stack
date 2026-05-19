@@ -633,91 +633,104 @@ function RoleBasicInfoSection({
 	onUpdateReasonChange: (value: string) => void;
 	children: ReactNode;
 }) {
+	// 标准企业表单: 左侧 label 列定宽 96px,右侧控件占满,所有 row 竖向严格对齐。
+	// header 显示当前名称 + 一行 inline 元数据(标识/成员/域),与正文表单清晰分层。
+	const scopeText = scope === "INSTITUTE" ? "全所共享域" : "部门域";
+	const memberSummary = `${memberCount} 人${
+		hasPendingMemberChange ? `(待新增 ${pendingAddsCount} · 移除 ${pendingRemovalsCount})` : ""
+	}`;
 	return (
 		<>
-			<CardHeader className="pb-4">
-				<div className="space-y-1.5">
-					{isEditMode ? (
-						<div className="space-y-2">
-							<Text variant="body3" className="font-medium">
-								角色名称
-							</Text>
+			<CardHeader className="px-6 pt-5 pb-4 border-b border-slate-200/70">
+				<div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+					<div className="min-w-0 flex-1">
+						<CardTitle className="text-lg font-semibold leading-tight truncate">{displayLabelText}</CardTitle>
+						<div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+							<span>标识：<span className="font-mono text-foreground/80">{authorityName}</span></span>
+							<span className="text-slate-300">·</span>
+							<span>所属域：<span className="text-foreground/80">{scopeText}</span></span>
+							<span className="text-slate-300">·</span>
+							<span>角色成员：<span className="text-foreground/80">{memberSummary}</span></span>
+						</div>
+					</div>
+				</div>
+			</CardHeader>
+			<CardContent className="px-6 py-5 text-sm">
+				<div className="divide-y divide-slate-100">
+					<FormRow label="角色名称" required>
+						{isEditMode ? (
 							<Input
 								value={displayLabel}
 								onChange={(event) => onDisplayLabelChange(event.target.value)}
 								placeholder="请输入角色名称"
 							/>
-						</div>
-					) : (
-						<CardTitle>{displayLabelText}</CardTitle>
-					)}
-					<Text variant="body3" className="text-muted-foreground">
-						角色标识：{authorityName}
-					</Text>
-				</div>
-			</CardHeader>
-			<CardContent className="space-y-5 text-sm">
-				<section className="grid gap-3 md:grid-cols-2">
-					<div className="space-y-1">
-						<Text variant="body3" className="font-medium">
-							所属域
-						</Text>
+						) : (
+							<Text variant="body3" className="text-sm">{displayLabelText}</Text>
+						)}
+					</FormRow>
+					<FormRow label="所属域" required>
 						{isEditMode ? (
 							<SelectScope value={scope} onChange={onScopeChange} />
 						) : (
-							<Text variant="body3" className="text-muted-foreground">
-								{scope === "INSTITUTE" ? "全所共享域" : "部门域"}
+							<Text variant="body3" className="text-sm">{scopeText}</Text>
+						)}
+					</FormRow>
+					<FormRow label="角色描述">
+						{isEditMode ? (
+							<Textarea
+								rows={2}
+								placeholder="更新角色说明"
+								value={description}
+								onChange={(event) => onDescriptionChange(event.target.value)}
+							/>
+						) : (
+							<Text variant="body3" className="text-sm whitespace-pre-line">
+								{roleDescription?.trim() || "未填写"}
 							</Text>
 						)}
-					</div>
-					<div className="space-y-1 md:justify-self-end md:text-right">
-						<Text variant="body3" className="font-medium">
-							角色成员数
-						</Text>
-						<Text variant="body3" className="text-muted-foreground">
-							{memberCount} 人
-							{hasPendingMemberChange
-								? `，待新增 ${pendingAddsCount} 人，待移除 ${pendingRemovalsCount} 人`
-								: ""}
-						</Text>
-					</div>
-				</section>
-
-				<section className="space-y-1.5">
-					<Text variant="body3" className="font-medium">
-						角色描述
-					</Text>
+					</FormRow>
 					{isEditMode ? (
-						<Textarea
-							rows={3}
-							placeholder="更新角色说明"
-							value={description}
-							onChange={(event) => onDescriptionChange(event.target.value)}
-						/>
-					) : (
-						<Text variant="body3" className="text-muted-foreground">
-							{roleDescription?.trim() || "未填写"}
-						</Text>
-					)}
-				</section>
-
-				{isEditMode ? (
-					<section className="space-y-1.5">
-						<Text variant="body3" className="font-medium">
-							审批备注（可选）
-						</Text>
-						<Textarea
-							rows={2}
-							placeholder="补充审批说明"
-							value={updateReason}
-							onChange={(event) => onUpdateReasonChange(event.target.value)}
-						/>
-					</section>
-				) : null}
+						<FormRow label="审批备注" hint="可选">
+							<Textarea
+								rows={2}
+								placeholder="补充审批说明"
+								value={updateReason}
+								onChange={(event) => onUpdateReasonChange(event.target.value)}
+							/>
+						</FormRow>
+					) : null}
+				</div>
 
 				{children}
 			</CardContent>
 		</>
+	);
+}
+
+/**
+ * 企业表单行 — label 在左定宽 96px,控件占满右侧,所有 row 竖向严格对齐。
+ * 比"label 一行 + 控件一行"上下堆叠更紧凑,也比 inline label + input 更专业。
+ */
+function FormRow({
+	label,
+	required,
+	hint,
+	children,
+}: {
+	label: string;
+	required?: boolean;
+	hint?: string;
+	children: ReactNode;
+}) {
+	return (
+		<div className="flex items-start gap-4 py-3 first:pt-0 last:pb-0">
+			<div className="w-24 shrink-0 pt-2 text-sm text-muted-foreground">
+				<span>{label}</span>
+				{required ? <span className="ml-1 text-rose-500">*</span> : null}
+				{hint ? <span className="ml-1 text-xs text-muted-foreground/70">({hint})</span> : null}
+			</div>
+			<div className="flex-1 min-w-0">{children}</div>
+		</div>
 	);
 }
 

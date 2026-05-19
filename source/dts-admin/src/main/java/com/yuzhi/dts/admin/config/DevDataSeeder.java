@@ -130,8 +130,13 @@ public class DevDataSeeder {
     }
 
     private void seedMenus() {
-        if (!menuRepo.findByDeletedFalseAndParentIsNullOrderBySortOrderAscIdAsc().isEmpty()) return;
+        if (!menuRepo.findByDeletedFalseAndParentIsNullOrderBySortOrderAscIdAsc().isEmpty()) {
+            portalMenuService.clearSeedMenuRoleBindings();
+            log.info("Cleared default portal menu role bindings from dev seed data");
+            return;
+        }
         portalMenuService.resetMenusToSeed();
+        portalMenuService.clearSeedMenuRoleBindings();
         log.info("Seeded portal menus from seed data");
     }
 

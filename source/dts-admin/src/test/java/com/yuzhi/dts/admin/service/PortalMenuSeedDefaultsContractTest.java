@@ -4,10 +4,18 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.admin.domain.PortalMenu;
+import com.yuzhi.dts.admin.domain.PortalMenuVisibility;
+import com.yuzhi.dts.admin.repository.PortalMenuRepository;
+import com.yuzhi.dts.admin.repository.PortalMenuVisibilityRepository;
+import com.yuzhi.dts.admin.repository.SystemConfigRepository;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -84,6 +92,45 @@ class PortalMenuSeedDefaultsContractTest {
         String cleanupXml = cleanup.getContentAsString(StandardCharsets.UTF_8);
         assertTrue(cleanupXml.contains("DELETE FROM portal_menu_visibility"));
         assertTrue(cleanupXml.contains("portal.menu.seed.hash"));
+    }
+
+    @Test
+    void clearSeedMenuRoleBindingsRemovesExistingVisibilityOnlyForSeedManagedMenus() {
+        PortalMenuRepository menuRepository = mock(PortalMenuRepository.class);
+        PortalMenuVisibilityRepository visibilityRepository = mock(PortalMenuVisibilityRepository.class);
+        PortalMenuService service = new PortalMenuService(
+            menuRepository,
+            visibilityRepository,
+            mock(SystemConfigRepository.class),
+            objectMapper,
+            noOpTransactionManager()
+        );
+        PortalMenu seedMenu = menuWithVisibility(1L, "{\"key\":\"workbench\",\"sectionKey\":\"workbench\"}");
+        PortalMenu customMenu = menuWithVisibility(2L, "{\"key\":\"custom\",\"sectionKey\":\"custom\"}");
+        PortalMenuVisibility seedVisibility = seedMenu.getVisibilities().get(0);
+        PortalMenuVisibility customVisibility = customMenu.getVisibilities().get(0);
+        when(menuRepository.findAll()).thenReturn(List.of(seedMenu, customMenu));
+
+        service.clearSeedMenuRoleBindings();
+
+        assertTrue(seedMenu.getVisibilities().isEmpty(), "seed menu bindings must be removed for onsite binding");
+        assertFalse(customMenu.getVisibilities().isEmpty(), "custom menu bindings must not be removed by seed cleanup");
+        verify(visibilityRepository).delete(seedVisibility);
+        verify(visibilityRepository, never()).delete(customVisibility);
+        verify(menuRepository).flush();
+    }
+
+    private PortalMenu menuWithVisibility(Long id, String metadata) {
+        PortalMenu menu = new PortalMenu();
+        menu.setId(id);
+        menu.setName("menu-" + id);
+        menu.setPath("menu-" + id);
+        menu.setMetadata(metadata);
+        PortalMenuVisibility visibility = new PortalMenuVisibility();
+        visibility.setId(id);
+        visibility.setRoleCode("ROLE_OP_ADMIN");
+        menu.addVisibility(visibility);
+        return menu;
     }
 
     private PlatformTransactionManager noOpTransactionManager() {
