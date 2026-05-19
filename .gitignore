@@ -55,6 +55,9 @@ source/dts-analytics-webapp/modern/.pnpm/
 source/dts-analytics-webapp/modern/.vite/
 source/dts-analytics-webapp/modern/.vite-cache/
 source/dts-analytics-webapp/modern/dist/
+source/dts-metrics-webapp/node_modules/
+source/dts-metrics-webapp/.vite-cache/
+source/dts-metrics-webapp/dist/
 source/dts-ingestion/target/
 builds/*/*.jar
 source/dts-bi-analytics/

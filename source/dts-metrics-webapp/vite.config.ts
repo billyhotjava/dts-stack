@@ -5,7 +5,7 @@ export default defineConfig({
 	base: "/metrics/",
 	plugins: [react()],
 	build: {
-		outDir: "../dts-metrics/src/main/resources/static/metrics",
+		outDir: "dist/metrics",
 		emptyOutDir: true,
 		sourcemap: false,
 	},

@@ -478,7 +478,7 @@ create_temp_context_from_repo_paths() {
 
 build_metrics_webapp() {
   local webapp_dir="${REPO_ROOT}/source/dts-metrics-webapp"
-  local output_dir="${REPO_ROOT}/source/dts-metrics/src/main/resources/static/metrics"
+  local output_dir="${REPO_ROOT}/source/dts-metrics/target/generated-resources/static/metrics"
   if [[ ! -f "${webapp_dir}/package.json" ]]; then
     return 0
   fi
@@ -486,11 +486,12 @@ build_metrics_webapp() {
   echo "[dts-build] Building dts-metrics React webapp"
   local tmp_context
   tmp_context="$(mktemp -d)"
-  mkdir -p "${tmp_context}/source" "${tmp_context}/source/dts-metrics/src/main/resources/static"
+  mkdir -p "${tmp_context}/source"
   (
     cd "${REPO_ROOT}/source"
     tar --exclude='dts-metrics-webapp/node_modules' \
       --exclude='dts-metrics-webapp/.vite-cache' \
+      --exclude='dts-metrics-webapp/dist' \
       -cf - dts-metrics-webapp
   ) | (
     cd "${tmp_context}/source"
@@ -526,7 +527,7 @@ build_metrics_webapp() {
       npm install -g "pnpm@${PNPM_VERSION}"; \
       pnpm install --frozen-lockfile --ignore-scripts; \
       pnpm "${WEBAPP_BUILD_CMD}"; \
-      chmod -R a+rwX /workspace/source/dts-metrics/src/main/resources/static/metrics; \
+      chmod -R a+rwX /workspace/source/dts-metrics-webapp/dist/metrics; \
       rm -rf node_modules .vite-cache /workspace/source/.pnpm-store'; then
     rm -rf "${tmp_context}"
     return 1
@@ -534,7 +535,7 @@ build_metrics_webapp() {
 
   rm -rf "${output_dir}"
   mkdir -p "${output_dir}"
-  cp -a "${tmp_context}/source/dts-metrics/src/main/resources/static/metrics/." "${output_dir}/"
+  cp -a "${tmp_context}/source/dts-metrics-webapp/dist/metrics/." "${output_dir}/"
   chmod -R u+rwX,go+rX,go-w "${output_dir}"
   rm -rf "${tmp_context}"
 }

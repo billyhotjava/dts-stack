@@ -13,3 +13,10 @@ test("asset map is a visual operating map, not only card and ledger views", () =
 	assert.match(SOURCE, /进入台账/);
 	assert.doesNotMatch(SOURCE, /label: "卡片"/);
 });
+
+test("asset map defaults to visual map unless the URL explicitly requests ledger view", () => {
+	assert.match(SOURCE, /new URLSearchParams\(window\.location\.search\)\.get\("view"\) === "table"/);
+	assert.match(SOURCE, /return "map"/);
+	assert.doesNotMatch(SOURCE, /localStorage\.getItem\(DATASET_VIEW_MODE_STORAGE_KEY\)/);
+	assert.doesNotMatch(SOURCE, /localStorage\.setItem\(DATASET_VIEW_MODE_STORAGE_KEY/);
+});

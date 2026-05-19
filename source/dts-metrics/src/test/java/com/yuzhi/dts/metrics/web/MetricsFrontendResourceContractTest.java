@@ -5,12 +5,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 class MetricsFrontendResourceContractTest {
 
     private static final Path WEBAPP_ROOT = Path.of("../dts-metrics-webapp");
     private static final Path STATIC_ROOT = Path.of("src/main/resources/static/metrics");
+    private static final Path POM = Path.of("pom.xml");
 
     @Test
     void metricsFrontendIsAReactViteApplication() throws IOException {
@@ -25,7 +27,7 @@ class MetricsFrontendResourceContractTest {
         assertThat(Files.readString(packageJson))
             .contains("\"name\": \"dts-metrics-webapp\"", "\"react\"", "\"react-dom\"", "\"build\"");
         assertThat(Files.readString(viteConfig))
-            .contains("base: \"/metrics/\"", "outDir: \"../dts-metrics/src/main/resources/static/metrics\"");
+            .contains("base: \"/metrics/\"", "outDir: \"dist/metrics\"");
     }
 
     @Test
@@ -55,13 +57,15 @@ class MetricsFrontendResourceContractTest {
     }
 
     @Test
-    void metricsStaticBundleIsGeneratedFromReactBuild() throws IOException {
-        Path indexHtml = STATIC_ROOT.resolve("index.html");
-        Path legacyScript = STATIC_ROOT.resolve("assets/metrics-app.js");
+    void metricsStaticBundleIsNotCommittedToJavaResources() throws IOException {
+        assertThat(Files.readString(POM))
+            .contains("<directory>${project.build.directory}/generated-resources</directory>");
 
-        assertThat(legacyScript).doesNotExist();
-        assertThat(indexHtml).exists();
-        assertThat(Files.readString(indexHtml))
-            .contains("id=\"root\"", "type=\"module\"", "/metrics/assets/");
+        if (!Files.exists(STATIC_ROOT)) {
+            return;
+        }
+        try (Stream<Path> staticFiles = Files.walk(STATIC_ROOT)) {
+            assertThat(staticFiles.filter(path -> path.toString().endsWith(".js")).toList()).isEmpty();
+        }
     }
 }

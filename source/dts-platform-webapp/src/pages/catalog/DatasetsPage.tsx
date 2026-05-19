@@ -87,7 +87,6 @@ const MATCH_OPTIONS = [
 ];
 
 const DATASET_FILTER_STORAGE_KEY = "catalog.asset.filter.v2";
-const DATASET_VIEW_MODE_STORAGE_KEY = "catalog.asset.view-mode.v2";
 const ASSET_PORTAL_V2_ENABLED = import.meta.env.VITE_CATALOG_ASSET_PORTAL_V2 !== "false";
 const UNASSIGNED_DOMAIN_KEY = "__UNASSIGNED__";
 
@@ -218,7 +217,7 @@ export default function Page() {
 			if (new URLSearchParams(window.location.search).get("view") === "table") {
 				return "table";
 			}
-			return localStorage.getItem(DATASET_VIEW_MODE_STORAGE_KEY) === "table" ? "table" : "map";
+			return "map";
 		} catch {
 			return "map";
 		}
@@ -309,10 +308,6 @@ export default function Page() {
 		};
 		localStorage.setItem(DATASET_FILTER_STORAGE_KEY, JSON.stringify(payload));
 	}, [keyword, assetType, classification, warehouseLayer, governanceStatus, matchStatus]);
-
-	useEffect(() => {
-		localStorage.setItem(DATASET_VIEW_MODE_STORAGE_KEY, viewMode);
-	}, [viewMode]);
 
 	const domainMap = useMemo(() => new Map(domains.map((item) => [item.id, item.name])), [domains]);
 

@@ -243,16 +243,19 @@ export function renderTable(props: TableRendererProps): ReactNode {
 
             return (
                 <div style={{ width: '100%', height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ flex: 1, overflow: 'auto' }}>
+                    <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
                     <table style={{
                         width: '100%',
                         // F4/T04: 横向滚动触发点 —— 容器窄于 minColumnWidth × 列数时 overflow:auto 生效
                         minWidth: computedTableMinWidth > 0 ? computedTableMinWidth : undefined,
-                        borderCollapse: 'collapse',
+                        // 注意:必须用 'separate' + borderSpacing:0,不能用 'collapse',
+                        // 否则 Chrome 中 sticky thead 位置计算出错,会被数据行盖住
+                        borderCollapse: 'separate',
+                        borderSpacing: 0,
                         tableLayout: 'fixed',
                     }}>
                         {displayHeader.length > 0 && (
-                            <thead>
+                            <thead style={freezeHeader ? { position: 'sticky', top: 0, zIndex: 10 } : undefined}>
                                 <tr style={{ background: headerBackground }}>
                                     {displayHeader.map((title, i) => (
                                         <th key={i} style={{
@@ -272,12 +275,13 @@ export function renderTable(props: TableRendererProps): ReactNode {
                                             overflowWrap: columnMeta[i]?.wrap ? 'anywhere' : undefined,
                                             wordBreak: columnMeta[i]?.wrap ? 'break-word' : undefined,
                                             lineHeight: columnMeta[i]?.wrap ? 1.35 : undefined,
-                                            ...(freezeHeader ? { position: 'sticky', top: 0, zIndex: 3 } : {}),
+                                            // sticky 同时在 <thead> 和 <th> 上,Chrome/Firefox 都稳定
+                                            ...(freezeHeader ? { position: 'sticky', top: 0, zIndex: 11 } : {}),
                                             ...(freezeFirstColumn && i === 0
                                                 ? {
                                                     position: 'sticky',
                                                     left: 0,
-                                                    zIndex: freezeHeader ? 5 : 2,
+                                                    zIndex: freezeHeader ? 12 : 2,
                                                     background: headerBackground,
                                                     boxShadow: `1px 0 0 ${borderColor}`,
                                                 }
