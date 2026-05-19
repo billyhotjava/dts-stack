@@ -880,6 +880,7 @@ function DatasetLineageImpactTab({ dataset }: { dataset: Record<string, any> }) 
 }
 
 function DatasetLineageTab({ datasetId }: { datasetId: string }) {
+	const router = useRouter();
 	const [impact, setImpact] = useState<any>(null);
 	const [loading, setLoading] = useState(true);
 
@@ -906,9 +907,9 @@ function DatasetLineageTab({ datasetId }: { datasetId: string }) {
 		return (
 			<div className="py-4 text-sm text-slate-500 space-y-2">
 				<div>暂无血缘数据。</div>
-				<a href={`/catalog/lineage/graph`} className="text-blue-600 underline text-xs">
+				<Button type="link" size="small" className="px-0" onClick={() => router.push("/catalog/lineage/graph")}>
 					前往血缘分析页 →
-				</a>
+				</Button>
 			</div>
 		);
 	}
@@ -925,9 +926,9 @@ function DatasetLineageTab({ datasetId }: { datasetId: string }) {
 				emptyText="暂无血缘节点"
 			/>
 			<div className="text-right">
-				<a href={`/catalog/lineage/graph`} className="text-xs text-blue-500 hover:underline">
+				<Button type="link" size="small" onClick={() => router.push("/catalog/lineage/graph")}>
 					查看完整血缘分析 →
-				</a>
+				</Button>
 			</div>
 		</div>
 	);

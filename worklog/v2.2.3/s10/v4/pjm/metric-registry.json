@@ -191,7 +191,8 @@
       "displayName": "超期任务数",
       "legacyAliases": [
         "超期任务数",
-        "超期数"
+        "超期数",
+        "超期未完成"
       ],
       "domain": "进度",
       "category": "基础",
@@ -305,7 +306,10 @@
       "legacyAliases": [
         "质量问题总数",
         "新增问题数",
-        "新增质量问题"
+        "新增质量问题",
+        "新增问题",
+        "问题总数",
+        "新增"
       ],
       "domain": "质量",
       "category": "基础",
@@ -327,7 +331,9 @@
         "未闭环质量问题数",
         "未归零质量问题数",
         "未闭环数",
-        "现存质量问题"
+        "现存质量问题",
+        "现存问题",
+        "未归零"
       ],
       "domain": "质量",
       "category": "基础",
@@ -347,7 +353,9 @@
       "displayName": "已完成归零数",
       "legacyAliases": [
         "已归零数",
-        "已闭环数"
+        "已闭环数",
+        "归零完成",
+        "已归零"
       ],
       "domain": "质量",
       "category": "基础",
@@ -997,7 +1005,9 @@
     },
     "pjm_qual_cat_management": {
       "displayName": "管理类质量问题数",
-      "legacyAliases": ["管理"],
+      "legacyAliases": [
+        "管理"
+      ],
       "domain": "质量",
       "category": "原因分类",
       "unit": "个",
@@ -1131,7 +1141,8 @@
       "displayName": "新增 I 类更改数",
       "legacyAliases": [
         "I类",
-        "I 类"
+        "I 类",
+        "I类更改"
       ],
       "domain": "技术状态",
       "category": "更改分类",
@@ -1151,7 +1162,8 @@
       "displayName": "新增 II 类更改数",
       "legacyAliases": [
         "II类",
-        "II 类"
+        "II 类",
+        "II类更改"
       ],
       "domain": "技术状态",
       "category": "更改分类",
@@ -1171,7 +1183,8 @@
       "displayName": "新增 III 类更改数",
       "legacyAliases": [
         "III类",
-        "III 类"
+        "III 类",
+        "III类更改"
       ],
       "domain": "技术状态",
       "category": "更改分类",
@@ -1228,7 +1241,8 @@
     "pjm_prog_on_time_cnt": {
       "displayName": "按时完成节点数",
       "legacyAliases": [
-        "按时完成"
+        "按时完成",
+        "已完成"
       ],
       "domain": "进度",
       "category": "完成状态",
@@ -1300,6 +1314,410 @@
       "excelRef": "原始指标 #12 + #13",
       "dbtField": "biz_dws_progress_monthly_v2.abnormal_pending_non_general_cnt + overdue_incomplete_unchanged_non_general_cnt",
       "code": "pjm_prog_abnormal_cnt"
+    },
+    "pjm_prog_delay_days": {
+      "displayName": "延期天数",
+      "legacyAliases": [
+        "延期天数"
+      ],
+      "domain": "进度",
+      "category": "节点属性",
+      "unit": "天",
+      "direction": "DOWN",
+      "definition": "节点实际完成时间相对计划完成时间的延后天数(正数=延后,负数=提前)",
+      "formula": "实际完成时间 − 计划完成时间(单位:天);未完成节点取 (统计结束时间 − 计划完成时间)",
+      "scope": "针对单个节点",
+      "sourceTable": "进度信息汇总表",
+      "frequency": "每日 01:00 刷新",
+      "thresholds": null,
+      "excelRef": "(派生)delay_days",
+      "dbtField": "biz_dwd_project_node_v2.delay_days",
+      "code": "pjm_prog_delay_days"
+    },
+    "pjm_qual_aging_days": {
+      "displayName": "滞留天数",
+      "legacyAliases": [
+        "滞留天数"
+      ],
+      "domain": "质量",
+      "category": "节点属性",
+      "unit": "天",
+      "direction": "DOWN",
+      "definition": "质量问题从发生到当前(或归零完成)的累计天数",
+      "formula": "未归零: 当前日期 − 问题发生日期; 已归零: 归零完成日期 − 问题发生日期",
+      "scope": "针对单个质量问题/风险/变更",
+      "sourceTable": "质量信息汇总表 / 风险信息汇总表 / 技术状态信息汇总表",
+      "frequency": "每日 01:00 刷新",
+      "thresholds": {
+        "warning": 30.0,
+        "critical": 60.0,
+        "rule": ">"
+      },
+      "excelRef": "(派生)aging_days",
+      "dbtField": "biz_dwd_*.aging_days",
+      "code": "pjm_qual_aging_days"
+    },
+    "pjm_qual_count": {
+      "displayName": "数量",
+      "legacyAliases": [],
+      "domain": "综合",
+      "category": "通用",
+      "unit": "个",
+      "direction": "NEUTRAL",
+      "definition": "饼图/柱图的纵轴数量,具体含义取决于图表上下文",
+      "formula": "COUNT(*) 或 SUM(...) — 按图表 SQL 分组键计数",
+      "scope": "随图表上下文,通常受时间筛选控制",
+      "sourceTable": "随图表上下文",
+      "frequency": "每日 01:00 刷新",
+      "thresholds": null,
+      "excelRef": "(通用计数列)",
+      "dbtField": "图表内 GROUP BY 后的 COUNT(*)",
+      "code": "pjm_qual_count"
+    },
+    "pjm_procurement_by_dept": {
+      "code": "pjm_procurement_by_dept",
+      "displayName": "物料采购(按科室)",
+      "legacyAliases": [
+        "物料采购"
+      ],
+      "domain": "采购",
+      "category": "基础",
+      "unit": "项",
+      "direction": "NEUTRAL",
+      "definition": "按责任科室统计物料采购情况(占位,数据源待接入)",
+      "formula": "待业务方提供口径",
+      "scope": "暂未接入实际数据源",
+      "sourceTable": "待定",
+      "frequency": "待定",
+      "thresholds": null,
+      "excelRef": "(待定)",
+      "dbtField": "(待接入)"
+    }
+  },
+  "fieldDictionary": {
+    "completion_status": {
+      "displayName": "完成情况",
+      "definition": "节点在统计时点的完成状态。'已变更'表示已走过变更流程并获批。",
+      "sourceTable": "进度信息汇总表",
+      "enumValues": [
+        {
+          "code": "正常待完成",
+          "label": "正常待完成",
+          "description": "节点未到计划时间,状态正常,还能正常完成"
+        },
+        {
+          "code": "按时完成",
+          "label": "按时完成",
+          "description": "节点已在计划时间内完成"
+        },
+        {
+          "code": "超期已完成已变更",
+          "label": "超期已完成已变更",
+          "description": "超过计划时间但已完成,且已走过变更流程"
+        },
+        {
+          "code": "超期已完成未变更",
+          "label": "超期已完成未变更",
+          "description": "超过计划时间但已完成,未走变更流程"
+        },
+        {
+          "code": "不正常待变更",
+          "label": "不正常待变更",
+          "description": "已到计划时间但未完成,需走变更流程(异常状态)"
+        },
+        {
+          "code": "超期未完成未变更",
+          "label": "超期未完成未变更",
+          "description": "已超过计划时间且未完成,未走变更流程(严重异常)"
+        },
+        {
+          "code": "超期未完成已变更",
+          "label": "超期未完成已变更",
+          "description": "已超过计划时间且未完成,已走过变更流程"
+        }
+      ],
+      "note": "排序权重: 正常待完成=1 < 按时完成=2 < 超期完成=3-4 < 不正常/超期未完成=5-7"
+    },
+    "node_type": {
+      "displayName": "节点类型",
+      "definition": "节点在项目中的重要等级,影响考核权重与异常判定。",
+      "sourceTable": "进度信息汇总表",
+      "enumValues": [
+        {
+          "code": "里程碑节点",
+          "label": "里程碑节点",
+          "description": "项目对外承诺的关键交付点,权重最高,单独考核完成率"
+        },
+        {
+          "code": "重大节点",
+          "label": "重大节点",
+          "description": "影响项目交付的关键节点"
+        },
+        {
+          "code": "重要节点",
+          "label": "重要节点",
+          "description": "重要技术或管理节点"
+        },
+        {
+          "code": "一般节点",
+          "label": "一般节点",
+          "description": "常规工作节点,通常不参与超期/不正常率统计"
+        }
+      ],
+      "note": "重要程度: 里程碑 > 重大 > 重要 > 一般"
+    },
+    "risk_level": {
+      "displayName": "风险等级",
+      "definition": "风险按业务影响程度的分级。",
+      "sourceTable": "风险信息汇总表 / 进度信息汇总表(节点风险)",
+      "enumValues": [
+        {
+          "code": "高",
+          "label": "高风险",
+          "description": "影响项目目标的重大风险,需重点关注与即时响应"
+        },
+        {
+          "code": "中",
+          "label": "中风险",
+          "description": "影响范围有限的中等风险,定期跟进"
+        },
+        {
+          "code": "低",
+          "label": "低风险",
+          "description": "潜在风险,持续观察"
+        }
+      ]
+    },
+    "risk_status": {
+      "displayName": "风险状态",
+      "definition": "风险的当前生命周期状态。",
+      "sourceTable": "风险信息汇总表",
+      "enumValues": [
+        {
+          "code": "已释放",
+          "label": "已释放",
+          "description": "风险已闭环,不再影响项目"
+        },
+        {
+          "code": "未释放",
+          "label": "未释放",
+          "description": "风险仍在跟踪中(默认状态)"
+        }
+      ],
+      "note": "数据规范化: 仅'已释放'是显式标识,其余值统一归为'未释放'"
+    },
+    "risk_category": {
+      "displayName": "风险类别",
+      "definition": "风险按业务领域的分类。",
+      "sourceTable": "风险信息汇总表",
+      "enumValues": [
+        {
+          "code": "技术",
+          "label": "技术风险",
+          "description": "技术方案/技术难题/技术指标相关"
+        },
+        {
+          "code": "进度",
+          "label": "进度风险",
+          "description": "节点延期/计划偏差相关"
+        },
+        {
+          "code": "成本",
+          "label": "成本风险",
+          "description": "预算超支/成本上升相关"
+        },
+        {
+          "code": "设计",
+          "label": "设计风险",
+          "description": "设计变更/方案返工相关"
+        },
+        {
+          "code": "质量",
+          "label": "质量风险",
+          "description": "产品/工艺质量相关"
+        },
+        {
+          "code": "其他",
+          "label": "其他风险",
+          "description": "未归入以上分类的风险"
+        }
+      ]
+    },
+    "quality_status": {
+      "displayName": "质量问题状态",
+      "definition": "质量问题的归零状态。'归零'指问题完全闭环。",
+      "sourceTable": "质量信息汇总表",
+      "enumValues": [
+        {
+          "code": "未完成归零",
+          "label": "未完成归零",
+          "description": "问题未闭环,仍在处理中"
+        },
+        {
+          "code": "已完成技术归零",
+          "label": "已完成技术归零",
+          "description": "通过技术手段完成归零"
+        },
+        {
+          "code": "已完成管理归零",
+          "label": "已完成管理归零",
+          "description": "通过管理手段完成归零"
+        },
+        {
+          "code": "已完成技术和管理归零",
+          "label": "已完成技术和管理归零",
+          "description": "同时完成技术与管理双归零"
+        }
+      ],
+      "note": "数据规范化: '处理中'/'进行中'/'未闭环'等统一归为'未完成归零'"
+    },
+    "quality_category": {
+      "displayName": "质量问题分类",
+      "definition": "质量问题按发生原因的分类。",
+      "sourceTable": "质量信息汇总表",
+      "enumValues": [
+        {
+          "code": "设计",
+          "label": "设计",
+          "description": "设计阶段引入的问题"
+        },
+        {
+          "code": "工艺",
+          "label": "工艺",
+          "description": "工艺设计或执行偏差"
+        },
+        {
+          "code": "管理",
+          "label": "管理",
+          "description": "流程/制度执行不到位"
+        },
+        {
+          "code": "元器件",
+          "label": "元器件",
+          "description": "元器件本体质量"
+        },
+        {
+          "code": "操作",
+          "label": "操作",
+          "description": "人员操作失误"
+        },
+        {
+          "code": "外协",
+          "label": "外协外购",
+          "description": "外协外购件质量"
+        },
+        {
+          "code": "软件",
+          "label": "软件",
+          "description": "软件缺陷"
+        },
+        {
+          "code": "环境",
+          "label": "环境",
+          "description": "环境因素引起"
+        },
+        {
+          "code": "其他",
+          "label": "其他",
+          "description": "未归入以上分类"
+        }
+      ]
+    },
+    "change_category": {
+      "displayName": "更改类别",
+      "definition": "技术状态更改的影响等级分类。",
+      "sourceTable": "技术状态信息汇总表",
+      "enumValues": [
+        {
+          "code": "I",
+          "label": "Ⅰ类更改",
+          "description": "影响最大的更改,需走完整评估评审签署流程"
+        },
+        {
+          "code": "II",
+          "label": "Ⅱ类更改",
+          "description": "影响中等的更改,需评审签署"
+        },
+        {
+          "code": "III",
+          "label": "Ⅲ类更改",
+          "description": "影响最小的更改,简化流程,不涉及整改要求"
+        }
+      ],
+      "note": "数据规范化: 罗马数字/阿拉伯数字/汉字一/二/三都归一化为 I/II/III"
+    },
+    "signature_status": {
+      "displayName": "文件签署状态",
+      "definition": "技术状态变更文件的签署流程节点。I/II 类与 III 类流程不同。",
+      "sourceTable": "技术状态信息汇总表",
+      "enumValues": [
+        {
+          "code": "已提出需求,未评估评审",
+          "label": "已提出需求,未评估评审",
+          "description": "I/II 类: 已发起更改但未完成评估评审"
+        },
+        {
+          "code": "已评估评审,未签署",
+          "label": "已评估评审,未签署",
+          "description": "I/II 类: 已完成评估评审但未签署"
+        },
+        {
+          "code": "已评估评审,已签署",
+          "label": "已评估评审,已签署",
+          "description": "I/II 类: 评审与签署均完成(已闭环)"
+        },
+        {
+          "code": "已提出需求,未签署",
+          "label": "已提出需求,未签署",
+          "description": "III 类: 已发起但未签署"
+        },
+        {
+          "code": "已提出需求,已签署",
+          "label": "已提出需求,已签署",
+          "description": "III 类: 已签署(已闭环)"
+        }
+      ]
+    },
+    "reform_status": {
+      "displayName": "整改状态",
+      "definition": "I/II 类技术状态变更单的整改落实状态。III 类不涉及整改。",
+      "sourceTable": "技术状态信息汇总表",
+      "enumValues": [
+        {
+          "code": "已落实整改",
+          "label": "已落实整改",
+          "description": "I/II 类: 已完成整改落实"
+        },
+        {
+          "code": "未落实整改",
+          "label": "未落实整改",
+          "description": "I/II 类: 整改尚未落实"
+        },
+        {
+          "code": "不涉及",
+          "label": "不涉及",
+          "description": "III 类变更单,不涉及整改要求"
+        }
+      ],
+      "note": "数据规范化: '已完成'/'完成' 归为'已落实整改';'无' 归为'不涉及'"
+    },
+    "boolean_yesno": {
+      "displayName": "是/否(布尔)",
+      "definition": "通用布尔字段,如'是否完成签署'。",
+      "sourceTable": "通用",
+      "enumValues": [
+        {
+          "code": "是",
+          "label": "是",
+          "description": "肯定/已完成/已签署"
+        },
+        {
+          "code": "否",
+          "label": "否",
+          "description": "否定/未完成/未签署"
+        }
+      ],
+      "note": "数据规范化: Y/YES/TRUE/已*/是 → 是; N/NO/FALSE/未*/否 → 否"
     }
   }
 }

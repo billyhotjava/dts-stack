@@ -456,7 +456,130 @@
         "enableSort": true,
         "enablePagination": true,
         "pageSize": 8,
-        "freezeHeader": true
+        "freezeHeader": true,
+        "columnNotes": {
+          "滞留天数": {
+            "code": "pjm_qual_aging_days",
+            "displayName": "滞留天数",
+            "domain": "质量",
+            "category": "节点属性",
+            "unit": "天",
+            "direction": "DOWN",
+            "definition": "质量问题从发生到当前(或归零完成)的累计天数",
+            "formula": "未归零: 当前日期 − 问题发生日期; 已归零: 归零完成日期 − 问题发生日期",
+            "scope": "针对单个质量问题/风险/变更",
+            "sourceTable": "质量信息汇总表 / 风险信息汇总表 / 技术状态信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": {
+              "warning": 30.0,
+              "critical": 60.0,
+              "rule": ">"
+            },
+            "excelRef": "(派生)aging_days"
+          },
+          "问题分类": {
+            "kind": "field",
+            "displayName": "质量问题分类",
+            "definition": "质量问题按发生原因的分类。",
+            "enumValues": [
+              {
+                "code": "设计",
+                "label": "设计",
+                "description": "设计阶段引入的问题"
+              },
+              {
+                "code": "工艺",
+                "label": "工艺",
+                "description": "工艺设计或执行偏差"
+              },
+              {
+                "code": "管理",
+                "label": "管理",
+                "description": "流程/制度执行不到位"
+              },
+              {
+                "code": "元器件",
+                "label": "元器件",
+                "description": "元器件本体质量"
+              },
+              {
+                "code": "操作",
+                "label": "操作",
+                "description": "人员操作失误"
+              },
+              {
+                "code": "外协",
+                "label": "外协外购",
+                "description": "外协外购件质量"
+              },
+              {
+                "code": "软件",
+                "label": "软件",
+                "description": "软件缺陷"
+              },
+              {
+                "code": "环境",
+                "label": "环境",
+                "description": "环境因素引起"
+              },
+              {
+                "code": "其他",
+                "label": "其他",
+                "description": "未归入以上分类"
+              }
+            ],
+            "sourceTable": "质量信息汇总表",
+            "note": null
+          },
+          "归零计划": {
+            "kind": "field",
+            "displayName": "是/否(布尔)",
+            "definition": "通用布尔字段,如'是否完成签署'。",
+            "enumValues": [
+              {
+                "code": "是",
+                "label": "是",
+                "description": "肯定/已完成/已签署"
+              },
+              {
+                "code": "否",
+                "label": "否",
+                "description": "否定/未完成/未签署"
+              }
+            ],
+            "sourceTable": "通用",
+            "note": "数据规范化: Y/YES/TRUE/已*/是 → 是; N/NO/FALSE/未*/否 → 否"
+          },
+          "状态": {
+            "kind": "field",
+            "displayName": "质量问题状态",
+            "definition": "质量问题的归零状态。'归零'指问题完全闭环。",
+            "enumValues": [
+              {
+                "code": "未完成归零",
+                "label": "未完成归零",
+                "description": "问题未闭环,仍在处理中"
+              },
+              {
+                "code": "已完成技术归零",
+                "label": "已完成技术归零",
+                "description": "通过技术手段完成归零"
+              },
+              {
+                "code": "已完成管理归零",
+                "label": "已完成管理归零",
+                "description": "通过管理手段完成归零"
+              },
+              {
+                "code": "已完成技术和管理归零",
+                "label": "已完成技术和管理归零",
+                "description": "同时完成技术与管理双归零"
+              }
+            ],
+            "sourceTable": "质量信息汇总表",
+            "note": "数据规范化: '处理中'/'进行中'/'未闭环'等统一归为'未完成归零'"
+          }
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -692,7 +815,130 @@
         "enableSort": true,
         "enablePagination": true,
         "pageSize": 8,
-        "freezeHeader": true
+        "freezeHeader": true,
+        "columnNotes": {
+          "滞留天数": {
+            "code": "pjm_qual_aging_days",
+            "displayName": "滞留天数",
+            "domain": "质量",
+            "category": "节点属性",
+            "unit": "天",
+            "direction": "DOWN",
+            "definition": "质量问题从发生到当前(或归零完成)的累计天数",
+            "formula": "未归零: 当前日期 − 问题发生日期; 已归零: 归零完成日期 − 问题发生日期",
+            "scope": "针对单个质量问题/风险/变更",
+            "sourceTable": "质量信息汇总表 / 风险信息汇总表 / 技术状态信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": {
+              "warning": 30.0,
+              "critical": 60.0,
+              "rule": ">"
+            },
+            "excelRef": "(派生)aging_days"
+          },
+          "问题分类": {
+            "kind": "field",
+            "displayName": "质量问题分类",
+            "definition": "质量问题按发生原因的分类。",
+            "enumValues": [
+              {
+                "code": "设计",
+                "label": "设计",
+                "description": "设计阶段引入的问题"
+              },
+              {
+                "code": "工艺",
+                "label": "工艺",
+                "description": "工艺设计或执行偏差"
+              },
+              {
+                "code": "管理",
+                "label": "管理",
+                "description": "流程/制度执行不到位"
+              },
+              {
+                "code": "元器件",
+                "label": "元器件",
+                "description": "元器件本体质量"
+              },
+              {
+                "code": "操作",
+                "label": "操作",
+                "description": "人员操作失误"
+              },
+              {
+                "code": "外协",
+                "label": "外协外购",
+                "description": "外协外购件质量"
+              },
+              {
+                "code": "软件",
+                "label": "软件",
+                "description": "软件缺陷"
+              },
+              {
+                "code": "环境",
+                "label": "环境",
+                "description": "环境因素引起"
+              },
+              {
+                "code": "其他",
+                "label": "其他",
+                "description": "未归入以上分类"
+              }
+            ],
+            "sourceTable": "质量信息汇总表",
+            "note": null
+          },
+          "归零计划": {
+            "kind": "field",
+            "displayName": "是/否(布尔)",
+            "definition": "通用布尔字段,如'是否完成签署'。",
+            "enumValues": [
+              {
+                "code": "是",
+                "label": "是",
+                "description": "肯定/已完成/已签署"
+              },
+              {
+                "code": "否",
+                "label": "否",
+                "description": "否定/未完成/未签署"
+              }
+            ],
+            "sourceTable": "通用",
+            "note": "数据规范化: Y/YES/TRUE/已*/是 → 是; N/NO/FALSE/未*/否 → 否"
+          },
+          "状态": {
+            "kind": "field",
+            "displayName": "质量问题状态",
+            "definition": "质量问题的归零状态。'归零'指问题完全闭环。",
+            "enumValues": [
+              {
+                "code": "未完成归零",
+                "label": "未完成归零",
+                "description": "问题未闭环,仍在处理中"
+              },
+              {
+                "code": "已完成技术归零",
+                "label": "已完成技术归零",
+                "description": "通过技术手段完成归零"
+              },
+              {
+                "code": "已完成管理归零",
+                "label": "已完成管理归零",
+                "description": "通过管理手段完成归零"
+              },
+              {
+                "code": "已完成技术和管理归零",
+                "label": "已完成技术和管理归零",
+                "description": "同时完成技术与管理双归零"
+              }
+            ],
+            "sourceTable": "质量信息汇总表",
+            "note": "数据规范化: '处理中'/'进行中'/'未闭环'等统一归为'未完成归零'"
+          }
+        }
       },
       "dataSource": {
         "type": "sql",

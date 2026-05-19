@@ -43,3 +43,8 @@ test("dataset detail page exposes enterprise asset workbench tabs", () => {
 	assert.match(SOURCE, /DatasetQualitySlaTab/);
 	assert.match(SOURCE, /DatasetLineageImpactTab/);
 });
+
+test("dataset detail page uses SPA navigation for catalog internal actions", () => {
+	assert.match(SOURCE, /router\.push\("\/catalog\/lineage\/graph"\)/);
+	assert.doesNotMatch(SOURCE, /href=\{`\/catalog\/lineage\/graph`\}/);
+});

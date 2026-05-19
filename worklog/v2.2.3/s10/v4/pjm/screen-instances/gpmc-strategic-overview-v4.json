@@ -1031,7 +1031,37 @@
           "#ff9f43",
           "#2ee6a6"
         ],
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "月度完成趋势",
+          "definition": "按「月份」分组,对比各组各系列指标",
+          "scope": "X 轴=月份; 受顶部时间筛选控制",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "按时完成",
+              "code": "pjm_prog_on_time_cnt",
+              "displayName": "按时完成节点数",
+              "formula": "完成情况='按时完成' 的节点计数",
+              "unit": "个"
+            },
+            {
+              "name": "超期完成",
+              "code": "pjm_prog_overdue_done_cnt",
+              "displayName": "超期完成节点数",
+              "formula": "完成情况∈('超期已完成已变更','超期已完成未变更') 的节点计数",
+              "unit": "个"
+            },
+            {
+              "name": "未完成",
+              "code": "pjm_prog_incomplete_cnt",
+              "displayName": "项目本周期节点未完成总数",
+              "formula": "状态为'不正常待变更'+'超期未完成未变更'+'超期未完成已变更'的节点计数",
+              "unit": "个"
+            }
+          ]
+        }
       },
       "actions": [],
       "dataSource": {
@@ -1081,7 +1111,37 @@
           "#ff9f43",
           "#ff5d73",
           "#8a7dff"
-        ]
+        ],
+        "metricNote": {
+          "displayName": "项目阶段分布",
+          "definition": "按「按时完成」分组,对比各组各系列指标",
+          "scope": "X 轴=按时完成; 受顶部时间筛选控制",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "超期完成",
+              "code": "pjm_prog_overdue_done_cnt",
+              "displayName": "超期完成节点数",
+              "formula": "完成情况∈('超期已完成已变更','超期已完成未变更') 的节点计数",
+              "unit": "个"
+            },
+            {
+              "name": "未完成",
+              "code": "pjm_prog_incomplete_cnt",
+              "displayName": "项目本周期节点未完成总数",
+              "formula": "状态为'不正常待变更'+'超期未完成未变更'+'超期未完成已变更'的节点计数",
+              "unit": "个"
+            },
+            {
+              "name": "正常待完成",
+              "code": "pjm_prog_pending_normal_cnt",
+              "displayName": "正常待完成节点数",
+              "formula": "完成情况='正常待完成' 的节点计数",
+              "unit": "个"
+            }
+          ]
+        }
       },
       "actions": [],
       "dataSource": {
@@ -1327,7 +1387,121 @@
         "enableSort": true,
         "enablePagination": true,
         "pageSize": 6,
-        "freezeHeader": true
+        "freezeHeader": true,
+        "columnNotes": {
+          "延期天数": {
+            "code": "pjm_prog_delay_days",
+            "displayName": "延期天数",
+            "domain": "进度",
+            "category": "节点属性",
+            "unit": "天",
+            "direction": "DOWN",
+            "definition": "节点实际完成时间相对计划完成时间的延后天数(正数=延后,负数=提前)",
+            "formula": "实际完成时间 − 计划完成时间(单位:天);未完成节点取 (统计结束时间 − 计划完成时间)",
+            "scope": "针对单个节点",
+            "sourceTable": "进度信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "(派生)delay_days"
+          },
+          "节点类型": {
+            "kind": "field",
+            "displayName": "节点类型",
+            "definition": "节点在项目中的重要等级,影响考核权重与异常判定。",
+            "enumValues": [
+              {
+                "code": "里程碑节点",
+                "label": "里程碑节点",
+                "description": "项目对外承诺的关键交付点,权重最高,单独考核完成率"
+              },
+              {
+                "code": "重大节点",
+                "label": "重大节点",
+                "description": "影响项目交付的关键节点"
+              },
+              {
+                "code": "重要节点",
+                "label": "重要节点",
+                "description": "重要技术或管理节点"
+              },
+              {
+                "code": "一般节点",
+                "label": "一般节点",
+                "description": "常规工作节点,通常不参与超期/不正常率统计"
+              }
+            ],
+            "sourceTable": "进度信息汇总表",
+            "note": "重要程度: 里程碑 > 重大 > 重要 > 一般"
+          },
+          "完成情况": {
+            "kind": "field",
+            "displayName": "完成情况",
+            "definition": "节点在统计时点的完成状态。'已变更'表示已走过变更流程并获批。",
+            "enumValues": [
+              {
+                "code": "正常待完成",
+                "label": "正常待完成",
+                "description": "节点未到计划时间,状态正常,还能正常完成"
+              },
+              {
+                "code": "按时完成",
+                "label": "按时完成",
+                "description": "节点已在计划时间内完成"
+              },
+              {
+                "code": "超期已完成已变更",
+                "label": "超期已完成已变更",
+                "description": "超过计划时间但已完成,且已走过变更流程"
+              },
+              {
+                "code": "超期已完成未变更",
+                "label": "超期已完成未变更",
+                "description": "超过计划时间但已完成,未走变更流程"
+              },
+              {
+                "code": "不正常待变更",
+                "label": "不正常待变更",
+                "description": "已到计划时间但未完成,需走变更流程(异常状态)"
+              },
+              {
+                "code": "超期未完成未变更",
+                "label": "超期未完成未变更",
+                "description": "已超过计划时间且未完成,未走变更流程(严重异常)"
+              },
+              {
+                "code": "超期未完成已变更",
+                "label": "超期未完成已变更",
+                "description": "已超过计划时间且未完成,已走过变更流程"
+              }
+            ],
+            "sourceTable": "进度信息汇总表",
+            "note": "排序权重: 正常待完成=1 < 按时完成=2 < 超期完成=3-4 < 不正常/超期未完成=5-7"
+          },
+          "风险等级": {
+            "kind": "field",
+            "displayName": "风险等级",
+            "definition": "风险按业务影响程度的分级。",
+            "enumValues": [
+              {
+                "code": "高",
+                "label": "高风险",
+                "description": "影响项目目标的重大风险,需重点关注与即时响应"
+              },
+              {
+                "code": "中",
+                "label": "中风险",
+                "description": "影响范围有限的中等风险,定期跟进"
+              },
+              {
+                "code": "低",
+                "label": "低风险",
+                "description": "潜在风险,持续观察"
+              }
+            ],
+            "sourceTable": "风险信息汇总表 / 进度信息汇总表(节点风险)",
+            "note": null
+          }
+        }
       },
       "actions": [],
       "dataSource": {
@@ -1685,7 +1859,37 @@
           "#27d8ff",
           "#ff9f43"
         ],
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "质量闭环趋势",
+          "definition": "按「月份」分组,对比各组各系列指标",
+          "scope": "X 轴=月份; 受顶部时间筛选控制",
+          "sourceTable": "质量信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "新增问题",
+              "code": "pjm_qual_new_issues",
+              "displayName": "新增质量问题数",
+              "formula": "质量问题发生时间在[开始日期,结束日期]内的问题计数",
+              "unit": "个"
+            },
+            {
+              "name": "归零完成",
+              "code": "pjm_qual_zero_completed",
+              "displayName": "已完成归零数",
+              "formula": "已完成技术归零 + 已完成管理归零 + 已完成技术和管理归零",
+              "unit": "个"
+            },
+            {
+              "name": "现存问题",
+              "code": "pjm_qual_open_issues",
+              "displayName": "现存质量问题数",
+              "formula": "状态='未完成归零' 的质量问题计数",
+              "unit": "个"
+            }
+          ]
+        }
       },
       "actions": [],
       "dataSource": {
@@ -1760,7 +1964,30 @@
         "chartPaddingBottom": 20,
         "chartPaddingLeft": 20,
         "xAxisLabelMaxLength": 5,
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "风险分类排名",
+          "definition": "按「高风险」分组,对比各组各系列指标",
+          "scope": "X 轴=高风险; 受顶部时间筛选控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "中风险",
+              "code": "pjm_risk_mid",
+              "displayName": "中风险数",
+              "formula": "风险等级='中' 的风险计数",
+              "unit": "个"
+            },
+            {
+              "name": "低风险",
+              "code": "pjm_risk_low",
+              "displayName": "低风险数",
+              "formula": "风险等级='低' 的风险计数",
+              "unit": "个"
+            }
+          ]
+        }
       },
       "actions": [],
       "dataSource": {
@@ -1837,7 +2064,30 @@
         "chartPaddingBottom": 18,
         "chartPaddingLeft": 18,
         "seriesLabelStrategy": "first-only",
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "技术状态变更",
+          "definition": "按「I类更改」分组,对比各组各系列指标",
+          "scope": "X 轴=I类更改; 受顶部时间筛选控制",
+          "sourceTable": "技术状态信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "II类更改",
+              "code": "pjm_tech_new_changes_ii",
+              "displayName": "新增 II 类更改数",
+              "formula": "更改类别='II' 且 更改提出时间在[开始,结束]内的更改计数",
+              "unit": "个"
+            },
+            {
+              "name": "III类更改",
+              "code": "pjm_tech_new_changes_iii",
+              "displayName": "新增 III 类更改数",
+              "formula": "更改类别='III' 且 更改提出时间在[开始,结束]内的更改计数",
+              "unit": "个"
+            }
+          ]
+        }
       },
       "actions": [],
       "dataSource": {

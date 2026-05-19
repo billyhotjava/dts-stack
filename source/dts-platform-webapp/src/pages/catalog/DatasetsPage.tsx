@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Alert, Button, Card, Collapse, Input, Layout, Modal, Pagination, Segmented, Select, Space, Spin, Table, Tabs, Tag, Tooltip, Tree } from "antd";
 import {
 	ApartmentOutlined,
+	ArrowRightOutlined,
 	BranchesOutlined,
 	DatabaseOutlined,
 	ProfileOutlined,
@@ -212,14 +213,14 @@ const MetricTile = ({
 export default function Page() {
 	const router = useRouter();
 	const [keyword, setKeyword] = useState("");
-	const [viewMode, setViewMode] = useState<"cards" | "table">(() => {
+	const [viewMode, setViewMode] = useState<"map" | "table">(() => {
 		try {
 			if (new URLSearchParams(window.location.search).get("view") === "table") {
 				return "table";
 			}
-			return localStorage.getItem(DATASET_VIEW_MODE_STORAGE_KEY) === "table" ? "table" : "cards";
+			return localStorage.getItem(DATASET_VIEW_MODE_STORAGE_KEY) === "table" ? "table" : "map";
 		} catch {
-			return "cards";
+			return "map";
 		}
 	});
 	const [domain, setDomain] = useState<string | undefined>();
@@ -460,6 +461,26 @@ export default function Page() {
 	const lineageFailureCount = Array.isArray(lineageFailureReport?.content) ? lineageFailureReport.content.length : 0;
 	const governanceGapRows: GovernanceGapRow[] = Array.isArray(governanceGapReport?.content) ? governanceGapReport.content : [];
 	const lineageFailureRows: LineageFailureRow[] = Array.isArray(lineageFailureReport?.content) ? lineageFailureReport.content : [];
+	const layerGroups = useMemo(
+		() =>
+			LAYER_ORDER.map((layer) => ({
+				layer,
+				meta: LAYER_META[layer],
+				items: records.filter((row) => normalizeLayer(row.warehouseLayer) === layer),
+			})),
+		[records],
+	);
+	const domainDistribution = useMemo(() => {
+		const counts = new Map<string, number>();
+		records.forEach((row) => {
+			const label = row.domain || (row.domainId ? domainMap.get(row.domainId) : undefined) || "未归域";
+			counts.set(label, (counts.get(label) || 0) + 1);
+		});
+		return Array.from(counts.entries())
+			.map(([name, count]) => ({ name, count }))
+			.sort((a, b) => b.count - a.count)
+			.slice(0, 6);
+	}, [domainMap, records]);
 
 	const treeData = useMemo(
 		() => [
@@ -602,7 +623,7 @@ export default function Page() {
 		}
 	};
 
-	const renderAssetCard = (row: AssetRow) => {
+	const renderAssetMapNode = (row: AssetRow) => {
 		const layer = normalizeLayer(row.warehouseLayer);
 		const meta = LAYER_META[layer];
 		const isStale = String(row.lifecycleStatus || "").toUpperCase() === "STALE" || row.status === "停用";
@@ -611,51 +632,139 @@ export default function Page() {
 			<button
 				key={row.id}
 				type="button"
-				className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-left shadow-sm transition hover:border-blue-300 hover:shadow-md"
+				className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md"
 				onClick={() => router.push(`/catalog/datasets/${row.id}`)}
 			>
 				<div className="flex items-start justify-between gap-2">
 					<Tooltip title={row.name}>
 						<div className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">{row.name}</div>
 					</Tooltip>
-					<Tag color={isStale ? "red" : meta.color}>{isStale ? "失效" : row.status || "启用"}</Tag>
+					<Tag color={readiness.color} style={{ fontSize: 11 }}>{readiness.label}</Tag>
 				</div>
 				<div className="mt-1 flex items-center gap-1 truncate text-xs text-slate-500">
 					<DatabaseOutlined />
 					<span className="truncate">{row.hiveDatabase && row.hiveTable ? `${row.hiveDatabase}.${row.hiveTable}` : row.type || "未知类型"}</span>
 				</div>
-				<div className="mt-2 flex flex-wrap gap-1">
-					<Tag style={{ fontSize: 11 }}>{row.type || "未知"}</Tag>
-					<Tag color={readiness.color} style={{ fontSize: 11 }}>
-						{readiness.label}
+				<div className="mt-2 flex items-center justify-between gap-2">
+					<Tag color={isStale ? "red" : meta.color} style={{ fontSize: 11 }}>
+						{isStale ? "失效" : row.status || "启用"}
 					</Tag>
 					<Tag color={row.classification ? "orange" : "default"} style={{ fontSize: 11 }}>
 						{classificationText(row.classification)}
 					</Tag>
-					<Tag color={row.governanceStatus === "GOVERNED" ? "green" : "gold"} style={{ fontSize: 11 }}>
-						{row.governanceStatus || "待治理"}
-					</Tag>
-					<Tag color={row.matchStatus === "MATCHED" ? "blue" : "volcano"} style={{ fontSize: 11 }}>
-						{row.matchStatus || "UNMATCHED"}
-					</Tag>
-					{row.domain || row.domainId ? (
-						<Tag color="blue" style={{ fontSize: 11 }}>
-							{row.domain || (row.domainId ? domainMap.get(row.domainId) : undefined) || "主题域"}
-						</Tag>
-					) : null}
 				</div>
 				{readiness.reasons.length ? (
 					<div className="mt-2 rounded border border-amber-100 bg-amber-50 px-2 py-1 text-[11px] text-amber-700">
-						{readiness.reasons.slice(0, 2).join(" / ")}
+						{readiness.reasons[0]}
 					</div>
 				) : null}
 				<div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-slate-500">
-					<span className="truncate">{row.owner || row.ownerDept || "未指定负责人"}</span>
-					<span className="shrink-0">{formatTime(row.snapshotTime || row.updatedAt)}</span>
+					<span className="truncate">{row.domain || (row.domainId ? domainMap.get(row.domainId) : undefined) || "未归域"}</span>
+					<span className="shrink-0">{row.owner || row.ownerDept || "未认领"}</span>
 				</div>
 			</button>
 		);
 	};
+
+	const renderAssetVisualMap = () => (
+		<div className="asset-map-stage space-y-4">
+			<div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+				<div>
+					<div className="text-sm font-semibold text-slate-900">数据流向</div>
+					<div className="mt-1 text-xs text-slate-500">
+						按来源、明细、汇总、应用数据集展示当前筛选范围内的资产分布；点击资产节点进入工作台详情。
+					</div>
+				</div>
+				<Button
+					icon={<ProfileOutlined />}
+					onClick={() => {
+						setViewMode("table");
+						router.push("/catalog/assets?view=table");
+					}}
+				>
+					进入台账
+				</Button>
+			</div>
+			<div className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-3">
+				<div className="grid min-w-[1120px] gap-3" style={{ gridTemplateColumns: `repeat(${LAYER_ORDER.length}, minmax(138px, 1fr))` }}>
+					{layerGroups.map((group, index) => (
+						<div key={group.layer} className={`relative min-h-[260px] rounded-lg border px-3 py-3 ${group.meta.tone}`}>
+							<div className="flex items-center justify-between gap-2">
+								<div>
+									<div className="text-sm font-semibold text-slate-900">{group.meta.label}</div>
+									<div className="text-xs text-slate-500">{group.items.length} 个资产</div>
+								</div>
+								{index < layerGroups.length - 1 ? <ArrowRightOutlined className="text-slate-400" /> : null}
+							</div>
+							<div className="mt-3 space-y-2">
+								{group.items.slice(0, 5).map(renderAssetMapNode)}
+								{group.items.length > 5 ? (
+									<button
+										type="button"
+										className="w-full rounded border border-dashed border-slate-300 bg-white/70 px-2 py-2 text-xs text-slate-500 hover:border-blue-300 hover:text-blue-600"
+										onClick={() => {
+											setWarehouseLayer(group.layer);
+											setViewMode("table");
+											router.push("/catalog/assets?view=table");
+										}}
+									>
+										查看剩余 {group.items.length - 5} 个
+									</button>
+								) : null}
+								{!group.items.length ? (
+									<div className="rounded border border-dashed border-slate-200 bg-white/60 px-2 py-6 text-center text-xs text-slate-400">
+										当前筛选无资产
+									</div>
+								) : null}
+							</div>
+						</div>
+					))}
+				</div>
+			</div>
+			<div className="grid gap-3 lg:grid-cols-3">
+				<Card size="small" title="业务视角">
+					<Space direction="vertical" size={8} className="w-full">
+						{domainDistribution.length ? (
+							domainDistribution.map((item) => (
+								<div key={item.name} className="flex items-center justify-between gap-3 rounded border border-slate-100 bg-slate-50 px-3 py-2">
+									<span className="truncate text-sm text-slate-700">{item.name}</span>
+									<Tag color={item.name === "未归域" ? "orange" : "blue"}>{item.count}</Tag>
+								</div>
+							))
+						) : (
+							<div className="py-4 text-center text-xs text-slate-400">暂无主题域分布</div>
+						)}
+					</Space>
+				</Card>
+				<Card size="small" title="治理阻断">
+					<div className="grid grid-cols-3 gap-2 text-center">
+						<div className="rounded border border-amber-100 bg-amber-50 px-2 py-3">
+							<div className="text-lg font-semibold text-amber-700">{blockingGapCount}</div>
+							<div className="text-xs text-amber-700">治理阻断</div>
+						</div>
+						<div className="rounded border border-rose-100 bg-rose-50 px-2 py-3">
+							<div className="text-lg font-semibold text-rose-700">{lineageFailureCount}</div>
+							<div className="text-xs text-rose-700">血缘缺口</div>
+						</div>
+						<div className="rounded border border-slate-100 bg-slate-50 px-2 py-3">
+							<div className="text-lg font-semibold text-slate-700">{missingDomainCount}</div>
+							<div className="text-xs text-slate-600">未归域</div>
+						</div>
+					</div>
+					<Button className="mt-3 w-full" onClick={() => void openRemediationWorkbench()} loading={signalsLoading}>
+						打开治理缺口处置
+					</Button>
+				</Card>
+				<Card size="small" title="运营入口">
+					<Space direction="vertical" size={8} className="w-full">
+						<Button block onClick={() => router.push("/catalog/search")}>资产搜索</Button>
+						<Button block onClick={() => router.push("/catalog/data-products")}>数据产品</Button>
+						<Button block onClick={() => router.push("/catalog/lineage/graph")}>血缘图谱</Button>
+					</Space>
+				</Card>
+			</div>
+		</div>
+	);
 
 	const renderAssetTable = () => (
 		<Table<AssetRow>
@@ -787,8 +896,14 @@ export default function Page() {
 						}
 						extra={
 							<Space wrap>
-								<Button icon={<ProfileOutlined />} onClick={() => setViewMode("table")}>
-									切换台账
+								<Button
+									icon={<ProfileOutlined />}
+									onClick={() => {
+										setViewMode("table");
+										router.push("/catalog/assets?view=table");
+									}}
+								>
+									进入台账
 								</Button>
 								<Button icon={<ReloadOutlined />} onClick={() => void loadDatasets(1, pageState.size)} loading={loading}>
 									刷新资产
@@ -948,9 +1063,13 @@ export default function Page() {
 							<Segmented
 								size="small"
 								value={viewMode}
-								onChange={(value) => setViewMode(value === "table" ? "table" : "cards")}
+								onChange={(value) => {
+									const next = value === "table" ? "table" : "map";
+									setViewMode(next);
+									router.push(next === "table" ? "/catalog/assets?view=table" : "/catalog/assets");
+								}}
 								options={[
-									{ label: "卡片", value: "cards" },
+									{ label: "地图", value: "map" },
 									{ label: "台账", value: "table" },
 								]}
 							/>
@@ -959,9 +1078,7 @@ export default function Page() {
 							viewMode === "table" ? (
 								renderAssetTable()
 							) : (
-								<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-									{records.map(renderAssetCard)}
-								</div>
+								renderAssetVisualMap()
 							)
 						) : (
 							<EmptyState title="未发现当前账号可见资产" description="可能还未完成元数据采集，也可能当前密级、主题域或资产授权限制了可见范围。" />

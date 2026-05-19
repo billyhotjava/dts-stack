@@ -456,7 +456,110 @@
         "enableSort": true,
         "enablePagination": true,
         "pageSize": 8,
-        "freezeHeader": true
+        "freezeHeader": true,
+        "columnNotes": {
+          "更改类别": {
+            "kind": "field",
+            "displayName": "更改类别",
+            "definition": "技术状态更改的影响等级分类。",
+            "enumValues": [
+              {
+                "code": "I",
+                "label": "Ⅰ类更改",
+                "description": "影响最大的更改,需走完整评估评审签署流程"
+              },
+              {
+                "code": "II",
+                "label": "Ⅱ类更改",
+                "description": "影响中等的更改,需评审签署"
+              },
+              {
+                "code": "III",
+                "label": "Ⅲ类更改",
+                "description": "影响最小的更改,简化流程,不涉及整改要求"
+              }
+            ],
+            "sourceTable": "技术状态信息汇总表",
+            "note": "数据规范化: 罗马数字/阿拉伯数字/汉字一/二/三都归一化为 I/II/III"
+          },
+          "文件签署状态": {
+            "kind": "field",
+            "displayName": "文件签署状态",
+            "definition": "技术状态变更文件的签署流程节点。I/II 类与 III 类流程不同。",
+            "enumValues": [
+              {
+                "code": "已提出需求,未评估评审",
+                "label": "已提出需求,未评估评审",
+                "description": "I/II 类: 已发起更改但未完成评估评审"
+              },
+              {
+                "code": "已评估评审,未签署",
+                "label": "已评估评审,未签署",
+                "description": "I/II 类: 已完成评估评审但未签署"
+              },
+              {
+                "code": "已评估评审,已签署",
+                "label": "已评估评审,已签署",
+                "description": "I/II 类: 评审与签署均完成(已闭环)"
+              },
+              {
+                "code": "已提出需求,未签署",
+                "label": "已提出需求,未签署",
+                "description": "III 类: 已发起但未签署"
+              },
+              {
+                "code": "已提出需求,已签署",
+                "label": "已提出需求,已签署",
+                "description": "III 类: 已签署(已闭环)"
+              }
+            ],
+            "sourceTable": "技术状态信息汇总表",
+            "note": null
+          },
+          "整改状态": {
+            "kind": "field",
+            "displayName": "整改状态",
+            "definition": "I/II 类技术状态变更单的整改落实状态。III 类不涉及整改。",
+            "enumValues": [
+              {
+                "code": "已落实整改",
+                "label": "已落实整改",
+                "description": "I/II 类: 已完成整改落实"
+              },
+              {
+                "code": "未落实整改",
+                "label": "未落实整改",
+                "description": "I/II 类: 整改尚未落实"
+              },
+              {
+                "code": "不涉及",
+                "label": "不涉及",
+                "description": "III 类变更单,不涉及整改要求"
+              }
+            ],
+            "sourceTable": "技术状态信息汇总表",
+            "note": "数据规范化: '已完成'/'完成' 归为'已落实整改';'无' 归为'不涉及'"
+          },
+          "签署完成": {
+            "kind": "field",
+            "displayName": "是/否(布尔)",
+            "definition": "通用布尔字段,如'是否完成签署'。",
+            "enumValues": [
+              {
+                "code": "是",
+                "label": "是",
+                "description": "肯定/已完成/已签署"
+              },
+              {
+                "code": "否",
+                "label": "否",
+                "description": "否定/未完成/未签署"
+              }
+            ],
+            "sourceTable": "通用",
+            "note": "数据规范化: Y/YES/TRUE/已*/是 → 是; N/NO/FALSE/未*/否 → 否"
+          }
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -707,7 +810,110 @@
         "enableSort": true,
         "enablePagination": true,
         "pageSize": 8,
-        "freezeHeader": true
+        "freezeHeader": true,
+        "columnNotes": {
+          "更改类别": {
+            "kind": "field",
+            "displayName": "更改类别",
+            "definition": "技术状态更改的影响等级分类。",
+            "enumValues": [
+              {
+                "code": "I",
+                "label": "Ⅰ类更改",
+                "description": "影响最大的更改,需走完整评估评审签署流程"
+              },
+              {
+                "code": "II",
+                "label": "Ⅱ类更改",
+                "description": "影响中等的更改,需评审签署"
+              },
+              {
+                "code": "III",
+                "label": "Ⅲ类更改",
+                "description": "影响最小的更改,简化流程,不涉及整改要求"
+              }
+            ],
+            "sourceTable": "技术状态信息汇总表",
+            "note": "数据规范化: 罗马数字/阿拉伯数字/汉字一/二/三都归一化为 I/II/III"
+          },
+          "文件签署状态": {
+            "kind": "field",
+            "displayName": "文件签署状态",
+            "definition": "技术状态变更文件的签署流程节点。I/II 类与 III 类流程不同。",
+            "enumValues": [
+              {
+                "code": "已提出需求,未评估评审",
+                "label": "已提出需求,未评估评审",
+                "description": "I/II 类: 已发起更改但未完成评估评审"
+              },
+              {
+                "code": "已评估评审,未签署",
+                "label": "已评估评审,未签署",
+                "description": "I/II 类: 已完成评估评审但未签署"
+              },
+              {
+                "code": "已评估评审,已签署",
+                "label": "已评估评审,已签署",
+                "description": "I/II 类: 评审与签署均完成(已闭环)"
+              },
+              {
+                "code": "已提出需求,未签署",
+                "label": "已提出需求,未签署",
+                "description": "III 类: 已发起但未签署"
+              },
+              {
+                "code": "已提出需求,已签署",
+                "label": "已提出需求,已签署",
+                "description": "III 类: 已签署(已闭环)"
+              }
+            ],
+            "sourceTable": "技术状态信息汇总表",
+            "note": null
+          },
+          "整改状态": {
+            "kind": "field",
+            "displayName": "整改状态",
+            "definition": "I/II 类技术状态变更单的整改落实状态。III 类不涉及整改。",
+            "enumValues": [
+              {
+                "code": "已落实整改",
+                "label": "已落实整改",
+                "description": "I/II 类: 已完成整改落实"
+              },
+              {
+                "code": "未落实整改",
+                "label": "未落实整改",
+                "description": "I/II 类: 整改尚未落实"
+              },
+              {
+                "code": "不涉及",
+                "label": "不涉及",
+                "description": "III 类变更单,不涉及整改要求"
+              }
+            ],
+            "sourceTable": "技术状态信息汇总表",
+            "note": "数据规范化: '已完成'/'完成' 归为'已落实整改';'无' 归为'不涉及'"
+          },
+          "签署完成": {
+            "kind": "field",
+            "displayName": "是/否(布尔)",
+            "definition": "通用布尔字段,如'是否完成签署'。",
+            "enumValues": [
+              {
+                "code": "是",
+                "label": "是",
+                "description": "肯定/已完成/已签署"
+              },
+              {
+                "code": "否",
+                "label": "否",
+                "description": "否定/未完成/未签署"
+              }
+            ],
+            "sourceTable": "通用",
+            "note": "数据规范化: Y/YES/TRUE/已*/是 → 是; N/NO/FALSE/未*/否 → 否"
+          }
+        }
       },
       "dataSource": {
         "type": "sql",

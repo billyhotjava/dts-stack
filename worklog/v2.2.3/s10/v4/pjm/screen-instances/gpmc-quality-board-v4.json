@@ -938,7 +938,37 @@
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 36,
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "项目质量问题",
+          "definition": "按「项目编号」分组,对比各组各系列指标",
+          "scope": "X 轴=项目编号; 受顶部时间筛选控制",
+          "sourceTable": "质量信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "问题总数",
+              "code": "pjm_qual_new_issues",
+              "displayName": "新增质量问题数",
+              "formula": "质量问题发生时间在[开始日期,结束日期]内的问题计数",
+              "unit": "个"
+            },
+            {
+              "name": "已归零",
+              "code": "pjm_qual_zero_completed",
+              "displayName": "已完成归零数",
+              "formula": "已完成技术归零 + 已完成管理归零 + 已完成技术和管理归零",
+              "unit": "个"
+            },
+            {
+              "name": "未归零",
+              "code": "pjm_qual_open_issues",
+              "displayName": "现存质量问题数",
+              "formula": "状态='未完成归零' 的质量问题计数",
+              "unit": "个"
+            }
+          ]
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -1018,7 +1048,37 @@
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 36,
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "时段质量问题",
+          "definition": "按「时段」分组,对比各组各系列指标",
+          "scope": "X 轴=时段; 受顶部时间筛选控制",
+          "sourceTable": "质量信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "新增",
+              "code": "pjm_qual_new_issues",
+              "displayName": "新增质量问题数",
+              "formula": "质量问题发生时间在[开始日期,结束日期]内的问题计数",
+              "unit": "个"
+            },
+            {
+              "name": "已归零",
+              "code": "pjm_qual_zero_completed",
+              "displayName": "已完成归零数",
+              "formula": "已完成技术归零 + 已完成管理归零 + 已完成技术和管理归零",
+              "unit": "个"
+            },
+            {
+              "name": "未归零",
+              "code": "pjm_qual_open_issues",
+              "displayName": "现存质量问题数",
+              "formula": "状态='未完成归零' 的质量问题计数",
+              "unit": "个"
+            }
+          ]
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -1077,7 +1137,23 @@
         "categoryKey": "类别",
         "valueKey": "数量",
         "titleFontSize": 0,
-        "chartPaddingTop": 36
+        "chartPaddingTop": 36,
+        "metricNote": {
+          "displayName": "质量问题类别",
+          "definition": "按「类别」分组,对比各组「数量」指标",
+          "scope": "X 轴=类别; 受顶部时间筛选控制",
+          "sourceTable": "随图表上下文",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "数量",
+              "code": "pjm_qual_count",
+              "displayName": "数量",
+              "formula": "COUNT(*) 或 SUM(...) — 按图表 SQL 分组键计数",
+              "unit": "个"
+            }
+          ]
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -1144,7 +1220,23 @@
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 36,
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "月度质量问题趋势",
+          "definition": "按「月份」分组,对比各组「质量问题总数」指标",
+          "scope": "X 轴=月份; 受顶部时间筛选控制",
+          "sourceTable": "质量信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "质量问题总数",
+              "code": "pjm_qual_new_issues",
+              "displayName": "新增质量问题数",
+              "formula": "质量问题发生时间在[开始日期,结束日期]内的问题计数",
+              "unit": "个"
+            }
+          ]
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -1234,7 +1326,87 @@
         "titleFontSize": 0,
         "chartPaddingTop": 36,
         "bodyColor": "#ffffff",
-        "freezeHeader": true
+        "freezeHeader": true,
+        "columnNotes": {
+          "问题分类": {
+            "kind": "field",
+            "displayName": "质量问题分类",
+            "definition": "质量问题按发生原因的分类。",
+            "enumValues": [
+              {
+                "code": "设计",
+                "label": "设计",
+                "description": "设计阶段引入的问题"
+              },
+              {
+                "code": "工艺",
+                "label": "工艺",
+                "description": "工艺设计或执行偏差"
+              },
+              {
+                "code": "管理",
+                "label": "管理",
+                "description": "流程/制度执行不到位"
+              },
+              {
+                "code": "元器件",
+                "label": "元器件",
+                "description": "元器件本体质量"
+              },
+              {
+                "code": "操作",
+                "label": "操作",
+                "description": "人员操作失误"
+              },
+              {
+                "code": "外协",
+                "label": "外协外购",
+                "description": "外协外购件质量"
+              },
+              {
+                "code": "软件",
+                "label": "软件",
+                "description": "软件缺陷"
+              },
+              {
+                "code": "环境",
+                "label": "环境",
+                "description": "环境因素引起"
+              },
+              {
+                "code": "其他",
+                "label": "其他",
+                "description": "未归入以上分类"
+              }
+            ],
+            "sourceTable": "质量信息汇总表",
+            "note": null
+          },
+          "整改状态": {
+            "kind": "field",
+            "displayName": "整改状态",
+            "definition": "I/II 类技术状态变更单的整改落实状态。III 类不涉及整改。",
+            "enumValues": [
+              {
+                "code": "已落实整改",
+                "label": "已落实整改",
+                "description": "I/II 类: 已完成整改落实"
+              },
+              {
+                "code": "未落实整改",
+                "label": "未落实整改",
+                "description": "I/II 类: 整改尚未落实"
+              },
+              {
+                "code": "不涉及",
+                "label": "不涉及",
+                "description": "III 类变更单,不涉及整改要求"
+              }
+            ],
+            "sourceTable": "技术状态信息汇总表",
+            "note": "数据规范化: '已完成'/'完成' 归为'已落实整改';'无' 归为'不涉及'"
+          }
+        }
       },
       "dataSource": {
         "type": "sql",

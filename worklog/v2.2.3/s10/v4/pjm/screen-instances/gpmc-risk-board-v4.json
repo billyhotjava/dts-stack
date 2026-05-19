@@ -1004,7 +1004,37 @@
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 36,
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "项目风险统计",
+          "definition": "按「项目编号」分组,对比各组各系列指标",
+          "scope": "X 轴=项目编号; 受顶部时间筛选控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "风险总数",
+              "code": "pjm_risk_total",
+              "displayName": "风险总数",
+              "formula": "风险提出时间在[开始日期,结束日期]内的风险计数",
+              "unit": "个"
+            },
+            {
+              "name": "高风险数",
+              "code": "pjm_risk_high",
+              "displayName": "高风险数",
+              "formula": "风险等级='高' 的风险计数",
+              "unit": "个"
+            },
+            {
+              "name": "未释放风险数",
+              "code": "pjm_risk_open",
+              "displayName": "未释放风险数",
+              "formula": "风险状态='未释放' 的风险计数",
+              "unit": "个"
+            }
+          ]
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -1063,7 +1093,23 @@
         "categoryKey": "风险类型",
         "valueKey": "数量",
         "titleFontSize": 0,
-        "chartPaddingTop": 36
+        "chartPaddingTop": 36,
+        "metricNote": {
+          "displayName": "风险分类分布",
+          "definition": "按「风险类型」分组,对比各组「数量」指标",
+          "scope": "X 轴=风险类型; 受顶部时间筛选控制",
+          "sourceTable": "随图表上下文",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "数量",
+              "code": "pjm_qual_count",
+              "displayName": "数量",
+              "formula": "COUNT(*) 或 SUM(...) — 按图表 SQL 分组键计数",
+              "unit": "个"
+            }
+          ]
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -1147,7 +1193,37 @@
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 36,
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "科室风险统计",
+          "definition": "按「责任科室」分组,对比各组各系列指标",
+          "scope": "X 轴=责任科室; 受顶部时间筛选控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "风险总数",
+              "code": "pjm_risk_total",
+              "displayName": "风险总数",
+              "formula": "风险提出时间在[开始日期,结束日期]内的风险计数",
+              "unit": "个"
+            },
+            {
+              "name": "高风险数",
+              "code": "pjm_risk_high",
+              "displayName": "高风险数",
+              "formula": "风险等级='高' 的风险计数",
+              "unit": "个"
+            },
+            {
+              "name": "未释放风险数",
+              "code": "pjm_risk_open",
+              "displayName": "未释放风险数",
+              "formula": "风险状态='未释放' 的风险计数",
+              "unit": "个"
+            }
+          ]
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -1256,7 +1332,110 @@
         "titleFontSize": 0,
         "chartPaddingTop": 36,
         "bodyColor": "#ffffff",
-        "freezeHeader": true
+        "freezeHeader": true,
+        "columnNotes": {
+          "滞留天数": {
+            "code": "pjm_qual_aging_days",
+            "displayName": "滞留天数",
+            "domain": "质量",
+            "category": "节点属性",
+            "unit": "天",
+            "direction": "DOWN",
+            "definition": "质量问题从发生到当前(或归零完成)的累计天数",
+            "formula": "未归零: 当前日期 − 问题发生日期; 已归零: 归零完成日期 − 问题发生日期",
+            "scope": "针对单个质量问题/风险/变更",
+            "sourceTable": "质量信息汇总表 / 风险信息汇总表 / 技术状态信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": {
+              "warning": 30.0,
+              "critical": 60.0,
+              "rule": ">"
+            },
+            "excelRef": "(派生)aging_days"
+          },
+          "风险等级": {
+            "kind": "field",
+            "displayName": "风险等级",
+            "definition": "风险按业务影响程度的分级。",
+            "enumValues": [
+              {
+                "code": "高",
+                "label": "高风险",
+                "description": "影响项目目标的重大风险,需重点关注与即时响应"
+              },
+              {
+                "code": "中",
+                "label": "中风险",
+                "description": "影响范围有限的中等风险,定期跟进"
+              },
+              {
+                "code": "低",
+                "label": "低风险",
+                "description": "潜在风险,持续观察"
+              }
+            ],
+            "sourceTable": "风险信息汇总表 / 进度信息汇总表(节点风险)",
+            "note": null
+          },
+          "风险分类": {
+            "kind": "field",
+            "displayName": "风险类别",
+            "definition": "风险按业务领域的分类。",
+            "enumValues": [
+              {
+                "code": "技术",
+                "label": "技术风险",
+                "description": "技术方案/技术难题/技术指标相关"
+              },
+              {
+                "code": "进度",
+                "label": "进度风险",
+                "description": "节点延期/计划偏差相关"
+              },
+              {
+                "code": "成本",
+                "label": "成本风险",
+                "description": "预算超支/成本上升相关"
+              },
+              {
+                "code": "设计",
+                "label": "设计风险",
+                "description": "设计变更/方案返工相关"
+              },
+              {
+                "code": "质量",
+                "label": "质量风险",
+                "description": "产品/工艺质量相关"
+              },
+              {
+                "code": "其他",
+                "label": "其他风险",
+                "description": "未归入以上分类的风险"
+              }
+            ],
+            "sourceTable": "风险信息汇总表",
+            "note": null
+          },
+          "风险状态": {
+            "kind": "field",
+            "displayName": "风险状态",
+            "definition": "风险的当前生命周期状态。",
+            "enumValues": [
+              {
+                "code": "已释放",
+                "label": "已释放",
+                "description": "风险已闭环,不再影响项目"
+              },
+              {
+                "code": "未释放",
+                "label": "未释放",
+                "description": "风险仍在跟踪中(默认状态)"
+              }
+            ],
+            "sourceTable": "风险信息汇总表",
+            "note": "数据规范化: 仅'已释放'是显式标识,其余值统一归为'未释放'"
+          }
+        }
       },
       "dataSource": {
         "type": "sql",

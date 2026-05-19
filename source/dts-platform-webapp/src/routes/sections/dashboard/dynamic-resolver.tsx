@@ -5,6 +5,7 @@ import { GLOBAL_CONFIG } from "@/global-config";
 import { useMenuStore } from "@/store/menuStore";
 import {
 	findBestMenuMatch,
+	findMenuByPath,
 	firstAccessibleChildPath,
 	firstAccessibleMenuPath,
 	isExternalPath,
@@ -81,12 +82,29 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 
 export const resolveDashboardComponentOverride = (path?: string) => {
 	const normalized = normalizeMenuPath(path || "");
-	return normalized ? PATH_COMPONENT_OVERRIDES[normalized] : "";
+	if (!normalized) return "";
+	const exact = PATH_COMPONENT_OVERRIDES[normalized];
+	if (exact) return exact;
+	const pathSegments = normalized.split("/").filter(Boolean);
+	const matched = Object.entries(PATH_COMPONENT_OVERRIDES).find(([pattern]) => {
+		if (!pattern.includes(":")) return false;
+		const patternSegments = normalizeMenuPath(pattern).split("/").filter(Boolean);
+		return (
+			patternSegments.length === pathSegments.length &&
+			patternSegments.every((segment, index) => segment.startsWith(":") || segment === pathSegments[index])
+		);
+	});
+	return matched?.[1] || "";
 };
 
 const isWithinBase = (pathname: string, normalizedBase?: string) => {
 	if (!normalizedBase) return true;
 	return pathname === normalizedBase || pathname.startsWith(`${normalizedBase}/`);
+};
+
+const directOverrideParentPath = (pathname: string) => {
+	if (pathname.startsWith("/catalog/datasets/")) return "/catalog/assets";
+	return "";
 };
 
 export function DynamicMenuResolver({ base }: Props) {
@@ -97,6 +115,7 @@ export function DynamicMenuResolver({ base }: Props) {
 	const normalizedBase = base ? normalizeMenuPath(base) : "";
 	const menusLoaded = Array.isArray(menus) && menus.length > 0;
 	const directOverridePath = isWithinBase(pathname, normalizedBase) ? resolveDashboardComponentOverride(pathname) : "";
+	const overrideParentPath = directOverrideParentPath(pathname);
 	const fallbackMenuPath = useMemo(() => firstAccessibleMenuPath(Array.isArray(menus) ? menus : []), [menus]);
 	const defaultRoute = GLOBAL_CONFIG.defaultRoute || "/workbench";
 
@@ -117,12 +136,24 @@ export function DynamicMenuResolver({ base }: Props) {
 		}
 		return findBestMenuMatch(menus || [], pathname);
 	}, [menus, menusLoaded, normalizedBase, pathname]);
+	const directOverrideParent = useMemo(() => {
+		if (!menusLoaded || !overrideParentPath) return null;
+		return findMenuByPath(menus || [], overrideParentPath);
+	}, [menus, menusLoaded, overrideParentPath]);
 
 	if (!menusLoaded) {
 		if (directOverridePath) {
 			return <>{Component(directOverridePath)}</>;
 		}
 		return <LineLoading />;
+	}
+
+	if (directOverridePath && !match) {
+		// menu-backed routes may have deeper non-menu operational detail pages, such as asset details.
+		if (overrideParentPath && !directOverrideParent) {
+			return redirectToFallback();
+		}
+		return <>{Component(directOverridePath)}</>;
 	}
 
 	if (!match) {

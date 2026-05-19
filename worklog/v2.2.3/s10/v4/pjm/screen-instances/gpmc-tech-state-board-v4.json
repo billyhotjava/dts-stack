@@ -1008,7 +1008,37 @@
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 36,
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "项目变更签署率",
+          "definition": "按「项目编号」分组,对比各组各系列指标",
+          "scope": "X 轴=项目编号; 受顶部时间筛选控制",
+          "sourceTable": "技术状态信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "变更总数",
+              "code": "pjm_tech_total_changes",
+              "displayName": "技术状态变更单总数",
+              "formula": "新增 I 类更改 + 新增 II 类更改 + 新增 III 类更改",
+              "unit": "个"
+            },
+            {
+              "name": "未签署",
+              "code": "pjm_tech_unsigned_total",
+              "displayName": "技术状态变更单未完成签署(I, II, III类)",
+              "formula": "完成签署='否' 的变更单计数 = I 类未签 + II 类未签 + III 类未签",
+              "unit": "个"
+            },
+            {
+              "name": "已签署",
+              "code": "pjm_tech_signed_total",
+              "displayName": "已完成签署变更单数",
+              "formula": "完成签署='是' 的变更单计数",
+              "unit": "个"
+            }
+          ]
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -1094,7 +1124,15 @@
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 36,
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "科室变更签署审查",
+          "definition": "按「责任科室」分组,对比各组「已提出」指标",
+          "scope": "X 轴=责任科室; 受顶部时间筛选控制",
+          "sourceTable": "见各系列",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": null
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -1169,7 +1207,37 @@
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 36,
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "科室变更趋势",
+          "definition": "按「月份」分组,对比各组各系列指标",
+          "scope": "X 轴=月份; 受顶部时间筛选控制",
+          "sourceTable": "技术状态信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "变更总数",
+              "code": "pjm_tech_total_changes",
+              "displayName": "技术状态变更单总数",
+              "formula": "新增 I 类更改 + 新增 II 类更改 + 新增 III 类更改",
+              "unit": "个"
+            },
+            {
+              "name": "已签署",
+              "code": "pjm_tech_signed_total",
+              "displayName": "已完成签署变更单数",
+              "formula": "完成签署='是' 的变更单计数",
+              "unit": "个"
+            },
+            {
+              "name": "未签署",
+              "code": "pjm_tech_unsigned_total",
+              "displayName": "技术状态变更单未完成签署(I, II, III类)",
+              "formula": "完成签署='否' 的变更单计数 = I 类未签 + II 类未签 + III 类未签",
+              "unit": "个"
+            }
+          ]
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -1237,7 +1305,15 @@
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 36,
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "项目变更次数",
+          "definition": "按「项目编号」分组,对比各组「变更次数」指标",
+          "scope": "X 轴=项目编号; 受顶部时间筛选控制",
+          "sourceTable": "见各系列",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": null
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -1340,7 +1416,67 @@
         "titleFontSize": 0,
         "chartPaddingTop": 36,
         "bodyColor": "#ffffff",
-        "freezeHeader": true
+        "freezeHeader": true,
+        "columnNotes": {
+          "签署状态": {
+            "kind": "field",
+            "displayName": "文件签署状态",
+            "definition": "技术状态变更文件的签署流程节点。I/II 类与 III 类流程不同。",
+            "enumValues": [
+              {
+                "code": "已提出需求,未评估评审",
+                "label": "已提出需求,未评估评审",
+                "description": "I/II 类: 已发起更改但未完成评估评审"
+              },
+              {
+                "code": "已评估评审,未签署",
+                "label": "已评估评审,未签署",
+                "description": "I/II 类: 已完成评估评审但未签署"
+              },
+              {
+                "code": "已评估评审,已签署",
+                "label": "已评估评审,已签署",
+                "description": "I/II 类: 评审与签署均完成(已闭环)"
+              },
+              {
+                "code": "已提出需求,未签署",
+                "label": "已提出需求,未签署",
+                "description": "III 类: 已发起但未签署"
+              },
+              {
+                "code": "已提出需求,已签署",
+                "label": "已提出需求,已签署",
+                "description": "III 类: 已签署(已闭环)"
+              }
+            ],
+            "sourceTable": "技术状态信息汇总表",
+            "note": null
+          },
+          "整改状态": {
+            "kind": "field",
+            "displayName": "整改状态",
+            "definition": "I/II 类技术状态变更单的整改落实状态。III 类不涉及整改。",
+            "enumValues": [
+              {
+                "code": "已落实整改",
+                "label": "已落实整改",
+                "description": "I/II 类: 已完成整改落实"
+              },
+              {
+                "code": "未落实整改",
+                "label": "未落实整改",
+                "description": "I/II 类: 整改尚未落实"
+              },
+              {
+                "code": "不涉及",
+                "label": "不涉及",
+                "description": "III 类变更单,不涉及整改要求"
+              }
+            ],
+            "sourceTable": "技术状态信息汇总表",
+            "note": "数据规范化: '已完成'/'完成' 归为'已落实整改';'无' 归为'不涉及'"
+          }
+        }
       },
       "dataSource": {
         "type": "sql",

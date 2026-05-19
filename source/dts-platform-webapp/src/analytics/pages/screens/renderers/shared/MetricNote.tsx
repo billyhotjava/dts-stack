@@ -21,6 +21,23 @@ export interface MetricThresholds {
 	rule?: ">" | "<" | "=" | null;
 }
 
+/**
+ * 系列说明 — 用于图表场景,每条系列(图例)对应一个权威指标。
+ * 渲染时按 code/name + formula/definition 紧凑列出。
+ */
+export interface MetricSeriesNote {
+	/** 系列名称(图例上的文字) */
+	name: string;
+	/** 指标 code(对齐 registry) */
+	code?: string;
+	/** 指标显示名(冗余,便于离线快速展示) */
+	displayName?: string;
+	/** 计算口径(简短) */
+	formula?: string;
+	/** 单位 */
+	unit?: string;
+}
+
 export interface MetricNote {
 	displayName?: string;
 	domain?: string;
@@ -34,10 +51,48 @@ export interface MetricNote {
 	frequency?: string;
 	thresholds?: MetricThresholds | null;
 	excelRef?: string;
+	/** 图表场景: 各系列的指标口径(按图例顺序) */
+	seriesNotes?: MetricSeriesNote[];
+}
+
+/**
+ * FieldNote — 字段字典说明(用于明细表的枚举类列)。
+ *
+ * 与 MetricNote 区别:
+ *   - MetricNote 描述"计算指标"(有公式/阈值)
+ *   - FieldNote   描述"字段含义 + 枚举取值表"(列代码与业务标签的对照)
+ *
+ * 数据源: 后端 dim_*_v2.sql 字典表(在 metric-registry.json 的 fieldDictionary 节点维护)。
+ */
+export interface FieldEnumEntry {
+	code: string;
+	label: string;
+	description?: string;
+}
+
+export interface FieldNote {
+	/** 字段中文名 */
+	displayName: string;
+	/** 字段含义说明 */
+	definition?: string;
+	/** 枚举取值表 */
+	enumValues?: FieldEnumEntry[];
+	/** 数据来源(业务可读) */
+	sourceTable?: string;
+	/** 业务备注 */
+	note?: string;
+	/** 是 fieldNote 不是 metricNote 的标识 */
+	kind: "field";
+}
+
+export type ColumnNote = MetricNote | FieldNote;
+
+function isFieldNote(n: unknown): n is FieldNote {
+	return !!n && typeof n === "object" && (n as { kind?: string }).kind === "field";
 }
 
 interface MetricNoteBadgeProps {
-	note: MetricNote;
+	note: MetricNote | FieldNote;
 	iconColor?: string;
 	iconSize?: number;
 	style?: CSSProperties;
@@ -71,6 +126,39 @@ function renderRow(label: string, value: ReactNode): ReactNode {
 	);
 }
 
+function FieldNoteContent({ note }: { note: FieldNote }) {
+	return (
+		<div style={{ maxWidth: 360, color: "rgba(15, 23, 42, 0.85)", fontSize: 12, lineHeight: 1.5 }}>
+			<div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a", marginBottom: 4 }}>
+				{note.displayName}
+				<span style={{ marginLeft: 6, fontWeight: 400, color: "#64748b", fontSize: 11 }}>· 字段说明</span>
+			</div>
+			{note.definition ? renderRow("定义", note.definition) : null}
+			{note.enumValues && note.enumValues.length > 0 ? (
+				<div style={{ marginTop: 8 }}>
+					<div style={{ fontSize: 11, fontWeight: 600, color: "rgba(15, 23, 42, 0.55)", marginBottom: 4 }}>
+						取值含义({note.enumValues.length} 种)
+					</div>
+					{note.enumValues.map((e) => (
+						<div key={e.code} style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 8, marginTop: 3 }}>
+							<div style={{ color: "#475569", fontSize: 11, lineHeight: 1.5, fontWeight: 500 }}>{e.label}</div>
+							<div style={{ color: "rgba(15, 23, 42, 0.85)", fontSize: 11, lineHeight: 1.5 }}>
+								{e.description || ""}
+							</div>
+						</div>
+					))}
+				</div>
+			) : null}
+			{note.sourceTable ? renderRow("数据来源", note.sourceTable) : null}
+			{note.note ? (
+				<div style={{ marginTop: 8, paddingTop: 6, borderTop: "1px dashed rgba(15, 23, 42, 0.12)", fontSize: 11, color: "rgba(15, 23, 42, 0.55)" }}>
+					{note.note}
+				</div>
+			) : null}
+		</div>
+	);
+}
+
 export function MetricNoteBadge({
 	note,
 	iconColor = "rgba(255, 255, 255, 0.55)",
@@ -78,6 +166,38 @@ export function MetricNoteBadge({
 	style,
 }: MetricNoteBadgeProps) {
 	if (!note) return null;
+
+	if (isFieldNote(note)) {
+		return (
+			<Popover content={<FieldNoteContent note={note} />} placement="topRight" mouseEnterDelay={0.25} overlayStyle={{ maxWidth: 380 }}>
+				<span
+					role="button"
+					aria-label={`查看${note.displayName}字段说明`}
+					tabIndex={0}
+					style={{
+						display: "inline-flex",
+						alignItems: "center",
+						justifyContent: "center",
+						width: iconSize + 4,
+						height: iconSize + 4,
+						borderRadius: "50%",
+						border: `1px solid ${iconColor}`,
+						color: iconColor,
+						fontSize: iconSize - 2,
+						fontWeight: 600,
+						fontFamily: "Georgia, serif",
+						cursor: "help",
+						lineHeight: 1,
+						marginLeft: 6,
+						verticalAlign: "middle",
+						...style,
+					}}
+				>
+					i
+				</span>
+			</Popover>
+		);
+	}
 
 	const thresholdsText = describeThresholds(note.thresholds, note.unit);
 	const directionText =
@@ -106,6 +226,24 @@ export function MetricNoteBadge({
 				"评价方向",
 				directionText && thresholdsText ? `${directionText} · ${thresholdsText}` : directionText || thresholdsText,
 			)}
+			{note.seriesNotes && note.seriesNotes.length > 0 ? (
+				<div style={{ marginTop: 8, paddingTop: 6, borderTop: "1px dashed rgba(15, 23, 42, 0.12)" }}>
+					<div style={{ fontSize: 11, fontWeight: 600, color: "rgba(15, 23, 42, 0.55)", marginBottom: 4 }}>
+						各系列口径
+					</div>
+					{note.seriesNotes.map((s, i) => (
+						<div key={`${s.code || s.name}-${i}`} style={{ display: "grid", gridTemplateColumns: "72px 1fr", gap: 8, marginTop: 4 }}>
+							<div style={{ color: "rgba(15, 23, 42, 0.55)", fontSize: 11, lineHeight: 1.5, overflow: "hidden", textOverflow: "ellipsis" }}>
+								{s.name}
+							</div>
+							<div style={{ color: "rgba(15, 23, 42, 0.9)", fontSize: 11, lineHeight: 1.5 }}>
+								<span style={{ whiteSpace: "pre-wrap" }}>{s.formula || s.displayName || s.code || "—"}</span>
+								{s.unit ? <span style={{ marginLeft: 4, color: "#64748b" }}>· {s.unit}</span> : null}
+							</div>
+						</div>
+					))}
+				</div>
+			) : null}
 			{note.excelRef && (
 				<div style={{ marginTop: 8, paddingTop: 6, borderTop: "1px dashed rgba(15, 23, 42, 0.12)" }}>
 					<span style={{ fontSize: 11, color: "rgba(15, 23, 42, 0.4)" }}>口径源 · {note.excelRef}</span>

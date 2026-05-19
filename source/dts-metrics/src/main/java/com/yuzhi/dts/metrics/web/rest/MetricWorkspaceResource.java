@@ -243,15 +243,15 @@ public class MetricWorkspaceResource {
                 "purpose",
                 "项目月度公共汇总模型，可复用于驾驶舱、科室看板和风险分析。",
                 "grain",
-                "stat_month + dept_id + project_type",
+                "stat_month + dept_name + project_type",
                 "materialization",
                 "incremental table",
                 "refresh",
                 "daily 02:30",
                 "fields",
-                List.of("stat_month", "dept_id", "project_type", "project_cnt", "overdue_project_cnt", "direct_cost_execution_rate"),
+                List.of("stat_month", "dept_name", "project_type", "project_cnt", "overdue_project_cnt", "direct_cost_execution_rate"),
                 "sql",
-                "select\n  stat_month,\n  dept_id,\n  project_type,\n  count(distinct project_id) as project_cnt\nfrom {{ ref('dwd_project_detail') }}\ngroup by stat_month, dept_id, project_type"
+                "select\n  stat_month,\n  dept_name,\n  project_type,\n  count(distinct project_id) as project_cnt\nfrom {{ ref('dwd_project_detail') }}\ngroup by stat_month, dept_name, project_type"
             ),
             object(
                 "layer",

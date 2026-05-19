@@ -675,7 +675,44 @@
           "labelFontSize": 11,
           "nameTruncate": false
         },
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "项目节点统计",
+          "definition": "按「项目」分组,对比各组各系列指标",
+          "scope": "X 轴=项目; 受顶部时间筛选控制",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "按时完成",
+              "code": "pjm_prog_on_time_cnt",
+              "displayName": "按时完成节点数",
+              "formula": "完成情况='按时完成' 的节点计数",
+              "unit": "个"
+            },
+            {
+              "name": "正常待完成",
+              "code": "pjm_prog_pending_normal_cnt",
+              "displayName": "正常待完成节点数",
+              "formula": "完成情况='正常待完成' 的节点计数",
+              "unit": "个"
+            },
+            {
+              "name": "超期完成",
+              "code": "pjm_prog_overdue_done_cnt",
+              "displayName": "超期完成节点数",
+              "formula": "完成情况∈('超期已完成已变更','超期已完成未变更') 的节点计数",
+              "unit": "个"
+            },
+            {
+              "name": "超期未完成",
+              "code": "pjm_prog_overdue_cnt",
+              "displayName": "超期任务数",
+              "formula": "(超期未完成未变更 + 超期未完成已变更) 的节点计数",
+              "unit": "个"
+            }
+          ]
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -748,7 +785,44 @@
           "labelFontSize": 11,
           "nameTruncate": false
         },
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "科室项目节点统计",
+          "definition": "按「科室」分组,对比各组各系列指标",
+          "scope": "X 轴=科室; 受顶部时间筛选控制",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "按时完成",
+              "code": "pjm_prog_on_time_cnt",
+              "displayName": "按时完成节点数",
+              "formula": "完成情况='按时完成' 的节点计数",
+              "unit": "个"
+            },
+            {
+              "name": "正常待完成",
+              "code": "pjm_prog_pending_normal_cnt",
+              "displayName": "正常待完成节点数",
+              "formula": "完成情况='正常待完成' 的节点计数",
+              "unit": "个"
+            },
+            {
+              "name": "超期完成",
+              "code": "pjm_prog_overdue_done_cnt",
+              "displayName": "超期完成节点数",
+              "formula": "完成情况∈('超期已完成已变更','超期已完成未变更') 的节点计数",
+              "unit": "个"
+            },
+            {
+              "name": "超期未完成",
+              "code": "pjm_prog_overdue_cnt",
+              "displayName": "超期任务数",
+              "formula": "(超期未完成未变更 + 超期未完成已变更) 的节点计数",
+              "unit": "个"
+            }
+          ]
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -874,7 +948,37 @@
           "show": true,
           "labelFontSize": 11
         },
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "项目风险统计",
+          "definition": "按「项目」分组,对比各组各系列指标",
+          "scope": "X 轴=项目; 受顶部时间筛选控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "高风险",
+              "code": "pjm_risk_high",
+              "displayName": "高风险数",
+              "formula": "风险等级='高' 的风险计数",
+              "unit": "个"
+            },
+            {
+              "name": "中风险",
+              "code": "pjm_risk_mid",
+              "displayName": "中风险数",
+              "formula": "风险等级='中' 的风险计数",
+              "unit": "个"
+            },
+            {
+              "name": "低风险",
+              "code": "pjm_risk_low",
+              "displayName": "低风险数",
+              "formula": "风险等级='低' 的风险计数",
+              "unit": "个"
+            }
+          ]
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -930,7 +1034,23 @@
         "categoryKey": "风险类型",
         "valueKey": "数量",
         "pieInnerRadius": 50,
-        "pieOuterRadius": 75
+        "pieOuterRadius": 75,
+        "metricNote": {
+          "displayName": "风险类型占比",
+          "definition": "按「风险类型」分组,对比各组「数量」指标",
+          "scope": "X 轴=风险类型; 受顶部时间筛选控制",
+          "sourceTable": "随图表上下文",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "数量",
+              "code": "pjm_qual_count",
+              "displayName": "数量",
+              "formula": "COUNT(*) 或 SUM(...) — 按图表 SQL 分组键计数",
+              "unit": "个"
+            }
+          ]
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -1065,7 +1185,23 @@
         "defaultZoom": "month",
         "sideTextColor": "#ffffff",
         "backgroundColor": "transparent",
-        "titleColor": "#e6f6ff"
+        "titleColor": "#e6f6ff",
+        "metricNote": {
+          "displayName": "下月重点计划甘特",
+          "definition": "按「重大项目」分组,对比各组「子项目」指标",
+          "scope": "X 轴=重大项目; 受顶部时间筛选控制",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "延期天数",
+              "code": "pjm_prog_delay_days",
+              "displayName": "延期天数",
+              "formula": "实际完成时间 − 计划完成时间(单位:天);未完成节点取 (统计结束时间 − 计划完成时间)",
+              "unit": "天"
+            }
+          ]
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -1782,7 +1918,22 @@
             "应付未付项": 4
           }
         ],
-        "categoryKey": "科室"
+        "categoryKey": "科室",
+        "metricNote": {
+          "code": "pjm_procurement_by_dept",
+          "displayName": "物料采购(按科室)",
+          "domain": "采购",
+          "category": "基础",
+          "unit": "项",
+          "direction": "NEUTRAL",
+          "definition": "按责任科室统计物料采购情况(占位,数据源待接入)",
+          "formula": "待业务方提供口径",
+          "scope": "暂未接入实际数据源",
+          "sourceTable": "待定",
+          "frequency": "待定",
+          "thresholds": null,
+          "excelRef": "(待定)"
+        }
       }
     }
   ],
