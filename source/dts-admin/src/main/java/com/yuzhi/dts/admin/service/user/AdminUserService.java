@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.admin.domain.AdminApprovalItem;
 import com.yuzhi.dts.admin.domain.AdminApprovalRequest;
 import com.yuzhi.dts.admin.domain.AdminKeycloakUser;
+import com.yuzhi.dts.admin.domain.AdminRoleMember;
 import com.yuzhi.dts.admin.domain.ChangeRequest;
 import com.yuzhi.dts.admin.repository.AdminApprovalRequestRepository;
 import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
@@ -506,6 +507,94 @@ public class AdminUserService {
     }
 
     public record DepartmentInfo(String deptCode, String deptName) {}
+
+    public record RoleAssignmentUser(
+        Long id,
+        String keycloakId,
+        String username,
+        String fullName,
+        String email,
+        String deptCode,
+        String deptName,
+        List<String> groupPaths,
+        boolean enabled,
+        int mdmEnabled,
+        boolean inRole
+    ) {}
+
+    @Transactional(readOnly = true)
+    public Page<RoleAssignmentUser> listRoleAssignmentUsers(
+        String role,
+        int page,
+        int size,
+        String username,
+        String fullName,
+        String deptPath
+    ) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 200);
+        String normalizedRole = normalizeRole(role);
+        String usernameFilter = StringUtils.trimToNull(username);
+        String fullNameFilter = StringUtils.trimToNull(fullName);
+        String deptPathFilter = StringUtils.trimToNull(deptPath);
+        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.ASC, "username"));
+
+        Page<AdminKeycloakUser> candidates = userRepository.findRoleAssignmentCandidates(
+            usernameFilter,
+            fullNameFilter,
+            deptPathFilter,
+            HIDDEN_USERNAMES_IN_USERLIST,
+            pageable
+        );
+        List<AdminKeycloakUser> content = candidates.getContent();
+        Map<String, DepartmentInfo> departments = resolveDepartments(
+            content.stream().map(AdminKeycloakUser::getUsername).filter(StringUtils::isNotBlank).toList()
+        );
+        Set<String> members = loadRoleMemberUsernames(normalizedRole);
+
+        return candidates.map(user -> {
+            String currentUsername = StringUtils.trimToEmpty(user.getUsername());
+            DepartmentInfo department = departments.get(currentUsername);
+            return new RoleAssignmentUser(
+                user.getId(),
+                user.getKeycloakId(),
+                currentUsername,
+                user.getFullName(),
+                user.getEmail(),
+                department == null ? null : department.deptCode(),
+                department == null ? null : department.deptName(),
+                user.getGroupPaths() == null ? List.of() : user.getGroupPaths(),
+                user.isEnabled(),
+                user.getMdmEnabled(),
+                members.contains(currentUsername.toLowerCase(Locale.ROOT))
+            );
+        });
+    }
+
+    private Set<String> loadRoleMemberUsernames(String role) {
+        if (!StringUtils.isNotBlank(role)) {
+            return Set.of();
+        }
+        LinkedHashSet<String> result = new LinkedHashSet<>();
+        collectRoleMemberUsernames(result, roleMemberRepo.findByRoleIgnoreCase(role));
+        String canonical = canonicalRoleValue(role);
+        if (StringUtils.isNotBlank(canonical) && !canonical.equalsIgnoreCase(role)) {
+            collectRoleMemberUsernames(result, roleMemberRepo.findByRoleIgnoreCase(canonical));
+        }
+        return result;
+    }
+
+    private void collectRoleMemberUsernames(Set<String> target, Collection<AdminRoleMember> members) {
+        if (members == null || members.isEmpty()) {
+            return;
+        }
+        for (AdminRoleMember member : members) {
+            if (member == null || !StringUtils.isNotBlank(member.getUsername())) {
+                continue;
+            }
+            target.add(member.getUsername().trim().toLowerCase(Locale.ROOT));
+        }
+    }
 
     @Transactional(readOnly = true)
     public Map<String, DepartmentInfo> resolveDepartments(Collection<String> usernames) {

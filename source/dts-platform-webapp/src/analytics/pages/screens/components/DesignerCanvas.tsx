@@ -72,12 +72,16 @@ export function DesignerCanvas() {
     }, []);
     const [fitScale, setFitScale] = useState(1);
 
-    // Phase 4.4: resize debounce with requestAnimationFrame
-    // 增加阈值过滤(避免滚动条出现/消失这种 ~16px 抖动反复触发 fitScale 变化,
-    // 进而和 zoom 变化产生反馈循环造成画布抖动)
+    // Phase 4.4 + UI 抖动修复:
+    // - resize debounce with requestAnimationFrame
+    // - 阈值过滤(避免滚动条 ±16px 抖动反复触发 fitScale)
+    // - scale 量化到 3 位小数,防止浮点精度引起的"无意义微更新"
+    // - 修改属性(颜色/标题等)时,组件重渲可能让 ResizeObserver 偶发触发,
+    //   仅当尺寸/容器变化超过 2% 时才认为是真实 resize
     useEffect(() => {
         let rafId = 0;
         const containerNode = containerRef.current;
+        const quantize = (v: number) => Math.round(v * 1000) / 1000;
         const updateFitScale = () => {
             if (!containerNode) {
                 return;
@@ -86,9 +90,10 @@ export function DesignerCanvas() {
             const availableHeight = Math.max(containerNode.clientHeight - 24, 240);
             const baseWidth = Math.max(config.width || 1920, 1);
             const baseHeight = Math.max(config.height || 1080, 1);
-            const next = Math.max(0.1, Math.min(1, availableWidth / baseWidth, availableHeight / baseHeight));
-            // 阈值过滤: 仅在变化 > 1% 时才更新,防止滚动条引起的 ±16px 反复触发
-            setFitScale((prev) => (Math.abs(next - prev) > 0.01 ? next : prev));
+            const raw = Math.max(0.1, Math.min(1, availableWidth / baseWidth, availableHeight / baseHeight));
+            const next = quantize(raw);
+            // 阈值过滤: 仅在变化 ≥ 2% 时才更新(避免滚动条/属性面板 layout 抖动连锁反应)
+            setFitScale((prev) => (Math.abs(next - prev) >= 0.02 ? next : prev));
         };
         const onResize = () => {
             cancelAnimationFrame(rafId);
@@ -142,7 +147,9 @@ export function DesignerCanvas() {
 
             if (offset && canvasRect) {
                 // Calculate position relative to canvas, accounting for zoom
-                const scale = Math.max(0.1, (zoom / 100) * fitScale);
+                // 量化到 3 位小数,确保 scale 在 fitScale 与 zoom 不变时严格相等,
+    // 否则 React 每次重渲都会产生新的浮点 width/height,触发不必要的 layout
+    const scale = Math.round(Math.max(0.1, (zoom / 100) * fitScale) * 1000) / 1000;
                 const x = Math.round((offset.x - canvasRect.left) / scale);
                 const y = Math.round((offset.y - canvasRect.top) / scale);
                 const dropX = x - item.defaultWidth / 2;
@@ -207,8 +214,8 @@ export function DesignerCanvas() {
     }), [zoom, fitScale, addComponent, editorReadonly]);
 
     // scale 提前声明 — 供框选/坐标换算使用
-    // (后面 line ~338 处的 const scale 会被覆盖掉,保持一致性)
-    const _designerScale = Math.max(0.1, (zoom / 100) * fitScale);
+    // 用同样的量化方式保证与 line ~354 处的 scale 严格相等
+    const _designerScale = Math.round(Math.max(0.1, (zoom / 100) * fitScale) * 1000) / 1000;
 
     const handleCanvasClick = useCallback((e: MouseEvent<HTMLDivElement>) => {
         // Deselect all when clicking on empty canvas area
@@ -342,7 +349,9 @@ export function DesignerCanvas() {
             .sort((a, b) => a.zIndex - b.zIndex);
     }, [config.components]);
 
-    const scale = Math.max(0.1, (zoom / 100) * fitScale);
+    // 量化到 3 位小数,确保 scale 在 fitScale 与 zoom 不变时严格相等,
+    // 否则 React 每次重渲都会产生新的浮点 width/height,触发不必要的 layout
+    const scale = Math.round(Math.max(0.1, (zoom / 100) * fitScale) * 1000) / 1000;
 
     // Ruler tick marks
     const rulerStep = scale >= 0.5 ? 100 : scale >= 0.25 ? 200 : 400;
@@ -405,8 +414,9 @@ export function DesignerCanvas() {
                 style={{
                     width: config.width * scale,
                     height: config.height * scale,
-                    // 缩放过渡 — 让按 +/- 25% 的变化看起来平滑,而非生硬跳变
-                    transition: 'width 160ms ease-out, height 160ms ease-out',
+                    // ❗ 不要在 width/height 上加 CSS transition:
+                    // 修改组件属性(颜色/标题等)会触发父组件重渲,scale 可能因 fitScale
+                    // 浮点精度微调而产生 sub-pixel 变化,加 transition 会让画布持续闪烁。
                 }}
             >
                 <div
@@ -428,8 +438,7 @@ export function DesignerCanvas() {
                         backgroundRepeat: 'no-repeat',
                         transform: `scale(${scale})`,
                         transformOrigin: 'top left',
-                        // 与 wrapper 同步过渡,缩放更平滑
-                        transition: 'transform 160ms ease-out',
+                        // 同上: 不在 transform 上加 transition,避免编辑属性时画布抖动
                     }}
                     onClick={handleCanvasClick}
                     onContextMenu={handleContextMenu}

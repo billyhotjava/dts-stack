@@ -55,4 +55,50 @@ public interface AdminKeycloakUserRepository extends JpaRepository<AdminKeycloak
 
     @Query("select u from AdminKeycloakUser u where lower(u.username) in :usernames")
     List<AdminKeycloakUser> findByUsernameInIgnoreCase(@Param("usernames") Collection<String> usernames);
+
+    @Query(
+        value = """
+            select *
+              from admin_keycloak_user u
+             where u.username is not null
+               and lower(u.username) not in (:excluded)
+               and (cast(:username as text) is null or lower(u.username) like lower(concat('%', cast(:username as text), '%')))
+               and (cast(:fullName as text) is null or lower(coalesce(u.full_name, '')) like lower(concat('%', cast(:fullName as text), '%')))
+               and (
+                   cast(:deptPath as text) is null
+                   or exists (
+                       select 1
+                         from jsonb_array_elements_text(coalesce(u.group_paths, '[]'::jsonb)) as gp(path)
+                        where lower(gp.path) = lower(cast(:deptPath as text))
+                           or lower(gp.path) like lower(concat(cast(:deptPath as text), '/%'))
+                   )
+               )
+             order by lower(u.username)
+            """,
+        countQuery = """
+            select count(*)
+              from admin_keycloak_user u
+             where u.username is not null
+               and lower(u.username) not in (:excluded)
+               and (cast(:username as text) is null or lower(u.username) like lower(concat('%', cast(:username as text), '%')))
+               and (cast(:fullName as text) is null or lower(coalesce(u.full_name, '')) like lower(concat('%', cast(:fullName as text), '%')))
+               and (
+                   cast(:deptPath as text) is null
+                   or exists (
+                       select 1
+                         from jsonb_array_elements_text(coalesce(u.group_paths, '[]'::jsonb)) as gp(path)
+                        where lower(gp.path) = lower(cast(:deptPath as text))
+                           or lower(gp.path) like lower(concat(cast(:deptPath as text), '/%'))
+                   )
+               )
+            """,
+        nativeQuery = true
+    )
+    Page<AdminKeycloakUser> findRoleAssignmentCandidates(
+        @Param("username") String username,
+        @Param("fullName") String fullName,
+        @Param("deptPath") String deptPath,
+        @Param("excluded") Collection<String> excluded,
+        Pageable pageable
+    );
 }

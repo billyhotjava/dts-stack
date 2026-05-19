@@ -70,8 +70,10 @@ import com.yuzhi.dts.admin.repository.OrganizationRepository;
 import com.yuzhi.dts.admin.service.user.AdminUserService;
 import com.yuzhi.dts.admin.service.mdm.MdmGatewayService;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO;
+import com.yuzhi.dts.admin.web.rest.vm.PagedResultVM;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.common.audit.ChangeSnapshot;
+import org.springframework.data.domain.Page;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -2208,6 +2210,33 @@ public class AdminApiResource {
             })
             .toList();
         return ResponseEntity.ok(ApiResponse.ok(payload));
+    }
+
+    @GetMapping("/roles/{name}/assignment-users")
+    public ResponseEntity<ApiResponse<PagedResultVM<AdminUserService.RoleAssignmentUser>>> roleAssignmentUsers(
+        @PathVariable String name,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "20") int size,
+        @RequestParam(required = false) String username,
+        @RequestParam(required = false) String fullName,
+        @RequestParam(required = false) String deptPath
+    ) {
+        String canonical = stripRolePrefix(Objects.toString(name, ""));
+        Page<AdminUserService.RoleAssignmentUser> result = adminUserService.listRoleAssignmentUsers(
+            canonical,
+            page,
+            size,
+            username,
+            fullName,
+            deptPath
+        );
+        PagedResultVM<AdminUserService.RoleAssignmentUser> body = new PagedResultVM<>(
+            result.getContent(),
+            result.getTotalElements(),
+            result.getNumber(),
+            result.getSize()
+        );
+        return ResponseEntity.ok(ApiResponse.ok(body));
     }
 
     private int safeCountMenuBindings(String canonical) {

@@ -13,6 +13,8 @@ import type {
 	PermissionCatalogSection,
 	PortalMenuCollection,
 	PortalMenuItem,
+	RoleAssignmentUser,
+	RoleAssignmentUserQuery,
 	SystemConfigItem,
 	UpsertWorkflowTemplatePayload,
 	WorkflowTemplateConfig,
@@ -57,11 +59,7 @@ const normalizeAdminUsersPage = (
 		: Array.isArray((page as any).records)
 			? ((page as any).records as AdminUser[])
 			: [];
-	const total =
-		(page as any).totalElements ??
-		(page as any).total ??
-		(page as any).totalRecords ??
-		content.length;
+	const total = (page as any).totalElements ?? (page as any).total ?? (page as any).totalRecords ?? content.length;
 	const size = (page as any).size;
 	return {
 		items: content,
@@ -338,6 +336,18 @@ export const adminApi = {
 	getRoleMembers: (role: string) =>
 		apiClient.get<Array<{ username: string; displayName: string }>>({
 			url: `/admin/roles/${encodeURIComponent(role)}/members`,
+		}),
+
+	getRoleAssignmentUsers: (role: string, query?: RoleAssignmentUserQuery) =>
+		apiClient.get<PagedResult<RoleAssignmentUser>>({
+			url: `/admin/roles/${encodeURIComponent(role)}/assignment-users`,
+			params: {
+				page: query?.page ?? 0,
+				size: query?.size ?? ADMIN_USER_PAGE_SIZE,
+				username: query?.username,
+				fullName: query?.fullName,
+				deptPath: query?.deptPath,
+			},
 		}),
 
 	getPermissionCatalog: () =>

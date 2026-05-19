@@ -271,6 +271,28 @@ export interface AdminUser {
 	mdmEnabled?: number;
 }
 
+export interface RoleAssignmentUser {
+	id?: number;
+	keycloakId?: string;
+	username: string;
+	fullName?: string;
+	email?: string;
+	deptCode?: string;
+	deptName?: string;
+	groupPaths?: string[];
+	enabled?: boolean;
+	mdmEnabled?: number;
+	inRole: boolean;
+}
+
+export interface RoleAssignmentUserQuery {
+	page?: number;
+	size?: number;
+	username?: string;
+	fullName?: string;
+	deptPath?: string;
+}
+
 export interface AdminRoleDetail {
 	id: number;
 	name: string;

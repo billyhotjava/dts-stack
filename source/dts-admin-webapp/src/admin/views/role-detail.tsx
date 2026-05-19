@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, TreeSelect, Select as AntSelect } from "antd";
+import { Button, Table, TreeSelect } from "antd";
 import { EditOutlined } from "@ant-design/icons";
 import type { TreeSelectProps } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { adminApi } from "@/admin/api/adminApi";
-import type { AdminRoleDetail, AdminUser, ChangeRequest, OrganizationNode } from "@/admin/types";
+import type { AdminRoleDetail, ChangeRequest, OrganizationNode, RoleAssignmentUser } from "@/admin/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { Textarea } from "@/ui/textarea";
@@ -23,6 +24,7 @@ type OrgTreeOption = {
 
 type RealmMember = { username: string; displayName?: string };
 type PendingMember = { username: string; displayName: string; keycloakId?: string };
+type AssignmentFilters = { deptPath: string; fullName: string; username: string };
 type MemberView = {
 	username: string;
 	displayName: string;
@@ -48,10 +50,6 @@ export default function RoleDetailView() {
 	const { data: organizations } = useQuery({
 		queryKey: ["admin", "orgs"],
 		queryFn: () => adminApi.getOrganizations({ auditSilent: true }),
-	});
-	const { data: adminUsers } = useQuery({
-		queryKey: ["admin", "users", "all"],
-		queryFn: () => adminApi.getAllAdminUsers(),
 	});
 	const { data: pendingChangeList } = useQuery({
 		queryKey: ["admin", "role-change-pending", canonical],
@@ -84,13 +82,13 @@ export default function RoleDetailView() {
 		if (!targetRole) return canonical;
 		return targetRole.roleId || targetRole.code || targetRole.name || canonical;
 	}, [targetRole, canonical]);
+	const roleName = useMemo(() => toRoleName(authorityName), [authorityName]);
 
 	const [realmMembers, setRealmMembers] = useState<RealmMember[]>([]);
 	const [membersLoading, setMembersLoading] = useState(false);
 
 	useEffect(() => {
 		let cancelled = false;
-		const roleName = toRoleName(authorityName);
 		if (!roleName) {
 			setRealmMembers([]);
 			return;
@@ -104,7 +102,7 @@ export default function RoleDetailView() {
 						(list ?? []).map((item) => ({
 							username: item.username,
 							displayName: item.displayName,
-						}))
+						})),
 					);
 				}
 			} catch (error) {
@@ -119,7 +117,7 @@ export default function RoleDetailView() {
 		return () => {
 			cancelled = true;
 		};
-	}, [authorityName]);
+	}, [roleName]);
 
 	const [displayLabel, setDisplayLabel] = useState("");
 	const [scope, setScope] = useState<"DEPARTMENT" | "INSTITUTE">("DEPARTMENT");
@@ -138,37 +136,25 @@ export default function RoleDetailView() {
 		setUpdateReason("");
 	}, [targetRole, authorityName]);
 
-	const adminUsersList = useMemo<AdminUser[]>(() => {
-		if (!adminUsers) return [];
-		if (Array.isArray(adminUsers)) return adminUsers;
-		return [];
-	}, [adminUsers]);
-
-	const adminUsersIndex = useMemo(() => {
-		const map = new Map<string, AdminUser>();
-		adminUsersList.forEach((user) => {
-			if (user?.username) {
-				map.set(user.username.toLowerCase(), user);
-			}
-		});
-		return map;
-	}, [adminUsersList]);
-
-	const [selectedOrgPath, setSelectedOrgPath] = useState<string>("");
-	const [selectedUsername, setSelectedUsername] = useState<string>("");
+	const emptyAssignmentFilters = useMemo<AssignmentFilters>(() => ({ deptPath: "", fullName: "", username: "" }), []);
+	const [assignmentFiltersDraft, setAssignmentFiltersDraft] = useState<AssignmentFilters>(emptyAssignmentFilters);
+	const [assignmentFilters, setAssignmentFilters] = useState<AssignmentFilters>(emptyAssignmentFilters);
+	const [assignmentPagination, setAssignmentPagination] = useState<{ current: number; pageSize: number }>({
+		current: 1,
+		pageSize: 20,
+	});
 	const [pendingAdds, setPendingAdds] = useState<Map<string, PendingMember>>(new Map());
 	const [pendingRemovals, setPendingRemovals] = useState<Set<string>>(new Set());
-	const [memberError, setMemberError] = useState<string>("");
 
 	useEffect(() => {
 		if (!isEditMode) {
 			setPendingAdds(new Map());
 			setPendingRemovals(new Set());
-			setSelectedOrgPath("");
-			setSelectedUsername("");
-			setMemberError("");
+			setAssignmentFiltersDraft(emptyAssignmentFilters);
+			setAssignmentFilters(emptyAssignmentFilters);
+			setAssignmentPagination({ current: 1, pageSize: 20 });
 		}
-	}, [isEditMode]);
+	}, [emptyAssignmentFilters, isEditMode]);
 
 	const orgOptionResult = useMemo(() => buildOrgOptions(organizations ?? []), [organizations]);
 	const orgOptions = orgOptionResult.options;
@@ -188,13 +174,11 @@ export default function RoleDetailView() {
 		const map = new Map<string, MemberView>();
 		baseMembersMap.forEach((member, key) => {
 			const displayName = member.displayName?.trim() || member.username;
-			const userRecord = adminUsersIndex.get(key);
 			map.set(key, {
 				username: member.username,
 				displayName,
 				status: pendingRemovals.has(key) ? "remove" : "existing",
 				origin: "existing",
-				keycloakId: userRecord?.keycloakId ?? undefined,
 			});
 		});
 		pendingAdds.forEach((draft, key) => {
@@ -207,7 +191,7 @@ export default function RoleDetailView() {
 			});
 		});
 		return map;
-	}, [adminUsersIndex, baseMembersMap, pendingAdds, pendingRemovals]);
+	}, [baseMembersMap, pendingAdds, pendingRemovals]);
 
 	const memberViews = useMemo(
 		() => Array.from(memberStatusMap.values()).sort((a, b) => a.displayName.localeCompare(b.displayName, "zh-CN")),
@@ -219,70 +203,143 @@ export default function RoleDetailView() {
 	);
 	const hasPendingMemberChange = pendingAdds.size > 0 || pendingRemovals.size > 0;
 
-	const filteredUsers = useMemo(() => {
-		if (!selectedOrgPath) return [];
-		const normalized = normalizeGroupPath(selectedOrgPath);
-		if (!normalized) return [];
-		return adminUsersList.filter((user) => {
-			const username = user?.username?.trim();
-			if (!username) return false;
+	const {
+		data: assignmentUsersPage,
+		isLoading: assignmentUsersLoading,
+		isError: assignmentUsersError,
+	} = useQuery({
+		queryKey: [
+			"admin",
+			"role-assignment-users",
+			roleName,
+			assignmentPagination.current,
+			assignmentPagination.pageSize,
+			assignmentFilters.deptPath,
+			assignmentFilters.fullName,
+			assignmentFilters.username,
+		],
+		enabled: isEditMode && roleName.length > 0,
+		queryFn: () =>
+			adminApi.getRoleAssignmentUsers(roleName, {
+				page: Math.max(0, assignmentPagination.current - 1),
+				size: assignmentPagination.pageSize,
+				deptPath: assignmentFilters.deptPath || undefined,
+				fullName: assignmentFilters.fullName || undefined,
+				username: assignmentFilters.username || undefined,
+			}),
+	});
+	const assignmentUsers = assignmentUsersPage?.content ?? [];
+
+	const selectedAssignmentRowKeys = useMemo(
+		() =>
+			assignmentUsers
+				.filter((user) => {
+					const key = user.username?.trim().toLowerCase();
+					if (!key) return false;
+					if (pendingAdds.has(key)) return true;
+					if (pendingRemovals.has(key)) return false;
+					return Boolean(user.inRole);
+				})
+				.map((user) => user.username),
+		[assignmentUsers, pendingAdds, pendingRemovals],
+	);
+
+	const handleAssignmentSelect = useCallback(
+		(user: RoleAssignmentUser, selected: boolean) => {
+			if (!isEditMode || hasPendingChange) return;
+			const username = user.username?.trim();
+			if (!username) return;
 			const key = username.toLowerCase();
-			const status = memberStatusMap.get(key)?.status;
-			if (status && status !== "remove") {
-				return false;
-			}
-			const rawGroupPaths: unknown = (user as any)?.groupPaths ?? (user as any)?.orgPath;
-			const candidatePaths = Array.isArray(rawGroupPaths) ? (rawGroupPaths as string[]) : [];
-			if (!candidatePaths.length) return false;
-			return candidatePaths.some((path) => {
-				const normalizedUserPath = normalizeGroupPath(path);
-				return normalizedUserPath === normalized || normalizedUserPath.startsWith(`${normalized}/`);
-			});
-		});
-	}, [adminUsersList, memberStatusMap, selectedOrgPath]);
-
-	const handleQueueAdd = useCallback(() => {
-		setMemberError("");
-		if (!isEditMode) {
-			setMemberError("当前为只读模式，无法添加成员");
-			return;
-		}
-		if (!selectedOrgPath) {
-			setMemberError("请先选择所属部门");
-			return;
-		}
-		if (!selectedUsername) {
-			setMemberError("请选择成员");
-			return;
-		}
-		const key = selectedUsername.toLowerCase();
-		const existingStatus = memberStatusMap.get(key);
-		if (existingStatus && existingStatus.status !== "remove") {
-			setMemberError("该成员已在角色中");
-			return;
-		}
-		if (pendingAdds.has(key)) {
-			setMemberError("该成员已添加到待审批列表");
-			return;
-		}
-		const userInfo = adminUsersIndex.get(key);
-		const displayName =
-			(userInfo?.fullName && userInfo.fullName.trim()) || userInfo?.username || selectedUsername;
-		const nextAdds = new Map(pendingAdds);
-		nextAdds.set(key, {
-			username: userInfo?.username ?? selectedUsername,
-			displayName,
-			keycloakId: userInfo?.keycloakId ?? undefined,
-		});
-		setPendingAdds(nextAdds);
-
-		if (pendingRemovals.has(key)) {
+			const nextAdds = new Map(pendingAdds);
 			const nextRemovals = new Set(pendingRemovals);
-			nextRemovals.delete(key);
+			if (selected) {
+				nextRemovals.delete(key);
+				if (!user.inRole) {
+					nextAdds.set(key, {
+						username,
+						displayName: user.fullName?.trim() || username,
+						keycloakId: user.keycloakId,
+					});
+				}
+			} else {
+				nextAdds.delete(key);
+				if (user.inRole) {
+					nextRemovals.add(key);
+				}
+			}
+			setPendingAdds(nextAdds);
 			setPendingRemovals(nextRemovals);
-		}
-		setSelectedUsername("");
-	}, [adminUsersIndex, isEditMode, memberStatusMap, pendingAdds, pendingRemovals, selectedOrgPath, selectedUsername]);
+		},
+		[hasPendingChange, isEditMode, pendingAdds, pendingRemovals],
+	);
+
+	const assignmentColumns = useMemo<ColumnsType<RoleAssignmentUser>>(
+		() => [
+			{
+				title: "用户名",
+				dataIndex: "username",
+				key: "username",
+				width: 180,
+				ellipsis: true,
+			},
+			{
+				title: "姓名",
+				dataIndex: "fullName",
+				key: "fullName",
+				width: 160,
+				ellipsis: true,
+				render: (value?: string) => value?.trim() || <span className="text-muted-foreground">-</span>,
+			},
+			{
+				title: "部门",
+				key: "department",
+				width: 220,
+				ellipsis: true,
+				render: (_, record) => {
+					if (record.deptName?.trim()) return record.deptName;
+					const groupPath = record.groupPaths?.[0];
+					return groupPath || <span className="text-muted-foreground">-</span>;
+				},
+			},
+			{
+				title: "账号状态",
+				key: "enabled",
+				width: 120,
+				render: (_, record) =>
+					record.enabled === false ? (
+						<Badge variant="destructive">禁用</Badge>
+					) : (
+						<Badge variant="secondary">可用</Badge>
+					),
+			},
+			{
+				title: "角色状态",
+				key: "roleState",
+				width: 160,
+				render: (_, record) => {
+					const key = record.username?.trim().toLowerCase();
+					if (key && pendingAdds.has(key))
+						return (
+							<Badge variant="secondary" className="border-emerald-500 text-emerald-600">
+								待新增
+							</Badge>
+						);
+					if (key && pendingRemovals.has(key))
+						return (
+							<Badge variant="destructive" className="bg-red-50 text-red-600">
+								待移除
+							</Badge>
+						);
+					return record.inRole ? (
+						<Badge variant="outline">已在角色中</Badge>
+					) : (
+						<span className="text-muted-foreground">未加入</span>
+					);
+				},
+			},
+		],
+		[pendingAdds, pendingRemovals],
+	);
 
 	const handleToggleMember = useCallback(
 		(member: MemberView) => {
@@ -329,16 +386,9 @@ export default function RoleDetailView() {
 		}));
 		const memberRemovesPayload = Array.from(effectiveRemovals).map((key) => {
 			const base = baseMembersMap.get(key);
-			const userRecord = adminUsersIndex.get(key);
-			const username = base?.username ?? userRecord?.username ?? key;
-			const displayName =
-				base?.displayName?.trim() ||
-				userRecord?.fullName?.trim() ||
-				userRecord?.username ||
-				base?.username ||
-				username;
-			const keycloakId = userRecord?.keycloakId ?? undefined;
-			return { username, displayName, keycloakId };
+			const username = base?.username ?? key;
+			const displayName = base?.displayName?.trim() || base?.username || username;
+			return { username, displayName, keycloakId: undefined };
 		});
 
 		const finalMembers = new Map(baseMembersMap);
@@ -409,11 +459,10 @@ export default function RoleDetailView() {
 			});
 			await adminApi.submitChangeRequest(change.id);
 			toast.success("角色变更申请已提交审批");
-			const nextLabel = trimmedDisplay || (targetRole.displayName || targetRole.name || authorityName || "");
+			const nextLabel = trimmedDisplay || targetRole.displayName || targetRole.name || authorityName || "";
 			setDisplayLabel(nextLabel);
 			setPendingAdds(new Map());
 			setPendingRemovals(new Set());
-			setSelectedUsername("");
 			await queryClient.invalidateQueries({ queryKey: ["admin", "role-change-pending", canonical] });
 			await queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
 			navigate("/admin/roles");
@@ -430,11 +479,9 @@ export default function RoleDetailView() {
 		displayLabel,
 		pendingRemovals,
 		queryClient,
-		realmMembers,
 		scope,
 		targetRole,
 		updateReason,
-		adminUsersIndex,
 		navigate,
 		pendingChange,
 		canonical,
@@ -480,7 +527,11 @@ export default function RoleDetailView() {
 					返回角色列表
 				</Button>
 				{!isEditMode ? (
-					<Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/admin/roles/${encodeURIComponent(roleKey)}/edit`)}>
+					<Button
+						type="primary"
+						icon={<EditOutlined />}
+						onClick={() => navigate(`/admin/roles/${encodeURIComponent(roleKey)}/edit`)}
+					>
 						编辑角色
 					</Button>
 				) : null}
@@ -493,7 +544,8 @@ export default function RoleDetailView() {
 						<p>
 							角色 <strong>{authorityName}</strong> 正在等待审批（单号 #{pendingChange!.id}，申请人{" "}
 							{pendingChange!.requestedByDisplayName || pendingChange!.requestedBy || "未知"}
-							{pendingChange!.requestedAt ? `，提交时间 ${formatDateTime(pendingChange!.requestedAt)}` : ""}）。审批完成前无法提交新的编辑请求。
+							{pendingChange!.requestedAt ? `，提交时间 ${formatDateTime(pendingChange!.requestedAt)}` : ""}
+							）。审批完成前无法提交新的编辑请求。
 						</p>
 						<div className="flex flex-wrap gap-2">
 							<Button type="default" size="small" onClick={() => navigate("/admin/my-changes")}>
@@ -548,8 +600,7 @@ export default function RoleDetailView() {
 								角色成员数
 							</Text>
 							<Text variant="body3" className="text-muted-foreground">
-								{visibleMemberCount} 人
-								{hasPendingMemberChange ? "（含待审批变更）" : ""}
+								{visibleMemberCount} 人{hasPendingMemberChange ? "（含待审批变更）" : ""}
 							</Text>
 						</div>
 					</section>
@@ -592,78 +643,139 @@ export default function RoleDetailView() {
 								角色成员
 							</Text>
 							<Text variant="body3" className="text-muted-foreground">
-								Keycloak 成员 {realmMembers.length} 人
-								{hasPendingMemberChange ? "，当前包含待审批的新增/移除" : ""}
+								Keycloak 成员 {realmMembers.length} 人{hasPendingMemberChange ? "，当前包含待审批的新增/移除" : ""}
 							</Text>
 						</div>
 
 						{isEditMode ? (
 							<div className="space-y-4 rounded-lg border border-dashed border-slate-200 p-4">
-								<div className="flex items-center gap-2">
-									<Icon icon="mdi:account-multiple-plus-outline" className="h-5 w-5 text-primary" />
-									<Text variant="body3">选择新增成员</Text>
-								</div>
-								<div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-									<div className="space-y-2 lg:w-64">
+								<div className="flex flex-wrap items-center justify-between gap-3">
+									<div className="flex items-center gap-2">
+										<Icon icon="mdi:account-multiple-plus-outline" className="h-5 w-5 text-primary" />
 										<Text variant="body3" className="font-medium">
-											所在部门
+											成员分配
+										</Text>
+									</div>
+									<Text variant="body3" className="text-muted-foreground">
+										待新增 {pendingAdds.size} 人，待移除 {pendingRemovals.size} 人
+									</Text>
+								</div>
+								<div className="grid gap-3 lg:grid-cols-[minmax(220px,1.1fr)_minmax(180px,0.8fr)_minmax(180px,0.8fr)_auto_auto]">
+									<div className="space-y-2">
+										<Text variant="body3" className="font-medium">
+											部门
 										</Text>
 										<TreeSelect
 											className="w-full"
 											placeholder="选择部门"
 											treeDefaultExpandAll
 											allowClear
-											value={selectedOrgPath || undefined}
+											value={assignmentFiltersDraft.deptPath || undefined}
 											onChange={(value) => {
-												setSelectedOrgPath(normalizeOrgPath(value || ""));
-												setSelectedUsername("");
-												setMemberError("");
+												setAssignmentFiltersDraft((prev) => ({
+													...prev,
+													deptPath: normalizeOrgPath(String(value || "")),
+												}));
 											}}
 											treeData={orgOptions}
 											style={{ width: "100%" }}
 										/>
 									</div>
-									<div className="space-y-2 lg:w-80">
+									<div className="space-y-2">
 										<Text variant="body3" className="font-medium">
-											候选成员
+											姓名
 										</Text>
-										<AntSelect
-											className="w-full"
-											style={{ width: "100%", maxWidth: 320 }}
-											showSearch
-											allowClear
-											placeholder={selectedOrgPath ? "选择成员" : "请先选择部门"}
-											value={selectedUsername || undefined}
-											disabled={!selectedOrgPath}
-											onChange={(value) => {
-												setSelectedUsername(value);
-												setMemberError("");
-											}}
-											filterOption={(input, option) =>
-												(option?.label as string).toLowerCase().includes(input.toLowerCase())
+										<Input
+											value={assignmentFiltersDraft.fullName}
+											onChange={(event) =>
+												setAssignmentFiltersDraft((prev) => ({
+													...prev,
+													fullName: event.target.value,
+												}))
 											}
-											options={filteredUsers.map((user) => ({
-												value: user.username,
-												label: user.fullName?.trim()
-													? `${user.fullName}（${user.username}）`
-													: user.username,
-											}))}
+											placeholder="按姓名查询"
 										/>
 									</div>
+									<div className="space-y-2">
+										<Text variant="body3" className="font-medium">
+											用户名
+										</Text>
+										<Input
+											value={assignmentFiltersDraft.username}
+											onChange={(event) =>
+												setAssignmentFiltersDraft((prev) => ({
+													...prev,
+													username: event.target.value,
+												}))
+											}
+											placeholder="按用户名查询"
+										/>
+									</div>
+									<div className="flex items-end">
+										<Button
+											type="primary"
+											htmlType="button"
+											onClick={() => {
+												setAssignmentFilters({
+													deptPath: assignmentFiltersDraft.deptPath.trim(),
+													fullName: assignmentFiltersDraft.fullName.trim(),
+													username: assignmentFiltersDraft.username.trim(),
+												});
+												setAssignmentPagination((prev) => ({ ...prev, current: 1 }));
+											}}
+										>
+											查询
+										</Button>
+									</div>
+									<div className="flex items-end">
+										<Button
+											type="default"
+											htmlType="button"
+											onClick={() => {
+												setAssignmentFiltersDraft(emptyAssignmentFilters);
+												setAssignmentFilters(emptyAssignmentFilters);
+												setAssignmentPagination((prev) => ({ ...prev, current: 1 }));
+											}}
+										>
+											重置
+										</Button>
+									</div>
 								</div>
-								<div className="flex flex-wrap items-center justify-between gap-3">
-									<Text variant="body3" className="text-muted-foreground">
-										已选待新增成员 {pendingAdds.size} 人
-									</Text>
-									<Button type="primary" htmlType="button" onClick={handleQueueAdd}>
-										加入待审批列表
-									</Button>
-								</div>
-								{memberError ? (
+								{assignmentUsersError ? (
 									<Text variant="body3" className="text-destructive">
-										{memberError}
+										加载用户列表失败，请稍后重试。
 									</Text>
 								) : null}
+								<Table<RoleAssignmentUser>
+									rowKey={(record) => record.username}
+									columns={assignmentColumns}
+									dataSource={assignmentUsers}
+									loading={assignmentUsersLoading}
+									rowSelection={{
+										selectedRowKeys: selectedAssignmentRowKeys,
+										preserveSelectedRowKeys: true,
+										getCheckboxProps: () => ({ disabled: hasPendingChange }),
+										onSelect: (record, selected) => handleAssignmentSelect(record, selected),
+										onSelectAll: (selected, _selectedRows, changedRows) => {
+											changedRows.forEach((record) => handleAssignmentSelect(record, selected));
+										},
+									}}
+									locale={{ emptyText: "未找到匹配用户" }}
+									pagination={{
+										current: assignmentPagination.current,
+										pageSize: assignmentPagination.pageSize,
+										total: assignmentUsersPage?.totalElements ?? assignmentUsers.length,
+										showSizeChanger: true,
+										pageSizeOptions: ["10", "20", "50", "100", "200"],
+										showTotal: (total) => `共 ${total} 人`,
+										onChange: (current, pageSize) => {
+											setAssignmentPagination({ current, pageSize });
+										},
+									}}
+									size="small"
+									tableLayout="fixed"
+									scroll={{ x: 900 }}
+								/>
 							</div>
 						) : null}
 
@@ -704,11 +816,7 @@ export default function RoleDetailView() {
 												) : null}
 												{isEditMode ? (
 													<Button size="small" type="default" onClick={() => handleToggleMember(member)}>
-														{member.origin === "new"
-															? "撤销新增"
-															: member.status === "remove"
-																? "恢复"
-																: "移除"}
+														{member.origin === "new" ? "撤销新增" : member.status === "remove" ? "恢复" : "移除"}
 													</Button>
 												) : null}
 											</div>
@@ -721,9 +829,9 @@ export default function RoleDetailView() {
 
 					{isEditMode ? (
 						<div className="flex justify-end border-t border-slate-200 pt-4">
-				<Button type="primary" onClick={handleSubmitChanges} disabled={updating || hasPendingChange}>
-					{updating ? "提交中…" : "提交角色编辑"}
-				</Button>
+							<Button type="primary" onClick={handleSubmitChanges} disabled={updating || hasPendingChange}>
+								{updating ? "提交中…" : "提交角色编辑"}
+							</Button>
 						</div>
 					) : null}
 				</CardContent>
@@ -740,13 +848,20 @@ function canonicalRole(value: string | null | undefined): string {
 	if (!trimmed || trimmed.toLowerCase() === "null" || trimmed.toLowerCase() === "undefined") {
 		return "";
 	}
-	return trimmed.toUpperCase().replace(/^ROLE[_-]?/, "").replace(/_/g, "");
+	return trimmed
+		.toUpperCase()
+		.replace(/^ROLE[_-]?/, "")
+		.replace(/_/g, "");
 }
 
 function isPendingRoleChange(change: ChangeRequest | undefined | null): boolean {
 	if (!change) return false;
-	const status = String(change.status || "").trim().toUpperCase();
-	const resourceType = String(change.resourceType || "").trim().toUpperCase();
+	const status = String(change.status || "")
+		.trim()
+		.toUpperCase();
+	const resourceType = String(change.resourceType || "")
+		.trim()
+		.toUpperCase();
 	return status === "PENDING" && (resourceType === "ROLE" || resourceType === "CUSTOM_ROLE");
 }
 
@@ -763,7 +878,8 @@ function resolveChangeRoleId(change: ChangeRequest | undefined | null): string {
 		return direct;
 	}
 	const payload = safeParseJson(change.payloadJson);
-	const payloadName = payload && typeof payload === "object" ? canonicalRole((payload as any).name || (payload as any).role) : "";
+	const payloadName =
+		payload && typeof payload === "object" ? canonicalRole((payload as any).name || (payload as any).role) : "";
 	if (payloadName) return payloadName;
 	const updated = change.updatedValue;
 	if (updated && typeof updated === "object") {
@@ -819,7 +935,9 @@ function toRoleName(value: string | null | undefined): string {
 
 function normalizeGroupPath(path: string): string {
 	if (!path) return "";
-	return path.startsWith("/") ? path.replace(/\/{2,}/g, "/").replace(/\/$/, "") : "/" + path.replace(/\/{2,}/g, "/").replace(/\/$/, "");
+	return path.startsWith("/")
+		? path.replace(/\/{2,}/g, "/").replace(/\/$/, "")
+		: "/" + path.replace(/\/{2,}/g, "/").replace(/\/$/, "");
 }
 
 function buildOrgOptions(nodes: OrganizationNode[]): {
@@ -832,18 +950,20 @@ function buildOrgOptions(nodes: OrganizationNode[]): {
 		return tree
 			.filter((node) => String(node?.status ?? "1") !== "0")
 			.map((node) => {
-			const segment = node.name ?? "";
-			const nextPath = [...prefix, segment].filter(Boolean);
-			const groupPath = node.groupPath ? normalizeGroupPath(node.groupPath) : normalizeGroupPath("/" + nextPath.join("/"));
-			const option: OrgTreeOption = {
-				value: groupPath,
-				label: segment || groupPath,
-			};
-			if (node.children && node.children.length > 0) {
-				option.children = build(node.children, nextPath);
-			}
-			return option;
-		});
+				const segment = node.name ?? "";
+				const nextPath = [...prefix, segment].filter(Boolean);
+				const groupPath = node.groupPath
+					? normalizeGroupPath(node.groupPath)
+					: normalizeGroupPath("/" + nextPath.join("/"));
+				const option: OrgTreeOption = {
+					value: groupPath,
+					label: segment || groupPath,
+				};
+				if (node.children && node.children.length > 0) {
+					option.children = build(node.children, nextPath);
+				}
+				return option;
+			});
 	};
 
 	result.push(...build(nodes, []));
@@ -873,7 +993,11 @@ function SelectScope({
 			>
 				部门域
 			</Button>
-			<Button htmlType="button" type={value === "INSTITUTE" ? "primary" : "default"} onClick={() => onChange("INSTITUTE")}>
+			<Button
+				htmlType="button"
+				type={value === "INSTITUTE" ? "primary" : "default"}
+				onClick={() => onChange("INSTITUTE")}
+			>
 				全所共享域
 			</Button>
 		</div>
