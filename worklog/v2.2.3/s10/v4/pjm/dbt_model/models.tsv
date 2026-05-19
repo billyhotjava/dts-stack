@@ -33,6 +33,7 @@ biz_ads_progress_kpi_v2	ADS	models/ads/biz_ads_progress_kpi_v2.sql			public	tabl
 biz_ads_quality_kpi_v2	ADS	models/ads/biz_ads_quality_kpi_v2.sql			public	table	project-management,biz,ads,kpi,quality	DRAFT	true		质量域原始指标—15个指标月度聚合
 biz_ads_tech_state_kpi_v2	ADS	models/ads/biz_ads_tech_state_kpi_v2.sql			public	table	project-management,biz,ads,kpi,tech-state	DRAFT	true		技术状态域原始指标—19个指标月度聚合
 biz_ads_risk_kpi_v2	ADS	models/ads/biz_ads_risk_kpi_v2.sql			public	table	project-management,biz,ads,kpi,risk	DRAFT	true		风险域KPI—风险总数/高中低/释放率月度聚合
+biz_ads_project_basic_info_v2	ADS	models/ads/biz_ads_project_basic_info_v2.sql			public	table	project-management,biz,ads,project-basic	DRAFT	true		项目基础信息ADS—项目负责人/所领导/节点数等看板基础信息
 biz_ads_progress_derived_v2	ADS	models/ads/biz_ads_progress_derived_v2.sql			public	table	project-management,biz,ads,derived,progress	DRAFT	true		进度域二次指标—6个（按时完成率/超期率/异常率/里程碑率/高风险占比/健康分）
 biz_ads_quality_derived_v2	ADS	models/ads/biz_ads_quality_derived_v2.sql			public	table	project-management,biz,ads,derived,quality	DRAFT	true		质量域二次指标—5个（归零率/现存率/计划提交率/设计类占比/健康分）
 biz_ads_tech_state_derived_v2	ADS	models/ads/biz_ads_tech_state_derived_v2.sql			public	table	project-management,biz,ads,derived,tech-state	DRAFT	true		技术状态域二次指标—5个（签署率/整改率/I类占比/未签署率/健康分）

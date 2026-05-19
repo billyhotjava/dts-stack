@@ -517,6 +517,7 @@ build_metrics_webapp() {
     -w /workspace/source/dts-metrics-webapp \
     "${NODE_IMAGE}" \
     sh -lc 'set -eux; \
+      trap "chmod -R a+rwX /workspace/source/dts-metrics-webapp /workspace/source/.pnpm-store 2>/dev/null || true" EXIT; \
       if [ -n "${NPM_REGISTRY:-}" ]; then export npm_config_registry="${NPM_REGISTRY}"; fi; \
       if [ -n "${NPM_HTTP_PROXY:-}${NPM_HTTPS_PROXY:-}" ]; then \
         export http_proxy="${NPM_HTTP_PROXY:-${NPM_HTTPS_PROXY:-}}"; \
@@ -527,7 +528,7 @@ build_metrics_webapp() {
       npm install -g "pnpm@${PNPM_VERSION}"; \
       pnpm install --frozen-lockfile --ignore-scripts; \
       pnpm "${WEBAPP_BUILD_CMD}"; \
-      chmod -R a+rwX /workspace/source/dts-metrics-webapp/dist/metrics; \
+      chmod -R a+rwX /workspace/source/dts-metrics-webapp/dist; \
       rm -rf node_modules .vite-cache /workspace/source/.pnpm-store'; then
     rm -rf "${tmp_context}"
     return 1

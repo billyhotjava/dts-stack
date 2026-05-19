@@ -845,37 +845,267 @@
       }
     },
     {
-      "id": "ov4-quality-by-project",
-      "type": "richtext",
-      "name": "质量问题统计",
+      "id": "ov4-quality-total-card",
+      "type": "number-card",
+      "name": "质量问题总数",
       "x": 833,
-      "y": 226,
-      "width": 339,
-      "height": 237,
+      "y": 246,
+      "width": 109,
+      "height": 198,
       "zIndex": 20,
       "locked": false,
       "visible": true,
       "config": {
-        "content": "<div style=\"display:flex;width:100%;height:100%;justify-content:space-around;align-items:center;padding:18px 8px 8px;box-sizing:border-box;\"><div style=\"flex:1;text-align:center;padding:0 4px;\"><div style=\"font-size:42px;font-weight:800;color:#7fd4ff;line-height:1;letter-spacing:0.5px;font-family:DIN,Helvetica,Arial,sans-serif;text-shadow:0 0 12px #7fd4ff55;\">28</div><div style=\"font-size:13px;margin-top:10px;color:#bcd6ef;letter-spacing:2px;\">质量问题总数</div></div><div style=\"width:1px;height:60%;background:linear-gradient(180deg,transparent,rgba(132,217,255,0.42),transparent);align-self:center;\"></div><div style=\"flex:1;text-align:center;padding:0 4px;\"><div style=\"font-size:42px;font-weight:800;color:#ffba49;line-height:1;letter-spacing:0.5px;font-family:DIN,Helvetica,Arial,sans-serif;text-shadow:0 0 12px #ffba4955;\">6</div><div style=\"font-size:13px;margin-top:10px;color:#bcd6ef;letter-spacing:2px;\">当月新增</div></div><div style=\"width:1px;height:60%;background:linear-gradient(180deg,transparent,rgba(132,217,255,0.42),transparent);align-self:center;\"></div><div style=\"flex:1;text-align:center;padding:0 4px;\"><div style=\"font-size:42px;font-weight:800;color:#ff6b6b;line-height:1;letter-spacing:0.5px;font-family:DIN,Helvetica,Arial,sans-serif;text-shadow:0 0 12px #ff6b6b55;\">5</div><div style=\"font-size:13px;margin-top:10px;color:#bcd6ef;letter-spacing:2px;\">未归零</div></div></div>",
-        "padding": 0,
-        "overflow": "hidden"
+        "title": "质量问题总数",
+        "value": 0,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 13,
+        "valueFontSize": 42,
+        "titleColor": "#bcd6ef",
+        "valueColor": "#7fd4ff",
+        "backgroundColor": "transparent",
+        "valueSourceMode": "data",
+        "valueField": "质量问题总数"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(SUM(q.new_issue_cnt), 0) AS \"质量问题总数\", COALESCE(SUM(CASE WHEN q.period_month = to_char({{dateTo}}::date, 'YYYY-MM') THEN q.new_issue_cnt ELSE 0 END), 0) AS \"当月新增\", COALESCE(SUM(CASE WHEN q.period_month = to_char({{dateTo}}::date, 'YYYY-MM') THEN q.open_issue_cnt ELSE 0 END), 0) AS \"未归零\" FROM biz_ads_quality_kpi_v2 q WHERE q.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND q.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            }
+          ]
+        }
       }
     },
     {
-      "id": "ov4-techstate-by-project",
-      "type": "richtext",
-      "name": "技术状态",
-      "x": 1563,
-      "y": 226,
-      "width": 339,
-      "height": 237,
+      "id": "ov4-quality-new-card",
+      "type": "number-card",
+      "name": "质量当月新增",
+      "x": 948,
+      "y": 246,
+      "width": 109,
+      "height": 198,
       "zIndex": 20,
       "locked": false,
       "visible": true,
       "config": {
-        "content": "<div style=\"display:flex;width:100%;height:100%;justify-content:space-around;align-items:center;padding:18px 8px 8px;box-sizing:border-box;\"><div style=\"flex:1;text-align:center;padding:0 4px;\"><div style=\"font-size:42px;font-weight:800;color:#7fd4ff;line-height:1;letter-spacing:0.5px;font-family:DIN,Helvetica,Arial,sans-serif;text-shadow:0 0 12px #7fd4ff55;\">12</div><div style=\"font-size:13px;margin-top:10px;color:#bcd6ef;letter-spacing:2px;\">技术状态变更总数</div></div><div style=\"width:1px;height:60%;background:linear-gradient(180deg,transparent,rgba(132,217,255,0.42),transparent);align-self:center;\"></div><div style=\"flex:1;text-align:center;padding:0 4px;\"><div style=\"font-size:42px;font-weight:800;color:#ffba49;line-height:1;letter-spacing:0.5px;font-family:DIN,Helvetica,Arial,sans-serif;text-shadow:0 0 12px #ffba4955;\">3</div><div style=\"font-size:13px;margin-top:10px;color:#bcd6ef;letter-spacing:2px;\">未签署</div></div><div style=\"width:1px;height:60%;background:linear-gradient(180deg,transparent,rgba(132,217,255,0.42),transparent);align-self:center;\"></div><div style=\"flex:1;text-align:center;padding:0 4px;\"><div style=\"font-size:42px;font-weight:800;color:#ff6b6b;line-height:1;letter-spacing:0.5px;font-family:DIN,Helvetica,Arial,sans-serif;text-shadow:0 0 12px #ff6b6b55;\">4</div><div style=\"font-size:13px;margin-top:10px;color:#bcd6ef;letter-spacing:2px;\">未落实整改</div></div></div>",
-        "padding": 0,
-        "overflow": "hidden"
+        "title": "当月新增",
+        "value": 0,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 13,
+        "valueFontSize": 42,
+        "titleColor": "#bcd6ef",
+        "valueColor": "#ffba49",
+        "backgroundColor": "transparent",
+        "valueSourceMode": "data",
+        "valueField": "当月新增"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(SUM(q.new_issue_cnt), 0) AS \"质量问题总数\", COALESCE(SUM(CASE WHEN q.period_month = to_char({{dateTo}}::date, 'YYYY-MM') THEN q.new_issue_cnt ELSE 0 END), 0) AS \"当月新增\", COALESCE(SUM(CASE WHEN q.period_month = to_char({{dateTo}}::date, 'YYYY-MM') THEN q.open_issue_cnt ELSE 0 END), 0) AS \"未归零\" FROM biz_ads_quality_kpi_v2 q WHERE q.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND q.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ov4-quality-open-card",
+      "type": "number-card",
+      "name": "质量未归零",
+      "x": 1063,
+      "y": 246,
+      "width": 109,
+      "height": 198,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "未归零",
+        "value": 0,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 13,
+        "valueFontSize": 42,
+        "titleColor": "#bcd6ef",
+        "valueColor": "#ff6b6b",
+        "backgroundColor": "transparent",
+        "valueSourceMode": "data",
+        "valueField": "未归零"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(SUM(q.new_issue_cnt), 0) AS \"质量问题总数\", COALESCE(SUM(CASE WHEN q.period_month = to_char({{dateTo}}::date, 'YYYY-MM') THEN q.new_issue_cnt ELSE 0 END), 0) AS \"当月新增\", COALESCE(SUM(CASE WHEN q.period_month = to_char({{dateTo}}::date, 'YYYY-MM') THEN q.open_issue_cnt ELSE 0 END), 0) AS \"未归零\" FROM biz_ads_quality_kpi_v2 q WHERE q.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND q.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ov4-techstate-total-card",
+      "type": "number-card",
+      "name": "技术状态变更总数",
+      "x": 1563,
+      "y": 246,
+      "width": 109,
+      "height": 198,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "变更总数",
+        "value": 0,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 13,
+        "valueFontSize": 42,
+        "titleColor": "#bcd6ef",
+        "valueColor": "#7fd4ff",
+        "backgroundColor": "transparent",
+        "valueSourceMode": "data",
+        "valueField": "技术状态变更总数"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(SUM(t.total_change_cnt), 0) AS \"技术状态变更总数\", COALESCE(SUM(CASE WHEN t.period_month = to_char({{dateTo}}::date, 'YYYY-MM') THEN t.file_unsigned_i_ii + t.file_unsigned_iii ELSE 0 END), 0) AS \"未签署\", COALESCE(SUM(CASE WHEN t.period_month = to_char({{dateTo}}::date, 'YYYY-MM') THEN t.reform_pending_i_ii ELSE 0 END), 0) AS \"未落实整改\" FROM biz_ads_tech_state_kpi_v2 t WHERE t.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND t.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ov4-techstate-unsigned-card",
+      "type": "number-card",
+      "name": "技术状态未签署",
+      "x": 1678,
+      "y": 246,
+      "width": 109,
+      "height": 198,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "未签署",
+        "value": 0,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 13,
+        "valueFontSize": 42,
+        "titleColor": "#bcd6ef",
+        "valueColor": "#ffba49",
+        "backgroundColor": "transparent",
+        "valueSourceMode": "data",
+        "valueField": "未签署"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(SUM(t.total_change_cnt), 0) AS \"技术状态变更总数\", COALESCE(SUM(CASE WHEN t.period_month = to_char({{dateTo}}::date, 'YYYY-MM') THEN t.file_unsigned_i_ii + t.file_unsigned_iii ELSE 0 END), 0) AS \"未签署\", COALESCE(SUM(CASE WHEN t.period_month = to_char({{dateTo}}::date, 'YYYY-MM') THEN t.reform_pending_i_ii ELSE 0 END), 0) AS \"未落实整改\" FROM biz_ads_tech_state_kpi_v2 t WHERE t.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND t.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ov4-techstate-reform-pending-card",
+      "type": "number-card",
+      "name": "技术状态未落实整改",
+      "x": 1793,
+      "y": 246,
+      "width": 109,
+      "height": 198,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "未落实整改",
+        "value": 0,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 13,
+        "valueFontSize": 42,
+        "titleColor": "#bcd6ef",
+        "valueColor": "#ff6b6b",
+        "backgroundColor": "transparent",
+        "valueSourceMode": "data",
+        "valueField": "未落实整改"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(SUM(t.total_change_cnt), 0) AS \"技术状态变更总数\", COALESCE(SUM(CASE WHEN t.period_month = to_char({{dateTo}}::date, 'YYYY-MM') THEN t.file_unsigned_i_ii + t.file_unsigned_iii ELSE 0 END), 0) AS \"未签署\", COALESCE(SUM(CASE WHEN t.period_month = to_char({{dateTo}}::date, 'YYYY-MM') THEN t.reform_pending_i_ii ELSE 0 END), 0) AS \"未落实整改\" FROM biz_ads_tech_state_kpi_v2 t WHERE t.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND t.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            }
+          ]
+        }
       }
     },
     {
@@ -1111,66 +1341,9 @@
       }
     },
     {
-      "id": "ov4-gantt-legend-plan",
-      "type": "title",
-      "name": "图例-计划",
-      "x": 1310,
-      "y": 786,
-      "width": 80,
-      "height": 24,
-      "zIndex": 20,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "text": "日",
-        "fontSize": 11,
-        "fontWeight": "600",
-        "color": "#ffffff",
-        "textAlign": "center"
-      }
-    },
-    {
-      "id": "ov4-gantt-legend-normal",
-      "type": "title",
-      "name": "图例-正常",
-      "x": 1700,
-      "y": 786,
-      "width": 80,
-      "height": 24,
-      "zIndex": 20,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "text": "周",
-        "fontSize": 11,
-        "fontWeight": "600",
-        "color": "#ffffff",
-        "textAlign": "center"
-      }
-    },
-    {
-      "id": "ov4-gantt-legend-delayed",
-      "type": "title",
-      "name": "图例-延期",
-      "x": 1790,
-      "y": 786,
-      "width": 90,
-      "height": 24,
-      "zIndex": 20,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "text": "月",
-        "fontSize": 11,
-        "fontWeight": "600",
-        "color": "#ffffff",
-        "textAlign": "center"
-      }
-    },
-    {
-      "id": "ov4-gantt-chart",
-      "type": "gantt-chart",
-      "name": "下月重点计划甘特",
+      "id": "ov4-next-month-plan-notes",
+      "type": "markdown-text",
+      "name": "下月重点计划信息编辑",
       "x": 22,
       "y": 820,
       "width": 1876,
@@ -1179,48 +1352,10 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "",
-        "renderMode": "board-hierarchical",
-        "drillMode": "modal",
-        "defaultZoom": "month",
-        "sideTextColor": "#ffffff",
-        "backgroundColor": "transparent",
-        "titleColor": "#e6f6ff",
-        "metricNote": {
-          "displayName": "下月重点计划甘特",
-          "definition": "按「重大项目」分组,对比各组「子项目」指标",
-          "scope": "X 轴=重大项目; 受顶部时间筛选控制",
-          "sourceTable": "进度信息汇总表",
-          "frequency": "每日 01:00 刷新",
-          "seriesNotes": [
-            {
-              "name": "延期天数",
-              "code": "pjm_prog_delay_days",
-              "displayName": "延期天数",
-              "formula": "实际完成时间 − 计划完成时间(单位:天);未完成节点取 (统计结束时间 − 计划完成时间)",
-              "unit": "天"
-            }
-          ]
-        }
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH active_projects AS (SELECT project_no FROM biz_dwd_project_node_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') GROUP BY project_no HAVING SUM(CASE WHEN is_incomplete THEN 1 ELSE 0 END) > 0) SELECT d.project_no AS \"重大项目\", COALESCE(d.subsystem, '(无子项目)') AS \"子项目\", d.node_task AS \"任务\", d.node_type AS \"类型\", to_char(d.plan_start_date, 'YYYY-MM-DD') AS \"计划开始日期\", to_char(d.plan_date, 'YYYY-MM-DD') AS \"计划完成日期\", to_char(COALESCE(d.actual_start_date, d.plan_start_date), 'YYYY-MM-DD') AS \"实际开始日期\", to_char(d.actual_date, 'YYYY-MM-DD') AS \"实际完成日期\", d.is_completed AS \"是否完成\", d.is_overdue_completed AS \"是否超期完成\", d.is_incomplete AS \"是否未完成\", COALESCE(d.delay_days, 0) AS \"延期天数\", d.risk_level AS \"风险等级\", d.completion_status AS \"完成情况\", d.dept AS \"责任科室\", d.owner AS \"责任人\", d.project_manager AS \"项目经理\" FROM biz_dwd_project_node_v2 d INNER JOIN active_projects ap ON ap.project_no = d.project_no WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') ORDER BY d.project_no, d.subsystem NULLS LAST, d.plan_date",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 5000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            }
-          ]
-        }
+        "markdown": "1. 完成总体方案评审闭环，形成问题清单与责任分解。\n2. 推进关键单机联试准备，完成试验资源、样件和人员排期确认。\n3. 跟踪超期节点整改，聚焦高风险项目周度复盘与闭环验证。\n4. 完成技术状态变更单签署和整改落实专项清理。",
+        "fontSize": 16,
+        "color": "#dff3ff",
+        "lineHeight": 1.7
       }
     },
     {
@@ -1519,9 +1654,29 @@
             "1,150"
           ]
         ],
-        "sourceType": "static",
+        "sourceType": "data",
         "headerBackground": "#0f2a55",
-        "headerColor": "#d9eeff"
+        "headerColor": "#d9eeff",
+        "headerSourceMode": "manual"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT p.project_name AS \"项目名称\", COALESCE(NULLIF(p.project_leads, ''), '--') AS \"项目两总\", COALESCE(to_char(p.project_budget_wan, 'FM999G999G990D0'), '--') AS \"项目经费(万)\" FROM biz_ads_project_basic_info_v2 p WHERE EXISTS (SELECT 1 FROM biz_dwd_project_node_v2 d WHERE d.project_no = p.project_no AND d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM')) ORDER BY p.node_cnt DESC, p.project_no LIMIT 8",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            }
+          ]
+        }
       }
     },
     {
