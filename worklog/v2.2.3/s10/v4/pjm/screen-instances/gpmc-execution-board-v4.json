@@ -801,160 +801,6 @@
       }
     },
     {
-      "id": "gpmc-execution-top-overdue",
-      "type": "table",
-      "name": "超期项目高风险TOP",
-      "x": 1280,
-      "y": 328,
-      "width": 584,
-      "height": 420,
-      "zIndex": 15,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "",
-        "columns": [
-          {
-            "source": "项目编号",
-            "alias": "项目编号",
-            "width": 90
-          },
-          {
-            "source": "节点任务及目标",
-            "alias": "节点任务及目标",
-            "width": 180
-          },
-          {
-            "source": "节点类型",
-            "alias": "节点类型",
-            "width": 90
-          },
-          {
-            "source": "责任人",
-            "alias": "责任人",
-            "width": 80
-          },
-          {
-            "source": "完成情况",
-            "alias": "完成情况",
-            "width": 110
-          }
-        ],
-        "pageSize": 10,
-        "showHeader": true,
-        "headerColor": "#ffffff",
-        "stripeColor": "rgba(88,180,255,0.08)",
-        "backgroundColor": "rgba(9,36,90,0.50)",
-        "titleFontSize": 0,
-        "chartPaddingTop": 36,
-        "bodyColor": "#ffffff",
-        "freezeHeader": true,
-        "columnNotes": {
-          "节点类型": {
-            "kind": "field",
-            "displayName": "节点类型",
-            "definition": "节点在项目中的重要等级,影响考核权重与异常判定。",
-            "enumValues": [
-              {
-                "code": "里程碑节点",
-                "label": "里程碑节点",
-                "description": "项目对外承诺的关键交付点,权重最高,单独考核完成率"
-              },
-              {
-                "code": "重大节点",
-                "label": "重大节点",
-                "description": "影响项目交付的关键节点"
-              },
-              {
-                "code": "重要节点",
-                "label": "重要节点",
-                "description": "重要技术或管理节点"
-              },
-              {
-                "code": "一般节点",
-                "label": "一般节点",
-                "description": "常规工作节点,通常不参与超期/不正常率统计"
-              }
-            ],
-            "sourceTable": "进度信息汇总表",
-            "note": "重要程度: 里程碑 > 重大 > 重要 > 一般"
-          },
-          "完成情况": {
-            "kind": "field",
-            "displayName": "完成情况",
-            "definition": "节点在统计时点的完成状态。'已变更'表示已走过变更流程并获批。",
-            "enumValues": [
-              {
-                "code": "正常待完成",
-                "label": "正常待完成",
-                "description": "节点未到计划时间,状态正常,还能正常完成"
-              },
-              {
-                "code": "按时完成",
-                "label": "按时完成",
-                "description": "节点已在计划时间内完成"
-              },
-              {
-                "code": "超期已完成已变更",
-                "label": "超期已完成已变更",
-                "description": "超过计划时间但已完成,且已走过变更流程"
-              },
-              {
-                "code": "超期已完成未变更",
-                "label": "超期已完成未变更",
-                "description": "超过计划时间但已完成,未走变更流程"
-              },
-              {
-                "code": "不正常待变更",
-                "label": "不正常待变更",
-                "description": "已到计划时间但未完成,需走变更流程(异常状态)"
-              },
-              {
-                "code": "超期未完成未变更",
-                "label": "超期未完成未变更",
-                "description": "已超过计划时间且未完成,未走变更流程(严重异常)"
-              },
-              {
-                "code": "超期未完成已变更",
-                "label": "超期未完成已变更",
-                "description": "已超过计划时间且未完成,已走过变更流程"
-              }
-            ],
-            "sourceTable": "进度信息汇总表",
-            "note": "排序权重: 正常待完成=1 < 按时完成=2 < 超期完成=3-4 < 不正常/超期未完成=5-7"
-          }
-        },
-        "headerBackground": "#0f2a55"
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT d.project_no AS \"项目编号\", COALESCE(d.node_task,'') AS \"节点任务及目标\", d.node_type AS \"节点类型\", d.owner AS \"责任人\", d.completion_status AS \"完成情况\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date,'YYYY-MM') AND d.is_incomplete = true AND (d.risk_level = '高' OR d.is_overdue_completed = true OR COALESCE(d.delay_days,0) > 0) [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] ORDER BY COALESCE(d.delay_days,0) DESC, d.plan_date ASC LIMIT 20",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
       "id": "gpmc-execution-kpi-incomplete",
       "type": "number-card",
       "name": "未完成数",
@@ -1452,7 +1298,7 @@
         "backgroundColor": "transparent",
         "titleColor": "#ffffff",
         "metricNote": {
-          "displayName": "下月重点计划甘特",
+          "displayName": "项目进度甘特",
           "definition": "按「重大项目」分组,对比各组「子项目」指标",
           "scope": "X 轴=重大项目; 受顶部时间筛选控制",
           "sourceTable": "进度信息汇总表",
@@ -1528,25 +1374,6 @@
       "visible": true,
       "config": {
         "text": "项目状态分布图",
-        "fontSize": 20,
-        "fontWeight": "700",
-        "color": "#ffffff",
-        "textAlign": "flex-start"
-      }
-    },
-    {
-      "id": "gpmc-execution-top-overdue-overlay-title",
-      "type": "title",
-      "name": "超期项目高风险TOP-标题",
-      "x": 1296,
-      "y": 296,
-      "width": 440,
-      "height": 28,
-      "zIndex": 20,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "text": "超期项目高风险TOP列表",
         "fontSize": 20,
         "fontWeight": "700",
         "color": "#ffffff",

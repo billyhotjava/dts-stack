@@ -1,112 +1,95 @@
-# Sprint-32: dts-metrics 独立服务落地（202605）
+# Sprint-32: React Flow 指标与语义工作台（202605）
 
 **时间**: 2026-05
-**状态**: DONE
-**类型**: Architecture / Implementation（dts-metrics + dts-platform + dts-platform-webapp）
-**目标**: 在 Sprint-31A 完成企业级资产事实源、Sprint-31 完成基础链路和拆分边界后，把语义指标中心从 platform 增值业务中抽出为独立 `dts-metrics` 服务。当前版本先不在部署配置层限制 `dts-metrics`，商务限制暂由交付和合同控制；待 license 模块完善后，再统一收口版本授权。
+**状态**: IN_PROGRESS
+**类型**: Productization / Implementation（dts-metrics-webapp + dts-metrics + dts-platform + dbt gateway）
+**目标**: 在已完成 `dts-metrics` 独立服务骨架、平台契约和基础指标包校验后，把指标与语义中心升级为基于 React Flow 的可视化工作台：业务对象、数据资产、Join、指标、筛选、DWS/ADS、发布和消费全部在同一张可验证图上完成。
 
-**前置依赖**: `dts-metrics` 必须通过 Sprint-31A 提供的 platform 资产、权限、审计和发布契约工作，不直接读取 platform 内部 Catalog/semantic 表。
+## 结论
 
-## 背景
+1. `dts-metrics` 是指标与语义产品事实源，负责 React Flow 画布、指标 DSL、metric-pack、候选 DWS/ADS artifact、版本和状态机。
+2. `dts-platform` 是企业控制面事实源，必须提供资产、字段、权限、RLS、术语、数据标准、审批、审计、dbt 发布网关、BI Dataset 注册和血缘注册。
+3. 模型检测不能由前端或 `dts-metrics` 直接调用 dbt。`dts-metrics` 先做本地 DSL/图校验，再调用 `dts-platform` 的模型验证/发布网关；`dts-platform` 负责用 dbt compile/test/build/release gate 做权威验证并写审计、审批和发布记录。
+4. dbt 是最终 SQL/model 正确性的执行引擎，但调用入口必须封装在 `dts-platform`，因为 dbt 项目目录、凭据、发布策略、运行证据和审计都属于 platform 控制面。
 
-Sprint-31A 先聚焦企业级数据资产事实源：资产身份、生命周期、治理字段、血缘、权限和读取契约。Sprint-31 再聚焦企业级数据平台主链路：数据源接入、ODS 契约、dbt 建模、资产治理、发布门禁、platform 权限事实源和 analytics 权限消费。随着语义指标、DWS/ADS 低代码生成、BI Dataset 注册和合作方行业包逐步增强，platform 承担了过多业务增值能力。
+## dts-platform 必须提供的能力
 
-新的产品分层要求：
+| 类别 | platform 能力 | dts-metrics 使用方式 |
+|------|---------------|----------------------|
+| 资产目录 | dataset/table/column/schema/classification/owner/lifecycle 查询 | React Flow 节点池、字段树、来源资产约束 |
+| 治理解析 | domain、glossary term、data standard、metric code 冲突解析 | 指标建模、metric-pack 导入、发布前校验 |
+| 权限与策略 | asset permission check、RLS policy resolve、人员/部门/密级上下文 | 预览、生成、验证、发布前全部强制校验 |
+| dbt 网关 | artifact 写入、compile/test/build、release-gate、release-submit、运行证据 | 模型检测与发布唯一入口 |
+| 审批审计 | review workflow、audit-events、outbox/event、发布记录 | 指标草稿、审核、发布、撤销、回滚 |
+| 消费注册 | BI Dataset、血缘、资产门户、下游 lock/consumer 关系 | 发布后进入 BI/大屏/API 消费 |
+| capability | metrics service、dbt gateway、BI/lineage 可用性 | 前端展示可用状态和降级提示 |
 
-- 当前交付版：`dts-platform`、`dts-ingestion`、`dts-analytics`、`dts-metrics` 都按核心服务方式部署，权限和事实源仍由 platform 统一管理。
-- 商务分级：基础能力、指标语义能力和大屏分析能力先通过交付边界控制，不通过 compose profile 或 `DTS_METRICS_ENABLED` 控制。
-- 后续 license 版：license 模块完善后，再把指标语义、行业包、大屏、AI 辅助等能力纳入统一授权判断。
-
-## 目标架构
+## 检测链路
 
 ```text
-platform-webapp shell
-  -> dts-platform
-       IAM / tenant / org / role
-       data-source registry / secret custody
-       catalog / asset_grant / audit / approval / event
-       dbt publish gateway / capability registry
-
-  -> dts-ingestion
-       connector / Addax / file / API / Airflow trigger
-
-  -> dts-metrics
-       subject domain / business object / dimension / metric
-       formula DSL / metric-pack import / DWS-ADS generator
-       preview / review / publish / BI Dataset registration
-
-  -> dts-analytics
-       screen / dashboard / chart consumption
-       permission check by platform asset_grant
+React Flow draft
+  -> dts-metrics graph/DSL preflight
+       结构完整性、节点类型、Join 基数、fanout 风险、指标依赖拓扑、字段引用、公式安全
+  -> dts-platform contract precheck
+       资产存在、字段存在、权限/RLS、术语/标准、审批策略、consumer lock
+  -> dts-platform dbt validation gateway
+       写候选 artifact -> dbt compile -> dbt test/build -> release gate -> 返回验证报告
+  -> dts-platform publish gateway
+       审核通过后 release submit、BI Dataset 注册、血缘注册、审计和运行记录
 ```
+
+**调用原则**: `dts-metrics` 不直接持有 dbt 目录和运行凭据，也不绕过 platform 调 dbt。`dts-platform` 可以继续复用现有 `/api/etl/dbt/release-gate/check`、`/api/etl/dbt/release/submit`，但 Sprint-32 需要补一个面向 metrics 的“候选模型验证”聚合契约，返回 compile/test/build 的结构化诊断。
 
 ## Feature 列表
 
 | ID | Feature | 优先级 | Task 数 | 状态 | 依赖 |
 |----|---------|--------|---------|------|------|
-| F1 | dts-metrics 服务骨架与默认部署 | P0 | 5 | DONE | Sprint-31A, Sprint-31 F5 |
-| F2 | platform 契约、服务鉴权与事实源边界 | P0 | 5 | DONE | Sprint-31A, F1 |
-| F3 | 指标领域模型、DSL 与安全生成 | P0 | 6 | DONE | Sprint-31A, F1, F2 |
-| F4 | metric-pack 合作方交付工作流 | P0 | 5 | DONE | Sprint-31A, F3 |
-| F5 | platform-webapp 入口、版本开关与兼容代理 | P0 | 5 | DONE | Sprint-31A, F1, F2 |
-| F6 | 迁移、回滚、集成测试与运维验收 | P0 | 6 | DONE | Sprint-31A, F1-F5 |
+| F1 | platform 契约与 dbt 验证网关 | P0 | 5 | IN_PROGRESS | Sprint-31A, Sprint-31 |
+| F2 | React Flow 语义图画布 | P0 | 5 | READY | F1 |
+| F3 | 指标公式与口径设计器 | P0 | 5 | READY | F1, F2 |
+| F4 | DWS/ADS 模型编排与 artifact 生成 | P0 | 5 | READY | F1, F2, F3 |
+| F5 | 验证、发布、血缘与消费闭环 | P0 | 5 | READY | F1-F4 |
+| F6 | 兼容迁移、IT 与回滚 | P0 | 4 | READY | F1-F5 |
 
-**统计**: READY=0, IN_PROGRESS=0, DONE=32, BLOCKED=0
+**统计**: READY=28, IN_PROGRESS=1, DONE=0, BLOCKED=0
 
-## 交付分级
+## 已完成基线
 
-Sprint-32 的必达目标是“服务独立 + 契约打通 + 最小行业包跑通”，不是一次性完成完整低代码指标产品。
+上一轮 Sprint-32 已交付：
 
-### MVP 必达
+- `dts-metrics` 服务骨架、Dockerfile、Compose 默认部署和健康检查。
+- platform service-auth、asset permission、RLS policy、domain/glossary/data-standard resolver、dbt release gate 的基础调用。
+- metric-pack v0.1 校验、DSL SQL 候选 artifact、示例行业包、迁移 dry-run。
+- `/metrics/**` 前端入口已从 platform-webapp 转到 metrics 服务。
 
-- `dts-metrics` 可独立构建、启动、健康检查，并随应用栈默认部署。
-- platform 继续作为 IAM、资产、权限、审计、审批、dbt 发布的唯一事实源。
-- 不再通过配置层区分 foundation/professional 是否启用 metrics；版本限制后续交给 license 模块。
-- 可以导入并校验一个 `metric-pack v0.1`。
-- `metric-pack` 只能引用 platform 已登记资产，只能使用受控 DSL，不能携带任意 SQL。
-- 可从示例包生成最小 DWS/ADS 候选 artifact，并提交 platform/dbt 发布网关。
-- platform-webapp 能基于 capability 展示、隐藏或友好提示指标入口。
-
-### 延展目标
-
-- 完整 BI Dataset 远端注册。
-- 完整 dashboard 自动生成。
-- 复杂跨主题域指标和多事实表 join 优化。
-- 合作方在线配置台。
-- 历史 `semantic_*` 数据的生产级自动迁移。
+这些能力是本轮 React Flow 产品化的基础，不作为新功能重复实现。
 
 ## 非目标
 
-- 不剥离 IAM；platform 仍是用户、角色、组织、租户和权限事实源。
-- 不让 `dts-metrics` 持有数据源密码；运行凭据仍由 platform 管理。
-- 不允许合作方写平台源码或提交任意 SQL；合作方交付物限定为受控 `metric-pack`。
-- 不替换 dbt 和 Airflow；`dts-metrics` 通过 platform/dbt 发布契约生成和提交模型。
-- 不把 analytics 合并进 `dts-metrics`；analytics 仍是消费层。
+- 不把 IAM、资产目录、权限、审批、审计和 dbt 执行迁入 `dts-metrics`。
+- 不让 `dts-metrics-webapp` 直接访问 platform 内部表或 dbt 文件系统。
+- 不接受合作方任意 SQL 作为默认模型定义；高级 SQL 只作为工程师受控模式，必须走 platform/dbt 验证。
+- 不在 Sprint-32 实现完整 cost-based optimizer、cube 缓存、GraphQL/OData、向量指标搜索。
 
 ## 完成标准
 
-- [x] `dts-metrics` 具备独立 Spring Boot 服务骨架、Dockerfile、默认 Compose 服务、健康检查和服务鉴权。
-- [x] 不依赖 license/profile 开关时，platform、ingestion、metrics、analytics 的基础启动链路可正常交付。
-- [x] `dts-metrics` 只通过 platform API 读取资产、数据源引用、权限、审计和 dbt 发布能力，不直接绕过 platform 事实源。
-- [x] 指标领域模型支持主题域、业务对象、维度、指标、公式 DSL、DWS/ADS 候选数据集定义和版本状态口径。
-- [x] metric-pack v0.1 可导入预检、校验、预览候选 artifact，且无法携带危险 SQL 或不安全资产引用。
-- [x] platform-webapp 按 platform 菜单权限展示指标入口；license 接入前不做版本禁用提示。
-- [x] 现有 platform 内语义接口保留一个 Sprint 兼容窗口，回滚时可恢复到 Sprint-31 行为。
-- [x] IT 证据覆盖默认启动 metrics、导入行业包、生成 DWS/ADS 候选 artifact、提交 dbt 发布网关、权限校验和回滚；BI Dataset 远端注册作为延展目标。
+- [ ] React Flow 画布可以创建业务对象、资产、Join、指标、筛选、DWS/ADS、发布节点，并保存为可重放 graph draft。
+- [ ] 所有节点都能映射到 platform 提供的资产/字段/权限/治理契约，不出现本地孤立事实源。
+- [ ] 指标公式支持原子、衍生、复合、时间周期和过滤条件，并能输出受控 DSL。
+- [ ] DWS/ADS 候选模型能生成 dbt SQL、schema.yml、exposure/metric 文档和 lineage hint。
+- [ ] 模型检测走 `dts-platform` 聚合 API，platform 内部调用 dbt compile/test/build/release gate，并返回结构化诊断。
+- [ ] 发布动作由 platform 完成审核、release submit、BI Dataset 注册、血缘注册、审计和运行记录。
+- [ ] 旧 `/api/semantic/**` 和旧页面入口有明确兼容、迁移或弃用提示。
 
 ## 验证策略
 
-按当前执行决策，本 Sprint 未在中途执行编译、镜像构建或容器重建。最终统一执行：
-
-- `worklog/v2.2.3/sprint-31-202605/it/scripts/golden-path-smoke.sh`
-- `worklog/v2.2.3/sprint-31-202605/it/scripts/observability-admission-check.sh`
-- `worklog/v2.2.3/sprint-32-202605/it/scripts/metrics-mvp-admission-check.sh`
-- 模块级 Java/前端编译、Docker 镜像构建和对应容器重建
+- `source/dts-metrics-webapp`: source contract、React typecheck、Vite build、Playwright 画布交互 smoke。
+- `source/dts-metrics`: graph/DSL/artifact/pack 单元测试，platform contract client mock 测试。
+- `source/dts-platform`: metrics validation gateway、dbt release gate、权限/RLS、审计/审批 focused tests。
+- 集成: React Flow draft -> metrics preflight -> platform contract precheck -> dbt validation -> publish dry-run -> BI/lineage registration dry-run。
 
 ## 相关材料
 
-- Sprint-31: `worklog/v2.2.3/sprint-31-202605/README.md`
-- Sprint-31 评审: `worklog/v2.2.3/sprint-31-202605/assets/full-code-review.md`
 - 服务拆分设计: `worklog/v2.2.3/sprint-32-202605/assets/dts-metrics-service-design.md`
-- Sprint-32 规划评审: `worklog/v2.2.3/sprint-32-202605/assets/sprint-32-review.md`
+- React Flow 边界说明: `worklog/v2.2.3/sprint-32-202605/assets/react-flow-metrics-contract.md`
 - 集成测试计划: `worklog/v2.2.3/sprint-32-202605/it/README.md`

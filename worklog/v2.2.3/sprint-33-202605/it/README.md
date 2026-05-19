@@ -25,6 +25,8 @@
 
 2026-05-19 追加完善：`RoleDetailView` 已进一步拆为 `RoleBasicInfoSection` 与 `RoleMemberAssignmentSection`，并通过 source-level contract、`pnpm build` 和后端 focused test 复验。
 
+2026-05-19 追加完善：按 TDD 补充待审批互斥保护 RED 用例，确认失败后统一禁用成员表格选择、当前成员移除/恢复/撤销按钮和成员切换 handler；复验 source-level contract 5/5、`pnpm build`、后端 focused test 均通过。
+
 ## 剩余风险
 
 - 未启动本地浏览器进行人工 smoke；需要在联调环境确认真实组织树、用户快照和角色成员数据的组合展示。

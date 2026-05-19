@@ -365,7 +365,7 @@ export default function RoleDetailView() {
 
 	const handleToggleMember = useCallback(
 		(member: MemberView) => {
-			if (!isEditMode) return;
+			if (!isEditMode || hasPendingChange) return;
 			const key = member.username.toLowerCase();
 			if (member.origin === "new") {
 				const next = new Map(pendingAdds);
@@ -381,7 +381,7 @@ export default function RoleDetailView() {
 			}
 			setPendingRemovals(nextRemovals);
 		},
-		[isEditMode, pendingAdds, pendingRemovals],
+		[hasPendingChange, isEditMode, pendingAdds, pendingRemovals],
 	);
 
 	const handleSubmitChanges = useCallback(async () => {
@@ -615,7 +615,7 @@ export default function RoleDetailView() {
 						assignmentUsers={assignmentUsers}
 						assignmentUsersLoading={assignmentUsersLoading}
 						selectedAssignmentRowKeys={selectedAssignmentRowKeys}
-						hasPendingChange={hasPendingChange}
+						canEditMembers={!hasPendingChange}
 						onAssignmentSelect={handleAssignmentSelect}
 						assignmentPagination={assignmentPagination}
 						assignmentUsersTotal={assignmentUsersTotal}
@@ -772,7 +772,7 @@ function RoleMemberAssignmentSection({
 	assignmentUsers,
 	assignmentUsersLoading,
 	selectedAssignmentRowKeys,
-	hasPendingChange,
+	canEditMembers,
 	onAssignmentSelect,
 	assignmentPagination,
 	assignmentUsersTotal,
@@ -797,7 +797,7 @@ function RoleMemberAssignmentSection({
 	assignmentUsers: RoleAssignmentUser[];
 	assignmentUsersLoading: boolean;
 	selectedAssignmentRowKeys: string[];
-	hasPendingChange: boolean;
+	canEditMembers: boolean;
 	onAssignmentSelect: (user: RoleAssignmentUser, selected: boolean) => void;
 	assignmentPagination: AssignmentPagination;
 	assignmentUsersTotal: number;
@@ -905,7 +905,7 @@ function RoleMemberAssignmentSection({
 						rowSelection={{
 							selectedRowKeys: selectedAssignmentRowKeys,
 							preserveSelectedRowKeys: true,
-							getCheckboxProps: () => ({ disabled: hasPendingChange }),
+							getCheckboxProps: () => ({ disabled: !canEditMembers }),
 							onSelect: (record, selected) => onAssignmentSelect(record, selected),
 							onSelectAll: (selected, _selectedRows, changedRows) => {
 								changedRows.forEach((record) => onAssignmentSelect(record, selected));
@@ -963,7 +963,7 @@ function RoleMemberAssignmentSection({
 											待移除
 										</Badge>
 									) : null}
-									{isEditMode ? (
+									{isEditMode && canEditMembers ? (
 										<Button size="small" type="default" onClick={() => onToggleMember(member)}>
 											{member.origin === "new" ? "撤销新增" : member.status === "remove" ? "恢复" : "移除"}
 										</Button>

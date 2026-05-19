@@ -8,6 +8,27 @@
 4. SQL 由 `dts-metrics` 受控生成、由 platform/dbt 发布门禁审核：第一版不接受合作方任意 SQL，只接受受控 DSL。
 5. 平台主链路可独立演进：数据源、ELT、dbt、资产目录和 SQL/dbt 工作流不依赖 metrics 内部实现。
 
+## 2026-05-19 React Flow 重规划补充
+
+Sprint-32 后续实现以 React Flow 图为主交互面，但服务边界不变：
+
+- `dts-metrics-webapp` 使用 React Flow 展示和编辑指标语义图。
+- `dts-metrics` 保存 graph draft、指标 DSL、候选 artifact 和发布状态。
+- `dts-platform` 提供资产、字段、权限、RLS、术语、数据标准、审批、审计、dbt 验证和发布网关。
+- dbt 是最终模型检测引擎，但调用入口必须是 `dts-platform`；`dts-metrics` 不直接访问 dbt 项目目录、运行凭据或发布记录。
+
+新的权威链路：
+
+```text
+React Flow graph
+  -> metrics graph/DSL preflight
+  -> platform contract precheck
+  -> platform dbt validation gateway
+  -> platform release submit / BI Dataset / lineage
+```
+
+详细契约见 `worklog/v2.2.3/sprint-32-202605/assets/react-flow-metrics-contract.md`。
+
 ## 服务边界
 
 | 能力 | platform | dts-metrics | analytics |

@@ -472,25 +472,25 @@
 **评审报告**: `worklog/v2.2.3/sprint-31-202605/assets/full-code-review.md`
 **集成测试**: `worklog/v2.2.3/sprint-31-202605/it/README.md`
 
-## Sprint-32: dts-metrics 独立服务落地 (202605)
-**状态**: DONE
-**类型**: Architecture / Implementation（dts-metrics + dts-platform + dts-platform-webapp）
-**目标**: 在 Sprint-31A 完成资产事实源、Sprint-31 完成主链路和拆分边界后，把语义指标中心抽出为独立 `dts-metrics` 服务。当前版本默认部署 metrics，商务限制暂不落到配置层，待 license 模块完善后统一收口授权。
-**依赖**: `dts-metrics` 只能消费 platform 的资产、权限、审计和发布契约，不直接读取 platform 内部 Catalog/semantic 表。
+## Sprint-32: React Flow 指标与语义工作台 (202605)
+**状态**: IN_PROGRESS
+**类型**: Productization / Implementation（dts-metrics-webapp + dts-metrics + dts-platform + dbt gateway）
+**目标**: 在 `dts-metrics` 独立服务基线已完成后，用 React Flow 重构指标与语义中心，把资产、业务对象、Join、指标、筛选、DWS/ADS、验证、发布和消费收敛到同一张可验证图。
+**依赖**: `dts-metrics` 只能消费 platform 的资产、字段、权限、RLS、治理解析、审批、审计、dbt 验证/发布、BI Dataset 和血缘契约；模型检测入口调用 `dts-platform`，由 platform 内部执行 dbt compile/test/build/release gate。
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
-| F1-service-shell-and-deployment | P0 | 5 | DONE |
-| F2-platform-contracts-and-auth | P0 | 5 | DONE |
-| F3-metric-domain-and-dsl | P0 | 6 | DONE |
-| F4-metric-pack-partner-workflow | P0 | 5 | DONE |
-| F5-webapp-routing-and-capabilities | P0 | 5 | DONE |
-| F6-migration-compatibility-and-it | P0 | 6 | DONE |
+| F1-platform-contracts-and-dbt-validation | P0 | 5 | IN_PROGRESS |
+| F2-react-flow-semantic-canvas | P0 | 5 | READY |
+| F3-metric-formula-designer | P0 | 5 | READY |
+| F4-dws-ads-model-composer | P0 | 5 | READY |
+| F5-validation-publish-consumption | P0 | 5 | READY |
+| F6-compatibility-it-rollout | P0 | 4 | READY |
 
-**统计**: READY=0, IN_PROGRESS=0, DONE=32, BLOCKED=0
+**统计**: READY=28, IN_PROGRESS=1, DONE=0, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-32-202605/README.md`
 **服务拆分设计**: `worklog/v2.2.3/sprint-32-202605/assets/dts-metrics-service-design.md`
-**规划评审**: `worklog/v2.2.3/sprint-32-202605/assets/sprint-32-review.md`
+**React Flow 契约**: `worklog/v2.2.3/sprint-32-202605/assets/react-flow-metrics-contract.md`
 **集成测试**: `worklog/v2.2.3/sprint-32-202605/it/README.md`
 
 ## Sprint-31B: Sprint-31A RX 运行时收口与代码质量加固 (202605)

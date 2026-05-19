@@ -23,32 +23,31 @@
 
 ## Task 1: Backend Contract
 
-- [ ] Run GitNexus impact for `listUsers`, `roleMembers`, `listSnapshots`, and repository query symbols before editing.
-- [ ] Write failing backend test for username/fullName/department filtering and `inRole`.
-- [ ] Run focused Maven test and confirm failure is due to missing query contract.
-- [ ] Implement minimal repository/service/resource changes.
-- [ ] Re-run focused Maven test until green.
+- [x] Run GitNexus impact for `listUsers`, `roleMembers`, `listSnapshots`, and repository query symbols before editing.
+- [x] Write failing backend test for username/fullName/department filtering and `inRole`.
+- [x] Run focused Maven test and confirm failure is due to missing query contract.
+- [x] Implement minimal repository/service/resource changes.
+- [x] Re-run focused Maven test until green.
 
 ## Task 2: Frontend API Contract
 
-- [ ] Write failing source-level test asserting `getRoleAssignmentUsers` path and `RoleAssignmentUser.inRole`.
-- [ ] Run Vitest and confirm failure.
-- [ ] Add types and API method.
-- [ ] Re-run Vitest until green.
+- [x] Write failing source-level test asserting `getRoleAssignmentUsers` path and `RoleAssignmentUser.inRole`.
+- [x] Run Vitest and confirm failure.
+- [x] Add types and API method.
+- [x] Re-run Vitest until green.
 
 ## Task 3: Role Edit Table
 
-- [ ] Extend source-level test to assert role edit no longer calls `getAllAdminUsers` for member assignment.
-- [ ] Add source-level assertions for Table `rowSelection`, department/name/username query inputs, and `pendingAdds` / `pendingRemovals`.
-- [ ] Run Vitest and confirm failure.
-- [ ] Refactor `role-detail.tsx` with the smallest viable component extraction.
-- [ ] Re-run Vitest until green.
+- [x] Extend source-level test to assert role edit no longer calls `getAllAdminUsers` for member assignment.
+- [x] Add source-level assertions for Table `rowSelection`, department/name/username query inputs, and `pendingAdds` / `pendingRemovals`.
+- [x] Run Vitest and confirm failure.
+- [x] Refactor `role-detail.tsx` with the smallest viable component extraction.
+- [x] Re-run Vitest until green.
 
 ## Task 4: Verification
 
-- [ ] Run backend focused test.
-- [ ] Run frontend source-level test.
-- [ ] Run `pnpm build` in `source/dts-admin-webapp`.
-- [ ] Write evidence files under `worklog/v2.2.3/sprint-33-202605/it/evidence/`.
-- [ ] Update task and sprint statuses based on actual command results.
-
+- [x] Run backend focused test.
+- [x] Run frontend source-level test.
+- [x] Run `pnpm build` in `source/dts-admin-webapp`.
+- [x] Write evidence files under `worklog/v2.2.3/sprint-33-202605/it/evidence/`.
+- [x] Update task and sprint statuses based on actual command results.

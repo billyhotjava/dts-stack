@@ -42,4 +42,12 @@ describe("role detail assignment table contract", () => {
 		expect(detailSource.includes("<RoleBasicInfoSection")).toBe(true);
 		expect(detailSource.includes("<RoleMemberAssignmentSection")).toBe(true);
 	});
+
+	it("disables all member edit actions while a role change is pending", () => {
+		const detailSource = readSource("./role-detail.tsx");
+
+		expect(detailSource.includes("canEditMembers={!hasPendingChange}")).toBe(true);
+		expect(detailSource.includes("if (!isEditMode || hasPendingChange) return;")).toBe(true);
+		expect(detailSource.includes("isEditMode && canEditMembers")).toBe(true);
+	});
 });

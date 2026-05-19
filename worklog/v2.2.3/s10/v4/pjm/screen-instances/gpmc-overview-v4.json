@@ -1303,9 +1303,9 @@
       }
     },
     {
-      "id": "ov4-gantt-panel",
+      "id": "ov4-next-month-plan-panel",
       "type": "shape",
-      "name": "ov4-gantt-panel",
+      "name": "ov4-next-month-plan-panel",
       "x": 10,
       "y": 774,
       "width": 1900,
@@ -1322,7 +1322,7 @@
       }
     },
     {
-      "id": "ov4-gantt-title",
+      "id": "ov4-next-month-plan-title",
       "type": "title",
       "name": "下月重点计划",
       "x": 26,

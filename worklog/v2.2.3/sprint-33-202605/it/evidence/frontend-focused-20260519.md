@@ -14,12 +14,13 @@ PASS.
 
 ## Evidence Notes
 
-- Vitest result after module refinement: 1 test file passed, 4 tests passed.
+- Vitest result after pending-change guard refinement: 1 test file passed, 5 tests passed.
 - The source-level contract test verifies:
   - `adminApi.getRoleAssignmentUsers` exists and targets `/assignment-users`;
   - `RoleAssignmentUser` includes `inRole: boolean`;
   - `role-detail.tsx` no longer calls `getAllAdminUsers`;
   - the page contains `rowSelection`, `pendingAdds`, `pendingRemovals`, `memberAdds`, `memberRemoves`, and the department/name/username query fields.
   - `RoleBasicInfoSection` and `RoleMemberAssignmentSection` exist and are used by `RoleDetailView`.
+  - pending role changes disable table selection, current-member edit buttons, and member toggle handlers.
 - `pnpm build` completed successfully after TypeScript compile and Vite production build.
 - Build output retained existing Vite dynamic/static import chunk warnings and browserslist stale-data notice.
