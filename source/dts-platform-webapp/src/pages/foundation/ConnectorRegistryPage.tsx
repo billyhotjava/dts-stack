@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AppstoreOutlined, ReloadOutlined, SyncOutlined } from "@ant-design/icons";
+import { AppstoreOutlined, } from "@ant-design/icons";
 import { Button, Card, Descriptions, Drawer, Select, Space, Switch, Tag, Typography, message } from "antd";
 import { CompactTable } from "@/components/table";
 import type { TableProps } from "antd";
@@ -206,10 +206,10 @@ export default function ConnectorRegistryPage() {
 						<Text type="secondary">停用</Text>
 						<Switch size="small" checked={includeDisabled} onChange={setIncludeDisabled} />
 					</Space>
-					<Button icon={<ReloadOutlined />} onClick={loadList} disabled={loading}>
+					<Button onClick={loadList} disabled={loading}>
 						刷新
 					</Button>
-					<Button icon={<SyncOutlined />} onClick={handleSeed} loading={seeding}>
+					<Button onClick={handleSeed} loading={seeding}>
 						同步内置
 					</Button>
 				</Space>

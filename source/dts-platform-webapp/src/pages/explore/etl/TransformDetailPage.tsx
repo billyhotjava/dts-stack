@@ -20,17 +20,7 @@ import {
 	Alert,
 } from "antd";
 import { CompactTable } from "@/components/table";
-import {
-	PlayCircleOutlined,
-	EditOutlined,
-	HistoryOutlined,
-	ArrowLeftOutlined,
-	SyncOutlined,
-	FileTextOutlined,
-	ReloadOutlined,
-	DeleteOutlined,
-	DownloadOutlined,
-} from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import { useRouter } from "@/routes/hooks";
 import {
 	ingestionTaskAPI,
@@ -542,14 +532,13 @@ export default function TransformDetailPage() {
 				title={task.name}
 				extra={
 					<Space wrap>
-						<Button icon={<ArrowLeftOutlined />} onClick={() => router.push("/explore/etl/transform")}>
+						<Button onClick={() => router.push("/explore/etl/transform")}>
 							返回
 						</Button>
-						<Button icon={<HistoryOutlined />} onClick={() => router.push(`/explore/etl/transform/${id}/executions`)}>
+						<Button onClick={() => router.push(`/explore/etl/transform/${id}/executions`)}>
 							执行历史
 						</Button>
 						<Button
-							icon={<FileTextOutlined />}
 							onClick={openLatestLog}
 							disabled={!task.lastExecutedAt}
 							data-testid="platform-transform-open-log"
@@ -557,14 +546,12 @@ export default function TransformDetailPage() {
 							最新日志
 						</Button>
 						<Button
-							icon={<EditOutlined />}
 							onClick={() => router.push(`/explore/etl/transform/${id}/edit`)}
 							disabled={task.status === "deleted"}
 						>
 							编辑
 						</Button>
 						<Button
-							icon={<SyncOutlined />}
 							onClick={handleRebuildDag}
 							disabled={task.status === "deleted" || task.airflowEnabled === false}
 						>
@@ -580,13 +567,12 @@ export default function TransformDetailPage() {
 							}}
 							disabled={task.status === "deleted"}
 						>
-							<Button danger icon={<DeleteOutlined />}>
+							<Button danger>
 								数据回退
 							</Button>
 						</Dropdown>
 						<Button
 							type="primary"
-							icon={<PlayCircleOutlined />}
 							onClick={handleExecute}
 							loading={executeSubmitting || (executeProgressOpen && !executeProgress.terminal)}
 							disabled={
@@ -649,7 +635,6 @@ export default function TransformDetailPage() {
 										title="执行与编排"
 										extra={
 											<Button
-												icon={<ReloadOutlined />}
 												onClick={() => loadLatestExecution()}
 												loading={latestExecutionLoading}
 											>
@@ -693,7 +678,7 @@ export default function TransformDetailPage() {
 											</Descriptions.Item>
 										</Descriptions>
 										<div className="mt-4 flex items-center gap-3">
-											<Button icon={<FileTextOutlined />} onClick={openLatestLog} disabled={!task.lastExecutedAt}>
+											<Button onClick={openLatestLog} disabled={!task.lastExecutedAt}>
 												查看最新日志
 											</Button>
 											{latestExecution ? (
@@ -713,14 +698,12 @@ export default function TransformDetailPage() {
 										extra={
 											<Space wrap>
 												<Button
-													icon={<ReloadOutlined />}
 													onClick={() => task?.id && loadBadRowSummary(Number(task.id))}
 													loading={badRowSummaryLoading}
 												>
 													刷新摘要
 												</Button>
 												<Button
-													icon={<DownloadOutlined />}
 													onClick={downloadBadRows}
 													loading={badRowDownloading}
 													disabled={!badRowSummary || !badRowSummary.errorRows}
@@ -848,7 +831,6 @@ export default function TransformDetailPage() {
 										title="实时链路状态"
 										extra={
 											<Button
-												icon={<ReloadOutlined />}
 												onClick={() => task?.id && loadRealtimeStatus(Number(task.id))}
 												loading={realtimeStatusLoading}
 											>
@@ -905,7 +887,6 @@ export default function TransformDetailPage() {
 										title="增量检查点"
 										extra={
 											<Button
-												icon={<ReloadOutlined />}
 												onClick={() => task?.id && loadIncrementalStates(Number(task.id))}
 												loading={incrementalStatesLoading}
 											>
@@ -1069,7 +1050,7 @@ export default function TransformDetailPage() {
 				onClose={() => setLogVisible(false)}
 				extra={
 					<Space>
-						<Button icon={<ReloadOutlined />} onClick={() => openLatestLog()} loading={logLoading}>
+						<Button onClick={() => openLatestLog()} loading={logLoading}>
 							刷新日志
 						</Button>
 					</Space>

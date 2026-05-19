@@ -19,7 +19,6 @@ import com.yuzhi.dts.admin.repository.PortalMenuVisibilityRepository;
 import com.yuzhi.dts.admin.repository.SystemConfigRepository;
 import com.yuzhi.dts.admin.service.ChangeRequestService;
 import com.yuzhi.dts.admin.service.OrganizationService;
-import com.yuzhi.dts.admin.service.OrganizationSyncService;
 import com.yuzhi.dts.admin.service.PortalMenuService;
 import com.yuzhi.dts.admin.service.audit.AdminAuditService;
 import com.yuzhi.dts.admin.service.audit.AuditV2Service;
@@ -45,8 +44,6 @@ class AdminApiResourceChangeAuditTest {
     private AuditV2Service auditV2Service;
     @Mock
     private OrganizationService organizationService;
-    @Mock
-    private OrganizationSyncService organizationSyncService;
     @Mock
     private ChangeRequestRepository changeRequestRepository;
     @Mock
@@ -96,7 +93,7 @@ class AdminApiResourceChangeAuditTest {
         resource = new AdminApiResource(
             auditV2Service,
             organizationService,
-            organizationSyncService,
+            null,
             changeRequestRepository,
             approvalRepository,
             changeRequestService,

@@ -2,12 +2,7 @@ import { useEffect, useState } from "react";
 import { Card, Col, Row, Spin, Statistic } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import {
-	CheckCircleOutlined,
-	DatabaseOutlined,
-	FileProtectOutlined,
-	ToolOutlined,
-} from "@ant-design/icons";
+import { CheckCircleOutlined, DatabaseOutlined, FileProtectOutlined, ToolOutlined } from "@ant-design/icons";
 import { Chart } from "@/components/chart/chart";
 import { getQualityDashboard } from "@/api/platformApi";
 import type { QualityDashboard as QualityDashboardData } from "@/api/platformApi";

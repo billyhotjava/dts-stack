@@ -66,7 +66,7 @@
       "name": "gpmc-quality-left",
       "x": 36,
       "y": 268,
-      "width": 450,
+      "width": 608,
       "height": 540,
       "zIndex": 1,
       "locked": false,
@@ -83,9 +83,9 @@
       "id": "gpmc-quality-mid",
       "type": "shape",
       "name": "gpmc-quality-mid",
-      "x": 498,
+      "x": 656,
       "y": 268,
-      "width": 450,
+      "width": 608,
       "height": 540,
       "zIndex": 1,
       "locked": false,
@@ -790,7 +790,7 @@
       "name": "项目质量问题",
       "x": 52,
       "y": 308,
-      "width": 418,
+      "width": 576,
       "height": 490,
       "zIndex": 15,
       "locked": false,
@@ -898,9 +898,9 @@
       "id": "gpmc-quality-stage",
       "type": "bar-chart",
       "name": "时段质量问题",
-      "x": 976,
+      "x": 1292,
       "y": 308,
-      "width": 418,
+      "width": 576,
       "height": 490,
       "zIndex": 15,
       "locked": false,
@@ -1008,9 +1008,9 @@
       "id": "gpmc-quality-category",
       "type": "pie-chart",
       "name": "质量问题类别",
-      "x": 514,
+      "x": 672,
       "y": 308,
-      "width": 418,
+      "width": 576,
       "height": 490,
       "zIndex": 15,
       "locked": false,
@@ -1067,81 +1067,6 @@
               "name": "dateTo",
               "variableKey": "dateTo"
             },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "gpmc-quality-trend",
-      "type": "line-chart",
-      "name": "月度质量问题趋势",
-      "x": 1438,
-      "y": 308,
-      "width": 430,
-      "height": 490,
-      "zIndex": 15,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "",
-        "xAxis": {
-          "type": "category",
-          "name": "月份"
-        },
-        "yAxis": {
-          "type": "value",
-          "name": "质量问题总数"
-        },
-        "legend": {
-          "show": false
-        },
-        "colors": [
-          "#45a4ff"
-        ],
-        "categoryKey": "月份",
-        "series": [
-          {
-            "name": "质量问题总数",
-            "dataKey": "质量问题总数",
-            "color": "#45a4ff"
-          }
-        ],
-        "titleFontSize": 0,
-        "chartPaddingTop": 36,
-        "axisLabelColor": "#ffffff",
-        "metricNote": {
-          "displayName": "月度质量问题趋势",
-          "definition": "按「月份」分组,对比各组「质量问题总数」指标",
-          "scope": "X 轴=月份; 受顶部时间筛选控制",
-          "sourceTable": "质量信息汇总表",
-          "frequency": "每日 01:00 刷新",
-          "seriesNotes": [
-            {
-              "name": "质量问题总数",
-              "code": "pjm_qual_new_issues",
-              "displayName": "新增质量问题数",
-              "formula": "质量问题发生时间在[开始日期,结束日期]内的问题计数",
-              "unit": "个"
-            }
-          ]
-        }
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT s.period_month AS \"月份\", SUM(s.new_issue_cnt) AS \"质量问题总数\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char(current_date - INTERVAL '11 months','YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]] GROUP BY s.period_month ORDER BY s.period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
             {
               "name": "deptId",
               "variableKey": "deptId"
@@ -1337,28 +1262,9 @@
       "id": "gpmc-quality-mid2",
       "type": "shape",
       "name": "gpmc-quality-mid2",
-      "x": 960,
+      "x": 1276,
       "y": 268,
-      "width": 450,
-      "height": 540,
-      "zIndex": 1,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "shapeType": "rect",
-        "fillColor": "rgba(12, 38, 82, 0.18)",
-        "borderColor": "transparent",
-        "borderWidth": 0,
-        "radius": 18
-      }
-    },
-    {
-      "id": "gpmc-quality-right",
-      "type": "shape",
-      "name": "gpmc-quality-right",
-      "x": 1422,
-      "y": 268,
-      "width": 462,
+      "width": 608,
       "height": 540,
       "zIndex": 1,
       "locked": false,
@@ -1377,7 +1283,7 @@
       "name": "项目质量问题-标题",
       "x": 52,
       "y": 276,
-      "width": 360,
+      "width": 520,
       "height": 28,
       "zIndex": 20,
       "locked": false,
@@ -1394,9 +1300,9 @@
       "id": "gpmc-quality-stage-overlay-title",
       "type": "title",
       "name": "时段质量问题-标题",
-      "x": 976,
+      "x": 1292,
       "y": 276,
-      "width": 360,
+      "width": 520,
       "height": 28,
       "zIndex": 20,
       "locked": false,
@@ -1413,34 +1319,15 @@
       "id": "gpmc-quality-category-overlay-title",
       "type": "title",
       "name": "质量问题类别-标题",
-      "x": 514,
+      "x": 672,
       "y": 276,
-      "width": 360,
+      "width": 520,
       "height": 28,
       "zIndex": 20,
       "locked": false,
       "visible": true,
       "config": {
         "text": "质量问题类别",
-        "fontSize": 20,
-        "fontWeight": "700",
-        "color": "#ffffff",
-        "textAlign": "flex-start"
-      }
-    },
-    {
-      "id": "gpmc-quality-trend-overlay-title",
-      "type": "title",
-      "name": "月度质量问题趋势-标题",
-      "x": 1438,
-      "y": 276,
-      "width": 360,
-      "height": 28,
-      "zIndex": 20,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "text": "月度质量问题趋势",
         "fontSize": 20,
         "fontWeight": "700",
         "color": "#ffffff",

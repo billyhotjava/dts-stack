@@ -16,16 +16,7 @@ import {
 	Typography,
 	message,
 } from "antd";
-import {
-	ArrowLeftOutlined,
-	DeleteOutlined,
-	EditOutlined,
-	ExperimentOutlined,
-	MoreOutlined,
-	ReloadOutlined,
-	RollbackOutlined,
-	SearchOutlined,
-} from "@ant-design/icons";
+import { RollbackOutlined, } from "@ant-design/icons";
 import { CompactTable } from "@/components/table";
 import RollbackImpactModal, { type RollbackRequest } from "@/components/rollback/RollbackImpactModal";
 import dataSourcesService, {
@@ -175,7 +166,7 @@ export default function DataSourceDetailPage() {
 		<Card
 			title={
 				<Space size="small">
-					<Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate(LIST_PATH)}>
+					<Button type="text" onClick={() => navigate(LIST_PATH)}>
 						返回
 					</Button>
 					<Breadcrumb
@@ -188,21 +179,21 @@ export default function DataSourceDetailPage() {
 			}
 			extra={
 				<Space size={4}>
-					<Button icon={<ReloadOutlined />} onClick={() => void loadDetail()} loading={loading}>
+					<Button onClick={() => void loadDetail()} loading={loading}>
 						刷新
 					</Button>
-					<Button icon={<ExperimentOutlined />} onClick={() => void handleTest()} loading={testing}>
+					<Button onClick={() => void handleTest()} loading={testing}>
 						测试连接
 					</Button>
-					<Button type="primary" icon={<EditOutlined />} disabled={adminManaged || !source?.id} onClick={handleEdit}>
+					<Button type="primary" disabled={adminManaged || !source?.id} onClick={handleEdit}>
 						编辑
 					</Button>
-					<Button danger icon={<DeleteOutlined />} disabled={adminManaged || !source?.id} onClick={handleDelete}>
+					<Button danger disabled={adminManaged || !source?.id} onClick={handleDelete}>
 						删除
 					</Button>
 					{moreMenuItems.length > 0 && (
 						<Dropdown menu={{ items: moreMenuItems }} trigger={["click"]} placement="bottomRight">
-							<Button icon={<MoreOutlined />} aria-label="更多操作" />
+							<Button aria-label="更多操作" >更多操作</Button>
 						</Dropdown>
 					)}
 				</Space>
@@ -362,7 +353,7 @@ function SchemaPanel({
 	return (
 		<Space direction="vertical" size="middle" style={{ width: "100%" }}>
 			<Space size="small" wrap>
-				<Button icon={<SearchOutlined />} type="primary" onClick={onRefresh} loading={loading}>
+				<Button type="primary" onClick={onRefresh} loading={loading}>
 					{result ? "重新探测" : "开始探测"}
 				</Button>
 				{result?.databaseProduct ? <Tag color="blue">{result.databaseProduct}</Tag> : null}

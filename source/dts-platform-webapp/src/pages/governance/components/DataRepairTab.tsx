@@ -18,14 +18,7 @@ import {
 } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import {
-	CloudUploadOutlined,
-	ExperimentOutlined,
-	SearchOutlined,
-	ToolOutlined,
-	InfoCircleOutlined,
-	SafetyOutlined,
-} from "@ant-design/icons";
+import { CloudUploadOutlined, InfoCircleOutlined, SafetyOutlined } from "@ant-design/icons";
 import { useSearchParams } from "react-router";
 import {
 	createIngestionTask,
@@ -348,7 +341,6 @@ function PreCheckMode({ initialTaskId }: { initialTaskId?: number }) {
 					)}
 					<Button
 						type="primary"
-						icon={<SearchOutlined />}
 						loading={checking}
 						onClick={handleStartCheck}
 						disabled={!taskId}
@@ -642,7 +634,7 @@ function ManualFailingRowsEditor({ runId, onSaved }: { runId?: string; onSaved?:
 		<div className="space-y-2 rounded border border-solid border-gray-200 p-3">
 			<div className="flex items-center justify-between">
 				<Typography.Text strong>人工编辑</Typography.Text>
-				<Button size="small" icon={<SearchOutlined />} loading={loading} onClick={() => void loadRows()}>
+				<Button size="small" loading={loading} onClick={() => void loadRows()}>
 					刷新失败行
 				</Button>
 			</div>
@@ -865,7 +857,6 @@ function QualityFixMode({ initialRunId }: { initialRunId?: string }) {
 					<Button
 						size="small"
 						type="primary"
-						icon={<ToolOutlined />}
 						onClick={() => openCleansingModal(record.id!)}
 						disabled={!record.id}
 					>
@@ -895,7 +886,6 @@ function QualityFixMode({ initialRunId }: { initialRunId?: string }) {
 				size="small"
 				extra={
 					<Button
-						icon={<ExperimentOutlined />}
 						onClick={() => void loadRuns()}
 						loading={loading}
 					>

@@ -5,7 +5,6 @@ import { analyticsApi, type CurrentUser, type DashboardListItem, type CardListIt
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Spin, Button, Card, Tag } from "antd";
 import { CompactTable } from "@/components/table";
-import { PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 type LoadState<T> =
@@ -243,12 +242,12 @@ export default function HomePage() {
 				extra={
 					<div style={{ display: 'flex', gap: 8 }}>
 						<Link to="/bi/screens">
-							<Button type="text" size="small" icon={<ArrowRightIcon />} iconPosition="end">
+							<Button type="text" size="small">
 								{t(locale, "common.viewAll")}
 							</Button>
 						</Link>
 						<Link to="/bi/screens/new">
-							<Button type="primary" size="small" icon={<PlusOutlined />}>
+							<Button type="primary" size="small">
 								{t(locale, "home.newScreen")}
 							</Button>
 						</Link>

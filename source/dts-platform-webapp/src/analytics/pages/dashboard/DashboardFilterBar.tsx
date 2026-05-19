@@ -1,7 +1,7 @@
 // @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 import React, { useMemo } from "react";
 import { Button, DatePicker, Input, Select, Tag } from "antd";
-import { PlusOutlined, CloseOutlined, FilterOutlined } from "@ant-design/icons";
+import { FilterOutlined } from "@ant-design/icons";
 import { t, type Locale } from "../../i18n";
 
 const { RangePicker } = DatePicker;
@@ -118,7 +118,6 @@ export function DashboardFilterBar({
 				<Button
 					type="dashed"
 					size="small"
-					icon={<PlusOutlined />}
 					onClick={onAddParam}
 				>
 					{t(locale, "dashboards.addFilter")}

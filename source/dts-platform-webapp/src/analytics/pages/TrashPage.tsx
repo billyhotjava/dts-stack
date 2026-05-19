@@ -3,7 +3,6 @@ import { analyticsApi, type TrashItem, type TrashResponse } from "../api/analyti
 import { PageHeader } from "@/components/page-header";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Button, Spin, Tag, Checkbox, message } from "antd";
-import { UndoOutlined } from "@ant-design/icons";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 type LoadState<T> =
 	| { state: "loading" }
@@ -82,7 +81,7 @@ export default function TrashPage() {
 				title={t(locale, "trash.title")}
 				actions={
 					selectedIds.size > 0 ? (
-						<Button icon={<UndoOutlined />} onClick={handleBatchRestore}>
+						<Button onClick={handleBatchRestore}>
 							恢复选中项 ({selectedIds.size})
 						</Button>
 					) : undefined
@@ -143,7 +142,7 @@ export default function TrashPage() {
 										{new Date(it.updated_at).toLocaleDateString()}
 									</span>
 								)}
-								<Button type="link" size="small" icon={<UndoOutlined />} onClick={() => restoreItem(it.model, it.id)}>
+								<Button type="link" size="small" onClick={() => restoreItem(it.model, it.id)}>
 									恢复
 								</Button>
 							</div>

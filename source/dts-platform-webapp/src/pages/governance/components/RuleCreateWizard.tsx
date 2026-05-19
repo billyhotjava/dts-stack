@@ -11,11 +11,7 @@ import {
 	Steps,
 	Tag,
 } from "antd";
-import {
-	CheckCircleOutlined,
-	CodeOutlined,
-	FileTextOutlined,
-} from "@ant-design/icons";
+import { CheckCircleOutlined, CodeOutlined, FileTextOutlined } from "@ant-design/icons";
 import {
 	listQualityTemplates,
 	previewTemplateSQL,

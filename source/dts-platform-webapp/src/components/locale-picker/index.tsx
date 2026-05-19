@@ -23,8 +23,8 @@ export default function LocalePicker() {
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<Button variant="ghost" size="icon" className="rounded-full">
-					<Icon icon={`local:${LANGUAGE_MAP[locale].icon}`} size="20" />
+				<Button variant="ghost" className="rounded-full px-3">
+					{LANGUAGE_MAP[locale].label}
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent>

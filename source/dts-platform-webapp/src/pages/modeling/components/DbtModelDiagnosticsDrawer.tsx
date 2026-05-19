@@ -1,7 +1,6 @@
 import { Alert, Button, Divider, Drawer, Empty, Skeleton, Space, Tag, Typography } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { ReloadOutlined } from "@ant-design/icons";
 import { formatDateTime, normalizeText } from "@/utils/textUtils";
 import { buildDiagnosticsTitle, formatDiagnosticsRowCount, resolveDiagnosticsStatus } from "../dbtModelDiagnostics.helpers";
 import type { DbtModelDependencyDiagnostic, DbtModelDiagnostics, SqlModel } from "../sqlModeling.types";
@@ -80,7 +79,7 @@ export default function DbtModelDiagnosticsDrawer({
 			title={buildDiagnosticsTitle(model?.name || diagnostics?.model)}
 			onClose={onClose}
 			extra={
-				<Button size="small" icon={<ReloadOutlined />} onClick={onReload} loading={loading}>
+				<Button size="small" onClick={onReload} loading={loading}>
 					刷新
 				</Button>
 			}

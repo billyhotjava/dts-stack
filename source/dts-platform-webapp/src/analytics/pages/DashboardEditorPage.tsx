@@ -11,13 +11,7 @@ import {
 } from "../api/analyticsApi";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Button, Input, Select, Modal, message, Spin } from "antd";
-import {
-	ArrowLeftOutlined,
-	PlusOutlined,
-	SaveOutlined,
-	EyeOutlined,
-	EditOutlined,
-} from "@ant-design/icons";
+import { PlusOutlined, } from "@ant-design/icons";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { useDashboardCrossFilter } from "../hooks/useDashboardCrossFilter";
 import { useDrillFilter } from "../hooks/useDrillFilter";
@@ -412,7 +406,7 @@ export default function DashboardEditorPage() {
 				{/* Top toolbar */}
 				<div className="flex items-center gap-3 mb-4 flex-wrap">
 					<Link to="/bi/dashboards">
-						<Button type="text" icon={<ArrowLeftOutlined />}>
+						<Button type="text">
 							{t(locale, "dashboards.backToList")}
 						</Button>
 					</Link>
@@ -445,7 +439,6 @@ export default function DashboardEditorPage() {
 					)}
 
 					<Button
-						icon={<PlusOutlined />}
 						onClick={() => setCardPickerOpen(true)}
 						disabled={allCards.state !== "loaded" || !isEditing}
 					>
@@ -453,7 +446,6 @@ export default function DashboardEditorPage() {
 					</Button>
 
 					<Button
-						icon={isEditing ? <EyeOutlined /> : <EditOutlined />}
 						onClick={() => setIsEditing(!isEditing)}
 					>
 						{isEditing ? t(locale, "dashboards.preview") : t(locale, "dashboards.editing")}
@@ -461,7 +453,6 @@ export default function DashboardEditorPage() {
 
 					<Button
 						type="primary"
-						icon={<SaveOutlined />}
 						onClick={save}
 						disabled={!name.trim() || saveState?.state === "loading"}
 						loading={saveState?.state === "loading"}
@@ -510,7 +501,6 @@ export default function DashboardEditorPage() {
 							<Button
 								type="primary"
 								ghost
-								icon={<PlusOutlined />}
 								onClick={() => setCardPickerOpen(true)}
 								disabled={allCards.state !== "loaded"}
 								className="mt-2"

@@ -6,7 +6,7 @@ import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Button, Card, Input, Modal, Space, Spin, message } from "antd";
 import { CompactTable } from "@/components/table";
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 
@@ -99,16 +99,15 @@ export default function DashboardsPage() {
 			render: (_, record) => (
 				<Space size={4}>
 					<Link to={`/bi/dashboards/${record.id}`}>
-						<Button type="link" size="small" icon={<EyeOutlined />}>查看</Button>
+						<Button type="link" size="small">查看</Button>
 					</Link>
 					<Link to={`/bi/dashboards/${record.id}/edit`}>
-						<Button type="link" size="small" icon={<EditOutlined />}>编辑</Button>
+						<Button type="link" size="small">编辑</Button>
 					</Link>
 					<Button
 						type="link"
 						size="small"
 						danger
-						icon={<DeleteOutlined />}
 						onClick={() => handleDelete(record.id, record.name || "")}
 					>
 						删除
@@ -125,7 +124,7 @@ export default function DashboardsPage() {
 				title={t(locale, "dashboards.title")}
 				actions={
 					<Link to="/bi/dashboards/new">
-						<Button type="primary" icon={<PlusOutlined />}>
+						<Button type="primary">
 							{t(locale, "dashboards.new")}
 						</Button>
 					</Link>

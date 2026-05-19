@@ -2,13 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Alert, Button, Card, Modal, Progress, Space, Tag, Typography, message } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import {
-	PlayCircleOutlined,
-	EditOutlined,
-	DeleteOutlined,
-	HistoryOutlined,
-	ReloadOutlined,
-} from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import { useRouter } from "@/routes/hooks";
 import {
 	ingestionTaskAPI,
@@ -448,7 +442,6 @@ export default function TransformPage() {
 						<Button
 							size="small"
 							type="primary"
-							icon={<PlayCircleOutlined />}
 							onClick={() => handleExecute(record.id!, record.name)}
 							loading={isTaskBusy(record) && !executeProgress.terminal}
 							disabled={record.status === "deleted" || isTaskBusy(record)}
@@ -459,14 +452,12 @@ export default function TransformPage() {
 						</Button>
 						<Button
 							size="small"
-							icon={<HistoryOutlined />}
 							onClick={() => router.push(`/explore/etl/transform/${record.id}/executions`)}
 						>
 							历史
 						</Button>
 						<Button
 							size="small"
-							icon={<EditOutlined />}
 							onClick={() => router.push(`/explore/etl/transform/${record.id}/edit`)}
 							disabled={record.status === "deleted" || isTaskBusy(record)}
 						>
@@ -475,7 +466,6 @@ export default function TransformPage() {
 						<Button
 							size="small"
 							danger
-							icon={<DeleteOutlined />}
 							onClick={() => handleDelete(record.id!, record.name)}
 							disabled={record.status === "deleted"}
 						>
@@ -510,7 +500,6 @@ export default function TransformPage() {
 						))}
 							<Button
 								className="rounded-2xl"
-								icon={<ReloadOutlined />}
 								onClick={() => {
 									void loadTasks();
 									void loadRunCenterOverview();

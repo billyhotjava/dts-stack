@@ -51,7 +51,7 @@ React Flow draft
 | F5 | 验证、发布、血缘与消费闭环 | P0 | 5 | READY | F1-F4 |
 | F6 | 兼容迁移、IT 与回滚 | P0 | 4 | READY | F1-F5 |
 
-**统计**: READY=27, IN_PROGRESS=1, DONE=1, BLOCKED=0
+**统计**: READY=26, IN_PROGRESS=2, DONE=1, BLOCKED=0
 
 ## 已完成基线
 

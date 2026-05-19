@@ -14,7 +14,7 @@ import {
 } from "antd";
 import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { PlusOutlined, DeleteOutlined, EditOutlined, RocketOutlined, UploadOutlined } from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import {
 	listIndicatorTemplates,
@@ -227,7 +227,6 @@ export default function Page() {
 						<Button
 							type="link"
 							size="small"
-							icon={<RocketOutlined />}
 							onClick={() => openWizard(record)}
 						>
 							展开
@@ -237,7 +236,6 @@ export default function Page() {
 						<Button
 							type="link"
 							size="small"
-							icon={<EditOutlined />}
 							onClick={() => openEdit(record)}
 						>
 							编辑
@@ -248,7 +246,6 @@ export default function Page() {
 							type="link"
 							size="small"
 							danger
-							icon={<DeleteOutlined />}
 							onClick={() => handleDelete(record)}
 						>
 							删除
@@ -271,7 +268,7 @@ export default function Page() {
 				<Typography.Title level={4} style={{ margin: 0 }}>指标模板管理</Typography.Title>
 				{canManage && (
 					<Space>
-						<Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+						<Button type="primary" onClick={openCreate}>
 							新建模板
 						</Button>
 						<Upload
@@ -279,7 +276,7 @@ export default function Page() {
 							showUploadList={false}
 							beforeUpload={(file) => { handleImport(file); return false; }}
 						>
-							<Button icon={<UploadOutlined />}>导入</Button>
+							<Button>导入</Button>
 						</Upload>
 						<Button type="link" size="small" onClick={handleDownloadExample}>
 							下载格式示例

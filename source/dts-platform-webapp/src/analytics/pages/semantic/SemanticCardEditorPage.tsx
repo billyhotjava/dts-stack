@@ -1,10 +1,4 @@
-import {
-	DatabaseOutlined,
-	DeploymentUnitOutlined,
-	PlayCircleOutlined,
-	PlusOutlined,
-	SaveOutlined,
-} from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import {
 	Alert,
 	Breadcrumb,
@@ -670,7 +664,6 @@ export default function SemanticCardEditorPage() {
 					<Space wrap>
 						{!isVirtualDatasetMode && (
 							<Button
-								icon={<DatabaseOutlined />}
 								onClick={() => setVdsModalOpen(true)}
 								disabled={!canModel || noSemanticModels}
 							>
@@ -679,7 +672,6 @@ export default function SemanticCardEditorPage() {
 						)}
 						{isVirtualDatasetMode && (
 							<Button
-								icon={<SaveOutlined />}
 								loading={savingVds}
 								onClick={saveVirtualDataset}
 								disabled={!canModel || noSemanticModels}
@@ -688,14 +680,13 @@ export default function SemanticCardEditorPage() {
 							</Button>
 						)}
 						{isVirtualDatasetMode && recordId && canPromote && (
-							<Button icon={<DeploymentUnitOutlined />} onClick={promoteVirtualDataset}>
+							<Button onClick={promoteVirtualDataset}>
 								提升到 dbt
 							</Button>
 						)}
 						{!isVirtualDatasetMode && (
 							<Button
 								type="primary"
-								icon={<SaveOutlined />}
 								loading={saving}
 								onClick={saveCard}
 								disabled={!canModel || noSemanticModels}
@@ -841,10 +832,10 @@ export default function SemanticCardEditorPage() {
 								title="查询预览"
 								extra={
 									<Space>
-										<Button icon={<DatabaseOutlined />} onClick={previewSql} disabled={noSemanticModels}>
+										<Button onClick={previewSql} disabled={noSemanticModels}>
 											预览 SQL
 										</Button>
-										<Button type="primary" icon={<PlayCircleOutlined />} onClick={runQuery} disabled={noSemanticModels}>
+										<Button type="primary" onClick={runQuery} disabled={noSemanticModels}>
 											运行查询
 										</Button>
 									</Space>
@@ -1053,7 +1044,6 @@ export default function SemanticCardEditorPage() {
 												</Space>
 											))}
 											<Button
-												icon={<PlusOutlined />}
 												onClick={() => setFilters((current) => [...current, { field: "", op: "=", value: "" }])}
 											>
 												新增筛选
@@ -1101,7 +1091,6 @@ export default function SemanticCardEditorPage() {
 												</Card>
 											))}
 											<Button
-												icon={<PlusOutlined />}
 												onClick={() =>
 													setDerivedMetrics((current) => [
 														...current,

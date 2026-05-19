@@ -20,20 +20,7 @@ import {
 	Upload,
 } from "antd";
 import type { UploadFile } from "antd/es/upload/interface";
-import {
-	FileOutlined,
-	FileTextOutlined,
-	FolderOutlined,
-	PlusOutlined,
-	DeleteOutlined,
-	SaveOutlined,
-	ReloadOutlined,
-	EditOutlined,
-	ExclamationCircleOutlined,
-	RocketOutlined,
-	UploadOutlined,
-	InboxOutlined,
-} from "@ant-design/icons";
+import { FileOutlined, FileTextOutlined, FolderOutlined, PlusOutlined, DeleteOutlined, EditOutlined, ExclamationCircleOutlined, InboxOutlined } from "@ant-design/icons";
 import type { DataNode } from "antd/es/tree";
 import {
 	getDbtFileTree,
@@ -656,25 +643,25 @@ export default function DbtFileBrowserPage() {
 								],
 							}}
 						>
-							<Button className="rounded-2xl" icon={<PlusOutlined />}>
+							<Button className="rounded-2xl">
 								新建
 							</Button>
 						</Dropdown>
-						<Button className="rounded-2xl" icon={<ReloadOutlined />} onClick={loadTree}>
+						<Button className="rounded-2xl" onClick={loadTree}>
 							刷新
 						</Button>
 						<Tooltip title="上传 ZIP 覆盖 dbt 项目文件（macros/models/seeds 等）">
-							<Button className="rounded-2xl" icon={<UploadOutlined />} onClick={() => setUploadOpen(true)}>
+							<Button className="rounded-2xl" onClick={() => setUploadOpen(true)}>
 								上传 ZIP
 							</Button>
 						</Tooltip>
 						{activeFile && dirty ? (
-							<Button className="rounded-2xl" type="primary" icon={<SaveOutlined />} loading={saving} onClick={saveFile}>
+							<Button className="rounded-2xl" type="primary" loading={saving} onClick={saveFile}>
 								保存
 							</Button>
 						) : null}
 						<Tooltip title="触发 dbt run">
-							<Button className="rounded-2xl" icon={<RocketOutlined />} onClick={openDbtRunConfig}>
+							<Button className="rounded-2xl" onClick={openDbtRunConfig}>
 								运行 dbt
 							</Button>
 						</Tooltip>
@@ -744,7 +731,6 @@ export default function DbtFileBrowserPage() {
 								<Button
 									size="small"
 									danger
-									icon={<DeleteOutlined />}
 									disabled={checkedKeys.length === 0 || batchDeleting}
 									onClick={handleBatchDelete}
 								>

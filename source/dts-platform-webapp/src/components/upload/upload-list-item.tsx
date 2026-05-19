@@ -31,8 +31,8 @@ export default function UploadListItem({ file, actions, thumbnail = false }: Pro
 	}, [file, format]);
 
 	const closeButton = (
-		<Button variant="ghost" size="icon" className="ml-auto rounded-full" onClick={actions.remove}>
-			<Icon icon="mingcute:close-line" size={16} />
+		<Button variant="ghost" className="ml-auto rounded-full px-2 text-xs" onClick={actions.remove}>
+			删除
 		</Button>
 	);
 

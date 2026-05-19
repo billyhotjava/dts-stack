@@ -3,7 +3,6 @@ import { Tree, Button, Dropdown, Modal, Input, Radio, message, Spin } from "antd
 import {
 	FolderOutlined,
 	FolderOpenOutlined,
-	PlusOutlined,
 	AppstoreOutlined,
 	InboxOutlined,
 } from "@ant-design/icons";
@@ -349,7 +348,6 @@ export default function CollectionTree({
 				<Button
 					type="text"
 					size="small"
-					icon={<PlusOutlined />}
 					block
 					onClick={() => {
 						setCreateParentId(null);

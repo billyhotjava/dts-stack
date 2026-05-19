@@ -1,7 +1,6 @@
 // @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 import React, { useState } from "react";
 import { Button, Checkbox, Input, Popover } from "antd";
-import { SettingOutlined } from "@ant-design/icons";
 import { t, type Locale } from "../../i18n";
 import type { DashboardParameter } from "./DashboardFilterBar";
 
@@ -121,7 +120,7 @@ export function ParameterMappingPopover({
 			onOpenChange={handleOpenChange}
 			placement="bottomLeft"
 		>
-			<Button type="text" size="small" icon={<SettingOutlined />} title={t(locale, "dashboards.paramMapping")} />
+			<Button type="text" size="small" title={t(locale, "dashboards.paramMapping")} >{t(locale, "dashboards.paramMapping")}</Button>
 		</Popover>
 	);
 }

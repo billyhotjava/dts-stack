@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Button, Card, Modal, Tag, Typography } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { PlusOutlined, DeleteOutlined } from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
 import { createToken, deleteToken, listMyTokens } from "@/api/platformApi";
 
@@ -75,7 +75,7 @@ export default function Page() {
 			title: "操作",
 			width: 140,
 			render: (_, record) => (
-				<Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>
+				<Button size="small" danger onClick={() => handleDelete(record.id)}>
 					吊销
 				</Button>
 			),
@@ -87,7 +87,7 @@ export default function Page() {
 			<PageHeader
 				title="数据服务中心 / 共享交换"
 				actions={
-					<Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+					<Button type="primary" onClick={handleCreate}>
 						生成令牌
 					</Button>
 				}

@@ -16,7 +16,7 @@ import {
 } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { DeleteOutlined, EditOutlined, PlusOutlined, SaveOutlined } from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
 import {
 	getClassificationMapping,
@@ -339,10 +339,10 @@ export default function Page() {
 			title: "操作",
 			render: (_, record) => (
 				<Space>
-					<Button size="small" icon={<EditOutlined />} onClick={() => openMappingModal(record)}>
+					<Button size="small" onClick={() => openMappingModal(record)}>
 						编辑
 					</Button>
-					<Button size="small" danger icon={<DeleteOutlined />} onClick={() => deleteMappingRow(record)}>
+					<Button size="small" danger onClick={() => deleteMappingRow(record)}>
 						删除
 					</Button>
 				</Space>
@@ -359,10 +359,10 @@ export default function Page() {
 			title: "操作",
 			render: (_, record) => (
 				<Space>
-					<Button size="small" icon={<EditOutlined />} onClick={() => openMaskingModal(record)}>
+					<Button size="small" onClick={() => openMaskingModal(record)}>
 						编辑
 					</Button>
-					<Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeMasking(record.id)}>
+					<Button size="small" danger onClick={() => removeMasking(record.id)}>
 						删除
 					</Button>
 				</Space>
@@ -382,7 +382,7 @@ export default function Page() {
 								children: (
 									<>
 										<Space className="mb-3">
-											<Button icon={<PlusOutlined />} type="primary" onClick={() => openMappingModal()}>
+											<Button type="primary" onClick={() => openMappingModal()}>
 												新增映射
 											</Button>
 											<Button loading={validatingMapping} onClick={() => void runMappingValidation()}>
@@ -391,7 +391,6 @@ export default function Page() {
 											<Button
 												type="default"
 												disabled={!classificationDirty}
-												icon={<SaveOutlined />}
 												onClick={saveMappingAll}
 										>
 											保存映射
@@ -444,7 +443,7 @@ export default function Page() {
 							children: (
 								<>
 									<Space className="mb-3">
-										<Button icon={<PlusOutlined />} type="primary" onClick={() => openMaskingModal()}>
+										<Button type="primary" onClick={() => openMaskingModal()}>
 											新增规则
 										</Button>
 									</Space>

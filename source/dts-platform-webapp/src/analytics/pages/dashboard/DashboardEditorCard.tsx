@@ -1,6 +1,6 @@
 import React from "react";
 import { Button, Spin, Tag } from "antd";
-import { DeleteOutlined, HolderOutlined } from "@ant-design/icons";
+import { HolderOutlined } from "@ant-design/icons";
 import { ChartRenderer, type VisualizationType, type VisualizationSettings, type SeriesClickParams } from "../../components/charts";
 import { ErrorNotice } from "../../components/ErrorNotice";
 import type { DashboardCard, DashboardQueryResponse } from "../../api/analyticsApi";
@@ -62,9 +62,8 @@ export function DashboardEditorCard({
 						type="text"
 						size="small"
 						danger
-						icon={<DeleteOutlined />}
 						onClick={onRemove}
-					/>
+					>删除</Button>
 				</div>
 			)}
 

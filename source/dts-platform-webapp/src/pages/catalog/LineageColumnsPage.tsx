@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { DownloadOutlined } from "@ant-design/icons";
 import { Alert, Button, Card } from "antd";
 import { CompactTable } from "@/components/table";
 import { EmptyState } from "@/components/empty-state";
@@ -77,7 +76,7 @@ export default function LineageColumnsPage() {
 
 	return (
 		<div className="space-y-4">
-			<Card title="血缘与影响分析 / 字段血缘" extra={<Button icon={<DownloadOutlined />} onClick={() => exportImpactCsv(nodes, edges, columnLineages)} disabled={!columnLineages.length}>导出字段血缘</Button>}>
+			<Card title="血缘与影响分析 / 字段血缘" extra={<Button onClick={() => exportImpactCsv(nodes, edges, columnLineages)} disabled={!columnLineages.length}>导出字段血缘</Button>}>
 				<div className="mb-3"><LineageSectionNav section="columns" /></div>
 				<LineageDataFilters
 					datasetOptions={datasetOptions}

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, Input, Progress, Select, Space, Tag, Timeline, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
-import { AlertTriangle, Boxes, CheckCircle2, DatabaseZap, GitBranch, RadioTower, RefreshCw, Send, TimerReset } from "lucide-react";
+import { AlertTriangle, CheckCircle2, RadioTower, Send, TimerReset } from "lucide-react";
 import { useNavigate } from "react-router";
 import {
 	PlatformPageHero,
@@ -192,7 +192,7 @@ export default function PlatformEventObservabilityPage() {
 						<Button onClick={openMetricsOperations}>指标运营台</Button>
 						<Button onClick={() => navigate("/ops/audit-evidence")}>审计证据链</Button>
 						<Button onClick={() => navigate("/ops/release-governance")}>发布治理</Button>
-						<Button icon={<RefreshCw className="h-4 w-4" />} loading={loading} onClick={() => void loadData(page.page)}>
+						<Button loading={loading} onClick={() => void loadData(page.page)}>
 							刷新
 						</Button>
 					</Space>
@@ -251,16 +251,16 @@ export default function PlatformEventObservabilityPage() {
 			<div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
 				<PlatformSectionCard title="观测入口">
 					<Space direction="vertical" size={12} className="w-full">
-						<Button block icon={<DatabaseZap className="h-4 w-4" />} onClick={() => navigate("/explore/etl")}>
+						<Button block onClick={() => navigate("/explore/etl")}>
 							ELT 链路
 						</Button>
-						<Button block icon={<Boxes className="h-4 w-4" />} onClick={openMetricsOperations}>
+						<Button block onClick={openMetricsOperations}>
 							指标链路
 						</Button>
-						<Button block icon={<GitBranch className="h-4 w-4" />} onClick={() => navigate("/catalog/lineage/impact")}>
+						<Button block onClick={() => navigate("/catalog/lineage/impact")}>
 							血缘影响
 						</Button>
-						<Button block icon={<RadioTower className="h-4 w-4" />} onClick={() => navigate("/ops/release-governance")}>
+						<Button block onClick={() => navigate("/ops/release-governance")}>
 							发布治理
 						</Button>
 					</Space>

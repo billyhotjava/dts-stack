@@ -1,4 +1,4 @@
-import { BranchesOutlined, PlusOutlined } from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import { Button, Card, Space, Spin, Tag, Typography } from "antd";
 import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
@@ -111,7 +111,7 @@ export default function SemanticExplorePage() {
 					{canModel && (
 						<>
 							<Link to={`/bi/card/new?base=${encodeURIComponent(String(record.id ?? ""))}`}>
-								<Button type="primary" size="small" icon={<PlusOutlined />}>
+								<Button type="primary" size="small">
 									新建卡片
 								</Button>
 							</Link>
@@ -138,11 +138,11 @@ export default function SemanticExplorePage() {
 				actions={
 					<Space>
 						<Link to="/bi/virtual-datasets">
-							<Button icon={<BranchesOutlined />}>虚拟数据集</Button>
+							<Button>虚拟数据集</Button>
 						</Link>
 						{canModel && (
 							<Link to="/bi/card/new">
-								<Button type="primary" icon={<PlusOutlined />}>
+								<Button type="primary">
 									新建语义卡片
 								</Button>
 							</Link>

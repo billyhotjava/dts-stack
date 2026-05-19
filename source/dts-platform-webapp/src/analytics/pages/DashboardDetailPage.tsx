@@ -219,7 +219,6 @@ export default function DashboardDetailPage() {
 								<Button
 									data-testid="analytics-dashboard-share"
 									type="default"
-									icon={<ShareIcon />}
 									loading={shareBusy}
 									onClick={async () => {
 										if (!id) return;
@@ -236,7 +235,7 @@ export default function DashboardDetailPage() {
 									{t(locale, "share.create")}
 								</Button>
 								<Link to={`/bi/dashboards/${encodeURIComponent(String(state.value.id))}/edit`}>
-									<Button type="primary" icon={<EditIcon />}>
+									<Button type="primary">
 										{t(locale, "dashboards.edit")}
 									</Button>
 								</Link>
@@ -251,7 +250,6 @@ export default function DashboardDetailPage() {
 									<Button
 										type="default"
 										size="small"
-										icon={shareCopied ? <CheckIcon /> : <CopyIcon />}
 										onClick={async () => {
 											const link = resolveRouteHref(`/bi/public/dashboard/${encodeURIComponent(shareUuid)}`);
 											const copied = await writeTextToClipboard(link);

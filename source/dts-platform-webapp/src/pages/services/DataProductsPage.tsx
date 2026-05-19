@@ -13,7 +13,7 @@ import {
 } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { PlusOutlined, EditOutlined, DeleteOutlined, FileAddOutlined, EyeOutlined } from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
 import dataProductsService, {
 	type DataProductDetail,
@@ -177,14 +177,14 @@ export default function Page() {
 			width: 260,
 			render: (_, record) => (
 				<Space>
-					<Button size="small" icon={<EyeOutlined />} onClick={() => openDetail(record)}>详情</Button>
-					<Button size="small" icon={<FileAddOutlined />} onClick={() => openVersionModal(record)}>
+					<Button size="small" onClick={() => openDetail(record)}>详情</Button>
+					<Button size="small" onClick={() => openVersionModal(record)}>
 						新增版本
 					</Button>
-					<Button size="small" icon={<EditOutlined />} onClick={() => openModal(record)}>
+					<Button size="small" onClick={() => openModal(record)}>
 						编辑
 					</Button>
-					<Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeProduct(record.id)}>
+					<Button size="small" danger onClick={() => removeProduct(record.id)}>
 						删除
 					</Button>
 				</Space>
@@ -197,7 +197,7 @@ export default function Page() {
 			<PageHeader
 				title="数据服务中心 / 数据产品"
 				actions={
-					<Button type="primary" icon={<PlusOutlined />} onClick={() => openModal()}>
+					<Button type="primary" onClick={() => openModal()}>
 						新增数据产品
 					</Button>
 				}

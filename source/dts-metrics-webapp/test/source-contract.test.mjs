@@ -77,4 +77,46 @@ describe("metrics webapp source migration contract", () => {
 		assert.match(designerPage, /selectedMeasures=\{selectedMeasures\}/);
 		assert.match(designerPage, /selectedDimensions=\{selectedDimensions\}/);
 	});
+
+	it("keeps the metrics menu integrated into the approved workbench and semantic modeling groups", () => {
+		const shellSource = assertFile("src/app/MetricsShell.tsx");
+		const routeLines = shellSource.match(/title: "[^"]+"/g)?.map((line) => line.replace(/^title: "|",?$/g, "")) ?? [];
+		const groupLines = shellSource.match(/group: "[^"]+"/g)?.map((line) => line.replace(/^group: "|",?$/g, "")) ?? [];
+
+		assert.deepEqual(groupLines, ["工作台", "语义建模"]);
+		assert.deepEqual(routeLines, [
+			"指标工作台",
+			"指标资产",
+			"指标包",
+			"迁移与回滚",
+			"运行与告警",
+			"语义建模流程",
+			"主题域映射",
+			"业务对象 Join",
+			"指标公式配置",
+			"DWS/ADS 数据集",
+			"审核发布与血缘",
+			"模型运行监控",
+		]);
+	});
+
+	it("does not ship local fake metrics data in the React app", () => {
+		const shellSource = assertFile("src/app/MetricsShell.tsx");
+		const designerPage = assertFile("src/pages/semantic/SemanticDesignerPage.tsx");
+		const forbidden = [
+			/sampleManifest/,
+			/defaultWorkspace/,
+			/designerFieldPool/,
+			/benchmarkCapabilityRows/,
+			/project-management-core/,
+			/flower-rental/,
+			/local-fallback/,
+			/fallbackMeta/,
+		];
+
+		for (const pattern of forbidden) {
+			assert.doesNotMatch(shellSource, pattern);
+			assert.doesNotMatch(designerPage, pattern);
+		}
+	});
 });

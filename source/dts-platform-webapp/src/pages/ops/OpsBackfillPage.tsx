@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button, Card, DatePicker, Form, Input, Modal, Select, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { PageHeader } from "@/components/page-header";
 import opsService, { type OpsBackfill } from "@/api/services/opsService";
@@ -98,7 +97,7 @@ export default function OpsBackfillPage() {
 			<PageHeader title="补数管理" />
 			<Card
 				extra={
-					<Button type="primary" icon={<PlusOutlined />} onClick={openModal}>
+					<Button type="primary" onClick={openModal}>
 						新建补数
 					</Button>
 				}

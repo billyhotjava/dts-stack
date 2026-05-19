@@ -16,19 +16,7 @@ import {
 	message,
 } from "antd";
 import { CompactTable } from "@/components/table";
-import {
-	AppstoreOutlined,
-	PlusOutlined,
-	ReloadOutlined,
-	EditOutlined,
-	DeleteOutlined,
-	ExperimentOutlined,
-	CheckCircleOutlined,
-	CloseCircleOutlined,
-	MoreOutlined,
-	SearchOutlined,
-	RollbackOutlined,
-} from "@ant-design/icons";
+import { CheckCircleOutlined, CloseCircleOutlined, SearchOutlined, RollbackOutlined } from "@ant-design/icons";
 import RollbackImpactModal, { type RollbackRequest } from "@/components/rollback/RollbackImpactModal";
 import dataSourcesService, {
 	type ConnectionTestResult,
@@ -771,7 +759,6 @@ export default function DataSourcesPage() {
 						<Space size={4} wrap={false}>
 							<Button
 								size="small"
-								icon={<ExperimentOutlined />}
 								loading={testingId === record.id}
 								onClick={() => handleTest(record)}
 							>
@@ -779,7 +766,6 @@ export default function DataSourcesPage() {
 							</Button>
 							<Button
 								size="small"
-								icon={<EditOutlined />}
 								disabled={adminManaged}
 								onClick={() => navigate(`/foundation/data-sources/${encodeURIComponent(String(record.id))}`)}
 							>
@@ -788,7 +774,6 @@ export default function DataSourcesPage() {
 							<Button
 								size="small"
 								danger
-								icon={<DeleteOutlined />}
 								disabled={adminManaged}
 								onClick={() => handleDelete(record)}
 							>
@@ -796,7 +781,7 @@ export default function DataSourcesPage() {
 							</Button>
 							{moreItems.length > 0 && (
 								<Dropdown menu={{ items: moreItems }} trigger={["click"]} placement="bottomRight">
-									<Button size="small" icon={<MoreOutlined />} aria-label="更多操作" />
+									<Button size="small" aria-label="更多操作" >更多操作</Button>
 								</Dropdown>
 							)}
 						</Space>
@@ -812,14 +797,14 @@ export default function DataSourcesPage() {
 			title="数据源连接"
 			extra={
 				<Space>
-					<Button icon={<ReloadOutlined />} onClick={loadList} disabled={loading}>
+					<Button onClick={loadList} disabled={loading}>
 						刷新
 					</Button>
-					<Button icon={<AppstoreOutlined />} onClick={() => navigate("/foundation/connectors")}>
+					<Button onClick={() => navigate("/foundation/connectors")}>
 						连接器目录
 					</Button>
 					<Button onClick={() => navigate("/foundation/jdbc-drivers")}>JDBC 驱动管理</Button>
-					<Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+					<Button type="primary" onClick={openCreate}>
 						新增数据源
 					</Button>
 				</Space>

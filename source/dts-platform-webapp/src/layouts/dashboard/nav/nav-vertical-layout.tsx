@@ -2,7 +2,6 @@ import Logo from "@/components/logo";
 import Brand from "@/components/brand";
 import { NavMini, NavVertical } from "@/components/nav";
 import type { NavProps } from "@/components/nav/types";
-import { Icon } from "@/components/icon";
 import { useSettingActions, useSettings } from "@/store/settingStore";
 import { ThemeLayout, ThemeMode } from "@/types/enum";
 import { Button } from "@/ui/button";
@@ -52,20 +51,15 @@ export function NavVerticalLayout({ data, className }: Props) {
 
 				<Button
 					variant="outline"
-					size="icon"
 					onClick={handleToggle}
 					className={cn(
-						"h-8 w-8 absolute right-0 translate-x-1/2 rounded-full border shadow-sm",
+						"h-8 px-2 absolute right-0 translate-x-1/2 rounded-full border shadow-sm text-xs",
 						isDark || isDarkSidebar
 							? "border-white/10 bg-white text-slate-900 hover:bg-slate-100"
 							: "border-border/70 bg-background text-text-primary hover:bg-accent",
 					)}
 				>
-					{themeLayout === ThemeLayout.Mini ? (
-						<Icon icon="lucide:arrow-right-to-line" size={12} />
-					) : (
-						<Icon icon="lucide:arrow-left-to-line" size={12} />
-					)}
+					{themeLayout === ThemeLayout.Mini ? "展开" : "收起"}
 				</Button>
 			</div>
 

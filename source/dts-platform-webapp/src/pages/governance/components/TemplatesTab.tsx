@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Button, Form, Input, Modal, Select, Space, Tag } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import {
 	listQualityTemplates,
 	createQualityTemplate,
@@ -165,16 +165,15 @@ export default function TemplatesTab({ canManage }: { canManage: boolean }) {
 			width: 220,
 			render: (_, record) => (
 				<Space>
-					<Button size="small" icon={<EyeOutlined />} onClick={() => preview(record)}>
+					<Button size="small" onClick={() => preview(record)}>
 						预览SQL
 					</Button>
-					<Button size="small" icon={<EditOutlined />} onClick={() => openModal(record)} disabled={!canManage}>
+					<Button size="small" onClick={() => openModal(record)} disabled={!canManage}>
 						编辑
 					</Button>
 					<Button
 						size="small"
 						danger
-						icon={<DeleteOutlined />}
 						onClick={() => remove(record.id)}
 						disabled={!canManage || !!record.builtin}
 					>
@@ -188,7 +187,7 @@ export default function TemplatesTab({ canManage }: { canManage: boolean }) {
 	return (
 		<>
 			<div className="mb-3 flex justify-end">
-				<Button type="primary" icon={<PlusOutlined />} onClick={() => openModal()} disabled={!canManage}>
+				<Button type="primary" onClick={() => openModal()} disabled={!canManage}>
 					新增模板
 				</Button>
 			</div>

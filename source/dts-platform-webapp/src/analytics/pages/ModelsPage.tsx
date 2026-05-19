@@ -23,33 +23,6 @@ const ModelCardIcon = () => (
 	</svg>
 );
 
-const PlusIcon = () => (
-	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-		<path d="M5 12h14" />
-		<path d="M12 5v14" />
-	</svg>
-);
-
-const GridIcon = () => (
-	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-		<rect width="7" height="7" x="3" y="3" rx="1" />
-		<rect width="7" height="7" x="14" y="3" rx="1" />
-		<rect width="7" height="7" x="14" y="14" rx="1" />
-		<rect width="7" height="7" x="3" y="14" rx="1" />
-	</svg>
-);
-
-const ListIcon = () => (
-	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-		<line x1="8" x2="21" y1="6" y2="6" />
-		<line x1="8" x2="21" y1="12" y2="12" />
-		<line x1="8" x2="21" y1="18" y2="18" />
-		<line x1="3" x2="3.01" y1="6" y2="6" />
-		<line x1="3" x2="3.01" y1="12" y2="12" />
-		<line x1="3" x2="3.01" y1="18" y2="18" />
-	</svg>
-);
-
 export default function ModelsPage() {
 	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
 	const [state, setState] = useState<LoadState<CardListItem[]>>({ state: "loading" });
@@ -122,7 +95,7 @@ export default function ModelsPage() {
 				title={t(locale, "models.title")}
 				actions={
 					<Link to="/bi/card/new">
-						<Button type="primary" icon={<PlusIcon />}>
+						<Button type="primary">
 							{t(locale, "questions.new")}
 						</Button>
 					</Link>
@@ -144,17 +117,15 @@ export default function ModelsPage() {
 					<Button
 						type={viewMode === "grid" ? "primary" : "default"}
 						size="small"
-						icon={<GridIcon />}
 						onClick={() => setViewMode("grid")}
 						aria-label="Grid view"
-					/>
+					>Grid view</Button>
 					<Button
 						type={viewMode === "list" ? "primary" : "default"}
 						size="small"
-						icon={<ListIcon />}
 						onClick={() => setViewMode("list")}
 						aria-label="List view"
-					/>
+					>List view</Button>
 				</div>
 			</div>
 
@@ -178,7 +149,7 @@ export default function ModelsPage() {
 					description={t(locale, "models.emptyDesc")}
 					actions={
 						<Link to="/bi/card/new">
-							<Button type="primary" icon={<PlusIcon />}>
+							<Button type="primary">
 								{t(locale, "questions.new")}
 							</Button>
 						</Link>

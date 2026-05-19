@@ -1,18 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Alert, Button, Card, Collapse, Input, Layout, Modal, Pagination, Segmented, Select, Space, Spin, Table, Tabs, Tag, Tooltip, Tree } from "antd";
-import {
-	ApartmentOutlined,
-	ArrowRightOutlined,
-	BranchesOutlined,
-	DatabaseOutlined,
-	ProfileOutlined,
-	ReloadOutlined,
-	SafetyCertificateOutlined,
-	SearchOutlined,
-	TableOutlined,
-	WarningOutlined,
-} from "@ant-design/icons";
+import { ApartmentOutlined, ArrowRightOutlined, BranchesOutlined, DatabaseOutlined, SafetyCertificateOutlined, SearchOutlined, TableOutlined, WarningOutlined } from "@ant-design/icons";
 import { EmptyState } from "@/components/empty-state";
 import {
 	getCatalogAssetsV2Diagnostics,
@@ -671,7 +660,6 @@ export default function Page() {
 					</div>
 				</div>
 				<Button
-					icon={<ProfileOutlined />}
 					onClick={() => {
 						setViewMode("table");
 						router.push("/catalog/assets?view=table");
@@ -892,7 +880,6 @@ export default function Page() {
 						extra={
 							<Space wrap>
 								<Button
-									icon={<ProfileOutlined />}
 									onClick={() => {
 										setViewMode("table");
 										router.push("/catalog/assets?view=table");
@@ -900,24 +887,24 @@ export default function Page() {
 								>
 									进入台账
 								</Button>
-								<Button icon={<ReloadOutlined />} onClick={() => void loadDatasets(1, pageState.size)} loading={loading}>
+								<Button onClick={() => void loadDatasets(1, pageState.size)} loading={loading}>
 									刷新资产
 								</Button>
 								{ASSET_PORTAL_V2_ENABLED ? (
-									<Button icon={<DatabaseOutlined />} onClick={() => void syncOpenMetadataAssets()} loading={syncing}>
+									<Button onClick={() => void syncOpenMetadataAssets()} loading={syncing}>
 										同步OpenMetadata
 									</Button>
 								) : null}
-								<Button icon={<SafetyCertificateOutlined />} onClick={() => void loadReconciliation()} loading={reconciliationLoading}>
+								<Button onClick={() => void loadReconciliation()} loading={reconciliationLoading}>
 									刷新核对
 								</Button>
 								{ASSET_PORTAL_V2_ENABLED ? (
-									<Button icon={<WarningOutlined />} onClick={() => void loadDiagnostics()} loading={diagnosticsLoading}>
+									<Button onClick={() => void loadDiagnostics()} loading={diagnosticsLoading}>
 										映射诊断
 									</Button>
 								) : null}
 								{ASSET_PORTAL_V2_ENABLED ? (
-									<Button icon={<WarningOutlined />} onClick={() => void loadResolutionFailures()} loading={resolutionFailuresLoading}>
+									<Button onClick={() => void loadResolutionFailures()} loading={resolutionFailuresLoading}>
 										解析失败
 									</Button>
 								) : null}
@@ -1089,7 +1076,6 @@ export default function Page() {
 								extra: (
 									<Button
 										size="small"
-										icon={<ReloadOutlined />}
 										loading={reconciliationLoading}
 										onClick={(event) => {
 											event.stopPropagation();

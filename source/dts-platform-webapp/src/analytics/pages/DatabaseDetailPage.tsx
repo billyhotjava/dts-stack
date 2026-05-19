@@ -11,36 +11,12 @@ type LoadState<T> =
 	| { state: "loaded"; value: T }
 	| { state: "error"; error: unknown };
 
-// Icons
-const SyncIcon = () => (
-	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-		<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-		<path d="M3 3v5h5" />
-		<path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
-		<path d="M16 16h5v5" />
-	</svg>
-);
-
 const TableIcon = () => (
 	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
 		<path d="M12 3v18" />
 		<rect width="18" height="18" x="3" y="3" rx="2" />
 		<path d="M3 9h18" />
 		<path d="M3 15h18" />
-	</svg>
-);
-
-const PlusIcon = () => (
-	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-		<path d="M5 12h14" />
-		<path d="M12 5v14" />
-	</svg>
-);
-
-const ClearIcon = () => (
-	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-		<path d="M18 6 6 18" />
-		<path d="m6 6 12 12" />
 	</svg>
 );
 
@@ -123,7 +99,6 @@ export default function DatabaseDetailPage() {
 				actions={
 					<Button
 						type="default"
-						icon={<SyncIcon />}
 						loading={syncing}
 						onClick={syncSchema}
 					>
@@ -144,7 +119,7 @@ export default function DatabaseDetailPage() {
 							/>
 						</div>
 						{q.trim() && (
-							<Button type="text" icon={<ClearIcon />} onClick={() => setQ("")}>
+							<Button type="text" onClick={() => setQ("")}>
 								{t(locale, "builder.remove")}
 							</Button>
 						)}
@@ -169,7 +144,7 @@ export default function DatabaseDetailPage() {
 					title={t(locale, "common.empty")}
 					description={t(locale, "data.metaEmpty")}
 					actions={
-						<Button type="primary" icon={<SyncIcon />} loading={syncing} onClick={syncSchema}>
+						<Button type="primary" loading={syncing} onClick={syncSchema}>
 							{syncing ? t(locale, "data.syncing") : t(locale, "data.sync")}
 						</Button>
 					}
@@ -207,7 +182,7 @@ export default function DatabaseDetailPage() {
 												</div>
 												{tb?.id && (
 													<Link to="/bi/card/new">
-														<Button type="text" icon={<PlusIcon />}>
+														<Button type="text">
 															{t(locale, "questions.new")}
 														</Button>
 													</Link>

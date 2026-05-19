@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Select, Space, Tag } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { EyeOutlined } from "@ant-design/icons";
 import { CheckCircle2, RefreshCw, Shield, Workflow } from "lucide-react";
 import { PlatformSummaryCards } from "@/components/console-page";
 import { EmptyState } from "@/components/empty-state";
@@ -139,7 +138,7 @@ export default function Page() {
 					return <Button onClick={() => push("/governance/quality-rules")}>查看质量</Button>;
 				}
 				if (record.type === "SCHEMA_DRIFT") {
-					return <Button icon={<EyeOutlined />} onClick={() => push("/catalog/assets")}>查看详情</Button>;
+					return <Button onClick={() => push("/catalog/assets")}>查看详情</Button>;
 				}
 				return "-";
 			},

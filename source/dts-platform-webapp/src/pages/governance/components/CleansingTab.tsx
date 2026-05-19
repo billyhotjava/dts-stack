@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Button, Form, Input, InputNumber, Modal, Space, Tag } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import {
 	listCleansingFunctions,
 	createCleansingFunction,
@@ -113,13 +113,12 @@ export default function CleansingTab({ canManage }: { canManage: boolean }) {
 			width: 160,
 			render: (_, record) => (
 				<Space>
-					<Button size="small" icon={<EditOutlined />} onClick={() => openModal(record)} disabled={!canManage}>
+					<Button size="small" onClick={() => openModal(record)} disabled={!canManage}>
 						编辑
 					</Button>
 					<Button
 						size="small"
 						danger
-						icon={<DeleteOutlined />}
 						onClick={() => remove(record.id)}
 						disabled={!canManage || !!record.builtin}
 					>
@@ -133,7 +132,7 @@ export default function CleansingTab({ canManage }: { canManage: boolean }) {
 	return (
 		<>
 			<div className="mb-3 flex justify-end">
-				<Button type="primary" icon={<PlusOutlined />} onClick={() => openModal()} disabled={!canManage}>
+				<Button type="primary" onClick={() => openModal()} disabled={!canManage}>
 					新增清洗函数
 				</Button>
 			</div>

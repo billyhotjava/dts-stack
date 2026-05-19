@@ -1,4 +1,4 @@
-import { CheckCircleOutlined, CloseCircleOutlined, DownloadOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, CloseCircleOutlined, } from "@ant-design/icons";
 import { Alert, Button, Card, Col, Radio, Row, Select, Spin, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -345,7 +345,7 @@ export default function QualityReportTab() {
 					value={periodDays}
 					onChange={(e) => setPeriodDays(e.target.value)}
 				/>
-				<Button icon={<DownloadOutlined />} disabled={!datasetId} onClick={handleExport}>
+				<Button disabled={!datasetId} onClick={handleExport}>
 					导出报告
 				</Button>
 			</div>

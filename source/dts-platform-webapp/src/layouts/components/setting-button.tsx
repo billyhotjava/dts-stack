@@ -78,8 +78,8 @@ export default function SettingButton() {
 	return (
 		<Sheet modal={false}>
 			<SheetTrigger asChild>
-				<Button variant="ghost" size="icon" className="rounded-full animate-slow-spin">
-					<Icon icon="local:ic-setting" size={24} />
+				<Button variant="ghost" className="rounded-full px-3">
+					{t("sys.settings.title")}
 				</Button>
 			</SheetTrigger>
 			<SheetContent style={sheetContentBgStyle} className="gap-0" onOpenAutoFocus={(e) => e.preventDefault()}>
@@ -351,17 +351,7 @@ export default function SettingButton() {
 							className="flex items-center justify-center"
 							aria-label={isFullscreen ? t("sys.settings.exitFullscreen") : t("sys.settings.fullscreen")}
 						>
-							{isFullscreen ? (
-								<>
-									<Icon icon="local:ic-settings-exit-fullscreen" />
-									<span className="ml-2">{t("sys.settings.exitFullscreen")}</span>
-								</>
-							) : (
-								<>
-									<Icon icon="local:ic-settings-fullscreen" />
-									<span className="ml-2">{t("sys.settings.fullscreen")}</span>
-								</>
-							)}
+							{isFullscreen ? t("sys.settings.exitFullscreen") : t("sys.settings.fullscreen")}
 						</div>
 					</Button>
 				</SheetFooter>

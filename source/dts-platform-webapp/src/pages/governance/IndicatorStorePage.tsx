@@ -11,11 +11,7 @@ import {
 	Tag,
 	Typography,
 } from "antd";
-import {
-	SearchOutlined,
-	StarOutlined,
-	StarFilled,
-} from "@ant-design/icons";
+import { SearchOutlined, } from "@ant-design/icons";
 import {
 	listIndicators,
 	listSubscriptions,
@@ -158,9 +154,8 @@ export default function IndicatorStorePage() {
 									extra={
 										<Button
 											type="text"
-											icon={subscribed ? <StarFilled style={{ color: "#faad14" }} /> : <StarOutlined />}
 											onClick={() => subscribed ? handleUnsubscribe(ind.id) : handleSubscribe(ind.id)}
-										/>
+										>操作</Button>
 									}
 								>
 									{ind.expressionSql && (

@@ -6,7 +6,7 @@ import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Button, Card, Input, Modal, Select, Space, Spin, Tag, message } from "antd";
 import { CompactTable } from "@/components/table";
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, UploadOutlined, FolderOutlined } from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import CollectionTree, { collectDescendantIds } from "../components/CollectionTree";
@@ -188,7 +188,7 @@ function BatchImportCardsModal({
 							style={{ display: 'none' }}
 							onChange={(e) => handleFilesSelected(e.target.files)}
 						/>
-						<Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>
+						<Button onClick={() => fileInputRef.current?.click()}>
 							选择 SQL 文件（可多选）
 						</Button>
 					</div>
@@ -369,15 +369,14 @@ export default function CardsPage() {
 			render: (_, record) => (
 				<Space size={4}>
 					<Link to={`/bi/questions/${record.id}`}>
-						<Button type="link" size="small" icon={<EyeOutlined />}>查看</Button>
+						<Button type="link" size="small">查看</Button>
 					</Link>
 					<Link to={`/bi/questions/${record.id}/edit`}>
-						<Button type="link" size="small" icon={<EditOutlined />}>编辑</Button>
+						<Button type="link" size="small">编辑</Button>
 					</Link>
 					<Button
 						type="link"
 						size="small"
-						icon={<FolderOutlined />}
 						onClick={() => {
 							setMoveCardIds([record.id]);
 							setMoveModalOpen(true);
@@ -389,7 +388,6 @@ export default function CardsPage() {
 						type="link"
 						size="small"
 						danger
-						icon={<DeleteOutlined />}
 						onClick={() => handleDelete(record.id, record.name || "")}
 					>
 						删除
@@ -405,11 +403,11 @@ export default function CardsPage() {
 				title={t(locale, "questions.title")}
 				actions={
 					<Space>
-						<Button icon={<UploadOutlined />} onClick={() => setBatchImportOpen(true)}>
+						<Button onClick={() => setBatchImportOpen(true)}>
 							批量导入 SQL
 						</Button>
 						<Link to="/bi/card/new">
-							<Button type="primary" icon={<PlusOutlined />}>
+							<Button type="primary">
 								{t(locale, "questions.new")}
 							</Button>
 						</Link>
@@ -461,7 +459,6 @@ export default function CardsPage() {
 												<Button
 													size="small"
 													danger
-													icon={<DeleteOutlined />}
 													loading={batchDeleting}
 													onClick={handleBatchDelete}
 												>
@@ -469,7 +466,6 @@ export default function CardsPage() {
 												</Button>
 												<Button
 													size="small"
-													icon={<FolderOutlined />}
 													onClick={() => {
 														setMoveCardIds(selectedRowKeys.map(Number));
 														setMoveModalOpen(true);

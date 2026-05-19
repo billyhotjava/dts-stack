@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { Button, Card, Popconfirm, Space, Tag } from "antd";
 import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { PlusOutlined, DeploymentUnitOutlined, EditOutlined } from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { useMenuStore } from "@/store/menuStore";
@@ -99,7 +99,7 @@ export default function SemanticVirtualDatasetsPage() {
 			render: (_value, record) => (
 				<Space>
 					<Link to={`/bi/virtual-datasets/${encodeURIComponent(String(record.id ?? ""))}`}>
-						<Button size="small" icon={<EditOutlined />}>
+						<Button size="small">
 							编辑
 						</Button>
 					</Link>
@@ -123,7 +123,7 @@ export default function SemanticVirtualDatasetsPage() {
 								}
 							}}
 						>
-							<Button size="small" icon={<DeploymentUnitOutlined />}>
+							<Button size="small">
 								提升
 							</Button>
 						</Popconfirm>
@@ -146,7 +146,7 @@ export default function SemanticVirtualDatasetsPage() {
 				actions={
 					canModel ? (
 						<Link to="/bi/virtual-datasets/new">
-							<Button type="primary" icon={<PlusOutlined />}>
+							<Button type="primary">
 								新建虚拟数据集
 							</Button>
 						</Link>

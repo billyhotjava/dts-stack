@@ -17,7 +17,7 @@ import {
 	Typography,
 } from "antd";
 import { CompactTable } from "@/components/table";
-import { DeleteOutlined, InboxOutlined, PlusOutlined } from "@ant-design/icons";
+import { InboxOutlined, } from "@ant-design/icons";
 import { Upload } from "@/components/upload";
 import { toast } from "sonner";
 import type { FormInstance } from "antd/es/form";
@@ -490,13 +490,12 @@ export default function FileUnifiedStep({
 										type="text"
 										danger
 										size="small"
-										icon={<DeleteOutlined />}
 										onClick={() => {
 											const cols = [...(fileUploadResult.columns || [])];
 											cols.splice(index, 1);
 											setFileUploadResult({ ...fileUploadResult, columns: cols });
 										}}
-									/>
+									>删除</Button>
 								),
 							},
 						]}
@@ -516,7 +515,6 @@ export default function FileUnifiedStep({
 					<Button
 						type="dashed"
 						size="small"
-						icon={<PlusOutlined />}
 						className="mt-2"
 						onClick={() => {
 							const cols = [...(fileUploadResult.columns || [])];

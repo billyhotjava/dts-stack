@@ -16,7 +16,7 @@ import {
 } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import {
 	createComplianceBatch,
 	deleteComplianceBatch,
@@ -302,7 +302,7 @@ export default function ComplianceCenterPanel() {
 							onConfirm={() => handleDeleteBatch(record)}
 							disabled={!canManage}
 						>
-							<Button size="small" danger icon={<DeleteOutlined />} disabled={!canManage} loading={busy}>
+							<Button size="small" danger disabled={!canManage} loading={busy}>
 								删除
 							</Button>
 						</Popconfirm>
@@ -336,7 +336,7 @@ export default function ComplianceCenterPanel() {
 			title: "操作",
 			width: 120,
 			render: (_, item) => (
-				<Button size="small" icon={<EditOutlined />} disabled={!canManage} onClick={() => openItemEdit(item)}>
+				<Button size="small" disabled={!canManage} onClick={() => openItemEdit(item)}>
 					更新
 				</Button>
 			),
@@ -360,10 +360,10 @@ export default function ComplianceCenterPanel() {
 						]}
 						style={{ width: 140 }}
 					/>
-					<Button icon={<ReloadOutlined />} onClick={() => void loadBatches()}>
+					<Button onClick={() => void loadBatches()}>
 						刷新
 					</Button>
-					<Button type="primary" icon={<PlusOutlined />} disabled={!canManage} onClick={openCreate}>
+					<Button type="primary" disabled={!canManage} onClick={openCreate}>
 						新建批次
 					</Button>
 				</Space>

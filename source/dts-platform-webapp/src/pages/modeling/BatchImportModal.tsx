@@ -13,7 +13,7 @@ import {
 	Tag,
 } from "antd";
 import { CompactTable } from "@/components/table";
-import { InboxOutlined, UploadOutlined, DownloadOutlined } from "@ant-design/icons";
+import { InboxOutlined, } from "@ant-design/icons";
 import { Upload } from "@/components/upload";
 import type { UploadFile } from "antd/es/upload/interface";
 import type { ColumnsType } from "antd/es/table";
@@ -419,7 +419,6 @@ const BatchImportModal = ({
 								</Upload>
 								<Space style={{ marginTop: 16 }}>
 									<Button
-										icon={<DownloadOutlined />}
 										onClick={downloadTemplate}
 									>
 										下载 TSV 模板
@@ -456,7 +455,7 @@ const BatchImportModal = ({
 									}}
 									showUploadList={false}
 								>
-									<Button icon={<UploadOutlined />}>选择 SQL 文件</Button>
+									<Button>选择 SQL 文件</Button>
 								</Upload>
 								{fileRows.length > 0 && (
 									<CompactTable

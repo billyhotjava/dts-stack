@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Card, Form, Input, Modal, Space, Tag, Typography, message } from "antd";
 import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, InboxOutlined } from "@ant-design/icons";
+import { InboxOutlined } from "@ant-design/icons";
 import { Upload } from "@/components/upload";
 type UploadRequestOption = Parameters<NonNullable<import("antd").UploadProps["customRequest"]>>[0];
 import jdbcDriversService, { type InfraJdbcDriver, type JdbcDriverUpdatePayload } from "@/api/services/jdbcDriversService";
@@ -156,10 +156,10 @@ export default function JdbcDriversPage() {
 				fixed: "right",
 				render: (_: any, record: InfraJdbcDriver) => (
 					<Space>
-						<Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
+						<Button size="small" onClick={() => openEdit(record)}>
 							编辑
 						</Button>
-						<Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
+						<Button size="small" danger onClick={() => handleDelete(record)}>
 							删除
 						</Button>
 					</Space>
@@ -179,10 +179,10 @@ export default function JdbcDriversPage() {
 			title="JDBC 驱动管理"
 			extra={
 				<Space>
-					<Button icon={<ReloadOutlined />} onClick={loadList} disabled={loading}>
+					<Button onClick={loadList} disabled={loading}>
 						刷新
 					</Button>
-					<Button type="primary" icon={<PlusOutlined />} onClick={openUpload}>
+					<Button type="primary" onClick={openUpload}>
 						上传驱动
 					</Button>
 				</Space>

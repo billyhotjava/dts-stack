@@ -6,7 +6,6 @@ import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Button, Card, Input, Space, Spin, Tag } from "antd";
 import { CompactTable } from "@/components/table";
-import { PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 
@@ -174,7 +173,7 @@ export default function CollectionsPage() {
 									style={{ width: 200 }}
 								/>
 								<Link to="/bi/card/new">
-									<Button type="primary" size="small" icon={<PlusOutlined />}>
+									<Button type="primary" size="small">
 										{t(locale, "questions.new")}
 									</Button>
 								</Link>
@@ -208,7 +207,7 @@ export default function CollectionsPage() {
 									style={{ width: 200 }}
 								/>
 								<Link to="/bi/dashboards/new">
-									<Button type="primary" size="small" icon={<PlusOutlined />}>
+									<Button type="primary" size="small">
 										{t(locale, "dashboards.new")}
 									</Button>
 								</Link>

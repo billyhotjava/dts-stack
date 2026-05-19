@@ -16,7 +16,7 @@ import {
 } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { ExclamationCircleOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import { ExclamationCircleOutlined } from "@ant-design/icons";
 import reportsService, { type ReportLink } from "@/api/services/reportsService";
 import {
 	archiveQueryDataset,
@@ -381,7 +381,7 @@ export function QueryDatasetManager() {
 							{ label: "ARCHIVED", value: "ARCHIVED" },
 						]}
 					/>
-					<Button icon={<ReloadOutlined />} onClick={() => void loadDatasets()}>
+					<Button onClick={() => void loadDatasets()}>
 						刷新数据集
 					</Button>
 				</Space>
@@ -411,7 +411,6 @@ export function QueryDatasetManager() {
 							<Space>
 								<Button
 									type="primary"
-									icon={<PlusOutlined />}
 									onClick={openCreateVersion}
 								>
 									新建版本

@@ -16,15 +16,7 @@ import {
 } from "antd";
 import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import {
-	DeleteOutlined,
-	EditOutlined,
-	ExclamationCircleOutlined,
-	LinkOutlined,
-	PlusOutlined,
-	ReloadOutlined,
-	SearchOutlined,
-} from "@ant-design/icons";
+import { ExclamationCircleOutlined, SearchOutlined } from "@ant-design/icons";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import reportsService, { type ReportLink, type ReportLinkUpsertRequest } from "@/api/services/reportsService";
@@ -447,13 +439,13 @@ export default function Page({ embedded }: Props) {
 				render: (_value, record) => (
 					<Space>
 						<Tooltip title="打开">
-							<Button type="link" icon={<LinkOutlined />} onClick={() => handleOpen(record)} />
+							<Button type="link" onClick={() => handleOpen(record)} >打开</Button>
 						</Tooltip>
 						<Tooltip title="编辑">
-							<Button type="link" icon={<EditOutlined />} onClick={() => openEdit(record)} />
+							<Button type="link" onClick={() => openEdit(record)} >编辑</Button>
 						</Tooltip>
 						<Tooltip title="停用">
-							<Button type="link" danger icon={<DeleteOutlined />} onClick={() => handleDisable(record)} />
+							<Button type="link" danger onClick={() => handleDisable(record)} >删除</Button>
 						</Tooltip>
 						{hasPurgePermission ? (
 							<Tooltip title="物理删除">
@@ -481,10 +473,10 @@ export default function Page({ embedded }: Props) {
 					title="数据可视化 / 外部 BI 集成"
 					actions={
 						<div className="flex items-center gap-2">
-							<Button icon={<PlusOutlined />} type="primary" onClick={openCreate}>
+							<Button type="primary" onClick={openCreate}>
 								新增 BI 链接
 							</Button>
-							<Button icon={<ReloadOutlined />} onClick={() => fetchList()}>
+							<Button onClick={() => fetchList()}>
 								刷新
 							</Button>
 						</div>
@@ -494,10 +486,10 @@ export default function Page({ embedded }: Props) {
 			{embedded && (
 				<div className="flex items-center justify-between">
 					<div className="flex items-center gap-2">
-						<Button icon={<PlusOutlined />} type="primary" onClick={openCreate}>
+						<Button type="primary" onClick={openCreate}>
 							新增 BI 链接
 						</Button>
-						<Button icon={<ReloadOutlined />} onClick={() => fetchList()}>
+						<Button onClick={() => fetchList()}>
 							刷新
 						</Button>
 					</div>

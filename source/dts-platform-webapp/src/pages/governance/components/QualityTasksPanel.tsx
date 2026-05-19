@@ -16,7 +16,7 @@ import {
 } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { DeleteOutlined, EditOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import {
 	createQualityTask,
 	deleteQualityTask,
@@ -334,14 +334,13 @@ export default function QualityTasksPanel() {
 					<Space wrap>
 						<Button
 							size="small"
-							icon={<PlayCircleOutlined />}
 							disabled={!canManage}
 							loading={busy}
 							onClick={() => handleTrigger(record)}
 						>
 							手工触发
 						</Button>
-						<Button size="small" icon={<EditOutlined />} disabled={!canManage} onClick={() => openModal(record)}>
+						<Button size="small" disabled={!canManage} onClick={() => openModal(record)}>
 							编辑
 						</Button>
 						<Switch
@@ -357,7 +356,7 @@ export default function QualityTasksPanel() {
 							onConfirm={() => handleDelete(record)}
 							disabled={!canManage}
 						>
-							<Button size="small" danger icon={<DeleteOutlined />} disabled={!canManage}>
+							<Button size="small" danger disabled={!canManage}>
 								删除
 							</Button>
 						</Popconfirm>
@@ -372,10 +371,10 @@ export default function QualityTasksPanel() {
 			title="质量巡检计划"
 			extra={
 				<Space>
-					<Button icon={<ReloadOutlined />} onClick={() => void loadTasks()}>
+					<Button onClick={() => void loadTasks()}>
 						刷新
 					</Button>
-					<Button type="primary" icon={<PlusOutlined />} disabled={!canManage} onClick={() => openModal()}>
+					<Button type="primary" disabled={!canManage} onClick={() => openModal()}>
 						新增计划
 					</Button>
 				</Space>

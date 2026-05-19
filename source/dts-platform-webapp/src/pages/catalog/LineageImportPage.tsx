@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SyncOutlined, UploadOutlined } from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import { Alert, Button, Card, Space, Upload } from "antd";
 import type { UploadProps } from "antd";
 import { toast } from "sonner";
@@ -43,11 +43,11 @@ export default function LineageImportPage() {
 			</Card>
 			<Card title="血缘来源同步">
 				<Space wrap>
-					<Button icon={<SyncOutlined />} loading={syncingAddax} onClick={handleSyncAddaxLineage}>
+					<Button loading={syncingAddax} onClick={handleSyncAddaxLineage}>
 						同步 Addax 血缘
 					</Button>
 					<Upload {...dbtUploadProps}>
-						<Button icon={<UploadOutlined />}>导入 dbt manifest</Button>
+						<Button>导入 dbt manifest</Button>
 					</Upload>
 				</Space>
 			</Card>

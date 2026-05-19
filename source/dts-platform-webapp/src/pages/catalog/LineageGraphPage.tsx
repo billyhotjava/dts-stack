@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { DownloadOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Space, Switch, Typography } from "antd";
 import { toast } from "sonner";
 import { LineageGraph } from "@/components/lineage";
@@ -209,7 +208,7 @@ ${svgNodes}
 
 	return (
 		<div className="space-y-4">
-			<Card title="血缘与影响分析 / 血缘图谱" extra={<Space><Button icon={<DownloadOutlined />} onClick={handleExportSvg} disabled={!nodes.length}>导出SVG</Button><Button icon={<DownloadOutlined />} onClick={handleExportPng} disabled={!nodes.length}>导出PNG</Button></Space>}>
+			<Card title="血缘与影响分析 / 血缘图谱" extra={<Space><Button onClick={handleExportSvg} disabled={!nodes.length}>导出SVG</Button><Button onClick={handleExportPng} disabled={!nodes.length}>导出PNG</Button></Space>}>
 				<div className="mb-3"><LineageSectionNav section="graph" /></div>
 				<LineageDataFilters
 					datasetOptions={datasetOptions}

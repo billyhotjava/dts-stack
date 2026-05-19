@@ -1,5 +1,4 @@
 import type { Key } from "react";
-import { DeleteOutlined } from "@ant-design/icons";
 import { Button, Input, Skeleton, Tree, Typography } from "antd";
 import { EmptyState } from "@/components/empty-state";
 import type { ModelFileBrowserTreeNode } from "../modelFileBrowserTree.helpers";
@@ -71,7 +70,7 @@ export default function ModelFileBrowser({
 					<Button size="small" onClick={onSelectAllCurrent}>
 						全选当前结果
 					</Button>
-					<Button size="small" danger icon={<DeleteOutlined />} disabled={batchDeleteDisabled} onClick={onBatchDelete}>
+					<Button size="small" danger disabled={batchDeleteDisabled} onClick={onBatchDelete}>
 						删除所选
 					</Button>
 				</div>

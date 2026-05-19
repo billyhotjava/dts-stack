@@ -10,13 +10,7 @@ import {
 	Typography,
 } from "antd";
 import { CompactTable } from "@/components/table";
-import {
-	WarningOutlined,
-	ReloadOutlined,
-	DownloadOutlined,
-	CheckCircleOutlined,
-	DeleteOutlined,
-} from "@ant-design/icons";
+import { WarningOutlined, CheckCircleOutlined, } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { ingestionTaskAPI, type StagingPage } from "@/api/ingestion";
 
@@ -327,21 +321,18 @@ export default function StagingDataEditor({ taskId, onClose }: StagingDataEditor
 				</Space>
 				<Space>
 					<Button
-						icon={<ReloadOutlined />}
 						loading={rechecking}
 						onClick={handleReCheck}
 					>
 						重新检查
 					</Button>
 					<Button
-						icon={<DownloadOutlined />}
 						onClick={handleExportErrors}
 					>
 						导出错误报告
 					</Button>
 					<Button
 						type="primary"
-						icon={<CheckCircleOutlined />}
 						disabled={totalErrorCount > 0}
 						loading={submitting}
 						onClick={handleSubmit}
@@ -350,7 +341,6 @@ export default function StagingDataEditor({ taskId, onClose }: StagingDataEditor
 					</Button>
 					<Button
 						danger
-						icon={<DeleteOutlined />}
 						onClick={handleDrop}
 					>
 						丢弃暂存

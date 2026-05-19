@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, Space, Tag, Timeline, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
-import { CheckCircle2, FileSearch, RefreshCw, ShieldCheck, Sigma } from "lucide-react";
+import { CheckCircle2, FileSearch, ShieldCheck, Sigma } from "lucide-react";
 import { useNavigate } from "react-router";
 import {
 	PlatformPageHero,
@@ -168,7 +168,7 @@ export default function AuditEvidencePage() {
 					<Space wrap>
 						<Button onClick={() => navigate("/ops/events")}>事件观测</Button>
 						<Button onClick={() => navigate("/ops/release-governance")}>发布治理</Button>
-						<Button icon={<RefreshCw className="h-4 w-4" />} loading={loading} onClick={() => void loadData()}>
+						<Button loading={loading} onClick={() => void loadData()}>
 							刷新
 						</Button>
 					</Space>

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useBoolean } from "react-use";
-import { Icon } from "@/components/icon";
 import useLocale from "@/locales/use-locale";
 import { useRouter } from "@/routes/hooks";
 import { Badge } from "@/ui/badge";
@@ -112,11 +111,9 @@ const SearchBar = () => {
 				onClick={() => setOpen(true)}
 			>
 				<div className="flex items-center justify-center gap-3">
-					<Icon icon="local:ic-search" size="20" />
 					<span className="hidden text-sm font-medium text-text-secondary xl:inline">搜索模块与页面</span>
 					<kbd className="flex items-center justify-center rounded-full bg-primary px-2 py-1 text-xs font-semibold text-common-white">
-						<Icon icon="qlementine-icons:key-cmd-16" />
-						<span>K</span>
+						Ctrl K
 					</kbd>
 				</div>
 			</Button>

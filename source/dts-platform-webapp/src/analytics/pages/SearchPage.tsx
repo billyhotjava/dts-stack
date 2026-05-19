@@ -12,14 +12,6 @@ type LoadState<T> =
 	| { state: "loaded"; value: T }
 	| { state: "error"; error: unknown };
 
-// Icons
-const SearchIcon = () => (
-	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-		<circle cx="11" cy="11" r="8" />
-		<path d="m21 21-4.35-4.35" />
-	</svg>
-);
-
 const DashboardIcon = () => (
 	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
 		<rect width="7" height="9" x="3" y="3" rx="1" />
@@ -123,7 +115,7 @@ export default function SearchPage() {
 								onSearch={() => {}}
 							/>
 						</div>
-						<Button type="primary" htmlType="submit" icon={<SearchIcon />}>
+						<Button type="primary" htmlType="submit">
 							{t(locale, "search.button")}
 						</Button>
 					</div>

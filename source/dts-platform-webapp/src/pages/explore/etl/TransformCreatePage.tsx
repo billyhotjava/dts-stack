@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Button, Card, Divider, Form, Input, InputNumber, Modal, Progress, Select, Space, Steps, Tag, Typography } from "antd";
 import { CompactTable } from "@/components/table";
-import { SaveOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { createIngestionTask, listSqlModels } from "@/api/platformApi";
@@ -1680,7 +1679,6 @@ export default function TransformCreatePage() {
 							重置表单
 						</Button>
 						<Button
-							icon={<SaveOutlined />}
 							loading={savingDraft}
 							onClick={handleSaveDraft}
 							disabled={isEdit || !!submittedTaskId}

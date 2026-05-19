@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Progress, Space, Tag, Timeline, Typography } from "antd";
 import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { CheckCircle2, ClipboardCheck, DatabaseZap, RadioTower, RefreshCw, ShieldCheck } from "lucide-react";
+import { ClipboardCheck, DatabaseZap, RadioTower, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router";
 import {
 	PlatformPageHero,
@@ -266,7 +266,7 @@ export default function ReleaseGovernancePage() {
 					<Space wrap>
 						<Button onClick={() => navigate("/ops/audit-evidence")}>审计证据链</Button>
 						<Button onClick={() => navigate("/ops/events")}>事件观测</Button>
-						<Button icon={<RefreshCw className="h-4 w-4" />} loading={loading} onClick={() => void loadData()}>
+						<Button loading={loading} onClick={() => void loadData()}>
 							刷新
 						</Button>
 					</Space>
@@ -311,13 +311,13 @@ export default function ReleaseGovernancePage() {
 
 				<PlatformSectionCard title="证据入口">
 					<Space direction="vertical" size={12} className="w-full">
-						<Button block icon={<DatabaseZap className="h-4 w-4" />} onClick={() => navigate("/explore/etl")}>
+						<Button block onClick={() => navigate("/explore/etl")}>
 							ELT 控制台
 						</Button>
-						<Button block icon={<CheckCircle2 className="h-4 w-4" />} onClick={() => openPlatformOrMetricsPath(navigate, "/metrics/operations")}>
+						<Button block onClick={() => openPlatformOrMetricsPath(navigate, "/metrics/operations")}>
 							指标运营台
 						</Button>
-						<Button block icon={<RadioTower className="h-4 w-4" />} onClick={() => navigate("/ops/events")}>
+						<Button block onClick={() => navigate("/ops/events")}>
 							事件观测
 						</Button>
 					</Space>

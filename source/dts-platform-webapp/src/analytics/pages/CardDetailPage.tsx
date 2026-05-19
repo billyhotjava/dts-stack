@@ -70,36 +70,6 @@ export default function CardDetailPage() {
 		};
 	}, [id]);
 
-	const ShareIcon = () => (
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-			<circle cx="18" cy="5" r="3" />
-			<circle cx="6" cy="12" r="3" />
-			<circle cx="18" cy="19" r="3" />
-			<line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-			<line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-		</svg>
-	);
-
-	const EditIcon = () => (
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-			<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-			<path d="m15 5 4 4" />
-		</svg>
-	);
-
-	const CopyIcon = () => (
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-			<rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-			<path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-		</svg>
-	);
-
-	const CheckIcon = () => (
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-			<polyline points="20 6 9 17 4 12" />
-		</svg>
-	);
-
 	const explain = async () => {
 		if (!id) return;
 		setExplainState({ state: "loading" });
@@ -127,7 +97,6 @@ export default function CardDetailPage() {
 							<>
 								<Button
 									type="default"
-									icon={<ShareIcon />}
 									loading={shareBusy}
 									onClick={async () => {
 										if (!id) return;
@@ -146,7 +115,7 @@ export default function CardDetailPage() {
 								<Link to={isSemanticCard(state.value)
 									? `/bi/card/${encodeURIComponent(String(state.value.id))}/edit`
 									: `/bi/questions/${encodeURIComponent(String(state.value.id))}/edit`}>
-									<Button type="primary" icon={<EditIcon />}>
+									<Button type="primary">
 										{t(locale, "questions.edit")}
 									</Button>
 								</Link>
@@ -164,7 +133,6 @@ export default function CardDetailPage() {
 									<Button
 										type="default"
 										size="small"
-										icon={shareCopied ? <CheckIcon /> : <CopyIcon />}
 										onClick={async () => {
 											const link = resolveRouteHref(`/bi/public/card/${encodeURIComponent(shareUuid)}`);
 											const copied = await writeTextToClipboard(link);

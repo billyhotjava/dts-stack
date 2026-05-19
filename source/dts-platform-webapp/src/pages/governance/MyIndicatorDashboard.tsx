@@ -9,11 +9,7 @@ import {
 	Tag,
 	Typography,
 } from "antd";
-import {
-	ArrowUpOutlined,
-	ArrowDownOutlined,
-	DeleteOutlined,
-} from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import {
 	getIndicator,
 	listSubscriptions,
@@ -144,24 +140,21 @@ export default function MyIndicatorDashboard() {
 											<Button
 												type="text"
 												size="small"
-												icon={<ArrowUpOutlined />}
 												disabled={index === 0}
 												onClick={() => handleMove(index, "up")}
-											/>
+											>操作</Button>
 											<Button
 												type="text"
 												size="small"
-												icon={<ArrowDownOutlined />}
 												disabled={index === items.length - 1}
 												onClick={() => handleMove(index, "down")}
-											/>
+											>操作</Button>
 											<Button
 												type="text"
 												size="small"
 												danger
-												icon={<DeleteOutlined />}
 												onClick={() => handleUnsubscribe(item.sub.id)}
-											/>
+											>删除</Button>
 										</Space>
 									}
 								>

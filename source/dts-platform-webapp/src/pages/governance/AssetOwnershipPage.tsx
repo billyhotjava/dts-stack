@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button, Card, Input, Modal, Select, Space, Tag } from "antd";
 import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
-import { EditOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { listAssetOwnership, updateAssetOwnership, batchUpdateAssetOwnership } from "@/api/platformApi";
 import { getOrgTree } from "@/api/services/directoryService";
@@ -117,7 +116,7 @@ export default function AssetOwnershipPage() {
 		{ title: "分配者", dataIndex: "assignedBy", key: "assignedBy", width: 120 },
 		{ title: "操作", dataIndex: "actions", key: "action", width: 160, fixed: "right",
 			render: (_: any, record: AssetOwnership) => (
-				<Button type="link" size="small" icon={<EditOutlined />} onClick={() => {
+				<Button type="link" size="small" onClick={() => {
 					setEditDept(record.ownerDeptCode);
 					setEditModal({ open: true, record });
 				}}>编辑</Button>

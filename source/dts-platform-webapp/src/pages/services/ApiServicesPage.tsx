@@ -12,7 +12,7 @@ import {
 } from "antd";
 import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { PlusOutlined, EditOutlined, DeleteOutlined, ExperimentOutlined } from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
 import apiServicesService, {
 	type ApiServiceSummary,
@@ -146,13 +146,13 @@ export default function Page() {
 			fixed: "right",
 			render: (_, record) => (
 				<Space>
-					<Button size="small" icon={<ExperimentOutlined />} onClick={() => tryInvoke(record.id)}>
+					<Button size="small" onClick={() => tryInvoke(record.id)}>
 						测试
 					</Button>
-					<Button size="small" icon={<EditOutlined />} onClick={() => openModal(record)}>
+					<Button size="small" onClick={() => openModal(record)}>
 						编辑
 					</Button>
-					<Button size="small" danger icon={<DeleteOutlined />} onClick={() => disableService(record.id)}>
+					<Button size="small" danger onClick={() => disableService(record.id)}>
 						下线
 					</Button>
 				</Space>
@@ -171,7 +171,7 @@ export default function Page() {
 			<PageHeader
 				title="数据服务中心 / 数据 API 管理"
 				actions={
-					<Button type="primary" icon={<PlusOutlined />} onClick={() => openModal()}>
+					<Button type="primary" onClick={() => openModal()}>
 						新增 API
 					</Button>
 				}

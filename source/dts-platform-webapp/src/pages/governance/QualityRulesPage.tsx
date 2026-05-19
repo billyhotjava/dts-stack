@@ -21,7 +21,7 @@ import {
 } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { PlusOutlined, PlayCircleOutlined, DeleteOutlined, EditOutlined, EyeOutlined } from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import { useSearchParams } from "react-router";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import {
@@ -498,16 +498,16 @@ export default function Page() {
 					<Button size="small" onClick={() => void openVersionModal(record)}>
 						版本
 					</Button>
-					<Button size="small" icon={<EyeOutlined />} onClick={() => {
+					<Button size="small" onClick={() => {
 						setDetailRule(record);
 						setDetailOpen(true);
 					}}>
 						详情
 					</Button>
-					<Button size="small" icon={<PlayCircleOutlined />} onClick={() => triggerRun(record)} disabled={!canManage}>
+					<Button size="small" onClick={() => triggerRun(record)} disabled={!canManage}>
 						执行
 					</Button>
-					<Button size="small" icon={<EditOutlined />} onClick={() => openModal(record)} disabled={!canManage}>
+					<Button size="small" onClick={() => openModal(record)} disabled={!canManage}>
 						编辑
 					</Button>
 					<Button
@@ -527,7 +527,7 @@ export default function Page() {
 					<Button size="small" onClick={() => toggleRule(record, !record.enabled)} disabled={!canManage}>
 						{record.enabled ? "停用" : "启用"}
 					</Button>
-					<Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeRule(record.id)} disabled={!canManage}>
+					<Button size="small" danger onClick={() => removeRule(record.id)} disabled={!canManage}>
 						删除
 					</Button>
 				</Space>
@@ -727,7 +727,6 @@ export default function Page() {
 							</Button>
 							<Button
 								type="primary"
-								icon={<PlayCircleOutlined />}
 								onClick={() => {
 									if (!detailRule) return;
 									void triggerRun(detailRule);
@@ -856,7 +855,7 @@ export default function Page() {
 			<Card
 				title="质量规则"
 				extra={
-					<Button className="rounded-2xl" type="primary" icon={<PlusOutlined />} onClick={() => setWizardOpen(true)} disabled={!canManage}>
+					<Button className="rounded-2xl" type="primary" onClick={() => setWizardOpen(true)} disabled={!canManage}>
 						新增规则
 					</Button>
 				}

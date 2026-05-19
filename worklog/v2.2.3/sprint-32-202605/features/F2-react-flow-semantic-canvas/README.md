@@ -12,7 +12,7 @@
 | ID | Task | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
 | T01 | React Flow 基础架构 | P0 | DONE | F1 |
-| T02 | 节点池和字段树 | P0 | READY | T01 |
+| T02 | 节点池和字段树 | P0 | IN_PROGRESS | T01 |
 | T03 | Join 边与 fanout 风险 | P0 | READY | T02 |
 | T04 | Graph draft 保存与加载 | P0 | READY | T03 |
 | T05 | 图结构校验与节点诊断 | P0 | READY | T04 |

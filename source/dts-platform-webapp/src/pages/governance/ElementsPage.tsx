@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Breadcrumb, Button, Card, Descriptions, Divider, Drawer, Form, Input, List, Modal, Select, Space, Spin, Tag, Typography } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { EyeOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
@@ -292,7 +292,6 @@ export default function ElementsPage() {
 					<Button
 						type="link"
 						size="small"
-						icon={<EyeOutlined />}
 						onClick={() => {
 							setDetailElement(row);
 							setDetailOpen(true);
@@ -301,10 +300,10 @@ export default function ElementsPage() {
 					>
 						详情
 					</Button>
-					<Button type="link" size="small" icon={<EditOutlined />} onClick={() => openModal(row)} disabled={!canManage}>
+					<Button type="link" size="small" onClick={() => openModal(row)} disabled={!canManage}>
 						编辑
 					</Button>
-					<Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => removeElement(row)} disabled={!canManage}>
+					<Button type="link" size="small" danger onClick={() => removeElement(row)} disabled={!canManage}>
 						删除
 					</Button>
 				</Space>

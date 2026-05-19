@@ -20,15 +20,7 @@ import {
 } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import {
-	DeleteOutlined,
-	EyeOutlined,
-	PauseCircleOutlined,
-	PlayCircleOutlined,
-	EditOutlined,
-	PlusOutlined,
-	ReloadOutlined,
-} from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import { useSearchParams } from "react-router";
 import {
 	createQualityTask,
@@ -426,7 +418,6 @@ export default function QualityTasksTab() {
 					<Space wrap>
 						<Button
 							size="small"
-							icon={record.enabled ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
 							disabled={!canManage}
 							loading={busy}
 							onClick={() => handleToggleTask(record)}
@@ -435,14 +426,13 @@ export default function QualityTasksTab() {
 						</Button>
 						<Button
 							size="small"
-							icon={<PlayCircleOutlined />}
 							disabled={!canManage}
 							loading={busy}
 							onClick={() => handleTriggerTask(record)}
 						>
 							立即执行
 						</Button>
-						<Button size="small" icon={<EditOutlined />} disabled={!canManage} onClick={() => openTaskModal(record)}>
+						<Button size="small" disabled={!canManage} onClick={() => openTaskModal(record)}>
 							编辑
 						</Button>
 						<Popconfirm
@@ -452,7 +442,7 @@ export default function QualityTasksTab() {
 							disabled={!canManage}
 							onConfirm={() => handleDeleteTask(record)}
 						>
-							<Button size="small" danger icon={<DeleteOutlined />} disabled={!canManage || busy}>
+							<Button size="small" danger disabled={!canManage || busy}>
 								删除
 							</Button>
 						</Popconfirm>
@@ -518,7 +508,7 @@ export default function QualityTasksTab() {
 			title: "操作",
 			width: 110,
 			render: (_, record) => (
-				<Button size="small" icon={<EyeOutlined />} onClick={() => openDetail(record)}>
+				<Button size="small" onClick={() => openDetail(record)}>
 					查看详情
 				</Button>
 			),
@@ -566,10 +556,10 @@ export default function QualityTasksTab() {
 				title="调度计划"
 				extra={
 					<Space>
-						<Button icon={<ReloadOutlined />} onClick={() => void loadTasks()}>
+						<Button onClick={() => void loadTasks()}>
 							刷新
 						</Button>
-						<Button type="primary" icon={<PlusOutlined />} disabled={!canManage} onClick={() => openTaskModal()}>
+						<Button type="primary" disabled={!canManage} onClick={() => openTaskModal()}>
 							新增计划
 						</Button>
 					</Space>
@@ -631,7 +621,7 @@ export default function QualityTasksTab() {
 			<Card
 				title="执行记录"
 				extra={
-					<Button icon={<ReloadOutlined />} onClick={() => void loadRuns()}>
+					<Button onClick={() => void loadRuns()}>
 						刷新
 					</Button>
 				}

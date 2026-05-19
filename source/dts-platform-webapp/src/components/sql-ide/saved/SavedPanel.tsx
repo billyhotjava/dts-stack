@@ -1,4 +1,4 @@
-import { DeleteOutlined, FolderOutlined, FileOutlined } from "@ant-design/icons";
+import { FolderOutlined, FileOutlined } from "@ant-design/icons";
 import { Button, Empty, Input, List, Popconfirm, Spin, Typography } from "antd";
 import { type FC, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -135,10 +135,11 @@ export const SavedPanel: FC = () => {
                           type="text"
                           size="small"
                           danger
-                          icon={<DeleteOutlined />}
                           onClick={(e) => e.stopPropagation()}
                           loading={deleteMutation.isPending && deleteMutation.variables === item.id}
-                        />
+                        >
+                          删除
+                        </Button>
                       </Popconfirm>,
                     ]}
                   >

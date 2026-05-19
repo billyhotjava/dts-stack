@@ -16,7 +16,7 @@ import {
 	Typography,
 } from "antd";
 import { CompactTable } from "@/components/table";
-import { CheckCircleOutlined, CodeOutlined } from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import {
 	listIndicatorTemplates,
 	getIndicatorTemplate,
@@ -364,7 +364,7 @@ export default function IndicatorWizard({ open, template, onClose, onSuccess }: 
 				</Form.Item>
 			</Form>
 
-			<Button icon={<CodeOutlined />} onClick={handlePreviewSql}>
+			<Button onClick={handlePreviewSql}>
 				SQL 预览
 			</Button>
 
@@ -406,7 +406,6 @@ export default function IndicatorWizard({ open, template, onClose, onSuccess }: 
 						{step === steps.length - 1 && (
 							<Button
 								type="primary"
-								icon={<CheckCircleOutlined />}
 								loading={submitting}
 								onClick={handleSubmit}
 							>

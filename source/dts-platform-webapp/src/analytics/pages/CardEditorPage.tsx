@@ -276,21 +276,6 @@ export default function CardEditorPage() {
 		}
 	};
 
-	// Icons
-	const PlayIcon = () => (
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-			<polygon points="6 3 20 12 6 21 6 3" />
-		</svg>
-	);
-
-	const SaveIcon = () => (
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-			<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-			<polyline points="17 21 17 13 7 13 7 21" />
-			<polyline points="7 3 7 8 15 8" />
-		</svg>
-	);
-
 	const databaseOptions = databases.state === "loaded"
 		? databases.value.map((db) => ({ value: String(db.id), label: db.name ?? `db:${db.id}` }))
 		: [{ value: "", label: t(locale, "loading") }];
@@ -412,7 +397,6 @@ export default function CardEditorPage() {
 					<div style={{ display: "flex", gap: "var(--spacing-sm)", alignItems: "center" }}>
 						<Button
 							type="primary"
-							icon={<PlayIcon />}
 							onClick={run}
 							disabled={dbEmpty || !canRun || runState?.state === "loading"}
 							loading={runState?.state === "loading"}
@@ -421,7 +405,6 @@ export default function CardEditorPage() {
 						</Button>
 						<Button
 							type="default"
-							icon={<SaveIcon />}
 							onClick={save}
 							disabled={dbEmpty || !canSave || saveState?.state === "loading"}
 							loading={saveState?.state === "loading"}

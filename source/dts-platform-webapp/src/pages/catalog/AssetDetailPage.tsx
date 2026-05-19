@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Alert, Button, Card, Form, Input, Modal, Select, Space, Tabs, Tag, Typography } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { BranchesOutlined, EyeOutlined, ProfileOutlined, ReloadOutlined } from "@ant-design/icons";
+import { ProfileOutlined, } from "@ant-design/icons";
 import { EmptyState } from "@/components/empty-state";
 import {
 	getCatalogLineageImpact,
@@ -581,7 +581,7 @@ export default function AssetDetailPage() {
 			title: "操作",
 			dataIndex: "actions",
 			render: (_, row) => (
-				<Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void openDetail(row)}>
+				<Button type="link" size="small" onClick={() => void openDetail(row)}>
 					查看画像
 				</Button>
 			),
@@ -599,10 +599,10 @@ export default function AssetDetailPage() {
 				}
 				extra={
 					<Space wrap>
-						<Button icon={<BranchesOutlined />} onClick={() => router.push("/catalog/assets")}>
+						<Button onClick={() => router.push("/catalog/assets")}>
 							资产地图
 						</Button>
-						<Button icon={<ReloadOutlined />} onClick={() => void loadDatasets(1, pageState.size)} loading={loading}>
+						<Button onClick={() => void loadDatasets(1, pageState.size)} loading={loading}>
 							刷新
 						</Button>
 					</Space>

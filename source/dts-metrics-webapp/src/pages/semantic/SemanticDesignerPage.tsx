@@ -13,61 +13,6 @@ import type {
 	SemanticQueryResponse,
 } from "../../features/semantic/semanticTypes";
 
-const fallbackMeta: SemanticMetaResponse = {
-	spec_version: "local-fallback",
-	models: [
-		{
-			id: "dwd_project_detail",
-			label: "项目明细主体",
-			subject_area: "项目管理",
-			security_level: "CONFIDENTIAL",
-			grain: "project_id + stat_month",
-			database_id: 1,
-			schema_name: "dwd",
-			table_name: "dwd_project_detail",
-			description: "platform 已开放给指标建模的项目明细模型",
-			metrics: [
-				{ id: "project_cnt", label: "项目数", aggregation: "count_distinct", field: "project_id" },
-				{ id: "direct_cost_amount", label: "直接成本", aggregation: "sum", field: "direct_cost_amount" },
-				{ id: "overdue_project_cnt", label: "延期项目数", aggregation: "count_if", field: "overdue_flag" },
-			],
-			dimensions: [
-				{ id: "stat_month", label: "统计月份", type: "date" },
-				{ id: "dept_name", label: "责任科室", type: "varchar" },
-				{ id: "project_type", label: "项目类型", type: "varchar" },
-			],
-			joins: [
-				{
-					to: "dwd_contract_detail",
-					type: "many_to_one",
-					relationship: "left",
-					path: "project_id",
-					fanout_warning: true,
-				},
-			],
-		},
-		{
-			id: "dwd_contract_detail",
-			label: "合同明细主体",
-			subject_area: "合同管理",
-			security_level: "INTERNAL",
-			grain: "contract_id",
-			database_id: 1,
-			schema_name: "dwd",
-			table_name: "dwd_contract_detail",
-			metrics: [
-				{ id: "contract_cnt", label: "合同数", aggregation: "count_distinct", field: "contract_id" },
-				{ id: "contract_amount", label: "合同金额", aggregation: "sum", field: "contract_amount" },
-			],
-			dimensions: [
-				{ id: "supplier_name", label: "供应商", type: "varchar" },
-				{ id: "contract_status", label: "合同状态", type: "varchar" },
-			],
-			joins: [],
-		},
-	],
-};
-
 const filterOps = ["=", "!=", ">", ">=", "<", "<=", "in", "like"];
 
 function asArray<T = Record<string, unknown>>(value: unknown): T[] {
@@ -191,9 +136,7 @@ export default function SemanticDesignerPage({ embedded }: { embedded: boolean }
 	const [selectedMeasures, setSelectedMeasures] = useState<string[]>([]);
 	const [selectedDimensions, setSelectedDimensions] = useState<string[]>([]);
 	const [filters, setFilters] = useState<QueryFilterDraft[]>([]);
-	const [derivedMetrics, setDerivedMetrics] = useState<DerivedMetricDraft[]>([
-		{ id: "direct_cost_execution_rate", label: "直接成本执行率", expression: "[direct_cost_amount] / [contract_amount]" },
-	]);
+	const [derivedMetrics, setDerivedMetrics] = useState<DerivedMetricDraft[]>([]);
 	const [limit, setLimit] = useState(200);
 
 	useEffect(() => {
@@ -202,13 +145,11 @@ export default function SemanticDesignerPage({ embedded }: { embedded: boolean }
 			.getSemanticMeta({ exposedToModeler: true })
 			.then((value) => {
 				if (cancelled) return;
-				const safeValue = value?.models?.length ? value : fallbackMeta;
-				setMetaState({ state: "loaded", value: safeValue });
+				setMetaState({ state: "loaded", value: { ...value, models: value?.models ?? [] } });
 			})
 			.catch((error) => {
 				if (cancelled) return;
-				setMetaState({ state: "loaded", value: fallbackMeta });
-				setPreviewState({ state: "error", error });
+				setMetaState({ state: "error", error });
 			});
 		return () => {
 			cancelled = true;
@@ -349,7 +290,11 @@ export default function SemanticDesignerPage({ embedded }: { embedded: boolean }
 			</div>
 
 			{metaState.state === "loading" ? <div className="semantic-empty">语义模型加载中...</div> : null}
-			{previewState?.state === "error" ? <div className="alert warn">语义元数据读取失败：{toMessage(previewState.error)}</div> : null}
+			{metaState.state === "error" ? <div className="alert warn">语义元数据读取失败：{toMessage(metaState.error)}</div> : null}
+			{metaState.state === "loaded" && models.length === 0 ? (
+				<div className="semantic-empty">暂无可建模语义元数据，请确认 platform 已返回 /bi/api/semantic/meta。</div>
+			) : null}
+			{previewState?.state === "error" ? <div className="alert warn">语义预览失败：{toMessage(previewState.error)}</div> : null}
 
 			<div className="semantic-designer-grid">
 				<aside className="semantic-side-panel">

@@ -1,4 +1,3 @@
-import { Icon } from "@/components/icon";
 import Logo from "@/components/logo";
 import { NavVertical } from "@/components/nav";
 import type { NavProps } from "@/components/nav/types";
@@ -11,8 +10,8 @@ export function NavMobileLayout({ data }: NavProps) {
 	return (
 		<Sheet modal={false}>
 			<SheetTrigger asChild>
-				<Button variant="ghost" size="icon">
-					<Icon icon="local:ic-menu" size={24} />
+				<Button variant="ghost" className="px-3">
+					菜单
 				</Button>
 			</SheetTrigger>
 			<SheetContent side="left" className="[&>button]:hidden px-2 w-[280px]">

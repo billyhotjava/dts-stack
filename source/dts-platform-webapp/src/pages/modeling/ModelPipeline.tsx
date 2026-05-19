@@ -1,11 +1,5 @@
 import { Tag } from "antd";
-import {
-	CheckCircleOutlined,
-	CodeOutlined,
-	ExperimentOutlined,
-	CloudUploadOutlined,
-	RocketOutlined,
-} from "@ant-design/icons";
+import { CheckCircleOutlined, CodeOutlined, ExperimentOutlined, CloudUploadOutlined, RocketOutlined } from "@ant-design/icons";
 import { createModelPipelineSteps } from "./modelPipeline.helpers";
 
 type StepStatus = "wait" | "process" | "finish" | "error";

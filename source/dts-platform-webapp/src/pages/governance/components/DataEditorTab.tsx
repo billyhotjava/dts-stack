@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Button, Form, Input, Modal, Select, Tag } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { PlusOutlined, EditOutlined } from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import {
 	listOdsTables,
 	listOdsColumns,
@@ -165,7 +165,7 @@ export default function DataEditorTab({ canManage }: { canManage: boolean }) {
 			width: 80,
 			fixed: "right" as const,
 			render: (_: any, record: OdsRow) => (
-				<Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)} disabled={!canManage}>
+				<Button size="small" onClick={() => openEdit(record)} disabled={!canManage}>
 					编辑
 				</Button>
 			),
@@ -197,7 +197,6 @@ export default function DataEditorTab({ canManage }: { canManage: boolean }) {
 					<>
 						<Button
 							type="primary"
-							icon={<PlusOutlined />}
 							onClick={() => openEdit()}
 							disabled={!canManage || columns.length === 0}
 						>

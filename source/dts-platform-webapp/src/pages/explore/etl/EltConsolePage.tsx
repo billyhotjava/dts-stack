@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, Progress, Space, Tag, Timeline, Typography } from "antd";
 import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { Activity, Boxes, CheckCircle2, Clock3, DatabaseZap, GitBranch, RadioTower, RefreshCw, ShieldCheck } from "lucide-react";
+import { Activity, Clock3, DatabaseZap, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router";
 import {
 	PlatformPageHero,
@@ -222,13 +222,13 @@ export default function EltConsolePage() {
 				title="ELT 控制台"
 				actions={
 					<Space wrap>
-						<Button icon={<RadioTower className="h-4 w-4" />} onClick={() => navigate("/ops/events")}>
+						<Button onClick={() => navigate("/ops/events")}>
 							事件观测
 						</Button>
 						<Button onClick={() => navigate("/ops/release-governance")}>
 							发布治理
 						</Button>
-						<Button icon={<RefreshCw className="h-4 w-4" />} loading={loading} onClick={() => void loadSnapshot()}>
+						<Button loading={loading} onClick={() => void loadSnapshot()}>
 							刷新
 						</Button>
 						<Button type="primary" onClick={() => navigate("/explore/etl/transform/new")}>
@@ -306,16 +306,16 @@ export default function EltConsolePage() {
 			<div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
 				<PlatformSectionCard title="治理闭环">
 					<Space direction="vertical" size={12} className="w-full">
-						<Button block icon={<Boxes className="h-4 w-4" />} onClick={() => navigate("/explore/etl/orchestration")}>
+						<Button block onClick={() => navigate("/explore/etl/orchestration")}>
 							编排与调度
 						</Button>
-						<Button block icon={<CheckCircle2 className="h-4 w-4" />} onClick={() => navigate("/governance/quality")}>
+						<Button block onClick={() => navigate("/governance/quality")}>
 							质量门禁
 						</Button>
-						<Button block icon={<GitBranch className="h-4 w-4" />} onClick={() => navigate("/catalog/lineage/impact")}>
+						<Button block onClick={() => navigate("/catalog/lineage/impact")}>
 							影响分析
 						</Button>
-						<Button block icon={<RadioTower className="h-4 w-4" />} onClick={() => navigate("/ops/audit-evidence")}>
+						<Button block onClick={() => navigate("/ops/audit-evidence")}>
 							审计证据链
 						</Button>
 					</Space>

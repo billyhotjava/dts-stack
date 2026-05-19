@@ -17,7 +17,7 @@ import {
 } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { EditOutlined, FileTextOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import {
 	appendIssueAction,
 	closeIssue,
@@ -398,10 +398,10 @@ export default function IssueWorkflowPanel({ initialDatasetId, initialStatus }: 
 			width: 260,
 			render: (_, record) => (
 				<Space wrap>
-					<Button size="small" icon={<FileTextOutlined />} onClick={() => void openDetail(record.id)}>
+					<Button size="small" onClick={() => void openDetail(record.id)}>
 						详情
 					</Button>
-					<Button size="small" icon={<EditOutlined />} disabled={!canManage} onClick={() => openEdit(record)}>
+					<Button size="small" disabled={!canManage} onClick={() => openEdit(record)}>
 						编辑
 					</Button>
 					<Button size="small" disabled={!canManage} onClick={() => openAction(record.id)}>
@@ -473,10 +473,10 @@ export default function IssueWorkflowPanel({ initialDatasetId, initialStatus }: 
 						onChange={(event) => setDatasetFilter(event.target.value?.trim() || "ALL")}
 						style={{ width: 190 }}
 					/>
-					<Button icon={<ReloadOutlined />} onClick={() => void loadIssues()}>
+					<Button onClick={() => void loadIssues()}>
 						刷新
 					</Button>
-					<Button type="primary" icon={<PlusOutlined />} disabled={!canManage} onClick={openCreate}>
+					<Button type="primary" disabled={!canManage} onClick={openCreate}>
 						新建问题单
 					</Button>
 				</Space>

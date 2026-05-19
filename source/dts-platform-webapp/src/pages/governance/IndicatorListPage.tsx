@@ -11,13 +11,7 @@ import {
 } from "antd";
 import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import {
-	CodeOutlined,
-	DeleteOutlined,
-	PlayCircleOutlined,
-	RocketOutlined,
-	SearchOutlined,
-} from "@ant-design/icons";
+import { SearchOutlined } from "@ant-design/icons";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import {
 	listIndicators,
@@ -224,7 +218,6 @@ export default function Page() {
 					<Button
 						type="link"
 						size="small"
-						icon={<CodeOutlined />}
 						onClick={() => handlePreviewSql(record)}
 					>
 						预览SQL
@@ -233,7 +226,6 @@ export default function Page() {
 						<Button
 							type="link"
 							size="small"
-							icon={<RocketOutlined />}
 							onClick={() => handleGenerate(record)}
 						>
 							生成
@@ -244,7 +236,6 @@ export default function Page() {
 							type="link"
 							size="small"
 							danger
-							icon={<DeleteOutlined />}
 							onClick={() => handleDelete(record)}
 						>
 							删除
@@ -268,7 +259,6 @@ export default function Page() {
 				{canManage && (
 					<Button
 						type="primary"
-						icon={<PlayCircleOutlined />}
 						loading={generating}
 						disabled={selectedRowKeys.length === 0}
 						onClick={handleBatchGenerate}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Alert, Button, Card, Form, Input, Modal, Select, Space, Tag, Typography } from "antd";
-import { PlusOutlined, DeleteOutlined, EditOutlined } from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/empty-state";
 import {
@@ -271,7 +271,6 @@ export default function DataProductsPage() {
 						</Button>
 						<Button
 							type="primary"
-							icon={<PlusOutlined />}
 							className="rounded-2xl"
 							onClick={openCreate}
 						>
@@ -355,10 +354,10 @@ export default function DataProductsPage() {
 										<Button size="small" onClick={() => setDetailTarget(product)}>
 											合同
 										</Button>
-										<Button size="small" icon={<EditOutlined />} onClick={() => openEdit(product)}>
+										<Button size="small" onClick={() => openEdit(product)}>
 											编辑
 										</Button>
-										<Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(product)}>
+										<Button size="small" danger onClick={() => handleDelete(product)}>
 											删除
 										</Button>
 									</div>

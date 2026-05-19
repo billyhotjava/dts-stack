@@ -26,27 +26,7 @@ import {
 	Skeleton,
 } from "antd";
 import { CompactTable } from "@/components/table";
-import {
-	PlusOutlined,
-	DeleteOutlined,
-	SaveOutlined,
-	SettingOutlined,
-	DownOutlined,
-	CodeOutlined,
-	TableOutlined,
-	LinkOutlined,
-	SyncOutlined,
-	RocketOutlined,
-	CloudUploadOutlined,
-	ReloadOutlined,
-	FileTextOutlined,
-	UndoOutlined,
-	CheckCircleOutlined,
-	ThunderboltOutlined,
-	SafetyCertificateOutlined,
-	InboxOutlined,
-	BugOutlined,
-} from "@ant-design/icons";
+import { DeleteOutlined, TableOutlined, LinkOutlined, SyncOutlined, CloudUploadOutlined, FileTextOutlined, UndoOutlined, CheckCircleOutlined, SafetyCertificateOutlined, InboxOutlined, } from "@ant-design/icons";
 import type { UploadFile } from "antd/es/upload/interface";
 import type { ColumnsType } from "antd/es/table";
 import { EmptyState } from "@/components/empty-state";
@@ -2252,7 +2232,6 @@ export default function SqlModelingPage() {
 					<Button
 						size="small"
 						type="link"
-						icon={<FileTextOutlined />}
 						onClick={() => {
 							if (row.dag_run_id) {
 								setBottomTab("operations"); setOpsSubTab("execlog");
@@ -2466,28 +2445,27 @@ export default function SqlModelingPage() {
 					<Divider type="vertical" className="h-6" />
 					{/* 模型操作 */}
 					<Dropdown menu={{ items: modelMenuItems }} trigger={["click"]}>
-						<Button icon={<PlusOutlined />}>
-							模型 <DownOutlined className="text-xs" />
+						<Button>
+							模型
 						</Button>
 					</Dropdown>
-					<Button danger icon={<DeleteOutlined />} onClick={removeSelectedModels} disabled={!bulkSelection.selectedIds.length}>
+					<Button danger onClick={removeSelectedModels} disabled={!bulkSelection.selectedIds.length}>
 						批量删除
 					</Button>
 					{/* 保存按钮 */}
 					<Button
-						icon={<SaveOutlined />}
 						onClick={saveSqlDraft}
 						disabled={!activeModel || !sqlDirty || !workspaceOk}
 					>
 						保存
 					</Button>
-					<Button icon={<BugOutlined />} onClick={() => void openDiagnosticsDrawer(activeModel)} disabled={!activeModel?.name}>
+					<Button onClick={() => void openDiagnosticsDrawer(activeModel)} disabled={!activeModel?.name}>
 						断链诊断
 					</Button>
 					{/* 插入代码 */}
 						<Dropdown menu={{ items: insertMenuItems }} trigger={["click"]}>
-							<Button icon={<CodeOutlined />} disabled={!activeModel}>
-								插入 <DownOutlined className="text-xs" />
+							<Button disabled={!activeModel}>
+								插入
 							</Button>
 						</Dropdown>
 					</div>
@@ -2497,7 +2475,6 @@ export default function SqlModelingPage() {
 									return (
 									<Button
 										key={action.key}
-										icon={<CodeOutlined />}
 										onClick={() => openRun("compile")}
 										loading={buildTriggering === "compile"}
 										disabled={sqlModels.length === 0 || !configEnabled || !workspaceOk || buildTriggering != null}
@@ -2511,7 +2488,6 @@ export default function SqlModelingPage() {
 									return (
 										<Button
 										key={action.key}
-										icon={<CheckCircleOutlined />}
 										onClick={() => openRun("test")}
 										loading={buildTriggering === "test"}
 										disabled={sqlModels.length === 0 || !configEnabled || !workspaceOk || buildTriggering != null}
@@ -2526,7 +2502,6 @@ export default function SqlModelingPage() {
 										<Button
 											key={action.key}
 											type="primary"
-											icon={<ThunderboltOutlined />}
 											onClick={() => openRun("build")}
 											loading={buildTriggering === "build"}
 											disabled={sqlModels.length === 0 || !configEnabled || !workspaceOk || buildTriggering != null}
@@ -2539,7 +2514,6 @@ export default function SqlModelingPage() {
 								return (
 									<Button
 										key={action.key}
-										icon={<RocketOutlined />}
 										onClick={() => openRun("release")}
 										disabled={!workspaceOk}
 										data-testid="platform-sql-modeling-release"
@@ -2604,12 +2578,12 @@ export default function SqlModelingPage() {
 							disabled={!workspaceOk}
 						>
 							<Button>
-								更多 <DownOutlined />
+								更多
 							</Button>
 						</Dropdown>
 						{/* 配置按钮 */}
 					<Tooltip title="工作区配置">
-						<Button icon={<SettingOutlined />} onClick={() => setConfigOpen(true)} />
+						<Button onClick={() => setConfigOpen(true)} >设置</Button>
 					</Tooltip>
 				</div>
 			</div>
@@ -2717,12 +2691,12 @@ export default function SqlModelingPage() {
 								</Button>
 							)}
 							{activeModel?.name ? (
-								<Button size="small" icon={<BugOutlined />} onClick={() => void openDiagnosticsDrawer(activeModel)}>
+								<Button size="small" onClick={() => void openDiagnosticsDrawer(activeModel)}>
 									诊断
 								</Button>
 							) : null}
 							<Tooltip title="刷新模型列表">
-								<Button size="small" icon={<SyncOutlined />} onClick={loadModels} loading={modelsLoading} />
+								<Button size="small" onClick={loadModels} loading={modelsLoading} >刷新</Button>
 							</Tooltip>
 						</Space>
 					</div>
@@ -2823,7 +2797,6 @@ export default function SqlModelingPage() {
 														<span className="text-muted-foreground">语义发布</span>
 														<Button
 															size="small"
-															icon={<CloudUploadOutlined />}
 															loading={publishingSemantic}
 															disabled={!activeModel.id || !activeModel.semanticContract}
 															onClick={async () => {
@@ -2995,7 +2968,6 @@ export default function SqlModelingPage() {
 											<div className="flex items-center gap-2 px-2">
 												<Button
 													size="small"
-													icon={<ReloadOutlined />}
 													loading={previewLoading}
 													onClick={() => loadPreview(activeModel?.name, previewLimit)}
 												>
@@ -3234,7 +3206,6 @@ export default function SqlModelingPage() {
 														</span>
 														<Button
 															size="small"
-															icon={<FileTextOutlined />}
 															loading={execLogLoading}
 															disabled={!dagRunId}
 															onClick={() => loadExecLog(dagRunId, rr.dagId)}
@@ -3289,7 +3260,7 @@ export default function SqlModelingPage() {
 													{/* Left: file changes + commit */}
 													<div className="flex-1 flex flex-col gap-2 min-w-0">
 														<div className="flex items-center gap-2">
-															<Button size="small" icon={<ReloadOutlined />} loading={gitLoading} onClick={loadGitInfo}>
+															<Button size="small" loading={gitLoading} onClick={loadGitInfo}>
 																刷新
 															</Button>
 															{gitStatus?.clean && <Tag color="green" icon={<CheckCircleOutlined />}>工作区干净</Tag>}
@@ -3304,7 +3275,7 @@ export default function SqlModelingPage() {
 																			<span className="truncate">{file}</span>
 																		</span>
 																		<Popconfirm title={`还原 ${file}？`} onConfirm={() => handleGitRevert(file)} okText="确认" cancelText="取消">
-																			<Button size="small" type="text" icon={<UndoOutlined />} loading={gitReverting === file} />
+																			<Button size="small" type="text" loading={gitReverting === file} >恢复</Button>
 																		</Popconfirm>
 																	</div>
 																))}
@@ -3363,7 +3334,6 @@ export default function SqlModelingPage() {
 												<div className="flex items-center gap-2 mb-2">
 													<Button
 														size="small"
-														icon={<ReloadOutlined />}
 														loading={auditLogsLoading}
 														onClick={() => loadAuditLogs(dbtConfig?.config?.targetDataSourceId)}
 													>
@@ -3794,7 +3764,7 @@ export default function SqlModelingPage() {
 				footer={
 					<Space>
 						<Button onClick={() => setBatchArchiveOpen(false)}>取消</Button>
-						<Button danger icon={<DeleteOutlined />} onClick={removeSelectedModels} disabled={!batchArchiveSelection.length}>
+						<Button danger onClick={removeSelectedModels} disabled={!batchArchiveSelection.length}>
 							删除所选
 						</Button>
 						<Button type="primary" onClick={submitBatchArchive} loading={archiveSubmitting} disabled={!batchArchiveSelection.length}>

@@ -19,7 +19,7 @@ import {
 	message,
 } from "antd";
 import { CompactTable } from "@/components/table";
-import { PlayCircleOutlined, ReloadOutlined, EyeOutlined } from "@ant-design/icons";
+import { } from "@ant-design/icons";
 import {
 	ingestionTaskAPI,
 	type IngestionExecutionDTO,
@@ -701,7 +701,7 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 								<Tag color="warning">未推进</Tag>
 							)}
 						</Tooltip>
-						<Button type="link" size="small" icon={<EyeOutlined />} onClick={() => openAuditDetail(record)}>
+						<Button type="link" size="small" onClick={() => openAuditDetail(record)}>
 							详情
 						</Button>
 					</Space>
@@ -786,7 +786,6 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 					<Space wrap>
 						<Button
 							type="primary"
-							icon={<PlayCircleOutlined />}
 							onClick={handleExecute}
 							loading={executeSubmitting}
 							disabled={task?.status === "deleted" || ["preparing", "running"].includes((task?.lastExecutionStatus || "").toLowerCase())}
@@ -796,7 +795,6 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 						</Button>
 						{isTimeWindowBackfillSupported() ? (
 							<Button
-								icon={<ReloadOutlined />}
 								onClick={openBackfillModal}
 								disabled={
 									task?.status === "deleted" ||
@@ -806,7 +804,7 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 								窗口回填
 							</Button>
 						) : null}
-						<Button icon={<ReloadOutlined />} onClick={loadExecutions} loading={loading}>
+						<Button onClick={loadExecutions} loading={loading}>
 							刷新
 						</Button>
 					</Space>
@@ -870,7 +868,6 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 					) : null}
 					{normalizeText(task.syncMode).toLowerCase() === "incremental" ? (
 						<Button
-							icon={<ReloadOutlined />}
 							onClick={() => {
 								if (!task?.id) return;
 								const executionIds = executions.map((it) => it.id).filter((it): it is number => typeof it === "number");
@@ -912,7 +909,6 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 						<Space>
 							{auditFrom || auditTo ? <Tag color="processing">审计范围已生效</Tag> : <Tag>审计范围：全部</Tag>}
 							<Button
-								icon={<ReloadOutlined />}
 								loading={incrementalStatesLoading}
 								onClick={() => task?.id && loadIncrementalStates(Number(task.id))}
 							>
@@ -1070,7 +1066,6 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 							style={{ width: 180 }}
 						/>
 						<Button
-							icon={<ReloadOutlined />}
 							loading={logLoading}
 							onClick={() => activeExecution && loadLog(activeExecution, { silent: true })}
 						>
@@ -1105,7 +1100,6 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 				extra={
 					<Space>
 						<Button
-							icon={<ReloadOutlined />}
 							loading={auditDetailLoading}
 							onClick={() => auditDetailExecution && openAuditDetail(auditDetailExecution)}
 						>

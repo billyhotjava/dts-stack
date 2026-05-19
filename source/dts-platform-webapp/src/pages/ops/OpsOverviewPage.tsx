@@ -3,7 +3,6 @@ import dayjs from "dayjs";
 import type { EChartsOption } from "echarts";
 import { Alert, Button, Card, Col, Empty, InputNumber, Row, Select, Space, Statistic, Tabs, Tag, Typography } from "antd";
 import { CompactTable } from "@/components/table";
-import { ReloadOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { Chart } from "@/components/chart/chart";
 import { EmptyState } from "@/components/empty-state";
@@ -512,7 +511,6 @@ export default function OpsOverviewPage() {
 						/>
 						<Button
 							className="rounded-2xl"
-							icon={<ReloadOutlined />}
 							onClick={() => void loadGovernanceOverview()}
 							loading={governanceLoading}
 						>
@@ -568,7 +566,6 @@ export default function OpsOverviewPage() {
 				extra={
 					<Button
 						className="rounded-2xl"
-						icon={<ReloadOutlined />}
 						onClick={() => void loadObservability()}
 						loading={observabilityLoading}
 					>
