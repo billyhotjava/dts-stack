@@ -24,3 +24,4 @@ PASS.
   - pending role changes disable table selection, current-member edit buttons, and member toggle handlers.
 - `pnpm build` completed successfully after TypeScript compile and Vite production build.
 - Build output retained existing Vite dynamic/static import chunk warnings and browserslist stale-data notice.
+- 2026-05-19 final loop re-ran Vitest and production build after syncing the implementation-plan checklist.
