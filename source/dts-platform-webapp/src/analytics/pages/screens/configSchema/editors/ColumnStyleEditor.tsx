@@ -204,7 +204,13 @@ const ColumnStyleEditor: React.FC<ColumnStyleEditorProps> = ({ value = [], onCha
           </Tooltip>
         </div>
       ) : null}
-      <Collapse size="small" items={items} />
+      <Collapse
+        size="small"
+        ghost
+        bordered={false}
+        items={items}
+        className="schema-config-collapse"
+      />
       <Button
         size="small"
         type="dashed"

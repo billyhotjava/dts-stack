@@ -245,7 +245,19 @@ const SchemaConfigRenderer: React.FC<SchemaConfigRendererProps> = ({ schema, con
     [groupOrder],
   );
 
-  return <Collapse size="small" items={collapseItems} defaultActiveKey={defaultActiveKey} />;
+  // 2026-05 视觉对齐:用 ghost 模式去掉 Collapse 外层 border + 圆角,
+  // 让"图表/外观/布局/行为"等子分组与上方的"组件外观"、"位置与尺寸"等顶级 section
+  // 视觉风格一致(深色平铺,不再有"卡片中的卡片"的视觉嵌套感)。
+  return (
+    <Collapse
+      size="small"
+      ghost
+      bordered={false}
+      items={collapseItems}
+      defaultActiveKey={defaultActiveKey}
+      className="schema-config-collapse"
+    />
+  );
 };
 
 export default SchemaConfigRenderer;

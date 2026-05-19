@@ -93,7 +93,16 @@ const AxisConfigEditor: React.FC<AxisConfigEditorProps> = ({ value = {}, onChang
     },
   ];
 
-  return <Collapse size="small" items={items} defaultActiveKey={['axis']} />;
+  return (
+    <Collapse
+      size="small"
+      ghost
+      bordered={false}
+      items={items}
+      defaultActiveKey={['axis']}
+      className="schema-config-collapse"
+    />
+  );
 };
 
 export default AxisConfigEditor;

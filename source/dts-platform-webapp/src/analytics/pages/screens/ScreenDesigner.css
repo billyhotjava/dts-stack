@@ -139,6 +139,27 @@
   font-size: 12px !important;
 }
 
+/* SchemaConfigRenderer 的 ghost Collapse —— 让子分组与外层 property-section 视觉对齐。
+   不再有"卡片中的卡片"的视觉嵌套感,深色平铺统一。 */
+.schema-config-collapse.ant-collapse-ghost {
+  background: transparent !important;
+}
+.schema-config-collapse.ant-collapse-ghost > .ant-collapse-item {
+  border: none !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12) !important;
+}
+.schema-config-collapse.ant-collapse-ghost > .ant-collapse-item:last-child {
+  border-bottom: none !important;
+}
+.schema-config-collapse.ant-collapse-ghost > .ant-collapse-item > .ant-collapse-header {
+  /* 与顶层 property-section padding 对齐(垂直 8px,左右 0) */
+  padding: 8px 0 !important;
+}
+.schema-config-collapse.ant-collapse-ghost .ant-collapse-content > .ant-collapse-content-box {
+  /* 内容区左右无额外缩进,避免"嵌套"视觉 */
+  padding: 0 0 12px !important;
+}
+
 .screen-designer .ant-checkbox-wrapper {
   color: rgba(255, 255, 255, 0.85) !important;
 }
