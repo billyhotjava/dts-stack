@@ -517,110 +517,6 @@
       }
     },
     {
-      "id": "风险与预警中心-explanation-shape",
-      "type": "shape",
-      "name": "说明",
-      "x": 1732,
-      "y": 34,
-      "width": 68,
-      "height": 30,
-      "zIndex": 66,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.78)",
-        "borderColor": "#3b82ff",
-        "borderWidth": 1,
-        "radius": 999
-      },
-      "actions": [
-        {
-          "type": "open-panel",
-          "panelTitle": "说明卡",
-          "panelBodyTemplate": "聚焦风险等级、分布、矩阵位置和措施闭环效果。\n• 先看风险总数、高风险数和闭环率。\n• 再看风险矩阵、分类分布和重点风险清单。\n• 措施摘要用于判断高风险是否有明确应对路径。"
-        }
-      ]
-    },
-    {
-      "id": "风险与预警中心-explanation-label",
-      "type": "title",
-      "name": "说明",
-      "x": 1732,
-      "y": 34,
-      "width": 68,
-      "height": 30,
-      "zIndex": 67,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "text": "说明",
-        "fontSize": 16,
-        "fontWeight": "700",
-        "color": "#3b82ff",
-        "textAlign": "center"
-      },
-      "actions": [
-        {
-          "type": "open-panel",
-          "panelTitle": "说明卡",
-          "panelBodyTemplate": "聚焦风险等级、分布、矩阵位置和措施闭环效果。\n• 先看风险总数、高风险数和闭环率。\n• 再看风险矩阵、分类分布和重点风险清单。\n• 措施摘要用于判断高风险是否有明确应对路径。"
-        }
-      ]
-    },
-    {
-      "id": "风险与预警中心-guide-shape",
-      "type": "shape",
-      "name": "导览",
-      "x": 1808,
-      "y": 34,
-      "width": 68,
-      "height": 30,
-      "zIndex": 66,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.78)",
-        "borderColor": "#2ee6a6",
-        "borderWidth": 1,
-        "radius": 999
-      },
-      "actions": [
-        {
-          "type": "open-panel",
-          "panelTitle": "导览卡",
-          "panelBodyTemplate": "建议按“风险等级 → 矩阵分布 → 重点风险 → 措施闭环”讲解。\n• 先用高风险数和矩阵解释风险集中在哪些象限。\n• 再聚焦重点风险清单和措施摘要，说明是否受控。\n• 执行层详情承载风险对象与应对措施的只读明细。\n\n→ 进入风险详情：查看风险对象、等级、责任人和措施明细。\n→ 返回战略层大屏：回到全局态势继续讲战略层健康度。"
-        }
-      ]
-    },
-    {
-      "id": "风险与预警中心-guide-label",
-      "type": "title",
-      "name": "导览",
-      "x": 1808,
-      "y": 34,
-      "width": 68,
-      "height": 30,
-      "zIndex": 67,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "text": "导览",
-        "fontSize": 16,
-        "fontWeight": "700",
-        "color": "#2ee6a6",
-        "textAlign": "center"
-      },
-      "actions": [
-        {
-          "type": "open-panel",
-          "panelTitle": "导览卡",
-          "panelBodyTemplate": "建议按“风险等级 → 矩阵分布 → 重点风险 → 措施闭环”讲解。\n• 先用高风险数和矩阵解释风险集中在哪些象限。\n• 再聚焦重点风险清单和措施摘要，说明是否受控。\n• 执行层详情承载风险对象与应对措施的只读明细。\n\n→ 进入风险详情：查看风险对象、等级、责任人和措施明细。\n→ 返回战略层大屏：回到全局态势继续讲战略层健康度。"
-        }
-      ]
-    },
-    {
       "id": "gpmc-risk-kpi-total",
       "type": "number-card",
       "name": "风险总数",
@@ -640,7 +536,7 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "metricNote": {
           "code": "pjm_risk_total",
           "displayName": "风险总数",
@@ -706,7 +602,7 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "metricNote": {
           "code": "pjm_risk_high",
           "displayName": "高风险数",
@@ -772,7 +668,7 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "metricNote": {
           "code": "pjm_risk_mid",
           "displayName": "中风险数",
@@ -838,7 +734,7 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "metricNote": {
           "code": "pjm_risk_open",
           "displayName": "未释放风险数",
@@ -904,7 +800,7 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "metricNote": {
           "code": "pjm_risk_release_rate",
           "displayName": "风险释放率",

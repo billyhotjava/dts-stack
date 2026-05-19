@@ -2,7 +2,7 @@
  * Table-family renderer: table, scroll-board, scroll-ranking.
  * Extracted verbatim from ComponentRenderer.tsx — do not modify rendering logic.
  */
-import type { ReactNode, Dispatch, SetStateAction } from 'react';
+import type { CSSProperties, ReactNode, Dispatch, SetStateAction } from 'react';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import type { CardData, ScreenComponent } from '../types';
 import type { ScreenThemeTokens } from '../screenThemes';
@@ -180,13 +180,17 @@ export function renderTable(props: TableRendererProps): ReactNode {
             const { header: displayHeader, data: displayData, columnMeta } = resolveBoundTableData(c, { defaultAlign: 'left' });
             const fontSize = Number(c.fontSize) || 16;
             const headerFontSize = Number(c.headerFontSize) || fontSize;
-            const headerColor = resolveTextColor(c.headerColor as string | undefined, t.textPrimary);
-            const headerBackground = (c.headerBackground as string) || 'rgba(148, 163, 184, 0.16)';
-            const bodyColor = resolveTextColor(c.bodyColor as string | undefined, t.textSecondary);
+            const headerColor = resolveTextColor(c.headerColor as string | undefined, '#ffffff');
+            // 表头必须不透明,否则 sticky 表头会被滚动的行数据透出看不清
+            const headerBackground = (c.headerBackground as string) || 'rgba(15, 35, 70, 0.96)';
+            // 记录默认白色字体,在大屏深色底上可读
+            const bodyColor = resolveTextColor(c.bodyColor as string | undefined, '#ffffff');
             const bodyBackground = (c.bodyBackground as string) || 'transparent';
             const borderColor = (c.borderColor as string) || 'rgba(148, 163, 184, 0.24)';
             const oddRowBackground = (c.oddRowBackground as string) || bodyBackground;
             const evenRowBackground = (c.evenRowBackground as string) || 'rgba(148, 163, 184, 0.06)';
+            // 行 hover 高亮(半透明蓝色,与大屏主色调统一)
+            const rowHoverBackground = (c.rowHoverBackground as string) || 'rgba(74, 158, 255, 0.18)';
             const enableSort = c.enableSort !== false;
             const enablePagination = c.enablePagination === true;
             const freezeHeader = c.freezeHeader !== false;
@@ -254,6 +258,8 @@ export function renderTable(props: TableRendererProps): ReactNode {
                                             color: headerColor,
                                             fontSize: headerFontSize,
                                             width: columnMeta[i]?.width ? `${columnMeta[i].width}%` : undefined,
+                                            // 每个 th 也应用 headerBackground,防止 sticky 时被下方滚动行透出
+                                            background: headerBackground,
                                             borderBottom: '1px solid ' + borderColor,
                                             borderRight: i < displayHeader.length - 1 ? '1px solid ' + borderColor : 'none',
                                             padding: '8px 10px',
@@ -334,9 +340,22 @@ export function renderTable(props: TableRendererProps): ReactNode {
                             </thead>
                         )}
                         <tbody>
-                            {pageRows.map((row, rowIndex) => (
+                            {pageRows.map((row, rowIndex) => {
+                                // 整行所有字段拼接 — 作为 tr 的 title,鼠标悬停 0.5s 自动浏览器弹窗显示完整记录
+                                const rowFullText = displayHeader
+                                    .map((h, i) => `${h}: ${row[i] ?? ''}`)
+                                    .join('\n');
+                                return (
                                 <tr
                                     key={rowIndex}
+                                    className="screen-table-row"
+                                    style={{
+                                        background: rowIndex % 2 === 0 ? oddRowBackground : evenRowBackground,
+                                        cursor: canRunTableActions || canRunTableDefaultDrill ? 'pointer' : 'default',
+                                        // CSS 变量 — hover 时由 .screen-table-row:hover > td 规则消费
+                                        ['--screen-table-row-hover' as string]: rowHoverBackground,
+                                    } as CSSProperties}
+                                    title={rowFullText}
                                     onClick={() => {
                                         const params = buildTableRowActionParams(displayHeader, row);
                                         if (canRunTableActions) {
@@ -356,10 +375,6 @@ export function renderTable(props: TableRendererProps): ReactNode {
                                             drillState.handleDrill(clickedValue);
                                         }
                                     }}
-                                    style={{
-                                        background: rowIndex % 2 === 0 ? oddRowBackground : evenRowBackground,
-                                        cursor: canRunTableActions || canRunTableDefaultDrill ? 'pointer' : 'default',
-                                    }}
                                 >
                                     {displayHeader.map((_, colIndex) => {
                                         const conditional = resolveTableConditionalStyle(
@@ -370,8 +385,13 @@ export function renderTable(props: TableRendererProps): ReactNode {
                                         );
                                         const rowBackground = rowIndex % 2 === 0 ? oddRowBackground : evenRowBackground;
                                         const cellBackground = conditional.background || rowBackground;
+                                        // 单元格原生 title — 容器窄时被截断的列可悬浮看完整值
+                                        const cellText = row[colIndex] == null ? '' : String(row[colIndex]);
                                         return (
-                                            <td key={colIndex} style={{
+                                            <td
+                                                key={colIndex}
+                                                title={cellText || undefined}
+                                                style={{
                                                 fontSize,
                                                 color: conditional.color || bodyColor,
                                                 background: cellBackground,
@@ -409,7 +429,8 @@ export function renderTable(props: TableRendererProps): ReactNode {
                                         );
                                     })}
                                 </tr>
-                            ))}
+                                );
+                            })}
                             {Array.from({ length: fillerRowCount }, (_, fillerIndex) => {
                                 const visualRowIndex = pageRows.length + fillerIndex;
                                 const fillerBackground = visualRowIndex % 2 === 0 ? oddRowBackground : evenRowBackground;

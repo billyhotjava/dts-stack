@@ -517,110 +517,6 @@
       }
     },
     {
-      "id": "质量信息与跟进措施-explanation-shape",
-      "type": "shape",
-      "name": "说明",
-      "x": 1732,
-      "y": 34,
-      "width": 68,
-      "height": 30,
-      "zIndex": 66,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.78)",
-        "borderColor": "#3b82ff",
-        "borderWidth": 1,
-        "radius": 999
-      },
-      "actions": [
-        {
-          "type": "open-panel",
-          "panelTitle": "说明卡",
-          "panelBodyTemplate": "聚焦质量问题规模、分类结构、闭环率和跟进措施覆盖情况。\n• 先看新增问题、现存问题和未提交归零计划。\n• 再看分类分布、项目排名和质量问题清单。\n• 问题与措施摘要用于判断质量闭环是否真正落地。"
-        }
-      ]
-    },
-    {
-      "id": "质量信息与跟进措施-explanation-label",
-      "type": "title",
-      "name": "说明",
-      "x": 1732,
-      "y": 34,
-      "width": 68,
-      "height": 30,
-      "zIndex": 67,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "text": "说明",
-        "fontSize": 16,
-        "fontWeight": "700",
-        "color": "#3b82ff",
-        "textAlign": "center"
-      },
-      "actions": [
-        {
-          "type": "open-panel",
-          "panelTitle": "说明卡",
-          "panelBodyTemplate": "聚焦质量问题规模、分类结构、闭环率和跟进措施覆盖情况。\n• 先看新增问题、现存问题和未提交归零计划。\n• 再看分类分布、项目排名和质量问题清单。\n• 问题与措施摘要用于判断质量闭环是否真正落地。"
-        }
-      ]
-    },
-    {
-      "id": "质量信息与跟进措施-guide-shape",
-      "type": "shape",
-      "name": "导览",
-      "x": 1808,
-      "y": 34,
-      "width": 68,
-      "height": 30,
-      "zIndex": 66,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.78)",
-        "borderColor": "#2ee6a6",
-        "borderWidth": 1,
-        "radius": 999
-      },
-      "actions": [
-        {
-          "type": "open-panel",
-          "panelTitle": "导览卡",
-          "panelBodyTemplate": "建议按“问题规模 → 分类 → 清单 → 措施”讲解，再下钻质量只读详情。\n• 优先讲高优未关和未提交归零计划，体现问题严重度。\n• 再进入问题清单和措施摘要，说明当前闭环状态。\n• 执行层详情页承载问题对象、责任人和措施时间线。\n\n→ 进入质量详情：查看质量问题对象、状态和跟进措施明细。\n→ 查看技术状态看板：继续讲解与质量相邻的技术状态专题。"
-        }
-      ]
-    },
-    {
-      "id": "质量信息与跟进措施-guide-label",
-      "type": "title",
-      "name": "导览",
-      "x": 1808,
-      "y": 34,
-      "width": 68,
-      "height": 30,
-      "zIndex": 67,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "text": "导览",
-        "fontSize": 16,
-        "fontWeight": "700",
-        "color": "#2ee6a6",
-        "textAlign": "center"
-      },
-      "actions": [
-        {
-          "type": "open-panel",
-          "panelTitle": "导览卡",
-          "panelBodyTemplate": "建议按“问题规模 → 分类 → 清单 → 措施”讲解，再下钻质量只读详情。\n• 优先讲高优未关和未提交归零计划，体现问题严重度。\n• 再进入问题清单和措施摘要，说明当前闭环状态。\n• 执行层详情页承载问题对象、责任人和措施时间线。\n\n→ 进入质量详情：查看质量问题对象、状态和跟进措施明细。\n→ 查看技术状态看板：继续讲解与质量相邻的技术状态专题。"
-        }
-      ]
-    },
-    {
       "id": "gpmc-quality-kpi-total",
       "type": "number-card",
       "name": "质量问题总数",
@@ -640,7 +536,7 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "metricNote": {
           "code": "pjm_qual_new_issues",
           "displayName": "新增质量问题数",
@@ -706,7 +602,7 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "metricNote": {
           "code": "pjm_qual_open_issues",
           "displayName": "现存质量问题数",
@@ -772,7 +668,7 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "metricNote": {
           "code": "pjm_qual_zero_rate",
           "displayName": "质量问题归零率",
@@ -842,7 +738,7 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "metricNote": {
           "code": "pjm_qual_top1_count",
           "displayName": "TOP1 质量问题分类数量",

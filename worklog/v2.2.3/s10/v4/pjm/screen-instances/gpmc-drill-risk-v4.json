@@ -155,7 +155,7 @@
         "precision": 0,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "borderRadius": 12,
         "fontSize": 36,
         "metricNote": {
@@ -221,7 +221,7 @@
         "precision": 0,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "borderRadius": 12,
         "fontSize": 36,
         "metricNote": {
@@ -287,7 +287,7 @@
         "precision": 0,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "borderRadius": 12,
         "fontSize": 36,
         "metricNote": {
@@ -353,7 +353,7 @@
         "precision": 0,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "borderRadius": 12,
         "fontSize": 36,
         "metricNote": {

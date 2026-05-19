@@ -517,110 +517,6 @@
       }
     },
     {
-      "id": "技术状态与跟进-explanation-shape",
-      "type": "shape",
-      "name": "说明",
-      "x": 1732,
-      "y": 34,
-      "width": 68,
-      "height": 30,
-      "zIndex": 66,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.78)",
-        "borderColor": "#3b82ff",
-        "borderWidth": 1,
-        "radius": 999
-      },
-      "actions": [
-        {
-          "type": "open-panel",
-          "panelTitle": "说明卡",
-          "panelBodyTemplate": "聚焦技术状态变更、签署进度、未闭环项和专项跟进动作。\n• 先看状态变更数、签署完成率和未闭环项。\n• 再看变更类别分布和跟进措施摘要。\n• 技术状态看板用于判断变更是否受控，而不是只看变更多寡。"
-        }
-      ]
-    },
-    {
-      "id": "技术状态与跟进-explanation-label",
-      "type": "title",
-      "name": "说明",
-      "x": 1732,
-      "y": 34,
-      "width": 68,
-      "height": 30,
-      "zIndex": 67,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "text": "说明",
-        "fontSize": 16,
-        "fontWeight": "700",
-        "color": "#3b82ff",
-        "textAlign": "center"
-      },
-      "actions": [
-        {
-          "type": "open-panel",
-          "panelTitle": "说明卡",
-          "panelBodyTemplate": "聚焦技术状态变更、签署进度、未闭环项和专项跟进动作。\n• 先看状态变更数、签署完成率和未闭环项。\n• 再看变更类别分布和跟进措施摘要。\n• 技术状态看板用于判断变更是否受控，而不是只看变更多寡。"
-        }
-      ]
-    },
-    {
-      "id": "技术状态与跟进-guide-shape",
-      "type": "shape",
-      "name": "导览",
-      "x": 1808,
-      "y": 34,
-      "width": 68,
-      "height": 30,
-      "zIndex": 66,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.78)",
-        "borderColor": "#2ee6a6",
-        "borderWidth": 1,
-        "radius": 999
-      },
-      "actions": [
-        {
-          "type": "open-panel",
-          "panelTitle": "导览卡",
-          "panelBodyTemplate": "建议按“状态变更 → 签署完成率 → 未闭环项 → 措施”讲解。\n• 先用变更数和签署完成率说明变更是否受控。\n• 再下钻到执行层查看技术状态对象和措施细节。\n• 技术状态与质量相邻，可串联说明两类问题的差异。\n\n→ 进入技术状态详情：查看状态对象、签署情况和跟进措施。\n→ 查看质量看板：切换到质量专题，串联说明问题与状态。"
-        }
-      ]
-    },
-    {
-      "id": "技术状态与跟进-guide-label",
-      "type": "title",
-      "name": "导览",
-      "x": 1808,
-      "y": 34,
-      "width": 68,
-      "height": 30,
-      "zIndex": 67,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "text": "导览",
-        "fontSize": 16,
-        "fontWeight": "700",
-        "color": "#2ee6a6",
-        "textAlign": "center"
-      },
-      "actions": [
-        {
-          "type": "open-panel",
-          "panelTitle": "导览卡",
-          "panelBodyTemplate": "建议按“状态变更 → 签署完成率 → 未闭环项 → 措施”讲解。\n• 先用变更数和签署完成率说明变更是否受控。\n• 再下钻到执行层查看技术状态对象和措施细节。\n• 技术状态与质量相邻，可串联说明两类问题的差异。\n\n→ 进入技术状态详情：查看状态对象、签署情况和跟进措施。\n→ 查看质量看板：切换到质量专题，串联说明问题与状态。"
-        }
-      ]
-    },
-    {
       "id": "gpmc-tech-kpi-total",
       "type": "number-card",
       "name": "变更单总数",
@@ -640,7 +536,7 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "metricNote": {
           "code": "pjm_tech_total_changes",
           "displayName": "技术状态变更单总数",
@@ -706,7 +602,7 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "metricNote": {
           "code": "pjm_tech_unsigned_total",
           "displayName": "技术状态变更单未完成签署(I, II, III类)",
@@ -772,7 +668,7 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "metricNote": {
           "code": "pjm_tech_signature_rate",
           "displayName": "技术状态变更单签署完成率",
@@ -842,7 +738,7 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "metricNote": {
           "code": "pjm_tech_reform_pending_i_ii",
           "displayName": "未落实整改(I, II类)",
@@ -908,7 +804,7 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "metricNote": {
           "code": "pjm_tech_reform_rate",
           "displayName": "整改落实完成率(I, II类)",

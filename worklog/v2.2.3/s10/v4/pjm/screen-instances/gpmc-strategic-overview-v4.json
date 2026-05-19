@@ -529,110 +529,6 @@
       "actions": []
     },
     {
-      "id": "gpmc-overview-assist-explanation-shape",
-      "type": "shape",
-      "name": "说明",
-      "x": 1742,
-      "y": 40,
-      "width": 68,
-      "height": 30,
-      "zIndex": 66,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.78)",
-        "borderColor": "#3b82ff",
-        "borderWidth": 1,
-        "radius": 999
-      },
-      "actions": [
-        {
-          "type": "open-panel",
-          "panelTitle": "说明卡",
-          "panelBodyTemplate": "面向集团领导，一屏判断项目是否健康、投资执行是否偏离、风险是否失控。\n• 优先关注项目总数、在建、延期、高风险四组总览指标。\n• 结合预算与执行、完成率趋势、事业部排名判断全局健康度。\n• 从异常项目与专题聚焦区定位需要继续追问的管控专题。"
-        }
-      ]
-    },
-    {
-      "id": "gpmc-overview-assist-explanation-label",
-      "type": "title",
-      "name": "说明",
-      "x": 1742,
-      "y": 40,
-      "width": 68,
-      "height": 30,
-      "zIndex": 67,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "text": "说明",
-        "fontSize": 16,
-        "fontWeight": "700",
-        "color": "#3b82ff",
-        "textAlign": "center"
-      },
-      "actions": [
-        {
-          "type": "open-panel",
-          "panelTitle": "说明卡",
-          "panelBodyTemplate": "面向集团领导，一屏判断项目是否健康、投资执行是否偏离、风险是否失控。\n• 优先关注项目总数、在建、延期、高风险四组总览指标。\n• 结合预算与执行、完成率趋势、事业部排名判断全局健康度。\n• 从异常项目与专题聚焦区定位需要继续追问的管控专题。"
-        }
-      ]
-    },
-    {
-      "id": "gpmc-overview-assist-guide-shape",
-      "type": "shape",
-      "name": "导览",
-      "x": 1818,
-      "y": 40,
-      "width": 68,
-      "height": 30,
-      "zIndex": 66,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.78)",
-        "borderColor": "#2ee6a6",
-        "borderWidth": 1,
-        "radius": 999
-      },
-      "actions": [
-        {
-          "type": "open-panel",
-          "panelTitle": "导览卡",
-          "panelBodyTemplate": "建议按“总览态势 → 问题专题 → 执行明细”的顺序讲解，不打断全局浏览。\n• 先讲“延期项目”和“高风险项目”，再进入对应管控看板。\n• 看板里的指标、榜单和清单继续下钻到执行层只读页面。\n• 执行层只承载明细与跟进情况，不在演示中编辑数据。\n\n→ 项目执行监控：查看延期 TOP10、里程碑与阻塞链路。\n→ 质量信息与跟进：查看质量问题规模、闭环率与措施清单。\n→ 技术状态与跟进：查看技术状态变更、签署率与未闭环项。\n→ 成本与预算控制：查看预算执行、偏差和周期支出趋势。\n→ 风险与预警中心：查看风险矩阵、分布与闭环情况。"
-        }
-      ]
-    },
-    {
-      "id": "gpmc-overview-assist-guide-label",
-      "type": "title",
-      "name": "导览",
-      "x": 1818,
-      "y": 40,
-      "width": 68,
-      "height": 30,
-      "zIndex": 67,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "text": "导览",
-        "fontSize": 16,
-        "fontWeight": "700",
-        "color": "#2ee6a6",
-        "textAlign": "center"
-      },
-      "actions": [
-        {
-          "type": "open-panel",
-          "panelTitle": "导览卡",
-          "panelBodyTemplate": "建议按“总览态势 → 问题专题 → 执行明细”的顺序讲解，不打断全局浏览。\n• 先讲“延期项目”和“高风险项目”，再进入对应管控看板。\n• 看板里的指标、榜单和清单继续下钻到执行层只读页面。\n• 执行层只承载明细与跟进情况，不在演示中编辑数据。\n\n→ 项目执行监控：查看延期 TOP10、里程碑与阻塞链路。\n→ 质量信息与跟进：查看质量问题规模、闭环率与措施清单。\n→ 技术状态与跟进：查看技术状态变更、签署率与未闭环项。\n→ 成本与预算控制：查看预算执行、偏差和周期支出趋势。\n→ 风险与预警中心：查看风险矩阵、分布与闭环情况。"
-        }
-      ]
-    },
-    {
       "id": "gpmc-overview-kpi-total",
       "type": "number-card",
       "name": "项目总数",
@@ -652,7 +548,7 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "metricNote": {
           "code": "pjm_project_total",
           "displayName": "项目总数",
@@ -719,7 +615,7 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "metricNote": {
           "code": "pjm_project_active",
           "displayName": "进行中项目",
@@ -786,7 +682,7 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "metricNote": {
           "code": "pjm_project_delay",
           "displayName": "延期项目数",
@@ -853,7 +749,7 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "metricNote": {
           "code": "pjm_prog_on_time_rate",
           "displayName": "节点按时完成率",
@@ -924,7 +820,7 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "metricNote": {
           "code": "pjm_risk_warning_index",
           "displayName": "项目风险预警指数",
@@ -1617,7 +1513,7 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "metricNote": {
           "code": "pjm_prog_health_score",
           "displayName": "进度健康度评分",
@@ -1687,7 +1583,7 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "metricNote": {
           "code": "pjm_qual_health_score",
           "displayName": "质量健康度评分",
@@ -1757,7 +1653,7 @@
         "valueFontSize": 34,
         "titleColor": "#ffffff",
         "valueColor": "#ffffff",
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "transparent",
         "metricNote": {
           "code": "pjm_tech_health_score",
           "displayName": "技术状态健康度评分",

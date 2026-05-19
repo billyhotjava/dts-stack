@@ -772,3 +772,11 @@
   from { opacity: 0; transform: rotate(-90deg) scale(0.6); }
   to { opacity: 1; transform: rotate(0) scale(1); }
 }
+
+/* 大屏 Table 渲染器 — tr hover 高亮(配合 TableRenderer.tsx 的 className) */
+.screen-table-row {
+  transition: background-color 120ms ease;
+}
+.screen-table-row:hover > td {
+  background-color: var(--screen-table-row-hover, rgba(74, 158, 255, 0.18)) !important;
+}
