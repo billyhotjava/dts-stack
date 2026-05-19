@@ -243,19 +243,34 @@ export function renderTable(props: TableRendererProps): ReactNode {
 
             return (
                 <div style={{ width: '100%', height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
+                    {/*
+                      Chrome 95 兼容性说明:
+                      - 滚动容器加 position:relative + transform:translateZ(0),
+                        触发独立合成层,稳定 sticky th 的位置计算
+                      - 不使用 <thead> 整体 sticky,Chrome 91-100 在 flex 嵌套 +
+                        overflow:auto 下偶发位置 bug;改用 <th> 单独 sticky
+                        (Chrome 56+ 完全稳定)
+                    */}
+                    <div style={{
+                        flex: 1,
+                        overflow: 'auto',
+                        position: 'relative',
+                        // GPU 层提升 — 避免 Chrome 95 sticky 滚动时位置抖动
+                        transform: 'translateZ(0)',
+                        willChange: 'scroll-position',
+                    }}>
                     <table style={{
                         width: '100%',
                         // F4/T04: 横向滚动触发点 —— 容器窄于 minColumnWidth × 列数时 overflow:auto 生效
                         minWidth: computedTableMinWidth > 0 ? computedTableMinWidth : undefined,
-                        // 注意:必须用 'separate' + borderSpacing:0,不能用 'collapse',
-                        // 否则 Chrome 中 sticky thead 位置计算出错,会被数据行盖住
+                        // 必须用 'separate' + borderSpacing:0,不能用 'collapse'
+                        // Chrome 95 在 collapse 模式下 sticky th 位置计算出错,会被数据行盖住
                         borderCollapse: 'separate',
                         borderSpacing: 0,
                         tableLayout: 'fixed',
                     }}>
                         {displayHeader.length > 0 && (
-                            <thead style={freezeHeader ? { position: 'sticky', top: 0, zIndex: 10 } : undefined}>
+                            <thead>
                                 <tr style={{ background: headerBackground }}>
                                     {displayHeader.map((title, i) => (
                                         <th key={i} style={{
@@ -275,7 +290,8 @@ export function renderTable(props: TableRendererProps): ReactNode {
                                             overflowWrap: columnMeta[i]?.wrap ? 'anywhere' : undefined,
                                             wordBreak: columnMeta[i]?.wrap ? 'break-word' : undefined,
                                             lineHeight: columnMeta[i]?.wrap ? 1.35 : undefined,
-                                            // sticky 同时在 <thead> 和 <th> 上,Chrome/Firefox 都稳定
+                                            // sticky 仅在 <th> 上,Chrome 56+ 稳定支持
+                                            // 不在 <thead> 上加,避免 Chrome 91-100 已知 bug
                                             ...(freezeHeader ? { position: 'sticky', top: 0, zIndex: 11 } : {}),
                                             ...(freezeFirstColumn && i === 0
                                                 ? {
