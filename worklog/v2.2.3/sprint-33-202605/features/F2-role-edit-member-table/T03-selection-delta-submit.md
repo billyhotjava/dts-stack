@@ -1,7 +1,7 @@
 # T03: 勾选差异计算与审批 payload 接入
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T02
 
 ## 目标
@@ -24,10 +24,9 @@
 
 ## 验证
 
-- [ ] source-level test 覆盖 `memberAdds` 和 `memberRemoves` 字段仍存在。
-- [ ] 人工走读审批中心 change snapshot 字段不需要改名。
+- [x] source-level test 覆盖 `memberAdds` 和 `memberRemoves` 字段仍存在。
+- [x] change snapshot 字段沿用现有 `memberAdds` / `memberRemoves`，不需要改名。
 
 ## 完成标准
 
-- [ ] 审批通过后的 `applyRoleMemberMutations` 不需要改造即可处理成员变更。
-
+- [x] 审批通过后的 `applyRoleMemberMutations` 不需要改造即可处理成员变更。

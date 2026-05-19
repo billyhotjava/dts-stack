@@ -1,7 +1,7 @@
 # T02: 成员分配表格 UI 与查询条件
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T01
 
 ## 目标
@@ -31,10 +31,9 @@
 
 ## 验证
 
-- [ ] source-level test 覆盖查询控件和 `rowSelection`。
-- [ ] `pnpm build` 通过。
+- [x] source-level test 覆盖查询控件和 `rowSelection`。
+- [x] `pnpm build` 通过。
 
 ## 完成标准
 
-- [ ] 管理员无需逐个下拉选择即可批量维护角色成员。
-
+- [x] 管理员无需逐个下拉选择即可批量维护角色成员。

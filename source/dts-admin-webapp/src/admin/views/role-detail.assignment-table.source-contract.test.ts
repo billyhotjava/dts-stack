@@ -33,4 +33,13 @@ describe("role detail assignment table contract", () => {
 		expect(detailSource.includes("fullName")).toBe(true);
 		expect(detailSource.includes("username")).toBe(true);
 	});
+
+	it("keeps role basic info and member assignment as separate page modules", () => {
+		const detailSource = readSource("./role-detail.tsx");
+
+		expect(detailSource.includes("function RoleBasicInfoSection")).toBe(true);
+		expect(detailSource.includes("function RoleMemberAssignmentSection")).toBe(true);
+		expect(detailSource.includes("<RoleBasicInfoSection")).toBe(true);
+		expect(detailSource.includes("<RoleMemberAssignmentSection")).toBe(true);
+	});
 });

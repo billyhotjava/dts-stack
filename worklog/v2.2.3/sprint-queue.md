@@ -520,20 +520,23 @@
 - 2026-05-18 新增前端验收口径：数据资产、语义指标、BI 消费能力必须以“页面可操作”为 DONE 标准；已先补资产解析失败报告入口，其余 assets-v2 详情、数据产品成员配置、治理缺口处置、dts-metrics 真实页面仍待闭环。
 
 ## Sprint-33: 角色管理成员分配重构 (202605)
-**状态**: IN_PROGRESS
+**状态**: DONE（聚焦验证通过；运行时手工 smoke 待现场环境补证）
 **类型**: UX / Refactor / Contract（dts-admin + dts-admin-webapp）
 **目标**: 把角色编辑页从“按部门下拉逐个添加成员”重构为“角色基础信息模块 + 可查询分页用户表”，支持按部门、姓名、用户名筛选，已在角色内的用户默认勾选，并通过现有审批流提交成员增删差异。
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
-| F1-assignment-user-query-contract | P0 | 3 | IN_PROGRESS |
-| F2-role-edit-member-table | P0 | 4 | READY |
-| F3-verification-and-it | P0 | 3 | READY |
+| F1-assignment-user-query-contract | P0 | 3 | DONE |
+| F2-role-edit-member-table | P0 | 4 | DONE |
+| F3-verification-and-it | P0 | 3 | DONE |
 
-**统计**: READY=7, IN_PROGRESS=1, DONE=0, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=10, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-33-202605/README.md`
 **实施计划**: `worklog/v2.2.3/sprint-33-202605/assets/implementation-plan.md`
 **集成测试**: `worklog/v2.2.3/sprint-33-202605/it/README.md`
+**完成记录**:
+- 2026-05-19 完成 `GET /api/admin/roles/{name}/assignment-users` 查询契约、角色编辑页成员分配表格、差异审批 payload 接入。
+- 2026-05-19 通过后端 focused test、前端 source-level test 和 `dts-admin-webapp` 生产构建；运行时浏览器 smoke 留给联调环境补证。
 
 ## v2.3 Backlog: 企业级资产与指标增强
 

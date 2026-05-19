@@ -1,7 +1,7 @@
 # Sprint-33: 角色管理成员分配重构（202605）
 
 **时间**: 2026-05
-**状态**: IN_PROGRESS
+**状态**: DONE（聚焦验证通过；运行时手工 smoke 待现场环境补证）
 **类型**: UX / Refactor / Contract（dts-admin + dts-admin-webapp）
 **目标**: 把角色编辑页从“按部门下拉逐个添加成员”重构为“角色基础信息模块 + 可查询分页用户表”，支持按部门、姓名、用户名筛选，已在角色内的用户默认勾选，并通过现有审批流提交成员增删差异。
 
@@ -15,11 +15,11 @@
 
 | ID | Feature | 优先级 | Task 数 | 状态 | 依赖 |
 |----|---------|--------|---------|------|------|
-| F1 | 角色成员用户查询契约 | P0 | 3 | IN_PROGRESS | 现有 `/admin/users`、`/admin/roles/{role}/members` |
-| F2 | 角色编辑页模块化与成员表格 | P0 | 4 | READY | F1 |
-| F3 | 回归验证、IT 证据与状态收口 | P0 | 3 | READY | F1, F2 |
+| F1 | 角色成员用户查询契约 | P0 | 3 | DONE | 现有 `/admin/users`、`/admin/roles/{role}/members` |
+| F2 | 角色编辑页模块化与成员表格 | P0 | 4 | DONE | F1 |
+| F3 | 回归验证、IT 证据与状态收口 | P0 | 3 | DONE | F1, F2 |
 
-**统计**: READY=7, IN_PROGRESS=1, DONE=0, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=10, BLOCKED=0
 
 ## 目标体验
 
@@ -40,13 +40,13 @@
 
 ## 完成标准
 
-- [ ] 后端提供可分页的角色成员候选用户查询契约，支持部门、姓名、用户名筛选，并返回 `inRole` 状态。
-- [ ] 前端不再依赖 `getAllAdminUsers()` 完成角色成员编辑。
-- [ ] 角色编辑页拆分为角色基础信息模块和成员分配表格模块。
-- [ ] 表格默认勾选已在角色内的用户，跨页勾选/取消能正确计算新增和移除差异。
-- [ ] 提交 payload 继续兼容现有角色审批、审批详情和审批通过执行链路。
-- [ ] 覆盖后端查询契约测试、前端 source-level 行为测试和 `dts-admin-webapp` 构建。
-- [ ] IT 证据写入 `worklog/v2.2.3/sprint-33-202605/it/`。
+- [x] 后端提供可分页的角色成员候选用户查询契约，支持部门、姓名、用户名筛选，并返回 `inRole` 状态。
+- [x] 前端不再依赖 `getAllAdminUsers()` 完成角色成员编辑。
+- [x] 角色编辑页拆分为角色基础信息模块和成员分配表格模块。
+- [x] 表格默认勾选已在角色内的用户，跨页勾选/取消能正确计算新增和移除差异。
+- [x] 提交 payload 继续兼容现有角色审批、审批详情和审批通过执行链路。
+- [x] 覆盖后端查询契约测试、前端 source-level 行为测试和 `dts-admin-webapp` 构建。
+- [x] IT 证据写入 `worklog/v2.2.3/sprint-33-202605/it/`。
 
 ## 验证策略
 
@@ -61,8 +61,7 @@
 - `source/dts-admin-webapp/src/admin/views/role-management.tsx`
 - `source/dts-admin-webapp/src/admin/api/adminApi.ts`
 - `source/dts-admin-webapp/src/admin/types.ts`
-- `source/dts-admin/src/main/java/com/yuzhi/dts/admin/web/rest/AdminUserResource.java`
+- `source/dts-admin/src/main/java/com/yuzhi/dts/admin/web/rest/AdminApiResource.java`
 - `source/dts-admin/src/main/java/com/yuzhi/dts/admin/service/user/AdminUserService.java`
 - `source/dts-admin/src/main/java/com/yuzhi/dts/admin/repository/AdminKeycloakUserRepository.java`
 - `source/dts-admin/src/main/java/com/yuzhi/dts/admin/repository/AdminRoleMemberRepository.java`
-

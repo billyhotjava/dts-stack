@@ -1,7 +1,7 @@
 # T02: 前端 API 类型与客户端封装
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T01
 
 ## 目标
@@ -23,10 +23,9 @@
 
 ## 验证
 
-- [ ] source-level test 覆盖 API path、query 参数名称和返回类型消费点。
-- [ ] TypeScript 编译通过。
+- [x] source-level test 覆盖 API path、query 参数名称和返回类型消费点。
+- [x] TypeScript 编译通过。
 
 ## 完成标准
 
-- [ ] 前端可以通过单一 API 获取带 `inRole` 的分页用户。
-
+- [x] 前端可以通过单一 API 获取带 `inRole` 的分页用户。

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Table, TreeSelect } from "antd";
@@ -25,6 +26,7 @@ type OrgTreeOption = {
 type RealmMember = { username: string; displayName?: string };
 type PendingMember = { username: string; displayName: string; keycloakId?: string };
 type AssignmentFilters = { deptPath: string; fullName: string; username: string };
+type AssignmentPagination = { current: number; pageSize: number };
 type MemberView = {
 	username: string;
 	displayName: string;
@@ -139,7 +141,7 @@ export default function RoleDetailView() {
 	const emptyAssignmentFilters = useMemo<AssignmentFilters>(() => ({ deptPath: "", fullName: "", username: "" }), []);
 	const [assignmentFiltersDraft, setAssignmentFiltersDraft] = useState<AssignmentFilters>(emptyAssignmentFilters);
 	const [assignmentFilters, setAssignmentFilters] = useState<AssignmentFilters>(emptyAssignmentFilters);
-	const [assignmentPagination, setAssignmentPagination] = useState<{ current: number; pageSize: number }>({
+	const [assignmentPagination, setAssignmentPagination] = useState<AssignmentPagination>({
 		current: 1,
 		pageSize: 20,
 	});
@@ -229,6 +231,26 @@ export default function RoleDetailView() {
 			}),
 	});
 	const assignmentUsers = assignmentUsersPage?.content ?? [];
+	const assignmentUsersTotal = assignmentUsersPage?.totalElements ?? assignmentUsers.length;
+
+	const handleApplyAssignmentFilters = useCallback(() => {
+		setAssignmentFilters({
+			deptPath: assignmentFiltersDraft.deptPath.trim(),
+			fullName: assignmentFiltersDraft.fullName.trim(),
+			username: assignmentFiltersDraft.username.trim(),
+		});
+		setAssignmentPagination((prev) => ({ ...prev, current: 1 }));
+	}, [assignmentFiltersDraft]);
+
+	const handleResetAssignmentFilters = useCallback(() => {
+		setAssignmentFiltersDraft(emptyAssignmentFilters);
+		setAssignmentFilters(emptyAssignmentFilters);
+		setAssignmentPagination((prev) => ({ ...prev, current: 1 }));
+	}, [emptyAssignmentFilters]);
+
+	const handleAssignmentPageChange = useCallback((current: number, pageSize: number) => {
+		setAssignmentPagination({ current, pageSize });
+	}, []);
 
 	const selectedAssignmentRowKeys = useMemo(
 		() =>
@@ -560,273 +582,48 @@ export default function RoleDetailView() {
 			) : null}
 
 			<Card>
-				<CardHeader>
-					<div className="space-y-2">
-						{isEditMode ? (
-							<div className="space-y-2">
-								<Text variant="body3" className="font-medium">
-									角色名称
-								</Text>
-								<Input
-									value={displayLabel}
-									onChange={(event) => setDisplayLabel(event.target.value)}
-									placeholder="请输入角色名称"
-								/>
-							</div>
-						) : (
-							<CardTitle>{displayLabelText}</CardTitle>
-						)}
-						<Text variant="body3" className="text-muted-foreground">
-							角色标识：{authorityName}
-						</Text>
-					</div>
-				</CardHeader>
-				<CardContent className="space-y-8 text-sm">
-					<section className="grid gap-4 md:grid-cols-2">
-						<div className="space-y-1">
-							<Text variant="body3" className="font-medium">
-								所属域
-							</Text>
-							{isEditMode ? (
-								<SelectScope value={scope} onChange={setScope} />
-							) : (
-								<Text variant="body3" className="text-muted-foreground">
-									{scope === "INSTITUTE" ? "全所共享域" : "部门域"}
-								</Text>
-							)}
-						</div>
-						<div className="space-y-1">
-							<Text variant="body3" className="font-medium">
-								角色成员数
-							</Text>
-							<Text variant="body3" className="text-muted-foreground">
-								{visibleMemberCount} 人{hasPendingMemberChange ? "（含待审批变更）" : ""}
-							</Text>
-						</div>
-					</section>
-
-					<section className="space-y-2">
-						<Text variant="body3" className="font-medium">
-							角色描述
-						</Text>
-						{isEditMode ? (
-							<Textarea
-								rows={3}
-								placeholder="更新角色说明"
-								value={description}
-								onChange={(event) => setDescription(event.target.value)}
-							/>
-						) : (
-							<Text variant="body3" className="text-muted-foreground">
-								{targetRole.description?.trim() || "未填写"}
-							</Text>
-						)}
-					</section>
-
-					{isEditMode ? (
-						<section className="space-y-2">
-							<Text variant="body3" className="font-medium">
-								审批备注（可选）
-							</Text>
-							<Textarea
-								rows={2}
-								placeholder="补充审批说明"
-								value={updateReason}
-								onChange={(event) => setUpdateReason(event.target.value)}
-							/>
-						</section>
-					) : null}
-
-					<section className="space-y-4 border-t border-slate-200 pt-4">
-						<div className="space-y-1">
-							<Text variant="body3" className="font-medium">
-								角色成员
-							</Text>
-							<Text variant="body3" className="text-muted-foreground">
-								Keycloak 成员 {realmMembers.length} 人{hasPendingMemberChange ? "，当前包含待审批的新增/移除" : ""}
-							</Text>
-						</div>
-
-						{isEditMode ? (
-							<div className="space-y-4 rounded-lg border border-dashed border-slate-200 p-4">
-								<div className="flex flex-wrap items-center justify-between gap-3">
-									<div className="flex items-center gap-2">
-										<Icon icon="mdi:account-multiple-plus-outline" className="h-5 w-5 text-primary" />
-										<Text variant="body3" className="font-medium">
-											成员分配
-										</Text>
-									</div>
-									<Text variant="body3" className="text-muted-foreground">
-										待新增 {pendingAdds.size} 人，待移除 {pendingRemovals.size} 人
-									</Text>
-								</div>
-								<div className="grid gap-3 lg:grid-cols-[minmax(220px,1.1fr)_minmax(180px,0.8fr)_minmax(180px,0.8fr)_auto_auto]">
-									<div className="space-y-2">
-										<Text variant="body3" className="font-medium">
-											部门
-										</Text>
-										<TreeSelect
-											className="w-full"
-											placeholder="选择部门"
-											treeDefaultExpandAll
-											allowClear
-											value={assignmentFiltersDraft.deptPath || undefined}
-											onChange={(value) => {
-												setAssignmentFiltersDraft((prev) => ({
-													...prev,
-													deptPath: normalizeOrgPath(String(value || "")),
-												}));
-											}}
-											treeData={orgOptions}
-											style={{ width: "100%" }}
-										/>
-									</div>
-									<div className="space-y-2">
-										<Text variant="body3" className="font-medium">
-											姓名
-										</Text>
-										<Input
-											value={assignmentFiltersDraft.fullName}
-											onChange={(event) =>
-												setAssignmentFiltersDraft((prev) => ({
-													...prev,
-													fullName: event.target.value,
-												}))
-											}
-											placeholder="按姓名查询"
-										/>
-									</div>
-									<div className="space-y-2">
-										<Text variant="body3" className="font-medium">
-											用户名
-										</Text>
-										<Input
-											value={assignmentFiltersDraft.username}
-											onChange={(event) =>
-												setAssignmentFiltersDraft((prev) => ({
-													...prev,
-													username: event.target.value,
-												}))
-											}
-											placeholder="按用户名查询"
-										/>
-									</div>
-									<div className="flex items-end">
-										<Button
-											type="primary"
-											htmlType="button"
-											onClick={() => {
-												setAssignmentFilters({
-													deptPath: assignmentFiltersDraft.deptPath.trim(),
-													fullName: assignmentFiltersDraft.fullName.trim(),
-													username: assignmentFiltersDraft.username.trim(),
-												});
-												setAssignmentPagination((prev) => ({ ...prev, current: 1 }));
-											}}
-										>
-											查询
-										</Button>
-									</div>
-									<div className="flex items-end">
-										<Button
-											type="default"
-											htmlType="button"
-											onClick={() => {
-												setAssignmentFiltersDraft(emptyAssignmentFilters);
-												setAssignmentFilters(emptyAssignmentFilters);
-												setAssignmentPagination((prev) => ({ ...prev, current: 1 }));
-											}}
-										>
-											重置
-										</Button>
-									</div>
-								</div>
-								{assignmentUsersError ? (
-									<Text variant="body3" className="text-destructive">
-										加载用户列表失败，请稍后重试。
-									</Text>
-								) : null}
-								<Table<RoleAssignmentUser>
-									rowKey={(record) => record.username}
-									columns={assignmentColumns}
-									dataSource={assignmentUsers}
-									loading={assignmentUsersLoading}
-									rowSelection={{
-										selectedRowKeys: selectedAssignmentRowKeys,
-										preserveSelectedRowKeys: true,
-										getCheckboxProps: () => ({ disabled: hasPendingChange }),
-										onSelect: (record, selected) => handleAssignmentSelect(record, selected),
-										onSelectAll: (selected, _selectedRows, changedRows) => {
-											changedRows.forEach((record) => handleAssignmentSelect(record, selected));
-										},
-									}}
-									locale={{ emptyText: "未找到匹配用户" }}
-									pagination={{
-										current: assignmentPagination.current,
-										pageSize: assignmentPagination.pageSize,
-										total: assignmentUsersPage?.totalElements ?? assignmentUsers.length,
-										showSizeChanger: true,
-										pageSizeOptions: ["10", "20", "50", "100", "200"],
-										showTotal: (total) => `共 ${total} 人`,
-										onChange: (current, pageSize) => {
-											setAssignmentPagination({ current, pageSize });
-										},
-									}}
-									size="small"
-									tableLayout="fixed"
-									scroll={{ x: 900 }}
-								/>
-							</div>
-						) : null}
-
-						<section className="space-y-3">
-							<Text variant="body3" className="font-medium">
-								当前成员
-							</Text>
-							{membersLoading ? (
-								<Text variant="body3" className="text-muted-foreground">
-									加载中…
-								</Text>
-							) : memberViews.length === 0 ? (
-								<Text variant="body3" className="text-muted-foreground">
-									暂无成员。
-								</Text>
-							) : (
-								memberViews.map((member) => (
-									<div key={member.username} className="rounded-lg border px-4 py-3">
-										<div className="flex flex-wrap items-start justify-between gap-2">
-											<div>
-												<Text variant="body2" className="font-medium">
-													{member.displayName}
-												</Text>
-												<Text variant="body3" className="text-muted-foreground">
-													{member.username}
-												</Text>
-											</div>
-											<div className="flex items-center gap-2">
-												{member.status === "add" ? (
-													<Badge variant="secondary" className="border-emerald-500 text-emerald-600">
-														新增
-													</Badge>
-												) : null}
-												{member.status === "remove" ? (
-													<Badge variant="destructive" className="bg-red-50 text-red-600">
-														待移除
-													</Badge>
-												) : null}
-												{isEditMode ? (
-													<Button size="small" type="default" onClick={() => handleToggleMember(member)}>
-														{member.origin === "new" ? "撤销新增" : member.status === "remove" ? "恢复" : "移除"}
-													</Button>
-												) : null}
-											</div>
-										</div>
-									</div>
-								))
-							)}
-						</section>
-					</section>
-
+				<RoleBasicInfoSection
+					isEditMode={isEditMode}
+					displayLabel={displayLabel}
+					onDisplayLabelChange={setDisplayLabel}
+					displayLabelText={displayLabelText}
+					authorityName={authorityName}
+					scope={scope}
+					onScopeChange={setScope}
+					visibleMemberCount={visibleMemberCount}
+					hasPendingMemberChange={hasPendingMemberChange}
+					description={description}
+					roleDescription={targetRole.description}
+					onDescriptionChange={setDescription}
+					updateReason={updateReason}
+					onUpdateReasonChange={setUpdateReason}
+				>
+					<RoleMemberAssignmentSection
+						isEditMode={isEditMode}
+						realmMemberCount={realmMembers.length}
+						hasPendingMemberChange={hasPendingMemberChange}
+						pendingAddsCount={pendingAdds.size}
+						pendingRemovalsCount={pendingRemovals.size}
+						assignmentFiltersDraft={assignmentFiltersDraft}
+						onAssignmentFiltersDraftChange={setAssignmentFiltersDraft}
+						normalizeOrgPath={normalizeOrgPath}
+						orgOptions={orgOptions}
+						onApplyAssignmentFilters={handleApplyAssignmentFilters}
+						onResetAssignmentFilters={handleResetAssignmentFilters}
+						assignmentUsersError={assignmentUsersError}
+						assignmentColumns={assignmentColumns}
+						assignmentUsers={assignmentUsers}
+						assignmentUsersLoading={assignmentUsersLoading}
+						selectedAssignmentRowKeys={selectedAssignmentRowKeys}
+						hasPendingChange={hasPendingChange}
+						onAssignmentSelect={handleAssignmentSelect}
+						assignmentPagination={assignmentPagination}
+						assignmentUsersTotal={assignmentUsersTotal}
+						onAssignmentPageChange={handleAssignmentPageChange}
+						membersLoading={membersLoading}
+						memberViews={memberViews}
+						onToggleMember={handleToggleMember}
+					/>
 					{isEditMode ? (
 						<div className="flex justify-end border-t border-slate-200 pt-4">
 							<Button type="primary" onClick={handleSubmitChanges} disabled={updating || hasPendingChange}>
@@ -834,9 +631,350 @@ export default function RoleDetailView() {
 							</Button>
 						</div>
 					) : null}
-				</CardContent>
+				</RoleBasicInfoSection>
 			</Card>
 		</div>
+	);
+}
+
+function RoleBasicInfoSection({
+	isEditMode,
+	displayLabel,
+	onDisplayLabelChange,
+	displayLabelText,
+	authorityName,
+	scope,
+	onScopeChange,
+	visibleMemberCount,
+	hasPendingMemberChange,
+	description,
+	roleDescription,
+	onDescriptionChange,
+	updateReason,
+	onUpdateReasonChange,
+	children,
+}: {
+	isEditMode: boolean;
+	displayLabel: string;
+	onDisplayLabelChange: (value: string) => void;
+	displayLabelText: string;
+	authorityName: string;
+	scope: "DEPARTMENT" | "INSTITUTE";
+	onScopeChange: (value: "DEPARTMENT" | "INSTITUTE") => void;
+	visibleMemberCount: number;
+	hasPendingMemberChange: boolean;
+	description: string;
+	roleDescription?: string | null;
+	onDescriptionChange: (value: string) => void;
+	updateReason: string;
+	onUpdateReasonChange: (value: string) => void;
+	children: ReactNode;
+}) {
+	return (
+		<>
+			<CardHeader>
+				<div className="space-y-2">
+					{isEditMode ? (
+						<div className="space-y-2">
+							<Text variant="body3" className="font-medium">
+								角色名称
+							</Text>
+							<Input
+								value={displayLabel}
+								onChange={(event) => onDisplayLabelChange(event.target.value)}
+								placeholder="请输入角色名称"
+							/>
+						</div>
+					) : (
+						<CardTitle>{displayLabelText}</CardTitle>
+					)}
+					<Text variant="body3" className="text-muted-foreground">
+						角色标识：{authorityName}
+					</Text>
+				</div>
+			</CardHeader>
+			<CardContent className="space-y-8 text-sm">
+				<section className="grid gap-4 md:grid-cols-2">
+					<div className="space-y-1">
+						<Text variant="body3" className="font-medium">
+							所属域
+						</Text>
+						{isEditMode ? (
+							<SelectScope value={scope} onChange={onScopeChange} />
+						) : (
+							<Text variant="body3" className="text-muted-foreground">
+								{scope === "INSTITUTE" ? "全所共享域" : "部门域"}
+							</Text>
+						)}
+					</div>
+					<div className="space-y-1">
+						<Text variant="body3" className="font-medium">
+							角色成员数
+						</Text>
+						<Text variant="body3" className="text-muted-foreground">
+							{visibleMemberCount} 人{hasPendingMemberChange ? "（含待审批变更）" : ""}
+						</Text>
+					</div>
+				</section>
+
+				<section className="space-y-2">
+					<Text variant="body3" className="font-medium">
+						角色描述
+					</Text>
+					{isEditMode ? (
+						<Textarea
+							rows={3}
+							placeholder="更新角色说明"
+							value={description}
+							onChange={(event) => onDescriptionChange(event.target.value)}
+						/>
+					) : (
+						<Text variant="body3" className="text-muted-foreground">
+							{roleDescription?.trim() || "未填写"}
+						</Text>
+					)}
+				</section>
+
+				{isEditMode ? (
+					<section className="space-y-2">
+						<Text variant="body3" className="font-medium">
+							审批备注（可选）
+						</Text>
+						<Textarea
+							rows={2}
+							placeholder="补充审批说明"
+							value={updateReason}
+							onChange={(event) => onUpdateReasonChange(event.target.value)}
+						/>
+					</section>
+				) : null}
+
+				{children}
+			</CardContent>
+		</>
+	);
+}
+
+function RoleMemberAssignmentSection({
+	isEditMode,
+	realmMemberCount,
+	hasPendingMemberChange,
+	pendingAddsCount,
+	pendingRemovalsCount,
+	assignmentFiltersDraft,
+	onAssignmentFiltersDraftChange,
+	normalizeOrgPath,
+	orgOptions,
+	onApplyAssignmentFilters,
+	onResetAssignmentFilters,
+	assignmentUsersError,
+	assignmentColumns,
+	assignmentUsers,
+	assignmentUsersLoading,
+	selectedAssignmentRowKeys,
+	hasPendingChange,
+	onAssignmentSelect,
+	assignmentPagination,
+	assignmentUsersTotal,
+	onAssignmentPageChange,
+	membersLoading,
+	memberViews,
+	onToggleMember,
+}: {
+	isEditMode: boolean;
+	realmMemberCount: number;
+	hasPendingMemberChange: boolean;
+	pendingAddsCount: number;
+	pendingRemovalsCount: number;
+	assignmentFiltersDraft: AssignmentFilters;
+	onAssignmentFiltersDraftChange: Dispatch<SetStateAction<AssignmentFilters>>;
+	normalizeOrgPath: (value: string) => string;
+	orgOptions: TreeSelectProps["treeData"];
+	onApplyAssignmentFilters: () => void;
+	onResetAssignmentFilters: () => void;
+	assignmentUsersError: boolean;
+	assignmentColumns: ColumnsType<RoleAssignmentUser>;
+	assignmentUsers: RoleAssignmentUser[];
+	assignmentUsersLoading: boolean;
+	selectedAssignmentRowKeys: string[];
+	hasPendingChange: boolean;
+	onAssignmentSelect: (user: RoleAssignmentUser, selected: boolean) => void;
+	assignmentPagination: AssignmentPagination;
+	assignmentUsersTotal: number;
+	onAssignmentPageChange: (current: number, pageSize: number) => void;
+	membersLoading: boolean;
+	memberViews: MemberView[];
+	onToggleMember: (member: MemberView) => void;
+}) {
+	return (
+		<section className="space-y-4 border-t border-slate-200 pt-4">
+			<div className="space-y-1">
+				<Text variant="body3" className="font-medium">
+					角色成员
+				</Text>
+				<Text variant="body3" className="text-muted-foreground">
+					Keycloak 成员 {realmMemberCount} 人{hasPendingMemberChange ? "，当前包含待审批的新增/移除" : ""}
+				</Text>
+			</div>
+
+			{isEditMode ? (
+				<div className="space-y-4 rounded-lg border border-dashed border-slate-200 p-4">
+					<div className="flex flex-wrap items-center justify-between gap-3">
+						<div className="flex items-center gap-2">
+							<Icon icon="mdi:account-multiple-plus-outline" className="h-5 w-5 text-primary" />
+							<Text variant="body3" className="font-medium">
+								成员分配
+							</Text>
+						</div>
+						<Text variant="body3" className="text-muted-foreground">
+							待新增 {pendingAddsCount} 人，待移除 {pendingRemovalsCount} 人
+						</Text>
+					</div>
+					<div className="grid gap-3 lg:grid-cols-[minmax(220px,1.1fr)_minmax(180px,0.8fr)_minmax(180px,0.8fr)_auto_auto]">
+						<div className="space-y-2">
+							<Text variant="body3" className="font-medium">
+								部门
+							</Text>
+							<TreeSelect
+								className="w-full"
+								placeholder="选择部门"
+								treeDefaultExpandAll
+								allowClear
+								value={assignmentFiltersDraft.deptPath || undefined}
+								onChange={(value) => {
+									onAssignmentFiltersDraftChange((prev) => ({
+										...prev,
+										deptPath: normalizeOrgPath(String(value || "")),
+									}));
+								}}
+								treeData={orgOptions}
+								style={{ width: "100%" }}
+							/>
+						</div>
+						<div className="space-y-2">
+							<Text variant="body3" className="font-medium">
+								姓名
+							</Text>
+							<Input
+								value={assignmentFiltersDraft.fullName}
+								onChange={(event) =>
+									onAssignmentFiltersDraftChange((prev) => ({
+										...prev,
+										fullName: event.target.value,
+									}))
+								}
+								placeholder="按姓名查询"
+							/>
+						</div>
+						<div className="space-y-2">
+							<Text variant="body3" className="font-medium">
+								用户名
+							</Text>
+							<Input
+								value={assignmentFiltersDraft.username}
+								onChange={(event) =>
+									onAssignmentFiltersDraftChange((prev) => ({
+										...prev,
+										username: event.target.value,
+									}))
+								}
+								placeholder="按用户名查询"
+							/>
+						</div>
+						<div className="flex items-end">
+							<Button type="primary" htmlType="button" onClick={onApplyAssignmentFilters}>
+								查询
+							</Button>
+						</div>
+						<div className="flex items-end">
+							<Button type="default" htmlType="button" onClick={onResetAssignmentFilters}>
+								重置
+							</Button>
+						</div>
+					</div>
+					{assignmentUsersError ? (
+						<Text variant="body3" className="text-destructive">
+							加载用户列表失败，请稍后重试。
+						</Text>
+					) : null}
+					<Table<RoleAssignmentUser>
+						rowKey={(record) => record.username}
+						columns={assignmentColumns}
+						dataSource={assignmentUsers}
+						loading={assignmentUsersLoading}
+						rowSelection={{
+							selectedRowKeys: selectedAssignmentRowKeys,
+							preserveSelectedRowKeys: true,
+							getCheckboxProps: () => ({ disabled: hasPendingChange }),
+							onSelect: (record, selected) => onAssignmentSelect(record, selected),
+							onSelectAll: (selected, _selectedRows, changedRows) => {
+								changedRows.forEach((record) => onAssignmentSelect(record, selected));
+							},
+						}}
+						locale={{ emptyText: "未找到匹配用户" }}
+						pagination={{
+							current: assignmentPagination.current,
+							pageSize: assignmentPagination.pageSize,
+							total: assignmentUsersTotal,
+							showSizeChanger: true,
+							pageSizeOptions: ["10", "20", "50", "100", "200"],
+							showTotal: (total) => `共 ${total} 人`,
+							onChange: onAssignmentPageChange,
+						}}
+						size="small"
+						tableLayout="fixed"
+						scroll={{ x: 900 }}
+					/>
+				</div>
+			) : null}
+
+			<section className="space-y-3">
+				<Text variant="body3" className="font-medium">
+					当前成员
+				</Text>
+				{membersLoading ? (
+					<Text variant="body3" className="text-muted-foreground">
+						加载中…
+					</Text>
+				) : memberViews.length === 0 ? (
+					<Text variant="body3" className="text-muted-foreground">
+						暂无成员。
+					</Text>
+				) : (
+					memberViews.map((member) => (
+						<div key={member.username} className="rounded-lg border px-4 py-3">
+							<div className="flex flex-wrap items-start justify-between gap-2">
+								<div>
+									<Text variant="body2" className="font-medium">
+										{member.displayName}
+									</Text>
+									<Text variant="body3" className="text-muted-foreground">
+										{member.username}
+									</Text>
+								</div>
+								<div className="flex items-center gap-2">
+									{member.status === "add" ? (
+										<Badge variant="secondary" className="border-emerald-500 text-emerald-600">
+											新增
+										</Badge>
+									) : null}
+									{member.status === "remove" ? (
+										<Badge variant="destructive" className="bg-red-50 text-red-600">
+											待移除
+										</Badge>
+									) : null}
+									{isEditMode ? (
+										<Button size="small" type="default" onClick={() => onToggleMember(member)}>
+											{member.origin === "new" ? "撤销新增" : member.status === "remove" ? "恢复" : "移除"}
+										</Button>
+									) : null}
+								</div>
+							</div>
+						</div>
+					))
+				)}
+			</section>
+		</section>
 	);
 }
 
