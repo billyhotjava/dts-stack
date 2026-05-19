@@ -1222,7 +1222,7 @@
         ],
         "pageSize": 20,
         "showHeader": true,
-        "headerColor": "#d9eeff",
+        "headerColor": "#ffffff",
         "stripeColor": "rgba(88,180,255,0.08)",
         "backgroundColor": "rgba(9,36,90,0.50)",
         "titleFontSize": 0,

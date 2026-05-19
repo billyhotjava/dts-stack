@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -12,6 +13,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.admin.domain.AdminKeycloakUser;
+import com.yuzhi.dts.admin.domain.AdminRoleMember;
 import com.yuzhi.dts.admin.repository.AdminApprovalRequestRepository;
 import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
 import com.yuzhi.dts.admin.repository.AdminRoleAssignmentRepository;
@@ -110,6 +112,42 @@ class AdminUserServiceListSnapshotsTest {
         verify(personProfileRepository, atLeastOnce()).findAll(any(org.springframework.data.domain.Pageable.class));
     }
 
+    @Test
+    void roleAssignmentUsersShouldFilterByUsernameFullNameDepartmentAndMarkExistingMembers() {
+        AdminKeycloakUser zhang = user("zhangsan", "张三", "/总院/数据部");
+        when(
+            userRepository.findRoleAssignmentCandidates(
+                eq("zhang"),
+                eq("张"),
+                eq("/总院/数据部"),
+                anyCollection(),
+                any(org.springframework.data.domain.Pageable.class)
+            )
+        )
+            .thenReturn(new PageImpl<>(List.of(zhang), PageRequest.of(0, 20), 1));
+        AdminRoleMember member = new AdminRoleMember();
+        member.setRole("DATA_STEWARD");
+        member.setUsername("zhangsan");
+        member.setDisplayName("张三");
+        when(roleMemberRepo.findByRoleIgnoreCase("DATA_STEWARD")).thenReturn(List.of(member));
+
+        Page<AdminUserService.RoleAssignmentUser> result = serviceWithoutMgmtToken.listRoleAssignmentUsers(
+            "DATA_STEWARD",
+            0,
+            20,
+            "zhang",
+            "张",
+            "/总院/数据部"
+        );
+
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        AdminUserService.RoleAssignmentUser row = result.getContent().get(0);
+        assertThat(row.username()).isEqualTo("zhangsan");
+        assertThat(row.fullName()).isEqualTo("张三");
+        assertThat(row.groupPaths()).contains("/总院/数据部");
+        assertThat(row.inRole()).isTrue();
+    }
+
     private AdminUserService buildService(String managementClientId, String managementClientSecret) {
         return new AdminUserService(
             userRepository,
@@ -130,5 +168,17 @@ class AdminUserServiceListSnapshotsTest {
             "dts-system",
             false
         );
+    }
+
+    private static AdminKeycloakUser user(String username, String fullName, String groupPath) {
+        AdminKeycloakUser user = new AdminKeycloakUser();
+        user.setUsername(username);
+        user.setFullName(fullName);
+        user.setKeycloakId("kc-" + username);
+        user.setEmail(username + "@example.test");
+        user.setGroupPaths(List.of(groupPath));
+        user.setEnabled(true);
+        user.setMdmEnabled(1);
+        return user;
     }
 }

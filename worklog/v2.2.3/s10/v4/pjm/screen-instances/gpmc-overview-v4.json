@@ -37,7 +37,7 @@
       "config": {
         "format": "YYYY-MM-DD HH:mm:ss",
         "fontSize": 12,
-        "color": "#e2ffff"
+        "color": "#ffffff"
       }
     },
     {
@@ -862,8 +862,8 @@
         "precision": 0,
         "titleFontSize": 13,
         "valueFontSize": 42,
-        "titleColor": "#bcd6ef",
-        "valueColor": "#7fd4ff",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "transparent",
         "valueSourceMode": "data",
         "valueField": "质量问题总数"
@@ -906,8 +906,8 @@
         "precision": 0,
         "titleFontSize": 13,
         "valueFontSize": 42,
-        "titleColor": "#bcd6ef",
-        "valueColor": "#ffba49",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "transparent",
         "valueSourceMode": "data",
         "valueField": "当月新增"
@@ -950,8 +950,8 @@
         "precision": 0,
         "titleFontSize": 13,
         "valueFontSize": 42,
-        "titleColor": "#bcd6ef",
-        "valueColor": "#ff6b6b",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "transparent",
         "valueSourceMode": "data",
         "valueField": "未归零"
@@ -994,8 +994,8 @@
         "precision": 0,
         "titleFontSize": 13,
         "valueFontSize": 42,
-        "titleColor": "#bcd6ef",
-        "valueColor": "#7fd4ff",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "transparent",
         "valueSourceMode": "data",
         "valueField": "技术状态变更总数"
@@ -1038,8 +1038,8 @@
         "precision": 0,
         "titleFontSize": 13,
         "valueFontSize": 42,
-        "titleColor": "#bcd6ef",
-        "valueColor": "#ffba49",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "transparent",
         "valueSourceMode": "data",
         "valueField": "未签署"
@@ -1082,8 +1082,8 @@
         "precision": 0,
         "titleFontSize": 13,
         "valueFontSize": 42,
-        "titleColor": "#bcd6ef",
-        "valueColor": "#ff6b6b",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "transparent",
         "valueSourceMode": "data",
         "valueField": "未落实整改"
@@ -1354,7 +1354,7 @@
       "config": {
         "markdown": "1. 完成总体方案评审闭环，形成问题清单与责任分解。\n2. 推进关键单机联试准备，完成试验资源、样件和人员排期确认。\n3. 跟踪超期节点整改，聚焦高风险项目周度复盘与闭环验证。\n4. 完成技术状态变更单签署和整改落实专项清理。",
         "fontSize": 16,
-        "color": "#dff3ff",
+        "color": "#ffffff",
         "lineHeight": 1.7
       }
     },
@@ -1572,7 +1572,7 @@
         "text": "项目基本信息",
         "fontSize": 14,
         "fontWeight": 600,
-        "color": "#bfe6ff",
+        "color": "#ffffff",
         "textAlign": "left"
       }
     },
@@ -1596,7 +1596,7 @@
         "waitTime": 2500,
         "headerHeight": 36,
         "fontSize": 13,
-        "color": "#dff3ff",
+        "color": "#ffffff",
         "header": [
           "项目名称",
           "项目两总",
@@ -1656,7 +1656,7 @@
         ],
         "sourceType": "data",
         "headerBackground": "#0f2a55",
-        "headerColor": "#d9eeff",
+        "headerColor": "#ffffff",
         "headerSourceMode": "manual"
       },
       "dataSource": {
@@ -1713,7 +1713,7 @@
         "text": "项目节点统计",
         "fontSize": 14,
         "fontWeight": 600,
-        "color": "#bfe6ff",
+        "color": "#ffffff",
         "textAlign": "left"
       }
     },
@@ -1751,7 +1751,7 @@
         "text": "科室任务完成统计",
         "fontSize": 14,
         "fontWeight": 600,
-        "color": "#bfe6ff",
+        "color": "#ffffff",
         "textAlign": "left"
       }
     },
@@ -1789,7 +1789,7 @@
         "text": "质量问题统计",
         "fontSize": 14,
         "fontWeight": 600,
-        "color": "#bfe6ff",
+        "color": "#ffffff",
         "textAlign": "left"
       }
     },
@@ -1827,7 +1827,7 @@
         "text": "物料采购",
         "fontSize": 14,
         "fontWeight": 600,
-        "color": "#bfe6ff",
+        "color": "#ffffff",
         "textAlign": "left"
       }
     },
@@ -1865,7 +1865,7 @@
         "text": "项目风险统计",
         "fontSize": 14,
         "fontWeight": 600,
-        "color": "#bfe6ff",
+        "color": "#ffffff",
         "textAlign": "left"
       }
     },
@@ -1903,7 +1903,7 @@
         "text": "经费成本（预留）",
         "fontSize": 14,
         "fontWeight": 600,
-        "color": "#bfe6ff",
+        "color": "#ffffff",
         "textAlign": "left"
       }
     },
@@ -1941,7 +1941,7 @@
         "text": "技术状态",
         "fontSize": 14,
         "fontWeight": 600,
-        "color": "#bfe6ff",
+        "color": "#ffffff",
         "textAlign": "left"
       }
     },
@@ -1979,7 +1979,7 @@
         "text": "风险类型占比",
         "fontSize": 14,
         "fontWeight": 600,
-        "color": "#bfe6ff",
+        "color": "#ffffff",
         "textAlign": "left"
       }
     },
@@ -2021,7 +2021,7 @@
           "show": true,
           "labelFontSize": 11
         },
-        "axisLabelColor": "#cfe7ff",
+        "axisLabelColor": "#ffffff",
         "series": [
           {
             "name": "合同签订数",

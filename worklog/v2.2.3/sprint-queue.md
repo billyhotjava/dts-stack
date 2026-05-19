@@ -519,6 +519,22 @@
 - 2026-05-18 完成 dts-metrics 发布预检路径：重新解析 platform policy、计算 predicate hash、调用 platform release gate，并在响应返回 `appliedPolicySource` / `appliedPredicateHash`。
 - 2026-05-18 新增前端验收口径：数据资产、语义指标、BI 消费能力必须以“页面可操作”为 DONE 标准；已先补资产解析失败报告入口，其余 assets-v2 详情、数据产品成员配置、治理缺口处置、dts-metrics 真实页面仍待闭环。
 
+## Sprint-33: 角色管理成员分配重构 (202605)
+**状态**: IN_PROGRESS
+**类型**: UX / Refactor / Contract（dts-admin + dts-admin-webapp）
+**目标**: 把角色编辑页从“按部门下拉逐个添加成员”重构为“角色基础信息模块 + 可查询分页用户表”，支持按部门、姓名、用户名筛选，已在角色内的用户默认勾选，并通过现有审批流提交成员增删差异。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-assignment-user-query-contract | P0 | 3 | IN_PROGRESS |
+| F2-role-edit-member-table | P0 | 4 | READY |
+| F3-verification-and-it | P0 | 3 | READY |
+
+**统计**: READY=7, IN_PROGRESS=1, DONE=0, BLOCKED=0
+**设计文档**: `worklog/v2.2.3/sprint-33-202605/README.md`
+**实施计划**: `worklog/v2.2.3/sprint-33-202605/assets/implementation-plan.md`
+**集成测试**: `worklog/v2.2.3/sprint-33-202605/it/README.md`
+
 ## v2.3 Backlog: 企业级资产与指标增强
 
 | Item | Owner | 来源 | 状态 |
