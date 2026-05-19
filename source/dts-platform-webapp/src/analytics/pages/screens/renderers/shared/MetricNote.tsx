@@ -99,6 +99,24 @@ interface MetricNoteBadgeProps {
 }
 
 /**
+ * 字体大小常量 —— 通过 clamp() 在不同分辨率下自适应,确保 2K 屏可读。
+ * 正常显示器(1080p/1440p)走 min 值,>= 18px;2K 屏走 max 值,更大。
+ */
+const FZ = {
+	title: "clamp(20px, 1.2vw, 24px)",         // Popover 顶部标题
+	titleMeta: "clamp(15px, 0.85vw, 18px)",   // 标题后的单位/小注
+	body: "clamp(18px, 1.0vw, 20px)",          // 正文内容
+	label: "clamp(16px, 0.9vw, 18px)",         // 左侧标签列
+	enumLabel: "clamp(16px, 0.9vw, 18px)",     // 枚举值名称
+	enumDesc: "clamp(15px, 0.85vw, 17px)",     // 枚举值含义
+	note: "clamp(15px, 0.85vw, 17px)",         // 底部业务备注
+} as const;
+
+/** Popover 主体白色背景,确保暗色大屏下也清晰可读 */
+const POPOVER_BG = "#ffffff";
+const POPOVER_BOX_SHADOW = "0 6px 24px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.12)";
+
+/**
  * 把阈值规则转成可读语言。
  * 例: rule=">" warning=15, critical=25 → "≥ 15 时关注,≥ 25 时预警"
  */
@@ -119,30 +137,30 @@ function describeThresholds(t: MetricThresholds | null | undefined, unit?: strin
 function renderRow(label: string, value: ReactNode): ReactNode {
 	if (!value) return null;
 	return (
-		<div style={{ display: "grid", gridTemplateColumns: "72px 1fr", gap: 8, marginTop: 6 }}>
-			<div style={{ color: "rgba(15, 23, 42, 0.55)", fontSize: 12, lineHeight: 1.5 }}>{label}</div>
-			<div style={{ color: "rgba(15, 23, 42, 0.9)", fontSize: 12, lineHeight: 1.5 }}>{value}</div>
+		<div style={{ display: "grid", gridTemplateColumns: "84px 1fr", gap: 10, marginTop: 8 }}>
+			<div style={{ color: "rgba(15, 23, 42, 0.55)", fontSize: FZ.label, lineHeight: 1.6 }}>{label}</div>
+			<div style={{ color: "rgba(15, 23, 42, 0.9)", fontSize: FZ.body, lineHeight: 1.6 }}>{value}</div>
 		</div>
 	);
 }
 
 function FieldNoteContent({ note }: { note: FieldNote }) {
 	return (
-		<div style={{ maxWidth: 360, color: "rgba(15, 23, 42, 0.85)", fontSize: 12, lineHeight: 1.5 }}>
-			<div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a", marginBottom: 4 }}>
+		<div style={{ maxWidth: 520, color: "rgba(15, 23, 42, 0.9)", fontSize: FZ.body, lineHeight: 1.6 }}>
+			<div style={{ fontSize: FZ.title, fontWeight: 600, color: "#0f172a", marginBottom: 6 }}>
 				{note.displayName}
-				<span style={{ marginLeft: 6, fontWeight: 400, color: "#64748b", fontSize: 11 }}>· 字段说明</span>
+				<span style={{ marginLeft: 8, fontWeight: 400, color: "#64748b", fontSize: FZ.titleMeta }}>· 字段说明</span>
 			</div>
 			{note.definition ? renderRow("定义", note.definition) : null}
 			{note.enumValues && note.enumValues.length > 0 ? (
-				<div style={{ marginTop: 8 }}>
-					<div style={{ fontSize: 11, fontWeight: 600, color: "rgba(15, 23, 42, 0.55)", marginBottom: 4 }}>
+				<div style={{ marginTop: 10 }}>
+					<div style={{ fontSize: FZ.label, fontWeight: 600, color: "rgba(15, 23, 42, 0.55)", marginBottom: 6 }}>
 						取值含义({note.enumValues.length} 种)
 					</div>
 					{note.enumValues.map((e) => (
-						<div key={e.code} style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 8, marginTop: 3 }}>
-							<div style={{ color: "#475569", fontSize: 11, lineHeight: 1.5, fontWeight: 500 }}>{e.label}</div>
-							<div style={{ color: "rgba(15, 23, 42, 0.85)", fontSize: 11, lineHeight: 1.5 }}>
+						<div key={e.code} style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 10, marginTop: 4 }}>
+							<div style={{ color: "#334155", fontSize: FZ.enumLabel, lineHeight: 1.6, fontWeight: 500 }}>{e.label}</div>
+							<div style={{ color: "rgba(15, 23, 42, 0.85)", fontSize: FZ.enumDesc, lineHeight: 1.6 }}>
 								{e.description || ""}
 							</div>
 						</div>
@@ -151,7 +169,7 @@ function FieldNoteContent({ note }: { note: FieldNote }) {
 			) : null}
 			{note.sourceTable ? renderRow("数据来源", note.sourceTable) : null}
 			{note.note ? (
-				<div style={{ marginTop: 8, paddingTop: 6, borderTop: "1px dashed rgba(15, 23, 42, 0.12)", fontSize: 11, color: "rgba(15, 23, 42, 0.55)" }}>
+				<div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px dashed rgba(15, 23, 42, 0.12)", fontSize: FZ.note, color: "rgba(15, 23, 42, 0.6)", lineHeight: 1.6 }}>
 					{note.note}
 				</div>
 			) : null}
@@ -169,7 +187,14 @@ export function MetricNoteBadge({
 
 	if (isFieldNote(note)) {
 		return (
-			<Popover content={<FieldNoteContent note={note} />} placement="topRight" mouseEnterDelay={0.25} overlayStyle={{ maxWidth: 380 }}>
+			<Popover
+				content={<FieldNoteContent note={note} />}
+				placement="topRight"
+				mouseEnterDelay={0.25}
+				color={POPOVER_BG}
+				overlayStyle={{ maxWidth: 540 }}
+				overlayInnerStyle={{ background: POPOVER_BG, color: "#0f172a", boxShadow: POPOVER_BOX_SHADOW, padding: 14, borderRadius: 8 }}
+			>
 				<span
 					role="button"
 					aria-label={`查看${note.displayName}字段说明`}
@@ -210,33 +235,32 @@ export function MetricNoteBadge({
 					: "";
 
 	const content = (
-		<div style={{ maxWidth: 340, color: "rgba(15, 23, 42, 0.85)", fontSize: 12, lineHeight: 1.5 }}>
+		<div style={{ maxWidth: 520, color: "rgba(15, 23, 42, 0.9)", fontSize: FZ.body, lineHeight: 1.6 }}>
 			{note.displayName && (
-				<div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a", marginBottom: 4 }}>
+				<div style={{ fontSize: FZ.title, fontWeight: 600, color: "#0f172a", marginBottom: 6 }}>
 					{note.displayName}
-					{note.unit ? <span style={{ marginLeft: 6, fontWeight: 400, color: "#64748b" }}>· {note.unit}</span> : null}
+					{note.unit ? <span style={{ marginLeft: 8, fontWeight: 400, color: "#64748b", fontSize: FZ.titleMeta }}>· {note.unit}</span> : null}
 				</div>
 			)}
 			{renderRow("定义", note.definition)}
 			{renderRow("计算公式", <span style={{ whiteSpace: "pre-wrap" }}>{note.formula}</span>)}
 			{renderRow("统计范围", note.scope)}
 			{renderRow("数据来源", note.sourceTable)}
-			{renderRow("更新频率", note.frequency)}
 			{renderRow(
 				"评价方向",
 				directionText && thresholdsText ? `${directionText} · ${thresholdsText}` : directionText || thresholdsText,
 			)}
 			{note.seriesNotes && note.seriesNotes.length > 0 ? (
-				<div style={{ marginTop: 8, paddingTop: 6, borderTop: "1px dashed rgba(15, 23, 42, 0.12)" }}>
-					<div style={{ fontSize: 11, fontWeight: 600, color: "rgba(15, 23, 42, 0.55)", marginBottom: 4 }}>
+				<div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px dashed rgba(15, 23, 42, 0.12)" }}>
+					<div style={{ fontSize: FZ.label, fontWeight: 600, color: "rgba(15, 23, 42, 0.55)", marginBottom: 6 }}>
 						各系列口径
 					</div>
 					{note.seriesNotes.map((s, i) => (
-						<div key={`${s.code || s.name}-${i}`} style={{ display: "grid", gridTemplateColumns: "72px 1fr", gap: 8, marginTop: 4 }}>
-							<div style={{ color: "rgba(15, 23, 42, 0.55)", fontSize: 11, lineHeight: 1.5, overflow: "hidden", textOverflow: "ellipsis" }}>
+						<div key={`${s.code || s.name}-${i}`} style={{ display: "grid", gridTemplateColumns: "100px 1fr", gap: 10, marginTop: 5 }}>
+							<div style={{ color: "#334155", fontSize: FZ.enumLabel, lineHeight: 1.6, overflow: "hidden", textOverflow: "ellipsis", fontWeight: 500 }}>
 								{s.name}
 							</div>
-							<div style={{ color: "rgba(15, 23, 42, 0.9)", fontSize: 11, lineHeight: 1.5 }}>
+							<div style={{ color: "rgba(15, 23, 42, 0.85)", fontSize: FZ.enumDesc, lineHeight: 1.6 }}>
 								<span style={{ whiteSpace: "pre-wrap" }}>{s.formula || s.displayName || s.code || "—"}</span>
 								{s.unit ? <span style={{ marginLeft: 4, color: "#64748b" }}>· {s.unit}</span> : null}
 							</div>
@@ -244,16 +268,18 @@ export function MetricNoteBadge({
 					))}
 				</div>
 			) : null}
-			{note.excelRef && (
-				<div style={{ marginTop: 8, paddingTop: 6, borderTop: "1px dashed rgba(15, 23, 42, 0.12)" }}>
-					<span style={{ fontSize: 11, color: "rgba(15, 23, 42, 0.4)" }}>口径源 · {note.excelRef}</span>
-				</div>
-			)}
 		</div>
 	);
 
 	return (
-		<Popover content={content} placement="topRight" mouseEnterDelay={0.25} overlayStyle={{ maxWidth: 360 }}>
+		<Popover
+			content={content}
+			placement="topRight"
+			mouseEnterDelay={0.25}
+			color={POPOVER_BG}
+			overlayStyle={{ maxWidth: 540 }}
+			overlayInnerStyle={{ background: POPOVER_BG, color: "#0f172a", boxShadow: POPOVER_BOX_SHADOW, padding: 14, borderRadius: 8 }}
+		>
 			<span
 				role="button"
 				aria-label={`查看${note.displayName || ""}指标说明`}
