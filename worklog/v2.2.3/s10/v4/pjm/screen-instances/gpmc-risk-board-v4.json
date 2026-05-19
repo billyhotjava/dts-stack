@@ -66,7 +66,26 @@
       "name": "gpmc-risk-left",
       "x": 36,
       "y": 268,
-      "width": 936,
+      "width": 608,
+      "height": 316,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 18
+      }
+    },
+    {
+      "id": "gpmc-risk-mid",
+      "type": "shape",
+      "name": "gpmc-risk-mid",
+      "x": 656,
+      "y": 268,
+      "width": 608,
       "height": 316,
       "zIndex": 1,
       "locked": false,
@@ -83,9 +102,9 @@
       "id": "gpmc-risk-right",
       "type": "shape",
       "name": "gpmc-risk-right",
-      "x": 984,
+      "x": 1276,
       "y": 268,
-      "width": 900,
+      "width": 608,
       "height": 316,
       "zIndex": 1,
       "locked": false,
@@ -854,9 +873,9 @@
       "id": "gpmc-risk-project",
       "type": "bar-chart",
       "name": "项目风险统计",
-      "x": 48,
+      "x": 52,
       "y": 318,
-      "width": 912,
+      "width": 576,
       "height": 256,
       "zIndex": 15,
       "locked": false,
@@ -961,12 +980,96 @@
       }
     },
     {
+      "id": "gpmc-risk-project-open",
+      "type": "bar-chart",
+      "name": "项目未释放风险",
+      "x": 672,
+      "y": 318,
+      "width": 576,
+      "height": 256,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "xAxis": {
+          "type": "value",
+          "name": "数量"
+        },
+        "yAxis": {
+          "type": "category",
+          "name": "项目"
+        },
+        "orientation": "horizontal",
+        "legend": {
+          "show": false
+        },
+        "colors": [
+          "#ffc645"
+        ],
+        "categoryKey": "项目编号",
+        "series": [
+          {
+            "name": "未释放风险数",
+            "dataKey": "未释放风险数",
+            "color": "#ffc645"
+          }
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "项目未释放风险",
+          "definition": "按项目统计当前周期内仍未释放的风险数量。",
+          "scope": "Y 轴=项目编号; 受顶部时间筛选控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "未释放风险数",
+              "code": "pjm_risk_open",
+              "displayName": "未释放风险数",
+              "formula": "风险状态不等于'已释放'的风险计数",
+              "unit": "个"
+            }
+          ]
+        }
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT x.\"项目编号\", x.\"未释放风险数\" FROM (SELECT s.project_no AS \"项目编号\", COALESCE(SUM(s.open_cnt),0) AS \"未释放风险数\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]] GROUP BY s.project_no) x WHERE x.\"未释放风险数\" > 0 ORDER BY x.\"未释放风险数\" DESC LIMIT 12",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
       "id": "gpmc-risk-category",
       "type": "pie-chart",
       "name": "风险分类分布",
-      "x": 972,
+      "x": 1292,
       "y": 318,
-      "width": 896,
+      "width": 576,
       "height": 256,
       "zIndex": 15,
       "locked": false,
@@ -1408,9 +1511,9 @@
       "id": "gpmc-risk-project-overlay-title",
       "type": "title",
       "name": "项目风险统计-标题",
-      "x": 64,
+      "x": 52,
       "y": 286,
-      "width": 360,
+      "width": 520,
       "height": 28,
       "zIndex": 20,
       "locked": false,
@@ -1424,12 +1527,31 @@
       }
     },
     {
+      "id": "gpmc-risk-project-open-overlay-title",
+      "type": "title",
+      "name": "项目未释放风险-标题",
+      "x": 672,
+      "y": 286,
+      "width": 520,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "项目未释放风险（按未释放数排序）",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
       "id": "gpmc-risk-category-overlay-title",
       "type": "title",
       "name": "风险分类分布-标题",
-      "x": 988,
+      "x": 1292,
       "y": 286,
-      "width": 360,
+      "width": 520,
       "height": 28,
       "zIndex": 20,
       "locked": false,

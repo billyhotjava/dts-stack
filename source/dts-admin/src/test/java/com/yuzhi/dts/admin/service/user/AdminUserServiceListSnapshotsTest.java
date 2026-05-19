@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -31,11 +32,13 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 @ExtendWith(MockitoExtension.class)
 class AdminUserServiceListSnapshotsTest {
@@ -146,6 +149,19 @@ class AdminUserServiceListSnapshotsTest {
         assertThat(row.fullName()).isEqualTo("张三");
         assertThat(row.groupPaths()).contains("/总院/数据部");
         assertThat(row.inRole()).isTrue();
+    }
+
+    @Test
+    void roleAssignmentUsersShouldUseUnsortedPageableBecauseNativeQueryOwnsOrdering() {
+        AdminKeycloakUser zhang = user("zhangsan", "张三", "/总院/数据部");
+        when(userRepository.findRoleAssignmentCandidates(isNull(), isNull(), isNull(), anyCollection(), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(zhang), PageRequest.of(0, 20), 1));
+
+        serviceWithoutMgmtToken.listRoleAssignmentUsers("DATA_STEWARD", 0, 20, null, null, null);
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(userRepository).findRoleAssignmentCandidates(isNull(), isNull(), isNull(), anyCollection(), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getSort().isUnsorted()).isTrue();
     }
 
     private AdminUserService buildService(String managementClientId, String managementClientSecret) {

@@ -537,7 +537,7 @@ public class AdminUserService {
         String usernameFilter = StringUtils.trimToNull(username);
         String fullNameFilter = StringUtils.trimToNull(fullName);
         String deptPathFilter = StringUtils.trimToNull(deptPath);
-        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.ASC, "username"));
+        Pageable pageable = PageRequest.of(safePage, safeSize);
 
         Page<AdminKeycloakUser> candidates = userRepository.findRoleAssignmentCandidates(
             usernameFilter,

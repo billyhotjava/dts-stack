@@ -38,6 +38,30 @@
       "label": "风险等级",
       "type": "string",
       "defaultValue": ""
+    },
+    {
+      "key": "qualityDrillProjectNo",
+      "label": "质量下钻项目",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "qualityDrillDept",
+      "label": "质量下钻科室",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "qualityDrillCategory",
+      "label": "质量下钻类别",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "qualityDrillMonth",
+      "label": "质量下钻月份",
+      "type": "string",
+      "defaultValue": ""
     }
   ],
   "components": [
@@ -66,7 +90,7 @@
       "name": "gpmc-quality-left",
       "x": 36,
       "y": 268,
-      "width": 608,
+      "width": 450,
       "height": 540,
       "zIndex": 1,
       "locked": false,
@@ -83,9 +107,9 @@
       "id": "gpmc-quality-mid",
       "type": "shape",
       "name": "gpmc-quality-mid",
-      "x": 656,
+      "x": 498,
       "y": 268,
-      "width": 608,
+      "width": 450,
       "height": 540,
       "zIndex": 1,
       "locked": false,
@@ -585,7 +609,7 @@
     {
       "id": "gpmc-quality-kpi-open",
       "type": "number-card",
-      "name": "未闭环质量问题数",
+      "name": "未归零质量问题",
       "x": 508,
       "y": 126,
       "width": 440,
@@ -594,7 +618,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "现存质量问题数",
+        "title": "未归零质量问题",
         "value": 0,
         "suffix": "",
         "precision": 0,
@@ -605,14 +629,14 @@
         "backgroundColor": "transparent",
         "metricNote": {
           "code": "pjm_qual_open_issues",
-          "displayName": "现存质量问题数",
+          "displayName": "未归零质量问题数",
           "domain": "质量",
           "category": "基础",
           "unit": "个",
           "direction": "DOWN",
           "definition": "目前状态为'未完成归零'的质量问题总数",
           "formula": "状态='未完成归零' 的质量问题计数",
-          "scope": "全量统计,不受时间筛选限制",
+          "scope": "受顶部时间筛选器控制; 当前状态为未完成归零",
           "sourceTable": "质量信息汇总表",
           "frequency": "每日 01:00 刷新",
           "thresholds": null,
@@ -624,7 +648,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COALESCE(SUM(s.open_issue_cnt),0) AS v FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
+          "query": "SELECT COUNT(*) AS v FROM biz_dwd_quality_issue_v2 d WHERE d.is_zero_completed = false AND d.issue_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND d.issue_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -646,7 +670,40 @@
             }
           ]
         }
-      }
+      },
+      "actions": [
+        {
+          "id": "quality-open-detail-drill",
+          "type": "set-variable",
+          "label": "查看未归零质量问题详情",
+          "mappings": [
+            {
+              "variableKey": "qualityDrillProjectNo",
+              "sourcePath": "data.__all",
+              "transform": "raw",
+              "fallbackValue": "__ALL__"
+            },
+            {
+              "variableKey": "qualityDrillDept",
+              "sourcePath": "data.__all",
+              "transform": "raw",
+              "fallbackValue": "__ALL__"
+            },
+            {
+              "variableKey": "qualityDrillCategory",
+              "sourcePath": "data.__all",
+              "transform": "raw",
+              "fallbackValue": "__ALL__"
+            },
+            {
+              "variableKey": "qualityDrillMonth",
+              "sourcePath": "data.__all",
+              "transform": "raw",
+              "fallbackValue": "__ALL__"
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "gpmc-quality-kpi-close-rate",
@@ -790,7 +847,7 @@
       "name": "项目质量问题",
       "x": 52,
       "y": 308,
-      "width": 576,
+      "width": 418,
       "height": 490,
       "zIndex": 15,
       "locked": false,
@@ -892,15 +949,189 @@
             }
           ]
         }
-      }
+      },
+      "actions": [
+        {
+          "id": "quality-project-detail-drill",
+          "type": "set-variable",
+          "label": "查看项目未归零质量问题",
+          "mappings": [
+            {
+              "variableKey": "qualityDrillProjectNo",
+              "sourcePath": "name",
+              "transform": "raw"
+            },
+            {
+              "variableKey": "qualityDrillCategory",
+              "sourcePath": "data.__all",
+              "transform": "raw",
+              "fallbackValue": "__ALL__"
+            },
+            {
+              "variableKey": "qualityDrillDept",
+              "sourcePath": "data.__all",
+              "transform": "raw",
+              "fallbackValue": "__ALL__"
+            },
+            {
+              "variableKey": "qualityDrillMonth",
+              "sourcePath": "data.__all",
+              "transform": "raw",
+              "fallbackValue": "__ALL__"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "gpmc-quality-dept",
+      "type": "bar-chart",
+      "name": "科室质量问题",
+      "x": 514,
+      "y": 308,
+      "width": 418,
+      "height": 490,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "xAxis": {
+          "type": "category",
+          "name": "科室"
+        },
+        "yAxis": {
+          "type": "value",
+          "name": "数量"
+        },
+        "orientation": "vertical",
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#8fa7c4",
+          "#2ee6a6",
+          "#ff5d73"
+        ],
+        "categoryKey": "科室",
+        "series": [
+          {
+            "name": "问题总数",
+            "dataKey": "问题总数",
+            "color": "#8fa7c4"
+          },
+          {
+            "name": "已归零",
+            "dataKey": "已归零",
+            "color": "#2ee6a6"
+          },
+          {
+            "name": "未归零",
+            "dataKey": "未归零",
+            "color": "#ff5d73"
+          }
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "科室质量问题",
+          "definition": "按「科室」分组,对比各组各系列指标",
+          "scope": "X 轴=科室; 受顶部时间筛选控制",
+          "sourceTable": "质量信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "问题总数",
+              "code": "pjm_qual_new_issues",
+              "displayName": "新增质量问题数",
+              "formula": "质量问题发生时间在[开始日期,结束日期]内的问题计数",
+              "unit": "个"
+            },
+            {
+              "name": "已归零",
+              "code": "pjm_qual_zero_completed",
+              "displayName": "已完成归零数",
+              "formula": "已完成技术归零 + 已完成管理归零 + 已完成技术和管理归零",
+              "unit": "个"
+            },
+            {
+              "name": "未归零",
+              "code": "pjm_qual_open_issues",
+              "displayName": "现存质量问题数",
+              "formula": "状态='未完成归零' 的质量问题计数",
+              "unit": "个"
+            }
+          ]
+        }
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(NULLIF(s.dept,''),'未登记') AS \"科室\", SUM(s.new_issue_cnt) AS \"问题总数\", SUM(s.zero_completed_cnt) AS \"已归零\", SUM(s.open_issue_cnt) AS \"未归零\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]] GROUP BY COALESCE(NULLIF(s.dept,''),'未登记') ORDER BY SUM(s.open_issue_cnt) DESC, SUM(s.new_issue_cnt) DESC LIMIT 12",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      },
+      "actions": [
+        {
+          "id": "quality-dept-detail-drill",
+          "type": "set-variable",
+          "label": "查看科室未归零质量问题",
+          "mappings": [
+            {
+              "variableKey": "qualityDrillProjectNo",
+              "sourcePath": "data.__all",
+              "transform": "raw",
+              "fallbackValue": "__ALL__"
+            },
+            {
+              "variableKey": "qualityDrillDept",
+              "sourcePath": "name",
+              "transform": "raw"
+            },
+            {
+              "variableKey": "qualityDrillCategory",
+              "sourcePath": "data.__all",
+              "transform": "raw",
+              "fallbackValue": "__ALL__"
+            },
+            {
+              "variableKey": "qualityDrillMonth",
+              "sourcePath": "data.__all",
+              "transform": "raw",
+              "fallbackValue": "__ALL__"
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "gpmc-quality-stage",
       "type": "bar-chart",
       "name": "时段质量问题",
-      "x": 1292,
+      "x": 1438,
       "y": 308,
-      "width": 576,
+      "width": 430,
       "height": 490,
       "zIndex": 15,
       "locked": false,
@@ -1002,15 +1233,47 @@
             }
           ]
         }
-      }
+      },
+      "actions": [
+        {
+          "id": "quality-month-detail-drill",
+          "type": "set-variable",
+          "label": "查看时段未归零质量问题",
+          "mappings": [
+            {
+              "variableKey": "qualityDrillProjectNo",
+              "sourcePath": "data.__all",
+              "transform": "raw",
+              "fallbackValue": "__ALL__"
+            },
+            {
+              "variableKey": "qualityDrillDept",
+              "sourcePath": "data.__all",
+              "transform": "raw",
+              "fallbackValue": "__ALL__"
+            },
+            {
+              "variableKey": "qualityDrillCategory",
+              "sourcePath": "data.__all",
+              "transform": "raw",
+              "fallbackValue": "__ALL__"
+            },
+            {
+              "variableKey": "qualityDrillMonth",
+              "sourcePath": "name",
+              "transform": "raw"
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "gpmc-quality-category",
       "type": "pie-chart",
       "name": "质量问题类别",
-      "x": 672,
+      "x": 976,
       "y": 308,
-      "width": 576,
+      "width": 418,
       "height": 490,
       "zIndex": 15,
       "locked": false,
@@ -1077,12 +1340,44 @@
             }
           ]
         }
-      }
+      },
+      "actions": [
+        {
+          "id": "quality-category-detail-drill",
+          "type": "set-variable",
+          "label": "查看类别未归零质量问题",
+          "mappings": [
+            {
+              "variableKey": "qualityDrillProjectNo",
+              "sourcePath": "data.__all",
+              "transform": "raw",
+              "fallbackValue": "__ALL__"
+            },
+            {
+              "variableKey": "qualityDrillDept",
+              "sourcePath": "data.__all",
+              "transform": "raw",
+              "fallbackValue": "__ALL__"
+            },
+            {
+              "variableKey": "qualityDrillCategory",
+              "sourcePath": "name",
+              "transform": "raw"
+            },
+            {
+              "variableKey": "qualityDrillMonth",
+              "sourcePath": "data.__all",
+              "transform": "raw",
+              "fallbackValue": "__ALL__"
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "gpmc-quality-detail",
       "type": "table",
-      "name": "质量问题清单",
+      "name": "未归零质量问题详情",
       "x": 36,
       "y": 888,
       "width": 1848,
@@ -1099,18 +1394,18 @@
             "width": 100
           },
           {
-            "source": "节点任务/分系统",
-            "alias": "节点任务/分系统",
-            "width": 180
+            "source": "分系统/分任务",
+            "alias": "分系统/分任务",
+            "width": 150
+          },
+          {
+            "source": "问题名称",
+            "alias": "问题名称",
+            "width": 170
           },
           {
             "source": "问题分类",
             "alias": "问题分类",
-            "width": 120
-          },
-          {
-            "source": "问题发现人",
-            "alias": "问题发现人",
             "width": 120
           },
           {
@@ -1119,24 +1414,29 @@
             "width": 140
           },
           {
-            "source": "质量等级",
-            "alias": "质量等级",
-            "width": 100
-          },
-          {
-            "source": "质量问题发生时间",
-            "alias": "质量问题发生时间",
+            "source": "团队及负责人",
+            "alias": "团队及负责人",
             "width": 140
           },
           {
-            "source": "整改状态",
-            "alias": "整改状态",
+            "source": "当前进展",
+            "alias": "当前进展",
+            "width": 170
+          },
+          {
+            "source": "发生时间",
+            "alias": "发生时间",
             "width": 110
           },
           {
-            "source": "整改完成时间",
-            "alias": "整改完成时间",
-            "width": 130
+            "source": "滞留天数",
+            "alias": "滞留天数",
+            "width": 100
+          },
+          {
+            "source": "归零计划",
+            "alias": "归零计划",
+            "width": 260
           }
         ],
         "pageSize": 20,
@@ -1203,29 +1503,13 @@
             "sourceTable": "质量信息汇总表",
             "note": null
           },
-          "整改状态": {
+          "滞留天数": {
             "kind": "field",
-            "displayName": "整改状态",
-            "definition": "I/II 类技术状态变更单的整改落实状态。III 类不涉及整改。",
-            "enumValues": [
-              {
-                "code": "已落实整改",
-                "label": "已落实整改",
-                "description": "I/II 类: 已完成整改落实"
-              },
-              {
-                "code": "未落实整改",
-                "label": "未落实整改",
-                "description": "I/II 类: 整改尚未落实"
-              },
-              {
-                "code": "不涉及",
-                "label": "不涉及",
-                "description": "III 类变更单,不涉及整改要求"
-              }
-            ],
-            "sourceTable": "技术状态信息汇总表",
-            "note": "数据规范化: '已完成'/'完成' 归为'已落实整改';'无' 归为'不涉及'"
+            "displayName": "未归零滞留天数",
+            "definition": "未完成归零问题从发生日期到状态日期的间隔天数。",
+            "enumValues": null,
+            "sourceTable": "质量信息汇总表",
+            "note": "仅统计当前未完成归零的问题。"
           }
         },
         "headerBackground": "#0f2a55"
@@ -1234,7 +1518,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT d.project_no AS \"项目编号\", COALESCE(d.subsystem,'') || CASE WHEN d.issue_name IS NOT NULL AND d.issue_name<>'' THEN ' · ' || d.issue_name ELSE '' END AS \"节点任务/分系统\", COALESCE(d.issue_category,'-') AS \"问题分类\", COALESCE(d.filled_by,'-') AS \"问题发现人\", d.dept AS \"责任部门\", '-' AS \"质量等级\", to_char(d.issue_date,'YYYY-MM-DD') AS \"质量问题发生时间\", COALESCE(d.status,'-') AS \"整改状态\", to_char(d.zero_complete_date,'YYYY-MM-DD') AS \"整改完成时间\" FROM biz_dwd_quality_issue_v2 d WHERE to_char(d.issue_date,'YYYY-MM') >= to_char({{dateFrom}}::date,'YYYY-MM') AND to_char(d.issue_date,'YYYY-MM') <= to_char({{dateTo}}::date,'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] ORDER BY d.issue_date DESC LIMIT 500",
+          "query": "SELECT d.project_no AS \"项目编号\", COALESCE(d.subsystem,'-') AS \"分系统/分任务\", COALESCE(d.issue_name,'-') AS \"问题名称\", COALESCE(d.issue_category_label, d.issue_category, '-') AS \"问题分类\", COALESCE(d.dept,'-') AS \"责任部门\", COALESCE(d.team_leader,'-') AS \"团队及负责人\", COALESCE(d.current_progress,'-') AS \"当前进展\", to_char(d.issue_date,'YYYY-MM-DD') AS \"发生时间\", COALESCE(d.pending_days,0) AS \"滞留天数\", COALESCE(d.zero_plan,'-') AS \"归零计划\" FROM biz_dwd_quality_issue_v2 d WHERE d.is_zero_completed = false AND d.issue_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND d.issue_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND ({{qualityDrillProjectNo}} = '__ALL__' OR d.project_no = {{qualityDrillProjectNo}})]] [[AND ({{qualityDrillDept}} = '__ALL__' OR COALESCE(NULLIF(d.dept,''),'未登记') = {{qualityDrillDept}})]] [[AND ({{qualityDrillMonth}} = '__ALL__' OR d.issue_month = {{qualityDrillMonth}})]] [[AND ({{qualityDrillCategory}} = '__ALL__' OR d.issue_category = {{qualityDrillCategory}} OR d.issue_category_label = {{qualityDrillCategory}} OR ({{qualityDrillCategory}} = '外协外购' AND d.issue_category = '外协'))]] ORDER BY COALESCE(d.pending_days,0) DESC, d.issue_date ASC LIMIT 500",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1253,6 +1537,22 @@
             {
               "name": "projectNo",
               "variableKey": "projectNo"
+            },
+            {
+              "name": "qualityDrillProjectNo",
+              "variableKey": "qualityDrillProjectNo"
+            },
+            {
+              "name": "qualityDrillDept",
+              "variableKey": "qualityDrillDept"
+            },
+            {
+              "name": "qualityDrillCategory",
+              "variableKey": "qualityDrillCategory"
+            },
+            {
+              "name": "qualityDrillMonth",
+              "variableKey": "qualityDrillMonth"
             }
           ]
         }
@@ -1262,9 +1562,28 @@
       "id": "gpmc-quality-mid2",
       "type": "shape",
       "name": "gpmc-quality-mid2",
-      "x": 1276,
+      "x": 960,
       "y": 268,
-      "width": 608,
+      "width": 450,
+      "height": 540,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 18
+      }
+    },
+    {
+      "id": "gpmc-quality-right",
+      "type": "shape",
+      "name": "gpmc-quality-right",
+      "x": 1422,
+      "y": 268,
+      "width": 462,
       "height": 540,
       "zIndex": 1,
       "locked": false,
@@ -1283,7 +1602,7 @@
       "name": "项目质量问题-标题",
       "x": 52,
       "y": 276,
-      "width": 520,
+      "width": 360,
       "height": 28,
       "zIndex": 20,
       "locked": false,
@@ -1297,12 +1616,31 @@
       }
     },
     {
+      "id": "gpmc-quality-dept-overlay-title",
+      "type": "title",
+      "name": "科室质量问题-标题",
+      "x": 514,
+      "y": 276,
+      "width": 360,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "科室质量问题",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
       "id": "gpmc-quality-stage-overlay-title",
       "type": "title",
       "name": "时段质量问题-标题",
-      "x": 1292,
+      "x": 1438,
       "y": 276,
-      "width": 520,
+      "width": 360,
       "height": 28,
       "zIndex": 20,
       "locked": false,
@@ -1319,9 +1657,9 @@
       "id": "gpmc-quality-category-overlay-title",
       "type": "title",
       "name": "质量问题类别-标题",
-      "x": 672,
+      "x": 976,
       "y": 276,
-      "width": 520,
+      "width": 360,
       "height": 28,
       "zIndex": 20,
       "locked": false,
@@ -1337,7 +1675,7 @@
     {
       "id": "gpmc-quality-detail-overlay-title",
       "type": "title",
-      "name": "质量问题清单-标题",
+      "name": "未归零质量问题详情-标题",
       "x": 52,
       "y": 856,
       "width": 360,
@@ -1346,7 +1684,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "质量问题清单（按提出时间倒序）",
+        "text": "未归零质量问题详情",
         "fontSize": 20,
         "fontWeight": "700",
         "color": "#ffffff",
