@@ -60,7 +60,7 @@ export function renderFilter(
             const debounceMs = normalizeFilterDebounceMs(c.debounceMs);
             return (
                 <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div style={{ fontSize: 12, color: labelColor }}>{label}</div>
+                    <div style={{ fontSize: Number(c.labelFontSize) || 16, fontWeight: 500, color: labelColor }}>{label}</div>
                     {scopeHint ? <div style={{ fontSize: 10, color: t.textSecondary }}>{scopeHint}</div> : null}
                     <input
                         type="text"
@@ -107,7 +107,7 @@ export function renderFilter(
             const optionStyle = { background: optionBackground, color: optionTextColor };
             return (
                 <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div style={{ fontSize: 12, color: labelColor }}>{label}</div>
+                    <div style={{ fontSize: Number(c.labelFontSize) || 16, fontWeight: 500, color: labelColor }}>{label}</div>
                     {scopeHint ? <div style={{ fontSize: 10, color: t.textSecondary }}>{scopeHint}</div> : null}
                     <select
                         value={value}
@@ -145,7 +145,7 @@ export function renderFilter(
             const inputBackground = String(c.inputBackground || (theme === 'glacier' ? '#ffffff' : 'rgba(15,23,42,0.65)'));
             return (
                 <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div style={{ fontSize: 12, color: labelColor }}>{label}</div>
+                    <div style={{ fontSize: Number(c.labelFontSize) || 16, fontWeight: 500, color: labelColor }}>{label}</div>
                     {scopeHint ? <div style={{ fontSize: 10, color: t.textSecondary }}>{scopeHint}</div> : null}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 16px 1fr', alignItems: 'center', gap: 4 }}>
                         <input

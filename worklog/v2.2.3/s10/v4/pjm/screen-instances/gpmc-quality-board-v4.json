@@ -1302,7 +1302,8 @@
             "sourceTable": "技术状态信息汇总表",
             "note": "数据规范化: '已完成'/'完成' 归为'已落实整改';'无' 归为'不涉及'"
           }
-        }
+        },
+        "headerBackground": "#0f2a55"
       },
       "dataSource": {
         "type": "sql",

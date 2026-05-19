@@ -181,8 +181,9 @@ export function renderTable(props: TableRendererProps): ReactNode {
             const fontSize = Number(c.fontSize) || 16;
             const headerFontSize = Number(c.headerFontSize) || fontSize;
             const headerColor = resolveTextColor(c.headerColor as string | undefined, '#ffffff');
-            // 表头必须不透明,否则 sticky 表头会被滚动的行数据透出看不清
-            const headerBackground = (c.headerBackground as string) || 'rgba(15, 35, 70, 0.96)';
+            // 表头必须完全不透明,否则 sticky 表头会被滚动的行数据透出看不清
+            // 用 hex 纯色 #0f2a55(深蓝),与已显式配置该值的看板对齐
+            const headerBackground = (c.headerBackground as string) || '#0f2a55';
             // 记录默认白色字体,在大屏深色底上可读
             const bodyColor = resolveTextColor(c.bodyColor as string | undefined, '#ffffff');
             const bodyBackground = (c.bodyBackground as string) || 'transparent';

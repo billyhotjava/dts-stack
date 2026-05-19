@@ -923,7 +923,8 @@
             "sourceTable": "进度信息汇总表",
             "note": "排序权重: 正常待完成=1 < 按时完成=2 < 超期完成=3-4 < 不正常/超期未完成=5-7"
           }
-        }
+        },
+        "headerBackground": "#0f2a55"
       },
       "dataSource": {
         "type": "sql",
@@ -1574,7 +1575,8 @@
             "sourceTable": "进度信息汇总表",
             "note": "排序权重: 正常待完成=1 < 按时完成=2 < 超期完成=3-4 < 不正常/超期未完成=5-7"
           }
-        }
+        },
+        "headerBackground": "#0f2a55"
       },
       "dataSource": {
         "type": "sql",

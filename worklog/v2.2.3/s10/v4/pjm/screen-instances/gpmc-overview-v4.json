@@ -1519,7 +1519,9 @@
             "1,150"
           ]
         ],
-        "sourceType": "static"
+        "sourceType": "static",
+        "headerBackground": "#0f2a55",
+        "headerColor": "#d9eeff"
       }
     },
     {
