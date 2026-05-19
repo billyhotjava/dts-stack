@@ -95,11 +95,48 @@
 
 .screen-designer .ant-collapse-header {
   color: rgba(255, 255, 255, 0.85) !important;
+  /* 统一基线: 与 property-section-title / property-label / toolbar-btn 一致 */
+  font-size: 13px !important;
 }
 
 .screen-designer .ant-collapse-content {
   background-color: transparent !important;
   border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* 嵌套 Collapse(SchemaConfigRenderer 内部)继承同一字号,不递减 */
+.screen-designer .ant-collapse .ant-collapse .ant-collapse-header {
+  font-size: 13px !important;
+}
+
+/* Ant Design 控件全局字号统一到 13px(属性面板内) */
+.property-panel-content .ant-input,
+.property-panel-content .ant-input-number,
+.property-panel-content .ant-input-number-input,
+.property-panel-content .ant-select-selector,
+.property-panel-content .ant-select-selection-item,
+.property-panel-content .ant-select-selection-placeholder,
+.property-panel-content .ant-btn,
+.property-panel-content .ant-radio-button-wrapper,
+.property-panel-content .ant-switch-inner,
+.property-panel-content .ant-checkbox-wrapper {
+  font-size: 13px !important;
+}
+
+/* Select 下拉项与 ColorPicker 弹层(挂载到 body)字号 */
+.ant-select-dropdown .ant-select-item,
+.ant-color-picker-presets .ant-color-picker-presets-label {
+  font-size: 13px !important;
+}
+
+/* 属性面板范围内统一 Tailwind text-xs(默认 12px) → 13px,与全局基线一致。
+   局限于 .property-panel-content,不影响其他页面使用 text-xs 的位置。 */
+.property-panel-content .text-xs {
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+}
+.property-panel-content .text-\[11px\] {
+  font-size: 12px !important;
 }
 
 .screen-designer .ant-checkbox-wrapper {
@@ -1266,7 +1303,8 @@
 }
 
 .property-section-title {
-  font-size: 12px;
+  /* 与 toolbar-btn / header-btn / property-label 全局基线对齐 */
+  font-size: 13px;
   font-weight: 600;
   color: var(--color-text-secondary);
   margin-bottom: 12px;

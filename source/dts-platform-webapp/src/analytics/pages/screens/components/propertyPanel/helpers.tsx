@@ -231,7 +231,7 @@ export function renderChartTitleLayoutRows(
 ) {
     return (
         <>
-            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 8, marginBottom: 4 }}>
+            <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 8, marginBottom: 4 }}>
                 标题位置微调
             </div>
             <div className="property-row flex items-center mb-3">

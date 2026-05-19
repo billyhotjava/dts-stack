@@ -127,7 +127,7 @@ export function renderAnimationConfig({
                             清除所有延迟
                         </button>
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 4, lineHeight: 1.45 }}>
+                    <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 4, lineHeight: 1.45 }}>
                         入场动画仅在预览和运行时生效，设计器中不播放。
                     </div>
                 </>

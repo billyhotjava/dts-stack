@@ -89,7 +89,12 @@ function toMessage(error: unknown): string {
 }
 
 function buildModelMap(models: SemanticModelMeta[]) {
-	return new Map(models.map((model) => [readId(model.id), model]).filter(([id]) => id));
+	const entries: Array<[string, SemanticModelMeta]> = [];
+	for (const model of models) {
+		const id = readId(model.id);
+		if (id) entries.push([id, model]);
+	}
+	return new Map<string, SemanticModelMeta>(entries);
 }
 
 function sameList(left: string[], right: string[]) {

@@ -49,7 +49,7 @@ export function CardSourceColumnBindingsEditor({
 
     return (
         <>
-            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 8, marginBottom: 4 }}>
+            <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 8, marginBottom: 4 }}>
                 {title}
             </div>
             <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
@@ -85,7 +85,7 @@ export function CardSourceColumnBindingsEditor({
                 </button>
             </div>
             {effectiveColumns.length === 0 && (
-                <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 4, marginBottom: 8 }}>
+                <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 4, marginBottom: 8 }}>
                     当前无字段绑定，请点击“添加列”。
                 </div>
             )}
@@ -99,7 +99,7 @@ export function CardSourceColumnBindingsEditor({
                         marginBottom: 6,
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                            <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
                                 列 {index + 1}{sourceMeta ? '' : ' (失效字段)'}
                             </span>
                             <div style={{ display: 'flex', gap: 4 }}>

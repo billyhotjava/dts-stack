@@ -37,21 +37,21 @@ export function renderExplainConfig({
                         >
                             解释当前组件
                         </button>
-                        <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>
+                        <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>
                             解释来源 CardId: {explainCardId}
                         </div>
                         {explainState?.state === 'loading' ? (
-                            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>解释生成中...</div>
+                            <div style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>解释生成中...</div>
                         ) : null}
                         {explainState?.state === 'error' ? (
-                            <div style={{ fontSize: 12, color: '#ef4444' }}>
+                            <div style={{ fontSize: 13, color: '#ef4444' }}>
                                 解释失败：{explainState.error instanceof Error ? explainState.error.message : 'unknown error'}
                             </div>
                         ) : null}
                         {explainState?.state === 'loaded' ? renderExplainResult(explainState.value) : null}
                     </div>
                 ) : (
-                    <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>
+                    <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>
                         当前组件未绑定可解释的 Card 数据源。
                     </div>
                 )
@@ -81,7 +81,7 @@ function renderExplainResult(value: ExplainabilityResponse) {
                     background: 'rgba(15,23,42,0.6)',
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word',
-                    fontSize: 11,
+                    fontSize: 13,
                     maxHeight: 240,
                     overflow: 'auto',
                 }}

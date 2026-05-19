@@ -155,11 +155,11 @@ export function StaticDataEditor({ component, updateComponent }: {
             <div className="text-xs text-text-secondary mb-1" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
                 <span>静态数据</span>
                 <span style={{ display: 'flex', gap: 8 }}>
-                    <button type="button" style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 11 }}
+                    <button type="button" style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 13 }}
                         onClick={() => { setHeaders(defaultTemplate.headers); setRows(defaultTemplate.rows); applyTableData(defaultTemplate.headers, defaultTemplate.rows); }}
                         title="重置为当前组件类型的示例数据"
                     >重置模板</button>
-                    <button type="button" style={{ background: 'none', border: 'none', color: 'var(--color-primary, #509EE3)', cursor: 'pointer', fontSize: 11 }}
+                    <button type="button" style={{ background: 'none', border: 'none', color: 'var(--color-primary, #509EE3)', cursor: 'pointer', fontSize: 13 }}
                         onClick={() => mode === 'table' ? switchToJson() : setMode('table')}
                     >{mode === 'table' ? 'JSON' : '表格'}</button>
                 </span>
@@ -172,7 +172,7 @@ export function StaticDataEditor({ component, updateComponent }: {
                 >
                     <table
                         className="bg-surface-card"
-                        style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, color: 'var(--color-text-primary, #e2e8f0)' }}
+                        style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, color: 'var(--color-text-primary, #e2e8f0)' }}
                     >
                         <thead>
                             <tr>
@@ -183,7 +183,7 @@ export function StaticDataEditor({ component, updateComponent }: {
                                             type="text"
                                             value={h}
                                             onChange={(e) => updateHeader(ci, e.target.value)}
-                                            style={{ width: '100%', border: 'none', background: 'transparent', padding: '6px 8px', fontSize: 12, fontWeight: 600, outline: 'none', boxSizing: 'border-box', color: 'inherit' }}
+                                            style={{ width: '100%', border: 'none', background: 'transparent', padding: '6px 8px', fontSize: 13, fontWeight: 600, outline: 'none', boxSizing: 'border-box', color: 'inherit' }}
                                         />
                                         {headers.length > 1 && (
                                             <button type="button" onClick={() => deleteColumn(ci)}
@@ -215,7 +215,7 @@ export function StaticDataEditor({ component, updateComponent }: {
                                                 type="text"
                                                 value={cell}
                                                 onChange={(e) => updateCell(ri, ci, e.target.value)}
-                                                style={{ width: '100%', border: 'none', background: 'transparent', padding: '5px 8px', fontSize: 12, outline: 'none', boxSizing: 'border-box', color: 'inherit' }}
+                                                style={{ width: '100%', border: 'none', background: 'transparent', padding: '5px 8px', fontSize: 13, outline: 'none', boxSizing: 'border-box', color: 'inherit' }}
                                             />
                                         </td>
                                     ))}
@@ -235,7 +235,7 @@ export function StaticDataEditor({ component, updateComponent }: {
                     <div className="bg-surface-card" style={{ padding: '4px 8px', borderTop: '1px solid var(--color-border, rgba(255,255,255,0.1))' }}>
                         <button type="button" onClick={addRow}
                             className="bg-surface-card"
-                            style={{ border: '1px dashed var(--color-border, rgba(255,255,255,0.15))', borderRadius: 4, padding: '3px 12px', cursor: 'pointer', fontSize: 11, color: 'var(--color-primary, #509EE3)', width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                            style={{ border: '1px dashed var(--color-border, rgba(255,255,255,0.15))', borderRadius: 4, padding: '3px 12px', cursor: 'pointer', fontSize: 13, color: 'var(--color-primary, #509EE3)', width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                         >
                             <Plus size={13} aria-hidden="true" />
                             添加行
@@ -246,12 +246,12 @@ export function StaticDataEditor({ component, updateComponent }: {
                 <div className="border border-border-default rounded bg-surface-card p-2">
                     <textarea
                         className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
-                        style={{ width: '100%', height: 200, fontFamily: 'monospace', fontSize: 11, resize: 'vertical', color: 'var(--color-text-primary, #e2e8f0)' }}
+                        style={{ width: '100%', height: 200, fontFamily: 'monospace', fontSize: 13, resize: 'vertical', color: 'var(--color-text-primary, #e2e8f0)' }}
                         value={jsonText}
                         onChange={(e) => { setJsonText(e.target.value); setJsonError(null); }}
                         spellCheck={false}
                     />
-                    {jsonError && <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>{jsonError}</div>}
+                    {jsonError && <div style={{ color: '#ef4444', fontSize: 13, marginTop: 4 }}>{jsonError}</div>}
                     <button type="button" className="property-btn-small inline-flex items-center justify-center px-3 py-1.5 min-h-8 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer hover:border-brand hover:bg-brand/10" style={{ marginTop: 6, width: '100%' }} onClick={applyJson}>
                         应用 JSON
                     </button>

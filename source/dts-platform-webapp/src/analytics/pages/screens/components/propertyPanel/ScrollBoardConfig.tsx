@@ -66,7 +66,7 @@ export function ScrollBoardConfig({ component, onChange }: {
 
             {/* Card 数据源: 等待列加载 */}
             {hasDynamicSource && sourceCols.length === 0 && (
-                <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 8, padding: '4px 0' }}>
+                <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 8, padding: '4px 0' }}>
                     等待数据源加载列信息…
                 </div>
             )}
@@ -85,7 +85,7 @@ export function ScrollBoardConfig({ component, onChange }: {
             {/* 静态数据源: 按索引的表头别名 (保持向后兼容) */}
             {!hasDynamicSource && staticHeaders.length > 0 && (
                 <>
-                    <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 8, marginBottom: 4 }}>
+                    <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 8, marginBottom: 4 }}>
                         表头别名
                     </div>
                     {staticHeaders.map((h, i) => (

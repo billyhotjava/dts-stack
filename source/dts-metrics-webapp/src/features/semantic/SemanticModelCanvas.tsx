@@ -101,7 +101,9 @@ export default function SemanticModelCanvas({
 						if (!option?.fanoutWarning && !option?.approvalRequired) return null;
 						return (
 							<span key={targetId}>
-								{option.sourceLabel} -> {option.targetLabel}: {option.fanoutWarning ? "fanout 风险" : "需要审批"}
+								{option.sourceLabel}
+								{" -> "}
+								{option.targetLabel}: {option.fanoutWarning ? "fanout 风险" : "需要审批"}
 							</span>
 						);
 					})}

@@ -210,7 +210,7 @@ export function renderOtherConfig({
                                 >
                                     清理显隐规则
                                 </button>
-                                <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+                                <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
                                     规则会按 Tab 选项顺序分配到图表/表格组件。
                                 </div>
                             </div>
@@ -244,7 +244,7 @@ export function renderOtherConfig({
                                 const checked = current.includes(device);
                                 const label = device === 'pc' ? 'PC' : device === 'tablet' ? '平板' : '手机';
                                 return (
-                                    <label key={device} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+                                    <label key={device} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13 }}>
                                         <input
                                             type="checkbox"
                                             checked={checked}
@@ -319,7 +319,7 @@ export function renderOtherConfig({
                                     </div>
                                 );
                             })()}
-                            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: -2 }}>
+                            <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: -2 }}>
                                 仅在预览/公开/导出模式生效，设计器中始终可见便于编辑。
                             </div>
                         </>

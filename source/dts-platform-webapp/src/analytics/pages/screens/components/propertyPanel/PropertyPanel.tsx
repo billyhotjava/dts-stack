@@ -165,7 +165,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                         <div
                             className="mb-3"
                             style={{
-                                fontSize: 11,
+                                fontSize: 13,
                                 color: !config.classification ? '#b45309' : 'var(--color-text-tertiary, #6b7280)',
                                 paddingLeft: 80,
                                 lineHeight: 1.5,
@@ -177,7 +177,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                         </div>
                         {isCustom && (
                             <>
-                                <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '8px 0 4px' }}>自定义主题颜色</div>
+                                <div style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: '8px 0 4px' }}>自定义主题颜色</div>
                                 {CUSTOM_THEME_FIELDS.map(({ key, label, fallback }) => (
                                     <div className="property-row flex items-center mb-3" key={key}>
                                         <label className="property-label w-20 text-xs text-text-secondary">{label}</label>
@@ -349,7 +349,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                     </div>
                     <div className="property-section py-3 border-b border-border-default">
                         <div className="property-section-title text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2">选择概览</div>
-                        <div style={{ fontSize: 12, opacity: 0.8, lineHeight: 1.7 }}>
+                        <div style={{ fontSize: 13, opacity: 0.8, lineHeight: 1.7 }}>
                             已选组件: {total}<br />
                             已分组组件: {grouped}<br />
                             类型数: {new Set(selectedComponents.map((item) => item.type)).size}
@@ -610,7 +610,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                 borderRadius: 8,
                                 padding: 12,
                                 background: 'rgba(248,250,252,0.55)',
-                                fontSize: 11,
+                                fontSize: 13,
                                 color: 'var(--color-text-secondary)',
                                 lineHeight: 1.6,
                             }}

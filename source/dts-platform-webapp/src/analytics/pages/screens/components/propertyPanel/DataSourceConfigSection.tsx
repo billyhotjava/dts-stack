@@ -453,7 +453,7 @@ export function renderDataSourceConfig(
                             从 SQL 提取参数
                         </button>
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: -2 }}>
+                    <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: -2 }}>
                         自动识别 &#123;&#123;param&#125;&#125; / $&#123;param&#125; 占位符并生成参数绑定。
                     </div>
                     <div className="property-row flex items-center mb-3">

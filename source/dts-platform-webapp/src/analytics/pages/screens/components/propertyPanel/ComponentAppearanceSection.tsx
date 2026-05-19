@@ -65,7 +65,7 @@ export function renderComponentAppearanceConfig({
                                 onChange={(e) => handleConfigChange('componentBgOpacity', Number(e.target.value))}
                                 style={{ flex: 1 }}
                             />
-                            <span style={{ fontSize: 11, minWidth: 32, textAlign: 'right' }}>{Number(config.componentBgOpacity ?? 100)}%</span>
+                            <span style={{ fontSize: 13, minWidth: 32, textAlign: 'right' }}>{Number(config.componentBgOpacity ?? 100)}%</span>
                         </div>
                     </div>
                     <div className="property-row flex items-center mb-3">

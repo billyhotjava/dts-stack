@@ -71,7 +71,7 @@ export function renderInteractionConfig(
             {interaction.enabled && (
                 <>
                     {globalVariables.length === 0 && (
-                        <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
+                        <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
                             请先在顶部“变量”里创建全局变量。
                         </div>
                     )}
@@ -172,7 +172,7 @@ export function renderInteractionConfig(
                         <Plus size={13} aria-hidden="true" />
                         添加联动规则
                     </button>
-                    <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 6, lineHeight: 1.5 }}>
+                    <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 6, lineHeight: 1.5 }}>
                         支持自定义路径，例如 <code>data.code</code>；可对值做数值/大小写转换，并设置空值回退。
                     </div>
 
@@ -210,7 +210,7 @@ export function renderInteractionConfig(
                                     <option value="self">当前窗口</option>
                                 </select>
                             </div>
-                            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 4 }}>
+                            <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 4 }}>
                                 支持占位符: {'{{name}} / {{seriesName}} / {{value}} / {{data.name}}'}
                             </div>
                         </>
@@ -260,7 +260,7 @@ export function renderActionConfig(
     const content = (
         <>
             {actions.length === 0 ? (
-                <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
+                <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
                     当前组件还没有动作入口。适合配置详情面板、跳转、变量写入或意图事件。
                 </div>
             ) : null}
@@ -457,7 +457,7 @@ export function renderActionConfig(
                         ) : null}
 
                         {(actionType === 'drill-down' || actionType === 'drill-up') ? (
-                            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 6 }}>
+                            <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 6 }}>
                                 {actionType === 'drill-down'
                                     ? '运行态会复用当前组件的下钻链路，并使用点击值推进到下一层。'
                                     : '运行态会从当前钻取层级返回上一层。'}
@@ -563,7 +563,7 @@ export function renderDrillDownConfig(
                                 justifyContent: 'space-between',
                                 alignItems: 'center',
                                 marginBottom: 4,
-                                fontSize: 11,
+                                fontSize: 13,
                                 color: 'var(--color-text-secondary)',
                             }}>
                                 <span>层级 {i + 1}</span>
@@ -573,7 +573,7 @@ export function renderDrillDownConfig(
                                     onClick={() => removeLevel(i)}
                                     style={{
                                         background: 'none', border: 'none',
-                                        color: '#ef4444', cursor: 'pointer', fontSize: 11, gap: 4,
+                                        color: '#ef4444', cursor: 'pointer', fontSize: 13, gap: 4,
                                     }}
                                 >
                                     <Trash2 size={12} aria-hidden="true" />

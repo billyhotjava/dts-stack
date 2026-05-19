@@ -30,7 +30,7 @@ export function renderPluginSchemaFields(
                 const value = hasExplicitValue ? component.config[key] : field?.defaultValue;
                 const description = String(field?.description || '').trim();
                 const descriptionNode = description ? (
-                    <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 4, lineHeight: 1.45 }}>
+                    <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 4, lineHeight: 1.45 }}>
                         {description}
                     </div>
                 ) : null;
@@ -179,7 +179,7 @@ export function renderPluginSchemaFields(
                                     margin: '6px 0 0',
                                     maxHeight: 120,
                                     overflow: 'auto',
-                                    fontSize: 11,
+                                    fontSize: 13,
                                     opacity: 0.8,
                                     whiteSpace: 'pre-wrap',
                                     wordBreak: 'break-all',

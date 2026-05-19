@@ -34,7 +34,7 @@ export function renderFieldMappingConfig({
         <div className="property-section py-3 border-b border-border-default">
             <div className="property-section-title property-section-title-collapsible text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
                 <SectionToggle collapsed={isCollapsed} label="字段映射" onToggle={() => toggleSection('field-mapping')} />
-                <label style={{ fontSize: 11, color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>
+                <label style={{ fontSize: 13, color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>
                     <input
                         type="checkbox"
                         checked={useFieldMapping}
@@ -53,7 +53,7 @@ export function renderFieldMappingConfig({
                     onChange={(newMapping) => handleConfigChange('_fieldMapping', newMapping)}
                 />
             ) : !isCollapsed ? (
-                <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', padding: '4px 0' }}>
+                <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', padding: '4px 0' }}>
                     字段映射已关闭，使用高级模式直接编辑 config。
                 </div>
             ) : null}

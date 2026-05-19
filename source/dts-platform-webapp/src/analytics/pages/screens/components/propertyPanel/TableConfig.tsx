@@ -159,12 +159,12 @@ export function TableConfig({ component, onChange }: {
                     placeholder='[{"columnKey":"amount","operator":">","value":100,"color":"#ef4444"}]'
                 />
             </div>
-            <div style={{ fontSize: 11, opacity: 0.75, marginTop: -2, marginBottom: 8, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 13, opacity: 0.75, marginTop: -2, marginBottom: 8, lineHeight: 1.5 }}>
                 支持按 `columnIndex`、`columnKey` 或 `columnTitle` 匹配列；建议优先使用 `columnKey` 以避免字段重排错位。
             </div>
 
             {hasDynamicSource && sourceCols.length === 0 && (
-                <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 8, padding: '4px 0' }}>
+                <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 8, padding: '4px 0' }}>
                     等待数据源加载列信息…
                 </div>
             )}
@@ -181,7 +181,7 @@ export function TableConfig({ component, onChange }: {
 
             {!hasDynamicSource && staticHeaders.length > 0 && (
                 <>
-                    <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 8, marginBottom: 4 }}>
+                    <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 8, marginBottom: 4 }}>
                         表头别名
                     </div>
                     {staticHeaders.map((h, i) => (
