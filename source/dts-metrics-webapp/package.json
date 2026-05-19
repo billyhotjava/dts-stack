@@ -5,6 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "VITE_CACHE_DIR=.vite-cache vite --host 0.0.0.0",
+		"test:source": "node --test test/source-contract.test.mjs",
 		"typecheck": "tsc --noEmit",
 		"build": "VITE_CACHE_DIR=.vite-cache tsc && VITE_CACHE_DIR=.vite-cache vite build",
 		"build:modern": "VITE_CACHE_DIR=.vite-cache tsc && VITE_CACHE_DIR=.vite-cache vite build",

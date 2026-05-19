@@ -26,6 +26,10 @@ export interface SchemaConfigRendererProps {
   config: Record<string, unknown>;
   onChange: (key: string, value: unknown) => void;
   theme?: string;
+  /** 仅渲染指定 group(白名单)。与 hideGroups 互斥。 */
+  onlyGroups?: string[];
+  /** 排除指定 group(黑名单)。 */
+  hideGroups?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -101,27 +105,43 @@ const FieldRow: React.FC<{ label: string; children: React.ReactNode; fullWidth?:
 // Component
 // ---------------------------------------------------------------------------
 
-const SchemaConfigRenderer: React.FC<SchemaConfigRendererProps> = ({ schema, config, onChange, theme }) => {
+const SchemaConfigRenderer: React.FC<SchemaConfigRendererProps> = ({ schema, config, onChange, theme, onlyGroups, hideGroups }) => {
   const tokens = useMemo(() => getThemeTokens(theme as ScreenTheme), [theme]);
+
+  const groupFilter = useMemo(() => {
+    if (onlyGroups && onlyGroups.length > 0) {
+      const allow = new Set(onlyGroups);
+      return (g: string) => allow.has(g);
+    }
+    if (hideGroups && hideGroups.length > 0) {
+      const deny = new Set(hideGroups);
+      return (g: string) => !deny.has(g);
+    }
+    return () => true;
+  }, [onlyGroups, hideGroups]);
 
   // Group fields
   const groupOrder: ConfigGroup[] = useMemo(() => {
-    if (schema.groups && schema.groups.length > 0) return schema.groups;
-    // Derive from STANDARD_GROUPS in insertion order
-    const groupKeys = new Set<string>();
-    for (const f of schema.fields) {
-      groupKeys.add(f.group ?? 'content');
+    let baseGroups: ConfigGroup[];
+    if (schema.groups && schema.groups.length > 0) {
+      baseGroups = schema.groups;
+    } else {
+      // Derive from STANDARD_GROUPS in insertion order
+      const groupKeys = new Set<string>();
+      for (const f of schema.fields) {
+        groupKeys.add(f.group ?? 'content');
+      }
+      const result: ConfigGroup[] = [];
+      for (const key of Object.keys(STANDARD_GROUPS)) {
+        if (groupKeys.has(key)) result.push(STANDARD_GROUPS[key]);
+      }
+      for (const key of groupKeys) {
+        if (!STANDARD_GROUPS[key]) result.push({ key, label: key, defaultOpen: false });
+      }
+      baseGroups = result;
     }
-    const result: ConfigGroup[] = [];
-    for (const key of Object.keys(STANDARD_GROUPS)) {
-      if (groupKeys.has(key)) result.push(STANDARD_GROUPS[key]);
-    }
-    // Add any unknown groups
-    for (const key of groupKeys) {
-      if (!STANDARD_GROUPS[key]) result.push({ key, label: key, defaultOpen: false });
-    }
-    return result;
-  }, [schema]);
+    return baseGroups.filter((g) => groupFilter(g.key));
+  }, [schema, groupFilter]);
 
   const fieldsByGroup = useMemo(() => {
     const map = new Map<string, ConfigField[]>();

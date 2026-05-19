@@ -1609,3 +1609,412 @@ pre {
 		display: none;
 	}
 }
+
+.semantic-designer,
+.semantic-designer * {
+	box-sizing: border-box;
+}
+
+.semantic-designer {
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+}
+
+.semantic-designer-header,
+.semantic-card-title {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+}
+
+.semantic-designer-header h3,
+.semantic-card-title h4,
+.semantic-form-section h4 {
+	margin: 0;
+	color: #061126;
+}
+
+.semantic-designer-header p {
+	margin: 6px 0 0;
+	color: #526789;
+}
+
+.semantic-designer-grid {
+	display: grid;
+	grid-template-columns: 320px minmax(0, 1fr) 360px;
+	gap: 16px;
+	align-items: start;
+}
+
+.semantic-side-panel,
+.semantic-main-panel,
+.semantic-card {
+	min-width: 0;
+}
+
+.semantic-side-panel,
+.semantic-card {
+	border: 1px solid #d9e2ef;
+	border-radius: 8px;
+	background: #fff;
+	padding: 16px;
+}
+
+.semantic-main-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.semantic-input {
+	width: 100%;
+	min-height: 38px;
+	border: 1px solid #d8e2ef;
+	border-radius: 8px;
+	background: #fff;
+	padding: 8px 10px;
+	color: #061126;
+	font: inherit;
+}
+
+.semantic-input.mini {
+	width: 76px;
+}
+
+.semantic-input.expression {
+	min-height: 68px;
+	resize: vertical;
+}
+
+.field-label {
+	display: block;
+	margin: 0 0 6px;
+	color: #526789;
+	font-size: 13px;
+	font-weight: 700;
+}
+
+.semantic-model-note {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 12px 0 16px;
+	padding: 12px;
+	border-radius: 8px;
+	background: #f6f9fc;
+	color: #526789;
+}
+
+.semantic-model-note strong {
+	color: #061126;
+}
+
+.semantic-model-note code {
+	white-space: normal;
+	color: #0f766e;
+}
+
+.semantic-field-explorer {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.semantic-field-stats,
+.chip-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.semantic-field-stats span,
+.chip,
+.field-kind,
+.semantic-node-security {
+	border-radius: 999px;
+	background: #eef4fb;
+	padding: 4px 9px;
+	color: #526789;
+	font-size: 12px;
+	font-weight: 700;
+}
+
+.semantic-tree {
+	display: flex;
+	max-height: 560px;
+	flex-direction: column;
+	gap: 10px;
+	overflow: auto;
+	padding-right: 4px;
+}
+
+.semantic-tree-node {
+	border-left: 2px solid #d8e2ef;
+	padding-left: 10px;
+}
+
+.semantic-tree-node summary {
+	display: flex;
+	cursor: pointer;
+	align-items: center;
+	gap: 8px;
+	padding: 4px 0;
+	color: #061126;
+}
+
+.semantic-tree-node summary span,
+.semantic-tree-node summary em {
+	color: #526789;
+	font-size: 12px;
+	font-style: normal;
+}
+
+.semantic-tree-node summary b {
+	border-radius: 999px;
+	background: #dff4ff;
+	padding: 2px 7px;
+	color: #176d9c;
+	font-size: 11px;
+}
+
+.semantic-tree-children {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 6px;
+}
+
+.semantic-field-row {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	width: 100%;
+	cursor: pointer;
+	align-items: center;
+	gap: 8px;
+	border: 1px solid #e4ebf4;
+	border-radius: 8px;
+	background: #fff;
+	padding: 9px;
+	text-align: left;
+}
+
+.semantic-field-row strong,
+.semantic-field-row em {
+	display: block;
+}
+
+.semantic-field-row em {
+	color: #526789;
+	font-size: 12px;
+	font-style: normal;
+}
+
+.semantic-field-row.selected {
+	border-color: #6fc7b6;
+	background: #effbf8;
+}
+
+.semantic-field-row b {
+	color: #0f766e;
+	font-size: 12px;
+}
+
+.field-kind.metric {
+	background: #eaf3ff;
+	color: #176d9c;
+}
+
+.field-kind.dimension {
+	background: #eef8ef;
+	color: #247a43;
+}
+
+.semantic-empty,
+.alert {
+	border-radius: 8px;
+	padding: 14px;
+	background: #f6f9fc;
+	color: #526789;
+}
+
+.alert.ok {
+	background: #effbf8;
+	color: #0f766e;
+}
+
+.alert.warn {
+	background: #fff7e8;
+	color: #9a5b00;
+}
+
+.semantic-canvas {
+	position: relative;
+	overflow: auto;
+	border: 1px solid #e4ebf4;
+	border-radius: 8px;
+	background:
+		linear-gradient(#f8fafc 1px, transparent 1px),
+		linear-gradient(90deg, #f8fafc 1px, transparent 1px),
+		#fff;
+	background-size: 20px 20px;
+}
+
+.semantic-canvas-edges {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	min-width: 760px;
+	pointer-events: none;
+}
+
+.semantic-canvas-edges text {
+	font-size: 12px;
+	font-weight: 700;
+}
+
+.semantic-node {
+	position: absolute;
+	display: flex;
+	min-height: 108px;
+	cursor: pointer;
+	flex-direction: column;
+	gap: 7px;
+	border: 1px solid #9fb1c8;
+	border-radius: 8px;
+	background: #fff;
+	box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+	padding: 12px;
+	text-align: left;
+}
+
+.semantic-node:disabled {
+	cursor: default;
+}
+
+.semantic-node.base {
+	border-color: #288dd2;
+	background: #eef8ff;
+}
+
+.semantic-node.selected {
+	border-color: #0f9f83;
+	background: #effbf8;
+}
+
+.semantic-node-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.semantic-node-head strong {
+	color: #061126;
+}
+
+.semantic-node-head em {
+	border-radius: 999px;
+	background: #eef4fb;
+	padding: 2px 7px;
+	color: #526789;
+	font-size: 11px;
+	font-style: normal;
+}
+
+.semantic-node-meta,
+.semantic-node > span:not(.semantic-node-head):not(.semantic-node-security) {
+	color: #526789;
+	font-size: 12px;
+}
+
+.semantic-canvas-warnings {
+	position: absolute;
+	right: 12px;
+	bottom: 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	max-width: 360px;
+}
+
+.semantic-canvas-warnings span {
+	border-radius: 8px;
+	background: #fff7e8;
+	padding: 8px 10px;
+	color: #9a5b00;
+	font-size: 12px;
+}
+
+.semantic-form-section {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin-top: 16px;
+}
+
+.semantic-card-title.compact {
+	align-items: center;
+}
+
+.chip {
+	border: 1px solid #d8e2ef;
+	cursor: pointer;
+}
+
+.chip.selected {
+	border-color: #6fc7b6;
+	background: #effbf8;
+	color: #0f766e;
+}
+
+.muted {
+	color: #70819d;
+}
+
+.filter-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto minmax(0, 0.8fr) auto;
+	gap: 8px;
+}
+
+.derived-row {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	border: 1px solid #e4ebf4;
+	border-radius: 8px;
+	padding: 10px;
+}
+
+.icon-button {
+	width: 38px;
+	height: 38px;
+	border: 1px solid #d8e2ef;
+	border-radius: 8px;
+	background: #fff;
+	color: #526789;
+	font-weight: 800;
+}
+
+.button.small {
+	min-height: 32px;
+	padding: 5px 10px;
+	font-size: 13px;
+}
+
+.code-editor.tall {
+	min-height: 320px;
+}
+
+@media (max-width: 1180px) {
+	.semantic-designer-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.semantic-tree {
+		max-height: 360px;
+	}
+}

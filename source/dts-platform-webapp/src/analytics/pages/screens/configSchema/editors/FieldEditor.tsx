@@ -282,8 +282,30 @@ function toInputString(value: unknown): string {
   return String(value);
 }
 
+// 按 field.key 模式自动推断单位 — 减少 schema 重复声明
+function inferUnit(field: ConfigField): string | undefined {
+  if (field.unit !== undefined) return field.unit || undefined;
+  const k = field.key.toLowerCase();
+  // 百分比
+  if (k.endsWith('rate') || k.endsWith('ratio') || k.endsWith('percent') || k.endsWith('opacity')) return '%';
+  if (k.includes('alpha')) return '%';
+  // 时间
+  if (k.endsWith('duration') || k.endsWith('delay') || k.endsWith('interval') || k.endsWith('ms')) return 'ms';
+  if (k.endsWith('seconds')) return '秒';
+  // 像素 — 通用
+  if (k.endsWith('fontsize') || k.endsWith('width') || k.endsWith('height')) return 'px';
+  if (k.endsWith('size') && !k.includes('page')) return 'px';
+  if (k.endsWith('radius') || k.endsWith('borderradius')) return 'px';
+  if (k.includes('padding') || k.includes('margin') || k.includes('gap') || k.includes('spacing')) return 'px';
+  if (k.endsWith('top') || k.endsWith('left') || k.endsWith('right') || k.endsWith('bottom')) return 'px';
+  if (k.endsWith('rotate') || k.endsWith('angle') || k.endsWith('rotation')) return '°';
+  return undefined;
+}
+
 const FieldEditor: React.FC<FieldEditorProps> = ({ field, value, onChange, themeDefault }) => {
-  const placeholder = field.placeholder ?? (themeDefault ? `主题默认: ${themeDefault}` : undefined);
+  const unit = inferUnit(field);
+  const placeholder = field.placeholder
+    ?? (themeDefault ? `主题默认: ${themeDefault}${unit || ''}` : (field.defaultValue != null ? `默认 ${field.defaultValue}${unit || ''}` : undefined));
 
   switch (field.type) {
     case 'text':
@@ -321,6 +343,8 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, value, onChange, theme
           max={field.max}
           step={field.step}
           placeholder={placeholder}
+          /* 单位后缀 — 自动按 key 推断(px/%/ms/° 等),或来自 field.unit */
+          addonAfter={unit ? <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>{unit}</span> : undefined}
         />
       );
 

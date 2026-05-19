@@ -1302,11 +1302,17 @@
 }
 
 .property-label {
-  width: 80px;
+  /* 宽度自适应:短字段(2 字)不占空间,长字段(如"与图形间距") 允许扩展不挤压输入区 */
+  min-width: 72px;
+  max-width: 108px;
+  flex-shrink: 0;
+  padding-right: 8px;
   /* 与 toolbar-btn / header-btn (13px) 统一 */
   font-size: 13px;
   line-height: 1.5;
   color: var(--color-text-secondary);
+  /* 超长字段允许在内部换行,避免横向溢出挤掉输入框 */
+  word-break: break-all;
 }
 
 .property-input {
@@ -1369,13 +1375,14 @@
   }
 
   .property-label {
-    width: 68px;
-    font-size: 11px;
+    min-width: 64px;
+    max-width: 92px;
+    font-size: 12px;
   }
 
   .property-input {
     padding: 5px 8px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .property-btn-small {

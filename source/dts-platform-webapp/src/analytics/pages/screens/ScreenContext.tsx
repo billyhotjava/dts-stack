@@ -737,3 +737,11 @@ export function useScreen() {
     }
     return context;
 }
+
+/**
+ * 与 useScreen 等价,但在 Provider 之外不抛错而是返回 null。
+ * 适合无关键路径的 UI 组件(如颜色预设面板)在测试/独立场景中安全运行。
+ */
+export function useScreenOptional() {
+    return useContext(ScreenContext);
+}

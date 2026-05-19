@@ -69,6 +69,8 @@ export interface ConfigField {
   options?: ConfigFieldOption[];
   /** Input placeholder text */
   placeholder?: string;
+  /** 数字字段后缀单位(如 px/%/秒);未提供时按 key 名自动推断 */
+  unit?: string;
   /** Conditional display predicate */
   showIf?: (config: Record<string, unknown>) => boolean;
   /** Maps to a theme token for auto-patching */

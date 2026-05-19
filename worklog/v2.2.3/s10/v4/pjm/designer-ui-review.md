@@ -163,12 +163,101 @@ localStorage.setItem('screen.editor.style-tab.openGroups', JSON.stringify(['styl
 
 ## 四、本次提交内容(就绪)
 
+### 第一批 — 基础修复
 | 文件 | 改动 |
 |---|---|
 | `components/DesignerCanvas.tsx` | 抖动修复 3 处(阈值过滤/滚动条稳定/过渡平滑) |
 | `ScreenDesigner.css` | 3 类字号统一到 13px(toolbar/label/input) |
-| `worklog/.../designer-ui-review.md` | 本份 Review 报告 |
 
-测试通过、JSON 校验通过、TypeScript 编译 0 error。
+### 第二批 — 样式 Tab 整改(A1/A2/A3/A4/A5/A6/A8)
 
-后续是否要把表 II 的整改清单按优先级执行,请决定。
+| 项 | 文件 | 改动 |
+|---|---|---|
+| **A1+A8** 分组扁平化 | `propertyPanel/ComponentConfigSection.tsx` | 移除外层"组件配置"折叠包装,让 schema 的图表/标题/图例/轴等子分组直接作为顶级 Collapse —— 减少 1 层嵌套 |
+| **A2** label 宽度自适应 | `ScreenDesigner.css` | `width: 80px` → `min-width: 72px; max-width: 108px; word-break: break-all`;长字段允许换行 |
+| **A3+A6** 单位 + placeholder | `configSchema/types.ts` `configSchema/editors/FieldEditor.tsx` | 给 ConfigField 加 `unit` 字段;FieldEditor 用 `addonAfter` 显示单位;按 key 自动推断 px/%/ms/° 等单位;数字字段无值时显示"默认 N px" 等 placeholder |
+| **A4+A5** 颜色组件统一 | `propertyPanel/ColorPickerInput.tsx` | 关闭 antd ColorPicker 的 `allowClear`(根除红色斜线);默认追加 hex/rgba 文本输入框(`showInput=true`);兼容 28 处既有调用 |
+
+## 五、自动单位推断规则
+
+| key 模式 | 自动单位 |
+|---|---|
+| `*Rate / *Ratio / *Percent / *Opacity / *alpha` | **%** |
+| `*Duration / *Delay / *Interval / *Ms` | **ms** |
+| `*Seconds` | **秒** |
+| `*FontSize / *Width / *Height / *Size` | **px** |
+| `*Radius / *BorderRadius` | **px** |
+| `*Padding / *Margin / *Gap / *Spacing` | **px** |
+| `*Top / *Left / *Right / *Bottom` | **px** |
+| `*Rotate / *Angle / *Rotation` | **°** |
+
+可在 ConfigField 显式声明 `unit: ''` 关闭自动推断,或 `unit: '自定义'` 覆盖。
+
+## 六、用户可感知效果
+
+| 之前 | 现在 |
+|---|---|
+| 三层嵌套(组件配置 > 图表 > 字段) | 两层嵌套(图表 > 字段) |
+| 字段名"与图形间距"挤掉输入框 | label 自动换行,输入框保持完整 |
+| "字号"输入框无任何提示 | "字号 [16] px" 显示单位+默认值 |
+| 颜色色块上一道红斜线没意义 | 色块清爽 + 右侧 hex 输入 + 清除按钮 |
+
+## 七、验证
+
+- **node:test 套件**: 22/22 通过(含 PropertyPanel 全套契约测试)
+- **vitest 套件**: 6/6 通过
+- **TypeScript 编译**: 0 error
+- **JSON 校验**: 10 张大屏全部通过
+
+## 八、第三批整改 — A7+A9+A10(已完成)
+
+### A10 折叠状态持久化(检查发现已实现 ✅)
+
+`propertyPanelPersistence.ts` 中已经有 `readCollapsedSections / writeCollapsedSections`,
+PropertyPanel 已通过 `useEffect + localStorage` 双向同步,无需新增工作。
+
+### A9 颜色主题快选 ✅
+
+**文件**: `propertyPanel/ColorPickerInput.tsx` + `ScreenContext.tsx`
+
+- 新增 `useScreenOptional()` hook(无 Provider 不抛错,适合通用组件)
+- ColorPickerInput 自动从大屏当前主题读色板,作为 ColorPicker 的 `presets` 显示:
+  - **主题色板**: `tokens.echarts.colorPalette` 的 8-10 个数据系列色
+  - **语义色**: 主题强调色 / 主文字色 / 次文字色 / 卡片背景色
+- 用户取色时一键命中主题色,提升大屏视觉一致性
+
+### A7 高级字段下沉 ✅
+
+**文件**: `configSchema/editors/SchemaConfigRenderer.tsx` + `propertyPanel/ComponentConfigSection.tsx` + `propertyPanel/PropertyPanel.tsx`
+
+- SchemaConfigRenderer 新增 `onlyGroups?: string[]` 与 `hideGroups?: string[]`
+- ComponentConfigSection 透传上述 prop
+- **样式 Tab**: `hideGroups: ['advanced']` — 隐藏所有 group='advanced' 的字段
+- **高级 Tab**: `onlyGroups: ['advanced']` — 仅显示 advanced 字段
+- 效果:
+  - 样式 Tab 不再混杂"标记线/提示框/散点 JSON/气泡范围"等低频技术配置
+  - 高级 Tab 集中"其他配置 + 动画配置 + 组件级高级字段"三类
+  - 业务用户日常调样式更聚焦
+
+## 九、最终验证
+
+- **node:test**: 22/22 ✅
+- **vitest**: 6/6 ✅
+- **TypeScript 编译**: 0 error
+- **10 张大屏 JSON 校验**: 0 error
+
+## 十、本轮全部交付清单
+
+| 阶段 | 项 | 文件 |
+|---|---|---|
+| 第一批 | 画布抖动修复 + 字号统一 | `DesignerCanvas.tsx` + `ScreenDesigner.css` |
+| 第二批 | A1+A8 分组扁平化 | `ComponentConfigSection.tsx` |
+| 第二批 | A2 label 自适应 | `ScreenDesigner.css` |
+| 第二批 | A3+A6 单位 + placeholder | `configSchema/types.ts` + `FieldEditor.tsx` |
+| 第二批 | A4+A5 颜色组件 | `ColorPickerInput.tsx` |
+| 第三批 | A9 主题色预设 | `ColorPickerInput.tsx` + `ScreenContext.tsx`(新 useScreenOptional) |
+| 第三批 | A7 高级字段下沉 | `SchemaConfigRenderer.tsx` + `ComponentConfigSection.tsx` + `PropertyPanel.tsx` |
+| 第三批 | A10 折叠持久化 | 已实现,确认 |
+
+**整体设计原则**: 业务用户在样式 Tab 改样式 → 高级 Tab 调技术细节;
+低频字段不再干扰常用流程,主题色直接可选,折叠状态记忆,UI 自适应不同字段长度。

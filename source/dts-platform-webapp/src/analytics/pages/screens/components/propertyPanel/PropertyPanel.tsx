@@ -477,6 +477,8 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                     updateComponent,
                     isSectionCollapsed,
                     toggleSection,
+                    /* A7: 样式 Tab 隐藏 advanced 分组,这些字段下沉到"高级" Tab */
+                    hideGroups: ['advanced'],
                 })}
 
                 {/* Data Source */}
@@ -628,6 +630,16 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                     handleConfigChange,
                     isSectionCollapsed,
                     toggleSection,
+                })}
+
+                {/* A7: 高级 Tab 渲染组件 schema 中 group='advanced' 的字段(如标记线/提示框/散点数据 等低频字段) */}
+                {isAdvancedTab && renderComponentConfigSection({
+                    selectedComponent,
+                    theme: config.theme,
+                    updateComponent,
+                    isSectionCollapsed,
+                    toggleSection,
+                    onlyGroups: ['advanced'],
                 })}
             </div>
         </div>

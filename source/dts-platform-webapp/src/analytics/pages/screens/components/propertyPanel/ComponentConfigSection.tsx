@@ -2,7 +2,6 @@ import SchemaConfigRenderer from '../../configSchema/editors/SchemaConfigRendere
 import { COMPONENT_CONFIG_SCHEMAS } from '../../configSchema/schemas';
 import type { ScreenComponent, ScreenConfig } from '../../types';
 import { setByPath } from './helpers';
-import { SectionToggle } from './SectionToggle';
 
 interface ComponentConfigSectionOptions {
     selectedComponent: ScreenComponent;
@@ -13,27 +12,27 @@ interface ComponentConfigSectionOptions {
     ) => void;
     isSectionCollapsed: (sectionKey: string) => boolean;
     toggleSection: (sectionKey: string) => void;
+    /** 仅渲染指定分组(白名单),用于 advanced Tab */
+    onlyGroups?: string[];
+    /** 排除指定分组(黑名单),用于 style Tab 隐藏 advanced */
+    hideGroups?: string[];
 }
 
 export function renderComponentConfigSection({
     selectedComponent,
     theme,
     updateComponent,
-    isSectionCollapsed,
-    toggleSection,
+    isSectionCollapsed: _isSectionCollapsed,
+    toggleSection: _toggleSection,
+    onlyGroups,
+    hideGroups,
 }: ComponentConfigSectionOptions) {
-    const isCollapsed = isSectionCollapsed('component-config');
-
+    // 2026-05 UI 重构: 去除"组件配置"这层 wrapper,让 SchemaConfigRenderer 的子分组
+    // (图表/标题/图例/坐标轴/外观 等)直接作为顶级 Collapse 渲染,减少一层嵌套。
+    // 同时支持 onlyGroups/hideGroups: 样式 Tab 隐藏 advanced,高级 Tab 仅显示 advanced。
     return (
         <div className="property-section py-3 border-b border-border-default">
-            <div
-                className="property-section-title property-section-title-collapsible text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none"
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
-            >
-                <SectionToggle collapsed={isCollapsed} label="组件配置" onToggle={() => toggleSection('component-config')} />
-            </div>
-
-            {!isCollapsed ? renderComponentConfigBody(selectedComponent, theme, updateComponent) : null}
+            {renderComponentConfigBody(selectedComponent, theme, updateComponent, onlyGroups, hideGroups)}
         </div>
     );
 }
@@ -45,6 +44,8 @@ function renderComponentConfigBody(
         id: string,
         updates: Partial<ScreenComponent> | ((prev: ScreenComponent) => Partial<ScreenComponent>),
     ) => void,
+    onlyGroups?: string[],
+    hideGroups?: string[],
 ) {
     const schema = COMPONENT_CONFIG_SCHEMAS[selectedComponent.type];
     if (!schema) {
@@ -84,6 +85,8 @@ function renderComponentConfigBody(
                 }));
             }}
             theme={theme}
+            onlyGroups={onlyGroups}
+            hideGroups={hideGroups}
         />
     );
 }

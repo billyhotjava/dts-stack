@@ -36,6 +36,19 @@ function toAlphaHex(color: string, alpha: number): string {
     return c;
 }
 
+function escapeTooltipText(value: unknown): string {
+    return String(value ?? '').replace(/[&<>"']/g, (ch) => {
+        switch (ch) {
+            case '&': return '&amp;';
+            case '<': return '&lt;';
+            case '>': return '&gt;';
+            case '"': return '&quot;';
+            case "'": return '&#39;';
+            default: return ch;
+        }
+    });
+}
+
 export function renderAxisChart(type: string, props: EChartsRendererProps): ReactNode | null {
     const {
         c, t,
@@ -51,6 +64,13 @@ export function renderAxisChart(type: string, props: EChartsRendererProps): Reac
     } = props;
 
     const axisLabelColor = axisLabelColorOverride || t.echarts.axisLabelColor;
+    const categoryAxisLabelTooltip = {
+        show: true,
+        formatter: (params: { value?: unknown; name?: unknown }) => {
+            const value = params?.value ?? params?.name;
+            return escapeTooltipText(value);
+        },
+    };
 
     // AxisConfigEditor / 嵌套 c.xAxis / c.yAxis 里的 show / splitLineShow / min / max / type
     // 需要在这里统一 merge 到 ECharts option 上。之前每个 case 里自己写 xAxis/yAxis，
@@ -126,6 +146,7 @@ export function renderAxisChart(type: string, props: EChartsRendererProps): Reac
                 xAxis: {
                     type: 'category',
                     data: c.xAxisData as string[],
+                    tooltip: categoryAxisLabelTooltip,
                     axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
                     axisLabel: {
                         color: axisLabelColor,
@@ -196,6 +217,7 @@ export function renderAxisChart(type: string, props: EChartsRendererProps): Reac
             const categoryAxisConfig = {
                 type: 'category' as const,
                 data: c.xAxisData as string[],
+                tooltip: categoryAxisLabelTooltip,
                 axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
                 axisLabel: {
                     color: axisLabelColor,
@@ -386,6 +408,7 @@ export function renderAxisChart(type: string, props: EChartsRendererProps): Reac
                 xAxis: {
                     type: 'category',
                     data: c.xAxisData as string[],
+                    tooltip: categoryAxisLabelTooltip,
                     axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
                     axisLabel: {
                         color: axisLabelColor,
@@ -484,6 +507,7 @@ export function renderAxisChart(type: string, props: EChartsRendererProps): Reac
                 xAxis: {
                     type: 'category',
                     data: wfCategories,
+                    tooltip: categoryAxisLabelTooltip,
                     axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
                     axisLabel: { color: axisLabelColor, fontSize: axisFontSize, rotate: xAxisLabelRotate },
                 },
@@ -600,6 +624,7 @@ export function renderAxisChart(type: string, props: EChartsRendererProps): Reac
                 xAxis: {
                     type: 'category',
                     data: candleDates,
+                    tooltip: categoryAxisLabelTooltip,
                     axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
                     axisLabel: { color: axisLabelColor, fontSize: axisFontSize, rotate: xAxisLabelRotate, hideOverlap: true },
                 },
@@ -641,6 +666,7 @@ export function renderAxisChart(type: string, props: EChartsRendererProps): Reac
             const boxCategoryAxis = {
                 type: 'category' as const,
                 data: boxCategories,
+                tooltip: categoryAxisLabelTooltip,
                 axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
                 axisLabel: { color: axisLabelColor, fontSize: axisFontSize },
             };
@@ -693,6 +719,7 @@ export function renderAxisChart(type: string, props: EChartsRendererProps): Reac
                 xAxis: {
                     type: 'category',
                     data: picCategories,
+                    tooltip: categoryAxisLabelTooltip,
                     axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
                     axisLabel: { color: axisLabelColor, fontSize: axisFontSize, rotate: xAxisLabelRotate, hideOverlap: true },
                 },
