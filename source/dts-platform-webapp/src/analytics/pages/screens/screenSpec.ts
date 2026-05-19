@@ -207,23 +207,144 @@ function normalizeComponent(
     };
 }
 
+function shouldFillConfigValue(value: unknown): boolean {
+    if (value === undefined || value === null) return true;
+    if (typeof value === 'string') return value.trim().length === 0;
+    if (Array.isArray(value)) return value.length === 0;
+    return false;
+}
+
+function readStringConfigValue(value: unknown): string | undefined {
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function copyConfigValueIfEmpty(
+    config: Record<string, unknown>,
+    targetKey: string,
+    sourceValue: unknown,
+) {
+    if (!shouldFillConfigValue(config[targetKey])) return;
+    if (sourceValue === undefined || sourceValue === null) return;
+    if (typeof sourceValue === 'string' && sourceValue.trim().length === 0) return;
+    config[targetKey] = sourceValue;
+}
+
+function readColorArray(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    const colors: string[] = [];
+    for (const item of value) {
+        if (typeof item !== 'string') continue;
+        const color = item.trim();
+        if (color.length > 0) {
+            colors.push(color);
+        }
+    }
+    return colors;
+}
+
+function normalizeLegacyAxisSeries(series: unknown): unknown {
+    if (!Array.isArray(series)) return series;
+    return series.map((item) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) {
+            return item;
+        }
+        const row = item as Record<string, unknown>;
+        const dataKey = readStringConfigValue(row.dataKey);
+        if (!dataKey || !shouldFillConfigValue(row.field)) {
+            return item;
+        }
+        return {
+            ...row,
+            field: dataKey,
+        };
+    });
+}
+
+function migrateLegacyGeneratedComponentConfig(
+    type: ScreenComponent['type'],
+    config: Record<string, unknown>,
+): Record<string, unknown> {
+    const migrated = { ...config };
+
+    if (type === 'filter-date-range') {
+        copyConfigValueIfEmpty(migrated, 'startKey', migrated.startVariableKey);
+        copyConfigValueIfEmpty(migrated, 'endKey', migrated.endVariableKey);
+        copyConfigValueIfEmpty(migrated, 'startVariableKey', migrated.startKey);
+        copyConfigValueIfEmpty(migrated, 'endVariableKey', migrated.endKey);
+    }
+
+    if (type === 'line-chart' || type === 'bar-chart' || type === 'combo-chart') {
+        copyConfigValueIfEmpty(migrated, 'xAxisField', migrated.categoryKey);
+        migrated.series = normalizeLegacyAxisSeries(migrated.series);
+
+        if (shouldFillConfigValue(migrated.seriesColors)) {
+            const explicitColors = readColorArray(migrated.colors);
+            if (explicitColors.length > 0) {
+                migrated.seriesColors = explicitColors;
+            } else if (Array.isArray(migrated.series)) {
+                const legacySeriesColors = migrated.series.map((item) => (
+                    item && typeof item === 'object' && !Array.isArray(item)
+                        ? (item as Record<string, unknown>).color
+                        : undefined
+                ));
+                const seriesColors = readColorArray(legacySeriesColors);
+                if (seriesColors.length > 0) {
+                    migrated.seriesColors = seriesColors;
+                }
+            }
+        }
+    }
+
+    if (type === 'bar-chart') {
+        const orientation = readStringConfigValue(migrated.orientation)?.toLowerCase();
+        if (shouldFillConfigValue(migrated.horizontal) && orientation) {
+            migrated.horizontal = orientation === 'horizontal';
+        }
+        const legacyStack = readStringConfigValue(migrated.stack)?.toLowerCase();
+        if (shouldFillConfigValue(migrated.stackMode) && legacyStack && legacyStack !== 'off' && legacyStack !== 'none') {
+            migrated.stackMode = 'stack';
+        }
+    }
+
+    if (type === 'line-chart' && shouldFillConfigValue(migrated.smooth) && migrated.lineSmooth !== undefined) {
+        migrated.smooth = migrated.lineSmooth !== false;
+    }
+
+    if (type === 'table') {
+        copyConfigValueIfEmpty(migrated, 'bodyBackground', migrated.backgroundColor);
+        copyConfigValueIfEmpty(migrated, 'oddRowBackground', migrated.backgroundColor);
+        copyConfigValueIfEmpty(migrated, 'evenRowBackground', migrated.stripeColor);
+    }
+
+    if (type === 'number-card') {
+        copyConfigValueIfEmpty(migrated, 'suffix', migrated.unit);
+        copyConfigValueIfEmpty(migrated, 'valueFontSize', migrated.fontSize);
+        copyConfigValueIfEmpty(migrated, 'componentBorderRadius', migrated.borderRadius);
+    }
+
+    return migrated;
+}
+
 function normalizeComponentConfig(
     id: string,
     type: ScreenComponent['type'],
     config: Record<string, unknown>,
 ): Record<string, unknown> {
+    const migratedConfig = migrateLegacyGeneratedComponentConfig(type, config);
     if (type === 'gantt-chart' && id === 'pmcc-execution-gantt') {
         return {
-            ...config,
-            renderMode: asTrimmedString(config.renderMode) || 'board',
-            nameField: asTrimmedString(config.nameField) || 'name',
-            startField: asTrimmedString(config.startField) || 'planDate',
-            endField: asTrimmedString(config.endField) || 'actualDate',
-            categoryField: asTrimmedString(config.categoryField) || 'majorProjectName',
-            statusField: asTrimmedString(config.statusField) || 'riskLevel',
+            ...migratedConfig,
+            renderMode: asTrimmedString(migratedConfig.renderMode) || 'board',
+            nameField: asTrimmedString(migratedConfig.nameField) || 'name',
+            startField: asTrimmedString(migratedConfig.startField) || 'planDate',
+            endField: asTrimmedString(migratedConfig.endField) || 'actualDate',
+            categoryField: asTrimmedString(migratedConfig.categoryField) || 'majorProjectName',
+            statusField: asTrimmedString(migratedConfig.statusField) || 'riskLevel',
         };
     }
-    return config;
+    return migratedConfig;
 }
 
 function normalizeDataSource(input: unknown): ScreenComponent['dataSource'] {

@@ -142,6 +142,128 @@ test('normalizeScreenConfig migrates legacy project operations gantt screen comp
     assert.equal(component?.config.statusField, 'riskLevel');
 });
 
+test('normalizeScreenConfig migrates legacy generated screen component fields to editor schema', () => {
+    const normalized = normalizeScreenConfig({
+        id: 'screen-legacy-generated',
+        name: '自动生成大屏',
+        width: 1920,
+        height: 1080,
+        backgroundColor: '#08121f',
+        components: [
+            {
+                id: 'legacy-date-filter',
+                type: 'filter-date-range',
+                name: '日期筛选',
+                x: 1260,
+                y: 28,
+                width: 320,
+                height: 58,
+                zIndex: 1,
+                visible: true,
+                locked: false,
+                config: {
+                    label: '统计周期',
+                    startVariableKey: 'dateFrom',
+                    endVariableKey: 'dateTo',
+                },
+            },
+            {
+                id: 'legacy-bar',
+                type: 'bar-chart',
+                name: '项目状态分布图',
+                x: 56,
+                y: 328,
+                width: 568,
+                height: 420,
+                zIndex: 2,
+                visible: true,
+                locked: false,
+                config: {
+                    categoryKey: '项目编号',
+                    orientation: 'horizontal',
+                    stack: 'total',
+                    colors: ['#8fa7c4', '#2ee6a6'],
+                    series: [
+                        { name: '总节点数', dataKey: '总节点数', color: '#8fa7c4' },
+                        { name: '按时完成', dataKey: '按时完成', color: '#2ee6a6' },
+                    ],
+                },
+            },
+            {
+                id: 'legacy-table',
+                type: 'table',
+                name: '任务进度列表',
+                x: 56,
+                y: 760,
+                width: 820,
+                height: 260,
+                zIndex: 3,
+                visible: true,
+                locked: false,
+                config: {
+                    backgroundColor: 'rgba(9,36,90,0.50)',
+                    stripeColor: 'rgba(88,180,255,0.08)',
+                },
+            },
+        ],
+    });
+
+    const [dateFilter, barChart, table] = normalized.config.components;
+
+    assert.equal(dateFilter.config.startKey, 'dateFrom');
+    assert.equal(dateFilter.config.endKey, 'dateTo');
+    assert.equal(dateFilter.config.startVariableKey, 'dateFrom');
+    assert.equal(dateFilter.config.endVariableKey, 'dateTo');
+
+    assert.equal(barChart.config.xAxisField, '项目编号');
+    assert.equal(barChart.config.horizontal, true);
+    assert.equal(barChart.config.stackMode, 'stack');
+    assert.deepEqual(barChart.config.seriesColors, ['#8fa7c4', '#2ee6a6']);
+    assert.deepEqual(barChart.config.series, [
+        { name: '总节点数', dataKey: '总节点数', color: '#8fa7c4', field: '总节点数' },
+        { name: '按时完成', dataKey: '按时完成', color: '#2ee6a6', field: '按时完成' },
+    ]);
+
+    assert.equal(table.config.bodyBackground, 'rgba(9,36,90,0.50)');
+    assert.equal(table.config.oddRowBackground, 'rgba(9,36,90,0.50)');
+    assert.equal(table.config.evenRowBackground, 'rgba(88,180,255,0.08)');
+});
+
+test('normalizeScreenConfig migrates legacy generated number-card fields', () => {
+    const normalized = normalizeScreenConfig({
+        id: 'screen-legacy-number',
+        name: '自动生成指标卡',
+        width: 1920,
+        height: 1080,
+        backgroundColor: '#08121f',
+        components: [
+            {
+                id: 'legacy-number-card',
+                type: 'number-card',
+                name: '节点完成百分比',
+                x: 48,
+                y: 96,
+                width: 250,
+                height: 118,
+                zIndex: 1,
+                visible: true,
+                locked: false,
+                config: {
+                    title: '节点完成百分比',
+                    value: '72.4',
+                    unit: '%',
+                    fontSize: 36,
+                },
+            },
+        ],
+    });
+
+    const component = normalized.config.components[0];
+
+    assert.equal(component.config.suffix, '%');
+    assert.equal(component.config.valueFontSize, 36);
+});
+
 test('validateScreenPayload accepts open-panel actions with empty body template', () => {
     const payload = buildScreenPayload({
         ...multiPageConfig,

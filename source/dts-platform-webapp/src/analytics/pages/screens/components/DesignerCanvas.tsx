@@ -203,12 +203,98 @@ export function DesignerCanvas() {
         }),
     }), [zoom, fitScale, addComponent, editorReadonly]);
 
+    // scale 提前声明 — 供框选/坐标换算使用
+    // (后面 line ~338 处的 const scale 会被覆盖掉,保持一致性)
+    const _designerScale = Math.max(0.1, (zoom / 100) * fitScale);
+
     const handleCanvasClick = useCallback((e: MouseEvent<HTMLDivElement>) => {
         // Deselect all when clicking on empty canvas area
         if (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains('canvas-grid')) {
             selectComponents([]);
         }
     }, [selectComponents]);
+
+    // ============================================================
+    // Shift + 拖框选(marquee selection)
+    // - 在画布空白区按住 Shift 并拖动 → 进入框选模式
+    // - 框选过程显示半透明蓝色矩形选区
+    // - 抬起时将选区命中的组件加入 selectedIds(累加,不覆盖)
+    // - 不按 Shift 拖空白 → 走原 onClick 清空选区流程,不框选
+    // ============================================================
+    const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+    const marqueeStartRef = useRef<{ x: number; y: number; baseSelectedIds: string[] } | null>(null);
+
+    const handleCanvasPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+        if (editorReadonly) return;
+        if (!e.isPrimary || e.button !== 0) return;
+        // 仅在按 Shift + 鼠标按下在空白区(画布自身或网格)时进入框选
+        if (!e.shiftKey) return;
+        const targetEl = e.target as HTMLElement;
+        const isEmptyArea = targetEl === e.currentTarget || targetEl.classList.contains('canvas-grid');
+        if (!isEmptyArea) return;
+
+        const rect = canvasRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        // 画布有 transform: scale(scale),把屏幕像素转换成 design 像素
+        const designX = (e.clientX - rect.left) / _designerScale;
+        const designY = (e.clientY - rect.top) / _designerScale;
+
+        e.preventDefault();
+        e.stopPropagation();
+        marqueeStartRef.current = { x: designX, y: designY, baseSelectedIds: [...selectedIds] };
+        setMarquee({ x1: designX, y1: designY, x2: designX, y2: designY });
+    }, [editorReadonly, _designerScale, selectedIds]);
+
+    useEffect(() => {
+        if (!marquee || !marqueeStartRef.current) return;
+        const onMove = (ev: PointerEvent) => {
+            const rect = canvasRef.current?.getBoundingClientRect();
+            if (!rect) return;
+            const designX = (ev.clientX - rect.left) / _designerScale;
+            const designY = (ev.clientY - rect.top) / _designerScale;
+            const start = marqueeStartRef.current!;
+            setMarquee({ x1: start.x, y1: start.y, x2: designX, y2: designY });
+        };
+        const onUp = () => {
+            if (!marqueeStartRef.current) return;
+            const m = { ...marquee! };
+            const left = Math.min(m.x1, m.x2);
+            const right = Math.max(m.x1, m.x2);
+            const top = Math.min(m.y1, m.y2);
+            const bottom = Math.max(m.y1, m.y2);
+            const isClick = (right - left < 4) && (bottom - top < 4);
+            if (!isClick) {
+                // 选取所有与选区相交的可见组件
+                const hit = config.components
+                    .filter((c) => c.visible !== false && !c.locked)
+                    .filter((c) => {
+                        const cLeft = c.x;
+                        const cRight = c.x + c.width;
+                        const cTop = c.y;
+                        const cBottom = c.y + c.height;
+                        // 相交判断(任何重叠就算命中)
+                        return cLeft < right && cRight > left && cTop < bottom && cBottom > top;
+                    })
+                    .map((c) => c.id);
+                if (hit.length > 0) {
+                    // Shift + 框选 = 累加到当前选区(去重)
+                    const base = marqueeStartRef.current.baseSelectedIds;
+                    const merged = Array.from(new Set([...base, ...hit]));
+                    selectComponents(merged);
+                }
+            }
+            marqueeStartRef.current = null;
+            setMarquee(null);
+        };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+        window.addEventListener('pointercancel', onUp);
+        return () => {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            window.removeEventListener('pointercancel', onUp);
+        };
+    }, [marquee, _designerScale, config.components, selectComponents]);
 
     // Right-click context menu
     const [ctxMenu, setCtxMenu] = useState<ContextMenuState>(null);
@@ -336,6 +422,7 @@ export function DesignerCanvas() {
                     }}
                     onClick={handleCanvasClick}
                     onContextMenu={handleContextMenu}
+                    onPointerDown={handleCanvasPointerDown}
                 >
                     {showGrid && <div className="canvas-grid absolute inset-0 pointer-events-none" />}
 
@@ -347,6 +434,25 @@ export function DesignerCanvas() {
                             theme={config.theme}
                         />
                     ))}
+
+                    {/* Shift + 拖框选 矩形指示器(design 坐标系) */}
+                    {marquee ? (
+                        <div
+                            data-testid="marquee-selection"
+                            aria-hidden="true"
+                            style={{
+                                position: 'absolute',
+                                left: Math.min(marquee.x1, marquee.x2),
+                                top: Math.min(marquee.y1, marquee.y2),
+                                width: Math.abs(marquee.x2 - marquee.x1),
+                                height: Math.abs(marquee.y2 - marquee.y1),
+                                background: 'rgba(74, 158, 255, 0.12)',
+                                border: '1px dashed rgba(74, 158, 255, 0.85)',
+                                pointerEvents: 'none',
+                                zIndex: 9999,
+                            }}
+                        />
+                    ) : null}
 
                     {snapGuides.x.map((x, idx) => (
                         <div

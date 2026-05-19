@@ -110,6 +110,20 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
     const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
         if (component.locked || editorReadonly) return;
         if (!e.isPrimary || activePointerId.current !== null) return;
+
+        // Shift + 点击 = 切换选中(加入/移除多选),不开始拖拽
+        // 与 Figma / Sketch / draw.io 行为一致
+        const isShiftClick = e.shiftKey && !component.groupId;
+        if (isShiftClick) {
+            e.stopPropagation();
+            e.preventDefault();
+            const nextIds = selectedIds.includes(component.id)
+                ? selectedIds.filter((id) => id !== component.id)
+                : [...selectedIds, component.id];
+            selectComponents(nextIds);
+            return;
+        }
+
         e.stopPropagation();
         e.preventDefault();
 
@@ -123,9 +137,13 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
             ? config.components.filter((item) => item.groupId === component.groupId).map((item) => item.id)
             : [];
 
+        // 多选拖拽: 如果当前组件已在多选区,保持所有选中一起拖
+        // 否则单选这个组件
         const seedIds = groupedIds.length > 0
             ? groupedIds
-            : (selectedIds.includes(component.id) ? selectedIds : [component.id]);
+            : (selectedIds.includes(component.id) && selectedIds.length > 1
+                ? selectedIds
+                : [component.id]);
         const moveIds = collectContainerSubtreeIds(config.components, seedIds);
 
         selectComponents(moveIds);

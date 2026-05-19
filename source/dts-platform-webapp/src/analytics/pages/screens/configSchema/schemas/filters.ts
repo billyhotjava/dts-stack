@@ -37,8 +37,23 @@ const filterSelectSchema: ComponentConfigSchema = {
     fields: [
         ...FILTER_SHARED_FIELDS,
         { key: 'options',  label: '选项列表', type: 'json',    group: 'content' },
+        { key: 'optionSourceMode', label: '选项来源', type: 'select', group: 'content', options: [
+            { label: '手工配置', value: 'manual' },
+            { label: '数据字段', value: 'data' },
+        ], defaultValue: 'manual' },
+        { key: 'dataOptionLabelField', label: '选项标签字段', type: 'text', group: 'content',
+            showIf: (config) => config.optionSourceMode === 'data',
+        },
+        { key: 'dataOptionValueField', label: '选项值字段', type: 'text', group: 'content',
+            showIf: (config) => config.optionSourceMode === 'data',
+        },
+        { key: 'dataOptionMax', label: '最大选项数', type: 'number', group: 'content', min: 1, max: 1000, defaultValue: 200,
+            showIf: (config) => config.optionSourceMode === 'data',
+        },
         { key: 'multiple', label: '多选',     type: 'boolean', group: 'behavior', defaultValue: false },
         ...FILTER_STYLE_FIELDS,
+        { key: 'optionBackground', label: '下拉背景色', type: 'color', group: 'appearance' },
+        { key: 'optionTextColor', label: '下拉文字色', type: 'color', group: 'appearance' },
     ],
 };
 
@@ -48,8 +63,8 @@ const filterDateRangeSchema: ComponentConfigSchema = {
     fields: [
         { key: 'label',       label: '标签文字',   type: 'text', group: 'content', defaultValue: '日期区间' },
         { key: 'scopeHint',   label: '作用域提示', type: 'text', group: 'content' },
-        { key: 'startVariableKey', label: '开始日期变量', type: 'text', group: 'behavior' },
-        { key: 'endVariableKey',   label: '结束日期变量', type: 'text', group: 'behavior' },
+        { key: 'startKey', label: '开始日期变量', type: 'text', group: 'behavior' },
+        { key: 'endKey',   label: '结束日期变量', type: 'text', group: 'behavior' },
         { key: 'format',      label: '日期格式',   type: 'text',    group: 'content', defaultValue: 'YYYY-MM-DD' },
         { key: 'showTime',    label: '显示时间',   type: 'boolean', group: 'content', defaultValue: false },
         ...FILTER_STYLE_FIELDS,
