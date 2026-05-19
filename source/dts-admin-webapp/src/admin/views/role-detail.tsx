@@ -635,8 +635,8 @@ function RoleBasicInfoSection({
 }) {
 	return (
 		<>
-			<CardHeader>
-				<div className="space-y-2">
+			<CardHeader className="pb-4">
+				<div className="space-y-1.5">
 					{isEditMode ? (
 						<div className="space-y-2">
 							<Text variant="body3" className="font-medium">
@@ -656,8 +656,8 @@ function RoleBasicInfoSection({
 					</Text>
 				</div>
 			</CardHeader>
-			<CardContent className="space-y-8 text-sm">
-				<section className="grid gap-4 md:grid-cols-2">
+			<CardContent className="space-y-5 text-sm">
+				<section className="grid gap-3 md:grid-cols-2">
 					<div className="space-y-1">
 						<Text variant="body3" className="font-medium">
 							所属域
@@ -670,7 +670,7 @@ function RoleBasicInfoSection({
 							</Text>
 						)}
 					</div>
-					<div className="space-y-1">
+					<div className="space-y-1 md:justify-self-end md:text-right">
 						<Text variant="body3" className="font-medium">
 							角色成员数
 						</Text>
@@ -683,7 +683,7 @@ function RoleBasicInfoSection({
 					</div>
 				</section>
 
-				<section className="space-y-2">
+				<section className="space-y-1.5">
 					<Text variant="body3" className="font-medium">
 						角色描述
 					</Text>
@@ -702,7 +702,7 @@ function RoleBasicInfoSection({
 				</section>
 
 				{isEditMode ? (
-					<section className="space-y-2">
+					<section className="space-y-1.5">
 						<Text variant="body3" className="font-medium">
 							审批备注（可选）
 						</Text>
