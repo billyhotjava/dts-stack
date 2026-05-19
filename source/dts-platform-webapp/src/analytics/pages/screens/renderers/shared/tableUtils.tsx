@@ -135,64 +135,118 @@ export function resolveTableConditionalStyle(
     if (!Array.isArray(rules)) {
         return {};
     }
-    const normalizedCurrentKey = String(columnMeta?.key ?? '').trim().toLowerCase();
-    const normalizedCurrentTitle = String(columnMeta?.title ?? '').trim().toLowerCase();
     for (const item of rules) {
         if (!item || typeof item !== 'object') continue;
         const rule = item as Record<string, unknown>;
-        const ruleColumnKey = String(rule.columnKey ?? '').trim().toLowerCase();
-        const ruleColumnTitle = String(rule.columnTitle ?? '').trim().toLowerCase();
-        let columnMatched = false;
-        if (ruleColumnKey && normalizedCurrentKey) {
-            columnMatched = ruleColumnKey === normalizedCurrentKey;
-        }
-        if (!columnMatched && ruleColumnTitle && normalizedCurrentTitle) {
-            columnMatched = ruleColumnTitle === normalizedCurrentTitle;
-        }
-        if (!columnMatched) {
-            const ruleCol = Number(rule.columnIndex);
-            columnMatched = Number.isFinite(ruleCol) && ruleCol === columnIndex;
-        }
-        if (!columnMatched) continue;
-        const operator = String(rule.operator || '').trim();
-        const target = rule.value;
-        const text = String(raw ?? '');
-        const textLower = text.toLowerCase();
-        const targetText = String(target ?? '');
-        const targetLower = targetText.toLowerCase();
-        const nRaw = Number(raw);
-        const nTarget = Number(target);
-        let matched = false;
-        if (operator === 'contains') {
-            matched = targetText.length > 0 && textLower.includes(targetLower);
-        } else if (operator === 'not-contains') {
-            matched = targetText.length === 0 || !textLower.includes(targetLower);
-        } else if (operator === 'starts-with') {
-            matched = targetText.length > 0 && textLower.startsWith(targetLower);
-        } else if (operator === 'ends-with') {
-            matched = targetText.length > 0 && textLower.endsWith(targetLower);
-        } else if (operator === 'empty') {
-            matched = text.trim().length === 0;
-        } else if (operator === 'not-empty') {
-            matched = text.trim().length > 0;
-        } else if (Number.isFinite(nRaw) && Number.isFinite(nTarget)) {
-            if (operator === '>') matched = nRaw > nTarget;
-            if (operator === '>=') matched = nRaw >= nTarget;
-            if (operator === '<') matched = nRaw < nTarget;
-            if (operator === '<=') matched = nRaw <= nTarget;
-            if (operator === '=' || operator === '==') matched = nRaw === nTarget;
-            if (operator === '!=' || operator === '<>') matched = nRaw !== nTarget;
-        } else {
-            if (operator === '=' || operator === '==') matched = text === String(target ?? '');
-            if (operator === '!=' || operator === '<>') matched = text !== String(target ?? '');
-        }
-        if (!matched) continue;
-        return {
-            color: typeof rule.color === 'string' ? rule.color : undefined,
-            background: typeof rule.background === 'string' ? rule.background : undefined,
-        };
+        if (isRowConditionalRule(rule)) continue;
+        const style = resolveMatchedConditionalRule(rule, columnIndex, raw, columnMeta);
+        if (style) return style;
     }
     return {};
+}
+
+export function resolveTableRowConditionalStyle(
+    rules: unknown,
+    row: unknown[],
+    columnMeta: Array<{ key?: string; title?: string }>,
+): { color?: string; background?: string } {
+    if (!Array.isArray(rules)) {
+        return {};
+    }
+    for (const item of rules) {
+        if (!item || typeof item !== 'object') continue;
+        const rule = item as Record<string, unknown>;
+        if (!isRowConditionalRule(rule)) continue;
+        const columnIndex = resolveConditionalRuleColumnIndex(rule, columnMeta);
+        if (columnIndex < 0) continue;
+        const style = resolveMatchedConditionalRule(rule, columnIndex, row[columnIndex], columnMeta[columnIndex]);
+        if (style) return style;
+    }
+    return {};
+}
+
+function isRowConditionalRule(rule: Record<string, unknown>): boolean {
+    return rule.scope === 'row' || rule.applyTo === 'row' || rule.target === 'row';
+}
+
+function resolveConditionalRuleColumnIndex(
+    rule: Record<string, unknown>,
+    columnMeta: Array<{ key?: string; title?: string }>,
+): number {
+    const ruleColumnKey = String(rule.columnKey ?? '').trim().toLowerCase();
+    const ruleColumnTitle = String(rule.columnTitle ?? '').trim().toLowerCase();
+    if (ruleColumnKey || ruleColumnTitle) {
+        const matched = columnMeta.findIndex((meta) => {
+            const normalizedKey = String(meta?.key ?? '').trim().toLowerCase();
+            const normalizedTitle = String(meta?.title ?? '').trim().toLowerCase();
+            return (ruleColumnKey.length > 0 && normalizedKey === ruleColumnKey)
+                || (ruleColumnTitle.length > 0 && normalizedTitle === ruleColumnTitle);
+        });
+        if (matched >= 0) return matched;
+    }
+    const ruleCol = Number(rule.columnIndex);
+    return Number.isFinite(ruleCol) ? ruleCol : -1;
+}
+
+function resolveMatchedConditionalRule(
+    rule: Record<string, unknown>,
+    columnIndex: number,
+    raw: unknown,
+    columnMeta?: { key?: string; title?: string },
+): { color?: string; background?: string } | null {
+    const normalizedCurrentKey = String(columnMeta?.key ?? '').trim().toLowerCase();
+    const normalizedCurrentTitle = String(columnMeta?.title ?? '').trim().toLowerCase();
+    const ruleColumnKey = String(rule.columnKey ?? '').trim().toLowerCase();
+    const ruleColumnTitle = String(rule.columnTitle ?? '').trim().toLowerCase();
+    let columnMatched = false;
+    if (ruleColumnKey && normalizedCurrentKey) {
+        columnMatched = ruleColumnKey === normalizedCurrentKey;
+    }
+    if (!columnMatched && ruleColumnTitle && normalizedCurrentTitle) {
+        columnMatched = ruleColumnTitle === normalizedCurrentTitle;
+    }
+    if (!columnMatched) {
+        const ruleCol = Number(rule.columnIndex);
+        columnMatched = Number.isFinite(ruleCol) && ruleCol === columnIndex;
+    }
+    if (!columnMatched) return null;
+    const operator = String(rule.operator || '').trim();
+    const target = rule.value;
+    const text = String(raw ?? '');
+    const textLower = text.toLowerCase();
+    const targetText = String(target ?? '');
+    const targetLower = targetText.toLowerCase();
+    const nRaw = Number(raw);
+    const nTarget = Number(target);
+    let matched = false;
+    if (operator === 'contains') {
+        matched = targetText.length > 0 && textLower.includes(targetLower);
+    } else if (operator === 'not-contains') {
+        matched = targetText.length === 0 || !textLower.includes(targetLower);
+    } else if (operator === 'starts-with') {
+        matched = targetText.length > 0 && textLower.startsWith(targetLower);
+    } else if (operator === 'ends-with') {
+        matched = targetText.length > 0 && textLower.endsWith(targetLower);
+    } else if (operator === 'empty') {
+        matched = text.trim().length === 0;
+    } else if (operator === 'not-empty') {
+        matched = text.trim().length > 0;
+    } else if (Number.isFinite(nRaw) && Number.isFinite(nTarget)) {
+        if (operator === '>') matched = nRaw > nTarget;
+        if (operator === '>=') matched = nRaw >= nTarget;
+        if (operator === '<') matched = nRaw < nTarget;
+        if (operator === '<=') matched = nRaw <= nTarget;
+        if (operator === '=' || operator === '==') matched = nRaw === nTarget;
+        if (operator === '!=' || operator === '<>') matched = nRaw !== nTarget;
+    } else {
+        if (operator === '=' || operator === '==') matched = text === String(target ?? '');
+        if (operator === '!=' || operator === '<>') matched = text !== String(target ?? '');
+    }
+    if (!matched) return null;
+    return {
+        color: typeof rule.color === 'string' ? rule.color : undefined,
+        background: typeof rule.background === 'string' ? rule.background : undefined,
+    };
 }
 
 export function normalizeColumnAlign(value: unknown, fallback: ColumnAlign): ColumnAlign {

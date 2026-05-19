@@ -156,11 +156,11 @@ export function TableConfig({ component, onChange }: {
                             toast.error('条件格式 JSON 解析失败');
                         }
                     }}
-                    placeholder='[{"columnKey":"amount","operator":">","value":100,"color":"#ef4444"}]'
+                    placeholder='[{"scope":"row","columnKey":"amount","operator":">","value":100,"background":"#ef4444"}]'
                 />
             </div>
             <div style={{ fontSize: 13, opacity: 0.75, marginTop: -2, marginBottom: 8, lineHeight: 1.5 }}>
-                支持按 `columnIndex`、`columnKey` 或 `columnTitle` 匹配列；建议优先使用 `columnKey` 以避免字段重排错位。
+                支持按 `columnIndex`、`columnKey` 或 `columnTitle` 匹配列；增加 `scope:"row"` 可按该列值给整行着色。
             </div>
 
             {hasDynamicSource && sourceCols.length === 0 && (

@@ -11,7 +11,7 @@ import { resolveTextColor } from './shared/chartUtils';
 import { MetricNoteBadge, type MetricNote } from './shared/MetricNote';
 import {
     compareTableValues, estimateTablePlaceholderRowCount, resolveTableConditionalStyle,
-    ThemedScrollTable, resolveBoundTableData,
+    resolveTableRowConditionalStyle, ThemedScrollTable, resolveBoundTableData,
 } from './shared/tableUtils';
 import {
     buildTableRowActionParams,
@@ -366,6 +366,11 @@ export function renderTable(props: TableRendererProps): ReactNode {
                                 const rowFullText = displayHeader
                                     .map((h, i) => `${h}: ${row[i] ?? ''}`)
                                     .join('\n');
+                                const rowConditional = resolveTableRowConditionalStyle(
+                                    conditionalRules,
+                                    row,
+                                    columnMeta,
+                                );
                                 return (
                                 <tr
                                     key={rowIndex}
@@ -405,7 +410,7 @@ export function renderTable(props: TableRendererProps): ReactNode {
                                             columnMeta[colIndex],
                                         );
                                         const rowBackground = rowIndex % 2 === 0 ? oddRowBackground : evenRowBackground;
-                                        const cellBackground = conditional.background || rowBackground;
+                                        const cellBackground = conditional.background || rowConditional.background || rowBackground;
                                         // 单元格原生 title — 容器窄时被截断的列可悬浮看完整值
                                         const cellText = row[colIndex] == null ? '' : String(row[colIndex]);
                                         return (
@@ -414,7 +419,7 @@ export function renderTable(props: TableRendererProps): ReactNode {
                                                 title={cellText || undefined}
                                                 style={{
                                                 fontSize,
-                                                color: conditional.color || bodyColor,
+                                                color: conditional.color || rowConditional.color || bodyColor,
                                                 background: cellBackground,
                                                 borderBottom: '1px solid ' + borderColor,
                                                 borderRight: colIndex < displayHeader.length - 1 ? '1px solid ' + borderColor : 'none',

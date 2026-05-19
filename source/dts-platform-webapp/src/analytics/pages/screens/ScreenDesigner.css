@@ -1316,7 +1316,12 @@
 .property-panel-content {
   flex: 1;
   overflow-y: auto;
+  /* 横向滚动 — 面板宽度不足时,内容用左右滑动而非压缩组件
+     使用 !important 防止 Tailwind 类(如 overflow-y-auto)或父级 overflow 简写覆盖 */
+  overflow-x: auto !important;
   padding: 16px;
+  /* 防止内部 row min-width 把内容推到面板外 */
+  box-sizing: border-box;
 }
 
 .property-section {
@@ -1358,6 +1363,18 @@
   display: flex;
   align-items: center;
   margin-bottom: 12px;
+  /* 关键: 面板宽度不足时,row 保持最小可读宽度,外层 panel-content 出现横向滚动条
+     而不是把 row 内的色块/hex 输入/下拉等组件挤压到看不见 */
+  min-width: 280px;
+  flex-wrap: nowrap;
+}
+
+/* section / collapse / panel content 不要 min-width!
+   让 section title (如"组件外观") 始终跟随面板宽度自适应,
+   仅 row 维持最小宽度并触发横向滚动 — 这样 section 标题永远可见。 */
+.property-panel-content > * {
+  /* 防止外层 flex/grid 把 panel-content 子元素错位 */
+  align-self: stretch;
 }
 
 .property-label {
@@ -1393,6 +1410,8 @@
   display: flex;
   gap: 8px;
   flex: 1;
+  /* 保护"色块 + hex + 备选"等并列控件,挤压时撑住外层 row 走横向滚动 */
+  min-width: 180px;
 }
 
 .property-input-group .property-input {

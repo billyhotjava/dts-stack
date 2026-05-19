@@ -822,24 +822,36 @@
           {
             "source": "节点任务及目标",
             "alias": "节点任务及目标",
-            "width": 32
+            "width": 30
           },
           {
             "source": "节点类型",
             "alias": "节点类型",
-            "width": 14
+            "width": 13
+          },
+          {
+            "source": "风险等级",
+            "alias": "风险等级",
+            "align": "center",
+            "headerAlign": "center",
+            "width": 10,
+            "metricNote": {
+              "displayName": "风险等级",
+              "definition": "节点风险等级。本表仅展示高风险且超期未完成的节点。",
+              "sourceTable": "进度信息汇总表"
+            }
           },
           {
             "source": "责任人",
             "alias": "责任人",
-            "width": 12
+            "width": 11
           },
           {
             "source": "超期天数",
             "alias": "超期天数",
             "align": "right",
             "headerAlign": "right",
-            "width": 12,
+            "width": 10,
             "formatter": "number",
             "metricNote": {
               "code": "pjm_prog_delay_days",
@@ -854,7 +866,7 @@
             "alias": "超期时长",
             "align": "center",
             "headerAlign": "center",
-            "width": 14,
+            "width": 10,
             "metricNote": {
               "displayName": "超期时长分段",
               "definition": "按超期天数折算为演示分段: 90天及以上、30-89天、1-29天。",
@@ -874,6 +886,7 @@
         "freezeHeader": true,
         "conditionalRules": [
           {
+            "scope": "row",
             "columnKey": "超期天数",
             "operator": ">=",
             "value": 90,
@@ -881,6 +894,7 @@
             "background": "rgba(239, 68, 68, 0.72)"
           },
           {
+            "scope": "row",
             "columnKey": "超期天数",
             "operator": ">=",
             "value": 30,
@@ -888,30 +902,10 @@
             "background": "rgba(245, 158, 11, 0.62)"
           },
           {
+            "scope": "row",
             "columnKey": "超期天数",
             "operator": "<",
             "value": 30,
-            "color": "#e0f2fe",
-            "background": "rgba(14, 165, 233, 0.42)"
-          },
-          {
-            "columnKey": "超期时长",
-            "operator": "=",
-            "value": "超3个月",
-            "color": "#ffffff",
-            "background": "rgba(239, 68, 68, 0.72)"
-          },
-          {
-            "columnKey": "超期时长",
-            "operator": "=",
-            "value": "1-3个月",
-            "color": "#fff7ed",
-            "background": "rgba(245, 158, 11, 0.62)"
-          },
-          {
-            "columnKey": "超期时长",
-            "operator": "=",
-            "value": "1个月以内",
             "color": "#e0f2fe",
             "background": "rgba(14, 165, 233, 0.42)"
           }
@@ -960,6 +954,13 @@
             "definition": "按超期天数分为超3个月、1-3个月、1个月以内,用于客户演示时颜色区分。",
             "sourceTable": "进度信息汇总表",
             "note": "超3个月=90天及以上;1-3个月=30-89天;1个月以内=1-29天。"
+          },
+          "风险等级": {
+            "kind": "field",
+            "displayName": "风险等级",
+            "definition": "节点风险等级。本表过滤为高风险节点。",
+            "sourceTable": "进度信息汇总表",
+            "note": "SQL 使用 is_high_risk=true 约束高风险口径。"
           }
         },
         "headerBackground": "#0f2a55"
@@ -968,7 +969,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT d.project_no AS \"项目编号\", COALESCE(d.node_task,'') AS \"节点任务及目标\", d.node_type AS \"节点类型\", d.owner AS \"责任人\", COALESCE(d.delay_days,0) AS \"超期天数\", CASE WHEN COALESCE(d.delay_days,0) >= 90 THEN '超3个月' WHEN COALESCE(d.delay_days,0) >= 30 THEN '1-3个月' ELSE '1个月以内' END AS \"超期时长\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date,'YYYY-MM') AND d.is_incomplete = true AND COALESCE(d.delay_days,0) > 0 [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] ORDER BY COALESCE(d.delay_days,0) DESC, d.plan_date ASC LIMIT 20",
+          "query": "SELECT d.project_no AS \"项目编号\", COALESCE(d.node_task,'') AS \"节点任务及目标\", d.node_type AS \"节点类型\", d.risk_level AS \"风险等级\", d.owner AS \"责任人\", COALESCE(d.delay_days,0) AS \"超期天数\", CASE WHEN COALESCE(d.delay_days,0) >= 90 THEN '超3个月' WHEN COALESCE(d.delay_days,0) >= 30 THEN '1-3个月' ELSE '1个月以内' END AS \"超期时长\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date,'YYYY-MM') AND d.is_incomplete = true AND d.is_high_risk = true AND COALESCE(d.delay_days,0) > 0 [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] ORDER BY COALESCE(d.delay_days,0) DESC, d.plan_date ASC LIMIT 20",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1092,8 +1093,8 @@
           "sourceTable": "进度信息汇总表",
           "frequency": "每日 01:00 刷新",
           "thresholds": {
-            "warning": 85.0,
-            "critical": 75.0,
+            "warning": 85,
+            "critical": 75,
             "rule": "<"
           },
           "excelRef": "原始指标 #9 节点完成百分比"
@@ -1162,8 +1163,8 @@
           "sourceTable": "进度信息汇总表",
           "frequency": "每日 01:00 刷新",
           "thresholds": {
-            "warning": 90.0,
-            "critical": 80.0,
+            "warning": 90,
+            "critical": 80,
             "rule": "<"
           },
           "excelRef": "原始指标 #26 里程碑节点完成总百分比"
@@ -1232,8 +1233,8 @@
           "sourceTable": "进度信息汇总表",
           "frequency": "每日 01:00 刷新",
           "thresholds": {
-            "warning": 15.0,
-            "critical": 25.0,
+            "warning": 15,
+            "critical": 25,
             "rule": ">"
           },
           "excelRef": "二次指标 #2 pjm_prog_overdue_rate"
@@ -1302,8 +1303,8 @@
           "sourceTable": "进度信息汇总表",
           "frequency": "每日 01:00 刷新",
           "thresholds": {
-            "warning": 10.0,
-            "critical": 20.0,
+            "warning": 10,
+            "critical": 20,
             "rule": ">"
           },
           "excelRef": "原始指标 #11 超期完成节点百分比"
