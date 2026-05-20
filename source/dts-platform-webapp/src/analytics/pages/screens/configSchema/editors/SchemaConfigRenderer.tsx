@@ -12,6 +12,7 @@ import ColorArrayEditor from './ColorArrayEditor';
 import AxisConfigEditor from './AxisConfigEditor';
 import LegendConfigEditor from './LegendConfigEditor';
 import ColumnStyleEditor from './ColumnStyleEditor';
+import { resolveColumnStyleSourceColumns } from './columnStyleSourceColumns';
 
 import type { AxisConfig } from './AxisConfigEditor';
 import type { LegendConfig } from './LegendConfigEditor';
@@ -195,11 +196,9 @@ const SchemaConfigRenderer: React.FC<SchemaConfigRendererProps> = ({ schema, con
     }
 
     if (field.type === 'column-style') {
-      // 从组件 config 上提取 SQL 数据源派生的列(由 ComponentRenderer 执行 SQL 后回写)。
-      // 当存在 _sourceColumns 时,ColumnStyleEditor 自动启用"字段下拉" + "一键同步列"。
-      const sourceColumns = (config as Record<string, unknown>)?._sourceColumns as
-        | Array<{ name: string; displayName?: string; baseType?: string }>
-        | undefined;
+      // 动态数据源优先消费 ComponentRenderer 回写的 _sourceColumns。
+      // 静态表格没有回写列信息时,从 header/data 推导同一份列元数据,让样式 Tab 也能同步和选择列。
+      const sourceColumns = resolveColumnStyleSourceColumns(config);
       return (
         <FieldRow key={field.key} label={field.label}>
           <ColumnStyleEditor

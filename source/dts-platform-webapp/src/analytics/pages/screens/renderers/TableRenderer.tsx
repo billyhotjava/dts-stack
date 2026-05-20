@@ -12,6 +12,7 @@ import { MetricNoteBadge, type MetricNote } from './shared/MetricNote';
 import {
     compareTableValues, estimateTablePlaceholderRowCount, resolveTableConditionalStyle,
     resolveTableRowConditionalStyle, ThemedScrollTable, resolveBoundTableData,
+    resolveFrozenColumnOffsets,
 } from './shared/tableUtils';
 import {
     buildTableRowActionParams,
@@ -206,7 +207,17 @@ export function renderTable(props: TableRendererProps): ReactNode {
             const estimatedBodyRowHeight = Math.max(36, Math.ceil(fontSize * 1.8));
             const minColumnWidth = Math.max(60, Number(c.minColumnWidth || 100));
             const autoPageSize = c.autoPageSize === true;
-            const computedTableMinWidth = displayHeader.length * minColumnWidth;
+            const computedTableMinWidth = columnMeta.reduce((total, meta) => {
+                if (meta.widthUnit === 'px' && typeof meta.width === 'number') {
+                    return total + Math.max(minColumnWidth, meta.width);
+                }
+                return total + minColumnWidth;
+            }, 0);
+            const frozenColumnMeta = columnMeta.map((meta, index) => ({
+                ...meta,
+                frozen: meta.frozen === true || (freezeFirstColumn && index === 0),
+            }));
+            const frozenColumnOffsets = resolveFrozenColumnOffsets(frozenColumnMeta, minColumnWidth);
 
             let pageSize = Math.max(1, Number(c.pageSize || 10));
             if (autoPageSize && enablePagination) {
@@ -216,10 +227,13 @@ export function renderTable(props: TableRendererProps): ReactNode {
                 pageSize = Math.max(1, fit);
             }
 
-            const sortedRows = tableSort && enableSort
+            const activeTableSort = tableSort && enableSort && columnMeta[tableSort.colIndex]?.sortable !== false
+                ? tableSort
+                : null;
+            const sortedRows = activeTableSort
                 ? [...displayData].sort((a, b) => {
-                    const v = compareTableValues(a[tableSort.colIndex], b[tableSort.colIndex]);
-                    return tableSort.order === 'asc' ? v : -v;
+                    const v = compareTableValues(a[activeTableSort.colIndex], b[activeTableSort.colIndex]);
+                    return activeTableSort.order === 'asc' ? v : -v;
                 })
                 : displayData;
             const totalPages = enablePagination ? Math.max(1, Math.ceil(sortedRows.length / pageSize)) : 1;
@@ -272,11 +286,15 @@ export function renderTable(props: TableRendererProps): ReactNode {
                         {displayHeader.length > 0 && (
                             <thead>
                                 <tr style={{ background: headerBackground }}>
-                                    {displayHeader.map((title, i) => (
+                                    {displayHeader.map((title, i) => {
+                                        const isColumnSortable = enableSort && columnMeta[i]?.sortable !== false;
+                                        const frozenLeft = frozenColumnOffsets[i];
+                                        const isColumnFrozen = typeof frozenLeft === 'number';
+                                        return (
                                         <th key={i} style={{
                                             color: headerColor,
                                             fontSize: headerFontSize,
-                                            width: columnMeta[i]?.width ? `${columnMeta[i].width}%` : undefined,
+                                            width: columnMeta[i]?.widthCss,
                                             // 每个 th 也应用 headerBackground,防止 sticky 时被下方滚动行透出
                                             background: headerBackground,
                                             borderBottom: '1px solid ' + borderColor,
@@ -293,10 +311,10 @@ export function renderTable(props: TableRendererProps): ReactNode {
                                             // sticky 仅在 <th> 上,Chrome 56+ 稳定支持
                                             // 不在 <thead> 上加,避免 Chrome 91-100 已知 bug
                                             ...(freezeHeader ? { position: 'sticky', top: 0, zIndex: 11 } : {}),
-                                            ...(freezeFirstColumn && i === 0
+                                            ...(isColumnFrozen
                                                 ? {
                                                     position: 'sticky',
-                                                    left: 0,
+                                                    left: frozenLeft,
                                                     zIndex: freezeHeader ? 12 : 2,
                                                     background: headerBackground,
                                                     boxShadow: `1px 0 0 ${borderColor}`,
@@ -305,9 +323,9 @@ export function renderTable(props: TableRendererProps): ReactNode {
                                         }}>
                                             <button
                                                 type="button"
-                                                disabled={!enableSort}
+                                                disabled={!isColumnSortable}
                                                 onClick={() => {
-                                                    if (!enableSort) return;
+                                                    if (!isColumnSortable) return;
                                                     setTablePage(1);
                                                     setTableSort((prev) => {
                                                         if (!prev || prev.colIndex !== i) {
@@ -325,7 +343,7 @@ export function renderTable(props: TableRendererProps): ReactNode {
                                                     color: headerColor,
                                                     fontSize: 'inherit',
                                                     fontWeight: 600,
-                                                    cursor: enableSort ? 'pointer' : 'default',
+                                                    cursor: isColumnSortable ? 'pointer' : 'default',
                                                     display: 'inline-flex',
                                                     alignItems: 'center',
                                                     gap: 4,
@@ -349,14 +367,15 @@ export function renderTable(props: TableRendererProps): ReactNode {
                                                         />
                                                     </span>
                                                 ) : null}
-                                                {tableSort?.colIndex === i ? (
-                                                    tableSort.order === 'asc'
+                                                {activeTableSort?.colIndex === i ? (
+                                                    activeTableSort.order === 'asc'
                                                         ? <ArrowUp size={10} strokeWidth={1.8} aria-hidden="true" />
                                                         : <ArrowDown size={10} strokeWidth={1.8} aria-hidden="true" />
                                                 ) : null}
                                             </button>
                                         </th>
-                                    ))}
+                                        );
+                                    })}
                                 </tr>
                             </thead>
                         )}
@@ -409,6 +428,8 @@ export function renderTable(props: TableRendererProps): ReactNode {
                                             row[colIndex],
                                             columnMeta[colIndex],
                                         );
+                                        const frozenLeft = frozenColumnOffsets[colIndex];
+                                        const isColumnFrozen = typeof frozenLeft === 'number';
                                         const rowBackground = rowIndex % 2 === 0 ? oddRowBackground : evenRowBackground;
                                         const cellBackground = conditional.background || rowConditional.background || rowBackground;
                                         // 单元格原生 title — 容器窄时被截断的列可悬浮看完整值
@@ -431,10 +452,10 @@ export function renderTable(props: TableRendererProps): ReactNode {
                                                 overflowWrap: columnMeta[colIndex]?.wrap ? 'anywhere' : undefined,
                                                 wordBreak: columnMeta[colIndex]?.wrap ? 'break-word' : undefined,
                                                 lineHeight: columnMeta[colIndex]?.wrap ? 1.35 : undefined,
-                                                ...(freezeFirstColumn && colIndex === 0
+                                                ...(isColumnFrozen
                                                     ? {
                                                         position: 'sticky',
-                                                        left: 0,
+                                                        left: frozenLeft,
                                                         zIndex: 1,
                                                         boxShadow: `1px 0 0 ${borderColor}`,
                                                         background: cellBackground,
@@ -482,10 +503,10 @@ export function renderTable(props: TableRendererProps): ReactNode {
                                                 overflowWrap: columnMeta[colIndex]?.wrap ? 'anywhere' : undefined,
                                                 wordBreak: columnMeta[colIndex]?.wrap ? 'break-word' : undefined,
                                                 lineHeight: columnMeta[colIndex]?.wrap ? 1.35 : undefined,
-                                                ...(freezeFirstColumn && colIndex === 0
+                                                ...(typeof frozenColumnOffsets[colIndex] === 'number'
                                                     ? {
                                                         position: 'sticky',
-                                                        left: 0,
+                                                        left: frozenColumnOffsets[colIndex],
                                                         zIndex: 1,
                                                         boxShadow: `1px 0 0 ${borderColor}`,
                                                         background: fillerBackground,

@@ -14,3 +14,13 @@ test("TableRenderer remains type-checked and uses icon sort indicators", async (
     assert.equal(source.includes("ComponentType"), false);
     assert.doesNotMatch(source, /\brenderUnavailableState,\s*\n\s*\}/);
 });
+
+test("TableRenderer consumes resolved column metadata for width, sorting, and frozen columns", async () => {
+    const source = await readFile(tableRendererPath, "utf8");
+
+    assert.match(source, /resolveFrozenColumnOffsets/);
+    assert.match(source, /columnMeta\[i\]\?\.widthCss/);
+    assert.match(source, /columnMeta\[i\]\?\.sortable !== false/);
+    assert.match(source, /activeTableSort/);
+    assert.match(source, /frozenColumnOffsets\[colIndex\]/);
+});

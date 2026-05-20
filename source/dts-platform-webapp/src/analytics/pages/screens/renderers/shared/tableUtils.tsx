@@ -26,6 +26,7 @@ function resolveTextColor(candidate: string | undefined, fallback: string): stri
 
 export type ColumnAlign = 'left' | 'center' | 'right';
 export type ColumnFormatter = 'auto' | 'string' | 'number' | 'percent' | 'date';
+export type ColumnWidthUnit = 'px' | 'percent';
 
 /**
  * 列级指标说明 — 与组件 metricNote 同形,用于在列头渲染 ℹ️。
@@ -34,13 +35,26 @@ export type ColumnFormatter = 'auto' | 'string' | 'number' | 'percent' | 'date';
 export type ColumnMetricNote = Record<string, unknown>;
 
 export interface ColumnEntry {
-    source: string;
+    /** Legacy field key used by template/table binding editors. */
+    source?: string;
+    /** Schema editor field key. Kept compatible with `source`. */
+    key?: string;
+    field?: string;
+    dataKey?: string;
+    name?: string;
     alias?: string;
+    label?: string;
+    title?: string;
+    header?: string;
+    displayName?: string;
     align?: ColumnAlign;
     headerAlign?: ColumnAlign;
-    width?: number;
+    width?: number | string;
+    widthUnit?: ColumnWidthUnit | '%';
     wrap?: boolean;
     formatter?: ColumnFormatter;
+    sortable?: boolean;
+    frozen?: boolean;
     /** 列级指标说明,鼠标悬浮列头时弹出。 */
     metricNote?: ColumnMetricNote;
 }
@@ -55,12 +69,17 @@ export interface SourceColumnMeta {
 
 export interface ResolvedColumnMeta {
     key: string;
+    source?: string;
     title: string;
     align: ColumnAlign;
     headerAlign?: ColumnAlign;
     width?: number;
+    widthUnit?: ColumnWidthUnit;
+    widthCss?: string;
     wrap: boolean;
     formatter: ColumnFormatter;
+    sortable?: boolean;
+    frozen?: boolean;
     baseType?: string;
     /** Whether this column contains masked/desensitized data (from backend RLS/masking policy). */
     masked?: boolean;
@@ -266,6 +285,117 @@ export function clampColumnWidth(value: unknown): number | undefined {
     return Math.max(5, Math.min(100, n));
 }
 
+function asTrimmedString(value: unknown): string | undefined {
+    if (typeof value !== 'string') return undefined;
+    const text = value.trim();
+    return text.length > 0 ? text : undefined;
+}
+
+function resolveColumnSourceKey(col: ColumnEntry | undefined): string | undefined {
+    if (!col) return undefined;
+    return asTrimmedString(col.key)
+        ?? asTrimmedString(col.source)
+        ?? asTrimmedString(col.field)
+        ?? asTrimmedString(col.dataKey)
+        ?? asTrimmedString(col.name);
+}
+
+function resolveColumnTitle(
+    col: ColumnEntry | undefined,
+    sourceMeta: SourceColumnMeta | undefined,
+    fallback: string,
+): string {
+    return asTrimmedString(col?.label)
+        ?? asTrimmedString(col?.alias)
+        ?? asTrimmedString(col?.title)
+        ?? asTrimmedString(col?.header)
+        ?? asTrimmedString(col?.displayName)
+        ?? asTrimmedString(sourceMeta?.displayName)
+        ?? fallback;
+}
+
+function inferColumnWidthUnit(col: ColumnEntry | undefined): ColumnWidthUnit {
+    if (col?.widthUnit === 'px') return 'px';
+    if (col?.widthUnit === 'percent' || col?.widthUnit === '%') return 'percent';
+    const widthText = typeof col?.width === 'string' ? col.width.trim().toLowerCase() : '';
+    if (widthText.endsWith('%')) return 'percent';
+    if (widthText.endsWith('px')) return 'px';
+    const hasSchemaShape = Boolean(col?.key || col?.label || col?.title || col?.header);
+    const hasLegacyShape = Boolean(col?.source || col?.alias);
+    return hasLegacyShape && !hasSchemaShape ? 'percent' : 'px';
+}
+
+function parseColumnWidth(value: unknown): { value: number; unit?: ColumnWidthUnit } | undefined {
+    if (value == null || value === '') return undefined;
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? { value } : undefined;
+    }
+    if (typeof value !== 'string') return undefined;
+    const text = value.trim().toLowerCase();
+    if (!text) return undefined;
+    if (text.endsWith('%')) {
+        const n = Number(text.slice(0, -1));
+        return Number.isFinite(n) ? { value: n, unit: 'percent' } : undefined;
+    }
+    if (text.endsWith('px')) {
+        const n = Number(text.slice(0, -2));
+        return Number.isFinite(n) ? { value: n, unit: 'px' } : undefined;
+    }
+    const n = Number(text);
+    return Number.isFinite(n) ? { value: n } : undefined;
+}
+
+function resolveColumnWidth(col: ColumnEntry | undefined): Pick<ResolvedColumnMeta, 'width' | 'widthUnit' | 'widthCss'> {
+    const parsed = parseColumnWidth(col?.width);
+    if (!parsed || parsed.value <= 0) return {};
+    const widthUnit = parsed.unit ?? inferColumnWidthUnit(col);
+    if (widthUnit === 'percent') {
+        const width = Math.max(5, Math.min(100, parsed.value));
+        return { width, widthUnit, widthCss: `${width}%` };
+    }
+    const width = Math.max(40, Math.min(2000, parsed.value));
+    return { width, widthUnit, widthCss: `${width}px` };
+}
+
+function resolveColumnSortable(col: ColumnEntry | undefined): boolean | undefined {
+    return typeof col?.sortable === 'boolean' ? col.sortable : undefined;
+}
+
+function resolveStaticColumnIndex(rawHeader: string[], col: ColumnEntry | undefined, fallbackIndex: number): number {
+    const key = resolveColumnSourceKey(col);
+    if (!key) return fallbackIndex;
+    const numericIndex = Number(key);
+    if (Number.isInteger(numericIndex) && numericIndex >= 0) {
+        return numericIndex;
+    }
+    const headerIndex = rawHeader.findIndex((header) => header === key);
+    return headerIndex >= 0 ? headerIndex : fallbackIndex;
+}
+
+function resolveColumnStickyWidth(meta: ResolvedColumnMeta | undefined, fallbackWidth: number): number {
+    if (meta?.widthUnit === 'px' && typeof meta.width === 'number' && Number.isFinite(meta.width)) {
+        return Math.max(1, meta.width);
+    }
+    if (typeof meta?.widthCss === 'string' && meta.widthCss.trim().toLowerCase().endsWith('px')) {
+        const parsed = Number(meta.widthCss.trim().slice(0, -2));
+        if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    }
+    return Math.max(1, Number(fallbackWidth) || 100);
+}
+
+export function resolveFrozenColumnOffsets(
+    columnMeta: ResolvedColumnMeta[],
+    fallbackColumnWidth: number,
+): Array<number | undefined> {
+    let left = 0;
+    return columnMeta.map((meta) => {
+        if (meta.frozen !== true) return undefined;
+        const offset = left;
+        left += resolveColumnStickyWidth(meta, fallbackColumnWidth);
+        return offset;
+    });
+}
+
 export function formatTableCell(value: unknown, formatter: ColumnFormatter, baseType?: string): string {
     if (value == null) return '';
 
@@ -348,19 +478,19 @@ export function ThemedScrollTable({ config, tokens, onRowClick, isRowInteractive
     }
 
     // Column resize state
-    const [colWidths, setColWidths] = useState<number[]>([]);
+    const [colWidths, setColWidths] = useState<Array<number | undefined>>([]);
     const resizing = useRef<{ colIndex: number; startX: number; startWidth: number } | null>(null);
     const headerRef = useRef<HTMLDivElement>(null);
+    const columnWidthSignature = (columnMeta ?? []).map((meta) => meta.widthCss ?? '').join('|');
 
     useEffect(() => {
-        if (headers.length > 0 && colWidths.length !== headers.length) {
+        if (headers.length > 0) {
             setColWidths(headers.map((_, i) => {
                 const meta = columnMeta?.[i];
-                const w = clampColumnWidth(meta?.width);
-                return w || (100 / headers.length);
+                return meta?.widthUnit === 'percent' ? clampColumnWidth(meta.width) : undefined;
             }));
         }
-    }, [headers.length, columnMeta, colWidths.length]);
+    }, [headers.length, columnWidthSignature]);
 
     const handleResizeStart = useCallback((e: React.MouseEvent, colIndex: number) => {
         e.preventDefault();
@@ -396,6 +526,10 @@ export function ThemedScrollTable({ config, tokens, onRowClick, isRowInteractive
         const align = normalizeColumnAlign(columnMeta?.[index]?.align, 'center');
         if (w) {
             return { flex: `0 0 ${w}%`, width: `${w}%`, textAlign: align };
+        }
+        const widthCss = columnMeta?.[index]?.widthCss;
+        if (widthCss) {
+            return { flex: `0 0 ${widthCss}`, width: widthCss, textAlign: align };
         }
         return { flex: '1 1 0', textAlign: align };
     };
@@ -478,8 +612,8 @@ export function resolveBoundTableData(
     const allData = (config.data as Array<Array<unknown>> | undefined) || [];
     // columnNotes 是按列标题映射的指标说明 — 用于"SQL 自动推断列"无 columns 配置的场景。
     const columnNotes = (config.columnNotes as Record<string, ColumnMetricNote> | undefined) || undefined;
-    const resolveColumnNote = (col: ColumnEntry | undefined, title: string): ColumnMetricNote | undefined =>
-        col?.metricNote || columnNotes?.[title] || columnNotes?.[col?.source || ''] || undefined;
+    const resolveColumnNote = (col: ColumnEntry | undefined, title: string, sourceKey?: string): ColumnMetricNote | undefined =>
+        col?.metricNote || columnNotes?.[title] || columnNotes?.[sourceKey || ''] || undefined;
 
     if (sourceCols?.length) {
         const effectiveColumns = columnsConfig
@@ -489,21 +623,26 @@ export function resolveBoundTableData(
         const sourceIndexByName = new Map(sourceCols.map((item, index) => [item.name, index] as const));
 
         const columnMeta = effectiveColumns.map((col): ResolvedColumnMeta => {
-            const sc = sourceMetaByName.get(col.source);
+            const sourceKey = resolveColumnSourceKey(col) ?? '';
+            const sc = sourceMetaByName.get(sourceKey);
             const colHeaderAlign = col.headerAlign === 'left' || col.headerAlign === 'center' || col.headerAlign === 'right'
                 ? col.headerAlign : undefined;
-            const title = col.alias || sc?.displayName || col.source;
+            const title = resolveColumnTitle(col, sc, sourceKey || '列');
+            const widthConfig = resolveColumnWidth(col);
             return {
-                key: col.source,
+                key: sourceKey,
+                source: sourceKey,
                 title,
                 align: normalizeColumnAlign(col.align, defaultAlign),
                 headerAlign: colHeaderAlign ?? globalHeaderAlign,
-                width: clampColumnWidth(col.width),
+                ...widthConfig,
                 wrap: col.wrap === true,
                 formatter: normalizeColumnFormatter(col.formatter),
+                sortable: resolveColumnSortable(col),
+                frozen: col.frozen === true,
                 baseType: sc?.baseType,
                 masked: sc?.masked === true,
-                metricNote: resolveColumnNote(col, title),
+                metricNote: resolveColumnNote(col, title, sourceKey),
             };
         });
         const data = allData.map((row) =>
@@ -521,6 +660,40 @@ export function resolveBoundTableData(
 
     const rawHeader = (config.header as string[] | undefined) || [];
     const alias = config.columnAlias as Record<string, string> | undefined;
+    if (columnsConfig) {
+        const resolvedColumns = columnsConfig.map((col, idx) => {
+            const sourceIndex = resolveStaticColumnIndex(rawHeader, col, idx);
+            const rawTitle = rawHeader[sourceIndex] ?? `列${sourceIndex + 1}`;
+            const sourceKey = resolveColumnSourceKey(col) ?? String(sourceIndex);
+            const aliasTitle = alias?.[String(sourceIndex)] || alias?.[sourceKey] || alias?.[rawTitle];
+            const title = resolveColumnTitle(col, undefined, aliasTitle || rawTitle);
+            const colHeaderAlign = col.headerAlign === 'left' || col.headerAlign === 'center' || col.headerAlign === 'right'
+                ? col.headerAlign : undefined;
+            const meta: ResolvedColumnMeta = {
+                key: sourceKey,
+                source: sourceKey,
+                title,
+                align: normalizeColumnAlign(col.align, defaultAlign),
+                headerAlign: colHeaderAlign ?? globalHeaderAlign,
+                ...resolveColumnWidth(col),
+                wrap: col.wrap === true,
+                formatter: normalizeColumnFormatter(col.formatter),
+                sortable: resolveColumnSortable(col),
+                frozen: col.frozen === true,
+                metricNote: resolveColumnNote(col, title, sourceKey),
+            };
+            return { sourceIndex, meta };
+        });
+        const columnMeta = resolvedColumns.map((item) => item.meta);
+        const data = allData.map((row) =>
+            resolvedColumns.map(({ sourceIndex, meta }) => formatTableCell(row[sourceIndex], meta.formatter)),
+        );
+        return {
+            header: columnMeta.map((col) => col.title),
+            data,
+            columnMeta,
+        };
+    }
     const mappedHeader = alias
         ? rawHeader.map((h, i) => alias[String(i)] || h)
         : rawHeader;
@@ -537,7 +710,7 @@ export function resolveBoundTableData(
         headerAlign: globalHeaderAlign,
         wrap: false,
         formatter: 'auto',
-        metricNote: resolveColumnNote(undefined, title),
+        metricNote: resolveColumnNote(undefined, title, String(idx)),
     }));
     const data = allData.map((row) =>
         columnMeta.map((col, idx) => formatTableCell(row[idx], col.formatter)),

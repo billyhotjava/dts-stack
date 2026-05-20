@@ -3,10 +3,16 @@ import { Button, Collapse, Input, InputNumber, Radio, Select, Switch, Tooltip, m
 import { DeleteOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons';
 
 export interface ColumnConfig {
+  source?: string;
   key?: string;
+  alias?: string;
   label?: string;
   width?: number;
+  widthUnit?: 'px' | 'percent' | '%';
   align?: 'left' | 'center' | 'right';
+  headerAlign?: 'left' | 'center' | 'right';
+  wrap?: boolean;
+  formatter?: 'auto' | 'string' | 'number' | 'percent' | 'date';
   frozen?: boolean;
   sortable?: boolean;
 }
@@ -33,10 +39,18 @@ export interface ColumnStyleEditorProps {
 
 const LabelRow: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-    <span style={{ fontSize: 12 }}>{label}</span>
-    <div style={{ maxWidth: '60%' }}>{children}</div>
+    <span style={{ fontSize: 12, flex: '0 0 72px', color: 'var(--color-text-secondary)' }}>{label}</span>
+    <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
   </div>
 );
+
+function resolveEditableColumnKey(col: ColumnConfig): string | undefined {
+  return col.key || col.source;
+}
+
+function resolveEditableColumnLabel(col: ColumnConfig): string | undefined {
+  return col.label || col.alias;
+}
 
 const ColumnStyleEditor: React.FC<ColumnStyleEditorProps> = ({ value = [], onChange, sourceColumns }) => {
   // 为每个列生成一个稳定的内部 uid,只在内部使用,不污染数据。
@@ -66,6 +80,32 @@ const ColumnStyleEditor: React.FC<ColumnStyleEditorProps> = ({ value = [], onCha
     onChange(next);
   };
 
+  const updateColumnKey = (idx: number, key: string) => {
+    const oldKey = resolveEditableColumnKey(value[idx] ?? {});
+    const oldSource = oldKey ? sourceMap.get(oldKey) : undefined;
+    const nextSource = sourceMap.get(key);
+    const currentLabel = resolveEditableColumnLabel(value[idx] ?? {});
+    const shouldSyncLabel = !currentLabel
+      || currentLabel === oldKey
+      || currentLabel === oldSource?.displayName;
+    const syncedLabel = nextSource?.displayName || key || undefined;
+    updateAt(idx, {
+      key,
+      source: key,
+      ...(shouldSyncLabel ? {
+        label: syncedLabel,
+        alias: syncedLabel,
+      } : {}),
+    });
+  };
+
+  const updateColumnLabel = (idx: number, label: string) => {
+    updateAt(idx, {
+      label: label || undefined,
+      alias: label || undefined,
+    });
+  };
+
   const removeAt = (idx: number) => {
     uidsRef.current.splice(idx, 1);
     onChange(value.filter((_, i) => i !== idx));
@@ -75,13 +115,22 @@ const ColumnStyleEditor: React.FC<ColumnStyleEditorProps> = ({ value = [], onCha
     if (hasSource) {
       // 自动选第一个未绑定的源字段
       const usedKeys = new Set(value.map((v) => v.key).filter(Boolean) as string[]);
+      value.forEach((v) => {
+        if (v.source) usedKeys.add(v.source);
+      });
       const next = sourceColumns!.find((s) => !usedKeys.has(s.name));
       if (next) {
-        onChange([...value, { key: next.name, label: next.displayName || next.name }]);
+        onChange([...value, {
+          key: next.name,
+          source: next.name,
+          label: next.displayName || next.name,
+          alias: next.displayName || next.name,
+          sortable: true,
+        }]);
         return;
       }
     }
-    onChange([...value, {}]);
+    onChange([...value, { sortable: true }]);
   };
 
   const syncFromSource = () => {
@@ -90,12 +139,27 @@ const ColumnStyleEditor: React.FC<ColumnStyleEditorProps> = ({ value = [], onCha
     // 仅按 sourceColumns 重建顺序与 key,补齐缺失的列。
     const byKey = new Map<string, ColumnConfig>();
     value.forEach((c) => {
-      if (c.key) byKey.set(c.key, c);
+      const key = resolveEditableColumnKey(c);
+      if (key) byKey.set(key, c);
     });
     const next: ColumnConfig[] = sourceColumns!.map((s) => {
       const exist = byKey.get(s.name);
-      if (exist) return exist;
-      return { key: s.name, label: s.displayName || s.name };
+      if (exist) {
+        return {
+          ...exist,
+          key: s.name,
+          source: s.name,
+          label: resolveEditableColumnLabel(exist) || s.displayName || s.name,
+          alias: resolveEditableColumnLabel(exist) || s.displayName || s.name,
+        };
+      }
+      return {
+        key: s.name,
+        source: s.name,
+        label: s.displayName || s.name,
+        alias: s.displayName || s.name,
+        sortable: true,
+      };
     });
     // 重置 uid (列顺序变更时避免 Collapse 状态错位)
     uidsRef.current = next.map(() => `col-${Math.random().toString(36).slice(2, 10)}`);
@@ -104,11 +168,13 @@ const ColumnStyleEditor: React.FC<ColumnStyleEditorProps> = ({ value = [], onCha
   };
 
   const items = value.map((col, idx) => {
-    const sourceMeta = col.key ? sourceMap.get(col.key) : undefined;
-    const isBroken = hasSource && col.key && !sourceMeta;
+    const columnKey = resolveEditableColumnKey(col);
+    const columnLabel = resolveEditableColumnLabel(col);
+    const sourceMeta = columnKey ? sourceMap.get(columnKey) : undefined;
+    const isBroken = hasSource && columnKey && !sourceMeta;
     return ({
       key: uids[idx] ?? `col-${idx}`,
-      label: col.label || sourceMeta?.displayName || col.key || `列 ${idx + 1}`,
+      label: columnLabel || sourceMeta?.displayName || columnKey || `列 ${idx + 1}`,
       extra: (
         <Button
           size="small"
@@ -127,15 +193,15 @@ const ColumnStyleEditor: React.FC<ColumnStyleEditorProps> = ({ value = [], onCha
             {hasSource ? (
               <Select
                 size="small"
-                value={col.key}
-                onChange={(v) => updateAt(idx, { key: v })}
+                value={columnKey}
+                onChange={(v) => updateColumnKey(idx, v)}
                 style={{ width: '100%' }}
                 placeholder="选择数据源字段"
                 showSearch
                 optionFilterProp="label"
                 status={isBroken ? 'error' : undefined}
                 options={[
-                  ...(isBroken ? [{ label: `${col.key} (已失效)`, value: col.key as string }] : []),
+                  ...(isBroken ? [{ label: `${columnKey} (已失效)`, value: columnKey as string }] : []),
                   ...sourceColumns!.map((s) => ({
                     label: s.displayName && s.displayName !== s.name ? `${s.displayName} (${s.name})` : s.name,
                     value: s.name,
@@ -145,8 +211,8 @@ const ColumnStyleEditor: React.FC<ColumnStyleEditorProps> = ({ value = [], onCha
             ) : (
               <Input
                 size="small"
-                value={col.key}
-                onChange={(e) => updateAt(idx, { key: e.target.value })}
+                value={columnKey}
+                onChange={(e) => updateColumnKey(idx, e.target.value)}
                 placeholder="字段标识"
               />
             )}
@@ -154,16 +220,16 @@ const ColumnStyleEditor: React.FC<ColumnStyleEditorProps> = ({ value = [], onCha
           <LabelRow label="显示标题">
             <Input
               size="small"
-              value={col.label}
-              onChange={(e) => updateAt(idx, { label: e.target.value })}
-              placeholder={sourceMeta?.displayName || col.key || '列标题'}
+              value={columnLabel}
+              onChange={(e) => updateColumnLabel(idx, e.target.value)}
+              placeholder={sourceMeta?.displayName || columnKey || '列标题'}
             />
           </LabelRow>
-          <LabelRow label="宽度">
+          <LabelRow label="宽度(px)">
             <InputNumber
               size="small"
               value={col.width}
-              onChange={(v) => updateAt(idx, { width: v ?? undefined })}
+              onChange={(v) => updateAt(idx, { width: v ?? undefined, widthUnit: 'px' })}
               min={40}
               max={600}
               style={{ width: '100%' }}
@@ -185,7 +251,25 @@ const ColumnStyleEditor: React.FC<ColumnStyleEditorProps> = ({ value = [], onCha
             <Switch size="small" checked={!!col.frozen} onChange={(v) => updateAt(idx, { frozen: v })} />
           </LabelRow>
           <LabelRow label="可排序">
-            <Switch size="small" checked={!!col.sortable} onChange={(v) => updateAt(idx, { sortable: v })} />
+            <Switch size="small" checked={col.sortable !== false} onChange={(v) => updateAt(idx, { sortable: v })} />
+          </LabelRow>
+          <LabelRow label="自动换行">
+            <Switch size="small" checked={!!col.wrap} onChange={(v) => updateAt(idx, { wrap: v })} />
+          </LabelRow>
+          <LabelRow label="格式化">
+            <Select
+              size="small"
+              value={col.formatter || 'auto'}
+              onChange={(v) => updateAt(idx, { formatter: v })}
+              style={{ width: '100%' }}
+              options={[
+                { label: '自动', value: 'auto' },
+                { label: '文本', value: 'string' },
+                { label: '数字', value: 'number' },
+                { label: '百分比', value: 'percent' },
+                { label: '日期时间', value: 'date' },
+              ]}
+            />
           </LabelRow>
         </div>
       ),
