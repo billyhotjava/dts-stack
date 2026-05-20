@@ -154,7 +154,8 @@ describe("DomainMatrix", () => {
 		unmount();
 	});
 
-	it("uncategorized_bucket_click_is_noop", () => {
+	it("uncategorized_bucket_is_filtered_out", () => {
+		// 需求: "未分类"合成桶不再渲染(业务上无下钻含义,占据整行视觉)。
 		const onSelect = vi.fn();
 		const cells: DomainCell[] = [
 			{ domain: "SCI", domainName: "科研", visits: 100 },
@@ -163,19 +164,21 @@ describe("DomainMatrix", () => {
 		const { container, unmount } = render(
 			<DomainMatrix visible={true} cells={cells} activeDomain={null} onSelect={onSelect} />,
 		);
-		const allCells = container.querySelectorAll("div[style*='border-radius: 8px']");
-		let uncatCell: HTMLElement | null = null;
-		allCells.forEach((el) => {
-			if ((el as HTMLElement).textContent?.includes("未分类")) {
-				uncatCell = el as HTMLElement;
-			}
-		});
-		expect(uncatCell).not.toBeNull();
-		act(() => {
-			uncatCell?.click();
-		});
-		expect(onSelect).not.toHaveBeenCalled();
-		expect(auditLogMock).not.toHaveBeenCalled();
+		// 真实业务域仍显示,未分类被过滤掉
+		expect(container.textContent).toContain("科研");
+		expect(container.textContent).not.toContain("未分类");
+		unmount();
+	});
+
+	it("not_rendered_when_only_uncategorized", () => {
+		// 过滤掉未分类后无可展示内容时,整块不渲染
+		const cells: DomainCell[] = [
+			{ domain: "__UNCATEGORIZED__", domainName: "未分类", visits: 15 },
+		];
+		const { container, unmount } = render(
+			<DomainMatrix visible={true} cells={cells} activeDomain={null} onSelect={() => {}} />,
+		);
+		expect(container.firstChild).toBeNull();
 		unmount();
 	});
 

@@ -18,8 +18,11 @@ Backend:
 
 ```bash
 mvn test
-mvn spring-boot:run
+mvn clean package
+java -jar target/dts-opmanager-2.2.3-SNAPSHOT.jar
 ```
+
+`mvn clean package` builds the React frontend and copies the generated files into the executable jar. Use `-Dskip.webapp=true` only when the frontend files have already been generated under `src/main/resources/static`, such as inside the Docker multi-stage build.
 
 Frontend:
 

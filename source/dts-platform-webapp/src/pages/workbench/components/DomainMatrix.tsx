@@ -70,14 +70,21 @@ function isSyntheticBucket(domain: string): boolean {
 }
 
 export function DomainMatrix({ visible, cells, activeDomain, onSelect }: DomainMatrixProps) {
+	// 过滤掉"未分类"合成桶 —— 业务上无可下钻含义,且常以整行灰条占据视觉。
+	const displayCells = useMemo(
+		() => cells.filter((c) => c.domain !== UNCATEGORIZED_DOMAIN),
+		[cells],
+	);
+
 	const stats = useMemo(() => {
-		const realCells = cells.filter((c) => !isSyntheticBucket(c.domain));
+		const realCells = displayCells.filter((c) => !isSyntheticBucket(c.domain));
 		if (realCells.length === 0) return { min: 0, max: 0, count: 0 };
 		const visits = realCells.map((c) => c.visits);
 		return { min: Math.min(...visits), max: Math.max(...visits), count: realCells.length };
-	}, [cells]);
+	}, [displayCells]);
 
-	if (!visible || cells.length === 0) return null;
+	// 过滤后无可展示业务域(只剩未分类/空)时,整块不渲染
+	if (!visible || displayCells.length === 0) return null;
 
 	const handleClick = (cell: DomainCell) => {
 		if (isSyntheticBucket(cell.domain)) return;
@@ -90,11 +97,11 @@ export function DomainMatrix({ visible, cells, activeDomain, onSelect }: DomainM
 			<div
 				style={{
 					display: "grid",
-					gridTemplateColumns: `repeat(${cells.length}, 1fr)`,
+					gridTemplateColumns: `repeat(${displayCells.length}, 1fr)`,
 					gap: 8,
 				}}
 			>
-				{cells.map((c, idx) => {
+				{displayCells.map((c, idx) => {
 					const synthetic = isSyntheticBucket(c.domain);
 					const isActive = c.domain === activeDomain;
 					const weight = synthetic ? 0 : weightOf(c.visits, stats.min, stats.max, stats.count);

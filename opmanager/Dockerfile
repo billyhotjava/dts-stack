@@ -13,7 +13,7 @@ WORKDIR /workspace
 COPY pom.xml ./
 COPY src ./src
 COPY --from=webapp /workspace/src/main/resources/static ./src/main/resources/static
-RUN mvn -q -DskipTests package
+RUN mvn -q -DskipTests -Dskip.webapp=true package
 
 FROM docker:27-cli AS docker-cli
 
