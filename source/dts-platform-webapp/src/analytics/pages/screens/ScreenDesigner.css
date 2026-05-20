@@ -1316,16 +1316,24 @@
 .property-panel-content {
   flex: 1;
   overflow-y: auto;
-  /* 横向滚动 — 面板宽度不足时,内容用左右滑动而非压缩组件
-     使用 !important 防止 Tailwind 类(如 overflow-y-auto)或父级 overflow 简写覆盖 */
-  overflow-x: auto !important;
+  overflow-x: hidden !important;
   padding: 16px;
-  /* 防止内部 row min-width 把内容推到面板外 */
+  box-sizing: border-box;
+}
+
+.property-panel,
+.designer-right-panel,
+.designer-right-panel-content,
+.property-panel-content,
+.property-section {
+  min-width: 0;
+  max-width: 100%;
   box-sizing: border-box;
 }
 
 .property-section {
   margin-bottom: 20px;
+  overflow: hidden;
 }
 
 .property-section-title {
@@ -1362,11 +1370,11 @@
 .property-row {
   display: flex;
   align-items: center;
+  gap: 8px;
   margin-bottom: 12px;
-  /* 关键: 面板宽度不足时,row 保持最小可读宽度,外层 panel-content 出现横向滚动条
-     而不是把 row 内的色块/hex 输入/下拉等组件挤压到看不见 */
-  min-width: 280px;
-  flex-wrap: nowrap;
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
 }
 
 /* section / collapse / panel content 不要 min-width!
@@ -1381,6 +1389,7 @@
   /* 宽度自适应:短字段(2 字)不占空间,长字段(如"与图形间距") 允许扩展不挤压输入区 */
   min-width: 72px;
   max-width: 108px;
+  flex: 0 0 78px;
   flex-shrink: 0;
   padding-right: 8px;
   /* 与 toolbar-btn / header-btn (13px) 统一 */
@@ -1389,6 +1398,23 @@
   color: var(--color-text-secondary);
   /* 超长字段允许在内部换行,避免横向溢出挤掉输入框 */
   word-break: break-all;
+}
+
+.property-row > :not(.property-label) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.property-row > .property-input,
+.property-row > .property-input-group,
+.property-row > .property-control,
+.property-row > .ant-input,
+.property-row > .ant-input-affix-wrapper,
+.property-row > select,
+.property-row > input:not([type='checkbox']):not([type='radio']),
+.property-row > span:not(.property-label),
+.property-row > div:not(.property-label) {
+  flex: 1 1 140px;
 }
 
 .property-input {
@@ -1410,12 +1436,49 @@
   display: flex;
   gap: 8px;
   flex: 1;
-  /* 保护"色块 + hex + 备选"等并列控件,挤压时撑住外层 row 走横向滚动 */
-  min-width: 180px;
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
 }
 
 .property-input-group .property-input {
-  flex: 1;
+  flex: 1 1 96px;
+}
+
+.property-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 140px;
+}
+
+.property-control--inline {
+  flex-wrap: nowrap;
+}
+
+.property-control--wrap {
+  flex-wrap: wrap;
+}
+
+.property-control > .property-input,
+.property-control > .ant-input,
+.property-control > .ant-input-affix-wrapper,
+.property-control > select,
+.property-control > input:not([type='checkbox']):not([type='radio']) {
+  flex: 1 1 96px;
+  min-width: 0;
+  max-width: 100%;
+  width: auto !important;
+}
+
+.property-control > input[type='range'] {
+  min-width: 72px;
+}
+
+.property-control .property-btn-small {
+  flex: 0 0 auto;
 }
 
 .property-btn-small {

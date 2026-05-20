@@ -27,19 +27,12 @@ export function renderComponentAppearanceConfig({
                 <>
                     <div className="property-row flex items-center mb-3">
                         <label className="property-label w-20 text-xs text-text-secondary">背景色</label>
-                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <div className="property-control property-control--inline">
                             <ColorPickerInput
                                 value={String(config.componentBgColor || '')}
                                 fallback="#000000"
                                 onChange={(value) => handleConfigChange('componentBgColor', value)}
                                 ariaLabel="背景色"
-                            />
-                            <input
-                                type="text"
-                                className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
-                                style={{ flex: 1 }}
-                                value={String(config.componentBgColor || '')}
-                                onChange={(e) => handleConfigChange('componentBgColor', e.target.value)}
                                 placeholder="transparent"
                             />
                             {config.componentBgColor ? (
@@ -55,7 +48,7 @@ export function renderComponentAppearanceConfig({
                     </div>
                     <div className="property-row flex items-center mb-3">
                         <label className="property-label w-20 text-xs text-text-secondary">背景透明度</label>
-                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <div className="property-control property-control--inline">
                             <input
                                 type="range"
                                 min={0}
@@ -82,7 +75,7 @@ export function renderComponentAppearanceConfig({
                     </div>
                     <div className="property-row flex items-center mb-3">
                         <label className="property-label w-20 text-xs text-text-secondary">边框</label>
-                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <div className="property-control property-control--wrap">
                             <input
                                 type="number"
                                 className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"

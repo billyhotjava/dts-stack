@@ -19,4 +19,6 @@ test("PropertyPanel delegates component appearance config to the extracted modul
 	assert.match(appearanceSource, /componentBgOpacity/);
 	assert.match(appearanceSource, /componentBorderRadius/);
 	assert.match(appearanceSource, /componentPadding/);
+	assert.match(appearanceSource, /placeholder="transparent"/);
+	assert.equal(appearanceSource.includes("onChange={(e) => handleConfigChange('componentBgColor'"), false);
 });

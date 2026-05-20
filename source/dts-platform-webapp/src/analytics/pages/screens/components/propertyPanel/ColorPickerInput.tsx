@@ -147,7 +147,7 @@ export function ColorPickerInput({
     }
 
     return (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flex: '1 1 120px', minWidth: 0, maxWidth: '100%' }}>
             {picker}
             <Input
                 size="small"
@@ -158,7 +158,7 @@ export function ColorPickerInput({
                 placeholder={placeholder ?? fallback}
                 allowClear
                 aria-label={ariaLabel ? `${ariaLabel} hex 值` : undefined}
-                style={{ flex: 1, minWidth: 0 }}
+                style={{ flex: '1 1 0', minWidth: 0, maxWidth: '100%' }}
             />
         </span>
     );
