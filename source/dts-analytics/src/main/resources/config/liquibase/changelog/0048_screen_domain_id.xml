@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0048-screen-domain-id" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="analytics_screen" columnName="domain_id"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="analytics_screen">
+            <column name="domain_id" type="varchar(64)"/>
+        </addColumn>
+        <createIndex tableName="analytics_screen" indexName="idx_analytics_screen_domain_id">
+            <column name="domain_id"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

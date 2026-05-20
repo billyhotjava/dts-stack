@@ -122,7 +122,10 @@ public class ScreenResource {
     }
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> list(HttpServletRequest request) {
+    public ResponseEntity<?> list(
+            @RequestParam(value = "domainId", required = false) String domainId,
+            @RequestParam(value = "domainUnassigned", required = false, defaultValue = "false") boolean domainUnassigned,
+            HttpServletRequest request) {
         Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
         if (user.isEmpty()) {
             return unauthorized();
@@ -141,7 +144,10 @@ public class ScreenResource {
             screens = screenRepository.findAllByIdInAndArchivedFalse(accessibleIds);
         }
 
+        String normalizedDomainId = readOptionalDomainId(domainId);
+
         List<ObjectNode> result = screens.stream()
+                .filter(screen -> matchesDomainFilter(screen, normalizedDomainId, domainUnassigned))
                 .map(screen -> {
                     ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
                     if (!permissions.canRead()) {
@@ -761,6 +767,7 @@ public class ScreenResource {
         AnalyticsScreen screen = new AnalyticsScreen();
         screen.setName(name);
         screen.setClassification(classificationUpper);
+        screen.setDomainId(readOptionalDomainId(body));
         screen.setDescription(body != null && body.has("description") && !body.path("description").isNull()
                 ? body.path("description").asText(null)
                 : null);
@@ -875,6 +882,9 @@ public class ScreenResource {
         }
         if (effectiveBody != null && effectiveBody.has("theme")) {
             screen.setTheme(effectiveBody.path("theme").isNull() ? null : effectiveBody.path("theme").asText(null));
+        }
+        if (effectiveBody != null && effectiveBody.has("domainId")) {
+            screen.setDomainId(readOptionalDomainId(effectiveBody));
         }
         if (effectiveBody != null && effectiveBody.has("components")) {
             screen.setComponentsJson(effectiveBody.path("components").toString());
@@ -1483,6 +1493,7 @@ public class ScreenResource {
         node.put("canDelete", permissions.isOwner());
         node.put("isOwner", permissions.isOwner());
         node.put("classification", screen.getClassification());
+        node.put("domainId", screen.getDomainId());
         node.put("ownerDeptCode", screen.getOwnerDeptCode());
         if (currentPublishedVersion != null) {
             node.put("publishedVersionNo", currentPublishedVersion.getVersionNo());
@@ -1700,6 +1711,7 @@ public class ScreenResource {
         node.put("backgroundColor", screen.getBackgroundColor());
         node.put("backgroundImage", screen.getBackgroundImage());
         node.put("theme", screen.getTheme());
+        node.put("domainId", screen.getDomainId());
         node.set("components", parseComponents(screen.getComponentsJson()));
         node.set("globalVariables", parseGlobalVariables(screen.getVariablesJson()));
         node.set("pages", parsePages(screen.getPagesJson()));
@@ -2892,6 +2904,32 @@ public class ScreenResource {
         }
         String trimmed = value.trim();
         return trimmed.isBlank() ? null : trimmed;
+    }
+
+    private static String readOptionalDomainId(JsonNode body) {
+        if (body == null || !body.has("domainId") || body.path("domainId").isNull()) {
+            return null;
+        }
+        return readOptionalDomainId(body.path("domainId").asText(null));
+    }
+
+    private static String readOptionalDomainId(String value) {
+        String domainId = trimToNull(value);
+        if (domainId == null) {
+            return null;
+        }
+        return domainId.length() <= 64 ? domainId : domainId.substring(0, 64);
+    }
+
+    private static boolean matchesDomainFilter(AnalyticsScreen screen, String domainId, boolean domainUnassigned) {
+        if (screen == null) {
+            return false;
+        }
+        String screenDomainId = readOptionalDomainId(screen.getDomainId());
+        if (domainUnassigned) {
+            return screenDomainId == null;
+        }
+        return domainId == null || domainId.equals(screenDomainId);
     }
 
     private static String nullToEmpty(String value) {

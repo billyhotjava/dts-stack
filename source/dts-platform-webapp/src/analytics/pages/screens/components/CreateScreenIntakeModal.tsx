@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Modal, Input, Select } from 'antd';
+import { useEffect, useMemo, useState } from "react";
+import { Modal, Input, Select } from "antd";
 
 /**
  * 新建大屏入口对话框（Sprint-24 F3/T01-T02）
@@ -20,12 +20,17 @@ import { Modal, Input, Select } from 'antd';
  */
 export interface CreateScreenIntakePayload {
 	name: string;
-	classification: 'PUBLIC' | 'INTERNAL' | 'SECRET' | 'CONFIDENTIAL';
+	classification: "PUBLIC" | "INTERNAL" | "SECRET" | "CONFIDENTIAL";
+	domainId?: string;
+	file?: File;
 }
 
 export interface CreateScreenIntakeModalProps {
 	open: boolean;
+	mode?: "create" | "import";
 	defaultName?: string;
+	defaultDomainId?: string;
+	domainOptions?: Array<{ label: string; value: string }>;
 	/** 弹窗标题，默认「新建大屏」；导入流程可改成「导入大屏」。 */
 	title?: string;
 	/** 标题下方说明文案；用于解释当前 intake 的来源（例：JSON 缺密级）。 */
@@ -36,24 +41,33 @@ export interface CreateScreenIntakeModalProps {
 	onSubmit: (payload: CreateScreenIntakePayload) => void | Promise<void>;
 }
 
-const LEVEL_OPTIONS: Array<{ label: string; value: CreateScreenIntakePayload['classification'] }> = [
-	{ label: '公开 (PUBLIC) — 全体登录用户可见', value: 'PUBLIC' },
-	{ label: '内部 (INTERNAL) — 内部员工可见', value: 'INTERNAL' },
-	{ label: '秘密 (SECRET) — 持秘密及以上人员密级可见', value: 'SECRET' },
-	{ label: '机密 (CONFIDENTIAL) — 持机密人员密级可见', value: 'CONFIDENTIAL' },
+const LEVEL_OPTIONS: Array<{ label: string; value: CreateScreenIntakePayload["classification"] }> = [
+	{ label: "公开 (PUBLIC) — 全体登录用户可见", value: "PUBLIC" },
+	{ label: "内部 (INTERNAL) — 内部员工可见", value: "INTERNAL" },
+	{ label: "秘密 (SECRET) — 持秘密及以上人员密级可见", value: "SECRET" },
+	{ label: "机密 (CONFIDENTIAL) — 持机密人员密级可见", value: "CONFIDENTIAL" },
 ];
+
+const UNASSIGNED_DOMAIN_KEY = "__UNASSIGNED__";
 
 export function CreateScreenIntakeModal({
 	open,
-	defaultName = '',
-	title = '新建大屏',
+	mode = "create",
+	defaultName = "",
+	defaultDomainId,
+	domainOptions = [],
+	title = "新建大屏",
 	description,
-	okText = '下一步',
+	okText = "下一步",
 	onCancel,
 	onSubmit,
 }: CreateScreenIntakeModalProps) {
 	const [name, setName] = useState(defaultName);
-	const [classification, setClassification] = useState<CreateScreenIntakePayload['classification'] | undefined>(undefined);
+	const [classification, setClassification] = useState<CreateScreenIntakePayload["classification"] | undefined>(
+		undefined,
+	);
+	const [domainId, setDomainId] = useState<string | undefined>(defaultDomainId);
+	const [file, setFile] = useState<File | undefined>(undefined);
 	const [submitting, setSubmitting] = useState(false);
 
 	// 每次打开时复位 — 上次的密级选择不在新建间持续，避免盲点确认。
@@ -61,18 +75,29 @@ export function CreateScreenIntakeModal({
 		if (open) {
 			setName(defaultName);
 			setClassification(undefined);
+			setDomainId(defaultDomainId);
+			setFile(undefined);
 			setSubmitting(false);
 		}
-	}, [open, defaultName]);
+	}, [open, defaultName, defaultDomainId]);
 
 	const trimmedName = useMemo(() => name.trim(), [name]);
-	const okDisabled = !trimmedName || !classification || submitting;
+	const domainSelectOptions = useMemo(
+		() => [{ label: "未归类", value: UNASSIGNED_DOMAIN_KEY }, ...domainOptions],
+		[domainOptions],
+	);
+	const okDisabled = !trimmedName || !classification || (mode === "import" && !file) || submitting;
 
 	const handleOk = async () => {
 		if (okDisabled || !classification) return;
 		setSubmitting(true);
 		try {
-			await onSubmit({ name: trimmedName, classification });
+			await onSubmit({
+				name: trimmedName,
+				classification,
+				domainId,
+				...(file ? { file } : {}),
+			});
 		} finally {
 			setSubmitting(false);
 		}
@@ -90,15 +115,15 @@ export function CreateScreenIntakeModal({
 			okButtonProps={{ disabled: okDisabled, loading: submitting }}
 			destroyOnClose
 		>
-			<div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 4 }}>
+			<div style={{ display: "flex", flexDirection: "column", gap: 14, paddingTop: 4 }}>
 				{description && (
-					<div style={{ fontSize: 13, color: 'var(--color-text-secondary, #6b7280)', lineHeight: 1.5 }}>
+					<div style={{ fontSize: 13, color: "var(--color-text-secondary, #6b7280)", lineHeight: 1.5 }}>
 						{description}
 					</div>
 				)}
 				<div>
 					<div style={{ fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
-						大屏名称 <span style={{ color: '#ff4d4f' }}>*</span>
+						大屏名称 <span style={{ color: "#ff4d4f" }}>*</span>
 					</div>
 					<Input
 						value={name}
@@ -108,18 +133,47 @@ export function CreateScreenIntakeModal({
 					/>
 				</div>
 				<div>
+					<div style={{ fontSize: 13, fontWeight: 500, marginBottom: 6 }}>数据域</div>
+					<Select
+						value={domainId || UNASSIGNED_DOMAIN_KEY}
+						onChange={(v) => setDomainId(v === UNASSIGNED_DOMAIN_KEY ? undefined : String(v))}
+						placeholder="请选择数据域"
+						style={{ width: "100%" }}
+						options={domainSelectOptions}
+					/>
+					<div style={{ fontSize: 12, color: "var(--color-text-tertiary, #6b7280)", marginTop: 6 }}>
+						数据域来自主题域管理；不选择时归入未归类。
+					</div>
+				</div>
+				{mode === "import" && (
+					<div>
+						<div style={{ fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
+							导入文件 <span style={{ color: "#ff4d4f" }}>*</span>
+						</div>
+						<Input
+							type="file"
+							accept="application/json, .json"
+							onChange={(e) => setFile(e.target.files?.[0])}
+							status={file ? undefined : "warning"}
+						/>
+						<div style={{ fontSize: 12, color: "var(--color-text-tertiary, #6b7280)", marginTop: 6 }}>
+							{file ? `已选择：${file.name}` : "请选择 JSON 文件"}
+						</div>
+					</div>
+				)}
+				<div>
 					<div style={{ fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
-						大屏密级 <span style={{ color: '#ff4d4f' }}>*</span>
+						大屏密级 <span style={{ color: "#ff4d4f" }}>*</span>
 					</div>
 					<Select
 						value={classification}
-						onChange={(v) => setClassification(v as CreateScreenIntakePayload['classification'])}
+						onChange={(v) => setClassification(v as CreateScreenIntakePayload["classification"])}
 						placeholder="请选择密级"
-						style={{ width: '100%' }}
+						style={{ width: "100%" }}
 						options={LEVEL_OPTIONS}
-						status={classification ? undefined : 'warning'}
+						status={classification ? undefined : "warning"}
 					/>
-					<div style={{ fontSize: 12, color: 'var(--color-text-tertiary, #6b7280)', marginTop: 6 }}>
+					<div style={{ fontSize: 12, color: "var(--color-text-tertiary, #6b7280)", marginTop: 6 }}>
 						密级必填：决定哪些人员可访问本大屏；可在编辑器属性面板随时调整。
 					</div>
 				</div>

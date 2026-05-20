@@ -63,6 +63,9 @@ public class AnalyticsScreen implements Serializable {
     @Column(name = "classification", length = 32)
     private String classification;
 
+    @Column(name = "domain_id", length = 64)
+    private String domainId;
+
     @Column(name = "owner_dept_code", length = 64)
     private String ownerDeptCode;
 
@@ -188,6 +191,14 @@ public class AnalyticsScreen implements Serializable {
 
     public void setClassification(String classification) {
         this.classification = classification;
+    }
+
+    public String getDomainId() {
+        return domainId;
+    }
+
+    public void setDomainId(String domainId) {
+        this.domainId = domainId;
     }
 
     public String getOwnerDeptCode() {

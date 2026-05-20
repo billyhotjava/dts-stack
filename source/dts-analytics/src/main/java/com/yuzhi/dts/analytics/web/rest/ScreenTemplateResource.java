@@ -517,6 +517,12 @@ public class ScreenTemplateResource {
         screen.setTheme(template.getTheme());
         screen.setComponentsJson(defaultJson(template.getComponentsJson(), "[]"));
         screen.setVariablesJson(defaultJson(template.getVariablesJson(), "[]"));
+        if (body != null && body.has("classification")) {
+            screen.setClassification(ScreenResource.normalizeRequiredClassification(body.path("classification").asText(null)));
+        }
+        if (body != null && body.has("domainId")) {
+            screen.setDomainId(trimToNull(body.path("domainId").asText(null)));
+        }
         screen.setCreatorId(user.get().getId());
         screen.setArchived(false);
 
@@ -544,6 +550,8 @@ public class ScreenTemplateResource {
         response.put("backgroundColor", screen.getBackgroundColor());
         response.put("backgroundImage", screen.getBackgroundImage());
         response.put("theme", screen.getTheme());
+        response.put("classification", screen.getClassification());
+        response.put("domainId", screen.getDomainId());
         response.set("components", parseArray(screen.getComponentsJson()));
         response.set("globalVariables", parseArray(screen.getVariablesJson()));
         response.put("sourceMode", "draft");
