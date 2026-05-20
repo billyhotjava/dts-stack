@@ -85,5 +85,5 @@ dts:
     enabled: ${DTS_ADMIN_ENABLED:true}
     base-url: ${DTS_ADMIN_BASE_URL:http://dts-admin:8081}
     api-path: ${DTS_ADMIN_API_PATH:/api}
-    service-token: ${DTS_ADMIN_SERVICE_TOKEN:}
+    service-token: ${DTS_ANALYTICS_TO_ADMIN_TOKEN:${DTS_PLATFORM_TO_ADMIN_TOKEN:${DTS_ADMIN_SERVICE_TOKEN:}}}
     service-name: ${DTS_ADMIN_SERVICE_NAME:dts-analytics}

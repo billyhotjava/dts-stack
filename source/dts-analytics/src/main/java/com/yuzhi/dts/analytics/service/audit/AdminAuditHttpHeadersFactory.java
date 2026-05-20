@@ -15,6 +15,7 @@ public final class AdminAuditHttpHeadersFactory {
 
     private static final String BEARER_PREFIX = "Bearer ";
     private static final String SERVICE_HEADER = "X-DTS-Service";
+    private static final String SERVICE_TOKEN_HEADER = "X-DTS-Service-Token";
 
     private AdminAuditHttpHeadersFactory() {}
 
@@ -26,15 +27,19 @@ public final class AdminAuditHttpHeadersFactory {
         }
         String token = properties.getServiceToken();
         if (StringUtils.hasText(token)) {
-            String trimmed = token.trim();
-            String value = trimmed.regionMatches(true, 0, BEARER_PREFIX, 0, BEARER_PREFIX.length())
-                ? trimmed
-                : BEARER_PREFIX + trimmed;
-            headers.set(HttpHeaders.AUTHORIZATION, value);
+            headers.set(SERVICE_TOKEN_HEADER, stripBearerPrefix(token));
         }
         if (StringUtils.hasText(properties.getServiceName())) {
             headers.set(SERVICE_HEADER, properties.getServiceName().trim());
         }
         return headers;
+    }
+
+    private static String stripBearerPrefix(String token) {
+        String trimmed = token.trim();
+        if (trimmed.regionMatches(true, 0, BEARER_PREFIX, 0, BEARER_PREFIX.length())) {
+            return trimmed.substring(BEARER_PREFIX.length()).trim();
+        }
+        return trimmed;
     }
 }

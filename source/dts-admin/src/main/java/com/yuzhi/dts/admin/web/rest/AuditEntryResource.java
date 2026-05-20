@@ -41,7 +41,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -163,7 +162,9 @@ public class AuditEntryResource {
         return ResponseEntity.ok(ApiResponse.ok(Map.of("removed", removed)));
     }
 
-    @GetMapping(value = "/export", produces = MediaType.TEXT_PLAIN_VALUE)
+    // produces 必须与前端 Accept: text/csv 及实际响应 Content-Type 一致,
+    // 否则 Spring 内容协商在进入方法前返回 406 Not Acceptable(导出失败)。
+    @GetMapping(value = "/export", produces = "text/csv")
     public void export(
         @RequestParam(value = "actor", required = false) String actor,
         @RequestParam(value = "module", required = false) String module,

@@ -674,8 +674,9 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_ANALYTICS:-dts_analytics}
       SPRING_DATASOURCE_USERNAME: ${PG_USER_ANALYTICS:-dts_analytics}
       SPRING_DATASOURCE_PASSWORD: ${PG_PWD_ANALYTICS:-dts_analytics}
-      # Service-to-service auth(analytics 出站 platform 用);DTS_ADMIN_SERVICE_TOKEN 仅作旧部署 fallback。
+      # Service-to-service auth(analytics 出站 platform/admin 用);DTS_ADMIN_SERVICE_TOKEN 仅作旧部署 fallback。
       DTS_ANALYTICS_TO_PLATFORM: ${DTS_ANALYTICS_TO_PLATFORM:-${DTS_ADMIN_SERVICE_TOKEN:-}}
+      DTS_ANALYTICS_TO_ADMIN_TOKEN: ${DTS_ANALYTICS_TO_ADMIN_TOKEN:-${DTS_PLATFORM_TO_ADMIN_TOKEN:-${DTS_ADMIN_SERVICE_TOKEN:-}}}
       PG_DB_BIADMIN: ${PG_DB_BIADMIN:-biadmin}
       PG_USER_BIADMIN: ${PG_USER_BIADMIN:-biadmin}
       PG_PWD_BIADMIN: ${PG_PWD_BIADMIN:-}

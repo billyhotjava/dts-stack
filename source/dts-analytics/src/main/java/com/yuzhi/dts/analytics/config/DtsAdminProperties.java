@@ -14,7 +14,7 @@ public class DtsAdminProperties {
     /** Relative path for public API on dts-admin. */
     private String apiPath = "/api";
 
-    /** Optional bearer token presented when calling dts-admin (audit ingest etc.). */
+    /** Optional service token presented when calling dts-admin (audit ingest etc.). */
     private String serviceToken;
 
     /** Logical service name announced via the X-DTS-Service header. */
