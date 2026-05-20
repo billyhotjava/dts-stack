@@ -15,6 +15,7 @@ export interface EChartsRendererProps {
     height: number;
     mode: 'designer' | 'preview';
     componentId: string;
+    fontFamily?: string;
     runtime: ScreenRuntimeLike;
 
     // ECharts component references

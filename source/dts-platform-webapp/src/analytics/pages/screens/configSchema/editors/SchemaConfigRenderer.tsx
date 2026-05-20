@@ -5,7 +5,7 @@ import type { ComponentConfigSchema, ConfigField, ConfigGroup } from '../types';
 import { STANDARD_GROUPS } from '../types';
 import type { ScreenThemeTokens } from '../../screenThemes';
 import { getThemeTokens } from '../../screenThemes';
-import type { ScreenTheme } from '../../types';
+import type { ScreenCustomTheme, ScreenTheme } from '../../types';
 
 import FieldEditor from './FieldEditor';
 import ColorArrayEditor from './ColorArrayEditor';
@@ -27,6 +27,7 @@ export interface SchemaConfigRendererProps {
   config: Record<string, unknown>;
   onChange: (key: string, value: unknown) => void;
   theme?: string;
+  customTheme?: ScreenCustomTheme;
   /** 仅渲染指定 group(白名单)。与 hideGroups 互斥。 */
   onlyGroups?: string[];
   /** 排除指定 group(黑名单)。 */
@@ -106,8 +107,8 @@ const FieldRow: React.FC<{ label: string; children: React.ReactNode; fullWidth?:
 // Component
 // ---------------------------------------------------------------------------
 
-const SchemaConfigRenderer: React.FC<SchemaConfigRendererProps> = ({ schema, config, onChange, theme, onlyGroups, hideGroups }) => {
-  const tokens = useMemo(() => getThemeTokens(theme as ScreenTheme), [theme]);
+const SchemaConfigRenderer: React.FC<SchemaConfigRendererProps> = ({ schema, config, onChange, theme, customTheme, onlyGroups, hideGroups }) => {
+  const tokens = useMemo(() => getThemeTokens(theme as ScreenTheme, customTheme), [theme, customTheme]);
 
   const groupFilter = useMemo(() => {
     if (onlyGroups && onlyGroups.length > 0) {

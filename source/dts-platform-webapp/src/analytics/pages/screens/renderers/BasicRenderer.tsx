@@ -5,6 +5,7 @@ import { isSafeSrcUrl } from '../sanitize';
 import { resolveTextColor } from './shared/chartUtils';
 import { renderMarkdownToHtml } from './shared/markdownUtils';
 import { NumberCardBasic, StatCardBasic, TitleBasic } from './basic/ResponsiveText';
+import { resolveScreenFontFamily } from '../screenTypography';
 
 /**
  * Props for basic renderer — all outer-scope values used by the basic display cases.
@@ -26,6 +27,7 @@ export interface BasicRendererProps {
     tabRuntimeValue: string;
     tabDefaultValue: string;
     tabVariableKey: string;
+    fontFamily?: string;
 }
 
 /**
@@ -43,14 +45,15 @@ export function renderBasic(
         currentTime,
         carouselItems, carouselIndex, setCarouselIndex, setCarouselPaused,
         tabOptions, tabRuntimeValue, tabDefaultValue, tabVariableKey,
+        fontFamily,
     } = props;
 
     switch (type) {
         case 'number-card':
-            return <NumberCardBasic c={c} t={t} />;
+            return <NumberCardBasic c={c} t={t} fontFamily={fontFamily} />;
 
         case 'title':
-            return <TitleBasic c={c} t={t} />;
+            return <TitleBasic c={c} t={t} fontFamily={fontFamily} />;
 
         case 'markdown-text': {
             const markdown = String(c.markdown ?? '');
@@ -63,7 +66,7 @@ export function renderBasic(
                         overflow: 'auto',
                         color: resolveTextColor(c.color as string | undefined, t.textPrimary),
                         fontSize: (c.fontSize as number) || 14,
-                        fontFamily: c.fontFamily ? (c.fontFamily as string) : undefined,
+                        fontFamily: resolveScreenFontFamily(fontFamily, c.fontFamily),
                         lineHeight: Number(c.lineHeight || 1.6),
                         padding: 8,
                     }}
@@ -92,7 +95,8 @@ export function renderBasic(
                         width: '100%',
                         height: '100%',
                         padding: rtPadding,
-                        overflow: rtOverflow as 'hidden' | 'visible' | 'scroll',
+                    overflow: rtOverflow as 'hidden' | 'visible' | 'scroll',
+                    fontFamily: resolveScreenFontFamily(fontFamily, c.fontFamily),
                         display: 'flex',
                         flexDirection: 'column',
                         justifyContent: alignMap[rtVAlign] ?? 'flex-start',
@@ -120,7 +124,8 @@ export function renderBasic(
                     justifyContent: 'center',
                     fontSize: c.fontSize as number,
                     color: resolveTextColor(c.color as string | undefined, t.textPrimary),
-                    fontFamily: c.fontFamily ? (c.fontFamily as string) : 'monospace',
+                    fontFamily: resolveScreenFontFamily(fontFamily, c.fontFamily),
+                    fontVariantNumeric: 'tabular-nums',
                 }}>
                     {formatted}
                 </div>
@@ -146,7 +151,7 @@ export function renderBasic(
             const accentColor = (c.accentColor as string) || t.accentColor;
             const labelColor = resolveTextColor(c.color as string | undefined, t.textSecondary);
             return (
-                <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8 }}>
+                <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8, fontFamily: resolveScreenFontFamily(fontFamily, c.fontFamily) }}>
                     <div style={{ fontSize: 12, color: labelColor }}>
                         {String(c.title || '倒计时')}
                     </div>
@@ -180,6 +185,7 @@ export function renderBasic(
                         background: (c.backgroundColor as string) || 'transparent',
                         color: resolveTextColor(c.color as string | undefined, t.textPrimary),
                         fontSize: (c.fontSize as number) || 14,
+                        fontFamily: resolveScreenFontFamily(fontFamily, c.fontFamily),
                         whiteSpace: 'nowrap',
                         position: 'relative',
                     }}
@@ -218,6 +224,7 @@ export function renderBasic(
                         display: 'flex',
                         flexDirection: 'column',
                         justifyContent: 'space-between',
+                        fontFamily: resolveScreenFontFamily(fontFamily, c.fontFamily),
                         boxSizing: 'border-box',
                         overflow: 'hidden',
                     }}
@@ -325,6 +332,7 @@ export function renderBasic(
                     display: 'flex',
                     alignItems: 'center',
                     gap: 8,
+                    fontFamily: resolveScreenFontFamily(fontFamily, c.fontFamily),
                 }}>
                     <div style={{
                         flex: 1,
@@ -342,7 +350,7 @@ export function renderBasic(
                         }} />
                     </div>
                     {Boolean(c.showLabel) && (
-                        <span style={{ color: t.progressBar.labelColor, fontSize: 12, minWidth: 40 }}>{value}%</span>
+                        <span style={{ color: t.progressBar.labelColor, fontSize: 12, minWidth: 40, fontVariantNumeric: 'tabular-nums' }}>{value}%</span>
                     )}
                 </div>
             );
@@ -358,7 +366,7 @@ export function renderBasic(
             const inactiveBackgroundColor = String(c.inactiveBackgroundColor || 'rgba(15,23,42,0.45)');
             const compact = c.compact === true;
             return (
-                <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 6, fontFamily: resolveScreenFontFamily(fontFamily, c.fontFamily) }}>
                     <div style={{ fontSize: 12, color: t.textSecondary }}>{label}</div>
                     <div style={{ display: 'flex', gap: compact ? 4 : 8, flexWrap: 'wrap', alignItems: 'center' }}>
                         {options.map((option) => {
@@ -447,6 +455,7 @@ export function renderBasic(
                     padding: Math.max(0, Number(c.padding || 12)),
                     boxSizing: 'border-box',
                     color: resolveTextColor(c.titleColor as string | undefined, t.textPrimary),
+                    fontFamily: resolveScreenFontFamily(fontFamily, c.fontFamily),
                 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
                         {String(c.title || '容器')}
@@ -515,6 +524,7 @@ export function renderBasic(
                     WebkitBackdropFilter: backdropBlur > 0 ? `blur(${backdropBlur}px)` : undefined,
                     boxShadow: finalShadow,
                     display: 'flex', flexDirection: 'column',
+                    fontFamily: resolveScreenFontFamily(fontFamily, c.fontFamily),
                     overflow: 'hidden',
                 }}>
                     {showHeader && (
@@ -578,7 +588,7 @@ export function renderBasic(
         }
 
         case 'stat-card':
-            return <StatCardBasic c={c} t={t} />;
+            return <StatCardBasic c={c} t={t} fontFamily={fontFamily} />;
 
         case 'image':
             return isSafeSrcUrl(c.src) ? (

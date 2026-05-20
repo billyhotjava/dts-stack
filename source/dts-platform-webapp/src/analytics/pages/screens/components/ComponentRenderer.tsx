@@ -47,6 +47,7 @@ import { renderBasic } from '../renderers/BasicRenderer';
 import { MetricNoteBadge, type MetricNote } from '../renderers/shared/MetricNote';
 import { renderDataV } from '../renderers/DataVRenderer';
 import { renderTable } from '../renderers/TableRenderer';
+import { resolveScreenFontFamily } from '../screenTypography';
 import {
     useEChartsLoader, isWebGLSupported,
     ECHART_COMPONENT_TYPES, ECHART_3D_TYPES,
@@ -58,15 +59,14 @@ import { DelayReasonMatrix } from '../../project-cockpit/components/DelayReasonM
 // - chartUtils.ts, tableUtils.tsx, markdownUtils.ts, geoJsonCache.ts
 // - InteractionLayer.tsx (interaction hook + screen-reference URL resolution)
 
-const SCREEN_UI_FONT_FAMILY = '"Lato", "Open Sans Variable", "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans", sans-serif';
-
-export const ComponentRenderer = memo(function ComponentRenderer({ component, mode = 'preview', theme, onConfigMeta }: ComponentRendererProps) {
+export const ComponentRenderer = memo(function ComponentRenderer({ component, mode = 'preview', theme, customTheme, fontFamily, onConfigMeta }: ComponentRendererProps) {
     const { type, config, width, height, dataSource, drillDown } = component;
 
     const runtime = useScreenRuntime();
     const pluginRuntimeVersion = useScreenPluginRuntime();
     const [pluginRecoveryVersion, setPluginRecoveryVersion] = useState(0);
-    const t = useMemo(() => getThemeTokens(theme), [theme]);
+    const t = useMemo(() => getThemeTokens(theme, customTheme), [theme, customTheme]);
+    const screenFontFamily = useMemo(() => resolveScreenFontFamily(fontFamily), [fontFamily]);
     const pluginMeta = useMemo(() => readComponentPluginMeta(config), [config]);
     const runtimePlugin = useMemo<RendererPlugin | null>(() => {
         const runtimeId = resolveRuntimePluginId(pluginMeta);
@@ -93,14 +93,14 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             ? componentConfigBg
             : 'transparent',
         color: t.echarts.colorPalette,
-        textStyle: { color: t.textPrimary, fontFamily: SCREEN_UI_FONT_FAMILY },
-        legend: { textStyle: { color: t.textPrimary, fontFamily: SCREEN_UI_FONT_FAMILY } },
+        textStyle: { color: t.textPrimary, fontFamily: screenFontFamily },
+        legend: { textStyle: { color: t.textPrimary, fontFamily: screenFontFamily } },
         tooltip: {
             backgroundColor: t.echarts.tooltipBg,
             borderColor: t.echarts.tooltipBorder,
-            textStyle: { color: t.textPrimary, fontFamily: SCREEN_UI_FONT_FAMILY },
+            textStyle: { color: t.textPrimary, fontFamily: screenFontFamily },
         },
-    }), [t, componentConfigBg]);
+    }), [t, componentConfigBg, screenFontFamily]);
 
     const {
         EChartsComponent, registerMapFn, hasMapFn,
@@ -1255,6 +1255,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             {
                 const chartNode = renderECharts({
                     type, c, t, width, height, mode, componentId: component.id, runtime,
+                    fontFamily: screenFontFamily,
                     EChart, renderEChartWithHandles,
                     themeOptions, chartMotionOption, chartTitleLayout, legendConfig, axisGrid, seriesColors,
                     axisOverrides,
@@ -1310,6 +1311,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             case 'iframe':
                 return renderBasic(type, {
                     c, t, component, runtime,
+                    fontFamily: screenFontFamily,
                     currentTime,
                     carouselItems, carouselIndex, setCarouselIndex, setCarouselPaused,
                     tabOptions, tabRuntimeValue, tabDefaultValue, tabVariableKey,
@@ -1335,7 +1337,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             case 'digital-flop':
             case 'percent-pond':
             case 'flyline-chart':
-                return renderDataV({ type, c, width, height, t });
+                return renderDataV({ type, c, width, height, t, fontFamily: screenFontFamily });
 
             // ==================== Table-family (delegated to TableRenderer) ====================
             case 'scroll-board':
@@ -1347,6 +1349,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     width,
                     height,
                     theme,
+                    fontFamily: screenFontFamily,
                     mode,
                     component,
                     runtime: runtime as any,

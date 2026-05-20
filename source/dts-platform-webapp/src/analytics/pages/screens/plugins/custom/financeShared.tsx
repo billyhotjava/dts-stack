@@ -2,6 +2,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import type { RendererPlugin, RendererPluginRenderContext } from '../types';
 import { buildPluginRuntimeId } from '../registry';
+import { SCREEN_DEFAULT_FONT_FAMILY } from '../../screenTypography';
 
 const COLORS = {
     page: '#f4f8fc',
@@ -18,7 +19,7 @@ const COLORS = {
     danger: '#dc2626',
 };
 
-const FONT_STACK = '"Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif';
+const FONT_STACK = SCREEN_DEFAULT_FONT_FAMILY;
 
 function px(value: unknown, fallback: number): number {
     return typeof value === 'number' && Number.isFinite(value) ? value : fallback;

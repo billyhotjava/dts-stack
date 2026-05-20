@@ -438,6 +438,7 @@ function normalizeCustomTheme(input: unknown): ScreenCustomTheme | undefined {
 		"textSecondary",
 		"borderColor",
 		"cardBackground",
+		"fontFamily",
 	] as const) {
 		const value = asTrimmedString((input as Record<string, unknown>)[key]);
 		if (value) {
@@ -495,6 +496,7 @@ export function normalizeScreenConfig(
 		height,
 		backgroundColor,
 		backgroundImage: asTrimmedString(row.backgroundImage),
+		fontFamily: asTrimmedString(row.fontFamily),
 		theme,
 		customTheme: normalizeCustomTheme(row.customTheme),
 		classification,
@@ -529,6 +531,7 @@ export function buildScreenPayload(config: ScreenConfig): ScreenWritePayload {
 		height: config.height,
 		backgroundColor: config.backgroundColor,
 		backgroundImage: config.backgroundImage,
+		fontFamily: config.fontFamily,
 		theme: config.theme,
 		customTheme: config.customTheme,
 		components: config.components,

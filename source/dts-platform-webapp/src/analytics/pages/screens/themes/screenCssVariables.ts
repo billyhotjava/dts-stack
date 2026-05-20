@@ -25,6 +25,7 @@ export function themeToCssVariables(tokens: ScreenThemeTokens): Record<string, s
 		'--screen-card-radius': `${tokens.cardBorderRadius}px`,
 
 		// Text
+		'--screen-font-family': tokens.fontFamily,
 		'--screen-text': tokens.textPrimary,
 		'--screen-text-secondary': tokens.textSecondary,
 		'--screen-text-muted': tokens.textMuted,

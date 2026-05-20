@@ -21,6 +21,7 @@ export function renderExtendedChart(type: string, props: EChartsRendererProps): 
         xAxisLabelRotate, yAxisLabelRotate, formatXAxisLabel,
         plotCenterX, plotCenterY,
         echartsClickHandler,
+        fontFamily,
     } = props;
 
     const axisLabelColor = axisLabelColorOverride || t.echarts.axisLabelColor;
@@ -161,7 +162,7 @@ export function renderExtendedChart(type: string, props: EChartsRendererProps): 
                     top: 8,
                     style: {
                         text: categories.at(-1) ?? '',
-                        font: 'bolder 16px sans-serif',
+                        font: `bolder 16px ${fontFamily || t.fontFamily}`,
                         fill: t.textSecondary,
                     },
                 },

@@ -19,6 +19,7 @@ export interface ScreenCustomTheme {
 	textSecondary?: string;
 	borderColor?: string;
 	cardBackground?: string;
+	fontFamily?: string;
 }
 
 export interface ScreenGlobalVariable {
@@ -322,6 +323,7 @@ export interface ScreenConfig {
 	height: number;
 	backgroundColor: string;
 	backgroundImage?: string;
+	fontFamily?: string;
 	theme?: ScreenTheme;
 	customTheme?: ScreenCustomTheme;
 	components: ScreenComponent[];

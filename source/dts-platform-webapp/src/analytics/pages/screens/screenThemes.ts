@@ -1,5 +1,6 @@
 import type { ScreenCustomTheme, ScreenTheme, ComponentType } from './types';
 import { COMPONENT_CONFIG_SCHEMAS } from './configSchema/schemas';
+import { SCREEN_DEFAULT_FONT_FAMILY } from './screenTypography';
 
 export interface ScreenThemeTokens {
     canvasBackground: string;
@@ -9,6 +10,7 @@ export interface ScreenThemeTokens {
     cardShadow: string;
     cardBorderRadius: number;
     // Text
+    fontFamily: string;
     textPrimary: string;
     textSecondary: string;
     textMuted: string;
@@ -86,6 +88,7 @@ const legacyDarkTheme: ScreenThemeTokens = {
     cardShadow: 'none',
     cardBorderRadius: 8,
     textPrimary: '#ffffff',
+    fontFamily: SCREEN_DEFAULT_FONT_FAMILY,
     textSecondary: '#94a3b8',
     textMuted: '#666',
     accentColor: '#00d4ff',
@@ -149,6 +152,7 @@ const titaniumTheme: ScreenThemeTokens = {
     cardShadow: 'none',
     cardBorderRadius: 6,
     textPrimary: '#e8eaed',
+    fontFamily: SCREEN_DEFAULT_FONT_FAMILY,
     textSecondary: '#6b7280',
     textMuted: '#4b5563',
     accentColor: '#4a9eff',
@@ -212,6 +216,7 @@ const glacierTheme: ScreenThemeTokens = {
     cardShadow: '0 14px 32px rgba(4, 75, 140, 0.10)',
     cardBorderRadius: 18,
     textPrimary: '#0f172a',
+    fontFamily: SCREEN_DEFAULT_FONT_FAMILY,
     textSecondary: '#334155',
     textMuted: '#64748b',
     accentColor: '#044B8C',
@@ -492,11 +497,13 @@ function applyCustomThemeTokens(tokens: ScreenThemeTokens, customTheme?: ScreenC
     const textSecondary = customTheme.textSecondary || tokens.textSecondary;
     const borderColor = customTheme.borderColor || tokens.echarts.axisLineColor;
     const cardBackground = customTheme.cardBackground || tokens.cardBackground;
+    const fontFamily = customTheme.fontFamily || tokens.fontFamily;
     const cardBorder = borderColor.startsWith('1px') ? borderColor : `1px solid ${borderColor}`;
     return {
         ...tokens,
         canvasBackground: background,
         cardBackground,
+        fontFamily,
         cardBorder,
         textPrimary,
         textSecondary,
@@ -572,12 +579,12 @@ function shouldReplaceValue(
  * Apply theme tokens to all component configs via schema themeTokenKey mappings.
  * @param mode 'force' = overwrite all themed fields; 'safe' = only fill empty values
  */
-export function applyThemeToComponents(
-    components: Array<{ type?: string; config?: Record<string, unknown> }>,
+export function applyThemeToComponents<T extends { type?: string; config?: Record<string, unknown> }>(
+    components: T[],
     theme: ScreenTheme | string | undefined,
     mode: 'force' | 'safe' = 'force',
     customTheme?: ScreenCustomTheme,
-) {
+): T[] {
     const tokens = getThemeTokens(theme as ScreenTheme, customTheme);
     return components.map((comp) => {
         const schema = COMPONENT_CONFIG_SCHEMAS[comp.type as ComponentType];

@@ -13,6 +13,7 @@ import { normalizeScreenConfig } from './screenSpec';
 import { buildComponentMap, isComponentEffectivelyVisible } from './componentHierarchy';
 import { safeCssBackgroundUrl } from './sanitize';
 import { useScreenCarousel } from './hooks/useScreenCarousel';
+import { useScreenFontFaces } from './hooks/useScreenFontFaces';
 import { resolveRuntimeScale } from './runtimeScale';
 import { resolveRuntimeCanvasScaleStyle } from './runtimeCanvasStyle';
 import {
@@ -21,6 +22,7 @@ import {
 	type DeviceMode,
 } from './deviceMode';
 import { resolveComponentAppearanceStyle } from './componentAppearance';
+import { resolveScreenFontFamily } from './screenTypography';
 import './screenRuntimeKeyframes.css';
 
 /* ── Theme-dependent inline style helpers ── */
@@ -339,10 +341,14 @@ export default function PublicScreenPage() {
 
 	const rawTheme = screen?.theme as ScreenTheme | undefined;
 	const screenTheme = resolveScreenTheme(rawTheme, screen?.backgroundColor);
+	const screenFontFamily = resolveScreenFontFamily(screen?.fontFamily ?? screen?.customTheme?.fontFamily);
+	useScreenFontFaces();
 	const publicCanvasRef = useRef<HTMLDivElement>(null);
 	useEffect(() => {
-		if (publicCanvasRef.current) applyThemeCssVariables(publicCanvasRef.current, screenTheme, screen?.customTheme);
-	}, [screenTheme, screen?.customTheme]);
+		if (!publicCanvasRef.current) return;
+		applyThemeCssVariables(publicCanvasRef.current, screenTheme, screen?.customTheme);
+		publicCanvasRef.current.style.setProperty('--screen-font-family', screenFontFamily);
+	}, [screenTheme, screen?.customTheme, screenFontFamily]);
 
 	const isDark = useMemo(() => {
 		if (!screen) return true; // default dark for loading/error states
@@ -461,6 +467,7 @@ export default function PublicScreenPage() {
 									backgroundImage: safeCssBackgroundUrl(carousel.currentPageBgImage || screen.backgroundImage),
 									backgroundSize: 'cover',
 									backgroundPosition: 'center',
+									fontFamily: screenFontFamily,
 									...runtimeCanvasScaleStyle,
 									transition: carousel.transitioning
 										? `opacity ${carouselDuration}ms ease, transform ${carouselDuration}ms ease`
@@ -485,10 +492,17 @@ export default function PublicScreenPage() {
 												width: component.width,
 												height: component.height,
 												zIndex: component.zIndex,
+												fontFamily: screenFontFamily,
 												...resolveComponentAppearanceStyle(component.config),
 											}}
 										>
-											<ComponentRenderer component={component} mode="preview" theme={screenTheme} />
+											<ComponentRenderer
+												component={component}
+												mode="preview"
+												theme={screenTheme}
+												customTheme={screen.customTheme}
+												fontFamily={screenFontFamily}
+											/>
 										</div>
 									))}
 							</div>

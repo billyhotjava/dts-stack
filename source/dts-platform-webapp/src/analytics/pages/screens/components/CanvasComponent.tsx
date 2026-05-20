@@ -1,7 +1,7 @@
 import { useCallback, useState, useRef } from 'react';
 import { useScreen } from '../ScreenContext';
 import { ComponentRenderer } from './ComponentRenderer';
-import type { ScreenComponent, ScreenTheme } from '../types';
+import type { ScreenComponent, ScreenCustomTheme, ScreenTheme } from '../types';
 import { collectContainerSubtreeIds } from '../componentHierarchy';
 import { resolveComponentAppearanceStyle } from '../componentAppearance';
 import { resolveInteractionScale, resolveScaledPointerDelta } from '../canvasInteraction';
@@ -10,6 +10,8 @@ interface CanvasComponentProps {
     component: ScreenComponent;
     isSelected: boolean;
     theme?: ScreenTheme;
+    customTheme?: ScreenCustomTheme;
+    fontFamily?: string;
 }
 
 type ResizeDirection = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
@@ -84,7 +86,7 @@ function clampGroupDelta(
     return { dx, dy };
 }
 
-export function CanvasComponent({ component, isSelected, theme }: CanvasComponentProps) {
+export function CanvasComponent({ component, isSelected, theme, customTheme, fontFamily }: CanvasComponentProps) {
     const { state, dispatch, selectComponents, updateComponent, snapshotTransform, setSnapGuides, clearSnapGuides, editorReadonly } = useScreen();
     const { config, selectedIds } = state;
     const [isDragging, setIsDragging] = useState(false);
@@ -454,13 +456,21 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
                 height: component.height,
                 zIndex: component.zIndex,
                 touchAction: 'none',
+                fontFamily,
                 cursor: isDragging ? 'grabbing' : isResizing ? 'default' : (component.locked || editorReadonly ? 'not-allowed' : 'move'),
                 ...resolveComponentAppearanceStyle(component.config),
             }}
             onPointerDown={handlePointerDown}
             onKeyDown={handleKeyDown}
         >
-            <ComponentRenderer component={component} mode="designer" theme={theme} onConfigMeta={handleConfigMeta} />
+            <ComponentRenderer
+                component={component}
+                mode="designer"
+                theme={theme}
+                customTheme={customTheme}
+                fontFamily={fontFamily}
+                onConfigMeta={handleConfigMeta}
+            />
 
             {isSelected && !component.locked && !editorReadonly && (
                 <>

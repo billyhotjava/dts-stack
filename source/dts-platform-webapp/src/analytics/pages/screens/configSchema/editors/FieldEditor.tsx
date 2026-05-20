@@ -159,7 +159,7 @@ const ImageUrlField: React.FC<ImageUrlFieldProps> = ({ value, onChange }) => {
     );
 };
 
-interface FontFamilyFieldProps {
+export interface FontFamilyFieldProps {
     value: unknown;
     onChange: (v: unknown) => void;
     placeholder?: string;
@@ -171,7 +171,7 @@ const PRESET_FONTS = [
     'Arial', 'Helvetica', 'Times New Roman', 'Georgia',
 ];
 
-const FontFamilyField: React.FC<FontFamilyFieldProps> = ({ value, onChange }) => {
+export const FontFamilyField: React.FC<FontFamilyFieldProps> = ({ value, onChange }) => {
     const fontInputRef = useRef<HTMLInputElement>(null);
     const [fontUploading, setFontUploading] = useState(false);
     const [uploadedFonts, setUploadedFonts] = useState<Array<{ fontFamily: string; url: string; format: string }>>([]);

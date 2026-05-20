@@ -6,6 +6,7 @@ import { setByPath } from './helpers';
 interface ComponentConfigSectionOptions {
     selectedComponent: ScreenComponent;
     theme?: ScreenConfig['theme'];
+    customTheme?: ScreenConfig['customTheme'];
     updateComponent: (
         id: string,
         updates: Partial<ScreenComponent> | ((prev: ScreenComponent) => Partial<ScreenComponent>),
@@ -21,6 +22,7 @@ interface ComponentConfigSectionOptions {
 export function renderComponentConfigSection({
     selectedComponent,
     theme,
+    customTheme,
     updateComponent,
     isSectionCollapsed: _isSectionCollapsed,
     toggleSection: _toggleSection,
@@ -32,7 +34,7 @@ export function renderComponentConfigSection({
     // 同时支持 onlyGroups/hideGroups: 样式 Tab 隐藏 advanced,高级 Tab 仅显示 advanced。
     return (
         <div className="property-section py-3 border-b border-border-default">
-            {renderComponentConfigBody(selectedComponent, theme, updateComponent, onlyGroups, hideGroups)}
+            {renderComponentConfigBody(selectedComponent, theme, customTheme, updateComponent, onlyGroups, hideGroups)}
         </div>
     );
 }
@@ -40,6 +42,7 @@ export function renderComponentConfigSection({
 function renderComponentConfigBody(
     selectedComponent: ScreenComponent,
     theme: ScreenConfig['theme'] | undefined,
+    customTheme: ScreenConfig['customTheme'] | undefined,
     updateComponent: (
         id: string,
         updates: Partial<ScreenComponent> | ((prev: ScreenComponent) => Partial<ScreenComponent>),
@@ -85,6 +88,7 @@ function renderComponentConfigBody(
                 }));
             }}
             theme={theme}
+            customTheme={customTheme}
             onlyGroups={onlyGroups}
             hideGroups={hideGroups}
         />

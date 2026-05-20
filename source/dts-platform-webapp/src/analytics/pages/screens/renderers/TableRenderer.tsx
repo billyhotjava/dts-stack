@@ -40,6 +40,7 @@ export interface TableRendererProps {
     width: number;
     height: number;
     theme?: ScreenTheme;
+    fontFamily?: string;
     mode: 'designer' | 'preview';
     component: ScreenComponent;
     runtime: ScreenRuntime;
@@ -63,6 +64,7 @@ export function renderTable(props: TableRendererProps): ReactNode {
         c,
         t,
         height,
+        fontFamily,
         mode,
         component,
         runtime,
@@ -109,12 +111,14 @@ export function renderTable(props: TableRendererProps): ReactNode {
         };
 
         return (
-            <ThemedScrollTable
-                config={filteredConfig}
-                tokens={t}
-                isRowInteractive={canRunScrollBoardActions || canRunScrollBoardDefaultDrill}
-                onRowClick={handleScrollBoardRowClick}
-            />
+            <div style={{ width: '100%', height: '100%', fontFamily }}>
+                <ThemedScrollTable
+                    config={filteredConfig}
+                    tokens={t}
+                    isRowInteractive={canRunScrollBoardActions || canRunScrollBoardDefaultDrill}
+                    onRowClick={handleScrollBoardRowClick}
+                />
+            </div>
         );
     };
 
@@ -356,7 +360,7 @@ export function renderTable(props: TableRendererProps): ReactNode {
             };
 
             return (
-                <div style={{ width: '100%', height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ width: '100%', height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', fontFamily }}>
                     {/*
                       Chrome 95 兼容性说明:
                       - 滚动容器加 position:relative + transform:translateZ(0),

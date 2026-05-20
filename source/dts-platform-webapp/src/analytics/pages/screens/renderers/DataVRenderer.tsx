@@ -18,9 +18,10 @@ interface DataVRendererProps {
     width: number;
     height: number;
     t?: ScreenThemeTokens;
+    fontFamily?: string;
 }
 
-export function renderDataV({ type, c, width, height, t }: DataVRendererProps): ReactNode | null {
+export function renderDataV({ type, c, width, height, t, fontFamily }: DataVRendererProps): ReactNode | null {
     switch (type) {
         case 'border-box':
             return (
@@ -43,7 +44,7 @@ export function renderDataV({ type, c, width, height, t }: DataVRendererProps): 
                     color={c.color as string[] | undefined}
                     backgroundColor={c.backgroundColor as string | undefined}
                     duration={c.duration as number | undefined}
-                    style={{ width: '100%', height: '100%' }}
+                    style={{ width: '100%', height: '100%', fontFamily }}
                 />
             );
 
@@ -56,7 +57,7 @@ export function renderDataV({ type, c, width, height, t }: DataVRendererProps): 
                     backgroundColor={c.backgroundColor as string | undefined}
                     duration={c.duration as number | undefined}
                     rowCount={c.rowNum as number | undefined}
-                    style={{ width: '100%', height: '100%' }}
+                    style={{ width: '100%', height: '100%', fontFamily }}
                 />
             );
 
@@ -78,7 +79,7 @@ export function renderDataV({ type, c, width, height, t }: DataVRendererProps): 
                 <DigitalFlop
                     number={Array.isArray(c.number) ? (c.number as number[])[0] : (c.number as number)}
                     content={c.content as string}
-                    style={c.style as { fontSize?: number; fill?: string }}
+                    style={{ ...((c.style as { fontSize?: number; fill?: string }) || {}), fontFamily: String(c.fontFamily || fontFamily || '') || undefined }}
                     backgroundColor={c.backgroundColor as string | undefined}
                 />
             );

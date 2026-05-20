@@ -14,6 +14,7 @@ import { buildComponentMap, isComponentEffectivelyVisible } from './componentHie
 import { safeCssBackgroundUrl } from './sanitize';
 import { useScreenCarousel } from './hooks/useScreenCarousel';
 import { useScreenVisitTracker } from './hooks/useScreenVisitTracker';
+import { useScreenFontFaces } from './hooks/useScreenFontFaces';
 import { resolveRuntimeScale } from './runtimeScale';
 import { resolveRuntimeCanvasScaleStyle } from './runtimeCanvasStyle';
 import { ScaleAdapter, type ScaleMode } from './renderers/ScaleAdapter';
@@ -23,6 +24,7 @@ import {
 	type DeviceMode,
 } from './deviceMode';
 import { resolveComponentAppearanceStyle } from './componentAppearance';
+import { resolveScreenFontFamily } from './screenTypography';
 import './screenRuntimeKeyframes.css';
 
 const PREVIEW_BATCH_SIZE = 20;
@@ -396,13 +398,16 @@ export default function ScreenPreviewPage() {
 	const canvasRef = useRef<HTMLDivElement>(null);
 	const rawTheme = (!loading && !error && screen) ? (screen as { theme?: string }).theme as ScreenTheme | undefined : undefined;
 	const screenTheme = resolveScreenTheme(rawTheme, screen?.backgroundColor);
+	const screenFontFamily = resolveScreenFontFamily(screen?.fontFamily ?? screen?.customTheme?.fontFamily);
+	useScreenFontFaces();
 
 	// Inject CSS Variables for theme — ensures theme switching takes effect immediately
 	useEffect(() => {
 		if (canvasRef.current) {
 			applyThemeCssVariables(canvasRef.current, screenTheme, screen?.customTheme);
+			canvasRef.current.style.setProperty('--screen-font-family', screenFontFamily);
 		}
-	}, [screenTheme, screen?.customTheme]);
+	}, [screenTheme, screen?.customTheme, screenFontFamily]);
 
 	const isDark = screenTheme !== 'glacier';
 
@@ -487,10 +492,17 @@ export default function ScreenPreviewPage() {
 						backgroundColor: carousel.currentPageBgColor || screen.backgroundColor || '#1e1f26',
 						backgroundImage: safeCssBackgroundUrl(carousel.currentPageBgImage || screen.backgroundImage),
 						backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat',
+						fontFamily: screenFontFamily,
 					}}>
 						{visibleSortedComponents.map((comp) => (
-							<div key={comp.id} style={{ position: 'absolute', left: comp.x, top: comp.y, width: comp.width, height: comp.height, zIndex: comp.zIndex, ...resolveEntryAnimationStyle(comp.config), ...resolveComponentAppearanceStyle(comp.config) }}>
-								<ComponentRenderer component={comp} mode="preview" theme={screenTheme} />
+							<div key={comp.id} style={{ position: 'absolute', left: comp.x, top: comp.y, width: comp.width, height: comp.height, zIndex: comp.zIndex, fontFamily: screenFontFamily, ...resolveEntryAnimationStyle(comp.config), ...resolveComponentAppearanceStyle(comp.config) }}>
+								<ComponentRenderer
+									component={comp}
+									mode="preview"
+									theme={screenTheme}
+									customTheme={screen.customTheme}
+									fontFamily={screenFontFamily}
+								/>
 							</div>
 						))}
 					</div>
@@ -512,6 +524,7 @@ export default function ScreenPreviewPage() {
 								backgroundSize: 'cover',
 								backgroundPosition: 'center',
 								backgroundRepeat: 'no-repeat',
+								fontFamily: screenFontFamily,
 								...runtimeCanvasScaleStyle,
 							}}
 						>
@@ -530,11 +543,18 @@ export default function ScreenPreviewPage() {
 											width: component.width,
 											height: component.height,
 											zIndex: component.zIndex,
+											fontFamily: screenFontFamily,
 											...resolveEntryAnimationStyle(component.config),
 											...resolveComponentAppearanceStyle(component.config),
 										}}
 									>
-										<ComponentRenderer component={component} mode="preview" theme={screenTheme} />
+										<ComponentRenderer
+											component={component}
+											mode="preview"
+											theme={screenTheme}
+											customTheme={screen.customTheme}
+											fontFamily={screenFontFamily}
+										/>
 									</div>
 								))}
 

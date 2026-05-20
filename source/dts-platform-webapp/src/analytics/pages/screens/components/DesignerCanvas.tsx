@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type MutableRefObject } from 'react';
 import { useDrop } from 'react-dnd';
-import apiClient from '@/api/apiClient';
 import { useScreen } from '../ScreenContext';
 import { generateId } from '../ScreenContext';
 import { CanvasComponent } from './CanvasComponent';
@@ -10,30 +9,14 @@ import { applyChartPresetDefaults, isChartComponentType } from '../chartPresets'
 import { safeCssBackgroundUrl } from '../sanitize';
 import { applyThemeCssVariables } from '../themes/screenCssVariables';
 import { resolveScreenTheme, getThemeTokens, applyThemeToComponents } from '../screenThemes';
+import { resolveScreenFontFamily } from '../screenTypography';
+import { useScreenFontFaces } from '../hooks/useScreenFontFaces';
 
 type ContextMenuState = {
     x: number;
     y: number;
     componentId?: string;
 } | null;
-
-type ScreenFontAsset = {
-    fontFamily: string;
-    url: string;
-    format?: string;
-};
-
-type ScreenFontResponse = ScreenFontAsset[] | { data?: ScreenFontAsset[] };
-
-function resolveScreenFontAssets(response: ScreenFontResponse): ScreenFontAsset[] {
-    const items = Array.isArray(response) ? response : response.data;
-    if (!Array.isArray(items)) return [];
-    return items.filter((item) => (
-        item
-        && typeof item.fontFamily === 'string'
-        && typeof item.url === 'string'
-    ));
-}
 
 export function DesignerCanvas() {
     const { state, addComponent, selectComponents, snapGuides, dispatch, deleteComponents, copyComponents, pasteComponents, duplicateSelected, undo, redo, clipboard, editorReadonly } = useScreen();
@@ -44,32 +27,18 @@ export function DesignerCanvas() {
     // Apply theme CSS Variables to canvas so components pick up theme changes
     const editorTheme = resolveScreenTheme(config.theme, config.backgroundColor);
     const editorThemeTokens = getThemeTokens(editorTheme, config.customTheme);
+    const screenFontFamily = resolveScreenFontFamily(config.fontFamily ?? config.customTheme?.fontFamily);
     // 画布底色优先使用用户自定义 (config.backgroundColor)；未设置/空时跟主题走
     // 以避免"浅色主题 + 深色画布"视觉错位。
     const resolvedCanvasBackground = (typeof config.backgroundColor === 'string' && config.backgroundColor.trim().length > 0)
         ? config.backgroundColor
         : editorThemeTokens.canvasBackground;
     useEffect(() => {
-        if (canvasRef.current) applyThemeCssVariables(canvasRef.current, editorTheme, config.customTheme);
-    }, [editorTheme, config.customTheme]);
-
-    // Inject @font-face for uploaded custom fonts so they're available everywhere
-    useEffect(() => {
-        const styleId = 'screen-custom-fonts';
-        apiClient.get<ScreenFontResponse>({ url: '/infra/screen-fonts' })
-            .then(res => {
-                const fonts = resolveScreenFontAssets(res);
-                if (!Array.isArray(fonts) || fonts.length === 0) return;
-                let el = document.getElementById(styleId) as HTMLStyleElement | null;
-                if (!el) { el = document.createElement('style'); el.id = styleId; document.head.appendChild(el); }
-                const formatMap: Record<string, string> = { ttf: 'truetype', otf: 'opentype', woff: 'woff', woff2: 'woff2' };
-                el.textContent = fonts.map((f) =>
-                    `@font-face { font-family: "${f.fontFamily}"; src: url("${f.url}") format("${formatMap[f.format ?? ''] || 'truetype'}"); font-display: swap; }`
-                ).join('\n');
-            })
-            .catch(() => {});
-        return () => { document.getElementById(styleId)?.remove(); };
-    }, []);
+        if (!canvasRef.current) return;
+        applyThemeCssVariables(canvasRef.current, editorTheme, config.customTheme);
+        canvasRef.current.style.setProperty('--screen-font-family', screenFontFamily);
+    }, [editorTheme, config.customTheme, screenFontFamily]);
+    useScreenFontFaces();
     const [fitScale, setFitScale] = useState(1);
 
     // Phase 4.4 + UI 抖动修复:
@@ -452,6 +421,8 @@ export function DesignerCanvas() {
                             component={component}
                             isSelected={selectedIds.includes(component.id)}
                             theme={config.theme}
+                            customTheme={config.customTheme}
+                            fontFamily={screenFontFamily}
                         />
                     ))}
 

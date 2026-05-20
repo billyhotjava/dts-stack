@@ -16,7 +16,7 @@ export function renderSpecialChart(type: string, props: EChartsRendererProps): R
         echartsClickHandler, componentActions, executeComponentActions,
         plotCenterX, plotCenterY, radarRadius,
         mapDrillRegion, setMapDrillRegion, mapReadyVersion, hasMapFn,
-        cardData,
+        cardData, fontFamily,
     } = props;
 
     const axisLabelColor = axisLabelColorOverride || t.echarts.axisLabelColor;
@@ -264,7 +264,7 @@ export function renderSpecialChart(type: string, props: EChartsRendererProps): R
                     gridSize: 8,
                     drawOutOfBound: false,
                     textStyle: {
-                        fontFamily: SCREEN_UI_FONT_FAMILY,
+                        fontFamily: fontFamily || SCREEN_UI_FONT_FAMILY,
                         color: () => t.echarts.colorPalette[Math.floor(Math.random() * t.echarts.colorPalette.length)],
                     },
                     data: (c.data as Array<{ name: string; value: number }>)?.map(d => ({

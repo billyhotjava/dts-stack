@@ -1,16 +1,18 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
+import { SCREEN_MONO_FONT_FAMILY } from '../../screenTypography';
 
 interface DigitalFlopProps {
   number?: number;
   content?: string;
-  style?: { fontSize?: number; fill?: string };
+  style?: { fontSize?: number; fill?: string; fontFamily?: string };
   backgroundColor?: string;
 }
 
-const DigitSpan: React.FC<{ digit: string; fontSize: number; color: string }> = ({
+const DigitSpan: React.FC<{ digit: string; fontSize: number; color: string; fontFamily?: string }> = ({
   digit,
   fontSize,
   color,
+  fontFamily,
 }) => {
   const [displayDigit, setDisplayDigit] = useState(digit);
   const prevRef = useRef(digit);
@@ -29,7 +31,7 @@ const DigitSpan: React.FC<{ digit: string; fontSize: number; color: string }> = 
       style={{
         display: 'inline-block',
         overflow: 'hidden',
-        fontFamily: '"Courier New", Consolas, monospace',
+        fontFamily: fontFamily || SCREEN_MONO_FONT_FAMILY,
         fontVariantNumeric: 'tabular-nums',
         fontSize,
         color,
@@ -52,6 +54,7 @@ export const DigitalFlop: React.FC<DigitalFlopProps> = ({
 }) => {
   const fontSize = style?.fontSize ?? 30;
   const color = style?.fill ?? 'var(--color-text-primary, #fff)';
+  const fontFamily = style?.fontFamily;
 
   const formatted = useMemo(() => {
     const numStr = number.toLocaleString();
@@ -73,7 +76,7 @@ export const DigitalFlop: React.FC<DigitalFlopProps> = ({
       }}
     >
       {chars.map((ch, i) => (
-        <DigitSpan key={`${i}-${ch}`} digit={ch} fontSize={fontSize} color={color} />
+        <DigitSpan key={`${i}-${ch}`} digit={ch} fontSize={fontSize} color={color} fontFamily={fontFamily} />
       ))}
     </span>
   );

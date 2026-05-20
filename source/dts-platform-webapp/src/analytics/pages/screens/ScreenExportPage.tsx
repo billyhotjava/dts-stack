@@ -10,9 +10,12 @@ import type { DeviceMode } from './deviceMode';
 import { isVisibleForDevice, resolveDeviceModeByViewport } from './deviceMode';
 import { normalizeScreenConfig, buildScreenPayload } from './screenSpec';
 import { resolveScreenTheme } from './screenThemes';
+import { applyThemeCssVariables } from './themes/screenCssVariables';
 import { escapeHtml, safeCssBackgroundUrl } from './sanitize';
 import type { ScreenConfig, ScreenTheme } from './types';
 import { resolveComponentAppearanceStyle } from './componentAppearance';
+import { resolveScreenFontFamily } from './screenTypography';
+import { useScreenFontFaces } from './hooks/useScreenFontFaces';
 
 function parseFormat(raw: string | null): 'png' | 'pdf' | 'json' {
 	const text = String(raw || '').trim().toLowerCase();
@@ -524,6 +527,13 @@ export default function ScreenExportPage() {
 
 	const rawTheme = screen?.theme as ScreenTheme | undefined;
 	const screenTheme = resolveScreenTheme(rawTheme, screen?.backgroundColor);
+	const screenFontFamily = resolveScreenFontFamily(screen?.fontFamily ?? screen?.customTheme?.fontFamily);
+	useScreenFontFaces();
+	useEffect(() => {
+		if (!canvasRef.current) return;
+		applyThemeCssVariables(canvasRef.current, screenTheme, screen?.customTheme);
+		canvasRef.current.style.setProperty('--screen-font-family', screenFontFamily);
+	}, [screenTheme, screen?.customTheme, screenFontFamily]);
 	const isDark = screenTheme !== 'glacier';
 	const components = (screen?.components ?? [])
 		.filter((item) => item.visible && isVisibleForDevice(item, effectiveDevice))
@@ -715,6 +725,7 @@ export default function ScreenExportPage() {
 									backgroundImage: safeCssBackgroundUrl(screen.backgroundImage),
 								backgroundSize: 'cover',
 								backgroundPosition: 'center',
+								fontFamily: screenFontFamily,
 								borderRadius: 28,
 								boxShadow: '0 28px 56px rgba(15, 23, 42, 0.2)',
 							}}
@@ -732,10 +743,17 @@ export default function ScreenExportPage() {
 											width: component.width,
 											height: component.height,
 											zIndex: component.zIndex,
+											fontFamily: screenFontFamily,
 											...resolveComponentAppearanceStyle(component.config),
 										}}
 									>
-										<ComponentRenderer component={component} mode="preview" theme={screenTheme} />
+										<ComponentRenderer
+											component={component}
+											mode="preview"
+											theme={screenTheme}
+											customTheme={screen.customTheme}
+											fontFamily={screenFontFamily}
+										/>
 									</div>
 								))}
 							{watermark.enabled && watermark.text && (

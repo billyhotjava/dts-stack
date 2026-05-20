@@ -6,7 +6,8 @@ import { getRendererPlugin } from '../../plugins/registry';
 import { readComponentPluginMeta, resolveRuntimePluginId } from '../../plugins/runtime';
 import { useScreenPluginRuntime } from '../../plugins/useScreenPluginRuntime';
 import { analyticsApi } from '../../../../api/analyticsApi';
-import { getThemeTokens } from '../../screenThemes';
+import { applyThemeToComponents, getThemeTokens } from '../../screenThemes';
+import { FontFamilyField } from '../../configSchema/editors/FieldEditor';
 
 // Extracted modules (F4-Step3 split)
 import {
@@ -90,10 +91,18 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
     if (selectedComponents.length === 0) {
         const customTheme = config.customTheme;
         const handleCustomThemeChange = (key: keyof ScreenCustomTheme, value: string) => {
+            const nextCustomTheme = { ...(customTheme || {}), [key]: value };
             updateConfig({
-                customTheme: { ...(customTheme || {}), [key]: value },
+                customTheme: nextCustomTheme,
                 ...(key === 'backgroundColor' ? { backgroundColor: value } : {}),
+                ...(config.theme === 'brand-custom'
+                    ? { components: applyThemeToComponents(config.components, config.theme, 'force', nextCustomTheme) }
+                    : {}),
             } as Partial<typeof config>);
+        };
+        const handleGlobalFontChange = (raw: unknown) => {
+            const value = typeof raw === 'string' ? raw.trim() : '';
+            updateConfig({ fontFamily: value || undefined });
         };
         const isCustom = config.theme === 'brand-custom';
         return (
@@ -126,13 +135,31 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                 onChange={(e) => {
                                     const theme = e.target.value as typeof config.theme;
                                     const tokens = getThemeTokens(theme, theme === 'brand-custom' ? config.customTheme : undefined);
-                                    updateConfig({ theme, backgroundColor: tokens.canvasBackground });
+                                    updateConfig({
+                                        theme,
+                                        backgroundColor: tokens.canvasBackground,
+                                        components: applyThemeToComponents(
+                                            config.components,
+                                            theme,
+                                            'force',
+                                            theme === 'brand-custom' ? config.customTheme : undefined,
+                                        ),
+                                    });
                                 }}
                             >
                                 {THEME_OPTIONS.map((option) => (
                                     <option key={option.value} value={option.value}>{option.label}</option>
                                 ))}
                             </select>
+                        </div>
+                        <div className="property-row flex items-center mb-3">
+                            <label className="property-label w-20 text-xs text-text-secondary">全局字体</label>
+                            <div className="flex-1 min-w-0">
+                                <FontFamilyField
+                                    value={config.fontFamily || undefined}
+                                    onChange={handleGlobalFontChange}
+                                />
+                            </div>
                         </div>
                         <div className="property-row flex items-center mb-1">
                             <label className="property-label w-20 text-xs text-text-secondary">
@@ -474,6 +501,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                 {isStyleTab && shouldRenderSection('component-config', '组件', '样式', '图表', '外观') && renderComponentConfigSection({
                     selectedComponent,
                     theme: config.theme,
+                    customTheme: config.customTheme,
                     updateComponent,
                     isSectionCollapsed,
                     toggleSection,
@@ -636,6 +664,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                 {isAdvancedTab && renderComponentConfigSection({
                     selectedComponent,
                     theme: config.theme,
+                    customTheme: config.customTheme,
                     updateComponent,
                     isSectionCollapsed,
                     toggleSection,

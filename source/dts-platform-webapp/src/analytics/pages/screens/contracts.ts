@@ -22,6 +22,7 @@ export interface ScreenUpdateConflictMeta {
 		height: number;
 		backgroundColor?: string | null;
 		backgroundImage?: string | null;
+		fontFamily?: string | null;
 		theme?: ScreenTheme | null;
 	};
 	baseComponents: ScreenUpdateConflictComponentSnapshot[];
@@ -39,6 +40,7 @@ export interface ScreenWritePayload extends Record<string, unknown> {
 	height: number;
 	backgroundColor?: string;
 	backgroundImage?: string;
+	fontFamily?: string;
 	theme?: ScreenTheme;
 	customTheme?: ScreenCustomTheme;
 	components: ScreenWriteComponent[];

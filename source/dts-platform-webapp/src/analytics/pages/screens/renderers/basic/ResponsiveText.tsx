@@ -22,6 +22,7 @@ import type { ScreenThemeTokens } from "../../screenThemes";
 import { resolveTextColor } from "../shared/chartUtils";
 import { useContainerFontSize } from "../../hooks/useContainerFontSize";
 import { MetricNoteBadge, ThresholdBar, type MetricNote } from "../shared/MetricNote";
+import { resolveScreenFontFamily } from "../../screenTypography";
 
 function pickFontSize(
     c: Record<string, unknown>,
@@ -41,9 +42,11 @@ function pickFontSize(
 export function TitleBasic({
     c,
     t,
+    fontFamily,
 }: {
     c: Record<string, unknown>;
     t: ScreenThemeTokens;
+    fontFamily?: string;
 }) {
     const ref = useRef<HTMLDivElement>(null);
     const cfg = pickFontSize(c, (c.fontSize as number) || 20, "fontSizeRatio", "fontSizeMin", "fontSizeMax", {
@@ -62,7 +65,7 @@ export function TitleBasic({
         justifyContent: (c.textAlign as string) || "left",
         fontSize: effectiveFontSize,
         fontWeight: (c.fontWeight as string) || "normal",
-        fontFamily: c.fontFamily ? (c.fontFamily as string) : undefined,
+        fontFamily: resolveScreenFontFamily(fontFamily, c.fontFamily),
         color: resolveTextColor(c.color as string | undefined, t.textPrimary),
     };
 
@@ -76,9 +79,11 @@ export function TitleBasic({
 export function NumberCardBasic({
     c,
     t,
+    fontFamily,
 }: {
     c: Record<string, unknown>;
     t: ScreenThemeTokens;
+    fontFamily?: string;
 }) {
     const ref = useRef<HTMLDivElement>(null);
     // 用数字本体的自适应驱动整卡；标题字号按 50% 比例从数字字号派生
@@ -129,7 +134,7 @@ export function NumberCardBasic({
                 borderRadius: t.cardBorderRadius,
                 border: t.numberCard.border,
                 boxShadow: t.cardShadow,
-                fontFamily: c.fontFamily ? (c.fontFamily as string) : undefined,
+                fontFamily: resolveScreenFontFamily(fontFamily, c.fontFamily),
                 overflow: "hidden",
             }}
         >
@@ -174,9 +179,11 @@ export function NumberCardBasic({
 export function StatCardBasic({
     c,
     t,
+    fontFamily,
 }: {
     c: Record<string, unknown>;
     t: ScreenThemeTokens;
+    fontFamily?: string;
 }) {
     const ref = useRef<HTMLDivElement>(null);
 
@@ -245,6 +252,7 @@ export function StatCardBasic({
                 background: bgColor,
                 border: `1px solid ${t.cardBorder?.replace(/^1px solid /, "") || "rgba(148,163,184,0.2)"}`,
                 boxShadow: shadowMap[shadow] || "none",
+                fontFamily: resolveScreenFontFamily(fontFamily, c.fontFamily),
                 overflow: "hidden",
             }}
         >
