@@ -1,5 +1,72 @@
 import type { CardData, ComponentType } from '../types';
 
+type TableColumnBinding = {
+    key?: unknown;
+    source?: unknown;
+    field?: unknown;
+    dataKey?: unknown;
+    name?: unknown;
+};
+
+function asTrimmedString(value: unknown): string | undefined {
+    if (typeof value !== 'string') return undefined;
+    const text = value.trim();
+    return text.length > 0 ? text : undefined;
+}
+
+function resolveTableColumnBindingKey(col: TableColumnBinding | undefined): string | undefined {
+    if (!col) return undefined;
+    return asTrimmedString(col.key)
+        ?? asTrimmedString(col.source)
+        ?? asTrimmedString(col.field)
+        ?? asTrimmedString(col.dataKey)
+        ?? asTrimmedString(col.name);
+}
+
+function parseColumnIndex(value: string | undefined, columnCount: number): number | undefined {
+    if (!value) return undefined;
+    const n = Number(value);
+    if (!Number.isInteger(n) || n < 0 || n >= columnCount) return undefined;
+    return n;
+}
+
+function resolveTableFieldIndex(field: string, cols: CardData['cols']): number {
+    const direct = cols.findIndex((c) => c.name === field);
+    if (direct >= 0) return direct;
+    return parseColumnIndex(field, cols.length) ?? -1;
+}
+
+function shouldUseIndexBackedTableColumns(
+    cols: CardData['cols'],
+    config?: Record<string, unknown>,
+): boolean {
+    const sourceNames = new Set(cols.map((col) => col.name));
+    const columns = config?.columns as TableColumnBinding[] | undefined;
+    if (Array.isArray(columns) && columns.some((col) => {
+        const key = resolveTableColumnBindingKey(col);
+        return parseColumnIndex(key, cols.length) != null && !sourceNames.has(key ?? '');
+    })) {
+        return true;
+    }
+
+    const fields = config?.fields as string[] | undefined;
+    return Array.isArray(fields) && fields.some((field) =>
+        parseColumnIndex(field, cols.length) != null && !sourceNames.has(field),
+    );
+}
+
+function toTableSourceColumn(
+    col: CardData['cols'][number],
+    index: number,
+    useIndexBackedColumns: boolean,
+): { name: string; displayName: string; baseType: string } {
+    return {
+        name: useIndexBackedColumns ? String(index) : col.name,
+        displayName: col.display_name || col.name,
+        baseType: col.base_type,
+    };
+}
+
 /**
  * Map Card query result {rows, cols} to component config fields.
  * Only returns DATA fields (xAxisData, series, data, value, header).
@@ -60,16 +127,13 @@ export function mapCardDataToConfig(
         case 'table': {
             const headerSourceMode = String(config?.headerSourceMode ?? 'data').trim().toLowerCase();
             const fields = config?.fields as string[] | undefined;
+            const useIndexBackedColumns = shouldUseIndexBackedTableColumns(cols, config);
             if (fields?.length) {
-                const indices = fields.map((f) => cols.findIndex((c) => c.name === f)).filter((i) => i >= 0);
+                const indices = fields.map((f) => resolveTableFieldIndex(f, cols)).filter((i) => i >= 0);
                 if (indices.length) {
                     const result: Record<string, unknown> = {
                         data: rows.map((row) => indices.map((i) => String(row[i] ?? ''))),
-                        _sourceColumns: indices.map((i) => ({
-                            name: cols[i].name,
-                            displayName: cols[i].display_name || cols[i].name,
-                            baseType: cols[i].base_type,
-                        })),
+                        _sourceColumns: indices.map((i) => toTableSourceColumn(cols[i], i, useIndexBackedColumns)),
                     };
                     if (headerSourceMode !== 'manual') {
                         result.header = indices.map((i) => cols[i].display_name || cols[i].name);
@@ -79,11 +143,7 @@ export function mapCardDataToConfig(
             }
             const result: Record<string, unknown> = {
                 data: rows.map((row) => row.map((cell) => String(cell ?? ''))),
-                _sourceColumns: cols.map((c) => ({
-                    name: c.name,
-                    displayName: c.display_name || c.name,
-                    baseType: c.base_type,
-                })),
+                _sourceColumns: cols.map((col, index) => toTableSourceColumn(col, index, useIndexBackedColumns)),
             };
             if (headerSourceMode !== 'manual') {
                 result.header = cols.map((c) => c.display_name || c.name);

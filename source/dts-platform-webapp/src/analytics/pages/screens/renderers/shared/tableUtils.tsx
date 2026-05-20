@@ -93,9 +93,54 @@ export interface ResolvedTableData {
     columnMeta: ResolvedColumnMeta[];
 }
 
+export interface ResolvedTableRowBackgrounds {
+    oddRowBackground: string;
+    evenRowBackground: string;
+}
+
 // ---------------------------------------------------------------------------
 // Public functions
 // ---------------------------------------------------------------------------
+
+const DEFAULT_TABLE_EVEN_ROW_BACKGROUND = 'rgba(148, 163, 184, 0.06)';
+
+function normalizeCssBackground(value: unknown): string | undefined {
+    if (typeof value !== 'string') return undefined;
+    const text = value.trim();
+    return text.length > 0 ? text : undefined;
+}
+
+function normalizeComparableCssBackground(value: string | undefined): string {
+    return (value ?? '').replace(/\s+/g, '').toLowerCase();
+}
+
+function isTransparentBackground(value: string | undefined): boolean {
+    return normalizeComparableCssBackground(value) === 'transparent';
+}
+
+function isDefaultEvenRowBackground(value: string | undefined): boolean {
+    return normalizeComparableCssBackground(value) === normalizeComparableCssBackground(DEFAULT_TABLE_EVEN_ROW_BACKGROUND);
+}
+
+export function resolveTableRowBackgrounds(config: Record<string, unknown>): ResolvedTableRowBackgrounds {
+    const bodyBackground = normalizeCssBackground(config.bodyBackground) ?? 'transparent';
+    const hasBodyBackground = !isTransparentBackground(bodyBackground);
+    const oddCandidate = normalizeCssBackground(config.oddRowBackground);
+    const evenCandidate = normalizeCssBackground(config.evenRowBackground);
+
+    const oddRowBackground = oddCandidate && !isTransparentBackground(oddCandidate)
+        ? oddCandidate
+        : bodyBackground;
+    const evenRowBackground = evenCandidate
+        && !isTransparentBackground(evenCandidate)
+        && !(hasBodyBackground && isDefaultEvenRowBackground(evenCandidate))
+        ? evenCandidate
+        : hasBodyBackground
+            ? bodyBackground
+            : DEFAULT_TABLE_EVEN_ROW_BACKGROUND;
+
+    return { oddRowBackground, evenRowBackground };
+}
 
 export function compareTableValues(a: unknown, b: unknown): number {
     const na = Number(a);
@@ -394,6 +439,104 @@ export function resolveFrozenColumnOffsets(
         left += resolveColumnStickyWidth(meta, fallbackColumnWidth);
         return offset;
     });
+}
+
+function clampTableColumnResizeWidth(widthPx: unknown, minimumWidth: number, maximumWidth: number): number | undefined {
+    const raw = Number(widthPx);
+    if (!Number.isFinite(raw)) return undefined;
+    const min = Math.max(1, Number(minimumWidth) || 1);
+    const max = Math.max(min, Number(maximumWidth) || min);
+    return Math.max(min, Math.min(max, Math.round(raw)));
+}
+
+export function resolveTableColumnResizePreview({
+    columnWidths,
+    columnIndex,
+    widthPx,
+    minimumWidth = 40,
+    maximumWidth = 2000,
+    minimumTableWidth = 0,
+}: {
+    columnWidths: number[];
+    columnIndex: number;
+    widthPx: number;
+    minimumWidth?: number;
+    maximumWidth?: number;
+    minimumTableWidth?: number;
+}): { columnWidth: number; tableMinWidth: number } | undefined {
+    if (!Number.isInteger(columnIndex) || columnIndex < 0 || columnIndex >= columnWidths.length) {
+        return undefined;
+    }
+    const columnWidth = clampTableColumnResizeWidth(widthPx, minimumWidth, maximumWidth);
+    if (columnWidth == null) return undefined;
+    const minWidth = Math.max(1, Number(minimumWidth) || 1);
+    const widths = columnWidths.map((value, index) => {
+        if (index === columnIndex) return columnWidth;
+        const width = Number(value);
+        return Number.isFinite(width) && width > 0 ? Math.round(width) : minWidth;
+    });
+    const tableMinWidth = Math.max(
+        Math.max(0, Math.round(Number(minimumTableWidth) || 0)),
+        widths.reduce((sum, value) => sum + value, 0),
+    );
+    return { columnWidth, tableMinWidth };
+}
+
+function columnConfigFromMeta(meta: ResolvedColumnMeta | undefined, index: number): ColumnEntry {
+    const key = asTrimmedString(meta?.key) ?? String(index);
+    const title = asTrimmedString(meta?.title) ?? `列${index + 1}`;
+    const source = asTrimmedString(meta?.source) ?? key;
+    const column: ColumnEntry = {
+        key,
+        source,
+        label: title,
+        alias: title,
+        align: normalizeColumnAlign(meta?.align, 'left'),
+        wrap: meta?.wrap === true,
+        formatter: normalizeColumnFormatter(meta?.formatter),
+    };
+    if (meta?.headerAlign === 'left' || meta?.headerAlign === 'center' || meta?.headerAlign === 'right') {
+        column.headerAlign = meta.headerAlign;
+    }
+    if (typeof meta?.sortable === 'boolean') {
+        column.sortable = meta.sortable;
+    }
+    if (meta?.frozen === true) {
+        column.frozen = true;
+    }
+    if (meta?.metricNote) {
+        column.metricNote = meta.metricNote;
+    }
+    return column;
+}
+
+export function resizeTableColumnConfig({
+    columns,
+    columnMeta,
+    columnIndex,
+    widthPx,
+    minimumWidth = 40,
+    maximumWidth = 2000,
+}: {
+    columns?: ColumnEntry[];
+    columnMeta: ResolvedColumnMeta[];
+    columnIndex: number;
+    widthPx: number;
+    minimumWidth?: number;
+    maximumWidth?: number;
+}): ColumnEntry[] | undefined {
+    if (!Number.isInteger(columnIndex) || columnIndex < 0) return columns;
+    const width = clampTableColumnResizeWidth(widthPx, minimumWidth, maximumWidth);
+    if (width == null) return columns;
+    const baseColumns = columns?.length
+        ? columns.map((item) => ({ ...item }))
+        : columnMeta.map((meta, index) => columnConfigFromMeta(meta, index));
+    if (columnIndex >= baseColumns.length) return columns;
+    return baseColumns.map((column, index) => (
+        index === columnIndex
+            ? { ...column, width, widthUnit: 'px' }
+            : column
+    ));
 }
 
 export function formatTableCell(value: unknown, formatter: ColumnFormatter, baseType?: string): string {

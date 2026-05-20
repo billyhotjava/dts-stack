@@ -7,6 +7,8 @@ import com.yuzhi.dts.admin.service.audit.AuditIngestAuthenticator.Decision;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
+import org.springframework.mock.web.MockHttpServletRequest;
 
 /**
  * Behavioural coverage for the audit ingest authenticator across the rotation states a
@@ -125,5 +127,20 @@ class AuditIngestAuthenticatorTest {
         assertThat(auth.authenticate("bearer " + ACTIVE_TOKEN, "p").accepted()).isTrue();
         assertThat(auth.authenticate("BEARER " + ACTIVE_TOKEN, "p").accepted()).isTrue();
         assertThat(auth.authenticate(ACTIVE_TOKEN, "p").accepted()).isTrue();
+    }
+
+    @Test
+    @DisplayName("service-token header has priority over OAuth Authorization")
+    void serviceTokenHeaderHasPriorityOverAuthorization() {
+        AuditIngestAuthenticator auth = authenticatorWith(true, List.of(ACTIVE_TOKEN));
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("X-DTS-Service", "DTS-Platform");
+        request.addHeader("X-DTS-Service-Token", ACTIVE_TOKEN);
+        request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer not-a-keycloak-jwt");
+
+        Decision decision = auth.authenticate(request);
+
+        assertThat(decision.accepted()).isTrue();
+        assertThat(decision.serviceName()).isEqualTo("dts-platform");
     }
 }

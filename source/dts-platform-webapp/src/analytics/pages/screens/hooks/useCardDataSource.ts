@@ -4,6 +4,7 @@ import { resolveAnalyticsErrorCodeMessage } from '../../../api/errorCodeMessages
 import type { CardParameterBinding, DataSourceConfig, CardData } from '../types';
 import { buildApiRuntimeRequest, resolveApiRuntimePayload } from '../apiDataSourceRuntime';
 import { runWithRetry, scheduleQueryTask } from './queryScheduler';
+import { normalizeTabularData } from './tabularDataAdapter';
 
 interface CardDataSourceResult {
     data: CardData | null;
@@ -34,133 +35,6 @@ if (typeof window !== 'undefined') {
             for (const [key] of toRemove) cacheStore.delete(key);
         }
     }, CACHE_CLEANUP_INTERVAL_MS);
-}
-
-type CardDataColumn = CardData['cols'][number];
-
-function normalizeColumn(raw: unknown, index: number): CardDataColumn {
-    const col = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
-    const name = String(col.name ?? col.field_ref ?? `col_${index + 1}`);
-    return {
-        name,
-        display_name: String(col.display_name ?? col.displayName ?? col.label ?? name),
-        base_type: String(col.base_type ?? col.baseType ?? col.semantic_type ?? col.semanticType ?? 'type/Text'),
-    };
-}
-
-function normalizeColumns(
-    rawCols: unknown,
-    rawMetaCols: unknown,
-    fallbackRows?: unknown[],
-): CardDataColumn[] {
-    if (Array.isArray(rawCols) && rawCols.length > 0) {
-        return rawCols.map((item, index) => normalizeColumn(item, index));
-    }
-    if (Array.isArray(rawMetaCols) && rawMetaCols.length > 0) {
-        return rawMetaCols.map((item, index) => normalizeColumn(item, index));
-    }
-    if (Array.isArray(fallbackRows) && fallbackRows.length > 0 && typeof fallbackRows[0] === 'object' && !Array.isArray(fallbackRows[0])) {
-        const keySet = new Set<string>();
-        for (const item of fallbackRows as Array<Record<string, unknown>>) {
-            Object.keys(item || {}).forEach((k) => keySet.add(k));
-        }
-        return Array.from(keySet).map((key) => ({
-            name: key,
-            display_name: key,
-            base_type: 'type/Text',
-        }));
-    }
-    return [];
-}
-
-function normalizeRows(rawRows: unknown, cols: CardDataColumn[]): unknown[][] {
-    if (!Array.isArray(rawRows)) {
-        return [];
-    }
-    if (rawRows.length === 0) {
-        return [];
-    }
-    if (Array.isArray(rawRows[0])) {
-        return rawRows as unknown[][];
-    }
-    if (typeof rawRows[0] === 'object') {
-        const objects = rawRows as Array<Record<string, unknown>>;
-        const effectiveCols = cols.length > 0
-            ? cols
-            : normalizeColumns([], [], rawRows);
-        return objects.map((row) => effectiveCols.map((col) => row?.[col.name] ?? null));
-    }
-    return rawRows.map((item) => [item]);
-}
-
-function toCardData(payload: unknown): CardData {
-    if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
-        const obj = payload as Record<string, unknown>;
-        const rows = obj.rows;
-        const cols = obj.cols;
-        const resultsMetadata = obj.results_metadata && typeof obj.results_metadata === 'object'
-            ? obj.results_metadata as Record<string, unknown>
-            : {};
-        const metaCols = resultsMetadata.columns;
-        if (Array.isArray(rows)) {
-            const normalizedCols = normalizeColumns(cols, metaCols, rows);
-            const normalizedRows = normalizeRows(rows, normalizedCols);
-            return {
-                rows: normalizedRows,
-                cols: normalizedCols.length > 0
-                    ? normalizedCols
-                    : (normalizedRows[0] ? normalizedRows[0].map((_, idx) => ({
-                        name: `col_${idx + 1}`,
-                        display_name: `列${idx + 1}`,
-                        base_type: 'type/Text',
-                    })) : []),
-            };
-        }
-        if (obj.data && typeof obj.data === 'object') {
-            return toCardData(obj.data);
-        }
-        // Single flat object (e.g. {key, label, value, unit} from responsePath extraction)
-        // → convert to single-row CardData with object keys as columns
-        const keys = Object.keys(obj);
-        if (keys.length > 0) {
-            return {
-                rows: [keys.map((k) => obj[k] ?? null)],
-                cols: keys.map((k) => ({ name: k, display_name: k, base_type: 'type/Text' })),
-            };
-        }
-    }
-
-    if (Array.isArray(payload) && payload.length > 0 && typeof payload[0] === 'object' && !Array.isArray(payload[0])) {
-        const objects = payload as Array<Record<string, unknown>>;
-        const keySet = new Set<string>();
-        for (const row of objects) {
-            Object.keys(row || {}).forEach((k) => keySet.add(k));
-        }
-        const keys = Array.from(keySet);
-        return {
-            rows: objects.map((row) => keys.map((k) => row?.[k] ?? null)),
-            cols: keys.map((k) => ({ name: k, display_name: k, base_type: 'type/Text' })),
-        };
-    }
-
-    if (Array.isArray(payload) && payload.length > 0 && Array.isArray(payload[0])) {
-        const rows = payload as unknown[][];
-        const width = rows[0]?.length ?? 0;
-        return {
-            rows,
-            cols: Array.from({ length: width }, (_, i) => ({
-                name: `col_${i + 1}`,
-                display_name: `列${i + 1}`,
-                base_type: 'type/Text',
-            })),
-        };
-    }
-
-    if (Array.isArray(payload) && payload.length === 0) {
-        return { rows: [], cols: [] };
-    }
-
-    throw new Error('数据源返回格式不支持，请返回 rows/cols 或数组结构');
 }
 
 function buildApiUrl(baseUrl: string, params?: Record<string, string>): string {
@@ -495,7 +369,7 @@ export function useCardDataSource(
                             if (result.error) {
                                 throw new Error(String(result.error));
                             }
-                            return toCardData(result.data ?? result);
+                            return normalizeTabularData(result.data ?? result);
                         }
 
                         if (sourceType === 'metric') {
@@ -527,7 +401,7 @@ export function useCardDataSource(
                             if (result.error) {
                                 throw new Error(String(result.error));
                             }
-                            return toCardData(result.data ?? result);
+                            return normalizeTabularData(result.data ?? result);
                         }
 
                         if (sourceType === 'api') {
@@ -557,7 +431,7 @@ export function useCardDataSource(
                             const payload = ct.includes('application/json')
                                 ? await response.json()
                                 : await response.text();
-                            return toCardData(resolveApiRuntimePayload(payload, cfg.responsePath));
+                            return normalizeTabularData(resolveApiRuntimePayload(payload, cfg.responsePath));
                         }
 
                         if (sourceType === 'sql') {
@@ -584,7 +458,7 @@ export function useCardDataSource(
                             if (result.error) {
                                 throw new Error(String(result.error));
                             }
-                            return toCardData(result.data ?? result);
+                            return normalizeTabularData(result.data ?? result);
                         }
 
                         if (sourceType === 'dataset') {
@@ -600,7 +474,7 @@ export function useCardDataSource(
                             if (result.error) {
                                 throw new Error(String(result.error));
                             }
-                            return toCardData(result.data ?? result);
+                            return normalizeTabularData(result.data ?? result);
                         }
 
                         throw new Error(`暂不支持的数据源类型: ${String(sourceType)}`);

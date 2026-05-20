@@ -470,6 +470,7 @@ services:
       # Service-to-service auth(platform 入站 + 出站客户端);DTS_ADMIN_SERVICE_TOKEN 仅作旧部署 fallback。
       DTS_INBOUND_FROM_ANALYTICS: ${DTS_INBOUND_FROM_ANALYTICS:-${DTS_ADMIN_SERVICE_TOKEN:-}}
       DTS_INBOUND_FROM_INGESTION: ${DTS_INBOUND_FROM_INGESTION:-${DTS_ADMIN_SERVICE_TOKEN:-}}
+      DTS_INBOUND_FROM_METRICS: ${DTS_INBOUND_FROM_METRICS:-${DTS_METRICS_TO_PLATFORM:-${DTS_ADMIN_SERVICE_TOKEN:-}}}
       DTS_PLATFORM_TO_ADMIN_TOKEN: ${DTS_PLATFORM_TO_ADMIN_TOKEN:-${DTS_ADMIN_SERVICE_TOKEN:-}}
       DTS_PLATFORM_CATALOG_MULTI_SOURCE_ENABLED: "true"
       DTS_PLATFORM_CATALOG_DEFAULT_SOURCE_TYPE: "POSTGRES"
@@ -519,6 +520,9 @@ services:
       DTS_PLATFORM_OPENMETADATA_TABLE_FIELDS: ${DTS_PLATFORM_OPENMETADATA_TABLE_FIELDS:-columns,owner,tags,domain,usageSummary,profile}
       DTS_PLATFORM_OPENMETADATA_TABLE_FQN_PATTERN: ${DTS_PLATFORM_OPENMETADATA_TABLE_FQN_PATTERN:-"{service}.{database}.{table}"}
       DTS_PLATFORM_OPENMETADATA_UI_BASE_URL: ${DTS_PLATFORM_OPENMETADATA_UI_BASE_URL:-}
+      DTS_METRICS_API_BASE_PATH: ${DTS_METRICS_API_BASE_PATH:-/api/metrics}
+      DTS_METRICS_EDITION: ${DTS_EDITION:-foundation}
+      DTS_METRICS_SERVICE_NAME: ${DTS_METRICS_SERVICE_NAME:-dts-metrics}
       LOG_ROOT: /logs
       # Data Standard attachments: encrypted filesystem storage
       DATA_STANDARD_ATTACHMENT_STORAGE_STRATEGY: "filesystem"
@@ -727,6 +731,49 @@ services:
       - "traefik.http.services.dts-analytics-api.loadbalancer.server.port=3000"
       - "traefik.http.routers.dts-analytics-api.middlewares=platform-forward-auth@file,dts-strip-analytics-api@docker,cors-allow@file,security-headers@file"
 
+  dts-metrics:
+    image: ${IMAGE_DTS_METRICS:-dts-metrics:1.0.0}
+    ports: []
+    depends_on:
+      dts-platform:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-prod}
+      LOG_ROOT: /logs
+      DTS_EDITION: ${DTS_EDITION:-foundation}
+      DTS_METRICS_SERVICE_NAME: ${DTS_METRICS_SERVICE_NAME:-dts-metrics}
+      DTS_METRICS_TO_PLATFORM: ${DTS_METRICS_TO_PLATFORM:-${DTS_INBOUND_FROM_METRICS:-${DTS_ADMIN_SERVICE_TOKEN:-}}}
+      DTS_PLATFORM_BASE_URL: ${DTS_PLATFORM_BASE_URL:-http://dts-platform:8081}
+      DTS_PLATFORM_API_PATH: ${DTS_PLATFORM_API_PATH:-/api}
+      JAVA_OPTS: ${DTS_METRICS_JAVA_OPTS:--Djava.security.egd=file:/dev/./urandom -XX:MaxRAMPercentage=75.0}
+    security_opt:
+      - seccomp=unconfined
+    volumes:
+      - ./logs/dts-metrics:/logs/dts-metrics:z
+    networks:
+      - dts-core
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:8084/management/health >/dev/null 2>&1 || grep -qE ':[0]*1F94 .* 0A ' /proc/net/tcp || grep -qE ':[0]*1F94 .* 0A ' /proc/net/tcp6" ]
+      <<: *hc
+      start_period: 30s
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.routers.dts-metrics-api.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/api/metrics`)"
+      - "traefik.http.routers.dts-metrics-api.entrypoints=websecure"
+      - "traefik.http.routers.dts-metrics-api.tls=true"
+      - "traefik.http.routers.dts-metrics-api.priority=260"
+      - "traefik.http.services.dts-metrics-api.loadbalancer.server.port=8084"
+      - "traefik.http.routers.dts-metrics-api.middlewares=platform-forward-auth@file,cors-allow@file,security-headers@file"
+      - "traefik.http.routers.dts-metrics-ui.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/metrics`)"
+      - "traefik.http.routers.dts-metrics-ui.entrypoints=websecure"
+      - "traefik.http.routers.dts-metrics-ui.tls=true"
+      - "traefik.http.routers.dts-metrics-ui.priority=255"
+      - "traefik.http.routers.dts-metrics-ui.service=dts-metrics-api"
+      - "traefik.http.routers.dts-metrics-ui.middlewares=platform-forward-auth@file,cors-allow@file,security-headers@file"
+
   dts-admin-webapp:
     image: ${IMAGE_DTS_ADMIN_WEBAPP:?Set IMAGE_DTS_ADMIN_WEBAPP in imgversion.conf or .env}
     environment:
@@ -796,7 +843,7 @@ services:
       - "traefik.docker.network=dts-core"
       # Avoid swallowing analytics mount path (/analytics) which is served by dts-analytics,
       # and avoid taking over Hetu reverse-proxy prefixes (screen/dashboards/system/tdv/...).
-      - "traefik.http.routers.dts-platform-ui.rule=Host(`${HOST_PLATFORM_UI}`) && !PathPrefix(`/api`) && !PathPrefix(`/admin/api`) && !PathPrefix(`/analytics`) && !PathPrefix(`/bi/api`) && !PathPrefix(`/screen`) && !PathPrefix(`/dashboards`) && !PathPrefix(`/system`) && !PathPrefix(`/tdv`) && !PathPrefix(`/account`) && !PathPrefix(`/hetu`) && !PathPrefix(`/static`)"
+      - "traefik.http.routers.dts-platform-ui.rule=Host(`${HOST_PLATFORM_UI}`) && !PathPrefix(`/api`) && !PathPrefix(`/admin/api`) && !PathPrefix(`/analytics`) && !PathPrefix(`/bi/api`) && !PathPrefix(`/screen`) && !PathPrefix(`/dashboards`) && !PathPrefix(`/system`) && !PathPrefix(`/tdv`) && !PathPrefix(`/account`) && !PathPrefix(`/hetu`) && !PathPrefix(`/metrics`) && !PathPrefix(`/static`)"
       # Ensure Hetu reverse-proxy routers (/screen,/dashboards,/system,/tdv,...) win over the SPA catch-all.
       - "traefik.http.routers.dts-platform-ui.priority=100"
       - "traefik.http.routers.dts-platform-ui.entrypoints=websecure"

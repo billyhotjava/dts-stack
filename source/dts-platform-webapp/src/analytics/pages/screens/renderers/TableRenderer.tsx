@@ -2,7 +2,7 @@
  * Table-family renderer: table, scroll-board, scroll-ranking.
  * Extracted verbatim from ComponentRenderer.tsx — do not modify rendering logic.
  */
-import type { CSSProperties, ReactNode, Dispatch, SetStateAction } from 'react';
+import type { CSSProperties, ReactNode, Dispatch, SetStateAction, MouseEvent as ReactMouseEvent } from 'react';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import type { CardData, ScreenComponent } from '../types';
 import type { ScreenThemeTokens } from '../screenThemes';
@@ -12,7 +12,9 @@ import { MetricNoteBadge, type MetricNote } from './shared/MetricNote';
 import {
     compareTableValues, estimateTablePlaceholderRowCount, resolveTableConditionalStyle,
     resolveTableRowConditionalStyle, ThemedScrollTable, resolveBoundTableData,
-    resolveFrozenColumnOffsets,
+    resolveFrozenColumnOffsets, resolveTableRowBackgrounds, resolveTableColumnResizePreview,
+    resizeTableColumnConfig,
+    type ColumnEntry,
 } from './shared/tableUtils';
 import {
     buildTableRowActionParams,
@@ -52,6 +54,7 @@ export interface TableRendererProps {
     componentActions: Array<Record<string, unknown>>;
     executeComponentActions: (params: Record<string, unknown>) => void;
     renderUnavailableState: (title: string, detail?: string) => ReactNode;
+    onConfigMeta?: (meta: Record<string, unknown>) => void;
 }
 
 export function renderTable(props: TableRendererProps): ReactNode {
@@ -72,6 +75,7 @@ export function renderTable(props: TableRendererProps): ReactNode {
         drillRuntimeEnabled,
         componentActions,
         executeComponentActions,
+        onConfigMeta,
     } = props;
 
     // 抽出的"滚动表格"渲染逻辑 —— 供 legacy `type='scroll-board'` 与
@@ -187,10 +191,8 @@ export function renderTable(props: TableRendererProps): ReactNode {
             const headerBackground = (c.headerBackground as string) || '#0f2a55';
             // 记录默认白色字体,在大屏深色底上可读
             const bodyColor = resolveTextColor(c.bodyColor as string | undefined, '#ffffff');
-            const bodyBackground = (c.bodyBackground as string) || 'transparent';
             const borderColor = (c.borderColor as string) || 'rgba(148, 163, 184, 0.24)';
-            const oddRowBackground = (c.oddRowBackground as string) || bodyBackground;
-            const evenRowBackground = (c.evenRowBackground as string) || 'rgba(148, 163, 184, 0.06)';
+            const { oddRowBackground, evenRowBackground } = resolveTableRowBackgrounds(c);
             // 行 hover 高亮(半透明蓝色,与大屏主色调统一)
             const rowHoverBackground = (c.rowHoverBackground as string) || 'rgba(74, 158, 255, 0.18)';
             const enableSort = c.enableSort !== false;
@@ -254,6 +256,104 @@ export function renderTable(props: TableRendererProps): ReactNode {
                 : 0;
             const canRunTableActions = mode === 'preview' && componentActions.length > 0;
             const canRunTableDefaultDrill = mode === 'preview' && !canRunTableActions && drillRuntimeEnabled && drillState.canDrillDown;
+            const canResizeTableColumns = mode === 'designer' && typeof onConfigMeta === 'function';
+
+            const handleColumnResizeMouseDown = (event: ReactMouseEvent<HTMLSpanElement>, columnIndex: number) => {
+                if (!canResizeTableColumns) return;
+                event.preventDefault();
+                event.stopPropagation();
+
+                const handleEl = event.currentTarget;
+                const th = handleEl.closest('th') as HTMLTableCellElement | null;
+                const table = handleEl.closest('table') as HTMLTableElement | null;
+                if (!th || !table) return;
+
+                const startX = event.clientX;
+                const startWidth = th.offsetWidth || minColumnWidth;
+                const tableRect = table.getBoundingClientRect();
+                const scale = table.offsetWidth > 0 ? tableRect.width / table.offsetWidth : 1;
+                const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
+                const targetCol = table.querySelector(`col[data-screen-table-col="${columnIndex}"]`) as HTMLTableColElement | null;
+                const headerCells = Array.from(table.querySelectorAll('thead th')) as HTMLTableCellElement[];
+                const startColumnWidths = headerCells.map((cell) => cell.offsetWidth || minColumnWidth);
+                const minimumResizableTableWidth = Math.max(minColumnWidth, startColumnWidths.length * minColumnWidth);
+                const previousBodyCursor = document.body.style.cursor;
+                const previousBodyUserSelect = document.body.style.userSelect;
+                const previousTableMinWidth = table.style.minWidth;
+                const previousThWidth = th.style.width;
+                const previousColWidth = targetCol?.style.width ?? '';
+                let nextWidth = startWidth;
+
+                const applyPreviewWidth = (rawWidth: number) => {
+                    const preview = resolveTableColumnResizePreview({
+                        columnWidths: startColumnWidths,
+                        columnIndex,
+                        widthPx: rawWidth,
+                        minimumWidth: minColumnWidth,
+                        minimumTableWidth: minimumResizableTableWidth,
+                    });
+                    if (!preview) return;
+                    nextWidth = preview.columnWidth;
+                    th.style.width = `${nextWidth}px`;
+                    if (targetCol) {
+                        targetCol.style.width = `${nextWidth}px`;
+                    }
+                    table.style.minWidth = `${preview.tableMinWidth}px`;
+                };
+
+                const restoreDocumentState = () => {
+                    document.body.style.cursor = previousBodyCursor;
+                    document.body.style.userSelect = previousBodyUserSelect;
+                };
+
+                const restorePreviewStyles = () => {
+                    table.style.minWidth = previousTableMinWidth;
+                    th.style.width = previousThWidth;
+                    if (targetCol) {
+                        targetCol.style.width = previousColWidth;
+                    }
+                };
+
+                const cleanupResizeListeners = () => {
+                    document.removeEventListener('mousemove', handleMouseMove);
+                    document.removeEventListener('mouseup', handleMouseUp);
+                    window.removeEventListener('blur', handleWindowBlur);
+                    restoreDocumentState();
+                };
+
+                const handleMouseMove = (moveEvent: MouseEvent) => {
+                    moveEvent.preventDefault();
+                    const deltaX = (moveEvent.clientX - startX) / safeScale;
+                    applyPreviewWidth(startWidth + deltaX);
+                };
+
+                const handleMouseUp = (upEvent: MouseEvent) => {
+                    upEvent.preventDefault();
+                    cleanupResizeListeners();
+
+                    const nextColumns = resizeTableColumnConfig({
+                        columns: c.columns as ColumnEntry[] | undefined,
+                        columnMeta,
+                        columnIndex,
+                        widthPx: nextWidth,
+                        minimumWidth: minColumnWidth,
+                    });
+                    if (nextColumns) {
+                        onConfigMeta?.({ columns: nextColumns });
+                    }
+                };
+
+                const handleWindowBlur = () => {
+                    cleanupResizeListeners();
+                    restorePreviewStyles();
+                };
+
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+                document.addEventListener('mousemove', handleMouseMove, { passive: false });
+                document.addEventListener('mouseup', handleMouseUp);
+                window.addEventListener('blur', handleWindowBlur);
+            };
 
             return (
                 <div style={{ width: '100%', height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -283,6 +383,15 @@ export function renderTable(props: TableRendererProps): ReactNode {
                         borderSpacing: 0,
                         tableLayout: 'fixed',
                     }}>
+                        <colgroup>
+                            {displayHeader.map((_, i) => (
+                                <col
+                                    key={i}
+                                    data-screen-table-col={i}
+                                    style={{ width: columnMeta[i]?.widthCss }}
+                                />
+                            ))}
+                        </colgroup>
                         {displayHeader.length > 0 && (
                             <thead>
                                 <tr style={{ background: headerBackground }}>
@@ -302,6 +411,7 @@ export function renderTable(props: TableRendererProps): ReactNode {
                                             padding: '8px 10px',
                                             textAlign: columnMeta[i]?.headerAlign ?? columnMeta[i]?.align ?? 'left',
                                             fontWeight: 600,
+                                            position: 'relative',
                                             whiteSpace: columnMeta[i]?.wrap ? 'normal' : 'nowrap',
                                             overflow: 'hidden',
                                             textOverflow: columnMeta[i]?.wrap ? undefined : 'ellipsis',
@@ -373,6 +483,26 @@ export function renderTable(props: TableRendererProps): ReactNode {
                                                         : <ArrowDown size={10} strokeWidth={1.8} aria-hidden="true" />
                                                 ) : null}
                                             </button>
+                                            {canResizeTableColumns ? (
+                                                <span
+                                                    className="screen-table-column-resize-handle"
+                                                    role="separator"
+                                                    aria-orientation="vertical"
+                                                    title="拖拽调整列宽"
+                                                    onMouseDown={(event) => handleColumnResizeMouseDown(event, i)}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        top: 0,
+                                                        right: -3,
+                                                        width: 7,
+                                                        height: '100%',
+                                                        cursor: 'col-resize',
+                                                        userSelect: 'none',
+                                                        zIndex: 30,
+                                                        background: 'transparent',
+                                                    }}
+                                                />
+                                            ) : null}
                                         </th>
                                         );
                                     })}

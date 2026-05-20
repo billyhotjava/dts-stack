@@ -59,7 +59,7 @@ public class AdminAuditGateway {
             headers.setContentType(MediaType.APPLICATION_JSON);
             if (StringUtils.hasText(adminProperties.getServiceToken())) {
                 String raw = adminProperties.getServiceToken().trim();
-                headers.set(HttpHeaders.AUTHORIZATION, raw.startsWith("Bearer ") ? raw : "Bearer " + raw);
+                headers.set("X-DTS-Service-Token", stripBearerPrefix(raw));
             }
             if (StringUtils.hasText(adminProperties.getServiceName())) {
                 headers.set("X-DTS-Service", adminProperties.getServiceName().trim());
@@ -73,6 +73,16 @@ public class AdminAuditGateway {
         } catch (RestClientException ex) {
             return false;
         }
+    }
+
+    private String stripBearerPrefix(String token) {
+        if (!StringUtils.hasText(token)) {
+            return token;
+        }
+        String trimmed = token.trim();
+        return trimmed.regionMatches(true, 0, "Bearer ", 0, "Bearer ".length())
+            ? trimmed.substring("Bearer ".length()).trim()
+            : trimmed;
     }
 
     private ResponseEntity<Map> exchange(URI uri, String authorization) {

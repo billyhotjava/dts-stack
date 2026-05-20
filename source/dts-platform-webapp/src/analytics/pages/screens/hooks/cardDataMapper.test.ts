@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mapCardDataToConfig } from './cardDataMapper';
+import { resolveBoundTableData } from '../renderers/shared/tableUtils';
 
 test('gantt-chart: maps rows to tasks array', () => {
     const cols = [
@@ -41,6 +42,40 @@ test('gantt-chart: maps rows to tasks array', () => {
     assert.equal(tasks[1].actualDate, '');
     assert.equal(tasks[1].isIncomplete, true);
     assert.equal(tasks[1].delayDays, 0);
+});
+
+test('table: keeps static index-based column bindings after data mapping', () => {
+    const config = {
+        columns: [
+            { key: '0', source: '0', label: '编号' },
+            { key: '1', source: '1', label: '名称' },
+            { key: '2', source: '2', label: '状态' },
+        ],
+    };
+    const mapped = mapCardDataToConfig('table', {
+        cols: [
+            { name: '编号', display_name: '编号', base_type: 'type/Text' },
+            { name: '名称', display_name: '名称', base_type: 'type/Text' },
+            { name: '状态', display_name: '状态', base_type: 'type/Text' },
+        ],
+        rows: [
+            ['001', '项目A', '进行中'],
+            ['002', '项目B', '已完成'],
+        ],
+    }, config);
+
+    assert.deepEqual(mapped._sourceColumns, [
+        { name: '0', displayName: '编号', baseType: 'type/Text' },
+        { name: '1', displayName: '名称', baseType: 'type/Text' },
+        { name: '2', displayName: '状态', baseType: 'type/Text' },
+    ]);
+
+    const resolved = resolveBoundTableData({ ...config, ...mapped });
+    assert.deepEqual(resolved.header, ['编号', '名称', '状态']);
+    assert.deepEqual(resolved.data, [
+        ['001', '项目A', '进行中'],
+        ['002', '项目B', '已完成'],
+    ]);
 });
 
 test('gantt-chart: returns empty on no rows', () => {

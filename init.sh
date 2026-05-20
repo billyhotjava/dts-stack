@@ -334,6 +334,7 @@ prepare_data_dirs(){
     "logs/elasticsearch"
     "logs/postgresql"
     "logs/traefik"
+    "logs/dts-metrics"
   )
   if [[ "${ENABLE_MINIO:-false}" == "true" ]]; then
     data_dirs+=("services/dts-minio/data")
@@ -367,6 +368,7 @@ prepare_data_dirs(){
     "logs/dts-platform"
     "logs/dts-ingestion"
     "logs/dts-analytics"
+    "logs/dts-metrics"
   )
   for dir in "${log_dirs[@]}"; do
     if [[ -d "${dir}" ]]; then

@@ -6,7 +6,10 @@ import {
     resolveBoundTableData,
     resolveFrozenColumnOffsets,
     resolveTableConditionalStyle,
+    resolveTableRowBackgrounds,
     resolveTableRowConditionalStyle,
+    resolveTableColumnResizePreview,
+    resizeTableColumnConfig,
 } from './tableUtils';
 
 test('estimateTablePlaceholderRowCount fills visible table height with placeholder rows', () => {
@@ -75,6 +78,32 @@ test('resolveTableConditionalStyle keeps row scoped rules out of cell-only forma
     );
 
     assert.deepEqual(style, { background: 'cell-orange', color: undefined });
+});
+
+test('resolveTableRowBackgrounds uses body background as the base for all data rows', () => {
+    const backgrounds = resolveTableRowBackgrounds({
+        bodyBackground: 'rgb(85,147,204)',
+        oddRowBackground: 'transparent',
+        evenRowBackground: 'rgba(148, 163, 184, 0.06)',
+    });
+
+    assert.deepEqual(backgrounds, {
+        oddRowBackground: 'rgb(85,147,204)',
+        evenRowBackground: 'rgb(85,147,204)',
+    });
+});
+
+test('resolveTableRowBackgrounds lets explicit odd and even row colors override the base', () => {
+    const backgrounds = resolveTableRowBackgrounds({
+        bodyBackground: 'rgb(85,147,204)',
+        oddRowBackground: 'rgb(46,90,177)',
+        evenRowBackground: 'rgb(255,128,0)',
+    });
+
+    assert.deepEqual(backgrounds, {
+        oddRowBackground: 'rgb(46,90,177)',
+        evenRowBackground: 'rgb(255,128,0)',
+    });
 });
 
 test('resolveBoundTableData supports schema column key and custom label for dynamic data', () => {
@@ -150,4 +179,94 @@ test('resolveFrozenColumnOffsets computes sticky offsets for configured frozen c
     ], 100);
 
     assert.deepEqual(offsets, [0, 120, undefined]);
+});
+
+test('resizeTableColumnConfig updates existing column width as px and clamps to minimum', () => {
+    const next = resizeTableColumnConfig({
+        columns: [
+            { source: 'project_no', alias: '项目编号', width: 30, widthUnit: 'percent' },
+            { source: 'owner_name', alias: '负责人', align: 'center' },
+        ],
+        columnMeta: [
+            { key: 'project_no', source: 'project_no', title: '项目编号', align: 'left', wrap: false, formatter: 'auto' },
+            { key: 'owner_name', source: 'owner_name', title: '负责人', align: 'center', wrap: false, formatter: 'auto' },
+        ],
+        columnIndex: 1,
+        widthPx: 36,
+        minimumWidth: 80,
+    });
+
+    assert.equal(next?.[0].width, 30);
+    assert.equal(next?.[0].widthUnit, 'percent');
+    assert.equal(next?.[1].width, 80);
+    assert.equal(next?.[1].widthUnit, 'px');
+    assert.equal(next?.[1].source, 'owner_name');
+    assert.equal(next?.[1].alias, '负责人');
+});
+
+test('resizeTableColumnConfig materializes columns from metadata when no column config exists', () => {
+    const next = resizeTableColumnConfig({
+        columns: undefined,
+        columnMeta: [
+            { key: '0', title: '编号', align: 'left', wrap: false, formatter: 'auto' },
+            { key: 'name', source: 'name', title: '名称', align: 'center', headerAlign: 'right', wrap: true, formatter: 'string', sortable: false, frozen: true },
+        ],
+        columnIndex: 1,
+        widthPx: 188,
+        minimumWidth: 60,
+    });
+
+    assert.deepEqual(next?.[0], {
+        key: '0',
+        source: '0',
+        label: '编号',
+        alias: '编号',
+        align: 'left',
+        wrap: false,
+        formatter: 'auto',
+    });
+    assert.deepEqual(next?.[1], {
+        key: 'name',
+        source: 'name',
+        label: '名称',
+        alias: '名称',
+        align: 'center',
+        headerAlign: 'right',
+        wrap: true,
+        formatter: 'string',
+        sortable: false,
+        frozen: true,
+        width: 188,
+        widthUnit: 'px',
+    });
+});
+
+test('resolveTableColumnResizePreview keeps preview column width and table min width in sync', () => {
+    const preview = resolveTableColumnResizePreview({
+        columnWidths: [120, 180, 80],
+        columnIndex: 1,
+        widthPx: 260,
+        minimumWidth: 60,
+        minimumTableWidth: 420,
+    });
+
+    assert.deepEqual(preview, {
+        columnWidth: 260,
+        tableMinWidth: 460,
+    });
+});
+
+test('resolveTableColumnResizePreview shrinks table min width down to the resizable lower bound', () => {
+    const preview = resolveTableColumnResizePreview({
+        columnWidths: [120, 180, 80],
+        columnIndex: 1,
+        widthPx: 20,
+        minimumWidth: 60,
+        minimumTableWidth: 180,
+    });
+
+    assert.deepEqual(preview, {
+        columnWidth: 60,
+        tableMinWidth: 260,
+    });
 });

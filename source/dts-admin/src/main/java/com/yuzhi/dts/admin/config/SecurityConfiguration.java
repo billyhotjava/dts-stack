@@ -72,7 +72,7 @@ public class SecurityConfiguration {
                     // Localization endpoints are required by the login/UI bootstrap without auth
                     .requestMatchers(mvc.pattern(AuthEndpointPaths.KEYCLOAK_LOCALIZATION_API_PATTERN)).permitAll()
                     // Ingest endpoint for sibling-service audit pushes. The controller (AuditIngestResource)
-                    // validates a shared bearer token via AuditIngestAuthenticator; permitAll here only
+                    // validates a shared service token via AuditIngestAuthenticator; permitAll here only
                     // means "skip the OAuth2 resource server filter" because callers are services, not Keycloak users.
                     .requestMatchers(mvc.pattern("/api/audit-events")).permitAll()
                     // MDM 回调/对接无需认证，由网关自身校验签名/令牌

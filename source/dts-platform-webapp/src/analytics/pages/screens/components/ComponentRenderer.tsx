@@ -148,6 +148,9 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
     // Persist _sourceColumns to saved config so PropertyPanel can read them
     const onConfigMetaRef = useRef(onConfigMeta);
     onConfigMetaRef.current = onConfigMeta;
+    const persistConfigMeta = useCallback((meta: Record<string, unknown>) => {
+        onConfigMetaRef.current?.(meta);
+    }, []);
     const [titleDragPreview, setTitleDragPreview] = useState<{ x: number; y: number } | null>(null);
     const titleDragHandlersRef = useRef<{ move: (event: MouseEvent) => void; up: (event: MouseEvent) => void } | null>(null);
     const [legendDragPreview, setLegendDragPreview] = useState<{ x: number; y: number } | null>(null);
@@ -1358,6 +1361,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     componentActions: componentActions as any,
                     executeComponentActions,
                     renderUnavailableState,
+                    onConfigMeta: persistConfigMeta,
                 });
 
             // ==================== 3D 可视化 (echarts-gl) ====================
@@ -1576,6 +1580,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         runtime.values,
         runtime,
         runtimePlugin,
+        persistConfigMeta,
     ]);
 
     const supportsRuntimeActionWrapper = mode === 'preview'

@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 /**
- * Validates the bearer token presented by sibling services when posting to /api/audit-events.
+ * Validates the service token presented by sibling services when posting to /api/audit-events.
  * <p>
  * Constant-time comparison prevents timing-based token brute force. Decisions are emitted as
  * a structured {@link Decision} so the controller can shape the HTTP response and audit the
@@ -28,6 +28,7 @@ public class AuditIngestAuthenticator {
 
     private static final Logger log = LoggerFactory.getLogger(AuditIngestAuthenticator.class);
     private static final String BEARER_PREFIX = "Bearer ";
+    private static final String SERVICE_TOKEN_HEADER = "X-DTS-Service-Token";
 
     private final AuditIngestProperties properties;
     private final AtomicLong rejectedCount = new AtomicLong();
@@ -99,9 +100,10 @@ public class AuditIngestAuthenticator {
     }
 
     public Decision authenticate(HttpServletRequest request) {
+        String serviceToken = request != null ? request.getHeader(SERVICE_TOKEN_HEADER) : null;
         String authorization = request != null ? request.getHeader(HttpHeaders.AUTHORIZATION) : null;
         String serviceName = request != null ? request.getHeader("X-DTS-Service") : null;
-        return authenticate(authorization, serviceName);
+        return authenticate(StringUtils.hasText(serviceToken) ? serviceToken : authorization, serviceName);
     }
 
     public Decision authenticate(String authorizationHeader, String serviceName) {

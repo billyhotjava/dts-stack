@@ -18,3 +18,10 @@ test("ComponentRenderer delegates source column metadata persistence to a shared
     assert.match(helperSource, /export function resolveSourceColumnsMeta/);
     assert.match(helperSource, /export function shouldPersistSourceColumns/);
 });
+
+test("ComponentRenderer passes config persistence callback into table renderer", async () => {
+    const rendererSource = await readFile(componentRendererPath, "utf8");
+
+    assert.match(rendererSource, /const persistConfigMeta = useCallback/);
+    assert.match(rendererSource, /onConfigMeta: persistConfigMeta/);
+});
