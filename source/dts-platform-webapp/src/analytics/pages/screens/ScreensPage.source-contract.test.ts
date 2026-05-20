@@ -112,6 +112,8 @@ test("ScreensPage keeps the domain classifier and table inside the page frame", 
 	assert.match(source, /className="min-w-0 flex-1 space-y-4 overflow-hidden"/);
 	assert.match(source, /className="max-w-full overflow-x-auto rounded-lg border border-border-default"/);
 	assert.match(source, /<colgroup>/);
-	assert.match(source, /className="w-full min-w-\[960px\] table-fixed border-collapse text-sm"/);
-	assert.match(source, /flex flex-wrap items-center justify-end gap-1\.5/);
+	assert.match(source, /className="w-full min-w-\[1080px\] table-fixed border-collapse text-sm"/);
+	// 操作列固定在右侧(sticky) + 按钮横排不换行(flex-nowrap)
+	assert.match(source, /flex flex-nowrap items-center justify-end gap-1\.5/);
+	assert.match(source, /sticky right-0 z-10 bg-surface-card/);
 });

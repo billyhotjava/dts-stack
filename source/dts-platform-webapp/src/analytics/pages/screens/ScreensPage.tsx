@@ -966,15 +966,16 @@ export default function ScreensPage() {
 							</div>
 						) : (
 							<div className="max-w-full overflow-x-auto rounded-lg border border-border-default">
-								<table className="w-full min-w-[960px] table-fixed border-collapse text-sm">
+								<table className="w-full min-w-[1080px] table-fixed border-collapse text-sm">
 									<colgroup>
-										<col className="w-[20%]" />
-										<col className="w-[22%]" />
-										<col className="w-[11%]" />
-										<col className="w-[8%]" />
-										<col className="w-[11%]" />
-										<col className="w-[14%]" />
-										<col className="w-[14%]" />
+										<col style={{ width: "22%" }} />
+										<col style={{ width: "26%" }} />
+										<col style={{ width: 120 }} />
+										<col style={{ width: 96 }} />
+										<col style={{ width: 120 }} />
+										<col style={{ width: 168 }} />
+										{/* 操作列固定宽度 + sticky 右侧,容纳 4 个横排按钮 */}
+										<col style={{ width: 240 }} />
 									</colgroup>
 									<thead>
 										<tr className="bg-surface-secondary text-text-secondary text-xs">
@@ -1023,7 +1024,7 @@ export default function ScreensPage() {
 											>
 												更新时间
 											</SortableHeader>
-											<th className="text-center font-bold px-4 py-3 whitespace-nowrap">操作</th>
+											<th className="sticky right-0 z-20 bg-surface-secondary text-center font-bold px-4 py-3 whitespace-nowrap shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.18)]">操作</th>
 										</tr>
 									</thead>
 									<tbody>
@@ -1063,8 +1064,8 @@ export default function ScreensPage() {
 													<td className="px-4 py-3 text-text-secondary whitespace-nowrap text-xs">
 														{formatDate(screen.updatedAt)}
 													</td>
-													<td className="px-3 py-3 text-right align-middle">
-														<div className="flex flex-wrap items-center justify-end gap-1.5">
+													<td className="sticky right-0 z-10 bg-surface-card px-3 py-3 align-middle shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.18)]">
+														<div className="flex flex-nowrap items-center justify-end gap-1.5">
 															<button
 																className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"
 																data-testid={`analytics-screen-preview-${screen.id}`}

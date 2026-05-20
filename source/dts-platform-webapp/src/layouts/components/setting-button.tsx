@@ -15,14 +15,13 @@ import { ScrollArea } from "@/ui/scroll-area";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from "@/ui/sheet";
 import { Slider } from "@/ui/slider";
 import { Switch } from "@/ui/switch";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
 import { Text } from "@/ui/typography";
 import { cn } from "@/utils";
 
 export default function SettingButton() {
 	const { t } = useTranslation();
 	const settings = useSettings();
-	const { themeMode, themeColorPresets, themeLayout, themeStretch, breadCrumb, fontSize, fontFamily } = settings;
+	const { themeMode, themeColorPresets, themeLayout, breadCrumb, fontSize, fontFamily } = settings;
 	const { setSettings } = useSettingActions();
 
 	const updateSettings = (partialSettings: Partial<SettingsType>) => {
@@ -152,10 +151,7 @@ export default function SettingButton() {
 											style={{ background: layoutBackground(ThemeLayout.Vertical) }}
 										/>
 										<div
-											className={cn(
-												"flex-1 w-full rounded opacity-20 mx-auto transition-all duration-300 ease-in-out",
-												!themeStretch && "w-10",
-											)}
+											className="flex-1 w-full rounded opacity-20 transition-all duration-300 ease-in-out"
 											style={{
 												background: layoutBackground(ThemeLayout.Vertical),
 											}}
@@ -188,10 +184,7 @@ export default function SettingButton() {
 											style={{ background: layoutBackground(ThemeLayout.Mini) }}
 										/>
 										<div
-											className={cn(
-												"flex-1 w-full rounded opacity-20 mx-auto transition-all duration-300 ease-in-out",
-												!themeStretch && "w-10",
-											)}
+											className="flex-1 w-full rounded opacity-20 transition-all duration-300 ease-in-out"
 											style={{
 												background: layoutBackground(ThemeLayout.Mini),
 											}}
@@ -230,29 +223,13 @@ export default function SettingButton() {
 									/>
 									<div className="h-full w-full flex-1 grow p-1 flex flex-col gap-1">
 										<div
-											className={cn(
-												"h-full w-full rounded opacity-20 mx-auto transition-all duration-300 ease-in-out",
-												!themeStretch && "w-10",
-											)}
+											className="h-full w-full rounded opacity-20 transition-all duration-300 ease-in-out"
 											style={{
 												background: layoutBackground(ThemeLayout.Horizontal),
 											}}
 										/>
 									</div>
 								</Card>
-							</div>
-							<div className="flex flex-row items-center justify-between">
-								<Tooltip delayDuration={700} defaultOpen={false} disableHoverableContent>
-									<TooltipTrigger>
-										<Text variant="subTitle2">{t("sys.settings.stretch")}</Text>
-										<Icon icon="solar:question-circle-linear" className="ml-1" />
-									</TooltipTrigger>
-									<TooltipContent>{t("sys.settings.stretchTip")}</TooltipContent>
-								</Tooltip>
-								<Switch
-									checked={themeStretch}
-									onCheckedChange={(checked) => updateSettings({ themeStretch: checked })}
-								/>
 							</div>
 						</div>
 

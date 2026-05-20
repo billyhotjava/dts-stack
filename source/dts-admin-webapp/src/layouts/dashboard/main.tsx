@@ -5,7 +5,6 @@ import { AuthGuard } from "@/components/auth/auth-guard";
 import { LineLoading } from "@/components/loading";
 import { GLOBAL_CONFIG } from "@/global-config";
 import Page403 from "@/pages/sys/error/Page403";
-import { useSettings } from "@/store/settingStore";
 import { cn } from "@/utils";
 import { flattenTrees } from "@/utils/tree";
 import { getBackendNavData } from "./nav/nav-data/nav-data-backend";
@@ -22,8 +21,6 @@ function findAuthByPath(path: string, items: any[]): string[] {
 }
 
 const Main = () => {
-	const { themeStretch } = useSettings();
-
 	const { pathname } = useLocation();
 	const navData = GLOBAL_CONFIG.routerMode === "frontend" ? clone(frontendNavData) : getBackendNavData();
 	const allItems = navData.reduce((acc: any[], group) => {
@@ -37,17 +34,9 @@ const Main = () => {
 			<main
 				data-slot="slash-layout-main"
 				className={cn(
-					"flex-auto w-full flex flex-col text-sm",
-					"transition-[max-width] duration-300 ease-in-out",
-					"px-4 sm:px-6 pb-6 pt-5 sm:pb-8 sm:pt-6 md:px-8 md:pb-10 mx-auto",
-					{
-						"max-w-full": themeStretch,
-						"xl:max-w-screen-2xl": !themeStretch,
-					},
+					"flex-auto w-full max-w-none min-w-0 overflow-x-hidden flex flex-col text-sm",
+					"px-4 sm:px-6 pb-6 pt-5 sm:pb-8 sm:pt-6 md:px-8 md:pb-10",
 				)}
-				style={{
-					willChange: "max-width",
-				}}
 			>
 				<Suspense fallback={<LineLoading />}>
 					<Outlet />

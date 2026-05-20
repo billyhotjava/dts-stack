@@ -1,9 +1,13 @@
 import { ReactNode } from 'react';
 
+export type PageContainerLayout = 'workspace' | 'readable' | 'form' | 'canvas';
+export type PageContainerMaxWidth = 'sm' | 'md' | 'lg' | 'xl' | 'full';
+
 export interface PageContainerProps {
 	children: ReactNode;
 	className?: string;
-	maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
+	layout?: PageContainerLayout;
+	maxWidth?: PageContainerMaxWidth;
 	padding?: 'none' | 'sm' | 'md' | 'lg';
 }
 
@@ -12,7 +16,14 @@ const maxWidthMap = {
 	md: 'max-w-screen-md',
 	lg: 'max-w-[var(--page-max-width)]',
 	xl: 'max-w-[1400px]',
-	full: 'max-w-full',
+	full: 'max-w-none',
+} as const;
+
+const layoutClassMap = {
+	workspace: 'w-full max-w-none min-w-0',
+	readable: 'w-full max-w-[var(--page-readable-width)] mx-auto',
+	form: 'w-full max-w-screen-md mx-auto',
+	canvas: 'w-full max-w-none min-w-0 overflow-hidden',
 } as const;
 
 const paddingMap = {
@@ -22,14 +33,23 @@ const paddingMap = {
 	lg: 'p-[var(--spacing-md)] md:p-[var(--spacing-xl)]',
 } as const;
 
+const resolveContainerClassName = (layout: PageContainerLayout, maxWidth?: PageContainerMaxWidth) => {
+	if (!maxWidth) {
+		return layoutClassMap[layout];
+	}
+	const alignmentClass = maxWidth === 'full' ? '' : 'mx-auto';
+	return `w-full min-w-0 ${maxWidthMap[maxWidth]} ${alignmentClass}`.trim();
+};
+
 export function PageContainer({
 	children,
 	className = '',
-	maxWidth = 'lg',
+	layout = 'workspace',
+	maxWidth,
 	padding = 'lg',
 }: PageContainerProps) {
 	return (
-		<div className={`w-full mx-auto ${maxWidthMap[maxWidth]} ${paddingMap[padding]} ${className}`.trim()}>
+		<div className={`${resolveContainerClassName(layout, maxWidth)} ${paddingMap[padding]} ${className}`.trim()}>
 			{children}
 		</div>
 	);
