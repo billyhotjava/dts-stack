@@ -2266,6 +2266,8 @@ export const analyticsApi = {
 		),
 	updateScreen: (id: string | number, body: ScreenWritePayload) =>
 		requestJson<ScreenDetail>(`/bi/api/screens/${encodeURIComponent(String(id))}`, "PUT", body),
+	updateScreenDomain: (id: string | number, domainId?: string | null) =>
+		requestJson<ScreenDetail>(`/bi/api/screens/${encodeURIComponent(String(id))}`, "PUT", { domainId: domainId || null }),
 	deleteScreen: (id: string | number) =>
 		requestJson<void>(`/bi/api/screens/${encodeURIComponent(String(id))}`, "DELETE"),
 	getScreenAcl: async (id: string | number): Promise<ScreenAclEntry[]> => {

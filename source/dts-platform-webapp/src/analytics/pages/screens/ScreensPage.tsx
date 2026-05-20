@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router";
-import { Pagination, Spin, Tree, message } from "antd";
+import { Modal, Pagination, Select, Spin, Tree, message } from "antd";
 import { toast } from "sonner";
 import { getDomainTree } from "@/api/platformApi";
 import { analyticsApi, type ScreenListItem, type ScreenAiGenerationResponse } from "../../api/analyticsApi";
@@ -23,6 +23,10 @@ import { countInlinedResources } from "./utils/resourceRestorer";
 import type { ScreenConfig } from "./types";
 const SCREEN_LIST_PREF_KEY = "dts.analytics.screens.listPref.v1";
 const UNASSIGNED_DOMAIN_KEY = "__UNASSIGNED__";
+const SCREEN_CARD_MENU_ITEM_CLASS =
+	"border border-transparent rounded-md px-3 py-2 bg-transparent text-text-primary text-sm text-left cursor-pointer transition-colors duration-150 hover:border-[rgba(37,99,235,0.35)] hover:bg-[rgba(37,99,235,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 disabled:opacity-55 disabled:cursor-not-allowed";
+const SCREEN_CARD_MENU_DANGER_ITEM_CLASS =
+	"border border-transparent rounded-md px-3 py-2 bg-transparent text-[rgb(220,38,38)] text-sm text-left cursor-pointer transition-colors duration-150 hover:border-[rgba(220,38,38,0.35)] hover:bg-[rgba(220,38,38,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(220,38,38,0.25)]";
 
 type DomainNode = {
 	id?: string;
@@ -167,6 +171,9 @@ export default function ScreensPage() {
 	// 以及表格容器 overflow-x-auto 强制的 overflow-y 裁剪，避免菜单被后续行或表格边缘遮挡。
 	const [cardMenuAnchor, setCardMenuAnchor] = useState<{ right: number; top?: number; bottom?: number } | null>(null);
 	const [aclScreenId, setAclScreenId] = useState<string | number | null>(null);
+	const [domainEditorScreen, setDomainEditorScreen] = useState<ScreenListItem | null>(null);
+	const [domainEditorValue, setDomainEditorValue] = useState<string | undefined>(undefined);
+	const [domainSaving, setDomainSaving] = useState(false);
 	const [exportingId, setExportingId] = useState<string | number | null>(null);
 	const [importPreview, setImportPreview] = useState<{
 		fileName: string;
@@ -342,6 +349,10 @@ export default function ScreensPage() {
 	);
 	const draftCount = Math.max(0, screens.length - publishedCount);
 	const domainOptions = useMemo(() => flattenDomainNodes(domainTree), [domainTree]);
+	const domainEditorOptions = useMemo(
+		() => [{ label: "未归类", value: UNASSIGNED_DOMAIN_KEY }, ...domainOptions],
+		[domainOptions],
+	);
 	const domainMap = useMemo(() => new Map(domainOptions.map((item) => [item.value, item.label])), [domainOptions]);
 	const selectedDomainIds = useMemo(() => {
 		if (!selectedDomain || selectedDomain === UNASSIGNED_DOMAIN_KEY) {
@@ -732,6 +743,48 @@ export default function ScreensPage() {
 		if (isImporting) return;
 		setImportIntakeOpen(true);
 	}, [isImporting]);
+
+	const openDomainEditor = useCallback((screen: ScreenListItem) => {
+		const currentDomainId = typeof screen.domainId === "string" ? screen.domainId.trim() : "";
+		setActiveCardMenuId(null);
+		setCardMenuAnchor(null);
+		setDomainEditorScreen(screen);
+		setDomainEditorValue(currentDomainId || undefined);
+	}, []);
+
+	const closeDomainEditor = useCallback(() => {
+		if (domainSaving) return;
+		setDomainEditorScreen(null);
+		setDomainEditorValue(undefined);
+	}, [domainSaving]);
+
+	const handleSaveDomain = useCallback(async () => {
+		if (!domainEditorScreen || domainSaving) return;
+		const nextDomainId = domainEditorValue?.trim() || null;
+		setDomainSaving(true);
+		try {
+			const updated = await analyticsApi.updateScreenDomain(domainEditorScreen.id, nextDomainId);
+			setScreens((prev) =>
+				prev.map((item) =>
+					String(item.id) === String(domainEditorScreen.id)
+						? {
+								...item,
+								domainId: updated.domainId ?? null,
+								updatedAt: updated.updatedAt || item.updatedAt,
+							}
+						: item,
+				),
+			);
+			setDomainEditorScreen(null);
+			setDomainEditorValue(undefined);
+			toast.success("已更新所属域");
+		} catch (err) {
+			console.error("Failed to update screen domain:", err);
+			toast.error(err instanceof Error ? err.message : "更新所属域失败");
+		} finally {
+			setDomainSaving(false);
+		}
+	}, [domainEditorScreen, domainEditorValue, domainSaving]);
 
 	const handleImportIntakeSubmit = useCallback(async (payload: CreateScreenIntakePayload) => {
 		const file = payload.file;
@@ -1138,7 +1191,7 @@ export default function ScreensPage() {
 																	{activeCardMenuId === screen.id && cardMenuAnchor
 																		? createPortal(
 																			<div
-																				className="screen-card-menu fixed min-w-[160px] z-[1100] bg-surface-card text-text-primary border border-border-default rounded-lg shadow-[0_8px_24px_rgba(15,23,42,0.2)] p-1.5 grid gap-0.5"
+																				className="screen-card-menu fixed min-w-[160px] z-[1100] bg-surface-card text-text-primary text-sm border border-border-default rounded-lg shadow-[0_8px_24px_rgba(15,23,42,0.2)] p-1.5 grid gap-0.5"
 																				style={{
 																					right: cardMenuAnchor.right,
 																					...(cardMenuAnchor.top !== undefined ? { top: cardMenuAnchor.top } : {}),
@@ -1149,7 +1202,14 @@ export default function ScreensPage() {
 																				<>
 																					<button
 																						type="button"
-																						className="border border-transparent rounded-md px-3 py-[7px] bg-transparent text-text-primary text-xs text-left cursor-pointer hover:border-brand hover:bg-brand/10 disabled:opacity-55 disabled:cursor-not-allowed"
+																						className={SCREEN_CARD_MENU_ITEM_CLASS}
+																						onClick={() => openDomainEditor(screen)}
+																					>
+																						修改所属域
+																					</button>
+																					<button
+																						type="button"
+																						className={SCREEN_CARD_MENU_ITEM_CLASS}
 																						data-testid={`analytics-screen-export-${screen.id}`}
 																						onClick={() => {
 																							setActiveCardMenuId(null);
@@ -1162,7 +1222,7 @@ export default function ScreensPage() {
 																					</button>
 																					<button
 																						type="button"
-																						className="border border-transparent rounded-md px-3 py-[7px] bg-transparent text-text-primary text-xs text-left cursor-pointer hover:border-brand hover:bg-brand/10 disabled:opacity-55 disabled:cursor-not-allowed"
+																						className={SCREEN_CARD_MENU_ITEM_CLASS}
 																						onClick={() => {
 																							setActiveCardMenuId(null);
 																							void handleSaveAsTemplate(screen.id, screen.name);
@@ -1176,7 +1236,7 @@ export default function ScreensPage() {
 																			{rowPermissions.canDelete ? (
 																				<button
 																					type="button"
-																					className="border border-transparent rounded-md px-3 py-[7px] bg-transparent text-xs text-left cursor-pointer hover:border-error hover:bg-error/10 text-error"
+																					className={SCREEN_CARD_MENU_DANGER_ITEM_CLASS}
 																					onClick={() => {
 																						setActiveCardMenuId(null);
 																						void handleDelete(screen.id);
@@ -1258,6 +1318,36 @@ export default function ScreensPage() {
 				onCancel={() => setImportIntakeOpen(false)}
 				onSubmit={handleImportIntakeSubmit}
 			/>
+
+			<Modal
+				open={domainEditorScreen !== null}
+				title="修改所属业务域"
+				width={420}
+				onCancel={closeDomainEditor}
+				onOk={handleSaveDomain}
+				okText="保存"
+				cancelText="取消"
+				okButtonProps={{ loading: domainSaving }}
+				destroyOnClose
+			>
+				<div className="grid gap-3 pt-1">
+					<div className="text-sm font-medium text-text-primary">{domainEditorScreen?.name || "未命名大屏"}</div>
+					<div>
+						<div className="mb-1.5 text-xs font-medium text-text-secondary">数据域</div>
+						<Select
+							value={domainEditorValue || UNASSIGNED_DOMAIN_KEY}
+							onChange={(value) =>
+								setDomainEditorValue(value === UNASSIGNED_DOMAIN_KEY ? undefined : String(value))
+							}
+							options={domainEditorOptions}
+							style={{ width: "100%" }}
+						/>
+					</div>
+					<div className="text-xs leading-5 text-text-tertiary">
+						数据域来自主题域管理；不选择时归入未归类。
+					</div>
+				</div>
+			</Modal>
 
 			{/* Sprint-24 F4：大屏密级合规盘点入口 */}
 			<UnclassifiedScreensModal

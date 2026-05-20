@@ -117,3 +117,26 @@ test("ScreensPage keeps the domain classifier and table inside the page frame", 
 	assert.match(source, /flex flex-nowrap items-center justify-end gap-1\.5/);
 	assert.match(source, /sticky right-0 z-10 bg-surface-card/);
 });
+
+test("ScreensPage lets managers change screen domain from the more menu", async () => {
+	const source = await readFile(screensPagePath, "utf8");
+
+	assert.match(source, /domainEditorScreen/);
+	assert.match(source, /修改所属域/);
+	assert.match(source, /analyticsApi\.updateScreenDomain/);
+	assert.match(source, /setScreens\(\(prev\) =>/);
+	assert.match(source, /title="修改所属业务域"/);
+	assert.match(source, /数据域来自主题域管理；不选择时归入未归类。/);
+});
+
+test("ScreensPage more menu keeps page typography and visible hover states", async () => {
+	const source = await readFile(screensPagePath, "utf8");
+
+	assert.match(source, /SCREEN_CARD_MENU_ITEM_CLASS/);
+	assert.match(source, /SCREEN_CARD_MENU_DANGER_ITEM_CLASS/);
+	assert.match(source, /screen-card-menu fixed[\s\S]*text-sm/);
+	assert.match(source, /SCREEN_CARD_MENU_ITEM_CLASS[\s\S]*text-sm[\s\S]*hover:bg-\[rgba\(37,99,235,0\.10\)\]/);
+	assert.match(source, /SCREEN_CARD_MENU_DANGER_ITEM_CLASS[\s\S]*text-sm[\s\S]*hover:bg-\[rgba\(220,38,38,0\.10\)\]/);
+	assert.equal(source.includes("text-xs text-left cursor-pointer hover:border-brand hover:bg-brand/10"), false);
+	assert.equal(source.includes("hover:bg-error/10 text-error"), false);
+});

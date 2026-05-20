@@ -15,3 +15,10 @@ test("screen write API uses the shared ScreenWritePayload contract", async () =>
 	assert.match(analyticsApiSource, /updateScreen:\s*\(id: string \| number, body: ScreenWritePayload\)/);
 	assert.match(screenSpecSource, /buildScreenPayload\(config: ScreenConfig\): ScreenWritePayload/);
 });
+
+test("screen write API exposes a lightweight domain update helper", async () => {
+	const analyticsApiSource = await readFile(analyticsApiPath, "utf8");
+
+	assert.match(analyticsApiSource, /updateScreenDomain:\s*\(id: string \| number, domainId\?: string \| null\)/);
+	assert.match(analyticsApiSource, /"PUT",\s*\{\s*domainId:\s*domainId \|\| null\s*\}/);
+});
