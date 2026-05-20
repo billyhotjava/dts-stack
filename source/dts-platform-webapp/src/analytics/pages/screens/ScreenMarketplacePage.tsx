@@ -140,7 +140,7 @@ export default function ScreenMarketplacePage() {
 	}, [activeTab, installing, loadItems]);
 
 	return (
-		<div className="p-6 max-w-[1320px] mx-auto text-inherit">
+		<div className="w-full max-w-none p-6 text-inherit">
 			<div className="flex justify-between gap-6 items-start mb-5">
 				<div>
 					<h1 className="text-2xl font-bold m-0 mb-2">组件与模板市场</h1>

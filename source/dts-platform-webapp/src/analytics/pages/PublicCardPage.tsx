@@ -56,7 +56,7 @@ export default function PublicCardPage() {
 	}, [uuid]);
 
 	return (
-		<PageContainer>
+		<PageContainer layout="readable">
 			<PageHeader
 				title={card.state === "loaded" ? card.value.name ?? "-" : t(locale, "loading")}
 				breadcrumbs={
@@ -102,4 +102,3 @@ export default function PublicCardPage() {
 		</PageContainer>
 	);
 }
-

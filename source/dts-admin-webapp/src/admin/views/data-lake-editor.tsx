@@ -635,7 +635,7 @@ export default function DataLakeEditorView() {
 
 	if (id && !dataLakesLoading && !editingLake) {
 		return (
-			<div className="mx-auto w-full max-w-[1400px] px-6 py-6 space-y-6">
+			<div className="w-full max-w-none px-6 py-6 space-y-6">
 				<Card>
 					<CardHeader>
 						<CardTitle>数据湖不存在</CardTitle>
@@ -654,7 +654,7 @@ export default function DataLakeEditorView() {
 	}
 
 	return (
-		<div className="mx-auto w-full max-w-[1400px] px-6 py-6 space-y-6">
+		<div className="w-full max-w-none px-6 py-6 space-y-6">
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<div>
 					<Text variant="body1" className="block text-lg font-semibold">

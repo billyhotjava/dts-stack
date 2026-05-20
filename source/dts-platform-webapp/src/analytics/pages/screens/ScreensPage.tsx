@@ -853,7 +853,7 @@ export default function ScreensPage() {
 							disabled={isImporting}
 							title="从 JSON 文件导入大屏配置（将创建为新草稿）"
 						>
-							{isImporting ? "导入中..." : "导入 JSON"}
+							{isImporting ? "导入中..." : "导入大屏"}
 						</button>
 						{/* <button className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleOpenAiGenerator}>
 							自动生成

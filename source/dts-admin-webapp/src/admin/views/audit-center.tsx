@@ -575,7 +575,7 @@ export default function AuditCenterView() {
 	);
 
 	return (
-		<div className="mx-auto w-full px-6 py-6">
+		<div className="w-full max-w-none px-6 py-6">
 			<Card>
 				<CardHeader className="gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
 					<div className="space-y-1.5">
