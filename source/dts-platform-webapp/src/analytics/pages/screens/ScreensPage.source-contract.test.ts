@@ -93,7 +93,7 @@ test("ScreensPage classifies screens by governance domain tree with an uncategor
 	assert.match(source, /collectDomainIds/);
 });
 
-test("ScreensPage uses a single intake modal for create and JSON import metadata", async () => {
+test("ScreensPage uses a single intake modal for create and screen package import metadata", async () => {
 	const source = await readFile(screensPagePath, "utf8");
 
 	assert.match(source, /mode=\{['"]create['"]\}/);
@@ -103,6 +103,20 @@ test("ScreensPage uses a single intake modal for create and JSON import metadata
 	assert.match(source, /defaultDomainId/);
 	assert.equal(source.includes('type="file"\n'), false);
 	assert.equal(source.includes("importInputRef"), false);
+});
+
+test("ScreensPage exports and imports portable screen zip packages", async () => {
+	const source = await readFile(screensPagePath, "utf8");
+
+	assert.match(source, /buildScreenPackageZip/);
+	assert.match(source, /parseScreenImportFile/);
+	assert.match(source, /handleExportScreenPackage/);
+	assert.match(source, /\.zip`/);
+	assert.match(source, /导出大屏/);
+	assert.match(source, /大屏包/);
+	assert.match(source, /restoredResourceCount/);
+	assert.equal(source.includes("handleExportJson"), false);
+	assert.equal(source.includes("导出 JSON"), false);
 });
 
 test("ScreensPage keeps the domain classifier and table inside the page frame", async () => {

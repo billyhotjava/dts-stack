@@ -152,12 +152,12 @@ export function CreateScreenIntakeModal({
 						</div>
 						<Input
 							type="file"
-							accept="application/json, .json"
+							accept="application/json, application/zip, .json, .zip"
 							onChange={(e) => setFile(e.target.files?.[0])}
 							status={file ? undefined : "warning"}
 						/>
 						<div style={{ fontSize: 12, color: "var(--color-text-tertiary, #6b7280)", marginTop: 6 }}>
-							{file ? `已选择：${file.name}` : "请选择 JSON 文件"}
+							{file ? `已选择：${file.name}` : "请选择大屏包 (.zip) 或旧版 JSON 文件"}
 						</div>
 					</div>
 				)}

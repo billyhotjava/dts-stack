@@ -15,12 +15,12 @@ test("CreateScreenIntakeModal collects data-domain metadata for create and impor
 	assert.match(source, /未归类/);
 });
 
-test("CreateScreenIntakeModal owns the JSON file picker in import mode", async () => {
+test("CreateScreenIntakeModal owns the screen package file picker in import mode", async () => {
 	const source = await readFile(modalPath, "utf8");
 
 	assert.match(source, /file\?:\s*File/);
 	assert.match(source, /setFile/);
-	assert.match(source, /accept="application\/json,\s*\.json"/);
+	assert.match(source, /accept="application\/json,\s*application\/zip,\s*\.json,\s*\.zip"/);
 	assert.match(source, /mode\s*===\s*['"]import['"]/);
-	assert.match(source, /请选择 JSON 文件/);
+	assert.match(source, /请选择大屏包 \(\.zip\) 或旧版 JSON 文件/);
 });

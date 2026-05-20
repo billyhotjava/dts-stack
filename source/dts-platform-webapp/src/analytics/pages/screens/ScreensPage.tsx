@@ -18,8 +18,7 @@ import { dateComparator, numberComparator, stringComparator, useTableSort } from
 import { useUserRoles } from "@/store/userStore";
 import { createConfigFromTemplate } from "./screenTemplates";
 import { buildScreenPayload, normalizeScreenConfig, validateScreenPayload } from "./screenSpec";
-import { inlineResources } from "./utils/resourceInliner";
-import { countInlinedResources } from "./utils/resourceRestorer";
+import { buildScreenPackageZip, parseScreenImportFile } from "./utils/screenPackage";
 import type { ScreenConfig } from "./types";
 const SCREEN_LIST_PREF_KEY = "dts.analytics.screens.listPref.v1";
 const UNASSIGNED_DOMAIN_KEY = "__UNASSIGNED__";
@@ -182,6 +181,7 @@ export default function ScreensPage() {
 		validation: { errors: string[]; warnings: string[] };
 		resourcesInlined: boolean;
 		inlinedResourceCount: number;
+		restoredResourceCount: number;
 		classification?: CreateScreenIntakePayload["classification"];
 		domainId?: string;
 		importName?: string;
@@ -698,7 +698,7 @@ export default function ScreensPage() {
 		return trimmed.replace(/[\\/:*?"<>|]+/g, "_");
 	};
 
-	const handleExportJson = useCallback(
+	const handleExportScreenPackage = useCallback(
 		async (screen: ScreenListItem) => {
 			if (exportingId !== null) return;
 			setExportingId(screen.id);
@@ -709,29 +709,29 @@ export default function ScreensPage() {
 					console.warn("[screens-export] normalized warnings:", normalized.warnings);
 				}
 				const rawSpec = buildScreenPayload(normalized.config) as Record<string, unknown>;
-				const { spec: inlinedSpec, inlinedCount, errors: inlineErrors } = await inlineResources(rawSpec);
-				if (inlineErrors.length > 0) {
-					console.warn("[screens-export] resource inlining warnings:", inlineErrors);
+				const { blob, resourceCount, warnings } = await buildScreenPackageZip({
+					screenName: String(detail.name || screen.name || "screen"),
+					screenSpec: rawSpec,
+				});
+				if (warnings.length > 0) {
+					console.warn("[screens-export] resource packaging warnings:", warnings);
 				}
-				const payload = {
-					schema: "dts.screen.spec",
-					exportedAt: new Date().toISOString(),
-					resourcesInlined: inlinedCount > 0,
-					screenSpec: inlinedSpec,
-				};
-				const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
 				const url = URL.createObjectURL(blob);
 				const link = document.createElement("a");
 				link.href = url;
-				link.download = `${sanitizeFileName(String(detail.name || screen.name || "screen"))}-spec.json`;
+				link.download = `${sanitizeFileName(String(detail.name || screen.name || "screen"))}-screen.zip`;
 				document.body.appendChild(link);
 				link.click();
 				document.body.removeChild(link);
 				URL.revokeObjectURL(url);
-				toast.success("已导出大屏 JSON");
+				if (warnings.length > 0) {
+					toast.warning(`已导出大屏包，${warnings.length} 个资源未打包`);
+				} else {
+					toast.success(resourceCount > 0 ? `已导出大屏包（含 ${resourceCount} 个资源）` : "已导出大屏包");
+				}
 			} catch (err) {
-				console.error("Failed to export screen json:", err);
-				toast.error(err instanceof Error ? err.message : "导出 JSON 失败");
+				console.error("Failed to export screen package:", err);
+				toast.error(err instanceof Error ? err.message : "导出大屏失败");
 			} finally {
 				setExportingId(null);
 			}
@@ -790,12 +790,9 @@ export default function ScreensPage() {
 		const file = payload.file;
 		if (!file) return;
 		try {
-			const content = await file.text();
-			const parsed = JSON.parse(content) as Record<string, unknown>;
-			const source = (parsed.screenSpec || parsed) as Record<string, unknown>;
-			const templateMeta = parsed.templateMeta as
-				| { name: string; description?: string; category?: string; tags?: string[] }
-				| undefined;
+			const imported = await parseScreenImportFile(file);
+			const source = imported.source;
+			const templateMeta = imported.templateMeta;
 			const normalized = normalizeScreenConfig(
 				{
 					...source,
@@ -808,24 +805,30 @@ export default function ScreensPage() {
 				console.warn("[screens-import] normalized warnings:", normalized.warnings);
 			}
 			const validation = validateScreenPayload(buildScreenPayload(normalized.config));
-			const resourcesInlined = parsed.resourcesInlined === true;
-			const inlinedResourceCount = resourcesInlined ? countInlinedResources(source) : 0;
+			const validationWithPackageWarnings = {
+				...validation,
+				warnings: [...validation.warnings, ...imported.warnings],
+			};
 			setImportPreview({
 				fileName: file.name,
 				parsedSpec: normalized.config,
 				templateMeta: templateMeta || undefined,
-				validation,
-				resourcesInlined,
-				inlinedResourceCount,
+				validation: validationWithPackageWarnings,
+				resourcesInlined: imported.resourcesInlined,
+				inlinedResourceCount: imported.inlinedResourceCount,
+				restoredResourceCount: imported.restoredResourceCount,
 				classification: payload.classification,
 				domainId: payload.domainId,
 				importName: payload.name,
 				file: payload.file,
 			});
 			setImportIntakeOpen(false);
+			if (imported.restoredResourceCount > 0) {
+				toast.success(`已恢复 ${imported.restoredResourceCount} 个大屏资源`);
+			}
 		} catch (err) {
 			console.error("Failed to parse import file:", err);
-			toast.error("JSON 导入失败，请检查文件格式");
+			toast.error("大屏导入失败，请检查大屏包或 JSON 文件格式");
 		}
 	}, []);
 
@@ -919,7 +922,7 @@ export default function ScreensPage() {
 							data-testid="analytics-screen-import"
 							onClick={handleOpenImport}
 							disabled={isImporting}
-							title="从 JSON 文件导入大屏配置（将创建为新草稿）"
+							title="从大屏包（zip）或旧版 JSON 文件导入大屏（将创建为新草稿）"
 						>
 							{isImporting ? "导入中..." : "导入大屏"}
 						</button>
@@ -1213,12 +1216,12 @@ export default function ScreensPage() {
 																						data-testid={`analytics-screen-export-${screen.id}`}
 																						onClick={() => {
 																							setActiveCardMenuId(null);
-																							void handleExportJson(screen);
+																							void handleExportScreenPackage(screen);
 																						}}
 																						disabled={exportingId === screen.id}
-																						title="导出当前大屏为 JSON（含内联资源）"
+																						title="导出当前大屏为 zip 大屏包（含图片资源）"
 																					>
-																						{exportingId === screen.id ? "导出中..." : "导出 JSON"}
+																						{exportingId === screen.id ? "导出中..." : "导出大屏"}
 																					</button>
 																					<button
 																						type="button"
@@ -1305,12 +1308,12 @@ export default function ScreensPage() {
 				onSubmit={handleIntakeSubmit}
 			/>
 
-			{/* Sprint-24 F3/F5：导入 JSON 与新建复用 intake，一次性收集文件、名称、密级与数据域。 */}
-			<CreateScreenIntakeModal
-				open={importIntakeOpen}
-				mode={"import"}
-				title="导入大屏"
-				description="请选择 JSON 文件，并为本次导入补齐大屏名称、密级和数据域。"
+				{/* Sprint-24 F3/F5：导入大屏与新建复用 intake，一次性收集文件、名称、密级与数据域。 */}
+				<CreateScreenIntakeModal
+					open={importIntakeOpen}
+					mode={"import"}
+					title="导入大屏"
+					description="请选择大屏包（.zip）或旧版 JSON 文件，并为本次导入补齐大屏名称、密级和数据域。"
 				defaultName={importPreview?.templateMeta?.name || importPreview?.parsedSpec.name || "导入大屏"}
 				defaultDomainId={selectedDomain && selectedDomain !== UNASSIGNED_DOMAIN_KEY ? selectedDomain : undefined}
 				domainOptions={domainOptions}
@@ -1611,6 +1614,7 @@ export default function ScreensPage() {
 					validation={importPreview.validation}
 					resourcesInlined={importPreview.resourcesInlined}
 					inlinedResourceCount={importPreview.inlinedResourceCount}
+					restoredResourceCount={importPreview.restoredResourceCount}
 					mode="list"
 					onConfirm={handleImportConfirm}
 				/>

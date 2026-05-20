@@ -20,6 +20,7 @@ export type ImportPreviewModalProps = {
 	validation: { errors: string[]; warnings: string[] };
 	resourcesInlined: boolean;
 	inlinedResourceCount: number;
+	restoredResourceCount?: number;
 	mode: 'editor' | 'marketplace' | 'list';
 	onConfirm: (action: ImportAction) => void;
 	allowedActions?: ImportAction[];
@@ -34,6 +35,7 @@ export function ImportPreviewModal({
 	validation,
 	resourcesInlined,
 	inlinedResourceCount,
+	restoredResourceCount = 0,
 	mode,
 	onConfirm,
 	allowedActions,
@@ -88,6 +90,9 @@ export function ImportPreviewModal({
 						<div>主题: <strong>{parsedSpec.theme || '默认'}</strong></div>
 						{resourcesInlined && (
 							<div>资源内联: <strong>是 ({inlinedResourceCount} 张图片)</strong></div>
+						)}
+						{restoredResourceCount > 0 && (
+							<div>资源恢复: <strong>是 ({restoredResourceCount} 个资源)</strong></div>
 						)}
 						{templateMeta?.category && (
 							<div>分类: <strong>{templateMeta.category}</strong></div>
