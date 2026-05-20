@@ -229,7 +229,7 @@ server:
       host-header: x-forwarded-host
       internal-proxies: ${DTS_TRUSTED_PROXY_REGEX:.*}
   undertow:
-    max-http-form-post-size: ${DATA_STANDARD_MAX_FILE_SIZE:209715200}
+    max-http-post-size: ${DATA_STANDARD_MAX_FILE_SIZE:209715200}
   servlet:
     session:
       cookie:

@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router";
 import { Pagination, Spin, Tree, message } from "antd";
 import { toast } from "sonner";
@@ -162,6 +163,9 @@ export default function ScreensPage() {
 	const [aiResult, setAiResult] = useState<ScreenAiGenerationResponse | null>(null);
 	const [aiContextHistory, setAiContextHistory] = useState<string[]>([]);
 	const [activeCardMenuId, setActiveCardMenuId] = useState<string | number | null>(null);
+	// 「更多」菜单改用 portal + fixed 定位渲染到 body，规避 sticky 操作列产生的层叠上下文
+	// 以及表格容器 overflow-x-auto 强制的 overflow-y 裁剪，避免菜单被后续行或表格边缘遮挡。
+	const [cardMenuAnchor, setCardMenuAnchor] = useState<{ right: number; top?: number; bottom?: number } | null>(null);
 	const [aclScreenId, setAclScreenId] = useState<string | number | null>(null);
 	const [exportingId, setExportingId] = useState<string | number | null>(null);
 	const [importPreview, setImportPreview] = useState<{
@@ -223,18 +227,29 @@ export default function ScreensPage() {
 			const node = event.target as HTMLElement | null;
 			if (!node?.closest(".screen-card-menu")) {
 				setActiveCardMenuId(null);
+				setCardMenuAnchor(null);
 			}
 		};
 		const handleEscape = (event: KeyboardEvent) => {
 			if (event.key === "Escape") {
 				setActiveCardMenuId(null);
+				setCardMenuAnchor(null);
 			}
+		};
+		// 菜单 fixed 定位不随滚动联动,任意滚动/缩放都直接关闭,避免菜单与按钮错位。
+		const handleReposition = () => {
+			setActiveCardMenuId(null);
+			setCardMenuAnchor(null);
 		};
 		window.addEventListener("mousedown", handlePointerDown);
 		window.addEventListener("keydown", handleEscape);
+		window.addEventListener("scroll", handleReposition, true);
+		window.addEventListener("resize", handleReposition);
 		return () => {
 			window.removeEventListener("mousedown", handlePointerDown);
 			window.removeEventListener("keydown", handleEscape);
+			window.removeEventListener("scroll", handleReposition, true);
+			window.removeEventListener("resize", handleReposition);
 		};
 	}, [activeCardMenuId]);
 
@@ -1100,14 +1115,36 @@ export default function ScreensPage() {
 																<div className="screen-card-menu relative">
 																	<button
 																		className={`px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary ${activeCardMenuId === screen.id ? "border-brand bg-brand/10" : ""}`}
-																		onClick={() =>
-																			setActiveCardMenuId((prev) => (prev === screen.id ? null : screen.id))
-																		}
+																		onClick={(event) => {
+																			if (activeCardMenuId === screen.id) {
+																				setActiveCardMenuId(null);
+																				setCardMenuAnchor(null);
+																				return;
+																			}
+																			const rect = event.currentTarget.getBoundingClientRect();
+																			const right = Math.max(8, window.innerWidth - rect.right);
+																			// 下方空间不足时向上展开,避免菜单冲出视口底部。
+																			const spaceBelow = window.innerHeight - rect.bottom;
+																			setCardMenuAnchor(
+																				spaceBelow < 220
+																					? { right, bottom: window.innerHeight - rect.top + 4 }
+																					: { right, top: rect.bottom + 4 },
+																			);
+																			setActiveCardMenuId(screen.id);
+																		}}
 																	>
 																		更多
 																	</button>
-																	{activeCardMenuId === screen.id ? (
-																		<div className="absolute right-0 top-[calc(100%+4px)] min-w-[160px] z-[900] bg-surface-card text-text-primary border border-border-default rounded-lg shadow-[0_8px_24px_rgba(15,23,42,0.2)] p-1.5 grid gap-0.5">
+																	{activeCardMenuId === screen.id && cardMenuAnchor
+																		? createPortal(
+																			<div
+																				className="screen-card-menu fixed min-w-[160px] z-[1100] bg-surface-card text-text-primary border border-border-default rounded-lg shadow-[0_8px_24px_rgba(15,23,42,0.2)] p-1.5 grid gap-0.5"
+																				style={{
+																					right: cardMenuAnchor.right,
+																					...(cardMenuAnchor.top !== undefined ? { top: cardMenuAnchor.top } : {}),
+																					...(cardMenuAnchor.bottom !== undefined ? { bottom: cardMenuAnchor.bottom } : {}),
+																				}}
+																			>
 																			{rowPermissions.canEdit ? (
 																				<>
 																					<button
@@ -1148,8 +1185,10 @@ export default function ScreensPage() {
 																					删除
 																				</button>
 																			) : null}
-																		</div>
-																	) : null}
+																		</div>,
+																		document.body,
+																		)
+																		: null}
 																</div>
 															) : null}
 														</div>
