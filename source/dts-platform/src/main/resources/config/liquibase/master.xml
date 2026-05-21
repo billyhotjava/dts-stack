@@ -164,5 +164,4 @@
     <include file="config/liquibase/changelog/20260518_02_asset_permission_audit_reason.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260518_03_asset_permission_policy_injection.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260518_04_modeling_plan_domain_id.xml" relativeToChangelogFile="false"/>
-    <include file="config/liquibase/changelog/20260521_01_std_code_sequence_defaults.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

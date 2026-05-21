@@ -39,6 +39,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
+import org.mockito.Mockito;
 import org.springframework.security.access.prepost.PreAuthorize;
 
 class ModelingAuxResourceTest {
@@ -54,6 +56,65 @@ class ModelingAuxResourceTest {
 
         assertThat(deleteGuard).isNotNull();
         assertThat(deleteGuard.value()).isEqualTo(createGuard.value());
+    }
+
+    @Test
+    void deleteGlossaryTermRemovesReviewsAndVersionsBeforeTerm() {
+        ModelingPlanRepository planRepo = mock(ModelingPlanRepository.class);
+        ModelingPlanVersionRepository planVersionRepo = mock(ModelingPlanVersionRepository.class);
+        ModelingPlanReviewRepository planReviewRepo = mock(ModelingPlanReviewRepository.class);
+        ModelingGlossaryTermRepository glossaryRepo = mock(ModelingGlossaryTermRepository.class);
+        ModelingGlossaryTermVersionRepository glossaryVersionRepo = mock(ModelingGlossaryTermVersionRepository.class);
+        ModelingGlossaryTermReviewRepository glossaryReviewRepo = mock(ModelingGlossaryTermReviewRepository.class);
+        ModelingTemplateRepository templateRepo = mock(ModelingTemplateRepository.class);
+        ModelingTemplateVersionRepository templateVersionRepo = mock(ModelingTemplateVersionRepository.class);
+        AuditService auditService = mock(AuditService.class);
+        DataStandardSecurity security = mock(DataStandardSecurity.class);
+        OrganizationVisibilityService organizationVisibilityService = mock(OrganizationVisibilityService.class);
+        DataStandardRepository dataStandardRepository = mock(DataStandardRepository.class);
+        GovIndicatorDefinitionRepository indicatorRepository = mock(GovIndicatorDefinitionRepository.class);
+        CatalogTableSchemaRepository catalogTableRepo = mock(CatalogTableSchemaRepository.class);
+        CatalogColumnSchemaRepository catalogColumnRepo = mock(CatalogColumnSchemaRepository.class);
+        AccessChecker catalogAccessChecker = mock(AccessChecker.class);
+        ModelingAssetReferenceService referenceService = mock(ModelingAssetReferenceService.class);
+        UUID id = UUID.randomUUID();
+        ModelingGlossaryTerm term = new ModelingGlossaryTerm();
+        term.setId(id);
+        term.setName("test");
+
+        when(glossaryRepo.findById(id)).thenReturn(Optional.of(term));
+        when(referenceService.glossaryReferences(term)).thenReturn(java.util.Map.of());
+        when(referenceService.countReferences(any())).thenReturn(0);
+
+        ModelingAuxResource resource = new ModelingAuxResource(
+            planRepo,
+            planVersionRepo,
+            planReviewRepo,
+            glossaryRepo,
+            glossaryVersionRepo,
+            glossaryReviewRepo,
+            templateRepo,
+            templateVersionRepo,
+            auditService,
+            security,
+            organizationVisibilityService,
+            new ObjectMapper(),
+            dataStandardRepository,
+            indicatorRepository,
+            catalogTableRepo,
+            catalogColumnRepo,
+            mock(CatalogDomainRepository.class),
+            catalogAccessChecker,
+            referenceService,
+            mock(CodeAssetGrantWriter.class)
+        );
+
+        resource.deleteGlossaryTerm(id);
+
+        InOrder inOrder = Mockito.inOrder(glossaryReviewRepo, glossaryVersionRepo, glossaryRepo);
+        inOrder.verify(glossaryReviewRepo).deleteByTerm(term);
+        inOrder.verify(glossaryVersionRepo).deleteByTerm(term);
+        inOrder.verify(glossaryRepo).deleteById(id);
     }
 
     @Test

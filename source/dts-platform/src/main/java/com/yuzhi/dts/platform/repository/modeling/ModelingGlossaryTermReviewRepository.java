@@ -10,5 +10,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ModelingGlossaryTermReviewRepository extends JpaRepository<ModelingGlossaryTermReview, UUID> {
     List<ModelingGlossaryTermReview> findByTermOrderByCreatedDateDesc(ModelingGlossaryTerm term);
-}
 
+    long deleteByTerm(ModelingGlossaryTerm term);
+}

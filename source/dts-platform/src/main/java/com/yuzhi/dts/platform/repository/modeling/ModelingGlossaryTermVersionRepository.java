@@ -12,5 +12,6 @@ public interface ModelingGlossaryTermVersionRepository extends JpaRepository<Mod
     Optional<ModelingGlossaryTermVersion> findByTermAndVersion(ModelingGlossaryTerm term, String version);
 
     List<ModelingGlossaryTermVersion> findByTermOrderByCreatedDateDesc(ModelingGlossaryTerm term);
-}
 
+    long deleteByTerm(ModelingGlossaryTerm term);
+}

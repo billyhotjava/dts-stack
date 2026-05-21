@@ -706,6 +706,8 @@ public class ModelingAuxResource {
                 "存在引用依赖，无法删除（影响对象 " + impactCount + " 个）" + (summary.isBlank() ? "" : "：" + summary)
             );
         }
+        glossaryReviewRepo.deleteByTerm(term);
+        glossaryVersionRepo.deleteByTerm(term);
         glossaryRepo.deleteById(id);
         auditService.auditAction(
             "MODELING_GLOSSARY_DELETE",
