@@ -481,7 +481,7 @@ button.danger {
 }
 
 .compareActions span {
-  min-width: 86px;
+  min-width: 150px;
   color: #445166;
   font-size: 13px;
   text-align: center;
@@ -489,17 +489,24 @@ button.danger {
 
 .diffGrid {
   position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 72px minmax(0, 1fr);
   max-height: 620px;
   overflow: auto;
   background: #fff;
 }
 
-.diffTitle {
+.diffHeader,
+.diffRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px minmax(0, 1fr);
+}
+
+.diffHeader {
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 4;
+}
+
+.diffTitle {
   border-bottom: 1px solid #d9e1ec;
   background: #eef3f8;
   color: #445166;
@@ -508,9 +515,6 @@ button.danger {
 }
 
 .diffReplaceTitle {
-  position: sticky;
-  top: 0;
-  z-index: 3;
   border-right: 1px solid #d9e1ec;
   border-bottom: 1px solid #d9e1ec;
   border-left: 1px solid #d9e1ec;
@@ -519,10 +523,6 @@ button.danger {
   font-weight: 600;
   padding: 10px 8px;
   text-align: center;
-}
-
-.diffRow {
-  display: contents;
 }
 
 .diffRow pre {
@@ -554,19 +554,25 @@ button.danger {
 }
 
 .diffRow.active pre {
-  box-shadow: inset 0 1px 0 #d49100, inset 0 -1px 0 #d49100;
+  background: #fff1b8;
+  box-shadow: inset 0 2px 0 #c97700, inset 0 -2px 0 #c97700;
 }
 
 .diffRow.active .diffBridge {
-  box-shadow: inset 0 1px 0 #d49100, inset 0 -1px 0 #d49100;
+  background: #ffe7a0;
+  box-shadow: inset 0 2px 0 #c97700, inset 0 -2px 0 #c97700;
 }
 
 .diffBridge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-height: 30px;
   border-top: 1px solid #e6ecf4;
   border-right: 1px solid #e6ecf4;
   border-left: 1px solid #e6ecf4;
   background: #fbfcfe;
+  padding: 3px 4px;
 }
 
 .diffBridge.modified {
@@ -581,23 +587,18 @@ button.danger {
   background: #fff0f0;
 }
 
-.replaceRail {
-  position: sticky;
-  bottom: 14px;
-  grid-column: 2;
-  z-index: 4;
-  justify-self: center;
-  align-self: end;
-  pointer-events: none;
+.diffLineAction {
+  min-height: 24px;
+  border-color: #2f6bcc;
+  border-radius: 5px;
+  background: #2f6bcc;
+  padding: 0 7px;
+  font-size: 13px;
 }
 
-.replaceButton {
-  min-height: 34px;
+.diffLineAction.delete {
   border-color: #b42318;
   background: #b42318;
-  padding: 0 10px;
-  font-size: 13px;
-  pointer-events: auto;
 }
 
 .diffRow span {

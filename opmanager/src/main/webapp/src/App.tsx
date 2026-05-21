@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   applyConfigAction,
+  applyConfigLine,
   createPlan,
   getRuntime,
   getWorkspaceStatus,
@@ -188,6 +189,35 @@ export function App() {
     }
   }
 
+  async function onApplyConfigLine(file: ConfigFileReview, row: SideBySideDiffRow, insertAfterLocalLineNumber: number | null) {
+    if (!configPrecheck || row.kind === "equal") return;
+    const confirmed = window.confirm(lineApplyConfirmMessage(file.path, row));
+    if (!confirmed) {
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const result = await applyConfigLine({
+        packageRegistrationId: configPrecheck.packageRegistrationId,
+        path: file.path,
+        localLineNumber: row.leftLineNumber,
+        packageLineNumber: row.rightLineNumber,
+        insertAfterLocalLineNumber,
+        expectedLocalText: row.leftLineNumber === null ? null : row.leftText,
+        expectedPackageText: row.rightLineNumber === null ? null : row.rightText
+      });
+      setConfigResult(result);
+      const response = await precheckConfig(configPrecheck.packageRegistrationId);
+      setConfigPrecheck(response);
+      setSelectedConfigPath(file.path);
+    } catch (caught) {
+      setError(toErrorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function toggleEvents(jobId: string) {
     if (events[jobId]) {
       const next = { ...events };
@@ -319,6 +349,7 @@ export function App() {
             onPrecheck={onConfigPrecheck}
             onSelectPath={setSelectedConfigPath}
             onApplyAction={onApplyConfigAction}
+            onApplyLine={onApplyConfigLine}
           />
         ) : null}
         {activeTab === "jobs" ? <JobsView jobs={jobs} events={events} onToggleEvents={toggleEvents} /> : null}
@@ -530,6 +561,7 @@ function ConfigPrecheckView(props: {
   onPrecheck: (event?: FormEvent) => void;
   onSelectPath: (path: string) => void;
   onApplyAction: (file: ConfigFileReview, action: ConfigApplyAction) => void;
+  onApplyLine: (file: ConfigFileReview, row: SideBySideDiffRow, insertAfterLocalLineNumber: number | null) => void;
 }) {
   const selectedFile = props.precheck?.files.find(file => file.path === props.selectedPath) || props.precheck?.files[0] || null;
   return (
@@ -595,7 +627,7 @@ function ConfigPrecheckView(props: {
                       ))}
                     </div>
                   </div>
-                  <DiffViewer file={selectedFile} busy={props.busy} onReplace={() => props.onApplyAction(selectedFile, "USE_PACKAGE")} />
+                  <DiffViewer file={selectedFile} busy={props.busy} onApplyLine={(row, insertAfterLocalLineNumber) => props.onApplyLine(selectedFile, row, insertAfterLocalLineNumber)} />
                 </>
               ) : (
                 <div className="emptyState">请选择升级包并执行配置预检。</div>
@@ -610,7 +642,7 @@ function ConfigPrecheckView(props: {
   );
 }
 
-function DiffViewer(props: { file: ConfigFileReview; busy: boolean; onReplace: () => void }) {
+function DiffViewer(props: { file: ConfigFileReview; busy: boolean; onApplyLine: (row: SideBySideDiffRow, insertAfterLocalLineNumber: number | null) => void }) {
   const [showOnlyChanges, setShowOnlyChanges] = useState(false);
   const [activeHunkIndex, setActiveHunkIndex] = useState(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -641,9 +673,11 @@ function DiffViewer(props: { file: ConfigFileReview; busy: boolean; onReplace: (
       return;
     }
 
-    const containerRect = scrollContainer.getBoundingClientRect();
-    const rowRect = row.getBoundingClientRect();
-    const targetTop = scrollContainer.scrollTop + rowRect.top - containerRect.top - (scrollContainer.clientHeight - rowRect.height) / 2;
+    const header = scrollContainer.querySelector<HTMLElement>(".diffHeader");
+    const headerHeight = header?.offsetHeight || 0;
+    const availableHeight = Math.max(0, scrollContainer.clientHeight - headerHeight);
+    const centeredOffset = Math.max(0, (availableHeight - row.offsetHeight) / 2);
+    const targetTop = row.offsetTop - headerHeight - centeredOffset;
     scrollContainer.scrollTop = Math.max(0, targetTop);
   }, [activeHunk, showOnlyChanges]);
 
@@ -656,16 +690,6 @@ function DiffViewer(props: { file: ConfigFileReview; busy: boolean; onReplace: (
       return;
     }
     setActiveHunkIndex(current => (current + direction + hunks.length) % hunks.length);
-  }
-
-  function replaceWithPackageFile() {
-    if (!canReplace) {
-      return;
-    }
-    const confirmed = window.confirm(`确认用右侧升级包文件覆盖左侧现场文件？\n${props.file.path}\n系统会先生成备份。`);
-    if (confirmed) {
-      props.onReplace();
-    }
   }
 
   return (
@@ -681,7 +705,7 @@ function DiffViewer(props: { file: ConfigFileReview; busy: boolean; onReplace: (
           <button className="iconButton" type="button" disabled={!hunks.length} onClick={() => moveHunk(-1)} title="上一个差异">
             ↑
           </button>
-          <span>{activeHunk ? `${activeHunk.label} / ${hunks.length}` : "无差异"}</span>
+          <span>{activeHunk ? `${activeHunk.label} / ${hunks.length}${hunkLocationLabel(diff.rows, activeHunk)}` : "无差异"}</span>
           <button className="iconButton" type="button" disabled={!hunks.length} onClick={() => moveHunk(1)} title="下一个差异">
             ↓
           </button>
@@ -691,31 +715,56 @@ function DiffViewer(props: { file: ConfigFileReview; busy: boolean; onReplace: (
         </div>
       </div>
       <div className="diffGrid" ref={scrollRef}>
-        <div className="diffTitle">现场文件</div>
-        <div className="diffReplaceTitle">替换</div>
-        <div className="diffTitle">升级包文件</div>
-        {visibleRows.map(row => (
-          <DiffRow key={row.key} row={row} activeHunk={activeHunk} />
-        ))}
-        <div className="replaceRail">
-          <button className="replaceButton" type="button" disabled={props.busy || !canReplace} onClick={replaceWithPackageFile} title={canReplace ? "用右侧升级包文件覆盖左侧现场文件" : "当前文件不允许直接替换"}>
-            ← 替换
-          </button>
+        <div className="diffHeader">
+          <div className="diffTitle">现场文件</div>
+          <div className="diffReplaceTitle">替换</div>
+          <div className="diffTitle">升级包文件</div>
         </div>
+        {visibleRows.map(row => (
+          <DiffRow
+            key={row.key}
+            row={row}
+            activeHunk={activeHunk}
+            busy={props.busy}
+            canReplace={canReplace}
+            insertAfterLocalLineNumber={row.kind === "inserted" ? findInsertAfterLocalLineNumber(diff.rows, row.index) : null}
+            onApplyLine={props.onApplyLine}
+          />
+        ))}
       </div>
     </div>
   );
 }
 
-function DiffRow(props: { row: SideBySideDiffRow; activeHunk: DiffHunk | null }) {
+function DiffRow(props: {
+  row: SideBySideDiffRow;
+  activeHunk: DiffHunk | null;
+  busy: boolean;
+  canReplace: boolean;
+  insertAfterLocalLineNumber: number | null;
+  onApplyLine: (row: SideBySideDiffRow, insertAfterLocalLineNumber: number | null) => void;
+}) {
   const active = Boolean(props.activeHunk && props.row.index >= props.activeHunk.start && props.row.index <= props.activeHunk.end);
+  const canApplyLine = props.canReplace && props.row.kind !== "equal";
   return (
-    <div className={`diffRow ${props.row.kind} ${active ? "active" : ""}`} data-row-index={props.row.index}>
-      <pre className={props.row.leftState} data-diff-row-anchor={props.row.index}>
+    <div className={`diffRow ${props.row.kind} ${active ? "active" : ""}`} data-row-index={props.row.index} data-diff-row-anchor={props.row.index}>
+      <pre className={props.row.leftState}>
         <span>{formatLineNumber(props.row.leftLineNumber)}</span>
         {props.row.leftText || " "}
       </pre>
-      <div className={`diffBridge ${props.row.kind}`} />
+      <div className={`diffBridge ${props.row.kind}`}>
+        {canApplyLine ? (
+          <button
+            className={props.row.kind === "deleted" ? "diffLineAction delete" : "diffLineAction"}
+            type="button"
+            disabled={props.busy}
+            onClick={() => props.onApplyLine(props.row, props.insertAfterLocalLineNumber)}
+            title={lineActionTitle(props.row)}
+          >
+            {lineActionLabel(props.row.kind)}
+          </button>
+        ) : null}
+      </div>
       <pre className={props.row.rightState}>
         <span>{formatLineNumber(props.row.rightLineNumber)}</span>
         {props.row.rightText || " "}
@@ -726,6 +775,52 @@ function DiffRow(props: { row: SideBySideDiffRow; activeHunk: DiffHunk | null })
 
 function formatLineNumber(value: number | null) {
   return value === null ? "" : String(value);
+}
+
+function findInsertAfterLocalLineNumber(rows: SideBySideDiffRow[], rowIndex: number) {
+  for (let index = rowIndex - 1; index >= 0; index -= 1) {
+    if (rows[index].leftLineNumber !== null) {
+      return rows[index].leftLineNumber;
+    }
+  }
+  return 0;
+}
+
+function hunkLocationLabel(rows: SideBySideDiffRow[], hunk: DiffHunk) {
+  const row = rows[hunk.start];
+  if (!row) {
+    return "";
+  }
+  const local = row.leftLineNumber === null ? "" : `现场 ${row.leftLineNumber}`;
+  const packaged = row.rightLineNumber === null ? "" : `升级包 ${row.rightLineNumber}`;
+  const parts = [local, packaged].filter(Boolean);
+  return parts.length ? ` · ${parts.join(" / ")}` : "";
+}
+
+function lineActionLabel(kind: SideBySideDiffRow["kind"]) {
+  if (kind === "inserted") return "插入";
+  if (kind === "deleted") return "删除";
+  return "←";
+}
+
+function lineActionTitle(row: SideBySideDiffRow) {
+  if (row.kind === "inserted") {
+    return `插入升级包第 ${formatLineNumber(row.rightLineNumber)} 行`;
+  }
+  if (row.kind === "deleted") {
+    return `删除现场第 ${formatLineNumber(row.leftLineNumber)} 行`;
+  }
+  return `用升级包第 ${formatLineNumber(row.rightLineNumber)} 行替换现场第 ${formatLineNumber(row.leftLineNumber)} 行`;
+}
+
+function lineApplyConfirmMessage(path: string, row: SideBySideDiffRow) {
+  if (row.kind === "inserted") {
+    return `确认把右侧升级包第 ${formatLineNumber(row.rightLineNumber)} 行插入现场文件？\n${path}\n系统会先生成备份。`;
+  }
+  if (row.kind === "deleted") {
+    return `确认删除左侧现场第 ${formatLineNumber(row.leftLineNumber)} 行以匹配升级包？\n${path}\n系统会先生成备份。`;
+  }
+  return `确认用右侧升级包第 ${formatLineNumber(row.rightLineNumber)} 行替换左侧现场第 ${formatLineNumber(row.leftLineNumber)} 行？\n${path}\n系统会先生成备份。`;
 }
 
 function JobsView(props: { jobs: UpgradeJob[]; events: Record<string, JobEvent[]>; onToggleEvents: (jobId: string) => void }) {

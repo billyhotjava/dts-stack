@@ -113,6 +113,16 @@ export type ConfigApplyResult = {
   writtenPath: string;
 };
 
+export type ConfigLineApplyPayload = {
+  packageRegistrationId: string;
+  path: string;
+  localLineNumber: number | null;
+  packageLineNumber: number | null;
+  insertAfterLocalLineNumber: number | null;
+  expectedLocalText: string | null;
+  expectedPackageText: string | null;
+};
+
 export type WorkspaceImage = {
   fileName: string;
   path: string;

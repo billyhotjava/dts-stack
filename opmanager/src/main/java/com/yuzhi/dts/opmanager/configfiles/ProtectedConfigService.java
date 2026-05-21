@@ -73,6 +73,82 @@ public class ProtectedConfigService {
         };
     }
 
+    public ConfigApplyResult applyPackageLine(
+        String packageRegistrationId,
+        String relativePath,
+        Integer localLineNumber,
+        Integer packageLineNumber,
+        Integer insertAfterLocalLineNumber,
+        String expectedLocalText,
+        String expectedPackageText
+    ) {
+        PackageRegistration registration = resolveRegistration(packageRegistrationId);
+        Path safePath = safeRelativePath(relativePath);
+        Path packageRoot = packageService.resolveStackRoot(registration);
+        Path targetRoot = properties.getTargetStackDir().toAbsolutePath().normalize();
+        ConfigFileReview review = reviewFile(targetRoot, packageRoot, safePath.toString().replace('\\', '/'));
+        if (review.contentOmitted()) {
+            throw new IllegalArgumentException("line apply is not available for omitted or binary config content");
+        }
+        if (!review.allowedActions().contains(ConfigApplyAction.USE_PACKAGE)) {
+            throw new IllegalArgumentException("line apply is not allowed for this protected config file");
+        }
+
+        Path local = targetRoot.resolve(safePath).normalize();
+        Path packaged = packageRoot.resolve(safePath).normalize();
+        if (packageLineNumber != null && !Files.isRegularFile(packaged)) {
+            throw new IllegalArgumentException("package file is missing");
+        }
+
+        try {
+            List<String> localLines = Files.exists(local) ? new ArrayList<>(Files.readAllLines(local, StandardCharsets.UTF_8)) : new ArrayList<>();
+            List<String> packageLines = Files.isRegularFile(packaged) ? Files.readAllLines(packaged, StandardCharsets.UTF_8) : List.of();
+            String path = safePath.toString().replace('\\', '/');
+
+            if (packageLineNumber != null && localLineNumber != null) {
+                int localIndex = lineIndex(localLineNumber, localLines, "local line");
+                int packageIndex = lineIndex(packageLineNumber, packageLines, "package line");
+                String packageLine = packageLines.get(packageIndex);
+                assertExpected(localLines.get(localIndex), expectedLocalText, "local line changed; rerun config precheck");
+                assertExpected(packageLine, expectedPackageText, "package line changed; rerun config precheck");
+                if (localLines.get(localIndex).equals(packageLine)) {
+                    return new ConfigApplyResult(false, path, ConfigApplyAction.USE_PACKAGE, "line already matches package", "", "");
+                }
+                String backup = backupIfExists(local, safePath);
+                localLines.set(localIndex, packageLine);
+                writeLines(local, localLines);
+                return new ConfigApplyResult(true, path, ConfigApplyAction.USE_PACKAGE, "applied package line", backup, local.toString());
+            }
+
+            if (packageLineNumber != null) {
+                int packageIndex = lineIndex(packageLineNumber, packageLines, "package line");
+                String packageLine = packageLines.get(packageIndex);
+                assertExpected(packageLine, expectedPackageText, "package line changed; rerun config precheck");
+                int insertIndex = insertionIndex(insertAfterLocalLineNumber, localLines);
+                if (insertIndex < localLines.size() && localLines.get(insertIndex).equals(packageLine)) {
+                    return new ConfigApplyResult(false, path, ConfigApplyAction.USE_PACKAGE, "package line already exists at target position", "", "");
+                }
+                String backup = backupIfExists(local, safePath);
+                localLines.add(insertIndex, packageLine);
+                writeLines(local, localLines);
+                return new ConfigApplyResult(true, path, ConfigApplyAction.USE_PACKAGE, "inserted package line", backup, local.toString());
+            }
+
+            if (localLineNumber != null) {
+                int localIndex = lineIndex(localLineNumber, localLines, "local line");
+                assertExpected(localLines.get(localIndex), expectedLocalText, "local line changed; rerun config precheck");
+                String backup = backupIfExists(local, safePath);
+                localLines.remove(localIndex);
+                writeLines(local, localLines);
+                return new ConfigApplyResult(true, path, ConfigApplyAction.USE_PACKAGE, "removed local-only line", backup, local.toString());
+            }
+
+            throw new IllegalArgumentException("line apply request must include a local line or package line");
+        } catch (IOException e) {
+            throw new IllegalStateException("failed to apply package line", e);
+        }
+    }
+
     private PackageRegistration resolveRegistration(String id) {
         return packageService.find(id).orElseThrow(() -> new NoSuchElementException("package registration not found"));
     }
@@ -225,16 +301,43 @@ public class ProtectedConfigService {
         if (!Files.exists(local)) {
             return "";
         }
-        Path backup = properties
-            .getDataDir()
-            .resolve("config-backups")
-            .resolve(FILE_TIME.format(Instant.now()))
-            .resolve(safePath)
-            .toAbsolutePath()
-            .normalize();
+        Path backupRoot = properties.getDataDir().resolve("config-backups").toAbsolutePath().normalize();
+        String timestamp = FILE_TIME.format(Instant.now());
+        Path backup = backupRoot.resolve(timestamp).resolve(safePath).normalize();
+        int suffix = 2;
+        while (Files.exists(backup)) {
+            backup = backupRoot.resolve(timestamp + "-" + suffix).resolve(safePath).normalize();
+            suffix += 1;
+        }
         Files.createDirectories(backup.getParent());
         Files.copy(local, backup, StandardCopyOption.REPLACE_EXISTING);
         return backup.toString();
+    }
+
+    private int lineIndex(Integer lineNumber, List<String> lines, String label) {
+        if (lineNumber == null || lineNumber < 1 || lineNumber > lines.size()) {
+            throw new IllegalArgumentException(label + " is out of range");
+        }
+        return lineNumber - 1;
+    }
+
+    private int insertionIndex(Integer insertAfterLocalLineNumber, List<String> localLines) {
+        int index = insertAfterLocalLineNumber == null ? localLines.size() : insertAfterLocalLineNumber;
+        if (index < 0 || index > localLines.size()) {
+            throw new IllegalArgumentException("insert position is out of range");
+        }
+        return index;
+    }
+
+    private void assertExpected(String actual, String expected, String message) {
+        if (expected != null && !actual.equals(expected)) {
+            throw new IllegalArgumentException(message);
+        }
+    }
+
+    private void writeLines(Path local, List<String> lines) throws IOException {
+        Files.createDirectories(local.getParent());
+        Files.write(local, lines, StandardCharsets.UTF_8);
     }
 
     private Set<String> envKeys(List<String> lines) {

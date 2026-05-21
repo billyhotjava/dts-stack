@@ -1,6 +1,7 @@
 import type {
   ConfigApplyAction,
   ConfigApplyResult,
+  ConfigLineApplyPayload,
   ConfigPrecheckResponse,
   DockerContainersResponse,
   JobEvent,
@@ -84,6 +85,13 @@ export function applyConfigAction(packageRegistrationId: string, path: string, a
   return request<ConfigApplyResult>("/api/opmanager/config/apply", {
     method: "POST",
     body: JSON.stringify({ packageRegistrationId, path, action })
+  });
+}
+
+export function applyConfigLine(payload: ConfigLineApplyPayload): Promise<ConfigApplyResult> {
+  return request<ConfigApplyResult>("/api/opmanager/config/apply-line", {
+    method: "POST",
+    body: JSON.stringify(payload)
   });
 }
 

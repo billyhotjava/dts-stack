@@ -1,6 +1,7 @@
 package com.yuzhi.dts.opmanager.configfiles;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.opmanager.config.OpManagerProperties;
@@ -78,6 +79,63 @@ class ProtectedConfigServiceTest {
         assertThat(result.backupPath()).isNotBlank();
         assertThat(Files.readString(Path.of(result.backupPath()))).contains("BASE_DOMAIN=site.local");
         assertThat(Files.readString(context.targetDir().resolve(".env"))).contains("BASE_DOMAIN=package.local").contains("DB_PASSWORD=package-secret");
+    }
+
+    @Test
+    void packageLineApplyReplacesOnlySelectedLine() throws Exception {
+        TestContext context = newContext();
+        Files.writeString(context.targetDir().resolve(".env"), "BASE_DOMAIN=site.local\nDB_PASSWORD=local-secret\nKEEP_LOCAL=true\n");
+        Files.writeString(context.packageStackDir().resolve(".env"), "BASE_DOMAIN=package.local\nDB_PASSWORD=package-secret\nKEEP_LOCAL=true\n");
+        registerPackage(context);
+
+        ConfigApplyResult result = context
+            .service()
+            .applyPackageLine(context.registrationId(), ".env", 1, 1, null, "BASE_DOMAIN=site.local", "BASE_DOMAIN=package.local");
+
+        assertThat(result.changed()).isTrue();
+        assertThat(Files.readString(context.targetDir().resolve(".env")))
+            .contains("BASE_DOMAIN=package.local")
+            .contains("DB_PASSWORD=local-secret")
+            .contains("KEEP_LOCAL=true");
+        assertThat(Files.readString(Path.of(result.backupPath()))).contains("BASE_DOMAIN=site.local");
+    }
+
+    @Test
+    void packageLineApplyInsertsPackageOnlyLineAtSelectedPosition() throws Exception {
+        TestContext context = newContext();
+        Files.writeString(context.targetDir().resolve(".env"), "BASE_DOMAIN=site.local\nKEEP_LOCAL=true\n");
+        Files.writeString(context.packageStackDir().resolve(".env"), "BASE_DOMAIN=site.local\nNEW_FLAG=true\nKEEP_LOCAL=true\n");
+        registerPackage(context);
+
+        ConfigApplyResult result = context.service().applyPackageLine(context.registrationId(), ".env", null, 2, 1, null, "NEW_FLAG=true");
+
+        assertThat(result.changed()).isTrue();
+        assertThat(Files.readAllLines(context.targetDir().resolve(".env"))).containsExactly("BASE_DOMAIN=site.local", "NEW_FLAG=true", "KEEP_LOCAL=true");
+    }
+
+    @Test
+    void packageLineApplyRemovesLocalOnlyLine() throws Exception {
+        TestContext context = newContext();
+        Files.writeString(context.targetDir().resolve(".env"), "BASE_DOMAIN=site.local\nLOCAL_ONLY=true\nKEEP_LOCAL=true\n");
+        Files.writeString(context.packageStackDir().resolve(".env"), "BASE_DOMAIN=site.local\nKEEP_LOCAL=true\n");
+        registerPackage(context);
+
+        ConfigApplyResult result = context.service().applyPackageLine(context.registrationId(), ".env", 2, null, null, "LOCAL_ONLY=true", null);
+
+        assertThat(result.changed()).isTrue();
+        assertThat(Files.readAllLines(context.targetDir().resolve(".env"))).containsExactly("BASE_DOMAIN=site.local", "KEEP_LOCAL=true");
+    }
+
+    @Test
+    void packageLineApplyRejectsStaleLocalLine() throws Exception {
+        TestContext context = newContext();
+        Files.writeString(context.targetDir().resolve(".env"), "BASE_DOMAIN=site.local\n");
+        Files.writeString(context.packageStackDir().resolve(".env"), "BASE_DOMAIN=package.local\n");
+        registerPackage(context);
+
+        assertThatThrownBy(() -> context.service().applyPackageLine(context.registrationId(), ".env", 1, 1, null, "BASE_DOMAIN=older.local", "BASE_DOMAIN=package.local"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("local line changed");
     }
 
     private TestContext newContext() throws Exception {

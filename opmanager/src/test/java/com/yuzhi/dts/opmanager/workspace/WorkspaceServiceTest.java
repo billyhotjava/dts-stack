@@ -9,7 +9,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -100,6 +102,55 @@ class WorkspaceServiceTest {
         );
     }
 
+    @Test
+    void recreateContainersStripsPlatformForDockerApiBefore141() throws Exception {
+        TestContext context = newContext();
+        context.runner().stdout(List.of("docker", "version", "--format", "{{.Server.APIVersion}}"), "1.39");
+        Files.writeString(
+            context.targetStack().resolve("docker-compose-app.yml"),
+            """
+            services:
+              dts-admin:
+                image: dts-admin:2.2.3
+                platform: ${DTS_RUNTIME_PLATFORM:-linux/arm64}
+                volumes:
+                  - ./logs:/logs
+            """
+        );
+
+        WorkspaceOperationResult result = context.service().recreateContainers();
+
+        assertThat(result.success()).isTrue();
+        List<String> recreate = context.runner().commands().getLast();
+        assertThat(recreate).contains("docker", "compose", "--project-directory", context.targetStack().toString(), "up", "-d", "--force-recreate");
+        assertThat(recreate).doesNotContain(context.targetStack().resolve("docker-compose-app.yml").toString());
+        Path compatibleCompose = Path.of(recreate.get(recreate.indexOf("-f") + 1));
+        assertThat(Files.readString(compatibleCompose)).contains("image: dts-admin:2.2.3").contains("./logs:/logs").doesNotContain("platform:");
+        assertThat(result.commands()).anySatisfy(output -> assertThat(output.message()).contains("Docker API 1.39 compatible compose without platform"));
+    }
+
+    @Test
+    void recreateContainersKeepsPlatformForDockerApi141AndNewer() throws Exception {
+        TestContext context = newContext();
+        context.runner().stdout(List.of("docker", "version", "--format", "{{.Server.APIVersion}}"), "1.41");
+        Files.writeString(
+            context.targetStack().resolve("docker-compose-app.yml"),
+            """
+            services:
+              dts-admin:
+                image: dts-admin:2.2.3
+                platform: ${DTS_RUNTIME_PLATFORM:-linux/arm64}
+            """
+        );
+
+        WorkspaceOperationResult result = context.service().recreateContainers();
+
+        assertThat(result.success()).isTrue();
+        List<String> recreate = context.runner().commands().getLast();
+        assertThat(recreate).doesNotContain("--project-directory");
+        assertThat(recreate).contains("-f", context.targetStack().resolve("docker-compose-app.yml").toString(), "up", "-d", "--force-recreate");
+    }
+
     private TestContext newContext() throws Exception {
         Path packageRoot = tempDir.resolve("packages");
         Path targetStack = tempDir.resolve("target-stack");
@@ -120,15 +171,20 @@ class WorkspaceServiceTest {
 
     private static final class RecordingRunner implements CommandRunner {
         private final List<List<String>> commands = new ArrayList<>();
+        private final Map<List<String>, String> stdoutByCommand = new HashMap<>();
 
         @Override
         public CommandResult run(List<String> command, Duration timeout) {
             commands.add(command);
-            return new CommandResult(command, 0, "ok", "", false, Duration.ofMillis(1));
+            return new CommandResult(command, 0, stdoutByCommand.getOrDefault(command, "ok"), "", false, Duration.ofMillis(1));
         }
 
         List<List<String>> commands() {
             return commands;
+        }
+
+        void stdout(List<String> command, String stdout) {
+            stdoutByCommand.put(command, stdout);
         }
     }
 }

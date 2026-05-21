@@ -8,6 +8,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -20,6 +23,8 @@ public class WorkspaceService {
     private static final Duration DOCKER_LOAD_TIMEOUT = Duration.ofMinutes(30);
     private static final Duration COMPOSE_TIMEOUT = Duration.ofMinutes(15);
     private static final Duration DETECT_TIMEOUT = Duration.ofSeconds(5);
+    private static final String PLATFORM_MIN_API_VERSION = "1.41";
+    private static final DateTimeFormatter FILE_TIME = DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(ZoneOffset.UTC);
 
     private final OpManagerProperties properties;
     private final CommandRunner commandRunner;
@@ -120,11 +125,28 @@ public class WorkspaceService {
         } else {
             command.add("docker-compose");
         }
-        Path envFile = targetStackDir().resolve(".env").toAbsolutePath().normalize();
+        Path targetStackDir = targetStackDir();
+        Path envFile = targetStackDir.resolve(".env").toAbsolutePath().normalize();
         if (Files.isRegularFile(envFile)) {
             command.addAll(List.of("--env-file", envFile.toString()));
         }
-        command.addAll(List.of("-f", composeFile.toString(), "up", "-d", "--force-recreate"));
+        Path effectiveComposeFile = composeFile;
+        if (composeContainsPlatform(composeFile)) {
+            CommandResult dockerApi = commandRunner.run(List.of("docker", "version", "--format", "{{.Server.APIVersion}}"), DETECT_TIMEOUT);
+            outputs.add(new WorkspaceCommandOutput(dockerApi.command(), dockerApi.success(), dockerApi.summary()));
+            if (dockerApi.success() && isApiVersionLessThan(dockerApi.trimmedStdout(), PLATFORM_MIN_API_VERSION)) {
+                effectiveComposeFile = platformCompatibleComposeFile(composeFile);
+                outputs.add(
+                    new WorkspaceCommandOutput(
+                        List.of("opmanager", "compose", "compat", composeFile.toString()),
+                        true,
+                        "generated Docker API " + dockerApi.trimmedStdout() + " compatible compose without platform: " + effectiveComposeFile
+                    )
+                );
+                command.addAll(List.of("--project-directory", targetStackDir.toString()));
+            }
+        }
+        command.addAll(List.of("-f", effectiveComposeFile.toString(), "up", "-d", "--force-recreate"));
         CommandResult recreate = commandRunner.run(command, COMPOSE_TIMEOUT);
         outputs.add(new WorkspaceCommandOutput(recreate.command(), recreate.success(), recreate.summary()));
         return new WorkspaceOperationResult(recreate.success(), recreate.success() ? "containers recreated" : "container recreate failed", List.copyOf(outputs));
@@ -248,5 +270,58 @@ public class WorkspaceService {
             return plugin;
         }
         return commandRunner.run(List.of("docker-compose", "version", "--short"), DETECT_TIMEOUT);
+    }
+
+    private boolean composeContainsPlatform(Path composeFile) {
+        try (Stream<String> lines = Files.lines(composeFile, StandardCharsets.UTF_8)) {
+            return lines.anyMatch(line -> line.matches("^\\s*platform\\s*:.*$"));
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private Path platformCompatibleComposeFile(Path composeFile) {
+        try {
+            Path outputDir = properties.getDataDir().resolve("compose-compat").toAbsolutePath().normalize();
+            Files.createDirectories(outputDir);
+            Path output = outputDir.resolve(composeFile.getFileName().toString() + ".no-platform-" + FILE_TIME.format(Instant.now()) + ".yml");
+            List<String> lines = Files.readAllLines(composeFile, StandardCharsets.UTF_8);
+            List<String> compatible = lines.stream().filter(line -> !line.matches("^\\s*platform\\s*:.*$")).toList();
+            Files.write(output, compatible, StandardCharsets.UTF_8);
+            return output;
+        } catch (IOException e) {
+            throw new IllegalStateException("failed to generate Docker API compatible compose file", e);
+        }
+    }
+
+    private boolean isApiVersionLessThan(String actual, String required) {
+        int[] actualParts = parseVersion(actual);
+        int[] requiredParts = parseVersion(required);
+        int max = Math.max(actualParts.length, requiredParts.length);
+        for (int index = 0; index < max; index += 1) {
+            int actualValue = index < actualParts.length ? actualParts[index] : 0;
+            int requiredValue = index < requiredParts.length ? requiredParts[index] : 0;
+            if (actualValue != requiredValue) {
+                return actualValue < requiredValue;
+            }
+        }
+        return false;
+    }
+
+    private int[] parseVersion(String value) {
+        String normalized = value == null ? "" : value.trim();
+        if (normalized.isBlank()) {
+            return new int[] { 0 };
+        }
+        String[] parts = normalized.split("\\.");
+        int[] parsed = new int[parts.length];
+        for (int index = 0; index < parts.length; index += 1) {
+            try {
+                parsed[index] = Integer.parseInt(parts[index].replaceAll("[^0-9].*$", ""));
+            } catch (NumberFormatException e) {
+                parsed[index] = 0;
+            }
+        }
+        return parsed;
     }
 }

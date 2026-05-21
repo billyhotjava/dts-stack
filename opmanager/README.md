@@ -249,7 +249,7 @@ tar -xzf /opt/dts-opmanager/packages/dts-opmanager-upgrade-*.tar.gz -C /opt/dts-
 3. 在“升级包”页扫描默认升级目录：`/opt/dts-opmanager/packages`。
 4. 在“配置预检”页比较现场 DTS stack 和升级包配置。
 5. 对 `.env`、compose、MDM 等受保护文件逐项确认差异。
-6. 必要时使用中间的“替换”按钮，用右侧升级包文件覆盖左侧现场文件；系统会先生成备份。
+6. 必要时使用中间的行级“替换 / 插入 / 删除”按钮，把右侧升级包中的单行变更应用到左侧现场文件；系统会先生成备份。
 7. 在工作区页加载 `images/*.tar`。
 8. 重建容器并观察运行状态。
 
@@ -310,6 +310,12 @@ tar -xzf /opt/dts-opmanager/packages/dts-opmanager-upgrade-*.tar.gz -C /opt/dts-
 如果这里仍然显示 `entrypoint=["java", ...]` 或 `/opt/java/openjdk/bin/java`，说明现场 `deploy` 目录里的镜像 tar 还是旧包，或者目录里混入了旧的 `dts-opmanager-*.tar`。当前脚本会要求 `deploy/` 下只能保留一个 opmanager 镜像 tar，并在检测到旧镜像布局时停止。
 
 当前 `start.sh` 不再用 `docker run --entrypoint /bin/sh` 做容器内文件检查。`dts-build.sh` 的成熟路径已经证明 Docker 18.09 / Kunpeng 对容器内 shell 包装敏感，所以这里只使用 `docker image inspect` 元数据和 compose 的显式 `entrypoint` 判定镜像是否匹配。
+
+### `"specify container image platform" requires API version 1.41`
+
+原因：现场 Docker Engine 18.09 的 Server API 通常是 1.39，而新版 `docker compose` 在 compose 文件包含 `platform:` 时会把平台参数传给 Docker Engine，触发 API 版本不兼容。
+
+处理：使用当前版本 opmanager。重建容器时，如果检测到目标 compose 文件包含 `platform:` 且 Docker Server API 小于 1.41，opmanager 会在自身数据目录生成一个临时兼容 compose 文件，去掉 `platform:` 行，并通过 `--project-directory` 保持现场 DTS stack 的相对挂载路径和 compose project 名称。原始 compose 文件不会被修改。
 
 ### 浏览器提示 JS MIME 类型是 `application/octet-stream`
 
