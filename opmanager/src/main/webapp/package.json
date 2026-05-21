@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "VITE_CACHE_DIR=.vite-cache vite",
     "build": "LEGACY_BROWSER_BUILD=1 VITE_CACHE_DIR=.vite-cache tsc -p tsconfig.json && LEGACY_BROWSER_BUILD=1 VITE_CACHE_DIR=.vite-cache vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:diff": "node --test test/diff.test.mjs"
   },
   "dependencies": {
     "react": "^18.2.0",

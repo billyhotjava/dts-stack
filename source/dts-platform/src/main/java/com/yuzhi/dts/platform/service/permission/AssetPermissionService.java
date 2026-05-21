@@ -389,11 +389,17 @@ public class AssetPermissionService {
             .stream()
             .filter(g -> granteeType.equalsIgnoreCase(g.getGranteeType()) && granteeId.equalsIgnoreCase(g.getGranteeId()))
             .toList();
-        if (!existing.isEmpty()) {
-            grantRepository.deleteAll(existing);
+        AssetGrant grant = existing
+            .stream()
+            .filter(g -> permission.equalsIgnoreCase(g.getPermission()))
+            .findFirst()
+            .orElseGet(() -> existing.isEmpty() ? new AssetGrant() : existing.get(0));
+        List<AssetGrant> redundant = existing.stream().filter(g -> g != grant).toList();
+        if (!redundant.isEmpty()) {
+            grantRepository.deleteAll(redundant);
+            grantRepository.flush();
         }
 
-        AssetGrant grant = new AssetGrant();
         grant.setAssetType(assetType);
         grant.setAssetId(assetId);
         grant.setGranteeType(granteeType);

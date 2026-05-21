@@ -12,6 +12,7 @@ import com.yuzhi.dts.platform.repository.permission.AssetOwnershipRepository;
 import com.yuzhi.dts.platform.repository.visualization.BiReportLinkRepository;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService.AccessibleAssetsResult;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService.AssetRef;
+import com.yuzhi.dts.platform.service.permission.AssetPermissionService.GrantCommand;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService.PermissionCheckCommand;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService.PermissionDecision;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService.PermissionResult;
@@ -159,6 +160,46 @@ class AssetPermissionServiceTest {
         PermissionResult result = service.check("emp", List.of("ROLE_EMPLOYEE"), "DEPT_A", "TABLE", "1");
         assertThat(result.allowed()).isTrue();
         assertThat(result.permission()).isEqualTo("EDIT");
+    }
+
+    @Test
+    void upsertGrant_shouldUpdateExistingGrantWithSameUniqueKey() {
+        AssetGrant existing = new AssetGrant();
+        existing.setAssetType("GLOSSARY_TERM");
+        existing.setAssetId("term-1");
+        existing.setGranteeType("DEPT");
+        existing.setGranteeId("1502");
+        existing.setPermission("MANAGE");
+        existing.setGrantedBy("creator");
+        existing.setGrantReason("old reason");
+        existing.setLevelOverride(true);
+        when(grantRepository.findByAssetTypeAndAssetId("GLOSSARY_TERM", "term-1")).thenReturn(List.of(existing));
+        when(grantRepository.save(any(AssetGrant.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        AssetGrant result = service.upsertGrant(
+            new GrantCommand(
+                "glossary_term",
+                "term-1",
+                "dept",
+                "1502",
+                "manage",
+                false,
+                null,
+                null,
+                "code asset sync",
+                "xiezm"
+            )
+        );
+
+        assertThat(result).isSameAs(existing);
+        assertThat(existing.getAssetType()).isEqualTo("GLOSSARY_TERM");
+        assertThat(existing.getGranteeType()).isEqualTo("DEPT");
+        assertThat(existing.getPermission()).isEqualTo("MANAGE");
+        assertThat(existing.getGrantedBy()).isEqualTo("xiezm");
+        assertThat(existing.getGrantReason()).isEqualTo("code asset sync");
+        assertThat(existing.isLevelOverride()).isFalse();
+        verify(grantRepository, never()).deleteAll(anyList());
+        verify(grantRepository).save(existing);
     }
 
     @Test

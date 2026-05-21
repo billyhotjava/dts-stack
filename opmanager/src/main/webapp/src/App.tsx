@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   applyConfigAction,
   createPlan,
@@ -14,6 +14,7 @@ import {
   registerPackagePath,
   uploadPackage
 } from "./api";
+import { buildSideBySideDiff, collectDiffHunks, type DiffHunk, type SideBySideDiffRow } from "./diff";
 import type {
   ConfigApplyAction,
   ConfigApplyResult,
@@ -545,33 +546,90 @@ function ConfigPrecheckView(props: {
 }
 
 function DiffViewer(props: { file: ConfigFileReview }) {
+  const [showOnlyChanges, setShowOnlyChanges] = useState(false);
+  const [activeHunkIndex, setActiveHunkIndex] = useState(0);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  const diff = useMemo(() => buildSideBySideDiff(props.file.localLines, props.file.packageLines), [props.file.localLines, props.file.packageLines]);
+  const hunks = useMemo(() => collectDiffHunks(diff.rows), [diff.rows]);
+  const visibleRows = useMemo(() => (showOnlyChanges ? diff.rows.filter(row => row.kind !== "equal") : diff.rows), [diff.rows, showOnlyChanges]);
+  const activeHunk = hunks[activeHunkIndex] || null;
+
+  useEffect(() => {
+    setShowOnlyChanges(false);
+    setActiveHunkIndex(0);
+  }, [props.file.path]);
+
+  useEffect(() => {
+    if (!activeHunk || !scrollRef.current) {
+      return;
+    }
+    const row = scrollRef.current.querySelector<HTMLElement>(`[data-row-index="${activeHunk.start}"]`);
+    row?.scrollIntoView({ block: "center" });
+  }, [activeHunk, showOnlyChanges]);
+
   if (props.file.contentOmitted) {
     return <div className="emptyState">文件较大或不是文本文件，已省略内容预览。可写入升级包副本后在现场工具中进一步查看。</div>;
   }
-  const rows = Math.max(props.file.localLines.length, props.file.packageLines.length);
+
+  function moveHunk(direction: -1 | 1) {
+    if (hunks.length === 0) {
+      return;
+    }
+    setActiveHunkIndex((activeHunkIndex + direction + hunks.length) % hunks.length);
+  }
+
   return (
-    <div className="diffGrid">
-      <div className="diffTitle">现场文件</div>
-      <div className="diffTitle">升级包文件</div>
-      {Array.from({ length: rows }).map((_, index) => {
-        const local = props.file.localLines[index] ?? "";
-        const packaged = props.file.packageLines[index] ?? "";
-        const changed = local !== packaged;
-        return (
-          <div className={changed ? "diffRow changed" : "diffRow"} key={index}>
-            <pre>
-              <span>{index + 1}</span>
-              {local || " "}
-            </pre>
-            <pre>
-              <span>{index + 1}</span>
-              {packaged || " "}
-            </pre>
-          </div>
-        );
-      })}
+    <div className="compareShell">
+      <div className="compareToolbar">
+        <div className="compareStats">
+          <span className="badge neutral">总行 {diff.rows.length}</span>
+          <span className={diff.changedRows ? "badge warn" : "badge ok"}>差异 {diff.changedRows}</span>
+          <span className="badge neutral">差异块 {hunks.length}</span>
+          {diff.strategy === "row-by-row" ? <span className="badge warn">大文件降级对比</span> : null}
+        </div>
+        <div className="compareActions">
+          <button className="iconButton" type="button" disabled={!hunks.length} onClick={() => moveHunk(-1)} title="上一个差异">
+            ↑
+          </button>
+          <span>{activeHunk ? `${activeHunk.label} / ${hunks.length}` : "无差异"}</span>
+          <button className="iconButton" type="button" disabled={!hunks.length} onClick={() => moveHunk(1)} title="下一个差异">
+            ↓
+          </button>
+          <button className="secondary" type="button" disabled={!hunks.length} onClick={() => setShowOnlyChanges(!showOnlyChanges)}>
+            {showOnlyChanges ? "显示全部" : "只看差异"}
+          </button>
+        </div>
+      </div>
+      <div className="diffGrid" ref={scrollRef}>
+        <div className="diffTitle">现场文件</div>
+        <div className="diffTitle">升级包文件</div>
+        {visibleRows.map(row => (
+          <DiffRow key={row.key} row={row} activeHunk={activeHunk} />
+        ))}
+      </div>
     </div>
   );
+}
+
+function DiffRow(props: { row: SideBySideDiffRow; activeHunk: DiffHunk | null }) {
+  const active = Boolean(props.activeHunk && props.row.index >= props.activeHunk.start && props.row.index <= props.activeHunk.end);
+  return (
+    <div className={`diffRow ${props.row.kind} ${active ? "active" : ""}`} data-row-index={props.row.index}>
+      <pre className={props.row.leftState} data-row-index={props.row.index}>
+        <span>{formatLineNumber(props.row.leftLineNumber)}</span>
+        {props.row.leftText || " "}
+      </pre>
+      <pre className={props.row.rightState}>
+        <span>{formatLineNumber(props.row.rightLineNumber)}</span>
+        {props.row.rightText || " "}
+      </pre>
+    </div>
+  );
+}
+
+function formatLineNumber(value: number | null) {
+  return value === null ? "" : String(value);
 }
 
 function JobsView(props: { jobs: UpgradeJob[]; events: Record<string, JobEvent[]>; onToggleEvents: (jobId: string) => void }) {

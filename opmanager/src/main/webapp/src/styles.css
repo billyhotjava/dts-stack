@@ -46,6 +46,15 @@ button.compact {
   padding: 0 10px;
 }
 
+button.iconButton {
+  width: 34px;
+  min-height: 32px;
+  padding: 0;
+  border-color: #bfccdc;
+  background: #fff;
+  color: #263447;
+}
+
 input,
 select {
   min-height: 38px;
@@ -414,16 +423,52 @@ button.danger {
   background: #b42318;
 }
 
-.diffGrid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+.compareShell {
   border: 1px solid #d9e1ec;
   border-radius: 6px;
   overflow: hidden;
+  background: #fff;
+}
+
+.compareToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #d9e1ec;
+  background: #f7f9fc;
+  padding: 10px 12px;
+}
+
+.compareStats,
+.compareActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.compareActions span {
+  min-width: 86px;
+  color: #445166;
+  font-size: 13px;
+  text-align: center;
+}
+
+.diffGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  max-height: 620px;
+  overflow: auto;
+  background: #fff;
 }
 
 .diffTitle {
-  background: #f2f5f9;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  border-bottom: 1px solid #d9e1ec;
+  background: #eef3f8;
   color: #445166;
   font-weight: 600;
   padding: 10px 12px;
@@ -434,7 +479,7 @@ button.danger {
 }
 
 .diffRow pre {
-  min-height: 28px;
+  min-height: 30px;
   margin: 0;
   border-top: 1px solid #e6ecf4;
   padding: 6px 10px;
@@ -442,10 +487,27 @@ button.danger {
   overflow-wrap: anywhere;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 13px;
+  line-height: 1.4;
 }
 
-.diffRow.changed pre {
+.diffRow.modified pre {
   background: #fff8e7;
+}
+
+.diffRow.inserted pre.inserted {
+  background: #eaf8ef;
+}
+
+.diffRow.deleted pre.deleted {
+  background: #fff0f0;
+}
+
+.diffRow pre.blank {
+  background: #f7f9fc;
+}
+
+.diffRow.active pre {
+  box-shadow: inset 0 1px 0 #d49100, inset 0 -1px 0 #d49100;
 }
 
 .diffRow pre + pre {
