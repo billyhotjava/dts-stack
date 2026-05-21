@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -38,8 +39,22 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 class ModelingAuxResourceTest {
+
+    @Test
+    void deleteGlossaryTermUsesSameMaintainerPermissionAsGlossaryUpsert() throws NoSuchMethodException {
+        PreAuthorize createGuard = ModelingAuxResource.class
+            .getMethod("createGlossaryTerm", ModelingGlossaryTerm.class, String.class)
+            .getAnnotation(PreAuthorize.class);
+        PreAuthorize deleteGuard = ModelingAuxResource.class
+            .getMethod("deleteGlossaryTerm", UUID.class)
+            .getAnnotation(PreAuthorize.class);
+
+        assertThat(deleteGuard).isNotNull();
+        assertThat(deleteGuard.value()).isEqualTo(createGuard.value());
+    }
 
     @Test
     void createPlan_shouldRejectDuplicateNameIgnoreCase() {

@@ -694,7 +694,7 @@ public class ModelingAuxResource {
     }
 
     @DeleteMapping("/glossary/terms/{id}")
-    @PreAuthorize("hasAuthority('" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deleteGlossaryTerm(@PathVariable UUID id) {
         ModelingGlossaryTerm term = glossaryRepo.findById(id).orElseThrow(() -> new EntityNotFoundException("术语不存在"));
         Map<String, Object> payload = referenceService.glossaryReferences(term);

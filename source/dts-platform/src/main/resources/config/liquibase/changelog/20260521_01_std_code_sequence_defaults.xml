@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260521-01-std-code-sequence-defaults" author="platform" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="std_code_value"/>
+            <tableExists tableName="std_code_mapping"/>
+        </preConditions>
+        <sql>
+            CREATE SEQUENCE IF NOT EXISTS std_code_value_item_id_seq;
+            ALTER SEQUENCE std_code_value_item_id_seq OWNED BY std_code_value.item_id;
+            SELECT setval(
+                'std_code_value_item_id_seq',
+                GREATEST(COALESCE((SELECT MAX(item_id) FROM std_code_value), 0), 1),
+                COALESCE((SELECT MAX(item_id) FROM std_code_value), 0) > 0
+            );
+            ALTER TABLE std_code_value ALTER COLUMN item_id SET DEFAULT nextval('std_code_value_item_id_seq'::regclass);
+
+            CREATE SEQUENCE IF NOT EXISTS std_code_mapping_map_id_seq;
+            ALTER SEQUENCE std_code_mapping_map_id_seq OWNED BY std_code_mapping.map_id;
+            SELECT setval(
+                'std_code_mapping_map_id_seq',
+                GREATEST(COALESCE((SELECT MAX(map_id) FROM std_code_mapping), 0), 1),
+                COALESCE((SELECT MAX(map_id) FROM std_code_mapping), 0) > 0
+            );
+            ALTER TABLE std_code_mapping ALTER COLUMN map_id SET DEFAULT nextval('std_code_mapping_map_id_seq'::regclass);
+        </sql>
+    </changeSet>
+</databaseChangeLog>
