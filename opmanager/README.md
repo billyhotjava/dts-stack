@@ -47,7 +47,7 @@ Vite 开发服务会把 `/api` 代理到 `http://localhost:18090`。
 | `OPMANAGER_DOCKER_ENABLED` | `true` | 是否启用 Docker 状态检查和执行能力 |
 | `OPMANAGER_PORTAINER_URL` | 空 | 可选的 Portainer 外链入口 |
 
-## 编译 OpManager 镜像
+## 编译 OpManager 运行包
 
 不要直接运行下面这种命令作为第一步：
 
@@ -68,7 +68,7 @@ cd /opt/prod/s10/v2.2.3/opmanager
 
 ./build-image.sh \
   --tag dts-opmanager:2.2.3 \
-  --output dts-opmanager-2.2.3-linux-arm64.tar
+  --output dts-opmanager-runtime-2.2.3-linux-arm64.tar.gz
 ```
 
 这个脚本会一次完成：
@@ -76,7 +76,19 @@ cd /opt/prod/s10/v2.2.3/opmanager
 1. 使用 Node 容器构建前端。
 2. 使用 Maven 容器构建 `target/dts-opmanager-*.jar`。
 3. 构建 `dts-opmanager:2.2.3` 运行镜像。
-4. 导出 `dts-opmanager-2.2.3-linux-arm64.tar`。
+4. 生成现场运行包 `dts-opmanager-runtime-2.2.3-linux-arm64.tar.gz`。
+
+运行包内包含：
+
+```text
+deploy/docker-compose.yml
+deploy/env.example
+deploy/start.sh
+deploy/dts-opmanager-2.2.3-linux-arm64.tar
+data/
+packages/
+README.md
+```
 
 鲲鹏 / 麒麟 ARM64 环境下也使用同一个脚本。脚本会参考 `builds/dts-build.sh` 的处理方式，在 ARM64 上自动为 Maven 容器增加：
 
@@ -89,7 +101,7 @@ cd /opt/prod/s10/v2.2.3/opmanager
 ```bash
 DOCKER_BUILD_PULL=1 ./build-image.sh \
   --tag dts-opmanager:2.2.3 \
-  --output dts-opmanager-2.2.3-linux-arm64.tar
+  --output dts-opmanager-runtime-2.2.3-linux-arm64.tar.gz
 ```
 
 如果现场 Maven 容器仍然受限，也可以使用宿主机 Maven：
@@ -98,7 +110,7 @@ DOCKER_BUILD_PULL=1 ./build-image.sh \
 ./build-image.sh \
   --host-maven \
   --tag dts-opmanager:2.2.3 \
-  --output dts-opmanager-2.2.3-linux-arm64.tar
+  --output dts-opmanager-runtime-2.2.3-linux-arm64.tar.gz
 ```
 
 构建完成后确认镜像架构：
@@ -115,12 +127,11 @@ arm64
 
 ## 现场运行
 
-把以下文件拷贝到现场：
+现场不需要拷贝 `opmanager/` 源码目录，只拷贝两个包：
 
 ```text
-dts-opmanager-2.2.3-linux-arm64.tar
-deploy/docker-compose.yml
-deploy/env.example
+dts-opmanager-runtime-2.2.3-linux-arm64.tar.gz   # OpManager 运行包
+dts-opmanager-upgrade-<时间>.tar.gz               # DTS 业务升级包
 ```
 
 现场只需要指定一个 OpManager 根目录，后续目录都以它为基础。下面以 `/opt/dts-opmanager` 为例：
@@ -128,50 +139,32 @@ deploy/env.example
 ```bash
 export OPMANAGER_HOME=/opt/dts-opmanager
 
-mkdir -p "$OPMANAGER_HOME/deploy"
-mkdir -p "$OPMANAGER_HOME/data"
-mkdir -p "$OPMANAGER_HOME/packages"
+mkdir -p "$OPMANAGER_HOME"
+tar -xzf dts-opmanager-runtime-2.2.3-linux-arm64.tar.gz -C "$OPMANAGER_HOME"
 ```
 
 目录含义：
 
 | 目录 | 用途 |
 | --- | --- |
-| `${OPMANAGER_HOME}/deploy` | 放 `docker-compose.yml`、`.env`、OpManager 镜像 tar |
+| `${OPMANAGER_HOME}/deploy` | 放 `docker-compose.yml`、`.env`、`start.sh`、OpManager 镜像 tar |
 | `${OPMANAGER_HOME}/data` | OpManager 自己的状态、任务记录和上传临时文件 |
 | `${OPMANAGER_HOME}/packages` | DTS 升级工作区，顶层只放 `images/`、`dts-stack/`、`misc/` |
 
-复制并编辑环境文件：
+启动 OpManager：
 
 ```bash
 cd "$OPMANAGER_HOME/deploy"
-cp env.example .env
+./start.sh
 ```
 
-重点确认 `.env`：
+`start.sh` 会自动：
 
-```env
-OPMANAGER_IMAGE=dts-opmanager:2.2.3
-OPMANAGER_HTTP_PORT=18095
-OPMANAGER_HOME=/opt/dts-opmanager
-OPMANAGER_DOCKER_ENABLED=true
-OPMANAGER_PORTAINER_URL=http://<server-ip>:9000
-```
+- 按当前解压目录生成或更新 `.env` 里的 `OPMANAGER_HOME`。
+- 执行 `docker load -i dts-opmanager-*.tar`。
+- 使用 `docker compose` 或旧版 `docker-compose` 启动服务。
 
 现场已有 DTS stack 运行目录不需要写进 `.env`；启动后在页面“概览”里填写，例如 `/data/dts-stack`。部署 compose 默认把宿主机 `/opt` 和 `/data` 挂进容器，因此 DTS stack 建议放在这两个根目录下。
-
-加载并启动：
-
-```bash
-docker load -i dts-opmanager-2.2.3-linux-arm64.tar
-docker compose -f docker-compose.yml --env-file .env up -d
-```
-
-如果现场只有旧版 `docker-compose`：
-
-```bash
-docker-compose -f docker-compose.yml --env-file .env up -d
-```
 
 验证：
 
@@ -184,6 +177,13 @@ curl http://127.0.0.1:18095/actuator/health
 
 ```text
 http://<server-ip>:18095/
+```
+
+然后把 DTS 升级包放到默认升级目录并解压：
+
+```bash
+cp dts-opmanager-upgrade-*.tar.gz "$OPMANAGER_HOME/packages/"
+tar -xzf "$OPMANAGER_HOME/packages"/dts-opmanager-upgrade-*.tar.gz -C "$OPMANAGER_HOME/packages"
 ```
 
 ## 生成升级包
@@ -252,7 +252,7 @@ tar -xzf /opt/dts-opmanager/packages/dts-opmanager-upgrade-*.tar.gz -C /opt/dts-
 处理：
 
 ```bash
-./build-image.sh --tag dts-opmanager:2.2.3 --output dts-opmanager-2.2.3-linux-arm64.tar
+./build-image.sh --tag dts-opmanager:2.2.3 --output dts-opmanager-runtime-2.2.3-linux-arm64.tar.gz
 ```
 
 ### `Failed to start thread "GC Thread#0"`

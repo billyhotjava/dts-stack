@@ -12,11 +12,14 @@ DOCKER_LOG="${TMP_DIR}/docker.log"
 mkdir -p \
   "${TEST_OPMANAGER}/src/main/webapp" \
   "${TEST_OPMANAGER}/src/main/resources" \
+  "${TEST_OPMANAGER}/deploy" \
   "${FAKE_BIN}"
 
 cp "${REPO_ROOT}/opmanager/build-image.sh" "${TEST_OPMANAGER}/build-image.sh"
 cp "${REPO_ROOT}/opmanager/Dockerfile" "${TEST_OPMANAGER}/Dockerfile"
 cp "${REPO_ROOT}/opmanager/.dockerignore" "${TEST_OPMANAGER}/.dockerignore"
+cp "${REPO_ROOT}/opmanager/deploy/docker-compose.yml" "${TEST_OPMANAGER}/deploy/docker-compose.yml"
+cp "${REPO_ROOT}/opmanager/deploy/env.example" "${TEST_OPMANAGER}/deploy/env.example"
 chmod +x "${TEST_OPMANAGER}/build-image.sh"
 
 cat > "${TEST_OPMANAGER}/pom.xml" <<'EOF_POM'
@@ -97,7 +100,8 @@ sed -i "s|__DOCKER_LOG__|${DOCKER_LOG}|g" "${FAKE_BIN}/docker"
 sed -i "s|__TEST_OPMANAGER__|${TEST_OPMANAGER}|g" "${FAKE_BIN}/docker"
 chmod +x "${FAKE_BIN}/docker"
 
-PATH="${FAKE_BIN}:${PATH}" HOME="${TMP_DIR}/home" "${TEST_OPMANAGER}/build-image.sh" --tag dts-opmanager:test --output "${TMP_DIR}/dts-opmanager-test-linux-arm64.tar" >/dev/null
+RUNTIME_PACKAGE="${TMP_DIR}/dts-opmanager-runtime-test-linux-arm64.tar.gz"
+PATH="${FAKE_BIN}:${PATH}" HOME="${TMP_DIR}/home" "${TEST_OPMANAGER}/build-image.sh" --tag dts-opmanager:test --output "${RUNTIME_PACKAGE}" >/dev/null
 
 if ! grep -Fq -- "--security-opt seccomp=unconfined" "${DOCKER_LOG}"; then
   echo "expected opmanager Maven container to relax seccomp on ARM64" >&2
@@ -123,14 +127,37 @@ if ! grep -Fq "build:build -t dts-opmanager:test -f ${TEST_OPMANAGER}/Dockerfile
   exit 1
 fi
 
-if ! grep -Fq "save:save dts-opmanager:test -o ${TMP_DIR}/dts-opmanager-test-linux-arm64.tar" "${DOCKER_LOG}"; then
-  echo "expected opmanager build script to export a docker save tar" >&2
+if ! grep -Eq "save:save dts-opmanager:test -o .*/deploy/dts-opmanager-test-linux-arm64.tar" "${DOCKER_LOG}"; then
+  echo "expected opmanager build script to export a docker save tar inside the runtime package" >&2
   cat "${DOCKER_LOG}" >&2
   exit 1
 fi
 
-if [[ ! -f "${TMP_DIR}/dts-opmanager-test-linux-arm64.tar" ]]; then
-  echo "expected opmanager build script to create the requested tar file" >&2
+if [[ ! -f "${RUNTIME_PACKAGE}" ]]; then
+  echo "expected opmanager build script to create the requested runtime package" >&2
+  exit 1
+fi
+
+PACKAGE_CONTENTS="$(tar -tzf "${RUNTIME_PACKAGE}")"
+for expected in \
+  deploy/docker-compose.yml \
+  deploy/env.example \
+  deploy/start.sh \
+  deploy/dts-opmanager-test-linux-arm64.tar \
+  data/ \
+  packages/ \
+  README.md
+do
+  if ! grep -qx "${expected}" <<<"${PACKAGE_CONTENTS}"; then
+    echo "expected runtime package to contain ${expected}" >&2
+    tar -tzf "${RUNTIME_PACKAGE}" >&2
+    exit 1
+  fi
+done
+
+if ! tar -xOf "${RUNTIME_PACKAGE}" deploy/env.example | grep -Fxq "OPMANAGER_IMAGE=dts-opmanager:test"; then
+  echo "expected packaged env.example to use the requested image tag" >&2
+  tar -xOf "${RUNTIME_PACKAGE}" deploy/env.example >&2
   exit 1
 fi
 

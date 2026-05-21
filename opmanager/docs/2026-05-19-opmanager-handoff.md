@@ -43,6 +43,7 @@
   - `opmanager/build-image.sh`
   - `opmanager/deploy/docker-compose.yml`
   - `opmanager/deploy/env.example`
+  - `build-image.sh` 输出现场运行包：`dts-opmanager-runtime-<version>-linux-<arch>.tar.gz`，包内包含部署文件、启动脚本和 OpManager 镜像 tar。
   - 默认容器内端口 `18090`，宿主机端口 `18095`。
   - 部署 compose 默认挂载宿主机 `/opt` 和 `/data`，页面里填写的 DTS stack 路径应位于这两个根目录下。
 - 固定升级工作区约定：
@@ -118,12 +119,23 @@ misc/        # 其他元数据、杂项文件
 tar -xzf /opt/dts-opmanager/packages/dts-opmanager-upgrade-*.tar.gz -C /opt/dts-opmanager/packages
 ```
 
-现场部署 opmanager：
+现场不需要拷贝 `opmanager/` 源码目录，只需要拷贝两个包：
+
+```text
+dts-opmanager-runtime-2.2.3-linux-arm64.tar.gz
+dts-opmanager-upgrade-*.tar.gz
+```
+
+推荐现场目录：
 
 ```bash
-cd opmanager
-docker load -i dts-opmanager-2.2.3-linux-arm64.tar
-docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
+mkdir -p /opt/dts-opmanager
+tar -xzf dts-opmanager-runtime-2.2.3-linux-arm64.tar.gz -C /opt/dts-opmanager
+cd /opt/dts-opmanager/deploy
+./start.sh
+
+cp dts-opmanager-upgrade-*.tar.gz /opt/dts-opmanager/packages/
+tar -xzf /opt/dts-opmanager/packages/dts-opmanager-upgrade-*.tar.gz -C /opt/dts-opmanager/packages
 ```
 
 访问地址：
@@ -219,8 +231,7 @@ git diff --check -- opmanager builds/dts-build.sh tests/test_dts_build_pack_cont
 
 ```bash
 cd /opt/prod/s10/v2.2.3/opmanager
-./build-image.sh --tag dts-opmanager:2.2.3 --output dts-opmanager-2.2.3-linux-arm64.tar
-docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
+./build-image.sh --tag dts-opmanager:2.2.3 --output dts-opmanager-runtime-2.2.3-linux-arm64.tar.gz
 ```
 
 ## 7. 接手注意事项

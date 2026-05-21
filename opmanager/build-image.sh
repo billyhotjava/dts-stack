@@ -4,8 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 IMAGE_TAG="${OPMANAGER_IMAGE:-dts-opmanager:2.2.3}"
-OUTPUT_PATH="${OPMANAGER_IMAGE_TAR:-}"
-SAVE_IMAGE_TAR="${SAVE_IMAGE_TAR:-true}"
+OUTPUT_PATH="${OPMANAGER_PACKAGE_TAR:-}"
 NODE_IMAGE="${NODE_IMAGE:-node:20.17.0-alpine3.20}"
 PNPM_VERSION="${PNPM_VERSION:-10.28.0}"
 MAVEN_IMAGE="${MAVEN_IMAGE:-maven:3.9.9-eclipse-temurin-21}"
@@ -28,24 +27,23 @@ usage() {
   cat <<USAGE
 Usage:
   ${0##*/} [image-tag]
-  ${0##*/} --tag <image-tag> [--output <tar-path>]
-  ${0##*/} --no-save --tag <image-tag>
+  ${0##*/} --tag <image-tag> [--output <package-path-or-dir>]
 
 Builds the dts-opmanager runtime image without running Maven inside Dockerfile
 RUN steps. This matches the Kunpeng/Kylin workaround used by builds/dts-build.sh.
 
 Options:
-  --tag <image-tag>     Image tag to build. Default: ${IMAGE_TAG}
-  --output <tar-path>   docker save output path. Default: ./<image>-<version>-linux-<arch>.tar
-  --no-save             Build the local image but do not export a tar file.
-  --pull                Pull base images during the final runtime docker build.
-  --host-maven          Use host mvn instead of a Maven container.
-  -h, --help            Show this help.
+  --tag <image-tag>             Image tag to build. Default: ${IMAGE_TAG}
+  --output <package-path-or-dir>
+                                Runtime package tar.gz output. If a directory is given,
+                                the default package name is created under that directory.
+  --pull                        Pull base images during the final runtime docker build.
+  --host-maven                  Use host mvn instead of a Maven container.
+  -h, --help                    Show this help.
 
 Environment:
   OPMANAGER_IMAGE       Default image tag when [image-tag] is omitted.
-  OPMANAGER_IMAGE_TAR   Default tar output path.
-  SAVE_IMAGE_TAR        Set to false to skip docker save.
+  OPMANAGER_PACKAGE_TAR Default runtime package output path.
   NODE_IMAGE            Node image for frontend build. Default: ${NODE_IMAGE}
   MAVEN_IMAGE           Maven image for backend jar build. Default: ${MAVEN_IMAGE}
   MAVEN_UNRESTRICTED    Set to 1 to force seccomp/nproc relaxation.
@@ -54,7 +52,7 @@ Environment:
   NPM_REGISTRY          Optional npm registry mirror.
 
 Example:
-  ${0##*/} --tag dts-opmanager:2.2.3 --output dts-opmanager-2.2.3-linux-arm64.tar
+  ${0##*/} --tag dts-opmanager:2.2.3 --output dts-opmanager-runtime-2.2.3-linux-arm64.tar.gz
 USAGE
 }
 
@@ -75,10 +73,6 @@ while [[ $# -gt 0 ]]; do
         exit 1
       fi
       shift 2
-      ;;
-    --no-save)
-      SAVE_IMAGE_TAR="false"
-      shift
       ;;
     --pull)
       DOCKER_BUILD_PULL="1"
@@ -293,30 +287,141 @@ image_arch() {
   esac
 }
 
-default_output_path() {
+image_name() {
   local image_name="${IMAGE_TAG%%:*}"
+  image_name="${image_name##*/}"
+  echo "${image_name}"
+}
+
+image_version() {
   local image_version="latest"
   if [[ "${IMAGE_TAG}" == *:* ]]; then
     image_version="${IMAGE_TAG##*:}"
   fi
-  image_name="${image_name##*/}"
-  echo "${SCRIPT_DIR}/${image_name}-${image_version}-linux-$(image_arch).tar"
+  echo "${image_version}"
 }
 
-save_runtime_image() {
-  if [[ "${SAVE_IMAGE_TAR}" == "0" || "${SAVE_IMAGE_TAR}" == "false" ]]; then
-    echo "[opmanager-build] Skipping docker save (--no-save)"
-    return 0
-  fi
+runtime_package_name() {
+  echo "$(image_name)-runtime-$(image_version)-linux-$(image_arch).tar.gz"
+}
 
-  local output="${OUTPUT_PATH:-$(default_output_path)}"
-  mkdir -p "$(dirname "${output}")"
-  docker save "${IMAGE_TAG}" -o "${output}"
-  echo "[opmanager-build] Saved ${output}"
+image_tar_name() {
+  echo "$(image_name)-$(image_version)-linux-$(image_arch).tar"
+}
+
+package_output_path() {
+  local output="${OUTPUT_PATH:-${SCRIPT_DIR}/$(runtime_package_name)}"
+  if [[ "${output}" != /* ]]; then
+    output="$(pwd)/${output}"
+  fi
+  case "${output}" in
+    *.tar.gz|*.tgz)
+      mkdir -p "$(dirname "${output}")"
+      echo "${output}"
+      ;;
+    *)
+      mkdir -p "${output}"
+      echo "${output}/$(runtime_package_name)"
+      ;;
+  esac
+}
+
+write_package_env_example() {
+  local target="$1"
+  sed \
+    -e "s|^OPMANAGER_IMAGE=.*|OPMANAGER_IMAGE=${IMAGE_TAG}|" \
+    "${SCRIPT_DIR}/deploy/env.example" > "${target}"
+}
+
+write_start_script() {
+  local target="$1"
+  cat > "${target}" <<'START_SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+OPMANAGER_HOME="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+
+cd "${SCRIPT_DIR}"
+
+if [[ ! -f .env ]]; then
+  cp env.example .env
+fi
+
+escaped_home="$(printf '%s' "${OPMANAGER_HOME}" | sed 's/[\/&]/\\&/g')"
+if grep -q '^OPMANAGER_HOME=' .env; then
+  sed -i "s|^OPMANAGER_HOME=.*|OPMANAGER_HOME=${escaped_home}|" .env
+else
+  printf '\nOPMANAGER_HOME=%s\n' "${OPMANAGER_HOME}" >> .env
+fi
+
+image_tar="$(find "${SCRIPT_DIR}" -maxdepth 1 -type f -name 'dts-opmanager-*.tar' | sort | tail -n 1)"
+if [[ -z "${image_tar}" ]]; then
+  echo "[opmanager-start] ERROR: dts-opmanager image tar not found under ${SCRIPT_DIR}" >&2
+  exit 1
+fi
+
+docker load -i "${image_tar}"
+
+if docker compose version >/dev/null 2>&1; then
+  docker compose -f docker-compose.yml --env-file .env up -d
+else
+  docker-compose -f docker-compose.yml --env-file .env up -d
+fi
+
+echo "[opmanager-start] DTS OpManager started."
+echo "[opmanager-start] Put DTS upgrade packages under ${OPMANAGER_HOME}/packages and extract them there."
+START_SCRIPT
+  chmod +x "${target}"
+}
+
+write_package_readme() {
+  local target="$1"
+  cat > "${target}" <<'README'
+# DTS OpManager Runtime Package
+
+## Install
+
+```bash
+mkdir -p /opt/dts-opmanager
+tar -xzf dts-opmanager-runtime-*.tar.gz -C /opt/dts-opmanager
+cd /opt/dts-opmanager/deploy
+./start.sh
+```
+
+## Add DTS Upgrade Package
+
+```bash
+cp dts-opmanager-upgrade-*.tar.gz /opt/dts-opmanager/packages/
+tar -xzf /opt/dts-opmanager/packages/dts-opmanager-upgrade-*.tar.gz -C /opt/dts-opmanager/packages
+```
+
+Open `http://<server-ip>:18095/`, set the existing DTS stack directory, then scan the default package directory.
+README
+}
+
+create_runtime_package() {
+  local output
+  output="$(package_output_path)"
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  local package_root="${tmp_dir}/runtime"
+  local image_tar="${package_root}/deploy/$(image_tar_name)"
+
+  mkdir -p "${package_root}/deploy" "${package_root}/data" "${package_root}/packages"
+  cp "${SCRIPT_DIR}/deploy/docker-compose.yml" "${package_root}/deploy/docker-compose.yml"
+  write_package_env_example "${package_root}/deploy/env.example"
+  write_start_script "${package_root}/deploy/start.sh"
+  write_package_readme "${package_root}/README.md"
+
+  docker save "${IMAGE_TAG}" -o "${image_tar}"
+  tar -czf "${output}" -C "${package_root}" "deploy" "data" "packages" "README.md"
+  rm -rf "${tmp_dir}"
+  echo "[opmanager-build] Runtime package ready: ${output}"
 }
 
 require_cmd docker
 build_webapp
 build_backend_jar
 build_runtime_image
-save_runtime_image
+create_runtime_package
