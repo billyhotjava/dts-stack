@@ -3,11 +3,11 @@
 FROM docker:27-cli AS docker-cli
 
 FROM eclipse-temurin:21-jre
-WORKDIR /opt/dts-opmanager
+WORKDIR /app/dts-opmanager
 
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=docker-cli /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/lib/docker/cli-plugins/docker-compose
-COPY target/dts-opmanager-*.jar /opt/dts-opmanager/dts-opmanager.jar
+COPY target/dts-opmanager-*.jar /app/dts-opmanager/dts-opmanager.jar
 
 RUN mkdir -p /opt/dts-opmanager/data /opt/dts-opmanager/packages
 
@@ -19,4 +19,4 @@ ENV OPMANAGER_SERVER_PORT=18090
 
 EXPOSE 18090
 
-ENTRYPOINT ["java", "-jar", "/opt/dts-opmanager/dts-opmanager.jar"]
+ENTRYPOINT ["java", "-jar", "/app/dts-opmanager/dts-opmanager.jar"]

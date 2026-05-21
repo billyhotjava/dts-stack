@@ -364,9 +364,9 @@ fi
 docker load -i "${image_tar}"
 
 if docker compose version >/dev/null 2>&1; then
-  docker compose -f docker-compose.yml --env-file .env up -d
+  docker compose -f docker-compose.yml --env-file .env up -d --force-recreate
 else
-  docker-compose -f docker-compose.yml --env-file .env up -d
+  docker-compose -f docker-compose.yml --env-file .env up -d --force-recreate
 fi
 
 echo "[opmanager-start] DTS OpManager started."

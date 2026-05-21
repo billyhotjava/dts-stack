@@ -44,6 +44,7 @@
   - `opmanager/deploy/docker-compose.yml`
   - `opmanager/deploy/env.example`
   - `build-image.sh` 输出现场运行包：`dts-opmanager-runtime-<version>-linux-<arch>.tar.gz`，包内包含部署文件、启动脚本和 OpManager 镜像 tar。
+  - 镜像内应用工作目录为 `/app/dts-opmanager`，避免部署 compose 挂载宿主机 `/opt` 时覆盖应用目录。
   - 默认容器内端口 `18090`，宿主机端口 `18095`。
   - 部署 compose 默认挂载宿主机 `/opt` 和 `/data`，页面里填写的 DTS stack 路径应位于这两个根目录下。
 - 固定升级工作区约定：

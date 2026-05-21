@@ -245,6 +245,12 @@ tar -xzf /opt/dts-opmanager/packages/dts-opmanager-upgrade-*.tar.gz -C /opt/dts-
 
 ## 常见问题
 
+### `chdir to cwd ("/opt/dts-opmanager") ... no such file or directory`
+
+原因：旧版 OpManager 镜像把应用工作目录放在 `/opt/dts-opmanager`，而部署 compose 又会挂载宿主机 `/opt`，导致镜像内工作目录被覆盖。
+
+处理：重新使用当前版本 `build-image.sh` 生成运行包。当前镜像的应用工作目录已经改为 `/app/dts-opmanager`，宿主机 `/opt` 挂载不会再覆盖应用目录。
+
 ### `COPY target/dts-opmanager-*.jar ... no source files`
 
 原因：直接运行了裸 `docker build`，但没有先生成 jar。
