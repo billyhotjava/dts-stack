@@ -8,12 +8,14 @@ RUN corepack enable && pnpm install --frozen-lockfile
 COPY src/main/webapp/ ./
 RUN pnpm build
 
-FROM maven:3.9-eclipse-temurin-21 AS backend
+FROM maven:3.9.9-eclipse-temurin-21 AS backend
+ENV JAVA_HOME=/opt/java/openjdk \
+    PATH="/opt/java/openjdk/bin:${PATH}"
 WORKDIR /workspace
 COPY pom.xml ./
 COPY src ./src
 COPY --from=webapp /workspace/src/main/resources/static ./src/main/resources/static
-RUN mvn -q -DskipTests -Dskip.webapp=true package
+RUN java -version && mvn -version && mvn -q -DskipTests -Dskip.webapp=true package
 
 FROM docker:27-cli AS docker-cli
 
