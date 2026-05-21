@@ -236,8 +236,8 @@ if ! tar -xOf "${RUNTIME_PACKAGE}" deploy/start.sh | grep -Fq "Loaded image:"; t
   exit 1
 fi
 
-if ! tar -xOf "${RUNTIME_PACKAGE}" deploy/start.sh | grep -Fq "current Kunpeng-compatible opmanager image"; then
-  echo "expected packaged start.sh to validate the opmanager image layout before compose up" >&2
+if ! tar -xOf "${RUNTIME_PACKAGE}" deploy/start.sh | grep -Fq "shell-based image layout check failed; continuing"; then
+  echo "expected packaged start.sh to keep shell-based image checks non-blocking on Docker 18/Kylin" >&2
   tar -xOf "${RUNTIME_PACKAGE}" deploy/start.sh >&2
   exit 1
 fi

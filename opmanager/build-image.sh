@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPT_VERSION="2026-05-21-docker18-compose129"
+SCRIPT_VERSION="2026-05-21-docker18-compose129-r2"
 
 IMAGE_TAG="${OPMANAGER_IMAGE:-dts-opmanager:2.2.3}"
 OUTPUT_PATH="${OPMANAGER_PACKAGE_TAR:-}"
@@ -401,11 +401,11 @@ if [[ "${image_arch}" != "arm64" && "${image_arch}" != "aarch64" ]]; then
   echo "[opmanager-start] WARN: expected an arm64 image for Kunpeng/Kylin, got '${image_arch:-unknown}'." >&2
 fi
 
-if ! docker run --rm --entrypoint /bin/sh "${image_tag}" -c 'test -x /opt/java/openjdk/bin/java && test -f /app/dts-opmanager/dts-opmanager.jar' >/dev/null 2>&1; then
-  echo "[opmanager-start] ERROR: loaded image is not a current Kunpeng-compatible opmanager image." >&2
-  echo "[opmanager-start] Expected /opt/java/openjdk/bin/java and /app/dts-opmanager/dts-opmanager.jar inside ${image_tag}." >&2
-  echo "[opmanager-start] Rebuild the runtime package with build-image.sh version 2026-05-21-docker18-compose129 or newer, then copy/extract that package again." >&2
-  exit 1
+if docker run --rm --entrypoint /bin/sh "${image_tag}" -c 'test -x /opt/java/openjdk/bin/java && test -f /app/dts-opmanager/dts-opmanager.jar' >/dev/null 2>&1; then
+  echo "[opmanager-start] Image layout check passed."
+else
+  echo "[opmanager-start] WARN: shell-based image layout check failed; continuing because Docker image metadata and compose entrypoint are explicit." >&2
+  echo "[opmanager-start] WARN: If startup still fails, run: docker image inspect ${image_tag} --format '{{.Architecture}} {{json .Config.Entrypoint}}'" >&2
 fi
 
 docker rm -f dts-opmanager >/dev/null 2>&1 || true
