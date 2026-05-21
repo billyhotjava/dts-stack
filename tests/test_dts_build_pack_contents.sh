@@ -9,7 +9,8 @@ TEST_REPO="${TMP_DIR}/repo"
 FAKE_BIN="${TMP_DIR}/bin"
 PACKAGE_PATH="${TMP_DIR}/dts-deploy.tar.gz"
 OPMANAGER_OUTPUT="${TMP_DIR}/opmanager-package"
-OPMANAGER_ENV_OUTPUT="${TMP_DIR}/opmanager-package-env"
+OPMANAGER_ARCHIVE="${OPMANAGER_OUTPUT}/dts-opmanager-upgrade-20260521.tar.gz"
+OPMANAGER_DEFAULT_ARCHIVE=""
 mkdir -p \
   "${TEST_REPO}/builds" \
   "${TEST_REPO}/builds/dist" \
@@ -235,37 +236,47 @@ do
   fi
 done
 
-PATH="${FAKE_BIN}:${PATH}" "${TEST_REPO}/builds/dts-build.sh" --opmanager-output "${OPMANAGER_OUTPUT}" >/dev/null
+PATH="${FAKE_BIN}:${PATH}" BUILD_TS=20260521 "${TEST_REPO}/builds/dts-build.sh" --opmanager-output "${OPMANAGER_OUTPUT}" >/dev/null
 
-TOP_LEVEL="$(find "${OPMANAGER_OUTPUT}" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort | tr '\n' ' ')"
-if [[ "${TOP_LEVEL}" != "dts-stack images misc " ]]; then
-  echo "expected opmanager output to contain only dts-stack images misc, got: ${TOP_LEVEL}" >&2
+if [[ ! -f "${OPMANAGER_ARCHIVE}" ]]; then
+  echo "expected --opmanager-output to create an opmanager tar.gz package" >&2
+  find "${OPMANAGER_OUTPUT}" -maxdepth 2 -type f -print >&2
   exit 1
 fi
 
-if [[ ! -f "${OPMANAGER_OUTPUT}/images/dts-admin_test.tar" ]]; then
-  echo "expected opmanager output to include normal image tar" >&2
+OPMANAGER_CONTENTS="$(tar -tzf "${OPMANAGER_ARCHIVE}")"
+if ! grep -qx 'images/dts-admin_test.tar' <<<"${OPMANAGER_CONTENTS}"; then
+  echo "expected opmanager archive to include normal image tar" >&2
   exit 1
 fi
 
-if [[ ! -f "${OPMANAGER_OUTPUT}/images/dts-platform_test.tar" ]]; then
-  echo "expected opmanager output to include legacy image tar" >&2
+if ! grep -qx 'images/dts-platform_test.tar' <<<"${OPMANAGER_CONTENTS}"; then
+  echo "expected opmanager archive to include legacy image tar" >&2
   exit 1
 fi
 
-if [[ ! -f "${OPMANAGER_OUTPUT}/dts-stack/bin/dts-upgrade-lite" ]]; then
-  echo "expected opmanager output to include stripped dts-stack tree" >&2
+if ! grep -qx 'dts-stack/bin/dts-upgrade-lite' <<<"${OPMANAGER_CONTENTS}"; then
+  echo "expected opmanager archive to include stripped dts-stack tree" >&2
   exit 1
 fi
 
-if [[ ! -f "${OPMANAGER_OUTPUT}/misc/merge-rules.yml" ]]; then
-  echo "expected opmanager output to move extra metadata into misc" >&2
+if ! grep -qx 'misc/merge-rules.yml' <<<"${OPMANAGER_CONTENTS}"; then
+  echo "expected opmanager archive to move extra metadata into misc" >&2
   exit 1
 fi
 
-PATH="${FAKE_BIN}:${PATH}" OPMANAGER_PACKAGE_ROOTS="${OPMANAGER_ENV_OUTPUT}" "${TEST_REPO}/builds/dts-build.sh" --opmanager-package >/dev/null
+PATH="${FAKE_BIN}:${PATH}" BUILD_TS=20260522 "${TEST_REPO}/builds/dts-build.sh" --opmanager-package >/dev/null
+OPMANAGER_DEFAULT_ARCHIVE="${TEST_REPO}/builds/opmanager-dist/dts-opmanager-upgrade-20260522.tar.gz"
 
-if [[ ! -d "${OPMANAGER_ENV_OUTPUT}/images" || ! -d "${OPMANAGER_ENV_OUTPUT}/dts-stack" || ! -d "${OPMANAGER_ENV_OUTPUT}/misc" ]]; then
-  echo "expected --opmanager-package to write fixed directories under OPMANAGER_PACKAGE_ROOTS" >&2
+if [[ ! -f "${OPMANAGER_DEFAULT_ARCHIVE}" ]]; then
+  echo "expected --opmanager-package to create a default tar.gz under builds/opmanager-dist" >&2
+  exit 1
+fi
+
+PATH="${FAKE_BIN}:${PATH}" BUILD_TS=20260523 "${TEST_REPO}/builds/dts-build.sh" --legacy --opmanager-package >/dev/null
+OPMANAGER_LEGACY_DEFAULT_ARCHIVE="${TEST_REPO}/builds/opmanager-legacy-dist/dts-opmanager-upgrade-20260523.tar.gz"
+
+if [[ ! -f "${OPMANAGER_LEGACY_DEFAULT_ARCHIVE}" ]]; then
+  echo "expected --legacy --opmanager-package to create a default tar.gz under builds/opmanager-legacy-dist" >&2
   exit 1
 fi

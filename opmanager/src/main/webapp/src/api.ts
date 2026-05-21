@@ -91,10 +91,10 @@ export function getWorkspaceStatus(): Promise<WorkspaceStatus> {
   return request<WorkspaceStatus>("/api/opmanager/workspace");
 }
 
-export function updateWorkspaceRoot(packageRoot: string): Promise<WorkspaceStatus> {
-  return request<WorkspaceStatus>("/api/opmanager/workspace/root", {
+export function updateTargetStackDir(targetStackDir: string): Promise<WorkspaceStatus> {
+  return request<WorkspaceStatus>("/api/opmanager/workspace/target-stack", {
     method: "PUT",
-    body: JSON.stringify({ packageRoot })
+    body: JSON.stringify({ targetStackDir })
   });
 }
 

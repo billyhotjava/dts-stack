@@ -4,6 +4,7 @@ import com.yuzhi.dts.opmanager.workspace.WorkspaceOperationResult;
 import com.yuzhi.dts.opmanager.workspace.WorkspaceRootRequest;
 import com.yuzhi.dts.opmanager.workspace.WorkspaceService;
 import com.yuzhi.dts.opmanager.workspace.WorkspaceStatus;
+import com.yuzhi.dts.opmanager.workspace.TargetStackRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -30,6 +31,11 @@ public class WorkspaceResource {
     @PutMapping("/root")
     public WorkspaceStatus updateRoot(@Valid @RequestBody WorkspaceRootRequest request) {
         return workspaceService.updatePackageRoot(request.packageRoot());
+    }
+
+    @PutMapping("/target-stack")
+    public WorkspaceStatus updateTargetStack(@Valid @RequestBody TargetStackRequest request) {
+        return workspaceService.updateTargetStackDir(request.targetStackDir());
     }
 
     @PostMapping("/load-images")

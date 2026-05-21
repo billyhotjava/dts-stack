@@ -12,7 +12,7 @@ import {
   precheckConfig,
   recreateWorkspaceContainers,
   registerPackagePath,
-  updateWorkspaceRoot,
+  updateTargetStackDir,
   uploadPackage
 } from "./api";
 import { buildSideBySideDiff, collectDiffHunks, type DiffHunk, type SideBySideDiffRow } from "./diff";
@@ -50,8 +50,7 @@ export function App() {
   const [containers, setContainers] = useState<DockerContainersResponse | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceStatus | null>(null);
   const [workspaceResult, setWorkspaceResult] = useState<WorkspaceOperationResult | null>(null);
-  const [workspaceRootInput, setWorkspaceRootInput] = useState("");
-  const [serverPath, setServerPath] = useState("");
+  const [targetStackInput, setTargetStackInput] = useState("");
   const [selectedPackage, setSelectedPackage] = useState("");
   const [planNote, setPlanNote] = useState("dry-run plan created");
   const [configPackage, setConfigPackage] = useState("");
@@ -82,27 +81,39 @@ export function App() {
     try {
       const [runtimeResult, packagesResult, jobsResult, containersResult, workspaceResult] = await Promise.all([getRuntime(), listPackages(), listJobs(), listContainers(), getWorkspaceStatus()]);
       setRuntime(runtimeResult);
-      setPackages(packagesResult);
+      setTargetStackInput(runtimeResult.targetStackDir);
+      setPackages(await autoRegisterDefaultWorkspace(workspaceResult, packagesResult));
       setJobs(jobsResult);
       setContainers(containersResult);
       setWorkspace(workspaceResult);
-      setWorkspaceRootInput(workspaceResult.packageRoot);
     } catch (caught) {
       setError(toErrorMessage(caught));
     }
   }
 
-  async function onRegisterPath(event: FormEvent) {
-    event.preventDefault();
-    if (!serverPath.trim()) return;
+  async function autoRegisterDefaultWorkspace(workspaceResult: WorkspaceStatus, currentPackages: PackageRegistration[]) {
+    const workspaceReady = workspaceResult.packageRootExists && workspaceResult.imagesDirExists && workspaceResult.stackDirExists && workspaceResult.miscDirExists;
+    const alreadyRegistered = currentPackages.some(item => item.sourcePath === workspaceResult.packageRoot);
+    if (!workspaceReady || alreadyRegistered) {
+      return currentPackages;
+    }
+    try {
+      await registerPackagePath(workspaceResult.packageRoot);
+      return await listPackages();
+    } catch {
+      return currentPackages;
+    }
+  }
+
+  async function onScanDefaultPackage() {
+    if (!workspace?.packageRoot) return;
     setBusy(true);
     setError("");
     try {
-      const registration = await registerPackagePath(serverPath.trim());
+      const registration = await registerPackagePath(workspace.packageRoot);
       setPackages(await listPackages());
       setSelectedPackage(registration.id);
       setConfigPackage(registration.id);
-      setServerPath("");
     } catch (caught) {
       setError(toErrorMessage(caught));
     } finally {
@@ -206,17 +217,18 @@ export function App() {
     }
   }
 
-  async function onWorkspaceRootSubmit(event: FormEvent) {
+  async function onTargetStackSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!workspaceRootInput.trim()) return;
+    if (!targetStackInput.trim()) return;
     setBusy(true);
     setError("");
     setWorkspaceResult(null);
     try {
-      const next = await updateWorkspaceRoot(workspaceRootInput.trim());
+      const next = await updateTargetStackDir(targetStackInput.trim());
       setWorkspace(next);
-      setWorkspaceRootInput(next.packageRoot);
-      setServerPath(next.packageRoot);
+      const runtimeResult = await getRuntime();
+      setRuntime(runtimeResult);
+      setTargetStackInput(runtimeResult.targetStackDir);
     } catch (caught) {
       setError(toErrorMessage(caught));
     } finally {
@@ -267,10 +279,10 @@ export function App() {
             jobs={jobs}
             workspace={workspace}
             workspaceResult={workspaceResult}
-            workspaceRootInput={workspaceRootInput}
+            targetStackInput={targetStackInput}
             busy={busy}
-            onWorkspaceRootChange={setWorkspaceRootInput}
-            onWorkspaceRootSubmit={onWorkspaceRootSubmit}
+            onTargetStackChange={setTargetStackInput}
+            onTargetStackSubmit={onTargetStackSubmit}
             onLoadImages={onLoadWorkspaceImages}
             onRecreateContainers={onRecreateWorkspaceContainers}
           />
@@ -279,18 +291,17 @@ export function App() {
           <PackagesView
             packages={packages}
             validPackages={validPackages}
-            serverPath={serverPath}
+            workspace={workspace}
             selectedPackage={selectedPackage}
             planNote={planNote}
             busy={busy}
             uploadResult={uploadResult}
-            onServerPathChange={setServerPath}
             onSelectedPackageChange={value => {
               setSelectedPackage(value);
               setConfigPackage(value);
             }}
             onPlanNoteChange={setPlanNote}
-            onRegisterPath={onRegisterPath}
+            onScanDefaultPackage={onScanDefaultPackage}
             onUpload={onUpload}
             onCreatePlan={onCreatePlan}
             onConfigPrecheck={onConfigPrecheck}
@@ -323,10 +334,10 @@ function Overview(props: {
   jobs: UpgradeJob[];
   workspace: WorkspaceStatus | null;
   workspaceResult: WorkspaceOperationResult | null;
-  workspaceRootInput: string;
+  targetStackInput: string;
   busy: boolean;
-  onWorkspaceRootChange: (value: string) => void;
-  onWorkspaceRootSubmit: (event: FormEvent) => void;
+  onTargetStackChange: (value: string) => void;
+  onTargetStackSubmit: (event: FormEvent) => void;
   onLoadImages: () => void;
   onRecreateContainers: () => void;
 }) {
@@ -343,6 +354,12 @@ function Overview(props: {
           <Fact label="Docker" value={runtime ? runtimeStatusText(runtime.dockerAvailable, runtime.dockerVersion, runtime.dockerMessage) : "-"} state={runtime?.dockerAvailable ? "ok" : "bad"} />
           <Fact label="Compose" value={runtime ? runtimeStatusText(runtime.composeAvailable, runtime.composeVersion, runtime.composeMessage) : "-"} state={runtime?.composeAvailable ? "ok" : "bad"} />
         </dl>
+        <form className="formRow workspaceForm" onSubmit={props.onTargetStackSubmit}>
+          <input value={props.targetStackInput} onChange={event => props.onTargetStackChange(event.target.value)} placeholder="/opt/dts-stack" />
+          <button type="submit" disabled={props.busy || !props.targetStackInput.trim()}>
+            保存 DTS 目录
+          </button>
+        </form>
         {runtime?.portainerUrl ? (
           <a className="linkButton" href={runtime.portainerUrl} target="_blank" rel="noreferrer">
             打开 Portainer
@@ -359,12 +376,6 @@ function Overview(props: {
       </div>
       <div className="panel wide">
         <h2>升级工作区</h2>
-        <form className="formRow workspaceForm" onSubmit={props.onWorkspaceRootSubmit}>
-          <input value={props.workspaceRootInput} onChange={event => props.onWorkspaceRootChange(event.target.value)} placeholder="/var/lib/dts-opmanager/packages" />
-          <button type="submit" disabled={props.busy || !props.workspaceRootInput.trim()}>
-            保存目录
-          </button>
-        </form>
         <dl className="facts">
           <Fact label="根目录" value={props.workspace?.packageRoot || "-"} state={props.workspace?.packageRootExists ? "ok" : "bad"} />
           <Fact label="images" value={props.workspace?.imagesDir || "-"} state={props.workspace?.imagesDirExists ? "ok" : "bad"} />
@@ -411,15 +422,14 @@ function runtimeStatusText(available: boolean, version: string, message: string)
 function PackagesView(props: {
   packages: PackageRegistration[];
   validPackages: PackageRegistration[];
-  serverPath: string;
+  workspace: WorkspaceStatus | null;
   selectedPackage: string;
   planNote: string;
   busy: boolean;
   uploadResult: UploadResult | null;
-  onServerPathChange: (value: string) => void;
   onSelectedPackageChange: (value: string) => void;
   onPlanNoteChange: (value: string) => void;
-  onRegisterPath: (event: FormEvent) => void;
+  onScanDefaultPackage: () => void;
   onUpload: (file: File | null) => void;
   onCreatePlan: (event: FormEvent) => void;
   onConfigPrecheck: (event?: FormEvent) => void;
@@ -427,13 +437,19 @@ function PackagesView(props: {
   return (
     <section className="stack">
       <div className="panel">
-        <h2>登记升级工作区</h2>
-        <form className="formRow" onSubmit={props.onRegisterPath}>
-          <input value={props.serverPath} onChange={event => props.onServerPathChange(event.target.value)} placeholder="/var/lib/dts-opmanager/packages" />
-          <button type="submit" disabled={props.busy || !props.serverPath.trim()}>
-            登记
+        <h2>默认升级目录</h2>
+        <dl className="facts">
+          <Fact label="根目录" value={props.workspace?.packageRoot || "-"} state={props.workspace?.packageRootExists ? "ok" : "bad"} />
+          <Fact label="images" value={props.workspace?.imagesDir || "-"} state={props.workspace?.imagesDirExists ? "ok" : "bad"} />
+          <Fact label="dts-stack" value={props.workspace?.stackDir || "-"} state={props.workspace?.stackDirExists ? "ok" : "bad"} />
+          <Fact label="misc" value={props.workspace?.miscDir || "-"} state={props.workspace?.miscDirExists ? "ok" : "bad"} />
+        </dl>
+        <div className="uploadLine">
+          <button type="button" disabled={props.busy || !props.workspace?.packageRootExists} onClick={props.onScanDefaultPackage}>
+            扫描默认目录
           </button>
-        </form>
+          <span>把 dts-opmanager-upgrade-*.tar.gz 解压到该目录后扫描。</span>
+        </div>
         <div className="uploadLine">
           <input type="file" onChange={event => props.onUpload(event.target.files ? event.target.files[0] : null)} disabled={props.busy} />
           {props.uploadResult ? <span>{props.uploadResult.fileName} 已保存</span> : null}

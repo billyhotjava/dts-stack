@@ -25,8 +25,8 @@ management:
         enabled: true
 
 opmanager:
-  data-dir: ${OPMANAGER_DATA_DIR:/var/lib/dts-opmanager}
-  package-roots: ${OPMANAGER_PACKAGE_ROOTS:/var/lib/dts-opmanager/packages}
+  data-dir: ${OPMANAGER_DATA_DIR:${OPMANAGER_HOME:/opt/dts-opmanager}/data}
+  package-roots: ${OPMANAGER_PACKAGE_ROOTS:${OPMANAGER_HOME:/opt/dts-opmanager}/packages}
   target-stack-dir: ${OPMANAGER_TARGET_STACK_DIR:/opt/dts-stack}
   docker-enabled: ${OPMANAGER_DOCKER_ENABLED:true}
   portainer-url: ${OPMANAGER_PORTAINER_URL:}

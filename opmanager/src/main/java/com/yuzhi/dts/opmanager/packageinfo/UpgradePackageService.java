@@ -171,7 +171,7 @@ public class UpgradePackageService {
             stream.forEach(
                 path -> {
                     String name = path.getFileName().toString();
-                    if (!WORKSPACE_DIRS.contains(name)) {
+                    if (!WORKSPACE_DIRS.contains(name) && !isWorkspaceArchive(name)) {
                         messages.add("unexpected top-level directory or file: " + name);
                     }
                 }
@@ -288,6 +288,10 @@ public class UpgradePackageService {
         Path path = Path.of(value);
         Path normalized = path.normalize();
         return path.isAbsolute() || normalized.startsWith("..") || normalized.toString().isBlank();
+    }
+
+    private boolean isWorkspaceArchive(String name) {
+        return name.endsWith(".tar.gz") || name.endsWith(".tgz");
     }
 
     private boolean isBlank(String value) {

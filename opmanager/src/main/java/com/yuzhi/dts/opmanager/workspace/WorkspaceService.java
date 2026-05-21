@@ -27,6 +27,7 @@ public class WorkspaceService {
     public WorkspaceService(OpManagerProperties properties, CommandRunner commandRunner) {
         this.properties = properties;
         this.commandRunner = commandRunner;
+        restorePersistedSettings();
     }
 
     public WorkspaceStatus status() {
@@ -60,6 +61,22 @@ public class WorkspaceService {
             return status();
         } catch (IOException e) {
             throw new IllegalStateException("failed to save workspace package root", e);
+        }
+    }
+
+    public synchronized WorkspaceStatus updateTargetStackDir(String targetStackDir) {
+        if (targetStackDir == null || targetStackDir.isBlank()) {
+            throw new IllegalArgumentException("target dts-stack directory is required");
+        }
+        Path root = Path.of(targetStackDir.trim()).toAbsolutePath().normalize();
+        try {
+            Path stateFile = targetStackStateFile();
+            Files.createDirectories(stateFile.getParent());
+            Files.writeString(stateFile, root.toString(), StandardCharsets.UTF_8);
+            properties.setTargetStackDir(root);
+            return status();
+        } catch (IOException e) {
+            throw new IllegalStateException("failed to save target dts-stack directory", e);
         }
     }
 
@@ -103,7 +120,7 @@ public class WorkspaceService {
         } else {
             command.add("docker-compose");
         }
-        Path envFile = properties.getTargetStackDir().resolve(".env").toAbsolutePath().normalize();
+        Path envFile = targetStackDir().resolve(".env").toAbsolutePath().normalize();
         if (Files.isRegularFile(envFile)) {
             command.addAll(List.of("--env-file", envFile.toString()));
         }
@@ -123,6 +140,15 @@ public class WorkspaceService {
         return root.toAbsolutePath().normalize();
     }
 
+    private Path targetStackDir() {
+        Path persisted = persistedTargetStackDir();
+        if (persisted != null) {
+            properties.setTargetStackDir(persisted);
+            return persisted;
+        }
+        return properties.getTargetStackDir().toAbsolutePath().normalize();
+    }
+
     private Path persistedPackageRoot() {
         Path stateFile = packageRootStateFile();
         if (!Files.isRegularFile(stateFile)) {
@@ -136,8 +162,36 @@ public class WorkspaceService {
         }
     }
 
+    private Path persistedTargetStackDir() {
+        Path stateFile = targetStackStateFile();
+        if (!Files.isRegularFile(stateFile)) {
+            return null;
+        }
+        try {
+            String value = Files.readString(stateFile, StandardCharsets.UTF_8).trim();
+            return value.isBlank() ? null : Path.of(value).toAbsolutePath().normalize();
+        } catch (IOException | RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private void restorePersistedSettings() {
+        Path packageRoot = persistedPackageRoot();
+        if (packageRoot != null) {
+            properties.setPackageRoots(List.of(packageRoot));
+        }
+        Path targetStackDir = persistedTargetStackDir();
+        if (targetStackDir != null) {
+            properties.setTargetStackDir(targetStackDir);
+        }
+    }
+
     private Path packageRootStateFile() {
         return properties.getDataDir().resolve("state/workspace-package-root.txt").toAbsolutePath().normalize();
+    }
+
+    private Path targetStackStateFile() {
+        return properties.getDataDir().resolve("state/target-stack-dir.txt").toAbsolutePath().normalize();
     }
 
     private Path imagesDir() {
@@ -178,7 +232,7 @@ public class WorkspaceService {
     }
 
     private Path composeFile() {
-        Path target = properties.getTargetStackDir().toAbsolutePath().normalize();
+        Path target = targetStackDir();
         for (String candidate : List.of("docker-compose-app.yml", "docker-compose.legacy.yml", "docker-compose.yml")) {
             Path compose = target.resolve(candidate).normalize();
             if (Files.isRegularFile(compose) && compose.startsWith(target)) {

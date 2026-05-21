@@ -53,6 +53,24 @@ class WorkspaceServiceTest {
     }
 
     @Test
+    void updatesTargetStackDirAndPersistsItAcrossServiceInstances() throws Exception {
+        TestContext context = newContext();
+        Path alternate = tempDir.resolve("alternate-target-stack");
+        Files.createDirectories(alternate);
+        Files.writeString(alternate.resolve("docker-compose.legacy.yml"), "services: {}\n");
+
+        context.service().updateTargetStackDir(alternate.toString());
+
+        WorkspaceService restarted = new WorkspaceService(context.properties(), context.runner());
+        restarted.recreateContainers();
+
+        assertThat(context.properties().getTargetStackDir()).isEqualTo(alternate);
+        assertThat(context.runner().commands()).contains(
+            List.of("docker", "compose", "-f", alternate.resolve("docker-compose.legacy.yml").toString(), "up", "-d", "--force-recreate")
+        );
+    }
+
+    @Test
     void loadImagesRunsDockerLoadForEachTar() throws Exception {
         TestContext context = newContext();
         Files.writeString(context.packageRoot().resolve("images/dts-admin.tar"), "admin");

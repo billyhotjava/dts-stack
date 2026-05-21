@@ -55,6 +55,7 @@ class UpgradePackageServiceTest {
         Files.createDirectories(packageRoot.resolve("misc"));
         Files.writeString(packageRoot.resolve("images/dts-admin.tar"), "fake image tar");
         Files.writeString(packageRoot.resolve("dts-stack/docker-compose-app.yml"), "services: {}\n");
+        Files.writeString(packageRoot.resolve("dts-opmanager-upgrade-20260521.tar.gz"), "archive copied by operator");
 
         UpgradePackageService service = newService(packageRoot);
 

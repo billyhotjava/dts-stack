@@ -30,8 +30,9 @@
   - `OpManagerApp`
   - `application.yml`
   - `OpManagerProperties`
-  - 默认数据目录：`/var/lib/dts-opmanager`
-  - 默认升级工作区：`/var/lib/dts-opmanager/packages`
+  - 现场部署根目录：`/opt/dts-opmanager`
+  - 现场数据目录：`${OPMANAGER_HOME}/data`
+  - 现场升级工作区：`${OPMANAGER_HOME}/packages`
 - 前端工程：
   - `src/main/webapp`
   - React 18 + Vite + TypeScript
@@ -43,16 +44,17 @@
   - `opmanager/deploy/docker-compose.yml`
   - `opmanager/deploy/env.example`
   - 默认容器内端口 `18090`，宿主机端口 `18095`。
+  - 部署 compose 默认挂载宿主机 `/opt` 和 `/data`，页面里填写的 DTS stack 路径应位于这两个根目录下。
 - 固定升级工作区约定：
   - `$OPMANAGER_PACKAGE_ROOTS/images`
   - `$OPMANAGER_PACKAGE_ROOTS/dts-stack`
   - `$OPMANAGER_PACKAGE_ROOTS/misc`
   - 这三个目录是当前约定的唯一顶层业务目录。
-- `dts-build.sh` 已支持导出 opmanager 升级工作区：
+- `dts-build.sh` 已支持导出 opmanager 升级包：
   - `--opmanager-package`
-  - `--opmanager-output <dir>`
+  - `--opmanager-output <dir-or-tar.gz>`
   - 推荐只使用镜像列表驱动的固定流程：
-    `./builds/dts-build.sh --image dts-admin dts-admin-webapp dts-ingestion dts-platform dts-platform-webapp dts-analytics dts-metrics --legacy --opmanager-output /var/lib/dts-opmanager/packages`
+    `./builds/dts-build.sh --image dts-admin dts-admin-webapp dts-ingestion dts-platform dts-platform-webapp dts-analytics dts-metrics --legacy --opmanager-package`
 - REST API 已有第一版：
   - `/api/opmanager/runtime`
   - `/api/opmanager/packages`
@@ -92,16 +94,28 @@ cd /opt/prod/s10/v2.2.3
 ./builds/dts-build.sh \
   --image dts-admin dts-admin-webapp dts-ingestion dts-platform dts-platform-webapp dts-analytics dts-metrics \
   --legacy \
-  --opmanager-output /var/lib/dts-opmanager/packages
+  --opmanager-package
 ```
 
-生成后的目录约定：
+默认输出目录会区分现场类型：
 
 ```text
-/var/lib/dts-opmanager/packages/
-  images/      # docker save 生成的镜像 tar 文件
-  dts-stack/   # 去除源代码后的 DTS stack 工程目录
-  misc/        # 其他元数据、杂项文件
+builds/opmanager-dist/                 # 普通 DTS 升级包
+builds/opmanager-legacy-dist/          # legacy 升级包，仅用于鲲鹏/麒麟现场
+```
+
+带 `--legacy` 时输出为 `builds/opmanager-legacy-dist/dts-opmanager-upgrade-<时间>.tar.gz`。解压后的目录约定：
+
+```text
+images/      # docker save 生成的镜像 tar 文件
+dts-stack/   # 去除源代码后的 DTS stack 工程目录
+misc/        # 其他元数据、杂项文件
+```
+
+现场把 `dts-opmanager-upgrade-*.tar.gz` 拷贝到 `/opt/dts-opmanager/packages` 后执行：
+
+```bash
+tar -xzf /opt/dts-opmanager/packages/dts-opmanager-upgrade-*.tar.gz -C /opt/dts-opmanager/packages
 ```
 
 现场部署 opmanager：
@@ -120,12 +134,13 @@ http://<server-ip>:18095/
 
 现场 UI 操作主线：
 
-1. 在“升级包”页面注册服务器目录，例如 `/var/lib/dts-opmanager/packages`。
-2. 在“配置预检”页面选择升级包，比较 `packages/dts-stack` 和现场 `OPMANAGER_TARGET_STACK_DIR`。
-3. 对 `.env`、Compose 文件、MDM 目录等高风险配置逐项确认。
-4. 在“概览”页面加载 `images/*.tar`。
-5. 在“概览”页面重建容器。
-6. 在“容器”页面查看 Docker 容器状态。
+1. 在“概览”页面填写现场已有 DTS stack 运行目录，例如 `/data/dts-stack`。
+2. 在“升级包”页面扫描默认升级目录 `/opt/dts-opmanager/packages`。
+3. 在“配置预检”页面选择升级包，比较 `packages/dts-stack` 和现场 DTS stack 目录。
+4. 对 `.env`、Compose 文件、MDM 目录等高风险配置逐项确认。
+5. 在“概览”页面加载 `images/*.tar`。
+6. 在“概览”页面重建容器。
+7. 在“容器”页面查看 Docker 容器状态。
 
 ## 4. 关键设计决策
 

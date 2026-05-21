@@ -8,9 +8,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "opmanager")
 public class OpManagerProperties {
 
-    private Path dataDir = Path.of("/var/lib/dts-opmanager");
+    private Path dataDir = Path.of("/opt/dts-opmanager/data");
 
-    private List<Path> packageRoots = new ArrayList<>(List.of(Path.of("/var/lib/dts-opmanager/packages")));
+    private List<Path> packageRoots = new ArrayList<>(List.of(Path.of("/opt/dts-opmanager/packages")));
 
     private Path targetStackDir = Path.of("/opt/dts-stack");
 
