@@ -273,6 +273,18 @@ tar -xzf /opt/dts-opmanager/packages/dts-opmanager-upgrade-*.tar.gz -C /opt/dts-
 
 处理：使用当前版本 `build-image.sh`。当前脚本只在显式传 `--host-maven` 或设置 `OPMANAGER_USE_HOST_MAVEN=1` 时才使用宿主机 Maven；默认使用 Maven 容器。
 
+当前脚本会打印版本：
+
+```text
+[opmanager-build] Script version: 2026-05-21-host-maven-fallback
+```
+
+如果请求宿主机 Maven 但现场没有 `mvn`，脚本会自动降级回 Maven 容器，并打印：
+
+```text
+[opmanager-build] WARN: OPMANAGER_USE_HOST_MAVEN=1 but 'mvn' is not in PATH; falling back to Maven container.
+```
+
 ### 浏览器提示 JS MIME 类型是 `application/octet-stream`
 
 原因通常是 jar 内静态资源缺失或资源 hash 不匹配。

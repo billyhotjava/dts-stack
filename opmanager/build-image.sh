@@ -2,6 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_VERSION="2026-05-21-host-maven-fallback"
 
 IMAGE_TAG="${OPMANAGER_IMAGE:-dts-opmanager:2.2.3}"
 OUTPUT_PATH="${OPMANAGER_PACKAGE_TAR:-}"
@@ -173,7 +174,6 @@ build_webapp() {
 }
 
 build_backend_jar_with_host_maven() {
-  require_cmd mvn
   ensure_maven_settings
   echo "[opmanager-build] Building backend jar via host Maven"
   local args=(-B -e -DskipTests -Dskip.webapp=true -Dmaven.repo.local="${MAVEN_REPO_LOCAL}" -f "${SCRIPT_DIR}/pom.xml")
@@ -246,7 +246,12 @@ build_backend_jar_with_container_maven() {
 build_backend_jar() {
   rm -f "${SCRIPT_DIR}"/target/dts-opmanager-*.jar "${SCRIPT_DIR}"/target/dts-opmanager-*.jar.original 2>/dev/null || true
   if [[ "${OPMANAGER_USE_HOST_MAVEN:-}" == "1" ]]; then
-    build_backend_jar_with_host_maven
+    if command -v mvn >/dev/null 2>&1; then
+      build_backend_jar_with_host_maven
+    else
+      echo "[opmanager-build] WARN: OPMANAGER_USE_HOST_MAVEN=1 but 'mvn' is not in PATH; falling back to Maven container." >&2
+      build_backend_jar_with_container_maven
+    fi
   else
     build_backend_jar_with_container_maven
   fi
@@ -423,6 +428,7 @@ create_runtime_package() {
 }
 
 require_cmd docker
+echo "[opmanager-build] Script version: ${SCRIPT_VERSION}"
 build_webapp
 build_backend_jar
 build_runtime_image

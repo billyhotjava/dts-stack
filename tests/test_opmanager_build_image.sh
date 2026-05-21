@@ -110,6 +110,17 @@ chmod +x "${FAKE_BIN}/docker"
 RUNTIME_PACKAGE="${TMP_DIR}/dts-opmanager-runtime-test-linux-arm64.tar.gz"
 PATH="${FAKE_BIN}:${PATH}" HOME="${TMP_DIR}/home" LEGACY_USE_HOST_MAVEN=1 "${TEST_OPMANAGER}/build-image.sh" --tag dts-opmanager:test --output "${RUNTIME_PACKAGE}" >/dev/null
 
+rm -f "${FAKE_BIN}/mvn"
+FALLBACK_PACKAGE="${TMP_DIR}/dts-opmanager-runtime-fallback-linux-arm64.tar.gz"
+FALLBACK_STDERR="${TMP_DIR}/fallback.stderr"
+PATH="${FAKE_BIN}:/usr/bin:/bin" HOME="${TMP_DIR}/home" OPMANAGER_USE_HOST_MAVEN=1 "${TEST_OPMANAGER}/build-image.sh" --tag dts-opmanager:test --output "${FALLBACK_PACKAGE}" >/dev/null 2>"${FALLBACK_STDERR}"
+
+if ! grep -Fq "falling back to Maven container" "${FALLBACK_STDERR}"; then
+  echo "expected opmanager build script to fall back when host Maven is requested but mvn is missing" >&2
+  cat "${FALLBACK_STDERR}" >&2
+  exit 1
+fi
+
 if ! grep -Fq -- "--security-opt seccomp=unconfined" "${DOCKER_LOG}"; then
   echo "expected opmanager Maven container to relax seccomp on ARM64" >&2
   cat "${DOCKER_LOG}" >&2
