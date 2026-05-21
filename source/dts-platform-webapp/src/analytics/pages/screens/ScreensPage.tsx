@@ -1022,7 +1022,6 @@ export default function ScreensPage() {
 							</div>
 						) : visibleScreens.length === 0 ? (
 							<div className="flex flex-col items-center justify-center px-5 py-10 text-center">
-								<div className="text-5xl text-text-muted mb-4">筛</div>
 								<div className="text-sm text-text-secondary">没有匹配结果</div>
 								<div className="text-xs text-text-muted mt-2">尝试清空搜索词或调整状态筛选</div>
 								<button
