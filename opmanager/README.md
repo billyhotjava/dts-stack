@@ -71,6 +71,8 @@ cd /opt/prod/s10/v2.2.3/opmanager
   --output dts-opmanager-runtime-2.2.3-linux-arm64.tar.gz
 ```
 
+注意：`linux-arm64` 运行包必须在鲲鹏 / ARM64 Docker 主机上生成。脚本会检查 `--output` 文件名里的架构和 Docker 服务端架构是否一致；如果在 x86_64 机器上误写 `linux-arm64.tar.gz`，会直接失败，避免生成文件名和镜像架构不一致的现场包。
+
 这个脚本会一次完成：
 
 1. 使用 Node 容器构建前端。
@@ -105,6 +107,7 @@ README.md
 - `deploy/docker-compose.yml` 对 opmanager 容器设置 `seccomp=unconfined` 和 `nproc: 65535`
 - `deploy/start.sh` 优先使用 `docker-compose` V1；只有没有 V1 时才使用 `docker compose`
 - `deploy/start.sh` 会打印 Docker / Compose 版本，并在启动前校验镜像架构、入口和 jar 路径
+- `deploy/start.sh` 会先 `docker load` 运行包内的镜像 tar，再使用 `--no-build` 启动 Compose；如果镜像没有成功加载，会直接失败，不会让 Compose 在离线现场尝试拉取镜像
 
 如果需要强制拉取基础镜像：
 

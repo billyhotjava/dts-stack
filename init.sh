@@ -668,6 +668,7 @@ generate_env_base(){
   : "${TRAEFIK_DASHBOARD_PORT:=8080}"
   : "${TRAEFIK_METRICS_PORT:=9100}"
   : "${TRAEFIK_ENABLE_PING:=true}"
+  : "${KAFKA_UI_BIND_HOST:=0.0.0.0}"
   : "${TRUSTSTORE_PASSWORD:=changeit}"
   : "${IMAGE_MAVEN:=maven:3.9.9-eclipse-temurin-21}"
   # Optional: image to run keytool in cert generation (offline/air-gapped)
@@ -1032,6 +1033,7 @@ TRAEFIK_DASHBOARD=${TRAEFIK_DASHBOARD}
 TRAEFIK_DASHBOARD_PORT=${TRAEFIK_DASHBOARD_PORT}
 TRAEFIK_METRICS_PORT=${TRAEFIK_METRICS_PORT}
 TRAEFIK_ENABLE_PING=${TRAEFIK_ENABLE_PING}
+KAFKA_UI_BIND_HOST=${KAFKA_UI_BIND_HOST}
 
 # ====== Build Helpers ======
 IMAGE_MAVEN=${IMAGE_MAVEN}

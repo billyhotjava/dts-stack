@@ -308,6 +308,74 @@ image_version() {
   echo "${image_version}"
 }
 
+normalize_arch() {
+  case "$1" in
+    arm64|aarch64|linux/arm64)
+      echo "arm64"
+      ;;
+    amd64|x86_64|linux/amd64)
+      echo "amd64"
+      ;;
+    *)
+      echo "$1"
+      ;;
+  esac
+}
+
+requested_output_arch() {
+  local output="${OUTPUT_PATH:-}"
+  if [[ -z "${output}" ]]; then
+    return 0
+  fi
+  local name="${output##*/}"
+  case "${name}" in
+    *linux-arm64*.tar.gz|*linux-arm64*.tgz|*linux-aarch64*.tar.gz|*linux-aarch64*.tgz)
+      echo "arm64"
+      ;;
+    *linux-amd64*.tar.gz|*linux-amd64*.tgz|*linux-x86_64*.tar.gz|*linux-x86_64*.tgz)
+      echo "amd64"
+      ;;
+  esac
+}
+
+validate_requested_arch_before_build() {
+  local requested_arch
+  requested_arch="$(requested_output_arch)"
+  if [[ -z "${requested_arch}" ]]; then
+    return 0
+  fi
+
+  local server_arch
+  server_arch="$(normalize_arch "$(docker version --format '{{.Server.Arch}}' 2>/dev/null || uname -m)")"
+
+  local default_platform_arch=""
+  if [[ -n "${DOCKER_DEFAULT_PLATFORM:-}" ]]; then
+    default_platform_arch="$(normalize_arch "${DOCKER_DEFAULT_PLATFORM}")"
+  fi
+
+  if [[ "${server_arch}" != "${requested_arch}" && "${default_platform_arch}" != "${requested_arch}" ]]; then
+    echo "[opmanager-build] ERROR: --output requests linux-${requested_arch}, but Docker server arch is ${server_arch}." >&2
+    echo "[opmanager-build] Build this package on a ${requested_arch} Docker host, or do not hard-code the output filename arch." >&2
+    exit 1
+  fi
+}
+
+verify_built_image_arch_matches_output() {
+  local requested_arch
+  requested_arch="$(requested_output_arch)"
+  if [[ -z "${requested_arch}" ]]; then
+    return 0
+  fi
+
+  local actual_arch
+  actual_arch="$(normalize_arch "$(image_arch)")"
+  if [[ "${actual_arch}" != "${requested_arch}" ]]; then
+    echo "[opmanager-build] ERROR: built image arch is ${actual_arch}, but --output requests linux-${requested_arch}." >&2
+    echo "[opmanager-build] Refusing to create a misleading runtime package." >&2
+    exit 1
+  fi
+}
+
 runtime_package_name() {
   echo "$(image_name)-runtime-$(image_version)-linux-$(image_arch).tar.gz"
 }
@@ -410,10 +478,15 @@ fi
 
 docker rm -f dts-opmanager >/dev/null 2>&1 || true
 
+if ! docker image inspect "${image_tag}" >/dev/null 2>&1; then
+  echo "[opmanager-start] ERROR: image ${image_tag} is not available after docker load; refusing to let compose pull in an offline environment." >&2
+  exit 1
+fi
+
 if command -v docker-compose >/dev/null 2>&1; then
-  docker-compose -f docker-compose.yml --env-file .env up -d --force-recreate --remove-orphans
+  docker-compose -f docker-compose.yml --env-file .env up -d --no-build --force-recreate --remove-orphans
 else
-  docker compose -f docker-compose.yml --env-file .env up -d --force-recreate --remove-orphans
+  docker compose -f docker-compose.yml --env-file .env up -d --no-build --force-recreate --remove-orphans
 fi
 
 echo "[opmanager-start] DTS OpManager started."
@@ -468,8 +541,10 @@ create_runtime_package() {
 }
 
 require_cmd docker
+validate_requested_arch_before_build
 echo "[opmanager-build] Script version: ${SCRIPT_VERSION}"
 build_webapp
 build_backend_jar
 build_runtime_image
+verify_built_image_arch_matches_output
 create_runtime_package
