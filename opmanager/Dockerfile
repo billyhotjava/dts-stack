@@ -3,7 +3,8 @@
 FROM docker:27-cli AS docker-cli
 
 FROM eclipse-temurin:21-jre
-ENV JAVA_HOME=/opt/java/openjdk
+RUN mkdir -p /app/java && cp -a /opt/java/openjdk /app/java/openjdk
+ENV JAVA_HOME=/app/java/openjdk
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 WORKDIR /app/dts-opmanager
 
@@ -21,4 +22,4 @@ ENV OPMANAGER_SERVER_PORT=18090
 
 EXPOSE 18090
 
-ENTRYPOINT ["/opt/java/openjdk/bin/java", "-jar", "/app/dts-opmanager/dts-opmanager.jar"]
+ENTRYPOINT ["/app/java/openjdk/bin/java", "-jar", "/app/dts-opmanager/dts-opmanager.jar"]

@@ -98,8 +98,9 @@ README.md
 
 生成的运行包也会按 Docker 18.09 / API 1.39 / docker-compose 1.29.2 兼容方式启动：
 
-- 运行镜像内显式设置 `JAVA_HOME=/opt/java/openjdk`
-- 镜像和 `deploy/docker-compose.yml` 都使用 `/opt/java/openjdk/bin/java` 绝对入口
+- 运行镜像会把 JRE 从 `/opt/java/openjdk` 复制到 `/app/java/openjdk`
+- 运行镜像内显式设置 `JAVA_HOME=/app/java/openjdk`
+- 镜像和 `deploy/docker-compose.yml` 都使用 `/app/java/openjdk/bin/java` 绝对入口
 - `deploy/docker-compose.yml` 显式设置 `working_dir: /app/dts-opmanager`
 - `deploy/docker-compose.yml` 对 opmanager 容器设置 `seccomp=unconfined` 和 `nproc: 65535`
 - `deploy/start.sh` 优先使用 `docker-compose` V1；只有没有 V1 时才使用 `docker compose`
@@ -285,7 +286,7 @@ tar -xzf /opt/dts-opmanager/packages/dts-opmanager-upgrade-*.tar.gz -C /opt/dts-
 当前脚本会打印版本：
 
 ```text
-[opmanager-build] Script version: 2026-05-21-dts-build-aligned
+[opmanager-build] Script version: 2026-05-21-host-opt-mount-safe
 ```
 
 如果请求宿主机 Maven 但现场没有 `mvn`，脚本会自动降级回 Maven 容器，并打印：
@@ -298,15 +299,15 @@ tar -xzf /opt/dts-opmanager/packages/dts-opmanager-upgrade-*.tar.gz -C /opt/dts-
 
 原因：旧版 opmanager 镜像入口使用 `java`，依赖基础镜像默认 `PATH`。部分鲲鹏 / 麒麟现场的旧 Docker / OCI runtime 对这类入口解析不稳定，会在容器启动阶段报找不到 `java`。
 
-处理：重新使用当前 `build-image.sh` 生成运行包。当前 Dockerfile 和 compose 已经改为显式 `JAVA_HOME=/opt/java/openjdk`，并使用 `/opt/java/openjdk/bin/java` 作为绝对入口。
+处理：重新使用当前 `build-image.sh` 生成运行包。当前 Dockerfile 会先把 JRE 复制到 `/app/java/openjdk`，compose 使用 `/app/java/openjdk/bin/java` 作为绝对入口。这样即使运行时保留 `/opt:/opt` 宿主机路径映射，也不会遮住 Java 运行时。
 
 当前 `start.sh` 会在 `docker-compose up` 前输出类似：
 
 ```text
-[opmanager-start] Loaded image: dts-opmanager:2.2.3, arch=arm64, entrypoint=["/opt/java/openjdk/bin/java","-jar","/app/dts-opmanager/dts-opmanager.jar"]
+[opmanager-start] Loaded image: dts-opmanager:2.2.3, arch=arm64, entrypoint=["/app/java/openjdk/bin/java","-jar","/app/dts-opmanager/dts-opmanager.jar"]
 ```
 
-如果这里仍然显示 `entrypoint=["java", ...]`，说明现场 `deploy` 目录里的镜像 tar 还是旧包，或者目录里混入了旧的 `dts-opmanager-*.tar`。当前脚本会要求 `deploy/` 下只能保留一个 opmanager 镜像 tar，并在检测到旧镜像布局时停止。
+如果这里仍然显示 `entrypoint=["java", ...]` 或 `/opt/java/openjdk/bin/java`，说明现场 `deploy` 目录里的镜像 tar 还是旧包，或者目录里混入了旧的 `dts-opmanager-*.tar`。当前脚本会要求 `deploy/` 下只能保留一个 opmanager 镜像 tar，并在检测到旧镜像布局时停止。
 
 当前 `start.sh` 不再用 `docker run --entrypoint /bin/sh` 做容器内文件检查。`dts-build.sh` 的成熟路径已经证明 Docker 18.09 / Kunpeng 对容器内 shell 包装敏感，所以这里只使用 `docker image inspect` 元数据和 compose 的显式 `entrypoint` 判定镜像是否匹配。
 

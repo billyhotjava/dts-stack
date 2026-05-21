@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
     working_dir: /app/dts-opmanager
     entrypoint:
-      - /opt/java/openjdk/bin/java
+      - /app/java/openjdk/bin/java
       - -jar
       - /app/dts-opmanager/dts-opmanager.jar
     security_opt:

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPT_VERSION="2026-05-21-dts-build-aligned"
+SCRIPT_VERSION="2026-05-21-host-opt-mount-safe"
 
 IMAGE_TAG="${OPMANAGER_IMAGE:-dts-opmanager:2.2.3}"
 OUTPUT_PATH="${OPMANAGER_PACKAGE_TAR:-}"
@@ -401,10 +401,10 @@ if [[ "${image_arch}" != "arm64" && "${image_arch}" != "aarch64" ]]; then
   echo "[opmanager-start] WARN: expected an arm64 image for Kunpeng/Kylin, got '${image_arch:-unknown}'." >&2
 fi
 
-if [[ "${image_entrypoint}" != *"/opt/java/openjdk/bin/java"* || "${image_entrypoint}" != *"/app/dts-opmanager/dts-opmanager.jar"* ]]; then
+if [[ "${image_entrypoint}" != *"/app/java/openjdk/bin/java"* || "${image_entrypoint}" != *"/app/dts-opmanager/dts-opmanager.jar"* ]]; then
   echo "[opmanager-start] ERROR: loaded image entrypoint is not compatible with Docker 18.09/Kunpeng." >&2
-  echo "[opmanager-start] Expected entrypoint to contain /opt/java/openjdk/bin/java and /app/dts-opmanager/dts-opmanager.jar." >&2
-  echo "[opmanager-start] Rebuild the runtime package with build-image.sh version 2026-05-21-dts-build-aligned or newer, then copy/extract that package again." >&2
+  echo "[opmanager-start] Expected entrypoint to contain /app/java/openjdk/bin/java and /app/dts-opmanager/dts-opmanager.jar." >&2
+  echo "[opmanager-start] Rebuild the runtime package with build-image.sh version 2026-05-21-host-opt-mount-safe or newer, then copy/extract that package again." >&2
   exit 1
 fi
 

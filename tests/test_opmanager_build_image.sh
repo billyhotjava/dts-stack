@@ -184,13 +184,18 @@ if grep -Fq "FROM maven" "${TEST_OPMANAGER}/Dockerfile" || grep -Fq "RUN mvn" "$
   exit 1
 fi
 
-if ! grep -Fq 'ENTRYPOINT ["/opt/java/openjdk/bin/java", "-jar", "/app/dts-opmanager/dts-opmanager.jar"]' "${TEST_OPMANAGER}/Dockerfile"; then
+if ! grep -Fq 'ENTRYPOINT ["/app/java/openjdk/bin/java", "-jar", "/app/dts-opmanager/dts-opmanager.jar"]' "${TEST_OPMANAGER}/Dockerfile"; then
   echo "expected opmanager runtime image to use an absolute Java entrypoint" >&2
   exit 1
 fi
 
-if ! grep -Fq "ENV JAVA_HOME=/opt/java/openjdk" "${TEST_OPMANAGER}/Dockerfile"; then
+if ! grep -Fq "ENV JAVA_HOME=/app/java/openjdk" "${TEST_OPMANAGER}/Dockerfile"; then
   echo "expected opmanager runtime image to set JAVA_HOME explicitly" >&2
+  exit 1
+fi
+
+if ! grep -Fq "cp -a /opt/java/openjdk /app/java/openjdk" "${TEST_OPMANAGER}/Dockerfile"; then
+  echo "expected opmanager runtime image to copy the JRE away from /opt before host /opt is mounted" >&2
   exit 1
 fi
 
@@ -212,7 +217,7 @@ if ! tar -xOf "${RUNTIME_PACKAGE}" deploy/docker-compose.yml | grep -Fq "working
   exit 1
 fi
 
-if ! tar -xOf "${RUNTIME_PACKAGE}" deploy/docker-compose.yml | grep -Fq "/opt/java/openjdk/bin/java"; then
+if ! tar -xOf "${RUNTIME_PACKAGE}" deploy/docker-compose.yml | grep -Fq "/app/java/openjdk/bin/java"; then
   echo "expected packaged compose to override the Java entrypoint with an absolute path" >&2
   tar -xOf "${RUNTIME_PACKAGE}" deploy/docker-compose.yml >&2
   exit 1
