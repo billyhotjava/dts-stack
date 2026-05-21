@@ -12,6 +12,7 @@ import {
   precheckConfig,
   recreateWorkspaceContainers,
   registerPackagePath,
+  updateWorkspaceRoot,
   uploadPackage
 } from "./api";
 import { buildSideBySideDiff, collectDiffHunks, type DiffHunk, type SideBySideDiffRow } from "./diff";
@@ -49,6 +50,7 @@ export function App() {
   const [containers, setContainers] = useState<DockerContainersResponse | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceStatus | null>(null);
   const [workspaceResult, setWorkspaceResult] = useState<WorkspaceOperationResult | null>(null);
+  const [workspaceRootInput, setWorkspaceRootInput] = useState("");
   const [serverPath, setServerPath] = useState("");
   const [selectedPackage, setSelectedPackage] = useState("");
   const [planNote, setPlanNote] = useState("dry-run plan created");
@@ -84,6 +86,7 @@ export function App() {
       setJobs(jobsResult);
       setContainers(containersResult);
       setWorkspace(workspaceResult);
+      setWorkspaceRootInput(workspaceResult.packageRoot);
     } catch (caught) {
       setError(toErrorMessage(caught));
     }
@@ -203,6 +206,24 @@ export function App() {
     }
   }
 
+  async function onWorkspaceRootSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!workspaceRootInput.trim()) return;
+    setBusy(true);
+    setError("");
+    setWorkspaceResult(null);
+    try {
+      const next = await updateWorkspaceRoot(workspaceRootInput.trim());
+      setWorkspace(next);
+      setWorkspaceRootInput(next.packageRoot);
+      setServerPath(next.packageRoot);
+    } catch (caught) {
+      setError(toErrorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onRecreateWorkspaceContainers() {
     setBusy(true);
     setError("");
@@ -240,7 +261,19 @@ export function App() {
 
       <main>
         {activeTab === "overview" ? (
-          <Overview runtime={runtime} packages={packages} jobs={jobs} workspace={workspace} workspaceResult={workspaceResult} busy={busy} onLoadImages={onLoadWorkspaceImages} onRecreateContainers={onRecreateWorkspaceContainers} />
+          <Overview
+            runtime={runtime}
+            packages={packages}
+            jobs={jobs}
+            workspace={workspace}
+            workspaceResult={workspaceResult}
+            workspaceRootInput={workspaceRootInput}
+            busy={busy}
+            onWorkspaceRootChange={setWorkspaceRootInput}
+            onWorkspaceRootSubmit={onWorkspaceRootSubmit}
+            onLoadImages={onLoadWorkspaceImages}
+            onRecreateContainers={onRecreateWorkspaceContainers}
+          />
         ) : null}
         {activeTab === "packages" ? (
           <PackagesView
@@ -290,7 +323,10 @@ function Overview(props: {
   jobs: UpgradeJob[];
   workspace: WorkspaceStatus | null;
   workspaceResult: WorkspaceOperationResult | null;
+  workspaceRootInput: string;
   busy: boolean;
+  onWorkspaceRootChange: (value: string) => void;
+  onWorkspaceRootSubmit: (event: FormEvent) => void;
   onLoadImages: () => void;
   onRecreateContainers: () => void;
 }) {
@@ -304,8 +340,8 @@ function Overview(props: {
           <Fact label="Java" value={runtime?.javaVersion || "-"} />
           <Fact label="数据目录" value={runtime?.dataDir || "-"} />
           <Fact label="DTS 目录" value={runtime?.targetStackDir || "-"} />
-          <Fact label="Docker" value={runtime?.dockerAvailable ? runtime.dockerVersion : "不可用"} state={runtime?.dockerAvailable ? "ok" : "bad"} />
-          <Fact label="Compose" value={runtime?.composeAvailable ? runtime.composeVersion : "不可用"} state={runtime?.composeAvailable ? "ok" : "bad"} />
+          <Fact label="Docker" value={runtime ? runtimeStatusText(runtime.dockerAvailable, runtime.dockerVersion, runtime.dockerMessage) : "-"} state={runtime?.dockerAvailable ? "ok" : "bad"} />
+          <Fact label="Compose" value={runtime ? runtimeStatusText(runtime.composeAvailable, runtime.composeVersion, runtime.composeMessage) : "-"} state={runtime?.composeAvailable ? "ok" : "bad"} />
         </dl>
         {runtime?.portainerUrl ? (
           <a className="linkButton" href={runtime.portainerUrl} target="_blank" rel="noreferrer">
@@ -323,6 +359,12 @@ function Overview(props: {
       </div>
       <div className="panel wide">
         <h2>升级工作区</h2>
+        <form className="formRow workspaceForm" onSubmit={props.onWorkspaceRootSubmit}>
+          <input value={props.workspaceRootInput} onChange={event => props.onWorkspaceRootChange(event.target.value)} placeholder="/var/lib/dts-opmanager/packages" />
+          <button type="submit" disabled={props.busy || !props.workspaceRootInput.trim()}>
+            保存目录
+          </button>
+        </form>
         <dl className="facts">
           <Fact label="根目录" value={props.workspace?.packageRoot || "-"} state={props.workspace?.packageRootExists ? "ok" : "bad"} />
           <Fact label="images" value={props.workspace?.imagesDir || "-"} state={props.workspace?.imagesDirExists ? "ok" : "bad"} />
@@ -357,6 +399,13 @@ function OperationResult(props: { result: WorkspaceOperationResult }) {
       ))}
     </div>
   );
+}
+
+function runtimeStatusText(available: boolean, version: string, message: string) {
+  if (available) {
+    return version || message || "可用";
+  }
+  return message || "不可用";
 }
 
 function PackagesView(props: {
@@ -523,14 +572,14 @@ function ConfigPrecheckView(props: {
                       <p>{selectedFile.message}</p>
                     </div>
                     <div className="actionBar">
-                      {selectedFile.allowedActions.map(action => (
-                        <button key={action} className={action === "KEEP_LOCAL" ? "secondary" : action === "USE_PACKAGE" ? "danger" : ""} type="button" disabled={props.busy} onClick={() => props.onApplyAction(selectedFile, action)}>
+                      {selectedFile.allowedActions.filter(action => action !== "USE_PACKAGE").map(action => (
+                        <button key={action} className={action === "KEEP_LOCAL" ? "secondary" : ""} type="button" disabled={props.busy} onClick={() => props.onApplyAction(selectedFile, action)}>
                           {actionLabel(action)}
                         </button>
                       ))}
                     </div>
                   </div>
-                  <DiffViewer file={selectedFile} />
+                  <DiffViewer file={selectedFile} busy={props.busy} onReplace={() => props.onApplyAction(selectedFile, "USE_PACKAGE")} />
                 </>
               ) : (
                 <div className="emptyState">请选择升级包并执行配置预检。</div>
@@ -545,11 +594,12 @@ function ConfigPrecheckView(props: {
   );
 }
 
-function DiffViewer(props: { file: ConfigFileReview }) {
+function DiffViewer(props: { file: ConfigFileReview; busy: boolean; onReplace: () => void }) {
   const [showOnlyChanges, setShowOnlyChanges] = useState(false);
   const [activeHunkIndex, setActiveHunkIndex] = useState(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
+  const canReplace = props.file.allowedActions.includes("USE_PACKAGE");
   const diff = useMemo(() => buildSideBySideDiff(props.file.localLines, props.file.packageLines), [props.file.localLines, props.file.packageLines]);
   const hunks = useMemo(() => collectDiffHunks(diff.rows), [diff.rows]);
   const visibleRows = useMemo(() => (showOnlyChanges ? diff.rows.filter(row => row.kind !== "equal") : diff.rows), [diff.rows, showOnlyChanges]);
@@ -579,6 +629,16 @@ function DiffViewer(props: { file: ConfigFileReview }) {
     setActiveHunkIndex((activeHunkIndex + direction + hunks.length) % hunks.length);
   }
 
+  function replaceWithPackageFile() {
+    if (!canReplace) {
+      return;
+    }
+    const confirmed = window.confirm(`确认用右侧升级包文件覆盖左侧现场文件？\n${props.file.path}\n系统会先生成备份。`);
+    if (confirmed) {
+      props.onReplace();
+    }
+  }
+
   return (
     <div className="compareShell">
       <div className="compareToolbar">
@@ -603,10 +663,16 @@ function DiffViewer(props: { file: ConfigFileReview }) {
       </div>
       <div className="diffGrid" ref={scrollRef}>
         <div className="diffTitle">现场文件</div>
+        <div className="diffReplaceTitle">替换</div>
         <div className="diffTitle">升级包文件</div>
         {visibleRows.map(row => (
           <DiffRow key={row.key} row={row} activeHunk={activeHunk} />
         ))}
+        <div className="replaceRail">
+          <button className="replaceButton" type="button" disabled={props.busy || !canReplace} onClick={replaceWithPackageFile} title={canReplace ? "用右侧升级包文件覆盖左侧现场文件" : "当前文件不允许直接替换"}>
+            ← 替换
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -620,6 +686,7 @@ function DiffRow(props: { row: SideBySideDiffRow; activeHunk: DiffHunk | null })
         <span>{formatLineNumber(props.row.leftLineNumber)}</span>
         {props.row.leftText || " "}
       </pre>
+      <div className={`diffBridge ${props.row.kind}`} />
       <pre className={props.row.rightState}>
         <span>{formatLineNumber(props.row.rightLineNumber)}</span>
         {props.row.rightText || " "}

@@ -6,6 +6,7 @@ import com.yuzhi.dts.opmanager.runtime.CommandRunner;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -44,6 +45,22 @@ public class WorkspaceService {
             Files.isDirectory(miscDir),
             imageTars()
         );
+    }
+
+    public synchronized WorkspaceStatus updatePackageRoot(String packageRoot) {
+        if (packageRoot == null || packageRoot.isBlank()) {
+            throw new IllegalArgumentException("workspace package root is required");
+        }
+        Path root = Path.of(packageRoot.trim()).toAbsolutePath().normalize();
+        try {
+            Path stateFile = packageRootStateFile();
+            Files.createDirectories(stateFile.getParent());
+            Files.writeString(stateFile, root.toString(), StandardCharsets.UTF_8);
+            properties.setPackageRoots(List.of(root));
+            return status();
+        } catch (IOException e) {
+            throw new IllegalStateException("failed to save workspace package root", e);
+        }
     }
 
     public WorkspaceOperationResult loadImages() {
@@ -97,9 +114,30 @@ public class WorkspaceService {
     }
 
     private Path packageRoot() {
+        Path persisted = persistedPackageRoot();
+        if (persisted != null) {
+            return persisted;
+        }
         List<Path> roots = properties.getPackageRoots();
         Path root = roots.isEmpty() ? properties.getDataDir().resolve("packages") : roots.getFirst();
         return root.toAbsolutePath().normalize();
+    }
+
+    private Path persistedPackageRoot() {
+        Path stateFile = packageRootStateFile();
+        if (!Files.isRegularFile(stateFile)) {
+            return null;
+        }
+        try {
+            String value = Files.readString(stateFile, StandardCharsets.UTF_8).trim();
+            return value.isBlank() ? null : Path.of(value).toAbsolutePath().normalize();
+        } catch (IOException | RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private Path packageRootStateFile() {
+        return properties.getDataDir().resolve("state/workspace-package-root.txt").toAbsolutePath().normalize();
     }
 
     private Path imagesDir() {

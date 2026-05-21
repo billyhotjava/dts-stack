@@ -1,11 +1,15 @@
 package com.yuzhi.dts.opmanager.web.rest;
 
 import com.yuzhi.dts.opmanager.workspace.WorkspaceOperationResult;
+import com.yuzhi.dts.opmanager.workspace.WorkspaceRootRequest;
 import com.yuzhi.dts.opmanager.workspace.WorkspaceService;
 import com.yuzhi.dts.opmanager.workspace.WorkspaceStatus;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -21,6 +25,11 @@ public class WorkspaceResource {
     @GetMapping
     public WorkspaceStatus status() {
         return workspaceService.status();
+    }
+
+    @PutMapping("/root")
+    public WorkspaceStatus updateRoot(@Valid @RequestBody WorkspaceRootRequest request) {
+        return workspaceService.updatePackageRoot(request.packageRoot());
     }
 
     @PostMapping("/load-images")

@@ -50,7 +50,8 @@
 - `dts-build.sh` 已支持导出 opmanager 升级工作区：
   - `--opmanager-package`
   - `--opmanager-output <dir>`
-  - `OPMANAGER_PACKAGE_ROOTS=/var/lib/dts-opmanager/packages ./builds/dts-build.sh -all --opmanager-package`
+  - 推荐只使用镜像列表驱动的固定流程：
+    `./builds/dts-build.sh --image dts-admin dts-admin-webapp dts-ingestion dts-platform dts-platform-webapp dts-analytics dts-metrics --legacy --opmanager-output /var/lib/dts-opmanager/packages`
 - REST API 已有第一版：
   - `/api/opmanager/runtime`
   - `/api/opmanager/packages`
@@ -87,7 +88,10 @@
 
 ```bash
 cd /opt/prod/s10/v2.2.3
-OPMANAGER_PACKAGE_ROOTS=/var/lib/dts-opmanager/packages ./builds/dts-build.sh -all --opmanager-package
+./builds/dts-build.sh \
+  --image dts-admin dts-admin-webapp dts-ingestion dts-platform dts-platform-webapp dts-analytics dts-metrics \
+  --legacy \
+  --opmanager-output /var/lib/dts-opmanager/packages
 ```
 
 生成后的目录约定：

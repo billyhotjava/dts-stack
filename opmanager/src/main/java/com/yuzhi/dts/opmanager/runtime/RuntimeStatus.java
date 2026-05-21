@@ -9,7 +9,9 @@ public record RuntimeStatus(
     boolean dockerEnabled,
     boolean dockerAvailable,
     String dockerVersion,
+    String dockerMessage,
     boolean composeAvailable,
     String composeVersion,
+    String composeMessage,
     String portainerUrl
 ) {}

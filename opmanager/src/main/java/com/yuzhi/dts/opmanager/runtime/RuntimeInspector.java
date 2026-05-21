@@ -19,10 +19,10 @@ public class RuntimeInspector {
     }
 
     public RuntimeStatus inspect() {
-        CommandResult docker = properties.isDockerEnabled()
-            ? commandRunner.run(List.of("docker", "version", "--format", "{{.Server.Version}}"), COMMAND_TIMEOUT)
-            : unavailable("docker disabled");
-        CommandResult compose = properties.isDockerEnabled() ? detectCompose() : unavailable("docker disabled");
+        RuntimeProbe docker = properties.isDockerEnabled()
+            ? probe(commandRunner.run(List.of("docker", "version", "--format", "{{.Server.Version}}"), COMMAND_TIMEOUT))
+            : RuntimeProbe.unavailable("docker disabled by OPMANAGER_DOCKER_ENABLED=false");
+        RuntimeProbe compose = properties.isDockerEnabled() ? detectCompose() : RuntimeProbe.unavailable("docker disabled by OPMANAGER_DOCKER_ENABLED=false");
 
         return new RuntimeStatus(
             System.getProperty("os.name", "unknown"),
@@ -31,23 +31,39 @@ public class RuntimeInspector {
             properties.getDataDir().toString(),
             properties.getTargetStackDir().toString(),
             properties.isDockerEnabled(),
-            docker.success(),
-            docker.success() ? docker.trimmedStdout() : docker.summary(),
-            compose.success(),
-            compose.success() ? compose.trimmedStdout() : compose.summary(),
+            docker.available(),
+            docker.version(),
+            docker.message(),
+            compose.available(),
+            compose.version(),
+            compose.message(),
             properties.getPortainerUrl()
         );
     }
 
-    private CommandResult detectCompose() {
+    private RuntimeProbe detectCompose() {
         CommandResult plugin = commandRunner.run(List.of("docker", "compose", "version", "--short"), COMMAND_TIMEOUT);
         if (plugin.success()) {
-            return plugin;
+            return probe(plugin);
         }
-        return commandRunner.run(List.of("docker-compose", "version", "--short"), COMMAND_TIMEOUT);
+        CommandResult legacy = commandRunner.run(List.of("docker-compose", "version", "--short"), COMMAND_TIMEOUT);
+        if (legacy.success()) {
+            return probe(legacy);
+        }
+        return RuntimeProbe.unavailable("docker compose plugin: " + plugin.summary() + "; docker-compose: " + legacy.summary());
     }
 
-    private CommandResult unavailable(String message) {
-        return new CommandResult(List.of(), 1, "", message, false, Duration.ZERO);
+    private RuntimeProbe probe(CommandResult result) {
+        if (result.success()) {
+            String version = result.trimmedStdout();
+            return new RuntimeProbe(true, version, version);
+        }
+        return RuntimeProbe.unavailable(result.summary());
+    }
+
+    private record RuntimeProbe(boolean available, String version, String message) {
+        static RuntimeProbe unavailable(String message) {
+            return new RuntimeProbe(false, "", message == null || message.isBlank() ? "unavailable" : message);
+        }
     }
 }

@@ -7,8 +7,10 @@ export type RuntimeStatus = {
   dockerEnabled: boolean;
   dockerAvailable: boolean;
   dockerVersion: string;
+  dockerMessage: string;
   composeAvailable: boolean;
   composeVersion: string;
+  composeMessage: string;
   portainerUrl: string;
 };
 

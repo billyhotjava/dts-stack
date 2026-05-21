@@ -14,6 +14,7 @@ setup_repo() {
     "${target_repo}/builds/dts-platform" \
     "${target_repo}/builds/dts-ingestion" \
     "${target_repo}/builds/dts-analytics" \
+    "${target_repo}/builds/dts-metrics" \
     "${target_repo}/builds/dts-admin-webapp" \
     "${target_repo}/builds/dts-platform-webapp" \
     "${target_repo}/builds/dts-analytics-webapp/modern" \
@@ -23,6 +24,7 @@ setup_repo() {
     "${target_repo}/source/dts-platform/target" \
     "${target_repo}/source/dts-ingestion/target" \
     "${target_repo}/source/dts-analytics/target" \
+    "${target_repo}/source/dts-metrics/target" \
     "${target_repo}/source/dts-airflow-om" \
     "${target_repo}/source"
 
@@ -42,6 +44,7 @@ EOF_POM
     "builds/dts-ingestion/Dockerfile.offline"
     "builds/dts-analytics/Dockerfile"
     "builds/dts-analytics/Dockerfile.offline"
+    "builds/dts-metrics/Dockerfile"
     "builds/dts-admin-webapp/Dockerfile"
     "builds/dts-platform-webapp/Dockerfile"
     "builds/dts-analytics-webapp/modern/Dockerfile"
@@ -61,6 +64,7 @@ EOF_DOCKERFILE
   : > "${target_repo}/builds/dts-platform/dts-platform.jar"
   : > "${target_repo}/builds/dts-ingestion/dts-ingestion.jar"
   : > "${target_repo}/builds/dts-analytics/dts-analytics.jar"
+  : > "${target_repo}/builds/dts-metrics/dts-metrics.jar"
 }
 
 setup_fake_bin() {
@@ -119,11 +123,13 @@ case "${1:-}" in
       "__TEST_REPO__/source/dts-admin/target" \
       "__TEST_REPO__/source/dts-platform/target" \
       "__TEST_REPO__/source/dts-ingestion/target" \
-      "__TEST_REPO__/source/dts-analytics/target"
+      "__TEST_REPO__/source/dts-analytics/target" \
+      "__TEST_REPO__/source/dts-metrics/target"
     : > "__TEST_REPO__/source/dts-admin/target/dts-admin-0.0.1-SNAPSHOT.jar"
     : > "__TEST_REPO__/source/dts-platform/target/dts-platform-0.0.1-SNAPSHOT.jar"
     : > "__TEST_REPO__/source/dts-ingestion/target/dts-ingestion-0.0.1-SNAPSHOT.jar"
     : > "__TEST_REPO__/source/dts-analytics/target/dts-analytics-0.0.1-SNAPSHOT.jar"
+    : > "__TEST_REPO__/source/dts-metrics/target/dts-metrics-0.0.1-SNAPSHOT.jar"
     printf 'run:%s\n' "$*" >> "__DOCKER_LOG__"
     exit 0
     ;;
@@ -164,6 +170,9 @@ case "${jar_path}" in
     ;;
   *dts-ingestion.jar)
     echo "com/yuzhi/dts/ingestion/DtsIngestionApp.class"
+    ;;
+  *dts-metrics.jar)
+    echo "com/yuzhi/dts/metrics/DtsMetricsApp.class"
     ;;
   *)
     echo "META-INF/MANIFEST.MF"
@@ -212,8 +221,8 @@ setup_fake_bin "${SCENARIO2_BIN}" "${SCENARIO2_REPO}" "${SCENARIO2_DOCKER_LOG}"
 PATH="${SCENARIO2_BIN}:${PATH}" PREBUILD_JARS=0 "${SCENARIO2_REPO}/builds/dts-build.sh" -all --legacy --no-save >/dev/null
 
 build_count="$(grep -c '^build:' "${SCENARIO2_DOCKER_LOG}")"
-if [[ "${build_count}" != "9" ]]; then
-  echo "expected -all --legacy to build exactly 9 legacy-chain images, got ${build_count}" >&2
+if [[ "${build_count}" != "10" ]]; then
+  echo "expected -all --legacy to build exactly 10 legacy-chain images, got ${build_count}" >&2
   cat "${SCENARIO2_DOCKER_LOG}" >&2
   exit 1
 fi
@@ -239,6 +248,7 @@ rm -f \
   "${SCENARIO3_REPO}/builds/dts-admin/dts-admin.jar" \
   "${SCENARIO3_REPO}/builds/dts-platform/dts-platform.jar" \
   "${SCENARIO3_REPO}/builds/dts-ingestion/dts-ingestion.jar" \
+  "${SCENARIO3_REPO}/builds/dts-metrics/dts-metrics.jar" \
   "${SCENARIO3_REPO}/builds/dts-analytics/dts-analytics.jar"
 
 PATH="${SCENARIO3_BIN}:${PATH}" \
@@ -250,6 +260,7 @@ for built_jar in \
   "${SCENARIO3_REPO}/builds/dts-admin/dts-admin.jar" \
   "${SCENARIO3_REPO}/builds/dts-platform/dts-platform.jar" \
   "${SCENARIO3_REPO}/builds/dts-ingestion/dts-ingestion.jar" \
+  "${SCENARIO3_REPO}/builds/dts-metrics/dts-metrics.jar" \
   "${SCENARIO3_REPO}/builds/dts-analytics/dts-analytics.jar"; do
   if [[ ! -f "${built_jar}" ]]; then
     echo "expected -all --legacy to prebuild missing backend jar: ${built_jar}" >&2
@@ -259,8 +270,8 @@ for built_jar in \
 done
 
 run_count="$(grep -c '^run:' "${SCENARIO3_DOCKER_LOG}")"
-if [[ "${run_count}" != "4" ]]; then
-  echo "expected -all --legacy to invoke Maven container 4 times for missing backend jars, got ${run_count}" >&2
+if [[ "${run_count}" != "5" ]]; then
+  echo "expected -all --legacy to invoke Maven container 5 times for missing backend jars, got ${run_count}" >&2
   cat "${SCENARIO3_DOCKER_LOG}" >&2
   exit 1
 fi

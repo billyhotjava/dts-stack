@@ -91,6 +91,13 @@ export function getWorkspaceStatus(): Promise<WorkspaceStatus> {
   return request<WorkspaceStatus>("/api/opmanager/workspace");
 }
 
+export function updateWorkspaceRoot(packageRoot: string): Promise<WorkspaceStatus> {
+  return request<WorkspaceStatus>("/api/opmanager/workspace/root", {
+    method: "PUT",
+    body: JSON.stringify({ packageRoot })
+  });
+}
+
 export function loadWorkspaceImages(): Promise<WorkspaceOperationResult> {
   return request<WorkspaceOperationResult>("/api/opmanager/workspace/load-images", {
     method: "POST"

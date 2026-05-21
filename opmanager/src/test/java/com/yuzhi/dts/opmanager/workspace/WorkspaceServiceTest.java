@@ -34,6 +34,25 @@ class WorkspaceServiceTest {
     }
 
     @Test
+    void updatesWorkspaceRootAndPersistsItAcrossServiceInstances() throws Exception {
+        TestContext context = newContext();
+        Path alternate = tempDir.resolve("alternate-packages");
+        Files.createDirectories(alternate.resolve("images"));
+        Files.createDirectories(alternate.resolve("dts-stack"));
+        Files.createDirectories(alternate.resolve("misc"));
+        Files.writeString(alternate.resolve("images/dts-platform.tar"), "platform");
+
+        WorkspaceStatus updated = context.service().updatePackageRoot(alternate.toString());
+
+        assertThat(updated.packageRoot()).isEqualTo(alternate.toString());
+        assertThat(updated.images()).extracting(WorkspaceImage::fileName).containsExactly("dts-platform.tar");
+
+        WorkspaceService restarted = new WorkspaceService(context.properties(), context.runner());
+
+        assertThat(restarted.status().packageRoot()).isEqualTo(alternate.toString());
+    }
+
+    @Test
     void loadImagesRunsDockerLoadForEachTar() throws Exception {
         TestContext context = newContext();
         Files.writeString(context.packageRoot().resolve("images/dts-admin.tar"), "admin");
@@ -71,14 +90,15 @@ class WorkspaceServiceTest {
         Files.createDirectories(packageRoot.resolve("misc"));
         Files.createDirectories(targetStack);
         OpManagerProperties properties = new OpManagerProperties();
+        properties.setDataDir(tempDir.resolve("data"));
         properties.setPackageRoots(List.of(packageRoot));
         properties.setTargetStackDir(targetStack);
         properties.setDockerEnabled(true);
         RecordingRunner runner = new RecordingRunner();
-        return new TestContext(packageRoot, targetStack, runner, new WorkspaceService(properties, runner));
+        return new TestContext(packageRoot, targetStack, properties, runner, new WorkspaceService(properties, runner));
     }
 
-    private record TestContext(Path packageRoot, Path targetStack, RecordingRunner runner, WorkspaceService service) {}
+    private record TestContext(Path packageRoot, Path targetStack, OpManagerProperties properties, RecordingRunner runner, WorkspaceService service) {}
 
     private static final class RecordingRunner implements CommandRunner {
         private final List<List<String>> commands = new ArrayList<>();

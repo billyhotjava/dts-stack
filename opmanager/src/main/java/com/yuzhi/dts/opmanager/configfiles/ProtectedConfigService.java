@@ -298,12 +298,12 @@ public class ProtectedConfigService {
             return List.of(ConfigApplyAction.KEEP_LOCAL);
         }
         if (category == ConfigCategory.ENV) {
-            return List.of(ConfigApplyAction.KEEP_LOCAL, ConfigApplyAction.MERGE_ENV_ADD_KEYS, ConfigApplyAction.WRITE_PACKAGE_COPY);
+            return List.of(ConfigApplyAction.KEEP_LOCAL, ConfigApplyAction.MERGE_ENV_ADD_KEYS, ConfigApplyAction.WRITE_PACKAGE_COPY, ConfigApplyAction.USE_PACKAGE);
         }
         if (!localExists && category != ConfigCategory.MDM) {
             return List.of(ConfigApplyAction.WRITE_PACKAGE_COPY, ConfigApplyAction.USE_PACKAGE);
         }
-        return List.of(ConfigApplyAction.KEEP_LOCAL, ConfigApplyAction.WRITE_PACKAGE_COPY);
+        return List.of(ConfigApplyAction.KEEP_LOCAL, ConfigApplyAction.WRITE_PACKAGE_COPY, ConfigApplyAction.USE_PACKAGE);
     }
 
     private ConfigCategory category(String relativePath) {

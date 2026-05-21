@@ -8,8 +8,12 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const webappRoot = resolve(here, "..");
 const outDir = resolve(webappRoot, ".tmp-test/diff");
+let diffModulePromise;
 
 async function loadDiffModule() {
+  if (diffModulePromise) {
+    return diffModulePromise;
+  }
   rmSync(outDir, { force: true, recursive: true });
   mkdirSync(outDir, { recursive: true });
   execFileSync(
@@ -27,9 +31,10 @@ async function loadDiffModule() {
       "--strict",
       "src/diff.ts"
     ],
-    { cwd: webappRoot, stdio: "pipe" }
+    { cwd: webappRoot, stdio: "inherit" }
   );
-  return import(pathToFileURL(resolve(outDir, "diff.js")).href);
+  diffModulePromise = import(pathToFileURL(resolve(outDir, "diff.js")).href);
+  return diffModulePromise;
 }
 
 test("aligns inserted package lines against an empty local side", async () => {

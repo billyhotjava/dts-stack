@@ -32,7 +32,7 @@ class ProtectedConfigServiceTest {
         ConfigFileReview env = response.files().stream().filter(file -> file.path().equals(".env")).findFirst().orElseThrow();
         assertThat(env.status()).isEqualTo(ConfigFileStatus.MODIFIED);
         assertThat(env.risk()).isEqualTo(ConfigRisk.HIGH);
-        assertThat(env.allowedActions()).contains(ConfigApplyAction.MERGE_ENV_ADD_KEYS, ConfigApplyAction.WRITE_PACKAGE_COPY);
+        assertThat(env.allowedActions()).contains(ConfigApplyAction.MERGE_ENV_ADD_KEYS, ConfigApplyAction.WRITE_PACKAGE_COPY, ConfigApplyAction.USE_PACKAGE);
     }
 
     @Test
@@ -63,6 +63,21 @@ class ProtectedConfigServiceTest {
         assertThat(Files.readString(context.targetDir().resolve("docker-compose-app.yml"))).contains("image: old");
         assertThat(result.writtenPath()).contains("docker-compose-app.yml.opmanager-");
         assertThat(Files.readString(Path.of(result.writtenPath()))).contains("image: new");
+    }
+
+    @Test
+    void usePackageBacksUpAndOverwritesProtectedEnvFile() throws Exception {
+        TestContext context = newContext();
+        Files.writeString(context.targetDir().resolve(".env"), "BASE_DOMAIN=site.local\nDB_PASSWORD=local-secret\n");
+        Files.writeString(context.packageStackDir().resolve(".env"), "BASE_DOMAIN=package.local\nDB_PASSWORD=package-secret\n");
+        registerPackage(context);
+
+        ConfigApplyResult result = context.service().apply(context.registrationId(), ".env", ConfigApplyAction.USE_PACKAGE);
+
+        assertThat(result.changed()).isTrue();
+        assertThat(result.backupPath()).isNotBlank();
+        assertThat(Files.readString(Path.of(result.backupPath()))).contains("BASE_DOMAIN=site.local");
+        assertThat(Files.readString(context.targetDir().resolve(".env"))).contains("BASE_DOMAIN=package.local").contains("DB_PASSWORD=package-secret");
     }
 
     private TestContext newContext() throws Exception {
