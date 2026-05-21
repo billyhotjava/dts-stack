@@ -267,6 +267,12 @@ tar -xzf /opt/dts-opmanager/packages/dts-opmanager-upgrade-*.tar.gz -C /opt/dts-
 
 处理：使用 `build-image.sh`，不要把 Maven 放回 Dockerfile。
 
+### `[opmanager-build] ERROR: 'mvn' not found in PATH`
+
+原因：旧版脚本会误读主工程构建变量 `LEGACY_USE_HOST_MAVEN=1`，从而切到宿主机 Maven。现场或编译机没有安装 `mvn` 时就会失败。
+
+处理：使用当前版本 `build-image.sh`。当前脚本只在显式传 `--host-maven` 或设置 `OPMANAGER_USE_HOST_MAVEN=1` 时才使用宿主机 Maven；默认使用 Maven 容器。
+
 ### 浏览器提示 JS MIME 类型是 `application/octet-stream`
 
 原因通常是 jar 内静态资源缺失或资源 hash 不匹配。

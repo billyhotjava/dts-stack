@@ -8,6 +8,7 @@ OUTPUT_PATH="${OPMANAGER_PACKAGE_TAR:-}"
 NODE_IMAGE="${NODE_IMAGE:-node:20.17.0-alpine3.20}"
 PNPM_VERSION="${PNPM_VERSION:-10.28.0}"
 MAVEN_IMAGE="${MAVEN_IMAGE:-maven:3.9.9-eclipse-temurin-21}"
+OPMANAGER_USE_HOST_MAVEN="${OPMANAGER_USE_HOST_MAVEN:-}"
 MAVEN_CONTAINER_JAVA_HOME="${MAVEN_CONTAINER_JAVA_HOME:-/opt/java/openjdk}"
 MAVEN_MEMORY_LIMIT="${MAVEN_MEMORY_LIMIT:-4g}"
 MAVEN_MIRROR_URL="${MAVEN_MIRROR_URL:-https://maven.aliyun.com/repository/public}"
@@ -47,7 +48,8 @@ Environment:
   NODE_IMAGE            Node image for frontend build. Default: ${NODE_IMAGE}
   MAVEN_IMAGE           Maven image for backend jar build. Default: ${MAVEN_IMAGE}
   MAVEN_UNRESTRICTED    Set to 1 to force seccomp/nproc relaxation.
-  LEGACY_USE_HOST_MAVEN Set to 1 to use host mvn instead of a Maven container.
+  OPMANAGER_USE_HOST_MAVEN
+                       Set to 1 to use host mvn instead of a Maven container.
   MAVEN_MIRROR_URL      Maven mirror used when settings.xml is generated.
   NPM_REGISTRY          Optional npm registry mirror.
 
@@ -79,7 +81,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --host-maven)
-      LEGACY_USE_HOST_MAVEN="1"
+      OPMANAGER_USE_HOST_MAVEN="1"
       shift
       ;;
     -h|--help)
@@ -243,7 +245,7 @@ build_backend_jar_with_container_maven() {
 
 build_backend_jar() {
   rm -f "${SCRIPT_DIR}"/target/dts-opmanager-*.jar "${SCRIPT_DIR}"/target/dts-opmanager-*.jar.original 2>/dev/null || true
-  if [[ "${LEGACY_USE_HOST_MAVEN:-}" == "1" ]]; then
+  if [[ "${OPMANAGER_USE_HOST_MAVEN:-}" == "1" ]]; then
     build_backend_jar_with_host_maven
   else
     build_backend_jar_with_container_maven

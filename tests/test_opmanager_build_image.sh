@@ -40,6 +40,13 @@ fi
 EOF_UNAME
 chmod +x "${FAKE_BIN}/uname"
 
+cat > "${FAKE_BIN}/mvn" <<'EOF_MVN'
+#!/usr/bin/env bash
+echo "host mvn must not be used unless --host-maven or OPMANAGER_USE_HOST_MAVEN=1 is set" >&2
+exit 99
+EOF_MVN
+chmod +x "${FAKE_BIN}/mvn"
+
 cat > "${FAKE_BIN}/docker" <<'EOF_DOCKER'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -101,7 +108,7 @@ sed -i "s|__TEST_OPMANAGER__|${TEST_OPMANAGER}|g" "${FAKE_BIN}/docker"
 chmod +x "${FAKE_BIN}/docker"
 
 RUNTIME_PACKAGE="${TMP_DIR}/dts-opmanager-runtime-test-linux-arm64.tar.gz"
-PATH="${FAKE_BIN}:${PATH}" HOME="${TMP_DIR}/home" "${TEST_OPMANAGER}/build-image.sh" --tag dts-opmanager:test --output "${RUNTIME_PACKAGE}" >/dev/null
+PATH="${FAKE_BIN}:${PATH}" HOME="${TMP_DIR}/home" LEGACY_USE_HOST_MAVEN=1 "${TEST_OPMANAGER}/build-image.sh" --tag dts-opmanager:test --output "${RUNTIME_PACKAGE}" >/dev/null
 
 if ! grep -Fq -- "--security-opt seccomp=unconfined" "${DOCKER_LOG}"; then
   echo "expected opmanager Maven container to relax seccomp on ARM64" >&2
