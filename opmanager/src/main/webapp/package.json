@@ -30,7 +30,7 @@
     "production": [
       "Chrome >= 95",
       "Edge >= 95",
-      "Firefox >= 102",
+      "Firefox >= 60",
       "Safari >= 15.4",
       "iOS >= 15.5",
       "Android >= 95"

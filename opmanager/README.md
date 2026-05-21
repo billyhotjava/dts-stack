@@ -6,7 +6,7 @@
 
 - 后端：Spring Boot 3.4.5 / Java 21。
 - 前端：React 18 / Vite，由同一个 Spring Boot 应用托管静态资源。
-- 浏览器兼容：生产构建面向 Chrome 95。
+- 浏览器兼容：生产构建面向 Chrome 95 和麒麟默认 Firefox 60.7.0。
 - 状态存储：现场部署默认写入 `${OPMANAGER_HOME}/data`。
 - 升级工作区：固定使用 `images/`、`dts-stack/`、`misc/` 三个顶层目录。
 - 运行环境：通过 Docker API 获取容器状态、加载镜像、重建 Compose 服务。

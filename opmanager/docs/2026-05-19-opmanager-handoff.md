@@ -10,7 +10,7 @@
 
 - 后端采用 Spring Boot + JHipster 体系，保留 Maven 工程结构和 JHipster 依赖习惯。
 - 前端采用 React + Vite，并打包进同一个 Spring Boot Jar，不做前后端分离部署。
-- UI 必须兼容 Chrome 95，避免依赖复杂新特性和重渲染组件。
+- UI 必须兼容 Chrome 95 和麒麟默认 Firefox 60.7.0，避免依赖复杂新特性和重渲染组件。
 - 目标现场包含离线环境、鲲鹏 ARM64 服务器、麒麟 OS；可以假设 Java 和 Docker 可用，不强依赖 systemd。
 - 现场升级包可能很大，优先支持提前把升级材料放到服务器目录，浏览器上传只作为补充能力。
 
@@ -36,7 +36,7 @@
 - 前端工程：
   - `src/main/webapp`
   - React 18 + Vite + TypeScript
-  - `@vitejs/plugin-legacy` 兼容 Chrome 95
+  - `@vitejs/plugin-legacy` 兼容 Chrome 95 和 Firefox 60.7.0
   - 前端资源由同一个 Spring Boot 应用托管。
 - Docker 部署：
   - `opmanager/Dockerfile`

@@ -107,8 +107,11 @@ th {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
   margin-bottom: 18px;
+}
+
+.topbar > * + * {
+  margin-left: 16px;
 }
 
 .topbar h1 {
@@ -125,11 +128,11 @@ th {
 .tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 16px;
+  margin: -4px -4px 12px;
 }
 
 .tabs button {
+  margin: 4px;
   border-color: #c6d0dd;
   background: #fff;
   color: #263447;
@@ -257,9 +260,14 @@ th {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  margin-top: 12px;
+  margin: 0 -6px;
+  padding-top: 12px;
   color: #5d6b7c;
+}
+
+.uploadLine > *,
+.runtimeLine > * {
+  margin: 0 6px 8px;
 }
 
 .tableWrap {
@@ -400,15 +408,22 @@ th {
 .fileItem span:last-child {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  margin: 0 -3px -6px;
+}
+
+.fileItem span:last-child > * {
+  margin: 0 3px 6px;
 }
 
 .detailHeader {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
   margin-bottom: 12px;
+}
+
+.detailHeader > * + * {
+  margin-left: 16px;
 }
 
 .detailHeader p {
@@ -420,7 +435,11 @@ th {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
+  margin: -4px;
+}
+
+.actionBar > * {
+  margin: 4px;
 }
 
 button.danger {
@@ -439,10 +458,13 @@ button.danger {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
   border-bottom: 1px solid #d9e1ec;
   background: #f7f9fc;
   padding: 10px 12px;
+}
+
+.compareToolbar > * + * {
+  margin-left: 12px;
 }
 
 .compareStats,
@@ -450,7 +472,12 @@ button.danger {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  margin: -4px;
+}
+
+.compareStats > *,
+.compareActions > * {
+  margin: 4px;
 }
 
 .compareActions span {
@@ -530,6 +557,10 @@ button.danger {
   box-shadow: inset 0 1px 0 #d49100, inset 0 -1px 0 #d49100;
 }
 
+.diffRow.active .diffBridge {
+  box-shadow: inset 0 1px 0 #d49100, inset 0 -1px 0 #d49100;
+}
+
 .diffBridge {
   min-height: 30px;
   border-top: 1px solid #e6ecf4;
@@ -590,6 +621,11 @@ button.danger {
     flex-direction: column;
   }
 
+  .topbar > * + * {
+    margin-top: 12px;
+    margin-left: 0;
+  }
+
   .grid.two,
   .grid.three,
   .configLayout,
@@ -599,6 +635,11 @@ button.danger {
 
   .detailHeader {
     flex-direction: column;
+  }
+
+  .detailHeader > * + * {
+    margin-top: 12px;
+    margin-left: 0;
   }
 
   .actionBar {

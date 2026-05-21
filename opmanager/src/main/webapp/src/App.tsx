@@ -627,11 +627,24 @@ function DiffViewer(props: { file: ConfigFileReview; busy: boolean; onReplace: (
   }, [props.file.path]);
 
   useEffect(() => {
-    if (!activeHunk || !scrollRef.current) {
+    setActiveHunkIndex(current => (hunks.length === 0 ? 0 : Math.min(current, hunks.length - 1)));
+  }, [hunks.length]);
+
+  useEffect(() => {
+    const scrollContainer = scrollRef.current;
+    if (!activeHunk || !scrollContainer) {
       return;
     }
-    const row = scrollRef.current.querySelector<HTMLElement>(`[data-row-index="${activeHunk.start}"]`);
-    row?.scrollIntoView({ block: "center" });
+
+    const row = scrollContainer.querySelector<HTMLElement>(`[data-diff-row-anchor="${activeHunk.start}"]`);
+    if (!row) {
+      return;
+    }
+
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const rowRect = row.getBoundingClientRect();
+    const targetTop = scrollContainer.scrollTop + rowRect.top - containerRect.top - (scrollContainer.clientHeight - rowRect.height) / 2;
+    scrollContainer.scrollTop = Math.max(0, targetTop);
   }, [activeHunk, showOnlyChanges]);
 
   if (props.file.contentOmitted) {
@@ -642,7 +655,7 @@ function DiffViewer(props: { file: ConfigFileReview; busy: boolean; onReplace: (
     if (hunks.length === 0) {
       return;
     }
-    setActiveHunkIndex((activeHunkIndex + direction + hunks.length) % hunks.length);
+    setActiveHunkIndex(current => (current + direction + hunks.length) % hunks.length);
   }
 
   function replaceWithPackageFile() {
@@ -672,7 +685,7 @@ function DiffViewer(props: { file: ConfigFileReview; busy: boolean; onReplace: (
           <button className="iconButton" type="button" disabled={!hunks.length} onClick={() => moveHunk(1)} title="下一个差异">
             ↓
           </button>
-          <button className="secondary" type="button" disabled={!hunks.length} onClick={() => setShowOnlyChanges(!showOnlyChanges)}>
+          <button className="secondary" type="button" disabled={!hunks.length} onClick={() => setShowOnlyChanges(current => !current)}>
             {showOnlyChanges ? "显示全部" : "只看差异"}
           </button>
         </div>
@@ -698,7 +711,7 @@ function DiffRow(props: { row: SideBySideDiffRow; activeHunk: DiffHunk | null })
   const active = Boolean(props.activeHunk && props.row.index >= props.activeHunk.start && props.row.index <= props.activeHunk.end);
   return (
     <div className={`diffRow ${props.row.kind} ${active ? "active" : ""}`} data-row-index={props.row.index}>
-      <pre className={props.row.leftState} data-row-index={props.row.index}>
+      <pre className={props.row.leftState} data-diff-row-anchor={props.row.index}>
         <span>{formatLineNumber(props.row.leftLineNumber)}</span>
         {props.row.leftText || " "}
       </pre>
