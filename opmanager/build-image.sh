@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPT_VERSION="2026-05-21-host-maven-fallback"
+SCRIPT_VERSION="2026-05-21-kunpeng-runtime"
 
 IMAGE_TAG="${OPMANAGER_IMAGE:-dts-opmanager:2.2.3}"
 OUTPUT_PATH="${OPMANAGER_PACKAGE_TAR:-}"

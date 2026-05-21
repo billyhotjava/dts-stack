@@ -183,3 +183,25 @@ if grep -Fq "FROM maven" "${TEST_OPMANAGER}/Dockerfile" || grep -Fq "RUN mvn" "$
   echo "expected opmanager Dockerfile not to run Maven inside Docker build" >&2
   exit 1
 fi
+
+if ! grep -Fq 'ENTRYPOINT ["/opt/java/openjdk/bin/java", "-jar", "/app/dts-opmanager/dts-opmanager.jar"]' "${TEST_OPMANAGER}/Dockerfile"; then
+  echo "expected opmanager runtime image to use an absolute Java entrypoint" >&2
+  exit 1
+fi
+
+if ! grep -Fq "ENV JAVA_HOME=/opt/java/openjdk" "${TEST_OPMANAGER}/Dockerfile"; then
+  echo "expected opmanager runtime image to set JAVA_HOME explicitly" >&2
+  exit 1
+fi
+
+if ! tar -xOf "${RUNTIME_PACKAGE}" deploy/docker-compose.yml | grep -Fq "seccomp=unconfined"; then
+  echo "expected packaged compose to relax seccomp for Kunpeng/Kylin Java runtime" >&2
+  tar -xOf "${RUNTIME_PACKAGE}" deploy/docker-compose.yml >&2
+  exit 1
+fi
+
+if ! tar -xOf "${RUNTIME_PACKAGE}" deploy/docker-compose.yml | grep -Fq "nproc: 65535"; then
+  echo "expected packaged compose to raise nproc for Kunpeng/Kylin Java runtime" >&2
+  tar -xOf "${RUNTIME_PACKAGE}" deploy/docker-compose.yml >&2
+  exit 1
+fi
