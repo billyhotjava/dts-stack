@@ -3,7 +3,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
-IMAGE_TAG="${1:-${OPMANAGER_IMAGE:-dts-opmanager:2.2.3}}"
+IMAGE_TAG="${OPMANAGER_IMAGE:-dts-opmanager:2.2.3}"
+OUTPUT_PATH="${OPMANAGER_IMAGE_TAR:-}"
+SAVE_IMAGE_TAR="${SAVE_IMAGE_TAR:-true}"
 NODE_IMAGE="${NODE_IMAGE:-node:20.17.0-alpine3.20}"
 PNPM_VERSION="${PNPM_VERSION:-10.28.0}"
 MAVEN_IMAGE="${MAVEN_IMAGE:-maven:3.9.9-eclipse-temurin-21}"
@@ -26,12 +28,24 @@ usage() {
   cat <<USAGE
 Usage:
   ${0##*/} [image-tag]
+  ${0##*/} --tag <image-tag> [--output <tar-path>]
+  ${0##*/} --no-save --tag <image-tag>
 
 Builds the dts-opmanager runtime image without running Maven inside Dockerfile
 RUN steps. This matches the Kunpeng/Kylin workaround used by builds/dts-build.sh.
 
+Options:
+  --tag <image-tag>     Image tag to build. Default: ${IMAGE_TAG}
+  --output <tar-path>   docker save output path. Default: ./<image>-<version>-linux-<arch>.tar
+  --no-save             Build the local image but do not export a tar file.
+  --pull                Pull base images during the final runtime docker build.
+  --host-maven          Use host mvn instead of a Maven container.
+  -h, --help            Show this help.
+
 Environment:
   OPMANAGER_IMAGE       Default image tag when [image-tag] is omitted.
+  OPMANAGER_IMAGE_TAR   Default tar output path.
+  SAVE_IMAGE_TAR        Set to false to skip docker save.
   NODE_IMAGE            Node image for frontend build. Default: ${NODE_IMAGE}
   MAVEN_IMAGE           Maven image for backend jar build. Default: ${MAVEN_IMAGE}
   MAVEN_UNRESTRICTED    Set to 1 to force seccomp/nproc relaxation.
@@ -40,13 +54,64 @@ Environment:
   NPM_REGISTRY          Optional npm registry mirror.
 
 Example:
-  ${0##*/} dts-opmanager:2.2.3
+  ${0##*/} --tag dts-opmanager:2.2.3 --output dts-opmanager-2.2.3-linux-arm64.tar
 USAGE
 }
 
-if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-  usage
-  exit 0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --tag)
+      IMAGE_TAG="${2:-}"
+      if [[ -z "${IMAGE_TAG}" ]]; then
+        echo "[opmanager-build] ERROR: --tag requires a value" >&2
+        exit 1
+      fi
+      shift 2
+      ;;
+    --output|-o)
+      OUTPUT_PATH="${2:-}"
+      if [[ -z "${OUTPUT_PATH}" ]]; then
+        echo "[opmanager-build] ERROR: --output requires a value" >&2
+        exit 1
+      fi
+      shift 2
+      ;;
+    --no-save)
+      SAVE_IMAGE_TAR="false"
+      shift
+      ;;
+    --pull)
+      DOCKER_BUILD_PULL="1"
+      shift
+      ;;
+    --host-maven)
+      LEGACY_USE_HOST_MAVEN="1"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    -*)
+      echo "[opmanager-build] ERROR: Unknown argument: $1" >&2
+      usage
+      exit 1
+      ;;
+    *)
+      IMAGE_TAG="$1"
+      shift
+      if [[ $# -gt 0 ]]; then
+        echo "[opmanager-build] ERROR: unexpected extra arguments: $*" >&2
+        usage
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+if [[ -z "${IMAGE_TAG}" ]]; then
+  echo "[opmanager-build] ERROR: image tag is empty" >&2
+  exit 1
 fi
 
 require_cmd() {
@@ -209,7 +274,49 @@ build_runtime_image() {
   docker image inspect "${IMAGE_TAG}" --format '[opmanager-build] Image architecture: {{.Architecture}}' || true
 }
 
+image_arch() {
+  local arch
+  arch="$(docker image inspect "${IMAGE_TAG}" --format '{{.Architecture}}' 2>/dev/null || true)"
+  case "${arch}" in
+    aarch64)
+      echo "arm64"
+      ;;
+    x86_64)
+      echo "amd64"
+      ;;
+    "")
+      uname -m | sed 's/aarch64/arm64/;s/x86_64/amd64/'
+      ;;
+    *)
+      echo "${arch}"
+      ;;
+  esac
+}
+
+default_output_path() {
+  local image_name="${IMAGE_TAG%%:*}"
+  local image_version="latest"
+  if [[ "${IMAGE_TAG}" == *:* ]]; then
+    image_version="${IMAGE_TAG##*:}"
+  fi
+  image_name="${image_name##*/}"
+  echo "${SCRIPT_DIR}/${image_name}-${image_version}-linux-$(image_arch).tar"
+}
+
+save_runtime_image() {
+  if [[ "${SAVE_IMAGE_TAR}" == "0" || "${SAVE_IMAGE_TAR}" == "false" ]]; then
+    echo "[opmanager-build] Skipping docker save (--no-save)"
+    return 0
+  fi
+
+  local output="${OUTPUT_PATH:-$(default_output_path)}"
+  mkdir -p "$(dirname "${output}")"
+  docker save "${IMAGE_TAG}" -o "${output}"
+  echo "[opmanager-build] Saved ${output}"
+}
+
 require_cmd docker
 build_webapp
 build_backend_jar
 build_runtime_image
+save_runtime_image

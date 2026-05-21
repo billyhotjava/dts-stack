@@ -51,8 +51,7 @@ The Vite dev server proxies `/api` to `http://localhost:18090`.
 Build the opmanager image in a connected build environment and export it:
 
 ```bash
-./build-image.sh dts-opmanager:2.2.3
-docker save dts-opmanager:2.2.3 -o dts-opmanager-2.2.3-linux-arm64.tar
+./build-image.sh --tag dts-opmanager:2.2.3 --output dts-opmanager-2.2.3-linux-arm64.tar
 ```
 
 On Kunpeng/Kylin ARM64 builders, build from an ARM64 host so the image is
@@ -65,7 +64,7 @@ Docker build `RUN` steps.
 
 ```bash
 uname -m
-DOCKER_BUILD_PULL=1 ./build-image.sh dts-opmanager:2.2.3
+DOCKER_BUILD_PULL=1 ./build-image.sh --tag dts-opmanager:2.2.3 --output dts-opmanager-2.2.3-linux-arm64.tar
 docker image inspect dts-opmanager:2.2.3 --format '{{.Architecture}}'
 ```
 

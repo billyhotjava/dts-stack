@@ -57,9 +57,34 @@ case "${1:-}" in
     printf 'build:%s\n' "$*" >> "__DOCKER_LOG__"
     exit 0
     ;;
+  save)
+    printf 'save:%s\n' "$*" >> "__DOCKER_LOG__"
+    output=""
+    shift
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -o)
+          output="${2:-}"
+          shift 2
+          ;;
+        *)
+          shift
+          ;;
+      esac
+    done
+    if [[ -n "${output}" ]]; then
+      mkdir -p "$(dirname "${output}")"
+      : > "${output}"
+    fi
+    exit 0
+    ;;
   image)
     if [[ "${2:-}" == "inspect" ]]; then
-      echo "[opmanager-build] Image architecture: arm64"
+      if [[ "${*: -1}" == "[opmanager-build] Image architecture: {{.Architecture}}" ]]; then
+        echo "[opmanager-build] Image architecture: arm64"
+      else
+        echo "arm64"
+      fi
     fi
     exit 0
     ;;
@@ -72,7 +97,7 @@ sed -i "s|__DOCKER_LOG__|${DOCKER_LOG}|g" "${FAKE_BIN}/docker"
 sed -i "s|__TEST_OPMANAGER__|${TEST_OPMANAGER}|g" "${FAKE_BIN}/docker"
 chmod +x "${FAKE_BIN}/docker"
 
-PATH="${FAKE_BIN}:${PATH}" HOME="${TMP_DIR}/home" "${TEST_OPMANAGER}/build-image.sh" dts-opmanager:test >/dev/null
+PATH="${FAKE_BIN}:${PATH}" HOME="${TMP_DIR}/home" "${TEST_OPMANAGER}/build-image.sh" --tag dts-opmanager:test --output "${TMP_DIR}/dts-opmanager-test-linux-arm64.tar" >/dev/null
 
 if ! grep -Fq -- "--security-opt seccomp=unconfined" "${DOCKER_LOG}"; then
   echo "expected opmanager Maven container to relax seccomp on ARM64" >&2
@@ -95,6 +120,17 @@ fi
 if ! grep -Fq "build:build -t dts-opmanager:test -f ${TEST_OPMANAGER}/Dockerfile ${TEST_OPMANAGER}" "${DOCKER_LOG}"; then
   echo "expected opmanager runtime image build to use the prebuilt-jar Dockerfile" >&2
   cat "${DOCKER_LOG}" >&2
+  exit 1
+fi
+
+if ! grep -Fq "save:save dts-opmanager:test -o ${TMP_DIR}/dts-opmanager-test-linux-arm64.tar" "${DOCKER_LOG}"; then
+  echo "expected opmanager build script to export a docker save tar" >&2
+  cat "${DOCKER_LOG}" >&2
+  exit 1
+fi
+
+if [[ ! -f "${TMP_DIR}/dts-opmanager-test-linux-arm64.tar" ]]; then
+  echo "expected opmanager build script to create the requested tar file" >&2
   exit 1
 fi
 

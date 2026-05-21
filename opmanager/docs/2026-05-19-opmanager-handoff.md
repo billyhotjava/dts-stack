@@ -204,7 +204,7 @@ git diff --check -- opmanager builds/dts-build.sh tests/test_dts_build_pack_cont
 
 ```bash
 cd /opt/prod/s10/v2.2.3/opmanager
-./build-image.sh dts-opmanager:2.2.3
+./build-image.sh --tag dts-opmanager:2.2.3 --output dts-opmanager-2.2.3-linux-arm64.tar
 docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
 ```
 
