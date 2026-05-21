@@ -285,7 +285,7 @@ tar -xzf /opt/dts-opmanager/packages/dts-opmanager-upgrade-*.tar.gz -C /opt/dts-
 当前脚本会打印版本：
 
 ```text
-[opmanager-build] Script version: 2026-05-21-docker18-compose129-r2
+[opmanager-build] Script version: 2026-05-21-dts-build-aligned
 ```
 
 如果请求宿主机 Maven 但现场没有 `mvn`，脚本会自动降级回 Maven 容器，并打印：
@@ -308,11 +308,7 @@ tar -xzf /opt/dts-opmanager/packages/dts-opmanager-upgrade-*.tar.gz -C /opt/dts-
 
 如果这里仍然显示 `entrypoint=["java", ...]`，说明现场 `deploy` 目录里的镜像 tar 还是旧包，或者目录里混入了旧的 `dts-opmanager-*.tar`。当前脚本会要求 `deploy/` 下只能保留一个 opmanager 镜像 tar，并在检测到旧镜像布局时停止。
 
-在 Docker 18.09 / 麒麟环境中，脚本还会尝试用 `/bin/sh` 做一次容器内文件检查。如果这一步失败但上面的 entrypoint 已经是 `/opt/java/openjdk/bin/java`，脚本只打印 warning 并继续启动：
-
-```text
-[opmanager-start] WARN: shell-based image layout check failed; continuing because Docker image metadata and compose entrypoint are explicit.
-```
+当前 `start.sh` 不再用 `docker run --entrypoint /bin/sh` 做容器内文件检查。`dts-build.sh` 的成熟路径已经证明 Docker 18.09 / Kunpeng 对容器内 shell 包装敏感，所以这里只使用 `docker image inspect` 元数据和 compose 的显式 `entrypoint` 判定镜像是否匹配。
 
 ### 浏览器提示 JS MIME 类型是 `application/octet-stream`
 

@@ -236,8 +236,14 @@ if ! tar -xOf "${RUNTIME_PACKAGE}" deploy/start.sh | grep -Fq "Loaded image:"; t
   exit 1
 fi
 
-if ! tar -xOf "${RUNTIME_PACKAGE}" deploy/start.sh | grep -Fq "shell-based image layout check failed; continuing"; then
-  echo "expected packaged start.sh to keep shell-based image checks non-blocking on Docker 18/Kylin" >&2
+if tar -xOf "${RUNTIME_PACKAGE}" deploy/start.sh | grep -Fq -- "--entrypoint /bin/sh"; then
+  echo "expected packaged start.sh not to use shell-based docker run checks on Docker 18/Kylin" >&2
+  tar -xOf "${RUNTIME_PACKAGE}" deploy/start.sh >&2
+  exit 1
+fi
+
+if ! tar -xOf "${RUNTIME_PACKAGE}" deploy/start.sh | grep -Fq "loaded image entrypoint is not compatible"; then
+  echo "expected packaged start.sh to validate image compatibility using inspect metadata" >&2
   tar -xOf "${RUNTIME_PACKAGE}" deploy/start.sh >&2
   exit 1
 fi
