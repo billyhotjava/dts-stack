@@ -96,11 +96,14 @@ README.md
 - `seccomp=unconfined`
 - `nproc=65535:65535`
 
-生成的运行包也会使用同样思路：
+生成的运行包也会按 Docker 18.09 / API 1.39 / docker-compose 1.29.2 兼容方式启动：
 
 - 运行镜像内显式设置 `JAVA_HOME=/opt/java/openjdk`
-- 容器入口使用 `/opt/java/openjdk/bin/java` 绝对路径
+- 镜像和 `deploy/docker-compose.yml` 都使用 `/opt/java/openjdk/bin/java` 绝对入口
+- `deploy/docker-compose.yml` 显式设置 `working_dir: /app/dts-opmanager`
 - `deploy/docker-compose.yml` 对 opmanager 容器设置 `seccomp=unconfined` 和 `nproc: 65535`
+- `deploy/start.sh` 优先使用 `docker-compose` V1；只有没有 V1 时才使用 `docker compose`
+- `deploy/start.sh` 会打印 Docker / Compose 版本，并在启动前校验镜像架构、入口和 jar 路径
 
 如果需要强制拉取基础镜像：
 
@@ -282,7 +285,7 @@ tar -xzf /opt/dts-opmanager/packages/dts-opmanager-upgrade-*.tar.gz -C /opt/dts-
 当前脚本会打印版本：
 
 ```text
-[opmanager-build] Script version: 2026-05-21-kunpeng-runtime
+[opmanager-build] Script version: 2026-05-21-docker18-compose129
 ```
 
 如果请求宿主机 Maven 但现场没有 `mvn`，脚本会自动降级回 Maven 容器，并打印：
@@ -295,7 +298,15 @@ tar -xzf /opt/dts-opmanager/packages/dts-opmanager-upgrade-*.tar.gz -C /opt/dts-
 
 原因：旧版 opmanager 镜像入口使用 `java`，依赖基础镜像默认 `PATH`。部分鲲鹏 / 麒麟现场的旧 Docker / OCI runtime 对这类入口解析不稳定，会在容器启动阶段报找不到 `java`。
 
-处理：重新使用当前 `build-image.sh` 生成运行包。当前 Dockerfile 已经改为显式 `JAVA_HOME=/opt/java/openjdk`，并使用 `/opt/java/openjdk/bin/java` 作为绝对入口。
+处理：重新使用当前 `build-image.sh` 生成运行包。当前 Dockerfile 和 compose 已经改为显式 `JAVA_HOME=/opt/java/openjdk`，并使用 `/opt/java/openjdk/bin/java` 作为绝对入口。
+
+当前 `start.sh` 会在 `docker-compose up` 前输出类似：
+
+```text
+[opmanager-start] Loaded image: dts-opmanager:2.2.3, arch=arm64, entrypoint=["/opt/java/openjdk/bin/java","-jar","/app/dts-opmanager/dts-opmanager.jar"]
+```
+
+如果这里仍然显示 `entrypoint=["java", ...]`，说明现场 `deploy` 目录里的镜像 tar 还是旧包，或者目录里混入了旧的 `dts-opmanager-*.tar`。当前脚本会要求 `deploy/` 下只能保留一个 opmanager 镜像 tar，并在检测到旧镜像布局时停止。
 
 ### 浏览器提示 JS MIME 类型是 `application/octet-stream`
 

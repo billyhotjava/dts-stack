@@ -205,3 +205,39 @@ if ! tar -xOf "${RUNTIME_PACKAGE}" deploy/docker-compose.yml | grep -Fq "nproc: 
   tar -xOf "${RUNTIME_PACKAGE}" deploy/docker-compose.yml >&2
   exit 1
 fi
+
+if ! tar -xOf "${RUNTIME_PACKAGE}" deploy/docker-compose.yml | grep -Fq "working_dir: /app/dts-opmanager"; then
+  echo "expected packaged compose to set an explicit runtime working directory" >&2
+  tar -xOf "${RUNTIME_PACKAGE}" deploy/docker-compose.yml >&2
+  exit 1
+fi
+
+if ! tar -xOf "${RUNTIME_PACKAGE}" deploy/docker-compose.yml | grep -Fq "/opt/java/openjdk/bin/java"; then
+  echo "expected packaged compose to override the Java entrypoint with an absolute path" >&2
+  tar -xOf "${RUNTIME_PACKAGE}" deploy/docker-compose.yml >&2
+  exit 1
+fi
+
+if ! tar -xOf "${RUNTIME_PACKAGE}" deploy/start.sh | grep -Fq "docker version --format"; then
+  echo "expected packaged start.sh to print Docker version diagnostics" >&2
+  tar -xOf "${RUNTIME_PACKAGE}" deploy/start.sh >&2
+  exit 1
+fi
+
+if ! tar -xOf "${RUNTIME_PACKAGE}" deploy/start.sh | grep -Fq "expected exactly one dts-opmanager image tar"; then
+  echo "expected packaged start.sh to reject ambiguous image tar files" >&2
+  tar -xOf "${RUNTIME_PACKAGE}" deploy/start.sh >&2
+  exit 1
+fi
+
+if ! tar -xOf "${RUNTIME_PACKAGE}" deploy/start.sh | grep -Fq "Loaded image:"; then
+  echo "expected packaged start.sh to inspect loaded image metadata" >&2
+  tar -xOf "${RUNTIME_PACKAGE}" deploy/start.sh >&2
+  exit 1
+fi
+
+if ! tar -xOf "${RUNTIME_PACKAGE}" deploy/start.sh | grep -Fq "current Kunpeng-compatible opmanager image"; then
+  echo "expected packaged start.sh to validate the opmanager image layout before compose up" >&2
+  tar -xOf "${RUNTIME_PACKAGE}" deploy/start.sh >&2
+  exit 1
+fi

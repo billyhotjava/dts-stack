@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPT_VERSION="2026-05-21-kunpeng-runtime"
+SCRIPT_VERSION="2026-05-21-docker18-compose129"
 
 IMAGE_TAG="${OPMANAGER_IMAGE:-dts-opmanager:2.2.3}"
 OUTPUT_PATH="${OPMANAGER_PACKAGE_TAR:-}"
@@ -368,12 +368,52 @@ if [[ -z "${image_tar}" ]]; then
   exit 1
 fi
 
+image_count="$(find "${SCRIPT_DIR}" -maxdepth 1 -type f -name 'dts-opmanager-*.tar' | wc -l | tr -d ' ')"
+if [[ "${image_count}" != "1" ]]; then
+  echo "[opmanager-start] ERROR: expected exactly one dts-opmanager image tar under ${SCRIPT_DIR}, found ${image_count}." >&2
+  echo "[opmanager-start] Remove old image tar files and keep only the runtime package tar for this deployment." >&2
+  find "${SCRIPT_DIR}" -maxdepth 1 -type f -name 'dts-opmanager-*.tar' -print >&2
+  exit 1
+fi
+
+image_tag="$(grep -E '^OPMANAGER_IMAGE=' .env | tail -n 1 | cut -d= -f2-)"
+image_tag="${image_tag:-dts-opmanager:2.2.3}"
+
+echo "[opmanager-start] Docker:"
+docker version --format 'client={{.Client.Version}} server={{.Server.Version}} api={{.Server.APIVersion}} arch={{.Server.Arch}}' 2>/dev/null || docker version
+echo "[opmanager-start] Compose:"
+if command -v docker-compose >/dev/null 2>&1; then
+  docker-compose version
+elif docker compose version >/dev/null 2>&1; then
+  docker compose version
+else
+  echo "[opmanager-start] ERROR: docker-compose or docker compose is required." >&2
+  exit 1
+fi
+
 docker load -i "${image_tar}"
 
-if docker compose version >/dev/null 2>&1; then
-  docker compose -f docker-compose.yml --env-file .env up -d --force-recreate
+image_arch="$(docker image inspect "${image_tag}" --format '{{.Architecture}}' 2>/dev/null || true)"
+image_entrypoint="$(docker image inspect "${image_tag}" --format '{{json .Config.Entrypoint}}' 2>/dev/null || true)"
+echo "[opmanager-start] Loaded image: ${image_tag}, arch=${image_arch:-unknown}, entrypoint=${image_entrypoint:-unknown}"
+
+if [[ "${image_arch}" != "arm64" && "${image_arch}" != "aarch64" ]]; then
+  echo "[opmanager-start] WARN: expected an arm64 image for Kunpeng/Kylin, got '${image_arch:-unknown}'." >&2
+fi
+
+if ! docker run --rm --entrypoint /bin/sh "${image_tag}" -c 'test -x /opt/java/openjdk/bin/java && test -f /app/dts-opmanager/dts-opmanager.jar' >/dev/null 2>&1; then
+  echo "[opmanager-start] ERROR: loaded image is not a current Kunpeng-compatible opmanager image." >&2
+  echo "[opmanager-start] Expected /opt/java/openjdk/bin/java and /app/dts-opmanager/dts-opmanager.jar inside ${image_tag}." >&2
+  echo "[opmanager-start] Rebuild the runtime package with build-image.sh version 2026-05-21-docker18-compose129 or newer, then copy/extract that package again." >&2
+  exit 1
+fi
+
+docker rm -f dts-opmanager >/dev/null 2>&1 || true
+
+if command -v docker-compose >/dev/null 2>&1; then
+  docker-compose -f docker-compose.yml --env-file .env up -d --force-recreate --remove-orphans
 else
-  docker-compose -f docker-compose.yml --env-file .env up -d --force-recreate
+  docker compose -f docker-compose.yml --env-file .env up -d --force-recreate --remove-orphans
 fi
 
 echo "[opmanager-start] DTS OpManager started."

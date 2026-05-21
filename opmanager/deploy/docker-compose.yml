@@ -3,6 +3,11 @@ services:
     image: ${OPMANAGER_IMAGE:-dts-opmanager:2.2.3}
     container_name: dts-opmanager
     restart: unless-stopped
+    working_dir: /app/dts-opmanager
+    entrypoint:
+      - /opt/java/openjdk/bin/java
+      - -jar
+      - /app/dts-opmanager/dts-opmanager.jar
     security_opt:
       - seccomp=unconfined
     ulimits:
