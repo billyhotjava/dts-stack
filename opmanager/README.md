@@ -51,18 +51,21 @@ The Vite dev server proxies `/api` to `http://localhost:18090`.
 Build the opmanager image in a connected build environment and export it:
 
 ```bash
-docker build -t dts-opmanager:2.2.3 -f Dockerfile .
+./build-image.sh dts-opmanager:2.2.3
 docker save dts-opmanager:2.2.3 -o dts-opmanager-2.2.3-linux-arm64.tar
 ```
 
 On Kunpeng/Kylin ARM64 builders, build from an ARM64 host so the image is
-native `linux/arm64`. The Dockerfile pins the Maven build stage to
-`maven:3.9.9-eclipse-temurin-21` and sets `JAVA_HOME=/opt/java/openjdk`
-explicitly to avoid Maven startup failures on some Kylin Docker environments.
+native `linux/arm64`. Use `build-image.sh` instead of plain `docker build`.
+The script builds the frontend and backend jar first, then creates a small
+runtime image. Its Maven container follows the same Kunpeng/Kylin workaround as
+`builds/dts-build.sh`: `JAVA_HOME=/opt/java/openjdk`, direct Maven execution, and
+`seccomp=unconfined`/raised `nproc` on ARM64 so JVM startup does not fail inside
+Docker build `RUN` steps.
 
 ```bash
 uname -m
-docker build --pull -t dts-opmanager:2.2.3 -f Dockerfile .
+DOCKER_BUILD_PULL=1 ./build-image.sh dts-opmanager:2.2.3
 docker image inspect dts-opmanager:2.2.3 --format '{{.Architecture}}'
 ```
 

@@ -1,22 +1,5 @@
 # syntax=docker/dockerfile:1.6
 
-FROM node:20-alpine AS webapp
-WORKDIR /workspace/src/main/webapp
-COPY src/main/webapp/package.json ./
-COPY src/main/webapp/pnpm-lock.yaml ./
-RUN corepack enable && pnpm install --frozen-lockfile
-COPY src/main/webapp/ ./
-RUN pnpm build
-
-FROM maven:3.9.9-eclipse-temurin-21 AS backend
-ENV JAVA_HOME=/opt/java/openjdk \
-    PATH="/opt/java/openjdk/bin:${PATH}"
-WORKDIR /workspace
-COPY pom.xml ./
-COPY src ./src
-COPY --from=webapp /workspace/src/main/resources/static ./src/main/resources/static
-RUN java -version && mvn -version && mvn -q -DskipTests -Dskip.webapp=true package
-
 FROM docker:27-cli AS docker-cli
 
 FROM eclipse-temurin:21-jre
@@ -24,7 +7,7 @@ WORKDIR /opt/dts-opmanager
 
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=docker-cli /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/lib/docker/cli-plugins/docker-compose
-COPY --from=backend /workspace/target/dts-opmanager-*.jar /opt/dts-opmanager/dts-opmanager.jar
+COPY target/dts-opmanager-*.jar /opt/dts-opmanager/dts-opmanager.jar
 
 RUN mkdir -p /var/lib/dts-opmanager/packages /var/lib/dts-opmanager/jobs /var/lib/dts-opmanager/logs
 
