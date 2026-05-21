@@ -180,6 +180,28 @@ find_bundled_docker_compose(){
   return 1
 }
 
+print_compose_info(){
+  local cli_display=""
+  local version_output=""
+  local part
+
+  for part in "${compose_cli[@]}"; do
+    if [[ -n "${cli_display}" ]]; then cli_display+=" "; fi
+    cli_display+="${part}"
+  done
+
+  version_output="$("${compose_cli[@]}" version 2>&1 | head -n 1 || true)"
+  if [[ -n "${version_output}" ]]; then
+    echo "[init.sh] Compose CLI: ${cli_display} (${version_output})"
+  else
+    echo "[init.sh] WARNING: Compose CLI: ${cli_display}; unable to read version, continuing." >&2
+  fi
+
+  if [[ "${LEGACY_STACK}" == "true" ]]; then
+    echo "[init.sh] Legacy compose note: docker-compose.legacy.yml targets Compose file 2.4 and uses health/completion dependencies; version is informational only, continuing."
+  fi
+}
+
 # Determine which optional services are enabled based on imgversion.conf
 determine_enabled_services(){
   local conf="imgversion.conf"
@@ -1546,6 +1568,8 @@ else
     fi
   fi
 fi
+
+print_compose_info
 
 compose_run=("${compose_cli[@]}")
 if [[ -f .env ]]; then
