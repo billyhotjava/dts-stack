@@ -6,6 +6,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,6 +23,8 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
 
     private static final Logger log = LoggerFactory.getLogger(ServiceDependencyAuthenticationFilter.class);
     private static final String SERVICE_HEADER = "X-DTS-Service";
+    private static final String USER_HEADER = "X-DTS-User";
+    private static final String ROLES_HEADER = "X-DTS-Roles";
 
     private final IngestionProperties properties;
 
@@ -37,14 +40,19 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
         if (!authenticated) {
             String serviceName = resolveServiceName(request);
             if (serviceName != null) {
+                String forwardedUser = normalizeHeader(request.getHeader(USER_HEADER));
+                String principal = forwardedUser != null ? forwardedUser : "service:" + serviceName;
+                List<SimpleGrantedAuthority> authorities = forwardedUser != null
+                    ? resolveForwardedAuthorities(request.getHeader(ROLES_HEADER))
+                    : List.of(new SimpleGrantedAuthority(AuthoritiesConstants.OP_ADMIN));
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                    "service:" + serviceName,
+                    principal,
                     null,
-                    List.of(new SimpleGrantedAuthority(AuthoritiesConstants.OP_ADMIN))
+                    authorities
                 );
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(authentication);
-                log.debug("Authenticated internal service call as {}", serviceName);
+                log.debug("Authenticated internal service call service={} principal={}", serviceName, principal);
             }
         }
         filterChain.doFilter(request, response);
@@ -59,5 +67,24 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
             return null;
         }
         return declared.trim();
+    }
+
+    private List<SimpleGrantedAuthority> resolveForwardedAuthorities(String rawRoles) {
+        if (!StringUtils.hasText(rawRoles)) {
+            return List.of();
+        }
+        return Arrays.stream(rawRoles.split(","))
+            .map(this::normalizeHeader)
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .map(SimpleGrantedAuthority::new)
+            .toList();
+    }
+
+    private String normalizeHeader(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return value.trim();
     }
 }

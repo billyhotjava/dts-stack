@@ -46,7 +46,9 @@ public class PkiSessionTicketService {
         "deptName",
         "personnel_level",
         "person_security_level",
-        "person_level"
+        "person_level",
+        "pkiLoginClientIp",
+        "pkiLoginUserAgent"
     );
     private static final List<String> COMPACT_ATTRIBUTE_KEYS = List.of(
         "dept_code",

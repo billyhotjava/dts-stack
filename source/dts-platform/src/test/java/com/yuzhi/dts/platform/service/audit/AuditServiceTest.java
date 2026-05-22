@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.audit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -11,11 +12,20 @@ import com.yuzhi.dts.common.audit.AuditActionCatalog;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry;
 import java.util.Map;
 import java.util.Optional;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 class AuditServiceTest {
+
+    @AfterEach
+    void tearDown() {
+        RequestContextHolder.resetRequestAttributes();
+    }
 
     @Test
     void recordAsShouldPreferHumanPayloadActorWhenPrimaryActorIsService() {
@@ -68,6 +78,34 @@ class AuditServiceTest {
         verify(forwarder, never()).record(org.mockito.ArgumentMatchers.any(AuditForwarderService.PendingAuditEvent.class));
     }
 
+    @Test
+    void recordAsShouldUsePayloadClientIpWhenCurrentRequestOnlyHasContainerIp() {
+        AuditForwarderService forwarder = mock(AuditForwarderService.class);
+        ObjectProvider<AuditForwarderService> provider = mockProvider(forwarder);
+        PkiContextEnricher enricher = mock(PkiContextEnricher.class);
+        when(enricher.resolveClientIp(any())).thenReturn("172.19.0.1");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
+
+        AuditService service = newService(provider, mock(PortalSessionRegistry.class), enricher);
+
+        service.recordAs(
+            "alice",
+            "AUTH LOGIN",
+            "platform",
+            "portal_user",
+            "alice",
+            "SUCCESS",
+            Map.of("summary", "业务端登录成功：alice", "clientIp", "10.20.0.1"),
+            null
+        );
+
+        ArgumentCaptor<AuditForwarderService.PendingAuditEvent> captor = ArgumentCaptor.forClass(
+            AuditForwarderService.PendingAuditEvent.class
+        );
+        verify(forwarder).record(captor.capture());
+        assertThat(captor.getValue().clientIp).isEqualTo("10.20.0.1");
+    }
+
     @SuppressWarnings("unchecked")
     private ObjectProvider<AuditForwarderService> mockProvider(AuditForwarderService forwarder) {
         ObjectProvider<AuditForwarderService> provider = mock(ObjectProvider.class);
@@ -76,13 +114,17 @@ class AuditServiceTest {
     }
 
     private AuditService newService(ObjectProvider<AuditForwarderService> provider, PortalSessionRegistry registry) {
+        return newService(provider, registry, mock(PkiContextEnricher.class));
+    }
+
+    private AuditService newService(ObjectProvider<AuditForwarderService> provider, PortalSessionRegistry registry, PkiContextEnricher enricher) {
         return new AuditService(
             provider,
             mock(AuditActionCatalog.class),
             registry,
             new ObjectMapper(),
             new OperationTypeNormalizer(),
-            mock(PkiContextEnricher.class)
+            enricher
         );
     }
 }

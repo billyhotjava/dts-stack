@@ -155,7 +155,7 @@ public class AdminAuthGateway {
             "/keycloak/auth/pki-login",
             payload == null ? Map.of() : payload,
             MAP_ENVELOPE,
-            AdminGatewayRequestOptions.builder().includeServiceAuthorization(false).build()
+            AdminGatewayRequestOptions.builder().auditSilent(true).includeServiceAuthorization(false).build()
         );
     }
 

@@ -3298,6 +3298,8 @@ public class KeycloakApiResource {
                 clientIp = request.getRemoteAddr();
             }
             String userAgent = Optional.ofNullable(request.getHeader("User-Agent")).orElse("");
+            String loginAudience = resolvePkiLoginAudience(request);
+            boolean adminAudience = "admin".equalsIgnoreCase(loginAudience);
 
             com.yuzhi.dts.admin.service.pki.PkiChallengeService challengeService = this.ctx.getBean(com.yuzhi.dts.admin.service.pki.PkiChallengeService.class);
             String challengeId = Optional.ofNullable(payload.challengeId()).map(String::trim).orElse("");
@@ -3422,12 +3424,6 @@ public class KeycloakApiResource {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("无法从证书映射用户名"));
             }
 
-            // Determine login audience: platform (default) or admin (admin console)
-            String loginAudience = Optional
-                .ofNullable(request.getHeader("X-Login-Audience"))
-                .orElse(Optional.ofNullable(request.getParameter("audience")).orElse("platform"));
-            boolean adminAudience = "admin".equalsIgnoreCase(loginAudience);
-
             Map<String, Object> auditContext = new LinkedHashMap<>();
             auditContext.put("audience", loginAudience);
             auditContext.put("mode", "pki");
@@ -3516,6 +3512,14 @@ public class KeycloakApiResource {
                 if (hasTriadRole) {
                     Map<String, Object> failAudit = new HashMap<>(auditContext);
                     failAudit.put("error", "forbidden_role");
+                    recordPkiLoginAudit(
+                        mappedUsername,
+                        adminAudience,
+                        AuditResultStatus.FAILED,
+                        failAudit,
+                        request,
+                        "业务端 PKI 登录失败（系统管理角色禁止登录）"
+                    );
                     return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("系统管理角色用户不能登录业务平台"));
                 }
                 if (!hasProtectedRole) {
@@ -3526,6 +3530,14 @@ public class KeycloakApiResource {
                     if (!allowed) {
                         Map<String, Object> failAudit = new HashMap<>(auditContext);
                         failAudit.put("error", "not_approved");
+                        recordPkiLoginAudit(
+                            mappedUsername,
+                            adminAudience,
+                            AuditResultStatus.FAILED,
+                            failAudit,
+                            request,
+                            "业务端 PKI 登录失败（未审批启用）"
+                        );
                         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("用户尚未审批启用，请联系授权管理员"));
                     }
                 }
@@ -3541,6 +3553,14 @@ public class KeycloakApiResource {
                 if (!hasAllowed) {
                     Map<String, Object> failAudit = new HashMap<>(auditContext);
                     failAudit.put("error", "role_not_allowed");
+                    recordPkiLoginAudit(
+                        mappedUsername,
+                        adminAudience,
+                        AuditResultStatus.FAILED,
+                        failAudit,
+                        request,
+                        "系统端 PKI 登录失败（角色不允许）"
+                    );
                     return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("仅系统管理角色可登录系统端"));
                 }
             }
@@ -3562,11 +3582,45 @@ public class KeycloakApiResource {
 
             Map<String, Object> successAudit = new HashMap<>(auditContext);
             successAudit.put("principal", principal);
+            recordPkiLoginAudit(
+                sessionUser,
+                adminAudience,
+                AuditResultStatus.SUCCESS,
+                successAudit,
+                request,
+                adminAudience ? "系统端 PKI 登录成功" : "业务端 PKI 登录成功"
+            );
             return ResponseEntity.ok(ApiResponse.ok(data));
         } catch (Exception ex) {
             String message = Optional.ofNullable(ex.getMessage()).filter(m -> !m.isBlank()).orElse("PKI 登录失败");
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(message));
         }
+    }
+
+    private String resolvePkiLoginAudience(HttpServletRequest request) {
+        return Optional
+            .ofNullable(request == null ? null : request.getHeader("X-Login-Audience"))
+            .orElse(Optional.ofNullable(request == null ? null : request.getParameter("audience")).orElse("platform"));
+    }
+
+    private void recordPkiLoginAudit(
+        String actor,
+        boolean adminAudience,
+        AuditResultStatus result,
+        Map<String, Object> detail,
+        HttpServletRequest request,
+        String summary
+    ) {
+        recordAuthActionV2(
+            actor,
+            adminAudience ? ButtonCodes.AUTH_ADMIN_LOGIN : ButtonCodes.AUTH_PLATFORM_LOGIN,
+            result,
+            detail,
+            request,
+            Optional.ofNullable(request).map(HttpServletRequest::getRequestURI).orElse("/api/keycloak/auth/pki-login"),
+            request != null ? request.getMethod() : "POST",
+            summary
+        );
     }
 
     @org.springframework.beans.factory.annotation.Autowired

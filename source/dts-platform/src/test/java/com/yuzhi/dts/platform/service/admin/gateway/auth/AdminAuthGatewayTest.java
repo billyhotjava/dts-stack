@@ -176,6 +176,7 @@ class AdminAuthGatewayTest {
             .expect(requestTo("http://dts-admin.test:8081/api/keycloak/auth/pki-login"))
             .andExpect(method(POST))
             .andExpect(request -> assertThat(request.getHeaders().containsKey(HttpHeaders.AUTHORIZATION)).isFalse())
+            .andExpect(request -> assertThat(request.getHeaders().getFirst("X-Audit-Silent")).isEqualTo("true"))
             .andRespond(
                 withSuccess(
                     """

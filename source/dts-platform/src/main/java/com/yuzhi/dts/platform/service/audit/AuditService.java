@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.common.audit.AuditActionCatalog;
 import com.yuzhi.dts.common.audit.AuditActionDefinition;
 import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.common.net.IpAddressUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
@@ -303,7 +304,7 @@ public class AuditService {
             ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
             if (attrs != null && attrs.getRequest() != null) {
                 var req = attrs.getRequest();
-                event.clientIp = pkiContextEnricher.resolveClientIp(req);
+                event.clientIp = resolveAuditClientIp(payloadMap, req);
                 event.clientAgent = req.getHeader("User-Agent");
                 event.requestUri = req.getRequestURI();
                 event.httpMethod = req.getMethod();
@@ -496,6 +497,40 @@ public class AuditService {
         }
         String text = String.valueOf(value).trim();
         return text.isEmpty() ? null : text;
+    }
+
+    private String resolveAuditClientIp(Map<String, Object> payloadMap, HttpServletRequest request) {
+        String requestIp = pkiContextEnricher.resolveClientIp(request);
+        String payloadIp = IpAddressUtils.resolveClientIp(
+            extractText(payloadMap, "clientIp"),
+            extractText(payloadMap, "pkiLoginClientIp"),
+            extractText(payloadMap, "ip")
+        );
+        if (isContainerAddress(requestIp) && StringUtils.hasText(payloadIp)) {
+            return payloadIp;
+        }
+        return StringUtils.hasText(requestIp) ? requestIp : payloadIp;
+    }
+
+    private boolean isContainerAddress(String ip) {
+        if (!StringUtils.hasText(ip)) {
+            return false;
+        }
+        String normalized = ip.trim();
+        if (normalized.equals("127.0.0.1") || normalized.equals("::1") || normalized.equals("0:0:0:0:0:0:0:1")) {
+            return true;
+        }
+        String[] parts = normalized.split("\\.");
+        if (parts.length != 4) {
+            return false;
+        }
+        try {
+            int first = Integer.parseInt(parts[0]);
+            int second = Integer.parseInt(parts[1]);
+            return first == 172 && second >= 16 && second <= 31;
+        } catch (NumberFormatException ignored) {
+            return false;
+        }
     }
 
 

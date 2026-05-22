@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.ingestion;
 
 import com.yuzhi.dts.platform.config.DtsIngestionProperties;
+import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import com.yuzhi.dts.platform.web.rest.ResultStatus;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
@@ -12,6 +13,7 @@ import io.github.resilience4j.retry.RetryRegistry;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
@@ -37,6 +39,8 @@ public class IngestionServiceClient {
 
     private static final Logger LOG = LoggerFactory.getLogger(IngestionServiceClient.class);
     private static final String SERVICE_HEADER = "X-DTS-Service";
+    private static final String USER_HEADER = "X-DTS-User";
+    private static final String ROLES_HEADER = "X-DTS-Roles";
     private static final Duration HEALTH_TTL = Duration.ofSeconds(15);
 
     private final RestTemplate restTemplate;
@@ -586,6 +590,19 @@ public class IngestionServiceClient {
         headers.setContentType(MediaType.APPLICATION_JSON);
         if (StringUtils.hasText(properties.getServiceName())) {
             headers.set(SERVICE_HEADER, properties.getServiceName());
+        }
+        SecurityUtils.getCurrentUserLogin()
+            .filter(StringUtils::hasText)
+            .map(String::trim)
+            .ifPresent(user -> headers.set(USER_HEADER, user));
+        List<String> roles = SecurityUtils.getCurrentUserAuthorities()
+            .stream()
+            .filter(StringUtils::hasText)
+            .map(String::trim)
+            .distinct()
+            .toList();
+        if (!roles.isEmpty()) {
+            headers.set(ROLES_HEADER, String.join(",", roles));
         }
         return headers;
     }

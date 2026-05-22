@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import com.yuzhi.dts.common.net.IpAddressUtils;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.session.PkiSessionTicketService;
 import com.yuzhi.dts.platform.security.session.PortalSessionCookieService;
@@ -32,6 +33,8 @@ import org.springframework.web.bind.annotation.*;
 public class KeycloakAuthResource {
 
     private static final Logger log = LoggerFactory.getLogger(KeycloakAuthResource.class);
+    private static final String PKI_LOGIN_CLIENT_IP = "pkiLoginClientIp";
+    private static final String PKI_LOGIN_USER_AGENT = "pkiLoginUserAgent";
     private final PortalSessionRegistry sessionRegistry;
     private final KeycloakAuthService keycloakAuthService;
     private final AdminAuthGateway adminAuthGateway;
@@ -533,9 +536,18 @@ public class KeycloakAuthResource {
             log.error("[pki-login] upstream response missing verified username");
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(ApiResponses.error("PKI 登录响应缺少已验证用户信息"));
         }
+        Map<String, Object> ticketUser = new java.util.LinkedHashMap<>(user);
+        String clientIp = resolveClientIp(request);
+        if (StringUtils.hasText(clientIp)) {
+            ticketUser.put(PKI_LOGIN_CLIENT_IP, clientIp);
+        }
+        String userAgent = request == null ? null : request.getHeader("User-Agent");
+        if (StringUtils.hasText(userAgent)) {
+            ticketUser.put(PKI_LOGIN_USER_AGENT, userAgent.trim());
+        }
         return ResponseEntity
             .ok()
-            .header(org.springframework.http.HttpHeaders.SET_COOKIE, pkiSessionTicketService.issue(username, user, request).toString())
+            .header(org.springframework.http.HttpHeaders.SET_COOKIE, pkiSessionTicketService.issue(username, ticketUser, request).toString())
             .body(ApiResponses.ok(data));
     }
 
@@ -559,10 +571,14 @@ public class KeycloakAuthResource {
         }
         String username = verifiedPrincipal.username();
         String auditActor = sanitizeActor(username);
+        String pkiLoginClientIp = null;
+        String pkiLoginUserAgent = null;
 
         String displayName = null;
         try {
             Map<String, Object> user = new java.util.LinkedHashMap<>(verifiedPrincipal.user());
+            pkiLoginClientIp = stringValue(user.get(PKI_LOGIN_CLIENT_IP));
+            pkiLoginUserAgent = stringValue(user.get(PKI_LOGIN_USER_AGENT));
             displayName = resolveUserDisplayName(user);
             // Normalize and map roles from upstream into platform authorities
             java.util.List<String> rawRoles = toStringList(user.get("roles"));
@@ -591,6 +607,7 @@ public class KeycloakAuthResource {
                 if (shouldRecordPortalLoginAudit() && auditActor != null) {
                     Map<String, Object> failurePayload = authAuditPayload(auditActor);
                     failurePayload.put("mode", "pki");
+                    applyPkiLoginClientEvidence(failurePayload, pkiLoginClientIp, pkiLoginUserAgent);
                     applyIdentityMetadata(failurePayload, displayName, auditActor);
                     failurePayload.put("summary", buildSummary("业务端登录失败", displayName, auditActor));
                     failurePayload.put("operationType", "LOGIN");
@@ -661,6 +678,8 @@ public class KeycloakAuthResource {
 
             // Build user payload (override roles/permissions with mapped ones)
             Map<String, Object> userOut = new java.util.LinkedHashMap<>(user);
+            userOut.remove(PKI_LOGIN_CLIENT_IP);
+            userOut.remove(PKI_LOGIN_USER_AGENT);
             userOut.put("username", userOut.getOrDefault("username", username));
             userOut.put("roles", mappedRoles);
             userOut.put("permissions", permissions);
@@ -706,6 +725,7 @@ public class KeycloakAuthResource {
             if (shouldRecordPortalLoginAudit() && auditActor != null) {
                 Map<String, Object> successPayload = authAuditPayload(auditActor);
                 successPayload.put("mode", "pki");
+                applyPkiLoginClientEvidence(successPayload, pkiLoginClientIp, pkiLoginUserAgent);
                 applyIdentityMetadata(successPayload, displayName, auditActor);
                 successPayload.put("summary", buildSummary("业务端登录成功", displayName, auditActor));
                 successPayload.put("operationType", "LOGIN");
@@ -729,6 +749,7 @@ public class KeycloakAuthResource {
             if (shouldRecordPortalLoginAudit() && auditActor != null) {
                 Map<String, Object> failurePayload = authAuditPayload(auditActor);
                 failurePayload.put("mode", "pki");
+                applyPkiLoginClientEvidence(failurePayload, pkiLoginClientIp, pkiLoginUserAgent);
                 applyIdentityMetadata(failurePayload, displayName, auditActor);
                 failurePayload.put("summary", buildSummary("业务端登录失败", displayName, auditActor));
                 failurePayload.put("operationType", "LOGIN");
@@ -988,6 +1009,30 @@ public class KeycloakAuthResource {
             payload.put("targetName", target);
             payload.put("resourceName", target);
         }
+    }
+
+    private void applyPkiLoginClientEvidence(Map<String, Object> payload, String clientIp, String userAgent) {
+        if (payload == null) {
+            return;
+        }
+        if (StringUtils.hasText(clientIp)) {
+            payload.put("clientIp", clientIp.trim());
+        }
+        if (StringUtils.hasText(userAgent)) {
+            payload.put("clientAgent", userAgent.trim());
+        }
+    }
+
+    private String resolveClientIp(HttpServletRequest request) {
+        if (request == null) {
+            return null;
+        }
+        return IpAddressUtils.resolveClientIp(
+            request.getHeader("Forwarded"),
+            request.getHeader("X-Forwarded-For"),
+            request.getHeader("X-Real-IP"),
+            request.getRemoteAddr()
+        );
     }
 
     private String buildSummary(String prefix, String displayName, String fallbackName) {
