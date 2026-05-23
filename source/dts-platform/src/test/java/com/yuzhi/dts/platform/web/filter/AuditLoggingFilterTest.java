@@ -118,6 +118,9 @@ class AuditLoggingFilterTest {
             "/api/directory/users",
             "/api/forward-auth",
             "/api/menu/tree",
+            "/api/infra/screen-fonts",
+            "/api/infra/screen-fonts/font-1.woff2",
+            "/api/infra/screen-images",
             "/api/catalog/domains/123/asset-stats",
             "/api/catalog/domain/asset-stats",
             "/api/workbench/options"

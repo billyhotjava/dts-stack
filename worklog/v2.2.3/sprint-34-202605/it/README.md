@@ -1,6 +1,6 @@
 # Sprint-34 IT Evidence
 
-**状态**: LOOP-4-PASS（代码与 focused 验证完成；现场 smoke 待部署补证）
+**状态**: LOOP-5-PASS（代码与 focused 验证完成；现场 smoke 待部署补证）
 
 ## 自动化验证
 
@@ -22,6 +22,11 @@
 | dts-admin | `./mvnw -q -pl dts-admin -DskipTests compile` | PASS | `it/evidence/20260523-audit-db-catalog-loop4-analytics.md` |
 | dts-analytics | `./mvnw -q -pl dts-analytics -DskipTests compile` | PASS | `it/evidence/20260523-audit-db-catalog-loop4-analytics.md` |
 | dts-admin | `xmllint --noout ...20260523-01_audit_action_catalog.xml ...master.xml` | PASS | `it/evidence/20260523-audit-db-catalog-loop4-analytics.md` |
+| dts-platform | `./mvnw -q -pl dts-platform -Dtest=AuditLoggingFilterTest test` | PASS | `it/evidence/20260523-audit-db-catalog-loop5-display-fallback.md` |
+| dts-admin | `./mvnw -q -pl dts-admin -Dtest=AuditEntryViewMapperTest,AuditV2ServiceTest test` | PASS | `it/evidence/20260523-audit-db-catalog-loop5-display-fallback.md` |
+| dts-admin-webapp | `pnpm exec vitest run src/admin/views/audit-center.source-contract.test.ts` | PASS | `it/evidence/20260523-audit-db-catalog-loop5-display-fallback.md` |
+| dts-admin-webapp | `pnpm build` | PASS | `it/evidence/20260523-audit-db-catalog-loop5-display-fallback.md` |
+| repo | `git diff --check` | PASS | `it/evidence/20260523-audit-db-catalog-loop5-display-fallback.md` |
 
 ## 现场 Smoke Checklist
 
@@ -52,3 +57,9 @@
 - 已完成 dts-analytics fallback actionCode 生成和 forwarder `buttonCode`/`operationCode` 转发。
 - 已补 analytics DB catalog seed，并让未知 analytics actionCode 落入 `analytics.unclassified`。
 - 已修复审计中心 analytics sourceSystem 展示，不再显示为管理端审计。
+
+## Loop 5 Review
+
+- 已修复审计中心“模块名称”列取错来源系统字段的问题，模块显示回到 DB catalog/module 快照。
+- 已修复 raw actionCode 摘要覆盖中文动作名的问题，新入库和历史展示都会优先使用已治理 operationName。
+- 已补大屏字体/图片 GET 支撑资源降噪，查看大屏不再生成“查看screen-fonts”类人工审计。

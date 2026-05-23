@@ -119,11 +119,7 @@ public class AuditV2Service {
             );
         builder.operation(operationCode, operationName, operationKind);
 
-        String summary = firstNonBlank(
-            request.summary(),
-            catalogAction != null ? catalogAction.operationName() : null,
-            metadata != null ? metadata.operationName() : null
-        );
+        String summary = resolveSummary(request, catalogAction, metadata);
         if (StringUtils.hasText(summary)) {
             builder.summary(summary);
         }
@@ -159,6 +155,37 @@ public class AuditV2Service {
         }
 
         return builder.emit();
+    }
+
+    private String resolveSummary(
+        AuditActionRequest request,
+        AuditActionCatalogService.ResolvedAction catalogAction,
+        AuditButtonMetadata metadata
+    ) {
+        String requestSummary = request.summary();
+        String catalogOperationName = catalogAction != null ? catalogAction.operationName() : null;
+        if (
+            StringUtils.hasText(catalogOperationName) &&
+            isRawActionToken(requestSummary, request.buttonCode(), request.operationCodeOverride())
+        ) {
+            return catalogOperationName.trim();
+        }
+        return firstNonBlank(requestSummary, catalogOperationName, metadata != null ? metadata.operationName() : null);
+    }
+
+    private boolean isRawActionToken(String value, String... references) {
+        if (!StringUtils.hasText(value)) {
+            return false;
+        }
+        String normalized = value.trim();
+        if (references != null) {
+            for (String reference : references) {
+                if (StringUtils.hasText(reference) && normalized.equalsIgnoreCase(reference.trim())) {
+                    return true;
+                }
+            }
+        }
+        return normalized.matches("[A-Z][A-Z0-9_:.\\-]{2,}");
     }
 
     private List<AuditActionRequest.AuditDetail> normalizeDetails(AuditActionRequest request) {

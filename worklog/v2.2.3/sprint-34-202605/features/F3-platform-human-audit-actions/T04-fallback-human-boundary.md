@@ -33,3 +33,4 @@
 
 - `AuditLoggingFilter` 增加对 forward-auth、menu tree、stats、summary、options、dropdown、selector 等支撑 GET 的跳过规则。
 - `AuditLoggingFilterTest` 补充覆盖支撑查询跳过边界，保留人工详情/导出类 GET 的兜底能力。
+- Loop 5 补充 `/api/infra/screen-fonts` 与 `/api/infra/screen-images` GET 资源降噪，避免查看大屏时字体/图片加载被误记为人工查看。

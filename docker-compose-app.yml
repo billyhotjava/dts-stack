@@ -89,8 +89,6 @@ services:
       SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET: ${OAUTH2_ADMIN_CLIENT_SECRET:-}
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${OIDC_ISSUER_URI}
       TZ: ${TZ:-Asia/Shanghai}
-    extra_hosts:
-      - ${HOST_SSO}:${HOST_GATEWAY_IP:-172.17.0.1}
     healthcheck:
       interval: 10s
       retries: 60
@@ -1282,8 +1280,6 @@ services:
       SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET: ${OAUTH2_PLATFORM_CLIENT_SECRET:-}
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${OIDC_ISSUER_URI}
       TZ: ${TZ:-Asia/Shanghai}
-    extra_hosts:
-      - ${HOST_SSO}:${HOST_GATEWAY_IP:-172.17.0.1}
     healthcheck:
       interval: 10s
       retries: 60
@@ -1494,7 +1490,9 @@ services:
       - traefik.http.routers.hetu-root-assets.service=hetu@file
       - traefik.http.routers.hetu-root-assets.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file
     networks:
-      dts-core: null
+      dts-core:
+        aliases:
+          - ${HOST_SSO}
     platform: ${DTS_RUNTIME_PLATFORM:-linux/amd64}
     ports:
       - 80:80

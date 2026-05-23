@@ -531,10 +531,10 @@ export default function AuditCenterView() {
 			},
 			{
 				title: "模块名称",
-				dataIndex: "sourceSystemText",
-				key: "sourceSystemText",
+				dataIndex: "module",
+				key: "module",
 				width: 120,
-				render: (_: string, r) => r.sourceSystemText || r.sourceSystem || "-",
+				render: (_: string, r) => translateModuleLabel(r.moduleKey, r.module),
 			},
 			{
 				title: "操作内容",

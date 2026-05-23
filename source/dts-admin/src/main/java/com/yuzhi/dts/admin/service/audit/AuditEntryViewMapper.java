@@ -51,7 +51,7 @@ public class AuditEntryViewMapper {
         map.put("operationTypeCode", normalizedCode);
         map.put("operationType", mapOperationTypeLabel(normalizedCode));
         map.put("operationTypeRaw", kind != null ? kind.displayName() : null);
-        map.put("operationContent", StringUtils.defaultIfBlank(view.summary(), view.operationName()));
+        map.put("operationContent", mapOperationContent(view));
         map.put("summary", view.summary());
         map.put("operationGroup", view.operationGroup());
         map.put("result", view.result());
@@ -219,6 +219,33 @@ public class AuditEntryViewMapper {
             type = AuditOperationType.READ;
         }
         return type.getDisplayName();
+    }
+
+    private String mapOperationContent(AuditEntryView view) {
+        String summary = safeTrim(view.summary());
+        String operationName = safeTrim(view.operationName());
+        if (StringUtils.isBlank(summary)) {
+            return StringUtils.defaultIfBlank(operationName, view.operationCode());
+        }
+        if (StringUtils.isNotBlank(operationName) && isRawOperationToken(summary, view.operationCode(), view.buttonCode())) {
+            return operationName;
+        }
+        return summary;
+    }
+
+    private boolean isRawOperationToken(String value, String... references) {
+        if (StringUtils.isBlank(value)) {
+            return false;
+        }
+        String normalized = value.trim();
+        if (references != null) {
+            for (String reference : references) {
+                if (StringUtils.isNotBlank(reference) && normalized.equalsIgnoreCase(reference.trim())) {
+                    return true;
+                }
+            }
+        }
+        return normalized.matches("[A-Z][A-Z0-9_:.\\-]{2,}");
     }
 
     private String extractOperationToken(AuditEntryView view) {

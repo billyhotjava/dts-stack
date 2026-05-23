@@ -375,6 +375,9 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
             return false;
         }
         String lowerUri = uri.toLowerCase(Locale.ROOT);
+        if (lowerUri.startsWith("/api/infra/screen-fonts") || lowerUri.startsWith("/api/infra/screen-images")) {
+            return true;
+        }
         if (
             containsAny(
                 lowerUri,

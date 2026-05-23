@@ -172,4 +172,38 @@ class AuditV2ServiceTest {
         assertThat(saved.getOperationName()).isEqualTo("导出新增组件");
         assertThat(saved.getMetadata()).containsEntry("classificationReason", "NO_CATALOG_MATCH");
     }
+
+    @Test
+    void replacesRawActionCodeSummaryWithCatalogOperationName() {
+        when(actionCatalogService.resolve("platform", "CATALOG_DOMAIN_TREE"))
+            .thenReturn(
+                Optional.of(
+                    new AuditActionCatalogService.ResolvedAction(
+                        "platform",
+                        "catalog.domain.tree",
+                        "主题域",
+                        "CATALOG_DOMAIN_TREE",
+                        "查看主题域树",
+                        AuditOperationKind.QUERY,
+                        "catalog_domain",
+                        true
+                    )
+                )
+            );
+
+        AuditActionRequest request = AuditActionRequest
+            .builder("xiezm", "CATALOG_DOMAIN_TREE")
+            .sourceSystem("platform")
+            .summary("CATALOG_DOMAIN_TREE")
+            .allowEmptyTargets()
+            .build();
+
+        service.record(request);
+
+        ArgumentCaptor<AuditEntry> captor = ArgumentCaptor.forClass(AuditEntry.class);
+        verify(repository).save(captor.capture());
+        AuditEntry saved = captor.getValue();
+        assertThat(saved.getSummary()).isEqualTo("查看主题域树");
+        assertThat(saved.getOperationName()).isEqualTo("查看主题域树");
+    }
 }

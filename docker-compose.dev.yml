@@ -128,8 +128,6 @@ services:
       SPRINGDOC_API_DOCS_ENABLED: "true"
       SPRINGDOC_SWAGGER_UI_ENABLED: "true"
       TZ: ${TZ:-Asia/Shanghai}
-    extra_hosts:
-      - ${HOST_SSO}:${HOST_GATEWAY_IP:-172.17.0.1}
     healthcheck:
       interval: 10s
       retries: 60
@@ -1430,7 +1428,6 @@ services:
       SPRINGDOC_SWAGGER_UI_ENABLED: "true"
       TZ: ${TZ:-Asia/Shanghai}
     extra_hosts:
-      - ${HOST_SSO}:${HOST_GATEWAY_IP:-172.17.0.1}
       - tdh01:172.16.0.154
     healthcheck:
       interval: 10s
@@ -1713,7 +1710,9 @@ services:
       - traefik.http.routers.hetu-root-assets.service=hetu@file
       - traefik.http.routers.hetu-root-assets.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file
     networks:
-      dts-core: null
+      dts-core:
+        aliases:
+          - ${HOST_SSO}
     platform: ${DTS_RUNTIME_PLATFORM:-linux/amd64}
     ports:
       - 80:80

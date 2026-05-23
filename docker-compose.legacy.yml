@@ -137,7 +137,9 @@ services:
       - "traefik.http.routers.hetu-root-assets.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file"
     restart: unless-stopped
     networks:
-      - dts-core
+      dts-core:
+        aliases:
+          - ${HOST_SSO}
 
   dts-kafka:
     platform: ${DTS_RUNTIME_PLATFORM:-linux/arm64}
@@ -411,8 +413,6 @@ services:
       # Optional: mount vendor PKI client jar(s) like svs-uk_custom.jar into /opt/dts/vendor
       - ./services/dts-admin/vendor:/opt/dts/vendor:ro,z
       - ./services/dts-platform/drivers:/opt/dts/drivers:z
-    extra_hosts:
-      - "${HOST_SSO}:${HOST_GATEWAY_IP:-172.17.0.1}"
     networks:
       - dts-core
     healthcheck:
@@ -551,8 +551,6 @@ services:
       - ./services/dts-dbt:/opt/dts/dbt:Z
       - ./services/dts-dbt/profiles:/opt/dts/dbt-profiles:Z
       - ./services/dts-airflow/dags:/opt/airflow/dags:Z
-    extra_hosts:
-      - "${HOST_SSO}:${HOST_GATEWAY_IP:-172.17.0.1}"
     networks:
       - dts-core
     healthcheck:
