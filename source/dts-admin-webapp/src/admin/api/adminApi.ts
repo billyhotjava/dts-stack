@@ -354,6 +354,7 @@ export const adminApi = {
 				username: query?.username,
 				fullName: query?.fullName,
 				deptPath: query?.deptPath,
+				inRole: query?.inRole,
 			},
 		}),
 

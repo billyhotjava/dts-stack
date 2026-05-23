@@ -51,17 +51,22 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 
 	// Resolve user IDs to display names
 	const resolveUserNames = useCallback(async (aclEntries: ScreenAclEntry[]) => {
+		const knownNames: Record<string, string> = {};
+		for (const entry of aclEntries) {
+			if (entry.subjectType === 'USER' && entry.subjectName) {
+				knownNames[String(entry.subjectId)] = entry.subjectName;
+			}
+		}
 		const userIds = [
 			...new Set(
 				aclEntries
-					.filter((e) => e.subjectType === 'USER')
+					.filter((e) => e.subjectType === 'USER' && !e.subjectName)
 					.map((e) => String(e.subjectId))
 					.filter((id) => id.trim().length > 0),
 			),
 		];
-		if (userIds.length === 0) return;
 
-		const nameMap: Record<string, string> = {};
+		const nameMap: Record<string, string> = { ...knownNames };
 		await Promise.all(
 			userIds.map(async (id) => {
 				try {
@@ -76,7 +81,9 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 				}
 			}),
 		);
-		setUserNameMap((prev) => ({ ...prev, ...nameMap }));
+		if (Object.keys(nameMap).length > 0) {
+			setUserNameMap((prev) => ({ ...prev, ...nameMap }));
+		}
 	}, []);
 
 	// Load ACL entries + screen classification
@@ -241,6 +248,17 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 	const ownerEntries = entries.filter((e) => e.perm === 'OWNER');
 	const nonOwnerEntries = entries.filter((e) => e.perm !== 'OWNER');
 
+	const resolveEntryLabel = useCallback((entry: ScreenAclEntry): string => {
+		if (entry.subjectType === 'ROLE') {
+			return `角色 ${entry.subjectName || entry.subjectId}`;
+		}
+		return entry.subjectName || userNameMap[String(entry.subjectId)] || entry.subjectUsername || `用户 ${entry.subjectId}`;
+	}, [userNameMap]);
+
+	const resolveEntryInitial = useCallback((entry: ScreenAclEntry): string => {
+		return (resolveEntryLabel(entry).trim() || '?').charAt(0).toUpperCase();
+	}, [resolveEntryLabel]);
+
 	const availablePerms: Array<{ value: 'READ' | 'MANAGE'; label: string }> = isOwner
 		? [
 			{ value: 'READ', label: '查看者' },
@@ -357,12 +375,10 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 										fontSize: 11,
 										fontWeight: 600,
 									}}>
-										{(userNameMap[String(entry.subjectId)] || entry.subjectId || '?').charAt(0).toUpperCase()}
+										{resolveEntryInitial(entry)}
 									</span>
 									<span style={{ fontSize: 13, color: 'var(--color-text-primary, #e5e7eb)' }}>
-										{entry.subjectType === 'USER'
-											? (userNameMap[String(entry.subjectId)] || `用户 ${entry.subjectId}`)
-											: `角色 ${entry.subjectId}`}
+										{resolveEntryLabel(entry)}
 									</span>
 								</div>
 								<Tag color={PERM_COLORS.OWNER} style={{ margin: 0 }}>
@@ -398,12 +414,10 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 											fontSize: 11,
 											fontWeight: 600,
 										}}>
-											{(userNameMap[String(entry.subjectId)] || entry.subjectId || '?').charAt(0).toUpperCase()}
+											{resolveEntryInitial(entry)}
 										</span>
 										<span style={{ fontSize: 13, color: 'var(--color-text-primary, #e5e7eb)' }}>
-											{entry.subjectType === 'USER'
-											? (userNameMap[String(entry.subjectId)] || `用户 ${entry.subjectId}`)
-											: `角色 ${entry.subjectId}`}
+											{resolveEntryLabel(entry)}
 										</span>
 									</div>
 									<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -626,6 +640,8 @@ function normalizeEntry(row: Partial<ScreenAclEntry>): ScreenAclEntry {
 	return {
 		subjectType: row.subjectType === 'ROLE' ? 'ROLE' : 'USER',
 		subjectId: String(row.subjectId || '').trim(),
+		subjectName: row.subjectName,
+		subjectUsername: row.subjectUsername,
 		perm: (validPerms.includes(row.perm as ScreenAclEntry['perm']) ? row.perm : 'READ') as ScreenAclEntry['perm'],
 		levelOverride: row.levelOverride === true,
 		id: row.id,

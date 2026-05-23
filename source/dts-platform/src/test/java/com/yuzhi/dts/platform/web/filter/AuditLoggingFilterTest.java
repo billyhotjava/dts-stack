@@ -114,13 +114,23 @@ class AuditLoggingFilterTest {
         AuditLoggingFilter filter = new AuditLoggingFilter(mockProvider(forwarder), mock(AuditFlowManager.class), false);
         authenticate("opadmin");
 
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/directory/users");
-        request.setQueryString("keyword=test1");
-        request.addParameter("keyword", "test1");
+        for (String uri : List.of(
+            "/api/directory/users",
+            "/api/forward-auth",
+            "/api/menu/tree",
+            "/api/catalog/domains/123/asset-stats",
+            "/api/catalog/domain/asset-stats",
+            "/api/workbench/options"
+        )) {
+            reset(forwarder);
+            MockHttpServletRequest request = new MockHttpServletRequest("GET", uri);
+            request.setQueryString("keyword=test1");
+            request.addParameter("keyword", "test1");
 
-        filter.doFilter(request, new MockHttpServletResponse(), (req, res) -> {});
+            filter.doFilter(request, new MockHttpServletResponse(), (req, res) -> {});
 
-        verify(forwarder, never()).record(org.mockito.ArgumentMatchers.any(AuditForwarderService.PendingAuditEvent.class));
+            verify(forwarder, never()).record(org.mockito.ArgumentMatchers.any(AuditForwarderService.PendingAuditEvent.class));
+        }
     }
 
     private AuditForwarderService.PendingAuditEvent perform(

@@ -133,7 +133,8 @@ export function ScreenGrantManager({ screenId, isOwner = false }: ScreenGrantMan
 	const userDisplayMap = useMemo(() => {
 		const map = new Map<string, PlatformUser>();
 		for (const u of platformUsers) {
-			map.set(u.username.toLowerCase(), u);
+			if (u.username) map.set(u.username.toLowerCase(), u);
+			if (u.id != null) map.set(String(u.id).toLowerCase(), u);
 		}
 		return map;
 	}, [platformUsers]);
@@ -148,7 +149,9 @@ export function ScreenGrantManager({ screenId, isOwner = false }: ScreenGrantMan
 
 	const resolveGrantLabel = (row: ScreenAclEntry): string => {
 		if (row.subjectType === 'USER') {
-			const u = userDisplayMap.get((row.subjectId || '').toLowerCase());
+			if (row.subjectName) return row.subjectName;
+			const lookupKeys = [row.subjectId, row.subjectUsername].filter(Boolean).map((id) => String(id).toLowerCase());
+			const u = lookupKeys.map((id) => userDisplayMap.get(id)).find(Boolean);
 			if (u) return u.displayName || u.username;
 		}
 		if (row.subjectType === 'ROLE') {

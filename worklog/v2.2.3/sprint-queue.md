@@ -1,7 +1,7 @@
 # Sprint Queue — v2.2.3
 
 ## Sprint-1: 架构加固 -- 高可用、安全、可观测性 (202604)
-**状态**: IN_PROGRESS
+**状态**: DONE（代码与 focused 验证完成；现场 smoke 待部署补证）
 **类型**: Design Only（仅设计，不实施）
 
 | Feature | Task 数 | 状态 |
@@ -537,6 +537,32 @@
 **完成记录**:
 - 2026-05-19 完成 `GET /api/admin/roles/{name}/assignment-users` 查询契约、角色编辑页成员分配表格、差异审批 payload 接入。
 - 2026-05-19 通过后端 focused test、前端 source-level test 和 `dts-admin-webapp` 生产构建；运行时浏览器 smoke 留给联调环境补证。
+
+## Sprint-34: 审计目录 DB 化与 Platform 人工操作审计重构 (202605)
+**状态**: DONE（代码与 focused 验证完成；现场 smoke 待部署补证）
+**类型**: Architecture / Implementation / Compliance（dts-admin + dts-platform + dts-common）
+**目标**: 将审计模块、动作、路由映射的运行时事实源从中心 JSON/路径猜测迁移到 dts-admin 数据库目录，确保 platform 持续新增模块时可以通过可治理目录注册审计动作，并只记录人工操作痕迹。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-db-audit-catalog | P0 | 4 | DONE |
+| F2-admin-classification-runtime | P0 | 4 | DONE |
+| F3-platform-human-audit-actions | P0 | 4 | DONE |
+| F4-verification-review-it | P0 | 3 | DONE |
+
+**统计**: READY=0, IN_PROGRESS=0, DONE=15, BLOCKED=0
+**设计文档**: `worklog/v2.2.3/sprint-34-202605/README.md`
+**实施计划**: `worklog/v2.2.3/sprint-34-202605/assets/implementation-plan.md`
+**集成测试**: `worklog/v2.2.3/sprint-34-202605/it/README.md`
+**关键决策**:
+- DB catalog 是唯一运行时审计分类权威；JSON 只保留 seed/export/迁移兼容地位。
+- 2026-05-23 Loop 2 完成审计中心筛选项 DB catalog 化与 HTTP fallback 降噪；现场 smoke 留部署环境补证。
+- 2026-05-23 Loop 3 完成 common catalog 缺失动作启动导入和 miss 累计，降低升级后既有 platform 动作大面积未分类风险。
+- 未注册 actionCode 不再被 URI 猜成业务模块，统一进入未分类治理队列。
+- HTTP fallback 只作为漏埋点保护网，不能产出大量支撑查询审计。
+**Loop 1 结果**:
+- dts-admin DB catalog、sourceSystem 透传、unknown action miss 已完成并通过 focused test。
+- platform 主题域和报表动作码已收敛；剩余审计中心筛选项 DB 化和 fallback 降噪进入下一轮。
 
 ## v2.3 Backlog: 企业级资产与指标增强
 

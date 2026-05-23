@@ -123,6 +123,8 @@ class AdminUserServiceListSnapshotsTest {
                 eq("zhang"),
                 eq("张"),
                 eq("/总院/数据部"),
+                eq(true),
+                anyCollection(),
                 anyCollection(),
                 any(org.springframework.data.domain.Pageable.class)
             )
@@ -140,7 +142,8 @@ class AdminUserServiceListSnapshotsTest {
             20,
             "zhang",
             "张",
-            "/总院/数据部"
+            "/总院/数据部",
+            true
         );
 
         assertThat(result.getTotalElements()).isEqualTo(1);
@@ -154,13 +157,13 @@ class AdminUserServiceListSnapshotsTest {
     @Test
     void roleAssignmentUsersShouldUseUnsortedPageableBecauseNativeQueryOwnsOrdering() {
         AdminKeycloakUser zhang = user("zhangsan", "张三", "/总院/数据部");
-        when(userRepository.findRoleAssignmentCandidates(isNull(), isNull(), isNull(), anyCollection(), any(Pageable.class)))
+        when(userRepository.findRoleAssignmentCandidates(isNull(), isNull(), isNull(), isNull(), anyCollection(), anyCollection(), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of(zhang), PageRequest.of(0, 20), 1));
 
-        serviceWithoutMgmtToken.listRoleAssignmentUsers("DATA_STEWARD", 0, 20, null, null, null);
+        serviceWithoutMgmtToken.listRoleAssignmentUsers("DATA_STEWARD", 0, 20, null, null, null, null);
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(userRepository).findRoleAssignmentCandidates(isNull(), isNull(), isNull(), anyCollection(), pageableCaptor.capture());
+        verify(userRepository).findRoleAssignmentCandidates(isNull(), isNull(), isNull(), isNull(), anyCollection(), anyCollection(), pageableCaptor.capture());
         assertThat(pageableCaptor.getValue().getSort().isUnsorted()).isTrue();
     }
 

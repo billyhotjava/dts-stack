@@ -4,9 +4,11 @@ import com.yuzhi.dts.admin.security.AuthoritiesConstants;
 import com.yuzhi.dts.admin.security.SecurityUtils;
 import com.yuzhi.dts.admin.security.TriadAccountRegistry;
 import com.yuzhi.dts.admin.service.audit.AuditEntryQueryService;
+import com.yuzhi.dts.admin.service.audit.AuditCategoryOption;
 import com.yuzhi.dts.admin.service.audit.AuditEntryView;
 import com.yuzhi.dts.admin.service.audit.AuditEntryViewMapper;
 import com.yuzhi.dts.admin.service.audit.AuditEntryActionRecorder;
+import com.yuzhi.dts.admin.service.audit.AuditGroupOption;
 import com.yuzhi.dts.admin.service.audit.AuditResourceDictionaryService;
 import com.yuzhi.dts.admin.service.audit.AuditSearchCriteria;
 import com.yuzhi.dts.admin.service.audit.ButtonCodes;
@@ -246,6 +248,23 @@ public class AuditEntryResource {
     @GetMapping("/groups")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> groups() {
         requireAuthenticatedActor();
+        List<AuditGroupOption> catalogOptions = auditQueryService.listGroupOptions();
+        if (!catalogOptions.isEmpty()) {
+            List<Map<String, Object>> out = new ArrayList<>(catalogOptions.size());
+            for (AuditGroupOption option : catalogOptions) {
+                Map<String, Object> entry = new LinkedHashMap<>();
+                entry.put("key", option.key());
+                entry.put("title", option.title());
+                entry.put("module", option.module());
+                entry.put("groupDisplayName", option.groupDisplayName());
+                if (StringUtils.isNotBlank(option.sourceSystem())) {
+                    entry.put("sourceSystem", option.sourceSystem());
+                    entry.put("sourceSystemLabel", viewMapper.mapSourceSystemText(option.sourceSystem()));
+                }
+                out.add(entry);
+            }
+            return ResponseEntity.ok(ApiResponse.ok(out));
+        }
         List<RuleSummary> summaries = opMappingEngine.describeRules();
         if (summaries.isEmpty()) {
             return ResponseEntity.ok(ApiResponse.ok(List.of()));
@@ -282,6 +301,21 @@ public class AuditEntryResource {
     @GetMapping("/categories")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> categories() {
         requireAuthenticatedActor();
+        List<AuditCategoryOption> catalogOptions = auditQueryService.listCategoryOptions();
+        if (!catalogOptions.isEmpty()) {
+            List<Map<String, Object>> out = new ArrayList<>(catalogOptions.size());
+            for (AuditCategoryOption category : catalogOptions) {
+                out.add(
+                    Map.of(
+                        "moduleKey", category.moduleKey(),
+                        "moduleTitle", category.moduleTitle(),
+                        "entryKey", category.entryKey(),
+                        "entryTitle", category.entryTitle()
+                    )
+                );
+            }
+            return ResponseEntity.ok(ApiResponse.ok(out));
+        }
         LinkedHashMap<String, ModuleView> modules = collectModulesFromRules();
         LinkedHashMap<String, CategoryView> categories = collectCategoriesFromRules(modules);
         List<Map<String, Object>> out = new ArrayList<>(categories.size());

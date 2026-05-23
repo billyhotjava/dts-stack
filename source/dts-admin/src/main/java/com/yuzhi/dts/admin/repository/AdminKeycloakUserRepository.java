@@ -73,6 +73,15 @@ public interface AdminKeycloakUserRepository extends JpaRepository<AdminKeycloak
                            or lower(gp.path) like lower(concat(cast(:deptPath as text), '/%'))
                    )
                )
+               and (
+                   cast(:inRole as boolean) is null
+                   or exists (
+                       select 1
+                         from admin_role_member m
+                        where lower(m.username) = lower(u.username)
+                          and lower(m.role) in (:roleKeys)
+                   ) = cast(:inRole as boolean)
+               )
              order by lower(u.username)
             """,
         countQuery = """
@@ -91,6 +100,15 @@ public interface AdminKeycloakUserRepository extends JpaRepository<AdminKeycloak
                            or lower(gp.path) like lower(concat(cast(:deptPath as text), '/%'))
                    )
                )
+               and (
+                   cast(:inRole as boolean) is null
+                   or exists (
+                       select 1
+                         from admin_role_member m
+                        where lower(m.username) = lower(u.username)
+                          and lower(m.role) in (:roleKeys)
+                   ) = cast(:inRole as boolean)
+               )
             """,
         nativeQuery = true
     )
@@ -98,6 +116,8 @@ public interface AdminKeycloakUserRepository extends JpaRepository<AdminKeycloak
         @Param("username") String username,
         @Param("fullName") String fullName,
         @Param("deptPath") String deptPath,
+        @Param("inRole") Boolean inRole,
+        @Param("roleKeys") Collection<String> roleKeys,
         @Param("excluded") Collection<String> excluded,
         Pageable pageable
     );

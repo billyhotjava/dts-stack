@@ -52,7 +52,7 @@ public class CatalogDomainResource {
                 pageable
             );
         Map<String, Object> data = Map.of("content", p.getContent(), "total", p.getTotalElements());
-        audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, "page=" + page, null);
+        audit.auditAction("CATALOG_DOMAIN_LIST", AuditStage.SUCCESS, "page=" + page, null);
         return ApiResponses.ok(data);
     }
 
@@ -65,7 +65,7 @@ public class CatalogDomainResource {
             domain.setParent(domainRepo.findById(pid).orElse(null));
         }
         CatalogDomain saved = domainRepo.save(domain);
-        audit.auditAction("CATALOG_ASSET_EDIT", AuditStage.SUCCESS, saved.getId().toString(), null);
+        audit.auditAction("CATALOG_DOMAIN_CREATE", AuditStage.SUCCESS, saved.getId().toString(), null);
         return ApiResponses.ok(saved);
     }
 
@@ -85,7 +85,7 @@ public class CatalogDomainResource {
             existing.setParent(null);
         }
         CatalogDomain saved = domainRepo.save(existing);
-        audit.auditAction("CATALOG_ASSET_EDIT", AuditStage.SUCCESS, id.toString(), null);
+        audit.auditAction("CATALOG_DOMAIN_UPDATE", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(saved);
     }
 
@@ -94,7 +94,7 @@ public class CatalogDomainResource {
     @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deleteDomain(@PathVariable UUID id) {
         domainRepo.deleteById(id);
-        audit.auditAction("CATALOG_ASSET_EDIT", AuditStage.SUCCESS, id.toString(), null);
+        audit.auditAction("CATALOG_DOMAIN_DELETE", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(Boolean.TRUE);
     }
 
@@ -125,7 +125,7 @@ public class CatalogDomainResource {
                 roots.add(m);
             }
         }
-        audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, "tree", null);
+        audit.auditAction("CATALOG_DOMAIN_TREE", AuditStage.SUCCESS, "tree", null);
         return ApiResponses.ok(roots);
     }
 
@@ -159,7 +159,7 @@ public class CatalogDomainResource {
             }
         }
         CatalogDomain saved = domainRepo.save(d);
-        audit.auditAction("CATALOG_ASSET_EDIT", AuditStage.SUCCESS, id.toString(), null);
+        audit.auditAction("CATALOG_DOMAIN_MOVE", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(saved);
     }
 }

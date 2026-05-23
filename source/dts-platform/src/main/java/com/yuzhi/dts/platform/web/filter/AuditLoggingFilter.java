@@ -404,6 +404,19 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         ) {
             return true;
         }
+        if (uri.startsWith("/api/forward-auth") || uri.startsWith("/api/menu/tree")) {
+            return true;
+        }
+        if (
+            lowerUri.endsWith("/asset-stats") ||
+            lowerUri.endsWith("/stats") ||
+            lowerUri.endsWith("/summary") ||
+            lowerUri.contains("/options") ||
+            lowerUri.contains("/dropdown") ||
+            lowerUri.contains("/selector")
+        ) {
+            return true;
+        }
         if (uri.startsWith("/api/catalog/datasets/") && uri.endsWith("/grants")) {
             return true;
         }

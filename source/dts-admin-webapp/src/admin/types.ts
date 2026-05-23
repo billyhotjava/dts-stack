@@ -300,6 +300,7 @@ export interface RoleAssignmentUserQuery {
 	username?: string;
 	fullName?: string;
 	deptPath?: string;
+	inRole?: boolean;
 }
 
 export interface AdminRoleDetail {

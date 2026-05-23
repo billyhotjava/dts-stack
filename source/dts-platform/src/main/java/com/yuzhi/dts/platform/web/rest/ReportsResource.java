@@ -63,7 +63,7 @@ public class ReportsResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         List<BiReportLinkDto> list = reports.listPublished(deptCode, reportType, keyword, activeDept, queryDatasetId, bizDomain);
-        audit.auditAction("VIS_REPORTS_PUBLISHED_READ", AuditStage.SUCCESS, "size=" + list.size(), null);
+        audit.auditAction("REPORT_LIST", AuditStage.SUCCESS, "size=" + list.size(), null);
         return ApiResponses.ok(list);
     }
 
@@ -98,7 +98,7 @@ public class ReportsResource {
         }
         AuditStage stage = outcome == BiReportLinkService.VisitOutcome.DENIED ? AuditStage.FAIL : AuditStage.SUCCESS;
         payload.put("outcome", outcome.name());
-        audit.auditAction("VIS_OPEN", stage, code != null ? code : (id != null ? id : "unknown"), payload);
+        audit.auditAction("REPORT_VIEW", stage, code != null ? code : (id != null ? id : "unknown"), payload);
         if (outcome == BiReportLinkService.VisitOutcome.DENIED) {
             // HTTP 200 + ok=false：保留与既有前端的兼容（前端以 ok 字段判断），
             // 同时确保审计反映真实的 deny 决策。reason 不暴露内部细节。
@@ -119,7 +119,7 @@ public class ReportsResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         List<BiReportLinkDto> list = reports.listAll(deptCode, reportType, keyword, enabledOnly, activeDept, queryDatasetId, bizDomain);
-        audit.auditAction("VIS_REPORTS_MANAGE_LIST_READ", AuditStage.SUCCESS, "size=" + list.size(), null);
+        audit.auditAction("REPORT_LIST", AuditStage.SUCCESS, "size=" + list.size(), null);
         return ApiResponses.ok(list);
     }
 
@@ -130,7 +130,7 @@ public class ReportsResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         BiReportLinkDto dto = reports.create(req, activeDept);
-        audit.auditAction("VIS_REPORTS_MANAGE_CREATE_CREATE", AuditStage.SUCCESS, dto.code(), null);
+        audit.auditAction("REPORT_CREATE", AuditStage.SUCCESS, dto.code(), null);
         return ApiResponses.ok(dto);
     }
 
@@ -142,7 +142,7 @@ public class ReportsResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         BiReportLinkDto dto = reports.update(id, req, activeDept);
-        audit.auditAction("VIS_REPORTS_MANAGE_UPDATE_UPDATE", AuditStage.SUCCESS, dto.code(), null);
+        audit.auditAction("REPORT_UPDATE", AuditStage.SUCCESS, dto.code(), null);
         return ApiResponses.ok(dto);
     }
 
@@ -150,7 +150,7 @@ public class ReportsResource {
     @PreAuthorize(REPORT_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> delete(@PathVariable UUID id) {
         reports.delete(id);
-        audit.auditAction("VIS_REPORTS_MANAGE_DELETE_DELETE", AuditStage.SUCCESS, id.toString(), null);
+        audit.auditAction("REPORT_DELETE", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(Map.of("ok", true));
     }
 
@@ -158,7 +158,7 @@ public class ReportsResource {
     @PreAuthorize("hasAuthority('" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<Map<String, Object>> purge(@PathVariable UUID id) {
         reports.purge(id);
-        audit.auditAction("VIS_REPORTS_MANAGE_PURGE_PURGE", AuditStage.SUCCESS, id.toString(), null);
+        audit.auditAction("REPORT_PURGE", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(Map.of("ok", true));
     }
 
@@ -189,7 +189,9 @@ public class ReportsResource {
         @RequestBody DashboardShareRequest request
     ) {
         try {
-            return ApiResponses.ok(shareService.share(id, request));
+            AssetGrantDto grant = shareService.share(id, request);
+            audit.auditAction("REPORT_SHARE", AuditStage.SUCCESS, id.toString(), Map.of("grantId", String.valueOf(grant.id())));
+            return ApiResponses.ok(grant);
         } catch (AccessDeniedException ex) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, ex.getMessage());
         } catch (IllegalArgumentException ex) {
@@ -204,6 +206,7 @@ public class ReportsResource {
     ) {
         try {
             shareService.revoke(id, grantId);
+            audit.auditAction("REPORT_REVOKE", AuditStage.SUCCESS, id.toString(), Map.of("grantId", grantId));
             return ApiResponses.ok(Map.of("ok", true));
         } catch (AccessDeniedException ex) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, ex.getMessage());

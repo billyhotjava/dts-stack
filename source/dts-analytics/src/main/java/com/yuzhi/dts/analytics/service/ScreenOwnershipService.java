@@ -1,14 +1,19 @@
 package com.yuzhi.dts.analytics.service;
 
 import com.yuzhi.dts.analytics.domain.AnalyticsScreenAccess;
+import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenAccessRepository;
+import com.yuzhi.dts.analytics.repository.AnalyticsUserRepository;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,13 +35,14 @@ public class ScreenOwnershipService {
     private static final String GRANT_REASON_PREFIX = "analytics_screen_permission:";
 
     private final AnalyticsScreenAccessRepository accessRepository;
+    private final AnalyticsUserRepository userRepository;
     private final PlatformPermissionClient platformClient;
     private final boolean platformSourceEnabled;
     private final boolean localFallbackEnabled;
     private final boolean localWriteEnabled;
 
     public ScreenOwnershipService(AnalyticsScreenAccessRepository accessRepository) {
-        this(accessRepository, null, false, true, true, false);
+        this(accessRepository, null, null, false, true, true, false);
     }
 
     public ScreenOwnershipService(
@@ -46,12 +52,35 @@ public class ScreenOwnershipService {
         boolean localFallbackEnabled,
         boolean localWriteEnabled
     ) {
-        this(accessRepository, platformClient, platformSourceEnabled, localFallbackEnabled, localWriteEnabled, !localWriteEnabled);
+        this(accessRepository, null, platformClient, platformSourceEnabled, localFallbackEnabled, localWriteEnabled, !localWriteEnabled);
+    }
+
+    public ScreenOwnershipService(
+        AnalyticsScreenAccessRepository accessRepository,
+        PlatformPermissionClient platformClient,
+        boolean platformSourceEnabled,
+        boolean localFallbackEnabled,
+        boolean localWriteEnabled,
+        boolean localIamReadOnly
+    ) {
+        this(accessRepository, null, platformClient, platformSourceEnabled, localFallbackEnabled, localWriteEnabled, localIamReadOnly);
+    }
+
+    ScreenOwnershipService(
+        AnalyticsScreenAccessRepository accessRepository,
+        AnalyticsUserRepository userRepository,
+        PlatformPermissionClient platformClient,
+        boolean platformSourceEnabled,
+        boolean localFallbackEnabled,
+        boolean localWriteEnabled
+    ) {
+        this(accessRepository, userRepository, platformClient, platformSourceEnabled, localFallbackEnabled, localWriteEnabled, !localWriteEnabled);
     }
 
     @Autowired
     public ScreenOwnershipService(
         AnalyticsScreenAccessRepository accessRepository,
+        AnalyticsUserRepository userRepository,
         PlatformPermissionClient platformClient,
         @Value("${dts.analytics.screen-permission.platform-source-enabled:true}") boolean platformSourceEnabled,
         @Value("${dts.analytics.screen-permission.local-fallback-enabled:true}") boolean localFallbackEnabled,
@@ -59,6 +88,7 @@ public class ScreenOwnershipService {
         @Value("${analytics.local-iam.read-only:true}") boolean localIamReadOnly
     ) {
         this.accessRepository = accessRepository;
+        this.userRepository = userRepository;
         this.platformClient = platformClient;
         this.platformSourceEnabled = platformSourceEnabled;
         this.localFallbackEnabled = localFallbackEnabled;
@@ -71,9 +101,13 @@ public class ScreenOwnershipService {
     public List<Map<String, Object>> listGrants(Long screenId) {
         if (platformEnabled()) {
             try {
-                return platformClient.listGrants(SCREEN_ASSET_TYPE, String.valueOf(screenId)).stream()
+                List<Map<String, Object>> platformGrants = platformClient.listGrants(SCREEN_ASSET_TYPE, String.valueOf(screenId)).stream()
                         .map(row -> platformGrantToMap(screenId, row))
                         .toList();
+                if (!localFallbackEnabled) {
+                    return platformGrants;
+                }
+                return mergeLegacyLocalGrants(screenId, platformGrants);
             } catch (PlatformPermissionClient.PlatformPermissionException ex) {
                 if (!localFallbackEnabled) {
                     throw ex;
@@ -88,6 +122,20 @@ public class ScreenOwnershipService {
         return accessRepository.findByScreenId(screenId).stream()
                 .map(this::toMap)
                 .toList();
+    }
+
+    private List<Map<String, Object>> mergeLegacyLocalGrants(Long screenId, List<Map<String, Object>> platformGrants) {
+        List<Map<String, Object>> merged = new ArrayList<>(platformGrants);
+        Set<String> seen = new HashSet<>();
+        for (Map<String, Object> grant : platformGrants) {
+            seen.add(grantIdentityKey(grant));
+        }
+        for (Map<String, Object> localGrant : localListGrants(screenId)) {
+            if (seen.add(grantIdentityKey(localGrant))) {
+                merged.add(localGrant);
+            }
+        }
+        return merged;
     }
 
     /**
@@ -184,7 +232,16 @@ public class ScreenOwnershipService {
     public boolean revokeGrantForScreen(Long grantId, Long screenId) {
         if (platformEnabled()) {
             try {
-                return platformClient.revokeGrant(SCREEN_ASSET_TYPE, String.valueOf(screenId), grantId);
+                boolean revoked = platformClient.revokeGrant(SCREEN_ASSET_TYPE, String.valueOf(screenId), grantId);
+                if (revoked || !localFallbackEnabled) {
+                    return revoked;
+                }
+                int legacyDeleted = accessRepository.deleteByIdAndScreenId(grantId, screenId);
+                if (legacyDeleted > 0) {
+                    LOG.info("event=analytics_permission_legacy_local_revoke screenId={} grantId={}", screenId, grantId);
+                    return true;
+                }
+                return false;
             } catch (PlatformPermissionClient.PlatformPermissionException ex) {
                 if (!localWriteEnabled) {
                     throw new IllegalStateException("platform permission service unavailable", ex);
@@ -229,7 +286,10 @@ public class ScreenOwnershipService {
         map.put("levelOverride", booleanVal(row.get("levelOverride")));
         map.put("grantedBy", stringVal(row.get("grantedBy")));
         map.put("grantedAt", row.get("grantedAt"));
-        return map;
+        map.put("grantSource", "platform");
+        putIfPresent(map, "granteeName", firstNonBlank(row.get("granteeName"), row.get("displayName"), row.get("granteeLabel")));
+        putIfPresent(map, "granteeUsername", stringVal(row.get("granteeUsername")));
+        return withUserDisplayFields(map);
     }
 
     private AnalyticsScreenAccess platformGrantToAccess(
@@ -350,6 +410,105 @@ public class ScreenOwnershipService {
         map.put("levelOverride", a.isLevelOverride());
         map.put("grantedBy", a.getGrantedBy());
         map.put("grantedAt", a.getGrantedAt());
+        map.put("grantSource", "local");
+        return withUserDisplayFields(map);
+    }
+
+    private Map<String, Object> withUserDisplayFields(Map<String, Object> map) {
+        if (!"USER".equals(normalizeToken(stringVal(map.get("granteeType"))))) {
+            return map;
+        }
+        resolveAnalyticsUser(stringVal(map.get("granteeId"))).ifPresent(user -> {
+            putIfMissing(map, "granteeUsername", firstNonBlank(user.getPlatformUsername(), user.getEmail(), user.getId()));
+            putIfMissing(map, "granteeName", analyticsUserDisplayName(user));
+            putIfMissing(map, "displayName", analyticsUserDisplayName(user));
+        });
         return map;
+    }
+
+    private Optional<AnalyticsUser> resolveAnalyticsUser(String granteeId) {
+        if (userRepository == null) {
+            return Optional.empty();
+        }
+        Long numericId = longVal(granteeId);
+        if (numericId != null) {
+            Optional<AnalyticsUser> user = userRepository.findById(numericId);
+            if (user.isPresent()) {
+                return user;
+            }
+        }
+        String text = stringVal(granteeId);
+        if (text == null) {
+            return Optional.empty();
+        }
+        Optional<AnalyticsUser> byPlatformUsername = userRepository.findByPlatformUsernameIgnoreCase(text);
+        if (byPlatformUsername.isPresent()) {
+            return byPlatformUsername;
+        }
+        return userRepository.findByEmailIgnoreCase(text);
+    }
+
+    private String grantIdentityKey(Map<String, Object> grant) {
+        String type = normalizeToken(stringVal(grant.get("granteeType")));
+        String granteeId = stringVal(grant.get("granteeId"));
+        if ("USER".equals(type)) {
+            granteeId = resolveAnalyticsUser(granteeId)
+                .map(user -> firstNonBlank(user.getPlatformUsername(), user.getEmail(), user.getId()))
+                .orElse(granteeId);
+        }
+        return type + ":" + normalizeLookupKey(granteeId);
+    }
+
+    private String normalizeLookupKey(Object value) {
+        String text = stringVal(value);
+        return text == null ? "" : text.toLowerCase(Locale.ROOT);
+    }
+
+    private String analyticsUserDisplayName(AnalyticsUser user) {
+        String fullName = firstNonBlank(
+            joinNameParts(user.getFirstName(), user.getLastName()),
+            user.getPlatformUsername(),
+            user.getEmail(),
+            user.getId()
+        );
+        return fullName == null ? null : fullName;
+    }
+
+    private String joinNameParts(String firstName, String lastName) {
+        String first = stringVal(firstName);
+        String last = stringVal(lastName);
+        if (first == null) {
+            return last;
+        }
+        if (last == null) {
+            return first;
+        }
+        return first + " " + last;
+    }
+
+    private String firstNonBlank(Object... values) {
+        if (values == null) {
+            return null;
+        }
+        for (Object value : values) {
+            String text = stringVal(value);
+            if (text != null) {
+                return text;
+            }
+        }
+        return null;
+    }
+
+    private void putIfPresent(Map<String, Object> map, String key, Object value) {
+        String text = stringVal(value);
+        if (text != null) {
+            map.put(key, text);
+        }
+    }
+
+    private void putIfMissing(Map<String, Object> map, String key, Object value) {
+        if (stringVal(map.get(key)) == null) {
+            putIfPresent(map, key, value);
+        }
     }
 }

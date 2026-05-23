@@ -14,6 +14,7 @@ import org.springframework.util.StringUtils;
 
 public record AuditActionRequest(
     Instant occurredAt,
+    String sourceSystem,
     String actorId,
     String actorName,
     List<String> actorRoles,
@@ -65,6 +66,7 @@ public record AuditActionRequest(
     public static final class Builder {
 
         private Instant occurredAt;
+        private String sourceSystem;
         private final String actorId;
         private final String buttonCode;
         private String actorName;
@@ -103,6 +105,11 @@ public record AuditActionRequest(
 
         public Builder occurredAt(Instant occurredAt) {
             this.occurredAt = occurredAt;
+            return this;
+        }
+
+        public Builder sourceSystem(String sourceSystem) {
+            this.sourceSystem = sourceSystem;
             return this;
         }
 
@@ -234,6 +241,7 @@ public record AuditActionRequest(
         public AuditActionRequest build() {
             return new AuditActionRequest(
                 occurredAt,
+                sourceSystem,
                 actorId,
                 actorName,
                 List.copyOf(actorRoles),

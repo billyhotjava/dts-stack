@@ -2,8 +2,11 @@ package com.yuzhi.dts.admin.service.audit;
 
 import com.yuzhi.dts.admin.domain.audit.AuditEntry;
 import com.yuzhi.dts.admin.domain.audit.AuditEntryTarget;
+import com.yuzhi.dts.admin.domain.audit.AuditActionCatalogEntry;
+import com.yuzhi.dts.admin.domain.audit.AuditModuleCatalog;
+import com.yuzhi.dts.admin.repository.audit.AuditActionCatalogRepository;
 import com.yuzhi.dts.admin.repository.audit.AuditEntryRepository;
-import com.yuzhi.dts.admin.service.audit.AuditResourceDictionaryService;
+import com.yuzhi.dts.admin.repository.audit.AuditModuleCatalogRepository;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
@@ -12,6 +15,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -34,10 +38,19 @@ public class AuditEntryQueryService {
 
     private final AuditEntryRepository repository;
     private final AuditResourceDictionaryService dictionaryService;
+    private final AuditModuleCatalogRepository moduleCatalogRepository;
+    private final AuditActionCatalogRepository actionCatalogRepository;
 
-    public AuditEntryQueryService(AuditEntryRepository repository, AuditResourceDictionaryService dictionaryService) {
+    public AuditEntryQueryService(
+        AuditEntryRepository repository,
+        AuditResourceDictionaryService dictionaryService,
+        AuditModuleCatalogRepository moduleCatalogRepository,
+        AuditActionCatalogRepository actionCatalogRepository
+    ) {
         this.repository = repository;
         this.dictionaryService = dictionaryService;
+        this.moduleCatalogRepository = moduleCatalogRepository;
+        this.actionCatalogRepository = actionCatalogRepository;
     }
 
     public Page<AuditEntryView> search(AuditSearchCriteria criteria, Pageable pageable) {
@@ -62,27 +75,76 @@ public class AuditEntryQueryService {
     }
 
     public List<ModuleOption> listModuleOptions() {
-        List<String> keys = repository.findDistinctModuleKeys();
-        if (keys == null || keys.isEmpty()) {
-            return List.of(new ModuleOption("general", resolveModuleLabel("general")));
-        }
         List<ModuleOption> options = new ArrayList<>();
         LinkedHashSet<String> seen = new LinkedHashSet<>();
+        for (AuditModuleCatalog module : moduleCatalogRepository.findAllByEnabledTrueOrderByOrderValueAscModuleKeyAsc()) {
+            String normalized = normalizeKey(module.getModuleKey());
+            if (!hasText(normalized) || !seen.add(normalized)) {
+                continue;
+            }
+            options.add(new ModuleOption(normalized, firstNonBlank(module.getModuleName(), resolveModuleLabel(normalized))));
+        }
+        List<String> keys = repository.findDistinctModuleKeys();
+        if (keys == null) {
+            keys = List.of();
+        }
         for (String raw : keys) {
             if (!hasText(raw)) {
                 continue;
             }
-            String normalized = raw.trim().toLowerCase(Locale.ROOT);
-            if (seen.contains(normalized)) {
+            String normalized = normalizeKey(raw);
+            if (!seen.add(normalized)) {
                 continue;
             }
-            seen.add(normalized);
             options.add(new ModuleOption(normalized, resolveModuleLabel(normalized)));
         }
         if (options.isEmpty()) {
             options.add(new ModuleOption("general", resolveModuleLabel("general")));
         }
         return List.copyOf(options);
+    }
+
+    public List<AuditGroupOption> listGroupOptions() {
+        LinkedHashMap<String, AuditGroupOption> grouped = new LinkedHashMap<>();
+        for (AuditActionCatalogEntry entry : actionCatalogRepository.findAllByEnabledTrueOrderByModuleKeyAscActionCodeAsc()) {
+            String moduleKey = normalizeKey(entry.getModuleKey());
+            if (!hasText(moduleKey)) {
+                continue;
+            }
+            grouped.putIfAbsent(
+                moduleKey,
+                new AuditGroupOption(
+                    moduleKey,
+                    firstNonBlank(entry.getModuleName(), resolveModuleLabel(moduleKey)),
+                    firstNonBlank(entry.getModuleName(), moduleKey),
+                    firstNonBlank(entry.getModuleName(), moduleKey),
+                    normalizeKey(entry.getSourceSystem())
+                )
+            );
+        }
+        return List.copyOf(grouped.values());
+    }
+
+    public List<AuditCategoryOption> listCategoryOptions() {
+        LinkedHashMap<String, AuditCategoryOption> grouped = new LinkedHashMap<>();
+        for (AuditActionCatalogEntry entry : actionCatalogRepository.findAllByEnabledTrueOrderByModuleKeyAscActionCodeAsc()) {
+            String moduleKey = normalizeKey(entry.getModuleKey());
+            if (!hasText(moduleKey)) {
+                continue;
+            }
+            String resourceType = normalizeKey(firstNonBlank(entry.getResourceType(), entry.getModuleKey()));
+            String entryKey = moduleKey + ":" + resourceType;
+            grouped.putIfAbsent(
+                entryKey,
+                new AuditCategoryOption(
+                    moduleKey,
+                    firstNonBlank(entry.getModuleName(), resolveModuleLabel(moduleKey)),
+                    entryKey,
+                    firstNonBlank(entry.getResourceType(), entry.getModuleName(), moduleKey)
+                )
+            );
+        }
+        return List.copyOf(grouped.values());
     }
 
     private String resolveModuleLabel(String key) {
@@ -99,6 +161,22 @@ public class AuditEntryQueryService {
                 default -> normalized;
             })
         );
+    }
+
+    private String normalizeKey(String value) {
+        return hasText(value) ? value.trim().toLowerCase(Locale.ROOT) : null;
+    }
+
+    private String firstNonBlank(String... candidates) {
+        if (candidates == null) {
+            return null;
+        }
+        for (String candidate : candidates) {
+            if (hasText(candidate)) {
+                return candidate.trim();
+            }
+        }
+        return null;
     }
 
     private Specification<AuditEntry> buildSpecification(AuditSearchCriteria criteria) {

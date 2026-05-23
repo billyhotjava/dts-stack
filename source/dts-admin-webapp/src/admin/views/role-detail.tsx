@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Modal, Table, TreeSelect } from "antd";
+import { Button, Modal, Select, Table, TreeSelect } from "antd";
 import type { TreeSelectProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { adminApi } from "@/admin/api/adminApi";
@@ -22,7 +22,8 @@ type OrgTreeOption = {
 };
 
 type PendingMember = { username: string; displayName: string; keycloakId?: string };
-type AssignmentFilters = { deptPath: string; fullName: string; username: string };
+type AssignmentRoleState = "ALL" | "IN_ROLE" | "NOT_IN_ROLE";
+type AssignmentFilters = { deptPath: string; fullName: string; username: string; roleState: AssignmentRoleState };
 type AssignmentPagination = { current: number; pageSize: number };
 type RoleEditSubmissionSummary = {
 	roleLabel: string;
@@ -138,7 +139,10 @@ export default function RoleDetailView() {
 		setUpdateReason("");
 	}, [targetRole, authorityName]);
 
-	const emptyAssignmentFilters = useMemo<AssignmentFilters>(() => ({ deptPath: "", fullName: "", username: "" }), []);
+	const emptyAssignmentFilters = useMemo<AssignmentFilters>(
+		() => ({ deptPath: "", fullName: "", username: "", roleState: "ALL" }),
+		[],
+	);
 	const [assignmentFiltersDraft, setAssignmentFiltersDraft] = useState<AssignmentFilters>(emptyAssignmentFilters);
 	const [assignmentFilters, setAssignmentFilters] = useState<AssignmentFilters>(emptyAssignmentFilters);
 	const [assignmentPagination, setAssignmentPagination] = useState<AssignmentPagination>({
@@ -180,6 +184,7 @@ export default function RoleDetailView() {
 			assignmentFilters.deptPath,
 			assignmentFilters.fullName,
 			assignmentFilters.username,
+			assignmentFilters.roleState,
 		],
 		enabled: isEditMode && roleName.length > 0,
 		queryFn: () =>
@@ -189,6 +194,12 @@ export default function RoleDetailView() {
 				deptPath: assignmentFilters.deptPath || undefined,
 				fullName: assignmentFilters.fullName || undefined,
 				username: assignmentFilters.username || undefined,
+				inRole:
+					assignmentFilters.roleState === "IN_ROLE"
+						? true
+						: assignmentFilters.roleState === "NOT_IN_ROLE"
+							? false
+							: undefined,
 			}),
 	});
 	const assignmentUsers = assignmentUsersPage?.content ?? [];
@@ -199,6 +210,7 @@ export default function RoleDetailView() {
 			deptPath: assignmentFiltersDraft.deptPath.trim(),
 			fullName: assignmentFiltersDraft.fullName.trim(),
 			username: assignmentFiltersDraft.username.trim(),
+			roleState: assignmentFiltersDraft.roleState,
 		});
 		setAssignmentPagination((prev) => ({ ...prev, current: 1 }));
 	}, [assignmentFiltersDraft]);
@@ -799,7 +811,7 @@ function RoleMemberAssignmentSection({
 							待新增 {pendingAddsCount} 人，待移除 {pendingRemovalsCount} 人
 						</Text>
 					</div>
-					<div className="grid gap-3 lg:grid-cols-[minmax(220px,1.1fr)_minmax(180px,0.8fr)_minmax(180px,0.8fr)_auto_auto]">
+					<div className="grid gap-3 lg:grid-cols-[minmax(220px,1.1fr)_minmax(150px,0.65fr)_minmax(170px,0.75fr)_minmax(170px,0.75fr)_auto_auto]">
 						<div className="space-y-2">
 							<Text variant="body3" className="font-medium">
 								部门
@@ -818,6 +830,26 @@ function RoleMemberAssignmentSection({
 								}}
 								treeData={orgOptions}
 								style={{ width: "100%" }}
+							/>
+						</div>
+						<div className="space-y-2">
+							<Text variant="body3" className="font-medium">
+								角色状态
+							</Text>
+							<Select
+								className="w-full"
+								value={assignmentFiltersDraft.roleState}
+								onChange={(value) =>
+									onAssignmentFiltersDraftChange((prev) => ({
+										...prev,
+										roleState: value as AssignmentRoleState,
+									}))
+								}
+								options={[
+									{ value: "ALL", label: "全部用户" },
+									{ value: "IN_ROLE", label: "已在角色中" },
+									{ value: "NOT_IN_ROLE", label: "未加入角色" },
+								]}
 							/>
 						</div>
 						<div className="space-y-2">

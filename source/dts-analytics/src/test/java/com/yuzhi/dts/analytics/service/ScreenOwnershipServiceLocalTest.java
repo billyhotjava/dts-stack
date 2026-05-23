@@ -1,7 +1,9 @@
 package com.yuzhi.dts.analytics.service;
 
 import com.yuzhi.dts.analytics.domain.AnalyticsScreenAccess;
+import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenAccessRepository;
+import com.yuzhi.dts.analytics.repository.AnalyticsUserRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -32,6 +34,16 @@ class ScreenOwnershipServiceLocalTest {
         a.setPermission(perm);
         a.setGrantedAt(Instant.now());
         return a;
+    }
+
+    private AnalyticsUser user(Long id, String platformUsername, String firstName, String lastName, String email) {
+        AnalyticsUser u = new AnalyticsUser();
+        u.setId(id);
+        u.setPlatformUsername(platformUsername);
+        u.setFirstName(firstName);
+        u.setLastName(lastName);
+        u.setEmail(email);
+        return u;
     }
 
     @BeforeEach
@@ -127,7 +139,7 @@ class ScreenOwnershipServiceLocalTest {
     @Test
     void platform_mode_listGrants_maps_manage_owner_reason_to_owner() {
         PlatformPermissionClient client = Mockito.mock(PlatformPermissionClient.class);
-        ScreenOwnershipService platformService = new ScreenOwnershipService(repo, client, true, true, false);
+        ScreenOwnershipService platformService = new ScreenOwnershipService(repo, client, true, false, false);
         when(client.listGrants("SCREEN", "1")).thenReturn(List.of(Map.of(
             "id", 99L,
             "granteeType", "USER",
@@ -148,6 +160,64 @@ class ScreenOwnershipServiceLocalTest {
     }
 
     @Test
+    void platform_mode_listGrants_enriches_platform_username_grant() {
+        PlatformPermissionClient client = Mockito.mock(PlatformPermissionClient.class);
+        AnalyticsUserRepository userRepo = Mockito.mock(AnalyticsUserRepository.class);
+        ScreenOwnershipService platformService = new ScreenOwnershipService(repo, userRepo, client, true, false, false);
+        when(client.listGrants("SCREEN", "1")).thenReturn(List.of(Map.of(
+            "id", 99L,
+            "granteeType", "USER",
+            "granteeId", "xiezm",
+            "permission", "READ",
+            "levelOverride", false,
+            "grantedBy", "7",
+            "grantReason", "analytics_screen_permission:VIEWER",
+            "grantedAt", Instant.parse("2026-05-11T00:00:00Z")
+        )));
+        when(userRepo.findByPlatformUsernameIgnoreCase("xiezm"))
+            .thenReturn(Optional.of(user(42L, "xiezm", "10S测试员工1", "", "xiezm@example.com")));
+
+        List<Map<String, Object>> grants = platformService.listGrants(1L);
+
+        assertThat(grants).hasSize(1);
+        assertThat(grants.getFirst())
+            .containsEntry("granteeUsername", "xiezm")
+            .containsEntry("granteeName", "10S测试员工1");
+    }
+
+    @Test
+    void platform_mode_listGrants_keeps_legacy_local_grants_visible() {
+        PlatformPermissionClient client = Mockito.mock(PlatformPermissionClient.class);
+        AnalyticsUserRepository userRepo = Mockito.mock(AnalyticsUserRepository.class);
+        ScreenOwnershipService platformService = new ScreenOwnershipService(repo, userRepo, client, true, true, false);
+        when(client.listGrants("SCREEN", "1")).thenReturn(List.of(Map.of(
+            "id", 99L,
+            "granteeType", "ROLE",
+            "granteeId", "DEPT_LEADER",
+            "permission", "READ",
+            "levelOverride", false,
+            "grantedBy", "7",
+            "grantReason", "analytics_screen_permission:VIEWER",
+            "grantedAt", Instant.parse("2026-05-11T00:00:00Z")
+        )));
+        when(repo.findByScreenId(1L)).thenReturn(List.of(
+            access(10L, 1L, "USER", "42", "VIEWER"),
+            access(11L, 1L, "ROLE", "DEPT_LEADER", "VIEWER")
+        ));
+        when(userRepo.findById(42L)).thenReturn(Optional.of(user(42L, "xiezm", "10S测试员工1", "", "xiezm@example.com")));
+
+        List<Map<String, Object>> grants = platformService.listGrants(1L);
+
+        assertThat(grants).hasSize(2);
+        assertThat(grants.get(0)).containsEntry("grantSource", "platform");
+        assertThat(grants.get(1))
+            .containsEntry("grantSource", "local")
+            .containsEntry("granteeId", "42")
+            .containsEntry("granteeUsername", "xiezm")
+            .containsEntry("granteeName", "10S测试员工1");
+    }
+
+    @Test
     void platform_mode_revokeGrantForScreen_deletes_platform_grant() {
         PlatformPermissionClient client = Mockito.mock(PlatformPermissionClient.class);
         ScreenOwnershipService platformService = new ScreenOwnershipService(repo, client, true, true, false);
@@ -157,6 +227,19 @@ class ScreenOwnershipServiceLocalTest {
 
         assertThat(deleted).isTrue();
         verify(repo, never()).deleteByIdAndScreenId(any(), any());
+    }
+
+    @Test
+    void platform_mode_revokeGrantForScreen_can_delete_legacy_local_grant() {
+        PlatformPermissionClient client = Mockito.mock(PlatformPermissionClient.class);
+        ScreenOwnershipService platformService = new ScreenOwnershipService(repo, client, true, true, false);
+        when(client.revokeGrant("SCREEN", "1", 10L)).thenReturn(false);
+        when(repo.deleteByIdAndScreenId(10L, 1L)).thenReturn(1);
+
+        boolean deleted = platformService.revokeGrantForScreen(10L, 1L);
+
+        assertThat(deleted).isTrue();
+        verify(repo).deleteByIdAndScreenId(10L, 1L);
     }
 
     @Test

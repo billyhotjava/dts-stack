@@ -23,17 +23,20 @@ public class AuditV2Service {
     private final AuditButtonRegistry buttonRegistry;
     private final ChangeSnapshotFormatter changeSnapshotFormatter;
     private final ObjectMapper objectMapper;
+    private final AuditActionCatalogService actionCatalogService;
 
     public AuditV2Service(
         AuditRecorder recorder,
         AuditButtonRegistry buttonRegistry,
         ChangeSnapshotFormatter changeSnapshotFormatter,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        AuditActionCatalogService actionCatalogService
     ) {
         this.recorder = recorder;
         this.buttonRegistry = buttonRegistry;
         this.changeSnapshotFormatter = changeSnapshotFormatter;
         this.objectMapper = objectMapper;
+        this.actionCatalogService = actionCatalogService;
     }
 
     public AuditEntry record(AuditActionRequest request) {
@@ -43,20 +46,39 @@ public class AuditV2Service {
         if ("system".equalsIgnoreCase(request.actorId()) && !request.allowSystemActor()) {
             return null;
         }
-        AuditButtonMetadata metadata = buttonRegistry.resolve(request.buttonCode()).orElse(null);
+        String sourceSystem = normalizeSourceSystem(request.sourceSystem());
+        AuditActionCatalogService.ResolvedAction catalogAction = actionCatalogService
+            .resolve(sourceSystem, request.buttonCode())
+            .orElse(null);
+        boolean platformCatalogMiss = catalogAction == null && isPlatformSource(sourceSystem);
+        if (platformCatalogMiss) {
+            actionCatalogService.recordMiss(request, "NO_CATALOG_MATCH");
+        }
+        AuditButtonMetadata metadata = platformCatalogMiss ? null : buttonRegistry.resolve(request.buttonCode()).orElse(null);
 
-        String moduleKey = firstNonBlank(request.moduleKeyOverride(), metadata != null ? metadata.moduleKey() : null);
+        String moduleKey = platformCatalogMiss
+            ? "platform.unclassified"
+            : firstNonBlank(
+                catalogAction != null ? catalogAction.moduleKey() : null,
+                request.moduleKeyOverride(),
+                metadata != null ? metadata.moduleKey() : null
+            );
         if (!StringUtils.hasText(moduleKey)) {
             throw new IllegalStateException("Missing moduleKey for button " + request.buttonCode());
         }
-        AuditOperationKind operationKind = request.operationKindOverride() != null
+        AuditOperationKind operationKind = catalogAction != null
+            ? catalogAction.operationKind()
+            : request.operationKindOverride() != null
             ? request.operationKindOverride()
             : metadata != null ? metadata.operationKind() : AuditOperationKind.OTHER;
-        boolean allowEmptyTargets = request.allowEmptyTargets() || (metadata != null && metadata.allowEmptyTargets());
+        boolean allowEmptyTargets = request.allowEmptyTargets() ||
+        platformCatalogMiss ||
+        (catalogAction != null && catalogAction.allowEmptyTargets()) ||
+        (metadata != null && metadata.allowEmptyTargets());
 
         AuditRecorder.AuditBuilder builder = recorder
             .start(request.actorId())
-            .sourceSystem("admin")
+            .sourceSystem(sourceSystem)
             .module(moduleKey)
             .actorName(request.actorName())
             .actorRoles(request.actorRoles())
@@ -71,15 +93,37 @@ public class AuditV2Service {
         if (request.occurredAt() != null) {
             builder.occurredAt(request.occurredAt());
         }
-        String moduleName = firstNonBlank(request.moduleNameOverride(), metadata != null ? metadata.moduleName() : null);
+        String moduleName = platformCatalogMiss
+            ? "未分类业务操作"
+            : firstNonBlank(
+                catalogAction != null ? catalogAction.moduleName() : null,
+                request.moduleNameOverride(),
+                metadata != null ? metadata.moduleName() : null
+            );
         if (StringUtils.hasText(moduleName)) {
             builder.moduleName(moduleName);
         }
-        String operationCode = firstNonBlank(request.operationCodeOverride(), metadata != null ? metadata.operationCode() : null);
-        String operationName = firstNonBlank(request.operationNameOverride(), metadata != null ? metadata.operationName() : null);
+        String operationCode = platformCatalogMiss
+            ? request.buttonCode()
+            : firstNonBlank(
+                catalogAction != null ? catalogAction.operationCode() : null,
+                request.operationCodeOverride(),
+                metadata != null ? metadata.operationCode() : null
+            );
+        String operationName = platformCatalogMiss
+            ? firstNonBlank(request.summary(), request.operationNameOverride(), request.buttonCode())
+            : firstNonBlank(
+                catalogAction != null ? catalogAction.operationName() : null,
+                request.operationNameOverride(),
+                metadata != null ? metadata.operationName() : null
+            );
         builder.operation(operationCode, operationName, operationKind);
 
-        String summary = firstNonBlank(request.summary(), metadata != null ? metadata.operationName() : null);
+        String summary = firstNonBlank(
+            request.summary(),
+            catalogAction != null ? catalogAction.operationName() : null,
+            metadata != null ? metadata.operationName() : null
+        );
         if (StringUtils.hasText(summary)) {
             builder.summary(summary);
         }
@@ -87,6 +131,12 @@ public class AuditV2Service {
         builder.client(request.clientIp(), request.clientAgent()).request(request.requestUri(), request.httpMethod());
 
         request.metadata().forEach(builder::metadata);
+        if (catalogAction != null && StringUtils.hasText(catalogAction.resourceType())) {
+            builder.metadata("resourceType", catalogAction.resourceType());
+        }
+        if (platformCatalogMiss) {
+            builder.metadata("classificationReason", "NO_CATALOG_MATCH");
+        }
         request.attributes().forEach(builder::extraAttribute);
 
         for (AuditActionRequest.AuditTarget target : request.targets()) {
@@ -325,6 +375,14 @@ public class AuditV2Service {
             }
         }
         return null;
+    }
+
+    private String normalizeSourceSystem(String sourceSystem) {
+        return StringUtils.hasText(sourceSystem) ? sourceSystem.trim().toLowerCase(Locale.ROOT) : "admin";
+    }
+
+    private boolean isPlatformSource(String sourceSystem) {
+        return "platform".equalsIgnoreCase(sourceSystem);
     }
 
     private String deriveResourceTypeFromButtonCode(String buttonCode) {

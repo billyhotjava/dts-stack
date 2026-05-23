@@ -1023,6 +1023,8 @@ export type ScreenAclEntry = {
 	screenId?: number | string;
 	subjectType: "USER" | "ROLE";
 	subjectId: string;
+	subjectName?: string;
+	subjectUsername?: string;
 	perm: "READ" | "MANAGE" | "OWNER";
 	/**
 	 * 大屏密级越级共享。仅对 perm=READ（后端 VIEWER）有意义；
@@ -2275,9 +2277,14 @@ export const analyticsApi = {
 			id?: number;
 			granteeType?: string;
 			granteeId?: string;
+			granteeName?: string;
+			granteeUsername?: string;
+			granteeLabel?: string;
+			displayName?: string;
 			permission?: string;
 			levelOverride?: boolean;
 			grantedBy?: string;
+			grantedAt?: string;
 			createdDate?: string;
 			lastModifiedDate?: string;
 		};
@@ -2287,13 +2294,15 @@ export const analyticsApi = {
 			screenId: id,
 			subjectType: (g.granteeType === "ROLE" ? "ROLE" : "USER") as ScreenAclEntry["subjectType"],
 			subjectId: g.granteeId || "",
+			subjectName: g.granteeName || g.displayName || g.granteeLabel,
+			subjectUsername: g.granteeUsername,
 			perm: (g.permission === "OWNER"
 				? "OWNER"
 				: g.permission === "MANAGER" || g.permission === "EDIT"
 					? "MANAGE"
 					: "READ") as ScreenAclEntry["perm"],
 			levelOverride: g.levelOverride === true,
-			createdAt: g.createdDate,
+			createdAt: g.createdDate || g.grantedAt,
 			updatedAt: g.lastModifiedDate,
 		}));
 	},

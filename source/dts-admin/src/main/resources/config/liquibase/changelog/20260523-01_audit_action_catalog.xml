@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260523-01-audit-action-catalog-schema" author="codex">
+        <comment>建立数据库驱动的审计模块与动作目录，替代 platform 运行时猜测模块名称</comment>
+
+        <createTable tableName="audit_module_catalog">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="source_system" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="module_key" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="module_name" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="parent_module_key" type="VARCHAR(128)"/>
+            <column name="owner" type="VARCHAR(128)"/>
+            <column name="enabled" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="order_value" type="INT" defaultValueNumeric="0"/>
+            <column name="version" type="VARCHAR(32)"/>
+            <column name="updated_at" type="TIMESTAMPTZ" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+
+        <addUniqueConstraint
+                tableName="audit_module_catalog"
+                columnNames="source_system,module_key"
+                constraintName="uk_audit_module_catalog_source_key"/>
+
+        <createIndex indexName="idx_audit_module_catalog_enabled" tableName="audit_module_catalog">
+            <column name="enabled"/>
+            <column name="order_value"/>
+        </createIndex>
+
+        <createTable tableName="audit_action_catalog">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="source_system" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="action_code" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="module_key" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="module_name" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="operation_code" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="operation_name" type="VARCHAR(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="operation_kind" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="resource_type" type="VARCHAR(128)"/>
+            <column name="allow_empty_targets" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="enabled" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="VARCHAR(32)"/>
+            <column name="updated_at" type="TIMESTAMPTZ" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+
+        <addUniqueConstraint
+                tableName="audit_action_catalog"
+                columnNames="source_system,action_code"
+                constraintName="uk_audit_action_catalog_source_code"/>
+
+        <createIndex indexName="idx_audit_action_catalog_enabled" tableName="audit_action_catalog">
+            <column name="source_system"/>
+            <column name="enabled"/>
+            <column name="module_key"/>
+        </createIndex>
+
+        <createTable tableName="audit_classification_miss">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="source_system" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="action_code" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="module_key_raw" type="VARCHAR(128)"/>
+            <column name="request_uri" type="VARCHAR(512)"/>
+            <column name="http_method" type="VARCHAR(16)"/>
+            <column name="actor_id" type="VARCHAR(128)"/>
+            <column name="reason" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="first_seen_at" type="TIMESTAMPTZ">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_seen_at" type="TIMESTAMPTZ">
+                <constraints nullable="false"/>
+            </column>
+            <column name="occurrence_count" type="BIGINT" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex indexName="idx_audit_classification_miss_action" tableName="audit_classification_miss">
+            <column name="source_system"/>
+            <column name="action_code"/>
+            <column name="last_seen_at"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260523-02-audit-action-catalog-platform-seed" author="codex">
+        <comment>写入 platform 首批人工操作审计目录，后续新模块只维护数据库目录</comment>
+        <sql splitStatements="true">
+            INSERT INTO audit_module_catalog (source_system, module_key, module_name, parent_module_key, owner, enabled, order_value, version, updated_at)
+            VALUES
+                ('platform', 'catalog.domain', '主题域', 'catalog', 'platform', true, 10, 'sprint-34', CURRENT_TIMESTAMP),
+                ('platform', 'visualization.reports', '数据大屏', 'visualization', 'platform', true, 20, 'sprint-34', CURRENT_TIMESTAMP),
+                ('platform', 'semantic.subject-domain', '语义主题域', 'semantic', 'platform', true, 30, 'sprint-34', CURRENT_TIMESTAMP),
+                ('platform', 'platform.unclassified', '未分类业务操作', 'platform', 'platform', true, 9999, 'sprint-34', CURRENT_TIMESTAMP)
+            ON CONFLICT (source_system, module_key) DO UPDATE SET
+                module_name = EXCLUDED.module_name,
+                parent_module_key = EXCLUDED.parent_module_key,
+                owner = EXCLUDED.owner,
+                enabled = EXCLUDED.enabled,
+                order_value = EXCLUDED.order_value,
+                version = EXCLUDED.version,
+                updated_at = CURRENT_TIMESTAMP;
+
+            INSERT INTO audit_action_catalog (
+                source_system, action_code, module_key, module_name, operation_code, operation_name,
+                operation_kind, resource_type, allow_empty_targets, enabled, version, updated_at
+            )
+            VALUES
+                ('platform', 'CATALOG_DOMAIN_LIST', 'catalog.domain', '主题域', 'CATALOG_DOMAIN_LIST', '查看主题域列表', 'QUERY', 'catalog_domain', true, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('platform', 'CATALOG_DOMAIN_TREE', 'catalog.domain', '主题域', 'CATALOG_DOMAIN_TREE', '查看主题域树', 'QUERY', 'catalog_domain', true, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('platform', 'CATALOG_DOMAIN_CREATE', 'catalog.domain', '主题域', 'CATALOG_DOMAIN_CREATE', '新增主题域', 'CREATE', 'catalog_domain', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('platform', 'CATALOG_DOMAIN_UPDATE', 'catalog.domain', '主题域', 'CATALOG_DOMAIN_UPDATE', '修改主题域', 'UPDATE', 'catalog_domain', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('platform', 'CATALOG_DOMAIN_DELETE', 'catalog.domain', '主题域', 'CATALOG_DOMAIN_DELETE', '删除主题域', 'DELETE', 'catalog_domain', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('platform', 'CATALOG_DOMAIN_MOVE', 'catalog.domain', '主题域', 'CATALOG_DOMAIN_MOVE', '移动主题域', 'UPDATE', 'catalog_domain', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('platform', 'CATALOG_DOMAIN_ASSET_STATS_READ', 'catalog.domain', '主题域', 'CATALOG_DOMAIN_ASSET_STATS_READ', '查看主题域资产统计', 'QUERY', 'catalog_domain', true, true, 'sprint-34', CURRENT_TIMESTAMP),
+
+                ('platform', 'REPORT_VIEW', 'visualization.reports', '数据大屏', 'REPORT_VIEW', '查看大屏', 'QUERY', 'screen_report', true, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('platform', 'REPORT_LIST', 'visualization.reports', '数据大屏', 'REPORT_LIST', '查看大屏列表', 'QUERY', 'screen_report', true, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('platform', 'REPORT_CREATE', 'visualization.reports', '数据大屏', 'REPORT_CREATE', '新建大屏', 'CREATE', 'screen_report', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('platform', 'REPORT_UPDATE', 'visualization.reports', '数据大屏', 'REPORT_UPDATE', '修改大屏', 'UPDATE', 'screen_report', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('platform', 'REPORT_DELETE', 'visualization.reports', '数据大屏', 'REPORT_DELETE', '删除大屏', 'DELETE', 'screen_report', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('platform', 'REPORT_PURGE', 'visualization.reports', '数据大屏', 'REPORT_PURGE', '清理大屏', 'DELETE', 'screen_report', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('platform', 'REPORT_SHARE', 'visualization.reports', '数据大屏', 'REPORT_SHARE', '共享大屏', 'GRANT', 'screen_report', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('platform', 'REPORT_REVOKE', 'visualization.reports', '数据大屏', 'REPORT_REVOKE', '取消大屏共享', 'REVOKE', 'screen_report', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+
+                ('platform', 'VIS_REPORTS_PUBLISHED_READ', 'visualization.reports', '数据大屏', 'REPORT_VIEW', '查看已发布大屏', 'QUERY', 'screen_report', true, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('platform', 'VIS_REPORTS_MANAGE_LIST_READ', 'visualization.reports', '数据大屏', 'REPORT_LIST', '查看大屏管理列表', 'QUERY', 'screen_report', true, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('platform', 'VIS_REPORTS_MANAGE_CREATE_CREATE', 'visualization.reports', '数据大屏', 'REPORT_CREATE', '新建大屏', 'CREATE', 'screen_report', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('platform', 'VIS_REPORTS_MANAGE_UPDATE_UPDATE', 'visualization.reports', '数据大屏', 'REPORT_UPDATE', '修改大屏', 'UPDATE', 'screen_report', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('platform', 'VIS_REPORTS_MANAGE_DELETE_DELETE', 'visualization.reports', '数据大屏', 'REPORT_DELETE', '删除大屏', 'DELETE', 'screen_report', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('platform', 'VIS_REPORTS_MANAGE_PURGE_PURGE', 'visualization.reports', '数据大屏', 'REPORT_PURGE', '清理大屏', 'DELETE', 'screen_report', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+
+                ('platform', 'SEMANTIC_SUBJECT_DOMAIN_LIST', 'semantic.subject-domain', '语义主题域', 'SEMANTIC_SUBJECT_DOMAIN_LIST', '查看语义主题域列表', 'QUERY', 'semantic_subject_domain', true, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('platform', 'SEMANTIC_SUBJECT_DOMAIN_CREATE', 'semantic.subject-domain', '语义主题域', 'SEMANTIC_SUBJECT_DOMAIN_CREATE', '新增语义主题域', 'CREATE', 'semantic_subject_domain', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('platform', 'SEMANTIC_SUBJECT_DOMAIN_UPDATE', 'semantic.subject-domain', '语义主题域', 'SEMANTIC_SUBJECT_DOMAIN_UPDATE', '修改语义主题域', 'UPDATE', 'semantic_subject_domain', false, true, 'sprint-34', CURRENT_TIMESTAMP)
+            ON CONFLICT (source_system, action_code) DO UPDATE SET
+                module_key = EXCLUDED.module_key,
+                module_name = EXCLUDED.module_name,
+                operation_code = EXCLUDED.operation_code,
+                operation_name = EXCLUDED.operation_name,
+                operation_kind = EXCLUDED.operation_kind,
+                resource_type = EXCLUDED.resource_type,
+                allow_empty_targets = EXCLUDED.allow_empty_targets,
+                enabled = EXCLUDED.enabled,
+                version = EXCLUDED.version,
+                updated_at = CURRENT_TIMESTAMP;
+        </sql>
+    </changeSet>
+</databaseChangeLog>

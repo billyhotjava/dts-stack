@@ -529,7 +529,8 @@ public class AdminUserService {
         int size,
         String username,
         String fullName,
-        String deptPath
+        String deptPath,
+        Boolean inRole
     ) {
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), 200);
@@ -538,11 +539,14 @@ public class AdminUserService {
         String fullNameFilter = StringUtils.trimToNull(fullName);
         String deptPathFilter = StringUtils.trimToNull(deptPath);
         Pageable pageable = PageRequest.of(safePage, safeSize);
+        List<String> roleKeys = roleLookupKeys(normalizedRole);
 
         Page<AdminKeycloakUser> candidates = userRepository.findRoleAssignmentCandidates(
             usernameFilter,
             fullNameFilter,
             deptPathFilter,
+            inRole,
+            roleKeys,
             HIDDEN_USERNAMES_IN_USERLIST,
             pageable
         );
@@ -569,6 +573,22 @@ public class AdminUserService {
                 members.contains(currentUsername.toLowerCase(Locale.ROOT))
             );
         });
+    }
+
+    private List<String> roleLookupKeys(String role) {
+        LinkedHashSet<String> keys = new LinkedHashSet<>();
+        String normalized = StringUtils.trimToNull(role);
+        if (normalized != null) {
+            keys.add(normalized.toLowerCase(Locale.ROOT));
+            String canonical = canonicalRoleValue(normalized);
+            if (StringUtils.isNotBlank(canonical)) {
+                keys.add(canonical.toLowerCase(Locale.ROOT));
+            }
+        }
+        if (keys.isEmpty()) {
+            keys.add("__no_role__");
+        }
+        return List.copyOf(keys);
     }
 
     private Set<String> loadRoleMemberUsernames(String role) {

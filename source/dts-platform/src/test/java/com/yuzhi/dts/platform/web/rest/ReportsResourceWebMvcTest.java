@@ -18,6 +18,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.audit.AuditFlowManager;
 import com.yuzhi.dts.platform.security.session.PortalSessionActivityService;
+import com.yuzhi.dts.platform.security.session.PortalSessionCookieService;
 import com.yuzhi.dts.platform.service.permission.DashboardShareService;
 import com.yuzhi.dts.platform.service.visualization.BiReportLinkService;
 import com.yuzhi.dts.platform.service.visualization.dto.BiReportLinkDto;
@@ -74,6 +75,9 @@ class ReportsResourceWebMvcTest {
 
     @MockBean
     private PortalSessionActivityService portalSessionActivityService;
+
+    @MockBean
+    private PortalSessionCookieService portalSessionCookieService;
 
     // Step 2.2 把 DashboardShareService 加入了 ReportsResource 的依赖；
     // 测试上下文需要相应 mock 否则 @WebMvcTest 启动失败。
@@ -236,7 +240,7 @@ class ReportsResourceWebMvcTest {
             eq("INTERNAL")
         );
         verify(auditService).auditAction(
-            eq("VIS_OPEN"),
+            eq("REPORT_VIEW"),
             eq(com.yuzhi.dts.common.audit.AuditStage.SUCCESS),
             eq("screen-7"),
             any()
@@ -264,7 +268,7 @@ class ReportsResourceWebMvcTest {
             .andExpect(jsonPath("$.data.reason").value("access_denied"));
 
         verify(auditService).auditAction(
-            eq("VIS_OPEN"),
+            eq("REPORT_VIEW"),
             eq(com.yuzhi.dts.common.audit.AuditStage.FAIL),
             eq("blocked-screen"),
             any()

@@ -2324,7 +2324,8 @@ public class AdminApiResource {
         @RequestParam(defaultValue = "20") int size,
         @RequestParam(required = false) String username,
         @RequestParam(required = false) String fullName,
-        @RequestParam(required = false) String deptPath
+        @RequestParam(required = false) String deptPath,
+        @RequestParam(required = false) Boolean inRole
     ) {
         String canonical = stripRolePrefix(Objects.toString(name, ""));
         Page<AdminUserService.RoleAssignmentUser> result = adminUserService.listRoleAssignmentUsers(
@@ -2333,7 +2334,8 @@ public class AdminApiResource {
             size,
             username,
             fullName,
-            deptPath
+            deptPath,
+            inRole
         );
         PagedResultVM<AdminUserService.RoleAssignmentUser> body = new PagedResultVM<>(
             result.getContent(),

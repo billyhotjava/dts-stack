@@ -28,10 +28,16 @@ describe("role detail assignment table contract", () => {
 
 	it("supports department full-name and username query fields", () => {
 		const detailSource = readSource("./role-detail.tsx");
+		const apiSource = readSource("../api/adminApi.ts");
+		const typesSource = readSource("../types.ts");
 
 		expect(detailSource.includes("deptPath")).toBe(true);
 		expect(detailSource.includes("fullName")).toBe(true);
 		expect(detailSource.includes("username")).toBe(true);
+		expect(detailSource.includes("roleState")).toBe(true);
+		expect(detailSource.includes("已在角色中")).toBe(true);
+		expect(apiSource.includes("inRole: query?.inRole")).toBe(true);
+		expect(typesSource.includes("inRole?: boolean")).toBe(true);
 	});
 
 	it("keeps role basic info and member assignment as separate page modules", () => {

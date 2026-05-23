@@ -9,6 +9,8 @@ import org.springframework.stereotype.Repository;
 public interface AnalyticsUserRepository extends JpaRepository<AnalyticsUser, Long> {
     Optional<AnalyticsUser> findByEmailIgnoreCase(String email);
 
+    Optional<AnalyticsUser> findByPlatformUsernameIgnoreCase(String platformUsername);
+
     Optional<AnalyticsUser> findFirstBySuperuserTrueOrderByIdAsc();
 
     long countBySuperuserTrue();

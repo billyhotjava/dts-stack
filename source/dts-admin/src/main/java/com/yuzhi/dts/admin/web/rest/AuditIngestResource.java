@@ -73,6 +73,7 @@ public class AuditIngestResource {
             AuditActionRequest.Builder builder = AuditActionRequest
                 .builder(payload.actor(), payload.buttonCode())
                 .occurredAt(payload.occurredAt())
+                .sourceSystem(payload.sourceSystem())
                 .actorName(payload.actorName())
                 .actorRoles(payload.actorRoles())
                 .summary(payload.summary())
