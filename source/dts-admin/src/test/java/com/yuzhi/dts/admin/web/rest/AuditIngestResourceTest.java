@@ -95,6 +95,48 @@ class AuditIngestResourceTest {
     }
 
     @Test
+    void usesOperationCodeAsButtonCodeWhenAnalyticsPayloadOmitsButtonCode() throws Exception {
+        AdminKeycloakUser user = new AdminKeycloakUser();
+        user.setUsername("xiezm");
+        user.setEmail("xiezm@example.test");
+        user.setFullName("测试xiezm");
+
+        when(authenticator.authenticate(any())).thenReturn(new Decision(true, "dts-analytics", "valid token"));
+        when(userRepository.findByUsernameIgnoreCase("xiezm@example.test")).thenReturn(Optional.empty());
+        when(userRepository.findByEmailIgnoreCase("xiezm@example.test")).thenReturn(Optional.of(user));
+
+        Map<String, Object> body = Map.ofEntries(
+            Map.entry("sourceSystem", "analytics"),
+            Map.entry("actor", "xiezm@example.test"),
+            Map.entry("module", "analytics.screen"),
+            Map.entry("operationCode", "SCREEN_VIEW"),
+            Map.entry("operationName", "查看大屏"),
+            Map.entry("operationType", "READ"),
+            Map.entry("resourceType", "SCREEN"),
+            Map.entry("resourceId", "42"),
+            Map.entry("targetTable", "SCREEN"),
+            Map.entry("targetIds", List.of("42")),
+            Map.entry("result", "SUCCESS")
+        );
+
+        mockMvc
+            .perform(
+                post("/api/audit-events")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsBytes(body))
+            )
+            .andExpect(status().isAccepted());
+
+        ArgumentCaptor<AuditActionRequest> captor = ArgumentCaptor.forClass(AuditActionRequest.class);
+        verify(auditV2Service).record(captor.capture());
+        AuditActionRequest request = captor.getValue();
+        assertThat(request.sourceSystem()).isEqualTo("analytics");
+        assertThat(request.buttonCode()).isEqualTo("SCREEN_VIEW");
+        assertThat(request.operationCodeOverride()).isEqualTo("SCREEN_VIEW");
+        assertThat(request.operationNameOverride()).isEqualTo("查看大屏");
+    }
+
+    @Test
     void skipsAuditEventsWhenNoExistingHumanActorIsPresent() throws Exception {
         when(authenticator.authenticate(any())).thenReturn(new Decision(true, "dts-analytics", "valid token"));
 

@@ -252,13 +252,30 @@ public class ScreenAuditService {
             case "screen.publish" -> "SCREEN_PUBLISH";
             case "screen.rollback" -> "SCREEN_ROLLBACK";
             case "screen.migrate" -> "SCREEN_MIGRATE";
+            case "screen.export.prepare" -> "SCREEN_EXPORT_PREPARE";
+            case "screen.export.denied" -> "SCREEN_EXPORT_DENIED";
+            case "screen.export.success" -> "SCREEN_EXPORT_SUCCESS";
+            case "screen.export.fallback" -> "SCREEN_EXPORT_FALLBACK";
+            case "screen.export.failed" -> "SCREEN_EXPORT_FAILED";
+            case "screen.export.report" -> "SCREEN_EXPORT_REPORT";
+            case "screen.export.server.render" -> "SCREEN_EXPORT_SERVER_RENDER";
+            case "screen.export.server.render.failed" -> "SCREEN_EXPORT_SERVER_RENDER_FAILED";
             case "screen.export.json" -> "SCREEN_EXPORT_JSON";
             case "screen.export.image" -> "SCREEN_EXPORT_IMAGE";
             case "screen.export.pdf" -> "SCREEN_EXPORT_PDF";
+            case "screen.public_link.create", "screen.public_link.policy" -> "SCREEN_PUBLIC_LINK_ENABLE";
+            case "screen.public_link.delete" -> "SCREEN_PUBLIC_LINK_DISABLE";
             case "screen.public_link.enable" -> "SCREEN_PUBLIC_LINK_ENABLE";
             case "screen.public_link.disable" -> "SCREEN_PUBLIC_LINK_DISABLE";
+            case "grant.add" -> "SCREEN_ACL_GRANT";
+            case "grant.revoke" -> "SCREEN_ACL_REVOKE";
             case "screen.acl.grant" -> "SCREEN_ACL_GRANT";
             case "screen.acl.revoke" -> "SCREEN_ACL_REVOKE";
+            case "screen.classification.update" -> "SCREEN_CLASSIFICATION_UPDATE";
+            case "screen.permission.local_fallback" -> "SCREEN_PERMISSION_LOCAL_FALLBACK";
+            case "screen.comment.add" -> "SCREEN_COMMENT_ADD";
+            case "screen.comment.resolve" -> "SCREEN_COMMENT_RESOLVE";
+            case "screen.comment.reopen" -> "SCREEN_COMMENT_REOPEN";
             default -> {
                 // Fallback: uppercase and replace dots with underscores
                 yield action.toUpperCase(Locale.ROOT).replace('.', '_');

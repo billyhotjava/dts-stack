@@ -189,10 +189,17 @@ public class AuditIngestResource {
                 sanitizedBody.get("roles")
             );
 
-            String buttonCode = text(sanitizedBody.get("buttonCode"), ButtonCodes.PLATFORM_GENERIC_EVENT);
+            String operationCodeCandidate = text(sanitizedBody.get("operationCode"));
+            String actionCandidate = text(sanitizedBody.get("action"));
+            String buttonCode = firstNonBlank(
+                text(sanitizedBody.get("buttonCode")),
+                operationCodeCandidate,
+                actionCandidate,
+                ButtonCodes.PLATFORM_GENERIC_EVENT
+            );
             String operationCode = firstNonBlank(
-                text(sanitizedBody.get("operationCode")),
-                text(sanitizedBody.get("action")),
+                operationCodeCandidate,
+                actionCandidate,
                 buttonCode
             );
             String operationName = firstNonBlank(

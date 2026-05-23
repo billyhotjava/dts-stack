@@ -36,6 +36,7 @@ class AnalyticsAuditLoggingFilterTest {
         AnalyticsAuditEvent event = captor.getValue();
         assertThat(event.actor()).isEqualTo("opadmin@platform.local");
         assertThat(event.actorName()).isEqualTo("Ops Admin");
+        assertThat(event.actionCode()).isEqualTo("SCREEN_VIEW");
         assertThat(event.action()).isEqualTo("查看大屏");
         assertThat(event.operationType()).isEqualTo("READ");
         assertThat(event.clientIp()).isEqualTo("223.86.189.127");
@@ -61,18 +62,27 @@ class AnalyticsAuditLoggingFilterTest {
         AnalyticsAuditLoggingFilter filter = new AnalyticsAuditLoggingFilter(sessionService, forwarder);
 
         AnalyticsAuditEvent save = perform(filter, sessionService, forwarder, "POST", "/api/dashboard/save");
+        assertThat(save.actionCode()).isEqualTo("VIS_DASHBOARD_EDIT");
         assertThat(save.action()).isEqualTo("保存仪表板");
         assertThat(save.operationType()).isEqualTo("UPDATE");
         reset(forwarder);
 
         AnalyticsAuditEvent sync = perform(filter, sessionService, forwarder, "POST", "/api/database/1/sync_schema");
+        assertThat(sync.actionCode()).isEqualTo("ANALYTICS_DATABASE_REFRESH");
         assertThat(sync.action()).isEqualTo("同步数据源");
         assertThat(sync.operationType()).isEqualTo("REFRESH");
         reset(forwarder);
 
         AnalyticsAuditEvent export = perform(filter, sessionService, forwarder, "GET", "/api/report-factory/runs/8/export");
+        assertThat(export.actionCode()).isEqualTo("ANALYTICS_REPORT_FACTORY_EXPORT");
         assertThat(export.action()).isEqualTo("导出报告工厂");
         assertThat(export.operationType()).isEqualTo("EXPORT");
+        reset(forwarder);
+
+        AnalyticsAuditEvent revoke = perform(filter, sessionService, forwarder, "DELETE", "/api/screen/42/public_link");
+        assertThat(revoke.actionCode()).isEqualTo("SCREEN_PUBLIC_LINK_DISABLE");
+        assertThat(revoke.action()).isEqualTo("撤销授权大屏");
+        assertThat(revoke.operationType()).isEqualTo("REVOKE");
     }
 
     private AnalyticsAuditEvent perform(

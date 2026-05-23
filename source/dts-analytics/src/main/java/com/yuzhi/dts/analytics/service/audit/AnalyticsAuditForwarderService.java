@@ -54,6 +54,12 @@ public class AnalyticsAuditForwarderService {
             body.put("actorName", event.actorName());
         }
         body.put("module", event.module());
+        if (StringUtils.hasText(event.actionCode())) {
+            body.put("buttonCode", event.actionCode());
+            body.put("operationCode", event.actionCode());
+        }
+        body.put("operationName", event.action());
+        body.put("summary", event.action());
         body.put("action", event.action());
         body.put("operationType", event.operationType());
         body.put("operationTypeCode", event.operationType());
@@ -108,6 +114,7 @@ public class AnalyticsAuditForwarderService {
         String actor,
         String actorName,
         String module,
+        String actionCode,
         String action,
         String operationType,
         String resourceType,

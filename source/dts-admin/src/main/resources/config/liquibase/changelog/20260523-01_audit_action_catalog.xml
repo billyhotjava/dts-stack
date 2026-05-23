@@ -185,4 +185,94 @@
                 updated_at = CURRENT_TIMESTAMP;
         </sql>
     </changeSet>
+
+    <changeSet id="20260523-03-audit-action-catalog-analytics-seed" author="codex">
+        <comment>写入 dts-analytics 首批人工操作审计目录，避免 BI/大屏/语义层事件落入管理端或 platform fallback</comment>
+        <sql splitStatements="true">
+            INSERT INTO audit_module_catalog (source_system, module_key, module_name, parent_module_key, owner, enabled, order_value, version, updated_at)
+            VALUES
+                ('analytics', 'analytics.screen', '数据大屏', 'analytics', 'analytics', true, 10, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'analytics.dashboard', '分析仪表板', 'analytics', 'analytics', true, 20, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'analytics.semantic', '自助BI与语义层', 'analytics', 'analytics', true, 30, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'analytics.database', '数据源', 'analytics', 'analytics', true, 40, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'analytics.report-factory', '报告工厂', 'analytics', 'analytics', true, 50, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'analytics.unclassified', '未分类分析操作', 'analytics', 'analytics', true, 9999, 'sprint-34', CURRENT_TIMESTAMP)
+            ON CONFLICT (source_system, module_key) DO UPDATE SET
+                module_name = EXCLUDED.module_name,
+                parent_module_key = EXCLUDED.parent_module_key,
+                owner = EXCLUDED.owner,
+                enabled = EXCLUDED.enabled,
+                order_value = EXCLUDED.order_value,
+                version = EXCLUDED.version,
+                updated_at = CURRENT_TIMESTAMP;
+
+            INSERT INTO audit_action_catalog (
+                source_system, action_code, module_key, module_name, operation_code, operation_name,
+                operation_kind, resource_type, allow_empty_targets, enabled, version, updated_at
+            )
+            VALUES
+                ('analytics', 'SCREEN_VIEW', 'analytics.screen', '数据大屏', 'SCREEN_VIEW', '查看大屏', 'QUERY', 'SCREEN', true, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_CREATE', 'analytics.screen', '数据大屏', 'SCREEN_CREATE', '新建大屏', 'CREATE', 'SCREEN', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_UPDATE', 'analytics.screen', '数据大屏', 'SCREEN_UPDATE', '修改大屏', 'UPDATE', 'SCREEN', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_DELETE', 'analytics.screen', '数据大屏', 'SCREEN_DELETE', '删除大屏', 'DELETE', 'SCREEN', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_PUBLISH', 'analytics.screen', '数据大屏', 'SCREEN_PUBLISH', '发布大屏', 'PUBLISH', 'SCREEN', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_ROLLBACK', 'analytics.screen', '数据大屏', 'SCREEN_ROLLBACK', '回滚大屏版本', 'UPDATE', 'SCREEN', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_MIGRATE', 'analytics.screen', '数据大屏', 'SCREEN_MIGRATE', '迁移大屏', 'CREATE', 'SCREEN', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_IMPORT', 'analytics.screen', '数据大屏', 'SCREEN_IMPORT', '导入大屏', 'IMPORT', 'SCREEN', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_REFRESH', 'analytics.screen', '数据大屏', 'SCREEN_REFRESH', '刷新大屏', 'REFRESH', 'SCREEN', true, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_EXPORT', 'analytics.screen', '数据大屏', 'SCREEN_EXPORT', '导出大屏', 'EXPORT', 'SCREEN', true, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_EXPORT_JSON', 'analytics.screen', '数据大屏', 'SCREEN_EXPORT_JSON', '导出大屏 JSON', 'EXPORT', 'SCREEN', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_EXPORT_IMAGE', 'analytics.screen', '数据大屏', 'SCREEN_EXPORT_IMAGE', '导出大屏图片', 'EXPORT', 'SCREEN', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_EXPORT_PDF', 'analytics.screen', '数据大屏', 'SCREEN_EXPORT_PDF', '导出大屏 PDF', 'EXPORT', 'SCREEN', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_EXPORT_PREPARE', 'analytics.screen', '数据大屏', 'SCREEN_EXPORT_PREPARE', '准备大屏导出', 'EXPORT', 'SCREEN', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_EXPORT_DENIED', 'analytics.screen', '数据大屏', 'SCREEN_EXPORT_DENIED', '拒绝大屏导出', 'REJECT', 'SCREEN', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_EXPORT_SUCCESS', 'analytics.screen', '数据大屏', 'SCREEN_EXPORT_SUCCESS', '大屏导出成功', 'EXPORT', 'SCREEN', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_EXPORT_FALLBACK', 'analytics.screen', '数据大屏', 'SCREEN_EXPORT_FALLBACK', '大屏导出降级', 'EXPORT', 'SCREEN', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_EXPORT_FAILED', 'analytics.screen', '数据大屏', 'SCREEN_EXPORT_FAILED', '大屏导出失败', 'EXPORT', 'SCREEN', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_EXPORT_REPORT', 'analytics.screen', '数据大屏', 'SCREEN_EXPORT_REPORT', '记录大屏导出结果', 'EXPORT', 'SCREEN', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_EXPORT_SERVER_RENDER', 'analytics.screen', '数据大屏', 'SCREEN_EXPORT_SERVER_RENDER', '服务端渲染导出大屏', 'EXPORT', 'SCREEN', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_EXPORT_SERVER_RENDER_FAILED', 'analytics.screen', '数据大屏', 'SCREEN_EXPORT_SERVER_RENDER_FAILED', '服务端渲染导出失败', 'EXPORT', 'SCREEN', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_PUBLIC_LINK_ENABLE', 'analytics.screen', '数据大屏', 'SCREEN_PUBLIC_LINK_ENABLE', '开启大屏公开链接', 'ENABLE', 'SCREEN', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_PUBLIC_LINK_DISABLE', 'analytics.screen', '数据大屏', 'SCREEN_PUBLIC_LINK_DISABLE', '关闭大屏公开链接', 'DISABLE', 'SCREEN', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_ACL_GRANT', 'analytics.screen', '数据大屏', 'SCREEN_ACL_GRANT', '授权大屏访问', 'GRANT', 'SCREEN', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_ACL_REVOKE', 'analytics.screen', '数据大屏', 'SCREEN_ACL_REVOKE', '撤销大屏授权', 'REVOKE', 'SCREEN', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_CLASSIFICATION_UPDATE', 'analytics.screen', '数据大屏', 'SCREEN_CLASSIFICATION_UPDATE', '调整大屏密级', 'UPDATE', 'SCREEN', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_PERMISSION_LOCAL_FALLBACK', 'analytics.screen', '数据大屏', 'SCREEN_PERMISSION_LOCAL_FALLBACK', '记录大屏权限降级判定', 'QUERY', 'SCREEN', true, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_COMMENT_ADD', 'analytics.screen', '数据大屏', 'SCREEN_COMMENT_ADD', '新增大屏协作评论', 'CREATE', 'SCREEN_COMMENT', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_COMMENT_RESOLVE', 'analytics.screen', '数据大屏', 'SCREEN_COMMENT_RESOLVE', '解决大屏协作评论', 'UPDATE', 'SCREEN_COMMENT', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SCREEN_COMMENT_REOPEN', 'analytics.screen', '数据大屏', 'SCREEN_COMMENT_REOPEN', '重新打开大屏协作评论', 'UPDATE', 'SCREEN_COMMENT', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+
+                ('analytics', 'VIS_DASHBOARD_VIEW', 'analytics.dashboard', '分析仪表板', 'VIS_DASHBOARD_VIEW', '查看仪表板', 'QUERY', 'DASHBOARD', true, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'VIS_DASHBOARD_EDIT', 'analytics.dashboard', '分析仪表板', 'VIS_DASHBOARD_EDIT', '编辑仪表板', 'UPDATE', 'DASHBOARD', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'VIS_DASHBOARD_PUBLISH', 'analytics.dashboard', '分析仪表板', 'VIS_DASHBOARD_PUBLISH', '发布仪表板', 'PUBLISH', 'DASHBOARD', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'VIS_DASHBOARD_EXPORT', 'analytics.dashboard', '分析仪表板', 'VIS_DASHBOARD_EXPORT', '导出仪表板', 'EXPORT', 'DASHBOARD', true, true, 'sprint-34', CURRENT_TIMESTAMP),
+
+                ('analytics', 'SEMANTIC_META_VIEW', 'analytics.semantic', '自助BI与语义层', 'SEMANTIC_META_VIEW', '查看语义元信息', 'QUERY', 'SEMANTIC', true, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SEMANTIC_GRAPH_VIEW', 'analytics.semantic', '自助BI与语义层', 'SEMANTIC_GRAPH_VIEW', '查看语义 Join 图', 'QUERY', 'SEMANTIC', true, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SEMANTIC_WORKBENCH_VIEW', 'analytics.semantic', '自助BI与语义层', 'SEMANTIC_WORKBENCH_VIEW', '查看语义建模工作台', 'QUERY', 'SEMANTIC', true, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SEMANTIC_CONTRACT_PUBLISH', 'analytics.semantic', '自助BI与语义层', 'SEMANTIC_CONTRACT_PUBLISH', '推送语义契约', 'PUBLISH', 'SEMANTIC', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SEMANTIC_QUERY_PREVIEW', 'analytics.semantic', '自助BI与语义层', 'SEMANTIC_QUERY_PREVIEW', '预览语义查询 SQL', 'QUERY', 'SEMANTIC', true, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SEMANTIC_QUERY_EXECUTE', 'analytics.semantic', '自助BI与语义层', 'SEMANTIC_QUERY_EXECUTE', '执行语义查询', 'EXECUTE', 'SEMANTIC', true, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SEMANTIC_VDS_LIST', 'analytics.semantic', '自助BI与语义层', 'SEMANTIC_VDS_LIST', '查看虚拟数据集列表', 'QUERY', 'SEMANTIC_VDS', true, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SEMANTIC_VDS_VIEW', 'analytics.semantic', '自助BI与语义层', 'SEMANTIC_VDS_VIEW', '查看虚拟数据集', 'QUERY', 'SEMANTIC_VDS', true, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SEMANTIC_VDS_CREATE', 'analytics.semantic', '自助BI与语义层', 'SEMANTIC_VDS_CREATE', '创建虚拟数据集', 'CREATE', 'SEMANTIC_VDS', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SEMANTIC_VDS_UPDATE', 'analytics.semantic', '自助BI与语义层', 'SEMANTIC_VDS_UPDATE', '更新虚拟数据集', 'UPDATE', 'SEMANTIC_VDS', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SEMANTIC_VDS_DELETE', 'analytics.semantic', '自助BI与语义层', 'SEMANTIC_VDS_DELETE', '删除虚拟数据集', 'DELETE', 'SEMANTIC_VDS', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'SEMANTIC_VDS_PROMOTE', 'analytics.semantic', '自助BI与语义层', 'SEMANTIC_VDS_PROMOTE', '提升虚拟数据集到 dbt', 'EXECUTE', 'SEMANTIC_VDS', false, true, 'sprint-34', CURRENT_TIMESTAMP),
+
+                ('analytics', 'ANALYTICS_DATABASE_REFRESH', 'analytics.database', '数据源', 'ANALYTICS_DATABASE_REFRESH', '同步数据源', 'REFRESH', 'DATABASE', true, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('analytics', 'ANALYTICS_REPORT_FACTORY_EXPORT', 'analytics.report-factory', '报告工厂', 'ANALYTICS_REPORT_FACTORY_EXPORT', '导出报告工厂', 'EXPORT', 'REPORT_FACTORY', true, true, 'sprint-34', CURRENT_TIMESTAMP)
+            ON CONFLICT (source_system, action_code) DO UPDATE SET
+                module_key = EXCLUDED.module_key,
+                module_name = EXCLUDED.module_name,
+                operation_code = EXCLUDED.operation_code,
+                operation_name = EXCLUDED.operation_name,
+                operation_kind = EXCLUDED.operation_kind,
+                resource_type = EXCLUDED.resource_type,
+                allow_empty_targets = EXCLUDED.allow_empty_targets,
+                enabled = EXCLUDED.enabled,
+                version = EXCLUDED.version,
+                updated_at = CURRENT_TIMESTAMP;
+        </sql>
+    </changeSet>
 </databaseChangeLog>

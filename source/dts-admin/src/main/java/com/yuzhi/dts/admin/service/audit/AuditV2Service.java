@@ -50,14 +50,14 @@ public class AuditV2Service {
         AuditActionCatalogService.ResolvedAction catalogAction = actionCatalogService
             .resolve(sourceSystem, request.buttonCode())
             .orElse(null);
-        boolean platformCatalogMiss = catalogAction == null && isPlatformSource(sourceSystem);
-        if (platformCatalogMiss) {
+        boolean businessCatalogMiss = catalogAction == null && isBusinessSource(sourceSystem);
+        if (businessCatalogMiss) {
             actionCatalogService.recordMiss(request, "NO_CATALOG_MATCH");
         }
-        AuditButtonMetadata metadata = platformCatalogMiss ? null : buttonRegistry.resolve(request.buttonCode()).orElse(null);
+        AuditButtonMetadata metadata = businessCatalogMiss ? null : buttonRegistry.resolve(request.buttonCode()).orElse(null);
 
-        String moduleKey = platformCatalogMiss
-            ? "platform.unclassified"
+        String moduleKey = businessCatalogMiss
+            ? unclassifiedModuleKey(sourceSystem)
             : firstNonBlank(
                 catalogAction != null ? catalogAction.moduleKey() : null,
                 request.moduleKeyOverride(),
@@ -72,9 +72,9 @@ public class AuditV2Service {
             ? request.operationKindOverride()
             : metadata != null ? metadata.operationKind() : AuditOperationKind.OTHER;
         boolean allowEmptyTargets = request.allowEmptyTargets() ||
-        platformCatalogMiss ||
-        (catalogAction != null && catalogAction.allowEmptyTargets()) ||
-        (metadata != null && metadata.allowEmptyTargets());
+            businessCatalogMiss ||
+            (catalogAction != null && catalogAction.allowEmptyTargets()) ||
+            (metadata != null && metadata.allowEmptyTargets());
 
         AuditRecorder.AuditBuilder builder = recorder
             .start(request.actorId())
@@ -93,8 +93,8 @@ public class AuditV2Service {
         if (request.occurredAt() != null) {
             builder.occurredAt(request.occurredAt());
         }
-        String moduleName = platformCatalogMiss
-            ? "未分类业务操作"
+        String moduleName = businessCatalogMiss
+            ? unclassifiedModuleName(sourceSystem)
             : firstNonBlank(
                 catalogAction != null ? catalogAction.moduleName() : null,
                 request.moduleNameOverride(),
@@ -103,14 +103,14 @@ public class AuditV2Service {
         if (StringUtils.hasText(moduleName)) {
             builder.moduleName(moduleName);
         }
-        String operationCode = platformCatalogMiss
+        String operationCode = businessCatalogMiss
             ? request.buttonCode()
             : firstNonBlank(
                 catalogAction != null ? catalogAction.operationCode() : null,
                 request.operationCodeOverride(),
                 metadata != null ? metadata.operationCode() : null
             );
-        String operationName = platformCatalogMiss
+        String operationName = businessCatalogMiss
             ? firstNonBlank(request.summary(), request.operationNameOverride(), request.buttonCode())
             : firstNonBlank(
                 catalogAction != null ? catalogAction.operationName() : null,
@@ -134,7 +134,7 @@ public class AuditV2Service {
         if (catalogAction != null && StringUtils.hasText(catalogAction.resourceType())) {
             builder.metadata("resourceType", catalogAction.resourceType());
         }
-        if (platformCatalogMiss) {
+        if (businessCatalogMiss) {
             builder.metadata("classificationReason", "NO_CATALOG_MATCH");
         }
         request.attributes().forEach(builder::extraAttribute);
@@ -381,8 +381,16 @@ public class AuditV2Service {
         return StringUtils.hasText(sourceSystem) ? sourceSystem.trim().toLowerCase(Locale.ROOT) : "admin";
     }
 
-    private boolean isPlatformSource(String sourceSystem) {
-        return "platform".equalsIgnoreCase(sourceSystem);
+    private boolean isBusinessSource(String sourceSystem) {
+        return "platform".equalsIgnoreCase(sourceSystem) || "analytics".equalsIgnoreCase(sourceSystem);
+    }
+
+    private String unclassifiedModuleKey(String sourceSystem) {
+        return "analytics".equalsIgnoreCase(sourceSystem) ? "analytics.unclassified" : "platform.unclassified";
+    }
+
+    private String unclassifiedModuleName(String sourceSystem) {
+        return "analytics".equalsIgnoreCase(sourceSystem) ? "未分类分析操作" : "未分类业务操作";
     }
 
     private String deriveResourceTypeFromButtonCode(String buttonCode) {

@@ -1,9 +1,9 @@
-# Sprint-34: 审计目录 DB 化与 Platform 人工操作审计重构（202605）
+# Sprint-34: 审计目录 DB 化与 Platform/Analytics 人工操作审计重构（202605）
 
 **时间**: 2026-05
 **状态**: DONE（代码与 focused 验证完成；现场 smoke 待部署补证）
-**类型**: Architecture / Implementation / Compliance（dts-admin + dts-platform + dts-common）
-**目标**: 将审计模块、动作、路由映射的运行时事实源从中心 JSON/路径猜测迁移到 dts-admin 数据库目录，确保 platform 持续新增模块时可以通过可治理目录注册审计动作，并只记录人工操作痕迹。
+**类型**: Architecture / Implementation / Compliance（dts-admin + dts-platform + dts-analytics + dts-common）
+**目标**: 将审计模块、动作、路由映射的运行时事实源从中心 JSON/路径猜测迁移到 dts-admin 数据库目录，确保 platform 与 analytics 持续新增模块时可以通过可治理目录注册审计动作，并只记录人工操作痕迹。
 
 ## 背景
 
@@ -19,8 +19,9 @@
 | F2 | dts-admin 运行时分类与入库链路 | P0 | 4 | DONE | F1 |
 | F3 | platform 人工操作审计动作收敛 | P0 | 4 | DONE | F1, F2 |
 | F4 | 验证、review 与 IT 证据 | P0 | 3 | DONE | F1-F3 |
+| F5 | dts-analytics 人工操作审计动作收敛 | P0 | 4 | DONE | F1, F2 |
 
-**统计**: READY=0, IN_PROGRESS=0, DONE=15, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=19, BLOCKED=0
 
 ## 核心约束
 
@@ -30,6 +31,7 @@
 4. 未注册 actionCode 不允许被路径猜测成业务模块；必须记录为未分类并进入治理队列。
 5. 历史审计记录保存入库时的模块名和操作名快照，不因目录后续改名而改变历史解释。
 6. dts-admin 与 dts-platform 的 sourceSystem 必须保真，业务端审计不能落成管理端审计。
+7. dts-analytics 的大屏、语义层和 fallback 审计必须提交稳定 actionCode，不能退成 platform generic。
 
 ## 非目标
 
@@ -45,6 +47,7 @@
 - [x] platform ingest 通过 DB 目录解析 actionCode；未知动作进入 miss 记录，不伪装分类。
 - [x] 主题域、语义主题域、报表查看/新增/修改/删除等现场问题动作分类正确。
 - [x] HTTP fallback 只作为漏埋点保护网，不生成大量支撑查询审计。
+- [x] dts-analytics 大屏、语义层、仪表板等人工操作通过 DB catalog 分类，显示为分析端审计。
 - [x] focused tests 覆盖 sourceSystem 透传、DB catalog 解析、未知动作 miss、主题域和报表动作。
 - [x] review 发现写入 `it/evidence/`，完成后根据 review 再补一轮修正。
 
@@ -53,12 +56,14 @@
 - Loop 1 完成核心入库链路和现场问题动作修复。
 - Loop 2 完成审计中心模块/分组/分类选项 DB catalog 化，并收紧 HTTP fallback 支撑查询降噪边界。
 - Loop 3 完成 review 补强：未分类 miss 按同类累计，common catalog 作为一次性缺失 seed 导入 DB，避免升级后大量既有 platform 动作全部落入未分类。
+- Loop 4 完成 dts-analytics 审计重构：稳定 actionCode 转发、analytics DB catalog seed、analytics 未分类治理和审计中心展示映射。
 - 剩余事项只保留部署后的现场 smoke 补证，不再阻塞代码交付。
 
 ## 验证策略
 
 - `source/dts-admin`: catalog service / ingest / AuditV2 focused tests。
 - `source/dts-platform`: AuditService / AuditForwarderService / AuditLoggingFilter focused tests。
+- `source/dts-analytics`: AnalyticsAuditLoggingFilter / AnalyticsAuditForwarderService focused tests。
 - 迁移检查：Liquibase changelog 可重复执行，新增表有唯一约束和必要索引。
 - 静态检查：扫描 platform `auditAction(...)` 与 dts-admin `ButtonCodes`，确保关键动作能命中目录。
 - 手工 smoke：auditadmin 查询业务端审计，确认日志类型、模块名称、操作内容和操作类型正确。
@@ -72,3 +77,6 @@
 - `source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/filter/AuditLoggingFilter.java`
 - `source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/rest/catalog/CatalogDomainResource.java`
 - `source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/rest/ReportsResource.java`
+- `source/dts-analytics/src/main/java/com/yuzhi/dts/analytics/web/filter/AnalyticsAuditLoggingFilter.java`
+- `source/dts-analytics/src/main/java/com/yuzhi/dts/analytics/service/audit/AnalyticsAuditForwarderService.java`
+- `source/dts-analytics/src/main/java/com/yuzhi/dts/analytics/service/ScreenAuditService.java`

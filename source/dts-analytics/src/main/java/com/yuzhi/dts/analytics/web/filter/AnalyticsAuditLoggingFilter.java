@@ -82,6 +82,7 @@ public class AnalyticsAuditLoggingFilter extends OncePerRequestFilter {
             actor,
             resolveActorName(user),
             resolveModule(uri),
+            deriveActionCode(method, uri),
             deriveAction(method, uri),
             deriveOperationType(method, uri),
             resolveResourceType(uri),
@@ -190,6 +191,9 @@ public class AnalyticsAuditLoggingFilter extends OncePerRequestFilter {
         if (containsAny(lowerUri, "/reject", "/cancel", "/close")) {
             return "驳回" + friendly;
         }
+        if ("DELETE".equalsIgnoreCase(method) && containsAny(lowerUri, "/grant", "/grants", "/public_link", "/public-link")) {
+            return "撤销授权" + friendly;
+        }
         if (containsAny(lowerUri, "/grant", "/public_link", "/public-link")) {
             return "授权" + friendly;
         }
@@ -210,6 +214,88 @@ public class AnalyticsAuditLoggingFilter extends OncePerRequestFilter {
             case "GET" -> "查看" + friendly;
             default -> "操作" + friendly;
         };
+    }
+
+    private String deriveActionCode(String method, String uri) {
+        String segment = firstSegment(uri);
+        String operationType = deriveOperationType(method, uri);
+        String lowerUri = uri == null ? "" : uri.toLowerCase(Locale.ROOT);
+        return switch (segment) {
+            case "screen" -> screenActionCode(operationType, lowerUri);
+            case "dashboard" -> dashboardActionCode(operationType);
+            case "semantic" -> semanticActionCode(operationType, lowerUri);
+            default -> "ANALYTICS_" + normalizeActionSegment(segment) + "_" + operationType;
+        };
+    }
+
+    private String screenActionCode(String operationType, String lowerUri) {
+        if (containsAny(lowerUri, "/public_link", "/public-link")) {
+            if ("DELETE".equals(operationType) || "REVOKE".equals(operationType)) {
+                return "SCREEN_PUBLIC_LINK_DISABLE";
+            }
+            return "SCREEN_PUBLIC_LINK_ENABLE";
+        }
+        if ("GRANT".equals(operationType)) {
+            return "SCREEN_ACL_GRANT";
+        }
+        if ("REVOKE".equals(operationType)) {
+            return "SCREEN_ACL_REVOKE";
+        }
+        if ("EXPORT".equals(operationType)) {
+            if (lowerUri.endsWith(".pdf") || lowerUri.contains("/pdf")) {
+                return "SCREEN_EXPORT_PDF";
+            }
+            if (lowerUri.endsWith(".png") || lowerUri.contains("/image") || lowerUri.contains("/render")) {
+                return "SCREEN_EXPORT_IMAGE";
+            }
+            if (lowerUri.endsWith(".json") || lowerUri.contains("/json")) {
+                return "SCREEN_EXPORT_JSON";
+            }
+            return "SCREEN_EXPORT";
+        }
+        return switch (operationType) {
+            case "CREATE" -> "SCREEN_CREATE";
+            case "UPDATE" -> "SCREEN_UPDATE";
+            case "DELETE", "ARCHIVE" -> "SCREEN_DELETE";
+            case "PUBLISH" -> "SCREEN_PUBLISH";
+            case "IMPORT" -> "SCREEN_IMPORT";
+            case "REFRESH" -> "SCREEN_REFRESH";
+            default -> "SCREEN_VIEW";
+        };
+    }
+
+    private String dashboardActionCode(String operationType) {
+        return switch (operationType) {
+            case "PUBLISH" -> "VIS_DASHBOARD_PUBLISH";
+            case "UPDATE", "CREATE", "IMPORT" -> "VIS_DASHBOARD_EDIT";
+            case "EXPORT" -> "VIS_DASHBOARD_EXPORT";
+            default -> "VIS_DASHBOARD_VIEW";
+        };
+    }
+
+    private String semanticActionCode(String operationType, String lowerUri) {
+        if (lowerUri.contains("/vds") || lowerUri.contains("/virtual-dataset") || lowerUri.contains("/virtual-datasets")) {
+            return switch (operationType) {
+                case "CREATE" -> "SEMANTIC_VDS_CREATE";
+                case "UPDATE" -> "SEMANTIC_VDS_UPDATE";
+                case "DELETE" -> "SEMANTIC_VDS_DELETE";
+                case "EXECUTE", "PUBLISH" -> "SEMANTIC_VDS_PROMOTE";
+                default -> "SEMANTIC_VDS_LIST";
+            };
+        }
+        if (lowerUri.contains("preview") || lowerUri.contains("explain")) {
+            return "SEMANTIC_QUERY_PREVIEW";
+        }
+        if (lowerUri.contains("query") || lowerUri.contains("execute") || lowerUri.contains("run")) {
+            return "SEMANTIC_QUERY_EXECUTE";
+        }
+        if (lowerUri.contains("graph")) {
+            return "SEMANTIC_GRAPH_VIEW";
+        }
+        if (lowerUri.contains("contract") || lowerUri.contains("publish")) {
+            return "SEMANTIC_CONTRACT_PUBLISH";
+        }
+        return "SEMANTIC_WORKBENCH_VIEW";
     }
 
     private String deriveOperationType(String method, String uri) {
@@ -237,6 +323,9 @@ public class AnalyticsAuditLoggingFilter extends OncePerRequestFilter {
         }
         if (containsAny(lowerUri, "/reject", "/cancel", "/close")) {
             return "REJECT";
+        }
+        if ("DELETE".equalsIgnoreCase(method) && containsAny(lowerUri, "/grant", "/grants", "/public_link", "/public-link")) {
+            return "REVOKE";
         }
         if (containsAny(lowerUri, "/grant", "/public_link", "/public-link")) {
             return "GRANT";
@@ -315,6 +404,19 @@ public class AnalyticsAuditLoggingFilter extends OncePerRequestFilter {
             return part.toLowerCase(Locale.ROOT);
         }
         return "general";
+    }
+
+    private String normalizeActionSegment(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "GENERAL";
+        }
+        String normalized = value
+            .trim()
+            .replaceAll("([a-z])([A-Z])", "$1_$2")
+            .replaceAll("[^A-Za-z0-9]+", "_")
+            .replaceAll("^_+|_+$", "")
+            .toUpperCase(Locale.ROOT);
+        return StringUtils.hasText(normalized) ? normalized : "GENERAL";
     }
 
     private String resolveClientIp(HttpServletRequest request) {

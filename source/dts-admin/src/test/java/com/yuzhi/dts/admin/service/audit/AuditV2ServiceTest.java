@@ -80,6 +80,46 @@ class AuditV2ServiceTest {
     }
 
     @Test
+    void recordsAnalyticsSourceSystemAndDbCatalogMetadata() {
+        when(actionCatalogService.resolve("analytics", "SCREEN_UPDATE"))
+            .thenReturn(
+                Optional.of(
+                    new AuditActionCatalogService.ResolvedAction(
+                        "analytics",
+                        "analytics.screen",
+                        "数据大屏",
+                        "SCREEN_UPDATE",
+                        "修改大屏",
+                        AuditOperationKind.UPDATE,
+                        "SCREEN",
+                        false
+                    )
+                )
+            );
+
+        AuditActionRequest request = AuditActionRequest
+            .builder("xiezm", "SCREEN_UPDATE")
+            .sourceSystem("analytics")
+            .moduleOverride("analytics.general", "分析服务")
+            .operationOverride("ANALYTICS_GENERIC_EVENT", "通用分析事件", AuditOperationKind.OTHER)
+            .summary("修改大屏")
+            .target("SCREEN", 42L, "项目执行监控")
+            .build();
+
+        service.record(request);
+
+        ArgumentCaptor<AuditEntry> captor = ArgumentCaptor.forClass(AuditEntry.class);
+        verify(repository).save(captor.capture());
+        AuditEntry saved = captor.getValue();
+        assertThat(saved.getSourceSystem()).isEqualTo("analytics");
+        assertThat(saved.getModuleKey()).isEqualTo("analytics.screen");
+        assertThat(saved.getModuleName()).isEqualTo("数据大屏");
+        assertThat(saved.getOperationCode()).isEqualTo("SCREEN_UPDATE");
+        assertThat(saved.getOperationName()).isEqualTo("修改大屏");
+        assertThat(saved.getOperationKind()).isEqualTo(AuditOperationKind.UPDATE.code());
+    }
+
+    @Test
     void recordsClassificationMissForUnknownPlatformActionInsteadOfTrustingOverrides() {
         when(actionCatalogService.resolve("platform", "PLATFORM_NEW_MODULE_SAVE")).thenReturn(Optional.empty());
 
@@ -103,6 +143,33 @@ class AuditV2ServiceTest {
         assertThat(saved.getModuleName()).isEqualTo("未分类业务操作");
         assertThat(saved.getOperationCode()).isEqualTo("PLATFORM_NEW_MODULE_SAVE");
         assertThat(saved.getOperationName()).isEqualTo("保存新模块配置");
+        assertThat(saved.getMetadata()).containsEntry("classificationReason", "NO_CATALOG_MATCH");
+    }
+
+    @Test
+    void recordsClassificationMissForUnknownAnalyticsActionInsteadOfTrustingOverrides() {
+        when(actionCatalogService.resolve("analytics", "ANALYTICS_NEW_WIDGET_EXPORT")).thenReturn(Optional.empty());
+
+        AuditActionRequest request = AuditActionRequest
+            .builder("xiezm", "ANALYTICS_NEW_WIDGET_EXPORT")
+            .sourceSystem("analytics")
+            .moduleOverride("analytics.widget", "组件")
+            .operationOverride("ANALYTICS_WIDGET_EXPORT", "导出组件", AuditOperationKind.EXPORT)
+            .summary("导出新增组件")
+            .allowEmptyTargets()
+            .build();
+
+        service.record(request);
+
+        verify(actionCatalogService).recordMiss(eq(request), eq("NO_CATALOG_MATCH"));
+        ArgumentCaptor<AuditEntry> captor = ArgumentCaptor.forClass(AuditEntry.class);
+        verify(repository).save(captor.capture());
+        AuditEntry saved = captor.getValue();
+        assertThat(saved.getSourceSystem()).isEqualTo("analytics");
+        assertThat(saved.getModuleKey()).isEqualTo("analytics.unclassified");
+        assertThat(saved.getModuleName()).isEqualTo("未分类分析操作");
+        assertThat(saved.getOperationCode()).isEqualTo("ANALYTICS_NEW_WIDGET_EXPORT");
+        assertThat(saved.getOperationName()).isEqualTo("导出新增组件");
         assertThat(saved.getMetadata()).containsEntry("classificationReason", "NO_CATALOG_MATCH");
     }
 }

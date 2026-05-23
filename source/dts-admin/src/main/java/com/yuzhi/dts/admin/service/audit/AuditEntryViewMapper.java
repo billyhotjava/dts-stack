@@ -179,12 +179,17 @@ public class AuditEntryViewMapper {
         }
         return switch (sourceSystem.trim().toLowerCase(Locale.ROOT)) {
             case "platform" -> "业务管理";
+            case "analytics" -> "BI分析";
             default -> "系统管理";
         };
     }
 
     public String mapLogType(String sourceSystem) {
-        return "platform".equalsIgnoreCase(StringUtils.trimToEmpty(sourceSystem)) ? "业务端审计" : "管理端审计";
+        return switch (StringUtils.trimToEmpty(sourceSystem).toLowerCase(Locale.ROOT)) {
+            case "platform" -> "业务端审计";
+            case "analytics" -> "分析端审计";
+            default -> "管理端审计";
+        };
     }
 
     public String normalizeOperationTypeCode(AuditEntryView view) {
