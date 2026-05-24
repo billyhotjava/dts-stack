@@ -1,6 +1,6 @@
 # Sprint-34 IT Evidence
 
-**状态**: LOOP-6-PASS（代码与 focused 验证完成；analytics 容器待重建后补现场 smoke）
+**状态**: LOOP-7-PASS（代码与 focused 验证完成；analytics/platform 容器待重建后补现场 smoke）
 
 ## 自动化验证
 
@@ -32,6 +32,10 @@
 | dts-analytics | `./mvnw -q -pl dts-analytics -DskipTests compile` | PASS | `it/evidence/20260523-audit-db-catalog-loop6-analytics-screen-ingest.md` |
 | dts-analytics | `./mvnw -q -pl dts-analytics test` | FAIL | `it/evidence/20260523-audit-db-catalog-loop6-analytics-screen-ingest.md` |
 | repo | `git diff --check` | PASS | `it/evidence/20260523-audit-db-catalog-loop6-analytics-screen-ingest.md` |
+| dts-platform | `./mvnw -q -pl dts-platform -Dtest=AuditForwarderServiceTest,AuditServiceTest test` | PASS | `it/evidence/20260524-audit-db-catalog-loop7-platform-auth.md` |
+| dts-admin | `./mvnw -q -pl dts-admin -Dtest=AuditActionCatalogLiquibaseSeedTest,AuditIngestResourceTest,AuditV2ServiceTest test` | PASS | `it/evidence/20260524-audit-db-catalog-loop7-platform-auth.md` |
+| dts-admin | `xmllint --noout ...20260523-01_audit_action_catalog.xml ...master.xml` | PASS | `it/evidence/20260524-audit-db-catalog-loop7-platform-auth.md` |
+| dts-admin-db | new platform auth seed/backfill SQL transaction dry-run | PASS | `it/evidence/20260524-audit-db-catalog-loop7-platform-auth.md` |
 
 ## 现场 Smoke Checklist
 
@@ -74,3 +78,9 @@
 - 已修复 dts-analytics 大屏管理复数路径 `/api/screens` 未命中 `SCREEN_*` 目录的问题。
 - 已修复 analytics 中央审计 actor 优先使用邮箱的问题，改为优先上报平台登录名，避免 admin ingest 因现场用户 email 为空而跳过。
 - 已停止把权限 local fallback 这类系统迁移保护事件转发为中央人工审计，保留本地 WARN 线索。
+
+## Loop 7 Review
+
+- 已修复业务端登录/登出仍使用 `AUTH LOGIN` / `AUTH LOGOUT` 作为入库 buttonCode 的问题。
+- 已新增 `platform.auth` / “业务端认证”目录，登录/登出后续不再落入“未分类业务操作”。
+- 已在新增 changeSet 中窄范围纠偏历史错误 auth 记录，只覆盖 `platform.unclassified` 下旧 auth action。

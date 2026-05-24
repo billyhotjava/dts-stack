@@ -10,8 +10,10 @@ import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.config.AuditProperties;
 import com.yuzhi.dts.platform.service.admin.gateway.audit.AdminAuditGateway;
+import java.util.Map;
 import java.util.Queue;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class AuditForwarderServiceTest {
@@ -72,10 +74,63 @@ class AuditForwarderServiceTest {
         assertThat(queue(service)).isEmpty();
     }
 
+    @Test
+    void recordShouldSendStableButtonCodeForPlatformLoginEvents() {
+        AdminAuditGateway gateway = mock(AdminAuditGateway.class);
+        when(gateway.isEnabled()).thenReturn(true);
+        when(gateway.recordEvent(anyMap())).thenReturn(true);
+
+        AuditForwarderService service = new AuditForwarderService(enabledProperties(), gateway);
+        AuditForwarderService.PendingAuditEvent event = new AuditForwarderService.PendingAuditEvent();
+        event.actor = "xiezm";
+        event.action = "AUTH LOGIN";
+        event.module = "platform";
+        event.operationType = "LOGIN";
+        event.resourceType = "portal_user";
+        event.resourceId = "xiezm";
+        event.result = "SUCCESS";
+
+        service.record(event);
+
+        Map<String, Object> body = capturedBody(gateway);
+        assertThat(body).containsEntry("buttonCode", "ADMIN_AUTH_PLATFORM_LOGIN");
+        assertThat(body).containsEntry("operationCode", "ADMIN_AUTH_PLATFORM_LOGIN");
+    }
+
+    @Test
+    void recordShouldSendStableButtonCodeForPlatformLogoutEvents() {
+        AdminAuditGateway gateway = mock(AdminAuditGateway.class);
+        when(gateway.isEnabled()).thenReturn(true);
+        when(gateway.recordEvent(anyMap())).thenReturn(true);
+
+        AuditForwarderService service = new AuditForwarderService(enabledProperties(), gateway);
+        AuditForwarderService.PendingAuditEvent event = new AuditForwarderService.PendingAuditEvent();
+        event.actor = "xiezm";
+        event.action = "AUTH LOGOUT";
+        event.module = "platform";
+        event.operationType = "LOGOUT";
+        event.resourceType = "portal_user";
+        event.resourceId = "xiezm";
+        event.result = "SUCCESS";
+
+        service.record(event);
+
+        Map<String, Object> body = capturedBody(gateway);
+        assertThat(body).containsEntry("buttonCode", "ADMIN_AUTH_PLATFORM_LOGOUT");
+        assertThat(body).containsEntry("operationCode", "ADMIN_AUTH_PLATFORM_LOGOUT");
+    }
+
     private AuditProperties enabledProperties() {
         AuditProperties properties = new AuditProperties();
         properties.setEnabled(true);
         return properties;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> capturedBody(AdminAuditGateway gateway) {
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(gateway).recordEvent(captor.capture());
+        return captor.getValue();
     }
 
     @SuppressWarnings("unchecked")

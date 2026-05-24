@@ -183,6 +183,68 @@
                 enabled = EXCLUDED.enabled,
                 version = EXCLUDED.version,
                 updated_at = CURRENT_TIMESTAMP;
+
+            UPDATE audit_entry
+            SET
+                module_key = 'platform.auth',
+                module_name = '业务端认证',
+                button_code = 'ADMIN_AUTH_PLATFORM_LOGIN',
+                operation_code = 'AUTH_PLATFORM_LOGIN',
+                operation_name = '业务端登录',
+                operation_kind = 'LOGIN'
+            WHERE source_system = 'platform'
+              AND module_key = 'platform.unclassified'
+              AND (button_code = 'AUTH LOGIN' OR operation_code = 'AUTH LOGIN')
+              AND operation_kind = 'LOGIN';
+
+            UPDATE audit_entry
+            SET
+                module_key = 'platform.auth',
+                module_name = '业务端认证',
+                button_code = 'ADMIN_AUTH_PLATFORM_LOGOUT',
+                operation_code = 'AUTH_PLATFORM_LOGOUT',
+                operation_name = '业务端登出',
+                operation_kind = 'LOGOUT'
+            WHERE source_system = 'platform'
+              AND module_key = 'platform.unclassified'
+              AND (button_code = 'AUTH LOGOUT' OR operation_code = 'AUTH LOGOUT')
+              AND operation_kind = 'LOGOUT';
+        </sql>
+    </changeSet>
+
+    <changeSet id="20260524-01-audit-action-catalog-platform-auth-seed" author="codex">
+        <comment>增量补齐业务端登录/登出审计目录，避免平台 auth 事件落入未分类业务操作</comment>
+        <sql splitStatements="true">
+            INSERT INTO audit_module_catalog (source_system, module_key, module_name, parent_module_key, owner, enabled, order_value, version, updated_at)
+            VALUES
+                ('platform', 'platform.auth', '业务端认证', 'platform', 'platform', true, 5, 'sprint-34', CURRENT_TIMESTAMP)
+            ON CONFLICT (source_system, module_key) DO UPDATE SET
+                module_name = EXCLUDED.module_name,
+                parent_module_key = EXCLUDED.parent_module_key,
+                owner = EXCLUDED.owner,
+                enabled = EXCLUDED.enabled,
+                order_value = EXCLUDED.order_value,
+                version = EXCLUDED.version,
+                updated_at = CURRENT_TIMESTAMP;
+
+            INSERT INTO audit_action_catalog (
+                source_system, action_code, module_key, module_name, operation_code, operation_name,
+                operation_kind, resource_type, allow_empty_targets, enabled, version, updated_at
+            )
+            VALUES
+                ('platform', 'ADMIN_AUTH_PLATFORM_LOGIN', 'platform.auth', '业务端认证', 'AUTH_PLATFORM_LOGIN', '业务端登录', 'LOGIN', 'portal_user', true, true, 'sprint-34', CURRENT_TIMESTAMP),
+                ('platform', 'ADMIN_AUTH_PLATFORM_LOGOUT', 'platform.auth', '业务端认证', 'AUTH_PLATFORM_LOGOUT', '业务端登出', 'LOGOUT', 'portal_user', true, true, 'sprint-34', CURRENT_TIMESTAMP)
+            ON CONFLICT (source_system, action_code) DO UPDATE SET
+                module_key = EXCLUDED.module_key,
+                module_name = EXCLUDED.module_name,
+                operation_code = EXCLUDED.operation_code,
+                operation_name = EXCLUDED.operation_name,
+                operation_kind = EXCLUDED.operation_kind,
+                resource_type = EXCLUDED.resource_type,
+                allow_empty_targets = EXCLUDED.allow_empty_targets,
+                enabled = EXCLUDED.enabled,
+                version = EXCLUDED.version,
+                updated_at = CURRENT_TIMESTAMP;
         </sql>
     </changeSet>
 

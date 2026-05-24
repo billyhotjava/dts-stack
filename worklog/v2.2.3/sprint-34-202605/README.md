@@ -59,6 +59,7 @@
 - Loop 4 完成 dts-analytics 审计重构：稳定 actionCode 转发、analytics DB catalog seed、analytics 未分类治理和审计中心展示映射。
 - Loop 5 完成现场二次反馈补强：审计中心模块列改用业务模块，raw actionCode 操作内容回落 DB catalog 中文名，大屏字体/图片 GET 支撑资源不再进入人工审计。
 - Loop 6 完成现场大屏管理审计缺失补强：复数 `/api/screens` 归一到大屏目录，analytics actor 改为平台登录名，权限 fallback 系统事件不再进入中央人工审计。
+- Loop 7 完成业务端登录/登出分类补强：platform auth 旧 action 转稳定 buttonCode，新增业务端认证 DB 目录并窄范围纠偏历史未分类 auth 记录。
 - 剩余事项只保留重建 analytics 后的现场 smoke 补证，不再阻塞代码交付。
 
 ## 验证策略

@@ -24,6 +24,11 @@ public class AuditForwarderService {
 
     private static final Logger log = LoggerFactory.getLogger(AuditForwarderService.class);
     private static final String SOURCE_SYSTEM_PLATFORM = "platform";
+    private static final String AUTH_LOGIN_ACTION = "AUTH LOGIN";
+    private static final String AUTH_LOGOUT_ACTION = "AUTH LOGOUT";
+    private static final String PORTAL_USER_RESOURCE = "portal_user";
+    private static final String PLATFORM_AUTH_LOGIN_BUTTON_CODE = "ADMIN_AUTH_PLATFORM_LOGIN";
+    private static final String PLATFORM_AUTH_LOGOUT_BUTTON_CODE = "ADMIN_AUTH_PLATFORM_LOGOUT";
     private static final Duration READ_DEDUPE_WINDOW = Duration.ofSeconds(2);
     private static final int READ_DEDUPE_MAX_SIZE = 2048;
     private static final int FAILOVER_QUEUE_MAX_SIZE = 10_000;
@@ -188,10 +193,7 @@ public class AuditForwarderService {
         if (!metadata.isEmpty()) {
             body.put("metadata", metadata);
         }
-        String buttonCode = textValue(metadata.get("actionCode"));
-        if (!StringUtils.hasText(buttonCode)) {
-            buttonCode = textValue(metadata.get("buttonCode"));
-        }
+        String buttonCode = resolveButtonCode(event, metadata);
         if (StringUtils.hasText(buttonCode)) {
             body.put("buttonCode", buttonCode);
             body.putIfAbsent("operationCode", buttonCode);
@@ -221,6 +223,43 @@ public class AuditForwarderService {
             body.put("extraTags", event.extraTags);
         }
         return body;
+    }
+
+    private String resolveButtonCode(PendingAuditEvent event, Map<String, Object> metadata) {
+        String buttonCode = textValue(metadata.get("actionCode"));
+        if (!StringUtils.hasText(buttonCode)) {
+            buttonCode = textValue(metadata.get("buttonCode"));
+        }
+        if (StringUtils.hasText(buttonCode)) {
+            return buttonCode;
+        }
+        return legacyPlatformAuthButtonCode(event);
+    }
+
+    private String legacyPlatformAuthButtonCode(PendingAuditEvent event) {
+        if (event == null || !isPortalAuthEvent(event)) {
+            return null;
+        }
+        String action = normalizeAction(event.action);
+        if (AUTH_LOGIN_ACTION.equals(action)) {
+            return PLATFORM_AUTH_LOGIN_BUTTON_CODE;
+        }
+        if (AUTH_LOGOUT_ACTION.equals(action)) {
+            return PLATFORM_AUTH_LOGOUT_BUTTON_CODE;
+        }
+        return null;
+    }
+
+    private boolean isPortalAuthEvent(PendingAuditEvent event) {
+        return PORTAL_USER_RESOURCE.equalsIgnoreCase(defaultString(event.resourceType, "")) ||
+            SOURCE_SYSTEM_PLATFORM.equalsIgnoreCase(defaultString(event.module, ""));
+    }
+
+    private String normalizeAction(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return "";
+        }
+        return raw.trim().replace('_', ' ').toUpperCase(Locale.ROOT);
     }
 
     private boolean forwardEvent(Map<String, Object> body) {
