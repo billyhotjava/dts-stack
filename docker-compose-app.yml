@@ -12,7 +12,7 @@ services:
         condition: service_healthy
         required: true
       dts-proxy:
-        condition: service_started
+        condition: service_healthy
         required: true
     environment:
       APP_API_DOCS_PUBLIC: ${APP_API_DOCS_PUBLIC:-false}
@@ -1500,6 +1500,16 @@ services:
       - traefik.http.routers.hetu-root-assets.priority=205
       - traefik.http.routers.hetu-root-assets.service=hetu@file
       - traefik.http.routers.hetu-root-assets.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file
+    healthcheck:
+      test:
+        - CMD
+        - traefik
+        - healthcheck
+        - --ping
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
     networks:
       dts-core:
         aliases:

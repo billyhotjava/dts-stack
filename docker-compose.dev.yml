@@ -42,13 +42,13 @@ services:
           -Dspring-boot.run.arguments="--spring.datasource.url=$${SPRING_DATASOURCE_URL} --spring.datasource.username=$${SPRING_DATASOURCE_USERNAME} --spring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
     depends_on:
       dts-keycloak:
-        condition: service_started
+        condition: service_healthy
         required: true
       dts-pg:
         condition: service_healthy
         required: true
       dts-proxy:
-        condition: service_started
+        condition: service_healthy
         required: true
     environment:
       APP_API_DOCS_PUBLIC: ${APP_API_DOCS_PUBLIC:-false}
@@ -173,6 +173,7 @@ services:
         protocol: tcp
         published: "5005"
         target: 5005
+    restart: unless-stopped
     security_opt:
       - seccomp=unconfined
     volumes:
@@ -248,7 +249,7 @@ services:
       - if [ -f package.json ]; then corepack enable; pnpm install --store-dir /pnpm-store --frozen-lockfile --ignore-scripts || pnpm install --store-dir /pnpm-store --no-frozen-lockfile --ignore-scripts; sh /patches/patch-vite-env.sh || true; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false; else echo no\ package.json\ found; tail -f /dev/null; fi
     depends_on:
       dts-admin:
-        condition: service_started
+        condition: service_healthy
         required: true
     environment:
       BROWSER: none
@@ -288,6 +289,7 @@ services:
         protocol: tcp
         published: "18011"
         target: 3001
+    restart: unless-stopped
     volumes:
       - bind:
           create_host_path: true
@@ -773,6 +775,7 @@ services:
         protocol: tcp
         published: "5007"
         target: 5007
+    restart: unless-stopped
     volumes:
       - bind:
           create_host_path: true
@@ -939,6 +942,15 @@ services:
         protocol: tcp
         published: "18083"
         target: 8083
+    healthcheck:
+      interval: 10s
+      retries: 60
+      start_period: 120s
+      test:
+        - CMD-SHELL
+        - curl -fsS http://127.0.0.1:8083/management/health >/dev/null || wget -qO- http://127.0.0.1:8083/management/health >/dev/null
+      timeout: 10s
+    restart: unless-stopped
     security_opt:
       - seccomp=unconfined
     volumes:
@@ -1020,6 +1032,17 @@ services:
       - traefik.http.middlewares.kc-headers.headers.customrequestheaders.X-Forwarded-Host=${HOST_SSO}
       - traefik.http.routers.kc.middlewares=kc-headers
     mem_limit: 1g
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          timeout 5s bash -ec 'exec 3<>/dev/tcp/127.0.0.1/8080;
+          printf "GET /realms/S10/.well-known/openid-configuration HTTP/1.1\r\nHost: ${HOST_SSO}\r\nConnection: close\r\n\r\n" >&3;
+          head -n 1 <&3 | grep -q " 200 "'
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 20s
     networks:
       dts-core: null
     platform: ${DTS_RUNTIME_PLATFORM:-linux/amd64}
@@ -1363,10 +1386,19 @@ services:
           -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5006 -Djavax.net.ssl.trustStore=/etc/dts/truststore.p12 -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Djavax.net.ssl.trustStoreType=PKCS12" \
           -Dspring-boot.run.arguments="--spring.datasource.url=$${SPRING_DATASOURCE_URL} --spring.datasource.username=$${SPRING_DATASOURCE_USERNAME} --spring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
     depends_on:
+      dts-admin:
+        condition: service_healthy
+        required: true
+      dts-keycloak:
+        condition: service_healthy
+        required: true
       dts-ingestion:
-        condition: service_started
+        condition: service_healthy
         required: true
       dts-pg:
+        condition: service_healthy
+        required: true
+      dts-proxy:
         condition: service_healthy
         required: true
     environment:
@@ -1464,6 +1496,7 @@ services:
         protocol: tcp
         published: "5006"
         target: 5006
+    restart: unless-stopped
     security_opt:
       - seccomp=unconfined
     volumes:
@@ -1542,8 +1575,14 @@ services:
       - -lc
       - if [ -f package.json ]; then corepack enable; pnpm install --store-dir /pnpm-store --frozen-lockfile --ignore-scripts || pnpm install --store-dir /pnpm-store --no-frozen-lockfile --ignore-scripts; sh /patches/patch-vite-env.sh || true; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false; else echo no\ package.json\ found; tail -f /dev/null; fi
     depends_on:
+      dts-admin:
+        condition: service_healthy
+        required: true
+      dts-analytics:
+        condition: service_healthy
+        required: true
       dts-platform:
-        condition: service_started
+        condition: service_healthy
         required: true
     environment:
       ALLOWED_EXTERNAL_REDIRECT_HOSTS: ${HOST_PLATFORM_UI},${HOST_META},${HOST_FLOW}
@@ -1594,6 +1633,7 @@ services:
         protocol: tcp
         published: "18012"
         target: 3001
+    restart: unless-stopped
     volumes:
       - bind:
           create_host_path: true
@@ -1709,6 +1749,16 @@ services:
       - traefik.http.routers.hetu-root-assets.priority=205
       - traefik.http.routers.hetu-root-assets.service=hetu@file
       - traefik.http.routers.hetu-root-assets.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file
+    healthcheck:
+      test:
+        - CMD
+        - traefik
+        - healthcheck
+        - --ping
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
     networks:
       dts-core:
         aliases:
