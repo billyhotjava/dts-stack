@@ -234,11 +234,24 @@ public class ScreenAuditService {
         }
         try {
             return userRepository.findById(actorId)
-                .map(AnalyticsUser::getEmail)
+                .map(user -> firstNonBlank(user.getPlatformUsername(), user.getEmail(), "user:" + actorId))
                 .orElse("user:" + actorId);
         } catch (Exception ex) {
             return "user:" + actorId;
         }
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            String trimmed = trimToNull(value);
+            if (trimmed != null) {
+                return trimmed;
+            }
+        }
+        return null;
     }
 
     private String mapActionToButtonCode(String action) {

@@ -123,11 +123,11 @@ public class AnalyticsAuditLoggingFilter extends OncePerRequestFilter {
         if (user == null) {
             return null;
         }
-        if (StringUtils.hasText(user.getEmail())) {
-            return user.getEmail().trim();
-        }
         if (StringUtils.hasText(user.getPlatformUsername())) {
             return user.getPlatformUsername().trim();
+        }
+        if (StringUtils.hasText(user.getEmail())) {
+            return user.getEmail().trim();
         }
         return user.getId() == null ? null : "user:" + user.getId();
     }
@@ -140,11 +140,15 @@ public class AnalyticsAuditLoggingFilter extends OncePerRequestFilter {
     }
 
     private String resolveModule(String uri) {
-        return "analytics." + firstSegment(uri);
+        return "analytics." + canonicalSegment(uri);
     }
 
     private String resolveResourceType(String uri) {
-        return "analytics." + firstSegment(uri);
+        String segment = canonicalSegment(uri);
+        if ("screen".equals(segment)) {
+            return "SCREEN";
+        }
+        return "analytics." + segment;
     }
 
     private String resolveResourceId(String uri) {
@@ -162,7 +166,7 @@ public class AnalyticsAuditLoggingFilter extends OncePerRequestFilter {
     }
 
     private String deriveAction(String method, String uri) {
-        String friendly = friendlyName(firstSegment(uri));
+        String friendly = friendlyName(canonicalSegment(uri));
         String lowerUri = uri == null ? "" : uri.toLowerCase(Locale.ROOT);
         if (lowerUri.contains("export") || lowerUri.contains("download") || lowerUri.endsWith("/csv") || lowerUri.endsWith("/xlsx")) {
             return "导出" + friendly;
@@ -217,7 +221,7 @@ public class AnalyticsAuditLoggingFilter extends OncePerRequestFilter {
     }
 
     private String deriveActionCode(String method, String uri) {
-        String segment = firstSegment(uri);
+        String segment = canonicalSegment(uri);
         String operationType = deriveOperationType(method, uri);
         String lowerUri = uri == null ? "" : uri.toLowerCase(Locale.ROOT);
         return switch (segment) {
@@ -404,6 +408,14 @@ public class AnalyticsAuditLoggingFilter extends OncePerRequestFilter {
             return part.toLowerCase(Locale.ROOT);
         }
         return "general";
+    }
+
+    private String canonicalSegment(String uri) {
+        String segment = firstSegment(uri);
+        if ("screens".equals(segment)) {
+            return "screen";
+        }
+        return segment;
     }
 
     private String normalizeActionSegment(String value) {

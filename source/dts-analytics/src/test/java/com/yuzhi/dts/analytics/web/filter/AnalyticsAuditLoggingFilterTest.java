@@ -34,7 +34,7 @@ class AnalyticsAuditLoggingFilterTest {
         ArgumentCaptor<AnalyticsAuditEvent> captor = ArgumentCaptor.forClass(AnalyticsAuditEvent.class);
         verify(forwarder).record(captor.capture());
         AnalyticsAuditEvent event = captor.getValue();
-        assertThat(event.actor()).isEqualTo("opadmin@platform.local");
+        assertThat(event.actor()).isEqualTo("opadmin");
         assertThat(event.actorName()).isEqualTo("Ops Admin");
         assertThat(event.actionCode()).isEqualTo("SCREEN_VIEW");
         assertThat(event.action()).isEqualTo("查看大屏");
@@ -83,6 +83,35 @@ class AnalyticsAuditLoggingFilterTest {
         assertThat(revoke.actionCode()).isEqualTo("SCREEN_PUBLIC_LINK_DISABLE");
         assertThat(revoke.action()).isEqualTo("撤销授权大屏");
         assertThat(revoke.operationType()).isEqualTo("REVOKE");
+    }
+
+    @Test
+    void shouldClassifyPluralScreenManagementRoutesAsScreenAudit() throws Exception {
+        AnalyticsSessionService sessionService = mock(AnalyticsSessionService.class);
+        AnalyticsAuditForwarderService forwarder = mock(AnalyticsAuditForwarderService.class);
+        AnalyticsAuditLoggingFilter filter = new AnalyticsAuditLoggingFilter(sessionService, forwarder);
+
+        AnalyticsAuditEvent list = perform(filter, sessionService, forwarder, "GET", "/api/screens");
+        assertThat(list.module()).isEqualTo("analytics.screen");
+        assertThat(list.resourceType()).isEqualTo("SCREEN");
+        assertThat(list.actionCode()).isEqualTo("SCREEN_VIEW");
+        assertThat(list.action()).isEqualTo("查看大屏");
+        assertThat(list.operationType()).isEqualTo("READ");
+        reset(forwarder);
+
+        AnalyticsAuditEvent update = perform(filter, sessionService, forwarder, "PUT", "/api/screens/42");
+        assertThat(update.module()).isEqualTo("analytics.screen");
+        assertThat(update.resourceType()).isEqualTo("SCREEN");
+        assertThat(update.resourceId()).isEqualTo("42");
+        assertThat(update.actionCode()).isEqualTo("SCREEN_UPDATE");
+        assertThat(update.action()).isEqualTo("修改大屏");
+        assertThat(update.operationType()).isEqualTo("UPDATE");
+        reset(forwarder);
+
+        AnalyticsAuditEvent grant = perform(filter, sessionService, forwarder, "PUT", "/api/screens/42/grants");
+        assertThat(grant.actionCode()).isEqualTo("SCREEN_ACL_GRANT");
+        assertThat(grant.action()).isEqualTo("授权大屏");
+        assertThat(grant.operationType()).isEqualTo("GRANT");
     }
 
     private AnalyticsAuditEvent perform(

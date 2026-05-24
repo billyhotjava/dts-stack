@@ -1,6 +1,6 @@
 # Sprint-34 IT Evidence
 
-**状态**: LOOP-5-PASS（代码与 focused 验证完成；现场 smoke 待部署补证）
+**状态**: LOOP-6-PASS（代码与 focused 验证完成；analytics 容器待重建后补现场 smoke）
 
 ## 自动化验证
 
@@ -27,6 +27,11 @@
 | dts-admin-webapp | `pnpm exec vitest run src/admin/views/audit-center.source-contract.test.ts` | PASS | `it/evidence/20260523-audit-db-catalog-loop5-display-fallback.md` |
 | dts-admin-webapp | `pnpm build` | PASS | `it/evidence/20260523-audit-db-catalog-loop5-display-fallback.md` |
 | repo | `git diff --check` | PASS | `it/evidence/20260523-audit-db-catalog-loop5-display-fallback.md` |
+| dts-analytics | `./mvnw -q -pl dts-analytics -Dtest=AnalyticsAuditLoggingFilterTest,ScreenAuditServiceTest,SemanticAuditServiceTest,AnalyticsAuditForwarderServiceTest,AdminAuditHttpHeadersFactoryTest,ScreenPermissionServiceTest test` | PASS | `it/evidence/20260523-audit-db-catalog-loop6-analytics-screen-ingest.md` |
+| dts-admin | `./mvnw -q -pl dts-admin -Dtest=AuditV2ServiceTest,AuditIngestResourceTest,AuditEntryViewMapperTest,AuditActionCatalogServiceTest test` | PASS | `it/evidence/20260523-audit-db-catalog-loop6-analytics-screen-ingest.md` |
+| dts-analytics | `./mvnw -q -pl dts-analytics -DskipTests compile` | PASS | `it/evidence/20260523-audit-db-catalog-loop6-analytics-screen-ingest.md` |
+| dts-analytics | `./mvnw -q -pl dts-analytics test` | FAIL | `it/evidence/20260523-audit-db-catalog-loop6-analytics-screen-ingest.md` |
+| repo | `git diff --check` | PASS | `it/evidence/20260523-audit-db-catalog-loop6-analytics-screen-ingest.md` |
 
 ## 现场 Smoke Checklist
 
@@ -63,3 +68,9 @@
 - 已修复审计中心“模块名称”列取错来源系统字段的问题，模块显示回到 DB catalog/module 快照。
 - 已修复 raw actionCode 摘要覆盖中文动作名的问题，新入库和历史展示都会优先使用已治理 operationName。
 - 已补大屏字体/图片 GET 支撑资源降噪，查看大屏不再生成“查看screen-fonts”类人工审计。
+
+## Loop 6 Review
+
+- 已修复 dts-analytics 大屏管理复数路径 `/api/screens` 未命中 `SCREEN_*` 目录的问题。
+- 已修复 analytics 中央审计 actor 优先使用邮箱的问题，改为优先上报平台登录名，避免 admin ingest 因现场用户 email 为空而跳过。
+- 已停止把权限 local fallback 这类系统迁移保护事件转发为中央人工审计，保留本地 WARN 线索。

@@ -271,8 +271,11 @@ public class SemanticAuditService {
         if (actor == null) {
             return "anonymous";
         }
+        if (StringUtils.hasText(actor.getPlatformUsername())) {
+            return actor.getPlatformUsername().trim();
+        }
         if (StringUtils.hasText(actor.getEmail())) {
-            return actor.getEmail();
+            return actor.getEmail().trim();
         }
         return "user:" + actor.getId();
     }
@@ -289,10 +292,7 @@ public class SemanticAuditService {
                 return name;
             }
         }
-        if (StringUtils.hasText(actor.getEmail())) {
-            return actor.getEmail();
-        }
-        return "user:" + actor.getId();
+        return resolveActor(actor);
     }
 
     private static String normalizeResult(String result) {

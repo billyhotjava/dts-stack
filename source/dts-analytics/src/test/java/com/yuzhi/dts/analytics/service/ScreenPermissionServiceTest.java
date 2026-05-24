@@ -289,6 +289,24 @@ class ScreenPermissionServiceTest {
     }
 
     @Test
+    void platform_local_fallback_is_not_forwarded_as_central_user_audit() {
+        PlatformPermissionClient client = Mockito.mock(PlatformPermissionClient.class);
+        ScreenAuditService auditService = Mockito.mock(ScreenAuditService.class);
+        ScreenPermissionService platformService = new ScreenPermissionService(repo, screenRepository, client, true, true, auditService);
+        AnalyticsUser u = user(45L, false);
+        u.setPlatformUsername("xiezm");
+        when(client.listAccessibleAssetIds("xiezm", "ROLE_PTR", "D01", "SCREEN", 0, 10000, "INTERNAL"))
+            .thenReturn(new PlatformPermissionClient.AccessibleAssetsResult(List.of(), 0, "FILTERED"));
+        when(screenRepository.findIdsByCreatorIdAndArchivedFalse(45L)).thenReturn(List.of(88L));
+        when(repo.findAccessibleScreenIds(eq("xiezm"), eq(List.of("ROLE_PTR")))).thenReturn(List.of());
+
+        List<Long> ids = platformService.listAccessibleScreenIds(u, new PlatformContext("D01", "INTERNAL", "ROLE_PTR"));
+
+        assertThat(ids).containsExactly(88L);
+        verify(auditService, never()).logCrossScreenEvent(any(), any(), any(), any());
+    }
+
+    @Test
     void null_user_returns_none_snapshot() {
         PermissionSnapshot snap = service.snapshot(screen(10L), null, List.of());
         assertThat(snap.canRead()).isFalse();
