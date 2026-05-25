@@ -15,3 +15,15 @@ test("existing screen grants prefer platform user directory fields and show depa
 	assert.match(source, />\s*部门\s*</);
 	assert.match(source, /resolveGrantDepartment\(row\)/);
 });
+
+test("role candidates use admin role ID and role name terminology", async () => {
+	const source = await readFile(managerPath, "utf8");
+
+	assert.match(source, /if \(r\) return r\.description \|\| r\.name;/);
+	assert.match(source, />\s*角色ID\s*</);
+	assert.match(source, />\s*角色名称\s*</);
+	assert.equal(source.includes("<th className={headerCls}>描述</th>"), false);
+	assert.match(source, /placeholder=\{granteeType === 'USER' \? '搜索用户名或姓名\.\.\.' : '搜索角色ID或角色名称\.\.\.'\}/);
+	assert.match(source, /<td className=\{`\$\{cellCls\} font-medium`\}>\{role\.name\}<\/td>/);
+	assert.match(source, /<td className=\{`\$\{cellCls\} text-text-secondary`\}>\{role\.description \|\| '-'\}<\/td>/);
+});

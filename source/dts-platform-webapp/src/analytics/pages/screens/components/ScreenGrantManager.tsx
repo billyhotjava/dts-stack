@@ -425,7 +425,7 @@ export function ScreenGrantManager({ screenId, isOwner = false }: ScreenGrantMan
 								className="w-full px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-sm focus:outline-none focus:border-brand"
 								value={searchQuery}
 								onChange={(e) => setSearchQuery(e.target.value)}
-								placeholder={granteeType === 'USER' ? '搜索用户名或姓名...' : '搜索角色名称...'}
+								placeholder={granteeType === 'USER' ? '搜索用户名或姓名...' : '搜索角色ID或角色名称...'}
 							/>
 						</div>
 					</div>
@@ -451,8 +451,8 @@ export function ScreenGrantManager({ screenId, isOwner = false }: ScreenGrantMan
 										</>
 									) : (
 										<>
+											<th className={headerCls}>角色ID</th>
 											<th className={headerCls}>角色名称</th>
-											<th className={headerCls}>描述</th>
 											<th className={headerCls}>来源</th>
 										</>
 									)}
