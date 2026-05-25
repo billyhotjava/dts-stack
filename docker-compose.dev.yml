@@ -106,7 +106,7 @@ services:
       DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES: ${DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES:-sysadmin,authadmin,auditadmin}
       EUREKA_CLIENT_ENABLED: ${EUREKA_CLIENT_ENABLED:-false}
       JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:-} ${DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA:-}
-      AUDIT_INGEST_SERVICE_TOKENS: ${AUDIT_INGEST_SERVICE_TOKENS:-${DTS_ADMIN_SERVICE_TOKEN:-}}
+      AUDIT_INGEST_SERVICE_TOKENS: ${AUDIT_INGEST_SERVICE_TOKENS:-${DTS_PLATFORM_TO_ADMIN_TOKEN:-${DTS_ADMIN_SERVICE_TOKEN:-}},${DTS_ANALYTICS_TO_ADMIN_TOKEN:-${DTS_PLATFORM_TO_ADMIN_TOKEN:-${DTS_ADMIN_SERVICE_TOKEN:-}}}}
       JHIPSTER_CORS_ALLOW_CREDENTIALS: "true"
       JHIPSTER_CORS_ALLOWED_HEADERS: '*'
       JHIPSTER_CORS_ALLOWED_METHODS: GET,POST,PUT,PATCH,DELETE,OPTIONS
@@ -731,6 +731,8 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=dts-core
+      - traefik.http.middlewares.dts-analytics-forwarded.headers.customrequestheaders.X-Forwarded-Proto=https
+      - traefik.http.middlewares.dts-analytics-forwarded.headers.customrequestheaders.X-Forwarded-Host=${HOST_PLATFORM_UI}
       - traefik.http.routers.dts-analytics-public.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api/public`)
       - traefik.http.routers.dts-analytics-public.entrypoints=websecure
       - traefik.http.routers.dts-analytics-public.tls=true
@@ -742,7 +744,7 @@ services:
       - traefik.http.routers.dts-analytics-embed.tls=true
       - traefik.http.routers.dts-analytics-embed.priority=244
       - traefik.http.routers.dts-analytics-embed.service=dts-analytics-api
-      - traefik.http.routers.dts-analytics-embed.middlewares=platform-forward-auth@file,dts-strip-analytics-api@docker,cors-allow@file,security-headers@file
+      - traefik.http.routers.dts-analytics-embed.middlewares=dts-analytics-forwarded@docker,platform-forward-auth@file,dts-strip-analytics-api@docker,cors-allow@file,security-headers@file
       - traefik.http.routers.dts-analytics-api-cors.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api`) && Method(`OPTIONS`)
       - traefik.http.routers.dts-analytics-api-cors.entrypoints=websecure
       - traefik.http.routers.dts-analytics-api-cors.tls=true
@@ -755,14 +757,14 @@ services:
       - traefik.http.routers.dts-analytics-api.priority=240
       - traefik.http.services.dts-analytics-api.loadbalancer.server.port=3000
       - traefik.http.middlewares.dts-strip-analytics-api.stripprefix.prefixes=/analytics
-      - traefik.http.routers.dts-analytics-api.middlewares=platform-forward-auth@file,dts-strip-analytics-api@docker,cors-allow@file,security-headers@file
+      - traefik.http.routers.dts-analytics-api.middlewares=dts-analytics-forwarded@docker,platform-forward-auth@file,dts-strip-analytics-api@docker,cors-allow@file,security-headers@file
       - traefik.http.middlewares.dts-strip-bi-api.stripprefix.prefixes=/bi
       - traefik.http.routers.dts-analytics-bi.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/bi/api`)
       - traefik.http.routers.dts-analytics-bi.entrypoints=websecure
       - traefik.http.routers.dts-analytics-bi.tls=true
       - traefik.http.routers.dts-analytics-bi.priority=250
       - traefik.http.routers.dts-analytics-bi.service=dts-analytics-api
-      - traefik.http.routers.dts-analytics-bi.middlewares=platform-forward-auth@file,dts-strip-bi-api@docker,cors-allow@file,security-headers@file
+      - traefik.http.routers.dts-analytics-bi.middlewares=dts-analytics-forwarded@docker,platform-forward-auth@file,dts-strip-bi-api@docker,cors-allow@file,security-headers@file
     networks:
       dts-core: null
     ports:
