@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import test from "node:test";
 import { readFile } from "node:fs/promises";
+import test from "node:test";
 
 const screensPagePath = new URL("./ScreensPage.tsx", import.meta.url);
+const globalCssPath = new URL("../../../global.css", import.meta.url);
 
 test("ScreensPage does not depend on removed legacy page shell classes", async () => {
 	const source = await readFile(screensPagePath, "utf8");
@@ -124,12 +125,55 @@ test("ScreensPage keeps the domain classifier and table inside the page frame", 
 
 	assert.match(source, /className="flex min-h-\[620px\] gap-4 overflow-hidden"/);
 	assert.match(source, /className="min-w-0 flex-1 space-y-4 overflow-hidden"/);
-	assert.match(source, /className="max-w-full overflow-x-auto rounded-lg border border-border-default"/);
+	assert.match(
+		source,
+		/className="analytics-screen-table-scroll max-w-full overflow-x-scroll rounded-lg border border-border-default"/,
+	);
 	assert.match(source, /<colgroup>/);
-	assert.match(source, /className="w-full min-w-\[1080px\] table-fixed border-collapse text-sm"/);
+	assert.match(source, /className="analytics-screen-management-table w-full border-collapse text-sm"/);
 	// 操作列固定在右侧(sticky) + 按钮横排不换行(flex-nowrap)
 	assert.match(source, /flex flex-nowrap items-center justify-end gap-1\.5/);
 	assert.match(source, /sticky right-0 z-10 bg-surface-card/);
+});
+
+test("ScreensPage management table uses visible horizontal scrolling and unified typography", async () => {
+	const [source, globalCss] = await Promise.all([readFile(screensPagePath, "utf8"), readFile(globalCssPath, "utf8")]);
+	const tableSource = source.slice(source.indexOf("<table"), source.indexOf("</table>"));
+
+	assert.match(source, /analytics-screen-table-scroll max-w-full overflow-x-scroll/);
+	assert.match(globalCss, /\.analytics-screen-table-scroll::-webkit-scrollbar\s*\{[\s\S]*height:\s*12px;/);
+	assert.match(
+		globalCss,
+		/\.analytics-screen-table-scroll::-webkit-scrollbar-thumb\s*\{[\s\S]*background:\s*rgba\(100,\s*116,\s*139,\s*0\.95\)/,
+	);
+	assert.match(tableSource, /className="analytics-screen-management-table w-full border-collapse text-sm"/);
+	assert.match(tableSource, /<tr className="bg-surface-secondary text-text-secondary text-sm">/);
+	assert.doesNotMatch(tableSource, /text-\[11px\]/);
+	assert.doesNotMatch(tableSource, /text-xs font-medium/);
+	assert.doesNotMatch(tableSource, /bg-success\/10|bg-warning\/10|border-success\/30|border-warning\/30/);
+});
+
+test("ScreensPage management table uses responsive column sizing for common monitor widths", async () => {
+	const [source, globalCss] = await Promise.all([readFile(screensPagePath, "utf8"), readFile(globalCssPath, "utf8")]);
+	const tableSource = source.slice(source.indexOf("<table"), source.indexOf("</table>"));
+
+	assert.match(tableSource, /className="analytics-screen-management-table w-full border-collapse text-sm"/);
+	assert.doesNotMatch(tableSource, /min-w-\[1080px\]/);
+	assert.doesNotMatch(tableSource, /<col style=/);
+	assert.match(tableSource, /className="analytics-screen-col-name"/);
+	assert.match(tableSource, /className="analytics-screen-col-description"/);
+	assert.match(tableSource, /className="analytics-screen-col-actions"/);
+	assert.match(globalCss, /\.analytics-screen-management-table\s*\{[\s\S]*min-width:\s*920px;/);
+	assert.match(globalCss, /\.analytics-screen-col-name\s*\{[\s\S]*width:\s*clamp\(170px,\s*24%,\s*620px\);/);
+	assert.match(globalCss, /\.analytics-screen-col-description\s*\{[\s\S]*width:\s*auto;/);
+	assert.match(
+		globalCss,
+		/@media\s*\(min-width:\s*1920px\)\s*\{[\s\S]*\.analytics-screen-management-table\s*\{[\s\S]*min-width:\s*100%;/,
+	);
+	assert.match(
+		globalCss,
+		/@media\s*\(min-width:\s*2560px\)\s*\{[\s\S]*\.analytics-screen-col-name\s*\{[\s\S]*width:\s*28%;/,
+	);
 });
 
 test("ScreensPage prioritizes long screen names and descriptions in the management table", async () => {
@@ -137,8 +181,8 @@ test("ScreensPage prioritizes long screen names and descriptions in the manageme
 
 	assert.doesNotMatch(source, /sortKey="width"[\s\S]*?分辨率/);
 	assert.equal(source.includes("{screen.width || 1920} × {screen.height || 1080}"), false);
-	assert.match(source, /<col style=\{\{ width: "30%" \}\} \/>/);
-	assert.match(source, /<col style=\{\{ width: "34%" \}\} \/>/);
+	assert.match(source, /className="analytics-screen-col-name"/);
+	assert.match(source, /className="analytics-screen-col-description"/);
 	assert.match(source, /title=\{screen\.name \|\| "未命名大屏"\}/);
 	assert.match(source, /title=\{screen\.description \|\| "无描述"\}/);
 	assert.match(source, /line-clamp-2/);

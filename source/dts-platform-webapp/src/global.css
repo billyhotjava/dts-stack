@@ -84,6 +84,67 @@
 		font-size: 0.875rem !important;
 		line-height: 1.25rem !important;
 	}
+
+	main[data-slot="slash-layout-main"] .analytics-screen-table-scroll {
+		scrollbar-color: rgba(100, 116, 139, 0.95) rgba(226, 232, 240, 0.95);
+		scrollbar-width: thin;
+	}
+
+	main[data-slot="slash-layout-main"] .analytics-screen-table-scroll::-webkit-scrollbar {
+		height: 12px;
+	}
+
+	main[data-slot="slash-layout-main"] .analytics-screen-table-scroll::-webkit-scrollbar-track {
+		background: rgba(226, 232, 240, 0.95);
+		border-radius: 9999px;
+	}
+
+	main[data-slot="slash-layout-main"] .analytics-screen-table-scroll::-webkit-scrollbar-thumb {
+		background: rgba(100, 116, 139, 0.95);
+		border: 2px solid rgba(226, 232, 240, 0.95);
+		border-radius: 9999px;
+	}
+
+	main[data-slot="slash-layout-main"] .analytics-screen-management-table {
+		min-width: 920px;
+		table-layout: fixed;
+	}
+
+	main[data-slot="slash-layout-main"] .analytics-screen-col-name {
+		width: clamp(170px, 24%, 620px);
+	}
+
+	main[data-slot="slash-layout-main"] .analytics-screen-col-description {
+		width: auto;
+	}
+
+	main[data-slot="slash-layout-main"] .analytics-screen-col-classification {
+		width: clamp(88px, 8%, 120px);
+	}
+
+	main[data-slot="slash-layout-main"] .analytics-screen-col-status {
+		width: clamp(88px, 8%, 140px);
+	}
+
+	main[data-slot="slash-layout-main"] .analytics-screen-col-updated {
+		width: clamp(132px, 12%, 200px);
+	}
+
+	main[data-slot="slash-layout-main"] .analytics-screen-col-actions {
+		width: clamp(220px, 14%, 280px);
+	}
+
+	@media (min-width: 1920px) {
+		main[data-slot="slash-layout-main"] .analytics-screen-management-table {
+			min-width: 100%;
+		}
+	}
+
+	@media (min-width: 2560px) {
+		main[data-slot="slash-layout-main"] .analytics-screen-col-name {
+			width: 28%;
+		}
+	}
 }
 
 /* Utilities overrides to strictly unify content typography */

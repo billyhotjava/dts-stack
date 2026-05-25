@@ -167,7 +167,7 @@ export default function ScreensPage() {
 	const [aiContextHistory, setAiContextHistory] = useState<string[]>([]);
 	const [activeCardMenuId, setActiveCardMenuId] = useState<string | number | null>(null);
 	// 「更多」菜单改用 portal + fixed 定位渲染到 body，规避 sticky 操作列产生的层叠上下文
-	// 以及表格容器 overflow-x-auto 强制的 overflow-y 裁剪，避免菜单被后续行或表格边缘遮挡。
+	// 以及表格容器横向滚动强制的 overflow-y 裁剪，避免菜单被后续行或表格边缘遮挡。
 	const [cardMenuAnchor, setCardMenuAnchor] = useState<{ right: number; top?: number; bottom?: number } | null>(null);
 	const [aclScreenId, setAclScreenId] = useState<string | number | null>(null);
 	const [domainEditorScreen, setDomainEditorScreen] = useState<ScreenListItem | null>(null);
@@ -1034,19 +1034,18 @@ export default function ScreensPage() {
 								</button>
 							</div>
 						) : (
-							<div className="max-w-full overflow-x-auto rounded-lg border border-border-default">
-								<table className="w-full min-w-[1080px] table-fixed border-collapse text-sm">
+							<div className="analytics-screen-table-scroll max-w-full overflow-x-scroll rounded-lg border border-border-default">
+								<table className="analytics-screen-management-table w-full border-collapse text-sm">
 									<colgroup>
-										<col style={{ width: "30%" }} />
-										<col style={{ width: "34%" }} />
-										<col style={{ width: 96 }} />
-										<col style={{ width: 120 }} />
-										<col style={{ width: 168 }} />
-										{/* 操作列固定宽度 + sticky 右侧,容纳 4 个横排按钮 */}
-										<col style={{ width: 240 }} />
+										<col className="analytics-screen-col-name" />
+										<col className="analytics-screen-col-description" />
+										<col className="analytics-screen-col-classification" />
+										<col className="analytics-screen-col-status" />
+										<col className="analytics-screen-col-updated" />
+										<col className="analytics-screen-col-actions" />
 									</colgroup>
 									<thead>
-										<tr className="bg-surface-secondary text-text-secondary text-xs">
+										<tr className="bg-surface-secondary text-text-secondary text-sm">
 											{/* 大屏管理表头：居中 + 加粗（font-bold 覆盖 SortableHeader 默认 font-semibold） */}
 											<SortableHeader sortKey="name" sortState={sortState} onSort={requestSort} className="font-bold">
 												名称
@@ -1113,18 +1112,18 @@ export default function ScreensPage() {
 													</td>
 													<td className="px-4 py-3 align-top whitespace-nowrap">
 														<span
-															className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold border border-transparent ${screen.publishedVersionNo ? "text-[#166534] bg-success/10 border-success/30" : "text-[#9a3412] bg-warning/10 border-warning/30"}`}
+															className={`font-semibold ${screen.publishedVersionNo ? "text-[#166534]" : "text-[#9a3412]"}`}
 														>
 															{screen.publishedVersionNo ? `已发布 v${screen.publishedVersionNo}` : "未发布"}
 														</span>
 													</td>
-													<td className="px-4 py-3 align-top text-text-secondary whitespace-nowrap text-xs">
+													<td className="px-4 py-3 align-top text-text-secondary whitespace-nowrap">
 														{formatDate(screen.updatedAt)}
 													</td>
 													<td className="sticky right-0 z-10 bg-surface-card px-3 py-3 align-middle border-l border-border-default shadow-[-8px_0_12px_-6px_rgba(15,23,42,0.22)]">
 														<div className="flex flex-nowrap items-center justify-end gap-1.5">
 															<button
-																className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"
+																className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-sm font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"
 																data-testid={`analytics-screen-preview-${screen.id}`}
 																onClick={() => handlePreview(screen.id)}
 															>
@@ -1132,7 +1131,7 @@ export default function ScreensPage() {
 															</button>
 															{rowPermissions.canEdit ? (
 																<button
-																	className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"
+																	className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-sm font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"
 																	data-testid={`analytics-screen-edit-button-${screen.id}`}
 																	onClick={() => handleEdit(screen.id)}
 																>
@@ -1141,7 +1140,7 @@ export default function ScreensPage() {
 															) : null}
 															{rowPermissions.canManage ? (
 																<button
-																	className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"
+																	className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-sm font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"
 																	onClick={() => {
 																		if (!screen.publishedVersionNo) {
 																			message.warning("只有已经发布的大屏才能进行权限设置");
@@ -1156,7 +1155,7 @@ export default function ScreensPage() {
 															{showMoreMenu ? (
 																<div className="screen-card-menu relative">
 																	<button
-																		className={`px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary ${activeCardMenuId === screen.id ? "border-brand bg-brand/10" : ""}`}
+																		className={`px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-sm font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary ${activeCardMenuId === screen.id ? "border-brand bg-brand/10" : ""}`}
 																		onClick={(event) => {
 																			if (activeCardMenuId === screen.id) {
 																				setActiveCardMenuId(null);
