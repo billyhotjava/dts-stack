@@ -107,6 +107,7 @@
     <include file="config/liquibase/changelog/20260430-03_audit_entry_verb_reclassify.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260519-01_portal_menu_seed_no_default_roles.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260523-01_audit_action_catalog.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260525-01_portal_menu_data_screen_root.xml" relativeToChangelogFile="false"/>
     <!-- jhipster-needle-liquibase-add-changelog - JHipster will add liquibase changelogs here -->
     <!-- jhipster-needle-liquibase-add-constraints-changelog - JHipster will add liquibase constraints changelogs here -->
     <!-- jhipster-needle-liquibase-add-incremental-changelog - JHipster will add incremental liquibase changelogs here -->

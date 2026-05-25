@@ -1,6 +1,7 @@
 package com.yuzhi.dts.admin.service;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -20,6 +21,7 @@ import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -50,6 +52,70 @@ class PortalMenuSeedDefaultsContractTest {
             assertInstanceOf(List.class, requiredRoles, () -> "requiredRoles must be a list for " + rule.get("code"));
             assertTrue(((List<?>) requiredRoles).isEmpty(), () -> "seed menu must not bind roles for " + rule.get("code"));
         }
+    }
+
+    @Test
+    void portalMenuSeedPromotesDataScreensToRootWithoutChangingRoleDefaults() throws Exception {
+        ClassPathResource seedResource = new ClassPathResource("config/data/portal-menu-seed.json");
+        assertTrue(seedResource.exists(), "portal-menu-seed.json must exist");
+
+        Map<String, Object> seed = objectMapper.readValue(seedResource.getInputStream(), new TypeReference<Map<String, Object>>() {});
+        List<Map<String, Object>> roots = listOfMaps(seed.get("portalNavSections"));
+        assertFalse(roots.isEmpty(), "portal menu seed must define root sections");
+
+        Map<String, Object> screensRoot = roots
+            .stream()
+            .filter(node -> "sys.nav.portal.biScreens".equals(node.get("titleKey")))
+            .findFirst()
+            .orElse(null);
+        assertNotNull(screensRoot, "数据大屏 must be a first-level root menu");
+        assertEquals("bi/screens", screensRoot.get("path"));
+        assertEquals("/bi/screens", screensRoot.get("externalLink"));
+
+        Map<String, Object> biAppsRoot = roots
+            .stream()
+            .filter(node -> "sys.nav.portal.businessIntelligenceApps".equals(node.get("titleKey")))
+            .findFirst()
+            .orElse(null);
+        assertNotNull(biAppsRoot, "商业智能应用 root menu must still exist");
+        assertFalse(
+            containsTitleKey(listOfMaps(biAppsRoot.get("children")), "sys.nav.portal.biScreens"),
+            "商业智能应用 subtree must no longer own 数据大屏"
+        );
+
+        ClassPathResource defaultsResource = new ClassPathResource("config/data/role-menu-defaults.json");
+        List<Map<String, Object>> defaults = objectMapper.readValue(
+            defaultsResource.getInputStream(),
+            new TypeReference<List<Map<String, Object>>>() {}
+        );
+        Map<String, Object> screensDefault = defaults
+            .stream()
+            .filter(rule -> "sys.nav.portal.biScreens".equals(rule.get("code")))
+            .findFirst()
+            .orElse(null);
+        assertNotNull(screensDefault, "数据大屏 role default entry must stay documented");
+        assertEquals("/bi/screens", screensDefault.get("route"));
+        assertTrue(((List<?>) screensDefault.get("requiredRoles")).isEmpty(), "数据大屏 seed must not add default role bindings");
+    }
+
+    @Test
+    void dataScreenRootMigrationPreservesVisibilityBindings() throws Exception {
+        String changelogFile = "20260525-01_portal_menu_data_screen_root.xml";
+        ClassPathResource master = new ClassPathResource("config/liquibase/master.xml");
+        String masterXml = master.getContentAsString(StandardCharsets.UTF_8);
+        assertTrue(masterXml.contains(changelogFile), "master.xml must include the data screen root migration");
+
+        ClassPathResource changelog = new ClassPathResource("config/liquibase/changelog/" + changelogFile);
+        assertTrue(changelog.exists(), "data screen root migration changelog must exist");
+
+        String changelogXml = changelog.getContentAsString(StandardCharsets.UTF_8);
+        assertTrue(changelogXml.contains("sys.nav.portal.biScreens"));
+        assertTrue(changelogXml.contains("parent_id = NULL"));
+        assertTrue(changelogXml.contains("portal.menu.seed.hash"));
+
+        String lowerXml = changelogXml.toLowerCase(Locale.ROOT);
+        assertFalse(lowerXml.contains("delete from portal_menu_visibility"));
+        assertFalse(lowerXml.contains("delete tablename=\"portal_menu_visibility\""));
     }
 
     @Test
@@ -118,6 +184,26 @@ class PortalMenuSeedDefaultsContractTest {
         verify(visibilityRepository).delete(seedVisibility);
         verify(visibilityRepository, never()).delete(customVisibility);
         verify(menuRepository).flush();
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> listOfMaps(Object value) {
+        if (!(value instanceof List<?> list)) {
+            return List.of();
+        }
+        return (List<Map<String, Object>>) (List<?>) list;
+    }
+
+    private boolean containsTitleKey(List<Map<String, Object>> nodes, String titleKey) {
+        for (Map<String, Object> node : nodes) {
+            if (titleKey.equals(node.get("titleKey"))) {
+                return true;
+            }
+            if (containsTitleKey(listOfMaps(node.get("children")), titleKey)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private PortalMenu menuWithVisibility(Long id, String metadata) {

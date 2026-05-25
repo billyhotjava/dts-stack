@@ -401,13 +401,12 @@ export default function ScreensPage() {
 		});
 	}, [domainMap, publishFilter, screens, searchKeyword, selectedDomain, selectedDomainIds]);
 
-	// Table sort columns: 操作列不参与排序，所以只覆盖前 6 列。密级用 classification 字典序
+	// Table sort columns: 操作列不参与排序。密级用 classification 字典序
 	// （CONFIDENTIAL/INTERNAL/PUBLIC/SECRET 或 S1-S4 都是稳定可比的字符串）。
 	const sortColumns = useMemo(
 		() => ({
 			name: stringComparator<ScreenListItem>((s) => s.name),
 			description: stringComparator<ScreenListItem>((s) => s.description),
-			width: numberComparator<ScreenListItem>((s) => s.width),
 			classification: stringComparator<ScreenListItem>((s) => s.classification),
 			published: numberComparator<ScreenListItem>((s) => Number(s.publishedVersionNo || 0)),
 			updatedAt: dateComparator<ScreenListItem>((s) => s.updatedAt),
@@ -1038,9 +1037,8 @@ export default function ScreensPage() {
 							<div className="max-w-full overflow-x-auto rounded-lg border border-border-default">
 								<table className="w-full min-w-[1080px] table-fixed border-collapse text-sm">
 									<colgroup>
-										<col style={{ width: "22%" }} />
-										<col style={{ width: "26%" }} />
-										<col style={{ width: 120 }} />
+										<col style={{ width: "30%" }} />
+										<col style={{ width: "34%" }} />
 										<col style={{ width: 96 }} />
 										<col style={{ width: 120 }} />
 										<col style={{ width: 168 }} />
@@ -1060,14 +1058,6 @@ export default function ScreensPage() {
 												className="font-bold"
 											>
 												描述
-											</SortableHeader>
-											<SortableHeader
-												sortKey="width"
-												sortState={sortState}
-												onSort={requestSort}
-												className="font-bold whitespace-nowrap"
-											>
-												分辨率
 											</SortableHeader>
 											{/* Sprint-24 F2/T02：密级列，便于一眼扫到 classification=null 的大屏 */}
 											<SortableHeader
@@ -1107,31 +1097,28 @@ export default function ScreensPage() {
 													className="border-t border-border-default bg-surface-card hover:bg-brand/5 transition-colors duration-150"
 													data-testid={`analytics-screen-row-${screen.id}`}
 												>
-													<td className="min-w-0 px-4 py-3 font-medium text-text-primary">
-														<span className="block overflow-hidden text-ellipsis whitespace-nowrap">
+													<td className="min-w-0 px-4 py-3 align-top font-medium text-text-primary">
+														<span className="line-clamp-2 whitespace-normal break-words leading-5" title={screen.name || "未命名大屏"}>
 															{screen.name || "未命名大屏"}
 														</span>
 													</td>
-													<td className="min-w-0 px-4 py-3 text-text-secondary">
-														<span className="block overflow-hidden text-ellipsis whitespace-nowrap">
+													<td className="min-w-0 px-4 py-3 align-top text-text-secondary">
+														<span className="line-clamp-2 whitespace-normal break-words leading-5" title={screen.description || "无描述"}>
 															{screen.description || "无描述"}
 														</span>
 													</td>
-													<td className="px-4 py-3 text-text-secondary whitespace-nowrap text-xs">
-														{screen.width || 1920} × {screen.height || 1080}
-													</td>
 													{/* Sprint-24 F2/T02：密级 Tag，null 显示橙色「未设密级」 */}
-													<td className="px-4 py-3 whitespace-nowrap">
+													<td className="px-4 py-3 align-top whitespace-nowrap">
 														<ClassificationTag value={screen.classification ?? null} size="small" />
 													</td>
-													<td className="px-4 py-3 whitespace-nowrap">
+													<td className="px-4 py-3 align-top whitespace-nowrap">
 														<span
 															className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold border border-transparent ${screen.publishedVersionNo ? "text-[#166534] bg-success/10 border-success/30" : "text-[#9a3412] bg-warning/10 border-warning/30"}`}
 														>
 															{screen.publishedVersionNo ? `已发布 v${screen.publishedVersionNo}` : "未发布"}
 														</span>
 													</td>
-													<td className="px-4 py-3 text-text-secondary whitespace-nowrap text-xs">
+													<td className="px-4 py-3 align-top text-text-secondary whitespace-nowrap text-xs">
 														{formatDate(screen.updatedAt)}
 													</td>
 													<td className="sticky right-0 z-10 bg-surface-card px-3 py-3 align-middle border-l border-border-default shadow-[-8px_0_12px_-6px_rgba(15,23,42,0.22)]">

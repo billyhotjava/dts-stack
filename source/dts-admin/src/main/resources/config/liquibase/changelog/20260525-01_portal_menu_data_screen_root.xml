@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260525-01-portal-menu-data-screen-root" author="codex">
+        <preConditions onFail="MARK_RAN" onError="MARK_RAN">
+            <and>
+                <tableExists tableName="portal_menu"/>
+                <tableExists tableName="system_config"/>
+                <columnExists tableName="portal_menu" columnName="parent_id"/>
+                <columnExists tableName="portal_menu" columnName="metadata"/>
+                <columnExists tableName="portal_menu" columnName="deleted"/>
+                <columnExists tableName="system_config" columnName="cfg_key"/>
+                <columnExists tableName="system_config" columnName="cfg_value"/>
+            </and>
+        </preConditions>
+
+        <comment>
+            Promote 数据大屏 to a root portal menu while preserving the existing menu row and role visibility bindings.
+        </comment>
+        <sql dbms="postgresql" splitStatements="false">
+            DO $do$
+            DECLARE
+                bi_apps_order INTEGER;
+                target_sort_order INTEGER;
+                screens_id BIGINT;
+                screens_meta TEXT;
+                seed_hash TEXT;
+            BEGIN
+                screens_meta := '{"key":"screens","sectionKey":"screens","titleKey":"sys.nav.portal.biScreens","title":"数据大屏","icon":"solar:monitor-bold-duotone","externalLink":"/bi/screens"}';
+                seed_hash := 'a9accc53265925c620b356eb65c06a243f3ecc34d88a9c457533673b05921511';
+
+                SELECT sort_order
+                INTO bi_apps_order
+                FROM portal_menu
+                WHERE parent_id IS NULL
+                  AND deleted = FALSE
+                  AND (
+                      name = 'sys.nav.portal.businessIntelligenceApps'
+                      OR metadata LIKE '%"titleKey":"sys.nav.portal.businessIntelligenceApps"%'
+                      OR metadata LIKE '%"key":"bi-apps"%'
+                  )
+                ORDER BY id
+                LIMIT 1;
+
+                target_sort_order := COALESCE(bi_apps_order, 1) + 1;
+
+                SELECT id
+                INTO screens_id
+                FROM portal_menu
+                WHERE name = 'sys.nav.portal.biScreens'
+                   OR metadata LIKE '%"titleKey":"sys.nav.portal.biScreens"%'
+                ORDER BY CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END, id
+                LIMIT 1;
+
+                IF screens_id IS NOT NULL THEN
+                    UPDATE portal_menu
+                    SET sort_order = sort_order + 1,
+                        last_modified_by = 'system',
+                        last_modified_date = now()
+                    WHERE parent_id IS NULL
+                      AND id &lt;&gt; screens_id
+                      AND sort_order &gt;= target_sort_order;
+
+                    UPDATE portal_menu
+                    SET
+                        parent_id = NULL,
+                        path = 'bi/screens',
+                        component = NULL,
+                        sort_order = target_sort_order,
+                        metadata = screens_meta,
+                        icon = 'solar:monitor-bold-duotone',
+                        deleted = FALSE,
+                        last_modified_by = 'system',
+                        last_modified_date = now()
+                    WHERE id = screens_id;
+                ELSE
+                    UPDATE portal_menu
+                    SET sort_order = sort_order + 1,
+                        last_modified_by = 'system',
+                        last_modified_date = now()
+                    WHERE parent_id IS NULL
+                      AND sort_order &gt;= target_sort_order;
+
+                    INSERT INTO portal_menu (
+                        name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted,
+                        created_by, created_date, last_modified_by, last_modified_date
+                    ) VALUES (
+                        'sys.nav.portal.biScreens', 'bi/screens', NULL, target_sort_order, screens_meta, NULL,
+                        'solar:monitor-bold-duotone', 'GENERAL', FALSE,
+                        'system', now(), 'system', now()
+                    );
+                END IF;
+
+                IF EXISTS (SELECT 1 FROM system_config WHERE cfg_key = 'portal.menu.seed.hash') THEN
+                    UPDATE system_config
+                    SET cfg_value = seed_hash,
+                        description = COALESCE(NULLIF(description, ''), 'Portal menu seed hash'),
+                        last_modified_by = 'system',
+                        last_modified_date = now()
+                    WHERE cfg_key = 'portal.menu.seed.hash';
+                ELSE
+                    INSERT INTO system_config (
+                        cfg_key, cfg_value, description, category, sensitive, data_type, editable, sort_order,
+                        display_name, config_scope, restart_required, owner, created_by, created_date,
+                        last_modified_by, last_modified_date
+                    ) VALUES (
+                        'portal.menu.seed.hash', seed_hash, 'Portal menu seed hash', 'SYSTEM', FALSE, 'STRING', FALSE, 0,
+                        'Portal menu seed hash', 'RUNTIME', FALSE, 'platform', 'system', now(), 'system', now()
+                    );
+                END IF;
+            END;
+            $do$;
+        </sql>
+    </changeSet>
+</databaseChangeLog>

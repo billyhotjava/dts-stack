@@ -132,6 +132,21 @@ test("ScreensPage keeps the domain classifier and table inside the page frame", 
 	assert.match(source, /sticky right-0 z-10 bg-surface-card/);
 });
 
+test("ScreensPage prioritizes long screen names and descriptions in the management table", async () => {
+	const source = await readFile(screensPagePath, "utf8");
+
+	assert.doesNotMatch(source, /sortKey="width"[\s\S]*?分辨率/);
+	assert.equal(source.includes("{screen.width || 1920} × {screen.height || 1080}"), false);
+	assert.match(source, /<col style=\{\{ width: "30%" \}\} \/>/);
+	assert.match(source, /<col style=\{\{ width: "34%" \}\} \/>/);
+	assert.match(source, /title=\{screen\.name \|\| "未命名大屏"\}/);
+	assert.match(source, /title=\{screen\.description \|\| "无描述"\}/);
+	assert.match(source, /line-clamp-2/);
+	assert.match(source, /whitespace-normal/);
+	assert.match(source, /break-words/);
+	assert.equal(source.includes("overflow-hidden text-ellipsis whitespace-nowrap"), false);
+});
+
 test("ScreensPage lets managers change screen domain from the more menu", async () => {
 	const source = await readFile(screensPagePath, "utf8");
 

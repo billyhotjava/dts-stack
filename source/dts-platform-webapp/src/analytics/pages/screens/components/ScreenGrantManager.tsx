@@ -8,6 +8,15 @@ interface ScreenGrantManagerProps {
 	isOwner?: boolean;
 }
 
+type GrantRowWithDept = ScreenAclEntry & {
+	subjectDeptCode?: string;
+	subjectDeptName?: string;
+	granteeDeptCode?: string;
+	granteeDeptName?: string;
+	deptCode?: string;
+	deptName?: string;
+};
+
 const GRANTEE_TYPE_LABELS: Record<string, string> = { USER: '用户', ROLE: '角色' };
 const PERM_LABELS: Record<string, string> = { OWNER: '拥有者', MANAGE: '管理者', READ: '查看者' };
 
@@ -147,12 +156,18 @@ export function ScreenGrantManager({ screenId, isOwner = false }: ScreenGrantMan
 		return map;
 	}, [roles]);
 
+	const findGrantUser = (row: ScreenAclEntry): PlatformUser | undefined => {
+		if (row.subjectType !== 'USER') return undefined;
+		const lookupKeys = [row.subjectId, row.subjectUsername].filter(Boolean).map((id) => String(id).toLowerCase());
+		return lookupKeys.map((id) => userDisplayMap.get(id)).find(Boolean);
+	};
+
 	const resolveGrantLabel = (row: ScreenAclEntry): string => {
 		if (row.subjectType === 'USER') {
-			if (row.subjectName) return row.subjectName;
-			const lookupKeys = [row.subjectId, row.subjectUsername].filter(Boolean).map((id) => String(id).toLowerCase());
-			const u = lookupKeys.map((id) => userDisplayMap.get(id)).find(Boolean);
+			const u = findGrantUser(row);
 			if (u) return u.displayName || u.username;
+			if (row.subjectName) return row.subjectName;
+			if (row.subjectUsername) return row.subjectUsername;
 		}
 		if (row.subjectType === 'ROLE') {
 			const r = roleDisplayMap.get((row.subjectId || '').toLowerCase());
@@ -161,15 +176,32 @@ export function ScreenGrantManager({ screenId, isOwner = false }: ScreenGrantMan
 		return row.subjectId;
 	};
 
+	const resolveGrantDepartment = (row: ScreenAclEntry): string => {
+		if (row.subjectType !== 'USER') return '-';
+		const u = findGrantUser(row);
+		if (u) return u.deptName || u.deptCode || '-';
+		const grant = row as GrantRowWithDept;
+		return (
+			grant.subjectDeptName ||
+			grant.granteeDeptName ||
+			grant.deptName ||
+			grant.subjectDeptCode ||
+			grant.granteeDeptCode ||
+			grant.deptCode ||
+			'-'
+		);
+	};
+
 	const grantSortColumns = useMemo(
 		() => ({
 			subjectType: stringComparator<ScreenAclEntry>(
 				(r) => GRANTEE_TYPE_LABELS[r.subjectType] || r.subjectType,
 			),
 			label: stringComparator<ScreenAclEntry>((r) => resolveGrantLabel(r)),
+			department: stringComparator<ScreenAclEntry>((r) => resolveGrantDepartment(r)),
 			perm: stringComparator<ScreenAclEntry>((r) => PERM_LABELS[r.perm] || r.perm),
 		}),
-		// resolveGrantLabel depends on user/role maps; recompute when those change.
+		// Label and department resolution depend on user/role maps; recompute when those change.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[userDisplayMap, roleDisplayMap],
 	);
@@ -307,6 +339,14 @@ export function ScreenGrantManager({ screenId, isOwner = false }: ScreenGrantMan
 										名称
 									</SortableHeader>
 									<SortableHeader
+										sortKey="department"
+										sortState={grantSortState}
+										onSort={requestGrantSort}
+										className="text-sm text-text-secondary bg-surface-secondary"
+									>
+										部门
+									</SortableHeader>
+									<SortableHeader
 										sortKey="perm"
 										sortState={grantSortState}
 										onSort={requestGrantSort}
@@ -322,6 +362,7 @@ export function ScreenGrantManager({ screenId, isOwner = false }: ScreenGrantMan
 									<tr key={row.id ?? idx} className="border-t border-border-default">
 										<td className={cellCls}>{GRANTEE_TYPE_LABELS[row.subjectType] || row.subjectType}</td>
 										<td className={cellCls}>{resolveGrantLabel(row)}</td>
+										<td className={`${cellCls} text-text-secondary`}>{resolveGrantDepartment(row)}</td>
 										<td className={cellCls}>
 											<span className={row.perm === 'OWNER' ? 'font-semibold text-brand' : ''}>
 												{PERM_LABELS[row.perm] || row.perm}

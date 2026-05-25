@@ -56,14 +56,6 @@
           "title": "BI 分析",
           "children": [
             {
-              "key": "screens",
-              "path": "screens",
-              "icon": "solar:monitor-bold-duotone",
-              "titleKey": "sys.nav.portal.biScreens",
-              "title": "数据大屏",
-              "externalLink": "/bi/screens"
-            },
-            {
               "key": "dashboards",
               "path": "dashboards",
               "icon": "solar:widget-3-bold-duotone",
@@ -90,6 +82,14 @@
           ]
         }
       ]
+    },
+    {
+      "key": "screens",
+      "path": "bi/screens",
+      "icon": "solar:monitor-bold-duotone",
+      "titleKey": "sys.nav.portal.biScreens",
+      "title": "数据大屏",
+      "externalLink": "/bi/screens"
     },
     {
       "key": "workbench",

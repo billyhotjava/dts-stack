@@ -184,31 +184,6 @@
                 version = EXCLUDED.version,
                 updated_at = CURRENT_TIMESTAMP;
 
-            UPDATE audit_entry
-            SET
-                module_key = 'platform.auth',
-                module_name = '业务端认证',
-                button_code = 'ADMIN_AUTH_PLATFORM_LOGIN',
-                operation_code = 'AUTH_PLATFORM_LOGIN',
-                operation_name = '业务端登录',
-                operation_kind = 'LOGIN'
-            WHERE source_system = 'platform'
-              AND module_key = 'platform.unclassified'
-              AND (button_code = 'AUTH LOGIN' OR operation_code = 'AUTH LOGIN')
-              AND operation_kind = 'LOGIN';
-
-            UPDATE audit_entry
-            SET
-                module_key = 'platform.auth',
-                module_name = '业务端认证',
-                button_code = 'ADMIN_AUTH_PLATFORM_LOGOUT',
-                operation_code = 'AUTH_PLATFORM_LOGOUT',
-                operation_name = '业务端登出',
-                operation_kind = 'LOGOUT'
-            WHERE source_system = 'platform'
-              AND module_key = 'platform.unclassified'
-              AND (button_code = 'AUTH LOGOUT' OR operation_code = 'AUTH LOGOUT')
-              AND operation_kind = 'LOGOUT';
         </sql>
     </changeSet>
 
@@ -245,6 +220,32 @@
                 enabled = EXCLUDED.enabled,
                 version = EXCLUDED.version,
                 updated_at = CURRENT_TIMESTAMP;
+
+            UPDATE audit_entry
+            SET
+                module_key = 'platform.auth',
+                module_name = '业务端认证',
+                button_code = 'ADMIN_AUTH_PLATFORM_LOGIN',
+                operation_code = 'AUTH_PLATFORM_LOGIN',
+                operation_name = '业务端登录',
+                operation_kind = 'LOGIN'
+            WHERE source_system = 'platform'
+              AND module_key = 'platform.unclassified'
+              AND (button_code = 'AUTH LOGIN' OR operation_code = 'AUTH LOGIN')
+              AND operation_kind = 'LOGIN';
+
+            UPDATE audit_entry
+            SET
+                module_key = 'platform.auth',
+                module_name = '业务端认证',
+                button_code = 'ADMIN_AUTH_PLATFORM_LOGOUT',
+                operation_code = 'AUTH_PLATFORM_LOGOUT',
+                operation_name = '业务端登出',
+                operation_kind = 'LOGOUT'
+            WHERE source_system = 'platform'
+              AND module_key = 'platform.unclassified'
+              AND (button_code = 'AUTH LOGOUT' OR operation_code = 'AUTH LOGOUT')
+              AND operation_kind = 'LOGOUT';
         </sql>
     </changeSet>
 
