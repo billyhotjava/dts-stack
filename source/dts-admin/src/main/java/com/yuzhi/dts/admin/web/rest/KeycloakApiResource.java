@@ -1751,11 +1751,7 @@ public class KeycloakApiResource {
         if (request == null) {
             return "unknown";
         }
-        String resolved = IpAddressUtils.resolveClientIp(
-            request.getHeader("X-Forwarded-For"),
-            request.getHeader("X-Real-IP"),
-            request.getRemoteAddr()
-        );
+        String resolved = IpAddressUtils.resolveClientIp(request::getHeader, request.getRemoteAddr());
         return resolved != null ? resolved : "unknown";
     }
 
@@ -2691,11 +2687,7 @@ public class KeycloakApiResource {
         auditDetail.put("approver", approver);
         auditDetail.put("note", note);
         String clientIp = request != null
-            ? IpAddressUtils.resolveClientIp(
-                request.getHeader("X-Forwarded-For"),
-                request.getHeader("X-Real-IP"),
-                request.getRemoteAddr()
-            )
+            ? IpAddressUtils.resolveClientIp(request::getHeader, request.getRemoteAddr())
             : null;
         try {
             switch (normalized) {
@@ -3289,11 +3281,7 @@ public class KeycloakApiResource {
                 return ResponseEntity.badRequest().body(ApiResponse.error("请求体不能为空"));
             }
 
-            String clientIp = IpAddressUtils.resolveClientIp(
-                request.getHeader("X-Forwarded-For"),
-                request.getHeader("X-Real-IP"),
-                request.getRemoteAddr()
-            );
+            String clientIp = IpAddressUtils.resolveClientIp(request::getHeader, request.getRemoteAddr());
             if (!org.springframework.util.StringUtils.hasText(clientIp)) {
                 clientIp = request.getRemoteAddr();
             }
@@ -3633,11 +3621,7 @@ public class KeycloakApiResource {
             return ResponseEntity.status(org.springframework.http.HttpStatus.NOT_FOUND).body(ApiResponse.error("PKI 登录未启用"));
         }
         com.yuzhi.dts.admin.service.pki.PkiChallengeService svc = this.ctx.getBean(com.yuzhi.dts.admin.service.pki.PkiChallengeService.class);
-        String ip = IpAddressUtils.resolveClientIp(
-            request.getHeader("X-Forwarded-For"),
-            request.getHeader("X-Real-IP"),
-            request.getRemoteAddr()
-        );
+        String ip = IpAddressUtils.resolveClientIp(request::getHeader, request.getRemoteAddr());
         if (!org.springframework.util.StringUtils.hasText(ip)) {
             ip = request.getRemoteAddr();
         }
@@ -3818,11 +3802,7 @@ public class KeycloakApiResource {
             String uname = username.toLowerCase(java.util.Locale.ROOT).trim();
             if (!triadUsernamesConfigured().contains(uname)) return null; // only configured triad accounts
 
-            String clientIp = IpAddressUtils.resolveClientIp(
-                request.getHeader("X-Forwarded-For"),
-                request.getHeader("X-Real-IP"),
-                request.getRemoteAddr()
-            );
+            String clientIp = IpAddressUtils.resolveClientIp(request::getHeader, request.getRemoteAddr());
             if (!org.springframework.util.StringUtils.hasText(clientIp)) clientIp = request.getRemoteAddr();
             if (clientIp == null) clientIp = "";
             clientIp = stripPort(clientIp.trim());

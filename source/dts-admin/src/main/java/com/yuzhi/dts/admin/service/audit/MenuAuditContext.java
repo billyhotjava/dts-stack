@@ -228,11 +228,7 @@ public final class MenuAuditContext {
 
         public Builder client(HttpServletRequest request, String fallbackUri, String fallbackMethod) {
             if (request != null) {
-                this.clientIp = IpAddressUtils.resolveClientIp(
-                    request.getHeader("X-Forwarded-For"),
-                    request.getHeader("X-Real-IP"),
-                    request.getRemoteAddr()
-                );
+                this.clientIp = IpAddressUtils.resolveClientIp(request::getHeader, request.getRemoteAddr());
                 this.clientAgent = request.getHeader("User-Agent");
                 this.requestUri = request.getRequestURI();
                 this.httpMethod = request.getMethod();

@@ -7,6 +7,7 @@ import com.yuzhi.dts.admin.service.audit.AuditOperationKind;
 import com.yuzhi.dts.admin.service.audit.AuditResultStatus;
 import com.yuzhi.dts.admin.service.audit.AuditV2Service;
 import com.yuzhi.dts.admin.service.audit.ButtonCodes;
+import com.yuzhi.dts.admin.config.AuditIngestProperties;
 import com.yuzhi.dts.admin.domain.AdminKeycloakUser;
 import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
 import com.yuzhi.dts.common.net.IpAddressUtils;
@@ -23,11 +24,13 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Predicate;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.web.util.matcher.IpAddressMatcher;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -45,15 +48,62 @@ public class AuditIngestResource {
     private final AuditV2Service auditV2Service;
     private final AuditIngestAuthenticator authenticator;
     private final AdminKeycloakUserRepository userRepository;
+    private final List<IpAddressMatcher> containerMatchers;
 
     public AuditIngestResource(
         AuditV2Service auditV2Service,
         AuditIngestAuthenticator authenticator,
-        AdminKeycloakUserRepository userRepository
+        AdminKeycloakUserRepository userRepository,
+        AuditIngestProperties properties
     ) {
         this.auditV2Service = Objects.requireNonNull(auditV2Service, "auditV2Service required");
         this.authenticator = Objects.requireNonNull(authenticator, "auditIngestAuthenticator required");
         this.userRepository = Objects.requireNonNull(userRepository, "userRepository required");
+        this.containerMatchers = buildContainerMatchers(properties);
+    }
+
+    private static List<IpAddressMatcher> buildContainerMatchers(AuditIngestProperties properties) {
+        List<IpAddressMatcher> matchers = new ArrayList<>();
+        List<String> cidrs = properties != null ? properties.getContainerCidrs() : List.of();
+        if (cidrs != null) {
+            for (String cidr : cidrs) {
+                if (StringUtils.isBlank(cidr)) {
+                    continue;
+                }
+                try {
+                    matchers.add(new IpAddressMatcher(cidr.trim()));
+                } catch (IllegalArgumentException ex) {
+                    log.warn("Ignoring invalid auditing.ingest.container-cidrs entry '{}': {}", cidr, ex.getMessage());
+                }
+            }
+        }
+        return List.copyOf(matchers);
+    }
+
+    /**
+     * Whether {@code ip} is a container/proxy hop rather than a real client. Loopback is always
+     * a hop; the remaining ranges come from {@link AuditIngestProperties#getContainerCidrs()} so
+     * sites with a non-standard bridge network (e.g. {@code 172.168.0.0/16}) can be configured
+     * without a code change.
+     */
+    private boolean isContainerAddress(String ip) {
+        if (StringUtils.isBlank(ip)) {
+            return true;
+        }
+        String normalized = ip.trim();
+        if (normalized.equals("127.0.0.1") || normalized.equals("::1") || normalized.equals("0:0:0:0:0:0:0:1")) {
+            return true;
+        }
+        for (IpAddressMatcher matcher : containerMatchers) {
+            try {
+                if (matcher.matches(normalized)) {
+                    return true;
+                }
+            } catch (IllegalArgumentException ignored) {
+                // non-IP literal (kept verbatim as audit evidence) — treat as non-container
+            }
+        }
+        return false;
     }
 
     @PostMapping
@@ -69,7 +119,7 @@ public class AuditIngestResource {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         try {
-            AuditPayload payload = AuditPayload.from(body, request, userRepository);
+            AuditPayload payload = AuditPayload.from(body, request, userRepository, this::isContainerAddress);
             AuditActionRequest.Builder builder = AuditActionRequest
                 .builder(payload.actor(), payload.buttonCode())
                 .occurredAt(payload.occurredAt())
@@ -166,7 +216,12 @@ public class AuditIngestResource {
         List<TargetRecord> targets,
         Map<String, Object> details
     ) {
-        static AuditPayload from(Map<String, Object> body, HttpServletRequest request, AdminKeycloakUserRepository userRepository) {
+        static AuditPayload from(
+            Map<String, Object> body,
+            HttpServletRequest request,
+            AdminKeycloakUserRepository userRepository,
+            Predicate<String> isContainerAddress
+        ) {
             Map<String, Object> sanitizedBody = body == null ? Map.of() : new LinkedHashMap<>(body);
             String sourceSystem = text(sanitizedBody.get("sourceSystem"), "platform");
             String moduleKey = firstNonBlank(
@@ -232,7 +287,7 @@ public class AuditIngestResource {
                 text(sanitizedBody.get("method")),
                 "POST"
             );
-            String clientIp = resolveClientIp(sanitizedBody, request);
+            String clientIp = resolveClientIp(sanitizedBody, request, isContainerAddress);
             String clientAgent = resolveClientAgent(sanitizedBody, request);
 
             Instant occurredAt = parseInstant(text(sanitizedBody.get("occurredAt")));
@@ -498,47 +553,37 @@ public class AuditIngestResource {
             return norm.matches("\\d+");
         }
 
-        private static String resolveClientIp(Map<String, Object> body, HttpServletRequest request) {
+        private static String resolveClientIp(
+            Map<String, Object> body,
+            HttpServletRequest request,
+            Predicate<String> isContainerAddress
+        ) {
             String fromBody = text(body.get("clientIp"), text(body.get("ip")));
             String forwardedCombined = request != null ? request.getHeader("Forwarded") : null;
             String forwarded = request != null ? request.getHeader("X-Forwarded-For") : null;
             String realIp = request != null ? request.getHeader("X-Real-IP") : null;
             String remote = request != null ? request.getRemoteAddr() : null;
-            return firstNonContainerClientIp(forwardedCombined, forwarded, realIp, fromBody, remote);
+            return firstNonContainerClientIp(isContainerAddress, forwardedCombined, forwarded, realIp, fromBody, remote);
         }
 
-        private static String firstNonContainerClientIp(String... candidates) {
+        private static String firstNonContainerClientIp(Predicate<String> isContainerAddress, String... candidates) {
             if (candidates == null) {
                 return null;
             }
+            String firstResolved = null;
             for (String candidate : candidates) {
                 String resolved = IpAddressUtils.resolveClientIp(candidate);
-                if (StringUtils.isNotBlank(resolved) && !isContainerAddress(resolved)) {
+                if (StringUtils.isBlank(resolved)) {
+                    continue;
+                }
+                if (firstResolved == null) {
+                    firstResolved = resolved;
+                }
+                if (isContainerAddress == null || !isContainerAddress.test(resolved)) {
                     return resolved;
                 }
             }
-            return null;
-        }
-
-        private static boolean isContainerAddress(String ip) {
-            if (StringUtils.isBlank(ip)) {
-                return true;
-            }
-            String normalized = ip.trim();
-            if (normalized.equals("127.0.0.1") || normalized.equals("::1") || normalized.equals("0:0:0:0:0:0:0:1")) {
-                return true;
-            }
-            String[] parts = normalized.split("\\.");
-            if (parts.length == 4) {
-                try {
-                    int first = Integer.parseInt(parts[0]);
-                    int second = Integer.parseInt(parts[1]);
-                    return first == 172 && second >= 16 && second <= 31;
-                } catch (NumberFormatException ignored) {
-                    return false;
-                }
-            }
-            return false;
+            return firstResolved;
         }
 
         private static String resolveClientAgent(Map<String, Object> body, HttpServletRequest request) {

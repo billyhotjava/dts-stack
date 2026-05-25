@@ -264,6 +264,11 @@ auditing:
     service-tokens: ${AUDIT_INGEST_SERVICE_TOKENS:${DTS_ADMIN_SERVICE_TOKEN:}}
     # Optional whitelist of caller-declared sourceSystem values; empty = accept any.
     allowed-source-systems: ${AUDIT_INGEST_ALLOWED_SOURCES:}
+    # CIDR ranges treated as container/proxy hops when resolving a pushed event's real client IP.
+    # Loopback is always treated as a hop. Add the site's bridge network here when it is not the
+    # Docker default (172.16/12) — e.g. deployments whose container subnet is 172.168.0.0/16 —
+    # otherwise that range is mistaken for a real client IP in the audit log.
+    container-cidrs: ${AUDIT_INGEST_CONTAINER_CIDRS:172.16.0.0/12,172.168.0.0/16}
   dictionary:
     # HMAC verification of audit dictionary files (audit-button-registry.json, legacy-action-mappings.json).
     # The HMAC key MUST be held by the authorization administrator (authadmin), not the system administrator.

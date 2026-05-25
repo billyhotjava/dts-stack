@@ -47,6 +47,40 @@ public final class IpAddressUtils {
         return null;
     }
 
+    /**
+     * Servlet-free view over an HTTP request's headers, so dts-common can read the proxy header
+     * chain without taking a {@code jakarta.servlet} dependency. Call sites pass {@code request::getHeader}.
+     */
+    @FunctionalInterface
+    public interface HeaderLookup {
+        String header(String name);
+    }
+
+    /**
+     * Canonical client-IP resolution for every audit/security call site behind a reverse proxy.
+     * <p>
+     * Reads the proxy header chain in priority order — RFC 7239 {@code Forwarded} first, then the
+     * de-facto {@code X-Forwarded-For} / {@code X-Real-IP}, finally the socket {@code remoteAddr}.
+     * Centralising the header list (and its order) here is deliberate: call sites used to inline
+     * their own 3-header list and several omitted {@code Forwarded}, so behind a Forwarded-only
+     * proxy they regressed to the container IP. Route new call sites through this method instead of
+     * re-listing headers.
+     *
+     * @param headers    header accessor, typically {@code request::getHeader}; {@code null} is tolerated
+     * @param remoteAddr the socket remote address, typically {@code request.getRemoteAddr()}
+     */
+    public static String resolveClientIp(HeaderLookup headers, String remoteAddr) {
+        if (headers == null) {
+            return resolveClientIp(remoteAddr);
+        }
+        return resolveClientIp(
+            headers.header("Forwarded"),
+            headers.header("X-Forwarded-For"),
+            headers.header("X-Real-IP"),
+            remoteAddr
+        );
+    }
+
     private static String firstNonBlankSegment(String raw) {
         if (raw == null) {
             return null;
@@ -78,10 +112,7 @@ public final class IpAddressUtils {
         }
         // RFC 7239 Forwarded header format: "for=192.0.2.43" or "for=[2001:db8::1]:47011"
         if (trimmed.regionMatches(true, 0, "for=", 0, 4)) {
-            trimmed = trimmed.substring(4).trim();
-            if (trimmed.startsWith("\"") && trimmed.endsWith("\"") && trimmed.length() >= 2) {
-                trimmed = trimmed.substring(1, trimmed.length() - 1);
-            }
+            trimmed = forwardedForValue(trimmed.substring(4));
         }
         // Drop trailing comment after a space.
         int space = trimmed.indexOf(' ');
@@ -101,6 +132,27 @@ public final class IpAddressUtils {
             trimmed = trimmed.substring(0, colon);
         }
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static String forwardedForValue(String rawValue) {
+        if (rawValue == null) {
+            return "";
+        }
+        String value = rawValue.trim();
+        if (value.startsWith("\"")) {
+            int closeQuote = value.indexOf('"', 1);
+            if (closeQuote > 0) {
+                return value.substring(1, closeQuote).trim();
+            }
+        }
+        int semicolon = value.indexOf(';');
+        if (semicolon >= 0) {
+            value = value.substring(0, semicolon).trim();
+        }
+        if (value.startsWith("\"") && value.endsWith("\"") && value.length() >= 2) {
+            value = value.substring(1, value.length() - 1).trim();
+        }
+        return value;
     }
 
     /**

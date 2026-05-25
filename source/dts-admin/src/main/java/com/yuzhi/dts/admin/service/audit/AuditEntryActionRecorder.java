@@ -156,10 +156,6 @@ public class AuditEntryActionRecorder {
         if (request == null) {
             return null;
         }
-        return IpAddressUtils.resolveClientIp(
-            request.getHeader("X-Forwarded-For"),
-            request.getHeader("X-Real-IP"),
-            request.getRemoteAddr()
-        );
+        return IpAddressUtils.resolveClientIp(request::getHeader, request.getRemoteAddr());
     }
 }

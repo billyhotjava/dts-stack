@@ -243,11 +243,7 @@ public class AdminUserResource {
     }
 
     private String clientIp(HttpServletRequest request) {
-        return IpAddressUtils.resolveClientIp(
-            request.getHeader("X-Forwarded-For"),
-            request.getHeader("X-Real-IP"),
-            request.getRemoteAddr()
-        );
+        return IpAddressUtils.resolveClientIp(request::getHeader, request.getRemoteAddr());
     }
 
     public static class DeleteUserRequestVM {

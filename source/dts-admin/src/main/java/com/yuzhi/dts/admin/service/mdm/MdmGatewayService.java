@@ -185,11 +185,7 @@ public class MdmGatewayService {
         dataType = StringUtils.defaultString(dataType, "unknown");
         String clientIp = request == null
             ? null
-            : IpAddressUtils.resolveClientIp(
-                request.getHeader("X-Forwarded-For"),
-                request.getHeader("X-Real-IP"),
-                request.getRemoteAddr()
-            );
+            : IpAddressUtils.resolveClientIp(request::getHeader, request.getRemoteAddr());
         validateToken(request);
 
         byte[] bytes;

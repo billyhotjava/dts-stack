@@ -40,6 +40,19 @@ public class AuditIngestProperties {
      */
     private Set<String> allowedSourceSystems = Set.of();
 
+    /**
+     * CIDR ranges treated as container/proxy hops when resolving the real client IP of a
+     * pushed audit event. The ingest endpoint is reached service-to-service, so the inbound
+     * {@code Forwarded}/{@code X-Forwarded-For}/{@code remoteAddr} are usually the internal
+     * bridge network; resolution must skip these in favour of the real client IP carried in
+     * the body. Loopback is always treated as a container hop in addition to this list.
+     * <p>
+     * Default {@code 172.16.0.0/12} (Docker's default bridge range). Sites whose container
+     * network uses a non-standard range (e.g. {@code 172.168.0.0/16}) must add it here via
+     * {@code AUDIT_INGEST_CONTAINER_CIDRS}, otherwise that range is mistaken for a real client.
+     */
+    private List<String> containerCidrs = new ArrayList<>(List.of("172.16.0.0/12"));
+
     public boolean isRequireToken() {
         return requireToken;
     }
@@ -78,6 +91,22 @@ public class AuditIngestProperties {
             .filter(value -> value != null && !value.isBlank())
             .map(value -> value.trim().toLowerCase(Locale.ROOT))
             .collect(Collectors.toUnmodifiableSet());
+    }
+
+    public List<String> getContainerCidrs() {
+        return containerCidrs;
+    }
+
+    public void setContainerCidrs(List<String> containerCidrs) {
+        if (containerCidrs == null) {
+            this.containerCidrs = new ArrayList<>();
+            return;
+        }
+        this.containerCidrs = containerCidrs
+            .stream()
+            .filter(cidr -> cidr != null && !cidr.isBlank())
+            .map(String::trim)
+            .collect(Collectors.toList());
     }
 
     public boolean hasConfiguredTokens() {

@@ -181,11 +181,7 @@ public class WorkflowConfigResource {
             }
 
             if (request != null) {
-                String clientIp = IpAddressUtils.resolveClientIp(
-                    request.getHeader("X-Forwarded-For"),
-                    request.getHeader("X-Real-IP"),
-                    request.getRemoteAddr()
-                );
+                String clientIp = IpAddressUtils.resolveClientIp(request::getHeader, request.getRemoteAddr());
                 builder.client(clientIp, request.getHeader("User-Agent"));
                 builder.request(request.getRequestURI(), request.getMethod());
             }

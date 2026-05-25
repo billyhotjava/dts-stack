@@ -252,11 +252,7 @@ public class AuthAuditListener {
             if (attrs instanceof ServletRequestAttributes servletAttrs) {
                 HttpServletRequest request = servletAttrs.getRequest();
                 if (request != null) {
-                    return IpAddressUtils.resolveClientIp(
-                        request.getHeader("X-Forwarded-For"),
-                        request.getHeader("X-Real-IP"),
-                        request.getRemoteAddr()
-                    );
+                    return IpAddressUtils.resolveClientIp(request::getHeader, request.getRemoteAddr());
                 }
             }
         } catch (Exception ex) {
