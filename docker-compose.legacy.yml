@@ -345,7 +345,8 @@ services:
       APP_API_DOCS_PUBLIC: "${APP_API_DOCS_PUBLIC:-false}"
       APP_TEST_API_ENABLED: "${APP_TEST_API_ENABLED:-false}"
       APP_TEST_API_TOKEN: "${APP_TEST_API_TOKEN:-}"
-      AUDIT_INGEST_SERVICE_TOKENS: ${AUDIT_INGEST_SERVICE_TOKENS:-${DTS_PLATFORM_TO_ADMIN_TOKEN:-${DTS_ADMIN_SERVICE_TOKEN:-}},${DTS_ANALYTICS_TO_ADMIN_TOKEN:-${DTS_PLATFORM_TO_ADMIN_TOKEN:-${DTS_ADMIN_SERVICE_TOKEN:-}}}}
+      # docker-compose 1.x mis-parses nested ${A:-${B:-}} defaults; init.sh writes explicit tokens to .env.
+      AUDIT_INGEST_SERVICE_TOKENS: ${AUDIT_INGEST_SERVICE_TOKENS:-}
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTADMIN:-dts_admin}
       SPRING_DATASOURCE_USERNAME: ${PG_USER_DTADMIN:-dts_admin}
       SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTADMIN:-dts_admin}
@@ -486,11 +487,11 @@ services:
       APP_API_DOCS_PUBLIC: "${APP_API_DOCS_PUBLIC:-false}"
       APP_TEST_API_ENABLED: "${APP_TEST_API_ENABLED:-false}"
       APP_TEST_API_TOKEN: "${APP_TEST_API_TOKEN:-}"
-      # Service-to-service auth(platform 入站 + 出站客户端);DTS_ADMIN_SERVICE_TOKEN 仅作旧部署 fallback。
-      DTS_INBOUND_FROM_ANALYTICS: ${DTS_INBOUND_FROM_ANALYTICS:-${DTS_ADMIN_SERVICE_TOKEN:-}}
-      DTS_INBOUND_FROM_INGESTION: ${DTS_INBOUND_FROM_INGESTION:-${DTS_ADMIN_SERVICE_TOKEN:-}}
-      DTS_INBOUND_FROM_METRICS: ${DTS_INBOUND_FROM_METRICS:-${DTS_METRICS_TO_PLATFORM:-${DTS_ADMIN_SERVICE_TOKEN:-}}}
-      DTS_PLATFORM_TO_ADMIN_TOKEN: ${DTS_PLATFORM_TO_ADMIN_TOKEN:-${DTS_ADMIN_SERVICE_TOKEN:-}}
+      # Service-to-service auth(platform 入站 + 出站客户端); init.sh writes explicit values for legacy Compose.
+      DTS_INBOUND_FROM_ANALYTICS: ${DTS_INBOUND_FROM_ANALYTICS:-}
+      DTS_INBOUND_FROM_INGESTION: ${DTS_INBOUND_FROM_INGESTION:-}
+      DTS_INBOUND_FROM_METRICS: ${DTS_INBOUND_FROM_METRICS:-}
+      DTS_PLATFORM_TO_ADMIN_TOKEN: ${DTS_PLATFORM_TO_ADMIN_TOKEN:-}
       DTS_PLATFORM_CATALOG_MULTI_SOURCE_ENABLED: "true"
       DTS_PLATFORM_CATALOG_DEFAULT_SOURCE_TYPE: "POSTGRES"
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTPS:-dts_platform}
@@ -612,8 +613,8 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTPS:-dts_platform}
       SPRING_DATASOURCE_USERNAME: ${PG_USER_DTPS:-dts_platform}
       SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTPS:-dts_platform}
-      # Service-to-service auth(ingestion 出站 platform 用);DTS_ADMIN_SERVICE_TOKEN 仅作旧部署 fallback。
-      DTS_INGESTION_TO_PLATFORM: ${DTS_INGESTION_TO_PLATFORM:-${DTS_ADMIN_SERVICE_TOKEN:-}}
+      # Service-to-service auth(ingestion 出站 platform 用); init.sh writes explicit values for legacy Compose.
+      DTS_INGESTION_TO_PLATFORM: ${DTS_INGESTION_TO_PLATFORM:-}
       DTS_ADDAX_ENABLED: ${DTS_ADDAX_ENABLED:-true}
       DTS_ADDAX_JOB_DIR: ${DTS_AIRFLOW_DAGS_DIR:-/opt/airflow/dags}
       DTS_ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
@@ -691,9 +692,9 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_ANALYTICS:-dts_analytics}
       SPRING_DATASOURCE_USERNAME: ${PG_USER_ANALYTICS:-dts_analytics}
       SPRING_DATASOURCE_PASSWORD: ${PG_PWD_ANALYTICS:-dts_analytics}
-      # Service-to-service auth(analytics 出站 platform/admin 用);DTS_ADMIN_SERVICE_TOKEN 仅作旧部署 fallback。
-      DTS_ANALYTICS_TO_PLATFORM: ${DTS_ANALYTICS_TO_PLATFORM:-${DTS_ADMIN_SERVICE_TOKEN:-}}
-      DTS_ANALYTICS_TO_ADMIN_TOKEN: ${DTS_ANALYTICS_TO_ADMIN_TOKEN:-${DTS_PLATFORM_TO_ADMIN_TOKEN:-${DTS_ADMIN_SERVICE_TOKEN:-}}}
+      # Service-to-service auth(analytics 出站 platform/admin 用); init.sh writes explicit values for legacy Compose.
+      DTS_ANALYTICS_TO_PLATFORM: ${DTS_ANALYTICS_TO_PLATFORM:-}
+      DTS_ANALYTICS_TO_ADMIN_TOKEN: ${DTS_ANALYTICS_TO_ADMIN_TOKEN:-}
       PG_DB_BIADMIN: ${PG_DB_BIADMIN:-biadmin}
       PG_USER_BIADMIN: ${PG_USER_BIADMIN:-biadmin}
       PG_PWD_BIADMIN: ${PG_PWD_BIADMIN:-}
@@ -763,7 +764,7 @@ services:
       LOG_ROOT: /logs
       DTS_EDITION: ${DTS_EDITION:-foundation}
       DTS_METRICS_SERVICE_NAME: ${DTS_METRICS_SERVICE_NAME:-dts-metrics}
-      DTS_METRICS_TO_PLATFORM: ${DTS_METRICS_TO_PLATFORM:-${DTS_INBOUND_FROM_METRICS:-${DTS_ADMIN_SERVICE_TOKEN:-}}}
+      DTS_METRICS_TO_PLATFORM: ${DTS_METRICS_TO_PLATFORM:-}
       DTS_PLATFORM_BASE_URL: ${DTS_PLATFORM_BASE_URL:-http://dts-platform:8081}
       DTS_PLATFORM_API_PATH: ${DTS_PLATFORM_API_PATH:-/api}
       JAVA_OPTS: ${DTS_METRICS_JAVA_OPTS:--Djava.security.egd=file:/dev/./urandom -XX:MaxRAMPercentage=75.0}
@@ -1006,7 +1007,7 @@ services:
       PG_SUPER_PASSWORD: ${PG_SUPER_PASSWORD}
       PG_HOST: ${PG_HOST}
       PG_PORT: ${PG_PORT}
-      OPENMETADATA_INGEST_DATABASE: ${DTS_OPENMETADATA_INGEST_DATABASE:-${PG_DB_BIADMIN:-biadmin}}
+      OPENMETADATA_INGEST_DATABASE: ${DTS_OPENMETADATA_INGEST_DATABASE:-biadmin}
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ./services/dts-openmetadata/ingestion:/opt/openmetadata/ingestion:ro,z
