@@ -106,7 +106,7 @@
 	}
 
 	main[data-slot="slash-layout-main"] .analytics-screen-management-table {
-		min-width: 920px;
+		min-width: 1080px;
 		table-layout: fixed;
 	}
 
@@ -131,13 +131,16 @@
 	}
 
 	main[data-slot="slash-layout-main"] .analytics-screen-col-actions {
-		width: clamp(220px, 14%, 280px);
+		width: 280px;
 	}
 
 	main[data-slot="slash-layout-main"] .analytics-screen-action-header,
 	main[data-slot="slash-layout-main"] .analytics-screen-action-cell {
 		position: sticky;
 		right: 0;
+		width: 280px;
+		min-width: 280px;
+		max-width: 280px;
 		background-clip: padding-box;
 	}
 
@@ -147,6 +150,7 @@
 
 	main[data-slot="slash-layout-main"] .analytics-screen-action-cell {
 		z-index: 1;
+		overflow: hidden;
 	}
 
 	@media (min-width: 1920px) {

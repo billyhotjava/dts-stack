@@ -155,6 +155,15 @@ test("ScreensPage fixed action column stays on the same visual layer as each tab
 	assert.match(globalCss, /\.analytics-screen-action-cell\s*\{[\s\S]*z-index:\s*1;/);
 });
 
+test("ScreensPage action buttons fit inside the fixed action cell", async () => {
+	const globalCss = await readFile(globalCssPath, "utf8");
+
+	assert.match(globalCss, /\.analytics-screen-management-table\s*\{[\s\S]*min-width:\s*1080px;/);
+	assert.match(globalCss, /\.analytics-screen-col-actions\s*\{[\s\S]*width:\s*280px;/);
+	assert.match(globalCss, /\.analytics-screen-action-cell\s*\{[\s\S]*overflow:\s*hidden;/);
+	assert.doesNotMatch(globalCss, /analytics-screen-col-actions\s*\{[\s\S]*clamp\(/);
+});
+
 test("ScreensPage management table uses visible horizontal scrolling and unified typography", async () => {
 	const [source, globalCss] = await Promise.all([readFile(screensPagePath, "utf8"), readFile(globalCssPath, "utf8")]);
 	const tableSource = source.slice(source.indexOf("<table"), source.indexOf("</table>"));
@@ -189,7 +198,7 @@ test("ScreensPage management table uses responsive column sizing for common moni
 	assert.match(tableSource, /className="analytics-screen-col-name"/);
 	assert.match(tableSource, /className="analytics-screen-col-description"/);
 	assert.match(tableSource, /className="analytics-screen-col-actions"/);
-	assert.match(globalCss, /\.analytics-screen-management-table\s*\{[\s\S]*min-width:\s*920px;/);
+	assert.match(globalCss, /\.analytics-screen-management-table\s*\{[\s\S]*min-width:\s*1080px;/);
 	assert.match(globalCss, /\.analytics-screen-col-name\s*\{[\s\S]*width:\s*clamp\(170px,\s*24%,\s*620px\);/);
 	assert.match(globalCss, /\.analytics-screen-col-description\s*\{[\s\S]*width:\s*auto;/);
 	assert.match(
