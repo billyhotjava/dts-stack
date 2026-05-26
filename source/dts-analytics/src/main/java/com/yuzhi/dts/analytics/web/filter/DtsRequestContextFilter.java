@@ -2,6 +2,7 @@ package com.yuzhi.dts.analytics.web.filter;
 
 import com.yuzhi.dts.analytics.web.support.RequestContext;
 import com.yuzhi.dts.analytics.web.support.RequestContextHolder;
+import com.yuzhi.dts.common.net.ClientIpTrace;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -9,7 +10,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.ZoneId;
 import java.util.Locale;
-import java.util.Optional;
 import java.util.TimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,7 +23,6 @@ import org.springframework.context.i18n.LocaleContextHolder;
 public class DtsRequestContextFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(DtsRequestContextFilter.class);
-    private static final String FORWARDED_FOR = "X-Forwarded-For";
     private static final String USER_AGENT = "User-Agent";
     private static final String TIMEZONE_HEADER = "X-Timezone";
 
@@ -41,9 +40,11 @@ public class DtsRequestContextFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         Locale locale = resolveLocale(request);
         String timeZoneId = resolveTimezone(request);
+        ClientIpTrace ipTrace = ClientIpTrace.from(request::getHeader, request.getRemoteAddr());
+        ipTrace.logInfo(log, "analytics-context", request.getMethod(), request.getRequestURI());
         RequestContext context = new RequestContext(
                 resolveRequestId(request),
-                resolveClientIp(request),
+                ipTrace.resolved(),
                 request.getHeader(USER_AGENT),
                 resolveScheme(request),
                 resolveHost(request),
@@ -71,14 +72,6 @@ public class DtsRequestContextFilter extends OncePerRequestFilter {
             return header;
         }
         return "unknown";
-    }
-
-    private String resolveClientIp(HttpServletRequest request) {
-        return Optional.ofNullable(request.getHeader(FORWARDED_FOR))
-                .filter(h -> !h.isBlank())
-                .map(h -> h.split(",")[0].trim())
-                .filter(h -> !h.isBlank())
-                .orElseGet(request::getRemoteAddr);
     }
 
     private String resolveScheme(HttpServletRequest request) {
@@ -117,4 +110,3 @@ public class DtsRequestContextFilter extends OncePerRequestFilter {
         return ZoneId.systemDefault().getId();
     }
 }
-

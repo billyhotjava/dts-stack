@@ -39,7 +39,7 @@ class PkiLoginAuditEvidenceTest {
         when(ticketService.issue(eq("alice"), any(), any()))
             .thenReturn(ResponseCookie.from("pki_session_ticket", "ticket-1").path("/").httpOnly(true).build());
         MockHttpServletRequest request = new MockHttpServletRequest();
-        request.addHeader("X-Forwarded-For", "10.20.0.1");
+        request.addHeader("X-Forwarded-For", "192.168.31.88");
 
         KeycloakAuthResource resource = newResource(gateway, mock(PortalSessionRegistry.class), mock(KeycloakAuthService.class), ticketService, mock(AuditService.class), false);
 
@@ -49,7 +49,7 @@ class PkiLoginAuditEvidenceTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> userCaptor = ArgumentCaptor.forClass(Map.class);
         verify(ticketService).issue(eq("alice"), userCaptor.capture(), eq(request));
-        assertThat(userCaptor.getValue()).containsEntry("pkiLoginClientIp", "10.20.0.1");
+        assertThat(userCaptor.getValue()).containsEntry("pkiLoginClientIp", "192.168.31.88");
     }
 
     @Test
@@ -63,7 +63,7 @@ class PkiLoginAuditEvidenceTest {
             .thenReturn(
                 new PkiSessionTicketService.VerifiedPkiPrincipal(
                     "alice",
-                    Map.of("username", "alice", "roles", List.of("ROLE_USER"), "pkiLoginClientIp", "10.20.0.1")
+                    Map.of("username", "alice", "roles", List.of("ROLE_USER"), "pkiLoginClientIp", "192.168.31.88")
                 )
             );
         when(ticketService.clearTicketCookie(any())).thenReturn(ResponseCookie.from("pki_session_ticket", "").path("/").maxAge(0).build());
@@ -110,10 +110,13 @@ class PkiLoginAuditEvidenceTest {
         assertThat(payloadCaptor.getValue()).isInstanceOf(Map.class);
         @SuppressWarnings("unchecked")
         Map<String, Object> auditPayload = (Map<String, Object>) payloadCaptor.getValue();
-        assertThat(auditPayload).containsEntry("clientIp", "10.20.0.1");
+        assertThat(auditPayload).containsEntry("clientIp", "192.168.31.88");
         @SuppressWarnings("unchecked")
         Map<String, Object> user = (Map<String, Object>) response.getBody().getData().get("user");
-        assertThat(user).doesNotContainKey("pkiLoginClientIp");
+        assertThat(user)
+            .containsEntry("loginIp", "192.168.31.88")
+            .containsEntry("clientIp", "192.168.31.88")
+            .doesNotContainKey("pkiLoginClientIp");
     }
 
     @Test
@@ -130,7 +133,7 @@ class PkiLoginAuditEvidenceTest {
         Map<String, Object> user = new LinkedHashMap<>();
         user.put("username", "alice");
         user.put("roles", List.of("ROLE_USER"));
-        user.put("pkiLoginClientIp", "10.20.0.1");
+        user.put("pkiLoginClientIp", "192.168.31.88");
         user.put("largeProfile", "x".repeat(5000));
 
         ResponseCookie cookie = ticketService.issue("alice", user, new MockHttpServletRequest());
@@ -140,7 +143,7 @@ class PkiLoginAuditEvidenceTest {
         PkiSessionTicketService.VerifiedPkiPrincipal principal = ticketService.resolve(resolveRequest, "alice");
 
         assertThat(principal).isNotNull();
-        assertThat(principal.user()).containsEntry("pkiLoginClientIp", "10.20.0.1");
+        assertThat(principal.user()).containsEntry("pkiLoginClientIp", "192.168.31.88");
     }
 
     private KeycloakAuthResource newResource(

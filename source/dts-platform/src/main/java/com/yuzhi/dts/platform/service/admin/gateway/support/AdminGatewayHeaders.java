@@ -1,9 +1,11 @@
 package com.yuzhi.dts.platform.service.admin.gateway.support;
 
-import com.yuzhi.dts.common.net.IpAddressUtils;
+import com.yuzhi.dts.common.net.ClientIpTrace;
 import com.yuzhi.dts.platform.config.PlatformOutboundAdminProperties;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.util.StringUtils;
@@ -11,6 +13,8 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 public class AdminGatewayHeaders {
+
+    private static final Logger log = LoggerFactory.getLogger(AdminGatewayHeaders.class);
 
     private final PlatformOutboundAdminProperties properties;
 
@@ -59,7 +63,9 @@ public class AdminGatewayHeaders {
         String forwarded = request.getHeader("X-Forwarded-For");
         String realIp = request.getHeader("X-Real-IP");
         String remote = request.getRemoteAddr();
-        String resolved = IpAddressUtils.resolveClientIp(forwarded, realIp, remote);
+        ClientIpTrace trace = ClientIpTrace.from(request::getHeader, remote);
+        String resolved = trace.resolved();
+        trace.logInfo(log, "platform-admin-gateway-inbound", request.getMethod(), request.getRequestURI());
 
         if (StringUtils.hasText(forwarded)) {
             headers.set("X-Forwarded-For", forwarded.trim());
@@ -77,6 +83,16 @@ public class AdminGatewayHeaders {
             headers.set("Forwarded", forwardedStd.trim());
         } else if (StringUtils.hasText(resolved)) {
             headers.set("Forwarded", "for=\"" + resolved.trim() + "\"");
+        }
+        if (log.isInfoEnabled()) {
+            log.info(
+                "[platform-admin-gateway-forwarded] method={} uri={} outboundForwarded='{}' outboundXff='{}' outboundReal='{}'",
+                nullSafe(request.getMethod()),
+                nullSafe(request.getRequestURI()),
+                nullSafe(headers.getFirst("Forwarded")),
+                nullSafe(headers.getFirst("X-Forwarded-For")),
+                nullSafe(headers.getFirst("X-Real-IP"))
+            );
         }
     }
 
@@ -97,5 +113,9 @@ public class AdminGatewayHeaders {
     private String stripBearerPrefix(String value) {
         String raw = value == null ? "" : value.trim();
         return raw.regionMatches(true, 0, "Bearer ", 0, "Bearer ".length()) ? raw.substring("Bearer ".length()).trim() : raw;
+    }
+
+    private static String nullSafe(String value) {
+        return value == null ? "" : value;
     }
 }

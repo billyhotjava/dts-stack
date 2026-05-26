@@ -68,7 +68,7 @@ class DiagnosticsResourceIT {
                             .header("X-Forwarded-Proto", "https")
                             .header("X-Forwarded-Host", "example.test")
                             .header("X-Timezone", "Asia/Shanghai")
-                            .header("Accept-Language", "fr-FR,fr;q=0.8")
+                            .header("Accept-Language", "en")
                             .header("User-Agent", "JUnit")
                             .accept(MediaType.APPLICATION_JSON))
                     .andExpect(status().isOk())
@@ -78,9 +78,18 @@ class DiagnosticsResourceIT {
                     .andExpect(jsonPath("$.scheme").value("https"))
                     .andExpect(jsonPath("$.host").value("example.test"))
                     .andExpect(jsonPath("$.path").value("/api/request-context"))
-                    .andExpect(jsonPath("$.locale").value("fr-FR"))
+                    .andExpect(jsonPath("$.locale").value("en"))
                     .andExpect(jsonPath("$.timezone").value("Asia/Shanghai"))
                     .andExpect(header().string("X-Request-Id", requestId));
+        }
+
+        @Test
+        void returnsClientIpFromForwardedHeaderWhenXForwardedForIsAbsent() throws Exception {
+            mockMvc.perform(get("/api/request-context")
+                            .header("Forwarded", "for=\"192.168.8.66\";proto=https;host=bi.example.com")
+                            .accept(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.clientIp").value("192.168.8.66"));
         }
 
         @Test

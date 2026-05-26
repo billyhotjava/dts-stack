@@ -25,6 +25,7 @@ import com.yuzhi.dts.admin.domain.AdminKeycloakUser;
 import com.yuzhi.dts.admin.security.session.AdminSessionCloseReason;
 import com.yuzhi.dts.admin.security.session.AdminSessionRegistry;
 import com.yuzhi.dts.admin.web.rest.dto.PkiChallengeView;
+import com.yuzhi.dts.common.net.ClientIpTrace;
 import com.yuzhi.dts.common.net.IpAddressUtils;
 import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import java.nio.charset.StandardCharsets;
@@ -1500,13 +1501,15 @@ public class KeycloakApiResource {
         try {
             String uri = Optional.ofNullable(request).map(HttpServletRequest::getRequestURI).orElse(fallbackUri);
             String method = request != null ? request.getMethod() : fallbackMethod;
+            ClientIpTrace ipTrace = clientIpTrace(request);
+            ipTrace.logInfo(LOG, "admin-auth-audit", method, uri);
             AuditActionRequest.Builder builder = AuditActionRequest
                 .builder(normalizedActor, buttonCode)
                 .actorName(resolveActorDisplayName(normalizedActor))
                 .actorRoles(currentUserAuthorities())
                 .summary(summary)
                 .result(result)
-                .client(clientIp(request), request != null ? request.getHeader("User-Agent") : null)
+                .client(resolvedClientIp(ipTrace), request != null ? request.getHeader("User-Agent") : null)
                 .request(uri, method)
                 .allowEmptyTargets();
             if (detail != null && !detail.isEmpty()) {
@@ -1748,10 +1751,18 @@ public class KeycloakApiResource {
     }
 
     private String clientIp(HttpServletRequest request) {
+        return resolvedClientIp(clientIpTrace(request));
+    }
+
+    private ClientIpTrace clientIpTrace(HttpServletRequest request) {
         if (request == null) {
-            return "unknown";
+            return ClientIpTrace.empty();
         }
-        String resolved = IpAddressUtils.resolveClientIp(request::getHeader, request.getRemoteAddr());
+        return ClientIpTrace.from(request::getHeader, request.getRemoteAddr());
+    }
+
+    private String resolvedClientIp(ClientIpTrace trace) {
+        String resolved = trace == null ? null : trace.resolved();
         return resolved != null ? resolved : "unknown";
     }
 
@@ -3621,7 +3632,9 @@ public class KeycloakApiResource {
             return ResponseEntity.status(org.springframework.http.HttpStatus.NOT_FOUND).body(ApiResponse.error("PKI 登录未启用"));
         }
         com.yuzhi.dts.admin.service.pki.PkiChallengeService svc = this.ctx.getBean(com.yuzhi.dts.admin.service.pki.PkiChallengeService.class);
-        String ip = IpAddressUtils.resolveClientIp(request::getHeader, request.getRemoteAddr());
+        ClientIpTrace ipTrace = clientIpTrace(request);
+        ipTrace.logInfo(LOG, "admin-pki-challenge", request.getMethod(), request.getRequestURI());
+        String ip = ipTrace.resolved();
         if (!org.springframework.util.StringUtils.hasText(ip)) {
             ip = request.getRemoteAddr();
         }
@@ -3802,8 +3815,15 @@ public class KeycloakApiResource {
             String uname = username.toLowerCase(java.util.Locale.ROOT).trim();
             if (!triadUsernamesConfigured().contains(uname)) return null; // only configured triad accounts
 
-            String clientIp = IpAddressUtils.resolveClientIp(request::getHeader, request.getRemoteAddr());
-            if (!org.springframework.util.StringUtils.hasText(clientIp)) clientIp = request.getRemoteAddr();
+            ClientIpTrace ipTrace = clientIpTrace(request);
+            ipTrace.logInfo(
+                LOG,
+                "admin-triad-allowlist",
+                request != null ? request.getMethod() : "POST",
+                request != null ? request.getRequestURI() : "/api/keycloak/auth/login"
+            );
+            String clientIp = ipTrace.resolved();
+            if (!org.springframework.util.StringUtils.hasText(clientIp) && request != null) clientIp = request.getRemoteAddr();
             if (clientIp == null) clientIp = "";
             clientIp = stripPort(clientIp.trim());
 

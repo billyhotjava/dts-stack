@@ -49,6 +49,8 @@ function buildRecoveredUser(status: PortalSessionStatus) {
 		firstName: displayName,
 		lastName: "",
 		fullName: displayName,
+		loginIp: status.loginIp ?? status.clientIp,
+		clientIp: status.clientIp ?? status.loginIp,
 		enabled: true,
 		roles,
 		permissions,

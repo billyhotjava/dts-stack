@@ -1,6 +1,6 @@
 package com.yuzhi.dts.platform.web.rest;
 
-import com.yuzhi.dts.common.net.IpAddressUtils;
+import com.yuzhi.dts.common.net.ClientIpTrace;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.session.PkiSessionTicketService;
 import com.yuzhi.dts.platform.security.session.PortalSessionCookieService;
@@ -94,6 +94,9 @@ public class KeycloakAuthResource {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponses.error("用户名或密码不能为空"));
         }
         String browserId = resolveBrowserId(request);
+        ClientIpTrace clientIpTrace = resolveClientIpTrace(request);
+        clientIpTrace.logInfo(log, "platform-login", requestMethod(request), requestUri(request));
+        String loginIp = clientIpTrace.resolved();
 
         // No username-based blocking; admin service enforces gating/approval rules
 
@@ -252,6 +255,7 @@ public class KeycloakAuthResource {
             if (personnelLevel != null && !personnelLevel.isBlank()) {
                 userOut.put("personnel_level", personnelLevel);
             }
+            putLoginIp(userOut, loginIp);
             try {
                 Object existingAttrs = userOut.get("attributes");
                 java.util.Map<String, Object> attrs = new java.util.LinkedHashMap<>();
@@ -276,6 +280,7 @@ public class KeycloakAuthResource {
 
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("authenticated", Boolean.TRUE);
+            putLoginIp(data, loginIp);
             // Expose Keycloak token lifetime so frontend can correctly judge expiry
             if (kcTokens.expiresIn() != null) {
                 data.put("expiresIn", kcTokens.expiresIn());
@@ -537,7 +542,9 @@ public class KeycloakAuthResource {
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(ApiResponses.error("PKI 登录响应缺少已验证用户信息"));
         }
         Map<String, Object> ticketUser = new java.util.LinkedHashMap<>(user);
-        String clientIp = resolveClientIp(request);
+        ClientIpTrace clientIpTrace = resolveClientIpTrace(request);
+        clientIpTrace.logInfo(log, "platform-pki-login", requestMethod(request), requestUri(request));
+        String clientIp = clientIpTrace.resolved();
         if (StringUtils.hasText(clientIp)) {
             ticketUser.put(PKI_LOGIN_CLIENT_IP, clientIp);
         }
@@ -579,6 +586,11 @@ public class KeycloakAuthResource {
             Map<String, Object> user = new java.util.LinkedHashMap<>(verifiedPrincipal.user());
             pkiLoginClientIp = stringValue(user.get(PKI_LOGIN_CLIENT_IP));
             pkiLoginUserAgent = stringValue(user.get(PKI_LOGIN_USER_AGENT));
+            ClientIpTrace clientIpTrace = resolveClientIpTrace(request);
+            clientIpTrace.logInfo(log, "platform-pki-session", requestMethod(request), requestUri(request));
+            if (!StringUtils.hasText(pkiLoginClientIp)) {
+                pkiLoginClientIp = clientIpTrace.resolved();
+            }
             displayName = resolveUserDisplayName(user);
             // Normalize and map roles from upstream into platform authorities
             java.util.List<String> rawRoles = toStringList(user.get("roles"));
@@ -693,6 +705,7 @@ public class KeycloakAuthResource {
             if (deptCode != null && !deptCode.isBlank()) userOut.put("dept_code", deptCode);
             if (deptName != null && !deptName.isBlank()) userOut.put("dept_name", deptName);
             if (personnelLevel != null && !personnelLevel.isBlank()) userOut.put("personnel_level", personnelLevel);
+            putLoginIp(userOut, pkiLoginClientIp);
             try {
                 Object existingAttrs = userOut.get("attributes");
                 java.util.Map<String, Object> attrs = new java.util.LinkedHashMap<>();
@@ -709,6 +722,7 @@ public class KeycloakAuthResource {
 
             Map<String, Object> data = new java.util.LinkedHashMap<>();
             data.put("authenticated", Boolean.TRUE);
+            putLoginIp(data, pkiLoginClientIp);
             if (kcTokens != null && kcTokens.expiresIn() != null) {
                 data.put("expiresIn", kcTokens.expiresIn());
             }
@@ -1023,16 +1037,28 @@ public class KeycloakAuthResource {
         }
     }
 
-    private String resolveClientIp(HttpServletRequest request) {
-        if (request == null) {
-            return null;
+    private void putLoginIp(Map<String, Object> data, String clientIp) {
+        if (data == null || !StringUtils.hasText(clientIp)) {
+            return;
         }
-        return IpAddressUtils.resolveClientIp(
-            request.getHeader("Forwarded"),
-            request.getHeader("X-Forwarded-For"),
-            request.getHeader("X-Real-IP"),
-            request.getRemoteAddr()
-        );
+        String normalized = clientIp.trim();
+        data.put("loginIp", normalized);
+        data.put("clientIp", normalized);
+    }
+
+    private ClientIpTrace resolveClientIpTrace(HttpServletRequest request) {
+        if (request == null) {
+            return ClientIpTrace.empty();
+        }
+        return ClientIpTrace.from(request::getHeader, request.getRemoteAddr());
+    }
+
+    private String requestMethod(HttpServletRequest request) {
+        return request == null ? null : request.getMethod();
+    }
+
+    private String requestUri(HttpServletRequest request) {
+        return request == null ? null : request.getRequestURI();
     }
 
     private String buildSummary(String prefix, String displayName, String fallbackName) {

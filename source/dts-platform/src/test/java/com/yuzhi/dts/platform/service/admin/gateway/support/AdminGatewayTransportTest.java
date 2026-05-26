@@ -101,6 +101,44 @@ class AdminGatewayTransportTest {
     }
 
     @Test
+    void exchangeEnvelopeDataShouldPropagateForwardedOnlyClientIpIntoXForwardedFor() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRemoteAddr("172.19.0.16");
+        request.addHeader("Forwarded", "for=\"192.168.8.66\";proto=https;host=bi.example.com");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        server
+            .expect(requestTo("http://dts-admin.test:8081/api/platform/orgs"))
+            .andExpect(method(GET))
+            .andExpect(header("X-Forwarded-For", "192.168.8.66"))
+            .andExpect(header("Forwarded", "for=\"192.168.8.66\";proto=https;host=bi.example.com"))
+            .andRespond(
+                withSuccess(
+                    """
+                    {
+                      "status": "SUCCESS",
+                      "message": "ok",
+                      "data": []
+                    }
+                    """,
+                    MediaType.APPLICATION_JSON
+                )
+            );
+
+        List<Map<String, Object>> data = transport.exchangeEnvelopeData(
+            AdminGatewayTarget.API,
+            GET,
+            "/platform/orgs",
+            null,
+            new ParameterizedTypeReference<AdminGatewayEnvelope<List<Map<String, Object>>>>() {},
+            AdminGatewayRequestOptions.defaults()
+        );
+
+        assertThat(data).isEmpty();
+        server.verify();
+    }
+
+    @Test
     void exchangeEnvelopeDataShouldThrowWhenEnvelopeSignalsFailure() {
         server
             .expect(requestTo("http://dts-admin.test:8081/api/platform/orgs"))

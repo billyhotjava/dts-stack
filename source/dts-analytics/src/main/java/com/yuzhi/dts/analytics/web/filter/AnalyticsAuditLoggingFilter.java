@@ -4,8 +4,7 @@ import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.audit.AnalyticsAuditForwarderService;
 import com.yuzhi.dts.analytics.service.audit.AnalyticsAuditForwarderService.AnalyticsAuditEvent;
-import com.yuzhi.dts.analytics.web.support.RequestContext;
-import com.yuzhi.dts.analytics.web.support.RequestContextHolder;
+import com.yuzhi.dts.common.net.ClientIpTrace;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,6 +14,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -23,6 +24,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Component
 public class AnalyticsAuditLoggingFilter extends OncePerRequestFilter {
 
+    private static final Logger log = LoggerFactory.getLogger(AnalyticsAuditLoggingFilter.class);
     private static final long READ_DEDUPE_WINDOW_MS = 2_000L;
     private static final int READ_DEDUPE_MAX_SIZE = 2_048;
 
@@ -74,6 +76,8 @@ public class AnalyticsAuditLoggingFilter extends OncePerRequestFilter {
         }
         String method = request.getMethod();
         String uri = request.getRequestURI();
+        ClientIpTrace ipTrace = ClientIpTrace.from(request::getHeader, request.getRemoteAddr());
+        ipTrace.logInfo(log, "analytics-audit", method, uri);
         boolean read = "GET".equalsIgnoreCase(method);
         if (read && isSupplementaryRead(uri)) {
             return;
@@ -90,7 +94,7 @@ public class AnalyticsAuditLoggingFilter extends OncePerRequestFilter {
             response.getStatus() >= 400 ? "FAILED" : "SUCCESS",
             method,
             uri,
-            resolveClientIp(request),
+            ipTrace.resolved(),
             request.getHeader("User-Agent"),
             (int) ((System.nanoTime() - startNanos) / 1_000_000)
         );
@@ -431,41 +435,4 @@ public class AnalyticsAuditLoggingFilter extends OncePerRequestFilter {
         return StringUtils.hasText(normalized) ? normalized : "GENERAL";
     }
 
-    private String resolveClientIp(HttpServletRequest request) {
-        RequestContext context = RequestContextHolder.current();
-        String forwarded = request.getHeader("X-Forwarded-For");
-        String realIp = request.getHeader("X-Real-IP");
-        String contextIp = context == null ? null : context.clientIp();
-        String remote = request.getRemoteAddr();
-        for (String candidate : new String[] { forwarded, realIp, contextIp, remote }) {
-            String ip = firstUsableIp(candidate);
-            if (StringUtils.hasText(ip)) {
-                return ip;
-            }
-        }
-        return null;
-    }
-
-    private String firstUsableIp(String candidate) {
-        if (!StringUtils.hasText(candidate)) {
-            return null;
-        }
-        for (String part : candidate.split(",")) {
-            String ip = part == null ? "" : part.trim();
-            if (!StringUtils.hasText(ip) || "unknown".equalsIgnoreCase(ip) || isContainerIp(ip)) {
-                continue;
-            }
-            return ip;
-        }
-        return null;
-    }
-
-    private boolean isContainerIp(String ip) {
-        return ip.startsWith("127.") || ip.startsWith("172.16.") || ip.startsWith("172.17.") ||
-            ip.startsWith("172.18.") || ip.startsWith("172.19.") || ip.startsWith("172.20.") ||
-            ip.startsWith("172.21.") || ip.startsWith("172.22.") || ip.startsWith("172.23.") ||
-            ip.startsWith("172.24.") || ip.startsWith("172.25.") || ip.startsWith("172.26.") ||
-            ip.startsWith("172.27.") || ip.startsWith("172.28.") || ip.startsWith("172.29.") ||
-            ip.startsWith("172.30.") || ip.startsWith("172.31.");
-    }
 }

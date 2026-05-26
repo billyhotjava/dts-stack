@@ -693,6 +693,7 @@ services:
           echo "[dts-analytics] sanitized wrapping quotes in JAVA_TOOL_OPTIONS"
         fi
         export JAVA_TOOL_OPTIONS="$${clean_java_tool_options}"
+        mvn -q -f /workspace-src/dts-common/pom.xml -DskipTests install
         mvn -q -DskipTests package
         mvn -q -DskipTests spring-boot:run \
           -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5007" \
@@ -1675,7 +1676,14 @@ services:
       - --ping=${TRAEFIK_ENABLE_PING}
       - --entrypoints.metrics.address=:${TRAEFIK_METRICS_PORT}
       - --accesslog=true
+      - --accesslog.format=json
       - --accesslog.filepath=/var/log/traefik/access.log
+      - --accesslog.fields.headers.defaultmode=drop
+      - --accesslog.fields.headers.names.Forwarded=keep
+      - --accesslog.fields.headers.names.X-Forwarded-For=keep
+      - --accesslog.fields.headers.names.X-Forwarded-Host=keep
+      - --accesslog.fields.headers.names.X-Forwarded-Proto=keep
+      - --accesslog.fields.headers.names.X-Real-IP=keep
       - --log.filepath=/var/log/traefik/traefik.log
       - --serversTransport.insecureSkipVerify=true
       - --log.level=INFO

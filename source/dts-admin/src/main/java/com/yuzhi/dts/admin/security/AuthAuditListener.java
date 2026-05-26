@@ -5,7 +5,7 @@ import com.yuzhi.dts.admin.service.audit.AuditResultStatus;
 import com.yuzhi.dts.admin.service.audit.AuditV2Service;
 import com.yuzhi.dts.admin.service.audit.ButtonCodes;
 import com.yuzhi.dts.admin.service.user.AdminUserService;
-import com.yuzhi.dts.common.net.IpAddressUtils;
+import com.yuzhi.dts.common.net.ClientIpTrace;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import java.nio.charset.StandardCharsets;
@@ -247,12 +247,20 @@ public class AuthAuditListener {
     }
 
     private String resolveClientIp() {
+        ClientIpTrace trace = currentClientIpTrace();
+        if (trace != null && org.springframework.util.StringUtils.hasText(trace.resolved())) {
+            return trace.resolved();
+        }
+        return null;
+    }
+
+    private ClientIpTrace currentClientIpTrace() {
         try {
             RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
             if (attrs instanceof ServletRequestAttributes servletAttrs) {
                 HttpServletRequest request = servletAttrs.getRequest();
                 if (request != null) {
-                    return IpAddressUtils.resolveClientIp(request::getHeader, request.getRemoteAddr());
+                    return ClientIpTrace.from(request::getHeader, request.getRemoteAddr());
                 }
             }
         } catch (Exception ex) {
@@ -260,7 +268,7 @@ public class AuthAuditListener {
                 log.debug("Failed to resolve client IP for login audit: {}", ex.getMessage());
             }
         }
-        return null;
+        return ClientIpTrace.empty();
     }
 
     private String buildLoginKey(String username, String clientIp) {
@@ -326,12 +334,19 @@ public class AuthAuditListener {
         }
         try {
             HttpServletRequest request = currentRequest();
+            ClientIpTrace ipTrace = currentClientIpTrace();
+            ipTrace.logInfo(
+                log,
+                "admin-auth-listener",
+                request != null ? request.getMethod() : "POST",
+                request != null ? request.getRequestURI() : "/internal/admin-auth"
+            );
             AuditActionRequest.Builder builder = AuditActionRequest
                 .builder(username, buttonCode)
                 .summary(summary)
                 .result(result)
                 .actorName(resolveDisplayName(username))
-                .client(resolveClientIp(), request != null ? request.getHeader("User-Agent") : null)
+                .client(ipTrace.resolved(), request != null ? request.getHeader("User-Agent") : null)
                 .request(
                     request != null ? request.getRequestURI() : "/internal/admin-auth",
                     request != null ? request.getMethod() : "POST"

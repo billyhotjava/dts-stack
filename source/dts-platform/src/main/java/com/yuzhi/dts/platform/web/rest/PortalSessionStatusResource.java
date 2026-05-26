@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import com.yuzhi.dts.common.net.ClientIpTrace;
 import com.yuzhi.dts.platform.domain.security.PortalSessionCloseReason;
 import com.yuzhi.dts.platform.domain.security.PortalSessionEntity;
 import com.yuzhi.dts.platform.repository.security.PortalSessionRepository;
@@ -12,6 +13,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.util.StringUtils;
@@ -22,6 +25,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/session")
 public class PortalSessionStatusResource {
+
+    private static final Logger log = LoggerFactory.getLogger(PortalSessionStatusResource.class);
 
     private final PortalSessionRepository sessionRepository;
     private final Clock clock;
@@ -47,6 +52,8 @@ public class PortalSessionStatusResource {
         Map<String, Object> data = new LinkedHashMap<>();
         Instant now = Instant.now(clock);
         data.put("serverNow", now.toString());
+        ClientIpTrace clientIpTrace = resolveClientIpTrace(request);
+        clientIpTrace.logInfo(log, "platform-session-status", requestMethod(request), requestUri(request));
 
         String token = extractToken(request);
         if (token == null) {
@@ -79,6 +86,7 @@ public class PortalSessionStatusResource {
 
         data.put("authenticated", true);
         data.put("username", entity.getUsername());
+        putClientIp(data, clientIpTrace.resolved());
         String displayName = entity.getDisplayName();
         if (displayName != null && !displayName.isBlank()) {
             data.put("displayName", displayName);
@@ -100,6 +108,30 @@ public class PortalSessionStatusResource {
             data.put("remainingSeconds", null);
         }
         return ApiResponses.ok(data);
+    }
+
+    private ClientIpTrace resolveClientIpTrace(HttpServletRequest request) {
+        if (request == null) {
+            return ClientIpTrace.empty();
+        }
+        return ClientIpTrace.from(request::getHeader, request.getRemoteAddr());
+    }
+
+    private String requestMethod(HttpServletRequest request) {
+        return request == null ? null : request.getMethod();
+    }
+
+    private String requestUri(HttpServletRequest request) {
+        return request == null ? null : request.getRequestURI();
+    }
+
+    private void putClientIp(Map<String, Object> data, String clientIp) {
+        if (!StringUtils.hasText(clientIp)) {
+            return;
+        }
+        String normalized = clientIp.trim();
+        data.put("loginIp", normalized);
+        data.put("clientIp", normalized);
     }
 
     private void appendReason(Map<String, Object> data, PortalSessionCloseReason reason) {

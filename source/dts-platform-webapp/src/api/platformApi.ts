@@ -5,6 +5,8 @@ export type PortalSessionStatus = {
 	authenticated?: boolean;
 	username?: string;
 	displayName?: string;
+	loginIp?: string;
+	clientIp?: string;
 	roles?: string[];
 	permissions?: string[];
 	deptCode?: string;

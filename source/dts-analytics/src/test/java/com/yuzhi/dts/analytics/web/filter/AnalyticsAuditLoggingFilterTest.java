@@ -43,6 +43,23 @@ class AnalyticsAuditLoggingFilterTest {
     }
 
     @Test
+    void shouldRecordForwardedOnlyInternalClientIp() throws Exception {
+        AnalyticsSessionService sessionService = mock(AnalyticsSessionService.class);
+        AnalyticsAuditForwarderService forwarder = mock(AnalyticsAuditForwarderService.class);
+        AnalyticsAuditLoggingFilter filter = new AnalyticsAuditLoggingFilter(sessionService, forwarder);
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/screen");
+        request.setRemoteAddr("172.19.0.14");
+        request.addHeader("Forwarded", "for=\"192.168.8.66\";proto=https;host=bi.example.com");
+        when(sessionService.resolveUser(request)).thenReturn(Optional.of(user()));
+
+        filter.doFilter(request, new MockHttpServletResponse(), (req, res) -> {});
+
+        ArgumentCaptor<AnalyticsAuditEvent> captor = ArgumentCaptor.forClass(AnalyticsAuditEvent.class);
+        verify(forwarder).record(captor.capture());
+        assertThat(captor.getValue().clientIp()).isEqualTo("192.168.8.66");
+    }
+
+    @Test
     void shouldSkipAnalyticsAuditWhenNoHumanUserIsResolved() throws Exception {
         AnalyticsSessionService sessionService = mock(AnalyticsSessionService.class);
         AnalyticsAuditForwarderService forwarder = mock(AnalyticsAuditForwarderService.class);

@@ -44,6 +44,11 @@
             <version>${jhipster-framework.version}</version>
         </dependency>
         <dependency>
+            <groupId>com.yuzhi.dts.common</groupId>
+            <artifactId>dts-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
             <artifactId>caffeine</artifactId>
         </dependency>

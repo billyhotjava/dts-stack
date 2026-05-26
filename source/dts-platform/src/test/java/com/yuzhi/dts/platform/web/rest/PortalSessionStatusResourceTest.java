@@ -167,6 +167,32 @@ class PortalSessionStatusResourceTest {
     }
 
     @Test
+    void statusShouldExposeResolvedLoginIpForRecoveredPortalSession() {
+        PortalSessionRepository sessionRepository = mock(PortalSessionRepository.class);
+        PortalSessionEntity entity = new PortalSessionEntity();
+        entity.setId(UUID.randomUUID());
+        entity.setUsername("alice");
+        entity.setAccessToken("token-1");
+        entity.setRefreshToken("refresh-1");
+        entity.setExpiresAt(Instant.parse("2026-04-09T10:30:45Z"));
+        when(sessionRepository.findByAccessToken("token-1")).thenReturn(Optional.of(entity));
+
+        PortalSessionStatusResource resource = resourceWithCookie(sessionRepository, "token-1");
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Forwarded", "for=192.168.31.88;proto=https");
+        request.setRemoteAddr("172.18.0.1");
+
+        ApiResponse<Map<String, Object>> response = resource.status(request);
+
+        assertThat(response.getData())
+            .containsEntry("authenticated", true)
+            .containsEntry("username", "alice")
+            .containsEntry("loginIp", "192.168.31.88")
+            .containsEntry("clientIp", "192.168.31.88");
+        verify(sessionRepository).findByAccessToken("token-1");
+    }
+
+    @Test
     void statusShouldIgnoreLegacyAccessTokenHeaderWhenCookieIsMissing() {
         PortalSessionRepository sessionRepository = mock(PortalSessionRepository.class);
         PortalSessionStatusResource resource = new PortalSessionStatusResource(

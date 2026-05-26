@@ -11,6 +11,10 @@ export interface UserInfo {
 	lastName?: string;
 	// Optional computed full name used by profile pages
 	fullName?: string;
+	/** Resolved real client IP captured at the current login/session probe. */
+	loginIp?: string;
+	/** Compatibility alias used by audit/session APIs. */
+	clientIp?: string;
 	// Optional Keycloak-style attributes map
 	attributes?: Record<string, string[]>;
 	department?: string;

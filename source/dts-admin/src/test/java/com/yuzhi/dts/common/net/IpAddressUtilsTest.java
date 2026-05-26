@@ -148,4 +148,24 @@ class IpAddressUtilsTest {
     void headerLookupNullUsesRemoteAddr() {
         assertThat(IpAddressUtils.resolveClientIp(null, "203.0.113.12")).isEqualTo("203.0.113.12");
     }
+
+    @Test
+    @DisplayName("诊断 trace：保留完整代理头、候选链和 remote fallback 标记")
+    void traceCapturesHeaderChainAndFallbackFlags() {
+        Map<String, String> map = new HashMap<>();
+        map.put("Forwarded", "for=192.168.8.66;proto=https;host=biadmin.example.com");
+        map.put("X-Forwarded-For", "192.168.8.66, 172.19.0.9");
+        map.put("X-Real-IP", "172.19.0.9");
+
+        ClientIpTrace trace = ClientIpTrace.from(headers(map), "172.19.0.12");
+
+        assertThat(trace.resolved()).isEqualTo("192.168.8.66");
+        assertThat(trace.forwarded()).isEqualTo("for=192.168.8.66;proto=https;host=biadmin.example.com");
+        assertThat(trace.forwardedFor()).isEqualTo("192.168.8.66, 172.19.0.9");
+        assertThat(trace.realIp()).isEqualTo("172.19.0.9");
+        assertThat(trace.remoteAddr()).isEqualTo("172.19.0.12");
+        assertThat(trace.candidates()).containsExactly("192.168.8.66", "192.168.8.66", "172.19.0.9", "172.19.0.9", "172.19.0.12");
+        assertThat(trace.fallbackToRemote()).isFalse();
+        assertThat(trace.missingForwarded()).isFalse();
+    }
 }

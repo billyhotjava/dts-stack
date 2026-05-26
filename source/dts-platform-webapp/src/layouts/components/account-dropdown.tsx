@@ -18,10 +18,16 @@ import {
  */
 export default function AccountDropdown() {
 	const { replace } = useRouter();
-	const { username, email, avatar } = useUserInfo();
+	const { username, email, avatar, loginIp, clientIp } = useUserInfo();
 	const signOut = useSignOut();
 	const { backToLogin } = useLoginStateContext();
 	const { t } = useTranslation();
+	const displayLoginIp =
+		typeof loginIp === "string" && loginIp.trim()
+			? loginIp.trim()
+			: typeof clientIp === "string" && clientIp.trim()
+				? clientIp.trim()
+				: "";
 
 	const logout = async () => {
 		try {
@@ -51,6 +57,11 @@ export default function AccountDropdown() {
 					<div className="flex min-w-0 flex-col items-start">
 						<div className="truncate text-text-primary text-sm font-semibold">{username}</div>
 						<div className="truncate text-text-secondary text-xs">{email}</div>
+						{displayLoginIp ? (
+							<div className="mt-1 max-w-full truncate text-[11px] text-text-secondary" title={displayLoginIp}>
+								登录IP {displayLoginIp}
+							</div>
+						) : null}
 					</div>
 				</div>
 				<DropdownMenuItem asChild>
