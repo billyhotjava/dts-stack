@@ -36,7 +36,9 @@ public class PlatformSessionBridgeFilter extends OncePerRequestFilter {
         if (path == null) {
             return false;
         }
-        return path.startsWith("/actuator/");
+        return path.startsWith("/actuator/")
+                || "/api/health".equals(path)
+                || "/api/info".equals(path);
     }
 
     @Override

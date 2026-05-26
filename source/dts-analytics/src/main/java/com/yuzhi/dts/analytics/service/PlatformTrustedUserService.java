@@ -166,6 +166,11 @@ public class PlatformTrustedUserService {
     }
 
     private Optional<PlatformIdentity> resolveIdentityFromForwardedHeaders(HttpServletRequest request) {
+        String username = request == null ? "" : header(request, "X-DTS-User");
+        if (!StringUtils.hasText(username)) {
+            return Optional.empty();
+        }
+
         if (properties.requireForwardedHeaders()) {
             // Basic hardening: only trust identity headers when request comes via reverse-proxy.
             //
@@ -175,11 +180,6 @@ public class PlatformTrustedUserService {
                 LOG.warn("Rejecting analytics auth request with X-DTS headers but missing forwarded proxy markers");
                 return Optional.empty();
             }
-        }
-
-        String username = header(request, "X-DTS-User");
-        if (!StringUtils.hasText(username)) {
-            return Optional.empty();
         }
 
         String displayName = header(request, "X-DTS-Display-Name");
