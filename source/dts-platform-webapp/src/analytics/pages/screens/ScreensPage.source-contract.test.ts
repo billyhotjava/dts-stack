@@ -139,6 +139,7 @@ test("ScreensPage keeps the domain classifier and table inside the page frame", 
 test("ScreensPage fixed action column stays on the same visual layer as each table row", async () => {
 	const [source, globalCss] = await Promise.all([readFile(screensPagePath, "utf8"), readFile(globalCssPath, "utf8")]);
 	const tableSource = source.slice(source.indexOf("<table"), source.indexOf("</table>"));
+	const actionCellClass = tableSource.match(/className="analytics-screen-action-cell[^"]+"/)?.[0] ?? "";
 
 	assert.match(
 		tableSource,
@@ -146,13 +147,13 @@ test("ScreensPage fixed action column stays on the same visual layer as each tab
 	);
 	assert.match(tableSource, /className="analytics-screen-action-header/);
 	assert.match(tableSource, /className="analytics-screen-action-cell/);
-	assert.match(tableSource, /group-hover:bg-brand\/5/);
+	assert.doesNotMatch(actionCellClass, /shadow-\[-8px_0_12px_-6px_rgba\(15,23,42,0\.22\)\]/);
 	assert.doesNotMatch(tableSource, /shadow-\[-8px_0_12px_-6px_rgba\(15,23,42,0\.22\)\]/);
 	assert.match(
 		globalCss,
 		/\.analytics-screen-action-header,\s*main\[data-slot="slash-layout-main"\]\s*\.analytics-screen-action-cell\s*\{[\s\S]*position:\s*sticky;/,
 	);
-	assert.match(globalCss, /\.analytics-screen-action-cell\s*\{[\s\S]*z-index:\s*1;/);
+	assert.match(globalCss, /\.analytics-screen-action-cell\s*\{[\s\S]*z-index:\s*10;/);
 });
 
 test("ScreensPage action buttons fit inside the fixed action cell", async () => {
@@ -162,6 +163,22 @@ test("ScreensPage action buttons fit inside the fixed action cell", async () => 
 	assert.match(globalCss, /\.analytics-screen-col-actions\s*\{[\s\S]*width:\s*280px;/);
 	assert.match(globalCss, /\.analytics-screen-action-cell\s*\{[\s\S]*overflow:\s*hidden;/);
 	assert.doesNotMatch(globalCss, /analytics-screen-col-actions\s*\{[\s\S]*clamp\(/);
+});
+
+test("ScreensPage fixed action column is an opaque independent layer", async () => {
+	const [source, globalCss] = await Promise.all([readFile(screensPagePath, "utf8"), readFile(globalCssPath, "utf8")]);
+	const tableSource = source.slice(source.indexOf("<table"), source.indexOf("</table>"));
+	const actionCellClass = tableSource.match(/className="analytics-screen-action-cell[^"]+"/)?.[0] ?? "";
+
+	assert.match(tableSource, /<tr className="bg-surface-muted text-text-secondary text-sm">/);
+	assert.doesNotMatch(actionCellClass, /group-hover:bg-brand\/5/);
+	assert.match(
+		globalCss,
+		/\.analytics-screen-action-header,\s*main\[data-slot="slash-layout-main"\]\s*\.analytics-screen-action-cell\s*\{[\s\S]*background-clip:\s*border-box;/,
+	);
+	assert.match(globalCss, /\.analytics-screen-action-header\s*\{[\s\S]*background-color:\s*var\(--surface-muted\);/);
+	assert.match(globalCss, /\.analytics-screen-action-cell\s*\{[\s\S]*z-index:\s*10;/);
+	assert.match(globalCss, /\.analytics-screen-action-cell\s*\{[\s\S]*background-color:\s*var\(--surface-card\);/);
 });
 
 test("ScreensPage management table uses visible horizontal scrolling and unified typography", async () => {
@@ -175,7 +192,7 @@ test("ScreensPage management table uses visible horizontal scrolling and unified
 		/\.analytics-screen-table-scroll::-webkit-scrollbar-thumb\s*\{[\s\S]*background:\s*rgba\(100,\s*116,\s*139,\s*0\.95\)/,
 	);
 	assert.match(tableSource, /className="analytics-screen-management-table w-full border-collapse text-sm"/);
-	assert.match(tableSource, /<tr className="bg-surface-secondary text-text-secondary text-sm">/);
+	assert.match(tableSource, /<tr className="bg-surface-muted text-text-secondary text-sm">/);
 	assert.match(
 		tableSource,
 		/<ClassificationTag value=\{screen\.classification \?\? null\} style=\{\{ fontSize: "inherit" \}\} \/>/,

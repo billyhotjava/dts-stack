@@ -1045,7 +1045,7 @@ export default function ScreensPage() {
 										<col className="analytics-screen-col-actions" />
 									</colgroup>
 									<thead>
-										<tr className="bg-surface-secondary text-text-secondary text-sm">
+										<tr className="bg-surface-muted text-text-secondary text-sm">
 											{/* 大屏管理表头：居中 + 加粗（font-bold 覆盖 SortableHeader 默认 font-semibold） */}
 											<SortableHeader sortKey="name" sortState={sortState} onSort={requestSort} className="font-bold">
 												名称
@@ -1083,7 +1083,7 @@ export default function ScreensPage() {
 											>
 												更新时间
 											</SortableHeader>
-											<th className="analytics-screen-action-header bg-surface-secondary text-center font-bold px-4 py-3 whitespace-nowrap border-l border-border-default">操作</th>
+											<th className="analytics-screen-action-header bg-surface-muted text-center font-bold px-4 py-3 whitespace-nowrap border-l border-border-default">操作</th>
 										</tr>
 									</thead>
 									<tbody>
@@ -1118,7 +1118,7 @@ export default function ScreensPage() {
 													<td className="px-4 py-3 align-top text-text-secondary whitespace-nowrap">
 														{formatDate(screen.updatedAt)}
 													</td>
-													<td className="analytics-screen-action-cell bg-surface-card group-hover:bg-brand/5 px-3 py-3 align-middle border-l border-border-default transition-colors duration-150">
+													<td className="analytics-screen-action-cell bg-surface-card px-3 py-3 align-middle border-l border-border-default transition-colors duration-150">
 														<div className="flex flex-nowrap items-center justify-end gap-1.5">
 															<button
 																className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-sm font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"

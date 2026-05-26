@@ -141,16 +141,18 @@
 		width: 280px;
 		min-width: 280px;
 		max-width: 280px;
-		background-clip: padding-box;
+		background-clip: border-box;
 	}
 
 	main[data-slot="slash-layout-main"] .analytics-screen-action-header {
-		z-index: 20;
+		z-index: 30;
+		background-color: var(--surface-muted);
 	}
 
 	main[data-slot="slash-layout-main"] .analytics-screen-action-cell {
-		z-index: 1;
+		z-index: 10;
 		overflow: hidden;
+		background-color: var(--surface-card);
 	}
 
 	@media (min-width: 1920px) {
