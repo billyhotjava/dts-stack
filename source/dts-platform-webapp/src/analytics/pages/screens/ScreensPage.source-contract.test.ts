@@ -148,9 +148,16 @@ test("ScreensPage management table uses visible horizontal scrolling and unified
 	);
 	assert.match(tableSource, /className="analytics-screen-management-table w-full border-collapse text-sm"/);
 	assert.match(tableSource, /<tr className="bg-surface-secondary text-text-secondary text-sm">/);
+	assert.match(
+		tableSource,
+		/<ClassificationTag value=\{screen\.classification \?\? null\} style=\{\{ fontSize: "inherit" \}\} \/>/,
+	);
+	assert.doesNotMatch(tableSource, /size="small"/);
 	assert.doesNotMatch(tableSource, /text-\[11px\]/);
 	assert.doesNotMatch(tableSource, /text-xs font-medium/);
 	assert.doesNotMatch(tableSource, /bg-success\/10|bg-warning\/10|border-success\/30|border-warning\/30/);
+	assert.match(tableSource, /className="font-semibold text-text-primary"/);
+	assert.doesNotMatch(tableSource, /text-\[#166534\]|text-\[#9a3412\]/);
 });
 
 test("ScreensPage management table uses responsive column sizing for common monitor widths", async () => {

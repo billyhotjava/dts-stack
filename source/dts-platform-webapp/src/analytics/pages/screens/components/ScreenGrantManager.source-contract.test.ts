@@ -23,7 +23,21 @@ test("role candidates use admin role ID and role name terminology", async () => 
 	assert.match(source, />\s*角色ID\s*</);
 	assert.match(source, />\s*角色名称\s*</);
 	assert.equal(source.includes("<th className={headerCls}>描述</th>"), false);
-	assert.match(source, /placeholder=\{granteeType === 'USER' \? '搜索用户名或姓名\.\.\.' : '搜索角色ID或角色名称\.\.\.'\}/);
+	assert.match(
+		source,
+		/placeholder=\{granteeType === 'USER' \? '搜索用户名或姓名\.\.\.' : '搜索角色ID或角色名称\.\.\.'\}/,
+	);
 	assert.match(source, /<td className=\{`\$\{cellCls\} font-medium`\}>\{role\.name\}<\/td>/);
 	assert.match(source, /<td className=\{`\$\{cellCls\} text-text-secondary`\}>\{role\.description \|\| '-'\}<\/td>/);
+});
+
+test("existing grant user labels are isolated from add-permission user search results", async () => {
+	const source = await readFile(managerPath, "utf8");
+
+	assert.match(source, /const \[grantUserDirectory, setGrantUserDirectory\] = useState<PlatformUser\[\]>\(\[\]\);/);
+	assert.match(source, /const loadGrantUserDirectory = useCallback\(async \(\) =>/);
+	assert.match(source, /setGrantUserDirectory\(result \|\| \[\]\);/);
+	assert.match(source, /for \(const u of grantUserDirectory\) \{/);
+	assert.doesNotMatch(source, /for \(const u of platformUsers\) \{/);
+	assert.match(source, /\}, \[grantUserDirectory\]\);/);
 });

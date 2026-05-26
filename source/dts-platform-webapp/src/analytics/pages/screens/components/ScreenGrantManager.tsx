@@ -46,6 +46,9 @@ export function ScreenGrantManager({ screenId, isOwner = false }: ScreenGrantMan
 	const [roles, setRoles] = useState<PlatformRole[]>([]);
 	const [rolesLoading, setRolesLoading] = useState(false);
 
+	// ── Existing grant display directory ──
+	const [grantUserDirectory, setGrantUserDirectory] = useState<PlatformUser[]>([]);
+
 	// ── Pagination ──
 	const [currentPage, setCurrentPage] = useState(1);
 
@@ -89,6 +92,15 @@ export function ScreenGrantManager({ screenId, isOwner = false }: ScreenGrantMan
 		}
 	}, []);
 
+	const loadGrantUserDirectory = useCallback(async () => {
+		try {
+			const result = await analyticsApi.listPlatformUsers();
+			setGrantUserDirectory(result || []);
+		} catch {
+			setGrantUserDirectory([]);
+		}
+	}, []);
+
 	// ── Load roles ──
 	const loadRoles = useCallback(async () => {
 		setRolesLoading(true);
@@ -105,8 +117,9 @@ export function ScreenGrantManager({ screenId, isOwner = false }: ScreenGrantMan
 	// ── Trigger load on mount ──
 	useEffect(() => {
 		loadUsers('');
+		loadGrantUserDirectory();
 		loadRoles();
-	}, [loadUsers, loadRoles]);
+	}, [loadUsers, loadGrantUserDirectory, loadRoles]);
 
 	// Reset selection state when tab changes
 	useEffect(() => {
@@ -141,12 +154,12 @@ export function ScreenGrantManager({ screenId, isOwner = false }: ScreenGrantMan
 	// ── Build lookup maps for existing grants ──
 	const userDisplayMap = useMemo(() => {
 		const map = new Map<string, PlatformUser>();
-		for (const u of platformUsers) {
+		for (const u of grantUserDirectory) {
 			if (u.username) map.set(u.username.toLowerCase(), u);
 			if (u.id != null) map.set(String(u.id).toLowerCase(), u);
 		}
 		return map;
-	}, [platformUsers]);
+	}, [grantUserDirectory]);
 
 	const roleDisplayMap = useMemo(() => {
 		const map = new Map<string, PlatformRole>();

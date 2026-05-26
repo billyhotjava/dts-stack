@@ -1108,12 +1108,10 @@ export default function ScreensPage() {
 													</td>
 													{/* Sprint-24 F2/T02：密级 Tag，null 显示橙色「未设密级」 */}
 													<td className="px-4 py-3 align-top whitespace-nowrap">
-														<ClassificationTag value={screen.classification ?? null} size="small" />
+														<ClassificationTag value={screen.classification ?? null} style={{ fontSize: "inherit" }} />
 													</td>
 													<td className="px-4 py-3 align-top whitespace-nowrap">
-														<span
-															className={`font-semibold ${screen.publishedVersionNo ? "text-[#166534]" : "text-[#9a3412]"}`}
-														>
+														<span className="font-semibold text-text-primary">
 															{screen.publishedVersionNo ? `已发布 v${screen.publishedVersionNo}` : "未发布"}
 														</span>
 													</td>
