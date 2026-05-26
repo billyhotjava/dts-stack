@@ -1097,9 +1097,16 @@ export default function ScreensPage() {
 													data-testid={`analytics-screen-row-${screen.id}`}
 												>
 													<td className="min-w-0 px-4 py-3 align-top font-medium text-text-primary">
-														<span className="line-clamp-2 whitespace-normal break-words leading-5" title={screen.name || "未命名大屏"}>
+														<a
+															className="line-clamp-2 whitespace-normal break-words leading-5 text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 rounded-sm"
+															data-testid={`analytics-screen-name-link-${screen.id}`}
+															href={resolveRouteForOpen(`/bi/screens/${screen.id}/preview`)}
+															rel="noopener noreferrer"
+															target="_blank"
+															title={screen.name || "未命名大屏"}
+														>
 															{screen.name || "未命名大屏"}
-														</span>
+														</a>
 													</td>
 													<td className="min-w-0 px-4 py-3 align-top text-text-secondary">
 														<span className="line-clamp-2 whitespace-normal break-words leading-5" title={screen.description || "无描述"}>

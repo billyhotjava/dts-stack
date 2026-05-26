@@ -21,6 +21,16 @@ test("ScreensPage opens editor in a new window from the management list", async 
 	);
 });
 
+test("ScreensPage links screen names to the preview page from the management list", async () => {
+	const source = await readFile(screensPagePath, "utf8");
+	const tableSource = source.slice(source.indexOf("<table"), source.indexOf("</table>"));
+
+	assert.match(tableSource, /data-testid=\{`analytics-screen-name-link-\$\{screen\.id\}`\}/);
+	assert.match(tableSource, /href=\{resolveRouteForOpen\(`\/bi\/screens\/\$\{screen\.id\}\/preview`\)\}/);
+	assert.match(tableSource, /target="_blank"/);
+	assert.match(tableSource, /rel="noopener noreferrer"/);
+});
+
 test("ScreensPage hides management actions when row permissions do not allow them", async () => {
 	const source = await readFile(screensPagePath, "utf8");
 
