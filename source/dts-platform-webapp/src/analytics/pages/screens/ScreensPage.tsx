@@ -1083,7 +1083,7 @@ export default function ScreensPage() {
 											>
 												更新时间
 											</SortableHeader>
-											<th className="sticky right-0 z-20 bg-surface-secondary text-center font-bold px-4 py-3 whitespace-nowrap border-l border-border-default shadow-[-8px_0_12px_-6px_rgba(15,23,42,0.22)]">操作</th>
+											<th className="analytics-screen-action-header bg-surface-secondary text-center font-bold px-4 py-3 whitespace-nowrap border-l border-border-default">操作</th>
 										</tr>
 									</thead>
 									<tbody>
@@ -1093,7 +1093,7 @@ export default function ScreensPage() {
 											return (
 												<tr
 													key={screen.id}
-													className="border-t border-border-default bg-surface-card hover:bg-brand/5 transition-colors duration-150"
+													className="group border-t border-border-default bg-surface-card hover:bg-brand/5 transition-colors duration-150"
 													data-testid={`analytics-screen-row-${screen.id}`}
 												>
 													<td className="min-w-0 px-4 py-3 align-top font-medium text-text-primary">
@@ -1118,7 +1118,7 @@ export default function ScreensPage() {
 													<td className="px-4 py-3 align-top text-text-secondary whitespace-nowrap">
 														{formatDate(screen.updatedAt)}
 													</td>
-													<td className="sticky right-0 z-10 bg-surface-card px-3 py-3 align-middle border-l border-border-default shadow-[-8px_0_12px_-6px_rgba(15,23,42,0.22)]">
+													<td className="analytics-screen-action-cell bg-surface-card group-hover:bg-brand/5 px-3 py-3 align-middle border-l border-border-default transition-colors duration-150">
 														<div className="flex flex-nowrap items-center justify-end gap-1.5">
 															<button
 																className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-sm font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"

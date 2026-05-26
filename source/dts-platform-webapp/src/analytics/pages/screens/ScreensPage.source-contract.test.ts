@@ -133,7 +133,26 @@ test("ScreensPage keeps the domain classifier and table inside the page frame", 
 	assert.match(source, /className="analytics-screen-management-table w-full border-collapse text-sm"/);
 	// 操作列固定在右侧(sticky) + 按钮横排不换行(flex-nowrap)
 	assert.match(source, /flex flex-nowrap items-center justify-end gap-1\.5/);
-	assert.match(source, /sticky right-0 z-10 bg-surface-card/);
+	assert.match(source, /analytics-screen-action-cell/);
+});
+
+test("ScreensPage fixed action column stays on the same visual layer as each table row", async () => {
+	const [source, globalCss] = await Promise.all([readFile(screensPagePath, "utf8"), readFile(globalCssPath, "utf8")]);
+	const tableSource = source.slice(source.indexOf("<table"), source.indexOf("</table>"));
+
+	assert.match(
+		tableSource,
+		/className="group border-t border-border-default bg-surface-card hover:bg-brand\/5 transition-colors duration-150"/,
+	);
+	assert.match(tableSource, /className="analytics-screen-action-header/);
+	assert.match(tableSource, /className="analytics-screen-action-cell/);
+	assert.match(tableSource, /group-hover:bg-brand\/5/);
+	assert.doesNotMatch(tableSource, /shadow-\[-8px_0_12px_-6px_rgba\(15,23,42,0\.22\)\]/);
+	assert.match(
+		globalCss,
+		/\.analytics-screen-action-header,\s*main\[data-slot="slash-layout-main"\]\s*\.analytics-screen-action-cell\s*\{[\s\S]*position:\s*sticky;/,
+	);
+	assert.match(globalCss, /\.analytics-screen-action-cell\s*\{[\s\S]*z-index:\s*1;/);
 });
 
 test("ScreensPage management table uses visible horizontal scrolling and unified typography", async () => {

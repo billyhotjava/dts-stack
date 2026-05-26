@@ -134,6 +134,21 @@
 		width: clamp(220px, 14%, 280px);
 	}
 
+	main[data-slot="slash-layout-main"] .analytics-screen-action-header,
+	main[data-slot="slash-layout-main"] .analytics-screen-action-cell {
+		position: sticky;
+		right: 0;
+		background-clip: padding-box;
+	}
+
+	main[data-slot="slash-layout-main"] .analytics-screen-action-header {
+		z-index: 20;
+	}
+
+	main[data-slot="slash-layout-main"] .analytics-screen-action-cell {
+		z-index: 1;
+	}
+
 	@media (min-width: 1920px) {
 		main[data-slot="slash-layout-main"] .analytics-screen-management-table {
 			min-width: 100%;
