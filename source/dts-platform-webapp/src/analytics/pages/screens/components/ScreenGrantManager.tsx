@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { analyticsApi, type ScreenAclEntry, type PlatformUser, type PlatformRole } from '../../../api/analyticsApi';
+import { analyticsApi, type CurrentUser, type ScreenAclEntry, type PlatformUser, type PlatformRole } from '../../../api/analyticsApi';
 import { SortableHeader } from '../../../components/SortableHeader';
 import { stringComparator, useTableSort } from '../../../hooks/useTableSort';
 
@@ -24,6 +24,44 @@ function toBackendPermission(perm: 'MANAGE' | 'READ'): string {
 	return perm === 'MANAGE' ? 'MANAGER' : 'VIEWER';
 }
 
+function normalizeGrantSearchValue(value: string | null | undefined): string {
+	return (value || '').trim().toLowerCase();
+}
+
+function matchesGrantUserSearch(user: PlatformUser, searchQuery: string): boolean {
+	const keyword = normalizeGrantSearchValue(searchQuery);
+	if (!keyword) return true;
+	return [user.username, user.displayName, user.deptName, user.deptCode]
+		.map(normalizeGrantSearchValue)
+		.some((value) => value.includes(keyword));
+}
+
+function mergePlatformUsers(existing: PlatformUser[], incoming: PlatformUser[]): PlatformUser[] {
+	if (incoming.length === 0) return existing;
+	const byKey = new Map<string, PlatformUser>();
+	for (const user of existing) {
+		const key = normalizeGrantSearchValue(user.username || user.id);
+		if (key) byKey.set(key, user);
+	}
+	for (const user of incoming) {
+		const key = normalizeGrantSearchValue(user.username || user.id);
+		if (key) byKey.set(key, { ...byKey.get(key), ...user });
+	}
+	return Array.from(byKey.values());
+}
+
+function isCurrentGrantUser(user: PlatformUser, currentUser: CurrentUser | null): boolean {
+	if (!currentUser) return false;
+	const currentKeys = [
+		currentUser.id == null ? null : String(currentUser.id),
+		currentUser.platform_username,
+		currentUser.email,
+	].map(normalizeGrantSearchValue).filter(Boolean);
+	if (currentKeys.length === 0) return false;
+	const userKeys = [user.id, user.username].map(normalizeGrantSearchValue).filter(Boolean);
+	return userKeys.some((key) => currentKeys.includes(key));
+}
+
 const PAGE_SIZE = 10;
 
 export function ScreenGrantManager({ screenId, isOwner = false }: ScreenGrantManagerProps) {
@@ -32,6 +70,7 @@ export function ScreenGrantManager({ screenId, isOwner = false }: ScreenGrantMan
 	const [error, setError] = useState<string | null>(null);
 	const [forbidden, setForbidden] = useState(false);
 	const [rows, setRows] = useState<ScreenAclEntry[]>([]);
+	const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
 
 	// ── Add grant form ──
 	const [granteeType, setGranteeType] = useState<'USER' | 'ROLE'>('USER');
@@ -79,14 +118,18 @@ export function ScreenGrantManager({ screenId, isOwner = false }: ScreenGrantMan
 		loadGrants();
 	}, [screenId, loadGrants]);
 
+	useEffect(() => {
+		analyticsApi.getCurrentUser().then(setCurrentUser).catch(() => setCurrentUser(null));
+	}, []);
+
 	// ── Load platform users ──
 	const loadUsers = useCallback(async (keyword: string) => {
 		setUsersLoading(true);
 		try {
 			const result = await analyticsApi.listPlatformUsers(keyword || undefined);
-			setPlatformUsers(result || []);
+			setPlatformUsers((current) => mergePlatformUsers(current, result || []));
 		} catch {
-			setPlatformUsers([]);
+			// Keep the cached directory so local display-name filtering still works.
 		} finally {
 			setUsersLoading(false);
 		}
@@ -150,6 +193,12 @@ export function ScreenGrantManager({ screenId, isOwner = false }: ScreenGrantMan
 				(r.description || '').toLowerCase().includes(kw),
 		);
 	}, [roles, searchQuery]);
+
+	const filteredUsers = useMemo(() => {
+		return platformUsers.filter(
+			(user) => !isCurrentGrantUser(user, currentUser) && matchesGrantUserSearch(user, searchQuery),
+		);
+	}, [platformUsers, searchQuery, currentUser]);
 
 	// ── Build lookup maps for existing grants ──
 	const userDisplayMap = useMemo(() => {
@@ -224,7 +273,7 @@ export function ScreenGrantManager({ screenId, isOwner = false }: ScreenGrantMan
 			defaultSort: { key: 'subjectType', direction: 'asc' },
 		});
 
-	const candidateList: (PlatformUser | PlatformRole)[] = granteeType === 'USER' ? platformUsers : filteredRoles;
+	const candidateList: (PlatformUser | PlatformRole)[] = granteeType === 'USER' ? filteredUsers : filteredRoles;
 	const totalItems = candidateList.length;
 	const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
 	const safePage = Math.min(currentPage, totalPages);

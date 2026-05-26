@@ -1256,6 +1256,9 @@ public class ScreenResource {
         if (!Set.of("VIEWER", "MANAGER").contains(resolvedPermission)) {
             return ResponseEntity.badRequest().body(Map.of("error", "permission must be VIEWER or MANAGER"));
         }
+        if (isSelfGrantTarget(user.orElseThrow(), granteeType, granteeId)) {
+            return ResponseEntity.badRequest().body(Map.of("error", "cannot modify your own screen permission"));
+        }
         // 仅 VIEWER 类 grant 才能携带 level_override；MANAGER 本就豁免密级。
         // service 层也会兜底强制（双重保险）；这里直接拒绝以给前端清晰错误信息。
         if (levelOverride && !"VIEWER".equals(resolvedPermission)) {
@@ -2461,6 +2464,21 @@ public class ScreenResource {
         if (caller.isSuperuser()) return true;
         if (screen == null || screen.getCreatorId() == null || caller.getId() == null) return false;
         return screen.getCreatorId().equals(caller.getId());
+    }
+
+    static boolean isSelfGrantTarget(AnalyticsUser caller, String granteeType, String granteeId) {
+        if (caller == null) return false;
+        if (!"USER".equalsIgnoreCase(trimToNull(granteeType))) return false;
+        String target = normalizeGrantIdentity(granteeId);
+        if (target == null) return false;
+        return target.equals(normalizeGrantIdentity(caller.getId() == null ? null : String.valueOf(caller.getId())))
+            || target.equals(normalizeGrantIdentity(caller.getPlatformUsername()))
+            || target.equals(normalizeGrantIdentity(caller.getEmail()));
+    }
+
+    private static String normalizeGrantIdentity(String value) {
+        String text = trimToNull(value);
+        return text == null ? null : text.toLowerCase(java.util.Locale.ROOT);
     }
 
     /**

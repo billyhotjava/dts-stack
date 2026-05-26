@@ -41,3 +41,31 @@ test("existing grant user labels are isolated from add-permission user search re
 	assert.doesNotMatch(source, /for \(const u of platformUsers\) \{/);
 	assert.match(source, /\}, \[grantUserDirectory\]\);/);
 });
+
+test("add-permission user search filters by username and Chinese display name", async () => {
+	const source = await readFile(managerPath, "utf8");
+
+	assert.match(source, /function normalizeGrantSearchValue\(value: string \| null \| undefined\): string/);
+	assert.match(source, /function matchesGrantUserSearch\(user: PlatformUser, searchQuery: string\): boolean/);
+	assert.match(source, /user\.username/);
+	assert.match(source, /user\.displayName/);
+	assert.match(
+		source,
+		/platformUsers\.filter\(\s*\(user\) => !isCurrentGrantUser\(user, currentUser\) && matchesGrantUserSearch\(user, searchQuery\),\s*\)/,
+	);
+	assert.match(source, /granteeType === 'USER' \? filteredUsers : filteredRoles/);
+	assert.match(source, /function mergePlatformUsers\(existing: PlatformUser\[\], incoming: PlatformUser\[\]\): PlatformUser\[\]/);
+	assert.match(source, /setPlatformUsers\(\(current\) => mergePlatformUsers\(current, result \|\| \[\]\)\);/);
+});
+
+test("add-permission user candidates exclude the current user", async () => {
+	const source = await readFile(managerPath, "utf8");
+
+	assert.match(source, /type CurrentUser/);
+	assert.match(source, /const \[currentUser, setCurrentUser\] = useState<CurrentUser \| null>\(null\);/);
+	assert.match(source, /analyticsApi\.getCurrentUser\(\)\.then\(setCurrentUser\)/);
+	assert.match(source, /function isCurrentGrantUser\(user: PlatformUser, currentUser: CurrentUser \| null\): boolean/);
+	assert.match(source, /currentUser\.platform_username/);
+	assert.match(source, /currentUser\.email/);
+	assert.match(source, /!isCurrentGrantUser\(user, currentUser\)/);
+});

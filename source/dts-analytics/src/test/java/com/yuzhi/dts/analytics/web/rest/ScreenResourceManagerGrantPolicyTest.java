@@ -80,4 +80,28 @@ class ScreenResourceManagerGrantPolicyTest {
         AnalyticsUser su = user(7L, true);
         assertThat(ScreenResource.isManagerGrantAllowed(null, su)).isTrue();
     }
+
+    @Test
+    @DisplayName("当前用户不能给自己写 USER grant（数字 id）")
+    void selfGrantByAnalyticsUserId_denied() {
+        AnalyticsUser owner = user(100L, false);
+        assertThat(ScreenResource.isSelfGrantTarget(owner, "USER", "100")).isTrue();
+    }
+
+    @Test
+    @DisplayName("当前用户不能给自己写 USER grant（平台用户名）")
+    void selfGrantByPlatformUsername_denied() {
+        AnalyticsUser owner = user(100L, false);
+        owner.setPlatformUsername("test230911");
+        assertThat(ScreenResource.isSelfGrantTarget(owner, "USER", " test230911 ")).isTrue();
+    }
+
+    @Test
+    @DisplayName("ROLE grant 和其他用户不算自授权")
+    void nonSelfGrant_allowed() {
+        AnalyticsUser owner = user(100L, false);
+        owner.setPlatformUsername("test230911");
+        assertThat(ScreenResource.isSelfGrantTarget(owner, "ROLE", "test230911")).isFalse();
+        assertThat(ScreenResource.isSelfGrantTarget(owner, "USER", "other")).isFalse();
+    }
 }
