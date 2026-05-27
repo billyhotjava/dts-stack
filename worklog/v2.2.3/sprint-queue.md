@@ -566,6 +566,27 @@
 - dts-admin DB catalog、sourceSystem 透传、unknown action miss 已完成并通过 focused test。
 - platform 主题域和报表动作码已收敛；剩余审计中心筛选项 DB 化和 fallback 降噪进入下一轮。
 
+## Sprint-35: dts-metrics 数据仓库可视化设计重构 (202605)
+**状态**: READY
+**类型**: Architecture / Productization / Implementation Plan（dts-metrics-webapp + dts-metrics + dts-platform + dbt gateway）
+**目标**: 基于 Sprint-32 的 React Flow 指标工作台方案，补齐“源数据库清洗到数据仓库之后，dts-metrics 从哪一层开始进行可视化设计”的硬边界，并按“架构与 PRD -> 前后端 API -> 前端 -> 后端 -> 安全与评审”顺序拆成可执行 feature/task。
+**关键决策**: 默认从已发布、已治理、可授权读取的 DWS/ADS 资产进入指标可视化；DWD 只作为高级建模上游，用于生成新的 DWS 候选模型；ODS/STG 只用于 lineage 和诊断，不进入普通指标画布。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-architecture-prd | P0 | 5 | READY |
+| F2-api-contracts | P0 | 5 | READY |
+| F3-frontend-visual-workbench | P0 | 5 | READY |
+| F4-backend-modeling-dbt-gateway | P0 | 5 | READY |
+| F5-security-review-it | P0 | 5 | READY |
+
+**统计**: READY=25, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**设计文档**: `worklog/v2.2.3/sprint-35-202605/README.md`
+**ELT 分层 PRD**: `worklog/v2.2.3/sprint-35-202605/assets/dts-metrics-elt-layer-prd.md`
+**API 契约**: `worklog/v2.2.3/sprint-35-202605/assets/dts-metrics-api-contract.md`
+**评审机制**: `worklog/v2.2.3/sprint-35-202605/assets/review-mechanism.md`
+**集成测试**: `worklog/v2.2.3/sprint-35-202605/it/README.md`
+
 ## v2.3 Backlog: 企业级资产与指标增强
 
 | Item | Owner | 来源 | 状态 |
