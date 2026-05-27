@@ -21,7 +21,7 @@ dim_change_category_alias	DWD	models/dwd/dim_change_category_alias.sql			public	
 dim_boolean_alias	DWD	models/dwd/dim_boolean_alias.sql			public	table	project-management,dim,dwd,alias	DRAFT	true		通用布尔别名表：Y/YES/TRUE/是等→是；否定值→否
 dim_reform_status_alias	DWD	models/dwd/dim_reform_status_alias.sql			public	table	project-management,dim,dwd,alias	DRAFT	true		整改状态别名表→canonical code
 dim_signature_status_alias	DWD	models/dwd/dim_signature_status_alias.sql			public	table	project-management,dim,dwd,alias	DRAFT	true		文件签署状态别名表（上下文相关）→canonical code
-biz_dwd_project_node_v2	DWD	models/dwd/biz_dwd_project_node_v2.sql			public	table	project-management,biz,dwd,progress	DRAFT	true		进度节点事实表—ODS清洗+枚举标准化+日期解析
+biz_dwd_project_node_v2	DWD	models/dwd/biz_dwd_project_node_v2.sql			public	table	project-management,biz,dwd,progress	DRAFT	true		进度节点事实表—从 STG 读取，完成情况/节点类型/风险等级标准化并派生日期口径
 biz_dwd_quality_issue_v2	DWD	models/dwd/biz_dwd_quality_issue_v2.sql			public	table	project-management,biz,dwd,quality	DRAFT	true		质量问题事实表—归零状态+分类+计划标志
 biz_dwd_tech_state_v2	DWD	models/dwd/biz_dwd_tech_state_v2.sql			public	table	project-management,biz,dwd,tech-state	DRAFT	true		技术状态事实表—更改类别标准化+签署/整改状态
 biz_dwd_risk_info_v2	DWD	models/dwd/biz_dwd_risk_info_v2.sql			public	table	project-management,biz,dwd,risk	DRAFT	true		风险事实表—风险台账清洗+等级标准化+释放标志

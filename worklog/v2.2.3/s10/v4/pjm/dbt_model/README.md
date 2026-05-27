@@ -1,4 +1,4 @@
-# Project Management dbt Model (v3)
+# Project Management dbt Model (v4)
 
 标准 dbt 项目，现场部署使用。
 

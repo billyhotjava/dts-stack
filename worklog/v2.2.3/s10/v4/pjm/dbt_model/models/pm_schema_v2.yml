@@ -220,7 +220,7 @@ models:
 
   # ═══ DWD 事实表 ═══
   - name: biz_dwd_project_node_v2
-    description: "进度节点事实表 — ODS清洗+枚举标准化+日期解析"
+    description: "进度节点事实表 — 从 STG 读取，完成情况/节点类型/风险等级标准化并派生日期口径"
     columns:
       - name: node_id
         tests:

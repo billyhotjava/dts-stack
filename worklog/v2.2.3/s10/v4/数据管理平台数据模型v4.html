@@ -1,6 +1,6 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>数据管理平台数据模型设计文档（v4 PostgreSQL 重构版）</title>
-<style>body{font-family:"Noto Sans CJK SC","Microsoft YaHei",Arial,sans-serif;color:#1f2937;line-height:1.45}h1{text-align:center;font-size:26pt;margin:20pt 0 18pt}h2{font-size:17pt;border-bottom:1px solid #d1d5db;padding-bottom:4pt;margin-top:20pt}h3{font-size:13pt;margin-top:14pt;color:#111827}h4{font-size:11pt;margin-top:10pt;color:#111827}p{font-size:10.5pt;margin:6pt 0}table{border-collapse:collapse;width:100%;margin:8pt 0 12pt;font-size:8.3pt}th,td{border:1px solid #9ca3af;padding:4pt 5pt;vertical-align:top}th{background:#e5e7eb;font-weight:bold}pre{background:#f3f4f6;border:1px solid #d1d5db;padding:8pt;white-space:pre-wrap;font-family:Consolas,"Liberation Mono",monospace;font-size:8pt}code{font-family:Consolas,"Liberation Mono",monospace}</style></head><body><h1>数据管理平台数据模型设计文档（v4 PostgreSQL 重构版）</h1>
-<p>文档版本：V4.1</p>
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>???????????????v4 PostgreSQL ????</title>
+<style>body{font-family:"Noto Sans CJK SC","Microsoft YaHei",Arial,sans-serif;color:#1f2937;line-height:1.45}h1{text-align:center;font-size:26pt;margin:20pt 0 18pt}h2{font-size:17pt;border-bottom:1px solid #d1d5db;padding-bottom:4pt;margin-top:20pt}h3{font-size:13pt;margin-top:14pt;color:#111827}h4{font-size:11pt;margin-top:10pt;color:#111827}p{font-size:10.5pt;margin:6pt 0}table{border-collapse:collapse;width:100%;margin:8pt 0 12pt;font-size:8.3pt}th,td{border:1px solid #9ca3af;padding:4pt 5pt;vertical-align:top}th{background:#e5e7eb;font-weight:bold}pre{background:#f3f4f6;border:1px solid #d1d5db;padding:8pt;white-space:pre-wrap;font-family:Consolas,"Liberation Mono",monospace;font-size:8pt}code{font-family:Consolas,"Liberation Mono",monospace}ul,ol{font-size:10.5pt;margin:6pt 0 8pt 20pt}li{margin:3pt 0}</style></head><body><h1>数据管理平台数据模型设计文档（v4 PostgreSQL 重构版）</h1>
+<p>文档版本：V4.2</p>
 <p>文档状态：重构稿</p>
 <p>适用范围：项目管控、采购库存、考勤、专利、财务一体化数据平台</p>
 <h2>核心设计原则</h2>
@@ -11,8 +11,9 @@
 <thead><tr><th>原则</th><th>说明</th></tr></thead><tbody>
 <tr><td>最新记录原则</td><td>进度 / 质量 / 风险 / 技术变更仅保留最新状态，更新时覆盖原有记录</td></tr>
 <tr><td>业务主键</td><td>为每个任务 / 问题 / 风险 / 变更生成唯一标识，作为覆盖更新依据</td></tr>
+<tr><td>STG 隔离原则</td><td>ODS 与 DWD 之间新增 STG 结构化层，统一做类型转换、占位符收敛、字段改名和来源元数据映射，不承载业务分类与派生语义</td></tr>
 <tr><td>简化存储</td><td>减少数据冗余，降低存储成本</td></tr>
-<tr><td>实时查询</td><td>直接查询 DWD 表即可获取最新状态，无需视图过滤</td></tr>
+<tr><td>实时查询</td><td>直接查询 DWD/DWS/ADS 表即可获取最新状态，无需视图过滤</td></tr>
 <tr><td>PostgreSQL 适配</td><td>DDL、索引、注释、布尔、时间、自增键统一使用 PostgreSQL 语法；更新时间由 trigger 或 ETL 显式维护。</td></tr>
 </tbody></table>
 <h3>数据域更新策略</h3>
@@ -46,24 +47,36 @@
 <p>ADS 应用服务层：项目域 v4 KPI/Derived 指标、项目全景看板、科室绩效看板、考勤分析看板、专利分析看板、质量分析看板、风险分析看板、库存分析看板、成本分析看板</p>
 <p>DWS 汇总指标层：项目域按进度/质量/技术状态/风险月度汇总，其他域沿用 v3 的科室综合、考勤汇总、专利汇总、库存汇总、成本汇总</p>
 <p>DWD 明细事实层：项目域 v4 使用 biz_dwd_project_node_v2、biz_dwd_quality_issue_v2、biz_dwd_risk_info_v2、biz_dwd_tech_state_v2；采购、库存、成本、考勤、专利、财务明细沿用 v3</p>
+<p>STG 结构化层：项目域 v4 新增 stg_pm__project_subject_domain_v2、stg_pm__quality_issue_v2、stg_pm__tech_state_v2、stg_pm__risk_info_v2 四个 view，作为 ODS 到 DWD 的唯一入口；STG 只做同位字段变换和来源元数据标准化，不做业务归一化、月份派生、布尔派生或跨列计算</p>
 <p>DIM 维度层：sys_department、sys_employee、dim_project、dim_wbs、dim_date、dim_enum、dim_material、dim_supplier、dim_warehouse、dim_patent、dim_account；项目域新增 dim_*_v2 canonical 维表与 dim_*_alias 别名维表</p>
 <p>Standard 标准层：由 PostgreSQL 数据类型标准、STG 字段收敛规则、DWD canonical/alias 维表和数据质量规则共同承担</p>
 <p>ODS 贴源层：ERP 在线（30张表，沿用 v3）、PMO 项目域 v4 离线（9张表）、考勤离线（1张表）、专利离线（1张表）、财务离线（4张表）</p>
 <h2>数据标准体系</h2>
 <h3>命名规范标准</h3>
 <table>
-<thead><tr><th>规范项</th><th>标准</th><th>示例</th><th></th></tr></thead><tbody>
-<tr><td>ODS 表命名</td><td>ods_{系统或主题}_{源表名}</td><td>ods_project_subject_domain_v2</td><td></td></tr>
-<tr><td>DIM 表命名</td><td>dim_{实体名}</td><td>dim_project_master</td><td></td></tr>
-<tr><td>DWD 表命名</td><td>biz_dwd_{主题}_{事实}_v{版本}</td><td>biz_dwd_project_node_v2</td><td></td></tr>
-<tr><td>DWS 表命名</td><td>biz_dws_{主题}_{粒度}_v{版本}</td><td>biz_dws_progress_monthly_v2</td><td></td></tr>
-<tr><td>ADS 表/视图命名</td><td>biz_ads_{主题}_{kpi\</td><td>derived}_v{版本}</td><td>biz_ads_progress_kpi_v2</td></tr>
-<tr><td>字段命名</td><td>小写字母 + 下划线</td><td>project_uid</td><td></td></tr>
-<tr><td>主键命名</td><td>{实体名}_id / {实体名}_uid</td><td>task_id、project_uid</td><td></td></tr>
-<tr><td>外键命名</td><td>{关联实体名}_id</td><td>responsible_dept_id</td><td></td></tr>
-<tr><td>布尔字段</td><td>is_{含义}</td><td>is_delayed</td><td></td></tr>
-<tr><td>时间字段</td><td>{动作}_time / {动作}_date / *_at</td><td>create_time、update_time、imported_at</td><td></td></tr>
+<thead><tr><th>规范项</th><th>标准</th><th>示例</th></tr></thead><tbody>
+<tr><td>ODS 表命名</td><td>ods_{系统或主题}_{源表名}</td><td>ods_project_subject_domain_v2</td></tr>
+<tr><td>STG 模型命名</td><td>stg_{源系统}__{源表或主题}_v{版本}</td><td>stg_pm__project_subject_domain_v2</td></tr>
+<tr><td>DIM 表命名</td><td>dim_{实体名}</td><td>dim_project_master</td></tr>
+<tr><td>DWD 表命名</td><td>biz_dwd_{主题}_{事实}_v{版本}</td><td>biz_dwd_project_node_v2</td></tr>
+<tr><td>DWS 表命名</td><td>biz_dws_{主题}_{粒度}_v{版本}</td><td>biz_dws_progress_monthly_v2</td></tr>
+<tr><td>ADS 表/视图命名</td><td>biz_ads_{主题}_{kpi|derived}_v{版本}</td><td>biz_ads_progress_kpi_v2</td></tr>
+<tr><td>字段命名</td><td>小写字母 + 下划线</td><td>project_uid</td></tr>
+<tr><td>主键命名</td><td>{实体名}_id / {实体名}_uid</td><td>task_id、project_uid</td></tr>
+<tr><td>外键命名</td><td>{关联实体名}_id</td><td>responsible_dept_id</td></tr>
+<tr><td>布尔字段</td><td>is_{含义}</td><td>is_delayed</td></tr>
+<tr><td>时间字段</td><td>{动作}_time / {动作}_date / *_at</td><td>create_time、update_time、imported_at</td></tr>
 </tbody></table>
+<h3>STG 层字段收敛标准</h3>
+<p>项目域 v4 在 ODS 和 DWD 之间设置 STG 层，所有项目事实必须先进入 <code>stg_pm__*</code> 模型，再由 DWD 进行业务解释。STG 的核心目标是把离线 Excel/ODS 的弱类型字段收敛为可复用的结构化输入，并保留来源追溯。</p>
+<table>
+<thead><tr><th>标准项</th><th>STG 允许动作</th><th>STG 禁止动作</th></tr></thead><tbody>
+<tr><td>字段处理</td><td><code>btrim</code> 去空白、占位符归 NULL、字段改名、日期/数值安全转换</td><td>枚举映射、中文值翻译、跨列拼接、拆分复合字符串</td></tr>
+<tr><td>语义处理</td><td>保留 <code>*_raw</code> 原值字段，作为 DWD alias 维表输入</td><td>生成 canonical code、label、is_* 业务布尔字段</td></tr>
+<tr><td>时间处理</td><td>将可解析日期转为 date/timestamp</td><td><code>to_char</code> 月份格式化、<code>extract</code> 年/季度派生、日期差计算</td></tr>
+<tr><td>血缘追溯</td><td>保留 <code>source_row_id</code>、<code>source_table</code>、<code>source_system</code>、<code>source_file</code>、<code>source_sheet_name</code>、<code>source_batch_id</code>、<code>source_row_num</code>、<code>imported_at</code></td><td>丢弃来源字段或直接读取旧版 <code>source_system/import_time</code> 技术字段</td></tr>
+</tbody></table>
+<p>ODS 物理表来源技术字段以入湖统一字段为准：<code>_dts_source_system</code> 映射为 STG 的 <code>source_system</code>，<code>_dts_import_time</code> 映射为 STG 的 <code>imported_at</code>。DWD/DWS/ADS 不允许直接消费 ODS，也不允许绕过 STG 读取原始项目表。</p>
 <h3>数据类型标准</h3>
 <table>
 <thead><tr><th>数据类型</th><th>使用场景</th><th>PostgreSQL 标准定义</th></tr></thead><tbody>
@@ -84,8 +97,8 @@
 <h3>PostgreSQL DDL 适配规则</h3>
 <table>
 <thead><tr><th>场景</th><th>原 MySQL 写法</th><th>PostgreSQL 写法</th></tr></thead><tbody>
-<tr><td>字段注释</td><td>col varchar(50) COMMENT &#x27;说明&#x27;</td><td>col varchar(50); COMMENT ON COLUMN table.col IS &#x27;说明&#x27;;</td></tr>
-<tr><td>表注释</td><td>) COMMENT &#x27;表说明&#x27;;</td><td>); COMMENT ON TABLE table IS &#x27;表说明&#x27;;</td></tr>
+<tr><td>字段注释</td><td>col varchar(50) COMMENT '说明'</td><td>col varchar(50); COMMENT ON COLUMN table.col IS '说明';</td></tr>
+<tr><td>表注释</td><td>) COMMENT '表说明';</td><td>); COMMENT ON TABLE table IS '表说明';</td></tr>
 <tr><td>自增主键</td><td>BIGINT AUTO_INCREMENT PRIMARY KEY</td><td>bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY</td></tr>
 <tr><td>时间类型</td><td>DATETIME</td><td>timestamp without time zone</td></tr>
 <tr><td>布尔类型</td><td>TINYINT(1) / TINYINT DEFAULT 1</td><td>boolean DEFAULT true；季度、月份等小整数用 smallint</td></tr>
@@ -1272,6 +1285,23 @@ COMMENT ON COLUMN dim_patent.grant_date IS &#x27;授权日期&#x27;;
 CREATE INDEX idx_dept ON dim_patent (dept_id);
 CREATE INDEX idx_status ON dim_patent (current_status_id);
 -- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<h2>STG 结构化层设计</h2>
+<p>项目域 v4 的 STG 层由 dbt view 承担，当前覆盖进度、质量、技术状态、风险四条主语义链路。STG 与 ODS 行级一一对应，统一输出 <code>source_row_id</code> 作为后续 DWD 事实表的追溯键；质量跟进、风险跟进、技术状态跟进、进度跟进、重要物料等 ODS 表当前仅注册 source，后续纳入语义链路时也应先补 STG，再进入 DWD。</p>
+<table>
+<thead><tr><th>STG 模型</th><th>上游 ODS</th><th>材质化</th><th>粒度</th><th>主要输出</th></tr></thead><tbody>
+<tr><td>stg_pm__project_subject_domain_v2</td><td>ods_project_subject_domain_v2</td><td>view</td><td>ODS 进度行/source_row_id</td><td>项目信息、节点计划/实际日期、完成情况原值、节点类型原值、风险等级原值、延期申请原值、来源元数据</td></tr>
+<tr><td>stg_pm__quality_issue_v2</td><td>ods_quality_issue_v2</td><td>view</td><td>ODS 质量问题行/source_row_id</td><td>项目/科室/责任人、问题描述、问题日期、归零状态原值、原因分类原值、归零计划同步原值、来源元数据</td></tr>
+<tr><td>stg_pm__tech_state_v2</td><td>ods_tech_state_v2</td><td>view</td><td>ODS 技术状态行/source_row_id</td><td>技术状态项、更改类别原值、文件签署/变更单签署/整改/评审原值、计划日期、来源元数据</td></tr>
+<tr><td>stg_pm__risk_info_v2</td><td>ods_risk_info_v2</td><td>view</td><td>ODS 风险行/source_row_id</td><td>风险描述、风险分类原值、风险等级原值、风险状态原值、释放计划同步原值、提交/释放日期、来源元数据</td></tr>
+</tbody></table>
+<h3>STG 到 DWD 的职责边界</h3>
+<table>
+<thead><tr><th>口径</th><th>STG 输出</th><th>DWD 解释</th></tr></thead><tbody>
+<tr><td>枚举字段</td><td><code>completion_status_raw</code>、<code>risk_level_raw</code>、<code>quality_category_raw</code>、<code>change_category_raw</code> 等原值</td><td>通过 alias 维表归一为 canonical code，再关联 canonical dim 输出 label 与 is_* 标志</td></tr>
+<tr><td>时间字段</td><td>安全解析后的日期字段</td><td>派生 <code>plan_month</code>、<code>actual_month</code>、<code>issue_month</code>、<code>submit_month</code>、<code>delay_days</code>、<code>pending_days</code></td></tr>
+<tr><td>布尔/状态</td><td>保留是否类字段原值</td><td>统一由 <code>dim_boolean_alias</code> 或专项 alias 维表解释</td></tr>
+<tr><td>来源血缘</td><td><code>source_row_id</code> 与 <code>source_*</code> 元数据</td><td>DWD 事实主键以 <code>source_row_id</code> 生成，并保留回溯字段</td></tr>
+</tbody></table>
 <h2>DWD 明细事实层设计</h2>
 <p>DWD 层表清单（项目域 v4 + 原 v3 非项目域）</p>
 <table>
@@ -1290,7 +1320,7 @@ CREATE INDEX idx_status ON dim_patent (current_status_id);
 <tr><td>项目域 v4</td><td>biz_ads_composite_derived_v2</td><td>月份</td><td>覆盖更新/重算</td><td>项目综合健康度，替代 dwd_project_full_info</td></tr>
 </tbody></table>
 <h3>项目域 v4 DWD 维度与事实模型</h3>
-<p>项目域不再使用旧版 <code>dwd_progress_detail</code>、<code>dwd_quality_detail</code>、<code>dwd_risk_detail</code>、<code>dwd_tech_change_detail</code> 四张手写明细表。v4 以 dbt 模型为准，DWD 层由 canonical 维表、alias 维表和 4 张事实表组成。</p>
+<p>项目域不再使用旧版 <code>dwd_progress_detail</code>、<code>dwd_quality_detail</code>、<code>dwd_risk_detail</code>、<code>dwd_tech_change_detail</code> 四张手写明细表。v4 以 dbt 模型为准，DWD 层由 canonical 维表、alias 维表和 4 张事实表组成；DWD 事实表必须从 <code>stg_pm__*</code> 读取，不直接消费 ODS。</p>
 <h4>Canonical 维表</h4>
 <table>
 <thead><tr><th>模型</th><th>分类</th><th>值域</th></tr></thead><tbody>
@@ -1328,6 +1358,10 @@ CREATE INDEX idx_status ON dim_patent (current_status_id);
 <h4>项目域 DWD 模型注册</h4>
 <table>
 <thead><tr><th>模型</th><th>层</th><th>SQL 路径</th><th>材质化</th><th>说明</th></tr></thead><tbody>
+<tr><td>stg_pm__project_subject_domain_v2</td><td>STG</td><td>models/stg/stg_pm__project_subject_domain_v2.sql</td><td>view</td><td>进度 STG 结构化层：类型转换、占位符收敛、字段改名和来源元数据映射</td></tr>
+<tr><td>stg_pm__quality_issue_v2</td><td>STG</td><td>models/stg/stg_pm__quality_issue_v2.sql</td><td>view</td><td>质量 STG 结构化层：类型转换、占位符收敛和来源元数据映射</td></tr>
+<tr><td>stg_pm__tech_state_v2</td><td>STG</td><td>models/stg/stg_pm__tech_state_v2.sql</td><td>view</td><td>技术状态 STG 结构化层：类型转换、占位符收敛和来源元数据映射</td></tr>
+<tr><td>stg_pm__risk_info_v2</td><td>STG</td><td>models/stg/stg_pm__risk_info_v2.sql</td><td>view</td><td>风险 STG 结构化层：类型转换、占位符收敛和来源元数据映射</td></tr>
 <tr><td>dim_completion_status_v2</td><td>DWD</td><td>models/dwd/dim_completion_status_v2.sql</td><td>table</td><td>完成情况维度表（稳定ID+中文标签）</td></tr>
 <tr><td>dim_node_type_v2</td><td>DWD</td><td>models/dwd/dim_node_type_v2.sql</td><td>table</td><td>节点类型维度表（稳定ID+中文标签）</td></tr>
 <tr><td>dim_risk_level_v2</td><td>DWD</td><td>models/dwd/dim_risk_level_v2.sql</td><td>table</td><td>风险等级维度表（稳定ID+中文标签）</td></tr>
@@ -1346,7 +1380,7 @@ CREATE INDEX idx_status ON dim_patent (current_status_id);
 <tr><td>dim_boolean_alias</td><td>DWD</td><td>models/dwd/dim_boolean_alias.sql</td><td>table</td><td>通用布尔别名表：Y/YES/TRUE/是等→是；否定值→否</td></tr>
 <tr><td>dim_reform_status_alias</td><td>DWD</td><td>models/dwd/dim_reform_status_alias.sql</td><td>table</td><td>整改状态别名表→canonical code</td></tr>
 <tr><td>dim_signature_status_alias</td><td>DWD</td><td>models/dwd/dim_signature_status_alias.sql</td><td>table</td><td>文件签署状态别名表（上下文相关）→canonical code</td></tr>
-<tr><td>biz_dwd_project_node_v2</td><td>DWD</td><td>models/dwd/biz_dwd_project_node_v2.sql</td><td>table</td><td>进度节点事实表—ODS清洗+枚举标准化+日期解析</td></tr>
+<tr><td>biz_dwd_project_node_v2</td><td>DWD</td><td>models/dwd/biz_dwd_project_node_v2.sql</td><td>table</td><td>进度节点事实表—从 STG 读取，完成情况/节点类型/风险等级标准化并派生日期口径</td></tr>
 <tr><td>biz_dwd_quality_issue_v2</td><td>DWD</td><td>models/dwd/biz_dwd_quality_issue_v2.sql</td><td>table</td><td>质量问题事实表—归零状态+分类+计划标志</td></tr>
 <tr><td>biz_dwd_tech_state_v2</td><td>DWD</td><td>models/dwd/biz_dwd_tech_state_v2.sql</td><td>table</td><td>技术状态事实表—更改类别标准化+签署/整改状态</td></tr>
 <tr><td>biz_dwd_risk_info_v2</td><td>DWD</td><td>models/dwd/biz_dwd_risk_info_v2.sql</td><td>table</td><td>风险事实表—风险台账清洗+等级标准化+释放标志</td></tr>
@@ -3102,6 +3136,7 @@ CREATE INDEX idx_confidence ON map_project_name (match_confidence);
 <table>
 <thead><tr><th>数据层级</th><th>保留周期</th><th>归档策略</th><th>说明</th></tr></thead><tbody>
 <tr><td>ODS 层</td><td>3 年</td><td>每年归档至冷存储</td><td>保留原始数据</td></tr>
+<tr><td>STG 层</td><td>随 ODS 可重建</td><td>不单独归档</td><td>view 结构化层，保留行级来源血缘</td></tr>
 <tr><td>DWD 明细层</td><td>永久</td><td>不归档</td><td>仅最新状态</td></tr>
 <tr><td>DWS 汇总层</td><td>永久</td><td>不归档</td><td>月度汇总</td></tr>
 <tr><td>DIM 维度层</td><td>永久</td><td>不归档</td><td>主数据</td></tr>
@@ -3120,6 +3155,7 @@ CREATE INDEX idx_confidence ON map_project_name (match_confidence);
 <table>
 <thead><tr><th>层级</th><th>表数量</th><th>更新策略</th></tr></thead><tbody>
 <tr><td>ODS</td><td>45 张（ERP/非项目沿用 v3，项目域 9 张）</td><td>追加 / 覆盖</td></tr>
+<tr><td>STG</td><td>项目域 v4 4 个 view</td><td>随 ODS/DWD 重算</td></tr>
 <tr><td>DIM</td><td>10 张原 v3 维表 + 项目域 dbt canonical/alias 维表</td><td>覆盖更新 / dbt 重算</td></tr>
 <tr><td>DWD</td><td>项目域 v4 dbt 模型 + 原 v3 非项目事实表</td><td>覆盖更新 / 追加 / 重算</td></tr>
 <tr><td>DWS</td><td>项目域 v4 月度 DWS + 原 v3 非项目汇总</td><td>覆盖更新 / 重算</td></tr>
