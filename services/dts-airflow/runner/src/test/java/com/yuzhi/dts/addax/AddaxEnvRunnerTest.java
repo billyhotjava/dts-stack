@@ -1,0 +1,149 @@
+package com.yuzhi.dts.addax;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+public final class AddaxEnvRunnerTest {
+
+    private static final String RUNNER_CLASS = "com.yuzhi.dts.addax.AddaxEnvRunner";
+    private static final Path RUNNER_CLASSES = Path.of(System.getProperty("runner.classes"));
+
+    public static void main(String[] args) throws Exception {
+        requiresJobPathArgument();
+        rejectsMissingJobFile();
+        writerOnlyJobDoesNotRequireReaderPasswordAndEscapesJson();
+        requiresReaderPasswordWhenReaderPlaceholderExists();
+        propagatesAddaxExitCode();
+        System.out.println("AddaxEnvRunnerTest: all tests passed");
+    }
+
+    private static void requiresJobPathArgument() throws Exception {
+        RunResult result = runRunner(Map.of());
+
+        assertEquals(64, result.exitCode(), "missing argument exit code");
+        assertContains(result.stderr(), "Usage: AddaxEnvRunner <job.json>", "usage message");
+    }
+
+    private static void rejectsMissingJobFile() throws Exception {
+        RunResult result = runRunner(Map.of(), "/tmp/dts-addax-runner-missing.json");
+
+        assertEquals(66, result.exitCode(), "missing job file exit code");
+        assertContains(result.stderr(), "Addax job file is not readable", "missing file message");
+    }
+
+    private static void writerOnlyJobDoesNotRequireReaderPasswordAndEscapesJson() throws Exception {
+        Path dir = Files.createTempDirectory("addax-runner-writer-only-");
+        Path captured = dir.resolve("captured.json");
+        Path fakeAddax = fakeAddax(dir, 0, captured);
+        Path job = dir.resolve("job.json");
+        Files.writeString(
+            job,
+            "{\"writer\":{\"password\":\"${DTS_TARGET_DB_PASSWORD}\"}}",
+            StandardCharsets.UTF_8
+        );
+
+        RunResult result = runRunner(
+            Map.of(
+                "ADDAX_BIN", fakeAddax.toString(),
+                "DTS_TARGET_DB_PASSWORD", "pa\"ss\\word&pipe|tab\tend"
+            ),
+            job.toString()
+        );
+
+        assertEquals(0, result.exitCode(), "writer-only job exit code");
+        assertNotContains(result.stderr(), "DTS_ADDAX_READER_PASSWORD", "reader password should not be required");
+        String rendered = Files.readString(captured, StandardCharsets.UTF_8);
+        assertContains(rendered, "pa\\\"ss\\\\word&pipe|tab\\tend", "JSON-escaped writer password");
+        assertNotContains(rendered, "${DTS_TARGET_DB_PASSWORD}", "writer placeholder removed");
+    }
+
+    private static void requiresReaderPasswordWhenReaderPlaceholderExists() throws Exception {
+        Path dir = Files.createTempDirectory("addax-runner-reader-required-");
+        Path fakeAddax = fakeAddax(dir, 0, dir.resolve("captured.json"));
+        Path job = dir.resolve("job.json");
+        Files.writeString(
+            job,
+            "{\"reader\":{\"password\":\"${DTS_ADDAX_READER_PASSWORD}\"},"
+                + "\"writer\":{\"password\":\"${DTS_TARGET_DB_PASSWORD}\"}}",
+            StandardCharsets.UTF_8
+        );
+
+        RunResult result = runRunner(
+            Map.of(
+                "ADDAX_BIN", fakeAddax.toString(),
+                "DTS_TARGET_DB_PASSWORD", "writer-secret"
+            ),
+            job.toString()
+        );
+
+        assertEquals(78, result.exitCode(), "missing reader password exit code");
+        assertContains(result.stderr(), "DTS_ADDAX_READER_PASSWORD", "missing reader password message");
+    }
+
+    private static void propagatesAddaxExitCode() throws Exception {
+        Path dir = Files.createTempDirectory("addax-runner-exit-code-");
+        Path fakeAddax = fakeAddax(dir, 23, dir.resolve("captured.json"));
+        Path job = dir.resolve("job.json");
+        Files.writeString(job, "{\"job\":{}}", StandardCharsets.UTF_8);
+
+        RunResult result = runRunner(Map.of("ADDAX_BIN", fakeAddax.toString()), job.toString());
+
+        assertEquals(23, result.exitCode(), "Addax child exit code propagation");
+    }
+
+    private static Path fakeAddax(Path dir, int exitCode, Path captured) throws IOException {
+        Path fakeAddax = dir.resolve("fake-addax.sh");
+        Files.writeString(
+            fakeAddax,
+            "#!/usr/bin/env sh\n"
+                + "set -eu\n"
+                + "cp \"$1\" \"" + captured + "\"\n"
+                + "exit " + exitCode + "\n",
+            StandardCharsets.UTF_8
+        );
+        fakeAddax.toFile().setExecutable(true);
+        return fakeAddax;
+    }
+
+    private static RunResult runRunner(Map<String, String> env, String... args) throws Exception {
+        List<String> command = new ArrayList<>();
+        command.add("java");
+        command.add("-cp");
+        command.add(RUNNER_CLASSES.toString());
+        command.add(RUNNER_CLASS);
+        command.addAll(List.of(args));
+
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.environment().putAll(env);
+        Process process = pb.start();
+        String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+        int exitCode = process.waitFor();
+        return new RunResult(exitCode, stdout, stderr);
+    }
+
+    private static void assertEquals(int expected, int actual, String label) {
+        if (expected != actual) {
+            throw new AssertionError(label + ": expected " + expected + " but got " + actual);
+        }
+    }
+
+    private static void assertContains(String actual, String expected, String label) {
+        if (!actual.contains(expected)) {
+            throw new AssertionError(label + ": expected to contain [" + expected + "] but was [" + actual + "]");
+        }
+    }
+
+    private static void assertNotContains(String actual, String expected, String label) {
+        if (actual.contains(expected)) {
+            throw new AssertionError(label + ": expected not to contain [" + expected + "] but was [" + actual + "]");
+        }
+    }
+
+    private record RunResult(int exitCode, String stdout, String stderr) {}
+}

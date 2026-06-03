@@ -1421,6 +1421,7 @@ services:
       DTS_DBT_PROJECT_DIR: /opt/dts/dbt
       DTS_FEATURE_PLATFORM_KC_LOCALIZATION: "true"
       DTS_HTTP_ACCESS_LOG: "true"
+      DTS_ANALYTICS_BASE_URL: ${DTS_ANALYTICS_BASE_URL:-http://dts-analytics:3000}
       DTS_INGESTION_BASE_URL: ${DTS_INGESTION_BASE_URL:-http://dts-ingestion:8083}
       DTS_INGESTION_SERVICE_NAME: ${DTS_INGESTION_SERVICE_NAME:-dts-platform}
       DTS_JDBC_DRIVER_CLASS: org.apache.hive.jdbc.HiveDriver

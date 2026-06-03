@@ -882,6 +882,7 @@ generate_env_base(){
 
   # ---------- Analytics ----------
   # Prefer your self-built image (offline/air-gapped friendly). Default aligns with other DTS app images.
+  : "${DTS_ANALYTICS_BASE_URL:=http://dts-analytics:3000}"
   : "${IMAGE_DTS_ADMIN:=dts-admin:1.0.0}"
   : "${IMAGE_DTS_PLATFORM:=dts-platform:1.0.0}"
   : "${IMAGE_DTS_INGESTION:=dts-ingestion:1.0.0}"
@@ -1188,6 +1189,7 @@ PLATFORM_VITE_HIDE_PASSWORD_LOGIN=${PLATFORM_VITE_HIDE_PASSWORD_LOGIN}
 WEBAPP_SHOW_CLASSIFIED_LOGIN_BADGE=${WEBAPP_SHOW_CLASSIFIED_LOGIN_BADGE}
 
 # ====== Analytics ======
+DTS_ANALYTICS_BASE_URL=${DTS_ANALYTICS_BASE_URL}
 ANALYTICS_ENCRYPTION_SECRET=${ANALYTICS_ENCRYPTION_SECRET}
 ANALYTICS_SITE_URL=${ANALYTICS_SITE_URL}
 ANALYTICS_JAVA_TOOL_OPTIONS="${ANALYTICS_JAVA_TOOL_OPTIONS}"

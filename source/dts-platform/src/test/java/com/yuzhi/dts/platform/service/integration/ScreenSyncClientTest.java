@@ -32,7 +32,7 @@ class ScreenSyncClientTest {
     @BeforeEach
     void setUp() {
         props = new DtsAnalyticsProperties();
-        props.setBaseUrl("http://dts-analytics:8084");
+        props.setBaseUrl("http://dts-analytics:3000");
         props.setServiceName("dts-platform");
         props.setEnabled(true);
 
@@ -44,7 +44,7 @@ class ScreenSyncClientTest {
     @Test
     @DisplayName("sends X-DTS-Service header and parses screen list")
     void parsesScreens() {
-        server.expect(requestTo("http://dts-analytics:8084/api/internal/screens"))
+        server.expect(requestTo("http://dts-analytics:3000/api/internal/screens"))
             .andExpect(method(HttpMethod.GET))
             .andExpect(header("X-DTS-Service", "dts-platform"))
             .andRespond(withSuccess("""

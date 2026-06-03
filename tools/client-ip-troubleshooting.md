@@ -8,7 +8,9 @@
 - 现场为公司局域网环境。
 - DTS 使用 `docker-compose.legacy.yml`。
 - 现场访问域名为 `https://bi.iae.caep`。
-- DTS 宿主机服务器 IP 为 `10.10.10.10`。
+- DTS 宿主机服务器 IP 为 `10.10.10.134`。
+- 客户端局域网主要为 `10.10.10.0/24` 和 `10.10.11.0/24`。
+- DTS 入口只运行 Traefik，中间没有其它 nginx、LB、Ingress 或代理服务器。
 - 用户从其他客户端机器正常访问 `https://bi.iae.caep` 的业务页面。
 - 不把 WireGuard 地址作为当前问题证据。
 
@@ -16,6 +18,7 @@
 
 - 不要在服务器本机执行 curl 作为客户端验证；本机访问可能走 loopback、hairpin NAT 或 docker-proxy 路径。
 - `TRUSTED_PROXY_CIDRS` 只能解决“Traefik 已收到真实 `X-Forwarded-For`/`Forwarded`，但因为不信任上一跳而丢弃”的问题。
+- 本现场没有其它前置代理时，不需要把 `10.10.10.0/24`、`10.10.11.0/24` 当成 `TRUSTED_PROXY_CIDRS` 主动配置；这些是客户端网段，不是可信代理网段。
 - 如果 Traefik 自己看到的客户端也是 `172.18.0.1`，并且请求头里没有真实 `X-Forwarded-For`/`Forwarded`，优先查 Docker NAT、docker-proxy、iptables/nft 或宿主机入口网络。
 
 ## 0. 记录现场变量
@@ -36,16 +39,42 @@ CLIENT_IP=<客户端真实局域网IP>
 
 ```text
 DTS_SITE_URL=https://bi.iae.caep
-DTS_SERVER_IP=10.10.10.10
+DTS_SERVER_IP=10.10.10.134
+CLIENT_LAN_CIDRS=10.10.10.0/24,10.10.11.0/24
 ```
 
 在客户端机器上确认域名解析，记为：
 
 ```text
-bi.iae.caep -> 10.10.10.10
+bi.iae.caep -> 10.10.10.134
 ```
 
-如果客户端域名解析不是 `10.10.10.10`，先修复 DNS 或客户端 hosts，再继续后续步骤。
+如果客户端域名解析不是 `10.10.10.134`，先修复 DNS 或客户端 hosts，再继续后续步骤。
+
+现场拓扑按以下链路理解：
+
+```text
+客户端 10.10.10.x / 10.10.11.x
+  -> DTS宿主机 10.10.10.134:443
+  -> dts-proxy / Traefik
+  -> dts-platform
+```
+
+该链路中没有其它前置代理，因此正常情况下 Traefik 的 `ClientAddr` 或 `ClientHost` 应直接出现客户端局域网 IP。
+
+已确认现场现象：
+
+```text
+dts-platform-webapp 右上角显示的登录 IP 是容器 IP。
+```
+
+该 IP 来自浏览器请求 `https://bi.iae.caep/api/session/status` 后，platform 返回的 `loginIp` / `clientIp` 字段。legacy 模式下 `docker-compose.legacy.yml` 已配置：
+
+```text
+https://bi.iae.caep/api/* -> Traefik -> dts-platform:8081
+```
+
+因此右上角显示容器 IP，说明 `dts-platform` 在 `/api/session/status` 这条请求上解析到的就是容器地址。后续排查只需要确认这个容器地址是在 Traefik 入口前已经形成，还是 Traefik 转发到 platform 时形成。
 
 后续命令除特别说明外，都在 DTS 宿主机的部署目录执行。
 
@@ -99,6 +128,11 @@ ClientAddr 或 ClientHost 是 172.18.0.1
 
 - 真实客户端 IP 在到达 Traefik 前已经丢失。
 - 跳到第 4 步，排查 Docker/NAT/宿主机入口。
+
+现场已经确认右上角登录 IP 是容器 IP，因此第 1 步是当前最关键分界点：
+
+- 如果 Traefik access log 的 `ClientAddr` / `ClientHost` 也是容器 IP，问题在宿主机入口到 Traefik 之前，优先查 Docker NAT、docker-proxy、iptables/nft。
+- 如果 Traefik access log 的 `ClientAddr` / `ClientHost` 是 `10.10.10.x` 或 `10.10.11.x`，但 platform 仍显示容器 IP，问题在 Traefik 到 platform 的转发头链路。
 
 ## 2. 查看 platform 是否收到真实客户端 IP
 
@@ -190,6 +224,10 @@ DTS_PROXY_IP=<上一步输出>
 - 执行修复路径 R1。
 
 ## 6. 验证 Traefik trustedIPs 配置是否覆盖上一跳
+
+本现场拓扑为客户端局域网直连 DTS 宿主机 Traefik，中间没有其它代理。正常情况下不需要进入本步骤，也不需要把 `10.10.10.0/24`、`10.10.11.0/24` 写入 `TRUSTED_PROXY_CIDRS`。
+
+只有在第 1 步确认同一条 Traefik access log 中已经存在 `X-Forwarded-For` 或 `Forwarded`，并且其中包含 `CLIENT_IP` 时，才继续检查本步骤。
 
 命令：
 
@@ -513,6 +551,7 @@ docker compose -f docker-compose.legacy.yml up -d --force-recreate dts-proxy
 
 - 第 1 步 Traefik access log 中 `X-Forwarded-For` 或 `Forwarded` 已包含 `CLIENT_IP`。
 - 第 6 步显示 `trustedIPs` 未覆盖上一跳来源。
+- 本现场声明没有前置代理，因此通常不应满足这两个条件；如果满足，说明现场链路中仍有设备或组件注入了代理头，需要先确认这个上一跳来源。
 
 编辑 `.env` 或现场环境文件，设置：
 
@@ -528,8 +567,10 @@ TRUSTED_PROXY_CIDRS=127.0.0.1/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 
 风险说明：
 
+- `TRUSTED_PROXY_CIDRS` 配的是可信上一跳代理，不是客户端网段白名单。
+- 对本现场来说，不建议因为客户端在 `10.10.10.0/24`、`10.10.11.0/24` 就直接配置这两个网段。
 - CIDR 放得越宽，越多内网来源可以伪造 `X-Forwarded-For`。
-- 长期配置应只写真实上一跳代理、K8s 节点或负载均衡器的 IP/CIDR。
+- 长期配置应只写真实上一跳代理、网关或负载均衡器的 IP/CIDR；如果确认没有这类上一跳代理，可以不配置。
 
 命令：
 

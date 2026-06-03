@@ -82,6 +82,14 @@ class AirflowDagServiceTest {
         assertThat(dagSource).contains("from datetime import datetime, timedelta");
         assertThat(dagSource).contains("schedule=timedelta(minutes=60)");
         assertThat(dagSource).doesNotContain("schedule=\"interval:60\"");
+        assertThat(dagSource).contains("ADDAX_RUNNER_JAR = os.getenv(\"ADDAX_RUNNER_JAR\"");
+        assertThat(dagSource).contains("from airflow.utils.template import literal");
+        assertThat(dagSource).contains("entrypoint=\"java\"");
+        assertThat(dagSource).contains("\"-cp\",");
+        assertThat(dagSource).contains("literal(ADDAX_RUNNER_JAR)");
+        assertThat(dagSource).contains("\"com.yuzhi.dts.addax.AddaxEnvRunner\"");
+        assertThat(dagSource).contains("run_cmd,");
+        assertThat(dagSource).doesNotContain("entrypoint=\"/opt/addax/bin/addax.sh\"");
     }
 
     @Test
@@ -100,6 +108,13 @@ class AirflowDagServiceTest {
         assertThat(dagSource).contains("from datetime import datetime, timedelta");
         assertThat(dagSource).contains("schedule=timedelta(minutes=90)");
         assertThat(dagSource).doesNotContain("schedule=\"interval:90\"");
+        assertThat(dagSource).contains("ADDAX_RUNNER_JAR = os.getenv(\"ADDAX_RUNNER_JAR\"");
+        assertThat(dagSource).contains("entrypoint=\"java\"");
+        assertThat(dagSource).contains("literal(ADDAX_RUNNER_JAR)");
+        assertThat(dagSource).contains("\"com.yuzhi.dts.addax.AddaxEnvRunner\"");
+        assertThat(dagSource).contains("\"/opt/addax/jobs/order.json\",");
+        assertThat(dagSource).contains("\"/opt/addax/jobs/item.json\",");
+        assertThat(dagSource).doesNotContain("entrypoint=\"/opt/addax/bin/addax.sh\"");
     }
 
     @Test

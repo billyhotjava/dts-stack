@@ -452,6 +452,8 @@ public class AirflowDagService {
             from datetime import datetime, timedelta
 
             from airflow import DAG
+            from airflow.models import Variable
+            from airflow.utils.template import literal
             from airflow.providers.docker.operators.docker import DockerOperator
             from docker.types import Mount
             %s
@@ -462,6 +464,7 @@ public class AirflowDagService {
             ADDAX_DRIVER_DIR = os.getenv("ADDAX_DRIVER_DIR", "")
             ADDAX_DRIVER_JARS = os.getenv("ADDAX_DRIVER_JARS", "")
             DEFAULT_JOB_PATH = os.getenv("ADDAX_JOB_DEFAULT", "%s")
+            %s
             %s
 
 
@@ -507,8 +510,13 @@ public class AirflowDagService {
                     api_version="auto",
                     auto_remove=True,
                     docker_url="unix://var/run/docker.sock",
-                    entrypoint="/opt/addax/bin/addax.sh",
-                    command=run_cmd,
+                    entrypoint="java",
+                    command=[
+                        "-cp",
+                        literal(ADDAX_RUNNER_JAR),
+                        ADDAX_RUNNER_CLASS,
+                        run_cmd,
+                    ],
                     network_mode=ADDAX_DOCKER_NETWORK,
                     mount_tmp_dir=False,
                     mounts=[
@@ -516,12 +524,12 @@ public class AirflowDagService {
                         Mount(source=ADDAX_LOG_DIR, target="/opt/addax/log", type="bind"),
                         *build_driver_mounts(),
                     ],
-                    environment={},
+                    environment=build_addax_environment(),
             %s
                     tty=False,
                 )
             %s
-            """.formatted(extraImports, addaxImage, addaxJobDir, defaultJobPath, lineageSupport,
+            """.formatted(extraImports, addaxImage, addaxJobDir, defaultJobPath, buildAddaxCredentialSupportBlock(), lineageSupport,
                 dagId, scheduleLiteral, sourceTag, nameTag,
                 defaultJobPath, initTableBlock, taskId, lineageCallbacks, dependencyBlock);
     }
@@ -544,6 +552,8 @@ public class AirflowDagService {
         sb.append("import urllib.request\n");
         sb.append("from datetime import datetime, timedelta\n\n");
         sb.append("from airflow import DAG\n");
+        sb.append("from airflow.models import Variable\n");
+        sb.append("from airflow.utils.template import literal\n");
         sb.append("from airflow.providers.docker.operators.docker import DockerOperator\n");
         sb.append("from docker.types import Mount\n\n");
         sb.append(String.format("ADDAX_IMAGE = os.getenv(\"ADDAX_IMAGE\", \"%s\")\n", addaxImage));
@@ -552,6 +562,8 @@ public class AirflowDagService {
         sb.append("ADDAX_DOCKER_NETWORK = os.getenv(\"ADDAX_DOCKER_NETWORK\", \"dts-core\")\n");
         sb.append("ADDAX_DRIVER_DIR = os.getenv(\"ADDAX_DRIVER_DIR\", \"\")\n");
         sb.append("ADDAX_DRIVER_JARS = os.getenv(\"ADDAX_DRIVER_JARS\", \"\")\n\n\n");
+        sb.append(buildAddaxCredentialSupportBlock());
+        sb.append("\n");
         sb.append(buildOpenLineageSupportBlock(task, null));
         sb.append("def build_driver_mounts():\n");
         sb.append("    mounts = []\n");
@@ -606,8 +618,13 @@ public class AirflowDagService {
             sb.append("        api_version=\"auto\",\n");
             sb.append("        auto_remove=True,\n");
             sb.append("        docker_url=\"unix://var/run/docker.sock\",\n");
-            sb.append("        entrypoint=\"/opt/addax/bin/addax.sh\",\n");
-            sb.append(String.format("        command=\"%s\",\n", jobPath));
+            sb.append("        entrypoint=\"java\",\n");
+            sb.append("        command=[\n");
+            sb.append("            \"-cp\",\n");
+            sb.append("            literal(ADDAX_RUNNER_JAR),\n");
+            sb.append("            ADDAX_RUNNER_CLASS,\n");
+            sb.append(String.format("            \"%s\",\n", jobPath));
+            sb.append("        ],\n");
             sb.append("        network_mode=ADDAX_DOCKER_NETWORK,\n");
             sb.append("        mount_tmp_dir=False,\n");
             sb.append("        mounts=[\n");
@@ -615,7 +632,7 @@ public class AirflowDagService {
         sb.append("            Mount(source=ADDAX_LOG_DIR, target=\"/opt/addax/log\", type=\"bind\"),\n");
             sb.append("            *build_driver_mounts(),\n");
             sb.append("        ],\n");
-            sb.append("        environment={},\n");
+            sb.append("        environment=build_addax_environment(),\n");
             if (StringUtils.hasText(lineageDatasets)) {
                 sb.append(String.format("        on_success_callback=make_openlineage_callback(\"COMPLETE\", %s),\n", lineageDatasets));
                 sb.append(String.format("        on_failure_callback=make_openlineage_callback(\"FAIL\", %s),\n", lineageDatasets));
@@ -625,6 +642,39 @@ public class AirflowDagService {
         }
 
         return sb.toString();
+    }
+
+    private String buildAddaxCredentialSupportBlock() {
+        return """
+            ADDAX_RUNNER_JAR = os.getenv("ADDAX_RUNNER_JAR", "/opt/addax/jobs/addax-env-runner.jar")
+            ADDAX_RUNNER_CLASS = os.getenv("ADDAX_RUNNER_CLASS", "com.yuzhi.dts.addax.AddaxEnvRunner")
+
+
+            def resolve_secret(primary_name, *fallback_names):
+                for name in (primary_name, *fallback_names):
+                    value = os.getenv(name)
+                    if value:
+                        return value
+                    value = Variable.get(name, default_var="")
+                    if value:
+                        return value
+                return ""
+
+
+            def build_addax_environment():
+                return {
+                    "DTS_ADDAX_READER_PASSWORD": resolve_secret(
+                        "DTS_ADDAX_READER_PASSWORD",
+                        "DTS_SOURCE_DB_PASSWORD",
+                        "DTS_PTR_MYSQL_PASSWORD",
+                    ),
+                    "DTS_TARGET_DB_PASSWORD": resolve_secret(
+                        "DTS_TARGET_DB_PASSWORD",
+                        "DTS_ADDAX_WRITER_PASSWORD",
+                    ),
+                }
+
+            """;
     }
 
     private String buildOpenLineageSupportBlock(IngestionTask task, String tableName) {

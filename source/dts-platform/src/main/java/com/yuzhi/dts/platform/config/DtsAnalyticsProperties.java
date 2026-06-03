@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class DtsAnalyticsProperties {
 
     private boolean enabled = true;
-    private String baseUrl = "http://dts-analytics:8084";
+    private String baseUrl = "http://dts-analytics:3000";
     private String serviceName = "dts-platform";
     private int connectTimeoutSeconds = 5;
     private int readTimeoutSeconds = 20;
