@@ -105,8 +105,13 @@ public class FileUploadService {
         String storedName = UUID.randomUUID().toString().substring(0, 8) + "_" + sanitizeFileName(originalName) + ".enc";
         Path hostPath = uploadsDir.resolve(storedName);
         byte[] iv = crypto.randomIv();
+        String keyVersion = crypto.currentKeyVersion();
         try {
             byte[] cipher = crypto.encrypt(plain, iv);
+            byte[] versionBytes = keyVersion.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            if (versionBytes.length > 255) {
+                throw new IllegalStateException("keyVersion 过长，无法写入文件头: " + keyVersion);
+            }
             try (
                 OutputStream out = Files.newOutputStream(
                     hostPath,
@@ -115,8 +120,10 @@ public class FileUploadService {
                     StandardOpenOption.WRITE
                 )
             ) {
-                out.write(iv);
-                out.write(cipher);
+                out.write(versionBytes.length); // verLen: 1 字节
+                out.write(versionBytes);        // keyVersion（文件自描述加密版本，支持轮转）
+                out.write(iv);                  // IV: 12B
+                out.write(cipher);              // AES-GCM 密文 + 16B tag
             }
         } catch (Exception ex) {
             throw new IllegalStateException("文件加密保存失败: " + ex.getMessage(), ex);

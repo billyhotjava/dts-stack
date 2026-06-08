@@ -21,6 +21,7 @@ public final class AddaxEnvRunnerTest {
         propagatesAddaxExitCode();
         decryptsEncryptedInputToTmpfsAndErases();
         failsWhenEncryptedInputButNoKey();
+        failsWhenKeyVersionMismatch();
         System.out.println("AddaxEnvRunnerTest: all tests passed");
     }
 
@@ -37,13 +38,18 @@ public final class AddaxEnvRunnerTest {
         byte[] iv = new byte[12];
         new java.security.SecureRandom().nextBytes(iv);
         java.nio.file.Path enc = dir.resolve("data.csv.enc");
-        Files.write(enc, AddaxFileCrypto.encrypt(plaintext, key, iv));
+        Files.write(enc, AddaxFileCrypto.encrypt(plaintext, key, iv, "v1"));
 
         java.nio.file.Path job = dir.resolve("job.json");
         Files.writeString(job, "{\"reader\":{\"path\":[\"" + enc + "\"]}}", StandardCharsets.UTF_8);
 
         RunResult result = runRunner(
-            Map.of("ADDAX_BIN", fakeAddax.toString(), "TMPDIR", tmpfs.toString(), "DTS_INFRA_ENCRYPTION_KEY", b64Key),
+            Map.of(
+                "ADDAX_BIN", fakeAddax.toString(),
+                "TMPDIR", tmpfs.toString(),
+                "DTS_INFRA_ENCRYPTION_KEY", b64Key,
+                "DTS_INFRA_KEY_VERSION", "v1"
+            ),
             job.toString()
         );
 
@@ -70,6 +76,33 @@ public final class AddaxEnvRunnerTest {
 
         assertEquals(78, result.exitCode(), "missing key exit code");
         assertContains(result.stderr(), "DTS_INFRA_ENCRYPTION_KEY", "missing key message");
+    }
+
+    private static void failsWhenKeyVersionMismatch() throws Exception {
+        java.nio.file.Path dir = Files.createTempDirectory("addax-runner-vermismatch-");
+        java.nio.file.Path fakeAddax = fakeAddax(dir, 0, dir.resolve("captured.json"));
+        String b64Key = java.util.Base64.getEncoder()
+            .encodeToString("0123456789abcdef0123456789abcdef".getBytes(StandardCharsets.UTF_8));
+        javax.crypto.SecretKey key = AddaxFileCrypto.keyFromBase64(b64Key);
+        byte[] iv = new byte[12];
+        new java.security.SecureRandom().nextBytes(iv);
+        java.nio.file.Path enc = dir.resolve("data.csv.enc");
+        Files.write(enc, AddaxFileCrypto.encrypt("x,y\n1,2\n".getBytes(StandardCharsets.UTF_8), key, iv, "v1"));
+        java.nio.file.Path job = dir.resolve("job.json");
+        Files.writeString(job, "{\"reader\":{\"path\":[\"" + enc + "\"]}}", StandardCharsets.UTF_8);
+
+        // 文件用 v1 加密，环境声明 v2 → 必须在解密前以清晰错误拒绝
+        RunResult result = runRunner(
+            Map.of(
+                "ADDAX_BIN", fakeAddax.toString(),
+                "DTS_INFRA_ENCRYPTION_KEY", b64Key,
+                "DTS_INFRA_KEY_VERSION", "v2"
+            ),
+            job.toString()
+        );
+
+        assertEquals(78, result.exitCode(), "key version mismatch exit code");
+        assertContains(result.stderr(), "key version mismatch", "version mismatch message");
     }
 
     private static void requiresJobPathArgument() throws Exception {

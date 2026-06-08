@@ -234,7 +234,7 @@ public class AddaxJobService {
     private static final List<String> FILE_METADATA_KEYS = List.of(
         "_filePath", "_containerPath", "_fileType", "_fileColumns", "_originalName", "_autoId",
         "_fileHash", "fileHash", "_fileSize", "fileSize", "_sheetName", "sheetName", "sheetIndex",
-        "_sourceSheet", "sourceSheet", "_rowNumberOffset"
+        "_sourceSheet", "sourceSheet", "_rowNumberOffset", "_keyVersion", "_encrypted"
     );
 
     private static final List<String> COLUMN_RULE_KEYS = List.of(

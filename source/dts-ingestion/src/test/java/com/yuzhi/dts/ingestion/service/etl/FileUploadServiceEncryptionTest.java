@@ -94,9 +94,13 @@ class FileUploadServiceEncryptionTest {
         Path enc = Path.of(result.hostPath());
         byte[] stored = Files.readAllBytes(enc);
 
-        // 文件头 12B 为 IV，其后为 GCM 密文；解密还原 == 原文件
-        byte[] iv = Arrays.copyOfRange(stored, 0, 12);
-        byte[] cipher = Arrays.copyOfRange(stored, 12, stored.length);
+        // 布局 [verLen:1][keyVersion][IV:12][GCM 密文]；版本头自描述，其后解密还原 == 原文件
+        int verLen = stored[0] & 0xFF;
+        String ver = new String(stored, 1, verLen, StandardCharsets.UTF_8);
+        assertThat(ver).isEqualTo("v1");
+        int ivStart = 1 + verLen;
+        byte[] iv = Arrays.copyOfRange(stored, ivStart, ivStart + 12);
+        byte[] cipher = Arrays.copyOfRange(stored, ivStart + 12, stored.length);
         byte[] decrypted = crypto.decrypt(cipher, iv);
         assertThat(decrypted).isEqualTo(plain);
 
@@ -127,7 +131,10 @@ class FileUploadServiceEncryptionTest {
         byte[] s1 = Files.readAllBytes(Path.of(service.handleUpload(new MockMultipartFile("file", "a.xlsx", null, plain)).hostPath()));
         byte[] s2 = Files.readAllBytes(Path.of(service.handleUpload(new MockMultipartFile("file", "b.xlsx", null, plain)).hostPath()));
 
-        assertThat(Arrays.copyOfRange(s1, 0, 12)).isNotEqualTo(Arrays.copyOfRange(s2, 0, 12));
+        int iv1Start = 1 + (s1[0] & 0xFF);
+        int iv2Start = 1 + (s2[0] & 0xFF);
+        assertThat(Arrays.copyOfRange(s1, iv1Start, iv1Start + 12))
+            .isNotEqualTo(Arrays.copyOfRange(s2, iv2Start, iv2Start + 12));
     }
 
     @Test

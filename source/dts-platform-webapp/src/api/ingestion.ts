@@ -229,6 +229,10 @@ export interface FileUploadResult {
 	batchCode?: string;
 	sheetName?: string;
 	sheetIndex?: number;
+	fileHash?: string;
+	fileSize?: number;
+	keyVersion?: string;
+	encrypted?: boolean;
 	csvPath?: string;
 	csvContainerPath?: string;
 	errorPath?: string;

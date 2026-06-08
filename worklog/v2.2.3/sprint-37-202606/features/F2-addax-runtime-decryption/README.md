@@ -14,7 +14,7 @@
 
 ## 加密文件格式契约（与 F1 共享）
 
-读取 F1 约定：`{name}.enc` = `[IV:12B][AES-GCM ciphertext+16B tag]`，`AES/GCM/NoPadding`，密钥 `DTS_INFRA_ENCRYPTION_KEY`，keyVersion 由 job/env 传入。
+读取 F1 约定：`{name}.enc` = `[verLen:1B][keyVersion][IV:12B][AES-GCM ciphertext+16B tag]`，`AES/GCM/NoPadding`，密钥 `DTS_INFRA_ENCRYPTION_KEY`。runner 从文件头读 keyVersion，与 env `DTS_INFRA_KEY_VERSION` 校验一致后解密（P0-3）。
 
 ## Task 列表
 

@@ -14,6 +14,20 @@
 | 安全复审 | `it/evidence/security-review/` | READY |
 | 加密样例 fixture | `it/fixtures/` | READY |
 
+## 部署前提：加密密钥配置（P0，必读）
+
+加密密钥**不写入 git**，由现场通过 `.env` 注入（compose 用 `${DTS_INFRA_ENCRYPTION_KEY:-}` 空兜底，fail-fast）。
+
+1. 生成密钥（AES-256，base64）：`openssl rand -base64 32`
+2. 写入现场 `.env`（与 compose 同目录，已 gitignore）：
+   ```
+   DTS_INFRA_ENCRYPTION_KEY=<上一步生成的值>
+   DTS_INFRA_KEY_VERSION=v1
+   ```
+3. dts-ingestion 与所有 Airflow/Addax 服务共用同一 key（compose 已统一引用 5 处）。
+4. **fail-fast**：未配 key 时 `FileUploadService` 拒绝上传（"加密密钥未配置"）、runner 解密失败——预期的合规阻断，非 bug。
+5. **密钥不可变**：投产后不能改（`.enc` 文件头记录 keyVersion，旧密文用它加密）；轮转需旧密文重加密（Backlog）。
+
 ## 验收命令草案
 
 ```bash

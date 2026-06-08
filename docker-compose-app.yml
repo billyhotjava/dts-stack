@@ -212,7 +212,7 @@ services:
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
       ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
-      DTS_INFRA_ENCRYPTION_KEY: "${DTS_INFRA_ENCRYPTION_KEY:-RtCJBl8ImhTmzi2G8VT8JxeQ+Cf9r6zm7hmjmirmuAU=}"
+      DTS_INFRA_ENCRYPTION_KEY: ${DTS_INFRA_ENCRYPTION_KEY:-}
       DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION:-v1}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
@@ -298,7 +298,7 @@ services:
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
       ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
-      DTS_INFRA_ENCRYPTION_KEY: "${DTS_INFRA_ENCRYPTION_KEY:-RtCJBl8ImhTmzi2G8VT8JxeQ+Cf9r6zm7hmjmirmuAU=}"
+      DTS_INFRA_ENCRYPTION_KEY: ${DTS_INFRA_ENCRYPTION_KEY:-}
       DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION:-v1}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
@@ -386,7 +386,7 @@ services:
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
       ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
-      DTS_INFRA_ENCRYPTION_KEY: "${DTS_INFRA_ENCRYPTION_KEY:-RtCJBl8ImhTmzi2G8VT8JxeQ+Cf9r6zm7hmjmirmuAU=}"
+      DTS_INFRA_ENCRYPTION_KEY: ${DTS_INFRA_ENCRYPTION_KEY:-}
       DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION:-v1}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
@@ -470,7 +470,7 @@ services:
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
       ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
-      DTS_INFRA_ENCRYPTION_KEY: "${DTS_INFRA_ENCRYPTION_KEY:-RtCJBl8ImhTmzi2G8VT8JxeQ+Cf9r6zm7hmjmirmuAU=}"
+      DTS_INFRA_ENCRYPTION_KEY: ${DTS_INFRA_ENCRYPTION_KEY:-}
       DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION:-v1}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
@@ -732,7 +732,7 @@ services:
       DTS_AIRFLOW_ENABLED: ${DTS_AIRFLOW_ENABLED:-true}
       DTS_AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD:-airflow}
       DTS_AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME:-airflow}
-      DTS_INFRA_ENCRYPTION_KEY: "${DTS_INFRA_ENCRYPTION_KEY:-RtCJBl8ImhTmzi2G8VT8JxeQ+Cf9r6zm7hmjmirmuAU=}"
+      DTS_INFRA_ENCRYPTION_KEY: ${DTS_INFRA_ENCRYPTION_KEY:-}
       DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION:-v1}
       DTS_INGESTION_TRUSTED_SERVICE_NAME: ${DTS_INGESTION_TRUSTED_SERVICE_NAME:-dts-platform}
       DTS_OPENMETADATA_API_PATH: ${DTS_OPENMETADATA_API_PATH:-/api/v1}

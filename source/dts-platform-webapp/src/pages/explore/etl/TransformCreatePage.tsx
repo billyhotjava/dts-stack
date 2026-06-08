@@ -783,6 +783,10 @@ export default function TransformCreatePage() {
 				readerConfig = {
 					_filePath: fileUploadResult.hostPath,
 					_containerPath: fileUploadResult.containerPath,
+					_keyVersion: fileUploadResult.keyVersion,
+					_encrypted: fileUploadResult.encrypted,
+					_fileHash: fileUploadResult.fileHash,
+					_fileSize: fileUploadResult.fileSize,
 					_fileType: "csv",
 					_fileColumns: fileUploadResult.columns,
 					_originalName: fileUploadResult.originalName,
@@ -1305,6 +1309,10 @@ export default function TransformCreatePage() {
 				readerConfig = {
 					_filePath: fileUploadResult.hostPath,
 					_containerPath: fileUploadResult.containerPath,
+					_keyVersion: fileUploadResult.keyVersion,
+					_encrypted: fileUploadResult.encrypted,
+					_fileHash: fileUploadResult.fileHash,
+					_fileSize: fileUploadResult.fileSize,
 					_fileType: "csv",
 					_fileColumns: fileUploadResult.columns,
 					_originalName: fileUploadResult.originalName,
@@ -1594,6 +1602,10 @@ export default function TransformCreatePage() {
 				{
 					_filePath: fileUploadResult.hostPath,
 					_containerPath: fileUploadResult.containerPath,
+					_keyVersion: fileUploadResult.keyVersion,
+					_encrypted: fileUploadResult.encrypted,
+					_fileHash: fileUploadResult.fileHash,
+					_fileSize: fileUploadResult.fileSize,
 					_fileType: "csv",
 					_fileColumns: fileUploadResult.columns,
 					_originalName: fileUploadResult.originalName,

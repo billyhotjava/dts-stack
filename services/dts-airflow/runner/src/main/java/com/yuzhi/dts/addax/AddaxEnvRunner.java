@@ -63,17 +63,22 @@ public final class AddaxEnvRunner {
             return EX_CONFIG;
         }
 
-        Path tempFile = writeTempJob(jobFile, prepared, env);
+        // P1 修复：把写临时 job 纳入 try/finally，确保 writeTempJob 失败时已解密明文仍被擦除
+        Path tempFile = null;
         try {
+            tempFile = writeTempJob(jobFile, prepared, env);
             return runAddax(tempFile, env, err);
         } finally {
-            Files.deleteIfExists(tempFile);
+            if (tempFile != null) {
+                Files.deleteIfExists(tempFile);
+            }
             erasePlaintexts(decryptedPlaintexts);
         }
     }
 
     private static final Pattern ENC_REFERENCE = Pattern.compile("\"([^\"]*\\.enc)\"");
     private static final String ENCRYPTION_KEY_ENV = "DTS_INFRA_ENCRYPTION_KEY";
+    private static final String KEY_VERSION_ENV = "DTS_INFRA_KEY_VERSION";
 
     /**
      * 把 job 中引用的 *.enc 密文解密到 TMPDIR（tmpfs）明文，并将路径改写为明文路径。
@@ -94,6 +99,7 @@ public final class AddaxEnvRunner {
             throw new GeneralSecurityException("encrypted input present but " + ENCRYPTION_KEY_ENV + " is not set");
         }
         SecretKey key = AddaxFileCrypto.keyFromBase64(base64Key);
+        String expectedVersion = env.get(KEY_VERSION_ENV);
         Path tmpDir = Path.of(env.getOrDefault("TMPDIR", System.getProperty("java.io.tmpdir")));
         String result = rendered;
         for (String encPath : encPaths) {
@@ -101,7 +107,14 @@ public final class AddaxEnvRunner {
             if (!Files.isReadable(enc)) {
                 throw new IOException("encrypted input not readable: " + encPath);
             }
-            byte[] plain = AddaxFileCrypto.decrypt(Files.readAllBytes(enc), key);
+            AddaxFileCrypto.EncryptedPayload parsed = AddaxFileCrypto.parse(Files.readAllBytes(enc));
+            // P0-3：密钥版本一致性校验，避免多 key 轮转场景误用错误版本密钥
+            if (expectedVersion != null && !expectedVersion.isBlank()
+                && !expectedVersion.equals(parsed.keyVersion())) {
+                throw new GeneralSecurityException(
+                    "key version mismatch for " + encPath + ": file=" + parsed.keyVersion() + " env=" + expectedVersion);
+            }
+            byte[] plain = AddaxFileCrypto.decrypt(parsed, key);
             Path plaintext = writePlaintext(tmpDir, enc.getFileName().toString(), plain);
             created.add(plaintext);
             result = result.replace(encPath, plaintext.toString());

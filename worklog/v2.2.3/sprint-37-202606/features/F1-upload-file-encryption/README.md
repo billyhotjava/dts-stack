@@ -15,7 +15,7 @@
 ## 加密文件格式契约（与 F2 共享，不可单方变更）
 
 - 文件名：`{原存储名}.enc`（如 `a1b2c3d4_data.xlsx.enc`）。
-- 布局：`[IV:12B][AES-GCM ciphertext + 16B tag]`（IV 置文件头，自包含）。
+- 布局：`[verLen:1B][keyVersion:verLen B][IV:12B][AES-GCM ciphertext + 16B tag]`（文件头自带 keyVersion，自描述、支持密钥轮转；IV 紧随版本头）。
 - 算法：`AES/GCM/NoPadding`，tag 128bit，密钥 `DTS_INFRA_ENCRYPTION_KEY`。
 - 元数据：`keyVersion`/`originalName`/明文`sha256`/`fileSize` → `IngestionTask.sourceConfig`。
 
