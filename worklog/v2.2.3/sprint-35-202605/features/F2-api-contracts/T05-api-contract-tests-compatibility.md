@@ -1,7 +1,7 @@
 # T05: API contract 测试与兼容策略
 
 **优先级**: P0
-**状态**: READY
+**状态**: IN_PROGRESS
 **依赖**: T04
 
 ## 目标
@@ -24,10 +24,12 @@
 
 ## 验证
 
-- [ ] Contract tests 证明默认 DWS/ADS。
-- [ ] 旧 semantic 写路径不能继续创建 platform 内部语义事实。
-- [ ] metrics 服务不可用时返回明确错误。
+- [x] `MetricVisualAssetResourceTest` 证明默认 DWS/ADS、DWD 需显式高级模式、ODS/STG 被拒。
+- [x] `MetricGraphResourceTest` 覆盖 graph create/get/patch/preflight、invalid layer、grain mismatch、derived metric cycle。
+- [x] `MetricModelLifecycleResourceTest` 覆盖 artifact、validate、publish dry-run 状态门禁和 publish 脱敏。
+- [x] `MetricsFrontendResourceContractTest` 与 webapp source test 覆盖 Sprint-35 feature routes 和 API path。
+- [ ] 旧 semantic 写路径兼容策略仍需单独落地，不能继续创建 platform 内部语义事实。
 
 ## 完成标准
 
-- [ ] API 契约可作为前端和后端并行开发依据。
+- [ ] API 契约可作为前端和后端并行开发依据；当前新 API focused contract 已有，旧 semantic 兼容策略待补齐。

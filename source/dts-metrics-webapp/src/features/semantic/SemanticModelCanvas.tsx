@@ -30,6 +30,11 @@ function edgeTone(option: SemanticJoinOption, selected: boolean): string {
 	return selected ? "#0f766e" : "#94a3b8";
 }
 
+function layerClass(layer: string): string {
+	const value = layer.toLowerCase();
+	return value === "dwd" || value === "dws" || value === "ads" ? value : "unknown";
+}
+
 function readId(value: unknown): string {
 	if (typeof value === "string") return value;
 	if (typeof value === "number") return String(value);
@@ -89,11 +94,18 @@ export default function SemanticModelCanvas({
 									<strong>{node.label}</strong>
 									<em>{statusLabel}</em>
 								</span>
-								<span>{node.subjectArea}</span>
+								<span className={`semantic-layer-badge ${layerClass(node.warehouseLayer)}`}>{node.warehouseLayer}</span>
+								<span className="semantic-node-key">{node.assetKey}</span>
 								<span className="semantic-node-meta">
 									指标 {node.metricCount} / 维度 {node.dimensionCount}
 								</span>
-								<span className="semantic-node-security">{node.securityLevel}</span>
+								<span className="semantic-node-meta">粒度 {node.grain}</span>
+								<span className="semantic-node-status-grid">
+									<b title="治理状态">{node.governanceStatus}</b>
+									<b title="权限决策">{node.permissionDecision}</b>
+									<b title="血缘状态">{node.lineageStatus}</b>
+								</span>
+								<span className="semantic-node-security">{node.subjectArea} / {node.securityLevel}</span>
 							</div>
 						),
 					},

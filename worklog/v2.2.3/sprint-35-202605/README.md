@@ -1,7 +1,7 @@
 # Sprint-35: dts-metrics 数据仓库可视化设计重构（202605）
 
 **时间**: 2026-05
-**状态**: READY
+**状态**: IN_PROGRESS
 **类型**: Architecture / Productization / Implementation Plan（dts-metrics-webapp + dts-metrics + dts-platform + dbt gateway）
 **目标**: 基于 Sprint-32 的 React Flow 指标工作台方案，补齐“源数据库清洗到数据仓库之后，dts-metrics 从哪一层开始进行可视化设计”的硬边界，并按“架构与 PRD -> 前后端 API -> 前端 -> 后端 -> 安全与评审”顺序拆成可执行 feature/task。
 
@@ -37,12 +37,12 @@ Sprint-32 的服务边界方向正确：`dts-metrics` 负责指标语义、graph
 | ID | Feature | 优先级 | Task 数 | 状态 | 依赖 |
 |----|---------|--------|---------|------|------|
 | F1 | 整体架构与 PRD 契约 | P0 | 5 | READY | Sprint-31, Sprint-32 |
-| F2 | 前后端 API 契约 | P0 | 5 | READY | F1 |
-| F3 | 前端可视化工作台 | P0 | 5 | READY | F1, F2 |
-| F4 | 后端建模与 dbt 网关 | P0 | 5 | READY | F1, F2 |
-| F5 | 安全、评审机制与 IT 准入 | P0 | 5 | READY | F1-F4 |
+| F2 | 前后端 API 契约 | P0 | 5 | IN_PROGRESS（T01/T02 DONE；T03-T05 IN_PROGRESS） | F1 |
+| F3 | 前端可视化工作台 | P0 | 5 | IN_PROGRESS（T03 DONE；T01/T02/T04/T05 IN_PROGRESS） | F1, F2 |
+| F4 | 后端建模与 dbt 网关 | P0 | 5 | IN_PROGRESS（T01/T03 DONE；T02/T04 IN_PROGRESS） | F1, F2 |
+| F5 | 安全、评审机制与 IT 准入 | P0 | 5 | IN_PROGRESS（T03 DONE） | F1-F4 |
 
-**统计**: READY=25, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=10, IN_PROGRESS=9, DONE=6, BLOCKED=0
 
 ## 完成标准
 

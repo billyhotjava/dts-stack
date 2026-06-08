@@ -15,6 +15,8 @@ export type SemanticFieldExplorerNode = {
 	fieldId?: string;
 	fieldKind?: SemanticFieldKind;
 	description?: string;
+	standardCodeField?: string;
+	labelField?: string;
 	securityLevel?: string;
 	isBase?: boolean;
 	metricCount?: number;
@@ -34,6 +36,26 @@ function readId(value: unknown): string {
 
 function readLabel(value: Record<string, unknown>, fallback: string): string {
 	return String(value.label ?? value.display_name ?? value.name ?? value.id ?? fallback);
+}
+
+function readString(value: unknown): string | undefined {
+	return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function inferStandardCodeField(fieldId: string, field: Record<string, unknown>, fieldKind: SemanticFieldKind): string | undefined {
+	return (
+		readString(field.standardCodeField) ??
+		readString(field.standard_code_field) ??
+		readString(field.codeField) ??
+		readString(field.code_field) ??
+		(fieldKind === "dimension" && fieldId.endsWith("_name") ? fieldId.replace(/_name$/, "_code") : undefined) ??
+		(fieldKind === "dimension" && fieldId.endsWith("_label") ? fieldId.replace(/_label$/, "_code") : undefined) ??
+		(fieldKind === "dimension" && fieldId.toLowerCase().includes("code") ? fieldId : undefined)
+	);
+}
+
+function inferLabelField(fieldId: string, field: Record<string, unknown>): string | undefined {
+	return readString(field.labelField) ?? readString(field.label_field) ?? readString(field.nameField) ?? readString(field.name_field) ?? fieldId;
 }
 
 function normalizeSearchText(value: string): string {
@@ -63,15 +85,19 @@ function buildFieldNodes(
 		}
 		const label = readLabel(field, fieldId);
 		const description = typeof field.description === "string" ? field.description : undefined;
+		const standardCodeField = inferStandardCodeField(fieldId, field, fieldKind);
+		const labelField = inferLabelField(fieldId, field);
 		nodes.push({
 			key: buildFieldKey(fieldKind, fieldId),
 			type: "field",
 			label,
-			searchText: normalizeSearchText([label, fieldId, description, modelLabel, subjectArea].filter(Boolean).join(" ")),
+			searchText: normalizeSearchText([label, fieldId, standardCodeField, labelField, description, modelLabel, subjectArea].filter(Boolean).join(" ")),
 			modelId,
 			fieldId,
 			fieldKind,
 			description,
+			standardCodeField,
+			labelField,
 			selected: selectedSet.has(fieldId),
 		});
 	}

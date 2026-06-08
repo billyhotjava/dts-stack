@@ -46,6 +46,7 @@ class ServiceDependencyAuthenticationFilterTest {
     private static final String METRICS_PERMISSION_DENIED_AUDIT = "/api/internal/v1/asset-permission/audit/denied";
     private static final String METRICS_PERMISSION_DENIED_AUDIT_CSV = "/api/internal/v1/asset-permission/audit/denied.csv";
     private static final String METRICS_POLICY_INJECTION_AUDIT = "/api/internal/v1/asset-permission/audit/policy-injection";
+    private static final String METRICS_MODEL_VALIDATION = "/api/internal/metrics/model-validation";
 
     private PlatformInboundServiceAuthProperties props;
     private SvcTokenAuthService svcTokenAuthService;
@@ -187,6 +188,7 @@ class ServiceDependencyAuthenticationFilterTest {
         assertMetricsCanAccess("GET", METRICS_PERMISSION_DENIED_AUDIT_CSV);
         assertMetricsCanAccess("GET", METRICS_POLICY_INJECTION_AUDIT);
         assertMetricsCanAccess("POST", METRICS_POLICY_INJECTION_AUDIT);
+        assertMetricsCanAccess("POST", METRICS_MODEL_VALIDATION);
         assertMetricsCanAccess("POST", "/api/etl/dbt/release-gate/check");
         assertMetricsCanAccess("POST", "/api/etl/dbt/release/submit");
     }

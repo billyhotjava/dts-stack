@@ -1,7 +1,7 @@
 # T02: React Flow 分层画布节点模型
 
 **优先级**: P0
-**状态**: READY
+**状态**: IN_PROGRESS
 **依赖**: T01
 
 ## 目标
@@ -24,10 +24,10 @@
 
 ## 验证
 
-- [ ] React Flow smoke 能看到 layer badge。
-- [ ] 保存/加载后节点层级不丢失。
+- [x] React Flow source contract 能看到 layer badge 和状态网格。
+- [x] 保存 graph 时继续写入 `warehouseLayer` / `assetKey`。
 - [ ] DWD 节点无法直接连接 publish 节点。
 
 ## 完成标准
 
-- [ ] 画布自身表达 ELT 分层，不需要靠说明文字解释。
+- [ ] 画布自身表达 ELT 分层，不需要靠说明文字解释；当前节点已显示 layer、asset key、grain、治理、权限和血缘，Playwright 视觉 smoke 仍待补齐。

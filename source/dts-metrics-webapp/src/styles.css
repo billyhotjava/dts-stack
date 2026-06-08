@@ -534,6 +534,15 @@ button.chip {
 	margin-bottom: 14px;
 }
 
+.inline-field {
+	display: grid;
+	gap: 6px;
+	width: min(100%, 320px);
+	color: #65758a;
+	font-size: 12px;
+	font-weight: 700;
+}
+
 .search-field {
 	display: grid;
 	gap: 6px;
@@ -1322,6 +1331,31 @@ select {
 	line-height: 1.45;
 }
 
+.feature-rule-list {
+	display: grid;
+	gap: 10px;
+}
+
+.feature-rule {
+	display: grid;
+	gap: 6px;
+	padding: 12px;
+	border: 1px solid #d8e1e9;
+	border-radius: 8px;
+	background: #f8fafc;
+}
+
+.feature-rule strong {
+	color: #142033;
+	font-size: 14px;
+}
+
+.feature-rule span {
+	color: #607086;
+	font-size: 13px;
+	line-height: 1.55;
+}
+
 input,
 textarea {
 	width: 100%;
@@ -1542,6 +1576,10 @@ pre {
 	.section-head {
 		flex-direction: column;
 		align-items: stretch;
+	}
+
+	.inline-field {
+		width: 100%;
 	}
 
 	.layout {
@@ -1809,7 +1847,9 @@ pre {
 }
 
 .semantic-field-row strong,
-.semantic-field-row em {
+.semantic-field-row em,
+.semantic-field-row code,
+.semantic-field-row small {
 	display: block;
 }
 
@@ -1817,6 +1857,20 @@ pre {
 	color: #526789;
 	font-size: 12px;
 	font-style: normal;
+}
+
+.semantic-field-row code,
+.semantic-field-row small {
+	overflow: hidden;
+	color: #526789;
+	font-size: 11px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.semantic-field-row code {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-weight: 700;
 }
 
 .semantic-field-row.selected {
@@ -2000,8 +2054,66 @@ pre {
 	font-style: normal;
 }
 
+.semantic-layer-badge {
+	width: fit-content;
+	border-radius: 4px;
+	padding: 2px 6px;
+	font-size: 11px;
+	font-weight: 800;
+	letter-spacing: 0;
+}
+
+.semantic-layer-badge.dwd {
+	background: #fff7e8;
+	color: #9a5b00;
+}
+
+.semantic-layer-badge.dws {
+	background: #e8f7f1;
+	color: #0f766e;
+}
+
+.semantic-layer-badge.ads {
+	background: #eef2ff;
+	color: #4257b2;
+}
+
+.semantic-layer-badge.unknown {
+	background: #eef4fb;
+	color: #526789;
+}
+
+.semantic-node-key {
+	overflow: hidden;
+	color: #526789;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 11px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.semantic-node-status-grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 4px;
+}
+
+.semantic-node-status-grid b {
+	overflow: hidden;
+	border: 1px solid #dbe6f3;
+	border-radius: 4px;
+	padding: 2px 4px;
+	background: #f8fbfe;
+	color: #31435f;
+	font-size: 10px;
+	font-weight: 700;
+	text-align: center;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .semantic-node-meta,
-.semantic-flow-node > span:not(.semantic-node-head):not(.semantic-node-security) {
+.semantic-flow-node > span:not(.semantic-node-head):not(.semantic-node-security):not(.semantic-layer-badge):not(.semantic-node-key):not(.semantic-node-status-grid) {
 	color: #526789;
 	font-size: 12px;
 }

@@ -46,6 +46,8 @@ function SemanticFieldNode({
 					role: node.fieldKind,
 					tableName: node.modelId ?? "",
 					modelId: node.modelId,
+					standardCodeField: node.standardCodeField,
+					labelField: node.labelField,
 				}),
 			);
 			event.dataTransfer.effectAllowed = "copy";
@@ -69,7 +71,9 @@ function SemanticFieldNode({
 				<span className={`field-kind ${node.fieldKind}`}>{node.fieldKind === "metric" ? "指标" : "维度"}</span>
 				<span>
 					<strong>{node.label}</strong>
+					{node.standardCodeField ? <code>{node.standardCodeField}</code> : null}
 					{node.description ? <em>{node.description}</em> : null}
+					{node.labelField && node.labelField !== node.fieldId ? <small>label: {node.labelField}</small> : null}
 				</span>
 				{node.selected ? <b>已选</b> : null}
 			</button>

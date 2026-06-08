@@ -349,6 +349,150 @@ class PlatformContractClientTest {
     }
 
     @Test
+    void listCatalogAssetsCallsPlatformCatalogWithServiceAuthAndQueryParams() {
+        DtsMetricsProperties properties = new DtsMetricsProperties();
+        properties.getPlatform().setBaseUrl("http://dts-platform:8081/");
+        properties.getPlatform().setApiPath("/api");
+        properties.getPlatform().setServiceToken("metrics-secret");
+
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PlatformContractClient client = new PlatformContractClient(properties, builder.build());
+
+        server
+            .expect(requestTo("http://dts-platform:8081/api/catalog/assets-v2?warehouseLayer=DWS&keyword=order+summary&page=0&size=20"))
+            .andExpect(method(HttpMethod.GET))
+            .andExpect(header("X-DTS-Service", "dts-metrics"))
+            .andExpect(header("X-DTS-Service-Token", "metrics-secret"))
+            .andRespond(withSuccess("""
+                {"data":{"content":[],"total":0}}
+                """, MediaType.APPLICATION_JSON));
+
+        Map<String, Object> result = client.listCatalogAssets("DWS", "order summary", 0, 20);
+
+        assertThat(result).containsKey("data");
+        server.verify();
+    }
+
+    @Test
+    void getCatalogAssetSchemaContractCallsPlatformCatalogWithServiceAuth() {
+        DtsMetricsProperties properties = new DtsMetricsProperties();
+        properties.getPlatform().setBaseUrl("http://dts-platform:8081/");
+        properties.getPlatform().setApiPath("/api");
+        properties.getPlatform().setServiceToken("metrics-secret");
+
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PlatformContractClient client = new PlatformContractClient(properties, builder.build());
+
+        server
+            .expect(requestTo("http://dts-platform:8081/api/catalog/assets-v2/asset-001/schema-contract"))
+            .andExpect(method(HttpMethod.GET))
+            .andExpect(header("X-DTS-Service", "dts-metrics"))
+            .andExpect(header("X-DTS-Service-Token", "metrics-secret"))
+            .andRespond(withSuccess("""
+                {"data":{"assetId":"asset-001","columns":[]}}
+                """, MediaType.APPLICATION_JSON));
+
+        Map<String, Object> result = client.getCatalogAssetSchemaContract("asset-001");
+
+        assertThat(result).containsKey("data");
+        server.verify();
+    }
+
+    @Test
+    void validateMetricModelCallsPlatformValidationGatewayWithServiceAuth() {
+        DtsMetricsProperties properties = new DtsMetricsProperties();
+        properties.getPlatform().setBaseUrl("http://dts-platform:8081/");
+        properties.getPlatform().setApiPath("/api");
+        properties.getPlatform().setServiceToken("metrics-secret");
+
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PlatformContractClient client = new PlatformContractClient(properties, builder.build());
+
+        server
+            .expect(requestTo("http://dts-platform:8081/api/internal/metrics/model-validation"))
+            .andExpect(method(HttpMethod.POST))
+            .andExpect(header("X-DTS-Service", "dts-metrics"))
+            .andExpect(header("X-DTS-Service-Token", "metrics-secret"))
+            .andExpect(content().json("""
+                {
+                  "modelId": "order-summary",
+                  "modelName": "dws_order_summary",
+                  "artifactRef": "candidate://dts-metrics/dws_order_summary",
+                  "graph": {"base":"dws_order_day"},
+                  "artifacts": {"dbtModelSql":"select 1 as metric_ready"},
+                  "appliedPolicySource": "platform-policy-required",
+                  "appliedPredicateHash": "sha256:abc123"
+                }
+                """))
+            .andRespond(withSuccess("""
+                {"decision":"PASS","valid":true}
+                """, MediaType.APPLICATION_JSON));
+
+        Map<String, Object> result = client.validateMetricModel(
+            new PlatformContractClient.MetricModelValidationRequest(
+                "order-summary",
+                "dws_order_summary",
+                "candidate://dts-metrics/dws_order_summary",
+                Map.of("base", "dws_order_day"),
+                Map.of("dbtModelSql", "select 1 as metric_ready"),
+                "platform-policy-required",
+                "sha256:abc123"
+            )
+        );
+
+        assertThat(result).containsEntry("decision", "PASS").containsEntry("valid", true);
+        server.verify();
+    }
+
+    @Test
+    void submitDbtReleaseCallsPlatformReleaseGatewayWithServiceAuth() {
+        DtsMetricsProperties properties = new DtsMetricsProperties();
+        properties.getPlatform().setBaseUrl("http://dts-platform:8081/");
+        properties.getPlatform().setApiPath("/api");
+        properties.getPlatform().setServiceToken("metrics-secret");
+
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PlatformContractClient client = new PlatformContractClient(properties, builder.build());
+
+        server
+            .expect(requestTo("http://dts-platform:8081/api/etl/dbt/release/submit"))
+            .andExpect(method(HttpMethod.POST))
+            .andExpect(header("X-DTS-Service", "dts-metrics"))
+            .andExpect(header("X-DTS-Service-Token", "metrics-secret"))
+            .andExpect(content().json("""
+                {
+                  "modelId": "order-summary",
+                  "modelName": "dws_order_summary",
+                  "artifactRef": "candidate://dts-metrics/dws_order_summary",
+                  "dryRun": false,
+                  "appliedPolicySource": "platform-policy-required",
+                  "appliedPredicateHash": "sha256:abc123"
+                }
+                """))
+            .andRespond(withSuccess("""
+                {"publishReference":"platform-release-001","decision":"PASS"}
+                """, MediaType.APPLICATION_JSON));
+
+        Map<String, Object> result = client.submitDbtRelease(
+            new PlatformContractClient.DbtReleaseSubmitRequest(
+                "order-summary",
+                "dws_order_summary",
+                "candidate://dts-metrics/dws_order_summary",
+                false,
+                "platform-policy-required",
+                "sha256:abc123"
+            )
+        );
+
+        assertThat(result).containsEntry("publishReference", "platform-release-001").containsEntry("decision", "PASS");
+        server.verify();
+    }
+
+    @Test
     void recordPolicyInjectionCallsPlatformWithServiceAuth() {
         DtsMetricsProperties properties = new DtsMetricsProperties();
         properties.getPlatform().setBaseUrl("http://dts-platform:8081/");

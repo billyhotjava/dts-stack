@@ -1,7 +1,7 @@
 # F4: 后端建模与 dbt 网关
 
 **优先级**: P0
-**状态**: READY
+**状态**: IN_PROGRESS
 
 ## 目标
 
@@ -11,10 +11,10 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| T01 | visual asset adapter 与 platform contract client | P0 | READY | F2 |
-| T02 | graph persistence 与 DSL preflight | P0 | READY | T01 |
-| T03 | DWD/DWS/ADS artifact generator | P0 | READY | T02 |
-| T04 | platform/dbt validation gateway 编排 | P0 | READY | T03 |
+| T01 | visual asset adapter 与 platform contract client | P0 | DONE | F2 |
+| T02 | graph persistence 与 DSL preflight | P0 | IN_PROGRESS | T01 |
+| T03 | DWD/DWS/ADS artifact generator | P0 | DONE | T02 |
+| T04 | platform/dbt validation gateway 编排 | P0 | IN_PROGRESS | T03 |
 | T05 | 旧 semantic dry-run 与兼容迁移 | P0 | READY | T04 |
 
 ## 完成标准

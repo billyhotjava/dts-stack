@@ -1,6 +1,8 @@
 package com.yuzhi.dts.metrics.service;
 
 import com.yuzhi.dts.metrics.config.DtsMetricsProperties;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -104,6 +106,40 @@ public class PlatformContractClient {
         }
     }
 
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> listCatalogAssets(String warehouseLayer, String keyword, int page, int size) {
+        try {
+            Map<String, Object> result = withServiceAuth(
+                restClient.get(),
+                "/catalog/assets-v2?warehouseLayer=" +
+                url(warehouseLayer) +
+                "&keyword=" +
+                url(keyword) +
+                "&page=" +
+                page +
+                "&size=" +
+                size
+            )
+                .retrieve()
+                .body(Map.class);
+            return result != null ? result : Map.of();
+        } catch (RestClientException e) {
+            throw new PlatformContractException("platform contract call failed: catalog assets read", e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getCatalogAssetSchemaContract(String assetId) {
+        try {
+            Map<String, Object> result = withServiceAuth(restClient.get(), "/catalog/assets-v2/" + url(assetId) + "/schema-contract")
+                .retrieve()
+                .body(Map.class);
+            return result != null ? result : Map.of();
+        } catch (RestClientException e) {
+            throw new PlatformContractException("platform contract call failed: catalog asset schema contract read", e);
+        }
+    }
+
     public void recordPolicyInjection(PolicyInjectionAuditRequest request) {
         try {
             RestClient.RequestBodySpec spec = restClient
@@ -116,6 +152,40 @@ public class PlatformContractClient {
             spec.body(request).retrieve().toBodilessEntity();
         } catch (RestClientException e) {
             throw new PlatformContractException("platform contract call failed: policy injection audit", e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> validateMetricModel(MetricModelValidationRequest request) {
+        try {
+            RestClient.RequestBodySpec spec = restClient
+                .post()
+                .uri(internalUrl("/internal/metrics/model-validation"))
+                .header("X-DTS-Service", properties.getServiceName());
+            if (StringUtils.hasText(properties.getPlatform().getServiceToken())) {
+                spec = spec.header("X-DTS-Service-Token", properties.getPlatform().getServiceToken());
+            }
+            Map<String, Object> result = spec.body(request).retrieve().body(Map.class);
+            return result != null ? result : Map.of();
+        } catch (RestClientException e) {
+            throw new PlatformContractException("platform contract call failed: metric model validation", e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> submitDbtRelease(DbtReleaseSubmitRequest request) {
+        try {
+            RestClient.RequestBodySpec spec = restClient
+                .post()
+                .uri(internalUrl("/etl/dbt/release/submit"))
+                .header("X-DTS-Service", properties.getServiceName());
+            if (StringUtils.hasText(properties.getPlatform().getServiceToken())) {
+                spec = spec.header("X-DTS-Service-Token", properties.getPlatform().getServiceToken());
+            }
+            Map<String, Object> result = spec.body(request).retrieve().body(Map.class);
+            return result != null ? result : Map.of();
+        } catch (RestClientException e) {
+            throw new PlatformContractException("platform contract call failed: dbt release submit", e);
         }
     }
 
@@ -270,6 +340,10 @@ public class PlatformContractClient {
         return result;
     }
 
+    private static String url(String value) {
+        return URLEncoder.encode(value != null ? value : "", StandardCharsets.UTF_8);
+    }
+
     public record PermissionAsset(String type, String id, String key) {}
 
     public record GlossaryTermContract(String ref, String id, String code, String name, String status, boolean active) {}
@@ -364,6 +438,25 @@ public class PlatformContractClient {
         String gitRef,
         String commitSha,
         Boolean strictMode,
+        String appliedPolicySource,
+        String appliedPredicateHash
+    ) {}
+
+    public record MetricModelValidationRequest(
+        String modelId,
+        String modelName,
+        String artifactRef,
+        Map<String, Object> graph,
+        Map<String, Object> artifacts,
+        String appliedPolicySource,
+        String appliedPredicateHash
+    ) {}
+
+    public record DbtReleaseSubmitRequest(
+        String modelId,
+        String modelName,
+        String artifactRef,
+        Boolean dryRun,
         String appliedPolicySource,
         String appliedPredicateHash
     ) {}

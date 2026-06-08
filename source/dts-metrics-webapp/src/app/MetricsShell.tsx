@@ -1,131 +1,102 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchJson, postYaml } from "../api";
+import type { ModelVersionHistory, VisualAssetsResponse } from "../features/semantic/semanticTypes";
 import SemanticDesignerPage from "../pages/semantic/SemanticDesignerPage";
-import type {
-	MetricAsset,
-	MetricsCapabilities,
-	MetricsHealth,
-	ModelCandidate,
-	ObjectJoin,
-	RouteGroup,
-	RouteItem,
-	StatusTone,
-	SubjectMapping,
-	WorkspaceSnapshot,
-} from "../types";
+import type { MetricsCapabilities, MetricsHealth, RouteGroup, RouteItem, StatusTone } from "../types";
 
-const routes: RouteGroup[] = [
+type FeatureRoute = RouteItem & {
+	feature: "F1" | "F2" | "F3" | "F4" | "F5";
+	path: string;
+};
+
+type FeatureRouteGroup = Omit<RouteGroup, "items"> & {
+	items: FeatureRoute[];
+};
+
+type OutputState = Record<string, string>;
+type MessageState = Record<string, { text: string; tone?: StatusTone }>;
+type BusyState = Record<string, boolean>;
+type ModelAction = "artifacts" | "validate" | "submit-review" | "publish-dry-run" | "publish" | "rollback";
+
+const routes: FeatureRouteGroup[] = [
 	{
-		group: "工作台",
+		group: "Sprint-35 Features",
 		items: [
 			{
-				path: "/metrics/center",
-				title: "指标工作台",
-				stage: "Metric Hub",
-				description: "集中查看 dts-metrics 服务能力、平台权限契约和指标包交付状态。",
+				feature: "F1",
+				path: "/metrics/f1-architecture",
+				title: "整体架构与 PRD 契约",
+				stage: "F1 Architecture / PRD",
+				description: "固定 DWS/ADS 默认入口、DWD 高级建模边界，以及 platform 控制面事实源。",
 			},
 			{
-				path: "/metrics/dictionary",
-				title: "指标资产",
-				stage: "Metric Dictionary",
-				description: "沉淀指标名称、口径、公式、单位、负责人、版本和下游消费关系。",
+				feature: "F2",
+				path: "/metrics/f2-api-contracts",
+				title: "前后端 API 契约",
+				stage: "F2 API Contracts",
+				description: "核验可视化资产、graph draft、preflight 和错误码契约。",
 			},
 			{
-				path: "/metrics/packs",
-				title: "指标包",
-				stage: "Metric Pack",
-				description: "提交真实指标包，执行结构校验、候选生成和导入预检。",
+				feature: "F3",
+				path: "/metrics/f3-visual-workbench",
+				title: "前端可视化工作台",
+				stage: "F3 Visual Workbench",
+				description: "从已治理 DWS/ADS 资产进入 React Flow 建模画布。",
 			},
 			{
-				path: "/metrics/migration",
-				title: "迁移与回滚",
-				stage: "Migration",
-				description: "读取 platform 旧语义数据到 dts-metrics 的 dry-run 映射、阻断项和回滚边界。",
+				feature: "F4",
+				path: "/metrics/f4-modeling-gateway",
+				title: "后端建模与 dbt 网关",
+				stage: "F4 Modeling / dbt Gateway",
+				description: "提交指标包、生成候选 artifact，并通过 platform/dbt gate 做验证。",
 			},
 			{
-				path: "/metrics/operations",
-				title: "运行与告警",
-				stage: "Operations",
-				description: "查看模型运行、新鲜度、发布预检和平台观测回传状态。",
-			},
-		],
-	},
-	{
-		group: "语义建模",
-		items: [
-			{
-				path: "/metrics/semantic",
-				title: "语义建模流程",
-				stage: "Semantic Modeling",
-				description: "从业务对象和指标口径出发，逐步生成公共汇总模型、应用数据集和 BI Dataset。",
-			},
-			{
-				path: "/metrics/semantic/subjects",
-				title: "主题域映射",
-				stage: "Subject Domain",
-				description: "从 platform 治理事实源读取主题域、术语和数据标准绑定状态。",
-			},
-			{
-				path: "/metrics/semantic/objects",
-				title: "业务对象 Join",
-				stage: "Business Object",
-				description: "查看真实业务对象、来源资产、Join 条件和 fanout 防护约束。",
-			},
-			{
-				path: "/metrics/semantic/metrics",
-				title: "指标公式配置",
-				stage: "Metric Designer",
-				description: "在 React Flow 画布中配置指标、维度、Join、筛选和模型节点。",
-			},
-			{
-				path: "/metrics/semantic/models",
-				title: "DWS/ADS 数据集",
-				stage: "DWS / ADS",
-				description: "查看由指标图生成并等待 platform/dbt 验证的候选 DWS/ADS 数据集。",
-			},
-			{
-				path: "/metrics/semantic/publish",
-				title: "审核发布与血缘",
-				stage: "Publish",
-				description: "发布前执行工程审核、SQL 预览、数据质量检查和血缘注册。",
-			},
-			{
-				path: "/metrics/semantic/runs",
-				title: "模型运行监控",
-				stage: "Run Monitor",
-				description: "跟踪 dbt/SQLMesh 运行、BI Dataset 注册和失败重试状态。",
+				feature: "F5",
+				path: "/metrics/f5-security-it",
+				title: "安全、评审机制与 IT 准入",
+				stage: "F5 Security / IT",
+				description: "核验 service-auth、RLS/masking、迁移 dry-run 与验收证据入口。",
 			},
 		],
 	},
 ];
 
 const routeItems = routes.flatMap((group) => group.items);
+const compatibilityRoutes = new Map<string, string>([
+	["/metrics", "/metrics/f3-visual-workbench"],
+	["/metrics/center", "/metrics/f1-architecture"],
+	["/metrics/dictionary", "/metrics/f3-visual-workbench"],
+	["/metrics/packs", "/metrics/f4-modeling-gateway"],
+	["/metrics/migration", "/metrics/f5-security-it"],
+	["/metrics/operations", "/metrics/f5-security-it"],
+	["/metrics/semantic", "/metrics/f3-visual-workbench"],
+	["/metrics/semantic/subjects", "/metrics/f1-architecture"],
+	["/metrics/semantic/objects", "/metrics/f3-visual-workbench"],
+	["/metrics/semantic/metrics", "/metrics/f3-visual-workbench"],
+	["/metrics/semantic/models", "/metrics/f4-modeling-gateway"],
+	["/metrics/semantic/publish", "/metrics/f4-modeling-gateway"],
+	["/metrics/semantic/runs", "/metrics/f5-security-it"],
+]);
 
-type WorkspaceState = Required<
-	Pick<
-		WorkspaceSnapshot,
-		"platformContracts" | "metricAssets" | "subjectMappings" | "objectJoins" | "formulaBlocks" | "modelCandidates" | "publishGates" | "runRecords"
-	>
->;
+const layerRules = [
+	["源数据库 / ODS / STG", "只作为 lineage、质量缺口和调试证据，不进入普通指标画布。"],
+	["DWD", "高级建模上游，用于生成候选 DWS；缺粒度、主键或标准码时阻断。"],
+	["DWS", "默认指标建模入口，承载主题域、业务对象、维度和汇总口径。"],
+	["ADS", "已有应用层资产可复用或导入，但不能反推成为新指标唯一事实源。"],
+	["BI Dataset / 大屏", "发布出口和消费锁定对象，不承载建模事实源。"],
+];
 
-const emptyWorkspace: WorkspaceState = {
-	platformContracts: [],
-	metricAssets: [],
-	subjectMappings: [],
-	objectJoins: [],
-	formulaBlocks: [],
-	modelCandidates: [],
-	publishGates: [],
-	runRecords: [],
-};
-
-const statusOk = new Set(["PASS", "SUCCESS", "ACTIVE", "PUBLISHED", "已接入", "fresh", "UP", "CONNECTED"]);
-const statusWarn = new Set(["WARNING", "REVIEW", "PENDING", "PENDING_GOVERNANCE", "待联调", "WARN", "ERROR"]);
+const platformBoundaries = [
+	["资产目录", "dts-platform catalog assets-v2"],
+	["权限/RLS/masking", "platform asset permission policy"],
+	["dbt 验证/发布", "platform dbt validation gateway"],
+	["审计/审批/血缘", "platform audit, review, lineage"],
+	["指标 graph/DSL/artifact", "dts-metrics domain facts"],
+];
 
 function normalizePath(pathname: string): string {
-	const value = String(pathname || "/metrics/center").replace(/\/+$/, "");
-	if (!value || value === "/metrics") return "/metrics/center";
-	return value;
+	const value = String(pathname || "/metrics/f3-visual-workbench").replace(/\/+$/, "") || "/metrics/f3-visual-workbench";
+	return compatibilityRoutes.get(value) ?? value;
 }
 
 function routeHref(path: string, embedded: boolean): string {
@@ -143,45 +114,36 @@ function outputError(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
-function mergeWorkspace(snapshot?: WorkspaceSnapshot): WorkspaceState {
-	return {
-		platformContracts: snapshot?.platformContracts ?? [],
-		metricAssets: snapshot?.metricAssets ?? [],
-		subjectMappings: snapshot?.subjectMappings ?? [],
-		objectJoins: snapshot?.objectJoins ?? [],
-		formulaBlocks: snapshot?.formulaBlocks ?? [],
-		modelCandidates: snapshot?.modelCandidates ?? [],
-		publishGates: snapshot?.publishGates ?? [],
-		runRecords: snapshot?.runRecords ?? [],
-	};
-}
-
 function statusLabel(value?: boolean): string {
 	if (value === false) return "未启用";
 	if (value === true) return "已启用";
 	return "待确认";
 }
 
-function countByStatus(items: Array<{ status: string }>, status: string): number {
-	return items.filter((item) => item.status === status).length;
-}
-
-function arrayCount(value?: unknown[]): number {
-	return Array.isArray(value) ? value.length : 0;
+function sendJson<T>(url: string, body: unknown): Promise<T> {
+	return fetchJson<T>(url, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(body ?? {}),
+	});
 }
 
 export default function MetricsShell() {
 	const embedded = new URLSearchParams(window.location.search).get("embedded") === "1";
 	const activePath = normalizePath(window.location.pathname);
-	const activeRoute = routeItems.find((item) => item.path === activePath) ?? routeItems[0];
-	const [workspace, setWorkspace] = useState<WorkspaceState>(emptyWorkspace);
+	const activeRoute = routeItems.find((item) => item.path === activePath) ?? routeItems[2];
 	const [health, setHealth] = useState<MetricsHealth | null>(null);
 	const [capabilities, setCapabilities] = useState<MetricsCapabilities | null>(null);
 	const [serviceError, setServiceError] = useState<string | null>(null);
 	const [packageText, setPackageText] = useState("");
-	const [outputs, setOutputs] = useState<Record<string, string>>({});
-	const [messages, setMessages] = useState<Record<string, { text: string; tone?: StatusTone }>>({});
-	const [busy, setBusy] = useState<Record<string, boolean>>({});
+	const [graphText, setGraphText] = useState('{\n  "base": "",\n  "measures": [],\n  "dimensions": [],\n  "joins": []\n}');
+	const [modelId, setModelId] = useState("order-summary");
+	const [modelText, setModelText] = useState(
+		'{\n  "modelName": "dws_order_summary",\n  "graph": {\n    "base": "dws_order_day",\n    "measures": ["order_amount"],\n    "dimensions": ["stat_date"],\n    "nodes": [\n      {\n        "id": "dws_order_day",\n        "role": "BASE",\n        "warehouseLayer": "DWS",\n        "grain": ["stat_date"]\n      }\n    ]\n  }\n}',
+	);
+	const [outputs, setOutputs] = useState<OutputState>({});
+	const [messages, setMessages] = useState<MessageState>({});
+	const [busy, setBusy] = useState<BusyState>({});
 
 	const setOutput = useCallback((key: string, value: string) => {
 		setOutputs((current) => ({ ...current, [key]: value }));
@@ -200,19 +162,117 @@ export default function MetricsShell() {
 		}
 	}, []);
 
-	const loadCapabilitiesInto = useCallback(
+	const refreshCapabilities = useCallback(
 		(outputKey: string) =>
 			withBusy(outputKey, async () => {
 				setOutput(outputKey, "读取中...");
 				try {
-					const result = await fetchJson<MetricsCapabilities>("/api/metrics/capabilities");
-					setCapabilities(result);
+					const [healthResult, capabilityResult] = await Promise.all([
+						fetchJson<MetricsHealth>("/api/metrics/health"),
+						fetchJson<MetricsCapabilities>("/api/metrics/capabilities"),
+					]);
+					setHealth(healthResult);
+					setCapabilities(capabilityResult);
+					setServiceError(null);
+					setOutput(outputKey, pretty({ health: healthResult, capabilities: capabilityResult }));
+				} catch (error) {
+					setServiceError(outputError(error));
+					setOutput(outputKey, outputError(error));
+				}
+			}),
+		[setOutput, withBusy],
+	);
+
+	const loadVisualAssets = useCallback(
+		(outputKey: string, includeDrilldown = false) =>
+			withBusy(outputKey, async () => {
+				setOutput(outputKey, "读取中...");
+				try {
+					const suffix = includeDrilldown ? "?layers=DWD&includeDrilldown=true&size=5" : "?layers=DWS,ADS&size=5";
+					const result = await fetchJson<VisualAssetsResponse>(`/api/metrics/visual-assets${suffix}`);
 					setOutput(outputKey, pretty(result));
 				} catch (error) {
 					setOutput(outputKey, outputError(error));
 				}
 			}),
 		[setOutput, withBusy],
+	);
+
+	const submitGraph = useCallback(
+		(outputKey: string, action: "preflight" | "save") =>
+			withBusy(outputKey, async () => {
+				setOutput(outputKey, "提交中...");
+				try {
+					const body = JSON.parse(graphText || "{}") as Record<string, unknown>;
+					const result =
+						action === "preflight"
+							? await sendJson<Record<string, unknown>>("/api/metrics/graphs/draft/preflight", body)
+							: await sendJson<Record<string, unknown>>("/api/metrics/graphs", body);
+					setOutput(outputKey, pretty(result));
+				} catch (error) {
+					setOutput(outputKey, outputError(error));
+				}
+			}),
+		[graphText, setOutput, withBusy],
+	);
+
+	const submitModel = useCallback(
+		(outputKey: string, action: ModelAction, success: string) =>
+			withBusy(outputKey, async () => {
+				const id = modelId.trim();
+				if (!id) {
+					setOutput("model", "modelId is required");
+					setMessage("model", "模型 ID 必填", "warn");
+					return;
+				}
+					setOutput("model", "提交中...");
+					setMessage("model", "提交中");
+				try {
+					const body =
+						action === "artifacts" || action === "validate"
+							? JSON.parse(modelText || "{}")
+							: action === "rollback"
+								? { reason: "manual rollback from metrics workbench" }
+								: {};
+					const result = await sendJson<Record<string, unknown>>(`/api/metrics/models/${encodeURIComponent(id)}/${action}`, body);
+					setOutput("model", pretty(result));
+					const ok =
+						result.status === "ARTIFACT_GENERATED" ||
+						result.status === "DBT_VALIDATED" ||
+						result.status === "REVIEW_SUBMITTED" ||
+						result.status === "PUBLISH_DRY_RUN_READY" ||
+						result.status === "PUBLISHED" ||
+						result.status === "ROLLED_BACK";
+					setMessage("model", ok ? success : "请求已返回，请查看响应内容", ok ? "ok" : "warn");
+				} catch (error) {
+					setOutput("model", outputError(error));
+					setMessage("model", "请求失败", "warn");
+				}
+			}),
+		[modelId, modelText, setMessage, setOutput, withBusy],
+	);
+
+	const loadModelVersions = useCallback(
+		() =>
+			withBusy("modelVersions", async () => {
+				const id = modelId.trim();
+				if (!id) {
+					setOutput("model", "modelId is required");
+					setMessage("model", "模型 ID 必填", "warn");
+					return;
+				}
+				setOutput("model", "读取中...");
+				setMessage("model", "读取版本历史");
+				try {
+					const result = await fetchJson<ModelVersionHistory>(`/api/metrics/models/${encodeURIComponent(id)}/versions`);
+					setOutput("model", pretty(result));
+					setMessage("model", "版本历史已返回", "ok");
+				} catch (error) {
+					setOutput("model", outputError(error));
+					setMessage("model", "请求失败", "warn");
+				}
+			}),
+		[modelId, setMessage, setOutput, withBusy],
 	);
 
 	const submitPackage = useCallback(
@@ -253,62 +313,37 @@ export default function MetricsShell() {
 	}, [embedded]);
 
 	useEffect(() => {
-		let cancelled = false;
-		async function load() {
-			try {
-				const [healthResult, capabilityResult, snapshot] = await Promise.all([
-					fetchJson<MetricsHealth>("/api/metrics/health"),
-					fetchJson<MetricsCapabilities>("/api/metrics/capabilities"),
-					fetchJson<WorkspaceSnapshot>("/api/metrics/workspace/snapshot"),
-				]);
-				if (cancelled) return;
-				setHealth(healthResult);
-				setCapabilities(capabilityResult);
-				setWorkspace(mergeWorkspace(snapshot));
-				setServiceError(null);
-			} catch (error) {
-				if (cancelled) return;
-				setServiceError(outputError(error));
-				setWorkspace(emptyWorkspace);
-			}
-		}
-		void load();
-		return () => {
-			cancelled = true;
-		};
-	}, []);
+		void refreshCapabilities("startup");
+	}, [refreshCapabilities]);
 
 	const summaryCards = useMemo(
 		() => [
 			["服务归属", capabilities?.service || health?.service || "dts-metrics"],
 			["启用状态", statusLabel(capabilities?.enabled ?? health?.enabled)],
 			["当前版本", capabilities?.edition || health?.edition || "等待服务响应"],
-			["权限事实源", "dts-platform"],
+			["当前 Feature", `${activeRoute.feature} / ${activeRoute.title}`],
 		],
-		[capabilities, health],
+		[activeRoute.feature, activeRoute.title, capabilities, health],
 	);
 
 	return (
 		<div className="app-shell">
 			<header className="topbar">
 				<div>
-					<p className="eyebrow">DTS Metrics Service</p>
-					<h1>指标与语义中心</h1>
+					<p className="eyebrow">Sprint-35 Metrics</p>
+					<h1>dts-metrics 数据仓库可视化设计</h1>
 				</div>
 				<ServicePill health={health} error={serviceError} />
 			</header>
 
 			<div className="layout">
-				<nav className="side-nav" aria-label="指标与语义中心导航">
+				<nav className="side-nav" aria-label="Sprint-35 Feature 导航">
 					{routes.map((group) => (
 						<div className="nav-group" key={group.group}>
 							<p className="nav-group-title">{group.group}</p>
 							{group.items.map((item) => (
-								<a
-									className={`nav-link ${item.path === activeRoute.path ? "active" : ""}`}
-									href={routeHref(item.path, embedded)}
-									key={item.path}
-								>
+								<a className={`nav-link ${item.path === activeRoute.path ? "active" : ""}`} href={routeHref(item.path, embedded)} key={item.path}>
+									<span>{item.feature}</span>
 									{item.title}
 								</a>
 							))}
@@ -324,11 +359,11 @@ export default function MetricsShell() {
 							<p>{activeRoute.description}</p>
 						</div>
 						<div className="hero-actions">
-							<a className="button" href={routeHref("/metrics/dictionary", embedded)}>
-								指标资产
+							<a className="button" href={routeHref("/metrics/f2-api-contracts", embedded)}>
+								API 契约
 							</a>
-							<a className="button primary" href={routeHref("/metrics/semantic/metrics", embedded)}>
-								指标公式配置
+							<a className="button primary" href={routeHref("/metrics/f3-visual-workbench", embedded)}>
+								可视化工作台
 							</a>
 						</div>
 					</section>
@@ -345,15 +380,24 @@ export default function MetricsShell() {
 					<section className="panel">
 						<RoutePanel
 							activeRoute={activeRoute}
-							capabilities={capabilities}
 							embedded={embedded}
-							workspace={workspace}
+							capabilities={capabilities}
 							packageText={packageText}
 							setPackageText={setPackageText}
+							modelId={modelId}
+							setModelId={setModelId}
+							modelText={modelText}
+							setModelText={setModelText}
+							graphText={graphText}
+							setGraphText={setGraphText}
 							outputs={outputs}
 							messages={messages}
 							busy={busy}
-							loadCapabilitiesInto={loadCapabilitiesInto}
+							refreshCapabilities={refreshCapabilities}
+							loadVisualAssets={loadVisualAssets}
+							submitGraph={submitGraph}
+							submitModel={submitModel}
+							loadModelVersions={loadModelVersions}
 							submitPackage={submitPackage}
 							loadMigrationDryRun={loadMigrationDryRun}
 						/>
@@ -376,651 +420,317 @@ function ServicePill({ health, error }: { health: MetricsHealth | null; error: s
 }
 
 interface RoutePanelProps {
-	activeRoute: RouteItem;
-	capabilities: MetricsCapabilities | null;
+	activeRoute: FeatureRoute;
 	embedded: boolean;
-	workspace: WorkspaceState;
+	capabilities: MetricsCapabilities | null;
 	packageText: string;
 	setPackageText: (value: string) => void;
-	outputs: Record<string, string>;
-	messages: Record<string, { text: string; tone?: StatusTone }>;
-	busy: Record<string, boolean>;
-	loadCapabilitiesInto: (outputKey: string) => Promise<void>;
+	modelId: string;
+	setModelId: (value: string) => void;
+	modelText: string;
+	setModelText: (value: string) => void;
+	graphText: string;
+	setGraphText: (value: string) => void;
+	outputs: OutputState;
+	messages: MessageState;
+	busy: BusyState;
+	refreshCapabilities: (outputKey: string) => Promise<void>;
+	loadVisualAssets: (outputKey: string, includeDrilldown?: boolean) => Promise<void>;
+	submitGraph: (outputKey: string, action: "preflight" | "save") => Promise<void>;
+	submitModel: (outputKey: string, action: ModelAction, success: string) => Promise<void>;
+	loadModelVersions: () => Promise<void>;
 	submitPackage: (actionKey: string, url: string, success: string) => Promise<void>;
 	loadMigrationDryRun: () => Promise<void>;
 }
 
 function RoutePanel(props: RoutePanelProps) {
-	switch (props.activeRoute.path) {
-		case "/metrics/center":
-			return <CenterPage {...props} />;
-		case "/metrics/dictionary":
-			return <MetricAssetsPage {...props} />;
-		case "/metrics/packs":
-			return <PackagePage {...props} />;
-		case "/metrics/migration":
-			return <MigrationPage {...props} />;
-		case "/metrics/operations":
-			return <OperationsPage {...props} />;
-		case "/metrics/semantic":
-			return <SemanticFlowPage embedded={props.embedded} />;
-		case "/metrics/semantic/subjects":
-			return <SubjectMappingPage {...props} />;
-		case "/metrics/semantic/objects":
-			return <BusinessObjectJoinPage {...props} />;
-		case "/metrics/semantic/metrics":
+	switch (props.activeRoute.feature) {
+		case "F1":
+			return <FeatureArchitecturePage {...props} />;
+		case "F2":
+			return <FeatureApiContractsPage {...props} />;
+		case "F3":
 			return <SemanticDesignerPage embedded={props.embedded} />;
-		case "/metrics/semantic/models":
-			return <ModelGenerationPage {...props} />;
-		case "/metrics/semantic/publish":
-			return <PublishPage {...props} />;
-		case "/metrics/semantic/runs":
-			return <RunMonitorPage {...props} />;
+		case "F4":
+			return <FeatureBackendGatewayPage {...props} />;
+		case "F5":
+			return <FeatureSecurityItPage {...props} />;
 		default:
-			return <CenterPage {...props} />;
+			return <SemanticDesignerPage embedded={props.embedded} />;
 	}
 }
 
-function CenterPage({ capabilities, embedded, workspace, outputs, busy, loadCapabilitiesInto }: RoutePanelProps) {
-	const published = countByStatus(workspace.metricAssets, "PUBLISHED");
-	const review = countByStatus(workspace.metricAssets, "REVIEW");
-	const draft = countByStatus(workspace.metricAssets, "DRAFT");
-
+function FeatureArchitecturePage({ embedded }: RoutePanelProps) {
 	return (
 		<>
 			<div className="section-head">
 				<div>
-					<h3>指标交付工作台</h3>
-					<p>工作台只展示 metrics 服务和 platform 返回的真实状态；无服务响应时显示空态。</p>
+					<h3>分层入口边界</h3>
+					<p>DWS/ADS 是普通可视化入口；DWD 只进入高级建模，ODS/STG 留在 lineage 和诊断层。</p>
 				</div>
-				<div className="toolbar">
-					<button className="button" disabled={busy.centerContract} type="button" onClick={() => void loadCapabilitiesInto("centerContract")}>
-						刷新能力
-					</button>
-					<a className="button primary" href={routeHref("/metrics/semantic/metrics", embedded)}>
-						进入画布
-					</a>
-				</div>
+				<a className="button primary" href={routeHref("/metrics/f3-visual-workbench", embedded)}>
+					进入 DWS/ADS 画布
+				</a>
 			</div>
-
-			<div className="command-strip">
-				<div>
-					<span>服务</span>
-					<strong>{capabilities?.service || "等待响应"}</strong>
-				</div>
-				<div>
-					<span>平台契约</span>
-					<strong>{workspace.platformContracts.length}</strong>
-				</div>
-				<div>
-					<span>指标资产</span>
-					<strong>{workspace.metricAssets.length}</strong>
-				</div>
-				<div>
-					<span>DWS/ADS 候选</span>
-					<strong>{workspace.modelCandidates.length}</strong>
-				</div>
-			</div>
-
-			<div className="workbench-grid">
-				<section className="section focus-panel">
-					<div className="section-title-row">
-						<h4>指标资产状态</h4>
-						<StatusPill value={review > 0 ? "REVIEW" : workspace.metricAssets.length ? "PASS" : "PENDING"} />
-					</div>
-					<div className="metric-ring" aria-label="指标资产状态概览">
-						<div>
-							<strong>{workspace.metricAssets.length}</strong>
-							<span>指标资产</span>
-						</div>
-					</div>
-					<div className="status-breakdown">
-						<div>
-							<span className="dot ok-dot" />
-							已发布 {published}
-						</div>
-						<div>
-							<span className="dot warn-dot" />
-							审核中 {review}
-						</div>
-						<div>
-							<span className="dot neutral-dot" />
-							草稿 {draft}
-						</div>
-					</div>
-				</section>
-
-				<section className="section flow-board">
-					<h4>语义建模入口</h4>
-					<div className="flow-lanes">
-						{routes[1].items.map((item, index) => (
-							<a className="flow-lane" href={routeHref(item.path, embedded)} key={item.path}>
-								<span>{String(index + 1).padStart(2, "0")}</span>
-								<strong>{item.title}</strong>
-								<em>{item.description}</em>
-							</a>
+			<div className="page-grid two-columns">
+				<section className="section">
+					<h4>ELT 分层准入</h4>
+					<div className="feature-rule-list">
+						{layerRules.map(([label, value]) => (
+							<div className="feature-rule" key={label}>
+								<strong>{label}</strong>
+								<span>{value}</span>
+							</div>
 						))}
 					</div>
 				</section>
-			</div>
-
-			<section className="section">
-				<h4>平台契约状态</h4>
-				{workspace.platformContracts.length ? (
-					<KeyTable headers={["能力", "接口/事实源", "状态"]} rows={workspace.platformContracts} />
-				) : (
-					<EmptyState title="暂无平台契约数据" description="等待 /api/metrics/workspace/snapshot 返回 platformContracts。" />
-				)}
-			</section>
-			<JsonOutput value={outputs.centerContract || "等待能力响应"} />
-		</>
-	);
-}
-
-function MetricAssetsPage({ embedded, workspace, outputs, busy, loadCapabilitiesInto }: RoutePanelProps) {
-	const [query, setQuery] = useState("");
-	const [statusFilter, setStatusFilter] = useState("ALL");
-	const visibleAssets = useMemo(() => {
-		const normalized = query.trim().toLowerCase();
-		return workspace.metricAssets.filter((item) => {
-			const statusMatched = statusFilter === "ALL" || item.status === statusFilter;
-			if (!statusMatched) return false;
-			if (!normalized) return true;
-			return [item.name, item.code, item.domain, item.owner, item.consumer, item.type].some((field) =>
-				String(field || "").toLowerCase().includes(normalized),
-			);
-		});
-	}, [query, statusFilter, workspace.metricAssets]);
-
-	return (
-		<>
-			<div className="section-head">
-				<div>
-					<h3>指标资产列表</h3>
-					<p>指标资产来自 metrics 服务快照；页面不再填充本地样例。</p>
-				</div>
-				<div className="toolbar">
-					<button className="button" disabled={busy.dictionaryContract} type="button" onClick={() => void loadCapabilitiesInto("dictionaryContract")}>
-						读取平台契约
-					</button>
-					<a className="button primary" href={routeHref("/metrics/semantic/metrics", embedded)}>
-						新建指标
-					</a>
-				</div>
-			</div>
-
-			<div className="list-toolbar">
-				<label className="search-field">
-					<span>搜索</span>
-					<input placeholder="指标名、编码、负责人、消费方" value={query} onChange={(event) => setQuery(event.target.value)} />
-				</label>
-				<div className="toolbar filters" aria-label="指标状态筛选">
-					{[
-						["ALL", `全部 ${workspace.metricAssets.length}`],
-						["PUBLISHED", `已发布 ${countByStatus(workspace.metricAssets, "PUBLISHED")}`],
-						["REVIEW", `审核中 ${countByStatus(workspace.metricAssets, "REVIEW")}`],
-						["DRAFT", `草稿 ${countByStatus(workspace.metricAssets, "DRAFT")}`],
-					].map(([value, label]) => (
-						<button className={`chip ${statusFilter === value ? "active" : ""}`} key={value} type="button" onClick={() => setStatusFilter(value)}>
-							{label}
-						</button>
-					))}
-				</div>
-			</div>
-
-			<div className="table-wrap">
-				{visibleAssets.length ? (
-					<table className="data-table">
-						<thead>
-							<tr>
-								<th>指标</th>
-								<th>主题域</th>
-								<th>类型</th>
-								<th>统计粒度</th>
-								<th>版本</th>
-								<th>状态</th>
-								<th>负责人</th>
-								<th>消费方</th>
-							</tr>
-						</thead>
-						<tbody>
-							{visibleAssets.map((item) => (
-								<MetricAssetRow item={item} key={item.code} />
-							))}
-						</tbody>
-					</table>
-				) : (
-					<EmptyState title="暂无指标资产" description="等待 /api/metrics/workspace/snapshot 返回 metricAssets。" />
-				)}
-			</div>
-			<JsonOutput value={outputs.dictionaryContract || "等待读取平台契约"} />
-		</>
-	);
-}
-
-function MetricAssetRow({ item }: { item: MetricAsset }) {
-	return (
-		<tr>
-			<td>
-				<strong>{item.name}</strong>
-				<span>{item.code}</span>
-			</td>
-			<td>{item.domain}</td>
-			<td>{item.type}</td>
-			<td>{item.grain}</td>
-			<td>{item.version}</td>
-			<td>
-				<StatusPill value={item.status} />
-			</td>
-			<td>{item.owner}</td>
-			<td>{item.consumer}</td>
-		</tr>
-	);
-}
-
-function PackagePage({ packageText, setPackageText, outputs, messages, busy, submitPackage }: RoutePanelProps) {
-	const message = messages.package ?? { text: "等待提交真实指标包" };
-	const canSubmit = packageText.trim().length > 0;
-	return (
-		<section className="section">
-			<h3>指标包校验</h3>
-			<p>这里不再预填充样例包。请粘贴真实 YAML/JSON 指标包后执行校验、候选生成或导入预检。</p>
-			<div className="manifest-grid">
-				<div>
-					<textarea
-						aria-label="指标包内容"
-						placeholder="粘贴真实指标包内容"
-						spellCheck={false}
-						value={packageText}
-						onChange={(event) => setPackageText(event.target.value)}
-					/>
-					<div className="toolbar">
-						<button
-							className="button primary"
-							disabled={!canSubmit || busy.validatePackage}
-							type="button"
-							onClick={() => void submitPackage("validatePackage", "/api/metrics/packs/validate", "校验通过")}
-						>
-							校验指标包
-						</button>
-						<button
-							className="button"
-							disabled={!canSubmit || busy.previewArtifacts}
-							type="button"
-							onClick={() => void submitPackage("previewArtifacts", "/api/metrics/packs/preview-artifacts", "候选生成物已生成")}
-						>
-							预览生成物
-						</button>
-						<button
-							className="button"
-							disabled={!canSubmit || busy.dryRunImport}
-							type="button"
-							onClick={() => void submitPackage("dryRunImport", "/api/metrics/packs/import", "导入预检通过")}
-						>
-							导入预检
-						</button>
-					</div>
-					<div className={`message ${message.tone || ""}`}>{message.text}</div>
-				</div>
-				<JsonOutput value={outputs.package || "暂无结果"} />
-			</div>
-		</section>
-	);
-}
-
-function SemanticFlowPage({ embedded }: { embedded: boolean }) {
-	return (
-		<>
-			<div className="section-head">
-				<div>
-					<h3>语义建模流程</h3>
-					<p>按菜单顺序进入主题域、业务对象、指标公式、DWS/ADS、发布和运行页面。</p>
-				</div>
-				<a className="button primary" href={routeHref("/metrics/semantic/metrics", embedded)}>
-					进入指标公式配置
-				</a>
-			</div>
-			<div className="workflow">
-				{routes[1].items.map((item, index) => (
-					<a className="workflow-step" href={routeHref(item.path, embedded)} key={item.path}>
-						<span>{String(index + 1).padStart(2, "0")}</span>
-						<strong>{item.title}</strong>
-						<p>{item.description}</p>
-					</a>
-				))}
-			</div>
-		</>
-	);
-}
-
-function SubjectMappingPage({ embedded, workspace, outputs, busy, loadCapabilitiesInto }: RoutePanelProps) {
-	return (
-		<>
-			<div className="section-head">
-				<div>
-					<h3>主题域映射</h3>
-					<p>主题域、术语和标准绑定必须来自 platform/metrics 服务快照。</p>
-				</div>
-				<div className="toolbar">
-					<button className="button" disabled={busy.subjectContract} type="button" onClick={() => void loadCapabilitiesInto("subjectContract")}>
-						读取 platform capability
-					</button>
-					<a className="button" href={routeHref("/metrics/packs", embedded)}>
-						提交指标包
-					</a>
-				</div>
-			</div>
-			{workspace.subjectMappings.length ? (
-				<div className="page-grid three-columns">
-					{workspace.subjectMappings.map((item) => (
-						<SubjectCard item={item} key={item.code || item.domain} />
-					))}
-				</div>
-			) : (
-				<EmptyState title="暂无主题域映射" description="等待 /api/metrics/workspace/snapshot 返回 subjectMappings。" />
-			)}
-			<JsonOutput value={outputs.subjectContract || "等待读取主题域契约"} />
-		</>
-	);
-}
-
-function SubjectCard({ item }: { item: SubjectMapping }) {
-	return (
-		<section className="section">
-			<div className="section-title-row">
-				<h4>{item.domain}</h4>
-				<StatusPill value={item.platformState} />
-			</div>
-			<dl className="meta-list">
-				<div>
-					<dt>domain code</dt>
-					<dd>{item.code}</dd>
-				</div>
-				<div>
-					<dt>平台资产</dt>
-					<dd>{item.assets}</dd>
-				</div>
-				<div>
-					<dt>指标数</dt>
-					<dd>{item.metrics}</dd>
-				</div>
-				<div>
-					<dt>数据标准</dt>
-					<dd>{item.standards}</dd>
-				</div>
-				<div>
-					<dt>治理缺口</dt>
-					<dd>{item.gap}</dd>
-				</div>
-			</dl>
-		</section>
-	);
-}
-
-function BusinessObjectJoinPage({ embedded, workspace }: RoutePanelProps) {
-	return (
-		<>
-			<div className="section-head">
-				<div>
-					<h3>业务对象 Join 设计</h3>
-					<p>业务对象、来源资产和 Join 条件必须来自服务端快照。</p>
-				</div>
-				<a className="button primary" href={routeHref("/metrics/semantic/models", embedded)}>
-					查看 DWS/ADS
-				</a>
-			</div>
-			{workspace.objectJoins.length ? (
-				<div className="page-grid two-columns">
-					{workspace.objectJoins.map((item) => (
-						<ObjectJoinCard item={item} key={`${item.object}-${item.source}`} />
-					))}
-				</div>
-			) : (
-				<EmptyState title="暂无业务对象 Join" description="等待 /api/metrics/workspace/snapshot 返回 objectJoins。" />
-			)}
-		</>
-	);
-}
-
-function ObjectJoinCard({ item }: { item: ObjectJoin }) {
-	return (
-		<section className="section">
-			<div className="section-title-row">
-				<h4>{item.object}</h4>
-				<span className="chip">{item.grain}</span>
-			</div>
-			<div className="join-chain">
-				<div className="join-node primary-node">
-					<strong>{item.source}</strong>
-					<span>{item.key}</span>
-				</div>
-				{item.joins.map(([table, key, type, cardinality]) => (
-					<div className="join-segment" key={`${table}-${key}-${type}`}>
-						<div className="join-edge">
-							{type} / {cardinality}
-						</div>
-						<div className="join-node">
-							<strong>{table}</strong>
-							<span>{key}</span>
-						</div>
-					</div>
-				))}
-			</div>
-			<ul className="compact-list">
-				{item.guardrails.map((guard) => (
-					<li key={guard}>{guard}</li>
-				))}
-			</ul>
-		</section>
-	);
-}
-
-function ModelGenerationPage({ workspace }: RoutePanelProps) {
-	return (
-		<>
-			<div className="section-head">
-				<div>
-					<h3>DWS/ADS 生成</h3>
-					<p>候选数据集来自 metrics 服务生成结果，最终检测必须走 dts-platform/dbt 网关。</p>
-				</div>
-			</div>
-			{workspace.modelCandidates.length ? (
-				<div className="generator-layout">
-					{workspace.modelCandidates.map((model) => (
-						<ModelCandidateCard model={model} key={model.name} />
-					))}
-				</div>
-			) : (
-				<EmptyState title="暂无 DWS/ADS 候选" description="等待服务端返回 modelCandidates。" />
-			)}
-		</>
-	);
-}
-
-function ModelCandidateCard({ model }: { model: ModelCandidate }) {
-	return (
-		<section className="section model-card">
-			<div className="section-title-row">
-				<h4>{model.name}</h4>
-				<span className="chip active">{model.layer}</span>
-			</div>
-			<p>{model.purpose}</p>
-			<dl className="meta-list">
-				<div>
-					<dt>粒度</dt>
-					<dd>{model.grain}</dd>
-				</div>
-				<div>
-					<dt>物化</dt>
-					<dd>{model.materialization}</dd>
-				</div>
-				<div>
-					<dt>刷新</dt>
-					<dd>{model.refresh}</dd>
-				</div>
-			</dl>
-			<div className="field-tags">
-				{model.fields.map((field) => (
-					<span key={field}>{field}</span>
-				))}
-			</div>
-			<pre className="code-preview">{model.sql}</pre>
-		</section>
-	);
-}
-
-function PublishPage({ workspace }: RoutePanelProps) {
-	const readyGates = workspace.publishGates.filter(([, status]) => status === "PASS").length;
-	const allGates = workspace.publishGates.length;
-	return (
-		<>
-			<div className="section-head">
-				<div>
-					<h3>审核发布与血缘</h3>
-					<p>发布检查来自服务端返回的门禁状态；页面不再内置示例发布链。</p>
-				</div>
-			</div>
-			<div className="release-summary">
-				<div>
-					<span>门禁通过</span>
-					<strong>
-						{readyGates}/{allGates}
-					</strong>
-				</div>
-				<div>
-					<span>发布事实源</span>
-					<strong>platform/dbt gate</strong>
-				</div>
-			</div>
-			{workspace.publishGates.length ? (
 				<section className="section">
-					<h4>发布检查</h4>
-					<KeyTable headers={["检查项", "状态", "说明"]} rows={workspace.publishGates} />
+					<h4>事实源边界</h4>
+					<KeyTable headers={["能力", "事实源"]} rows={platformBoundaries} />
 				</section>
-			) : (
-				<EmptyState title="暂无发布门禁" description="等待 /api/metrics/workspace/snapshot 返回 publishGates。" />
-			)}
+			</div>
 		</>
 	);
 }
 
-function OperationsPage({ embedded, workspace, outputs, busy, loadCapabilitiesInto }: RoutePanelProps) {
-	const successCount = workspace.runRecords.filter((record) => record[2] === "SUCCESS").length;
-	const warningCount = workspace.runRecords.filter((record) => record[2] === "WARNING").length;
-	const pendingCount = workspace.runRecords.filter((record) => record[2] === "PENDING").length;
-
+function FeatureApiContractsPage({ graphText, setGraphText, outputs, busy, refreshCapabilities, loadVisualAssets, submitGraph }: RoutePanelProps) {
 	return (
 		<>
 			<div className="section-head">
 				<div>
-					<h3>运行与告警</h3>
-					<p>工作台侧只聚合真实运行记录和告警状态，不再提供本地演示数据。</p>
+					<h3>API 契约核验</h3>
+					<p>本页直接调用 dts-metrics API，不读取 platform internal API，也不使用 workspace snapshot。</p>
 				</div>
 				<div className="toolbar">
-					<button className="button" disabled={busy.runStatus} type="button" onClick={() => void loadCapabilitiesInto("runStatus")}>
-						刷新服务观测
+					<button className="button" disabled={busy.apiCapability} type="button" onClick={() => void refreshCapabilities("apiCapability")}>
+						刷新 capability
 					</button>
-					<a className="button" href={routeHref("/metrics/semantic/runs", embedded)}>
-						模型运行监控
-					</a>
+					<button className="button primary" disabled={busy.visualAssets} type="button" onClick={() => void loadVisualAssets("visualAssets")}>
+						读取 DWS/ADS
+					</button>
+					<button className="button" disabled={busy.dwdAssets} type="button" onClick={() => void loadVisualAssets("dwdAssets", true)}>
+						高级 DWD 查询
+					</button>
 				</div>
 			</div>
-			<RunRecordSummary successCount={successCount} pendingCount={pendingCount} warningCount={warningCount} total={workspace.runRecords.length} />
-			{workspace.runRecords.length ? (
-				<div className="table-wrap">
-					<KeyTable headers={["模型", "层级", "状态", "最近运行", "耗时", "说明"]} rows={workspace.runRecords} />
-				</div>
-			) : (
-				<EmptyState title="暂无运行告警" description="等待 /api/metrics/workspace/snapshot 返回 runRecords。" />
-			)}
-			<JsonOutput value={outputs.runStatus || "等待刷新运行观测"} />
+			<div className="split-layout">
+				<section className="section">
+					<h4>Graph draft</h4>
+					<textarea className="code-editor tall" spellCheck={false} value={graphText} onChange={(event) => setGraphText(event.target.value)} />
+					<div className="toolbar">
+						<button className="button" disabled={busy.graphPreflight} type="button" onClick={() => void submitGraph("graphPreflight", "preflight")}>
+							执行 preflight
+						</button>
+						<button className="button primary" disabled={busy.graphSave} type="button" onClick={() => void submitGraph("graphSave", "save")}>
+							保存 graph draft
+						</button>
+					</div>
+				</section>
+				<section className="section">
+					<h4>契约响应</h4>
+					<JsonOutput value={outputs.graphSave || outputs.graphPreflight || outputs.visualAssets || outputs.apiCapability || "等待 API 响应"} />
+				</section>
+			</div>
 		</>
 	);
 }
 
-function RunMonitorPage({ embedded, workspace, outputs, busy, loadCapabilitiesInto }: RoutePanelProps) {
-	const successCount = workspace.runRecords.filter((record) => record[2] === "SUCCESS").length;
-	const warningCount = workspace.runRecords.filter((record) => record[2] === "WARNING").length;
-	const pendingCount = workspace.runRecords.filter((record) => record[2] === "PENDING").length;
+function FeatureBackendGatewayPage({
+	packageText,
+	setPackageText,
+	modelId,
+	setModelId,
+	modelText,
+	setModelText,
+	outputs,
+	messages,
+	busy,
+	submitModel,
+	loadModelVersions,
+	submitPackage,
+}: RoutePanelProps) {
+	const message = messages.package ?? { text: "等待提交指标包" };
+	const modelMessage = messages.model ?? { text: "等待模型 lifecycle 操作" };
+	const canSubmit = packageText.trim().length > 0;
+	const canSubmitModel = modelId.trim().length > 0 && modelText.trim().length > 0;
+	return (
+		<div className="page-grid">
+			<section className="section">
+				<div className="section-head">
+					<div>
+						<h3>模型 lifecycle 与 platform/dbt 网关</h3>
+						<p>候选 artifact、dbt validation、审核和发布只通过 metrics API 编排，再由 platform 控制面执行。</p>
+					</div>
+					<label className="inline-field">
+						<span>模型 ID</span>
+						<input value={modelId} onChange={(event) => setModelId(event.target.value)} />
+					</label>
+				</div>
+				<div className="split-layout">
+					<div>
+						<textarea
+							aria-label="模型 lifecycle 请求"
+							className="code-editor tall"
+							spellCheck={false}
+							value={modelText}
+							onChange={(event) => setModelText(event.target.value)}
+						/>
+						<div className="toolbar">
+							<button
+								className="button primary"
+								disabled={!canSubmitModel || busy.modelArtifacts}
+								type="button"
+								onClick={() => void submitModel("modelArtifacts", "artifacts", "候选 artifact 已生成")}
+							>
+								生成 artifact
+							</button>
+							<button
+								className="button"
+								disabled={!canSubmitModel || busy.modelValidate}
+								type="button"
+								onClick={() => void submitModel("modelValidate", "validate", "platform/dbt 验证通过")}
+							>
+								模型验证
+							</button>
+							<button
+								className="button"
+								disabled={!modelId.trim() || busy.modelReview}
+								type="button"
+								onClick={() => void submitModel("modelReview", "submit-review", "审核已提交")}
+							>
+								提交审核
+							</button>
+							<button
+								className="button"
+								disabled={!modelId.trim() || busy.modelDryRun}
+								type="button"
+								onClick={() => void submitModel("modelDryRun", "publish-dry-run", "发布 dry-run 通过")}
+							>
+								发布 dry-run
+							</button>
+							<button
+								className="button"
+								disabled={!modelId.trim() || busy.modelPublish}
+								type="button"
+								onClick={() => void submitModel("modelPublish", "publish", "发布已提交")}
+							>
+								发布
+							</button>
+							<button
+								className="button"
+								disabled={!modelId.trim() || busy.modelVersions}
+								type="button"
+								onClick={() => void loadModelVersions()}
+							>
+								版本历史
+							</button>
+							<button
+								className="button"
+								disabled={!modelId.trim() || busy.modelRollback}
+								type="button"
+								onClick={() => void submitModel("modelRollback", "rollback", "已回滚上一版")}
+							>
+								回滚
+							</button>
+						</div>
+						<div className={`message ${modelMessage.tone || ""}`}>{modelMessage.text}</div>
+					</div>
+					<div>
+						<h4>模型网关响应</h4>
+						<JsonOutput value={outputs.model || "等待模型 lifecycle 响应"} />
+					</div>
+				</div>
+			</section>
+			<div className="manifest-grid">
+			<section className="section">
+				<h3>指标包与候选 artifact</h3>
+				<textarea
+					aria-label="指标包内容"
+					placeholder="粘贴 YAML/JSON 指标包内容"
+					spellCheck={false}
+					value={packageText}
+					onChange={(event) => setPackageText(event.target.value)}
+				/>
+				<div className="toolbar">
+					<button
+						className="button primary"
+						disabled={!canSubmit || busy.validatePackage}
+						type="button"
+						onClick={() => void submitPackage("validatePackage", "/api/metrics/packs/validate", "校验通过")}
+					>
+						校验指标包
+					</button>
+					<button
+						className="button"
+						disabled={!canSubmit || busy.previewArtifacts}
+						type="button"
+						onClick={() => void submitPackage("previewArtifacts", "/api/metrics/packs/preview-artifacts", "候选生成物已生成")}
+					>
+						预览 artifact
+					</button>
+					<button
+						className="button"
+						disabled={!canSubmit || busy.dryRunImport}
+						type="button"
+						onClick={() => void submitPackage("dryRunImport", "/api/metrics/packs/import", "导入预检通过")}
+					>
+						导入 dry-run
+					</button>
+					<button
+						className="button"
+						disabled={!canSubmit || busy.publishDryRun}
+						type="button"
+						onClick={() => void submitPackage("publishDryRun", "/api/metrics/packs/publish-dry-run", "发布 dry-run 通过")}
+					>
+						发布 dry-run
+					</button>
+				</div>
+				<div className={`message ${message.tone || ""}`}>{message.text}</div>
+			</section>
+			<section className="section">
+				<h3>网关响应</h3>
+				<JsonOutput value={outputs.package || "等待指标包操作响应"} />
+			</section>
+			</div>
+		</div>
+	);
+}
 
+function FeatureSecurityItPage({ capabilities, outputs, busy, refreshCapabilities, loadMigrationDryRun }: RoutePanelProps) {
+	const contract = capabilities?.platformContract;
+	const rows: Array<Array<string | number>> = [
+		["service-auth header", contract?.authHeaders?.service || "X-DTS-Service"],
+		["token header", contract?.authHeaders?.token || "X-DTS-Service-Token"],
+		["service token configured", contract?.serviceTokenConfigured ? "true" : "false"],
+		["platform api path", contract?.apiPath || "/api"],
+	];
 	return (
 		<>
 			<div className="section-head">
 				<div>
-					<h3>模型运行监控</h3>
-					<p>运行记录来自 metrics 服务和 platform/dbt 回传。</p>
+					<h3>安全与 IT 准入</h3>
+					<p>预览、验证、发布都必须保留 platform 权限、RLS/masking、dbt gate 和审计边界。</p>
 				</div>
 				<div className="toolbar">
-					<button className="button" disabled={busy.runStatus} type="button" onClick={() => void loadCapabilitiesInto("runStatus")}>
-						刷新服务观测
+					<button className="button" disabled={busy.securityCapability} type="button" onClick={() => void refreshCapabilities("securityCapability")}>
+						刷新安全契约
 					</button>
-					<a className="button" href={routeHref("/metrics/semantic/publish", embedded)}>
-						查看发布门禁
-					</a>
+					<button className="button primary" disabled={busy.migration} type="button" onClick={() => void loadMigrationDryRun()}>
+						读取迁移 dry-run
+					</button>
 				</div>
 			</div>
-			<RunRecordSummary successCount={successCount} pendingCount={pendingCount} warningCount={warningCount} total={workspace.runRecords.length} />
-			{workspace.runRecords.length ? (
-				<div className="table-wrap">
-					<KeyTable headers={["模型", "层级", "状态", "最近运行", "耗时", "说明"]} rows={workspace.runRecords} />
-				</div>
-			) : (
-				<EmptyState title="暂无运行记录" description="等待 /api/metrics/workspace/snapshot 返回 runRecords。" />
-			)}
-			<JsonOutput value={outputs.runStatus || "等待刷新运行观测"} />
+			<div className="page-grid two-columns">
+				<section className="section">
+					<h4>service-auth 边界</h4>
+					<KeyTable headers={["项目", "当前值"]} rows={rows} />
+				</section>
+				<section className="section">
+					<h4>IT 响应</h4>
+					<JsonOutput value={outputs.migration || outputs.securityCapability || "等待安全契约或迁移 dry-run 响应"} />
+				</section>
+			</div>
 		</>
-	);
-}
-
-function RunRecordSummary({
-	successCount,
-	pendingCount,
-	warningCount,
-	total,
-}: {
-	successCount: number;
-	pendingCount: number;
-	warningCount: number;
-	total: number;
-}) {
-	return (
-		<div className="run-board">
-			{[
-				["成功", String(successCount)],
-				["等待", String(pendingCount)],
-				["告警", String(warningCount)],
-				["总数", String(total)],
-			].map(([label, value]) => (
-				<div key={label}>
-					<span>{label}</span>
-					<strong>{value}</strong>
-				</div>
-			))}
-		</div>
-	);
-}
-
-function MigrationPage({ outputs, busy, loadMigrationDryRun }: RoutePanelProps) {
-	return (
-		<section className="section">
-			<h3>迁移 dry-run</h3>
-			<p>迁移页面只展示服务端 dry-run 报告，不在前端内置旧语义样例。</p>
-			<div className="toolbar">
-				<button className="button primary" disabled={busy.migration} type="button" onClick={() => void loadMigrationDryRun()}>
-					读取 dry-run 报告
-				</button>
-			</div>
-			<JsonOutput value={outputs.migration || "等待读取"} />
-		</section>
-	);
-}
-
-function EmptyState({ title, description }: { title: string; description: string }) {
-	return (
-		<div className="empty-state">
-			<strong>{title}</strong>
-			<span>{description}</span>
-		</div>
 	);
 }
 
@@ -1037,10 +747,9 @@ function KeyTable({ headers, rows }: { headers: string[]; rows: Array<Array<stri
 			<tbody>
 				{rows.map((row, index) => (
 					<tr key={`${row.join("-")}-${index}`}>
-						{row.map((cell, cellIndex) => {
-							const value = String(cell ?? "");
-							return <td key={`${value}-${cellIndex}`}>{looksLikeStatus(value) ? <StatusPill value={value} /> : value}</td>;
-						})}
+						{row.map((cell, cellIndex) => (
+							<td key={`${cell}-${cellIndex}`}>{cell}</td>
+						))}
 					</tr>
 				))}
 			</tbody>
@@ -1049,18 +758,5 @@ function KeyTable({ headers, rows }: { headers: string[]; rows: Array<Array<stri
 }
 
 function JsonOutput({ value }: { value: string }) {
-	return (
-		<pre className="output" aria-label="接口输出">
-			{value}
-		</pre>
-	);
-}
-
-function StatusPill({ value }: { value: string }) {
-	const tone = statusOk.has(value) ? "ok" : statusWarn.has(value) ? "warn" : "neutral";
-	return <span className={`status ${tone}`}>{value}</span>;
-}
-
-function looksLikeStatus(value: string): boolean {
-	return statusOk.has(value) || statusWarn.has(value) || /^[A-Z_]+$/.test(value);
+	return <pre className="json-output">{value}</pre>;
 }

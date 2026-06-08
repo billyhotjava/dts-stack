@@ -25,12 +25,14 @@ class PlatformCapabilityResourceTest {
             .contains("/api/catalog/assets-v2/resolution-failures");
         assertThat(map(capabilities.get("permissions"))).containsEntry("source", "platform-asset-grant");
         assertThat(map(capabilities.get("dbtPublish"))).containsEntry("mode", "platform-gated");
+        assertThat(map(capabilities.get("dbtPublish"))).containsEntry("validationGateway", "/api/internal/metrics/model-validation");
         assertThat(map(capabilities.get("metrics"))).containsEntry("serviceBoundary", "optional-value-added-service");
         assertThat(map(capabilities.get("metrics"))).containsEntry("partnerDelivery", "metric-pack");
         assertThat(map(capabilities.get("metrics")).get("requiredPlatformContracts").toString())
             .contains("/api/internal/domains/resolve")
             .contains("/api/internal/data-standards/resolve")
-            .contains("/api/internal/v1/asset-permission/policy");
+            .contains("/api/internal/v1/asset-permission/policy")
+            .contains("/api/internal/metrics/model-validation");
         assertThat(map(capabilities.get("permissions")).get("endpoints").toString())
             .contains("/api/internal/v1/asset-permission/policy")
             .contains("/api/internal/asset-permission/policy");

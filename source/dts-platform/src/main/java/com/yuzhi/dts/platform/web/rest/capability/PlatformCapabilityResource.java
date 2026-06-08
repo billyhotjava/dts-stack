@@ -64,6 +64,7 @@ public class PlatformCapabilityResource {
             "/api/internal/data-standards/resolve",
             "/api/internal/asset-permission/check",
             "/api/internal/v1/asset-permission/policy",
+            "/api/internal/metrics/model-validation",
             "/api/etl/dbt/release/submit",
             "platform-audit"
         ));
@@ -204,6 +205,7 @@ public class PlatformCapabilityResource {
         dbt.put("mode", "platform-gated");
         dbt.put("requiresGovernanceReady", true);
         dbt.put("governanceGapEndpoint", "/api/catalog/assets-v2/governance-gaps");
+        dbt.put("validationGateway", "/api/internal/metrics/model-validation");
         if (internal) {
             dbt.put("publishGateway", "platform");
         }

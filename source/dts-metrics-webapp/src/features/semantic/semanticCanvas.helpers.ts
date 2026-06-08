@@ -20,6 +20,12 @@ export type SemanticCanvasNodeModel = {
 	label: string;
 	subjectArea: string;
 	securityLevel: string;
+	warehouseLayer: string;
+	assetKey: string;
+	grain: string;
+	governanceStatus: string;
+	permissionDecision: string;
+	lineageStatus: string;
 	metricCount: number;
 	dimensionCount: number;
 	state: SemanticCanvasNodeState;
@@ -186,6 +192,12 @@ export function buildSemanticCanvasGraph(
 				label: String(model?.label ?? model?.id ?? id),
 				subjectArea: String(model?.subject_area ?? "未分域"),
 				securityLevel: String(model?.security_level ?? "INTERNAL"),
+				warehouseLayer: String(model?.warehouse_layer ?? "UNKNOWN"),
+				assetKey: String(model?.asset_key ?? id),
+				grain: String(model?.grain ?? "未声明"),
+				governanceStatus: String(model?.governance_status ?? "UNKNOWN"),
+				permissionDecision: String(model?.permission_decision ?? "UNKNOWN"),
+				lineageStatus: String(model?.lineage_status ?? "UNKNOWN"),
 				metricCount: asArray(model?.metrics).length,
 				dimensionCount: asArray(model?.dimensions).length,
 				state: id === baseModelId ? "base" : selectedSet.has(id) ? "selected" : "candidate",

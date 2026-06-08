@@ -1,7 +1,7 @@
 # T04: DWD 高级建模向导
 
 **优先级**: P0
-**状态**: READY
+**状态**: IN_PROGRESS
 **依赖**: T02,T03
 
 ## 目标
@@ -23,10 +23,10 @@
 
 ## 验证
 
-- [ ] DWD 向导缺 grain 时不能进入下一步。
-- [ ] DWD 候选模型生成后进入 validation，不进入 publish。
+- [x] DWD 向导缺 grain / standardCode / measure 时不能保存候选 graph draft。
+- [x] DWD 候选模型生成后保存为 graph draft，不进入 publish。
 - [ ] Playwright 覆盖 DWD 失败和成功路径。
 
 ## 完成标准
 
-- [ ] DWD 只服务生成 DWS 候选，不成为默认消费资产。
+- [ ] DWD 只服务生成 DWS 候选，不成为默认消费资产；当前前端受控向导已接入，Playwright 证据仍待补齐。

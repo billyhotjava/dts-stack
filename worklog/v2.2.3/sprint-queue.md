@@ -28,7 +28,7 @@
 **统计**: READY=4, IN_PROGRESS=0, DONE=0, BLOCKED=0
 
 ## Sprint-3: IAM 修复 -- displayName 链路 bug 修复 (202604)
-**状态**: READY
+**状态**: IN_PROGRESS
 **类型**: Implementation（实施型，为 v2.3.0 IAM 重构做铺垫）
 
 | Feature | Task 数 | 状态 |
@@ -567,7 +567,7 @@
 - platform 主题域和报表动作码已收敛；剩余审计中心筛选项 DB 化和 fallback 降噪进入下一轮。
 
 ## Sprint-35: dts-metrics 数据仓库可视化设计重构 (202605)
-**状态**: READY
+**状态**: IN_PROGRESS
 **类型**: Architecture / Productization / Implementation Plan（dts-metrics-webapp + dts-metrics + dts-platform + dbt gateway）
 **目标**: 基于 Sprint-32 的 React Flow 指标工作台方案，补齐“源数据库清洗到数据仓库之后，dts-metrics 从哪一层开始进行可视化设计”的硬边界，并按“架构与 PRD -> 前后端 API -> 前端 -> 后端 -> 安全与评审”顺序拆成可执行 feature/task。
 **关键决策**: 默认从已发布、已治理、可授权读取的 DWS/ADS 资产进入指标可视化；DWD 只作为高级建模上游，用于生成新的 DWS 候选模型；ODS/STG 只用于 lineage 和诊断，不进入普通指标画布。
@@ -575,17 +575,41 @@
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
 | F1-architecture-prd | P0 | 5 | READY |
-| F2-api-contracts | P0 | 5 | READY |
-| F3-frontend-visual-workbench | P0 | 5 | READY |
-| F4-backend-modeling-dbt-gateway | P0 | 5 | READY |
-| F5-security-review-it | P0 | 5 | READY |
+| F2-api-contracts | P0 | 5 | IN_PROGRESS（T01/T02 DONE；T03-T05 IN_PROGRESS） |
+| F3-frontend-visual-workbench | P0 | 5 | IN_PROGRESS（T03 DONE；T01/T02/T04/T05 IN_PROGRESS） |
+| F4-backend-modeling-dbt-gateway | P0 | 5 | IN_PROGRESS（T01/T03 DONE；T02/T04 IN_PROGRESS） |
+| F5-security-review-it | P0 | 5 | IN_PROGRESS（T03 DONE） |
 
-**统计**: READY=25, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=10, IN_PROGRESS=9, DONE=6, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-35-202605/README.md`
 **ELT 分层 PRD**: `worklog/v2.2.3/sprint-35-202605/assets/dts-metrics-elt-layer-prd.md`
 **API 契约**: `worklog/v2.2.3/sprint-35-202605/assets/dts-metrics-api-contract.md`
 **评审机制**: `worklog/v2.2.3/sprint-35-202605/assets/review-mechanism.md`
 **集成测试**: `worklog/v2.2.3/sprint-35-202605/it/README.md`
+
+## Sprint-36: 数据安全与机密级合规整改专项 (202606)
+**状态**: PLANNING
+**类型**: Security / Compliance / Implementation Plan（dts-keycloak + dts-admin + dts-platform + dts-admin-webapp + dts-platform-webapp）
+**目标**: 闭合协议 2.3.2.5（数据安全）与 2.3.2.10（安全保密）中阻断机密级（BMB17.1/17.2-2024）测评验收的 P0 缺口，并补齐敏感数据自动识别 P1 能力，TDD 驱动。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-password-policy-lockout | P0 | 5 | READY |
+| F2-session-security-remediation | P0 | 5 | READY |
+| F3-operation-permission-matrix | P0 | 5 | READY |
+| F4-sensitive-data-auto-discovery | P1 | 5 | READY |
+| F5-bmb-baseline-assessment-ledger | P0 | 5 | READY |
+| F6-security-review-it-gate | P0 | 5 | READY |
+
+**统计**: READY=30, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**设计文档**: `worklog/v2.2.3/sprint-36-202606/README.md`
+**差距分析报告**: `worklog/v2.2.3/sprint-36-202606/assets/protocol-gap-analysis-v3.md`（协议 11 模块，13 项 P0 + 29 项 P1）
+**证据底稿**: `worklog/v2.2.3/sprint-36-202606/assets/gap-evidence/M01..M11.md`
+**集成测试**: `worklog/v2.2.3/sprint-36-202606/it/README.md`
+**主题聚焦决策**:
+- 协议 13 项 P0 横跨 6 模块，单 sprint 不可全包；本期选「数据安全+机密级合规」单主题，因其是验收硬门槛、P0 最密集（独占 6 项）、技术内聚、单 sprint 可落地。
+- 其余 P0 排期：M04 生命周期/销毁 → Sprint-37；M09 告警规则 + M11 高可用/性能 → Sprint-38（见报告 §6 roadmap）。
+- sprint-32~35 未闭合 M05/M10 任何前序缺口；机密级口令控制/操作权限矩阵/敏感识别/BMB 映射均缺失。
 
 ## v2.3 Backlog: 企业级资产与指标增强
 

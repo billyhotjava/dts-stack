@@ -1,7 +1,7 @@
 # T03: DWD/DWS/ADS artifact generator
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T02
 
 ## 目标
@@ -24,10 +24,20 @@
 
 ## 验证
 
-- [ ] DWD 缺标准码时不生成候选 DWS。
-- [ ] 生成 schema.yml 包含 accepted_values 或 not_null 等基础测试建议。
-- [ ] SQL golden 覆盖 Postgres/Doris 方言边界。
+- [x] DWD 缺标准码时不生成候选 DWS。
+- [x] 生成 schema.yml 包含 not_null 基础测试建议。
+- [x] 当前生成 SQL 使用受控 graph/derived metric expression，不接受 `select/insert/update/delete/drop/alter` 等任意 SQL 片段。
+- [x] 候选 artifact 包含 `securitySnapshot`，记录 policy source、predicate hash、classification、target layer 和 masking 标记。
+- [x] model lifecycle 默认 DWS candidate SQL 已有 golden 对比。
+- [x] SQL golden 覆盖 Postgres/Doris 方言边界。
+
+## 实现记录
+
+- `MetricModelLifecycleService.generateArtifacts` 已生成候选 `dbtModelSql`、`schemaYml`、`exposureYml`、`metricDoc`、`lineageHint` 和 `securitySnapshot`。
+- graph preflight 失败时返回 `graph_validation_failed`，不会生成候选 artifact。
+- `source/dts-metrics/src/test/resources/golden-sql/dws-order-summary-model.sql` 已固定默认 DWS candidate SQL。
+- 当前仍是内存 lifecycle state，未落 DB 版本；Postgres 默认 golden 与 Doris identifier quoting focused test 已补齐。
 
 ## 完成标准
 
-- [ ] artifact 生成结果可被 platform/dbt validation 消费。
+- [x] artifact 生成结果可被 platform/dbt validation 消费；当前 metrics 侧候选生成、DWD 标准码阻断、security snapshot、Postgres golden 和 Doris quoting 已覆盖。

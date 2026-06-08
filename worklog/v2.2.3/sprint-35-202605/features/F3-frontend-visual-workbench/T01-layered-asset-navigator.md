@@ -1,7 +1,7 @@
 # T01: 资产层级导航与 DWS/ADS 默认入口
 
 **优先级**: P0
-**状态**: READY
+**状态**: IN_PROGRESS
 **依赖**: F2
 
 ## 目标
@@ -10,7 +10,7 @@
 
 ## 技术设计
 
-- 资产列表默认请求 `/api/metrics/visual-assets?layers=DWS,ADS`。
+- 资产列表已默认请求 `/api/metrics/visual-assets?layers=DWS,ADS`。
 - 顶部提供层级筛选：DWS、ADS、高级 DWD；不提供 ODS/STG 拖拽入口。
 - 每个资产展示 grain、time columns、dimension/metric counts、permission、governance、lineage。
 - DWD 高级入口必须显示“生成 DWS 候选模型”而非“直接建看板”。
@@ -23,9 +23,9 @@
 
 ## 验证
 
-- [ ] DWS/ADS 默认 tab 有真实 API 请求。
+- [x] DWS/ADS 默认 tab 有真实 API 请求。
 - [ ] DWD tab 必须显式高级模式。
-- [ ] ODS/STG 不出现在可拖拽资产列表。
+- [x] ODS/STG 不出现在可拖拽资产列表。
 
 ## 完成标准
 

@@ -1,7 +1,7 @@
 # F2: 前后端 API 契约
 
 **优先级**: P0
-**状态**: READY
+**状态**: IN_PROGRESS
 
 ## 目标
 
@@ -11,15 +11,15 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| T01 | 可视化资产查询 API | P0 | READY | F1 |
-| T02 | Graph draft 与 preflight API | P0 | READY | T01 |
-| T03 | 候选 artifact、验证和发布 API | P0 | READY | T02 |
-| T04 | DTO、错误码和 TypeScript contract | P0 | READY | T01-T03 |
-| T05 | API contract 测试与兼容策略 | P0 | READY | T04 |
+| T01 | 可视化资产查询 API | P0 | DONE | F1 |
+| T02 | Graph draft 与 preflight API | P0 | DONE | T01 |
+| T03 | 候选 artifact、验证和发布 API | P0 | IN_PROGRESS | T02 |
+| T04 | DTO、错误码和 TypeScript contract | P0 | IN_PROGRESS | T01-T03 |
+| T05 | API contract 测试与兼容策略 | P0 | IN_PROGRESS | T04 |
 
 ## 完成标准
 
-- [ ] API 默认只返回 DWS/ADS，可通过高级模式显式请求 DWD。
+- [x] API 默认只返回 DWS/ADS，可通过高级模式显式请求 DWD。
 - [ ] DTO 包含 warehouseLayer、grain、permissionDecision、governanceStatus 和 validationState。
-- [ ] 失败场景使用明确错误码，不返回模糊 500 或静默 fallback。
+- [x] 失败场景使用明确错误码，不返回模糊 500 或静默 fallback。
 - [ ] 旧 `/api/semantic/**` 有代理、只读或弃用策略。

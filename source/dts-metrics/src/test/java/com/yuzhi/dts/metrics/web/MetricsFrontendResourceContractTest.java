@@ -12,6 +12,7 @@ class MetricsFrontendResourceContractTest {
 
     private static final Path WEBAPP_ROOT = Path.of("../dts-metrics-webapp");
     private static final Path STATIC_ROOT = Path.of("src/main/resources/static/metrics");
+    private static final Path DTO_ROOT = Path.of("src/main/java/com/yuzhi/dts/metrics/service/dto");
     private static final Path POM = Path.of("pom.xml");
 
     @Test
@@ -32,27 +33,51 @@ class MetricsFrontendResourceContractTest {
 
     @Test
     void metricsReactAppKeepsTheRequiredPagesAndApiActions() throws IOException {
-        String appSource = Files.readString(WEBAPP_ROOT.resolve("src/App.tsx"));
+        String appSource = Files.readString(WEBAPP_ROOT.resolve("src/app/MetricsShell.tsx"));
 
         assertThat(appSource)
             .contains(
-                "\"/metrics/dictionary\"",
-                "\"/metrics/semantic/subjects\"",
-                "\"/metrics/semantic/objects\"",
-                "\"/metrics/semantic/metrics\"",
-                "\"/metrics/semantic/models\"",
-                "\"/metrics/semantic/publish\"",
-                "\"/metrics/semantic/runs\"",
-                "\"/metrics/operations\""
+                "\"/metrics/f1-architecture\"",
+                "\"/metrics/f2-api-contracts\"",
+                "\"/metrics/f3-visual-workbench\"",
+                "\"/metrics/f4-modeling-gateway\"",
+                "\"/metrics/f5-security-it\""
             );
         assertThat(appSource)
             .contains(
-                "\"/api/metrics/workspace/snapshot\"",
                 "\"/api/metrics/capabilities\"",
+                "/api/metrics/visual-assets",
+                "\"/api/metrics/graphs\"",
+                "\"/api/metrics/graphs/draft/preflight\"",
+                "/api/metrics/models/",
+                "\"artifacts\"",
+                "\"validate\"",
+                "\"submit-review\"",
+                "\"rollback\"",
+                "/versions",
                 "\"/api/metrics/packs/preview-artifacts\"",
                 "\"/api/metrics/packs/import\"",
                 "\"/api/metrics/packs/publish-dry-run\"",
                 "\"/api/metrics/migration/semantic-dry-run\""
+            );
+        assertThat(appSource).doesNotContain("\"/api/metrics/workspace/snapshot\"");
+    }
+
+    @Test
+    void metricsLifecycleStatusAndErrorContractsAreCentralized() throws IOException {
+        String semanticTypes = Files.readString(WEBAPP_ROOT.resolve("src/features/semantic/semanticTypes.ts"));
+        String lifecycleStatus = Files.readString(DTO_ROOT.resolve("MetricLifecycleStatus.java"));
+        String errorCodes = Files.readString(DTO_ROOT.resolve("MetricContractErrorCode.java"));
+
+        assertThat(semanticTypes).contains("export type MetricLifecycleStatus", "export type MetricContractErrorCode");
+        assertThat(lifecycleStatus).contains("ARTIFACT_GENERATED", "DBT_VALIDATED", "PUBLISHED", "ROLLED_BACK");
+        assertThat(errorCodes)
+            .contains(
+                "GRAPH_VALIDATION_FAILED",
+                "STANDARD_CODE_REQUIRED",
+                "DBT_VALIDATION_FAILED",
+                "PLATFORM_CONTRACT_UNAVAILABLE",
+                "ROLLBACK_TARGET_REQUIRED"
             );
     }
 

@@ -9,9 +9,9 @@
 | 证据 | 路径 | 状态 |
 |------|------|------|
 | 架构与 PRD review | `it/evidence/architecture-review/` | READY |
-| API contract | `it/evidence/api-contracts/` | READY |
+| API contract | `it/evidence/api-contracts/` | IN_PROGRESS |
 | 前端工作台 Playwright | `it/evidence/frontend-workbench/` | READY |
-| 后端 graph/artifact/dbt gateway | `it/evidence/backend-dbt-gateway/` | READY |
+| 后端 graph/artifact/dbt gateway | `it/evidence/backend-dbt-gateway/` | IN_PROGRESS |
 | 安全与评审 gate | `it/evidence/security-review/` | READY |
 
 ## 验收命令草案
@@ -31,13 +31,31 @@ cd source
 
 ```bash
 curl -sS 'http://127.0.0.1:18084/api/metrics/visual-assets?layers=DWS,ADS'
-curl -sS 'http://127.0.0.1:18084/api/metrics/visual-assets?layers=DWD&mode=advanced'
+curl -sS 'http://127.0.0.1:18084/api/metrics/visual-assets?layers=DWD&includeDrilldown=true'
 ```
 
 ```bash
 curl -sS -X POST http://127.0.0.1:18084/api/metrics/graphs/{graphId}/preflight \
   -H 'Content-Type: application/json' \
   -d @worklog/v2.2.3/sprint-35-202605/it/fixtures/dws-graph-preflight.json
+```
+
+```bash
+curl -sS -X POST http://127.0.0.1:18084/api/metrics/models/{modelId}/artifacts \
+  -H 'Content-Type: application/json' \
+  -d @worklog/v2.2.3/sprint-35-202605/it/fixtures/dwd-to-dws-validation.json
+
+curl -sS -X POST http://127.0.0.1:18084/api/metrics/models/{modelId}/validate \
+  -H 'Content-Type: application/json' \
+  -d @worklog/v2.2.3/sprint-35-202605/it/fixtures/dwd-to-dws-validation.json
+
+curl -sS -X POST http://127.0.0.1:18084/api/metrics/models/{modelId}/publish
+
+curl -sS http://127.0.0.1:18084/api/metrics/models/{modelId}/versions
+
+curl -sS -X POST http://127.0.0.1:18084/api/metrics/models/{modelId}/rollback \
+  -H 'Content-Type: application/json' \
+  -d '{"reason":"smoke rollback"}'
 ```
 
 ```bash
