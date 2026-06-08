@@ -624,6 +624,42 @@ PY
   printf '%s' "${key}"
 }
 
+generate_aes_key(){
+  # Java-side InfraSettingsCryptoService expects STANDARD Base64 (with + and /), not URL-safe variants.
+  local key=""
+
+  if command -v openssl >/dev/null 2>&1; then
+    key="$(openssl rand -base64 32 2>/dev/null | tr -d '\n\r' || true)"
+  fi
+
+  if [[ -z "${key}" ]] && command -v python3 >/dev/null 2>&1; then
+    key="$(python3 - <<'PY' 2>/dev/null || true
+import base64, os
+print(base64.b64encode(os.urandom(32)).decode("ascii"), end="")
+PY
+)"
+  fi
+
+  if [[ -z "${key}" ]] && command -v python >/dev/null 2>&1; then
+    key="$(python - <<'PY' 2>/dev/null || true
+import base64, os
+print(base64.b64encode(os.urandom(32)).decode("ascii"), end="")
+PY
+)"
+  fi
+
+  if [[ -z "${key}" ]]; then
+    key="$(head -c 32 /dev/urandom | base64 | tr -d '\n\r' || true)"
+  fi
+
+  if [[ -z "${key}" ]]; then
+    echo "[init.sh] ERROR: Failed to generate a standard base64 AES key." >&2
+    exit 1
+  fi
+
+  printf '%s' "${key}"
+}
+
 # URL-encode a single component for safe embedding in URIs
 urlencode_component(){
   local s="${1:-}"
@@ -907,6 +943,8 @@ generate_env_base(){
 
   # ---------- Airflow ----------
   : "${AIRFLOW_WEBSERVER_PORT:=18090}"
+  : "${DTS_INFRA_ENCRYPTION_KEY:=$(generate_aes_key)}"
+  : "${DTS_INFRA_KEY_VERSION:=v1}"
   : "${AIRFLOW_FERNET_KEY:=$(generate_fernet)}"
   : "${AIRFLOW_ADMIN_USERNAME:=airflow}"
   : "${AIRFLOW_ADMIN_PASSWORD:=${SECRET}}"
@@ -1242,6 +1280,8 @@ ADDAX_DOCKER_NETWORK=${ADDAX_DOCKER_NETWORK}
 
 # ====== Airflow ======
 AIRFLOW_WEBSERVER_PORT=${AIRFLOW_WEBSERVER_PORT}
+DTS_INFRA_ENCRYPTION_KEY=${DTS_INFRA_ENCRYPTION_KEY}
+DTS_INFRA_KEY_VERSION=${DTS_INFRA_KEY_VERSION}
 AIRFLOW_FERNET_KEY=${AIRFLOW_FERNET_KEY}
 AIRFLOW_ADMIN_USERNAME=${AIRFLOW_ADMIN_USERNAME}
 AIRFLOW_ADMIN_PASSWORD=${AIRFLOW_ADMIN_PASSWORD}

@@ -93,6 +93,19 @@ class AirflowDagServiceTest {
     }
 
     @Test
+    void shouldInjectTmpfsAndEncryptionEnvForAddaxDag() throws Exception {
+        IngestionTask task = task("manual", "task_addax_security_demo");
+
+        dagService.rebuildDagForTask(task);
+
+        String dagSource = readDag("task_addax_security_demo");
+        assertThat(dagSource).contains("Mount(target=\"/decrypted\", type=\"tmpfs\", read_only=False)");
+        assertThat(dagSource).contains("\"TMPDIR\": \"/decrypted\",");
+        assertThat(dagSource).contains("\"DTS_INFRA_ENCRYPTION_KEY\": os.environ.get(\"DTS_INFRA_ENCRYPTION_KEY\", \"\"),");
+        assertThat(dagSource).contains("\"DTS_INFRA_KEY_VERSION\": os.environ.get(\"DTS_INFRA_KEY_VERSION\", \"v1\"),");
+    }
+
+    @Test
     void shouldTranslateIntervalScheduleForMultiTaskDag() throws Exception {
         IngestionTask task = task("interval:90", "task_interval_multi_demo");
 

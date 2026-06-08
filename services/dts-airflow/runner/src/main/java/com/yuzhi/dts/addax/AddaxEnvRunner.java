@@ -117,7 +117,9 @@ public final class AddaxEnvRunner {
             byte[] plain = AddaxFileCrypto.decrypt(parsed, key);
             Path plaintext = writePlaintext(tmpDir, enc.getFileName().toString(), plain);
             created.add(plaintext);
-            result = result.replace(encPath, plaintext.toString());
+            String quotedEncPath = "\"" + encPath + "\"";
+            String quotedPlainPath = "\"" + plaintext + "\"";
+            result = result.replace(quotedEncPath, quotedPlainPath);
         }
         return result;
     }
