@@ -54,7 +54,7 @@ tests/run_gates.sh
 
 - 宿主机（含 root）能从文件系统目录 `cat`/`strings`/`grep` 出上传文件明文。
 - 作业前/中/后 bind 树（dags/uploads）出现任何明文 Excel/CSV。
-- `.enc` 仍为 world-readable（残留 o+r）。
+- 无密钥即可从 `.enc` 读出明文内容（加密失效）。
 - 密钥缺失或解密失败时退化为明文落盘 / 明文喂 Addax / 明文残留。
 - Addax 入湖结果加密前后不一致（行数/字段/类型/内容偏差）。
 - 明文 tmpfs 路径或密钥出现在 bind 日志、审计、异常消息中。

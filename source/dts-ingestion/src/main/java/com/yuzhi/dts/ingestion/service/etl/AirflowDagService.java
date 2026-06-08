@@ -522,6 +522,7 @@ public class AirflowDagService {
                     mounts=[
                         Mount(source=ADDAX_JOB_DIR, target="/opt/addax/jobs", type="bind"),
                         Mount(source=ADDAX_LOG_DIR, target="/opt/addax/log", type="bind"),
+                        Mount(target="/decrypted", type="tmpfs", read_only=False),
                         *build_driver_mounts(),
                     ],
                     environment=build_addax_environment(),
@@ -630,6 +631,7 @@ public class AirflowDagService {
             sb.append("        mounts=[\n");
         sb.append("            Mount(source=ADDAX_JOB_DIR, target=\"/opt/addax/jobs\", type=\"bind\"),\n");
         sb.append("            Mount(source=ADDAX_LOG_DIR, target=\"/opt/addax/log\", type=\"bind\"),\n");
+            sb.append("            Mount(target=\"/decrypted\", type=\"tmpfs\", read_only=False),\n");
             sb.append("            *build_driver_mounts(),\n");
             sb.append("        ],\n");
             sb.append("        environment=build_addax_environment(),\n");
@@ -663,6 +665,10 @@ public class AirflowDagService {
 
             def build_addax_environment():
                 return {
+                    # Sprint-37: 上传密文解密到 tmpfs(/decrypted) 供 Addax 读取；密钥经 Airflow worker 透传，明文不落盘
+                    "TMPDIR": "/decrypted",
+                    "DTS_INFRA_ENCRYPTION_KEY": os.environ.get("DTS_INFRA_ENCRYPTION_KEY", ""),
+                    "DTS_INFRA_KEY_VERSION": os.environ.get("DTS_INFRA_KEY_VERSION", "v1"),
                     "DTS_ADDAX_READER_PASSWORD": resolve_secret(
                         "DTS_ADDAX_READER_PASSWORD",
                         "DTS_SOURCE_DB_PASSWORD",

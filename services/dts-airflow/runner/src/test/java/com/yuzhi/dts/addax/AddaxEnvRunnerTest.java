@@ -19,7 +19,57 @@ public final class AddaxEnvRunnerTest {
         writerOnlyJobDoesNotRequireReaderPasswordAndEscapesJson();
         requiresReaderPasswordWhenReaderPlaceholderExists();
         propagatesAddaxExitCode();
+        decryptsEncryptedInputToTmpfsAndErases();
+        failsWhenEncryptedInputButNoKey();
         System.out.println("AddaxEnvRunnerTest: all tests passed");
+    }
+
+    private static void decryptsEncryptedInputToTmpfsAndErases() throws Exception {
+        java.nio.file.Path dir = Files.createTempDirectory("addax-runner-decrypt-");
+        java.nio.file.Path tmpfs = Files.createDirectory(dir.resolve("tmpfs"));
+        java.nio.file.Path captured = dir.resolve("captured.json");
+        java.nio.file.Path fakeAddax = fakeAddax(dir, 0, captured);
+
+        String b64Key = java.util.Base64.getEncoder()
+            .encodeToString("0123456789abcdef0123456789abcdef".getBytes(StandardCharsets.UTF_8));
+        javax.crypto.SecretKey key = AddaxFileCrypto.keyFromBase64(b64Key);
+        byte[] plaintext = "col_a,col_b\n1,2\n".getBytes(StandardCharsets.UTF_8);
+        byte[] iv = new byte[12];
+        new java.security.SecureRandom().nextBytes(iv);
+        java.nio.file.Path enc = dir.resolve("data.csv.enc");
+        Files.write(enc, AddaxFileCrypto.encrypt(plaintext, key, iv));
+
+        java.nio.file.Path job = dir.resolve("job.json");
+        Files.writeString(job, "{\"reader\":{\"path\":[\"" + enc + "\"]}}", StandardCharsets.UTF_8);
+
+        RunResult result = runRunner(
+            Map.of("ADDAX_BIN", fakeAddax.toString(), "TMPDIR", tmpfs.toString(), "DTS_INFRA_ENCRYPTION_KEY", b64Key),
+            job.toString()
+        );
+
+        assertEquals(0, result.exitCode(), "decrypt job exit code");
+        String rendered = Files.readString(captured, StandardCharsets.UTF_8);
+        assertNotContains(rendered, ".enc", "enc path replaced with tmpfs plaintext");
+        assertContains(rendered, "addax-plain-", "tmpfs plaintext path injected");
+        try (java.util.stream.Stream<java.nio.file.Path> stream = Files.list(tmpfs)) {
+            if (stream.findAny().isPresent()) {
+                throw new AssertionError("plaintext/tempjob not erased from tmpfs after run");
+            }
+        }
+    }
+
+    private static void failsWhenEncryptedInputButNoKey() throws Exception {
+        java.nio.file.Path dir = Files.createTempDirectory("addax-runner-nokey-");
+        java.nio.file.Path fakeAddax = fakeAddax(dir, 0, dir.resolve("captured.json"));
+        java.nio.file.Path enc = dir.resolve("data.csv.enc");
+        Files.write(enc, new byte[] { 1, 2, 3 });
+        java.nio.file.Path job = dir.resolve("job.json");
+        Files.writeString(job, "{\"reader\":{\"path\":[\"" + enc + "\"]}}", StandardCharsets.UTF_8);
+
+        RunResult result = runRunner(Map.of("ADDAX_BIN", fakeAddax.toString()), job.toString());
+
+        assertEquals(78, result.exitCode(), "missing key exit code");
+        assertContains(result.stderr(), "DTS_INFRA_ENCRYPTION_KEY", "missing key message");
     }
 
     private static void requiresJobPathArgument() throws Exception {

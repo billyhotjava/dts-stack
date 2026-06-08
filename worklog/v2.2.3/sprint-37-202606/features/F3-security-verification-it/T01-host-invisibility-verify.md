@@ -13,7 +13,7 @@
 - 上传一个含已知敏感关键字的 xlsx，触发入湖。
 - 断言 A（静态）：`sudo cat {STACK_ROOT}/services/dts-airflow/dags/uploads/*.enc` 输出为二进制密文，`strings` 不含已知关键字、不含 `PK\x03\x04`。
 - 断言 B（无明文）：`sudo grep -rl "<已知关键字>" {STACK_ROOT}/services/dts-airflow/dags/` 作业前/中/后均无命中（明文不落 bind 树）。
-- 断言 C（权限）：`.enc` 非 world-readable（无 o+r）。
+- 断言 C（密文性）：`.enc` 保留 `o+r`（Addax 跨 UID 读密文所需）；安全由密文性保证（断言 A/B），不依赖权限收紧。
 - 断言 D（运行期）：作业执行窗口内，`sudo ls {STACK_ROOT}/.../uploads` 仍只有 `.enc`；明文仅在 Addax 容器 tmpfs（`docker exec <addax> ls $TMPDIR` 可见，宿主机磁盘不可见）。
 
 ## 技术设计（验证手段）
@@ -30,7 +30,7 @@
 
 - [ ] 宿主机 root 仅见密文，`strings`/`grep` 无明文关键字。
 - [ ] 作业前/中/后 bind 树零明文。
-- [ ] `.enc` 非 world-readable。
+- [ ] `.enc` 为密文（strings 无明文关键字），权限策略不影响安全。
 
 ## 完成标准
 

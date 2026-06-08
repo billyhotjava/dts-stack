@@ -19,7 +19,7 @@
 
 - 改 `AirflowDagService.java` 的 DockerOperator 模板（L507-524 与 L615-632 两处）：增加 tmpfs（DockerOperator `tmpfs` 参数）+ `TMPDIR` env 指向该 tmpfs。
 - `build_addax_environment()`（L… 由 `buildAddaxEnvironment` 生成）注入 `DTS_INFRA_ENCRYPTION_KEY`/`DTS_INFRA_KEY_VERSION`（compose 已为 dts-ingestion 提供 L727-728，需同样传给 Addax 容器）。
-- compose（`docker-compose-app.yml`）：去掉对 `uploads` 的 `chmod o+r`（L200-201 收敛为不含 uploads，或 uploads 单独 0700）。
+- compose（`docker-compose-app.yml` + `docker-compose.legacy.yml`）：给 4 个 Airflow/Addax 服务注入 `DTS_INFRA_ENCRYPTION_KEY`/`DTS_INFRA_KEY_VERSION`（runner 解密所需）。**保留 uploads 的 `chmod o+r`**——加密后 uploads 为密文，全员可读无害，且 `o+r` 是不同 UID 的 Addax 容器跨 bind 读密文的前提；防护由加密达成、不靠权限。（现场为鲲鹏 legacy 模式，两个 compose 必须同步。）
 
 ## 影响范围
 

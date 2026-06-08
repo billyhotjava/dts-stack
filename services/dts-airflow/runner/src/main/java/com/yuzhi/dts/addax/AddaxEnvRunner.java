@@ -5,8 +5,16 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
+import java.security.GeneralSecurityException;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import javax.crypto.SecretKey;
 
 public final class AddaxEnvRunner {
 
@@ -45,11 +53,83 @@ public final class AddaxEnvRunner {
             return EX_CONFIG;
         }
 
-        Path tempFile = writeTempJob(jobFile, rendered, env);
+        List<Path> decryptedPlaintexts = new ArrayList<>();
+        String prepared;
+        try {
+            prepared = decryptEncryptedInputs(rendered, env, decryptedPlaintexts);
+        } catch (GeneralSecurityException | IOException ex) {
+            err.println("ERROR: failed to decrypt encrypted upload input: " + ex.getMessage());
+            erasePlaintexts(decryptedPlaintexts);
+            return EX_CONFIG;
+        }
+
+        Path tempFile = writeTempJob(jobFile, prepared, env);
         try {
             return runAddax(tempFile, env, err);
         } finally {
             Files.deleteIfExists(tempFile);
+            erasePlaintexts(decryptedPlaintexts);
+        }
+    }
+
+    private static final Pattern ENC_REFERENCE = Pattern.compile("\"([^\"]*\\.enc)\"");
+    private static final String ENCRYPTION_KEY_ENV = "DTS_INFRA_ENCRYPTION_KEY";
+
+    /**
+     * 把 job 中引用的 *.enc 密文解密到 TMPDIR（tmpfs）明文，并将路径改写为明文路径。
+     * 无 .enc 引用时原样返回（向后兼容）。明文文件登记到 created，调用方负责擦除。
+     */
+    private static String decryptEncryptedInputs(String rendered, Map<String, String> env, List<Path> created)
+        throws IOException, GeneralSecurityException {
+        Matcher matcher = ENC_REFERENCE.matcher(rendered);
+        Set<String> encPaths = new LinkedHashSet<>();
+        while (matcher.find()) {
+            encPaths.add(matcher.group(1));
+        }
+        if (encPaths.isEmpty()) {
+            return rendered;
+        }
+        String base64Key = env.get(ENCRYPTION_KEY_ENV);
+        if (base64Key == null || base64Key.isBlank()) {
+            throw new GeneralSecurityException("encrypted input present but " + ENCRYPTION_KEY_ENV + " is not set");
+        }
+        SecretKey key = AddaxFileCrypto.keyFromBase64(base64Key);
+        Path tmpDir = Path.of(env.getOrDefault("TMPDIR", System.getProperty("java.io.tmpdir")));
+        String result = rendered;
+        for (String encPath : encPaths) {
+            Path enc = Path.of(encPath);
+            if (!Files.isReadable(enc)) {
+                throw new IOException("encrypted input not readable: " + encPath);
+            }
+            byte[] plain = AddaxFileCrypto.decrypt(Files.readAllBytes(enc), key);
+            Path plaintext = writePlaintext(tmpDir, enc.getFileName().toString(), plain);
+            created.add(plaintext);
+            result = result.replace(encPath, plaintext.toString());
+        }
+        return result;
+    }
+
+    private static Path writePlaintext(Path tmpDir, String encFileName, byte[] plain) throws IOException {
+        String base = encFileName.endsWith(".enc") ? encFileName.substring(0, encFileName.length() - 4) : encFileName;
+        int dot = base.lastIndexOf('.');
+        String suffix = dot >= 0 ? base.substring(dot) : "";
+        Path out = Files.createTempFile(tmpDir, "addax-plain-", suffix);
+        try {
+            Files.setPosixFilePermissions(out, Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
+        } catch (UnsupportedOperationException ignored) {
+            // 非 POSIX 文件系统（部分测试平台）；内容仍位于运行期 tmpfs，作业结束擦除
+        }
+        Files.write(out, plain);
+        return out;
+    }
+
+    private static void erasePlaintexts(List<Path> created) {
+        for (Path plaintext : created) {
+            try {
+                Files.deleteIfExists(plaintext);
+            } catch (IOException ignored) {
+                // best-effort：容器 tmpfs 随 auto_remove 一并销毁
+            }
         }
     }
 

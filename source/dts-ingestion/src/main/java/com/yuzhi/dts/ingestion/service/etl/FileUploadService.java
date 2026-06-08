@@ -1,11 +1,13 @@
 package com.yuzhi.dts.ingestion.service.etl;
 
 import com.yuzhi.dts.ingestion.config.AddaxProperties;
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.HexFormat;
@@ -37,15 +39,18 @@ public class FileUploadService {
     private final AddaxProperties properties;
     private final com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService settingsService;
     private final CsvParseService csvParseService;
+    private final com.yuzhi.dts.ingestion.service.infra.InfraSettingsCryptoService crypto;
 
     public FileUploadService(
         AddaxProperties properties,
         com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService settingsService,
-        CsvParseService csvParseService
+        CsvParseService csvParseService,
+        com.yuzhi.dts.ingestion.service.infra.InfraSettingsCryptoService crypto
     ) {
         this.properties = properties;
         this.settingsService = settingsService;
         this.csvParseService = csvParseService;
+        this.crypto = crypto;
     }
 
     public record FileUploadResult(
@@ -57,7 +62,9 @@ public class FileUploadService {
         String fileHash,
         Long fileSize,
         String sheetName,
-        Integer sheetIndex
+        Integer sheetIndex,
+        String keyVersion,
+        boolean encrypted
     ) {}
 
     public record FileColumn(String name, String type, String label) {}
@@ -65,6 +72,10 @@ public class FileUploadService {
     public FileUploadResult handleUpload(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("上传文件不能为空");
+        }
+        // 机密级：密钥未配置时 fail-fast，禁止明文落盘回退
+        if (!crypto.isEncryptionReady()) {
+            throw new IllegalStateException("加密密钥未配置，禁止上传涉密文件");
         }
         String originalName = StringUtils.hasText(file.getOriginalFilename())
             ? file.getOriginalFilename().trim()
@@ -75,6 +86,13 @@ public class FileUploadService {
             throw new IllegalArgumentException("不支持的文件类型: " + extension + "，仅支持 .xlsx, .xls, .csv");
         }
 
+        byte[] plain;
+        try {
+            plain = file.getBytes();
+        } catch (Exception ex) {
+            throw new IllegalStateException("读取上传文件失败: " + ex.getMessage(), ex);
+        }
+
         String jobDir = resolveJobDir();
         Path uploadsDir = Paths.get(jobDir, UPLOADS_SUBDIR);
         try {
@@ -83,40 +101,65 @@ public class FileUploadService {
             throw new IllegalStateException("无法创建上传目录: " + uploadsDir, ex);
         }
 
-        String storedName = UUID.randomUUID().toString().substring(0, 8) + "_" + sanitizeFileName(originalName);
+        // 密文文件名加 .enc 后缀；布局 [IV:12B][AES-GCM ciphertext+tag]
+        String storedName = UUID.randomUUID().toString().substring(0, 8) + "_" + sanitizeFileName(originalName) + ".enc";
         Path hostPath = uploadsDir.resolve(storedName);
+        byte[] iv = crypto.randomIv();
         try {
-            Files.copy(file.getInputStream(), hostPath, StandardCopyOption.REPLACE_EXISTING);
+            byte[] cipher = crypto.encrypt(plain, iv);
+            try (
+                OutputStream out = Files.newOutputStream(
+                    hostPath,
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.TRUNCATE_EXISTING,
+                    StandardOpenOption.WRITE
+                )
+            ) {
+                out.write(iv);
+                out.write(cipher);
+            }
         } catch (Exception ex) {
-            throw new IllegalStateException("文件保存失败: " + ex.getMessage(), ex);
+            throw new IllegalStateException("文件加密保存失败: " + ex.getMessage(), ex);
         }
 
         String containerPath = ADDAX_CONTAINER_DIR + "/" + UPLOADS_SUBDIR + "/" + storedName;
-        String fileHash = sha256(hostPath);
-        Long fileSize = fileSize(hostPath);
+        String fileHash = sha256(plain); // 明文摘要，供 F2 解密后完整性校验
+        Long fileSize = (long) plain.length;
         String sheetName = null;
         Integer sheetIndex = null;
 
         List<FileColumn> columns;
         try {
             if ("excel".equals(fileType)) {
-                sheetName = firstSheetName(hostPath);
+                sheetName = firstSheetName(plain);
                 sheetIndex = 0;
-                columns = parseExcelHeaders(hostPath);
+                columns = parseExcelHeaders(plain);
             } else {
-                columns = parseCsvHeaders(hostPath);
+                columns = parseCsvHeaders(plain);
             }
         } catch (Exception ex) {
             LOG.warn("Failed to parse file headers: {}", ex.getMessage());
             columns = List.of();
         }
 
-        LOG.info("Uploaded file: {} -> {} ({} columns detected)", originalName, hostPath, columns.size());
-        return new FileUploadResult(hostPath.toString(), containerPath, fileType, columns, originalName, fileHash, fileSize, sheetName, sheetIndex);
+        LOG.info("Uploaded encrypted file: {} -> {} ({} columns detected)", originalName, hostPath, columns.size());
+        return new FileUploadResult(
+            hostPath.toString(),
+            containerPath,
+            fileType,
+            columns,
+            originalName,
+            fileHash,
+            fileSize,
+            sheetName,
+            sheetIndex,
+            crypto.currentKeyVersion(),
+            true
+        );
     }
 
-    private String firstSheetName(Path filePath) {
-        try (Workbook workbook = WorkbookFactory.create(filePath.toFile())) {
+    private String firstSheetName(byte[] data) {
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(data))) {
             Sheet sheet = workbook.getSheetAt(0);
             return sheet == null ? null : sheet.getSheetName();
         } catch (Exception ex) {
@@ -124,36 +167,19 @@ public class FileUploadService {
         }
     }
 
-    private Long fileSize(Path filePath) {
-        try {
-            return Files.size(filePath);
-        } catch (Exception ex) {
-            return null;
-        }
-    }
-
-    private String sha256(Path filePath) {
+    private String sha256(byte[] data) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] buffer = new byte[8192];
-            try (InputStream input = Files.newInputStream(filePath)) {
-                int read;
-                while ((read = input.read(buffer)) >= 0) {
-                    if (read > 0) {
-                        digest.update(buffer, 0, read);
-                    }
-                }
-            }
-            return HexFormat.of().formatHex(digest.digest());
+            return HexFormat.of().formatHex(digest.digest(data));
         } catch (Exception ex) {
-            LOG.warn("Failed to calculate file hash for {}: {}", filePath, ex.getMessage());
+            LOG.warn("Failed to calculate file hash: {}", ex.getMessage());
             return null;
         }
     }
 
-    private List<FileColumn> parseExcelHeaders(Path filePath) throws Exception {
+    private List<FileColumn> parseExcelHeaders(byte[] data) throws Exception {
         List<FileColumn> columns = new ArrayList<>();
-        try (Workbook workbook = WorkbookFactory.create(filePath.toFile())) {
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(data))) {
             Sheet sheet = workbook.getSheetAt(0);
             if (sheet == null) {
                 return columns;
@@ -179,8 +205,8 @@ public class FileUploadService {
         return columns;
     }
 
-    private List<FileColumn> parseCsvHeaders(Path filePath) throws Exception {
-        try (InputStream inputStream = Files.newInputStream(filePath)) {
+    private List<FileColumn> parseCsvHeaders(byte[] data) throws Exception {
+        try (InputStream inputStream = new ByteArrayInputStream(data)) {
             return csvParseService.parseHeaders(inputStream);
         }
     }
