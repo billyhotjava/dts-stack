@@ -611,6 +611,27 @@
 - 其余 P0 排期：M04 生命周期/销毁 → Sprint-37；M09 告警规则 + M11 高可用/性能 → Sprint-38（见报告 §6 roadmap）。
 - sprint-32~35 未闭合 M05/M10 任何前序缺口；机密级口令控制/操作权限矩阵/敏感识别/BMB 映射均缺失。
 
+## Sprint-37: 数据入湖上传文件加密专项 (202606)
+**状态**: PLANNING
+**类型**: Security / Compliance / Implementation Plan（dts-ingestion + services/dts-airflow/runner + dts-airflow DAG + docker compose）
+**目标**: 入湖上传的 Excel/CSV 实现「磁盘恒密文 + 明文仅容器内存(tmpfs)运行期即焚」，宿主机（含 root）从文件系统目录不可见明文，且不影响 Addax 入湖功能。TDD 驱动。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-upload-file-encryption | P0 | 5 | READY |
+| F2-addax-runtime-decryption | P0 | 5 | READY |
+| F3-security-verification-it | P0 | 5 | READY |
+
+**统计**: READY=15, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**设计文档**: `worklog/v2.2.3/sprint-37-202606/README.md`
+**现状调查**: `worklog/v2.2.3/sprint-37-202606/assets/upload-file-exposure-investigation.md`
+**集成测试**: `worklog/v2.2.3/sprint-37-202606/it/README.md`
+**关键决策**:
+- 现场实锤：入湖上传 Excel/CSV 明文落盘 bind 目录 + chmod o+r，宿主机含 root 可直接查看；逐一排除证明无自动清理机制（容器销毁/--force-recreate/dts-reset 均不删 uploads）。
+- 方案：复用 InfraSettingsCryptoService（AES-GCM）加密落盘；AddaxEnvRunner（dts 自有 wrapper）运行期解密到 tmpfs，Addax 零改动。
+- 残余边界：明文运行期在容器 tmpfs（内存），root 经 docker exec 仍可读；达成口径为「宿主机磁盘目录不可见明文」，消除内存明文需换入湖引擎（Backlog）。
+- 独立于 Sprint-36；原 roadmap 数据管理生命周期顺延 Sprint-38、可观测性与高可用顺延 Sprint-39。
+
 ## v2.3 Backlog: 企业级资产与指标增强
 
 | Item | Owner | 来源 | 状态 |
