@@ -56,19 +56,32 @@ function buildPagination(
 ): TablePaginationConfig | false {
 	if (current === false) return false;
 	const base: TablePaginationConfig = {
-		pageSize: DEFAULT_PAGE_SIZE,
 		showSizeChanger: true,
 		pageSizeOptions: DEFAULT_PAGE_SIZE_OPTIONS,
 		size: "small",
 		showTotal: (t) => `共 ${t} 条`,
 	};
-	if (current && typeof current === "object") {
-		return { ...base, ...current };
+	const caller: TablePaginationConfig = current && typeof current === "object" ? { ...current } : {};
+
+	// 服务端受控分页：调用方自行管理 current + onChange，原样透传（pageSize 必须保持受控）。
+	const isControlled = caller.current != null || typeof caller.onChange === "function";
+	if (isControlled) {
+		return { ...base, pageSize: caller.pageSize ?? DEFAULT_PAGE_SIZE, ...caller };
 	}
-	if (typeof total === "number") {
-		return { ...base, total };
+
+	// 客户端分页（非受控）：把固定 pageSize 收敛为 defaultPageSize。
+	// 否则 antd 把 pageSize 当受控值，每次渲染都强制写回，导致"改每页条数不生效"（历史 bug）。
+	// 改用 defaultPageSize 后由 antd 内部管理，用户在 showSizeChanger 里的选择才会持久生效。
+	const { pageSize, defaultPageSize, ...callerRest } = caller;
+	const result: TablePaginationConfig = {
+		...base,
+		defaultPageSize: defaultPageSize ?? pageSize ?? DEFAULT_PAGE_SIZE,
+		...callerRest,
+	};
+	if (typeof total === "number" && result.total == null) {
+		result.total = total;
 	}
-	return base;
+	return result;
 }
 
 export function CompactTable<T extends object = Record<string, unknown>>(
