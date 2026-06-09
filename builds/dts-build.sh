@@ -461,9 +461,11 @@ build_image_ctx() {
   INJECT_ADDAX_RUNNER_BACKUP=""
 
   if [[ "$name" == "dts-addax" ]]; then
-    if inject_addax_runner_jar_to_context "$context_dir"; then
-      injected_runner_jar="true"
+    if ! inject_addax_runner_jar_to_context "$context_dir"; then
+      echo "[dts-build] ERROR: fail to prepare addax runner jar for dts-addax build."
+      exit 1
     fi
+    injected_runner_jar="true"
   fi
 
   echo "[dts-build] Building ${name} -> ${tag} (no-cache)"
