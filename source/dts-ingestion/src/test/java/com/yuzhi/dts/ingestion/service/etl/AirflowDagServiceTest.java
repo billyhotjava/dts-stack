@@ -100,10 +100,23 @@ class AirflowDagServiceTest {
         dagService.rebuildDagForTask(task);
 
         String dagSource = readDag("task_addax_security_demo");
-        assertThat(dagSource).contains("Mount(target=\"/decrypted\", type=\"tmpfs\", read_only=False)");
+        assertThat(dagSource).contains("Mount(target=\"/decrypted\", source=None, type=\"tmpfs\", read_only=False)");
         assertThat(dagSource).contains("\"TMPDIR\": \"/decrypted\",");
         assertThat(dagSource).contains("\"DTS_INFRA_ENCRYPTION_KEY\": os.environ.get(\"DTS_INFRA_ENCRYPTION_KEY\", \"\"),");
         assertThat(dagSource).contains("\"DTS_INFRA_KEY_VERSION\": os.environ.get(\"DTS_INFRA_KEY_VERSION\", \"v1\"),");
+        // docker.types.Mount 的 source 是必填位置参数；任何 Mount(...) 缺 source= 都会在 DAG 导入期抛 TypeError。
+        // 该断言守住此不变量（曾因 tmpfs mount 漏写 source 导致现场 AIRFLOW_DAG_NOT_READY_TIMEOUT）。
+        assertThatEveryMountHasSource(dagSource);
+    }
+
+    private void assertThatEveryMountHasSource(String dagSource) {
+        // 仅校验单行完整 Mount(...) 调用（同时含 "Mount(" 与 ")"）；
+        // 多行 Mount( opener 不含闭括号，其 source= 在后续行，自然被排除。
+        dagSource.lines()
+            .filter(line -> line.contains("Mount(") && line.contains(")"))
+            .forEach(line -> assertThat(line)
+                .as("每个 Mount(...) 调用都必须显式带 source=（docker-py 必填位置参数）: %s", line.trim())
+                .contains("source="));
     }
 
     @Test

@@ -522,7 +522,7 @@ public class AirflowDagService {
                     mounts=[
                         Mount(source=ADDAX_JOB_DIR, target="/opt/addax/jobs", type="bind"),
                         Mount(source=ADDAX_LOG_DIR, target="/opt/addax/log", type="bind"),
-                        Mount(target="/decrypted", type="tmpfs", read_only=False),
+                        Mount(target="/decrypted", source=None, type="tmpfs", read_only=False),
                         *build_driver_mounts(),
                     ],
                     environment=build_addax_environment(),
@@ -631,7 +631,7 @@ public class AirflowDagService {
             sb.append("        mounts=[\n");
         sb.append("            Mount(source=ADDAX_JOB_DIR, target=\"/opt/addax/jobs\", type=\"bind\"),\n");
         sb.append("            Mount(source=ADDAX_LOG_DIR, target=\"/opt/addax/log\", type=\"bind\"),\n");
-            sb.append("            Mount(target=\"/decrypted\", type=\"tmpfs\", read_only=False),\n");
+            sb.append("            Mount(target=\"/decrypted\", source=None, type=\"tmpfs\", read_only=False),\n");
             sb.append("            *build_driver_mounts(),\n");
             sb.append("        ],\n");
             sb.append("        environment=build_addax_environment(),\n");
