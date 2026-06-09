@@ -648,7 +648,7 @@ public class AirflowDagService {
 
     private String buildAddaxCredentialSupportBlock() {
         return """
-            ADDAX_RUNNER_JAR = os.getenv("ADDAX_RUNNER_JAR", "/opt/addax/jobs/addax-env-runner.jar")
+            ADDAX_RUNNER_JAR = os.getenv("ADDAX_RUNNER_JAR", "/opt/addax/addax-env-runner.jar")
             ADDAX_RUNNER_CLASS = os.getenv("ADDAX_RUNNER_CLASS", "com.yuzhi.dts.addax.AddaxEnvRunner")
 
 

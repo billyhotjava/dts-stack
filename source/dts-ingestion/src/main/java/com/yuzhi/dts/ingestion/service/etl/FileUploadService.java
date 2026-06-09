@@ -101,7 +101,7 @@ public class FileUploadService {
             throw new IllegalStateException("无法创建上传目录: " + uploadsDir, ex);
         }
 
-        // 密文文件名加 .enc 后缀；布局 [IV:12B][AES-GCM ciphertext+tag]
+        // 密文文件名加 .enc 后缀；自描述布局 [verLen:1B][keyVersion:verLen B][IV:12B][AES-GCM ciphertext+16B tag]
         String storedName = UUID.randomUUID().toString().substring(0, 8) + "_" + sanitizeFileName(originalName) + ".enc";
         Path hostPath = uploadsDir.resolve(storedName);
         byte[] iv = crypto.randomIv();
@@ -160,7 +160,7 @@ public class FileUploadService {
             fileSize,
             sheetName,
             sheetIndex,
-            crypto.currentKeyVersion(),
+            keyVersion, // 复用写入文件头的同一版本号，保证 .enc 头与审计元数据严格一致（P0-3 依赖）
             true
         );
     }

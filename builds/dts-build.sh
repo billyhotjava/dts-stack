@@ -457,10 +457,25 @@ build_image_ctx() {
   local output_dir="$5"
   shift 5
   local args=("$@")
+  local injected_runner_jar="false"
+  INJECT_ADDAX_RUNNER_BACKUP=""
+
+  if [[ "$name" == "dts-addax" ]]; then
+    if inject_addax_runner_jar_to_context "$context_dir"; then
+      injected_runner_jar="true"
+    fi
+  fi
 
   echo "[dts-build] Building ${name} -> ${tag} (no-cache)"
   docker build --no-cache -t "$tag" -f "$dockerfile" "${args[@]}" "$context_dir"
   save_image "$tag" "$output_dir"
+  if [[ "$name" == "dts-addax" && "$injected_runner_jar" == "true" ]]; then
+    if [[ -n "${INJECT_ADDAX_RUNNER_BACKUP}" ]]; then
+      mv "${INJECT_ADDAX_RUNNER_BACKUP}" "${context_dir}/addax-env-runner.jar"
+    else
+      rm -f "${context_dir}/addax-env-runner.jar"
+    fi
+  fi
   # Free dangling layers after each image to prevent OOM on memory-constrained servers
   docker image prune -f >/dev/null 2>&1 || true
 }
@@ -487,6 +502,42 @@ create_temp_context_from_repo_paths() {
     tar -xf -
   )
   echo "$tmp_context"
+}
+
+locate_addax_runner_jar() {
+  local candidates=(
+    "${REPO_ROOT}/services/dts-airflow/dags/addax-env-runner.jar"
+    "${REPO_ROOT}/services/dts-airflow/runner/target/addax-env-runner.jar"
+  )
+  local candidate
+  for candidate in "${candidates[@]}"; do
+    if [[ -f "${candidate}" ]]; then
+      echo "${candidate}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+inject_addax_runner_jar_to_context() {
+  local context_dir="$1"
+  local destination="${context_dir}/addax-env-runner.jar"
+  local source_jar
+
+  if ! source_jar="$(locate_addax_runner_jar)"; then
+    echo "[dts-build] ERROR: addax-env-runner.jar not found."
+    echo "[dts-build]        Please run: ${REPO_ROOT}/services/dts-airflow/runner/build-runner.sh"
+    echo "[dts-build]        (compiled jar is required to bake into dts-addax image)."
+    return 1
+  fi
+  INJECT_ADDAX_RUNNER_BACKUP=""
+  if [[ -f "${destination}" ]]; then
+    INJECT_ADDAX_RUNNER_BACKUP="$(mktemp)"
+    cp "${destination}" "${INJECT_ADDAX_RUNNER_BACKUP}"
+  fi
+
+  cp "${source_jar}" "${destination}"
+  return 0
 }
 
 # build_analytics_modern_image removed — analytics UI is now embedded in platform-webapp.

@@ -83,6 +83,7 @@ class AirflowDagServiceTest {
         assertThat(dagSource).contains("schedule=timedelta(minutes=60)");
         assertThat(dagSource).doesNotContain("schedule=\"interval:60\"");
         assertThat(dagSource).contains("ADDAX_RUNNER_JAR = os.getenv(\"ADDAX_RUNNER_JAR\"");
+        assertThat(dagSource).contains("/opt/addax/addax-env-runner.jar");
         assertThat(dagSource).contains("from airflow.utils.template import literal");
         assertThat(dagSource).contains("entrypoint=\"java\"");
         assertThat(dagSource).contains("\"-cp\",");
@@ -122,6 +123,7 @@ class AirflowDagServiceTest {
         assertThat(dagSource).contains("schedule=timedelta(minutes=90)");
         assertThat(dagSource).doesNotContain("schedule=\"interval:90\"");
         assertThat(dagSource).contains("ADDAX_RUNNER_JAR = os.getenv(\"ADDAX_RUNNER_JAR\"");
+        assertThat(dagSource).contains("/opt/addax/addax-env-runner.jar");
         assertThat(dagSource).contains("entrypoint=\"java\"");
         assertThat(dagSource).contains("literal(ADDAX_RUNNER_JAR)");
         assertThat(dagSource).contains("\"com.yuzhi.dts.addax.AddaxEnvRunner\"");

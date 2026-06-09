@@ -36,6 +36,8 @@ services/dts-airflow/**/__pycache__/
 services/dts-airflow/**/*.pyc
 services/dts-airflow/**/*.pyo
 services/dts-airflow/**/*.pyd
+services/dts-airflow/runner/build/
+services/dts-airflow/runner/target/
 .skills/**/__pycache__/
 .skills/**/*.pyc
 .skills/**/*.pyo

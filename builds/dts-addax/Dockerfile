@@ -7,6 +7,7 @@ LABEL maintainer="DTS Build"
 
 ARG ADDAX_VERSION=6.0.8
 ARG ADDAX_RELEASE_URL=https://github.com/wgzhao/Addax/releases/download/${ADDAX_VERSION}/addax-${ADDAX_VERSION}.tar.gz
+ARG ADDAX_RUNNER_JAR=addax-env-runner.jar
 
 ADD ${ADDAX_RELEASE_URL} /tmp/addax.tar.gz
 
@@ -17,6 +18,8 @@ RUN tar xzf /tmp/addax.tar.gz -C /opt/ --no-same-permissions --no-same-owner \
  && sed -i 's/if \[ ! -r "${JOB_FILE}" \]/if false/' /opt/addax/bin/addax.sh \
  && sed -i 's/if \[ ! -w "${LOG_DIR}" \]/if false/' /opt/addax/bin/addax.sh \
  && mkdir -p /opt/addax/log && chmod 777 /opt/addax/log
+
+COPY ${ADDAX_RUNNER_JAR} /opt/addax/addax-env-runner.jar
 
 WORKDIR /opt/addax
 
