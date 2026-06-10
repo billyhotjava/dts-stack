@@ -15,7 +15,7 @@ import {
 	type IngestionTaskTemplateDTO,
 	type TableInfo,
 } from "@/api/ingestion";
-import dataSourcesService, { type ExcelImportErrorRow, type InfraDataSource } from "@/api/services/dataSourcesService";
+import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
 import { listTables as sqlListTables, listColumns as sqlListColumns, type TableInfo as SqlTableInfo, type ColumnInfo } from "@/api/sql-workbench";
 import { DbUnifiedStep } from "./steps/DbUnifiedStep";
 import FileUnifiedStep from "./steps/FileUnifiedStep";
@@ -26,10 +26,8 @@ import type { ExtraColumnDef } from "./steps/types";
 import { resolveAsyncRunPollHint, resolveCreatedTaskId } from "./transformCreateAsyncRun.helpers";
 import { loadTransformCreateBootstrap } from "./transformCreateBootstrap.helpers";
 import { buildTransformCreateDraftPayload } from "./transformCreateDraft.helpers";
-import { buildTransformFileUploadResult } from "./transformCreateFileFlow.helpers";
 import { filterBusinessFileMappingColumns } from "./fileColumnSystemFields.helpers";
 import {
-	buildPreparedFileParseInput,
 	buildRefreshFileParseInput,
 	buildSheetChangeFileParseInput,
 } from "./transformCreateFileParse.helpers";
@@ -157,7 +155,7 @@ export default function TransformCreatePage() {
 	const [previewRefreshing, setPreviewRefreshing] = useState(false);
 	const [errorPreviewOpen, setErrorPreviewOpen] = useState(false);
 	const [errorPreviewLoading, setErrorPreviewLoading] = useState(false);
-	const [errorPreviewRows, setErrorPreviewRows] = useState<ExcelImportErrorRow[]>([]);
+	const [errorPreviewRows, setErrorPreviewRows] = useState<Array<{ rowIndex?: number; message?: string }>>([]);
 	const [errorPreviewLimit, setErrorPreviewLimit] = useState(50);
 	// batchFieldModalOpen and batchFieldText moved to FileBasicStep
 	const {
@@ -787,7 +785,7 @@ export default function TransformCreatePage() {
 					_encrypted: fileUploadResult.encrypted,
 					_fileHash: fileUploadResult.fileHash,
 					_fileSize: fileUploadResult.fileSize,
-					_fileType: "csv",
+					_fileType: fileUploadResult.fileType || "csv",
 					_fileColumns: fileUploadResult.columns,
 					_originalName: fileUploadResult.originalName,
 					_autoId: Boolean(values?.fileAutoId ?? true),
@@ -893,19 +891,21 @@ export default function TransformCreatePage() {
 	) => {
 		const sheetIndex = selectedSheet?.index;
 		const sheetName = selectedSheet?.name;
-		const parseResult = await dataSourcesService.excelParse({
+		const parseResult = await ingestionTaskAPI.parseUploadedFileById({
 			fileId,
+			previewLimit,
 			sheetIndex,
 			sheetName,
-			headerRow: 1,
-			dataStartRow: 2,
-			previewLimit: previewLimit || 20,
-			delimiter: ",",
-			skipErrors: true,
-			fillMerged: false,
-			dateFormat: "yyyy-MM-dd HH:mm:ss",
 		});
-		return buildTransformFileUploadResult(fileName, batchCode, fileId, sheets, parseResult, selectedSheet);
+		return {
+			...parseResult,
+			fileId: parseResult.fileId || fileId,
+			batchCode: parseResult.batchCode || batchCode || fileId,
+			originalName: parseResult.originalName || fileName,
+			sheets: parseResult.sheets && parseResult.sheets.length ? parseResult.sheets : sheets || [],
+			sheetIndex: parseResult.sheetIndex ?? sheetIndex,
+			sheetName: parseResult.sheetName || sheetName,
+		};
 	};
 
 	// --- ODS 表关联 ---
@@ -1001,12 +1001,9 @@ export default function TransformCreatePage() {
 		}
 		try {
 			setErrorPreviewLoading(true);
-			const resp = await dataSourcesService.excelErrors({
-				fileId: fileUploadResult.fileId,
-				limit: errorPreviewLimit,
-			});
-			setErrorPreviewRows(resp.rows || []);
+			setErrorPreviewRows([]);
 			setErrorPreviewOpen(true);
+			toast.info("入湖链路当前不提供错误明细接口，请在任务执行日志中排查。");
 		} catch {
 			// handled by global interceptor
 		} finally {
@@ -1313,7 +1310,7 @@ export default function TransformCreatePage() {
 					_encrypted: fileUploadResult.encrypted,
 					_fileHash: fileUploadResult.fileHash,
 					_fileSize: fileUploadResult.fileSize,
-					_fileType: "csv",
+					_fileType: fileUploadResult.fileType || "csv",
 					_fileColumns: fileUploadResult.columns,
 					_originalName: fileUploadResult.originalName,
 					_autoId: Boolean(mergedValues?.fileAutoId ?? true),
@@ -1606,7 +1603,7 @@ export default function TransformCreatePage() {
 					_encrypted: fileUploadResult.encrypted,
 					_fileHash: fileUploadResult.fileHash,
 					_fileSize: fileUploadResult.fileSize,
-					_fileType: "csv",
+					_fileType: fileUploadResult.fileType || "csv",
 					_fileColumns: fileUploadResult.columns,
 					_originalName: fileUploadResult.originalName,
 					_autoId: Boolean(mergedValues?.fileAutoId ?? true),
@@ -1774,16 +1771,9 @@ export default function TransformCreatePage() {
 											setUploadingFile(true);
 											const prevColumns = fileUploadResult?.columns;
 											setFileUploadResult(null);
-											const prepare = await dataSourcesService.excelPrepare(file);
-											const parseInput = buildPreparedFileParseInput(prepare, filePreviewRows);
-											const parsed = await parseFile(
-												parseInput.fileId,
-												parseInput.fileName,
-												parseInput.batchCode,
-												parseInput.sheets,
-												parseInput.selectedSheet,
-												parseInput.previewLimit
-											);
+											const parsed = await ingestionTaskAPI.uploadAndParseFile(file, {
+												previewLimit: filePreviewRows,
+											});
 											const outcome = buildFilePostParseOutcome({
 												parsed,
 												currentFileTableName: form.getFieldValue("fileTableName"),

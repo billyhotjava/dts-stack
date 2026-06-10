@@ -273,10 +273,29 @@ public class IngestionServiceClient {
     }
 
     public ApiResponse<Object> uploadFile(org.springframework.web.multipart.MultipartFile file) {
+        return uploadFile(file, "/api/ingestion/files/upload", null, null, null);
+    }
+
+    public ApiResponse<Object> uploadAndParse(
+        org.springframework.web.multipart.MultipartFile file,
+        Integer previewLimit,
+        Integer sheetIndex,
+        String sheetName
+    ) {
+        return uploadFile(file, "/api/ingestion/files/upload-and-parse", previewLimit, sheetIndex, sheetName);
+    }
+
+    private ApiResponse<Object> uploadFile(
+        org.springframework.web.multipart.MultipartFile file,
+        String path,
+        Integer previewLimit,
+        Integer sheetIndex,
+        String sheetName
+    ) {
         if (!isEnabled()) {
             return new ApiResponse<>(503, "ingestion service disabled", null);
         }
-        URI uri = buildAbsoluteUri("/api/ingestion/files/upload");
+        URI uri = buildAbsoluteUri(path);
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.MULTIPART_FORM_DATA);
@@ -290,6 +309,15 @@ public class IngestionServiceClient {
                     return file.getOriginalFilename();
                 }
             });
+            if (previewLimit != null) {
+                body.add("previewLimit", String.valueOf(previewLimit));
+            }
+            if (sheetIndex != null) {
+                body.add("sheetIndex", String.valueOf(sheetIndex));
+            }
+            if (StringUtils.hasText(sheetName)) {
+                body.add("sheetName", sheetName);
+            }
             HttpEntity<org.springframework.util.LinkedMultiValueMap<String, Object>> entity = new HttpEntity<>(body, headers);
             ResponseEntity<Object> response = longRestTemplate.exchange(uri, HttpMethod.POST, entity, Object.class);
             Object responseBody = response.getBody();
@@ -306,6 +334,41 @@ public class IngestionServiceClient {
         } catch (Exception ex) {
             LOG.warn("Ingestion file upload error: {}", ex.getMessage());
             return new ApiResponse<>(500, "文件上传失败: " + ex.getMessage(), null);
+        }
+    }
+
+    public ApiResponse<Object> parseUploadedFile(
+        String fileId,
+        Integer previewLimit,
+        Integer sheetIndex,
+        String sheetName,
+        String originalName
+    ) {
+        if (!isEnabled()) {
+            return new ApiResponse<>(503, "ingestion service disabled", null);
+        }
+        try {
+            java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
+            payload.put("fileId", fileId);
+            if (previewLimit != null) {
+                payload.put("previewLimit", previewLimit);
+            }
+            if (sheetIndex != null) {
+                payload.put("sheetIndex", sheetIndex);
+            }
+            if (StringUtils.hasText(sheetName)) {
+                payload.put("sheetName", sheetName);
+            }
+            if (StringUtils.hasText(originalName)) {
+                payload.put("originalName", originalName);
+            }
+            return exchangeObject("/api/ingestion/files/parse", HttpMethod.POST, payload, null, longRestTemplate);
+        } catch (HttpStatusCodeException ex) {
+            LOG.warn("Ingestion file parse failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            return new ApiResponse<>(ex.getStatusCode().value(), "文件解析失败", null);
+        } catch (Exception ex) {
+            LOG.warn("Ingestion file parse error: {}", ex.getMessage());
+            return new ApiResponse<>(500, "文件解析失败: " + ex.getMessage(), null);
         }
     }
 

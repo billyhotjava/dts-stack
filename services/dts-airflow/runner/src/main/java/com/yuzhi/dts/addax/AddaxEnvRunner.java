@@ -102,15 +102,21 @@ public final class AddaxEnvRunner {
         String expectedVersion = env.get(KEY_VERSION_ENV);
         Path tmpDir = Path.of(env.getOrDefault("TMPDIR", System.getProperty("java.io.tmpdir")));
         String result = rendered;
+        if (!encPaths.isEmpty() && (base64Key == null || base64Key.isBlank())) {
+            throw new GeneralSecurityException(
+                "encrypted input present but " + ENCRYPTION_KEY_ENV + " is not set");
+        }
         for (String encPath : encPaths) {
             Path enc = Path.of(encPath);
             if (!Files.isReadable(enc)) {
                 throw new IOException("encrypted input not readable: " + encPath);
             }
             AddaxFileCrypto.EncryptedPayload parsed = AddaxFileCrypto.parse(Files.readAllBytes(enc));
+            if (expectedVersion == null || expectedVersion.isBlank()) {
+                throw new GeneralSecurityException("encrypted input present but " + KEY_VERSION_ENV + " is not set");
+            }
             // P0-3：密钥版本一致性校验，避免多 key 轮转场景误用错误版本密钥
-            if (expectedVersion != null && !expectedVersion.isBlank()
-                && !expectedVersion.equals(parsed.keyVersion())) {
+            if (!expectedVersion.equals(parsed.keyVersion())) {
                 throw new GeneralSecurityException(
                     "key version mismatch for " + encPath + ": file=" + parsed.keyVersion() + " env=" + expectedVersion);
             }

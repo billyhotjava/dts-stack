@@ -466,6 +466,36 @@ public class IngestionTaskProxyResource {
         return ResponseEntity.ok(ingestionClient.uploadFile(file));
     }
 
+    public record FileParseRequest(String fileId, Integer previewLimit, Integer sheetIndex, String sheetName, String originalName) {}
+
+    @PostMapping(value = "/files/upload-and-parse", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> uploadAndParseFile(
+        @RequestPart("file") MultipartFile file,
+        @RequestParam(value = "previewLimit", required = false) Integer previewLimit,
+        @RequestParam(value = "sheetIndex", required = false) Integer sheetIndex,
+        @RequestParam(value = "sheetName", required = false) String sheetName
+    ) {
+        return ResponseEntity.ok(ingestionClient.uploadAndParse(file, previewLimit, sheetIndex, sheetName));
+    }
+
+    @PostMapping("/files/parse")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> parseUploadedFile(@RequestBody FileParseRequest request) {
+        if (request == null || request.fileId() == null || request.fileId().isBlank()) {
+            return ResponseEntity.badRequest().body(new ApiResponse<>(400, "fileId 不能为空", null));
+        }
+        return ResponseEntity.ok(
+            ingestionClient.parseUploadedFile(
+                request.fileId(),
+                request.previewLimit(),
+                request.sheetIndex(),
+                request.sheetName(),
+                request.originalName()
+            )
+        );
+    }
+
     @GetMapping("/tasks/executions/observability")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> getExecutionsObservability(@RequestParam Map<String, String> params) {

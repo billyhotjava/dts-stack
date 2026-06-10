@@ -92,4 +92,4 @@ dts:
     service-token: ${DTS_PLATFORM_SERVICE_TOKEN:${DTS_ADMIN_SERVICE_TOKEN:}}
     infra:
       encryption-key: ${DTS_INFRA_ENCRYPTION_KEY:}
-      key-version: ${DTS_INFRA_KEY_VERSION:v1}
+      key-version: ${DTS_INFRA_KEY_VERSION:}

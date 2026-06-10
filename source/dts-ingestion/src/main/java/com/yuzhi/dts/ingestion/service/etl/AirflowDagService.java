@@ -668,7 +668,7 @@ public class AirflowDagService {
                     # Sprint-37: 上传密文解密到 tmpfs(/decrypted) 供 Addax 读取；密钥经 Airflow worker 透传，明文不落盘
                     "TMPDIR": "/decrypted",
                     "DTS_INFRA_ENCRYPTION_KEY": os.environ.get("DTS_INFRA_ENCRYPTION_KEY", ""),
-                    "DTS_INFRA_KEY_VERSION": os.environ.get("DTS_INFRA_KEY_VERSION", "v1"),
+                    "DTS_INFRA_KEY_VERSION": os.environ.get("DTS_INFRA_KEY_VERSION", ""),
                     "DTS_ADDAX_READER_PASSWORD": resolve_secret(
                         "DTS_ADDAX_READER_PASSWORD",
                         "DTS_SOURCE_DB_PASSWORD",

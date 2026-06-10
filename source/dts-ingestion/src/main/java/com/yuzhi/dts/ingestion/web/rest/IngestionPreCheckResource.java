@@ -10,7 +10,9 @@ import com.yuzhi.dts.ingestion.service.etl.BuiltInRuleChecker;
 import com.yuzhi.dts.ingestion.service.etl.CsvParseService;
 import com.yuzhi.dts.ingestion.service.etl.ExcelParseService;
 import com.yuzhi.dts.ingestion.service.etl.StagingTableService;
+import com.yuzhi.dts.ingestion.service.etl.FileUploadService;
 import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -54,6 +56,7 @@ public class IngestionPreCheckResource {
     private final StagingTableService stagingTableService;
     private final BuiltInRuleChecker builtInRuleChecker;
     private final PlatformInfraClient platformInfraClient;
+    private final FileUploadService fileUploadService;
 
     public IngestionPreCheckResource(
         IngestionTaskRepository taskRepository,
@@ -61,7 +64,8 @@ public class IngestionPreCheckResource {
         CsvParseService csvParseService,
         StagingTableService stagingTableService,
         BuiltInRuleChecker builtInRuleChecker,
-        PlatformInfraClient platformInfraClient
+        PlatformInfraClient platformInfraClient,
+        FileUploadService fileUploadService
     ) {
         this.taskRepository = taskRepository;
         this.excelParseService = excelParseService;
@@ -69,6 +73,7 @@ public class IngestionPreCheckResource {
         this.stagingTableService = stagingTableService;
         this.builtInRuleChecker = builtInRuleChecker;
         this.platformInfraClient = platformInfraClient;
+        this.fileUploadService = fileUploadService;
     }
 
     // ----- DTOs for request / response -----
@@ -114,7 +119,8 @@ public class IngestionPreCheckResource {
 
         try {
             ParseResult parseResult;
-            try (InputStream is = Files.newInputStream(path)) {
+            byte[] plain = fileUploadService.readPlainBytes(path);
+            try (InputStream is = new ByteArrayInputStream(plain)) {
                 parseResult = isCsvTask(task, path) ? csvParseService.parse(is) : excelParseService.parse(is);
             }
 

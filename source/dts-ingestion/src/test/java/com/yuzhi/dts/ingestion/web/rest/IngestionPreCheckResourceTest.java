@@ -18,6 +18,7 @@ import com.yuzhi.dts.ingestion.service.etl.BuiltInRuleChecker;
 import com.yuzhi.dts.ingestion.service.etl.CsvParseService;
 import com.yuzhi.dts.ingestion.service.etl.ExcelParseService;
 import com.yuzhi.dts.ingestion.service.etl.StagingTableService;
+import com.yuzhi.dts.ingestion.service.etl.FileUploadService;
 import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -64,6 +65,9 @@ class IngestionPreCheckResourceTest {
     @MockBean
     private PlatformInfraClient platformInfraClient;
 
+    @MockBean
+    private FileUploadService fileUploadService;
+
     @TempDir
     Path tempDir;
 
@@ -82,6 +86,7 @@ class IngestionPreCheckResourceTest {
         List<ColumnInfo> columns = List.of(new ColumnInfo("project", "STRING", 100), new ColumnInfo("cost", "LONG", 100));
         List<List<String>> rows = List.of(List.of("alpha", "88"));
         when(taskRepository.findById(42L)).thenReturn(Optional.of(task));
+        when(fileUploadService.readPlainBytes(csv)).thenReturn(Files.readAllBytes(csv));
         when(csvParseService.parse(any(InputStream.class))).thenReturn(new ParseResult(1, columns, List.of(), List.of(), rows));
         when(stagingTableService.create(any(UUID.class), eq(42L), eq(columns))).thenReturn(STAGING_TABLE);
         when(builtInRuleChecker.check(STAGING_TABLE, columns)).thenReturn(Map.of());

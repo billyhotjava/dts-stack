@@ -353,12 +353,26 @@ public class DataRollbackService {
 	}
 
 	private String extractUploadPath(IngestionTask task) {
-		// Extract hostPath from sourceConfig JSON
-		// Pattern: sourceConfig -> {"hostPath": "/path/to/file", ...}
+		// 支持新老键名：优先 hostPath，其次 _filePath/filePath/path
 		var config = task.getSourceConfig();
-		if (config != null && config.has("hostPath")) {
-			String path = config.get("hostPath").asText(null);
-			if (path != null && !path.isBlank()) return path;
+		if (config == null) {
+			return null;
+		}
+		String path = config.path("hostPath").asText(null);
+		if (path != null && !path.isBlank()) {
+			return path;
+		}
+		path = config.path("_filePath").asText(null);
+		if (path != null && !path.isBlank()) {
+			return path;
+		}
+		path = config.path("filePath").asText(null);
+		if (path != null && !path.isBlank()) {
+			return path;
+		}
+		path = config.path("path").asText(null);
+		if (path != null && !path.isBlank()) {
+			return path;
 		}
 		return null;
 	}

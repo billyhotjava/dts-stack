@@ -1,8 +1,6 @@
 import type { FileUploadResult } from "@/api/ingestion";
 import { normalizeText } from "@/utils/textUtils";
 
-type SheetOption = { index: number; name: string };
-
 type ParsedFileColumn = {
 	name: string;
 	dataType?: string;
@@ -10,16 +8,25 @@ type ParsedFileColumn = {
 };
 
 type ParsedFileResult = {
-	csvPath: string;
-	csvContainerPath: string;
-	errorPath?: string;
-	errorContainerPath?: string;
-	delimiter?: string;
-	columns: ParsedFileColumn[];
+	hostPath?: string;
+	containerPath?: string;
+	fileType?: string;
+	csvPath?: string;
+	csvContainerPath?: string;
+	columns?: ParsedFileColumn[];
+	sheetName?: string;
+	sheetIndex?: number;
 	preview?: string[][];
 	rowCount?: number;
 	errorCount?: number;
-	sheetName?: string;
+	errorPath?: string;
+	errorContainerPath?: string;
+	delimiter?: string;
+};
+
+type SheetOption = {
+	index: number;
+	name: string;
 };
 
 const normalizeIdentifier = (value?: string) => {
@@ -62,10 +69,13 @@ export function buildTransformFileUploadResult(
 		}))
 		.filter((col) => col.name);
 
+	const hostPath = normalizeText(parseResult.hostPath) || parseResult.csvPath || "";
+	const containerPath = normalizeText(parseResult.containerPath) || parseResult.csvContainerPath || "";
+
 	return {
-		hostPath: parseResult.csvPath,
-		containerPath: parseResult.csvContainerPath,
-		fileType: "csv",
+		hostPath,
+		containerPath,
+		fileType: parseResult.fileType || resolveFileTypeFromName(fileName),
 		sourceFileType: resolveFileTypeFromName(fileName),
 		columns,
 		originalName: fileName,
@@ -73,15 +83,15 @@ export function buildTransformFileUploadResult(
 		batchCode,
 		sheets,
 		sheetName: parseResult.sheetName || selectedSheet?.name,
-		sheetIndex: selectedSheet?.index,
-		csvPath: parseResult.csvPath,
-		csvContainerPath: parseResult.csvContainerPath,
+		sheetIndex: parseResult.sheetIndex ?? selectedSheet?.index,
 		errorPath: parseResult.errorPath,
 		errorContainerPath: parseResult.errorContainerPath,
 		delimiter: parseResult.delimiter,
 		preview: parseResult.preview,
 		rowCount: parseResult.rowCount,
 		errorCount: parseResult.errorCount,
+		csvPath: parseResult.csvPath || hostPath,
+		csvContainerPath: parseResult.csvContainerPath || containerPath,
 	};
 }
 

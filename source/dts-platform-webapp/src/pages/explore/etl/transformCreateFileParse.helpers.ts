@@ -1,24 +1,26 @@
 import type { FileUploadResult } from "@/api/ingestion";
-import type { ExcelImportPrepareResponse, ExcelSheetInfo } from "@/api/services/dataSourcesService";
 
 type FileParseInput = {
 	fileId: string;
 	fileName: string;
 	batchCode: string;
-	sheets: ExcelSheetInfo[] | undefined;
+	sheets: FileUploadResult["sheets"] | undefined;
 	selectedSheet?: { index?: number; name?: string };
 	previewLimit: number;
 };
 
 export function buildPreparedFileParseInput(
-	prepare: ExcelImportPrepareResponse,
+	prepare: FileUploadResult,
 	previewLimit: number
 ): FileParseInput {
+	const fileId = prepare.fileId || prepare.batchCode || "";
+	const fileName = prepare.originalName || "";
+	const batchCode = prepare.batchCode || "";
 	const sheets = prepare.sheets || [];
 	return {
-		fileId: prepare.fileId,
-		fileName: prepare.fileName,
-		batchCode: prepare.batchCode,
+		fileId,
+		fileName,
+		batchCode,
 		sheets,
 		selectedSheet: sheets.length ? sheets[0] : undefined,
 		previewLimit,

@@ -3,13 +3,12 @@ package com.yuzhi.dts.ingestion.service.etl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.ingestion.config.AddaxProperties;
 import com.yuzhi.dts.ingestion.config.InfraSecurityProperties;
+import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
 import com.yuzhi.dts.ingestion.service.infra.InfraSettingsCryptoService;
 import java.io.ByteArrayOutputStream;
@@ -21,6 +20,8 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -181,6 +182,21 @@ class FileUploadServiceEncryptionTest {
 
         assertThat(result.hostPath()).endsWith(".enc");
         assertThat(result.columns()).hasSize(1);
+    }
+
+    @Test
+    void cleanupForTask_supports_filePath_aliases() throws Exception {
+        FileUploadService service = newService(crypto);
+        var upload = service.handleUpload(new MockMultipartFile("file", "people.xlsx", null, makeXlsx()));
+        IngestionTask task = new IngestionTask();
+        ObjectNode sourceConfig = new ObjectMapper().createObjectNode();
+        sourceConfig.put("_filePath", upload.hostPath());
+        task.setSourceConfig(sourceConfig);
+
+        var deleted = service.cleanupForTask(task);
+
+        assertThat(deleted).containsExactly(upload.hostPath());
+        assertThat(Files.exists(Path.of(upload.hostPath()))).isFalse();
     }
 
     private static int indexOf(byte[] haystack, byte[] needle) {

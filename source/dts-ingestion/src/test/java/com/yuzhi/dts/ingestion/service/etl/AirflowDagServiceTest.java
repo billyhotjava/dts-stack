@@ -103,7 +103,7 @@ class AirflowDagServiceTest {
         assertThat(dagSource).contains("Mount(target=\"/decrypted\", source=None, type=\"tmpfs\", read_only=False)");
         assertThat(dagSource).contains("\"TMPDIR\": \"/decrypted\",");
         assertThat(dagSource).contains("\"DTS_INFRA_ENCRYPTION_KEY\": os.environ.get(\"DTS_INFRA_ENCRYPTION_KEY\", \"\"),");
-        assertThat(dagSource).contains("\"DTS_INFRA_KEY_VERSION\": os.environ.get(\"DTS_INFRA_KEY_VERSION\", \"v1\"),");
+        assertThat(dagSource).contains("\"DTS_INFRA_KEY_VERSION\": os.environ.get(\"DTS_INFRA_KEY_VERSION\", \"\"),");
         // docker.types.Mount 的 source 是必填位置参数；任何 Mount(...) 缺 source= 都会在 DAG 导入期抛 TypeError。
         // 该断言守住此不变量（曾因 tmpfs mount 漏写 source 导致现场 AIRFLOW_DAG_NOT_READY_TIMEOUT）。
         assertThatEveryMountHasSource(dagSource);

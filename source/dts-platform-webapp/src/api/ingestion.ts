@@ -372,6 +372,13 @@ export const resolveExecutionPollIntervalMs = (hint?: number): number => {
  * 数据入湖任务API
  */
 class IngestionTaskAPI {
+	private resolveWrappedResponse<T>(payload: T | { status?: number | string; data?: T }): T {
+		if (payload && typeof payload === "object" && "status" in payload && "data" in payload) {
+			return (payload as { data?: T }).data as T;
+		}
+		return payload as T;
+	}
+
 	/**
 	 * 创建入湖任务
 	 */
@@ -570,11 +577,49 @@ class IngestionTaskAPI {
 	async uploadFile(file: File): Promise<FileUploadResult> {
 		const formData = new FormData();
 		formData.append("file", file);
-		return api.post({
+		const payload: any = await api.post({
 			url: "/ingestion/files/upload",
 			data: formData,
 			headers: { "Content-Type": "multipart/form-data" },
 		});
+		return this.resolveWrappedResponse<FileUploadResult>(payload);
+	}
+
+	async uploadAndParseFile(
+		file: File,
+		options?: { previewLimit?: number; sheetIndex?: number; sheetName?: string }
+	): Promise<FileUploadResult> {
+		const formData = new FormData();
+		formData.append("file", file);
+		if (options?.previewLimit != null) {
+			formData.append("previewLimit", String(options.previewLimit));
+		}
+		if (options?.sheetIndex != null) {
+			formData.append("sheetIndex", String(options.sheetIndex));
+		}
+		if (options?.sheetName) {
+			formData.append("sheetName", options.sheetName);
+		}
+		const payload: any = await api.post({
+			url: "/ingestion/files/upload-and-parse",
+			data: formData,
+			headers: { "Content-Type": "multipart/form-data" },
+		});
+		return this.resolveWrappedResponse<FileUploadResult>(payload);
+	}
+
+	async parseUploadedFileById(payload: {
+		fileId: string;
+		previewLimit?: number;
+		sheetIndex?: number;
+		sheetName?: string;
+		originalName?: string;
+	}): Promise<FileUploadResult> {
+		const payloadResult: any = await api.post({
+			url: "/ingestion/files/parse",
+			data: payload,
+		});
+		return this.resolveWrappedResponse<FileUploadResult>(payloadResult);
 	}
 
 	async getConnectorCapabilities(): Promise<IngestionConnectorCapabilityDTO[]> {

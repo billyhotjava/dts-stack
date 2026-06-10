@@ -11,7 +11,7 @@ test("buildPreparedFileParseInput picks the first sheet as default selection", (
 	const result = buildPreparedFileParseInput(
 		{
 			fileId: "file-1",
-			fileName: "project.xlsx",
+			originalName: "project.xlsx",
 			batchCode: "batch-1",
 			sheets: [
 				{ index: 0, name: "Sheet1" },
