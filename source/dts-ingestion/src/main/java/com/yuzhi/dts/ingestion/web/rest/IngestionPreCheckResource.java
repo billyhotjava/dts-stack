@@ -391,19 +391,25 @@ public class IngestionPreCheckResource {
     }
 
     private boolean isCsvTask(IngestionTask task, Path path) {
-        if (task.getSourceType() != null) {
-            String lower = task.getSourceType().toLowerCase(java.util.Locale.ROOT);
-            if ("csv".equals(lower) || "txt".equals(lower) || "txtfilereader".equals(lower)) {
-                return true;
-            }
-        }
         if (task.getSourceConfig() != null) {
             String fileType = task.getSourceConfig().path("_fileType").asText(null);
             if (isCsvLikeFileType(fileType)) {
                 return true;
             }
-            String sourceTypeFileType = task.getSourceType();
-            if (StringUtils.hasText(sourceTypeFileType) && isCsvLikeFileType(sourceTypeFileType)) {
+            if (StringUtils.hasText(fileType)) {
+                return false;
+            }
+            String legacyFileType = task.getSourceConfig().path("fileType").asText(null);
+            if (isCsvLikeFileType(legacyFileType)) {
+                return true;
+            }
+            if (StringUtils.hasText(legacyFileType)) {
+                return false;
+            }
+        }
+        if (task.getSourceType() != null) {
+            String lower = task.getSourceType().toLowerCase(java.util.Locale.ROOT);
+            if (isCsvLikeFileType(lower)) {
                 return true;
             }
         }

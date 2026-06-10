@@ -2334,21 +2334,19 @@ public class IngestionTaskService {
 
     private String resolveUploadedFileType(IngestionTask task) {
         String sourceType = StringUtils.hasText(task.getSourceType()) ? task.getSourceType().toLowerCase(java.util.Locale.ROOT) : null;
-        if ("txtfilereader".equals(sourceType) || "csv".equals(sourceType) || "txt".equals(sourceType)) {
-            return "csv";
-        }
         JsonNode sourceConfig = task.getSourceConfig();
         if (sourceConfig != null) {
-            String configured = sourceConfig.path("fileType").asText(null);
+            String configured = sourceConfig.path("_fileType").asText(null);
+            if (StringUtils.hasText(configured)) {
+                return normalizeUploadedFileType(configured);
+            }
+            configured = sourceConfig.path("fileType").asText(null);
             if (StringUtils.hasText(configured)) {
                 return normalizeUploadedFileType(configured);
             }
         }
-        if (sourceConfig != null) {
-            String fileType = sourceConfig.path("_fileType").asText(null);
-            if (StringUtils.hasText(fileType)) {
-                return normalizeUploadedFileType(fileType);
-            }
+        if ("txtfilereader".equals(sourceType) || "csv".equals(sourceType) || "txt".equals(sourceType)) {
+            return "csv";
         }
         String filePath = resolveUploadedFilePath(sourceConfig);
         if (!StringUtils.hasText(filePath)) {
