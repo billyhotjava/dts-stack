@@ -153,7 +153,7 @@ export default function QualityTasksTab() {
 	const [runsLoading, setRunsLoading] = useState(false);
 	const [runFilters, setRunFilters] = useState<RunFilters>({});
 	const [runPage, setRunPage] = useState(1);
-	const [runPageSize, setRunPageSize] = useState(20);
+	const [runPageSize, setRunPageSize] = useState(10);
 	const [runTotal, setRunTotal] = useState(0);
 
 	/* --- detail drawer --- */
@@ -705,7 +705,7 @@ export default function QualityTasksTab() {
 						total: runTotal,
 						showSizeChanger: true,
 						onChange: (page, size) => {
-							setRunPage(page);
+							setRunPage(size !== runPageSize ? 1 : page);
 							setRunPageSize(size);
 						},
 					}}

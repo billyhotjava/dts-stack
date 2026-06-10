@@ -66,16 +66,16 @@ export default function Page() {
 	const canManage = useCatalogManageAccess();
 	const [activeTab, setActiveTab] = useState("requests");
 
-	const [requestsPage, setRequestsPage] = useState<PageResult<AccessRequest>>({ content: [], total: 0, page: 1, size: 20 });
-	const [pendingPage, setPendingPage] = useState<PageResult<TaskView>>({ content: [], total: 0, page: 1, size: 20 });
-	const [donePage, setDonePage] = useState<PageResult<TaskView>>({ content: [], total: 0, page: 1, size: 20 });
+	const [requestsPage, setRequestsPage] = useState<PageResult<AccessRequest>>({ content: [], total: 0, page: 1, size: 10 });
+	const [pendingPage, setPendingPage] = useState<PageResult<TaskView>>({ content: [], total: 0, page: 1, size: 10 });
+	const [donePage, setDonePage] = useState<PageResult<TaskView>>({ content: [], total: 0, page: 1, size: 10 });
 
 	const [requestsQuery, setRequestsQuery] = useState<{ page: number; size: number; status?: string; keyword?: string }>({
 		page: 1,
-		size: 20,
+		size: 10,
 	});
-	const [pendingQuery, setPendingQuery] = useState<{ page: number; size: number; keyword?: string }>({ page: 1, size: 20 });
-	const [doneQuery, setDoneQuery] = useState<{ page: number; size: number; status?: string; keyword?: string }>({ page: 1, size: 20 });
+	const [pendingQuery, setPendingQuery] = useState<{ page: number; size: number; keyword?: string }>({ page: 1, size: 10 });
+	const [doneQuery, setDoneQuery] = useState<{ page: number; size: number; status?: string; keyword?: string }>({ page: 1, size: 10 });
 
 	const [loadingRequests, setLoadingRequests] = useState(false);
 	const [loadingPending, setLoadingPending] = useState(false);
@@ -339,7 +339,12 @@ export default function Page() {
 											pageSize: requestsPage.size,
 											total: requestsPage.total,
 											showSizeChanger: true,
-											onChange: (page, size) => setRequestsQuery((prev) => ({ ...prev, page, size: size || prev.size })),
+											onChange: (page, size) =>
+												setRequestsQuery((prev) => ({
+													...prev,
+													page: size && size !== prev.size ? 1 : page,
+													size: size || prev.size,
+												})),
 										}}
 									/>
 								</Space>
@@ -387,7 +392,12 @@ export default function Page() {
 											pageSize: pendingPage.size,
 											total: pendingPage.total,
 											showSizeChanger: true,
-											onChange: (page, size) => setPendingQuery((prev) => ({ ...prev, page, size: size || prev.size })),
+											onChange: (page, size) =>
+												setPendingQuery((prev) => ({
+													...prev,
+													page: size && size !== prev.size ? 1 : page,
+													size: size || prev.size,
+												})),
 										}}
 									/>
 								</Space>
@@ -429,7 +439,12 @@ export default function Page() {
 											pageSize: donePage.size,
 											total: donePage.total,
 											showSizeChanger: true,
-											onChange: (page, size) => setDoneQuery((prev) => ({ ...prev, page, size: size || prev.size })),
+											onChange: (page, size) =>
+												setDoneQuery((prev) => ({
+													...prev,
+													page: size && size !== prev.size ? 1 : page,
+													size: size || prev.size,
+												})),
 										}}
 									/>
 								</Space>

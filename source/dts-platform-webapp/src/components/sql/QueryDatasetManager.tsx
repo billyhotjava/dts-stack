@@ -395,7 +395,7 @@ export function QueryDatasetManager() {
 						loading={loadingDatasets}
 						columns={datasetColumns}
 						dataSource={filteredDatasets}
-						pagination={{ pageSize: 8, showSizeChanger: false }}
+						pagination={{ pageSize: 10, showSizeChanger: false }}
 						rowClassName={(record) => (record.id === selectedDatasetId ? "bg-muted/40" : "")}
 						onRow={(record) => ({
 							onClick: () => setSelectedDatasetId(record.id),
@@ -457,7 +457,7 @@ export function QueryDatasetManager() {
 												loading={loadingVersions}
 												columns={versionColumns}
 												dataSource={versions}
-												pagination={{ pageSize: 6, showSizeChanger: false }}
+												pagination={{ pageSize: 10, showSizeChanger: false }}
 											/>
 										),
 									},
@@ -471,7 +471,7 @@ export function QueryDatasetManager() {
 												loading={loadingReports}
 												columns={reportColumns}
 												dataSource={reports}
-												pagination={{ pageSize: 6, showSizeChanger: false }}
+												pagination={{ pageSize: 10, showSizeChanger: false }}
 											/>
 										),
 									},

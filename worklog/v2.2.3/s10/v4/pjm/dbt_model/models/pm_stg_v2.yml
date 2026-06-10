@@ -84,3 +84,23 @@ models:
         description: "ODS 原始风险状态（未归一化）"
       - name: release_plan_synced_raw
         description: "ODS 原始释放计划同步标志（未归一化）"
+
+  - name: stg_pm__budget_v2
+    description: "预算 ODS 结构化层：四金额列 parse_numeric_safe，文本占位符收敛。三本账派生下沉 DWD。"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+      - name: budget_amount
+        description: "预算金额（调整后），源值解析，不做单位换算"
+      - name: prepaid_amount
+        description: "预付账款（未验收未报销、无发票）"
+      - name: book_cost_amount
+        description: "账面成本（已验收有发票）"
+      - name: payable_amount
+        description: "应付账款（有发票暂未付款）"

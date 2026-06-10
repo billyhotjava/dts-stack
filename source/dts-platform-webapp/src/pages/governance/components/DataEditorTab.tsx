@@ -38,7 +38,7 @@ export default function DataEditorTab({ canManage }: { canManage: boolean }) {
 	const [rows, setRows] = useState<OdsRow[]>([]);
 	const [rowsLoading, setRowsLoading] = useState(false);
 	const [page, setPage] = useState(0);
-	const [pageSize, setPageSize] = useState(20);
+	const [pageSize, setPageSize] = useState(10);
 	const [totalRows, setTotalRows] = useState(0);
 
 	const [editModalOpen, setEditModalOpen] = useState(false);
@@ -69,7 +69,7 @@ export default function DataEditorTab({ canManage }: { canManage: boolean }) {
 		}
 	};
 
-	const loadRows = async (tableName: string, p = 0, s = 20) => {
+	const loadRows = async (tableName: string, p = 0, s = 10) => {
 		setRowsLoading(true);
 		try {
 			const result: any = await listOdsRows(tableName, { page: p, size: s });
@@ -222,9 +222,10 @@ export default function DataEditorTab({ canManage }: { canManage: boolean }) {
 						total: totalRows,
 						showSizeChanger: true,
 						onChange: (p, s) => {
-							setPage(p - 1);
+							const nextPage = s !== pageSize ? 0 : p - 1;
+							setPage(nextPage);
 							setPageSize(s);
-							void loadRows(selectedTable, p - 1, s);
+							void loadRows(selectedTable, nextPage, s);
 						},
 					}}
 				/>
@@ -260,7 +261,7 @@ export default function DataEditorTab({ canManage }: { canManage: boolean }) {
 					columns={logColumns}
 					dataSource={logs}
 					loading={logsLoading}
-					pagination={{ pageSize: 10 }}
+					pagination={{ defaultPageSize: 10 }}
 				/>
 			</Modal>
 		</>

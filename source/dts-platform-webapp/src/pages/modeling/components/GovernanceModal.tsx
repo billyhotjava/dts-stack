@@ -165,7 +165,7 @@ export default function GovernanceModal({
 						selectedRowKeys: selection,
 						onChange: (keys) => onSelectionChange(keys.map((key) => String(key))),
 					}}
-					pagination={{ pageSize: 8, hideOnSinglePage: true }}
+					pagination={{ pageSize: 10, hideOnSinglePage: true }}
 					columns={[
 						{
 							title: "模型",

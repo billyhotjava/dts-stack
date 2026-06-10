@@ -1891,7 +1891,7 @@
     {
       "id": "ov4-cell-c3r2-title",
       "type": "title",
-      "name": "经费成本（预留）",
+      "name": "经费预算执行",
       "x": 1204,
       "y": 491,
       "width": 327,
@@ -1900,7 +1900,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "经费成本（预留）",
+        "text": "经费预算执行（研究室）",
         "fontSize": 14,
         "fontWeight": 600,
         "color": "#ffffff",
@@ -2090,6 +2090,90 @@
           "frequency": "待定",
           "thresholds": null,
           "excelRef": "(待定)"
+        }
+      }
+    },
+    {
+      "id": "ov4-budget-by-lab",
+      "type": "bar-chart",
+      "name": "经费预算执行",
+      "x": 1198,
+      "y": 519,
+      "width": 339,
+      "height": 237,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "stackMode": "stack",
+        "series": [
+          {
+            "name": "已执行",
+            "data": []
+          },
+          {
+            "name": "剩余可用",
+            "data": []
+          }
+        ],
+        "seriesColors": [
+          "#27d8ff",
+          "#2ee6a6"
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 8,
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 40,
+        "chartPaddingLeft": 40,
+        "legend": {
+          "show": true,
+          "position": "bottom",
+          "fontSize": 12
+        },
+        "horizontal": false,
+        "xAxis": {
+          "show": true,
+          "labelFontSize": 11,
+          "labelRotate": -20
+        },
+        "yAxis": {
+          "show": true,
+          "labelFontSize": 11
+        },
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "经费预算执行（研究室）",
+          "definition": "按「研究室」分组,已执行+剩余可用堆叠=预算总额(当前快照)",
+          "scope": "X 轴=研究室; 预算为时点快照,不受时间筛选",
+          "sourceTable": "预算执行台账表",
+          "frequency": "随入湖批次刷新(时点快照)",
+          "seriesNotes": [
+            {
+              "name": "已执行",
+              "code": "pjm_budg_executed",
+              "displayName": "已执行金额",
+              "formula": "预付+账面+应付",
+              "unit": "元"
+            },
+            {
+              "name": "剩余可用",
+              "code": "pjm_budg_remaining",
+              "displayName": "预算剩余可用",
+              "formula": "预算−已执行",
+              "unit": "元"
+            }
+          ]
+        }
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(d.research_lab,'未分配') AS \"研究室\", SUM(d.executed_amount) AS \"已执行\", GREATEST(0, SUM(d.remaining_amount)) AS \"剩余可用\" FROM biz_dwd_budget_v2 d GROUP BY COALESCE(d.research_lab,'未分配') ORDER BY SUM(d.budget_amount) DESC LIMIT 10",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": []
         }
       }
     }

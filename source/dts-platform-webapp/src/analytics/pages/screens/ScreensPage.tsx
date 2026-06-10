@@ -1260,9 +1260,11 @@ export default function ScreensPage() {
 									pageSize={pageSize}
 									total={totalCount}
 									onChange={(p, ps) => {
-										setCurrentPage(p);
 										if (ps && ps !== pageSize) {
 											setPageSize(ps);
+											setCurrentPage(1);
+										} else {
+											setCurrentPage(p);
 										}
 									}}
 									showSizeChanger

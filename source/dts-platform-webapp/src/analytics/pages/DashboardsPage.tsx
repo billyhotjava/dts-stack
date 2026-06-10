@@ -155,7 +155,7 @@ export default function DashboardsPage() {
 							dataSource={filteredDashboards}
 							rowKey={(r) => r.id}
 							size="small"
-							pagination={filteredDashboards.length > 15 ? { pageSize: 15, showSizeChanger: true, showTotal: (total) => `${total} 条` } : false}
+							pagination={filteredDashboards.length > 10 ? { pageSize: 10, showSizeChanger: true, showTotal: (total) => `${total} 条` } : false}
 						/>
 					)}
 				</Card>

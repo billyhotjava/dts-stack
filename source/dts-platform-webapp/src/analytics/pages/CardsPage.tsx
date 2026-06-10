@@ -496,7 +496,7 @@ export default function CardsPage() {
 											onChange: (keys) => setSelectedRowKeys(keys),
 										}}
 										pagination={{
-											pageSize: 20,
+											pageSize: 10,
 											showSizeChanger: true,
 											showQuickJumper: true,
 											showTotal: (total) => `共 ${total} 条`,

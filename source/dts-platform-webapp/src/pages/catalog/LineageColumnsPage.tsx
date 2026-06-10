@@ -101,7 +101,7 @@ export default function LineageColumnsPage() {
 			{!selectedId ? <Alert type="info" message="请选择一个数据集查看字段血缘。" showIcon action={<EmptyAction onReload={loadDatasets} />} /> : null}
 			{selectedId ? (
 				<Card title="字段级输入输出关系">
-					{columnLineages.length ? <CompactTable rowKey={(row, idx) => row.id || `${row.upstreamColumn || "up"}-${row.downstreamColumn || "down"}-${idx}`} columns={columnLineageColumns} dataSource={columnLineages} loading={loading} scroll={{ x: 1200 }} pagination={{ pageSize: 10 }} /> : <EmptyState title="暂无字段血缘" description="当前条件下未检索到字段级血缘。" />}
+					{columnLineages.length ? <CompactTable rowKey={(row, idx) => row.id || `${row.upstreamColumn || "up"}-${row.downstreamColumn || "down"}-${idx}`} columns={columnLineageColumns} dataSource={columnLineages} loading={loading} scroll={{ x: 1200 }} pagination={{ defaultPageSize: 10 }} /> : <EmptyState title="暂无字段血缘" description="当前条件下未检索到字段级血缘。" />}
 				</Card>
 			) : null}
 		</div>

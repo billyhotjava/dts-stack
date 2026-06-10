@@ -71,7 +71,7 @@ export function DbSourceStep({
 	readerTypeValidator,
 }: DbSourceStepProps) {
 	const tableSelectionMode = Form.useWatch("tableSelectionMode", form);
-	const [tablePageSize, setTablePageSize] = useState(8);
+	const [tablePageSize, setTablePageSize] = useState(10);
 
 	return (
 		<>
@@ -228,9 +228,9 @@ export function DbSourceStep({
 						{ title: "类型", dataIndex: "type", width: 120 },
 					]}
 					pagination={{
-						pageSize: tablePageSize,
+						defaultPageSize: tablePageSize,
 						showSizeChanger: true,
-						pageSizeOptions: [8, 20, 50, 100],
+						pageSizeOptions: [10, 20, 50, 100],
 						onShowSizeChange: (_current: number, size: number) => setTablePageSize(size),
 					}}
 				/>

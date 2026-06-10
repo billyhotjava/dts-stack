@@ -363,3 +363,19 @@ CREATE TABLE ods_material_info_v2 (
     _dts_source_system       varchar(500) DEFAULT 'excel',
     _dts_import_time         timestamp DEFAULT now()
 );
+
+-- ─── 9. 预算执行台账表（来源: budget.xlsx，8个业务字段；科研经费"三本账"快照） ───
+DROP TABLE IF EXISTS ods_budget_v2 CASCADE;
+CREATE TABLE ods_budget_v2 (
+    id                       serial PRIMARY KEY,
+    project_no               varchar(500),   -- 项目号
+    budget_no                varchar(500),   -- 预算编号
+    subtopic                 varchar(2000),  -- 所属子课题
+    research_lab             varchar(500),   -- 研究室
+    budget_amount_adjusted   varchar(500),   -- 预算金额（调整后）
+    prepaid_amount           varchar(500),   -- 预付账款（未验收未报销、无发票）
+    book_cost_amount         varchar(500),   -- 账面成本（已验收有发票）
+    payable_amount           varchar(500),   -- 应付账款（有发票暂未付款）
+    _dts_source_system       varchar(500) DEFAULT 'excel',
+    _dts_import_time         timestamp DEFAULT now()
+);

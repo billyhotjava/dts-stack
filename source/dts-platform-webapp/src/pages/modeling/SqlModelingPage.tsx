@@ -3597,7 +3597,7 @@ export default function SqlModelingPage() {
 								size="small"
 								rowKey={(record) => String(record.id || "")}
 								dataSource={runFilteredModels}
-								pagination={{ pageSize: 8, size: "small", showSizeChanger: false }}
+								pagination={{ pageSize: 10, size: "small", showSizeChanger: false }}
 								scroll={{ y: 260 }}
 								rowSelection={{
 									selectedRowKeys: runSelectedModelIds,

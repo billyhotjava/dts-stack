@@ -511,7 +511,7 @@ export default function OrchestrationRunsTab() {
 						loading={jobsLoading}
 						columns={jobColumns}
 						dataSource={filteredJobs}
-						pagination={{ pageSize: 8, showSizeChanger: false }}
+						pagination={{ defaultPageSize: 10, showSizeChanger: false }}
 						onRow={(record) => ({
 							onClick: () => setSelectedDagId(record.dagId),
 						})}
@@ -554,7 +554,7 @@ export default function OrchestrationRunsTab() {
 							loading={runsLoading}
 							columns={runColumns}
 							dataSource={runs}
-							pagination={{ pageSize: 6, showSizeChanger: false }}
+							pagination={{ defaultPageSize: 10, showSizeChanger: false }}
 							size="small"
 						/>
 					) : (

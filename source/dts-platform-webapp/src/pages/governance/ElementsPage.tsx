@@ -363,7 +363,7 @@ export default function ElementsPage() {
 							pageSize: data?.size ?? pageSize,
 							total: data?.total ?? 0,
 							onChange: (page, size) => {
-								setPageNum(page - 1);
+								setPageNum(size !== pageSize ? 0 : page - 1);
 								setPageSize(size);
 							},
 						}}

@@ -105,10 +105,10 @@ export default function LineageDiffPage() {
 						</Space>
 					</Card>
 					<Card title="新增关系">
-						<CompactTable rowKey={(row, idx) => row.id || `added-${idx}`} columns={edgeColumns} dataSource={diffResult?.addedEdges || []} loading={diffLoading} scroll={{ x: 1200 }} pagination={{ pageSize: 8 }} />
+						<CompactTable rowKey={(row, idx) => row.id || `added-${idx}`} columns={edgeColumns} dataSource={diffResult?.addedEdges || []} loading={diffLoading} scroll={{ x: 1200 }} pagination={{ defaultPageSize: 10 }} />
 					</Card>
 					<Card title="移除关系">
-						<CompactTable rowKey={(row, idx) => row.id || `removed-${idx}`} columns={edgeColumns} dataSource={diffResult?.removedEdges || []} loading={diffLoading} scroll={{ x: 1200 }} pagination={{ pageSize: 8 }} />
+						<CompactTable rowKey={(row, idx) => row.id || `removed-${idx}`} columns={edgeColumns} dataSource={diffResult?.removedEdges || []} loading={diffLoading} scroll={{ x: 1200 }} pagination={{ defaultPageSize: 10 }} />
 					</Card>
 				</>
 			) : null}

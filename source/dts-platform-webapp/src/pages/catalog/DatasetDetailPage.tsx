@@ -829,7 +829,7 @@ function OpenMetadataLineageTab({ assetId }: { assetId: string }) {
 				size="small"
 				rowKey={(row: any, idx) => row.id || `${row.fromFqn}-${row.toFqn}-${idx}`}
 				dataSource={edges}
-				pagination={{ pageSize: 8 }}
+				pagination={{ defaultPageSize: 10 }}
 				columns={[
 					{ title: "上游", dataIndex: "fromFqn", render: (v: any) => <span className="font-mono text-xs">{v || "-"}</span> },
 					{ title: "下游", dataIndex: "toFqn", render: (v: any) => <span className="font-mono text-xs">{v || "-"}</span> },

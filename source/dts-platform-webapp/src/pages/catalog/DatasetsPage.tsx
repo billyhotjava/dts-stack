@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Alert, Button, Card, Collapse, Input, Layout, Modal, Pagination, Segmented, Select, Space, Spin, Table, Tabs, Tag, Tooltip, Tree } from "antd";
 import { ApartmentOutlined, ArrowRightOutlined, BranchesOutlined, DatabaseOutlined, SafetyCertificateOutlined, SearchOutlined, TableOutlined, WarningOutlined } from "@ant-design/icons";
 import { EmptyState } from "@/components/empty-state";
+import { CompactTable } from "@/components/table";
 import {
 	getCatalogAssetsV2Diagnostics,
 	getCatalogAssetsV2GovernanceGaps,
@@ -1122,12 +1123,12 @@ export default function Page() {
 							key: "governance-gaps",
 							label: `治理缺口（${governanceGapRows.length}）`,
 							children: (
-								<Table<GovernanceGapRow>
+								<CompactTable<GovernanceGapRow>
 									rowKey={(row) => row.id || row.assetKey || row.fqn || row.displayName || "asset"}
 									size="small"
 									loading={signalsLoading}
 									dataSource={governanceGapRows}
-									pagination={{ pageSize: 6, showSizeChanger: false }}
+									autoEllipsis={false} pagination={{ defaultPageSize: 10 }}
 									scroll={{ x: 980 }}
 									columns={[
 										{
@@ -1192,12 +1193,12 @@ export default function Page() {
 							key: "lineage-failures",
 							label: `血缘失败（${lineageFailureRows.length}）`,
 							children: (
-								<Table<LineageFailureRow>
+								<CompactTable<LineageFailureRow>
 									rowKey={(row) => row.id || row.assetKey || row.fqn || row.displayName || "asset"}
 									size="small"
 									loading={signalsLoading}
 									dataSource={lineageFailureRows}
-									pagination={{ pageSize: 6, showSizeChanger: false }}
+									autoEllipsis={false} pagination={{ defaultPageSize: 10 }}
 									scroll={{ x: 1020 }}
 									columns={[
 										{
@@ -1279,12 +1280,12 @@ export default function Page() {
 					message={resolutionFailures.length ? `最近发现 ${resolutionFailures.length} 条解析失败` : "最近没有资产身份解析失败"}
 					description="这些记录会影响指标包、治理指标、代码化资产和资产授权的事实源闭环。请优先处理 ref 命名、资产类型映射和历史兼容代理。"
 				/>
-				<Table<ResolutionFailureRow>
+				<CompactTable<ResolutionFailureRow>
 					rowKey={(row) => row.id || `${row.ref || "ref"}-${row.requestedAt || "time"}`}
 					size="small"
 					loading={resolutionFailuresLoading}
 					dataSource={resolutionFailures}
-					pagination={{ pageSize: 8, showSizeChanger: false }}
+					autoEllipsis={false} pagination={{ defaultPageSize: 10 }}
 					scroll={{ x: 900 }}
 					columns={[
 						{

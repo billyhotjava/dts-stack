@@ -421,7 +421,7 @@ export default function Page() {
 						dataSource={spaces}
 						loading={loading}
 						scroll={{ x: 1200 }}
-						pagination={{ pageSize: 8 }}
+						pagination={{ pageSize: 10 }}
 					/>
 				)}
 			</Card>

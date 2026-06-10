@@ -529,7 +529,7 @@ export default function Page({ embedded }: Props) {
 					loading={loading}
 					dataSource={records}
 					columns={columns}
-					pagination={{ pageSize: 8 }}
+					pagination={{ pageSize: 10 }}
 					locale={{ emptyText: <EmptyState title="暂无外部 BI" description="请先添加 BI 入口或同步河图连接。" /> }}
 				/>
 			</Card>

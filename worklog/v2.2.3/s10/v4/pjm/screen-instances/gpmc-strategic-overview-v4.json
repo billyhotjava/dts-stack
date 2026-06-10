@@ -2330,6 +2330,118 @@
           ]
         }
       }
+    },
+    {
+      "id": "gpmc-overview-cost-title",
+      "type": "title",
+      "name": "经费预算执行",
+      "x": 1582,
+      "y": 392,
+      "width": 300,
+      "height": 24,
+      "zIndex": 21,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "经费预算执行",
+        "fontSize": 16,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "left"
+      }
+    },
+    {
+      "id": "gpmc-overview-cost-chart",
+      "type": "bar-chart",
+      "name": "经费预算执行",
+      "x": 1574,
+      "y": 420,
+      "width": 300,
+      "height": 130,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "经费预算执行",
+        "xAxisData": [
+          "已执行",
+          "剩余可用",
+          "超支金额"
+        ],
+        "series": [
+          {
+            "name": "金额",
+            "data": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "seriesColors": [
+          "#27d8ff",
+          "#2ee6a6",
+          "#ff5d73"
+        ],
+        "titleFontSize": 0,
+        "axisFontSize": 15,
+        "chartPaddingTop": 22,
+        "chartPaddingRight": 14,
+        "chartPaddingBottom": 20,
+        "chartPaddingLeft": 20,
+        "xAxisLabelMaxLength": 6,
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "经费预算执行",
+          "definition": "当前快照下已执行/剩余可用/超支金额三本账概览",
+          "scope": "预算为时点快照,不受时间筛选;受研究室/项目筛选",
+          "sourceTable": "预算执行台账表",
+          "frequency": "随入湖批次刷新(时点快照)",
+          "seriesNotes": [
+            {
+              "name": "已执行",
+              "code": "pjm_budg_executed",
+              "displayName": "已执行金额",
+              "formula": "预付+账面+应付",
+              "unit": "元"
+            },
+            {
+              "name": "剩余可用",
+              "code": "pjm_budg_remaining",
+              "displayName": "预算剩余可用",
+              "formula": "预算−已执行",
+              "unit": "元"
+            },
+            {
+              "name": "超支金额",
+              "code": "pjm_budg_overrun_amount",
+              "displayName": "超支金额",
+              "formula": "Σ max(0,已执行−预算)",
+              "unit": "元"
+            }
+          ]
+        }
+      },
+      "actions": [],
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(SUM(d.executed_amount),0) AS \"已执行\", GREATEST(0, COALESCE(SUM(d.remaining_amount),0)) AS \"剩余可用\", COALESCE(SUM(d.overrun_amount),0) AS \"超支金额\" FROM biz_dwd_budget_v2 d WHERE 1=1 [[AND d.research_lab = {{deptId}}]] [[AND d.project_no = {{projectNo}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
     }
   ]
 }

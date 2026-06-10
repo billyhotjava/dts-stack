@@ -57,6 +57,7 @@ dbt test --profile dts
 - `ods_quality_issue_v2`
 - `ods_tech_state_v2`
 - `ods_risk_info_v2`
+- `ods_budget_v2`
 
 对应 STG 表：
 
@@ -64,3 +65,4 @@ dbt test --profile dts
 - `stg_pm__quality_issue_v2`
 - `stg_pm__tech_state_v2`
 - `stg_pm__risk_info_v2`
+- `stg_pm__budget_v2`

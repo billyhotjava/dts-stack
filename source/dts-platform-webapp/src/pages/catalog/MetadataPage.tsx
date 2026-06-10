@@ -912,7 +912,7 @@ export default function MetadataPage() {
 					dataSource={runs}
 					loading={loadingRuns}
 					scroll={{ x: 1600 }}
-					pagination={{ pageSize: 8 }}
+					pagination={{ defaultPageSize: 10 }}
 				/>
 			</Card>
 
@@ -988,7 +988,7 @@ export default function MetadataPage() {
 					dataSource={driftEvents}
 					loading={loadingDrift}
 					scroll={{ x: 1100 }}
-					pagination={{ pageSize: 8 }}
+					pagination={{ defaultPageSize: 10 }}
 				/>
 			</Card>
 

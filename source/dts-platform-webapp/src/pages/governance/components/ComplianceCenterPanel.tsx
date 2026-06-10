@@ -441,7 +441,7 @@ export default function ComplianceCenterPanel() {
 						rowKey={(item) => item.id || item.ruleCode || Math.random().toString()}
 						columns={itemColumns}
 						dataSource={Array.isArray(currentBatch?.items) ? currentBatch?.items : []}
-						pagination={{ pageSize: 8 }}
+						pagination={{ defaultPageSize: 10 }}
 					/>
 				</Space>
 			</Modal>

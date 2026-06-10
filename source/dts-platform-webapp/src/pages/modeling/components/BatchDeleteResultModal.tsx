@@ -31,7 +31,7 @@ export default function BatchDeleteResultModal({ open, onClose, result, title = 
 				<CompactTable
 					size="small"
 					rowKey={(record) => record.modelId}
-					pagination={{ pageSize: 8, hideOnSinglePage: true }}
+					pagination={{ pageSize: 10, hideOnSinglePage: true }}
 					dataSource={result?.rows || []}
 					columns={[
 						{

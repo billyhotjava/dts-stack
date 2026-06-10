@@ -230,7 +230,7 @@ export default function ConnectorRegistryPage() {
 				dataSource={list}
 				loading={loading}
 				scroll={{ x: 1040 }}
-				pagination={{ pageSize: 12 }}
+				pagination={{ defaultPageSize: 10 }}
 			/>
 
 			<Drawer

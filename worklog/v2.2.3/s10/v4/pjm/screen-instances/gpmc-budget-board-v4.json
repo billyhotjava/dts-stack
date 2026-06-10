@@ -1,0 +1,1549 @@
+{
+  "schemaVersion": 3,
+  "id": "gpmc-budget-board-v4",
+  "name": "经费预算执行中心",
+  "description": "经费预算执行大屏：预算总额/已执行(三本账)/执行率/剩余/超支预警，按研究室·项目·子课题拆解。当前快照口径。",
+  "classification": "INTERNAL",
+  "width": 1920,
+  "height": 1080,
+  "backgroundColor": "#115AAD",
+  "theme": "dark-command",
+  "globalVariables": [
+    {
+      "key": "dateFrom",
+      "label": "开始日期",
+      "type": "date",
+      "defaultValue": "2024-01-01"
+    },
+    {
+      "key": "dateTo",
+      "label": "结束日期",
+      "type": "date",
+      "defaultValue": "2026-12-31"
+    },
+    {
+      "key": "deptId",
+      "label": "研究室",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "projectNo",
+      "label": "项目号",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "subtopic",
+      "label": "所属子课题",
+      "type": "string",
+      "defaultValue": ""
+    }
+  ],
+  "components": [
+    {
+      "id": "gpmc-budget-top",
+      "type": "shape",
+      "name": "gpmc-budget-top",
+      "x": 36,
+      "y": 110,
+      "width": 1848,
+      "height": 140,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 18
+      }
+    },
+    {
+      "id": "gpmc-budget-left",
+      "type": "shape",
+      "name": "gpmc-budget-left",
+      "x": 36,
+      "y": 268,
+      "width": 608,
+      "height": 316,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 18
+      }
+    },
+    {
+      "id": "gpmc-budget-mid",
+      "type": "shape",
+      "name": "gpmc-budget-mid",
+      "x": 656,
+      "y": 268,
+      "width": 608,
+      "height": 316,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 18
+      }
+    },
+    {
+      "id": "gpmc-budget-right",
+      "type": "shape",
+      "name": "gpmc-budget-right",
+      "x": 1276,
+      "y": 268,
+      "width": 608,
+      "height": 316,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 18
+      }
+    },
+    {
+      "id": "gpmc-budget-bottom",
+      "type": "shape",
+      "name": "gpmc-budget-bottom",
+      "x": 36,
+      "y": 838,
+      "width": 1848,
+      "height": 220,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 18
+      }
+    },
+    {
+      "id": "经费预算执行中心-header-bar",
+      "type": "shape",
+      "name": "风险与预警中心-header-bar",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 100,
+      "zIndex": 5,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 0
+      }
+    },
+    {
+      "id": "经费预算执行中心-title",
+      "type": "title",
+      "name": "风险与预警中心",
+      "x": 44,
+      "y": 24,
+      "width": 720,
+      "height": 42,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "经费预算执行中心",
+        "fontSize": 32,
+        "fontWeight": "800",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "budget-topic-overview-shape",
+      "type": "shape",
+      "name": "综合态势",
+      "x": 44,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 24,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(88, 180, 255, 0.16)",
+        "borderColor": "rgba(88, 180, 255, 0.30)",
+        "borderWidth": 1,
+        "radius": 12
+      },
+      "actions": []
+    },
+    {
+      "id": "budget-topic-overview-label",
+      "type": "title",
+      "name": "综合态势",
+      "x": 44,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "综合态势",
+        "fontSize": 17,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": []
+    },
+    {
+      "id": "budget-topic-execution-shape",
+      "type": "shape",
+      "name": "执行监控",
+      "x": 188,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 24,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(88, 180, 255, 0.16)",
+        "borderColor": "rgba(88, 180, 255, 0.30)",
+        "borderWidth": 1,
+        "radius": 12
+      },
+      "actions": []
+    },
+    {
+      "id": "budget-topic-execution-label",
+      "type": "title",
+      "name": "执行监控",
+      "x": 188,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "执行监控",
+        "fontSize": 17,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": []
+    },
+    {
+      "id": "budget-topic-quality-shape",
+      "type": "shape",
+      "name": "质量跟进",
+      "x": 332,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 24,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(88, 180, 255, 0.16)",
+        "borderColor": "rgba(88, 180, 255, 0.30)",
+        "borderWidth": 1,
+        "radius": 12
+      },
+      "actions": []
+    },
+    {
+      "id": "budget-topic-quality-label",
+      "type": "title",
+      "name": "质量跟进",
+      "x": 332,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "质量跟进",
+        "fontSize": 17,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": []
+    },
+    {
+      "id": "budget-topic-tech-state-shape",
+      "type": "shape",
+      "name": "技术状态",
+      "x": 476,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 24,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(88, 180, 255, 0.16)",
+        "borderColor": "rgba(88, 180, 255, 0.30)",
+        "borderWidth": 1,
+        "radius": 12
+      },
+      "actions": []
+    },
+    {
+      "id": "budget-topic-tech-state-label",
+      "type": "title",
+      "name": "技术状态",
+      "x": 476,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "技术状态",
+        "fontSize": 17,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": []
+    },
+    {
+      "id": "budget-topic-cost-shape",
+      "type": "shape",
+      "name": "成本控制",
+      "x": 620,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 24,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(88, 180, 255, 0.24)",
+        "borderColor": "rgba(39, 216, 255, 0.22)",
+        "borderWidth": 1,
+        "radius": 12
+      },
+      "actions": []
+    },
+    {
+      "id": "budget-topic-cost-label",
+      "type": "title",
+      "name": "成本控制",
+      "x": 620,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "成本控制",
+        "fontSize": 17,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": []
+    },
+    {
+      "id": "budget-topic-budget-shape",
+      "type": "shape",
+      "name": "风险预警",
+      "x": 764,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 24,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(88, 180, 255, 0.16)",
+        "borderColor": "rgba(88, 180, 255, 0.30)",
+        "borderWidth": 1,
+        "radius": 12
+      },
+      "actions": []
+    },
+    {
+      "id": "budget-topic-budget-label",
+      "type": "title",
+      "name": "风险预警",
+      "x": 764,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "风险预警",
+        "fontSize": 17,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": []
+    },
+    {
+      "id": "经费预算执行中心-date",
+      "type": "filter-date-range",
+      "name": "统计周期",
+      "x": 1260,
+      "y": 28,
+      "width": 320,
+      "height": 58,
+      "zIndex": 65,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "统计周期",
+        "startKey": "dateFrom",
+        "endKey": "dateTo",
+        "labelColor": "#ffffff",
+        "inputBackground": "rgba(88, 180, 255, 0.20)",
+        "inputBorderColor": "rgba(39, 216, 255, 0.18)",
+        "inputTextColor": "#ffffff"
+      }
+    },
+    {
+      "id": "经费预算执行中心-dept",
+      "type": "filter-select",
+      "name": "研究室",
+      "x": 940,
+      "y": 28,
+      "width": 150,
+      "height": 58,
+      "zIndex": 65,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "研究室",
+        "variableKey": "deptId",
+        "placeholder": "全部",
+        "labelColor": "#ffffff",
+        "inputBackground": "rgba(88, 180, 255, 0.20)",
+        "inputBorderColor": "rgba(39, 216, 255, 0.18)",
+        "inputTextColor": "#ffffff",
+        "optionSourceMode": "data",
+        "dataOptionLabelField": "label",
+        "dataOptionValueField": "value",
+        "dataOptionMax": 200,
+        "optionBackground": "#0b2652",
+        "optionTextColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT DISTINCT d.research_lab AS label, d.research_lab AS value FROM biz_dwd_budget_v2 d WHERE d.research_lab IS NOT NULL AND d.research_lab != '' ORDER BY d.research_lab",
+          "queryTimeoutSeconds": 10,
+          "maxRows": 200,
+          "parameterBindings": []
+        }
+      }
+    },
+    {
+      "id": "经费预算执行中心-project",
+      "type": "filter-select",
+      "name": "项目号",
+      "x": 1104,
+      "y": 28,
+      "width": 140,
+      "height": 58,
+      "zIndex": 65,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "项目号",
+        "variableKey": "projectNo",
+        "placeholder": "全部",
+        "labelColor": "#ffffff",
+        "inputBackground": "rgba(88, 180, 255, 0.20)",
+        "inputBorderColor": "rgba(39, 216, 255, 0.18)",
+        "inputTextColor": "#ffffff",
+        "optionSourceMode": "data",
+        "dataOptionLabelField": "label",
+        "dataOptionValueField": "value",
+        "dataOptionMax": 500,
+        "optionBackground": "#0b2652",
+        "optionTextColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT DISTINCT d.project_no AS label, d.project_no AS value FROM biz_dwd_budget_v2 d WHERE d.project_no IS NOT NULL AND d.project_no != '' ORDER BY d.project_no",
+          "queryTimeoutSeconds": 10,
+          "maxRows": 200,
+          "parameterBindings": []
+        }
+      }
+    },
+    {
+      "id": "经费预算执行中心-risk",
+      "type": "filter-select",
+      "name": "所属子课题",
+      "x": 1596,
+      "y": 28,
+      "width": 120,
+      "height": 58,
+      "zIndex": 65,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "所属子课题",
+        "variableKey": "subtopic",
+        "placeholder": "全部",
+        "labelColor": "#ffffff",
+        "inputBackground": "rgba(88, 180, 255, 0.20)",
+        "inputBorderColor": "rgba(39, 216, 255, 0.18)",
+        "inputTextColor": "#ffffff",
+        "optionBackground": "#0b2652",
+        "optionTextColor": "#ffffff",
+        "optionSourceMode": "data",
+        "dataOptionLabelField": "label",
+        "dataOptionValueField": "value",
+        "dataOptionMax": 200
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT DISTINCT d.subtopic AS label, d.subtopic AS value FROM biz_dwd_budget_v2 d WHERE d.subtopic IS NOT NULL AND d.subtopic != '' ORDER BY d.subtopic",
+          "queryTimeoutSeconds": 10,
+          "maxRows": 200,
+          "parameterBindings": []
+        }
+      }
+    },
+    {
+      "id": "gpmc-budget-kpi-budget",
+      "type": "number-card",
+      "name": "预算总额",
+      "x": 44,
+      "y": 126,
+      "width": 350,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "预算总额",
+        "value": 0,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "metricNote": {
+          "code": "pjm_budg_total",
+          "displayName": "预算总额(调整后)",
+          "domain": "预算",
+          "category": "基础",
+          "unit": "元",
+          "direction": "NEUTRAL",
+          "definition": "调整后批复预算总额(时点快照)",
+          "formula": "Σ 预算金额(调整后)",
+          "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+          "sourceTable": "预算执行台账表",
+          "frequency": "随入湖批次刷新(时点快照)",
+          "thresholds": null,
+          "excelRef": "(预算台账)预算金额(调整后)"
+        },
+        "metricCode": "pjm_budg_total"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(SUM(d.budget_amount),0) AS v FROM biz_dwd_budget_v2 d WHERE 1=1 [[AND d.research_lab = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.subtopic = {{subtopic}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "subtopic",
+              "variableKey": "subtopic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-budget-kpi-executed",
+      "type": "number-card",
+      "name": "已执行金额",
+      "x": 414,
+      "y": 126,
+      "width": 350,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "已执行金额",
+        "value": 0,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#ffffff",
+        "valueColor": "#27d8ff",
+        "backgroundColor": "transparent",
+        "metricNote": {
+          "code": "pjm_budg_executed",
+          "displayName": "已执行金额",
+          "domain": "预算",
+          "category": "基础",
+          "unit": "元",
+          "direction": "NEUTRAL",
+          "definition": "已占用预算(三本账合计:预付+账面+应付)",
+          "formula": "预付账款 + 账面成本 + 应付账款",
+          "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+          "sourceTable": "预算执行台账表",
+          "frequency": "随入湖批次刷新(时点快照)",
+          "thresholds": null,
+          "excelRef": "(预算台账)派生:已执行"
+        },
+        "metricCode": "pjm_budg_executed"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(SUM(d.executed_amount),0) AS v FROM biz_dwd_budget_v2 d WHERE 1=1 [[AND d.research_lab = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.subtopic = {{subtopic}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "subtopic",
+              "variableKey": "subtopic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-budget-kpi-exec-rate",
+      "type": "number-card",
+      "name": "预算执行率",
+      "x": 784,
+      "y": 126,
+      "width": 350,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "预算执行率",
+        "value": 0,
+        "suffix": "%",
+        "precision": 2,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffc645",
+        "backgroundColor": "transparent",
+        "metricNote": {
+          "code": "pjm_budg_execution_rate",
+          "displayName": "预算执行率",
+          "domain": "预算",
+          "category": "率",
+          "unit": "%",
+          "direction": "NEUTRAL",
+          "definition": "已执行占预算的比率,≥100% 即超支",
+          "formula": "已执行 ÷ 预算总额 × 100%",
+          "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+          "sourceTable": "预算执行台账表",
+          "frequency": "随入湖批次刷新(时点快照)",
+          "thresholds": {
+            "warning": 90.0,
+            "critical": 100.0,
+            "rule": ">"
+          },
+          "excelRef": "(预算台账)派生:执行率"
+        },
+        "metricCode": "pjm_budg_execution_rate"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT CASE WHEN COALESCE(SUM(d.budget_amount),0)=0 THEN 0 ELSE ROUND(SUM(d.executed_amount)::numeric/NULLIF(SUM(d.budget_amount),0)::numeric*100,2) END AS v FROM biz_dwd_budget_v2 d WHERE 1=1 [[AND d.research_lab = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.subtopic = {{subtopic}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "subtopic",
+              "variableKey": "subtopic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-budget-kpi-remaining",
+      "type": "number-card",
+      "name": "预算剩余可用",
+      "x": 1154,
+      "y": 126,
+      "width": 350,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "预算剩余可用",
+        "value": 0,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#ffffff",
+        "valueColor": "#2ee6a6",
+        "backgroundColor": "transparent",
+        "metricNote": {
+          "code": "pjm_budg_remaining",
+          "displayName": "预算剩余可用",
+          "domain": "预算",
+          "category": "基础",
+          "unit": "元",
+          "direction": "NEUTRAL",
+          "definition": "预算总额扣除已执行后的可用余额(可为负=超支)",
+          "formula": "预算总额 − 已执行",
+          "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+          "sourceTable": "预算执行台账表",
+          "frequency": "随入湖批次刷新(时点快照)",
+          "thresholds": null,
+          "excelRef": "(预算台账)派生:剩余"
+        },
+        "metricCode": "pjm_budg_remaining"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(SUM(d.remaining_amount),0) AS v FROM biz_dwd_budget_v2 d WHERE 1=1 [[AND d.research_lab = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.subtopic = {{subtopic}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "subtopic",
+              "variableKey": "subtopic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-budget-kpi-health",
+      "type": "number-card",
+      "name": "预算健康度评分",
+      "x": 1524,
+      "y": 126,
+      "width": 350,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "预算健康度评分",
+        "value": 0,
+        "suffix": "",
+        "precision": 2,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "metricNote": {
+          "code": "pjm_budg_health_score",
+          "displayName": "预算健康度评分",
+          "domain": "预算",
+          "category": "健康度",
+          "unit": "分",
+          "direction": "UP",
+          "definition": "综合超支控制与资金支付健康的预算评分(0-100)",
+          "formula": "预算控制(无超支)×0.7 + 资金支付健康(应付占比低)×0.3",
+          "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+          "sourceTable": "预算执行台账表",
+          "frequency": "随入湖批次刷新(时点快照)",
+          "thresholds": {
+            "warning": 70.0,
+            "critical": 50.0,
+            "rule": "<"
+          },
+          "excelRef": "(预算台账)派生:健康分"
+        },
+        "metricCode": "pjm_budg_health_score"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT ROUND( (100-LEAST(100, CASE WHEN COALESCE(SUM(d.budget_amount),0)=0 THEN 0 ELSE SUM(d.overrun_amount)::numeric/NULLIF(SUM(d.budget_amount),0)::numeric*100 END))*0.7 + (100-LEAST(100, CASE WHEN COALESCE(SUM(d.executed_amount),0)=0 THEN 0 ELSE SUM(d.payable_amount)::numeric/NULLIF(SUM(d.executed_amount),0)::numeric*100 END))*0.3 ,2) AS v FROM biz_dwd_budget_v2 d WHERE 1=1 [[AND d.research_lab = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.subtopic = {{subtopic}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "subtopic",
+              "variableKey": "subtopic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-budget-by-lab",
+      "type": "bar-chart",
+      "name": "各研究室预算执行",
+      "x": 52,
+      "y": 318,
+      "width": 576,
+      "height": 256,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "xAxis": {
+          "type": "value",
+          "name": "数量"
+        },
+        "yAxis": {
+          "type": "category",
+          "name": "研究室"
+        },
+        "orientation": "horizontal",
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#8fa7c4",
+          "#27d8ff",
+          "#2ee6a6"
+        ],
+        "categoryKey": "研究室",
+        "series": [
+          {
+            "name": "预算金额",
+            "dataKey": "预算金额",
+            "color": "#8fa7c4"
+          },
+          {
+            "name": "已执行",
+            "dataKey": "已执行",
+            "color": "#27d8ff"
+          },
+          {
+            "name": "剩余",
+            "dataKey": "剩余",
+            "color": "#2ee6a6"
+          }
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "各研究室预算执行",
+          "definition": "按「研究室」分组对比预算/已执行/剩余",
+          "scope": "Y轴=研究室; 当前快照,受研究室/项目/子课题筛选",
+          "sourceTable": "预算执行台账表",
+          "frequency": "随入湖批次刷新(时点快照)",
+          "seriesNotes": [
+            {
+              "name": "预算金额",
+              "code": "pjm_budg_total",
+              "displayName": "预算总额",
+              "formula": "Σ 预算金额(调整后)",
+              "unit": "元"
+            },
+            {
+              "name": "已执行",
+              "code": "pjm_budg_executed",
+              "displayName": "已执行金额",
+              "formula": "预付+账面+应付",
+              "unit": "元"
+            },
+            {
+              "name": "剩余",
+              "code": "pjm_budg_remaining",
+              "displayName": "预算剩余可用",
+              "formula": "预算−已执行",
+              "unit": "元"
+            }
+          ]
+        }
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(d.research_lab,'未分配') AS \"研究室\", SUM(d.budget_amount) AS \"预算金额\", SUM(d.executed_amount) AS \"已执行\", SUM(d.remaining_amount) AS \"剩余\" FROM biz_dwd_budget_v2 d WHERE 1=1 [[AND d.research_lab = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.subtopic = {{subtopic}}]] GROUP BY COALESCE(d.research_lab,'未分配') ORDER BY SUM(d.budget_amount) DESC LIMIT 12",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "subtopic",
+              "variableKey": "subtopic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-budget-by-project",
+      "type": "bar-chart",
+      "name": "各项目预算执行",
+      "x": 672,
+      "y": 318,
+      "width": 576,
+      "height": 256,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "xAxis": {
+          "type": "value",
+          "name": "数量"
+        },
+        "yAxis": {
+          "type": "category",
+          "name": "项目"
+        },
+        "orientation": "horizontal",
+        "legend": {
+          "show": false
+        },
+        "colors": [
+          "#8fa7c4",
+          "#ffc645"
+        ],
+        "categoryKey": "项目号",
+        "series": [
+          {
+            "name": "预算金额",
+            "dataKey": "预算金额",
+            "color": "#8fa7c4"
+          },
+          {
+            "name": "已执行",
+            "dataKey": "已执行",
+            "color": "#ffc645"
+          }
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "各项目预算执行",
+          "definition": "按「项目号」分组对比预算与已执行",
+          "scope": "Y轴=项目号; 当前快照,受研究室/项目/子课题筛选",
+          "sourceTable": "预算执行台账表",
+          "frequency": "随入湖批次刷新(时点快照)",
+          "seriesNotes": [
+            {
+              "name": "预算金额",
+              "code": "pjm_budg_total",
+              "displayName": "预算总额",
+              "formula": "Σ 预算金额(调整后)",
+              "unit": "元"
+            },
+            {
+              "name": "已执行",
+              "code": "pjm_budg_executed",
+              "displayName": "已执行金额",
+              "formula": "预付+账面+应付",
+              "unit": "元"
+            }
+          ]
+        }
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT d.project_no AS \"项目号\", SUM(d.budget_amount) AS \"预算金额\", SUM(d.executed_amount) AS \"已执行\" FROM biz_dwd_budget_v2 d WHERE 1=1 [[AND d.research_lab = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.subtopic = {{subtopic}}]] GROUP BY d.project_no ORDER BY SUM(d.budget_amount) DESC LIMIT 12",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "subtopic",
+              "variableKey": "subtopic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-budget-composition",
+      "type": "pie-chart",
+      "name": "已执行构成（三本账）",
+      "x": 1292,
+      "y": 318,
+      "width": 576,
+      "height": 256,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#27d8ff",
+          "#2ee6a6",
+          "#ffc645"
+        ],
+        "categoryKey": "构成",
+        "valueKey": "金额",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "metricNote": {
+          "displayName": "已执行构成（三本账）",
+          "definition": "已执行金额按预付/账面成本/应付三本账拆分",
+          "scope": "当前快照,受研究室/项目/子课题筛选",
+          "sourceTable": "预算执行台账表",
+          "frequency": "随入湖批次刷新(时点快照)",
+          "seriesNotes": [
+            {
+              "name": "预付账款",
+              "code": "pjm_budg_prepaid",
+              "displayName": "预付账款",
+              "formula": "Σ 预付账款",
+              "unit": "元"
+            },
+            {
+              "name": "账面成本",
+              "code": "pjm_budg_book_cost",
+              "displayName": "账面成本",
+              "formula": "Σ 账面成本",
+              "unit": "元"
+            },
+            {
+              "name": "应付账款",
+              "code": "pjm_budg_payable",
+              "displayName": "应付账款",
+              "formula": "Σ 应付账款",
+              "unit": "元"
+            }
+          ]
+        }
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT '预付账款' AS \"构成\", COALESCE(SUM(d.prepaid_amount),0) AS \"金额\" FROM biz_dwd_budget_v2 d WHERE 1=1 [[AND d.research_lab = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.subtopic = {{subtopic}}]] UNION ALL SELECT '账面成本', COALESCE(SUM(d.book_cost_amount),0) FROM biz_dwd_budget_v2 d WHERE 1=1 [[AND d.research_lab = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.subtopic = {{subtopic}}]] UNION ALL SELECT '应付账款', COALESCE(SUM(d.payable_amount),0) FROM biz_dwd_budget_v2 d WHERE 1=1 [[AND d.research_lab = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.subtopic = {{subtopic}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "subtopic",
+              "variableKey": "subtopic"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "subtopic",
+              "variableKey": "subtopic"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "subtopic",
+              "variableKey": "subtopic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-budget-by-subtopic",
+      "type": "bar-chart",
+      "name": "子课题预算执行率",
+      "x": 48,
+      "y": 626,
+      "width": 1820,
+      "height": 210,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "xAxis": {
+          "type": "category",
+          "name": "子课题"
+        },
+        "yAxis": {
+          "type": "value",
+          "name": "执行率%"
+        },
+        "orientation": "vertical",
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#ffc645"
+        ],
+        "categoryKey": "子课题",
+        "series": [
+          {
+            "name": "执行率",
+            "dataKey": "执行率",
+            "color": "#ffc645"
+          }
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "子课题预算执行率",
+          "definition": "按「所属子课题」分组的预算执行率排名",
+          "scope": "X轴=子课题; 当前快照,受研究室/项目/子课题筛选",
+          "sourceTable": "预算执行台账表",
+          "frequency": "随入湖批次刷新(时点快照)",
+          "seriesNotes": [
+            {
+              "name": "执行率",
+              "code": "pjm_budg_execution_rate",
+              "displayName": "预算执行率",
+              "formula": "已执行÷预算×100%",
+              "unit": "%"
+            }
+          ]
+        }
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(d.subtopic,'未分类') AS \"子课题\", CASE WHEN SUM(d.budget_amount)=0 THEN 0 ELSE ROUND(SUM(d.executed_amount)::numeric/NULLIF(SUM(d.budget_amount),0)::numeric*100,2) END AS \"执行率\" FROM biz_dwd_budget_v2 d WHERE 1=1 [[AND d.research_lab = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.subtopic = {{subtopic}}]] GROUP BY COALESCE(d.subtopic,'未分类') ORDER BY \"执行率\" DESC LIMIT 15",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "subtopic",
+              "variableKey": "subtopic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-budget-detail",
+      "type": "table",
+      "name": "预算执行明细",
+      "x": 36,
+      "y": 888,
+      "width": 1848,
+      "height": 168,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "columns": [
+          {
+            "source": "项目号",
+            "alias": "项目号",
+            "width": 100
+          },
+          {
+            "source": "预算编号",
+            "alias": "预算编号",
+            "width": 120
+          },
+          {
+            "source": "所属子课题",
+            "alias": "所属子课题",
+            "width": 200
+          },
+          {
+            "source": "研究室",
+            "alias": "研究室",
+            "width": 120
+          },
+          {
+            "source": "预算金额",
+            "alias": "预算金额",
+            "width": 120
+          },
+          {
+            "source": "预付账款",
+            "alias": "预付账款",
+            "width": 120
+          },
+          {
+            "source": "账面成本",
+            "alias": "账面成本",
+            "width": 120
+          },
+          {
+            "source": "应付账款",
+            "alias": "应付账款",
+            "width": 120
+          },
+          {
+            "source": "已执行",
+            "alias": "已执行",
+            "width": 120
+          },
+          {
+            "source": "剩余",
+            "alias": "剩余",
+            "width": 110
+          },
+          {
+            "source": "执行率%",
+            "alias": "执行率%",
+            "width": 90
+          },
+          {
+            "source": "状态",
+            "alias": "状态",
+            "width": 80
+          }
+        ],
+        "pageSize": 20,
+        "showHeader": true,
+        "headerColor": "#ffffff",
+        "stripeColor": "rgba(88,180,255,0.08)",
+        "backgroundColor": "rgba(9,36,90,0.50)",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "bodyColor": "#ffffff",
+        "freezeHeader": true,
+        "columnNotes": {
+          "执行率%": {
+            "code": "pjm_budg_execution_rate",
+            "displayName": "预算执行率",
+            "domain": "预算",
+            "category": "率",
+            "unit": "%",
+            "direction": "NEUTRAL",
+            "definition": "已执行占预算的比率,≥100% 即超支",
+            "formula": "已执行 ÷ 预算总额 × 100%",
+            "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+            "sourceTable": "预算执行台账表",
+            "frequency": "随入湖批次刷新(时点快照)",
+            "thresholds": {
+              "warning": 90.0,
+              "critical": 100.0,
+              "rule": ">"
+            },
+            "excelRef": "(预算台账)派生:执行率"
+          },
+          "已执行": {
+            "code": "pjm_budg_executed",
+            "displayName": "已执行金额",
+            "domain": "预算",
+            "category": "基础",
+            "unit": "元",
+            "direction": "NEUTRAL",
+            "definition": "已占用预算(三本账合计:预付+账面+应付)",
+            "formula": "预付账款 + 账面成本 + 应付账款",
+            "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+            "sourceTable": "预算执行台账表",
+            "frequency": "随入湖批次刷新(时点快照)",
+            "thresholds": null,
+            "excelRef": "(预算台账)派生:已执行"
+          },
+          "状态": {
+            "kind": "field",
+            "displayName": "预算状态",
+            "definition": "单条预算是否超支。",
+            "enumValues": [
+              {
+                "code": "超支",
+                "label": "超支",
+                "description": "该条已执行 > 预算"
+              },
+              {
+                "code": "正常",
+                "label": "正常",
+                "description": "该条已执行 ≤ 预算"
+              }
+            ],
+            "sourceTable": "预算执行台账表",
+            "note": "已执行=预付+账面+应付"
+          }
+        },
+        "headerBackground": "#0f2a55"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT d.project_no AS \"项目号\", COALESCE(d.budget_no,'-') AS \"预算编号\", COALESCE(d.subtopic,'-') AS \"所属子课题\", COALESCE(d.research_lab,'-') AS \"研究室\", d.budget_amount AS \"预算金额\", d.prepaid_amount AS \"预付账款\", d.book_cost_amount AS \"账面成本\", d.payable_amount AS \"应付账款\", d.executed_amount AS \"已执行\", d.remaining_amount AS \"剩余\", COALESCE(d.execution_rate_line,0) AS \"执行率%\", CASE WHEN d.is_overrun THEN '超支' ELSE '正常' END AS \"状态\" FROM biz_dwd_budget_v2 d WHERE 1=1 [[AND d.research_lab = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.subtopic = {{subtopic}}]] ORDER BY d.overrun_amount DESC, d.budget_amount DESC LIMIT 500",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "subtopic",
+              "variableKey": "subtopic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-budget-mid2-left",
+      "type": "shape",
+      "name": "gpmc-budget-mid2-left",
+      "x": 36,
+      "y": 576,
+      "width": 1848,
+      "height": 254,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 18
+      }
+    },
+    {
+      "id": "gpmc-budget-mid2-right",
+      "type": "shape",
+      "name": "gpmc-budget-mid2-right",
+      "x": 984,
+      "y": 576,
+      "width": 900,
+      "height": 254,
+      "zIndex": 1,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 18
+      }
+    },
+    {
+      "id": "gpmc-budget-project-overlay-title",
+      "type": "title",
+      "name": "项目风险统计-标题",
+      "x": 52,
+      "y": 286,
+      "width": 520,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "各研究室预算执行",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "gpmc-budget-project-open-overlay-title",
+      "type": "title",
+      "name": "项目未释放风险-标题",
+      "x": 672,
+      "y": 286,
+      "width": 520,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "各项目预算执行",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "gpmc-budget-category-overlay-title",
+      "type": "title",
+      "name": "风险分类分布-标题",
+      "x": 1292,
+      "y": 286,
+      "width": 520,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "已执行构成（三本账）",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "gpmc-budget-dept-overlay-title",
+      "type": "title",
+      "name": "科室风险统计-标题",
+      "x": 64,
+      "y": 594,
+      "width": 360,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "子课题预算执行率",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "gpmc-budget-detail-overlay-title",
+      "type": "title",
+      "name": "项目风险汇总列表-标题",
+      "x": 52,
+      "y": 856,
+      "width": 360,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "预算执行明细列表",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    }
+  ]
+}

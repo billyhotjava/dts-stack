@@ -1025,7 +1025,7 @@ export default function ReferenceCodesPage() {
 							pageSizeOptions: [10, 20, 50, 100],
 							showTotal: (total) => `共 ${total} 条`,
 							onChange: (page, size) => {
-								setPageNum(page - 1);
+								setPageNum(size !== pageSize ? 0 : page - 1);
 								setPageSize(size);
 							},
 						}}
@@ -1252,7 +1252,7 @@ export default function ReferenceCodesPage() {
 								rowKey={(row, idx) => `${row.codeValue || "c"}-${idx}`}
 								columns={conflictColumns}
 								dataSource={Array.isArray(structuredPreview.conflicts) ? structuredPreview.conflicts : []}
-								pagination={{ pageSize: 5 }}
+								pagination={{ defaultPageSize: 10 }}
 							/>
 							<CompactTable
 								size="small"
@@ -1260,7 +1260,7 @@ export default function ReferenceCodesPage() {
 								rowKey={(row, idx) => `${row.codeValue || row.line || "e"}-${idx}`}
 								columns={errorColumns}
 								dataSource={Array.isArray(structuredPreview.errors) ? structuredPreview.errors : []}
-								pagination={{ pageSize: 5 }}
+								pagination={{ defaultPageSize: 10 }}
 							/>
 						</Space>
 					) : null}
@@ -1297,7 +1297,7 @@ export default function ReferenceCodesPage() {
 						loading={structuredHistoryLoading}
 						columns={importRunColumns}
 						dataSource={structuredHistory}
-						pagination={{ pageSize: 6 }}
+						pagination={{ defaultPageSize: 10 }}
 					/>
 					{structuredHistoryDetail ? (
 						<>
@@ -1316,7 +1316,7 @@ export default function ReferenceCodesPage() {
 								rowKey={(row, idx) => `${row.codeValue || "diff"}-${idx}`}
 								columns={importDiffColumns}
 								dataSource={structuredHistoryDetail.diffRows || []}
-								pagination={{ pageSize: 6 }}
+								pagination={{ defaultPageSize: 10 }}
 							/>
 						</>
 					) : (

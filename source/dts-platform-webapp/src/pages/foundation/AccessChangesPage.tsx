@@ -94,7 +94,7 @@ export default function AccessChangesPage() {
 	const [actionType, setActionType] = useState<"SUBMIT" | "APPROVE" | "REJECT" | null>(null);
 	const [actionTarget, setActionTarget] = useState<IngestionChangeLogDTO | null>(null);
 	const [loading, setLoading] = useState(false);
-	const [pageState, setPageState] = useState({ page: 1, size: 8, total: 0 });
+	const [pageState, setPageState] = useState({ page: 1, size: 10, total: 0 });
 	const [form] = Form.useForm();
 	const [actionForm] = Form.useForm();
 
@@ -344,7 +344,10 @@ export default function AccessChangesPage() {
 						pageSize: pageState.size,
 						total: pageState.total,
 						showSizeChanger: true,
-						onChange: (page, size) => loadChanges(page, size),
+						onChange: (page, size) => {
+							const nextSize = size || 10;
+							loadChanges(nextSize !== pageState.size ? 1 : page, nextSize);
+						},
 					}}
 					onRow={(row) => ({
 						onClick: () => setSelected(row),

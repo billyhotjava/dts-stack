@@ -397,7 +397,7 @@ export default function IndicatorDashboardPage() {
 									size="small"
 									dataSource={drillRows}
 									rowKey={(_, i) => String(i)}
-									pagination={{ pageSize: 10 }}
+									pagination={{ defaultPageSize: 10 }}
 									columns={Object.keys(drillRows[0]).map((key) => ({
 										title: key,
 										dataIndex: key,
@@ -426,7 +426,7 @@ export default function IndicatorDashboardPage() {
 									size="small"
 									dataSource={detailData.history}
 									rowKey="id"
-									pagination={{ pageSize: 8 }}
+									pagination={{ defaultPageSize: 10 }}
 									columns={[
 										{
 											title: "运行时间",

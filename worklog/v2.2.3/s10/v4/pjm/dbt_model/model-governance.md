@@ -112,24 +112,34 @@ ODS 物理表的来源技术字段以入湖统一字段为准：`_dts_source_sys
 - `stg_pm__quality_issue_v2`
 - `stg_pm__tech_state_v2`
 - `stg_pm__risk_info_v2`
+- `stg_pm__budget_v2`
 
 ### DWD
 - 维度：`dim_*_v2`（8 张，见 3.1）
 - 别名：`dim_*_alias`（10 张，见 3.1）
-- 事实：`biz_dwd_project_node_v2` / `biz_dwd_quality_issue_v2` / `biz_dwd_tech_state_v2` / `biz_dwd_risk_info_v2`
+- 事实：`biz_dwd_project_node_v2` / `biz_dwd_quality_issue_v2` / `biz_dwd_tech_state_v2` / `biz_dwd_risk_info_v2` / `biz_dwd_budget_v2`
+  - 注：`biz_dwd_budget_v2` 无枚举/分类字段，不依赖任何 dim（三本账纯数值口径）
 
 ### DWS
 - `biz_dws_progress_monthly_v2`
 - `biz_dws_quality_monthly_v2`
 - `biz_dws_tech_state_monthly_v2`
 - `biz_dws_risk_monthly_v2`
+- `biz_dws_budget_v2`（**当前快照，无时间轴**；粒度 project×research_lab）
 
 ### ADS
 - `biz_ads_progress_kpi_v2` / `biz_ads_progress_derived_v2`
 - `biz_ads_quality_kpi_v2` / `biz_ads_quality_derived_v2`
 - `biz_ads_tech_state_kpi_v2` / `biz_ads_tech_state_derived_v2`
 - `biz_ads_risk_kpi_v2`
+- `biz_ads_budget_kpi_v2` / `biz_ads_budget_derived_v2`（快照单行，无 period 维度）
 - `biz_ads_composite_derived_v2`
+
+### 预算域特例说明
+预算台账是**时点快照**，无业务日期列，故：
+- DWS/ADS 不带 `period_year/period_month`，反映"当前"状态而非按月时间序列。
+- 大屏顶部日期筛选器对预算看板不生效（仅 `research_lab`/`project_no`/`subtopic` 过滤生效）。
+- 已执行口径冻结：`已执行 = 预付账款 + 账面成本 + 应付账款`。
 
 ## 8. 治理原则
 

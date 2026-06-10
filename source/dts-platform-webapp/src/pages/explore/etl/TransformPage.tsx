@@ -50,7 +50,7 @@ export default function TransformPage() {
 	useEffect(() => {
 		void loadTasks();
 		void loadRunCenterOverview();
-	}, [pagination.current, statusFilter]);
+	}, [pagination.current, pagination.pageSize, statusFilter]);
 
 	useEffect(() => {
 		return () => {
@@ -567,7 +567,12 @@ export default function TransformPage() {
 							showQuickJumper: true,
 							showTotal: (total) => `共 ${total} 条`,
 							onChange: (page, pageSize) => {
-								setPagination((prev) => ({ ...prev, current: page, pageSize: pageSize || 10 }));
+								setPagination((prev) => ({
+									...prev,
+									// 切换每页条数时回到第 1 页，避免当前页超出新页数范围
+									current: pageSize !== prev.pageSize ? 1 : page,
+									pageSize: pageSize || 10,
+								}));
 							},
 						}}
 					/>

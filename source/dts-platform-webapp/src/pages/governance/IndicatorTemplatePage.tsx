@@ -297,7 +297,7 @@ export default function Page() {
 				columns={columns}
 				dataSource={templates}
 				loading={loading}
-				pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (t) => `共 ${t} 条` }}
+				pagination={{ defaultPageSize: 10, showSizeChanger: true, showTotal: (t) => `共 ${t} 条` }}
 				size="middle"
 			/>
 

@@ -674,7 +674,7 @@ export default function AssetDetailPage() {
 							showSizeChanger: true,
 						}}
 						onChange={(pagination) => {
-							const nextPage = pagination.current || 1;
+							const nextPage = (pagination.pageSize || 10) !== pageState.size ? 1 : pagination.current || 1;
 							const nextSize = pagination.pageSize || 10;
 							void loadDatasets(nextPage, nextSize);
 						}}

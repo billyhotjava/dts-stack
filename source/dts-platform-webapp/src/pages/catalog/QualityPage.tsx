@@ -347,7 +347,7 @@ export default function QualityPage() {
 						columns={columns}
 						dataSource={cases}
 						loading={loading}
-						pagination={{ pageSize: 10 }}
+						pagination={{ defaultPageSize: 10 }}
 					/>
 				) : (
 					<EmptyState title="暂无规则结果" description="当前数据集暂无质量规则执行记录。" />

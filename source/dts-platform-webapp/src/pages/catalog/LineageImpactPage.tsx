@@ -154,8 +154,8 @@ export default function LineageImpactPage() {
 					</Card>
 					<Card title="节点与关系">
 						<Space direction="vertical" className="w-full">
-							{nodes.length ? <CompactTable rowKey={(row, idx) => row.id || `${row.db || "db"}.${row.table || "tb"}-${idx}`} columns={nodeColumns} dataSource={nodes} loading={loading} scroll={{ x: 1200 }} pagination={{ pageSize: 8 }} onRow={(record) => ({ onClick: () => setSelectedNode(record) })} /> : <EmptyState title="暂无节点" description="当前条件下未检索到血缘节点。" />}
-							{edges.length ? <CompactTable rowKey={(row, idx) => row.id || `${row.upstreamDatasetId || "up"}-${row.downstreamDatasetId || "down"}-${idx}`} columns={edgeColumns} dataSource={edges} loading={loading} scroll={{ x: 1000 }} pagination={{ pageSize: 8 }} /> : <EmptyState title="暂无关系边" description="当前条件下未检索到血缘关系。" />}
+							{nodes.length ? <CompactTable rowKey={(row, idx) => row.id || `${row.db || "db"}.${row.table || "tb"}-${idx}`} columns={nodeColumns} dataSource={nodes} loading={loading} scroll={{ x: 1200 }} pagination={{ defaultPageSize: 10 }} onRow={(record) => ({ onClick: () => setSelectedNode(record) })} /> : <EmptyState title="暂无节点" description="当前条件下未检索到血缘节点。" />}
+							{edges.length ? <CompactTable rowKey={(row, idx) => row.id || `${row.upstreamDatasetId || "up"}-${row.downstreamDatasetId || "down"}-${idx}`} columns={edgeColumns} dataSource={edges} loading={loading} scroll={{ x: 1000 }} pagination={{ defaultPageSize: 10 }} /> : <EmptyState title="暂无关系边" description="当前条件下未检索到血缘关系。" />}
 						</Space>
 					</Card>
 				</>

@@ -50,7 +50,7 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 	const [task, setTask] = useState<IngestionTaskDTO | null>(null);
 	const [executions, setExecutions] = useState<IngestionExecutionDTO[]>([]);
 	const [loading, setLoading] = useState(false);
-	const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
+	const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 });
 	const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
 	const [failureCategoryFilter, setFailureCategoryFilter] = useState<string | undefined>(undefined);
 	const [failureQuickFilter, setFailureQuickFilter] = useState<"all" | "governance">("all");
@@ -92,7 +92,7 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 			loadTask();
 			loadExecutions();
 		}
-	}, [taskId, pagination.current, statusFilter, failureCategoryFilter]);
+	}, [taskId, pagination.current, pagination.pageSize, statusFilter, failureCategoryFilter]);
 
 	useEffect(() => {
 		if (!task?.id) {
@@ -896,7 +896,11 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 						showQuickJumper: true,
 						showTotal: (total) => `共 ${total} 条执行记录`,
 						onChange: (page, pageSize) => {
-							setPagination((prev) => ({ ...prev, current: page, pageSize: pageSize || 20 }));
+							setPagination((prev) => ({
+								...prev,
+								current: pageSize !== prev.pageSize ? 1 : page,
+								pageSize: pageSize || 10,
+							}));
 						},
 					}}
 				/>

@@ -830,7 +830,7 @@ export default function DataSourcesPage() {
 				dataSource={list}
 				loading={loading}
 				scroll={{ x: 1820 }}
-				pagination={{ pageSize: 12 }}
+				pagination={{ defaultPageSize: 10 }}
 			/>
 
 			<Modal

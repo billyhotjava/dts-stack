@@ -644,7 +644,7 @@ function ManualFailingRowsEditor({ runId, onSaved }: { runId?: string; onSaved?:
 				dataSource={rows}
 				loading={loading}
 				size="small"
-				pagination={{ pageSize: 10 }}
+				pagination={{ defaultPageSize: 10 }}
 				scroll={{ x: 900 }}
 				locale={{ emptyText: "暂无失败行明细" }}
 			/>
@@ -902,7 +902,7 @@ function QualityFixMode({ initialRunId }: { initialRunId?: string }) {
 						dataSource={runs}
 						loading={loading}
 						size="small"
-						pagination={{ showSizeChanger: true, defaultPageSize: 20 }}
+						pagination={{ showSizeChanger: true, defaultPageSize: 10 }}
 					/>
 				)}
 			</Card>
