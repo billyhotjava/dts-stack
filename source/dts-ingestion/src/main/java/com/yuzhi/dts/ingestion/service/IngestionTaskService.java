@@ -18,6 +18,9 @@ import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
 import com.yuzhi.dts.ingestion.service.etl.AirflowClient;
 import com.yuzhi.dts.ingestion.service.etl.AirflowDagService;
 import com.yuzhi.dts.ingestion.service.etl.DagPreheatService;
+import com.yuzhi.dts.ingestion.service.etl.ExcelParseService;
+import com.yuzhi.dts.ingestion.service.etl.CsvParseService;
+import com.yuzhi.dts.ingestion.service.etl.FileUploadService;
 import com.yuzhi.dts.ingestion.service.etl.IncrementalSyncService;
 import com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier;
 import com.yuzhi.dts.ingestion.service.etl.IngestionExecutionLineageSnapshot;
@@ -41,6 +44,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
+import java.io.ByteArrayInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -92,6 +96,9 @@ public class IngestionTaskService {
     private final IncrementalSyncService incrementalSyncService;
     private final AuditService auditService;
     private final IngestionTaskChangeLogService changeLogService;
+    private final ExcelParseService excelParseService;
+    private final FileUploadService fileUploadService;
+    private final CsvParseService csvParseService;
     private final com.yuzhi.dts.ingestion.service.etl.IngestionRetryService retryService;
     private final DagPreheatService dagPreheatService;
     private final PlatformInfraClient platformInfraClient;
@@ -112,6 +119,9 @@ public class IngestionTaskService {
         IncrementalSyncService incrementalSyncService,
         AuditService auditService,
         IngestionTaskChangeLogService changeLogService,
+        ExcelParseService excelParseService,
+        FileUploadService fileUploadService,
+        CsvParseService csvParseService,
         @org.springframework.context.annotation.Lazy com.yuzhi.dts.ingestion.service.etl.IngestionRetryService retryService,
         DagPreheatService dagPreheatService,
         PlatformInfraClient platformInfraClient,
@@ -131,6 +141,9 @@ public class IngestionTaskService {
         this.incrementalSyncService = incrementalSyncService;
         this.auditService = auditService;
         this.changeLogService = changeLogService;
+        this.excelParseService = excelParseService;
+        this.fileUploadService = fileUploadService;
+        this.csvParseService = csvParseService;
         this.retryService = retryService;
         this.dagPreheatService = dagPreheatService;
         this.platformInfraClient = platformInfraClient;
@@ -572,6 +585,8 @@ public class IngestionTaskService {
                     execution.getBackfillWindowEnd()
                 )
                 : incrementalSyncService.buildReaderRuntimeOverrides(task, source);
+            validateExcelFormulaOrFail(task);
+            validateUploadedFileColumnsOrFail(task);
             Map<String, Object> runtimeContext = buildExecutionRuntimeContext(task, execution);
             task = ensureAddaxJobExists(task, source, runtimeReaderOverrides, runtimeContext);
             execution.setDroppedTables(resolveDroppedTables(task));
@@ -2210,6 +2225,219 @@ public class IngestionTaskService {
         return snap;
     }
 
+    private void validateExcelFormulaOrFail(IngestionTask task) {
+        if (task == null) {
+            return;
+        }
+        if (!isFileSourceType(task.getSourceType())) {
+            return;
+        }
+
+        String sourceType = StringUtils.hasText(task.getSourceType()) ? task.getSourceType().toLowerCase(java.util.Locale.ROOT) : null;
+        if ("csv".equals(sourceType) || "txtfilereader".equals(sourceType)) {
+            return;
+        }
+
+        String fileType = resolveUploadedFileType(task);
+        if (StringUtils.hasText(fileType) && ("csv".equalsIgnoreCase(fileType) || "txt".equalsIgnoreCase(fileType))) {
+            return;
+        }
+
+        String filePath = resolveUploadedFilePath(task.getSourceConfig());
+        if (!StringUtils.hasText(filePath)) {
+            return;
+        }
+        byte[] plain = fileUploadService.readPlainBytes(Path.of(filePath));
+        String sheetSelector = resolveSourceSheetSelector(task.getSourceConfig());
+        if (StringUtils.hasText(sheetSelector)) {
+            excelParseService.validateFormulaCells(plain, sheetSelector);
+        } else {
+            excelParseService.validateFormulaCells(plain);
+        }
+    }
+
+    private void validateUploadedFileColumnsOrFail(IngestionTask task) {
+        if (task == null || !isFileSourceType(task.getSourceType())) {
+            return;
+        }
+
+        int expectedColumns = resolveExpectedFileColumnCount(task.getSourceConfig());
+        if (expectedColumns < 1) {
+            return;
+        }
+
+        String filePath = resolveUploadedFilePath(task.getSourceConfig());
+        if (!StringUtils.hasText(filePath)) {
+            return;
+        }
+
+        String fileType = resolveUploadedFileType(task);
+        byte[] plain = fileUploadService.readPlainBytes(Path.of(filePath));
+        int actualColumns = resolveUploadedFileColumnCount(fileType, plain);
+        if (actualColumns < 1) {
+            return;
+        }
+
+        if (actualColumns != expectedColumns) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "入湖文件列数与配置不一致：配置 %d 列，实际 %d 列，请检查文件头/分隔符/是否使用了错误文件",
+                    expectedColumns,
+                    actualColumns
+                )
+            );
+        }
+    }
+
+    private int resolveUploadedFileColumnCount(String fileType, byte[] plain) {
+        String normalized = normalizeUploadedFileType(fileType);
+        if (isCsvLikeExtension(normalized)) {
+            try {
+                return csvParseService.parseHeaders(new ByteArrayInputStream(plain)).size();
+            } catch (Exception ex) {
+                throw new IllegalArgumentException("CSV 入湖文件解析失败：" + ex.getMessage(), ex);
+            }
+        }
+        if (isExcelLikeType(normalized)) {
+            try {
+                return fileUploadService.parseExcelHeaders(plain).size();
+            } catch (Exception ex) {
+                throw new IllegalArgumentException("Excel 入湖文件解析失败：" + ex.getMessage(), ex);
+            }
+        }
+        return -1;
+    }
+
+    private int resolveExpectedFileColumnCount(JsonNode sourceConfig) {
+        if (sourceConfig == null) {
+            return -1;
+        }
+        JsonNode fileColumnsNode = sourceConfig.path("_fileColumns");
+        if (!fileColumnsNode.isArray()) {
+            return -1;
+        }
+        return fileColumnsNode.size();
+    }
+
+    private String resolveUploadedFilePath(JsonNode sourceConfig) {
+        if (sourceConfig == null) {
+            return null;
+        }
+        for (String key : List.of("hostPath", "_filePath", "filePath", "path", "_containerPath", "containerPath")) {
+            String value = sourceConfig.path(key).asText(null);
+            if (StringUtils.hasText(value)) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private String resolveUploadedFileType(IngestionTask task) {
+        String sourceType = StringUtils.hasText(task.getSourceType()) ? task.getSourceType().toLowerCase(java.util.Locale.ROOT) : null;
+        if ("txtfilereader".equals(sourceType) || "csv".equals(sourceType) || "txt".equals(sourceType)) {
+            return "csv";
+        }
+        JsonNode sourceConfig = task.getSourceConfig();
+        if (sourceConfig != null) {
+            String configured = sourceConfig.path("fileType").asText(null);
+            if (StringUtils.hasText(configured)) {
+                return normalizeUploadedFileType(configured);
+            }
+        }
+        if (sourceConfig != null) {
+            String fileType = sourceConfig.path("_fileType").asText(null);
+            if (StringUtils.hasText(fileType)) {
+                return normalizeUploadedFileType(fileType);
+            }
+        }
+        String filePath = resolveUploadedFilePath(sourceConfig);
+        if (!StringUtils.hasText(filePath)) {
+            return "csv".equals(sourceType) || "txt".equals(sourceType) ? "csv" : sourceType;
+        }
+        String extension = extractFileTypeFromPath(filePath);
+        if (!StringUtils.hasText(extension)) {
+            return "csv".equals(sourceType) || "txt".equals(sourceType) ? "csv" : sourceType;
+        }
+        if ("txt".equals(sourceType) || "txtfilereader".equals(sourceType)) {
+            if (isCsvLikeExtension(extension)) {
+                return "csv";
+            }
+        }
+        return normalizeUploadedFileType(extension);
+    }
+
+    private String resolveSourceSheetSelector(JsonNode sourceConfig) {
+        if (sourceConfig == null) {
+            return null;
+        }
+        for (String key : List.of("_sheetName", "sheetName", "_sourceSheet", "sourceSheet", "sheet")) {
+            String sheet = sourceConfig.path(key).asText(null);
+            if (StringUtils.hasText(sheet)) {
+                return sheet.trim();
+            }
+        }
+
+        JsonNode sheetIndex = sourceConfig.path("sheetIndex");
+        if (sheetIndex.isInt()) {
+            return String.valueOf(sheetIndex.intValue());
+        }
+        if (sheetIndex.isTextual() && StringUtils.hasText(sheetIndex.asText())) {
+            return sheetIndex.asText().trim();
+        }
+        return null;
+    }
+
+    private boolean isCsvLikeExtension(String extension) {
+        return "csv".equalsIgnoreCase(extension)
+            || "tsv".equalsIgnoreCase(extension)
+            || "txt".equalsIgnoreCase(extension)
+            || "text".equalsIgnoreCase(extension);
+    }
+
+    private boolean isExcelLikeType(String type) {
+        return "excel".equalsIgnoreCase(type)
+            || "excelreader".equalsIgnoreCase(type)
+            || "xls".equalsIgnoreCase(type)
+            || "xlsx".equalsIgnoreCase(type);
+    }
+
+    private String normalizeUploadedFileType(String fileType) {
+        if (!StringUtils.hasText(fileType)) {
+            return "";
+        }
+        String normalized = stripEncryptionSuffix(fileType.trim().toLowerCase(java.util.Locale.ROOT));
+        if ("txtfilereader".equals(normalized) || "txt".equals(normalized)) {
+            return "csv";
+        }
+        if ("excelreader".equals(normalized)) {
+            return "excel";
+        }
+        if (normalized.startsWith(".")) {
+            normalized = normalized.substring(1);
+        }
+        return normalized;
+    }
+
+    private String extractFileTypeFromPath(String filePath) {
+        if (!StringUtils.hasText(filePath)) {
+            return "";
+        }
+        String safeName = stripEncryptionSuffix(filePath.trim());
+        int dot = safeName.lastIndexOf('.');
+        if (dot < 0 || dot >= safeName.length() - 1) {
+            return "";
+        }
+        return safeName.substring(dot + 1).toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private String stripEncryptionSuffix(String value) {
+        if (!StringUtils.hasText(value)) {
+            return value;
+        }
+        String lower = value.toLowerCase(java.util.Locale.ROOT);
+        return lower.endsWith(".enc") ? lower.substring(0, lower.length() - 4) : value;
+    }
+
     private com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolveSource(
         IngestionTask task,
         com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource provided
@@ -2230,7 +2458,11 @@ public class IngestionTaskService {
     private boolean isFileSourceType(String sourceType) {
         if (!org.springframework.util.StringUtils.hasText(sourceType)) return false;
         String lower = sourceType.toLowerCase(java.util.Locale.ROOT);
-        return "excel".equals(lower) || "csv".equals(lower) || "excelreader".equals(lower) || "txtfilereader".equals(lower);
+        return "excel".equals(lower)
+            || "csv".equals(lower)
+            || "txt".equals(lower)
+            || "excelreader".equals(lower)
+            || "txtfilereader".equals(lower);
     }
 
     private boolean isApiSourceTask(IngestionTask task) {

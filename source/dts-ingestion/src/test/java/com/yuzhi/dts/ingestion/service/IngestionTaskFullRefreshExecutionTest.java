@@ -19,6 +19,9 @@ import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
 import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
 import com.yuzhi.dts.ingestion.service.etl.AirflowDagService;
 import com.yuzhi.dts.ingestion.service.etl.DagPreheatService;
+import com.yuzhi.dts.ingestion.service.etl.CsvParseService;
+import com.yuzhi.dts.ingestion.service.etl.ExcelParseService;
+import com.yuzhi.dts.ingestion.service.etl.FileUploadService;
 import com.yuzhi.dts.ingestion.service.etl.IncrementalSyncService;
 import com.yuzhi.dts.ingestion.service.etl.IngestionRetryService;
 import com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner;
@@ -26,6 +29,7 @@ import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionExecutionMapper;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionTaskMapper;
 import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -80,6 +84,15 @@ class IngestionTaskFullRefreshExecutionTest {
     private IngestionTaskChangeLogService changeLogService;
 
     @Mock
+    private ExcelParseService excelParseService;
+
+    @Mock
+    private FileUploadService fileUploadService;
+
+    @Mock
+    private CsvParseService csvParseService;
+
+    @Mock
     private IngestionRetryService retryService;
 
     @Mock
@@ -111,6 +124,9 @@ class IngestionTaskFullRefreshExecutionTest {
             incrementalSyncService,
             auditService,
             changeLogService,
+            excelParseService,
+            fileUploadService,
+            csvParseService,
             retryService,
             dagPreheatService,
             platformInfraClient,
@@ -196,6 +212,69 @@ class IngestionTaskFullRefreshExecutionTest {
             .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
 
         verify(targetTableProvisioner, never()).ensureTargetTables(any(), any(), any());
+    }
+
+    @Test
+    void execute_fileTaskWithInvalidFormula_shouldFailInAsyncPhase() throws Exception {
+        IngestionTask task = baseTask(104L, "excel", "full_refresh");
+        java.nio.file.Path file = Files.createTempFile("formula-invalid", ".xlsx");
+        ObjectNode sourceConfig = (ObjectNode) task.getSourceConfig().deepCopy();
+        sourceConfig.put("_filePath", file.toString());
+        task.setSourceConfig(sourceConfig);
+
+        when(taskRepository.findById(104L)).thenReturn(Optional.of(task));
+        when(fileUploadService.readPlainBytes(file)).thenReturn("x".getBytes(StandardCharsets.UTF_8));
+        org.mockito.Mockito.doThrow(new IllegalArgumentException("Excel 公式预检失败：A2 公式无法解析 -> 1/0"))
+            .when(excelParseService)
+            .validateFormulaCells(any(byte[].class));
+        when(executionMapper.toDto(any(IngestionExecution.class))).thenReturn(new IngestionExecutionDTO());
+
+        service.execute(104L);
+
+        org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+            .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+
+        verify(addaxJobService, never()).createJobFromTask(any(), any(), any(), any(), any());
+        verify(targetTableProvisioner, never()).ensureTargetTables(any(), any(), any());
+        ArgumentCaptor<IngestionExecution> captor = ArgumentCaptor.forClass(IngestionExecution.class);
+        verify(executionRepository, org.mockito.Mockito.atLeast(2)).save(captor.capture());
+        boolean hasFailed = captor.getAllValues().stream()
+            .anyMatch(e -> "failed".equals(e.getStatus())
+                && e.getErrorMessage() != null
+                && e.getErrorMessage().contains("公式预检失败"));
+        assertThat(hasFailed).isTrue();
+    }
+
+    @Test
+    void execute_fileTaskWithHostPathFormula_shouldUseHostPath() throws Exception {
+        IngestionTask task = baseTask(105L, "excel", "full_refresh");
+        java.nio.file.Path file = Files.createTempFile("formula-invalid-host", ".xlsx");
+        ObjectNode sourceConfig = (ObjectNode) task.getSourceConfig().deepCopy();
+        sourceConfig.put("hostPath", file.toString());
+        task.setSourceConfig(sourceConfig);
+
+        when(taskRepository.findById(105L)).thenReturn(Optional.of(task));
+        when(fileUploadService.readPlainBytes(file)).thenReturn("y".getBytes(StandardCharsets.UTF_8));
+        org.mockito.Mockito.doThrow(new IllegalArgumentException("Excel 公式预检失败：A2 公式无法解析 -> not_existing_named_range"))
+            .when(excelParseService)
+            .validateFormulaCells(any(byte[].class));
+        when(executionMapper.toDto(any(IngestionExecution.class))).thenReturn(new IngestionExecutionDTO());
+
+        service.execute(105L);
+
+        org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+            .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+
+        verify(fileUploadService).readPlainBytes(file);
+        verify(addaxJobService, never()).createJobFromTask(any(), any(), any(), any(), any());
+        verify(targetTableProvisioner, never()).ensureTargetTables(any(), any(), any());
+        ArgumentCaptor<IngestionExecution> captor = ArgumentCaptor.forClass(IngestionExecution.class);
+        verify(executionRepository, org.mockito.Mockito.atLeast(2)).save(captor.capture());
+        boolean hasFailed = captor.getAllValues().stream()
+            .anyMatch(e -> "failed".equals(e.getStatus())
+                && e.getErrorMessage() != null
+                && e.getErrorMessage().contains("公式预检失败"));
+        assertThat(hasFailed).isTrue();
     }
 
     @Test

@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -184,6 +185,92 @@ public class ExcelParseService {
         }
     }
 
+    public void validateFormulaCells(byte[] plain) {
+        validateFormulaCells(plain, null);
+    }
+
+    public void validateFormulaCells(byte[] plain, String sheetSelector) {
+        if (plain == null || plain.length == 0) {
+            throw new IllegalArgumentException("Excel 文件为空");
+        }
+        try (Workbook workbook = WorkbookFactory.create(new java.io.ByteArrayInputStream(plain))) {
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            for (Sheet sheet : resolveSheetsToValidate(workbook, sheetSelector)) {
+                if (sheet == null) {
+                    continue;
+                }
+                for (int r = 0; r <= sheet.getLastRowNum(); r++) {
+                    Row row = sheet.getRow(r);
+                    if (row == null) {
+                        continue;
+                    }
+                    int lastCell = row.getLastCellNum();
+                    if (lastCell < 0) {
+                        continue;
+                    }
+                    for (int c = 0; c < lastCell; c++) {
+                        Cell cell = row.getCell(c);
+                        if (cell == null || cell.getCellType() != CellType.FORMULA) {
+                            continue;
+                        }
+                        if (!isFormulaCellUsable(cell, evaluator)) {
+                            String position = cell.getAddress() != null ? cell.getAddress().formatAsString() : ("R" + (r + 1) + "C" + (c + 1));
+                            String formula = cell.getCellFormula();
+                            String sheetName = sheet.getSheetName();
+                            throw new IllegalArgumentException(
+                                "Excel 公式预检失败：" + (sheetName == null ? "" : (sheetName + " ")) + position + " 公式无法解析 -> " + formula
+                            );
+                        }
+                    }
+                }
+            }
+        } catch (IllegalArgumentException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("Excel 公式预检失败：" + ex.getMessage(), ex);
+        }
+    }
+
+    private List<Sheet> resolveSheetsToValidate(Workbook workbook, String sheetSelector) {
+        if (workbook == null || workbook.getNumberOfSheets() <= 0) {
+            return List.of();
+        }
+
+        if (sheetSelector == null || sheetSelector.isBlank()) {
+            List<Sheet> all = new java.util.ArrayList<>();
+            for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+                all.add(workbook.getSheetAt(i));
+            }
+            return all;
+        }
+
+        String selector = sheetSelector.trim();
+        if (!selector.isEmpty()) {
+            Sheet byIndex = resolveSheetBySelector(workbook, selector);
+            if (byIndex != null) {
+                return Collections.singletonList(byIndex);
+            }
+            Sheet byName = workbook.getSheet(selector);
+            if (byName != null) {
+                return Collections.singletonList(byName);
+            }
+        }
+
+        throw new IllegalArgumentException("未找到指定 sheet: " + sheetSelector);
+    }
+
+    private Sheet resolveSheetBySelector(Workbook workbook, String selector) {
+        try {
+            int index = Integer.parseInt(selector);
+            if (index >= 0 && index < workbook.getNumberOfSheets()) {
+                return workbook.getSheetAt(index);
+            }
+            return null;
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
     private String getCellStringValue(Cell cell) {
         if (cell == null) {
             return null;
@@ -284,6 +371,41 @@ public class ExcelParseService {
             LOG.debug("Formula evaluation failed at row {}, col {}: {}",
                 cell.getRowIndex(), cell.getColumnIndex(), e.getMessage());
             return null;
+        }
+    }
+
+    private boolean isFormulaCellUsable(Cell cell, FormulaEvaluator evaluator) {
+        if (cell == null) {
+            return false;
+        }
+
+        if (evaluator != null) {
+            try {
+                CellValue evaluated = evaluator.evaluate(cell);
+                if (evaluated != null && evaluated.getCellType() != CellType.ERROR) {
+                    return true;
+                }
+                if (evaluated != null) {
+                    LOG.debug("Formula evaluation returned ERROR at row {}, col {}",
+                        cell.getRowIndex(), cell.getColumnIndex());
+                }
+            } catch (Exception ex) {
+                LOG.debug("Formula evaluation failed at row {}, col {}: {}",
+                    cell.getRowIndex(), cell.getColumnIndex(), ex.getMessage());
+            }
+        }
+
+        return hasNonErrorCachedFormulaValue(cell);
+    }
+
+    private boolean hasNonErrorCachedFormulaValue(Cell cell) {
+        try {
+            CellType cachedType = cell.getCachedFormulaResultType();
+            return cachedType != null && cachedType != CellType.ERROR;
+        } catch (Exception ex) {
+            LOG.debug("Cannot read cached formula result at row {}, col {}: {}",
+                cell.getRowIndex(), cell.getColumnIndex(), ex.getMessage());
+            return false;
         }
     }
 

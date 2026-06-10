@@ -102,10 +102,6 @@ public final class AddaxEnvRunner {
         String expectedVersion = env.get(KEY_VERSION_ENV);
         Path tmpDir = Path.of(env.getOrDefault("TMPDIR", System.getProperty("java.io.tmpdir")));
         String result = rendered;
-        if (!encPaths.isEmpty() && (base64Key == null || base64Key.isBlank())) {
-            throw new GeneralSecurityException(
-                "encrypted input present but " + ENCRYPTION_KEY_ENV + " is not set");
-        }
         for (String encPath : encPaths) {
             Path enc = Path.of(encPath);
             if (!Files.isReadable(enc)) {

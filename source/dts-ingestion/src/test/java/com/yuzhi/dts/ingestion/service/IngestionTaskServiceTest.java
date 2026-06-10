@@ -14,6 +14,9 @@ import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
 import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
 import com.yuzhi.dts.ingestion.service.etl.AirflowDagService;
 import com.yuzhi.dts.ingestion.service.etl.DagPreheatService;
+import com.yuzhi.dts.ingestion.service.etl.ExcelParseService;
+import com.yuzhi.dts.ingestion.service.etl.CsvParseService;
+import com.yuzhi.dts.ingestion.service.etl.FileUploadService;
 import com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner;
 import com.yuzhi.dts.ingestion.service.etl.IncrementalSyncService;
 import com.yuzhi.dts.ingestion.service.etl.IngestionRetryService;
@@ -32,6 +35,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -93,6 +97,15 @@ class IngestionTaskServiceTest {
     private IngestionTaskChangeLogService changeLogService;
 
     @Mock
+    private ExcelParseService excelParseService;
+
+    @Mock
+    private FileUploadService fileUploadService;
+
+    @Mock
+    private CsvParseService csvParseService;
+
+    @Mock
     private IngestionRetryService retryService;
 
     @Mock
@@ -124,6 +137,9 @@ class IngestionTaskServiceTest {
             incrementalSyncService,
             auditService,
             changeLogService,
+            excelParseService,
+            fileUploadService,
+            csvParseService,
             retryService,
             dagPreheatService,
             platformInfraClient,
@@ -386,12 +402,13 @@ class IngestionTaskServiceTest {
         task.setId(taskId);
         task.setStatus("draft");
         task.setSourceType("httpreader");
+        task.setSourceConfig(objectMapper.createObjectNode().put("apiType", "ingress"));
 
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        when(executionMapper.toDto(any(IngestionExecution.class))).thenReturn(new IngestionExecutionDTO());
 
-        assertThatThrownBy(() -> ingestionTaskService.execute(taskId))
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("API 数据接入运行时尚未启用");
+        IngestionExecutionDTO result = ingestionTaskService.execute(taskId);
+        assertThat(result).isNotNull();
     }
 
     @Test
@@ -431,10 +448,9 @@ class IngestionTaskServiceTest {
         IngestionTaskDTO result = ingestionTaskService.update(taskId, dto);
 
         assertThat(result).isNotNull();
-        assertThat(existingTask.getStatus()).isEqualTo("draft");
+        assertThat(existingTask.getStatus()).isEqualTo("active");
         assertThat(existingTask.getAddaxJobPath()).isNull();
         verify(addaxJobService, never()).createJobFromTask(any(IngestionTask.class));
-        verify(airflowAdapter, never()).isEnabled();
         verify(airflowDagService, never()).ensureDagForTask(any(), any());
     }
 
@@ -475,6 +491,45 @@ class IngestionTaskServiceTest {
         // Then
         assertThat(result).isPresent();
         verify(executionRepository).findFirstByTaskIdOrderByCreatedAtDesc(taskId);
+    }
+
+    @Test
+    void execute_shouldRebuildAddaxJobForLegacyTxtFileSource() throws Exception {
+        Long taskId = 1L;
+        IngestionTask task = createTestTaskEntity();
+        task.setId(taskId);
+        task.setStatus("active");
+        task.setSourceType("txt");
+        task.setSourceDataSourceId(null);
+        task.setAirflowEnabled(true);
+        task.setAirflowDagId("legacy-txt-dag");
+        ObjectNode sourceConfig = objectMapper.createObjectNode();
+        sourceConfig.put("_filePath", java.nio.file.Files.createTempFile("legacy-txt", ".xlsx.enc").toString());
+        task.setSourceConfig(sourceConfig);
+        task.setAddaxJobPath("/tmp/legacy-job.json");
+
+        when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        when(taskRepository.save(task)).thenReturn(task);
+        when(executionMapper.toDto(any(IngestionExecution.class))).thenReturn(new IngestionExecutionDTO());
+        when(airflowAdapter.isEnabled()).thenReturn(true);
+        when(addaxJobService.createJobFromTask(any(IngestionTask.class), any(), any(), any(), any())).thenReturn(
+            new AddaxJobService.AddaxJobResult("legacy-txt-job.json", "/tmp/legacy-txt-job.json", Map.of())
+        );
+        when(addaxJobService.splitJobIntoPerTableFiles(anyString())).thenReturn(List.of());
+        when(addaxJobService.toContainerJobPath(anyString())).thenReturn("/opt/addax/job.json");
+        when(airflowDagService.rebuildDagForTask(any(IngestionTask.class), anyList())).thenReturn("legacy-txt-dag");
+        when(airflowAdapter.triggerIfRequested(any(), anyMap(), eq(true))).thenReturn(
+            Map.of("status", "triggered", "dagRunId", "run-001")
+        );
+
+        IngestionExecutionDTO result = ingestionTaskService.execute(taskId);
+        assertThat(result).isNotNull();
+
+        org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+            .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+
+        verify(addaxJobService).createJobFromTask(any(IngestionTask.class), any(), any(), any(), any());
+        verify(targetTableProvisioner, never()).ensureTargetTables(any(), any(), any());
     }
 
     @Test
@@ -538,6 +593,49 @@ class IngestionTaskServiceTest {
         assertThat(task.getAirflowDagId()).isEqualTo("rebuilt-dag");
         verify(taskRepository).save(task);
         verify(dagPreheatService).preheatDag("rebuilt-dag");
+    }
+
+    @Test
+    void validateExcelFormulaOrFail_shouldUseSourceSheetSelector() throws Exception {
+        IngestionTask task = createTestTaskEntity();
+        task.setId(1L);
+        task.setSourceType("excelreader");
+        ObjectNode sourceConfig = objectMapper.createObjectNode();
+        sourceConfig.put("_filePath", "/tmp/test.xlsx");
+        sourceConfig.put("_sourceSheet", "Sheet1");
+        task.setSourceConfig(sourceConfig);
+
+        byte[] plain = new byte[] { 1, 2, 3 };
+        when(fileUploadService.readPlainBytes(any(java.nio.file.Path.class))).thenReturn(plain);
+
+        Method method = IngestionTaskService.class.getDeclaredMethod("validateExcelFormulaOrFail", IngestionTask.class);
+        method.setAccessible(true);
+        method.invoke(ingestionTaskService, task);
+
+        verify(fileUploadService).readPlainBytes(any(java.nio.file.Path.class));
+        verify(excelParseService).validateFormulaCells(eq(plain), eq("Sheet1"));
+        verify(excelParseService, never()).validateFormulaCells(eq(plain));
+    }
+
+    @Test
+    void validateExcelFormulaOrFail_shouldValidateAllSheetsWhenSelectorMissing() throws Exception {
+        IngestionTask task = createTestTaskEntity();
+        task.setId(2L);
+        task.setSourceType("excelreader");
+        ObjectNode sourceConfig = objectMapper.createObjectNode();
+        sourceConfig.put("_filePath", "/tmp/test.xlsx");
+        task.setSourceConfig(sourceConfig);
+
+        byte[] plain = new byte[] { 4, 5, 6 };
+        when(fileUploadService.readPlainBytes(any(java.nio.file.Path.class))).thenReturn(plain);
+
+        Method method = IngestionTaskService.class.getDeclaredMethod("validateExcelFormulaOrFail", IngestionTask.class);
+        method.setAccessible(true);
+        method.invoke(ingestionTaskService, task);
+
+        verify(fileUploadService).readPlainBytes(any(java.nio.file.Path.class));
+        verify(excelParseService).validateFormulaCells(eq(plain));
+        verify(excelParseService, never()).validateFormulaCells(eq(plain), anyString());
     }
 
     // Helper methods

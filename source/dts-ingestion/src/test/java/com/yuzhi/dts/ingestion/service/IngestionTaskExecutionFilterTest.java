@@ -14,6 +14,9 @@ import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
 import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
 import com.yuzhi.dts.ingestion.service.etl.AirflowDagService;
 import com.yuzhi.dts.ingestion.service.etl.DagPreheatService;
+import com.yuzhi.dts.ingestion.service.etl.ExcelParseService;
+import com.yuzhi.dts.ingestion.service.etl.FileUploadService;
+import com.yuzhi.dts.ingestion.service.etl.CsvParseService;
 import com.yuzhi.dts.ingestion.service.etl.IncrementalSyncService;
 import com.yuzhi.dts.ingestion.service.etl.IngestionRetryService;
 import com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner;
@@ -74,6 +77,15 @@ class IngestionTaskExecutionFilterTest {
     private IngestionTaskChangeLogService changeLogService;
 
     @Mock
+    private ExcelParseService excelParseService;
+
+    @Mock
+    private FileUploadService fileUploadService;
+
+    @Mock
+    private CsvParseService csvParseService;
+
+    @Mock
     private IngestionRetryService retryService;
 
     @Mock
@@ -103,11 +115,14 @@ class IngestionTaskExecutionFilterTest {
             incrementalSyncService,
             auditService,
             changeLogService,
+            excelParseService,
+            fileUploadService,
+            csvParseService,
             retryService,
             dagPreheatService,
             platformInfraClient,
             transactionManager,
-            Runnable::run
+            command -> command.run()
         );
     }
 

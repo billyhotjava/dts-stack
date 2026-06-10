@@ -184,6 +184,11 @@ spring:
     multipart:
       max-file-size: ${DATA_STANDARD_MAX_FILE_SIZE:209715200}
       max-request-size: ${DATA_STANDARD_MAX_FILE_SIZE:209715200}
+      # Sprint-37 H1: dts-platform 是入湖上传第一跳代理(IngestionTaskProxyResource /files/upload*)，
+      # 上传明文先经此容器的 multipart 处理。200MB 上限纯内存会 OOM，故 threshold 适中(小文件
+      # 留内存)；超阈值与 POI 临时文件落容器内 JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/apptmp(tmpfs)，
+      # 而非宿主机 overlay2 diff 层。
+      file-size-threshold: ${DTS_MULTIPART_THRESHOLD:8MB}
   security:
     oauth2:
       client:

@@ -596,7 +596,7 @@ public class FileUploadService {
 
     private void writeEncryptedPayload(Path hostPath, byte[] plain, String keyVersion, byte[] iv) {
         try {
-            byte[] cipher = crypto.encrypt(plain, iv);
+            byte[] cipher = crypto.encryptStrict(plain, iv);
             byte[] versionBytes = keyVersion.getBytes(java.nio.charset.StandardCharsets.UTF_8);
             if (versionBytes.length > 255) {
                 throw new IllegalStateException("keyVersion 过长，无法写入文件头: " + keyVersion);
@@ -635,7 +635,7 @@ public class FileUploadService {
         byte[] iv = java.util.Arrays.copyOfRange(stored, ivStart, cipherStart);
         byte[] cipherText = java.util.Arrays.copyOfRange(stored, cipherStart, stored.length);
         try {
-            return crypto.decrypt(cipherText, iv);
+            return crypto.decryptStrict(cipherText, iv);
         } catch (Exception ex) {
             throw new IllegalStateException("读取或解密文件失败: " + ex.getMessage(), ex);
         }
@@ -697,25 +697,6 @@ public class FileUploadService {
             case BOOLEAN -> "boolean";
             default -> "string";
         };
-    }
-
-    private String inferTypeFromString(String value) {
-        if (!StringUtils.hasText(value)) {
-            return "string";
-        }
-        String trimmed = value.trim();
-        if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
-            return "string";
-        }
-        try {
-            Long.parseLong(trimmed);
-            return "long";
-        } catch (NumberFormatException ignored) {}
-        try {
-            Double.parseDouble(trimmed);
-            return "double";
-        } catch (NumberFormatException ignored) {}
-        return "string";
     }
 
     private String lowerType(String rawType) {
@@ -866,14 +847,5 @@ public class FileUploadService {
             }
         }
         return deleted;
-    }
-
-    private String firstSheetName(byte[] data) {
-        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(data))) {
-            Sheet sheet = workbook.getSheetAt(0);
-            return sheet == null ? null : sheet.getSheetName();
-        } catch (Exception ex) {
-            return null;
-        }
     }
 }

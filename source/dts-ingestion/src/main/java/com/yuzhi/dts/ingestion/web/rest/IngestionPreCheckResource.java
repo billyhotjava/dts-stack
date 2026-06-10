@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -120,6 +121,14 @@ public class IngestionPreCheckResource {
         try {
             ParseResult parseResult;
             byte[] plain = fileUploadService.readPlainBytes(path);
+            if (!isCsvTask(task, path)) {
+                String sheetSelector = resolveSourceSheetSelector(task.getSourceConfig());
+                if (StringUtils.hasText(sheetSelector)) {
+                    excelParseService.validateFormulaCells(plain, sheetSelector);
+                } else {
+                    excelParseService.validateFormulaCells(plain);
+                }
+            }
             try (InputStream is = new ByteArrayInputStream(plain)) {
                 parseResult = isCsvTask(task, path) ? csvParseService.parse(is) : excelParseService.parse(is);
             }
@@ -384,18 +393,22 @@ public class IngestionPreCheckResource {
     private boolean isCsvTask(IngestionTask task, Path path) {
         if (task.getSourceType() != null) {
             String lower = task.getSourceType().toLowerCase(java.util.Locale.ROOT);
-            if ("csv".equals(lower) || "txtfilereader".equals(lower)) {
+            if ("csv".equals(lower) || "txt".equals(lower) || "txtfilereader".equals(lower)) {
                 return true;
             }
         }
         if (task.getSourceConfig() != null) {
             String fileType = task.getSourceConfig().path("_fileType").asText(null);
-            if ("csv".equalsIgnoreCase(fileType)) {
+            if (isCsvLikeFileType(fileType)) {
+                return true;
+            }
+            String sourceTypeFileType = task.getSourceType();
+            if (StringUtils.hasText(sourceTypeFileType) && isCsvLikeFileType(sourceTypeFileType)) {
                 return true;
             }
         }
-        String fileName = path.getFileName() == null ? "" : path.getFileName().toString().toLowerCase(java.util.Locale.ROOT);
-        return fileName.endsWith(".csv");
+        String fileName = path.getFileName() == null ? "" : stripEncryptionSuffix(path.getFileName().toString().toLowerCase(java.util.Locale.ROOT));
+        return fileName.endsWith(".csv") || fileName.endsWith(".tsv") || fileName.endsWith(".txt") || fileName.endsWith(".text");
     }
 
     private String requireStagingTable(IngestionTask task) {
@@ -425,8 +438,17 @@ public class IngestionPreCheckResource {
         if (sourceConfig == null) {
             return null;
         }
-        // Try _filePath first (standard key for file uploads), then filePath
-        JsonNode filePathNode = sourceConfig.get("_filePath");
+        // Try host/container keys consistently with upload persistence, then legacy keys.
+        JsonNode filePathNode = sourceConfig.get("hostPath");
+        if (filePathNode == null) {
+            filePathNode = sourceConfig.get("_containerPath");
+        }
+        if (filePathNode == null) {
+            filePathNode = sourceConfig.get("containerPath");
+        }
+        if (filePathNode == null) {
+            filePathNode = sourceConfig.get("_filePath");
+        }
         if (filePathNode == null) {
             filePathNode = sourceConfig.get("filePath");
         }
@@ -434,6 +456,42 @@ public class IngestionPreCheckResource {
             filePathNode = sourceConfig.get("path");
         }
         return filePathNode != null ? filePathNode.asText() : null;
+    }
+
+    private boolean isCsvLikeFileType(String value) {
+        if (!org.springframework.util.StringUtils.hasText(value)) {
+            return false;
+        }
+        String normalized = stripEncryptionSuffix(value.trim()).toLowerCase(java.util.Locale.ROOT);
+        return "csv".equals(normalized) || "tsv".equals(normalized) || "txt".equals(normalized) || "text".equals(normalized) || "txtfilereader".equals(normalized);
+    }
+
+    private String resolveSourceSheetSelector(JsonNode sourceConfig) {
+        if (sourceConfig == null) {
+            return null;
+        }
+        for (String key : List.of("_sheetName", "sheetName", "_sourceSheet", "sourceSheet", "sheet")) {
+            String sheet = sourceConfig.path(key).asText(null);
+            if (StringUtils.hasText(sheet)) {
+                return sheet.trim();
+            }
+        }
+        JsonNode sheetIndex = sourceConfig.path("sheetIndex");
+        if (sheetIndex.isInt()) {
+            return String.valueOf(sheetIndex.intValue());
+        }
+        if (sheetIndex.isTextual() && StringUtils.hasText(sheetIndex.asText())) {
+            return sheetIndex.asText().trim();
+        }
+        return null;
+    }
+
+    private String stripEncryptionSuffix(String value) {
+        if (!org.springframework.util.StringUtils.hasText(value)) {
+            return value;
+        }
+        String lower = value.toLowerCase(java.util.Locale.ROOT);
+        return lower.endsWith(".enc") ? lower.substring(0, lower.length() - 4) : value;
     }
 
     private UUID extractPreCheckDatasetId(IngestionTask task) {

@@ -760,6 +760,9 @@ services:
       DTS_PLATFORM_OPENMETADATA_SERVICE_NAME: ${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-}
       DTS_PLATFORM_OPENMETADATA_TABLE_FIELDS: ${DTS_PLATFORM_OPENMETADATA_TABLE_FIELDS:-}
       DTS_PLATFORM_OPENMETADATA_TABLE_FQN_PATTERN: ${DTS_PLATFORM_OPENMETADATA_TABLE_FQN_PATTERN:-"{service}.{database}.{table}"}
+      # Sprint-37 H1/H2: 将 JVM 临时目录指向容器 tmpfs，使 Tomcat multipart 与 POI 解析的
+      # 上传明文临时文件落内存而非宿主机 overlay2 diff 层。
+      JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/apptmp
       LOG_ROOT: /logs
       SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTPS:-dts_platform}
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTPS:-dts_platform}
@@ -781,6 +784,10 @@ services:
     restart: unless-stopped
     security_opt:
       - seccomp=unconfined
+    tmpfs:
+      # Sprint-37 H1/H2: 上传明文临时文件(multipart location + java.io.tmpdir)落此 tmpfs(内存)，
+      # 不写宿主机磁盘层；mode=1700 仅 root(容器运行用户)可读写。
+      - /apptmp:size=268435456,mode=1700
     volumes:
       - bind:
           create_host_path: true
@@ -1276,7 +1283,7 @@ services:
       DTS_PLATFORM_OPENMETADATA_TABLE_FQN_PATTERN: ${DTS_PLATFORM_OPENMETADATA_TABLE_FQN_PATTERN:-"{service}.{database}.{table}"}
       DTS_PLATFORM_OPENMETADATA_UI_BASE_URL: ${DTS_PLATFORM_OPENMETADATA_UI_BASE_URL:-}
       EUREKA_CLIENT_ENABLED: "false"
-      JAVA_TOOL_OPTIONS: -Djavax.net.ssl.trustStore=/etc/dts/truststore.p12 -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Djavax.net.ssl.trustStoreType=PKCS12 -Dspring.datasource.url=$${SPRING_DATASOURCE_URL} -Dspring.datasource.username=$${SPRING_DATASOURCE_USERNAME} -Dspring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}
+      JAVA_TOOL_OPTIONS: -Djavax.net.ssl.trustStore=/etc/dts/truststore.p12 -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Djavax.net.ssl.trustStoreType=PKCS12 -Dspring.datasource.url=$${SPRING_DATASOURCE_URL} -Dspring.datasource.username=$${SPRING_DATASOURCE_USERNAME} -Dspring.datasource.password=$${SPRING_DATASOURCE_PASSWORD} -Djava.io.tmpdir=/apptmp
       JHIPSTER_CORS_ALLOW_CREDENTIALS: "true"
       JHIPSTER_CORS_ALLOWED_HEADERS: '*'
       JHIPSTER_CORS_ALLOWED_METHODS: GET,POST,PUT,PATCH,DELETE,OPTIONS
@@ -1337,6 +1344,10 @@ services:
     restart: unless-stopped
     security_opt:
       - seccomp=unconfined
+    tmpfs:
+      # Sprint-37 H1/H2: 入湖上传第一跳，上传明文临时文件(multipart location + java.io.tmpdir)
+      # 落此 tmpfs(内存)，不写宿主机磁盘层；200MB 上限故 size 较大；mode=1700 仅 root 可读写。
+      - /apptmp:size=805306368,mode=1700
     volumes:
       - bind:
           create_host_path: true

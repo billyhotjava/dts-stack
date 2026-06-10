@@ -55,7 +55,8 @@ MultipartFile                         AddaxEnvRunner.run()
 |----|------|------|
 | dts-ingestion | `FileUploadService` 加密落盘 + 表头内存解密 + cleanup 适配 `.enc` | 上传 REST 契约、源类型判定 |
 | runner | `AddaxEnvRunner` 增解密→tmpfs→改写路径→擦除 | Addax 二进制、job 模板渲染逻辑 |
-| DAG/编排 | `AirflowDagService` 注入 tmpfs mount + 密钥环境；去掉 uploads 的 `o+r` | DockerOperator 其余配置、bind 结构 |
+| DAG/编排 | `AirflowDagService` 注入 tmpfs mount + 密钥环境；uploads `.enc` **保留** `o+r`（密文性保证安全、供 Addax 跨 UID 读，见 F3/T01 断言 C） | DockerOperator 其余配置、bind 结构 |
+| 上传服务（H1） | dts-platform/dts-ingestion `multipart.file-size-threshold` + 容器 `tmpfs:/apptmp` + `-Djava.io.tmpdir=/apptmp`，使 Tomcat/POI 临时明文落 tmpfs | 上传 REST 契约 |
 | 密钥 | 复用 `DTS_INFRA_ENCRYPTION_KEY` + `keyVersion`，两侧一致校验 | 不新造密钥体系 |
 
 ## Feature 顺序
@@ -72,8 +73,9 @@ MultipartFile                         AddaxEnvRunner.run()
 
 - [ ] 上传的 Excel/CSV 以 AES-GCM 加密为 `{name}.enc` 落盘，宿主机 `cat` 仅得密文；明文 sha256/iv/keyVersion 入 sourceConfig。
 - [ ] 表头解析在内存完成（解密后 POI/CSV 解析），不产生任何明文临时文件。
+- [ ] **（H1）上传服务容器（dts-platform 入湖上传第一跳代理 + dts-ingestion）的 Tomcat multipart 与 POI 临时文件落 tmpfs（`/apptmp` + `-Djava.io.tmpdir`），不写宿主机 overlay2 `diff/` 层；`file-size-threshold` 使小文件留内存。**
 - [ ] `AddaxEnvRunner` 运行期把密文解密到 tmpfs 明文供 Addax 读取，作业结束（含失败）擦除明文。
-- [ ] DAG 给 Addax 容器挂 tmpfs 且 `TMPDIR` 指向它；密钥环境注入；compose 去掉 uploads 的 `o+r`。
+- [ ] DAG 给 Addax 容器挂 tmpfs 且 `TMPDIR` 指向它；密钥环境注入；uploads `.enc` **保留** `o+r`（安全由密文性保证、供 Addax 跨 UID 读，不依赖权限收紧——见 F3/T01）。
 - [ ] 密钥缺失时上传与解密均 fail-fast，无明文回退。
 - [ ] Addax 入湖功能回归：加密前后入湖结果（行数/字段/类型）一致。
 - [ ] IT 证据：宿主机（含 root）`ls`/`cat` uploads 仅见密文；磁盘无明文残留；Addax 入湖成功。

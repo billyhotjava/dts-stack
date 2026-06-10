@@ -104,4 +104,64 @@ class IngestionPreCheckResourceTest {
         verify(stagingTableService).bulkInsert(STAGING_TABLE, columns, rows);
         verify(taskRepository).save(task);
     }
+
+    @Test
+    void parseShouldUseHostPathFromSourceConfig() throws Exception {
+        Path csv = tempDir.resolve("project-hostpath.csv");
+        Files.writeString(csv, "project,cost\nbeta,128\n");
+
+        IngestionTask task = new IngestionTask();
+        task.setId(43L);
+        task.setName("csv-hostpath");
+        task.setSourceType("csv");
+        task.setSourceConfig(objectMapper.valueToTree(Map.of("hostPath", csv.toString(), "_fileType", "csv")));
+        task.setStagingTableName("tmp_ingestion_old");
+
+        List<ColumnInfo> columns = List.of(new ColumnInfo("project", "STRING", 100), new ColumnInfo("cost", "LONG", 100));
+        List<List<String>> rows = List.of(List.of("beta", "128"));
+        when(taskRepository.findById(43L)).thenReturn(Optional.of(task));
+        when(fileUploadService.readPlainBytes(csv)).thenReturn(Files.readAllBytes(csv));
+        when(csvParseService.parse(any(InputStream.class))).thenReturn(new ParseResult(1, columns, List.of(), List.of(), rows));
+        when(stagingTableService.create(any(UUID.class), eq(43L), eq(columns))).thenReturn("tmp_ingestion_43");
+        when(builtInRuleChecker.check("tmp_ingestion_43", columns)).thenReturn(Map.of());
+
+        mockMvc.perform(post("/api/ingestion/tasks/43/parse"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.totalRows").value(1))
+            .andExpect(jsonPath("$.stagingTableName").value("tmp_ingestion_43"));
+
+        verify(fileUploadService).readPlainBytes(csv);
+        verify(csvParseService).parse(any(InputStream.class));
+        verify(stagingTableService).create(any(UUID.class), eq(43L), eq(columns));
+    }
+
+    @Test
+    void parseShouldTreatCsvEncByName() throws Exception {
+        Path csv = tempDir.resolve("project-enc.csv.enc");
+        Files.writeString(csv, "project,cost\nenc,256\n");
+
+        IngestionTask task = new IngestionTask();
+        task.setId(44L);
+        task.setName("csv-enc");
+        task.setSourceType("excel");
+        task.setSourceConfig(objectMapper.valueToTree(Map.of("hostPath", csv.toString())));
+        task.setStagingTableName("tmp_ingestion_old");
+
+        List<ColumnInfo> columns = List.of(new ColumnInfo("project", "STRING", 100), new ColumnInfo("cost", "LONG", 100));
+        List<List<String>> rows = List.of(List.of("enc", "256"));
+        when(taskRepository.findById(44L)).thenReturn(Optional.of(task));
+        when(fileUploadService.readPlainBytes(csv)).thenReturn(Files.readAllBytes(csv));
+        when(csvParseService.parse(any(InputStream.class))).thenReturn(new ParseResult(1, columns, List.of(), List.of(), rows));
+        when(stagingTableService.create(any(UUID.class), eq(44L), eq(columns))).thenReturn("tmp_ingestion_44");
+        when(builtInRuleChecker.check("tmp_ingestion_44", columns)).thenReturn(Map.of());
+
+        mockMvc.perform(post("/api/ingestion/tasks/44/parse"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.totalRows").value(1))
+            .andExpect(jsonPath("$.stagingTableName").value("tmp_ingestion_44"));
+
+        verify(fileUploadService).readPlainBytes(csv);
+        verify(csvParseService).parse(any(InputStream.class));
+        verify(excelParseService, never()).parse(any(InputStream.class));
+    }
 }

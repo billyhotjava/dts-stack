@@ -15,6 +15,10 @@ spring:
     multipart:
       max-file-size: 50MB
       max-request-size: 60MB
+      # Sprint-37 H1: 消除上传明文落宿主机磁盘层。threshold ≥ max-file-size 使被允许的上传
+      # 全部留内存、根本不写磁盘。超阈值与 POI 解析的临时文件依赖容器内
+      # JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/apptmp(tmpfs) 重定向，不落宿主机 overlay2 diff 层。
+      file-size-threshold: 50MB
   jpa:
     open-in-view: false
     hibernate:

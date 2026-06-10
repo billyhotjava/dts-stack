@@ -236,7 +236,21 @@ public class AddaxJobService {
         "_fileHash", "fileHash", "_fileSize", "fileSize", "_sheetName", "sheetName", "sheetIndex",
         "_sourceSheet", "sourceSheet", "_rowNumberOffset", "_keyVersion", "_encrypted"
     );
-    private static final List<String> FILE_TYPE_HINT_KEYS = List.of("_fileType", "fileType", "_originalName", "_filePath", "_containerPath", "path");
+    private static final List<String> FILE_TYPE_HINT_KEYS = List.of(
+        "_fileType",
+        "fileType",
+        "_originalName",
+        "originalName",
+        "fileName",
+        "filename",
+        "name",
+        "_filePath",
+        "filePath",
+        "_containerPath",
+        "containerPath",
+        "path",
+        "hostPath"
+    );
     private static final Set<String> EXCEL_FILE_TYPES = Set.of("xlsx", "xls", "xlsm", "xlsb", "xltx", "xlt", "ods");
     private static final Set<String> CSV_FILE_TYPES = Set.of("csv", "tsv", "txt", "text");
 
@@ -1336,19 +1350,21 @@ public class AddaxJobService {
             else if ("csv".equals(lower)) resolvedReaderType = "txtfilereader";
         }
         String inferredFileReaderType = inferFileReaderTypeFromConfig(readerConfig);
-        if (!StringUtils.hasText(resolvedReaderType) && StringUtils.hasText(inferredFileReaderType)) {
-            resolvedReaderType = inferredFileReaderType;
-        } else if (StringUtils.hasText(resolvedReaderType) && isFileReaderType(resolvedReaderType) && StringUtils.hasText(inferredFileReaderType)) {
-            String normalizedResolved = resolvedReaderType.toLowerCase(Locale.ROOT);
-            if (!normalizedResolved.equals(inferredFileReaderType)) {
-                LOG.warn(
-                    "Task {} declared readerType '{}' but file metadata suggests '{}'; using '{}'.",
-                    task.getName(),
-                    resolvedReaderType,
-                    inferredFileReaderType,
-                    inferredFileReaderType
-                );
-                resolvedReaderType = inferredFileReaderType;
+        if (StringUtils.hasText(inferredFileReaderType)) {
+            String normalizedResolved = StringUtils.hasText(resolvedReaderType) ? resolvedReaderType.toLowerCase(Locale.ROOT) : null;
+            boolean hasFileHints = hasFileSourceHint(readerConfig);
+            boolean resolvedIsFileReader = isFileReaderType(normalizedResolved);
+            if (!StringUtils.hasText(normalizedResolved) || resolvedIsFileReader || hasFileHints) {
+                if (!StringUtils.hasText(normalizedResolved) || !normalizedResolved.equals(inferredFileReaderType) || hasFileHints) {
+                    LOG.warn(
+                        "Task {} declared readerType '{}' but file metadata suggests '{}'; using '{}'.",
+                        task.getName(),
+                        normalizedResolved == null ? "<null>" : normalizedResolved,
+                        inferredFileReaderType,
+                        inferredFileReaderType
+                    );
+                    resolvedReaderType = inferredFileReaderType;
+                }
             }
         }
         // BUG-003 fix: For file-based readers, always regenerate job config from current
@@ -1368,6 +1384,23 @@ public class AddaxJobService {
             runtimeReaderOverrides,
             runtimeContext
         );
+    }
+
+    private boolean hasFileSourceHint(Map<String, Object> readerConfig) {
+        if (readerConfig == null || readerConfig.isEmpty()) {
+            return false;
+        }
+        for (String key : FILE_TYPE_HINT_KEYS) {
+            if (StringUtils.hasText(firstStringValue(readerConfig.get(key)))) {
+                return true;
+            }
+        }
+        for (String key : FILE_METADATA_KEYS) {
+            if (StringUtils.hasText(firstStringValue(readerConfig.get(key)))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void applyReaderRuntimeOverrides(Map<String, Object> readerConfig, Map<String, Object> runtimeReaderOverrides) {
@@ -1391,7 +1424,9 @@ public class AddaxJobService {
     private boolean isFileReaderType(String readerType) {
         if (!StringUtils.hasText(readerType)) return false;
         String lower = readerType.toLowerCase(Locale.ROOT);
-        return "excelreader".equals(lower) || "txtfilereader".equals(lower)
+        return "txt".equals(lower)
+            || "excelreader".equals(lower)
+            || "txtfilereader".equals(lower)
             || "excel".equals(lower) || "csv".equals(lower);
     }
 
@@ -1400,6 +1435,18 @@ public class AddaxJobService {
         String containerPath = normalizeText(config.get("_containerPath"));
         if (!StringUtils.hasText(containerPath)) {
             containerPath = normalizeText(config.get("path"));
+        }
+        if (!StringUtils.hasText(containerPath)) {
+            containerPath = normalizeText(config.get("containerPath"));
+        }
+        if (!StringUtils.hasText(containerPath)) {
+            containerPath = normalizeText(firstStringValue(config.get("hostPath")));
+        }
+        if (!StringUtils.hasText(containerPath)) {
+            containerPath = normalizeText(firstStringValue(config.get("filePath")));
+        }
+        if (!StringUtils.hasText(containerPath)) {
+            containerPath = normalizeText(firstStringValue(config.get("_filePath")));
         }
         if (!StringUtils.hasText(containerPath)) {
             throw new IllegalArgumentException("文件源缺少文件路径");
@@ -2097,6 +2144,11 @@ public class AddaxJobService {
     }
 
     private String sha256IfReadable(String filePath) {
+        // Sprint-37 L2: .enc 为密文，其 hash 与明文 sha256 语义不符，会误导 lineage——跳过，
+        // 让调用方(resolveFileHash)退回 null 而非记录错误的密文哈希。明文 hash 应取 sourceConfig 的 _fileHash。
+        if (filePath != null && filePath.endsWith(".enc")) {
+            return null;
+        }
         try {
             Path path = Paths.get(filePath);
             if (!Files.isRegularFile(path) || !Files.isReadable(path)) {
@@ -2251,6 +2303,9 @@ public class AddaxJobService {
         }
         String normalized = readerType.trim();
         String lower = normalized.toLowerCase(Locale.ROOT);
+        if ("txt".equals(lower)) {
+            return "txtfilereader";
+        }
         if ("dm".equals(lower) || "dameng".equals(lower) || "dm8".equals(lower) || "dameng8".equals(lower)) {
             return "rdbmsreader";
         }
