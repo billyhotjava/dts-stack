@@ -156,6 +156,41 @@ class AddaxJobServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void shouldNormalizeReaderTypeForExcelFileByMetadata() throws Exception {
+        // Given
+        IngestionTask task = new IngestionTask();
+        task.setName("file-type-fallback-excel");
+        task.setSourceType("txtfilereader");
+        ObjectNode sourceConfig = objectMapper.createObjectNode();
+        sourceConfig.put("_fileType", "excel");
+        sourceConfig.put("_originalName", "ods_finance_own_fund.xlsx");
+        sourceConfig.put("path", "/opt/airflow/dags/exchange/excel/ods_finance_own_fund.xlsx.enc");
+        sourceConfig.put("table", "ods_finance_own_fund");
+        task.setSourceConfig(sourceConfig);
+
+        task.setDestinationType("postgresqlwriter");
+        ObjectNode destinationConfig = objectMapper.createObjectNode();
+        destinationConfig.put("username", "biadmin");
+        destinationConfig.put("password", "password");
+        destinationConfig.put("host", "127.0.0.1");
+        destinationConfig.put("port", 5432);
+        destinationConfig.put("database", "biadmin");
+        destinationConfig.put("table", "ods_finance_own_fund");
+        task.setDestinationConfig(destinationConfig);
+
+        // When
+        AddaxJobService.AddaxJobResult result = addaxJobService.createJobFromTask(task);
+
+        // Then
+        Map<String, Object> jobConfig = result.jobConfig();
+        Map<String, Object> job = (Map<String, Object>) jobConfig.get("job");
+        Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
+        Map<String, Object> reader = (Map<String, Object>) content.get("reader");
+        assertThat(reader.get("name")).isEqualTo("excelreader");
+    }
+
+    @Test
     void shouldNormalizeDriverAndJdbcUrl() throws Exception {
         // Given
         String taskName = "normalize-test";

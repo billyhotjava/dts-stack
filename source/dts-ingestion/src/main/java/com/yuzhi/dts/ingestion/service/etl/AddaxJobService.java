@@ -236,6 +236,9 @@ public class AddaxJobService {
         "_fileHash", "fileHash", "_fileSize", "fileSize", "_sheetName", "sheetName", "sheetIndex",
         "_sourceSheet", "sourceSheet", "_rowNumberOffset", "_keyVersion", "_encrypted"
     );
+    private static final List<String> FILE_TYPE_HINT_KEYS = List.of("_fileType", "fileType", "_originalName", "_filePath", "_containerPath", "path");
+    private static final Set<String> EXCEL_FILE_TYPES = Set.of("xlsx", "xls", "xlsm", "xlsb", "xltx", "xlt", "ods");
+    private static final Set<String> CSV_FILE_TYPES = Set.of("csv", "tsv", "txt", "text");
 
     private static final List<String> COLUMN_RULE_KEYS = List.of(
         "_columnPrefix", "_columnSuffix", "_extraColumns"
@@ -1332,6 +1335,22 @@ public class AddaxJobService {
             if ("excel".equals(lower)) resolvedReaderType = "excelreader";
             else if ("csv".equals(lower)) resolvedReaderType = "txtfilereader";
         }
+        String inferredFileReaderType = inferFileReaderTypeFromConfig(readerConfig);
+        if (!StringUtils.hasText(resolvedReaderType) && StringUtils.hasText(inferredFileReaderType)) {
+            resolvedReaderType = inferredFileReaderType;
+        } else if (StringUtils.hasText(resolvedReaderType) && isFileReaderType(resolvedReaderType) && StringUtils.hasText(inferredFileReaderType)) {
+            String normalizedResolved = resolvedReaderType.toLowerCase(Locale.ROOT);
+            if (!normalizedResolved.equals(inferredFileReaderType)) {
+                LOG.warn(
+                    "Task {} declared readerType '{}' but file metadata suggests '{}'; using '{}'.",
+                    task.getName(),
+                    resolvedReaderType,
+                    inferredFileReaderType,
+                    inferredFileReaderType
+                );
+                resolvedReaderType = inferredFileReaderType;
+            }
+        }
         // BUG-003 fix: For file-based readers, always regenerate job config from current
         // column definitions. Using saved addaxConfig would skip DDL injection (DROP + CREATE),
         // causing stale table schema when columns are modified.
@@ -1402,6 +1421,82 @@ public class AddaxJobService {
         if (pathObj instanceof String str) {
             config.put("path", List.of(str));
         }
+    }
+
+    private String inferFileReaderTypeFromConfig(Map<String, Object> readerConfig) {
+        if (readerConfig == null || readerConfig.isEmpty()) {
+            return null;
+        }
+        String typeHint = firstStringValue(readerConfig.get("_fileType"));
+        String mapped = mapFileTypeHintToReader(typeHint);
+        if (StringUtils.hasText(mapped)) {
+            return mapped;
+        }
+        typeHint = firstStringValue(readerConfig.get("fileType"));
+        mapped = mapFileTypeHintToReader(typeHint);
+        if (StringUtils.hasText(mapped)) {
+            return mapped;
+        }
+        for (String key : FILE_TYPE_HINT_KEYS) {
+            String candidate = firstStringValue(readerConfig.get(key));
+            mapped = mapFileTypeHintToReader(candidate);
+            if (StringUtils.hasText(mapped)) {
+                return mapped;
+            }
+            String fileTypeFromName = inferReaderTypeFromFilename(candidate);
+            if (StringUtils.hasText(fileTypeFromName)) {
+                return fileTypeFromName;
+            }
+        }
+        return null;
+    }
+
+    private String mapFileTypeHintToReader(String fileTypeHint) {
+        if (!StringUtils.hasText(fileTypeHint)) {
+            return null;
+        }
+        String normalized = fileTypeHint.trim().toLowerCase(Locale.ROOT);
+        if (normalized.contains("excel")) {
+            return "excelreader";
+        }
+        if (normalized.contains("csv")) {
+            return "txtfilereader";
+        }
+        if (normalized.contains("/")) {
+            if (normalized.contains("spreadsheet") || normalized.contains("excel")) {
+                return "excelreader";
+            }
+            if (normalized.contains("csv")) {
+                return "txtfilereader";
+            }
+        }
+        String normalizedFilename = stripEncryptionSuffix(normalized);
+        int dot = normalizedFilename.lastIndexOf(".");
+        if (dot >= 0 && dot < normalizedFilename.length() - 1) {
+            String extension = normalizedFilename.substring(dot + 1);
+            if (EXCEL_FILE_TYPES.contains(extension)) {
+                return "excelreader";
+            }
+            if (CSV_FILE_TYPES.contains(extension)) {
+                return "txtfilereader";
+            }
+        }
+        return null;
+    }
+
+    private String inferReaderTypeFromFilename(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return mapFileTypeHintToReader(value);
+    }
+
+    private String stripEncryptionSuffix(String value) {
+        if (!StringUtils.hasText(value)) {
+            return value;
+        }
+        String lower = value.toLowerCase(Locale.ROOT);
+        return lower.endsWith(".enc") ? lower.substring(0, lower.length() - 4) : value;
     }
 
     private void stripFileMetadataKeys(Map<String, Object> config) {

@@ -31,7 +31,7 @@ public class IngestionSourceResolver {
         Map.entry("db2", "db2reader"),
         Map.entry("sqlite", "sqlitereader"),
         Map.entry("jdbc", "rdbmsreader"),
-        Map.entry("excel", "txtfilereader"),
+        Map.entry("excel", "excelreader"),
         Map.entry("csv", "txtfilereader"),
         Map.entry("json", "jsonreader"),
         Map.entry("api", "httpreader"),
