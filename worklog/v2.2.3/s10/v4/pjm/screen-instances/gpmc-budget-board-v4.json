@@ -10,18 +10,6 @@
   "theme": "dark-command",
   "globalVariables": [
     {
-      "key": "dateFrom",
-      "label": "开始日期",
-      "type": "date",
-      "defaultValue": "2024-01-01"
-    },
-    {
-      "key": "dateTo",
-      "label": "结束日期",
-      "type": "date",
-      "defaultValue": "2026-12-31"
-    },
-    {
       "key": "deptId",
       "label": "研究室",
       "type": "string",
@@ -415,31 +403,10 @@
       "actions": []
     },
     {
-      "id": "经费预算执行中心-date",
-      "type": "filter-date-range",
-      "name": "统计周期",
-      "x": 1260,
-      "y": 28,
-      "width": 320,
-      "height": 58,
-      "zIndex": 65,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "label": "统计周期",
-        "startKey": "dateFrom",
-        "endKey": "dateTo",
-        "labelColor": "#ffffff",
-        "inputBackground": "rgba(88, 180, 255, 0.20)",
-        "inputBorderColor": "rgba(39, 216, 255, 0.18)",
-        "inputTextColor": "#ffffff"
-      }
-    },
-    {
       "id": "经费预算执行中心-dept",
       "type": "filter-select",
       "name": "研究室",
-      "x": 940,
+      "x": 1104,
       "y": 28,
       "width": 150,
       "height": 58,
@@ -476,7 +443,7 @@
       "id": "经费预算执行中心-project",
       "type": "filter-select",
       "name": "项目号",
-      "x": 1104,
+      "x": 940,
       "y": 28,
       "width": 140,
       "height": 58,
@@ -513,7 +480,7 @@
       "id": "经费预算执行中心-risk",
       "type": "filter-select",
       "name": "所属子课题",
-      "x": 1596,
+      "x": 1260,
       "y": 28,
       "width": 120,
       "height": 58,
@@ -868,7 +835,7 @@
       "id": "gpmc-budget-by-lab",
       "type": "bar-chart",
       "name": "各研究室预算执行",
-      "x": 52,
+      "x": 672,
       "y": 318,
       "width": 576,
       "height": 256,
@@ -974,7 +941,7 @@
       "id": "gpmc-budget-by-project",
       "type": "bar-chart",
       "name": "各项目预算执行",
-      "x": 672,
+      "x": 52,
       "y": 318,
       "width": 576,
       "height": 256,
@@ -997,7 +964,9 @@
         },
         "colors": [
           "#8fa7c4",
-          "#ffc645"
+          "#27d8ff",
+          "#2ee6a6",
+          "#ff5d5d"
         ],
         "categoryKey": "项目号",
         "series": [
@@ -1009,7 +978,17 @@
           {
             "name": "已执行",
             "dataKey": "已执行",
-            "color": "#ffc645"
+            "color": "#27d8ff"
+          },
+          {
+            "name": "剩余",
+            "dataKey": "剩余",
+            "color": "#2ee6a6"
+          },
+          {
+            "name": "超支",
+            "dataKey": "超支",
+            "color": "#ff5d5d"
           }
         ],
         "titleFontSize": 0,
@@ -1035,6 +1014,20 @@
               "displayName": "已执行金额",
               "formula": "预付+账面+应付",
               "unit": "万元"
+            },
+            {
+              "name": "剩余",
+              "code": "pjm_budg_remaining",
+              "displayName": "预算剩余可用",
+              "formula": "预算−已执行",
+              "unit": "万元"
+            },
+            {
+              "name": "超支",
+              "code": "pjm_budg_overrun_amount",
+              "displayName": "超支金额",
+              "formula": "Σ max(0,已执行−预算)（行级汇总）",
+              "unit": "万元"
             }
           ]
         }
@@ -1043,7 +1036,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT d.project_no AS \"项目号\", SUM(d.budget_amount) AS \"预算金额\", SUM(d.executed_amount) AS \"已执行\" FROM biz_dwd_budget_v2 d WHERE 1=1 [[AND d.research_lab = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.subtopic = {{subtopic}}]] GROUP BY d.project_no ORDER BY SUM(d.budget_amount) DESC LIMIT 12",
+          "query": "SELECT d.project_no AS \"项目号\", SUM(d.budget_amount) AS \"预算金额\", SUM(d.executed_amount) AS \"已执行\", SUM(d.remaining_amount) AS \"剩余\", SUM(d.overrun_amount) AS \"超支\" FROM biz_dwd_budget_v2 d WHERE 1=1 [[AND d.research_lab = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.subtopic = {{subtopic}}]] GROUP BY d.project_no ORDER BY SUM(d.budget_amount) DESC LIMIT 12",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1454,7 +1447,7 @@
       "id": "gpmc-budget-project-overlay-title",
       "type": "title",
       "name": "项目风险统计-标题",
-      "x": 52,
+      "x": 672,
       "y": 286,
       "width": 520,
       "height": 28,
@@ -1473,7 +1466,7 @@
       "id": "gpmc-budget-project-open-overlay-title",
       "type": "title",
       "name": "项目未释放风险-标题",
-      "x": 672,
+      "x": 52,
       "y": 286,
       "width": 520,
       "height": 28,
