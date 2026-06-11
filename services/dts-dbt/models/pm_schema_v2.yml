@@ -220,7 +220,7 @@ models:
 
   # ═══ DWD 事实表 ═══
   - name: biz_dwd_project_node_v2
-    description: "进度节点事实表 — ODS清洗+枚举标准化+日期解析"
+    description: "进度节点事实表 — 从 STG 读取，完成情况/节点类型/风险等级标准化并派生日期口径"
     columns:
       - name: node_id
         tests:
@@ -384,6 +384,32 @@ models:
               config:
                 severity: warn
 
+  - name: biz_dwd_budget_v2
+    description: "预算事实表 — 三本账快照清洗；已执行=预付+账面+应付；派生剩余/超支"
+    columns:
+      - name: budget_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+      - name: budget_no
+        description: "预算编号 — 全局唯一自然主键（源表保证）"
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+      - name: project_no
+        tests:
+          - not_null:
+              config:
+                severity: warn
+
   # ═══ DWS 汇总表 ═══
   - name: biz_dws_progress_monthly_v2
     description: "进度域月度汇总 — 按 project×month 聚合，对齐原始指标 #1-33"
@@ -421,6 +447,15 @@ models:
               config:
                 severity: warn
 
+  - name: biz_dws_budget_v2
+    description: "预算域汇总（当前快照，无时间轴）— 按 project×research_lab 聚合三本账金额"
+    columns:
+      - name: project_no
+        tests:
+          - not_null:
+              config:
+                severity: warn
+
   # ═══ ADS 原始指标 (kpi) ═══
   - name: biz_ads_progress_kpi_v2
     description: "进度域原始指标 — 33个指标月度聚合，含分子/分母"
@@ -434,6 +469,9 @@ models:
   - name: biz_ads_risk_kpi_v2
     description: "风险域KPI — 风险总数/高中低/释放率月度聚合"
 
+  - name: biz_ads_budget_kpi_v2
+    description: "预算域KPI — 预算/预付/账面成本/应付/已执行/剩余/超支（当前快照单行）"
+
   # ═══ ADS 二次指标 (derived) ═══
   - name: biz_ads_progress_derived_v2
     description: "进度域二次指标 — 6个（按时完成率/超期率/异常率/里程碑率/高风险占比/健康分）"
@@ -443,6 +481,9 @@ models:
 
   - name: biz_ads_tech_state_derived_v2
     description: "技术状态域二次指标 — 5个（签署率/整改率/I类占比/未签署率/健康分）"
+
+  - name: biz_ads_budget_derived_v2
+    description: "预算域二次指标 — 5个（执行率/账面入账率/应付占比/剩余率/健康分）"
 
   - name: biz_ads_composite_derived_v2
     description: "综合域二次指标 — 2个（项目综合健康度/风险预警指数）"

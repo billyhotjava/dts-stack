@@ -369,7 +369,7 @@ public class DbtDagService {
                     "PY\\n"
                     ")\\n"
                     "sync_manifest=$(python - <<'PY'\\n"
-                    "raw = {{ dag_run.conf.get('syncManifest', '') | tojson }}\\n"
+                    "raw = {{ dag_run.conf.get('syncManifest', '') | string | tojson }}\\n"
                     "if raw is None:\\n"
                     "    print('', end='')\\n"
                     "else:\\n"
