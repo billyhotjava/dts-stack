@@ -395,6 +395,15 @@ models:
           - not_null:
               config:
                 severity: warn
+      - name: budget_no
+        description: "预算编号 — 全局唯一自然主键（源表保证）"
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
       - name: project_no
         tests:
           - not_null:

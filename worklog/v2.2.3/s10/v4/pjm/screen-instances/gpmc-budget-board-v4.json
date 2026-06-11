@@ -572,7 +572,7 @@
           "displayName": "预算总额(调整后)",
           "domain": "预算",
           "category": "基础",
-          "unit": "元",
+          "unit": "万元",
           "direction": "NEUTRAL",
           "definition": "调整后批复预算总额(时点快照)",
           "formula": "Σ 预算金额(调整后)",
@@ -634,7 +634,7 @@
           "displayName": "已执行金额",
           "domain": "预算",
           "category": "基础",
-          "unit": "元",
+          "unit": "万元",
           "direction": "NEUTRAL",
           "definition": "已占用预算(三本账合计:预付+账面+应付)",
           "formula": "预付账款 + 账面成本 + 应付账款",
@@ -762,7 +762,7 @@
           "displayName": "预算剩余可用",
           "domain": "预算",
           "category": "基础",
-          "unit": "元",
+          "unit": "万元",
           "direction": "NEUTRAL",
           "definition": "预算总额扣除已执行后的可用余额(可为负=超支)",
           "formula": "预算总额 − 已执行",
@@ -927,21 +927,21 @@
               "code": "pjm_budg_total",
               "displayName": "预算总额",
               "formula": "Σ 预算金额(调整后)",
-              "unit": "元"
+              "unit": "万元"
             },
             {
               "name": "已执行",
               "code": "pjm_budg_executed",
               "displayName": "已执行金额",
               "formula": "预付+账面+应付",
-              "unit": "元"
+              "unit": "万元"
             },
             {
               "name": "剩余",
               "code": "pjm_budg_remaining",
               "displayName": "预算剩余可用",
               "formula": "预算−已执行",
-              "unit": "元"
+              "unit": "万元"
             }
           ]
         }
@@ -1027,14 +1027,14 @@
               "code": "pjm_budg_total",
               "displayName": "预算总额",
               "formula": "Σ 预算金额(调整后)",
-              "unit": "元"
+              "unit": "万元"
             },
             {
               "name": "已执行",
               "code": "pjm_budg_executed",
               "displayName": "已执行金额",
               "formula": "预付+账面+应付",
-              "unit": "元"
+              "unit": "万元"
             }
           ]
         }
@@ -1100,21 +1100,21 @@
               "code": "pjm_budg_prepaid",
               "displayName": "预付账款",
               "formula": "Σ 预付账款",
-              "unit": "元"
+              "unit": "万元"
             },
             {
               "name": "账面成本",
               "code": "pjm_budg_book_cost",
               "displayName": "账面成本",
               "formula": "Σ 账面成本",
-              "unit": "元"
+              "unit": "万元"
             },
             {
               "name": "应付账款",
               "code": "pjm_budg_payable",
               "displayName": "应付账款",
               "formula": "Σ 应付账款",
-              "unit": "元"
+              "unit": "万元"
             }
           ]
         }
@@ -1356,7 +1356,7 @@
             "displayName": "已执行金额",
             "domain": "预算",
             "category": "基础",
-            "unit": "元",
+            "unit": "万元",
             "direction": "NEUTRAL",
             "definition": "已占用预算(三本账合计:预付+账面+应付)",
             "formula": "预付账款 + 账面成本 + 应付账款",

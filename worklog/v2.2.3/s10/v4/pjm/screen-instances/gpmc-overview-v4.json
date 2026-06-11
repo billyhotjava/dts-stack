@@ -2154,14 +2154,14 @@
               "code": "pjm_budg_executed",
               "displayName": "已执行金额",
               "formula": "预付+账面+应付",
-              "unit": "元"
+              "unit": "万元"
             },
             {
               "name": "剩余可用",
               "code": "pjm_budg_remaining",
               "displayName": "预算剩余可用",
               "formula": "预算−已执行",
-              "unit": "元"
+              "unit": "万元"
             }
           ]
         }

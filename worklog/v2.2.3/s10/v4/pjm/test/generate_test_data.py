@@ -323,6 +323,21 @@ RISK_MEASURES = {
     "其他": "建立专项台账并按周通报处置",
 }
 
+# 预算域：科研经费"三本账"快照。金额单位为万元，预算编号全局唯一。
+BUDGET_SUBTOPICS = ["总体方案设计", "关键件研制", "联调与验证"]
+
+# 三本账执行场景：(场景标签, 已执行/预算比例, 预付占已执行比例, 账面占已执行比例)
+#   已执行 = 预付账款 + 账面成本 + 应付账款
+#   应付占比 = 1 - 预付占比 - 账面占比（各场景均保证为正）
+BUDGET_SCENARIOS = [
+    ("进度内执行", 0.55, 0.40, 0.50),
+    ("接近满额", 0.92, 0.20, 0.65),
+    ("预算超支", 1.12, 0.15, 0.60),
+    ("高应付占比", 0.75, 0.10, 0.45),
+    ("多预付未结", 0.60, 0.60, 0.30),
+    ("研制启动期", 0.25, 0.70, 0.25),
+]
+
 
 CSV_SCHEMAS = {
     "ods_project_subject_domain_v2": [
@@ -629,6 +644,16 @@ CSV_SCHEMAS = {
         "last_update_week",
         "remark",
     ],
+    "ods_budget_v2": [
+        "project_no",
+        "budget_no",
+        "subtopic",
+        "research_lab",
+        "budget_amount_adjusted",
+        "prepaid_amount",
+        "book_cost_amount",
+        "payable_amount",
+    ],
 }
 
 
@@ -642,6 +667,10 @@ def week_of(d: date | None) -> str:
 
 def format_days(days: int | None) -> str:
     return str(days) if days is not None else ""
+
+
+def fmt_amount(value: float) -> str:
+    return f"{round(value, 2):.2f}"
 
 
 def collab_dept(idx: int) -> str:
@@ -1159,6 +1188,45 @@ def build_material_rows() -> list[dict[str, str]]:
     return rows
 
 
+def build_budget_rows() -> list[dict[str, str]]:
+    """预算执行台账快照：每个项目 2~3 个子课题，每条独立预算编号（全局唯一）。
+
+    金额单位万元；三本账（预付/账面/应付）之和精确等于已执行金额，
+    便于 DWD 用 ``已执行 = 预付 + 账面 + 应付`` 重建并校验。
+    场景循环覆盖进度内执行 / 接近满额 / 预算超支 / 高应付 / 多预付 / 启动期。
+    """
+    rows: list[dict[str, str]] = []
+    scenario_idx = 0
+    for idx, project in enumerate(PROJECTS):
+        suffix = project["project_no"].split("-")[-1]
+        subtopic_count = 2 + (idx % 2)
+        for j in range(subtopic_count):
+            _, exec_ratio, prepaid_ratio, book_ratio = BUDGET_SCENARIOS[
+                scenario_idx % len(BUDGET_SCENARIOS)
+            ]
+            scenario_idx += 1
+
+            budget = 120 + idx * 18 + j * 40
+            executed = round(budget * exec_ratio, 2)
+            prepaid = round(executed * prepaid_ratio, 2)
+            book_cost = round(executed * book_ratio, 2)
+            payable = round(executed - prepaid - book_cost, 2)
+
+            rows.append(
+                {
+                    "project_no": project["project_no"],
+                    "budget_no": f"YS-2026-{suffix}-{j + 1:02d}",
+                    "subtopic": f"{project['theme']}-{BUDGET_SUBTOPICS[j]}",
+                    "research_lab": project["dept"],
+                    "budget_amount_adjusted": fmt_amount(budget),
+                    "prepaid_amount": fmt_amount(prepaid),
+                    "book_cost_amount": fmt_amount(book_cost),
+                    "payable_amount": fmt_amount(payable),
+                }
+            )
+    return rows
+
+
 def write_table(base_name: str, rows: list[dict[str, str]]) -> None:
     fieldnames = CSV_SCHEMAS[base_name]
     csv_path = TEST_DIR / f"{base_name}.csv"
@@ -1192,6 +1260,7 @@ def main() -> None:
         "ods_risk_info_v2": risk_rows,
         "ods_risk_measure_v2": build_risk_measure_rows(risk_rows),
         "ods_material_info_v2": build_material_rows(),
+        "ods_budget_v2": build_budget_rows(),
     }
 
     for base_name, rows in tables.items():
