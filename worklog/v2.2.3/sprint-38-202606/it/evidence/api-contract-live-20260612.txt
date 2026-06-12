@@ -1,0 +1,96 @@
+# API contract live verification - 2026-06-12
+
+Environment:
+- cwd: /opt/prod/s10/v2.2.3
+- compose project: v223
+- service: v223-dts-ingestion-1
+
+Scope:
+- Verify the running dts-ingestion API source contract is v1.2.0.
+- Verify authProviders expose enabled flags for front-end consumption.
+- Verify connector capability constraints do not drift from the API contract.
+
+Focused regression:
+
+Command:
+./mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -pl dts-ingestion -Dtest=ConnectorCapabilityServiceTest,ApiAuthProviderRegistryTest,ApiConnectorContractResourceTest,IngestionTaskResourceTest#multiTenancyEndpoints_returnTenantCatalog+createTask_apiDraftRejectsDisabledAuthProvider test
+
+Result:
+PASS. Only existing Mockito dynamic-agent and MockBean deprecation warnings were emitted.
+
+Image rebuild and service restart:
+
+Command:
+./builds/dts-build.sh --image dts-ingestion --no-save
+
+Result:
+BUILD SUCCESS. Final image:
+sha256:20eafba6f9b673507aa2ab73bcf2ccd6afe8a16a2e615b319295cff918dedcbe
+
+Command:
+docker compose -p v223 -f docker-compose-app.yml up -d --no-deps --force-recreate dts-ingestion
+
+Result:
+v223-dts-ingestion-1 recreated and started. Compose warned that external network dts-core already exists outside project v223.
+
+Container health:
+
+Command:
+docker inspect v223-dts-ingestion-1 --format 'image={{.Image}} status={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}'
+
+Output:
+image=sha256:20eafba6f9b673507aa2ab73bcf2ccd6afe8a16a2e615b319295cff918dedcbe status=running health=healthy
+
+Live contract endpoint:
+
+Command:
+docker exec v223-dts-ingestion-1 sh -lc 'curl -sS -H "X-DTS-Service: dts-platform" http://127.0.0.1:8083/api/ingestion/api/contract | tr "," "\n" | grep -E "contractVersion|jwtLogin|customSignature|mtls|enabled"'
+
+Output:
+{"contractVersion":"1.2.0"
+"enabled":true}
+"enabled":true}
+"enabled":true}
+"enabled":true}
+"enabled":true}
+{"id":"jwtLogin"
+"enabled":true}
+{"id":"customSignature"
+"enabled":false}
+{"id":"mtls"
+"enabled":false}]
+
+Live connector capability endpoint:
+
+Command:
+docker exec v223-dts-ingestion-1 sh -lc 'curl -sS -H "X-DTS-Service: dts-platform" http://127.0.0.1:8083/api/ingestion/connectors/capabilities/api | tr "," "\n" | grep -E "contractVersion|authProviders|jwtLogin|customSignature|mtls|enabled"'
+
+Output:
+"enabled":false}
+"enabled":false}
+"enabled":true
+"enabled":true}}
+"authProviders":[{"id":"none"
+"enabled":true}
+"enabled":true}
+"enabled":true}
+"enabled":true}
+"enabled":true}
+{"id":"jwtLogin"
+"enabled":true}
+{"id":"customSignature"
+"enabled":false}
+{"id":"mtls"
+"enabled":false}]
+"contractVersion":"1.2.0"
+"enabled":true
+
+Startup log snippets:
+
+Command:
+docker logs --since 2m v223-dts-ingestion-1
+
+Output snippets:
+2026-06-12T14:52:47.354+08:00  INFO 1 --- [           main] c.yuzhi.dts.ingestion.DtsIngestionApp    : Starting DtsIngestionApp v2.2.3-SNAPSHOT using Java 21.0.9
+2026-06-12T14:52:57.970+08:00  INFO 1 --- [           main] c.yuzhi.dts.ingestion.DtsIngestionApp    : Started DtsIngestionApp in 11.605 seconds
+2026-06-12T14:52:58.205+08:00  INFO 1 --- [           main] c.y.d.i.s.etl.ConnectorCapabilitySeeder  : [ingestion] connector capabilities seeded

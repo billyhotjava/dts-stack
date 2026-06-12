@@ -378,6 +378,12 @@ public class IngestionTaskProxyResource {
         return ResponseEntity.ok(ingestionClient.listApiAuthProviders());
     }
 
+    @PostMapping("/api/test-connection")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> testApiConnection(@RequestBody Map<String, Object> payload) {
+        return ResponseEntity.ok(ingestionClient.testApiConnection(payload));
+    }
+
     @GetMapping("/tasks/{id}/realtime-status")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> getRealtimeStatus(@PathVariable("id") Long id) {

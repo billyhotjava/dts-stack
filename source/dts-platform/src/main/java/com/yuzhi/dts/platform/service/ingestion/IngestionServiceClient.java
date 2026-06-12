@@ -199,6 +199,10 @@ public class IngestionServiceClient {
         return exchangeObject("/api/ingestion/api/auth-providers", HttpMethod.GET, null, null, restTemplate);
     }
 
+    public ApiResponse<Object> testApiConnection(Object payload) {
+        return exchangeObject("/api/ingestion/api/test-connection", HttpMethod.POST, payload, null, restTemplate);
+    }
+
     public ApiResponse<Object> getRealtimeStatus(Long taskId) {
         return exchangeObject("/api/ingestion/tasks/" + taskId + "/realtime-status", HttpMethod.GET, null, null, restTemplate);
     }

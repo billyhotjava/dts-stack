@@ -20,6 +20,8 @@ import com.yuzhi.dts.ingestion.service.etl.CsvParseService;
 import com.yuzhi.dts.ingestion.service.etl.IncrementalSyncService;
 import com.yuzhi.dts.ingestion.service.etl.IngestionRetryService;
 import com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner;
+import com.yuzhi.dts.ingestion.service.etl.api.ApiIngestionExecutor;
+import com.yuzhi.dts.ingestion.service.etl.connector.SourceConnectorRegistry;
 import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionExecutionMapper;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionTaskMapper;
@@ -95,6 +97,12 @@ class IngestionTaskExecutionFilterTest {
     private PlatformInfraClient platformInfraClient;
 
     @Mock
+    private SourceConnectorRegistry sourceConnectorRegistry;
+
+    @Mock
+    private ApiIngestionExecutor apiIngestionExecutor;
+
+    @Mock
     private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private IngestionTaskService ingestionTaskService;
@@ -121,6 +129,8 @@ class IngestionTaskExecutionFilterTest {
             retryService,
             dagPreheatService,
             platformInfraClient,
+            sourceConnectorRegistry,
+            apiIngestionExecutor,
             transactionManager,
             command -> command.run()
         );

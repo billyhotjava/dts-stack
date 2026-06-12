@@ -5,10 +5,13 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.InfraSecurityProperties;
+import com.yuzhi.dts.platform.domain.infra.InfraConnector;
+import com.yuzhi.dts.platform.domain.service.InfraConnectionTestLog;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraCatalogSyncRunRepository;
+import com.yuzhi.dts.platform.repository.infra.InfraConnectorRepository;
 import com.yuzhi.dts.platform.repository.service.InfraConnectionTestLogRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataStorageRepository;
@@ -16,8 +19,10 @@ import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
 import com.yuzhi.dts.platform.service.infra.dto.ApiSecretSummary;
+import com.yuzhi.dts.platform.service.infra.dto.DataSourceRequest;
 import com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDetailDto;
 import com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDto;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -80,6 +85,9 @@ class InfraManagementServiceTest {
 
     @Mock
     private InfraCatalogSyncRunRepository syncRunRepository;
+
+    @Mock
+    private InfraConnectorRepository connectorRepository;
 
     @Mock
     private AuditService auditService;
@@ -258,5 +266,94 @@ class InfraManagementServiceTest {
 
         assertThat(detail.secrets()).containsEntry("password", "p@ssw0rd");
         assertThat(detail.secretSummaries()).isEmpty();
+    }
+
+    @Test
+    void createDataSource_apiTypeStoresSecretsViaSecretServiceAndReturnsMaskedMetadata() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(connectorRepository.findByConnectorKeyIgnoreCase("http-api")).thenReturn(Optional.of(httpApiConnector()));
+        org.mockito.Mockito
+            .doAnswer(invocation -> {
+                InfraDataSource entity = invocation.getArgument(0);
+                entity.setSecureProps("ciphertext-only".getBytes(StandardCharsets.UTF_8));
+                entity.setSecureIv("iv".getBytes(StandardCharsets.UTF_8));
+                entity.setSecureKeyVersion("v1-test");
+                return null;
+            })
+            .when(secretService)
+            .applySecrets(org.mockito.ArgumentMatchers.any(InfraDataSource.class), org.mockito.ArgumentMatchers.anyMap());
+        when(dataSourceRepository.save(org.mockito.ArgumentMatchers.any(InfraDataSource.class))).thenAnswer(invocation -> {
+            InfraDataSource entity = invocation.getArgument(0);
+            entity.setId(id);
+            return entity;
+        });
+        DataSourceRequest request = new DataSourceRequest(
+            "crm-api",
+            "api",
+            null,
+            null,
+            null,
+            Map.of("baseUrl", "https://crm.example.test/openapi", "authProvider", "apiKey"),
+            Map.of("value", "plain-api-key")
+        );
+
+        InfraDataSourceDto dto = service.createDataSource(request, "operator", "dept-a");
+
+        org.mockito.ArgumentCaptor<InfraDataSource> entityCaptor = org.mockito.ArgumentCaptor.forClass(InfraDataSource.class);
+        org.mockito.Mockito.verify(dataSourceRepository).save(entityCaptor.capture());
+        InfraDataSource saved = entityCaptor.getValue();
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<Map<String, Object>> secretsCaptor =
+            (org.mockito.ArgumentCaptor<Map<String, Object>>) (org.mockito.ArgumentCaptor<?>) org.mockito.ArgumentCaptor.forClass(Map.class);
+        org.mockito.Mockito.verify(secretService).applySecrets(org.mockito.ArgumentMatchers.same(saved), secretsCaptor.capture());
+        assertThat(secretsCaptor.getValue()).containsEntry("value", "plain-api-key");
+        assertThat(new String(saved.getSecureProps(), StandardCharsets.UTF_8)).doesNotContain("plain-api-key");
+        assertThat(saved.getProps()).doesNotContain("plain-api-key");
+        assertThat(dto.hasSecrets()).isTrue();
+        assertThat(dto.props()).containsKey(ApiSecretMetadataService.PROPS_METADATA_KEY);
+        assertThat(dto.props().toString()).contains("pl***-key").doesNotContain("plain-api-key");
+    }
+
+    @Test
+    void recordConnectionTest_apiDataSourceRequestRedactsPropsAndSecrets() {
+        UUID id = UUID.randomUUID();
+        DataSourceRequest request = new DataSourceRequest(
+            "crm-api",
+            "api",
+            null,
+            null,
+            null,
+            Map.of(
+                "baseUrl",
+                "https://crm.example.test/openapi",
+                "token",
+                "top-secret-token",
+                "auth",
+                Map.of("provider", "apiKey", "value", "plain-api-key")
+            ),
+            Map.of("value", "encrypted-later-secret")
+        );
+
+        service.recordConnectionTest(id, request, HiveConnectionTestResult.failure("连接失败", 12), "operator");
+
+        org.mockito.ArgumentCaptor<InfraConnectionTestLog> captor = org.mockito.ArgumentCaptor.forClass(
+            InfraConnectionTestLog.class
+        );
+        org.mockito.Mockito.verify(testLogRepository).save(captor.capture());
+        String payload = captor.getValue().getRequestPayload();
+        assertThat(payload)
+            .contains("\"secretsProvided\":true")
+            .contains("\"token\":\"***\"")
+            .contains("\"value\":\"***\"")
+            .doesNotContain("top-secret-token", "plain-api-key", "encrypted-later-secret");
+    }
+
+    private InfraConnector httpApiConnector() {
+        InfraConnector connector = new InfraConnector();
+        connector.setConnectorKey("http-api");
+        connector.setName("HTTP API");
+        connector.setCategory("api");
+        connector.setDefaultEngine("api-http");
+        return connector;
     }
 }

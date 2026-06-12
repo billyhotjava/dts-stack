@@ -91,10 +91,10 @@ export function UnifiedReviewStep({
 		<>
 			<Divider orientation="left">API 资源预览</Divider>
 			<Alert
-				type="warning"
+				type="info"
 				showIcon
-				message="API 任务当前仅保存草稿"
-				description="运行时未启用；草稿会保存 API 资源、ODS 原始记录落地契约和 schema snapshot 入口。"
+				message="API 任务可执行"
+				description="任务会保存 API 资源、ODS 原始记录落地契约和 schema snapshot 入口，并通过 Airflow 触发 Java API 执行器。"
 				className="mb-4"
 			/>
 			{tableMappingPreview.length > 0 ? (
@@ -175,12 +175,17 @@ export function UnifiedReviewStep({
 	const executionSection = isApiFlow ? (
 		<>
 			<Divider orientation="left">执行选项</Divider>
-			<Alert
-				type="info"
-				showIcon
-				message="API 运行入口暂不开放"
-				description="保存后任务保持草稿状态；待 API runtime、鉴权插件和目标落表策略确认后再开放执行。"
-			/>
+			<Card type="inner" title="Airflow 触发">
+				<Form.Item name="airflowEnabled" label="启用 Airflow" valuePropName="checked">
+					<Switch />
+				</Form.Item>
+				<Form.Item name="runNow" label="立即触发" valuePropName="checked">
+					<Switch />
+				</Form.Item>
+				<Text type="secondary">
+					API 任务提交后由 Airflow 触发 Java 执行器，连接测试可在上一步预览首页记录。
+				</Text>
+			</Card>
 		</>
 	) : (
 		<>
@@ -255,7 +260,7 @@ export function UnifiedReviewStep({
 			items={[
 				{
 					key: "api-preview",
-					label: "API 草稿预览",
+					label: "API 任务预览",
 					children: (
 						<Card type="inner" title="API 任务预览">
 							{previewState.error ? (

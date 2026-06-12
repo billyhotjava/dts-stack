@@ -1,6 +1,8 @@
 package com.yuzhi.dts.ingestion.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.ingestion.domain.IngestionExecution;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import com.yuzhi.dts.ingestion.repository.IngestionExecutionRepository;
@@ -25,6 +27,12 @@ import com.yuzhi.dts.ingestion.service.etl.IncrementalSyncService;
 import com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier;
 import com.yuzhi.dts.ingestion.service.etl.IngestionExecutionLineageSnapshot;
 import com.yuzhi.dts.ingestion.service.etl.api.ApiConnectorTypes;
+import com.yuzhi.dts.ingestion.service.etl.api.ApiIngestionExecutor;
+import com.yuzhi.dts.ingestion.service.etl.api.ApiIngestionResult;
+import com.yuzhi.dts.ingestion.service.etl.connector.ExecutionPlan;
+import com.yuzhi.dts.ingestion.service.etl.connector.SourceConnector;
+import com.yuzhi.dts.ingestion.service.etl.connector.SourceConnectorContext;
+import com.yuzhi.dts.ingestion.service.etl.connector.SourceConnectorRegistry;
 import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionExecutionMapper;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionTaskMapper;
@@ -82,6 +90,8 @@ public class IngestionTaskService {
     private static final Duration GOVERNANCE_QUEUE_MAX_WAIT = Duration.ofSeconds(30);
     private static final Duration GOVERNANCE_QUEUE_POLL_INTERVAL = Duration.ofSeconds(2);
     private static final List<String> IN_PROGRESS_STATUSES = List.of("running", "preparing");
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
     private final IngestionTaskRepository taskRepository;
     private final IngestionExecutionRepository executionRepository;
@@ -102,6 +112,8 @@ public class IngestionTaskService {
     private final com.yuzhi.dts.ingestion.service.etl.IngestionRetryService retryService;
     private final DagPreheatService dagPreheatService;
     private final PlatformInfraClient platformInfraClient;
+    private final SourceConnectorRegistry sourceConnectorRegistry;
+    private final ApiIngestionExecutor apiIngestionExecutor;
     private final TransactionTemplate txTemplate;
     private final Executor ingestionTaskExecutor;
 
@@ -125,6 +137,8 @@ public class IngestionTaskService {
         @org.springframework.context.annotation.Lazy com.yuzhi.dts.ingestion.service.etl.IngestionRetryService retryService,
         DagPreheatService dagPreheatService,
         PlatformInfraClient platformInfraClient,
+        SourceConnectorRegistry sourceConnectorRegistry,
+        ApiIngestionExecutor apiIngestionExecutor,
         PlatformTransactionManager transactionManager,
         @org.springframework.beans.factory.annotation.Qualifier("ingestionTaskExecutor") Executor ingestionTaskExecutor
     ) {
@@ -147,6 +161,8 @@ public class IngestionTaskService {
         this.retryService = retryService;
         this.dagPreheatService = dagPreheatService;
         this.platformInfraClient = platformInfraClient;
+        this.sourceConnectorRegistry = sourceConnectorRegistry;
+        this.apiIngestionExecutor = apiIngestionExecutor;
         this.txTemplate = new TransactionTemplate(transactionManager);
         this.ingestionTaskExecutor = ingestionTaskExecutor;
     }
@@ -445,6 +461,29 @@ public class IngestionTaskService {
         return execute(taskId, "BACKFILL_RANGE", new BackfillWindow(column, windowStart, windowEnd));
     }
 
+    public IngestionExecutionDTO executeInternalApi(
+        Long taskId,
+        String batchId,
+        String triggerMode,
+        Instant windowStart,
+        Instant windowEnd,
+        String column
+    ) {
+        String mode = normalizeTriggerMode(triggerMode);
+        BackfillWindow backfillWindow = null;
+        if ("BACKFILL_RANGE".equalsIgnoreCase(mode)
+            || windowStart != null
+            || windowEnd != null
+            || StringUtils.hasText(column)) {
+            if (windowStart == null || windowEnd == null) {
+                throw new IllegalArgumentException("backfillWindowStart and backfillWindowEnd are required for API backfill");
+            }
+            mode = "BACKFILL_RANGE";
+            backfillWindow = new BackfillWindow(column, windowStart, windowEnd);
+        }
+        return execute(taskId, mode, backfillWindow, batchId, true);
+    }
+
     public IngestionTaskDTO validateAsyncExecutionRequest(Long taskId) {
         return taskMapper.toDto(loadExecutableTask(taskId));
     }
@@ -458,9 +497,22 @@ public class IngestionTaskService {
     }
 
     private IngestionExecutionDTO execute(Long taskId, String triggerMode, BackfillWindow backfillWindow) {
+        return execute(taskId, triggerMode, backfillWindow, null, false);
+    }
+
+    private IngestionExecutionDTO execute(
+        Long taskId,
+        String triggerMode,
+        BackfillWindow backfillWindow,
+        String requestedBatchId,
+        boolean apiOnly
+    ) {
         log.info("Executing ingestion task ID: {}", taskId);
 
         IngestionTask task = loadExecutableTask(taskId);
+        if (apiOnly && !isApiSourceTask(task)) {
+            throw new IllegalArgumentException("Internal API ingestion endpoint only supports API source tasks: " + taskId);
+        }
         GovernancePolicy policy = resolveGovernancePolicy(task);
         BackfillWindow resolvedBackfill = null;
         if (backfillWindow != null) {
@@ -493,7 +545,7 @@ public class IngestionTaskService {
             execution.setBackfillWindowStart(resolvedBackfill.windowStart());
             execution.setBackfillWindowEnd(resolvedBackfill.windowEnd());
         }
-        execution.setBatchId(generateBatchId(taskId));
+        execution.setBatchId(resolveBatchId(taskId, requestedBatchId));
         execution.setExecutionId("preparing-" + UUID.randomUUID().toString().substring(0, 8));
         IngestionExecutionLineageSnapshot.apply(execution, task);
         execution = executionRepository.save(execution);
@@ -609,6 +661,24 @@ public class IngestionTaskService {
             }
             execution.setStartTime(Instant.now());
 
+            if (apiTask) {
+                executeApiIngestionPlan(task, execution, source);
+                task.setLastExecutedAt(Instant.now());
+                task.setLastExecutionStatus(execution.getStatus());
+                taskRepository.save(task);
+                syncExecutionLineageQuietly(task, execution);
+                log.info("Completed API execution {} for task ID: {}", execution.getExecutionId(), taskId);
+
+                Map<String, Object> auditMeta = new LinkedHashMap<>();
+                auditMeta.put("taskId", taskId);
+                auditMeta.put("executionId", execution.getId());
+                auditMeta.put("batchId", execution.getBatchId());
+                auditMeta.put("operator", resolveOperator(task));
+                auditMeta.put("engine", "api-http");
+                auditService.auditAction("INGESTION_TASK_EXECUTE", AuditStage.SUCCESS, task.getName(), auditMeta);
+                return;
+            }
+
             if (airflowEnabled) {
                 Map<String, Object> conf = new java.util.LinkedHashMap<>();
                 if (!apiTask) {
@@ -718,11 +788,90 @@ public class IngestionTaskService {
         }
     }
 
+    private void executeApiIngestionPlan(
+        IngestionTask task,
+        IngestionExecution execution,
+        com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source
+    ) {
+        SourceConnectorContext context = buildSourceConnectorContext(task, source);
+        SourceConnector connector = sourceConnectorRegistry.find(context)
+            .orElseThrow(() -> new IllegalStateException("未找到 API 数据源连接器: " + task.getSourceType()));
+        ExecutionPlan plan = connector.buildExecutionPlan(context);
+
+        execution.setExecutionId("api-" + UUID.randomUUID().toString().substring(0, 8));
+        execution.setStatus("running");
+        executionRepository.save(execution);
+
+        ApiIngestionResult result = apiIngestionExecutor.execute(plan, task, execution);
+        if (result == null) {
+            throw new IllegalStateException("API 入湖执行未返回结果");
+        }
+        if (!result.success()) {
+            String message = StringUtils.hasText(result.errorMessage()) ? result.errorMessage() : "API 入湖执行失败";
+            throw new IllegalStateException(message);
+        }
+
+        execution.setStatus("success");
+        execution.setEndTime(Instant.now());
+        if (result.rowsRead() != null) {
+            execution.setRowsRead(result.rowsRead());
+        }
+        if (result.rowsWritten() != null) {
+            execution.setRowsWritten(result.rowsWritten());
+        }
+        executionRepository.save(execution);
+    }
+
+    private SourceConnectorContext buildSourceConnectorContext(
+        IngestionTask task,
+        com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source
+    ) {
+        return new SourceConnectorContext(
+            task.getId(),
+            task.getName(),
+            task.getSourceDataSourceId(),
+            task.getSourceType(),
+            mergedApiSourceConfig(task, source),
+            task.getSyncMode(),
+            jsonObjectMap(task.getSyncConfig(), "syncConfig"),
+            List.of()
+        );
+    }
+
+    private Map<String, Object> mergedApiSourceConfig(
+        IngestionTask task,
+        com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source
+    ) {
+        Map<String, Object> merged = new LinkedHashMap<>();
+        if (source != null && source.readerConfig() != null) {
+            merged.putAll(source.readerConfig());
+        }
+        merged.putAll(jsonObjectMap(task.getSourceConfig(), "sourceConfig"));
+        return merged;
+    }
+
+    private Map<String, Object> jsonObjectMap(JsonNode node, String fieldName) {
+        if (node == null || node.isNull() || node.isMissingNode()) {
+            return Map.of();
+        }
+        if (!node.isObject()) {
+            throw new IllegalArgumentException(fieldName + " 必须是 JSON 对象");
+        }
+        Map<String, Object> value = OBJECT_MAPPER.convertValue(node, MAP_TYPE);
+        return value == null ? Map.of() : value;
+    }
+
     private void syncExecutionLineageQuietly(IngestionTask task, IngestionExecution execution) {
         if (task == null || execution == null) {
             return;
         }
         try {
+            if (isApiSourceTask(task)) {
+                boolean emitted = platformInfraClient.emitIngestionOpenLineageEvent(task, execution);
+                if (!emitted) {
+                    log.debug("API OpenLineage event skipped or not emitted for task {} execution {}", task.getId(), execution.getId());
+                }
+            }
             boolean synced = platformInfraClient.syncIngestionExecutionLineage(task, execution);
             if (!synced) {
                 auditService.auditAction(
@@ -733,7 +882,12 @@ public class IngestionTaskService {
                 );
             }
         } catch (Exception ex) {
-            log.warn("Failed to sync ingestion execution lineage for task {} execution {}: {}", task.getId(), execution.getId(), ex.getMessage());
+            log.warn(
+                "Failed to sync ingestion execution lineage for task {} execution {}: {}",
+                task.getId(),
+                execution.getId(),
+                ex.getMessage()
+            );
             auditService.auditAction(
                 "INGESTION_LINEAGE_SYNC",
                 AuditStage.FAIL,
@@ -757,6 +911,14 @@ public class IngestionTaskService {
     private String generateBatchId(Long taskId) {
         String taskPart = taskId == null ? "task" : "task-" + taskId;
         return "batch-" + taskPart + "-" + UUID.randomUUID().toString().replace("-", "");
+    }
+
+    private String resolveBatchId(Long taskId, String requestedBatchId) {
+        String normalized = toText(requestedBatchId);
+        if (StringUtils.hasText(normalized)) {
+            return truncateText(normalized, 128);
+        }
+        return generateBatchId(taskId);
     }
 
     private Map<String, Object> buildExecutionRuntimeContext(IngestionTask task, IngestionExecution execution) {
@@ -2164,6 +2326,85 @@ public class IngestionTaskService {
         return taskMapper.toDto(task);
     }
 
+    public Map<String, Object> rebuildApiDags() {
+        List<IngestionTask> tasks = taskRepository.findAll();
+        List<Map<String, Object>> items = new ArrayList<>();
+        int migrated = 0;
+        int skipped = 0;
+        int failed = 0;
+
+        for (IngestionTask task : tasks) {
+            if (task == null) {
+                skipped++;
+                items.add(apiDagMigrationItem(null, null, "skipped", "task is null", null));
+                continue;
+            }
+            Long taskId = task.getId();
+            String taskName = task.getName();
+            if (!ApiConnectorTypes.isApiSourceType(task.getSourceType())) {
+                skipped++;
+                items.add(apiDagMigrationItem(taskId, taskName, "skipped", "not api source", null));
+                continue;
+            }
+            if ("deleted".equalsIgnoreCase(toText(task.getStatus()))) {
+                skipped++;
+                items.add(apiDagMigrationItem(taskId, taskName, "skipped", "task deleted", null));
+                continue;
+            }
+            if (Boolean.FALSE.equals(task.getAirflowEnabled())) {
+                skipped++;
+                items.add(apiDagMigrationItem(taskId, taskName, "skipped", "airflow disabled", null));
+                continue;
+            }
+            try {
+                String dagId = airflowDagService.rebuildDagForTask(task);
+                if (!StringUtils.hasText(dagId)) {
+                    throw new IllegalStateException("DAG 生成失败");
+                }
+                if (!dagId.equals(task.getAirflowDagId())) {
+                    task.setAirflowDagId(dagId);
+                }
+                taskRepository.save(task);
+                dagPreheatService.preheatDag(dagId);
+                migrated++;
+                items.add(apiDagMigrationItem(taskId, taskName, "migrated", null, dagId));
+            } catch (Exception ex) {
+                failed++;
+                items.add(apiDagMigrationItem(taskId, taskName, "failed", trimMessage(ex.getMessage()), task.getAirflowDagId()));
+            }
+        }
+
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("total", tasks.size());
+        summary.put("migrated", migrated);
+        summary.put("skipped", skipped);
+        summary.put("failed", failed);
+        summary.put("items", List.copyOf(items));
+        return summary;
+    }
+
+    private Map<String, Object> apiDagMigrationItem(Long taskId, String taskName, String action, String reason, String dagId) {
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("taskId", taskId);
+        item.put("taskName", taskName);
+        item.put("action", action);
+        if (StringUtils.hasText(reason)) {
+            item.put("reason", reason);
+        }
+        if (StringUtils.hasText(dagId)) {
+            item.put("dagId", dagId);
+        }
+        return item;
+    }
+
+    private String trimMessage(String message) {
+        if (!StringUtils.hasText(message)) {
+            return null;
+        }
+        String trimmed = message.trim();
+        return trimmed.length() > 300 ? trimmed.substring(0, 300) : trimmed;
+    }
+
     private IngestionTask ensureAirflowDag(IngestionTask task) {
         return ensureAirflowDag(task, false);
     }
@@ -2174,8 +2415,9 @@ public class IngestionTaskService {
         }
         // Split multi-content-block job into per-table files so each Airflow operator
         // runs Addax with a single content block (Addax only processes the first one).
-        java.util.List<AddaxJobService.PerTableJob> perTableJobs =
-            addaxJobService.splitJobIntoPerTableFiles(task.getAddaxJobPath());
+        java.util.List<AddaxJobService.PerTableJob> perTableJobs = isApiSourceTask(task)
+            ? List.of()
+            : addaxJobService.splitJobIntoPerTableFiles(task.getAddaxJobPath());
         String dagId = forceRebuild
             ? airflowDagService.rebuildDagForTask(task, perTableJobs)
             : airflowDagService.ensureDagForTask(task, perTableJobs);

@@ -27,8 +27,17 @@ final class AddaxFileCrypto {
     /** 解析出的密文三元组：加密版本、IV、密文（含 tag）。 */
     record EncryptedPayload(String keyVersion, byte[] iv, byte[] cipherText) {}
 
-    static SecretKey keyFromBase64(String base64Key) {
-        byte[] keyBytes = Base64.getDecoder().decode(base64Key);
+    static SecretKey keyFromBase64(String base64Key) throws GeneralSecurityException {
+        byte[] keyBytes;
+        try {
+            keyBytes = Base64.getDecoder().decode(base64Key);
+        } catch (IllegalArgumentException ex) {
+            throw new GeneralSecurityException("DTS_INFRA_ENCRYPTION_KEY is not valid Base64", ex);
+        }
+        if (keyBytes.length != 16 && keyBytes.length != 24 && keyBytes.length != 32) {
+            throw new GeneralSecurityException(
+                "DTS_INFRA_ENCRYPTION_KEY decoded length must be 16/24/32 bytes, got " + keyBytes.length);
+        }
         return new SecretKeySpec(keyBytes, "AES");
     }
 

@@ -3,6 +3,7 @@ package com.yuzhi.dts.ingestion.service.etl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.ingestion.config.AddaxProperties;
 import com.yuzhi.dts.ingestion.config.AirflowProperties;
+import com.yuzhi.dts.ingestion.config.ApiProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
@@ -21,6 +22,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -36,6 +38,7 @@ public class AirflowDagService {
     private final IngestionSettingsService settingsService;
     private final AirflowClient airflowClient;
     private final org.springframework.core.env.Environment springEnv;
+    private final ApiProperties apiProperties;
 
     public AirflowDagService(
         AirflowProperties properties,
@@ -44,11 +47,24 @@ public class AirflowDagService {
         AirflowClient airflowClient,
         org.springframework.core.env.Environment springEnv
     ) {
+        this(properties, addaxProperties, settingsService, airflowClient, springEnv, new ApiProperties());
+    }
+
+    @Autowired
+    public AirflowDagService(
+        AirflowProperties properties,
+        AddaxProperties addaxProperties,
+        IngestionSettingsService settingsService,
+        AirflowClient airflowClient,
+        org.springframework.core.env.Environment springEnv,
+        ApiProperties apiProperties
+    ) {
         this.properties = properties;
         this.addaxProperties = addaxProperties;
         this.settingsService = settingsService;
         this.airflowClient = airflowClient;
         this.springEnv = springEnv;
+        this.apiProperties = apiProperties == null ? new ApiProperties() : apiProperties;
     }
 
     public String ensureDagForTask(IngestionTask task) {
@@ -668,7 +684,7 @@ public class AirflowDagService {
                     # Sprint-37: 上传密文解密到 tmpfs(/decrypted) 供 Addax 读取；密钥经 Airflow worker 透传，明文不落盘
                     "TMPDIR": "/decrypted",
                     "DTS_INFRA_ENCRYPTION_KEY": os.environ.get("DTS_INFRA_ENCRYPTION_KEY", ""),
-                    "DTS_INFRA_KEY_VERSION": os.environ.get("DTS_INFRA_KEY_VERSION", ""),
+                    "DTS_INFRA_KEY_VERSION": os.environ.get("DTS_INFRA_KEY_VERSION", "v1"),
                     "DTS_ADDAX_READER_PASSWORD": resolve_secret(
                         "DTS_ADDAX_READER_PASSWORD",
                         "DTS_SOURCE_DB_PASSWORD",
@@ -695,6 +711,7 @@ public class AirflowDagService {
             OPENLINEAGE_SERVICE = os.getenv("DTS_OPENLINEAGE_SERVICE", "dts-airflow")
             OPENLINEAGE_ENABLED = os.getenv("DTS_OPENLINEAGE_ENABLED", "true").lower() not in ("0", "false", "no")
             LINEAGE_DATASETS = %s
+            _DTS_INTERNAL_HTTP_OPENER = globals().get("_DTS_INTERNAL_HTTP_OPENER") or urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
             def emit_openlineage_event(event_type, context, datasets):
@@ -725,7 +742,7 @@ public class AirflowDagService {
                     },
                 )
                 try:
-                    urllib.request.urlopen(request, timeout=5).read()
+                    _DTS_INTERNAL_HTTP_OPENER.open(request, timeout=5).read()
                 except Exception as exc:
                     print(f"OpenLineage emit failed: {exc}")
 
@@ -1138,23 +1155,15 @@ public class AirflowDagService {
     }
 
     /**
-     * Build a self-contained Airflow DAG for API ingestion.
-     * The DAG performs HTTP fetches and lands raw JSON records into Postgres ODS
-     * using the Sprint-22 raw landing contract.
+     * Build a thin Airflow DAG for API ingestion.
+     * Business runtime stays in dts-ingestion; Airflow only triggers and polls it.
      */
     private String buildApiDagSource(String dagId, IngestionTask task) {
-        String sourceConfigJson;
-        try {
-            JsonNode src = task.getSourceConfig();
-            sourceConfigJson = src == null || src.isNull() ? "{}" : JOB_MAPPER.writeValueAsString(src);
-        } catch (Exception ex) {
-            LOG.warn("[airflow] failed to serialize source_config for api task {}: {}", task.getId(), ex.getMessage());
-            sourceConfigJson = "{}";
-        }
         String taskName = task.getName() == null ? "" : task.getName();
         String scheduleLiteral = buildScheduleExpression(task.getSyncSchedule());
         String taskIdLiteral = resolveTaskId(task);
         long ingestionTaskId = task.getId() == null ? 0L : task.getId();
+        long executionTimeoutSeconds = Math.max(1L, apiProperties.getExecutionTimeout().toSeconds());
         String lineageSupport = buildOpenLineageSupportBlock(task, null);
         String lineageCallbacks = StringUtils.hasText(lineageSupport)
             ? "                    on_success_callback=make_openlineage_callback(\"COMPLETE\", LINEAGE_DATASETS),\n" +
@@ -1166,6 +1175,8 @@ public class AirflowDagService {
 
             import json
             import os
+            import time
+            import urllib.error
             import urllib.request
             import uuid
             from datetime import datetime, timedelta
@@ -1175,326 +1186,82 @@ public class AirflowDagService {
 
             INGESTION_TASK_ID = %d
             INGESTION_TASK_NAME = "%s"
-            SOURCE_CONFIG_JSON = \"\"\"%s\"\"\"
+            INGESTION_BASE_URL = os.getenv("DTS_INGESTION_INTERNAL_BASE_URL", "http://dts-ingestion:8083").rstrip("/")
+            SERVICE_NAME = os.getenv("DTS_SERVICE_NAME", "dts-airflow")
+            SERVICE_TOKEN = os.getenv("DTS_SERVICE_TOKEN", "")
+            POLL_INTERVAL_SECONDS = int(os.getenv("DTS_API_INGESTION_POLL_INTERVAL_SECONDS", "5"))
+            POLL_TIMEOUT_SECONDS = int(os.getenv("DTS_API_INGESTION_POLL_TIMEOUT_SECONDS", "%d"))
+            _DTS_INTERNAL_HTTP_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
             %s
 
 
-            def _run_api_ingestion(**context):
-                import base64
-                import time
-                import urllib.error
-                import urllib.parse
-                import urllib.request
-                import psycopg2
-                from psycopg2 import sql
-                from psycopg2.extras import Json
-
-                cfg = json.loads(SOURCE_CONFIG_JSON or "{}")
-                base_url = (cfg.get("baseUrl") or "").rstrip("/")
-                if not base_url:
-                    raise RuntimeError("API_RUNTIME_CONFIG: baseUrl is required")
-
-                resources = cfg.get("resources") or []
-                if not isinstance(resources, list) or not resources:
-                    resource = cfg.get("resource") or {}
-                    resources = [resource] if resource else []
-                if not resources:
-                    raise RuntimeError("API_RUNTIME_CONFIG: at least one resource is required")
-
-                conn = psycopg2.connect(
-                    host=os.getenv("DTS_TARGET_DB_HOST", "dts-pg"),
-                    port=int(os.getenv("DTS_TARGET_DB_PORT", "5432")),
-                    dbname=os.getenv("DTS_TARGET_DB_NAME", "biadmin"),
-                    user=os.getenv("DTS_TARGET_DB_USER", "biadmin"),
-                    password=os.environ["DTS_TARGET_DB_PASSWORD"],
-                )
-                try:
-                    cur = conn.cursor()
-                    cur.execute(
-                        \"\"\"
-                        CREATE TABLE IF NOT EXISTS dts_api_ingestion_checkpoint (
-                            task_id BIGINT NOT NULL,
-                            resource_id TEXT NOT NULL,
-                            cursor_value TEXT,
-                            updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-                            PRIMARY KEY (task_id, resource_id)
-                        )
-                        \"\"\"
-                    )
-                    batch_id = str(context.get("dag_run").conf.get("batch_id") if context.get("dag_run") and context.get("dag_run").conf else None) if context.get("dag_run") else None
-                    if not batch_id or batch_id == "None":
-                        batch_id = str(uuid.uuid4())
-                    execution_id = context.get("run_id", batch_id) if isinstance(context, dict) else batch_id
-                    total_records = 0
-                    for resource in resources:
-                        if not isinstance(resource, dict):
-                            continue
-                        total_records += _run_resource(cur, cfg, base_url, resource, batch_id, str(execution_id), context)
-                    conn.commit()
-                    print(f"[api-ingestion] task={INGESTION_TASK_ID} resources={len(resources)} records={total_records}")
-                finally:
-                    conn.close()
-
-
-            def _run_resource(cur, cfg, base_url, resource, batch_id, execution_id, context):
-                resource_id = str(resource.get("resourceId") or resource.get("id") or resource.get("name") or "default")
-                target_table = str(resource.get("targetTable") or ("ods_api_" + resource_id))
-                path = str(resource.get("path") or "").lstrip("/")
-                if not path:
-                    raise RuntimeError("API_RUNTIME_CONFIG: resource.path is required for " + resource_id)
-
-                _ensure_landing_table(cur, target_table)
-                checkpoint = _read_checkpoint(cur, resource_id)
-                cursor_cfg = resource.get("cursor") or {}
-                backfill_start = _dag_conf(context, "backfill_window_start")
-                backfill_end = _dag_conf(context, "backfill_window_end")
-                cursor_value = backfill_start or checkpoint
-                max_cursor = checkpoint
-                page_no = 1
-                record_total = 0
-                next_url = None
-                next_token = None
-                pagination = resource.get("pagination") or {}
-                while True:
-                    url, query = _build_url(base_url, path, resource, pagination, page_no, next_token, next_url, cursor_cfg, cursor_value, backfill_end)
-                    body = _build_body(resource, cursor_cfg, cursor_value, backfill_end)
-                    headers = _build_headers(cfg)
-                    method = str(resource.get("method") or "GET").upper()
-                    payload = _request_json(url, method, headers, body, cfg)
-                    records = _extract_records(payload, str(resource.get("recordPath") or ""))
-                    for idx, record in enumerate(records, start=1):
-                        value = _extract_path(record, cursor_cfg.get("field")) if isinstance(record, dict) else None
-                        if value is not None:
-                            max_cursor = str(value) if max_cursor is None or str(value) > str(max_cursor) else max_cursor
-                        _insert_record(cur, target_table, record, resource_id, url, batch_id, execution_id, page_no, idx, value)
-                    record_total += len(records)
-                    next_token = _extract_path(payload, pagination.get("nextTokenPath"))
-                    next_url = _extract_path(payload, pagination.get("nextUrlPath"))
-                    if not _has_next_page(pagination, page_no, next_token, next_url, len(records)):
-                        break
-                    page_no += 1
-                    if page_no > int(pagination.get("maxPages") or 1000):
-                        raise RuntimeError("API_RUNTIME_PAGINATION_LIMIT: maxPages exceeded for " + resource_id)
-                if cursor_cfg and max_cursor:
-                    _write_checkpoint(cur, resource_id, max_cursor)
-                return record_total
-
-
             def _dag_conf(context, key):
+                run = context.get("dag_run") if isinstance(context, dict) else None
+                conf = getattr(run, "conf", None) or {}
+                return conf.get(key)
+
+
+            def _call_ingestion_api(method, path, payload=None):
+                headers = {
+                    "Content-Type": "application/json",
+                    "X-DTS-Service": SERVICE_NAME,
+                }
+                if SERVICE_TOKEN:
+                    headers["X-DTS-Service-Token"] = SERVICE_TOKEN
+                body = json.dumps(payload).encode("utf-8") if payload is not None else None
+                request = urllib.request.Request(
+                    INGESTION_BASE_URL + path,
+                    data=body,
+                    method=method,
+                    headers=headers,
+                )
                 try:
-                    run = context.get("dag_run")
-                    conf = run.conf or {}
-                    return conf.get(key)
-                except Exception:
-                    return None
-
-
-            def _build_url(base_url, path, resource, pagination, page_no, next_token, next_url, cursor_cfg, cursor_value, backfill_end):
-                if next_url:
-                    return str(next_url), {}
-                query = dict(resource.get("query") or {})
-                if cursor_cfg and str(cursor_cfg.get("injectInto") or "query").lower() == "query" and cursor_value is not None:
-                    query[str(cursor_cfg.get("parameterName") or cursor_cfg.get("field") or "cursor")] = cursor_value
-                    if backfill_end is not None:
-                        query[str(cursor_cfg.get("endParameterName") or "cursorEnd")] = backfill_end
-                ptype = str(pagination.get("type") or "").lower()
-                if ptype in ("page", "pagepagesize"):
-                    query[str(pagination.get("pageParam") or "page")] = page_no
-                    query[str(pagination.get("sizeParam") or "pageSize")] = int(pagination.get("pageSize") or 100)
-                elif ptype == "offset":
-                    page_size = int(pagination.get("pageSize") or 100)
-                    query[str(pagination.get("offsetParam") or "offset")] = (page_no - 1) * page_size
-                    query[str(pagination.get("limitParam") or "limit")] = page_size
-                elif ptype == "token" and next_token:
-                    query[str(pagination.get("tokenParam") or pagination.get("pageParam") or "pageToken")] = next_token
-                url = base_url + "/" + path
-                pairs = [(str(k), json.dumps(v, ensure_ascii=False) if isinstance(v, (dict, list)) else str(v)) for k, v in query.items() if v is not None]
-                if pairs:
-                    url = url + ("&" if "?" in url else "?") + urllib.parse.urlencode(pairs)
-                return url, query
-
-
-            def _build_body(resource, cursor_cfg, cursor_value, backfill_end):
-                body = resource.get("bodyTemplate")
-                if body is None:
-                    return None
-                text = json.dumps(body, ensure_ascii=False) if isinstance(body, (dict, list)) else str(body)
-                if cursor_value is not None:
-                    text = text.replace("{{cursor}}", str(cursor_value))
-                    text = text.replace("${cursor}", str(cursor_value))
-                if backfill_end is not None:
-                    text = text.replace("{{cursor_end}}", str(backfill_end))
-                    text = text.replace("${cursor_end}", str(backfill_end))
-                return text.encode("utf-8")
-
-
-            def _build_headers(cfg):
-                headers = dict(cfg.get("defaultHeaders") or {})
-                auth = cfg.get("auth") or {}
-                provider = str(auth.get("provider") or "none").lower()
-                refs = auth.get("secretRefs") or {}
-                config = auth.get("config") or {}
-                if provider in ("", "none", "anonymous"):
-                    return headers
-                if provider in ("bearer", "bearertoken"):
-                    token = _secret(refs.get("token") or config.get("tokenEnv") or "DTS_API_BEARER_TOKEN")
-                    headers["Authorization"] = "Bearer " + token
-                elif provider == "apikey":
-                    key = _secret(refs.get("apiKey") or config.get("apiKeyEnv") or "DTS_API_KEY")
-                    placement = str(config.get("placement") or "header").lower()
-                    name = str(config.get("name") or "X-API-Key")
-                    if placement == "query":
-                        headers["_dts_api_key_query"] = name + "=" + urllib.parse.quote(key)
-                    else:
-                        headers[name] = key
-                elif provider == "basic":
-                    user = _secret(refs.get("username") or config.get("usernameEnv") or "DTS_API_USERNAME")
-                    pwd = _secret(refs.get("password") or config.get("passwordEnv") or "DTS_API_PASSWORD")
-                    headers["Authorization"] = "Basic " + base64.b64encode((user + ":" + pwd).encode("utf-8")).decode("ascii")
-                else:
-                    raise RuntimeError("API_RUNTIME_AUTH_UNSUPPORTED: " + provider)
-                return headers
-
-
-            def _secret(env_name):
-                value = os.environ.get(str(env_name))
-                if not value:
-                    raise RuntimeError("API_RUNTIME_SECRET_MISSING: " + str(env_name))
-                return value
-
-
-            def _request_json(url, method, headers, body, cfg):
-                retry = cfg.get("retry") or cfg.get("requestPolicy") or {}
-                attempts = int(retry.get("maxRetries") or retry.get("retries") or 2) + 1
-                timeout = int((cfg.get("requestPolicy") or {}).get("readTimeoutMillis") or 60000) / 1000
-                rate = cfg.get("rateLimit") or {}
-                rps = float(rate.get("requestsPerSecond") or 0)
-                if rps > 0:
-                    time.sleep(1.0 / rps)
-                clean_headers = {k: v for k, v in headers.items() if not str(k).startswith("_dts_")}
-                if "_dts_api_key_query" in headers:
-                    url = url + ("&" if "?" in url else "?") + headers["_dts_api_key_query"]
-                last_error = None
-                for attempt in range(1, attempts + 1):
-                    try:
-                        req = urllib.request.Request(url, data=body, method=method, headers=clean_headers)
-                        with urllib.request.urlopen(req, timeout=timeout) as resp:
-                            status = resp.getcode()
-                            raw = resp.read().decode("utf-8")
-                        if status >= 400:
-                            raise RuntimeError("API_RUNTIME_HTTP_" + str(status))
+                    with _DTS_INTERNAL_HTTP_OPENER.open(request, timeout=30) as response:
+                        raw = response.read().decode("utf-8")
                         return json.loads(raw) if raw else {}
-                    except urllib.error.HTTPError as ex:
-                        status = ex.code
-                        category = "RATE_LIMIT" if status == 429 else ("AUTH" if status in (401, 403) else ("SERVER" if status >= 500 else "CLIENT"))
-                        last_error = f"API_RUNTIME_{category}: HTTP {status}"
-                        if status < 500 and status != 429:
-                            break
-                    except Exception as ex:
-                        last_error = "API_RUNTIME_NETWORK: " + str(ex)
-                    if attempt < attempts:
-                        time.sleep(min(30, 2 ** (attempt - 1)))
-                raise RuntimeError(last_error or "API_RUNTIME_UNKNOWN")
+                except urllib.error.HTTPError as ex:
+                    raw = ex.read().decode("utf-8", "ignore")
+                    raise RuntimeError(f"DTS_API_INGESTION_HTTP_{ex.code}: {raw}") from ex
 
 
-            def _extract_records(payload, record_path):
-                records = _extract_path(payload, record_path)
-                if records is None:
-                    records = payload
-                if records is None:
-                    return []
-                if isinstance(records, dict):
-                    return [records]
-                if isinstance(records, list):
-                    return records
-                raise RuntimeError("API_RUNTIME_SCHEMA: recordPath did not resolve to list/object")
+            def _copy_conf(payload, context, field, *aliases):
+                for key in (field, *aliases):
+                    value = _dag_conf(context, key)
+                    if value is not None:
+                        payload[field] = value
+                        return
 
 
-            def _extract_path(obj, path):
-                if not path:
-                    return None
-                current = obj
-                for segment in str(path).replace("$.", "").split("."):
-                    if not segment:
-                        continue
-                    if isinstance(current, dict):
-                        current = current.get(segment)
-                    else:
-                        return None
-                return current
+            def _trigger_api_ingestion(**context):
+                batch_id = _dag_conf(context, "batchId") or _dag_conf(context, "batch_id") or str(uuid.uuid4())
+                payload = {
+                    "taskId": INGESTION_TASK_ID,
+                    "batchId": batch_id,
+                    "airflowRunId": context.get("run_id"),
+                    "logicalDate": str(context.get("logical_date") or ""),
+                }
+                _copy_conf(payload, context, "mode")
+                _copy_conf(payload, context, "backfillWindowStart", "backfill_window_start")
+                _copy_conf(payload, context, "backfillWindowEnd", "backfill_window_end")
+                _copy_conf(payload, context, "backfillCursorColumn", "backfill_cursor_column")
 
+                response = _call_ingestion_api("POST", "/internal/api-ingestion/executions", payload)
+                execution_id = response.get("id") or response.get("executionId")
+                if not execution_id:
+                    raise RuntimeError("DTS_API_INGESTION_EXECUTION_ID_MISSING")
 
-            def _has_next_page(pagination, page_no, next_token, next_url, record_count):
-                ptype = str(pagination.get("type") or "").lower()
-                if not ptype or ptype == "none":
-                    return False
-                if next_url or next_token:
-                    return True
-                if ptype in ("page", "pagepagesize", "offset"):
-                    page_size = int(pagination.get("pageSize") or 100)
-                    return record_count >= page_size
-                return False
-
-
-            def _ensure_landing_table(cur, target_table):
-                cur.execute(
-                    sql.SQL(
-                        \"\"\"
-                        CREATE TABLE IF NOT EXISTS {} (
-                            id BIGSERIAL PRIMARY KEY,
-                            _dts_raw_record JSONB NOT NULL,
-                            _dts_source_system TEXT,
-                            _dts_source_resource TEXT,
-                            _dts_endpoint TEXT,
-                            _dts_import_time TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-                            _dts_batch_id TEXT,
-                            _dts_execution_id TEXT,
-                            _dts_page_no INTEGER,
-                            _dts_record_no INTEGER,
-                            _dts_cursor_value TEXT
-                        )
-                        \"\"\"
-                    ).format(_table_identifier(target_table))
-                )
-
-
-            def _insert_record(cur, target_table, record, resource_id, url, batch_id, execution_id, page_no, record_no, cursor_value):
-                cur.execute(
-                    sql.SQL(
-                        "INSERT INTO {} (_dts_raw_record, _dts_source_system, _dts_source_resource, _dts_endpoint, "
-                        "_dts_batch_id, _dts_execution_id, _dts_page_no, _dts_record_no, _dts_cursor_value) "
-                        "VALUES (%%s, %%s, %%s, %%s, %%s, %%s, %%s, %%s, %%s)"
-                    ).format(_table_identifier(target_table)),
-                    (Json(record), "api", resource_id, url, batch_id, execution_id, page_no, record_no, None if cursor_value is None else str(cursor_value)),
-                )
-
-
-            def _table_identifier(name):
-                parts = [p for p in str(name).split(".") if p]
-                if not parts:
-                    raise RuntimeError("API_RUNTIME_CONFIG: targetTable is empty")
-                return sql.Identifier(*parts)
-
-
-            def _read_checkpoint(cur, resource_id):
-                cur.execute(
-                    "SELECT cursor_value FROM dts_api_ingestion_checkpoint WHERE task_id=%%s AND resource_id=%%s",
-                    (INGESTION_TASK_ID, resource_id),
-                )
-                row = cur.fetchone()
-                return row[0] if row else None
-
-
-            def _write_checkpoint(cur, resource_id, cursor_value):
-                cur.execute(
-                    \"\"\"
-                    INSERT INTO dts_api_ingestion_checkpoint(task_id, resource_id, cursor_value, updated_at)
-                    VALUES (%%s, %%s, %%s, now())
-                    ON CONFLICT (task_id, resource_id)
-                    DO UPDATE SET cursor_value=EXCLUDED.cursor_value, updated_at=now()
-                    \"\"\",
-                    (INGESTION_TASK_ID, resource_id, str(cursor_value)),
-                )
+                deadline = time.time() + POLL_TIMEOUT_SECONDS
+                last_status = "UNKNOWN"
+                while time.time() < deadline:
+                    state = _call_ingestion_api("GET", f"/internal/api-ingestion/executions/{execution_id}")
+                    last_status = str(state.get("status") or "").upper()
+                    if last_status in ("SUCCEEDED", "SUCCESS", "COMPLETED", "DONE"):
+                        return state
+                    if last_status in ("FAILED", "ERROR", "CANCELED", "CANCELLED"):
+                        message = state.get("errorMessage") or state.get("message") or last_status
+                        raise RuntimeError(f"DTS_API_INGESTION_FAILED: {message}")
+                    time.sleep(POLL_INTERVAL_SECONDS)
+                raise TimeoutError(f"DTS_API_INGESTION_TIMEOUT: execution={execution_id} status={last_status}")
 
 
             with DAG(
@@ -1507,35 +1274,26 @@ public class AirflowDagService {
                 default_args={
                     "owner": "dts-ingestion",
                     "retries": 0,
-                    "execution_timeout": timedelta(minutes=15),
+                    "execution_timeout": timedelta(seconds=%d),
                 },
                 tags=["dts", "ingestion", "api"],
             ) as dag:
                 api_run = PythonOperator(
                     task_id="%s",
-                    python_callable=_run_api_ingestion,
+                    python_callable=_trigger_api_ingestion,
             %s
                 )
             """.formatted(
                 ingestionTaskId,
                 escapePythonString(taskName),
-                escapeTripleQuotedJson(sourceConfigJson),
+                executionTimeoutSeconds,
                 lineageSupport,
                 escapePythonString(dagId),
                 scheduleLiteral,
+                executionTimeoutSeconds,
                 escapePythonString(taskIdLiteral),
                 lineageCallbacks
             );
     }
 
-    /** Make a JSON string safe to embed inside a Python triple-quoted string. */
-    private String escapeTripleQuotedJson(String json) {
-        if (json == null) return "{}";
-        // Escape backslashes first, then any sequence of three or more double quotes,
-        // and finally avoid trailing-quote-followed-by-closer ambiguity.
-        return json
-            .replace("\\", "\\\\")
-            .replace("\"\"\"", "\\\"\\\"\\\"")
-            .replace("\\u", "\\\\u");
-    }
 }

@@ -221,72 +221,80 @@ public class FileUploadService {
         Path hostPath = uploadsDir.resolve(storedName);
         byte[] iv = crypto.randomIv();
         String keyVersion = crypto.currentKeyVersion();
+        if (!StringUtils.hasText(keyVersion)) {
+            throw new IllegalStateException("加密密钥版本未配置，禁止上传涉密文件");
+        }
         writeEncryptedPayload(hostPath, plain, keyVersion, iv);
 
-        String containerPath = ADDAX_CONTAINER_DIR + "/" + UPLOADS_SUBDIR + "/" + storedName;
-        String sheetName = null;
-        Integer sheetIndex = null;
-        List<SheetMetadata> sheets = List.of();
-        int rowCount = 0;
-        int errorCount = 0;
-        List<FileColumn> columns;
-        List<List<String>> preview = null;
-        String delimiter = null;
+        try {
+            String containerPath = ADDAX_CONTAINER_DIR + "/" + UPLOADS_SUBDIR + "/" + storedName;
+            String sheetName = null;
+            Integer sheetIndex = null;
+            List<SheetMetadata> sheets = List.of();
+            int rowCount = 0;
+            int errorCount = 0;
+            List<FileColumn> columns;
+            List<List<String>> preview = null;
+            String delimiter = null;
 
-        if (includeParsed) {
-            int normalizedPreviewLimit = normalizePreviewLimit(previewLimit);
-            ParsedUploadPayload parsed = parseUploadedPayload(
-                plain,
-                fileId,
-                fileType,
-                requestedSheetIndex,
-                requestedSheetName,
-                normalizedPreviewLimit
-            );
-            columns = parsed.columns();
-            sheets = parsed.sheets();
-            sheetName = parsed.sheetName();
-            sheetIndex = parsed.sheetIndex();
-            rowCount = parsed.rowCount();
-            errorCount = parsed.errorCount();
-            preview = parsed.preview();
-            delimiter = parsed.delimiter();
-        } else {
-            if ("excel".equals(fileType)) {
-                sheetIndex = resolveRequestedExcelSheetIndex(plain, requestedSheetIndex, requestedSheetName);
-                sheetName = resolveRequestedSheetName(plain, sheetIndex);
-                sheets = listExcelSheets(plain);
+            if (includeParsed) {
+                int normalizedPreviewLimit = normalizePreviewLimit(previewLimit);
+                ParsedUploadPayload parsed = parseUploadedPayload(
+                    plain,
+                    fileId,
+                    fileType,
+                    requestedSheetIndex,
+                    requestedSheetName,
+                    normalizedPreviewLimit
+                );
+                columns = parsed.columns();
+                sheets = parsed.sheets();
+                sheetName = parsed.sheetName();
+                sheetIndex = parsed.sheetIndex();
+                rowCount = parsed.rowCount();
+                errorCount = parsed.errorCount();
+                preview = parsed.preview();
+                delimiter = parsed.delimiter();
+            } else {
+                if ("excel".equals(fileType)) {
+                    sheetIndex = resolveRequestedExcelSheetIndex(plain, requestedSheetIndex, requestedSheetName);
+                    sheetName = resolveRequestedSheetName(plain, sheetIndex);
+                    sheets = listExcelSheets(plain);
+                }
+                columns = parseHeadersForUpload(plain, fileType);
+                rowCount = 0;
+                errorCount = 0;
+                preview = null;
+                delimiter = "csv".equals(fileType) ? "," : null;
             }
-            columns = parseHeadersForUpload(plain, fileType);
-            rowCount = 0;
-            errorCount = 0;
-            preview = null;
-            delimiter = "csv".equals(fileType) ? "," : null;
+
+            String fileHash = sha256(plain);
+            Long fileSize = (long) plain.length;
+
+            return buildResult(
+                hostPath.toString(),
+                containerPath,
+                fileType,
+                columns,
+                originalName,
+                fileId,
+                fileId,
+                sheetName,
+                sheetIndex,
+                sheets,
+                keyVersion,
+                true,
+                fileHash,
+                fileSize,
+                rowCount,
+                errorCount,
+                preview,
+                delimiter
+            );
+        } catch (RuntimeException ex) {
+            deleteUploadQuietly(hostPath, "upload post-processing failed");
+            throw ex;
         }
-
-        String fileHash = sha256(plain);
-        Long fileSize = (long) plain.length;
-
-        return buildResult(
-            hostPath.toString(),
-            containerPath,
-            fileType,
-            columns,
-            originalName,
-            fileId,
-            fileId,
-            sheetName,
-            sheetIndex,
-            sheets,
-            keyVersion,
-            true,
-            fileHash,
-            fileSize,
-            rowCount,
-            errorCount,
-            preview,
-            delimiter
-        );
     }
 
     private ParsedUploadPayload parseExistingUpload(
@@ -615,7 +623,19 @@ public class FileUploadService {
                 out.write(cipher);
             }
         } catch (Exception ex) {
+            deleteUploadQuietly(hostPath, "encrypted payload write failed");
             throw new IllegalStateException("文件加密保存失败: " + ex.getMessage(), ex);
+        }
+    }
+
+    private void deleteUploadQuietly(Path hostPath, String reason) {
+        if (hostPath == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(hostPath);
+        } catch (Exception cleanupEx) {
+            LOG.warn("Failed to clean upload file after {}: {} ({})", reason, hostPath, cleanupEx.getMessage());
         }
     }
 

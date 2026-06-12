@@ -1,5 +1,6 @@
 package com.yuzhi.dts.ingestion.service.etl.api;
 
+import com.yuzhi.dts.ingestion.config.ApiProperties;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -17,6 +18,15 @@ public final class ApiSourceConfigNormalizer {
         UUID sourceDataSourceId,
         String fallbackSourceName
     ) {
+        return normalize(sourceConfig, sourceDataSourceId, fallbackSourceName, ApiProperties.DEFAULT_TABLE_PREFIX);
+    }
+
+    public static Map<String, Object> normalize(
+        Map<String, Object> sourceConfig,
+        UUID sourceDataSourceId,
+        String fallbackSourceName,
+        String tablePrefix
+    ) {
         Map<String, Object> normalized = safeMap(sourceConfig);
         normalized.put("connectorType", ApiConnectorTypes.CONNECTOR_TYPE);
         normalized.put("readerType", ApiConnectorTypes.DEFAULT_READER_TYPE);
@@ -31,7 +41,7 @@ public final class ApiSourceConfigNormalizer {
         String sourceKey = resolveSourceKey(normalized, sourceDataSourceId, fallbackSourceName);
         List<Map<String, Object>> normalizedResources = new ArrayList<>(resources.size());
         for (Map<String, Object> resource : resources) {
-            normalizedResources.add(normalizeResource(resource, sourceKey));
+            normalizedResources.add(normalizeResource(resource, sourceKey, tablePrefix));
         }
         normalized.put("resource", normalizedResources.get(0));
         normalized.put("resources", normalizedResources);
@@ -58,7 +68,21 @@ public final class ApiSourceConfigNormalizer {
         UUID sourceDataSourceId,
         String fallbackSourceName
     ) {
-        Map<String, Object> normalized = normalize(normalizedSourceConfig, sourceDataSourceId, fallbackSourceName);
+        return deriveOdsMappings(
+            normalizedSourceConfig,
+            sourceDataSourceId,
+            fallbackSourceName,
+            ApiProperties.DEFAULT_TABLE_PREFIX
+        );
+    }
+
+    public static List<Map<String, String>> deriveOdsMappings(
+        Map<String, Object> normalizedSourceConfig,
+        UUID sourceDataSourceId,
+        String fallbackSourceName,
+        String tablePrefix
+    ) {
+        Map<String, Object> normalized = normalize(normalizedSourceConfig, sourceDataSourceId, fallbackSourceName, tablePrefix);
         List<Map<String, Object>> resources = extractResources(normalized);
         if (resources.isEmpty()) {
             return List.of();
@@ -80,7 +104,7 @@ public final class ApiSourceConfigNormalizer {
         return List.copyOf(mappings);
     }
 
-    private static Map<String, Object> normalizeResource(Map<String, Object> resource, String sourceKey) {
+    private static Map<String, Object> normalizeResource(Map<String, Object> resource, String sourceKey, String tablePrefix) {
         Map<String, Object> normalized = safeMap(resource);
         normalized.remove("fields");
 
@@ -95,7 +119,7 @@ public final class ApiSourceConfigNormalizer {
 
         String targetTable = normalizeTableName(firstText(normalized, "targetTable"));
         if (!StringUtils.hasText(targetTable)) {
-            targetTable = buildOdsTableName(sourceKey, resourceId);
+            targetTable = buildOdsTableName(tablePrefix, sourceKey, resourceId);
         }
         normalized.put("targetTable", targetTable);
         normalized.put("landing", normalizeLanding(normalized.get("landing")));
@@ -183,7 +207,7 @@ public final class ApiSourceConfigNormalizer {
         return "api";
     }
 
-    private static String buildOdsTableName(String sourceKey, String resourceId) {
+    private static String buildOdsTableName(String tablePrefix, String sourceKey, String resourceId) {
         String source = normalizeIdentifier(sourceKey);
         if (!StringUtils.hasText(source)) {
             source = "api";
@@ -192,7 +216,11 @@ public final class ApiSourceConfigNormalizer {
         if (!StringUtils.hasText(resource)) {
             resource = "resource";
         }
-        return "ods_api_" + source + "_" + resource;
+        return tablePrefix(tablePrefix) + source + "_" + resource;
+    }
+
+    private static String tablePrefix(String tablePrefix) {
+        return StringUtils.hasText(tablePrefix) ? tablePrefix.trim() : ApiProperties.DEFAULT_TABLE_PREFIX;
     }
 
     private static String normalizeTableName(String value) {

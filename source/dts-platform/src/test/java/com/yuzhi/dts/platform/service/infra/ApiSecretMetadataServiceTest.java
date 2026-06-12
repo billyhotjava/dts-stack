@@ -113,6 +113,26 @@ class ApiSecretMetadataServiceTest {
     }
 
     @Test
+    @DisplayName("jwtLogin tracks arbitrary login secret placeholders")
+    void jwtLoginTracksArbitraryLoginSecretPlaceholders() {
+        Map<String, Object> secrets = Map.of("password", "passw0rd-1234", "tenantSecret", "tenant-secret-xyz");
+
+        ApiSecretMetadata metadata = service.computeMetadata("jwtLogin", secrets, null);
+
+        assertThat(metadata.providerId()).isEqualTo("jwtLogin");
+        assertThat(metadata.fields())
+            .extracting(ApiSecretMetadata.FieldEntry::fieldName)
+            .contains("password", "tenantSecret");
+        assertThat(metadata.fields())
+            .filteredOn(entry -> "tenantSecret".equals(entry.fieldName()))
+            .singleElement()
+            .satisfies(entry -> {
+                assertThat(entry.secretVersion()).isEqualTo("v1");
+                assertThat(entry.maskedDisplay()).isEqualTo("te***-xyz");
+            });
+    }
+
+    @Test
     @DisplayName("provider 'none' yields empty metadata regardless of supplied secrets")
     void providerNoneYieldsEmptyMetadata() {
         ApiSecretMetadata metadata = service.computeMetadata("none", Map.of("value", "anything"), null);

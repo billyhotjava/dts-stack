@@ -432,6 +432,10 @@ auditing:
 
 dts:
   platform:
+    infra:
+      multi-source-enabled: ${DTS_PLATFORM_INFRA_MULTI_SOURCE_ENABLED:false}
+      encryption-key: ${DTS_INFRA_ENCRYPTION_KEY:${DATA_STANDARD_ENCRYPTION_KEY:}}
+      key-version: ${DTS_INFRA_KEY_VERSION:${DATA_STANDARD_KEY_VERSION:v1}}
     data-standard:
       encryption-key: ${DATA_STANDARD_ENCRYPTION_KEY:}
       key-version: ${DATA_STANDARD_KEY_VERSION:v1}

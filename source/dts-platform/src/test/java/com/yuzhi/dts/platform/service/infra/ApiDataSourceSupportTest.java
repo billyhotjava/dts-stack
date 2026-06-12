@@ -122,6 +122,7 @@ class ApiDataSourceSupportTest {
             .containsEntry("connectorType", "api")
             .containsEntry("readerType", "httpreader")
             .containsEntry("sourceCategory", "api")
+            .containsEntry("contractVersion", "1.2.0")
             .containsEntry("authProvider", "none");
     }
 

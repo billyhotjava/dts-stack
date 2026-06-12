@@ -67,7 +67,9 @@ class AirflowExecutionSyncServiceTest {
             incrementalSyncService,
             auditService
         );
-        when(settingsService.getSettings(IngestionSettingsService.SERVICE_AIRFLOW))
+        org.mockito.Mockito
+            .lenient()
+            .when(settingsService.getSettings(IngestionSettingsService.SERVICE_AIRFLOW))
             .thenReturn(new IngestionSettingsService.SettingsSnapshot(Map.of("executionPollEnabled", true, "executionPollBatchSize", 20)));
         when(executionRepository.save(any(IngestionExecution.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(taskRepository.save(any(IngestionTask.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -146,6 +148,27 @@ class AirflowExecutionSyncServiceTest {
         assertThat(savedExecution.getErrorMessage()).contains("dag-missing");
         assertThat(savedExecution.getErrorMessage()).contains("manual__404");
         verify(incrementalSyncService, never()).updateCheckpointOnSuccess(any(), any());
+    }
+
+    @Test
+    void recoverStaleExecutions_shouldFailStaleInternalApiExecutionWithoutAirflowLookup() {
+        IngestionTask task = task(40L, "api-task", null);
+        task.setAirflowEnabled(false);
+        IngestionExecution execution = runningExecution(404L, "api-batch-1", task);
+        execution.setStartTime(Instant.now().minusSeconds(2 * 60 * 60));
+        when(executionRepository.findByStatusesIgnoreCase(List.of("running", "preparing"))).thenReturn(List.of(execution));
+
+        syncService.recoverStaleExecutions();
+
+        ArgumentCaptor<IngestionExecution> executionCaptor = ArgumentCaptor.forClass(IngestionExecution.class);
+        verify(executionRepository).save(executionCaptor.capture());
+        IngestionExecution savedExecution = executionCaptor.getValue();
+        assertThat(savedExecution.getStatus()).isEqualTo("failed");
+        assertThat(savedExecution.getErrorMessage()).contains("服务重启后无法恢复");
+        assertThat(savedExecution.getFailureCategory()).isEqualTo("RUNTIME");
+        assertThat(savedExecution.isRetryExhausted()).isFalse();
+        assertThat(task.getLastExecutionStatus()).isEqualTo("failed");
+        verify(airflowClient, never()).getDagRunLookup(any(), any());
     }
 
     private IngestionTask task(Long id, String name, String dagId) {

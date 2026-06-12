@@ -510,6 +510,56 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 		return `${minutes}分${remain}秒`;
 	};
 
+	const arrayRecords = (value: unknown): Record<string, any>[] => {
+		if (!Array.isArray(value)) {
+			return [];
+		}
+		return value.filter((item): item is Record<string, any> => Boolean(item) && typeof item === "object" && !Array.isArray(item));
+	};
+
+	const apiResourceRows = (record: IngestionExecutionDTO) =>
+		arrayRecords(record.sourceTables).filter((item) => {
+			const sourceType = normalizeText(item.sourceType).toLowerCase();
+			const namespace = normalizeText(item.namespace).toLowerCase();
+			return sourceType === "api" || namespace.startsWith("api");
+		});
+
+	const renderApiResources = (record: IngestionExecutionDTO) => {
+		const rows = apiResourceRows(record);
+		if (!rows.length) {
+			return "-";
+		}
+		return (
+			<Space direction="vertical" size={2}>
+				{rows.slice(0, 3).map((item, index) => {
+					const name = normalizeText(item.name || item.resourceId || item.qualifiedName) || `resource-${index + 1}`;
+					const pageCount = item.pageCount ?? "-";
+					const rowsRead = item.rowsRead ?? "-";
+					const cursorValue = normalizeText(item.cursorValue);
+					const status = normalizeText(item.status) || "SUCCESS";
+					const tooltip = [
+						`资源：${name}`,
+						`页数：${pageCount}`,
+						`读取：${rowsRead}`,
+						cursorValue ? `游标：${cursorValue}` : null,
+						item.httpStatus ? `HTTP：${item.httpStatus}` : null,
+						item.endpoint ? `端点：${item.endpoint}` : null,
+					]
+						.filter(Boolean)
+						.join("\n");
+					return (
+						<Tooltip key={`${name}-${index}`} title={<span className="whitespace-pre-line">{tooltip}</span>}>
+							<Tag color={status.toUpperCase() === "SUCCESS" ? "success" : "error"}>
+								{name} · {pageCount}页 · {rowsRead}行{cursorValue ? ` · ${cursorValue}` : ""}
+							</Tag>
+						</Tooltip>
+					);
+				})}
+				{rows.length > 3 ? <Typography.Text type="secondary">+{rows.length - 3} 个资源</Typography.Text> : null}
+			</Space>
+		);
+	};
+
 	const auditSummaryByExecution = useMemo(() => {
 		const summary = new Map<number, { total: number; advanced: number; unchanged: number }>();
 		for (const audit of incrementalAudits) {
@@ -673,6 +723,12 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 			key: "rowsWritten",
 			width: 120,
 			render: formatNumber,
+		},
+		{
+			title: "API资源",
+			key: "apiResources",
+			width: 260,
+			render: (_: any, record: IngestionExecutionDTO) => renderApiResources(record),
 		},
 		{
 			title: "水位推进",
@@ -887,7 +943,7 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 					dataSource={executions}
 					rowKey="id"
 					loading={loading}
-					scroll={{ x: 1900 }}
+					scroll={{ x: 2160 }}
 					pagination={{
 						current: pagination.current,
 						pageSize: pagination.pageSize,

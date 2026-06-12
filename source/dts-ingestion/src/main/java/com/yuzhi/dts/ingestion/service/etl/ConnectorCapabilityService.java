@@ -231,7 +231,7 @@ public class ConnectorCapabilityService {
         constraints.put("supportsRateLimit", true);
         constraints.put("defaultReaderType", ApiConnectorTypes.DEFAULT_READER_TYPE);
         constraints.put("odsLanding", ApiSourceContracts.odsLandingDescriptor());
-        constraints.put("authProviders", List.of("none", "apiKey", "bearerToken", "basic", "oauth2ClientCredentials", "customSignature", "mtls"));
+        constraints.put("authProviders", apiAuthProviderConstraints());
         constraints.put(
             "features",
             Map.of(
@@ -258,6 +258,19 @@ public class ConnectorCapabilityService {
             )
         );
         return constraints;
+    }
+
+    private List<Map<String, Object>> apiAuthProviderConstraints() {
+        return List.of(
+            Map.of("id", "none", "enabled", true),
+            Map.of("id", "apiKey", "enabled", true),
+            Map.of("id", "bearerToken", "enabled", true),
+            Map.of("id", "basic", "enabled", true),
+            Map.of("id", "oauth2ClientCredentials", "enabled", true),
+            Map.of("id", "jwtLogin", "enabled", true),
+            Map.of("id", "customSignature", "enabled", false),
+            Map.of("id", "mtls", "enabled", false)
+        );
     }
 
     private IngestionConnectorCapabilityDTO toDto(IngestionConnectorCapability entity) {

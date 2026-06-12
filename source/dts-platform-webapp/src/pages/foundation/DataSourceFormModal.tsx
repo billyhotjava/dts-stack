@@ -27,6 +27,7 @@ import connectorsService, { type InfraConnector } from "@/api/services/connector
 import jdbcDriversService, { type InfraJdbcDriver } from "@/api/services/jdbcDriversService";
 import {
 	ingestionTaskAPI,
+	type ApiConnectionTestResultDTO,
 	type ApiAuthProviderDescriptorDTO,
 	type ApiConnectorContractDTO,
 } from "@/api/ingestion";
@@ -108,6 +109,8 @@ export default function DataSourceFormModal({ open, editing, onClose, onSaved }:
 	const [driversLoading, setDriversLoading] = useState(false);
 	const [apiContract, setApiContract] = useState<ApiConnectorContractDTO | null>(null);
 	const [apiContractLoading, setApiContractLoading] = useState(false);
+	const [apiTesting, setApiTesting] = useState(false);
+	const [apiTestResult, setApiTestResult] = useState<ApiConnectionTestResultDTO | null>(null);
 	const [deptOptions, setDeptOptions] = useState<{ label: string; value: string }[]>([]);
 
 	const [excelModalOpen, setExcelModalOpen] = useState(false);
@@ -194,6 +197,7 @@ export default function DataSourceFormModal({ open, editing, onClose, onSaved }:
 	useEffect(() => {
 		if (!open) return;
 		setExcelParseResult(null);
+		setApiTestResult(null);
 		if (!editing) {
 			form.resetFields();
 			return;
@@ -423,6 +427,51 @@ export default function DataSourceFormModal({ open, editing, onClose, onSaved }:
 			sourceCategory: "api",
 			contractVersion: apiContract?.contractVersion || baseProps?.contractVersion || "1.0.0",
 		};
+	};
+
+	const handleApiConnectionTest = async () => {
+		try {
+			const values = await form.validateFields([
+				"type",
+				"apiBaseUrl",
+				"apiAuthProvider",
+				"apiAuthConfig",
+				"apiAuthSecrets",
+				"apiDefaultHeadersJson",
+				"apiRequestPolicyJson",
+				"apiRateLimitJson",
+				"apiTlsJson",
+				"propsJson",
+			]);
+			if (!isApiSourceType(values.type)) {
+				message.warning("请选择 API 数据源类型后再测试");
+				return;
+			}
+			setApiTesting(true);
+			setApiTestResult(null);
+			const selectedApiDescriptor = (apiContract?.authProviders || []).find(
+				(item) => String(item.id).toLowerCase() === String(values.apiAuthProvider || "none").toLowerCase(),
+			);
+			const result = editing?.id
+				? await ingestionTaskAPI.testApiConnection({ dataSourceId: editing.id })
+				: await ingestionTaskAPI.testApiConnection({
+						sourceConfig: asRecord(
+							buildApiProps(values, values.propsJson ? asRecord(parseJson(values.propsJson)) : undefined, selectedApiDescriptor)
+								.readerConfig,
+						),
+						secrets: buildApiSecrets(values, selectedApiDescriptor),
+					});
+			setApiTestResult(result);
+			if (result?.connected) {
+				message.success("API 连接成功");
+			} else {
+				message.warning(result?.message || result?.advice || "API 连接失败");
+			}
+		} catch (err: any) {
+			message.error(err?.message || "API 连接测试失败");
+		} finally {
+			setApiTesting(false);
+		}
 	};
 
 	const handleSave = async () => {
@@ -714,6 +763,26 @@ export default function DataSourceFormModal({ open, editing, onClose, onSaved }:
 									<Input.TextArea rows={3} placeholder='{"verifyTls":true}' />
 								</Form.Item>
 							</div>
+							<Form.Item label="连接测试">
+								<Space direction="vertical" style={{ width: "100%" }}>
+									<Button onClick={handleApiConnectionTest} loading={apiTesting}>
+										{editing?.id ? "测试已保存连接" : "测试当前配置"}
+									</Button>
+									{apiTestResult ? (
+										<Alert
+											type={apiTestResult.connected ? "success" : "warning"}
+											showIcon
+											message={apiTestResult.connected ? "连接成功" : "连接失败"}
+											description={
+												apiTestResult.connected
+													? `HTTP ${apiTestResult.httpStatus ?? "-"} · 样本 ${apiTestResult.sampleCount ?? 0} 条 · ${apiTestResult.elapsedMs ?? 0} ms`
+													: apiTestResult.advice || apiTestResult.message || apiTestResult.failureCategory || "请检查 API 配置"
+											}
+										/>
+									) : null}
+									{!editing?.id ? <Text type="secondary">保存前可用当前表单配置测试 API 连接。</Text> : null}
+								</Space>
+							</Form.Item>
 						</>
 					)}
 					{jdbcRequired && (

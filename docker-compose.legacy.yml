@@ -559,6 +559,8 @@ services:
       DATA_STANDARD_STORAGE_DIR: "/opt/dts/upload"
       # Base64 key for AES-GCM (16 bytes here for demo; replace in production)
       DATA_STANDARD_ENCRYPTION_KEY: "MDEyMzQ1Njc4OWFiY2RlZg=="
+      DTS_INFRA_ENCRYPTION_KEY: ${DTS_INFRA_ENCRYPTION_KEY:-${DATA_STANDARD_ENCRYPTION_KEY:-}}
+      DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION:-${DATA_STANDARD_KEY_VERSION:-v1}}
       DTS_ADMIN_BASE_URL: "http://dts-admin:8081"
       DTS_ADMIN_API_PATH: "/api"
       # Biadmin datasource for data warehouse (dbt output, ad-hoc queries)
@@ -675,7 +677,7 @@ services:
       DTS_PLATFORM_OPENMETADATA_DEFAULT_SCHEMA: ${DTS_PLATFORM_OPENMETADATA_DEFAULT_SCHEMA:-}
       DTS_INGESTION_TRUSTED_SERVICE_NAME: ${DTS_INGESTION_TRUSTED_SERVICE_NAME:-dts-platform}
       DTS_INFRA_ENCRYPTION_KEY: ${DTS_INFRA_ENCRYPTION_KEY:-}
-      DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION}
+      DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION:-v1}
       LOG_ROOT: /logs
       STACK_ROOT: ${STACK_ROOT}
       # Sprint-37 H1/H2: 将 JVM 临时目录指向容器 tmpfs，使 Tomcat multipart 与 POI 解析的
@@ -1072,7 +1074,7 @@ services:
       DBT_IMAGE: ${IMAGE_DBT}
       ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
       DTS_INFRA_ENCRYPTION_KEY: ${DTS_INFRA_ENCRYPTION_KEY:-}
-      DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION}
+      DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION:-v1}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
@@ -1134,7 +1136,7 @@ services:
       DBT_IMAGE: ${IMAGE_DBT}
       ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
       DTS_INFRA_ENCRYPTION_KEY: ${DTS_INFRA_ENCRYPTION_KEY:-}
-      DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION}
+      DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION:-v1}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
@@ -1206,7 +1208,7 @@ services:
       DBT_IMAGE: ${IMAGE_DBT}
       ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
       DTS_INFRA_ENCRYPTION_KEY: ${DTS_INFRA_ENCRYPTION_KEY:-}
-      DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION}
+      DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION:-v1}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
@@ -1258,7 +1260,7 @@ services:
       DBT_IMAGE: ${IMAGE_DBT}
       ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
       DTS_INFRA_ENCRYPTION_KEY: ${DTS_INFRA_ENCRYPTION_KEY:-}
-      DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION}
+      DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION:-v1}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}

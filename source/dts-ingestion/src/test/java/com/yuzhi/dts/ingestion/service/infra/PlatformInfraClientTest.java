@@ -1,8 +1,12 @@
 package com.yuzhi.dts.ingestion.service.infra;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.allOf;
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.HttpMethod.GET;
+import static org.springframework.http.HttpMethod.POST;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.headerDoesNotExist;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
@@ -10,6 +14,9 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.yuzhi.dts.ingestion.domain.IngestionExecution;
+import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import com.yuzhi.dts.ingestion.config.IngestionOutboundPlatformProperties;
 import java.util.Map;
 import java.util.UUID;
@@ -147,5 +154,74 @@ class PlatformInfraClientTest {
 
         client.fetchDataSourceDetail(DATA_SOURCE_ID);
         server.verify();
+    }
+
+    @Test
+    void syncIngestionExecutionLineageIncludesRowCountFacets() {
+        PlatformInfraClient client = buildClient(props("env-runtime-secret"));
+        MockRestServiceServer server = bindServer(client);
+        server
+            .expect(requestTo("http://platform.test/api/catalog/lineage/ingestion-executions"))
+            .andExpect(method(POST))
+            .andExpect(content().string(allOf(
+                containsString("\"rowsRead\":10"),
+                containsString("\"rowsWritten\":9"),
+                containsString("\"sourceTables\""),
+                containsString("\"targetTables\"")
+            )))
+            .andRespond(withSuccess("{\"status\":200}", MediaType.APPLICATION_JSON));
+
+        boolean synced = client.syncIngestionExecutionLineage(apiTask(), apiExecution());
+
+        assertThat(synced).isTrue();
+        server.verify();
+    }
+
+    @Test
+    void emitIngestionOpenLineageEventPostsRowCountFacets() {
+        PlatformInfraClient client = buildClient(props("env-runtime-secret"));
+        MockRestServiceServer server = bindServer(client);
+        server
+            .expect(requestTo("http://platform.test/api/internal/lineage/openlineage"))
+            .andExpect(method(POST))
+            .andExpect(content().string(allOf(
+                containsString("\"eventType\":\"COMPLETE\""),
+                containsString("\"namespace\":\"dts-ingestion\""),
+                containsString("\"rowCount\""),
+                containsString("\"rowsRead\":10"),
+                containsString("\"rowsWritten\":9"),
+                containsString("\"inputs\""),
+                containsString("\"outputs\"")
+            )))
+            .andRespond(withSuccess("{\"status\":200}", MediaType.APPLICATION_JSON));
+
+        boolean emitted = client.emitIngestionOpenLineageEvent(apiTask(), apiExecution());
+
+        assertThat(emitted).isTrue();
+        server.verify();
+    }
+
+    private IngestionTask apiTask() {
+        IngestionTask task = new IngestionTask();
+        task.setId(10L);
+        task.setName("orders-api");
+        task.setSourceType("httpreader");
+        task.setSourceDataSourceId(DATA_SOURCE_ID);
+        task.setDestinationType("postgreswriter");
+        return task;
+    }
+
+    private IngestionExecution apiExecution() {
+        IngestionExecution execution = new IngestionExecution();
+        execution.setId(100L);
+        execution.setExecutionId("api-100");
+        execution.setStatus("success");
+        execution.setRowsRead(10L);
+        execution.setRowsWritten(9L);
+        execution.setSourceTables(JsonNodeFactory.instance.arrayNode().add(JsonNodeFactory.instance.objectNode().put("name", "orders")));
+        execution.setTargetTables(
+            JsonNodeFactory.instance.arrayNode().add(JsonNodeFactory.instance.objectNode().put("name", "ods_orders"))
+        );
+        return execution;
     }
 }

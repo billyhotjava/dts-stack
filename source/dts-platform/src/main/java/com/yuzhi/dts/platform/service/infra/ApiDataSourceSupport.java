@@ -70,7 +70,7 @@ final class ApiDataSourceSupport {
         normalized.put("connectorType", CONNECTOR_TYPE);
         normalized.putIfAbsent("readerType", DEFAULT_READER_TYPE);
         normalized.putIfAbsent("sourceCategory", CONNECTOR_TYPE);
-        normalized.putIfAbsent("contractVersion", "1.0.0");
+        normalized.putIfAbsent("contractVersion", "1.2.0");
         if (!StringUtils.hasText(extractAuthProvider(normalized))) {
             normalized.put("authProvider", "none");
         }

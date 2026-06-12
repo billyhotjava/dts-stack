@@ -15,12 +15,20 @@ import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
 import com.yuzhi.dts.ingestion.service.etl.AirflowDagService;
 import com.yuzhi.dts.ingestion.service.etl.DagPreheatService;
 import com.yuzhi.dts.ingestion.service.etl.ExcelParseService;
+import com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier;
 import com.yuzhi.dts.ingestion.service.etl.CsvParseService;
 import com.yuzhi.dts.ingestion.service.etl.FileUploadService;
 import com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner;
 import com.yuzhi.dts.ingestion.service.etl.IncrementalSyncService;
 import com.yuzhi.dts.ingestion.service.etl.IngestionRetryService;
 import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
+import com.yuzhi.dts.ingestion.service.etl.api.ApiIngestionExecutor;
+import com.yuzhi.dts.ingestion.service.etl.api.ApiIngestionResult;
+import com.yuzhi.dts.ingestion.service.etl.api.ApiHttpException;
+import com.yuzhi.dts.ingestion.service.etl.connector.ExecutionPlan;
+import com.yuzhi.dts.ingestion.service.etl.connector.SourceConnector;
+import com.yuzhi.dts.ingestion.service.etl.connector.SourceConnectorContext;
+import com.yuzhi.dts.ingestion.service.etl.connector.SourceConnectorRegistry;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionExecutionMapper;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionTaskMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -36,6 +44,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 import java.lang.reflect.Method;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -115,6 +124,12 @@ class IngestionTaskServiceTest {
     private PlatformInfraClient platformInfraClient;
 
     @Mock
+    private SourceConnectorRegistry sourceConnectorRegistry;
+
+    @Mock
+    private ApiIngestionExecutor apiIngestionExecutor;
+
+    @Mock
     private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private IngestionTaskService ingestionTaskService;
@@ -143,6 +158,8 @@ class IngestionTaskServiceTest {
             retryService,
             dagPreheatService,
             platformInfraClient,
+            sourceConnectorRegistry,
+            apiIngestionExecutor,
             transactionManager,
             Runnable::run
         );
@@ -396,19 +413,371 @@ class IngestionTaskServiceTest {
     }
 
     @Test
-    void execute_shouldRejectApiSourceTaskUntilRuntimeIsEnabled() {
+    void execute_shouldRunApiTaskThroughConnectorRegistryAndApiExecutor() {
         Long taskId = 1L;
+        UUID sourceId = UUID.randomUUID();
         IngestionTask task = createTestTaskEntity();
         task.setId(taskId);
-        task.setStatus("draft");
+        task.setStatus("active");
+        task.setAirflowEnabled(false);
         task.setSourceType("httpreader");
-        task.setSourceConfig(objectMapper.createObjectNode().put("apiType", "ingress"));
+        task.setSourceDataSourceId(sourceId);
+        ObjectNode sourceConfig = objectMapper.createObjectNode();
+        sourceConfig.put("path", "/orders");
+        task.setSourceConfig(sourceConfig);
 
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        when(sourceResolver.resolve(sourceId, List.of())).thenReturn(
+            new com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource(
+                "httpreader",
+                Map.of(
+                    "readerType",
+                    "httpreader",
+                    "connectorType",
+                    "api",
+                    "baseUrl",
+                    "https://crm.example.test/openapi",
+                    "auth",
+                    Map.of("provider", "bearerToken", "tokenRef", "accessToken"),
+                    "secrets",
+                    Map.of("accessToken", "token-123"),
+                    "defaultHeaders",
+                    Map.of("X-Tenant", "demo")
+                ),
+                null
+            )
+        );
         when(executionMapper.toDto(any(IngestionExecution.class))).thenReturn(new IngestionExecutionDTO());
+        SourceConnector apiConnector = mock(SourceConnector.class);
+        ExecutionPlan plan = new ExecutionPlan(
+            "api-http",
+            "api",
+            "1.2.0",
+            null,
+            Map.of("sourceDataSourceId", sourceId.toString()),
+            List.of(),
+            new ExecutionPlan.CheckpointPolicy("none", null, "task_success"),
+            Map.of("engine", "api-http")
+        );
+        when(sourceConnectorRegistry.find(any(SourceConnectorContext.class))).thenReturn(Optional.of(apiConnector));
+        when(apiConnector.buildExecutionPlan(any(SourceConnectorContext.class))).thenReturn(plan);
+        when(apiIngestionExecutor.execute(eq(plan), eq(task), any(IngestionExecution.class))).thenReturn(
+            ApiIngestionResult.success(12L, 12L, Map.of("stream", "orders"))
+        );
 
         IngestionExecutionDTO result = ingestionTaskService.execute(taskId);
         assertThat(result).isNotNull();
+
+        org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+            .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+
+        ArgumentCaptor<SourceConnectorContext> contextCaptor = ArgumentCaptor.forClass(SourceConnectorContext.class);
+        verify(sourceConnectorRegistry).find(contextCaptor.capture());
+        verify(apiConnector).buildExecutionPlan(contextCaptor.getValue());
+        verify(apiIngestionExecutor).execute(eq(plan), eq(task), any(IngestionExecution.class));
+        verify(airflowAdapter, never()).triggerIfRequested(any(), any(), anyBoolean());
+        verify(addaxJobService, never()).resolveWriterColumnsIfNeeded(anyString());
+
+        ArgumentCaptor<IngestionExecution> executionCaptor = ArgumentCaptor.forClass(IngestionExecution.class);
+        verify(executionRepository, atLeast(2)).save(executionCaptor.capture());
+        assertThat(executionCaptor.getAllValues()).anySatisfy(saved -> {
+            assertThat(saved.getStatus()).isEqualTo("success");
+            assertThat(saved.getRowsRead()).isEqualTo(12L);
+            assertThat(saved.getRowsWritten()).isEqualTo(12L);
+            assertThat(saved.getEndTime()).isNotNull();
+        });
+
+        assertThat(contextCaptor.getValue().taskId()).isEqualTo(taskId);
+        assertThat(contextCaptor.getValue().sourceDataSourceId()).isEqualTo(sourceId);
+        assertThat(contextCaptor.getValue().sourceConfig())
+            .containsEntry("baseUrl", "https://crm.example.test/openapi")
+            .containsEntry("path", "/orders");
+        assertThat(contextCaptor.getValue().sourceConfig().get("auth")).isEqualTo(
+            Map.of("provider", "bearerToken", "tokenRef", "accessToken")
+        );
+        assertThat(contextCaptor.getValue().sourceConfig().get("secrets")).isEqualTo(Map.of("accessToken", "token-123"));
+        assertThat(contextCaptor.getValue().sourceConfig().get("defaultHeaders")).isEqualTo(Map.of("X-Tenant", "demo"));
+    }
+
+    @Test
+    void execute_shouldMarkApiExecutionFailedWhenExecutorTimesOut() {
+        Long taskId = 1L;
+        UUID sourceId = UUID.randomUUID();
+        IngestionTask task = createTestTaskEntity();
+        task.setId(taskId);
+        task.setStatus("active");
+        task.setAirflowEnabled(false);
+        task.setSourceType("httpreader");
+        task.setSourceDataSourceId(sourceId);
+        ObjectNode sourceConfig = objectMapper.createObjectNode();
+        sourceConfig.put("path", "/orders");
+        task.setSourceConfig(sourceConfig);
+
+        when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        when(sourceResolver.resolve(sourceId, List.of())).thenReturn(
+            new com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource(
+                "httpreader",
+                Map.of("readerType", "httpreader", "connectorType", "api", "baseUrl", "https://crm.example.test/openapi"),
+                null
+            )
+        );
+        when(executionMapper.toDto(any(IngestionExecution.class))).thenReturn(new IngestionExecutionDTO());
+        SourceConnector apiConnector = mock(SourceConnector.class);
+        ExecutionPlan plan = new ExecutionPlan(
+            "api-http",
+            "api",
+            "1.2.0",
+            null,
+            Map.of("sourceDataSourceId", sourceId.toString()),
+            List.of(),
+            new ExecutionPlan.CheckpointPolicy("none", null, "task_success"),
+            Map.of("engine", "api-http")
+        );
+        when(sourceConnectorRegistry.find(any(SourceConnectorContext.class))).thenReturn(Optional.of(apiConnector));
+        when(apiConnector.buildExecutionPlan(any(SourceConnectorContext.class))).thenReturn(plan);
+        when(apiIngestionExecutor.execute(eq(plan), eq(task), any(IngestionExecution.class))).thenThrow(
+            new ApiHttpException("API_RUNTIME_TIMEOUT", "API_RUNTIME_TIMEOUT: API 入湖执行超时: 1s", null, 0)
+        );
+
+        IngestionExecutionDTO result = ingestionTaskService.execute(taskId);
+        assertThat(result).isNotNull();
+
+        org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+            .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+
+        ArgumentCaptor<IngestionExecution> executionCaptor = ArgumentCaptor.forClass(IngestionExecution.class);
+        verify(executionRepository, atLeast(2)).save(executionCaptor.capture());
+        assertThat(executionCaptor.getAllValues()).anySatisfy(saved -> {
+            assertThat(saved.getStatus()).isEqualTo("failed");
+            assertThat(saved.getErrorMessage()).contains("API_RUNTIME_TIMEOUT");
+            assertThat(saved.getFailureCategory()).isEqualTo("RUNTIME_ERROR");
+            assertThat(saved.getEndTime()).isNotNull();
+        });
+        verify(apiIngestionExecutor).execute(eq(plan), eq(task), any(IngestionExecution.class));
+    }
+
+    @Test
+    void execute_shouldClassifyApiNetworkFailureAndScheduleRetry() {
+        Long taskId = 1L;
+        UUID sourceId = UUID.randomUUID();
+        IngestionTask task = createTestTaskEntity();
+        task.setId(taskId);
+        task.setStatus("active");
+        task.setAirflowEnabled(false);
+        task.setSourceType("httpreader");
+        task.setSourceDataSourceId(sourceId);
+        ObjectNode sourceConfig = objectMapper.createObjectNode();
+        sourceConfig.put("path", "/orders");
+        task.setSourceConfig(sourceConfig);
+
+        when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        when(sourceResolver.resolve(sourceId, List.of())).thenReturn(
+            new com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource(
+                "httpreader",
+                Map.of("readerType", "httpreader", "connectorType", "api", "baseUrl", "https://crm.example.test/openapi"),
+                null
+            )
+        );
+        when(executionMapper.toDto(any(IngestionExecution.class))).thenReturn(new IngestionExecutionDTO());
+        SourceConnector apiConnector = mock(SourceConnector.class);
+        ExecutionPlan plan = new ExecutionPlan(
+            "api-http",
+            "api",
+            "1.2.0",
+            null,
+            Map.of("sourceDataSourceId", sourceId.toString()),
+            List.of(),
+            new ExecutionPlan.CheckpointPolicy("none", null, "task_success"),
+            Map.of("engine", "api-http")
+        );
+        when(sourceConnectorRegistry.find(any(SourceConnectorContext.class))).thenReturn(Optional.of(apiConnector));
+        when(apiConnector.buildExecutionPlan(any(SourceConnectorContext.class))).thenReturn(plan);
+        when(apiIngestionExecutor.execute(eq(plan), eq(task), any(IngestionExecution.class))).thenThrow(
+            new ApiHttpException("API_RUNTIME_NETWORK", "API_RUNTIME_NETWORK: connect timed out", null, 1)
+        );
+
+        IngestionExecutionDTO result = ingestionTaskService.execute(taskId);
+        assertThat(result).isNotNull();
+
+        org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+            .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+
+        ArgumentCaptor<IngestionExecution> executionCaptor = ArgumentCaptor.forClass(IngestionExecution.class);
+        verify(executionRepository, atLeast(2)).save(executionCaptor.capture());
+        assertThat(executionCaptor.getAllValues()).anySatisfy(saved -> {
+            assertThat(saved.getStatus()).isEqualTo("failed");
+            assertThat(saved.getErrorMessage()).contains("API_RUNTIME_NETWORK");
+            assertThat(saved.getFailureCategory()).isEqualTo(ExecutionFailureClassifier.CATEGORY_CONNECTION);
+            assertThat(saved.getFailureAdvice()).isEqualTo(
+                ExecutionFailureClassifier.advice(ExecutionFailureClassifier.CATEGORY_CONNECTION)
+            );
+            assertThat(saved.getEndTime()).isNotNull();
+        });
+
+        ArgumentCaptor<IngestionExecution> retryExecutionCaptor = ArgumentCaptor.forClass(IngestionExecution.class);
+        verify(retryService).scheduleRetryIfEligible(retryExecutionCaptor.capture());
+        assertThat(retryExecutionCaptor.getValue().getStatus()).isEqualTo("failed");
+        assertThat(retryExecutionCaptor.getValue().getFailureCategory()).isEqualTo(
+            ExecutionFailureClassifier.CATEGORY_CONNECTION
+        );
+        verify(apiIngestionExecutor).execute(eq(plan), eq(task), any(IngestionExecution.class));
+    }
+
+    @Test
+    void executeInternalApi_shouldUseRequestBatchAndBackfillWindow() {
+        Long taskId = 1L;
+        UUID sourceId = UUID.randomUUID();
+        Instant windowStart = Instant.parse("2026-06-01T00:00:00Z");
+        Instant windowEnd = Instant.parse("2026-06-02T00:00:00Z");
+        IngestionTask task = createTestTaskEntity();
+        task.setId(taskId);
+        task.setStatus("active");
+        task.setAirflowEnabled(false);
+        task.setSourceType("httpreader");
+        task.setSourceDataSourceId(sourceId);
+        ObjectNode sourceConfig = objectMapper.createObjectNode();
+        sourceConfig.put("path", "/orders");
+        task.setSourceConfig(sourceConfig);
+
+        when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        when(incrementalSyncService.validateBackfillWindow(task, "updated_at", windowStart, windowEnd)).thenReturn("updated_at");
+        when(sourceResolver.resolve(sourceId, List.of())).thenReturn(
+            new com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource(
+                "httpreader",
+                Map.of("connectorType", "api", "baseUrl", "https://crm.example.test/openapi"),
+                null
+            )
+        );
+        when(executionMapper.toDto(any(IngestionExecution.class))).thenAnswer(inv -> {
+            IngestionExecution execution = inv.getArgument(0);
+            IngestionExecutionDTO dto = new IngestionExecutionDTO();
+            dto.setId(execution.getId());
+            dto.setTaskId(taskId);
+            dto.setBatchId(execution.getBatchId());
+            dto.setStatus(execution.getStatus());
+            dto.setTriggerMode(execution.getTriggerMode());
+            dto.setBackfillWindowStart(execution.getBackfillWindowStart());
+            dto.setBackfillWindowEnd(execution.getBackfillWindowEnd());
+            dto.setBackfillColumn(execution.getBackfillColumn());
+            return dto;
+        });
+        SourceConnector apiConnector = mock(SourceConnector.class);
+        ExecutionPlan plan = new ExecutionPlan(
+            "api-http",
+            "api",
+            "1.2.0",
+            null,
+            Map.of("sourceDataSourceId", sourceId.toString()),
+            List.of(),
+            new ExecutionPlan.CheckpointPolicy("updated_at", "updated_at", "per_resource"),
+            Map.of("engine", "api-http")
+        );
+        when(sourceConnectorRegistry.find(any(SourceConnectorContext.class))).thenReturn(Optional.of(apiConnector));
+        when(apiConnector.buildExecutionPlan(any(SourceConnectorContext.class))).thenReturn(plan);
+        when(apiIngestionExecutor.execute(eq(plan), eq(task), any(IngestionExecution.class))).thenReturn(
+            ApiIngestionResult.success(3L, 3L, Map.of("stream", "orders"))
+        );
+
+        IngestionExecutionDTO submitted = ingestionTaskService.executeInternalApi(
+            taskId,
+            "airflow-batch-001",
+            "BACKFILL_RANGE",
+            windowStart,
+            windowEnd,
+            "updated_at"
+        );
+
+        assertThat(submitted.getBatchId()).isEqualTo("airflow-batch-001");
+        assertThat(submitted.getTriggerMode()).isEqualTo("BACKFILL_RANGE");
+        assertThat(submitted.getBackfillWindowStart()).isEqualTo(windowStart);
+        assertThat(submitted.getBackfillWindowEnd()).isEqualTo(windowEnd);
+        assertThat(submitted.getBackfillColumn()).isEqualTo("updated_at");
+
+        org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+            .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+
+        verify(apiIngestionExecutor).execute(eq(plan), eq(task), any(IngestionExecution.class));
+        verify(airflowAdapter, never()).triggerIfRequested(any(), any(), anyBoolean());
+
+        ArgumentCaptor<IngestionExecution> executionCaptor = ArgumentCaptor.forClass(IngestionExecution.class);
+        verify(executionRepository, atLeast(2)).save(executionCaptor.capture());
+        assertThat(executionCaptor.getAllValues()).anySatisfy(saved -> {
+            assertThat(saved.getBatchId()).isEqualTo("airflow-batch-001");
+            assertThat(saved.getTriggerMode()).isEqualTo("BACKFILL_RANGE");
+            assertThat(saved.getBackfillWindowStart()).isEqualTo(windowStart);
+            assertThat(saved.getBackfillWindowEnd()).isEqualTo(windowEnd);
+            assertThat(saved.getBackfillColumn()).isEqualTo("updated_at");
+        });
+        assertThat(executionCaptor.getAllValues()).anySatisfy(saved -> {
+            assertThat(saved.getStatus()).isEqualTo("success");
+            assertThat(saved.getRowsRead()).isEqualTo(3L);
+            assertThat(saved.getRowsWritten()).isEqualTo(3L);
+        });
+        verify(platformInfraClient).emitIngestionOpenLineageEvent(eq(task), any(IngestionExecution.class));
+    }
+
+    @Test
+    void executeInternalApi_shouldEnsureThinDagForAirflowEnabledApiTask() {
+        Long taskId = 1L;
+        UUID sourceId = UUID.randomUUID();
+        IngestionTask task = createTestTaskEntity();
+        task.setId(taskId);
+        task.setName("api-orders");
+        task.setStatus("active");
+        task.setSyncMode("full_refresh");
+        task.setAirflowEnabled(true);
+        task.setSourceType("api");
+        task.setSourceDataSourceId(sourceId);
+        ObjectNode sourceConfig = objectMapper.createObjectNode();
+        sourceConfig.put("path", "/orders");
+        task.setSourceConfig(sourceConfig);
+
+        when(airflowAdapter.isEnabled()).thenReturn(true);
+        when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        when(taskRepository.save(task)).thenReturn(task);
+        when(sourceResolver.resolve(sourceId, List.of())).thenReturn(
+            new com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource(
+                "httpreader",
+                Map.of("connectorType", "api", "baseUrl", "https://crm.example.test/openapi"),
+                null
+            )
+        );
+        when(airflowDagService.rebuildDagForTask(task, Collections.emptyList())).thenReturn("thin-api-dag");
+        when(executionMapper.toDto(any(IngestionExecution.class))).thenAnswer(inv -> {
+            IngestionExecution execution = inv.getArgument(0);
+            IngestionExecutionDTO dto = new IngestionExecutionDTO();
+            dto.setId(execution.getId());
+            dto.setTaskId(taskId);
+            dto.setBatchId(execution.getBatchId());
+            dto.setStatus(execution.getStatus());
+            return dto;
+        });
+        SourceConnector apiConnector = mock(SourceConnector.class);
+        ExecutionPlan plan = new ExecutionPlan(
+            "api-http",
+            "api",
+            "1.2.0",
+            null,
+            Map.of("sourceDataSourceId", sourceId.toString()),
+            List.of(),
+            new ExecutionPlan.CheckpointPolicy("none", null, "task_success"),
+            Map.of("engine", "api-http")
+        );
+        when(sourceConnectorRegistry.find(any(SourceConnectorContext.class))).thenReturn(Optional.of(apiConnector));
+        when(apiConnector.buildExecutionPlan(any(SourceConnectorContext.class))).thenReturn(plan);
+        when(apiIngestionExecutor.execute(eq(plan), eq(task), any(IngestionExecution.class))).thenReturn(
+            ApiIngestionResult.success(2L, 2L, Map.of("stream", "orders"))
+        );
+
+        ingestionTaskService.executeInternalApi(taskId, "airflow-batch-001", "MANUAL", null, null, null);
+
+        org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+            .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+
+        assertThat(task.getAirflowDagId()).isEqualTo("thin-api-dag");
+        verify(airflowDagService).rebuildDagForTask(task, Collections.emptyList());
+        verify(airflowAdapter, never()).triggerIfRequested(any(), any(), anyBoolean());
+        verify(apiIngestionExecutor).execute(eq(plan), eq(task), any(IngestionExecution.class));
     }
 
     @Test
@@ -593,6 +962,49 @@ class IngestionTaskServiceTest {
         assertThat(task.getAirflowDagId()).isEqualTo("rebuilt-dag");
         verify(taskRepository).save(task);
         verify(dagPreheatService).preheatDag("rebuilt-dag");
+    }
+
+    @Test
+    void rebuildApiDags_shouldForceRebuildOnlyActiveApiTasks() {
+        IngestionTask apiTask = createTestTaskEntity();
+        apiTask.setId(10L);
+        apiTask.setName("api-orders");
+        apiTask.setSourceType("api");
+        apiTask.setStatus("active");
+        apiTask.setAirflowEnabled(true);
+        apiTask.setAirflowDagId("old-api-dag");
+
+        IngestionTask deletedApiTask = createTestTaskEntity();
+        deletedApiTask.setId(11L);
+        deletedApiTask.setName("deleted-api");
+        deletedApiTask.setSourceType("api");
+        deletedApiTask.setStatus("deleted");
+        deletedApiTask.setAirflowEnabled(true);
+
+        IngestionTask jdbcTask = createTestTaskEntity();
+        jdbcTask.setId(12L);
+        jdbcTask.setName("jdbc-task");
+        jdbcTask.setSourceType("mysqlreader");
+        jdbcTask.setStatus("active");
+        jdbcTask.setAirflowEnabled(true);
+
+        when(taskRepository.findAll()).thenReturn(List.of(apiTask, deletedApiTask, jdbcTask));
+        when(airflowDagService.rebuildDagForTask(apiTask)).thenReturn("thin-api-dag");
+        when(taskRepository.save(apiTask)).thenReturn(apiTask);
+
+        Map<String, Object> result = ingestionTaskService.rebuildApiDags();
+
+        assertThat(result)
+            .containsEntry("total", 3)
+            .containsEntry("migrated", 1)
+            .containsEntry("skipped", 2)
+            .containsEntry("failed", 0);
+        assertThat(apiTask.getAirflowDagId()).isEqualTo("thin-api-dag");
+        verify(airflowDagService).rebuildDagForTask(apiTask);
+        verify(airflowDagService, never()).rebuildDagForTask(deletedApiTask);
+        verify(airflowDagService, never()).rebuildDagForTask(jdbcTask);
+        verify(taskRepository).save(apiTask);
+        verify(dagPreheatService).preheatDag("thin-api-dag");
     }
 
     @Test

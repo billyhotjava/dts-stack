@@ -7,6 +7,16 @@ public record ApiAuthProviderDescriptor(
     String label,
     String description,
     List<ApiAuthProviderField> fields,
-    Boolean supportsRotation
-) {}
-
+    Boolean supportsRotation,
+    Boolean enabled
+) {
+    public ApiAuthProviderDescriptor(
+        String id,
+        String label,
+        String description,
+        List<ApiAuthProviderField> fields,
+        Boolean supportsRotation
+    ) {
+        this(id, label, description, fields, supportsRotation, Boolean.TRUE);
+    }
+}

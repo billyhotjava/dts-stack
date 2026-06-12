@@ -1,6 +1,7 @@
 package com.yuzhi.dts.ingestion.service.etl;
 
 import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
+import com.yuzhi.dts.ingestion.service.etl.api.ApiConnectorTypes;
 import com.yuzhi.dts.ingestion.service.etl.JdbcMetadataService;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -67,6 +68,9 @@ public class IngestionSourceResolver {
     public ResolvedSource resolve(UUID dataSourceId, List<String> tables) {
         PlatformInfraClient.DataSourceDetail detail = platformInfraClient.fetchDataSourceDetail(dataSourceId);
         Map<String, Object> props = safeMap(detail.props());
+        if (isApiSource(detail, props)) {
+            return resolveApiSource(detail, props, tables);
+        }
         String jdbcUrl = resolveJdbcUrl(detail, props);
         Map<String, Object> readerConfig = resolveReaderConfig(props);
         applyJdbcConnection(readerConfig, jdbcUrl);
@@ -75,6 +79,15 @@ public class IngestionSourceResolver {
         applyTables(readerConfig, tables);
         String readerType = resolveReaderType(detail, props, readerConfig, jdbcUrl);
         return new ResolvedSource(readerType, readerConfig, detail);
+    }
+
+    public ApiConnectionInfo resolveApiInfo(UUID dataSourceId) {
+        PlatformInfraClient.DataSourceDetail detail = platformInfraClient.fetchDataSourceDetail(dataSourceId);
+        Map<String, Object> props = safeMap(detail.props());
+        if (!isApiSource(detail, props)) {
+            throw new IllegalArgumentException("数据源不是 API 类型: " + dataSourceId);
+        }
+        return resolveApiInfo(detail, props);
     }
 
     public JdbcMetadataService.JdbcConnectionInfo resolveJdbcInfo(UUID dataSourceId) {
@@ -106,6 +119,109 @@ public class IngestionSourceResolver {
             return copy;
         }
         return new LinkedHashMap<>();
+    }
+
+    private ResolvedSource resolveApiSource(
+        PlatformInfraClient.DataSourceDetail detail,
+        Map<String, Object> props,
+        List<String> tables
+    ) {
+        ApiConnectionInfo apiInfo = resolveApiInfo(detail, props);
+        Map<String, Object> readerConfig = new LinkedHashMap<>();
+        readerConfig.put("readerType", ApiConnectorTypes.DEFAULT_READER_TYPE);
+        readerConfig.put("connectorType", ApiConnectorTypes.CONNECTOR_TYPE);
+        readerConfig.put("sourceDataSourceId", detail.id() == null ? null : detail.id().toString());
+        if (StringUtils.hasText(apiInfo.baseUrl())) {
+            readerConfig.put("baseUrl", apiInfo.baseUrl());
+        }
+        readerConfig.put("authProvider", apiInfo.authProvider());
+        if (!apiInfo.authConfig().isEmpty()) {
+            readerConfig.put("auth", apiInfo.authConfig());
+        }
+        if (!apiInfo.defaultHeaders().isEmpty()) {
+            readerConfig.put("defaultHeaders", apiInfo.defaultHeaders());
+        }
+        if (!apiInfo.secrets().isEmpty()) {
+            readerConfig.put("secrets", apiInfo.secrets());
+        }
+        if (!apiInfo.props().isEmpty()) {
+            readerConfig.put("props", apiInfo.props());
+        }
+        if (tables != null && !tables.isEmpty()) {
+            readerConfig.put("resources", tables);
+        }
+        return new ResolvedSource(ApiConnectorTypes.DEFAULT_READER_TYPE, readerConfig, detail);
+    }
+
+    private ApiConnectionInfo resolveApiInfo(PlatformInfraClient.DataSourceDetail detail, Map<String, Object> props) {
+        Map<String, Object> safeProps = safeMap(props);
+        Map<String, Object> authConfig = resolveAuthConfig(safeProps);
+        String authProvider = resolveAuthProvider(safeProps, authConfig);
+        if (!authConfig.isEmpty()) {
+            authConfig.putIfAbsent("provider", authProvider);
+        }
+        return new ApiConnectionInfo(
+            detail.id(),
+            detail.name(),
+            resolveApiBaseUrl(safeProps),
+            authProvider,
+            authConfig,
+            resolveDefaultHeaders(safeProps),
+            safeProps,
+            safeMap(detail.secrets())
+        );
+    }
+
+    private boolean isApiSource(PlatformInfraClient.DataSourceDetail detail, Map<String, Object> props) {
+        if (detail != null && ApiConnectorTypes.isApiSourceType(detail.type())) {
+            return true;
+        }
+        String connectorType = extractString(props, "connectorType", "readerType", "sourceCategory");
+        return ApiConnectorTypes.isApiSourceType(connectorType);
+    }
+
+    private String resolveApiBaseUrl(Map<String, Object> props) {
+        String direct = extractString(props, "baseUrl", "baseURL");
+        if (StringUtils.hasText(direct)) {
+            return direct;
+        }
+        Map<String, Object> api = extractMap(props, "api");
+        return extractString(api, "baseUrl", "baseURL");
+    }
+
+    private String resolveAuthProvider(Map<String, Object> props, Map<String, Object> authConfig) {
+        String direct = extractString(props, "authProvider");
+        if (StringUtils.hasText(direct)) {
+            return direct;
+        }
+        String fromAuth = extractString(authConfig, "provider");
+        if (StringUtils.hasText(fromAuth)) {
+            return fromAuth;
+        }
+        Map<String, Object> api = extractMap(props, "api");
+        String nestedDirect = extractString(api, "authProvider");
+        if (StringUtils.hasText(nestedDirect)) {
+            return nestedDirect;
+        }
+        return "none";
+    }
+
+    private Map<String, Object> resolveAuthConfig(Map<String, Object> props) {
+        Map<String, Object> auth = extractMap(props, "auth");
+        if (!auth.isEmpty()) {
+            return auth;
+        }
+        Map<String, Object> api = extractMap(props, "api");
+        return extractMap(api, "auth");
+    }
+
+    private Map<String, Object> resolveDefaultHeaders(Map<String, Object> props) {
+        Map<String, Object> headers = extractMap(props, "defaultHeaders", "headers");
+        if (!headers.isEmpty()) {
+            return headers;
+        }
+        Map<String, Object> api = extractMap(props, "api");
+        return extractMap(api, "defaultHeaders", "headers");
     }
 
     private String resolveReaderType(
@@ -346,6 +462,17 @@ public class IngestionSourceResolver {
     private Map<String, Object> safeMap(Map<String, Object> input) {
         return input == null ? new LinkedHashMap<>() : new LinkedHashMap<>(input);
     }
+
+    public record ApiConnectionInfo(
+        UUID id,
+        String name,
+        String baseUrl,
+        String authProvider,
+        Map<String, Object> authConfig,
+        Map<String, Object> defaultHeaders,
+        Map<String, Object> props,
+        Map<String, Object> secrets
+    ) {}
 
     public record ResolvedSource(String readerType, Map<String, Object> readerConfig, PlatformInfraClient.DataSourceDetail detail) {}
 }

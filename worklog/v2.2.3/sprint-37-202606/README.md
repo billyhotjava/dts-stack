@@ -44,7 +44,7 @@ MultipartFile                         AddaxEnvRunner.run()
 ## 加密文件格式契约（F1 写入、F2 读取，必须一致）
 
 - 密文文件名：`{原存储名}.enc`（如 `a1b2c3d4_data.xlsx.enc`）。
-- 文件布局：`[IV: 12 bytes][AES-GCM ciphertext + 16 bytes tag]`（IV 置于文件头，自包含）。
+- 文件布局：`[verLen:1B][keyVersion:verLen B][IV:12B][AES-GCM ciphertext + 16B tag]`（keyVersion 与 IV 置于文件头，自包含）。
 - 算法：`AES/GCM/NoPadding`，tag 128 bit，密钥来自 `DTS_INFRA_ENCRYPTION_KEY`（两侧同源）。
 - 元数据：`keyVersion`、`originalName`、明文 `sha256`、`fileSize` 写入 `IngestionTask.sourceConfig` JSON（用于校验与密钥版本路由）。
 - 密钥未配置：**机密级禁止明文回退**——上传与解密均 fail-fast 拒绝，不得退化为明文存储（区别于 `InfraSettingsCryptoService` 现有的明文告警回退）。
@@ -71,7 +71,7 @@ MultipartFile                         AddaxEnvRunner.run()
 
 ## 完成标准
 
-- [ ] 上传的 Excel/CSV 以 AES-GCM 加密为 `{name}.enc` 落盘，宿主机 `cat` 仅得密文；明文 sha256/iv/keyVersion 入 sourceConfig。
+- [ ] 上传的 Excel/CSV 以 AES-GCM 加密为 `{name}.enc` 落盘，宿主机 `cat` 仅得密文；keyVersion/IV 写入文件头，明文 sha256/keyVersion 入 sourceConfig。
 - [ ] 表头解析在内存完成（解密后 POI/CSV 解析），不产生任何明文临时文件。
 - [ ] **（H1）上传服务容器（dts-platform 入湖上传第一跳代理 + dts-ingestion）的 Tomcat multipart 与 POI 临时文件落 tmpfs（`/apptmp` + `-Djava.io.tmpdir`），不写宿主机 overlay2 `diff/` 层；`file-size-threshold` 使小文件留内存。**
 - [ ] `AddaxEnvRunner` 运行期把密文解密到 tmpfs 明文供 Addax 读取，作业结束（含失败）擦除明文。

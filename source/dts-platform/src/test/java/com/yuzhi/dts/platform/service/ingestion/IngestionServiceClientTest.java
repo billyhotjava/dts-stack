@@ -106,4 +106,24 @@ class IngestionServiceClientTest {
         assertThat(response.getStatus()).isEqualTo(200);
         longServer.verify();
     }
+
+    @Test
+    void shouldProxyApiConnectionTestToIngestionApiEndpoint() {
+        RestTemplate restTemplate = (RestTemplate) ReflectionTestUtils.getField(client, "restTemplate");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).ignoreExpectOrder(true).build();
+        server
+            .expect(requestTo("http://ingestion.test/api/ingestion/api/test-connection"))
+            .andExpect(method(POST))
+            .andRespond(
+                withStatus(HttpStatus.OK)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body("{\"connected\":true,\"httpStatus\":200,\"authOk\":true,\"sampleCount\":1}")
+            );
+
+        ApiResponse<Object> response = client.testApiConnection(Map.of("dataSourceId", "11111111-2222-3333-4444-555555555555"));
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(response.getData()).isInstanceOf(Map.class);
+        server.verify();
+    }
 }

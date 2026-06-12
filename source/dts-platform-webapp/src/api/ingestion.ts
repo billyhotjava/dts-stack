@@ -53,6 +53,8 @@ export interface IngestionExecutionDTO {
 	backfillWindowEnd?: string;
 	backfillColumn?: string;
 	droppedTables?: string;
+	sourceTables?: Record<string, any>[];
+	targetTables?: Record<string, any>[];
 	queueWaitSeconds?: number;
 	createdAt?: string;
 }
@@ -352,6 +354,28 @@ export interface ApiConnectorContractDTO {
 	defaultReaderType?: string;
 	syncModes?: string[];
 	authProviders?: ApiAuthProviderDescriptorDTO[];
+}
+
+export interface ApiConnectionTestRequestDTO {
+	dataSourceId?: string;
+	resource?: Record<string, any>;
+	requestPolicy?: Record<string, any>;
+	sourceConfig?: Record<string, any>;
+	secrets?: Record<string, any>;
+}
+
+export interface ApiConnectionTestResultDTO {
+	connected?: boolean;
+	httpStatus?: number;
+	authOk?: boolean;
+	sampleCount?: number;
+	recordPathResolved?: boolean;
+	sampleRecords?: Record<string, any>[];
+	failureCategory?: string;
+	advice?: string;
+	message?: string;
+	errorCode?: string;
+	elapsedMs?: number;
 }
 
 const DEFAULT_EXECUTION_POLL_INTERVAL_MS = (() => {
@@ -700,6 +724,15 @@ class IngestionTaskAPI {
 			return (payload as any).data as ApiAuthProviderDescriptorDTO[];
 		}
 		return [];
+	}
+
+	async testApiConnection(data: ApiConnectionTestRequestDTO): Promise<ApiConnectionTestResultDTO> {
+		const payload: any = await api.post({
+			url: "/ingestion/api/test-connection",
+			data,
+			_skipErrorToast: true,
+		} as any);
+		return this.resolveWrappedResponse<ApiConnectionTestResultDTO>(payload);
 	}
 
 	async getRealtimeStatus(taskId: number): Promise<IngestionRealtimeStatusDTO | null> {

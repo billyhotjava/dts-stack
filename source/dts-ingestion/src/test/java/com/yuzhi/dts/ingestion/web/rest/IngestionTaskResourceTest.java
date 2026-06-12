@@ -25,10 +25,15 @@ import com.yuzhi.dts.ingestion.service.etl.ConnectorCapabilityService;
 import com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver;
 import com.yuzhi.dts.ingestion.service.etl.JdbcMetadataService;
 import com.yuzhi.dts.ingestion.service.etl.RealtimeTaskStatusService;
+import com.yuzhi.dts.ingestion.service.etl.api.ApiAuthProviderDescriptor;
+import com.yuzhi.dts.ingestion.service.etl.api.ApiAuthProviderRegistry;
 import com.yuzhi.dts.ingestion.service.openmetadata.OpenMetadataAdapter;
 import com.yuzhi.dts.ingestion.config.AirflowProperties;
+import com.yuzhi.dts.ingestion.config.ApiProperties;
 import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
@@ -85,6 +90,12 @@ class IngestionTaskResourceTest {
 
     @MockBean
     private AirflowProperties airflowProperties;
+
+    @MockBean
+    private ApiProperties apiProperties;
+
+    @MockBean
+    private ApiAuthProviderRegistry apiAuthProviderRegistry;
 
     @Test
     void createTask_apiDraftNormalizesRawOdsLandingAndTableMapping() throws Exception {
@@ -148,6 +159,53 @@ class IngestionTaskResourceTest {
     }
 
     @Test
+    void createTask_apiDraftRejectsDisabledAuthProvider() throws Exception {
+        UUID sourceId = UUID.fromString("11111111-2222-3333-4444-555555555555");
+        PlatformInfraClient.DataSourceDetail detail = new PlatformInfraClient.DataSourceDetail(
+            sourceId,
+            "CRM API",
+            "api",
+            null,
+            null,
+            null,
+            null,
+            Map.of("readerType", "httpreader", "connectorType", "api"),
+            Map.of(),
+            "ACTIVE"
+        );
+        when(ingestionSourceResolver.resolve(eq(sourceId), anyList()))
+            .thenReturn(new IngestionSourceResolver.ResolvedSource("httpreader", Map.of("readerType", "httpreader"), detail));
+        when(apiAuthProviderRegistry.findDescriptor("mtls"))
+            .thenReturn(Optional.of(new ApiAuthProviderDescriptor("mtls", "mTLS", "preview", List.of(), true, false)));
+
+        mockMvc.perform(post("/api/ingestion/tasks")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "draft": true,
+                      "name": "crm-orders",
+                      "source": {
+                        "dataSourceId": "11111111-2222-3333-4444-555555555555",
+                        "type": "api",
+                        "config": {
+                          "sourceSystem": "CRM",
+                          "auth": {"provider": "mtls"},
+                          "resource": {"path": "/v1/orders"}
+                        }
+                      },
+                      "sync": {"mode": "full_refresh"},
+                      "streams": {"selection": "manual", "include": ["orders"]},
+                      "airflow": {"enabled": false}
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.message").value("API 鉴权方式 mtls 暂未开放，不能用于入湖任务"));
+
+        verify(ingestionTaskService, never()).create(any(IngestionTaskDTO.class), any(), eq(true));
+    }
+
+    @Test
     void discoverTables_requiresSourceConfig() throws Exception {
         mockMvc.perform(post("/api/ingestion/metadata/tables")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -168,6 +226,22 @@ class IngestionTaskResourceTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data.taskId").value(1));
+    }
+
+    @Test
+    void rebuildApiDags_returnsMigrationSummary() throws Exception {
+        when(ingestionTaskService.rebuildApiDags()).thenReturn(
+            Map.of("total", 3, "migrated", 1, "skipped", 2, "failed", 0)
+        );
+
+        mockMvc.perform(post("/api/ingestion/tasks/dags/rebuild-api"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.total").value(3))
+            .andExpect(jsonPath("$.migrated").value(1))
+            .andExpect(jsonPath("$.skipped").value(2))
+            .andExpect(jsonPath("$.failed").value(0));
+
+        verify(ingestionTaskService).rebuildApiDags();
     }
 
     @Test

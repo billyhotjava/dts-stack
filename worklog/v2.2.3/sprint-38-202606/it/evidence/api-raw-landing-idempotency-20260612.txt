@@ -1,0 +1,10 @@
+Command:
+RUN_LIVE=1 bash worklog/v2.2.3/sprint-38-202606/it/scripts/api-raw-landing-idempotency.sh
+
+Output:
+schema=dts_it_api_raw_20260612142453_752163
+first_inserted=2
+after_first=2
+second_inserted=0
+after_second=2
+idempotency=PASS

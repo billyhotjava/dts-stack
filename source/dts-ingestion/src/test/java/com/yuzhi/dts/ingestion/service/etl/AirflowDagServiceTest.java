@@ -146,7 +146,7 @@ class AirflowDagServiceTest {
     }
 
     @Test
-    void shouldGenerateApiDagWithoutPlaintextPasswordAndWithPythonOperator() throws Exception {
+    void shouldGenerateThinApiDagThatCallsInternalIngestionEndpoint() throws Exception {
         IngestionTask task = new IngestionTask();
         task.setId(99L);
         task.setName("api-orders-mock");
@@ -166,23 +166,36 @@ class AirflowDagServiceTest {
         dagService.rebuildDagForTask(task);
 
         String dag = readDag("ods_api_orders_mock");
-        // No plaintext password embedded (regression guard for AirflowDagService password leak)
-        assertThat(dag).doesNotContain("Devops123");
-        assertThat(dag).doesNotContain("password=os.getenv(\"DTS_TARGET_DB_PASSWORD\",");
-        // Strict env-only password lookup
-        assertThat(dag).contains("os.environ[\"DTS_TARGET_DB_PASSWORD\"]");
-        // API DAG uses PythonOperator (not Addax DockerOperator)
+        // API DAG uses PythonOperator as a thin trigger, not Addax DockerOperator or embedded API runtime.
         assertThat(dag).contains("from airflow.operators.python import PythonOperator");
-        assertThat(dag).contains("python_callable=_run_api_ingestion");
+        assertThat(dag).contains("python_callable=_trigger_api_ingestion");
         assertThat(dag).doesNotContain("from airflow.providers.docker.operators.docker import DockerOperator");
-        // Source config is embedded as JSON literal so the worker can parse it
-        assertThat(dag).contains("SOURCE_CONFIG_JSON");
-        assertThat(dag).contains("\"baseUrl\":\"https://api.example.com\"");
+        assertThat(dag).contains("/internal/api-ingestion/executions");
+        assertThat(dag).contains("X-DTS-Service");
+        assertThat(dag).contains("DTS_INGESTION_INTERNAL_BASE_URL");
+        assertThat(dag).contains("DTS_SERVICE_TOKEN");
+        assertThat(dag).contains("DTS_API_INGESTION_POLL_TIMEOUT_SECONDS\", \"1800\"");
+        assertThat(dag).contains("\"execution_timeout\": timedelta(seconds=1800)");
+        assertThat(dag).contains("urllib.request.ProxyHandler({})");
+        assertThat(dag).contains("_DTS_INTERNAL_HTTP_OPENER.open(request, timeout=30)");
+        assertThat(dag).contains("\"taskId\": INGESTION_TASK_ID");
+        assertThat(dag).contains("\"batchId\": batch_id");
+        assertThat(dag).contains("response.get(\"id\") or response.get(\"executionId\")");
         // Schedule expression is "None" for manual
         assertThat(dag).contains("schedule=None");
-        // ODS landing table includes raw_record + technical columns
-        assertThat(dag).contains("_dts_raw_record JSONB");
-        assertThat(dag).contains("_dts_batch_id");
+        // Business logic and credential semantics must live in dts-ingestion Java runtime.
+        assertThat(dag).doesNotContain("SOURCE_CONFIG_JSON");
+        assertThat(dag).doesNotContain("\"baseUrl\":\"https://api.example.com\"");
+        assertThat(dag).doesNotContain("DTS_API_BEARER_TOKEN");
+        assertThat(dag).doesNotContain("DTS_API_KEY");
+        assertThat(dag).doesNotContain("DTS_API_USERNAME");
+        assertThat(dag).doesNotContain("DTS_API_PASSWORD");
+        assertThat(dag).doesNotContain("psycopg2");
+        assertThat(dag).doesNotContain("DTS_TARGET_DB_PASSWORD");
+        assertThat(dag).doesNotContain("_ensure_landing_table");
+        assertThat(dag).doesNotContain("dts_api_ingestion_checkpoint");
+        assertThat(dag).doesNotContain("_dts_raw_record JSONB");
+        assertThat(dag).doesNotContain("_request_json");
     }
 
     @Test

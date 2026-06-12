@@ -1,16 +1,29 @@
 package com.yuzhi.dts.ingestion.service.etl.api;
 
+import com.yuzhi.dts.ingestion.config.ApiProperties;
 import com.yuzhi.dts.ingestion.service.etl.connector.ExecutionPlan;
 import com.yuzhi.dts.ingestion.service.etl.connector.SourceConnector;
 import com.yuzhi.dts.ingestion.service.etl.connector.SourceConnectorContext;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 @Component
 public class ApiHttpSourceConnector implements SourceConnector {
+
+    private final ApiProperties apiProperties;
+
+    public ApiHttpSourceConnector() {
+        this(new ApiProperties());
+    }
+
+    @Autowired
+    public ApiHttpSourceConnector(ApiProperties apiProperties) {
+        this.apiProperties = apiProperties == null ? new ApiProperties() : apiProperties;
+    }
 
     @Override
     public String connectorType() {
@@ -42,7 +55,8 @@ public class ApiHttpSourceConnector implements SourceConnector {
         Map<String, Object> sourceConfig = ApiSourceConfigNormalizer.normalize(
             context.sourceConfig(),
             context.sourceDataSourceId(),
-            context.taskName()
+            context.taskName(),
+            apiProperties.getTablePrefix()
         );
         List<String> streams = context.streams() == null || context.streams().isEmpty()
             ? ApiSourceConfigNormalizer.resolveResourceIds(sourceConfig)
@@ -57,7 +71,12 @@ public class ApiHttpSourceConnector implements SourceConnector {
         payload.put("odsLanding", ApiSourceContracts.odsLandingDescriptor());
         payload.put(
             "odsMappings",
-            ApiSourceConfigNormalizer.deriveOdsMappings(sourceConfig, context.sourceDataSourceId(), context.taskName())
+            ApiSourceConfigNormalizer.deriveOdsMappings(
+                sourceConfig,
+                context.sourceDataSourceId(),
+                context.taskName(),
+                apiProperties.getTablePrefix()
+            )
         );
 
         ExecutionPlan.CheckpointPolicy checkpointPolicy = new ExecutionPlan.CheckpointPolicy(

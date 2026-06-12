@@ -22,6 +22,11 @@ public final class ExecutionFailureClassifier {
             return CATEGORY_RUNTIME;
         }
 
+        String apiRuntimeCategory = classifyApiRuntime(text);
+        if (apiRuntimeCategory != null) {
+            return apiRuntimeCategory;
+        }
+
         // Governance rules (highest priority — user-actionable)
         if (containsAny(text, "治理队列等待超时", "governance queue wait timeout")) {
             return CATEGORY_GOVERNANCE_QUEUE_TIMEOUT;
@@ -68,7 +73,7 @@ public final class ExecutionFailureClassifier {
         // Data quality errors (narrowed keywords to avoid false positives)
         if (containsAny(text, "type mismatch", "data truncation", "null value in column",
             "invalid input syntax", "numeric value out of range",
-            "date/time field value out of range", "character varying")) {
+            "date/time field value out of range", "invalid date format", "character varying")) {
             return CATEGORY_DATA_QUALITY;
         }
 
@@ -94,6 +99,26 @@ public final class ExecutionFailureClassifier {
 
     private static String normalize(String value) {
         return value == null ? null : value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static String classifyApiRuntime(String text) {
+        if (!containsAny(text, "api_runtime_")) {
+            return null;
+        }
+        if (containsAny(text, "api_runtime_auth")) {
+            return CATEGORY_PERMISSION;
+        }
+        if (containsAny(text, "api_runtime_rate_limit", "api_runtime_network", "api_runtime_server")) {
+            return CATEGORY_CONNECTION;
+        }
+        if (containsAny(text, "api_runtime_blocked_url", "api_runtime_config", "api_runtime_redirect", "api_runtime_pagination")) {
+            return CATEGORY_GOVERNANCE_LIMIT;
+        }
+        if (containsAny(text, "api_runtime_schema", "api_runtime_response_too_large", "api_runtime_response_parse",
+            "api_runtime_cursor", "api_runtime_client")) {
+            return CATEGORY_DATA_QUALITY;
+        }
+        return CATEGORY_RUNTIME;
     }
 
     private static boolean containsAny(String text, String... markers) {

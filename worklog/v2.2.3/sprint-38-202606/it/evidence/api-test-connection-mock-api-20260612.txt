@@ -1,0 +1,10 @@
+Command:
+./mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -pl dts-ingestion -Dtest=ApiConnectorContractResourceTest#testConnection_shouldCallMockApiWithRawConfigAndReturnSample+testConnection_shouldClassifyMockApiAuthFailureWithRealEngine test
+
+Result:
+PASS
+
+Coverage:
+- Local mock API success path used real ApiHttpEngine with sourceConfig+secrets.
+- Bearer token "token-123" returned connected=true, httpStatus=200, sampleCount=1, recordPathResolved=true.
+- Mock API HTTP 401 returned connected=false, authOk=false, failureCategory=PERMISSION_ERROR, errorCode=API_RUNTIME_AUTH.

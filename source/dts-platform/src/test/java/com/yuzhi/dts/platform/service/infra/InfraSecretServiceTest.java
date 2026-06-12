@@ -6,10 +6,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.InfraSecurityProperties;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.domain.service.InfraDataStorage;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.context.properties.bind.Bindable;
+import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.env.YamlPropertySourceLoader;
+import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.mock.env.MockEnvironment;
 
 class InfraSecretServiceTest {
 
@@ -57,5 +64,27 @@ class InfraSecretServiceTest {
         assertThat(new String(storage.getSecureProps(), StandardCharsets.UTF_8)).isEqualTo("{\"accessKey\":\"abc\"}");
         assertThat(storage.getSecureIv()).isNull();
         assertThat(storage.getSecureKeyVersion()).isEqualTo("PLAINTEXT");
+    }
+
+    @Test
+    void applicationYamlBindsInfraSecretKeyFromDtsInfraEnvironment() throws IOException {
+        ConfigurableEnvironment environment = new MockEnvironment()
+            .withProperty("DTS_INFRA_ENCRYPTION_KEY", "MDEyMzQ1Njc4OUFCQ0RFRg==")
+            .withProperty("DTS_INFRA_KEY_VERSION", "v2-live");
+        YamlPropertySourceLoader loader = new YamlPropertySourceLoader();
+        for (org.springframework.core.env.PropertySource<?> propertySource : loader.load(
+            "application",
+            new FileSystemResource("src/main/resources/config/application.yml")
+        )) {
+            environment.getPropertySources().addLast(propertySource);
+        }
+
+        InfraSecurityProperties bound = Binder
+            .get(environment)
+            .bind("dts.platform.infra", Bindable.of(InfraSecurityProperties.class))
+            .orElseThrow(() -> new AssertionError("dts.platform.infra properties were not bound"));
+
+        assertThat(bound.getEncryptionKey()).isEqualTo("MDEyMzQ1Njc4OUFCQ0RFRg==");
+        assertThat(bound.getKeyVersion()).isEqualTo("v2-live");
     }
 }

@@ -25,6 +25,8 @@ import com.yuzhi.dts.ingestion.service.etl.FileUploadService;
 import com.yuzhi.dts.ingestion.service.etl.IncrementalSyncService;
 import com.yuzhi.dts.ingestion.service.etl.IngestionRetryService;
 import com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner;
+import com.yuzhi.dts.ingestion.service.etl.api.ApiIngestionExecutor;
+import com.yuzhi.dts.ingestion.service.etl.connector.SourceConnectorRegistry;
 import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionExecutionMapper;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionTaskMapper;
@@ -102,6 +104,12 @@ class IngestionTaskFullRefreshExecutionTest {
     private PlatformInfraClient platformInfraClient;
 
     @Mock
+    private SourceConnectorRegistry sourceConnectorRegistry;
+
+    @Mock
+    private ApiIngestionExecutor apiIngestionExecutor;
+
+    @Mock
     private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private IngestionTaskService service;
@@ -130,6 +138,8 @@ class IngestionTaskFullRefreshExecutionTest {
             retryService,
             dagPreheatService,
             platformInfraClient,
+            sourceConnectorRegistry,
+            apiIngestionExecutor,
             transactionManager,
             Runnable::run
         );

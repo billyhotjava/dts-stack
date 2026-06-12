@@ -100,6 +100,20 @@ public class InfraManagementService {
     private static final String AUDIT_ACTION_CATALOG_SYNC = "FOUNDATION_DATASOURCE_CATALOG_SYNC";
     private static final Duration ADMIN_DATA_LAKE_LOOKUP_TIMEOUT = Duration.ofMillis(800);
     private static final int LOCAL_DEFAULT_LAKE_SCORE_THRESHOLD = 70;
+    private static final java.util.Set<String> SENSITIVE_PAYLOAD_KEYS = java.util.Set.of(
+        "authorization",
+        "apikey",
+        "token",
+        "accesstoken",
+        "refreshtoken",
+        "bearertoken",
+        "password",
+        "clientsecret",
+        "privatekey",
+        "keytab",
+        "krb5",
+        "secret"
+    );
     private static final java.util.Set<String> JDBC_TYPES = java.util.Set.of(
         "jdbc",
         "postgres",
@@ -592,32 +606,81 @@ public class InfraManagementService {
             safe.put("jdbcUrl", request.jdbcUrl());
             safe.put("username", request.username());
             safe.put("description", request.description());
-            safe.put("props", request.props());
+            safe.put("props", redactSensitivePayload(request.props()));
             safe.put("secretsProvided", request.secrets() != null && !request.secrets().isEmpty());
             return safe;
         }
         if (payload instanceof Map<?, ?> map) {
+            return redactSensitivePayload(map);
+        }
+        return payload;
+    }
+
+    private Object redactSensitivePayload(Object value) {
+        return redactSensitivePayload(value, "");
+    }
+
+    private Object redactSensitivePayload(Object value, String path) {
+        if (value instanceof Map<?, ?> map) {
             Map<String, Object> safe = new LinkedHashMap<>();
             map.forEach((k, v) -> {
                 if (k == null) {
                     return;
                 }
                 String key = String.valueOf(k);
-                String normalized = key.toLowerCase(Locale.ROOT);
-                if (
-                    normalized.contains("password") ||
-                    normalized.contains("keytab") ||
-                    normalized.contains("krb5") ||
-                    normalized.contains("secret")
-                ) {
+                String currentPath = StringUtils.hasText(path) ? path + "." + key : key;
+                if (isSensitivePayloadKey(currentPath, key)) {
                     safe.put(key, "***");
                 } else {
-                    safe.put(key, v);
+                    safe.put(key, redactSensitivePayload(v, currentPath));
                 }
             });
             return safe;
         }
-        return payload;
+        if (value instanceof Iterable<?> iterable) {
+            List<Object> safe = new java.util.ArrayList<>();
+            int index = 0;
+            for (Object item : iterable) {
+                safe.add(redactSensitivePayload(item, path + "[" + index + "]"));
+                index++;
+            }
+            return List.copyOf(safe);
+        }
+        return value;
+    }
+
+    private boolean isSensitivePayloadKey(String path, String key) {
+        String normalized = normalizePayloadKey(key);
+        if (!StringUtils.hasText(normalized)) {
+            return false;
+        }
+        if (normalized.endsWith("secretref") || normalized.endsWith("secretversion") || normalized.endsWith("maskeddisplay")) {
+            return false;
+        }
+        String normalizedPath = normalizePayloadKey(path);
+        if (StringUtils.hasText(normalizedPath) && normalizedPath.contains("secretrefs")) {
+            return false;
+        }
+        if ("value".equals(normalized) && pathHasSegment(normalizedPath, "auth")) {
+            return true;
+        }
+        return SENSITIVE_PAYLOAD_KEYS.contains(normalized);
+    }
+
+    private boolean pathHasSegment(String normalizedPath, String segment) {
+        if (!StringUtils.hasText(normalizedPath) || !StringUtils.hasText(segment)) {
+            return false;
+        }
+        for (String part : normalizedPath.split("[.\\[\\]]+")) {
+            if (segment.equals(part)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String normalizePayloadKey(String key) {
+        return StringUtils.hasText(key) ? key.trim().replace("-", "").replace("_", "").toLowerCase(Locale.ROOT) : null;
     }
 
     public boolean isMultiSourceEnabled() {

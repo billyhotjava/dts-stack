@@ -15,7 +15,7 @@ import {
 	Typography,
 } from "antd";
 import { CompactTable } from "@/components/table";
-import type { TableInfo } from "@/api/ingestion";
+import type { ApiConnectionTestResultDTO, TableInfo } from "@/api/ingestion";
 import type { IngestionFormContext } from "./types";
 import { normalizeText } from "@/utils/textUtils";
 import { isApiDataSource, normalizeType } from "../ingestionFormHelpers";
@@ -109,6 +109,9 @@ export type DbUnifiedStepProps = Pick<
 	readerTypeValidator: (_: any, value: string) => Promise<void>;
 	deptOptions: { label: string; value: string }[];
 	loadingDeptOptions: boolean;
+	apiPreviewing?: boolean;
+	apiPreviewResult?: ApiConnectionTestResultDTO | null;
+	onApiPreview?: () => void;
 };
 
 /* ── component ── */
@@ -142,10 +145,15 @@ export function DbUnifiedStep({
 	readerTypeValidator,
 	deptOptions,
 	loadingDeptOptions,
+	apiPreviewing = false,
+	apiPreviewResult,
+	onApiPreview,
 }: DbUnifiedStepProps) {
 	const syncMode = Form.useWatch("syncMode", form);
 	const scheduleType = Form.useWatch("scheduleType", form);
 	const tableSelectionMode = Form.useWatch("tableSelectionMode", form);
+	const selectedDataSourceId = Form.useWatch("sourceDataSourceId", form);
+	const apiResourcePath = Form.useWatch("apiResourcePath", form);
 	const [tablePageSize, setTablePageSize] = useState(10);
 	const apiFlow = sourceCategory === "api";
 	const dataSourceOptions = useMemo(
@@ -292,6 +300,47 @@ export function DbUnifiedStep({
 							<Input.TextArea rows={4} placeholder='{"type":"field","field":"updatedAt","injectInto":"query","parameterName":"updatedAfter"}' />
 						</Form.Item>
 					</div>
+					<Card type="inner" title="接口预览" className="mb-4">
+						<Space direction="vertical" size={12} className="w-full">
+							<Button
+								onClick={onApiPreview}
+								loading={apiPreviewing}
+								disabled={!onApiPreview || !normalizeText(selectedDataSourceId) || !normalizeText(apiResourcePath)}
+							>
+								预览首页记录
+							</Button>
+							{apiPreviewResult ? (
+								<Alert
+									type={apiPreviewResult.connected ? "success" : "warning"}
+									showIcon
+									message={apiPreviewResult.connected ? "接口预览成功" : "接口预览失败"}
+									description={
+										apiPreviewResult.connected
+											? `HTTP ${apiPreviewResult.httpStatus ?? "-"} · 样本 ${apiPreviewResult.sampleCount ?? 0} 条 · recordPath ${
+													apiPreviewResult.recordPathResolved ? "已解析" : "未配置"
+												} · ${apiPreviewResult.elapsedMs ?? 0}ms`
+											: apiPreviewResult.advice || apiPreviewResult.message || apiPreviewResult.failureCategory || "请检查 API 配置"
+									}
+								/>
+							) : null}
+							{apiPreviewResult?.sampleRecords?.length ? (
+								<Collapse
+									ghost
+									items={[
+										{
+											key: "api-sample-records",
+											label: "样本记录",
+											children: (
+												<pre className="bg-muted p-4 rounded overflow-auto">
+													{JSON.stringify(apiPreviewResult.sampleRecords, null, 2)}
+												</pre>
+											),
+										},
+									]}
+								/>
+							) : null}
+						</Space>
+					</Card>
 				</>
 			) : (
 				<>

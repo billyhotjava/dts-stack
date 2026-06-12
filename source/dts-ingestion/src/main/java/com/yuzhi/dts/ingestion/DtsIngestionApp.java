@@ -2,6 +2,7 @@ package com.yuzhi.dts.ingestion;
 
 import com.yuzhi.dts.ingestion.config.AddaxProperties;
 import com.yuzhi.dts.ingestion.config.AirflowProperties;
+import com.yuzhi.dts.ingestion.config.ApiProperties;
 import com.yuzhi.dts.ingestion.config.InfraSecurityProperties;
 import com.yuzhi.dts.ingestion.config.IngestionOutboundPlatformProperties;
 import com.yuzhi.dts.ingestion.config.IngestionProperties;
@@ -18,6 +19,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableConfigurationProperties({
     AddaxProperties.class,
     AirflowProperties.class,
+    ApiProperties.class,
     InfraSecurityProperties.class,
     IngestionOutboundPlatformProperties.class,
     IngestionProperties.class,

@@ -5,7 +5,7 @@ import java.util.Map;
 
 public final class ApiSourceContracts {
 
-    public static final String CONTRACT_VERSION = "1.1.0";
+    public static final String CONTRACT_VERSION = "1.2.0";
     public static final String ODS_LANDING_MODE = "raw_record";
     public static final String RAW_RECORD_COLUMN = "_dts_raw_record";
     public static final String NORMALIZATION_LAYER = "stg";
@@ -73,7 +73,7 @@ public final class ApiSourceContracts {
 
     public record RateLimitPolicy(Integer requestsPerSecond, Integer burst, Integer maxConcurrency) {}
 
-    public record TlsPolicy(Boolean verifyTls, String mtlsSecretRef) {}
+    public record TlsPolicy(Boolean verifyTls, String caSecretRef, String mtlsSecretRef) {}
 
     public record AuthConfig(String provider, Map<String, Object> config, Map<String, String> secretRefs) {}
 

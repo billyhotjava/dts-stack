@@ -199,10 +199,14 @@ function PreCheckMode({ initialTaskId }: { initialTaskId?: number }) {
 				source: {
 					type: fileType,
 					config: {
-						_filePath: result.hostPath,
-						_containerPath: result.containerPath,
-						_fileType: fileType,
-						_fileColumns: result.columns || [],
+							_filePath: result.hostPath,
+							_containerPath: result.containerPath,
+							_keyVersion: result.keyVersion,
+							_encrypted: result.encrypted,
+							_fileHash: result.fileHash,
+							_fileSize: result.fileSize,
+							_fileType: fileType,
+							_fileColumns: result.columns || [],
 						_originalName: result.originalName || file.name,
 						_datasetId: selectedDataset,
 						_targetDataSourceId: selectedDatasetMeta.sourceId || defaultDataSourceId,

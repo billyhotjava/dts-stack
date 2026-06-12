@@ -104,6 +104,23 @@ class IngestionTaskProxyResourceTest {
     }
 
     @Test
+    void apiConnectionTestIsExposedViaPlatformProxy() throws Exception {
+        when(ingestionClient.testApiConnection(Map.of("dataSourceId", "11111111-2222-3333-4444-555555555555")))
+            .thenReturn(new ApiResponse<>(200, "ok", Map.of("connected", true, "httpStatus", 200, "sampleCount", 1)));
+
+        mockMvc.perform(post("/api/ingestion/api/test-connection")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"dataSourceId\":\"11111111-2222-3333-4444-555555555555\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.connected").value(true))
+            .andExpect(jsonPath("$.data.httpStatus").value(200))
+            .andExpect(jsonPath("$.data.sampleCount").value(1));
+
+        verify(ingestionClient).testApiConnection(Map.of("dataSourceId", "11111111-2222-3333-4444-555555555555"));
+    }
+
+    @Test
     void executeTaskAsyncIsExposedViaPlatformProxy() throws Exception {
         when(ingestionClient.executeTaskAsync(5L))
             .thenReturn(new ApiResponse<>(202, "accepted", Map.of("taskId", 5, "status", "submitted", "async", true)));

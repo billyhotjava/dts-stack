@@ -12,9 +12,12 @@ import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
 import com.yuzhi.dts.ingestion.service.etl.ConnectorCapabilityService;
 import com.yuzhi.dts.ingestion.service.etl.RealtimeTaskStatusService;
 import com.yuzhi.dts.ingestion.service.etl.JdbcMetadataService;
+import com.yuzhi.dts.ingestion.service.etl.api.ApiAuthProviderDescriptor;
+import com.yuzhi.dts.ingestion.service.etl.api.ApiAuthProviderRegistry;
 import com.yuzhi.dts.ingestion.service.etl.api.ApiConnectorTypes;
 import com.yuzhi.dts.ingestion.service.etl.api.ApiSourceConfigNormalizer;
 import com.yuzhi.dts.ingestion.config.AirflowProperties;
+import com.yuzhi.dts.ingestion.config.ApiProperties;
 import com.yuzhi.dts.ingestion.service.openmetadata.OpenMetadataAdapter;
 import com.yuzhi.dts.ingestion.service.IngestionTaskChangeLogService;
 import com.yuzhi.dts.ingestion.service.dto.IngestionConnectorCapabilityDTO;
@@ -84,6 +87,8 @@ public class IngestionTaskResource {
     private final RealtimeTaskStatusService realtimeTaskStatusService;
     private final ObjectMapper objectMapper;
     private final AirflowProperties airflowProperties;
+    private final ApiProperties apiProperties;
+    private final ApiAuthProviderRegistry apiAuthProviderRegistry;
 
     public IngestionTaskResource(
         AddaxJobService addaxJobService,
@@ -99,7 +104,9 @@ public class IngestionTaskResource {
         ConnectorCapabilityService connectorCapabilityService,
         RealtimeTaskStatusService realtimeTaskStatusService,
         ObjectMapper objectMapper,
-        AirflowProperties airflowProperties
+        AirflowProperties airflowProperties,
+        ApiProperties apiProperties,
+        ApiAuthProviderRegistry apiAuthProviderRegistry
     ) {
         this.addaxJobService = addaxJobService;
         this.auditService = auditService;
@@ -115,6 +122,8 @@ public class IngestionTaskResource {
         this.realtimeTaskStatusService = realtimeTaskStatusService;
         this.objectMapper = objectMapper;
         this.airflowProperties = airflowProperties;
+        this.apiProperties = apiProperties == null ? new ApiProperties() : apiProperties;
+        this.apiAuthProviderRegistry = apiAuthProviderRegistry;
     }
 
     public record IngestionTaskRequest(
@@ -321,7 +330,8 @@ public class IngestionTaskResource {
                 sourceOverrides = ApiSourceConfigNormalizer.normalize(
                     sourceOverrides,
                     request.source().dataSourceId(),
-                    request.name()
+                    request.name(),
+                    apiTablePrefix()
                 );
             }
             Map<String, Object> resolvedReaderConfig = resolvedSource != null ? resolvedSource.readerConfig() : safeMap(request.source().config());
@@ -330,8 +340,10 @@ public class IngestionTaskResource {
                 Map<String, Object> apiRuntimeConfig = ApiSourceConfigNormalizer.normalize(
                     mergedReaderConfig,
                     request.source().dataSourceId(),
-                    request.name()
+                    request.name(),
+                    apiTablePrefix()
                 );
+                validateApiAuthProviderEnabled(apiRuntimeConfig);
                 AirflowAdapter.AirflowRequest airflowRequest = buildAirflowRequest(request.airflow());
                 com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO taskDTO =
                     new com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO();
@@ -348,7 +360,8 @@ public class IngestionTaskResource {
                 List<Map<String, String>> apiTableMapping = ApiSourceConfigNormalizer.deriveOdsMappings(
                     apiRuntimeConfig,
                     request.source().dataSourceId(),
-                    request.name()
+                    request.name(),
+                    apiTablePrefix()
                 );
                 if (!apiTableMapping.isEmpty()) {
                     taskDTO.setTableMapping(toJsonNode(apiTableMapping));
@@ -436,7 +449,8 @@ public class IngestionTaskResource {
                     List<Map<String, String>> apiTableMapping = ApiSourceConfigNormalizer.deriveOdsMappings(
                         sourceOverrides,
                         request.source().dataSourceId(),
-                        request.name()
+                        request.name(),
+                        apiTablePrefix()
                     );
                     if (!apiTableMapping.isEmpty()) {
                         taskDTO.setTableMapping(toJsonNode(apiTableMapping));
@@ -754,6 +768,11 @@ public class IngestionTaskResource {
         }
         String text = value.toString().trim();
         return StringUtils.hasText(text) ? text : null;
+    }
+
+    private String apiTablePrefix() {
+        String tablePrefix = apiProperties == null ? null : apiProperties.getTablePrefix();
+        return StringUtils.hasText(tablePrefix) ? tablePrefix : ApiProperties.DEFAULT_TABLE_PREFIX;
     }
 
     private Map<String, Object> safeMap(Map<String, Object> value) {
@@ -1704,6 +1723,50 @@ public class IngestionTaskResource {
         }
     }
 
+    private void validateApiAuthProviderEnabled(Map<String, Object> sourceConfig) {
+        String providerId = resolveApiAuthProvider(sourceConfig);
+        if (!StringUtils.hasText(providerId)) {
+            return;
+        }
+        ApiAuthProviderDescriptor descriptor = apiAuthProviderRegistry.findDescriptor(providerId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "未知 API 鉴权方式: " + providerId));
+        if (Boolean.FALSE.equals(descriptor.enabled())) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "API 鉴权方式 " + descriptor.id() + " 暂未开放，不能用于入湖任务"
+            );
+        }
+    }
+
+    private String resolveApiAuthProvider(Map<String, Object> sourceConfig) {
+        if (sourceConfig == null || sourceConfig.isEmpty()) {
+            return null;
+        }
+        String direct = normalize(sourceConfig.get("authProvider"));
+        if (StringUtils.hasText(direct)) {
+            return direct;
+        }
+        Object auth = sourceConfig.get("auth");
+        if (auth instanceof Map<?, ?> authMap) {
+            String provider = normalize(authMap.get("provider"));
+            if (StringUtils.hasText(provider)) {
+                return provider;
+            }
+        }
+        Object api = sourceConfig.get("api");
+        if (api instanceof Map<?, ?> apiMap) {
+            String nested = normalize(apiMap.get("authProvider"));
+            if (StringUtils.hasText(nested)) {
+                return nested;
+            }
+            Object nestedAuth = apiMap.get("auth");
+            if (nestedAuth instanceof Map<?, ?> nestedAuthMap) {
+                return normalize(nestedAuthMap.get("provider"));
+            }
+        }
+        return null;
+    }
+
     private List<IngestionTaskTemplateDTO> buildTemplateCatalog() {
         return List.of(
             new IngestionTaskTemplateDTO(
@@ -2010,8 +2073,10 @@ public class IngestionTaskResource {
             sourceOverrides = ApiSourceConfigNormalizer.normalize(
                 sourceOverrides,
                 taskDTO.getSourceDataSourceId(),
-                taskDTO.getName()
+                taskDTO.getName(),
+                apiTablePrefix()
             );
+            validateApiAuthProviderEnabled(sourceOverrides);
         }
         if (!isFileSourceUpdate && hasConnectionOverride(jsonNodeToMap(taskDTO.getSourceConfig()))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "入湖任务必须使用已配置的数据源连接");
@@ -2068,7 +2133,8 @@ public class IngestionTaskResource {
             List<Map<String, String>> tableMapping = ApiSourceConfigNormalizer.deriveOdsMappings(
                 sourceOverrides,
                 taskDTO.getSourceDataSourceId(),
-                taskDTO.getName()
+                taskDTO.getName(),
+                apiTablePrefix()
             );
             taskDTO.setTableMapping(tableMapping.isEmpty() ? null : toJsonNode(tableMapping));
             taskDTO.setDestinationType(null);
@@ -2535,6 +2601,34 @@ public class IngestionTaskResource {
             );
             throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
         }
+    }
+
+    /**
+     * POST /api/ingestion/tasks/dags/rebuild-api : 批量重生成 API 入湖瘦 DAG
+     */
+    @PostMapping("/tasks/dags/rebuild-api")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<Map<String, Object>> rebuildApiDags() {
+        String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
+        Map<String, Object> summary = ingestionTaskService.rebuildApiDags();
+        auditService.auditAction(
+            "INGESTION_API_DAGS_REBUILD",
+            AuditStage.SUCCESS,
+            "api",
+            Map.of(
+                "summary",
+                "批量重建 API 入湖 DAG",
+                "operator",
+                operator,
+                "total",
+                String.valueOf(summary.getOrDefault("total", 0)),
+                "migrated",
+                String.valueOf(summary.getOrDefault("migrated", 0)),
+                "failed",
+                String.valueOf(summary.getOrDefault("failed", 0))
+            )
+        );
+        return ResponseEntity.ok(summary);
     }
 
     /**

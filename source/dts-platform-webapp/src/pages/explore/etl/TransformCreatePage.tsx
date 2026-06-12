@@ -8,6 +8,7 @@ import { useUserInfo } from "@/store/userStore";
 import { useParams, useRouter } from "@/routes/hooks";
 import {
 	ingestionTaskAPI,
+	type ApiConnectionTestResultDTO,
 	type DefaultDestinationStatus,
 	type FileUploadResult,
 	type IngestionConnectorCapabilityDTO,
@@ -118,6 +119,8 @@ export default function TransformCreatePage() {
 	const [loadingTask, setLoadingTask] = useState(false);
 	const [editingTask, setEditingTask] = useState<IngestionTaskDTO | null>(null);
 	const [submittedTaskId, setSubmittedTaskId] = useState<number | string | null>(null);
+	const [apiPreviewing, setApiPreviewing] = useState(false);
+	const [apiPreviewResult, setApiPreviewResult] = useState<ApiConnectionTestResultDTO | null>(null);
 	const [discoveringTables, setDiscoveringTables] = useState(false);
 	const [discoveredTables, setDiscoveredTables] = useState<TableInfo[]>([]);
 	const [selectedTableKeys, setSelectedTableKeys] = useState<string[]>([]);
@@ -188,10 +191,11 @@ export default function TransformCreatePage() {
 				selectedTables: "",
 				readerTables: "",
 				writerTables: "",
-				airflowEnabled: next === "api" ? false : form.getFieldValue("airflowEnabled"),
-				runNow: next === "api" ? false : form.getFieldValue("runNow"),
+				airflowEnabled: next === "api" ? true : form.getFieldValue("airflowEnabled"),
+				runNow: next === "api" ? true : form.getFieldValue("runNow"),
 				syncMode: next === "api" ? "full_refresh" : form.getFieldValue("syncMode"),
 			});
+			setApiPreviewResult(null);
 		},
 		[form]
 	);
@@ -1055,6 +1059,35 @@ export default function TransformCreatePage() {
 			return;
 		}
 		syncSelectedTablesToForm(selectedTableKeys);
+	};
+
+	const handleApiPreview = async () => {
+		const values = form.getFieldsValue(true);
+		const dataSourceId = normalizeText(values.sourceDataSourceId);
+		if (!dataSourceId) {
+			toast.error("请先选择 API 数据源连接");
+			return;
+		}
+		try {
+			await form.validateFields(["sourceDataSourceId", "apiResourcePath", "apiMethod"]);
+			setApiPreviewing(true);
+			const readerConfig = buildApiReaderConfig(values);
+			const resource = (readerConfig.resource || {}) as Record<string, any>;
+			const result = await ingestionTaskAPI.testApiConnection({
+				dataSourceId,
+				resource,
+			});
+			setApiPreviewResult(result);
+			if (result.connected) {
+				toast.success("API 预览成功");
+			} else {
+				toast.warning(result.advice || result.message || "API 预览失败");
+			}
+		} catch (err: any) {
+			toast.error(err?.message || "API 预览失败");
+		} finally {
+			setApiPreviewing(false);
+		}
 	};
 
 	const readerTablesValidator = (_: any, value: string) => {
@@ -1923,6 +1956,9 @@ export default function TransformCreatePage() {
 									readerTypeValidator={readerTypeValidator}
 									deptOptions={deptOptions}
 									loadingDeptOptions={loadingDeptOptions}
+									apiPreviewing={apiPreviewing}
+									apiPreviewResult={apiPreviewResult}
+									onApiPreview={handleApiPreview}
 								/>
 							)}
 							{currentStep === 1 && (
@@ -1956,7 +1992,7 @@ export default function TransformCreatePage() {
 							</Button>
 						) : (
 							<Button type="primary" loading={saving} onClick={() => form.submit()} disabled={loadingTask}>
-								{isApiFlow ? "保存 API 草稿" : isEdit ? "保存修改" : "提交任务"}
+								{isApiFlow ? (isEdit ? "保存 API 任务" : "提交 API 任务") : isEdit ? "保存修改" : "提交任务"}
 							</Button>
 						)}
 					</Space>

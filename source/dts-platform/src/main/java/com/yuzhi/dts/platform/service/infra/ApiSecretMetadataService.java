@@ -35,6 +35,7 @@ public class ApiSecretMetadataService {
         "bearertoken", List.of("token"),
         "basic", List.of("password"),
         "oauth2clientcredentials", List.of("clientSecret"),
+        "jwtlogin", List.of("password", "secret", "clientSecret"),
         "customsignature", List.of("secret"),
         "mtls", List.of("certSecretRef", "keySecretRef")
     );
@@ -67,7 +68,7 @@ public class ApiSecretMetadataService {
         ApiSecretMetadata previous
     ) {
         String normalizedProvider = normalizeProviderId(providerId);
-        List<String> sensitiveFields = PROVIDER_SENSITIVE_FIELDS.getOrDefault(normalizedProvider, List.of());
+        List<String> sensitiveFields = resolveSensitiveFields(normalizedProvider, incomingSecrets, previous);
         if (sensitiveFields.isEmpty()) {
             return new ApiSecretMetadata(canonicalProviderId(providerId), List.of());
         }
@@ -111,6 +112,33 @@ public class ApiSecretMetadataService {
         }
 
         return new ApiSecretMetadata(canonicalProviderId(providerId), nextFields);
+    }
+
+    private static List<String> resolveSensitiveFields(
+        String normalizedProvider,
+        Map<String, Object> incomingSecrets,
+        ApiSecretMetadata previous
+    ) {
+        List<String> configured = PROVIDER_SENSITIVE_FIELDS.getOrDefault(normalizedProvider, List.of());
+        if (!"jwtlogin".equals(normalizedProvider)) {
+            return configured;
+        }
+        Set<String> fields = new LinkedHashSet<>(configured);
+        if (incomingSecrets != null) {
+            incomingSecrets.forEach((key, value) -> {
+                if (StringUtils.hasText(key) && StringUtils.hasText(asText(value))) {
+                    fields.add(key);
+                }
+            });
+        }
+        if (previous != null) {
+            previous.fields().forEach(entry -> {
+                if (entry != null && StringUtils.hasText(entry.fieldName())) {
+                    fields.add(entry.fieldName());
+                }
+            });
+        }
+        return List.copyOf(fields);
     }
 
     /**

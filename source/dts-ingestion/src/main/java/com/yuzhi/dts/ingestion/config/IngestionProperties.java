@@ -45,7 +45,7 @@ public class IngestionProperties {
         /** Exponential backoff multiplier. */
         private double backoffMultiplier = 2.0;
         /** Comma-separated failure categories eligible for auto-retry. */
-        private String retryableCategories = "CONNECTION_ERROR,GOVERNANCE_LIMIT,GOVERNANCE_QUEUE_TIMEOUT,RUNTIME_ERROR";
+        private String retryableCategories = "CONNECTION_ERROR,GOVERNANCE_QUEUE_TIMEOUT,RUNTIME_ERROR";
         /** How often the retry scheduler scans for due retries (ms). */
         private long scanIntervalMs = 30000;
 

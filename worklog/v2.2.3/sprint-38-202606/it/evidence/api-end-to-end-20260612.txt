@@ -1,0 +1,167 @@
+# Sprint-38 IT-01 API 入湖端到端主链路证据
+
+日期: 2026-06-12
+环境: local v223 stack
+
+## 结论
+
+- PASS: API 数据源 + 入湖任务 + Java API executor + raw landing + checkpoint 增量推进已跑通。
+- PASS: 生成的 Airflow 瘦 DAG 已由 Airflow scheduler 真实触发，DAG task 成功，并通过内部 API 创建第三次 ingestion execution。
+- PASS: 生成 DAG 使用内部 HTTP opener 禁用代理，避免 Airflow 容器 `HTTP_PROXY/HTTPS_PROXY` 干扰 `dts-ingestion`/OpenLineage 内部回调。
+- 非本证据范围: 凭据密文存储、GET 不回显、DAG/env/log 无明文凭据由 IT-02 单独验收。
+
+## 失败复现与根因
+
+前一版 live Airflow 触发失败:
+
+```text
+airflow_run_id=s38-api-e2e-airflow-89-1781248881
+airflow task addax_s38_api_it_ods_api_orders failed for run s38-api-e2e-airflow-89-1781248881
+```
+
+Airflow task 日志:
+
+```text
+File "/opt/airflow/dags/dts_api_e2e_orders.py", line 119, in _trigger_api_ingestion
+  response = _call_ingestion_api("POST", "/internal/api-ingestion/executions", payload)
+urllib.error.URLError: <urlopen error [Errno -2] Name or service not known>
+```
+
+Airflow 容器代理环境:
+
+```text
+HTTPS_PROXY=http://host.docker.internal:10808
+NO_PROXY=
+HTTP_PROXY=http://host.docker.internal:10808
+```
+
+根因: Python `urllib` 默认读取代理环境变量，内部服务回调被错误发往代理路径；容器内 `host.docker.internal` 不可解析，导致 DAG 未进入 dts-ingestion。
+
+## 代码验证
+
+RED:
+
+```text
+./mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -pl dts-ingestion -Dtest=AirflowDagServiceTest#shouldGenerateThinApiDagThatCallsInternalIngestionEndpoint test
+Expecting actual ... to contain: "urllib.request.ProxyHandler({})"
+Exit code: 1
+```
+
+GREEN:
+
+```text
+./mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -pl dts-ingestion -Dtest=AirflowDagServiceTest#shouldGenerateThinApiDagThatCallsInternalIngestionEndpoint test
+Exit code: 0
+```
+
+相关回归:
+
+```text
+./mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -pl dts-ingestion -Dtest=AirflowDagServiceTest#shouldGenerateThinApiDagThatCallsInternalIngestionEndpoint,InternalApiIngestionResourceTest,IngestionTaskServiceTest#executeInternalApi_shouldUseRequestBatchAndBackfillWindow+executeInternalApi_shouldEnsureThinDagForAirflowEnabledApiTask+rebuildApiDags_shouldForceRebuildOnlyActiveApiTasks test
+Exit code: 0
+```
+
+构建与重启:
+
+```text
+./builds/dts-build.sh --image dts-ingestion --no-save
+BUILD SUCCESS
+writing image sha256:4649ca52b159915f32610735c5d84178c948c40201bbe42989e60b14925b95f7 done
+
+docker compose -p v223 -f docker-compose-app.yml up -d --no-deps --force-recreate dts-ingestion
+Container v223-dts-ingestion-1 Started
+
+docker inspect v223-dts-ingestion-1 --format ...
+image=sha256:4649ca52b159915f32610735c5d84178c948c40201bbe42989e60b14925b95f7 status=running health=healthy started=2026-06-12T07:27:15.910795803Z
+```
+
+## Live IT 输出
+
+命令:
+
+```text
+RUN_LIVE=1 bash worklog/v2.2.3/sprint-38-202606/it/scripts/api-end-to-end.sh
+```
+
+输出摘要:
+
+```text
+task_id=90
+first_execution_id=134
+first_status=success
+first_rows_read=2
+first_rows_written=2
+raw_rows=2
+checkpoint=2026-06-12T00:02:00Z
+second_execution_id=135
+second_status=success
+second_rows_read=1
+second_rows_written=1
+raw_rows=3
+checkpoint=2026-06-12T00:03:00Z
+airflow_run_id=s38-api-e2e-airflow-90-1781249278
+airflow_task_state=success
+airflow_execution_id=136
+airflow_execution_status=success
+airflow_rows_read=1
+airflow_rows_written=1
+raw_rows=4
+checkpoint=2026-06-12T00:04:00Z
+landing_table=s38_api_it.ods_api_orders
+mock_api_container=s38-api-mock-e2e
+```
+
+## Live DB 与 Airflow 复核
+
+任务行:
+
+```text
+ id |        name        | airflow_enabled |   airflow_dag_id   | addax_job_path | last_execution_status
+----+--------------------+-----------------+--------------------+----------------+-----------------------
+ 90 | s38-api-e2e-orders | t               | dts_api_e2e_orders |                | success
+```
+
+执行记录:
+
+```text
+ id  | task_id | execution_id |       batch_id        | status  | rows_read | rows_written | failure_category
+-----+---------+--------------+-----------------------+---------+-----------+--------------+------------------
+ 134 |      90 | api-efd2651b | s38-e2e-batch-1       | success |         2 |            2 |
+ 135 |      90 | api-e631ce93 | s38-e2e-batch-2       | success |         1 |            1 |
+ 136 |      90 | api-5c9a0163 | s38-e2e-airflow-batch | success |         1 |            1 |
+```
+
+raw landing 与 checkpoint:
+
+```text
+ _dts_source_resource | rows |      max_cursor
+----------------------+------+----------------------
+ orders               |    4 | 2026-06-12T00:04:00Z
+
+ task_id | resource_id |     cursor_value
+---------+-------------+----------------------
+      90 | orders      | 2026-06-12T00:04:00Z
+```
+
+Airflow task:
+
+```text
+airflow tasks state dts_api_e2e_orders addax_s38_api_it_ods_api_orders s38-api-e2e-airflow-90-1781249278
+success
+
+dag_id             | execution_date            | task_id                         | state   | start_date                       | end_date
+===================+===========================+=================================+=========+==================================+=================================
+dts_api_e2e_orders | 2026-06-12T07:28:20+00:00 | addax_s38_api_it_ods_api_orders | success | 2026-06-12T07:28:20.881793+00:00 | 2026-06-12T07:28:26.456951+00:00
+```
+
+生成 DAG 关键片段:
+
+```text
+21:_DTS_INTERNAL_HTTP_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+27:_DTS_INTERNAL_HTTP_OPENER = globals().get("_DTS_INTERNAL_HTTP_OPENER") or urllib.request.build_opener(urllib.request.ProxyHandler({}))
+58:        _DTS_INTERNAL_HTTP_OPENER.open(request, timeout=5).read()
+92:        with _DTS_INTERNAL_HTTP_OPENER.open(request, timeout=30) as response:
+121:    response = _call_ingestion_api("POST", "/internal/api-ingestion/executions", payload)
+129:        state = _call_ingestion_api("GET", f"/internal/api-ingestion/executions/{execution_id}")
+legacy_api_markers=absent
+```

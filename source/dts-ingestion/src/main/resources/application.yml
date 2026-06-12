@@ -44,6 +44,28 @@ dts:
   ingestion:
     enabled: true
     trusted-service-name: ${DTS_INGESTION_TRUSTED_SERVICE_NAME:dts-platform}
+    api:
+      max-pages: ${DTS_INGESTION_API_MAX_PAGES:1000}
+      connect-timeout: ${DTS_INGESTION_API_CONNECT_TIMEOUT:10s}
+      read-timeout: ${DTS_INGESTION_API_READ_TIMEOUT:60s}
+      execution-timeout: ${DTS_INGESTION_API_EXECUTION_TIMEOUT:30m}
+      max-response-bytes: ${DTS_INGESTION_API_MAX_RESPONSE_BYTES:32MB}
+      table-prefix: ${DTS_INGESTION_API_TABLE_PREFIX:ods_api_}
+      allow-http: ${DTS_INGESTION_API_ALLOW_HTTP:false}
+      allowed-hosts: ${DTS_INGESTION_API_ALLOWED_HOSTS:}
+      retry:
+        max-retries: ${DTS_INGESTION_API_RETRY_MAX_RETRIES:3}
+        base-backoff: ${DTS_INGESTION_API_RETRY_BASE_BACKOFF:200ms}
+        backoff-cap: ${DTS_INGESTION_API_RETRY_BACKOFF_CAP:30s}
+      rate-limit:
+        default-rps: ${DTS_INGESTION_API_RATE_LIMIT_DEFAULT_RPS:0}
+        burst-multiplier: ${DTS_INGESTION_API_RATE_LIMIT_BURST_MULTIPLIER:2}
+        max-concurrency: ${DTS_INGESTION_API_RATE_LIMIT_MAX_CONCURRENCY:1}
+      landing:
+        batch-size: ${DTS_INGESTION_API_LANDING_BATCH_SIZE:500}
+      executor:
+        pool-size: ${DTS_INGESTION_API_EXECUTOR_POOL_SIZE:4}
+        per-task-concurrency: ${DTS_INGESTION_API_EXECUTOR_PER_TASK_CONCURRENCY:1}
     # Sprint-28 F4 新增:出站客户端配置(ingestion 调 platform)
     outbound:
       platform:
@@ -96,4 +118,4 @@ dts:
     service-token: ${DTS_PLATFORM_SERVICE_TOKEN:${DTS_ADMIN_SERVICE_TOKEN:}}
     infra:
       encryption-key: ${DTS_INFRA_ENCRYPTION_KEY:}
-      key-version: ${DTS_INFRA_KEY_VERSION:}
+      key-version: ${DTS_INFRA_KEY_VERSION:v1}

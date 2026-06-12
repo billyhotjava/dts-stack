@@ -1,12 +1,16 @@
 package com.yuzhi.dts.ingestion.service.infra;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.ingestion.config.IngestionOutboundPlatformProperties;
 import com.yuzhi.dts.ingestion.domain.IngestionExecution;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import java.net.URI;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -216,6 +220,8 @@ public class PlatformInfraClient {
         executionPayload.put("endTime", execution.getEndTime() == null ? null : execution.getEndTime().toString());
         executionPayload.put("sourceTables", execution.getSourceTables());
         executionPayload.put("targetTables", execution.getTargetTables());
+        executionPayload.put("rowsRead", execution.getRowsRead());
+        executionPayload.put("rowsWritten", execution.getRowsWritten());
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("task", taskPayload);
@@ -241,6 +247,51 @@ public class PlatformInfraClient {
         return false;
     }
 
+    public boolean emitIngestionOpenLineageEvent(IngestionTask task, IngestionExecution execution) {
+        if (task == null || execution == null) {
+            return false;
+        }
+        List<Map<String, Object>> inputs = openLineageDatasets(execution.getSourceTables(), execution.getRowsRead(), "rowsRead");
+        List<Map<String, Object>> outputs = openLineageDatasets(execution.getTargetTables(), execution.getRowsWritten(), "rowsWritten");
+        if (inputs.isEmpty() || outputs.isEmpty()) {
+            return false;
+        }
+        URI uri = buildUri("/internal/lineage/openlineage");
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("eventType", openLineageEventType(execution.getStatus()));
+        payload.put("eventTime", openLineageEventTime(execution).toString());
+        payload.put("producer", "dts-ingestion");
+        payload.put("run", Map.of("runId", openLineageRunId(execution)));
+        payload.put("job", Map.of("namespace", "dts-ingestion", "name", openLineageJobName(task)));
+        payload.put("inputs", inputs);
+        payload.put("outputs", outputs);
+        Map<String, Object> ingestionFacet = new LinkedHashMap<>();
+        ingestionFacet.put("_producer", "dts-ingestion");
+        ingestionFacet.put("taskId", task.getId() == null ? null : task.getId().toString());
+        ingestionFacet.put("executionId", execution.getId() == null ? null : execution.getId().toString());
+        ingestionFacet.put("rowsRead", execution.getRowsRead());
+        ingestionFacet.put("rowsWritten", execution.getRowsWritten());
+        payload.put("facets", Map.of("dtsIngestion", ingestionFacet));
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setAccept(java.util.List.of(MediaType.APPLICATION_JSON));
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        applyServiceHeaders(headers);
+        try {
+            ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.POST, new HttpEntity<>(payload, headers), Map.class);
+            if (!response.getStatusCode().is2xxSuccessful()) {
+                LOG.warn("Platform OpenLineage emit returned status={}", response.getStatusCode().value());
+                return false;
+            }
+            return true;
+        } catch (HttpStatusCodeException ex) {
+            LOG.warn("Platform OpenLineage emit failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+        } catch (Exception ex) {
+            LOG.warn("Platform OpenLineage emit failed: {}", ex.getMessage());
+        }
+        return false;
+    }
+
     private void applyServiceHeaders(HttpHeaders headers) {
         headers.set(SERVICE_HEADER, resolveServiceName());
         String token = resolveServiceToken();
@@ -259,6 +310,78 @@ public class PlatformInfraClient {
         IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_PLATFORM);
         String envFallback = StringUtils.hasText(outboundProps.getServiceToken()) ? outboundProps.getServiceToken().trim() : null;
         return settings.getString("serviceToken", envFallback);
+    }
+
+    private List<Map<String, Object>> openLineageDatasets(JsonNode datasets, Long rowCount, String rowField) {
+        if (datasets == null || !datasets.isArray() || datasets.isEmpty()) {
+            return List.of();
+        }
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (JsonNode dataset : datasets) {
+            if (dataset == null || !dataset.isObject()) {
+                continue;
+            }
+            String name = text(dataset.get("name"));
+            if (!StringUtils.hasText(name)) {
+                continue;
+            }
+            Map<String, Object> rowFacet = new LinkedHashMap<>();
+            rowFacet.put("_producer", "dts-ingestion");
+            rowFacet.put("rowCount", rowCount == null ? 0L : rowCount);
+            rowFacet.put(rowField, rowCount == null ? 0L : rowCount);
+
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("namespace", firstNonBlank(text(dataset.get("namespace")), "api"));
+            item.put("name", name);
+            item.put("facets", Map.of("rowCount", rowFacet));
+            result.add(item);
+        }
+        return List.copyOf(result);
+    }
+
+    private String openLineageEventType(String status) {
+        if ("failed".equalsIgnoreCase(status) || "fail".equalsIgnoreCase(status)) {
+            return "FAIL";
+        }
+        if ("running".equalsIgnoreCase(status)) {
+            return "START";
+        }
+        return "COMPLETE";
+    }
+
+    private Instant openLineageEventTime(IngestionExecution execution) {
+        if (execution.getEndTime() != null) {
+            return execution.getEndTime();
+        }
+        if (execution.getStartTime() != null) {
+            return execution.getStartTime();
+        }
+        return Instant.now();
+    }
+
+    private String openLineageRunId(IngestionExecution execution) {
+        if (StringUtils.hasText(execution.getExecutionId())) {
+            return execution.getExecutionId();
+        }
+        return execution.getId() == null ? UUID.randomUUID().toString() : execution.getId().toString();
+    }
+
+    private String openLineageJobName(IngestionTask task) {
+        if (StringUtils.hasText(task.getName())) {
+            return task.getName();
+        }
+        return task.getId() == null ? "api-ingestion-task" : "task-" + task.getId();
+    }
+
+    private String firstNonBlank(String first, String fallback) {
+        return StringUtils.hasText(first) ? first : fallback;
+    }
+
+    private String text(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        return StringUtils.hasText(node.asText()) ? node.asText().trim() : null;
     }
 
     private URI buildUri(String path) {

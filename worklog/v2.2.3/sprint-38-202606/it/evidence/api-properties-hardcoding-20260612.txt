@@ -1,0 +1,15 @@
+Commands:
+./mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -pl dts-ingestion -Dtest=ApiPropertiesTest test
+
+rg -n "1000|ofSeconds\\(60\\)|ofMinutes\\(15\\)|sleep\\(|ods_api_|dts-pg:5432/biadmin|DTS_TARGET_DB" source/dts-ingestion/src/main/java/com/yuzhi/dts/ingestion source/dts-ingestion/src/main/resources/application.yml
+
+Result:
+- ApiPropertiesTest passed.
+- The validation warning emitted during the test is expected: the suite verifies invalid ApiProperties values fail fast.
+- Remaining API default hits are the ApiProperties/application.yml defaults with env overrides:
+  - dts.ingestion.api.max-pages
+  - dts.ingestion.api.table-prefix
+  - ApiProperties.DEFAULT_TABLE_PREFIX
+  - ApiProperties maxPages/readTimeout defaults
+- `DTS_TARGET_DB_*` hits are in non-API Addax/JDBC/file DAG branches; API DAG migration evidence separately verifies API DAG files do not contain old target DB or API env credential semantics.
+- No `ofMinutes(15)` or `dts-pg:5432/biadmin` API runtime hardcoded hit remains in the scanned API path.

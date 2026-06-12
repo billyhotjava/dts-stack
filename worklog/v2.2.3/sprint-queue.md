@@ -632,6 +632,30 @@
 - 残余边界：明文运行期在容器 tmpfs（内存），root 经 docker exec 仍可读；达成口径为「宿主机磁盘目录不可见明文」，消除内存明文需换入湖引擎（Backlog）。
 - 独立于 Sprint-36；原 roadmap 数据管理生命周期顺延 Sprint-38、可观测性与高可用顺延 Sprint-39。
 
+## Sprint-38: 基于应用系统 API 的数据入湖重构 (202606)
+**状态**: IN_PROGRESS
+**类型**: Refactor / Feature（dts-ingestion + dts-platform + dts-platform-webapp）
+**目标**: 以「我方调用应用系统 API 拉取数据入湖」为第一目标，端到端重构：数据源连接、凭据安全、Java 执行器（替换 385 行内嵌 Python）、Airflow 瘦触发、前端任务向导；消除 API 路径全部硬编码与逻辑缺陷。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-API数据源与凭据安全 | P0 | 4 | IN_PROGRESS |
+| F2-Java执行器 | P0 | 6 | IN_PROGRESS |
+| F3-任务编排与调度集成 | P0 | 4 | IN_PROGRESS |
+| F4-前端改造 | P1 | 3 | IN_PROGRESS |
+| F5-配置外部化与旧路径下线 | P1 | 3 | IN_PROGRESS |
+
+**统计**: READY=2, IN_PROGRESS=11, DONE=7, BLOCKED=0
+**设计文档**: `worklog/v2.2.3/sprint-38-202606/README.md`
+**审计底稿**: `worklog/v2.2.3/sprint-38-202606/assets/api-ingestion-audit.md`
+**集成测试**: `worklog/v2.2.3/sprint-38-202606/it/README.md`
+**关键决策**:
+- 方向 = 出站拉取（我方持客户凭据调对方 API）；入站推送（对方推我方接收端点）为后续 sprint。
+- 执行引擎 = Java 执行器（死代码 SPI ApiHttpSourceConnector 落地），调度 = C1 瘦触发（Airflow 只触发+轮询，业务逻辑回归 dts-ingestion 进程，与 JDBC/文件运维一致）。
+- 密钥 = 数据源 secrets 加密落库 + 进程内解密（复用 IngestionSourceResolver/InfraSettingsCryptoService），废除 env 明文路径；明文不出服务边界。
+- 鉴权已确认（2026-06-12）：客户对接用 **JWT token**（对方应用登录端点换短时 token，在对方给出的 apikey/basic/jwt 三选项中选定）。GA = jwtLogin(P0 主路径)+bearer/apikey/basic+OAuth2(同形态)；签名/mTLS 维持 PREVIEW。
+- **编号顺延**：原 roadmap 的 M04 生命周期 → Sprint-39，M09 告警+M11 高可用 → Sprint-40（本期客户 API 对接为现场优先需求，插队）。
+
 ## v2.3 Backlog: 企业级资产与指标增强
 
 | Item | Owner | 来源 | 状态 |

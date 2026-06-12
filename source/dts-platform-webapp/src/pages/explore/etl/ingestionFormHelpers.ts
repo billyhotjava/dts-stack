@@ -1266,19 +1266,33 @@ export const extractFileUploadResult = (task: IngestionTaskDTO): FileUploadResul
 	const fileType = normalizeText(sourceConfig._fileType) || "csv";
 	const sourceFileType = resolveFileTypeFromName(originalName);
 	const rawColumns = Array.isArray(sourceConfig._fileColumns) ? sourceConfig._fileColumns : [];
-	const columns = rawColumns
-		.map((col: any) => ({
-			name: normalizeText(col?.safeName || col?.name || col?.column || col?.field),
-			type: normalizeText(col?.type || col?.dataType) || "string",
-			label: normalizeText(col?.label || col?.name || col?.column || col?.field),
-		}))
-		.filter((col: any) => col.name);
-	return {
-		hostPath: hostPath || containerPath,
-		containerPath: containerPath || hostPath,
-		fileType: fileType || "csv",
-		sourceFileType,
-		columns,
-		originalName,
+		const columns = rawColumns
+			.map((col: any) => ({
+				name: normalizeText(col?.safeName || col?.name || col?.column || col?.field),
+				type: normalizeText(col?.type || col?.dataType) || "string",
+				label: normalizeText(col?.label || col?.name || col?.column || col?.field),
+			}))
+			.filter((col: any) => col.name);
+		const rawFileSize = sourceConfig._fileSize ?? sourceConfig.fileSize;
+		const parsedFileSize = typeof rawFileSize === "number" ? rawFileSize : Number(rawFileSize);
+		const rawEncrypted = sourceConfig._encrypted ?? sourceConfig.encrypted;
+		const parsedEncrypted = typeof rawEncrypted === "boolean"
+			? rawEncrypted
+			: rawEncrypted === "true"
+				? true
+				: rawEncrypted === "false"
+					? false
+					: undefined;
+		return {
+			hostPath: hostPath || containerPath,
+			containerPath: containerPath || hostPath,
+			fileType: fileType || "csv",
+			sourceFileType,
+			columns,
+			originalName,
+			fileHash: normalizeText(sourceConfig._fileHash || sourceConfig.fileHash) || undefined,
+			fileSize: Number.isFinite(parsedFileSize) ? parsedFileSize : undefined,
+			keyVersion: normalizeText(sourceConfig._keyVersion || sourceConfig.keyVersion) || undefined,
+			encrypted: parsedEncrypted,
+		};
 	};
-};
