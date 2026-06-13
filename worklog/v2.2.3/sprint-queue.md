@@ -656,6 +656,32 @@
 - 鉴权已确认（2026-06-12）：客户对接用 **JWT token**（对方应用登录端点换短时 token，在对方给出的 apikey/basic/jwt 三选项中选定）。GA = jwtLogin(P0 主路径)+bearer/apikey/basic+OAuth2(同形态)；签名/mTLS 维持 PREVIEW。
 - **编号顺延**：原 roadmap 的 M04 生命周期 → Sprint-39，M09 告警+M11 高可用 → Sprint-40（本期客户 API 对接为现场优先需求，插队）。
 
+## Sprint-35b: dts-metrics 架构收口与持久化硬化 (202606)
+**状态**: IN_PROGRESS
+**类型**: Architecture Hardening / Implementation（dts-metrics，跨服务依赖 dts-platform）
+**目标**: 闭合 Sprint-35 的 dts-metrics 完成标准，落实架构评审 6 缺陷修复（metrics 侧），把服务从"内存态原型"推到"可水平部署、可验收"。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-领域持久化层 | P0 | 5 | DONE |
+| F2-安全链路统一与审计收口 | P0 | 4 | READY |
+| F3-发布一致性与跨服务收口 | P0 | 3 | READY |
+| F4-韧性与契约对齐 | P1 | 3 | IN_PROGRESS (T01 DONE) |
+| F5-领域类型化 | P1 | 2 | READY |
+| F6-IT准入与验收证据 | P0 | 3 | READY |
+
+**统计**: READY=4, IN_PROGRESS=1, DONE=1, BLOCKED=0
+**进度（2026-06-14）**: F1 持久化（🔴最严重缺陷 #1）+ F4-T01 RestClient 超时 经 Workflow 实现并自验绿（84 单测 + 4 Testcontainers IT，含并发乐观锁 409）；分支 feat/sprint-35b-dts-metrics-hardening 待提交。
+**设计文档**: `worklog/v2.2.3/sprint-35b-202606/README.md`
+**架构评审底稿**: `worklog/v2.2.3/sprint-35b-202606/assets/architecture-review.md`
+**集成测试**: `worklog/v2.2.3/sprint-35b-202606/it/README.md`
+**关键决策**:
+- 定位为 Sprint-35 硬化续期（参照 31a/31b 对 31），不撞 roadmap 预留的 Sprint-39（M04 生命周期）/40（M09+M11）。
+- 🔴 最严重缺陷=事实源零持久化（状态全在 ConcurrentHashMap）；修复序=持久化→安全对等→发布一致性→韧性/契约→类型化→IT。
+- 持久化 datasource/Liquibase **mirror 同仓 dts-platform/dts-admin**，dts-metrics 用独立 schema；不自创基础设施。
+- 跨服务边界：BI/lineage/audit register 端点本体属 platform 职责，本期只做 metrics 侧编排与调用 + 联调标注。
+- F1+F2+F4-T01 经 Workflow 多代理在分支 `feat/sprint-35b-dts-metrics-hardening` 实现，design-first + 末段并行 build/test/review/gitnexus 影响分析。
+
 ## v2.3 Backlog: 企业级资产与指标增强
 
 | Item | Owner | 来源 | 状态 |

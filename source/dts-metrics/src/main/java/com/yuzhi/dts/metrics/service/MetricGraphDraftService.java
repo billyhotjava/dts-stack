@@ -1,5 +1,7 @@
 package com.yuzhi.dts.metrics.service;
 
+import com.yuzhi.dts.metrics.domain.GraphDraft;
+import com.yuzhi.dts.metrics.domain.repository.GraphDraftRepository;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -9,15 +11,17 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class MetricGraphDraftService {
+
+    private static final String DRAFT_SOURCE = "dts-metrics graph draft store";
 
     private static final String DSL_IDENTIFIER = "[A-Za-z_][A-Za-z0-9_.]*";
     private static final String DSL_LITERAL = "[A-Za-z0-9_.-]+";
@@ -86,42 +90,50 @@ public class MetricGraphDraftService {
         "lte"
     );
 
-    private final Map<String, Map<String, Object>> drafts = new ConcurrentHashMap<>();
+    private final GraphDraftRepository graphDraftRepository;
 
+    public MetricGraphDraftService(GraphDraftRepository graphDraftRepository) {
+        this.graphDraftRepository = graphDraftRepository;
+    }
+
+    @Transactional
     public Map<String, Object> createDraft(Map<String, Object> graph) {
         requireGraph(graph);
         List<Map<String, Object>> diagnostics = diagnostics(graph);
-        String draftId = UUID.randomUUID().toString();
         Instant now = Instant.now();
-        Map<String, Object> draft = new LinkedHashMap<>();
-        draft.put("id", draftId);
-        draft.put("status", state(diagnostics));
-        draft.put("graph", new LinkedHashMap<>(graph));
-        draft.put("diagnostics", diagnostics);
-        draft.put("meta", Map.of("createdAt", now.toString(), "updatedAt", now.toString(), "source", "dts-metrics graph draft store"));
-        drafts.put(draftId, draft);
-        return draft;
+        GraphDraft entity = new GraphDraft();
+        entity.setId(UUID.randomUUID().toString());
+        entity.setStatus(state(diagnostics));
+        entity.setGraph(new LinkedHashMap<>(graph));
+        entity.setDiagnostics(diagnostics);
+        entity.setSource(DRAFT_SOURCE);
+        entity.setCreatedAt(now);
+        entity.setUpdatedAt(now);
+        GraphDraft saved = graphDraftRepository.save(entity);
+        return toMap(saved, true);
     }
 
+    @Transactional(readOnly = true)
     public Map<String, Object> getDraft(String draftId) {
-        Map<String, Object> draft = drafts.get(draftId);
-        if (draft == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "graph draft not found");
-        }
-        return draft;
+        return graphDraftRepository
+            .findById(draftId)
+            .map(entity -> toMap(entity, true))
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "graph draft not found"));
     }
 
+    @Transactional
     public Map<String, Object> updateDraft(String draftId, Map<String, Object> graph) {
-        Map<String, Object> existing = getDraft(draftId);
+        GraphDraft entity = graphDraftRepository
+            .findById(draftId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "graph draft not found"));
         requireGraph(graph);
         List<Map<String, Object>> diagnostics = diagnostics(graph);
-        Map<String, Object> updated = new LinkedHashMap<>(existing);
-        updated.put("status", state(diagnostics));
-        updated.put("graph", new LinkedHashMap<>(graph));
-        updated.put("diagnostics", diagnostics);
-        updated.put("meta", Map.of("updatedAt", Instant.now().toString(), "source", "dts-metrics graph draft store"));
-        drafts.put(draftId, updated);
-        return updated;
+        entity.setStatus(state(diagnostics));
+        entity.setGraph(new LinkedHashMap<>(graph));
+        entity.setDiagnostics(diagnostics);
+        entity.setUpdatedAt(Instant.now());
+        GraphDraft saved = graphDraftRepository.save(entity);
+        return toMap(saved, false);
     }
 
     public Map<String, Object> preflightDraft(Map<String, Object> graph) {
@@ -143,6 +155,28 @@ public class MetricGraphDraftService {
 
     public Map<String, Object> graph(String draftId) {
         return graphFromDraft(getDraft(draftId));
+    }
+
+    /**
+     * Reassemble the legacy public draft Map from entity columns so reads are byte-identical to the
+     * old {@code ConcurrentHashMap}-backed shape. On create the {@code meta} bucket carries
+     * {@code createdAt}; on update it omits {@code createdAt} to preserve the legacy quirk where
+     * {@code updateDraft} dropped {@code createdAt} from {@code meta}.
+     */
+    private static Map<String, Object> toMap(GraphDraft entity, boolean includeCreatedAt) {
+        Map<String, Object> draft = new LinkedHashMap<>();
+        draft.put("id", entity.getId());
+        draft.put("status", entity.getStatus());
+        draft.put("graph", entity.getGraph());
+        draft.put("diagnostics", entity.getDiagnostics());
+        Map<String, Object> meta = new LinkedHashMap<>();
+        if (includeCreatedAt) {
+            meta.put("createdAt", entity.getCreatedAt() != null ? entity.getCreatedAt().toString() : null);
+        }
+        meta.put("updatedAt", entity.getUpdatedAt() != null ? entity.getUpdatedAt().toString() : null);
+        meta.put("source", entity.getSource());
+        draft.put("meta", meta);
+        return draft;
     }
 
     @SuppressWarnings("unchecked")

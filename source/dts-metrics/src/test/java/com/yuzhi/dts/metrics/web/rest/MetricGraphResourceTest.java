@@ -3,6 +3,7 @@ package com.yuzhi.dts.metrics.web.rest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.yuzhi.dts.metrics.domain.repository.InMemoryGraphDraftRepository;
 import com.yuzhi.dts.metrics.service.MetricGraphDraftService;
 import java.util.List;
 import java.util.Map;
@@ -282,6 +283,6 @@ class MetricGraphResourceTest {
     }
 
     private static MetricGraphResource resource() {
-        return new MetricGraphResource(new MetricGraphDraftService());
+        return new MetricGraphResource(new MetricGraphDraftService(new InMemoryGraphDraftRepository()));
     }
 }

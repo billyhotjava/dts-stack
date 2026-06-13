@@ -46,6 +46,15 @@ public class DtsMetricsProperties {
 
         private String serviceToken = "";
 
+        /**
+         * Connect timeout (ms) for platform internal contract calls. Fail-closed: a timeout surfaces as
+         * PlatformContractException -> 503, never an unbounded hang. (Sprint-35b F4-T01)
+         */
+        private int connectTimeoutMs = 2000;
+
+        /** Read timeout (ms) for platform internal contract calls. */
+        private int readTimeoutMs = 5000;
+
         public String getBaseUrl() {
             return baseUrl;
         }
@@ -68,6 +77,22 @@ public class DtsMetricsProperties {
 
         public void setServiceToken(String serviceToken) {
             this.serviceToken = serviceToken;
+        }
+
+        public int getConnectTimeoutMs() {
+            return connectTimeoutMs;
+        }
+
+        public void setConnectTimeoutMs(int connectTimeoutMs) {
+            this.connectTimeoutMs = connectTimeoutMs;
+        }
+
+        public int getReadTimeoutMs() {
+            return readTimeoutMs;
+        }
+
+        public void setReadTimeoutMs(int readTimeoutMs) {
+            this.readTimeoutMs = readTimeoutMs;
         }
     }
 }

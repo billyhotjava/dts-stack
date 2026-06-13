@@ -14,7 +14,8 @@ public enum MetricContractErrorCode {
     ROLLBACK_TARGET_REQUIRED("rollback_target_required"),
     ROLLBACK_TARGET_NOT_FOUND("rollback_target_not_found"),
     ROLLBACK_TARGET_MUST_DIFFER("rollback_target_must_differ"),
-    MODEL_LIFECYCLE_STATE_NOT_FOUND("model_lifecycle_state_not_found");
+    MODEL_LIFECYCLE_STATE_NOT_FOUND("model_lifecycle_state_not_found"),
+    METRIC_VERSION_CONFLICT("metric_version_conflict");
 
     private final String code;
 

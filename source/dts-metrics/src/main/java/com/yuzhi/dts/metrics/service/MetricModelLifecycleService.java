@@ -1,5 +1,9 @@
 package com.yuzhi.dts.metrics.service;
 
+import com.yuzhi.dts.metrics.domain.MetricRollbackEvent;
+import com.yuzhi.dts.metrics.domain.repository.MetricModelStateRepository;
+import com.yuzhi.dts.metrics.domain.repository.MetricModelVersionRepository;
+import com.yuzhi.dts.metrics.domain.repository.MetricRollbackEventRepository;
 import com.yuzhi.dts.metrics.service.dto.MetricContractErrorCode;
 import com.yuzhi.dts.metrics.service.dto.MetricLifecycleStatus;
 import java.time.Instant;
@@ -8,13 +12,22 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * Durable metric-model lifecycle service.
+ *
+ * <p>The three legacy {@code ConcurrentHashMap}s (model state / versions / rollback events) are replaced
+ * by JPA repositories (T04). Every public method keeps its exact signature and reassembles the legacy
+ * {@code Map<String,Object>} return shape losslessly from the flat entity columns plus the
+ * {@code transient_state} jsonb bucket on {@link MetricModelState}. Remote platform calls are issued
+ * outside any write transaction so a {@code RestClient} call never holds a DB connection open.
+ */
 @Service
 public class MetricModelLifecycleService {
 
@@ -22,15 +35,28 @@ public class MetricModelLifecycleService {
 
     private final MetricGraphDraftService graphDraftService;
     private final PlatformContractClient platformContractClient;
-    private final Map<String, Map<String, Object>> modelStates = new ConcurrentHashMap<>();
-    private final Map<String, List<Map<String, Object>>> modelVersions = new ConcurrentHashMap<>();
-    private final Map<String, List<Map<String, Object>>> rollbackEvents = new ConcurrentHashMap<>();
+    private final MetricModelStateRepository modelStateRepository;
+    private final MetricModelVersionRepository modelVersionRepository;
+    private final MetricRollbackEventRepository rollbackEventRepository;
+    private final MetricLifecyclePublishWriter publishWriter;
 
-    public MetricModelLifecycleService(MetricGraphDraftService graphDraftService, PlatformContractClient platformContractClient) {
+    public MetricModelLifecycleService(
+        MetricGraphDraftService graphDraftService,
+        PlatformContractClient platformContractClient,
+        MetricModelStateRepository modelStateRepository,
+        MetricModelVersionRepository modelVersionRepository,
+        MetricRollbackEventRepository rollbackEventRepository,
+        MetricLifecyclePublishWriter publishWriter
+    ) {
         this.graphDraftService = graphDraftService;
         this.platformContractClient = platformContractClient;
+        this.modelStateRepository = modelStateRepository;
+        this.modelVersionRepository = modelVersionRepository;
+        this.rollbackEventRepository = rollbackEventRepository;
+        this.publishWriter = publishWriter;
     }
 
+    @Transactional
     public Map<String, Object> generateArtifacts(String modelId, Map<String, Object> request) {
         Map<String, Object> graph = graph(modelId, request);
         Map<String, Object> preflight = graphDraftService.preflightDraft(graph);
@@ -53,11 +79,14 @@ public class MetricModelLifecycleService {
         result.put("appliedPredicateHash", predicateHash);
         result.put("warnings", List.of("Candidate artifacts must pass platform/dbt validation before review or publish."));
         result.put("meta", Map.of("generatedAt", Instant.now().toString(), "source", "dts-metrics model lifecycle"));
-        modelStates.put(modelId, result);
+        saveState(modelId, result);
         return result;
     }
 
     public Map<String, Object> validateModel(String modelId, Map<String, Object> request) {
+        // Load (and lazily generate) artifact state inside a write tx, then call the platform OUTSIDE the
+        // tx so the remote round-trip never holds a DB connection open. The validated result is persisted
+        // in a final short write tx.
         Map<String, Object> state = artifactState(modelId, request);
         try {
             Map<String, Object> validation = platformContractClient.validateMetricModel(
@@ -78,23 +107,25 @@ public class MetricModelLifecycleService {
             next.put("status", MetricLifecycleStatus.DBT_VALIDATED.code());
             next.put("platformValidation", validation);
             next.put("validatedAt", Instant.now().toString());
-            modelStates.put(modelId, next);
+            saveState(modelId, next);
             return next;
         } catch (PlatformContractClient.PlatformContractException e) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, MetricContractErrorCode.PLATFORM_CONTRACT_UNAVAILABLE.code(), e);
         }
     }
 
+    @Transactional
     public Map<String, Object> submitReview(String modelId) {
         Map<String, Object> state = requireStatus(modelId, MetricLifecycleStatus.DBT_VALIDATED.code());
         Map<String, Object> next = publicState(state, MetricLifecycleStatus.REVIEW_SUBMITTED.code());
         next.put("reviewReference", "platform-review://" + modelId);
         next.put("submittedAt", Instant.now().toString());
-        modelStates.put(modelId, next);
+        saveState(modelId, next);
         return next;
     }
 
     public Map<String, Object> publishDryRun(String modelId) {
+        // Read-validate state, call the release gate OUTSIDE a write tx, then persist the dry-run result.
         Map<String, Object> state = requireStatus(modelId, MetricLifecycleStatus.DBT_VALIDATED.code());
         try {
             Map<String, Object> releaseGate = platformContractClient.checkDbtReleaseGate(
@@ -110,7 +141,7 @@ public class MetricModelLifecycleService {
             Map<String, Object> next = publicState(state, MetricLifecycleStatus.PUBLISH_DRY_RUN_READY.code());
             next.put("releaseGate", releaseGate);
             next.put("checkedAt", Instant.now().toString());
-            modelStates.put(modelId, next);
+            saveState(modelId, next);
             return next;
         } catch (PlatformContractClient.PlatformContractException e) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, MetricContractErrorCode.PLATFORM_CONTRACT_UNAVAILABLE.code(), e);
@@ -125,6 +156,9 @@ public class MetricModelLifecycleService {
             MetricLifecycleStatus.REVIEW_SUBMITTED.code()
         );
         try {
+            // Remote submit happens OUTSIDE the write tx; the version insert + state update run in a single
+            // short tx where the unique(model_id, version) constraint + @Version serialize concurrent
+            // publishes (loser maps to 409 metric_version_conflict).
             Map<String, Object> submitted = platformContractClient.submitDbtRelease(
                 new PlatformContractClient.DbtReleaseSubmitRequest(
                     modelId,
@@ -135,36 +169,26 @@ public class MetricModelLifecycleService {
                     text(state.get("appliedPredicateHash"))
                 )
             );
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("modelId", modelId);
-            result.put("modelName", state.get("modelName"));
-            result.put("status", MetricLifecycleStatus.PUBLISHED.code());
-            result.put("artifactRef", state.get("artifactRef"));
-            result.put("version", nextVersion(modelId));
-            result.put("activeVersion", result.get("version"));
-            result.put("previousVersion", latestVersion(modelId));
-            result.put("platformPublishReference", firstText(submitted.get("publishReference"), submitted.get("id"), "platform-release://" + modelId));
-            result.put("releaseDecision", firstText(submitted.get("decision"), submitted.get("status"), "SUBMITTED"));
-            result.put("rollbackAvailable", modelVersions.getOrDefault(modelId, List.of()).size() > 0);
-            result.put("publishedAt", Instant.now().toString());
-            modelStates.put(modelId, result);
-            appendModelVersion(modelId, result);
-            return result;
+            // Persist in a dedicated transactional bean so the proxy applies (self-invocation would not):
+            // the version insert + state update run together in one short tx.
+            return publishWriter.commitPublish(modelId, state, submitted);
         } catch (PlatformContractClient.PlatformContractException e) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, MetricContractErrorCode.PLATFORM_CONTRACT_UNAVAILABLE.code(), e);
         }
     }
 
+    @Transactional
     public Map<String, Object> rollback(String modelId, Map<String, Object> request) {
         Map<String, Object> state = currentState(modelId);
-        List<Map<String, Object>> versions = modelVersions.getOrDefault(modelId, List.of());
+        List<Map<String, Object>> versions = mappedVersions(modelId);
         if (versions.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, MetricContractErrorCode.PUBLISHED_VERSION_REQUIRED.code());
         }
-        String fromVersion = firstText(state.get("activeVersion"), state.get("version"), latestVersion(modelId));
+        String fromVersion = firstText(state.get("activeVersion"), state.get("version"), latestVersion(versions));
         Map<String, Object> target = rollbackTarget(versions, text(value(request, "targetVersion")), fromVersion);
         String rollbackToVersion = text(target.get("version"));
-        String eventVersion = "rollback-" + (rollbackEvents.getOrDefault(modelId, List.of()).size() + 1);
+        int eventOrdinal = (int) (rollbackEventRepository.countByModelId(modelId) + 1);
+        String eventVersion = "rollback-" + eventOrdinal;
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("modelId", modelId);
         result.put("modelName", target.get("modelName"));
@@ -180,34 +204,36 @@ public class MetricModelLifecycleService {
         result.put("rollbackPlan", List.of("freeze current publish reference", "restore semantic graph/artifact pointer", "request BI consumer refresh"));
         result.put("consumerLockImpact", List.of("BI Dataset consumers must refresh against rollbackToVersion before the next publish."));
         result.put("rolledBackAt", Instant.now().toString());
-        modelStates.put(modelId, result);
-        appendRollbackEvent(modelId, result);
+        saveState(modelId, result);
+        appendRollbackEvent(modelId, eventOrdinal, result);
         return result;
     }
 
+    @Transactional(readOnly = true)
     public Map<String, Object> versionHistory(String modelId) {
         Map<String, Object> state = currentState(modelId);
+        List<Map<String, Object>> versions = mappedVersions(modelId);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("modelId", modelId);
         result.put("modelName", state.get("modelName"));
         result.put("status", state.get("status"));
         result.put("activeVersion", firstText(state.get("activeVersion"), state.get("version")));
-        result.put("versions", modelVersions.getOrDefault(modelId, List.of()));
-        result.put("rollbackEvents", rollbackEvents.getOrDefault(modelId, List.of()));
-        result.put("rollbackAvailable", modelVersions.getOrDefault(modelId, List.of()).size() > 1);
+        result.put("versions", versions);
+        result.put("rollbackEvents", mappedRollbackEvents(modelId));
+        result.put("rollbackAvailable", versions.size() > 1);
         return result;
     }
 
     private Map<String, Object> artifactState(String modelId, Map<String, Object> request) {
-        Map<String, Object> current = modelStates.get(modelId);
-        if (current != null && current.containsKey("artifacts")) {
+        Map<String, Object> current = loadState(modelId);
+        if (current != null && current.containsKey("artifacts") && current.get("artifacts") != null) {
             return current;
         }
         return generateArtifacts(modelId, request);
     }
 
     private Map<String, Object> requireStatus(String modelId, String... allowed) {
-        Map<String, Object> state = modelStates.get(modelId);
+        Map<String, Object> state = loadState(modelId);
         if (state == null) {
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, MetricContractErrorCode.ARTIFACT_REQUIRED.code());
         }
@@ -221,7 +247,7 @@ public class MetricModelLifecycleService {
     }
 
     private Map<String, Object> currentState(String modelId) {
-        Map<String, Object> state = modelStates.get(modelId);
+        Map<String, Object> state = loadState(modelId);
         if (state == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, MetricContractErrorCode.MODEL_LIFECYCLE_STATE_NOT_FOUND.code());
         }
@@ -239,40 +265,45 @@ public class MetricModelLifecycleService {
         return result;
     }
 
-    private void appendModelVersion(String modelId, Map<String, Object> state) {
-        List<Map<String, Object>> versions = new ArrayList<>(modelVersions.getOrDefault(modelId, List.of()));
-        Map<String, Object> version = new LinkedHashMap<>();
-        version.put("version", state.get("version"));
-        version.put("modelName", state.get("modelName"));
-        version.put("status", state.get("status"));
-        version.put("platformPublishReference", state.get("platformPublishReference"));
-        version.put("releaseDecision", state.get("releaseDecision"));
-        version.put("publishedAt", state.get("publishedAt"));
-        version.put("artifactRef", state.get("artifactRef"));
-        versions.add(version);
-        modelVersions.put(modelId, List.copyOf(versions));
+    // ---- State persistence + Map<->entity round-trip (delegated to MetricModelStateMapper) ----
+
+    /**
+     * Load the current public-state {@code Map} for a model, reassembling the legacy heterogeneous shape
+     * from the flat columns plus the {@code transient_state} jsonb bucket. Returns {@code null} when no row
+     * exists (callers map that to the appropriate error/404).
+     */
+    private Map<String, Object> loadState(String modelId) {
+        return modelStateRepository.findById(modelId).map(MetricModelStateMapper::stateToMap).orElse(null);
     }
 
-    private void appendRollbackEvent(String modelId, Map<String, Object> state) {
-        List<Map<String, Object>> events = new ArrayList<>(rollbackEvents.getOrDefault(modelId, List.of()));
-        Map<String, Object> event = new LinkedHashMap<>();
-        event.put("version", state.get("version"));
-        event.put("status", state.get("status"));
-        event.put("rollbackFromVersion", state.get("rollbackFromVersion"));
-        event.put("rollbackToVersion", state.get("rollbackToVersion"));
-        event.put("platformRollbackReference", state.get("platformRollbackReference"));
-        event.put("reason", state.get("reason"));
-        event.put("rolledBackAt", state.get("rolledBackAt"));
-        events.add(event);
-        rollbackEvents.put(modelId, List.copyOf(events));
+    private void saveState(String modelId, Map<String, Object> state) {
+        MetricModelStateMapper.writeState(modelStateRepository, modelId, state);
     }
 
-    private String nextVersion(String modelId) {
-        return "v" + (modelVersions.getOrDefault(modelId, List.of()).size() + 1);
+    private List<Map<String, Object>> mappedVersions(String modelId) {
+        return MetricModelStateMapper.versionsToMaps(modelVersionRepository.findByModelIdOrderByVersionOrdinalAsc(modelId));
     }
 
-    private String latestVersion(String modelId) {
-        List<Map<String, Object>> versions = modelVersions.getOrDefault(modelId, List.of());
+    private List<Map<String, Object>> mappedRollbackEvents(String modelId) {
+        return MetricModelStateMapper.rollbackEventsToMaps(rollbackEventRepository.findByModelIdOrderByEventOrdinalAsc(modelId));
+    }
+
+    private void appendRollbackEvent(String modelId, int eventOrdinal, Map<String, Object> state) {
+        MetricRollbackEvent event = new MetricRollbackEvent();
+        event.setModelId(modelId);
+        event.setEventOrdinal(eventOrdinal);
+        event.setVersion(text(state.get("version")));
+        event.setStatus(text(state.get("status")));
+        event.setRollbackFromVersion(textOrNull(state.get("rollbackFromVersion")));
+        event.setRollbackToVersion(textOrNull(state.get("rollbackToVersion")));
+        event.setPlatformRollbackReference(textOrNull(state.get("platformRollbackReference")));
+        event.setReason(textOrNull(state.get("reason")));
+        Object rolledBackAt = state.get("rolledBackAt");
+        event.setRolledBackAt(rolledBackAt != null ? Instant.parse(String.valueOf(rolledBackAt)) : null);
+        rollbackEventRepository.save(event);
+    }
+
+    private static String latestVersion(List<Map<String, Object>> versions) {
         return versions.isEmpty() ? "" : text(versions.get(versions.size() - 1).get("version"));
     }
 
@@ -605,5 +636,9 @@ public class MetricModelLifecycleService {
 
     private static String text(Object value) {
         return value != null ? String.valueOf(value).trim() : "";
+    }
+
+    private static String textOrNull(Object value) {
+        return value != null ? String.valueOf(value).trim() : null;
     }
 }

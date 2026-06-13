@@ -4,7 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.yuzhi.dts.metrics.config.DtsMetricsProperties;
+import com.yuzhi.dts.metrics.domain.repository.InMemoryGraphDraftRepository;
+import com.yuzhi.dts.metrics.domain.repository.InMemoryMetricModelStateRepository;
+import com.yuzhi.dts.metrics.domain.repository.InMemoryMetricModelVersionRepository;
+import com.yuzhi.dts.metrics.domain.repository.InMemoryMetricRollbackEventRepository;
 import com.yuzhi.dts.metrics.service.MetricGraphDraftService;
+import com.yuzhi.dts.metrics.service.MetricLifecyclePublishWriter;
 import com.yuzhi.dts.metrics.service.MetricModelLifecycleService;
 import com.yuzhi.dts.metrics.service.PlatformContractClient;
 import com.yuzhi.dts.metrics.service.dto.MetricContractErrorCode;
@@ -199,7 +204,22 @@ class MetricModelLifecycleResourceTest {
     }
 
     private static MetricModelResource resource(CapturingPlatformClient platformClient) {
-        return new MetricModelResource(new MetricModelLifecycleService(new MetricGraphDraftService(), platformClient));
+        // Share the same in-memory state/version repo instances between the service and the publish writer
+        // so reads and writes hit the same backing store (mirrors prod where Spring injects one bean each).
+        InMemoryMetricModelStateRepository stateRepository = new InMemoryMetricModelStateRepository();
+        InMemoryMetricModelVersionRepository versionRepository = new InMemoryMetricModelVersionRepository();
+        InMemoryMetricRollbackEventRepository rollbackRepository = new InMemoryMetricRollbackEventRepository();
+        MetricLifecyclePublishWriter publishWriter = new MetricLifecyclePublishWriter(stateRepository, versionRepository);
+        return new MetricModelResource(
+            new MetricModelLifecycleService(
+                new MetricGraphDraftService(new InMemoryGraphDraftRepository()),
+                platformClient,
+                stateRepository,
+                versionRepository,
+                rollbackRepository,
+                publishWriter
+            )
+        );
     }
 
     private static Map<String, Object> readyDwsGraph() {
