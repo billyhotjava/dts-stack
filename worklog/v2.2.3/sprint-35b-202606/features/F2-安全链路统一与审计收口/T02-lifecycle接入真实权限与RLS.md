@@ -1,7 +1,7 @@
 # T02: lifecycle 接入真实 permission + RLS 解析
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE（占位符 policySource 已替换为真实解析；无权→403 已测）
 **依赖**: T01
 
 ## 目标

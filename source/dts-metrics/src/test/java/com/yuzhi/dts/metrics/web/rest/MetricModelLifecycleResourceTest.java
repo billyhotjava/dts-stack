@@ -11,6 +11,7 @@ import com.yuzhi.dts.metrics.domain.repository.InMemoryMetricRollbackEventReposi
 import com.yuzhi.dts.metrics.service.MetricGraphDraftService;
 import com.yuzhi.dts.metrics.service.MetricLifecyclePublishWriter;
 import com.yuzhi.dts.metrics.service.MetricModelLifecycleService;
+import com.yuzhi.dts.metrics.service.MetricSecurityPolicyService;
 import com.yuzhi.dts.metrics.service.PlatformContractClient;
 import com.yuzhi.dts.metrics.service.dto.MetricContractErrorCode;
 import com.yuzhi.dts.metrics.service.dto.MetricLifecycleStatus;
@@ -214,6 +215,8 @@ class MetricModelLifecycleResourceTest {
             new MetricModelLifecycleService(
                 new MetricGraphDraftService(new InMemoryGraphDraftRepository()),
                 platformClient,
+                new MetricSecurityPolicyService(platformClient),
+                new DtsMetricsProperties(),
                 stateRepository,
                 versionRepository,
                 rollbackRepository,
@@ -264,6 +267,18 @@ class MetricModelLifecycleResourceTest {
 
         private CapturingPlatformClient() {
             super(new DtsMetricsProperties(), RestClient.builder().build());
+        }
+
+        @Override
+        public PermissionCheckResult checkPermission(PermissionCheckRequest request) {
+            // Lifecycle now enforces source-asset permission (F2-T02); the platform grants PREVIEW here.
+            return new PermissionCheckResult(true, "PREVIEW", "allowed", null, request.action(), null, null, null, "INTERNAL", "platform-permission");
+        }
+
+        @Override
+        public RlsPolicyResult resolveRlsPolicy(RlsPolicyRequest request) {
+            // Empty policy -> no row filter / no masking, so candidate SQL stays byte-identical to the golden file.
+            return RlsPolicyResult.empty();
         }
 
         @Override

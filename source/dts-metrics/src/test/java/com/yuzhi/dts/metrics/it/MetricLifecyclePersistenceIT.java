@@ -267,6 +267,16 @@ class MetricLifecyclePersistenceIT {
         }
 
         @Override
+        public PermissionCheckResult checkPermission(PermissionCheckRequest request) {
+            return new PermissionCheckResult(true, "PREVIEW", "allowed", null, request.action(), null, null, null, "INTERNAL", "platform-permission");
+        }
+
+        @Override
+        public RlsPolicyResult resolveRlsPolicy(RlsPolicyRequest request) {
+            return RlsPolicyResult.empty();
+        }
+
+        @Override
         public Map<String, Object> validateMetricModel(MetricModelValidationRequest request) {
             return Map.of("decision", "PASS", "valid", true);
         }

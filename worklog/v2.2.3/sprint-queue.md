@@ -630,7 +630,7 @@
 - 现场实锤：入湖上传 Excel/CSV 明文落盘 bind 目录 + chmod o+r，宿主机含 root 可直接查看；逐一排除证明无自动清理机制（容器销毁/--force-recreate/dts-reset 均不删 uploads）。
 - 方案：复用 InfraSettingsCryptoService（AES-GCM）加密落盘；AddaxEnvRunner（dts 自有 wrapper）运行期解密到 tmpfs，Addax 零改动。
 - 残余边界：明文运行期在容器 tmpfs（内存），root 经 docker exec 仍可读；达成口径为「宿主机磁盘目录不可见明文」，消除内存明文需换入湖引擎（Backlog）。
-- 独立于 Sprint-36；原 roadmap 数据管理生命周期顺延 Sprint-38、可观测性与高可用顺延 Sprint-39。
+- 独立于 Sprint-36；原 roadmap 数据管理生命周期能力已并入 Sprint-39 主链路规划，可观测性与高可用顺延后续 sprint。
 
 ## Sprint-38: 基于应用系统 API 的数据入湖重构 (202606)
 **状态**: IN_PROGRESS
@@ -654,7 +654,7 @@
 - 执行引擎 = Java 执行器（死代码 SPI ApiHttpSourceConnector 落地），调度 = C1 瘦触发（Airflow 只触发+轮询，业务逻辑回归 dts-ingestion 进程，与 JDBC/文件运维一致）。
 - 密钥 = 数据源 secrets 加密落库 + 进程内解密（复用 IngestionSourceResolver/InfraSettingsCryptoService），废除 env 明文路径；明文不出服务边界。
 - 鉴权已确认（2026-06-12）：客户对接用 **JWT token**（对方应用登录端点换短时 token，在对方给出的 apikey/basic/jwt 三选项中选定）。GA = jwtLogin(P0 主路径)+bearer/apikey/basic+OAuth2(同形态)；签名/mTLS 维持 PREVIEW。
-- **编号顺延**：原 roadmap 的 M04 生命周期 → Sprint-39，M09 告警+M11 高可用 → Sprint-40（本期客户 API 对接为现场优先需求，插队）。
+- **编号顺延**：原 roadmap 的 M04 生命周期能力并入 Sprint-39“结构化数据黄金链路与商业化闭环”，M09 告警+M11 高可用顺延后续 sprint（客户 API 对接和产品主链路为现场优先需求）。
 
 ## Sprint-35b: dts-metrics 架构收口与持久化硬化 (202606)
 **状态**: IN_PROGRESS
@@ -664,23 +664,47 @@
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
 | F1-领域持久化层 | P0 | 5 | DONE |
-| F2-安全链路统一与审计收口 | P0 | 4 | READY |
+| F2-安全链路统一与审计收口 | P0 | 4 | DONE |
 | F3-发布一致性与跨服务收口 | P0 | 3 | READY |
 | F4-韧性与契约对齐 | P1 | 3 | IN_PROGRESS (T01 DONE) |
 | F5-领域类型化 | P1 | 2 | READY |
 | F6-IT准入与验收证据 | P0 | 3 | READY |
 
-**统计**: READY=4, IN_PROGRESS=1, DONE=1, BLOCKED=0
-**进度（2026-06-14）**: F1 持久化（🔴最严重缺陷 #1）+ F4-T01 RestClient 超时 经 Workflow 实现并自验绿（84 单测 + 4 Testcontainers IT，含并发乐观锁 409）；分支 feat/sprint-35b-dts-metrics-hardening 待提交。
+**统计**: READY=3, IN_PROGRESS=1, DONE=2, BLOCKED=0
+**进度（2026-06-14）**: F1 持久化（🔴#1）+ F2 安全对等/审计（#2/#3审计）+ F4-T01 超时（#5）已实现自验绿（90 单测含 6 安全对等 + 4 Testcontainers IT）。F2 将 lifecycle 主路径接入与 pack 链路同源的 permission/RLS/masking/audit，消除占位符策略。下一步 F3 发布一致性（saga + BI/lineage/audit 注册，依赖 platform 端点）。分支 feat/sprint-35b-dts-metrics-hardening。
 **设计文档**: `worklog/v2.2.3/sprint-35b-202606/README.md`
 **架构评审底稿**: `worklog/v2.2.3/sprint-35b-202606/assets/architecture-review.md`
 **集成测试**: `worklog/v2.2.3/sprint-35b-202606/it/README.md`
 **关键决策**:
-- 定位为 Sprint-35 硬化续期（参照 31a/31b 对 31），不撞 roadmap 预留的 Sprint-39（M04 生命周期）/40（M09+M11）。
+- 定位为 Sprint-35 硬化续期（参照 31a/31b 对 31）；后续 Sprint-39 已升级为“结构化数据黄金链路与商业化闭环”，原 M04 生命周期能力并入 Sprint-39 F1/F3，M09+M11 仍顺延后续 sprint。
 - 🔴 最严重缺陷=事实源零持久化（状态全在 ConcurrentHashMap）；修复序=持久化→安全对等→发布一致性→韧性/契约→类型化→IT。
 - 持久化 datasource/Liquibase **mirror 同仓 dts-platform/dts-admin**，dts-metrics 用独立 schema；不自创基础设施。
 - 跨服务边界：BI/lineage/audit register 端点本体属 platform 职责，本期只做 metrics 侧编排与调用 + 联调标注。
 - F1+F2+F4-T01 经 Workflow 多代理在分支 `feat/sprint-35b-dts-metrics-hardening` 实现，design-first + 末段并行 build/test/review/gitnexus 影响分析。
+
+## Sprint-39: 结构化数据黄金链路与商业化闭环 (202606)
+**状态**: READY
+**类型**: Product Foundation / Implementation（dts-platform + dts-ingestion + dts-metrics + dts-platform-webapp）
+**目标**: 面向传统行业结构化数据客户，把现有数据接入、入湖、建模、治理、资产、权限、报表、数据服务和运维能力串成一条可验收主链路，先打牢商业产品基础，再演进现代湖仓路线。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-结构化数据黄金链路状态机 | P0 | 4 | READY |
+| F2-接入入湖到建模产品闭环 | P0 | 4 | READY |
+| F3-治理资产权限硬门禁 | P0 | 4 | READY |
+| F4-任务运维中心产品化 | P1 | 4 | READY |
+| F5-业务消费闭环 | P1 | 4 | READY |
+
+**统计**: READY=20, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**设计文档**: `worklog/v2.2.3/sprint-39-202606/README.md`
+**能力契约**: `worklog/v2.2.3/sprint-39-202606/assets/product-capability-contract.md`
+**集成测试**: `worklog/v2.2.3/sprint-39-202606/it/README.md`
+**关键决策**:
+- 客户主场景 = 传统行业结构化数据；JDBC/API/file 是 GA 主路径，现代湖仓表格式、流批一体、成本优化进入后续增强。
+- 产品主线 = `数据源 -> 入湖任务 -> ODS -> DWD/DWS/ADS -> 质量/血缘/资产登记 -> 权限/审批 -> 指标/报表/数据服务 -> 运维监控`。
+- dbt 仍是当前主建模引擎，但用户侧表达为“建模方案/指标模型/数据集发布”，不暴露手工导入作为默认流程。
+- 治理从“登记项”升级为“发布门禁”：owner、分级、质量、血缘、权限缺失时阻断发布或进入待治理状态。
+- dts-metrics 只承接治理后的 DWS/ADS 业务语义和候选 artifact；platform 仍是资产、权限、RLS、审计、审批、dbt 发布和 BI 注册控制面。
 
 ## v2.3 Backlog: 企业级资产与指标增强
 

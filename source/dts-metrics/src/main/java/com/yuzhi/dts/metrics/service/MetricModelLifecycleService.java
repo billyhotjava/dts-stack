@@ -1,5 +1,6 @@
 package com.yuzhi.dts.metrics.service;
 
+import com.yuzhi.dts.metrics.config.DtsMetricsProperties;
 import com.yuzhi.dts.metrics.domain.MetricRollbackEvent;
 import com.yuzhi.dts.metrics.domain.repository.MetricModelStateRepository;
 import com.yuzhi.dts.metrics.domain.repository.MetricModelVersionRepository;
@@ -12,7 +13,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,9 +36,12 @@ import org.springframework.web.server.ResponseStatusException;
 public class MetricModelLifecycleService {
 
     private static final Pattern UNSAFE_EXPRESSION = Pattern.compile("(?i)(;|--|/\\*|\\*/|\\bselect\\b|\\binsert\\b|\\bupdate\\b|\\bdelete\\b|\\bdrop\\b|\\balter\\b)");
+    private static final Logger LOG = LoggerFactory.getLogger(MetricModelLifecycleService.class);
 
     private final MetricGraphDraftService graphDraftService;
     private final PlatformContractClient platformContractClient;
+    private final MetricSecurityPolicyService securityPolicyService;
+    private final DtsMetricsProperties properties;
     private final MetricModelStateRepository modelStateRepository;
     private final MetricModelVersionRepository modelVersionRepository;
     private final MetricRollbackEventRepository rollbackEventRepository;
@@ -43,6 +50,8 @@ public class MetricModelLifecycleService {
     public MetricModelLifecycleService(
         MetricGraphDraftService graphDraftService,
         PlatformContractClient platformContractClient,
+        MetricSecurityPolicyService securityPolicyService,
+        DtsMetricsProperties properties,
         MetricModelStateRepository modelStateRepository,
         MetricModelVersionRepository modelVersionRepository,
         MetricRollbackEventRepository rollbackEventRepository,
@@ -50,6 +59,8 @@ public class MetricModelLifecycleService {
     ) {
         this.graphDraftService = graphDraftService;
         this.platformContractClient = platformContractClient;
+        this.securityPolicyService = securityPolicyService;
+        this.properties = properties;
         this.modelStateRepository = modelStateRepository;
         this.modelVersionRepository = modelVersionRepository;
         this.rollbackEventRepository = rollbackEventRepository;
@@ -58,15 +69,33 @@ public class MetricModelLifecycleService {
 
     @Transactional
     public Map<String, Object> generateArtifacts(String modelId, Map<String, Object> request) {
+        return generateArtifacts(modelId, request, MetricSecurityPolicyService.SecurityActor.system());
+    }
+
+    /**
+     * Generate candidate artifacts. The graph-lifecycle path now enforces the SAME platform security spine
+     * as the metric-pack path (F2-T02/T03): source-asset permission is required, the real RLS/masking policy
+     * is resolved from the platform (replacing the former {@code platform-policy-required} placeholder and
+     * empty predicate hash), and that policy is injected into the generated SQL.
+     */
+    @Transactional
+    public Map<String, Object> generateArtifacts(String modelId, Map<String, Object> request, MetricSecurityPolicyService.SecurityActor actor) {
         Map<String, Object> graph = graph(modelId, request);
         Map<String, Object> preflight = graphDraftService.preflightDraft(graph);
         if (!"GRAPH_READY".equals(preflight.get("status"))) {
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, MetricContractErrorCode.GRAPH_VALIDATION_FAILED.code());
         }
         String modelName = safeModelName(firstText(value(request, "modelName"), "dws_" + safeIdentifier(modelId) + "_summary"));
-        String policySource = "platform-policy-required";
-        String predicateHash = MetricPolicyAuditSupport.predicateHash(List.of(), List.of(), policySource);
-        Map<String, Object> artifacts = artifacts(modelName, graph, policySource, predicateHash);
+        PlatformContractClient.RlsPolicyResult policy = enforceSourcePolicy(actor, graph);
+        String policySource = StringUtils.hasText(policy.policySource()) ? policy.policySource() : "platform-permission";
+        String predicateHash = securityPolicyService.predicateHash(policy);
+        Map<String, Object> artifacts;
+        try {
+            artifacts = artifacts(modelName, graph, policy, policySource, predicateHash);
+        } catch (IllegalArgumentException e) {
+            // e.g. a platform-masked column used inside a metric formula (F2-T03 parity with the pack path).
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, MetricContractErrorCode.GRAPH_VALIDATION_FAILED.code(), e);
+        }
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("modelId", modelId);
         result.put("modelName", modelName);
@@ -80,7 +109,33 @@ public class MetricModelLifecycleService {
         result.put("warnings", List.of("Candidate artifacts must pass platform/dbt validation before review or publish."));
         result.put("meta", Map.of("generatedAt", Instant.now().toString(), "source", "dts-metrics model lifecycle"));
         saveState(modelId, result);
+        emitAudit("metric.model.artifacts.generate", result, "ARTIFACT_GENERATED", false);
         return result;
+    }
+
+    /**
+     * Require permission on the source asset and resolve its effective RLS/masking policy from the platform.
+     * Permission denial maps to 403; platform transport failure maps to 503 (fail-closed: no artifact is
+     * generated without a resolved policy).
+     */
+    private PlatformContractClient.RlsPolicyResult enforceSourcePolicy(MetricSecurityPolicyService.SecurityActor actor, Map<String, Object> graph) {
+        MetricSecurityPolicyService.PolicyAsset asset = sourcePolicyAsset(graph);
+        try {
+            securityPolicyService.requirePermission(actor, asset, "PREVIEW");
+            return securityPolicyService.resolvePolicy(actor, asset, "PREVIEW");
+        } catch (MetricSecurityPolicyService.PermissionDeniedException e) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, MetricContractErrorCode.ASSET_PERMISSION_DENIED.code(), e);
+        } catch (PlatformContractClient.PlatformContractException e) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, MetricContractErrorCode.PLATFORM_CONTRACT_UNAVAILABLE.code(), e);
+        }
+    }
+
+    private static MetricSecurityPolicyService.PolicyAsset sourcePolicyAsset(Map<String, Object> graph) {
+        String base = text(graph.get("base"));
+        if (!StringUtils.hasText(base)) {
+            return null;
+        }
+        return new MetricSecurityPolicyService.PolicyAsset("DBT_MODEL", base, base, firstText(graph.get("classification"), "INTERNAL"));
     }
 
     public Map<String, Object> validateModel(String modelId, Map<String, Object> request) {
@@ -108,6 +163,7 @@ public class MetricModelLifecycleService {
             next.put("platformValidation", validation);
             next.put("validatedAt", Instant.now().toString());
             saveState(modelId, next);
+            emitAudit("metric.model.validate", next, "DBT_VALIDATED", false);
             return next;
         } catch (PlatformContractClient.PlatformContractException e) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, MetricContractErrorCode.PLATFORM_CONTRACT_UNAVAILABLE.code(), e);
@@ -171,7 +227,9 @@ public class MetricModelLifecycleService {
             );
             // Persist in a dedicated transactional bean so the proxy applies (self-invocation would not):
             // the version insert + state update run together in one short tx.
-            return publishWriter.commitPublish(modelId, state, submitted);
+            Map<String, Object> result = publishWriter.commitPublish(modelId, state, submitted);
+            emitAudit("metric.model.publish", result, "PUBLISHED", true);
+            return result;
         } catch (PlatformContractClient.PlatformContractException e) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, MetricContractErrorCode.PLATFORM_CONTRACT_UNAVAILABLE.code(), e);
         }
@@ -206,6 +264,7 @@ public class MetricModelLifecycleService {
         result.put("rolledBackAt", Instant.now().toString());
         saveState(modelId, result);
         appendRollbackEvent(modelId, eventOrdinal, result);
+        emitAudit("metric.model.rollback", result, "ROLLED_BACK", true);
         return result;
     }
 
@@ -280,6 +339,40 @@ public class MetricModelLifecycleService {
         MetricModelStateMapper.writeState(modelStateRepository, modelId, state);
     }
 
+    /**
+     * Emit a platform audit event for a high-risk lifecycle action (F2-T04). Gated by
+     * {@code dts.metrics.platform.audit-events-enabled} (off by default until the platform
+     * {@code /internal/audit-events} endpoint is live — F3-T03 联调依赖). Failures are never swallowed
+     * silently: blocking actions (publish/rollback) log at ERROR for reconciliation, non-blocking actions
+     * (generate/validate) log at WARN. Transactional audit ordering and compensation is F3-T01's saga.
+     */
+    private void emitAudit(String action, Map<String, Object> state, String outcome, boolean blocking) {
+        if (!properties.getPlatform().isAuditEventsEnabled()) {
+            return;
+        }
+        try {
+            platformContractClient.recordAuditEvent(
+                new PlatformContractClient.AuditEventRequest(
+                    action,
+                    text(state.get("modelId")),
+                    text(state.get("modelName")),
+                    "system",
+                    textOrNull(state.get("appliedPolicySource")),
+                    textOrNull(state.get("appliedPredicateHash")),
+                    firstTextOrNull(state.get("platformPublishReference"), state.get("platformRollbackReference"), state.get("artifactRef")),
+                    outcome,
+                    Instant.now().toString()
+                )
+            );
+        } catch (PlatformContractClient.PlatformContractException e) {
+            if (blocking) {
+                LOG.error("audit event '{}' for model {} FAILED after a high-risk action; manual reconciliation may be required", action, text(state.get("modelId")), e);
+            } else {
+                LOG.warn("audit event '{}' for model {} failed; continuing (non-blocking)", action, text(state.get("modelId")), e);
+            }
+        }
+    }
+
     private List<Map<String, Object>> mappedVersions(String modelId) {
         return MetricModelStateMapper.versionsToMaps(modelVersionRepository.findByModelIdOrderByVersionOrdinalAsc(modelId));
     }
@@ -345,7 +438,13 @@ public class MetricModelLifecycleService {
         return graphDraftService.graph(modelId);
     }
 
-    private Map<String, Object> artifacts(String modelName, Map<String, Object> graph, String policySource, String predicateHash) {
+    private Map<String, Object> artifacts(
+        String modelName,
+        Map<String, Object> graph,
+        PlatformContractClient.RlsPolicyResult policy,
+        String policySource,
+        String predicateHash
+    ) {
         List<String> dimensions = identifiers(graph.get("dimensions"));
         List<String> measures = identifiers(graph.get("measures"));
         List<Map<String, Object>> derivedMetrics = maps(graph.get("derived_metrics"));
@@ -354,11 +453,15 @@ public class MetricModelLifecycleService {
         }
         String dialect = dialect(graph);
         Map<String, Object> artifacts = new LinkedHashMap<>();
-        artifacts.put("dbtModelSql", dbtModelSql(modelName, safeIdentifier(text(graph.get("base"))), dimensions, measures, derivedMetrics, dialect));
+        artifacts.put("dbtModelSql", dbtModelSql(modelName, safeIdentifier(text(graph.get("base"))), dimensions, measures, derivedMetrics, dialect, policy));
         artifacts.put("schemaYml", schemaYml(modelName, dimensions, measures, derivedMetrics));
         artifacts.put("exposureYml", exposureYml(modelName));
         artifacts.put("metricDoc", metricDoc(modelName, dimensions, measures, derivedMetrics));
         artifacts.put("lineageHint", Map.of("upstreamAsset", text(graph.get("base")), "model", modelName, "targetLayer", targetLayer(graph)));
+        if (securityPolicyService.hasMaskedColumns(policy)) {
+            artifacts.put("maskingMacroSql", securityPolicyService.maskingMacroSql());
+        }
+        artifacts.put("securityPolicyJson", securityPolicyService.securityPolicyJson(policy));
         artifacts.put("securitySnapshot", securitySnapshot(graph, policySource, predicateHash));
         return artifacts;
     }
@@ -374,17 +477,35 @@ public class MetricModelLifecycleService {
         return snapshot;
     }
 
-    private static String dbtModelSql(
+    /**
+     * Build the candidate dbt model SQL, injecting the platform RLS/masking policy exactly as the metric-pack
+     * path does (F2-T03): masked dimensions are wrapped in the masking macro, a masked column used as a metric
+     * is rejected, and a platform RLS {@code where} block is appended. For an empty policy every injection is a
+     * no-op, so a model with no platform policy renders byte-identical SQL.
+     */
+    private String dbtModelSql(
         String modelName,
         String base,
         List<String> dimensions,
         List<String> measures,
         List<Map<String, Object>> derivedMetrics,
-        String dialect
+        String dialect,
+        PlatformContractClient.RlsPolicyResult policy
     ) {
+        Set<String> maskedColumns = securityPolicyService.maskedColumns(policy);
+        securityPolicyService.validateMaskedMetricInputs(metricExpressions(measures, derivedMetrics), maskedColumns);
         List<String> selectRows = new ArrayList<>();
+        List<String> groupExpressions = new ArrayList<>();
         for (String dimension : dimensions) {
-            selectRows.add("    " + quoteIdentifier(dimension, dialect));
+            if (maskedColumns.contains(dimension.toLowerCase(Locale.ROOT))) {
+                String masked = securityPolicyService.maskDimensionExpression(dimension, maskedColumns);
+                selectRows.add("    " + masked + " as " + quoteIdentifier(dimension, dialect));
+                groupExpressions.add(masked);
+            } else {
+                String quoted = quoteIdentifier(dimension, dialect);
+                selectRows.add("    " + quoted);
+                groupExpressions.add(quoted);
+            }
         }
         for (String measure : measures) {
             selectRows.add("    sum(" + quoteIdentifier(measure, dialect) + ") as " + quoteIdentifier(measure, dialect));
@@ -403,14 +524,31 @@ public class MetricModelLifecycleService {
         sql.append("select\n");
         sql.append(String.join(",\n", selectRows));
         sql.append("\nfrom {{ ref('").append(base).append("') }}\n");
-        if (!dimensions.isEmpty()) {
+        securityPolicyService.appendRlsWhere(sql, policy);
+        if (!groupExpressions.isEmpty()) {
             sql.append("group by\n");
-            for (int i = 0; i < dimensions.size(); i++) {
-                sql.append("    ").append(quoteIdentifier(dimensions.get(i), dialect));
-                sql.append(i + 1 < dimensions.size() ? ",\n" : "\n");
+            for (int i = 0; i < groupExpressions.size(); i++) {
+                sql.append("    ").append(groupExpressions.get(i));
+                sql.append(i + 1 < groupExpressions.size() ? ",\n" : "\n");
             }
         }
         return sql.toString();
+    }
+
+    private static List<MetricSecurityPolicyService.MetricExpression> metricExpressions(List<String> measures, List<Map<String, Object>> derivedMetrics) {
+        List<MetricSecurityPolicyService.MetricExpression> expressions = new ArrayList<>();
+        for (String measure : measures) {
+            expressions.add(new MetricSecurityPolicyService.MetricExpression(measure, measure));
+        }
+        for (Map<String, Object> derivedMetric : derivedMetrics) {
+            expressions.add(
+                new MetricSecurityPolicyService.MetricExpression(
+                    safeIdentifier(text(derivedMetric.get("id"))),
+                    text(derivedMetric.get("expression"))
+                )
+            );
+        }
+        return expressions;
     }
 
     private static String schemaYml(String modelName, List<String> dimensions, List<String> measures, List<Map<String, Object>> derivedMetrics) {
@@ -632,6 +770,11 @@ public class MetricModelLifecycleService {
             }
         }
         return "";
+    }
+
+    private static String firstTextOrNull(Object... values) {
+        String text = firstText(values);
+        return StringUtils.hasText(text) ? text : null;
     }
 
     private static String text(Object value) {

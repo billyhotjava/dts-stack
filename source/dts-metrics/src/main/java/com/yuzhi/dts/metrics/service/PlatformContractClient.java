@@ -155,6 +155,29 @@ public class PlatformContractClient {
         }
     }
 
+    /**
+     * Record a high-risk lifecycle action (generate / validate / publish / rollback) as a platform audit
+     * event. Mirrors {@link #recordPolicyInjection} exactly: service-auth headers + bodiless POST.
+     *
+     * <p>F2-T04 / contract note: the receiver {@code /internal/audit-events} is owned by dts-platform and is
+     * not yet implemented (F3-T03 联调依赖). Callers gate invocation behind
+     * {@code dts.metrics.platform.audit-events-enabled}; this method only defines the metrics-side contract.
+     */
+    public void recordAuditEvent(AuditEventRequest request) {
+        try {
+            RestClient.RequestBodySpec spec = restClient
+                .post()
+                .uri(internalUrl("/internal/audit-events"))
+                .header("X-DTS-Service", properties.getServiceName());
+            if (StringUtils.hasText(properties.getPlatform().getServiceToken())) {
+                spec = spec.header("X-DTS-Service-Token", properties.getPlatform().getServiceToken());
+            }
+            spec.body(request).retrieve().toBodilessEntity();
+        } catch (RestClientException e) {
+            throw new PlatformContractException("platform contract call failed: audit event", e);
+        }
+    }
+
     @SuppressWarnings("unchecked")
     public Map<String, Object> validateMetricModel(MetricModelValidationRequest request) {
         try {
@@ -472,6 +495,19 @@ public class PlatformContractClient {
         String predicateHash,
         String direction,
         String packId
+    ) {}
+
+    /** A high-risk metric-model lifecycle action recorded as a platform audit event (F2-T04). */
+    public record AuditEventRequest(
+        String action,
+        String modelId,
+        String modelName,
+        String actor,
+        String policySource,
+        String predicateHash,
+        String platformReference,
+        String outcome,
+        String occurredAt
     ) {}
 
     public static class PlatformContractException extends RuntimeException {

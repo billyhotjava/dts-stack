@@ -23,14 +23,14 @@ Sprint-35 把 React Flow 指标工作台重构为清晰的 ELT 分层契约（DW
 | ID | Feature | 优先级 | Task 数 | 状态 | 缺陷 | 依赖 |
 |----|---------|--------|---------|------|------|------|
 | F1 | 领域持久化层 | P0 | 5 | DONE | #1 | Sprint-35 F4 |
-| F2 | 安全链路统一与审计收口 | P0 | 4 | READY | #2,#3(审计) | F1 |
+| F2 | 安全链路统一与审计收口 | P0 | 4 | DONE | #2,#3(审计) | F1 |
 | F3 | 发布一致性与跨服务收口 | P0 | 3 | READY | #3 | F1,F2 |
 | F4 | 韧性与契约对齐 | P1 | 3 | IN_PROGRESS（T01 DONE） | #5,#6 | - |
 | F5 | 领域类型化 | P1 | 2 | READY | #4 | F1 |
 | F6 | IT 准入与验收证据 | P0 | 3 | READY | 全部 | F1-F4 |
 
-**统计**: READY=4, IN_PROGRESS=1, DONE=1, BLOCKED=0
-**进度**: F1（持久化，🔴#1）+ F4-T01（RestClient 超时，#5）已实现并验证绿（84 单测 + 4 Testcontainers IT，2026-06-14）。下一步 F2 安全对等 + F3 发布一致性。
+**统计**: READY=3, IN_PROGRESS=1, DONE=2, BLOCKED=0
+**进度**: F1（持久化 🔴#1）、F2（安全对等+审计 #2/#3审计）、F4-T01（RestClient 超时 #5）已实现并验证绿（90 单测含 6 安全对等 + 4 Testcontainers IT，2026-06-14）。下一步 F3 发布一致性（saga + BI/lineage/audit 注册，跨 platform 端点）。
 
 ## 完成标准
 

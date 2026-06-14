@@ -55,6 +55,13 @@ public class DtsMetricsProperties {
         /** Read timeout (ms) for platform internal contract calls. */
         private int readTimeoutMs = 5000;
 
+        /**
+         * Emit platform audit events for high-risk lifecycle actions (F2-T04). The receiver
+         * {@code /internal/audit-events} is owned by dts-platform; until that endpoint is live (F3-T03
+         * 联调依赖) this stays disabled so the metrics side does not block on a 404.
+         */
+        private boolean auditEventsEnabled = false;
+
         public String getBaseUrl() {
             return baseUrl;
         }
@@ -93,6 +100,14 @@ public class DtsMetricsProperties {
 
         public void setReadTimeoutMs(int readTimeoutMs) {
             this.readTimeoutMs = readTimeoutMs;
+        }
+
+        public boolean isAuditEventsEnabled() {
+            return auditEventsEnabled;
+        }
+
+        public void setAuditEventsEnabled(boolean auditEventsEnabled) {
+            this.auditEventsEnabled = auditEventsEnabled;
         }
     }
 }

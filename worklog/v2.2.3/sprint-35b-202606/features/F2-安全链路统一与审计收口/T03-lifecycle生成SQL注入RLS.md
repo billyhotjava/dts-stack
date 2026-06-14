@@ -1,7 +1,7 @@
 # T03: lifecycle 生成 SQL 注入 RLS/masking（对齐 pack 链路）
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE（RLS WHERE + masking 注入与 pack 对等；masked 列作度量→422 已测）
 **依赖**: T02
 
 ## 目标

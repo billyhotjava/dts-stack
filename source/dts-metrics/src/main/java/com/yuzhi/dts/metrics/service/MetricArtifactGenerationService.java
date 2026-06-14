@@ -1,7 +1,6 @@
 package com.yuzhi.dts.metrics.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.yuzhi.dts.metrics.service.dto.MetricArtifactPreviewResult;
@@ -14,7 +13,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -24,8 +22,8 @@ public class MetricArtifactGenerationService {
     private final MetricPackValidationService validationService;
     private final MetricFormulaSqlGenerator formulaSqlGenerator;
     private final PlatformContractClient platformContractClient;
+    private final MetricSecurityPolicyService securityPolicyService;
     private final ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
-    private final ObjectMapper jsonMapper = new ObjectMapper();
     private static final Set<String> SOURCE_MODEL_ASSET_TYPES = Set.of("DATASET", "DBT_MODEL", "SEMANTIC_MODEL");
 
     public MetricArtifactGenerationService(
@@ -36,6 +34,10 @@ public class MetricArtifactGenerationService {
         this.validationService = validationService;
         this.formulaSqlGenerator = formulaSqlGenerator;
         this.platformContractClient = platformContractClient;
+        // The shared security spine is derived from the already-injected platform client so this
+        // constructor signature stays pinned by the existing pack test suite. The same component is a
+        // Spring @Service bean for the lifecycle path to inject.
+        this.securityPolicyService = new MetricSecurityPolicyService(platformContractClient);
     }
 
     public MetricArtifactPreviewResult preview(String manifestContent) {
@@ -65,11 +67,13 @@ public class MetricArtifactGenerationService {
         try {
             sourceModel = safeRefName(String.valueOf(manifest.getOrDefault("source_model", "replace_with_dwd_model")));
             PlatformAssetDeclaration sourceAsset = requireSourceModelPlatformAsset(manifest, sourceModel);
-            requirePreviewPermission(actor, sourceAsset);
+            MetricSecurityPolicyService.SecurityActor securityActor = toSecurityActor(actor);
+            MetricSecurityPolicyService.PolicyAsset policyAsset = toPolicyAsset(sourceAsset);
+            securityPolicyService.requirePermission(securityActor, policyAsset, "PREVIEW");
             if (sourceAsset != null) {
-                rlsPolicy = resolvePlatformPolicy(actor, sourceAsset);
+                rlsPolicy = securityPolicyService.resolvePolicy(securityActor, policyAsset, "PREVIEW");
                 if (declaredApplyRls) {
-                    requireDeclaredRlsPolicy(rlsPolicy);
+                    securityPolicyService.requireDeclaredRlsPolicy(rlsPolicy);
                 }
             }
             requireActivePlatformDomains(manifest);
@@ -78,13 +82,18 @@ public class MetricArtifactGenerationService {
             dimensions = readDimensions(manifest.get("dimensions"));
             metrics = readMetrics(manifest.get("metrics"));
             artifacts.put("dbtModelSql", dbtModelSql(modelName, sourceModel, dimensions, metrics, rlsPolicy));
-            if (hasMaskedColumns(rlsPolicy)) {
-                artifacts.put("maskingMacroSql", maskingMacroSql());
+            if (securityPolicyService.hasMaskedColumns(rlsPolicy)) {
+                artifacts.put("maskingMacroSql", securityPolicyService.maskingMacroSql());
             }
-            artifacts.put("securityPolicyJson", securityPolicyJson(rlsPolicy));
+            artifacts.put("securityPolicyJson", securityPolicyService.securityPolicyJson(rlsPolicy));
             artifacts.put("schemaYml", schemaYml(modelName, dimensions, metrics, rlsPolicy));
             artifacts.put("metricDoc", metricDoc(packId, dimensions, metrics));
             recordConsumerPolicyInjection(packId, actor, sourceAsset, sourceModel, rlsPolicy);
+        } catch (MetricSecurityPolicyService.PermissionDeniedException e) {
+            return MetricArtifactPreviewResult.invalid(
+                List.of("platform asset permission check failed before artifact preview"),
+                validation.summary()
+            );
         } catch (IllegalArgumentException e) {
             return MetricArtifactPreviewResult.invalid(List.of(e.getMessage()), validation.summary());
         } catch (PlatformContractClient.PlatformContractException e) {
@@ -112,10 +121,10 @@ public class MetricArtifactGenerationService {
             warnings.add("No inline metrics were found; generated placeholder artifact requires metric files to be imported later.");
         }
         warnings.add("Platform asset existence and permission checks must pass before preview or publish.");
-        if (declaredApplyRls || !policyEmpty(rlsPolicy)) {
+        if (declaredApplyRls || !securityPolicyService.policyEmpty(rlsPolicy)) {
             warnings.add("security.apply_rls is a manifest declaration; effective RLS and masking policy is resolved from dts-platform.");
         }
-        if (!declaredApplyRls && !policyEmpty(rlsPolicy)) {
+        if (!declaredApplyRls && !securityPolicyService.policyEmpty(rlsPolicy)) {
             warnings.add("Platform security policy overrides manifest security.apply_rls=false.");
         }
 
@@ -141,7 +150,7 @@ public class MetricArtifactGenerationService {
         PlatformContractClient.RlsPolicyResult effective = rlsPolicy != null
             ? rlsPolicy
             : PlatformContractClient.RlsPolicyResult.empty();
-        platformContractClient.recordPolicyInjection(
+        securityPolicyService.recordInjection(
             new PlatformContractClient.PolicyInjectionAuditRequest(
                 effectiveActor.username(),
                 asset.type(),
@@ -150,7 +159,7 @@ public class MetricArtifactGenerationService {
                 effective.predicates() != null ? effective.predicates() : List.of(),
                 effective.maskedColumns() != null ? effective.maskedColumns() : List.of(),
                 StringUtils.hasText(effective.policySource()) ? effective.policySource() : "platform-permission",
-                MetricPolicyAuditSupport.predicateHash(effective),
+                securityPolicyService.predicateHash(effective),
                 "CONSUMER",
                 packId
             )
@@ -164,12 +173,12 @@ public class MetricArtifactGenerationService {
         List<MetricColumn> metrics,
         PlatformContractClient.RlsPolicyResult rlsPolicy
     ) {
-        Set<String> maskedColumns = maskedColumns(rlsPolicy);
-        validateMaskedMetricInputs(metrics, maskedColumns);
+        Set<String> maskedColumns = securityPolicyService.maskedColumns(rlsPolicy);
+        securityPolicyService.validateMaskedMetricInputs(toMetricExpressions(metrics), maskedColumns);
         List<String> selectRows = new ArrayList<>();
         List<String> groupRows = new ArrayList<>();
         for (String dimension : dimensions) {
-            String dimensionExpression = dimensionExpression(dimension, maskedColumns);
+            String dimensionExpression = securityPolicyService.maskDimensionExpression(dimension, maskedColumns);
             selectRows.add("    " + dimensionExpression + " as " + columnAlias(dimension));
             groupRows.add(dimensionExpression);
         }
@@ -186,7 +195,7 @@ public class MetricArtifactGenerationService {
         sql.append("select\n");
         sql.append(String.join(",\n", selectRows));
         sql.append("\nfrom {{ ref('").append(sourceModel).append("') }}\n");
-        appendRlsWhere(sql, rlsPolicy);
+        securityPolicyService.appendRlsWhere(sql, rlsPolicy);
         if (!groupRows.isEmpty()) {
             sql.append("group by\n");
             for (int i = 0; i < groupRows.size(); i++) {
@@ -197,83 +206,16 @@ public class MetricArtifactGenerationService {
         return sql.toString();
     }
 
-    private static String dimensionExpression(String dimension, Set<String> maskedColumns) {
-        if (!maskedColumns.contains(dimension.toLowerCase(Locale.ROOT))) {
-            return dimension;
-        }
-        return "{{ dts_mask('" + dimension.replace("'", "''") + "') }}";
-    }
-
     private static String columnAlias(String column) {
         int dot = column.lastIndexOf('.');
         return dot >= 0 && dot + 1 < column.length() ? column.substring(dot + 1) : column;
     }
 
-    private static void validateMaskedMetricInputs(List<MetricColumn> metrics, Set<String> maskedColumns) {
-        if (metrics == null || metrics.isEmpty() || maskedColumns.isEmpty()) {
-            return;
+    private static List<MetricSecurityPolicyService.MetricExpression> toMetricExpressions(List<MetricColumn> metrics) {
+        if (metrics == null || metrics.isEmpty()) {
+            return List.of();
         }
-        for (MetricColumn metric : metrics) {
-            for (String maskedColumn : maskedColumns) {
-                if (referencesIdentifier(metric.sql(), maskedColumn)) {
-                    throw new IllegalArgumentException(
-                        "masked column "
-                            + maskedColumn
-                            + " is used by metric "
-                            + metric.code()
-                            + "; configure a non-sensitive surrogate or remove it from the metric formula"
-                    );
-                }
-            }
-        }
-    }
-
-    private static boolean referencesIdentifier(String sql, String identifier) {
-        if (!StringUtils.hasText(sql) || !StringUtils.hasText(identifier)) {
-            return false;
-        }
-        String pattern = "(?<![A-Za-z0-9_])(?:[A-Za-z_][A-Za-z0-9_]*\\.)*" + Pattern.quote(identifier) + "(?![A-Za-z0-9_])";
-        return Pattern.compile(pattern, Pattern.CASE_INSENSITIVE).matcher(sql).find();
-    }
-
-    private static void appendRlsWhere(StringBuilder sql, PlatformContractClient.RlsPolicyResult rlsPolicy) {
-        if (rlsPolicy == null || rlsPolicy.predicates() == null || rlsPolicy.predicates().isEmpty()) {
-            return;
-        }
-        List<String> predicates = rlsPolicy.predicates().stream().filter(StringUtils::hasText).map(String::trim).toList();
-        if (predicates.isEmpty()) {
-            return;
-        }
-        String source = StringUtils.hasText(rlsPolicy.policySource()) ? rlsPolicy.policySource() : "platform-policy";
-        sql.append("-- dts-platform RLS: ").append(source).append("\n");
-        sql.append("where\n");
-        for (int i = 0; i < predicates.size(); i++) {
-            sql.append("    (").append(predicates.get(i)).append(")");
-            sql.append(i + 1 < predicates.size() ? " and\n" : "\n");
-        }
-    }
-
-    private String securityPolicyJson(PlatformContractClient.RlsPolicyResult rlsPolicy) {
-        PlatformContractClient.RlsPolicyResult effective = rlsPolicy != null ? rlsPolicy : PlatformContractClient.RlsPolicyResult.empty();
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("applyRls", effective.applyRls());
-        payload.put("predicates", effective.predicates() != null ? effective.predicates() : List.of());
-        payload.put("maskedColumns", effective.maskedColumns() != null ? effective.maskedColumns() : List.of());
-        payload.put("policySource", StringUtils.hasText(effective.policySource()) ? effective.policySource() : "platform-permission");
-        payload.put("releaseGate", "platform/dbt release gate must re-resolve and compare this policy before publishing");
-        try {
-            return jsonMapper.writeValueAsString(payload);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("failed to render security policy artifact", e);
-        }
-    }
-
-    private String maskingMacroSql() {
-        return """
-            {% macro dts_mask(column_name) -%}
-                cast(null as varchar)
-            {%- endmacro %}
-            """;
+        return metrics.stream().map(metric -> new MetricSecurityPolicyService.MetricExpression(metric.code(), metric.sql())).toList();
     }
 
     private String schemaYml(
@@ -282,7 +224,7 @@ public class MetricArtifactGenerationService {
         List<MetricColumn> metrics,
         PlatformContractClient.RlsPolicyResult rlsPolicy
     ) {
-        Set<String> maskedColumns = maskedColumns(rlsPolicy);
+        Set<String> maskedColumns = securityPolicyService.maskedColumns(rlsPolicy);
         StringBuilder yml = new StringBuilder();
         yml.append("version: 2\n\nmodels:\n");
         yml.append("  - name: ").append(modelName).append("\n");
@@ -306,24 +248,6 @@ public class MetricArtifactGenerationService {
             }
         }
         return yml.toString();
-    }
-
-    private static boolean hasMaskedColumns(PlatformContractClient.RlsPolicyResult rlsPolicy) {
-        return !maskedColumns(rlsPolicy).isEmpty();
-    }
-
-    private static Set<String> maskedColumns(PlatformContractClient.RlsPolicyResult rlsPolicy) {
-        if (rlsPolicy == null || rlsPolicy.maskedColumns() == null || rlsPolicy.maskedColumns().isEmpty()) {
-            return Set.of();
-        }
-        LinkedHashSet<String> columns = new LinkedHashSet<>();
-        for (String column : rlsPolicy.maskedColumns()) {
-            if (!StringUtils.hasText(column)) {
-                continue;
-            }
-            columns.add(MetricFormulaSqlGenerator.safeIdentifier(column).toLowerCase(Locale.ROOT));
-        }
-        return Set.copyOf(columns);
     }
 
     private String metricDoc(String packId, List<String> dimensions, List<MetricColumn> metrics) {
@@ -418,55 +342,21 @@ public class MetricArtifactGenerationService {
         throw new IllegalArgumentException("source_model must be declared in dependencies.platform_assets before artifact preview");
     }
 
-    private void requirePreviewPermission(PreviewActor actor, PlatformAssetDeclaration asset) {
+    private static MetricSecurityPolicyService.SecurityActor toSecurityActor(PreviewActor actor) {
+        PreviewActor effectiveActor = actor != null ? actor : PreviewActor.system();
+        return new MetricSecurityPolicyService.SecurityActor(
+            effectiveActor.username(),
+            effectiveActor.userRoles(),
+            effectiveActor.userDeptCode(),
+            effectiveActor.userClassification()
+        );
+    }
+
+    private static MetricSecurityPolicyService.PolicyAsset toPolicyAsset(PlatformAssetDeclaration asset) {
         if (asset == null) {
-            return;
+            return null;
         }
-        PreviewActor effectiveActor = actor != null ? actor : PreviewActor.system();
-        PlatformContractClient.PermissionCheckResult result = platformContractClient.checkPermission(
-            new PlatformContractClient.PermissionCheckRequest(
-                effectiveActor.username(),
-                effectiveActor.userRoles(),
-                effectiveActor.userDeptCode(),
-                effectiveActor.userClassification(),
-                asset.assetClassification(),
-                "PREVIEW",
-                new PlatformContractClient.PermissionAsset(asset.type(), asset.id(), asset.key())
-            )
-        );
-        if (result == null || !result.allowed()) {
-            throw new IllegalArgumentException("platform asset permission check failed before artifact preview");
-        }
-    }
-
-    private PlatformContractClient.RlsPolicyResult resolvePlatformPolicy(PreviewActor actor, PlatformAssetDeclaration asset) {
-        PreviewActor effectiveActor = actor != null ? actor : PreviewActor.system();
-        PlatformContractClient.RlsPolicyResult result = platformContractClient.resolveRlsPolicy(
-            new PlatformContractClient.RlsPolicyRequest(
-                effectiveActor.username(),
-                effectiveActor.userRoles(),
-                effectiveActor.userDeptCode(),
-                effectiveActor.userClassification(),
-                asset.assetClassification(),
-                "PREVIEW",
-                new PlatformContractClient.PermissionAsset(asset.type(), asset.id(), asset.key())
-            )
-        );
-        return result != null ? result : PlatformContractClient.RlsPolicyResult.empty();
-    }
-
-    private static void requireDeclaredRlsPolicy(PlatformContractClient.RlsPolicyResult effective) {
-        if (effective == null || !effective.applyRls() || policyEmpty(effective)) {
-            throw new IllegalArgumentException(
-                "metric-pack declares apply_rls=true but platform policy returned empty; ask platform admin to configure row-filter or column-mask for asset"
-            );
-        }
-    }
-
-    private static boolean policyEmpty(PlatformContractClient.RlsPolicyResult policy) {
-        boolean noPredicates = policy.predicates() == null || policy.predicates().stream().noneMatch(StringUtils::hasText);
-        boolean noMasking = policy.maskedColumns() == null || policy.maskedColumns().stream().noneMatch(StringUtils::hasText);
-        return noPredicates && noMasking;
+        return new MetricSecurityPolicyService.PolicyAsset(asset.type(), asset.id(), asset.key(), asset.assetClassification());
     }
 
     private static boolean applyRls(Map<String, Object> manifest) {
