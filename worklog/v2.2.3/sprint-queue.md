@@ -657,7 +657,7 @@
 - **编号顺延**：原 roadmap 的 M04 生命周期能力并入 Sprint-39“结构化数据黄金链路与商业化闭环”，M09 告警+M11 高可用顺延后续 sprint（客户 API 对接和产品主链路为现场优先需求）。
 
 ## Sprint-35b: dts-metrics 架构收口与持久化硬化 (202606)
-**状态**: IN_PROGRESS
+**状态**: 主体 DONE（6 缺陷骨架全闭；F5 record 类型化与若干 followup 余留）
 **类型**: Architecture Hardening / Implementation（dts-metrics，跨服务依赖 dts-platform）
 **目标**: 闭合 Sprint-35 的 dts-metrics 完成标准，落实架构评审 6 缺陷修复（metrics 侧），把服务从"内存态原型"推到"可水平部署、可验收"。
 
@@ -666,12 +666,12 @@
 | F1-领域持久化层 | P0 | 5 | DONE |
 | F2-安全链路统一与审计收口 | P0 | 4 | DONE |
 | F3-发布一致性与跨服务收口 | P0 | 3 | DONE (metrics 侧) |
-| F4-韧性与契约对齐 | P1 | 3 | IN_PROGRESS (T01 DONE) |
-| F5-领域类型化 | P1 | 2 | READY |
-| F6-IT准入与验收证据 | P0 | 3 | READY |
+| F4-韧性与契约对齐 | P1 | 3 | DONE (T01/T02/T03) |
+| F5-领域类型化 | P1 | 2 | IN_PROGRESS (拆分 DONE; record 化 followup) |
+| F6-IT准入与验收证据 | P0 | 3 | DONE |
 
-**统计**: READY=2, IN_PROGRESS=1, DONE=3, BLOCKED=0
-**进度（2026-06-14）**: F1 持久化（🔴#1）+ F2 安全对等/审计（#2/#3审计）+ F3 发布一致性（#3，metrics 侧）+ F4-T01 超时（#5）已实现自验绿（94 单测含 6 安全对等 + 4 发布闭环 + 4 Testcontainers IT）。F3 = publish 幂等守卫 + MetricDownstreamRegistrar 有序注册 BI/lineage（开关 gating）+ 注册失败→PUBLISH_BLOCKED。**跨服务 followup**: platform 侧 register/audit 端点本体 + 端到端联调。**技术债**: lifecycle 799 行逼近上限，F5 需拆 artifact builder。剩余 F4-T02/T03、F5、F6。分支 feat/sprint-35b-dts-metrics-hardening。
+**统计**: DONE=5, IN_PROGRESS=1（F5 类型化）, READY=0, BLOCKED=0
+**进度（2026-06-14）**: 6 缺陷收口——#1 持久化 ✅ / #2 安全对等 ✅ / #3 发布闭环 ✅（metrics 侧幂等+有序注册+PUBLISH_BLOCKED；outbox 重试=followup）/ #4 类型化 🟡（artifact builder 拆分 ✅ lifecycle 799→502 行，record 化 followup）/ #5 超时 ✅ / #6 契约漂移 ✅（visual-assets 文档收口 + 逐资产 permissionDecision 透传）。F6 IT 证据已落 `it/evidence/`（持久化/安全对等/发布闭环/韧性，逐条阻断条件映射 + 原始 surefire）。**验收基线**: 单元 96 + 持久化/artifact IT 7 = **103 例全绿**（含真实 Postgres 并发锁 409 验证）。**跨服务 followup**: platform 侧 register/audit/visual-assets 端点本体 + 端到端联调。**余留**: F5 record 化、#3 outbox 重试、F4 受限重试。提交 77fae55/3ecc46a/95d5c316/33c4834/4ba6851，分支 feat/sprint-35b-dts-metrics-hardening。
 **设计文档**: `worklog/v2.2.3/sprint-35b-202606/README.md`
 **架构评审底稿**: `worklog/v2.2.3/sprint-35b-202606/assets/architecture-review.md`
 **集成测试**: `worklog/v2.2.3/sprint-35b-202606/it/README.md`

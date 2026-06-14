@@ -8,10 +8,12 @@
 
 | 证据 | 路径 | 状态 |
 |------|------|------|
-| 持久化（重启/并发锁） | `it/evidence/persistence/` | READY |
-| 安全对等（permission/RLS/audit） | `it/evidence/security-parity/` | READY |
-| 发布闭环/回滚 | `it/evidence/publish-closure/` | READY |
-| 韧性（超时/重试） | `it/evidence/resilience/` | READY |
+| 持久化（重启/并发锁） | `it/evidence/persistence/` | DONE（IT 4 例，真实 Postgres） |
+| 安全对等（permission/RLS/audit） | `it/evidence/security-parity/` | DONE（6 + 3 例） |
+| 发布闭环/回滚 | `it/evidence/publish-closure/` | DONE（4 + 10 例） |
+| 韧性（超时/重试） | `it/evidence/resilience/` | DONE（配置级证据；慢服务端计时测试列 followup） |
+
+> 证据采集基线 2026-06-14：单元 96 + 持久化/artifact IT 7 = **103 例全绿**。各目录 README 含阻断条件→测试逐条映射 + 原始 surefire 报告。
 
 ## 验收命令
 

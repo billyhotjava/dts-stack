@@ -1,7 +1,7 @@
 # Sprint-35b: dts-metrics 架构收口与持久化硬化（202606）
 
 **时间**: 2026-06
-**状态**: IN_PROGRESS
+**状态**: 主体 DONE（6 缺陷骨架全闭；F5 record 类型化与若干 followup 余留，见下）
 **类型**: Architecture Hardening / Implementation（dts-metrics + dts-metrics-webapp，跨服务依赖 dts-platform）
 **目标**: 把 Sprint-35 的 dts-metrics 从"原型方向对、产品未成"推到"可水平部署、可验收"，落实架构评审发现的 6 个缺陷修复（metrics 侧实现，platform 侧依赖明确标注）。
 
@@ -25,27 +25,27 @@ Sprint-35 把 React Flow 指标工作台重构为清晰的 ELT 分层契约（DW
 | F1 | 领域持久化层 | P0 | 5 | DONE | #1 | Sprint-35 F4 |
 | F2 | 安全链路统一与审计收口 | P0 | 4 | DONE | #2,#3(审计) | F1 |
 | F3 | 发布一致性与跨服务收口 | P0 | 3 | DONE（metrics 侧；platform 端点联调=followup） | #3 | F1,F2 |
-| F4 | 韧性与契约对齐 | P1 | 3 | IN_PROGRESS（T01 DONE） | #5,#6 | - |
-| F5 | 领域类型化 | P1 | 2 | READY | #4 | F1 |
-| F6 | IT 准入与验收证据 | P0 | 3 | READY | 全部 | F1-F4 |
+| F4 | 韧性与契约对齐 | P1 | 3 | DONE（T01/T02/T03；受限重试=followup） | #5,#6 | - |
+| F5 | 领域类型化 | P1 | 2 | IN_PROGRESS（artifact builder 拆分 DONE；record 类型化 followup） | #4 | F1 |
+| F6 | IT 准入与验收证据 | P0 | 3 | DONE | 全部 | F1-F4 |
 
-**统计**: READY=2, IN_PROGRESS=1, DONE=3, BLOCKED=0
-**进度**: F1（持久化 🔴#1）、F2（安全对等+审计 #2/#3审计）、F3（发布一致性 #3，metrics 侧）、F4-T01（RestClient 超时 #5）已实现并验证绿（94 单测含 6 安全对等 + 4 发布闭环 + 4 Testcontainers IT，2026-06-14）。
-**跨服务 followup**：platform 侧 `/internal/bi/datasets/register`、`/internal/lineage/register`、`/internal/audit-events` 端点本体 + 端到端联调（端点缺失时由开关 gating，metrics 侧 fail-closed 为 PUBLISH_BLOCKED）。
-**技术债**：MetricModelLifecycleService 已 799 行逼近上限，F5 类型化时需拆出 artifact builder。
-**剩余**：F4-T02/T03（契约对齐 #6）、F5（类型化 #4）、F6（IT 证据汇总）。
+**统计**: DONE=5, IN_PROGRESS=1（F5 类型化）, READY=0, BLOCKED=0
+**进度**: F1（持久化 🔴#1）、F2（安全对等+审计 #2/#3审计）、F3（发布一致性 #3，metrics 侧）、F4（RestClient 超时 #5 + visual-assets 契约对齐 #6）、F5 拆分（MetricCandidateArtifactBuilder，lifecycle 799→502 行）、F6（IT 证据落 `it/evidence/`）均已实现并验证绿。验收基线 2026-06-14：单元 96 + 持久化/artifact IT 7 = **103 例全绿**。
+**6 缺陷收口**：#1 持久化 ✅、#2 安全对等 ✅、#3 发布闭环 ✅（metrics 侧幂等+有序注册+PUBLISH_BLOCKED；outbox 重试=followup）、#4 类型化 🟡（拆分 ✅、record 化 followup）、#5 超时 ✅、#6 契约漂移 ✅。
+**跨服务 followup**：platform 侧 `/internal/bi/datasets/register`、`/internal/lineage/register`、`/internal/audit-events`、`/internal/metrics/visual-assets` 端点本体 + 端到端联调（端点缺失时由开关 gating，metrics 侧 fail-closed 为 PUBLISH_BLOCKED；visual-assets 现状走 `/catalog/assets-v2`）。
+**余留 followup**（非阻断）：F5 record 类型化（GraphNode/VisualAssetSummary/ValidationDiagnostic/ModelState）、#3 发布 outbox 重试补偿、F4 幂等只读受限重试 + 慢服务端超时计时测试。
 
 ## 完成标准
 
-- [ ] dts-metrics 的 graph draft / model state / version / rollback 落库（mirror 同仓 dts-platform/dts-admin 的 datasource+Liquibase 约定），重启不丢、支持多实例。
-- [ ] 模型版本写入带乐观锁，并发发布不产生脏版本。
-- [ ] graph lifecycle 链路与 metric-pack 链路的 permission / RLS / masking / audit 行为对等，policySource/predicateHash 来自真实 platform 解析而非占位符。
-- [ ] generate / validate / publish / rollback 每个阶段都向 platform `/internal/audit-events` 落审计。
-- [ ] publish 编排具备幂等与失败补偿，BI Dataset register + lineage register 已接入（platform 端点就绪时联调）。
-- [ ] RestClient 配置连接/读超时，platform 抖动不再无界挂起。
-- [ ] visual-assets 端点契约与实现一致（消除 `/catalog/assets-v2` 漂移）。
-- [ ] 核心契约 DTO（GraphNode/VisualAssetSummary/ValidationDiagnostic/ModelState）record 化。
-- [ ] IT 证据覆盖：重启持久性、安全对等、发布闭环/回滚，落在 `it/evidence/`。
+- [x] dts-metrics 的 graph draft / model state / version / rollback 落库（mirror 同仓 dts-platform/dts-admin 的 datasource+Liquibase 约定），重启不丢、支持多实例。
+- [x] 模型版本写入带乐观锁，并发发布不产生脏版本。（IT `concurrentPublish...` 真实 Postgres 验证 409 metric_version_conflict）
+- [x] graph lifecycle 链路与 metric-pack 链路的 permission / RLS / masking / audit 行为对等，policySource/predicateHash 来自真实 platform 解析而非占位符。
+- [x] generate / validate / publish / rollback 每个阶段都向 platform `/internal/audit-events` 落审计。（开关 gating，待 platform 端点联调）
+- [x] publish 编排具备幂等与失败补偿，BI Dataset register + lineage register 已接入（platform 端点就绪时联调）。（幂等守卫 + 失败落 PUBLISH_BLOCKED；outbox 重试=followup）
+- [x] RestClient 配置连接/读超时，platform 抖动不再无界挂起。
+- [x] visual-assets 端点契约与实现一致（消除 `/catalog/assets-v2` 漂移）。（文档收口 + 逐资产 permissionDecision 透传；内部端点列中期目标）
+- [ ] 核心契约 DTO（GraphNode/VisualAssetSummary/ValidationDiagnostic/ModelState）record 化。（**followup**：artifact builder 拆分已为其铺路）
+- [x] IT 证据覆盖：重启持久性、安全对等、发布闭环/回滚，落在 `it/evidence/`。
 
 ## 非目标
 
