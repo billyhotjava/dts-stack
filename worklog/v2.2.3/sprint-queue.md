@@ -683,19 +683,20 @@
 - F1+F2+F4-T01 经 Workflow 多代理在分支 `feat/sprint-35b-dts-metrics-hardening` 实现，design-first + 末段并行 build/test/review/gitnexus 影响分析。
 
 ## Sprint-39: 结构化数据黄金链路与商业化闭环 (202606)
-**状态**: READY
+**状态**: IN_PROGRESS
 **类型**: Product Foundation / Implementation（dts-platform + dts-ingestion + dts-metrics + dts-platform-webapp）
 **目标**: 面向传统行业结构化数据客户，把现有数据接入、入湖、建模、治理、资产、权限、报表、数据服务和运维能力串成一条可验收主链路，先打牢商业产品基础，再演进现代湖仓路线。
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
-| F1-结构化数据黄金链路状态机 | P0 | 4 | READY |
+| F1-结构化数据黄金链路状态机 | P0 | 4 | IN_PROGRESS (T01 DONE) |
 | F2-接入入湖到建模产品闭环 | P0 | 4 | READY |
 | F3-治理资产权限硬门禁 | P0 | 4 | READY |
 | F4-任务运维中心产品化 | P1 | 4 | READY |
 | F5-业务消费闭环 | P1 | 4 | READY |
 
-**统计**: READY=20, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=19, IN_PROGRESS=0, DONE=1, BLOCKED=0
+**进度（2026-06-14）**: F1-T01 已落地 platform 侧黄金链路契约：阶段顺序、阶段状态、阻断码、阶段快照字段和阻断校验已形成可编译代码，并通过 `./mvnw -q -Dtest=GoldenChainContractTest test`。下一步 F1-T02 建链路实例与阶段快照持久化模型。
 **设计文档**: `worklog/v2.2.3/sprint-39-202606/README.md`
 **能力契约**: `worklog/v2.2.3/sprint-39-202606/assets/product-capability-contract.md`
 **集成测试**: `worklog/v2.2.3/sprint-39-202606/it/README.md`
