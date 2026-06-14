@@ -125,7 +125,10 @@ public class MetricVisualAssetResource {
         result.put("metricColumns", List.of());
         result.put("governanceStatus", firstText(item.get("governanceStatus"), "PENDING_GOVERNANCE"));
         result.put("lineageStatus", StringUtils.hasText(text(item.get("matchStatus"))) ? item.get("matchStatus") : "UNKNOWN");
-        result.put("permissionDecision", "PLATFORM_FILTERED");
+        // T03: surface the platform's per-asset permission verdict verbatim when present (forward-compatible
+        // with the contracted /internal/metrics/visual-assets endpoint). The generic /catalog/assets-v2 payload
+        // carries no per-asset decision today, so fall back to PLATFORM_FILTERED rather than overclaiming ALLOWED.
+        result.put("permissionDecision", firstText(item.get("permissionDecision"), item.get("permission_decision"), "PLATFORM_FILTERED"));
         result.put("classification", firstText(item.get("classification"), "UNCLASSIFIED"));
         result.put("ownerDept", text(item.get("ownerDept")));
         result.put("description", text(item.get("description")));

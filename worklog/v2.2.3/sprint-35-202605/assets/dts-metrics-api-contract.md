@@ -66,6 +66,13 @@ Response:
 }
 ```
 
+> **现状对齐（Sprint-35b F4-T02/T03）**：dts-metrics 当前从 platform 通用目录 `GET /catalog/assets-v2`
+> 取数（`meta.source = "dts-platform catalog assets-v2"`），而非下表声明的专用 `GET /api/internal/metrics/visual-assets`。
+> 后者由 platform 侧按权限/治理/层级返回"可建模资产"，列为**中期跨服务目标**（与 `bi/datasets/register`、`lineage/register`、
+> `audit-events` 一并待 platform 就绪后切换）。`permissionDecision` 采**逐资产透传**语义：当平台载荷带该字段时原样返回
+> （如 `ALLOWED`，与未来内部端点前向兼容），缺失时回退为 `PLATFORM_FILTERED`（表示"列表已由平台预过滤"，不擅自宣称
+> `ALLOWED` 以免越权背书）。
+
 ### `POST /api/metrics/graphs/{graphId}/preflight`
 
 Response 必须把失败定位到图元素：
@@ -90,7 +97,7 @@ Response 必须把失败定位到图元素：
 
 | Method | Path | 用途 |
 |--------|------|------|
-| GET | `/api/internal/metrics/visual-assets` | platform 根据权限、治理和层级返回可建模资产 |
+| GET | `/api/internal/metrics/visual-assets` | platform 根据权限、治理和层级返回可建模资产（**中期目标**；现状临时走 `/catalog/assets-v2`，见上方"现状对齐"） |
 | POST | `/api/internal/metrics/asset-contracts/batch` | 批量解析 schema、grain、lineage、governance gaps |
 | POST | `/api/internal/asset-permission/check` | 校验 source、preview、publish 权限 |
 | POST | `/api/internal/v1/asset-permission/policy` | 获取 RLS/masking policy 和 hash |

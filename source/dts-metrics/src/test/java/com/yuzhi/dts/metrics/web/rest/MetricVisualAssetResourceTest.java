@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.yuzhi.dts.metrics.config.DtsMetricsProperties;
 import com.yuzhi.dts.metrics.service.PlatformContractClient;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,33 @@ class MetricVisualAssetResourceTest {
     }
 
     @Test
+    void perAssetPermissionDecisionFromPlatformIsSurfaced() {
+        // T03: the per-asset permissionDecision is the platform's real verdict passed through verbatim
+        // (forward-compatible with the contracted /internal/metrics/visual-assets endpoint), not a flat label.
+        CapturingPlatformClient platformClient = new CapturingPlatformClient();
+        platformClient.assetPermissionDecision = "ALLOWED";
+        MetricVisualAssetResource resource = new MetricVisualAssetResource(platformClient);
+
+        Map<String, Object> result = resource.listVisualAssets("DWS", null, 0, 20, false);
+
+        Map<String, Object> asset = asMap(((List<?>) result.get("data")).get(0));
+        assertThat(asset).containsEntry("permissionDecision", "ALLOWED");
+    }
+
+    @Test
+    void permissionDecisionFallsBackToPlatformFilteredWhenAbsent() {
+        // When the generic /catalog/assets-v2 payload carries no per-asset decision, metrics does NOT overclaim
+        // ALLOWED; it labels the list as platform-prefiltered (honest fallback).
+        CapturingPlatformClient platformClient = new CapturingPlatformClient();
+        MetricVisualAssetResource resource = new MetricVisualAssetResource(platformClient);
+
+        Map<String, Object> result = resource.listVisualAssets("DWS", null, 0, 20, false);
+
+        Map<String, Object> asset = asMap(((List<?>) result.get("data")).get(0));
+        assertThat(asset).containsEntry("permissionDecision", "PLATFORM_FILTERED");
+    }
+
+    @Test
     void platformFailureDoesNotFallbackToStaticAssets() {
         CapturingPlatformClient platformClient = new CapturingPlatformClient();
         platformClient.fail = true;
@@ -60,6 +88,7 @@ class MetricVisualAssetResourceTest {
 
         private final List<String> layers = new ArrayList<>();
         private boolean fail;
+        private String assetPermissionDecision;
 
         private CapturingPlatformClient() {
             super(new DtsMetricsProperties(), RestClient.builder().build());
@@ -71,28 +100,16 @@ class MetricVisualAssetResourceTest {
                 throw new PlatformContractException("platform unavailable");
             }
             layers.add(warehouseLayer);
-            return Map.of(
-                "data",
-                Map.of(
-                    "content",
-                    List.of(
-                        Map.of(
-                            "id",
-                            warehouseLayer.toLowerCase() + "-001",
-                            "displayName",
-                            warehouseLayer + " Order Summary",
-                            "fqn",
-                            "warehouse." + warehouseLayer.toLowerCase() + ".order_summary",
-                            "warehouseLayer",
-                            warehouseLayer,
-                            "governanceStatus",
-                            "ACTIVE"
-                        )
-                    ),
-                    "total",
-                    1
-                )
-            );
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", warehouseLayer.toLowerCase() + "-001");
+            item.put("displayName", warehouseLayer + " Order Summary");
+            item.put("fqn", "warehouse." + warehouseLayer.toLowerCase() + ".order_summary");
+            item.put("warehouseLayer", warehouseLayer);
+            item.put("governanceStatus", "ACTIVE");
+            if (assetPermissionDecision != null) {
+                item.put("permissionDecision", assetPermissionDecision);
+            }
+            return Map.of("data", Map.of("content", List.of(item), "total", 1));
         }
     }
 
