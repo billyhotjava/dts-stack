@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.yuzhi.dts.metrics.config.DtsMetricsProperties;
 import com.yuzhi.dts.metrics.service.PlatformContractClient;
+import com.yuzhi.dts.metrics.service.dto.VisualAssetSummary;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -56,8 +57,8 @@ class MetricVisualAssetResourceTest {
 
         Map<String, Object> result = resource.listVisualAssets("DWS", null, 0, 20, false);
 
-        Map<String, Object> asset = asMap(((List<?>) result.get("data")).get(0));
-        assertThat(asset).containsEntry("permissionDecision", "ALLOWED");
+        VisualAssetSummary asset = (VisualAssetSummary) ((List<?>) result.get("data")).get(0);
+        assertThat(asset.permissionDecision()).isEqualTo("ALLOWED");
     }
 
     @Test
@@ -69,8 +70,8 @@ class MetricVisualAssetResourceTest {
 
         Map<String, Object> result = resource.listVisualAssets("DWS", null, 0, 20, false);
 
-        Map<String, Object> asset = asMap(((List<?>) result.get("data")).get(0));
-        assertThat(asset).containsEntry("permissionDecision", "PLATFORM_FILTERED");
+        VisualAssetSummary asset = (VisualAssetSummary) ((List<?>) result.get("data")).get(0);
+        assertThat(asset.permissionDecision()).isEqualTo("PLATFORM_FILTERED");
     }
 
     @Test

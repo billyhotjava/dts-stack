@@ -2,8 +2,8 @@ package com.yuzhi.dts.metrics.web.rest;
 
 import com.yuzhi.dts.metrics.service.PlatformContractClient;
 import com.yuzhi.dts.metrics.service.PlatformContractClient.PlatformContractException;
+import com.yuzhi.dts.metrics.service.dto.VisualAssetSummary;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -37,7 +37,7 @@ public class MetricVisualAssetResource {
         @RequestParam(value = "includeDrilldown", required = false, defaultValue = "false") boolean includeDrilldown
     ) {
         List<String> acceptedLayers = parseLayers(layers, includeDrilldown);
-        List<Map<String, Object>> data = new ArrayList<>();
+        List<VisualAssetSummary> data = new ArrayList<>();
         long total = 0;
         for (String layer : acceptedLayers) {
             Map<String, Object> platform = readPlatformAssets(layer, keyword, page, size);
@@ -108,31 +108,31 @@ public class MetricVisualAssetResource {
         return layers;
     }
 
-    private Map<String, Object> toVisualAsset(Map<String, Object> item, String layer) {
+    private VisualAssetSummary toVisualAsset(Map<String, Object> item, String layer) {
         String id = text(item.get("id"));
-        String name = firstText(item.get("displayName"), item.get("table"), item.get("fqn"), id);
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("assetId", id);
-        result.put("assetKey", firstText(item.get("fqn"), "catalog:asset:" + id));
-        result.put("name", name);
-        result.put("warehouseLayer", firstText(item.get("warehouseLayer"), layer));
-        result.put("domainCode", text(item.get("domainId")));
-        result.put("businessObjectCode", firstText(item.get("table"), item.get("displayName"), id));
-        result.put("grain", List.of());
-        result.put("primaryKeys", List.of());
-        result.put("timeColumns", List.of());
-        result.put("dimensionColumns", List.of());
-        result.put("metricColumns", List.of());
-        result.put("governanceStatus", firstText(item.get("governanceStatus"), "PENDING_GOVERNANCE"));
-        result.put("lineageStatus", StringUtils.hasText(text(item.get("matchStatus"))) ? item.get("matchStatus") : "UNKNOWN");
         // T03: surface the platform's per-asset permission verdict verbatim when present (forward-compatible
         // with the contracted /internal/metrics/visual-assets endpoint). The generic /catalog/assets-v2 payload
         // carries no per-asset decision today, so fall back to PLATFORM_FILTERED rather than overclaiming ALLOWED.
-        result.put("permissionDecision", firstText(item.get("permissionDecision"), item.get("permission_decision"), "PLATFORM_FILTERED"));
-        result.put("classification", firstText(item.get("classification"), "UNCLASSIFIED"));
-        result.put("ownerDept", text(item.get("ownerDept")));
-        result.put("description", text(item.get("description")));
-        return result;
+        String permissionDecision = firstText(item.get("permissionDecision"), item.get("permission_decision"), "PLATFORM_FILTERED");
+        return new VisualAssetSummary(
+            id,
+            firstText(item.get("fqn"), "catalog:asset:" + id),
+            firstText(item.get("displayName"), item.get("table"), item.get("fqn"), id),
+            firstText(item.get("warehouseLayer"), layer),
+            text(item.get("domainId")),
+            firstText(item.get("table"), item.get("displayName"), id),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            firstText(item.get("governanceStatus"), "PENDING_GOVERNANCE"),
+            firstText(item.get("matchStatus"), "UNKNOWN"),
+            permissionDecision,
+            firstText(item.get("classification"), "UNCLASSIFIED"),
+            text(item.get("ownerDept")),
+            text(item.get("description"))
+        );
     }
 
     @SuppressWarnings("unchecked")
