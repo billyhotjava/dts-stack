@@ -1,7 +1,7 @@
 # T01: publish saga/outbox 编排（幂等 + 补偿）
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE（幂等守卫 + MetricDownstreamRegistrar 有序编排 + PUBLISH_BLOCKED；完整 outbox 重试=followup）
 **依赖**: F1, F2
 
 ## 目标

@@ -178,6 +178,49 @@ public class PlatformContractClient {
         }
     }
 
+    /**
+     * Register a published model as a platform BI Dataset (F3). The receiver
+     * {@code /internal/bi/datasets/register} is owned by dts-platform; callers gate this behind
+     * {@code dts.metrics.platform.bi-lineage-register-enabled} until that endpoint is live.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> registerBiDataset(BiDatasetRegisterRequest request) {
+        try {
+            RestClient.RequestBodySpec spec = restClient
+                .post()
+                .uri(internalUrl("/internal/bi/datasets/register"))
+                .header("X-DTS-Service", properties.getServiceName());
+            if (StringUtils.hasText(properties.getPlatform().getServiceToken())) {
+                spec = spec.header("X-DTS-Service-Token", properties.getPlatform().getServiceToken());
+            }
+            Map<String, Object> result = spec.body(request).retrieve().body(Map.class);
+            return result != null ? result : Map.of();
+        } catch (RestClientException e) {
+            throw new PlatformContractException("platform contract call failed: bi dataset register", e);
+        }
+    }
+
+    /**
+     * Register source -> DWS/ADS -> BI Dataset lineage for a published model (F3). The receiver
+     * {@code /internal/lineage/register} is owned by dts-platform; gated like {@link #registerBiDataset}.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> registerLineage(LineageRegisterRequest request) {
+        try {
+            RestClient.RequestBodySpec spec = restClient
+                .post()
+                .uri(internalUrl("/internal/lineage/register"))
+                .header("X-DTS-Service", properties.getServiceName());
+            if (StringUtils.hasText(properties.getPlatform().getServiceToken())) {
+                spec = spec.header("X-DTS-Service-Token", properties.getPlatform().getServiceToken());
+            }
+            Map<String, Object> result = spec.body(request).retrieve().body(Map.class);
+            return result != null ? result : Map.of();
+        } catch (RestClientException e) {
+            throw new PlatformContractException("platform contract call failed: lineage register", e);
+        }
+    }
+
     @SuppressWarnings("unchecked")
     public Map<String, Object> validateMetricModel(MetricModelValidationRequest request) {
         try {
@@ -508,6 +551,24 @@ public class PlatformContractClient {
         String platformReference,
         String outcome,
         String occurredAt
+    ) {}
+
+    /** Register a published model version as a platform BI Dataset (F3). */
+    public record BiDatasetRegisterRequest(
+        String modelId,
+        String modelName,
+        String version,
+        String artifactRef,
+        String platformPublishReference
+    ) {}
+
+    /** Register source -> DWS/ADS -> BI Dataset lineage for a published model version (F3). */
+    public record LineageRegisterRequest(
+        String modelId,
+        String modelName,
+        String version,
+        String upstreamAsset,
+        String platformPublishReference
     ) {}
 
     public static class PlatformContractException extends RuntimeException {

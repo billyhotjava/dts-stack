@@ -46,6 +46,7 @@ public class MetricModelLifecycleService {
     private final MetricModelVersionRepository modelVersionRepository;
     private final MetricRollbackEventRepository rollbackEventRepository;
     private final MetricLifecyclePublishWriter publishWriter;
+    private final MetricDownstreamRegistrar downstreamRegistrar;
 
     public MetricModelLifecycleService(
         MetricGraphDraftService graphDraftService,
@@ -55,7 +56,8 @@ public class MetricModelLifecycleService {
         MetricModelStateRepository modelStateRepository,
         MetricModelVersionRepository modelVersionRepository,
         MetricRollbackEventRepository rollbackEventRepository,
-        MetricLifecyclePublishWriter publishWriter
+        MetricLifecyclePublishWriter publishWriter,
+        MetricDownstreamRegistrar downstreamRegistrar
     ) {
         this.graphDraftService = graphDraftService;
         this.platformContractClient = platformContractClient;
@@ -65,6 +67,7 @@ public class MetricModelLifecycleService {
         this.modelVersionRepository = modelVersionRepository;
         this.rollbackEventRepository = rollbackEventRepository;
         this.publishWriter = publishWriter;
+        this.downstreamRegistrar = downstreamRegistrar;
     }
 
     @Transactional
@@ -205,6 +208,12 @@ public class MetricModelLifecycleService {
     }
 
     public Map<String, Object> publish(String modelId) {
+        // Idempotent retry: a model already PUBLISHED at the current version returns its existing result
+        // instead of submitting a duplicate release (F3). A new version still requires re-validation first.
+        Map<String, Object> published = loadState(modelId);
+        if (published != null && MetricLifecycleStatus.PUBLISHED.code().equals(text(published.get("status")))) {
+            return published;
+        }
         Map<String, Object> state = requireStatus(
             modelId,
             MetricLifecycleStatus.DBT_VALIDATED.code(),
@@ -228,6 +237,9 @@ public class MetricModelLifecycleService {
             // Persist in a dedicated transactional bean so the proxy applies (self-invocation would not):
             // the version insert + state update run together in one short tx.
             Map<String, Object> result = publishWriter.commitPublish(modelId, state, submitted);
+            // Close the publish loop: register the version with platform BI Dataset + lineage (F3). When the
+            // registration is enabled and fails, the model is persisted as PUBLISH_BLOCKED and a 503 surfaces.
+            result = downstreamRegistrar.registerDownstream(modelId, result);
             emitAudit("metric.model.publish", result, "PUBLISHED", true);
             return result;
         } catch (PlatformContractClient.PlatformContractException e) {

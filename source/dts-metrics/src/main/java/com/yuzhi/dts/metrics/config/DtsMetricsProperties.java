@@ -62,6 +62,13 @@ public class DtsMetricsProperties {
          */
         private boolean auditEventsEnabled = false;
 
+        /**
+         * Register published models with the platform BI Dataset + lineage facts (F3). The receivers
+         * {@code /internal/bi/datasets/register} and {@code /internal/lineage/register} are owned by
+         * dts-platform; until they are live this stays disabled so publish does not block on a 404.
+         */
+        private boolean biLineageRegisterEnabled = false;
+
         public String getBaseUrl() {
             return baseUrl;
         }
@@ -108,6 +115,14 @@ public class DtsMetricsProperties {
 
         public void setAuditEventsEnabled(boolean auditEventsEnabled) {
             this.auditEventsEnabled = auditEventsEnabled;
+        }
+
+        public boolean isBiLineageRegisterEnabled() {
+            return biLineageRegisterEnabled;
+        }
+
+        public void setBiLineageRegisterEnabled(boolean biLineageRegisterEnabled) {
+            this.biLineageRegisterEnabled = biLineageRegisterEnabled;
         }
     }
 }

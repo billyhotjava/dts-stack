@@ -124,7 +124,8 @@ class MetricLifecycleSecurityParityTest {
             stateRepository,
             versionRepository,
             rollbackRepository,
-            new MetricLifecyclePublishWriter(stateRepository, versionRepository)
+            new MetricLifecyclePublishWriter(stateRepository, versionRepository),
+            new MetricDownstreamRegistrar(client, props, stateRepository)
         );
     }
 

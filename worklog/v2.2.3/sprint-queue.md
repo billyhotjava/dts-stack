@@ -665,13 +665,13 @@
 |---------|--------|---------|------|
 | F1-领域持久化层 | P0 | 5 | DONE |
 | F2-安全链路统一与审计收口 | P0 | 4 | DONE |
-| F3-发布一致性与跨服务收口 | P0 | 3 | READY |
+| F3-发布一致性与跨服务收口 | P0 | 3 | DONE (metrics 侧) |
 | F4-韧性与契约对齐 | P1 | 3 | IN_PROGRESS (T01 DONE) |
 | F5-领域类型化 | P1 | 2 | READY |
 | F6-IT准入与验收证据 | P0 | 3 | READY |
 
-**统计**: READY=3, IN_PROGRESS=1, DONE=2, BLOCKED=0
-**进度（2026-06-14）**: F1 持久化（🔴#1）+ F2 安全对等/审计（#2/#3审计）+ F4-T01 超时（#5）已实现自验绿（90 单测含 6 安全对等 + 4 Testcontainers IT）。F2 将 lifecycle 主路径接入与 pack 链路同源的 permission/RLS/masking/audit，消除占位符策略。下一步 F3 发布一致性（saga + BI/lineage/audit 注册，依赖 platform 端点）。分支 feat/sprint-35b-dts-metrics-hardening。
+**统计**: READY=2, IN_PROGRESS=1, DONE=3, BLOCKED=0
+**进度（2026-06-14）**: F1 持久化（🔴#1）+ F2 安全对等/审计（#2/#3审计）+ F3 发布一致性（#3，metrics 侧）+ F4-T01 超时（#5）已实现自验绿（94 单测含 6 安全对等 + 4 发布闭环 + 4 Testcontainers IT）。F3 = publish 幂等守卫 + MetricDownstreamRegistrar 有序注册 BI/lineage（开关 gating）+ 注册失败→PUBLISH_BLOCKED。**跨服务 followup**: platform 侧 register/audit 端点本体 + 端到端联调。**技术债**: lifecycle 799 行逼近上限，F5 需拆 artifact builder。剩余 F4-T02/T03、F5、F6。分支 feat/sprint-35b-dts-metrics-hardening。
 **设计文档**: `worklog/v2.2.3/sprint-35b-202606/README.md`
 **架构评审底稿**: `worklog/v2.2.3/sprint-35b-202606/assets/architecture-review.md`
 **集成测试**: `worklog/v2.2.3/sprint-35b-202606/it/README.md`

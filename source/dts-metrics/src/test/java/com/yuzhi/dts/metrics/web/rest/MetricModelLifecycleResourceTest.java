@@ -8,6 +8,7 @@ import com.yuzhi.dts.metrics.domain.repository.InMemoryGraphDraftRepository;
 import com.yuzhi.dts.metrics.domain.repository.InMemoryMetricModelStateRepository;
 import com.yuzhi.dts.metrics.domain.repository.InMemoryMetricModelVersionRepository;
 import com.yuzhi.dts.metrics.domain.repository.InMemoryMetricRollbackEventRepository;
+import com.yuzhi.dts.metrics.service.MetricDownstreamRegistrar;
 import com.yuzhi.dts.metrics.service.MetricGraphDraftService;
 import com.yuzhi.dts.metrics.service.MetricLifecyclePublishWriter;
 import com.yuzhi.dts.metrics.service.MetricModelLifecycleService;
@@ -220,7 +221,8 @@ class MetricModelLifecycleResourceTest {
                 stateRepository,
                 versionRepository,
                 rollbackRepository,
-                publishWriter
+                publishWriter,
+                new MetricDownstreamRegistrar(platformClient, new DtsMetricsProperties(), stateRepository)
             )
         );
     }

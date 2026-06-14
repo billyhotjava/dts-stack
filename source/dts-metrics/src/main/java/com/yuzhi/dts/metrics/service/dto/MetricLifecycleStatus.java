@@ -6,6 +6,7 @@ public enum MetricLifecycleStatus {
     REVIEW_SUBMITTED,
     PUBLISH_DRY_RUN_READY,
     PUBLISHED,
+    PUBLISH_BLOCKED,
     ROLLED_BACK;
 
     public String code() {

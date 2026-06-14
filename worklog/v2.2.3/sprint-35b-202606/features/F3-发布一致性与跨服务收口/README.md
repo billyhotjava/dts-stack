@@ -1,7 +1,7 @@
 # F3: 发布一致性与跨服务收口
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE（metrics 侧编排+gating+测试全绿；platform 端点本体+端到端联调=跨服务 followup）
 **对应缺陷**: #3 发布无一致性/saga
 
 ## 目标
@@ -12,9 +12,9 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| T01 | publish saga/outbox 编排（幂等 + 补偿） | P0 | READY | F1,F2 |
-| T02 | 接入 BI Dataset register + lineage register | P0 | READY | T01 |
-| T03 | PUBLISH_BLOCKED 失败态落地 + 平台端点联调 | P0 | READY | T02 |
+| T01 | publish saga/outbox 编排（幂等 + 补偿） | P0 | DONE（幂等守卫 + 有序编排；完整 outbox 重试=followup） | F1,F2 |
+| T02 | 接入 BI Dataset register + lineage register | P0 | DONE（metrics 侧调用+gating；platform 端点本体=followup） | T01 |
+| T03 | PUBLISH_BLOCKED 失败态落地 + 平台端点联调 | P0 | DONE（PUBLISH_BLOCKED 落地+测试；端到端联调=followup） | T02 |
 
 ## 完成标准
 - [ ] publish 可重试且幂等，部分失败有补偿路径，状态最终一致。
