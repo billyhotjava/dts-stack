@@ -120,6 +120,7 @@ class MetricLifecycleSecurityParityTest {
             new MetricGraphDraftService(new InMemoryGraphDraftRepository()),
             client,
             new MetricSecurityPolicyService(client),
+            new MetricCandidateArtifactBuilder(new MetricSecurityPolicyService(client)),
             props,
             stateRepository,
             versionRepository,

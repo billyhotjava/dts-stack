@@ -8,13 +8,10 @@ import com.yuzhi.dts.metrics.domain.repository.MetricRollbackEventRepository;
 import com.yuzhi.dts.metrics.service.dto.MetricContractErrorCode;
 import com.yuzhi.dts.metrics.service.dto.MetricLifecycleStatus;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
-import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -35,12 +32,12 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class MetricModelLifecycleService {
 
-    private static final Pattern UNSAFE_EXPRESSION = Pattern.compile("(?i)(;|--|/\\*|\\*/|\\bselect\\b|\\binsert\\b|\\bupdate\\b|\\bdelete\\b|\\bdrop\\b|\\balter\\b)");
     private static final Logger LOG = LoggerFactory.getLogger(MetricModelLifecycleService.class);
 
     private final MetricGraphDraftService graphDraftService;
     private final PlatformContractClient platformContractClient;
     private final MetricSecurityPolicyService securityPolicyService;
+    private final MetricCandidateArtifactBuilder artifactBuilder;
     private final DtsMetricsProperties properties;
     private final MetricModelStateRepository modelStateRepository;
     private final MetricModelVersionRepository modelVersionRepository;
@@ -52,6 +49,7 @@ public class MetricModelLifecycleService {
         MetricGraphDraftService graphDraftService,
         PlatformContractClient platformContractClient,
         MetricSecurityPolicyService securityPolicyService,
+        MetricCandidateArtifactBuilder artifactBuilder,
         DtsMetricsProperties properties,
         MetricModelStateRepository modelStateRepository,
         MetricModelVersionRepository modelVersionRepository,
@@ -62,6 +60,7 @@ public class MetricModelLifecycleService {
         this.graphDraftService = graphDraftService;
         this.platformContractClient = platformContractClient;
         this.securityPolicyService = securityPolicyService;
+        this.artifactBuilder = artifactBuilder;
         this.properties = properties;
         this.modelStateRepository = modelStateRepository;
         this.modelVersionRepository = modelVersionRepository;
@@ -88,13 +87,13 @@ public class MetricModelLifecycleService {
         if (!"GRAPH_READY".equals(preflight.get("status"))) {
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, MetricContractErrorCode.GRAPH_VALIDATION_FAILED.code());
         }
-        String modelName = safeModelName(firstText(value(request, "modelName"), "dws_" + safeIdentifier(modelId) + "_summary"));
+        String modelName = safeModelName(firstText(value(request, "modelName"), "dws_" + MetricIdentifiers.safeIdentifier(modelId) + "_summary"));
         PlatformContractClient.RlsPolicyResult policy = enforceSourcePolicy(actor, graph);
         String policySource = StringUtils.hasText(policy.policySource()) ? policy.policySource() : "platform-permission";
         String predicateHash = securityPolicyService.predicateHash(policy);
         Map<String, Object> artifacts;
         try {
-            artifacts = artifacts(modelName, graph, policy, policySource, predicateHash);
+            artifacts = artifactBuilder.build(modelName, graph, policy, policySource, predicateHash);
         } catch (IllegalArgumentException e) {
             // e.g. a platform-masked column used inside a metric formula (F2-T03 parity with the pack path).
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, MetricContractErrorCode.GRAPH_VALIDATION_FAILED.code(), e);
@@ -450,158 +449,6 @@ public class MetricModelLifecycleService {
         return graphDraftService.graph(modelId);
     }
 
-    private Map<String, Object> artifacts(
-        String modelName,
-        Map<String, Object> graph,
-        PlatformContractClient.RlsPolicyResult policy,
-        String policySource,
-        String predicateHash
-    ) {
-        List<String> dimensions = identifiers(graph.get("dimensions"));
-        List<String> measures = identifiers(graph.get("measures"));
-        List<Map<String, Object>> derivedMetrics = maps(graph.get("derived_metrics"));
-        for (Map<String, Object> derivedMetric : derivedMetrics) {
-            rejectUnsafeExpression(text(derivedMetric.get("expression")));
-        }
-        String dialect = dialect(graph);
-        Map<String, Object> artifacts = new LinkedHashMap<>();
-        artifacts.put("dbtModelSql", dbtModelSql(modelName, safeIdentifier(text(graph.get("base"))), dimensions, measures, derivedMetrics, dialect, policy));
-        artifacts.put("schemaYml", schemaYml(modelName, dimensions, measures, derivedMetrics));
-        artifacts.put("exposureYml", exposureYml(modelName));
-        artifacts.put("metricDoc", metricDoc(modelName, dimensions, measures, derivedMetrics));
-        artifacts.put("lineageHint", Map.of("upstreamAsset", text(graph.get("base")), "model", modelName, "targetLayer", targetLayer(graph)));
-        if (securityPolicyService.hasMaskedColumns(policy)) {
-            artifacts.put("maskingMacroSql", securityPolicyService.maskingMacroSql());
-        }
-        artifacts.put("securityPolicyJson", securityPolicyService.securityPolicyJson(policy));
-        artifacts.put("securitySnapshot", securitySnapshot(graph, policySource, predicateHash));
-        return artifacts;
-    }
-
-    private static Map<String, Object> securitySnapshot(Map<String, Object> graph, String policySource, String predicateHash) {
-        Map<String, Object> snapshot = new LinkedHashMap<>();
-        snapshot.put("policySource", policySource);
-        snapshot.put("predicateHash", predicateHash);
-        snapshot.put("classification", firstText(graph.get("classification"), "INTERNAL"));
-        snapshot.put("targetLayer", targetLayer(graph));
-        snapshot.put("maskingRequired", true);
-        snapshot.put("generatedAt", Instant.now().toString());
-        return snapshot;
-    }
-
-    /**
-     * Build the candidate dbt model SQL, injecting the platform RLS/masking policy exactly as the metric-pack
-     * path does (F2-T03): masked dimensions are wrapped in the masking macro, a masked column used as a metric
-     * is rejected, and a platform RLS {@code where} block is appended. For an empty policy every injection is a
-     * no-op, so a model with no platform policy renders byte-identical SQL.
-     */
-    private String dbtModelSql(
-        String modelName,
-        String base,
-        List<String> dimensions,
-        List<String> measures,
-        List<Map<String, Object>> derivedMetrics,
-        String dialect,
-        PlatformContractClient.RlsPolicyResult policy
-    ) {
-        Set<String> maskedColumns = securityPolicyService.maskedColumns(policy);
-        securityPolicyService.validateMaskedMetricInputs(metricExpressions(measures, derivedMetrics), maskedColumns);
-        List<String> selectRows = new ArrayList<>();
-        List<String> groupExpressions = new ArrayList<>();
-        for (String dimension : dimensions) {
-            if (maskedColumns.contains(dimension.toLowerCase(Locale.ROOT))) {
-                String masked = securityPolicyService.maskDimensionExpression(dimension, maskedColumns);
-                selectRows.add("    " + masked + " as " + quoteIdentifier(dimension, dialect));
-                groupExpressions.add(masked);
-            } else {
-                String quoted = quoteIdentifier(dimension, dialect);
-                selectRows.add("    " + quoted);
-                groupExpressions.add(quoted);
-            }
-        }
-        for (String measure : measures) {
-            selectRows.add("    sum(" + quoteIdentifier(measure, dialect) + ") as " + quoteIdentifier(measure, dialect));
-        }
-        for (Map<String, Object> derivedMetric : derivedMetrics) {
-            String id = safeIdentifier(text(derivedMetric.get("id")));
-            String expression = compileDerivedExpression(text(derivedMetric.get("expression")), dialect);
-            selectRows.add("    (" + expression + ") as " + quoteIdentifier(id, dialect));
-        }
-        if (selectRows.isEmpty()) {
-            selectRows.add("    1 as metric_ready");
-        }
-        StringBuilder sql = new StringBuilder();
-        sql.append("{{ config(materialized='table', tags=['dts-metrics', 'sprint-35-candidate']) }}\n\n");
-        sql.append("-- Candidate artifact generated from a governed graph draft. Publish only through platform/dbt gate.\n");
-        sql.append("select\n");
-        sql.append(String.join(",\n", selectRows));
-        sql.append("\nfrom {{ ref('").append(base).append("') }}\n");
-        securityPolicyService.appendRlsWhere(sql, policy);
-        if (!groupExpressions.isEmpty()) {
-            sql.append("group by\n");
-            for (int i = 0; i < groupExpressions.size(); i++) {
-                sql.append("    ").append(groupExpressions.get(i));
-                sql.append(i + 1 < groupExpressions.size() ? ",\n" : "\n");
-            }
-        }
-        return sql.toString();
-    }
-
-    private static List<MetricSecurityPolicyService.MetricExpression> metricExpressions(List<String> measures, List<Map<String, Object>> derivedMetrics) {
-        List<MetricSecurityPolicyService.MetricExpression> expressions = new ArrayList<>();
-        for (String measure : measures) {
-            expressions.add(new MetricSecurityPolicyService.MetricExpression(measure, measure));
-        }
-        for (Map<String, Object> derivedMetric : derivedMetrics) {
-            expressions.add(
-                new MetricSecurityPolicyService.MetricExpression(
-                    safeIdentifier(text(derivedMetric.get("id"))),
-                    text(derivedMetric.get("expression"))
-                )
-            );
-        }
-        return expressions;
-    }
-
-    private static String schemaYml(String modelName, List<String> dimensions, List<String> measures, List<Map<String, Object>> derivedMetrics) {
-        StringBuilder yml = new StringBuilder();
-        yml.append("version: 2\n\nmodels:\n");
-        yml.append("  - name: ").append(modelName).append("\n");
-        yml.append("    description: Sprint-35 candidate model generated by dts-metrics.\n");
-        yml.append("    columns:\n");
-        for (String dimension : dimensions) {
-            yml.append("      - name: ").append(dimension).append("\n");
-            yml.append("        tests:\n          - not_null\n");
-        }
-        for (String measure : measures) {
-            yml.append("      - name: ").append(measure).append("\n");
-            yml.append("        description: Aggregated metric candidate.\n");
-        }
-        for (Map<String, Object> derivedMetric : derivedMetrics) {
-            yml.append("      - name: ").append(safeIdentifier(text(derivedMetric.get("id")))).append("\n");
-            yml.append("        description: Derived metric candidate.\n");
-        }
-        return yml.toString();
-    }
-
-    private static String exposureYml(String modelName) {
-        return "version: 2\n\nexposures:\n  - name: " + modelName + "_bi_dataset\n    type: dashboard\n    depends_on:\n      - ref('" + modelName + "')\n";
-    }
-
-    private static String metricDoc(String modelName, List<String> dimensions, List<String> measures, List<Map<String, Object>> derivedMetrics) {
-        return "# " + modelName + "\n\nDimensions: " + dimensions + "\n\nMeasures: " + measures + "\n\nDerived: " + derivedMetrics.size() + "\n";
-    }
-
-    private static String targetLayer(Map<String, Object> graph) {
-        for (Map<String, Object> node : maps(graph.get("nodes"))) {
-            String layer = text(node.get("warehouseLayer")).toUpperCase(Locale.ROOT);
-            if ("ADS".equals(layer)) {
-                return "ADS";
-            }
-        }
-        return "DWS";
-    }
-
     private static boolean platformPassed(Map<String, Object> validation) {
         Object decision = validation.get("decision");
         Object status = validation.get("status");
@@ -609,140 +456,12 @@ public class MetricModelLifecycleService {
         return Boolean.TRUE.equals(valid) || "PASS".equals(decision) || MetricLifecycleStatus.DBT_VALIDATED.code().equals(status);
     }
 
-    private static List<String> identifiers(Object value) {
-        List<String> result = new ArrayList<>();
-        for (Object item : list(value)) {
-            if (item instanceof Map<?, ?> map) {
-                Object id = map.get("id");
-                if (id != null) {
-                    result.add(safeIdentifier(text(id)));
-                }
-                continue;
-            }
-            result.add(safeIdentifier(text(item)));
-        }
-        return result.stream().filter(StringUtils::hasText).distinct().toList();
-    }
-
-    private static void rejectUnsafeExpression(String expression) {
-        if (UNSAFE_EXPRESSION.matcher(expression).find()) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, MetricContractErrorCode.GRAPH_VALIDATION_FAILED.code());
-        }
-    }
-
-    private static String compileDerivedExpression(String expression, String dialect) {
-        rejectUnsafeExpression(expression);
-        int start = expression.indexOf('(');
-        int end = expression.lastIndexOf(')');
-        if (start <= 0 || end <= start) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, MetricContractErrorCode.GRAPH_VALIDATION_FAILED.code());
-        }
-        String function = expression.substring(0, start).trim().toLowerCase(Locale.ROOT);
-        List<String> args = splitArgs(expression.substring(start + 1, end));
-        return switch (function) {
-            case "sum", "count", "avg", "min", "max" -> function + "(" + quoteIdentifier(requiredArg(args, 0), dialect) + ")";
-            case "count_distinct" -> "count(distinct " + quoteIdentifier(requiredArg(args, 0), dialect) + ")";
-            case "ratio" ->
-                "sum(" +
-                quoteIdentifier(requiredArg(args, 0), dialect) +
-                ") / nullif(sum(" +
-                quoteIdentifier(requiredArg(args, 1), dialect) +
-                "), 0)";
-            case "date_trunc" -> dateTruncSql(requiredArg(args, 0), requiredArg(args, 1), dialect);
-            case "count_if" -> "sum(case when " + conditionSql(requiredArg(args, 0), requiredArg(args, 1), requiredArg(args, 2), dialect) + " then 1 else 0 end)";
-            case "sum_if" ->
-                "sum(case when " +
-                conditionSql(requiredArg(args, 1), requiredArg(args, 2), requiredArg(args, 3), dialect) +
-                " then " +
-                quoteIdentifier(requiredArg(args, 0), dialect) +
-                " else 0 end)";
-            case "case_when" ->
-                "case when " +
-                conditionSql(requiredArg(args, 0), requiredArg(args, 1), requiredArg(args, 2), dialect) +
-                " then " +
-                literalSql(requiredArg(args, 3)) +
-                " else " +
-                literalSql(requiredArg(args, 4)) +
-                " end";
-            default -> throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, MetricContractErrorCode.GRAPH_VALIDATION_FAILED.code());
-        };
-    }
-
-    private static String dateTruncSql(String grain, String field, String dialect) {
-        String safeGrain = safeIdentifier(grain).toLowerCase(Locale.ROOT);
-        if ("doris".equals(dialect)) {
-            return "date_trunc(" + quoteIdentifier(field, dialect) + ", '" + safeGrain + "')";
-        }
-        return "date_trunc('" + safeGrain + "', " + quoteIdentifier(field, dialect) + ")";
-    }
-
-    private static String conditionSql(String field, String op, String value, String dialect) {
-        return quoteIdentifier(field, dialect) + " " + comparisonOperator(op) + " " + literalSql(value);
-    }
-
-    private static String comparisonOperator(String op) {
-        return switch (op.toLowerCase(Locale.ROOT)) {
-            case "eq" -> "=";
-            case "ne" -> "<>";
-            case "gt" -> ">";
-            case "gte" -> ">=";
-            case "lt" -> "<";
-            case "lte" -> "<=";
-            default -> throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, MetricContractErrorCode.GRAPH_VALIDATION_FAILED.code());
-        };
-    }
-
-    private static String literalSql(String value) {
-        String literal = text(value);
-        if (literal.matches("-?\\d+(\\.\\d+)?")) {
-            return literal;
-        }
-        return "'" + literal.replace("'", "''") + "'";
-    }
-
-    private static List<String> splitArgs(String value) {
-        List<String> result = new ArrayList<>();
-        for (String item : value.split(",")) {
-            result.add(item.trim());
-        }
-        return result;
-    }
-
-    private static String requiredArg(List<String> args, int index) {
-        if (index >= args.size() || !StringUtils.hasText(args.get(index))) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, MetricContractErrorCode.GRAPH_VALIDATION_FAILED.code());
-        }
-        return args.get(index);
-    }
-
     private static String safeModelName(String value) {
-        String modelName = safeIdentifier(value).toLowerCase(Locale.ROOT);
+        String modelName = MetricIdentifiers.safeIdentifier(value).toLowerCase(Locale.ROOT);
         if (!modelName.startsWith("dws_") && !modelName.startsWith("ads_")) {
             return "dws_" + modelName;
         }
         return modelName;
-    }
-
-    private static String quoteIdentifier(String value, String dialect) {
-        String identifier = safeIdentifier(value);
-        if (!StringUtils.hasText(identifier)) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, MetricContractErrorCode.GRAPH_VALIDATION_FAILED.code());
-        }
-        String quote = "doris".equals(dialect) ? "`" : "\"";
-        return quote + identifier + quote;
-    }
-
-    private static String dialect(Map<String, Object> graph) {
-        String dialect = text(graph.get("dialect")).toLowerCase(Locale.ROOT);
-        return "doris".equals(dialect) ? "doris" : "postgres";
-    }
-
-    private static String safeIdentifier(String value) {
-        String identifier = text(value).replaceAll("[^A-Za-z0-9_]", "_");
-        while (identifier.contains("__")) {
-            identifier = identifier.replace("__", "_");
-        }
-        return identifier.replaceAll("^_+|_+$", "");
     }
 
     private static Object value(Map<String, Object> request, String key) {
@@ -756,22 +475,6 @@ public class MetricModelLifecycleService {
             return typed;
         }
         return Map.of();
-    }
-
-    private static List<?> list(Object value) {
-        return value instanceof List<?> list ? list : List.of();
-    }
-
-    private static List<Map<String, Object>> maps(Object value) {
-        List<Map<String, Object>> result = new ArrayList<>();
-        for (Object item : list(value)) {
-            if (item instanceof Map<?, ?> map) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> typed = (Map<String, Object>) map;
-                result.add(typed);
-            }
-        }
-        return result;
     }
 
     private static String firstText(Object... values) {

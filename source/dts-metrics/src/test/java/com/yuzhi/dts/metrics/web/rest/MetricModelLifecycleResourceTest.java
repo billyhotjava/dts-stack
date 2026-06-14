@@ -12,6 +12,7 @@ import com.yuzhi.dts.metrics.service.MetricDownstreamRegistrar;
 import com.yuzhi.dts.metrics.service.MetricGraphDraftService;
 import com.yuzhi.dts.metrics.service.MetricLifecyclePublishWriter;
 import com.yuzhi.dts.metrics.service.MetricModelLifecycleService;
+import com.yuzhi.dts.metrics.service.MetricCandidateArtifactBuilder;
 import com.yuzhi.dts.metrics.service.MetricSecurityPolicyService;
 import com.yuzhi.dts.metrics.service.PlatformContractClient;
 import com.yuzhi.dts.metrics.service.dto.MetricContractErrorCode;
@@ -217,6 +218,7 @@ class MetricModelLifecycleResourceTest {
                 new MetricGraphDraftService(new InMemoryGraphDraftRepository()),
                 platformClient,
                 new MetricSecurityPolicyService(platformClient),
+                new MetricCandidateArtifactBuilder(new MetricSecurityPolicyService(platformClient)),
                 new DtsMetricsProperties(),
                 stateRepository,
                 versionRepository,
