@@ -559,8 +559,8 @@ services:
       DATA_STANDARD_STORAGE_DIR: "/opt/dts/upload"
       # Base64 key for AES-GCM (16 bytes here for demo; replace in production)
       DATA_STANDARD_ENCRYPTION_KEY: "MDEyMzQ1Njc4OWFiY2RlZg=="
-      DTS_INFRA_ENCRYPTION_KEY: ${DTS_INFRA_ENCRYPTION_KEY:-${DATA_STANDARD_ENCRYPTION_KEY:-}}
-      DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION:-${DATA_STANDARD_KEY_VERSION:-v1}}
+      DTS_INFRA_ENCRYPTION_KEY: ${DTS_INFRA_ENCRYPTION_KEY:-}
+      DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION:-v1}
       DTS_ADMIN_BASE_URL: "http://dts-admin:8081"
       DTS_ADMIN_API_PATH: "/api"
       # Biadmin datasource for data warehouse (dbt output, ad-hoc queries)
