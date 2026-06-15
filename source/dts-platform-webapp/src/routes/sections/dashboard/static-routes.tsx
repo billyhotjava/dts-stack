@@ -22,7 +22,7 @@ const OpsOverviewPage = lazy(() => import("@/pages/ops/OpsOverviewPage"));
 const OpsInstancesPage = lazy(() => import("@/pages/ops/OpsInstancesPage"));
 const OpsAlertLogPage = lazy(() => import("@/pages/ops/OpsAlertLogPage"));
 const OpsBackfillPage = lazy(() => import("@/pages/ops/OpsBackfillPage"));
-const BusinessConsumptionPage = lazy(() => import("@/pages/services/BusinessConsumptionPage"));
+const DataManagementWorkbenchPage = lazy(() => import("@/pages/workbench/DataManagementWorkbenchPage"));
 
 // ── Analytics pages (static routes — registered statically for reliability; menu controls visibility) ──
 const AnalyticsHomePage = lazy(() => import("@/analytics/pages/HomePage"));
@@ -110,7 +110,8 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{ path: "ops/instances", element: <S><OpsInstancesPage /></S> },
 	{ path: "ops/alerts", element: <S><OpsAlertLogPage /></S> },
 	{ path: "ops/backfill", element: <S><OpsBackfillPage /></S> },
-	{ path: "services/consumption", element: <S><BusinessConsumptionPage /></S> },
+	{ path: "workbench/data-management", element: <S><DataManagementWorkbenchPage /></S> },
+	{ path: "services/consumption", element: <S><DataManagementWorkbenchPage /></S> },
 	{ path: "modeling/semantic-center", element: <MetricsServiceFrame /> },
 	{ path: "modeling/semantic-center/*", element: <MetricsServiceFrame /> },
 	{ path: "bi/semantic-modeling", element: <MetricsServiceFrame /> },

@@ -745,6 +745,24 @@
 - 绞杀者并存：受控路径与现有 permissive 路径按 governanceMode 切换，PERMISSIVE 字节不变。
 - 受控 DSL 须与 dts-metrics 黄金 SQL 语义一致（防移植漂移）。
 
+## Sprint-42: 数据管理主题看板 (202606)
+**状态**: DONE
+**类型**: Product Architecture / Implementation（dts-platform-webapp + dts-admin menu seed）
+**目标**: 将 Sprint-39 黄金链路和 Sprint-40 消费工作台重构为面向数据管理员的业务主题看板，让客户先按经营分析、质量管理、项目交付、客户服务理解数据交付状态。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-数据管理主题看板 | P0 | 4 | DONE |
+
+**统计**: READY=0, IN_PROGRESS=0, DONE=4, BLOCKED=0
+**进度（2026-06-16）**: 完成主题聚合模型、数据管理工作台页面、工作台菜单入口、旧消费入口兼容、dts-admin seed 可见性契约和前端构建验证。
+**设计文档**: `worklog/v2.2.3/sprint-42-202606/README.md`
+**集成测试**: `worklog/v2.2.3/sprint-42-202606/it/README.md`
+**关键决策**:
+- 服务对象 = 数据管理员；客户偏业务，通常没有专职数据工程师。
+- 第一对象 = 业务主题/场景，第二对象 = 关联数据资产，技术动作只作为下一步入口。
+- 入口放在“工作台 -> 数据管理工作台”，旧 `/services/consumption` 保持兼容，避免现场旧链接断开。
+
 ## v2.3 Backlog: 企业级资产与指标增强
 
 | Item | Owner | 来源 | 状态 |

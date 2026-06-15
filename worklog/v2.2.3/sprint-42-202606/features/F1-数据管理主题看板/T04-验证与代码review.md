@@ -1,7 +1,7 @@
 # T04: 验证与代码 review
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T03
 
 ## 目标
@@ -21,13 +21,13 @@
 
 ## 验证
 
-- [ ] 前端主题模型测试通过。
-- [ ] 前端页面/路由/menu source-contract 通过。
-- [ ] dts-admin menu seed 契约测试通过。
-- [ ] 构建或类型检查通过。
-- [ ] GitNexus detect changes 完成。
+- [x] 前端主题模型测试通过。
+- [x] 前端页面/路由/menu source-contract 通过。
+- [x] dts-admin menu seed 契约测试通过。
+- [x] 构建或类型检查通过。
+- [x] GitNexus detect changes 完成，risk=low，未报告受影响 execution flow。
 
 ## 完成标准
 
-- [ ] Sprint-42 状态更新为 DONE。
-- [ ] review 结论可供用户一起 check。
+- [x] Sprint-42 状态更新为 DONE。
+- [x] review 结论可供用户一起 check：未发现阻断项；剩余人工 check 重点是现场菜单树是否只展示工作台下的新入口，以及主题文案是否符合客户业务叫法。

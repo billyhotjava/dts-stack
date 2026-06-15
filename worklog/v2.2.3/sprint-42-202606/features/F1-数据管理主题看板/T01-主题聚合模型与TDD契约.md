@@ -1,7 +1,7 @@
 # T01: 主题聚合模型与 TDD 契约
 
 **优先级**: P0
-**状态**: IN_PROGRESS
+**状态**: DONE
 **依赖**: 无
 
 ## 目标
@@ -22,9 +22,9 @@
 
 ## 验证
 
-- [ ] `pnpm exec vitest run src/pages/workbench/dataManagementThemeModel.test.ts`
+- [x] `pnpm exec vitest run src/pages/workbench/dataManagementThemeModel.test.ts` — 4/4 passed
 
 ## 完成标准
 
-- [ ] RED 测试先失败。
-- [ ] GREEN 后覆盖主题归类、阻断状态、空态主题和业务动作。
+- [x] RED 测试先失败。
+- [x] GREEN 后覆盖主题归类、阻断状态、空态主题和业务动作。

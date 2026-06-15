@@ -1,7 +1,7 @@
 # F1: 数据管理主题看板
 
 **优先级**: P0
-**状态**: IN_PROGRESS
+**状态**: DONE
 
 ## 目标
 
@@ -11,15 +11,15 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| T01 | 主题聚合模型与 TDD 契约 | P0 | IN_PROGRESS | - |
-| T02 | 数据管理工作台页面 | P0 | READY | T01 |
-| T03 | 菜单与路由迁移 | P0 | READY | T02 |
-| T04 | 验证与代码 review | P0 | READY | T03 |
+| T01 | 主题聚合模型与 TDD 契约 | P0 | DONE | - |
+| T02 | 数据管理工作台页面 | P0 | DONE | T01 |
+| T03 | 菜单与路由迁移 | P0 | DONE | T02 |
+| T04 | 验证与代码 review | P0 | DONE | T03 |
 
 ## 完成标准
 
-- [ ] 主题聚合模型能从 golden-chain summary/detail 推导主题状态和下一步动作。
-- [ ] 页面首屏展示业务主题，而不是技术模块列表。
-- [ ] `/workbench/data-management` 静态路由、动态菜单解析、菜单 seed、角色默认项一致。
-- [ ] 保留旧 `/services/consumption` 兼容路由，避免现场旧链接断开。
-- [ ] 验证证据记录到 `it/README.md`。
+- [x] 主题聚合模型能从 golden-chain summary/detail 推导主题状态和下一步动作。
+- [x] 页面首屏展示业务主题，而不是技术模块列表。
+- [x] `/workbench/data-management` 静态路由、动态菜单解析、菜单 seed、角色默认项一致。
+- [x] 保留旧 `/services/consumption` 兼容路由，避免现场旧链接断开。
+- [x] 验证证据记录到 `it/README.md`。
