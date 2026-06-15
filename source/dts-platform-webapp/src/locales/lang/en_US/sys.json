@@ -111,6 +111,8 @@
     "exploreExport": "Export center",
     "exploreExportCaption": "Export requests, approval status, and download history",
     "services": "Data services",
+    "servicesConsumption": "Business consumption",
+    "servicesConsumptionCaption": "Publish governed assets to reports, metrics, APIs, and acceptance packages",
     "servicesApi": "API services",
     "servicesApiCaption": "REST catalog, online testing, and classification-aware views",
     "servicesProxy": "JDBC/ODBC proxy",

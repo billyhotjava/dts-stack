@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260614_01_golden_chain_instance" author="platform">
+        <createTable tableName="golden_chain_instance">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="chain_key" type="varchar(128)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="ux_golden_chain_instance_key"/>
+            </column>
+            <column name="display_name" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_kind" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_ref_type" type="varchar(64)"/>
+            <column name="source_ref_id" type="varchar(256)"/>
+            <column name="current_stage" type="varchar(32)" defaultValue="DRAFT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="lifecycle_status" type="varchar(32)" defaultValue="PENDING">
+                <constraints nullable="false"/>
+            </column>
+            <column name="owner" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="enabled" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <createIndex tableName="golden_chain_instance" indexName="idx_golden_chain_instance_source">
+            <column name="source_kind"/>
+            <column name="source_ref_type"/>
+            <column name="source_ref_id"/>
+        </createIndex>
+        <createIndex tableName="golden_chain_instance" indexName="idx_golden_chain_instance_stage">
+            <column name="current_stage"/>
+        </createIndex>
+        <createIndex tableName="golden_chain_instance" indexName="idx_golden_chain_instance_status">
+            <column name="lifecycle_status"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260614_01_golden_chain_stage_snapshot" author="platform">
+        <createTable tableName="golden_chain_stage_snapshot">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="chain_instance_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="stage" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="stage_sequence" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="owner" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="evidence_ref" type="varchar(2048)"/>
+            <column name="evidence_type" type="varchar(64)"/>
+            <column name="source_ref_type" type="varchar(64)"/>
+            <column name="source_ref_id" type="varchar(256)"/>
+            <column name="blocker_code" type="varchar(64)"/>
+            <column name="blocker_reason" type="varchar(1024)"/>
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="golden_chain_stage_snapshot"
+            baseColumnNames="chain_instance_id"
+            constraintName="fk_golden_chain_snapshot_instance"
+            referencedTableName="golden_chain_instance"
+            referencedColumnNames="id"/>
+
+        <addUniqueConstraint
+            tableName="golden_chain_stage_snapshot"
+            columnNames="chain_instance_id, stage"
+            constraintName="ux_golden_chain_snapshot_stage"/>
+
+        <createIndex tableName="golden_chain_stage_snapshot" indexName="idx_golden_chain_snapshot_instance">
+            <column name="chain_instance_id"/>
+        </createIndex>
+        <createIndex tableName="golden_chain_stage_snapshot" indexName="idx_golden_chain_snapshot_order">
+            <column name="chain_instance_id"/>
+            <column name="stage_sequence"/>
+        </createIndex>
+        <createIndex tableName="golden_chain_stage_snapshot" indexName="idx_golden_chain_snapshot_status">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

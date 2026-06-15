@@ -65,6 +65,7 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	"/governance/my-indicators": "/pages/governance/MyIndicatorDashboard",
 	"/security/data-security": "/pages/security/data-security",
 	"/security/dataset-access-approval": "/pages/security/DatasetAccessApprovalPage",
+	"/services/consumption": "/pages/services/BusinessConsumptionPage",
 	"/services/apis": "/pages/services/ApiServicesPage",
 	"/services/products": "/pages/services/DataProductsPage",
 	"/services/tokens": "/pages/services/TokensPage",
@@ -76,6 +77,10 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	"/ops/release-governance": "/pages/ops/ReleaseGovernancePage",
 	"/platform/release-governance": "/pages/ops/ReleaseGovernancePage",
 	"/ops/logs": "/pages/ops/OpsLogCenterPage",
+	"/ops/overview": "/pages/ops/OpsOverviewPage",
+	"/ops/instances": "/pages/ops/OpsInstancesPage",
+	"/ops/alerts": "/pages/ops/OpsAlertLogPage",
+	"/ops/backfill": "/pages/ops/OpsBackfillPage",
 	"/catalog/datasets/:id": "/pages/catalog/DatasetDetailPage",
 	// Analytics pages are statically registered in static-routes.tsx — no overrides needed.
 };

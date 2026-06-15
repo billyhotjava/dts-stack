@@ -454,6 +454,14 @@
       "title": "数据服务中心",
       "children": [
         {
+          "key": "consumption",
+          "path": "consumption",
+          "icon": "solar:chart-square-bold-duotone",
+          "titleKey": "sys.nav.portal.servicesConsumption",
+          "title": "业务消费工作台",
+          "externalLink": "/services/consumption"
+        },
+        {
           "key": "api",
           "path": "api",
           "icon": "solar:share-bold-duotone",

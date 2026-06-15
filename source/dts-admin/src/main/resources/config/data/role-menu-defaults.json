@@ -246,6 +246,12 @@
     "requiredRoles": []
   },
   {
+    "code": "sys.nav.portal.servicesConsumption",
+    "title": "业务消费工作台",
+    "route": "/services/consumption",
+    "requiredRoles": []
+  },
+  {
     "code": "sys.nav.portal.serviceApi",
     "title": "数据 API 管理",
     "route": "/services/apis",

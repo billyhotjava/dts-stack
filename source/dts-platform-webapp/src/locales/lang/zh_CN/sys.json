@@ -120,6 +120,8 @@
 				"exploreExport": "导出中心",
 				"exploreExportCaption": "导出申请、审批状态与历史下载",
 				"services": "数据服务",
+				"servicesConsumption": "业务消费工作台",
+				"servicesConsumptionCaption": "从治理后资产发布到报表、指标、数据 API 和客户验收",
 				"servicesApi": "API 服务",
                 "servicesApiCaption": "REST 接口目录、在线试调、按数据密级（DATA_*）裁剪视图",
 				"servicesProxy": "JDBC/ODBC Proxy",

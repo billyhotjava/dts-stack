@@ -683,20 +683,20 @@
 - F1+F2+F4-T01 经 Workflow 多代理在分支 `feat/sprint-35b-dts-metrics-hardening` 实现，design-first + 末段并行 build/test/review/gitnexus 影响分析。
 
 ## Sprint-39: 结构化数据黄金链路与商业化闭环 (202606)
-**状态**: IN_PROGRESS
+**状态**: DONE
 **类型**: Product Foundation / Implementation（dts-platform + dts-ingestion + dts-metrics + dts-platform-webapp）
 **目标**: 面向传统行业结构化数据客户，把现有数据接入、入湖、建模、治理、资产、权限、报表、数据服务和运维能力串成一条可验收主链路，先打牢商业产品基础，再演进现代湖仓路线。
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
-| F1-结构化数据黄金链路状态机 | P0 | 4 | IN_PROGRESS (T01 DONE) |
-| F2-接入入湖到建模产品闭环 | P0 | 4 | READY |
-| F3-治理资产权限硬门禁 | P0 | 4 | READY |
-| F4-任务运维中心产品化 | P1 | 4 | READY |
-| F5-业务消费闭环 | P1 | 4 | READY |
+| F1-结构化数据黄金链路状态机 | P0 | 4 | DONE |
+| F2-接入入湖到建模产品闭环 | P0 | 4 | DONE |
+| F3-治理资产权限硬门禁 | P0 | 4 | DONE |
+| F4-任务运维中心产品化 | P1 | 4 | DONE |
+| F5-业务消费闭环 | P1 | 4 | DONE |
 
-**统计**: READY=19, IN_PROGRESS=0, DONE=1, BLOCKED=0
-**进度（2026-06-14）**: F1-T01 已落地 platform 侧黄金链路契约：阶段顺序、阶段状态、阻断码、阶段快照字段和阻断校验已形成可编译代码，并通过 `./mvnw -q -Dtest=GoldenChainContractTest test`。下一步 F1-T02 建链路实例与阶段快照持久化模型。
+**统计**: READY=0, IN_PROGRESS=0, DONE=20, BLOCKED=0
+**进度（2026-06-14）**: F1/F2/F3/F4/F5 全部完成。Sprint-39 已覆盖黄金链路状态机、接入入湖到建模闭环、治理资产权限硬门禁、任务运维中心产品化和业务消费闭环。
 **设计文档**: `worklog/v2.2.3/sprint-39-202606/README.md`
 **能力契约**: `worklog/v2.2.3/sprint-39-202606/assets/product-capability-contract.md`
 **集成测试**: `worklog/v2.2.3/sprint-39-202606/it/README.md`
@@ -706,6 +706,23 @@
 - dbt 仍是当前主建模引擎，但用户侧表达为“建模方案/指标模型/数据集发布”，不暴露手工导入作为默认流程。
 - 治理从“登记项”升级为“发布门禁”：owner、分级、质量、血缘、权限缺失时阻断发布或进入待治理状态。
 - dts-metrics 只承接治理后的 DWS/ADS 业务语义和候选 artifact；platform 仍是资产、权限、RLS、审计、审批、dbt 发布和 BI 注册控制面。
+
+## Sprint-40: 业务消费闭环 UI 补强 (202606)
+**状态**: DONE
+**类型**: UI Productization / Implementation（dts-platform-webapp + dts-admin menu seed）
+**目标**: 在 Sprint-39 已完成黄金链路后端与工作日志基础上，把业务消费闭环补成客户可见的服务中心入口。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-业务消费工作台页面与菜单入口 | P0 | 3 | DONE |
+
+**统计**: READY=0, IN_PROGRESS=0, DONE=3, BLOCKED=0
+**进度（2026-06-14）**: 新增 `/services/consumption` “业务消费工作台”，接入菜单 seed、角色默认项、静态路由和动态菜单解析；页面覆盖报表数据集、指标入口、数据 API、数据产品、权限一致和客户验收包；前端契约、运维路由回归、生产构建和 whitespace 检查均通过。
+**设计文档**: `worklog/v2.2.3/sprint-40-202606/README.md`
+**集成测试**: `worklog/v2.2.3/sprint-40-202606/it/README.md`
+**关键决策**:
+- Sprint-39 保持 DONE；本 sprint 作为 UI 补强独立记录，避免重新打开已完成的后端主线。
+- 页面只做工作台编排与导航，不新增后端接口，不替换已有报表、指标、API、数据产品页面。
 
 ## v2.3 Backlog: 企业级资产与指标增强
 

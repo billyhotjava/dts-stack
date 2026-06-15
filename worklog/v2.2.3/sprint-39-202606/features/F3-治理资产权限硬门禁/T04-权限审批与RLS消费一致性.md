@@ -1,7 +1,7 @@
 # T04: 权限审批与 RLS 消费一致性
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T03
 
 ## 目标
@@ -10,21 +10,23 @@
 
 ## 技术设计
 
-- 检查 `asset_grant`、审批流、RLS/masking、metrics policy hash、大屏权限 fallback。
-- 默认关闭或标记 legacy local fallback，只保留明确 break-glass。
-- 每次消费记录权限快照和策略 hash，便于审计。
+- 新增 `GoldenChainPermissionConsistencyService`，统一资产门户、metrics、BI、大屏、API 服务、数据产品的权限快照判断。
+- 检查 platform policy hash、RLS hash、masking hash、asset key、user ref 是否一致。
+- legacy local fallback 默认阻断；仅明确 break-glass 时放行并输出 warning。
+- 无权限错误只返回泛化安全提示，不泄露资产细节。
 
 ## 影响范围
 
-- `source/dts-platform` permission/catalog/services
-- `source/dts-metrics` platform contract
-- `source/dts-platform-webapp` screens/BI
+- `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/goldenchain/governance/`
+- `source/dts-platform/src/test/java/com/yuzhi/dts/platform/service/goldenchain/governance/`
 
 ## 验证
 
-- [ ] 同一用户在资产门户可见性、metrics 预览、BI、大屏/API 消费结果一致。
-- [ ] 无权限错误不泄露资产细节。
+- [x] 同一用户在资产门户可见性、metrics 预览、BI、大屏/API 消费结果一致。
+- [x] 无权限错误不泄露资产细节。
+- [x] legacy local fallback 默认阻断，break-glass 明确放行并输出 warning。
+- [x] focused test 通过：`cd source/dts-platform && ./mvnw -q -Dtest=GoldenChainPermissionConsistencyServiceTest test`
 
 ## 完成标准
 
-- [ ] platform 成为消费权限唯一事实源。
+- [x] platform 成为消费权限唯一事实源。
