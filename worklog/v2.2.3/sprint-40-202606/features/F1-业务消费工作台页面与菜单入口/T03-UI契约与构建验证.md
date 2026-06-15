@@ -11,7 +11,7 @@
 
 ## 结果
 
-- 业务消费工作台 source-contract: 2/2 passed。
+- 业务消费工作台 source-contract: 3/3 passed，覆盖真实 golden-chain API 接入、静态演示数值移除和 UI 契约。
 - 运维路由 source-contract: 2/2 passed。
 - 前端生产构建通过。
 - whitespace 检查通过。
