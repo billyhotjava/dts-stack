@@ -1,7 +1,7 @@
 # F3: ELT 分层准入闸（EltLayerGate + 校验集成）
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: F1
 
 ## 目标
@@ -13,7 +13,7 @@
 |----|------|--------|------|------|
 | T01 | EltLayerGate 组件（层级规则 + 诊断码）+ 单测 | P0 | DONE | F1-T01 |
 | T02 | 集成进 model/business-object 校验 + validateModelForReview（受控模式生效） | P0 | DONE | T01, F1-T02 |
-| T03 | 错误码映射（400 invalid_layer / grain_mismatch / standard_code_required） | P0 | READY | T02 |
+| T03 | 错误码映射（unsafe_expression→422；分层码→400） | P0 | DONE | T02 |
 
 ## 完成标准
 - [ ] DWS/ADS 资产可作建模入口；ODS/STG 被拒（invalid_layer）。

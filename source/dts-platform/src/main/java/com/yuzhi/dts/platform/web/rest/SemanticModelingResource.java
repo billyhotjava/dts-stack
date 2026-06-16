@@ -409,8 +409,30 @@ public class SemanticModelingResource {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Object>> handleSemanticValidationFailure(IllegalArgumentException ex) {
-        LOG.debug("Semantic modeling validation failed: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponses.error(SEMANTIC_VALIDATION_FAILED, ex.getMessage()));
+        String message = ex.getMessage() == null ? "" : ex.getMessage();
+        // F3-T03: 受控建模违规码收口——unsafe_expression（受控 DSL）→ 422；
+        // invalid_layer/grain_mismatch/standard_code_required（ELT 分层闸）→ 400 并透出具体码；
+        // 其余校验异常保持 400 + SEMANTIC_VALIDATION_FAILED（现状）。
+        String code = controlledViolationCode(message);
+        HttpStatus status = "unsafe_expression".equals(code) ? HttpStatus.UNPROCESSABLE_ENTITY : HttpStatus.BAD_REQUEST;
+        String responseCode = code != null ? code : SEMANTIC_VALIDATION_FAILED;
+        LOG.debug("Semantic modeling validation failed [{}]: {}", responseCode, message);
+        return ResponseEntity.status(status).body(ApiResponses.error(responseCode, message));
+    }
+
+    /** 解析受控建模违规码（来自 ControlledMetricDslCompiler / EltLayerGate 抛出的 "code: message" 前缀）。 */
+    static String controlledViolationCode(String message) {
+        if (message == null) {
+            return null;
+        }
+        int idx = message.indexOf(':');
+        if (idx <= 0) {
+            return null;
+        }
+        return switch (message.substring(0, idx).trim()) {
+            case "unsafe_expression", "invalid_layer", "grain_mismatch", "standard_code_required" -> message.substring(0, idx).trim();
+            default -> null;
+        };
     }
 
     private Map<String, Object> eventPayload(Object... values) {
