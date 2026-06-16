@@ -840,20 +840,20 @@
 - 客户可见页面使用业务语言，不默认暴露 sprint/F1/F2、iframe、artifact、dbt 文件等内部表达。
 
 ## Sprint-46: 工作台首页收敛与个人定制 (202606)
-**状态**: READY
+**状态**: DONE
 **类型**: UI Productization / Workbench Personalization / Backend Preference Contract（dts-platform-webapp + dts-platform + dts-admin menu seed）
 **目标**: 将“工作台”“数据管理工作台”“业务消费工作台”收敛为唯一 `/workbench` 首页，并支持每个登录用户通过 checkbox 勾选组件、上移/下移调整显示顺序；不做拖拽门户，不内置客户 demo 场景，兼容 Chrome 95。
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
-| F1-唯一工作台路由与菜单收敛 | P0 | 3 | READY |
-| F2-个人工作台偏好后端契约 | P0 | 4 | READY |
-| F3-前端工作台容器与组件注册表 | P0 | 3 | READY |
-| F4-自定义工作台抽屉 | P0 | 3 | READY |
-| F5-数据管理能力组件化迁移 | P0 | 4 | READY |
-| F6-验收兼容与发布材料 | P0 | 3 | READY |
+| F1-唯一工作台路由与菜单收敛 | P0 | 3 | DONE |
+| F2-个人工作台偏好后端契约 | P0 | 4 | DONE |
+| F3-前端工作台容器与组件注册表 | P0 | 3 | DONE |
+| F4-自定义工作台抽屉 | P0 | 3 | DONE |
+| F5-数据管理能力组件化迁移 | P0 | 4 | DONE |
+| F6-验收兼容与发布材料 | P0 | 3 | DONE |
 
-**统计**: READY=20, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=20, BLOCKED=0
 **背景**: Sprint-45 已完成全局 UI 产品化整改，但客户现场定制首页诉求要求进一步从架构上去重：保留唯一工作台，把数据管理能力拆成用户可勾选的首页组件。
 **设计文档**: `worklog/v2.2.3/sprint-46-202606/README.md`
 **外部设计源**: `docs/superpowers/specs/2026-06-16-workbench-home-personalization-design.md`

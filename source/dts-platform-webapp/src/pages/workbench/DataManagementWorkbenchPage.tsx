@@ -23,15 +23,17 @@ const TONE_COLOR: Record<DataManagementTone, string> = {
 	danger: "red",
 };
 
-const themeNames = "经营分析、质量管理、项目交付、客户服务";
-
 const statusTag = (label: string, tone: DataManagementTone) => <Tag color={TONE_COLOR[tone]}>{label}</Tag>;
 
-export default function Page() {
+export type DataManagementWorkbenchPageProps = {
+	embedded?: boolean;
+};
+
+export default function Page({ embedded = false }: DataManagementWorkbenchPageProps) {
 	const router = useRouter();
 	const [chains, setChains] = useState<GoldenChainSummary[]>([]);
 	const [detailsByChainKey, setDetailsByChainKey] = useState<Record<string, GoldenChainDetail | undefined>>({});
-	const [selectedThemeKey, setSelectedThemeKey] = useState<string>("business");
+	const [selectedThemeKey, setSelectedThemeKey] = useState<string>("");
 	const [loading, setLoading] = useState(false);
 
 	useEffect(() => {
@@ -72,7 +74,7 @@ export default function Page() {
 	}, []);
 
 	const themes = useMemo(() => buildDataManagementThemes(chains, detailsByChainKey), [chains, detailsByChainKey]);
-	const selectedTheme = useMemo<DataManagementThemeState>(
+	const selectedTheme = useMemo<DataManagementThemeState | undefined>(
 		() => themes.find((theme) => theme.key === selectedThemeKey) || themes[0],
 		[themes, selectedThemeKey],
 	);
@@ -80,83 +82,110 @@ export default function Page() {
 		(theme) => theme.governance.tone === "warning" || theme.operation.tone === "warning",
 	);
 
-	const themeSummary = `${themeNames}主题看板`;
+	const hasThemes = themes.length > 0;
+	const themeSummary = hasThemes ? "已加载现场配置主题" : "待现场定义业务主题";
 	const failureReason = selectedTheme?.failureReason || "";
 	const nextAction = selectedTheme?.nextAction || selectedTheme?.primaryAction.label;
 	const evidenceRefs = selectedTheme?.evidenceRefs || [];
+	const headerActions = (
+		<Space wrap>
+			<Button onClick={() => router.push("/foundation/data-sources")}>配置数据源</Button>
+			<Button type={blockedThemes.length > 0 ? "primary" : "default"} onClick={() => router.push("/workbench/todo")}>
+				处理阻断项
+			</Button>
+			<Button onClick={() => router.push("/governance/quality")}>治理检查</Button>
+			<Button onClick={() => router.push("/catalog/assets")}>查看资产</Button>
+			<Button onClick={() => router.push("/bi/dashboards")}>创建报表</Button>
+			<Button onClick={() => router.push("/services/apis")}>发布数据 API</Button>
+			<Button onClick={() => router.push("/ops/overview")}>查看运行</Button>
+		</Space>
+	);
 
 	return (
-		<div className="space-y-6">
-			<PageHeader
-				title="数据管理工作台"
-				actions={
-					<Space wrap>
-						<Button onClick={() => router.push("/foundation/data-sources")}>配置数据源</Button>
-						<Button type={blockedThemes.length > 0 ? "primary" : "default"} onClick={() => router.push("/workbench/todo")}>
-							处理阻断项
-						</Button>
-						<Button onClick={() => router.push("/governance/quality")}>治理检查</Button>
-						<Button onClick={() => router.push("/catalog/assets")}>查看资产</Button>
-						<Button onClick={() => router.push("/bi/dashboards")}>创建报表</Button>
-						<Button onClick={() => router.push("/services/apis")}>发布数据 API</Button>
-						<Button onClick={() => router.push("/ops/overview")}>查看运行</Button>
-					</Space>
-				}
-			/>
+		<div className="space-y-6" data-testid="data-management-workbench-section">
+			{embedded ? (
+				<div className="flex flex-wrap items-start justify-between gap-4">
+					<div>
+						<Typography.Title level={4} style={{ margin: 0 }}>
+							数据管理
+						</Typography.Title>
+						<Text type="secondary">从数据源、黄金链路、治理阻断到消费发布的现场配置闭环。</Text>
+					</div>
+					{headerActions}
+				</div>
+			) : (
+				<PageHeader title="数据管理工作台" actions={headerActions} />
+			)}
 
 			<Alert
 				type={blockedThemes.length > 0 ? "warning" : "info"}
 				showIcon
 				message={blockedThemes.length > 0 ? "存在需要处理的主题" : themeSummary}
-				description="面向数据管理员按业务主题查看数据可用、治理状态、消费状态和运行健康。"
+				description="业务主题需在客户现场按组织、报表和资产口径定义，产品不内置演示场景；配置完成后再展示数据可用、治理状态、消费状态和运行健康。"
 			/>
 
 			<Spin spinning={loading}>
-				<div className="grid gap-4 xl:grid-cols-4 md:grid-cols-2">
-					{themes.map((theme) => (
-						<Card
-							key={theme.key}
-							hoverable
-							title={theme.title}
-							extra={<Tag>{theme.chainCount} 条链路</Tag>}
-							className={selectedTheme?.key === theme.key ? "border-primary" : undefined}
-							onClick={() => setSelectedThemeKey(theme.key)}
-						>
-							<div className="flex min-h-[248px] flex-col justify-between gap-4">
-								<Text type="secondary">{theme.description}</Text>
-								<Progress percent={theme.progressPercent} size="small" />
-								<div className="grid grid-cols-2 gap-2 text-sm">
-									<div>
-										<div className="mb-1 text-muted-foreground">数据可用</div>
-										{statusTag(theme.dataAvailability.label, theme.dataAvailability.tone)}
+				{hasThemes ? (
+					<div className="grid gap-4 xl:grid-cols-4 md:grid-cols-2">
+						{themes.map((theme) => (
+							<Card
+								key={theme.key}
+								hoverable
+								title={theme.title}
+								extra={<Tag>{theme.chainCount} 条链路</Tag>}
+								className={selectedTheme?.key === theme.key ? "border-primary" : undefined}
+								onClick={() => setSelectedThemeKey(theme.key)}
+							>
+								<div className="flex min-h-[248px] flex-col justify-between gap-4">
+									<Text type="secondary">{theme.description}</Text>
+									<Progress percent={theme.progressPercent} size="small" />
+									<div className="grid grid-cols-2 gap-2 text-sm">
+										<div>
+											<div className="mb-1 text-muted-foreground">数据可用</div>
+											{statusTag(theme.dataAvailability.label, theme.dataAvailability.tone)}
+										</div>
+										<div>
+											<div className="mb-1 text-muted-foreground">治理状态</div>
+											{statusTag(theme.governance.label, theme.governance.tone)}
+										</div>
+										<div>
+											<div className="mb-1 text-muted-foreground">消费状态</div>
+											{statusTag(theme.consumption.label, theme.consumption.tone)}
+										</div>
+										<div>
+											<div className="mb-1 text-muted-foreground">运行健康</div>
+											{statusTag(theme.operation.label, theme.operation.tone)}
+										</div>
 									</div>
-									<div>
-										<div className="mb-1 text-muted-foreground">治理状态</div>
-										{statusTag(theme.governance.label, theme.governance.tone)}
-									</div>
-									<div>
-										<div className="mb-1 text-muted-foreground">消费状态</div>
-										{statusTag(theme.consumption.label, theme.consumption.tone)}
-									</div>
-									<div>
-										<div className="mb-1 text-muted-foreground">运行健康</div>
-										{statusTag(theme.operation.label, theme.operation.tone)}
-									</div>
+									<Button block onClick={(event) => {
+										event.stopPropagation();
+										router.push(theme.primaryAction.route);
+									}}>
+										{theme.primaryAction.label}
+									</Button>
 								</div>
-								<Button block onClick={(event) => {
-									event.stopPropagation();
-									router.push(theme.primaryAction.route);
-								}}>
-									{theme.primaryAction.label}
+							</Card>
+						))}
+					</div>
+				) : (
+					<EmptyState
+						compact
+						title="待现场定义业务主题"
+						description="数据管理工作台不内置演示场景。请在客户现场确认主题口径，并完成数据源、资产和交付链路配置后再展示主题卡片。"
+						actions={
+							<Space wrap>
+								<Button type="primary" onClick={() => router.push("/foundation/data-sources")}>
+									配置数据源
 								</Button>
-							</div>
-						</Card>
-					))}
-				</div>
+								<Button onClick={() => router.push("/catalog/assets")}>查看资产</Button>
+							</Space>
+						}
+					/>
+				)}
 			</Spin>
 
 			<Card
-				title={selectedTheme?.title || "主题详情"}
+				title={selectedTheme?.title || "现场主题配置"}
 				extra={selectedTheme ? statusTag(selectedTheme.consumption.label, selectedTheme.consumption.tone) : null}
 			>
 				{selectedTheme && selectedTheme.chainCount > 0 ? (
@@ -206,8 +235,8 @@ export default function Page() {
 				) : (
 					<EmptyState
 						compact
-						title="暂无主题链路"
-						description="配置数据来源并完成数据交付后，这里会按业务主题展示状态和证据。"
+						title="暂无现场业务主题"
+						description="当前环境还没有客户现场确认的业务主题。完成主题口径、数据来源和交付链路配置后，这里才会展示主题状态和证据。"
 						actions={
 							<Space wrap>
 								<Button type="primary" onClick={() => router.push("/foundation/data-sources")}>

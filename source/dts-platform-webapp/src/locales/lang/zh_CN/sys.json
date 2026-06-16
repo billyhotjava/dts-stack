@@ -115,8 +115,6 @@
 				"exploreEtlReconciliation": "装载对账校验",
 				"workbench": "工作台",
 				"workbenchHome": "首页",
-				"workbenchDataManagement": "数据管理工作台",
-				"workbenchDataManagementCaption": "按业务主题查看数据可用、治理、消费和运行状态",
 				"exploreSharing": "结果集分享",
 				"exploreSharingCaption": "受控分享，支持有效期与可见范围",
 				"exploreExport": "导出中心",

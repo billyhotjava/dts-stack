@@ -12,12 +12,6 @@
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.workbenchDataManagement",
-    "title": "数据管理工作台",
-    "route": "/workbench/data-management",
-    "requiredRoles": []
-  },
-  {
     "code": "sys.nav.portal.resourceConnectors",
     "title": "连接器目录",
     "route": "/foundation/connectors",

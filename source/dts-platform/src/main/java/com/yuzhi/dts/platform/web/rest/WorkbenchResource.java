@@ -6,8 +6,11 @@ import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.workbench.WorkbenchAuditRateLimiter;
 import com.yuzhi.dts.platform.service.workbench.WorkbenchLeaderOverviewService;
+import com.yuzhi.dts.platform.service.workbench.WorkbenchPreferencesService;
 import com.yuzhi.dts.platform.service.workbench.WorkbenchService;
 import com.yuzhi.dts.platform.service.workbench.dto.LeaderOverviewResponse;
+import com.yuzhi.dts.platform.service.workbench.dto.WorkbenchPreferencesRequest;
+import com.yuzhi.dts.platform.service.workbench.dto.WorkbenchPreferencesResponse;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -15,6 +18,7 @@ import java.util.Map;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -35,17 +39,20 @@ public class WorkbenchResource {
 
     private final WorkbenchService workbenchService;
     private final WorkbenchLeaderOverviewService leaderOverviewService;
+    private final WorkbenchPreferencesService preferencesService;
     private final AuditService auditService;
     private final WorkbenchAuditRateLimiter auditRateLimiter;
 
     public WorkbenchResource(
         WorkbenchService workbenchService,
         WorkbenchLeaderOverviewService leaderOverviewService,
+        WorkbenchPreferencesService preferencesService,
         AuditService auditService,
         WorkbenchAuditRateLimiter auditRateLimiter
     ) {
         this.workbenchService = workbenchService;
         this.leaderOverviewService = leaderOverviewService;
+        this.preferencesService = preferencesService;
         this.auditService = auditService;
         this.auditRateLimiter = auditRateLimiter;
     }
@@ -98,6 +105,41 @@ public class WorkbenchResource {
                 "effective", payload.scope() == null ? "" : payload.scope(),
                 "dept", payload.effectiveDeptCode() == null ? "" : payload.effectiveDeptCode()
             )), null);
+        return ApiResponses.ok(payload);
+    }
+
+    @GetMapping("/preferences")
+    public ApiResponse<WorkbenchPreferencesResponse> preferences() {
+        String user = SecurityUtils.getCurrentUserLogin().orElseThrow();
+        WorkbenchPreferencesResponse payload = preferencesService.getPreferences(user, SecurityUtils.getCurrentUserAuthorities());
+        auditService.auditAction("WORKBENCH_PREFERENCES_READ", AuditStage.SUCCESS, user, null);
+        return ApiResponses.ok(payload);
+    }
+
+    @PutMapping("/preferences")
+    public ResponseEntity<ApiResponse<WorkbenchPreferencesResponse>> savePreferences(
+        @RequestBody(required = false) WorkbenchPreferencesRequest request
+    ) {
+        String user = SecurityUtils.getCurrentUserLogin().orElseThrow();
+        try {
+            WorkbenchPreferencesResponse payload = preferencesService.savePreferences(
+                user,
+                SecurityUtils.getCurrentUserAuthorities(),
+                request
+            );
+            auditService.auditAction("WORKBENCH_PREFERENCES_SAVE", AuditStage.SUCCESS, user, null);
+            return ResponseEntity.ok(ApiResponses.ok(payload));
+        } catch (IllegalArgumentException ex) {
+            auditService.auditAction("WORKBENCH_PREFERENCES_SAVE", AuditStage.FAIL, user, ex.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponses.error("workbenchPreferenceInvalid", ex.getMessage()));
+        }
+    }
+
+    @PostMapping("/preferences/reset")
+    public ApiResponse<WorkbenchPreferencesResponse> resetPreferences() {
+        String user = SecurityUtils.getCurrentUserLogin().orElseThrow();
+        WorkbenchPreferencesResponse payload = preferencesService.resetPreferences(user, SecurityUtils.getCurrentUserAuthorities());
+        auditService.auditAction("WORKBENCH_PREFERENCES_RESET", AuditStage.SUCCESS, user, null);
         return ApiResponses.ok(payload);
     }
 

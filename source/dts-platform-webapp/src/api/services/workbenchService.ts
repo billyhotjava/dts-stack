@@ -18,6 +18,30 @@ export type WorkbenchTodoItem = {
 	requester?: string;
 };
 
+export type WorkbenchComponentDescriptor = {
+	key: string;
+	title: string;
+	description?: string | null;
+	enabled?: boolean;
+	disabledReason?: string | null;
+};
+
+export type WorkbenchPreferenceItem = {
+	key: string;
+	visible: boolean;
+	order: number;
+};
+
+export type WorkbenchPreferencesRequest = {
+	items: WorkbenchPreferenceItem[];
+};
+
+export type WorkbenchPreferencesResponse = {
+	version: number;
+	availableComponents: WorkbenchComponentDescriptor[];
+	items: WorkbenchPreferenceItem[];
+};
+
 /**
  * Sprint-15 F1/T03 — Leader overview KPI block.
  *
@@ -93,6 +117,10 @@ export interface LeaderOverviewParams {
 export default {
 	overview: () => apiClient.get<WorkbenchOverview>({ url: "/workbench/overview" }),
 	todos: () => apiClient.get<WorkbenchTodoItem[]>({ url: "/workbench/todos" }),
+	preferences: () => apiClient.get<WorkbenchPreferencesResponse>({ url: "/workbench/preferences" }),
+	savePreferences: (payload: WorkbenchPreferencesRequest) =>
+		apiClient.put<WorkbenchPreferencesResponse>({ url: "/workbench/preferences", data: payload }),
+	resetPreferences: () => apiClient.post<WorkbenchPreferencesResponse>({ url: "/workbench/preferences/reset" }),
 	leaderOverview: (params: LeaderOverviewParams) =>
 		apiClient.get<LeaderOverviewResponse>({
 			url: "/workbench/leader-overview",

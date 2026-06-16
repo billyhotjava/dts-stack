@@ -19,27 +19,27 @@ const MENU_SEED = readFileSync(
 );
 const ZH_LOCALE = readFileSync(new URL("../../locales/lang/zh_CN/sys.json", import.meta.url), "utf8");
 
-test("legacy business consumption route resolves to data management workbench", () => {
-	assert.match(MENU_SEED, /"key": "data-management"/);
-	assert.match(MENU_SEED, /"externalLink": "\/workbench\/data-management"/);
+test("legacy business consumption route redirects to the single workbench homepage", () => {
+	assert.doesNotMatch(MENU_SEED, /"key": "data-management"/);
+	assert.doesNotMatch(MENU_SEED, /"externalLink": "\/workbench\/data-management"/);
 	assert.doesNotMatch(MENU_SEED, /"key": "consumption"[\s\S]*?"externalLink": "\/services\/consumption"/);
-	assert.match(ZH_LOCALE, /"workbenchDataManagement": "数据管理工作台"/);
-	assert.match(STATIC_ROUTES, /DataManagementWorkbenchPage/);
-	assert.match(STATIC_ROUTES, /path: "workbench\/data-management"/);
-	assert.match(STATIC_ROUTES, /path: "services\/consumption"/);
-	assert.match(DYNAMIC_RESOLVER, /"\/services\/consumption": "\/pages\/workbench\/DataManagementWorkbenchPage"/);
+	assert.doesNotMatch(ZH_LOCALE, /"workbenchDataManagement": "数据管理工作台"/);
+	assert.doesNotMatch(STATIC_ROUTES, /path: "services\/consumption"[\s\S]*?<DataManagementWorkbenchPage/);
+	assert.match(STATIC_ROUTES, /path: "services\/consumption"[\s\S]*?section=consumption/);
+	assert.match(DYNAMIC_RESOLVER, /"\/services\/consumption": "\/workbench\?section=consumption"/);
 });
 
-test("data management workbench presents business themes as customer workflow", () => {
+test("data management workbench does not ship builtin demo business themes", () => {
 	assert.equal(existsSync(PAGE_URL), true);
 	const source = readFileSync(PAGE_URL, "utf8");
 
 	assert.match(source, /数据管理工作台/);
-	assert.match(source, /主题看板/);
-	assert.match(source, /经营分析/);
-	assert.match(source, /质量管理/);
-	assert.match(source, /项目交付/);
-	assert.match(source, /客户服务/);
+	assert.match(source, /待现场定义业务主题/);
+	assert.match(source, /不内置演示场景/);
+	assert.doesNotMatch(source, /经营分析/);
+	assert.doesNotMatch(source, /质量管理/);
+	assert.doesNotMatch(source, /项目交付/);
+	assert.doesNotMatch(source, /客户服务/);
 	assert.doesNotMatch(source, /SQL|dbt|\.sql/i);
 });
 
@@ -56,6 +56,7 @@ test("data management workbench is driven by golden chain runtime state", () => 
 	assert.match(pageSource, /nextAction/);
 	assert.match(pageSource, /evidenceRefs/);
 	assert.match(modelSource, /DEFAULT_DATA_MANAGEMENT_THEMES/);
+	assert.doesNotMatch(modelSource, /keywords: \[/);
 	assert.doesNotMatch(pageSource, /percent=\{83\}|已开放入口.*4|权限一致面.*6/s);
 
 	assert.match(serviceSource, /GoldenChainSummary/);

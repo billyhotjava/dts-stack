@@ -24,5 +24,5 @@ test("Sprint-45 data sources page connects source setup to ingestion and golden 
 	assert.match(PAGE_SOURCE, /dataSourcesService\.schemaDiscover/);
 	assert.match(PAGE_SOURCE, /dataSourcesService\.odsPreview/);
 	assert.match(PAGE_SOURCE, /dataSourcesService\.odsPrecheck/);
-	assert.match(PAGE_SOURCE, /"\/workbench\/data-management"/);
+	assert.match(PAGE_SOURCE, /"\/workbench\?section=data-management"/);
 });

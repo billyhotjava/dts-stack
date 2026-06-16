@@ -24,6 +24,11 @@ const workbenchComponentPath = GLOBAL_CONFIG.enableSqlIdeV2
 	? "/pages/explore/SqlIdePage"
 	: "/pages/explore/QueryWorkbenchPage";
 
+const PATH_REDIRECT_OVERRIDES: Record<string, string> = {
+	"/workbench/data-management": "/workbench?section=data-management",
+	"/services/consumption": "/workbench?section=consumption",
+};
+
 const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	// ── Platform pages ──
 	"/governance": "/pages/governance/GovernanceCenterPage",
@@ -44,7 +49,6 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	"/foundation/data-sources": "/pages/foundation/DataSourcesPage",
 	"/foundation/jdbc-drivers": "/pages/foundation/JdbcDriversPage",
 	"/workbench/todo": "/pages/workbench/WorkflowCenterPage",
-	"/workbench/data-management": "/pages/workbench/DataManagementWorkbenchPage",
 	"/explore/etl": "/pages/explore/etl/EltConsolePage",
 	"/explore/etl/console": "/pages/explore/etl/EltConsolePage",
 	"/explore/etl/scripts": "/pages/explore/etl/ScriptStudioPage",
@@ -69,7 +73,6 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	"/governance/my-indicators": "/pages/governance/MyIndicatorDashboard",
 	"/security/data-security": "/pages/security/data-security",
 	"/security/dataset-access-approval": "/pages/security/DatasetAccessApprovalPage",
-	"/services/consumption": "/pages/workbench/DataManagementWorkbenchPage",
 	"/services/apis": "/pages/services/ApiServicesPage",
 	"/services/products": "/pages/services/DataProductsPage",
 	"/services/tokens": "/pages/services/TokensPage",
@@ -123,6 +126,7 @@ export function DynamicMenuResolver({ base }: Props) {
 	const pathname = normalizeMenuPath(location.pathname || "/");
 	const normalizedBase = base ? normalizeMenuPath(base) : "";
 	const menusLoaded = Array.isArray(menus) && menus.length > 0;
+	const directRedirectPath = PATH_REDIRECT_OVERRIDES[pathname];
 	const directOverridePath = isWithinBase(pathname, normalizedBase) ? resolveDashboardComponentOverride(pathname) : "";
 	const overrideParentPath = directOverrideParentPath(pathname);
 	const fallbackMenuPath = useMemo(() => firstAccessibleMenuPath(Array.isArray(menus) ? menus : []), [menus]);
@@ -149,6 +153,10 @@ export function DynamicMenuResolver({ base }: Props) {
 		if (!menusLoaded || !overrideParentPath) return null;
 		return findMenuByPath(menus || [], overrideParentPath);
 	}, [menus, menusLoaded, overrideParentPath]);
+
+	if (directRedirectPath) {
+		return <Navigate to={directRedirectPath} replace />;
+	}
 
 	if (!menusLoaded) {
 		if (directOverridePath) {

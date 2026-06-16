@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { useLocation, type RouteObject } from "react-router";
+import { Navigate, useLocation, type RouteObject } from "react-router";
 import { LineLoading } from "@/components/loading";
 import { metricsServiceEmbeddedHrefFromPlatformLocation } from "./metricsServiceRoutes";
 
@@ -22,7 +22,6 @@ const OpsOverviewPage = lazy(() => import("@/pages/ops/OpsOverviewPage"));
 const OpsInstancesPage = lazy(() => import("@/pages/ops/OpsInstancesPage"));
 const OpsAlertLogPage = lazy(() => import("@/pages/ops/OpsAlertLogPage"));
 const OpsBackfillPage = lazy(() => import("@/pages/ops/OpsBackfillPage"));
-const DataManagementWorkbenchPage = lazy(() => import("@/pages/workbench/DataManagementWorkbenchPage"));
 const WorkflowCenterPage = lazy(() => import("@/pages/workbench/WorkflowCenterPage"));
 const StudioProjectsPage = lazy(() => import("@/pages/modeling/ModelTemplatesPage"));
 const SqlModelingPage = lazy(() => import("@/pages/modeling/SqlModelingPage"));
@@ -114,8 +113,8 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{ path: "ops/alerts", element: <S><OpsAlertLogPage /></S> },
 	{ path: "ops/backfill", element: <S><OpsBackfillPage /></S> },
 	{ path: "workbench/todo", element: <S><WorkflowCenterPage /></S> },
-	{ path: "workbench/data-management", element: <S><DataManagementWorkbenchPage /></S> },
-	{ path: "services/consumption", element: <S><DataManagementWorkbenchPage /></S> },
+	{ path: "workbench/data-management", element: <Navigate to="/workbench?section=data-management" replace /> },
+	{ path: "services/consumption", element: <Navigate to="/workbench?section=consumption" replace /> },
 	{ path: "studio/projects", element: <S><StudioProjectsPage /></S> },
 	{ path: "studio/sql-modeling", element: <S><SqlModelingPage /></S> },
 	{ path: "modeling/semantic-center", element: <MetricsServiceFrame /> },

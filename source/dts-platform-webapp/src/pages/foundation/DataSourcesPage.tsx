@@ -806,7 +806,7 @@ export default function DataSourcesPage() {
 						连接器目录
 					</Button>
 					<Button onClick={() => navigate("/foundation/jdbc-drivers")}>JDBC 驱动管理</Button>
-					<Button onClick={() => navigate("/workbench/data-management")}>查看黄金链路</Button>
+					<Button onClick={() => navigate("/workbench?section=data-management")}>查看黄金链路</Button>
 					<Button type="primary" onClick={openCreate}>
 						新建数据源
 					</Button>

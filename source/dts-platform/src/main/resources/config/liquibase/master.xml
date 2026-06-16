@@ -166,4 +166,5 @@
     <include file="config/liquibase/changelog/20260518_04_modeling_plan_domain_id.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260614_01_golden_chain_instance.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260616_01_semantic_governance_mode.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260616_02_workbench_user_preference.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

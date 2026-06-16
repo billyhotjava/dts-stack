@@ -46,36 +46,26 @@ const stateByTheme = (themes: DataManagementThemeState[]) =>
 	Object.fromEntries(themes.map((item) => [item.key, item]));
 
 describe("data management theme model", () => {
-	it("keeps business themes as the first-class board objects even when no chain exists", () => {
+	it("does not create default customer business themes before onsite definition", () => {
 		const themes = buildDataManagementThemes([], {});
 
-		expect(themes.map((item) => item.title)).toEqual(DEFAULT_DATA_MANAGEMENT_THEMES.map((item) => item.title));
-		expect(themes.map((item) => item.title)).toEqual(["经营分析", "质量管理", "项目交付", "客户服务"]);
-		for (const theme of themes) {
-			expect(theme.dataAvailability.label).toBe("未接入");
-			expect(theme.governance.label).toBe("待建设");
-			expect(theme.consumption.label).toBe("待发布");
-			expect(theme.operation.label).toBe("待运行");
-			expect(theme.primaryAction.route).toBe("/foundation/data-sources");
-		}
+		expect(DEFAULT_DATA_MANAGEMENT_THEMES).toEqual([]);
+		expect(themes).toEqual([]);
 	});
 
-	it("assigns golden chains to business themes using customer-facing business words", () => {
+	it("builds board objects only from configured customer chains", () => {
 		const chains = [
 			summary({ chainKey: "chain-orders", displayName: "经营订单分析链路" }),
 			summary({ chainKey: "chain-quality", displayName: "质量问题整改链路" }),
-			summary({ chainKey: "chain-project", displayName: "项目交付进度链路" }),
-			summary({ chainKey: "chain-customer", displayName: "客户服务满意度链路" }),
 		];
 
 		const themes = stateByTheme(buildDataManagementThemes(chains, {}));
 
-		expect(themes.business.chainCount).toBe(1);
-		expect(themes.quality.chainCount).toBe(1);
-		expect(themes.delivery.chainCount).toBe(1);
-		expect(themes.customer.chainCount).toBe(1);
-		expect(themes.business.relatedChains[0].displayName).toBe("经营订单分析链路");
-		expect(themes.quality.relatedChains[0].displayName).toBe("质量问题整改链路");
+		expect(Object.keys(themes)).toEqual(["chain-orders", "chain-quality"]);
+		expect(themes["chain-orders"].chainCount).toBe(1);
+		expect(themes["chain-quality"].chainCount).toBe(1);
+		expect(themes["chain-orders"].title).toBe("经营订单分析链路");
+		expect(themes["chain-quality"].title).toBe("质量问题整改链路");
 	});
 
 	it("surfaces blocked governance and operations as theme-level next actions", () => {
@@ -101,12 +91,12 @@ describe("data management theme model", () => {
 			}),
 		);
 
-		expect(themes.quality.governance.label).toBe("待治理");
-		expect(themes.quality.governance.tone).toBe("warning");
-		expect(themes.quality.operation.label).toBe("待运行");
-		expect(themes.quality.primaryAction.label).toBe("补齐质量责任人与分级说明");
-		expect(themes.quality.primaryAction.route).toBe("/governance/quality");
-		expect(themes.quality.evidenceRefs).toContain("it/evidence/customer-demo/03-governance-gate.md");
+		expect(themes["chain-quality"].governance.label).toBe("待治理");
+		expect(themes["chain-quality"].governance.tone).toBe("warning");
+		expect(themes["chain-quality"].operation.label).toBe("待运行");
+		expect(themes["chain-quality"].primaryAction.label).toBe("补齐质量责任人与分级说明");
+		expect(themes["chain-quality"].primaryAction.route).toBe("/governance/quality");
+		expect(themes["chain-quality"].evidenceRefs).toContain("it/evidence/customer-demo/03-governance-gate.md");
 	});
 
 	it("marks a theme as published and healthy only when consumption and operations are ready", () => {
@@ -128,10 +118,10 @@ describe("data management theme model", () => {
 			}),
 		);
 
-		expect(themes.customer.dataAvailability.label).toBe("可用");
-		expect(themes.customer.governance.label).toBe("已达标");
-		expect(themes.customer.consumption.label).toBe("已发布");
-		expect(themes.customer.operation.label).toBe("运行健康");
-		expect(themes.customer.primaryAction.route).toBe("/bi/report-factory");
+		expect(themes["chain-customer"].dataAvailability.label).toBe("可用");
+		expect(themes["chain-customer"].governance.label).toBe("已达标");
+		expect(themes["chain-customer"].consumption.label).toBe("已发布");
+		expect(themes["chain-customer"].operation.label).toBe("运行健康");
+		expect(themes["chain-customer"].primaryAction.route).toBe("/bi/report-factory");
 	});
 });

@@ -28,7 +28,11 @@ import { ScreenStrip } from "./components/ScreenStrip";
 
 const DEBOUNCE_MS = 150;
 
-export function LeaderOverviewPage() {
+export type LeaderOverviewPageProps = {
+	visibleComponentKeys?: ReadonlySet<string>;
+};
+
+export function LeaderOverviewPage({ visibleComponentKeys }: LeaderOverviewPageProps = {}) {
 	const roleInfo = useWorkbenchRole();
 	const [filter, setFilter] = useState<WorkbenchFilterState>(() => initialFilterState(roleInfo));
 	const [data, setData] = useState<LeaderOverviewResponse | null>(null);
@@ -94,7 +98,13 @@ export function LeaderOverviewPage() {
 		setFilter((prev) => ({ ...prev, bizDomain: domain }));
 	}, []);
 
+	const isComponentVisible = useCallback(
+		(key: string): boolean => !visibleComponentKeys || visibleComponentKeys.has(key),
+		[visibleComponentKeys],
+	);
+
 	const showMatrix =
+		isComponentVisible("leader-kpi") &&
 		roleInfo.isInstLeader &&
 		filter.bizDomainAvailable &&
 		(data?.domainMatrix?.length ?? 0) > 0;
@@ -105,7 +115,7 @@ export function LeaderOverviewPage() {
 
 			<div style={{ padding: 16 }}>
 				<Space direction="vertical" size={16} style={{ width: "100%" }}>
-					<ScreenStrip />
+					{isComponentVisible("screen-strip") && <ScreenStrip />}
 
 					{error && (
 						<Alert
@@ -121,15 +131,17 @@ export function LeaderOverviewPage() {
 						/>
 					)}
 
-					<KpiRow
-						role={roleInfo.role}
-						filter={filter}
-						kpis={data?.kpis ?? null}
-						loading={loading}
-						error={Boolean(error)}
-					/>
+					{isComponentVisible("leader-kpi") && (
+						<KpiRow
+							role={roleInfo.role}
+							filter={filter}
+							kpis={data?.kpis ?? null}
+							loading={loading}
+							error={Boolean(error)}
+						/>
+					)}
 
-					{roleInfo.isInstLeader && (
+					{roleInfo.isInstLeader && isComponentVisible("leader-kpi") && (
 						<DomainMatrix
 							visible={showMatrix}
 							cells={data?.domainMatrix ?? []}
@@ -138,22 +150,28 @@ export function LeaderOverviewPage() {
 						/>
 					)}
 
-					<Row gutter={16}>
-						<Col xs={24} md={16}>
-							<TopReportsBlock
-								role={roleInfo.role}
-								items={data?.topReports ?? []}
-								loading={loading}
-							/>
-						</Col>
-						<Col xs={24} md={8}>
-							<CoreAssetsBlock
-								role={roleInfo.role}
-								items={data?.topAssets ?? []}
-								loading={loading}
-							/>
-						</Col>
-					</Row>
+					{(isComponentVisible("top-reports") || isComponentVisible("core-assets")) && (
+						<Row gutter={16}>
+							{isComponentVisible("top-reports") && (
+								<Col xs={24} md={isComponentVisible("core-assets") ? 16 : 24}>
+									<TopReportsBlock
+										role={roleInfo.role}
+										items={data?.topReports ?? []}
+										loading={loading}
+									/>
+								</Col>
+							)}
+							{isComponentVisible("core-assets") && (
+								<Col xs={24} md={isComponentVisible("top-reports") ? 8 : 24}>
+									<CoreAssetsBlock
+										role={roleInfo.role}
+										items={data?.topAssets ?? []}
+										loading={loading}
+									/>
+								</Col>
+							)}
+						</Row>
+					)}
 				</Space>
 			</div>
 		</div>
