@@ -7,6 +7,7 @@ const INDEX_URL = new URL("./index.tsx", import.meta.url);
 const LEADER_PAGE_URL = new URL("./LeaderOverviewPage.tsx", import.meta.url);
 const REGISTRY_URL = new URL("./workbenchComponentRegistry.tsx", import.meta.url);
 const DRAWER_URL = new URL("./components/WorkbenchCustomizeDrawer.tsx", import.meta.url);
+const LOCAL_PREFERENCES_URL = new URL("./workbenchLocalPreferences.ts", import.meta.url);
 
 const expectedComponentKeys = [
 	"leader-kpi",
@@ -76,14 +77,29 @@ test("workbench page is a personalizable container over the leader overview modu
 	assert.match(indexSource, /useSearchParams/);
 	assert.match(indexSource, /customize=1/);
 	assert.match(indexSource, /visibleComponentKeys/);
-	assert.match(indexSource, /当前环境暂未启用个人工作台保存/);
+	assert.match(indexSource, /readLocalWorkbenchPreferenceItems/);
+	assert.match(indexSource, /saveLocalWorkbenchPreferenceItems/);
+	assert.match(indexSource, /resetLocalWorkbenchPreferenceItems/);
 	assert.doesNotMatch(indexSource, /<Alert/);
-	assert.doesNotMatch(indexSource, /个人工作台配置暂时不可用|No static resource/);
+	assert.doesNotMatch(indexSource, /个人工作台配置暂时不可用|No static resource|后端已升级|暂未启用个人工作台保存/);
 
 	assert.match(leaderSource, /visibleComponentKeys\?:\s*ReadonlySet<string>/);
 	for (const key of ["screen-strip", "leader-kpi", "top-reports", "core-assets"]) {
 		assert.match(leaderSource, new RegExp(`isComponentVisible\\("${key}"\\)`));
 	}
+});
+
+test("workbench local preferences provide a silent per-user fallback", () => {
+	assert.equal(existsSync(LOCAL_PREFERENCES_URL), true);
+	const source = readFileSync(LOCAL_PREFERENCES_URL, "utf8");
+
+	assert.match(source, /dts\.platform\.workbench\.preferences\.v1/);
+	assert.match(source, /resolveWorkbenchPreferenceOwner/);
+	assert.match(source, /readLocalWorkbenchPreferenceItems/);
+	assert.match(source, /saveLocalWorkbenchPreferenceItems/);
+	assert.match(source, /resetLocalWorkbenchPreferenceItems/);
+	assert.match(source, /username/);
+	assert.doesNotMatch(source, /后端已升级|暂未启用个人工作台保存|No static resource/);
 });
 
 test("legacy data-management query renders the real data management section inside workbench", () => {

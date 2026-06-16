@@ -7,15 +7,23 @@ import workbenchService, {
 	type WorkbenchPreferenceItem,
 	type WorkbenchPreferencesResponse,
 } from "@/api/services/workbenchService";
+import { useUserInfo } from "@/store/userStore";
 import WorkbenchCustomizeDrawer from "./components/WorkbenchCustomizeDrawer";
 import DataManagementWorkbenchPage from "./DataManagementWorkbenchPage";
 import { LeaderOverviewPage } from "./LeaderOverviewPage";
+import {
+	readLocalWorkbenchPreferenceItems,
+	resetLocalWorkbenchPreferenceItems,
+	resolveWorkbenchPreferenceOwner,
+	saveLocalWorkbenchPreferenceItems,
+} from "./workbenchLocalPreferences";
 import {
 	WORKBENCH_COMPONENT_REGISTRY,
 	getWorkbenchComponent,
 	isLeaderOverviewComponentKey,
 	registryOrderOf,
 	renderWorkbenchComponent,
+	toWorkbenchComponentDescriptors,
 } from "./workbenchComponentRegistry";
 import { normalizeWorkbenchPreferenceItems } from "./workbenchPersonalizationModel";
 
@@ -23,7 +31,6 @@ const CUSTOMIZE_QUERY = "customize=1";
 const CUSTOMIZE_QUERY_INDEX = CUSTOMIZE_QUERY.indexOf("=");
 const CUSTOMIZE_QUERY_KEY = CUSTOMIZE_QUERY.slice(0, CUSTOMIZE_QUERY_INDEX);
 const CUSTOMIZE_QUERY_VALUE = CUSTOMIZE_QUERY.slice(CUSTOMIZE_QUERY_INDEX + 1);
-const PREFERENCES_UNAVAILABLE_MESSAGE = "当前环境暂未启用个人工作台保存，请确认 dts-platform 后端已升级。";
 
 function normalizeAvailableComponents(
 	components: WorkbenchComponentDescriptor[] | undefined,
@@ -52,6 +59,23 @@ function normalizeAvailableComponents(
 		.sort((a, b) => registryOrderOf(a.key) - registryOrderOf(b.key));
 }
 
+function normalizeSavedItems(items: WorkbenchPreferenceItem[]): WorkbenchPreferenceItem[] {
+	return items.map((item, index) => ({
+		key: item.key,
+		visible: item.visible,
+		order: (index + 1) * 10,
+	}));
+}
+
+function buildLocalPreferenceResponse(items?: WorkbenchPreferenceItem[] | null): WorkbenchPreferencesResponse {
+	const availableComponents = toWorkbenchComponentDescriptors();
+	return {
+		version: 0,
+		availableComponents,
+		items: normalizeWorkbenchPreferenceItems(items ?? undefined, availableComponents),
+	};
+}
+
 export default function WorkbenchPage() {
 	const [searchParams, setSearchParams] = useSearchParams();
 	const [preferences, setPreferences] = useState<WorkbenchPreferencesResponse | null>(null);
@@ -61,6 +85,8 @@ export default function WorkbenchPage() {
 		() => searchParams.get(CUSTOMIZE_QUERY_KEY) === CUSTOMIZE_QUERY_VALUE,
 	);
 	const activeSection = searchParams.get("section");
+	const userInfo = useUserInfo();
+	const preferenceOwner = useMemo(() => resolveWorkbenchPreferenceOwner(userInfo), [userInfo]);
 
 	const loadPreferences = useCallback(async (): Promise<void> => {
 		setLoading(true);
@@ -69,10 +95,11 @@ export default function WorkbenchPage() {
 			setPreferences(next);
 		} catch (ex: unknown) {
 			console.warn("[workbench] personal preferences are unavailable; using local defaults", ex);
+			setPreferences(buildLocalPreferenceResponse(readLocalWorkbenchPreferenceItems(preferenceOwner)));
 		} finally {
 			setLoading(false);
 		}
-	}, []);
+	}, [preferenceOwner]);
 
 	useEffect(() => {
 		void loadPreferences();
@@ -122,26 +149,27 @@ export default function WorkbenchPage() {
 
 	const handleSave = useCallback(
 		async (items: WorkbenchPreferenceItem[]): Promise<void> => {
+			const nextItems = normalizeSavedItems(items);
 			setSaving(true);
 			try {
 				const next = await workbenchService.savePreferences({
-					items: items.map((item, index) => ({
-						key: item.key,
-						visible: item.visible,
-						order: (index + 1) * 10,
-					})),
+					items: nextItems,
 				});
 				setPreferences(next);
+				saveLocalWorkbenchPreferenceItems(preferenceOwner, next.items);
 				message.success("工作台已更新");
 				closeCustomize();
 			} catch (ex: unknown) {
 				console.warn("[workbench] failed to save personal preferences", ex);
-				message.warning(PREFERENCES_UNAVAILABLE_MESSAGE);
+				saveLocalWorkbenchPreferenceItems(preferenceOwner, nextItems);
+				setPreferences(buildLocalPreferenceResponse(nextItems));
+				message.success("工作台已更新");
+				closeCustomize();
 			} finally {
 				setSaving(false);
 			}
 		},
-		[closeCustomize],
+		[closeCustomize, preferenceOwner],
 	);
 
 	const handleReset = useCallback(async (): Promise<void> => {
@@ -149,14 +177,17 @@ export default function WorkbenchPage() {
 		try {
 			const next = await workbenchService.resetPreferences();
 			setPreferences(next);
+			resetLocalWorkbenchPreferenceItems(preferenceOwner);
 			message.success("已恢复默认工作台");
 		} catch (ex: unknown) {
 			console.warn("[workbench] failed to reset personal preferences", ex);
-			message.warning(PREFERENCES_UNAVAILABLE_MESSAGE);
+			resetLocalWorkbenchPreferenceItems(preferenceOwner);
+			setPreferences(buildLocalPreferenceResponse(null));
+			message.success("已恢复默认工作台");
 		} finally {
 			setSaving(false);
 		}
-	}, []);
+	}, [preferenceOwner]);
 
 	return (
 		<div data-testid="platform-workbench-home">
