@@ -10,7 +10,7 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| T01 | governanceMode 模型属性 + Liquibase changelog（默认值保证存量兼容） | P0 | READY | - |
+| T01 | governanceMode 模型属性 + Liquibase changelog（默认值保证存量兼容） | P0 | DONE | - |
 | T02 | 受控模式判定与分流骨架（buildMetricExpression / 校验入口） | P0 | READY | T01 |
 
 ## 完成标准

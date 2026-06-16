@@ -155,10 +155,41 @@ class SemanticModelingServiceTest {
         return new CapturedQuery(sqlCaptor.getValue(), paramsCaptor.getValue());
     }
 
+    @Test
+    void newModelDefaultsGovernanceModeToControlled() throws Exception {
+        // F1-T01: a new model with no explicit governanceMode defaults to CONTROLLED (strangler: opt-in 受控).
+        MapSqlParameterSource params = modelParams(
+            new SemanticModelingService.ModelRequest(null, "DWS", "dws_demo", null, null, null, null, null, null, null)
+        );
+        assertThat(params.getValue("governanceMode")).isEqualTo("CONTROLLED");
+    }
+
+    @Test
+    void explicitGovernanceModeIsPreserved() throws Exception {
+        // Existing/legacy models stay PERMISSIVE when the request carries it explicitly (no silent flip).
+        MapSqlParameterSource params = modelParams(
+            new SemanticModelingService.ModelRequest(null, "DWS", "dws_demo", null, null, null, null, null, null, "PERMISSIVE")
+        );
+        assertThat(params.getValue("governanceMode")).isEqualTo("PERMISSIVE");
+    }
+
+    @Test
+    void listModelsSelectsGovernanceModeColumn() {
+        service.listModels(null);
+        CapturedQuery query = captureQuery();
+        assertThat(query.sql()).contains("from semantic_model").contains("governance_mode");
+    }
+
     private String buildMetricExpression(SemanticModelingService.MetricDto metric) throws Exception {
         Method method = SemanticModelingService.class.getDeclaredMethod("buildMetricExpression", SemanticModelingService.MetricDto.class);
         method.setAccessible(true);
         return (String) method.invoke(service, metric);
+    }
+
+    private MapSqlParameterSource modelParams(SemanticModelingService.ModelRequest request) throws Exception {
+        Method method = SemanticModelingService.class.getDeclaredMethod("modelParams", UUID.class, SemanticModelingService.ModelRequest.class);
+        method.setAccessible(true);
+        return (MapSqlParameterSource) method.invoke(service, UUID.randomUUID(), request);
     }
 
     private record CapturedQuery(String sql, MapSqlParameterSource params) {}
