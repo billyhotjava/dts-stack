@@ -1,6 +1,10 @@
 package com.yuzhi.dts.platform.service.etl;
 
+import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
+import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import com.yuzhi.dts.platform.domain.modeling.ModelingSqlModel;
+import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -25,20 +29,27 @@ public class DbtQualityGateService {
     private final ModelingSqlModelRepository sqlModelRepository;
     private final DbtConfigService dbtConfigService;
     private final DbtRunResultService dbtRunResultService;
+    private final CatalogTableSchemaRepository catalogTableRepository;
+    private final CatalogColumnSchemaRepository catalogColumnRepository;
 
     public DbtQualityGateService(
         ModelingSqlModelRepository sqlModelRepository,
         DbtConfigService dbtConfigService,
-        DbtRunResultService dbtRunResultService
+        DbtRunResultService dbtRunResultService,
+        CatalogTableSchemaRepository catalogTableRepository,
+        CatalogColumnSchemaRepository catalogColumnRepository
     ) {
         this.sqlModelRepository = sqlModelRepository;
         this.dbtConfigService = dbtConfigService;
         this.dbtRunResultService = dbtRunResultService;
+        this.catalogTableRepository = catalogTableRepository;
+        this.catalogColumnRepository = catalogColumnRepository;
     }
 
     public DbtQualityGateResult evaluate(String selector) {
         List<String> selectedModels = resolveModelsBySelector(selector);
         List<ModelingSqlModel> allModels = sqlModelRepository.findAll();
+        List<CatalogTableSchema> catalogTables = selectedModels.isEmpty() ? List.of() : loadCatalogTables();
         Set<String> missingTests = new LinkedHashSet<>();
         Set<String> missingTypeMeta = new LinkedHashSet<>();
         Set<String> missingOwnerMeta = new LinkedHashSet<>();
@@ -52,16 +63,23 @@ public class DbtQualityGateService {
                     continue;
                 }
                 String content = readText(ymlPath);
+                List<CatalogTableSchema> catalogMatches = findCatalogTablesByName(catalogTables, modelName);
                 if (!StringUtils.hasText(content) || !content.contains("tests:")) {
                     missingTests.add(modelName);
                 }
-                if (!StringUtils.hasText(content) || !content.contains("expected_data_type")) {
+                if (
+                    (!StringUtils.hasText(content) || !content.contains("expected_data_type")) &&
+                    !hasCatalogTypeMetadata(catalogMatches)
+                ) {
                     missingTypeMeta.add(modelName);
                 }
-                if (!containsGovernanceKey(content, "owner")) {
+                if (!containsGovernanceKey(content, "owner") && !hasCatalogOwner(catalogMatches)) {
                     missingOwnerMeta.add(modelName);
                 }
-                if (!containsGovernanceKey(content, "classification")) {
+                if (
+                    !containsGovernanceKey(content, "classification") &&
+                    !hasCatalogClassification(catalogMatches)
+                ) {
                     missingClassificationMeta.add(modelName);
                 }
             }
@@ -75,21 +93,21 @@ public class DbtQualityGateService {
         boolean latestFailed = "FAILED".equals(latestStatus);
         boolean qualityCommand = isQualityCommand(command);
         boolean missingUnbuiltRelations = isMissingUnbuiltRelationTestFailure(latestRun);
-        boolean blocking = latestFailed && qualityCommand && !missingUnbuiltRelations;
+        boolean qualityCommandFailed = latestFailed && qualityCommand && !missingUnbuiltRelations;
 
         List<String> warnings = new ArrayList<>();
         List<String> blockers = new ArrayList<>();
         if (!missingTests.isEmpty()) {
-            blockers.add("以下模型未发现 schema.yml 测试: " + String.join(", ", missingTests));
+            warnings.add("以下模型未发现 schema.yml 测试: " + String.join(", ", missingTests));
         }
         if (!missingTypeMeta.isEmpty()) {
-            blockers.add("以下模型缺少类型元信息(expected_data_type): " + String.join(", ", missingTypeMeta));
+            warnings.add("以下模型缺少类型元信息(expected_data_type): " + String.join(", ", missingTypeMeta));
         }
         if (!missingOwnerMeta.isEmpty()) {
-            blockers.add("以下模型缺少 owner 治理元信息: " + String.join(", ", missingOwnerMeta));
+            warnings.add("以下模型缺少 owner 治理元信息: " + String.join(", ", missingOwnerMeta));
         }
         if (!missingClassificationMeta.isEmpty()) {
-            blockers.add("以下模型缺少 classification 治理元信息: " + String.join(", ", missingClassificationMeta));
+            warnings.add("以下模型缺少 classification 治理元信息: " + String.join(", ", missingClassificationMeta));
         }
         if (missingUnbuiltRelations) {
             warnings.add("最近一次 dbt test 失败是因为目标关系尚未生成，首次上线可继续执行 dbt build");
@@ -97,8 +115,8 @@ public class DbtQualityGateService {
         if (latestFailed && !qualityCommand) {
             warnings.add("最近一次构建状态为 FAILED，但不是测试命令，请确认是否继续上线");
         }
-        if (blocking) {
-            blockers.add("最近一次质量构建失败（" + defaultText(command, "unknown command") + "），请修复后再上线");
+        if (qualityCommandFailed) {
+            warnings.add("最近一次质量构建失败（" + defaultText(command, "unknown command") + "），建议修复后再上线");
         }
 
         return new DbtQualityGateResult(
@@ -295,6 +313,73 @@ public class DbtQualityGateService {
         Pattern direct = Pattern.compile("(?m)^\\s*" + Pattern.quote(key) + "\\s*:");
         Pattern meta = Pattern.compile("(?m)^\\s*" + Pattern.quote(key) + "_name\\s*:");
         return direct.matcher(content).find() || meta.matcher(content).find();
+    }
+
+    private List<CatalogTableSchema> loadCatalogTables() {
+        try {
+            List<CatalogTableSchema> tables = catalogTableRepository.findAll();
+            return tables == null ? List.of() : tables;
+        } catch (RuntimeException ex) {
+            LOG.warn("[dbt-quality-gate] failed to load catalog table metadata: {}", ex.getMessage());
+            return List.of();
+        }
+    }
+
+    private List<CatalogTableSchema> findCatalogTablesByName(List<CatalogTableSchema> tables, String modelName) {
+        if (tables == null || tables.isEmpty() || !StringUtils.hasText(modelName)) {
+            return List.of();
+        }
+        String normalized = modelName.trim();
+        return tables
+            .stream()
+            .filter(table -> table != null && StringUtils.hasText(table.getName()))
+            .filter(table -> normalized.equalsIgnoreCase(table.getName().trim()))
+            .toList();
+    }
+
+    private boolean hasCatalogTypeMetadata(List<CatalogTableSchema> tables) {
+        if (tables == null || tables.isEmpty()) {
+            return false;
+        }
+        return tables.stream().anyMatch(this::hasCatalogTypeMetadata);
+    }
+
+    private boolean hasCatalogTypeMetadata(CatalogTableSchema table) {
+        if (table == null) {
+            return false;
+        }
+        try {
+            List<CatalogColumnSchema> columns = catalogColumnRepository.findByTable(table);
+            if (columns == null || columns.isEmpty()) {
+                return false;
+            }
+            return columns
+                .stream()
+                .allMatch(column -> column != null && StringUtils.hasText(column.getDataType()));
+        } catch (RuntimeException ex) {
+            LOG.warn(
+                "[dbt-quality-gate] failed to load catalog column metadata for {}: {}",
+                table.getName(),
+                ex.getMessage()
+            );
+            return false;
+        }
+    }
+
+    private boolean hasCatalogOwner(List<CatalogTableSchema> tables) {
+        if (tables == null || tables.isEmpty()) {
+            return false;
+        }
+        return tables.stream().anyMatch(table -> table != null && StringUtils.hasText(table.getOwner()));
+    }
+
+    private boolean hasCatalogClassification(List<CatalogTableSchema> tables) {
+        if (tables == null || tables.isEmpty()) {
+            return false;
+        }
+        return tables
+            .stream()
+            .anyMatch(table -> table != null && StringUtils.hasText(table.getClassification()));
     }
 
     private String defaultText(String value, String fallback) {

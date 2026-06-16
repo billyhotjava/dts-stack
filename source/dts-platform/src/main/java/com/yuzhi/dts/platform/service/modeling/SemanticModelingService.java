@@ -44,6 +44,7 @@ public class SemanticModelingService {
     private final CatalogDatasetLineageRepository catalogLineageRepository;
     private final DbtReleaseSubmissionService dbtReleaseSubmissionService;
     private final ControlledMetricDslCompiler controlledMetricDslCompiler;
+    private final EltLayerGate eltLayerGate;
 
     public SemanticModelingService(
         NamedParameterJdbcTemplate jdbc,
@@ -55,7 +56,8 @@ public class SemanticModelingService {
         CatalogDatasetRepository catalogDatasetRepository,
         CatalogDatasetLineageRepository catalogLineageRepository,
         DbtReleaseSubmissionService dbtReleaseSubmissionService,
-        ControlledMetricDslCompiler controlledMetricDslCompiler
+        ControlledMetricDslCompiler controlledMetricDslCompiler,
+        EltLayerGate eltLayerGate
     ) {
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
@@ -67,6 +69,7 @@ public class SemanticModelingService {
         this.catalogLineageRepository = catalogLineageRepository;
         this.dbtReleaseSubmissionService = dbtReleaseSubmissionService;
         this.controlledMetricDslCompiler = controlledMetricDslCompiler;
+        this.eltLayerGate = eltLayerGate;
     }
 
     @Transactional(readOnly = true)
@@ -1779,6 +1782,9 @@ public class SemanticModelingService {
         ModelBindingDto bindings = getModelBindings(model.id());
         if (bindings.metricIds() == null || bindings.metricIds().isEmpty()) {
             throw new IllegalArgumentException("模型未绑定输出指标，不能提交审核");
+        }
+        if (isControlled(model)) {
+            enforceLayerGate(model);
         }
         buildExecutableModelSql(
             model,
