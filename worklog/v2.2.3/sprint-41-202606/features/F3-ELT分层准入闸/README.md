@@ -11,7 +11,7 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| T01 | EltLayerGate 组件（层级规则 + 诊断码）+ 单测 | P0 | READY | F1-T01 |
+| T01 | EltLayerGate 组件（层级规则 + 诊断码）+ 单测 | P0 | DONE | F1-T01 |
 | T02 | 集成进 model/business-object 校验 + validateModelForReview（受控模式生效） | P0 | READY | T01, F1-T02 |
 | T03 | 错误码映射（400 invalid_layer / grain_mismatch / standard_code_required） | P0 | READY | T02 |
 
