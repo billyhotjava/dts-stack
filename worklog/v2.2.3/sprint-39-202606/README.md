@@ -29,12 +29,12 @@
 | ID | Feature | 优先级 | Task 数 | 状态 | 阶段目标 |
 |----|---------|--------|---------|------|----------|
 | F1 | 结构化数据黄金链路状态机 | P0 | 4 | DONE | 定义并落地跨模块主链路状态与验收证据 |
-| F2 | 接入入湖到建模产品闭环 | P0 | 4 | DONE | 把数据源/入湖/ODS/dbt source/模型发布串成后台主线 |
+| F2 | 接入入湖到建模产品闭环 | P0 | 5 | DONE | 把数据源/入湖/ODS/dbt source/模型发布串成后台主线 |
 | F3 | 治理资产权限硬门禁 | P0 | 4 | DONE | 让治理、资产、血缘、权限成为发布前硬约束 |
 | F4 | 任务运维中心产品化 | P1 | 4 | DONE | 将已有 ops 后端能力接成客户可用运维工作台 |
 | F5 | 业务消费闭环 | P1 | 4 | DONE | 把指标、报表、大屏、数据 API、数据产品统一到治理后资产 |
 
-**统计**: READY=0, IN_PROGRESS=0, DONE=20, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=21, BLOCKED=0
 **依赖顺序**: F1 -> F2 -> F3 -> F4/F5；F4 可在 F1 状态模型稳定后并行，F5 依赖 F2/F3 的发布门禁口径。
 
 ## 进度记录
@@ -47,6 +47,7 @@
 - 2026-06-14: 完成 F2-T02。新增 `GoldenChainOdsDbtSourceContractService`，将 ODS 字段快照生成 dbt source 候选配置，并在缺 owner、缺字段快照或 STG 暴露时返回 `BLOCKED_MODEL`；focused test 通过 `./mvnw -q -Dtest=GoldenChainOdsDbtSourceContractServiceTest test`。
 - 2026-06-14: 完成 F2-T03。新增 `GoldenChainModelReleaseGateService`，模型发布前校验 dbt compile/test/build、DWD 主键/标准码、DWS/ADS 粒度、schema contract、质量、血缘和分级分类；focused test 通过 `./mvnw -q -Dtest=GoldenChainModelReleaseGateServiceTest test`。
 - 2026-06-14: 完成 F2-T04。新增 `GoldenChainDbtMigrationInventoryService` 和 PM 业务包迁移清单 `assets/dbt-migration-inventory-pm.md`，将存量手工 dbt 导入风险显性化；focused test 通过 `./mvnw -q -Dtest=GoldenChainDbtMigrationInventoryServiceTest test`。
+- 2026-06-15: 完成 F2-T05。新增 `GoldenChainModelingResource`，将 ODS 到 dbt source、模型发布门禁、存量 dbt 迁移清单补成平台 API；focused test 通过 `./mvnw -q -Dtest=GoldenChainModelingResourceTest test`。
 - 2026-06-14: 完成 F3-T01。新增 `GoldenChainAssetIdentityResolver`，固化资产身份优先级并将无法解析或重复资产标记为待治理；focused test 通过 `./mvnw -q -Dtest=GoldenChainAssetIdentityResolverTest test`。
 - 2026-06-14: 完成 F3-T02。新增 `GoldenChainGovernanceGateService`，将 owner、分级分类、质量规则/结果和 DWD/DWS/ADS 关键治理字段变成发布硬门禁；focused test 通过 `./mvnw -q -Dtest=GoldenChainGovernanceGateServiceTest test`。
 - 2026-06-14: 完成 F3-T03。新增 `GoldenChainLineageGovernanceService`，将血缘解析失败、缺 source/target 或缺 evidenceRef 统一转为 `PENDING_GOVERNANCE`；focused test 通过 `./mvnw -q -Dtest=GoldenChainLineageGovernanceServiceTest test`。

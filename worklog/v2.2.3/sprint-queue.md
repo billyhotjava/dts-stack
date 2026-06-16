@@ -690,13 +690,13 @@
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
 | F1-结构化数据黄金链路状态机 | P0 | 4 | DONE |
-| F2-接入入湖到建模产品闭环 | P0 | 4 | DONE |
+| F2-接入入湖到建模产品闭环 | P0 | 5 | DONE |
 | F3-治理资产权限硬门禁 | P0 | 4 | DONE |
 | F4-任务运维中心产品化 | P1 | 4 | DONE |
 | F5-业务消费闭环 | P1 | 4 | DONE |
 
-**统计**: READY=0, IN_PROGRESS=0, DONE=20, BLOCKED=0
-**进度（2026-06-14）**: F1/F2/F3/F4/F5 全部完成。Sprint-39 已覆盖黄金链路状态机、接入入湖到建模闭环、治理资产权限硬门禁、任务运维中心产品化和业务消费闭环。
+**统计**: READY=0, IN_PROGRESS=0, DONE=21, BLOCKED=0
+**进度（2026-06-15）**: F1/F2/F3/F4/F5 全部完成；F2 已补齐平台建模闭环 API。Sprint-39 已覆盖黄金链路状态机、接入入湖到建模闭环、治理资产权限硬门禁、任务运维中心产品化和业务消费闭环。
 **设计文档**: `worklog/v2.2.3/sprint-39-202606/README.md`
 **能力契约**: `worklog/v2.2.3/sprint-39-202606/assets/product-capability-contract.md`
 **集成测试**: `worklog/v2.2.3/sprint-39-202606/it/README.md`

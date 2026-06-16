@@ -2,7 +2,9 @@ package com.yuzhi.dts.platform.service.goldenchain.modeling;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.stereotype.Service;
 
+@Service
 public class GoldenChainDbtMigrationInventoryService {
 
     public GoldenChainDbtMigrationReport inventory(List<GoldenChainDbtAssetSnapshot> snapshots) {

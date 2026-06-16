@@ -11,7 +11,7 @@
 
 | ID | 场景 | 覆盖 | 证据 |
 |----|------|------|------|
-| IT-01 | JDBC 黄金链路：建数据源 -> 入湖 -> ODS -> dbt source -> DWS/ADS -> 资产登记 -> 报表消费 | F1/F2/F3/F5 | `it/scripts/golden-chain-jdbc.sh` + F1/F2/F3/F5 focused tests |
+| IT-01 | JDBC 黄金链路：建数据源 -> 入湖 -> ODS -> dbt source -> DWS/ADS -> 资产登记 -> 报表消费 | F1/F2/F3/F5 | `it/scripts/golden-chain-jdbc.sh` + F1/F2/F3/F5 focused tests + `GoldenChainModelingResourceTest` |
 | IT-02 | API 黄金链路：复用 Sprint-38 API 数据源和 Java 执行器，确认 chain 状态推进且不回退密钥安全 | F1/F2 | `it/scripts/golden-chain-api.sh` + Sprint-38 API 入湖基线 |
 | IT-03 | file 黄金链路：上传加密文件 -> 入湖 -> ODS -> 质量/资产 -> 消费入口 | F1/F2/F3 | `it/scripts/golden-chain-file.sh` + `GoldenChainIngestionTaskNormalizerTest` |
 | IT-04 | 治理阻断：缺 owner / 分级 / 质量规则 / 血缘证据时阻断发布并给出业务可读原因 | F3 | `GoldenChainGovernanceGateServiceTest` + `GoldenChainLineageGovernanceServiceTest` |
@@ -33,6 +33,7 @@
 - 2026-06-14: F1 + F2-T01/T02/T03 黄金链路组合测试通过 `cd source/dts-platform && ./mvnw -q -Dtest=GoldenChainContractTest,GoldenChainIngestionTaskNormalizerTest,GoldenChainOdsDbtSourceContractServiceTest,GoldenChainModelReleaseGateServiceTest,GoldenChainQueryServiceTest,GoldenChainResourceTest,GoldenChainInstancePersistenceIT test`。
 - 2026-06-14: F2-T04 存量 dbt 迁移清单测试通过 `cd source/dts-platform && ./mvnw -q -Dtest=GoldenChainDbtMigrationInventoryServiceTest test`，并产出 `assets/dbt-migration-inventory-pm.md`。
 - 2026-06-14: F1 + F2 全量黄金链路组合测试通过 `cd source/dts-platform && ./mvnw -q -Dtest=GoldenChainContractTest,GoldenChainIngestionTaskNormalizerTest,GoldenChainOdsDbtSourceContractServiceTest,GoldenChainModelReleaseGateServiceTest,GoldenChainDbtMigrationInventoryServiceTest,GoldenChainQueryServiceTest,GoldenChainResourceTest,GoldenChainInstancePersistenceIT test`。
+- 2026-06-15: F2-T05 平台建模闭环 API 测试通过 `cd source/dts-platform && ./mvnw -q -Dtest=GoldenChainModelingResourceTest test`，覆盖 ODS 到 dbt source 候选、模型发布门禁和存量 dbt 迁移清单三个平台调用入口。
 - 2026-06-14: F3-T01 资产身份解析测试通过 `cd source/dts-platform && ./mvnw -q -Dtest=GoldenChainAssetIdentityResolverTest test`，覆盖平台资产 ID 优先、无法解析诊断和重复资产待治理。
 - 2026-06-14: F3-T02 治理门禁测试通过 `cd source/dts-platform && ./mvnw -q -Dtest=GoldenChainGovernanceGateServiceTest test`，覆盖 owner、分级分类、质量规则/结果、DWD 主键/标准码、DWS/ADS 粒度/指标口径硬阻断。
 - 2026-06-14: F3-T03 血缘治理测试通过 `cd source/dts-platform && ./mvnw -q -Dtest=GoldenChainLineageGovernanceServiceTest test`，覆盖 OpenLineage/dbt manifest/Addax declared lineage 诊断、缺 source/target 和缺 evidenceRef 待治理。
