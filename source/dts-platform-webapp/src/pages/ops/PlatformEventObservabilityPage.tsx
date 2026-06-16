@@ -188,9 +188,11 @@ export default function PlatformEventObservabilityPage() {
 				title="事件观测"
 				actions={
 					<Space wrap>
+						<Button onClick={() => navigate("/ops/events")}>查看事件</Button>
 						<Button onClick={() => navigate("/explore/etl")}>ELT 控制台</Button>
 						<Button onClick={openMetricsOperations}>指标运营台</Button>
-						<Button onClick={() => navigate("/ops/audit-evidence")}>审计证据链</Button>
+						<Button onClick={() => navigate("/catalog/lineage/impact")}>查看关联链路</Button>
+						<Button onClick={() => navigate("/ops/audit-evidence")}>导出证据</Button>
 						<Button onClick={() => navigate("/ops/release-governance")}>发布治理</Button>
 						<Button loading={loading} onClick={() => void loadData(page.page)}>
 							刷新

@@ -4,6 +4,7 @@ import { Alert, Button, Card, Collapse, Input, Layout, Modal, Pagination, Segmen
 import { ApartmentOutlined, ArrowRightOutlined, BranchesOutlined, DatabaseOutlined, SafetyCertificateOutlined, SearchOutlined, TableOutlined, WarningOutlined } from "@ant-design/icons";
 import { EmptyState } from "@/components/empty-state";
 import { CompactTable } from "@/components/table";
+import { PageHeader } from "@/components/page-header";
 import {
 	getCatalogAssetsV2Diagnostics,
 	getCatalogAssetsV2GovernanceGaps,
@@ -819,10 +820,13 @@ export default function Page() {
 				},
 				{
 					title: "操作",
-					width: 230,
+					width: 520,
 					fixed: "right",
 					render: (_, row) => (
-						<Space onClick={(event) => event.stopPropagation()}>
+						<Space wrap onClick={(event) => event.stopPropagation()}>
+							<Button size="small" onClick={() => router.push(`/security/dataset-access-approval?datasetId=${row.id}`)}>
+								申请权限
+							</Button>
 							<Button size="small" onClick={() => router.push(`/catalog/datasets/${row.id}`)}>
 								详情
 							</Button>
@@ -830,7 +834,16 @@ export default function Page() {
 								治理
 							</Button>
 							<Button size="small" onClick={() => router.push(`/catalog/datasets/${row.id}?tab=lineage-impact`)}>
-								血缘
+								查看血缘
+							</Button>
+							<Button size="small" onClick={() => router.push(`/bi/dashboards?assetId=${row.id}`)}>
+								创建报表
+							</Button>
+							<Button size="small" onClick={() => router.push(`/catalog/data-products?assetId=${row.id}`)}>
+								生成数据产品
+							</Button>
+							<Button size="small" onClick={() => router.push(`/services/apis?assetId=${row.id}`)}>
+								发布数据 API
 							</Button>
 						</Space>
 					),
@@ -871,6 +884,7 @@ export default function Page() {
 			</Layout.Sider>
 			<Layout.Content style={{ padding: "0 16px" }}>
 				<div className="space-y-4">
+					<PageHeader title="资产目录" />
 					<Card
 						title={
 							<Space size={8}>

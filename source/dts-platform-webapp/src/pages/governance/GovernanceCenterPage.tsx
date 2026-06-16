@@ -3,6 +3,7 @@ import { Alert, Button, Card, Col, Row, Space, Tag, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { PlatformSummaryCards } from "@/components/console-page";
+import { PageHeader } from "@/components/page-header";
 import { getGovernanceReleaseGate } from "@/api/platformApi";
 
 type Entry = {
@@ -50,8 +51,17 @@ export default function GovernanceCenterPage() {
 				title: "质量管控",
 				entries: [
 					{ title: "质量规则", description: "定义并执行质量规则", path: "/governance/rules" },
-					{ title: "质量看板", description: "查看执行结果与趋势", path: "/governance/quality" },
+					{ title: "质量检查", description: "运行质量检查并查看执行结果", path: "/governance/quality" },
 					{ title: "资产视图", description: "联动查看数据资产质量", path: "/catalog/quality" },
+				],
+			},
+			{
+				title: "主题域与安全",
+				entries: [
+					{ title: "主题域", description: "定义数据责任域和资产归属", path: "/governance/subjects" },
+					{ title: "分级分类", description: "配置密级映射、脱敏规则和安全字段", path: "/security/data-security" },
+					{ title: "权限审批", description: "处理资产访问申请和授权链路", path: "/security/dataset-access-approval" },
+					{ title: "权限审计", description: "核对权限变更和访问审计证据", path: "/governance/permission-audit" },
 				],
 			},
 		],
@@ -107,17 +117,19 @@ export default function GovernanceCenterPage() {
 
 	return (
 		<div className="space-y-6">
-			<div className="flex items-center justify-between">
-				<h1 className="text-xl font-semibold">数据治理中心</h1>
-				<Space>
-					<Button onClick={() => navigate("/governance/rules")}>
-						质量规则
-					</Button>
-					<Button onClick={() => navigate("/governance/standards/glossary")}>
-						术语表
-					</Button>
-				</Space>
-			</div>
+			<PageHeader
+				title="数据治理中心 / 发布门禁"
+				actions={
+					<Space wrap>
+						<Button type="primary" onClick={() => navigate("/governance/rules")}>
+							新建规则
+						</Button>
+						<Button onClick={() => navigate("/governance/quality")}>运行质量</Button>
+						<Button onClick={() => navigate("/workbench/todo")}>修复阻断</Button>
+						<Button onClick={() => navigate("/governance/quality")}>查看报告</Button>
+					</Space>
+				}
+			/>
 
 			<PlatformSummaryCards items={summaryCards} />
 

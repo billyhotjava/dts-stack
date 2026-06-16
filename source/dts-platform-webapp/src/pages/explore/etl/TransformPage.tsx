@@ -4,6 +4,7 @@ import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { } from "@ant-design/icons";
 import { useRouter } from "@/routes/hooks";
+import { PageHeader } from "@/components/page-header";
 import {
 	ingestionTaskAPI,
 	type IngestionExecutionDTO,
@@ -432,10 +433,10 @@ export default function TransformPage() {
 			sorter: (a, b) => (a.createdBy || "").localeCompare(b.createdBy || ""),
 		},
 			{
-				title: "操作",
+			title: "操作",
 				dataIndex: "actions",
 				key: "action",
-				width: 320,
+				width: 520,
 				fixed: "right",
 				render: (_: any, record: IngestionTaskDTO) => (
 					<Space size="small" wrap>
@@ -448,13 +449,29 @@ export default function TransformPage() {
 						>
 							{isTaskBusy(record)
 								? (record.lastExecutionStatus || "").toLowerCase() === "preparing" ? "准备中" : "执行中"
-								: "执行"}
+								: "运行"}
+						</Button>
+						<Button size="small" disabled title="当前入湖任务接口未开放中断动作，运行中任务会自动轮询到终态">
+							停止
+						</Button>
+						<Button
+							size="small"
+							onClick={() => handleExecute(record.id!, record.name)}
+							disabled={record.status === "deleted" || isTaskBusy(record)}
+						>
+							重跑
+						</Button>
+						<Button size="small" onClick={() => router.push(`/ops/backfill?taskId=${record.id}`)}>
+							补数
 						</Button>
 						<Button
 							size="small"
 							onClick={() => router.push(`/explore/etl/transform/${record.id}/executions`)}
 						>
-							历史
+							查看日志
+						</Button>
+						<Button size="small" onClick={() => router.push(`/ops/instances?taskId=${record.id}`)}>
+							查看实例
 						</Button>
 						<Button
 							size="small"
@@ -478,6 +495,18 @@ export default function TransformPage() {
 
 	return (
 		<div className="space-y-4" data-testid="platform-transform-page">
+			<PageHeader
+				title="数据开发中心 / ETL 转换与入湖任务"
+				actions={
+					<Space wrap>
+						<Button onClick={() => router.push("/ops/overview")}>查看运维</Button>
+						<Button onClick={() => router.push("/explore/etl/transform/new")}>新建转换</Button>
+						<Button type="primary" onClick={() => router.push("/explore/etl/transform/new")}>
+							创建入湖任务
+						</Button>
+					</Space>
+				}
+			/>
 			<Card
 				title="入湖任务中心"
 				extra={

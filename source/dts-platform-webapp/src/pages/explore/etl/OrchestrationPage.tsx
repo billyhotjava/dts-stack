@@ -2,6 +2,8 @@ import { Button, message, Space, Tabs } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { type IngestionTaskDTO, ingestionTaskAPI } from "@/api/ingestion";
+import { PageHeader } from "@/components/page-header";
+import { useRouter } from "@/routes/hooks";
 import {
 	BlockSelectorPanel,
 	deserializeDsl,
@@ -39,6 +41,7 @@ function readLocalDsl(): WorkflowDsl | null {
 }
 
 export default function OrchestrationPage() {
+	const router = useRouter();
 	const [searchParams] = useSearchParams();
 	const taskId = parseTaskId(searchParams.get("taskId"));
 	const [activeKey, setActiveKey] = useState<OrchestrationTabKey>("canvas");
@@ -149,8 +152,24 @@ export default function OrchestrationPage() {
 	);
 
 	return (
-		<div>
-			<Space style={{ marginBottom: 12 }}>
+		<div className="space-y-4">
+			<PageHeader
+				title="数据开发中心 / 任务编排"
+				actions={
+					<Space wrap>
+						<Button type="primary" onClick={handleResetDsl}>新建 DAG</Button>
+						<Button disabled title="当前编排接口未开放启用调度动作，请先保存 DAG 并在调度服务中生效">
+							启用调度
+						</Button>
+						<Button disabled title="当前编排接口未开放暂停动作，请在调度服务中处理">
+							暂停
+						</Button>
+						<Button onClick={() => router.push("/ops/backfill")}>补数</Button>
+						<Button onClick={() => router.push("/ops/alerts")}>查看告警</Button>
+					</Space>
+				}
+			/>
+			<Space>
 				<Button type="primary" onClick={handleSaveDsl}>
 					{taskId ? "保存到任务" : "保存 DSL"}
 				</Button>

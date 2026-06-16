@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
+	Alert,
 	Button,
 	Card,
 	Form,
@@ -110,7 +111,7 @@ export default function Page() {
 				toast.success("数据产品已更新");
 			} else {
 				await dataProductsService.create(payload);
-				toast.success("数据产品已新增");
+				toast.success("数据产品已新建");
 			}
 			setModalOpen(false);
 			await loadProducts();
@@ -177,9 +178,18 @@ export default function Page() {
 			width: 260,
 			render: (_, record) => (
 				<Space>
-					<Button size="small" onClick={() => openDetail(record)}>详情</Button>
+					<Button size="small" onClick={() => openDetail(record)}>查看来源资产</Button>
+					<Button size="small" onClick={() => openVersionModal(record)}>
+						配置消费方式
+					</Button>
 					<Button size="small" onClick={() => openVersionModal(record)}>
 						新增版本
+					</Button>
+					<Button size="small" disabled={record.status === "PUBLISHED"} title="通过版本配置保存发布状态">
+						发布
+					</Button>
+					<Button size="small" disabled={record.status !== "PUBLISHED"} title="当前后端未开放独立下线接口，请通过产品状态归档">
+						下线
 					</Button>
 					<Button size="small" onClick={() => openModal(record)}>
 						编辑
@@ -198,17 +208,23 @@ export default function Page() {
 				title="数据服务中心 / 数据产品"
 				actions={
 					<Button type="primary" onClick={() => openModal()}>
-						新增数据产品
+						新建数据产品
 					</Button>
 				}
 			/>
 			<Card>
+				<Alert
+					className="mb-4"
+					type="info"
+					showIcon
+					message="数据产品从来源资产、消费方式、版本发布到下线归档形成统一生命周期。"
+				/>
 				<CompactTable rowKey={(record) => record.id} columns={columns} dataSource={products} loading={loading} />
 			</Card>
 
 			<Modal
 				open={modalOpen}
-				title={editing ? "编辑数据产品" : "新增数据产品"}
+				title={editing ? "编辑数据产品" : "新建数据产品"}
 				onCancel={() => setModalOpen(false)}
 				onOk={saveProduct}
 				okText="保存"

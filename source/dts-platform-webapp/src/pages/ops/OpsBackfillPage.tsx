@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Button, Card, DatePicker, Form, Input, Modal, Select, Tag } from "antd";
+import { Alert, Button, Card, DatePicker, Form, Input, Modal, Select, Space, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
+import { useNavigate } from "react-router";
 import { PageHeader } from "@/components/page-header";
 import opsService, { type OpsBackfill } from "@/api/services/opsService";
 import { listAirflowJobs } from "@/api/platformApi";
@@ -19,6 +20,7 @@ const formatDate = (value?: string) => {
 };
 
 export default function OpsBackfillPage() {
+	const navigate = useNavigate();
 	const [records, setRecords] = useState<OpsBackfill[]>([]);
 	const [jobs, setJobs] = useState<AirflowJob[]>([]);
 	const [loading, setLoading] = useState(false);
@@ -88,13 +90,55 @@ export default function OpsBackfillPage() {
 		{ title: "触发时间", dataIndex: "triggeredAt", render: (v) => formatDate(v) , sorter: (a, b) => { const ta = a.triggeredAt ? new Date(a.triggeredAt as any).getTime() : 0; const tb = b.triggeredAt ? new Date(b.triggeredAt as any).getTime() : 0; return ta - tb; } },
 		{ title: "外部运行ID", dataIndex: "externalRunId", render: (v) => v || "-" },
 		{ title: "备注", dataIndex: "message", render: (v) => v || "-" },
+		{
+			title: "操作",
+			key: "actions",
+			width: 260,
+			fixed: "right",
+			render: (_: unknown, record) => (
+				<Space size="small" wrap>
+					<Button
+						type="link"
+						size="small"
+						onClick={() => navigate(`/explore/etl/orchestration?dagId=${encodeURIComponent(record.dagId || "")}`)}
+					>
+						查看源任务
+					</Button>
+					<Button
+						type="link"
+						size="small"
+						onClick={() => navigate(`/ops/instances?runId=${encodeURIComponent(record.externalRunId || record.id)}`)}
+					>
+						查看实例
+					</Button>
+					<Button
+						type="link"
+						size="small"
+						onClick={() => navigate(`/ops/logs?entryKey=AIRFLOW_DAG&runId=${encodeURIComponent(record.externalRunId || record.id)}`)}
+					>
+						查看日志
+					</Button>
+				</Space>
+			),
+		},
 	];
 
 	const columns = useMemo(() => appendDetailAction(baseColumns, (row) => setDetailRow(row)), []);
 
 	return (
 		<div className="space-y-6 px-6 py-6">
-			<PageHeader title="补数管理" />
+			<PageHeader
+				title="补数管理"
+				actions={
+					<Space wrap>
+						<Button onClick={() => navigate("/ops/instances")}>查看实例</Button>
+						<Button onClick={() => navigate("/ops/logs")}>查看日志</Button>
+						<Button type="primary" onClick={openModal}>
+							新建补数
+						</Button>
+					</Space>
+				}
+			/>
 			<Card
 				extra={
 					<Button type="primary" onClick={openModal}>
@@ -102,6 +146,13 @@ export default function OpsBackfillPage() {
 					</Button>
 				}
 			>
+				<Alert
+					className="mb-4"
+					type="info"
+					showIcon
+					message="影响说明"
+					description="补数会重新触发所选 DAG 的历史日期范围，请确认下游资产和报表可以接受重复刷新。"
+				/>
 				<CompactTable<OpsBackfill> rowKey={(record) => record.id} columns={columns} dataSource={records} loading={loading} />
 			</Card>
 			<RecordDetailDrawer<OpsBackfill>

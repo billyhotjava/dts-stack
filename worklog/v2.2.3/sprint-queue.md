@@ -809,6 +809,35 @@
 - 只做前端呈现，不改后端 `/api/semantic`（Sprint-41 已落）。
 - 绞杀者：permissive 模型前端行为不变。
 
+## Sprint-45: 数据中台 UI 产品化整改大 Sprint (202606)
+**状态**: DONE
+**类型**: UI Productization / Product Architecture / Implementation（dts-platform-webapp + dts-admin menu seed + dts-analytics-webapp/modern）
+**目标**: 把当前“后台能力强、前端页面割裂”的状态整改为一个可演示、可验收、可持续开发的数据中台产品，用页面把 `数据源 -> 入湖任务 -> ODS/DWD/DWS/ADS -> 治理/权限/血缘 -> 指标/报表/API/数据产品/大屏 -> 运维审计` 串成真实主链路。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-产品壳与全局导航闭环 | P0 | 5 | DONE |
+| F2-工作台与黄金链路产品化 | P0 | 4 | DONE |
+| F3-数据接入到开发链路贯通 | P0 | 4 | DONE |
+| F4-治理与资产门户闭环 | P0 | 4 | DONE |
+| F5-指标BI大屏消费体验统一 | P1 | 4 | DONE |
+| F6-数据服务与运维验收闭环 | P1 | 5 | DONE |
+| F7-页面级视觉规范与验收体系 | P0 | 4 | DONE |
+
+**统计**: READY=0, IN_PROGRESS=0, DONE=30, BLOCKED=0
+**背景**: Sprint-39 已打通结构化数据黄金链路，Sprint-40/42 已补消费工作台和数据管理主题看板，Sprint-44 另行承担语义工作台前端整合；本 sprint 专门承担全局 UI 整改，消除假入口、断路由、命名漂移、页面割裂和按钮假实现风险。
+**P0 断点**: `/workbench/todo`、`/studio/projects`、`/studio/sql-modeling`、服务中心数据产品命名、共享交换/令牌语义、隐藏运维审计入口。
+**设计文档**: `worklog/v2.2.3/sprint-45-202606/README.md`
+**页面矩阵**: `worklog/v2.2.3/sprint-45-202606/assets/ui-page-capability-matrix.md`
+**按钮组件矩阵**: `worklog/v2.2.3/sprint-45-202606/assets/button-component-inventory.md`
+**集成测试**: `worklog/v2.2.3/sprint-45-202606/it/README.md`
+**完成证据**: source-contract 26/26 通过；`pnpm build` 通过；Playwright preview smoke 8 条关键路由通过并生成截图证据。
+**关键决策**:
+- 本 sprint 不重写后端能力，重点是菜单、路由、页面、按钮、组件、状态和验收证据。
+- 所有菜单叶子必须真实可达，或明确外链/下线；不保留假入口。
+- 每个核心页面必须具备主按钮、次按钮、危险按钮、空态、异常态、权限态、加载态和真实下一步。
+- 客户可见页面使用业务语言，不默认暴露 sprint/F1/F2、iframe、artifact、dbt 文件等内部表达。
+
 ## v2.3 Backlog: 企业级资产与指标增强
 
 | Item | Owner | 来源 | 状态 |

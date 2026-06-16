@@ -16,6 +16,7 @@ import {
 	message,
 } from "antd";
 import { CompactTable } from "@/components/table";
+import { PageHeader } from "@/components/page-header";
 import { CheckCircleOutlined, CloseCircleOutlined, SearchOutlined, RollbackOutlined } from "@ant-design/icons";
 import RollbackImpactModal, { type RollbackRequest } from "@/components/rollback/RollbackImpactModal";
 import dataSourcesService, {
@@ -762,7 +763,7 @@ export default function DataSourcesPage() {
 								loading={testingId === record.id}
 								onClick={() => handleTest(record)}
 							>
-								测试
+								测试连接
 							</Button>
 							<Button
 								size="small"
@@ -793,9 +794,10 @@ export default function DataSourcesPage() {
 	);
 
 	return (
-		<Card
-			title="数据源连接"
-			extra={
+		<div className="space-y-4">
+			<PageHeader
+				title="数据源连接"
+				actions={
 				<Space>
 					<Button onClick={loadList} disabled={loading}>
 						刷新
@@ -804,12 +806,14 @@ export default function DataSourcesPage() {
 						连接器目录
 					</Button>
 					<Button onClick={() => navigate("/foundation/jdbc-drivers")}>JDBC 驱动管理</Button>
+					<Button onClick={() => navigate("/workbench/data-management")}>查看黄金链路</Button>
 					<Button type="primary" onClick={openCreate}>
-						新增数据源
+						新建数据源
 					</Button>
 				</Space>
-			}
-		>
+				}
+			/>
+			<Card title="数据源连接">
 			{listError ? (
 				<Alert
 					type="error"
@@ -1036,6 +1040,7 @@ export default function DataSourcesPage() {
 				onClose={() => setRollbackOpen(false)}
 				onSuccess={() => { loadList(); }}
 			/>
-		</Card>
+			</Card>
+		</div>
 	);
 }

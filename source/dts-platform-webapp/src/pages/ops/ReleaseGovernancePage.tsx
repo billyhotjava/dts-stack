@@ -266,6 +266,13 @@ export default function ReleaseGovernancePage() {
 					<Space wrap>
 						<Button onClick={() => navigate("/ops/audit-evidence")}>审计证据链</Button>
 						<Button onClick={() => navigate("/ops/events")}>事件观测</Button>
+						<Button onClick={() => navigate("/catalog/lineage/impact")}>查看关联链路</Button>
+						<Button type="primary" disabled title="后端发布复核提交接口未接入，当前仅展示门禁检查结果">
+							发起发布复核
+						</Button>
+						<Button danger disabled title="后端撤回发布接口未接入，不能在前端伪造撤回">
+							撤回发布
+						</Button>
 						<Button loading={loading} onClick={() => void loadData()}>
 							刷新
 						</Button>

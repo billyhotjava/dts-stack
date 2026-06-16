@@ -56,13 +56,13 @@
   {
     "code": "sys.nav.portal.studioProjects",
     "title": "项目空间管理",
-    "route": "/modeling/templates",
+    "route": "/studio/projects",
     "requiredRoles": []
   },
   {
     "code": "sys.nav.portal.studioSqlModeling",
     "title": "逻辑建模（SQL）",
-    "route": "/modeling/templates",
+    "route": "/studio/sql-modeling",
     "requiredRoles": []
   },
   {

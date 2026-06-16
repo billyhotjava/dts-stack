@@ -215,6 +215,11 @@ export default function DataProductsPage() {
 		setModalOpen(true);
 	};
 
+	const openStatusEdit = (product: DataProduct, status: "PUBLISHED" | "OFFLINE") => {
+		openEdit(product);
+		form.setFieldValue("status", status);
+	};
+
 	const handleSave = async () => {
 		const values = await form.validateFields();
 		const payload: Omit<DataProduct, "id"> = {
@@ -350,9 +355,29 @@ export default function DataProductsPage() {
 									{product.description && (
 										<div className="line-clamp-2 text-xs text-slate-600">{product.description}</div>
 									)}
-									<div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-1">
+									<div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-1">
+										<Button size="small" onClick={() => openStatusEdit(product, "PUBLISHED")} disabled={!readiness.ready}>
+											发布
+										</Button>
+										<Button size="small" onClick={() => router.push(`/security/dataset-access-approval?productId=${product.id}`)}>
+											申请
+										</Button>
+										<Button
+											size="small"
+											disabled={!product.consumerEntry}
+											onClick={() => product.consumerEntry && router.push(product.consumerEntry)}
+											title={product.consumerEntry ? "进入配置的消费入口" : "请先配置消费入口"}
+										>
+											查看消费
+										</Button>
+										<Button size="small" onClick={() => router.push(`/governance/permission-audit?productId=${product.id}`)}>
+											查看审计
+										</Button>
 										<Button size="small" onClick={() => setDetailTarget(product)}>
 											合同
+										</Button>
+										<Button size="small" danger onClick={() => openStatusEdit(product, "OFFLINE")}>
+											下线
 										</Button>
 										<Button size="small" onClick={() => openEdit(product)}>
 											编辑

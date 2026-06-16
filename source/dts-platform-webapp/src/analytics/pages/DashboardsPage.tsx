@@ -63,6 +63,16 @@ export default function DashboardsPage() {
 		});
 	};
 
+	const handleShare = async (id: number) => {
+		const url = `${window.location.origin}/bi/dashboards/${id}`;
+		try {
+			await navigator.clipboard.writeText(url);
+			message.success("看板链接已复制");
+		} catch {
+			message.error("复制失败，请手动复制浏览器地址");
+		}
+	};
+
 	const columns: ColumnsType<DashboardListItem> = [
 		{
 			title: t(locale, "common.name"),
@@ -95,15 +105,21 @@ export default function DashboardsPage() {
 		{
 			title: t(locale, "common.actions"),
 			key: "actions",
-			width: 150,
+			width: 240,
 			render: (_, record) => (
-				<Space size={4}>
+				<Space size={4} wrap>
 					<Link to={`/bi/dashboards/${record.id}`}>
 						<Button type="link" size="small">查看</Button>
 					</Link>
 					<Link to={`/bi/dashboards/${record.id}/edit`}>
 						<Button type="link" size="small">编辑</Button>
 					</Link>
+					<Button type="link" size="small" disabled title="请进入编辑器完成发布门禁">
+						发布
+					</Button>
+					<Button type="link" size="small" onClick={() => void handleShare(record.id)}>
+						分享
+					</Button>
 					<Button
 						type="link"
 						size="small"
@@ -123,11 +139,16 @@ export default function DashboardsPage() {
 			<PageHeader
 				title={t(locale, "dashboards.title")}
 				actions={
-					<Link to="/bi/dashboards/new">
-						<Button type="primary">
-							{t(locale, "dashboards.new")}
+					<Space>
+						<Button disabled title="进入看板编辑器后添加图表">
+							添加图表
 						</Button>
-					</Link>
+						<Link to="/bi/dashboards/new">
+							<Button type="primary">
+								新建看板
+							</Button>
+						</Link>
+					</Space>
 				}
 			/>
 

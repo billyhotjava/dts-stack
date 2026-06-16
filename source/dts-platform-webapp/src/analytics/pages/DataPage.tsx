@@ -234,9 +234,9 @@ export default function DataPage() {
 			{
 				title: "操作",
 				key: "actions",
-				width: 180,
+				width: 360,
 				render: (_: unknown, row: DataLakeRow) => (
-					<Space size="small">
+					<Space size="small" wrap>
 						{isDataAdmin && (
 							<Button
 								type="link"
@@ -251,14 +251,29 @@ export default function DataPage() {
 						{row.analyticsDbId ? (
 							<Link to={`/bi/data/${row.analyticsDbId}`}>
 								<Button type="link" size="small">
-									查看表
+									选择数据集
 								</Button>
 							</Link>
 						) : (
 							<Button type="link" size="small" disabled>
-								查看表
+								选择数据集
 							</Button>
 						)}
+						{row.analyticsDbId ? (
+							<Link to={`/bi/data/${row.analyticsDbId}`}>
+								<Button type="link" size="small">预览</Button>
+							</Link>
+						) : <Button type="link" size="small" disabled>预览</Button>}
+						{row.analyticsDbId ? (
+							<Link to={`/bi/questions/new?dbId=${row.analyticsDbId}`}>
+								<Button type="link" size="small">创建问题</Button>
+							</Link>
+						) : <Button type="link" size="small" disabled>创建问题</Button>}
+						{row.analyticsDbId ? (
+							<Link to={`/bi/dashboards/new?dbId=${row.analyticsDbId}`}>
+								<Button type="link" size="small">创建报表</Button>
+							</Link>
+						) : <Button type="link" size="small" disabled>创建报表</Button>}
 					</Space>
 				),
 			},
@@ -328,7 +343,7 @@ export default function DataPage() {
 
 	return (
 		<div className="space-y-4">
-			<PageHeader title="数据管理" />
+			<PageHeader title="BI 数据 / 选择数据集" />
 
 			{/* --- Data Lake List --- */}
 			<PageSection

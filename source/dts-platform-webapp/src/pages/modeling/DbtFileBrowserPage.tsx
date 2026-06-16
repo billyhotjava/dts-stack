@@ -652,9 +652,12 @@ export default function DbtFileBrowserPage() {
 						</Button>
 						<Tooltip title="上传 ZIP 覆盖 dbt 项目文件（macros/models/seeds 等）">
 							<Button className="rounded-2xl" onClick={() => setUploadOpen(true)}>
-								上传 ZIP
+								导入 ZIP
 							</Button>
 						</Tooltip>
+						<Button className="rounded-2xl" onClick={() => router.push("/studio/sql-modeling")}>
+							预览模型
+						</Button>
 						{activeFile && dirty ? (
 							<Button className="rounded-2xl" type="primary" loading={saving} onClick={saveFile}>
 								保存
@@ -669,7 +672,10 @@ export default function DbtFileBrowserPage() {
 							编译
 						</Button>
 						<Button className="rounded-2xl" size="small" onClick={() => handleQuickBuild("test")} loading={buildSubmitting === "test"}>
-							测试
+							校验测试
+						</Button>
+						<Button className="rounded-2xl" size="small" disabled title="dbt 文件发布需先通过 SQL 建模页发布门禁">
+							发布
 						</Button>
 						<Button className="rounded-2xl" size="small" onClick={() => handleQuickBuild("docs")} loading={buildSubmitting === "docs"}>
 							文档

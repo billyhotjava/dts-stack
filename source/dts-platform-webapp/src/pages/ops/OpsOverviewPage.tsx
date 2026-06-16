@@ -8,6 +8,7 @@ import { Chart } from "@/components/chart/chart";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { useLogPreview } from "@/components/log-preview/LogPreviewContext";
+import { useNavigate } from "react-router";
 import opsService, {
 	type ExternalRun,
 	type OpsAlert,
@@ -75,6 +76,7 @@ const projectLoadColumns = [
 // ─── Component ───────────────────────────────────────────────────────
 export default function OpsOverviewPage() {
 	const { openLogPreview } = useLogPreview();
+	const navigate = useNavigate();
 
 	// ── Dev-center state ──
 	const [overview, setOverview] = useState<OpsOverview | null>(null);
@@ -659,7 +661,18 @@ export default function OpsOverviewPage() {
 
 	return (
 		<div className="mx-auto w-full max-w-none space-y-6 px-6 py-6">
-			<PageHeader title="任务运行概览" />
+			<PageHeader
+				title="任务运行概览"
+				actions={
+					<Space wrap>
+						<Button onClick={() => navigate("/ops/events")}>查看事件</Button>
+						<Button onClick={() => navigate("/ops/audit-evidence")}>导出证据</Button>
+						<Button type="primary" onClick={() => navigate("/ops/release-governance")}>
+							发起发布复核
+						</Button>
+					</Space>
+				}
+			/>
 			<Tabs
 				defaultActiveKey="devCenter"
 				items={[

@@ -31,6 +31,16 @@ const formatDate = (value?: string) => {
 	return Number.isNaN(date.valueOf()) ? value : date.toLocaleString();
 };
 
+const resolveSourceTaskPath = (record: OpsInstance) => {
+	if (record.entryKey === "AIRFLOW_DAG") {
+		return `/explore/etl/orchestration?dagId=${encodeURIComponent(record.dagId || record.artifactId || "")}`;
+	}
+	if (record.entryKey === "DBT_RUN") {
+		return `/modeling/dbt-files?runId=${encodeURIComponent(record.externalRunId || record.id)}`;
+	}
+	return `/explore/etl/transform?taskId=${encodeURIComponent(record.artifactId || record.id)}`;
+};
+
 export default function OpsInstancesPage() {
 	const [records, setRecords] = useState<OpsInstance[]>([]);
 	const [loading, setLoading] = useState(false);
@@ -103,14 +113,46 @@ export default function OpsInstancesPage() {
 		{
 			title: "操作",
 			dataIndex: "actions",
-			width: 240,
+			width: 420,
 			fixed: "right",
 			render: (_: unknown, record: OpsInstance) => {
 				const isDbt =
 					record.entryKey === "DBT_RUN" ||
 					(record.entryKey === "AIRFLOW_DAG" && record.dagId?.includes("dbt"));
 				return (
-					<Space size="small">
+					<Space size="small" wrap>
+						<Button
+							type="link"
+							size="small"
+							onClick={() => navigate(resolveSourceTaskPath(record))}
+						>
+							查看源任务
+						</Button>
+						<Button
+							type="link"
+							size="small"
+							onClick={() => navigate(`/foundation/data-sources?keyword=${encodeURIComponent(record.artifactName || record.artifactId || "")}`)}
+						>
+							查看数据源
+						</Button>
+						<Button
+							type="link"
+							size="small"
+							onClick={() => navigate(`/catalog/assets?keyword=${encodeURIComponent(record.artifactName || record.artifactId || "")}`)}
+						>
+							查看资产
+						</Button>
+						<Button
+							type="link"
+							size="small"
+							onClick={() =>
+								navigate(
+									`/ops/backfill?dagId=${encodeURIComponent(record.dagId || "")}&runId=${encodeURIComponent(record.externalRunId || record.id)}`,
+								)
+							}
+						>
+							补数
+						</Button>
 						{isDbt && record.externalRunId && (
 							<Button
 								type="link"
@@ -125,7 +167,7 @@ export default function OpsInstancesPage() {
 									})
 								}
 							>
-								日志
+								查看日志
 							</Button>
 						)}
 						<Button
@@ -137,7 +179,13 @@ export default function OpsInstancesPage() {
 								)
 							}
 						>
-							日志中心
+							查看日志
+						</Button>
+						<Button type="link" size="small" disabled title="后端重试实例接口未接入，不能在前端伪造重试">
+							重试
+						</Button>
+						<Button type="link" size="small" danger disabled title="后端终止实例接口未接入，不能在前端伪造终止">
+							终止实例
 						</Button>
 					</Space>
 				);

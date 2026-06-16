@@ -5,6 +5,7 @@ import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { useCatalogManageAccess } from "@/hooks/useModuleManageAccess";
 import { PageHeader } from "@/components/page-header";
+import { useRouter } from "@/routes/hooks";
 import {
 	cancelDatasetAccessRequest,
 	decideDatasetAccessTask,
@@ -63,6 +64,7 @@ const parsePage = <T,>(raw: any, fallbackPage: number, fallbackSize: number): Pa
 };
 
 export default function Page() {
+	const router = useRouter();
 	const canManage = useCatalogManageAccess();
 	const [activeTab, setActiveTab] = useState("requests");
 
@@ -260,7 +262,7 @@ export default function Page() {
 						详情
 					</Button>
 					<Button size="small" type="primary" onClick={() => openDecision([record.task?.id], "approve")} disabled={!canManage}>
-						同意
+						批准
 					</Button>
 					<Button size="small" danger onClick={() => openDecision([record.task?.id], "reject")} disabled={!canManage}>
 						驳回
@@ -294,7 +296,15 @@ export default function Page() {
 
 	return (
 		<div className="space-y-6">
-			<PageHeader title="数据资产门户 / 权限申请" />
+			<PageHeader
+				title="数据资产门户 / 权限申请"
+				actions={
+					<Space>
+						<Button type="primary" onClick={() => router.push("/catalog/assets")}>申请权限</Button>
+						<Button onClick={() => router.push("/governance/permission-audit")}>查看审计</Button>
+					</Space>
+				}
+			/>
 			<Card>
 				<Tabs
 					activeKey={activeTab}
@@ -368,7 +378,7 @@ export default function Page() {
 											disabled={!canManage || pendingSelectedTaskIds.length === 0}
 											onClick={() => openDecision(pendingSelectedTaskIds, "approve")}
 										>
-											批量同意
+											批量批准
 										</Button>
 										<Button
 											danger
@@ -456,7 +466,7 @@ export default function Page() {
 
 			<Modal
 				open={decisionModal.open}
-				title={decisionModal.action === "approve" ? "同意申请" : "驳回申请"}
+				title={decisionModal.action === "approve" ? "批准申请" : "驳回申请"}
 				onCancel={() => setDecisionModal({ open: false })}
 				onOk={handleDecision}
 				okText="确认"

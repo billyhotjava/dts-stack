@@ -249,7 +249,7 @@ export default function Nl2SqlEvalPage() {
 	return (
 		<div className="space-y-4">
 			<PageHeader
-				title={t(locale, "nl2sqlEval.title")}
+				title="增强分析工具 / NL2SQL 评测辅助工具"
 				actions={
 					<Button type="default" onClick={() => void Promise.all([loadCases(), loadRuns()])}>
 						{t(locale, "common.refresh")}

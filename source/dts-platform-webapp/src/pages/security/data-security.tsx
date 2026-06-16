@@ -18,6 +18,7 @@ import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
+import { useRouter } from "@/routes/hooks";
 import {
 	getClassificationMapping,
 	getClassificationMaskingLinkage,
@@ -81,6 +82,7 @@ type DatasetLinkage = {
 };
 
 export default function Page() {
+	const router = useRouter();
 	const [classificationRows, setClassificationRows] = useState<ClassificationRow[]>([]);
 	const [classificationDirty, setClassificationDirty] = useState(false);
 	const [maskingRules, setMaskingRules] = useState<MaskingRule[]>([]);
@@ -372,7 +374,23 @@ export default function Page() {
 
 	return (
 		<div className="space-y-6">
-			<PageHeader title="数据治理中心 / 分级分类" />
+			<PageHeader
+				title="数据治理中心 / 分级分类"
+				actions={
+					<Space wrap>
+						<Button type="primary" onClick={() => openMappingModal()}>
+							新建分级
+						</Button>
+						<Button disabled title="请在数据集安全字段页选择数据集后保存密级字段和部门字段">
+							绑定资产
+						</Button>
+						<Button disabled title="当前安全策略接口未开放例外申请，请通过权限审批提交临时访问申请">
+							申请例外
+						</Button>
+						<Button onClick={() => router.push("/governance/permission-audit")}>查看审计</Button>
+					</Space>
+				}
+			/>
 			<Card>
 				<Tabs
 					items={[

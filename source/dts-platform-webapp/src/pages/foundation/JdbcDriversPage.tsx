@@ -4,6 +4,7 @@ import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/componen
 import type { ColumnsType } from "antd/es/table";
 import { InboxOutlined } from "@ant-design/icons";
 import { Upload } from "@/components/upload";
+import { PageHeader } from "@/components/page-header";
 type UploadRequestOption = Parameters<NonNullable<import("antd").UploadProps["customRequest"]>>[0];
 import jdbcDriversService, { type InfraJdbcDriver, type JdbcDriverUpdatePayload } from "@/api/services/jdbcDriversService";
 import { formatTime } from "@/utils/textUtils";
@@ -156,8 +157,20 @@ export default function JdbcDriversPage() {
 				fixed: "right",
 				render: (_: any, record: InfraJdbcDriver) => (
 					<Space>
+						<Button size="small" onClick={() => setDetailRow(record)}>
+							查看详情
+						</Button>
+						<Button size="small" disabled title="当前驱动接口未开放独立校验动作，请通过上传校验和缺失状态判断">
+							校验
+						</Button>
 						<Button size="small" onClick={() => openEdit(record)}>
 							编辑
+						</Button>
+						<Button size="small" disabled title="当前驱动接口未开放启用动作，上传后自动进入可用目录">
+							启用
+						</Button>
+						<Button size="small" disabled title="当前驱动接口未开放禁用动作，可删除后重新上传">
+							禁用
 						</Button>
 						<Button size="small" danger onClick={() => handleDelete(record)}>
 							删除
@@ -175,19 +188,21 @@ export default function JdbcDriversPage() {
 	);
 
 	return (
-		<Card
-			title="JDBC 驱动管理"
-			extra={
-				<Space>
-					<Button onClick={loadList} disabled={loading}>
-						刷新
-					</Button>
-					<Button type="primary" onClick={openUpload}>
-						上传驱动
-					</Button>
-				</Space>
-			}
-		>
+		<div className="space-y-4">
+			<PageHeader
+				title="数据接入基础 / JDBC 驱动管理"
+				actions={
+					<Space>
+						<Button onClick={loadList} disabled={loading}>
+							刷新
+						</Button>
+						<Button type="primary" onClick={openUpload}>
+							上传驱动
+						</Button>
+					</Space>
+				}
+			/>
+			<Card title="驱动资产">
 			<div className="mb-3 text-xs text-slate-500">
 				默认驱动目录：<Text code>services/dts-platform/drivers</Text>（上传后自动同步到该目录）
 			</div>
@@ -256,13 +271,14 @@ export default function JdbcDriversPage() {
 					</Form.Item>
 				</Form>
 			</Modal>
-			<RecordDetailDrawer<InfraJdbcDriver>
+				<RecordDetailDrawer<InfraJdbcDriver>
 				open={detailRow !== null}
 				onClose={() => setDetailRow(null)}
 				record={detailRow}
 				columns={baseColumns}
 				title="驱动详情"
-			/>
-		</Card>
+				/>
+			</Card>
+		</div>
 	);
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
+	Alert,
 	Button,
 	Card,
 	Form,
@@ -101,7 +102,7 @@ export default function Page() {
 				toast.success("API 服务已更新");
 			} else {
 				await apiServicesService.create(values);
-				toast.success("API 服务已新增");
+				toast.success("API 服务已新建");
 			}
 			setModalOpen(false);
 			await loadServices();
@@ -147,10 +148,19 @@ export default function Page() {
 			render: (_, record) => (
 				<Space>
 					<Button size="small" onClick={() => tryInvoke(record.id)}>
-						测试
+						测试调用
+					</Button>
+					<Button size="small" disabled title="当前后端未开放启用接口，保存后按服务状态进入发布流程">
+						启用
 					</Button>
 					<Button size="small" onClick={() => openModal(record)}>
 						编辑
+					</Button>
+					<Button size="small" onClick={() => setDetailRow(record)}>
+						查看调用
+					</Button>
+					<Button size="small" disabled title="审计流水接口尚未接入，先在服务详情中核对发布状态和调用指标">
+						查看审计
 					</Button>
 					<Button size="small" danger onClick={() => disableService(record.id)}>
 						下线
@@ -172,17 +182,23 @@ export default function Page() {
 				title="数据服务中心 / 数据 API 管理"
 				actions={
 					<Button type="primary" onClick={() => openModal()}>
-						新增 API
+						新建 API
 					</Button>
 				}
 			/>
 			<Card>
+				<Alert
+					className="mb-4"
+					type="info"
+					showIcon
+					message="API 发布前需绑定数据集、密级、限流与调用验证；查看调用用于验收近 7 日服务表现。"
+				/>
 				<CompactTable rowKey={(record) => record.id} columns={columns} dataSource={services} loading={loading} />
 			</Card>
 
 			<Modal
 				open={modalOpen}
-				title={editing ? "编辑 API 服务" : "新增 API 服务"}
+				title={editing ? "编辑 API 服务" : "新建 API 服务"}
 				onCancel={() => setModalOpen(false)}
 				onOk={saveService}
 				okText="保存"

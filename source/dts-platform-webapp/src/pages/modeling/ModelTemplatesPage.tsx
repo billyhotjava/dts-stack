@@ -327,6 +327,9 @@ export default function Page() {
 						<Button size="small" onClick={() => openEdit(row)}>
 							编辑
 						</Button>
+						<Button size="small" onClick={() => router.push(`/studio/sql-modeling?planId=${row.id || ""}`)}>
+							进入 SQL 建模
+						</Button>
 						<Button size="small" onClick={() => openPublish(row)} disabled={normalizeUpper(row.status) === "ARCHIVED"}>
 							发布
 						</Button>
@@ -346,7 +349,7 @@ export default function Page() {
 				),
 			},
 		],
-		[domainNameById],
+		[domainNameById, router],
 	);
 
 	return (
@@ -355,6 +358,12 @@ export default function Page() {
 				title="数据开发中心 · 项目空间管理"
 				actions={
 					<Space>
+						<Button disabled title="当前项目空间接口未开放批量导入，先通过新建项目登记仓库与环境">
+							导入项目
+						</Button>
+						<Button onClick={() => router.push("/studio/sql-modeling")}>
+							进入 SQL 建模
+						</Button>
 						<Button onClick={loadSpaces} loading={loading}>
 							刷新
 						</Button>

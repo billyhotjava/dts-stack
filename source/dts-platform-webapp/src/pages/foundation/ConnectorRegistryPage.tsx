@@ -3,7 +3,9 @@ import { AppstoreOutlined, } from "@ant-design/icons";
 import { Button, Card, Descriptions, Drawer, Select, Space, Switch, Tag, Typography, message } from "antd";
 import { CompactTable } from "@/components/table";
 import type { TableProps } from "antd";
+import { PageHeader } from "@/components/page-header";
 import connectorsService, { type InfraConnector } from "@/api/services/connectorsService";
+import { useRouter } from "@/routes/hooks";
 import { formatTime } from "@/utils/textUtils";
 
 const { Text } = Typography;
@@ -86,6 +88,7 @@ function CapabilityTags({ connector, compact = false }: { connector: InfraConnec
 }
 
 export default function ConnectorRegistryPage() {
+	const router = useRouter();
 	const [list, setList] = useState<InfraConnector[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [category, setCategory] = useState("");
@@ -192,29 +195,63 @@ export default function ConnectorRegistryPage() {
 				width: 180,
 				render: (value: string) => formatTime(value),
 			},
+			{
+				title: "操作",
+				key: "actions",
+				width: 260,
+				fixed: "right",
+				render: (_: unknown, record) => (
+					<Space size="small" wrap>
+						<Button size="small" onClick={() => router.push("/foundation/data-sources")}>
+							创建数据源
+						</Button>
+						<Button size="small" onClick={() => setSelected(record)}>
+							配置
+						</Button>
+						<Button size="small" onClick={() => setSelected(record)}>
+							查看模板
+						</Button>
+						<Button size="small" disabled title="当前连接器目录接口未开放启用动作，请同步内置目录后在数据源页使用">
+							启用
+						</Button>
+						<Button size="small" disabled title="当前连接器目录接口未开放停用动作，请通过停用筛选核对状态">
+							停用
+						</Button>
+					</Space>
+				),
+			},
 		],
-		[]
+		[router]
 	);
 
 	return (
-		<Card
-			title="连接器目录"
-			extra={
-				<Space wrap>
-					<Select style={{ width: 120 }} value={category} options={CATEGORY_OPTIONS} onChange={setCategory} />
-					<Space size={6}>
-						<Text type="secondary">停用</Text>
-						<Switch size="small" checked={includeDisabled} onChange={setIncludeDisabled} />
+		<div className="space-y-4">
+			<PageHeader
+				title="数据接入基础 / 连接器目录"
+				actions={
+					<Space wrap>
+						<Button onClick={() => router.push("/foundation/data-sources")}>创建数据源</Button>
+						<Button onClick={loadList} disabled={loading}>
+							刷新
+						</Button>
+						<Button type="primary" onClick={handleSeed} loading={seeding}>
+							同步内置
+						</Button>
 					</Space>
-					<Button onClick={loadList} disabled={loading}>
-						刷新
-					</Button>
-					<Button onClick={handleSeed} loading={seeding}>
-						同步内置
-					</Button>
-				</Space>
-			}
-		>
+				}
+			/>
+			<Card
+				title="连接器目录"
+				extra={
+					<Space wrap>
+						<Select style={{ width: 120 }} value={category} options={CATEGORY_OPTIONS} onChange={setCategory} />
+						<Space size={6}>
+							<Text type="secondary">停用</Text>
+							<Switch size="small" checked={includeDisabled} onChange={setIncludeDisabled} />
+						</Space>
+					</Space>
+				}
+			>
 			<Space className="mb-3" size={[8, 8]} wrap>
 				<Tag icon={<AppstoreOutlined />}>共 {list.length} 个</Tag>
 				{summary.map(([key, count]) => (
@@ -233,7 +270,7 @@ export default function ConnectorRegistryPage() {
 				pagination={{ defaultPageSize: 10 }}
 			/>
 
-			<Drawer
+				<Drawer
 				title={selected?.name || "连接器详情"}
 				open={Boolean(selected)}
 				onClose={() => setSelected(null)}
@@ -288,7 +325,8 @@ export default function ConnectorRegistryPage() {
 						</div>
 					</Space>
 				) : null}
-			</Drawer>
-		</Card>
+				</Drawer>
+			</Card>
+		</div>
 	);
 }

@@ -23,6 +23,9 @@ const OpsInstancesPage = lazy(() => import("@/pages/ops/OpsInstancesPage"));
 const OpsAlertLogPage = lazy(() => import("@/pages/ops/OpsAlertLogPage"));
 const OpsBackfillPage = lazy(() => import("@/pages/ops/OpsBackfillPage"));
 const DataManagementWorkbenchPage = lazy(() => import("@/pages/workbench/DataManagementWorkbenchPage"));
+const WorkflowCenterPage = lazy(() => import("@/pages/workbench/WorkflowCenterPage"));
+const StudioProjectsPage = lazy(() => import("@/pages/modeling/ModelTemplatesPage"));
+const SqlModelingPage = lazy(() => import("@/pages/modeling/SqlModelingPage"));
 
 // ── Analytics pages (static routes — registered statically for reliability; menu controls visibility) ──
 const AnalyticsHomePage = lazy(() => import("@/analytics/pages/HomePage"));
@@ -110,8 +113,11 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{ path: "ops/instances", element: <S><OpsInstancesPage /></S> },
 	{ path: "ops/alerts", element: <S><OpsAlertLogPage /></S> },
 	{ path: "ops/backfill", element: <S><OpsBackfillPage /></S> },
+	{ path: "workbench/todo", element: <S><WorkflowCenterPage /></S> },
 	{ path: "workbench/data-management", element: <S><DataManagementWorkbenchPage /></S> },
 	{ path: "services/consumption", element: <S><DataManagementWorkbenchPage /></S> },
+	{ path: "studio/projects", element: <S><StudioProjectsPage /></S> },
+	{ path: "studio/sql-modeling", element: <S><SqlModelingPage /></S> },
 	{ path: "modeling/semantic-center", element: <MetricsServiceFrame /> },
 	{ path: "modeling/semantic-center/*", element: <MetricsServiceFrame /> },
 	{ path: "bi/semantic-modeling", element: <MetricsServiceFrame /> },

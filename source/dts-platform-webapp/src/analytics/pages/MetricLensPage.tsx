@@ -140,7 +140,7 @@ export default function MetricLensPage() {
 	return (
 		<div className="space-y-4">
 			<PageHeader
-				title={t(locale, "metricLens.title")}
+				title="增强分析工具 / MetricLens 辅助工具"
 				actions={
 					<Button type="default" onClick={() => void Promise.all([loadList(), loadConflicts()])}>
 						{t(locale, "common.refresh")}

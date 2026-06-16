@@ -650,6 +650,15 @@ export default function ScreensPage() {
 		window.open(resolveRouteForOpen(`/bi/screens/${id}/preview`), "_blank", "noopener,noreferrer");
 	};
 
+	const handleCopyScreenLink = async (id: string | number) => {
+		const copied = await writeTextToClipboard(resolveRouteForOpen(`/bi/screens/${id}/preview`));
+		if (!copied) {
+			message.warning("复制失败，请稍后重试");
+			return;
+		}
+		message.success("大屏地址已复制");
+	};
+
 	const handleSaveAsTemplate = async (id: string | number, screenName?: string) => {
 		if (savingTemplateId !== null) return;
 
@@ -1126,13 +1135,13 @@ export default function ScreensPage() {
 														{formatDate(screen.updatedAt)}
 													</td>
 													<td className="analytics-screen-action-cell bg-surface-card px-3 py-3 align-middle border-l border-border-default transition-colors duration-150">
-														<div className="flex flex-nowrap items-center justify-end gap-1.5">
+														<div className="flex flex-wrap items-center justify-end gap-1.5">
 															<button
 																className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-sm font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"
 																data-testid={`analytics-screen-preview-${screen.id}`}
 																onClick={() => handlePreview(screen.id)}
 															>
-																查看
+																预览
 															</button>
 															{rowPermissions.canEdit ? (
 																<button
@@ -1157,6 +1166,19 @@ export default function ScreensPage() {
 																	权限
 																</button>
 															) : null}
+															<button
+																className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-sm font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"
+																onClick={() => void handleCopyScreenLink(screen.id)}
+															>
+																复制
+															</button>
+															<button
+																className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card text-sm font-medium text-text-secondary opacity-60 cursor-not-allowed"
+																disabled
+																title="请进入编辑器完成发布门禁"
+															>
+																发布
+															</button>
 															{showMoreMenu ? (
 																<div className="screen-card-menu relative">
 																	<button

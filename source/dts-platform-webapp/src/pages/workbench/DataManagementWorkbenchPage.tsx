@@ -91,11 +91,15 @@ export default function Page() {
 				title="数据管理工作台"
 				actions={
 					<Space wrap>
-						<Button onClick={() => router.push("/catalog/assets")}>查看资产</Button>
-						<Button onClick={() => router.push("/ops/overview")}>运行健康</Button>
-						<Button type="primary" onClick={() => router.push("/bi/report-factory")}>
-							查看成果
+						<Button onClick={() => router.push("/foundation/data-sources")}>配置数据源</Button>
+						<Button type={blockedThemes.length > 0 ? "primary" : "default"} onClick={() => router.push("/workbench/todo")}>
+							处理阻断项
 						</Button>
+						<Button onClick={() => router.push("/governance/quality")}>治理检查</Button>
+						<Button onClick={() => router.push("/catalog/assets")}>查看资产</Button>
+						<Button onClick={() => router.push("/bi/dashboards")}>创建报表</Button>
+						<Button onClick={() => router.push("/services/apis")}>发布数据 API</Button>
+						<Button onClick={() => router.push("/ops/overview")}>查看运行</Button>
 					</Space>
 				}
 			/>
@@ -189,10 +193,13 @@ export default function Page() {
 								)}
 							</div>
 							<Space wrap>
-								<Button onClick={() => router.push("/catalog/assets")}>资产明细</Button>
+								<Button onClick={() => router.push("/foundation/data-sources")}>配置数据源</Button>
+								<Button onClick={() => router.push("/workbench/todo")}>处理阻断项</Button>
 								<Button onClick={() => router.push("/governance/quality")}>治理检查</Button>
-								<Button onClick={() => router.push("/services/apis")}>服务目录</Button>
-								<Button onClick={() => router.push("/ops/overview")}>运行影响</Button>
+								<Button onClick={() => router.push("/catalog/assets")}>查看资产</Button>
+								<Button onClick={() => router.push("/bi/dashboards")}>创建报表</Button>
+								<Button onClick={() => router.push("/services/apis")}>发布数据 API</Button>
+								<Button onClick={() => router.push("/ops/overview")}>查看运行</Button>
 							</Space>
 						</div>
 					</div>
@@ -201,6 +208,14 @@ export default function Page() {
 						compact
 						title="暂无主题链路"
 						description="配置数据来源并完成数据交付后，这里会按业务主题展示状态和证据。"
+						actions={
+							<Space wrap>
+								<Button type="primary" onClick={() => router.push("/foundation/data-sources")}>
+									配置数据源
+								</Button>
+								<Button onClick={() => router.push("/workbench/todo")}>处理阻断项</Button>
+							</Space>
+						}
 					/>
 				)}
 			</Card>

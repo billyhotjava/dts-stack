@@ -166,7 +166,11 @@ export default function AuditEvidencePage() {
 				title="审计证据链"
 				actions={
 					<Space wrap>
-						<Button onClick={() => navigate("/ops/events")}>事件观测</Button>
+						<Button onClick={() => navigate("/ops/events")}>查看事件</Button>
+						<Button onClick={() => navigate("/catalog/lineage/impact")}>查看关联链路</Button>
+						<Button disabled title="后端证据导出接口未接入，不能在前端生成静态假文件">
+							导出证据
+						</Button>
 						<Button onClick={() => navigate("/ops/release-governance")}>发布治理</Button>
 						<Button loading={loading} onClick={() => void loadData()}>
 							刷新

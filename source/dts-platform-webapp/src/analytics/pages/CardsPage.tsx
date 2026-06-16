@@ -403,12 +403,21 @@ export default function CardsPage() {
 				title={t(locale, "questions.title")}
 				actions={
 					<Space>
+						<Button disabled title="打开问题编辑页后运行查询">
+							运行
+						</Button>
+						<Button disabled title="打开问题编辑页后保存分析问题">
+							保存
+						</Button>
+						<Button disabled title="运行查询后在编辑页生成图表">
+							生成图表
+						</Button>
 						<Button onClick={() => setBatchImportOpen(true)}>
 							批量导入 SQL
 						</Button>
 						<Link to="/bi/card/new">
 							<Button type="primary">
-								{t(locale, "questions.new")}
+								新建问题
 							</Button>
 						</Link>
 					</Space>
