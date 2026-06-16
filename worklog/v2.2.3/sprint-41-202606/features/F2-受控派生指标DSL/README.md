@@ -13,7 +13,7 @@
 |----|------|--------|------|------|
 | T01 | ControlledMetricDslCompiler 组件移植（白名单 + 三层防御 + 方言 quote） | P0 | DONE | F1-T01 |
 | T02 | 单测（每函数 postgres+doris、raw 拒、注入拒、quote、默认拒绝） | P0 | DONE | T01 |
-| T03 | buildMetricExpression 受控委托；PERMISSIVE 保留现状 | P0 | READY | T01, F1-T02 |
+| T03 | buildMetricExpression 受控委托；PERMISSIVE 保留现状 | P0 | DONE | T01, F1-T02 |
 
 ## 完成标准
 - [ ] 受控模式仅允许 sum/count/count_distinct/avg/min/max/ratio/date_trunc/count_if/sum_if/case_when；其余 → 422。

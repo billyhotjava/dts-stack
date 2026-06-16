@@ -1,7 +1,7 @@
 # T03: buildMetricExpression 受控委托
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T01, F1-T02
 
 ## 目标

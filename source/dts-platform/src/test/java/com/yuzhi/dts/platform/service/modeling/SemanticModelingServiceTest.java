@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.modeling;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.clearInvocations;
@@ -45,7 +46,8 @@ class SemanticModelingServiceTest {
                 mock(QueryDatasetVersionRepository.class),
                 mock(CatalogDatasetRepository.class),
                 mock(CatalogDatasetLineageRepository.class),
-                mock(DbtReleaseSubmissionService.class)
+                mock(DbtReleaseSubmissionService.class),
+                new ControlledMetricDslCompiler(new ObjectMapper())
             );
     }
 
@@ -186,10 +188,46 @@ class SemanticModelingServiceTest {
         return (String) method.invoke(service, metric);
     }
 
+    @Test
+    void controlledModeDelegatesToStrictCompilerAndQuotes() throws Throwable {
+        // F2-T03: CONTROLLED 模型的派生指标走严格编译器（白名单 + 方言 quote）。
+        String sum = buildMetricExpression(
+            new SemanticModelingService.MetricDto(
+                UUID.randomUUID(), UUID.randomUUID(), "amt", "金额", "sum", "{\"field\":\"order_amount\"}", null, null, "ACTIVE"
+            ),
+            true
+        );
+        assertThat(sum).isEqualTo("sum(\"order_amount\")");
+    }
+
+    @Test
+    void controlledModeRejectsRawSqlButPermissiveAllowsIt() throws Throwable {
+        SemanticModelingService.MetricDto rawSql = new SemanticModelingService.MetricDto(
+            UUID.randomUUID(), UUID.randomUUID(), "x", "x", "sql", "{\"expression\":\"sum(amount)\"}", null, null, "ACTIVE"
+        );
+        // 受控模式拒绝原始 SQL；permissive（现状）不拒绝（绞杀者并存）。
+        assertThatThrownBy(() -> buildMetricExpression(rawSql, true)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(buildMetricExpression(rawSql, false)).isNotBlank();
+    }
+
     private MapSqlParameterSource modelParams(SemanticModelingService.ModelRequest request) throws Exception {
         Method method = SemanticModelingService.class.getDeclaredMethod("modelParams", UUID.class, SemanticModelingService.ModelRequest.class);
         method.setAccessible(true);
         return (MapSqlParameterSource) method.invoke(service, UUID.randomUUID(), request);
+    }
+
+    private String buildMetricExpression(SemanticModelingService.MetricDto metric, boolean controlled) throws Throwable {
+        Method method = SemanticModelingService.class.getDeclaredMethod(
+            "buildMetricExpression",
+            SemanticModelingService.MetricDto.class,
+            boolean.class
+        );
+        method.setAccessible(true);
+        try {
+            return (String) method.invoke(service, metric, controlled);
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            throw e.getCause();
+        }
     }
 
     private record CapturedQuery(String sql, MapSqlParameterSource params) {}

@@ -43,6 +43,7 @@ public class SemanticModelingService {
     private final CatalogDatasetRepository catalogDatasetRepository;
     private final CatalogDatasetLineageRepository catalogLineageRepository;
     private final DbtReleaseSubmissionService dbtReleaseSubmissionService;
+    private final ControlledMetricDslCompiler controlledMetricDslCompiler;
 
     public SemanticModelingService(
         NamedParameterJdbcTemplate jdbc,
@@ -53,7 +54,8 @@ public class SemanticModelingService {
         QueryDatasetVersionRepository queryDatasetVersionRepository,
         CatalogDatasetRepository catalogDatasetRepository,
         CatalogDatasetLineageRepository catalogLineageRepository,
-        DbtReleaseSubmissionService dbtReleaseSubmissionService
+        DbtReleaseSubmissionService dbtReleaseSubmissionService,
+        ControlledMetricDslCompiler controlledMetricDslCompiler
     ) {
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
@@ -64,6 +66,7 @@ public class SemanticModelingService {
         this.catalogDatasetRepository = catalogDatasetRepository;
         this.catalogLineageRepository = catalogLineageRepository;
         this.dbtReleaseSubmissionService = dbtReleaseSubmissionService;
+        this.controlledMetricDslCompiler = controlledMetricDslCompiler;
     }
 
     @Transactional(readOnly = true)
@@ -1501,8 +1504,9 @@ public class SemanticModelingService {
             selectItems.add("    " + field + " as " + alias);
             groupByItems.add(field);
         }
+        boolean controlled = isControlled(model);
         for (MetricDto metric : metrics) {
-            String expression = buildMetricExpression(metric);
+            String expression = buildMetricExpression(metric, controlled);
             String alias = safeIdentifier(defaultValue(metric.code(), metric.name()));
             selectItems.add("    " + expression + " as " + alias);
         }
@@ -1627,7 +1631,25 @@ public class SemanticModelingService {
         return doc.toString();
     }
 
+    /** F1-T02: 受控模式判定——CONTROLLED 模型走严格受控路径，其余（含存量）保持 permissive。 */
+    private boolean isControlled(ModelDto model) {
+        return model != null && "CONTROLLED".equalsIgnoreCase(model.governanceMode());
+    }
+
     private String buildMetricExpression(MetricDto metric) {
+        return buildMetricExpression(metric, false);
+    }
+
+    private String buildMetricExpression(MetricDto metric, boolean controlled) {
+        if (controlled) {
+            // F2-T03: 受控模式委托严格编译器（白名单 + 拒原始 SQL + 方言 quote + 注入防御）。
+            // 违规抛 IllegalArgumentException（unsafe_expression），由上层映射 422。
+            return controlledMetricDslCompiler.compile(
+                metric.formulaType(),
+                metric.formulaJson(),
+                ControlledMetricDslCompiler.SqlDialect.POSTGRES
+            );
+        }
         String type = defaultValue(metric.formulaType(), "sum").toLowerCase(Locale.ROOT);
         JsonNode formula = parseFormula(metric.formulaJson());
         return switch (type) {
