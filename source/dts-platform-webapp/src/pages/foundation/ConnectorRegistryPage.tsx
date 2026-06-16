@@ -10,6 +10,9 @@ import { formatTime } from "@/utils/textUtils";
 
 const { Text } = Typography;
 
+const CAPABILITY_COLUMN_WIDTH = 240;
+const CONNECTOR_TABLE_SCROLL_X = 1360;
+
 const CATEGORY_OPTIONS = [
 	{ label: "全部", value: "" },
 	{ label: "数据库", value: "DATABASE" },
@@ -76,13 +79,13 @@ function CapabilityTags({ connector, compact = false }: { connector: InfraConnec
 		return <Text type="secondary">-</Text>;
 	}
 	return (
-		<Space size={[4, 4]} wrap>
+		<Space size={[4, 4]} wrap className="max-w-full min-w-0">
 			{visibleKeys.map((key) => (
-				<Tag key={key} color={key === "cdc" ? "orange" : "processing"}>
+				<Tag key={key} color={key === "cdc" ? "orange" : "processing"} className="whitespace-nowrap">
 					{CAPABILITY_LABELS[key]}
 				</Tag>
 			))}
-			{overflow > 0 ? <Tag>+{overflow}</Tag> : null}
+			{overflow > 0 ? <Tag className="whitespace-nowrap">+{overflow}</Tag> : null}
 		</Space>
 	);
 }
@@ -174,6 +177,7 @@ export default function ConnectorRegistryPage() {
 			{
 				title: "能力",
 				key: "capabilities",
+				width: CAPABILITY_COLUMN_WIDTH,
 				render: (_: unknown, record) => <CapabilityTags connector={record} compact />,
 			},
 			{
@@ -266,7 +270,7 @@ export default function ConnectorRegistryPage() {
 				columns={columns}
 				dataSource={list}
 				loading={loading}
-				scroll={{ x: 1040 }}
+				scroll={{ x: CONNECTOR_TABLE_SCROLL_X }}
 				pagination={{ defaultPageSize: 10 }}
 			/>
 
