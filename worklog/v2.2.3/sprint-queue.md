@@ -839,6 +839,65 @@
 - 每个核心页面必须具备主按钮、次按钮、危险按钮、空态、异常态、权限态、加载态和真实下一步。
 - 客户可见页面使用业务语言，不默认暴露 sprint/F1/F2、iframe、artifact、dbt 文件等内部表达。
 
+## Sprint-46: 工作台首页收敛与个人定制 (202606)
+**状态**: READY
+**类型**: UI Productization / Workbench Personalization / Backend Preference Contract（dts-platform-webapp + dts-platform + dts-admin menu seed）
+**目标**: 将“工作台”“数据管理工作台”“业务消费工作台”收敛为唯一 `/workbench` 首页，并支持每个登录用户通过 checkbox 勾选组件、上移/下移调整显示顺序；不做拖拽门户，不内置客户 demo 场景，兼容 Chrome 95。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-唯一工作台路由与菜单收敛 | P0 | 3 | READY |
+| F2-个人工作台偏好后端契约 | P0 | 4 | READY |
+| F3-前端工作台容器与组件注册表 | P0 | 3 | READY |
+| F4-自定义工作台抽屉 | P0 | 3 | READY |
+| F5-数据管理能力组件化迁移 | P0 | 4 | READY |
+| F6-验收兼容与发布材料 | P0 | 3 | READY |
+
+**统计**: READY=20, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**背景**: Sprint-45 已完成全局 UI 产品化整改，但客户现场定制首页诉求要求进一步从架构上去重：保留唯一工作台，把数据管理能力拆成用户可勾选的首页组件。
+**设计文档**: `worklog/v2.2.3/sprint-46-202606/README.md`
+**外部设计源**: `docs/superpowers/specs/2026-06-16-workbench-home-personalization-design.md`
+**组件矩阵**: `worklog/v2.2.3/sprint-46-202606/assets/workbench-ui-control-matrix.md`
+**集成测试**: `worklog/v2.2.3/sprint-46-202606/it/README.md`
+**关键决策**:
+- `/workbench` 是唯一工作台首页，`/workbench/data-management` 和 `/services/consumption` 只保留兼容跳转。
+- 每个登录用户可以勾选首页组件并调整显示顺序，配置保存到服务端。
+- 自定义方式只用 checkbox、上移、下移、保存、取消、恢复默认，不做拖拽和自由栅格。
+- 首页组件必须来自注册表，绑定真实页面或真实接口；无数据时显示空态或不可用原因。
+- 删除“经营分析、质量管理、项目交付、客户服务”等内置 demo 场景，客户场景到现场再定义。
+- Chrome 95 是硬约束，不引入 `structuredClone`、container query、复杂拖拽库或新浏览器 API。
+
+## Sprint-47: 语义层整合 Phase 4 — dts-metrics 退役 (202606)
+**状态**: READY（执行 gate：SP-2/SP-3 完成——原生页平价 + 路由收敛）
+**类型**: Decommission / 破坏性下线（dts-metrics 服务 + dts-metrics-webapp）
+**目标**: 平台原生治理页平价后安全退役 dts-metrics，消除两套并行语义层，整合大计划闭环。原则 verify-first → 灰度切断 → 回退窗口 → 先归档再删。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-退役前置核验与决策（gate） | P0 | 3 | READY |
+| F2-流量切断与部署下线（traefik 路由 + compose，灰度+回退） | P0 | 3 | READY |
+| F3-平台侧依赖清理（service-auth 授权 + metrics 配置） | P1 | 2 | READY |
+| F4-代码归档与整合收口（源码归档 + 分支处置 + 文档/记忆 + 闭环） | P1 | 3 | READY |
+
+**统计**: READY=11, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**退役足迹**（已勘察）: docker-compose-app.yml `dts-metrics`(:8084) + traefik `dts-metrics-api`(/api/metrics) `dts-metrics-ui`(/metrics)；平台 `MetricsInternalAccess`/`ServiceDependencyAuthenticationFilter`/`DtsMetricsCapabilityProperties`/application.yml；源码 source/dts-metrics(-webapp)；opmanager 文档。数据：v2.2.3 内存态无持久化数据需迁移。
+**依赖**: gate = SP-3（Sprint-44 F2 平价 + F3 路由切原生）；F2 依赖 F1 决策；F3/F4 依赖 F2 回退窗口稳定。
+**设计文档**: `worklog/v2.2.3/sprint-47-202606/README.md` + `assets/sp4-retirement-plan.md`
+**集成测试**: `worklog/v2.2.3/sprint-47-202606/it/README.md`
+**关键决策**:
+- 不在平价前退役（执行 gate）；每步可回退、保留回退窗口、先归档再删、不删 git 历史。
+- 平台 service-auth 清理须精确（仅 metrics 身份），勿误伤其他内部调用方。
+- sprint-35b 硬化随退役作废（逻辑亮点已 SP-1 移植进平台）。
+
+### 整合大计划 SP-1~SP-4 总览
+| 阶段 | Sprint | 状态 |
+|------|--------|------|
+| SP-1 受控建模逻辑（后端） | 41 | DONE（36 测试绿） |
+| SP-2 语义富化贯通（catalog+dbt） | 43 | 计划就绪 |
+| SP-3 前端整合（治理呈现+工作台+路由收敛） | 44 | 计划就绪 |
+| SP-4 dts-metrics 退役 | 47 | 计划就绪 |
+| dts-platform 领域解耦评审 | v2.3 | Backlog |
+
 ## v2.3 Backlog: 企业级资产与指标增强
 
 | Item | Owner | 来源 | 状态 |
