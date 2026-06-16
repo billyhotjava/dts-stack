@@ -24,6 +24,13 @@ dts-metrics/语义层坐落在 ELT + OpenMetadata 生态之上（详见记忆 `d
 | SP-3 | React Flow 图形工作台移植进平台前端 | 保留分析师建模 UX | 中高（前端工作量大） |
 | SP-4 | dts-metrics 服务/webapp 退役切流 | 消除双语义层 | 中（切流 + 数据/路由处置） |
 
+## 架构边界决策（2026-06-16）
+用户提出："dts-platform 单体功能越来越多，不分拆 metrics 架构师会不会有很多问题？" —— 正当关切。结论：
+- **消重复 ≠ 解决巨石过载**，是两个独立问题。当前 dts-metrics 是"坏的分拆"（瘦 UI + 重复语义层 + chatty 调回平台 = distributed monolith），合并它**减少**架构债。
+- **SP-1 升级为"模块化、可抽取"标准**：受控建模逻辑落进独立 `modeling` 子包/组件（`ControlledMetricDslCompiler`、`EltLayerGate`，显式接口、`semantic_*` schema 命名隔离），**不堆进 2000+ 行 `SemanticModelingService`**——今天是模块，将来可抽取为服务（modular monolith with extraction-ready seam）。
+- **dts-platform 按真实领域缝解耦（元数据&目录 / ETL&编排 / 语义建模&服务 / 治理）= v2.3 大版本独立架构议题**，不在本 sprint。metrics 的最终归宿是其中"语义建模&服务"模块，但前提是先合并干净、有清晰契约。
+- 抽取判据（满足才独立成服务）：独立有界上下文 + 独立生命周期 + 独立数据 owner + 独立扩展需求 + 独立团队 owner。
+
 ## 遗留处置
 - **dts-metrics sprint-35b 硬化**（F1 持久化 / F2 安全对等 / F5 拆分 / F6 IT，在 `feat/sprint-35b-dts-metrics-hardening` + `main`）：dts-metrics 既定退役，**不再合入 v2.2.3、不再继续硬化**；移植取其**逻辑**（DSL/分层/图形），非其基础设施。
 - 相关记忆：`dts-metrics-branch-baseline`、`dts-metrics-elt-ecosystem`、`dts-metrics-architecture-review`。

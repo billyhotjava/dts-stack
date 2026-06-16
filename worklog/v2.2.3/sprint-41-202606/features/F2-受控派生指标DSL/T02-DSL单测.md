@@ -1,7 +1,7 @@
 # T02: ControlledMetricDslCompiler 单测
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T01
 
 ## 目标

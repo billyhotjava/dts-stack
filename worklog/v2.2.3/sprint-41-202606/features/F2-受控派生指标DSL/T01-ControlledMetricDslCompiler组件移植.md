@@ -1,7 +1,7 @@
 # T01: ControlledMetricDslCompiler 组件移植
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: F1-T01
 
 ## 目标
