@@ -47,7 +47,8 @@ class SemanticModelingServiceTest {
                 mock(CatalogDatasetRepository.class),
                 mock(CatalogDatasetLineageRepository.class),
                 mock(DbtReleaseSubmissionService.class),
-                new ControlledMetricDslCompiler(new ObjectMapper())
+                new ControlledMetricDslCompiler(new ObjectMapper()),
+                new EltLayerGate()
             );
     }
 
@@ -208,6 +209,45 @@ class SemanticModelingServiceTest {
         // 受控模式拒绝原始 SQL；permissive（现状）不拒绝（绞杀者并存）。
         assertThatThrownBy(() -> buildMetricExpression(rawSql, true)).isInstanceOf(IllegalArgumentException.class);
         assertThat(buildMetricExpression(rawSql, false)).isNotBlank();
+    }
+
+    @Test
+    void controlledLayerGateAllowsDwsAndAds() throws Throwable {
+        enforceLayerGate(model("DWS", "stat_date"));
+        enforceLayerGate(model("ADS", null));
+    }
+
+    @Test
+    void controlledLayerGateRejectsOdsAndDwdWithoutGrain() {
+        assertThatThrownBy(() -> enforceLayerGate(model("ODS", "x")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("invalid_layer");
+        assertThatThrownBy(() -> enforceLayerGate(model("DWD", null)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("grain_mismatch");
+    }
+
+    @Test
+    void controlledLayerGateAllowsDwdWithGrain() throws Throwable {
+        // 标准码强制随 SP-2 接入，当前 DWD 仅校验 grain
+        enforceLayerGate(model("DWD", "stat_date"));
+    }
+
+    private SemanticModelingService.ModelDto model(String type, String grain) {
+        return new SemanticModelingService.ModelDto(
+            UUID.randomUUID(), UUID.randomUUID(), type, "m_" + type, null, null, grain, null, null,
+            "DRAFT", "DRAFT", null, null, null, null, null, "CONTROLLED"
+        );
+    }
+
+    private void enforceLayerGate(SemanticModelingService.ModelDto model) throws Throwable {
+        Method method = SemanticModelingService.class.getDeclaredMethod("enforceLayerGate", SemanticModelingService.ModelDto.class);
+        method.setAccessible(true);
+        try {
+            method.invoke(service, model);
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            throw e.getCause();
+        }
     }
 
     private MapSqlParameterSource modelParams(SemanticModelingService.ModelRequest request) throws Exception {

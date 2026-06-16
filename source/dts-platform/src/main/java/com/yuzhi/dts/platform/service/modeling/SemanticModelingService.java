@@ -1639,6 +1639,32 @@ public class SemanticModelingService {
         return model != null && "CONTROLLED".equalsIgnoreCase(model.governanceMode());
     }
 
+    /**
+     * F3-T02: 受控模式 ELT 分层准入。对模型的<b>输出层</b>（{@code model.type}）+ grain 施加准入：
+     * 受控模型须输出到 DWS/ADS（或带 grain 的 DWD），ODS/STG 与无 grain 的 DWD 被拒。
+     *
+     * <p><b>已知边界（依赖 SP-2 语义富化）</b>：平台语义模型当前不携带<b>源表</b>层级与标准码
+     * （层级在 catalog 按表名 keyed、标准码未建模），故此处只对输出层 + grain 强制；源表"禁止从
+     * ODS/STG 建模"与 DWD 标准码强制随 SP-2 catalog 层级解析接入（标准码位先置 true、不直连发布置 false）。
+     */
+    private void enforceLayerGate(ModelDto model) {
+        List<EltLayerGate.Diagnostic> diagnostics = eltLayerGate.evaluate(
+            List.of(
+                new EltLayerGate.LayerNode(
+                    defaultValue(model.name(), model.id() == null ? "model" : model.id().toString()),
+                    model.type(),
+                    StringUtils.hasText(model.grain()),
+                    true,
+                    false
+                )
+            )
+        );
+        if (!diagnostics.isEmpty()) {
+            EltLayerGate.Diagnostic first = diagnostics.get(0);
+            throw new IllegalArgumentException(first.code() + ": " + first.message());
+        }
+    }
+
     private String buildMetricExpression(MetricDto metric) {
         return buildMetricExpression(metric, false);
     }
