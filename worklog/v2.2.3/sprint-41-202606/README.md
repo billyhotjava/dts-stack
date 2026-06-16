@@ -28,11 +28,17 @@
 
 | ID | Feature | Task 数 | 状态 | 优先级 |
 |----|---------|---------|------|--------|
-| F1 | 受控模式基座（governanceMode + 切换骨架 + 存量兼容） | 2 | READY | P0 |
-| F2 | 受控派生指标 DSL（ControlledMetricDslCompiler + 委托） | 3 | READY | P0 |
+| F1 | 受控模式基座（governanceMode + 切换骨架 + 存量兼容） | 2 | DONE | P0 |
+| F2 | 受控派生指标 DSL（ControlledMetricDslCompiler + 委托） | 3 | DONE | P0 |
 | F3 | ELT 分层准入闸（EltLayerGate + 校验集成） | 3 | READY | P0 |
 
 **依赖**：F2、F3 均依赖 F1 的受控模式切换；F2、F3 之间可并行。
+
+## 进度（2026-06-16）
+- **F1 DONE**：`semantic_model.governance_mode`（CONTROLLED|PERMISSIVE）+ Liquibase 回填 PERMISSIVE + `isControlled` 分流（提交 `c5234a75a` / `01899129f`）。
+- **F2 DONE**：`ControlledMetricDslCompiler`（独立可抽取组件，白名单 + 方言 quote + 注入防御，拒原始 SQL）+ `buildMetricExpression` 受控委托（提交 `bef64345d` / `01899129f`）；15+2 单测全绿。
+- **F3 待**：`EltLayerGate`（DWS/ADS 入口、DWD 需 grain+标准码、ODS/STG 禁）+ 校验集成 + 错误码 422/400 收口。
+- 架构边界决策：SP-1 按"模块化可抽取"落地（受控逻辑在独立 `modeling` 组件，不堆进 2000+ 行 service）；dts-platform 领域解耦排入 v2.3。
 
 ## 完成标准
 - [ ] 模型可标记 `governanceMode=CONTROLLED`；受控模型走严格路径，存量/PERMISSIVE 模型行为字节不变（绞杀者并存）。

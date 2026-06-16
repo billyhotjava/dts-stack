@@ -1,7 +1,7 @@
 # F1: 受控模式基座（governanceMode + 切换骨架 + 存量兼容）
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 
 ## 目标
 引入模型级 `governanceMode`（CONTROLLED|PERMISSIVE）作为绞杀者开关：受控模型走 F2/F3 的严格路径，存量/PERMISSIVE 模型行为字节不变。F2、F3 均依赖本 feature 的切换点。

@@ -1,7 +1,7 @@
 # F2: 受控派生指标 DSL（ControlledMetricDslCompiler + 委托）
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: F1
 
 ## 目标
