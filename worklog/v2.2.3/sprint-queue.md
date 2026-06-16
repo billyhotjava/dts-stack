@@ -725,25 +725,27 @@
 - 页面只做工作台编排与导航，不新增后端接口，不替换已有报表、指标、API、数据产品页面。
 
 ## Sprint-41: 语义层整合 Phase 1 — 受控建模逻辑移植 (202606)
-**状态**: READY
+**状态**: DONE（F1+F2+F3 全部完成；源表层级/标准码 gating 依赖 SP-2，已标注）
 **类型**: Architecture Consolidation / Implementation（仅后端 dts-platform）
 **目标**: 把 dts-metrics 的受控派生指标 DSL + ELT 分层准入移植进权威语义层 dts-platform `SemanticModelingService`，绞杀者式按模型级 governanceMode 切换。
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
-| F1-受控模式基座（governanceMode + 切换骨架 + 存量兼容） | P0 | 2 | READY |
-| F2-受控派生指标DSL（ControlledMetricDslCompiler + 委托） | P0 | 3 | READY |
-| F3-ELT分层准入闸（EltLayerGate + 校验集成） | P0 | 3 | READY |
+| F1-受控模式基座（governanceMode + 切换骨架 + 存量兼容） | P0 | 2 | DONE |
+| F2-受控派生指标DSL（ControlledMetricDslCompiler + 委托） | P0 | 3 | DONE |
+| F3-ELT分层准入闸（EltLayerGate + 校验集成） | P0 | 3 | DONE |
 
-**统计**: READY=8, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=8, BLOCKED=0
+**进度（2026-06-16）**: 全部 DONE。`governance_mode` 受控开关 + `ControlledMetricDslCompiler`（独立可抽取，白名单/方言 quote/注入防御/拒 raw SQL）+ `EltLayerGate`（DWS/ADS 入口、DWD 需 grain、ODS/STG 禁）+ 受控集成（buildMetricExpression 委托 + validateModelForReview 调闸）+ 错误码（unsafe_expression→422、分层码→400）。验收 **36 例全绿**（编译器 15 + 闸 7 + service 12 + resource 2）。提交 c5234a75a/bef64345d/01899129f/9919cbbd3/12560de3d/834c755b3，分支 feat/semantic-consolidation（已 merge 回 v2.2.3）。
 **背景**: 决策以 dts-platform 为唯一权威语义层（更成熟：评审工作流/runs/业务对象映射/可用 BI+血缘注册/持久化/前端 + 已具备 generateArtifacts→DbtFileService 物化），dts-metrics 亮点移植后逐步退役。本 sprint 为整合大计划 SP-1；后续 SP-2 语义富化契约、SP-3 React Flow 工作台移植、SP-4 dts-metrics 退役。
-**实施分支**: 建议 `feat/semantic-consolidation`（不为退役中的 dts-metrics 合 sprint-35b）。
 **设计文档**: `worklog/v2.2.3/sprint-41-202606/README.md` + `assets/sp1-controlled-modeling-design.md` + `assets/semantic-consolidation-roadmap.md`
 **集成测试**: `worklog/v2.2.3/sprint-41-202606/it/README.md`
 **关键决策**:
 - 平台侧权威；dts-metrics 取逻辑（DSL/分层）不取基础设施；sprint-35b 硬化遗留作废、不合入 v2.2.3。
 - 绞杀者并存：受控路径与现有 permissive 路径按 governanceMode 切换，PERMISSIVE 字节不变。
-- 受控 DSL 须与 dts-metrics 黄金 SQL 语义一致（防移植漂移）。
+- 受控 DSL 取**安全/语义一致**而非字节复刻 dts-metrics（两者输入模型不同：字符串表达式 vs JSON formula）。
+- 源表层级 gating + DWD 标准码强制依赖 SP-2 语义富化（平台模型当前不携带源表层级/标准码）。
+- 架构边界：SP-1 模块化可抽取；dts-platform 领域解耦评审排入 v2.3。
 
 ## Sprint-42: 数据管理主题看板 (202606)
 **状态**: DONE

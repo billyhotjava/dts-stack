@@ -1,7 +1,7 @@
 # Sprint-41: 语义层整合 Phase 1 — 受控建模逻辑移植
 
 **时间**: 2026-06
-**状态**: READY
+**状态**: DONE（F1+F2+F3 全部完成；源表层级/标准码 gating 依赖 SP-2，已文档标注）
 **类型**: Architecture Consolidation / Implementation（仅后端 dts-platform）
 **实施分支**: 建议从 `v2.2.3` 切 `feat/semantic-consolidation`（不为退役中的 dts-metrics 合 sprint-35b）
 
@@ -30,15 +30,17 @@
 |----|---------|---------|------|--------|
 | F1 | 受控模式基座（governanceMode + 切换骨架 + 存量兼容） | 2 | DONE | P0 |
 | F2 | 受控派生指标 DSL（ControlledMetricDslCompiler + 委托） | 3 | DONE | P0 |
-| F3 | ELT 分层准入闸（EltLayerGate + 校验集成） | 3 | READY | P0 |
+| F3 | ELT 分层准入闸（EltLayerGate + 校验集成） | 3 | DONE | P0 |
 
 **依赖**：F2、F3 均依赖 F1 的受控模式切换；F2、F3 之间可并行。
 
-## 进度（2026-06-16）
-- **F1 DONE**：`semantic_model.governance_mode`（CONTROLLED|PERMISSIVE）+ Liquibase 回填 PERMISSIVE + `isControlled` 分流（提交 `c5234a75a` / `01899129f`）。
-- **F2 DONE**：`ControlledMetricDslCompiler`（独立可抽取组件，白名单 + 方言 quote + 注入防御，拒原始 SQL）+ `buildMetricExpression` 受控委托（提交 `bef64345d` / `01899129f`）；15+2 单测全绿。
-- **F3 待**：`EltLayerGate`（DWS/ADS 入口、DWD 需 grain+标准码、ODS/STG 禁）+ 校验集成 + 错误码 422/400 收口。
-- 架构边界决策：SP-1 按"模块化可抽取"落地（受控逻辑在独立 `modeling` 组件，不堆进 2000+ 行 service）；dts-platform 领域解耦排入 v2.3。
+## 进度（2026-06-16，全部 DONE）
+- **F1 DONE**：`semantic_model.governance_mode`（CONTROLLED|PERMISSIVE）+ Liquibase 回填 PERMISSIVE + `isControlled` 分流（`c5234a75a` / `01899129f`）。
+- **F2 DONE**：`ControlledMetricDslCompiler`（独立可抽取组件，白名单 + 方言 quote + 注入防御，拒原始 SQL）+ `buildMetricExpression` 受控委托（`bef64345d` / `01899129f`）。
+- **F3 DONE**：`EltLayerGate`（DWS/ADS 入口、DWD 需 grain、ODS/STG 禁）+ `validateModelForReview` 受控集成 + 错误码（unsafe_expression→422、分层码→400）（`9919cbbd3` / `12560de3d` / `834c755b3`）。
+- **验收基线**：`./mvnw -pl dts-platform clean test -Dtest='ControlledMetricDslCompilerTest,EltLayerGateTest,SemanticModelingServiceTest,SemanticModelingResourceTest'` → **36 例全绿**（编译器 15 + 闸 7 + service 12 + resource 2）。
+- **架构边界**：SP-1 按"模块化可抽取"落地（受控逻辑在独立 `modeling` 组件，不堆进 2000+ 行 service）；dts-platform 领域解耦排入 **v2.3**。
+- **依赖 SP-2 的 followup**：源表层级 gating（禁止从 ODS/STG 源表建模）+ DWD 标准码强制——平台模型当前不携带源表层级/标准码（catalog 按表名 keyed），随 SP-2 语义富化接入；`EltLayerGate` 组件已支持完整规则，等输入即生效。
 
 ## 完成标准
 - [ ] 模型可标记 `governanceMode=CONTROLLED`；受控模型走严格路径，存量/PERMISSIVE 模型行为字节不变（绞杀者并存）。
