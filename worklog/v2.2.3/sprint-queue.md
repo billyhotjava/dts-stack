@@ -765,6 +765,28 @@
 - 第一对象 = 业务主题/场景，第二对象 = 关联数据资产，技术动作只作为下一步入口。
 - 入口放在“工作台 -> 数据管理工作台”，旧 `/services/consumption` 保持兼容，避免现场旧链接断开。
 
+## Sprint-43: 语义层整合 Phase 2 — 语义富化贯通 (202606)
+**状态**: READY
+**类型**: Architecture Consolidation / Implementation（dts-platform catalog + dbt 约定 + 消费端）
+**目标**: 把 dbt 列 meta（semantic_type/grain/standard_code/time）贯通 dbt→OM/catalog 列同步→列契约→schema-contract/assets-v2→建模消费，解锁 Sprint-41 F3 源表层级 gating + dts-metrics visual-assets 空列族 + DWD 标准码强制。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-dbt-meta语义契约标准化 | P1 | 2 | READY |
+| F2-catalog列同步捕获meta（含 OM-meta spike） | P0 | 3 | READY |
+| F3-契约透出列族 | P0 | 2 | READY |
+| F4-接通消费端（F3 源表 gating + visual-assets 列族） | P0 | 2 | READY |
+
+**统计**: READY=9, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**背景**: 整合大计划 SP-2。关键发现——dbt schema.yml **已有** `meta.semantic_type` 约定（dws/semantic/schema.yml），但 catalog 不透出；故 SP-2 = **贯通已有 meta** 而非发明契约。**前置**: F2-T00 spike 验证 OM dbt ingestion 是否已抓 meta（决定走 OM 镜像 or 直读 dbt）。
+**依赖**: 上游 SP-1 = Sprint-41（DONE）；本 sprint 解锁其 F3-T02 落地说明记录的"依赖 SP-2"项。后续 SP-3 工作台移植、SP-4 dts-metrics 退役；v2.3 dts-platform 领域解耦评审。
+**设计文档**: `worklog/v2.2.3/sprint-43-202606/README.md` + `assets/sp2-semantic-enrichment-design.md`
+**集成测试**: `worklog/v2.2.3/sprint-43-202606/it/README.md`
+**关键决策**:
+- 契约已存在于 dbt（semantic_type），SP-2 只贯通 + 小幅扩展（grain/standard_code/time），不发明、不重写 OM ingestion。
+- 绞杀者：无 meta 的存量列/资产回退（catalog 行为字节不变）。
+- grain 倾向复用平台 `semantic_model.grain`（Sprint-41 已有），dbt meta 作来源同步。
+
 ## v2.3 Backlog: 企业级资产与指标增强
 
 | Item | Owner | 来源 | 状态 |
