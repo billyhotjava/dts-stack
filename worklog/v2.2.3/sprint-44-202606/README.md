@@ -20,10 +20,11 @@
 | ID | Feature | Task 数 | 状态 | 优先级 |
 |----|---------|---------|------|--------|
 | F1 | 受控建模治理前端呈现（governanceMode + 受控 DSL 提示 + 分层诊断） | 4 | READY | P0 |
-| F2 | React Flow 可视化工作台亮点移植（受控图形建模） | TBD | PLANNED | P1 |
-| F3 | 菜单/路由收敛至原生页（配合 SP-4 退役 iframe） | TBD | PLANNED | P1 |
+| F2 | React Flow 可视化工作台亮点移植（受控图形建模） | 4 | READY | P1 |
+| F3 | 菜单/路由收敛至原生页（配合 SP-4 退役 iframe） | 3 | READY | P1 |
 
-> 本 sprint 先交付 **F1**（细化如下）；F2/F3 待 SP-2 列族贯通 + SP-4 退役节奏排期。
+> 三 feature 均已细化。**执行序**：F1（治理呈现，独立）→ F2（图形工作台，依赖 SP-2 列族）→ F3（路由收敛，依赖 F2 平价 + SP-4 退役）。
+> 关键洞察：平台已有 React Flow 画布（`analytics/pages/semantic`，BI 卡片用），F2 **复用而非再造**——把 dts-metrics 治理亮点（受控 DSL 构造器 / ELT 分层 UX）叠加到治理路径。
 
 ## 完成标准（F1）
 - [ ] 模型创建/编辑可设 `governanceMode`（CONTROLLED|PERMISSIVE），列表可见模式。

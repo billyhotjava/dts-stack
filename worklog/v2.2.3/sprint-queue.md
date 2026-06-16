@@ -795,10 +795,11 @@
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
 | F1-受控建模治理前端呈现（governanceMode + 受控 DSL 提示 + 分层诊断） | P0 | 4 | READY |
-| F2-React Flow 可视化工作台亮点移植 | P1 | TBD | PLANNED |
-| F3-菜单/路由收敛至原生页（配合 SP-4 退役 iframe） | P1 | TBD | PLANNED |
+| F2-React Flow 可视化工作台亮点移植 | P1 | 4 | READY |
+| F3-菜单/路由收敛至原生页（配合 SP-4 退役 iframe） | P1 | 3 | READY |
 
-**统计**: READY=4（F1）, PLANNED=2（F2/F3 待细化）, DONE=0, BLOCKED=0
+**统计**: READY=11, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**执行序**: F1（治理呈现，独立）→ F2（图形工作台，依赖 SP-2 列族；复用 analytics 已有 React Flow 画布而非再造）→ F3（路由收敛，依赖 F2 平价 + SP-4 退役 dts-metrics）。
 **背景**: SP-1（Sprint-41）后端受控治理只动后端，前端尚无 governanceMode 控件/422-400 友好提示/分层诊断展示。现状菜单 `/modeling/semantic-center` 仍指向 iframe 嵌入的待退役 dts-metrics-webapp；调 `/api/semantic` 的平台原生页才是权威 UI。本 sprint 让权威 UI 承载受控治理。
 **F1 细化**: T01 governanceMode 前端贯通+开关 / T02 受控派生指标违规友好提示(422 unsafe_expression) / T03 ELT 分层闸诊断展示(400 分层码) / T04 视觉区分+文案+前端契约测试。
 **依赖**: 上游 Sprint-41（后端 DONE）；F1 不依赖 SP-2；字段选择列族联动属 F2 + Sprint-43 SP-2。
