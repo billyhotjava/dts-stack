@@ -22,6 +22,17 @@ const ROLE_DEFAULTS = readFileSync(
 	"utf8",
 );
 const ZH_LOCALE = readFileSync(new URL("../../locales/lang/zh_CN/sys.json", import.meta.url), "utf8");
+const ADMIN_LIQUIBASE_MASTER = readFileSync(
+	new URL("../../../../dts-admin/src/main/resources/config/liquibase/master.xml", import.meta.url),
+	"utf8",
+);
+const ADMIN_MENU_CLEANUP = readFileSync(
+	new URL(
+		"../../../../dts-admin/src/main/resources/config/liquibase/changelog/20260617-01_remove_workbench_data_management_menu.xml",
+		import.meta.url,
+	),
+	"utf8",
+);
 
 test("workbench is the only homepage and legacy data-management entries redirect back to it", () => {
 	assert.doesNotMatch(MENU_SEED, /"key": "data-management"/);
@@ -56,6 +67,15 @@ test("data management workbench waits for onsite business theme definition", () 
 	assert.match(source, /运行健康/);
 	assert.doesNotMatch(source, /业务消费工作台/);
 	assert.doesNotMatch(source, /SQL|dbt|ODS|DWD|DWS|ADS|\.sql/i);
+});
+
+test("admin database migration removes legacy data-management workbench menu", () => {
+	assert.match(ADMIN_LIQUIBASE_MASTER, /20260617-01_remove_workbench_data_management_menu\.xml/);
+	assert.match(ADMIN_MENU_CLEANUP, /portal_menu_visibility/);
+	assert.match(ADMIN_MENU_CLEANUP, /portal_menu/);
+	assert.match(ADMIN_MENU_CLEANUP, /workbenchdatamanagement/i);
+	assert.match(ADMIN_MENU_CLEANUP, /\/workbench\/data-management/);
+	assert.match(ADMIN_MENU_CLEANUP, /data-management/);
 });
 
 test("data management workbench is driven by golden chain state through a theme model", () => {

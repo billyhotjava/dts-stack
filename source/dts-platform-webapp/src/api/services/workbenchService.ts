@@ -117,10 +117,19 @@ export interface LeaderOverviewParams {
 export default {
 	overview: () => apiClient.get<WorkbenchOverview>({ url: "/workbench/overview" }),
 	todos: () => apiClient.get<WorkbenchTodoItem[]>({ url: "/workbench/todos" }),
-	preferences: () => apiClient.get<WorkbenchPreferencesResponse>({ url: "/workbench/preferences" }),
+	preferences: () =>
+		apiClient.get<WorkbenchPreferencesResponse>({ url: "/workbench/preferences", _skipErrorToast: true } as any),
 	savePreferences: (payload: WorkbenchPreferencesRequest) =>
-		apiClient.put<WorkbenchPreferencesResponse>({ url: "/workbench/preferences", data: payload }),
-	resetPreferences: () => apiClient.post<WorkbenchPreferencesResponse>({ url: "/workbench/preferences/reset" }),
+		apiClient.put<WorkbenchPreferencesResponse>({
+			url: "/workbench/preferences",
+			data: payload,
+			_skipErrorToast: true,
+		} as any),
+	resetPreferences: () =>
+		apiClient.post<WorkbenchPreferencesResponse>({
+			url: "/workbench/preferences/reset",
+			_skipErrorToast: true,
+		} as any),
 	leaderOverview: (params: LeaderOverviewParams) =>
 		apiClient.get<LeaderOverviewResponse>({
 			url: "/workbench/leader-overview",

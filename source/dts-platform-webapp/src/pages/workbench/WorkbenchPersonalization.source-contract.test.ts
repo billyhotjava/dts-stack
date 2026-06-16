@@ -31,6 +31,9 @@ test("workbench service exposes personal preference endpoints", () => {
 	assert.match(source, /preferences:\s*\(\)\s*=>\s*apiClient\.get<WorkbenchPreferencesResponse>\(\{\s*url:\s*"\/workbench\/preferences"/s);
 	assert.match(source, /savePreferences:\s*\([^)]*\)\s*=>\s*apiClient\.put<WorkbenchPreferencesResponse>\(\{\s*url:\s*"\/workbench\/preferences"/s);
 	assert.match(source, /resetPreferences:\s*\(\)\s*=>\s*apiClient\.post<WorkbenchPreferencesResponse>\(\{\s*url:\s*"\/workbench\/preferences\/reset"/s);
+	assert.match(source, /preferences:[\s\S]*_skipErrorToast:\s*true/);
+	assert.match(source, /savePreferences:[\s\S]*_skipErrorToast:\s*true/);
+	assert.match(source, /resetPreferences:[\s\S]*_skipErrorToast:\s*true/);
 });
 
 test("workbench component registry enumerates real product modules, not demo scenarios", () => {
@@ -73,6 +76,9 @@ test("workbench page is a personalizable container over the leader overview modu
 	assert.match(indexSource, /useSearchParams/);
 	assert.match(indexSource, /customize=1/);
 	assert.match(indexSource, /visibleComponentKeys/);
+	assert.match(indexSource, /当前环境暂未启用个人工作台保存/);
+	assert.doesNotMatch(indexSource, /<Alert/);
+	assert.doesNotMatch(indexSource, /个人工作台配置暂时不可用|No static resource/);
 
 	assert.match(leaderSource, /visibleComponentKeys\?:\s*ReadonlySet<string>/);
 	for (const key of ["screen-strip", "leader-kpi", "top-reports", "core-assets"]) {

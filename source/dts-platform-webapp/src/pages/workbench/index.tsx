@@ -1,4 +1,4 @@
-import { Alert, Button, Empty, message, Skeleton, Space, Typography } from "antd";
+import { Button, Empty, message, Skeleton, Space, Typography } from "antd";
 import { RefreshCw, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -23,6 +23,7 @@ const CUSTOMIZE_QUERY = "customize=1";
 const CUSTOMIZE_QUERY_INDEX = CUSTOMIZE_QUERY.indexOf("=");
 const CUSTOMIZE_QUERY_KEY = CUSTOMIZE_QUERY.slice(0, CUSTOMIZE_QUERY_INDEX);
 const CUSTOMIZE_QUERY_VALUE = CUSTOMIZE_QUERY.slice(CUSTOMIZE_QUERY_INDEX + 1);
+const PREFERENCES_UNAVAILABLE_MESSAGE = "当前环境暂未启用个人工作台保存，请确认 dts-platform 后端已升级。";
 
 function normalizeAvailableComponents(
 	components: WorkbenchComponentDescriptor[] | undefined,
@@ -59,17 +60,15 @@ export default function WorkbenchPage() {
 	const [drawerOpen, setDrawerOpen] = useState<boolean>(
 		() => searchParams.get(CUSTOMIZE_QUERY_KEY) === CUSTOMIZE_QUERY_VALUE,
 	);
-	const [error, setError] = useState<Error | null>(null);
 	const activeSection = searchParams.get("section");
 
 	const loadPreferences = useCallback(async (): Promise<void> => {
 		setLoading(true);
-		setError(null);
 		try {
 			const next = await workbenchService.preferences();
 			setPreferences(next);
 		} catch (ex: unknown) {
-			setError(ex instanceof Error ? ex : new Error(String(ex)));
+			console.warn("[workbench] personal preferences are unavailable; using local defaults", ex);
 		} finally {
 			setLoading(false);
 		}
@@ -135,6 +134,9 @@ export default function WorkbenchPage() {
 				setPreferences(next);
 				message.success("工作台已更新");
 				closeCustomize();
+			} catch (ex: unknown) {
+				console.warn("[workbench] failed to save personal preferences", ex);
+				message.warning(PREFERENCES_UNAVAILABLE_MESSAGE);
 			} finally {
 				setSaving(false);
 			}
@@ -148,6 +150,9 @@ export default function WorkbenchPage() {
 			const next = await workbenchService.resetPreferences();
 			setPreferences(next);
 			message.success("已恢复默认工作台");
+		} catch (ex: unknown) {
+			console.warn("[workbench] failed to reset personal preferences", ex);
+			message.warning(PREFERENCES_UNAVAILABLE_MESSAGE);
 		} finally {
 			setSaving(false);
 		}
@@ -186,19 +191,6 @@ export default function WorkbenchPage() {
 						</Space>
 					</Space>
 
-					{error && (
-						<Alert
-							type="warning"
-							showIcon
-							message="个人工作台配置暂时不可用"
-							description="已使用本地默认配置展示，保存前请先重试。"
-							action={
-								<Button size="small" onClick={() => void loadPreferences()}>
-									重试
-								</Button>
-							}
-						/>
-					)}
 				</Space>
 			</div>
 
