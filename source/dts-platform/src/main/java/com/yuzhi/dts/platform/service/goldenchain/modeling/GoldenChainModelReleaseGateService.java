@@ -6,7 +6,9 @@ import com.yuzhi.dts.platform.service.goldenchain.GoldenChainStageSnapshot;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import org.springframework.stereotype.Service;
 
+@Service
 public class GoldenChainModelReleaseGateService {
 
     private static final String UNASSIGNED_OWNER = "待分配";

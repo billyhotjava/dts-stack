@@ -12,6 +12,12 @@
     "requiredRoles": []
   },
   {
+    "code": "sys.nav.portal.workbenchDataManagement",
+    "title": "数据管理工作台",
+    "route": "/workbench/data-management",
+    "requiredRoles": []
+  },
+  {
     "code": "sys.nav.portal.resourceConnectors",
     "title": "连接器目录",
     "route": "/foundation/connectors",
@@ -243,12 +249,6 @@
     "code": "sys.nav.portal.opsBackfill",
     "title": "补数管理",
     "route": "/ops/backfill",
-    "requiredRoles": []
-  },
-  {
-    "code": "sys.nav.portal.servicesConsumption",
-    "title": "业务消费工作台",
-    "route": "/services/consumption",
     "requiredRoles": []
   },
   {

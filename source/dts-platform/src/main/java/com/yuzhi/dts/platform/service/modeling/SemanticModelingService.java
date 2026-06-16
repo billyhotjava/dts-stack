@@ -426,7 +426,7 @@ public class SemanticModelingService {
         return jdbc.query(
             ("""
             select id, object_id, type, name, table_name, description, grain, materialization, refresh_cycle, status,
-                   review_status, submitted_by, submitted_at, reviewed_by, reviewed_at, review_comment
+                   review_status, submitted_by, submitted_at, reviewed_by, reviewed_at, review_comment, governance_mode
             from semantic_model
             """ + whereClause + """
             order by last_modified_date desc nulls last, name asc
@@ -448,7 +448,8 @@ public class SemanticModelingService {
                 instant(rs, "submitted_at"),
                 rs.getString("reviewed_by"),
                 instant(rs, "reviewed_at"),
-                rs.getString("review_comment")
+                rs.getString("review_comment"),
+                defaultValue(rs.getString("governance_mode"), "PERMISSIVE")
             )
         );
     }
@@ -698,9 +699,9 @@ public class SemanticModelingService {
         jdbc.update(
             """
             insert into semantic_model
-                (id, object_id, type, name, table_name, description, grain, materialization, refresh_cycle, status, created_date, last_modified_date)
+                (id, object_id, type, name, table_name, description, grain, materialization, refresh_cycle, status, governance_mode, created_date, last_modified_date)
             values
-                (:id, :objectId, :type, :name, :tableName, :description, :grain, :materialization, :refreshCycle, :status, :now, :now)
+                (:id, :objectId, :type, :name, :tableName, :description, :grain, :materialization, :refreshCycle, :status, :governanceMode, :now, :now)
             """,
             modelParams(id, request)
         );
@@ -1341,7 +1342,7 @@ public class SemanticModelingService {
         return listOne(
             """
             select id, object_id, type, name, table_name, description, grain, materialization, refresh_cycle, status,
-                   review_status, submitted_by, submitted_at, reviewed_by, reviewed_at, review_comment
+                   review_status, submitted_by, submitted_at, reviewed_by, reviewed_at, review_comment, governance_mode
             from semantic_model
             where id = :id
             """,
@@ -1362,7 +1363,8 @@ public class SemanticModelingService {
                 instant(rs, "submitted_at"),
                 rs.getString("reviewed_by"),
                 instant(rs, "reviewed_at"),
-                rs.getString("review_comment")
+                rs.getString("review_comment"),
+                defaultValue(rs.getString("governance_mode"), "PERMISSIVE")
             )
         );
     }
@@ -1972,7 +1974,8 @@ public class SemanticModelingService {
             .addValue("grain", trimToNull(request.grain()))
             .addValue("materialization", trimToNull(request.materialization()))
             .addValue("refreshCycle", trimToNull(request.refreshCycle()))
-            .addValue("status", defaultValue(request.status(), "DRAFT"));
+            .addValue("status", defaultValue(request.status(), "DRAFT"))
+            .addValue("governanceMode", defaultValue(request.governanceMode(), "CONTROLLED"));
     }
 
     private static UUID uuid(ResultSet rs, String column) throws SQLException {
@@ -2153,9 +2156,10 @@ public class SemanticModelingService {
         Instant submittedAt,
         String reviewedBy,
         Instant reviewedAt,
-        String reviewComment
+        String reviewComment,
+        String governanceMode
     ) {}
-    public record ModelRequest(UUID objectId, String type, String name, String tableName, String description, String grain, String materialization, String refreshCycle, String status) {}
+    public record ModelRequest(UUID objectId, String type, String name, String tableName, String description, String grain, String materialization, String refreshCycle, String status, String governanceMode) {}
     public record ModelBindingDto(UUID modelId, List<UUID> dimensionIds, List<UUID> metricIds) {}
     public record ModelBindingRequest(List<UUID> dimensionIds, List<UUID> metricIds) {}
     public record ReviewActionRequest(String comment) {}

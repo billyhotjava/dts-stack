@@ -690,13 +690,13 @@
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
 | F1-结构化数据黄金链路状态机 | P0 | 4 | DONE |
-| F2-接入入湖到建模产品闭环 | P0 | 4 | DONE |
+| F2-接入入湖到建模产品闭环 | P0 | 5 | DONE |
 | F3-治理资产权限硬门禁 | P0 | 4 | DONE |
 | F4-任务运维中心产品化 | P1 | 4 | DONE |
 | F5-业务消费闭环 | P1 | 4 | DONE |
 
-**统计**: READY=0, IN_PROGRESS=0, DONE=20, BLOCKED=0
-**进度（2026-06-14）**: F1/F2/F3/F4/F5 全部完成。Sprint-39 已覆盖黄金链路状态机、接入入湖到建模闭环、治理资产权限硬门禁、任务运维中心产品化和业务消费闭环。
+**统计**: READY=0, IN_PROGRESS=0, DONE=21, BLOCKED=0
+**进度（2026-06-15）**: F1/F2/F3/F4/F5 全部完成；F2 已补齐平台建模闭环 API。Sprint-39 已覆盖黄金链路状态机、接入入湖到建模闭环、治理资产权限硬门禁、任务运维中心产品化和业务消费闭环。
 **设计文档**: `worklog/v2.2.3/sprint-39-202606/README.md`
 **能力契约**: `worklog/v2.2.3/sprint-39-202606/assets/product-capability-contract.md`
 **集成测试**: `worklog/v2.2.3/sprint-39-202606/it/README.md`
@@ -723,6 +723,45 @@
 **关键决策**:
 - Sprint-39 保持 DONE；本 sprint 作为 UI 补强独立记录，避免重新打开已完成的后端主线。
 - 页面只做工作台编排与导航，不新增后端接口，不替换已有报表、指标、API、数据产品页面。
+
+## Sprint-41: 语义层整合 Phase 1 — 受控建模逻辑移植 (202606)
+**状态**: READY
+**类型**: Architecture Consolidation / Implementation（仅后端 dts-platform）
+**目标**: 把 dts-metrics 的受控派生指标 DSL + ELT 分层准入移植进权威语义层 dts-platform `SemanticModelingService`，绞杀者式按模型级 governanceMode 切换。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-受控模式基座（governanceMode + 切换骨架 + 存量兼容） | P0 | 2 | READY |
+| F2-受控派生指标DSL（ControlledMetricDslCompiler + 委托） | P0 | 3 | READY |
+| F3-ELT分层准入闸（EltLayerGate + 校验集成） | P0 | 3 | READY |
+
+**统计**: READY=8, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**背景**: 决策以 dts-platform 为唯一权威语义层（更成熟：评审工作流/runs/业务对象映射/可用 BI+血缘注册/持久化/前端 + 已具备 generateArtifacts→DbtFileService 物化），dts-metrics 亮点移植后逐步退役。本 sprint 为整合大计划 SP-1；后续 SP-2 语义富化契约、SP-3 React Flow 工作台移植、SP-4 dts-metrics 退役。
+**实施分支**: 建议 `feat/semantic-consolidation`（不为退役中的 dts-metrics 合 sprint-35b）。
+**设计文档**: `worklog/v2.2.3/sprint-41-202606/README.md` + `assets/sp1-controlled-modeling-design.md` + `assets/semantic-consolidation-roadmap.md`
+**集成测试**: `worklog/v2.2.3/sprint-41-202606/it/README.md`
+**关键决策**:
+- 平台侧权威；dts-metrics 取逻辑（DSL/分层）不取基础设施；sprint-35b 硬化遗留作废、不合入 v2.2.3。
+- 绞杀者并存：受控路径与现有 permissive 路径按 governanceMode 切换，PERMISSIVE 字节不变。
+- 受控 DSL 须与 dts-metrics 黄金 SQL 语义一致（防移植漂移）。
+
+## Sprint-42: 数据管理主题看板 (202606)
+**状态**: DONE
+**类型**: Product Architecture / Implementation（dts-platform-webapp + dts-admin menu seed）
+**目标**: 将 Sprint-39 黄金链路和 Sprint-40 消费工作台重构为面向数据管理员的业务主题看板，让客户先按经营分析、质量管理、项目交付、客户服务理解数据交付状态。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-数据管理主题看板 | P0 | 4 | DONE |
+
+**统计**: READY=0, IN_PROGRESS=0, DONE=4, BLOCKED=0
+**进度（2026-06-16）**: 完成主题聚合模型、数据管理工作台页面、工作台菜单入口、旧消费入口兼容、dts-admin seed 可见性契约和前端构建验证。
+**设计文档**: `worklog/v2.2.3/sprint-42-202606/README.md`
+**集成测试**: `worklog/v2.2.3/sprint-42-202606/it/README.md`
+**关键决策**:
+- 服务对象 = 数据管理员；客户偏业务，通常没有专职数据工程师。
+- 第一对象 = 业务主题/场景，第二对象 = 关联数据资产，技术动作只作为下一步入口。
+- 入口放在“工作台 -> 数据管理工作台”，旧 `/services/consumption` 保持兼容，避免现场旧链接断开。
 
 ## v2.3 Backlog: 企业级资产与指标增强
 

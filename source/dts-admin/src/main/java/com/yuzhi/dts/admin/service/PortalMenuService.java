@@ -80,6 +80,7 @@ public class PortalMenuService {
         // P1-7: workbench.favorites removed in Sprint-15 / F2 alongside the
         // portal_user_favorite table. Keeping the menu key alive surfaced an
         // orphan menu item even though the front-end page was deleted.
+        Map.entry("workbench.data-management", "/pages/workbench/DataManagementWorkbenchPage"),
         Map.entry("resource.connectors", "/pages/foundation/ConnectorRegistryPage"),
         Map.entry("resource.sources", "/pages/foundation/DataSourcesPage"),
         Map.entry("resource.jdbcDrivers", "/pages/foundation/JdbcDriversPage"),
@@ -111,6 +112,7 @@ public class PortalMenuService {
         Map.entry("ops.alerts", "/pages/ops/OpsAlertLogPage"),
         Map.entry("ops.backfill", "/pages/ops/OpsBackfillPage"),
         Map.entry("services.api", "/pages/services/ApiServicesPage"),
+        Map.entry("services.consumption", "/pages/workbench/DataManagementWorkbenchPage"),
         Map.entry("services.outbound", "/pages/services/DataProductsPage"),
         Map.entry("services.exchange", "/pages/services/TokensPage"),
         Map.entry("visual-analytics.reports", "/pages/visualization/ReportsPage")
@@ -779,8 +781,8 @@ public class PortalMenuService {
             List<PortalMenu> roots = menuRepo.findByDeletedFalseAndParentIsNullOrderBySortOrderAscIdAsc();
 
             if (seedHash != null && storedHash != null && !seedHash.equals(storedHash)) {
-                log.info("Portal menu seed changed; resetting menus to new seed");
-                resetMenusToSeed();
+                log.info("Portal menu seed changed; applying non-destructive seed upsert");
+                applySeedMaintenance(seed);
                 persistSeedHash(seedHash);
                 return;
             }
@@ -797,41 +799,45 @@ public class PortalMenuService {
                 return;
             }
 
-            // Non-destructive: ensure missing seed nodes exist; do not wipe customized menus on upgrades.
-            try {
-                menuMutationTx.execute(status -> {
-                    upsertMenusFromSeed(seed);
-                    return null;
-                });
-            } catch (Exception ex) {
-                log.warn("Failed ensuring portal menus from seed: {}", ex.getMessage());
-                log.debug("Portal menu seed upsert error stack", ex);
-            }
-
-            // Ensure default role bindings exist at least once
-            try {
-                menuMutationTx.execute(status -> {
-                    applyDefaultRoleBindings();
-                    return null;
-                });
-            } catch (Exception ignored) {}
-
-            // Soft-delete legacy root menus that are no longer part of the seed
-            try {
-                menuMutationTx.execute(status -> {
-                    cleanupLegacyRootMenus(seed);
-                    return null;
-                });
-            } catch (Exception ex) {
-                log.warn("Failed cleaning legacy portal menus: {}", ex.getMessage());
-                log.debug("Legacy portal menu cleanup error stack", ex);
-            }
+            applySeedMaintenance(seed);
 
             if (storedHash == null) {
                 persistSeedHash(seedHash);
             }
         } catch (Exception ex) {
             log.warn("Skip portal menu seed verification due to: {}", ex.getMessage());
+        }
+    }
+
+    private void applySeedMaintenance(MenuSeed seed) {
+        // Non-destructive: ensure missing seed nodes exist; do not wipe customized menus on upgrades.
+        try {
+            menuMutationTx.execute(status -> {
+                upsertMenusFromSeed(seed);
+                return null;
+            });
+        } catch (Exception ex) {
+            log.warn("Failed ensuring portal menus from seed: {}", ex.getMessage());
+            log.debug("Portal menu seed upsert error stack", ex);
+        }
+
+        // Ensure default role bindings exist at least once.
+        try {
+            menuMutationTx.execute(status -> {
+                applyDefaultRoleBindings();
+                return null;
+            });
+        } catch (Exception ignored) {}
+
+        // Soft-delete legacy root menus that are no longer part of the seed.
+        try {
+            menuMutationTx.execute(status -> {
+                cleanupLegacyRootMenus(seed);
+                return null;
+            });
+        } catch (Exception ex) {
+            log.warn("Failed cleaning legacy portal menus: {}", ex.getMessage());
+            log.debug("Legacy portal menu cleanup error stack", ex);
         }
     }
 
@@ -955,13 +961,18 @@ public class PortalMenuService {
             if (existing == null) {
                 PortalMenu created = buildMenuTree(child, parent, childOrder, nextCompositeKey, sectionKey);
                 created.setParent(parent);
+                inheritVisibilitiesFromParentSubtree(created, parent, existingChildren);
                 menuRepo.save(created);
             } else {
+                boolean dirty = false;
                 // Sync metadata from seed so removed fields (e.g. externalLink) are cleaned up.
                 String freshMetadata = writeMetadata(child, false, sectionKey);
                 if (freshMetadata != null && !freshMetadata.equals(existing.getMetadata())) {
                     existing.setMetadata(freshMetadata);
-                    menuRepo.save(existing);
+                    dirty = true;
+                }
+                if (inheritVisibilityIfUnbound(existing, parent, existingChildren)) {
+                    dirty = true;
                 }
                 // Recurse to ensure deeper nodes exist.
                 ensureChildrenFromSeed(existing, child.children(), 1, nextCompositeKey, sectionKey);
@@ -970,12 +981,123 @@ public class PortalMenuService {
                     String component = resolveComponent(nextCompositeKey);
                     if (StringUtils.hasText(component) && !component.equals(existing.getComponent())) {
                         existing.setComponent(component);
-                        menuRepo.save(existing);
+                        dirty = true;
                     }
+                }
+                if (dirty) {
+                    menuRepo.save(existing);
                 }
             }
             childOrder++;
         }
+    }
+
+    private void inheritVisibilitiesFromParentSubtree(PortalMenu menu, PortalMenu parent, List<PortalMenu> siblingCandidates) {
+        if (menu == null) {
+            return;
+        }
+        inheritVisibilityIfUnbound(menu, parent, siblingCandidates);
+        if (menu.getChildren() == null || menu.getChildren().isEmpty()) {
+            return;
+        }
+        for (PortalMenu child : menu.getChildren()) {
+            inheritVisibilitiesFromParentSubtree(child, menu, menu.getChildren());
+        }
+    }
+
+    private boolean inheritVisibilityIfUnbound(PortalMenu menu, PortalMenu parent, List<PortalMenu> siblingCandidates) {
+        if (menu == null || parent == null) {
+            return false;
+        }
+        if (menu.getVisibilities() != null && !menu.getVisibilities().isEmpty()) {
+            return false;
+        }
+        List<PortalMenuVisibility> inheritedSources = inheritedVisibilitySources(menu, parent, siblingCandidates);
+        if (inheritedSources.isEmpty()) {
+            return false;
+        }
+        boolean dirty = false;
+        for (PortalMenuVisibility visibility : inheritedSources) {
+            PortalMenuVisibility inherited = copyVisibility(menu, visibility);
+            if (inherited != null) {
+                menu.addVisibility(inherited);
+                dirty = true;
+            }
+        }
+        return dirty;
+    }
+
+    private List<PortalMenuVisibility> inheritedVisibilitySources(
+        PortalMenu target,
+        PortalMenu parent,
+        List<PortalMenu> siblingCandidates
+    ) {
+        LinkedHashMap<String, PortalMenuVisibility> sources = new LinkedHashMap<>();
+        addVisibilitySources(sources, parent == null ? null : parent.getVisibilities());
+        if (!sources.isEmpty()) {
+            return new ArrayList<>(sources.values());
+        }
+        if (siblingCandidates == null || siblingCandidates.isEmpty()) {
+            return List.of();
+        }
+        for (PortalMenu sibling : siblingCandidates) {
+            if (!isSeedSiblingVisibilitySource(target, sibling)) {
+                continue;
+            }
+            addVisibilitySources(sources, sibling.getVisibilities());
+        }
+        return new ArrayList<>(sources.values());
+    }
+
+    private void addVisibilitySources(LinkedHashMap<String, PortalMenuVisibility> sources, List<PortalMenuVisibility> visibilities) {
+        if (visibilities == null || visibilities.isEmpty()) {
+            return;
+        }
+        for (PortalMenuVisibility visibility : visibilities) {
+            if (visibility == null) {
+                continue;
+            }
+            sources.putIfAbsent(visibilityKey(visibility), visibility);
+        }
+    }
+
+    private String visibilityKey(PortalMenuVisibility visibility) {
+        return (
+            Objects.toString(visibility.getRoleCode(), "") +
+            "|" +
+            Objects.toString(visibility.getPermissionCode(), "") +
+            "|" +
+            Objects.toString(visibility.getDataLevel(), "")
+        );
+    }
+
+    private boolean sameMenu(PortalMenu left, PortalMenu right) {
+        if (left == right) {
+            return true;
+        }
+        if (left == null || right == null) {
+            return false;
+        }
+        if (left.getId() != null && right.getId() != null) {
+            return Objects.equals(left.getId(), right.getId());
+        }
+        String leftKey = extractMetadataKey(left);
+        String rightKey = extractMetadataKey(right);
+        if (StringUtils.hasText(leftKey) && StringUtils.hasText(rightKey)) {
+            return leftKey.trim().equalsIgnoreCase(rightKey.trim());
+        }
+        return StringUtils.hasText(left.getPath()) && left.getPath().equalsIgnoreCase(right.getPath());
+    }
+
+    private boolean isSeedSiblingVisibilitySource(PortalMenu target, PortalMenu sibling) {
+        if (sibling == null || sameMenu(target, sibling) || sibling.isDeleted()) {
+            return false;
+        }
+        String name = sibling.getName();
+        if (StringUtils.hasText(name) && name.trim().toLowerCase(Locale.ROOT).startsWith("custom.")) {
+            return false;
+        }
+        return StringUtils.hasText(extractEntryKey(sibling)) || StringUtils.hasText(extractMetadataKey(sibling));
     }
 
     private PortalMenu findChildByMetadataKey(Long parentId, List<PortalMenu> candidates, String expectedKey) {
@@ -1488,6 +1610,15 @@ public class PortalMenuService {
         String nameLower = name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
         String pathLower = path == null ? "" : path.trim().toLowerCase(Locale.ROOT);
         String entryKey = extractEntryKey(menu);
+        String titleKey = extractTitleKey(menu);
+        String normalizedPath = pathLower.replaceAll("^/+", "").replaceAll("/+$", "");
+        if (
+            ("services".equalsIgnoreCase(sectionKey) && "consumption".equalsIgnoreCase(entryKey)) ||
+            "sys.nav.portal.servicesConsumption".equals(titleKey) ||
+            "services/consumption".equals(normalizedPath)
+        ) {
+            return true;
+        }
         if ("security".equalsIgnoreCase(sectionKey) && StringUtils.hasText(entryKey)) {
             String normalized = entryKey.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "");
             if ("threeadmins".equals(normalized)) {

@@ -113,6 +113,14 @@
           "titleKey": "sys.nav.portal.workbenchTodo",
           "title": "待办事项",
           "externalLink": "/workbench/todo"
+        },
+        {
+          "key": "data-management",
+          "path": "data-management",
+          "icon": "solar:chart-square-bold-duotone",
+          "titleKey": "sys.nav.portal.workbenchDataManagement",
+          "title": "数据管理工作台",
+          "externalLink": "/workbench/data-management"
         }
       ]
     },
@@ -453,14 +461,6 @@
       "titleKey": "sys.nav.portal.serviceCenter",
       "title": "数据服务中心",
       "children": [
-        {
-          "key": "consumption",
-          "path": "consumption",
-          "icon": "solar:chart-square-bold-duotone",
-          "titleKey": "sys.nav.portal.servicesConsumption",
-          "title": "业务消费工作台",
-          "externalLink": "/services/consumption"
-        },
         {
           "key": "api",
           "path": "api",

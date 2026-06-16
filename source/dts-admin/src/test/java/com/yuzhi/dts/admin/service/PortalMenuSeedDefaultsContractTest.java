@@ -14,17 +14,21 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.admin.domain.PortalMenu;
 import com.yuzhi.dts.admin.domain.PortalMenuVisibility;
+import com.yuzhi.dts.admin.domain.SystemConfig;
 import com.yuzhi.dts.admin.repository.PortalMenuRepository;
 import com.yuzhi.dts.admin.repository.PortalMenuVisibilityRepository;
 import com.yuzhi.dts.admin.repository.SystemConfigRepository;
 import java.lang.reflect.Method;
+import java.lang.reflect.Constructor;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -145,6 +149,235 @@ class PortalMenuSeedDefaultsContractTest {
     }
 
     @Test
+    void legacyBusinessConsumptionSeedMenuIsHiddenAfterDataManagementWorkbenchMigration() throws Exception {
+        PortalMenuService service = new PortalMenuService(null, null, null, objectMapper, noOpTransactionManager());
+        PortalMenu menu = menuWithVisibility(
+            100L,
+            "{\"key\":\"consumption\",\"sectionKey\":\"services\",\"entryKey\":\"consumption\",\"titleKey\":\"sys.nav.portal.servicesConsumption\"}"
+        );
+        menu.setPath("services/consumption");
+        menu.setChildren(new ArrayList<>());
+
+        Method filterMenu = PortalMenuService.class.getDeclaredMethod(
+            "filterMenu",
+            PortalMenu.class,
+            Set.class,
+            Set.class,
+            String.class
+        );
+        filterMenu.setAccessible(true);
+
+        Object filtered = filterMenu.invoke(service, menu, Set.of("ROLE_OP_ADMIN"), Set.of(), null);
+
+        assertEquals(null, filtered, "legacy services/consumption seed menu must be hidden while the route stays compatible");
+    }
+
+    @Test
+    void seedUpsertedDataManagementWorkbenchChildKeepsParentVisibilityAndRouteComponent() throws Exception {
+        PortalMenuRepository menuRepository = mock(PortalMenuRepository.class);
+        PortalMenuService service = new PortalMenuService(
+            menuRepository,
+            null,
+            mock(SystemConfigRepository.class),
+            objectMapper,
+            noOpTransactionManager()
+        );
+        PortalMenu services = menuWithVisibility(10L, "{\"key\":\"workbench\",\"sectionKey\":\"workbench\"}");
+        services.setPath("workbench");
+        when(menuRepository.findByParentIdOrderBySortOrderAscIdAsc(10L)).thenReturn(List.of());
+
+        Method ensureChildrenFromSeed = PortalMenuService.class.getDeclaredMethod(
+            "ensureChildrenFromSeed",
+            PortalMenu.class,
+            List.class,
+            int.class,
+            String.class,
+            String.class
+        );
+        ensureChildrenFromSeed.setAccessible(true);
+        ensureChildrenFromSeed.invoke(
+            service,
+            services,
+            List.of(
+                menuNode(
+                    "data-management",
+                    "data-management",
+                    "monitor",
+                    "sys.nav.portal.workbenchDataManagement",
+                    "数据管理工作台",
+                    "/workbench/data-management",
+                    List.of()
+                )
+            ),
+            1,
+            "workbench",
+            "workbench"
+        );
+
+        ArgumentCaptor<PortalMenu> menuCaptor = ArgumentCaptor.forClass(PortalMenu.class);
+        verify(menuRepository).save(menuCaptor.capture());
+        PortalMenu consumption = menuCaptor.getValue();
+
+        assertEquals("workbench/data-management", consumption.getPath());
+        assertEquals("/pages/workbench/DataManagementWorkbenchPage", consumption.getComponent());
+        assertEquals(1, consumption.getVisibilities().size(), "new seed child must inherit onsite parent visibility");
+        assertEquals("ROLE_OP_ADMIN", consumption.getVisibilities().get(0).getRoleCode());
+    }
+
+    @Test
+    void seedUpsertedDataManagementWorkbenchChildInheritsSiblingVisibilityWhenParentIsUnbound() throws Exception {
+        PortalMenuRepository menuRepository = mock(PortalMenuRepository.class);
+        PortalMenuService service = new PortalMenuService(
+            menuRepository,
+            null,
+            mock(SystemConfigRepository.class),
+            objectMapper,
+            noOpTransactionManager()
+        );
+        PortalMenu services = new PortalMenu();
+        services.setId(10L);
+        services.setName("sys.nav.portal.workbench");
+        services.setPath("workbench");
+        services.setMetadata("{\"key\":\"workbench\",\"sectionKey\":\"workbench\"}");
+        services.setVisibilities(new ArrayList<>());
+        PortalMenu overview = menuWithVisibility(11L, "{\"key\":\"overview\",\"sectionKey\":\"workbench\",\"entryKey\":\"overview\"}");
+        overview.setPath("workbench/overview");
+        overview.setParent(services);
+        overview.getVisibilities().get(0).setRoleCode("ROLE_INST_DATA_OWNER");
+        PortalMenu todo = menuWithVisibility(12L, "{\"key\":\"todo\",\"sectionKey\":\"workbench\",\"entryKey\":\"todo\"}");
+        todo.setPath("workbench/todo");
+        todo.setParent(services);
+        todo.getVisibilities().get(0).setRoleCode("ROLE_INST_LEADER");
+        when(menuRepository.findByParentIdOrderBySortOrderAscIdAsc(10L)).thenReturn(List.of(overview, todo));
+
+        Method ensureChildrenFromSeed = PortalMenuService.class.getDeclaredMethod(
+            "ensureChildrenFromSeed",
+            PortalMenu.class,
+            List.class,
+            int.class,
+            String.class,
+            String.class
+        );
+        ensureChildrenFromSeed.setAccessible(true);
+        ensureChildrenFromSeed.invoke(
+            service,
+            services,
+            List.of(
+                menuNode(
+                    "data-management",
+                    "data-management",
+                    "monitor",
+                    "sys.nav.portal.workbenchDataManagement",
+                    "数据管理工作台",
+                    "/workbench/data-management",
+                    List.of()
+                )
+            ),
+            1,
+            "workbench",
+            "workbench"
+        );
+
+        ArgumentCaptor<PortalMenu> menuCaptor = ArgumentCaptor.forClass(PortalMenu.class);
+        verify(menuRepository).save(menuCaptor.capture());
+        PortalMenu consumption = menuCaptor.getValue();
+
+        assertEquals("workbench/data-management", consumption.getPath());
+        assertEquals(
+            Set.of("ROLE_INST_DATA_OWNER", "ROLE_INST_LEADER"),
+            consumption.getVisibilities().stream().map(PortalMenuVisibility::getRoleCode).collect(java.util.stream.Collectors.toSet())
+        );
+    }
+
+    @Test
+    void seedUpsertedChildDoesNotInheritCustomSiblingVisibility() throws Exception {
+        PortalMenuRepository menuRepository = mock(PortalMenuRepository.class);
+        PortalMenuService service = new PortalMenuService(
+            menuRepository,
+            null,
+            mock(SystemConfigRepository.class),
+            objectMapper,
+            noOpTransactionManager()
+        );
+        PortalMenu services = new PortalMenu();
+        services.setId(10L);
+        services.setName("sys.nav.portal.workbench");
+        services.setPath("workbench");
+        services.setMetadata("{\"key\":\"workbench\",\"sectionKey\":\"workbench\"}");
+        services.setVisibilities(new ArrayList<>());
+        PortalMenu custom = menuWithVisibility(11L, "{\"title\":\"自定义链接\",\"sectionKey\":\"workbench\"}");
+        custom.setName("custom.link.example");
+        custom.setPath("workbench/link-example");
+        custom.setParent(services);
+        custom.getVisibilities().get(0).setRoleCode("ROLE_CUSTOM_ONLY");
+        when(menuRepository.findByParentIdOrderBySortOrderAscIdAsc(10L)).thenReturn(List.of(custom));
+
+        Method ensureChildrenFromSeed = PortalMenuService.class.getDeclaredMethod(
+            "ensureChildrenFromSeed",
+            PortalMenu.class,
+            List.class,
+            int.class,
+            String.class,
+            String.class
+        );
+        ensureChildrenFromSeed.setAccessible(true);
+        ensureChildrenFromSeed.invoke(
+            service,
+            services,
+            List.of(
+                menuNode(
+                    "data-management",
+                    "data-management",
+                    "monitor",
+                    "sys.nav.portal.workbenchDataManagement",
+                    "数据管理工作台",
+                    "/workbench/data-management",
+                    List.of()
+                )
+            ),
+            1,
+            "workbench",
+            "workbench"
+        );
+
+        ArgumentCaptor<PortalMenu> menuCaptor = ArgumentCaptor.forClass(PortalMenu.class);
+        verify(menuRepository).save(menuCaptor.capture());
+
+        assertTrue(menuCaptor.getValue().getVisibilities().isEmpty());
+    }
+
+    @Test
+    void seedHashMismatchDoesNotResetExistingMenuBindings() throws Exception {
+        PortalMenuRepository menuRepository = mock(PortalMenuRepository.class);
+        PortalMenuVisibilityRepository visibilityRepository = mock(PortalMenuVisibilityRepository.class);
+        SystemConfigRepository configRepository = mock(SystemConfigRepository.class);
+        PortalMenuService service = new PortalMenuService(
+            menuRepository,
+            visibilityRepository,
+            configRepository,
+            objectMapper,
+            noOpTransactionManager()
+        );
+        SystemConfig config = new SystemConfig();
+        config.setKey("portal.menu.seed.hash");
+        config.setValue("old-seed-hash");
+        PortalMenu services = menuWithVisibility(10L, "{\"key\":\"services\",\"sectionKey\":\"services\"}");
+        services.setPath("services");
+        services.setChildren(new ArrayList<>());
+        when(configRepository.findByKey("portal.menu.seed.hash")).thenReturn(Optional.of(config));
+        when(menuRepository.findByDeletedFalseAndParentIsNullOrderBySortOrderAscIdAsc()).thenReturn(List.of(services));
+        when(menuRepository.findByParentIdOrderBySortOrderAscIdAsc(10L)).thenReturn(List.of());
+        when(menuRepository.findAll()).thenReturn(List.of(services));
+
+        Method ensureSeedMenus = PortalMenuService.class.getDeclaredMethod("ensureSeedMenus");
+        ensureSeedMenus.setAccessible(true);
+        ensureSeedMenus.invoke(service);
+
+        verify(visibilityRepository, never()).deleteAllInBatch();
+        verify(menuRepository, never()).deleteAllInBatch();
+    }
+
+    @Test
     void freshInstallMigrationClearsLegacySeedVisibilityBindingsBeforeSeedHashIsStored() throws Exception {
         ClassPathResource master = new ClassPathResource("config/liquibase/master.xml");
         String masterXml = master.getContentAsString(StandardCharsets.UTF_8);
@@ -184,6 +417,29 @@ class PortalMenuSeedDefaultsContractTest {
         verify(visibilityRepository).delete(seedVisibility);
         verify(visibilityRepository, never()).delete(customVisibility);
         verify(menuRepository).flush();
+    }
+
+    private Object menuNode(
+        String key,
+        String path,
+        String icon,
+        String titleKey,
+        String title,
+        String externalLink,
+        List<?> children
+    ) throws Exception {
+        Class<?> menuNodeType = Class.forName("com.yuzhi.dts.admin.service.PortalMenuService$MenuNode");
+        Constructor<?> constructor = menuNodeType.getDeclaredConstructor(
+            String.class,
+            String.class,
+            String.class,
+            String.class,
+            String.class,
+            String.class,
+            List.class
+        );
+        constructor.setAccessible(true);
+        return constructor.newInstance(key, path, icon, titleKey, title, externalLink, children);
     }
 
     @SuppressWarnings("unchecked")
