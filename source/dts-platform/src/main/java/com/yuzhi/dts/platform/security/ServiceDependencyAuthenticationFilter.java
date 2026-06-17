@@ -138,6 +138,7 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
         }
         if ("dts-analytics".equals(service)) {
             return isGet(method, path, "/api/infra/data-sources")
+                || isGet(method, path, "/api/infra/data-source-selections")
                 || isGetInfraDataSourceDetail(method, path)
                 || isGetRuntimeDetail(method, path)
                 || isAnalyticsAssetPermission(method, path);

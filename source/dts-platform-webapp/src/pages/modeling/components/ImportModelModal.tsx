@@ -83,7 +83,7 @@ export default function ImportModelModal({
 					<Select
 						placeholder="选择来源数据源"
 						options={dataSources.map((ds) => ({
-							label: ds?.name || ds?.id,
+							label: `${ds?.name || ds?.id}${ds?.defaultSource ? "（默认湖仓）" : ""}`,
 							value: ds?.id,
 						}))}
 					/>

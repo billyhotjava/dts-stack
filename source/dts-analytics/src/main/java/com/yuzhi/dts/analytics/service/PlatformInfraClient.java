@@ -31,6 +31,7 @@ public class PlatformInfraClient {
     private static final Logger LOG = LoggerFactory.getLogger(PlatformInfraClient.class);
     private static final String SERVICE_HEADER = "X-DTS-Service";
     private static final String SERVICE_TOKEN_HEADER = "X-DTS-Service-Token";
+    private static final String CAPABILITY_ANALYTICS_REGISTERABLE = "ANALYTICS_REGISTERABLE";
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
@@ -51,6 +52,44 @@ public class PlatformInfraClient {
     }
 
     public List<DataSourceSummary> listDataSources() {
+        try {
+            return listSelectableDataSources();
+        } catch (HttpStatusCodeException ex) {
+            LOG.warn(
+                "Platform data source selection failed status={} body={}; falling back to legacy list",
+                ex.getStatusCode().value(),
+                ex.getResponseBodyAsString()
+            );
+        } catch (RuntimeException ex) {
+            LOG.warn("Platform data source selection failed: {}; falling back to legacy list", ex.getMessage());
+        }
+        return listLegacyDataSources();
+    }
+
+    private List<DataSourceSummary> listSelectableDataSources() {
+        URI uri = buildDataSourceSelectionUri(CAPABILITY_ANALYTICS_REGISTERABLE);
+        HttpHeaders headers = buildHeaders();
+        try {
+            ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+            Map<String, Object> body = response.getBody() == null ? Map.of() : new LinkedHashMap<>(response.getBody());
+            Object data = body.get("data");
+            if (data instanceof Map<?, ?> map) {
+                Object items = map.get("items");
+                if (items instanceof List<?> list) {
+                    return toSummaryList(list);
+                }
+            }
+            return List.of();
+        } catch (HttpStatusCodeException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new IllegalStateException("获取平台数据源失败: " + ex.getMessage(), ex);
+        }
+    }
+
+    private List<DataSourceSummary> listLegacyDataSources() {
         URI uri = buildUri("/infra/data-sources");
         HttpHeaders headers = buildHeaders();
         try {
@@ -69,6 +108,13 @@ public class PlatformInfraClient {
         } catch (Exception ex) {
             throw new IllegalStateException("获取平台数据源失败: " + ex.getMessage(), ex);
         }
+    }
+
+    private URI buildDataSourceSelectionUri(String capability) {
+        return UriComponentsBuilder.fromUri(buildUri("/infra/data-source-selections"))
+            .queryParam("capability", capability)
+            .build(true)
+            .toUri();
     }
 
     public DataSourceDetail fetchDataSourceDetail(UUID id) {

@@ -79,15 +79,15 @@ export default function ModelEditDrawer({
 					<Form.Item
 						name="sourceDataSourceId"
 						label="来源数据源"
-						tooltip="选择数据来源系统，用于自动生成调度标签；Excel/手工录入场景可不选"
+						rules={[{ required: true, message: "请选择来源数据源" }]}
+						tooltip="选择模型绑定的 Platform 数据源；默认湖仓会优先展示，但可选择其他有权限的湖仓"
 					>
 						<Select
-							placeholder="选择来源数据源（可选）"
+							placeholder="选择来源数据源"
 							showSearch
-							allowClear
 							optionFilterProp="label"
 							options={dataSources.map((ds) => ({
-								label: ds?.name || ds?.id,
+								label: `${ds?.name || ds?.id}${ds?.defaultSource ? "（默认湖仓）" : ""}`,
 								value: ds?.id,
 							}))}
 						/>

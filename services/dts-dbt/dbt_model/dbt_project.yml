@@ -1,0 +1,26 @@
+name: "pm_analytics_v3"
+version: "2.1.0"
+config-version: 2
+profile: "dts"
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  pm_analytics_v3:
+    +persist_docs:
+      relation: true
+      columns: true
+    stg:
+      +materialized: view
+      +tags: ["project-management-v3", "stg"]
+    dwd:
+      +materialized: table
+    dws:
+      +materialized: table
+    ads:
+      +materialized: table
+
+on-run-start:
+  - "{{ ensure_date_helpers() }}"

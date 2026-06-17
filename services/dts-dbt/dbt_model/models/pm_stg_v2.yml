@@ -1,0 +1,106 @@
+version: 2
+
+models:
+  - name: stg_pm__project_subject_domain_v2
+    description: "进度 ODS 结构化层：仅做类型转换 + 占位符收敛 + 字段改名。暴露 *_raw 原始字段，归一化与派生下沉 DWD。"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+      - name: project_no
+        description: "项目编号"
+      - name: completion_status_raw
+        description: "ODS 原始完成情况（未归一化）"
+      - name: node_type_raw
+        description: "ODS 原始节点类型（未归一化）"
+      - name: risk_level_raw
+        description: "ODS 原始风险等级（未归一化）"
+      - name: delay_applied_raw
+        description: "ODS 原始延期申请标志（未归一化）"
+
+  - name: stg_pm__quality_issue_v2
+    description: "质量 ODS 结构化层：仅做类型转换与占位符收敛。归一化与派生下沉 DWD。"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+      - name: status_raw
+        description: "ODS 原始质量归零状态（未归一化）"
+      - name: issue_category_raw
+        description: "ODS 原始质量原因分类（未归一化）"
+      - name: zero_plan_synced_raw
+        description: "ODS 原始归零计划同步标志（未归一化）"
+
+  - name: stg_pm__tech_state_v2
+    description: "技术状态 ODS 结构化层：仅做类型转换与占位符收敛。归一化、签署状态上下文判断、派生下沉 DWD。"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+      - name: change_category_raw
+        description: "ODS 原始更改类别（未归一化，含 I/Ⅰ/I类/1/一 等变体）"
+      - name: file_signature_status_raw
+        description: "ODS 原始文件签署状态（未归一化）"
+      - name: reform_status_raw
+        description: "ODS 原始整改状态（未归一化）"
+      - name: completion_signature_raw
+        description: "ODS 原始变更单签署状态（未归一化）"
+      - name: plan_synced_raw
+        description: "ODS 原始计划同步标志（未归一化）"
+      - name: review_situation_raw
+        description: "ODS 原始评审情况文本（未归一化）"
+
+  - name: stg_pm__risk_info_v2
+    description: "风险 ODS 结构化层：仅做类型转换与占位符收敛。归一化与派生下沉 DWD。"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+      - name: risk_category_raw
+        description: "ODS 原始风险分类（未归一化）"
+      - name: risk_level_raw
+        description: "ODS 原始风险等级（未归一化）"
+      - name: risk_status_raw
+        description: "ODS 原始风险状态（未归一化）"
+      - name: release_plan_synced_raw
+        description: "ODS 原始释放计划同步标志（未归一化）"
+
+  - name: stg_pm__budget_v2
+    description: "预算 ODS 结构化层：四金额列 parse_numeric_safe，文本占位符收敛。三本账派生下沉 DWD。"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+      - name: budget_amount
+        description: "预算金额（调整后），源值解析，不做单位换算"
+      - name: prepaid_amount
+        description: "预付账款（未验收未报销、无发票）"
+      - name: book_cost_amount
+        description: "账面成本（已验收有发票）"
+      - name: payable_amount
+        description: "应付账款（有发票暂未付款）"

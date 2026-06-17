@@ -1,5 +1,11 @@
 # Legacy 环境入湖文件上传 400 排查手册
 
+## 更新现场镜像文件
+#docker load -i dts-ingestion_1.0.0-20260617-145601.tar
+#docker load -i dts-platform_1.0.0-20260617-145601.tar
+#docker-compose -f docker-compose.legacy.yml up -d --force-recreate dts-platform dts-ingestion
+
+
 适用场景：鲲鹏 + 银河麒麟现场，使用 `docker-compose.legacy.yml`，Docker 版本较老，Compose 为 `docker-compose` v1。现象通常是用户新建数据入湖任务时上传 Excel/CSV，页面没有明显提示，Chrome Network 里看到 400，`dts-platform` 日志出现 `Ingestion file upload failed`。
 
 ## 注意事项
@@ -123,7 +129,7 @@ echo "AIRFLOW__CORE__FERNET_KEY=$([ -n "$AIRFLOW__CORE__FERNET_KEY" ] && echo SE
 ```bash
 cd /opt/prod/s10/v2.2.3
 
-egrep -n "Ingestion file upload failed|Ingestion file upload error|文件上传失败" logs/dts-platform/app.log | tail -50
+egrep -n "Ingestion file upload proxy|Ingestion file upload failed|Ingestion file upload error|文件上传失败|traceId=" logs/dts-platform/app.log | tail -80
 ```
 
 Ingestion 侧日志：
@@ -131,17 +137,30 @@ Ingestion 侧日志：
 ```bash
 cd /opt/prod/s10/v2.2.3
 
-egrep -n "Upload and parse file failed|加密密钥未配置|无法创建上传目录|读取上传文件失败|不支持的文件类型|dts.platform.infra.encryption-key" logs/dts-ingestion/app.log | tail -80
+egrep -n "Ingestion upload request|Ingestion file upload|Upload and parse file failed|加密密钥未配置|无法创建上传目录|读取上传文件失败|不支持的文件类型|dts.platform.infra.encryption-key|traceId=" logs/dts-ingestion/app.log | tail -120
 ```
 
 说明：
 
-- 新增日志补丁后，`dts-ingestion` 在 INFO 级别会打印 `Upload and parse file failed: name=..., size=..., contentType=..., previewLimit=..., sheetIndex=..., sheetName=...`，并带异常栈。
+- 新增日志补丁后，`dts-platform` 会打印 `Ingestion file upload proxy start/response/failed/error`，里面包含 `traceId`、目标 URI、文件名、大小、contentType、HTTP 状态和异常。
+- 新增日志补丁后，`dts-ingestion` 会打印 `Ingestion upload request received/completed/failed` 和 `Ingestion file upload service received/classified/bytes read/directory ready/encrypted payload written/parse start/parse completed/post-processing failed`。
+- `Upload and parse file failed` 仍保留在 `dts-ingestion` 入口层，INFO 级别会带 `traceId`、文件名、大小、contentType、previewLimit、sheetIndex、sheetName 和异常栈。
 - 如果平台侧有 `Ingestion file upload failed status=400 body=`，但 ingestion 侧完全没有 `Upload and parse file failed`，可能是现场镜像还没有包含日志补丁，或者请求没有真正到达 `dts-ingestion`。
 - 如果 ingestion 侧有 `加密密钥未配置`，根因为 `DTS_INFRA_ENCRYPTION_KEY` 未进入运行中 `dts-ingestion`。
 - 如果 ingestion 侧有 `dts.platform.infra.encryption-key 不是合法的 Base64 编码` 或 `解码后长度必须为 16/24/32 字节`，根因为 key 格式非法。
 - 如果 ingestion 侧有 `无法创建上传目录`，转到目录权限排查。
 - 如果 ingestion 侧有 `读取上传文件失败`，重点检查上传临时目录 `/apptmp`、文件大小、容器 tmpfs。
+
+按 traceId 串联两边日志：
+
+```bash
+cd /opt/prod/s10/v2.2.3
+
+TRACE_ID="$(egrep -o 'traceId=[0-9a-fA-F-]+' logs/dts-platform/app.log | tail -1 | cut -d= -f2)"
+echo "TRACE_ID=${TRACE_ID}"
+grep -n "${TRACE_ID}" logs/dts-platform/app.log
+grep -n "${TRACE_ID}" logs/dts-ingestion/app.log
+```
 
 ## 5. 检查上传目录和临时目录权限
 
@@ -190,6 +209,8 @@ getenforce 2>/dev/null || true
 ```bash
 cd /opt/prod/s10/v2.2.3
 
+TRACE_ID="manual-upload-probe-$(date +%Y%m%d%H%M%S)"
+
 docker-compose -f docker-compose.legacy.yml exec -T dts-ingestion sh -lc '
 cat >/tmp/dts-upload-probe.csv <<EOF
 col_a,col_b
@@ -198,9 +219,12 @@ EOF
 
 curl -sS -w "\nHTTP_CODE=%{http_code}\n" \
   -H "X-DTS-Service: dts-platform" \
+  -H "X-DTS-Upload-Trace: '"${TRACE_ID}"'" \
   -F "file=@/tmp/dts-upload-probe.csv;type=text/csv" \
   "http://127.0.0.1:8083/api/ingestion/files/upload-and-parse?previewLimit=5"
 '
+
+echo "TRACE_ID=${TRACE_ID}"
 ```
 
 判断：
@@ -220,6 +244,9 @@ curl -sS -w "\nHTTP_CODE=%{http_code}\n" \
 | `不是合法的 Base64 编码` | key 格式非法 | 使用合法 Base64 AES key，解码后长度必须为 16/24/32 字节 |
 | `无法创建上传目录` | `/opt/airflow/dags/uploads` 不可写 | 修复 `services/dts-airflow/dags` 宿主机目录权限或安全标签 |
 | `读取上传文件失败` | multipart 临时文件或文件大小问题 | 检查 `/apptmp` tmpfs、容器空间、文件大小 |
+| platform 有 `proxy start`，ingestion 没有同一 `traceId` | 请求未到 ingestion，或服务间地址、网络、认证阻断 | 检查 `DTS_INGESTION_BASE_URL`、`dts-ingestion` 健康状态、容器网络 |
+| ingestion 有 `directory ready`，随后 `encrypted payload write failed` | 目录可创建但密文写入失败 | 检查 `uploads` 目录剩余空间、权限、安全策略 |
+| ingestion 有 `parse start`，随后 `post-processing failed` | 文件已加密落盘，解析阶段失败 | 看同一 `traceId` 的 `解析 Excel 文件失败` 或 `解析 CSV 文件失败` 具体异常 |
 | 最小 CSV 直连 200，但页面仍 400 | ingestion 正常，问题在 platform 代理、前端提示或用户权限链路 | 收集 `dts-platform` 日志和浏览器 Network response |
 | ingestion 没有新增 INFO 日志 | 现场运行镜像未包含日志补丁，或请求未到 ingestion | 确认镜像版本并重建/替换 `dts-ingestion` |
 
@@ -295,8 +322,8 @@ echo "DTS_AIRFLOW_DAGS_DIR=${DTS_AIRFLOW_DAGS_DIR:-EMPTY}"
 ls -ld /apptmp /opt/airflow/dags /opt/airflow/dags/uploads 2>&1 || true
 ' > "$OUT/ingestion-env-and-dirs.txt" 2>&1
 
-egrep -n "Ingestion file upload failed|Ingestion file upload error|文件上传失败" logs/dts-platform/app.log | tail -80 > "$OUT/platform-upload-errors.txt" 2>&1 || true
-egrep -n "Upload and parse file failed|加密密钥未配置|无法创建上传目录|读取上传文件失败|不支持的文件类型|dts.platform.infra.encryption-key" logs/dts-ingestion/app.log | tail -120 > "$OUT/ingestion-upload-errors.txt" 2>&1 || true
+egrep -n "Ingestion file upload proxy|Ingestion file upload failed|Ingestion file upload error|文件上传失败|traceId=" logs/dts-platform/app.log | tail -160 > "$OUT/platform-upload-errors.txt" 2>&1 || true
+egrep -n "Ingestion upload request|Ingestion file upload|Upload and parse file failed|加密密钥未配置|无法创建上传目录|读取上传文件失败|不支持的文件类型|dts.platform.infra.encryption-key|traceId=" logs/dts-ingestion/app.log | tail -240 > "$OUT/ingestion-upload-errors.txt" 2>&1 || true
 
 tar czf "$OUT.tar.gz" "$OUT"
 echo "$OUT.tar.gz"

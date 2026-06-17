@@ -35,6 +35,7 @@ import com.yuzhi.dts.platform.repository.visualization.BiReportLinkRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
+import com.yuzhi.dts.platform.service.governance.DefaultLakeDatasetGuard;
 import com.yuzhi.dts.platform.service.infra.AdminInfraClient;
 import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
 import java.nio.file.Path;
@@ -117,6 +118,9 @@ class ModelingSqlModelServiceTest {
 
     @Mock
     private AuditService auditService;
+
+    @Mock
+    private DefaultLakeDatasetGuard defaultLakeDatasetGuard;
 
     @Mock
     private ModelFileService fileService;
@@ -636,6 +640,38 @@ class ModelingSqlModelServiceTest {
         );
 
         assertThatThrownBy(() -> service.create(request, "D1")).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("模型名已存在");
+    }
+
+    @Test
+    void create_shouldAllowExplicitNonDefaultPlatformSourceWhenDefaultLakeGuardIsPresent() {
+        UUID defaultSourceId = UUID.randomUUID();
+        UUID projectSourceId = UUID.randomUUID();
+        ModelingSqlModelService guardedService = serviceWithDefaultLakeGuard();
+        lenient().when(defaultLakeDatasetGuard.currentDefaultLakeSourceId()).thenReturn(Optional.of(defaultSourceId));
+        lenient().doThrow(new IllegalArgumentException("仅允许选择默认数据湖数据源"))
+            .when(defaultLakeDatasetGuard)
+            .requireDefaultLakeSource(eq(projectSourceId), anyString());
+        when(dataSourceRepository.findById(projectSourceId)).thenReturn(Optional.of(source(projectSourceId, "项目湖仓", "postgres")));
+
+        ModelingSqlModelService.SqlModelRequest request = new ModelingSqlModelService.SqlModelRequest(
+            planId,
+            "dwd_project_budget",
+            null,
+            "DWD",
+            projectSourceId,
+            "public",
+            "table",
+            "project-management",
+            "desc",
+            "select 1 as id",
+            true,
+            "DRAFT",
+            "D1",
+            null
+        );
+
+        assertThatCode(() -> guardedService.create(request, "D1")).doesNotThrowAnyException();
+        assertThat(storedModels).singleElement().satisfies(model -> assertThat(model.getSourceDataSourceId()).isEqualTo(projectSourceId));
     }
 
     @Test
@@ -1198,6 +1234,32 @@ class ModelingSqlModelServiceTest {
         mapping.setStreamName(table);
         mapping.setStreamNamespace(schema);
         return mapping;
+    }
+
+    private ModelingSqlModelService serviceWithDefaultLakeGuard() {
+        return new ModelingSqlModelService(
+            repo,
+            planRepo,
+            dataSourceRepository,
+            adminInfraClient,
+            organizationVisibilityService,
+            security,
+            dbtConfigService,
+            datasetRepository,
+            catalogDomainRepository,
+            tableRepository,
+            columnRepository,
+            queryDatasetAssetRepository,
+            biReportLinkRepository,
+            columnSyncService,
+            auditService,
+            objectMapper,
+            fileService,
+            taskExecutor,
+            transactionManager,
+            defaultLakeDatasetGuard,
+            null
+        );
     }
 
     private InfraDataSource source(UUID id, String name, String type) {

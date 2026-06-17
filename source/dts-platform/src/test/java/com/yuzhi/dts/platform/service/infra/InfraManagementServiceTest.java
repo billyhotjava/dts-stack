@@ -39,6 +39,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 @ExtendWith(MockitoExtension.class)
@@ -156,6 +158,98 @@ class InfraManagementServiceTest {
         assertThat(result)
             .extracting(dto -> dto.props() == null ? null : dto.props().get("source"))
             .containsExactly("admin-data-lake", null);
+    }
+
+    @Test
+    void createDataSource_deptDataOwnerKeepsOwnerDeptEmptyWhenNoDeptIsSelected() {
+        SecurityContextHolder
+            .getContext()
+            .setAuthentication(
+                new UsernamePasswordAuthenticationToken(
+                    "asset-manager",
+                    "n/a",
+                    List.of(new SimpleGrantedAuthority("ROLE_DEPT_DATA_OWNER"))
+                )
+            );
+        when(dataSourceRepository.save(org.mockito.ArgumentMatchers.any(InfraDataSource.class))).thenAnswer(invocation -> {
+            InfraDataSource saved = invocation.getArgument(0);
+            saved.setId(UUID.randomUUID());
+            return saved;
+        });
+        InfraConnector connector = new InfraConnector();
+        connector.setConnectorKey("postgresql");
+        connector.setName("PostgreSQL");
+        connector.setCategory("database");
+        connector.setStatus("ACTIVE");
+        when(connectorRepository.findByConnectorKeyIgnoreCase("postgresql")).thenReturn(Optional.of(connector));
+
+        InfraDataSourceDto dto = service.createDataSource(
+            new DataSourceRequest(
+                "数仓 (biadmin)",
+                "POSTGRESQL",
+                "jdbc:postgresql://dts-pg:5432/biadmin",
+                "biadmin",
+                "内置数据湖",
+                Map.of(),
+                Map.of("password", "secret")
+            ),
+            "admin",
+            null
+        );
+
+        assertThat(dto.ownerDept()).isNull();
+    }
+
+    @Test
+    void updateDataSource_deptDataOwnerCanMaintainGlobalDataSourceWithoutDeptContext() {
+        SecurityContextHolder
+            .getContext()
+            .setAuthentication(
+                new UsernamePasswordAuthenticationToken(
+                    "asset-manager",
+                    "n/a",
+                    List.of(new SimpleGrantedAuthority("ROLE_DEPT_DATA_OWNER"))
+                )
+            );
+        UUID id = UUID.randomUUID();
+        InfraDataSource existing = new InfraDataSource();
+        existing.setId(id);
+        existing.setName("数仓 (biadmin)");
+        existing.setType("POSTGRESQL");
+        existing.setConnectorKey("postgresql");
+        existing.setJdbcUrl("jdbc:postgresql://dts-pg:5432/biadmin");
+        existing.setUsername("biadmin");
+        existing.setStatus("ACTIVE");
+        existing.setOwnerDept(null);
+
+        InfraConnector connector = new InfraConnector();
+        connector.setConnectorKey("postgresql");
+        connector.setName("PostgreSQL");
+        connector.setCategory("database");
+        connector.setStatus("ACTIVE");
+        when(dataSourceRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(connectorRepository.findByConnectorKeyIgnoreCase("postgresql")).thenReturn(Optional.of(connector));
+        when(secretService.readSecrets(existing)).thenReturn(Map.of("password", "secret"));
+        when(dataSourceRepository.save(org.mockito.ArgumentMatchers.any(InfraDataSource.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        InfraManagementService.DataSourceUpdateImpact impact = service.updateDataSourceWithImpact(
+            id,
+            new DataSourceRequest(
+                "数仓 (biadmin)",
+                "POSTGRESQL",
+                "postgresql",
+                "jdbc:postgresql://dts-pg:5432/biadmin",
+                "biadmin",
+                "内置数据湖",
+                null,
+                Map.of(),
+                Map.of("password", "secret")
+            ),
+            "asset-manager",
+            null
+        );
+
+        assertThat(impact.dataSource().ownerDept()).isNull();
     }
 
     private AdminInfraClient.AdminDataLakeConfig adminLake(UUID id) {

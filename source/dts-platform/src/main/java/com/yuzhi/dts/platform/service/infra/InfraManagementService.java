@@ -306,7 +306,7 @@ public class InfraManagementService {
         validateRequest(request, null);
         applyDataSource(entity, request, username);
         ensureNotSystemManaged(entity.getType(), activeDeptHeader);
-        applyOwnerDept(entity, activeDeptHeader);
+        applyOwnerDept(entity, request);
         InfraDataSource saved = dataSourceRepository.save(entity);
         syncCatalogIfEnabled(saved, request, username);
         return toDto(saved);
@@ -402,7 +402,7 @@ public class InfraManagementService {
         }
         Map<String, Object> beforeSecrets = secretService.readSecrets(entity);
         applyDataSource(entity, request, username);
-        applyOwnerDept(entity, activeDeptHeader);
+        applyOwnerDept(entity, request);
         InfraDataSource saved = dataSourceRepository.save(entity);
         syncCatalogIfEnabled(saved, request, username);
         Map<String, Object> afterProps = readProps(saved.getProps());
@@ -606,6 +606,7 @@ public class InfraManagementService {
             safe.put("jdbcUrl", request.jdbcUrl());
             safe.put("username", request.username());
             safe.put("description", request.description());
+            safe.put("ownerDept", request.ownerDept());
             safe.put("props", redactSensitivePayload(request.props()));
             safe.put("secretsProvided", request.secrets() != null && !request.secrets().isEmpty());
             return safe;
@@ -1239,43 +1240,24 @@ public class InfraManagementService {
         if (TYPE_POSTGRES.equalsIgnoreCase(type) && !isInstituteMaintainer()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权限维护系统数据源");
         }
-        if (!isInstituteMaintainer()) {
-            String dept = normalizeDept(resolveActiveDept(activeDeptHeader));
-            if (dept.isEmpty()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少部门上下文，请先选择部门范围");
-            }
-        }
     }
 
-    private void applyOwnerDept(InfraDataSource entity, String activeDeptHeader) {
+    private void applyOwnerDept(InfraDataSource entity, DataSourceRequest request) {
         if (entity == null) return;
-        if (isInstituteMaintainer()) {
-            // Do not override existing department binding on updates.
-            // For new records, allow optionally binding to current department context.
-            if (entity.getId() == null && !StringUtils.hasText(entity.getOwnerDept())) {
-                String dept = normalizeDept(resolveActiveDept(activeDeptHeader));
-                entity.setOwnerDept(dept.isEmpty() ? null : dept);
-            }
-            return;
-        }
-        String dept = normalizeDept(resolveActiveDept(activeDeptHeader));
-        if (dept.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少部门上下文，请先选择部门范围");
-        }
-        entity.setOwnerDept(dept);
+        entity.setOwnerDept(normalize(request == null ? null : request.ownerDept()));
     }
 
     private void ensureDeptScopeWritable(InfraDataSource entity, String activeDeptHeader) {
         if (entity == null) return;
         if (isInstituteMaintainer()) return;
 
+        String owner = normalizeDept(entity.getOwnerDept());
+        if (owner.isEmpty()) {
+            return;
+        }
         String dept = normalizeDept(resolveActiveDept(activeDeptHeader));
         if (dept.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少部门上下文，请先选择部门范围");
-        }
-        String owner = normalizeDept(entity.getOwnerDept());
-        if (owner.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权限维护所级数据源");
         }
         if (!owner.equalsIgnoreCase(dept)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权限维护其他部门的数据源");
@@ -1980,13 +1962,15 @@ public class InfraManagementService {
 
     private Map<String, Object> readProps(String json) {
         if (!StringUtils.hasText(json)) {
-            return Collections.emptyMap();
+            return new LinkedHashMap<>();
         }
         try {
-            return objectMapper.readValue(json, Map.class);
+            return new LinkedHashMap<>(objectMapper.readValue(json, Map.class));
         } catch (JsonProcessingException e) {
             LOG.warn("Failed to parse props JSON: {}", e.getMessage());
-            return Map.of("raw", json);
+            Map<String, Object> fallback = new LinkedHashMap<>();
+            fallback.put("raw", json);
+            return fallback;
         }
     }
 }

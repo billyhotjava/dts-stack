@@ -36,6 +36,19 @@ export type InfraDataSource = {
 	heartbeatStatus?: string;
 	heartbeatFailureCount?: number;
 	lastError?: string;
+	capabilities?: string[];
+	selectable?: boolean;
+	defaultSource?: boolean;
+	recommended?: boolean;
+	recommendationReason?: string;
+};
+
+export type DataSourceSelectionResponse = {
+	capability: string;
+	defaultDataSourceId?: string;
+	defaultSource?: string;
+	message?: string;
+	items: InfraDataSource[];
 };
 
 export type DataSourceUpsertPayload = {
@@ -45,6 +58,7 @@ export type DataSourceUpsertPayload = {
 	jdbcUrl?: string;
 	username?: string;
 	description?: string;
+	ownerDept?: string;
 	props?: Record<string, any>;
 	secrets?: Record<string, any>;
 };
@@ -308,6 +322,8 @@ export type OdsPrecheckResponse = {
 
 export default {
 	list: () => apiClient.get<InfraDataSource[]>({ url: "/infra/data-sources" }),
+	selections: (params?: { capability?: string }) =>
+		apiClient.get<DataSourceSelectionResponse>({ url: "/infra/data-source-selections", params }),
 	detail: (id: string) => apiClient.get<InfraDataSource>({ url: `/infra/data-sources/${id}` }),
 	create: (payload: DataSourceUpsertPayload) =>
 		apiClient.post<InfraDataSource>({ url: "/infra/data-sources", data: payload }),

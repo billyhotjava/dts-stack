@@ -6,12 +6,15 @@ import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 @Service
@@ -21,6 +24,7 @@ public class DefaultDestinationSyncService {
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String TYPE_INCEPTOR = "INCEPTOR";
     private static final String BIADMIN_NAME = "数仓 (biadmin)";
+    private static final String SOURCE_ADMIN_DEFAULT_DATA_LAKE = "admin-default-data-lake";
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
     private final AdminInfraClient adminInfraClient;
@@ -55,6 +59,7 @@ public class DefaultDestinationSyncService {
         return new DefaultDestinationSnapshot(writerType, destinationName, destinationConfig);
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public DefaultDestinationStatus checkDefaultDestinationStatus() {
         LakeSnapshot lake = resolveDefaultLake().orElse(null);
         if (lake == null) {
@@ -71,11 +76,11 @@ public class DefaultDestinationSyncService {
             message = "默认数据湖未配置写入器参数";
         }
         String destinationName = firstNonEmpty(lake.getDestinationName(), lake.getName());
-        String dataSourceId = resolveLocalDataSourceId(lake);
+        String dataSourceId = resolveLocalDataSourceId(lake, destinationConfig, writerType);
         return new DefaultDestinationStatus(true, hasWriterType, hasConfig, destinationName, writerType, message, dataSourceId);
     }
 
-    private String resolveLocalDataSourceId(LakeSnapshot lake) {
+    private String resolveLocalDataSourceId(LakeSnapshot lake, Map<String, Object> destinationConfig, String writerType) {
         if (lake == null) {
             return null;
         }
@@ -84,7 +89,7 @@ public class DefaultDestinationSyncService {
         }
         String lakeName = normalize(lake.getName());
         String lakeDestName = normalize(lake.getDestinationName());
-        String lakeJdbc = normalize(lake.getJdbcUrl());
+        String lakeJdbc = firstNonEmpty(normalize(lake.getJdbcUrl()), normalize(destinationConfig == null ? null : destinationConfig.get("jdbcUrl")));
         if (!StringUtils.hasText(lakeName) && !StringUtils.hasText(lakeDestName) && !StringUtils.hasText(lakeJdbc)) {
             return null;
         }
@@ -114,13 +119,230 @@ public class DefaultDestinationSyncService {
                     }
                 }
             }
+            if (matched == null) {
+                matched = matchByJdbcDatabase(candidates, lakeJdbc);
+            }
+            if (matched == null && looksLikeBiadmin(lakeName, lakeDestName, lakeJdbc)) {
+                matched = matchBestBiadminCandidate(candidates);
+            }
             if (matched != null && matched.getId() != null) {
                 return matched.getId().toString();
+            }
+            InfraDataSource created = createPlatformDataSource(lake, destinationConfig, writerType, lakeJdbc);
+            if (created != null && created.getId() != null) {
+                return created.getId().toString();
             }
         } catch (RuntimeException ex) {
             LOG.debug("Failed to resolve local data source id for default lake: {}", ex.getMessage());
         }
         return null;
+    }
+
+    private InfraDataSource createPlatformDataSource(
+        LakeSnapshot lake,
+        Map<String, Object> destinationConfig,
+        String writerType,
+        String jdbcUrl
+    ) {
+        String resolvedJdbcUrl = firstNonEmpty(jdbcUrl, normalize(destinationConfig == null ? null : destinationConfig.get("jdbcUrl")));
+        if (!StringUtils.hasText(resolvedJdbcUrl)) {
+            return null;
+        }
+        InfraDataSource source = new InfraDataSource();
+        source.setName(firstNonEmpty(lake.getName(), lake.getDestinationName(), BIADMIN_NAME));
+        source.setType(inferSourceType(lake, writerType, resolvedJdbcUrl));
+        source.setConnectorKey(inferConnectorKey(source.getType()));
+        source.setJdbcUrl(resolvedJdbcUrl);
+        source.setUsername(firstNonEmpty(lake.getUsername(), normalize(destinationConfig == null ? null : destinationConfig.get("username"))));
+        source.setDescription("由 dts-admin 默认湖仓自动同步");
+        source.setOwnerDept(null);
+        source.setStatus(STATUS_ACTIVE);
+        source.setCreatedBy("system");
+        source.setLastModifiedBy("system");
+        source.setProps(writeProps(buildDefaultLakeProps(lake, destinationConfig, writerType)));
+        Map<String, Object> secrets = buildDefaultLakeSecrets(lake, destinationConfig);
+        if (!secrets.isEmpty()) {
+            secretService.applySecrets(source, secrets);
+        }
+        return dataSourceRepository.save(source);
+    }
+
+    private String inferSourceType(LakeSnapshot lake, String writerType, String jdbcUrl) {
+        String type = normalize(lake == null ? null : lake.getType());
+        String marker = firstNonEmpty(writerType, type, jdbcUrl);
+        String lower = marker == null ? "" : marker.toLowerCase(Locale.ROOT);
+        if (lower.contains("postgres") || lower.startsWith("jdbc:postgresql:")) {
+            return "POSTGRESQL";
+        }
+        if (lower.contains("mysql") || lower.contains("mariadb") || lower.startsWith("jdbc:mysql:") || lower.startsWith("jdbc:mariadb:")) {
+            return "MYSQL";
+        }
+        if (lower.contains("oracle") || lower.startsWith("jdbc:oracle:")) {
+            return "ORACLE";
+        }
+        if (lower.contains("sqlserver") || lower.contains("mssql") || lower.startsWith("jdbc:sqlserver:")) {
+            return "SQLSERVER";
+        }
+        if (lower.contains("clickhouse") || lower.startsWith("jdbc:clickhouse:")) {
+            return "CLICKHOUSE";
+        }
+        if (lower.contains("hive") || lower.startsWith("jdbc:hive2:")) {
+            return "HIVE";
+        }
+        if (StringUtils.hasText(type)) {
+            return type.toUpperCase(Locale.ROOT);
+        }
+        return "JDBC";
+    }
+
+    private String inferConnectorKey(String type) {
+        String normalized = normalize(type);
+        return normalized == null ? null : normalized.toLowerCase(Locale.ROOT);
+    }
+
+    private Map<String, Object> buildDefaultLakeProps(
+        LakeSnapshot lake,
+        Map<String, Object> destinationConfig,
+        String writerType
+    ) {
+        Map<String, Object> props = new LinkedHashMap<>();
+        props.put("source", SOURCE_ADMIN_DEFAULT_DATA_LAKE);
+        props.put("defaultLake", true);
+        putIfHasText(props, "destinationName", lake == null ? null : lake.getDestinationName());
+        putIfHasText(props, "destinationDefinitionId", firstNonEmpty(lake == null ? null : lake.getDestinationDefinitionId(), writerType));
+        putIfHasText(props, "writerType", writerType);
+        Map<String, Object> safeDestinationConfig = sanitizeConfig(destinationConfig);
+        if (!safeDestinationConfig.isEmpty()) {
+            props.put("destinationConfig", safeDestinationConfig);
+        }
+        return props;
+    }
+
+    private Map<String, Object> buildDefaultLakeSecrets(LakeSnapshot lake, Map<String, Object> destinationConfig) {
+        Map<String, Object> secrets = new LinkedHashMap<>();
+        String password = firstNonEmpty(
+            normalize(lake == null ? null : lake.getPassword()),
+            normalize(destinationConfig == null ? null : destinationConfig.get("password"))
+        );
+        putIfHasText(secrets, "password", password);
+        return secrets;
+    }
+
+    private Map<String, Object> sanitizeConfig(Map<String, Object> raw) {
+        if (raw == null || raw.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Object> safe = new LinkedHashMap<>();
+        raw.forEach((key, value) -> {
+            if (key == null) {
+                return;
+            }
+            String normalized = key.toLowerCase(Locale.ROOT).replace("_", "").replace("-", "");
+            if (normalized.contains("password") || normalized.contains("secret") || normalized.contains("token")) {
+                return;
+            }
+            safe.put(key, value);
+        });
+        return safe;
+    }
+
+    private void putIfHasText(Map<String, Object> target, String key, String value) {
+        if (target != null && StringUtils.hasText(value)) {
+            target.put(key, value.trim());
+        }
+    }
+
+    private String writeProps(Map<String, Object> props) {
+        if (props == null || props.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(props);
+        } catch (Exception ex) {
+            LOG.debug("Failed to serialize default lake props: {}", ex.getMessage());
+            return "{}";
+        }
+    }
+
+    private InfraDataSource matchByJdbcDatabase(List<InfraDataSource> candidates, String lakeJdbc) {
+        String lakeDatabase = extractJdbcDatabaseName(lakeJdbc);
+        if (!StringUtils.hasText(lakeDatabase) || candidates == null || candidates.isEmpty()) {
+            return null;
+        }
+        InfraDataSource best = null;
+        int bestScore = Integer.MIN_VALUE;
+        for (InfraDataSource source : candidates) {
+            if (source == null || source.getId() == null) {
+                continue;
+            }
+            String sourceDatabase = extractJdbcDatabaseName(source.getJdbcUrl());
+            if (!lakeDatabase.equalsIgnoreCase(sourceDatabase)) {
+                continue;
+            }
+            int score = scoreLocalLake(source);
+            if (score > bestScore) {
+                best = source;
+                bestScore = score;
+            }
+        }
+        return best;
+    }
+
+    private InfraDataSource matchBestBiadminCandidate(List<InfraDataSource> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return null;
+        }
+        InfraDataSource best = null;
+        int bestScore = Integer.MIN_VALUE;
+        for (InfraDataSource source : candidates) {
+            if (source == null || source.getId() == null) {
+                continue;
+            }
+            if (!looksLikeBiadmin(source.getName(), source.getJdbcUrl())) {
+                continue;
+            }
+            int score = scoreLocalLake(source);
+            if (score > bestScore) {
+                best = source;
+                bestScore = score;
+            }
+        }
+        return best;
+    }
+
+    private boolean looksLikeBiadmin(String... values) {
+        if (values == null) {
+            return false;
+        }
+        for (String value : values) {
+            String text = normalize(value);
+            if (StringUtils.hasText(text) && text.toLowerCase(Locale.ROOT).contains("biadmin")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String extractJdbcDatabaseName(String jdbcUrl) {
+        String text = normalize(jdbcUrl);
+        if (!StringUtils.hasText(text)) {
+            return null;
+        }
+        String lower = text.toLowerCase(Locale.ROOT);
+        String sqlServerMarker = "databasename=";
+        int sqlServerIndex = lower.indexOf(sqlServerMarker);
+        if (sqlServerIndex >= 0) {
+            String database = text.substring(sqlServerIndex + sqlServerMarker.length());
+            int end = database.indexOf(';');
+            return normalize(end >= 0 ? database.substring(0, end) : database);
+        }
+        int queryIndex = text.indexOf('?');
+        String withoutQuery = queryIndex >= 0 ? text.substring(0, queryIndex) : text;
+        int slashIndex = withoutQuery.lastIndexOf('/');
+        if (slashIndex < 0 || slashIndex == withoutQuery.length() - 1) {
+            return null;
+        }
+        return normalize(withoutQuery.substring(slashIndex + 1));
     }
 
     private Optional<LakeSnapshot> resolveDefaultLake() {

@@ -402,7 +402,6 @@ public class ModelingSqlModelService {
 
     InfraDataSource resolveSource(UUID sourceId, String activeDeptHeader) {
         InfraDataSource source = resolveSourceEntity(sourceId).orElseThrow(() -> new EntityNotFoundException("来源数据源不存在"));
-        assertDefaultLakeSource(sourceId);
         String activeDept = security.resolveActiveDept(activeDeptHeader);
         boolean instituteScope = security.hasInstituteScope();
         if (!isOwnerDeptVisible(source.getOwnerDept(), activeDept, instituteScope)) {
@@ -872,7 +871,6 @@ public class ModelingSqlModelService {
         if (candidates != null) {
             ranked.addAll(candidates);
         }
-        adminInfraClient.fetchDefaultDataLake().map(ModelingSqlModelService::toVirtualSource).ifPresent(ranked::add);
         UUID bestId = null;
         int bestScore = Integer.MIN_VALUE;
         for (InfraDataSource source : ranked) {
@@ -890,16 +888,6 @@ public class ModelingSqlModelService {
             }
         }
         return bestId;
-    }
-
-    private void assertDefaultLakeSource(UUID sourceId) {
-        if (defaultLakeDatasetGuard == null) {
-            return;
-        }
-        defaultLakeDatasetGuard.requireDefaultLakeSource(
-            sourceId,
-            "数仓建模仅允许使用默认数据湖数据源，请先将外部数据源入湖到 ODS 后再进行建模分析"
-        );
     }
 
     private UUID resolveUsableSourceId(UUID sourceId, String activeDeptHeader) {

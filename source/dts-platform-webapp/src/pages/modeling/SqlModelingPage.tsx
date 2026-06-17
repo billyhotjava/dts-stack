@@ -70,7 +70,6 @@ import {
 	getRollbackAuditLog,
 } from "@/api/platformApi";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
-import { ingestionTaskAPI } from "@/api/ingestion";
 import BatchImportModal from "./BatchImportModal";
 import BatchDeleteResultModal from "./components/BatchDeleteResultModal";
 import GovernanceModal from "./components/GovernanceModal";
@@ -276,6 +275,7 @@ export default function SqlModelingPage() {
 	const [modelsLoading, setModelsLoading] = useState(false);
 	const [sqlModels, setSqlModels] = useState<SqlModel[]>([]);
 	const [dataSources, setDataSources] = useState<InfraDataSource[]>([]);
+	const [recommendedDataSourceId, setRecommendedDataSourceId] = useState<string>();
 	const [layers, setLayers] = useState<{ layer: string; name: string; description: string }[]>([]);
 	const [modelDrawerOpen, setModelDrawerOpen] = useState(false);
 	const [modelSubmitting, setModelSubmitting] = useState(false);
@@ -443,26 +443,23 @@ export default function SqlModelingPage() {
 
 	const loadSources = useCallback(async () => {
 		try {
-			const [resp, lake] = await Promise.all([
-				dataSourcesService.list(),
-				ingestionTaskAPI.getDefaultDestinationStatus(),
-			]);
-			if (!lake?.available || !lake.dataSourceId) {
-				setDataSources([]);
-				toast.error(lake?.message || "未识别默认数据湖连接");
-				return;
+			const resp = await dataSourcesService.selections({ capability: "MODELING_LAKEHOUSE" });
+			const list = Array.isArray(resp?.items) ? resp.items : [];
+			setDataSources(list);
+			const preferred =
+				normalizeText(resp?.defaultDataSourceId) ||
+				normalizeText(list.find((item) => item?.recommended)?.id) ||
+				normalizeText(list[0]?.id);
+			setRecommendedDataSourceId(preferred || undefined);
+			if (!list.length) {
+				toast.error(resp?.message || "暂无可用 Platform 数据源");
+			} else if (resp?.message) {
+				toast.warning(resp.message);
 			}
-			const list = Array.isArray(resp) ? resp : [];
-			const defaultLakeSource = list.find((item) => String(item?.id || "") === String(lake.dataSourceId));
-			setDataSources(defaultLakeSource ? [defaultLakeSource] : [{
-				id: String(lake.dataSourceId),
-				name: lake.destinationName || "默认数据湖",
-				type: lake.writerType || "DATA_LAKE",
-				status: "ACTIVE",
-			} as InfraDataSource]);
 		} catch (err: any) {
 			setDataSources([]);
-			toast.error(err?.message || "默认数据湖连接读取失败");
+			setRecommendedDataSourceId(undefined);
+			toast.error(err?.message || "数据源列表读取失败");
 		}
 	}, []);
 
@@ -1538,6 +1535,7 @@ export default function SqlModelingPage() {
 		modelForm.setFieldsValue({
 			planId: activeSpace?.id || undefined,
 			layer: "DWD",
+			sourceDataSourceId: recommendedDataSourceId || dataSources[0]?.id || undefined,
 			materialized: "table",
 			enabled: true,
 			semanticContract: "",
@@ -1553,6 +1551,7 @@ export default function SqlModelingPage() {
 		importForm.setFieldsValue({
 			planId: activeSpace?.id || undefined,
 			layer: "DWD",
+			sourceDataSourceId: recommendedDataSourceId || dataSources[0]?.id || undefined,
 			materialized: "table",
 			enabled: true,
 		});

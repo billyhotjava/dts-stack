@@ -19,6 +19,7 @@ import type { UploadFile } from "antd/es/upload/interface";
 import type { ColumnsType } from "antd/es/table";
 import JSZip from "jszip";
 import { batchImportSqlModels } from "@/api/platformApi";
+import type { InfraDataSource } from "@/api/services/dataSourcesService";
 import { extractImportedModelNames } from "./batchImportNavigation.helpers";
 
 interface BatchImportModalProps {
@@ -26,7 +27,7 @@ interface BatchImportModalProps {
 	onClose: () => void;
 	onSuccess: (payload: { planId?: string; importedModelNames: string[] }) => void;
 	spaces: Array<{ id?: string; name?: string }>;
-	dataSources: Array<{ id?: string; name?: string }>;
+	dataSources: InfraDataSource[];
 	activeSpaceId?: string;
 }
 
@@ -346,7 +347,10 @@ const BatchImportModal = ({
 				>
 					<Select
 						placeholder="选择来源数据源"
-						options={dataSources.map((ds) => ({ label: ds?.name || ds?.id, value: ds?.id }))}
+						options={dataSources.map((ds) => ({
+							label: `${ds?.name || ds?.id}${ds?.defaultSource ? "（默认湖仓）" : ""}`,
+							value: ds?.id,
+						}))}
 					/>
 				</Form.Item>
 			</div>

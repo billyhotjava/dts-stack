@@ -504,6 +504,7 @@ export default function DataSourceFormModal({ open, editing, onClose, onSaved }:
 				jdbcUrl: jdbc ? String(values.jdbcUrl || "").trim() || undefined : undefined,
 				username: jdbc ? String(values.username || "").trim() || undefined : undefined,
 				description: String(values.description || "").trim() || undefined,
+				ownerDept: String(values.ownerDept || "").trim() || undefined,
 				props: props && Object.keys(props).length ? props : undefined,
 				secrets: apiSourceFlag ? apiSecrets : values.password ? { password: values.password } : undefined,
 			};
@@ -855,10 +856,11 @@ export default function DataSourceFormModal({ open, editing, onClose, onSaved }:
 					<Form.Item name="description" label="描述">
 						<Input.TextArea rows={2} placeholder="可选" />
 					</Form.Item>
-					<Form.Item name="ownerDept" label="归属部门" rules={[{ required: true, message: "请选择归属部门" }]}>
+					<Form.Item name="ownerDept" label="归属部门">
 						<Select
 							showSearch
-							placeholder="选择归属部门"
+							allowClear
+							placeholder="选择归属部门（可选）"
 							options={deptOptions}
 							filterOption={(input, option) =>
 								(option?.label ?? "").toLowerCase().includes(input.toLowerCase())

@@ -325,17 +325,10 @@ public class ModelingSqlModelResource {
         List<InfraOdsTableMapping> mappings = odsTableMappingRepository.findByEnabledTrueOrderByOdsSchemaAscOdsTableAsc();
         String kw = StringUtils.hasText(keyword) ? keyword.trim().toLowerCase(Locale.ROOT) : null;
         UUID defaultLakeSourceId = defaultLakeDatasetGuard.currentDefaultLakeSourceId().orElse(null);
-        if (defaultLakeSourceId == null) {
-            LOG.warn("[dbt-sources] default lake source id is unavailable; returning empty source list");
-            return ApiResponses.ok(List.of());
-        }
-        if (sourceDataSourceId != null && !defaultLakeSourceId.equals(sourceDataSourceId)) {
-            LOG.warn("[dbt-sources] rejected non-default sourceDataSourceId={} defaultLakeSourceId={}", sourceDataSourceId, defaultLakeSourceId);
-            return ApiResponses.ok(List.of());
-        }
         Map<UUID, String> sourceNameCache = new HashMap<>();
         Map<String, Boolean> activeOdsCache = new HashMap<>();
         int staleSkipped = 0;
+        int sourceSkipped = 0;
 
         List<Map<String, Object>> result = new ArrayList<>();
         for (InfraOdsTableMapping mapping : mappings) {
@@ -343,7 +336,11 @@ public class ModelingSqlModelResource {
             String schema = StringUtils.hasText(mapping.getOdsSchema()) ? mapping.getOdsSchema().trim() : "public";
             String table = StringUtils.hasText(mapping.getOdsTable()) ? mapping.getOdsTable().trim() : null;
             if (!StringUtils.hasText(table)) continue;
-            UUID effectiveSourceId = defaultLakeSourceId;
+            UUID effectiveSourceId = mapping.getConnectionId() != null ? mapping.getConnectionId() : defaultLakeSourceId;
+            if (sourceDataSourceId != null && !sourceDataSourceId.equals(effectiveSourceId)) {
+                sourceSkipped++;
+                continue;
+            }
             if (!hasActiveOdsDataset(schema, table, effectiveSourceId, activeOdsCache)) {
                 staleSkipped++;
                 continue;
@@ -389,6 +386,9 @@ public class ModelingSqlModelResource {
             staleSkipped,
             preview
         );
+        if (sourceSkipped > 0) {
+            LOG.debug("[dbt-sources] sourceDataSourceId={} skippedBySource={}", sourceDataSourceId, sourceSkipped);
+        }
         if (sourceDataSourceId != null && result.isEmpty()) {
             LOG.warn(
                 "[dbt-sources] no ODS mappings matched sourceDataSourceId={} keyword='{}'; check metadata sync/catalog_dataset source binding",
