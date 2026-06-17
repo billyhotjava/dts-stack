@@ -6,10 +6,16 @@
 ## 目标
 把平台 `src/pages/modeling/Semantic*Page` 从"跳转 dts-metrics 的 5 行壳"重建为**消费 `/api/semantic` 的真实原生页**（subjects/objects/dimensions/metrics/models + 评审/发布/runs），激活死代码 `semanticModelingApi.ts`。这是 F1（治理）/F2（工作台）/F3（收敛）的前置——没有真实原生页，后续无处附着。
 
-## 现状（勘察）
-- `SemanticModelingCenterPage` 现 `window.location.replace("/metrics/semantic/*")`（跳 dts-metrics）；`SemanticModelsPage` 等是其 5 行壳。
-- `semanticModelingApi.ts`（34 端点对应的客户端）**无人 import**——本 feature 激活它。
+## 现状（勘察，cold-start 必读）
+- **两条渲染路径都通 dts-metrics**（重建前必先理清菜单实际走哪条）：
+  1. `src/routes/sections/dashboard/static-routes.tsx`：`/modeling/semantic-center`(*) → `<MetricsServiceFrame/>`（**iframe** 嵌 dts-metrics-webapp，经 `metricsServiceRoutes.ts` 映射到 `/metrics/*`）。
+  2. `src/pages/modeling/Semantic*Page`（5 行壳）→ `SemanticModelingCenterPage` → `window.location.replace("/metrics/semantic/*")`（**整页跳转**）。
+- 即同一套语义入口被 iframe + 跳转壳两种方式都导向 dts-metrics；F0 重建须同时处理这两条（flag 切原生时，iframe 路由与跳转壳都要改走原生容器）。
+- `semanticModelingApi.ts`（34 端点对应的客户端）**无人 import = 死代码**——本 feature 激活它。
 - 后端 `/api/semantic`（`SemanticModelingResource`，34 端点）成熟可用。
+- env flag 模式：照 `src/global-config.ts`（如 `String(import.meta.env.VITE_ENABLE_SQL_IDE_V2 || "true").toLowerCase()==="true"`），新增 `VITE_SEMANTIC_NATIVE`（默认关=保持现跳转/iframe）。
+- API 包装：`semanticModelingApi` 用 `api`@`@/api/apiClient` + `quiet`（_skipErrorToast）；最小验证入口 `getSemanticWorkbenchOverview()` → `/semantic/workbench`。
+- 提交 `1648fda0d fix: isolate metrics frontend boundary` = 跳转壳是**有意隔离**的结果；F0 逆转它，是整合代价。
 
 ## Task 列表
 

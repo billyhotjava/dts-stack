@@ -16,13 +16,14 @@ dts-metrics/语义层坐落在 ELT + OpenMetadata 生态之上（详见记忆 `d
 - 治理（分类/owner/域/术语/标准）= 平台本地 DB；血缘双库割裂（ingestion 写 OM、平台 OpenLineage 落本地）。
 - 整合**不重造**目录/血缘/编排/转换——这些生态已有；只把"语义建模治理"收口到平台。
 
-## 阶段
-| 阶段 | 内容 | 价值 | 风险 |
-|------|------|------|------|
-| **SP-1** | 受控建模逻辑移植（受控 DSL + ELT 分层准入） | 治理亮点不丢 | 低（后端、绞杀者并存） |
-| SP-2 | 语义富化契约（schema.yml meta 角色 + catalog 透出） | 填"语义角色缺失"根因 | 中（跨 dbt + catalog） |
-| SP-3 | React Flow 图形工作台移植进平台前端 | 保留分析师建模 UX | 中高（前端工作量大） |
-| SP-4 | dts-metrics 服务/webapp 退役切流 | 消除双语义层 | 中（切流 + 数据/路由处置） |
+## 阶段（→ Sprint 映射与状态）
+| 阶段 | Sprint | 状态 | 内容 |
+|------|--------|------|------|
+| **SP-1** | 41 | ✅ DONE（36 测试绿，已编码） | 受控建模逻辑移植（受控 DSL + ELT 分层准入），后端 |
+| SP-2 | 43 | 📋 计划就绪（4F/9T） | 语义富化贯通（dbt meta semantic_type 已存在 → catalog 透出列族） |
+| SP-3 | 44 | 📋 计划就绪（4F/15T，**已按现状重写**） | **重建平台原生语义 UI**（替跳转壳）+ 治理呈现 + 工作台 + 路由收敛 |
+| SP-4 | 47 | 📋 计划就绪（4F/11T） | dts-metrics 服务/webapp 退役（gated，verify-first/灰度/回退/先归档） |
+| 解耦评审 | v2.3 | ⬜ Backlog | dts-platform 按领域缝拆分 |
 
 ## 架构边界决策（2026-06-16）
 用户提出："dts-platform 单体功能越来越多，不分拆 metrics 架构师会不会有很多问题？" —— 正当关切。结论：
@@ -34,3 +35,37 @@ dts-metrics/语义层坐落在 ELT + OpenMetadata 生态之上（详见记忆 `d
 ## 遗留处置
 - **dts-metrics sprint-35b 硬化**（F1 持久化 / F2 安全对等 / F5 拆分 / F6 IT，在 `feat/sprint-35b-dts-metrics-hardening` + `main`）：dts-metrics 既定退役，**不再合入 v2.2.3、不再继续硬化**；移植取其**逻辑**（DSL/分层/图形），非其基础设施。
 - 相关记忆：`dts-metrics-branch-baseline`、`dts-metrics-elt-ecosystem`、`dts-metrics-architecture-review`。
+
+---
+
+## 执行交接 / Cold-start（2026-06-16，新会话从这里读起）
+
+**目标**: 新会话可冷启动编码，无需重复勘察。整合大计划 = 在平台 `/api/semantic` 上收口语义建模，退役 dts-metrics。
+
+### 已完成
+- **SP-1 (Sprint-41) 后端受控治理已编码并验证**（36 测试绿）：`ControlledMetricDslCompiler`（受控 DSL，独立可抽取）+ `EltLayerGate`（分层闸）+ `governanceMode`（绞杀者开关）+ `buildMetricExpression` 受控委托 + 422/400 错误码。提交 c5234a75→834c755b（已 merge v2.2.3）。
+
+### 关键现状发现（避免重复踩坑）
+1. **平台原生语义前端是空壳**：`src/pages/modeling/Semantic*Page` 全是 5 行跳转壳 + `/modeling/semantic-center` 是 iframe，两者都通向 dts-metrics-webapp；`semanticModelingApi.ts`(/api/semantic 客户端)=死代码。提交 `1648fda0d` 表明这是**有意隔离**。→ 故 **SP-3 的真任务是"重建原生 UI"（新增 F0 前置），非"加开关"**。
+2. **后端 `/api/semantic`（SemanticModelingResource）成熟**（34 端点：subjects/objects/dims/metrics/models/bindings/review/runs/publish/register），可直接支撑原生 UI。
+3. **dbt `meta.semantic_type` 已存在**（`services/dts-dbt/models/dws/semantic/schema.yml`）→ SP-2 是"贯通已有 meta 到 catalog 列族"，非发明。
+4. **SP-2 前置 spike (F2-T00)**：OM dbt ingestion 是否已抓 `meta` → 决定 SP-2 走 OM 镜像还是直读 dbt。
+5. **F2(SP-3) 复用平台已有 React Flow 画布**（`analytics/pages/semantic/SemanticModelCanvas`，Chrome95 兼容已处理），不再造。
+
+### 推荐执行顺序（依赖）
+1. **SP-2 (Sprint-43)** 先做 F2-T00 spike → 后端贯通列族（解锁 SP-3 F2 字段角色 + SP-1 F3 源表 gating）。**可与 SP-3 F0/F1 并行**（SP-3 F0/F1 不依赖列族）。
+2. **SP-3 (Sprint-44)**：**F0 重建原生页（前置）** → F1 治理呈现 → F2 工作台（依赖 SP-2 列族）→ F3 路由收敛。
+3. **SP-4 (Sprint-47)**：gated 在 SP-2/SP-3 平价后，灰度退役 dts-metrics。
+
+### 验证命令
+```bash
+# 后端（SP-1 已绿；SP-2/SP-4 平台改动）
+cd source && ./mvnw -pl dts-platform clean test -Dtest='ControlledMetricDslCompilerTest,EltLayerGateTest,SemanticModelingServiceTest,SemanticModelingResourceTest'
+# 前端（SP-3）
+cd source/dts-platform-webapp && pnpm build   # tsc + vite（Chrome95 LEGACY_BROWSER_BUILD）
+```
+
+### 分支/工作树
+- 工作基线 = `v2.2.3`（易变，并行 session 频繁切换/merge——见记忆 `dts-metrics-branch-baseline`）。
+- SP-1 已 merge v2.2.3。SP-2/3/4 编码建议续 `feat/semantic-consolidation` 或新特性分支；提交时**精确暂存、隔离并行改动**（sprint-42/45/46 + webapp workbench）。
+- 铁律：改完 `clean` 再信测试（增量假绿）；record 加字段必同步全部构造点。
