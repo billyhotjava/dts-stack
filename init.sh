@@ -795,6 +795,11 @@ generate_env_base(){
   : "${PG_USER_ANALYTICS:=dts_analytics}"
   : "${PG_PWD_ANALYTICS:=${SECRET}}"
 
+  # dts-metrics semantic/candidate-artifact plane
+  : "${PG_DB_METRICS:=dts_metrics}"
+  : "${PG_USER_METRICS:=dts_metrics}"
+  : "${PG_PWD_METRICS:=${SECRET}}"
+
   # OpenMetadata
   : "${PG_DB_OPENMETADATA:=openmetadata_db}"
   : "${PG_USER_OPENMETADATA:=openmetadata}"
@@ -1148,6 +1153,11 @@ PG_PWD_DTCOMMON=${PG_PWD_DTCOMMON}
 PG_DB_ANALYTICS=${PG_DB_ANALYTICS}
 PG_USER_ANALYTICS=${PG_USER_ANALYTICS}
 PG_PWD_ANALYTICS=${PG_PWD_ANALYTICS}
+
+# --- dts-metrics triplet ---
+PG_DB_METRICS=${PG_DB_METRICS}
+PG_USER_METRICS=${PG_USER_METRICS}
+PG_PWD_METRICS=${PG_PWD_METRICS}
 
 # --- OpenMetadata triplet ---
 PG_DB_OPENMETADATA=${PG_DB_OPENMETADATA}

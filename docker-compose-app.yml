@@ -820,6 +820,9 @@ services:
       DTS_PLATFORM_BASE_URL: ${DTS_PLATFORM_BASE_URL:-http://dts-platform:8081}
       JAVA_OPTS: ${DTS_METRICS_JAVA_OPTS:--Djava.security.egd=file:/dev/./urandom -XX:MaxRAMPercentage=75.0}
       LOG_ROOT: /logs
+      SPRING_DATASOURCE_PASSWORD: ${PG_PWD_METRICS:-${PG_PWD_DTPS:-dts_metrics}}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_METRICS:-dts_metrics}
+      SPRING_DATASOURCE_USERNAME: ${PG_USER_METRICS:-dts_metrics}
       SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-prod}
       TZ: ${TZ:-Asia/Shanghai}
     healthcheck:
@@ -1168,6 +1171,7 @@ services:
       PG_DB_DTCOMMON: ${PG_DB_DTCOMMON}
       PG_DB_DTPS: ${PG_DB_DTPS}
       PG_DB_KEYCLOAK: ${PG_DB_KEYCLOAK}
+      PG_DB_METRICS: ${PG_DB_METRICS:-dts_metrics}
       PG_DB_OPENMETADATA: ${PG_DB_OPENMETADATA:-openmetadata}
       PG_DB_RANGER: ${PG_DB_RANGER}
       PG_PWD_AIRFLOW: ${PG_PWD_AIRFLOW:-airflow}
@@ -1176,6 +1180,7 @@ services:
       PG_PWD_DTCOMMON: ${PG_PWD_DTCOMMON}
       PG_PWD_DTPS: ${PG_PWD_DTPS}
       PG_PWD_KEYCLOAK: ${PG_PWD_KEYCLOAK}
+      PG_PWD_METRICS: ${PG_PWD_METRICS:-${PG_PWD_DTPS:-dts_metrics}}
       PG_PWD_OPENMETADATA: ${PG_PWD_OPENMETADATA:-openmetadata}
       PG_PWD_RANGER: ${PG_PWD_RANGER}
       PG_USER_AIRFLOW: ${PG_USER_AIRFLOW:-airflow}
@@ -1184,6 +1189,7 @@ services:
       PG_USER_DTCOMMON: ${PG_USER_DTCOMMON}
       PG_USER_DTPS: ${PG_USER_DTPS}
       PG_USER_KEYCLOAK: ${PG_USER_KEYCLOAK}
+      PG_USER_METRICS: ${PG_USER_METRICS:-dts_metrics}
       PG_USER_OPENMETADATA: ${PG_USER_OPENMETADATA:-openmetadata}
       PG_USER_RANGER: ${PG_USER_RANGER}
       PGDATA: /var/lib/postgresql/data/pgdata

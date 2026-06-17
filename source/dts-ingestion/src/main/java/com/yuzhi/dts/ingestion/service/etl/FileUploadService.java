@@ -103,37 +103,76 @@ public class FileUploadService {
     }
 
     public FileUploadResult handleUpload(MultipartFile file) {
-        return handleUploadInternal(file, null, null, null, false);
+        return handleUpload(file, null);
+    }
+
+    public FileUploadResult handleUpload(MultipartFile file, String uploadTraceId) {
+        return handleUploadInternal(file, null, null, null, false, uploadTraceId);
     }
 
     public FileUploadResult handleUploadAndParse(MultipartFile file, Integer previewLimit, Integer sheetIndex, String sheetName) {
-        return handleUploadInternal(file, previewLimit, sheetIndex, sheetName, true);
+        return handleUploadAndParse(file, previewLimit, sheetIndex, sheetName, null);
+    }
+
+    public FileUploadResult handleUploadAndParse(
+        MultipartFile file,
+        Integer previewLimit,
+        Integer sheetIndex,
+        String sheetName,
+        String uploadTraceId
+    ) {
+        return handleUploadInternal(file, previewLimit, sheetIndex, sheetName, true, uploadTraceId);
     }
 
     public FileUploadResult parseById(String fileId, Integer previewLimit, Integer sheetIndex, String sheetName, String originalName) {
-        ParsedUploadPayload parsed = parseExistingUpload(fileId, previewLimit, sheetIndex, sheetName);
-        String resolvedOriginalName = resolveOriginalNameFromStoredFile(fileId, parsed.hostPath())
-            .orElse(sanitizeOrDefault(originalName, parsed.fileId()));
-        return buildResult(
-            parsed.hostPath(),
-            parsed.containerPath(),
-            parsed.fileType(),
-            parsed.columns(),
-            resolvedOriginalName,
-            parsed.fileId(),
-            parsed.fileId(),
-            parsed.sheetName(),
-            parsed.sheetIndex(),
-            parsed.sheets(),
-            parsed.keyVersion(),
-            true,
-            parsed.fileHash(),
-            parsed.fileSize(),
-            parsed.rowCount(),
-            parsed.errorCount(),
-            parsed.preview(),
-            parsed.delimiter()
+        LOG.info(
+            "Ingestion uploaded file parse-by-id start: fileId={}, previewLimit={}, sheetIndex={}, sheetName={}, originalName={}",
+            fileId,
+            previewLimit,
+            sheetIndex,
+            sheetName,
+            originalName
         );
+        try {
+            ParsedUploadPayload parsed = parseExistingUpload(fileId, previewLimit, sheetIndex, sheetName);
+            String resolvedOriginalName = resolveOriginalNameFromStoredFile(fileId, parsed.hostPath())
+                .orElse(sanitizeOrDefault(originalName, parsed.fileId()));
+            FileUploadResult result = buildResult(
+                parsed.hostPath(),
+                parsed.containerPath(),
+                parsed.fileType(),
+                parsed.columns(),
+                resolvedOriginalName,
+                parsed.fileId(),
+                parsed.fileId(),
+                parsed.sheetName(),
+                parsed.sheetIndex(),
+                parsed.sheets(),
+                parsed.keyVersion(),
+                true,
+                parsed.fileHash(),
+                parsed.fileSize(),
+                parsed.rowCount(),
+                parsed.errorCount(),
+                parsed.preview(),
+                parsed.delimiter()
+            );
+            LOG.info(
+                "Ingestion uploaded file parse-by-id completed: fileId={}, fileType={}, columns={}, rows={}, errors={}, sheetIndex={}, sheetName={}, hostPath={}",
+                result.fileId(),
+                result.fileType(),
+                result.columns() == null ? 0 : result.columns().size(),
+                result.rowCount(),
+                result.errorCount(),
+                result.sheetIndex(),
+                result.sheetName(),
+                result.hostPath()
+            );
+            return result;
+        } catch (RuntimeException ex) {
+            LOG.info("Ingestion uploaded file parse-by-id failed: fileId={}, error={}", fileId, ex.getMessage(), ex);
+            throw ex;
+        }
     }
 
     private Optional<String> resolveOriginalNameFromStoredFile(String fileId, String containerPath) {
@@ -184,36 +223,119 @@ public class FileUploadService {
         Integer previewLimit,
         Integer requestedSheetIndex,
         String requestedSheetName,
-        boolean includeParsed
+        boolean includeParsed,
+        String uploadTraceId
     ) {
+        String traceId = normalizeTraceId(uploadTraceId);
+        String requestName = file == null ? null : file.getOriginalFilename();
+        Long declaredSize = file == null ? null : file.getSize();
+        String contentType = file == null ? null : file.getContentType();
+        LOG.info(
+            "Ingestion file upload service received: traceId={}, name={}, declaredSize={}, contentType={}, includeParsed={}, previewLimit={}, requestedSheetIndex={}, requestedSheetName={}",
+            traceId,
+            requestName,
+            declaredSize,
+            contentType,
+            includeParsed,
+            previewLimit,
+            requestedSheetIndex,
+            requestedSheetName
+        );
         if (file == null || file.isEmpty()) {
+            LOG.info(
+                "Ingestion file upload rejected: traceId={}, reason=empty_file, name={}, declaredSize={}, contentType={}",
+                traceId,
+                requestName,
+                declaredSize,
+                contentType
+            );
             throw new IllegalArgumentException("上传文件不能为空");
         }
         if (!crypto.isEncryptionReady()) {
+            LOG.info(
+                "Ingestion file upload rejected: traceId={}, reason=encryption_not_ready, keyVersionPresent={}, name={}, declaredSize={}, contentType={}",
+                traceId,
+                StringUtils.hasText(crypto.currentKeyVersion()),
+                requestName,
+                declaredSize,
+                contentType
+            );
             throw new IllegalStateException("加密密钥未配置，禁止上传涉密文件");
         }
         String originalName = StringUtils.hasText(file.getOriginalFilename())
             ? file.getOriginalFilename().trim()
             : "upload";
+        String fileId = UUID.randomUUID().toString();
         String extension = resolveExtension(originalName);
         String fileType = resolveFileType(extension);
         if (fileType == null) {
+            LOG.info(
+                "Ingestion file upload rejected: traceId={}, fileId={}, reason=unsupported_file_type, originalName={}, extension={}",
+                traceId,
+                fileId,
+                originalName,
+                extension
+            );
             throw new IllegalArgumentException("不支持的文件类型: " + extension + "，仅支持 .xlsx, .xls, .csv");
         }
+        LOG.info(
+            "Ingestion file upload classified: traceId={}, fileId={}, originalName={}, extension={}, fileType={}, encryptionReady={}, keyVersionPresent={}",
+            traceId,
+            fileId,
+            originalName,
+            extension,
+            fileType,
+            crypto.isEncryptionReady(),
+            StringUtils.hasText(crypto.currentKeyVersion())
+        );
 
         byte[] plain;
         try {
             plain = file.getBytes();
+            LOG.info(
+                "Ingestion file upload bytes read: traceId={}, fileId={}, declaredSize={}, actualSize={}, contentType={}",
+                traceId,
+                fileId,
+                declaredSize,
+                plain.length,
+                contentType
+            );
         } catch (Exception ex) {
+            LOG.info(
+                "Ingestion file upload bytes read failed: traceId={}, fileId={}, name={}, declaredSize={}, contentType={}, error={}",
+                traceId,
+                fileId,
+                originalName,
+                declaredSize,
+                contentType,
+                ex.getMessage(),
+                ex
+            );
             throw new IllegalStateException("读取上传文件失败: " + ex.getMessage(), ex);
         }
 
-        String fileId = UUID.randomUUID().toString();
         String jobDir = resolveJobDir();
         Path uploadsDir = Paths.get(jobDir, UPLOADS_SUBDIR);
         try {
             Files.createDirectories(uploadsDir);
+            LOG.info(
+                "Ingestion file upload directory ready: traceId={}, fileId={}, jobDir={}, uploadsDir={}, tmpDir={}",
+                traceId,
+                fileId,
+                jobDir,
+                uploadsDir,
+                System.getProperty("java.io.tmpdir")
+            );
         } catch (Exception ex) {
+            LOG.info(
+                "Ingestion file upload directory failed: traceId={}, fileId={}, jobDir={}, uploadsDir={}, error={}",
+                traceId,
+                fileId,
+                jobDir,
+                uploadsDir,
+                ex.getMessage(),
+                ex
+            );
             throw new IllegalStateException("无法创建上传目录: " + uploadsDir, ex);
         }
 
@@ -222,12 +344,23 @@ public class FileUploadService {
         byte[] iv = crypto.randomIv();
         String keyVersion = crypto.currentKeyVersion();
         if (!StringUtils.hasText(keyVersion)) {
+            LOG.info("Ingestion file upload rejected: traceId={}, fileId={}, reason=missing_key_version", traceId, fileId);
             throw new IllegalStateException("加密密钥版本未配置，禁止上传涉密文件");
         }
         writeEncryptedPayload(hostPath, plain, keyVersion, iv);
+        String containerPath = ADDAX_CONTAINER_DIR + "/" + UPLOADS_SUBDIR + "/" + storedName;
+        LOG.info(
+            "Ingestion file upload encrypted payload written: traceId={}, fileId={}, hostPath={}, containerPath={}, plainSize={}, storedSize={}, keyVersion={}",
+            traceId,
+            fileId,
+            hostPath,
+            containerPath,
+            plain.length,
+            storedFileSize(hostPath),
+            keyVersion
+        );
 
         try {
-            String containerPath = ADDAX_CONTAINER_DIR + "/" + UPLOADS_SUBDIR + "/" + storedName;
             String sheetName = null;
             Integer sheetIndex = null;
             List<SheetMetadata> sheets = List.of();
@@ -239,6 +372,15 @@ public class FileUploadService {
 
             if (includeParsed) {
                 int normalizedPreviewLimit = normalizePreviewLimit(previewLimit);
+                LOG.info(
+                    "Ingestion file upload parse start: traceId={}, fileId={}, fileType={}, previewLimit={}, requestedSheetIndex={}, requestedSheetName={}",
+                    traceId,
+                    fileId,
+                    fileType,
+                    normalizedPreviewLimit,
+                    requestedSheetIndex,
+                    requestedSheetName
+                );
                 ParsedUploadPayload parsed = parseUploadedPayload(
                     plain,
                     fileId,
@@ -255,7 +397,28 @@ public class FileUploadService {
                 errorCount = parsed.errorCount();
                 preview = parsed.preview();
                 delimiter = parsed.delimiter();
+                LOG.info(
+                    "Ingestion file upload parse completed: traceId={}, fileId={}, fileType={}, columns={}, rows={}, errors={}, sheetIndex={}, sheetName={}, sheets={}, previewRows={}",
+                    traceId,
+                    fileId,
+                    fileType,
+                    columns == null ? 0 : columns.size(),
+                    rowCount,
+                    errorCount,
+                    sheetIndex,
+                    sheetName,
+                    sheets == null ? 0 : sheets.size(),
+                    preview == null ? 0 : preview.size()
+                );
             } else {
+                LOG.info(
+                    "Ingestion file upload header scan start: traceId={}, fileId={}, fileType={}, requestedSheetIndex={}, requestedSheetName={}",
+                    traceId,
+                    fileId,
+                    fileType,
+                    requestedSheetIndex,
+                    requestedSheetName
+                );
                 if ("excel".equals(fileType)) {
                     sheetIndex = resolveRequestedExcelSheetIndex(plain, requestedSheetIndex, requestedSheetName);
                     sheetName = resolveRequestedSheetName(plain, sheetIndex);
@@ -266,6 +429,16 @@ public class FileUploadService {
                 errorCount = 0;
                 preview = null;
                 delimiter = "csv".equals(fileType) ? "," : null;
+                LOG.info(
+                    "Ingestion file upload header scan completed: traceId={}, fileId={}, fileType={}, columns={}, sheetIndex={}, sheetName={}, sheets={}",
+                    traceId,
+                    fileId,
+                    fileType,
+                    columns == null ? 0 : columns.size(),
+                    sheetIndex,
+                    sheetName,
+                    sheets == null ? 0 : sheets.size()
+                );
             }
 
             String fileHash = sha256(plain);
@@ -292,6 +465,16 @@ public class FileUploadService {
                 delimiter
             );
         } catch (RuntimeException ex) {
+            LOG.info(
+                "Ingestion file upload post-processing failed: traceId={}, fileId={}, fileType={}, hostPath={}, includeParsed={}, error={}",
+                traceId,
+                fileId,
+                fileType,
+                hostPath,
+                includeParsed,
+                ex.getMessage(),
+                ex
+            );
             deleteUploadQuietly(hostPath, "upload post-processing failed");
             throw ex;
         }
@@ -623,6 +806,14 @@ public class FileUploadService {
                 out.write(cipher);
             }
         } catch (Exception ex) {
+            LOG.info(
+                "Ingestion file upload encrypted payload write failed: hostPath={}, plainSize={}, keyVersion={}, error={}",
+                hostPath,
+                plain == null ? null : plain.length,
+                keyVersion,
+                ex.getMessage(),
+                ex
+            );
             deleteUploadQuietly(hostPath, "encrypted payload write failed");
             throw new IllegalStateException("文件加密保存失败: " + ex.getMessage(), ex);
         }
@@ -686,6 +877,19 @@ public class FileUploadService {
             return MAX_PREVIEW_LIMIT;
         }
         return previewLimit;
+    }
+
+    private String normalizeTraceId(String uploadTraceId) {
+        return StringUtils.hasText(uploadTraceId) ? uploadTraceId.trim() : "-";
+    }
+
+    private Long storedFileSize(Path hostPath) {
+        try {
+            return hostPath == null || !Files.exists(hostPath) ? null : Files.size(hostPath);
+        } catch (Exception ex) {
+            LOG.debug("Failed to inspect stored upload size {}: {}", hostPath, ex.getMessage());
+            return null;
+        }
     }
 
     private String sanitizeOrDefault(String value, String fallback) {

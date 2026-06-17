@@ -15,6 +15,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
@@ -41,6 +42,7 @@ public class IngestionServiceClient {
     private static final String SERVICE_HEADER = "X-DTS-Service";
     private static final String USER_HEADER = "X-DTS-User";
     private static final String ROLES_HEADER = "X-DTS-Roles";
+    private static final String UPLOAD_TRACE_HEADER = "X-DTS-Upload-Trace";
     private static final Duration HEALTH_TTL = Duration.ofSeconds(15);
 
     private final RestTemplate restTemplate;
@@ -296,21 +298,50 @@ public class IngestionServiceClient {
         Integer sheetIndex,
         String sheetName
     ) {
+        String traceId = UUID.randomUUID().toString();
+        String originalName = file == null ? null : file.getOriginalFilename();
+        Long declaredSize = file == null ? null : file.getSize();
+        String contentType = file == null ? null : file.getContentType();
         if (!isEnabled()) {
+            LOG.warn(
+                "Ingestion file upload proxy disabled: traceId={}, path={}, enabled={}, baseUrlSet={}, name={}, size={}, contentType={}",
+                traceId,
+                path,
+                properties.isEnabled(),
+                StringUtils.hasText(properties.getBaseUrl()),
+                originalName,
+                declaredSize,
+                contentType
+            );
             return new ApiResponse<>(503, "ingestion service disabled", null);
         }
         URI uri = buildAbsoluteUri(path);
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+            headers.set(UPLOAD_TRACE_HEADER, traceId);
             if (StringUtils.hasText(properties.getServiceName())) {
                 headers.set(SERVICE_HEADER, properties.getServiceName());
             }
+            LOG.info(
+                "Ingestion file upload proxy start: traceId={}, path={}, target={}, name={}, size={}, contentType={}, previewLimit={}, sheetIndex={}, sheetName={}, serviceHeaderSet={}",
+                traceId,
+                path,
+                uri,
+                originalName,
+                declaredSize,
+                contentType,
+                previewLimit,
+                sheetIndex,
+                sheetName,
+                StringUtils.hasText(properties.getServiceName())
+            );
+            byte[] fileBytes = readMultipartBytes(file, traceId, path, originalName, declaredSize, contentType);
             org.springframework.util.LinkedMultiValueMap<String, Object> body = new org.springframework.util.LinkedMultiValueMap<>();
-            body.add("file", new org.springframework.core.io.ByteArrayResource(file.getBytes()) {
+            body.add("file", new org.springframework.core.io.ByteArrayResource(fileBytes) {
                 @Override
                 public String getFilename() {
-                    return file.getOriginalFilename();
+                    return originalName;
                 }
             });
             if (previewLimit != null) {
@@ -328,15 +359,51 @@ public class IngestionServiceClient {
             if (responseBody instanceof Map<?, ?> map) {
                 ApiResponse<Object> unwrapped = unwrapApiResponseMap(map);
                 if (unwrapped != null) {
+                    LOG.info(
+                        "Ingestion file upload proxy response: traceId={}, path={}, httpStatus={}, apiStatus={}, message={}, dataType={}",
+                        traceId,
+                        path,
+                        response.getStatusCode().value(),
+                        unwrapped.getStatus(),
+                        unwrapped.getMessage(),
+                        unwrapped.getData() == null ? null : unwrapped.getData().getClass().getSimpleName()
+                    );
                     return unwrapped;
                 }
             }
+            LOG.info(
+                "Ingestion file upload proxy response: traceId={}, path={}, httpStatus={}, bodyType={}",
+                traceId,
+                path,
+                response.getStatusCode().value(),
+                responseBody == null ? null : responseBody.getClass().getSimpleName()
+            );
             return new ApiResponse<>(response.getStatusCode().value(), "ok", responseBody);
         } catch (HttpStatusCodeException ex) {
-            LOG.warn("Ingestion file upload failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            LOG.warn(
+                "Ingestion file upload proxy failed: traceId={}, path={}, target={}, status={}, body={}, name={}, size={}, contentType={}",
+                traceId,
+                path,
+                uri,
+                ex.getStatusCode().value(),
+                abbreviate(ex.getResponseBodyAsString(), 2000),
+                originalName,
+                declaredSize,
+                contentType
+            );
             return new ApiResponse<>(ex.getStatusCode().value(), "文件上传失败", null);
         } catch (Exception ex) {
-            LOG.warn("Ingestion file upload error: {}", ex.getMessage());
+            LOG.warn(
+                "Ingestion file upload proxy error: traceId={}, path={}, target={}, name={}, size={}, contentType={}, error={}",
+                traceId,
+                path,
+                uri,
+                originalName,
+                declaredSize,
+                contentType,
+                ex.getMessage(),
+                ex
+            );
             return new ApiResponse<>(500, "文件上传失败: " + ex.getMessage(), null);
         }
     }
@@ -708,5 +775,50 @@ public class IngestionServiceClient {
             );
         }
         return builder.build(true).toUri();
+    }
+
+    private byte[] readMultipartBytes(
+        org.springframework.web.multipart.MultipartFile file,
+        String traceId,
+        String path,
+        String originalName,
+        Long declaredSize,
+        String contentType
+    ) {
+        if (file == null) {
+            throw new IllegalArgumentException("上传文件不能为空");
+        }
+        try {
+            byte[] bytes = file.getBytes();
+            LOG.info(
+                "Ingestion file upload proxy read multipart: traceId={}, path={}, name={}, declaredSize={}, actualSize={}, contentType={}",
+                traceId,
+                path,
+                originalName,
+                declaredSize,
+                bytes.length,
+                contentType
+            );
+            return bytes;
+        } catch (Exception ex) {
+            LOG.warn(
+                "Ingestion file upload proxy read multipart failed: traceId={}, path={}, name={}, declaredSize={}, contentType={}, error={}",
+                traceId,
+                path,
+                originalName,
+                declaredSize,
+                contentType,
+                ex.getMessage(),
+                ex
+            );
+            throw new IllegalStateException("读取上传文件失败: " + ex.getMessage(), ex);
+        }
+    }
+
+    private String abbreviate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, Math.max(0, maxLength)) + "...";
     }
 }
