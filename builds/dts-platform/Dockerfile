@@ -76,7 +76,7 @@ RUN set -eux; \
     BUILD_POM=$(cat /workspace/.build-pom); \
     if [ "${ENABLE_MAVEN_BUILD}" = "true" ]; then \
       sed -i "s|__MIRROR_URL__|${MAVEN_MIRROR_URL}|g" /root/.m2/settings.xml; \
-      mvn -s /root/.m2/settings.xml -q -DskipTests -f "$BUILD_POM" -pl dts-platform -am package; \
+      mvn -s /root/.m2/settings.xml -q -DskipTests -f "$BUILD_POM" -pl dts-platform -am clean package; \
     else \
       # Offline/locked-down fallback: use prebuilt jar from builds/
       echo "Skipping Maven build; using prebuilt jar from /workspace/builds/dts-platform"; \

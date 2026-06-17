@@ -643,7 +643,7 @@ build_maven_module() {
 MAVEN_SETTINGS_EOF
       sed -i "s|__MAVEN_MIRROR_URL__|${MAVEN_MIRROR_URL}|g" "$MAVEN_SETTINGS_FILE"
     fi
-    mvn -B -e -DskipTests -Dmaven.repo.local="${MAVEN_REPO_LOCAL}" -s "$MAVEN_SETTINGS_FILE" -f "${REPO_ROOT}/source/pom.xml" -pl "$module" -am package
+    mvn -B -e -DskipTests -Dmaven.repo.local="${MAVEN_REPO_LOCAL}" -s "$MAVEN_SETTINGS_FILE" -f "${REPO_ROOT}/source/pom.xml" -pl "$module" -am clean package
   else
     echo "[dts-build] Building ${module} jar via ${MAVEN_IMAGE}"
     local security_opts=()
@@ -702,7 +702,7 @@ SETTINGS_EOF
     fi
 
     if [[ -n "$MAVEN_DEBUG" ]]; then
-      echo "[dts-build] DEBUG: mvn args: ${maven_args[*]} package"
+      echo "[dts-build] DEBUG: mvn args: ${maven_args[*]} clean package"
       echo "[dts-build] DEBUG: security_opts: ${security_opts[*]+"${security_opts[*]}"}"
     fi
     local container_path="${MAVEN_CONTAINER_JAVA_HOME}/bin:/usr/share/maven/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -714,7 +714,7 @@ SETTINGS_EOF
     if [[ -n "${use_bash_maven_runner}" ]]; then
       local quoted_maven_args=()
       local arg
-      for arg in "${maven_args[@]}" package; do
+      for arg in "${maven_args[@]}" clean package; do
         quoted_maven_args+=("$(printf '%q' "${arg}")")
       done
       local bash_cmd="export JAVA_HOME=${MAVEN_CONTAINER_JAVA_HOME}; export PATH=${container_path}; exec /usr/bin/mvn ${quoted_maven_args[*]}"
@@ -737,7 +737,7 @@ SETTINGS_EOF
         -v "${MAVEN_SETTINGS_DIR}:${MAVEN_SETTINGS_DIR}" \
         -w /workspace \
         "$MAVEN_IMAGE" \
-        mvn "${maven_args[@]}" package
+        mvn "${maven_args[@]}" clean package
     fi
   fi
 
