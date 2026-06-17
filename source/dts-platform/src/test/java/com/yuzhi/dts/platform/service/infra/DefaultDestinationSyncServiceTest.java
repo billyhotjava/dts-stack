@@ -68,6 +68,31 @@ class DefaultDestinationSyncServiceTest {
     }
 
     @Test
+    void checkDefaultDestinationStatus_reusesExistingPlatformSourceWhenOnlyAliasDiffers() {
+        UUID platformSourceId = UUID.randomUUID();
+        AdminInfraClient.AdminDataLakeConfig adminLake = adminLake(
+            "数仓 (biadmin)",
+            "jdbc:postgresql://dts-pg:5432/biadmin",
+            "postgresqlwriter"
+        );
+        InfraDataSource platformSource = source(
+            platformSourceId,
+            "现场手工湖仓",
+            "jdbc:postgresql://dts-pg:5432/biadmin",
+            "POSTGRESQL"
+        );
+
+        when(adminInfraClient.fetchDefaultDataLake()).thenReturn(Optional.of(adminLake));
+        when(dataSourceRepository.findByStatusIgnoreCase("ACTIVE")).thenReturn(List.of(platformSource));
+
+        DefaultDestinationSyncService.DefaultDestinationStatus status = service.checkDefaultDestinationStatus();
+
+        assertThat(status.available()).isTrue();
+        assertThat(status.dataSourceId()).isEqualTo(platformSourceId.toString());
+        org.mockito.Mockito.verify(dataSourceRepository, org.mockito.Mockito.never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void checkDefaultDestinationStatus_createsPlatformDataSourceWhenAdminDefaultLakeHasNoLocalMatch() {
         UUID adminSourceId = UUID.randomUUID();
         UUID platformSourceId = UUID.randomUUID();
