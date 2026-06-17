@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.infra;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
@@ -9,6 +10,7 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -77,6 +79,35 @@ class DataSourceSelectionServiceTest {
         assertThat(response.message()).contains("未识别默认数据湖数据源");
         assertThat(response.items()).hasSize(1);
         assertThat(response.items().get(0).id()).isEqualTo(projectLake.getId());
+        assertThat(response.items().get(0).recommended()).isTrue();
+    }
+
+    @Test
+    void listSelectionsSyncsDefaultDestinationBeforeReadingSources() {
+        UUID platformSourceId = UUID.randomUUID();
+        InfraDataSource syncedLake = source(platformSourceId, "数仓 (biadmin)", "POSTGRESQL", "jdbc:postgresql://dts-pg:5432/biadmin");
+        when(defaultDestinationSyncService.checkDefaultDestinationStatus())
+            .thenReturn(new DefaultDestinationSyncService.DefaultDestinationStatus(
+                true,
+                true,
+                true,
+                "数仓 (biadmin)",
+                "postgresqlwriter",
+                null,
+                platformSourceId.toString()
+            ));
+        when(dataSourceRepository.findByStatusIgnoreCase("ACTIVE")).thenReturn(List.of(syncedLake));
+
+        DataSourceSelectionService.DataSourceSelectionResponse response = new DataSourceSelectionService(
+            dataSourceRepository,
+            defaultDestinationSyncService
+        ).listSelections("DBT_TARGET", null);
+
+        InOrder order = inOrder(defaultDestinationSyncService, dataSourceRepository);
+        order.verify(defaultDestinationSyncService).checkDefaultDestinationStatus();
+        order.verify(dataSourceRepository).findByStatusIgnoreCase("ACTIVE");
+        assertThat(response.defaultDataSourceId()).isEqualTo(platformSourceId);
+        assertThat(response.items()).hasSize(1);
         assertThat(response.items().get(0).recommended()).isTrue();
     }
 

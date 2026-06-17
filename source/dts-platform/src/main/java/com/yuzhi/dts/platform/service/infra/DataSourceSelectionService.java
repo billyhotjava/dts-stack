@@ -61,11 +61,11 @@ public class DataSourceSelectionService {
 
     public DataSourceSelectionResponse listSelections(String capability, String activeDeptHeader) {
         String normalizedCapability = normalizeCapability(capability);
+        DefaultDestinationSyncService.DefaultDestinationStatus defaultStatus = resolveDefaultStatus().orElse(null);
         List<InfraDataSource> sources = loadVisibleSources(activeDeptHeader)
             .stream()
             .filter(source -> supportsCapability(source, normalizedCapability))
             .toList();
-        DefaultDestinationSyncService.DefaultDestinationStatus defaultStatus = resolveDefaultStatus().orElse(null);
         UUID adminDefaultId = parseUuid(defaultStatus != null ? defaultStatus.dataSourceId() : null);
         boolean hasAdminDefault = adminDefaultId != null && sources.stream().anyMatch(source -> adminDefaultId.equals(source.getId()));
         UUID selectedDefaultId = hasAdminDefault ? adminDefaultId : (sources.size() == 1 ? sources.get(0).getId() : null);
