@@ -304,6 +304,7 @@ public class InfraManagementService {
         ensureNotInceptorManaged(request.type());
         InfraDataSource entity = new InfraDataSource();
         validateRequest(request, null);
+        ensureUniqueConnectionSignature(request, null);
         applyDataSource(entity, request, username);
         ensureNotSystemManaged(entity.getType(), activeDeptHeader);
         applyOwnerDept(entity, request);
@@ -393,6 +394,7 @@ public class InfraManagementService {
         ensureNotSystemManaged(entity.getType(), activeDeptHeader);
         ensureDeptScopeWritable(entity, activeDeptHeader);
         validateRequest(request, entity);
+        ensureUniqueConnectionSignature(request, id);
         String beforeType = entity.getType();
         String beforeJdbcUrl = entity.getJdbcUrl();
         String beforeUsername = entity.getUsername();
@@ -1094,6 +1096,50 @@ public class InfraManagementService {
         }
         String type = normalizeType(request.type());
         return JDBC_TYPES.contains(type);
+    }
+
+    private void ensureUniqueConnectionSignature(DataSourceRequest request, UUID currentId) {
+        if (!isJdbcRequest(request)) {
+            return;
+        }
+        String requestedConnector = normalizeConnectorKey(resolveConnectorKey(request));
+        String requestedJdbcUrl = normalizeConnectionToken(request.jdbcUrl());
+        String requestedUsername = normalizeConnectionToken(request.username());
+        if (
+            !StringUtils.hasText(requestedConnector) ||
+            !StringUtils.hasText(requestedJdbcUrl) ||
+            !StringUtils.hasText(requestedUsername)
+        ) {
+            return;
+        }
+        List<InfraDataSource> existingSources = dataSourceRepository.findAll();
+        if (existingSources == null || existingSources.isEmpty()) {
+            return;
+        }
+        for (InfraDataSource source : existingSources) {
+            if (source == null || Objects.equals(source.getId(), currentId)) {
+                continue;
+            }
+            String existingJdbcUrl = normalizeConnectionToken(source.getJdbcUrl());
+            String existingUsername = normalizeConnectionToken(source.getUsername());
+            if (!StringUtils.hasText(existingJdbcUrl) || !StringUtils.hasText(existingUsername)) {
+                continue;
+            }
+            String existingConnector = normalizeConnectorKey(resolveConnectorKey(source, readProps(source.getProps())));
+            if (
+                requestedConnector.equals(existingConnector) &&
+                requestedJdbcUrl.equals(existingJdbcUrl) &&
+                requestedUsername.equals(existingUsername)
+            ) {
+                String label = StringUtils.hasText(source.getName()) ? source.getName() : source.getId().toString();
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "数据源连接已存在：" + label);
+            }
+        }
+    }
+
+    private String normalizeConnectionToken(Object value) {
+        String text = normalizeText(value);
+        return text == null ? null : text.toLowerCase(Locale.ROOT);
     }
 
     private String extractReaderType(Map<String, Object> props) {

@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.infra;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -252,6 +253,87 @@ class InfraManagementServiceTest {
         assertThat(impact.dataSource().ownerDept()).isNull();
     }
 
+    @Test
+    void createDataSource_rejectsDuplicateJdbcConnectionSignature() {
+        InfraDataSource existing = new InfraDataSource();
+        existing.setId(UUID.randomUUID());
+        existing.setName("数仓 (biadmin)");
+        existing.setType("POSTGRESQL");
+        existing.setConnectorKey("postgresql");
+        existing.setJdbcUrl("jdbc:postgresql://dts-pg:5432/biadmin");
+        existing.setUsername("biadmin");
+        existing.setStatus("ACTIVE");
+
+        when(connectorRepository.findByConnectorKeyIgnoreCase("postgresql")).thenReturn(Optional.of(postgresConnector()));
+        when(dataSourceRepository.findAll()).thenReturn(List.of(existing));
+
+        assertThatThrownBy(() ->
+                service.createDataSource(
+                    new DataSourceRequest(
+                        "默认湖仓副本",
+                        "POSTGRESQL",
+                        "postgresql",
+                        "jdbc:postgresql://dts-pg:5432/biadmin",
+                        "biadmin",
+                        "重复连接",
+                        null,
+                        Map.of(),
+                        Map.of("password", "secret")
+                    ),
+                    "operator",
+                    null
+                )
+            )
+            .hasMessageContaining("数据源连接已存在");
+    }
+
+    @Test
+    void updateDataSource_rejectsChangingToDuplicateJdbcConnectionSignature() {
+        UUID currentId = UUID.randomUUID();
+        UUID existingId = UUID.randomUUID();
+        InfraDataSource current = new InfraDataSource();
+        current.setId(currentId);
+        current.setName("报表库");
+        current.setType("POSTGRESQL");
+        current.setConnectorKey("postgresql");
+        current.setJdbcUrl("jdbc:postgresql://report-db:5432/report");
+        current.setUsername("report");
+        current.setStatus("ACTIVE");
+
+        InfraDataSource existing = new InfraDataSource();
+        existing.setId(existingId);
+        existing.setName("数仓 (biadmin)");
+        existing.setType("POSTGRESQL");
+        existing.setConnectorKey("postgresql");
+        existing.setJdbcUrl("jdbc:postgresql://dts-pg:5432/biadmin");
+        existing.setUsername("biadmin");
+        existing.setStatus("ACTIVE");
+
+        when(dataSourceRepository.findById(currentId)).thenReturn(Optional.of(current));
+        when(connectorRepository.findByConnectorKeyIgnoreCase("postgresql")).thenReturn(Optional.of(postgresConnector()));
+        when(dataSourceRepository.findAll()).thenReturn(List.of(current, existing));
+
+        assertThatThrownBy(() ->
+                service.updateDataSourceWithImpact(
+                    currentId,
+                    new DataSourceRequest(
+                        "报表库",
+                        "POSTGRESQL",
+                        "postgresql",
+                        "jdbc:postgresql://dts-pg:5432/biadmin",
+                        "biadmin",
+                        "重复连接",
+                        null,
+                        Map.of(),
+                        Map.of("password", "secret")
+                    ),
+                    "operator",
+                    null
+                )
+            )
+            .hasMessageContaining("数据源连接已存在");
+    }
+
     private AdminInfraClient.AdminDataLakeConfig adminLake(UUID id) {
         AdminInfraClient.AdminDataLakeConfig lake = new AdminInfraClient.AdminDataLakeConfig();
         setField(lake, "id", id);
@@ -274,6 +356,15 @@ class InfraManagementServiceTest {
         } catch (ReflectiveOperationException ex) {
             throw new IllegalStateException("Failed to set field " + name, ex);
         }
+    }
+
+    private InfraConnector postgresConnector() {
+        InfraConnector connector = new InfraConnector();
+        connector.setConnectorKey("postgresql");
+        connector.setName("PostgreSQL");
+        connector.setCategory("database");
+        connector.setStatus("ACTIVE");
+        return connector;
     }
 
     @Test
