@@ -787,28 +787,28 @@
 - 绞杀者：无 meta 的存量列/资产回退（catalog 行为字节不变）。
 - grain 倾向复用平台 `semantic_model.grain`（Sprint-41 已有），dbt meta 作来源同步。
 
-## Sprint-44: 语义层整合 Phase 3 — 语义工作台前端整合 (202606)
-**状态**: READY
-**类型**: Frontend / Implementation（dts-platform-webapp 原生语义建模页）
-**目标**: 把整合的语义建模能力收敛到平台原生语义页；本 sprint 先做 F1 受控建模治理前端呈现——让 SP-1 后端治理（governanceMode/受控 DSL/分层闸）在用户页面可见可用可理解。
+## Sprint-44: 语义层整合 Phase 3 — 平台原生语义 UI 重建与治理呈现 (202606)
+**状态**: READY（**已按现状勘察修订**：平台原生语义页是跳转壳，需先重建）
+**类型**: Frontend / Implementation（dts-platform-webapp 原生语义建模 UI）
+**目标**: 在 /api/semantic 上重建平台原生语义建模 UI（替换刻意的跳转壳），成为唯一权威 UI 并承载 SP-1 受控治理。
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
+| F0-原生语义建模页骨架与 CRUD（替换跳转壳，消费 /api/semantic） | P0 | 4 | READY |
 | F1-受控建模治理前端呈现（governanceMode + 受控 DSL 提示 + 分层诊断） | P0 | 4 | READY |
 | F2-React Flow 可视化工作台亮点移植 | P1 | 4 | READY |
-| F3-菜单/路由收敛至原生页（配合 SP-4 退役 iframe） | P1 | 3 | READY |
+| F3-菜单/路由收敛 + iframe/跳转壳退役（配合 SP-4） | P1 | 3 | READY |
 
-**统计**: READY=11, IN_PROGRESS=0, DONE=0, BLOCKED=0
-**执行序**: F1（治理呈现，独立）→ F2（图形工作台，依赖 SP-2 列族；复用 analytics 已有 React Flow 画布而非再造）→ F3（路由收敛，依赖 F2 平价 + SP-4 退役 dts-metrics）。
-**背景**: SP-1（Sprint-41）后端受控治理只动后端，前端尚无 governanceMode 控件/422-400 友好提示/分层诊断展示。现状菜单 `/modeling/semantic-center` 仍指向 iframe 嵌入的待退役 dts-metrics-webapp；调 `/api/semantic` 的平台原生页才是权威 UI。本 sprint 让权威 UI 承载受控治理。
-**F1 细化**: T01 governanceMode 前端贯通+开关 / T02 受控派生指标违规友好提示(422 unsafe_expression) / T03 ELT 分层闸诊断展示(400 分层码) / T04 视觉区分+文案+前端契约测试。
-**依赖**: 上游 Sprint-41（后端 DONE）；F1 不依赖 SP-2；字段选择列族联动属 F2 + Sprint-43 SP-2。
-**设计文档**: `worklog/v2.2.3/sprint-44-202606/README.md`
+**统计**: READY=15, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**现状修正（方案 A 重写）**: 勘察发现平台 `Semantic*Page` 全是 5 行跳转壳 → `window.location.replace("/metrics/semantic/*")`（跳 dts-metrics-webapp）；`semanticModelingApi.ts`(/api/semantic 客户端)=死代码；提交 `1648fda0d fix: isolate metrics frontend boundary` 表明语义前端**被有意隔离进 dts-metrics**。故"平台权威"要落地必须**先重建原生 UI（新增 F0）**，治理/工作台/收敛再叠上。此举逆转 `1648fda0d` 的隔离决定，是整合代价。
+**执行序**: **F0（重建原生页，前置）** → F1（治理呈现）→ F2（图形工作台，复用 analytics React Flow + SP-2 列族）→ F3（路由收敛，配合 SP-4）。
+**依赖**: 上游 Sprint-41（后端 /api/semantic 34 端点 DONE）；F1/F2/F3 均依赖 F0；F2 另依赖 SP-2 列族；F3 依赖 SP-4 退役节奏。
+**设计文档**: `worklog/v2.2.3/sprint-44-202606/README.md`（含现状修正）
 **集成测试**: `worklog/v2.2.3/sprint-44-202606/it/README.md`
 **关键决策**:
-- 落平台原生页（`src/pages/modeling/`），不动 dts-metrics iframe（SP-4 退役）。
-- 只做前端呈现，不改后端 `/api/semantic`（Sprint-41 已落）。
-- 绞杀者：permissive 模型前端行为不变。
+- 重建平台原生语义 UI（消费 /api/semantic），替换刻意的跳转壳；灰度 flag 保回退。
+- 不改后端 /api/semantic（SP-1 已落）。
+- 不在 F0 重建完成前切路由（F3）；绞杀者：permissive 行为不变。
 
 ## Sprint-45: 数据中台 UI 产品化整改大 Sprint (202606)
 **状态**: DONE
