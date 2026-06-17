@@ -16,6 +16,8 @@
 
 `AIRFLOW_FERNET_KEY` 不是上传预览接口的直接依赖。它是 Airflow 自身配置，主要影响 Airflow 元数据库里的 Connection/Variable 加解密和 DAG 运行时配置读取，不会直接导致 `/api/ingestion/files/upload-and-parse` 上传预览接口 400。
 
+日志补丁里新增了 `X-DTS-Upload-Trace` 链路标识。页面上传时，`dts-platform` 会生成 `traceId` 并传给 `dts-ingestion`；现场可以用同一个 `traceId` 同时检索 platform 和 ingestion 日志。直连 ingestion 的 curl 也可以手工传这个请求头。
+
 ## 1. 记录 Docker 和 Compose 版本
 
 ```bash
