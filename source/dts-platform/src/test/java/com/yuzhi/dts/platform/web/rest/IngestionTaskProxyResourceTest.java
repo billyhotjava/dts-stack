@@ -63,10 +63,12 @@ class IngestionTaskProxyResourceTest {
 
     @Test
     void createTaskForwardsPayload() throws Exception {
+        String platformDataSourceId = "11111111-2222-3333-4444-555555555555";
         DefaultDestinationSnapshot snapshot = new DefaultDestinationSnapshot(
             "rdbmswriter",
             "lake",
-            Map.of("connection", java.util.List.of(Map.of("jdbcUrl", java.util.List.of("jdbc:pg"))))
+            Map.of("connection", java.util.List.of(Map.of("jdbcUrl", java.util.List.of("jdbc:pg")))),
+            platformDataSourceId
         );
         when(destinationSyncService.ensureDefaultDestination()).thenReturn(snapshot);
         when(ingestionClient.createIngestionTask(anyMap()))
@@ -87,6 +89,48 @@ class IngestionTaskProxyResourceTest {
         assertThat(destination.get("definitionId")).isEqualTo("rdbmswriter");
         Map<String, Object> config = (Map<String, Object>) destination.get("config");
         assertThat(((java.util.List<?>) config.get("table")).get(0)).isEqualTo("t1");
+        assertThat(config.get("targetDataSourceId")).isEqualTo(platformDataSourceId);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void createTaskUsesSelectedTargetDataSourceWhenProvided() throws Exception {
+        String targetDataSourceId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+        DefaultDestinationSnapshot snapshot = new DefaultDestinationSnapshot(
+            "postgresqlwriter",
+            "经营分析湖仓",
+            Map.of("jdbcUrl", "jdbc:postgresql://analytics-pg:5432/ads", "username", "biadmin"),
+            targetDataSourceId
+        );
+        when(destinationSyncService.ensureDestination(targetDataSourceId)).thenReturn(snapshot);
+        when(ingestionClient.createIngestionTask(anyMap()))
+            .thenReturn(new ApiResponse<>(200, "ok", Map.of("task", "demo")));
+
+        mockMvc.perform(post("/api/ingestion/tasks")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "name":"task",
+                      "destination":{
+                        "usePlatformDefault":true,
+                        "config":{
+                          "targetDataSourceId":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                          "connection":[{"table":["ods_orders"]}]
+                        }
+                      }
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200));
+
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(ingestionClient).createIngestionTask(captor.capture());
+        Map<String, Object> destination = (Map<String, Object>) captor.getValue().get("destination");
+        Map<String, Object> config = (Map<String, Object>) destination.get("config");
+        assertThat(destination.get("definitionId")).isEqualTo("postgresqlwriter");
+        assertThat(config.get("targetDataSourceId")).isEqualTo(targetDataSourceId);
+        assertThat(config.get("jdbcUrl")).isEqualTo("jdbc:postgresql://analytics-pg:5432/ads");
+        assertThat(config.get("username")).isEqualTo("biadmin");
     }
 
     @Test

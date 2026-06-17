@@ -123,6 +123,39 @@ class AddaxJobServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void shouldKeepTargetDataSourceMetadataOutOfWriterParameters() throws Exception {
+        Map<String, Object> readerConfig = Map.of(
+            "connection", Map.of("jdbcUrl", "jdbc:mysql://mysql:3306/source", "table", java.util.List.of("orders")),
+            "username", "root",
+            "password", "secret"
+        );
+        Map<String, Object> writerConfig = new java.util.LinkedHashMap<>();
+        writerConfig.put("targetDataSourceId", "11111111-2222-3333-4444-555555555555");
+        writerConfig.put("destinationDataSourceId", "22222222-3333-4444-5555-666666666666");
+        writerConfig.put("dataSourceId", "33333333-4444-5555-6666-777777777777");
+        writerConfig.put("connection", Map.of("jdbcUrl", "jdbc:postgresql://pg:5432/biadmin", "table", java.util.List.of("orders")));
+        writerConfig.put("username", "biadmin");
+        writerConfig.put("password", "secret");
+
+        AddaxJobService.AddaxJobResult result = addaxJobService.createJob(
+            "metadata-strip",
+            "rdbmsreader",
+            readerConfig,
+            "rdbmswriter",
+            writerConfig,
+            null
+        );
+
+        Map<String, Object> job = (Map<String, Object>) result.jobConfig().get("job");
+        Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
+        Map<String, Object> writer = (Map<String, Object>) content.get("writer");
+        Map<String, Object> parameter = (Map<String, Object>) writer.get("parameter");
+        assertThat(parameter).doesNotContainKeys("targetDataSourceId", "destinationDataSourceId", "dataSourceId");
+        assertThat(parameter.get("username")).isEqualTo("biadmin");
+    }
+
+    @Test
     void shouldCreateJobFromIngestionTask() throws Exception {
         // Given
         IngestionTask task = new IngestionTask();

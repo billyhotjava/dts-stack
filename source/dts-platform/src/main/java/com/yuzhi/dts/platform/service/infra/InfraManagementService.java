@@ -394,7 +394,7 @@ public class InfraManagementService {
         ensureNotSystemManaged(entity.getType(), activeDeptHeader);
         ensureDeptScopeWritable(entity, activeDeptHeader);
         validateRequest(request, entity);
-        ensureUniqueConnectionSignature(request, id);
+        ensureUniqueConnectionSignature(request, entity);
         String beforeType = entity.getType();
         String beforeJdbcUrl = entity.getJdbcUrl();
         String beforeUsername = entity.getUsername();
@@ -1098,20 +1098,23 @@ public class InfraManagementService {
         return JDBC_TYPES.contains(type);
     }
 
-    private void ensureUniqueConnectionSignature(DataSourceRequest request, UUID currentId) {
+    private void ensureUniqueConnectionSignature(DataSourceRequest request, InfraDataSource current) {
         if (!isJdbcRequest(request)) {
             return;
         }
-        String requestedConnector = normalizeConnectorKey(resolveConnectorKey(request));
         String requestedJdbcUrl = normalizeConnectionToken(request.jdbcUrl());
         String requestedUsername = normalizeConnectionToken(request.username());
+        if (!StringUtils.hasText(requestedJdbcUrl) || !StringUtils.hasText(requestedUsername)) {
+            return;
+        }
         if (
-            !StringUtils.hasText(requestedConnector) ||
-            !StringUtils.hasText(requestedJdbcUrl) ||
-            !StringUtils.hasText(requestedUsername)
+            current != null &&
+            requestedJdbcUrl.equals(normalizeConnectionToken(current.getJdbcUrl())) &&
+            requestedUsername.equals(normalizeConnectionToken(current.getUsername()))
         ) {
             return;
         }
+        UUID currentId = current == null ? null : current.getId();
         List<InfraDataSource> existingSources = dataSourceRepository.findAll();
         if (existingSources == null || existingSources.isEmpty()) {
             return;
@@ -1125,12 +1128,7 @@ public class InfraManagementService {
             if (!StringUtils.hasText(existingJdbcUrl) || !StringUtils.hasText(existingUsername)) {
                 continue;
             }
-            String existingConnector = normalizeConnectorKey(resolveConnectorKey(source, readProps(source.getProps())));
-            if (
-                requestedConnector.equals(existingConnector) &&
-                requestedJdbcUrl.equals(existingJdbcUrl) &&
-                requestedUsername.equals(existingUsername)
-            ) {
+            if (requestedJdbcUrl.equals(existingJdbcUrl) && requestedUsername.equals(existingUsername)) {
                 String label = StringUtils.hasText(source.getName()) ? source.getName() : source.getId().toString();
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "数据源连接已存在：" + label);
             }

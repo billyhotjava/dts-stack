@@ -288,6 +288,45 @@ class InfraManagementServiceTest {
     }
 
     @Test
+    void createDataSource_rejectsDuplicateJdbcConnectionAcrossGenericAndSpecificConnectors() {
+        InfraDataSource existing = new InfraDataSource();
+        existing.setId(UUID.randomUUID());
+        existing.setName("PostgreSQL 湖仓");
+        existing.setType("POSTGRESQL");
+        existing.setConnectorKey("postgresql");
+        existing.setJdbcUrl("jdbc:postgresql://dts-pg:5432/biadmin");
+        existing.setUsername("biadmin");
+        existing.setStatus("ACTIVE");
+
+        InfraConnector connector = new InfraConnector();
+        connector.setConnectorKey("jdbc");
+        connector.setName("通用 JDBC");
+        connector.setCategory("database");
+        connector.setStatus("ACTIVE");
+        when(connectorRepository.findByConnectorKeyIgnoreCase("jdbc")).thenReturn(Optional.of(connector));
+        when(dataSourceRepository.findAll()).thenReturn(List.of(existing));
+
+        assertThatThrownBy(() ->
+                service.createDataSource(
+                    new DataSourceRequest(
+                        "通用 JDBC 湖仓",
+                        "JDBC",
+                        "jdbc",
+                        "jdbc:postgresql://dts-pg:5432/biadmin",
+                        "biadmin",
+                        "重复连接",
+                        null,
+                        Map.of(),
+                        Map.of("password", "secret")
+                    ),
+                    "operator",
+                    null
+                )
+            )
+            .hasMessageContaining("数据源连接已存在");
+    }
+
+    @Test
     void updateDataSource_rejectsChangingToDuplicateJdbcConnectionSignature() {
         UUID currentId = UUID.randomUUID();
         UUID existingId = UUID.randomUUID();

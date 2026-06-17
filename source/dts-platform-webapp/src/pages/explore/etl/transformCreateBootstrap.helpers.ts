@@ -1,5 +1,5 @@
 import type { DefaultDestinationStatus, IngestionConnectorCapabilityDTO, IngestionTaskTemplateDTO } from "@/api/ingestion";
-import type { InfraDataSource } from "@/api/services/dataSourcesService";
+import type { DataSourceSelectionResponse, InfraDataSource } from "@/api/services/dataSourcesService";
 
 type SqlModelOption = { id?: string; name?: string; alias?: string };
 
@@ -8,6 +8,7 @@ export type TransformCreateBootstrapLoaders = {
 	loadConnectorCapabilities: () => Promise<IngestionConnectorCapabilityDTO[] | unknown>;
 	loadTaskTemplates: () => Promise<IngestionTaskTemplateDTO[] | unknown>;
 	loadDefaultDestinationStatus: () => Promise<DefaultDestinationStatus>;
+	loadTargetDataSourceSelections?: () => Promise<DataSourceSelectionResponse | unknown>;
 	loadSqlModels: () => Promise<SqlModelOption[] | unknown>;
 };
 
@@ -20,6 +21,10 @@ export type TransformCreateBootstrapResult = {
 	selectedTemplateId: string | undefined;
 	defaultDestinationStatus: DefaultDestinationStatus | null;
 	defaultDestinationError: string;
+	targetDataSources: InfraDataSource[];
+	targetDataSourceDefaultId: string | undefined;
+	targetDataSourcesError: string;
+	targetDataSourceMessage: string;
 	sqlModels: SqlModelOption[];
 	sqlModelsError: string;
 };
@@ -35,12 +40,13 @@ export async function loadTransformCreateBootstrap(
 	loaders: TransformCreateBootstrapLoaders,
 	currentSelectedTemplateId?: string
 ): Promise<TransformCreateBootstrapResult> {
-	const [dataSourcesResult, capabilitiesResult, templatesResult, destinationResult, sqlModelsResult] =
+	const [dataSourcesResult, capabilitiesResult, templatesResult, destinationResult, targetDataSourcesResult, sqlModelsResult] =
 		await Promise.allSettled([
 			loaders.loadDataSources(),
 			loaders.loadConnectorCapabilities(),
 			loaders.loadTaskTemplates(),
 			loaders.loadDefaultDestinationStatus(),
+			loaders.loadTargetDataSourceSelections ? loaders.loadTargetDataSourceSelections() : Promise.resolve(null),
 			loaders.loadSqlModels(),
 		]);
 
@@ -57,6 +63,14 @@ export async function loadTransformCreateBootstrap(
 	const selectedTemplateId =
 		currentSelectedTemplateId || (taskTemplates.length ? String(taskTemplates[0].id) : undefined);
 	const defaultDestinationStatus = destinationResult.status === "fulfilled" ? destinationResult.value : null;
+	const targetSelection =
+		targetDataSourcesResult.status === "fulfilled" &&
+		targetDataSourcesResult.value &&
+		typeof targetDataSourcesResult.value === "object" &&
+		Array.isArray((targetDataSourcesResult.value as DataSourceSelectionResponse).items)
+			? (targetDataSourcesResult.value as DataSourceSelectionResponse)
+			: null;
+	const targetDataSources = targetSelection?.items || [];
 	const sqlModels = sqlModelsResult.status === "fulfilled" && Array.isArray(sqlModelsResult.value)
 		? sqlModelsResult.value
 		: [];
@@ -70,11 +84,16 @@ export async function loadTransformCreateBootstrap(
 		taskTemplates,
 		selectedTemplateId,
 		defaultDestinationStatus,
-		defaultDestinationError:
-			destinationResult.status === "rejected"
-				? toMessage(destinationResult.reason, "无法获取默认数据湖配置")
-				: "",
-		sqlModels,
+			defaultDestinationError:
+				destinationResult.status === "rejected"
+					? toMessage(destinationResult.reason, "无法获取默认数据湖配置")
+					: "",
+			targetDataSources,
+			targetDataSourceDefaultId: targetSelection?.defaultDataSourceId,
+			targetDataSourcesError:
+				targetDataSourcesResult.status === "rejected" ? toMessage(targetDataSourcesResult.reason, "目标湖仓列表加载失败") : "",
+			targetDataSourceMessage: targetSelection?.message || "",
+			sqlModels,
 		sqlModelsError:
 			sqlModelsResult.status === "rejected" ? toMessage(sqlModelsResult.reason, "模型列表加载失败") : "",
 	};

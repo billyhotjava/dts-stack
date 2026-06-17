@@ -16,6 +16,7 @@ import {
 } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ApiConnectionTestResultDTO, TableInfo } from "@/api/ingestion";
+import type { InfraDataSource } from "@/api/services/dataSourcesService";
 import type { IngestionFormContext } from "./types";
 import { normalizeText } from "@/utils/textUtils";
 import { isApiDataSource, normalizeType } from "../ingestionFormHelpers";
@@ -88,10 +89,13 @@ export type DbUnifiedStepProps = Pick<
 	| "setSourceCategory"
 	| "selectedTableKeys"
 	| "setSelectedTableKeys"
-	| "selectedDataSource"
-	| "dataSources"
-> & {
-	onSourceCategoryChange: (next: string) => void;
+		| "selectedDataSource"
+		| "dataSources"
+	> & {
+		targetDataSources: InfraDataSource[];
+		loadingTargetDataSources: boolean;
+		targetDataSourceMessage: string;
+		onSourceCategoryChange: (next: string) => void;
 	activeCapabilitySet: Set<string>;
 	supportsIncremental: boolean;
 	supportsCdc: boolean;
@@ -126,8 +130,11 @@ export function DbUnifiedStep({
 	onSourceCategoryChange,
 	selectedTableKeys,
 	setSelectedTableKeys,
-	selectedDataSource: _selectedDataSource,
-	dataSources,
+		selectedDataSource: _selectedDataSource,
+		dataSources,
+		targetDataSources,
+		loadingTargetDataSources,
+		targetDataSourceMessage,
 	activeCapabilitySet,
 	supportsIncremental,
 	supportsCdc,
@@ -156,7 +163,7 @@ export function DbUnifiedStep({
 	const apiResourcePath = Form.useWatch("apiResourcePath", form);
 	const [tablePageSize, setTablePageSize] = useState(10);
 	const apiFlow = sourceCategory === "api";
-	const dataSourceOptions = useMemo(
+		const dataSourceOptions = useMemo(
 		() =>
 			dataSources
 				.filter((item) => {
@@ -168,8 +175,16 @@ export function DbUnifiedStep({
 					label: `${item.name} (${item.type || "unknown"})`,
 					value: item.id,
 				})),
-		[dataSources, sourceCategory]
-	);
+			[dataSources, sourceCategory]
+		);
+		const targetDataSourceOptions = useMemo(
+			() =>
+				targetDataSources.map((item) => ({
+					label: `${item.name}${item.recommended ? "（推荐）" : ""} (${item.type || "unknown"})`,
+					value: item.id,
+				})),
+			[targetDataSources]
+		);
 
 	return (
 		<>
@@ -417,14 +432,30 @@ export function DbUnifiedStep({
 						</>
 					)}
 				</>
-			)}
-			<div className="grid gap-4 md:grid-cols-2">
-				<Form.Item name="syncPrefix" label="目标表前缀" extra="用于自动生成 ODS 表名（如：ods_erp_ + 源表名）。若 Writer 已指定目标表，可留空。">
-					<Input placeholder="从数据源自动推算，可手动修改" />
-				</Form.Item>
-			</div>
+				)}
+				<div className="grid gap-4 md:grid-cols-2">
+					<Form.Item
+						name="targetDataSourceId"
+						label="目标数据源"
+						rules={[{ required: true, message: "请选择目标数据源" }]}
+					>
+						<Select
+							loading={loadingTargetDataSources}
+							placeholder={loadingTargetDataSources ? "加载中..." : "请选择目标数据源"}
+							options={targetDataSourceOptions}
+							showSearch
+							optionFilterProp="label"
+						/>
+					</Form.Item>
+					<Form.Item name="syncPrefix" label="目标表前缀" extra="用于自动生成 ODS 表名（如：ods_erp_ + 源表名）。若 Writer 已指定目标表，可留空。">
+						<Input placeholder="从数据源自动推算，可手动修改" />
+					</Form.Item>
+				</div>
+				{targetDataSourceMessage ? (
+					<Alert type="warning" showIcon message={targetDataSourceMessage} className="mb-4" />
+				) : null}
 
-			{/* ─── 源端表发现 ─── */}
+				{/* ─── 源端表发现 ─── */}
 			{!apiFlow ? (
 				<>
 				<Divider orientation="left">源端表发现</Divider>

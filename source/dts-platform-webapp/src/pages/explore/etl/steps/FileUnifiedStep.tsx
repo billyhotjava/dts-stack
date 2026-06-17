@@ -22,6 +22,7 @@ import { Upload } from "@/components/upload";
 import { toast } from "sonner";
 import type { FormInstance } from "antd/es/form";
 import type { FileUploadResult } from "@/api/ingestion";
+import type { InfraDataSource } from "@/api/services/dataSourcesService";
 import type { ColumnInfo } from "@/api/sql-workbench";
 import type { SyncModeOption, ExtraColumnDef } from "./types";
 import { applyPastedOdsFieldsToFileColumns, parsePastedOdsFields } from "../fileOdsPasteMapping.helpers";
@@ -44,6 +45,9 @@ export type FileUnifiedStepProps = {
 	odsColumns: ColumnInfo[];
 	odsMatchApplied: boolean;
 	defaultDestinationStatus: { destinationName?: string; available?: boolean; writerType?: string; message?: string } | null;
+	targetDataSources: InfraDataSource[];
+	loadingTargetDataSources: boolean;
+	targetDataSourceMessage: string;
 
 	/* schedule & sync */
 	syncModeOptions: SyncModeOption[];
@@ -109,6 +113,9 @@ export default function FileUnifiedStep({
 	odsColumns,
 	odsMatchApplied,
 	defaultDestinationStatus,
+	targetDataSources,
+	loadingTargetDataSources,
+	targetDataSourceMessage,
 	syncModeOptions,
 	scheduleType,
 	activeCapabilitySet,
@@ -145,6 +152,14 @@ export default function FileUnifiedStep({
 	const [manualMatchedCount, setManualMatchedCount] = useState(0);
 	const [manualUnmatchedOdsFields, setManualUnmatchedOdsFields] = useState<string[]>([]);
 	const businessOdsColumns = useMemo(() => filterBusinessFileMappingColumns(odsColumns), [odsColumns]);
+	const targetDataSourceOptions = useMemo(
+		() =>
+			targetDataSources.map((item) => ({
+				label: `${item.name}${item.recommended ? "（推荐）" : ""} (${item.type || "unknown"})`,
+				value: item.id,
+			})),
+		[targetDataSources]
+	);
 	const hiddenOdsSystemColumnCount = Math.max(0, odsColumns.length - businessOdsColumns.length);
 
 	const normalizedScheduleType = String(scheduleType || "manual").trim() || "manual";
@@ -615,9 +630,25 @@ export default function FileUnifiedStep({
 						.join(" · ")}
 					className="mb-4"
 				/>
-			) : null}
-			<Form.Item
-				name="fileTableName"
+				) : null}
+				<Form.Item
+					name="targetDataSourceId"
+					label="目标数据源"
+					rules={[{ required: true, message: "请选择目标数据源" }]}
+				>
+					<Select
+						loading={loadingTargetDataSources}
+						placeholder={loadingTargetDataSources ? "加载中..." : "请选择目标数据源"}
+						options={targetDataSourceOptions}
+						showSearch
+						optionFilterProp="label"
+					/>
+				</Form.Item>
+				{targetDataSourceMessage ? (
+					<Alert type="warning" showIcon message={targetDataSourceMessage} className="mb-4" />
+				) : null}
+				<Form.Item
+					name="fileTableName"
 				label="目标表名"
 				rules={[{ validator: fileTableNameValidator }]}
 				tooltip="仅允许字母、数字、下划线，可包含 schema.table"

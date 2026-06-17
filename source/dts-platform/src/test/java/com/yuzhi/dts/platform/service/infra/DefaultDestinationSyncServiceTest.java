@@ -93,6 +93,56 @@ class DefaultDestinationSyncServiceTest {
     }
 
     @Test
+    void ensureDefaultDestination_carriesCanonicalPlatformDataSourceId() {
+        UUID platformSourceId = UUID.randomUUID();
+        AdminInfraClient.AdminDataLakeConfig adminLake = adminLake(
+            "数仓 (biadmin)",
+            "jdbc:postgresql://dts-pg:5432/biadmin",
+            "postgresqlwriter"
+        );
+        InfraDataSource platformSource = source(
+            platformSourceId,
+            "现场手工湖仓",
+            "jdbc:postgresql://dts-pg:5432/biadmin",
+            "POSTGRESQL"
+        );
+
+        when(adminInfraClient.fetchDefaultDataLake()).thenReturn(Optional.of(adminLake));
+        when(dataSourceRepository.findByStatusIgnoreCase("ACTIVE")).thenReturn(List.of(platformSource));
+
+        DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot = service.ensureDefaultDestination();
+
+        assertThat(snapshot.dataSourceId()).isEqualTo(platformSourceId.toString());
+        assertThat(snapshot.destinationConfig()).containsEntry("jdbcUrl", "jdbc:postgresql://dts-pg:5432/biadmin");
+    }
+
+    @Test
+    void ensureDestination_usesRequestedPlatformDataSourceInsteadOfAdminDefault() {
+        UUID selectedSourceId = UUID.randomUUID();
+        InfraDataSource selected = source(
+            selectedSourceId,
+            "经营分析湖仓",
+            "jdbc:postgresql://analytics-pg:5432/ads",
+            "POSTGRESQL"
+        );
+        selected.setProps("{\"schema\":\"ads\"}");
+
+        when(dataSourceRepository.findById(selectedSourceId)).thenReturn(Optional.of(selected));
+        when(secretService.readSecrets(selected)).thenReturn(Map.of("password", "analytics-secret"));
+
+        DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot = service.ensureDestination(selectedSourceId.toString());
+
+        assertThat(snapshot.dataSourceId()).isEqualTo(selectedSourceId.toString());
+        assertThat(snapshot.destinationName()).isEqualTo("经营分析湖仓");
+        assertThat(snapshot.destinationDefinitionId()).isEqualTo("postgresqlwriter");
+        assertThat(snapshot.destinationConfig())
+            .containsEntry("jdbcUrl", "jdbc:postgresql://analytics-pg:5432/ads")
+            .containsEntry("username", "biadmin")
+            .containsEntry("password", "analytics-secret");
+        org.mockito.Mockito.verifyNoInteractions(adminInfraClient);
+    }
+
+    @Test
     void checkDefaultDestinationStatus_createsPlatformDataSourceWhenAdminDefaultLakeHasNoLocalMatch() {
         UUID adminSourceId = UUID.randomUUID();
         UUID platformSourceId = UUID.randomUUID();

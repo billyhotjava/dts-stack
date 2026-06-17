@@ -112,6 +112,24 @@ const saveDraft = (values: Record<string, any>) => {
 	}
 };
 
+const resolveWriterTypeFromDataSource = (source?: InfraDataSource | null) => {
+	if (!source) return undefined;
+	const marker = `${source.type || ""} ${source.connectorKey || ""} ${source.jdbcUrl || ""}`.toLowerCase();
+	if (marker.includes("postgres") || marker.includes("jdbc:postgresql:")) return "postgresqlwriter";
+	if (marker.includes("mysql") || marker.includes("mariadb") || marker.includes("jdbc:mysql:") || marker.includes("jdbc:mariadb:")) return "mysqlwriter";
+	if (marker.includes("oracle") || marker.includes("jdbc:oracle:")) return "oraclewriter";
+	if (marker.includes("sqlserver") || marker.includes("mssql") || marker.includes("jdbc:sqlserver:")) return "sqlserverwriter";
+	if (marker.includes("clickhouse") || marker.includes("jdbc:clickhouse:")) return "clickhousewriter";
+	if (marker.includes("hive") || marker.includes("jdbc:hive2:")) return "hivewriter";
+	if (marker.includes("dm") || marker.includes("dameng") || marker.includes("jdbc:dm:")) return "rdbmswriter";
+	return undefined;
+};
+
+const withTargetDataSourceId = (config: Record<string, any> | undefined, targetDataSourceId: string) => ({
+	...(config || {}),
+	targetDataSourceId,
+});
+
 export default function TransformCreatePage() {
 	const [saving, setSaving] = useState(false);
 	const [savingDraft, setSavingDraft] = useState(false);
@@ -131,6 +149,8 @@ export default function TransformCreatePage() {
 	const [defaultDestinationError, setDefaultDestinationError] = useState("");
 	const [currentStep, setCurrentStep] = useState(0);
 	const [dataSources, setDataSources] = useState<InfraDataSource[]>([]);
+	const [targetDataSources, setTargetDataSources] = useState<InfraDataSource[]>([]);
+	const [targetDataSourceMessage, setTargetDataSourceMessage] = useState("");
 	const [loadingDataSources, setLoadingDataSources] = useState(false);
 	const activeDept = useActiveDept();
 	const [deptOptions, setDeptOptions] = useState<{ label: string; value: string }[]>([]);
@@ -205,11 +225,17 @@ export default function TransformCreatePage() {
 	const formValues = Form.useWatch([], form);
 	const selectedTablesValue = Form.useWatch("selectedTables", form);
 	const selectedDataSourceId = Form.useWatch("sourceDataSourceId", form);
+	const selectedTargetDataSourceId = Form.useWatch("targetDataSourceId", form);
 	const selectedDataSource = useMemo(
 		() => dataSources.find((item) => String(item.id) === String(selectedDataSourceId)),
 		[dataSources, selectedDataSourceId]
 	);
+	const selectedTargetDataSource = useMemo(
+		() => targetDataSources.find((item) => String(item.id) === String(selectedTargetDataSourceId)),
+		[targetDataSources, selectedTargetDataSourceId]
+	);
 	const lakeDatasourceId = useMemo(() => {
+		if (selectedTargetDataSourceId) return selectedTargetDataSourceId;
 		if (!defaultDestinationStatus) return null;
 		if (defaultDestinationStatus.dataSourceId) {
 			return defaultDestinationStatus.dataSourceId;
@@ -217,7 +243,7 @@ export default function TransformCreatePage() {
 		if (!defaultDestinationStatus.destinationName || !dataSources.length) return null;
 		const match = dataSources.find(ds => ds.name === defaultDestinationStatus.destinationName);
 		return match?.id ?? null;
-	}, [dataSources, defaultDestinationStatus]);
+	}, [dataSources, defaultDestinationStatus, selectedTargetDataSourceId]);
 	const discoveredTableKeys = useMemo(
 		() => discoveredTables.map((item) => buildTableKey(item)),
 		[discoveredTables]
@@ -238,6 +264,13 @@ export default function TransformCreatePage() {
 		}
 		selectedTableKeysRef.current = normalized;
 	}, [selectedTablesValue, selectedTableKeys, tableSelectionMode, form]);
+
+	useEffect(() => {
+		const writerType = resolveWriterTypeFromDataSource(selectedTargetDataSource) || normalizeText(defaultDestinationStatus?.writerType);
+		if (writerType) {
+			form.setFieldValue("writerType", writerType);
+		}
+	}, [defaultDestinationStatus?.writerType, form, selectedTargetDataSource]);
 
 	const initialValues = useMemo(
 		() => ({
@@ -365,16 +398,19 @@ export default function TransformCreatePage() {
 			const bootstrap = await loadTransformCreateBootstrap(
 				{
 					loadDataSources: () => dataSourcesService.list(),
-					loadConnectorCapabilities: () => ingestionTaskAPI.getConnectorCapabilities(),
-					loadTaskTemplates: () => ingestionTaskAPI.getTaskTemplates(),
-					loadDefaultDestinationStatus: () => ingestionTaskAPI.getDefaultDestinationStatus(),
-					loadSqlModels: () => listSqlModels() as Promise<Array<{ id?: string; name?: string; alias?: string }>>,
-				},
-				selectedTemplateId
-			);
-			if (!active) return;
-			setDataSources(bootstrap.dataSources);
-			setConnectorCapabilities(bootstrap.connectorCapabilities);
+						loadConnectorCapabilities: () => ingestionTaskAPI.getConnectorCapabilities(),
+						loadTaskTemplates: () => ingestionTaskAPI.getTaskTemplates(),
+						loadDefaultDestinationStatus: () => ingestionTaskAPI.getDefaultDestinationStatus(),
+						loadTargetDataSourceSelections: () => dataSourcesService.selections({ capability: "DBT_TARGET" }),
+						loadSqlModels: () => listSqlModels() as Promise<Array<{ id?: string; name?: string; alias?: string }>>,
+					},
+					selectedTemplateId
+				);
+				if (!active) return;
+				setDataSources(bootstrap.dataSources);
+				setTargetDataSources(bootstrap.targetDataSources);
+				setTargetDataSourceMessage(bootstrap.targetDataSourceMessage);
+				setConnectorCapabilities(bootstrap.connectorCapabilities);
 			setCapabilityLoadFailed(bootstrap.capabilityLoadFailed);
 			setTaskTemplates(bootstrap.taskTemplates);
 			if (bootstrap.selectedTemplateId && bootstrap.selectedTemplateId !== selectedTemplateId) {
@@ -382,16 +418,23 @@ export default function TransformCreatePage() {
 			}
 			setDefaultDestinationStatus(bootstrap.defaultDestinationStatus);
 			setDefaultDestinationError(bootstrap.defaultDestinationError);
-			if (bootstrap.defaultDestinationStatus?.writerType) {
-				form.setFieldValue("writerType", bootstrap.defaultDestinationStatus.writerType);
-			}
-			setSqlModels(bootstrap.sqlModels);
-			if (bootstrap.dataSourcesError) {
-				toast.error(bootstrap.dataSourcesError);
-			}
-			if (bootstrap.sqlModelsError) {
-				toast.error(bootstrap.sqlModelsError);
-			}
+				if (bootstrap.defaultDestinationStatus?.writerType) {
+					form.setFieldValue("writerType", bootstrap.defaultDestinationStatus.writerType);
+				}
+				const currentTargetDataSourceId = normalizeText(form.getFieldValue("targetDataSourceId"));
+				if (!currentTargetDataSourceId && bootstrap.targetDataSourceDefaultId) {
+					form.setFieldValue("targetDataSourceId", bootstrap.targetDataSourceDefaultId);
+				}
+				setSqlModels(bootstrap.sqlModels);
+				if (bootstrap.dataSourcesError) {
+					toast.error(bootstrap.dataSourcesError);
+				}
+				if (bootstrap.targetDataSourcesError) {
+					toast.error(bootstrap.targetDataSourcesError);
+				}
+				if (bootstrap.sqlModelsError) {
+					toast.error(bootstrap.sqlModelsError);
+				}
 			setLoadingDataSources(false);
 			setLoadingTaskTemplates(false);
 			setLoadingDefaultDestination(false);
@@ -1236,21 +1279,30 @@ export default function TransformCreatePage() {
 				throw new Error("请填写任务名称");
 			}
 			mergedValues.name = taskName;
-			const isFileSource = mergedValues.sourceCategory === "file" && fileUploadResult;
-			const isApiSource = mergedValues.sourceCategory === "api";
-			const sourceDataSourceId = normalizeText(mergedValues.sourceDataSourceId);
-			if (!isFileSource && !sourceDataSourceId) {
-				throw new Error("请选择数据源连接");
-			}
-			if (isFileSource && !fileUploadResult) {
-				throw new Error("请先上传文件");
-			}
+				const isFileSource = mergedValues.sourceCategory === "file" && fileUploadResult;
+				const isApiSource = mergedValues.sourceCategory === "api";
+				const sourceDataSourceId = normalizeText(mergedValues.sourceDataSourceId);
+				const targetDataSourceId = normalizeText(mergedValues.targetDataSourceId);
+				if (!isFileSource && !sourceDataSourceId) {
+					throw new Error("请选择数据源连接");
+				}
+				if (!targetDataSourceId) {
+					throw new Error("请选择目标数据源");
+				}
+				if (isFileSource && !fileUploadResult) {
+					throw new Error("请先上传文件");
+				}
 			if (isApiSource) {
 				const readerConfig = buildApiReaderConfig(mergedValues);
 				applyReaderTypeToConfig(readerConfig, "httpreader");
-				const apiResource = (readerConfig.resource || {}) as Record<string, any>;
-				const apiResourceId = normalizeText(apiResource.resourceId) || "api_resource";
-				const apiSyncConfig = buildSyncConfigFromValues(mergedValues, false);
+					const apiResource = (readerConfig.resource || {}) as Record<string, any>;
+					const apiResourceId = normalizeText(apiResource.resourceId) || "api_resource";
+					const apiDestinationConfig = withTargetDataSourceId(undefined, targetDataSourceId);
+					const apiWriterType =
+						resolveWriterTypeFromDataSource(selectedTargetDataSource) ||
+						normalizeText(defaultDestinationStatus?.writerType) ||
+						"postgresqlwriter";
+					const apiSyncConfig = buildSyncConfigFromValues(mergedValues, false);
 				const apiAirflowEnabled = mergedValues.airflowEnabled ?? editingTask?.airflowEnabled ?? true;
 				if (isEdit && editId) {
 					const governanceSyncFields = buildGovernanceSyncFields(mergedValues);
@@ -1259,11 +1311,11 @@ export default function TransformCreatePage() {
 						id: editId,
 						name: taskName,
 						description: normalizeText(mergedValues.description) || undefined,
-						sourceType: "httpreader",
-						sourceDataSourceId,
-						sourceConfig: readerConfig,
-						destinationType: undefined,
-						destinationConfig: undefined,
+							sourceType: "httpreader",
+							sourceDataSourceId,
+							sourceConfig: readerConfig,
+							destinationType: apiWriterType,
+							destinationConfig: apiDestinationConfig,
 						syncMode: mergedValues.syncMode || editingTask?.syncMode || "full_refresh",
 						syncSchedule: buildSyncScheduleText(mergedValues),
 						syncConfig: {
@@ -1289,12 +1341,17 @@ export default function TransformCreatePage() {
 						description: normalizeText(mergedValues.description) || undefined,
 						owner: userInfo?.username || userInfo?.login,
 						ownerDept: normalizeText(mergedValues.ownerDept) || undefined,
-						source: {
-							dataSourceId: sourceDataSourceId,
-							type: "httpreader",
-							config: readerConfig,
-						},
-						sync: {
+							source: {
+								dataSourceId: sourceDataSourceId,
+								type: "httpreader",
+								config: readerConfig,
+							},
+							destination: {
+								usePlatformDefault: true,
+								type: apiWriterType,
+								config: apiDestinationConfig,
+							},
+							sync: {
 							mode: normalizeText(mergedValues.syncMode) || "full_refresh",
 							schedule: buildSyncScheduleSpec(mergedValues),
 							incrementalColumn: apiSyncConfig?.incrementalColumn,
@@ -1395,6 +1452,7 @@ export default function TransformCreatePage() {
 				if (fileWriterUsername) writerConfig.username = fileWriterUsername;
 				if (fileWriterPassword) writerConfig.password = fileWriterPassword;
 				if (fileWriterSchema) writerConfig.schema = fileWriterSchema;
+				writerConfig.targetDataSourceId = targetDataSourceId;
 				const fileConn: Record<string, any> = { table: [fileTableName] };
 				if (fileWriterJdbc) {
 					fileConn.jdbcUrl = splitLines(fileWriterJdbc);
@@ -1478,6 +1536,7 @@ export default function TransformCreatePage() {
 			let writerConfig = isJsonMode
 				? parseJson(mergedValues.writerConfig, "Writer 配置")
 				: buildWriterConfig(mergedValues);
+			writerConfig = withTargetDataSourceId(writerConfig, targetDataSourceId);
 			const inferredManualTables = mergeTableSelections(
 				selectedTables,
 				extractReaderTables(readerConfig),
@@ -1790,10 +1849,13 @@ export default function TransformCreatePage() {
 									form={form}
 									fileUploadResult={fileUploadResult}
 									setFileUploadResult={setFileUploadResult}
-									odsColumns={odsColumns}
-									odsMatchApplied={odsMatchApplied}
-									defaultDestinationStatus={defaultDestinationStatus}
-									syncModeOptions={syncModeOptions}
+										odsColumns={odsColumns}
+										odsMatchApplied={odsMatchApplied}
+										defaultDestinationStatus={defaultDestinationStatus}
+										targetDataSources={targetDataSources}
+										loadingTargetDataSources={loadingDefaultDestination}
+										targetDataSourceMessage={targetDataSourceMessage}
+										syncModeOptions={syncModeOptions}
 									scheduleType={scheduleType}
 									activeCapabilitySet={activeCapabilitySet}
 									capabilityLoadFailed={capabilityLoadFailed}
@@ -1936,10 +1998,13 @@ export default function TransformCreatePage() {
 									setSourceCategory={setSourceCategory}
 									onSourceCategoryChange={handleSourceCategoryChange}
 									selectedTableKeys={selectedTableKeys}
-									setSelectedTableKeys={setSelectedTableKeys}
-									selectedDataSource={selectedDataSource ?? null}
-									dataSources={dataSources}
-									activeCapabilitySet={activeCapabilitySet}
+										setSelectedTableKeys={setSelectedTableKeys}
+										selectedDataSource={selectedDataSource ?? null}
+										dataSources={dataSources}
+										targetDataSources={targetDataSources}
+										loadingTargetDataSources={loadingDefaultDestination}
+										targetDataSourceMessage={targetDataSourceMessage}
+										activeCapabilitySet={activeCapabilitySet}
 									supportsIncremental={supportsIncremental}
 									supportsCdc={supportsCdc}
 									supportsBackfill={supportsBackfill}

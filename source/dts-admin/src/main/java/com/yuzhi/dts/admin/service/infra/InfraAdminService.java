@@ -43,10 +43,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class InfraAdminService {
@@ -225,6 +227,7 @@ public class InfraAdminService {
     public InfraDataSourceDto createDataSource(UpsertInfraDataSourcePayload payload, String operator) {
         InfraDataSource entity = new InfraDataSource();
         entity.setId(UUID.randomUUID());
+        ensureUniqueConnectionSignature(payload, null);
         applyPayload(entity, payload);
         applySecrets(entity, payload.getSecrets());
         Instant now = Instant.now();
@@ -252,6 +255,7 @@ public class InfraAdminService {
             .findById(id)
             .map(existing -> {
                 InfraDataSourceDto before = toDto(existing);
+                ensureUniqueConnectionSignature(payload, existing);
                 applyPayload(existing, payload);
                 if (payload.getSecretsRaw() != null) {
                     applySecrets(existing, payload.getSecrets());
@@ -628,6 +632,48 @@ public class InfraAdminService {
             return "JDBC";
         }
         return type.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private void ensureUniqueConnectionSignature(UpsertInfraDataSourcePayload payload, InfraDataSource current) {
+        String requestedJdbcUrl = normalizeConnectionToken(payload == null ? null : payload.getJdbcUrl());
+        String requestedUsername = normalizeConnectionToken(payload == null ? null : payload.getUsername());
+        if (!StringUtils.hasText(requestedJdbcUrl)) {
+            return;
+        }
+        if (
+            current != null &&
+            requestedJdbcUrl.equals(normalizeConnectionToken(current.getJdbcUrl())) &&
+            requestedUsername.equals(normalizeConnectionToken(current.getUsername()))
+        ) {
+            return;
+        }
+        UUID currentId = current == null ? null : current.getId();
+        List<InfraDataSource> existingSources = dataSourceRepository.findAll();
+        if (existingSources == null || existingSources.isEmpty()) {
+            return;
+        }
+        for (InfraDataSource source : existingSources) {
+            if (source == null || (currentId != null && currentId.equals(source.getId()))) {
+                continue;
+            }
+            String existingJdbcUrl = normalizeConnectionToken(source.getJdbcUrl());
+            if (!StringUtils.hasText(existingJdbcUrl)) {
+                continue;
+            }
+            String existingUsername = normalizeConnectionToken(source.getUsername());
+            if (requestedJdbcUrl.equals(existingJdbcUrl) && requestedUsername.equals(existingUsername)) {
+                String label = StringUtils.hasText(source.getName()) ? source.getName() : source.getId().toString();
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "数据源连接已存在：" + label);
+            }
+        }
+    }
+
+    private String normalizeConnectionToken(Object value) {
+        if (value == null) {
+            return "";
+        }
+        String text = value.toString().trim();
+        return text.isEmpty() ? "" : text.toLowerCase(Locale.ROOT);
     }
 
     private JdbcConnectionTestRequest buildJdbcTestRequest(InfraDataSource entity, JdbcConnectionTestRequest override) {

@@ -82,7 +82,7 @@ public class IngestionTaskProxyResource {
         }
         Map<String, Object> resolvedPayload = payload;
         if (!draft || usesPlatformDefaultDestination(payload)) {
-            DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot = destinationSyncService.ensureDefaultDestination();
+            DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot = resolveDestinationSnapshot(payload);
             resolvedPayload = applyDefaultDestinationPayload(payload, snapshot);
         }
         ApiResponse<Map<String, Object>> response = ingestionClient.createIngestionTask(resolvedPayload);
@@ -144,7 +144,7 @@ public class IngestionTaskProxyResource {
         @PathVariable("id") Long id,
         @RequestBody Map<String, Object> payload
     ) {
-        DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot = destinationSyncService.ensureDefaultDestination();
+        DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot = resolveDestinationSnapshot(payload);
         Map<String, Object> resolvedPayload = applyDefaultDestinationUpdatePayload(payload, snapshot);
         // Preserve the existing task's password when the update payload does not include one
         preserveExistingPassword(id, resolvedPayload, payload);
@@ -586,6 +586,7 @@ public class IngestionTaskProxyResource {
         }
         Map<String, Object> overrides = extractConfig(destinationMap.get("config"));
         Map<String, Object> mergedConfig = mergeDestinationConfig(resolved.destinationConfig(), overrides);
+        applyTargetDataSourceId(mergedConfig, resolved);
         ensureWriterJdbcUrl(mergedConfig);
         ensureWriterTables(mergedConfig);
         Map<String, Object> destination = new LinkedHashMap<>();
@@ -619,6 +620,7 @@ public class IngestionTaskProxyResource {
         DefaultDestinationSyncService.DefaultDestinationSnapshot resolved = requireDefaultDestination(snapshot);
         Map<String, Object> overrides = extractConfig(payload.get("destinationConfig"));
         Map<String, Object> mergedConfig = mergeDestinationConfig(resolved.destinationConfig(), overrides);
+        applyTargetDataSourceId(mergedConfig, resolved);
         ensureWriterJdbcUrl(mergedConfig);
         ensureWriterTables(mergedConfig);
         Map<String, Object> merged = new LinkedHashMap<>(payload);
@@ -649,6 +651,73 @@ public class IngestionTaskProxyResource {
             );
         }
         return snapshot;
+    }
+
+    private DefaultDestinationSyncService.DefaultDestinationSnapshot resolveDestinationSnapshot(Map<String, Object> payload) {
+        String targetDataSourceId = extractTargetDataSourceId(payload);
+        if (StringUtils.hasText(targetDataSourceId)) {
+            return destinationSyncService.ensureDestination(targetDataSourceId);
+        }
+        return destinationSyncService.ensureDefaultDestination();
+    }
+
+    private void applyTargetDataSourceId(
+        Map<String, Object> config,
+        DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot
+    ) {
+        if (config == null || snapshot == null || !StringUtils.hasText(snapshot.dataSourceId())) {
+            return;
+        }
+        config.put("targetDataSourceId", snapshot.dataSourceId());
+    }
+
+    private String extractTargetDataSourceId(Map<String, Object> payload) {
+        if (payload == null || payload.isEmpty()) {
+            return null;
+        }
+        Object destinationObj = payload.get("destination");
+        if (destinationObj instanceof Map<?, ?> destinationMap) {
+            String direct = firstText(
+                destinationMap.get("targetDataSourceId"),
+                destinationMap.get("destinationDataSourceId"),
+                destinationMap.get("dataSourceId")
+            );
+            if (StringUtils.hasText(direct)) {
+                return direct;
+            }
+            String fromConfig = extractTargetDataSourceIdFromConfig(extractConfig(destinationMap.get("config")));
+            if (StringUtils.hasText(fromConfig)) {
+                return fromConfig;
+            }
+        }
+        return extractTargetDataSourceIdFromConfig(extractConfig(payload.get("destinationConfig")));
+    }
+
+    private String extractTargetDataSourceIdFromConfig(Map<String, Object> config) {
+        if (config == null || config.isEmpty()) {
+            return null;
+        }
+        return firstText(
+            config.get("targetDataSourceId"),
+            config.get("destinationDataSourceId"),
+            config.get("dataSourceId")
+        );
+    }
+
+    private String firstText(Object... values) {
+        if (values == null) {
+            return null;
+        }
+        for (Object value : values) {
+            if (value == null) {
+                continue;
+            }
+            String text = String.valueOf(value).trim();
+            if (StringUtils.hasText(text)) {
+                return text;
+            }
+        }
+        return null;
     }
 
     private Map<String, Object> extractConfig(Object value) {

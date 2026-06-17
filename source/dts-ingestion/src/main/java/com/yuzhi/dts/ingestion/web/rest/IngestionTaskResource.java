@@ -352,6 +352,19 @@ public class IngestionTaskResource {
                 taskDTO.setSourceType(ApiConnectorTypes.DEFAULT_READER_TYPE);
                 taskDTO.setSourceDataSourceId(request.source().dataSourceId());
                 taskDTO.setSourceConfig(toJsonNode(apiRuntimeConfig));
+                Map<String, Object> apiDestinationConfig = safeMap(request.destination() == null ? null : request.destination().config());
+                String apiWriterType = resolvePlugin(
+                    request.destination() == null ? null : request.destination().definitionId(),
+                    apiDestinationConfig,
+                    List.of("writerType", "writer", "type")
+                );
+                if (StringUtils.hasText(apiWriterType)) {
+                    taskDTO.setDestinationType(apiWriterType);
+                    apiDestinationConfig.putIfAbsent("writerType", apiWriterType);
+                }
+                if (!apiDestinationConfig.isEmpty()) {
+                    taskDTO.setDestinationConfig(toJsonNode(apiDestinationConfig));
+                }
                 taskDTO.setSyncMode(syncMode);
                 taskDTO.setSyncSchedule(resolveSyncSchedule(request.sync()));
                 taskDTO.setSyncConfig(toJsonNode(buildSyncConfig(request.sync())));

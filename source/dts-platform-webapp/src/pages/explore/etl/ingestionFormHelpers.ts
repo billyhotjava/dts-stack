@@ -1169,6 +1169,11 @@ export const mapTaskToForm = (task: IngestionTaskDTO) => {
 	const writerPassword = normalizeText(resolvedWriterConfig?.password);
 	const writerSchema = normalizeText(resolvedWriterConfig?.schema || resolvedWriterConfig?.database);
 	const writerWriteMode = normalizeText(resolvedWriterConfig?.writeMode);
+	const targetDataSourceId = normalizeText(
+		resolvedWriterConfig?.targetDataSourceId ||
+		resolvedWriterConfig?.destinationDataSourceId ||
+		resolvedWriterConfig?.dataSourceId
+	);
 	const selector = normalizeText(task.dbtModelSelector);
 	const dbtModels = selector
 		? selector
@@ -1203,6 +1208,7 @@ export const mapTaskToForm = (task: IngestionTaskDTO) => {
 			sourceConfig.system ||
 			sourceConfig.name,
 		sourceDataSourceId: task.sourceDataSourceId,
+		targetDataSourceId: targetDataSourceId || undefined,
 		readerType: resolvedReaderType,
 		readerConfig: JSON.stringify(sourceConfig, null, 2),
 		apiResourceId: normalizeText(apiResource.resourceId) || undefined,

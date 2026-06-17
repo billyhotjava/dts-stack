@@ -43,6 +43,11 @@ public class AddaxJobService {
         "jdbcProperties",
         "connection"
     );
+    private static final Set<String> DESTINATION_METADATA_KEYS = Set.of(
+        "targetDataSourceId",
+        "destinationDataSourceId",
+        "dataSourceId"
+    );
     private final AddaxProperties properties;
     private final IngestionSettingsService settingsService;
     private final ObjectMapper objectMapper;
@@ -302,6 +307,7 @@ public class AddaxJobService {
             resolvedReader = ensureDriver(readerType, resolvedReader);
         }
         Map<String, Object> resolvedWriter = ensureDriver(writerType, safeMap(writerConfig));
+        stripDestinationMetadata(resolvedWriter);
         // Fallback: inject data lake credentials if writer has no password
         if (!StringUtils.hasText(normalizeText(resolvedWriter.get("password")))) {
             resolvedWriter.put("password", springEnv.getProperty("spring.datasource.password", ""));
@@ -593,12 +599,20 @@ public class AddaxJobService {
         ensureDriver(normalizedPlugin, params);
         if ("writer".equalsIgnoreCase(key)) {
             ensureWriterConnection(pluginType, params);
+            stripDestinationMetadata(params);
         }
         if (nodeMap instanceof Map<?, ?>) {
             @SuppressWarnings("unchecked")
             Map<Object, Object> mutable = (Map<Object, Object>) nodeMap;
             mutable.put("parameter", params);
         }
+    }
+
+    private void stripDestinationMetadata(Map<String, Object> writerConfig) {
+        if (writerConfig == null || writerConfig.isEmpty()) {
+            return;
+        }
+        DESTINATION_METADATA_KEYS.forEach(writerConfig::remove);
     }
 
     private void mergeMissing(Map<String, Object> target, Map<String, Object> source, String key) {

@@ -12,10 +12,12 @@ import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class DefaultDestinationSyncService {
@@ -49,14 +51,39 @@ public class DefaultDestinationSyncService {
         if (lake == null) {
             return null;
         }
+        return buildDestinationSnapshot(lake, false);
+    }
+
+    public DefaultDestinationSnapshot ensureDestination(String dataSourceId) {
+        String normalizedId = normalize(dataSourceId);
+        if (!StringUtils.hasText(normalizedId)) {
+            return ensureDefaultDestination();
+        }
+        UUID id;
+        try {
+            id = UUID.fromString(normalizedId);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "目标数据源 ID 不合法: " + normalizedId);
+        }
+        InfraDataSource source = dataSourceRepository
+            .findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "目标数据源不存在: " + normalizedId));
+        return buildDestinationSnapshot(toLocalLakeSnapshot(source), true);
+    }
+
+    private DefaultDestinationSnapshot buildDestinationSnapshot(LakeSnapshot lake, boolean selectedById) {
+        if (lake == null) {
+            return null;
+        }
         Map<String, Object> destinationConfig = resolveDestinationConfig(lake);
         String writerType = resolveWriterType(lake, destinationConfig);
         if (!StringUtils.hasText(writerType)) {
-            LOG.debug("Default data lake missing Addax writer type; skip default destination");
+            LOG.debug("Data lake missing Addax writer type; skip default destination");
             return null;
         }
         String destinationName = firstNonEmpty(lake.getDestinationName(), lake.getName(), "dts-addax-destination");
-        return new DefaultDestinationSnapshot(writerType, destinationName, destinationConfig);
+        String dataSourceId = selectedById ? lake.getDataSourceId() : resolveLocalDataSourceId(lake, destinationConfig, writerType);
+        return new DefaultDestinationSnapshot(writerType, destinationName, destinationConfig, dataSourceId);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -779,8 +806,13 @@ public class DefaultDestinationSyncService {
     public record DefaultDestinationSnapshot(
         String destinationDefinitionId,
         String destinationName,
-        Map<String, Object> destinationConfig
+        Map<String, Object> destinationConfig,
+        String dataSourceId
     ) {
+        public DefaultDestinationSnapshot(String destinationDefinitionId, String destinationName, Map<String, Object> destinationConfig) {
+            this(destinationDefinitionId, destinationName, destinationConfig, null);
+        }
+
         public DefaultDestinationSnapshot {
             destinationConfig = destinationConfig == null ? Map.of() : new LinkedHashMap<>(destinationConfig);
         }

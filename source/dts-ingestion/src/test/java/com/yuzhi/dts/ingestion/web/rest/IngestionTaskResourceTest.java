@@ -136,11 +136,20 @@ class IngestionTaskResourceTest {
                           }
                         }
                       },
-                      "sync": {"mode": "full_refresh"},
-                      "streams": {"selection": "manual", "include": ["orders"]},
-                      "airflow": {"enabled": false}
-                    }
-                    """))
+	                      "sync": {"mode": "full_refresh"},
+	                      "streams": {"selection": "manual", "include": ["orders"]},
+	                      "destination": {
+	                        "usePlatformDefault": true,
+	                        "definitionId": "postgresqlwriter",
+	                        "config": {
+	                          "targetDataSourceId": "22222222-3333-4444-5555-666666666666",
+	                          "jdbcUrl": "jdbc:postgresql://pg:5432/biadmin",
+	                          "username": "biadmin"
+	                        }
+	                      },
+	                      "airflow": {"enabled": false}
+	                    }
+	                    """))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data.task.id").value(99));
@@ -152,8 +161,10 @@ class IngestionTaskResourceTest {
         assertThat(task.getAirflowEnabled()).isFalse();
         assertThat(task.getSourceConfig().get("resource").has("fields")).isFalse();
         assertThat(task.getSourceConfig().get("resource").get("targetTable").asText()).isEqualTo("ods_api_crm_v1_orders");
-        assertThat(task.getSourceConfig().get("resource").get("landing").get("rawRecordColumn").asText()).isEqualTo("_dts_raw_record");
-        assertThat(task.getTableMapping()).hasSize(1);
+	        assertThat(task.getSourceConfig().get("resource").get("landing").get("rawRecordColumn").asText()).isEqualTo("_dts_raw_record");
+	        assertThat(task.getDestinationType()).isEqualTo("postgresqlwriter");
+	        assertThat(task.getDestinationConfig().get("targetDataSourceId").asText()).isEqualTo("22222222-3333-4444-5555-666666666666");
+	        assertThat(task.getTableMapping()).hasSize(1);
         assertThat(task.getTableMapping().get(0).get("source").asText()).isEqualTo("v1_orders");
         assertThat(task.getTableMapping().get(0).get("target").asText()).isEqualTo("ods_api_crm_v1_orders");
     }
