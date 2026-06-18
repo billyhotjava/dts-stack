@@ -100,6 +100,8 @@ const LAYER_META: Record<string, { label: string; color: string; tone: string }>
 };
 
 const LAYER_ORDER = ["SOURCE", "ODS", "STG", "DWD", "DIM", "DWS", "ADS", "OTHER"];
+const ASSET_ACTION_COLUMN_WIDTH = 640;
+const ASSET_TABLE_SCROLL_X = 1760;
 
 type ReconciliationAssertion = {
 	code?: string;
@@ -757,7 +759,9 @@ export default function Page() {
 			rowKey="id"
 			dataSource={records}
 			pagination={false}
-			scroll={{ x: 1180 }}
+			scroll={{ x: ASSET_TABLE_SCROLL_X }}
+			tableLayout="fixed"
+			className="catalog-assets-table"
 			onRow={(row) => ({
 				onClick: () => router.push(`/catalog/datasets/${row.id}`),
 			})}
@@ -820,10 +824,10 @@ export default function Page() {
 				},
 				{
 					title: "操作",
-					width: 520,
+					width: ASSET_ACTION_COLUMN_WIDTH,
 					fixed: "right",
 					render: (_, row) => (
-						<Space wrap onClick={(event) => event.stopPropagation()}>
+						<Space size={[4, 4]} className="catalog-assets-actions" onClick={(event) => event.stopPropagation()}>
 							<Button size="small" onClick={() => router.push(`/security/dataset-access-approval?datasetId=${row.id}`)}>
 								申请权限
 							</Button>

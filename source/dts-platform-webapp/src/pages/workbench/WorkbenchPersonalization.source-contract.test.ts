@@ -78,6 +78,7 @@ test("workbench component registry enumerates real product modules, not demo sce
 
 	assert.doesNotMatch(source, /经营分析|质量管理|项目交付|客户服务|demo|Demo/);
 	assert.doesNotMatch(source, /react-grid-layout|@dnd-kit|drag/i);
+	assert.doesNotMatch(source, /bodyStyle=/);
 });
 
 test("workbench page is a personalizable container over the leader overview modules", () => {
@@ -148,9 +149,11 @@ test("legacy data-management query renders the real data management section insi
 	assert.match(indexSource, /DataManagementWorkbenchPage/);
 	assert.match(indexSource, /searchParams\.get\("section"\)/);
 	assert.match(indexSource, /activeSection === "data-management"/);
-	assert.match(indexSource, /<DataManagementWorkbenchPage embedded/);
+	assert.match(indexSource, /activeSection === "data-management" \|\| activeSection === "consumption"/);
+	assert.match(indexSource, /<DataManagementWorkbenchPage[\s\S]*embedded[\s\S]*focus=\{activeSection === "consumption" \? "consumption" : "data-management"\}/);
 	assert.match(pageSource, /embedded\?:\s*boolean/);
-	assert.match(pageSource, /data-testid="data-management-workbench-section"/);
+	assert.match(pageSource, /data-testid=\{isConsumptionFocus/);
+	assert.match(pageSource, /"data-management-workbench-section"/);
 });
 
 test("customize drawer uses checkboxes and simple order buttons for Chrome 95 compatibility", () => {

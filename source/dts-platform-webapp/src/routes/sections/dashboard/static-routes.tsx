@@ -79,6 +79,13 @@ const MetricsServiceFrame = () => {
 	);
 };
 
+const WorkbenchSectionRedirect = ({ section }: { section: "data-management" | "consumption" }) => {
+	const location = useLocation();
+	const next = new URLSearchParams(location.search);
+	next.set("section", section);
+	return <Navigate to={`/workbench?${next.toString()}`} replace />;
+};
+
 export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	// ── Platform ──
 	{ path: "explore/etl", element: <S><EltConsolePage /></S> },
@@ -113,8 +120,8 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{ path: "ops/alerts", element: <S><OpsAlertLogPage /></S> },
 	{ path: "ops/backfill", element: <S><OpsBackfillPage /></S> },
 	{ path: "workbench/todo", element: <S><WorkflowCenterPage /></S> },
-	{ path: "workbench/data-management", element: <Navigate to="/workbench?section=data-management" replace /> },
-	{ path: "services/consumption", element: <Navigate to="/workbench?section=consumption" replace /> },
+	{ path: "workbench/data-management", element: <WorkbenchSectionRedirect section="data-management" /> },
+	{ path: "services/consumption", element: <WorkbenchSectionRedirect section="consumption" /> },
 	{ path: "studio/projects", element: <S><StudioProjectsPage /></S> },
 	{ path: "studio/sql-modeling", element: <S><SqlModelingPage /></S> },
 	{ path: "modeling/semantic-center", element: <MetricsServiceFrame /> },

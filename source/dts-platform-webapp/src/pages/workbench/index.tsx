@@ -86,6 +86,7 @@ export default function WorkbenchPage() {
 		() => searchParams.get(CUSTOMIZE_QUERY_KEY) === CUSTOMIZE_QUERY_VALUE,
 	);
 	const activeSection = searchParams.get("section");
+	const productId = searchParams.get("productId");
 	const userInfo = useUserInfo();
 	const preferenceOwner = useMemo(() => resolveWorkbenchPreferenceOwner(userInfo), [userInfo]);
 
@@ -151,7 +152,7 @@ export default function WorkbenchPage() {
 		(item) => item.visible && isLeaderOverviewComponentKey(item.key),
 	);
 	const isEmptyWorkbench = visibleComponentKeys.size === 0;
-	const showDataManagementSection = activeSection === "data-management";
+	const showDataManagementSection = activeSection === "data-management" || activeSection === "consumption";
 
 	const handleSave = useCallback(
 		async (items: WorkbenchPreferenceItem[]): Promise<void> => {
@@ -247,7 +248,11 @@ export default function WorkbenchPage() {
 
 			{showDataManagementSection && (
 				<div style={{ padding: 16 }}>
-					<DataManagementWorkbenchPage embedded />
+					<DataManagementWorkbenchPage
+						embedded
+						focus={activeSection === "consumption" ? "consumption" : "data-management"}
+						productId={productId}
+					/>
 				</div>
 			)}
 

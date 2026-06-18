@@ -42,12 +42,14 @@ test("workbench is the only homepage and legacy data-management entries redirect
 	assert.doesNotMatch(ZH_LOCALE, /"workbenchDataManagement": "数据管理工作台"/);
 	assert.doesNotMatch(STATIC_ROUTES, /path: "workbench\/data-management"[\s\S]*?<DataManagementWorkbenchPage/);
 	assert.doesNotMatch(STATIC_ROUTES, /path: "services\/consumption"[\s\S]*?<DataManagementWorkbenchPage/);
-	assert.match(STATIC_ROUTES, /path: "workbench\/data-management"[\s\S]*?section=data-management/);
-	assert.match(STATIC_ROUTES, /path: "services\/consumption"[\s\S]*?section=consumption/);
+	assert.match(STATIC_ROUTES, /path: "workbench\/data-management"[\s\S]*?<WorkbenchSectionRedirect section="data-management"/);
+	assert.match(STATIC_ROUTES, /path: "services\/consumption"[\s\S]*?<WorkbenchSectionRedirect section="consumption"/);
+	assert.match(STATIC_ROUTES, /next\.set\("section", section\)/);
 	assert.doesNotMatch(DYNAMIC_RESOLVER, /"\/workbench\/data-management": "\/pages\/workbench\/DataManagementWorkbenchPage"/);
 	assert.doesNotMatch(DYNAMIC_RESOLVER, /"\/services\/consumption": "\/pages\/workbench\/DataManagementWorkbenchPage"/);
 	assert.match(DYNAMIC_RESOLVER, /"\/workbench\/data-management": "\/workbench\?section=data-management"/);
 	assert.match(DYNAMIC_RESOLVER, /"\/services\/consumption": "\/workbench\?section=consumption"/);
+	assert.match(DYNAMIC_RESOLVER, /buildDirectRedirectPath/);
 });
 
 test("data management workbench waits for onsite business theme definition", () => {

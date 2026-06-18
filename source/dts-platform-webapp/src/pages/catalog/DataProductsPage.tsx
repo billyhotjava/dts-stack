@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, Button, Card, Form, Input, Modal, Select, Space, Tag, Typography } from "antd";
+import { Alert, Button, Card, Form, Input, Modal, Select, Space, Tag, Tooltip, Typography } from "antd";
 import { } from "@ant-design/icons";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/empty-state";
@@ -47,6 +47,8 @@ const STATUS_OPTIONS = Object.entries(STATUS_CONFIG).map(([value, item]) => ({
 	label: item.label,
 	value,
 }));
+
+const DEFAULT_CONSUMER_ENTRY = "/workbench?section=consumption";
 
 type CandidateOption = {
 	label: string;
@@ -101,6 +103,13 @@ const resolveProductReadiness = (product: DataProduct) => {
 		ready: blockers.length === 0,
 		members,
 	};
+};
+
+const resolveConsumerEntryRoute = (product: DataProduct) => {
+	const base = product.consumerEntry || DEFAULT_CONSUMER_ENTRY;
+	if (!product.id) return base;
+	const separator = base.includes("?") ? "&" : "?";
+	return `${base}${separator}productId=${encodeURIComponent(String(product.id))}`;
 };
 
 export default function DataProductsPage() {
@@ -296,6 +305,7 @@ export default function DataProductsPage() {
 							const status = STATUS_CONFIG[product.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.DRAFT;
 							const readiness = resolveProductReadiness(product);
 							const members = readiness.members;
+							const consumerEntryRoute = resolveConsumerEntryRoute(product);
 							return (
 								<div
 									key={product.id}
@@ -356,17 +366,20 @@ export default function DataProductsPage() {
 										<div className="line-clamp-2 text-xs text-slate-600">{product.description}</div>
 									)}
 									<div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-1">
-										<Button size="small" onClick={() => openStatusEdit(product, "PUBLISHED")} disabled={!readiness.ready}>
-											发布
-										</Button>
+										<Tooltip title={readiness.ready ? "发布会将产品状态调整为已发布" : `发布前需补齐：${readiness.blockers.join(" / ")}`}>
+											<span>
+												<Button size="small" onClick={() => openStatusEdit(product, "PUBLISHED")} disabled={!readiness.ready}>
+													发布
+												</Button>
+											</span>
+										</Tooltip>
 										<Button size="small" onClick={() => router.push(`/security/dataset-access-approval?productId=${product.id}`)}>
 											申请
 										</Button>
 										<Button
 											size="small"
-											disabled={!product.consumerEntry}
-											onClick={() => product.consumerEntry && router.push(product.consumerEntry)}
-											title={product.consumerEntry ? "进入配置的消费入口" : "请先配置消费入口"}
+											onClick={() => router.push(consumerEntryRoute)}
+											title={product.consumerEntry ? "进入配置的消费入口" : "进入统一工作台消费发布视图"}
 										>
 											查看消费
 										</Button>

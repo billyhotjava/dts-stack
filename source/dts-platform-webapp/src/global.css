@@ -764,3 +764,19 @@
 .connector-registry-actions .ant-btn {
 	flex: 0 0 auto;
 }
+
+.catalog-assets-table .ant-table-tbody > tr > td {
+	vertical-align: top;
+}
+
+.catalog-assets-actions {
+	display: inline-flex;
+	max-width: 100%;
+	white-space: nowrap;
+	flex-wrap: nowrap;
+	gap: 4px;
+}
+
+.catalog-assets-actions .ant-btn {
+	flex: 0 0 auto;
+}

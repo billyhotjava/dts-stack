@@ -27,9 +27,11 @@ const statusTag = (label: string, tone: DataManagementTone) => <Tag color={TONE_
 
 export type DataManagementWorkbenchPageProps = {
 	embedded?: boolean;
+	focus?: "data-management" | "consumption";
+	productId?: string | null;
 };
 
-export default function Page({ embedded = false }: DataManagementWorkbenchPageProps) {
+export default function Page({ embedded = false, focus = "data-management", productId = null }: DataManagementWorkbenchPageProps) {
 	const router = useRouter();
 	const [chains, setChains] = useState<GoldenChainSummary[]>([]);
 	const [detailsByChainKey, setDetailsByChainKey] = useState<Record<string, GoldenChainDetail | undefined>>({});
@@ -87,6 +89,11 @@ export default function Page({ embedded = false }: DataManagementWorkbenchPagePr
 	const failureReason = selectedTheme?.failureReason || "";
 	const nextAction = selectedTheme?.nextAction || selectedTheme?.primaryAction.label;
 	const evidenceRefs = selectedTheme?.evidenceRefs || [];
+	const isConsumptionFocus = focus === "consumption";
+	const sectionTitle = isConsumptionFocus ? "消费发布" : "数据管理";
+	const sectionDescription = isConsumptionFocus
+		? "从数据产品、资产授权、报表/API 发布到客户验收的消费闭环。"
+		: "从数据源、黄金链路、治理阻断到消费发布的现场配置闭环。";
 	const headerActions = (
 		<Space wrap>
 			<Button onClick={() => router.push("/foundation/data-sources")}>配置数据源</Button>
@@ -102,19 +109,32 @@ export default function Page({ embedded = false }: DataManagementWorkbenchPagePr
 	);
 
 	return (
-		<div className="space-y-6" data-testid="data-management-workbench-section">
+		<div className="space-y-6" data-testid={isConsumptionFocus ? "data-consumption-workbench-section" : "data-management-workbench-section"}>
 			{embedded ? (
 				<div className="flex flex-wrap items-start justify-between gap-4">
 					<div>
 						<Typography.Title level={4} style={{ margin: 0 }}>
-							数据管理
+							{sectionTitle}
 						</Typography.Title>
-						<Text type="secondary">从数据源、黄金链路、治理阻断到消费发布的现场配置闭环。</Text>
+						<Text type="secondary">{sectionDescription}</Text>
 					</div>
 					{headerActions}
 				</div>
 			) : (
 				<PageHeader title="数据管理工作台" actions={headerActions} />
+			)}
+
+			{isConsumptionFocus && (
+				<Alert
+					type="info"
+					showIcon
+					message="消费发布入口已并入个人工作台"
+					description={
+						productId
+							? `已带入数据产品 ${productId}，请从资产、权限、报表、数据 API 和运行证据核对是否满足客户验收。`
+							: "请从资产、权限、报表、数据 API 和运行证据核对是否满足客户验收。"
+					}
+				/>
 			)}
 
 			<Alert

@@ -29,6 +29,19 @@ const PATH_REDIRECT_OVERRIDES: Record<string, string> = {
 	"/services/consumption": "/workbench?section=consumption",
 };
 
+const buildDirectRedirectPath = (redirectPath: string, currentSearch: string) => {
+	const [targetPath, targetSearch = ""] = redirectPath.split("?");
+	const targetParams = new URLSearchParams(targetSearch);
+	const section = targetParams.get("section");
+	const next = new URLSearchParams(currentSearch);
+	if (section) next.set("section", section);
+	targetParams.forEach((value, key) => {
+		if (key !== "section") next.set(key, value);
+	});
+	const queryString = next.toString();
+	return queryString ? `${targetPath}?${queryString}` : targetPath;
+};
+
 const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	// ── Platform pages ──
 	"/governance": "/pages/governance/GovernanceCenterPage",
@@ -155,7 +168,7 @@ export function DynamicMenuResolver({ base }: Props) {
 	}, [menus, menusLoaded, overrideParentPath]);
 
 	if (directRedirectPath) {
-		return <Navigate to={directRedirectPath} replace />;
+		return <Navigate to={buildDirectRedirectPath(directRedirectPath, location.search)} replace />;
 	}
 
 	if (!menusLoaded) {

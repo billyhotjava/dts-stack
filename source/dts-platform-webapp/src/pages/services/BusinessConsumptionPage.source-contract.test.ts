@@ -25,8 +25,10 @@ test("legacy business consumption route redirects to the single workbench homepa
 	assert.doesNotMatch(MENU_SEED, /"key": "consumption"[\s\S]*?"externalLink": "\/services\/consumption"/);
 	assert.doesNotMatch(ZH_LOCALE, /"workbenchDataManagement": "数据管理工作台"/);
 	assert.doesNotMatch(STATIC_ROUTES, /path: "services\/consumption"[\s\S]*?<DataManagementWorkbenchPage/);
-	assert.match(STATIC_ROUTES, /path: "services\/consumption"[\s\S]*?section=consumption/);
+	assert.match(STATIC_ROUTES, /path: "services\/consumption"[\s\S]*?<WorkbenchSectionRedirect section="consumption"/);
+	assert.match(STATIC_ROUTES, /next\.set\("section", section\)/);
 	assert.match(DYNAMIC_RESOLVER, /"\/services\/consumption": "\/workbench\?section=consumption"/);
+	assert.match(DYNAMIC_RESOLVER, /buildDirectRedirectPath/);
 });
 
 test("data management workbench does not ship builtin demo business themes", () => {

@@ -7,10 +7,10 @@ import {
 	Gauge,
 	GitBranch,
 	ListTodo,
+	type LucideIcon,
 	MonitorPlay,
 	Server,
 	ShieldAlert,
-	type LucideIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router";
@@ -27,12 +27,7 @@ export type WorkbenchComponentDefinition = {
 	render?: () => ReactNode;
 };
 
-const LEADER_OVERVIEW_COMPONENT_KEYS = new Set([
-	"leader-kpi",
-	"top-reports",
-	"core-assets",
-	"screen-strip",
-]);
+const LEADER_OVERVIEW_COMPONENT_KEYS = new Set(["leader-kpi", "top-reports", "core-assets", "screen-strip"]);
 
 type WorkbenchEntryCardProps = {
 	definition: WorkbenchComponentDefinition;
@@ -46,7 +41,7 @@ function WorkbenchEntryCard({ definition }: WorkbenchEntryCardProps) {
 		<Card
 			size="small"
 			style={{ borderRadius: 8, height: "100%" }}
-			bodyStyle={{ height: "100%", display: "flex", flexDirection: "column", gap: 12 }}
+			styles={{ body: { height: "100%", display: "flex", flexDirection: "column", gap: 12 } }}
 		>
 			<Space align="start" style={{ width: "100%" }}>
 				<span
