@@ -889,6 +889,33 @@
 - 平台 service-auth 清理须精确（仅 metrics 身份），勿误伤其他内部调用方。
 - sprint-35b 硬化随退役作废（逻辑亮点已 SP-1 移植进平台）。
 
+## Sprint-48: 前端页面驱动的数据中台重构治理 (202606)
+**状态**: DONE
+**类型**: Architecture Governance + Implementation（skills + 页面矩阵 + 后续编码约束 + 首批页面整改）
+**目标**: 固化 DTS 企业级数据中台后续前端重构的执行规则：以现有前端页面为第一事实源，尽量不新增菜单或页面，通过页面、按钮、组件、路由和接口契约把功能点串成真实产品闭环。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-DTS前端重构skills固化 | P0 | 3 | DONE |
+| F2-现有页面能力矩阵基线 | P0 | 4 | DONE |
+| F3-菜单路由收敛规则 | P0 | 3 | DONE |
+| F4-TDD与Chrome95验收基线 | P0 | 3 | DONE |
+
+**统计**: READY=0, IN_PROGRESS=0, DONE=13, BLOCKED=0
+**进度（2026-06-18）**: 完成 DTS 前端重构 skills、页面/按钮矩阵、菜单路由收敛规则和 TDD/Chrome95 验收基线；同时完成首批整改：清理工作台内置 demo 场景夹具，工作台偏好 API 默认关闭并保留本地偏好，避免后端未升级时 `/api/workbench/preferences` 404 噪音。
+**背景**: Sprint-45/46 已完成全局 UI 产品化与唯一工作台整改，后续继续编码前需要先固化页面优先、菜单收敛、按钮组件真实闭环和 Chrome95 验收规则，避免再次出现页面割裂、假实现或内置客户 demo 场景。
+**设计文档**: `worklog/v2.2.3/sprint-48-202606/README.md`
+**页面矩阵**: `worklog/v2.2.3/sprint-48-202606/assets/page-capability-matrix.md`
+**按钮组件矩阵**: `worklog/v2.2.3/sprint-48-202606/assets/button-component-matrix.md`
+**规则固化**: `worklog/v2.2.3/sprint-48-202606/assets/dts-frontend-refactor-rules.md`
+**集成测试**: `worklog/v2.2.3/sprint-48-202606/it/README.md`
+**关键决策**:
+- 前端页面是产品重构的第一事实源；后台能力只补页面闭环。
+- 默认不新增菜单或页面；优先复用、合并、兼容跳转或退役。
+- 每个客户可见按钮和组件必须有状态、路由/API/外部交接点和测试证据。
+- 客户业务场景不内置为产品 demo；由现场配置或客户定义。
+- 后续 UI 编码必须先写 source-contract/unit test，再做最小实现，并补 Chrome95/Playwright 证据。
+
 ### 整合大计划 SP-1~SP-4 总览
 | 阶段 | Sprint | 状态 |
 |------|--------|------|

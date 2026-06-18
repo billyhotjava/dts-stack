@@ -20,16 +20,18 @@ export type GlobalConfig = {
 	routerHistory: "browser" | "hash";
 	/** Enable admin UI for managing portal (client) menus */
 	enablePortalMenuMgmt: boolean;
-    /** Enable experimental SQL workbench experience */
-    enableSqlWorkbench: boolean;
-    /** Enable Sprint-11 new SQL IDE (replaces QueryWorkbenchPage when true) */
-    enableSqlIdeV2: boolean;
-    /** Allowed roles to sign in; empty means allow all authenticated users */
-    allowedLoginRoles: string[];
-    /** Local Koal middleware endpoints, used for PKI login */
-    koalPkiEndpoints: string[];
-    /** Show the classified login mark: red star + 机密 text */
-    showClassifiedLoginBadge: boolean;
+	/** Enable experimental SQL workbench experience */
+	enableSqlWorkbench: boolean;
+	/** Enable Sprint-11 new SQL IDE (replaces QueryWorkbenchPage when true) */
+	enableSqlIdeV2: boolean;
+	/** Allowed roles to sign in; empty means allow all authenticated users */
+	allowedLoginRoles: string[];
+	/** Local Koal middleware endpoints, used for PKI login */
+	koalPkiEndpoints: string[];
+	/** Show the classified login mark: red star + 机密 text */
+	showClassifiedLoginBadge: boolean;
+	/** Enable server-side personal workbench preferences API */
+	enableWorkbenchPreferenceApi: boolean;
 };
 
 /**
@@ -106,91 +108,106 @@ const resolveApiBaseUrl = () => {
 };
 
 const resolveAllowedLoginRoles = (): string[] => {
-    // Default: allow all authenticated users (empty list).
-    // If you want to restrict, set VITE_ALLOWED_LOGIN_ROLES to a comma-separated list, e.g.
-    // "DEPT_DATA_VIEWER,DEPT_DATA_DEV,DEPT_DATA_OWNER,INST_DATA_VIEWER,INST_DATA_DEV,INST_DATA_OWNER,ROLE_OP_ADMIN".
-    const defaultValue = "";
-    const raw = (import.meta.env.VITE_ALLOWED_LOGIN_ROLES || defaultValue) as string;
-    return String(raw)
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
+	// Default: allow all authenticated users (empty list).
+	// If you want to restrict, set VITE_ALLOWED_LOGIN_ROLES to a comma-separated list, e.g.
+	// "DEPT_DATA_VIEWER,DEPT_DATA_DEV,DEPT_DATA_OWNER,INST_DATA_VIEWER,INST_DATA_DEV,INST_DATA_OWNER,ROLE_OP_ADMIN".
+	const defaultValue = "";
+	const raw = (import.meta.env.VITE_ALLOWED_LOGIN_ROLES || defaultValue) as string;
+	return String(raw)
+		.split(",")
+		.map((s) => s.trim())
+		.filter(Boolean);
 };
 
 declare global {
-    interface Window {
-        __RUNTIME_CONFIG__?: {
-            koalPkiEndpoints?: string[];
-            enableSqlWorkbench?: string | boolean;
-            enableSqlIdeV2?: string | boolean;
-            platformBaseUrl?: string;
-            allowedExternalRedirectHosts?: string[] | string;
-            showClassifiedLoginBadge?: string | boolean;
-        };
-    }
+	interface Window {
+		__RUNTIME_CONFIG__?: {
+			koalPkiEndpoints?: string[];
+			enableSqlWorkbench?: string | boolean;
+			enableSqlIdeV2?: string | boolean;
+			platformBaseUrl?: string;
+			allowedExternalRedirectHosts?: string[] | string;
+			showClassifiedLoginBadge?: string | boolean;
+			enableWorkbenchPreferenceApi?: string | boolean;
+		};
+	}
 }
 
 const resolveKoalPkiEndpoints = (): string[] => {
-    // 1) Prefer runtime-injected config (unified for admin & platform)
-    try {
-        const arr = (typeof window !== "undefined" && (window.__RUNTIME_CONFIG__?.koalPkiEndpoints)) || [];
-        if (Array.isArray(arr) && arr.length > 0) return arr.map((s) => String(s).trim()).filter(Boolean);
-    } catch {}
-    // 2) Fall back to build-time env
-    const raw = import.meta.env.VITE_KOAL_PKI_ENDPOINTS as any;
-    if (typeof raw === "string") {
-        return raw
-            .split(",")
-            .map((endpoint) => endpoint.trim())
-            .filter(Boolean);
-    }
-    if (Array.isArray(raw)) {
-        return raw.map((s) => String(s).trim()).filter(Boolean);
-    }
-    return [];
+	// 1) Prefer runtime-injected config (unified for admin & platform)
+	try {
+		const arr = (typeof window !== "undefined" && window.__RUNTIME_CONFIG__?.koalPkiEndpoints) || [];
+		if (Array.isArray(arr) && arr.length > 0) return arr.map((s) => String(s).trim()).filter(Boolean);
+	} catch {}
+	// 2) Fall back to build-time env
+	const raw = import.meta.env.VITE_KOAL_PKI_ENDPOINTS as any;
+	if (typeof raw === "string") {
+		return raw
+			.split(",")
+			.map((endpoint) => endpoint.trim())
+			.filter(Boolean);
+	}
+	if (Array.isArray(raw)) {
+		return raw.map((s) => String(s).trim()).filter(Boolean);
+	}
+	return [];
 };
 
 const resolveEnableSqlWorkbench = (): boolean => {
-    try {
-        const rc = (typeof window !== "undefined" && window.__RUNTIME_CONFIG__) || {};
-        if (rc && typeof rc.enableSqlWorkbench !== "undefined") {
-            const raw = String(rc.enableSqlWorkbench).trim().toLowerCase();
-            if (raw === "true" || raw === "1") return true;
-            if (raw === "false" || raw === "0") return false;
-        }
-    } catch {}
-    return String(import.meta.env.VITE_ENABLE_SQL_WORKBENCH || "false").toLowerCase() === "true";
+	try {
+		const rc = (typeof window !== "undefined" && window.__RUNTIME_CONFIG__) || {};
+		if (rc && typeof rc.enableSqlWorkbench !== "undefined") {
+			const raw = String(rc.enableSqlWorkbench).trim().toLowerCase();
+			if (raw === "true" || raw === "1") return true;
+			if (raw === "false" || raw === "0") return false;
+		}
+	} catch {}
+	return String(import.meta.env.VITE_ENABLE_SQL_WORKBENCH || "false").toLowerCase() === "true";
 };
 
 const resolveEnableSqlIdeV2 = (): boolean => {
-    try {
-        const rc = (typeof window !== "undefined" && window.__RUNTIME_CONFIG__) || {};
-        if (rc && typeof rc.enableSqlIdeV2 !== "undefined") {
-            const raw = String(rc.enableSqlIdeV2).trim().toLowerCase();
-            if (raw === "true" || raw === "1") return true;
-            if (raw === "false" || raw === "0") return false;
-        }
-    } catch {}
-    return String(import.meta.env.VITE_ENABLE_SQL_IDE_V2 || "true").toLowerCase() === "true";
+	try {
+		const rc = (typeof window !== "undefined" && window.__RUNTIME_CONFIG__) || {};
+		if (rc && typeof rc.enableSqlIdeV2 !== "undefined") {
+			const raw = String(rc.enableSqlIdeV2).trim().toLowerCase();
+			if (raw === "true" || raw === "1") return true;
+			if (raw === "false" || raw === "0") return false;
+		}
+	} catch {}
+	return String(import.meta.env.VITE_ENABLE_SQL_IDE_V2 || "true").toLowerCase() === "true";
 };
 
 const parseBooleanFlag = (value: unknown): boolean | undefined => {
-    if (typeof value === "boolean") return value;
-    if (typeof value !== "string") return undefined;
-    const normalized = value.trim().toLowerCase();
-    if (["true", "1", "yes", "y", "on"].includes(normalized)) return true;
-    if (["false", "0", "no", "n", "off"].includes(normalized)) return false;
-    return undefined;
+	if (typeof value === "boolean") return value;
+	if (typeof value !== "string") return undefined;
+	const normalized = value.trim().toLowerCase();
+	if (["true", "1", "yes", "y", "on"].includes(normalized)) return true;
+	if (["false", "0", "no", "n", "off"].includes(normalized)) return false;
+	return undefined;
 };
 
 const resolveShowClassifiedLoginBadge = (): boolean => {
-    try {
-        const runtimeValue = typeof window !== "undefined" ? window.__RUNTIME_CONFIG__?.showClassifiedLoginBadge : undefined;
-        const parsed = parseBooleanFlag(runtimeValue);
-        if (typeof parsed === "boolean") return parsed;
-    } catch {}
-    const env = import.meta.env as Record<string, string | boolean | undefined>;
-    return parseBooleanFlag(env.WEBAPP_SHOW_CLASSIFIED_LOGIN_BADGE ?? env.VITE_SHOW_CLASSIFIED_LOGIN_BADGE) ?? true;
+	try {
+		const runtimeValue =
+			typeof window !== "undefined" ? window.__RUNTIME_CONFIG__?.showClassifiedLoginBadge : undefined;
+		const parsed = parseBooleanFlag(runtimeValue);
+		if (typeof parsed === "boolean") return parsed;
+	} catch {}
+	const env = import.meta.env as Record<string, string | boolean | undefined>;
+	return parseBooleanFlag(env.WEBAPP_SHOW_CLASSIFIED_LOGIN_BADGE ?? env.VITE_SHOW_CLASSIFIED_LOGIN_BADGE) ?? true;
+};
+
+const resolveEnableWorkbenchPreferenceApi = (): boolean => {
+	try {
+		const runtimeValue =
+			typeof window !== "undefined" ? window.__RUNTIME_CONFIG__?.enableWorkbenchPreferenceApi : undefined;
+		const parsed = parseBooleanFlag(runtimeValue);
+		if (typeof parsed === "boolean") return parsed;
+	} catch {}
+	const env = import.meta.env as Record<string, string | boolean | undefined>;
+	return (
+		parseBooleanFlag(env.WEBAPP_ENABLE_WORKBENCH_PREFERENCE_API ?? env.VITE_ENABLE_WORKBENCH_PREFERENCE_API) ?? false
+	);
 };
 
 export const GLOBAL_CONFIG: GlobalConfig = {
@@ -205,10 +222,11 @@ export const GLOBAL_CONFIG: GlobalConfig = {
 	routerHistory: ((import.meta.env.VITE_APP_ROUTER_HISTORY || "browser") as string).trim().toLowerCase() as
 		| "browser"
 		| "hash",
-    enablePortalMenuMgmt: String(import.meta.env.VITE_ENABLE_PORTAL_MENU_MGMT || "true").toLowerCase() === "true",
-    enableSqlWorkbench: resolveEnableSqlWorkbench(),
-    enableSqlIdeV2: resolveEnableSqlIdeV2(),
-    allowedLoginRoles: resolveAllowedLoginRoles(),
-    koalPkiEndpoints: resolveKoalPkiEndpoints(),
-    showClassifiedLoginBadge: resolveShowClassifiedLoginBadge(),
+	enablePortalMenuMgmt: String(import.meta.env.VITE_ENABLE_PORTAL_MENU_MGMT || "true").toLowerCase() === "true",
+	enableSqlWorkbench: resolveEnableSqlWorkbench(),
+	enableSqlIdeV2: resolveEnableSqlIdeV2(),
+	allowedLoginRoles: resolveAllowedLoginRoles(),
+	koalPkiEndpoints: resolveKoalPkiEndpoints(),
+	showClassifiedLoginBadge: resolveShowClassifiedLoginBadge(),
+	enableWorkbenchPreferenceApi: resolveEnableWorkbenchPreferenceApi(),
 };

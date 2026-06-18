@@ -3,11 +3,17 @@ import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const SERVICE_URL = new URL("../../api/services/workbenchService.ts", import.meta.url);
+const GLOBAL_CONFIG_URL = new URL("../../global-config.ts", import.meta.url);
 const INDEX_URL = new URL("./index.tsx", import.meta.url);
 const LEADER_PAGE_URL = new URL("./LeaderOverviewPage.tsx", import.meta.url);
 const REGISTRY_URL = new URL("./workbenchComponentRegistry.tsx", import.meta.url);
 const DRAWER_URL = new URL("./components/WorkbenchCustomizeDrawer.tsx", import.meta.url);
 const LOCAL_PREFERENCES_URL = new URL("./workbenchLocalPreferences.ts", import.meta.url);
+const VITE_CONFIG_URL = new URL("../../../vite.config.ts", import.meta.url);
+const PLATFORM_WEBAPP_ENTRYPOINT_URL = new URL(
+	"../../../../../builds/dts-platform-webapp/docker-entrypoint.sh",
+	import.meta.url,
+);
 
 const expectedComponentKeys = [
 	"leader-kpi",
@@ -29,9 +35,18 @@ test("workbench service exposes personal preference endpoints", () => {
 	assert.match(source, /WorkbenchComponentDescriptor/);
 	assert.match(source, /WorkbenchPreferenceItem/);
 	assert.match(source, /WorkbenchPreferencesResponse/);
-	assert.match(source, /preferences:\s*\(\)\s*=>\s*apiClient\.get<WorkbenchPreferencesResponse>\(\{\s*url:\s*"\/workbench\/preferences"/s);
-	assert.match(source, /savePreferences:\s*\([^)]*\)\s*=>\s*apiClient\.put<WorkbenchPreferencesResponse>\(\{\s*url:\s*"\/workbench\/preferences"/s);
-	assert.match(source, /resetPreferences:\s*\(\)\s*=>\s*apiClient\.post<WorkbenchPreferencesResponse>\(\{\s*url:\s*"\/workbench\/preferences\/reset"/s);
+	assert.match(
+		source,
+		/preferences:\s*\(\)\s*=>\s*apiClient\.get<WorkbenchPreferencesResponse>\(\{\s*url:\s*"\/workbench\/preferences"/s,
+	);
+	assert.match(
+		source,
+		/savePreferences:\s*\([^)]*\)\s*=>\s*apiClient\.put<WorkbenchPreferencesResponse>\(\{\s*url:\s*"\/workbench\/preferences"/s,
+	);
+	assert.match(
+		source,
+		/resetPreferences:\s*\(\)\s*=>\s*apiClient\.post<WorkbenchPreferencesResponse>\(\{\s*url:\s*"\/workbench\/preferences\/reset"/s,
+	);
 	assert.match(source, /preferences:[\s\S]*_skipErrorToast:\s*true/);
 	assert.match(source, /savePreferences:[\s\S]*_skipErrorToast:\s*true/);
 	assert.match(source, /resetPreferences:[\s\S]*_skipErrorToast:\s*true/);
@@ -87,6 +102,30 @@ test("workbench page is a personalizable container over the leader overview modu
 	for (const key of ["screen-strip", "leader-kpi", "top-reports", "core-assets"]) {
 		assert.match(leaderSource, new RegExp(`isComponentVisible\\("${key}"\\)`));
 	}
+});
+
+test("workbench server-side preference API is opt-in to avoid 404 noise before backend upgrade", () => {
+	const globalConfigSource = readFileSync(GLOBAL_CONFIG_URL, "utf8");
+	const indexSource = readFileSync(INDEX_URL, "utf8");
+	const viteConfigSource = readFileSync(VITE_CONFIG_URL, "utf8");
+	const entrypointSource = readFileSync(PLATFORM_WEBAPP_ENTRYPOINT_URL, "utf8");
+
+	assert.match(globalConfigSource, /enableWorkbenchPreferenceApi:\s*boolean/);
+	assert.match(globalConfigSource, /enableWorkbenchPreferenceApi\?:\s*string\s*\|\s*boolean/);
+	assert.match(globalConfigSource, /resolveEnableWorkbenchPreferenceApi/);
+	assert.match(globalConfigSource, /VITE_ENABLE_WORKBENCH_PREFERENCE_API/);
+	assert.match(globalConfigSource, /enableWorkbenchPreferenceApi:\s*resolveEnableWorkbenchPreferenceApi\(\)/);
+	assert.match(viteConfigSource, /enableWorkbenchPreferenceApi/);
+	assert.match(entrypointSource, /WEBAPP_ENABLE_WORKBENCH_PREFERENCE_API/);
+	assert.match(entrypointSource, /enableWorkbenchPreferenceApi='\$\{val\}'/);
+
+	assert.match(indexSource, /GLOBAL_CONFIG/);
+	assert.match(
+		indexSource,
+		/!GLOBAL_CONFIG\.enableWorkbenchPreferenceApi[\s\S]*buildLocalPreferenceResponse\(readLocalWorkbenchPreferenceItems\(preferenceOwner\)\)/,
+	);
+	assert.match(indexSource, /!GLOBAL_CONFIG\.enableWorkbenchPreferenceApi[\s\S]*saveLocalWorkbenchPreferenceItems/);
+	assert.match(indexSource, /!GLOBAL_CONFIG\.enableWorkbenchPreferenceApi[\s\S]*resetLocalWorkbenchPreferenceItems/);
 });
 
 test("workbench local preferences provide a silent per-user fallback", () => {

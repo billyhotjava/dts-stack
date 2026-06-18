@@ -1,19 +1,33 @@
+import { existsSync } from "node:fs";
+import { resolve as resolvePath } from "node:path";
+import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import { vanillaExtractPlugin } from "@vanilla-extract/vite-plugin";
+import legacy from "@vitejs/plugin-legacy";
 import react from "@vitejs/plugin-react";
 import { visualizer } from "rollup-plugin-visualizer";
 import { defineConfig, loadEnv } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
-import { existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { resolve as resolvePath } from "node:path";
-import legacy from "@vitejs/plugin-legacy";
-import { unwrapCssLayers } from "./tools/postcss/unwrap-css-layers";
 import { legacyCssFallbacks } from "./tools/postcss/legacy-css-fallbacks";
+import { unwrapCssLayers } from "./tools/postcss/unwrap-css-layers";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
-const legacySupportedBrowsers = ["chrome >= 95", "edge >= 95", "firefox >= 102", "safari >= 15.4", "ios >= 15.5", "android >= 95"];
-const modernSupportedBrowsers = ["chrome >= 109", "edge >= 109", "firefox >= 115", "safari >= 16.4", "ios >= 16.4", "android >= 109"];
+const legacySupportedBrowsers = [
+	"chrome >= 95",
+	"edge >= 95",
+	"firefox >= 102",
+	"safari >= 15.4",
+	"ios >= 15.5",
+	"android >= 95",
+];
+const modernSupportedBrowsers = [
+	"chrome >= 109",
+	"edge >= 109",
+	"firefox >= 115",
+	"safari >= 16.4",
+	"ios >= 16.4",
+	"android >= 109",
+];
 const adminServiceTarget = { host: "dts-admin", containerPort: 8081, hostPort: 18081 };
 const analyticsApiServiceTarget = { host: "dts-analytics", containerPort: 3000, hostPort: 3000 };
 const analyticsUiServiceTarget = { host: "dts-analytics-webapp-modern", containerPort: 3002, hostPort: 3002 };
@@ -31,7 +45,7 @@ function resolveServiceProxyTarget(
 	service: { host: string; containerPort: number; hostPort: number },
 	runningInContainer: boolean,
 ) {
-	if (envValue && envValue.trim()) {
+	if (envValue?.trim()) {
 		return envValue.trim();
 	}
 	return runningInContainer
@@ -113,11 +127,7 @@ export default defineConfig(({ mode }) => {
 	// on older browsers used by customers. Modern-only build still available via
 	// LEGACY_BROWSER_BUILD=0 (e.g. when debugging with chrome 109+ features).
 	const legacyFlagRaw =
-		env.LEGACY_BROWSER_BUILD ??
-		rawEnv.LEGACY_BROWSER_BUILD ??
-		env.VITE_LEGACY_BUILD ??
-		rawEnv.VITE_LEGACY_BUILD ??
-		"1";
+		env.LEGACY_BROWSER_BUILD ?? rawEnv.LEGACY_BROWSER_BUILD ?? env.VITE_LEGACY_BUILD ?? rawEnv.VITE_LEGACY_BUILD ?? "1";
 	const normalizedLegacyFlag = String(legacyFlagRaw).trim().toLowerCase();
 	const legacyEnabled = normalizedLegacyFlag !== "0" && normalizedLegacyFlag !== "false";
 	const browserTargets = legacyEnabled ? legacySupportedBrowsers : modernSupportedBrowsers;
@@ -161,122 +171,129 @@ export default defineConfig(({ mode }) => {
 		analyticsUiServiceTarget,
 		runningInContainer,
 	);
-	const pollingEnabled = String(env.CHOKIDAR_USEPOLLING || "").trim().toLowerCase() === "true";
+	const pollingEnabled =
+		String(env.CHOKIDAR_USEPOLLING || "")
+			.trim()
+			.toLowerCase() === "true";
 	const pollingInterval = Number(env.CHOKIDAR_INTERVAL || 1000) || 1000;
 
 	if (mode !== "production") {
 		// Helpful runtime log for diagnosing 401 during login in dev
-		console.info(
-			`[dev-proxy] target=${runtimeProxyTarget} prefix=${apiProxyPrefix || ""} base=${base}`,
-		);
+		console.info(`[dev-proxy] target=${runtimeProxyTarget} prefix=${apiProxyPrefix || ""} base=${base}`);
 	}
 
-  // Dev-only helper: serve /runtime-config.js, mirroring prod entrypoint behavior.
-  const runtimeConfigPlugin = (() => {
-    const koalCsv = (env as any).KOAL_PKI_ENDPOINTS || (env as any).VITE_KOAL_PKI_ENDPOINTS || "";
-    const koalList = String(koalCsv)
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const enableRaw = (env as any).WEBAPP_PASSWORD_LOGIN_ENABLED ?? "";
-    const hideRaw = (env as any).VITE_HIDE_PASSWORD_LOGIN ?? "";
-    const classifiedBadgeRaw = (env as any).WEBAPP_SHOW_CLASSIFIED_LOGIN_BADGE ?? "";
-    const vendorBase = (env as any).KOAL_VENDOR_BASE || (env as any).VITE_KOAL_VENDOR_BASE || "";
-    const platformBase = (env as any).PLATFORM_PUBLIC_BASE_URL || (env as any).VITE_PLATFORM_PUBLIC_BASE_URL || "";
-    const allowedExternalHostsRaw =
-      (env as any).ALLOWED_EXTERNAL_REDIRECT_HOSTS || (env as any).VITE_ALLOWED_EXTERNAL_REDIRECT_HOSTS || "";
-    const allowedExternalHosts = String(allowedExternalHostsRaw)
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-    const sqlWorkbenchRaw = (env as any).VITE_ENABLE_SQL_WORKBENCH ?? (env as any).WEBAPP_ENABLE_SQL_WORKBENCH ?? "";
-    const sqlIdeV2Raw = (env as any).VITE_ENABLE_SQL_IDE_V2 ?? (env as any).WEBAPP_ENABLE_SQL_IDE_V2 ?? "";
-    const enable = String(enableRaw).trim().toLowerCase();
-    const hide = String(hideRaw).trim().toLowerCase();
-    const classifiedBadge = String(classifiedBadgeRaw).trim().toLowerCase();
-    const sqlWorkbench = String(sqlWorkbenchRaw).trim().toLowerCase();
-    const sqlIdeV2 = String(sqlIdeV2Raw).trim().toLowerCase();
-    return {
-      name: "dev-runtime-config",
-      apply: "serve",
-      configureServer(server: any) {
-        server.middlewares.use((req: any, res: any, next: any) => {
-          if (req.url === "/runtime-config.js") {
-            let js = "(function(w){w.__RUNTIME_CONFIG__=w.__RUNTIME_CONFIG__||{};";
-            if (koalList.length > 0) {
-              js += `w.__RUNTIME_CONFIG__.koalPkiEndpoints=${JSON.stringify(koalList)};`;
-            }
-            if (enable) {
-              js += `w.__RUNTIME_CONFIG__.enablePasswordLogin=${JSON.stringify(enable)};`;
-            }
-            if (hide) {
-              js += `w.__RUNTIME_CONFIG__.hidePasswordLogin=${JSON.stringify(hide)};`;
-            }
-            if (classifiedBadge) {
-              js += `w.__RUNTIME_CONFIG__.showClassifiedLoginBadge=${JSON.stringify(classifiedBadge)};`;
-            }
-            if (sqlWorkbench) {
-              js += `w.__RUNTIME_CONFIG__.enableSqlWorkbench=${JSON.stringify(sqlWorkbench)};`;
-            }
-            if (sqlIdeV2) {
-              js += `w.__RUNTIME_CONFIG__.enableSqlIdeV2=${JSON.stringify(sqlIdeV2)};`;
-            }
-            if (String(vendorBase).trim()) {
-              js += `w.__RUNTIME_CONFIG__.koalVendorBase=${JSON.stringify(String(vendorBase).trim())};`;
-            }
-            if (String(platformBase).trim()) {
-              js += `w.__RUNTIME_CONFIG__.platformBaseUrl=${JSON.stringify(String(platformBase).trim())};`;
-            }
-            if (allowedExternalHosts.length > 0) {
-              js += `w.__RUNTIME_CONFIG__.allowedExternalRedirectHosts=${JSON.stringify(allowedExternalHosts)};`;
-            }
-            js += "})(window);\n";
-            res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-            res.end(js);
-            return;
-          }
-          next();
-        });
-      },
-    };
-  })();
+	// Dev-only helper: serve /runtime-config.js, mirroring prod entrypoint behavior.
+	const runtimeConfigPlugin = (() => {
+		const koalCsv = (env as any).KOAL_PKI_ENDPOINTS || (env as any).VITE_KOAL_PKI_ENDPOINTS || "";
+		const koalList = String(koalCsv)
+			.split(",")
+			.map((s) => s.trim())
+			.filter(Boolean);
+		const enableRaw = (env as any).WEBAPP_PASSWORD_LOGIN_ENABLED ?? "";
+		const hideRaw = (env as any).VITE_HIDE_PASSWORD_LOGIN ?? "";
+		const classifiedBadgeRaw = (env as any).WEBAPP_SHOW_CLASSIFIED_LOGIN_BADGE ?? "";
+		const workbenchPreferenceApiRaw =
+			(env as any).WEBAPP_ENABLE_WORKBENCH_PREFERENCE_API ?? (env as any).VITE_ENABLE_WORKBENCH_PREFERENCE_API ?? "";
+		const vendorBase = (env as any).KOAL_VENDOR_BASE || (env as any).VITE_KOAL_VENDOR_BASE || "";
+		const platformBase = (env as any).PLATFORM_PUBLIC_BASE_URL || (env as any).VITE_PLATFORM_PUBLIC_BASE_URL || "";
+		const allowedExternalHostsRaw =
+			(env as any).ALLOWED_EXTERNAL_REDIRECT_HOSTS || (env as any).VITE_ALLOWED_EXTERNAL_REDIRECT_HOSTS || "";
+		const allowedExternalHosts = String(allowedExternalHostsRaw)
+			.split(",")
+			.map((item) => item.trim())
+			.filter(Boolean);
+		const sqlWorkbenchRaw = (env as any).VITE_ENABLE_SQL_WORKBENCH ?? (env as any).WEBAPP_ENABLE_SQL_WORKBENCH ?? "";
+		const sqlIdeV2Raw = (env as any).VITE_ENABLE_SQL_IDE_V2 ?? (env as any).WEBAPP_ENABLE_SQL_IDE_V2 ?? "";
+		const enable = String(enableRaw).trim().toLowerCase();
+		const hide = String(hideRaw).trim().toLowerCase();
+		const classifiedBadge = String(classifiedBadgeRaw).trim().toLowerCase();
+		const workbenchPreferenceApi = String(workbenchPreferenceApiRaw).trim().toLowerCase();
+		const sqlWorkbench = String(sqlWorkbenchRaw).trim().toLowerCase();
+		const sqlIdeV2 = String(sqlIdeV2Raw).trim().toLowerCase();
+		return {
+			name: "dev-runtime-config",
+			apply: "serve",
+			configureServer(server: any) {
+				server.middlewares.use((req: any, res: any, next: any) => {
+					if (req.url === "/runtime-config.js") {
+						let js = "(function(w){w.__RUNTIME_CONFIG__=w.__RUNTIME_CONFIG__||{};";
+						if (koalList.length > 0) {
+							js += `w.__RUNTIME_CONFIG__.koalPkiEndpoints=${JSON.stringify(koalList)};`;
+						}
+						if (enable) {
+							js += `w.__RUNTIME_CONFIG__.enablePasswordLogin=${JSON.stringify(enable)};`;
+						}
+						if (hide) {
+							js += `w.__RUNTIME_CONFIG__.hidePasswordLogin=${JSON.stringify(hide)};`;
+						}
+						if (classifiedBadge) {
+							js += `w.__RUNTIME_CONFIG__.showClassifiedLoginBadge=${JSON.stringify(classifiedBadge)};`;
+						}
+						if (workbenchPreferenceApi) {
+							js += `w.__RUNTIME_CONFIG__.enableWorkbenchPreferenceApi=${JSON.stringify(workbenchPreferenceApi)};`;
+						}
+						if (sqlWorkbench) {
+							js += `w.__RUNTIME_CONFIG__.enableSqlWorkbench=${JSON.stringify(sqlWorkbench)};`;
+						}
+						if (sqlIdeV2) {
+							js += `w.__RUNTIME_CONFIG__.enableSqlIdeV2=${JSON.stringify(sqlIdeV2)};`;
+						}
+						if (String(vendorBase).trim()) {
+							js += `w.__RUNTIME_CONFIG__.koalVendorBase=${JSON.stringify(String(vendorBase).trim())};`;
+						}
+						if (String(platformBase).trim()) {
+							js += `w.__RUNTIME_CONFIG__.platformBaseUrl=${JSON.stringify(String(platformBase).trim())};`;
+						}
+						if (allowedExternalHosts.length > 0) {
+							js += `w.__RUNTIME_CONFIG__.allowedExternalRedirectHosts=${JSON.stringify(allowedExternalHosts)};`;
+						}
+						js += "})(window);\n";
+						res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+						res.end(js);
+						return;
+					}
+					next();
+				});
+			},
+		};
+	})();
 
-  return {
-    base,
-    envPrefix: ["VITE_", "WEBAPP_"],
-    plugins: [
-      // Redirect `import "sonner"` → dedup wrapper everywhere except
-      // dedup-toast.ts itself (which needs the real sonner package).
-      {
-        name: "sonner-dedup",
-        enforce: "pre" as const,
-        resolveId(source: string, importer: string | undefined) {
-          if (source === "sonner" && importer && !importer.includes("dedup-toast")) {
-            return resolvePath(rootDir, "src/utils/dedup-toast.ts");
-          }
-        },
-      },
-      react(),
-      vanillaExtractPlugin({
-        identifiers: ({ debugId }) => `${debugId}`,
-      }),
-      tailwindcss(),
-      legacy({
-        targets: browserTargets,
-        modernPolyfills: true,
-        renderLegacyChunks: false,
-      }),
-      tsconfigPaths(),
-      runtimeConfigPlugin,
-
-      isProduction &&
-      visualizer({
-        // Avoid auto-opening in CI/Docker to prevent PowerShell/xdg-open errors
-        open: env.VITE_VISUALIZER_OPEN === "true" && !process.env.CI,
-				gzipSize: true,
-				brotliSize: true,
-				template: "treemap",
+	return {
+		base,
+		envPrefix: ["VITE_", "WEBAPP_"],
+		plugins: [
+			// Redirect `import "sonner"` → dedup wrapper everywhere except
+			// dedup-toast.ts itself (which needs the real sonner package).
+			{
+				name: "sonner-dedup",
+				enforce: "pre" as const,
+				resolveId(source: string, importer: string | undefined) {
+					if (source === "sonner" && importer && !importer.includes("dedup-toast")) {
+						return resolvePath(rootDir, "src/utils/dedup-toast.ts");
+					}
+				},
+			},
+			react(),
+			vanillaExtractPlugin({
+				identifiers: ({ debugId }) => `${debugId}`,
 			}),
+			tailwindcss(),
+			legacy({
+				targets: browserTargets,
+				modernPolyfills: true,
+				renderLegacyChunks: false,
+			}),
+			tsconfigPaths(),
+			runtimeConfigPlugin,
+
+			isProduction &&
+				visualizer({
+					// Avoid auto-opening in CI/Docker to prevent PowerShell/xdg-open errors
+					open: env.VITE_VISUALIZER_OPEN === "true" && !process.env.CI,
+					gzipSize: true,
+					brotliSize: true,
+					template: "treemap",
+				}),
 		].filter(Boolean),
 
 		resolve: {
@@ -286,40 +303,40 @@ export default defineConfig(({ mode }) => {
 			},
 		},
 
-    server: {
-      open: true,
-      host: true,
-      port: 3001,
-      // Accept requests from other containers (admin dev proxy) by host header
-      // like 'dts-platform-webapp'.
-      allowedHosts: true,
-      // Restrict file serving to this project only
-      fs: { strict: true, allow: [rootDir] },
-      // Ignore sibling workspace mounts to avoid cross-project file watching
-      watch: {
-        ignored: [
-          "**/dts-admin-webapp/**",
-          "**/.pnpm-store/**",
-          "**/.pnpm/**",
-          "**/pnpm-store/**",
-          "**/.vite-cache/**",
-        ],
-        usePolling: pollingEnabled,
-        interval: pollingEnabled ? pollingInterval : undefined,
-      },
-				proxy: createPlatformServerProxy({
-					apiProxyTarget: runtimeProxyTarget,
-					apiProxyPrefix,
-					adminProxyTarget,
-					analyticsApiProxyTarget,
-					analyticsUiProxyTarget,
-				}),
+		server: {
+			open: true,
+			host: true,
+			port: 3001,
+			// Accept requests from other containers (admin dev proxy) by host header
+			// like 'dts-platform-webapp'.
+			allowedHosts: true,
+			// Restrict file serving to this project only
+			fs: { strict: true, allow: [rootDir] },
+			// Ignore sibling workspace mounts to avoid cross-project file watching
+			watch: {
+				ignored: [
+					"**/dts-admin-webapp/**",
+					"**/.pnpm-store/**",
+					"**/.pnpm/**",
+					"**/pnpm-store/**",
+					"**/.vite-cache/**",
+				],
+				usePolling: pollingEnabled,
+				interval: pollingEnabled ? pollingInterval : undefined,
 			},
+			proxy: createPlatformServerProxy({
+				apiProxyTarget: runtimeProxyTarget,
+				apiProxyPrefix,
+				adminProxyTarget,
+				analyticsApiProxyTarget,
+				analyticsUiProxyTarget,
+			}),
+		},
 
-			build: {
-				target: buildTarget,
-				minify: "esbuild",
-				sourcemap: !isProduction,
+		build: {
+			target: buildTarget,
+			minify: "esbuild",
+			sourcemap: !isProduction,
 			cssCodeSplit: true,
 			chunkSizeWarningLimit: 1500,
 			rollupOptions: {
@@ -338,23 +355,23 @@ export default defineConfig(({ mode }) => {
 			exclude: ["@iconify/react", "@vanilla-extract/css"],
 		},
 
-			esbuild: {
-				drop: isProduction ? ["console", "debugger"] : [],
-				legalComments: "none",
-				target: buildTarget,
+		esbuild: {
+			drop: isProduction ? ["console", "debugger"] : [],
+			legalComments: "none",
+			target: buildTarget,
 		},
 
 		css: {
 			postcss: {
 				plugins: legacyEnabled ? [unwrapCssLayers(), legacyCssFallbacks()] : [],
 			},
-      // Do not attempt to resolve absolute container paths in CSS urls
-      url: {
-        filter: (url) => {
-          if (url.startsWith("/workspace/")) return false;
-          return true;
-        },
-      },
-    },
+			// Do not attempt to resolve absolute container paths in CSS urls
+			url: {
+				filter: (url) => {
+					if (url.startsWith("/workspace/")) return false;
+					return true;
+				},
+			},
+		},
 	};
 });

@@ -7,24 +7,25 @@ import workbenchService, {
 	type WorkbenchPreferenceItem,
 	type WorkbenchPreferencesResponse,
 } from "@/api/services/workbenchService";
+import { GLOBAL_CONFIG } from "@/global-config";
 import { useUserInfo } from "@/store/userStore";
 import WorkbenchCustomizeDrawer from "./components/WorkbenchCustomizeDrawer";
 import DataManagementWorkbenchPage from "./DataManagementWorkbenchPage";
 import { LeaderOverviewPage } from "./LeaderOverviewPage";
+import {
+	getWorkbenchComponent,
+	isLeaderOverviewComponentKey,
+	registryOrderOf,
+	renderWorkbenchComponent,
+	toWorkbenchComponentDescriptors,
+	WORKBENCH_COMPONENT_REGISTRY,
+} from "./workbenchComponentRegistry";
 import {
 	readLocalWorkbenchPreferenceItems,
 	resetLocalWorkbenchPreferenceItems,
 	resolveWorkbenchPreferenceOwner,
 	saveLocalWorkbenchPreferenceItems,
 } from "./workbenchLocalPreferences";
-import {
-	WORKBENCH_COMPONENT_REGISTRY,
-	getWorkbenchComponent,
-	isLeaderOverviewComponentKey,
-	registryOrderOf,
-	renderWorkbenchComponent,
-	toWorkbenchComponentDescriptors,
-} from "./workbenchComponentRegistry";
 import { normalizeWorkbenchPreferenceItems } from "./workbenchPersonalizationModel";
 
 const CUSTOMIZE_QUERY = "customize=1";
@@ -90,6 +91,11 @@ export default function WorkbenchPage() {
 
 	const loadPreferences = useCallback(async (): Promise<void> => {
 		setLoading(true);
+		if (!GLOBAL_CONFIG.enableWorkbenchPreferenceApi) {
+			setPreferences(buildLocalPreferenceResponse(readLocalWorkbenchPreferenceItems(preferenceOwner)));
+			setLoading(false);
+			return;
+		}
 		try {
 			const next = await workbenchService.preferences();
 			setPreferences(next);
@@ -152,6 +158,13 @@ export default function WorkbenchPage() {
 			const nextItems = normalizeSavedItems(items);
 			setSaving(true);
 			try {
+				if (!GLOBAL_CONFIG.enableWorkbenchPreferenceApi) {
+					saveLocalWorkbenchPreferenceItems(preferenceOwner, nextItems);
+					setPreferences(buildLocalPreferenceResponse(nextItems));
+					message.success("工作台已更新");
+					closeCustomize();
+					return;
+				}
 				const next = await workbenchService.savePreferences({
 					items: nextItems,
 				});
@@ -175,6 +188,12 @@ export default function WorkbenchPage() {
 	const handleReset = useCallback(async (): Promise<void> => {
 		setSaving(true);
 		try {
+			if (!GLOBAL_CONFIG.enableWorkbenchPreferenceApi) {
+				resetLocalWorkbenchPreferenceItems(preferenceOwner);
+				setPreferences(buildLocalPreferenceResponse(null));
+				message.success("已恢复默认工作台");
+				return;
+			}
 			const next = await workbenchService.resetPreferences();
 			setPreferences(next);
 			resetLocalWorkbenchPreferenceItems(preferenceOwner);
@@ -198,11 +217,7 @@ export default function WorkbenchPage() {
 							工作台
 						</Typography.Title>
 						<Space wrap>
-							<Button
-								icon={<SlidersHorizontal size={16} aria-hidden="true" />}
-								type="primary"
-								onClick={openCustomize}
-							>
+							<Button icon={<SlidersHorizontal size={16} aria-hidden="true" />} type="primary" onClick={openCustomize}>
 								自定义工作台
 							</Button>
 							<Button
@@ -221,7 +236,6 @@ export default function WorkbenchPage() {
 							</Button>
 						</Space>
 					</Space>
-
 				</Space>
 			</div>
 
@@ -259,11 +273,7 @@ export default function WorkbenchPage() {
 			{isEmptyWorkbench && (
 				<div style={{ padding: 32 }}>
 					<Empty description="当前工作台未选择任何组件">
-						<Button
-							type="primary"
-							icon={<SlidersHorizontal size={16} aria-hidden="true" />}
-							onClick={openCustomize}
-						>
+						<Button type="primary" icon={<SlidersHorizontal size={16} aria-hidden="true" />} onClick={openCustomize}>
 							自定义工作台
 						</Button>
 					</Empty>
