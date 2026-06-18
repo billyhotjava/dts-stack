@@ -1,14 +1,8 @@
 import { Button, Checkbox, Drawer, Empty, List, Space, Typography } from "antd";
 import { ArrowDown, ArrowUp, RotateCcw, Save, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type {
-	WorkbenchComponentDescriptor,
-	WorkbenchPreferenceItem,
-} from "@/api/services/workbenchService";
-import {
-	moveWorkbenchPreferenceItem,
-	normalizeWorkbenchPreferenceItems,
-} from "../workbenchPersonalizationModel";
+import type { WorkbenchComponentDescriptor, WorkbenchPreferenceItem } from "@/api/services/workbenchService";
+import { moveWorkbenchPreferenceItem, normalizeWorkbenchPreferenceItems } from "../workbenchPersonalizationModel";
 
 export type WorkbenchCustomizeDrawerProps = {
 	open: boolean;
@@ -53,6 +47,7 @@ export function WorkbenchCustomizeDrawer({
 			title="自定义工作台"
 			open={open}
 			width={520}
+			data-testid="workbench-customize-drawer"
 			onClose={onClose}
 			destroyOnClose
 			footer={

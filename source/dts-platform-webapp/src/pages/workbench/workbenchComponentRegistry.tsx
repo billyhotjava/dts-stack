@@ -40,6 +40,7 @@ function WorkbenchEntryCard({ definition }: WorkbenchEntryCardProps) {
 	return (
 		<Card
 			size="small"
+			data-testid={`workbench-entry-card-${definition.key}`}
 			style={{ borderRadius: 8, height: "100%" }}
 			styles={{ body: { height: "100%", display: "flex", flexDirection: "column", gap: 12 } }}
 		>
@@ -71,6 +72,7 @@ function WorkbenchEntryCard({ definition }: WorkbenchEntryCardProps) {
 					type="primary"
 					size="small"
 					icon={<Icon size={14} aria-hidden="true" />}
+					data-testid={`workbench-entry-action-${definition.key}`}
 					onClick={() => definition.route && navigate(definition.route)}
 					disabled={!definition.route}
 				>
