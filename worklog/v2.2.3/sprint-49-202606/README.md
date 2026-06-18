@@ -1,7 +1,7 @@
 # Sprint-49: 前端 P0 页面真实闭环整改
 
 **时间**: 2026-06
-**状态**: IN_PROGRESS
+**状态**: DONE
 **目标**: 基于 Sprint-48 页面矩阵，优先修复客户已能看到的 P0 页面割裂和布局问题，不新增菜单或页面，通过现有页面把数据接入、资产、消费和工作台入口串成可验收的数据中台产品闭环。
 
 ## 背景
@@ -15,7 +15,7 @@ Sprint-48 已固化“前端页面为第一事实源”的规则和页面/按钮
 | F1 | 数据接入基础页面闭环 | P0 | 3 | DONE |
 | F2 | 资产与消费页面闭环 | P0 | 3 | DONE |
 | F3 | 工作台入口闭环 | P0 | 2 | DONE |
-| F4 | Chrome95 证据与 Review | P0 | 3 | READY |
+| F4 | Chrome95 证据与 Review | P0 | 3 | DONE |
 
 ## 完成标准
 
@@ -24,6 +24,7 @@ Sprint-48 已固化“前端页面为第一事实源”的规则和页面/按钮
 - [x] 不新增菜单或页面，优先复用 Sprint-48 已盘点页面。
 - [x] 已改连接器目录页面具备 source-contract、构建验证和 Chrome95/浏览器证据。
 - [x] Sprint-49 `it/README.md` 已记录连接器、资产消费和工作台入口验证命令、截图和已知全局 warning。
+- [x] 代码 review 完成，无阻断问题；剩余既有全局导航 warning 已登记。
 
 ## 当前切片
 
@@ -35,4 +36,6 @@ Sprint-48 已固化“前端页面为第一事实源”的规则和页面/按钮
 - `F2/T03`: DONE。`/services/consumption` 兼容跳转保留 `productId` query，工作台支持 `section=consumption`。
 - `F3/T01`: DONE。工作台首页 7 个非概览组件动作均有真实路由落点，并补充稳定测试标识。
 - `F3/T02`: DONE。默认关闭后端偏好 API 时走本地偏好降级，Chrome smoke 验证未请求 `/api/workbench/preferences`。
-- 下一切片：`F4/T01` Chrome95 证据与 Review 收口。
+- `F4/T01`: DONE。Sprint-49 全量 source-contract 42/42 通过，生产构建通过。
+- `F4/T02`: DONE。Chrome95 风险扫描未命中生产代码，三条 smoke 截图证据已更新。
+- `F4/T03`: DONE。代码 review 无阻断问题，既有全局导航 warning 和构建告警已登记为剩余风险。

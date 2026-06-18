@@ -35,6 +35,16 @@
   - 工作台首页指标：`entryCardCount=7`、`entryActionCount=7`、`checkboxCount=11`、`preferenceApiRequests=0`。
   - 工作台跳转闭环：点击“数据交付链路 / 查看链路”进入 `#/workbench?section=data-management`，`data-management-workbench-section=true`，`data-consumption-workbench-section=false`。
   - 浏览器控制台：`consoleErrors=[]`、`badResponses=[]`；仅保留既有全局导航 `li` 嵌套 `li` warning。
+- `node --test --experimental-strip-types src/pages/foundation/ConnectorRegistryPage.source-contract.test.ts src/pages/foundation/DataSourcesPage.source-contract.test.ts src/pages/catalog/Sprint49AssetConsumptionFlow.source-contract.test.ts src/pages/catalog/DataProductsPage.source-contract.test.ts src/pages/catalog/DataAssetPortalMenu.source-contract.test.ts src/pages/catalog/DatasetsPage.asset-map-visual.source-contract.test.ts src/pages/catalog/DatasetDetailPage.source-contract.test.ts src/pages/services/BusinessConsumptionPage.source-contract.test.ts src/pages/workbench/Sprint49WorkbenchEntryFlow.source-contract.test.ts src/pages/workbench/WorkbenchPersonalization.source-contract.test.ts src/pages/workbench/DataManagementWorkbenchPage.source-contract.test.ts src/pages/workbench/workbenchLocalPreferences.test.ts`
+  - 结果：42/42 pass。
+- `rg -n ":has\\(|dvh|svh|lvh|container-type|container-name|ResizeObserver|structuredClone|@dnd-kit|react-grid-layout|bodyStyle" ...`
+  - 结果：生产代码未命中；仅命中 source-contract 中的禁止项断言。
+- `node ../../worklog/v2.2.3/sprint-49-202606/it/scripts/connector-registry-smoke.mjs`
+  - 结果：最终回归通过，`consoleErrors=[]`。
+- `node ../../worklog/v2.2.3/sprint-49-202606/it/scripts/asset-consumption-smoke.mjs`
+  - 结果：最终回归通过，`consoleErrors=[]`、`badResponses=[]`。
+- `node ../../worklog/v2.2.3/sprint-49-202606/it/scripts/workbench-entry-smoke.mjs`
+  - 结果：最终回归通过，`consoleErrors=[]`、`badResponses=[]`。
 - `node ../../worklog/v2.2.3/sprint-49-202606/it/scripts/connector-registry-smoke.mjs`
   - 结果：通过。
   - 1366x768 指标：`capabilityCellWidth=160`、`actionCellWidth=360`、`capabilityRows=1`、`actionRows=1`、`actionButtonCount=5`。

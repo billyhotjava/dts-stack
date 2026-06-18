@@ -926,10 +926,10 @@
 | F1-数据接入基础页面闭环 | P0 | 3 | DONE |
 | F2-资产与消费页面闭环 | P0 | 3 | DONE |
 | F3-工作台入口闭环 | P0 | 2 | DONE |
-| F4-Chrome95证据与Review | P0 | 3 | READY |
+| F4-Chrome95证据与Review | P0 | 3 | DONE |
 
-**统计**: READY=3, IN_PROGRESS=0, DONE=8, BLOCKED=0
-**进度（2026-06-18）**: 完成 F1 数据接入基础页面闭环：`/foundation/connectors` 表格布局已稳定，“配置/查看模板”已区分 Drawer 模式，“启用/停用”有禁用说明，“创建数据源”可带 `connectorKey` 打开 `/foundation/data-sources` 新增弹窗并预选连接器。完成 F2 资产与消费页面闭环：`/catalog/assets` 台账操作列固定宽度，数据产品“查看消费”默认进入唯一工作台消费发布 section，`/services/consumption` 兼容跳转保留 `productId` 上下文。完成 F3 工作台入口闭环：`/workbench` 首页 7 个组件动作均有真实路由落点，自定义抽屉保持勾选+上移/下移，默认本地偏好降级不请求 `/api/workbench/preferences`。下一步进入 F4 Chrome95 证据与 Review 收口。
+**统计**: READY=0, IN_PROGRESS=0, DONE=11, BLOCKED=0
+**进度（2026-06-18）**: Sprint-49 完成。F1 数据接入基础页面闭环：`/foundation/connectors` 表格布局稳定，“配置/查看模板”区分 Drawer 模式，“启用/停用”有禁用说明，“创建数据源”可带 `connectorKey` 打开 `/foundation/data-sources` 新增弹窗并预选连接器。F2 资产与消费页面闭环：`/catalog/assets` 台账操作列固定宽度，数据产品“查看消费”默认进入唯一工作台消费发布 section，`/services/consumption` 兼容跳转保留 `productId` 上下文。F3 工作台入口闭环：`/workbench` 首页 7 个组件动作均有真实路由落点，自定义抽屉保持勾选+上移/下移，默认本地偏好降级不请求 `/api/workbench/preferences`。F4 证据与 Review：source-contract 42/42、三条 Chrome smoke、生产构建和 GitNexus 低风险检测完成。
 **设计文档**: `worklog/v2.2.3/sprint-49-202606/README.md`
 **来源矩阵**: `worklog/v2.2.3/sprint-48-202606/assets/page-capability-matrix.md` + `worklog/v2.2.3/sprint-48-202606/assets/button-component-matrix.md`
 **集成测试**: `worklog/v2.2.3/sprint-49-202606/it/README.md`
