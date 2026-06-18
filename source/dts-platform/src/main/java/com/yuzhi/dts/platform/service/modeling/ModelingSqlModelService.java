@@ -310,6 +310,86 @@ public class ModelingSqlModelService {
         return payload;
     }
 
+    @Transactional(readOnly = true)
+    public SqlModelStandardBindingResult listStandardBindings(UUID id, String activeDeptHeader) {
+        ModelingSqlModel model = loadVisibleModel(id, activeDeptHeader, "当前账号无权访问该模型");
+        return buildStandardBindingResult(model, readStandardBindings(model), activeDeptHeader);
+    }
+
+    @Transactional
+    public SqlModelStandardBindingResult saveStandardBindings(
+        UUID id,
+        SqlModelStandardBindingRequest request,
+        String activeDeptHeader
+    ) {
+        ModelingSqlModel model = loadVisibleModel(id, activeDeptHeader, "当前账号无权维护该模型");
+        List<SqlModelStandardBinding> bindings = request == null || request.bindings() == null
+            ? List.of()
+            : request
+                .bindings()
+                .stream()
+                .map(this::normalizeStandardBinding)
+                .filter(binding -> StringUtils.hasText(binding.columnName()))
+                .toList();
+        writeStandardBindings(model, bindings);
+        ModelingSqlModel saved = repo.save(model);
+        return buildStandardBindingResult(saved, bindings, activeDeptHeader);
+    }
+
+    @Transactional
+    public SqlModelSchemaYmlResult generateSchemaYml(UUID id, String activeDeptHeader) {
+        ModelingSqlModel model = loadVisibleModel(id, activeDeptHeader, "当前账号无权访问该模型");
+        SqlModelStandardBindingResult bindingResult = buildStandardBindingResult(model, readStandardBindings(model), activeDeptHeader);
+        String schemaYml = buildSchemaYml(model, bindingResult.bindings());
+        fileService.writeSchemaYmlFile(model.getModelPath(), schemaYml);
+        return new SqlModelSchemaYmlResult(
+            model.getId(),
+            model.getName(),
+            resolveSchemaYmlPath(model),
+            schemaYml
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public SqlModelStandardGateResult checkStandardGate(UUID id, String activeDeptHeader) {
+        ModelingSqlModel model = loadVisibleModel(id, activeDeptHeader, "当前账号无权访问该模型");
+        SqlModelStandardBindingResult result = buildStandardBindingResult(model, readStandardBindings(model), activeDeptHeader);
+        List<String> blockers = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
+        if (result.totalColumns() == 0) {
+            warnings.add("当前模型尚未识别字段，请先同步字段或生成字段草稿");
+        }
+        if (result.missingColumns() > 0) {
+            blockers.add("存在 " + result.missingColumns() + " 个字段未绑定数据元标准");
+        }
+        long missingCodeSet = result
+            .bindings()
+            .stream()
+            .filter(binding -> StringUtils.hasText(binding.codeSet()))
+            .filter(binding -> !StringUtils.hasText(binding.standardCode()))
+            .count();
+        if (missingCodeSet > 0) {
+            blockers.add("存在 " + missingCodeSet + " 个码表字段缺少标准编码");
+        }
+        long drifted = result.bindings().stream().filter(binding -> "drift".equalsIgnoreCase(trimToNull(binding.status()))).count();
+        if (drifted > 0) {
+            blockers.add("存在 " + drifted + " 个字段标准版本漂移");
+        }
+        if (result.mappedColumns() == 0 && result.totalColumns() > 0) {
+            warnings.add("字段已识别，但尚未形成标准绑定");
+        }
+        return new SqlModelStandardGateResult(
+            model.getId(),
+            model.getName(),
+            !blockers.isEmpty(),
+            blockers,
+            warnings,
+            result.totalColumns(),
+            result.mappedColumns(),
+            result.missingColumns()
+        );
+    }
+
     @Transactional
     public SqlModelDto create(SqlModelRequest request, String activeDeptHeader) {
         ensureWorkspaceWritable();
@@ -686,6 +766,301 @@ public class ModelingSqlModelService {
         String csvName = baseName.endsWith(".sql") ? baseName.substring(0, baseName.length() - 4) + ".csv" : baseName + ".csv";
         Path csvPath = sqlPath.resolveSibling(csvName);
         return columnSyncService.parseCsv(csvPath);
+    }
+
+    private ModelingSqlModel loadVisibleModel(UUID id, String activeDeptHeader, String forbiddenMessage) {
+        String activeDept = security.resolveActiveDept(activeDeptHeader);
+        boolean instituteScope = security.hasInstituteScope();
+        ModelingSqlModel model = repo.findById(id).orElseThrow(() -> new EntityNotFoundException("模型不存在"));
+        if (!isOwnerDeptVisible(model.getOwnerDept(), activeDept, instituteScope)) {
+            throw new IllegalArgumentException(forbiddenMessage);
+        }
+        return model;
+    }
+
+    private SqlModelStandardBindingResult buildStandardBindingResult(
+        ModelingSqlModel model,
+        List<SqlModelStandardBinding> persistedBindings,
+        String activeDeptHeader
+    ) {
+        List<SqlModelStandardBinding> saved = persistedBindings == null
+            ? List.of()
+            : persistedBindings.stream().map(this::normalizeStandardBinding).toList();
+        List<Map<String, Object>> columns = model != null && model.getId() != null ? listColumns(model.getId(), activeDeptHeader) : List.of();
+        if (columns.isEmpty()) {
+            int mapped = (int) saved.stream().filter(binding -> StringUtils.hasText(binding.standardCode())).count();
+            return new SqlModelStandardBindingResult(
+                model != null ? model.getId() : null,
+                model != null ? model.getName() : null,
+                saved.size(),
+                mapped,
+                Math.max(saved.size() - mapped, 0),
+                saved
+            );
+        }
+
+        Map<String, SqlModelStandardBinding> byColumn = new LinkedHashMap<>();
+        for (SqlModelStandardBinding binding : saved) {
+            String key = normalizeColumnKey(binding.columnName());
+            if (StringUtils.hasText(key)) {
+                byColumn.put(key, binding);
+            }
+        }
+        List<SqlModelStandardBinding> merged = new ArrayList<>();
+        for (Map<String, Object> column : columns) {
+            String columnName = objectText(column.get("name"));
+            if (!StringUtils.hasText(columnName)) {
+                continue;
+            }
+            SqlModelStandardBinding binding = byColumn.get(normalizeColumnKey(columnName));
+            if (binding == null) {
+                merged.add(
+                    new SqlModelStandardBinding(
+                        columnName,
+                        null,
+                        null,
+                        null,
+                        null,
+                        objectText(column.get("dataType")),
+                        null,
+                        null,
+                        null,
+                        null,
+                        "missing",
+                        "未绑定数据元标准"
+                    )
+                );
+            } else {
+                merged.add(
+                    new SqlModelStandardBinding(
+                        binding.columnName(),
+                        binding.standardId(),
+                        binding.standardCode(),
+                        binding.standardName(),
+                        binding.standardVersion(),
+                        defaultText(binding.dataType(), objectText(column.get("dataType"))),
+                        binding.nullable(),
+                        binding.codeSet(),
+                        binding.securityLevel(),
+                        binding.bindingSource(),
+                        binding.status(),
+                        binding.driftReason()
+                    )
+                );
+            }
+        }
+        int mapped = (int) merged.stream().filter(binding -> StringUtils.hasText(binding.standardCode())).count();
+        return new SqlModelStandardBindingResult(
+            model != null ? model.getId() : null,
+            model != null ? model.getName() : null,
+            merged.size(),
+            mapped,
+            Math.max(merged.size() - mapped, 0),
+            merged
+        );
+    }
+
+    private List<SqlModelStandardBinding> readStandardBindings(ModelingSqlModel model) {
+        Map<String, Object> root = readSemanticContractObject(model);
+        Object dts = root.get("dts");
+        if (!(dts instanceof Map<?, ?> dtsMap)) {
+            return List.of();
+        }
+        Object rawBindings = dtsMap.get("standardBindings");
+        if (!(rawBindings instanceof List<?>)) {
+            return List.of();
+        }
+        try {
+            List<SqlModelStandardBinding> bindings = objectMapper.convertValue(rawBindings, new TypeReference<>() {});
+            return bindings.stream().map(this::normalizeStandardBinding).toList();
+        } catch (IllegalArgumentException ex) {
+            LOG.warn("[sql-model] failed to parse standard bindings for model {}: {}", model != null ? model.getId() : null, ex.getMessage());
+            return List.of();
+        }
+    }
+
+    private void writeStandardBindings(ModelingSqlModel model, List<SqlModelStandardBinding> bindings) {
+        Map<String, Object> root = readSemanticContractObject(model);
+        Map<String, Object> dts;
+        Object existingDts = root.get("dts");
+        if (existingDts instanceof Map<?, ?> map) {
+            dts = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (entry.getKey() != null) {
+                    dts.put(entry.getKey().toString(), entry.getValue());
+                }
+            }
+        } else {
+            dts = new LinkedHashMap<>();
+        }
+        List<Map<String, Object>> payload = bindings
+            .stream()
+            .map(binding -> objectMapper.convertValue(binding, new TypeReference<Map<String, Object>>() {}))
+            .toList();
+        dts.put("standardBindings", payload);
+        root.put("dts", dts);
+        try {
+            applySemanticContract(model, objectMapper.writeValueAsString(root));
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("字段标准绑定无法写入语义契约");
+        }
+    }
+
+    private Map<String, Object> readSemanticContractObject(ModelingSqlModel model) {
+        String raw = model != null ? trimToNull(model.getSemanticContract()) : null;
+        if (!StringUtils.hasText(raw)) {
+            return new LinkedHashMap<>();
+        }
+        try {
+            Object parsed = objectMapper.readValue(raw, Object.class);
+            if (parsed instanceof Map<?, ?> map) {
+                Map<String, Object> result = new LinkedHashMap<>();
+                for (Map.Entry<?, ?> entry : map.entrySet()) {
+                    if (entry.getKey() != null) {
+                        result.put(entry.getKey().toString(), entry.getValue());
+                    }
+                }
+                return result;
+            }
+            Map<String, Object> wrapper = new LinkedHashMap<>();
+            wrapper.put("legacyContract", parsed);
+            return wrapper;
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("语义契约无法解析，不能写入字段标准绑定");
+        }
+    }
+
+    private SqlModelStandardBinding normalizeStandardBinding(SqlModelStandardBinding raw) {
+        if (raw == null) {
+            return new SqlModelStandardBinding(null, null, null, null, null, null, null, null, null, null, "missing", null);
+        }
+        String columnName = trimToNull(raw.columnName());
+        String standardCode = trimToNull(raw.standardCode());
+        String status = trimToNull(raw.status());
+        if (!StringUtils.hasText(status)) {
+            status = StringUtils.hasText(standardCode) ? "active" : "missing";
+        }
+        String bindingSource = trimToNull(raw.bindingSource());
+        if (!StringUtils.hasText(bindingSource) && StringUtils.hasText(standardCode)) {
+            bindingSource = "manual";
+        }
+        return new SqlModelStandardBinding(
+            columnName,
+            raw.standardId(),
+            standardCode,
+            trimToNull(raw.standardName()),
+            trimToNull(raw.standardVersion()),
+            trimToNull(raw.dataType()),
+            raw.nullable(),
+            normalizeUpperOrNull(raw.codeSet()),
+            normalizeUpperOrNull(raw.securityLevel()),
+            bindingSource,
+            status,
+            trimToNull(raw.driftReason())
+        );
+    }
+
+    private String buildSchemaYml(ModelingSqlModel model, List<SqlModelStandardBinding> bindings) {
+        StringBuilder yml = new StringBuilder();
+        yml.append("version: 2\n");
+        yml.append("models:\n");
+        yml.append("  - name: ").append(yamlScalar(defaultText(trimToNull(model.getName()), "model"))).append("\n");
+        if (StringUtils.hasText(model.getDescription())) {
+            yml.append("    description: ").append(yamlScalar(model.getDescription())).append("\n");
+        }
+        List<SqlModelStandardBinding> effective = bindings == null ? List.of() : bindings;
+        if (effective.isEmpty()) {
+            yml.append("    columns: []\n");
+            return yml.toString();
+        }
+        yml.append("    columns:\n");
+        for (SqlModelStandardBinding binding : effective) {
+            if (!StringUtils.hasText(binding.columnName())) {
+                continue;
+            }
+            yml.append("      - name: ").append(yamlScalar(binding.columnName())).append("\n");
+            if (StringUtils.hasText(binding.standardName())) {
+                yml.append("        description: ").append(yamlScalar(binding.standardName())).append("\n");
+            }
+            if (StringUtils.hasText(binding.dataType())) {
+                yml.append("        data_type: ").append(yamlScalar(binding.dataType())).append("\n");
+            }
+            List<String> tests = buildSchemaYmlTests(binding);
+            if (!tests.isEmpty()) {
+                yml.append("        tests:\n");
+                for (String test : tests) {
+                    yml.append(test);
+                }
+            }
+            yml.append("        meta:\n");
+            yml.append("          dts:\n");
+            appendYamlMeta(yml, "standardCode", binding.standardCode());
+            appendYamlMeta(yml, "standardVersion", binding.standardVersion());
+            appendYamlMeta(yml, "codeSet", binding.codeSet());
+            appendYamlMeta(yml, "securityLevel", binding.securityLevel());
+            appendYamlMeta(yml, "bindingSource", binding.bindingSource());
+            appendYamlMeta(yml, "status", binding.status());
+        }
+        return yml.toString();
+    }
+
+    private List<String> buildSchemaYmlTests(SqlModelStandardBinding binding) {
+        List<String> tests = new ArrayList<>();
+        if (Boolean.FALSE.equals(binding.nullable())) {
+            tests.add("          - not_null\n");
+        }
+        if (StringUtils.hasText(binding.codeSet())) {
+            tests.add("          - relationships:\n");
+            tests.add("              to: ref('" + seedName(binding.codeSet()) + "')\n");
+            tests.add("              field: code\n");
+        }
+        return tests;
+    }
+
+    private void appendYamlMeta(StringBuilder yml, String key, String value) {
+        if (StringUtils.hasText(value)) {
+            yml.append("            ").append(key).append(": ").append(yamlScalar(value)).append("\n");
+        }
+    }
+
+    private String resolveSchemaYmlPath(ModelingSqlModel model) {
+        String modelPath = model != null ? trimToNull(model.getModelPath()) : null;
+        if (!StringUtils.hasText(modelPath)) {
+            return "models/schema.yml";
+        }
+        int lastSlash = modelPath.lastIndexOf('/');
+        return lastSlash >= 0 ? modelPath.substring(0, lastSlash + 1) + "schema.yml" : "schema.yml";
+    }
+
+    private String seedName(String codeSet) {
+        return "seed_" + slugify(codeSet);
+    }
+
+    private String yamlScalar(String value) {
+        String text = trimToNull(value);
+        if (!StringUtils.hasText(text)) {
+            return "\"\"";
+        }
+        if (text.matches("^[A-Za-z0-9_./:-]+$")) {
+            return text;
+        }
+        return "\"" + text.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+    }
+
+    private String objectText(Object value) {
+        if (value == null) {
+            return null;
+        }
+        return trimToNull(value.toString());
+    }
+
+    private String normalizeColumnKey(String value) {
+        return StringUtils.hasText(value) ? value.trim().toLowerCase(Locale.ROOT) : null;
+    }
+
+    private String normalizeUpperOrNull(String value) {
+        String text = trimToNull(value);
+        return StringUtils.hasText(text) ? text.toUpperCase(Locale.ROOT) : null;
     }
 
     private String resolveModelSchema(ModelingSqlModel model, DbtConfigService.DbtConfigView view) {
@@ -1224,6 +1599,45 @@ public class ModelingSqlModelService {
         String code,
         UUID queryDatasetId,
         boolean enabled
+    ) {}
+
+    public record SqlModelStandardBinding(
+        String columnName,
+        UUID standardId,
+        String standardCode,
+        String standardName,
+        String standardVersion,
+        String dataType,
+        Boolean nullable,
+        String codeSet,
+        String securityLevel,
+        String bindingSource,
+        String status,
+        String driftReason
+    ) {}
+
+    public record SqlModelStandardBindingRequest(List<SqlModelStandardBinding> bindings) {}
+
+    public record SqlModelStandardBindingResult(
+        UUID modelId,
+        String modelName,
+        int totalColumns,
+        int mappedColumns,
+        int missingColumns,
+        List<SqlModelStandardBinding> bindings
+    ) {}
+
+    public record SqlModelSchemaYmlResult(UUID modelId, String modelName, String path, String schemaYml) {}
+
+    public record SqlModelStandardGateResult(
+        UUID modelId,
+        String modelName,
+        boolean blocking,
+        List<String> blockers,
+        List<String> warnings,
+        int totalColumns,
+        int mappedColumns,
+        int missingColumns
     ) {}
 
     public record SqlModelOdsGenerateRequest(

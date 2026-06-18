@@ -106,6 +106,31 @@ public class ModelFileService {
         }
     }
 
+    public void writeSchemaYmlFile(String modelPath, String ymlText) {
+        if (!StringUtils.hasText(modelPath) || !StringUtils.hasText(ymlText)) {
+            throw new IllegalArgumentException("模型路径和 schema.yml 内容不能为空");
+        }
+        String projectDirStr = dbtConfigService.resolveProjectDir();
+        if (!StringUtils.hasText(projectDirStr)) {
+            throw new IllegalStateException("dbt projectDir 未配置，无法写入 schema.yml");
+        }
+        Path projectDir = Path.of(projectDirStr).normalize();
+        Path sqlPath = projectDir.resolve(modelPath).normalize();
+        if (!sqlPath.startsWith(projectDir)) {
+            throw new IllegalStateException("schema.yml 目标路径非法: " + sqlPath);
+        }
+        Path ymlPath = sqlPath.resolveSibling("schema.yml").normalize();
+        if (!ymlPath.startsWith(projectDir)) {
+            throw new IllegalStateException("schema.yml 目标路径非法: " + ymlPath);
+        }
+        try {
+            Files.createDirectories(ymlPath.getParent());
+            Files.writeString(ymlPath, ymlText.trim() + "\n", StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (IOException ex) {
+            throw new IllegalStateException("写入 schema.yml 失败: " + ex.getMessage(), ex);
+        }
+    }
+
     public void deleteFileIfChanged(String oldPath, String newPath) {
         if (!StringUtils.hasText(oldPath)) {
             return;

@@ -38,6 +38,10 @@ import {
 	listSqlModelColumns,
 	getSqlModelContractImpact,
 	publishSqlModelSemantic,
+	listSqlModelStandardBindings,
+	saveSqlModelStandardBindings,
+	generateSqlModelSchemaYml,
+	checkSqlModelStandardGate,
 	createSqlModel,
 	updateSqlModel,
 	batchDeleteSqlModels,
@@ -68,6 +72,7 @@ import {
 	getDbtGitDiff,
 	revertDbtFile,
 	getRollbackAuditLog,
+	listMetadataStandards,
 } from "@/api/platformApi";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
 import BatchImportModal from "./BatchImportModal";
@@ -143,6 +148,10 @@ import type {
 	SqlModelOdsGenerateResult,
 	DbtReleaseSubmitResult,
 	SqlModelContractImpact,
+	SqlModelStandardBinding,
+	SqlModelStandardBindingResult,
+	SqlModelStandardGateResult,
+	SqlModelSchemaYmlResult,
 	SqlModelGovernancePreviewItem,
 	SqlModelGovernancePreviewResult,
 	SqlModelGovernanceExecuteResult,
@@ -173,6 +182,17 @@ const resolveDbtSelector = (value?: string) => {
 	}
 	return selector || undefined;
 };
+
+const extractListPayload = (payload: any): any[] => {
+	if (Array.isArray(payload)) return payload;
+	if (Array.isArray(payload?.content)) return payload.content;
+	if (Array.isArray(payload?.data)) return payload.data;
+	if (Array.isArray(payload?.data?.content)) return payload.data.content;
+	return [];
+};
+
+const isUuidText = (value?: string) =>
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalizeText(value));
 
 const tryParseJsonObject = (raw: string | undefined) => {
 	const text = normalizeText(raw);
@@ -309,6 +329,12 @@ export default function SqlModelingPage() {
 	const [contractImpactLoading, setContractImpactLoading] = useState(false);
 	const [contractImpact, setContractImpact] = useState<SqlModelContractImpact | null>(null);
 	const [publishingSemantic, setPublishingSemantic] = useState(false);
+	const [standardBindingsLoading, setStandardBindingsLoading] = useState(false);
+	const [standardBindingResult, setStandardBindingResult] = useState<SqlModelStandardBindingResult | null>(null);
+	const [standardGateChecking, setStandardGateChecking] = useState(false);
+	const [standardGateResult, setStandardGateResult] = useState<SqlModelStandardGateResult | null>(null);
+	const [standardAutoMatching, setStandardAutoMatching] = useState(false);
+	const [schemaYmlGenerating, setSchemaYmlGenerating] = useState(false);
 	const [bottomTab, setBottomTab] = useState("preview");
 	const [opsSubTab, setOpsSubTab] = useState("compile");
 	const [keyword, setKeyword] = useState("");
@@ -542,6 +568,115 @@ export default function SqlModelingPage() {
 			setContractImpactLoading(false);
 		}
 	}, []);
+
+	const loadStandardBindings = useCallback(async (modelId?: string) => {
+		if (!modelId) {
+			setStandardBindingResult(null);
+			setStandardGateResult(null);
+			return;
+		}
+		setStandardBindingsLoading(true);
+		try {
+			const resp = (await listSqlModelStandardBindings(modelId)) as SqlModelStandardBindingResult;
+			setStandardBindingResult(resp || null);
+			setStandardGateResult(null);
+		} catch (err: any) {
+			setStandardBindingResult(null);
+		} finally {
+			setStandardBindingsLoading(false);
+		}
+	}, []);
+
+	const handleCheckStandardGate = useCallback(async (modelId?: string) => {
+		if (!modelId) return;
+		setStandardGateChecking(true);
+		try {
+			const resp = (await checkSqlModelStandardGate(modelId)) as SqlModelStandardGateResult;
+			setStandardGateResult(resp || null);
+			if (resp?.blocking) {
+				toast.error("标准门禁未通过");
+			} else {
+				toast.success("标准门禁通过");
+			}
+		} catch (err: any) {
+			toast.error(err?.message || "标准门禁检查失败");
+		} finally {
+			setStandardGateChecking(false);
+		}
+	}, []);
+
+	const handleGenerateSchemaYml = useCallback(async (modelId?: string) => {
+		if (!modelId) return;
+		setSchemaYmlGenerating(true);
+		try {
+			const resp = (await generateSqlModelSchemaYml(modelId)) as SqlModelSchemaYmlResult;
+			toast.success(`schema.yml 已写入 ${resp?.path || "dbt 项目"}`);
+			Modal.info({
+				title: "schema.yml 已生成",
+				width: 720,
+				content: (
+					<div className="space-y-2 text-xs">
+						<div>写入路径：{resp?.path || "-"}</div>
+						<pre style={{ maxHeight: 360, overflow: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+							{resp?.schemaYml || ""}
+						</pre>
+					</div>
+				),
+			});
+		} catch (err: any) {
+			toast.error(err?.message || "生成 schema.yml 失败");
+		} finally {
+			setSchemaYmlGenerating(false);
+		}
+	}, []);
+
+	const handleAutoMatchStandards = useCallback(async (modelId?: string) => {
+		if (!modelId) return;
+		if (!modelColumns.length) {
+			toast.error("当前模型尚未识别字段，无法自动匹配数据元");
+			return;
+		}
+		setStandardAutoMatching(true);
+		try {
+			const resp = await listMetadataStandards({ page: 0, size: 500 });
+			const standards = extractListPayload(resp);
+			const standardsByKey = new Map<string, any>();
+			standards.forEach((standard) => {
+				[standard?.fieldNameEn, standard?.fieldNameCn, standard?.code, standard?.standardCode]
+					.map((value) => normalizeLower(value))
+					.filter(Boolean)
+					.forEach((key) => standardsByKey.set(key, standard));
+			});
+			const bindings: SqlModelStandardBinding[] = modelColumns.map((column) => {
+				const columnName = normalizeText(column.name);
+				const comment = normalizeText(column.comment);
+				const matched = standardsByKey.get(normalizeLower(columnName)) || standardsByKey.get(normalizeLower(comment));
+				const matchedId = normalizeText(matched?.id);
+				return {
+					columnName,
+					standardId: isUuidText(matchedId) ? matchedId : undefined,
+					standardCode: matched?.code || matched?.standardCode || matched?.fieldNameEn,
+					standardName: matched?.fieldNameCn || matched?.name || matched?.fieldNameEn,
+					standardVersion: matched?.version || matched?.standardVersion,
+					dataType: matched?.dataType || column.dataType,
+					nullable: typeof matched?.nullable === "boolean" ? matched.nullable : undefined,
+					codeSet: matched?.codeSet,
+					securityLevel: matched?.securityLevel,
+					bindingSource: matched ? "auto" : undefined,
+					status: matched ? "active" : "missing",
+					driftReason: matched ? undefined : "未匹配到数据元标准",
+				};
+			});
+			const saved = (await saveSqlModelStandardBindings(modelId, { bindings })) as SqlModelStandardBindingResult;
+			setStandardBindingResult(saved || null);
+			setStandardGateResult(null);
+			toast.success(`已自动匹配 ${saved?.mappedColumns ?? 0} / ${saved?.totalColumns ?? modelColumns.length} 个字段`);
+		} catch (err: any) {
+			toast.error(err?.message || "自动匹配数据元失败");
+		} finally {
+			setStandardAutoMatching(false);
+		}
+	}, [modelColumns]);
 
 	const loadDbtSources = useCallback(async (sourceDataSourceId?: string) => {
 		const requestSeq = ++dbtSourcesReqSeqRef.current;
@@ -2124,6 +2259,10 @@ export default function SqlModelingPage() {
 	}, [activeModel?.id, loadContractImpact]);
 
 	useEffect(() => {
+		void loadStandardBindings(activeModel?.id);
+	}, [activeModel?.id, loadStandardBindings]);
+
+	useEffect(() => {
 		if (!activeRunsRequest.shouldLoadRuns) {
 			setRuns([]);
 			return;
@@ -2161,6 +2300,16 @@ export default function SqlModelingPage() {
 	const unassignedModelIdSet = useMemo(() => new Set(unassignedModelIds), [unassignedModelIds]);
 	const selectionSummary = useMemo(() => summarizeBulkSelection(bulkSelection), [bulkSelection]);
 
+	const standardBindingByColumn = useMemo(() => {
+		const map = new Map<string, SqlModelStandardBinding>();
+		(standardBindingResult?.bindings || []).forEach((binding) => {
+			const key = normalizeLower(binding.columnName);
+			if (key) {
+				map.set(key, binding);
+			}
+		});
+		return map;
+	}, [standardBindingResult?.bindings]);
 
 	const buildLayerNodes = useCallback((input: SqlModel[]): ModelFileBrowserTreeNode[] => {
 		const layers = new Map<string, SqlModel[]>();
@@ -2248,23 +2397,49 @@ export default function SqlModelingPage() {
 
 	const modelColumnColumns: ColumnsType<ModelColumn> = useMemo(
 		() => [
-			{ title: "字段", dataIndex: "name", key: "name", ellipsis: true , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
-			{ title: "类型", dataIndex: "dataType", key: "dataType", width: 120, ellipsis: true },
 			{
-				title: "状态",
-				dataIndex: "status",
-				key: "status",
-				width: 100,
-				render: (value) => {
-					const label = normalizeUpper(value);
-					if (!label) return <Tag>未知</Tag>;
-					if (label === "DRAFT") return <Tag color="orange">草稿</Tag>;
-					if (label === "ACTIVE") return <Tag color="green">正式</Tag>;
-					return <Tag>{value}</Tag>;
+				title: "字段",
+				key: "name",
+				width: 112,
+				sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
+				render: (_value, row) => (
+					<div className="min-w-0">
+						<div className="truncate font-medium">{row.name || "-"}</div>
+						<div className="truncate text-[11px] text-muted-foreground">{row.dataType || "-"}</div>
+					</div>
+				),
+			},
+			{
+				title: "数据元标准",
+				key: "standard",
+				width: 164,
+				render: (_value, row) => {
+					const binding = standardBindingByColumn.get(normalizeLower(row.name));
+					const status = normalizeLower(binding?.status);
+					const statusTag =
+						status === "active" ? (
+							<Tag color="green">已绑定</Tag>
+						) : status === "drift" ? (
+							<Tag color="red">漂移</Tag>
+						) : (
+							<Tag color="gold">待映射</Tag>
+						);
+					if (!binding?.standardCode) {
+						return <div className="space-y-1">{statusTag}</div>;
+					}
+					return (
+						<div className="min-w-0 space-y-1">
+							<Tooltip title={binding.standardName || binding.standardCode}>
+								<Tag color="blue" className="max-w-full truncate">{binding.standardCode}</Tag>
+							</Tooltip>
+							{binding.codeSet ? <div className="truncate text-[11px] text-muted-foreground">{binding.codeSet}</div> : null}
+							<div>{statusTag}</div>
+						</div>
+					);
 				},
 			},
 		],
-		[],
+		[standardBindingByColumn],
 	);
 
 	const spaceKeyMap = useMemo(() => {
@@ -2834,6 +3009,65 @@ export default function SqlModelingPage() {
 															{contractImpactLoading ? "计算中..." : (contractImpact?.fieldCount ?? modelColumns.length)}
 														</span>
 													</div>
+													<div
+														className="rounded border border-border bg-muted/20 px-2 py-2"
+														data-testid="platform-sql-modeling-standard-readiness"
+													>
+														<div className="mb-1 flex items-center justify-between gap-2">
+															<span className="text-muted-foreground">字段标准绑定</span>
+															{standardBindingsLoading ? (
+																<Tag>加载中</Tag>
+															) : standardGateResult?.blocking ? (
+																<Tag color="red">门禁阻断</Tag>
+															) : (standardBindingResult?.missingColumns ?? modelColumns.length) > 0 ? (
+																<Tag color="gold">待映射</Tag>
+															) : (
+																<Tag color="green">已就绪</Tag>
+															)}
+														</div>
+														<div className="text-[11px] leading-5 text-muted-foreground">
+															当前模型已识别 {standardBindingResult?.totalColumns ?? modelColumns.length} 个字段，已绑定{" "}
+															{standardBindingResult?.mappedColumns ?? 0} 个，待映射 {standardBindingResult?.missingColumns ?? modelColumns.length} 个。
+															公共码表 seed 和字段标准会写入 dbt schema.yml，并进入标准门禁。
+														</div>
+														{standardGateResult?.blockers?.length ? (
+															<div className="mt-1 text-[11px] leading-5 text-red-600">
+																{standardGateResult.blockers.slice(0, 2).join("；")}
+															</div>
+														) : standardGateResult?.warnings?.length ? (
+															<div className="mt-1 text-[11px] leading-5 text-amber-600">
+																{standardGateResult.warnings.slice(0, 2).join("；")}
+															</div>
+														) : null}
+														<Space size={4} wrap className="mt-2">
+															<Button
+																size="small"
+																loading={standardAutoMatching}
+																disabled={!activeModel.id || modelColumns.length === 0}
+																onClick={() => handleAutoMatchStandards(activeModel.id)}
+															>
+																自动匹配数据元
+															</Button>
+															<Button
+																size="small"
+																data-testid="platform-sql-modeling-standard-gate-check"
+																loading={standardGateChecking}
+																disabled={!activeModel.id}
+																onClick={() => handleCheckStandardGate(activeModel.id)}
+															>
+																标准门禁
+															</Button>
+															<Button
+																size="small"
+																data-testid="platform-sql-modeling-schema-yml-generate"
+																loading={schemaYmlGenerating}
+																disabled={!activeModel.id || (standardBindingResult?.mappedColumns ?? 0) === 0}
+																onClick={() => handleGenerateSchemaYml(activeModel.id)}
+															>
+																生成 schema.yml
+															</Button>
+														</Space>
+													</div>
 												</div>
 												<Divider className="my-2" />
 												<div className="text-xs font-medium text-muted-foreground mb-2">字段列表</div>
@@ -2846,7 +3080,7 @@ export default function SqlModelingPage() {
 														pagination={false}
 														columns={modelColumnColumns}
 														dataSource={modelColumns}
-														loading={columnsLoading}
+														loading={columnsLoading || standardBindingsLoading}
 														scroll={{ y: 180 }}
 													/>
 												) : (

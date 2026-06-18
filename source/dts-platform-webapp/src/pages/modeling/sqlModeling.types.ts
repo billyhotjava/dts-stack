@@ -212,6 +212,48 @@ export type ModelColumn = {
 	status?: string;
 };
 
+export type SqlModelStandardBinding = {
+	columnName?: string;
+	standardId?: string;
+	standardCode?: string;
+	standardName?: string;
+	standardVersion?: string;
+	dataType?: string;
+	nullable?: boolean;
+	codeSet?: string;
+	securityLevel?: string;
+	bindingSource?: string;
+	status?: string;
+	driftReason?: string;
+};
+
+export type SqlModelStandardBindingResult = {
+	modelId?: string;
+	modelName?: string;
+	totalColumns?: number;
+	mappedColumns?: number;
+	missingColumns?: number;
+	bindings?: SqlModelStandardBinding[];
+};
+
+export type SqlModelStandardGateResult = {
+	modelId?: string;
+	modelName?: string;
+	blocking?: boolean;
+	blockers?: string[];
+	warnings?: string[];
+	totalColumns?: number;
+	mappedColumns?: number;
+	missingColumns?: number;
+};
+
+export type SqlModelSchemaYmlResult = {
+	modelId?: string;
+	modelName?: string;
+	path?: string;
+	schemaYml?: string;
+};
+
 export type DbtSourceItem = {
 	id?: string;
 	schema?: string;

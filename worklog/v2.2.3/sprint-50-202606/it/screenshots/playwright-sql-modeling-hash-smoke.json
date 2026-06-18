@@ -1,0 +1,104 @@
+{
+  "captures": [
+    {
+      "viewport": "sql-modeling-hash-desktop-1366x768",
+      "status": 200,
+      "url": "http://127.0.0.1:4173/#/studio/sql-modeling",
+      "title": "BI数智平台",
+      "hasWorkbench": 1,
+      "bodyText": "服务器错误,请联系系统管理员!\nBI数智平台\n机密 (CONFIDENTIAL)\n收起\n数据平台\n工作台\n搜索模块与页面\nCtrl K\nCommand Palette\n\nSearch for a command to run...\n\n数据加载失败\n网络连接不稳定，部分数据未能加载。\n重新加载\n逻辑建模\ndbt 已连接\n模 型\n批量删除\n保 存\n断链诊断\n插 入\n编 译\n测 试\n构 建\n上 线\n更 多\n设 置\n项目目录\n已选 0 项\n树 0 / 治理 0 / 列表 0\n全选当前结果\n删除所选\n暂无项目空间\n请先在项目空间管理中创建项目空间。\n未选择模型\n刷 新\n请从左侧选择一个模型开始编辑\n模型\n项目\n请选择模型\n数据预览\n操作记录\n操作说明\n请先选择一个模型",
+      "screenshot": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/sprint-50-202606/it/screenshots/sql-modeling-hash-desktop-1366x768.png"
+    },
+    {
+      "viewport": "sql-modeling-hash-mobile-390x844",
+      "status": 200,
+      "url": "http://127.0.0.1:4173/#/studio/sql-modeling",
+      "title": "BI数智平台",
+      "hasWorkbench": 1,
+      "bodyText": "菜单\nCtrl K\nCommand Palette\n\nSearch for a command to run...\n\n数据加载失败\n网络连接不稳定，部分数据未能加载。\n重新加载\n逻辑建模\ndbt 已连接\n模 型\n批量删除\n保 存\n断链诊断\n插 入\n编 译\n测 试\n构 建\n上 线\n更 多\n设 置\n项目目录\n已选 0 项\n树 0 / 治理 0 / 列表 0\n全选当前结果\n删除所选\n暂无项目空间\n请先在项目空间管理中创建项目空间。\n未选择模型\n刷 新\n请从左侧选择一个模型开始编辑\n模型\n项目\n请选择模型\n数据预览\n操作记录\n操作说明\n请先选择一个模型",
+      "screenshot": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/sprint-50-202606/it/screenshots/sql-modeling-hash-mobile-390x844.png"
+    }
+  ],
+  "errors": [
+    {
+      "viewport": "sql-modeling-hash-desktop-1366x768",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    },
+    {
+      "viewport": "sql-modeling-hash-desktop-1366x768",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    },
+    {
+      "viewport": "sql-modeling-hash-desktop-1366x768",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    },
+    {
+      "viewport": "sql-modeling-hash-desktop-1366x768",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    },
+    {
+      "viewport": "sql-modeling-hash-desktop-1366x768",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    },
+    {
+      "viewport": "sql-modeling-hash-desktop-1366x768",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    },
+    {
+      "viewport": "sql-modeling-hash-desktop-1366x768",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    },
+    {
+      "viewport": "sql-modeling-hash-desktop-1366x768",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    },
+    {
+      "viewport": "sql-modeling-hash-mobile-390x844",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    },
+    {
+      "viewport": "sql-modeling-hash-mobile-390x844",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    },
+    {
+      "viewport": "sql-modeling-hash-mobile-390x844",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    },
+    {
+      "viewport": "sql-modeling-hash-mobile-390x844",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    },
+    {
+      "viewport": "sql-modeling-hash-mobile-390x844",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    },
+    {
+      "viewport": "sql-modeling-hash-mobile-390x844",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    },
+    {
+      "viewport": "sql-modeling-hash-mobile-390x844",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    },
+    {
+      "viewport": "sql-modeling-hash-mobile-390x844",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    }
+  ]
+}

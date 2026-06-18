@@ -917,7 +917,7 @@
 - 后续 UI 编码必须先写 source-contract/unit test，再做最小实现，并补 Chrome95/Playwright 证据。
 
 ## Sprint-49: 前端 P0 页面真实闭环整改 (202606)
-**状态**: IN_PROGRESS
+**状态**: DONE
 **类型**: Implementation（页面闭环 + TDD + Chrome95）
 **目标**: 基于 Sprint-48 页面矩阵，优先修复客户已能看到的 P0 页面割裂和布局问题，不新增菜单或页面，通过现有页面把数据接入、资产、消费和工作台入口串成可验收的数据中台产品闭环。
 
@@ -937,6 +937,35 @@
 - 不新增菜单或页面，优先修复现有客户可见页面。
 - 每个修复先 source-contract 红灯，再做最小实现。
 - Chrome95 和 1366x768 表格截图是 UI 完成条件之一。
+
+## Sprint-50: 数据标准与 dbt 模型契约联动设计 (202606)
+**状态**: IMPLEMENTED
+**类型**: Architecture Design + Frontend-first Product Matrix + Implementation
+**目标**: 先完善和重构现有前端页面承载面，再把数据标准和 dbt 模型挂钩，形成“标准定义 -> 模型开发 -> dbt 校验 -> 发布门禁 -> 资产同步”的数据开发中心闭环。默认不新增菜单或页面。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F0-前端页面承载面完善与重构 | P0 | 5 | DONE |
+| F1-标准到模型的页面矩阵与契约定义 | P0 | 4 | DONE |
+| F2-SQL建模页字段标准映射 | P0 | 5 | DONE |
+| F3-公共码表到dbt Seeds联动增强 | P0 | 4 | DONE |
+| F4-dbt schema.yml与标准元数据生成 | P0 | 4 | DONE |
+| F5-发布门禁接入标准校验 | P0 | 4 | DONE |
+| F6-Chrome95与source-contract验收 | P0 | 5 | DONE |
+
+**统计**: READY=0, IN_PROGRESS=0, DONE=31, PARTIAL=0, BLOCKED=0
+**进度（2026-06-19）**: 已完成 Sprint-50 编码与验收：SQL 建模页支持字段标准自动匹配并保存到 `semanticContract.dts.standardBindings`，后端提供标准绑定、schema.yml 生成写入、标准门禁接口，公共码表 `codeSet` 进入 dbt schema.yml relationship test。source-contract 7/7、平台 Webapp Chrome95 生产构建通过；Playwright mock smoke 已补桌面/窄屏截图并验证标准绑定区域无 console error。后端 `ModelingSqlModelServiceTest` 全类存在既有批量导入/文件删除失败，目标新增用例已通过；SQL 建模页窄屏仍按桌面工作台横向承载，移动端响应式需另排。
+**设计文档**: `worklog/v2.2.3/sprint-50-202606/README.md`
+**架构设计**: `worklog/v2.2.3/sprint-50-202606/assets/data-standards-dbt-modeling-architecture.md`
+**Feature 台账**: `worklog/v2.2.3/sprint-50-202606/features/`
+**集成测试**: `worklog/v2.2.3/sprint-50-202606/it/README.md`
+**关键决策**:
+- Sprint-50 第一优先级是前端页面承载面完善与重构；F1-F6 均依赖 F0。
+- 不新增“标准建模中心”菜单，复用现有标准管理、逻辑建模、项目文件浏览和任务编排。
+- 数据元作为 dbt column contract 的字段级标准来源，公共码表作为 dbt seeds 和码值校验来源。
+- SQL 建模页是字段标准映射、dbt 契约生成和发布门禁的主工作台。
+- 项目文件浏览只作为底层 dbt 文件证据面，不允许绕过 SQL 建模页发布。
+- 客户现场业务规则不内置为 demo 或模板，只提供映射、确认和门禁机制。
 
 ### 整合大计划 SP-1~SP-4 总览
 | 阶段 | Sprint | 状态 |

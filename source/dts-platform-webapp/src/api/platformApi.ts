@@ -365,6 +365,14 @@ export const getSqlModelContractImpact = (id: string) =>
 	api.get(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}/contract-impact` }));
 export const publishSqlModelSemantic = (id: string) =>
 	api.post(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}/semantic/publish` }));
+export const listSqlModelStandardBindings = (id: string) =>
+	api.get(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}/standard-bindings` }));
+export const saveSqlModelStandardBindings = (id: string, data: any) =>
+	api.put(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}/standard-bindings`, data }));
+export const generateSqlModelSchemaYml = (id: string) =>
+	api.post(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}/dbt/schema-yml` }));
+export const checkSqlModelStandardGate = (id: string) =>
+	api.post(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}/standard-gate/check` }));
 export const createSqlModel = (data: any) => api.post(withModelingRequestTimeout({ url: "/modeling/sql-models", data }));
 export const updateSqlModel = (id: string, data: any) =>
 	api.put(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}`, data }));

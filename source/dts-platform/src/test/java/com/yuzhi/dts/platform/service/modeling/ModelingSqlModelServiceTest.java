@@ -309,6 +309,51 @@ class ModelingSqlModelServiceTest {
     }
 
     @Test
+    void saveStandardBindings_shouldPersistBindingsInSemanticContractAndGenerateDbtSchemaYml() {
+        UUID modelId = UUID.randomUUID();
+        ModelingSqlModel model = new ModelingSqlModel();
+        model.setId(modelId);
+        model.setPlanId(planId);
+        model.setName("dwd_order_detail");
+        model.setSchemaName("dwd");
+        model.setLayer("DWD");
+        model.setOwnerDept("D1");
+        model.setSourceDataSourceId(UUID.randomUUID());
+        model.setModelPath("models/dwd/dwd_order_detail.sql");
+        storedModels.add(model);
+
+        var binding = new ModelingSqlModelService.SqlModelStandardBinding(
+            "order_status",
+            null,
+            "STD_ORDER_STATUS",
+            "订单状态",
+            "v1.0",
+            "varchar",
+            false,
+            "ORDER_STATUS",
+            "INTERNAL",
+            "manual",
+            "active",
+            null
+        );
+
+        ModelingSqlModelService.SqlModelStandardBindingResult result =
+            service.saveStandardBindings(modelId, new ModelingSqlModelService.SqlModelStandardBindingRequest(List.of(binding)), "D1");
+
+        assertThat(result.mappedColumns()).isEqualTo(1);
+        assertThat(model.getSemanticContract()).contains("standardBindings");
+        assertThat(model.getSemanticContract()).contains("STD_ORDER_STATUS");
+
+        ModelingSqlModelService.SqlModelSchemaYmlResult yml = service.generateSchemaYml(modelId, "D1");
+
+        assertThat(yml.schemaYml()).contains("name: dwd_order_detail");
+        assertThat(yml.schemaYml()).contains("name: order_status");
+        assertThat(yml.schemaYml()).contains("standardCode: STD_ORDER_STATUS");
+        assertThat(yml.schemaYml()).contains("codeSet: ORDER_STATUS");
+        verify(fileService).writeSchemaYmlFile("models/dwd/dwd_order_detail.sql", yml.schemaYml());
+    }
+
+    @Test
     void generateFromOds_shouldUseDatasetSource_whenRequestAndMappingSourceUnavailable() {
         UUID mappingId = UUID.randomUUID();
         UUID badRequestSourceId = UUID.randomUUID();

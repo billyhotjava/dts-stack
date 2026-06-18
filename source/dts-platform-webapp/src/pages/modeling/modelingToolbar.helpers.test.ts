@@ -6,7 +6,7 @@ import {
 	shouldRenderInlineGitCommit,
 } from "./modelingToolbar.helpers";
 
-test("createPrimaryModelingActions keeps only compile test and release as main actions", () => {
+test("createPrimaryModelingActions keeps compile test build and release as main workbench actions", () => {
 	const actions = createPrimaryModelingActions();
 
 	assert.deepEqual(
@@ -17,6 +17,7 @@ test("createPrimaryModelingActions keeps only compile test and release as main a
 		[
 			{ key: "compile", label: "编译" },
 			{ key: "test", label: "测试" },
+			{ key: "build", label: "构建" },
 			{ key: "release", label: "上线" },
 		],
 	);

@@ -655,11 +655,15 @@ export default function DbtFileBrowserPage() {
 								导入 ZIP
 							</Button>
 						</Tooltip>
-						<Button className="rounded-2xl" onClick={() => router.push("/studio/sql-modeling")}>
+						<Button
+							className="rounded-2xl"
+							onClick={() => router.push("/studio/sql-modeling")}
+							data-testid="dbt-file-browser-preview-model"
+						>
 							预览模型
 						</Button>
 						{activeFile && dirty ? (
-							<Button className="rounded-2xl" type="primary" loading={saving} onClick={saveFile}>
+							<Button className="rounded-2xl" type="primary" loading={saving} onClick={saveFile} data-testid="dbt-file-browser-save">
 								保存
 							</Button>
 						) : null}

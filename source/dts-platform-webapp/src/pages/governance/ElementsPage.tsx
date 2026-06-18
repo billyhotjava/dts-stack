@@ -292,6 +292,7 @@ export default function ElementsPage() {
 					<Button
 						type="link"
 						size="small"
+						data-testid="governance-elements-view-references"
 						onClick={() => {
 							setDetailElement(row);
 							setDetailOpen(true);
@@ -319,11 +320,14 @@ export default function ElementsPage() {
 			<PageHeader
 				title="数据治理中心 · 标准管理 / 数据元"
 				actions={
-					<Button type="primary" onClick={() => openModal()} disabled={!canManage}>
+					<Button type="primary" onClick={() => openModal()} disabled={!canManage} data-testid="governance-elements-create">
 						+ 新增数据元
 					</Button>
 				}
 			/>
+			<div className="rounded-md border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+				数据元是 SQL 模型字段的标准来源；通过引用关系查看模型字段引用，避免标准只停留在治理台账。
+			</div>
 
 			<Card>
 				<Space className="mb-4">

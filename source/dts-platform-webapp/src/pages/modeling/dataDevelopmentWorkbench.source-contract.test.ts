@@ -1,0 +1,89 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+const staticRoutes = readFileSync(
+	new URL("../../routes/sections/dashboard/static-routes.tsx", import.meta.url),
+	"utf8",
+);
+const dynamicResolver = readFileSync(
+	new URL("../../routes/sections/dashboard/dynamic-resolver.tsx", import.meta.url),
+	"utf8",
+);
+const menuSeed = readFileSync(
+	new URL("../../../../dts-admin/src/main/resources/config/data/portal-menu-seed.json", import.meta.url),
+	"utf8",
+);
+const sqlModelingPage = readFileSync(new URL("./SqlModelingPage.tsx", import.meta.url), "utf8");
+const dbtFileBrowserPage = readFileSync(new URL("./DbtFileBrowserPage.tsx", import.meta.url), "utf8");
+const elementsPage = readFileSync(new URL("../governance/ElementsPage.tsx", import.meta.url), "utf8");
+const referenceCodesPage = readFileSync(new URL("../governance/ReferenceCodesPage.tsx", import.meta.url), "utf8");
+const platformApi = readFileSync(new URL("../../api/platformApi.ts", import.meta.url), "utf8");
+
+test("data development workbench routes converge on existing pages", () => {
+	assert.match(menuSeed, /"title": "数据开发中心"[\s\S]*?"externalLink": "\/studio\/sql-modeling"/);
+	assert.match(menuSeed, /"title": "项目文件浏览"[\s\S]*?"externalLink": "\/modeling\/dbt-files"/);
+	assert.match(menuSeed, /"title": "标准管理"[\s\S]*?"externalLink": "\/governance\/standards\/elements"/);
+	assert.match(menuSeed, /"title": "公共码表"[\s\S]*?"externalLink": "\/governance\/standards\/reference"/);
+	assert.match(staticRoutes, /const SqlModelingPage = lazy\(\(\) => import\("@\/pages\/modeling\/SqlModelingPage"\)\)/);
+	assert.match(staticRoutes, /const DbtFileBrowserPage = lazy\(\(\) => import\("@\/pages\/modeling\/DbtFileBrowserPage"\)\)/);
+	assert.match(staticRoutes, /path: "studio\/sql-modeling"[\s\S]*<SqlModelingPage/);
+	assert.match(staticRoutes, /path: "modeling\/dbt-files"[\s\S]*<DbtFileBrowserPage/);
+	assert.match(dynamicResolver, /"\/studio\/sql-modeling": "\/pages\/modeling\/SqlModelingPage"/);
+	assert.match(dynamicResolver, /"\/modeling\/dbt-files": "\/pages\/modeling\/DbtFileBrowserPage"/);
+	assert.match(dynamicResolver, /"\/governance\/standards\/elements": "\/pages\/governance\/ElementsPage"/);
+	assert.match(dynamicResolver, /"\/governance\/standards\/reference": "\/pages\/governance\/ReferenceCodesPage"/);
+});
+
+test("sql modeling page exposes stable workbench actions for standard and dbt linkage", () => {
+	assert.match(sqlModelingPage, /data-testid="platform-sql-modeling-page"/);
+	assert.match(sqlModelingPage, /data-testid="platform-sql-modeling-compile"/);
+	assert.match(sqlModelingPage, /data-testid="platform-sql-modeling-test"/);
+	assert.match(sqlModelingPage, /data-testid="platform-sql-modeling-build"/);
+	assert.match(sqlModelingPage, /data-testid="platform-sql-modeling-release"/);
+	assert.match(sqlModelingPage, /sqlModels\.length === 0 \|\| !configEnabled \|\| !workspaceOk \|\| buildTriggering != null/);
+	assert.match(sqlModelingPage, /建模与上线操作流程/);
+	assert.match(sqlModelingPage, /质量门禁/);
+	assert.match(sqlModelingPage, /发布门禁/);
+	assert.match(sqlModelingPage, /data-testid="platform-sql-modeling-standard-readiness"/);
+	assert.match(sqlModelingPage, /data-testid="platform-sql-modeling-standard-gate-check"/);
+	assert.match(sqlModelingPage, /data-testid="platform-sql-modeling-schema-yml-generate"/);
+	assert.match(sqlModelingPage, /listSqlModelStandardBindings/);
+	assert.match(sqlModelingPage, /saveSqlModelStandardBindings/);
+	assert.match(sqlModelingPage, /listMetadataStandards/);
+	assert.match(sqlModelingPage, /checkSqlModelStandardGate/);
+	assert.match(sqlModelingPage, /generateSqlModelSchemaYml/);
+	assert.match(sqlModelingPage, /字段标准绑定/);
+	assert.match(sqlModelingPage, /自动匹配数据元/);
+	assert.match(sqlModelingPage, /标准门禁/);
+	assert.match(sqlModelingPage, /生成 schema\.yml/);
+	assert.match(sqlModelingPage, /公共码表 seed/);
+	assert.match(platformApi, /url: `\/modeling\/sql-models\/\$\{id\}\/standard-bindings`/);
+	assert.match(platformApi, /url: `\/modeling\/sql-models\/\$\{id\}\/dbt\/schema-yml`/);
+	assert.match(platformApi, /url: `\/modeling\/sql-models\/\$\{id\}\/standard-gate\/check`/);
+});
+
+test("governance standards pages expose stable controls for model field standards", () => {
+	assert.match(elementsPage, /title="数据治理中心 · 标准管理 \/ 数据元"/);
+	assert.match(elementsPage, /data-testid="governance-elements-create"/);
+	assert.match(elementsPage, /data-testid="governance-elements-view-references"/);
+	assert.match(elementsPage, /listMetadataStandards/);
+	assert.match(platformApi, /url: "\/modeling\/metadata-standards"/);
+	assert.match(elementsPage, /listReferenceCodes/);
+	assert.match(elementsPage, /模型字段引用/);
+	assert.match(referenceCodesPage, /title="公共码表"/);
+	assert.match(referenceCodesPage, /data-testid="governance-reference-sync-seeds"/);
+	assert.match(referenceCodesPage, /loading=\{seedSyncing\}/);
+	assert.match(referenceCodesPage, /syncReferenceCodeSeeds/);
+	assert.match(referenceCodesPage, /更新 dbt Seeds/);
+	assert.match(referenceCodesPage, /dbt Seeds 同步/);
+	assert.match(platformApi, /url: "\/governance\/reference-codes\/seeds"/);
+});
+
+test("dbt file browser is a file evidence surface and hands publishing back to SQL modeling", () => {
+	assert.match(dbtFileBrowserPage, /title="DBT 文件工作区"/);
+	assert.match(dbtFileBrowserPage, /data-testid="dbt-file-browser-preview-model"/);
+	assert.match(dbtFileBrowserPage, /data-testid="dbt-file-browser-save"/);
+	assert.match(dbtFileBrowserPage, /title="dbt 文件发布需先通过 SQL 建模页发布门禁"/);
+	assert.match(dbtFileBrowserPage, /\/studio\/sql-modeling/);
+});

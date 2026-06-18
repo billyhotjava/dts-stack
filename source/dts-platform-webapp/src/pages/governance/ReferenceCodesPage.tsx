@@ -228,6 +228,7 @@ export default function ReferenceCodesPage() {
 	const [referenceOpen, setReferenceOpen] = useState(false);
 	const [referenceLoading, setReferenceLoading] = useState(false);
 	const [referencePayload, setReferencePayload] = useState<AssetReferencePayload | null>(null);
+	const [seedSyncing, setSeedSyncing] = useState(false);
 	const [form] = Form.useForm();
 	const [itemForm] = Form.useForm();
 	const [mappingForm] = Form.useForm();
@@ -748,6 +749,7 @@ export default function ReferenceCodesPage() {
 			toast.error("当前账号无治理维护权限");
 			return;
 		}
+		setSeedSyncing(true);
 		try {
 			const resp = (await syncReferenceCodeSeeds()) as any;
 			const summary = resp?.seedPath
@@ -756,6 +758,8 @@ export default function ReferenceCodesPage() {
 			toast.success(summary);
 		} catch (err: any) {
 			toast.error(err?.message || "更新 dbt Seeds 失败");
+		} finally {
+			setSeedSyncing(false);
 		}
 	};
 
@@ -923,7 +927,12 @@ export default function ReferenceCodesPage() {
 				title="公共码表"
 				extra={
 					<Space>
-						<Button onClick={syncSeeds} disabled={!canManage}>
+						<Button
+							onClick={syncSeeds}
+							disabled={!canManage}
+							loading={seedSyncing}
+							data-testid="governance-reference-sync-seeds"
+						>
 							更新 dbt Seeds
 						</Button>
 						<Button type="primary" onClick={() => openModal()} disabled={!canManage}>
@@ -932,6 +941,9 @@ export default function ReferenceCodesPage() {
 					</Space>
 				}
 			>
+				<div className="mb-3 rounded-md border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+					dbt Seeds 同步把公共码表写入 dbt 项目证据面；模型字段绑定码表后，发布门禁会检查 seed 是否已同步。
+				</div>
 				<div className="mb-3 flex flex-wrap items-center gap-2">
 					<Input.Search
 						placeholder="搜索码表..."

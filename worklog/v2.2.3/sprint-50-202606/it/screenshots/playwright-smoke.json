@@ -1,0 +1,32 @@
+{
+  "captures": [
+    {
+      "viewport": "desktop-1366x768",
+      "status": 200,
+      "url": "http://127.0.0.1:4173/studio/sql-modeling#/auth/login",
+      "title": "BI数智平台",
+      "bodyText": "服务器错误,请联系系统管理员!\n机密\nBI数智平台\n\n(业务端)\n\n证书登录\n简体中文\n设置",
+      "screenshot": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/sprint-50-202606/it/screenshots/desktop-1366x768.png"
+    },
+    {
+      "viewport": "mobile-390x844",
+      "status": 200,
+      "url": "http://127.0.0.1:4173/studio/sql-modeling#/auth/login",
+      "title": "BI数智平台",
+      "bodyText": "服务器错误,请联系系统管理员!\n机密\nBI数智平台\n\n(业务端)\n\n证书登录\n简体中文\n设置",
+      "screenshot": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/sprint-50-202606/it/screenshots/mobile-390x844.png"
+    }
+  ],
+  "errors": [
+    {
+      "viewport": "desktop-1366x768",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    },
+    {
+      "viewport": "mobile-390x844",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    }
+  ]
+}

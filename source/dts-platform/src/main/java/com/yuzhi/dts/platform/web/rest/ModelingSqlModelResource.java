@@ -20,6 +20,10 @@ import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelG
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelOdsGenerateRequest;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelOdsGenerateResult;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelRequest;
+import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelSchemaYmlResult;
+import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelStandardBindingRequest;
+import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelStandardBindingResult;
+import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelStandardGateResult;
 import com.yuzhi.dts.platform.service.governance.DefaultLakeDatasetGuard;
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
@@ -140,6 +144,53 @@ public class ModelingSqlModelResource {
         SqlModelContractImpact impact = sqlModelService.getContractImpact(id, activeDept);
         auditService.auditAction("MODELING_SQL_MODEL_CONTRACT_IMPACT_READ", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(impact);
+    }
+
+    @GetMapping("/{id}/standard-bindings")
+    @Transactional(readOnly = true)
+    public ApiResponse<SqlModelStandardBindingResult> listStandardBindings(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        SqlModelStandardBindingResult result = sqlModelService.listStandardBindings(id, activeDept);
+        auditService.auditAction("MODELING_SQL_MODEL_STANDARD_BINDINGS_READ", AuditStage.SUCCESS, id.toString(), null);
+        return ApiResponses.ok(result);
+    }
+
+    @PutMapping("/{id}/standard-bindings")
+    @Transactional
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<SqlModelStandardBindingResult> saveStandardBindings(
+        @PathVariable UUID id,
+        @RequestBody SqlModelStandardBindingRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        SqlModelStandardBindingResult result = sqlModelService.saveStandardBindings(id, request, activeDept);
+        auditService.auditAction("MODELING_SQL_MODEL_STANDARD_BINDINGS_UPDATE", AuditStage.SUCCESS, id.toString(), null);
+        return ApiResponses.ok(result);
+    }
+
+    @PostMapping("/{id}/dbt/schema-yml")
+    @Transactional
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<SqlModelSchemaYmlResult> generateSchemaYml(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        SqlModelSchemaYmlResult result = sqlModelService.generateSchemaYml(id, activeDept);
+        auditService.auditAction("MODELING_SQL_MODEL_SCHEMA_YML_GENERATE", AuditStage.SUCCESS, id.toString(), null);
+        return ApiResponses.ok(result);
+    }
+
+    @PostMapping("/{id}/standard-gate/check")
+    @Transactional(readOnly = true)
+    public ApiResponse<SqlModelStandardGateResult> checkStandardGate(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        SqlModelStandardGateResult result = sqlModelService.checkStandardGate(id, activeDept);
+        auditService.auditAction("MODELING_SQL_MODEL_STANDARD_GATE_CHECK", AuditStage.SUCCESS, id.toString(), null);
+        return ApiResponses.ok(result);
     }
 
     @PostMapping
