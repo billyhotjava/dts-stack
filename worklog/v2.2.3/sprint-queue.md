@@ -916,6 +916,28 @@
 - 客户业务场景不内置为产品 demo；由现场配置或客户定义。
 - 后续 UI 编码必须先写 source-contract/unit test，再做最小实现，并补 Chrome95/Playwright 证据。
 
+## Sprint-49: 前端 P0 页面真实闭环整改 (202606)
+**状态**: IN_PROGRESS
+**类型**: Implementation（页面闭环 + TDD + Chrome95）
+**目标**: 基于 Sprint-48 页面矩阵，优先修复客户已能看到的 P0 页面割裂和布局问题，不新增菜单或页面，通过现有页面把数据接入、资产、消费和工作台入口串成可验收的数据中台产品闭环。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-数据接入基础页面闭环 | P0 | 3 | DONE |
+| F2-资产与消费页面闭环 | P0 | 3 | READY |
+| F3-工作台入口闭环 | P0 | 2 | READY |
+| F4-Chrome95证据与Review | P0 | 3 | READY |
+
+**统计**: READY=8, IN_PROGRESS=0, DONE=3, BLOCKED=0
+**进度（2026-06-18）**: 完成 F1 数据接入基础页面闭环：`/foundation/connectors` 表格布局已稳定，“配置/查看模板”已区分 Drawer 模式，“启用/停用”有禁用说明，“创建数据源”可带 `connectorKey` 打开 `/foundation/data-sources` 新增弹窗并预选连接器。1366x768 表格、Drawer、新增数据源弹窗截图已落到 Sprint IT。下一步进入 F2 资产与消费页面闭环。
+**设计文档**: `worklog/v2.2.3/sprint-49-202606/README.md`
+**来源矩阵**: `worklog/v2.2.3/sprint-48-202606/assets/page-capability-matrix.md` + `worklog/v2.2.3/sprint-48-202606/assets/button-component-matrix.md`
+**集成测试**: `worklog/v2.2.3/sprint-49-202606/it/README.md`
+**关键决策**:
+- 不新增菜单或页面，优先修复现有客户可见页面。
+- 每个修复先 source-contract 红灯，再做最小实现。
+- Chrome95 和 1366x768 表格截图是 UI 完成条件之一。
+
 ### 整合大计划 SP-1~SP-4 总览
 | 阶段 | Sprint | 状态 |
 |------|--------|------|

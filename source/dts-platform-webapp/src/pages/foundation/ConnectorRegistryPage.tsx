@@ -1,17 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
-import { AppstoreOutlined, } from "@ant-design/icons";
-import { Button, Card, Descriptions, Drawer, Select, Space, Switch, Tag, Typography, message } from "antd";
-import { CompactTable } from "@/components/table";
+import { AppstoreOutlined } from "@ant-design/icons";
 import type { TableProps } from "antd";
-import { PageHeader } from "@/components/page-header";
+import { Button, Card, Descriptions, Drawer, message, Select, Space, Switch, Tag, Tooltip, Typography } from "antd";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import connectorsService, { type InfraConnector } from "@/api/services/connectorsService";
+import { PageHeader } from "@/components/page-header";
+import { CompactTable } from "@/components/table";
 import { useRouter } from "@/routes/hooks";
 import { formatTime } from "@/utils/textUtils";
 
 const { Text } = Typography;
 
-const CAPABILITY_COLUMN_WIDTH = 240;
-const CONNECTOR_TABLE_SCROLL_X = 1360;
+const CAPABILITY_COLUMN_WIDTH = 160;
+const CONNECTOR_ACTION_COLUMN_WIDTH = 360;
+const CONNECTOR_TABLE_SCROLL_X = 1240;
+
+type ConnectorDrawerMode = "detail" | "config" | "template";
 
 const CATEGORY_OPTIONS = [
 	{ label: "全部", value: "" },
@@ -71,15 +74,33 @@ const renderJson = (value?: Record<string, any>) => {
 
 const capabilityEnabled = (connector: InfraConnector, key: string) => connector.capabilities?.[key] === true;
 
+const getDrawerTitle = (connector: InfraConnector | null, mode: ConnectorDrawerMode) => {
+	if (!connector) {
+		return "连接器详情";
+	}
+	const base = connector.name || connector.connectorKey;
+	if (mode === "config") {
+		return `${base} / 配置要求`;
+	}
+	if (mode === "template") {
+		return `${base} / 配置模板`;
+	}
+	return `${base} / 详情`;
+};
+
 function CapabilityTags({ connector, compact = false }: { connector: InfraConnector; compact?: boolean }) {
 	const keys = Object.keys(CAPABILITY_LABELS).filter((key) => capabilityEnabled(connector, key));
-	const visibleKeys = compact ? keys.slice(0, 5) : keys;
+	const visibleKeys = compact ? keys.slice(0, 2) : keys;
 	const overflow = keys.length - visibleKeys.length;
 	if (!keys.length) {
 		return <Text type="secondary">-</Text>;
 	}
 	return (
-		<Space size={[4, 4]} wrap className="max-w-full min-w-0">
+		<Space
+			size={[4, 4]}
+			wrap={!compact}
+			className={compact ? "connector-registry-capability-tags max-w-full min-w-0" : "max-w-full min-w-0"}
+		>
 			{visibleKeys.map((key) => (
 				<Tag key={key} color={key === "cdc" ? "orange" : "processing"} className="whitespace-nowrap">
 					{CAPABILITY_LABELS[key]}
@@ -97,9 +118,25 @@ export default function ConnectorRegistryPage() {
 	const [category, setCategory] = useState("");
 	const [includeDisabled, setIncludeDisabled] = useState(false);
 	const [selected, setSelected] = useState<InfraConnector | null>(null);
+	const [drawerMode, setDrawerMode] = useState<ConnectorDrawerMode>("detail");
 	const [seeding, setSeeding] = useState(false);
 
-	const loadList = async () => {
+	const openConnectorDrawer = useCallback((connector: InfraConnector, mode: ConnectorDrawerMode) => {
+		setSelected(connector);
+		setDrawerMode(mode);
+	}, []);
+
+	const openDataSourceCreate = useCallback(
+		(connectorKey?: string) => {
+			const target = connectorKey
+				? `/foundation/data-sources?create=1&connectorKey=${encodeURIComponent(connectorKey)}`
+				: "/foundation/data-sources?create=1";
+			router.push(target);
+		},
+		[router],
+	);
+
+	const loadList = useCallback(async () => {
 		setLoading(true);
 		try {
 			const data = await connectorsService.list({
@@ -112,11 +149,11 @@ export default function ConnectorRegistryPage() {
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, [category, includeDisabled]);
 
 	useEffect(() => {
 		void loadList();
-	}, [category, includeDisabled]);
+	}, [loadList]);
 
 	const handleSeed = async () => {
 		setSeeding(true);
@@ -147,10 +184,10 @@ export default function ConnectorRegistryPage() {
 				dataIndex: "name",
 				sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 				key: "name",
-				width: 220,
+				width: 190,
 				render: (_: string, record) => (
 					<Space direction="vertical" size={0}>
-						<Button type="link" className="h-auto p-0" onClick={() => setSelected(record)}>
+						<Button type="link" className="h-auto p-0" onClick={() => openConnectorDrawer(record, "detail")}>
 							{record.name || record.connectorKey}
 						</Button>
 						<Text type="secondary" className="text-xs">
@@ -163,15 +200,15 @@ export default function ConnectorRegistryPage() {
 				title: "分类",
 				dataIndex: "category",
 				key: "category",
-				width: 110,
+				width: 90,
 				render: (value: string) => <Tag color={CATEGORY_COLORS[value] || "default"}>{value || "-"}</Tag>,
 			},
-			{ title: "源类型", dataIndex: "sourceType", key: "sourceType", width: 120 },
+			{ title: "源类型", dataIndex: "sourceType", key: "sourceType", width: 100 },
 			{
 				title: "默认引擎",
 				dataIndex: "defaultEngine",
 				key: "defaultEngine",
-				width: 130,
+				width: 100,
 				render: (value: string) => <Tag color={ENGINE_COLORS[value] || "default"}>{value || "-"}</Tag>,
 			},
 			{
@@ -184,7 +221,7 @@ export default function ConnectorRegistryPage() {
 				title: "状态",
 				dataIndex: "status",
 				key: "status",
-				width: 100,
+				width: 90,
 				render: (value: string) => <Tag color={value === "ACTIVE" ? "success" : "default"}>{value || "-"}</Tag>,
 			},
 			{
@@ -196,36 +233,44 @@ export default function ConnectorRegistryPage() {
 					return ta - tb;
 				},
 				key: "lastUpdatedAt",
-				width: 180,
+				width: 150,
 				render: (value: string) => formatTime(value),
 			},
 			{
 				title: "操作",
 				key: "actions",
-				width: 260,
+				width: CONNECTOR_ACTION_COLUMN_WIDTH,
 				fixed: "right",
 				render: (_: unknown, record) => (
-					<Space size="small" wrap>
-						<Button size="small" onClick={() => router.push("/foundation/data-sources")}>
+					<Space size="small" className="connector-registry-actions">
+						<Button size="small" onClick={() => openDataSourceCreate(record.connectorKey)}>
 							创建数据源
 						</Button>
-						<Button size="small" onClick={() => setSelected(record)}>
+						<Button size="small" onClick={() => openConnectorDrawer(record, "config")}>
 							配置
 						</Button>
-						<Button size="small" onClick={() => setSelected(record)}>
+						<Button size="small" onClick={() => openConnectorDrawer(record, "template")}>
 							查看模板
 						</Button>
-						<Button size="small" disabled title="当前连接器目录接口未开放启用动作，请同步内置目录后在数据源页使用">
-							启用
-						</Button>
-						<Button size="small" disabled title="当前连接器目录接口未开放停用动作，请通过停用筛选核对状态">
-							停用
-						</Button>
+						<Tooltip title="当前连接器目录接口未开放启用动作，请同步内置目录后在数据源页使用">
+							<span>
+								<Button size="small" disabled>
+									启用
+								</Button>
+							</span>
+						</Tooltip>
+						<Tooltip title="当前连接器目录接口未开放停用动作，请通过停用筛选核对状态">
+							<span>
+								<Button size="small" disabled>
+									停用
+								</Button>
+							</span>
+						</Tooltip>
 					</Space>
 				),
 			},
 		],
-		[router]
+		[openConnectorDrawer, openDataSourceCreate],
 	);
 
 	return (
@@ -234,7 +279,7 @@ export default function ConnectorRegistryPage() {
 				title="数据接入基础 / 连接器目录"
 				actions={
 					<Space wrap>
-						<Button onClick={() => router.push("/foundation/data-sources")}>创建数据源</Button>
+						<Button onClick={() => openDataSourceCreate()}>创建数据源</Button>
 						<Button onClick={loadList} disabled={loading}>
 							刷新
 						</Button>
@@ -256,79 +301,124 @@ export default function ConnectorRegistryPage() {
 					</Space>
 				}
 			>
-			<Space className="mb-3" size={[8, 8]} wrap>
-				<Tag icon={<AppstoreOutlined />}>共 {list.length} 个</Tag>
-				{summary.map(([key, count]) => (
-					<Tag key={key} color={CATEGORY_COLORS[key] || "default"}>
-						{key} {count}
-					</Tag>
-				))}
-			</Space>
+				<Space className="mb-3" size={[8, 8]} wrap>
+					<Tag icon={<AppstoreOutlined />}>共 {list.length} 个</Tag>
+					{summary.map(([key, count]) => (
+						<Tag key={key} color={CATEGORY_COLORS[key] || "default"}>
+							{key} {count}
+						</Tag>
+					))}
+				</Space>
 
-			<CompactTable
-				rowKey="connectorKey"
-				columns={columns}
-				dataSource={list}
-				loading={loading}
-				scroll={{ x: CONNECTOR_TABLE_SCROLL_X }}
-				pagination={{ defaultPageSize: 10 }}
-			/>
+				<CompactTable
+					rowKey="connectorKey"
+					columns={columns}
+					dataSource={list}
+					loading={loading}
+					className="connector-registry-table"
+					scroll={{ x: CONNECTOR_TABLE_SCROLL_X }}
+					tableLayout="fixed"
+					pagination={{ defaultPageSize: 10 }}
+				/>
 
 				<Drawer
-				title={selected?.name || "连接器详情"}
-				open={Boolean(selected)}
-				onClose={() => setSelected(null)}
-				width={720}
-				destroyOnClose
-			>
-				{selected ? (
-					<Space direction="vertical" size="large" className="w-full">
-						<Descriptions bordered size="small" column={2}>
-							<Descriptions.Item label="连接器 Key">{selected.connectorKey}</Descriptions.Item>
-							<Descriptions.Item label="状态">{selected.status || "-"}</Descriptions.Item>
-							<Descriptions.Item label="分类">{selected.category || "-"}</Descriptions.Item>
-							<Descriptions.Item label="源类型">{selected.sourceType || "-"}</Descriptions.Item>
-							<Descriptions.Item label="默认引擎">{selected.defaultEngine || "-"}</Descriptions.Item>
-							<Descriptions.Item label="排序">{selected.displayOrder ?? "-"}</Descriptions.Item>
-							<Descriptions.Item label="更新时间" span={2}>
-								{formatTime(selected.lastUpdatedAt)}
-							</Descriptions.Item>
-							<Descriptions.Item label="说明" span={2}>
-								{selected.description || "-"}
-							</Descriptions.Item>
-						</Descriptions>
+					title={getDrawerTitle(selected, drawerMode)}
+					open={Boolean(selected)}
+					onClose={() => setSelected(null)}
+					width={720}
+					destroyOnClose
+					footer={
+						selected ? (
+							<Space className="w-full justify-end">
+								<Button onClick={() => setSelected(null)}>关闭</Button>
+								<Button type="primary" onClick={() => openDataSourceCreate(selected.connectorKey)}>
+									创建数据源
+								</Button>
+							</Space>
+						) : null
+					}
+				>
+					{selected ? (
+						<Space direction="vertical" size="large" className="w-full">
+							{drawerMode === "config" ? (
+								<Text type="secondary">按连接器配置要求创建数据源，实际连接参数在数据源页录入。</Text>
+							) : null}
+							{drawerMode === "template" ? (
+								<Text type="secondary">模板来自连接器目录的默认值、敏感字段和部署兼容性定义。</Text>
+							) : null}
 
-						<div>
-							<Text strong>能力矩阵</Text>
-							<div className="mt-2">
-								<CapabilityTags connector={selected} />
+							<Descriptions bordered size="small" column={2}>
+								<Descriptions.Item label="连接器 Key">{selected.connectorKey}</Descriptions.Item>
+								<Descriptions.Item label="状态">{selected.status || "-"}</Descriptions.Item>
+								<Descriptions.Item label="分类">{selected.category || "-"}</Descriptions.Item>
+								<Descriptions.Item label="源类型">{selected.sourceType || "-"}</Descriptions.Item>
+								<Descriptions.Item label="默认引擎">{selected.defaultEngine || "-"}</Descriptions.Item>
+								<Descriptions.Item label="排序">{selected.displayOrder ?? "-"}</Descriptions.Item>
+								<Descriptions.Item label="更新时间" span={2}>
+									{formatTime(selected.lastUpdatedAt)}
+								</Descriptions.Item>
+								<Descriptions.Item label="说明" span={2}>
+									{selected.description || "-"}
+								</Descriptions.Item>
+							</Descriptions>
+
+							<div>
+								<Text strong>能力矩阵</Text>
+								<div className="mt-2">
+									<CapabilityTags connector={selected} />
+								</div>
 							</div>
-						</div>
 
-						<div>
-							<Text strong>配置 Schema</Text>
-							<div className="mt-2">
-								<Descriptions bordered size="small" column={1}>
-									<Descriptions.Item label="必填字段">
-										{toArray(selected.configSchema?.required).join(", ") || "-"}
-									</Descriptions.Item>
-									<Descriptions.Item label="可选字段">
-										{toArray(selected.configSchema?.optional).join(", ") || "-"}
-									</Descriptions.Item>
-									<Descriptions.Item label="默认值">{renderJson(selected.configSchema?.defaults)}</Descriptions.Item>
-									<Descriptions.Item label="敏感字段">
-										{selected.sensitiveFields?.length ? selected.sensitiveFields.join(", ") : "-"}
-									</Descriptions.Item>
-								</Descriptions>
+							{drawerMode === "detail" || drawerMode === "config" ? (
+								<div>
+									<Text strong>配置 Schema</Text>
+									<div className="mt-2">
+										<Descriptions bordered size="small" column={1}>
+											<Descriptions.Item label="必填字段">
+												{toArray(selected.configSchema?.required).join(", ") || "-"}
+											</Descriptions.Item>
+											<Descriptions.Item label="可选字段">
+												{toArray(selected.configSchema?.optional).join(", ") || "-"}
+											</Descriptions.Item>
+											<Descriptions.Item label="默认值">
+												{renderJson(selected.configSchema?.defaults)}
+											</Descriptions.Item>
+											<Descriptions.Item label="敏感字段">
+												{selected.sensitiveFields?.length ? selected.sensitiveFields.join(", ") : "-"}
+											</Descriptions.Item>
+										</Descriptions>
+									</div>
+								</div>
+							) : null}
+
+							{drawerMode === "template" ? (
+								<div>
+									<Text strong>配置模板</Text>
+									<div className="mt-2">
+										<Descriptions bordered size="small" column={1}>
+											<Descriptions.Item label="默认值模板">
+												{renderJson(selected.configSchema?.defaults)}
+											</Descriptions.Item>
+											<Descriptions.Item label="必填字段">
+												{toArray(selected.configSchema?.required).join(", ") || "-"}
+											</Descriptions.Item>
+											<Descriptions.Item label="可选字段">
+												{toArray(selected.configSchema?.optional).join(", ") || "-"}
+											</Descriptions.Item>
+											<Descriptions.Item label="敏感字段">
+												{selected.sensitiveFields?.length ? selected.sensitiveFields.join(", ") : "-"}
+											</Descriptions.Item>
+										</Descriptions>
+									</div>
+								</div>
+							) : null}
+
+							<div>
+								<Text strong>部署兼容性</Text>
+								<div className="mt-2">{renderJson(selected.compatibility)}</div>
 							</div>
-						</div>
-
-						<div>
-							<Text strong>部署兼容性</Text>
-							<div className="mt-2">{renderJson(selected.compatibility)}</div>
-						</div>
-					</Space>
-				) : null}
+						</Space>
+					) : null}
 				</Drawer>
 			</Card>
 		</div>

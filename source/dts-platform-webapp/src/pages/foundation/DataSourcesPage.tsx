@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import {
 	Alert,
 	Button,
@@ -149,10 +149,12 @@ const resolveConnectorCapability = (record: InfraDataSource) => {
 
 export default function DataSourcesPage() {
 	const navigate = useNavigate();
+	const [searchParams, setSearchParams] = useSearchParams();
 	const [list, setList] = useState<InfraDataSource[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [listError, setListError] = useState<string | null>(null);
 	const [formOpen, setFormOpen] = useState(false);
+	const [initialConnectorKey, setInitialConnectorKey] = useState<string | undefined>();
 	const [testingId, setTestingId] = useState<string | null>(null);
 	const [schemaDiscoveringId, setSchemaDiscoveringId] = useState<string | null>(null);
 	const [schemaModalOpen, setSchemaModalOpen] = useState(false);
@@ -187,9 +189,25 @@ export default function DataSourcesPage() {
 		loadList();
 	}, []);
 
-	const openCreate = () => {
+	const openCreate = useCallback((connectorKey?: string) => {
+		setInitialConnectorKey(connectorKey);
 		setFormOpen(true);
-	};
+	}, []);
+
+	const closeCreate = useCallback(() => {
+		setFormOpen(false);
+		setInitialConnectorKey(undefined);
+	}, []);
+
+	useEffect(() => {
+		const createRequested = searchParams.get("create") === "1";
+		if (!createRequested) return;
+		openCreate(searchParams.get("connectorKey") || undefined);
+		const next = new URLSearchParams(searchParams);
+		next.delete("create");
+		next.delete("connectorKey");
+		setSearchParams(next, { replace: true });
+	}, [openCreate, searchParams, setSearchParams]);
 
 	const handleDelete = (record: InfraDataSource) => {
 		if (isAdminManagedSource(record)) {
@@ -807,7 +825,7 @@ export default function DataSourcesPage() {
 					</Button>
 					<Button onClick={() => navigate("/foundation/jdbc-drivers")}>JDBC 驱动管理</Button>
 					<Button onClick={() => navigate("/workbench?section=data-management")}>查看黄金链路</Button>
-					<Button type="primary" onClick={openCreate}>
+						<Button type="primary" onClick={() => openCreate()}>
 						新建数据源
 					</Button>
 				</Space>
@@ -1028,11 +1046,12 @@ export default function DataSourcesPage() {
 			</Modal>
 
 			<DataSourceFormModal
-				open={formOpen}
-				editing={null}
-				onClose={() => setFormOpen(false)}
-				onSaved={loadList}
-			/>
+					open={formOpen}
+					editing={null}
+					initialConnectorKey={initialConnectorKey}
+					onClose={closeCreate}
+					onSaved={loadList}
+				/>
 
 			<RollbackImpactModal
 				open={rollbackOpen}

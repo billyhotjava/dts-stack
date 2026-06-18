@@ -60,6 +60,7 @@ const { Text } = Typography;
 interface DataSourceFormModalProps {
 	open: boolean;
 	editing: InfraDataSource | null;
+	initialConnectorKey?: string;
 	onClose: () => void;
 	onSaved: () => void;
 }
@@ -100,7 +101,13 @@ const showImpact = (impact: DataSourceUpdateImpact | null) => {
 	});
 };
 
-export default function DataSourceFormModal({ open, editing, onClose, onSaved }: DataSourceFormModalProps) {
+export default function DataSourceFormModal({
+	open,
+	editing,
+	initialConnectorKey,
+	onClose,
+	onSaved,
+}: DataSourceFormModalProps) {
 	const [form] = Form.useForm();
 	const [saving, setSaving] = useState(false);
 	const [connectors, setConnectors] = useState<InfraConnector[]>([]);
@@ -200,6 +207,9 @@ export default function DataSourceFormModal({ open, editing, onClose, onSaved }:
 		setApiTestResult(null);
 		if (!editing) {
 			form.resetFields();
+			if (initialConnectorKey) {
+				form.setFieldsValue({ connectorKey: initialConnectorKey });
+			}
 			return;
 		}
 		const props = editing.props || {};
@@ -227,7 +237,7 @@ export default function DataSourceFormModal({ open, editing, onClose, onSaved }:
 			apiTlsJson: apiSource ? stringifyJson(readApiConfigPart(props, "tls")) : "",
 		});
 		if (apiSource) void loadApiContract();
-	}, [open, editing, form, loadApiContract]);
+	}, [open, editing, form, loadApiContract, initialConnectorKey]);
 
 	// drivers 列表加载完后回填 driverId（编辑态）
 	useEffect(() => {
@@ -292,41 +302,53 @@ export default function DataSourceFormModal({ open, editing, onClose, onSaved }:
 		[apiAuthProviderValue, apiAuthProviders],
 	);
 
-	const handleTypeChange = (type: string) => {
-		if (isApiSourceType(type)) {
-			form.setFieldsValue({
-				driverId: undefined,
-				driverClass: undefined,
-				driverVersion: undefined,
-				jdbcUrl: undefined,
-				username: undefined,
-				password: undefined,
-				readerType: apiContract?.defaultReaderType || "httpreader",
-				apiAuthProvider: form.getFieldValue("apiAuthProvider") || "none",
-			});
-			void loadApiContract();
-			return;
-		}
-		if (!isJdbcType(type, form.getFieldValue("jdbcUrl"))) {
-			form.setFieldsValue({ readerType: form.getFieldValue("readerType") || "" });
-		}
-	};
+	const handleTypeChange = useCallback(
+		(type: string) => {
+			if (isApiSourceType(type)) {
+				form.setFieldsValue({
+					driverId: undefined,
+					driverClass: undefined,
+					driverVersion: undefined,
+					jdbcUrl: undefined,
+					username: undefined,
+					password: undefined,
+					readerType: apiContract?.defaultReaderType || "httpreader",
+					apiAuthProvider: form.getFieldValue("apiAuthProvider") || "none",
+				});
+				void loadApiContract();
+				return;
+			}
+			if (!isJdbcType(type, form.getFieldValue("jdbcUrl"))) {
+				form.setFieldsValue({ readerType: form.getFieldValue("readerType") || "" });
+			}
+		},
+		[apiContract?.defaultReaderType, form, loadApiContract],
+	);
 
-	const applyConnectorDefaults = (connectorKey?: string) => {
-		const connector = connectors.find((item) => item.connectorKey === connectorKey);
-		const fallback = TYPE_OPTIONS.find((option) => inferConnectorKey(option.value) === connectorKey);
-		if (!connector && !fallback) return;
-		const nextType = connector?.sourceType || fallback?.value || connectorKey;
-		if (!nextType) return;
-		form.setFieldsValue({
-			type: nextType,
-			readerType:
-				connectorKey === "http-api"
-					? apiContract?.defaultReaderType || "httpreader"
-					: form.getFieldValue("readerType"),
-		});
-		handleTypeChange(nextType);
-	};
+	const applyConnectorDefaults = useCallback(
+		(connectorKey?: string) => {
+			const connector = connectors.find((item) => item.connectorKey === connectorKey);
+			const fallback = TYPE_OPTIONS.find((option) => inferConnectorKey(option.value) === connectorKey);
+			if (!connector && !fallback) return;
+			const nextType = connector?.sourceType || fallback?.value || connectorKey;
+			if (!nextType) return;
+			form.setFieldsValue({
+				type: nextType,
+				readerType:
+					connectorKey === "http-api"
+						? apiContract?.defaultReaderType || "httpreader"
+						: form.getFieldValue("readerType"),
+			});
+			handleTypeChange(nextType);
+		},
+		[apiContract?.defaultReaderType, connectors, form, handleTypeChange],
+	);
+
+	useEffect(() => {
+		if (!open || editing || !initialConnectorKey) return;
+		form.setFieldsValue({ connectorKey: initialConnectorKey });
+		applyConnectorDefaults(initialConnectorKey);
+	}, [open, editing, initialConnectorKey, form, applyConnectorDefaults]);
 
 	const handleDriverSelect = (id?: string) => {
 		if (!id) return;

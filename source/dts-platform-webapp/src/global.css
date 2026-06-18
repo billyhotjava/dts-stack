@@ -737,3 +737,30 @@
 	white-space: nowrap;
 	font-weight: 600;
 }
+
+.connector-registry-table .ant-table-tbody > tr > td {
+	vertical-align: middle;
+}
+
+.connector-registry-capability-tags {
+	display: inline-flex;
+	max-width: 100%;
+	white-space: nowrap;
+	overflow: hidden;
+	flex-wrap: nowrap;
+}
+
+.connector-registry-capability-tags .ant-tag {
+	flex: 0 0 auto;
+}
+
+.connector-registry-actions {
+	display: inline-flex;
+	max-width: 100%;
+	white-space: nowrap;
+	flex-wrap: nowrap;
+}
+
+.connector-registry-actions .ant-btn {
+	flex: 0 0 auto;
+}
