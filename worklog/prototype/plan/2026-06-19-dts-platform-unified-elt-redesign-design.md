@@ -3,7 +3,7 @@
 > 状态：已与用户（架构师）逐节确认
 > 日期：2026-06-19
 > 范围：**只做前端原型**，纯前端 + mock API，不做后台
-> 产物位置：`worklog/prototype/`（工程在 `app/`，计划文档在 `plan/`）
+> 产物位置：`worklog/prototype/`（工程在 `source/`，计划文档在 `plan/`）
 
 ---
 
@@ -48,7 +48,7 @@ dts-platform 现网（`source/dts-platform-webapp`，React 19 + Ant Design 5 + V
 
 ```
 worklog/prototype/
-├── app/                      # 新 React 工程
+├── source/                   # 新 React 工程
 │   ├── src/
 │   │   ├── shell/            # 项目外壳：项目切换器 + 阶段导航轨 + 顶栏
 │   │   ├── stages/           # ① connect ② integrate ③ assets ④ metrics（黄金主线）
