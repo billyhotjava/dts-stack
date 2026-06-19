@@ -1,0 +1,70 @@
+@import "./tokens.css";
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+	height: 100%;
+	margin: 0;
+}
+
+body {
+	font-family: var(--font-family, "Inter", "Segoe UI", system-ui, -apple-system, "PingFang SC",
+			"Microsoft YaHei", sans-serif);
+	font-size: var(--text-base);
+	color: var(--ink);
+	background: var(--surface-sunken);
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+}
+
+/* 数据区等宽数字对齐（Swiss 数据密度） */
+.tnum,
+.ant-table-tbody td,
+.ant-statistic-content {
+	font-variant-numeric: tabular-nums;
+	font-feature-settings: "tnum";
+}
+
+h1,
+h2,
+h3,
+h4 {
+	margin: 0;
+	font-weight: 650;
+	letter-spacing: -0.01em;
+	color: var(--ink);
+}
+
+a {
+	color: var(--accent);
+	text-decoration: none;
+}
+a:hover {
+	color: var(--accent-hover);
+}
+
+::selection {
+	background: var(--accent-soft);
+}
+
+/* 滚动条收敛 */
+::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+::-webkit-scrollbar-thumb {
+	background: var(--hairline-strong);
+	border-radius: 999px;
+	border: 2px solid var(--surface-sunken);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	* {
+		animation-duration: 0.001ms !important;
+		transition-duration: 0.001ms !important;
+	}
+}

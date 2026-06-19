@@ -1,0 +1,56 @@
+/*
+ * Swiss 设计 token —— CSS 变量（与 tokens.ts 同值）。
+ * Chrome 95 安全：全部 HSL，无 oklch / color-mix / :has / 容器查询。
+ */
+:root {
+	--ink: hsl(222, 24%, 12%);
+	--ink-muted: hsl(220, 9%, 40%);
+	--ink-subtle: hsl(220, 8%, 56%);
+
+	--surface: hsl(0, 0%, 100%);
+	--surface-sunken: hsl(220, 20%, 97%);
+	--surface-raised: hsl(0, 0%, 100%);
+
+	--hairline: hsl(220, 16%, 88%);
+	--hairline-strong: hsl(220, 14%, 78%);
+
+	--accent: hsl(222, 80%, 48%);
+	--accent-hover: hsl(222, 82%, 42%);
+	--accent-active: hsl(222, 84%, 36%);
+	--accent-soft: hsl(222, 80%, 96%);
+
+	--success: hsl(152, 56%, 36%);
+	--success-soft: hsl(152, 46%, 95%);
+	--warning: hsl(38, 92%, 44%);
+	--warning-soft: hsl(38, 92%, 95%);
+	--error: hsl(2, 72%, 50%);
+	--error-soft: hsl(2, 72%, 96%);
+
+	/* 8px 基线 */
+	--space-xs: 4px;
+	--space-sm: 8px;
+	--space-md: 12px;
+	--space-lg: 16px;
+	--space-xl: 24px;
+	--space-xxl: 32px;
+
+	--radius-sm: 2px;
+	--radius-md: 3px;
+	--radius-lg: 6px;
+
+	/* 字号阶（Swiss 强层次） */
+	--text-xs: 0.75rem; /* 12 */
+	--text-sm: 0.8125rem; /* 13 */
+	--text-base: 0.875rem; /* 14 */
+	--text-md: 1rem; /* 16 */
+	--text-lg: 1.25rem; /* 20 */
+	--text-xl: 1.75rem; /* 28 */
+	--text-2xl: 2.5rem; /* 40 */
+
+	--shell-rail-w: 232px;
+	--shell-topbar-h: 52px;
+
+	--ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+	--dur-fast: 120ms;
+	--dur: 200ms;
+}
