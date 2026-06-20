@@ -11,7 +11,7 @@ export const SEED_PROJECTS: Project[] = [
 		workspaceId: "ws-sales",
 		name: "销售准备项目",
 		description: "整合 PLM 订单与 ERP 客户，产出销售达成率指标",
-		owner: "崔耀文",
+		owner: "测试用户",
 		updatedAt: "2026-06-19",
 		metrics: {
 			connectedSources: 2,
@@ -25,7 +25,7 @@ export const SEED_PROJECTS: Project[] = [
 		workspaceId: "ws-sales",
 		name: "销售预测项目",
 		description: "基于历史订单的销售预测建模",
-		owner: "崔耀文",
+		owner: "测试用户",
 		updatedAt: "2026-06-15",
 		metrics: {
 			connectedSources: 0,

@@ -7,7 +7,7 @@ export const SEED_WORKSPACES: Workspace[] = [
 		name: "销售处",
 		deptCode: "SALES",
 		description: "销售业务数据与分析",
-		owner: "崔耀文",
+		owner: "测试用户",
 		memberCount: 8,
 	},
 	{

@@ -70,9 +70,9 @@ export function TopBar() {
 			<BellOutlined style={{ fontSize: 16, color: "var(--ink-muted)" }} />
 			<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
 				<Avatar size={28} style={{ background: "var(--accent-soft)", color: "var(--accent-active)", fontSize: 13 }}>
-					崔
+					测
 				</Avatar>
-				<span style={{ fontSize: "var(--text-sm)", color: "var(--ink-muted)" }}>崔耀文</span>
+				<span style={{ fontSize: "var(--text-sm)", color: "var(--ink-muted)" }}>测试用户</span>
 			</div>
 		</header>
 	);
