@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate } from "react-router";
 import { AppShell } from "@/shell/AppShell";
+import { ConnectStage } from "@/stages/connect/ConnectStage";
 import { ProjectPortal } from "@/stages/portal/ProjectPortal";
 import { StagePlaceholder } from "@/stages/StagePlaceholder";
 
@@ -14,7 +15,7 @@ export const router = createBrowserRouter([
 		children: [
 			{ index: true, element: <Navigate to="/portal" replace /> },
 			{ path: "portal", element: <ProjectPortal /> },
-			{ path: "connect", element: <StagePlaceholder areaKey="connect" /> },
+			{ path: "connect", element: <ConnectStage /> },
 			{ path: "integrate", element: <StagePlaceholder areaKey="integrate" /> },
 			{ path: "assets", element: <StagePlaceholder areaKey="assets" /> },
 			{ path: "metrics", element: <StagePlaceholder areaKey="metrics" /> },

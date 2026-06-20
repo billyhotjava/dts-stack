@@ -21,6 +21,8 @@ export interface ProjectMetrics {
 
 export interface Project {
 	id: string;
+	/** 所属工作区（部门）—— 项目隶属于工作区 */
+	workspaceId: string;
 	name: string;
 	description?: string;
 	owner?: string;

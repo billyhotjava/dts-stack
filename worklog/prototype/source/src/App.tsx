@@ -5,28 +5,36 @@ import { RouterProvider } from "react-router";
 import { router } from "@/routes/router";
 import { DevReset } from "@/shell/DevReset";
 import { useProjectStore } from "@/store/projectStore";
+import { useWorkspaceStore } from "@/store/workspaceStore";
 import { antdTheme } from "@/ui/theme";
 
 export default function App() {
+	const loadWorkspaces = useWorkspaceStore((s) => s.loadWorkspaces);
+	const wsReady = useWorkspaceStore((s) => s.ready);
+	const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
 	const loadProjects = useProjectStore((s) => s.loadProjects);
-	const loading = useProjectStore((s) => s.loading);
-	const loaded = useProjectStore((s) => s.projects.length > 0);
 
+	// 启动：加载工作区（部门）
 	useEffect(() => {
-		void loadProjects();
-	}, [loadProjects]);
+		void loadWorkspaces();
+	}, [loadWorkspaces]);
+
+	// 工作区变更 → 联动加载该工作区下的项目
+	useEffect(() => {
+		if (currentWorkspaceId) void loadProjects(currentWorkspaceId);
+	}, [currentWorkspaceId, loadProjects]);
 
 	return (
 		<ConfigProvider theme={antdTheme} locale={zhCN}>
 			<AntApp>
-				{loaded ? (
+				{wsReady ? (
 					<>
 						<RouterProvider router={router} />
 						<DevReset />
 					</>
 				) : (
 					<div style={{ height: "100%", display: "grid", placeItems: "center" }}>
-						<Spin spinning={loading} tip="加载项目…">
+						<Spin tip="加载工作区…">
 							<div style={{ width: 1, height: 1 }} />
 						</Spin>
 					</div>

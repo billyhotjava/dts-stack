@@ -10,6 +10,7 @@ export function ProjectSwitcher() {
 	const setCurrent = useProjectStore((s) => s.setCurrent);
 	const current = projects.find((p) => p.id === currentId) ?? null;
 
+	// projects 已是当前工作区下的项目（projectStore 按 workspace 加载）
 	const items: MenuProps["items"] = projects.map((p) => ({
 		key: p.id,
 		label: (

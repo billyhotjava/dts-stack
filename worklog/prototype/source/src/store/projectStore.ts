@@ -1,21 +1,23 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Project } from "@/types/project";
-import { projectService } from "@/mock/services/projectService";
 import { unwrap } from "@/mock/client";
+import { projectService } from "@/mock/services/projectService";
+import type { Project } from "@/types/project";
 
 interface ProjectState {
+	/** 当前工作区下的项目 */
 	projects: Project[];
 	currentId: string | null;
 	loading: boolean;
-	loadProjects: () => Promise<void>;
+	/** 加载某工作区的项目；切换工作区时调用 */
+	loadProjects: (workspaceId: string) => Promise<void>;
 	setCurrent: (id: string) => void;
 	current: () => Project | null;
 }
 
 /**
- * 项目上下文 store。currentId 持久化到 localStorage，
- * 使刷新后仍停留在同一项目（与现网 contextStore 一致的持久化策略）。
+ * 项目上下文 store。项目隶属工作区，故加载按 workspaceId 过滤。
+ * currentId 持久化；切换工作区后若旧项目不在新工作区，则回落到首个项目。
  */
 export const useProjectStore = create<ProjectState>()(
 	persist(
@@ -23,13 +25,12 @@ export const useProjectStore = create<ProjectState>()(
 			projects: [],
 			currentId: null,
 			loading: false,
-			async loadProjects() {
+			async loadProjects(workspaceId) {
 				set({ loading: true });
-				const projects = unwrap(await projectService.list());
+				const projects = unwrap(await projectService.listByWorkspace(workspaceId));
 				set((state) => ({
 					projects,
 					loading: false,
-					// 若尚无选中项或选中项已不存在，默认选第一个
 					currentId:
 						state.currentId && projects.some((p) => p.id === state.currentId)
 							? state.currentId

@@ -1,6 +1,7 @@
 import { BellOutlined, SearchOutlined } from "@ant-design/icons";
 import { Avatar } from "antd";
 import { ProjectSwitcher } from "./ProjectSwitcher";
+import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
 /** 顶栏：品牌 + 项目上下文 + 全局搜索（占位，S7 实现 ⌘K）+ 账号。 */
 export function TopBar() {
@@ -37,6 +38,9 @@ export function TopBar() {
 				<span style={{ color: "var(--hairline-strong)" }}>▸</span>
 			</div>
 
+			{/* 工作区(部门) ▸ 项目 两级上下文 */}
+			<WorkspaceSwitcher />
+			<span style={{ color: "var(--hairline-strong)" }}>▸</span>
 			<ProjectSwitcher />
 
 			<div style={{ flex: 1 }} />
