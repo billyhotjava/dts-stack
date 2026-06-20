@@ -32,7 +32,11 @@ export default defineConfig({
 		target: buildTarget,
 	},
 	server: {
+		host: "0.0.0.0", // 绑定所有网卡，便于远程访问
 		port: 5273,
-		host: true,
+	},
+	preview: {
+		host: "0.0.0.0",
+		port: 5273,
 	},
 });
