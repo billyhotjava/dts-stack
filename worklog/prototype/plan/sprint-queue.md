@@ -14,10 +14,10 @@
 | [S3](./sprint-3-集成画布内核/README.md) | ② 集成 · 画布内核 | 2 | DONE | S1 |
 | [S4](./sprint-4-集成配置运行/README.md) | ② 集成 · 配置/运行/双视图 | 4 | DONE | S3 |
 | [S5](./sprint-5-资产/README.md) | ③ 资产（目录/血缘/质量） | 3 | DONE | S1 |
-| [S6](./sprint-6-指标/README.md) | ④ 指标（指标/语义/dbt 隐藏） | 4 | READY | S4 |
+| [S6](./sprint-6-指标/README.md) | ④ 指标（指标/语义/dbt 隐藏） | 4 | DONE | S4 |
 | [S7](./sprint-7-旁路区收尾/README.md) | 旁路区 + 全局搜索 + 打磨 | 4 | READY | S1–S6 |
 
-**统计**: READY=2, IN_PROGRESS=1, DONE=5, BLOCKED=0（S2 F3 简版；S3 画布内核✅；S4 配置/运行/双视图/dbt✅；S5 资产/血缘/质量✅）
+**统计**: READY=1, IN_PROGRESS=1, DONE=6, BLOCKED=0（S2 F3 简版；S3✅；S4✅；S5✅；S6 指标/语义/dbt 隐藏/字典✅）
 
 ## 关键路径
 

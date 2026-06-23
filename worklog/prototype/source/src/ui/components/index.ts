@@ -4,3 +4,4 @@ export { Surface } from "./Surface";
 export { SectionTitle } from "./SectionTitle";
 export { CompactTable, DEFAULT_PAGE_SIZE } from "./CompactTable";
 export type { CompactColumn } from "./CompactTable";
+export { Sparkline } from "./Sparkline";

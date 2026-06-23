@@ -1,5 +1,6 @@
 import type { AssetGrant, Dataset, DataProduct, DatasetLineage, QualityRule } from "@/types/asset";
 import type { Connector, DataSource, JdbcDriver } from "@/types/datasource";
+import type { GlossaryTerm, Metric, ReferenceCode, SemanticSubject } from "@/types/metric";
 import type { Department } from "@/types/department";
 import type { ProjectSpace } from "@/types/projectSpace";
 import type { TransformGraphDTO } from "@/types/transform";
@@ -14,6 +15,12 @@ import { SEED_CONNECTORS } from "./fixtures/connectors";
 import { SEED_DATA_SOURCES } from "./fixtures/dataSources";
 import { SEED_DEPARTMENTS } from "./fixtures/departments";
 import { SEED_JDBC_DRIVERS } from "./fixtures/jdbcDrivers";
+import {
+	SEED_GLOSSARY,
+	SEED_METRICS,
+	SEED_REFERENCE_CODES,
+	SEED_SEMANTIC_SUBJECTS,
+} from "./fixtures/metrics";
 import { SEED_PROJECT_SPACES } from "./fixtures/projectSpaces";
 import { SEED_TRANSFORM_GRAPHS } from "./fixtures/transformGraphs";
 
@@ -33,6 +40,10 @@ interface MockDb {
 	lineage: Record<string, DatasetLineage>;
 	qualityRules: QualityRule[];
 	assetGrants: AssetGrant[];
+	metrics: Metric[];
+	semanticSubjects: SemanticSubject[];
+	glossary: GlossaryTerm[];
+	referenceCodes: ReferenceCode[];
 }
 
 /** Chrome 95 安全的深拷贝（数据皆纯 JSON，避免 structuredClone：Chrome 98+）。 */
@@ -53,6 +64,10 @@ function seed(): MockDb {
 		lineage: clone(SEED_LINEAGE),
 		qualityRules: clone(SEED_QUALITY_RULES),
 		assetGrants: clone(SEED_ASSET_GRANTS),
+		metrics: clone(SEED_METRICS),
+		semanticSubjects: clone(SEED_SEMANTIC_SUBJECTS),
+		glossary: clone(SEED_GLOSSARY),
+		referenceCodes: clone(SEED_REFERENCE_CODES),
 	};
 }
 
@@ -72,4 +87,8 @@ export function resetDb(): void {
 	db.lineage = fresh.lineage;
 	db.qualityRules = fresh.qualityRules;
 	db.assetGrants = fresh.assetGrants;
+	db.metrics = fresh.metrics;
+	db.semanticSubjects = fresh.semanticSubjects;
+	db.glossary = fresh.glossary;
+	db.referenceCodes = fresh.referenceCodes;
 }

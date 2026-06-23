@@ -3,6 +3,7 @@ import { AppShell } from "@/shell/AppShell";
 import { AssetsStage } from "@/stages/assets/AssetsStage";
 import { ConnectStage } from "@/stages/connect/ConnectStage";
 import { IntegrateStage } from "@/stages/integrate/IntegrateStage";
+import { MetricsStage } from "@/stages/metrics/MetricsStage";
 import { DepartmentPortal } from "@/stages/portal/DepartmentPortal";
 import { StagePlaceholder } from "@/stages/StagePlaceholder";
 
@@ -20,7 +21,7 @@ export const router = createBrowserRouter([
 			{ path: "connect", element: <ConnectStage /> },
 			{ path: "integrate", element: <IntegrateStage /> },
 			{ path: "assets", element: <AssetsStage /> },
-			{ path: "metrics", element: <StagePlaceholder areaKey="metrics" /> },
+			{ path: "metrics", element: <MetricsStage /> },
 			{ path: "platform/serve", element: <StagePlaceholder areaKey="serve" /> },
 			{ path: "platform/govern", element: <StagePlaceholder areaKey="govern" /> },
 			{ path: "platform/security", element: <StagePlaceholder areaKey="security" /> },
