@@ -1,17 +1,17 @@
 import type { DataSource } from "@/types/datasource";
-import type { Project } from "@/types/project";
-import type { Workspace } from "@/types/workspace";
+import type { Department } from "@/types/department";
+import type { ProjectSpace } from "@/types/projectSpace";
 import { SEED_DATA_SOURCES } from "./fixtures/dataSources";
-import { SEED_PROJECTS } from "./fixtures/projects";
-import { SEED_WORKSPACES } from "./fixtures/workspaces";
+import { SEED_DEPARTMENTS } from "./fixtures/departments";
+import { SEED_PROJECT_SPACES } from "./fixtures/projectSpaces";
 
 /**
  * 进程内 mock 数据库。各 service 从这里读写。
- * 后续 sprint 的领域数据（转换/资产/指标）按同样方式扩展集合。
+ * 组织模型：部门(主) → 项目空间(dev 辅助)；资产/指标归口部门。
  */
 interface MockDb {
-	workspaces: Workspace[];
-	projects: Project[];
+	departments: Department[];
+	projectSpaces: ProjectSpace[];
 	dataSources: DataSource[];
 }
 
@@ -22,8 +22,8 @@ function clone<T>(value: T): T {
 
 function seed(): MockDb {
 	return {
-		workspaces: clone(SEED_WORKSPACES),
-		projects: clone(SEED_PROJECTS),
+		departments: clone(SEED_DEPARTMENTS),
+		projectSpaces: clone(SEED_PROJECT_SPACES),
 		dataSources: clone(SEED_DATA_SOURCES),
 	};
 }
@@ -33,7 +33,7 @@ export const db: MockDb = seed();
 /** 重置为初始样例数据（开发入口调用）。 */
 export function resetDb(): void {
 	const fresh = seed();
-	db.workspaces = fresh.workspaces;
-	db.projects = fresh.projects;
+	db.departments = fresh.departments;
+	db.projectSpaces = fresh.projectSpaces;
 	db.dataSources = fresh.dataSources;
 }

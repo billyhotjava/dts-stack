@@ -9,9 +9,9 @@ import {
 } from "@ant-design/icons";
 import { NavLink } from "react-router";
 import { StatusDot } from "@/ui/components";
-import { useProjectStore } from "@/store/projectStore";
+import { useDepartmentStore } from "@/store/departmentStore";
 import { deriveStageStatuses, STAGES } from "./stages";
-import type { StageStatus } from "@/types/project";
+import type { StageStatus } from "@/types/department";
 
 const PLATFORM_ITEMS = [
 	{ key: "serve", label: "数据服务", path: "/platform/serve", icon: <ApiOutlined /> },
@@ -81,9 +81,9 @@ const rowStyle = (active: boolean): React.CSSProperties => ({
 	fontSize: "var(--text-base)",
 });
 
-/** 左侧导航轨：上半=黄金主线 4 阶段（带派生状态），下半=平台旁路区。 */
+/** 左侧导航轨：上半=黄金主线 4 阶段（按当前部门派生状态），下半=平台旁路区。 */
 export function StageRail() {
-	const current = useProjectStore((s) => s.projects.find((p) => p.id === s.currentId) ?? null);
+	const current = useDepartmentStore((s) => s.departments.find((d) => d.id === s.currentDepartmentId) ?? null);
 	const statuses = current ? deriveStageStatuses(current) : null;
 
 	return (
@@ -103,7 +103,7 @@ export function StageRail() {
 		>
 			<NavLink to="/portal" style={({ isActive }) => rowStyle(isActive)}>
 				<AppstoreOutlined style={{ width: 18, textAlign: "center" }} />
-				<span>项目门户</span>
+				<span>部门门户</span>
 			</NavLink>
 
 			<div

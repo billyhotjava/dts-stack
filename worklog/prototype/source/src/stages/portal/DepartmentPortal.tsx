@@ -1,34 +1,30 @@
 import { ArrowRightOutlined, CheckCircleFilled } from "@ant-design/icons";
 import { Button, Empty } from "antd";
 import { useNavigate } from "react-router";
-import { useProjectStore } from "@/store/projectStore";
+import { useDepartmentStore } from "@/store/departmentStore";
 import { SectionTitle, StatusDot, Surface } from "@/ui/components";
 import { currentStage, deriveStageStatuses, STAGES } from "@/shell/stages";
-import type { StageStatus } from "@/types/project";
+import type { StageStatus } from "@/types/department";
 
 const STATUS_LABEL: Record<StageStatus, string> = { done: "完成", active: "进行中", todo: "待开始" };
-const STATUS_TONE: Record<StageStatus, "done" | "active" | "todo"> = {
-	done: "done",
-	active: "active",
-	todo: "todo",
-};
+const STATUS_TONE: Record<StageStatus, "done" | "active" | "todo"> = { done: "done", active: "active", todo: "todo" };
 
-export function ProjectPortal() {
+export function DepartmentPortal() {
 	const navigate = useNavigate();
-	const project = useProjectStore((s) => s.projects.find((p) => p.id === s.currentId) ?? null);
+	const dept = useDepartmentStore((s) => s.departments.find((d) => d.id === s.currentDepartmentId) ?? null);
 
-	if (!project) {
-		return <Empty description="请选择一个项目" style={{ marginTop: 80 }} />;
+	if (!dept) {
+		return <Empty description="请选择一个部门" style={{ marginTop: 80 }} />;
 	}
 
-	const statuses = deriveStageStatuses(project);
-	const next = currentStage(project);
-	const allDone = STAGES.every((s) => s.isComplete(project.metrics));
+	const statuses = deriveStageStatuses(dept);
+	const next = currentStage(dept);
+	const allDone = STAGES.every((s) => s.isComplete(dept.metrics));
 	const metricValue: Record<string, number> = {
-		connect: project.metrics.connectedSources,
-		integrate: project.metrics.transformRunsSucceeded,
-		assets: project.metrics.publishedDatasets,
-		metrics: project.metrics.publishedIndicators,
+		connect: dept.metrics.connectedSources,
+		integrate: dept.metrics.transformRunsSucceeded,
+		assets: dept.metrics.publishedDatasets,
+		metrics: dept.metrics.publishedIndicators,
 	};
 	const metricUnit: Record<string, string> = {
 		connect: "已连通源",
@@ -39,9 +35,9 @@ export function ProjectPortal() {
 
 	return (
 		<div style={{ maxWidth: 1080, margin: "0 auto" }}>
-			<SectionTitle kicker="项目门户" title={project.name} desc={project.description} />
+			<SectionTitle kicker={`部门门户 · ${dept.deptCode}`} title={dept.name} desc={dept.description} />
 
-			{/* 你的下一步 —— 引导卡 */}
+			{/* 你的下一步 —— 引导卡（按部门成熟度派生） */}
 			<Surface
 				pad="lg"
 				style={{
@@ -74,7 +70,7 @@ export function ProjectPortal() {
 							</span>
 						) : (
 							<span>
-								阶段 {next.index} · {next.label}：{next.nextAction(project)}
+								阶段 {next.index} · {next.label}：{next.nextAction(dept)}
 							</span>
 						)}
 					</div>
@@ -84,26 +80,16 @@ export function ProjectPortal() {
 				</Button>
 			</Surface>
 
-			{/* 4 阶段总览 */}
+			{/* 4 阶段总览（部门级） */}
 			<div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
 				{STAGES.map((stage) => {
 					const status = statuses[stage.key];
 					return (
-						<Surface
-							key={stage.key}
-							pad="md"
-							style={{ cursor: "pointer", transition: "border-color var(--dur) var(--ease-out)" }}
-							className="portal-stage-card"
-						>
+						<Surface key={stage.key} pad="md">
 							<button
 								type="button"
 								onClick={() => navigate(stage.path)}
-								style={{
-									all: "unset",
-									cursor: "pointer",
-									display: "block",
-									width: "100%",
-								}}
+								style={{ all: "unset", cursor: "pointer", display: "block", width: "100%" }}
 							>
 								<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
 									<span style={{ fontSize: 11, color: "var(--ink-subtle)" }}>阶段 {stage.index}</span>
@@ -114,13 +100,9 @@ export function ProjectPortal() {
 									<span className="tnum" style={{ fontSize: "var(--text-xl)", fontWeight: 700, color: "var(--ink)" }}>
 										{metricValue[stage.key]}
 									</span>
-									<span style={{ fontSize: "var(--text-sm)", color: "var(--ink-muted)" }}>
-										{metricUnit[stage.key]}
-									</span>
+									<span style={{ fontSize: "var(--text-sm)", color: "var(--ink-muted)" }}>{metricUnit[stage.key]}</span>
 								</div>
-								<div style={{ fontSize: "var(--text-xs)", color: "var(--ink-subtle)", marginTop: 8 }}>
-									{stage.doneWhen}
-								</div>
+								<div style={{ fontSize: "var(--text-xs)", color: "var(--ink-subtle)", marginTop: 8 }}>{stage.doneWhen}</div>
 							</button>
 						</Surface>
 					);

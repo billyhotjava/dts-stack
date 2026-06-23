@@ -1,14 +1,16 @@
-/** 黄金主线四阶段。 */
+/**
+ * 部门 = 主组织边界（权限分割 + 资产/指标归口）。
+ * 对齐现网后端：dept 是主权限轴，资产实体普遍带 ownerDept。
+ * 黄金主线四阶段的成熟度归口到部门。
+ */
 export type StageKey = "connect" | "integrate" | "assets" | "metrics";
 
-/** 阶段状态：完成 / 进行中 / 待开始。 */
 export type StageStatus = "done" | "active" | "todo";
 
 /**
- * 项目级度量 —— 阶段状态由这些数值派生，而非手工设置。
- * 这是"项目/工作空间 + 阶段向导"范式的事实源。
+ * 部门级阶段度量 —— 黄金主线状态由此派生（资产/指标归口部门，而非项目）。
  */
-export interface ProjectMetrics {
+export interface StageMetrics {
 	/** 已连通的数据源数（阶段① 完成判据：>=1） */
 	connectedSources: number;
 	/** 跑通的转换作业数（阶段② 完成判据：>=1） */
@@ -19,13 +21,14 @@ export interface ProjectMetrics {
 	publishedIndicators: number;
 }
 
-export interface Project {
+export interface Department {
 	id: string;
-	/** 所属工作区（部门）—— 项目隶属于工作区 */
-	workspaceId: string;
 	name: string;
+	/** 部门编码（稳定 ASCII 主键，避免中文名漂移） */
+	deptCode: string;
 	description?: string;
 	owner?: string;
-	updatedAt?: string;
-	metrics: ProjectMetrics;
+	memberCount?: number;
+	/** 部门的黄金主线成熟度 */
+	metrics: StageMetrics;
 }

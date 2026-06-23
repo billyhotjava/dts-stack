@@ -1,12 +1,13 @@
 import { createBrowserRouter, Navigate } from "react-router";
 import { AppShell } from "@/shell/AppShell";
 import { ConnectStage } from "@/stages/connect/ConnectStage";
-import { ProjectPortal } from "@/stages/portal/ProjectPortal";
+import { IntegrateStage } from "@/stages/integrate/IntegrateStage";
+import { DepartmentPortal } from "@/stages/portal/DepartmentPortal";
 import { StagePlaceholder } from "@/stages/StagePlaceholder";
 
 /**
- * 路由：黄金主线 4 阶段 + 平台旁路区。
- * 阶段页 S1 为信息性占位，后续 sprint 逐步替换为真实页面。
+ * 路由：部门门户 + 黄金主线 4 阶段 + 平台旁路区。
+ * 资产③/指标④ S1 仍为信息性占位，后续 sprint 替换。
  */
 export const router = createBrowserRouter([
 	{
@@ -14,9 +15,9 @@ export const router = createBrowserRouter([
 		element: <AppShell />,
 		children: [
 			{ index: true, element: <Navigate to="/portal" replace /> },
-			{ path: "portal", element: <ProjectPortal /> },
+			{ path: "portal", element: <DepartmentPortal /> },
 			{ path: "connect", element: <ConnectStage /> },
-			{ path: "integrate", element: <StagePlaceholder areaKey="integrate" /> },
+			{ path: "integrate", element: <IntegrateStage /> },
 			{ path: "assets", element: <StagePlaceholder areaKey="assets" /> },
 			{ path: "metrics", element: <StagePlaceholder areaKey="metrics" /> },
 			{ path: "platform/serve", element: <StagePlaceholder areaKey="serve" /> },
