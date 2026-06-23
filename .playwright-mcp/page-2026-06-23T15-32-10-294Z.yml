@@ -1,0 +1,295 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e14]:
+      - banner [ref=e15]:
+        - generic [ref=e16]:
+          - generic [ref=e17]: D
+          - generic [ref=e18]: DTS
+          - generic [ref=e19]: ▸
+        - button "apartment 销售处 down" [ref=e20] [cursor=pointer]:
+          - img "apartment" [ref=e21]:
+            - img [ref=e22]
+          - generic [ref=e24]: 销售处
+          - img "down" [ref=e25]:
+            - img [ref=e26]
+        - button "search 搜索 ⌘K" [ref=e28] [cursor=pointer]:
+          - img "search" [ref=e29]:
+            - img [ref=e30]
+          - generic [ref=e32]: 搜索
+          - generic [ref=e33]: ⌘K
+        - img "bell" [ref=e34]:
+          - img [ref=e35]
+        - generic [ref=e37]:
+          - generic [ref=e39]: 测
+          - generic [ref=e40]: 测试用户
+      - generic [ref=e41]:
+        - navigation "主导航" [ref=e42]:
+          - link "appstore 部门门户" [ref=e43] [cursor=pointer]:
+            - /url: /portal
+            - img "appstore" [ref=e44]:
+              - img [ref=e45]
+            - generic [ref=e47]: 部门门户
+          - generic [ref=e48]: 黄金主线
+          - link "check 连接 完成" [ref=e49] [cursor=pointer]:
+            - /url: /connect
+            - img "check" [ref=e51]:
+              - img [ref=e52]
+            - generic [ref=e54]: 连接
+            - generic [ref=e55]: 完成
+          - link "集成 进行中" [ref=e56] [cursor=pointer]:
+            - /url: /integrate
+            - generic [ref=e60]: 集成
+            - generic [ref=e61]: 进行中
+          - link "3 资产 待开始" [ref=e62] [cursor=pointer]:
+            - /url: /assets
+            - generic [ref=e63]: "3"
+            - generic [ref=e64]: 资产
+            - generic [ref=e65]: 待开始
+          - link "4 指标 待开始" [ref=e66] [cursor=pointer]:
+            - /url: /metrics
+            - generic [ref=e67]: "4"
+            - generic [ref=e68]: 指标
+            - generic [ref=e69]: 待开始
+          - generic [ref=e71]: 平台
+          - link "api 数据服务" [ref=e72] [cursor=pointer]:
+            - /url: /platform/serve
+            - img "api" [ref=e74]:
+              - img [ref=e75]
+            - generic [ref=e77]: 数据服务
+          - link "safety-certificate 治理" [ref=e78] [cursor=pointer]:
+            - /url: /platform/govern
+            - img "safety-certificate" [ref=e80]:
+              - img [ref=e81]
+            - generic [ref=e83]: 治理
+          - link "lock 安全" [ref=e84] [cursor=pointer]:
+            - /url: /platform/security
+            - img "lock" [ref=e86]:
+              - img [ref=e87]
+            - generic [ref=e89]: 安全
+          - link "cloud-server 运维" [ref=e90] [cursor=pointer]:
+            - /url: /platform/ops
+            - img "cloud-server" [ref=e92]:
+              - img [ref=e93]
+            - generic [ref=e97]: 运维
+          - link "setting 设置" [ref=e98] [cursor=pointer]:
+            - /url: /platform/settings
+            - img "setting" [ref=e100]:
+              - img [ref=e101]
+            - generic [ref=e103]: 设置
+        - main [ref=e104]:
+          - generic [ref=e105]:
+            - generic [ref=e106]:
+              - generic [ref=e107]:
+                - generic [ref=e108]: 阶段 ②
+                - generic [ref=e109]: 集成 · 可视化 ELT
+                - generic [ref=e110]: 拖拽节点搭建转换，dbt 在底层自动生成。当前部门：销售处
+              - generic [ref=e112]: S4 配置/运行
+            - generic [ref=e113]:
+              - generic [ref=e114]:
+                - img "folder" [ref=e115]:
+                  - img [ref=e116]
+                - generic [ref=e118]: 项目空间
+                - generic [ref=e119]: 本部门内组织 ELT/建模（资产产出归口部门）
+                - button "plus 新建空间" [ref=e120] [cursor=pointer]:
+                  - img "plus" [ref=e122]:
+                    - img [ref=e123]
+                  - generic [ref=e126]: 新建空间
+              - generic [ref=e127]:
+                - button "销售准备 3 个模型 · 测试用户" [ref=e128] [cursor=pointer]:
+                  - generic [ref=e129]: 销售准备
+                  - generic [ref=e130]: 3 个模型 · 测试用户
+                - button "销售预测 1 个模型 · 测试用户" [ref=e131] [cursor=pointer]:
+                  - generic [ref=e132]: 销售预测
+                  - generic [ref=e133]: 1 个模型 · 测试用户
+            - generic [ref=e134]:
+              - radiogroup "segmented control" [ref=e135]:
+                - generic [ref=e136]:
+                  - generic [ref=e137] [cursor=pointer]:
+                    - radio "画布" [checked]
+                    - generic "画布" [ref=e138]
+                  - generic [ref=e139] [cursor=pointer]:
+                    - radio "列表"
+                    - generic "列表" [ref=e140]
+              - button "code 查看生成的 dbt" [ref=e141] [cursor=pointer]:
+                - img "code" [ref=e143]:
+                  - img [ref=e144]
+                - generic [ref=e146]: 查看生成的 dbt
+            - generic [ref=e147]:
+              - generic [ref=e148]:
+                - generic [ref=e149]: 节点
+                - generic [ref=e150]:
+                  - img "database" [ref=e152]:
+                    - img [ref=e153]
+                  - generic [ref=e155]: 源表
+                  - button "添加源表节点到画布" [ref=e156] [cursor=pointer]:
+                    - img "plus" [ref=e157]:
+                      - img [ref=e158]
+                - generic [ref=e161]:
+                  - img "clear" [ref=e163]:
+                    - img [ref=e164]
+                  - generic [ref=e166]: 清洗
+                  - button "添加清洗节点到画布" [ref=e167] [cursor=pointer]:
+                    - img "plus" [ref=e168]:
+                      - img [ref=e169]
+                - generic [ref=e172]:
+                  - img "merge-cells" [ref=e174]:
+                    - img [ref=e175]
+                  - generic [ref=e177]: 连接
+                  - button "添加连接节点到画布" [ref=e178] [cursor=pointer]:
+                    - img "plus" [ref=e179]:
+                      - img [ref=e180]
+                - generic [ref=e183]:
+                  - img "function" [ref=e185]:
+                    - img [ref=e186]
+                  - generic [ref=e188]: 聚合
+                  - button "添加聚合节点到画布" [ref=e189] [cursor=pointer]:
+                    - img "plus" [ref=e190]:
+                      - img [ref=e191]
+                - generic [ref=e194]:
+                  - img "export" [ref=e196]:
+                    - img [ref=e197]
+                  - generic [ref=e199]: 输出
+                  - button "添加输出节点到画布" [ref=e200] [cursor=pointer]:
+                    - img "plus" [ref=e201]:
+                      - img [ref=e202]
+                - generic [ref=e205]: 拖拽到画布，或点 + 添加（键盘可达）。
+              - application [ref=e207]:
+                - generic [ref=e209]:
+                  - generic:
+                    - generic:
+                      - img:
+                        - group "Edge from n-plm to n-dedup"
+                      - img:
+                        - group "Edge from n-dedup to n-join" [ref=e210] [cursor=pointer]
+                      - img:
+                        - group "Edge from n-erp to n-join" [ref=e213] [cursor=pointer]
+                      - img:
+                        - group "Edge from n-join to n-ods"
+                    - generic:
+                      - group [ref=e216]:
+                        - generic [ref=e217]:
+                          - generic [ref=e218]:
+                            - img "database" [ref=e220]:
+                              - img [ref=e221]
+                            - generic [ref=e223]: 源表
+                          - generic [ref=e227]:
+                            - generic [ref=e228]: PLM.订单
+                            - generic [ref=e229]: PLM 生产系统
+                            - generic [ref=e230]:
+                              - generic [ref=e231]: 就绪
+                              - generic [ref=e232]: 32,000 行
+                      - group [ref=e234]:
+                        - generic [ref=e235]:
+                          - generic [ref=e237]:
+                            - img "clear" [ref=e239]:
+                              - img [ref=e240]
+                            - generic [ref=e242]: 清洗
+                          - generic [ref=e246]:
+                            - generic [ref=e247]: 去重
+                            - generic [ref=e248]: 主键 order_id · 保留最新
+                            - generic [ref=e249]:
+                              - generic [ref=e250]: 就绪
+                              - generic [ref=e251]: 31,800 行
+                      - group [ref=e253]:
+                        - generic [ref=e254]:
+                          - generic [ref=e255]:
+                            - img "database" [ref=e257]:
+                              - img [ref=e258]
+                            - generic [ref=e260]: 源表
+                          - generic [ref=e264]:
+                            - generic [ref=e265]: ERP.客户
+                            - generic [ref=e266]: ERP 企业系统
+                            - generic [ref=e267]:
+                              - generic [ref=e268]: 就绪
+                              - generic [ref=e269]: 5,200 行
+                      - group [ref=e271]:
+                        - generic [ref=e272]:
+                          - generic [ref=e274]:
+                            - img "merge-cells" [ref=e276]:
+                              - img [ref=e277]
+                            - generic [ref=e279]: 连接
+                          - generic [ref=e283]:
+                            - generic [ref=e284]: 连接
+                            - generic [ref=e285]: order.cust_id = cust.id
+                            - generic [ref=e287]: 待运行
+                      - group [ref=e289]:
+                        - generic [ref=e290]:
+                          - generic [ref=e292]:
+                            - img "export" [ref=e294]:
+                              - img [ref=e295]
+                            - generic [ref=e297]: 输出
+                          - generic [ref=e301]:
+                            - generic [ref=e302]: ODS.宽表
+                            - generic [ref=e303]: ods_sales_wide
+                            - generic [ref=e305]: 待运行
+                - img
+                - generic "Control Panel" [ref=e306]:
+                  - button "Zoom In" [ref=e307] [cursor=pointer]:
+                    - img [ref=e308]
+                  - button "Zoom Out" [ref=e310] [cursor=pointer]:
+                    - img [ref=e311]
+                  - button "Fit View" [ref=e313] [cursor=pointer]:
+                    - img [ref=e314]
+                  - button "Toggle Interactivity" [ref=e316] [cursor=pointer]:
+                    - img [ref=e317]
+                - img "Mini Map" [ref=e320]
+            - generic [ref=e327]:
+              - generic [ref=e328]:
+                - button "caret-right 运行" [ref=e329] [cursor=pointer]:
+                  - img "caret-right" [ref=e331]:
+                    - img [ref=e332]
+                  - generic [ref=e334]: 运行
+                - generic [ref=e335]: 运行整图转换（mock 执行）；dbt 在底层自动生成并调度。
+              - generic [ref=e337]:
+                - tablist [ref=e338]:
+                  - generic [ref=e340]:
+                    - tab "运行历史" [selected] [ref=e342] [cursor=pointer]
+                    - tab "日志" [ref=e344] [cursor=pointer]
+                - tabpanel "运行历史" [ref=e347]:
+                  - table [ref=e354]:
+                    - rowgroup [ref=e360]:
+                      - row "开始时间 状态 行数 耗时" [ref=e361]:
+                        - columnheader "开始时间" [ref=e362]
+                        - columnheader "状态" [ref=e363]
+                        - columnheader "行数" [ref=e364]
+                        - columnheader "耗时" [ref=e365]
+                    - rowgroup [ref=e366]:
+                      - row "暂无数据 暂无数据" [ref=e367]:
+                        - cell "暂无数据 暂无数据" [ref=e368]:
+                          - generic [ref=e369]:
+                            - img "暂无数据" [ref=e371]
+                            - generic [ref=e377]: 暂无数据
+    - button "reload 重置样例数据" [ref=e379] [cursor=pointer]:
+      - img "reload" [ref=e381]:
+        - img [ref=e382]
+      - generic [ref=e384]: 重置样例数据
+  - dialog "查看生成的 dbt（只读）" [ref=e386]:
+    - generic [ref=e388]:
+      - button "关闭" [ref=e389] [cursor=pointer]:
+        - img "close" [ref=e390]:
+          - img [ref=e391]
+      - generic [ref=e393]: 查看生成的 dbt（只读）
+    - generic [ref=e394]:
+      - generic [ref=e395]:
+        - text: 以下 dbt 模型由画布转换图
+        - strong [ref=e396]: 自动生成
+        - text: ，普通流程无需手写；此处仅供查看与排查。
+      - generic [ref=e397]:
+        - generic [ref=e398]:
+          - generic [ref=e399]:
+            - generic [ref=e400]: stg_1.sql
+            - generic [ref=e401]: view
+            - generic [ref=e402]: 依赖 1
+          - generic [ref=e403]: "select distinct * from {{ source('raw', 'plm') }}"
+        - generic [ref=e404]:
+          - generic [ref=e405]:
+            - generic [ref=e406]: int_2.sql
+            - generic [ref=e407]: view
+            - generic [ref=e408]: 依赖 2
+          - generic [ref=e409]: "select a.*, b.* from {{ ref('stg_1') }} a join {{ source('raw', 'erp') }} b on a.cust_id = b.id"
+        - generic [ref=e410]:
+          - generic [ref=e411]:
+            - generic [ref=e412]: mart_ods.sql
+            - generic [ref=e413]: table
+            - generic [ref=e414]: 依赖 1
+          - generic [ref=e415]: "{{ config(materialized='table') }} select * from {{ ref('int_2') }}"

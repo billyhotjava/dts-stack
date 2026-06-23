@@ -1,0 +1,15 @@
+[     157ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:5273/node_modules/.vite/deps/chunk-IVX557XK.js?v=9bd0a0ff:21608
+[     545ms] [ERROR] Warning: [antd: Modal] `destroyOnClose` is deprecated. Please use `destroyOnHidden` instead. @ http://localhost:5273/node_modules/.vite/deps/antd.js?v=9bd0a0ff:945
+[ 1115342ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:5273/node_modules/.vite/deps/chunk-IVX557XK.js?v=a1da65cb:21608
+[ 1115904ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:5273/node_modules/.vite/deps/chunk-IVX557XK.js?v=a1da65cb:21608
+[ 1116558ms] [ERROR] Warning: [antd: Modal] `destroyOnClose` is deprecated. Please use `destroyOnHidden` instead. @ http://localhost:5273/node_modules/.vite/deps/antd.js?v=a1da65cb:945
+[ 1186572ms] [ERROR] WebSocket connection to 'ws://localhost:5273/?token=p5IVBbB5pFiO' failed:  @ http://localhost:5273/@vite/client:801
+[ 1186572ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:5273/@vite/client:963
+[ 1186607ms] [ERROR] WebSocket connection to 'ws://localhost:5273/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5273/@vite/client:1034
+[ 1187608ms] [ERROR] WebSocket connection to 'ws://localhost:5273/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5273/@vite/client:1034
+[ 1188609ms] [ERROR] WebSocket connection to 'ws://localhost:5273/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5273/@vite/client:1034
+[ 1189611ms] [ERROR] WebSocket connection to 'ws://localhost:5273/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5273/@vite/client:1034
+[ 1190613ms] [ERROR] WebSocket connection to 'ws://localhost:5273/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5273/@vite/client:1034
+[ 1191618ms] [ERROR] WebSocket connection to 'ws://localhost:5273/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5273/@vite/client:1034
+[ 1193349ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:5273/node_modules/.vite/deps/chunk-IVX557XK.js?v=a1da65cb:21608
+[ 1193878ms] [ERROR] Warning: [antd: Modal] `destroyOnClose` is deprecated. Please use `destroyOnHidden` instead. @ http://localhost:5273/node_modules/.vite/deps/antd.js?v=a1da65cb:945
