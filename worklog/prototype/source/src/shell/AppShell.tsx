@@ -1,4 +1,5 @@
 import { Outlet } from "react-router";
+import { CommandPalette } from "./CommandPalette";
 import { TopBar } from "./TopBar";
 import { StageRail } from "./StageRail";
 
@@ -16,6 +17,7 @@ export function AppShell() {
 					<Outlet />
 				</main>
 			</div>
+			<CommandPalette />
 		</div>
 	);
 }

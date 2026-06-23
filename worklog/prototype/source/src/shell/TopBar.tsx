@@ -44,7 +44,8 @@ export function TopBar() {
 
 			<button
 				type="button"
-				title="全局搜索（S7 实现 ⌘K）"
+				title="全局搜索 ⌘K"
+				onClick={() => window.dispatchEvent(new Event("dts:open-search"))}
 				style={{
 					display: "inline-flex",
 					alignItems: "center",

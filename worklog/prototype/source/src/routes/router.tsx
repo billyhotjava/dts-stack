@@ -5,7 +5,11 @@ import { ConnectStage } from "@/stages/connect/ConnectStage";
 import { IntegrateStage } from "@/stages/integrate/IntegrateStage";
 import { MetricsStage } from "@/stages/metrics/MetricsStage";
 import { DepartmentPortal } from "@/stages/portal/DepartmentPortal";
-import { StagePlaceholder } from "@/stages/StagePlaceholder";
+import { GovernStage } from "@/platform/GovernStage";
+import { OpsStage } from "@/platform/OpsStage";
+import { SecurityStage } from "@/platform/SecurityStage";
+import { ServeStage } from "@/platform/ServeStage";
+import { SettingsStage } from "@/platform/SettingsStage";
 
 /**
  * 路由：部门门户 + 黄金主线 4 阶段 + 平台旁路区。
@@ -22,11 +26,11 @@ export const router = createBrowserRouter([
 			{ path: "integrate", element: <IntegrateStage /> },
 			{ path: "assets", element: <AssetsStage /> },
 			{ path: "metrics", element: <MetricsStage /> },
-			{ path: "platform/serve", element: <StagePlaceholder areaKey="serve" /> },
-			{ path: "platform/govern", element: <StagePlaceholder areaKey="govern" /> },
-			{ path: "platform/security", element: <StagePlaceholder areaKey="security" /> },
-			{ path: "platform/ops", element: <StagePlaceholder areaKey="ops" /> },
-			{ path: "platform/settings", element: <StagePlaceholder areaKey="settings" /> },
+			{ path: "platform/serve", element: <ServeStage /> },
+			{ path: "platform/govern", element: <GovernStage /> },
+			{ path: "platform/security", element: <SecurityStage /> },
+			{ path: "platform/ops", element: <OpsStage /> },
+			{ path: "platform/settings", element: <SettingsStage /> },
 			{ path: "*", element: <Navigate to="/portal" replace /> },
 		],
 	},
