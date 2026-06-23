@@ -31,7 +31,10 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @Transactional
@@ -50,6 +53,7 @@ public class PersonnelImportService {
     private final AdminKeycloakUserRepository adminKeycloakUserRepository;
     private final ObjectMapper objectMapper;
     private final MdmGatewayProperties mdmGatewayProperties;
+    private final PlatformTransactionManager transactionManager;
 
     public PersonnelImportService(
         PersonImportBatchRepository batchRepository,
@@ -61,7 +65,8 @@ public class PersonnelImportService {
         KeycloakUserProvisioningService provisioningService,
         AdminKeycloakUserRepository adminKeycloakUserRepository,
         ObjectMapper objectMapper,
-        MdmGatewayProperties mdmGatewayProperties
+        MdmGatewayProperties mdmGatewayProperties,
+        PlatformTransactionManager transactionManager
     ) {
         this.batchRepository = batchRepository;
         this.recordRepository = recordRepository;
@@ -73,6 +78,7 @@ public class PersonnelImportService {
         this.adminKeycloakUserRepository = adminKeycloakUserRepository;
         this.objectMapper = objectMapper;
         this.mdmGatewayProperties = mdmGatewayProperties;
+        this.transactionManager = transactionManager;
     }
 
     public PersonnelImportResult importFromApi(String reference, boolean dryRun, String cursor) {
@@ -125,54 +131,15 @@ public class PersonnelImportService {
         int failed = 0;
         int skipped = 0;
         for (PersonnelPayload payload : payloads) {
-            PersonImportRecord record = buildRecord(batch, payload);
+            RecordOutcome outcome;
             try {
-                if (dryRun) {
-                    record.setStatus(PersonRecordStatus.SKIPPED);
-                    record.setMessage("Dry-run 模式，未写入 Keycloak");
-                    skipped++;
-                } else {
-                    String keycloakUserId = provisioningService.provision(payload);
-                    record.setKeycloakUserId(keycloakUserId);
-                    upsertSnapshot(
-                        keycloakUserId,
-                        firstNonBlank(payload.account(), payload.personCode()),
-                        payload.fullName(),
-                        payload.attributes().getOrDefault("securityLevel", payload.attributes().get("person_security_level")),
-                        null,
-                        null,
-                        resolveMdmEnabled(payload)
-                    );
-                    record.setStatus(PersonRecordStatus.SUCCESS);
-                    record.setMessage("OK");
-                    success++;
-                }
-            } catch (PersonnelImportException ex) {
-                record.setStatus(PersonRecordStatus.FAILED);
-                record.setMessage(ex.getMessage());
-                failed++;
-                OPS_LOG.warn(
-                    "[record-fail] batch={} personCode={} reason={} payload={}",
-                    batch.getId(),
-                    payload.personCode(),
-                    ex.getMessage(),
-                    summarizePayload(payload)
-                );
+                outcome = processRecordInNewTransaction(batch.getId(), payload, dryRun);
             } catch (Exception ex) {
-                record.setStatus(PersonRecordStatus.FAILED);
-                record.setMessage("处理异常: " + ex.getMessage());
-                failed++;
-                OPS_LOG.error(
-                    "[record-error] batch={} personCode={} payload={} {}",
-                    batch.getId(),
-                    payload.personCode(),
-                    summarizePayload(payload),
-                    ex.getMessage(),
-                    ex
-                );
+                outcome = saveRecordFailureInNewTransaction(batch.getId(), payload, ex);
             }
-            record.setProcessedAt(Instant.now());
-            recordRepository.save(record);
+            success += outcome.success();
+            failed += outcome.failed();
+            skipped += outcome.skipped();
         }
 
         batch.setSuccessRecords(success);
@@ -219,6 +186,118 @@ public class PersonnelImportService {
         record.setPayload(payload.safeAttributes());
         record.setAttributes(payload.safeAttributes());
         return record;
+    }
+
+    private RecordOutcome processRecordInNewTransaction(Long batchId, PersonnelPayload payload, boolean dryRun) {
+        RecordOutcome outcome = requiresNewTransaction()
+            .execute(status -> {
+                PersonImportBatch batchRef = batchRepository.getReferenceById(batchId);
+                PersonImportRecord record = buildRecord(batchRef, payload);
+                RecordOutcome recordOutcome = applyPayload(batchId, record, payload, dryRun);
+                record.setProcessedAt(Instant.now());
+                recordRepository.save(record);
+                return recordOutcome;
+            });
+        return outcome == null ? RecordOutcome.oneFailed() : outcome;
+    }
+
+    private RecordOutcome applyPayload(Long batchId, PersonImportRecord record, PersonnelPayload payload, boolean dryRun) {
+        try {
+            if (dryRun) {
+                record.setStatus(PersonRecordStatus.SKIPPED);
+                record.setMessage("Dry-run 模式，未写入 Keycloak");
+                return RecordOutcome.oneSkipped();
+            }
+            String keycloakUserId = provisioningService.provision(payload);
+            record.setKeycloakUserId(keycloakUserId);
+            Map<String, Object> attributes = payload.attributes() == null ? Map.of() : payload.attributes();
+            upsertSnapshot(
+                keycloakUserId,
+                firstNonBlank(payload.account(), payload.personCode()),
+                payload.fullName(),
+                attributes.getOrDefault("securityLevel", attributes.get("person_security_level")),
+                null,
+                null,
+                resolveMdmEnabled(payload)
+            );
+            record.setStatus(PersonRecordStatus.SUCCESS);
+            record.setMessage("OK");
+            return RecordOutcome.oneSuccess();
+        } catch (PersonnelImportException ex) {
+            record.setStatus(PersonRecordStatus.FAILED);
+            record.setMessage(limitMessage(ex.getMessage()));
+            OPS_LOG.warn(
+                "[record-fail] batch={} personCode={} reason={} payload={}",
+                batchId,
+                payload.personCode(),
+                ex.getMessage(),
+                summarizePayload(payload)
+            );
+            return RecordOutcome.oneFailed();
+        } catch (Exception ex) {
+            record.setStatus(PersonRecordStatus.FAILED);
+            record.setMessage(limitMessage("处理异常: " + exceptionMessage(ex)));
+            OPS_LOG.error(
+                "[record-error] batch={} personCode={} payload={} {}",
+                batchId,
+                payload.personCode(),
+                summarizePayload(payload),
+                ex.getMessage(),
+                ex
+            );
+            return RecordOutcome.oneFailed();
+        }
+    }
+
+    private RecordOutcome saveRecordFailureInNewTransaction(Long batchId, PersonnelPayload payload, Exception ex) {
+        try {
+            requiresNewTransaction()
+                .executeWithoutResult(status -> {
+                    PersonImportBatch batchRef = batchRepository.getReferenceById(batchId);
+                    PersonImportRecord record = buildRecord(batchRef, payload);
+                    record.setStatus(PersonRecordStatus.FAILED);
+                    record.setMessage(limitMessage("事务异常: " + exceptionMessage(ex)));
+                    record.setProcessedAt(Instant.now());
+                    recordRepository.save(record);
+                });
+        } catch (Exception persistEx) {
+            OPS_LOG.error(
+                "[record-error-persist-fail] batch={} personCode={} payload={} original={} persist={}",
+                batchId,
+                payload.personCode(),
+                summarizePayload(payload),
+                exceptionMessage(ex),
+                exceptionMessage(persistEx),
+                persistEx
+            );
+        }
+        OPS_LOG.error(
+            "[record-transaction-error] batch={} personCode={} payload={} {}",
+            batchId,
+            payload.personCode(),
+            summarizePayload(payload),
+            exceptionMessage(ex),
+            ex
+        );
+        return RecordOutcome.oneFailed();
+    }
+
+    private TransactionTemplate requiresNewTransaction() {
+        TransactionTemplate template = new TransactionTemplate(transactionManager);
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return template;
+    }
+
+    private String exceptionMessage(Throwable ex) {
+        String message = ex == null ? null : ex.getMessage();
+        return StringUtils.isBlank(message) && ex != null ? ex.getClass().getSimpleName() : message;
+    }
+
+    private String limitMessage(String message) {
+        if (message == null) {
+            return null;
+        }
+        return message.length() > 1900 ? message.substring(0, 1900) : message;
     }
 
     private String summarizePayload(PersonnelPayload payload) {
@@ -410,5 +489,19 @@ public class PersonnelImportService {
             batch.getSkippedRecords() == null ? 0 : batch.getSkippedRecords(),
             batch.isDryRun()
         );
+    }
+
+    private record RecordOutcome(int success, int failed, int skipped) {
+        private static RecordOutcome oneSuccess() {
+            return new RecordOutcome(1, 0, 0);
+        }
+
+        private static RecordOutcome oneFailed() {
+            return new RecordOutcome(0, 1, 0);
+        }
+
+        private static RecordOutcome oneSkipped() {
+            return new RecordOutcome(0, 0, 1);
+        }
     }
 }

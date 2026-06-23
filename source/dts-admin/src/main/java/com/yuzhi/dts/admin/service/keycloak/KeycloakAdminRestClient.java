@@ -115,6 +115,38 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
     }
 
     @Override
+    public Optional<KeycloakUserDTO> findByUsernameStrict(String username, String accessToken) {
+        if (username == null || username.isBlank()) {
+            return Optional.empty();
+        }
+        URI uri = UriComponentsBuilder
+            .fromUri(usersEndpoint)
+            .queryParam("username", username)
+            .queryParam("exact", true)
+            .build()
+            .encode()
+            .toUri();
+        try {
+            ResponseEntity<String> response = exchange(uri, HttpMethod.GET, accessToken, null);
+            if (!response.getStatusCode().is2xxSuccessful()) {
+                throw toRuntime("查询 Keycloak 用户失败", response);
+            }
+            if (response.getBody() == null) {
+                return Optional.empty();
+            }
+            List<Map<String, Object>> body = objectMapper.readValue(response.getBody(), LIST_OF_MAP);
+            return body.stream().findFirst().map(this::toUserDto);
+        } catch (RuntimeException ex) {
+            if (ex instanceof IllegalStateException && ex.getMessage() != null && ex.getMessage().startsWith("查询 Keycloak 用户失败")) {
+                throw ex;
+            }
+            throw new IllegalStateException("查询 Keycloak 用户失败: " + ex.getMessage(), ex);
+        } catch (Exception ex) {
+            throw new IllegalStateException("查询 Keycloak 用户失败: " + ex.getMessage(), ex);
+        }
+    }
+
+    @Override
     public List<KeycloakUserDTO> searchUsers(String keyword, String accessToken) {
         String query = keyword == null ? "" : keyword.trim();
         if (query.isEmpty()) {

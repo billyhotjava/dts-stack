@@ -17,6 +17,10 @@ public interface KeycloakAdminClient {
 
     Optional<KeycloakUserDTO> findByUsername(String username, String accessToken);
 
+    default Optional<KeycloakUserDTO> findByUsernameStrict(String username, String accessToken) {
+        return findByUsername(username, accessToken);
+    }
+
     Optional<KeycloakUserDTO> findById(String userId, String accessToken);
 
     KeycloakUserDTO createUser(KeycloakUserDTO payload, String accessToken);

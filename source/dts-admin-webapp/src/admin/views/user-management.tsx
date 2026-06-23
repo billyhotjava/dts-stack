@@ -309,14 +309,6 @@ export default function UserManagementView() {
         render: (val?: string) => (val ? val : <span className="text-muted-foreground">-</span>),
       },
       {
-        title: "邮箱",
-        dataIndex: "email",
-        key: "email",
-        width: 220,
-        ellipsis: true,
-        onCell: () => ({ style: { verticalAlign: "middle" } }),
-      },
-      {
         title: "所属部门",
         key: "department",
         width: 200,
@@ -475,7 +467,7 @@ export default function UserManagementView() {
               className="user-management-table text-sm"
               rowClassName={() => "text-sm"}
               tableLayout="fixed"
-              scroll={{ x: 1500 }}
+              scroll={{ x: 1280 }}
               expandable={{
                 expandedRowRender,
                 expandRowByClick: true,

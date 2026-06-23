@@ -49,6 +49,11 @@ public class InMemoryKeycloakAdminClient implements KeycloakAdminClient {
     }
 
     @Override
+    public Optional<KeycloakUserDTO> findByUsernameStrict(String username, String accessToken) {
+        return findByUsername(username, accessToken);
+    }
+
+    @Override
     public Optional<KeycloakUserDTO> findById(String userId, String accessToken) {
         return Optional.ofNullable(stores.findUserById(userId));
     }

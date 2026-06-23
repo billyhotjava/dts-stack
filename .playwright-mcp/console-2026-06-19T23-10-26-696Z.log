@@ -1,0 +1,4 @@
+[     210ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:5274/node_modules/.vite/deps/chunk-IVX557XK.js?v=be049df4:21608
+[     345ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5274/favicon.ico:0
+[  697914ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:5274/@vite/client:963
+[  697915ms] [ERROR] WebSocket connection to 'ws://localhost:5274/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5274/@vite/client:1034

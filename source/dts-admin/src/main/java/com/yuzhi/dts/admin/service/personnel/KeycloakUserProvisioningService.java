@@ -79,7 +79,7 @@ public class KeycloakUserProvisioningService {
         int mdmEnabled = resolveMdmEnabled(payload);
         Map<String, List<String>> desiredAttrs = KeycloakUserAttributesMapper.toAttributes(payload);
 
-        var existingOpt = keycloakAdminClient.findByUsername(username, token);
+        var existingOpt = keycloakAdminClient.findByUsernameStrict(username, token);
         String keycloakUserId;
         if (existingOpt.isPresent()) {
             KeycloakUserDTO existing = existingOpt.orElseThrow();

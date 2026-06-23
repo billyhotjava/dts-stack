@@ -25,10 +25,12 @@ import com.yuzhi.dts.admin.repository.PersonProfileRepository;
 import com.yuzhi.dts.admin.service.ChangeRequestService;
 import com.yuzhi.dts.admin.service.audit.AuditV2Service;
 import com.yuzhi.dts.admin.service.audit.ChangeSnapshotFormatter;
+import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAdminClient;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService.TokenResponse;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -116,6 +118,37 @@ class AdminUserServiceListSnapshotsTest {
     }
 
     @Test
+    void keycloakRefreshShouldReadPersonnelSecurityLevelAlias() {
+        AdminUserService serviceWithMgmtToken = buildService("mgmt-client", "mgmt-secret");
+        Page<AdminKeycloakUser> empty = new PageImpl<>(List.of(), PageRequest.of(0, 20), 0);
+        KeycloakUserDTO remote = keycloakUser("kc-alias", "alias-user", Map.of("personnel_security_level", List.of("1")));
+        when(userRepository.findAllExcludingUsernames(anyCollection(), any(org.springframework.data.domain.Pageable.class))).thenReturn(empty);
+        when(keycloakAuthService.obtainClientCredentialsToken(anyString(), anyString()))
+            .thenReturn(new TokenResponse("token", null, null, null, null, null, null, null));
+        when(keycloakAdminClient.listUsers(anyInt(), anyInt(), anyString())).thenReturn(List.of(remote));
+        when(userRepository.findByKeycloakId("kc-alias")).thenReturn(java.util.Optional.empty());
+        when(userRepository.findByUsernameIgnoreCase("alias-user")).thenReturn(java.util.Optional.empty());
+        when(personProfileRepository.findAll(any(org.springframework.data.domain.Pageable.class))).thenReturn(Page.empty());
+
+        serviceWithMgmtToken.listSnapshots(0, 20, null, null);
+
+        ArgumentCaptor<AdminKeycloakUser> saved = ArgumentCaptor.forClass(AdminKeycloakUser.class);
+        verify(userRepository).save(saved.capture());
+        assertThat(saved.getValue().getPersonSecurityLevel()).isEqualTo("IMPORTANT");
+    }
+
+    @Test
+    void syncSnapshotShouldReadPersonLevelAlias() {
+        KeycloakUserDTO remote = keycloakUser("kc-sync", "sync-user", Map.of("person_level", List.of("CORE")));
+        when(userRepository.findByKeycloakId("kc-sync")).thenReturn(java.util.Optional.empty());
+        when(userRepository.save(any(AdminKeycloakUser.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        AdminKeycloakUser saved = serviceWithoutMgmtToken.syncSnapshot(remote);
+
+        assertThat(saved.getPersonSecurityLevel()).isEqualTo("CORE");
+    }
+
+    @Test
     void roleAssignmentUsersShouldFilterByUsernameFullNameDepartmentAndMarkExistingMembers() {
         AdminKeycloakUser zhang = user("zhangsan", "张三", "/总院/数据部");
         when(
@@ -198,6 +231,16 @@ class AdminUserServiceListSnapshotsTest {
         user.setGroupPaths(List.of(groupPath));
         user.setEnabled(true);
         user.setMdmEnabled(1);
+        return user;
+    }
+
+    private static KeycloakUserDTO keycloakUser(String id, String username, Map<String, List<String>> attributes) {
+        KeycloakUserDTO user = new KeycloakUserDTO();
+        user.setId(id);
+        user.setUsername(username);
+        user.setFullName(username);
+        user.setEnabled(true);
+        user.setAttributes(attributes);
         return user;
     }
 }

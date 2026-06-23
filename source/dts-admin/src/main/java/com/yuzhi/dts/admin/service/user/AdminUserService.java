@@ -268,7 +268,7 @@ public class AdminUserService {
                     snapshot.setFullName(StringUtils.defaultIfBlank(resolveFullName(dto), snapshot.getFullName()));
                     snapshot.setEmail(StringUtils.defaultIfBlank(dto.getEmail(), snapshot.getEmail()));
                     snapshot.setPhone(StringUtils.defaultIfBlank(extractSingle(dto, "phone"), snapshot.getPhone()));
-                    String secLevel = normalizeSecurityLevel(extractSingle(dto, "person_security_level"));
+                    String secLevel = extractPersonLevel(dto);
                     snapshot.setPersonSecurityLevel(StringUtils.defaultIfBlank(secLevel, DEFAULT_PERSON_LEVEL));
                     snapshot.setEnabled(Boolean.TRUE.equals(dto.getEnabled()));
                     if (dto.getRealmRoles() != null) {
@@ -2181,13 +2181,13 @@ public class AdminUserService {
         entity.setFullName(resolveFullName(dto));
         entity.setEmail(dto.getEmail());
         entity.setEnabled(Boolean.TRUE.equals(dto.getEnabled()));
-        String securityLevel = normalizeSecurityLevel(extractSingle(dto, "person_security_level"));
+        String securityLevel = extractPersonLevel(dto);
         entity.setPersonSecurityLevel(securityLevel);
         entity.setRealmRoles(dto.getRealmRoles());
         entity.setGroupPaths(dto.getGroups());
         entity.setPhone(extractSingle(dto, "phone"));
         entity.setLastSyncAt(Instant.now());
-        if (!SUPPORTED_SECURITY_LEVELS.contains(securityLevel)) {
+        if (securityLevel == null || !SUPPORTED_SECURITY_LEVELS.contains(securityLevel)) {
             throw new IllegalStateException("用户密级无效: " + securityLevel);
         }
     }
@@ -3891,7 +3891,7 @@ public class AdminUserService {
                 dto.setGroups(new ArrayList<>(requestedGroupPaths));
                 ensureDeptCodeAttribute(dto, requestedGroupPaths);
             }
-            Optional<KeycloakUserDTO> existing = keycloakAdminClient.findByUsername(dto.getUsername(), accessToken);
+            Optional<KeycloakUserDTO> existing = keycloakAdminClient.findByUsernameStrict(dto.getUsername(), accessToken);
             KeycloakUserDTO target;
             if (existing.isPresent()) {
                 KeycloakUserDTO current = existing.orElseThrow();
@@ -3902,9 +3902,8 @@ public class AdminUserService {
                         target = keycloakAdminClient.updateUser(keycloakId, dto, accessToken);
                         LOG.info("Keycloak user {} already existed; attributes updated", dto.getUsername());
                     } catch (RuntimeException ex) {
-                        LOG.warn("Failed to update existing Keycloak user {}, fallback to create: {}", dto.getUsername(), ex.getMessage());
-                        dto.setId(null);
-                        target = keycloakAdminClient.createUser(dto, accessToken);
+                        LOG.warn("Failed to update existing Keycloak user {}, abort create to avoid duplicate: {}", dto.getUsername(), ex.getMessage());
+                        throw new IllegalStateException("更新已存在 Keycloak 用户失败，已阻止重复创建: " + ex.getMessage(), ex);
                     }
                 } else {
                     dto.setId(null);
