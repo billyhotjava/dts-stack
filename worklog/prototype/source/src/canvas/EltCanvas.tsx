@@ -2,8 +2,6 @@ import { Background, Controls, MiniMap, ReactFlow, ReactFlowProvider, useReactFl
 import "@xyflow/react/dist/style.css";
 import { App as AntApp } from "antd";
 import { useCallback, useEffect } from "react";
-import { unwrap } from "@/mock/client";
-import { transformService } from "@/mock/services/transformService";
 import type { TransformNodeKind } from "@/types/transform";
 import { DND_MIME, NodePalette } from "./NodePalette";
 import { TransformNodeView } from "./TransformNodeView";
@@ -11,7 +9,7 @@ import { useTransformGraphStore } from "./transformGraphStore";
 
 const nodeTypes = { transform: TransformNodeView };
 
-function CanvasInner({ projectSpaceId }: { projectSpaceId: string }) {
+function CanvasInner() {
 	const nodes = useTransformGraphStore((s) => s.nodes);
 	const edges = useTransformGraphStore((s) => s.edges);
 	const onNodesChange = useTransformGraphStore((s) => s.onNodesChange);
@@ -19,15 +17,10 @@ function CanvasInner({ projectSpaceId }: { projectSpaceId: string }) {
 	const onConnect = useTransformGraphStore((s) => s.onConnect);
 	const addNode = useTransformGraphStore((s) => s.addNode);
 	const setSelected = useTransformGraphStore((s) => s.setSelected);
-	const load = useTransformGraphStore((s) => s.load);
 	const lastRejection = useTransformGraphStore((s) => s.lastRejection);
 	const clearRejection = useTransformGraphStore((s) => s.clearRejection);
 	const { screenToFlowPosition } = useReactFlow();
 	const { message } = AntApp.useApp();
-
-	useEffect(() => {
-		void transformService.getGraph(projectSpaceId).then((r) => load(unwrap(r)));
-	}, [projectSpaceId, load]);
 
 	useEffect(() => {
 		if (lastRejection) {
@@ -56,7 +49,7 @@ function CanvasInner({ projectSpaceId }: { projectSpaceId: string }) {
 		<div
 			style={{
 				display: "flex",
-				height: 560,
+				height: 540,
 				border: "1px solid var(--hairline)",
 				borderRadius: "var(--radius-md)",
 				overflow: "hidden",
@@ -88,11 +81,11 @@ function CanvasInner({ projectSpaceId }: { projectSpaceId: string }) {
 	);
 }
 
-/** 可视化 ELT 画布 —— 节点面板 + reactflow 画布。 */
-export function EltCanvas({ projectSpaceId }: { projectSpaceId: string }) {
+/** 可视化 ELT 画布 —— 节点面板 + reactflow 画布（图由上层载入 store）。 */
+export function EltCanvas() {
 	return (
 		<ReactFlowProvider>
-			<CanvasInner projectSpaceId={projectSpaceId} />
+			<CanvasInner />
 		</ReactFlowProvider>
 	);
 }

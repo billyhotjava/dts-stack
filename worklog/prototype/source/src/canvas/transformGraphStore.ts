@@ -5,6 +5,14 @@ import type { TransformGraphDTO, TransformNodeData, TransformNodeKind } from "@/
 
 export type TransformNode = Node<TransformNodeData, "transform">;
 
+export interface RunRecord {
+	id: string;
+	startedAt: string;
+	status: "success" | "failed";
+	durationMs: number;
+	rows: number;
+}
+
 const KIND_LABEL: Record<TransformNodeKind, string> = {
 	source: "源表",
 	clean: "清洗",
@@ -21,13 +29,18 @@ interface GraphState {
 	selectedId: string | null;
 	/** 最近一次非法连接的提示（供 UI 反馈） */
 	lastRejection: string | null;
+	running: boolean;
+	logs: string[];
+	runs: RunRecord[];
 	load: (dto: TransformGraphDTO) => void;
 	onNodesChange: (changes: NodeChange<TransformNode>[]) => void;
 	onEdgesChange: (changes: EdgeChange[]) => void;
 	onConnect: (conn: Connection) => void;
 	addNode: (kind: TransformNodeKind, position: { x: number; y: number }) => void;
+	updateNodeData: (id: string, patch: Partial<TransformNodeData>) => void;
 	setSelected: (id: string | null) => void;
 	clearRejection: () => void;
+	run: () => void;
 }
 
 function toNode(n: TransformGraphDTO["nodes"][number]): TransformNode {
@@ -56,8 +69,18 @@ export const useTransformGraphStore = create<GraphState>((set, get) => ({
 	edges: [],
 	selectedId: null,
 	lastRejection: null,
+	running: false,
+	logs: [],
+	runs: [],
 	load(dto) {
-		set({ nodes: dto.nodes.map(toNode), edges: dto.edges.map((e) => ({ ...e })), selectedId: null });
+		set({
+			nodes: dto.nodes.map(toNode),
+			edges: dto.edges.map((e) => ({ ...e })),
+			selectedId: null,
+			running: false,
+			logs: [],
+			runs: [],
+		});
 	},
 	onNodesChange(changes) {
 		set({ nodes: applyNodeChanges(changes, get().nodes) });
@@ -83,11 +106,45 @@ export const useTransformGraphStore = create<GraphState>((set, get) => ({
 		};
 		set({ nodes: [...get().nodes, node], selectedId: node.id });
 	},
+	updateNodeData(id, patch) {
+		set({
+			nodes: get().nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...patch } } : n)),
+		});
+	},
 	setSelected(id) {
 		set({ selectedId: id });
 	},
 	clearRejection() {
 		set({ lastRejection: null });
+	},
+	run() {
+		if (get().running) return;
+		const startedAt = new Date().toISOString().slice(0, 19).replace("T", " ");
+		// 标记全部为运行中
+		set({
+			running: true,
+			logs: [`[${startedAt}] 开始运行转换图（${get().nodes.length} 节点）`],
+			nodes: get().nodes.map((n) => ({ ...n, data: { ...n.data, status: "running" } })),
+		});
+		// 模拟异步执行：逐节点完成
+		setTimeout(() => {
+			const order = get().nodes;
+			const logs = [...get().logs, ...order.map((n) => `  ✓ ${n.data.label} 执行完成`)];
+			const rows = order.reduce((max, n) => Math.max(max, n.data.rowCount ?? 0), 0) || 31800;
+			const record: RunRecord = {
+				id: `run-${get().runs.length + 1}`,
+				startedAt,
+				status: "success",
+				durationMs: 600 + order.length * 80,
+				rows,
+			};
+			set({
+				running: false,
+				nodes: get().nodes.map((n) => ({ ...n, data: { ...n.data, status: "ok" } })),
+				logs: [...logs, `[完成] 成功 · ${rows.toLocaleString()} 行 · ${record.durationMs}ms`],
+				runs: [record, ...get().runs],
+			});
+		}, 700);
 	},
 }));
 
