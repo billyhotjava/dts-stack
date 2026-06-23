@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate } from "react-router";
 import { AppShell } from "@/shell/AppShell";
+import { AssetsStage } from "@/stages/assets/AssetsStage";
 import { ConnectStage } from "@/stages/connect/ConnectStage";
 import { IntegrateStage } from "@/stages/integrate/IntegrateStage";
 import { DepartmentPortal } from "@/stages/portal/DepartmentPortal";
@@ -18,7 +19,7 @@ export const router = createBrowserRouter([
 			{ path: "portal", element: <DepartmentPortal /> },
 			{ path: "connect", element: <ConnectStage /> },
 			{ path: "integrate", element: <IntegrateStage /> },
-			{ path: "assets", element: <StagePlaceholder areaKey="assets" /> },
+			{ path: "assets", element: <AssetsStage /> },
 			{ path: "metrics", element: <StagePlaceholder areaKey="metrics" /> },
 			{ path: "platform/serve", element: <StagePlaceholder areaKey="serve" /> },
 			{ path: "platform/govern", element: <StagePlaceholder areaKey="govern" /> },

@@ -1,7 +1,15 @@
+import type { AssetGrant, Dataset, DataProduct, DatasetLineage, QualityRule } from "@/types/asset";
 import type { Connector, DataSource, JdbcDriver } from "@/types/datasource";
 import type { Department } from "@/types/department";
 import type { ProjectSpace } from "@/types/projectSpace";
 import type { TransformGraphDTO } from "@/types/transform";
+import {
+	SEED_ASSET_GRANTS,
+	SEED_DATA_PRODUCTS,
+	SEED_DATASETS,
+	SEED_LINEAGE,
+	SEED_QUALITY_RULES,
+} from "./fixtures/assets";
 import { SEED_CONNECTORS } from "./fixtures/connectors";
 import { SEED_DATA_SOURCES } from "./fixtures/dataSources";
 import { SEED_DEPARTMENTS } from "./fixtures/departments";
@@ -20,6 +28,11 @@ interface MockDb {
 	connectors: Connector[];
 	jdbcDrivers: JdbcDriver[];
 	transformGraphs: TransformGraphDTO[];
+	datasets: Dataset[];
+	dataProducts: DataProduct[];
+	lineage: Record<string, DatasetLineage>;
+	qualityRules: QualityRule[];
+	assetGrants: AssetGrant[];
 }
 
 /** Chrome 95 安全的深拷贝（数据皆纯 JSON，避免 structuredClone：Chrome 98+）。 */
@@ -35,6 +48,11 @@ function seed(): MockDb {
 		connectors: clone(SEED_CONNECTORS),
 		jdbcDrivers: clone(SEED_JDBC_DRIVERS),
 		transformGraphs: clone(SEED_TRANSFORM_GRAPHS),
+		datasets: clone(SEED_DATASETS),
+		dataProducts: clone(SEED_DATA_PRODUCTS),
+		lineage: clone(SEED_LINEAGE),
+		qualityRules: clone(SEED_QUALITY_RULES),
+		assetGrants: clone(SEED_ASSET_GRANTS),
 	};
 }
 
@@ -49,4 +67,9 @@ export function resetDb(): void {
 	db.connectors = fresh.connectors;
 	db.jdbcDrivers = fresh.jdbcDrivers;
 	db.transformGraphs = fresh.transformGraphs;
+	db.datasets = fresh.datasets;
+	db.dataProducts = fresh.dataProducts;
+	db.lineage = fresh.lineage;
+	db.qualityRules = fresh.qualityRules;
+	db.assetGrants = fresh.assetGrants;
 }
