@@ -1,11 +1,13 @@
 import type { Connector, DataSource, JdbcDriver } from "@/types/datasource";
 import type { Department } from "@/types/department";
 import type { ProjectSpace } from "@/types/projectSpace";
+import type { TransformGraphDTO } from "@/types/transform";
 import { SEED_CONNECTORS } from "./fixtures/connectors";
 import { SEED_DATA_SOURCES } from "./fixtures/dataSources";
 import { SEED_DEPARTMENTS } from "./fixtures/departments";
 import { SEED_JDBC_DRIVERS } from "./fixtures/jdbcDrivers";
 import { SEED_PROJECT_SPACES } from "./fixtures/projectSpaces";
+import { SEED_TRANSFORM_GRAPHS } from "./fixtures/transformGraphs";
 
 /**
  * 进程内 mock 数据库。各 service 从这里读写。
@@ -17,6 +19,7 @@ interface MockDb {
 	dataSources: DataSource[];
 	connectors: Connector[];
 	jdbcDrivers: JdbcDriver[];
+	transformGraphs: TransformGraphDTO[];
 }
 
 /** Chrome 95 安全的深拷贝（数据皆纯 JSON，避免 structuredClone：Chrome 98+）。 */
@@ -31,6 +34,7 @@ function seed(): MockDb {
 		dataSources: clone(SEED_DATA_SOURCES),
 		connectors: clone(SEED_CONNECTORS),
 		jdbcDrivers: clone(SEED_JDBC_DRIVERS),
+		transformGraphs: clone(SEED_TRANSFORM_GRAPHS),
 	};
 }
 
@@ -44,4 +48,5 @@ export function resetDb(): void {
 	db.dataSources = fresh.dataSources;
 	db.connectors = fresh.connectors;
 	db.jdbcDrivers = fresh.jdbcDrivers;
+	db.transformGraphs = fresh.transformGraphs;
 }
