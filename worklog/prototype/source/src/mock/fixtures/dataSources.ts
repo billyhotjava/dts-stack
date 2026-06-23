@@ -2,13 +2,61 @@ import type { DataSource } from "@/types/datasource";
 
 /**
  * 种子数据源 —— 混合制归属：
- * - PLM/ERP/QMIS 全所级系统，scope=platform（平台层共享，跨部门）
- * - 各部门本地源 scope=department（归属对应部门）
+ * - PLM/ERP/QMIS 全所级系统，scope=platform（平台层共享，跨部门，部门侧只读）
+ * - 各部门本地源 scope=department（归属对应部门，部门侧可管）
  */
 export const SEED_DATA_SOURCES: DataSource[] = [
-	{ id: "ds-plm", name: "PLM 生产系统", type: "PLM", scope: "platform", connector: "Oracle", status: "connected", owner: "网信中心" },
-	{ id: "ds-erp", name: "ERP 企业系统", type: "ERP", scope: "platform", connector: "SQLServer", status: "connected", owner: "网信中心" },
-	{ id: "ds-qmis", name: "QMIS 质量系统", type: "QMIS", scope: "platform", connector: "MySQL", status: "connected", owner: "网信中心" },
+	{
+		id: "ds-plm",
+		name: "PLM 生产系统",
+		type: "PLM",
+		scope: "platform",
+		connector: "Oracle",
+		status: "connected",
+		owner: "网信中心",
+		jdbcUrl: "jdbc:oracle:thin:@plm-db:1521:PLM",
+		username: "dts_reader",
+		description: "产品生命周期管理系统，订单/物料主数据",
+		capabilities: ["read", "incremental"],
+		engineVersion: "Oracle 19c",
+		driverVersion: "ojdbc8 21.9",
+		lastTestedAt: "2026-06-22 09:12",
+		createdAt: "2026-04-01",
+	},
+	{
+		id: "ds-erp",
+		name: "ERP 企业系统",
+		type: "ERP",
+		scope: "platform",
+		connector: "SQLServer",
+		status: "connected",
+		owner: "网信中心",
+		jdbcUrl: "jdbc:sqlserver://erp-db:1433;databaseName=ERP",
+		username: "dts_reader",
+		description: "企业资源计划，客户/财务主数据",
+		capabilities: ["read"],
+		engineVersion: "SQL Server 2019",
+		driverVersion: "mssql-jdbc 12.4",
+		lastTestedAt: "2026-06-22 09:13",
+		createdAt: "2026-04-01",
+	},
+	{
+		id: "ds-qmis",
+		name: "QMIS 质量系统",
+		type: "QMIS",
+		scope: "platform",
+		connector: "MySQL",
+		status: "connected",
+		owner: "网信中心",
+		jdbcUrl: "jdbc:mysql://qmis-db:3306/qmis",
+		username: "dts_reader",
+		description: "质量管理信息系统，检验/不合格记录",
+		capabilities: ["read", "incremental"],
+		engineVersion: "MySQL 8.0",
+		driverVersion: "mysql-connector-j 8.3",
+		lastTestedAt: "2026-06-21 18:40",
+		createdAt: "2026-04-05",
+	},
 	{
 		id: "ds-sales-local",
 		name: "销售本地台账",
@@ -18,6 +66,8 @@ export const SEED_DATA_SOURCES: DataSource[] = [
 		connector: "File",
 		status: "untested",
 		owner: "销售处",
+		description: "销售处线下维护的本地台账文件",
+		createdAt: "2026-06-10",
 	},
 	{
 		id: "ds-quality-local",
@@ -28,5 +78,13 @@ export const SEED_DATA_SOURCES: DataSource[] = [
 		connector: "PostgreSQL",
 		status: "connected",
 		owner: "质量处",
+		jdbcUrl: "jdbc:postgresql://quality-local:5432/inspect",
+		username: "qa_user",
+		description: "质量处本地抽检数据库",
+		capabilities: ["read", "write"],
+		engineVersion: "PostgreSQL 15",
+		driverVersion: "postgresql 42.7",
+		lastTestedAt: "2026-06-20 14:05",
+		createdAt: "2026-05-02",
 	},
 ];
