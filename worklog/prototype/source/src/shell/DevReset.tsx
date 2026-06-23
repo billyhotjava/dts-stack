@@ -1,6 +1,7 @@
 import { ReloadOutlined } from "@ant-design/icons";
 import { App as AntApp, Button } from "antd";
 import { resetDb } from "@/mock/db";
+import { transformService } from "@/mock/services/transformService";
 import { useDepartmentStore } from "@/store/departmentStore";
 import { useProjectSpaceStore } from "@/store/projectSpaceStore";
 
@@ -17,6 +18,7 @@ export function DevReset() {
 				size="small"
 				icon={<ReloadOutlined />}
 				onClick={async () => {
+					transformService.clearPersisted();
 					resetDb();
 					await loadDepartments();
 					if (currentDepartmentId) await loadSpaces(currentDepartmentId);

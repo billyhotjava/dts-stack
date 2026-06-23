@@ -10,14 +10,14 @@
 |--------|------|-----------|------|------|
 | [S1](./sprint-1-地基/README.md) | 地基（脚手架/设计系统/mock/外壳） | 4 | DONE | - |
 | [S1.5](./sprint-1.5-工作区层/README.md) | 工作区层（平台/工作区/项目 三层 + 数据源混合制） | 2 | DONE | S1 |
-| [S2](./sprint-2-连接/README.md) | ① 连接（数据源/连接器/调度） | 3 | IN_PROGRESS | S1.5 |
+| [S2](./sprint-2-连接/README.md) | ① 连接（数据源/连接器/调度） | 3 | DONE | S1.5 |
 | [S3](./sprint-3-集成画布内核/README.md) | ② 集成 · 画布内核 | 2 | DONE | S1 |
 | [S4](./sprint-4-集成配置运行/README.md) | ② 集成 · 配置/运行/双视图 | 4 | DONE | S3 |
 | [S5](./sprint-5-资产/README.md) | ③ 资产（目录/血缘/质量） | 3 | DONE | S1 |
 | [S6](./sprint-6-指标/README.md) | ④ 指标（指标/语义/dbt 隐藏） | 4 | DONE | S4 |
 | [S7](./sprint-7-旁路区收尾/README.md) | 旁路区 + 全局搜索 + 打磨 | 4 | DONE | S1–S6 |
 
-**统计**: READY=0, IN_PROGRESS=1, DONE=7, BLOCKED=0（全部 sprint 完成；S2 仅 F3 接入/调度为简版）
+**统计**: READY=0, IN_PROGRESS=0, DONE=8, BLOCKED=0（全部完成。打磨：画布持久化 + S2-F3 接入/调度真实化 已补齐）
 
 ## 关键路径
 
