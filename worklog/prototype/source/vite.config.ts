@@ -27,6 +27,18 @@ export default defineConfig({
 		target: buildTarget,
 		cssTarget: buildTarget,
 		sourcemap: true,
+		// antd vendor 块体积大属框架固有，已拆为独立可缓存块；调高阈值消除噪音
+		chunkSizeWarningLimit: 1200,
+		rollupOptions: {
+			output: {
+				// 拆 vendor，改善缓存与首屏（reactflow 仅集成/血缘用，路由懒加载后不进首屏）
+				manualChunks: {
+					react: ["react", "react-dom", "react-router"],
+					antd: ["antd", "@ant-design/icons"],
+					flow: ["@xyflow/react"],
+				},
+			},
+		},
 	},
 	esbuild: {
 		target: buildTarget,

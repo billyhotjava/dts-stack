@@ -1,3 +1,5 @@
+import { Spin } from "antd";
+import { Suspense } from "react";
 import { Outlet } from "react-router";
 import { CommandPalette } from "./CommandPalette";
 import { TopBar } from "./TopBar";
@@ -14,7 +16,9 @@ export function AppShell() {
 			<div style={{ flex: 1, display: "flex", minHeight: 0 }}>
 				<StageRail />
 				<main style={{ flex: 1, minWidth: 0, overflow: "auto", padding: 24 }}>
-					<Outlet />
+					<Suspense fallback={<div style={{ display: "grid", placeItems: "center", height: "60%" }}><Spin /></div>}>
+						<Outlet />
+					</Suspense>
 				</main>
 			</div>
 			<CommandPalette />

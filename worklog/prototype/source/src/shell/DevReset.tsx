@@ -1,5 +1,7 @@
 import { ReloadOutlined } from "@ant-design/icons";
 import { App as AntApp, Button } from "antd";
+import { unwrap } from "@/mock/client";
+import { useTransformGraphStore } from "@/canvas/transformGraphStore";
 import { resetDb } from "@/mock/db";
 import { transformService } from "@/mock/services/transformService";
 import { useDepartmentStore } from "@/store/departmentStore";
@@ -22,6 +24,9 @@ export function DevReset() {
 					resetDb();
 					await loadDepartments();
 					if (currentDepartmentId) await loadSpaces(currentDepartmentId);
+					// 同步复位画布 store（否则停留在集成阶段时会立刻把旧图重新持久化）
+					const spaceId = useProjectSpaceStore.getState().currentSpaceId;
+					if (spaceId) useTransformGraphStore.getState().load(unwrap(await transformService.getGraph(spaceId)));
 					message.success("已重置为样例数据");
 				}}
 			>

@@ -1,20 +1,22 @@
+import { lazy } from "react";
 import { createBrowserRouter, Navigate } from "react-router";
 import { AppShell } from "@/shell/AppShell";
-import { AssetsStage } from "@/stages/assets/AssetsStage";
-import { ConnectStage } from "@/stages/connect/ConnectStage";
-import { IntegrateStage } from "@/stages/integrate/IntegrateStage";
-import { MetricsStage } from "@/stages/metrics/MetricsStage";
-import { DepartmentPortal } from "@/stages/portal/DepartmentPortal";
-import { GovernStage } from "@/platform/GovernStage";
-import { OpsStage } from "@/platform/OpsStage";
-import { SecurityStage } from "@/platform/SecurityStage";
-import { ServeStage } from "@/platform/ServeStage";
-import { SettingsStage } from "@/platform/SettingsStage";
 
 /**
  * 路由：部门门户 + 黄金主线 4 阶段 + 平台旁路区。
- * 资产③/指标④ S1 仍为信息性占位，后续 sprint 替换。
+ * 各页 React.lazy 懒加载 —— 把 reactflow（集成/血缘）等重依赖从首屏拆出。
  */
+const DepartmentPortal = lazy(() => import("@/stages/portal/DepartmentPortal").then((m) => ({ default: m.DepartmentPortal })));
+const ConnectStage = lazy(() => import("@/stages/connect/ConnectStage").then((m) => ({ default: m.ConnectStage })));
+const IntegrateStage = lazy(() => import("@/stages/integrate/IntegrateStage").then((m) => ({ default: m.IntegrateStage })));
+const AssetsStage = lazy(() => import("@/stages/assets/AssetsStage").then((m) => ({ default: m.AssetsStage })));
+const MetricsStage = lazy(() => import("@/stages/metrics/MetricsStage").then((m) => ({ default: m.MetricsStage })));
+const ServeStage = lazy(() => import("@/platform/ServeStage").then((m) => ({ default: m.ServeStage })));
+const GovernStage = lazy(() => import("@/platform/GovernStage").then((m) => ({ default: m.GovernStage })));
+const SecurityStage = lazy(() => import("@/platform/SecurityStage").then((m) => ({ default: m.SecurityStage })));
+const OpsStage = lazy(() => import("@/platform/OpsStage").then((m) => ({ default: m.OpsStage })));
+const SettingsStage = lazy(() => import("@/platform/SettingsStage").then((m) => ({ default: m.SettingsStage })));
+
 export const router = createBrowserRouter([
 	{
 		path: "/",
