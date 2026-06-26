@@ -24,6 +24,7 @@ import dataSourcesService, {
 	type InfraDataSource,
 } from "@/api/services/dataSourcesService";
 import connectorsService, { type InfraConnector } from "@/api/services/connectorsService";
+import dictionaryService, { type PlatformSystemType } from "@/api/services/dictionaryService";
 import jdbcDriversService, { type InfraJdbcDriver } from "@/api/services/jdbcDriversService";
 import {
 	ingestionTaskAPI,
@@ -31,6 +32,7 @@ import {
 	type ApiAuthProviderDescriptorDTO,
 	type ApiConnectorContractDTO,
 } from "@/api/ingestion";
+import { useRouter } from "@/routes/hooks";
 import {
 	TYPE_OPTIONS,
 	asRecord,
@@ -82,6 +84,18 @@ const resolveDriverMatch = (record: InfraDataSource | null, driverList: InfraJdb
 	});
 };
 
+const resolveSystemTypeValue = (item: PlatformSystemType) =>
+	normalizeConnectorKey(item.value || item.code || item.key || item.type);
+
+const resolveSystemTypeLabel = (item: PlatformSystemType, value: string) =>
+	String(item.label || item.displayName || item.name || value).trim();
+
+const isSystemTypeEnabled = (item: PlatformSystemType) => {
+	if (item.enabled === false) return false;
+	const status = String(item.status || "").trim().toUpperCase();
+	return !status || status === "ACTIVE" || status === "ENABLED" || status === "PUBLISHED";
+};
+
 const showImpact = (impact: DataSourceUpdateImpact | null) => {
 	if (!impact || !impact.connectionChanged) return;
 	const affected = impact.affectedTasks ?? 0;
@@ -108,10 +122,15 @@ export default function DataSourceFormModal({
 	onClose,
 	onSaved,
 }: DataSourceFormModalProps) {
+	const router = useRouter();
 	const [form] = Form.useForm();
 	const [saving, setSaving] = useState(false);
 	const [connectors, setConnectors] = useState<InfraConnector[]>([]);
 	const [connectorsLoading, setConnectorsLoading] = useState(false);
+	const [systemTypes, setSystemTypes] = useState<PlatformSystemType[]>([]);
+	const [systemTypesLoading, setSystemTypesLoading] = useState(false);
+	const [systemTypesLoaded, setSystemTypesLoaded] = useState(false);
+	const [systemTypesError, setSystemTypesError] = useState<string | null>(null);
 	const [drivers, setDrivers] = useState<InfraJdbcDriver[]>([]);
 	const [driversLoading, setDriversLoading] = useState(false);
 	const [apiContract, setApiContract] = useState<ApiConnectorContractDTO | null>(null);
@@ -142,6 +161,21 @@ export default function DataSourceFormModal({
 			setConnectors([]);
 		} finally {
 			setConnectorsLoading(false);
+		}
+	}, []);
+
+	const loadSystemTypes = useCallback(async () => {
+		setSystemTypesLoading(true);
+		try {
+			const data = await dictionaryService.listSystemTypes();
+			setSystemTypes(Array.isArray(data) ? data.filter(isSystemTypeEnabled) : []);
+			setSystemTypesError(null);
+		} catch {
+			setSystemTypes([]);
+			setSystemTypesError("系统类型字典暂不可用，当前使用内置兜底选项。");
+		} finally {
+			setSystemTypesLoaded(true);
+			setSystemTypesLoading(false);
 		}
 	}, []);
 
@@ -196,9 +230,10 @@ export default function DataSourceFormModal({
 	useEffect(() => {
 		if (!open) return;
 		void loadConnectors();
+		void loadSystemTypes();
 		void loadDrivers();
 		void loadDepts();
-	}, [open, loadConnectors, loadDrivers, loadDepts]);
+	}, [open, loadConnectors, loadSystemTypes, loadDrivers, loadDepts]);
 
 	// 初始化表单：editing 变化或 open 上升沿都需要刷新
 	useEffect(() => {
@@ -280,6 +315,25 @@ export default function DataSourceFormModal({
 			label: `${connector.name}${connector.defaultEngine ? ` · ${connector.defaultEngine}` : ""}`,
 		}));
 	}, [connectors]);
+
+	const systemTypeOptions = useMemo(() => {
+		const seen = new Set<string>();
+		const options = systemTypes
+			.map((item) => {
+				const value = resolveSystemTypeValue(item);
+				if (!value || seen.has(value)) return null;
+				seen.add(value);
+				return {
+					value,
+					label: resolveSystemTypeLabel(item, value),
+				};
+			})
+			.filter(Boolean) as Array<{ value: string; label: string }>;
+		return options.length ? options : TYPE_OPTIONS;
+	}, [systemTypes]);
+
+	const systemTypesFallbackActive = systemTypesLoaded && systemTypeOptions === TYPE_OPTIONS;
+	const systemTypesFallbackMessage = systemTypesError || "系统类型字典为空，当前使用内置兜底选项。";
 
 	const selectedConnector = useMemo(
 		() => connectors.find((item) => item.connectorKey === connectorValue),
@@ -666,10 +720,32 @@ export default function DataSourceFormModal({
 							{selectedConnector.description}
 						</Text>
 					) : null}
+					{systemTypesFallbackActive ? (
+						<Alert
+							type="warning"
+							showIcon
+							className="mb-4"
+							message="系统类型字典未接通"
+							description={
+								<Space direction="vertical" size={4}>
+									<Text>{systemTypesFallbackMessage}</Text>
+									<Space size={8} wrap>
+										<Button type="link" className="h-auto p-0" onClick={() => router.push("/governance/standards/reference")}>
+											去参考码维护
+										</Button>
+										<Button type="link" className="h-auto p-0" onClick={() => router.push("/foundation/connectors")}>
+											查看连接器目录
+										</Button>
+									</Space>
+								</Space>
+							}
+						/>
+					) : null}
 					<Form.Item name="type" label="源类型" rules={[{ required: true, message: "请选择源类型" }]}>
 						<Select
-							options={TYPE_OPTIONS}
-							placeholder="由连接器自动填充"
+							options={systemTypeOptions}
+							placeholder={systemTypesLoading ? "系统类型加载中..." : "由连接器自动填充"}
+							loading={systemTypesLoading}
 							disabled={Boolean(connectorValue)}
 							onChange={(value) => handleTypeChange(value)}
 						/>

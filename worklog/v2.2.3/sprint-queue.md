@@ -145,7 +145,7 @@
 **设计文档**: `worklog/v2.2.3/sprint-9-202604/README.md`
 
 ## Sprint-10: 大屏编辑器 Phase 1 — 组件配置增强 + 主题修复 + 发布弹窗 (202604)
-**状态**: READY
+**状态**: IN_PROGRESS
 **类型**: Implementation（实施型）
 
 | Feature | Task 数 | 状态 |
@@ -966,6 +966,32 @@
 - SQL 建模页是字段标准映射、dbt 契约生成和发布门禁的主工作台。
 - 项目文件浏览只作为底层 dbt 文件证据面，不允许绕过 SQL 建模页发布。
 - 客户现场业务规则不内置为 demo 或模板，只提供映射、确认和门禁机制。
+
+## Sprint-51: 现有页面横切职责域重构 (202606)
+**状态**: IN_PROGRESS
+**类型**: Frontend-first Refactor Planning / Existing Pages Only
+**目标**: 参考 v2.2.4 Sprint-2 的横切职责域思想，在 v2.2.3 现有页面上规划字典、血缘、治理、元数据和状态联动重构；先不改代码，不新增 `/v2` 命名空间，后续实施以现有页面和真实 API 缺口为第一约束。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F0-现有页面事实源与重构边界 | P0 | 3 | READY |
+| F1-字典域现有页面收敛 | P0 | 3 | IN_PROGRESS |
+| F2-血缘与元数据详情闭环 | P0 | 3 | READY |
+| F3-治理域跨页面复用 | P0 | 3 | READY |
+| F4-工作台主链路串联 | P1 | 2 | READY |
+| F5-API缺口与验收证据 | P0 | 3 | READY |
+
+**统计**: READY=16, IN_PROGRESS=0, DONE=1, BLOCKED=0
+**背景**: v2.2.4 Sprint-2 提供了“字典 / 血缘 / 治理 / 元数据 / Store 编排”的横切域重构思想，但 v2.2.3 已经通过 Sprint-45~50 建立了客户可见的现有页面闭环。本 sprint 明确不复制 v2.2.4 的 `/src/v2` 新骨架，而是把思想转译到 `/foundation/data-sources`、`/catalog/assets`、`/catalog/datasets/:id`、`/catalog/lineage/*`、`/governance/*`、`/studio/sql-modeling` 和 `/workbench` 等现有页面。
+**设计文档**: `worklog/v2.2.3/sprint-51-202606/README.md`
+**页面矩阵**: `worklog/v2.2.3/sprint-51-202606/assets/existing-page-cross-domain-matrix.md`
+**API缺口登记**: `worklog/v2.2.3/sprint-51-202606/assets/api-gap-register.md`
+**集成测试计划**: `worklog/v2.2.3/sprint-51-202606/it/README.md`
+**关键决策**:
+- 现有页面是第一事实源；默认不新增菜单、不新增 `/v2` 路由、不回植 `src/v2` UI 骨架。
+- 优先界面重构和页面链路闭环，后端只补现有页面验收所需的真实 API 缺口。
+- 字典、血缘、治理、元数据、状态联动都必须落到客户可见页面、按钮、抽屉、空态和错误态。
+- 后续编码前先补 source-contract，再做最小实现，并记录 Chrome95/页面 smoke 证据。
 
 ### 整合大计划 SP-1~SP-4 总览
 | 阶段 | Sprint | 状态 |
