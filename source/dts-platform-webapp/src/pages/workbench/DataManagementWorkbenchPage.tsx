@@ -102,6 +102,8 @@ export default function Page({ embedded = false, focus = "data-management", prod
 			</Button>
 			<Button onClick={() => router.push("/governance/quality")}>治理检查</Button>
 			<Button onClick={() => router.push("/catalog/assets")}>查看资产</Button>
+			<Button onClick={() => router.push("/catalog/lineage/graph")}>查看血缘</Button>
+			<Button onClick={() => router.push("/governance/standards/reference")}>字典管理</Button>
 			<Button onClick={() => router.push("/bi/dashboards")}>创建报表</Button>
 			<Button onClick={() => router.push("/services/apis")}>发布数据 API</Button>
 			<Button onClick={() => router.push("/ops/overview")}>查看运行</Button>
@@ -246,6 +248,8 @@ export default function Page({ embedded = false, focus = "data-management", prod
 								<Button onClick={() => router.push("/workbench/todo")}>处理阻断项</Button>
 								<Button onClick={() => router.push("/governance/quality")}>治理检查</Button>
 								<Button onClick={() => router.push("/catalog/assets")}>查看资产</Button>
+								<Button onClick={() => router.push("/catalog/lineage/graph")}>查看血缘</Button>
+								<Button onClick={() => router.push("/governance/standards/reference")}>字典管理</Button>
 								<Button onClick={() => router.push("/bi/dashboards")}>创建报表</Button>
 								<Button onClick={() => router.push("/services/apis")}>发布数据 API</Button>
 								<Button onClick={() => router.push("/ops/overview")}>查看运行</Button>

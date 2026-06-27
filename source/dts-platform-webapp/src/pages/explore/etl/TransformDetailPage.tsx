@@ -989,7 +989,7 @@ export default function TransformDetailPage() {
 					setExecuteProgressOpen(false);
 				}}
 				footer={
-					<Space>
+					<Space wrap>
 						<Button
 							onClick={() => {
 								stopExecutePolling();
@@ -999,6 +999,17 @@ export default function TransformDetailPage() {
 						>
 							查看执行历史
 						</Button>
+						{executeProgress.terminal && executeProgress.status === "success" && (
+							<Button
+								onClick={() => {
+									stopExecutePolling();
+									setExecuteProgressOpen(false);
+									router.push("/catalog/lineage/import");
+								}}
+							>
+								同步 Addax 血缘
+							</Button>
+						)}
 						<Button
 							type="primary"
 							onClick={() => {

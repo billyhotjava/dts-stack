@@ -62,6 +62,7 @@ const toDatasetFromAssetV2Detail = (id: string, detail: any) => {
 		__columns: Array.isArray(detail?.columns) ? detail.columns : [],
 		__rawJson: detail?.rawJson,
 		__profileJson: detail?.profileJson,
+		__tags: Array.isArray(detail?.asset?.tags) ? detail.asset.tags : [],
 	};
 };
 
@@ -250,6 +251,20 @@ export default function DatasetDetailPage() {
 	);
 }
 
+const resolveProfileSummary = (profileJson?: string): { rowCount?: number; columnCount?: number; profileDate?: string } => {
+	if (!profileJson) return {};
+	try {
+		const p = JSON.parse(profileJson);
+		return {
+			rowCount: p.rowCount ?? p.row_count ?? undefined,
+			columnCount: p.columnCount ?? p.column_count ?? undefined,
+			profileDate: p.profileDate ?? p.createDateTime ?? p.timestamp ?? undefined,
+		};
+	} catch {
+		return {};
+	}
+};
+
 function DatasetOverviewTab({
 	dataset,
 	assetContract,
@@ -261,6 +276,7 @@ function DatasetOverviewTab({
 	schemaContract?: Record<string, any> | null;
 	contractLoading?: boolean;
 }) {
+	const router = useRouter();
 	const asset = assetContract || dataset;
 	const readiness = resolveAssetReadiness({
 		classification: asset.classification,
@@ -275,6 +291,16 @@ function DatasetOverviewTab({
 		legacyDatasetId: asset.legacyDatasetId ?? dataset.__legacyDatasetId,
 	});
 	const missingFields = Array.isArray(assetContract?.missingGovernanceFields) ? assetContract?.missingGovernanceFields : [];
+	const tags: any[] = Array.isArray(dataset.__tags) ? dataset.__tags : [];
+	const profile = resolveProfileSummary(dataset.__profileJson);
+
+	const governanceActions = readiness.state === "BLOCKED" || readiness.state === "WARNING" ? (
+		<Space size={4} wrap>
+			<Button size="small" onClick={() => router.push("/governance/quality")}>质量规则</Button>
+			<Button size="small" onClick={() => router.push("/governance/asset-grants")}>授权管理</Button>
+		</Space>
+	) : null;
+
 	return (
 		<div className="space-y-3 py-2">
 			{dataset.__source === "openmetadata" && (
@@ -291,6 +317,7 @@ function DatasetOverviewTab({
 							? readiness.reasons.join("；")
 							: "密级、主题域、归属部门和生命周期满足引用前置条件。"
 				}
+				action={governanceActions}
 			/>
 			<Descriptions bordered size="small" column={2}>
 				<Descriptions.Item label="仓库分层">{dataset.warehouseLayer ?? "-"}</Descriptions.Item>
@@ -305,7 +332,23 @@ function DatasetOverviewTab({
 				<Descriptions.Item label="映射状态">{dataset.matchStatus ?? "-"}</Descriptions.Item>
 				<Descriptions.Item label="字段合同">{schemaContract?.columnCount ?? dataset.columnCount ?? "-"}</Descriptions.Item>
 				<Descriptions.Item label="资产来源">{assetContract?.metadataSource ?? dataset.__source ?? "-"}</Descriptions.Item>
+				{profile.rowCount != null && (
+					<Descriptions.Item label="数据行数">{profile.rowCount.toLocaleString()}</Descriptions.Item>
+				)}
+				{profile.profileDate && (
+					<Descriptions.Item label="最近采样">{String(profile.profileDate).slice(0, 19)}</Descriptions.Item>
+				)}
 			</Descriptions>
+			{tags.length > 0 && (
+				<div className="flex flex-wrap items-center gap-1">
+					<span className="text-xs text-slate-500 mr-1">标签：</span>
+					{tags.map((t: any, i: number) => {
+						const label = t?.tagFQN ?? t?.name ?? t?.label ?? String(t);
+						const shortLabel = String(label).split(".").pop() ?? label;
+						return <Tag key={i} title={label}>{shortLabel}</Tag>;
+					})}
+				</div>
+			)}
 			{missingFields.length ? (
 				<Alert type="warning" showIcon message="治理字段待补齐" description={missingFields.join("、")} />
 			) : null}
@@ -842,6 +885,7 @@ function OpenMetadataLineageTab({ assetId }: { assetId: string }) {
 }
 
 function DatasetLineageImpactTab({ dataset }: { dataset: Record<string, any> }) {
+	const router = useRouter();
 	const hasOpenMetadataAsset = dataset.__source === "openmetadata" && dataset.id;
 	const hasLegacyDataset = Boolean(dataset.__legacyDatasetId);
 	return (
@@ -858,6 +902,18 @@ function DatasetLineageImpactTab({ dataset }: { dataset: Record<string, any> }) 
 							: hasLegacyDataset
 								? "当前使用 DTS 本地治理资产影响链路。"
 								: "当前资产没有可用血缘证据。"
+				}
+				action={
+					<Button
+						size="small"
+						onClick={() =>
+							dataset.__legacyDatasetId
+								? router.push(`/catalog/lineage/graph?datasetId=${encodeURIComponent(String(dataset.__legacyDatasetId))}`)
+								: router.push("/catalog/lineage/graph")
+						}
+					>
+						血缘图 →
+					</Button>
 				}
 			/>
 			{hasOpenMetadataAsset ? (
@@ -903,11 +959,13 @@ function DatasetLineageTab({ datasetId }: { datasetId: string }) {
 
 	if (loading) return <div className="py-6"><Spin /></div>;
 
+	const lineageGraphUrl = `/catalog/lineage/graph?datasetId=${encodeURIComponent(datasetId)}`;
+
 	if (!lineageNodes.length) {
 		return (
 			<div className="py-4 text-sm text-slate-500 space-y-2">
 				<div>暂无血缘数据。</div>
-				<Button type="link" size="small" className="px-0" onClick={() => router.push("/catalog/lineage/graph")}>
+				<Button type="link" size="small" className="px-0" onClick={() => router.push(lineageGraphUrl)}>
 					前往血缘分析页 →
 				</Button>
 			</div>
@@ -926,7 +984,7 @@ function DatasetLineageTab({ datasetId }: { datasetId: string }) {
 				emptyText="暂无血缘节点"
 			/>
 			<div className="text-right">
-				<Button type="link" size="small" onClick={() => router.push("/catalog/lineage/graph")}>
+				<Button type="link" size="small" onClick={() => router.push(lineageGraphUrl)}>
 					查看完整血缘分析 →
 				</Button>
 			</div>
