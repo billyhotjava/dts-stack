@@ -1,7 +1,7 @@
 # T02: Source-contract 验收基线
 
 **优先级**: P0  
-**状态**: READY  
+**状态**: DONE  
 **依赖**: F1 F2 F3
 
 ## 目标

@@ -968,20 +968,21 @@
 - 客户现场业务规则不内置为 demo 或模板，只提供映射、确认和门禁机制。
 
 ## Sprint-51: 现有页面横切职责域重构 (202606)
-**状态**: IN_PROGRESS
+**状态**: DONE
 **类型**: Frontend-first Refactor Planning / Existing Pages Only
 **目标**: 参考 v2.2.4 Sprint-2 的横切职责域思想，在 v2.2.3 现有页面上规划字典、血缘、治理、元数据和状态联动重构；先不改代码，不新增 `/v2` 命名空间，后续实施以现有页面和真实 API 缺口为第一约束。
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
-| F0-现有页面事实源与重构边界 | P0 | 3 | READY |
-| F1-字典域现有页面收敛 | P0 | 3 | IN_PROGRESS |
-| F2-血缘与元数据详情闭环 | P0 | 3 | READY |
-| F3-治理域跨页面复用 | P0 | 3 | READY |
-| F4-工作台主链路串联 | P1 | 2 | READY |
-| F5-API缺口与验收证据 | P0 | 3 | READY |
+| F0-现有页面事实源与重构边界 | P0 | 3 | DONE |
+| F1-字典域现有页面收敛 | P0 | 3 | DONE |
+| F2-血缘与元数据详情闭环 | P0 | 3 | DONE |
+| F3-治理域跨页面复用 | P0 | 3 | DONE |
+| F4-工作台主链路串联 | P1 | 2 | DONE |
+| F5-API缺口与验收证据 | P0 | 3 | DONE |
 
-**统计**: READY=16, IN_PROGRESS=0, DONE=1, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=17, BLOCKED=0
+**进度（2026-06-27）**: Sprint-51 全部 DONE。F1 字典域：dictionaryService.ts 接线 /platform/dict/system-types + TYPE_OPTIONS 兜底，DataSourceFormModal 系统类型下拉 + 标准管理维护入口。F2 血缘/元数据：DatasetDetailPage 补 tags 显示 + profile 解析摘要，血缘 tab 带 ?datasetId 上下文导航，TransformDetailPage 执行成功后 Addax 血缘同步入口。F3 治理：资产详情概览 Alert 对 BLOCKED/WARNING 状态挂质量/授权快捷动作，SqlModelingPage 已有 standardGateResult + testResult 展示满足 F3-T02，F3-T03 通过 buildAssetGrantUrl 串联。F4 工作台：headerActions + 详情面板增加血缘/字典横切入口（遵守 SQL 字面量约束）。F5 验收：tsc EXIT:0；source-contract 133 tests 123 pass（10 项为预存基线失败，零净增）；pnpm build 2m4s 通过；API 缺口 6/6 以前端收敛关闭。
 **背景**: v2.2.4 Sprint-2 提供了“字典 / 血缘 / 治理 / 元数据 / Store 编排”的横切域重构思想，但 v2.2.3 已经通过 Sprint-45~50 建立了客户可见的现有页面闭环。本 sprint 明确不复制 v2.2.4 的 `/src/v2` 新骨架，而是把思想转译到 `/foundation/data-sources`、`/catalog/assets`、`/catalog/datasets/:id`、`/catalog/lineage/*`、`/governance/*`、`/studio/sql-modeling` 和 `/workbench` 等现有页面。
 **设计文档**: `worklog/v2.2.3/sprint-51-202606/README.md`
 **页面矩阵**: `worklog/v2.2.3/sprint-51-202606/assets/existing-page-cross-domain-matrix.md`
