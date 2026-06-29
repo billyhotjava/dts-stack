@@ -65,6 +65,3 @@ export default function MetricWorkbenchPage() {
         </div>
     );
 }
-
-// Expose selectedId contract for Task 2/3/4
-export type { SemanticSubjectDomain, SemanticBusinessObject, SemanticMetric };
