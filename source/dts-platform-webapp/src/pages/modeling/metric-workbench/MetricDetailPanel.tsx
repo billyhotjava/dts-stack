@@ -4,12 +4,14 @@ import { toast } from "sonner";
 import {
     updateSemanticMetric,
     listSemanticModelRuns,
+    listSemanticModels,
     triggerSemanticModelRun,
     publishSemanticModelToDbt,
     registerSemanticBiDataset,
     registerSemanticLineage,
     type SemanticBusinessObject,
     type SemanticMetric,
+    type SemanticModel,
     type SemanticModelRun,
 } from "@/api/semanticModelingApi";
 
@@ -104,17 +106,36 @@ function MetricFormulaTab({
     );
 }
 
-function RunsTab({ metricId }: { metricId: string }) {
+function RunsTab() {
+    const [models, setModels] = useState<SemanticModel[]>([]);
+    const [modelId, setModelId] = useState<string | null>(null);
     const [runs, setRuns] = useState<SemanticModelRun[]>([]);
     const [loading, setLoading] = useState(false);
     const [triggering, setTriggering] = useState(false);
     const [publishing, setPublishing] = useState(false);
 
+    // Load all semantic models once on mount (shared data, not per-metric)
     useEffect(() => {
+        void (async () => {
+            try {
+                const list = await listSemanticModels();
+                setModels(Array.isArray(list) ? list : []);
+            } catch {
+                setModels([]);
+            }
+        })();
+    }, []);
+
+    // Load runs whenever the selected model changes
+    useEffect(() => {
+        if (!modelId) {
+            setRuns([]);
+            return;
+        }
         void (async () => {
             setLoading(true);
             try {
-                const list = await listSemanticModelRuns(metricId);
+                const list = await listSemanticModelRuns(modelId);
                 setRuns(Array.isArray(list) ? (list as SemanticModelRun[]) : []);
             } catch {
                 setRuns([]);
@@ -122,12 +143,13 @@ function RunsTab({ metricId }: { metricId: string }) {
                 setLoading(false);
             }
         })();
-    }, [metricId]);
+    }, [modelId]);
 
     const handleTrigger = async () => {
+        if (!modelId) return;
         setTriggering(true);
         try {
-            await triggerSemanticModelRun(metricId, { runType: "MANUAL" });
+            await triggerSemanticModelRun(modelId, { runType: "MANUAL" });
             toast.success("运行已触发");
         } catch {
             /* global interceptor handles error toast */
@@ -137,12 +159,13 @@ function RunsTab({ metricId }: { metricId: string }) {
     };
 
     const handlePublish = async () => {
+        if (!modelId) return;
         setPublishing(true);
         try {
-            await publishSemanticModelToDbt(metricId);
+            await publishSemanticModelToDbt(modelId);
             await Promise.allSettled([
-                registerSemanticBiDataset(metricId),
-                registerSemanticLineage(metricId),
+                registerSemanticBiDataset(modelId),
+                registerSemanticLineage(modelId),
             ]);
             toast.success("已发布 dbt 并注册 BI 数据集 + 血缘");
         } catch {
@@ -152,19 +175,36 @@ function RunsTab({ metricId }: { metricId: string }) {
         }
     };
 
-    if (loading) return <div className="p-2 text-sm text-gray-400">加载中...</div>;
+    const modelOptions = models.map((m) => ({
+        label: `[${m.type ?? "?"}] ${m.name}`,
+        value: m.id,
+    }));
 
     return (
         <div className="p-2 space-y-2">
+            <div>
+                <div className="text-xs text-gray-500 mb-1">关联语义模型</div>
+                <Select
+                    options={modelOptions}
+                    value={modelId ?? undefined}
+                    onChange={(v: string) => setModelId(v)}
+                    style={{ width: "100%" }}
+                    placeholder="选择语义模型"
+                    allowClear
+                    onClear={() => setModelId(null)}
+                />
+            </div>
             <Space>
-                <Button size="small" loading={triggering} onClick={handleTrigger}>
+                <Button size="small" loading={triggering} disabled={!modelId} onClick={handleTrigger}>
                     触发运行
                 </Button>
-                <Button size="small" type="primary" loading={publishing} onClick={handlePublish}>
+                <Button size="small" type="primary" loading={publishing} disabled={!modelId} onClick={handlePublish}>
                     发布 dbt
                 </Button>
             </Space>
-            {runs.length === 0 ? (
+            {loading ? (
+                <div className="text-sm text-gray-400">加载中...</div>
+            ) : runs.length === 0 ? (
                 <Empty description="暂无运行记录" image={Empty.PRESENTED_IMAGE_SIMPLE} />
             ) : (
                 <div className="space-y-1">
@@ -226,7 +266,7 @@ export function MetricDetailPanel({
                     {
                         key: "runs",
                         label: "消费数据",
-                        children: <RunsTab metricId={metricId} />,
+                        children: <RunsTab />,
                     },
                 ]}
             />
