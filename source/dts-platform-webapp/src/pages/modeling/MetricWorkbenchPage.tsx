@@ -9,6 +9,7 @@ import {
     type SemanticMetric,
 } from "@/api/semanticModelingApi";
 import { MetricCanvas } from "./metric-workbench/MetricCanvas";
+import { MetricDetailPanel } from "./metric-workbench/MetricDetailPanel";
 import { SubjectBrowserPanel } from "./metric-workbench/SubjectBrowserPanel";
 
 export default function MetricWorkbenchPage() {
@@ -55,20 +56,17 @@ export default function MetricWorkbenchPage() {
                         loading={loading}
                     />
                 </div>
-                <div
-                    style={{ width: 360, borderLeft: "1px solid #e5e7eb" }}
-                    className="overflow-y-auto p-4 text-gray-400 text-sm"
-                    data-selected-id={selectedId ?? ""}
-                >
-                    {selectedId == null ? "请在画布中选择节点" : `已选：${selectedId}`}
-                    {selectedId != null && (
-                        <button
-                            className="ml-2 text-xs underline"
-                            onClick={() => setSelectedId(null)}
-                        >
-                            取消
-                        </button>
-                    )}
+                <div style={{ width: 360, borderLeft: "1px solid #e5e7eb" }} className="overflow-y-auto">
+                    <MetricDetailPanel
+                        selectedId={selectedId}
+                        objects={objects}
+                        metrics={metrics}
+                        onMetricUpdated={() => {
+                            void listSemanticMetrics().then((m) => {
+                                setMetrics(Array.isArray(m) ? (m as SemanticMetric[]) : []);
+                            });
+                        }}
+                    />
                 </div>
             </div>
         </div>
