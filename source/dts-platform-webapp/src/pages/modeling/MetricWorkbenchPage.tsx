@@ -8,6 +8,7 @@ import {
     type SemanticBusinessObject,
     type SemanticMetric,
 } from "@/api/semanticModelingApi";
+import { MetricCanvas } from "./metric-workbench/MetricCanvas";
 
 export default function MetricWorkbenchPage() {
     const [domains, setDomains] = useState<SemanticSubjectDomain[]>([]);
@@ -41,10 +42,13 @@ export default function MetricWorkbenchPage() {
                 >
                     {loading ? "加载中..." : `主题域 ${domains.length} · 对象 ${objects.length}`}
                 </div>
-                <div className="flex flex-1 items-center justify-center bg-gray-50">
-                    <span className="text-gray-400">
-                        {loading ? "画布加载中..." : `${objects.length} 个业务对象，${metrics.length} 个指标`}
-                    </span>
+                <div className="flex-1 overflow-hidden" style={{ minHeight: 0 }}>
+                    <MetricCanvas
+                        objects={objects}
+                        metrics={metrics}
+                        selectedId={selectedId}
+                        onNodeSelect={setSelectedId}
+                    />
                 </div>
                 <div
                     style={{ width: 360, borderLeft: "1px solid #e5e7eb" }}
