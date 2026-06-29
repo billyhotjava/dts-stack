@@ -9,6 +9,7 @@ import {
     type SemanticMetric,
 } from "@/api/semanticModelingApi";
 import { MetricCanvas } from "./metric-workbench/MetricCanvas";
+import { SubjectBrowserPanel } from "./metric-workbench/SubjectBrowserPanel";
 
 export default function MetricWorkbenchPage() {
     const [domains, setDomains] = useState<SemanticSubjectDomain[]>([]);
@@ -36,11 +37,14 @@ export default function MetricWorkbenchPage() {
         <div className="flex h-full flex-col" data-testid="metric-workbench-page">
             <PageHeader title="指标工作台" />
             <div className="flex flex-1 overflow-hidden">
-                <div
-                    style={{ width: 240, borderRight: "1px solid #e5e7eb" }}
-                    className="overflow-y-auto p-2 text-sm text-gray-500"
-                >
-                    {loading ? "加载中..." : `主题域 ${domains.length} · 对象 ${objects.length}`}
+                <div style={{ width: 240, borderRight: "1px solid #e5e7eb" }} className="overflow-hidden">
+                    <SubjectBrowserPanel
+                        domains={domains}
+                        objects={objects}
+                        metrics={metrics}
+                        selectedId={selectedId}
+                        onSelect={setSelectedId}
+                    />
                 </div>
                 <div className="flex-1 overflow-hidden" style={{ minHeight: 0 }}>
                     <MetricCanvas
