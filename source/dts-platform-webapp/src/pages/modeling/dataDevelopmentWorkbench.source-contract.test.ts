@@ -87,3 +87,14 @@ test("dbt file browser is a file evidence surface and hands publishing back to S
 	assert.match(dbtFileBrowserPage, /title="dbt 文件发布需先通过 SQL 建模页发布门禁"/);
 	assert.match(dbtFileBrowserPage, /\/studio\/sql-modeling/);
 });
+
+test("metric workbench route is registered in static routes and dynamic resolver", () => {
+	assert.match(staticRoutes, /path: "modeling\/metric-workbench"/);
+	assert.match(dynamicResolver, /"\/modeling\/metric-workbench"/);
+	assert.match(staticRoutes, /path: "modeling\/semantic\/subjects"/);
+	assert.match(staticRoutes, /path: "modeling\/semantic\/objects"/);
+	assert.match(staticRoutes, /path: "modeling\/semantic\/metrics"/);
+	assert.match(staticRoutes, /path: "modeling\/semantic\/models"/);
+	assert.match(staticRoutes, /path: "modeling\/semantic\/publish"/);
+	assert.match(staticRoutes, /path: "modeling\/semantic\/runs"/);
+});

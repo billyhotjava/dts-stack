@@ -1,5 +1,1 @@
-import SemanticModelingCenterPage from "./SemanticModelingCenterPage";
-
-export default function SemanticPublishPage() {
-	return <SemanticModelingCenterPage section="publish" />;
-}
+export default function SemanticPublishPage() { return null; }

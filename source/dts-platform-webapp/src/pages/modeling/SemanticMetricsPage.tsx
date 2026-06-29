@@ -1,5 +1,1 @@
-import SemanticModelingCenterPage from "./SemanticModelingCenterPage";
-
-export default function SemanticMetricsPage() {
-	return <SemanticModelingCenterPage section="metrics" />;
-}
+export default function SemanticMetricsPage() { return null; }

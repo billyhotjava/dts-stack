@@ -1,5 +1,1 @@
-import SemanticModelingCenterPage from "./SemanticModelingCenterPage";
-
-export default function SemanticSubjectsPage() {
-	return <SemanticModelingCenterPage section="subjects" />;
-}
+export default function SemanticSubjectsPage() { return null; }

@@ -26,6 +26,13 @@ const WorkflowCenterPage = lazy(() => import("@/pages/workbench/WorkflowCenterPa
 const StudioProjectsPage = lazy(() => import("@/pages/modeling/ModelTemplatesPage"));
 const SqlModelingPage = lazy(() => import("@/pages/modeling/SqlModelingPage"));
 const DbtFileBrowserPage = lazy(() => import("@/pages/modeling/DbtFileBrowserPage"));
+const MetricWorkbenchPage = lazy(() => import("@/pages/modeling/MetricWorkbenchPage"));
+const SemanticSubjectsPage = lazy(() => import("@/pages/modeling/SemanticSubjectsPage"));
+const SemanticObjectsPage = lazy(() => import("@/pages/modeling/SemanticObjectsPage"));
+const SemanticMetricsPage = lazy(() => import("@/pages/modeling/SemanticMetricsPage"));
+const SemanticModelsPage = lazy(() => import("@/pages/modeling/SemanticModelsPage"));
+const SemanticPublishPage = lazy(() => import("@/pages/modeling/SemanticPublishPage"));
+const SemanticRunsPage = lazy(() => import("@/pages/modeling/SemanticRunsPage"));
 
 // ── Analytics pages (static routes — registered statically for reliability; menu controls visibility) ──
 const AnalyticsHomePage = lazy(() => import("@/analytics/pages/HomePage"));
@@ -126,6 +133,13 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{ path: "studio/projects", element: <S><StudioProjectsPage /></S> },
 	{ path: "studio/sql-modeling", element: <S><SqlModelingPage /></S> },
 	{ path: "modeling/dbt-files", element: <S><DbtFileBrowserPage /></S> },
+	{ path: "modeling/metric-workbench", element: <S><MetricWorkbenchPage /></S> },
+	{ path: "modeling/semantic/subjects", element: <S><SemanticSubjectsPage /></S> },
+	{ path: "modeling/semantic/objects", element: <S><SemanticObjectsPage /></S> },
+	{ path: "modeling/semantic/metrics", element: <S><SemanticMetricsPage /></S> },
+	{ path: "modeling/semantic/models", element: <S><SemanticModelsPage /></S> },
+	{ path: "modeling/semantic/publish", element: <S><SemanticPublishPage /></S> },
+	{ path: "modeling/semantic/runs", element: <S><SemanticRunsPage /></S> },
 	{ path: "modeling/semantic-center", element: <MetricsServiceFrame /> },
 	{ path: "modeling/semantic-center/*", element: <MetricsServiceFrame /> },
 	{ path: "bi/semantic-modeling", element: <MetricsServiceFrame /> },
