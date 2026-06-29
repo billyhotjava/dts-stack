@@ -967,6 +967,27 @@
 - 项目文件浏览只作为底层 dbt 文件证据面，不允许绕过 SQL 建模页发布。
 - 客户现场业务规则不内置为 demo 或模板，只提供映射、确认和门禁机制。
 
+## Sprint-52: 指标工作台 & 语义建模全面整合 (202606)
+**状态**: READY
+**类型**: Frontend Product Capability / React Flow Canvas
+**目标**: 构建 React Flow 三栏指标工作台 + 替换 6 个 SemanticXxxPage 重定向壳为真实页面，实现 DWS/ADS 建模→指标可视化→消费看板端到端闭环。
+**设计文档**: `worklog/v2.2.3/sprint-52-202606/assets/metric-workbench-design.md`
+**集成测试**: `worklog/v2.2.3/sprint-52-202606/it/README.md`
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-指标工作台主页 | P0 | 4 | READY |
+| F2-主题域与业务对象 | P0 | 2 | READY |
+| F3-指标与模型页 | P0 | 2 | READY |
+| F4-发布与运行监控 | P1 | 2 | READY |
+| F5-验证收尾 | P0 | 2 | READY |
+
+**统计**: READY=12, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**关键约束**:
+- Chrome 95: 颜色用 HSL/HEX，禁 oklch/:has/container
+- `/modeling/semantic-center` MetricsServiceFrame 保持不动
+- 不触碰 `addax-env-runner.jar`，不新增 `/v2` 路由
+
 ## Sprint-51: 现有页面横切职责域重构 (202606)
 **状态**: DONE
 **类型**: Frontend-first Refactor Planning / Existing Pages Only
