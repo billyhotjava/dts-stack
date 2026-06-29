@@ -28,6 +28,7 @@ interface MetricCanvasProps {
     metrics: SemanticMetric[];
     selectedId: string | null;
     onNodeSelect: (id: string | null) => void;
+    loading?: boolean;
 }
 
 function buildNodes(
@@ -44,7 +45,6 @@ function buildNodes(
             objectId: o.id,
             name: o.name,
             code: o.code,
-            tableCount: 0,
         } satisfies BizObjectNodeData,
     }));
     const metricNodes: Node[] = metrics.map((m, i) => ({
@@ -73,7 +73,7 @@ function buildEdges(metrics: SemanticMetric[]): Edge[] {
         }));
 }
 
-function MetricCanvasInner({ objects, metrics, selectedId, onNodeSelect }: MetricCanvasProps) {
+function MetricCanvasInner({ objects, metrics, selectedId, onNodeSelect, loading }: MetricCanvasProps) {
     const nodes = useMemo(() => buildNodes(objects, metrics, selectedId), [objects, metrics, selectedId]);
     const edges = useMemo(() => buildEdges(metrics), [metrics]);
 
@@ -83,6 +83,14 @@ function MetricCanvasInner({ objects, metrics, selectedId, onNodeSelect }: Metri
         },
         [onNodeSelect],
     );
+
+    if (loading) {
+        return (
+            <div className="flex h-full items-center justify-center text-gray-400 text-sm">
+                画布加载中...
+            </div>
+        );
+    }
 
     if (objects.length === 0 && metrics.length === 0) {
         return (

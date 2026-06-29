@@ -48,6 +48,7 @@ export default function MetricWorkbenchPage() {
                         metrics={metrics}
                         selectedId={selectedId}
                         onNodeSelect={setSelectedId}
+                        loading={loading}
                     />
                 </div>
                 <div

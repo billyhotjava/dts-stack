@@ -4,7 +4,6 @@ export type BizObjectNodeData = {
     objectId: string;
     name: string;
     code: string;
-    tableCount: number;
 };
 
 export function BizObjectNode({ data, selected }: NodeProps) {
@@ -22,10 +21,9 @@ export function BizObjectNode({ data, selected }: NodeProps) {
         >
             <div style={{ fontWeight: 600, color: "hsl(220,30%,25%)" }}>{d.name}</div>
             <div style={{ color: "hsl(220,20%,55%)", fontSize: 11, marginTop: 2 }}>
-                {d.code} · {d.tableCount} 张表
+                {d.code}
             </div>
             <Handle type="source" position={Position.Right} />
-            <Handle type="target" position={Position.Left} />
         </div>
     );
 }
