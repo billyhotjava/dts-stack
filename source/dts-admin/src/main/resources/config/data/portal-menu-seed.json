@@ -8,47 +8,6 @@
       "title": "商业智能应用",
       "children": [
         {
-          "key": "metrics",
-          "path": "metrics",
-          "icon": "solar:function-bold-duotone",
-          "titleKey": "sys.nav.portal.metricsCenter",
-          "title": "指标与语义",
-          "children": [
-            {
-              "key": "metric-center",
-              "path": "center",
-              "icon": "solar:chart-square-bold-duotone",
-              "titleKey": "sys.nav.portal.metricsWorkbench",
-              "title": "指标工作台",
-              "externalLink": "/bi-apps/metrics/center"
-            },
-            {
-              "key": "metric-assets",
-              "path": "assets",
-              "icon": "solar:clipboard-list-bold-duotone",
-              "titleKey": "sys.nav.portal.metricsDictionary",
-              "title": "指标资产",
-              "externalLink": "/bi-apps/metrics/assets"
-            },
-            {
-              "key": "semantic-modeling",
-              "path": "semantic",
-              "icon": "solar:diagram-up-bold-duotone",
-              "titleKey": "sys.nav.portal.metricsSemantic",
-              "title": "语义建模",
-              "externalLink": "/bi-apps/metrics/semantic"
-            },
-            {
-              "key": "metric-publish",
-              "path": "publish",
-              "icon": "solar:rocket-bold-duotone",
-              "titleKey": "sys.nav.portal.metricsPublish",
-              "title": "发布与运行",
-              "externalLink": "/bi-apps/metrics/publish"
-            }
-          ]
-        },
-        {
           "key": "bi",
           "path": "bi",
           "icon": "solar:widget-3-bold-duotone",
@@ -227,6 +186,71 @@
           "titleKey": "sys.nav.portal.studioDbtFiles",
           "title": "项目文件浏览",
           "externalLink": "/modeling/dbt-files"
+        },
+        {
+          "key": "metric-modeling",
+          "path": "metric-modeling",
+          "icon": "solar:graph-bold-duotone",
+          "titleKey": "sys.nav.portal.studioMetricModeling",
+          "title": "指标建模",
+          "children": [
+            {
+              "key": "metric-workbench",
+              "path": "metric-workbench",
+              "icon": "solar:layers-minimalistic-bold-duotone",
+              "titleKey": "sys.nav.portal.studioMetricWorkbench",
+              "title": "指标工作台",
+              "externalLink": "/modeling/metric-workbench"
+            },
+            {
+              "key": "semantic-subjects",
+              "path": "subjects",
+              "icon": "solar:map-point-bold-duotone",
+              "titleKey": "sys.nav.portal.studioSemanticSubjects",
+              "title": "主题域",
+              "externalLink": "/modeling/semantic/subjects"
+            },
+            {
+              "key": "semantic-objects",
+              "path": "objects",
+              "icon": "solar:box-bold-duotone",
+              "titleKey": "sys.nav.portal.studioSemanticObjects",
+              "title": "业务对象",
+              "externalLink": "/modeling/semantic/objects"
+            },
+            {
+              "key": "semantic-metrics",
+              "path": "metrics",
+              "icon": "solar:chart-bold-duotone",
+              "titleKey": "sys.nav.portal.studioSemanticMetrics",
+              "title": "指标管理",
+              "externalLink": "/modeling/semantic/metrics"
+            },
+            {
+              "key": "semantic-models",
+              "path": "models",
+              "icon": "solar:database-bold-duotone",
+              "titleKey": "sys.nav.portal.studioSemanticModels",
+              "title": "模型管理",
+              "externalLink": "/modeling/semantic/models"
+            },
+            {
+              "key": "semantic-publish",
+              "path": "publish",
+              "icon": "solar:rocket-bold-duotone",
+              "titleKey": "sys.nav.portal.studioSemanticPublish",
+              "title": "发布审核",
+              "externalLink": "/modeling/semantic/publish"
+            },
+            {
+              "key": "semantic-runs",
+              "path": "runs",
+              "icon": "solar:history-bold-duotone",
+              "titleKey": "sys.nav.portal.studioSemanticRuns",
+              "title": "运行监控",
+              "externalLink": "/modeling/semantic/runs"
+            }
+          ]
         }
       ]
     },

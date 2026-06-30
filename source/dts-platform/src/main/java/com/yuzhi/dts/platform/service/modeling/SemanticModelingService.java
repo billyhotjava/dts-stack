@@ -1558,7 +1558,7 @@ public class SemanticModelingService {
             return safeTableRef(object.mainTable());
         }
         String primary = mappings.stream()
-            .filter(item -> "PRIMARY".equalsIgnoreCase(defaultValue(item.tableRole(), "")))
+            .filter(item -> isPrimaryMappingRole(item.tableRole()))
             .findFirst()
             .map(ObjectTableMappingDto::tableName)
             .orElse(object.mainTable());

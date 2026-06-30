@@ -807,61 +807,6 @@ services:
         source: ${STACK_ROOT}/services/dts-platform/drivers
         target: ${STACK_ROOT}/services/dts-platform/drivers
         type: bind
-  dts-metrics:
-    depends_on:
-      dts-platform:
-        condition: service_healthy
-        required: true
-    environment:
-      DTS_EDITION: ${DTS_EDITION:-foundation}
-      DTS_METRICS_SERVICE_NAME: ${DTS_METRICS_SERVICE_NAME:-dts-metrics}
-      DTS_METRICS_TO_PLATFORM: ${DTS_METRICS_TO_PLATFORM:-${DTS_ADMIN_SERVICE_TOKEN:-}}
-      DTS_PLATFORM_API_PATH: ${DTS_PLATFORM_API_PATH:-/api}
-      DTS_PLATFORM_BASE_URL: ${DTS_PLATFORM_BASE_URL:-http://dts-platform:8081}
-      JAVA_OPTS: ${DTS_METRICS_JAVA_OPTS:--Djava.security.egd=file:/dev/./urandom -XX:MaxRAMPercentage=75.0}
-      LOG_ROOT: /logs
-      SPRING_DATASOURCE_PASSWORD: ${PG_PWD_METRICS:-${PG_PWD_DTPS:-dts_metrics}}
-      SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_METRICS:-dts_metrics}
-      SPRING_DATASOURCE_USERNAME: ${PG_USER_METRICS:-dts_metrics}
-      SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-prod}
-      TZ: ${TZ:-Asia/Shanghai}
-    healthcheck:
-      interval: 10s
-      retries: 60
-      start_period: 30s
-      test:
-        - CMD-SHELL
-        - curl -fsS http://127.0.0.1:8084/management/health >/dev/null 2>&1 || grep -qE ':[0]*1F94 .* 0A ' /proc/net/tcp || grep -qE ':[0]*1F94 .* 0A ' /proc/net/tcp6
-      timeout: 10s
-    image: ${IMAGE_DTS_METRICS:-dts-metrics:1.0.0}
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=dts-core
-      - traefik.http.routers.dts-metrics-api.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/api/metrics`)
-      - traefik.http.routers.dts-metrics-api.entrypoints=websecure
-      - traefik.http.routers.dts-metrics-api.tls=true
-      - traefik.http.routers.dts-metrics-api.priority=260
-      - traefik.http.services.dts-metrics-api.loadbalancer.server.port=8084
-      - traefik.http.routers.dts-metrics-api.middlewares=platform-forward-auth@file,cors-allow@file,security-headers@file
-      - traefik.http.routers.dts-metrics-ui.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/metrics`)
-      - traefik.http.routers.dts-metrics-ui.entrypoints=websecure
-      - traefik.http.routers.dts-metrics-ui.tls=true
-      - traefik.http.routers.dts-metrics-ui.priority=255
-      - traefik.http.routers.dts-metrics-ui.service=dts-metrics-api
-      - traefik.http.routers.dts-metrics-ui.middlewares=platform-forward-auth@file,cors-allow@file,security-headers@file
-    networks:
-      dts-core: null
-    ports: []
-    restart: unless-stopped
-    security_opt:
-      - seccomp=unconfined
-    volumes:
-      - bind:
-          create_host_path: true
-          selinux: z
-        source: ./logs/dts-metrics
-        target: /logs/dts-metrics
-        type: bind
   dts-keycloak:
     command:
       - start
@@ -1171,7 +1116,6 @@ services:
       PG_DB_DTCOMMON: ${PG_DB_DTCOMMON}
       PG_DB_DTPS: ${PG_DB_DTPS}
       PG_DB_KEYCLOAK: ${PG_DB_KEYCLOAK}
-      PG_DB_METRICS: ${PG_DB_METRICS:-dts_metrics}
       PG_DB_OPENMETADATA: ${PG_DB_OPENMETADATA:-openmetadata}
       PG_DB_RANGER: ${PG_DB_RANGER}
       PG_PWD_AIRFLOW: ${PG_PWD_AIRFLOW:-airflow}
@@ -1180,7 +1124,6 @@ services:
       PG_PWD_DTCOMMON: ${PG_PWD_DTCOMMON}
       PG_PWD_DTPS: ${PG_PWD_DTPS}
       PG_PWD_KEYCLOAK: ${PG_PWD_KEYCLOAK}
-      PG_PWD_METRICS: ${PG_PWD_METRICS:-${PG_PWD_DTPS:-dts_metrics}}
       PG_PWD_OPENMETADATA: ${PG_PWD_OPENMETADATA:-openmetadata}
       PG_PWD_RANGER: ${PG_PWD_RANGER}
       PG_USER_AIRFLOW: ${PG_USER_AIRFLOW:-airflow}
@@ -1189,7 +1132,6 @@ services:
       PG_USER_DTCOMMON: ${PG_USER_DTCOMMON}
       PG_USER_DTPS: ${PG_USER_DTPS}
       PG_USER_KEYCLOAK: ${PG_USER_KEYCLOAK}
-      PG_USER_METRICS: ${PG_USER_METRICS:-dts_metrics}
       PG_USER_OPENMETADATA: ${PG_USER_OPENMETADATA:-openmetadata}
       PG_USER_RANGER: ${PG_USER_RANGER}
       PGDATA: /var/lib/postgresql/data/pgdata
@@ -1259,7 +1201,6 @@ services:
       DTS_ANALYTICS_BASE_URL: ${DTS_ANALYTICS_BASE_URL:-http://dts-analytics:3000}
       DTS_INBOUND_FROM_ANALYTICS: ${DTS_INBOUND_FROM_ANALYTICS:-${DTS_ADMIN_SERVICE_TOKEN:-}}
       DTS_INBOUND_FROM_INGESTION: ${DTS_INBOUND_FROM_INGESTION:-${DTS_ADMIN_SERVICE_TOKEN:-}}
-      DTS_INBOUND_FROM_METRICS: ${DTS_INBOUND_FROM_METRICS:-${DTS_ADMIN_SERVICE_TOKEN:-}}
       DTS_PLATFORM_TO_ADMIN_TOKEN: ${DTS_PLATFORM_TO_ADMIN_TOKEN:-${DTS_ADMIN_SERVICE_TOKEN:-}}
       DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL:-http://dts-airflow-webserver:8080}
       DTS_AIRFLOW_DAG_ID: ${DTS_AIRFLOW_DAG_ID:-dbt_load}
@@ -1272,9 +1213,6 @@ services:
       DTS_FEATURE_PLATFORM_KC_LOCALIZATION: "true"
       DTS_INGESTION_BASE_URL: ${DTS_INGESTION_BASE_URL:-http://dts-ingestion:8083}
       DTS_INGESTION_SERVICE_NAME: ${DTS_INGESTION_SERVICE_NAME:-dts-platform}
-      DTS_METRICS_API_BASE_PATH: ${DTS_METRICS_API_BASE_PATH:-/api/metrics}
-      DTS_METRICS_EDITION: ${DTS_EDITION:-foundation}
-      DTS_METRICS_SERVICE_NAME: ${DTS_METRICS_SERVICE_NAME:-dts-metrics}
       DTS_JDBC_DRIVER_CLASS: org.apache.hive.jdbc.HiveDriver
       DTS_JDBC_DRIVER_JAR: quark-driver-8.37.3.jar
       DTS_JDBC_LOAD_EXTERNAL_DRIVERS: "true"
@@ -1428,7 +1366,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=dts-core
-      - traefik.http.routers.dts-platform-ui.rule=Host(`${HOST_PLATFORM_UI}`) && !PathPrefix(`/api`) && !PathPrefix(`/admin/api`) && !PathPrefix(`/analytics`) && !PathPrefix(`/bi/api`) && !PathPrefix(`/screen`) && !PathPrefix(`/dashboards`) && !PathPrefix(`/system`) && !PathPrefix(`/tdv`) && !PathPrefix(`/account`) && !PathPrefix(`/hetu`) && !PathPrefix(`/metrics`) && !PathPrefix(`/static`)
+      - traefik.http.routers.dts-platform-ui.rule=Host(`${HOST_PLATFORM_UI}`) && !PathPrefix(`/api`) && !PathPrefix(`/admin/api`) && !PathPrefix(`/analytics`) && !PathPrefix(`/bi/api`) && !PathPrefix(`/screen`) && !PathPrefix(`/dashboards`) && !PathPrefix(`/system`) && !PathPrefix(`/tdv`) && !PathPrefix(`/account`) && !PathPrefix(`/hetu`) && !PathPrefix(`/static`)
       - traefik.http.routers.dts-platform-ui.priority=100
       - traefik.http.routers.dts-platform-ui.entrypoints=websecure
       - traefik.http.routers.dts-platform-ui.tls=true

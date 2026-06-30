@@ -233,6 +233,53 @@ class SemanticModelingServiceTest {
         enforceLayerGate(model("DWD", "stat_date"));
     }
 
+    @Test
+    void executableSqlUsesMainMappingRoleAsPrimaryTable() throws Throwable {
+        UUID objectId = UUID.randomUUID();
+        doReturn(
+            List.of(
+                new SemanticModelingService.ObjectTableMappingDto(
+                    UUID.randomUUID(),
+                    objectId,
+                    "dim_customer",
+                    "dimension",
+                    "dwd_order_detail.customer_id = dim_customer.customer_id",
+                    0
+                ),
+                new SemanticModelingService.ObjectTableMappingDto(
+                    UUID.randomUUID(),
+                    objectId,
+                    "dwd_order_detail",
+                    "main",
+                    null,
+                    1
+                )
+            )
+        )
+            .when(jdbc)
+            .query(anyString(), any(MapSqlParameterSource.class), any(RowMapper.class));
+
+        String sql = buildExecutableModelSql(
+            model("DWS", "stat_date"),
+            new SemanticModelingService.BusinessObjectDto(
+                objectId,
+                UUID.randomUUID(),
+                "order",
+                "订单",
+                null,
+                "order_id",
+                "legacy_order_main",
+                "ACTIVE",
+                null
+            )
+        );
+
+        assertThat(sql)
+            .contains("from dwd_order_detail")
+            .contains("left join dim_customer on dwd_order_detail.customer_id = dim_customer.customer_id")
+            .doesNotContain("from legacy_order_main");
+    }
+
     private SemanticModelingService.ModelDto model(String type, String grain) {
         return new SemanticModelingService.ModelDto(
             UUID.randomUUID(), UUID.randomUUID(), type, "m_" + type, null, null, grain, null, null,
@@ -265,6 +312,25 @@ class SemanticModelingServiceTest {
         method.setAccessible(true);
         try {
             return (String) method.invoke(service, metric, controlled);
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            throw e.getCause();
+        }
+    }
+
+    private String buildExecutableModelSql(
+        SemanticModelingService.ModelDto model,
+        SemanticModelingService.BusinessObjectDto object
+    ) throws Throwable {
+        Method method = SemanticModelingService.class.getDeclaredMethod(
+            "buildExecutableModelSql",
+            SemanticModelingService.ModelDto.class,
+            SemanticModelingService.BusinessObjectDto.class,
+            List.class,
+            List.class
+        );
+        method.setAccessible(true);
+        try {
+            return (String) method.invoke(service, model, object, List.of(), List.of());
         } catch (java.lang.reflect.InvocationTargetException e) {
             throw e.getCause();
         }

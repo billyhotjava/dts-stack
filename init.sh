@@ -356,8 +356,10 @@ prepare_data_dirs(){
     "logs/elasticsearch"
     "logs/postgresql"
     "logs/traefik"
-    "logs/dts-metrics"
   )
+  if [[ "${DTS_LEGACY_METRICS_ENABLED:-false}" == "true" || "${DTS_LEGACY_METRICS_ENABLED:-false}" == "1" ]]; then
+    data_dirs+=("logs/dts-metrics")
+  fi
   if [[ "${ENABLE_MINIO:-false}" == "true" ]]; then
     data_dirs+=("services/dts-minio/data")
   fi
@@ -390,8 +392,10 @@ prepare_data_dirs(){
     "logs/dts-platform"
     "logs/dts-ingestion"
     "logs/dts-analytics"
-    "logs/dts-metrics"
   )
+  if [[ "${DTS_LEGACY_METRICS_ENABLED:-false}" == "true" || "${DTS_LEGACY_METRICS_ENABLED:-false}" == "1" ]]; then
+    log_dirs+=("logs/dts-metrics")
+  fi
   for dir in "${log_dirs[@]}"; do
     if [[ -d "${dir}" ]]; then
       chmod -R 777 "${dir}" 2>/dev/null || true
@@ -795,10 +799,20 @@ generate_env_base(){
   : "${PG_USER_ANALYTICS:=dts_analytics}"
   : "${PG_PWD_ANALYTICS:=${SECRET}}"
 
-  # dts-metrics semantic/candidate-artifact plane
-  : "${PG_DB_METRICS:=dts_metrics}"
-  : "${PG_USER_METRICS:=dts_metrics}"
-  : "${PG_PWD_METRICS:=${SECRET}}"
+  # dts-metrics retired from the default app stack. Legacy stack can still opt in.
+  : "${DTS_LEGACY_METRICS_ENABLED:=${LEGACY_STACK}}"
+  if [[ "${DTS_LEGACY_METRICS_ENABLED}" == "true" || "${DTS_LEGACY_METRICS_ENABLED}" == "1" ]]; then
+    : "${PG_DB_METRICS:=dts_metrics}"
+    : "${PG_USER_METRICS:=dts_metrics}"
+    : "${PG_PWD_METRICS:=${SECRET}}"
+    : "${DTS_INBOUND_FROM_METRICS:=${SECRET}}"
+    : "${DTS_METRICS_TO_PLATFORM:=${DTS_INBOUND_FROM_METRICS}}"
+    : "${DTS_PLATFORM_INBOUND_TRUSTED_SERVICES:=dts-admin,dts-ingestion,dts-airflow,dts-analytics,dts-metrics}"
+    : "${DTS_PLATFORM_INBOUND_SHARED_SECRET:=${DTS_INBOUND_FROM_METRICS}}"
+    : "${DTS_METRICS_SERVICE_NAME:=dts-metrics}"
+    : "${DTS_METRICS_API_BASE_PATH:=/api/metrics}"
+    : "${IMAGE_DTS_METRICS:=dts-metrics:1.0.0}"
+  fi
 
   # OpenMetadata
   : "${PG_DB_OPENMETADATA:=openmetadata_db}"
@@ -905,11 +919,9 @@ generate_env_base(){
   : "${DTS_PLATFORM_TO_ADMIN_TOKEN:=${SECRET}}"
   : "${DTS_INBOUND_FROM_INGESTION:=${SECRET}}"
   : "${DTS_INBOUND_FROM_ANALYTICS:=${SECRET}}"
-  : "${DTS_INBOUND_FROM_METRICS:=${SECRET}}"
   : "${DTS_INGESTION_TO_PLATFORM:=${DTS_INBOUND_FROM_INGESTION}}"
   : "${DTS_ANALYTICS_TO_PLATFORM:=${DTS_INBOUND_FROM_ANALYTICS}}"
   : "${DTS_ANALYTICS_TO_ADMIN_TOKEN:=${DTS_PLATFORM_TO_ADMIN_TOKEN}}"
-  : "${DTS_METRICS_TO_PLATFORM:=${DTS_INBOUND_FROM_METRICS}}"
   if [ "${DTS_ANALYTICS_TO_ADMIN_TOKEN}" = "${DTS_PLATFORM_TO_ADMIN_TOKEN}" ]; then
     : "${AUDIT_INGEST_SERVICE_TOKENS:=${DTS_PLATFORM_TO_ADMIN_TOKEN}}"
   else
@@ -918,8 +930,6 @@ generate_env_base(){
 
   # ---------- Edition / optional service capabilities ----------
   : "${DTS_EDITION:=foundation}"
-  : "${DTS_METRICS_SERVICE_NAME:=dts-metrics}"
-  : "${DTS_METRICS_API_BASE_PATH:=/api/metrics}"
 
   # ---------- Analytics ----------
   # Prefer your self-built image (offline/air-gapped friendly). Default aligns with other DTS app images.
@@ -927,7 +937,6 @@ generate_env_base(){
   : "${IMAGE_DTS_ADMIN:=dts-admin:1.0.0}"
   : "${IMAGE_DTS_PLATFORM:=dts-platform:1.0.0}"
   : "${IMAGE_DTS_INGESTION:=dts-ingestion:1.0.0}"
-  : "${IMAGE_DTS_METRICS:=dts-metrics:1.0.0}"
   : "${IMAGE_DTS_ADMIN_WEBAPP:=dts-admin-webapp:1.0.0}"
   : "${IMAGE_DTS_PLATFORM_WEBAPP:=dts-platform-webapp:1.0.0}"
   : "${IMAGE_DTS_ANALYTICS:=dts-analytics:1.0.0}"
@@ -1154,11 +1163,6 @@ PG_DB_ANALYTICS=${PG_DB_ANALYTICS}
 PG_USER_ANALYTICS=${PG_USER_ANALYTICS}
 PG_PWD_ANALYTICS=${PG_PWD_ANALYTICS}
 
-# --- dts-metrics triplet ---
-PG_DB_METRICS=${PG_DB_METRICS}
-PG_USER_METRICS=${PG_USER_METRICS}
-PG_PWD_METRICS=${PG_PWD_METRICS}
-
 # --- OpenMetadata triplet ---
 PG_DB_OPENMETADATA=${PG_DB_OPENMETADATA}
 PG_USER_OPENMETADATA=${PG_USER_OPENMETADATA}
@@ -1204,11 +1208,9 @@ DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA="${DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA_ENV}"
 DTS_PLATFORM_TO_ADMIN_TOKEN=${DTS_PLATFORM_TO_ADMIN_TOKEN}
 DTS_INBOUND_FROM_INGESTION=${DTS_INBOUND_FROM_INGESTION}
 DTS_INBOUND_FROM_ANALYTICS=${DTS_INBOUND_FROM_ANALYTICS}
-DTS_INBOUND_FROM_METRICS=${DTS_INBOUND_FROM_METRICS}
 DTS_INGESTION_TO_PLATFORM=${DTS_INGESTION_TO_PLATFORM}
 DTS_ANALYTICS_TO_PLATFORM=${DTS_ANALYTICS_TO_PLATFORM}
 DTS_ANALYTICS_TO_ADMIN_TOKEN=${DTS_ANALYTICS_TO_ADMIN_TOKEN}
-DTS_METRICS_TO_PLATFORM=${DTS_METRICS_TO_PLATFORM}
 AUDIT_INGEST_SERVICE_TOKENS=${AUDIT_INGEST_SERVICE_TOKENS}
 
 # ====== Admin password-login IP allowlist (triad only; PKI unaffected) ======
@@ -1359,16 +1361,31 @@ EXPLORE_DB_PASSWORD=${EXPLORE_DB_PASSWORD}
 IMAGE_DTS_ADMIN=${IMAGE_DTS_ADMIN}
 IMAGE_DTS_PLATFORM=${IMAGE_DTS_PLATFORM}
 IMAGE_DTS_INGESTION=${IMAGE_DTS_INGESTION}
-IMAGE_DTS_METRICS=${IMAGE_DTS_METRICS}
 IMAGE_DTS_ADMIN_WEBAPP=${IMAGE_DTS_ADMIN_WEBAPP}
 IMAGE_DTS_PLATFORM_WEBAPP=${IMAGE_DTS_PLATFORM_WEBAPP}
 IMAGE_DTS_ANALYTICS=${IMAGE_DTS_ANALYTICS}
 
 # ====== 可选能力 ======
 DTS_EDITION=${DTS_EDITION}
+DTS_LEGACY_METRICS_ENABLED=${DTS_LEGACY_METRICS_ENABLED}
+EOF
+
+  if [[ "${DTS_LEGACY_METRICS_ENABLED}" == "true" || "${DTS_LEGACY_METRICS_ENABLED}" == "1" ]]; then
+    cat >> .env <<EOF
+
+# ====== Legacy dts-metrics (disabled in default app stack) ======
+PG_DB_METRICS=${PG_DB_METRICS}
+PG_USER_METRICS=${PG_USER_METRICS}
+PG_PWD_METRICS=${PG_PWD_METRICS}
+DTS_INBOUND_FROM_METRICS=${DTS_INBOUND_FROM_METRICS}
+DTS_METRICS_TO_PLATFORM=${DTS_METRICS_TO_PLATFORM}
+DTS_PLATFORM_INBOUND_TRUSTED_SERVICES=${DTS_PLATFORM_INBOUND_TRUSTED_SERVICES}
+DTS_PLATFORM_INBOUND_SHARED_SECRET=${DTS_PLATFORM_INBOUND_SHARED_SECRET}
 DTS_METRICS_SERVICE_NAME=${DTS_METRICS_SERVICE_NAME}
 DTS_METRICS_API_BASE_PATH=${DTS_METRICS_API_BASE_PATH}
+IMAGE_DTS_METRICS=${IMAGE_DTS_METRICS}
 EOF
+  fi
 
   # Append optional hosts/env blocks conditionally to .env
   if [[ "${ENABLE_MINIO:-false}" == "true" ]]; then

@@ -71,8 +71,9 @@ Examples:
   ${0##*/} --pack
   ${0##*/} --pack --output /tmp/dts-deploy.tar.gz
   ${0##*/} --pack --no-images
-  ${0##*/} --image dts-admin dts-admin-webapp dts-ingestion dts-platform dts-platform-webapp dts-analytics dts-metrics --legacy --opmanager-package
-  ${0##*/} --image dts-admin dts-admin-webapp dts-ingestion dts-platform dts-platform-webapp dts-analytics dts-metrics --legacy --opmanager-output /tmp/release
+  ${0##*/} --image dts-admin dts-admin-webapp dts-ingestion dts-platform dts-platform-webapp dts-analytics --legacy --opmanager-package
+  ${0##*/} --image dts-admin dts-admin-webapp dts-ingestion dts-platform dts-platform-webapp dts-analytics --legacy --opmanager-output /tmp/release
+  ${0##*/} --image dts-metrics --legacy   (explicit legacy metrics rollback image)
 USAGE
 }
 
@@ -377,7 +378,6 @@ assert_distinct_backend_images() {
     "dts-admin|${IMAGE_DTS_ADMIN}"
     "dts-platform|${IMAGE_DTS_PLATFORM}"
     "dts-ingestion|${IMAGE_DTS_INGESTION}"
-    "dts-metrics|${IMAGE_DTS_METRICS}"
     "dts-analytics|${IMAGE_DTS_ANALYTICS}"
   )
   declare -A seen=()
@@ -758,7 +758,6 @@ init_images_normal() {
   IMAGE_DTS_ADMIN="${IMAGE_DTS_ADMIN:-dts-admin:local}"
   IMAGE_DTS_PLATFORM="${IMAGE_DTS_PLATFORM:-dts-platform:local}"
   IMAGE_DTS_INGESTION="${IMAGE_DTS_INGESTION:-dts-ingestion:local}"
-  IMAGE_DTS_METRICS="${IMAGE_DTS_METRICS:-dts-metrics:local}"
   IMAGE_DTS_ANALYTICS="${IMAGE_DTS_ANALYTICS:-dts-analytics:local}"
   IMAGE_DTS_ADMIN_WEBAPP="${IMAGE_DTS_ADMIN_WEBAPP:-dts-admin-webapp:local}"
   IMAGE_DTS_PLATFORM_WEBAPP="${IMAGE_DTS_PLATFORM_WEBAPP:-dts-platform-webapp:local}"
@@ -846,8 +845,6 @@ build_all_normal() {
     build_maven_module "dts-admin" "dts-admin-*.jar" "${REPO_ROOT}/builds/dts-admin/dts-admin.jar"
     build_maven_module "dts-platform" "dts-platform-*.jar" "${REPO_ROOT}/builds/dts-platform/dts-platform.jar"
     build_maven_module "dts-ingestion" "dts-ingestion-*.jar" "${REPO_ROOT}/builds/dts-ingestion/dts-ingestion.jar"
-    build_metrics_webapp
-    build_maven_module "dts-metrics" "dts-metrics-*.jar" "${REPO_ROOT}/builds/dts-metrics/dts-metrics.jar"
     build_maven_module "dts-analytics" "dts-analytics-*.jar" "${REPO_ROOT}/builds/dts-analytics/dts-analytics.jar"
     enable_maven_build_arg="false"
   fi
@@ -856,7 +853,6 @@ build_all_normal() {
     verify_prebuilt_module_jar "dts-admin" "${REPO_ROOT}/builds/dts-admin/dts-admin.jar"
     verify_prebuilt_module_jar "dts-platform" "${REPO_ROOT}/builds/dts-platform/dts-platform.jar"
     verify_prebuilt_module_jar "dts-ingestion" "${REPO_ROOT}/builds/dts-ingestion/dts-ingestion.jar"
-    verify_prebuilt_module_jar "dts-metrics" "${REPO_ROOT}/builds/dts-metrics/dts-metrics.jar"
     verify_prebuilt_module_jar "dts-analytics" "${REPO_ROOT}/builds/dts-analytics/dts-analytics.jar"
   fi
 
@@ -865,8 +861,6 @@ build_all_normal() {
   build_image "dts-platform" "$IMAGE_DTS_PLATFORM" "${REPO_ROOT}/builds/dts-platform/Dockerfile" "$NORMAL_DIST" \
     --build-arg ENABLE_MAVEN_BUILD="${enable_maven_build_arg}"
   build_image "dts-ingestion" "$IMAGE_DTS_INGESTION" "${REPO_ROOT}/builds/dts-ingestion/Dockerfile" "$NORMAL_DIST" \
-    --build-arg ENABLE_MAVEN_BUILD="${enable_maven_build_arg}"
-  build_image "dts-metrics" "$IMAGE_DTS_METRICS" "${REPO_ROOT}/builds/dts-metrics/Dockerfile" "$NORMAL_DIST" \
     --build-arg ENABLE_MAVEN_BUILD="${enable_maven_build_arg}"
   build_image "dts-analytics" "$IMAGE_DTS_ANALYTICS" "${REPO_ROOT}/builds/dts-analytics/Dockerfile" "$NORMAL_DIST" \
     --build-arg ENABLE_MAVEN_BUILD="${enable_maven_build_arg}"

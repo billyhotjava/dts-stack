@@ -60,27 +60,45 @@
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.metricsWorkbench",
+    "code": "sys.nav.portal.studioMetricWorkbench",
     "title": "指标工作台",
-    "route": "/bi-apps/metrics/center",
+    "route": "/modeling/metric-workbench",
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.metricsDictionary",
-    "title": "指标资产",
-    "route": "/bi-apps/metrics/assets",
+    "code": "sys.nav.portal.studioSemanticSubjects",
+    "title": "主题域",
+    "route": "/modeling/semantic/subjects",
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.metricsSemantic",
-    "title": "语义建模",
-    "route": "/bi-apps/metrics/semantic",
+    "code": "sys.nav.portal.studioSemanticObjects",
+    "title": "业务对象",
+    "route": "/modeling/semantic/objects",
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.metricsPublish",
-    "title": "发布与运行",
-    "route": "/bi-apps/metrics/publish",
+    "code": "sys.nav.portal.studioSemanticMetrics",
+    "title": "指标管理",
+    "route": "/modeling/semantic/metrics",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.studioSemanticModels",
+    "title": "模型管理",
+    "route": "/modeling/semantic/models",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.studioSemanticPublish",
+    "title": "发布审核",
+    "route": "/modeling/semantic/publish",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.studioSemanticRuns",
+    "title": "运行监控",
+    "route": "/modeling/semantic/runs",
     "requiredRoles": []
   },
   {

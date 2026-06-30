@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Drawer, Input, Space, Tag } from "antd";
+import { Alert, Button, Drawer, Input, Space, Tag } from "antd";
 import { toast } from "sonner";
 import { CompactTable } from "@/components/table";
 import { PageHeader } from "@/components/page-header";
@@ -22,10 +22,17 @@ const REVIEW_STATUS_COLOR: Record<string, string> = {
 	DRAFT: "default", SUBMITTED: "processing", APPROVED: "success", REJECTED: "error",
 };
 
+type PublishNotice = {
+	type: "success" | "warning" | "error";
+	message: string;
+	description?: string;
+};
+
 export default function SemanticPublishPage() {
 	const [models, setModels] = useState<SemanticModel[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [publishing, setPublishing] = useState<string | null>(null);
+	const [publishNotice, setPublishNotice] = useState<PublishNotice | null>(null);
 	const [logDrawerModel, setLogDrawerModel] = useState<string | null>(null);
 	const [logs, setLogs] = useState<SemanticModelReviewLog[]>([]);
 	const [artifactDrawerModel, setArtifactDrawerModel] = useState<string | null>(null);
@@ -70,16 +77,46 @@ export default function SemanticPublishPage() {
 
 	const handlePublish = async (modelId: string) => {
 		setPublishing(modelId);
+		setPublishNotice(null);
 		try {
 			await publishSemanticModelToDbt(modelId);
-			await Promise.allSettled([
-				registerSemanticBiDataset(modelId),
-				registerSemanticLineage(modelId),
-			]);
+		} catch {
+			setPublishNotice({
+				type: "error",
+				message: "dbt 发布失败",
+				description: "发布未完成，请修复模型制品或任务配置后重试。",
+			});
+			setPublishing(null);
+			return;
+		}
+		try {
+			await registerSemanticBiDataset(modelId);
+		} catch {
+			setPublishNotice({
+				type: "warning",
+				message: "dbt 已发布，BI 数据集注册失败",
+				description: "模型制品已落地，但消费侧数据集还不可用。请检查 BI 注册配置后重新点击发布。",
+			});
+			toast.error("dbt 已发布，BI 数据集注册失败，请重试");
+			setPublishing(null);
+			return;
+		}
+		try {
+			await registerSemanticLineage(modelId);
+			setPublishNotice({
+				type: "success",
+				message: "发布成功",
+				description: "dbt 制品、BI 数据集和血缘已全部注册。",
+			});
 			toast.success("发布成功：dbt 发布 + BI 数据集 + 血缘已注册");
 			void load();
 		} catch {
-			/* global interceptor */
+			setPublishNotice({
+				type: "warning",
+				message: "dbt 与 BI 数据集已完成，血缘注册失败",
+				description: "消费侧数据集已可用，但血缘视图暂不完整。请检查血缘注册配置后重新点击发布。",
+			});
+			toast.error("dbt 与 BI 数据集已完成，血缘注册失败，请重试");
 		} finally {
 			setPublishing(null);
 		}
@@ -140,6 +177,16 @@ export default function SemanticPublishPage() {
 				<div style={{ color: "hsl(220,80%,55%)", padding: "4px 0", fontSize: 13 }}>
 					正在发布 dbt 并注册血缘，请稍候...
 				</div>
+			)}
+			{publishNotice && (
+				<Alert
+					type={publishNotice.type}
+					message={publishNotice.message}
+					description={publishNotice.description}
+					showIcon
+					closable
+					onClose={() => setPublishNotice(null)}
+				/>
 			)}
 			<div className="flex gap-2 items-center">
 				<span className="text-sm text-gray-500">拒绝原因:</span>

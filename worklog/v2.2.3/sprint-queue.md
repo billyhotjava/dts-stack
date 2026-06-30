@@ -967,6 +967,30 @@
 - 项目文件浏览只作为底层 dbt 文件证据面，不允许绕过 SQL 建模页发布。
 - 客户现场业务规则不内置为 demo 或模板，只提供映射、确认和门禁机制。
 
+## Sprint-53: dts-metrics 默认退役与指标路由收敛 (202606)
+**状态**: DONE
+**类型**: Retirement / Menu Route Convergence / Frontend-first Migration
+**目标**: 将旧 `dts-metrics` 服务从默认产品入口、默认运行面和默认构建链路中退役，把指标与语义能力收敛到 v2.2.3 现有平台页面，保留必要旧链接兼容和可回滚证据。
+**设计文档**: `worklog/v2.2.3/sprint-53-202606/README.md`
+**退役矩阵**: `worklog/v2.2.3/sprint-53-202606/assets/dts-metrics-retirement-matrix.md`
+**页面矩阵**: `worklog/v2.2.3/sprint-53-202606/assets/page-capability-matrix.md`
+**集成测试**: `worklog/v2.2.3/sprint-53-202606/it/README.md`
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F0-退役边界与能力盘点 | P0 | 3 | DONE |
+| F1-菜单角色路由收敛 | P0 | 4 | DONE |
+| F2-默认运行面退役 | P0 | 4 | DONE |
+| F3-平台语义指标接管 | P0 | 4 | DONE |
+| F4-验证收尾 | P0 | 3 | DONE |
+
+**统计**: READY=0, IN_PROGRESS=0, DONE=18, BLOCKED=0
+**关键决策**:
+- 先做“默认退役”，不直接删除 `source/dts-metrics`、`source/dts-metrics-webapp` 或历史 Liquibase。
+- 旧 `/bi-apps/metrics/*`、`/modeling/semantic-center/*` 和 `/bi/semantic-modeling` 只作为兼容入口，目标是 redirect 到平台新页面，不再 iframe 旧服务。
+- 默认 compose/build/init 不再启动或构建 `dts-metrics`；legacy/rollback 路径必须文档化。
+- Sprint-54 再打通数据源 -> 数据连接 -> 数据资产 -> 数据质量黄金线；Sprint-55 再完善可视化指标并评估物理删除。
+
 ## Sprint-52: 指标工作台 & 语义建模全面整合 (202606)
 **状态**: READY
 **类型**: Frontend Product Capability / React Flow Canvas
@@ -985,7 +1009,7 @@
 **统计**: READY=12, IN_PROGRESS=0, DONE=0, BLOCKED=0
 **关键约束**:
 - Chrome 95: 颜色用 HSL/HEX，禁 oklch/:has/container
-- `/modeling/semantic-center` MetricsServiceFrame 保持不动
+- `/modeling/semantic-center` 在 Sprint-53 中已改为兼容 redirect 到平台语义页面
 - 不触碰 `addax-env-runner.jar`，不新增 `/v2` 路由
 
 ## Sprint-51: 现有页面横切职责域重构 (202606)

@@ -10,10 +10,12 @@ const SCREENS_SOURCE = readFileSync(new URL("./screens/ScreensPage.tsx", import.
 const METRIC_LENS_SOURCE = readFileSync(new URL("./MetricLensPage.tsx", import.meta.url), "utf8");
 const NL2SQL_SOURCE = readFileSync(new URL("./Nl2SqlEvalPage.tsx", import.meta.url), "utf8");
 
-test("Sprint-45 metrics entry is a customer-facing semantic and metrics shell", () => {
-	for (const expected of ["bi-apps/metrics", "指标与语义中心", "modeling/semantic-center"]) {
+test("Sprint-45 metrics entry is a customer-facing platform modeling surface", () => {
+	for (const expected of ["modeling/metric-workbench", "modeling/semantic/metrics", "modeling/semantic/models"]) {
 		assert.match(STATIC_ROUTES_SOURCE, new RegExp(expected.replace("/", "\\/")));
 	}
+	assert.doesNotMatch(STATIC_ROUTES_SOURCE, /MetricsServiceFrame/);
+	assert.doesNotMatch(STATIC_ROUTES_SOURCE, /<iframe/);
 });
 
 test("Sprint-45 BI data and question pages connect dataset selection to analysis and report creation", () => {

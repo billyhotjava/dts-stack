@@ -1,44 +1,42 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Drawer, Form, Input } from "antd";
+import { Button, Drawer, Empty, Form, Input, InputNumber, Select, Space } from "antd";
 import { toast } from "sonner";
 import { CompactTable } from "@/components/table";
 import { PageHeader } from "@/components/page-header";
 import { VisualFlowCanvas } from "@/components/visual-canvas/VisualFlowCanvas";
 import type { ColumnsType } from "antd/es/table";
-import type { Node, Edge } from "@xyflow/react";
 import {
 	listSemanticBusinessObjects,
 	listSemanticObjectTableMappings,
 	createSemanticBusinessObject,
+	saveSemanticObjectTableMappings,
 	type SemanticBusinessObject,
 	type SemanticObjectTableMapping,
 } from "@/api/semanticModelingApi";
+import { buildSemanticObjectJoinGraph } from "./semanticObjectMappings.helpers";
 
-function buildJoinGraph(mappings: SemanticObjectTableMapping[]): { nodes: Node[]; edges: Edge[] } {
-	const nodes: Node[] = mappings.map((m, i) => ({
-		id: m.id ?? `tmp-${i}`,
-		position: { x: i * 220, y: 60 },
-		data: { label: `${m.tableName}\n[${m.tableRole ?? "main"}]` },
-	}));
-	const mainNode = nodes.find((_, i) => mappings[i]?.tableRole === "main" || i === 0);
-	const edges: Edge[] = mappings
-		.filter((m) => m.joinExpression && mainNode && m.id !== mainNode.id)
-		.map((m) => ({
-			id: `edge-${m.id}`,
-			source: mainNode!.id,
-			target: m.id ?? "",
-			label: m.joinExpression?.slice(0, 20),
-		}));
-	return { nodes, edges };
-}
+const TABLE_ROLE_OPTIONS = [
+	{ label: "主表", value: "main" },
+	{ label: "关联表", value: "join" },
+	{ label: "维表", value: "dimension" },
+	{ label: "事实表", value: "fact" },
+];
+
+type MappingFormValues = {
+	mappings?: SemanticObjectTableMapping[];
+};
 
 export default function SemanticObjectsPage() {
 	const [objects, setObjects] = useState<SemanticBusinessObject[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [selected, setSelected] = useState<SemanticBusinessObject | null>(null);
 	const [mappings, setMappings] = useState<SemanticObjectTableMapping[]>([]);
+	const [mappingLoading, setMappingLoading] = useState(false);
+	const [mappingSaving, setMappingSaving] = useState(false);
+	const [mappingDrawerOpen, setMappingDrawerOpen] = useState(false);
 	const [createOpen, setCreateOpen] = useState(false);
 	const [form] = Form.useForm();
+	const [mappingForm] = Form.useForm<MappingFormValues>();
 
 	const load = useCallback(async () => {
 		setLoading(true);
@@ -56,14 +54,21 @@ export default function SemanticObjectsPage() {
 		void load();
 	}, [load]);
 
-	const handleSelect = async (obj: SemanticBusinessObject) => {
-		setSelected(obj);
+	const loadMappings = useCallback(async (obj: SemanticBusinessObject) => {
+		setMappingLoading(true);
 		try {
 			const maps = await listSemanticObjectTableMappings(obj.id);
 			setMappings(Array.isArray(maps) ? (maps as SemanticObjectTableMapping[]) : []);
 		} catch {
 			setMappings([]);
+		} finally {
+			setMappingLoading(false);
 		}
+	}, []);
+
+	const handleSelect = async (obj: SemanticBusinessObject) => {
+		setSelected(obj);
+		await loadMappings(obj);
 	};
 
 	const handleCreate = async () => {
@@ -75,6 +80,47 @@ export default function SemanticObjectsPage() {
 			void load();
 		} catch (err: unknown) {
 			if (err && typeof err === "object" && "errorFields" in err) return;
+		}
+	};
+
+	const openMappingDrawer = () => {
+		if (!selected) return;
+		const initialMappings = mappings.length > 0
+			? mappings
+			: [{
+				objectId: selected.id,
+				tableName: selected.mainTable ?? "",
+				tableRole: "main",
+				joinExpression: "",
+				sortOrder: 0,
+			}];
+		mappingForm.setFieldsValue({ mappings: initialMappings });
+		setMappingDrawerOpen(true);
+	};
+
+	const handleSaveMappings = async () => {
+		if (!selected) return;
+		try {
+			const values = await mappingForm.validateFields();
+			const nextMappings = (values.mappings ?? [])
+				.map((mapping, index) => ({
+					...mapping,
+					objectId: selected.id,
+					tableName: String(mapping.tableName ?? "").trim(),
+					tableRole: mapping.tableRole || (index === 0 ? "main" : "join"),
+					joinExpression: mapping.joinExpression?.trim(),
+					sortOrder: typeof mapping.sortOrder === "number" ? mapping.sortOrder : index,
+				}))
+				.filter((mapping) => mapping.tableName);
+			setMappingSaving(true);
+			await saveSemanticObjectTableMappings(selected.id, nextMappings);
+			toast.success("表映射已保存");
+			setMappingDrawerOpen(false);
+			await loadMappings(selected);
+		} catch (err: unknown) {
+			if (err && typeof err === "object" && "errorFields" in err) return;
+		} finally {
+			setMappingSaving(false);
 		}
 	};
 
@@ -92,13 +138,13 @@ export default function SemanticObjectsPage() {
 			width: 100,
 			render: (_: unknown, row: SemanticBusinessObject) => (
 				<Button type="link" size="small" onClick={() => void handleSelect(row)}>
-					查看 join 图
+					维护映射
 				</Button>
 			),
 		},
 	];
 
-	const { nodes, edges } = buildJoinGraph(mappings);
+	const { nodes, edges } = buildSemanticObjectJoinGraph(mappings);
 
 	return (
 		<div className="space-y-4" data-testid="semantic-objects-page">
@@ -135,10 +181,33 @@ export default function SemanticObjectsPage() {
 							overflow: "hidden",
 						}}
 					>
-						<div className="p-2 text-sm font-medium text-gray-600 border-b border-gray-200">
-							{selected.name} — join 关系图
+						<div className="p-2 border-b border-gray-200 flex items-center justify-between gap-2">
+							<div>
+								<div className="text-sm font-medium text-gray-600">{selected.name} — join 关系图</div>
+								<div className="text-xs text-gray-400">{mappings.length} 张表映射</div>
+							</div>
+							<Space size="small">
+								<Button size="small" onClick={() => void loadMappings(selected)} loading={mappingLoading}>
+									刷新
+								</Button>
+								<Button size="small" type="primary" onClick={openMappingDrawer}>
+									编辑表映射
+								</Button>
+							</Space>
 						</div>
-						<VisualFlowCanvas nodes={nodes} edges={edges} height={300} />
+						{mappingLoading ? (
+							<div className="p-6 text-sm text-gray-400">加载表映射...</div>
+						) : mappings.length === 0 ? (
+							<div className="p-6">
+								<Empty description="暂无表映射">
+									<Button type="primary" onClick={openMappingDrawer}>
+										去编辑
+									</Button>
+								</Empty>
+							</div>
+						) : (
+							<VisualFlowCanvas nodes={nodes} edges={edges} height={300} />
+						)}
 					</div>
 				)}
 			</div>
@@ -165,6 +234,80 @@ export default function SemanticObjectsPage() {
 					<Form.Item name="primaryKey" label="主键">
 						<Input placeholder="order_id" />
 					</Form.Item>
+				</Form>
+			</Drawer>
+			<Drawer
+				title={selected ? `${selected.name} · 编辑表映射` : "编辑表映射"}
+				open={mappingDrawerOpen}
+				onClose={() => setMappingDrawerOpen(false)}
+				width={620}
+				data-testid="semantic-object-mappings-drawer"
+				footer={
+					<Space className="w-full justify-end">
+						<Button onClick={() => setMappingDrawerOpen(false)}>取消</Button>
+						<Button type="primary" loading={mappingSaving} onClick={() => void handleSaveMappings()}>
+							保存映射
+						</Button>
+					</Space>
+				}
+			>
+				<Form form={mappingForm} layout="vertical">
+					<Form.List name="mappings">
+						{(fields, { add, remove }) => (
+							<div className="space-y-3">
+								{fields.map(({ key, name, ...restField }) => (
+									<div key={key} className="border border-gray-200 rounded-md p-3">
+										<Form.Item {...restField} name={[name, "id"]} hidden>
+											<Input />
+										</Form.Item>
+										<Form.Item {...restField} name={[name, "objectId"]} hidden>
+											<Input />
+										</Form.Item>
+										<div className="grid grid-cols-2 gap-3">
+											<Form.Item
+												{...restField}
+												name={[name, "tableName"]}
+												label="表名"
+												rules={[{ required: true, message: "请输入表名" }]}
+											>
+												<Input placeholder="dwd_order_detail" />
+											</Form.Item>
+											<Form.Item {...restField} name={[name, "tableRole"]} label="表角色">
+												<Select options={TABLE_ROLE_OPTIONS} placeholder="选择角色" />
+											</Form.Item>
+										</div>
+										<Form.Item {...restField} name={[name, "joinExpression"]} label="关联表达式">
+											<Input.TextArea
+												rows={2}
+												placeholder="fact.customer_id = dim_customer.customer_id"
+												style={{ fontFamily: "monospace", fontSize: 12 }}
+											/>
+										</Form.Item>
+										<div className="flex items-end justify-between gap-3">
+											<Form.Item {...restField} name={[name, "sortOrder"]} label="排序" className="mb-0">
+												<InputNumber min={0} style={{ width: 120 }} />
+											</Form.Item>
+											<Button danger size="small" onClick={() => remove(name)} disabled={fields.length <= 1}>
+												删除
+											</Button>
+										</div>
+									</div>
+								))}
+								<Button
+									block
+									onClick={() =>
+										add({
+											objectId: selected?.id,
+											tableRole: fields.length === 0 ? "main" : "join",
+											sortOrder: fields.length,
+										})
+									}
+								>
+									新增表映射
+								</Button>
+							</div>
+						)}
+					</Form.List>
 				</Form>
 			</Drawer>
 		</div>

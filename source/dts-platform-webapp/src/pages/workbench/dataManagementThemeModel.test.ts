@@ -103,6 +103,29 @@ describe("data management theme model", () => {
 		expect(themes["chain-quality"].evidenceRefs).toContain("it/evidence/onsite-defined/03-governance-gate.md");
 	});
 
+	it("routes blocked model readiness to the platform semantic model page", () => {
+		const chain = summary({
+			chainKey: "chain-model",
+			displayName: "现场模型链路",
+			currentStage: "MODEL_READY",
+			currentStageLabel: "模型就绪",
+			status: "BLOCKED",
+		});
+		const themes = stateByTheme(
+			buildDataManagementThemes([chain], {
+				"chain-model": detail(chain, [
+					stage("ODS_READY", "READY"),
+					stage("MODEL_READY", "BLOCKED", {
+						failureReason: "缺少语义模型绑定",
+						nextAction: "补齐模型字段与业务对象映射",
+					}),
+				]),
+			}),
+		);
+
+		expect(themes["chain-model"].primaryAction.route).toBe("/modeling/semantic/models");
+	});
+
 	it("marks a theme as published and healthy only when consumption and operations are ready", () => {
 		const chain = summary({
 			chainKey: "chain-onsite-satisfaction",

@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const PAGE_URL = new URL("../workbench/DataManagementWorkbenchPage.tsx", import.meta.url);
+const BUSINESS_CONSUMPTION_URL = new URL("./BusinessConsumptionPage.tsx", import.meta.url);
 const MODEL_URL = new URL("../workbench/dataManagementThemeModel.ts", import.meta.url);
 const SERVICE_URL = new URL("../../api/services/goldenChainService.ts", import.meta.url);
 const STATIC_ROUTES = readFileSync(
@@ -65,4 +66,12 @@ test("data management workbench is driven by golden chain runtime state", () => 
 	assert.match(serviceSource, /GoldenChainDetail/);
 	assert.match(serviceSource, /url: "\/golden-chains"/);
 	assert.match(serviceSource, /\/golden-chains\/\$\{encodeURIComponent\(chainKey\)\}/);
+});
+
+test("business consumption metric entry uses the platform metric workbench", () => {
+	const source = readFileSync(BUSINESS_CONSUMPTION_URL, "utf8");
+
+	assert.match(source, /route: "\/modeling\/metric-workbench"/);
+	assert.doesNotMatch(source, /\/bi-apps\/metrics\/center/);
+	assert.doesNotMatch(source, /\/metrics\/center/);
 });

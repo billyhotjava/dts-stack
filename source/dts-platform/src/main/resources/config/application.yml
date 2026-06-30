@@ -310,7 +310,7 @@ dts:
         # F2 之前,所有受信服务统一校验此 secret。F2 起优先用 trusted-services Map 内的独立 secret。
         shared-secret: ${DTS_PLATFORM_INBOUND_SHARED_SECRET:${DTS_ADMIN_SERVICE_TOKEN:}}
         # 入站白名单。逗号分隔字符串会被 Spring 自动转 List。
-        trusted-service-names: ${DTS_PLATFORM_INBOUND_TRUSTED_SERVICES:${DTS_ADMIN_SERVICE_NAME:dts-admin,dts-ingestion,dts-airflow,dts-analytics,dts-metrics}}
+        trusted-service-names: ${DTS_PLATFORM_INBOUND_TRUSTED_SERVICES:${DTS_ADMIN_SERVICE_NAME:dts-admin,dts-ingestion,dts-airflow,dts-analytics}}
         # 每对独立 secret(Sprint-28 F2 起启用)。
         # 单独的 DTS_INBOUND_FROM_<SERVICE> 优先;未设时 fallback 到 DTS_ADMIN_SERVICE_TOKEN,
         # 若仍为空,会进一步 fallback 到 shared-secret(运维仅迁移到一半时不至于全断)。
@@ -318,7 +318,6 @@ dts:
           dts-ingestion: ${DTS_INBOUND_FROM_INGESTION:${DTS_ADMIN_SERVICE_TOKEN:}}
           dts-airflow:   ${DTS_INBOUND_FROM_AIRFLOW:${DTS_ADMIN_SERVICE_TOKEN:}}
           dts-analytics: ${DTS_INBOUND_FROM_ANALYTICS:${DTS_ADMIN_SERVICE_TOKEN:}}
-          dts-metrics:   ${DTS_INBOUND_FROM_METRICS:${DTS_ADMIN_SERVICE_TOKEN:}}
         # 兼容开关:开启后退回 Sprint-27 行为(仅 X-DTS-Service header 即注入 OP_ADMIN)。production 严禁开启。
         legacy-header-only-mode: ${DTS_PLATFORM_LEGACY_HEADER_ONLY_MODE:false}
     events:
