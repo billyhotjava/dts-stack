@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Breadcrumb, Button, Card, Descriptions, Divider, Drawer, Form, Input, List, Modal, Select, Space, Spin, Tag, Typography } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { } from "@ant-design/icons";
+import { DownloadOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/page-header";
 import {
 	createMetadataStandard,
 	deleteMetadataStandard,
+	downloadDataStandardPackageTemplate,
 	getMetadataStandardReferences,
 	listMetadataStandards,
 	listReferenceCodes,
@@ -75,6 +76,7 @@ export default function ElementsPage() {
 	const [referenceLoading, setReferenceLoading] = useState(false);
 	const [references, setReferences] = useState<AssetReferencePayload | null>(null);
 	const [codeOptions, setCodeOptions] = useState<ReferenceCodeDirectory[]>([]);
+	const [templateDownloading, setTemplateDownloading] = useState(false);
 	const [form] = Form.useForm();
 	const canManage = useGovernanceManageAccess();
 
@@ -153,6 +155,30 @@ export default function ElementsPage() {
 			setReferenceLoading(false);
 		}
 	}, []);
+
+	const downloadStandardPackageTemplate = async () => {
+		if (!canManage) {
+			toast.error("当前账号无治理维护权限");
+			return;
+		}
+		setTemplateDownloading(true);
+		try {
+			const blob = await downloadDataStandardPackageTemplate();
+			const url = URL.createObjectURL(blob);
+			const link = document.createElement("a");
+			link.href = url;
+			link.download = "data-standard-package-template.zip";
+			document.body.appendChild(link);
+			link.click();
+			link.remove();
+			URL.revokeObjectURL(url);
+			toast.success("标准包模板已下载");
+		} catch (err: any) {
+			toast.error(err?.message || "下载标准包模板失败");
+		} finally {
+			setTemplateDownloading(false);
+		}
+	};
 
 	const openModal = (row?: MetadataStandard) => {
 		setEditing(row || null);
@@ -320,9 +346,20 @@ export default function ElementsPage() {
 			<PageHeader
 				title="数据治理中心 · 标准管理 / 数据元"
 				actions={
-					<Button type="primary" onClick={() => openModal()} disabled={!canManage} data-testid="governance-elements-create">
-						+ 新增数据元
-					</Button>
+					<Space>
+						<Button
+							icon={<DownloadOutlined />}
+							onClick={downloadStandardPackageTemplate}
+							loading={templateDownloading}
+							disabled={!canManage}
+							data-testid="governance-elements-template-download"
+						>
+							下载标准包模板
+						</Button>
+						<Button type="primary" onClick={() => openModal()} disabled={!canManage} data-testid="governance-elements-create">
+							+ 新增数据元
+						</Button>
+					</Space>
 				}
 			/>
 			<div className="rounded-md border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">

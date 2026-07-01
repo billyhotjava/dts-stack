@@ -13,6 +13,7 @@ import {
     type OnSelectionChangeFunc,
     type Connection,
     type NodeChange,
+    type OnNodeDrag,
     type Node,
     type Edge,
 } from "@xyflow/react";
@@ -28,6 +29,7 @@ import {
     findMetricDropTargetObject,
     parseMetricDragPayload,
     resolveMetricBinding,
+    resolveMetricNodeDropBinding,
     type MetricCanvasNodePositionMap,
 } from "./metricCanvas.helpers";
 
@@ -156,6 +158,26 @@ function MetricCanvasInner({
         [bindMetricToObject],
     );
 
+    const handleNodeDragStop: OnNodeDrag<Node> = useCallback(
+        (_event, node) => {
+            saveNodePosition(node.id, node.position);
+            const latestNodes = nodes.map((item) =>
+                item.id === node.id ? { ...item, position: node.position } : item,
+            );
+            const binding = resolveMetricNodeDropBinding(node, latestNodes);
+            if (!binding) {
+                return;
+            }
+            const metric = metrics.find((item) => item.id === binding.metricId);
+            if (metric?.objectId === binding.objectId) {
+                onNodeSelect(node.id);
+                return;
+            }
+            void bindMetricToObject(binding.metricId, binding.objectId);
+        },
+        [bindMetricToObject, metrics, nodes, onNodeSelect, saveNodePosition],
+    );
+
     const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
         event.preventDefault();
         event.dataTransfer.dropEffect = "link";
@@ -211,9 +233,12 @@ function MetricCanvasInner({
             onNodesChange={handleNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={handleConnect}
+            onNodeDragStop={handleNodeDragStop}
             onSelectionChange={handleSelectionChange}
             onDragOver={handleDragOver}
             onDrop={handleDrop}
+            connectionRadius={36}
+            aria-label="拖指标节点到业务对象节点上完成绑定"
         >
             <Background />
             <Controls />

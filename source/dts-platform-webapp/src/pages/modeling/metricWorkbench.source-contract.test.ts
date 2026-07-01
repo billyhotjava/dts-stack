@@ -58,6 +58,9 @@ test("MetricWorkbenchPage uses React Flow canvas and semantic API", () => {
 	assert.match(WORKBENCH, /listSemanticModels/);
 	assert.match(WORKBENCH, /SemanticWorkspaceFrame/);
 	assert.match(WORKBENCH, /metric-workbench-page/);
+	assert.match(WORKBENCH, /xl:grid-cols-\[300px_minmax\(0,1fr\)\]/);
+	assert.match(WORKBENCH, /metric-workbench-main/);
+	assert.match(WORKBENCH, /metric-detail-dock/);
 	assert.doesNotMatch(WORKBENCH, /window\.location\.replace/);
 	assert.doesNotMatch(WORKBENCH, /oklch|:has\(|@container/);
 	assert.match(SUBJECT_BROWSER, /\/governance\/subjects/);
@@ -72,6 +75,9 @@ test("MetricCanvas uses @xyflow/react with custom nodes and edges", () => {
 	assert.match(CANVAS, /BizObjectNode/);
 	assert.match(CANVAS, /MetricNode/);
 	assert.match(CANVAS, /MetricBindingEdge/);
+	assert.match(CANVAS, /nodesDraggable/);
+	assert.match(CANVAS, /onNodeDragStop/);
+	assert.match(CANVAS, /拖指标节点到业务对象节点上完成绑定/);
 	assert.match(CANVAS, /业务对象页选择治理主题域/);
 	assert.doesNotMatch(CANVAS, /主题域页创建业务对象/);
 	assert.doesNotMatch(CANVAS, /oklch|:has\(|@container/);

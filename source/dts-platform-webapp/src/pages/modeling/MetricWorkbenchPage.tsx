@@ -97,10 +97,10 @@ export default function MetricWorkbenchPage() {
             }
         >
             <div
-                className="grid gap-4 xl:grid-cols-[280px_minmax(520px,1fr)_380px]"
+                className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)]"
                 data-testid="metric-workbench-page"
             >
-                <div className="flex min-h-[560px] flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                <div className="flex min-h-[680px] flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
                     <SubjectBrowserPanel
                         domains={domains}
                         objects={objects}
@@ -109,36 +109,41 @@ export default function MetricWorkbenchPage() {
                         onSelect={setSelectedId}
                     />
                 </div>
-                <div className="flex min-h-[560px] flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-                    <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-                        <div>
-                            <div className="text-sm font-semibold text-gray-900">指标关系画布</div>
-                            <div className="text-xs text-gray-500">
-                                {objects.length} 个业务对象 / {metrics.length} 个指标 / {activeMetrics} 个可用指标
+                <div className="flex min-h-[680px] min-w-0 flex-col gap-4" data-testid="metric-workbench-main">
+                    <div className="flex min-h-[440px] flex-[1.4] flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                        <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+                            <div>
+                                <div className="text-sm font-semibold text-gray-900">指标关系画布</div>
+                                <div className="text-xs text-gray-500">
+                                    {objects.length} 个业务对象 / {metrics.length} 个指标 / {activeMetrics} 个可用指标
+                                </div>
                             </div>
                         </div>
+                        <div className="min-h-[400px] flex-1">
+                            <MetricCanvas
+                                objects={objects}
+                                metrics={metrics}
+                                selectedId={selectedId}
+                                onNodeSelect={setSelectedId}
+                                onMetricBound={handleMetricBound}
+                                loading={loading}
+                            />
+                        </div>
                     </div>
-                    <div className="min-h-0 flex-1">
-                        <MetricCanvas
+                    <div
+                        className="min-h-[260px] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-sm"
+                        data-testid="metric-detail-dock"
+                    >
+                        <MetricDetailPanel
+                            selectedId={selectedId}
                             objects={objects}
                             metrics={metrics}
-                            selectedId={selectedId}
-                            onNodeSelect={setSelectedId}
-                            onMetricBound={handleMetricBound}
-                            loading={loading}
+                            models={models}
+                            onMetricUpdated={() => {
+                                void refreshMetrics();
+                            }}
                         />
                     </div>
-                </div>
-                <div className="min-h-[560px] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-sm">
-                    <MetricDetailPanel
-                        selectedId={selectedId}
-                        objects={objects}
-                        metrics={metrics}
-                        models={models}
-                        onMetricUpdated={() => {
-                            void refreshMetrics();
-                        }}
-                    />
                 </div>
             </div>
         </SemanticWorkspaceFrame>

@@ -6,6 +6,7 @@ import {
 	findMetricDropTargetObject,
 	parseMetricDragPayload,
 	resolveMetricBinding,
+	resolveMetricNodeDropBinding,
 	serializeMetricDragPayload,
 	type MetricCanvasNodePositionMap,
 } from "./metricCanvas.helpers";
@@ -98,6 +99,28 @@ describe("metric canvas helpers", () => {
 
 		expect(findMetricDropTargetObject(nodes, { x: 150, y: 270 })).toBe("object-2");
 		expect(findMetricDropTargetObject(nodes, { x: 760, y: 420 })).toBeNull();
+	});
+
+	it("resolves a metric node dragged onto a business object node", () => {
+		const nodes = buildMetricCanvasNodes(OBJECTS, METRICS, null, {
+			"obj-object-2": { x: 96, y: 240 },
+		});
+
+		expect(
+			resolveMetricNodeDropBinding(
+				{ id: "metric-metric-2", type: "metric", position: { x: 150, y: 270 } },
+				nodes,
+			),
+		).toEqual({
+			objectId: "object-2",
+			metricId: "metric-2",
+		});
+		expect(
+			resolveMetricNodeDropBinding(
+				{ id: "obj-object-1", type: "bizObject", position: { x: 150, y: 270 } },
+				nodes,
+			),
+		).toBeNull();
 	});
 
 	it("builds full metric update payloads for the backend full-update contract", () => {

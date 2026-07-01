@@ -1,7 +1,7 @@
-import type { ReactNode } from "react";
 import { Button } from "antd";
-import { Activity, BarChart3, Box, CheckCircle2, CircleDot, Database, Layers3, MapPinned, Rocket } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { Activity, BarChart3, Box, CheckCircle2, CircleDot, Database, Layers3, MapPinned, Rocket } from "lucide-react";
+import type { ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { PageHeader } from "@/components/page-header";
 import { cn } from "@/utils";
@@ -80,7 +80,10 @@ export function SemanticWorkspaceFrame({
 	className?: string;
 }) {
 	const navigate = useNavigate();
-	const activeIndex = Math.max(0, STEPS.findIndex((step) => step.key === activeKey));
+	const activeIndex = Math.max(
+		0,
+		STEPS.findIndex((step) => step.key === activeKey),
+	);
 
 	return (
 		<div className={cn("space-y-4 px-6 py-5", className)} data-testid="semantic-workspace-frame">
@@ -101,51 +104,48 @@ export function SemanticWorkspaceFrame({
 				}
 			/>
 
-				<div className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
-					<div className="flex flex-wrap items-center justify-between gap-3">
-						<div className="min-w-0">
-							<div className="text-sm font-medium text-gray-900">{description}</div>
-						</div>
-						<div className="flex flex-wrap gap-2">
+			<div className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
+				<div className="flex flex-wrap items-center justify-between gap-3">
+					<div className="min-w-0">
+						<div className="text-sm font-medium text-gray-900">{description}</div>
+					</div>
+					<div className="flex flex-wrap gap-2">
 						{stats.map((item) => (
 							<div
 								key={item.label}
-								className={cn(
-									"min-w-[96px] rounded-md border px-3 py-2",
-									STAT_TONE_CLASS[item.tone ?? "gray"],
-								)}
+								className={cn("min-w-[96px] rounded-md border px-3 py-2", STAT_TONE_CLASS[item.tone ?? "gray"])}
 							>
 								<div className="text-lg font-semibold leading-5">{item.value}</div>
 								<div className="mt-1 text-xs opacity-80">{item.label}</div>
 							</div>
-							))}
-						</div>
-					</div>
-
-					<div className="mt-3">
-						<div className="min-w-0" data-testid="semantic-workspace-flow">
-							<div className="flex flex-wrap items-center gap-2" aria-label="指标建模导航">
-								{STEPS.map((step, index) => {
-									const Icon = step.icon;
-									const active = step.key === activeKey;
-									const done = index < activeIndex;
-									return (
-										<Button
-											key={step.key}
-											size="small"
-											type={active ? "primary" : "default"}
-											aria-current={active ? "step" : undefined}
-											onClick={() => navigate(step.path)}
-										>
-											{done ? <CheckCircle2 size={14} /> : active ? <CircleDot size={14} /> : <Icon size={14} />}
-											{step.label}
-										</Button>
-									);
-								})}
-							</div>
-						</div>
+						))}
 					</div>
 				</div>
+
+				<div className="mt-3">
+					<div className="min-w-0" data-testid="semantic-workspace-flow">
+						<nav className="flex flex-wrap items-center gap-2" aria-label="指标建模导航">
+							{STEPS.map((step, index) => {
+								const Icon = step.icon;
+								const active = step.key === activeKey;
+								const done = index < activeIndex;
+								return (
+									<Button
+										key={step.key}
+										size="small"
+										type={active ? "primary" : "default"}
+										aria-current={active ? "step" : undefined}
+										onClick={() => navigate(step.path)}
+									>
+										{done ? <CheckCircle2 size={14} /> : active ? <CircleDot size={14} /> : <Icon size={14} />}
+										{step.label}
+									</Button>
+								);
+							})}
+						</nav>
+					</div>
+				</div>
+			</div>
 
 			{children}
 		</div>

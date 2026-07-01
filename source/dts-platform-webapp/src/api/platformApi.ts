@@ -556,6 +556,8 @@ export const updateMetadataStandard = (id: string, data: any) => api.put({ url: 
 export const deleteMetadataStandard = (id: string) => api.delete({ url: `/modeling/metadata-standards/${id}` });
 export const getMetadataStandardReferences = (id: string) =>
 	api.get({ url: `/modeling/metadata-standards/${id}/references` });
+export const downloadDataStandardPackageTemplate = () =>
+	api.get<Blob>({ url: "/modeling/metadata-standards/template", responseType: "blob" });
 export const importMetadataStandards = (formData: FormData) =>
     api.post({ url: "/modeling/metadata-standards/import", data: formData });
 

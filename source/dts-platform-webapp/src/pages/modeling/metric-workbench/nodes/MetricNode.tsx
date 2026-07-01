@@ -29,6 +29,8 @@ export function MetricNode({ data, selected }: NodeProps) {
                 padding: "10px 14px",
                 minWidth: 160,
                 fontSize: 13,
+                cursor: "move",
+                boxShadow: selected ? "0 8px 18px rgba(22, 163, 74, 0.16)" : "0 2px 8px rgba(15, 23, 42, 0.06)",
             }}
         >
             <div style={{ fontWeight: 600, color: "hsl(142,30%,20%)" }}>📈 {d.name}</div>
@@ -50,7 +52,17 @@ export function MetricNode({ data, selected }: NodeProps) {
             {isDraft && (
                 <div style={{ fontSize: 10, color: "hsl(0,0%,60%)", marginTop: 2 }}>DRAFT</div>
             )}
-            <Handle type="target" position={Position.Left} />
+            <Handle
+                type="target"
+                position={Position.Left}
+                style={{
+                    width: 10,
+                    height: 10,
+                    border: "2px solid white",
+                    background: "hsl(142,60%,45%)",
+                    boxShadow: "0 0 0 2px hsla(142,60%,45%,0.22)",
+                }}
+            />
         </div>
     );
 }

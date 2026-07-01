@@ -146,6 +146,21 @@ export function findMetricDropTargetObject(
 	return stripNodePrefix(target?.id, OBJECT_NODE_PREFIX);
 }
 
+export function resolveMetricNodeDropBinding(
+	node: Pick<Node, "id" | "type" | "position">,
+	nodes: Array<Pick<Node, "id" | "type" | "position">>,
+): MetricBinding | null {
+	if (node.type !== "metric") {
+		return null;
+	}
+	const metricId = stripNodePrefix(node.id, METRIC_NODE_PREFIX);
+	const objectId = findMetricDropTargetObject(
+		nodes.filter((item) => item.id !== node.id),
+		node.position,
+	);
+	return metricId && objectId ? { metricId, objectId } : null;
+}
+
 export function buildSemanticMetricUpdatePayload(
 	metric: Pick<SemanticMetric, "objectId" | "code" | "name" | "formulaType" | "formulaJson" | "format" | "unit" | "status">,
 	patch: Partial<SemanticMetricUpdatePayload>,

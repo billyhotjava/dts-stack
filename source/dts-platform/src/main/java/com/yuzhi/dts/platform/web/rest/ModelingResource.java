@@ -56,19 +56,53 @@ public class ModelingResource {
 
     private static final String MODELING_MAINTAINER_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
-    private static final String METADATA_STANDARD_TEMPLATE =
+    private static final String BUSINESS_TERM_TEMPLATE =
+        "term_code,term_name,aliases,definition,domain,owner_dept,owner,tags,version,status,version_notes\n" +
+        "BT_EXAMPLE_PROJECT,示例业务对象,示例对象|业务对象,描述业务对象的统一口径和边界,示例域,数据治理部,biadmin,示例|业务口径,v1,DRAFT,首次梳理\n";
+    private static final String DATA_ELEMENT_TEMPLATE =
         "field_name_cn,field_name_en,data_type,data_length,data_precision,data_scale,nullable,domain,description,source_system,code_set,default_value,is_pk,security_level\n" +
-        "员工编号,emp_id,VARCHAR,32,,,N,人力,员工唯一编号,ERP,,,\n";
-    private static final String METADATA_STANDARD_RULES =
+        "示例编号,example_id,VARCHAR,64,,,N,示例域,业务对象唯一标识,示例系统,,,Y,INTERNAL\n" +
+        "示例状态,example_status,VARCHAR,32,,,N,示例域,业务状态编码，枚举值来自 EXAMPLE_STATUS,示例系统,EXAMPLE_STATUS,,N,INTERNAL\n";
+    private static final String REFERENCE_CODE_DIRECTORY_TEMPLATE =
+        "code_type_id,code_type_code,code_type_name,std_level,biz_catalog,data_type,status,owner_dept,version\n" +
+        ",EXAMPLE_STATUS,示例状态,企业级,示例域,VARCHAR,1,数据治理部,v1\n";
+    private static final String REFERENCE_CODE_ITEM_TEMPLATE =
+        "code_type_code,code_value,code_name,description,sort_num,parent_code,is_default\n" +
+        "EXAMPLE_STATUS,ACTIVE,有效,可用于生产口径,10,,Y\n" +
+        "EXAMPLE_STATUS,INACTIVE,无效,不再用于生产口径,20,,N\n";
+    private static final String REFERENCE_CODE_MAPPING_TEMPLATE =
+        "code_type_code,source_system,source_code,standard_code\n" +
+        "EXAMPLE_STATUS,示例系统,1,ACTIVE\n" +
+        "EXAMPLE_STATUS,示例系统,0,INACTIVE\n";
+    private static final String DATA_STANDARD_PACKAGE_RULES =
         """
-        元数据标准导入校验规则
-        1) 必填字段：field_name_cn, field_name_en, data_type, nullable, domain, description, source_system
-        2) 唯一键：field_name_en + domain
-        3) nullable 仅允许 Y/N（大小写不敏感）
-        4) data_type 建议使用：VARCHAR/INT/BIGINT/DECIMAL/DATE/TIMESTAMP/BOOLEAN/DOUBLE
-        5) VARCHAR 必须填写 data_length；DECIMAL 建议填写 data_precision/data_scale
-        6) security_level 可选：INTERNAL/CONFIDENTIAL/SECRET/TOP_SECRET
-        7) 空行或全部为空的记录会被跳过
+        数据标准包模板说明
+
+        这个模板用于把“业务术语 -> 数据元 -> 公共码表 -> SQL/dbt 字段落标”串成一套可验收的标准包。
+        示例行只表示填写格式，不代表客户现场业务真值；现场落地时请替换为客户确认后的口径。
+
+        文件清单
+        1) 01-business-terms.csv：业务术语。用于定义业务对象、指标口径、别名和归属域。
+        2) 02-data-elements.csv：数据元。用于定义字段中文名、英文名、类型、可空、主题域、来源系统、码表编码和安全等级。
+        3) 03-reference-code-directories.csv：公共码表目录。用于定义码表编码、名称、层级、业务分类、数据类型、状态和版本。
+        4) 04-reference-code-items.csv：公共码表取值。用于定义标准码值、标准码名、排序、父级和值默认标识。
+        5) 05-reference-code-mappings.csv：系统码值映射。用于把来源系统码值映射到标准码值。
+
+        建议维护顺序
+        1) 先在“数据域/主题域”确认 domain / biz_catalog 的归属。
+        2) 维护业务术语，统一业务名词和口径边界。
+        3) 维护公共码表目录、码值和来源系统映射。
+        4) 维护数据元；当字段使用枚举时，code_set 填公共码表的 code_type_code。
+        5) 在 SQL/dbt 模型中绑定数据元，执行标准闸口；schema.yml 可继承字段说明和标准绑定。
+
+        数据元导入校验规则
+        1) 必填字段：field_name_cn, field_name_en, data_type, nullable, domain, description, source_system。
+        2) 唯一键：field_name_en + domain。
+        3) nullable 仅允许 Y/N（大小写不敏感）。
+        4) data_type 建议使用：VARCHAR/INT/BIGINT/DECIMAL/DATE/TIMESTAMP/BOOLEAN/DOUBLE。
+        5) VARCHAR 必须填写 data_length；DECIMAL 建议填写 data_precision/data_scale。
+        6) security_level 可选：INTERNAL/CONFIDENTIAL/SECRET/TOP_SECRET。
+        7) 空行或全部为空的记录会被跳过。
 
         常见错误说明
         - 缺少必填字段：请补齐必填列后再导入
@@ -166,14 +200,14 @@ public class ModelingResource {
         headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
         headers.setContentDisposition(
             ContentDisposition.attachment()
-                .filename(URLEncoder.encode("metadata-standards-template.zip", StandardCharsets.UTF_8), StandardCharsets.UTF_8)
+                .filename(URLEncoder.encode("data-standard-package-template.zip", StandardCharsets.UTF_8), StandardCharsets.UTF_8)
                 .build()
         );
         audit.auditAction(
             "MODELING_METADATA_STANDARD_TEMPLATE_DOWNLOAD",
             AuditStage.SUCCESS,
             "template",
-            Map.of("summary", "下载元数据标准导入模板")
+            Map.of("summary", "下载数据标准包模板")
         );
         return ResponseEntity.ok().headers(headers).body(zip);
     }
@@ -216,21 +250,25 @@ public class ModelingResource {
 
     private byte[] buildMetadataTemplateZip() {
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream(); ZipOutputStream zos = new ZipOutputStream(baos, StandardCharsets.UTF_8)) {
-            ZipEntry templateEntry = new ZipEntry("metadata-standards-template.csv");
-            zos.putNextEntry(templateEntry);
-            zos.write(METADATA_STANDARD_TEMPLATE.getBytes(StandardCharsets.UTF_8));
-            zos.closeEntry();
-
-            ZipEntry rulesEntry = new ZipEntry("metadata-standards-rules.txt");
-            zos.putNextEntry(rulesEntry);
-            zos.write(METADATA_STANDARD_RULES.getBytes(StandardCharsets.UTF_8));
-            zos.closeEntry();
+            writeZipEntry(zos, "01-business-terms.csv", BUSINESS_TERM_TEMPLATE);
+            writeZipEntry(zos, "02-data-elements.csv", DATA_ELEMENT_TEMPLATE);
+            writeZipEntry(zos, "03-reference-code-directories.csv", REFERENCE_CODE_DIRECTORY_TEMPLATE);
+            writeZipEntry(zos, "04-reference-code-items.csv", REFERENCE_CODE_ITEM_TEMPLATE);
+            writeZipEntry(zos, "05-reference-code-mappings.csv", REFERENCE_CODE_MAPPING_TEMPLATE);
+            writeZipEntry(zos, "README-data-standard-package.txt", DATA_STANDARD_PACKAGE_RULES);
 
             zos.finish();
             return baos.toByteArray();
         } catch (Exception ex) {
-            return METADATA_STANDARD_TEMPLATE.getBytes(StandardCharsets.UTF_8);
+            return DATA_ELEMENT_TEMPLATE.getBytes(StandardCharsets.UTF_8);
         }
+    }
+
+    private static void writeZipEntry(ZipOutputStream zos, String entryName, String content) throws java.io.IOException {
+        zos.putNextEntry(new ZipEntry(entryName));
+        // Excel-friendly: prefix UTF-8 BOM so Chinese headers and examples render correctly.
+        zos.write(("\uFEFF" + content).getBytes(StandardCharsets.UTF_8));
+        zos.closeEntry();
     }
 
     @GetMapping("/standards/{id}")
