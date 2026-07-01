@@ -76,23 +76,23 @@ public class SemanticModelingService {
     public List<SubjectDomainDto> listSubjectDomains() {
         return jdbc.query(
             """
-            select id, code, name, description, status, owner_dept,
-                   governance_domain_id, governance_domain_code, governance_domain_name
-            from semantic_subject_domain
-            order by name asc, code asc
+            select d.id,
+                   coalesce(nullif(d.code, ''), d.name) as code,
+                   d.name,
+                   d.description,
+                   'ACTIVE' as status,
+                   d.owner as owner_dept,
+                   d.id as governance_domain_id,
+                   d.code as governance_domain_code,
+                   d.name as governance_domain_name
+            from catalog_domain d
+            where upper(coalesce(d.code, '')) not like 'DS:%'
+              and coalesce(d.description, '') not like 'Schema from %'
+              and coalesce(d.description, '') not like 'Auto-created domain for schema%'
+            order by d.name asc, d.code asc
             """,
-            Map.of(),
-            (rs, rowNum) -> new SubjectDomainDto(
-                uuid(rs, "id"),
-                rs.getString("code"),
-                rs.getString("name"),
-                rs.getString("description"),
-                rs.getString("status"),
-                rs.getString("owner_dept"),
-                uuid(rs, "governance_domain_id"),
-                rs.getString("governance_domain_code"),
-                rs.getString("governance_domain_name")
-            )
+            params(),
+            (rs, rowNum) -> subjectDomainDto(rs)
         );
     }
 
@@ -182,6 +182,7 @@ public class SemanticModelingService {
     }
 
     public BusinessObjectDto createBusinessObject(BusinessObjectRequest request) {
+        UUID domainId = ensureGovernanceDomainProjection(request.domainId());
         UUID id = UUID.randomUUID();
         jdbc.update(
             """
@@ -192,7 +193,7 @@ public class SemanticModelingService {
             """,
             params()
                 .addValue("id", id)
-                .addValue("domainId", request.domainId())
+                .addValue("domainId", domainId)
                 .addValue("code", required(request.code(), "code"))
                 .addValue("name", required(request.name(), "name"))
                 .addValue("description", trimToNull(request.description()))
@@ -205,6 +206,7 @@ public class SemanticModelingService {
     }
 
     public BusinessObjectDto updateBusinessObject(UUID id, BusinessObjectRequest request) {
+        UUID domainId = ensureGovernanceDomainProjection(request.domainId());
         jdbc.update(
             """
             update semantic_business_object
@@ -221,7 +223,7 @@ public class SemanticModelingService {
             """,
             params()
                 .addValue("id", id)
-                .addValue("domainId", request.domainId())
+                .addValue("domainId", domainId)
                 .addValue("code", required(request.code(), "code"))
                 .addValue("name", required(request.name(), "name"))
                 .addValue("description", trimToNull(request.description()))
@@ -463,8 +465,16 @@ public class SemanticModelingService {
     @Transactional(readOnly = true)
     public Map<String, Object> workbenchOverview() {
         long indicatorDefinitions = count("select count(*) from gov_indicator_definition");
-        long domains = count("select count(*) from semantic_subject_domain");
-        long mappedDomains = count("select count(*) from semantic_subject_domain where governance_domain_id is not null");
+        long domains = count(
+            """
+            select count(*)
+            from catalog_domain d
+            where upper(coalesce(d.code, '')) not like 'DS:%'
+              and coalesce(d.description, '') not like 'Schema from %'
+              and coalesce(d.description, '') not like 'Auto-created domain for schema%'
+            """
+        );
+        long mappedDomains = domains;
         long objects = count("select count(*) from semantic_business_object");
         long objectsWithMainTable = count("select count(*) from semantic_business_object where main_table is not null and trim(main_table) <> ''");
         long objectsWithMappings = count("select count(distinct object_id) from semantic_object_table_mapping");
@@ -581,15 +591,15 @@ public class SemanticModelingService {
                 indicatorDefinitions > 0 ? "指标定义已接入" : "暂无治理指标定义，先在指标字典维护指标口径"
             ),
             step(
-                "subject-domain-mapping",
-                "主题域映射",
-                "/metrics/semantic/subjects",
-                "/api/semantic/subject-domains",
+                "governance-subject-domain",
+                "治理主题域引用",
+                "/governance/subjects",
+                "/api/catalog/domains/tree",
                 domains,
                 mappedDomains,
-                domains - mappedDomains,
-                domains > 0 && mappedDomains == domains ? "READY" : domains > 0 ? "PARTIAL" : "EMPTY",
-                mappedDomains == domains && domains > 0 ? "主题域已完成治理域映射" : "先创建或引用治理主题域，并补齐治理域映射"
+                0,
+                domains > 0 ? "READY" : "EMPTY",
+                domains > 0 ? "主题域来自数据治理中心" : "请先在数据治理中心维护主题域"
             ),
             step(
                 "business-object-join",
@@ -691,7 +701,7 @@ public class SemanticModelingService {
     public List<Map<String, Object>> semanticMenuDiagnostics() {
         return List.of(
             menu("metric-workbench", "指标工作台", "/metrics/center", List.of("/api/governance/indicators", "/api/platform/sprint27/metric-operations")),
-            menu("subject-domain-mapping", "主题域映射", "/metrics/semantic/subjects", List.of("/api/semantic/subject-domains", "/api/catalog/domains/tree")),
+            menu("governance-subject-domain", "治理主题域引用", "/governance/subjects", List.of("/api/catalog/domains/tree")),
             menu("business-object-join", "业务对象 JOIN", "/metrics/semantic/objects", List.of("/api/semantic/business-objects", "/api/semantic/business-objects/{id}/table-mappings")),
             menu("metric-visual-config", "指标可视化配置", "/metrics/semantic/metrics", List.of("/api/semantic/dimensions", "/api/semantic/metrics")),
             menu("dws-ads-datasets", "DWS/ADS 数据集", "/metrics/semantic/models", List.of("/api/semantic/models", "/api/semantic/models/{id}/bindings", "/api/semantic/models/{id}/generate-artifacts")),
@@ -1306,17 +1316,88 @@ public class SemanticModelingService {
             where id = :id
             """,
             params().addValue("id", id),
-            (rs, rowNum) -> new SubjectDomainDto(
-                uuid(rs, "id"),
-                rs.getString("code"),
-                rs.getString("name"),
-                rs.getString("description"),
-                rs.getString("status"),
-                rs.getString("owner_dept"),
-                uuid(rs, "governance_domain_id"),
-                rs.getString("governance_domain_code"),
-                rs.getString("governance_domain_name")
-            )
+            (rs, rowNum) -> subjectDomainDto(rs)
+        );
+    }
+
+    private UUID ensureGovernanceDomainProjection(UUID domainId) {
+        if (domainId == null) {
+            return null;
+        }
+        Number existing = jdbc.queryForObject(
+            "select count(*) from semantic_subject_domain where id = :id",
+            params().addValue("id", domainId),
+            Number.class
+        );
+        if (existing != null && existing.longValue() > 0) {
+            return domainId;
+        }
+
+        List<SubjectDomainDto> domains = jdbc.query(
+            """
+            select d.id,
+                   coalesce(nullif(d.code, ''), d.name) as code,
+                   d.name,
+                   d.description,
+                   'ACTIVE' as status,
+                   d.owner as owner_dept,
+                   d.id as governance_domain_id,
+                   d.code as governance_domain_code,
+                   d.name as governance_domain_name
+            from catalog_domain d
+            where d.id = :id
+            """,
+            params().addValue("id", domainId),
+            (rs, rowNum) -> subjectDomainDto(rs)
+        );
+        if (domains.isEmpty()) {
+            throw new IllegalArgumentException("主题域不存在，请先在数据治理中心维护主题域");
+        }
+
+        SubjectDomainDto domain = domains.get(0);
+        jdbc.update(
+            """
+            insert into semantic_subject_domain
+                (id, code, name, description, status, owner_dept,
+                 governance_domain_id, governance_domain_code, governance_domain_name,
+                 created_date, last_modified_date)
+            values
+                (:id, :code, :name, :description, :status, :ownerDept,
+                 :governanceDomainId, :governanceDomainCode, :governanceDomainName,
+                 :now, :now)
+            """,
+            params()
+                .addValue("id", domain.id())
+                .addValue("code", projectionDomainCode(domain.id()))
+                .addValue("name", required(domain.name(), "name"))
+                .addValue("description", trimToNull(domain.description()))
+                .addValue("status", defaultValue(domain.status(), "ACTIVE"))
+                .addValue("ownerDept", trimToNull(domain.ownerDept()))
+                .addValue("governanceDomainId", domain.governanceDomainId())
+                .addValue("governanceDomainCode", trimToNull(domain.governanceDomainCode()))
+                .addValue("governanceDomainName", trimToNull(domain.governanceDomainName()))
+        );
+        return domainId;
+    }
+
+    private static String projectionDomainCode(UUID domainId) {
+        if (domainId == null) {
+            throw new IllegalArgumentException("主题域不能为空");
+        }
+        return "GOV_" + domainId.toString().replace("-", "").substring(0, 12).toUpperCase(Locale.ROOT);
+    }
+
+    private static SubjectDomainDto subjectDomainDto(ResultSet rs) throws SQLException {
+        return new SubjectDomainDto(
+            uuid(rs, "id"),
+            rs.getString("code"),
+            rs.getString("name"),
+            rs.getString("description"),
+            rs.getString("status"),
+            rs.getString("owner_dept"),
+            uuid(rs, "governance_domain_id"),
+            rs.getString("governance_domain_code"),
+            rs.getString("governance_domain_name")
         );
     }
 

@@ -5,7 +5,6 @@ const SEMANTIC_PREFIX = "/modeling/semantic";
 
 const SEMANTIC_PAGE_BY_SUFFIX: Record<string, string> = {
 	"semantic": "models",
-	"semantic/subjects": "subjects",
 	"semantic/objects": "objects",
 	"semantic/metrics": "metrics",
 	"semantic/models": "models",
@@ -29,8 +28,11 @@ const platformPathFromMetricsSuffix = (suffix: string) => {
 	if (normalized === "assets" || normalized === "dictionary") {
 		return `${SEMANTIC_PREFIX}/metrics`;
 	}
-	if (normalized === "operations" || normalized === "f5-security-it" || normalized === "runs") {
-		return `${SEMANTIC_PREFIX}/runs`;
+	if (normalized === "subjects" || normalized === "semantic/subjects") {
+		return "/governance/subjects";
+	}
+	if (normalized === "operations" || normalized === "f5-security-it" || normalized === "runs" || normalized === "semantic/runs") {
+		return "/ops/instances";
 	}
 	if (normalized === "publish") {
 		return `${SEMANTIC_PREFIX}/publish`;

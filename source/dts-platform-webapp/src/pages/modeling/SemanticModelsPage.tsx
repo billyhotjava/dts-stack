@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button, Form, Input, Modal, Popconfirm, Radio, Select, Space, Tag } from "antd";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { CompactTable } from "@/components/table";
-import { PageHeader } from "@/components/page-header";
 import type { ColumnsType } from "antd/es/table";
 import {
 	listSemanticModels,
@@ -14,6 +14,7 @@ import {
 	type SemanticModel,
 	type SemanticModelPreview,
 } from "@/api/semanticModelingApi";
+import { SemanticWorkspaceFrame } from "./semantic-workspace/SemanticWorkspaceFrame";
 
 type ModelType = "DWS" | "ADS" | "ALL";
 
@@ -153,39 +154,51 @@ export default function SemanticModelsPage() {
 	];
 
 	return (
-		<div className="space-y-4" data-testid="semantic-models-page">
-			<PageHeader
-				title="语义建模 · DWS/ADS 模型"
-				actions={
-					<Button
-						type="primary"
-						data-testid="semantic-models-create"
-						onClick={() => {
-							form.resetFields();
-							setCreateOpen(true);
-						}}
-					>
-						+ 新建模型
-					</Button>
-				}
-			/>
-			<Radio.Group
-				value={typeFilter}
-				onChange={(e) => setTypeFilter(e.target.value as ModelType)}
-				optionType="button"
-				buttonStyle="solid"
-				options={[
-					{ label: "全部", value: "ALL" },
-					{ label: "DWS", value: "DWS" },
-					{ label: "ADS", value: "ADS" },
-				]}
-			/>
-			<CompactTable<SemanticModel>
-				rowKey="id"
-				columns={columns}
-				dataSource={models}
-				loading={loading}
-			/>
+		<SemanticWorkspaceFrame
+			activeKey="models"
+			title="模型管理"
+			description="管理 DWS/ADS 语义模型、预览、制品生成和运行触发。"
+			stats={[
+				{ label: "模型", value: models.length, tone: "blue" },
+				{ label: "DWS", value: models.filter((item) => item.type === "DWS").length, tone: "green" },
+				{ label: "ADS", value: models.filter((item) => item.type === "ADS").length, tone: "amber" },
+				{ label: "待审核", value: models.filter((item) => item.reviewStatus === "SUBMITTED").length, tone: "red" },
+			]}
+			actions={
+				<Button
+					type="primary"
+					data-testid="semantic-models-create"
+					onClick={() => {
+						form.resetFields();
+						setCreateOpen(true);
+					}}
+				>
+					<Plus size={16} />
+					新建模型
+				</Button>
+			}
+		>
+			<div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm" data-testid="semantic-models-page">
+				<div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+					<Radio.Group
+						value={typeFilter}
+						onChange={(e) => setTypeFilter(e.target.value as ModelType)}
+						optionType="button"
+						buttonStyle="solid"
+						options={[
+							{ label: "全部", value: "ALL" },
+							{ label: "DWS", value: "DWS" },
+							{ label: "ADS", value: "ADS" },
+						]}
+					/>
+				</div>
+				<CompactTable<SemanticModel>
+					rowKey="id"
+					columns={columns}
+					dataSource={models}
+					loading={loading}
+				/>
+			</div>
 
 			{/* 数据预览 Modal */}
 			<Modal
@@ -245,6 +258,6 @@ export default function SemanticModelsPage() {
 					</Form.Item>
 				</Form>
 			</Modal>
-		</div>
+		</SemanticWorkspaceFrame>
 	);
 }

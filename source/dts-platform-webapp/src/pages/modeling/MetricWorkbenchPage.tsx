@@ -1,44 +1,106 @@
-import { useEffect, useState } from "react";
-import { PageHeader } from "@/components/page-header";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Button } from "antd";
+import { RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 import {
     listSemanticSubjectDomains,
     listSemanticBusinessObjects,
     listSemanticMetrics,
+    listSemanticModels,
+    updateSemanticMetric,
     type SemanticSubjectDomain,
     type SemanticBusinessObject,
     type SemanticMetric,
+    type SemanticModel,
 } from "@/api/semanticModelingApi";
+import { SemanticWorkspaceFrame } from "./semantic-workspace/SemanticWorkspaceFrame";
 import { MetricCanvas } from "./metric-workbench/MetricCanvas";
 import { MetricDetailPanel } from "./metric-workbench/MetricDetailPanel";
 import { SubjectBrowserPanel } from "./metric-workbench/SubjectBrowserPanel";
+import { buildSemanticMetricUpdatePayload } from "./metric-workbench/metricCanvas.helpers";
 
 export default function MetricWorkbenchPage() {
     const [domains, setDomains] = useState<SemanticSubjectDomain[]>([]);
     const [objects, setObjects] = useState<SemanticBusinessObject[]>([]);
     const [metrics, setMetrics] = useState<SemanticMetric[]>([]);
+    const [models, setModels] = useState<SemanticModel[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        void (async () => {
-            setLoading(true);
-            const [d, o, m] = await Promise.allSettled([
-                listSemanticSubjectDomains(),
-                listSemanticBusinessObjects(),
-                listSemanticMetrics(),
-            ]);
-            if (d.status === "fulfilled") setDomains(Array.isArray(d.value) ? (d.value as SemanticSubjectDomain[]) : []);
-            if (o.status === "fulfilled") setObjects(Array.isArray(o.value) ? (o.value as SemanticBusinessObject[]) : []);
-            if (m.status === "fulfilled") setMetrics(Array.isArray(m.value) ? (m.value as SemanticMetric[]) : []);
-            setLoading(false);
-        })();
+    const load = useCallback(async () => {
+        setLoading(true);
+        const [d, o, m, modelList] = await Promise.allSettled([
+            listSemanticSubjectDomains(),
+            listSemanticBusinessObjects(),
+            listSemanticMetrics(),
+            listSemanticModels(),
+        ]);
+        if (d.status === "fulfilled") setDomains(Array.isArray(d.value) ? (d.value as SemanticSubjectDomain[]) : []);
+        if (o.status === "fulfilled") setObjects(Array.isArray(o.value) ? (o.value as SemanticBusinessObject[]) : []);
+        if (m.status === "fulfilled") setMetrics(Array.isArray(m.value) ? (m.value as SemanticMetric[]) : []);
+        if (modelList.status === "fulfilled") setModels(Array.isArray(modelList.value) ? (modelList.value as SemanticModel[]) : []);
+        setLoading(false);
     }, []);
 
+    useEffect(() => {
+        void load();
+    }, [load]);
+
+    const refreshMetrics = useCallback(async () => {
+        const list = await listSemanticMetrics();
+        setMetrics(Array.isArray(list) ? (list as SemanticMetric[]) : []);
+    }, []);
+
+    const handleMetricBound = useCallback(
+        async (metricId: string, objectId: string) => {
+            const metric = metrics.find((item) => item.id === metricId);
+            const object = objects.find((item) => item.id === objectId);
+            if (!metric || !object) {
+                toast.error("指标或业务对象不存在，请刷新后重试");
+                return;
+            }
+            await updateSemanticMetric(metricId, buildSemanticMetricUpdatePayload(metric, { objectId }));
+            setMetrics((current) =>
+                current.map((item) => (item.id === metricId ? { ...item, objectId } : item)),
+            );
+            toast.success(`已绑定到业务对象：${object.name}`);
+            void refreshMetrics();
+        },
+        [metrics, objects, refreshMetrics],
+    );
+
+    const activeMetrics = useMemo(
+        () => metrics.filter((metric) => metric.status === "ACTIVE").length,
+        [metrics],
+    );
+    const releasedModels = useMemo(
+        () => models.filter((model) => model.reviewStatus === "APPROVED").length,
+        [models],
+    );
+
     return (
-        <div className="flex h-full flex-col" data-testid="metric-workbench-page">
-            <PageHeader title="指标工作台" />
-            <div className="flex flex-1 overflow-hidden">
-                <div style={{ width: 240, borderRight: "1px solid #e5e7eb" }} className="overflow-hidden">
+        <SemanticWorkspaceFrame
+            activeKey="workbench"
+            title="指标工作台"
+            description="查看并维护业务对象、指标和语义模型关系。"
+            stats={[
+                { label: "治理主题域", value: domains.length, tone: "blue" },
+                { label: "业务对象", value: objects.length, tone: "green" },
+                { label: "指标", value: metrics.length, tone: "amber" },
+                { label: "已审核模型", value: releasedModels, tone: releasedModels > 0 ? "green" : "gray" },
+            ]}
+            actions={
+                <Button onClick={() => void load()} loading={loading}>
+                    <RefreshCw size={16} />
+                    刷新
+                </Button>
+            }
+        >
+            <div
+                className="grid gap-4 xl:grid-cols-[280px_minmax(520px,1fr)_380px]"
+                data-testid="metric-workbench-page"
+            >
+                <div className="flex min-h-[560px] flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
                     <SubjectBrowserPanel
                         domains={domains}
                         objects={objects}
@@ -47,28 +109,38 @@ export default function MetricWorkbenchPage() {
                         onSelect={setSelectedId}
                     />
                 </div>
-                <div className="flex-1 overflow-hidden" style={{ minHeight: 0 }}>
-                    <MetricCanvas
-                        objects={objects}
-                        metrics={metrics}
-                        selectedId={selectedId}
-                        onNodeSelect={setSelectedId}
-                        loading={loading}
-                    />
+                <div className="flex min-h-[560px] flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                    <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+                        <div>
+                            <div className="text-sm font-semibold text-gray-900">指标关系画布</div>
+                            <div className="text-xs text-gray-500">
+                                {objects.length} 个业务对象 / {metrics.length} 个指标 / {activeMetrics} 个可用指标
+                            </div>
+                        </div>
+                    </div>
+                    <div className="min-h-0 flex-1">
+                        <MetricCanvas
+                            objects={objects}
+                            metrics={metrics}
+                            selectedId={selectedId}
+                            onNodeSelect={setSelectedId}
+                            onMetricBound={handleMetricBound}
+                            loading={loading}
+                        />
+                    </div>
                 </div>
-                <div style={{ width: 360, borderLeft: "1px solid #e5e7eb" }} className="overflow-y-auto">
+                <div className="min-h-[560px] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-sm">
                     <MetricDetailPanel
                         selectedId={selectedId}
                         objects={objects}
                         metrics={metrics}
+                        models={models}
                         onMetricUpdated={() => {
-                            void listSemanticMetrics().then((m) => {
-                                setMetrics(Array.isArray(m) ? (m as SemanticMetric[]) : []);
-                            });
+                            void refreshMetrics();
                         }}
                     />
                 </div>
             </div>
-        </div>
+        </SemanticWorkspaceFrame>
     );
 }

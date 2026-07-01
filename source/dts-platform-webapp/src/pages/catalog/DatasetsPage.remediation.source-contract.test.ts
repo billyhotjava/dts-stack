@@ -6,6 +6,7 @@ const SOURCE = readFileSync(new URL("./DatasetsPage.tsx", import.meta.url), "utf
 
 test("asset map exposes remediation workspace for governance gaps and lineage failures", () => {
 	assert.match(SOURCE, /治理缺口处置工作台/);
+	assert.match(SOURCE, /治理优先队列/);
 	assert.match(SOURCE, /governanceGapRows/);
 	assert.match(SOURCE, /lineageFailureRows/);
 	assert.match(SOURCE, /处置缺口/);

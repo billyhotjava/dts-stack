@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Drawer, Form, Input, Select, Tag } from "antd";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { CompactTable } from "@/components/table";
-import { PageHeader } from "@/components/page-header";
 import type { ColumnsType } from "antd/es/table";
 import {
     listSemanticMetrics,
@@ -12,6 +12,7 @@ import {
     type SemanticMetric,
     type SemanticBusinessObject,
 } from "@/api/semanticModelingApi";
+import { SemanticWorkspaceFrame } from "./semantic-workspace/SemanticWorkspaceFrame";
 
 const FORMULA_TYPE_COLOR: Record<string, string> = {
     "aggregation/sum": "blue",
@@ -52,6 +53,11 @@ export default function SemanticMetricsPage() {
 
     useEffect(() => { void load(); }, [load]);
 
+    const objectNameById = useMemo(
+        () => new Map(objects.map((object) => [object.id, object.name])),
+        [objects],
+    );
+
     const handleEdit = (row: SemanticMetric) => {
         setEditRow(row);
         form.setFieldsValue({ formulaType: row.formulaType, formulaJson: row.formulaJson, unit: row.unit });
@@ -86,6 +92,12 @@ export default function SemanticMetricsPage() {
         { title: "编码", dataIndex: "code", width: 140 },
         { title: "名称", dataIndex: "name" },
         {
+            title: "业务对象",
+            dataIndex: "objectId",
+            width: 180,
+            render: (v?: string) => v ? (objectNameById.get(v) ?? v) : <span style={{ color: "#aaa" }}>未绑定</span>,
+        },
+        {
             title: "公式类型", dataIndex: "formulaType", width: 200,
             render: (v?: string) => v
                 ? <Tag color={FORMULA_TYPE_COLOR[v] ?? "default"}>{v}</Tag>
@@ -105,25 +117,35 @@ export default function SemanticMetricsPage() {
     ];
 
     return (
-        <div className="space-y-4" data-testid="semantic-metrics-page">
-            <PageHeader
-                title="语义建模 · 指标"
-                actions={
-                    <Button
-                        type="primary"
-                        data-testid="semantic-metrics-create"
-                        onClick={() => { createForm.resetFields(); setCreateOpen(true); }}
-                    >
-                        + 新建指标
-                    </Button>
-                }
-            />
-            <CompactTable<SemanticMetric>
-                rowKey="id"
-                columns={columns}
-                dataSource={metrics}
-                loading={loading}
-            />
+        <SemanticWorkspaceFrame
+            activeKey="metrics"
+            title="指标管理"
+            description="维护指标编码、公式、单位和业务对象归属。"
+            stats={[
+                { label: "指标", value: metrics.length, tone: "blue" },
+                { label: "已绑定对象", value: metrics.filter((item) => item.objectId).length, tone: "green" },
+                { label: "已配置公式", value: metrics.filter((item) => item.formulaType).length, tone: "amber" },
+                { label: "ACTIVE", value: metrics.filter((item) => item.status === "ACTIVE").length, tone: "green" },
+            ]}
+            actions={
+                <Button
+                    type="primary"
+                    data-testid="semantic-metrics-create"
+                    onClick={() => { createForm.resetFields(); setCreateOpen(true); }}
+                >
+                    <Plus size={16} />
+                    新建指标
+                </Button>
+            }
+        >
+            <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm" data-testid="semantic-metrics-page">
+                <CompactTable<SemanticMetric>
+                    rowKey="id"
+                    columns={columns}
+                    dataSource={metrics}
+                    loading={loading}
+                />
+            </div>
             <Drawer
                 title="编辑公式"
                 open={drawerOpen}
@@ -169,6 +191,6 @@ export default function SemanticMetricsPage() {
                     </Form.Item>
                 </Form>
             </Drawer>
-        </div>
+        </SemanticWorkspaceFrame>
     );
 }

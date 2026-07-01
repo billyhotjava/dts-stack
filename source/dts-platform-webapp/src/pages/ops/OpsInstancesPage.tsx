@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Card, Input, Select, Space, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { PageHeader } from "@/components/page-header";
 import opsService, { type OpsInstance } from "@/api/services/opsService";
 import { useLogPreview } from "@/components/log-preview/LogPreviewContext";
@@ -21,7 +21,7 @@ const STATUS_OPTIONS = [
 const ENTRY_OPTIONS = [
 	{ label: "全部", value: "ALL" },
 	{ label: "入湖任务", value: "INGESTION_TASK" },
-	{ label: "dbt 任务", value: "DBT_RUN" },
+	{ label: "指标/dbt 运行", value: "DBT_RUN" },
 	{ label: "Airflow DAG", value: "AIRFLOW_DAG" },
 ];
 
@@ -44,9 +44,12 @@ const resolveSourceTaskPath = (record: OpsInstance) => {
 export default function OpsInstancesPage() {
 	const [records, setRecords] = useState<OpsInstance[]>([]);
 	const [loading, setLoading] = useState(false);
-	const [keyword, setKeyword] = useState("");
+	const [searchParams] = useSearchParams();
+	const urlKeyword = searchParams.get("keyword") ?? "";
+	const urlEntryKey = searchParams.get("entryKey") || "ALL";
+	const [keyword, setKeyword] = useState(urlKeyword);
 	const [status, setStatus] = useState("ALL");
-	const [entryKey, setEntryKey] = useState("ALL");
+	const [entryKey, setEntryKey] = useState(urlEntryKey);
 	const [taskInstances, setTaskInstances] = useState<Record<string, AirflowTaskInstance[]>>({});
 	const [taskLoading, setTaskLoading] = useState<Record<string, boolean>>({});
 	const [detailRow, setDetailRow] = useState<OpsInstance | null>(null);
@@ -54,13 +57,13 @@ export default function OpsInstancesPage() {
 	const { openLogPreview } = useLogPreview();
 	const navigate = useNavigate();
 
-	const loadInstances = async () => {
+	const fetchInstances = useCallback(async (filters: { keyword: string; status: string; entryKey: string }) => {
 		setLoading(true);
 		try {
 			const list = await opsService.instances({
-				keyword: keyword.trim() || undefined,
-				status: status === "ALL" ? undefined : status,
-				entryKey: entryKey === "ALL" ? undefined : entryKey,
+				keyword: filters.keyword.trim() || undefined,
+				status: filters.status === "ALL" ? undefined : filters.status,
+				entryKey: filters.entryKey === "ALL" ? undefined : filters.entryKey,
 				limit: 200,
 			});
 			setRecords(Array.isArray(list) ? (list as OpsInstance[]) : []);
@@ -69,11 +72,18 @@ export default function OpsInstancesPage() {
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, []);
+
+	const loadInstances = useCallback(
+		() => fetchInstances({ keyword, status, entryKey }),
+		[entryKey, fetchInstances, keyword, status],
+	);
 
 	useEffect(() => {
-		void loadInstances();
-	}, []);
+		setKeyword(urlKeyword);
+		setEntryKey(urlEntryKey);
+		void fetchInstances({ keyword: urlKeyword, status, entryKey: urlEntryKey });
+	}, [fetchInstances, urlEntryKey, urlKeyword]);
 
 	const loadTaskInstances = async (record: OpsInstance) => {
 		const runId = record.id;

@@ -13,20 +13,22 @@ test("maps legacy platform metrics routes to platform modeling routes", () => {
 	assert.equal(metricsServicePathFromPlatformPath("/bi-apps/metrics/assets"), "/modeling/semantic/metrics");
 	assert.equal(metricsServicePathFromPlatformPath("/bi-apps/metrics/dictionary"), "/modeling/semantic/metrics");
 	assert.equal(metricsServicePathFromPlatformPath("/metrics/dictionary"), "/modeling/semantic/metrics");
-	assert.equal(metricsServicePathFromPlatformPath("/metrics/operations"), "/modeling/semantic/runs");
-	assert.equal(metricsServicePathFromPlatformPath("/bi-apps/metrics/f5-security-it"), "/modeling/semantic/runs");
-	assert.equal(metricsServicePathFromPlatformPath("/metrics/runs"), "/modeling/semantic/runs");
-	assert.equal(metricsServicePathFromPlatformPath("/bi-apps/metrics/semantic/subjects"), "/modeling/semantic/subjects");
+	assert.equal(metricsServicePathFromPlatformPath("/metrics/operations"), "/ops/instances");
+	assert.equal(metricsServicePathFromPlatformPath("/bi-apps/metrics/f5-security-it"), "/ops/instances");
+	assert.equal(metricsServicePathFromPlatformPath("/metrics/runs"), "/ops/instances");
+	assert.equal(metricsServicePathFromPlatformPath("/bi-apps/metrics/subjects"), "/governance/subjects");
+	assert.equal(metricsServicePathFromPlatformPath("/bi-apps/metrics/semantic/subjects"), "/governance/subjects");
 	assert.equal(metricsServicePathFromPlatformPath("/bi-apps/metrics/semantic/objects"), "/modeling/semantic/objects");
 	assert.equal(metricsServicePathFromPlatformPath("/bi-apps/metrics/semantic/metrics"), "/modeling/semantic/metrics");
 	assert.equal(metricsServicePathFromPlatformPath("/bi-apps/metrics/semantic/models"), "/modeling/semantic/models");
 	assert.equal(metricsServicePathFromPlatformPath("/bi-apps/metrics/publish"), "/modeling/semantic/publish");
 	assert.equal(metricsServicePathFromPlatformPath("/bi-apps/metrics/semantic/publish"), "/modeling/semantic/publish");
-	assert.equal(metricsServicePathFromPlatformPath("/bi-apps/metrics/semantic/runs"), "/modeling/semantic/runs");
+	assert.equal(metricsServicePathFromPlatformPath("/bi-apps/metrics/semantic/runs"), "/ops/instances");
 });
 
 test("maps legacy semantic center routes to platform semantic pages", () => {
 	assert.equal(metricsServicePathFromPlatformPath("/modeling/semantic-center"), "/modeling/semantic/models");
+	assert.equal(metricsServicePathFromPlatformPath("/modeling/semantic-center/subjects"), "/governance/subjects");
 	assert.equal(metricsServicePathFromPlatformPath("/modeling/semantic-center/objects"), "/modeling/semantic/objects");
 	assert.equal(metricsServicePathFromPlatformPath("/bi/semantic-modeling"), "/modeling/semantic/models");
 });

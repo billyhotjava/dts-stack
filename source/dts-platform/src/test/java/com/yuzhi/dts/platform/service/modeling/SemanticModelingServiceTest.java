@@ -19,6 +19,7 @@ import com.yuzhi.dts.platform.service.etl.DbtReleaseSubmissionService;
 import com.yuzhi.dts.platform.service.query.QueryGateway;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -59,6 +60,29 @@ class SemanticModelingServiceTest {
         CapturedQuery query = captureQuery();
         assertThat(query.sql()).contains("from semantic_business_object").doesNotContain("domain_id = :domainId");
         assertThat(query.params().getValues()).doesNotContainKey("domainId");
+    }
+
+    @Test
+    void listSubjectDomainsUsesCatalogGovernanceDomainsAsSource() {
+        service.listSubjectDomains();
+
+        CapturedQuery query = captureQuery();
+        assertThat(query.sql())
+            .contains("from catalog_domain")
+            .contains("governance_domain_id")
+            .doesNotContain("from semantic_subject_domain");
+    }
+
+    @Test
+    void semanticMenuDiagnosticsPointsSubjectDomainsToGovernanceCenter() {
+        List<Map<String, Object>> menus = service.semanticMenuDiagnostics();
+
+        assertThat(menus)
+            .anySatisfy(menu -> {
+                assertThat(menu).containsEntry("key", "governance-subject-domain");
+                assertThat(menu).containsEntry("path", "/governance/subjects");
+            });
+        assertThat(menus).noneSatisfy(menu -> assertThat(menu).containsEntry("path", "/metrics/semantic/subjects"));
     }
 
     @Test

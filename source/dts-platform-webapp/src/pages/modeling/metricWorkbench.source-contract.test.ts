@@ -14,6 +14,10 @@ const DETAIL_PANEL = readFileSync(
 	new URL("./metric-workbench/MetricDetailPanel.tsx", import.meta.url),
 	"utf8",
 );
+const SUBJECT_BROWSER = readFileSync(
+	new URL("./metric-workbench/SubjectBrowserPanel.tsx", import.meta.url),
+	"utf8",
+);
 const SUBJECTS = readFileSync(
 	new URL("./SemanticSubjectsPage.tsx", import.meta.url),
 	"utf8",
@@ -38,14 +42,29 @@ const RUNS = readFileSync(
 	new URL("./SemanticRunsPage.tsx", import.meta.url),
 	"utf8",
 );
+const LEGACY_CENTER = readFileSync(
+	new URL("./SemanticModelingCenterPage.tsx", import.meta.url),
+	"utf8",
+);
+const WORKSPACE_FRAME = readFileSync(
+	new URL("./semantic-workspace/SemanticWorkspaceFrame.tsx", import.meta.url),
+	"utf8",
+);
 
 test("MetricWorkbenchPage uses React Flow canvas and semantic API", () => {
 	assert.match(WORKBENCH, /listSemanticSubjectDomains/);
 	assert.match(WORKBENCH, /listSemanticBusinessObjects/);
 	assert.match(WORKBENCH, /listSemanticMetrics/);
+	assert.match(WORKBENCH, /listSemanticModels/);
+	assert.match(WORKBENCH, /SemanticWorkspaceFrame/);
 	assert.match(WORKBENCH, /metric-workbench-page/);
 	assert.doesNotMatch(WORKBENCH, /window\.location\.replace/);
 	assert.doesNotMatch(WORKBENCH, /oklch|:has\(|@container/);
+	assert.match(SUBJECT_BROWSER, /\/governance\/subjects/);
+	assert.match(SUBJECT_BROWSER, /未归属治理主题域/);
+	assert.match(SUBJECT_BROWSER, /未绑定业务对象指标/);
+	assert.match(SUBJECT_BROWSER, /serializeMetricDragPayload/);
+	assert.doesNotMatch(SUBJECT_BROWSER, /\/modeling\/semantic\/subjects/);
 });
 
 test("MetricCanvas uses @xyflow/react with custom nodes and edges", () => {
@@ -53,21 +72,40 @@ test("MetricCanvas uses @xyflow/react with custom nodes and edges", () => {
 	assert.match(CANVAS, /BizObjectNode/);
 	assert.match(CANVAS, /MetricNode/);
 	assert.match(CANVAS, /MetricBindingEdge/);
+	assert.match(CANVAS, /业务对象页选择治理主题域/);
+	assert.doesNotMatch(CANVAS, /主题域页创建业务对象/);
 	assert.doesNotMatch(CANVAS, /oklch|:has\(|@container/);
 });
 
-test("all SemanticXxxPages are real implementations (no redirect shells)", () => {
+test("semantic workspace frame shows step progress and next action", () => {
+	assert.match(WORKSPACE_FRAME, /semantic-workspace-flow/);
+	assert.match(WORKSPACE_FRAME, /aria-label="指标建模导航"/);
+	assert.match(WORKSPACE_FRAME, /\/governance\/subjects/);
+	assert.doesNotMatch(WORKSPACE_FRAME, /\/modeling\/semantic\/subjects/);
+	assert.match(WORKSPACE_FRAME, /\/ops\/instances\?entryKey=DBT_RUN/);
+	assert.doesNotMatch(WORKSPACE_FRAME, /事实源|下一步|完成发布闭环/);
+	assert.doesNotMatch(WORKSPACE_FRAME, /oklch|:has\(|@container/);
+});
+
+test("Semantic modeling pages are real implementations except retired compatibility routes", () => {
 	for (const [name, src] of [
-		["SemanticSubjectsPage", SUBJECTS],
 		["SemanticObjectsPage", OBJECTS],
 		["SemanticMetricsPage", METRICS_PAGE],
 		["SemanticModelsPage", MODELS_PAGE],
 		["SemanticPublishPage", PUBLISH],
-		["SemanticRunsPage", RUNS],
 	]) {
 		assert.doesNotMatch(src, /window\.location\.replace/, `${name} should not be a redirect shell`);
 		assert.doesNotMatch(src, /SemanticModelingCenterPage/, `${name} should not import SemanticModelingCenterPage`);
+		assert.match(src, /SemanticWorkspaceFrame/, `${name} should use the unified metric modeling workspace`);
 	}
+});
+
+test("semantic subjects route redirects to governance subject areas", () => {
+	assert.match(SUBJECTS, /Navigate/);
+	assert.match(SUBJECTS, /\/governance\/subjects/);
+	assert.doesNotMatch(SUBJECTS, /createSemanticSubjectDomain|updateSemanticSubjectDomain|listSemanticSubjectDomains/);
+	assert.match(LEGACY_CENTER, /subjects: "\/governance\/subjects"/);
+	assert.doesNotMatch(LEGACY_CENTER, /\/metrics\/semantic\/subjects/);
 });
 
 test("publish page calls dbt + BI registration + lineage in sequence", () => {
@@ -81,6 +119,9 @@ test("publish page calls dbt + BI registration + lineage in sequence", () => {
 });
 
 test("semantic objects page closes table mapping edit/save loop", () => {
+	assert.match(OBJECTS, /listSemanticSubjectDomains/);
+	assert.match(OBJECTS, /name="domainId"/);
+	assert.match(OBJECTS, /治理主题域/);
 	assert.match(OBJECTS, /saveSemanticObjectTableMappings/);
 	assert.match(OBJECTS, /semantic-object-mappings-drawer/);
 	assert.match(OBJECTS, /Form\.List/);
@@ -102,9 +143,10 @@ test("publish flow does not claim full success when BI or lineage registration f
 	}
 });
 
-test("runs page polls RUNNING status", () => {
-	assert.match(RUNS, /POLL_INTERVAL_MS/);
-	assert.match(RUNS, /setInterval/);
-	assert.match(RUNS, /clearInterval/);
-	assert.match(RUNS, /semantic-runs-page/);
+test("semantic runs route is retired into task operations center", () => {
+	assert.match(RUNS, /Navigate/);
+	assert.match(RUNS, /\/ops\/instances\?entryKey=DBT_RUN/);
+	assert.doesNotMatch(RUNS, /POLL_INTERVAL_MS|setInterval|listSemanticModelRuns/);
+	assert.match(DETAIL_PANEL, /任务运维中心/);
+	assert.match(DETAIL_PANEL, /\/ops\/instances\?entryKey=DBT_RUN/);
 });

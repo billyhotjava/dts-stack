@@ -8,9 +8,13 @@ test("asset map is a visual operating map, not only card and ledger views", () =
 	assert.match(SOURCE, /renderAssetVisualMap/);
 	assert.match(SOURCE, /renderAssetMapNode/);
 	assert.match(SOURCE, /asset-map-stage/);
-	assert.match(SOURCE, /数据流向/);
-	assert.match(SOURCE, /业务视角/);
+	assert.match(SOURCE, /资产链路总览/);
+	assert.match(SOURCE, /全部资产工作区/);
+	assert.match(SOURCE, /治理优先队列/);
+	assert.match(SOURCE, /主题域覆盖/);
 	assert.match(SOURCE, /进入台账/);
+	assert.doesNotMatch(SOURCE, /gridTemplateColumns:\s*`repeat\(\$\{LAYER_ORDER\.length\}/);
+	assert.doesNotMatch(SOURCE, /minmax\(138px/);
 	assert.doesNotMatch(SOURCE, /label: "卡片"/);
 });
 

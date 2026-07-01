@@ -4,13 +4,13 @@ import { LineLoading } from "@/components/loading";
 export type SemanticModelingSection = "overview" | "subjects" | "objects" | "metrics" | "models" | "publish" | "runs";
 
 const semanticServicePath: Record<SemanticModelingSection, string> = {
-	overview: "/metrics/semantic",
-	subjects: "/metrics/semantic/subjects",
-	objects: "/metrics/semantic/objects",
-	metrics: "/metrics/semantic/metrics",
-	models: "/metrics/semantic/models",
-	publish: "/metrics/semantic/publish",
-	runs: "/metrics/semantic/runs",
+	overview: "/modeling/metric-workbench",
+	subjects: "/governance/subjects",
+	objects: "/modeling/semantic/objects",
+	metrics: "/modeling/semantic/metrics",
+	models: "/modeling/semantic/models",
+	publish: "/modeling/semantic/publish",
+	runs: "/ops/instances?entryKey=DBT_RUN",
 };
 
 export default function SemanticModelingCenterPage({ section = "overview" }: { section?: SemanticModelingSection }) {

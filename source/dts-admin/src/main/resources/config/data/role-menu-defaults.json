@@ -66,12 +66,6 @@
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.studioSemanticSubjects",
-    "title": "主题域",
-    "route": "/modeling/semantic/subjects",
-    "requiredRoles": []
-  },
-  {
     "code": "sys.nav.portal.studioSemanticObjects",
     "title": "业务对象",
     "route": "/modeling/semantic/objects",
@@ -93,12 +87,6 @@
     "code": "sys.nav.portal.studioSemanticPublish",
     "title": "发布审核",
     "route": "/modeling/semantic/publish",
-    "requiredRoles": []
-  },
-  {
-    "code": "sys.nav.portal.studioSemanticRuns",
-    "title": "运行监控",
-    "route": "/modeling/semantic/runs",
     "requiredRoles": []
   },
   {

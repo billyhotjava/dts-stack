@@ -27,6 +27,10 @@ test("Sprint-45 ops instances can reverse-locate source task, backfill, logs and
 	for (const route of ["/explore/etl/transform", "/ops/backfill", "/ops/logs", "/foundation/data-sources", "/catalog/assets"]) {
 		assert.match(OPS_INSTANCES_SOURCE, new RegExp(route.replaceAll("/", "\\/")));
 	}
+	assert.match(OPS_INSTANCES_SOURCE, /searchParams\.get\("keyword"\)/);
+	assert.match(OPS_INSTANCES_SOURCE, /searchParams\.get\("entryKey"\)/);
+	assert.match(OPS_INSTANCES_SOURCE, /fetchInstances\(\{ keyword: urlKeyword, status, entryKey: urlEntryKey \}\)/);
+	assert.doesNotMatch(OPS_INSTANCES_SOURCE, /默认聚焦|统一查看/);
 });
 
 test("Sprint-45 ops alerts and backfill expose todo creation and impact scope", () => {

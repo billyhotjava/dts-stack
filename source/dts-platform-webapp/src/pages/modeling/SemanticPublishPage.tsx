@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { Alert, Button, Drawer, Input, Space, Tag } from "antd";
 import { toast } from "sonner";
 import { CompactTable } from "@/components/table";
-import { PageHeader } from "@/components/page-header";
 import type { ColumnsType } from "antd/es/table";
 import {
 	listSemanticModels,
@@ -17,6 +16,7 @@ import {
 	type SemanticModelReviewLog,
 	type SemanticGeneratedArtifact,
 } from "@/api/semanticModelingApi";
+import { SemanticWorkspaceFrame } from "./semantic-workspace/SemanticWorkspaceFrame";
 
 const REVIEW_STATUS_COLOR: Record<string, string> = {
 	DRAFT: "default", SUBMITTED: "processing", APPROVED: "success", REJECTED: "error",
@@ -171,8 +171,18 @@ export default function SemanticPublishPage() {
 	];
 
 	return (
-		<div className="space-y-4" data-testid="semantic-publish-page">
-			<PageHeader title="语义建模 · 审核发布" />
+			<SemanticWorkspaceFrame
+				activeKey="publish"
+				title="发布审核"
+				description="审核 ADS 语义模型并执行发布操作。"
+			stats={[
+				{ label: "ADS 模型", value: models.length, tone: "blue" },
+				{ label: "待审核", value: models.filter((item) => item.reviewStatus === "SUBMITTED").length, tone: "amber" },
+				{ label: "已通过", value: models.filter((item) => item.reviewStatus === "APPROVED").length, tone: "green" },
+				{ label: "已拒绝", value: models.filter((item) => item.reviewStatus === "REJECTED").length, tone: "red" },
+			]}
+		>
+			<div className="space-y-4" data-testid="semantic-publish-page">
 			{publishing && (
 				<div style={{ color: "hsl(220,80%,55%)", padding: "4px 0", fontSize: 13 }}>
 					正在发布 dbt 并注册血缘，请稍候...
@@ -198,12 +208,14 @@ export default function SemanticPublishPage() {
 					placeholder="填写后点击拒绝"
 				/>
 			</div>
-			<CompactTable<SemanticModel>
-				rowKey="id"
-				columns={columns}
-				dataSource={models}
-				loading={loading}
-			/>
+			<div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+				<CompactTable<SemanticModel>
+					rowKey="id"
+					columns={columns}
+					dataSource={models}
+					loading={loading}
+				/>
+			</div>
 			<Drawer
 				title="审核日志"
 				open={logDrawerModel !== null}
@@ -247,6 +259,7 @@ export default function SemanticPublishPage() {
 					</div>
 				))}
 			</Drawer>
-		</div>
+			</div>
+		</SemanticWorkspaceFrame>
 	);
 }

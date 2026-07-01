@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { Alert, Tabs, Select, Input, Button, Space, Tag, Empty } from "antd";
+import { Activity, BarChart3, Box, Database, Rocket } from "lucide-react";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
     updateSemanticMetric,
@@ -14,6 +16,7 @@ import {
     type SemanticModel,
     type SemanticModelRun,
 } from "@/api/semanticModelingApi";
+import { buildSemanticMetricUpdatePayload } from "./metricCanvas.helpers";
 
 const FORMULA_TYPE_OPTIONS = [
     { label: "aggregation/sum", value: "aggregation/sum" },
@@ -35,6 +38,7 @@ export interface MetricDetailPanelProps {
     selectedId: string | null;
     objects: SemanticBusinessObject[];
     metrics: SemanticMetric[];
+    models: SemanticModel[];
     onMetricUpdated: () => void;
 }
 
@@ -59,7 +63,10 @@ function MetricFormulaTab({
     const handleSave = async () => {
         setSaving(true);
         try {
-            await updateSemanticMetric(metric.id, { formulaType, formulaJson, unit });
+            await updateSemanticMetric(
+                metric.id,
+                buildSemanticMetricUpdatePayload(metric, { formulaType, formulaJson, unit }),
+            );
             toast.success("指标已保存");
             onSaved();
         } catch {
@@ -106,8 +113,9 @@ function MetricFormulaTab({
     );
 }
 
-function RunsTab() {
-    const [models, setModels] = useState<SemanticModel[]>([]);
+function RunsTab({ models }: { models: SemanticModel[] }) {
+    const navigate = useNavigate();
+    const [availableModels, setAvailableModels] = useState<SemanticModel[]>(models);
     const [modelId, setModelId] = useState<string | null>(null);
     const [runs, setRuns] = useState<SemanticModelRun[]>([]);
     const [loading, setLoading] = useState(false);
@@ -121,15 +129,19 @@ function RunsTab() {
 
     // Load all semantic models once on mount (shared data, not per-metric)
     useEffect(() => {
+        if (models.length > 0) {
+            setAvailableModels(models);
+            return;
+        }
         void (async () => {
             try {
                 const list = await listSemanticModels();
-                setModels(Array.isArray(list) ? list : []);
+                setAvailableModels(Array.isArray(list) ? list : []);
             } catch {
-                setModels([]);
+                setAvailableModels([]);
             }
         })();
-    }, []);
+    }, [models]);
 
     // Load runs whenever the selected model changes
     useEffect(() => {
@@ -210,7 +222,7 @@ function RunsTab() {
         }
     };
 
-    const modelOptions = models.map((m) => ({
+    const modelOptions = availableModels.map((m) => ({
         label: `[${m.type ?? "?"}] ${m.name}`,
         value: m.id,
     }));
@@ -236,7 +248,15 @@ function RunsTab() {
                 <Button size="small" type="primary" loading={publishing} disabled={!modelId} onClick={handlePublish}>
                     发布 dbt
                 </Button>
+                <Button size="small" onClick={() => navigate("/ops/instances?entryKey=DBT_RUN")}>
+                    任务运维中心
+                </Button>
             </Space>
+            <Alert
+                type="info"
+                showIcon
+                message="运行实例、失败日志和补数统一在任务运维中心跟踪。"
+            />
             {publishNotice && (
                 <Alert
                     type={publishNotice.type}
@@ -271,12 +291,16 @@ export function MetricDetailPanel({
     selectedId,
     objects,
     metrics,
+    models,
     onMetricUpdated,
 }: MetricDetailPanelProps) {
     if (!selectedId) {
         return (
-            <div className="flex h-full items-center justify-center text-gray-400 text-sm p-4 text-center">
-                请在画布中选择节点
+            <div className="flex h-full items-center justify-center p-6 text-center text-sm text-gray-400">
+                <div>
+                    <Activity className="mx-auto mb-3 text-gray-300" size={28} />
+                    请在画布中选择业务对象或指标
+                </div>
             </div>
         );
     }
@@ -285,12 +309,34 @@ export function MetricDetailPanel({
         const objectId = selectedId.replace("obj-", "");
         const obj = objects.find((o) => o.id === objectId);
         if (!obj) return null;
+        const boundMetrics = metrics.filter((metric) => metric.objectId === obj.id);
         return (
-            <div className="p-4 space-y-2">
-                <div className="font-semibold text-gray-700">{obj.name}</div>
-                <div className="text-xs text-gray-400">{obj.code}</div>
-                <div className="text-xs text-gray-500">主表: {obj.mainTable ?? "未配置"}</div>
-                <div className="text-xs text-gray-500">主键: {obj.primaryKey ?? "未配置"}</div>
+            <div className="space-y-4 p-4">
+                <div>
+                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                        <Box size={16} />
+                        {obj.name}
+                    </div>
+                    <div className="mt-1 text-xs text-gray-500">{obj.code}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+                        <div className="text-xs text-gray-500">主表</div>
+                        <div className="mt-1 truncate text-sm text-gray-900">{obj.mainTable ?? "未配置"}</div>
+                    </div>
+                    <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+                        <div className="text-xs text-gray-500">主键</div>
+                        <div className="mt-1 truncate text-sm text-gray-900">{obj.primaryKey ?? "未配置"}</div>
+                    </div>
+                    <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+                        <div className="text-xs text-gray-500">挂载指标</div>
+                        <div className="mt-1 text-sm font-semibold text-gray-900">{boundMetrics.length}</div>
+                    </div>
+                    <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+                        <div className="text-xs text-gray-500">状态</div>
+                        <div className="mt-1 text-sm text-gray-900">{boundMetrics.length > 0 ? "可建模" : "待补指标"}</div>
+                    </div>
+                </div>
             </div>
         );
     }
@@ -299,22 +345,46 @@ export function MetricDetailPanel({
         const metricId = selectedId.replace("metric-", "");
         const metric = metrics.find((m) => m.id === metricId);
         if (!metric) return null;
+        const object = objects.find((item) => item.id === metric.objectId);
         return (
-            <Tabs
-                size="small"
-                items={[
-                    {
-                        key: "formula",
-                        label: "公式/维度",
-                        children: <MetricFormulaTab metric={metric} onSaved={onMetricUpdated} />,
-                    },
-                    {
-                        key: "runs",
-                        label: "消费数据",
-                        children: <RunsTab />,
-                    },
-                ]}
-            />
+            <div>
+                <div className="border-b border-gray-100 p-4">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                        <BarChart3 size={16} />
+                        {metric.name}
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                        <span>{metric.code}</span>
+                        {object ? <Tag color="blue">{object.name}</Tag> : <Tag>未绑定对象</Tag>}
+                        {metric.status ? <Tag>{metric.status}</Tag> : null}
+                    </div>
+                </div>
+                <Tabs
+                    size="small"
+                    items={[
+                        {
+                            key: "formula",
+                            label: (
+                                <span className="inline-flex items-center gap-1">
+                                    <Database size={14} />
+                                    公式配置
+                                </span>
+                            ),
+                            children: <MetricFormulaTab metric={metric} onSaved={onMetricUpdated} />,
+                        },
+                        {
+                            key: "runs",
+                            label: (
+                                <span className="inline-flex items-center gap-1">
+                                    <Rocket size={14} />
+                                    发布与运维
+                                </span>
+                            ),
+                            children: <RunsTab models={models} />,
+                        },
+                    ]}
+                />
+            </div>
         );
     }
 

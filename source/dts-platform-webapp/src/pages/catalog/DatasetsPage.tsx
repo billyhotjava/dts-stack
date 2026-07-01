@@ -451,11 +451,35 @@ export default function Page() {
 	const lineageFailureRows: LineageFailureRow[] = Array.isArray(lineageFailureReport?.content) ? lineageFailureReport.content : [];
 	const layerGroups = useMemo(
 		() =>
-			LAYER_ORDER.map((layer) => ({
-				layer,
-				meta: LAYER_META[layer],
-				items: records.filter((row) => normalizeLayer(row.warehouseLayer) === layer),
-			})),
+			LAYER_ORDER.map((layer) => {
+				const items = records.filter((row) => normalizeLayer(row.warehouseLayer) === layer);
+				const summary = items.reduce(
+					(acc, row) => {
+						const readiness = resolveAssetReadiness(row).state;
+						if (readiness === "READY") acc.ready += 1;
+						if (readiness === "BLOCKED") acc.blocked += 1;
+						if (readiness === "WARNING") acc.warning += 1;
+						if (readiness === "FALLBACK") acc.fallback += 1;
+						return acc;
+					},
+					{ ready: 0, blocked: 0, warning: 0, fallback: 0 },
+				);
+				return {
+					layer,
+					meta: LAYER_META[layer],
+					items,
+					...summary,
+					attention: summary.blocked + summary.warning,
+				};
+			}),
+		[records],
+	);
+	const attentionAssets = useMemo(
+		() =>
+			records
+				.map((row) => ({ row, readiness: resolveAssetReadiness(row) }))
+				.filter((item) => item.readiness.state !== "READY" || (!item.row.domain && !item.row.domainId))
+				.slice(0, 6),
 		[records],
 	);
 	const domainDistribution = useMemo(() => {
@@ -616,39 +640,52 @@ export default function Page() {
 		const meta = LAYER_META[layer];
 		const isStale = String(row.lifecycleStatus || "").toUpperCase() === "STALE" || row.status === "停用";
 		const readiness = resolveAssetReadiness(row);
+		const assetLocation = row.hiveDatabase && row.hiveTable ? `${row.hiveDatabase}.${row.hiveTable}` : row.description || row.type || "未知类型";
+		const domainLabel = row.domain || (row.domainId ? domainMap.get(row.domainId) : undefined) || "未归域";
 		return (
 			<button
 				key={row.id}
 				type="button"
-				className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md"
+				className="group w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md"
 				onClick={() => router.push(`/catalog/datasets/${row.id}`)}
 			>
 				<div className="flex items-start justify-between gap-2">
 					<Tooltip title={row.name}>
-						<div className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">{row.name}</div>
+						<div className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900 group-hover:text-blue-700">{row.name}</div>
 					</Tooltip>
 					<Tag color={readiness.color} style={{ fontSize: 11 }}>{readiness.label}</Tag>
 				</div>
-				<div className="mt-1 flex items-center gap-1 truncate text-xs text-slate-500">
+				<div className="mt-2 flex items-center gap-1 truncate text-xs text-slate-500">
 					<DatabaseOutlined />
-					<span className="truncate">{row.hiveDatabase && row.hiveTable ? `${row.hiveDatabase}.${row.hiveTable}` : row.type || "未知类型"}</span>
+					<span className="truncate">{assetLocation}</span>
 				</div>
-				<div className="mt-2 flex items-center justify-between gap-2">
-					<Tag color={isStale ? "red" : meta.color} style={{ fontSize: 11 }}>
-						{isStale ? "失效" : row.status || "启用"}
-					</Tag>
-					<Tag color={row.classification ? "orange" : "default"} style={{ fontSize: 11 }}>
-						{classificationText(row.classification)}
-					</Tag>
+				<div className="mt-3 grid grid-cols-3 gap-2 text-[11px] text-slate-500">
+					<div className="min-w-0 rounded border border-slate-100 bg-slate-50 px-2 py-1">
+						<div className="text-slate-400">分层</div>
+						<div className="truncate font-medium text-slate-700">{meta.label}</div>
+					</div>
+					<div className="min-w-0 rounded border border-slate-100 bg-slate-50 px-2 py-1">
+						<div className="text-slate-400">主题域</div>
+						<div className="truncate font-medium text-slate-700">{domainLabel}</div>
+					</div>
+					<div className="min-w-0 rounded border border-slate-100 bg-slate-50 px-2 py-1">
+						<div className="text-slate-400">负责人</div>
+						<div className="truncate font-medium text-slate-700">{row.owner || row.ownerDept || "未认领"}</div>
+					</div>
 				</div>
 				{readiness.reasons.length ? (
 					<div className="mt-2 rounded border border-amber-100 bg-amber-50 px-2 py-1 text-[11px] text-amber-700">
 						{readiness.reasons[0]}
 					</div>
 				) : null}
-				<div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-slate-500">
-					<span className="truncate">{row.domain || (row.domainId ? domainMap.get(row.domainId) : undefined) || "未归域"}</span>
-					<span className="shrink-0">{row.owner || row.ownerDept || "未认领"}</span>
+				<div className="mt-3 flex flex-wrap items-center gap-2">
+					<Tag color={isStale ? "red" : meta.color} style={{ fontSize: 11 }}>
+						{isStale ? "失效" : row.status || "启用"}
+					</Tag>
+					<Tag color={row.classification ? "orange" : "default"} style={{ fontSize: 11 }}>
+						{classificationText(row.classification)}
+					</Tag>
+					<span className="text-[11px] text-slate-400">{formatTime(row.snapshotTime || row.updatedAt)}</span>
 				</div>
 			</button>
 		);
@@ -656,99 +693,140 @@ export default function Page() {
 
 	const renderAssetVisualMap = () => (
 		<div className="asset-map-stage space-y-4">
-			<div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+			<div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
 				<div>
-					<div className="text-sm font-semibold text-slate-900">数据流向</div>
+					<div className="text-sm font-semibold text-slate-900">资产链路总览</div>
 					<div className="mt-1 text-xs text-slate-500">
-						按来源、明细、汇总、应用数据集展示当前筛选范围内的资产分布；点击资产节点进入工作台详情。
+						当前筛选范围内的数据接入、入湖开发、治理可用和服务发布状态。
 					</div>
 				</div>
-				<Button
-					onClick={() => {
-						setViewMode("table");
-						router.push("/catalog/assets?view=table");
-					}}
-				>
-					进入台账
-				</Button>
+				<Space>
+					<Button onClick={() => void openRemediationWorkbench()} loading={signalsLoading}>
+						治理优先队列
+					</Button>
+					<Button
+						onClick={() => {
+							setViewMode("table");
+							router.push("/catalog/assets?view=table");
+						}}
+					>
+						进入台账
+					</Button>
+				</Space>
 			</div>
 			<div className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-3">
-				<div className="grid min-w-[1120px] gap-3" style={{ gridTemplateColumns: `repeat(${LAYER_ORDER.length}, minmax(138px, 1fr))` }}>
+				<div className="grid min-w-[1040px] grid-cols-8 gap-3">
 					{layerGroups.map((group, index) => (
-						<div key={group.layer} className={`relative min-h-[260px] rounded-lg border px-3 py-3 ${group.meta.tone}`}>
-							<div className="flex items-center justify-between gap-2">
-								<div>
-									<div className="text-sm font-semibold text-slate-900">{group.meta.label}</div>
-									<div className="text-xs text-slate-500">{group.items.length} 个资产</div>
+						<button
+							key={group.layer}
+							type="button"
+							className={`relative min-h-[126px] rounded-lg border px-3 py-3 text-left transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-sm ${group.meta.tone} ${warehouseLayer === group.layer ? "ring-2 ring-blue-200" : ""}`}
+							onClick={() => setWarehouseLayer(group.layer)}
+						>
+							<div className="flex items-start justify-between gap-2">
+								<div className="min-w-0">
+									<div className="truncate text-sm font-semibold text-slate-900">{group.meta.label}</div>
+									<div className="mt-1 text-2xl font-semibold leading-none text-slate-900">{group.items.length}</div>
 								</div>
-								{index < layerGroups.length - 1 ? <ArrowRightOutlined className="text-slate-400" /> : null}
+								{index < layerGroups.length - 1 ? <ArrowRightOutlined className="mt-1 text-slate-400" /> : null}
 							</div>
-							<div className="mt-3 space-y-2">
-								{group.items.slice(0, 5).map(renderAssetMapNode)}
-								{group.items.length > 5 ? (
-									<button
-										type="button"
-										className="w-full rounded border border-dashed border-slate-300 bg-white/70 px-2 py-2 text-xs text-slate-500 hover:border-blue-300 hover:text-blue-600"
-										onClick={() => {
-											setWarehouseLayer(group.layer);
-											setViewMode("table");
-											router.push("/catalog/assets?view=table");
-										}}
-									>
-										查看剩余 {group.items.length - 5} 个
-									</button>
-								) : null}
-								{!group.items.length ? (
-									<div className="rounded border border-dashed border-slate-200 bg-white/60 px-2 py-6 text-center text-xs text-slate-400">
-										当前筛选无资产
-									</div>
-								) : null}
+							<div className="mt-3 grid grid-cols-2 gap-1 text-[11px]">
+								<span className="rounded bg-white/70 px-2 py-1 text-green-700">可用 {group.ready}</span>
+								<span className="rounded bg-white/70 px-2 py-1 text-amber-700">待处置 {group.attention}</span>
 							</div>
-						</div>
+						</button>
 					))}
 				</div>
 			</div>
-			<div className="grid gap-3 lg:grid-cols-3">
-				<Card size="small" title="业务视角">
-					<Space direction="vertical" size={8} className="w-full">
-						{domainDistribution.length ? (
-							domainDistribution.map((item) => (
-								<div key={item.name} className="flex items-center justify-between gap-3 rounded border border-slate-100 bg-slate-50 px-3 py-2">
-									<span className="truncate text-sm text-slate-700">{item.name}</span>
-									<Tag color={item.name === "未归域" ? "orange" : "blue"}>{item.count}</Tag>
+			<div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+				<div className="rounded-xl border border-slate-200 bg-white p-4">
+					<div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+						<div>
+							<div className="text-sm font-semibold text-slate-900">
+								{warehouseLayer === "ALL" ? "全部资产工作区" : `${LAYER_META[normalizeLayer(warehouseLayer)].label}资产工作区`}
+							</div>
+							<div className="mt-1 text-xs text-slate-500">按资产状态、主题归属、密级和负责人查看当前资产。</div>
+						</div>
+						<Tag color="blue">{records.length} 个资产</Tag>
+					</div>
+					<div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+						{records.map(renderAssetMapNode)}
+					</div>
+				</div>
+				<div className="space-y-4">
+					<div className="rounded-xl border border-slate-200 bg-white p-4">
+						<div className="mb-3 flex items-center justify-between gap-3">
+							<div className="text-sm font-semibold text-slate-900">治理优先队列</div>
+							<Button size="small" onClick={() => void openRemediationWorkbench()} loading={signalsLoading}>
+								处置缺口
+							</Button>
+						</div>
+						<div className="grid grid-cols-3 gap-2 text-center">
+							<div className="rounded border border-amber-100 bg-amber-50 px-2 py-3">
+								<div className="text-lg font-semibold text-amber-700">{blockingGapCount}</div>
+								<div className="text-xs text-amber-700">治理阻断</div>
+							</div>
+							<div className="rounded border border-rose-100 bg-rose-50 px-2 py-3">
+								<div className="text-lg font-semibold text-rose-700">{lineageFailureCount}</div>
+								<div className="text-xs text-rose-700">血缘缺口</div>
+							</div>
+							<div className="rounded border border-slate-100 bg-slate-50 px-2 py-3">
+								<div className="text-lg font-semibold text-slate-700">{missingDomainCount}</div>
+								<div className="text-xs text-slate-600">未归域</div>
+							</div>
+						</div>
+						<div className="mt-3 space-y-2">
+							{attentionAssets.length ? (
+								attentionAssets.map(({ row, readiness }) => (
+									<div key={row.id} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+										<div className="flex items-start justify-between gap-2">
+											<Tooltip title={row.name}>
+												<div className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-800">{row.name}</div>
+											</Tooltip>
+											<Tag color={readiness.color} style={{ fontSize: 11 }}>{readiness.label}</Tag>
+										</div>
+										<div className="mt-1 truncate text-[11px] text-slate-500">{readiness.reasons.join(" / ") || "映射或生命周期需要确认"}</div>
+										<div className="mt-2 flex items-center gap-2">
+											<Button size="small" onClick={() => openGovernanceRemediation(row.id)}>
+												补治理字段
+											</Button>
+											<Button size="small" onClick={() => router.push(`/catalog/datasets/${row.id}?tab=lineage`)}>
+												血缘详情
+											</Button>
+										</div>
+									</div>
+								))
+							) : (
+								<div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-6 text-center text-xs text-slate-400">
+									当前页暂无优先处置资产
 								</div>
-							))
-						) : (
-							<div className="py-4 text-center text-xs text-slate-400">暂无主题域分布</div>
-						)}
-					</Space>
-				</Card>
-				<Card size="small" title="治理阻断">
-					<div className="grid grid-cols-3 gap-2 text-center">
-						<div className="rounded border border-amber-100 bg-amber-50 px-2 py-3">
-							<div className="text-lg font-semibold text-amber-700">{blockingGapCount}</div>
-							<div className="text-xs text-amber-700">治理阻断</div>
-						</div>
-						<div className="rounded border border-rose-100 bg-rose-50 px-2 py-3">
-							<div className="text-lg font-semibold text-rose-700">{lineageFailureCount}</div>
-							<div className="text-xs text-rose-700">血缘缺口</div>
-						</div>
-						<div className="rounded border border-slate-100 bg-slate-50 px-2 py-3">
-							<div className="text-lg font-semibold text-slate-700">{missingDomainCount}</div>
-							<div className="text-xs text-slate-600">未归域</div>
+							)}
 						</div>
 					</div>
-					<Button className="mt-3 w-full" onClick={() => void openRemediationWorkbench()} loading={signalsLoading}>
-						打开治理缺口处置
-					</Button>
-				</Card>
-				<Card size="small" title="运营入口">
-					<Space direction="vertical" size={8} className="w-full">
-						<Button block onClick={() => router.push("/catalog/search")}>资产搜索</Button>
-						<Button block onClick={() => router.push("/catalog/data-products")}>数据产品</Button>
-						<Button block onClick={() => router.push("/catalog/lineage/graph")}>血缘图谱</Button>
-					</Space>
-				</Card>
+					<div className="rounded-xl border border-slate-200 bg-white p-4">
+						<div className="mb-3 text-sm font-semibold text-slate-900">主题域覆盖</div>
+						<div className="space-y-2">
+							{domainDistribution.length ? (
+								domainDistribution.map((item) => (
+									<div key={item.name} className="flex items-center justify-between gap-3 rounded border border-slate-100 bg-slate-50 px-3 py-2">
+										<span className="truncate text-sm text-slate-700">{item.name}</span>
+										<Tag color={item.name === "未归域" ? "orange" : "blue"}>{item.count}</Tag>
+									</div>
+								))
+							) : (
+								<div className="py-4 text-center text-xs text-slate-400">暂无主题域分布</div>
+							)}
+						</div>
+					</div>
+					<div className="rounded-xl border border-slate-200 bg-white p-4">
+						<div className="mb-3 text-sm font-semibold text-slate-900">服务化出口</div>
+						<Space direction="vertical" size={8} className="w-full">
+							<Button block onClick={() => router.push("/catalog/search")}>资产搜索</Button>
+							<Button block onClick={() => router.push("/catalog/data-products")}>数据产品</Button>
+							<Button block onClick={() => router.push("/catalog/lineage/graph")}>血缘图谱</Button>
+						</Space>
+					</div>
+				</div>
 			</div>
 		</div>
 	);
@@ -1296,7 +1374,7 @@ export default function Page() {
 					showIcon
 					className="mb-3"
 					message={resolutionFailures.length ? `最近发现 ${resolutionFailures.length} 条解析失败` : "最近没有资产身份解析失败"}
-					description="这些记录会影响指标包、治理指标、代码化资产和资产授权的事实源闭环。请优先处理 ref 命名、资产类型映射和历史兼容代理。"
+					description="请核对 ref 命名、资产类型映射和历史兼容配置。"
 				/>
 				<CompactTable<ResolutionFailureRow>
 					rowKey={(row) => row.id || `${row.ref || "ref"}-${row.requestedAt || "time"}`}

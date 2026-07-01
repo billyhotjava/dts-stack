@@ -1,18 +1,21 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Drawer, Empty, Form, Input, InputNumber, Select, Space } from "antd";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { CompactTable } from "@/components/table";
-import { PageHeader } from "@/components/page-header";
 import { VisualFlowCanvas } from "@/components/visual-canvas/VisualFlowCanvas";
 import type { ColumnsType } from "antd/es/table";
 import {
+	listSemanticSubjectDomains,
 	listSemanticBusinessObjects,
 	listSemanticObjectTableMappings,
 	createSemanticBusinessObject,
 	saveSemanticObjectTableMappings,
+	type SemanticSubjectDomain,
 	type SemanticBusinessObject,
 	type SemanticObjectTableMapping,
 } from "@/api/semanticModelingApi";
+import { SemanticWorkspaceFrame } from "./semantic-workspace/SemanticWorkspaceFrame";
 import { buildSemanticObjectJoinGraph } from "./semanticObjectMappings.helpers";
 
 const TABLE_ROLE_OPTIONS = [
@@ -27,8 +30,10 @@ type MappingFormValues = {
 };
 
 export default function SemanticObjectsPage() {
+	const [domains, setDomains] = useState<SemanticSubjectDomain[]>([]);
 	const [objects, setObjects] = useState<SemanticBusinessObject[]>([]);
 	const [loading, setLoading] = useState(false);
+	const [domainsLoading, setDomainsLoading] = useState(false);
 	const [selected, setSelected] = useState<SemanticBusinessObject | null>(null);
 	const [mappings, setMappings] = useState<SemanticObjectTableMapping[]>([]);
 	const [mappingLoading, setMappingLoading] = useState(false);
@@ -37,6 +42,18 @@ export default function SemanticObjectsPage() {
 	const [createOpen, setCreateOpen] = useState(false);
 	const [form] = Form.useForm();
 	const [mappingForm] = Form.useForm<MappingFormValues>();
+
+	const loadDomains = useCallback(async () => {
+		setDomainsLoading(true);
+		try {
+			const list = await listSemanticSubjectDomains();
+			setDomains(Array.isArray(list) ? (list as SemanticSubjectDomain[]) : []);
+		} catch {
+			setDomains([]);
+		} finally {
+			setDomainsLoading(false);
+		}
+	}, []);
 
 	const load = useCallback(async () => {
 		setLoading(true);
@@ -53,6 +70,24 @@ export default function SemanticObjectsPage() {
 	useEffect(() => {
 		void load();
 	}, [load]);
+
+	useEffect(() => {
+		void loadDomains();
+	}, [loadDomains]);
+
+	const domainNameById = useMemo(
+		() => new Map(domains.map((domain) => [domain.id, domain.name || domain.code || domain.id])),
+		[domains],
+	);
+
+	const domainOptions = useMemo(
+		() =>
+			domains.map((domain) => ({
+				value: domain.id,
+				label: domain.name ? (domain.code ? `${domain.name} (${domain.code})` : domain.name) : domain.code || domain.id,
+			})),
+		[domains],
+	);
 
 	const loadMappings = useCallback(async (obj: SemanticBusinessObject) => {
 		setMappingLoading(true);
@@ -128,6 +163,13 @@ export default function SemanticObjectsPage() {
 		{ title: "编码", dataIndex: "code", width: 120 },
 		{ title: "名称", dataIndex: "name" },
 		{
+			title: "治理主题域",
+			dataIndex: "domainId",
+			width: 180,
+			render: (value?: string) =>
+				value ? domainNameById.get(value) || <span style={{ color: "#aaa" }}>未匹配治理域</span> : <span style={{ color: "#aaa" }}>未归属</span>,
+		},
+		{
 			title: "主表",
 			dataIndex: "mainTable",
 			render: (v?: string) => v ?? <span style={{ color: "#aaa" }}>-</span>,
@@ -145,26 +187,37 @@ export default function SemanticObjectsPage() {
 	];
 
 	const { nodes, edges } = buildSemanticObjectJoinGraph(mappings);
+	const objectsWithMainTable = objects.filter((item) => item.mainTable).length;
+	const objectsWithDomain = objects.filter((item) => item.domainId).length;
 
 	return (
-		<div className="space-y-4" data-testid="semantic-objects-page">
-			<PageHeader
-				title="语义建模 · 业务对象"
-				actions={
-					<Button
-						type="primary"
-						data-testid="semantic-objects-create"
-						onClick={() => {
-							form.resetFields();
-							setCreateOpen(true);
-						}}
-					>
-						+ 新建业务对象
-					</Button>
-				}
-			/>
-			<div className="flex gap-4">
-				<div style={{ flex: 1 }}>
+		<SemanticWorkspaceFrame
+			activeKey="objects"
+			title="业务对象"
+			description="维护业务对象的主表、主键和关联表。"
+			stats={[
+				{ label: "业务对象", value: objects.length, tone: "blue" },
+				{ label: "治理主题域", value: domains.length, tone: "green" },
+				{ label: "已归属主题域", value: objectsWithDomain, tone: objectsWithDomain > 0 ? "green" : "amber" },
+				{ label: "已配置主表", value: objectsWithMainTable, tone: objectsWithMainTable > 0 ? "green" : "amber" },
+				{ label: "当前映射表", value: selected ? mappings.length : "-", tone: "gray" },
+			]}
+			actions={
+				<Button
+					type="primary"
+					data-testid="semantic-objects-create"
+					onClick={() => {
+						form.resetFields();
+						setCreateOpen(true);
+					}}
+				>
+					<Plus size={16} />
+					新建业务对象
+				</Button>
+			}
+		>
+			<div className="grid gap-4 xl:grid-cols-[minmax(520px,1fr)_520px]" data-testid="semantic-objects-page">
+				<div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
 					<CompactTable<SemanticBusinessObject>
 						rowKey="id"
 						columns={columns}
@@ -174,12 +227,12 @@ export default function SemanticObjectsPage() {
 				</div>
 				{selected && (
 					<div
-						style={{
-							width: 480,
-							border: "1px solid #e5e7eb",
-							borderRadius: 6,
-							overflow: "hidden",
-						}}
+							style={{
+								border: "1px solid #e5e7eb",
+								borderRadius: 6,
+								overflow: "hidden",
+								background: "#fff",
+							}}
 					>
 						<div className="p-2 border-b border-gray-200 flex items-center justify-between gap-2">
 							<div>
@@ -227,6 +280,15 @@ export default function SemanticObjectsPage() {
 					</Form.Item>
 					<Form.Item name="name" label="名称" rules={[{ required: true }]}>
 						<Input placeholder="订单" />
+					</Form.Item>
+					<Form.Item name="domainId" label="治理主题域" rules={[{ required: true, message: "请选择治理主题域" }]}>
+						<Select
+							showSearch
+							optionFilterProp="label"
+							loading={domainsLoading}
+							options={domainOptions}
+							placeholder="选择数据治理中心主题域"
+						/>
 					</Form.Item>
 					<Form.Item name="mainTable" label="主表">
 						<Input placeholder="dwd_order_detail" />
@@ -310,6 +372,6 @@ export default function SemanticObjectsPage() {
 					</Form.List>
 				</Form>
 			</Drawer>
-		</div>
+		</SemanticWorkspaceFrame>
 	);
 }

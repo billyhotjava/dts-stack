@@ -18,7 +18,7 @@
 **统计**: READY=20, IN_PROGRESS=0, DONE=0, BLOCKED=0
 
 ## Sprint-2: BI 分析卡片文件夹管理 (202604)
-**状态**: IN_PROGRESS
+**状态**: DONE
 **类型**: Implementation（实施型）
 
 | Feature | Task 数 | 状态 |
@@ -990,6 +990,64 @@
 - 旧 `/bi-apps/metrics/*`、`/modeling/semantic-center/*` 和 `/bi/semantic-modeling` 只作为兼容入口，目标是 redirect 到平台新页面，不再 iframe 旧服务。
 - 默认 compose/build/init 不再启动或构建 `dts-metrics`；legacy/rollback 路径必须文档化。
 - Sprint-54 再打通数据源 -> 数据连接 -> 数据资产 -> 数据质量黄金线；Sprint-55 再完善可视化指标并评估物理删除。
+
+## Sprint-56: 指标工作台拖拽建模闭环 (202607)
+**状态**: DONE
+**类型**: Frontend Productization / React Flow DnD / Metric Binding
+**目标**: 将指标工作台从“可视化关系画布”推进为可拖拽、可连线、可回写绑定关系的建模工作台。
+**设计文档**: `worklog/v2.2.3/sprint-56-202607/README.md`
+**集成测试**: `worklog/v2.2.3/sprint-56-202607/it/README.md`
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-指标工作台拖拽建模闭环 | P0 | 3 | DONE |
+
+**统计**: READY=0, IN_PROGRESS=0, DONE=3, BLOCKED=0
+**关键决策**:
+- 绑定关系是业务事实，拖拽或连线后必须回写 `PUT /api/semantic/metrics/{id}`。
+- 节点布局先作为个人操作偏好保存在浏览器 `localStorage`，暂不新增后端 layout API。
+- 未绑定指标必须出现在目录侧分组，否则无法完成首次拖拽挂载。
+- 后端指标更新是全量 PUT，前端必须保留 `code/name/formula/status` 等字段，避免绑定后被后续保存清空。
+
+## Sprint-55: 黄金线菜单架构重排 (202606)
+**状态**: DONE
+**类型**: Menu IA Refactor / dts-admin Seed / Runtime Reparent Migration
+**目标**: 以 dts-admin 菜单种子为事实源，将 portal 侧栏重排为“数据基础 -> 数据集成 -> 数据开发 -> 指标建模 -> 数据资产 -> 数据消费 -> 治理运营 -> 运维与监控”的黄金线信息架构。
+**设计文档**: `worklog/v2.2.3/sprint-55-202606/README.md`
+**集成测试**: `worklog/v2.2.3/sprint-55-202606/it/README.md`
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-黄金线菜单架构收敛 | P0 | 3 | DONE |
+
+**统计**: READY=0, IN_PROGRESS=0, DONE=3, BLOCKED=0
+**关键决策**:
+- dts-admin `portal-menu-seed.json` 是菜单事实源；前端只消费菜单与路由，不在平台侧另建菜单结构。
+- “数据基础”前置主题域、业务术语、数据元、公共码表和标准模板；指标建模只引用治理主题域。
+- “指标建模”提升为一级分区，运行实例仍统一归入任务运维中心。
+- “数据消费”统一承载数据 API、数据推送、共享交换、BI 和数据大屏。
+- 运行态 DB 使用 reparent 迁移保留原 `portal_menu.id` 和 `portal_menu_visibility` 绑定。
+
+## Sprint-54: 指标建模产品化 UI 与运行监控收敛 (202606)
+**状态**: IN_PROGRESS
+**类型**: Frontend Productization / Ops Convergence
+**目标**: 将指标工作台、业务对象、指标管理、模型管理、发布审核打磨成统一指标建模工作区；主题域统一引用数据治理中心，并把运行监控收敛到任务运维中心。
+**设计文档**: `worklog/v2.2.3/sprint-54-202606/README.md`
+**集成测试**: `worklog/v2.2.3/sprint-54-202606/it/README.md`
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-指标建模统一工作区 | P0 | 3 | DONE |
+| F2-语义页面产品化完善 | P0 | 3 | DONE |
+| F3-运行监控运维收敛 | P0 | 3 | DONE |
+| F4-验证收尾 | P0 | 2 | DONE |
+
+**统计**: READY=0, IN_PROGRESS=0, DONE=11, BLOCKED=0
+**关键决策**:
+- 指标建模菜单聚焦建模、管理和发布审核；运行实例、日志、失败、补数统一归入任务运维中心。
+- 主题域唯一维护入口是数据治理中心 `/governance/subjects`；指标建模只引用治理主题域，旧 `/modeling/semantic/subjects` 做兼容跳转。
+- `/modeling/semantic/runs`、旧 `/metrics/operations` 等路径保留兼容，但目标页进入运维监控。
+- 不新增 `/v2` 路由，不回引旧 `dts-metrics` iframe，优先使用现有平台语义 API。
 
 ## Sprint-52: 指标工作台 & 语义建模全面整合 (202606)
 **状态**: READY
