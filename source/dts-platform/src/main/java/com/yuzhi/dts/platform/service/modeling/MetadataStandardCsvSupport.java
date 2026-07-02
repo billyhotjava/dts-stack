@@ -2,7 +2,10 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.platform.domain.modeling.DataSecurityLevel;
+import com.yuzhi.dts.platform.domain.modeling.MetadataStandard;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -144,6 +147,26 @@ public final class MetadataStandardCsvSupport {
         if (!StringUtils.hasText(raw)) return DataSecurityLevel.INTERNAL;
         SecurityLevelCatalog.DataSecurityLevel parsed = SecurityLevelCatalog.DataSecurityLevel.parse(raw);
         return parsed == null ? DataSecurityLevel.INTERNAL : DataSecurityLevel.valueOf(parsed.code());
+    }
+
+    /** 数据元更新前的 before-image（供导入 run 回滚还原），字段与回滚 restore 一一对应。 */
+    public static Map<String, Object> elementImage(MetadataStandard element) {
+        Map<String, Object> image = new LinkedHashMap<>();
+        image.put("fieldNameCn", element.getFieldNameCn());
+        image.put("fieldNameEn", element.getFieldNameEn());
+        image.put("dataType", element.getDataType());
+        image.put("dataLength", element.getDataLength());
+        image.put("dataPrecision", element.getDataPrecision());
+        image.put("dataScale", element.getDataScale());
+        image.put("nullable", element.getNullable());
+        image.put("domain", element.getDomain());
+        image.put("description", element.getDescription());
+        image.put("sourceSystem", element.getSourceSystem());
+        image.put("codeSet", element.getCodeSet());
+        image.put("defaultValue", element.getDefaultValue());
+        image.put("isPk", element.getIsPk());
+        image.put("securityLevel", element.getSecurityLevel() == null ? null : element.getSecurityLevel().name());
+        return image;
     }
 
     public static String trimToNull(String value) {

@@ -262,7 +262,7 @@ public class StandardPackageApplyService {
             );
             if (existing.isPresent()) {
                 MetadataStandard entity = existing.orElseThrow();
-                ctx.record(TYPE_ELEMENT, String.valueOf(entity.getId()), ACTION_UPDATE, elementImage(entity));
+                ctx.record(TYPE_ELEMENT, String.valueOf(entity.getId()), ACTION_UPDATE, MetadataStandardCsvSupport.elementImage(entity));
                 metadataStandardService.update(entity.getId(), req);
                 ctx.countUpdate(TYPE_ELEMENT);
             } else {
@@ -565,25 +565,6 @@ public class StandardPackageApplyService {
         image.put("owner", term.getOwner());
         image.put("ownerDept", term.getOwnerDept());
         image.put("tags", term.getTags());
-        return image;
-    }
-
-    private Map<String, Object> elementImage(MetadataStandard element) {
-        Map<String, Object> image = new LinkedHashMap<>();
-        image.put("fieldNameCn", element.getFieldNameCn());
-        image.put("fieldNameEn", element.getFieldNameEn());
-        image.put("dataType", element.getDataType());
-        image.put("dataLength", element.getDataLength());
-        image.put("dataPrecision", element.getDataPrecision());
-        image.put("dataScale", element.getDataScale());
-        image.put("nullable", element.getNullable());
-        image.put("domain", element.getDomain());
-        image.put("description", element.getDescription());
-        image.put("sourceSystem", element.getSourceSystem());
-        image.put("codeSet", element.getCodeSet());
-        image.put("defaultValue", element.getDefaultValue());
-        image.put("isPk", element.getIsPk());
-        image.put("securityLevel", element.getSecurityLevel() == null ? null : element.getSecurityLevel().name());
         return image;
     }
 

@@ -1,11 +1,18 @@
 package com.yuzhi.dts.platform.service.modeling;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.domain.modeling.MetadataStandard;
+import com.yuzhi.dts.platform.domain.modeling.StandardPackageImportRun;
+import com.yuzhi.dts.platform.domain.modeling.StandardPackageImportRunItem;
 import com.yuzhi.dts.platform.repository.modeling.MetadataStandardRepository;
+import com.yuzhi.dts.platform.repository.modeling.StandardPackageImportRunItemRepository;
+import com.yuzhi.dts.platform.repository.modeling.StandardPackageImportRunRepository;
 import com.yuzhi.dts.platform.service.modeling.dto.MetadataStandardImportResultDto;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -20,12 +27,27 @@ import org.springframework.web.multipart.MultipartFile;
 @Transactional
 public class MetadataStandardImportService {
 
+    /** 旧单文件直导路径的 run 来源标识，与标准包 UPLOAD/BUILTIN 区分。 */
+    public static final String SOURCE_LEGACY_SINGLE = "LEGACY_SINGLE";
+
     private final MetadataStandardRepository repository;
     private final MetadataStandardService service;
+    private final StandardPackageImportRunRepository runRepository;
+    private final StandardPackageImportRunItemRepository runItemRepository;
+    private final ObjectMapper objectMapper;
 
-    public MetadataStandardImportService(MetadataStandardRepository repository, MetadataStandardService service) {
+    public MetadataStandardImportService(
+        MetadataStandardRepository repository,
+        MetadataStandardService service,
+        StandardPackageImportRunRepository runRepository,
+        StandardPackageImportRunItemRepository runItemRepository,
+        ObjectMapper objectMapper
+    ) {
         this.repository = repository;
         this.service = service;
+        this.runRepository = runRepository;
+        this.runItemRepository = runItemRepository;
+        this.objectMapper = objectMapper;
     }
 
     public MetadataStandardImportResultDto importCsv(MultipartFile file) {
@@ -34,6 +56,7 @@ public class MetadataStandardImportService {
             result.addError("未上传文件或文件为空");
             return result;
         }
+        List<StandardPackageImportRunItem> runItems = new ArrayList<>();
 
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
             String headerLine = reader.readLine();
@@ -71,11 +94,13 @@ public class MetadataStandardImportService {
                     );
                     existing.ifPresentOrElse(
                         standard -> {
+                            runItems.add(runItem(runItems.size() + 1, standard.getId().toString(), "UPDATE", MetadataStandardCsvSupport.elementImage(standard)));
                             service.update(standard.getId(), req);
                             result.setUpdated(result.getUpdated() + 1);
                         },
                         () -> {
-                            service.create(req);
+                            var dto = service.create(req);
+                            runItems.add(runItem(runItems.size() + 1, String.valueOf(dto.getId()), "CREATE", null));
                             result.setCreated(result.getCreated() + 1);
                         }
                     );
@@ -89,7 +114,36 @@ public class MetadataStandardImportService {
         } catch (Exception ex) {
             result.addError("读取 CSV 失败：" + safeMessage(ex));
         }
+        if (!runItems.isEmpty()) {
+            StandardPackageImportRun run = new StandardPackageImportRun();
+            run.setPackageName(StringUtils.hasText(file.getOriginalFilename()) ? file.getOriginalFilename() : "metadata-standards.csv");
+            run.setSource(SOURCE_LEGACY_SINGLE);
+            run.setStatus(StandardPackageApplyService.STATUS_APPLIED);
+            run.setSummary("数据元单文件导入：新增 " + result.getCreated() + "，更新 " + result.getUpdated());
+            run.setCreatedBy(SecurityUtils.getCurrentUserLogin().orElse("system"));
+            StandardPackageImportRun saved = runRepository.save(run);
+            for (StandardPackageImportRunItem item : runItems) {
+                item.setRunId(saved.getId());
+            }
+            runItemRepository.saveAll(runItems);
+        }
         return result;
+    }
+
+    private StandardPackageImportRunItem runItem(int seq, String entityId, String action, Map<String, Object> beforeImage) {
+        StandardPackageImportRunItem item = new StandardPackageImportRunItem();
+        item.setSeq(seq);
+        item.setEntityType("ELEMENT");
+        item.setEntityId(entityId);
+        item.setAction(action);
+        if (beforeImage != null) {
+            try {
+                item.setBeforeJson(objectMapper.writeValueAsString(beforeImage));
+            } catch (Exception ex) {
+                throw new IllegalStateException("before-image 序列化失败");
+            }
+        }
+        return item;
     }
 
     private Map<String, Integer> buildHeaderIndex(List<String> headers) {
