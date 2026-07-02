@@ -61,6 +61,7 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	"/foundation/connectors": "/pages/foundation/ConnectorRegistryPage",
 	"/foundation/data-sources": "/pages/foundation/DataSourcesPage",
 	"/foundation/jdbc-drivers": "/pages/foundation/JdbcDriversPage",
+	"/foundation/standard-package": "/pages/foundation/StandardPackagePage",
 	"/workbench/todo": "/pages/workbench/WorkflowCenterPage",
 	"/explore/etl": "/pages/explore/etl/EltConsolePage",
 	"/explore/etl/console": "/pages/explore/etl/EltConsolePage",

@@ -70,6 +70,14 @@
               "titleKey": "sys.nav.portal.governanceReference",
               "title": "公共码表",
               "externalLink": "/governance/standards/reference"
+            },
+            {
+              "key": "standard-package",
+              "path": "standard-package",
+              "icon": "solar:import-bold-duotone",
+              "titleKey": "sys.nav.portal.governanceStandardPackage",
+              "title": "标准包导入",
+              "externalLink": "/foundation/standard-package"
             }
           ]
         },

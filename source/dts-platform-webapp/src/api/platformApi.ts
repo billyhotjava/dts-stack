@@ -561,6 +561,18 @@ export const downloadDataStandardPackageTemplate = () =>
 export const importMetadataStandards = (formData: FormData) =>
     api.post({ url: "/modeling/metadata-standards/import", data: formData });
 
+// Standard packages (数据元+码表+术语 打包导入管道)
+export const previewStandardPackageImport = (formData: FormData) =>
+	api.post({ url: "/modeling/standard-packages/import/preview", data: formData });
+export const applyStandardPackageImport = (runId: string) =>
+	api.post({ url: "/modeling/standard-packages/import/apply", data: { runId } });
+export const listStandardPackageRuns = (params: any = {}) =>
+	api.get({ url: "/modeling/standard-packages/runs", params });
+export const getStandardPackageRun = (runId: string) =>
+	api.get({ url: `/modeling/standard-packages/runs/${runId}` });
+export const rollbackStandardPackageRun = (runId: string) =>
+	api.post({ url: `/modeling/standard-packages/runs/${runId}/rollback` });
+
 // Reference codes (public code tables)
 export const listReferenceCodes = (params: any = {}) => api.get({ url: "/governance/reference-codes", params });
 export const getReferenceCode = (id: string) => api.get({ url: `/governance/reference-codes/${id}` });
