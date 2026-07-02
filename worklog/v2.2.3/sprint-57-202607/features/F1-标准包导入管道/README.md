@@ -1,7 +1,7 @@
 # F1: 标准包导入管道
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 
 ## 目标
 
@@ -11,10 +11,10 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| T01 | 包解析与 preview 端点 | P0 | READY | - |
-| T02 | apply/rollback/runs 端点 | P0 | READY | T01 |
-| T03 | 收编数据元直导端点 | P1 | READY | T01 |
-| T04 | 前端标准包导入向导 | P0 | READY | T02 |
+| T01 | 包解析与 preview 端点 | P0 | DONE (b84f4b645) | - |
+| T02 | apply/rollback/runs 端点 | P0 | DONE (b3d02b27e) | T01 |
+| T03 | 收编数据元直导端点 | P1 | DONE (f90ec0491) | T01 |
+| T04 | 前端标准包导入向导 | P0 | DONE (9a40626e6) | T02 |
 
 ## 完成标准
 

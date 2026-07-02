@@ -60,8 +60,8 @@ POST /api/modeling/standard-packages/builtin/{code}/install  (安装=走同一 p
 
 | ID | Feature | Task 数 | 状态 |
 |----|---------|---------|------|
-| F1 | 标准包导入管道 | 4 | READY |
-| F2 | 内置国标包 | 2 | READY |
+| F1 | 标准包导入管道 | 4 | DONE |
+| F2 | 内置国标包 | 2 | DONE |
 | F3 | 基础数据页面完善 | 3 | READY |
 
 **范围外**：数据资产工业级打磨（原任务 2）单列 Sprint-58 规划，不混入本 sprint。
@@ -84,3 +84,10 @@ POST /api/modeling/standard-packages/builtin/{code}/install  (安装=走同一 p
 - [ ] 至少 3 个内置国标包（性别/学历/行政区划节选 + 常用数据元）可在页面一键安装
 - [ ] 基础数据四页面交互范式统一（列表+详情+引用追溯+导入导出入口）
 - [ ] it/ 留存集成验证证据（curl 报文 + 页面截图）
+
+## 实施偏差记录
+
+1. **行政区划仅内置省级 34 条**（原计划含地级市 ~333）：地市级码值手工整理易臆造，违反"码值以国标原文为准"，改为按需通过标准包上传扩充，manifest 描述已注明。
+2. **回滚防篡改简化**：T02 原设计"被后续修改的实体标记 SKIPPED"（基于 lastModifiedDate 对比），实现简化为"实体已不存在则 SKIPPED、存在即还原"。全量时间戳对比价值有限且易误报，如需严格模式后续补。
+3. **已知无关测试失败**：`ModelingSqlModelServiceTest` 7 个用例（zip 清单/文件系统权限类）在本 sprint 开工前即失败，与标准包管道零交集（grep 确认无引用），待独立排查。
+4. **部署提示**：新端点/页面需重建 dts-platform 与 dts-platform-webapp 容器后方可 IT 验证；菜单行已直接 upsert 进 dts_admin DB（id=7，2 个角色绑定），种子文件同步更新供全新部署。

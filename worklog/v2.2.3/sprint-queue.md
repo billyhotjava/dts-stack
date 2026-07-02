@@ -1000,11 +1000,11 @@
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
-| F1-标准包导入管道 | P0 | 4 | READY |
-| F2-内置国标包 | P0 | 2 | READY |
+| F1-标准包导入管道 | P0 | 4 | DONE |
+| F2-内置国标包 | P0 | 2 | DONE |
 | F3-基础数据页面完善 | P1 | 3 | READY |
 
-**统计**: READY=9, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=3, IN_PROGRESS=0, DONE=6, BLOCKED=0
 **关键决策**:
 - "标准模板" = 数据标准包（数据元+码表+术语打包），非 TemplatesPage 建模模板。
 - 一条 preview/apply/rollback 管道两个来源：客户上传 zip 与官方内置包，内置国标包不做独立种子机制。
