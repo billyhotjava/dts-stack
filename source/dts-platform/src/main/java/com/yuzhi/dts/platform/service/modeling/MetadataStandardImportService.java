@@ -1,10 +1,8 @@
 package com.yuzhi.dts.platform.service.modeling;
 
-import com.yuzhi.dts.platform.domain.modeling.DataSecurityLevel;
 import com.yuzhi.dts.platform.domain.modeling.MetadataStandard;
 import com.yuzhi.dts.platform.repository.modeling.MetadataStandardRepository;
 import com.yuzhi.dts.platform.service.modeling.dto.MetadataStandardImportResultDto;
-import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -13,9 +11,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -24,24 +19,6 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 @Transactional
 public class MetadataStandardImportService {
-
-    private static final Set<String> ALLOWED_TYPES = Set.of(
-        "VARCHAR",
-        "CHAR",
-        "TEXT",
-        "INT",
-        "INTEGER",
-        "BIGINT",
-        "DECIMAL",
-        "NUMERIC",
-        "DOUBLE",
-        "FLOAT",
-        "DATE",
-        "TIMESTAMP",
-        "BOOLEAN"
-    );
-
-    private static final Pattern TYPE_WITH_SIZE = Pattern.compile("([A-Z0-9_]+)\\s*\\((\\d+)(?:\\s*,\\s*(\\d+))?\\)");
 
     private final MetadataStandardRepository repository;
     private final MetadataStandardService service;
@@ -79,101 +56,14 @@ public class MetadataStandardImportService {
                     continue;
                 }
                 List<String> values = CsvUtils.parseCsvLine(line);
-                String fieldNameCn = get(values, index, "field_name_cn");
-                String fieldNameEn = get(values, index, "field_name_en");
-                String dataTypeRaw = get(values, index, "data_type");
-                String nullableRaw = get(values, index, "nullable");
-                String domain = get(values, index, "domain");
-                String description = get(values, index, "description");
-                String sourceSystem = get(values, index, "source_system");
-
-                if (!StringUtils.hasText(fieldNameCn) || !StringUtils.hasText(fieldNameEn)) {
-                    result.addError("第 " + rowNumber + " 行：field_name_cn 或 field_name_en 为空，已跳过");
-                    result.setSkipped(result.getSkipped() + 1);
-                    continue;
-                }
-                if (!StringUtils.hasText(dataTypeRaw)) {
-                    result.addError("第 " + rowNumber + " 行：" + fieldNameEn + " data_type 为空，已跳过");
-                    result.setSkipped(result.getSkipped() + 1);
-                    continue;
-                }
-                if (!StringUtils.hasText(nullableRaw)) {
-                    result.addError("第 " + rowNumber + " 行：" + fieldNameEn + " nullable 为空，已跳过");
-                    result.setSkipped(result.getSkipped() + 1);
-                    continue;
-                }
-                if (!StringUtils.hasText(domain)) {
-                    result.addError("第 " + rowNumber + " 行：" + fieldNameEn + " domain 为空，已跳过");
-                    result.setSkipped(result.getSkipped() + 1);
-                    continue;
-                }
-                if (!StringUtils.hasText(description)) {
-                    result.addError("第 " + rowNumber + " 行：" + fieldNameEn + " description 为空，已跳过");
-                    result.setSkipped(result.getSkipped() + 1);
-                    continue;
-                }
-                if (!StringUtils.hasText(sourceSystem)) {
-                    result.addError("第 " + rowNumber + " 行：" + fieldNameEn + " source_system 为空，已跳过");
+                MetadataStandardCsvSupport.ElementRow row = MetadataStandardCsvSupport.buildElementRow(key -> get(values, index, key));
+                if (row.hasError()) {
+                    result.addError("第 " + rowNumber + " 行：" + row.error());
                     result.setSkipped(result.getSkipped() + 1);
                     continue;
                 }
 
-                Boolean nullable = parseBooleanYN(nullableRaw);
-                if (nullable == null) {
-                    result.addError("第 " + rowNumber + " 行：" + fieldNameEn + " nullable 仅支持 Y/N");
-                    result.setSkipped(result.getSkipped() + 1);
-                    continue;
-                }
-
-                TypeParts typeParts = parseTypeParts(dataTypeRaw);
-                String normalizedType = typeParts.baseType();
-                if (!ALLOWED_TYPES.contains(normalizedType)) {
-                    result.addError("第 " + rowNumber + " 行：" + fieldNameEn + " data_type 不在建议集合内");
-                    result.setSkipped(result.getSkipped() + 1);
-                    continue;
-                }
-
-                Integer dataLength = parseInteger(get(values, index, "data_length"));
-                Integer dataPrecision = parseInteger(get(values, index, "data_precision"));
-                Integer dataScale = parseInteger(get(values, index, "data_scale"));
-
-                if (dataLength == null && typeParts.length() != null) {
-                    dataLength = typeParts.length();
-                }
-                if (dataPrecision == null && typeParts.precision() != null) {
-                    dataPrecision = typeParts.precision();
-                }
-                if (dataScale == null && typeParts.scale() != null) {
-                    dataScale = typeParts.scale();
-                }
-
-                if ("VARCHAR".equals(normalizedType) && dataLength == null) {
-                    result.addError("第 " + rowNumber + " 行：" + fieldNameEn + " VARCHAR 未填写 data_length");
-                    result.setSkipped(result.getSkipped() + 1);
-                    continue;
-                }
-                if (("DECIMAL".equals(normalizedType) || "NUMERIC".equals(normalizedType)) && dataPrecision == null) {
-                    result.addError("第 " + rowNumber + " 行：" + fieldNameEn + " DECIMAL 未填写 data_precision");
-                    result.setSkipped(result.getSkipped() + 1);
-                    continue;
-                }
-
-                MetadataStandardUpsertRequest req = new MetadataStandardUpsertRequest();
-                req.setFieldNameCn(fieldNameCn.trim());
-                req.setFieldNameEn(fieldNameEn.trim());
-                req.setDataType(normalizedType);
-                req.setDataLength(dataLength);
-                req.setDataPrecision(dataPrecision);
-                req.setDataScale(dataScale);
-                req.setNullable(nullable);
-                req.setDomain(domain.trim());
-                req.setDescription(description.trim());
-                req.setSourceSystem(sourceSystem.trim());
-                req.setCodeSet(trimToNull(get(values, index, "code_set")));
-                req.setDefaultValue(trimToNull(get(values, index, "default_value")));
-                req.setIsPk(parseBooleanYN(get(values, index, "is_pk")));
-                req.setSecurityLevel(parseSecurityLevel(get(values, index, "security_level")));
-
+                MetadataStandardUpsertRequest req = row.request();
                 try {
                     Optional<MetadataStandard> existing = repository.findByFieldNameEnIgnoreCaseAndDomainIgnoreCase(
                         req.getFieldNameEn(),
@@ -221,56 +111,8 @@ public class MetadataStandardImportService {
         return StringUtils.hasText(v) ? v.trim() : null;
     }
 
-    private Integer parseInteger(String raw) {
-        if (!StringUtils.hasText(raw)) return null;
-        try {
-            return Integer.parseInt(raw.trim());
-        } catch (NumberFormatException ex) {
-            return null;
-        }
-    }
-
-    private Boolean parseBooleanYN(String raw) {
-        if (!StringUtils.hasText(raw)) return null;
-        String normalized = raw.trim().toUpperCase(Locale.ROOT);
-        if ("Y".equals(normalized) || "YES".equals(normalized) || "TRUE".equals(normalized)) return Boolean.TRUE;
-        if ("N".equals(normalized) || "NO".equals(normalized) || "FALSE".equals(normalized)) return Boolean.FALSE;
-        return null;
-    }
-
-    private DataSecurityLevel parseSecurityLevel(String raw) {
-        if (!StringUtils.hasText(raw)) return DataSecurityLevel.INTERNAL;
-        SecurityLevelCatalog.DataSecurityLevel parsed = SecurityLevelCatalog.DataSecurityLevel.parse(raw);
-        return parsed == null ? DataSecurityLevel.INTERNAL : DataSecurityLevel.valueOf(parsed.code());
-    }
-
-    private TypeParts parseTypeParts(String raw) {
-        String text = raw.trim().toUpperCase(Locale.ROOT);
-        Matcher matcher = TYPE_WITH_SIZE.matcher(text);
-        if (matcher.find()) {
-            String base = matcher.group(1);
-            Integer p1 = parseInteger(matcher.group(2));
-            Integer p2 = parseInteger(matcher.group(3));
-            if ("DECIMAL".equals(base) || "NUMERIC".equals(base)) {
-                return new TypeParts(base, null, p1, p2);
-            }
-            return new TypeParts(base, p1, null, null);
-        }
-        return new TypeParts(text, null, null, null);
-    }
-
-    private String trimToNull(String value) {
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
-    }
-
     private String safeMessage(Exception ex) {
         String msg = ex.getMessage();
         return StringUtils.hasText(msg) ? msg : ex.getClass().getSimpleName();
     }
-
-    private record TypeParts(String baseType, Integer length, Integer precision, Integer scale) {}
 }

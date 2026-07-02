@@ -991,6 +991,26 @@
 - 默认 compose/build/init 不再启动或构建 `dts-metrics`；legacy/rollback 路径必须文档化。
 - Sprint-54 再打通数据源 -> 数据连接 -> 数据资产 -> 数据质量黄金线；Sprint-55 再完善可视化指标并评估物理删除。
 
+## Sprint-57: 基础数据闭环——标准包导入管道与内置国标包 (202607)
+**状态**: IN_PROGRESS
+**类型**: Backend Pipeline / Frontend Wizard / Builtin GB Standard Packs
+**目标**: 打通"下载标准包模板 -> 客户填写 -> 上传 -> 校验/应用/回滚"闭环，并以同一管道交付内置国标包，使基础数据模块可交付。
+**设计文档**: `worklog/v2.2.3/sprint-57-202607/README.md`
+**集成测试**: `worklog/v2.2.3/sprint-57-202607/it/README.md`
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-标准包导入管道 | P0 | 4 | READY |
+| F2-内置国标包 | P0 | 2 | READY |
+| F3-基础数据页面完善 | P1 | 3 | READY |
+
+**统计**: READY=9, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**关键决策**:
+- "标准模板" = 数据标准包（数据元+码表+术语打包），非 TemplatesPage 建模模板。
+- 一条 preview/apply/rollback 管道两个来源：客户上传 zip 与官方内置包，内置国标包不做独立种子机制。
+- 收编 `/metadata-standards/import` 旧直导路径，数据元校验逻辑单一来源。
+- 数据资产工业级打磨单列 Sprint-58 规划，不混入本 sprint。
+
 ## Sprint-56: 指标工作台拖拽建模闭环 (202607)
 **状态**: DONE
 **类型**: Frontend Productization / React Flow DnD / Metric Binding
