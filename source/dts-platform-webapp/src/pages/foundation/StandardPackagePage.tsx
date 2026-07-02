@@ -10,6 +10,8 @@ import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import {
 	applyStandardPackageImport,
 	downloadDataStandardPackageTemplate,
+	installBuiltinStandardPackage,
+	listBuiltinStandardPackages,
 	listStandardPackageRuns,
 	previewStandardPackageImport,
 	rollbackStandardPackageRun,
@@ -59,6 +61,16 @@ type RunRow = {
 type RunsPayload = {
 	content?: RunRow[];
 	total?: number;
+};
+
+type BuiltinPackage = {
+	code: string;
+	name?: string;
+	standardNo?: string;
+	category?: string;
+	description?: string;
+	installed?: boolean;
+	entryCounts?: Record<string, number>;
 };
 
 const FILE_LABELS: Record<string, string> = {
@@ -114,6 +126,11 @@ export default function StandardPackagePage() {
 	const [applyResult, setApplyResult] = useState<ApplyResult | null>(null);
 	const [templateDownloading, setTemplateDownloading] = useState(false);
 
+	// builtin state
+	const [builtins, setBuiltins] = useState<BuiltinPackage[]>([]);
+	const [builtinLoading, setBuiltinLoading] = useState(false);
+	const [installingCode, setInstallingCode] = useState<string | null>(null);
+
 	// history state
 	const [runs, setRuns] = useState<RunRow[]>([]);
 	const [runsTotal, setRunsTotal] = useState(0);
@@ -134,11 +151,47 @@ export default function StandardPackagePage() {
 		}
 	}, [pageNum, pageSize]);
 
+	const loadBuiltins = useCallback(async () => {
+		setBuiltinLoading(true);
+		try {
+			const resp = (await listBuiltinStandardPackages()) as BuiltinPackage[];
+			setBuiltins(Array.isArray(resp) ? resp : []);
+		} catch (err: any) {
+			toast.error(err?.message || "加载内置标准包失败");
+		} finally {
+			setBuiltinLoading(false);
+		}
+	}, []);
+
 	useEffect(() => {
 		if (activeTab === "history") {
 			void loadRuns();
 		}
-	}, [activeTab, loadRuns]);
+		if (activeTab === "builtin") {
+			void loadBuiltins();
+		}
+	}, [activeTab, loadRuns, loadBuiltins]);
+
+	const installBuiltin = async (pkg: BuiltinPackage) => {
+		setInstallingCode(pkg.code);
+		try {
+			const resp = (await installBuiltinStandardPackage(pkg.code)) as {
+				applied?: boolean;
+				totalCreated?: number;
+				totalUpdated?: number;
+			};
+			if (resp?.applied === false) {
+				toast.error(`内置包 ${pkg.name || pkg.code} 校验未通过，请联系产品方修复资源`);
+			} else {
+				toast.success(`已安装 ${pkg.name || pkg.code}：新增 ${resp?.totalCreated ?? 0}，更新 ${resp?.totalUpdated ?? 0}`);
+			}
+			void loadBuiltins();
+		} catch (err: any) {
+			toast.error(err?.message || "安装内置标准包失败");
+		} finally {
+			setInstallingCode(null);
+		}
+	};
 
 	const downloadTemplate = async () => {
 		setTemplateDownloading(true);
@@ -424,6 +477,45 @@ export default function StandardPackagePage() {
 		</Space>
 	);
 
+	const builtinPanel = (
+		<Card loading={builtinLoading}>
+			{builtins.length === 0 && !builtinLoading ? (
+				<EmptyState title="暂无内置标准包" description="产品内置的国标包会显示在这里。" />
+			) : (
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+					{builtins.map((pkg) => {
+						const totalEntries = Object.values(pkg.entryCounts || {}).reduce((sum, count) => sum + count, 0);
+						return (
+							<Card key={pkg.code} size="small" data-testid={`builtin-package-${pkg.code}`}>
+								<Space direction="vertical" className="w-full" size={8}>
+									<Space size={8} wrap>
+										<Text strong>{pkg.name}</Text>
+										<Tag>{pkg.standardNo}</Tag>
+										<Tag color="blue">{pkg.category}</Tag>
+										{pkg.installed ? <Tag color="success">已安装</Tag> : null}
+									</Space>
+									<Text type="secondary">{pkg.description}</Text>
+									<Space size={16}>
+										<Text type="secondary">共 {totalEntries} 条</Text>
+										<Button
+											size="small"
+											type={pkg.installed ? "default" : "primary"}
+											loading={installingCode === pkg.code}
+											disabled={!canManage || (installingCode !== null && installingCode !== pkg.code)}
+											onClick={() => installBuiltin(pkg)}
+										>
+											{pkg.installed ? "重新安装" : "安装"}
+										</Button>
+									</Space>
+								</Space>
+							</Card>
+						);
+					})}
+				</div>
+			)}
+		</Card>
+	);
+
 	const history = (
 		<Card>
 			<CompactTable<RunRow>
@@ -461,6 +553,7 @@ export default function StandardPackagePage() {
 				onChange={setActiveTab}
 				items={[
 					{ key: "wizard", label: "导入向导", children: wizard },
+					{ key: "builtin", label: "内置标准包", children: builtinPanel },
 					{ key: "history", label: "导入历史", children: history },
 				]}
 			/>

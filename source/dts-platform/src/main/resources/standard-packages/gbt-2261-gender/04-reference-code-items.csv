@@ -1,0 +1,5 @@
+code_type_code,code_value,code_name,description,sort_num,parent_code,is_default
+GENDER_GBT2261,0,未知的性别,,1,,N
+GENDER_GBT2261,1,男性,,2,,N
+GENDER_GBT2261,2,女性,,3,,N
+GENDER_GBT2261,9,未说明的性别,,4,,N

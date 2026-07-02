@@ -572,6 +572,9 @@ export const getStandardPackageRun = (runId: string) =>
 	api.get({ url: `/modeling/standard-packages/runs/${runId}` });
 export const rollbackStandardPackageRun = (runId: string) =>
 	api.post({ url: `/modeling/standard-packages/runs/${runId}/rollback` });
+export const listBuiltinStandardPackages = () => api.get({ url: "/modeling/standard-packages/builtin" });
+export const installBuiltinStandardPackage = (code: string) =>
+	api.post({ url: `/modeling/standard-packages/builtin/${code}/install` });
 
 // Reference codes (public code tables)
 export const listReferenceCodes = (params: any = {}) => api.get({ url: "/governance/reference-codes", params });

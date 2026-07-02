@@ -1,0 +1,16 @@
+field_name_cn,field_name_en,data_type,data_length,data_precision,data_scale,nullable,domain,description,source_system,code_set,default_value,is_pk,security_level
+公民身份号码,citizen_id_number,CHAR,18,,,N,人口基础,公民身份号码（参照 GB 11643），18 位含校验码,MDM,,,N,INTERNAL
+姓名,person_name,VARCHAR,64,,,N,人口基础,自然人姓名全称,MDM,,,N,INTERNAL
+性别代码,gender_code,VARCHAR,1,,,N,人口基础,人的性别代码（GB/T 2261.1）,MDM,GENDER_GBT2261,,N,INTERNAL
+学历代码,education_code,VARCHAR,2,,,Y,人口基础,学历代码（GB/T 4658）,MDM,EDU_GBT4658,,N,INTERNAL
+出生日期,birth_date,DATE,,,,Y,人口基础,自然人出生日期,MDM,,,N,INTERNAL
+手机号码,mobile_phone,VARCHAR,11,,,Y,联系信息,中国大陆 11 位移动电话号码,MDM,,,N,INTERNAL
+电子邮箱,email_address,VARCHAR,128,,,Y,联系信息,电子邮箱地址,MDM,,,N,INTERNAL
+行政区划代码,region_code,CHAR,6,,,Y,地址区划,行政区划代码（GB/T 2260），6 位数字,MDM,REGION_GBT2260,,N,INTERNAL
+详细地址,address_detail,VARCHAR,256,,,Y,地址区划,门牌级详细地址描述,MDM,,,N,INTERNAL
+统一社会信用代码,unified_social_credit_code,CHAR,18,,,N,机构基础,法人和其他组织统一社会信用代码（GB 32100），18 位,MDM,,,N,INTERNAL
+机构名称,org_name,VARCHAR,128,,,N,机构基础,法人机构登记名称,MDM,,,N,INTERNAL
+金额,amount,DECIMAL,,18,2,Y,通用,货币金额（单位元，保留 2 位小数）,MDM,,,N,INTERNAL
+创建时间,created_time,TIMESTAMP,,,,N,通用,记录创建时间戳,MDM,,,N,INTERNAL
+更新时间,updated_time,TIMESTAMP,,,,Y,通用,记录最后更新时间戳,MDM,,,N,INTERNAL
+备注,remark,VARCHAR,512,,,Y,通用,自由文本备注,MDM,,,N,INTERNAL

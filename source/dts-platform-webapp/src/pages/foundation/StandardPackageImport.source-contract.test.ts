@@ -46,6 +46,29 @@ test("standard package page implements the three-step wizard with history rollba
 	assert.match(PAGE, /导入历史/);
 });
 
+test("builtin GB standard packs install through the same pipeline", () => {
+	assert.match(STANDARD_PACKAGE_RESOURCE, /builtin\/\{code\}\/install/);
+	assert.match(PLATFORM_API, /listBuiltinStandardPackages/);
+	assert.match(PLATFORM_API, /installBuiltinStandardPackage/);
+	assert.match(PAGE, /内置标准包/);
+	assert.match(PAGE, /installBuiltinStandardPackage/);
+	assert.match(PAGE, /builtin-package-/);
+});
+
+test("builtin pack resources ship the four GB packages", () => {
+	const manifest = readFileSync(
+		new URL(
+			"../../../../dts-platform/src/main/resources/standard-packages/manifest.json",
+			import.meta.url,
+		),
+		"utf8",
+	);
+	assert.match(manifest, /gbt-2261-gender/);
+	assert.match(manifest, /gbt-4658-education/);
+	assert.match(manifest, /gbt-2260-region/);
+	assert.match(manifest, /common-data-elements/);
+});
+
 test("standard package page is routable statically and via menu resolver", () => {
 	assert.match(STATIC_ROUTES, /foundation\/standard-package/);
 	assert.match(DYNAMIC_RESOLVER, /"\/foundation\/standard-package": "\/pages\/foundation\/StandardPackagePage"/);

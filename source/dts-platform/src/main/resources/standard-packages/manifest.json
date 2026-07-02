@@ -1,0 +1,32 @@
+{
+  "packages": [
+    {
+      "code": "gbt-2261-gender",
+      "name": "性别代码",
+      "standardNo": "GB/T 2261.1-2003",
+      "category": "公共码表",
+      "description": "个人基本信息分类与代码 第1部分：人的性别代码。含未知/男性/女性/未说明共 4 个码值。"
+    },
+    {
+      "code": "gbt-4658-education",
+      "name": "学历代码",
+      "standardNo": "GB/T 4658-2006",
+      "category": "公共码表",
+      "description": "学历代码常用节选：研究生/本科/专科/中职/高中/初中/小学等大类及常用毕业代码，共 16 个码值。"
+    },
+    {
+      "code": "gbt-2260-region",
+      "name": "行政区划代码（省级）",
+      "standardNo": "GB/T 2260",
+      "category": "公共码表",
+      "description": "中华人民共和国行政区划代码省级节选（34 个省级行政区，6 位数字代码）。地市级及以下建议按需通过标准包上传扩充。"
+    },
+    {
+      "code": "common-data-elements",
+      "name": "常用数据元",
+      "standardNo": "参照 GB/T 18391",
+      "category": "数据元",
+      "description": "身份证号、姓名、手机号、邮箱、统一社会信用代码、金额等常用数据元定义，性别/学历/行政区划字段关联对应国标码表。依赖以上三个码表包，建议先安装码表包。"
+    }
+  ]
+}

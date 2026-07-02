@@ -1,0 +1,2 @@
+code_type_id,code_type_code,code_type_name,std_level,biz_catalog,data_type,status,owner_dept,version
+,REGION_GBT2260,行政区划代码,NATIONAL,地址区划,CHAR,1,,GB/T 2260

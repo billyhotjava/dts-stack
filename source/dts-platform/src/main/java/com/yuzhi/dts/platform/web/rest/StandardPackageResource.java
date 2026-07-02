@@ -4,7 +4,9 @@ import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.StandardPackageApplyService;
+import com.yuzhi.dts.platform.service.modeling.StandardPackageBuiltinService;
 import com.yuzhi.dts.platform.service.modeling.StandardPackageImportService;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.MediaType;
@@ -28,15 +30,18 @@ public class StandardPackageResource {
 
     private final StandardPackageImportService importService;
     private final StandardPackageApplyService applyService;
+    private final StandardPackageBuiltinService builtinService;
     private final AuditService audit;
 
     public StandardPackageResource(
         StandardPackageImportService importService,
         StandardPackageApplyService applyService,
+        StandardPackageBuiltinService builtinService,
         AuditService audit
     ) {
         this.importService = importService;
         this.applyService = applyService;
+        this.builtinService = builtinService;
         this.audit = audit;
     }
 
@@ -115,5 +120,30 @@ public class StandardPackageResource {
     public ApiResponse<Map<String, Object>> getRun(@PathVariable UUID runId) {
         audit.auditAction("MODELING_STANDARD_PACKAGE_RUN_VIEW", AuditStage.SUCCESS, runId.toString(), Map.of("summary", "查看标准包导入明细"));
         return ApiResponses.ok(applyService.getRun(runId));
+    }
+
+    @GetMapping("/builtin")
+    public ApiResponse<List<Map<String, Object>>> listBuiltin() {
+        audit.auditAction("MODELING_STANDARD_PACKAGE_BUILTIN_LIST", AuditStage.SUCCESS, "list", Map.of("summary", "查看内置标准包"));
+        return ApiResponses.ok(builtinService.listBuiltin());
+    }
+
+    @PostMapping("/builtin/{code}/install")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> installBuiltin(@PathVariable String code) {
+        String actor = SecurityUtils.getCurrentUserLogin().orElse("system");
+        try {
+            Map<String, Object> result = builtinService.install(code, actor);
+            audit.auditAction(
+                "MODELING_STANDARD_PACKAGE_BUILTIN_INSTALL",
+                AuditStage.SUCCESS,
+                code,
+                Map.of("summary", "安装内置标准包：" + code)
+            );
+            return ApiResponses.ok(result);
+        } catch (IllegalArgumentException ex) {
+            audit.auditAction("MODELING_STANDARD_PACKAGE_BUILTIN_INSTALL", AuditStage.FAIL, code, Map.of("summary", ex.getMessage()));
+            return ApiResponses.error(ex.getMessage());
+        }
     }
 }
