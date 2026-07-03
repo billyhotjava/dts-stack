@@ -5,6 +5,7 @@ import test from "node:test";
 const SOURCE = readFileSync(new URL("./DatasetsPage.tsx", import.meta.url), "utf8");
 const SHARED = readFileSync(new URL("./assets/assetPageShared.tsx", import.meta.url), "utf8");
 const MAP_VIEW = readFileSync(new URL("./assets/AssetMapView.tsx", import.meta.url), "utf8");
+const LEDGER_VIEW = readFileSync(new URL("./assets/AssetLedgerView.tsx", import.meta.url), "utf8");
 
 test("asset page shares types/constants/helpers via a dedicated module", () => {
 	assert.match(SHARED, /export const LAYER_ORDER/);
@@ -70,7 +71,8 @@ test("asset ledger has its own registration and verification shell", () => {
 	assert.match(SOURCE, /asset-ledger-toolbar/);
 	assert.match(SOURCE, /asset-ledger-card/);
 	assert.match(SOURCE, /asset-ledger-filter-strip/);
-	assert.match(SOURCE, /asset-ledger-workbench/);
+	assert.match(LEDGER_VIEW, /asset-ledger-workbench/);
+	assert.match(SOURCE, /<AssetLedgerView/);
 	assert.match(SOURCE, /资产登记台账/);
 	assert.match(SOURCE, /登记核验/);
 	assert.match(SOURCE, /待补字段/);

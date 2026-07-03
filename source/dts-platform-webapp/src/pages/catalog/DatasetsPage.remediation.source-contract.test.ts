@@ -4,6 +4,7 @@ import test from "node:test";
 
 const SOURCE = readFileSync(new URL("./DatasetsPage.tsx", import.meta.url), "utf8");
 const MAP_VIEW = readFileSync(new URL("./assets/AssetMapView.tsx", import.meta.url), "utf8");
+const LEDGER_VIEW = readFileSync(new URL("./assets/AssetLedgerView.tsx", import.meta.url), "utf8");
 
 test("asset map exposes remediation workspace for governance gaps and lineage failures", () => {
 	assert.match(SOURCE, /治理缺口处置工作台/);
@@ -30,8 +31,8 @@ test("asset map supports visual map and operational ledger table", () => {
 	assert.match(SOURCE, /renderAssetTable/);
 	assert.match(SOURCE, /进入台账/);
 	assert.match(SOURCE, /返回地图/);
-	assert.match(SOURCE, /title: "治理状态"/);
-	assert.match(SOURCE, /tab=lineage-impact/);
+	assert.match(LEDGER_VIEW, /title: "治理状态"/);
+	assert.match(LEDGER_VIEW, /tab=lineage-impact/);
 	assert.doesNotMatch(SOURCE, /label: "卡片"/);
 	assert.doesNotMatch(SOURCE, /DATASET_VIEW_MODE_STORAGE_KEY/);
 	assert.doesNotMatch(SOURCE, /router\.push\("\/catalog\/asset-detail"\)/);
