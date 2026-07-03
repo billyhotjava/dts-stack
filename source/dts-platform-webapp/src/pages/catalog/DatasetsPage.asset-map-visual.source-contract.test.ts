@@ -3,6 +3,16 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const SOURCE = readFileSync(new URL("./DatasetsPage.tsx", import.meta.url), "utf8");
+const SHARED = readFileSync(new URL("./assets/assetPageShared.tsx", import.meta.url), "utf8");
+
+test("asset page shares types/constants/helpers via a dedicated module", () => {
+	assert.match(SHARED, /export const LAYER_ORDER/);
+	assert.match(SHARED, /export const LAYER_META/);
+	assert.match(SHARED, /export const LEDGER_PAGE_SIZE = 10/);
+	assert.match(SHARED, /export const normalizeLayer/);
+	assert.match(SHARED, /export const MetricTile/);
+	assert.match(SOURCE, /from "\.\/assets\/assetPageShared"/);
+});
 
 test("asset map is a navigation matrix, not a paginated detail list", () => {
 	assert.match(SOURCE, /renderAssetVisualMap/);
@@ -44,7 +54,7 @@ test("asset map defaults to visual map unless the URL explicitly requests ledger
 test("asset ledger exports CSV and follows the 10-per-page pagination convention", () => {
 	assert.match(SOURCE, /exportLedgerCsv/);
 	assert.match(SOURCE, /asset-ledger-export/);
-	assert.match(SOURCE, /LEDGER_PAGE_SIZE = 10/);
+	assert.match(SOURCE, /LEDGER_PAGE_SIZE/);
 	// 台账分页 10/20/50/100，地图保持原档位
 	assert.match(SOURCE, /isLedgerView \? \[10, 20, 50, 100\] : \[12, 18, 30, 48\]/);
 });

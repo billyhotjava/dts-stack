@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const DATASETS_SOURCE = readFileSync(new URL("./DatasetsPage.tsx", import.meta.url), "utf8");
+// Sprint-57 F4 拆分：表格布局常量移入共享层
+const ASSET_PAGE_SHARED = readFileSync(new URL("./assets/assetPageShared.tsx", import.meta.url), "utf8");
 const DATA_PRODUCTS_SOURCE = readFileSync(new URL("./DataProductsPage.tsx", import.meta.url), "utf8");
 const WORKBENCH_SOURCE = readFileSync(new URL("../workbench/index.tsx", import.meta.url), "utf8");
 const DATA_MANAGEMENT_SOURCE = readFileSync(
@@ -19,7 +21,7 @@ const DYNAMIC_RESOLVER = readFileSync(
 );
 
 test("Sprint-49 F2 keeps asset ledger table stable while exposing the consumption chain", () => {
-	assert.match(DATASETS_SOURCE, /const ASSET_TABLE_SCROLL_X = 1760/);
+	assert.match(ASSET_PAGE_SHARED, /const ASSET_TABLE_SCROLL_X = 1760/);
 	assert.match(DATASETS_SOURCE, /tableLayout="fixed"/);
 	assert.match(DATASETS_SOURCE, /className="catalog-assets-table"/);
 	assert.match(DATASETS_SOURCE, /className="catalog-assets-actions"/);

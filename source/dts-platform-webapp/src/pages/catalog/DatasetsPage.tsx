@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
 import { Alert, Button, Card, Collapse, Input, Layout, Modal, Pagination, Select, Space, Spin, Table, Tabs, Tag, Tooltip, Tree } from "antd";
 import { ApartmentOutlined, ArrowRightOutlined, BranchesOutlined, DatabaseOutlined, SafetyCertificateOutlined, SearchOutlined, TableOutlined, WarningOutlined } from "@ant-design/icons";
 import { EmptyState } from "@/components/empty-state";
@@ -21,189 +20,27 @@ import {
 import { useRouter } from "@/routes/hooks";
 import { resolveAssetReadiness } from "./assetPortalUx.helpers";
 
-type AssetRow = {
-	id: string;
-	name: string;
-	type: string;
-	domainId?: string;
-	domain?: string;
-	classification?: string;
-	warehouseLayer?: string;
-	status?: string;
-	lifecycleStatus?: string;
-	owner?: string;
-	ownerDept?: string;
-	governanceStatus?: string;
-	matchStatus?: string;
-	metadataSource?: string;
-	legacyDatasetId?: string;
-	description?: string;
-	hiveDatabase?: string;
-	hiveTable?: string;
-	updatedAt?: string;
-	snapshotTime?: string;
-};
-
-type DomainNode = { id?: string; name?: string; code?: string; children?: DomainNode[] };
-
-const TYPE_OPTIONS = [
-	{ label: "全部类型", value: "ALL" },
-	{ label: "Hive", value: "HIVE" },
-	{ label: "JDBC", value: "JDBC" },
-	{ label: "文件", value: "FILE" },
-];
-
-const CLASSIFICATION_OPTIONS = [
-	{ label: "全部密级", value: "ALL" },
-	{ label: "公开", value: "PUBLIC" },
-	{ label: "内部", value: "INTERNAL" },
-	{ label: "秘密", value: "SECRET" },
-	{ label: "机密", value: "CONFIDENTIAL" },
-];
-
-const GOVERNANCE_OPTIONS = [
-	{ label: "全部治理状态", value: "ALL" },
-	{ label: "已治理", value: "GOVERNED" },
-	{ label: "待认领", value: "PENDING_CLAIM" },
-	{ label: "待定级", value: "PENDING_CLASSIFICATION" },
-	{ label: "待归域", value: "PENDING_DOMAIN" },
-	{ label: "停用", value: "DISABLED" },
-];
-
-const MATCH_OPTIONS = [
-	{ label: "全部映射", value: "ALL" },
-	{ label: "已映射", value: "MATCHED" },
-	{ label: "未匹配", value: "UNMATCHED" },
-	{ label: "人工确认", value: "MANUAL_REVIEW" },
-];
-
-const DATASET_FILTER_STORAGE_KEY = "catalog.asset.filter.v2";
-const ASSET_PORTAL_V2_ENABLED = import.meta.env.VITE_CATALOG_ASSET_PORTAL_V2 !== "false";
-const UNASSIGNED_DOMAIN_KEY = "__UNASSIGNED__";
-
-const CLASSIFICATION_LABEL: Record<string, string> = {
-	PUBLIC: "公开",
-	INTERNAL: "内部",
-	SECRET: "秘密",
-	CONFIDENTIAL: "机密",
-};
-
-const LAYER_META: Record<string, { label: string; color: string; tone: string }> = {
-	SOURCE: { label: "来源", color: "magenta", tone: "border-pink-200 bg-pink-50/60" },
-	ODS: { label: "ODS", color: "default", tone: "border-slate-200 bg-slate-50/70" },
-	STG: { label: "STG", color: "geekblue", tone: "border-indigo-200 bg-indigo-50/60" },
-	DWD: { label: "DWD", color: "blue", tone: "border-blue-200 bg-blue-50/60" },
-	DIM: { label: "DIM", color: "purple", tone: "border-purple-200 bg-purple-50/60" },
-	DWS: { label: "DWS", color: "cyan", tone: "border-cyan-200 bg-cyan-50/60" },
-	ADS: { label: "ADS", color: "green", tone: "border-green-200 bg-green-50/60" },
-	OTHER: { label: "未分层", color: "default", tone: "border-slate-200 bg-white" },
-};
-
-const LAYER_ORDER = ["SOURCE", "ODS", "STG", "DWD", "DIM", "DWS", "ADS", "OTHER"];
-// 台账遵循全局分页约定：默认 10 条/页；地图保持原有卡片档位
-const LEDGER_PAGE_SIZE = 10;
-const MAP_PAGE_SIZE = 18;
-const ASSET_ACTION_COLUMN_WIDTH = 640;
-const ASSET_TABLE_SCROLL_X = 1760;
-
-type ReconciliationAssertion = {
-	code?: string;
-	name?: string;
-	passed?: boolean;
-	severity?: string;
-	detail?: string;
-	suggestion?: string;
-};
-
-type ReconciliationResult = {
-	generatedAt?: string;
-	assertionCount?: number;
-	failedCount?: number;
-	errorCount?: number;
-	warningCount?: number;
-	assertions?: ReconciliationAssertion[];
-	regressionChecklist?: Array<{ code?: string; name?: string; route?: string; description?: string }>;
-};
-
-type ResolutionFailureRow = {
-	id?: string;
-	ref?: string;
-	requestedAt?: string;
-	caller?: string;
-	typeHintGuess?: string;
-	reason?: string;
-};
-
-type GovernanceGapRow = {
-	id?: string;
-	displayName?: string;
-	fqn?: string;
-	assetKey?: string;
-	grantAssetType?: string;
-	grantAssetId?: string;
-	lifecycleStatus?: string;
-	governanceStatus?: string;
-	severity?: string;
-	blockingGaps?: string[];
-	warningGaps?: string[];
-	metadataSource?: string;
-};
-
-type LineageFailureRow = GovernanceGapRow & {
-	blocking?: boolean;
-	reason?: string;
-	evidenceSource?: string;
-	nextAction?: string;
-};
-
-const normalizeLayer = (value?: string) => {
-	const normalized = String(value || "").trim().toUpperCase();
-	return normalized && LAYER_META[normalized] ? normalized : "OTHER";
-};
-
-const classificationText = (value?: string) => {
-	const normalized = String(value || "").trim().toUpperCase();
-	return normalized ? CLASSIFICATION_LABEL[normalized] || normalized : "未设定";
-};
-
-const formatTime = (value?: string) => {
-	if (!value) return "-";
-	try {
-		return new Date(value).toLocaleString();
-	} catch {
-		return value;
-	}
-};
-
-const buildTreeNodes = (nodes: DomainNode[], prefix = "domain"): any[] =>
-	nodes.map((node, index) => ({
-		key: node.id || `fallback-${prefix}-${index}`,
-		title: node.name ?? node.code ?? "未命名",
-		children: node.children?.length ? buildTreeNodes(node.children, `${prefix}-${index}`) : undefined,
-	}));
-
-const MetricTile = ({
-	icon,
-	label,
-	value,
-	footnote,
-	tone = "text-slate-700",
-}: {
-	icon: ReactNode;
-	label: string;
-	value: ReactNode;
-	footnote?: string;
-	tone?: string;
-}) => (
-	<div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
-		<div className="flex items-center justify-between gap-3">
-			<div className="text-xs text-slate-500">{label}</div>
-			<div className={`text-lg ${tone}`}>{icon}</div>
-		</div>
-		<div className="mt-2 text-2xl font-semibold leading-none text-slate-900">{value}</div>
-		{footnote ? <div className="mt-2 truncate text-xs text-slate-500">{footnote}</div> : null}
-	</div>
-);
+import {
+	TYPE_OPTIONS,
+	CLASSIFICATION_OPTIONS,
+	GOVERNANCE_OPTIONS,
+	MATCH_OPTIONS,
+	DATASET_FILTER_STORAGE_KEY,
+	ASSET_PORTAL_V2_ENABLED,
+	UNASSIGNED_DOMAIN_KEY,
+	LAYER_META,
+	LAYER_ORDER,
+	LEDGER_PAGE_SIZE,
+	MAP_PAGE_SIZE,
+	ASSET_ACTION_COLUMN_WIDTH,
+	ASSET_TABLE_SCROLL_X,
+	normalizeLayer,
+	classificationText,
+	formatTime,
+	buildTreeNodes,
+	MetricTile,
+} from "./assets/assetPageShared";
+import type { AssetRow, DomainNode, ReconciliationResult, ResolutionFailureRow, GovernanceGapRow, LineageFailureRow } from "./assets/assetPageShared";
 
 export default function Page() {
 	const router = useRouter();
