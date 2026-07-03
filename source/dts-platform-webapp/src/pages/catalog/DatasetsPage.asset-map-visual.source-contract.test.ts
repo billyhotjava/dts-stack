@@ -41,6 +41,14 @@ test("asset map defaults to visual map unless the URL explicitly requests ledger
 	assert.doesNotMatch(SOURCE, /localStorage\.setItem\(DATASET_VIEW_MODE_STORAGE_KEY/);
 });
 
+test("asset ledger exports CSV and follows the 10-per-page pagination convention", () => {
+	assert.match(SOURCE, /exportLedgerCsv/);
+	assert.match(SOURCE, /asset-ledger-export/);
+	assert.match(SOURCE, /LEDGER_PAGE_SIZE = 10/);
+	// 台账分页 10/20/50/100，地图保持原档位
+	assert.match(SOURCE, /isLedgerView \? \[10, 20, 50, 100\] : \[12, 18, 30, 48\]/);
+});
+
 test("asset ledger has its own registration and verification shell", () => {
 	assert.match(SOURCE, /const isLedgerView = viewMode === "table"/);
 	assert.match(SOURCE, /const pageTitle = isLedgerView \? "资产台账" : "资产地图"/);

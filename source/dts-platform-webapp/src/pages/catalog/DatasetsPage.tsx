@@ -100,6 +100,9 @@ const LAYER_META: Record<string, { label: string; color: string; tone: string }>
 };
 
 const LAYER_ORDER = ["SOURCE", "ODS", "STG", "DWD", "DIM", "DWS", "ADS", "OTHER"];
+// 台账遵循全局分页约定：默认 10 条/页；地图保持原有卡片档位
+const LEDGER_PAGE_SIZE = 10;
+const MAP_PAGE_SIZE = 18;
 const ASSET_ACTION_COLUMN_WIDTH = 640;
 const ASSET_TABLE_SCROLL_X = 1760;
 
@@ -243,7 +246,11 @@ export default function Page() {
 	const [remediationOpen, setRemediationOpen] = useState(false);
 	const [remediationLoading, setRemediationLoading] = useState<string | null>(null);
 	const [records, setRecords] = useState<AssetRow[]>([]);
-	const [pageState, setPageState] = useState({ page: 1, size: 18, total: 0 });
+	const [pageState, setPageState] = useState(() => ({
+		page: 1,
+		size: viewMode === "table" ? LEDGER_PAGE_SIZE : MAP_PAGE_SIZE,
+		total: 0,
+	}));
 	const [domains, setDomains] = useState<{ id: string; name: string }[]>([]);
 	const [reconciliation, setReconciliation] = useState<ReconciliationResult | null>(null);
 	const [reconciliationLoading, setReconciliationLoading] = useState(false);
@@ -659,6 +666,7 @@ export default function Page() {
 
 	const switchAssetView = (next: "map" | "table") => {
 		setViewMode(next);
+		setPageState((prev) => ({ ...prev, page: 1, size: next === "table" ? LEDGER_PAGE_SIZE : MAP_PAGE_SIZE }));
 		router.push(next === "table" ? "/catalog/assets?view=table" : "/catalog/assets");
 	};
 
@@ -668,6 +676,7 @@ export default function Page() {
 			setDomain(domainKey);
 		}
 		setViewMode("table");
+		setPageState((prev) => ({ ...prev, page: 1, size: LEDGER_PAGE_SIZE }));
 		const params = new URLSearchParams();
 		params.set("view", "table");
 		if (layer && layer !== "ALL") {
@@ -677,6 +686,39 @@ export default function Page() {
 			params.set("domain", domainKey);
 		}
 		router.push(`/catalog/assets?${params.toString()}`);
+	};
+
+	const exportLedgerCsv = () => {
+		const header = ["名称", "物理位置", "类型", "分层", "主题域", "密级", "状态", "治理状态", "负责人", "更新时间"];
+		const escapeCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+		const lines = [header.map(escapeCell).join(",")];
+		for (const row of records) {
+			lines.push(
+				[
+					row.name,
+					row.hiveDatabase && row.hiveTable ? `${row.hiveDatabase}.${row.hiveTable}` : row.description || row.id,
+					row.type,
+					LAYER_META[normalizeLayer(row.warehouseLayer)].label,
+					row.domain || (row.domainId ? domainMap.get(row.domainId) : undefined) || "未归域",
+					classificationText(row.classification),
+					row.status || "",
+					resolveAssetReadiness(row).label,
+					row.owner || row.ownerDept || "",
+					formatTime(row.snapshotTime || row.updatedAt),
+				]
+					.map(escapeCell)
+					.join(","),
+			);
+		}
+		const blob = new Blob([`﻿${lines.join("\n")}`], { type: "text/csv;charset=utf-8" });
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement("a");
+		link.href = url;
+		link.download = `asset-ledger-${new Date().toISOString().slice(0, 10)}.csv`;
+		document.body.appendChild(link);
+		link.click();
+		link.remove();
+		URL.revokeObjectURL(url);
 	};
 
 	const domainMatrix = useMemo(() => {
@@ -1229,7 +1271,7 @@ export default function Page() {
 								pageSize={pageState.size}
 								total={pageState.total}
 								showSizeChanger
-								pageSizeOptions={[12, 18, 30, 48]}
+								pageSizeOptions={isLedgerView ? [10, 20, 50, 100] : [12, 18, 30, 48]}
 								onChange={(page, size) => void loadDatasets(page, size)}
 							/>
 						}
@@ -1241,9 +1283,14 @@ export default function Page() {
 											<div className="text-sm font-semibold text-slate-900">资产登记台账</div>
 											<div className="mt-1 text-xs text-slate-500">按登记字段、治理状态、密级和消费动作核验当前资产。</div>
 										</div>
-										<Button size="small" onClick={() => switchAssetView("map")}>
-											返回地图
-										</Button>
+										<Space size={8}>
+											<Button size="small" onClick={exportLedgerCsv} data-testid="asset-ledger-export">
+												导出 CSV（本页）
+											</Button>
+											<Button size="small" onClick={() => switchAssetView("map")}>
+												返回地图
+											</Button>
+										</Space>
 									</div>
 									<Tabs
 										activeKey={warehouseLayer}
