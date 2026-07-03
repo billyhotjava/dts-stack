@@ -23,11 +23,12 @@ test("remediation actions route to detail tabs and refresh lineage evidence", ()
 
 test("asset map supports visual map and operational ledger table", () => {
 	assert.match(SOURCE, /new URLSearchParams\(window\.location\.search\)\.get\("view"\) === "table"/);
-	assert.match(SOURCE, /Segmented/);
+	// 视图切换：Segmented 已由 进入台账/返回地图 显式动作按钮取代（Sprint-57 F4 基线）
+	assert.match(SOURCE, /switchAssetView/);
 	assert.match(SOURCE, /renderAssetVisualMap/);
 	assert.match(SOURCE, /renderAssetTable/);
-	assert.match(SOURCE, /label: "地图"/);
-	assert.match(SOURCE, /label: "台账"/);
+	assert.match(SOURCE, /进入台账/);
+	assert.match(SOURCE, /返回地图/);
 	assert.match(SOURCE, /title: "治理状态"/);
 	assert.match(SOURCE, /tab=lineage-impact/);
 	assert.doesNotMatch(SOURCE, /label: "卡片"/);

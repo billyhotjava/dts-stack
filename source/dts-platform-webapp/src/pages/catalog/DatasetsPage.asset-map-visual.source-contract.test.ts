@@ -4,20 +4,34 @@ import test from "node:test";
 
 const SOURCE = readFileSync(new URL("./DatasetsPage.tsx", import.meta.url), "utf8");
 
-test("asset map is a visual operating map, not only card and ledger views", () => {
+test("asset map is a navigation matrix, not a paginated detail list", () => {
 	assert.match(SOURCE, /renderAssetVisualMap/);
-	assert.match(SOURCE, /renderAssetMapNode/);
 	assert.match(SOURCE, /asset-map-stage/);
 	assert.match(SOURCE, /asset-map-toolbar/);
 	assert.match(SOURCE, /asset-map-card/);
 	assert.match(SOURCE, /资产链路总览/);
-	assert.match(SOURCE, /全部资产工作区/);
 	assert.match(SOURCE, /治理优先队列/);
 	assert.match(SOURCE, /主题域覆盖/);
 	assert.match(SOURCE, /进入台账/);
+	// 地图去明细化：不再渲染 per-asset 卡片网格，明细职责归台账
+	assert.doesNotMatch(SOURCE, /renderAssetMapNode/);
+	assert.doesNotMatch(SOURCE, /全部资产工作区/);
+	// 地图的主体是 分层×主题域 导航矩阵
+	assert.match(SOURCE, /renderAssetMatrix/);
+	assert.match(SOURCE, /asset-map-matrix/);
+	assert.match(SOURCE, /分层×主题域矩阵/);
 	assert.doesNotMatch(SOURCE, /gridTemplateColumns:\s*`repeat\(\$\{LAYER_ORDER\.length\}/);
 	assert.doesNotMatch(SOURCE, /minmax\(138px/);
 	assert.doesNotMatch(SOURCE, /label: "卡片"/);
+});
+
+test("asset map matrix drills down into the ledger with layer and domain filters", () => {
+	assert.match(SOURCE, /drillToLedger/);
+	assert.match(SOURCE, /params\.set\("layer"/);
+	assert.match(SOURCE, /params\.set\("domain"/);
+	// 台账深链可携带 layer/domain 初始化筛选
+	assert.match(SOURCE, /\.get\("layer"\)/);
+	assert.match(SOURCE, /\.get\("domain"\)/);
 });
 
 test("asset map defaults to visual map unless the URL explicitly requests ledger view", () => {

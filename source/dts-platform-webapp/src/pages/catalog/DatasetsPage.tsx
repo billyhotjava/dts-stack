@@ -215,10 +215,22 @@ export default function Page() {
 			return "map";
 		}
 	});
-	const [domain, setDomain] = useState<string | undefined>();
+	const [domain, setDomain] = useState<string | undefined>(() => {
+		try {
+			return new URLSearchParams(window.location.search).get("domain") || undefined;
+		} catch {
+			return undefined;
+		}
+	});
 	const [assetType, setAssetType] = useState<string>("ALL");
 	const [classification, setClassification] = useState<string>("ALL");
-	const [warehouseLayer, setWarehouseLayer] = useState<string>("ALL");
+	const [warehouseLayer, setWarehouseLayer] = useState<string>(() => {
+		try {
+			return new URLSearchParams(window.location.search).get("layer") || "ALL";
+		} catch {
+			return "ALL";
+		}
+	});
 	const [governanceStatus, setGovernanceStatus] = useState<string>("ALL");
 	const [matchStatus, setMatchStatus] = useState<string>("ALL");
 	const [loading, setLoading] = useState(false);
@@ -244,16 +256,22 @@ export default function Page() {
 
 	useEffect(() => {
 		try {
+			// 地图矩阵下钻等深链显式携带 layer/domain 时，URL 优先于本地缓存的筛选
+			const hasDeepLinkFilters = Boolean(
+				new URLSearchParams(window.location.search).get("layer") || new URLSearchParams(window.location.search).get("domain"),
+			);
 			const raw = localStorage.getItem(DATASET_FILTER_STORAGE_KEY);
 			if (!raw) return;
 			const saved = JSON.parse(raw);
 			setKeyword(typeof saved?.keyword === "string" ? saved.keyword : "");
-			setDomain(undefined);
 			setAssetType(typeof saved?.assetType === "string" && saved.assetType ? saved.assetType : "ALL");
 			setClassification(typeof saved?.classification === "string" && saved.classification ? saved.classification : "ALL");
-			setWarehouseLayer(typeof saved?.warehouseLayer === "string" && saved.warehouseLayer ? saved.warehouseLayer : "ALL");
 			setGovernanceStatus(typeof saved?.governanceStatus === "string" && saved.governanceStatus ? saved.governanceStatus : "ALL");
 			setMatchStatus(typeof saved?.matchStatus === "string" && saved.matchStatus ? saved.matchStatus : "ALL");
+			if (!hasDeepLinkFilters) {
+				setDomain(undefined);
+				setWarehouseLayer(typeof saved?.warehouseLayer === "string" && saved.warehouseLayer ? saved.warehouseLayer : "ALL");
+			}
 		} catch {
 			// ignore malformed cache
 		}
@@ -644,61 +662,102 @@ export default function Page() {
 		router.push(next === "table" ? "/catalog/assets?view=table" : "/catalog/assets");
 	};
 
-	const renderAssetMapNode = (row: AssetRow) => {
-		const layer = normalizeLayer(row.warehouseLayer);
-		const meta = LAYER_META[layer];
-		const isStale = String(row.lifecycleStatus || "").toUpperCase() === "STALE" || row.status === "停用";
-		const readiness = resolveAssetReadiness(row);
-		const assetLocation = row.hiveDatabase && row.hiveTable ? `${row.hiveDatabase}.${row.hiveTable}` : row.description || row.type || "未知类型";
-		const domainLabel = row.domain || (row.domainId ? domainMap.get(row.domainId) : undefined) || "未归域";
-		return (
-			<button
-				key={row.id}
-				type="button"
-				className="group w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md"
-				onClick={() => router.push(`/catalog/datasets/${row.id}`)}
-			>
-				<div className="flex items-start justify-between gap-2">
-					<Tooltip title={row.name}>
-						<div className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900 group-hover:text-blue-700">{row.name}</div>
-					</Tooltip>
-					<Tag color={readiness.color} style={{ fontSize: 11 }}>{readiness.label}</Tag>
-				</div>
-				<div className="mt-2 flex items-center gap-1 truncate text-xs text-slate-500">
-					<DatabaseOutlined />
-					<span className="truncate">{assetLocation}</span>
-				</div>
-				<div className="mt-3 grid grid-cols-3 gap-2 text-[11px] text-slate-500">
-					<div className="min-w-0 rounded border border-slate-100 bg-slate-50 px-2 py-1">
-						<div className="text-slate-400">分层</div>
-						<div className="truncate font-medium text-slate-700">{meta.label}</div>
-					</div>
-					<div className="min-w-0 rounded border border-slate-100 bg-slate-50 px-2 py-1">
-						<div className="text-slate-400">主题域</div>
-						<div className="truncate font-medium text-slate-700">{domainLabel}</div>
-					</div>
-					<div className="min-w-0 rounded border border-slate-100 bg-slate-50 px-2 py-1">
-						<div className="text-slate-400">负责人</div>
-						<div className="truncate font-medium text-slate-700">{row.owner || row.ownerDept || "未认领"}</div>
-					</div>
-				</div>
-				{readiness.reasons.length ? (
-					<div className="mt-2 rounded border border-amber-100 bg-amber-50 px-2 py-1 text-[11px] text-amber-700">
-						{readiness.reasons[0]}
-					</div>
-				) : null}
-				<div className="mt-3 flex flex-wrap items-center gap-2">
-					<Tag color={isStale ? "red" : meta.color} style={{ fontSize: 11 }}>
-						{isStale ? "失效" : row.status || "启用"}
-					</Tag>
-					<Tag color={row.classification ? "orange" : "default"} style={{ fontSize: 11 }}>
-						{classificationText(row.classification)}
-					</Tag>
-					<span className="text-[11px] text-slate-400">{formatTime(row.snapshotTime || row.updatedAt)}</span>
-				</div>
-			</button>
-		);
+	const drillToLedger = (layer: string, domainKey?: string) => {
+		setWarehouseLayer(layer || "ALL");
+		if (domainKey) {
+			setDomain(domainKey);
+		}
+		setViewMode("table");
+		const params = new URLSearchParams();
+		params.set("view", "table");
+		if (layer && layer !== "ALL") {
+			params.set("layer", layer);
+		}
+		if (domainKey) {
+			params.set("domain", domainKey);
+		}
+		router.push(`/catalog/assets?${params.toString()}`);
 	};
+
+	const domainMatrix = useMemo(() => {
+		const columns = new Map<string, { key: string; name: string }>();
+		const cells = new Map<string, { total: number; attention: number }>();
+		for (const row of records) {
+			const domainKey = row.domainId ? String(row.domainId) : UNASSIGNED_DOMAIN_KEY;
+			const domainName = row.domain || (row.domainId ? domainMap.get(row.domainId) : undefined) || "未归域";
+			if (!columns.has(domainKey)) {
+				columns.set(domainKey, { key: domainKey, name: domainName });
+			}
+			const layer = normalizeLayer(row.warehouseLayer);
+			const cellKey = `${layer}|${domainKey}`;
+			const cell = cells.get(cellKey) || { total: 0, attention: 0 };
+			cell.total += 1;
+			if (resolveAssetReadiness(row).state !== "READY") {
+				cell.attention += 1;
+			}
+			cells.set(cellKey, cell);
+		}
+		return { columns: [...columns.values()], cells };
+	}, [records, domainMap]);
+
+	const renderAssetMatrix = () => (
+		<div className="rounded-xl border border-slate-200 bg-white p-4" data-testid="asset-map-matrix">
+			<div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+				<div>
+					<div className="text-sm font-semibold text-slate-900">分层×主题域矩阵</div>
+					<div className="mt-1 text-xs text-slate-500">格子 = 该分层×主题域下的资产数，点击进入台账查看明细。</div>
+				</div>
+				<Tag color="blue">{records.length} 个资产</Tag>
+			</div>
+			{domainMatrix.columns.length ? (
+				<div className="overflow-x-auto">
+					<table className="w-full min-w-[720px] border-separate" style={{ borderSpacing: 4 }}>
+						<thead>
+							<tr>
+								<th className="px-2 py-1 text-left text-xs font-medium text-slate-400">分层 \ 主题域</th>
+								{domainMatrix.columns.map((col) => (
+									<th key={col.key} className="px-2 py-1 text-left text-xs font-medium text-slate-600">
+										<span className="line-clamp-1">{col.name}</span>
+									</th>
+								))}
+							</tr>
+						</thead>
+						<tbody>
+							{LAYER_ORDER.map((layer) => (
+								<tr key={layer}>
+									<td className="whitespace-nowrap px-2 py-1 text-xs font-medium text-slate-600">{LAYER_META[layer].label}</td>
+									{domainMatrix.columns.map((col) => {
+										const cell = domainMatrix.cells.get(`${layer}|${col.key}`);
+										if (!cell) {
+											return (
+												<td key={col.key} className="rounded bg-slate-50 px-2 py-2 text-center text-xs text-slate-300">
+													-
+												</td>
+											);
+										}
+										return (
+											<td key={col.key} className="p-0">
+												<button
+													type="button"
+													className={`w-full rounded px-2 py-2 text-center text-xs font-semibold transition hover:ring-2 hover:ring-blue-200 ${cell.attention > 0 ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"}`}
+													onClick={() => drillToLedger(layer, col.key)}
+												>
+													{cell.total}
+													{cell.attention > 0 ? <span className="ml-1 text-[10px]">待处置 {cell.attention}</span> : null}
+												</button>
+											</td>
+										);
+									})}
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			) : (
+				<div className="py-8 text-center text-xs text-slate-400">当前筛选范围内暂无资产</div>
+			)}
+		</div>
+	);
 
 	const renderAssetVisualMap = () => (
 		<div className="asset-map-stage space-y-4">
@@ -743,20 +802,7 @@ export default function Page() {
 				</div>
 			</div>
 			<div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-				<div className="rounded-xl border border-slate-200 bg-white p-4">
-					<div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-						<div>
-							<div className="text-sm font-semibold text-slate-900">
-								{warehouseLayer === "ALL" ? "全部资产工作区" : `${LAYER_META[normalizeLayer(warehouseLayer)].label}资产工作区`}
-							</div>
-							<div className="mt-1 text-xs text-slate-500">按资产状态、主题归属、密级和负责人查看当前资产。</div>
-						</div>
-						<Tag color="blue">{records.length} 个资产</Tag>
-					</div>
-					<div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
-						{records.map(renderAssetMapNode)}
-					</div>
-				</div>
+				{renderAssetMatrix()}
 				<div className="space-y-4">
 					<div className="rounded-xl border border-slate-200 bg-white p-4">
 						<div className="mb-3 flex items-center justify-between gap-3">
