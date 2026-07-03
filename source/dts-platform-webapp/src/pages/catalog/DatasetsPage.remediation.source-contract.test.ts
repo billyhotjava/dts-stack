@@ -3,10 +3,11 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const SOURCE = readFileSync(new URL("./DatasetsPage.tsx", import.meta.url), "utf8");
+const MAP_VIEW = readFileSync(new URL("./assets/AssetMapView.tsx", import.meta.url), "utf8");
 
 test("asset map exposes remediation workspace for governance gaps and lineage failures", () => {
 	assert.match(SOURCE, /治理缺口处置工作台/);
-	assert.match(SOURCE, /治理优先队列/);
+	assert.match(MAP_VIEW, /治理优先队列/);
 	assert.match(SOURCE, /governanceGapRows/);
 	assert.match(SOURCE, /lineageFailureRows/);
 	assert.match(SOURCE, /处置缺口/);
