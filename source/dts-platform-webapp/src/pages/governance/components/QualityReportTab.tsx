@@ -2,6 +2,7 @@ import { CheckCircleOutlined, CloseCircleOutlined, } from "@ant-design/icons";
 import { Alert, Button, Card, Col, Radio, Row, Select, Spin, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { type DefaultDestinationStatus, ingestionTaskAPI } from "@/api/ingestion";
 import type { QualityScoreResult, RuleRunHistory } from "@/api/platformApi";
@@ -68,6 +69,7 @@ function ScoreCard({ label, score, delta }: { label: string; score: number; delt
 
 /* ---------- Inline History ---------- */
 function RuleHistoryInline({ ruleId }: { ruleId: string }) {
+	const navigate = useNavigate();
 	const [rows, setRows] = useState<RuleRunHistory[]>([]);
 	const [loading, setLoading] = useState(true);
 
@@ -119,7 +121,10 @@ function RuleHistoryInline({ ruleId }: { ruleId: string }) {
 		{
 			title: "操作",
 			width: 80,
-			render: (_, record) => (record.status === "FAILED" ? <Typography.Link>去修复</Typography.Link> : null),
+			render: (_, record) =>
+				record.status === "FAILED" ? (
+					<Typography.Link onClick={() => navigate(`/governance/rules?tab=repair&runId=${record.runId}`)}>去修复</Typography.Link>
+				) : null,
 		},
 	];
 

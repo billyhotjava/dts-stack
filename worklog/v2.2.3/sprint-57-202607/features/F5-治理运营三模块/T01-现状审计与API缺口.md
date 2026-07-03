@@ -41,3 +41,8 @@
 1. **依赖容器重建**：dts-platform + webapp 重建后逐条跑上述验证点，把"疑似"变"确认"。
 2. 每模块确认缺口后按 TDD 补齐：先写 source-contract/单测锁定目标动线（RED）→ 实现（GREEN）。
 3. 验证记录追加到本文档，缺口清单落到各任务文档。
+
+## 审计修正（2026-07-03 循环迭代）
+
+1. **"与管控页互跳缺失"为伪缺口**：`/governance/rules`（QualityRulesPage）本身是五 Tab 容器（概览/规则/任务/报告/修复），已内嵌 QualityReportTab；独立菜单"质量报告"与之复用同一组件，无需额外互跳。
+2. **确认并修复一个真实占位缺口**：质量报告 run 历史中 FAILED 行的"去修复"Typography.Link 无 onClick（死链接），已修复为跳转 `/governance/rules?tab=repair&runId=...`（activeTab 由 URL tab 参数驱动，已核实落点正确）。TDD：qualityReportRepairLink.source-contract.test.ts 先 RED 后 GREEN。
