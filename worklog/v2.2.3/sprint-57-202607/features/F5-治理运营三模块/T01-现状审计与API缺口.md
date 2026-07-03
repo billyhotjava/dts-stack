@@ -1,0 +1,43 @@
+# T01: 三模块现状审计与 API 缺口登记
+
+**优先级**: P0
+**状态**: IN_PROGRESS（静态审计完成，运行时验证待容器重建）
+**依赖**: 无
+
+## 静态审计结论（2026-07-03）
+
+三模块**均非纯占位**：前端接真实 platformApi，后端 REST + 服务栈存在。"功能不完善"的疑点在**执行深度与动线闭环**，需运行时验证定位。
+
+### 质量管控 /governance/rules（QualityRulesPage 922 行）
+
+| 层 | 现状 |
+|----|------|
+| 前端 API | 11 个函数：rules CRUD、versions、version-status、toggle、dry-run、run、templates、previewTemplateSQL |
+| 后端端点 | GovernanceResource 全部对应存在（L172-631），含 runs/failing-rows |
+| 执行栈 | QualityRunService / QualityStatementExecutor / QualityTaskScheduler / IngestionQualityBridge 均在 |
+
+**待运行时验证**：① 试跑是否真执行 SQL 并回写 run/history；② 模板预览 SQL 是否可用；③ 规则→数据集绑定动线是否走得通。
+
+### 质量报告 /governance/quality（QualityReportTab 411 行）
+
+| 层 | 现状 |
+|----|------|
+| 前端 API | getQualityScore / getRuleHistory / listDatasets / listQualityRules |
+| 后端端点 | /quality/score、/quality/dashboard、/quality/rules/{id}/history 存在；QualityScoreService/QualityDashboardService 在 |
+
+**待运行时验证**：score/dashboard 是否基于真实 run 数据聚合（疑似空库下全 0，被感知为占位）；与管控页互跳缺失。
+
+### 分级分类 /security/data-security（data-security.tsx 582 行）
+
+| 层 | 现状 |
+|----|------|
+| 前端 API | 10 个函数：classification-mapping（get/replace/validate/masking-linkage）、masking-rules CRUD、dataset security-mapping |
+| 后端端点 | 挂在 **/catalog/** 命名空间（AssetResource 等），非 governance；已确认存在 |
+
+**待运行时验证**：① 批量定级能力是否存在（目前疑似仅单数据集映射）；② 与资产台账密级列的联动（SECURITY_LINKAGE_EVENT 机制）是否生效。
+
+## 下一步（T02-T04 进场条件）
+
+1. **依赖容器重建**：dts-platform + webapp 重建后逐条跑上述验证点，把"疑似"变"确认"。
+2. 每模块确认缺口后按 TDD 补齐：先写 source-contract/单测锁定目标动线（RED）→ 实现（GREEN）。
+3. 验证记录追加到本文档，缺口清单落到各任务文档。
