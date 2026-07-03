@@ -63,8 +63,10 @@ POST /api/modeling/standard-packages/builtin/{code}/install  (安装=走同一 p
 | F1 | 标准包导入管道 | 4 | DONE |
 | F2 | 内置国标包 | 2 | DONE |
 | F3 | 基础数据页面完善 | 3 | READY |
+| F4 | 数据资产重构（地图/台账分离） | 4 | IN_PROGRESS |
+| F5 | 治理运营三模块重构 | 4 | IN_PROGRESS |
 
-**范围外**：数据资产工业级打磨（原任务 2）单列 Sprint-58 规划，不混入本 sprint。
+**范围调整（2026-07-03 用户决策）**：数据资产重构与治理运营三模块补齐并入本 sprint（F4/F5），按 TDD 推进；原"单列 Sprint-58"决定作废。
 
 ## 全局约束
 

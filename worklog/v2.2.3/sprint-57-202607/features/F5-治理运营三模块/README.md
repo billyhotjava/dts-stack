@@ -1,0 +1,29 @@
+# F5: 治理运营三模块重构
+
+**优先级**: P0
+**状态**: IN_PROGRESS
+
+## 目标
+
+治理运营下三个入口（质量管控 `/governance/rules`、质量报告 `/governance/quality`、分级分类 `/security/data-security`）当前界面骨架在（分别 922/411/582 行，均接 platformApi），但功能链路不完整。逐模块审计缺口 → TDD 补齐到可用。
+
+## 约束
+
+- TDD：先契约/单测（RED）再实现（GREEN）；后端补缺口的服务必须带单测。
+- 复用既有组件与范式（CompactTable、EmptyState、useGovernanceManageAccess）。
+- 不重写整页，缺什么补什么——以"用户能走完一条完整业务动线"为验收口径。
+
+## Task 列表
+
+| ID | Task | 优先级 | 状态 | 依赖 |
+|----|------|--------|------|------|
+| T01 | 三模块现状审计与 API 缺口登记（assets/governance-ops-audit.md） | P0 | READY | - |
+| T02 | 质量管控完善（规则 CRUD→试跑→绑定数据集→启停 动线闭环） | P0 | READY | T01 |
+| T03 | 质量报告完善（评分/趋势/规则命中明细，与管控页互跳） | P0 | READY | T01 |
+| T04 | 分级分类完善（密级台账、批量定级、与资产台账联动） | P0 | READY | T01 |
+
+## 完成标准
+
+- [ ] 审计文档明确每模块"已有/缺失/mock"清单与后端缺口
+- [ ] 每模块至少一条端到端业务动线可走通，配 source-contract 测试
+- [ ] 后端新增/修改逻辑单测覆盖，全部绿
