@@ -75,12 +75,40 @@ test("MetricCanvas uses @xyflow/react with custom nodes and edges", () => {
 	assert.match(CANVAS, /BizObjectNode/);
 	assert.match(CANVAS, /MetricNode/);
 	assert.match(CANVAS, /MetricBindingEdge/);
+	assert.match(CANVAS, /metric-canvas-toolbar/);
+	assert.match(CANVAS, /选择/);
+	assert.match(CANVAS, /连线/);
+	assert.match(CANVAS, /自动布局/);
+	assert.match(CANVAS, /预检/);
+	assert.match(CANVAS, /保存编排/);
 	assert.match(CANVAS, /nodesDraggable/);
 	assert.match(CANVAS, /onNodeDragStop/);
+	assert.match(CANVAS, /resolveMetricConnection/);
+	assert.match(CANVAS, /METRIC_DERIVES/);
 	assert.match(CANVAS, /拖指标节点到业务对象节点上完成绑定/);
+	assert.doesNotMatch(CANVAS, /MiniMap/);
 	assert.match(CANVAS, /业务对象页选择治理主题域/);
 	assert.doesNotMatch(CANVAS, /主题域页创建业务对象/);
 	assert.doesNotMatch(CANVAS, /oklch|:has\(|@container/);
+});
+
+test("MetricWorkbenchPage wires semantic derivation save and relation deletion", () => {
+	assert.match(WORKBENCH, /onMetricDerived/);
+	assert.match(WORKBENCH, /onMetricRelationDeleted/);
+	assert.match(WORKBENCH, /addMetricDependencyToFormulaJson/);
+	assert.match(WORKBENCH, /removeMetricDependencyFromFormulaJson/);
+	assert.match(WORKBENCH, /buildMetricCanvasPreflightIssues/);
+});
+
+test("MetricDetailPanel exposes edge relation configuration", () => {
+	assert.match(DETAIL_PANEL, /关系配置/);
+	assert.match(DETAIL_PANEL, /METRIC_DERIVES/);
+	assert.match(DETAIL_PANEL, /OBJECT_METRIC/);
+	assert.match(DETAIL_PANEL, /派生表达式/);
+	assert.match(DETAIL_PANEL, /关系说明/);
+	assert.match(DETAIL_PANEL, /删除关系/);
+	assert.match(DETAIL_PANEL, /removeMetricDependencyFromFormulaJson/);
+	assert.match(DETAIL_PANEL, /buildSemanticMetricUpdatePayload/);
 });
 
 test("semantic workspace frame shows step progress and next action", () => {

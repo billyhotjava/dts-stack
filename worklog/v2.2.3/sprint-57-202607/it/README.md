@@ -17,9 +17,18 @@
 | IT-9 | 既有 source-contract 测试全绿（模板 zip 契约不破坏） | node --test | 命令输出 | ☐ |
 | IT-10 | 指标工作台指标 -> 指标连线形成 `METRIC_DERIVES` 派生关系 | 页面 + 请求拦截 | 截图 + PUT payload | ☐ |
 | IT-11 | 指标工作台边配置保存/删除与业务对象绑定回归 | 页面 + 请求拦截 | 截图 + PUT payload | ☐ |
-| IT-12 | 指标工作台预检识别孤立指标、环依赖、草稿依赖、非法公式 JSON | 单测 + 页面 | 命令输出 + 截图 | ☐ |
+| IT-12 | 指标工作台预检识别孤立指标、环依赖、草稿依赖、非法公式 JSON | 单测 + 页面 | 命令输出 + `assets/it-12-metric-workbench-toolbar.png` | ◐ |
 
 证据存放：`../assets/`（截图命名 `it-{N}-{描述}.png`）。
+
+## F6 指标工作台语义编排验证记录（2026-07-04）
+
+- `pnpm exec vitest run src/pages/modeling/metric-workbench/metricCanvas.helpers.test.ts`：12/12 通过。
+- `node --test --experimental-strip-types src/pages/modeling/metricWorkbench.source-contract.test.ts`：11/11 通过。
+- `pnpm exec tsc --noEmit`：通过。
+- `git diff --check -- source/dts-platform-webapp/src/api/semanticModelingApi.ts source/dts-platform-webapp/src/pages/modeling/MetricWorkbenchPage.tsx source/dts-platform-webapp/src/pages/modeling/metric-workbench source/dts-platform-webapp/src/pages/modeling/metricWorkbench.source-contract.test.ts`：通过。
+- Playwright smoke：`http://localhost:3001/#/modeling/metric-workbench` 可渲染指标工作台；接口失败/空数据时工具栏仍可见；截图见 `assets/it-12-metric-workbench-toolbar.png`。
+- 待补：真实指标数据下拦截 `PUT /api/semantic/metrics/{id}`，留存 `METRIC_DERIVES` 新增/删除 payload。
 
 ## 部署验证记录（2026-07-04）
 

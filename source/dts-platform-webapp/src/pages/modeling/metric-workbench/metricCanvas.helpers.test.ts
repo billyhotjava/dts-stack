@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+	addMetricDependencyToFormulaJson,
 	buildMetricCanvasEdges,
 	buildMetricCanvasNodes,
+	buildMetricCanvasPreflightIssues,
 	buildSemanticMetricUpdatePayload,
 	findMetricDropTargetObject,
+	removeMetricDependencyFromFormulaJson,
 	parseMetricDragPayload,
 	resolveMetricBinding,
+	resolveMetricConnection,
 	resolveMetricNodeDropBinding,
 	serializeMetricDragPayload,
 	type MetricCanvasNodePositionMap,
@@ -38,6 +42,26 @@ const METRICS = [
 		code: "ORDER_COUNT",
 		name: "订单数",
 		formulaType: "aggregation/count_distinct",
+		status: "DRAFT",
+	},
+];
+
+const DERIVED_METRICS = [
+	{
+		id: "metric-1",
+		objectId: "object-1",
+		code: "GMV",
+		name: "成交金额",
+		formulaType: "aggregation/sum",
+		formulaJson: '{"field":"amount","type":"sum"}',
+		status: "ACTIVE",
+	},
+	{
+		id: "metric-2",
+		code: "ORDER_COUNT",
+		name: "订单数",
+		formulaType: "aggregation/count_distinct",
+		formulaJson: '{"field":"order_id","dependsOnMetricIds":["metric-1"]}',
 		status: "DRAFT",
 	},
 ];
@@ -80,8 +104,48 @@ describe("metric canvas helpers", () => {
 				source: "obj-object-1",
 				target: "metric-metric-1",
 				type: "binding",
+				data: { relationType: "OBJECT_METRIC" },
 			},
 		]);
+	});
+
+	it("marks persisted metric derivation bindings from formula JSON", () => {
+		const edges = buildMetricCanvasEdges(DERIVED_METRICS);
+
+		expect(edges).toEqual([
+			{
+				id: "edge-metric-1",
+				source: "obj-object-1",
+				target: "metric-metric-1",
+				type: "binding",
+				data: { relationType: "OBJECT_METRIC" },
+			},
+			{
+				id: "edge-derives-metric-1-metric-2",
+				source: "metric-metric-1",
+				target: "metric-metric-2",
+				type: "binding",
+				data: {
+					relationType: "METRIC_DERIVES",
+					sourceMetricId: "metric-1",
+					targetMetricId: "metric-2",
+				},
+			},
+		]);
+	});
+
+	it("accepts metric-to-metric derivation connections without breaking object binding", () => {
+		expect(resolveMetricConnection({ source: "obj-object-1", target: "metric-metric-2" })).toEqual({
+			relationType: "OBJECT_METRIC",
+			objectId: "object-1",
+			metricId: "metric-2",
+		});
+		expect(resolveMetricConnection({ source: "metric-metric-1", target: "metric-metric-2" })).toEqual({
+			relationType: "METRIC_DERIVES",
+			sourceMetricId: "metric-1",
+			targetMetricId: "metric-2",
+		});
+		expect(resolveMetricConnection({ source: "metric-metric-1", target: "metric-metric-1" })).toBeNull();
 	});
 
 	it("round-trips metric drag payloads and rejects unrelated data", () => {
@@ -134,5 +198,75 @@ describe("metric canvas helpers", () => {
 			unit: "元",
 			status: "ACTIVE",
 		});
+	});
+
+	it("adds and removes metric dependencies without overwriting formula fields", () => {
+		const added = addMetricDependencyToFormulaJson('{"field":"amount","type":"sum"}', "metric-2");
+
+		expect(added).toEqual({
+			ok: true,
+			formulaJson: '{"field":"amount","type":"sum","dependsOnMetricIds":["metric-2"]}',
+		});
+
+		const removed = removeMetricDependencyFromFormulaJson(
+			'{"field":"amount","type":"sum","dependsOnMetricIds":["metric-1","metric-2"]}',
+			"metric-1",
+		);
+
+		expect(removed).toEqual({
+			ok: true,
+			formulaJson: '{"field":"amount","type":"sum","dependsOnMetricIds":["metric-2"]}',
+		});
+	});
+
+	it("does not silently overwrite invalid formula JSON", () => {
+		expect(addMetricDependencyToFormulaJson("{bad-json", "metric-2")).toEqual({
+			ok: false,
+			error: "INVALID_FORMULA_JSON",
+		});
+	});
+
+	it("preflights isolated metrics, cyclic dependencies, draft dependencies and invalid JSON", () => {
+		const issues = buildMetricCanvasPreflightIssues(OBJECTS, [
+			{
+				id: "metric-1",
+				objectId: "object-1",
+				code: "GMV",
+				name: "成交金额",
+				formulaJson: '{"dependsOnMetricIds":["metric-2"]}',
+				status: "ACTIVE",
+			},
+			{
+				id: "metric-2",
+				code: "ORDER_COUNT",
+				name: "订单数",
+				formulaJson: '{"dependsOnMetricIds":["metric-1"]}',
+				status: "DRAFT",
+			},
+			{
+				id: "metric-3",
+				code: "AOV",
+				name: "客单价",
+				formulaJson: '{"field":"amount"}',
+				status: "ACTIVE",
+			},
+			{
+				id: "metric-4",
+				code: "BAD",
+				name: "坏公式",
+				formulaJson: "{bad-json",
+				status: "ACTIVE",
+			},
+		]);
+
+		expect(issues.map((issue) => issue.code)).toEqual(
+			expect.arrayContaining([
+				"ACTIVE_DEPENDS_ON_DRAFT",
+				"CYCLIC_METRIC_DEPENDENCY",
+				"INVALID_FORMULA_JSON",
+				"ISOLATED_METRIC",
+			]),
+		);
+		expect(issues.every((issue) => issue.nodeId || issue.edgeId)).toBe(true);
 	});
 });

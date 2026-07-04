@@ -1,7 +1,7 @@
 # T01: 关系模型 helper 与预检规则
 
 **优先级**: P0  
-**状态**: READY  
+**状态**: DONE
 **依赖**: 无
 
 ## 目标
@@ -27,13 +27,13 @@
 
 ## 验证
 
-- [ ] helper 单测覆盖 `OBJECT_METRIC` 与 `METRIC_DERIVES` 边构造。
-- [ ] helper 单测覆盖环依赖检测。
-- [ ] helper 单测覆盖合法/非法 `formulaJson` 合并保护。
-- [ ] helper 单测覆盖删除派生关系。
+- [x] helper 单测覆盖 `OBJECT_METRIC` 与 `METRIC_DERIVES` 边构造。
+- [x] helper 单测覆盖环依赖检测。
+- [x] helper 单测覆盖合法/非法 `formulaJson` 合并保护。
+- [x] helper 单测覆盖删除派生关系。
 
 ## 完成标准
 
-- [ ] 关系解析不破坏 Sprint-56 已有业务对象绑定边。
-- [ ] 非法 `formulaJson` 不会被静默覆盖。
-- [ ] 预检问题能返回可定位的 nodeId 或 edgeId。
+- [x] 关系解析不破坏 Sprint-56 已有业务对象绑定边。
+- [x] 非法 `formulaJson` 不会被静默覆盖。
+- [x] 预检问题能返回可定位的 nodeId 或 edgeId。

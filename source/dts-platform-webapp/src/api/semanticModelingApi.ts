@@ -49,7 +49,7 @@ export type SemanticDimension = {
 
 export type SemanticMetric = {
 	id: string;
-	objectId?: string;
+	objectId?: string | null;
 	code: string;
 	name: string;
 	formulaType?: string;

@@ -17,7 +17,14 @@ import { SemanticWorkspaceFrame } from "./semantic-workspace/SemanticWorkspaceFr
 import { MetricCanvas } from "./metric-workbench/MetricCanvas";
 import { MetricDetailPanel } from "./metric-workbench/MetricDetailPanel";
 import { SubjectBrowserPanel } from "./metric-workbench/SubjectBrowserPanel";
-import { buildSemanticMetricUpdatePayload } from "./metric-workbench/metricCanvas.helpers";
+import {
+    addMetricDependencyToFormulaJson,
+    buildMetricCanvasPreflightIssues,
+    buildSemanticMetricUpdatePayload,
+    removeMetricDependencyFromFormulaJson,
+    type MetricCanvasPreflightIssue,
+    type MetricCanvasRelation,
+} from "./metric-workbench/metricCanvas.helpers";
 
 export default function MetricWorkbenchPage() {
     const [domains, setDomains] = useState<SemanticSubjectDomain[]>([]);
@@ -25,6 +32,7 @@ export default function MetricWorkbenchPage() {
     const [metrics, setMetrics] = useState<SemanticMetric[]>([]);
     const [models, setModels] = useState<SemanticModel[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [preflightIssues, setPreflightIssues] = useState<MetricCanvasPreflightIssue[]>([]);
     const [loading, setLoading] = useState(true);
 
     const load = useCallback(async () => {
@@ -68,6 +76,98 @@ export default function MetricWorkbenchPage() {
         },
         [metrics, objects, refreshMetrics],
     );
+
+    const handleMetricDerived = useCallback(
+        async (sourceMetricId: string, targetMetricId: string) => {
+            const sourceMetric = metrics.find((item) => item.id === sourceMetricId);
+            const targetMetric = metrics.find((item) => item.id === targetMetricId);
+            if (!sourceMetric || !targetMetric) {
+                toast.error("指标不存在，请刷新后重试");
+                return;
+            }
+            const formulaUpdate = addMetricDependencyToFormulaJson(targetMetric.formulaJson, sourceMetricId);
+            if (!formulaUpdate.ok) {
+                toast.error("目标指标公式 JSON 不合法，未写回派生关系");
+                return;
+            }
+            await updateSemanticMetric(
+                targetMetric.id,
+                buildSemanticMetricUpdatePayload(targetMetric, { formulaJson: formulaUpdate.formulaJson }),
+            );
+            setMetrics((current) =>
+                current.map((item) =>
+                    item.id === targetMetricId ? { ...item, formulaJson: formulaUpdate.formulaJson } : item,
+                ),
+            );
+            setPreflightIssues([]);
+            toast.success(`已建立派生关系：${sourceMetric.name} -> ${targetMetric.name}`);
+            void refreshMetrics();
+        },
+        [metrics, refreshMetrics],
+    );
+
+    const handleMetricRelationDeleted = useCallback(
+        async (relation: MetricCanvasRelation) => {
+            if (relation.relationType === "OBJECT_METRIC") {
+                const metric = metrics.find((item) => item.id === relation.metricId);
+                if (!metric) {
+                    toast.error("指标不存在，请刷新后重试");
+                    return;
+                }
+                await updateSemanticMetric(
+                    metric.id,
+                    buildSemanticMetricUpdatePayload(metric, { objectId: null }),
+                );
+                setMetrics((current) =>
+                    current.map((item) => (item.id === metric.id ? { ...item, objectId: null } : item)),
+                );
+                setSelectedId(`metric-${metric.id}`);
+                setPreflightIssues([]);
+                toast.success("业务对象绑定关系已删除");
+                void refreshMetrics();
+                return;
+            }
+
+            const targetMetric = metrics.find((item) => item.id === relation.targetMetricId);
+            if (!targetMetric) {
+                toast.error("目标指标不存在，请刷新后重试");
+                return;
+            }
+            const formulaUpdate = removeMetricDependencyFromFormulaJson(
+                targetMetric.formulaJson,
+                relation.sourceMetricId,
+            );
+            if (!formulaUpdate.ok) {
+                toast.error("目标指标公式 JSON 不合法，未删除派生关系");
+                return;
+            }
+            await updateSemanticMetric(
+                targetMetric.id,
+                buildSemanticMetricUpdatePayload(targetMetric, { formulaJson: formulaUpdate.formulaJson }),
+            );
+            setMetrics((current) =>
+                current.map((item) =>
+                    item.id === targetMetric.id ? { ...item, formulaJson: formulaUpdate.formulaJson } : item,
+                ),
+            );
+            setSelectedId(`metric-${targetMetric.id}`);
+            setPreflightIssues([]);
+            toast.success("指标派生关系已删除");
+            void refreshMetrics();
+        },
+        [metrics, refreshMetrics],
+    );
+
+    const handlePreflight = useCallback(() => {
+        const issues = buildMetricCanvasPreflightIssues(objects, metrics);
+        setPreflightIssues(issues);
+        setSelectedId(null);
+        if (issues.length === 0) {
+            toast.success("指标编排预检通过");
+            return;
+        }
+        toast.warning(`指标编排预检发现 ${issues.length} 项问题`);
+    }, [metrics, objects]);
 
     const activeMetrics = useMemo(
         () => metrics.filter((metric) => metric.status === "ACTIVE").length,
@@ -126,6 +226,9 @@ export default function MetricWorkbenchPage() {
                                 selectedId={selectedId}
                                 onNodeSelect={setSelectedId}
                                 onMetricBound={handleMetricBound}
+                                onMetricDerived={handleMetricDerived}
+                                onPreflight={handlePreflight}
+                                onArrangementSave={() => toast.success("编排关系已实时保存")}
                                 loading={loading}
                             />
                         </div>
@@ -139,9 +242,12 @@ export default function MetricWorkbenchPage() {
                             objects={objects}
                             metrics={metrics}
                             models={models}
+                            preflightIssues={preflightIssues}
                             onMetricUpdated={() => {
+                                setPreflightIssues([]);
                                 void refreshMetrics();
                             }}
+                            onMetricRelationDeleted={handleMetricRelationDeleted}
                         />
                     </div>
                 </div>

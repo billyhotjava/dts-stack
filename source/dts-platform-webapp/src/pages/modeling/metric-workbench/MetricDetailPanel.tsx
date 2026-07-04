@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Alert, Tabs, Select, Input, Button, Space, Tag, Empty } from "antd";
-import { Activity, BarChart3, Box, Database, Rocket } from "lucide-react";
+import { Activity, AlertTriangle, BarChart3, Box, Database, GitBranch, Rocket, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
@@ -16,7 +16,15 @@ import {
     type SemanticModel,
     type SemanticModelRun,
 } from "@/api/semanticModelingApi";
-import { buildSemanticMetricUpdatePayload } from "./metricCanvas.helpers";
+import {
+    addMetricDependencyToFormulaJson,
+    buildSemanticMetricUpdatePayload,
+    findMetricCanvasRelationByEdgeId,
+    getMetricDependencyIds,
+    removeMetricDependencyFromFormulaJson,
+    type MetricCanvasPreflightIssue,
+    type MetricCanvasRelation,
+} from "./metricCanvas.helpers";
 
 const FORMULA_TYPE_OPTIONS = [
     { label: "aggregation/sum", value: "aggregation/sum" },
@@ -40,6 +48,31 @@ export interface MetricDetailPanelProps {
     metrics: SemanticMetric[];
     models: SemanticModel[];
     onMetricUpdated: () => void;
+    onMetricRelationDeleted: (relation: MetricCanvasRelation) => Promise<void> | void;
+    preflightIssues?: MetricCanvasPreflightIssue[];
+}
+
+function readFormulaField(formulaJson: string | null | undefined, field: string): string {
+    if (!formulaJson) {
+        return "";
+    }
+    try {
+        const value = JSON.parse(formulaJson) as Record<string, unknown>;
+        const fieldValue = value?.[field];
+        return typeof fieldValue === "string" ? fieldValue : "";
+    } catch {
+        return "";
+    }
+}
+
+function withOptionalFormulaField(formulaJson: string, field: string, value: string): string {
+    const next = JSON.parse(formulaJson) as Record<string, unknown>;
+    if (value.trim()) {
+        next[field] = value.trim();
+    } else {
+        delete next[field];
+    }
+    return JSON.stringify(next);
 }
 
 function MetricFormulaTab({
@@ -108,6 +141,162 @@ function MetricFormulaTab({
             </div>
             <Button type="primary" size="small" loading={saving} onClick={handleSave} block>
                 保存指标
+            </Button>
+        </div>
+    );
+}
+
+function MetricRelationPanel({
+    relation,
+    objects,
+    metrics,
+    onSaved,
+    onDeleted,
+}: {
+    relation: MetricCanvasRelation;
+    objects: SemanticBusinessObject[];
+    metrics: SemanticMetric[];
+    onSaved: () => void;
+    onDeleted: (relation: MetricCanvasRelation) => Promise<void> | void;
+}) {
+    const targetMetric = metrics.find((metric) =>
+        relation.relationType === "OBJECT_METRIC" ? metric.id === relation.metricId : metric.id === relation.targetMetricId,
+    );
+    const sourceMetric = relation.relationType === "METRIC_DERIVES"
+        ? metrics.find((metric) => metric.id === relation.sourceMetricId)
+        : null;
+    const sourceObject = relation.relationType === "OBJECT_METRIC"
+        ? objects.find((object) => object.id === relation.objectId)
+        : null;
+    const [expression, setExpression] = useState(() =>
+        relation.relationType === "METRIC_DERIVES" ? readFormulaField(targetMetric?.formulaJson, "derivationExpression") : "",
+    );
+    const [note, setNote] = useState(() =>
+        relation.relationType === "METRIC_DERIVES" ? readFormulaField(targetMetric?.formulaJson, "derivationNote") : "",
+    );
+    const [saving, setSaving] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+
+    useEffect(() => {
+        if (relation.relationType !== "METRIC_DERIVES") {
+            setExpression("");
+            setNote("");
+            return;
+        }
+        setExpression(readFormulaField(targetMetric?.formulaJson, "derivationExpression"));
+        setNote(readFormulaField(targetMetric?.formulaJson, "derivationNote"));
+    }, [relation, targetMetric?.formulaJson]);
+
+    if (!targetMetric) {
+        return (
+            <div className="p-4">
+                <Empty description="关系目标指标不存在" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            </div>
+        );
+    }
+
+    const handleSave = async () => {
+        if (relation.relationType !== "METRIC_DERIVES" || !sourceMetric) {
+            return;
+        }
+        const relationFormula = addMetricDependencyToFormulaJson(targetMetric.formulaJson, sourceMetric.id);
+        if (!relationFormula.ok) {
+            toast.error("公式 JSON 不合法，未写回派生关系");
+            return;
+        }
+        setSaving(true);
+        try {
+            const withExpression = withOptionalFormulaField(
+                relationFormula.formulaJson,
+                "derivationExpression",
+                expression,
+            );
+            const formulaJson = withOptionalFormulaField(withExpression, "derivationNote", note);
+            await updateSemanticMetric(
+                targetMetric.id,
+                buildSemanticMetricUpdatePayload(targetMetric, { formulaJson }),
+            );
+            toast.success("派生关系已保存");
+            onSaved();
+        } catch {
+            /* global interceptor handles error toast */
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (relation.relationType === "METRIC_DERIVES") {
+            const formulaUpdate = removeMetricDependencyFromFormulaJson(
+                targetMetric.formulaJson,
+                relation.sourceMetricId,
+            );
+            if (!formulaUpdate.ok) {
+                toast.error("目标指标公式 JSON 不合法，未删除派生关系");
+                return;
+            }
+        }
+        setDeleting(true);
+        try {
+            await onDeleted(relation);
+        } finally {
+            setDeleting(false);
+        }
+    };
+
+    return (
+        <div className="space-y-4 p-4">
+            <div>
+                <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <GitBranch size={16} />
+                    关系配置
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                    <Tag color={relation.relationType === "METRIC_DERIVES" ? "blue" : "green"}>
+                        {relation.relationType}
+                    </Tag>
+                    <span className="text-gray-500">
+                        {relation.relationType === "METRIC_DERIVES"
+                            ? `${sourceMetric?.name ?? relation.sourceMetricId} -> ${targetMetric.name}`
+                            : `${sourceObject?.name ?? relation.objectId} -> ${targetMetric.name}`}
+                    </span>
+                </div>
+            </div>
+
+            {relation.relationType === "METRIC_DERIVES" ? (
+                <div className="space-y-3">
+                    <div>
+                        <div className="mb-1 text-xs text-gray-500">派生表达式</div>
+                        <Input.TextArea
+                            value={expression}
+                            onChange={(event) => setExpression(event.target.value)}
+                            rows={3}
+                            placeholder="例如：GMV / 订单数"
+                        />
+                    </div>
+                    <div>
+                        <div className="mb-1 text-xs text-gray-500">关系说明</div>
+                        <Input.TextArea
+                            value={note}
+                            onChange={(event) => setNote(event.target.value)}
+                            rows={2}
+                            placeholder="说明此派生关系的业务口径"
+                        />
+                    </div>
+                    <Button type="primary" size="small" loading={saving} onClick={handleSave} block>
+                        保存关系
+                    </Button>
+                </div>
+            ) : (
+                <Alert
+                    type="info"
+                    showIcon
+                    message="业务对象绑定关系由指标 objectId 保存，删除关系不会删除指标本身。"
+                />
+            )}
+
+            <Button danger size="small" icon={<Trash2 size={14} />} loading={deleting} onClick={handleDelete} block>
+                删除关系
             </Button>
         </div>
     );
@@ -293,8 +482,31 @@ export function MetricDetailPanel({
     metrics,
     models,
     onMetricUpdated,
+    onMetricRelationDeleted,
+    preflightIssues = [],
 }: MetricDetailPanelProps) {
     if (!selectedId) {
+        if (preflightIssues.length > 0) {
+            return (
+                <div className="space-y-3 p-4">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                        <AlertTriangle size={16} />
+                        预检结果
+                    </div>
+                    <div className="space-y-2">
+                        {preflightIssues.map((issue, index) => (
+                            <Alert
+                                key={`${issue.code}-${issue.metricId ?? issue.edgeId ?? index}`}
+                                type={issue.severity === "error" ? "error" : "warning"}
+                                showIcon
+                                message={issue.code}
+                                description={issue.message}
+                            />
+                        ))}
+                    </div>
+                </div>
+            );
+        }
         return (
             <div className="flex h-full items-center justify-center p-6 text-center text-sm text-gray-400">
                 <div>
@@ -346,6 +558,10 @@ export function MetricDetailPanel({
         const metric = metrics.find((m) => m.id === metricId);
         if (!metric) return null;
         const object = objects.find((item) => item.id === metric.objectId);
+        const upstreamMetrics = getMetricDependencyIds(metric)
+            .map((dependencyId) => metrics.find((item) => item.id === dependencyId))
+            .filter((item): item is SemanticMetric => Boolean(item));
+        const downstreamMetrics = metrics.filter((item) => getMetricDependencyIds(item).includes(metric.id));
         return (
             <div>
                 <div className="border-b border-gray-100 p-4">
@@ -357,6 +573,14 @@ export function MetricDetailPanel({
                         <span>{metric.code}</span>
                         {object ? <Tag color="blue">{object.name}</Tag> : <Tag>未绑定对象</Tag>}
                         {metric.status ? <Tag>{metric.status}</Tag> : null}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                        <Tag color={upstreamMetrics.length > 0 ? "blue" : "default"}>
+                            上游依赖 {upstreamMetrics.length}
+                        </Tag>
+                        <Tag color={downstreamMetrics.length > 0 ? "purple" : "default"}>
+                            下游派生 {downstreamMetrics.length}
+                        </Tag>
                     </div>
                 </div>
                 <Tabs
@@ -385,6 +609,26 @@ export function MetricDetailPanel({
                     ]}
                 />
             </div>
+        );
+    }
+
+    if (selectedId.startsWith("edge-")) {
+        const relation = findMetricCanvasRelationByEdgeId(selectedId, metrics);
+        if (!relation) {
+            return (
+                <div className="p-4">
+                    <Empty description="请选择一条有效关系" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                </div>
+            );
+        }
+        return (
+            <MetricRelationPanel
+                relation={relation}
+                objects={objects}
+                metrics={metrics}
+                onSaved={onMetricUpdated}
+                onDeleted={onMetricRelationDeleted}
+            />
         );
     }
 
