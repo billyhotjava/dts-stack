@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button, Card, Descriptions, Divider, Drawer, Form, Input, List, Modal, Space, Spin, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { } from "@ant-design/icons";
+import { DownloadOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
 import { CompactTable } from "@/components/table";
@@ -11,12 +11,17 @@ import {
 	createGlossaryTerm,
 	deleteGlossaryTerm,
 	getGlossaryTermReferences,
+	listGlossaryTermReviews,
 	listGlossaryTerms,
+	listGlossaryTermVersions,
 	updateGlossaryTerm,
 } from "@/api/platformApi";
 import { normalizeText } from "@/utils/textUtils";
 
 const { Text } = Typography;
+const GLOSSARY_EXPORT_HEADER_LINE =
+	"term_code,term_name,aliases,definition,domain,owner_dept,owner,tags,version,status,version_notes";
+const GLOSSARY_EXPORT_HEADERS = GLOSSARY_EXPORT_HEADER_LINE.split(",");
 
 type GlossaryTerm = {
 	id?: string;
@@ -26,7 +31,32 @@ type GlossaryTerm = {
 	definition?: string;
 	domain?: string;
 	owner?: string;
+	ownerDept?: string;
 	tags?: string;
+	version?: string;
+	status?: string;
+	versionNotes?: string;
+};
+
+type GlossaryTermVersion = {
+	id?: string;
+	version?: string;
+	status?: string;
+	changeSummary?: string;
+	releasedAt?: string;
+	createdBy?: string;
+	createdDate?: string;
+};
+
+type GlossaryTermReview = {
+	id?: string;
+	version?: string;
+	status?: string;
+	reviewer?: string;
+	reviewNotes?: string;
+	reviewedAt?: string;
+	createdBy?: string;
+	createdDate?: string;
 };
 
 type AssetReferenceItem = {
@@ -44,6 +74,42 @@ type AssetReferencePayload = {
 	items?: AssetReferenceItem[];
 };
 
+const displayValue = (value?: string | number | null) => {
+	const text = String(value ?? "").trim();
+	return text || "-";
+};
+
+const displayDateTime = (value?: string | null) => {
+	const text = String(value ?? "").trim();
+	if (!text) return "-";
+	return text.replace("T", " ").slice(0, 19);
+};
+
+const csvValue = (value?: string | number | null) => {
+	const text = String(value ?? "");
+	if (/[",\n\r]/.test(text)) {
+		return `"${text.replace(/"/g, '""')}"`;
+	}
+	return text;
+};
+
+const glossaryCsvRow = (term: GlossaryTerm) =>
+	[
+		term.code,
+		term.name,
+		term.aliases,
+		term.definition,
+		term.domain,
+		term.ownerDept,
+		term.owner,
+		term.tags,
+		term.version,
+		term.status,
+		term.versionNotes,
+	]
+		.map(csvValue)
+		.join(",");
+
 export default function GlossaryPage() {
 	const navigate = useNavigate();
 	const [searchParams, setSearchParams] = useSearchParams();
@@ -56,7 +122,11 @@ export default function GlossaryPage() {
 	const [detailOpen, setDetailOpen] = useState(false);
 	const [detailTerm, setDetailTerm] = useState<GlossaryTerm | null>(null);
 	const [referenceLoading, setReferenceLoading] = useState(false);
+	const [versionLoading, setVersionLoading] = useState(false);
+	const [reviewLoading, setReviewLoading] = useState(false);
 	const [references, setReferences] = useState<AssetReferencePayload | null>(null);
+	const [versions, setVersions] = useState<GlossaryTermVersion[]>([]);
+	const [reviews, setReviews] = useState<GlossaryTermReview[]>([]);
 	const [form] = Form.useForm();
 	const canManage = useGovernanceManageAccess();
 
@@ -86,20 +156,44 @@ export default function GlossaryPage() {
 		}
 	}, [keyword]);
 
-	const loadReferences = useCallback(async (id?: string) => {
+	const loadDetailContext = useCallback(async (id?: string) => {
 		if (!id) {
 			setReferences(null);
+			setVersions([]);
+			setReviews([]);
 			return;
 		}
 		setReferenceLoading(true);
+		setVersionLoading(true);
+		setReviewLoading(true);
 		try {
-			const resp = (await getGlossaryTermReferences(id)) as AssetReferencePayload;
-			setReferences(resp || null);
-		} catch (err: any) {
-			setReferences(null);
-			toast.error(err?.message || "加载引用关系失败");
+			const [referenceResult, versionResult, reviewResult] = await Promise.allSettled([
+				getGlossaryTermReferences(id),
+				listGlossaryTermVersions(id),
+				listGlossaryTermReviews(id),
+			]);
+			if (referenceResult.status === "fulfilled") {
+				setReferences((referenceResult.value || null) as AssetReferencePayload);
+			} else {
+				setReferences(null);
+				toast.error((referenceResult.reason as any)?.message || "加载引用关系失败");
+			}
+			if (versionResult.status === "fulfilled") {
+				setVersions(Array.isArray(versionResult.value) ? (versionResult.value as GlossaryTermVersion[]) : []);
+			} else {
+				setVersions([]);
+				toast.error((versionResult.reason as any)?.message || "加载版本记录失败");
+			}
+			if (reviewResult.status === "fulfilled") {
+				setReviews(Array.isArray(reviewResult.value) ? (reviewResult.value as GlossaryTermReview[]) : []);
+			} else {
+				setReviews([]);
+				toast.error((reviewResult.reason as any)?.message || "加载评审记录失败");
+			}
 		} finally {
 			setReferenceLoading(false);
+			setVersionLoading(false);
+			setReviewLoading(false);
 		}
 	}, []);
 
@@ -120,6 +214,19 @@ export default function GlossaryPage() {
 			tags: row?.tags,
 		});
 		setModalOpen(true);
+	};
+
+	const exportGlossaryCsv = () => {
+		const rows = [GLOSSARY_EXPORT_HEADERS.join(","), ...items.map(glossaryCsvRow)];
+		const blob = new Blob(["\uFEFF" + rows.join("\n")], { type: "text/csv;charset=utf-8" });
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement("a");
+		link.href = url;
+		link.download = "01-business-terms.csv";
+		document.body.appendChild(link);
+		link.click();
+		document.body.removeChild(link);
+		URL.revokeObjectURL(url);
 	};
 
 	const submit = async () => {
@@ -225,7 +332,7 @@ export default function GlossaryPage() {
 						onClick={() => {
 							setDetailTerm(row);
 							setDetailOpen(true);
-							void loadReferences(row.id);
+							void loadDetailContext(row.id);
 						}}
 					>
 						详情
@@ -247,6 +354,14 @@ export default function GlossaryPage() {
 				title="业务术语"
 				extra={
 					<Space wrap>
+						<Button
+							className="rounded-2xl"
+							icon={<DownloadOutlined />}
+							data-testid="governance-glossary-export"
+							onClick={exportGlossaryCsv}
+						>
+							导出CSV
+						</Button>
 						<Button className="rounded-2xl" disabled>
 							同步至 OpenMetadata
 						</Button>
@@ -341,8 +456,74 @@ export default function GlossaryPage() {
 					<Descriptions.Item label="别名">{detailTerm?.aliases || "-"}</Descriptions.Item>
 					<Descriptions.Item label="主题域">{detailTerm?.domain || "-"}</Descriptions.Item>
 					<Descriptions.Item label="负责人">{detailTerm?.owner || "-"}</Descriptions.Item>
+					<Descriptions.Item label="所属部门">{detailTerm?.ownerDept || "-"}</Descriptions.Item>
 					<Descriptions.Item label="标签">{detailTerm?.tags || "-"}</Descriptions.Item>
+					<Descriptions.Item label="当前版本">{detailTerm?.version || "-"}</Descriptions.Item>
+					<Descriptions.Item label="状态">{detailTerm?.status || "-"}</Descriptions.Item>
+					<Descriptions.Item label="版本说明">{detailTerm?.versionNotes || "-"}</Descriptions.Item>
 				</Descriptions>
+				<Divider />
+				<Text strong>版本记录</Text>
+				<div className="mt-2">
+					{versionLoading ? (
+						<Spin size="small" />
+					) : versions.length === 0 ? (
+						<Text type="secondary">暂无版本记录</Text>
+					) : (
+						<List
+							size="small"
+							dataSource={versions}
+							renderItem={(item) => (
+								<List.Item>
+									<List.Item.Meta
+										title={`${displayValue(item.version)} · ${displayValue(item.status)}`}
+										description={
+											<Space direction="vertical" size={0}>
+												<Text>{displayValue(item.changeSummary)}</Text>
+												<Text type="secondary">发布时间：{displayDateTime(item.releasedAt)}</Text>
+												<Text type="secondary">
+													创建人：{displayValue(item.createdBy)} · 创建时间：{displayDateTime(item.createdDate)}
+												</Text>
+											</Space>
+										}
+									/>
+								</List.Item>
+							)}
+						/>
+					)}
+				</div>
+				<Divider />
+				<Text strong>评审记录</Text>
+				<div className="mt-2">
+					{reviewLoading ? (
+						<Spin size="small" />
+					) : reviews.length === 0 ? (
+						<Text type="secondary">暂无评审记录</Text>
+					) : (
+						<List
+							size="small"
+							dataSource={reviews}
+							renderItem={(item) => (
+								<List.Item>
+									<List.Item.Meta
+										title={`${displayValue(item.version)} · ${displayValue(item.status)}`}
+										description={
+											<Space direction="vertical" size={0}>
+												<Text>{displayValue(item.reviewNotes)}</Text>
+												<Text type="secondary">
+													评审人：{displayValue(item.reviewer)} · 评审时间：{displayDateTime(item.reviewedAt)}
+												</Text>
+												<Text type="secondary">
+													提交人：{displayValue(item.createdBy)} · 提交时间：{displayDateTime(item.createdDate)}
+												</Text>
+											</Space>
+										}
+									/>
+								</List.Item>
+							)}
+						/>
+					)}
+				</div>
 				<Divider />
 				<Text strong>引用关系</Text>
 				<div className="mt-2">

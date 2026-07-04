@@ -637,6 +637,10 @@ export const listGlossaryTerms = (params: any = {}) => api.get<any[]>({ url: "/m
 export const createGlossaryTerm = (data: any) => api.post({ url: "/modeling/glossary/terms", data });
 export const updateGlossaryTerm = (id: string, data: any) => api.put({ url: `/modeling/glossary/terms/${id}`, data });
 export const deleteGlossaryTerm = (id: string) => api.delete({ url: `/modeling/glossary/terms/${id}` });
+export const listGlossaryTermVersions = (id: string) =>
+	api.get<any[]>({ url: `/modeling/glossary/terms/${id}/versions` });
+export const listGlossaryTermReviews = (id: string) =>
+	api.get<any[]>({ url: `/modeling/glossary/terms/${id}/reviews` });
 export const getGlossaryTermReferences = (id: string) =>
 	api.get({ url: `/modeling/glossary/terms/${id}/references` });
 
