@@ -34,7 +34,7 @@
 - Playwright mock smoke：指标节点右侧 source handle 可起线；`订单金额 -> 客单价` 形成 `METRIC_DERIVES`，payload 见 `assets/it-10-metric-derives-put-payload.json`，截图见 `assets/it-10-metric-workbench-derives-edge.png`。
 - Playwright mock smoke：删除 `METRIC_DERIVES` 后，payload 移除 `dependsOnMetricIds`，见 `assets/it-11-metric-derives-delete-payload.json`。
 - Playwright smoke：窄屏可用性截图见 `assets/it-12-metric-workbench-narrow.png`。
-- 待补：真实后端指标数据下拦截 `PUT /api/semantic/metrics/{id}`。当前本地 `/api/semantic/*` 经 Vite 代理返回 500，本轮使用 mock 语义数据验证前端连线与 payload 形态。
+- 待补：真实后端指标数据下拦截 `PUT /api/semantic/metrics/{id}`。本地 3001 代理空 500 已定位为 dev proxy 目标未暴露；修复转发后未登录 curl 返回 401，说明请求已到 platform。当前仍缺有效登录会话与真实指标数据，本轮使用 mock 语义数据验证前端连线与 payload 形态。
 
 ## F5 分级分类资产联动验证记录（2026-07-04）
 
@@ -43,14 +43,14 @@
 - `pnpm exec tsc --noEmit`：通过。
 - Playwright smoke：`http://localhost:3001/#/security/data-security?tab=datasetSecurity&datasetId=asset-smoke-001` 可渲染分级分类页，激活 `数据集安全字段`，选择框显示 `asset-smoke-001`；截图见 `assets/it-13-f5-data-security-deeplink.png`。
 - Playwright smoke：`http://localhost:3001/#/security/data-security?tab=classification` 可见 `批量导入`、`导出映射`、`保存映射`；截图见 `assets/it-14-f5-classification-batch.png`。
-- 待补：真实 catalog 后端联动。当前本地 `/api/catalog/classification-mapping`、`/api/catalog/masking-rules`、`/api/catalog/datasets/{id}/security-mapping`、`/api/catalog/classification-masking/linkage` 经 Vite 代理返回 500，本轮不宣称真实数据保存/联动已完成。
+- 待补：真实 catalog 后端联动。本地 3001 代理空 500 已定位为 dev proxy 目标未暴露；修复转发后未登录 curl 返回 401，说明请求已到 platform。当前仍缺有效登录会话，本轮不宣称真实数据保存/联动已完成。
 
 ## F5 质量管控与质量报告闭环验证记录（2026-07-04）
 
 - `node --test src/pages/governance/QualityRulesReportFlow.source-contract.test.ts`：2/2 通过。
 - `pnpm exec tsc --noEmit`：通过。
 - Playwright smoke：`http://localhost:3001/#/governance/rules?tab=report&datasetId=quality-smoke-001` 可激活 `质量报告`，数据集选择保留 `quality-smoke-001`，`导出报告` 可见；截图见 `assets/it-15-f5-quality-report-deeplink.png`。
-- 待补：真实质量执行/评分后端联动。当前本地质量数据接口返回服务器错误或空数据，本轮不宣称 `triggerQualityRun` 已真实执行 SQL 并回写 run/history。
+- 待补：真实质量执行/评分后端联动。本地 3001 代理空 500 已定位为 dev proxy 目标未暴露；修复转发后未登录 curl 返回 401，说明请求已到 platform。当前仍缺有效登录会话与质量运行数据，本轮不宣称 `triggerQualityRun` 已真实执行 SQL 并回写 run/history。
 
 ## F3 数据元导入入口验证记录（2026-07-04）
 

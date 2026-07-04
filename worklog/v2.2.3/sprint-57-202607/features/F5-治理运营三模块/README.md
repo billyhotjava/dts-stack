@@ -27,7 +27,7 @@
 - 2026-07-04：T02/T03 交叉闭环完成。质量规则执行成功后自动切到 `质量报告` 并携带 `datasetId`；质量报告页支持 `datasetId` 深链并在默认数据湖接口失败时保留上下文。TDD 契约见 `source/dts-platform-webapp/src/pages/governance/QualityRulesReportFlow.source-contract.test.ts`，截图见 `../../assets/it-15-f5-quality-report-deeplink.png`。
 - 2026-07-04：T04 第一条闭环完成。资产台账行级新增 `分级分类` 入口，可直达 `/security/data-security?tab=datasetSecurity&datasetId={assetId}`；分级分类页支持 `tab/datasetId` 深链并激活 `数据集安全字段`。TDD 契约见 `source/dts-platform-webapp/src/pages/security/F5DataSecurityLinkage.source-contract.test.ts`，截图见 `../../assets/it-13-f5-data-security-deeplink.png`。
 - 2026-07-04：T04 第二条闭环完成。分类映射页签新增 `批量导入` / `导出映射`，CSV 导入复用 `importClassificationMapping`，导出复用 `exportClassificationMapping` 并下载 CSV。截图见 `../../assets/it-14-f5-classification-batch.png`。
-- 2026-07-04：运行时 smoke 发现本地 `/api/catalog/*` 相关端点经 Vite 代理返回 500；本轮已完成前端路由/状态联动，真实数据回写和批量定级仍需后续补证。
+- 2026-07-04：运行时 smoke 将本地 `/api/*` 空 500 定位为 3001 Vite dev proxy 默认目标 `localhost:18082` 未暴露；已用宿主转发并重启 3001，curl 现返回后端 401（未登录），说明链路已到 platform。真实数据回写、质量执行和批量定级仍需有效登录会话与业务数据补证。
 
 ## 完成标准
 

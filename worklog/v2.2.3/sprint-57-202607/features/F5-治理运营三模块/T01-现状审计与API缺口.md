@@ -55,7 +55,7 @@
 - 质量报告页已支持 `datasetId` URL 参数：`/governance/rules?tab=report&datasetId={datasetId}` 可激活 `质量报告` 并保留数据集选择；默认数据湖接口失败时不丢失 URL 数据集上下文。
 - TDD：新增 `QualityRulesReportFlow.source-contract.test.ts`，先 RED 后 GREEN；`pnpm exec tsc --noEmit` 通过。
 - Playwright smoke：`quality-smoke-001` 深链可渲染 `质量报告`、保留数据集选择并显示 `导出报告`，截图 `assets/it-15-f5-quality-report-deeplink.png`。
-- 仍待运行时验证：当前本地质量评分/规则历史接口返回服务器错误或空数据，尚未证明 `triggerQualityRun` 真执行 SQL、回写 run/history，并驱动 score/dashboard 聚合。
+- 仍待运行时验证：本地 3001 代理空 500 已定位为 dev proxy 目标未暴露；修复转发后未登录 curl 返回 401，说明链路到达 platform。仍需有效登录会话与业务数据证明 `triggerQualityRun` 真执行 SQL、回写 run/history，并驱动 score/dashboard 聚合。
 
 ### 分级分类 /security/data-security
 
@@ -65,4 +65,4 @@
 - TDD：`F5DataSecurityLinkage.source-contract.test.ts` 先 RED 后 GREEN；相关回归 9/9 通过，`pnpm exec tsc --noEmit` 通过。
 - Playwright smoke：`asset-smoke-001` 深链可渲染目标页签与选择框，截图 `assets/it-13-f5-data-security-deeplink.png`。
 - Playwright smoke：分类映射页签可见 `批量导入`、`导出映射`、`保存映射`，截图 `assets/it-14-f5-classification-batch.png`。
-- 仍待运行时验证：本地 Vite 代理下 `/api/catalog/classification-mapping`、`/api/catalog/masking-rules`、`/api/catalog/datasets/{id}/security-mapping`、`/api/catalog/classification-masking/linkage` 返回 500；真实密级保存、脱敏联动回写与批量定级需后端可用后继续补证。
+- 仍待运行时验证：本地 3001 代理空 500 已定位为 dev proxy 目标未暴露；修复转发后未登录 curl 返回 401，说明 catalog 链路到达 platform。真实密级保存、脱敏联动回写与批量定级需有效登录会话与业务数据后继续补证。
