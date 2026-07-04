@@ -15,9 +15,9 @@
 | IT-7 | 菜单/直达 URL 可访问，不落 /workbench 兜底 | 页面 | 截图 | ☐ |
 | IT-8 | 三页面范式巡检记录 | 文档 + 页面 | assets/foundation-pages-audit.md；assets/it-8-f3-elements-page.png；assets/it-8-f3-glossary-page.png；assets/it-8-f3-reference-codes-page.png | ✅ |
 | IT-9 | 既有 source-contract 测试全绿（模板 zip 契约不破坏） | node --test | 相关契约 14/14 通过；完整回归待最终补跑 | ◐ |
-| IT-10 | 指标工作台指标 -> 指标连线形成 `METRIC_DERIVES` 派生关系 | 页面 + 请求拦截 | 截图 + PUT payload | ☐ |
-| IT-11 | 指标工作台边配置保存/删除与业务对象绑定回归 | 页面 + 请求拦截 | 截图 + PUT payload | ☐ |
-| IT-12 | 指标工作台预检识别孤立指标、环依赖、草稿依赖、非法公式 JSON | 单测 + 页面 | 命令输出 + `assets/it-12-metric-workbench-toolbar.png` | ◐ |
+| IT-10 | 指标工作台指标 -> 指标连线形成 `METRIC_DERIVES` 派生关系 | 页面 + 请求拦截 | `assets/it-10-metric-workbench-derives-edge.png`；`assets/it-10-metric-derives-put-payload.json` | ◐ |
+| IT-11 | 指标工作台边配置保存/删除与业务对象绑定回归 | 页面 + 请求拦截 | `assets/it-11-metric-derives-delete-payload.json` | ◐ |
+| IT-12 | 指标工作台预检识别孤立指标、环依赖、草稿依赖、非法公式 JSON | 单测 + 页面 | 命令输出 + `assets/it-12-metric-workbench-toolbar.png` + `assets/it-12-metric-workbench-narrow.png` | ✅ |
 
 证据存放：`../assets/`（截图命名 `it-{N}-{描述}.png`）。
 
@@ -28,7 +28,10 @@
 - `pnpm exec tsc --noEmit`：通过。
 - `git diff --check -- source/dts-platform-webapp/src/api/semanticModelingApi.ts source/dts-platform-webapp/src/pages/modeling/MetricWorkbenchPage.tsx source/dts-platform-webapp/src/pages/modeling/metric-workbench source/dts-platform-webapp/src/pages/modeling/metricWorkbench.source-contract.test.ts`：通过。
 - Playwright smoke：`http://localhost:3001/#/modeling/metric-workbench` 可渲染指标工作台；接口失败/空数据时工具栏仍可见；截图见 `assets/it-12-metric-workbench-toolbar.png`。
-- 待补：真实指标数据下拦截 `PUT /api/semantic/metrics/{id}`，留存 `METRIC_DERIVES` 新增/删除 payload。
+- Playwright mock smoke：指标节点右侧 source handle 可起线；`订单金额 -> 客单价` 形成 `METRIC_DERIVES`，payload 见 `assets/it-10-metric-derives-put-payload.json`，截图见 `assets/it-10-metric-workbench-derives-edge.png`。
+- Playwright mock smoke：删除 `METRIC_DERIVES` 后，payload 移除 `dependsOnMetricIds`，见 `assets/it-11-metric-derives-delete-payload.json`。
+- Playwright smoke：窄屏可用性截图见 `assets/it-12-metric-workbench-narrow.png`。
+- 待补：真实后端指标数据下拦截 `PUT /api/semantic/metrics/{id}`。当前本地 `/api/semantic/*` 经 Vite 代理返回 500，本轮使用 mock 语义数据验证前端连线与 payload 形态。
 
 ## F3 数据元导入入口验证记录（2026-07-04）
 
@@ -62,4 +65,4 @@
 | 新前端产物 | ✅ bundle 含 `StandardPackagePage-*.js` 与 `AssetMapView-*.js`（标准包向导 + 资产矩阵已进镜像） |
 | 应用启动 | ✅ dts-platform 健康检查通过 |
 
-**待执行（需登录会话）**：IT-1~7 标准包全流程与内置包安装、F5-T01 运行时验证（质量试跑/评分/分级分类联动）、IT-10~12 指标工作台——需页面操作或提供测试账号后 curl 取证。
+**待执行（需登录会话/可用后端数据）**：IT-1~7 标准包全流程与内置包安装、F5-T01 运行时验证（质量试跑/评分/分级分类联动）、IT-10~11 指标工作台真实后端数据 payload 补证。

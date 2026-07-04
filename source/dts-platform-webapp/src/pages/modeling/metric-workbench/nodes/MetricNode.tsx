@@ -63,6 +63,17 @@ export function MetricNode({ data, selected }: NodeProps) {
                     boxShadow: "0 0 0 2px hsla(142,60%,45%,0.22)",
                 }}
             />
+            <Handle
+                type="source"
+                position={Position.Right}
+                style={{
+                    width: 10,
+                    height: 10,
+                    border: "2px solid white",
+                    background: "hsl(217,75%,55%)",
+                    boxShadow: "0 0 0 2px hsla(217,75%,55%,0.22)",
+                }}
+            />
         </div>
     );
 }
