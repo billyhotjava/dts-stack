@@ -73,6 +73,43 @@ public class CatalogAssetPortalService {
         this.accessChecker = accessChecker;
     }
 
+    /** 资产概览聚合（地图页数据源）：内部翻页复用 listAssets，可见性规则单一来源。 */
+    public CatalogAssetOverviewAggregator.AssetOverview overview(AssetQuery query, String activeDept) {
+        final int scanPageSize = 200;
+        final int scanMaxPages = 10; // 首版内存聚合上限 2000 条，超限置 truncated
+        List<AssetSummary> rows = new ArrayList<>();
+        long total = 0;
+        for (int page = 0; page < scanMaxPages; page++) {
+            AssetPage result = listAssets(
+                new AssetQuery(
+                    query.keyword(),
+                    query.service(),
+                    query.type(),
+                    query.database(),
+                    query.schema(),
+                    query.syncStatus(),
+                    query.classification(),
+                    query.warehouseLayer(),
+                    query.ownerDept(),
+                    query.governanceStatus(),
+                    query.matchStatus(),
+                    query.domainId(),
+                    query.domainUnassigned(),
+                    page,
+                    scanPageSize
+                ),
+                activeDept
+            );
+            rows.addAll(result.content());
+            total = result.total();
+            if (result.content().isEmpty() || rows.size() >= total) {
+                break;
+            }
+        }
+        boolean truncated = rows.size() < total;
+        return CatalogAssetOverviewAggregator.aggregate(rows, rows.size(), truncated);
+    }
+
     public AssetPage listAssets(AssetQuery query, String activeDept) {
         int page = Math.max(0, query.page());
         int size = Math.max(1, Math.min(query.size(), 200));

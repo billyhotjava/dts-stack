@@ -72,6 +72,8 @@ export type CatalogAssetV2Query = {
 };
 export const listCatalogAssetsV2 = (params: CatalogAssetV2Query = {}) =>
 	api.get({ url: "/catalog/assets-v2", params });
+export const getCatalogAssetsOverview = (params: { domainId?: string; domainUnassigned?: boolean } = {}) =>
+	api.get({ url: "/catalog/assets-v2/overview", params });
 export const getCatalogAssetV2 = (id: string) => api.get({ url: `/catalog/assets-v2/${id}` });
 export const getCatalogAssetV2Contract = (id: string) =>
 	api.get<Record<string, any>>({ url: `/catalog/assets-v2/${id}/contract` });

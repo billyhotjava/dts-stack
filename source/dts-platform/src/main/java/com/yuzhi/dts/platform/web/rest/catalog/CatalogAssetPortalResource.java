@@ -8,6 +8,7 @@ import com.yuzhi.dts.platform.service.catalog.CatalogAssetMappingReportService;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetSchemaContract;
 import com.yuzhi.dts.platform.service.catalog.CatalogLineageFailureReport;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetOverviewAggregator;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetPortalService;
 import com.yuzhi.dts.platform.service.catalog.OpenMetadataAssetSyncService;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
@@ -107,6 +108,26 @@ public class CatalogAssetPortalResource {
         helper.putIfHasText(payload, "keyword", keyword);
         audit.auditAction("CATALOG_ASSET_LIST", AuditStage.SUCCESS, "assets-v2", payload);
         return ApiResponses.ok(result);
+    }
+
+    @GetMapping("/overview")
+    @Transactional(readOnly = true)
+    public ApiResponse<CatalogAssetOverviewAggregator.AssetOverview> overview(
+        @RequestParam(value = "domainId", required = false) UUID domainId,
+        @RequestParam(value = "domainUnassigned", required = false, defaultValue = "false") boolean domainUnassigned,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        String effDept = activeDept != null ? activeDept : helper.claim("dept_code");
+        CatalogAssetOverviewAggregator.AssetOverview overview = assetPortalService.overview(
+            new CatalogAssetPortalService.AssetQuery(null, null, null, null, null, null, null, null, null, null, null, domainId, domainUnassigned, 0, 200),
+            effDept
+        );
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("summary", "查看资产概览统计");
+        payload.put("total", overview.total());
+        helper.putIfHasText(payload, "activeDept", effDept);
+        audit.auditAction("CATALOG_ASSET_OVERVIEW", AuditStage.SUCCESS, "assets-v2-overview", payload);
+        return ApiResponses.ok(overview);
     }
 
     @GetMapping("/governance-gaps")
