@@ -23,7 +23,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -33,6 +36,10 @@ import org.springframework.util.StringUtils;
 @Service
 @Transactional
 public class SemanticModelingService {
+    private static final Pattern DERIVED_METRIC_TOKEN = Pattern.compile("\\{\\{\\s*metric\\s*:\\s*([^}]+?)\\s*}}");
+    private static final Pattern DERIVED_TEMPLATE_WORD = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
+    private static final Pattern DERIVED_TEMPLATE_CHARACTERS = Pattern.compile("[A-Za-z0-9_\\s+\\-*/().,]+");
+    private static final Set<String> DERIVED_TEMPLATE_FUNCTIONS = Set.of("metric_ref", "nullif");
 
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
@@ -1589,8 +1596,13 @@ public class SemanticModelingService {
             groupByItems.add(field);
         }
         boolean controlled = isControlled(model);
+        Map<UUID, MetricDto> metricById = new LinkedHashMap<>();
         for (MetricDto metric : metrics) {
-            String expression = buildMetricExpression(metric, controlled);
+            metricById.put(metric.id(), metric);
+        }
+        Map<UUID, String> compiledMetricExpressions = new LinkedHashMap<>();
+        for (MetricDto metric : metrics) {
+            String expression = buildMetricExpression(metric, controlled, metricById, compiledMetricExpressions, new ArrayList<>());
             String alias = safeIdentifier(defaultValue(metric.code(), metric.name()));
             selectItems.add("    " + expression + " as " + alias);
         }
@@ -1751,6 +1763,43 @@ public class SemanticModelingService {
     }
 
     private String buildMetricExpression(MetricDto metric, boolean controlled) {
+        Map<UUID, MetricDto> metricById = metric.id() == null ? Map.of() : Map.of(metric.id(), metric);
+        return buildMetricExpression(metric, controlled, metricById, new LinkedHashMap<>(), new ArrayList<>());
+    }
+
+    private String buildMetricExpression(
+        MetricDto metric,
+        boolean controlled,
+        Map<UUID, MetricDto> metricById,
+        Map<UUID, String> compiledMetricExpressions,
+        List<UUID> stack
+    ) {
+        if (metric.id() != null && compiledMetricExpressions.containsKey(metric.id())) {
+            return compiledMetricExpressions.get(metric.id());
+        }
+        if (metric.id() != null && stack.contains(metric.id())) {
+            throw new IllegalArgumentException("指标派生关系存在环依赖: " + defaultValue(metric.code(), metric.name()));
+        }
+        if (metric.id() != null) {
+            stack.add(metric.id());
+        }
+        try {
+            JsonNode formula = parseFormula(metric.formulaJson());
+            String expression = isDerivedMetric(metric, formula)
+                ? derivedMetricExpression(metric, formula, controlled, metricById, compiledMetricExpressions, stack)
+                : baseMetricExpression(metric, controlled, formula);
+            if (metric.id() != null) {
+                compiledMetricExpressions.put(metric.id(), expression);
+            }
+            return expression;
+        } finally {
+            if (metric.id() != null && !stack.isEmpty()) {
+                stack.remove(stack.size() - 1);
+            }
+        }
+    }
+
+    private String baseMetricExpression(MetricDto metric, boolean controlled, JsonNode formula) {
         if (controlled) {
             // F2-T03: 受控模式委托严格编译器（白名单 + 拒原始 SQL + 方言 quote + 注入防御）。
             // 违规抛 IllegalArgumentException（unsafe_expression），由上层映射 422。
@@ -1761,7 +1810,6 @@ public class SemanticModelingService {
             );
         }
         String type = defaultValue(metric.formulaType(), "sum").toLowerCase(Locale.ROOT);
-        JsonNode formula = parseFormula(metric.formulaJson());
         return switch (type) {
             case "count" -> "count(" + safeField(defaultValue(readText(formula, "field"), "*")) + ")";
             case "count_distinct" -> "count(distinct " + safeField(required(readText(formula, "field"), "metric field")) + ")";
@@ -1783,6 +1831,103 @@ public class SemanticModelingService {
                 yield "sum(" + safeField(required(readText(formula, "field"), "metric field")) + ")";
             }
         };
+    }
+
+    private boolean isDerivedMetric(MetricDto metric, JsonNode formula) {
+        String type = defaultValue(metric.formulaType(), "").toLowerCase(Locale.ROOT);
+        return "derived".equals(type) || "derivation".equals(type) || "metric_derives".equals(type) || StringUtils.hasText(readText(formula, "derivationExpression"));
+    }
+
+    private String derivedMetricExpression(
+        MetricDto metric,
+        JsonNode formula,
+        boolean controlled,
+        Map<UUID, MetricDto> metricById,
+        Map<UUID, String> compiledMetricExpressions,
+        List<UUID> stack
+    ) {
+        List<UUID> dependencyIds = readMetricDependencyIds(formula);
+        if (dependencyIds.isEmpty()) {
+            throw new IllegalArgumentException("派生指标缺少 dependsOnMetricIds: " + defaultValue(metric.code(), metric.name()));
+        }
+        String template = required(firstText(formula, "derivationExpression", "expression", "expr", "formula"), "derivationExpression");
+        validateDerivedExpressionTemplate(template);
+
+        Map<String, String> dependencyExpressions = new LinkedHashMap<>();
+        for (UUID dependencyId : dependencyIds) {
+            MetricDto dependency = metricById.get(dependencyId);
+            if (dependency == null) {
+                throw new IllegalArgumentException("派生指标依赖不存在: " + dependencyId);
+            }
+            String expression = buildMetricExpression(dependency, controlled, metricById, compiledMetricExpressions, stack);
+            dependencyExpressions.put(dependencyId.toString(), expression);
+            if (StringUtils.hasText(dependency.code())) {
+                dependencyExpressions.put(dependency.code().trim(), expression);
+            }
+            if (StringUtils.hasText(dependency.name())) {
+                dependencyExpressions.put(dependency.name().trim(), expression);
+            }
+        }
+
+        Matcher matcher = DERIVED_METRIC_TOKEN.matcher(template);
+        StringBuffer sql = new StringBuffer();
+        boolean foundToken = false;
+        while (matcher.find()) {
+            foundToken = true;
+            String key = matcher.group(1).trim();
+            String expression = dependencyExpressions.get(key);
+            if (expression == null) {
+                throw new IllegalArgumentException("派生表达式引用了未声明依赖指标: " + key);
+            }
+            matcher.appendReplacement(sql, Matcher.quoteReplacement("(" + expression + ")"));
+        }
+        matcher.appendTail(sql);
+        if (!foundToken) {
+            throw new IllegalArgumentException("派生表达式必须使用 {{metric:code}} 引用上游指标");
+        }
+        return sql.toString();
+    }
+
+    private List<UUID> readMetricDependencyIds(JsonNode formula) {
+        JsonNode depends = formula == null ? null : formula.get("dependsOnMetricIds");
+        if (depends == null || !depends.isArray()) {
+            return List.of();
+        }
+        List<UUID> ids = new ArrayList<>();
+        for (JsonNode item : depends) {
+            if (item == null || item.isNull() || !StringUtils.hasText(item.asText())) {
+                continue;
+            }
+            try {
+                ids.add(UUID.fromString(item.asText().trim()));
+            } catch (IllegalArgumentException ex) {
+                throw new IllegalArgumentException("dependsOnMetricIds 仅支持指标 ID: " + item.asText());
+            }
+        }
+        return ids;
+    }
+
+    private void validateDerivedExpressionTemplate(String template) {
+        String normalized = DERIVED_METRIC_TOKEN.matcher(template).replaceAll(" metric_ref ");
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        if (
+            normalized.contains(";") ||
+            normalized.contains("--") ||
+            normalized.contains("/*") ||
+            lower.matches(".*\\b(select|insert|update|delete|drop|alter|truncate|create|grant|revoke|merge|union|exec)\\b.*")
+        ) {
+            throw new IllegalArgumentException("派生表达式不合法");
+        }
+        if (!DERIVED_TEMPLATE_CHARACTERS.matcher(normalized).matches()) {
+            throw new IllegalArgumentException("派生表达式仅支持指标引用、算术运算和 nullif");
+        }
+        Matcher wordMatcher = DERIVED_TEMPLATE_WORD.matcher(normalized);
+        while (wordMatcher.find()) {
+            String word = wordMatcher.group().toLowerCase(Locale.ROOT);
+            if (!DERIVED_TEMPLATE_FUNCTIONS.contains(word)) {
+                throw new IllegalArgumentException("派生表达式仅支持指标引用、算术运算和 nullif: " + word);
+            }
+        }
     }
 
     private String ratioSql(JsonNode formula) {

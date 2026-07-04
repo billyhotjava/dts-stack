@@ -323,7 +323,7 @@ function MetricCanvasInner({
                     预检
                 </Button>
                 <Button size="small" type="primary" icon={<Save size={14} />} onClick={onArrangementSave}>
-                    保存编排
+                    实时保存
                 </Button>
             </Space>
         </div>
