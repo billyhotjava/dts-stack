@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import Papa from "papaparse";
 import { toast } from "sonner";
 import {
 	Alert,
@@ -23,6 +24,8 @@ import { useSearchParams } from "react-router";
 import {
 	getClassificationMapping,
 	getClassificationMaskingLinkage,
+	importClassificationMapping,
+	exportClassificationMapping,
 	replaceClassificationMapping,
 	validateClassificationMapping,
 	listMaskingRules,
@@ -91,6 +94,9 @@ export default function Page() {
 	const [datasets, setDatasets] = useState<{ id: string; name: string }[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [mappingModalOpen, setMappingModalOpen] = useState(false);
+	const [mappingBatchModalOpen, setMappingBatchModalOpen] = useState(false);
+	const [mappingBatchRaw, setMappingBatchRaw] = useState("");
+	const [mappingBatchSubmitting, setMappingBatchSubmitting] = useState(false);
 	const [editingMapping, setEditingMapping] = useState<ClassificationRow | null>(null);
 	const [mappingForm] = Form.useForm<ClassificationRow>();
 	const [maskingModalOpen, setMaskingModalOpen] = useState(false);
@@ -282,6 +288,79 @@ export default function Page() {
 		setMappingValidation(null);
 	};
 
+	const normalizeImportedMappingRows = (rows: Array<Record<string, any>>) =>
+		rows
+			.map((row) => ({
+				source: String(row.source || row["来源系统"] || "").trim(),
+				sourceLevel: String(row.sourceLevel || row.source_level || row["来源级别"] || "").trim(),
+				platformLevel: String(row.platformLevel || row.platform_level || row["平台级别"] || "").trim(),
+			}))
+			.filter((row) => row.source && row.sourceLevel && row.platformLevel);
+
+	const downloadClassificationMappingCsv = (rows: ClassificationRow[]) => {
+		const csv = Papa.unparse(
+			rows.map((row) => ({
+				source: row.source || "",
+				sourceLevel: row.sourceLevel || "",
+				platformLevel: row.platformLevel || "",
+			})),
+		);
+		const blob = new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" });
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement("a");
+		link.href = url;
+		link.download = "classification-mapping.csv";
+		document.body.appendChild(link);
+		link.click();
+		document.body.removeChild(link);
+		URL.revokeObjectURL(url);
+	};
+
+	const handleExportMappingBatch = async () => {
+		try {
+			const result: any = await exportClassificationMapping();
+			const rows = Array.isArray(result) ? result : Array.isArray(result?.content) ? result.content : classificationRows;
+			downloadClassificationMappingCsv(rows as ClassificationRow[]);
+			toast.success("分类映射已导出");
+		} catch (error: any) {
+			toast.error(error?.message || "导出失败");
+		}
+	};
+
+	const handleImportMappingBatch = async () => {
+		if (!mappingBatchRaw.trim()) {
+			toast.warning("请粘贴 CSV 内容");
+			return;
+		}
+		setMappingBatchSubmitting(true);
+		try {
+			const parsed = Papa.parse<Record<string, string>>(mappingBatchRaw, {
+				header: true,
+				skipEmptyLines: true,
+			});
+			if (parsed.errors.length > 0) {
+				toast.error(parsed.errors[0]?.message || "CSV 解析失败");
+				return;
+			}
+			const rows = normalizeImportedMappingRows(parsed.data);
+			if (rows.length === 0) {
+				toast.error("未解析到有效映射，请检查表头 source/sourceLevel/platformLevel");
+				return;
+			}
+			await importClassificationMapping(rows);
+			toast.success(`已导入 ${rows.length} 条分类映射`);
+			setMappingBatchModalOpen(false);
+			setMappingBatchRaw("");
+			await loadMappings();
+			notifySecurityLinkageChanged();
+			await loadDatasetLinkage(selectedDataset);
+		} catch (error: any) {
+			toast.error(error?.message || "批量导入失败");
+		} finally {
+			setMappingBatchSubmitting(false);
+		}
+	};
+
 	const saveMappingAll = async () => {
 		try {
 			const validation = await runMappingValidation(true);
@@ -441,9 +520,15 @@ export default function Page() {
 											<Button type="primary" onClick={() => openMappingModal()}>
 												新增映射
 											</Button>
-											<Button loading={validatingMapping} onClick={() => void runMappingValidation()}>
-												冲突预检
-											</Button>
+										<Button loading={validatingMapping} onClick={() => void runMappingValidation()}>
+											冲突预检
+										</Button>
+										<Button onClick={() => setMappingBatchModalOpen(true)}>
+											批量导入
+										</Button>
+										<Button onClick={() => void handleExportMappingBatch()}>
+											导出映射
+										</Button>
 											<Button
 												type="default"
 												disabled={!classificationDirty}
@@ -590,6 +675,30 @@ export default function Page() {
 						<Input placeholder="例如 PUBLIC" />
 					</Form.Item>
 				</Form>
+			</Modal>
+
+			<Modal
+				open={mappingBatchModalOpen}
+				title="批量导入映射"
+				onCancel={() => setMappingBatchModalOpen(false)}
+				onOk={handleImportMappingBatch}
+				okText="导入"
+				okButtonProps={{ loading: mappingBatchSubmitting }}
+				destroyOnClose
+			>
+				<Space direction="vertical" className="w-full">
+					<Alert
+						type="info"
+						showIcon
+						message="支持 CSV 表头：source,sourceLevel,platformLevel；也兼容 来源系统,来源级别,平台级别。"
+					/>
+					<Input.TextArea
+						rows={8}
+						value={mappingBatchRaw}
+						onChange={(event) => setMappingBatchRaw(event.target.value)}
+						placeholder={"source,sourceLevel,platformLevel\nOM,P0,SECRET"}
+					/>
+				</Space>
 			</Modal>
 
 			<Modal

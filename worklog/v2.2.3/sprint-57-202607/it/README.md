@@ -19,6 +19,7 @@
 | IT-11 | 指标工作台边配置保存/删除与业务对象绑定回归 | 页面 + 请求拦截 | `assets/it-11-metric-derives-delete-payload.json` | ◐ |
 | IT-12 | 指标工作台预检识别孤立指标、环依赖、草稿依赖、非法公式 JSON | 单测 + 页面 | 命令输出 + `assets/it-12-metric-workbench-toolbar.png` + `assets/it-12-metric-workbench-narrow.png` | ✅ |
 | IT-13 | F5 分级分类深链：资产台账可直达数据集安全字段绑定 | source-contract + 页面 | `assets/it-13-f5-data-security-deeplink.png` | ✅ |
+| IT-14 | F5 分类映射批量导入/导出命令可见 | source-contract + 页面 | `assets/it-14-f5-classification-batch.png` | ✅ |
 
 证据存放：`../assets/`（截图命名 `it-{N}-{描述}.png`）。
 
@@ -36,10 +37,11 @@
 
 ## F5 分级分类资产联动验证记录（2026-07-04）
 
-- `node --test src/pages/security/F5DataSecurityLinkage.source-contract.test.ts`：3/3 通过。
-- 相关回归：`node --test src/pages/catalog/Sprint45GovernanceAsset.source-contract.test.ts src/pages/governance/qualityReportRepairLink.source-contract.test.ts src/pages/security/F5DataSecurityLinkage.source-contract.test.ts`：8/8 通过。
+- `node --test src/pages/security/F5DataSecurityLinkage.source-contract.test.ts`：4/4 通过。
+- 相关回归：`node --test src/pages/catalog/Sprint45GovernanceAsset.source-contract.test.ts src/pages/governance/qualityReportRepairLink.source-contract.test.ts src/pages/security/F5DataSecurityLinkage.source-contract.test.ts`：9/9 通过。
 - `pnpm exec tsc --noEmit`：通过。
 - Playwright smoke：`http://localhost:3001/#/security/data-security?tab=datasetSecurity&datasetId=asset-smoke-001` 可渲染分级分类页，激活 `数据集安全字段`，选择框显示 `asset-smoke-001`；截图见 `assets/it-13-f5-data-security-deeplink.png`。
+- Playwright smoke：`http://localhost:3001/#/security/data-security?tab=classification` 可见 `批量导入`、`导出映射`、`保存映射`；截图见 `assets/it-14-f5-classification-batch.png`。
 - 待补：真实 catalog 后端联动。当前本地 `/api/catalog/classification-mapping`、`/api/catalog/masking-rules`、`/api/catalog/datasets/{id}/security-mapping`、`/api/catalog/classification-masking/linkage` 经 Vite 代理返回 500，本轮不宣称真实数据保存/联动已完成。
 
 ## F3 数据元导入入口验证记录（2026-07-04）

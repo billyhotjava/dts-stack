@@ -23,3 +23,14 @@ test("F5-T04 binding asset command is an active navigation command, not a disabl
 	assert.match(SECURITY_SOURCE, /setActiveDatasetSecurityTab/);
 	assert.doesNotMatch(SECURITY_SOURCE, /<Button disabled title="请在数据集安全字段页选择数据集后保存密级字段和部门字段">\s*绑定资产\s*<\/Button>/);
 });
+
+test("F5-T04 classification mapping exposes batch import and export commands", () => {
+	assert.match(SECURITY_SOURCE, /import Papa from "papaparse"/);
+	assert.match(SECURITY_SOURCE, /importClassificationMapping/);
+	assert.match(SECURITY_SOURCE, /exportClassificationMapping/);
+	assert.match(SECURITY_SOURCE, /批量导入/);
+	assert.match(SECURITY_SOURCE, /导出映射/);
+	assert.match(SECURITY_SOURCE, /Papa\.parse/);
+	assert.match(SECURITY_SOURCE, /handleImportMappingBatch/);
+	assert.match(SECURITY_SOURCE, /downloadClassificationMappingCsv/);
+});

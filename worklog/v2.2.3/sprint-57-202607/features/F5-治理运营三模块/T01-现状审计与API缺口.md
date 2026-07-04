@@ -53,6 +53,8 @@
 
 - 已修复一个真实动线断点：资产台账行级新增 `分级分类`，可直接进入 `/security/data-security?tab=datasetSecurity&datasetId={assetId}`。
 - 分级分类页已支持 `tab/datasetId` URL 参数：深链可激活 `数据集安全字段` 页签并带入数据集选择；顶部 `绑定资产` 不再是 disabled 占位按钮。
-- TDD：`F5DataSecurityLinkage.source-contract.test.ts` 先 RED 后 GREEN；相关回归 8/8 通过，`pnpm exec tsc --noEmit` 通过。
+- 分类映射页签已新增 `批量导入` / `导出映射`：CSV 导入使用 `importClassificationMapping`，导出使用 `exportClassificationMapping` 并下载 CSV，补齐批量维护入口。
+- TDD：`F5DataSecurityLinkage.source-contract.test.ts` 先 RED 后 GREEN；相关回归 9/9 通过，`pnpm exec tsc --noEmit` 通过。
 - Playwright smoke：`asset-smoke-001` 深链可渲染目标页签与选择框，截图 `assets/it-13-f5-data-security-deeplink.png`。
+- Playwright smoke：分类映射页签可见 `批量导入`、`导出映射`、`保存映射`，截图 `assets/it-14-f5-classification-batch.png`。
 - 仍待运行时验证：本地 Vite 代理下 `/api/catalog/classification-mapping`、`/api/catalog/masking-rules`、`/api/catalog/datasets/{id}/security-mapping`、`/api/catalog/classification-masking/linkage` 返回 500；真实密级保存、脱敏联动回写与批量定级需后端可用后继续补证。
