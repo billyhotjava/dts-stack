@@ -10,6 +10,10 @@ const CANVAS = readFileSync(
 	new URL("./metric-workbench/MetricCanvas.tsx", import.meta.url),
 	"utf8",
 );
+const METRIC_NODE = readFileSync(
+	new URL("./metric-workbench/nodes/MetricNode.tsx", import.meta.url),
+	"utf8",
+);
 const DETAIL_PANEL = readFileSync(
 	new URL("./metric-workbench/MetricDetailPanel.tsx", import.meta.url),
 	"utf8",
@@ -90,6 +94,13 @@ test("MetricCanvas uses @xyflow/react with custom nodes and edges", () => {
 	assert.match(CANVAS, /业务对象页选择治理主题域/);
 	assert.doesNotMatch(CANVAS, /主题域页创建业务对象/);
 	assert.doesNotMatch(CANVAS, /oklch|:has\(|@container/);
+});
+
+test("MetricNode exposes both handles so metric-to-metric derivation can be drawn", () => {
+	assert.match(METRIC_NODE, /type="target"/);
+	assert.match(METRIC_NODE, /position=\{Position\.Left\}/);
+	assert.match(METRIC_NODE, /type="source"/);
+	assert.match(METRIC_NODE, /position=\{Position\.Right\}/);
 });
 
 test("MetricWorkbenchPage wires semantic derivation save and relation deletion", () => {
