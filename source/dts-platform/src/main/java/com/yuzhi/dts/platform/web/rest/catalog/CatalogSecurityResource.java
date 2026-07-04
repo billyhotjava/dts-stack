@@ -120,7 +120,11 @@ public class CatalogSecurityResource {
                 id.toString(),
                 Map.of("summary", "清除行级安全字段映射", "datasetId", id.toString(), "before", before, "after", Map.of())
             );
-            return ApiResponses.ok(Map.of("datasetId", id.toString(), "dataLevelField", null, "deptField", null));
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("datasetId", id.toString());
+            payload.put("dataLevelField", null);
+            payload.put("deptField", null);
+            return ApiResponses.ok(payload);
         }
 
         if (mapping == null) {

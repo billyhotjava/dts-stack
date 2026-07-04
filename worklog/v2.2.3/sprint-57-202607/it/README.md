@@ -1,6 +1,6 @@
 # Sprint-57 集成验证
 
-**状态**: IN_PROGRESS（2026-07-04 标准包 IT-1~7 已完成真实后端闭环；F5/F6 仍有运行态补证项）
+**状态**: DONE（2026-07-04 IT-1~15 已完成 TDD、真实后端 IT 或页面 smoke 补证）
 
 ## 验证项
 
@@ -14,13 +14,13 @@
 | IT-6 | 数据元 code_set 与已安装码表关联正确 | SQL | `assets/it-6-code-set-association.json` | ✅ |
 | IT-7 | 菜单/直达 URL 可访问，不落 /workbench 兜底 | 页面 | `assets/it-7-standard-package-direct-url.png`；`assets/it-7-standard-package-direct-url.json` | ✅ |
 | IT-8 | 三页面范式巡检记录 | 文档 + 页面 | assets/foundation-pages-audit.md；assets/it-8-f3-elements-page.png；assets/it-8-f3-glossary-page.png；assets/it-8-f3-reference-codes-page.png | ✅ |
-| IT-9 | 既有 source-contract 测试全绿（模板 zip 契约不破坏） | node --test | 相关契约 14/14 通过；完整回归待最终补跑 | ◐ |
-| IT-10 | 指标工作台指标 -> 指标连线形成 `METRIC_DERIVES` 派生关系 | 页面 + 请求拦截 | `assets/it-10-metric-workbench-derives-edge.png`；`assets/it-10-metric-derives-put-payload.json` | ◐ |
-| IT-11 | 指标工作台边配置保存/删除与业务对象绑定回归 | 页面 + 请求拦截 | `assets/it-11-metric-derives-delete-payload.json` | ◐ |
+| IT-9 | 既有 source-contract 测试全绿（模板 zip 契约不破坏） | node --test | 相关契约 14/14 通过；最终补跑见下方记录 | ✅ |
+| IT-10 | 指标工作台指标 -> 指标连线形成 `METRIC_DERIVES` 派生关系 | 页面 + 请求拦截 + 真实 API | `assets/it-10-metric-workbench-derives-edge.png`；`assets/it-10-metric-derives-put-payload.json`；`assets/it-10-metric-derives-real-put-payload.json` | ✅ |
+| IT-11 | 指标工作台边配置保存/删除与业务对象绑定回归 | 页面 + 请求拦截 + 真实 API | `assets/it-11-metric-derives-delete-payload.json`；`assets/it-10-metric-derives-real-put-payload.json` 的 `remove` 段 | ✅ |
 | IT-12 | 指标工作台预检识别孤立指标、环依赖、草稿依赖、非法公式 JSON | 单测 + 页面 | 命令输出 + `assets/it-12-metric-workbench-toolbar.png` + `assets/it-12-metric-workbench-narrow.png` | ✅ |
-| IT-13 | F5 分级分类深链：资产台账可直达数据集安全字段绑定 | source-contract + 页面 | `assets/it-13-f5-data-security-deeplink.png` | ✅ |
-| IT-14 | F5 分类映射批量导入/导出命令可见 | source-contract + 页面 | `assets/it-14-f5-classification-batch.png` | ✅ |
-| IT-15 | F5 质量规则执行后可深链到质量报告数据集上下文 | source-contract + 页面 | `assets/it-15-f5-quality-report-deeplink.png` | ✅ |
+| IT-13 | F5 分级分类深链：资产台账可直达数据集安全字段绑定 | source-contract + 页面 + 真实 API/SQL | `assets/it-13-f5-data-security-deeplink.png`；`assets/it-13-14-f5-security-real-linkage.json` | ✅ |
+| IT-14 | F5 分类映射批量导入/导出命令可见 | source-contract + 页面 + 真实 API | `assets/it-14-f5-classification-batch.png`；`assets/it-13-14-f5-security-real-linkage.json` | ✅ |
+| IT-15 | F5 质量规则执行后可深链到质量报告数据集上下文 | source-contract + 页面 + 真实 API | `assets/it-15-f5-quality-report-deeplink.png`；`assets/it-15-f5-quality-real-run.json` | ✅ |
 
 证据存放：`../assets/`（截图命名 `it-{N}-{描述}.png`）。
 
@@ -34,7 +34,7 @@
 - Playwright mock smoke：指标节点右侧 source handle 可起线；`订单金额 -> 客单价` 形成 `METRIC_DERIVES`，payload 见 `assets/it-10-metric-derives-put-payload.json`，截图见 `assets/it-10-metric-workbench-derives-edge.png`。
 - Playwright mock smoke：删除 `METRIC_DERIVES` 后，payload 移除 `dependsOnMetricIds`，见 `assets/it-11-metric-derives-delete-payload.json`。
 - Playwright smoke：窄屏可用性截图见 `assets/it-12-metric-workbench-narrow.png`。
-- 待补：真实后端指标数据下拦截 `PUT /api/semantic/metrics/{id}`。本地 3001 代理空 500 已定位为 dev proxy 目标未暴露；修复转发后未登录 curl 返回 401，说明请求已到 platform。当前仍缺有效登录会话与真实指标数据，本轮使用 mock 语义数据验证前端连线与 payload 形态。
+- 真实后端 IT：使用 `sprint57_it` 会话直连 `http://127.0.0.1:18082/api/semantic`，选择真实指标 `94b2cfc4-52fc-46b6-a611-0e0aff42dd53` 作为来源、`f75d94ec-e6ac-45fd-9b48-bb285b9fdbf3` 作为目标；`PUT /api/semantic/metrics/{id}` 增加 `formulaJson.dependsOnMetricIds` 后 HTTP 200，读回确认持久化；随后再次 PUT 恢复原公式 HTTP 200。证据见 `assets/it-10-metric-derives-real-put-payload.json`。
 
 ## 标准包真实闭环验证记录（2026-07-04）
 
@@ -56,14 +56,15 @@
 - `pnpm exec tsc --noEmit`：通过。
 - Playwright smoke：`http://localhost:3001/#/security/data-security?tab=datasetSecurity&datasetId=asset-smoke-001` 可渲染分级分类页，激活 `数据集安全字段`，选择框显示 `asset-smoke-001`；截图见 `assets/it-13-f5-data-security-deeplink.png`。
 - Playwright smoke：`http://localhost:3001/#/security/data-security?tab=classification` 可见 `批量导入`、`导出映射`、`保存映射`；截图见 `assets/it-14-f5-classification-batch.png`。
-- 待补：真实 catalog 后端联动。本地 3001 代理空 500 已定位为 dev proxy 目标未暴露；修复转发后未登录 curl 返回 401，说明请求已到 platform。当前仍缺有效登录会话，本轮不宣称真实数据保存/联动已完成。
+- TDD 修复：真实 restore 首次发现 `PUT /api/catalog/datasets/{id}/security-mapping` 传 `null/null` 时因 `Map.of(..., null)` 返回 500；新增 `CatalogSecurityResourceTest.upsertDatasetSecurityMapping_clearsMappingWithNullablePayload` 锁定清空响应和删除行为，修复后 `CatalogSecurityResourceTest,StandardPackageApplyServiceTest` 8/8 通过。
+- 真实后端 IT：`GET/POST/PUT /api/catalog/classification-mapping*` 完成分类映射 validate/import/export/restore；`GET/PUT /api/catalog/datasets/{id}/security-mapping` 完成安全字段保存、联动查询和清空恢复；修复后 restore HTTP 200，最终返回 `dataLevelField=null, deptField=null`，`catalog_dataset_security_mapping` 查询行数为 0。证据见 `assets/it-13-14-f5-security-real-linkage.json`。
 
 ## F5 质量管控与质量报告闭环验证记录（2026-07-04）
 
 - `node --test src/pages/governance/QualityRulesReportFlow.source-contract.test.ts`：2/2 通过。
 - `pnpm exec tsc --noEmit`：通过。
 - Playwright smoke：`http://localhost:3001/#/governance/rules?tab=report&datasetId=quality-smoke-001` 可激活 `质量报告`，数据集选择保留 `quality-smoke-001`，`导出报告` 可见；截图见 `assets/it-15-f5-quality-report-deeplink.png`。
-- 待补：真实质量执行/评分后端联动。本地 3001 代理空 500 已定位为 dev proxy 目标未暴露；修复转发后未登录 curl 返回 401，说明请求已到 platform。当前仍缺有效登录会话与质量运行数据，本轮不宣称 `triggerQualityRun` 已真实执行 SQL 并回写 run/history。
+- 真实后端 IT：创建 Sprint-57 专用质量规则 `833298ed-d4f0-4a48-a5cb-51a410d8af04`，绑定数据集 `271b3ea0-b1a1-4f14-9cb2-baa09c7eadc8` 后 dry-run HTTP 200，生成 run `599dd1fd-710f-4a2e-be60-1e1251a00438`；当前环境 Hive 未配置，run 状态为 `FAILED` 且错误分类为 `CONFIG`，但 report 查询和 rule history 均 HTTP 200 并能回查该运行记录。该规则保留用于审计追溯，证据见 `assets/it-15-f5-quality-real-run.json`。
 
 ## F3 数据元导入入口验证记录（2026-07-04）
 
@@ -88,13 +89,14 @@
 
 ## 部署验证记录（2026-07-04）
 
-重建方式：`builds/dts-build.sh --image dts-platform dts-platform-webapp` + `docker compose -f docker-compose-app.yml up -d`（新容器 13:50）。
+重建方式：`builds/dts-build.sh --image dts-platform dts-platform-webapp` + `docker compose -f docker-compose-app.yml up -d`（标准包/前端新容器 13:50）；F5 空值清理修复后再次执行 `./builds/dts-build.sh --image dts-platform` + `docker compose -f docker-compose-app.yml up -d dts-platform`（平台容器 15:44）。
 
 | 验证点 | 结果 |
 |--------|------|
 | liquibase 迁移 | ✅ `std_pkg_import_run` / `std_pkg_import_run_item` 两表存在于 dts_platform 库 |
 | 标准包端点注册 | ✅ `GET /api/modeling/standard-packages/builtin` 返回 401（需鉴权，非 404） |
 | 新前端产物 | ✅ bundle 含 `StandardPackagePage-*.js` 与 `AssetMapView-*.js`（标准包向导 + 资产矩阵已进镜像） |
-| 应用启动 | ✅ dts-platform 健康检查通过 |
+| 应用启动 | ✅ dts-platform 健康检查通过；`http://127.0.0.1:18082/management/health` 返回 200 |
+| F5/F6 真实后端补证 | ✅ `it-10-metric-derives-real-put-payload.json`、`it-13-14-f5-security-real-linkage.json`、`it-15-f5-quality-real-run.json` 已留存 |
 
-**待执行（需登录会话/可用后端数据）**：IT-1~7 标准包全流程与内置包安装、F5-T01 运行时验证（质量试跑/评分/分级分类联动）、IT-10~11 指标工作台真实后端数据 payload 补证。
+**剩余风险**：质量规则 dry-run 已真实生成 run/report/history，但当前环境未配置 Hive/Inceptor 执行源，因此本轮验证的是“规则调度、失败归档、报告回查闭环”，不是业务 SQL 成功评分。

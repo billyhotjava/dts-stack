@@ -1,7 +1,7 @@
 # Sprint-57: 基础数据闭环 —— 标准包导入管道与内置国标包
 
 **时间**: 2026-07
-**状态**: IN_PROGRESS（标准包 F1/F2/F3/F4 已完成真实 IT；F5/F6 仍保留运行态补证项）
+**状态**: DONE（F1-F6 已完成 TDD、真实后端 IT 或页面 smoke 补证）
 **目标**: 打通"下载标准包模板 → 客户填写 → 上传 DTS → 校验/应用/回滚"的完整闭环，并以同一管道交付内置国标包，使基础数据模块（数据元/业务术语/公共码表/标准包）达到可交付状态。
 
 ## 背景
@@ -64,8 +64,8 @@ POST /api/modeling/standard-packages/builtin/{code}/install  (安装=走同一 p
 | F2 | 内置国标包 | 2 | DONE |
 | F3 | 基础数据页面完善 | 3 | DONE |
 | F4 | 数据资产重构（地图/台账分离） | 4 | DONE |
-| F5 | 治理运营三模块重构 | 4 | IN_PROGRESS |
-| F6 | 指标工作台语义编排编辑器 | 4 | IN_PROGRESS |
+| F5 | 治理运营三模块重构 | 4 | DONE |
+| F6 | 指标工作台语义编排编辑器 | 4 | DONE |
 
 **范围调整（2026-07-03 用户决策）**：数据资产重构与治理运营三模块补齐并入本 sprint（F4/F5），按 TDD 推进；原"单列 Sprint-58"决定作废。
 **范围追加（2026-07-03 用户决策）**：指标工作台在 Sprint-56 拖拽绑定闭环基础上继续升级为语义编排编辑器（F6），线条代表真实指标建模关系，优先复用现有 `PUT /api/semantic/metrics/{id}`，不新增后端关系表。
@@ -87,7 +87,7 @@ POST /api/modeling/standard-packages/builtin/{code}/install  (安装=走同一 p
 - [x] 旧数据元直导端点收编到新管道校验逻辑，行为兼容
 - [x] 至少 3 个内置国标包（性别/学历/行政区划节选 + 常用数据元）可在页面一键安装
 - [x] 基础数据四页面交互范式统一（列表+详情+引用追溯+导入导出入口）
-- [ ] 指标工作台支持 `OBJECT_METRIC` 与 `METRIC_DERIVES` 两类语义关系边，具备工具栏、边配置、删除关系和预检能力
+- [x] 指标工作台支持 `OBJECT_METRIC` 与 `METRIC_DERIVES` 两类语义关系边，具备工具栏、边配置、删除关系和预检能力
 - [x] it/ 留存集成验证证据（curl 报文 + 页面截图）
 
 ## TDD 与集成验证记录（2026-07-04）
@@ -98,6 +98,11 @@ POST /api/modeling/standard-packages/builtin/{code}/install  (安装=走同一 p
 - 后端单测：`./mvnw -Dtest=StandardPackageApplyServiceTest -Dspotless.apply.skip=true test`，7/7 通过。
 - 真实 IT：标准包 preview 错误行、valid preview、apply 入库计数、rollback 清零、旧数据元直导历史、内置包幂等安装、code_set 关联均已留存到 `assets/it-*.json`。
 - 页面 IT：`#/foundation/standard-package` 直达不落 `/workbench`，标准包首屏、内置包、历史页截图已留存。
+- TDD 红灯：F5 真实 API restore 发现 `PUT /api/catalog/datasets/{id}/security-mapping` 清空字段时返回 500，根因是 `CatalogSecurityResource` 使用 `Map.of(..., null)` 组装响应。
+- TDD 用例：`CatalogSecurityResourceTest.upsertDatasetSecurityMapping_clearsMappingWithNullablePayload` 锁定“清空安全字段映射时删除台账行并返回 `null/null` 响应”。
+- 修复：清空分支改用 `LinkedHashMap` 允许空值响应；后端单测 `./mvnw -Dtest=CatalogSecurityResourceTest,StandardPackageApplyServiceTest -Dspotless.apply.skip=true test`，8/8 通过。
+- F5 真实 IT：分类映射 validate/import/export/restore、数据集安全字段 save/linkage/restore、DB 行清理、质量规则 dry-run/report/history 均已留存到 `it-13-14-f5-security-real-linkage.json` 与 `it-15-f5-quality-real-run.json`。
+- F6 真实 IT：指标工作台 `METRIC_DERIVES` 关系已通过真实 `PUT /api/semantic/metrics/{id}` 增加 `dependsOnMetricIds` 并恢复原公式，证据见 `it-10-metric-derives-real-put-payload.json`。
 
 ## 实施偏差记录
 
@@ -106,3 +111,4 @@ POST /api/modeling/standard-packages/builtin/{code}/install  (安装=走同一 p
 3. **已知无关测试失败**：`ModelingSqlModelServiceTest` 7 个用例（zip 清单/文件系统权限类）在本 sprint 开工前即失败，与标准包管道零交集（grep 确认无引用），待独立排查。
 4. **部署提示**：新端点/页面已重建 dts-platform 与 dts-platform-webapp 容器并完成标准包 IT；菜单行已直接 upsert 进 dts_admin DB（id=7，2 个角色绑定），种子文件同步更新供全新部署。
 5. **标准包回滚引用保护修正**：标准包创建的数据元可能引用同包码表目录，整包回滚时必须按导入记录删除，不复用页面级 `delete` 的引用保护；该行为已用单测与真实 rollback IT 锁定。
+6. **F5 安全映射清空修正**：真实联动验证曾留下 `tenant_id/source_system` 映射残留；修复后已重新部署并验证 restore HTTP 200，接口最终返回 `null/null`，`catalog_dataset_security_mapping` 查询行数为 0。

@@ -1,0 +1,66 @@
+{
+  "checkedAt": "2026-07-04T07:34:39.479Z",
+  "apiBase": "http://127.0.0.1:18082/api/semantic",
+  "sourceMetric": {
+    "id": "94b2cfc4-52fc-46b6-a611-0e0aff42dd53",
+    "code": "gmv",
+    "name": "成交金额"
+  },
+  "targetMetric": {
+    "id": "f75d94ec-e6ac-45fd-9b48-bb285b9fdbf3",
+    "code": "gmv",
+    "name": "成交金额"
+  },
+  "add": {
+    "httpStatus": 200,
+    "requestPayload": {
+      "objectId": "1295fa2a-a7fb-4477-b4a3-40dd222c0dc4",
+      "code": "gmv",
+      "name": "成交金额",
+      "formulaType": "sum",
+      "formulaJson": "{\"field\":\"amount\",\"dependsOnMetricIds\":[\"94b2cfc4-52fc-46b6-a611-0e0aff42dd53\"]}",
+      "format": "decimal",
+      "unit": "元",
+      "status": "ACTIVE"
+    },
+    "response": {
+      "id": "f75d94ec-e6ac-45fd-9b48-bb285b9fdbf3",
+      "objectId": "1295fa2a-a7fb-4477-b4a3-40dd222c0dc4",
+      "code": "gmv",
+      "name": "成交金额",
+      "formulaType": "sum",
+      "formulaJson": "{\"field\":\"amount\",\"dependsOnMetricIds\":[\"94b2cfc4-52fc-46b6-a611-0e0aff42dd53\"]}",
+      "format": "decimal",
+      "unit": "元",
+      "status": "ACTIVE"
+    },
+    "persistedDependsOnMetricIds": [
+      "94b2cfc4-52fc-46b6-a611-0e0aff42dd53"
+    ]
+  },
+  "remove": {
+    "httpStatus": 200,
+    "requestPayload": {
+      "objectId": "1295fa2a-a7fb-4477-b4a3-40dd222c0dc4",
+      "code": "gmv",
+      "name": "成交金额",
+      "formulaType": "sum",
+      "formulaJson": "{\"field\":\"amount\"}",
+      "format": "decimal",
+      "unit": "元",
+      "status": "ACTIVE"
+    },
+    "response": {
+      "id": "f75d94ec-e6ac-45fd-9b48-bb285b9fdbf3",
+      "objectId": "1295fa2a-a7fb-4477-b4a3-40dd222c0dc4",
+      "code": "gmv",
+      "name": "成交金额",
+      "formulaType": "sum",
+      "formulaJson": "{\"field\":\"amount\"}",
+      "format": "decimal",
+      "unit": "元",
+      "status": "ACTIVE"
+    },
+    "restoredFormulaJson": "{\"field\":\"amount\"}"
+  }
+}

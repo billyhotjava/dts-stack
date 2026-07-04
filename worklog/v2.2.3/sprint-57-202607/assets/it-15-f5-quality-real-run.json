@@ -1,0 +1,233 @@
+{
+  "checkedAt": "2026-07-04T07:38:28.428Z",
+  "datasetId": "271b3ea0-b1a1-4f14-9cb2-baa09c7eadc8",
+  "createRule": {
+    "httpStatus": 200,
+    "requestPayload": {
+      "code": "SPRINT57_IT_1783150708187",
+      "name": "Sprint-57 IT 质量报告联动 1783150708187",
+      "type": "COMPLETENESS",
+      "category": "IT",
+      "description": "Sprint-57 F5 质量运行与报告深链集成验证专用规则",
+      "owner": "sprint57_it",
+      "ownerDept": null,
+      "severity": "LOW",
+      "dataLevel": "INTERNAL",
+      "executor": "hive",
+      "enabled": true,
+      "publishNow": true,
+      "datasetId": "271b3ea0-b1a1-4f14-9cb2-baa09c7eadc8",
+      "definition": {
+        "sql": "SELECT 0 AS failing_rows"
+      },
+      "bindings": [
+        {
+          "datasetId": "271b3ea0-b1a1-4f14-9cb2-baa09c7eadc8",
+          "datasetAlias": "sprint57_it_dataset",
+          "scopeType": "DATASET"
+        }
+      ]
+    },
+    "response": {
+      "status": 200,
+      "message": "OK",
+      "code": null,
+      "data": {
+        "id": "833298ed-d4f0-4a48-a5cb-51a410d8af04",
+        "code": "SPRINT57_IT_1783150708187",
+        "name": "Sprint-57 IT 质量报告联动 1783150708187",
+        "type": "COMPLETENESS",
+        "category": "IT",
+        "description": "Sprint-57 F5 质量运行与报告深链集成验证专用规则",
+        "owner": "sprint57_it",
+        "ownerDept": null,
+        "severity": "LOW",
+        "dataLevel": "INTERNAL",
+        "executor": "hive",
+        "frequencyCron": null,
+        "template": false,
+        "enabled": true,
+        "datasetId": "271b3ea0-b1a1-4f14-9cb2-baa09c7eadc8",
+        "latestVersionId": "42c8eff0-494d-427c-b0cc-b910f77cdb88",
+        "createdDate": "2026-07-04T07:38:28.211986699Z",
+        "createdBy": "sprint57_it",
+        "lastModifiedDate": "2026-07-04T07:38:28.211986699Z",
+        "lastModifiedBy": "sprint57_it",
+        "bindings": [],
+        "latestVersion": {
+          "id": "42c8eff0-494d-427c-b0cc-b910f77cdb88",
+          "ruleId": "833298ed-d4f0-4a48-a5cb-51a410d8af04",
+          "version": 1,
+          "status": "PUBLISHED",
+          "definition": "{\"sql\":\"SELECT 0 AS failing_rows\"}",
+          "checksum": null,
+          "notes": null,
+          "approvedBy": "sprint57_it",
+          "approvedAt": "2026-07-04T07:38:28.212634552Z",
+          "createdDate": "2026-07-04T07:38:28.215086517Z",
+          "createdBy": "sprint57_it"
+        }
+      }
+    }
+  },
+  "dryRun": {
+    "httpStatus": 200,
+    "requestPayload": {
+      "ruleId": "833298ed-d4f0-4a48-a5cb-51a410d8af04",
+      "datasetId": "271b3ea0-b1a1-4f14-9cb2-baa09c7eadc8",
+      "triggerType": "SPRINT57_IT",
+      "dryRun": true
+    },
+    "response": {
+      "status": 200,
+      "message": "OK",
+      "code": null,
+      "data": [
+        {
+          "id": "599dd1fd-710f-4a2e-be60-1e1251a00438",
+          "ruleId": "833298ed-d4f0-4a48-a5cb-51a410d8af04",
+          "ruleVersionId": "42c8eff0-494d-427c-b0cc-b910f77cdb88",
+          "bindingId": "bdde8669-8915-4e41-a96d-b1ae1ef8a584",
+          "datasetId": "271b3ea0-b1a1-4f14-9cb2-baa09c7eadc8",
+          "jobId": null,
+          "triggerType": "DRY_RUN",
+          "triggerRef": "sprint57_it",
+          "status": "FAILED",
+          "severity": "LOW",
+          "dataLevel": "INTERNAL",
+          "scheduledAt": "2026-07-04T07:38:28.272414640Z",
+          "startedAt": "2026-07-04T07:38:28.278705508Z",
+          "finishedAt": "2026-07-04T07:38:28.295819409Z",
+          "durationMs": 17,
+          "message": "存在1个检测失败",
+          "inputParamsJson": "{}",
+          "errorCategory": "CONFIG",
+          "rowsTotal": null,
+          "failingRowCount": 0,
+          "metricsJson": "[{\"key\":\"sql\",\"sql\":\"SELECT 0 AS failing_rows\",\"status\":\"FAILED\",\"message\":\"Hive 执行未配置：请先在管理端发布可用的 Inceptor 数据源或设置 dts.platform.hive.*\",\"errorCode\":\"CONFIG\"}]",
+          "metrics": [
+            {
+              "id": "91d4e98c-8a48-4bd0-a374-08b485d26081",
+              "runId": "599dd1fd-710f-4a2e-be60-1e1251a00438",
+              "metricKey": "sql",
+              "metricValue": 0,
+              "thresholdValue": 80,
+              "status": "FAILED",
+              "detail": "Hive 执行未配置：请先在管理端发布可用的 Inceptor 数据源或设置 dts.platform.hive.*"
+            }
+          ],
+          "createdDate": "2026-07-04T07:38:28.276394271Z",
+          "createdBy": "sprint57_it"
+        }
+      ]
+    }
+  },
+  "runDetail": {
+    "httpStatus": 200,
+    "response": {
+      "status": 200,
+      "message": "OK",
+      "code": null,
+      "data": {
+        "id": "599dd1fd-710f-4a2e-be60-1e1251a00438",
+        "ruleId": "833298ed-d4f0-4a48-a5cb-51a410d8af04",
+        "ruleVersionId": "42c8eff0-494d-427c-b0cc-b910f77cdb88",
+        "bindingId": "bdde8669-8915-4e41-a96d-b1ae1ef8a584",
+        "datasetId": "271b3ea0-b1a1-4f14-9cb2-baa09c7eadc8",
+        "jobId": null,
+        "triggerType": "DRY_RUN",
+        "triggerRef": "sprint57_it",
+        "status": "FAILED",
+        "severity": "LOW",
+        "dataLevel": "INTERNAL",
+        "scheduledAt": "2026-07-04T07:38:28.272415Z",
+        "startedAt": "2026-07-04T07:38:28.278706Z",
+        "finishedAt": "2026-07-04T07:38:28.295819Z",
+        "durationMs": 17,
+        "message": "存在1个检测失败",
+        "inputParamsJson": "{}",
+        "errorCategory": "CONFIG",
+        "rowsTotal": null,
+        "failingRowCount": 0,
+        "metricsJson": "[{\"key\": \"sql\", \"sql\": \"SELECT 0 AS failing_rows\", \"status\": \"FAILED\", \"message\": \"Hive 执行未配置：请先在管理端发布可用的 Inceptor 数据源或设置 dts.platform.hive.*\", \"errorCode\": \"CONFIG\"}]",
+        "metrics": [
+          {
+            "id": "91d4e98c-8a48-4bd0-a374-08b485d26081",
+            "runId": "599dd1fd-710f-4a2e-be60-1e1251a00438",
+            "metricKey": "sql",
+            "metricValue": 0,
+            "thresholdValue": 80,
+            "status": "FAILED",
+            "detail": "Hive 执行未配置：请先在管理端发布可用的 Inceptor 数据源或设置 dts.platform.hive.*"
+          }
+        ],
+        "createdDate": "2026-07-04T07:38:28.276394Z",
+        "createdBy": "sprint57_it"
+      }
+    }
+  },
+  "reportQuery": {
+    "httpStatus": 200,
+    "response": {
+      "status": 200,
+      "message": "OK",
+      "code": null,
+      "data": [
+        {
+          "id": "599dd1fd-710f-4a2e-be60-1e1251a00438",
+          "ruleId": "833298ed-d4f0-4a48-a5cb-51a410d8af04",
+          "ruleVersionId": "42c8eff0-494d-427c-b0cc-b910f77cdb88",
+          "bindingId": "bdde8669-8915-4e41-a96d-b1ae1ef8a584",
+          "datasetId": "271b3ea0-b1a1-4f14-9cb2-baa09c7eadc8",
+          "jobId": null,
+          "triggerType": "DRY_RUN",
+          "triggerRef": "sprint57_it",
+          "status": "FAILED",
+          "severity": "LOW",
+          "dataLevel": "INTERNAL",
+          "scheduledAt": "2026-07-04T07:38:28.272415Z",
+          "startedAt": "2026-07-04T07:38:28.278706Z",
+          "finishedAt": "2026-07-04T07:38:28.295819Z",
+          "durationMs": 17,
+          "message": "存在1个检测失败",
+          "inputParamsJson": "{}",
+          "errorCategory": "CONFIG",
+          "rowsTotal": null,
+          "failingRowCount": 0,
+          "metricsJson": "[{\"key\": \"sql\", \"sql\": \"SELECT 0 AS failing_rows\", \"status\": \"FAILED\", \"message\": \"Hive 执行未配置：请先在管理端发布可用的 Inceptor 数据源或设置 dts.platform.hive.*\", \"errorCode\": \"CONFIG\"}]",
+          "metrics": [
+            {
+              "id": "91d4e98c-8a48-4bd0-a374-08b485d26081",
+              "runId": "599dd1fd-710f-4a2e-be60-1e1251a00438",
+              "metricKey": "sql",
+              "metricValue": 0,
+              "thresholdValue": 80,
+              "status": "FAILED",
+              "detail": "Hive 执行未配置：请先在管理端发布可用的 Inceptor 数据源或设置 dts.platform.hive.*"
+            }
+          ],
+          "createdDate": "2026-07-04T07:38:28.276394Z",
+          "createdBy": "sprint57_it"
+        }
+      ]
+    }
+  },
+  "ruleHistory": {
+    "httpStatus": 200,
+    "response": {
+      "status": 200,
+      "message": "OK",
+      "code": null,
+      "data": [
+        {
+          "runId": "599dd1fd-710f-4a2e-be60-1e1251a00438",
+          "time": "2026-07-04T07:38:28.295819Z",
+          "status": "FAILED",
+          "passRate": 0,
+          "failingRows": 0
+        }
+      ]
+    }
+  },
+  "note": "The Sprint-57 IT rule is intentionally retained so quality report history remains traceable."
+}
