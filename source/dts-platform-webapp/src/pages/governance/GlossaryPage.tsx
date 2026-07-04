@@ -110,10 +110,17 @@ const glossaryCsvRow = (term: GlossaryTerm) =>
 		.map(csvValue)
 		.join(",");
 
+const parseIntOr = (value: string | null, fallback: number) => {
+	const parsed = Number.parseInt(String(value || ""), 10);
+	return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+};
+
 export default function GlossaryPage() {
 	const navigate = useNavigate();
 	const [searchParams, setSearchParams] = useSearchParams();
 	const [keyword, setKeyword] = useState(searchParams.get("keyword") || "");
+	const [pageNum, setPageNum] = useState(parseIntOr(searchParams.get("page"), 0));
+	const [pageSize, setPageSize] = useState(parseIntOr(searchParams.get("size"), 10) || 10);
 	const [items, setItems] = useState<GlossaryTerm[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [modalOpen, setModalOpen] = useState(false);
@@ -130,16 +137,31 @@ export default function GlossaryPage() {
 	const [form] = Form.useForm();
 	const canManage = useGovernanceManageAccess();
 
-	const applyKeyword = (value: string) => {
-		const normalized = value || "";
-		setKeyword(normalized);
+	const syncQuery = (nextKeyword: string, nextPage: number, nextSize: number) => {
 		const params = new URLSearchParams(searchParams);
-		if (normalized.trim()) {
-			params.set("keyword", normalized.trim());
+		if (nextKeyword.trim()) {
+			params.set("keyword", nextKeyword.trim());
 		} else {
 			params.delete("keyword");
 		}
+		if (nextPage > 0) {
+			params.set("page", String(nextPage));
+		} else {
+			params.delete("page");
+		}
+		if (nextSize !== 10) {
+			params.set("size", String(nextSize));
+		} else {
+			params.delete("size");
+		}
 		setSearchParams(params, { replace: true });
+	};
+
+	const applyKeyword = (value: string) => {
+		const normalized = value || "";
+		setKeyword(normalized);
+		setPageNum(0);
+		syncQuery(normalized, 0, pageSize);
 	};
 
 	const loadGlossary = useCallback(async () => {
@@ -376,7 +398,10 @@ export default function GlossaryPage() {
 						placeholder="搜索术语名称..."
 						style={{ width: 300 }}
 						value={keyword}
-						onChange={(e) => setKeyword(e.target.value)}
+						onChange={(e) => {
+							setKeyword(e.target.value);
+							setPageNum(0);
+						}}
 						onSearch={(value) => applyKeyword(value)}
 						allowClear
 					/>
@@ -392,6 +417,20 @@ export default function GlossaryPage() {
 						dataSource={items}
 						columns={columns}
 						loading={loading}
+						pagination={{
+							current: pageNum + 1,
+							pageSize,
+							total: items.length,
+							showSizeChanger: true,
+							pageSizeOptions: [10, 20, 50, 100],
+							showTotal: (total) => `共 ${total} 条`,
+							onChange: (page, size) => {
+								const nextPage = size !== pageSize ? 0 : page - 1;
+								setPageNum(size !== pageSize ? 0 : page - 1);
+								setPageSize(size);
+								syncQuery(keyword, nextPage, size);
+							},
+						}}
 					/>
 				)}
 			</Card>

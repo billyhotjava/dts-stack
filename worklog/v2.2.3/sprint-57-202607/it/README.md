@@ -13,7 +13,7 @@
 | IT-5 | 内置国标包一键安装（gbt-2261/4658/2260 + 数据元包），重复安装幂等 | 页面 | 截图 | ☐ |
 | IT-6 | 数据元 code_set 与已安装码表关联正确 | 页面 + SQL | 截图 | ☐ |
 | IT-7 | 菜单/直达 URL 可访问，不落 /workbench 兜底 | 页面 | 截图 | ☐ |
-| IT-8 | 三页面范式巡检记录 | 文档 + 页面 | assets/foundation-pages-audit.md；assets/it-8-f3-elements-import-entry.png；assets/it-9-f3-glossary-export.png | ◐ |
+| IT-8 | 三页面范式巡检记录 | 文档 + 页面 | assets/foundation-pages-audit.md；assets/it-8-f3-elements-page.png；assets/it-8-f3-glossary-page.png；assets/it-8-f3-reference-codes-page.png | ✅ |
 | IT-9 | 既有 source-contract 测试全绿（模板 zip 契约不破坏） | node --test | 相关契约 14/14 通过；完整回归待最终补跑 | ◐ |
 | IT-10 | 指标工作台指标 -> 指标连线形成 `METRIC_DERIVES` 派生关系 | 页面 + 请求拦截 | 截图 + PUT payload | ☐ |
 | IT-11 | 指标工作台边配置保存/删除与业务对象绑定回归 | 页面 + 请求拦截 | 截图 + PUT payload | ☐ |
@@ -44,6 +44,12 @@
 - `pnpm exec tsc --noEmit`：通过。
 - `git diff --check -- source/dts-platform-webapp/src/pages/governance/GlossaryPage.tsx source/dts-platform-webapp/src/api/platformApi.ts source/dts-platform-webapp/src/pages/governance/GlossaryPage.source-contract.test.ts`：通过。
 - Playwright smoke：`http://localhost:3001/#/governance/standards/glossary` 可见 `导出CSV`；下载文件名 `01-business-terms.csv`，首行为 `term_code,term_name,aliases,definition,domain,owner_dept,owner,tags,version,status,version_notes`。当前环境无术语数据，详情抽屉带数据烟测与“导出再导入 preview=更新”留待 IT 补证。截图见 `assets/it-9-f3-glossary-export.png`。
+
+## F3 三页面范式巡检验证记录（2026-07-04）
+
+- `node --test --experimental-strip-types src/pages/governance/FoundationPagesInteraction.source-contract.test.ts`：3/3 通过。
+- 巡检记录：`assets/foundation-pages-audit.md`。
+- Playwright smoke（1366 宽）：数据元、业务术语、公共码表三页可访问并截图，见 `assets/it-8-f3-elements-page.png`、`assets/it-8-f3-glossary-page.png`、`assets/it-8-f3-reference-codes-page.png`。
 
 ## 部署验证记录（2026-07-04）
 

@@ -411,6 +411,9 @@ export default function ElementsPage() {
 							current: (data?.page ?? 0) + 1,
 							pageSize: data?.size ?? pageSize,
 							total: data?.total ?? 0,
+							showSizeChanger: true,
+							pageSizeOptions: [10, 20, 50, 100],
+							showTotal: (total) => `共 ${total} 条`,
 							onChange: (page, size) => {
 								setPageNum(size !== pageSize ? 0 : page - 1);
 								setPageSize(size);

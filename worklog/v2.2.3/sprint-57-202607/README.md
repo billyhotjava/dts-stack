@@ -62,7 +62,7 @@ POST /api/modeling/standard-packages/builtin/{code}/install  (安装=走同一 p
 |----|---------|---------|------|
 | F1 | 标准包导入管道 | 4 | DONE |
 | F2 | 内置国标包 | 2 | DONE |
-| F3 | 基础数据页面完善 | 3 | IN_PROGRESS |
+| F3 | 基础数据页面完善 | 3 | DONE |
 | F4 | 数据资产重构（地图/台账分离） | 4 | IN_PROGRESS |
 | F5 | 治理运营三模块重构 | 4 | IN_PROGRESS |
 | F6 | 指标工作台语义编排编辑器 | 4 | IN_PROGRESS |
@@ -86,7 +86,7 @@ POST /api/modeling/standard-packages/builtin/{code}/install  (安装=走同一 p
 - [ ] 导入历史可查、单次导入可整包回滚
 - [ ] 旧数据元直导端点收编到新管道校验逻辑，行为兼容
 - [ ] 至少 3 个内置国标包（性别/学历/行政区划节选 + 常用数据元）可在页面一键安装
-- [ ] 基础数据四页面交互范式统一（列表+详情+引用追溯+导入导出入口）
+- [x] 基础数据四页面交互范式统一（列表+详情+引用追溯+导入导出入口）
 - [ ] 指标工作台支持 `OBJECT_METRIC` 与 `METRIC_DERIVES` 两类语义关系边，具备工具栏、边配置、删除关系和预检能力
 - [ ] it/ 留存集成验证证据（curl 报文 + 页面截图）
 

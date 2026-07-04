@@ -5,7 +5,7 @@ import test from "node:test";
 const ELEMENTS_PAGE = readFileSync(new URL("./ElementsPage.tsx", import.meta.url), "utf8");
 const GLOSSARY_PAGE = readFileSync(new URL("./GlossaryPage.tsx", import.meta.url), "utf8");
 const REFERENCE_CODES_PAGE = readFileSync(new URL("./ReferenceCodesPage.tsx", import.meta.url), "utf8");
-const SPRINT_ROOT = new URL("../../../../worklog/v2.2.3/sprint-57-202607/", import.meta.url);
+const SPRINT_ROOT = new URL("../../../../../worklog/v2.2.3/sprint-57-202607/", import.meta.url);
 const AUDIT_DOC = new URL("assets/foundation-pages-audit.md", SPRINT_ROOT);
 
 const PAGES = [
