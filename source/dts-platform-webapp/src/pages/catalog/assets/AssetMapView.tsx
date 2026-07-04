@@ -17,7 +17,6 @@ export interface AssetMapViewProps {
 	onSelectLayer: (layer: string) => void;
 	onOpenRemediationWorkbench: () => void;
 	onOpenGovernanceRemediation: (assetId?: string) => void;
-	onEnterLedger: () => void;
 	onDrillToLedger: (layer: string, domainKey?: string) => void;
 }
 
@@ -33,7 +32,6 @@ export function AssetMapView({
 	onSelectLayer,
 	onOpenRemediationWorkbench,
 	onOpenGovernanceRemediation,
-	onEnterLedger,
 	onDrillToLedger,
 }: AssetMapViewProps) {
 	const router = useRouter();
@@ -174,14 +172,9 @@ export function AssetMapView({
 						当前筛选范围内的数据接入、入湖开发、治理可用和服务发布状态。
 					</div>
 				</div>
-					<Space>
-						<Button onClick={() => onOpenRemediationWorkbench()} loading={signalsLoading}>
-							治理优先队列
-						</Button>
-						<Button onClick={() => onEnterLedger()}>
-							进入台账
-						</Button>
-					</Space>
+					<Button onClick={() => onOpenRemediationWorkbench()} loading={signalsLoading}>
+						治理优先队列
+					</Button>
 				</div>
 			<div className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-3">
 				<div className="grid min-w-[1040px] grid-cols-8 gap-3">

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Button, Card, Collapse, Input, Layout, Modal, Pagination, Select, Space, Spin, Tabs, Tag, Tree } from "antd";
-import { ApartmentOutlined, BranchesOutlined, DatabaseOutlined, SafetyCertificateOutlined, SearchOutlined, TableOutlined, WarningOutlined } from "@ant-design/icons";
+import { Alert, Badge, Button, Card, Collapse, Dropdown, Input, Layout, Modal, Pagination, Select, Space, Spin, Tabs, Tag, Tree } from "antd";
+import { ApartmentOutlined, BranchesOutlined, DatabaseOutlined, DownOutlined, FilterOutlined, SafetyCertificateOutlined, SearchOutlined, TableOutlined, WarningOutlined } from "@ant-design/icons";
 import { EmptyState } from "@/components/empty-state";
 import { CompactTable } from "@/components/table";
 import { PageHeader } from "@/components/page-header";
@@ -480,6 +480,33 @@ export default function Page() {
 		router.push(`/catalog/assets?${params.toString()}`);
 	};
 
+	const [filtersOpen, setFiltersOpen] = useState(false);
+	const activeFilterCount = [assetType, classification, governanceStatus, matchStatus].filter((value) => value && value !== "ALL").length;
+
+	const opsItem = (title: string, description: string) => (
+		<div className="py-0.5">
+			<div>{title}</div>
+			<div className="text-xs text-slate-400">{description}</div>
+		</div>
+	);
+	// 低频同步/诊断动作收进菜单，避免工具栏按钮平铺（Sprint-57 F4-T05）
+	const opsMenuItems = [
+		...(ASSET_PORTAL_V2_ENABLED
+			? [
+					{ key: "sync-om", disabled: syncing, label: opsItem(syncing ? "同步 OpenMetadata（进行中…）" : "同步 OpenMetadata", "从元数据平台拉取最新资产清单（耗时较长，完成后自动刷新）") },
+					{ key: "diagnostics", disabled: diagnosticsLoading, label: opsItem("映射诊断", "统计已映射/未匹配/待人工确认数量，结果显示在工具栏下方") },
+					{ key: "resolution-failures", disabled: resolutionFailuresLoading, label: opsItem("解析失败记录", "查看资产身份解析失败明细") },
+				]
+			: []),
+		{ key: "reconciliation", disabled: reconciliationLoading, label: opsItem("发布前核对", "刷新发布前回归断言结果（页面底部展开查看）") },
+	];
+	const handleOpsMenuClick = (key: string) => {
+		if (key === "sync-om") void syncOpenMetadataAssets();
+		if (key === "diagnostics") void loadDiagnostics();
+		if (key === "resolution-failures") void loadResolutionFailures();
+		if (key === "reconciliation") void loadReconciliation();
+	};
+
 	const exportLedgerCsv = () => {
 		const header = ["名称", "物理位置", "类型", "分层", "主题域", "密级", "状态", "治理状态", "负责人", "更新时间"];
 		const escapeCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
@@ -525,7 +552,6 @@ export default function Page() {
 			onSelectLayer={setWarehouseLayer}
 			onOpenRemediationWorkbench={() => void openRemediationWorkbench()}
 			onOpenGovernanceRemediation={openGovernanceRemediation}
-			onEnterLedger={() => switchAssetView("table")}
 			onDrillToLedger={drillToLedger}
 		/>
 	);
@@ -591,35 +617,39 @@ export default function Page() {
 							}
 							extra={
 								<Space wrap>
-									<Button onClick={() => switchAssetView(isLedgerView ? "map" : "table")}>
+									<Button type="primary" ghost onClick={() => switchAssetView(isLedgerView ? "map" : "table")}>
 										{isLedgerView ? "返回地图" : "进入台账"}
 									</Button>
 									<Button onClick={() => void loadDatasets(1, pageState.size)} loading={loading}>
-										刷新资产
-								</Button>
-								{ASSET_PORTAL_V2_ENABLED ? (
-									<Button onClick={() => void syncOpenMetadataAssets()} loading={syncing}>
-										同步OpenMetadata
+										刷新
 									</Button>
-								) : null}
-								<Button onClick={() => void loadReconciliation()} loading={reconciliationLoading}>
-									刷新核对
-								</Button>
-								{ASSET_PORTAL_V2_ENABLED ? (
-									<Button onClick={() => void loadDiagnostics()} loading={diagnosticsLoading}>
-										映射诊断
-									</Button>
-								) : null}
-								{ASSET_PORTAL_V2_ENABLED ? (
-									<Button onClick={() => void loadResolutionFailures()} loading={resolutionFailuresLoading}>
-										解析失败
-									</Button>
-								) : null}
-							</Space>
-						}
+									<Dropdown menu={{ items: opsMenuItems, onClick: ({ key }) => handleOpsMenuClick(String(key)) }} trigger={["click"]}>
+										<Button data-testid="asset-ops-menu">
+											同步与诊断 <DownOutlined />
+										</Button>
+									</Dropdown>
+								</Space>
+							}
 					>
 						<div className="flex flex-wrap items-center gap-2">
-							<Select
+							<Input
+								prefix={<SearchOutlined />}
+								placeholder="搜索资产名称 / 描述"
+								style={{ width: 280 }}
+								value={keyword}
+								onChange={(event) => setKeyword(event.target.value)}
+								allowClear
+							/>
+							<Badge count={activeFilterCount} size="small">
+								<Button icon={<FilterOutlined />} onClick={() => setFiltersOpen((open) => !open)} data-testid="asset-filters-toggle">
+									{filtersOpen ? "收起筛选" : "筛选"}
+								</Button>
+							</Badge>
+							{activeFilterCount > 0 || keyword.trim() ? <Button onClick={resetFilters}>重置</Button> : null}
+						</div>
+						{filtersOpen ? (
+							<div className="mt-3 flex flex-wrap items-center gap-2">
+								<Select
 								allowClear
 								placeholder="资产类型"
 								style={{ minWidth: 160 }}
@@ -651,16 +681,8 @@ export default function Page() {
 								onChange={(value) => setMatchStatus(value || "ALL")}
 								options={MATCH_OPTIONS}
 							/>
-							<Input
-								prefix={<SearchOutlined />}
-								placeholder="搜索资产名称 / 描述"
-								style={{ width: 260 }}
-								value={keyword}
-								onChange={(event) => setKeyword(event.target.value)}
-								allowClear
-							/>
-							<Button onClick={resetFilters}>重置筛选</Button>
-						</div>
+							</div>
+						) : null}
 					</Card>
 
 					{diagnostics ? (
@@ -796,9 +818,7 @@ export default function Page() {
 										items={layerTabItems}
 										tabBarStyle={{ marginBottom: 0 }}
 									/>
-									<Button size="small" onClick={() => switchAssetView("table")}>
-										进入台账
-									</Button>
+
 								</div>
 							)}
 							{records.length ? (
