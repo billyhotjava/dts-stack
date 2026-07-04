@@ -3,10 +3,10 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const SOURCE = readFileSync(new URL("./DatasetsPage.tsx", import.meta.url), "utf8");
-const MAP_VIEW = readFileSync(new URL("./assets/AssetMapView.tsx", import.meta.url), "utf8");
+const OVERVIEW = readFileSync(new URL("./AssetOverviewPage.tsx", import.meta.url), "utf8");
 
 test("asset toolbar keeps only three primary actions with diagnostics folded into a menu", () => {
-	// 主操作：进入台账（主 CTA）、刷新、同步与诊断菜单
+	// 主操作：返回地图、刷新、同步与诊断菜单（台账=执行工作台）
 	assert.match(SOURCE, /asset-ops-menu/);
 	assert.match(SOURCE, /同步与诊断/);
 	// 四个诊断动作以菜单项存在，且每项带说明文案
@@ -30,10 +30,7 @@ test("asset filters are collapsed behind a toggle with an active-filter badge", 
 	assert.match(SOURCE, /搜索资产名称 \/ 描述/);
 });
 
-test("enter-ledger CTA is unique: duplicates removed from layer tabs row and map overview", () => {
-	const pageMatches = SOURCE.match(/进入台账/g) || [];
-	assert.equal(pageMatches.length, 1, `DatasetsPage 应只保留 1 处进入台账，实际 ${pageMatches.length}`);
-	// AssetMapView 不再有进入台账按钮（矩阵格下钻仍在）
-	assert.doesNotMatch(MAP_VIEW, /onEnterLedger/);
-	assert.match(MAP_VIEW, /onDrillToLedger/);
+test("enter-ledger CTA lives on the overview page only", () => {
+	assert.doesNotMatch(SOURCE, /进入台账/);
+	assert.match(OVERVIEW, /进入台账/);
 });

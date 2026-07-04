@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Badge, Button, Card, Collapse, Dropdown, Input, Layout, Modal, Pagination, Select, Space, Spin, Tabs, Tag, Tree } from "antd";
-import { ApartmentOutlined, BranchesOutlined, DatabaseOutlined, DownOutlined, FilterOutlined, SafetyCertificateOutlined, SearchOutlined, TableOutlined, WarningOutlined } from "@ant-design/icons";
+import { ApartmentOutlined, DatabaseOutlined, DownOutlined, FilterOutlined, SafetyCertificateOutlined, SearchOutlined, TableOutlined, WarningOutlined } from "@ant-design/icons";
 import { EmptyState } from "@/components/empty-state";
 import { CompactTable } from "@/components/table";
 import { PageHeader } from "@/components/page-header";
@@ -31,7 +31,6 @@ import {
 	LAYER_META,
 	LAYER_ORDER,
 	LEDGER_PAGE_SIZE,
-	MAP_PAGE_SIZE,
 	normalizeLayer,
 	classificationText,
 	formatTime,
@@ -39,22 +38,11 @@ import {
 	MetricTile,
 } from "./assets/assetPageShared";
 import type { AssetRow, DomainNode, ReconciliationResult, ResolutionFailureRow, GovernanceGapRow, LineageFailureRow } from "./assets/assetPageShared";
-import { AssetMapView } from "./assets/AssetMapView";
 import { AssetLedgerView } from "./assets/AssetLedgerView";
 
 export default function Page() {
 	const router = useRouter();
 	const [keyword, setKeyword] = useState("");
-	const [viewMode, setViewMode] = useState<"map" | "table">(() => {
-		try {
-			if (new URLSearchParams(window.location.search).get("view") === "table") {
-				return "table";
-			}
-			return "map";
-		} catch {
-			return "map";
-		}
-	});
 	const [domain, setDomain] = useState<string | undefined>(() => {
 		try {
 			return new URLSearchParams(window.location.search).get("domain") || undefined;
@@ -85,7 +73,7 @@ export default function Page() {
 	const [records, setRecords] = useState<AssetRow[]>([]);
 	const [pageState, setPageState] = useState(() => ({
 		page: 1,
-		size: viewMode === "table" ? LEDGER_PAGE_SIZE : MAP_PAGE_SIZE,
+		size: LEDGER_PAGE_SIZE,
 		total: 0,
 	}));
 	const [domains, setDomains] = useState<{ id: string; name: string }[]>([]);
@@ -309,9 +297,8 @@ export default function Page() {
 	const governanceCoverage = records.length ? Math.round(((records.length - unclassifiedCount - missingDomainCount) / Math.max(records.length, 1)) * 100) : 0;
 	const blockingGapCount = Number(governanceGapReport?.severityCounts?.BLOCKING || 0);
 	const lineageFailureCount = Array.isArray(lineageFailureReport?.content) ? lineageFailureReport.content.length : 0;
-	const isLedgerView = viewMode === "table";
-	const pageTitle = isLedgerView ? "资产台账" : "资产地图";
-	const pageSubtitle = isLedgerView ? "核验登记、权属、密级、治理和消费出口。" : "按主题域、数仓分层和治理状态查看资产链路。";
+	const pageTitle = "资产台账";
+	const pageSubtitle = "核验登记、权属、密级、治理和消费出口。查看统计概览请返回资产地图。";
 	const ledgerIssueCount = unclassifiedCount + missingDomainCount + blockingGapCount + lineageFailureCount;
 	const governanceGapRows: GovernanceGapRow[] = Array.isArray(governanceGapReport?.content) ? governanceGapReport.content : [];
 	const lineageFailureRows: LineageFailureRow[] = Array.isArray(lineageFailureReport?.content) ? lineageFailureReport.content : [];
@@ -456,29 +443,7 @@ export default function Page() {
 		}
 	};
 
-	const switchAssetView = (next: "map" | "table") => {
-		setViewMode(next);
-		setPageState((prev) => ({ ...prev, page: 1, size: next === "table" ? LEDGER_PAGE_SIZE : MAP_PAGE_SIZE }));
-		router.push(next === "table" ? "/catalog/assets?view=table" : "/catalog/assets");
-	};
 
-	const drillToLedger = (layer: string, domainKey?: string) => {
-		setWarehouseLayer(layer || "ALL");
-		if (domainKey) {
-			setDomain(domainKey);
-		}
-		setViewMode("table");
-		setPageState((prev) => ({ ...prev, page: 1, size: LEDGER_PAGE_SIZE }));
-		const params = new URLSearchParams();
-		params.set("view", "table");
-		if (layer && layer !== "ALL") {
-			params.set("layer", layer);
-		}
-		if (domainKey) {
-			params.set("domain", domainKey);
-		}
-		router.push(`/catalog/assets?${params.toString()}`);
-	};
 
 	const [filtersOpen, setFiltersOpen] = useState(false);
 	const activeFilterCount = [assetType, classification, governanceStatus, matchStatus].filter((value) => value && value !== "ALL").length;
@@ -540,21 +505,6 @@ export default function Page() {
 		URL.revokeObjectURL(url);
 	};
 
-	const renderAssetVisualMap = () => (
-		<AssetMapView
-			records={records}
-			domainMap={domainMap}
-			warehouseLayer={warehouseLayer}
-			signalsLoading={signalsLoading}
-			blockingGapCount={blockingGapCount}
-			lineageFailureCount={lineageFailureCount}
-			missingDomainCount={missingDomainCount}
-			onSelectLayer={setWarehouseLayer}
-			onOpenRemediationWorkbench={() => void openRemediationWorkbench()}
-			onOpenGovernanceRemediation={openGovernanceRemediation}
-			onDrillToLedger={drillToLedger}
-		/>
-	);
 
 	const renderAssetTable = () => (
 		<AssetLedgerView
@@ -602,14 +552,14 @@ export default function Page() {
 					<div className="space-y-4">
 						<PageHeader title={pageTitle} />
 						<Card
-							className={isLedgerView ? "asset-ledger-toolbar" : "asset-map-toolbar"}
+							className="asset-ledger-toolbar"
 							title={
 								<div className="flex items-start gap-2">
-									{isLedgerView ? <TableOutlined className="mt-1" /> : <BranchesOutlined className="mt-1" />}
+									<TableOutlined className="mt-1" />
 									<div>
 										<div className="flex flex-wrap items-center gap-2">
 											<span>{pageTitle}</span>
-											<Tag color={isLedgerView ? "geekblue" : "cyan"}>{isLedgerView ? "登记核验" : "链路视图"}</Tag>
+											<Tag color="geekblue">登记核验</Tag>
 										</div>
 										<div className="mt-1 text-xs font-normal text-slate-500">{pageSubtitle}</div>
 									</div>
@@ -617,8 +567,8 @@ export default function Page() {
 							}
 							extra={
 								<Space wrap>
-									<Button type="primary" ghost onClick={() => switchAssetView(isLedgerView ? "map" : "table")}>
-										{isLedgerView ? "返回地图" : "进入台账"}
+									<Button onClick={() => router.push("/catalog/assets")}>
+										返回地图
 									</Button>
 									<Button onClick={() => void loadDatasets(1, pageState.size)} loading={loading}>
 										刷新
@@ -725,54 +675,32 @@ export default function Page() {
 						/>
 					) : null}
 
-						{isLedgerView ? (
-							<div className="grid gap-3 md:grid-cols-5">
-								<MetricTile icon={<DatabaseOutlined />} label="台账总量" value={pageState.total} footnote={selectedDomainName} />
-								<MetricTile icon={<TableOutlined />} label="本页登记" value={records.length} footnote={`启用 ${activeCount} 个`} />
-								<MetricTile icon={<WarningOutlined />} label="待补字段" value={ledgerIssueCount} footnote={`未定密 ${unclassifiedCount} 个 / 未归域 ${missingDomainCount} 个`} tone={ledgerIssueCount > 0 ? "text-amber-600" : "text-green-600"} />
-								<MetricTile
-									icon={<SafetyCertificateOutlined />}
-									label="可消费资产"
-									value={Number(readinessCounts.READY || 0)}
-									footnote={`阻断 ${Number(readinessCounts.BLOCKED || 0)} 个 / 待确认 ${Number(readinessCounts.WARNING || 0)} 个`}
-									tone={Number(readinessCounts.BLOCKED || 0) > 0 ? "text-amber-600" : "text-green-600"}
-								/>
-								<MetricTile
-									icon={<SafetyCertificateOutlined />}
-									label="治理覆盖率"
-									value={`${Math.max(0, governanceCoverage)}%`}
-									footnote={`血缘缺口 ${lineageFailureCount} 个 / 失效 ${staleCount} 个`}
-									tone={governanceCoverage >= 80 ? "text-green-600" : "text-amber-600"}
-								/>
-							</div>
-						) : (
-							<div className="grid gap-3 md:grid-cols-5">
-								<MetricTile icon={<DatabaseOutlined />} label="资产总量" value={pageState.total} footnote={selectedDomainName} />
-								<MetricTile icon={<TableOutlined />} label="当前页资产" value={records.length} footnote={`启用 ${activeCount} 个`} />
-								<MetricTile icon={<ApartmentOutlined />} label="主题域覆盖" value={domains.length} footnote={`未归域 ${missingDomainCount} 个`} />
-								<MetricTile
-									icon={<SafetyCertificateOutlined />}
-									label="可引用资产"
-									value={Number(readinessCounts.READY || 0)}
-									footnote={`阻断 ${Number(readinessCounts.BLOCKED || 0)} 个 / 待确认 ${Number(readinessCounts.WARNING || 0)} 个`}
-									tone={Number(readinessCounts.BLOCKED || 0) > 0 ? "text-amber-600" : "text-green-600"}
-								/>
-								<MetricTile
-									icon={<SafetyCertificateOutlined />}
-									label="治理覆盖率"
-									value={`${Math.max(0, governanceCoverage)}%`}
-									footnote={`未定密 ${unclassifiedCount} 个 / 失效 ${staleCount} 个`}
-									tone={governanceCoverage >= 80 ? "text-green-600" : "text-amber-600"}
-								/>
-							</div>
-						)}
+												<div className="grid gap-3 md:grid-cols-5">
+							<MetricTile icon={<DatabaseOutlined />} label="台账总量" value={pageState.total} footnote={selectedDomainName} />
+							<MetricTile icon={<TableOutlined />} label="本页登记" value={records.length} footnote={`启用 ${activeCount} 个`} />
+							<MetricTile icon={<WarningOutlined />} label="待补字段" value={ledgerIssueCount} footnote={`未定密 ${unclassifiedCount} 个 / 未归域 ${missingDomainCount} 个`} tone={ledgerIssueCount > 0 ? "text-amber-600" : "text-green-600"} />
+							<MetricTile
+								icon={<SafetyCertificateOutlined />}
+								label="可消费资产"
+								value={Number(readinessCounts.READY || 0)}
+								footnote={`阻断 ${Number(readinessCounts.BLOCKED || 0)} 个 / 待确认 ${Number(readinessCounts.WARNING || 0)} 个`}
+								tone={Number(readinessCounts.BLOCKED || 0) > 0 ? "text-amber-600" : "text-green-600"}
+							/>
+							<MetricTile
+								icon={<SafetyCertificateOutlined />}
+								label="治理覆盖率"
+								value={`${Math.max(0, governanceCoverage)}%`}
+								footnote={`血缘缺口 ${lineageFailureCount} 个 / 失效 ${staleCount} 个`}
+								tone={governanceCoverage >= 80 ? "text-green-600" : "text-amber-600"}
+							/>
+						</div>
 
 						<Card
-							className={isLedgerView ? "asset-ledger-card" : "asset-map-card"}
+							className="asset-ledger-card"
 							title={
 								<Space size={8}>
-									{isLedgerView ? <TableOutlined /> : <BranchesOutlined />}
-									<span>{isLedgerView ? "资产登记台账" : `${selectedDomainName}资产分布`}</span>
+									<TableOutlined />
+									<span>资产登记台账</span>
 								</Space>
 							}
 						extra={
@@ -782,51 +710,35 @@ export default function Page() {
 								pageSize={pageState.size}
 								total={pageState.total}
 								showSizeChanger
-								pageSizeOptions={isLedgerView ? [10, 20, 50, 100] : [12, 18, 30, 48]}
+								pageSizeOptions={[10, 20, 50, 100]}
 								onChange={(page, size) => void loadDatasets(page, size)}
 							/>
 						}
 					>
-							{isLedgerView ? (
-								<div className="asset-ledger-filter-strip mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-									<div className="mb-2 flex flex-wrap items-center justify-between gap-3">
-										<div>
-											<div className="text-sm font-semibold text-slate-900">资产登记台账</div>
-											<div className="mt-1 text-xs text-slate-500">按登记字段、治理状态、密级和消费动作核验当前资产。</div>
-										</div>
-										<Space size={8}>
-											<Button size="small" onClick={exportLedgerCsv} data-testid="asset-ledger-export">
-												导出 CSV（本页）
-											</Button>
-											<Button size="small" onClick={() => switchAssetView("map")}>
-												返回地图
-											</Button>
-										</Space>
+														<div className="asset-ledger-filter-strip mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+								<div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+									<div>
+										<div className="text-sm font-semibold text-slate-900">资产登记台账</div>
+										<div className="mt-1 text-xs text-slate-500">按登记字段、治理状态、密级和消费动作核验当前资产。</div>
 									</div>
-									<Tabs
-										activeKey={warehouseLayer}
-										onChange={(value) => setWarehouseLayer(value || "ALL")}
-										items={layerTabItems}
-										tabBarStyle={{ marginBottom: 0 }}
-									/>
+									<Space size={8}>
+										<Button size="small" onClick={exportLedgerCsv} data-testid="asset-ledger-export">
+											导出 CSV（本页）
+										</Button>
+										<Button size="small" onClick={() => router.push("/catalog/assets")}>
+											返回地图
+										</Button>
+									</Space>
 								</div>
-							) : (
-								<div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-									<Tabs
-										activeKey={warehouseLayer}
-										onChange={(value) => setWarehouseLayer(value || "ALL")}
-										items={layerTabItems}
-										tabBarStyle={{ marginBottom: 0 }}
-									/>
-
-								</div>
-							)}
+								<Tabs
+									activeKey={warehouseLayer}
+									onChange={(value) => setWarehouseLayer(value || "ALL")}
+									items={layerTabItems}
+									tabBarStyle={{ marginBottom: 0 }}
+								/>
+							</div>
 							{records.length ? (
-								isLedgerView ? (
-									renderAssetTable()
-								) : (
-									renderAssetVisualMap()
-							)
+							renderAssetTable()
 						) : (
 							<EmptyState title="未发现当前账号可见资产" description="可能还未完成元数据采集，也可能当前密级、主题域或资产授权限制了可见范围。" />
 						)}

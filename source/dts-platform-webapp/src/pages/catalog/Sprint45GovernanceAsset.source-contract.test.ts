@@ -7,7 +7,7 @@ const ASSETS_SOURCE = readFileSync(new URL("./DatasetsPage.tsx", import.meta.url
 // Sprint-57 F4 拆分：台账/地图视图组件化，行级动作断言并入组合源
 const ASSETS_COMBINED = ASSETS_SOURCE
 	+ readFileSync(new URL("./assets/AssetLedgerView.tsx", import.meta.url), "utf8")
-	+ readFileSync(new URL("./assets/AssetMapView.tsx", import.meta.url), "utf8");
+	+ readFileSync(new URL("./AssetOverviewPage.tsx", import.meta.url), "utf8");
 const PRODUCTS_SOURCE = readFileSync(new URL("./DataProductsPage.tsx", import.meta.url), "utf8");
 const APPROVAL_SOURCE = readFileSync(new URL("../security/DatasetAccessApprovalPage.tsx", import.meta.url), "utf8");
 const SECURITY_SOURCE = readFileSync(new URL("../security/data-security.tsx", import.meta.url), "utf8");

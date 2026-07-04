@@ -291,7 +291,7 @@
           "icon": "solar:document-text-bold-duotone",
           "titleKey": "sys.nav.portal.dataPortalDetail",
           "title": "资产台账",
-          "externalLink": "/catalog/assets?view=table"
+          "externalLink": "/catalog/assets/ledger"
         },
         {
           "key": "lineage",
