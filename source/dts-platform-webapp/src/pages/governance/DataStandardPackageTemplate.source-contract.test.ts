@@ -37,3 +37,11 @@ test("data element page exposes the standard package download as a real blob act
 	assert.match(ELEMENTS_PAGE, /data-standard-package-template\.zip/);
 	assert.match(ELEMENTS_PAGE, /governance-elements-template-download/);
 });
+
+test("data element page routes imports into the package wizard instead of single CSV upload", () => {
+	assert.match(ELEMENTS_PAGE, /导入标准包/);
+	assert.match(ELEMENTS_PAGE, /governance-elements-standard-package-import/);
+	assert.match(ELEMENTS_PAGE, /navigate\("\/foundation\/standard-package\?from=elements"\)/);
+	assert.doesNotMatch(ELEMENTS_PAGE, /importMetadataStandards/);
+	assert.doesNotMatch(ELEMENTS_PAGE, /Upload\.|<Upload/);
+});
