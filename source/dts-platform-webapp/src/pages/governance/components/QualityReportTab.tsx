@@ -2,7 +2,7 @@ import { CheckCircleOutlined, CloseCircleOutlined, } from "@ant-design/icons";
 import { Alert, Button, Card, Col, Radio, Row, Select, Spin, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { type DefaultDestinationStatus, ingestionTaskAPI } from "@/api/ingestion";
 import type { QualityScoreResult, RuleRunHistory } from "@/api/platformApi";
@@ -133,8 +133,9 @@ function RuleHistoryInline({ ruleId }: { ruleId: string }) {
 
 /* ---------- Main Component ---------- */
 export default function QualityReportTab() {
+	const [searchParams, setSearchParams] = useSearchParams();
 	const [datasets, setDatasets] = useState<DatasetOption[]>([]);
-	const [datasetId, setDatasetId] = useState<string>();
+	const [datasetId, setDatasetId] = useState<string | undefined>(() => searchParams.get("datasetId") || undefined);
 	const [defaultLake, setDefaultLake] = useState<DefaultDestinationStatus | null>(null);
 	const [datasetLoadMessage, setDatasetLoadMessage] = useState<string>();
 	const [periodDays, setPeriodDays] = useState(30);
@@ -148,13 +149,14 @@ export default function QualityReportTab() {
 	useEffect(() => {
 		let cancelled = false;
 		const loadDefaultLakeDatasets = async () => {
+			const linkedDatasetId = searchParams.get("datasetId") || undefined;
 			try {
 				const lake = await ingestionTaskAPI.getDefaultDestinationStatus();
 				if (cancelled) return;
 				setDefaultLake(lake);
 				if (!lake?.available || !lake.dataSourceId) {
 					setDatasets([]);
-					setDatasetId(undefined);
+					setDatasetId(linkedDatasetId);
 					setDatasetLoadMessage(lake?.message || "未解析到默认数据湖连接");
 					return;
 				}
@@ -173,7 +175,7 @@ export default function QualityReportTab() {
 				if (cancelled) return;
 				setDefaultLake(null);
 				setDatasets([]);
-				setDatasetId(undefined);
+				setDatasetId(linkedDatasetId);
 				setDatasetLoadMessage(err?.message || "默认数据湖连接读取失败");
 			}
 		};
@@ -183,9 +185,29 @@ export default function QualityReportTab() {
 		};
 	}, []);
 
+	useEffect(() => {
+		const linkedDatasetId = searchParams.get("datasetId") || undefined;
+		setDatasetId((prev) => (prev === linkedDatasetId ? prev : linkedDatasetId));
+	}, [searchParams]);
+
+	const handleDatasetChange = (nextDatasetId?: string) => {
+		setDatasetId(nextDatasetId);
+		const params = new URLSearchParams(searchParams);
+		params.set("tab", "report");
+		if (nextDatasetId) {
+			params.set("datasetId", nextDatasetId);
+		} else {
+			params.delete("datasetId");
+		}
+		setSearchParams(params, { replace: true });
+	};
+
 	/* auto-select first dataset from default data lake only */
 	useEffect(() => {
 		if (datasetId && datasets.some((item) => item.id === datasetId)) {
+			return;
+		}
+		if (datasetId && datasets.length === 0) {
 			return;
 		}
 		if (datasets.length > 0) {
@@ -340,7 +362,7 @@ export default function QualityReportTab() {
 					showSearch
 					optionFilterProp="label"
 					value={datasetId}
-					onChange={setDatasetId}
+					onChange={handleDatasetChange}
 					options={datasets.map((d) => ({ label: d.name, value: d.id }))}
 				/>
 				<Radio.Group

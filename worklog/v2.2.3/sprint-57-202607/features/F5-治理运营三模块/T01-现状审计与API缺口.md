@@ -49,6 +49,14 @@
 
 ## 运行时补证（2026-07-04）
 
+### 质量管控 /governance/rules 与质量报告 /governance/quality
+
+- 已修复一个真实动线断点：质量规则 `执行` 成功后不再只停留 toast，而是切到 `质量报告` 页签并携带 `datasetId`，形成“规则执行 -> 查看报告”的前端闭环。
+- 质量报告页已支持 `datasetId` URL 参数：`/governance/rules?tab=report&datasetId={datasetId}` 可激活 `质量报告` 并保留数据集选择；默认数据湖接口失败时不丢失 URL 数据集上下文。
+- TDD：新增 `QualityRulesReportFlow.source-contract.test.ts`，先 RED 后 GREEN；`pnpm exec tsc --noEmit` 通过。
+- Playwright smoke：`quality-smoke-001` 深链可渲染 `质量报告`、保留数据集选择并显示 `导出报告`，截图 `assets/it-15-f5-quality-report-deeplink.png`。
+- 仍待运行时验证：当前本地质量评分/规则历史接口返回服务器错误或空数据，尚未证明 `triggerQualityRun` 真执行 SQL、回写 run/history，并驱动 score/dashboard 聚合。
+
 ### 分级分类 /security/data-security
 
 - 已修复一个真实动线断点：资产台账行级新增 `分级分类`，可直接进入 `/security/data-security?tab=datasetSecurity&datasetId={assetId}`。

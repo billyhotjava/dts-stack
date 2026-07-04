@@ -402,6 +402,17 @@ export default function Page() {
 		}
 	};
 
+	const openQualityReportForRule = (rule: Rule) => {
+		const params = new URLSearchParams(searchParams);
+		params.set("tab", "report");
+		if (rule?.datasetId) {
+			params.set("datasetId", String(rule.datasetId));
+		} else {
+			params.delete("datasetId");
+		}
+		setSearchParams(params, { replace: true });
+	};
+
 	const triggerRun = async (rule: Rule) => {
 		if (!canManage) {
 			toast.error("当前账号无治理维护权限");
@@ -410,7 +421,8 @@ export default function Page() {
 		if (!rule?.id) return;
 		try {
 			await triggerQualityRun({ ruleId: rule.id });
-			toast.success("已触发执行");
+			toast.success("已触发执行，可在质量报告查看结果");
+			openQualityReportForRule(rule);
 		} catch (error: any) {
 			toast.error(error?.message || "触发失败");
 		}
