@@ -73,3 +73,11 @@ test("standard package page is routable statically and via menu resolver", () =>
 	assert.match(STATIC_ROUTES, /foundation\/standard-package/);
 	assert.match(DYNAMIC_RESOLVER, /"\/foundation\/standard-package": "\/pages\/foundation\/StandardPackagePage"/);
 });
+
+test("standard package page can return to the data element page when launched from elements", () => {
+	assert.match(PAGE, /useSearchParams/);
+	assert.match(PAGE, /useNavigate/);
+	assert.match(PAGE, /fromSource === "elements"/);
+	assert.match(PAGE, /返回数据元/);
+	assert.match(PAGE, /\/governance\/standards\/elements/);
+});
