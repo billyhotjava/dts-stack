@@ -11,6 +11,8 @@ const TransformDetailPage = lazy(() => import("@/pages/explore/etl/TransformDeta
 const TransformExecutionHistoryPage = lazy(() => import("@/pages/explore/etl/TransformExecutionHistoryPage"));
 const DataSourceDetailPage = lazy(() => import("@/pages/foundation/DataSourceDetailPage"));
 const StandardPackagePage = lazy(() => import("@/pages/foundation/StandardPackagePage"));
+const AssetOverviewPage = lazy(() => import("@/pages/catalog/AssetOverviewPage"));
+const DatasetsPage = lazy(() => import("@/pages/catalog/DatasetsPage"));
 const AssetOwnershipPage = lazy(() => import("@/pages/governance/AssetOwnershipPage"));
 const AssetGrantPage = lazy(() => import("@/pages/governance/AssetGrantPage"));
 const MyGrantsPage = lazy(() => import("@/pages/governance/MyGrantsPage"));
@@ -94,6 +96,8 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{ path: "explore/etl/transform/:id/executions", element: <S><TransformExecutionHistoryPage /></S> },
 	{ path: "foundation/data-sources/:id", element: <S><DataSourceDetailPage /></S> },
 	{ path: "foundation/standard-package", element: <S><StandardPackagePage /></S> },
+	{ path: "catalog/assets", element: <S><AssetOverviewPage /></S> },
+	{ path: "catalog/assets/ledger", element: <S><DatasetsPage /></S> },
 	{ path: "settings/profile", element: <S><ProfilePage /></S> },
 	{ path: "governance/asset-ownership", element: <S><AssetOwnershipPage /></S> },
 	{ path: "governance/asset-grants", element: <S><AssetGrantPage /></S> },

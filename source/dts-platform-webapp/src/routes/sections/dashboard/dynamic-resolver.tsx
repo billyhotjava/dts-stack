@@ -45,7 +45,8 @@ const buildDirectRedirectPath = (redirectPath: string, currentSearch: string) =>
 const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	// ── Platform pages ──
 	"/governance": "/pages/governance/GovernanceCenterPage",
-	"/catalog/assets": "/pages/catalog/DatasetsPage",
+	"/catalog/assets": "/pages/catalog/AssetOverviewPage",
+	"/catalog/assets/ledger": "/pages/catalog/DatasetsPage",
 	"/catalog/asset-detail": "/pages/catalog/AssetDetailPage",
 	"/catalog/search": "/pages/catalog/DataSearchPage",
 	"/catalog/metadata": "/pages/catalog/MetadataPage",
