@@ -65,8 +65,10 @@ POST /api/modeling/standard-packages/builtin/{code}/install  (安装=走同一 p
 | F3 | 基础数据页面完善 | 3 | READY |
 | F4 | 数据资产重构（地图/台账分离） | 4 | IN_PROGRESS |
 | F5 | 治理运营三模块重构 | 4 | IN_PROGRESS |
+| F6 | 指标工作台语义编排编辑器 | 4 | READY |
 
 **范围调整（2026-07-03 用户决策）**：数据资产重构与治理运营三模块补齐并入本 sprint（F4/F5），按 TDD 推进；原"单列 Sprint-58"决定作废。
+**范围追加（2026-07-03 用户决策）**：指标工作台在 Sprint-56 拖拽绑定闭环基础上继续升级为语义编排编辑器（F6），线条代表真实指标建模关系，优先复用现有 `PUT /api/semantic/metrics/{id}`，不新增后端关系表。
 
 ## 全局约束
 
@@ -85,6 +87,7 @@ POST /api/modeling/standard-packages/builtin/{code}/install  (安装=走同一 p
 - [ ] 旧数据元直导端点收编到新管道校验逻辑，行为兼容
 - [ ] 至少 3 个内置国标包（性别/学历/行政区划节选 + 常用数据元）可在页面一键安装
 - [ ] 基础数据四页面交互范式统一（列表+详情+引用追溯+导入导出入口）
+- [ ] 指标工作台支持 `OBJECT_METRIC` 与 `METRIC_DERIVES` 两类语义关系边，具备工具栏、边配置、删除关系和预检能力
 - [ ] it/ 留存集成验证证据（curl 报文 + 页面截图）
 
 ## 实施偏差记录

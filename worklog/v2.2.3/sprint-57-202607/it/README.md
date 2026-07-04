@@ -1,6 +1,6 @@
 # Sprint-57 集成验证
 
-**状态**: 未开始
+**状态**: IN_PROGRESS（2026-07-04 容器已重建，自动化验证通过；带会话流程待执行）
 
 ## 验证项
 
@@ -15,5 +15,21 @@
 | IT-7 | 菜单/直达 URL 可访问，不落 /workbench 兜底 | 页面 | 截图 | ☐ |
 | IT-8 | 三页面范式巡检记录 | 文档 | assets/foundation-pages-audit.md | ☐ |
 | IT-9 | 既有 source-contract 测试全绿（模板 zip 契约不破坏） | node --test | 命令输出 | ☐ |
+| IT-10 | 指标工作台指标 -> 指标连线形成 `METRIC_DERIVES` 派生关系 | 页面 + 请求拦截 | 截图 + PUT payload | ☐ |
+| IT-11 | 指标工作台边配置保存/删除与业务对象绑定回归 | 页面 + 请求拦截 | 截图 + PUT payload | ☐ |
+| IT-12 | 指标工作台预检识别孤立指标、环依赖、草稿依赖、非法公式 JSON | 单测 + 页面 | 命令输出 + 截图 | ☐ |
 
 证据存放：`../assets/`（截图命名 `it-{N}-{描述}.png`）。
+
+## 部署验证记录（2026-07-04）
+
+重建方式：`builds/dts-build.sh --image dts-platform dts-platform-webapp` + `docker compose -f docker-compose-app.yml up -d`（新容器 13:50）。
+
+| 验证点 | 结果 |
+|--------|------|
+| liquibase 迁移 | ✅ `std_pkg_import_run` / `std_pkg_import_run_item` 两表存在于 dts_platform 库 |
+| 标准包端点注册 | ✅ `GET /api/modeling/standard-packages/builtin` 返回 401（需鉴权，非 404） |
+| 新前端产物 | ✅ bundle 含 `StandardPackagePage-*.js` 与 `AssetMapView-*.js`（标准包向导 + 资产矩阵已进镜像） |
+| 应用启动 | ✅ dts-platform 健康检查通过 |
+
+**待执行（需登录会话）**：IT-1~7 标准包全流程与内置包安装、F5-T01 运行时验证（质量试跑/评分/分级分类联动）、IT-10~12 指标工作台——需页面操作或提供测试账号后 curl 取证。

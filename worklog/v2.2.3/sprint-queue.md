@@ -1005,13 +1005,15 @@
 | F3-基础数据页面完善 | P1 | 3 | READY |
 | F4-数据资产重构 | P0 | 4 | DONE |
 | F5-治理运营三模块重构 | P0 | 4 | IN_PROGRESS |
+| F6-指标工作台语义编排编辑器 | P0 | 4 | READY |
 
-**统计**: READY=7, IN_PROGRESS=4, DONE=10, BLOCKED=0
+**统计**: READY=11, IN_PROGRESS=4, DONE=10, BLOCKED=0
 **关键决策**:
 - "标准模板" = 数据标准包（数据元+码表+术语打包），非 TemplatesPage 建模模板。
 - 一条 preview/apply/rollback 管道两个来源：客户上传 zip 与官方内置包，内置国标包不做独立种子机制。
 - 收编 `/metadata-standards/import` 旧直导路径，数据元校验逻辑单一来源。
-- 数据资产工业级打磨单列 Sprint-58 规划，不混入本 sprint。
+- 2026-07-03 范围已调整：F4 数据资产、F5 治理运营、F6 指标工作台语义编排均并入 Sprint-57；不再保留“单列 Sprint-58”作为本批计划约束。
+- 指标工作台语义编排编辑器作为 F6 进入 Sprint-57：线条代表真实指标建模关系，前端优先复用现有指标 PUT，不新增后端关系表。
 
 ## Sprint-56: 指标工作台拖拽建模闭环 (202607)
 **状态**: DONE
