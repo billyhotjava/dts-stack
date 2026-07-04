@@ -304,6 +304,73 @@ class SemanticModelingServiceTest {
             .doesNotContain("from legacy_order_main");
     }
 
+    @Test
+    void modelSqlCompilesMetricDerivationExpressionFromDependsOnMetrics() throws Throwable {
+        UUID objectId = UUID.randomUUID();
+        UUID gmvId = UUID.randomUUID();
+        UUID orderCntId = UUID.randomUUID();
+        UUID avgOrderAmountId = UUID.randomUUID();
+        SemanticModelingService.MetricDto gmv = new SemanticModelingService.MetricDto(
+            gmvId,
+            objectId,
+            "gmv",
+            "成交金额",
+            "sum",
+            "{\"field\":\"amount\"}",
+            "decimal",
+            "元",
+            "ACTIVE"
+        );
+        SemanticModelingService.MetricDto orderCnt = new SemanticModelingService.MetricDto(
+            orderCntId,
+            objectId,
+            "order_cnt",
+            "订单数",
+            "count_distinct",
+            "{\"field\":\"order_id\"}",
+            "integer",
+            "单",
+            "ACTIVE"
+        );
+        SemanticModelingService.MetricDto avgOrderAmount = new SemanticModelingService.MetricDto(
+            avgOrderAmountId,
+            objectId,
+            "avg_order_amount",
+            "客单价",
+            "derived",
+            """
+            {
+              "dependsOnMetricIds": ["%s", "%s"],
+              "derivationExpression": "{{metric:gmv}} / nullif({{metric:order_cnt}}, 0)"
+            }
+            """.formatted(gmvId, orderCntId),
+            "decimal",
+            "元/单",
+            "ACTIVE"
+        );
+
+        String sql = buildModelSql(
+            model("DWS", "stat_date"),
+            new SemanticModelingService.BusinessObjectDto(
+                objectId,
+                UUID.randomUUID(),
+                "order",
+                "订单",
+                null,
+                "order_id",
+                "dwd_order_detail",
+                "ACTIVE",
+                null
+            ),
+            List.of(gmv, orderCnt, avgOrderAmount)
+        );
+
+        assertThat(sql)
+            .contains("sum(\"amount\") as gmv")
+            .contains("count(distinct \"order_id\") as order_cnt")
+            .contains("(sum(\"amount\")) / nullif((count(distinct \"order_id\")), 0) as avg_order_amount");
+    }
+
     private SemanticModelingService.ModelDto model(String type, String grain) {
         return new SemanticModelingService.ModelDto(
             UUID.randomUUID(), UUID.randomUUID(), type, "m_" + type, null, null, grain, null, null,
@@ -355,6 +422,26 @@ class SemanticModelingServiceTest {
         method.setAccessible(true);
         try {
             return (String) method.invoke(service, model, object, List.of(), List.of());
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            throw e.getCause();
+        }
+    }
+
+    private String buildModelSql(
+        SemanticModelingService.ModelDto model,
+        SemanticModelingService.BusinessObjectDto object,
+        List<SemanticModelingService.MetricDto> metrics
+    ) throws Throwable {
+        Method method = SemanticModelingService.class.getDeclaredMethod(
+            "buildModelSql",
+            SemanticModelingService.ModelDto.class,
+            SemanticModelingService.BusinessObjectDto.class,
+            List.class,
+            List.class
+        );
+        method.setAccessible(true);
+        try {
+            return (String) method.invoke(service, model, object, List.of(), metrics);
         } catch (java.lang.reflect.InvocationTargetException e) {
             throw e.getCause();
         }

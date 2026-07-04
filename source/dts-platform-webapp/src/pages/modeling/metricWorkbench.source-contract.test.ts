@@ -84,7 +84,8 @@ test("MetricCanvas uses @xyflow/react with custom nodes and edges", () => {
 	assert.match(CANVAS, /连线/);
 	assert.match(CANVAS, /自动布局/);
 	assert.match(CANVAS, /预检/);
-	assert.match(CANVAS, /保存编排/);
+	assert.match(CANVAS, /实时保存/);
+	assert.doesNotMatch(CANVAS, /保存编排/);
 	assert.match(CANVAS, /nodesDraggable/);
 	assert.match(CANVAS, /onNodeDragStop/);
 	assert.match(CANVAS, /resolveMetricConnection/);
