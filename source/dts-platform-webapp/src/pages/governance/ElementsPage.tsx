@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Breadcrumb, Button, Card, Descriptions, Divider, Drawer, Form, Input, List, Modal, Select, Space, Spin, Tag, Typography } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { DownloadOutlined } from "@ant-design/icons";
+import { DownloadOutlined, ImportOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
@@ -355,6 +355,14 @@ export default function ElementsPage() {
 							data-testid="governance-elements-template-download"
 						>
 							下载标准包模板
+						</Button>
+						<Button
+							icon={<ImportOutlined />}
+							onClick={() => navigate("/foundation/standard-package?from=elements")}
+							disabled={!canManage}
+							data-testid="governance-elements-standard-package-import"
+						>
+							导入标准包
 						</Button>
 						<Button type="primary" onClick={() => openModal()} disabled={!canManage} data-testid="governance-elements-create">
 							+ 新增数据元

@@ -13,7 +13,7 @@
 | IT-5 | 内置国标包一键安装（gbt-2261/4658/2260 + 数据元包），重复安装幂等 | 页面 | 截图 | ☐ |
 | IT-6 | 数据元 code_set 与已安装码表关联正确 | 页面 + SQL | 截图 | ☐ |
 | IT-7 | 菜单/直达 URL 可访问，不落 /workbench 兜底 | 页面 | 截图 | ☐ |
-| IT-8 | 三页面范式巡检记录 | 文档 | assets/foundation-pages-audit.md | ☐ |
+| IT-8 | 三页面范式巡检记录 | 文档 + 页面 | assets/foundation-pages-audit.md；assets/it-8-f3-elements-import-entry.png | ◐ |
 | IT-9 | 既有 source-contract 测试全绿（模板 zip 契约不破坏） | node --test | 命令输出 | ☐ |
 | IT-10 | 指标工作台指标 -> 指标连线形成 `METRIC_DERIVES` 派生关系 | 页面 + 请求拦截 | 截图 + PUT payload | ☐ |
 | IT-11 | 指标工作台边配置保存/删除与业务对象绑定回归 | 页面 + 请求拦截 | 截图 + PUT payload | ☐ |
@@ -29,6 +29,13 @@
 - `git diff --check -- source/dts-platform-webapp/src/api/semanticModelingApi.ts source/dts-platform-webapp/src/pages/modeling/MetricWorkbenchPage.tsx source/dts-platform-webapp/src/pages/modeling/metric-workbench source/dts-platform-webapp/src/pages/modeling/metricWorkbench.source-contract.test.ts`：通过。
 - Playwright smoke：`http://localhost:3001/#/modeling/metric-workbench` 可渲染指标工作台；接口失败/空数据时工具栏仍可见；截图见 `assets/it-12-metric-workbench-toolbar.png`。
 - 待补：真实指标数据下拦截 `PUT /api/semantic/metrics/{id}`，留存 `METRIC_DERIVES` 新增/删除 payload。
+
+## F3 数据元导入入口验证记录（2026-07-04）
+
+- `node --test --experimental-strip-types src/pages/governance/DataStandardPackageTemplate.source-contract.test.ts`：3/3 通过。
+- `node --test --experimental-strip-types src/pages/foundation/StandardPackageImport.source-contract.test.ts`：7/7 通过。
+- `pnpm exec tsc --noEmit`：通过。
+- Playwright smoke：`http://localhost:3001/#/governance/standards/elements` 可见 `导入标准包` 入口；`http://localhost:3001/#/foundation/standard-package?from=elements` 可见 `返回数据元`；点击返回后回到数据元页。截图见 `assets/it-8-f3-elements-import-entry.png`。
 
 ## 部署验证记录（2026-07-04）
 

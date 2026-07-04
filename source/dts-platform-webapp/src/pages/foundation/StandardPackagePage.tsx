@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button, Card, Popconfirm, Result, Space, Steps, Tabs, Tag, Typography, Upload } from "antd";
-import { DownloadOutlined, InboxOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, DownloadOutlined, InboxOutlined } from "@ant-design/icons";
+import { useNavigate, useSearchParams } from "react-router";
 import type { ColumnsType } from "antd/es/table";
 import { CompactTable } from "@/components/table";
 import { EmptyState } from "@/components/empty-state";
@@ -115,6 +116,9 @@ function downloadBlob(blob: Blob, filename: string) {
 
 export default function StandardPackagePage() {
 	const canManage = useGovernanceManageAccess();
+	const navigate = useNavigate();
+	const [searchParams] = useSearchParams();
+	const fromSource = searchParams.get("from");
 	const [activeTab, setActiveTab] = useState("wizard");
 
 	// wizard state
@@ -544,7 +548,20 @@ export default function StandardPackagePage() {
 
 	return (
 		<div className="flex flex-col gap-4 p-4">
-			<PageHeader title="标准包导入" />
+			<PageHeader
+				title="标准包导入"
+				actions={
+					fromSource === "elements" ? (
+						<Button
+							icon={<ArrowLeftOutlined />}
+							onClick={() => navigate("/governance/standards/elements")}
+							data-testid="standard-package-return-elements"
+						>
+							返回数据元
+						</Button>
+					) : null
+				}
+			/>
 			<div className="rounded-md border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
 				下载模板 → 填写业务术语/数据元/公共码表 → 上传校验 → 确认应用，支持整包回滚。
 			</div>

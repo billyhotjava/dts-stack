@@ -1002,12 +1002,12 @@
 |---------|--------|---------|------|
 | F1-标准包导入管道 | P0 | 4 | DONE |
 | F2-内置国标包 | P0 | 2 | DONE |
-| F3-基础数据页面完善 | P1 | 3 | READY |
+| F3-基础数据页面完善 | P1 | 3 | IN_PROGRESS |
 | F4-数据资产重构 | P0 | 4 | DONE |
 | F5-治理运营三模块重构 | P0 | 4 | IN_PROGRESS |
 | F6-指标工作台语义编排编辑器 | P0 | 4 | IN_PROGRESS |
 
-**统计**: READY=7, IN_PROGRESS=5, DONE=13, BLOCKED=0
+**统计**: READY=6, IN_PROGRESS=5, DONE=14, BLOCKED=0
 **关键决策**:
 - "标准模板" = 数据标准包（数据元+码表+术语打包），非 TemplatesPage 建模模板。
 - 一条 preview/apply/rollback 管道两个来源：客户上传 zip 与官方内置包，内置国标包不做独立种子机制。
