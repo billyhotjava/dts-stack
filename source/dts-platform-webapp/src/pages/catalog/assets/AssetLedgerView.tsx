@@ -136,6 +136,9 @@ export function AssetLedgerView({
 							<Button size="small" onClick={() => router.push(`/security/dataset-access-approval?datasetId=${row.id}`)}>
 								申请权限
 							</Button>
+							<Button size="small" onClick={() => router.push(`/security/data-security?tab=datasetSecurity&datasetId=${row.id}`)}>
+								分级分类
+							</Button>
 							<Button size="small" onClick={() => router.push(`/catalog/datasets/${row.id}`)}>
 								详情
 							</Button>

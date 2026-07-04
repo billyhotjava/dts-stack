@@ -19,6 +19,7 @@ import type { ColumnsType } from "antd/es/table";
 import { } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
 import { useRouter } from "@/routes/hooks";
+import { useSearchParams } from "react-router";
 import {
 	getClassificationMapping,
 	getClassificationMaskingLinkage,
@@ -83,6 +84,7 @@ type DatasetLinkage = {
 
 export default function Page() {
 	const router = useRouter();
+	const [searchParams, setSearchParams] = useSearchParams();
 	const [classificationRows, setClassificationRows] = useState<ClassificationRow[]>([]);
 	const [classificationDirty, setClassificationDirty] = useState(false);
 	const [maskingRules, setMaskingRules] = useState<MaskingRule[]>([]);
@@ -94,12 +96,13 @@ export default function Page() {
 	const [maskingModalOpen, setMaskingModalOpen] = useState(false);
 	const [editingMasking, setEditingMasking] = useState<MaskingRule | null>(null);
 	const [maskingForm] = Form.useForm<MaskingRule & { datasetId?: string }>();
-	const [selectedDataset, setSelectedDataset] = useState<string | undefined>();
+	const [selectedDataset, setSelectedDataset] = useState<string | undefined>(() => searchParams.get("datasetId") || undefined);
 	const [, setSecurityMapping] = useState<any>(null);
 	const [securityForm] = Form.useForm();
 	const [mappingValidation, setMappingValidation] = useState<MappingValidationResult | null>(null);
 	const [validatingMapping, setValidatingMapping] = useState(false);
 	const [datasetLinkage, setDatasetLinkage] = useState<DatasetLinkage | null>(null);
+	const activeTab = searchParams.get("tab") || "classification";
 
 	const datasetOptions = useMemo(
 		() => datasets.map((item) => ({ label: item.name, value: item.id })),
@@ -110,6 +113,34 @@ export default function Page() {
 		const version = String(Date.now());
 		localStorage.setItem(SECURITY_LINKAGE_VERSION_KEY, version);
 		window.dispatchEvent(new CustomEvent(SECURITY_LINKAGE_EVENT, { detail: { version } }));
+	};
+
+	const updateSearchParamState = (patch: { tab?: string; datasetId?: string }) => {
+		const params = new URLSearchParams(searchParams);
+		if (patch.tab) {
+			params.set("tab", patch.tab);
+		}
+		if ("datasetId" in patch) {
+			if (patch.datasetId) {
+				params.set("datasetId", patch.datasetId);
+			} else {
+				params.delete("datasetId");
+			}
+		}
+		setSearchParams(params, { replace: true });
+	};
+
+	const handleTabChange = (key: string) => {
+		updateSearchParamState({ tab: key });
+	};
+
+	const setActiveDatasetSecurityTab = () => {
+		updateSearchParamState({ tab: "datasetSecurity", datasetId: selectedDataset });
+	};
+
+	const handleDatasetChange = (datasetId?: string) => {
+		setSelectedDataset(datasetId);
+		updateSearchParamState({ tab: "datasetSecurity", datasetId });
 	};
 
 	const loadMappings = async () => {
@@ -210,6 +241,11 @@ export default function Page() {
 		void loadSecurityMapping(selectedDataset);
 		void loadDatasetLinkage(selectedDataset);
 	}, [selectedDataset]);
+
+	useEffect(() => {
+		const datasetId = searchParams.get("datasetId") || undefined;
+		setSelectedDataset((prev) => (prev === datasetId ? prev : datasetId));
+	}, [searchParams]);
 
 	const openMappingModal = (row?: ClassificationRow) => {
 		setEditingMapping(row || null);
@@ -381,7 +417,7 @@ export default function Page() {
 						<Button type="primary" onClick={() => openMappingModal()}>
 							新建分级
 						</Button>
-						<Button disabled title="请在数据集安全字段页选择数据集后保存密级字段和部门字段">
+						<Button onClick={setActiveDatasetSecurityTab}>
 							绑定资产
 						</Button>
 						<Button disabled title="当前安全策略接口未开放例外申请，请通过权限审批提交临时访问申请">
@@ -393,6 +429,8 @@ export default function Page() {
 			/>
 			<Card>
 				<Tabs
+					activeKey={activeTab}
+					onChange={handleTabChange}
 					items={[
 						{
 							key: "classification",
@@ -484,7 +522,7 @@ export default function Page() {
 										<Select
 											options={datasetOptions}
 											value={selectedDataset}
-											onChange={setSelectedDataset}
+											onChange={handleDatasetChange}
 											style={{ minWidth: 240 }}
 											allowClear
 										/>

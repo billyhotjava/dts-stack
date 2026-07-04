@@ -18,6 +18,7 @@
 | IT-10 | 指标工作台指标 -> 指标连线形成 `METRIC_DERIVES` 派生关系 | 页面 + 请求拦截 | `assets/it-10-metric-workbench-derives-edge.png`；`assets/it-10-metric-derives-put-payload.json` | ◐ |
 | IT-11 | 指标工作台边配置保存/删除与业务对象绑定回归 | 页面 + 请求拦截 | `assets/it-11-metric-derives-delete-payload.json` | ◐ |
 | IT-12 | 指标工作台预检识别孤立指标、环依赖、草稿依赖、非法公式 JSON | 单测 + 页面 | 命令输出 + `assets/it-12-metric-workbench-toolbar.png` + `assets/it-12-metric-workbench-narrow.png` | ✅ |
+| IT-13 | F5 分级分类深链：资产台账可直达数据集安全字段绑定 | source-contract + 页面 | `assets/it-13-f5-data-security-deeplink.png` | ✅ |
 
 证据存放：`../assets/`（截图命名 `it-{N}-{描述}.png`）。
 
@@ -32,6 +33,14 @@
 - Playwright mock smoke：删除 `METRIC_DERIVES` 后，payload 移除 `dependsOnMetricIds`，见 `assets/it-11-metric-derives-delete-payload.json`。
 - Playwright smoke：窄屏可用性截图见 `assets/it-12-metric-workbench-narrow.png`。
 - 待补：真实后端指标数据下拦截 `PUT /api/semantic/metrics/{id}`。当前本地 `/api/semantic/*` 经 Vite 代理返回 500，本轮使用 mock 语义数据验证前端连线与 payload 形态。
+
+## F5 分级分类资产联动验证记录（2026-07-04）
+
+- `node --test src/pages/security/F5DataSecurityLinkage.source-contract.test.ts`：3/3 通过。
+- 相关回归：`node --test src/pages/catalog/Sprint45GovernanceAsset.source-contract.test.ts src/pages/governance/qualityReportRepairLink.source-contract.test.ts src/pages/security/F5DataSecurityLinkage.source-contract.test.ts`：8/8 通过。
+- `pnpm exec tsc --noEmit`：通过。
+- Playwright smoke：`http://localhost:3001/#/security/data-security?tab=datasetSecurity&datasetId=asset-smoke-001` 可渲染分级分类页，激活 `数据集安全字段`，选择框显示 `asset-smoke-001`；截图见 `assets/it-13-f5-data-security-deeplink.png`。
+- 待补：真实 catalog 后端联动。当前本地 `/api/catalog/classification-mapping`、`/api/catalog/masking-rules`、`/api/catalog/datasets/{id}/security-mapping`、`/api/catalog/classification-masking/linkage` 经 Vite 代理返回 500，本轮不宣称真实数据保存/联动已完成。
 
 ## F3 数据元导入入口验证记录（2026-07-04）
 

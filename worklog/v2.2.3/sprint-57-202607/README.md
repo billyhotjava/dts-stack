@@ -63,7 +63,7 @@ POST /api/modeling/standard-packages/builtin/{code}/install  (安装=走同一 p
 | F1 | 标准包导入管道 | 4 | DONE |
 | F2 | 内置国标包 | 2 | DONE |
 | F3 | 基础数据页面完善 | 3 | DONE |
-| F4 | 数据资产重构（地图/台账分离） | 4 | IN_PROGRESS |
+| F4 | 数据资产重构（地图/台账分离） | 4 | DONE |
 | F5 | 治理运营三模块重构 | 4 | IN_PROGRESS |
 | F6 | 指标工作台语义编排编辑器 | 4 | IN_PROGRESS |
 

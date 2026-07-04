@@ -46,3 +46,13 @@
 
 1. **"与管控页互跳缺失"为伪缺口**：`/governance/rules`（QualityRulesPage）本身是五 Tab 容器（概览/规则/任务/报告/修复），已内嵌 QualityReportTab；独立菜单"质量报告"与之复用同一组件，无需额外互跳。
 2. **确认并修复一个真实占位缺口**：质量报告 run 历史中 FAILED 行的"去修复"Typography.Link 无 onClick（死链接），已修复为跳转 `/governance/rules?tab=repair&runId=...`（activeTab 由 URL tab 参数驱动，已核实落点正确）。TDD：qualityReportRepairLink.source-contract.test.ts 先 RED 后 GREEN。
+
+## 运行时补证（2026-07-04）
+
+### 分级分类 /security/data-security
+
+- 已修复一个真实动线断点：资产台账行级新增 `分级分类`，可直接进入 `/security/data-security?tab=datasetSecurity&datasetId={assetId}`。
+- 分级分类页已支持 `tab/datasetId` URL 参数：深链可激活 `数据集安全字段` 页签并带入数据集选择；顶部 `绑定资产` 不再是 disabled 占位按钮。
+- TDD：`F5DataSecurityLinkage.source-contract.test.ts` 先 RED 后 GREEN；相关回归 8/8 通过，`pnpm exec tsc --noEmit` 通过。
+- Playwright smoke：`asset-smoke-001` 深链可渲染目标页签与选择框，截图 `assets/it-13-f5-data-security-deeplink.png`。
+- 仍待运行时验证：本地 Vite 代理下 `/api/catalog/classification-mapping`、`/api/catalog/masking-rules`、`/api/catalog/datasets/{id}/security-mapping`、`/api/catalog/classification-masking/linkage` 返回 500；真实密级保存、脱敏联动回写与批量定级需后端可用后继续补证。
