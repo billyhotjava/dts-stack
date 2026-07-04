@@ -256,6 +256,32 @@ class StandardPackageApplyServiceTest {
     }
 
     @Test
+    @DisplayName("rollback：本次导入创建的数据元直接删除，不触发页面引用保护")
+    void rollback_createdElement_usesRepositoryDelete() {
+        UUID runId = UUID.randomUUID();
+        StandardPackageImportRun run = previewedRun(runId, "{}");
+        run.setStatus("APPLIED");
+        when(runRepository.findById(runId)).thenReturn(Optional.of(run));
+
+        UUID elementId = UUID.randomUUID();
+        StandardPackageImportRunItem createElement = new StandardPackageImportRunItem();
+        createElement.setRunId(runId);
+        createElement.setSeq(1);
+        createElement.setEntityType("ELEMENT");
+        createElement.setEntityId(elementId.toString());
+        createElement.setAction("CREATE");
+
+        when(runItemRepository.findByRunIdOrderBySeqDesc(runId)).thenReturn(List.of(createElement));
+        when(metadataStandardRepository.existsById(elementId)).thenReturn(true);
+
+        Map<String, Object> result = service.rollback(runId, "tester");
+
+        assertThat(result.get("deleted")).isEqualTo(1);
+        verify(metadataStandardRepository).deleteById(elementId);
+        verify(metadataStandardService, never()).delete(any(UUID.class));
+    }
+
+    @Test
     @DisplayName("apply：数据元已存在时走更新并记录 before-image")
     void apply_existingElement_recordsUpdateImage() {
         UUID runId = UUID.randomUUID();

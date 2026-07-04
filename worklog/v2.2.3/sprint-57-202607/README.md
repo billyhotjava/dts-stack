@@ -1,7 +1,7 @@
 # Sprint-57: 基础数据闭环 —— 标准包导入管道与内置国标包
 
 **时间**: 2026-07
-**状态**: IN_PROGRESS
+**状态**: IN_PROGRESS（标准包 F1/F2/F3/F4 已完成真实 IT；F5/F6 仍保留运行态补证项）
 **目标**: 打通"下载标准包模板 → 客户填写 → 上传 DTS → 校验/应用/回滚"的完整闭环，并以同一管道交付内置国标包，使基础数据模块（数据元/业务术语/公共码表/标准包）达到可交付状态。
 
 ## 背景
@@ -82,17 +82,27 @@ POST /api/modeling/standard-packages/builtin/{code}/install  (安装=走同一 p
 
 ## 完成标准
 
-- [ ] 客户可下载模板 zip、填写后整包上传，看到逐行校验报告，确认后一次入库
-- [ ] 导入历史可查、单次导入可整包回滚
-- [ ] 旧数据元直导端点收编到新管道校验逻辑，行为兼容
-- [ ] 至少 3 个内置国标包（性别/学历/行政区划节选 + 常用数据元）可在页面一键安装
+- [x] 客户可下载模板 zip、填写后整包上传，看到逐行校验报告，确认后一次入库
+- [x] 导入历史可查、单次导入可整包回滚
+- [x] 旧数据元直导端点收编到新管道校验逻辑，行为兼容
+- [x] 至少 3 个内置国标包（性别/学历/行政区划节选 + 常用数据元）可在页面一键安装
 - [x] 基础数据四页面交互范式统一（列表+详情+引用追溯+导入导出入口）
 - [ ] 指标工作台支持 `OBJECT_METRIC` 与 `METRIC_DERIVES` 两类语义关系边，具备工具栏、边配置、删除关系和预检能力
-- [ ] it/ 留存集成验证证据（curl 报文 + 页面截图）
+- [x] it/ 留存集成验证证据（curl 报文 + 页面截图）
+
+## TDD 与集成验证记录（2026-07-04）
+
+- TDD 红灯：真实回滚 IT 发现 `ELEMENT` 新增项回滚被 `metadataStandardService.delete()` 的引用保护拦截，返回 `409 CONFLICT`。
+- TDD 用例：`StandardPackageApplyServiceTest.rollback_createdElement_usesRepositoryDelete` 锁定“标准包创建的数据元回滚应通过 repository 删除，不走页面级引用保护”。
+- 修复：`StandardPackageApplyService.rollbackCreate` 的 `TYPE_ELEMENT` 分支改为 `metadataStandardRepository.deleteById(id)`。
+- 后端单测：`./mvnw -Dtest=StandardPackageApplyServiceTest -Dspotless.apply.skip=true test`，7/7 通过。
+- 真实 IT：标准包 preview 错误行、valid preview、apply 入库计数、rollback 清零、旧数据元直导历史、内置包幂等安装、code_set 关联均已留存到 `assets/it-*.json`。
+- 页面 IT：`#/foundation/standard-package` 直达不落 `/workbench`，标准包首屏、内置包、历史页截图已留存。
 
 ## 实施偏差记录
 
 1. **行政区划仅内置省级 34 条**（原计划含地级市 ~333）：地市级码值手工整理易臆造，违反"码值以国标原文为准"，改为按需通过标准包上传扩充，manifest 描述已注明。
 2. **回滚防篡改简化**：T02 原设计"被后续修改的实体标记 SKIPPED"（基于 lastModifiedDate 对比），实现简化为"实体已不存在则 SKIPPED、存在即还原"。全量时间戳对比价值有限且易误报，如需严格模式后续补。
 3. **已知无关测试失败**：`ModelingSqlModelServiceTest` 7 个用例（zip 清单/文件系统权限类）在本 sprint 开工前即失败，与标准包管道零交集（grep 确认无引用），待独立排查。
-4. **部署提示**：新端点/页面需重建 dts-platform 与 dts-platform-webapp 容器后方可 IT 验证；菜单行已直接 upsert 进 dts_admin DB（id=7，2 个角色绑定），种子文件同步更新供全新部署。
+4. **部署提示**：新端点/页面已重建 dts-platform 与 dts-platform-webapp 容器并完成标准包 IT；菜单行已直接 upsert 进 dts_admin DB（id=7，2 个角色绑定），种子文件同步更新供全新部署。
+5. **标准包回滚引用保护修正**：标准包创建的数据元可能引用同包码表目录，整包回滚时必须按导入记录删除，不复用页面级 `delete` 的引用保护；该行为已用单测与真实 rollback IT 锁定。

@@ -1,0 +1,22 @@
+{
+  "httpStatus": "200",
+  "rollback": {
+    "status": 200,
+    "message": "OK",
+    "data": {
+      "runId": "9afbd809-d556-4ad1-a3e2-33ba5c219b4e",
+      "status": "ROLLED_BACK",
+      "deleted": 6,
+      "restored": 0,
+      "skipped": []
+    }
+  },
+  "sqlCounts": [
+    "terms=0",
+    "elements=0",
+    "directories=0",
+    "values=0",
+    "mappings=0",
+    "run_status=ROLLED_BACK"
+  ]
+}

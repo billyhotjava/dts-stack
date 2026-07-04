@@ -1,0 +1,47 @@
+{
+  "httpStatus": "200",
+  "status": 200,
+  "message": "OK",
+  "runId": "9afbd809-d556-4ad1-a3e2-33ba5c219b4e",
+  "blocking": false,
+  "totalErrors": 0,
+  "codeType": "S57_s57_20260704151638_STATUS",
+  "fieldNameEn": "s57_20260704151638_status_code",
+  "files": [
+    {
+      "file": "01-business-terms.csv",
+      "totalRows": null,
+      "toCreate": 1,
+      "toUpdate": 0,
+      "errorCount": 0
+    },
+    {
+      "file": "02-data-elements.csv",
+      "totalRows": null,
+      "toCreate": 1,
+      "toUpdate": 0,
+      "errorCount": 0
+    },
+    {
+      "file": "03-reference-code-directories.csv",
+      "totalRows": null,
+      "toCreate": 1,
+      "toUpdate": 0,
+      "errorCount": 0
+    },
+    {
+      "file": "04-reference-code-items.csv",
+      "totalRows": null,
+      "toCreate": 2,
+      "toUpdate": 0,
+      "errorCount": 0
+    },
+    {
+      "file": "05-reference-code-mappings.csv",
+      "totalRows": null,
+      "toCreate": 1,
+      "toUpdate": 0,
+      "errorCount": 0
+    }
+  ]
+}

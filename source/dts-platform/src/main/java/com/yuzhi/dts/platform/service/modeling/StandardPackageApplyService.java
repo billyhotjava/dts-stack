@@ -410,7 +410,7 @@ public class StandardPackageApplyService {
                 case TYPE_ELEMENT -> {
                     UUID id = UUID.fromString(item.getEntityId());
                     if (!metadataStandardRepository.existsById(id)) return false;
-                    metadataStandardService.delete(id);
+                    metadataStandardRepository.deleteById(id);
                 }
                 case TYPE_CODE_DIRECTORY -> {
                     if (!codeDirectoryRepository.existsById(item.getEntityId())) return false;
