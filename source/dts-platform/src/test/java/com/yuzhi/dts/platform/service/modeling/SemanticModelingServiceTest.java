@@ -371,6 +371,80 @@ class SemanticModelingServiceTest {
             .contains("(sum(\"amount\")) / nullif((count(distinct \"order_id\")), 0) as avg_order_amount");
     }
 
+    @Test
+    void validatesMetricDerivationWithSameCompilerRules() {
+        UUID objectId = UUID.randomUUID();
+        UUID gmvId = UUID.randomUUID();
+        UUID orderCntId = UUID.randomUUID();
+        UUID avgOrderAmountId = UUID.randomUUID();
+        SemanticModelingService.MetricDto gmv = new SemanticModelingService.MetricDto(
+            gmvId,
+            objectId,
+            "gmv",
+            "成交金额",
+            "sum",
+            "{\"field\":\"amount\"}",
+            "decimal",
+            "元",
+            "ACTIVE"
+        );
+        SemanticModelingService.MetricDto orderCnt = new SemanticModelingService.MetricDto(
+            orderCntId,
+            objectId,
+            "order_cnt",
+            "订单数",
+            "count_distinct",
+            "{\"field\":\"order_id\"}",
+            "integer",
+            "单",
+            "ACTIVE"
+        );
+        SemanticModelingService.MetricDto avgOrderAmount = new SemanticModelingService.MetricDto(
+            avgOrderAmountId,
+            objectId,
+            "avg_order_amount",
+            "客单价",
+            "derived",
+            """
+            {
+              "dependsOnMetricIds": ["%s", "%s"],
+              "derivationExpression": "{{metric:gmv}} / nullif({{metric:order_cnt}}, 0)"
+            }
+            """.formatted(gmvId, orderCntId),
+            "decimal",
+            "元/单",
+            "ACTIVE"
+        );
+
+        SemanticModelingService.MetricDerivationValidationDto result = service.validateMetricDerivation(
+            new SemanticModelingService.MetricDerivationValidationRequest(avgOrderAmountId, avgOrderAmount.formulaJson()),
+            List.of(gmv, orderCnt, avgOrderAmount)
+        );
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.compiledExpression()).isEqualTo("(sum(\"amount\")) / nullif((count(distinct \"order_id\")), 0)");
+        assertThat(result.dependencyIds()).containsExactly(gmvId, orderCntId);
+        assertThat(result.issues()).isEmpty();
+
+        SemanticModelingService.MetricDerivationValidationDto invalid = service.validateMetricDerivation(
+            new SemanticModelingService.MetricDerivationValidationRequest(
+                avgOrderAmountId,
+                """
+                {
+                  "dependsOnMetricIds": ["%s"],
+                  "derivationExpression": "{{metric:gmv}} / (select 1)"
+                }
+                """.formatted(gmvId)
+            ),
+            List.of(gmv, orderCnt, avgOrderAmount)
+        );
+
+        assertThat(invalid.valid()).isFalse();
+        assertThat(invalid.compiledExpression()).isNull();
+        assertThat(invalid.dependencyIds()).containsExactly(gmvId);
+        assertThat(invalid.issues()).anySatisfy(issue -> assertThat(issue).contains("派生表达式"));
+    }
+
     private SemanticModelingService.ModelDto model(String type, String grain) {
         return new SemanticModelingService.ModelDto(
             UUID.randomUUID(), UUID.randomUUID(), type, "m_" + type, null, null, grain, null, null,

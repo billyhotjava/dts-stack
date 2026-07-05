@@ -18,6 +18,10 @@ const DETAIL_PANEL = readFileSync(
 	new URL("./metric-workbench/MetricDetailPanel.tsx", import.meta.url),
 	"utf8",
 );
+const SEMANTIC_API = readFileSync(
+	new URL("../../api/semanticModelingApi.ts", import.meta.url),
+	"utf8",
+);
 const SUBJECT_BROWSER = readFileSync(
 	new URL("./metric-workbench/SubjectBrowserPanel.tsx", import.meta.url),
 	"utf8",
@@ -110,13 +114,20 @@ test("MetricWorkbenchPage wires semantic derivation save and relation deletion",
 	assert.match(WORKBENCH, /addMetricDependencyToFormulaJson/);
 	assert.match(WORKBENCH, /removeMetricDependencyFromFormulaJson/);
 	assert.match(WORKBENCH, /buildMetricCanvasPreflightIssues/);
+	assert.match(WORKBENCH, /validateSemanticMetricDerivation/);
+	assert.match(WORKBENCH, /DERIVATION_COMPILE_FAILED/);
+	assert.match(SEMANTIC_API, /validateSemanticMetricDerivation/);
+	assert.match(SEMANTIC_API, /\/semantic\/metrics\/derivation\/validate/);
 });
 
 test("MetricDetailPanel exposes edge relation configuration", () => {
 	assert.match(DETAIL_PANEL, /关系配置/);
 	assert.match(DETAIL_PANEL, /METRIC_DERIVES/);
 	assert.match(DETAIL_PANEL, /OBJECT_METRIC/);
-	assert.match(DETAIL_PANEL, /派生表达式/);
+	assert.match(DETAIL_PANEL, /DSL 编辑器/);
+	assert.match(DETAIL_PANEL, /可引用上游指标/);
+	assert.match(DETAIL_PANEL, /insertMetricDslToken/);
+	assert.match(DETAIL_PANEL, /\{\{metric:/);
 	assert.match(DETAIL_PANEL, /关系说明/);
 	assert.match(DETAIL_PANEL, /删除关系/);
 	assert.match(DETAIL_PANEL, /removeMetricDependencyFromFormulaJson/);

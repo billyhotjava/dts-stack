@@ -6,6 +6,7 @@ import {
 	buildMetricCanvasPreflightIssues,
 	buildSemanticMetricUpdatePayload,
 	findMetricDropTargetObject,
+	insertMetricDslToken,
 	removeMetricDependencyFromFormulaJson,
 	parseMetricDragPayload,
 	resolveMetricBinding,
@@ -224,6 +225,18 @@ describe("metric canvas helpers", () => {
 			ok: false,
 			error: "INVALID_FORMULA_JSON",
 		});
+	});
+
+	it("inserts metric DSL tokens at cursor or selected range", () => {
+		expect(insertMetricDslToken("{{metric:gmv}} / ", "{{metric:order_cnt}}", 17, 17)).toBe(
+			"{{metric:gmv}} / {{metric:order_cnt}}",
+		);
+		expect(insertMetricDslToken("old_expression", "{{metric:gmv}}", 0, "old_expression".length)).toBe(
+			"{{metric:gmv}}",
+		);
+		expect(insertMetricDslToken("{{metric:gmv}} / ", "{{metric:order_cnt}}")).toBe(
+			"{{metric:gmv}} / {{metric:order_cnt}}",
+		);
 	});
 
 	it("preflights isolated metrics, cyclic dependencies, draft dependencies and invalid JSON", () => {
