@@ -46,6 +46,18 @@ test("data management workbench does not ship builtin demo business themes", () 
 	assert.doesNotMatch(source, /SQL|dbt|\.sql/i);
 });
 
+test("data management workbench exposes a no-SQL first report journey", () => {
+	const source = readFileSync(PAGE_URL, "utf8");
+
+	for (const label of ["接入一张业务表", "选择业务表", "生成同步任务", "生成报表", "查看运行证据"]) {
+		assert.match(source, new RegExp(label));
+	}
+	for (const route of ["/foundation/data-sources", "/explore/etl/transform", "/bi/explore", "/ops/overview"]) {
+		assert.match(source, new RegExp(route.replace(/[/?]/g, "\\$&")));
+	}
+	assert.doesNotMatch(source, /预览 SQL|模板参数 \(JSON\)|dbt source|sourceId|DDL/);
+});
+
 test("data management workbench is driven by golden chain runtime state", () => {
 	assert.equal(existsSync(SERVICE_URL), true);
 	assert.equal(existsSync(MODEL_URL), true);

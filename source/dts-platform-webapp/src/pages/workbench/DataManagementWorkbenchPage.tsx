@@ -25,6 +25,39 @@ const TONE_COLOR: Record<DataManagementTone, string> = {
 
 const statusTag = (label: string, tone: DataManagementTone) => <Tag color={TONE_COLOR[tone]}>{label}</Tag>;
 
+const firstReportJourneySteps = [
+	{
+		title: "接入一张业务表",
+		desc: "从连接器目录或数据源连接开始，完成连接测试。",
+		route: "/foundation/data-sources",
+		action: "配置数据源",
+	},
+	{
+		title: "选择业务表",
+		desc: "探测表结构，选择要进入治理链路的业务表和字段。",
+		route: "/foundation/data-sources",
+		action: "探测业务表",
+	},
+	{
+		title: "生成同步任务",
+		desc: "确认字段、同步方式和预检结果，生成可运行的同步任务。",
+		route: "/explore/etl/transform",
+		action: "查看同步任务",
+	},
+	{
+		title: "生成报表",
+		desc: "进入语义探索，选择指标、维度、筛选条件和图形。",
+		route: "/bi/explore",
+		action: "创建分析卡片",
+	},
+	{
+		title: "查看运行证据",
+		desc: "到运行概览确认任务成功率、告警和补数记录。",
+		route: "/ops/overview",
+		action: "查看运行证据",
+	},
+];
+
 export type DataManagementWorkbenchPageProps = {
 	embedded?: boolean;
 	focus?: "data-management" | "consumption";
@@ -145,6 +178,23 @@ export default function Page({ embedded = false, focus = "data-management", prod
 				message={blockedThemes.length > 0 ? "存在需要处理的主题" : themeSummary}
 				description="业务主题需在客户现场按组织、报表和资产口径定义，产品不内置演示场景；配置完成后再展示数据可用、治理状态、消费状态和运行健康。"
 			/>
+
+			<Card title="新手首单：接入业务表生成报表" extra={<Tag color="blue">业务默认路径</Tag>}>
+				<div className="grid gap-3 xl:grid-cols-5 md:grid-cols-2">
+					{firstReportJourneySteps.map((step, index) => (
+						<div key={step.title} className="flex min-h-[176px] flex-col justify-between rounded border border-gray-200 p-3">
+							<div className="space-y-2">
+								<Tag color={index === 0 ? "blue" : "default"}>{index + 1}</Tag>
+								<div className="font-medium">{step.title}</div>
+								<Text type="secondary">{step.desc}</Text>
+							</div>
+							<Button block onClick={() => router.push(step.route)}>
+								{step.action}
+							</Button>
+						</div>
+					))}
+				</div>
+			</Card>
 
 			<Spin spinning={loading}>
 				{hasThemes ? (

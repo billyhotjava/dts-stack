@@ -19,6 +19,7 @@ const expectedWorkbenchRoutes = [
 	"/workbench/todo",
 	"/bi/dashboards",
 	"/foundation/data-sources",
+	"/workbench?section=data-management&journey=first-report",
 	"/workbench?section=data-management",
 	"/governance/quality",
 	"/services/apis",
@@ -29,6 +30,9 @@ test("Sprint-49 F3 workbench entry cards expose stable testable actions", () => 
 	assert.match(REGISTRY_SOURCE, /data-testid=\{`workbench-entry-card-\$\{definition\.key\}`\}/);
 	assert.match(REGISTRY_SOURCE, /data-testid=\{`workbench-entry-action-\$\{definition\.key\}`\}/);
 	assert.match(REGISTRY_SOURCE, /onClick=\{\(\) => definition\.route && navigate\(definition\.route\)\}/);
+	assert.match(REGISTRY_SOURCE, /first-report/);
+	assert.match(REGISTRY_SOURCE, /首张报表/);
+	assert.match(REGISTRY_SOURCE, /接入一张业务表并生成报表/);
 	assert.doesNotMatch(REGISTRY_SOURCE, /window\.location|href=/);
 });
 

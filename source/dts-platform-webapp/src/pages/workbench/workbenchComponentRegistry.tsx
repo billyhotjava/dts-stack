@@ -4,6 +4,7 @@ import {
 	BarChart3,
 	Boxes,
 	Database,
+	FileText,
 	Gauge,
 	GitBranch,
 	ListTodo,
@@ -142,6 +143,14 @@ export const WORKBENCH_COMPONENT_REGISTRY: WorkbenchComponentDefinition[] = [
 		actionText: "配置数据源",
 		route: "/foundation/data-sources",
 		icon: Database,
+	}),
+	entry({
+		key: "first-report",
+		title: "首张报表",
+		description: "接入一张业务表并生成报表",
+		actionText: "开始首单",
+		route: "/workbench?section=data-management&journey=first-report",
+		icon: FileText,
 	}),
 	entry({
 		key: "golden-chain",
