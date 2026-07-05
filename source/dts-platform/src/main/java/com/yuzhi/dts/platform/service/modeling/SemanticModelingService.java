@@ -431,6 +431,54 @@ public class SemanticModelingService {
     }
 
     @Transactional(readOnly = true)
+    public MetricDerivationValidationDto validateMetricDerivation(MetricDerivationValidationRequest request) {
+        return validateMetricDerivation(request, listMetrics(null));
+    }
+
+    MetricDerivationValidationDto validateMetricDerivation(MetricDerivationValidationRequest request, List<MetricDto> metrics) {
+        if (request == null || request.targetMetricId() == null) {
+            return new MetricDerivationValidationDto(false, null, List.of("缺少目标指标"), List.of());
+        }
+        List<MetricDto> availableMetrics = metrics == null ? List.of() : metrics;
+        MetricDto target = availableMetrics
+            .stream()
+            .filter(metric -> request.targetMetricId().equals(metric.id()))
+            .findFirst()
+            .orElse(null);
+        if (target == null) {
+            return new MetricDerivationValidationDto(false, null, List.of("目标指标不存在: " + request.targetMetricId()), List.of());
+        }
+
+        String formulaJson = StringUtils.hasText(request.formulaJson()) ? request.formulaJson() : target.formulaJson();
+        MetricDto candidate = new MetricDto(
+            target.id(),
+            target.objectId(),
+            target.code(),
+            target.name(),
+            target.formulaType(),
+            formulaJson,
+            target.format(),
+            target.unit(),
+            target.status()
+        );
+        Map<UUID, MetricDto> metricById = new LinkedHashMap<>();
+        for (MetricDto metric : availableMetrics) {
+            metricById.put(metric.id(), metric);
+        }
+        metricById.put(candidate.id(), candidate);
+
+        List<UUID> dependencyIds = List.of();
+        try {
+            dependencyIds = readMetricDependencyIds(parseFormula(formulaJson));
+            String compiledExpression = buildMetricExpression(candidate, true, metricById, new LinkedHashMap<>(), new ArrayList<>());
+            return new MetricDerivationValidationDto(true, compiledExpression, List.of(), dependencyIds);
+        } catch (IllegalArgumentException ex) {
+            String message = StringUtils.hasText(ex.getMessage()) ? ex.getMessage() : "派生表达式校验失败";
+            return new MetricDerivationValidationDto(false, null, List.of(message), dependencyIds);
+        }
+    }
+
+    @Transactional(readOnly = true)
     public List<ModelDto> listModels(String type) {
         String normalizedType = trimToNull(type);
         String whereClause = normalizedType == null ? "" : " where upper(type) = upper(:type)";
@@ -2419,6 +2467,8 @@ public class SemanticModelingService {
 
     public record MetricDto(UUID id, UUID objectId, String code, String name, String formulaType, String formulaJson, String format, String unit, String status) {}
     public record MetricRequest(UUID objectId, String code, String name, String formulaType, String formulaJson, String format, String unit, String status) {}
+    public record MetricDerivationValidationRequest(UUID targetMetricId, String formulaJson) {}
+    public record MetricDerivationValidationDto(boolean valid, String compiledExpression, List<String> issues, List<UUID> dependencyIds) {}
 
     public record ModelDto(
         UUID id,

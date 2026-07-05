@@ -59,6 +59,18 @@ export type SemanticMetric = {
 	status?: string;
 };
 
+export type MetricDerivationValidationRequest = {
+	targetMetricId: string;
+	formulaJson?: string | null;
+};
+
+export type MetricDerivationValidationResult = {
+	valid: boolean;
+	compiledExpression?: string | null;
+	issues?: string[];
+	dependencyIds?: string[];
+};
+
 export type SemanticModel = {
 	id: string;
 	objectId?: string;
@@ -195,6 +207,11 @@ export const createSemanticMetric = (data: Partial<SemanticMetric> & { formulaJs
 	api.post<SemanticMetric>({ url: "/semantic/metrics", data });
 export const updateSemanticMetric = (id: string, data: Partial<SemanticMetric> & { formulaJson?: string; unit?: string }) =>
 	api.put<SemanticMetric>({ url: `/semantic/metrics/${encodeURIComponent(id)}`, data });
+export const validateSemanticMetricDerivation = (data: MetricDerivationValidationRequest) =>
+	api.post<MetricDerivationValidationResult>({
+		url: "/semantic/metrics/derivation/validate",
+		data,
+	});
 
 export const listSemanticModels = (params?: { type?: "DWS" | "ADS" }) =>
 	quiet<SemanticModel[]>({ url: "/semantic/models", params });

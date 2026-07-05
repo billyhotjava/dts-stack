@@ -23,6 +23,12 @@ class ControlledMetricDslCompilerTest {
     }
 
     @Test
+    void namespacedAggregationTypesMatchWorkbenchFormulaOptions() {
+        assertThat(pg("aggregation/sum", "{\"field\":\"order_amount\"}")).isEqualTo("sum(\"order_amount\")");
+        assertThat(pg("aggregation/count_distinct", "{\"field\":\"order_id\"}")).isEqualTo("count(distinct \"order_id\")");
+    }
+
+    @Test
     void countWithoutFieldRendersCountStar() {
         assertThat(pg("count", "{}")).isEqualTo("count(*)");
     }

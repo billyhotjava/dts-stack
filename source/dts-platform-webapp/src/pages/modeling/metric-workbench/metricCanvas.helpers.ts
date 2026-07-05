@@ -47,6 +47,7 @@ export type MetricCanvasPreflightIssue = {
 	code:
 		| "ACTIVE_DEPENDS_ON_DRAFT"
 		| "CYCLIC_METRIC_DEPENDENCY"
+		| "DERIVATION_COMPILE_FAILED"
 		| "INVALID_FORMULA_JSON"
 		| "ISOLATED_METRIC"
 		| "MISSING_OBJECT_BINDING";
@@ -123,6 +124,18 @@ function normalizeMetricIds(value: unknown): string[] {
 export function getMetricDependencyIds(metric: Pick<SemanticMetric, "formulaJson">): string[] {
 	const parsed = parseFormulaObject(metric.formulaJson);
 	return parsed.ok ? normalizeMetricIds(parsed.value.dependsOnMetricIds) : [];
+}
+
+export function insertMetricDslToken(
+	expression: string,
+	token: string,
+	selectionStart?: number,
+	selectionEnd?: number,
+): string {
+	const source = expression ?? "";
+	const start = Math.max(0, Math.min(selectionStart ?? source.length, source.length));
+	const end = Math.max(start, Math.min(selectionEnd ?? start, source.length));
+	return `${source.slice(0, start)}${token}${source.slice(end)}`;
 }
 
 export function addMetricDependencyToFormulaJson(

@@ -8,6 +8,7 @@ import {
     listSemanticMetrics,
     listSemanticModels,
     updateSemanticMetric,
+    validateSemanticMetricDerivation,
     type SemanticSubjectDomain,
     type SemanticBusinessObject,
     type SemanticMetric,
@@ -21,6 +22,7 @@ import {
     addMetricDependencyToFormulaJson,
     buildMetricCanvasPreflightIssues,
     buildSemanticMetricUpdatePayload,
+    getMetricDependencyIds,
     removeMetricDependencyFromFormulaJson,
     type MetricCanvasPreflightIssue,
     type MetricCanvasRelation,
@@ -158,12 +160,44 @@ export default function MetricWorkbenchPage() {
         [metrics, refreshMetrics],
     );
 
-    const handlePreflight = useCallback(() => {
-        const issues = buildMetricCanvasPreflightIssues(objects, metrics);
+    const handlePreflight = useCallback(async () => {
+        const localIssues = buildMetricCanvasPreflightIssues(objects, metrics);
+        const derivedMetrics = metrics.filter((metric) => getMetricDependencyIds(metric).length > 0);
+        const backendIssues = (
+            await Promise.all(
+                derivedMetrics.map(async (metric): Promise<MetricCanvasPreflightIssue | null> => {
+                    try {
+                        const result = await validateSemanticMetricDerivation({
+                            targetMetricId: metric.id,
+                            formulaJson: metric.formulaJson,
+                        });
+                        if (result.valid) {
+                            return null;
+                        }
+                        return {
+                            code: "DERIVATION_COMPILE_FAILED",
+                            severity: "error",
+                            message: `${metric.name || metric.code} DSL 编译失败：${result.issues?.join("；") || "后端规则未通过"}`,
+                            metricId: metric.id,
+                            nodeId: `metric-${metric.id}`,
+                        };
+                    } catch {
+                        return {
+                            code: "DERIVATION_COMPILE_FAILED",
+                            severity: "error",
+                            message: `${metric.name || metric.code} DSL 编译预检调用失败`,
+                            metricId: metric.id,
+                            nodeId: `metric-${metric.id}`,
+                        };
+                    }
+                }),
+            )
+        ).filter((issue): issue is MetricCanvasPreflightIssue => Boolean(issue));
+        const issues = [...localIssues, ...backendIssues];
         setPreflightIssues(issues);
         setSelectedId(null);
         if (issues.length === 0) {
-            toast.success("指标编排预检通过");
+            toast.success("指标编排与 DSL 编译预检通过");
             return;
         }
         toast.warning(`指标编排预检发现 ${issues.length} 项问题`);

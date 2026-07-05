@@ -204,7 +204,8 @@ public class ControlledMetricDslCompiler {
     }
 
     private static String normalizeType(String value) {
-        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+        String type = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+        return type.startsWith("aggregation/") ? type.substring("aggregation/".length()) : type;
     }
 
     private static String text(JsonNode node, String field) {

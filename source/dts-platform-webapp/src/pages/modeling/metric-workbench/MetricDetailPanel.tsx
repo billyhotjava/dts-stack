@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Alert, Tabs, Select, Input, Button, Space, Tag, Empty } from "antd";
+import type { TextAreaRef } from "antd/es/input/TextArea";
 import { Activity, AlertTriangle, BarChart3, Box, Database, GitBranch, Rocket, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -21,6 +22,7 @@ import {
     buildSemanticMetricUpdatePayload,
     findMetricCanvasRelationByEdgeId,
     getMetricDependencyIds,
+    insertMetricDslToken,
     removeMetricDependencyFromFormulaJson,
     type MetricCanvasPreflightIssue,
     type MetricCanvasRelation,
@@ -176,6 +178,23 @@ function MetricRelationPanel({
     );
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    const expressionTextAreaRef = useRef<TextAreaRef>(null);
+    const referenceMetrics = useMemo(() => {
+        if (relation.relationType !== "METRIC_DERIVES") {
+            return [];
+        }
+        const metricById = new Map(metrics.map((metric) => [metric.id, metric]));
+        const dependencyIds = targetMetric ? getMetricDependencyIds(targetMetric) : [];
+        const orderedIds = sourceMetric ? [sourceMetric.id, ...dependencyIds] : dependencyIds;
+        return Array.from(new Set(orderedIds))
+            .map((metricId) => metricById.get(metricId))
+            .filter((metric): metric is SemanticMetric => {
+                if (!metric) {
+                    return false;
+                }
+                return metric.id !== targetMetric?.id;
+            });
+    }, [metrics, relation, sourceMetric?.id, targetMetric?.formulaJson, targetMetric?.id]);
 
     useEffect(() => {
         if (relation.relationType !== "METRIC_DERIVES") {
@@ -225,6 +244,27 @@ function MetricRelationPanel({
         }
     };
 
+    const metricToken = (metric: SemanticMetric) => `{{metric:${metric.code || metric.id}}}`;
+
+    const insertTokenForMetric = (metric: SemanticMetric) => {
+        const token = metricToken(metric);
+        const textArea = expressionTextAreaRef.current?.resizableTextArea?.textArea;
+        const start = typeof textArea?.selectionStart === "number" ? textArea.selectionStart : expression.length;
+        const end = typeof textArea?.selectionEnd === "number" ? textArea.selectionEnd : start;
+        const nextExpression = insertMetricDslToken(expression, token, start, end);
+        setExpression(nextExpression);
+        const cursor = start + token.length;
+        const focusTextArea = () => {
+            textArea?.focus();
+            textArea?.setSelectionRange(cursor, cursor);
+        };
+        if (typeof window === "undefined") {
+            focusTextArea();
+            return;
+        }
+        window.requestAnimationFrame(focusTextArea);
+    };
+
     const handleDelete = async () => {
         if (relation.relationType === "METRIC_DERIVES") {
             const formulaUpdate = removeMetricDependencyFromFormulaJson(
@@ -265,13 +305,33 @@ function MetricRelationPanel({
 
             {relation.relationType === "METRIC_DERIVES" ? (
                 <div className="space-y-3">
+                    {referenceMetrics.length > 0 ? (
+                        <div>
+                            <div className="mb-1 text-xs text-gray-500">可引用上游指标</div>
+                            <div className="flex flex-wrap gap-2">
+                                {referenceMetrics.map((metric) => (
+                                    <Button
+                                        key={metric.id}
+                                        size="small"
+                                        className="h-auto max-w-full whitespace-normal text-left"
+                                        onClick={() => insertTokenForMetric(metric)}
+                                    >
+                                        <span className="mr-1">{metric.name || metric.code}</span>
+                                        <span className="font-mono text-[11px] text-gray-500">{metricToken(metric)}</span>
+                                    </Button>
+                                ))}
+                            </div>
+                        </div>
+                    ) : null}
                     <div>
-                        <div className="mb-1 text-xs text-gray-500">派生表达式</div>
+                        <div className="mb-1 text-xs text-gray-500">DSL 编辑器</div>
                         <Input.TextArea
+                            ref={expressionTextAreaRef}
                             value={expression}
                             onChange={(event) => setExpression(event.target.value)}
-                            rows={3}
-                            placeholder="例如：GMV / 订单数"
+                            rows={4}
+                            placeholder="{{metric:gmv}} / nullif({{metric:order_cnt}}, 0)"
+                            style={{ fontFamily: "monospace", fontSize: 12 }}
                         />
                     </div>
                     <div>

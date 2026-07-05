@@ -48,7 +48,7 @@ interface MetricCanvasProps {
     onNodeSelect: (id: string | null) => void;
     onMetricBound: (metricId: string, objectId: string) => Promise<void> | void;
     onMetricDerived: (sourceMetricId: string, targetMetricId: string) => Promise<void> | void;
-    onPreflight: () => void;
+    onPreflight: () => Promise<void> | void;
     onArrangementSave: () => void;
     loading?: boolean;
 }
@@ -319,7 +319,7 @@ function MetricCanvasInner({
                 </Button>
             </Space>
             <Space size={6} wrap>
-                <Button size="small" icon={<AlertTriangle size={14} />} onClick={onPreflight}>
+                <Button size="small" icon={<AlertTriangle size={14} />} onClick={() => void onPreflight()}>
                     预检
                 </Button>
                 <Button size="small" type="primary" icon={<Save size={14} />} onClick={onArrangementSave}>

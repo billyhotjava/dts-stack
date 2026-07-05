@@ -9,6 +9,8 @@ import com.yuzhi.dts.platform.service.modeling.SemanticModelingService.Dimension
 import com.yuzhi.dts.platform.service.modeling.SemanticModelingService.DimensionRequest;
 import com.yuzhi.dts.platform.service.modeling.SemanticModelingService.GeneratedArtifactDto;
 import com.yuzhi.dts.platform.service.modeling.SemanticModelingService.GenerateArtifactsResult;
+import com.yuzhi.dts.platform.service.modeling.SemanticModelingService.MetricDerivationValidationDto;
+import com.yuzhi.dts.platform.service.modeling.SemanticModelingService.MetricDerivationValidationRequest;
 import com.yuzhi.dts.platform.service.modeling.SemanticModelingService.MetricDto;
 import com.yuzhi.dts.platform.service.modeling.SemanticModelingService.MetricRequest;
 import com.yuzhi.dts.platform.service.modeling.SemanticModelingService.ModelDto;
@@ -201,6 +203,15 @@ public class SemanticModelingResource {
         MetricDto dto = service.updateMetric(id, request);
         audit.auditAction("SEMANTIC_METRIC_UPDATE", AuditStage.SUCCESS, id.toString(), Map.of("name", dto.name()));
         return ApiResponses.ok(dto);
+    }
+
+    @PostMapping("/metrics/derivation/validate")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<MetricDerivationValidationDto> validateMetricDerivation(@RequestBody MetricDerivationValidationRequest request) {
+        MetricDerivationValidationDto result = service.validateMetricDerivation(request);
+        String target = request == null || request.targetMetricId() == null ? "unknown" : request.targetMetricId().toString();
+        audit.auditAction("SEMANTIC_METRIC_DERIVATION_VALIDATE", AuditStage.SUCCESS, target, Map.of("valid", result.valid(), "issues", result.issues().size()));
+        return ApiResponses.ok(result);
     }
 
     @GetMapping("/models")
