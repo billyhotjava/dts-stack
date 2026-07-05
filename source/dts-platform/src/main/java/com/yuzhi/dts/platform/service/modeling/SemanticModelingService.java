@@ -1870,7 +1870,7 @@ public class SemanticModelingService {
         }
 
         Matcher matcher = DERIVED_METRIC_TOKEN.matcher(template);
-        StringBuffer sql = new StringBuffer();
+        StringBuilder sql = new StringBuilder();
         boolean foundToken = false;
         while (matcher.find()) {
             foundToken = true;
