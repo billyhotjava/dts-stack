@@ -100,3 +100,19 @@
 | F5/F6 真实后端补证 | ✅ `it-10-metric-derives-real-put-payload.json`、`it-13-14-f5-security-real-linkage.json`、`it-15-f5-quality-real-run.json` 已留存 |
 
 **剩余风险**：质量规则 dry-run 已真实生成 run/report/history，但当前环境未配置 Hive/Inceptor 执行源，因此本轮验证的是“规则调度、失败归档、报告回查闭环”，不是业务 SQL 成功评分。
+
+## F4 部署验证记录（2026-07-05，T05~T08 上线）
+
+重建方式：`builds/dts-build.sh --image dts-platform dts-platform-webapp` + `docker compose -f docker-compose-app.yml up -d dts-platform dts-platform-webapp`（两容器新建时间 2026-07-05T00:51Z，基线 07-04T12:46Z）。
+
+首次构建失败：并行分支提交 0d8eb3745 的派生指标编译使用 `StringBuffer`，触发 modernizer `Prefer java.lang.StringBuilder`；已等价替换为 `StringBuilder`（`Matcher.appendReplacement/appendTail` Java 9+ 原生支持，签名与行为不变），修复提交 d0c93cccb 后构建通过。
+
+| 验证点 | 结果 |
+|--------|------|
+| overview 聚合端点注册 | ✅ 容器内 `GET http://127.0.0.1:8081/api/catalog/assets-v2/overview` 返回 401（需鉴权，非 404） |
+| 地图页进镜像 | ✅ bundle 含 `AssetOverviewPage-*.js`，且含 `asset-overview-matrix` 标识 |
+| 台账页进镜像 | ✅ `DatasetsPage-*.js` 含 `资产登记台账`；`index-*.js` 含 `assets-v2/overview` 调用 |
+| 应用启动 | ✅ compose 报告 dts-platform Healthy；JDBC catalog sync 正常执行（datasets=508） |
+| 菜单 | ✅ dts_admin.portal_menu id=9443 已于 07-04 更新指向 `/catalog/assets/ledger`（无需重建 dts-admin） |
+
+登录说明：环境为 PKI（UKey）登录，无法做登录态浏览器实测；采用与既有 IT 取证一致的「端点 401 + bundle 标识 + dev 3001 未登录 smoke（截图已归档 it-17）」组合证据。
