@@ -4,6 +4,7 @@ import test from "node:test";
 
 const CONNECTOR_REGISTRY_SOURCE = readFileSync(new URL("./ConnectorRegistryPage.tsx", import.meta.url), "utf8");
 const DATA_SOURCES_SOURCE = readFileSync(new URL("./DataSourcesPage.tsx", import.meta.url), "utf8");
+const DATA_SOURCE_DETAIL_SOURCE = readFileSync(new URL("./DataSourceDetailPage.tsx", import.meta.url), "utf8");
 const DATA_SOURCE_FORM_SOURCE = readFileSync(new URL("./DataSourceFormModal.tsx", import.meta.url), "utf8");
 const DICTIONARY_SERVICE_SOURCE = readFileSync(
 	new URL("../../api/services/dictionaryService.ts", import.meta.url),
@@ -36,6 +37,7 @@ test("data source form applies the initial connector and its defaults", () => {
 
 test("data source form reads system types from platform dictionary before fallback", () => {
 	assert.match(DICTIONARY_SERVICE_SOURCE, /url:\s*"\/platform\/dict\/system-types"/);
+	assert.match(DICTIONARY_SERVICE_SOURCE, /_skipErrorToast:\s*true/);
 	assert.match(DATA_SOURCE_FORM_SOURCE, /dictionaryService\.listSystemTypes\(\)/);
 	assert.match(DATA_SOURCE_FORM_SOURCE, /const systemTypeOptions = useMemo/);
 	assert.match(DATA_SOURCE_FORM_SOURCE, /options=\{systemTypeOptions\}/);
@@ -44,4 +46,13 @@ test("data source form reads system types from platform dictionary before fallba
 	assert.match(DATA_SOURCE_FORM_SOURCE, /系统类型字典未接通/);
 	assert.match(DATA_SOURCE_FORM_SOURCE, /router\.push\("\/governance\/standards\/reference"\)/);
 	assert.match(DATA_SOURCE_FORM_SOURCE, /router\.push\("\/foundation\/connectors"\)/);
+});
+
+test("data source list and detail pages do not expose full-chain rollback", () => {
+	for (const source of [DATA_SOURCES_SOURCE, DATA_SOURCE_DETAIL_SOURCE]) {
+		assert.doesNotMatch(source, /全链路回退/);
+		assert.doesNotMatch(source, /RollbackImpactModal/);
+		assert.doesNotMatch(source, /rollbackAnalyze/);
+		assert.doesNotMatch(source, /rollbackExecute/);
+	}
 });

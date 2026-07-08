@@ -28,5 +28,6 @@ const pickList = (payload: unknown): PlatformSystemType[] => {
 };
 
 export default {
-	listSystemTypes: async () => pickList(await apiClient.get<unknown>({ url: "/platform/dict/system-types" })),
+	listSystemTypes: async () =>
+		pickList(await apiClient.get<unknown>({ url: "/platform/dict/system-types", _skipErrorToast: true } as any)),
 };

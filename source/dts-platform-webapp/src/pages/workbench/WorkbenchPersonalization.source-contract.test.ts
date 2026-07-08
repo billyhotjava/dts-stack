@@ -23,6 +23,7 @@ const expectedComponentKeys = [
 	"todo",
 	"bi-delivery",
 	"data-sources",
+	"first-report",
 	"golden-chain",
 	"governance-blockers",
 	"api-services",
@@ -67,6 +68,7 @@ test("workbench component registry enumerates real product modules, not demo sce
 		"/workbench/todo",
 		"/bi/dashboards",
 		"/foundation/data-sources",
+		"/workbench?section=data-management&journey=first-report",
 		"/workbench?section=data-management",
 		"/governance/quality",
 		"/services/apis",
@@ -148,10 +150,14 @@ test("legacy data-management query renders the real data management section insi
 
 	assert.match(indexSource, /DataManagementWorkbenchPage/);
 	assert.match(indexSource, /searchParams\.get\("section"\)/);
+	assert.match(indexSource, /searchParams\.get\("journey"\)/);
 	assert.match(indexSource, /activeSection === "data-management"/);
-	assert.match(indexSource, /activeSection === "data-management" \|\| activeSection === "consumption"/);
+	assert.match(indexSource, /activeJourney === "first-report"/);
+	assert.match(indexSource, /activeSection === "data-management" \|\| activeSection === "consumption" \|\| activeJourney === "first-report"/);
 	assert.match(indexSource, /<DataManagementWorkbenchPage[\s\S]*embedded[\s\S]*focus=\{activeSection === "consumption" \? "consumption" : "data-management"\}/);
+	assert.match(indexSource, /firstReportActive=\{activeJourney === "first-report"\}/);
 	assert.match(pageSource, /embedded\?:\s*boolean/);
+	assert.match(pageSource, /firstReportActive\?:\s*boolean/);
 	assert.match(pageSource, /data-testid=\{isConsumptionFocus/);
 	assert.match(pageSource, /"data-management-workbench-section"/);
 });

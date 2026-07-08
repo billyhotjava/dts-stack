@@ -71,6 +71,21 @@ test("data management workbench waits for onsite business theme definition", () 
 	assert.doesNotMatch(source, /SQL|dbt|ODS|DWD|DWS|ADS|\.sql/i);
 });
 
+test("first report journey can be focused from the workbench entry route", () => {
+	assert.equal(existsSync(PAGE_URL), true);
+	const source = readFileSync(PAGE_URL, "utf8");
+
+	assert.match(source, /firstReportActive\?:\s*boolean/);
+	assert.match(source, /data-testid="first-report-journey-guide"/);
+	assert.match(source, /data-journey-active=\{firstReportActive/);
+	assert.match(source, /当前首单：接入业务表生成报表/);
+	assert.match(source, /首单目标/);
+	for (const label of ["连接成功", "任务可运行", "报表可查看", "证据可追溯"]) {
+		assert.match(source, new RegExp(label));
+	}
+	assert.doesNotMatch(source, /预览 SQL|模板参数 \(JSON\)|dbt source|sourceId|DDL/);
+});
+
 test("admin database migration removes legacy data-management workbench menu", () => {
 	assert.match(ADMIN_LIQUIBASE_MASTER, /20260617-01_remove_workbench_data_management_menu\.xml/);
 	assert.match(ADMIN_MENU_CLEANUP, /portal_menu_visibility/);

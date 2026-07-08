@@ -25,6 +25,8 @@ const TONE_COLOR: Record<DataManagementTone, string> = {
 
 const statusTag = (label: string, tone: DataManagementTone) => <Tag color={TONE_COLOR[tone]}>{label}</Tag>;
 
+const firstReportAcceptanceItems = ["连接成功", "任务可运行", "报表可查看", "证据可追溯"];
+
 const firstReportJourneySteps = [
 	{
 		title: "接入一张业务表",
@@ -61,10 +63,16 @@ const firstReportJourneySteps = [
 export type DataManagementWorkbenchPageProps = {
 	embedded?: boolean;
 	focus?: "data-management" | "consumption";
+	firstReportActive?: boolean;
 	productId?: string | null;
 };
 
-export default function Page({ embedded = false, focus = "data-management", productId = null }: DataManagementWorkbenchPageProps) {
+export default function Page({
+	embedded = false,
+	focus = "data-management",
+	firstReportActive = false,
+	productId = null,
+}: DataManagementWorkbenchPageProps) {
 	const router = useRouter();
 	const [chains, setChains] = useState<GoldenChainSummary[]>([]);
 	const [detailsByChainKey, setDetailsByChainKey] = useState<Record<string, GoldenChainDetail | undefined>>({});
@@ -179,7 +187,34 @@ export default function Page({ embedded = false, focus = "data-management", prod
 				description="业务主题需在客户现场按组织、报表和资产口径定义，产品不内置演示场景；配置完成后再展示数据可用、治理状态、消费状态和运行健康。"
 			/>
 
-			<Card title="新手首单：接入业务表生成报表" extra={<Tag color="blue">业务默认路径</Tag>}>
+			<Card
+				title={firstReportActive ? "当前首单：接入业务表生成报表" : "新手首单：接入业务表生成报表"}
+				extra={
+					<Space wrap>
+						{firstReportActive ? <Tag color="green">当前路径</Tag> : null}
+						<Tag color="blue">业务默认路径</Tag>
+					</Space>
+				}
+				data-testid="first-report-journey-guide"
+				data-journey-active={firstReportActive}
+				style={firstReportActive ? { borderColor: "#1677ff" } : undefined}
+			>
+				{firstReportActive && (
+					<Alert
+						type="success"
+						showIcon
+						className="mb-3"
+						message="首单目标"
+						description="从一张业务表完成连接、同步、报表和运行证据核对。"
+					/>
+				)}
+				<div className="mb-3 flex flex-wrap gap-2">
+					{firstReportAcceptanceItems.map((item) => (
+						<Tag key={item} color={firstReportActive ? "green" : "default"}>
+							{item}
+						</Tag>
+					))}
+				</div>
 				<div className="grid gap-3 xl:grid-cols-5 md:grid-cols-2">
 					{firstReportJourneySteps.map((step, index) => (
 						<div key={step.title} className="flex min-h-[176px] flex-col justify-between rounded border border-gray-200 p-3">

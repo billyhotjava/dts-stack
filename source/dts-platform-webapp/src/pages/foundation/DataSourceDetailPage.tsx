@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import {
 	Alert,
@@ -6,7 +6,6 @@ import {
 	Button,
 	Card,
 	Descriptions,
-	Dropdown,
 	Empty,
 	Modal,
 	Space,
@@ -16,9 +15,7 @@ import {
 	Typography,
 	message,
 } from "antd";
-import { RollbackOutlined, } from "@ant-design/icons";
 import { CompactTable } from "@/components/table";
-import RollbackImpactModal, { type RollbackRequest } from "@/components/rollback/RollbackImpactModal";
 import dataSourcesService, {
 	type ConnectionTestResult,
 	type InfraDataSource,
@@ -38,7 +35,7 @@ const LIST_PATH = "/foundation/data-sources";
  *
  * - 只读 Descriptions + Schema 探测 Tab
  * - 编辑直接在本页弹 <DataSourceFormModal/>，保存后 reload 详情
- * - 测试 / 删除 / 全链路回退 与列表行能力对齐
+ * - 测试 / 删除 与列表行能力对齐
  */
 export default function DataSourceDetailPage() {
 	const { id } = useParams<{ id: string }>();
@@ -51,8 +48,6 @@ export default function DataSourceDetailPage() {
 	const [schemaLoading, setSchemaLoading] = useState(false);
 	const [schemaResult, setSchemaResult] = useState<SchemaDiscoverResponse | null>(null);
 	const [schemaError, setSchemaError] = useState<string | null>(null);
-	const [rollbackOpen, setRollbackOpen] = useState(false);
-	const [rollbackRequest, setRollbackRequest] = useState<RollbackRequest | null>(null);
 	const [editOpen, setEditOpen] = useState(false);
 
 	const loadDetail = useCallback(async () => {
@@ -143,25 +138,6 @@ export default function DataSourceDetailPage() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [activeTab, source?.id]);
 
-	const moreMenuItems = useMemo(
-		() =>
-			source?.id
-				? [
-						{
-							key: "rollback",
-							icon: <RollbackOutlined />,
-							label: "全链路回退",
-							danger: true,
-							onClick: () => {
-								setRollbackRequest({ level: 3, scope: "datasource", dataSourceId: source.id });
-								setRollbackOpen(true);
-							},
-						},
-					]
-				: [],
-		[source?.id],
-	);
-
 	return (
 		<Card
 			title={
@@ -191,11 +167,6 @@ export default function DataSourceDetailPage() {
 					<Button danger disabled={adminManaged || !source?.id} onClick={handleDelete}>
 						删除
 					</Button>
-					{moreMenuItems.length > 0 && (
-						<Dropdown menu={{ items: moreMenuItems }} trigger={["click"]} placement="bottomRight">
-							<Button aria-label="更多操作" >更多操作</Button>
-						</Dropdown>
-					)}
 				</Space>
 			}
 		>
@@ -254,16 +225,6 @@ export default function DataSourceDetailPage() {
 			) : (
 				<Empty description="未找到数据源" />
 			)}
-
-			<RollbackImpactModal
-				open={rollbackOpen}
-				request={rollbackRequest}
-				onClose={() => {
-					setRollbackOpen(false);
-					setRollbackRequest(null);
-				}}
-			/>
-
 			<DataSourceFormModal
 				open={editOpen}
 				editing={source}

@@ -17,8 +17,7 @@ import {
 } from "antd";
 import { CompactTable } from "@/components/table";
 import { PageHeader } from "@/components/page-header";
-import { CheckCircleOutlined, CloseCircleOutlined, SearchOutlined, RollbackOutlined } from "@ant-design/icons";
-import RollbackImpactModal, { type RollbackRequest } from "@/components/rollback/RollbackImpactModal";
+import { CheckCircleOutlined, CloseCircleOutlined, SearchOutlined } from "@ant-design/icons";
 import dataSourcesService, {
 	type ConnectionTestResult,
 	type InfraDataSource,
@@ -169,8 +168,6 @@ export default function DataSourcesPage() {
 	const [odsRequest, setOdsRequest] = useState<OdsGenerationRequest | null>(null);
 	const [odsConfig, setOdsConfig] = useState<OdsWizardConfig>(defaultOdsWizardConfig());
 	const [odsColumnOverrides, setOdsColumnOverrides] = useState<OdsColumnOverrides>({});
-	const [rollbackOpen, setRollbackOpen] = useState(false);
-	const [rollbackRequest, setRollbackRequest] = useState<RollbackRequest | null>(null);
 
 	const loadList = async () => {
 		setLoading(true);
@@ -744,7 +741,7 @@ export default function DataSourcesPage() {
 				render: (_: any, record: InfraDataSource) => {
 					const adminManaged = isAdminManagedSource(record);
 					const apiSource = isApiSourceType(record.type);
-					// 高频按钮留在行内；低频/危险操作收进 ⋯ 下拉，把操作列从 540px 压缩到 240px
+					// 高频按钮留在行内；低频操作收进 ⋯ 下拉，把操作列从 540px 压缩到 240px
 					const moreItems = [
 						...(!apiSource
 							? [
@@ -755,20 +752,6 @@ export default function DataSourcesPage() {
 										disabled: schemaDiscoveringId === record.id,
 										onClick: () => {
 											void handleSchemaDiscover(record);
-										},
-									},
-								]
-							: []),
-						...(record.id
-							? [
-									{
-										key: "rollback",
-										icon: <RollbackOutlined />,
-										label: "全链路回退",
-										danger: true,
-										onClick: () => {
-											setRollbackRequest({ level: 3, scope: "datasource", dataSourceId: record.id });
-											setRollbackOpen(true);
 										},
 									},
 								]
@@ -1052,13 +1035,6 @@ export default function DataSourcesPage() {
 					onClose={closeCreate}
 					onSaved={loadList}
 				/>
-
-			<RollbackImpactModal
-				open={rollbackOpen}
-				request={rollbackRequest}
-				onClose={() => setRollbackOpen(false)}
-				onSuccess={() => { loadList(); }}
-			/>
 			</Card>
 		</div>
 	);
