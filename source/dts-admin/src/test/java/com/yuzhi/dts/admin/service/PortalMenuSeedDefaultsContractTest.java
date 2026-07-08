@@ -103,6 +103,95 @@ class PortalMenuSeedDefaultsContractTest {
     }
 
     @Test
+    void dataAssetMetadataManagementSeedKeepsSeparateCollectionAndManagementEntrypoints() throws Exception {
+        ClassPathResource seedResource = new ClassPathResource("config/data/portal-menu-seed.json");
+        assertTrue(seedResource.exists(), "portal-menu-seed.json must exist");
+
+        Map<String, Object> seed = objectMapper.readValue(seedResource.getInputStream(), new TypeReference<Map<String, Object>>() {});
+        List<Map<String, Object>> roots = listOfMaps(seed.get("portalNavSections"));
+        Map<String, Object> resourceRoot = roots.stream().filter(node -> "resource".equals(node.get("key"))).findFirst().orElse(null);
+        Map<String, Object> portalRoot = roots.stream().filter(node -> "portal".equals(node.get("key"))).findFirst().orElse(null);
+        assertNotNull(resourceRoot, "数据集成 root menu must exist");
+        assertNotNull(portalRoot, "数据资产 root menu must exist");
+
+        Map<String, Object> sourceStructure = listOfMaps(resourceRoot.get("children"))
+            .stream()
+            .filter(node -> "metadata".equals(node.get("key")))
+            .findFirst()
+            .orElse(null);
+        assertNotNull(sourceStructure, "数据源结构采集 must stay in data integration");
+        assertEquals("数据源结构采集", sourceStructure.get("title"));
+        assertEquals("/catalog/metadata", sourceStructure.get("externalLink"));
+
+        Map<String, Object> metadataManagement = listOfMaps(portalRoot.get("children"))
+            .stream()
+            .filter(node -> "metadata-management".equals(node.get("key")))
+            .findFirst()
+            .orElse(null);
+        assertNotNull(metadataManagement, "数据资产 must expose 元数据管理");
+        assertEquals("sys.nav.portal.dataPortalMetadataManagement", metadataManagement.get("titleKey"));
+        assertEquals("元数据管理", metadataManagement.get("title"));
+        assertEquals("/catalog/metadata-management", metadataManagement.get("externalLink"));
+
+        ClassPathResource defaultsResource = new ClassPathResource("config/data/role-menu-defaults.json");
+        List<Map<String, Object>> defaults = objectMapper.readValue(
+            defaultsResource.getInputStream(),
+            new TypeReference<List<Map<String, Object>>>() {}
+        );
+        Map<String, Object> managementDefault = defaults
+            .stream()
+            .filter(rule -> "sys.nav.portal.dataPortalMetadataManagement".equals(rule.get("code")))
+            .findFirst()
+            .orElse(null);
+        assertNotNull(managementDefault, "元数据管理 role default entry must stay documented");
+        assertEquals("/catalog/metadata-management", managementDefault.get("route"));
+        assertTrue(((List<?>) managementDefault.get("requiredRoles")).isEmpty(), "元数据管理 seed must not add default role bindings");
+    }
+
+    @Test
+    void lowCodeDevelopmentSeedStaysInDataDevelopmentAndKeepsAdvancedEntrypoints() throws Exception {
+        ClassPathResource seedResource = new ClassPathResource("config/data/portal-menu-seed.json");
+        assertTrue(seedResource.exists(), "portal-menu-seed.json must exist");
+
+        Map<String, Object> seed = objectMapper.readValue(seedResource.getInputStream(), new TypeReference<Map<String, Object>>() {});
+        List<Map<String, Object>> roots = listOfMaps(seed.get("portalNavSections"));
+        Map<String, Object> studioRoot = roots.stream().filter(node -> "studio".equals(node.get("key"))).findFirst().orElse(null);
+        Map<String, Object> metricRoot = roots.stream().filter(node -> "metric-modeling".equals(node.get("key"))).findFirst().orElse(null);
+        assertNotNull(studioRoot, "数据开发 root menu must exist");
+        assertNotNull(metricRoot, "指标建模 root menu must stay separate");
+
+        List<Map<String, Object>> studioChildren = listOfMaps(studioRoot.get("children"));
+        assertEquals("low-code-development", studioChildren.get(0).get("key"), "低代码开发向导 should be the first data development entry");
+        Map<String, Object> lowCode = studioChildren
+            .stream()
+            .filter(node -> "low-code-development".equals(node.get("key")))
+            .findFirst()
+            .orElse(null);
+        assertNotNull(lowCode, "数据开发 must expose 低代码开发向导");
+        assertEquals("sys.nav.portal.studioLowCodeDevelopment", lowCode.get("titleKey"));
+        assertEquals("低代码开发向导", lowCode.get("title"));
+        assertEquals("/studio/low-code-development", lowCode.get("externalLink"));
+        assertTrue(containsTitleKey(studioChildren, "sys.nav.portal.studioSqlModeling"), "SQL modeling must stay available");
+        assertTrue(containsTitleKey(studioChildren, "sys.nav.portal.studioScripts"), "script development must stay available");
+        assertTrue(containsTitleKey(studioChildren, "sys.nav.portal.studioOrchestration"), "orchestration must stay available");
+        assertFalse(containsTitleKey(studioChildren, "sys.nav.portal.studioMetricWorkbench"), "metric workbench must stay in metric modeling");
+
+        ClassPathResource defaultsResource = new ClassPathResource("config/data/role-menu-defaults.json");
+        List<Map<String, Object>> defaults = objectMapper.readValue(
+            defaultsResource.getInputStream(),
+            new TypeReference<List<Map<String, Object>>>() {}
+        );
+        Map<String, Object> lowCodeDefault = defaults
+            .stream()
+            .filter(rule -> "sys.nav.portal.studioLowCodeDevelopment".equals(rule.get("code")))
+            .findFirst()
+            .orElse(null);
+        assertNotNull(lowCodeDefault, "低代码开发向导 role default entry must stay documented");
+        assertEquals("/studio/low-code-development", lowCodeDefault.get("route"));
+        assertTrue(((List<?>) lowCodeDefault.get("requiredRoles")).isEmpty(), "低代码开发向导 seed must not add default role bindings");
+    }
+
+    @Test
     void dataScreenRootMigrationPreservesVisibilityBindings() throws Exception {
         String changelogFile = "20260525-01_portal_menu_data_screen_root.xml";
         ClassPathResource master = new ClassPathResource("config/liquibase/master.xml");

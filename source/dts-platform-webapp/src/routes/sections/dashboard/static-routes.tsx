@@ -13,6 +13,7 @@ const DataSourceDetailPage = lazy(() => import("@/pages/foundation/DataSourceDet
 const StandardPackagePage = lazy(() => import("@/pages/foundation/StandardPackagePage"));
 const AssetOverviewPage = lazy(() => import("@/pages/catalog/AssetOverviewPage"));
 const DatasetsPage = lazy(() => import("@/pages/catalog/DatasetsPage"));
+const MetadataManagementPage = lazy(() => import("@/pages/catalog/MetadataManagementPage"));
 const AssetOwnershipPage = lazy(() => import("@/pages/governance/AssetOwnershipPage"));
 const AssetGrantPage = lazy(() => import("@/pages/governance/AssetGrantPage"));
 const MyGrantsPage = lazy(() => import("@/pages/governance/MyGrantsPage"));
@@ -26,6 +27,7 @@ const OpsInstancesPage = lazy(() => import("@/pages/ops/OpsInstancesPage"));
 const OpsAlertLogPage = lazy(() => import("@/pages/ops/OpsAlertLogPage"));
 const OpsBackfillPage = lazy(() => import("@/pages/ops/OpsBackfillPage"));
 const WorkflowCenterPage = lazy(() => import("@/pages/workbench/WorkflowCenterPage"));
+const LowCodeDevelopmentPage = lazy(() => import("@/pages/modeling/LowCodeDevelopmentPage"));
 const StudioProjectsPage = lazy(() => import("@/pages/modeling/ModelTemplatesPage"));
 const SqlModelingPage = lazy(() => import("@/pages/modeling/SqlModelingPage"));
 const DbtFileBrowserPage = lazy(() => import("@/pages/modeling/DbtFileBrowserPage"));
@@ -98,6 +100,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{ path: "foundation/standard-package", element: <S><StandardPackagePage /></S> },
 	{ path: "catalog/assets", element: <S><AssetOverviewPage /></S> },
 	{ path: "catalog/assets/ledger", element: <S><DatasetsPage /></S> },
+	{ path: "catalog/metadata-management", element: <S><MetadataManagementPage /></S> },
 	{ path: "settings/profile", element: <S><ProfilePage /></S> },
 	{ path: "governance/asset-ownership", element: <S><AssetOwnershipPage /></S> },
 	{ path: "governance/asset-grants", element: <S><AssetGrantPage /></S> },
@@ -126,6 +129,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{ path: "workbench/todo", element: <S><WorkflowCenterPage /></S> },
 	{ path: "workbench/data-management", element: <WorkbenchSectionRedirect section="data-management" /> },
 	{ path: "services/consumption", element: <WorkbenchSectionRedirect section="consumption" /> },
+	{ path: "studio/low-code-development", element: <S><LowCodeDevelopmentPage /></S> },
 	{ path: "studio/projects", element: <S><StudioProjectsPage /></S> },
 	{ path: "studio/sql-modeling", element: <S><SqlModelingPage /></S> },
 	{ path: "modeling/dbt-files", element: <S><DbtFileBrowserPage /></S> },

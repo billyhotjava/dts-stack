@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button } from "antd";
+import { Alert, Button, Space, Tag } from "antd";
 import { RefreshCw } from "lucide-react";
+import { useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
     listSemanticSubjectDomains,
@@ -29,6 +30,8 @@ import {
 } from "./metric-workbench/metricCanvas.helpers";
 
 export default function MetricWorkbenchPage() {
+    const location = useLocation();
+    const navigate = useNavigate();
     const [domains, setDomains] = useState<SemanticSubjectDomain[]>([]);
     const [objects, setObjects] = useState<SemanticBusinessObject[]>([]);
     const [metrics, setMetrics] = useState<SemanticMetric[]>([]);
@@ -36,6 +39,20 @@ export default function MetricWorkbenchPage() {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [preflightIssues, setPreflightIssues] = useState<MetricCanvasPreflightIssue[]>([]);
     const [loading, setLoading] = useState(true);
+
+    const lowCodeContext = useMemo(() => {
+        const params = new URLSearchParams(location.search);
+        const journey = params.get("journey");
+        if (journey === "low-code-development") {
+            return {
+                journey,
+                target: params.get("target") || "report",
+                sourceDatasetId: params.get("sourceDatasetId") || "",
+                businessObjectId: params.get("businessObjectId") || "",
+            };
+        }
+        return null;
+    }, [location.search]);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -55,6 +72,14 @@ export default function MetricWorkbenchPage() {
     useEffect(() => {
         void load();
     }, [load]);
+
+    useEffect(() => {
+        if (!lowCodeContext?.businessObjectId || objects.length === 0) return;
+        const matched = objects.find((item) => item.id === lowCodeContext.businessObjectId);
+        if (matched && selectedId !== `object-${matched.id}`) {
+            setSelectedId(`object-${matched.id}`);
+        }
+    }, [lowCodeContext?.businessObjectId, objects, selectedId]);
 
     const refreshMetrics = useCallback(async () => {
         const list = await listSemanticMetrics();
@@ -230,6 +255,27 @@ export default function MetricWorkbenchPage() {
                 </Button>
             }
         >
+            {lowCodeContext ? (
+                <Alert
+                    className="mb-4"
+                    type="info"
+                    showIcon
+                    data-testid="metric-workbench-low-code-context"
+                    message="来自低代码开发向导"
+                    description="请围绕已确认的业务对象维护指标、维度、统计周期和口径，生成结果会回到模型管理与发布审核。"
+                    action={
+                        <Space wrap>
+                            <Tag color="blue">{lowCodeContext.target === "report" ? "报表数据集" : lowCodeContext.target}</Tag>
+                            <Button
+                                size="small"
+                                onClick={() => navigate("/studio/low-code-development?step=metric_designed&target=report")}
+                            >
+                                返回低代码向导
+                            </Button>
+                        </Space>
+                    }
+                />
+            ) : null}
             <div
                 className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)]"
                 data-testid="metric-workbench-page"

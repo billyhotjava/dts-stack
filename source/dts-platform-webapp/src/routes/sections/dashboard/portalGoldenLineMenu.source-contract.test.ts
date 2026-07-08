@@ -59,7 +59,12 @@ test("portal menu follows the golden line information architecture", () => {
 	assert.equal(section("data-foundation").title, "数据基础");
 	assert.deepEqual(section("data-foundation").children?.map((item) => item.key), ["subjects", "standards", "templates"]);
 	assert.equal(child(section("data-foundation"), "subjects").externalLink, "/governance/subjects");
-	assert.deepEqual(child(section("data-foundation"), "standards").children?.map((item) => item.key), ["glossary", "elements", "reference"]);
+	assert.deepEqual(child(section("data-foundation"), "standards").children?.map((item) => item.key), [
+		"glossary",
+		"elements",
+		"reference",
+		"standard-package",
+	]);
 
 	assert.equal(section("resource").title, "数据集成");
 	assert.deepEqual(section("resource").children?.map((item) => item.key), [
@@ -73,6 +78,15 @@ test("portal menu follows the golden line information architecture", () => {
 
 	assert.equal(section("studio").title, "数据开发");
 	assert.doesNotMatch(JSON.stringify(section("studio")), /metric-modeling|studioMetricModeling/);
+	assert.deepEqual(section("studio").children?.map((item) => item.key), [
+		"low-code-development",
+		"projects",
+		"sql",
+		"scripts",
+		"orchestration",
+		"adhoc",
+		"dbt-files",
+	]);
 
 	assert.deepEqual(section("metric-modeling").children?.map((item) => item.key), [
 		"metric-workbench",
@@ -100,6 +114,7 @@ test("golden line section titles have locale coverage and role routes stay canon
 		"dataFoundation",
 		"dataIntegration",
 		"studioCenter",
+		"studioLowCodeDevelopment",
 		"studioMetricModeling",
 		"dataPortal",
 		"dataConsumption",

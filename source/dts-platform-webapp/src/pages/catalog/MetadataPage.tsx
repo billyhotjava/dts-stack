@@ -672,7 +672,7 @@ export default function MetadataPage() {
 	return (
 		<div className="space-y-4">
 			<Card
-				title="元数据采集"
+				title="数据源结构采集"
 				extra={
 					<Space>
 						<Button onClick={() => void loadPipelines()}>刷新任务</Button>
@@ -894,7 +894,7 @@ export default function MetadataPage() {
 									</div>
 								</>
 							) : (
-								<EmptyState title="暂无元数据" description="请先完成元数据采集或检查元数据服务连接。" />
+								<EmptyState title="暂无结构元数据" description="请先完成数据源结构采集或检查采集服务连接。" />
 							)}
 							</Space>
 						</Spin>
@@ -1005,7 +1005,7 @@ export default function MetadataPage() {
 				<div className="space-y-2 text-sm text-slate-600">
 					<div>1. 采集任务来自当前已启用的数据源或主数据连接。</div>
 					<div>2. 触发采集后可在“采集历史”查看执行结果与错误信息。</div>
-					<div>3. 元数据结果预览来自平台采集或 OpenMetadata 服务。</div>
+					<div>3. 结构采集结果预览来自平台采集或 OpenMetadata 服务。</div>
 				</div>
 			</Modal>
 

@@ -127,7 +127,7 @@
           "path": "metadata",
           "icon": "solar:upload-bold-duotone",
           "titleKey": "sys.nav.portal.resourceMetadata",
-          "title": "元数据采集",
+          "title": "数据源结构采集",
           "externalLink": "/catalog/metadata"
         },
         {
@@ -155,6 +155,14 @@
       "titleKey": "sys.nav.portal.studioCenter",
       "title": "数据开发",
       "children": [
+        {
+          "key": "low-code-development",
+          "path": "low-code-development",
+          "icon": "solar:magic-stick-3-bold-duotone",
+          "titleKey": "sys.nav.portal.studioLowCodeDevelopment",
+          "title": "低代码开发向导",
+          "externalLink": "/studio/low-code-development"
+        },
         {
           "key": "projects",
           "path": "projects",
@@ -276,6 +284,14 @@
           "titleKey": "sys.nav.portal.dataPortalSearch",
           "title": "数据搜索",
           "externalLink": "/catalog/search"
+        },
+        {
+          "key": "metadata-management",
+          "path": "metadata-management",
+          "icon": "solar:database-bold-duotone",
+          "titleKey": "sys.nav.portal.dataPortalMetadataManagement",
+          "title": "元数据管理",
+          "externalLink": "/catalog/metadata-management"
         },
         {
           "key": "products",

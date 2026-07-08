@@ -1,15 +1,17 @@
-import { Button, Space, Table, Tag } from "antd";
+import { MoreOutlined } from "@ant-design/icons";
+import type { MenuProps } from "antd";
+import { Button, Dropdown, Space, Table, Tag } from "antd";
 import { useRouter } from "@/routes/hooks";
 import { resolveAssetReadiness } from "../assetPortalUx.helpers";
+import type { AssetRow } from "./assetPageShared";
 import {
 	ASSET_ACTION_COLUMN_WIDTH,
 	ASSET_TABLE_SCROLL_X,
-	LAYER_META,
 	classificationText,
 	formatTime,
+	LAYER_META,
 	normalizeLayer,
 } from "./assetPageShared";
-import type { AssetRow } from "./assetPageShared";
 
 export interface AssetLedgerViewProps {
 	records: AssetRow[];
@@ -32,6 +34,35 @@ export function AssetLedgerView({
 	onOpenGovernanceRemediation,
 }: AssetLedgerViewProps) {
 	const router = useRouter();
+	const overflowActionItems: MenuProps["items"] = [
+		{ key: "classification", label: "分级分类" },
+		{ key: "lineage", label: "查看血缘" },
+		{ key: "report", label: "创建报表" },
+		{ key: "product", label: "生成数据产品" },
+		{ key: "api", label: "发布数据 API" },
+	];
+
+	const handleOverflowAction = (row: AssetRow, key: string) => {
+		if (key === "classification") {
+			router.push(`/security/data-security?tab=datasetSecurity&datasetId=${row.id}`);
+			return;
+		}
+		if (key === "lineage") {
+			router.push(`/catalog/datasets/${row.id}?tab=lineage-impact`);
+			return;
+		}
+		if (key === "report") {
+			router.push(`/bi/dashboards?assetId=${row.id}`);
+			return;
+		}
+		if (key === "product") {
+			router.push(`/catalog/data-products?assetId=${row.id}`);
+			return;
+		}
+		if (key === "api") {
+			router.push(`/services/apis?assetId=${row.id}`);
+		}
+	};
 
 	return (
 		<div className="asset-ledger-workbench space-y-3">
@@ -132,12 +163,9 @@ export function AssetLedgerView({
 					width: ASSET_ACTION_COLUMN_WIDTH,
 					fixed: "right",
 					render: (_, row) => (
-						<Space size={[4, 4]} className="catalog-assets-actions" onClick={(event) => event.stopPropagation()}>
+						<Space size={[4, 4]} className="catalog-assets-actions" wrap={false} onClick={(event) => event.stopPropagation()}>
 							<Button size="small" onClick={() => router.push(`/security/dataset-access-approval?datasetId=${row.id}`)}>
 								申请权限
-							</Button>
-							<Button size="small" onClick={() => router.push(`/security/data-security?tab=datasetSecurity&datasetId=${row.id}`)}>
-								分级分类
 							</Button>
 							<Button size="small" onClick={() => router.push(`/catalog/datasets/${row.id}`)}>
 								详情
@@ -145,18 +173,20 @@ export function AssetLedgerView({
 							<Button size="small" onClick={() => onOpenGovernanceRemediation(row.id)}>
 								治理
 							</Button>
-							<Button size="small" onClick={() => router.push(`/catalog/datasets/${row.id}?tab=lineage-impact`)}>
-								查看血缘
-							</Button>
-							<Button size="small" onClick={() => router.push(`/bi/dashboards?assetId=${row.id}`)}>
-								创建报表
-							</Button>
-							<Button size="small" onClick={() => router.push(`/catalog/data-products?assetId=${row.id}`)}>
-								生成数据产品
-							</Button>
-							<Button size="small" onClick={() => router.push(`/services/apis?assetId=${row.id}`)}>
-								发布数据 API
-							</Button>
+							<Dropdown
+								trigger={["click"]}
+								menu={{
+									items: overflowActionItems,
+									onClick: ({ key, domEvent }) => {
+										domEvent.stopPropagation();
+										handleOverflowAction(row, String(key));
+									},
+								}}
+							>
+								<Button size="small" icon={<MoreOutlined />}>
+									更多
+								</Button>
+							</Dropdown>
 						</Space>
 					),
 				},

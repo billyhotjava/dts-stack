@@ -31,7 +31,7 @@
   },
   {
     "code": "sys.nav.portal.resourceMetadata",
-    "title": "元数据采集",
+    "title": "数据源结构采集",
     "route": "/catalog/metadata",
     "requiredRoles": []
   },
@@ -45,6 +45,12 @@
     "code": "sys.nav.portal.resourceChanges",
     "title": "接入变更记录",
     "route": "/foundation/access-changes",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.studioLowCodeDevelopment",
+    "title": "低代码开发向导",
+    "route": "/studio/low-code-development",
     "requiredRoles": []
   },
   {
@@ -171,6 +177,12 @@
     "code": "sys.nav.portal.dataPortalSearch",
     "title": "数据搜索",
     "route": "/catalog/search",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.dataPortalMetadataManagement",
+    "title": "元数据管理",
+    "route": "/catalog/metadata-management",
     "requiredRoles": []
   },
   {

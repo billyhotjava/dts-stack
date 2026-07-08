@@ -15,21 +15,26 @@ const ROLE_DEFAULTS = readFileSync(
 
 test("Sprint-45 P0 workbench and studio menu leaves resolve to real platform pages", () => {
 	assert.match(MENU_SEED, /"externalLink": "\/workbench\/todo"/);
+	assert.match(MENU_SEED, /"externalLink": "\/studio\/low-code-development"/);
 	assert.match(MENU_SEED, /"externalLink": "\/studio\/projects"/);
 	assert.match(MENU_SEED, /"externalLink": "\/studio\/sql-modeling"/);
 
 	assert.match(ROLE_DEFAULTS, /"route": "\/workbench\/todo"/);
+	assert.match(ROLE_DEFAULTS, /"route": "\/studio\/low-code-development"/);
 	assert.match(ROLE_DEFAULTS, /"route": "\/studio\/projects"/);
 	assert.match(ROLE_DEFAULTS, /"route": "\/studio\/sql-modeling"/);
 
 	assert.match(STATIC_ROUTES, /WorkflowCenterPage/);
+	assert.match(STATIC_ROUTES, /LowCodeDevelopmentPage/);
 	assert.match(STATIC_ROUTES, /StudioProjectsPage/);
 	assert.match(STATIC_ROUTES, /SqlModelingPage/);
 	assert.match(STATIC_ROUTES, /path: "workbench\/todo"/);
+	assert.match(STATIC_ROUTES, /path: "studio\/low-code-development"/);
 	assert.match(STATIC_ROUTES, /path: "studio\/projects"/);
 	assert.match(STATIC_ROUTES, /path: "studio\/sql-modeling"/);
 
 	assert.match(DYNAMIC_RESOLVER, /"\/workbench\/todo": "\/pages\/workbench\/WorkflowCenterPage"/);
+	assert.match(DYNAMIC_RESOLVER, /"\/studio\/low-code-development": "\/pages\/modeling\/LowCodeDevelopmentPage"/);
 	assert.match(DYNAMIC_RESOLVER, /"\/studio\/projects": "\/pages\/modeling\/ModelTemplatesPage"/);
 	assert.match(DYNAMIC_RESOLVER, /"\/studio\/sql-modeling": "\/pages\/modeling\/SqlModelingPage"/);
 });

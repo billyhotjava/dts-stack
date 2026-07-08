@@ -1,6 +1,6 @@
 import { AppstoreOutlined } from "@ant-design/icons";
 import type { TableProps } from "antd";
-import { Button, Card, Descriptions, Drawer, message, Select, Space, Switch, Tag, Tooltip, Typography } from "antd";
+import { Button, Card, Descriptions, Drawer, message, Select, Space, Tag, Typography } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import connectorsService, { type InfraConnector } from "@/api/services/connectorsService";
 import { PageHeader } from "@/components/page-header";
@@ -11,8 +11,8 @@ import { formatTime } from "@/utils/textUtils";
 const { Text } = Typography;
 
 const CAPABILITY_COLUMN_WIDTH = 160;
-const CONNECTOR_ACTION_COLUMN_WIDTH = 360;
-const CONNECTOR_TABLE_SCROLL_X = 1240;
+const CONNECTOR_ACTION_COLUMN_WIDTH = 280;
+const CONNECTOR_TABLE_SCROLL_X = 1160;
 
 type ConnectorDrawerMode = "detail" | "config" | "template";
 
@@ -116,7 +116,6 @@ export default function ConnectorRegistryPage() {
 	const [list, setList] = useState<InfraConnector[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [category, setCategory] = useState("");
-	const [includeDisabled, setIncludeDisabled] = useState(false);
 	const [selected, setSelected] = useState<InfraConnector | null>(null);
 	const [drawerMode, setDrawerMode] = useState<ConnectorDrawerMode>("detail");
 	const [seeding, setSeeding] = useState(false);
@@ -141,7 +140,6 @@ export default function ConnectorRegistryPage() {
 		try {
 			const data = await connectorsService.list({
 				category: category || undefined,
-				includeDisabled,
 			});
 			setList(Array.isArray(data) ? data : []);
 		} catch {
@@ -149,7 +147,7 @@ export default function ConnectorRegistryPage() {
 		} finally {
 			setLoading(false);
 		}
-	}, [category, includeDisabled]);
+	}, [category]);
 
 	useEffect(() => {
 		void loadList();
@@ -252,20 +250,6 @@ export default function ConnectorRegistryPage() {
 						<Button size="small" onClick={() => openConnectorDrawer(record, "template")}>
 							查看模板
 						</Button>
-						<Tooltip title="当前连接器目录接口未开放启用动作，请同步内置目录后在数据源页使用">
-							<span>
-								<Button size="small" disabled>
-									启用
-								</Button>
-							</span>
-						</Tooltip>
-						<Tooltip title="当前连接器目录接口未开放停用动作，请通过停用筛选核对状态">
-							<span>
-								<Button size="small" disabled>
-									停用
-								</Button>
-							</span>
-						</Tooltip>
 					</Space>
 				),
 			},
@@ -294,10 +278,6 @@ export default function ConnectorRegistryPage() {
 				extra={
 					<Space wrap>
 						<Select style={{ width: 120 }} value={category} options={CATEGORY_OPTIONS} onChange={setCategory} />
-						<Space size={6}>
-							<Text type="secondary">停用</Text>
-							<Switch size="small" checked={includeDisabled} onChange={setIncludeDisabled} />
-						</Space>
 					</Space>
 				}
 			>

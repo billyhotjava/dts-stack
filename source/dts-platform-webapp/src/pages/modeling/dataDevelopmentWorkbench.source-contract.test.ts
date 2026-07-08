@@ -21,14 +21,19 @@ const referenceCodesPage = readFileSync(new URL("../governance/ReferenceCodesPag
 const platformApi = readFileSync(new URL("../../api/platformApi.ts", import.meta.url), "utf8");
 
 test("data development workbench routes converge on existing pages", () => {
-	assert.match(menuSeed, /"title": "数据开发中心"[\s\S]*?"externalLink": "\/studio\/sql-modeling"/);
+	assert.match(menuSeed, /"title": "数据开发"[\s\S]*?"externalLink": "\/studio\/low-code-development"/);
+	assert.match(menuSeed, /"title": "低代码开发向导"[\s\S]*?"externalLink": "\/studio\/low-code-development"/);
+	assert.match(menuSeed, /"title": "数据开发"[\s\S]*?"externalLink": "\/studio\/sql-modeling"/);
 	assert.match(menuSeed, /"title": "项目文件浏览"[\s\S]*?"externalLink": "\/modeling\/dbt-files"/);
 	assert.match(menuSeed, /"title": "标准管理"[\s\S]*?"externalLink": "\/governance\/standards\/elements"/);
 	assert.match(menuSeed, /"title": "公共码表"[\s\S]*?"externalLink": "\/governance\/standards\/reference"/);
+	assert.match(staticRoutes, /const LowCodeDevelopmentPage = lazy\(\(\) => import\("@\/pages\/modeling\/LowCodeDevelopmentPage"\)\)/);
 	assert.match(staticRoutes, /const SqlModelingPage = lazy\(\(\) => import\("@\/pages\/modeling\/SqlModelingPage"\)\)/);
 	assert.match(staticRoutes, /const DbtFileBrowserPage = lazy\(\(\) => import\("@\/pages\/modeling\/DbtFileBrowserPage"\)\)/);
+	assert.match(staticRoutes, /path: "studio\/low-code-development"[\s\S]*<LowCodeDevelopmentPage/);
 	assert.match(staticRoutes, /path: "studio\/sql-modeling"[\s\S]*<SqlModelingPage/);
 	assert.match(staticRoutes, /path: "modeling\/dbt-files"[\s\S]*<DbtFileBrowserPage/);
+	assert.match(dynamicResolver, /"\/studio\/low-code-development": "\/pages\/modeling\/LowCodeDevelopmentPage"/);
 	assert.match(dynamicResolver, /"\/studio\/sql-modeling": "\/pages\/modeling\/SqlModelingPage"/);
 	assert.match(dynamicResolver, /"\/modeling\/dbt-files": "\/pages\/modeling\/DbtFileBrowserPage"/);
 	assert.match(dynamicResolver, /"\/governance\/standards\/elements": "\/pages\/governance\/ElementsPage"/);

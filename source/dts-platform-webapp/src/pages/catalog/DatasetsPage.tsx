@@ -740,7 +740,7 @@ export default function Page() {
 							{records.length ? (
 							renderAssetTable()
 						) : (
-							<EmptyState title="未发现当前账号可见资产" description="可能还未完成元数据采集，也可能当前密级、主题域或资产授权限制了可见范围。" />
+							<EmptyState title="未发现当前账号可见资产" description="可能还未完成数据源结构采集，也可能当前密级、主题域或资产授权限制了可见范围。" />
 						)}
 					</Card>
 

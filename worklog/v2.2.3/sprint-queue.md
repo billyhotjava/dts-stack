@@ -28,7 +28,7 @@
 **统计**: READY=4, IN_PROGRESS=0, DONE=0, BLOCKED=0
 
 ## Sprint-3: IAM 修复 -- displayName 链路 bug 修复 (202604)
-**状态**: IN_PROGRESS
+**状态**: DONE
 **类型**: Implementation（实施型，为 v2.3.0 IAM 重构做铺垫）
 
 | Feature | Task 数 | 状态 |
@@ -1129,6 +1129,51 @@
 | SP-3 前端整合（治理呈现+工作台+路由收敛） | 44 | 计划就绪 |
 | SP-4 dts-metrics 退役 | 47 | 计划就绪 |
 | dts-platform 领域解耦评审 | v2.3 | Backlog |
+
+## Sprint-58: 数据资产元数据管理入口重构 (202607)
+**状态**: IN_PROGRESS
+**类型**: Implementation
+**目标**: 在数据资产菜单组新增“元数据管理”模块，把资产业务语义治理与数据源结构采集拆成两个清晰入口。
+**设计文档**: `worklog/v2.2.3/sprint-58-202607/README.md`
+**集成测试**: `worklog/v2.2.3/sprint-58-202607/it/README.md`
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-数据资产元数据管理 | 4 | DONE |
+
+**统计**: READY=0, IN_PROGRESS=0, DONE=4, BLOCKED=0
+**关键决策**:
+- 数据集成继续保留“数据源结构采集” `/catalog/metadata`，用于采集任务、采集历史和 Schema 漂移。
+- 数据资产新增“元数据管理” `/catalog/metadata-management`，用于资产语义元数据补齐、治理缺口识别和资产详情跳转。
+- OpenMetadata 作为技术主目录或缓存；DTS 继续维护业务描述、权属、密级、生命周期、权限和映射扩展。
+
+## Sprint-59: 低代码无 SQL 数据开发与指标设计一体化 (202607)
+**状态**: DONE
+**类型**: Product Journey / Frontend-first Implementation / ELT-Metrics Convergence
+**目标**: 在数据开发区提供一条面向不懂 SQL 用户的低代码向导，把“接入业务表、确认业务对象、定义指标、生成 DWS/ADS、发布报表数据集”串成连续旅程，同时保留 SQL、脚本、任务编排作为高级开发入口。
+**设计文档**: `worklog/v2.2.3/sprint-59-202607/README.md`
+**边界说明**: `worklog/v2.2.3/sprint-59-202607/assets/low-code-elt-metric-boundary.md`
+**编码指导**: `worklog/v2.2.3/sprint-59-202607/assets/coding-guidance.md`
+**集成测试**: `worklog/v2.2.3/sprint-59-202607/it/README.md`
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-低代码开发入口与边界收敛 | P0 | 3 | DONE |
+| F2-无SQL业务表到模型向导 | P0 | 4 | DONE |
+| F3-指标设计与DWSADS生成联动 | P0 | 3 | DONE |
+| F4-编码护栏与集成验收 | P0 | 3 | DONE |
+
+**统计**: READY=0, IN_PROGRESS=0, DONE=13, BLOCKED=0
+**关键决策**:
+- 低代码开发入口落在数据开发信息架构里，但实现为连接 ELT、资产治理、指标建模、发布审核和任务运维的编排页，不复制现有页面逻辑。
+- 数据接入、ODS、DWD 基座由专业用户保障；低代码用户可发起需求、确认字段和生成 DWD 草案，但不直接发布基础层模型。
+- DWS/ADS 是低代码主要生成目标，由指标、维度、粒度、筛选条件和消费目标驱动。
+- 指标设计是低代码开发的核心步骤，必须和指标工作台、指标管理、模型管理、发布审核共享业务对象和上下文。
+- 普通用户主流程不暴露 SQL/dbt 作为必需理解成本；SQL、脚本、dbt 文件和任务编排保留为高级开发入口。
+**完成记录**:
+- 新增 `/studio/low-code-development` 低代码开发向导和菜单/角色默认项。
+- 指标工作台支持 `journey=low-code-development` 上下文提示和返回向导动作。
+- 验证：前端 source-contract 26/26、`pnpm exec tsc --noEmit`、`pnpm build`、后端 targeted seed test、Playwright smoke 通过。
 
 ## v2.3 Backlog: 企业级资产与指标增强
 
