@@ -375,6 +375,10 @@ export const generateSqlModelSchemaYml = (id: string) =>
 	api.post(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}/dbt/schema-yml` }));
 export const checkSqlModelStandardGate = (id: string) =>
 	api.post(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}/standard-gate/check` }));
+export const createStandardBindingDraftSnapshot = (data: any) =>
+	api.post(withModelingRequestTimeout({ url: "/modeling/standard-binding-drafts", data }));
+export const getStandardBindingDraftSnapshot = (id: string) =>
+	api.get(withModelingRequestTimeout({ url: `/modeling/standard-binding-drafts/${id}` }));
 export const createSqlModel = (data: any) => api.post(withModelingRequestTimeout({ url: "/modeling/sql-models", data }));
 export const updateSqlModel = (id: string, data: any) =>
 	api.put(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}`, data }));

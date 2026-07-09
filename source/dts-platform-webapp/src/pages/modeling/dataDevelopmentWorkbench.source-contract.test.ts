@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const staticRoutes = readFileSync(
@@ -14,18 +14,22 @@ const menuSeed = readFileSync(
 	new URL("../../../../dts-admin/src/main/resources/config/data/portal-menu-seed.json", import.meta.url),
 	"utf8",
 );
+const standardBindingDraftUrl = new URL("./standardBindingDraft.ts", import.meta.url);
+const standardBindingDraft = existsSync(standardBindingDraftUrl) ? readFileSync(standardBindingDraftUrl, "utf8") : "";
 const sqlModelingPage = readFileSync(new URL("./SqlModelingPage.tsx", import.meta.url), "utf8");
 const dbtFileBrowserPage = readFileSync(new URL("./DbtFileBrowserPage.tsx", import.meta.url), "utf8");
+const lowCodeDevelopmentPage = readFileSync(new URL("./LowCodeDevelopmentPage.tsx", import.meta.url), "utf8");
 const elementsPage = readFileSync(new URL("../governance/ElementsPage.tsx", import.meta.url), "utf8");
+const standardPackagePage = readFileSync(new URL("../foundation/StandardPackagePage.tsx", import.meta.url), "utf8");
 const referenceCodesPage = readFileSync(new URL("../governance/ReferenceCodesPage.tsx", import.meta.url), "utf8");
 const platformApi = readFileSync(new URL("../../api/platformApi.ts", import.meta.url), "utf8");
 
 test("data development workbench routes converge on existing pages", () => {
-	assert.match(menuSeed, /"title": "数据开发"[\s\S]*?"externalLink": "\/studio\/low-code-development"/);
+	assert.match(menuSeed, /"title": "维度建模"[\s\S]*?"externalLink": "\/studio\/low-code-development"/);
 	assert.match(menuSeed, /"title": "低代码开发向导"[\s\S]*?"externalLink": "\/studio\/low-code-development"/);
-	assert.match(menuSeed, /"title": "数据开发"[\s\S]*?"externalLink": "\/studio\/sql-modeling"/);
+	assert.match(menuSeed, /"title": "维度建模"[\s\S]*?"externalLink": "\/studio\/sql-modeling"/);
 	assert.match(menuSeed, /"title": "项目文件浏览"[\s\S]*?"externalLink": "\/modeling\/dbt-files"/);
-	assert.match(menuSeed, /"title": "标准管理"[\s\S]*?"externalLink": "\/governance\/standards\/elements"/);
+	assert.match(menuSeed, /"title": "数据标准"[\s\S]*?"externalLink": "\/governance\/standards\/elements"/);
 	assert.match(menuSeed, /"title": "公共码表"[\s\S]*?"externalLink": "\/governance\/standards\/reference"/);
 	assert.match(staticRoutes, /const LowCodeDevelopmentPage = lazy\(\(\) => import\("@\/pages\/modeling\/LowCodeDevelopmentPage"\)\)/);
 	assert.match(staticRoutes, /const SqlModelingPage = lazy\(\(\) => import\("@\/pages\/modeling\/SqlModelingPage"\)\)/);
@@ -83,6 +87,45 @@ test("governance standards pages expose stable controls for model field standard
 	assert.match(referenceCodesPage, /更新 dbt Seeds/);
 	assert.match(referenceCodesPage, /dbt Seeds 同步/);
 	assert.match(platformApi, /url: "\/governance\/reference-codes\/seeds"/);
+});
+
+test("standards can hand field binding drafts to low-code and sql modeling", () => {
+	assert.match(standardBindingDraft, /STANDARD_BINDING_DRAFT_STORAGE_KEY/);
+	assert.match(standardBindingDraft, /createStandardBindingDraft/);
+	assert.match(standardBindingDraft, /getStandardBindingDraft/);
+	assert.match(standardBindingDraft, /isBackendStandardBindingDraftId/);
+	assert.match(standardBindingDraft, /buildSqlFromStandardBindingDraft/);
+	assert.match(standardBindingDraft, /buildStandardBindingsFromDraft/);
+	assert.match(platformApi, /url: "\/modeling\/standard-binding-drafts"/);
+	assert.match(platformApi, /url: `\/modeling\/standard-binding-drafts\/\$\{id\}`/);
+
+	assert.match(standardPackagePage, /标准包已应用/);
+	assert.match(standardPackagePage, /查看数据元并生成落标草稿/);
+	assert.match(standardPackagePage, /\/governance\/standards\/elements\?from=standard-package&bindingDraft=1/);
+
+	assert.match(elementsPage, /createStandardBindingDraft/);
+	assert.match(elementsPage, /createStandardBindingDraftSnapshot/);
+	assert.match(elementsPage, /data-testid="governance-elements-standard-binding-draft"/);
+	assert.match(elementsPage, /已保存字段落标快照/);
+	assert.match(elementsPage, /字段落标草稿/);
+	assert.match(elementsPage, /standardDraftId/);
+	assert.match(elementsPage, /\/studio\/low-code-development/);
+
+	assert.match(lowCodeDevelopmentPage, /getStandardBindingDraft/);
+	assert.match(lowCodeDevelopmentPage, /getStandardBindingDraftSnapshot/);
+	assert.match(lowCodeDevelopmentPage, /data-testid="low-code-standard-binding-draft-ready"/);
+	assert.match(lowCodeDevelopmentPage, /标准落标草稿已接入/);
+	assert.match(lowCodeDevelopmentPage, /withStandardDraftRoute/);
+	assert.match(lowCodeDevelopmentPage, /\/studio\/sql-modeling/);
+
+	assert.match(sqlModelingPage, /getStandardBindingDraft/);
+	assert.match(sqlModelingPage, /getStandardBindingDraftSnapshot/);
+	assert.match(sqlModelingPage, /buildStandardBindingsFromDraft/);
+	assert.match(sqlModelingPage, /buildSqlFromStandardBindingDraft/);
+	assert.match(sqlModelingPage, /data-testid="platform-sql-modeling-standard-draft"/);
+	assert.match(sqlModelingPage, /应用到当前模型/);
+	assert.match(sqlModelingPage, /创建模型草稿/);
+	assert.match(sqlModelingPage, /saveSqlModelStandardBindings/);
 });
 
 test("dbt file browser is a file evidence surface and hands publishing back to SQL modeling", () => {

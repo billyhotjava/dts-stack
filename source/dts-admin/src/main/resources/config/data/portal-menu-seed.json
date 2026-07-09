@@ -26,72 +26,6 @@
       ]
     },
     {
-      "key": "data-foundation",
-      "path": "data-foundation",
-      "icon": "solar:book-bookmark-bold-duotone",
-      "titleKey": "sys.nav.portal.dataFoundation",
-      "title": "数据基础",
-      "children": [
-        {
-          "key": "subjects",
-          "path": "subjects",
-          "icon": "solar:map-point-bold-duotone",
-          "titleKey": "sys.nav.portal.governanceSubjects",
-          "title": "主题域管理",
-          "externalLink": "/governance/subjects"
-        },
-        {
-          "key": "standards",
-          "path": "standards",
-          "icon": "solar:document-text-bold-duotone",
-          "titleKey": "sys.nav.portal.governanceStandards",
-          "title": "标准管理",
-          "children": [
-            {
-              "key": "glossary",
-              "path": "glossary",
-              "icon": "solar:book-bold-duotone",
-              "titleKey": "sys.nav.portal.governanceGlossary",
-              "title": "业务术语",
-              "externalLink": "/governance/standards/glossary"
-            },
-            {
-              "key": "elements",
-              "path": "elements",
-              "icon": "solar:document-bold-duotone",
-              "titleKey": "sys.nav.portal.governanceElements",
-              "title": "数据元",
-              "externalLink": "/governance/standards/elements"
-            },
-            {
-              "key": "reference",
-              "path": "reference",
-              "icon": "solar:database-bold-duotone",
-              "titleKey": "sys.nav.portal.governanceReference",
-              "title": "公共码表",
-              "externalLink": "/governance/standards/reference"
-            },
-            {
-              "key": "standard-package",
-              "path": "standard-package",
-              "icon": "solar:import-bold-duotone",
-              "titleKey": "sys.nav.portal.governanceStandardPackage",
-              "title": "标准包导入",
-              "externalLink": "/foundation/standard-package"
-            }
-          ]
-        },
-        {
-          "key": "templates",
-          "path": "templates",
-          "icon": "solar:folder-with-files-bold-duotone",
-          "titleKey": "sys.nav.portal.governanceTemplates",
-          "title": "标准模板",
-          "externalLink": "/governance/templates"
-        }
-      ]
-    },
-    {
       "key": "resource",
       "path": "resource",
       "icon": "solar:database-bold-duotone",
@@ -153,219 +87,378 @@
       "path": "studio",
       "icon": "solar:code-bold-duotone",
       "titleKey": "sys.nav.portal.studioCenter",
-      "title": "数据开发",
+      "title": "数据开发与运维",
       "children": [
         {
-          "key": "low-code-development",
-          "path": "low-code-development",
-          "icon": "solar:magic-stick-3-bold-duotone",
-          "titleKey": "sys.nav.portal.studioLowCodeDevelopment",
-          "title": "低代码开发向导",
-          "externalLink": "/studio/low-code-development"
-        },
-        {
-          "key": "projects",
-          "path": "projects",
-          "icon": "solar:folder-with-files-bold-duotone",
-          "titleKey": "sys.nav.portal.studioProjects",
-          "title": "项目空间管理",
-          "externalLink": "/studio/projects"
-        },
-        {
-          "key": "sql",
-          "path": "sql-modeling",
-          "icon": "solar:documents-bold-duotone",
-          "titleKey": "sys.nav.portal.studioSqlModeling",
-          "title": "逻辑建模（SQL）",
-          "externalLink": "/studio/sql-modeling"
-        },
-        {
-          "key": "scripts",
-          "path": "scripts",
-          "icon": "local:ic-scripts",
-          "titleKey": "sys.nav.portal.studioScripts",
-          "title": "脚本开发（Python/Spark）",
-          "externalLink": "/explore/etl/scripts"
-        },
-        {
-          "key": "orchestration",
-          "path": "orchestration",
-          "icon": "solar:diagram-up-bold-duotone",
-          "titleKey": "sys.nav.portal.studioOrchestration",
-          "title": "任务编排",
-          "externalLink": "/explore/etl/orchestration"
-        },
-        {
-          "key": "adhoc",
-          "path": "adhoc",
-          "icon": "solar:magic-stick-3-bold-duotone",
-          "titleKey": "sys.nav.portal.studioAdhoc",
-          "title": "即席查询",
-          "externalLink": "/explore/workbench"
-        },
-        {
-          "key": "dbt-files",
-          "path": "dbt-files",
-          "icon": "solar:folder-2-bold-duotone",
-          "titleKey": "sys.nav.portal.studioDbtFiles",
-          "title": "项目文件浏览",
-          "externalLink": "/modeling/dbt-files"
-        }
-      ]
-    },
-    {
-      "key": "metric-modeling",
-      "path": "metric-modeling",
-      "icon": "solar:graph-bold-duotone",
-      "titleKey": "sys.nav.portal.studioMetricModeling",
-      "title": "指标建模",
-      "children": [
-        {
-          "key": "metric-workbench",
-          "path": "metric-workbench",
+          "key": "modeling",
+          "path": "modeling",
           "icon": "solar:layers-minimalistic-bold-duotone",
-          "titleKey": "sys.nav.portal.studioMetricWorkbench",
-          "title": "指标工作台",
-          "externalLink": "/modeling/metric-workbench"
-        },
-        {
-          "key": "semantic-objects",
-          "path": "objects",
-          "icon": "solar:box-bold-duotone",
-          "titleKey": "sys.nav.portal.studioSemanticObjects",
-          "title": "业务对象",
-          "externalLink": "/modeling/semantic/objects"
-        },
-        {
-          "key": "semantic-metrics",
-          "path": "metrics",
-          "icon": "solar:chart-bold-duotone",
-          "titleKey": "sys.nav.portal.studioSemanticMetrics",
-          "title": "指标管理",
-          "externalLink": "/modeling/semantic/metrics"
-        },
-        {
-          "key": "semantic-models",
-          "path": "models",
-          "icon": "solar:database-bold-duotone",
-          "titleKey": "sys.nav.portal.studioSemanticModels",
-          "title": "模型管理",
-          "externalLink": "/modeling/semantic/models"
-        },
-        {
-          "key": "semantic-publish",
-          "path": "publish",
-          "icon": "solar:rocket-bold-duotone",
-          "titleKey": "sys.nav.portal.studioSemanticPublish",
-          "title": "发布审核",
-          "externalLink": "/modeling/semantic/publish"
-        }
-      ]
-    },
-    {
-      "key": "portal",
-      "path": "portal",
-      "icon": "solar:book-bold-duotone",
-      "titleKey": "sys.nav.portal.dataPortal",
-      "title": "数据资产",
-      "children": [
-        {
-          "key": "map",
-          "path": "map",
-          "icon": "solar:map-point-bold-duotone",
-          "titleKey": "sys.nav.portal.dataPortalMap",
-          "title": "资产地图",
-          "externalLink": "/catalog/assets"
-        },
-        {
-          "key": "search",
-          "path": "search",
-          "icon": "solar:rounded-magnifer-bold-duotone",
-          "titleKey": "sys.nav.portal.dataPortalSearch",
-          "title": "数据搜索",
-          "externalLink": "/catalog/search"
-        },
-        {
-          "key": "metadata-management",
-          "path": "metadata-management",
-          "icon": "solar:database-bold-duotone",
-          "titleKey": "sys.nav.portal.dataPortalMetadataManagement",
-          "title": "元数据管理",
-          "externalLink": "/catalog/metadata-management"
-        },
-        {
-          "key": "products",
-          "path": "products",
-          "icon": "solar:box-bold-duotone",
-          "titleKey": "sys.nav.portal.dataPortalProducts",
-          "title": "数据产品",
-          "externalLink": "/catalog/data-products"
-        },
-        {
-          "key": "detail",
-          "path": "detail",
-          "icon": "solar:document-text-bold-duotone",
-          "titleKey": "sys.nav.portal.dataPortalDetail",
-          "title": "资产台账",
-          "externalLink": "/catalog/assets/ledger"
-        },
-        {
-          "key": "lineage",
-          "path": "lineage",
-          "icon": "solar:share-circle-bold-duotone",
-          "titleKey": "sys.nav.portal.dataPortalLineage",
-          "title": "血缘与影响分析",
-          "externalLink": "/catalog/lineage",
+          "titleKey": "sys.nav.portal.studioDataModeling",
+          "title": "数据建模",
           "children": [
             {
-              "key": "lineage-impact",
-              "path": "impact",
-              "icon": "solar:chart-bold-duotone",
-              "titleKey": "sys.nav.portal.dataPortalLineageImpact",
-              "title": "影响分析",
-              "externalLink": "/catalog/lineage/impact"
+              "key": "warehouse-planning",
+              "path": "warehouse-planning",
+              "icon": "solar:map-point-bold-duotone",
+              "titleKey": "sys.nav.portal.warehousePlanning",
+              "title": "数仓规划",
+              "children": [
+                {
+                  "key": "subjects",
+                  "path": "subjects",
+                  "icon": "solar:map-point-bold-duotone",
+                  "titleKey": "sys.nav.portal.governanceSubjects",
+                  "title": "主题域管理",
+                  "externalLink": "/governance/subjects"
+                },
+                {
+                  "key": "projects",
+                  "path": "projects",
+                  "icon": "solar:folder-with-files-bold-duotone",
+                  "titleKey": "sys.nav.portal.studioProjects",
+                  "title": "项目空间管理",
+                  "externalLink": "/studio/projects"
+                }
+              ]
             },
             {
-              "key": "lineage-graph",
-              "path": "graph",
-              "icon": "solar:share-circle-bold-duotone",
-              "titleKey": "sys.nav.portal.dataPortalLineageGraph",
-              "title": "血缘图谱",
-              "externalLink": "/catalog/lineage/graph"
+              "key": "standards",
+              "path": "standards",
+              "icon": "solar:document-text-bold-duotone",
+              "titleKey": "sys.nav.portal.dataStandards",
+              "title": "数据标准",
+              "children": [
+                {
+                  "key": "standard-package",
+                  "path": "standard-package",
+                  "icon": "solar:import-bold-duotone",
+                  "titleKey": "sys.nav.portal.governanceStandardPackage",
+                  "title": "标准包导入",
+                  "externalLink": "/foundation/standard-package"
+                },
+                {
+                  "key": "glossary",
+                  "path": "glossary",
+                  "icon": "solar:book-bold-duotone",
+                  "titleKey": "sys.nav.portal.governanceGlossary",
+                  "title": "业务术语",
+                  "externalLink": "/governance/standards/glossary"
+                },
+                {
+                  "key": "elements",
+                  "path": "elements",
+                  "icon": "solar:document-bold-duotone",
+                  "titleKey": "sys.nav.portal.governanceElements",
+                  "title": "数据元",
+                  "externalLink": "/governance/standards/elements"
+                },
+                {
+                  "key": "reference",
+                  "path": "reference",
+                  "icon": "solar:database-bold-duotone",
+                  "titleKey": "sys.nav.portal.governanceReference",
+                  "title": "公共码表",
+                  "externalLink": "/governance/standards/reference"
+                },
+                {
+                  "key": "templates",
+                  "path": "templates",
+                  "icon": "solar:folder-with-files-bold-duotone",
+                  "titleKey": "sys.nav.portal.governanceTemplates",
+                  "title": "标准模板",
+                  "externalLink": "/governance/templates"
+                }
+              ]
             },
             {
-              "key": "lineage-columns",
-              "path": "columns",
-              "icon": "solar:database-bold-duotone",
-              "titleKey": "sys.nav.portal.dataPortalLineageColumns",
-              "title": "字段血缘",
-              "externalLink": "/catalog/lineage/columns"
+              "key": "dimensional-modeling",
+              "path": "dimensional-modeling",
+              "icon": "solar:cube-bold-duotone",
+              "titleKey": "sys.nav.portal.dimensionalModeling",
+              "title": "维度建模",
+              "children": [
+                {
+                  "key": "low-code-development",
+                  "path": "low-code-development",
+                  "icon": "solar:magic-stick-3-bold-duotone",
+                  "titleKey": "sys.nav.portal.studioLowCodeDevelopment",
+                  "title": "低代码开发向导",
+                  "externalLink": "/studio/low-code-development"
+                },
+                {
+                  "key": "sql",
+                  "path": "sql-modeling",
+                  "icon": "solar:documents-bold-duotone",
+                  "titleKey": "sys.nav.portal.studioSqlModeling",
+                  "title": "逻辑建模（SQL）",
+                  "externalLink": "/studio/sql-modeling"
+                },
+                {
+                  "key": "semantic-objects",
+                  "path": "objects",
+                  "icon": "solar:box-bold-duotone",
+                  "titleKey": "sys.nav.portal.studioSemanticObjects",
+                  "title": "业务对象",
+                  "externalLink": "/modeling/semantic/objects"
+                },
+                {
+                  "key": "semantic-models",
+                  "path": "models",
+                  "icon": "solar:database-bold-duotone",
+                  "titleKey": "sys.nav.portal.studioSemanticModels",
+                  "title": "模型管理",
+                  "externalLink": "/modeling/semantic/models"
+                },
+                {
+                  "key": "dbt-files",
+                  "path": "dbt-files",
+                  "icon": "solar:folder-2-bold-duotone",
+                  "titleKey": "sys.nav.portal.studioDbtFiles",
+                  "title": "项目文件浏览",
+                  "externalLink": "/modeling/dbt-files"
+                }
+              ]
             },
             {
-              "key": "lineage-import",
-              "path": "import",
-              "icon": "solar:upload-bold-duotone",
-              "titleKey": "sys.nav.portal.dataPortalLineageImport",
-              "title": "血缘导入",
-              "externalLink": "/catalog/lineage/import"
-            },
-            {
-              "key": "lineage-diff",
-              "path": "diff",
-              "icon": "solar:history-2-bold-duotone",
-              "titleKey": "sys.nav.portal.dataPortalLineageDiff",
-              "title": "快照对比",
-              "externalLink": "/catalog/lineage/diff"
+              "key": "data-metrics",
+              "path": "data-metrics",
+              "icon": "solar:graph-bold-duotone",
+              "titleKey": "sys.nav.portal.dataMetrics",
+              "title": "数据指标",
+              "children": [
+                {
+                  "key": "metric-workbench",
+                  "path": "metric-workbench",
+                  "icon": "solar:layers-minimalistic-bold-duotone",
+                  "titleKey": "sys.nav.portal.studioMetricWorkbench",
+                  "title": "指标工作台",
+                  "externalLink": "/modeling/metric-workbench"
+                },
+                {
+                  "key": "semantic-metrics",
+                  "path": "metrics",
+                  "icon": "solar:chart-bold-duotone",
+                  "titleKey": "sys.nav.portal.studioSemanticMetrics",
+                  "title": "指标管理",
+                  "externalLink": "/modeling/semantic/metrics"
+                },
+                {
+                  "key": "semantic-publish",
+                  "path": "publish",
+                  "icon": "solar:rocket-bold-duotone",
+                  "titleKey": "sys.nav.portal.studioSemanticPublish",
+                  "title": "发布审核",
+                  "externalLink": "/modeling/semantic/publish"
+                }
+              ]
             }
           ]
         },
         {
-          "key": "permission",
-          "path": "permission",
-          "icon": "solar:lock-keyhole-bold-duotone",
-          "titleKey": "sys.nav.portal.dataPortalPermission",
-          "title": "权限申请",
-          "externalLink": "/security/dataset-access-approval"
+          "key": "data-studio",
+          "path": "data-studio",
+          "icon": "solar:code-bold-duotone",
+          "titleKey": "sys.nav.portal.studioDataStudio",
+          "title": "Data Studio",
+          "children": [
+            {
+              "key": "scripts",
+              "path": "scripts",
+              "icon": "local:ic-scripts",
+              "titleKey": "sys.nav.portal.studioScripts",
+              "title": "脚本开发（Python/Spark）",
+              "externalLink": "/explore/etl/scripts"
+            },
+            {
+              "key": "orchestration",
+              "path": "orchestration",
+              "icon": "solar:diagram-up-bold-duotone",
+              "titleKey": "sys.nav.portal.studioOrchestration",
+              "title": "任务编排",
+              "externalLink": "/explore/etl/orchestration"
+            },
+            {
+              "key": "adhoc",
+              "path": "adhoc",
+              "icon": "solar:magic-stick-3-bold-duotone",
+              "titleKey": "sys.nav.portal.studioAdhoc",
+              "title": "即席查询",
+              "externalLink": "/explore/workbench"
+            }
+          ]
+        },
+        {
+          "key": "ops-center",
+          "path": "ops-center",
+          "icon": "solar:settings-bold-duotone",
+          "titleKey": "sys.nav.portal.studioOpsCenter",
+          "title": "运维中心",
+          "children": [
+            {
+              "key": "overview",
+              "path": "overview",
+              "icon": "solar:chart-square-bold-duotone",
+              "titleKey": "sys.nav.portal.opsOverview",
+              "title": "运行概览",
+              "externalLink": "/ops/overview"
+            },
+            {
+              "key": "instances",
+              "path": "instances",
+              "icon": "solar:history-bold-duotone",
+              "titleKey": "sys.nav.portal.opsInstances",
+              "title": "任务实例监控",
+              "externalLink": "/ops/instances"
+            },
+            {
+              "key": "alerts",
+              "path": "alerts",
+              "icon": "solar:bell-bing-bold-duotone",
+              "titleKey": "sys.nav.portal.opsAlerts",
+              "title": "告警记录",
+              "externalLink": "/ops/alerts"
+            },
+            {
+              "key": "backfill",
+              "path": "backfill",
+              "icon": "solar:refresh-bold-duotone",
+              "titleKey": "sys.nav.portal.opsBackfill",
+              "title": "补数管理",
+              "externalLink": "/ops/backfill"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "governance",
+      "path": "governance",
+      "icon": "solar:shield-check-bold-duotone",
+      "titleKey": "sys.nav.portal.governanceOperations",
+      "title": "数据治理",
+      "children": [
+        {
+          "key": "assets",
+          "path": "assets",
+          "icon": "solar:book-bold-duotone",
+          "titleKey": "sys.nav.portal.governanceAssets",
+          "title": "数据地图与资产",
+          "children": [
+            {
+              "key": "map",
+              "path": "map",
+              "icon": "solar:map-point-bold-duotone",
+              "titleKey": "sys.nav.portal.dataPortalMap",
+              "title": "资产地图",
+              "externalLink": "/catalog/assets"
+            },
+            {
+              "key": "search",
+              "path": "search",
+              "icon": "solar:rounded-magnifer-bold-duotone",
+              "titleKey": "sys.nav.portal.dataPortalSearch",
+              "title": "数据搜索",
+              "externalLink": "/catalog/search"
+            },
+            {
+              "key": "metadata-management",
+              "path": "metadata-management",
+              "icon": "solar:database-bold-duotone",
+              "titleKey": "sys.nav.portal.dataPortalMetadataManagement",
+              "title": "元数据管理",
+              "externalLink": "/catalog/metadata-management"
+            },
+            {
+              "key": "detail",
+              "path": "detail",
+              "icon": "solar:document-text-bold-duotone",
+              "titleKey": "sys.nav.portal.dataPortalDetail",
+              "title": "资产台账",
+              "externalLink": "/catalog/assets/ledger"
+            },
+            {
+              "key": "lineage",
+              "path": "lineage",
+              "icon": "solar:share-circle-bold-duotone",
+              "titleKey": "sys.nav.portal.dataPortalLineage",
+              "title": "血缘与影响分析",
+              "externalLink": "/catalog/lineage",
+              "children": [
+                {
+                  "key": "lineage-impact",
+                  "path": "impact",
+                  "icon": "solar:chart-bold-duotone",
+                  "titleKey": "sys.nav.portal.dataPortalLineageImpact",
+                  "title": "影响分析",
+                  "externalLink": "/catalog/lineage/impact"
+                },
+                {
+                  "key": "lineage-graph",
+                  "path": "graph",
+                  "icon": "solar:share-circle-bold-duotone",
+                  "titleKey": "sys.nav.portal.dataPortalLineageGraph",
+                  "title": "血缘图谱",
+                  "externalLink": "/catalog/lineage/graph"
+                },
+                {
+                  "key": "lineage-columns",
+                  "path": "columns",
+                  "icon": "solar:database-bold-duotone",
+                  "titleKey": "sys.nav.portal.dataPortalLineageColumns",
+                  "title": "字段血缘",
+                  "externalLink": "/catalog/lineage/columns"
+                },
+                {
+                  "key": "lineage-import",
+                  "path": "import",
+                  "icon": "solar:upload-bold-duotone",
+                  "titleKey": "sys.nav.portal.dataPortalLineageImport",
+                  "title": "血缘导入",
+                  "externalLink": "/catalog/lineage/import"
+                },
+                {
+                  "key": "lineage-diff",
+                  "path": "diff",
+                  "icon": "solar:history-2-bold-duotone",
+                  "titleKey": "sys.nav.portal.dataPortalLineageDiff",
+                  "title": "快照对比",
+                  "externalLink": "/catalog/lineage/diff"
+                }
+              ]
+            },
+            {
+              "key": "permission",
+              "path": "permission",
+              "icon": "solar:lock-keyhole-bold-duotone",
+              "titleKey": "sys.nav.portal.dataPortalPermission",
+              "title": "权限申请",
+              "externalLink": "/security/dataset-access-approval"
+            }
+          ]
+        },
+        {
+          "key": "qualityRules",
+          "path": "quality-rules",
+          "icon": "solar:checklist-bold-duotone",
+          "titleKey": "sys.nav.portal.governanceQualityRules",
+          "title": "质量管控",
+          "externalLink": "/governance/rules"
+        },
+        {
+          "key": "qualityReport",
+          "path": "quality-report",
+          "icon": "solar:chart-bold-duotone",
+          "titleKey": "sys.nav.portal.governanceQualityReport",
+          "title": "质量报告",
+          "externalLink": "/governance/quality"
+        },
+        {
+          "key": "classification",
+          "path": "classification",
+          "icon": "solar:tag-bold-duotone",
+          "titleKey": "sys.nav.portal.governanceClassification",
+          "title": "分级分类",
+          "externalLink": "/security/data-security"
         }
       ]
     },
@@ -374,41 +467,8 @@
       "path": "consumption",
       "icon": "solar:share-circle-bold-duotone",
       "titleKey": "sys.nav.portal.dataConsumption",
-      "title": "数据消费",
+      "title": "数据分析与服务",
       "children": [
-        {
-          "key": "services",
-          "path": "services",
-          "icon": "solar:settings-minimalistic-bold-duotone",
-          "titleKey": "sys.nav.portal.serviceCenter",
-          "title": "数据服务中心",
-          "children": [
-            {
-              "key": "api",
-              "path": "api",
-              "icon": "solar:share-bold-duotone",
-              "titleKey": "sys.nav.portal.serviceApi",
-              "title": "数据 API 管理",
-              "externalLink": "/services/apis"
-            },
-            {
-              "key": "outbound",
-              "path": "outbound",
-              "icon": "solar:forward-bold-duotone",
-              "titleKey": "sys.nav.portal.serviceOutbound",
-              "title": "数据推送",
-              "externalLink": "/services/products"
-            },
-            {
-              "key": "exchange",
-              "path": "exchange",
-              "icon": "solar:folder-open-bold-duotone",
-              "titleKey": "sys.nav.portal.serviceExchange",
-              "title": "共享交换",
-              "externalLink": "/services/tokens"
-            }
-          ]
-        },
         {
           "key": "bi-apps",
           "path": "bi-apps",
@@ -458,76 +518,47 @@
           "titleKey": "sys.nav.portal.biScreens",
           "title": "数据大屏",
           "externalLink": "/bi/screens"
-        }
-      ]
-    },
-    {
-      "key": "governance",
-      "path": "governance",
-      "icon": "solar:shield-check-bold-duotone",
-      "titleKey": "sys.nav.portal.governanceOperations",
-      "title": "治理运营",
-      "children": [
-        {
-          "key": "qualityRules",
-          "path": "quality-rules",
-          "icon": "solar:checklist-bold-duotone",
-          "titleKey": "sys.nav.portal.governanceQualityRules",
-          "title": "质量管控",
-          "externalLink": "/governance/rules"
         },
         {
-          "key": "qualityReport",
-          "path": "quality-report",
-          "icon": "solar:chart-bold-duotone",
-          "titleKey": "sys.nav.portal.governanceQualityReport",
-          "title": "质量报告",
-          "externalLink": "/governance/quality"
-        },
-        {
-          "key": "classification",
-          "path": "classification",
-          "icon": "solar:tag-bold-duotone",
-          "titleKey": "sys.nav.portal.governanceClassification",
-          "title": "分级分类",
-          "externalLink": "/security/data-security"
-        }
-      ]
-    },
-    {
-      "key": "ops",
-      "path": "ops",
-      "icon": "solar:settings-bold-duotone",
-      "titleKey": "sys.nav.portal.opsCenter",
-      "title": "运维与监控",
-      "children": [
-        {
-          "key": "overview",
-          "path": "overview",
-          "icon": "solar:chart-square-bold-duotone",
-          "titleKey": "sys.nav.portal.opsOverview",
-          "title": "运行概览"
-        },
-        {
-          "key": "instances",
-          "path": "instances",
-          "icon": "solar:history-bold-duotone",
-          "titleKey": "sys.nav.portal.opsInstances",
-          "title": "任务实例监控"
-        },
-        {
-          "key": "alerts",
-          "path": "alerts",
-          "icon": "solar:bell-bing-bold-duotone",
-          "titleKey": "sys.nav.portal.opsAlerts",
-          "title": "告警记录"
-        },
-        {
-          "key": "backfill",
-          "path": "backfill",
-          "icon": "solar:refresh-bold-duotone",
-          "titleKey": "sys.nav.portal.opsBackfill",
-          "title": "补数管理"
+          "key": "services",
+          "path": "services",
+          "icon": "solar:settings-minimalistic-bold-duotone",
+          "titleKey": "sys.nav.portal.serviceCenter",
+          "title": "数据服务中心",
+          "children": [
+            {
+              "key": "api",
+              "path": "api",
+              "icon": "solar:share-bold-duotone",
+              "titleKey": "sys.nav.portal.serviceApi",
+              "title": "数据 API 管理",
+              "externalLink": "/services/apis"
+            },
+            {
+              "key": "products",
+              "path": "products",
+              "icon": "solar:box-bold-duotone",
+              "titleKey": "sys.nav.portal.dataPortalProducts",
+              "title": "数据产品",
+              "externalLink": "/catalog/data-products"
+            },
+            {
+              "key": "outbound",
+              "path": "outbound",
+              "icon": "solar:forward-bold-duotone",
+              "titleKey": "sys.nav.portal.serviceOutbound",
+              "title": "数据推送",
+              "externalLink": "/services/products"
+            },
+            {
+              "key": "exchange",
+              "path": "exchange",
+              "icon": "solar:folder-open-bold-duotone",
+              "titleKey": "sys.nav.portal.serviceExchange",
+              "title": "共享交换",
+              "externalLink": "/services/tokens"
+            }
+          ]
         }
       ]
     }

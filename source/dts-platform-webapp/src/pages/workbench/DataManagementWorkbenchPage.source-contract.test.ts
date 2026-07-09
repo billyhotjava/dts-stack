@@ -56,7 +56,7 @@ test("data management workbench waits for onsite business theme definition", () 
 	assert.equal(existsSync(PAGE_URL), true);
 	const source = readFileSync(PAGE_URL, "utf8");
 
-	assert.match(source, /数据管理工作台/);
+	assert.match(source, /端到端数据产品工作台/);
 	assert.match(source, /待现场定义业务主题/);
 	assert.match(source, /不内置演示场景/);
 	assert.doesNotMatch(source, /经营分析/);
@@ -68,7 +68,61 @@ test("data management workbench waits for onsite business theme definition", () 
 	assert.match(source, /消费状态/);
 	assert.match(source, /运行健康/);
 	assert.doesNotMatch(source, /业务消费工作台/);
-	assert.doesNotMatch(source, /SQL|dbt|ODS|DWD|DWS|ADS|\.sql/i);
+});
+
+test("workbench exposes the end-to-end data product journey from integration to service evidence", () => {
+	assert.equal(existsSync(PAGE_URL), true);
+	const source = readFileSync(PAGE_URL, "utf8");
+
+	assert.match(source, /data-testid="end-to-end-data-product-journey"/);
+	assert.match(source, /productJourneyStages/);
+	assert.match(source, /E2E_DATA_PRODUCT_JOURNEY/);
+	assert.match(source, /withE2EJourney/);
+	assert.match(source, /journey", E2E_DATA_PRODUCT_JOURNEY/);
+	assert.match(source, /data-testid="end-to-end-journey-continue"/);
+	assert.match(source, /配置数据源/);
+	assert.match(source, /确认数仓规划/);
+	assert.match(source, /套用标准包/);
+	assert.match(source, /进入低代码建模/);
+	assert.match(source, /设计指标/);
+	assert.match(source, /编排数据开发/);
+	assert.match(source, /发布数据 API/);
+	assert.match(source, /查看运行证据/);
+	for (const label of ["负责角色", "当前缺口", "下一步"]) {
+		assert.match(source, new RegExp(label));
+	}
+	for (const label of ["数据集成", "数仓规划", "数据标准", "维度建模", "数据指标", "数据开发", "数据服务", "运行证据"]) {
+		assert.match(source, new RegExp(label));
+	}
+	for (const route of [
+		"/foundation/data-sources",
+		"/explore/etl/transform",
+		"/governance/subjects",
+		"/catalog/metadata-management",
+		"/foundation/standard-package",
+		"/governance/standards/elements",
+		"/studio/low-code-development",
+		"/studio/sql-modeling",
+		"/modeling/metric-workbench",
+		"/modeling/semantic/metrics",
+		"/explore/etl/scripts",
+		"/explore/etl/orchestration",
+		"/services/apis",
+		"/bi/dashboards",
+		"/ops/instances",
+		"/ops/overview",
+	]) {
+		assert.match(source, new RegExp(route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+		assert.ok(
+			DYNAMIC_RESOLVER.includes(`"${route}"`) || STATIC_ROUTES.includes(`path: "${route.slice(1)}"`),
+			`${route} should resolve to a registered page`,
+		);
+	}
+	for (const key of ["integration", "planning", "standards", "modeling", "metrics", "development", "service", "evidence"]) {
+		assert.match(source, new RegExp(key));
+	}
+	assert.match(source, /data-testid=\{`end-to-end-stage-\$\{stage\.key\}-primary`\}/);
+	assert.match(source, /data-testid=\{`end-to-end-stage-\$\{stage\.key\}-secondary`\}/);
 });
 
 test("first report journey can be focused from the workbench entry route", () => {

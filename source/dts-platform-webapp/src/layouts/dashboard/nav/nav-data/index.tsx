@@ -332,9 +332,10 @@ const resolveDedupeKey = (node: MenuTree, meta: Record<string, any> | null): str
  */
 const NAV_CATEGORY_GROUPS: { name?: string; keys: string[]; flatten?: boolean }[] = [
 	{ name: undefined, keys: ["workbench"] },
-	{ name: "数据集成", keys: ["resource", "studio"] },
-	{ name: "治理与资产", keys: ["governance", "portal"] },
-	{ name: "运维与服务", keys: ["ops", "services"] },
+	{ name: "数据集成", keys: ["resource"] },
+	{ name: "数据开发与运维", keys: ["studio"] },
+	{ name: "数据治理", keys: ["governance"] },
+	{ name: "数据分析与服务", keys: ["consumption"] },
 ];
 
 const resolveSectionKey = (node: MenuTree): string => {

@@ -59,7 +59,7 @@ class PortalMenuSeedDefaultsContractTest {
     }
 
     @Test
-    void portalMenuSeedPromotesDataScreensToRootWithoutChangingRoleDefaults() throws Exception {
+    void portalMenuSeedPlacesAnalyticsUnderDataAnalysisServicesWithoutChangingRoleDefaults() throws Exception {
         ClassPathResource seedResource = new ClassPathResource("config/data/portal-menu-seed.json");
         assertTrue(seedResource.exists(), "portal-menu-seed.json must exist");
 
@@ -67,24 +67,32 @@ class PortalMenuSeedDefaultsContractTest {
         List<Map<String, Object>> roots = listOfMaps(seed.get("portalNavSections"));
         assertFalse(roots.isEmpty(), "portal menu seed must define root sections");
 
-        Map<String, Object> screensRoot = roots
+        Map<String, Object> consumptionRoot = roots
             .stream()
-            .filter(node -> "sys.nav.portal.biScreens".equals(node.get("titleKey")))
+            .filter(node -> "consumption".equals(node.get("key")))
             .findFirst()
             .orElse(null);
-        assertNotNull(screensRoot, "数据大屏 must be a first-level root menu");
-        assertEquals("bi/screens", screensRoot.get("path"));
-        assertEquals("/bi/screens", screensRoot.get("externalLink"));
+        assertNotNull(consumptionRoot, "数据分析与服务 root menu must exist");
+        assertEquals("数据分析与服务", consumptionRoot.get("title"));
 
-        Map<String, Object> biAppsRoot = roots
+        Map<String, Object> screens = listOfMaps(consumptionRoot.get("children"))
+            .stream()
+            .filter(node -> "screens".equals(node.get("key")))
+            .findFirst()
+            .orElse(null);
+        assertNotNull(screens, "数据大屏 must live under 数据分析与服务");
+        assertEquals("screens", screens.get("path"));
+        assertEquals("/bi/screens", screens.get("externalLink"));
+
+        Map<String, Object> biAppsRoot = listOfMaps(consumptionRoot.get("children"))
             .stream()
             .filter(node -> "sys.nav.portal.businessIntelligenceApps".equals(node.get("titleKey")))
             .findFirst()
             .orElse(null);
-        assertNotNull(biAppsRoot, "商业智能应用 root menu must still exist");
+        assertNotNull(biAppsRoot, "商业智能应用 menu must still exist under 数据分析与服务");
         assertFalse(
             containsTitleKey(listOfMaps(biAppsRoot.get("children")), "sys.nav.portal.biScreens"),
-            "商业智能应用 subtree must no longer own 数据大屏"
+            "商业智能应用 subtree must not own 数据大屏"
         );
 
         ClassPathResource defaultsResource = new ClassPathResource("config/data/role-menu-defaults.json");
@@ -103,16 +111,16 @@ class PortalMenuSeedDefaultsContractTest {
     }
 
     @Test
-    void dataAssetMetadataManagementSeedKeepsSeparateCollectionAndManagementEntrypoints() throws Exception {
+    void dataGovernanceKeepsSeparateCollectionAndAssetManagementEntrypoints() throws Exception {
         ClassPathResource seedResource = new ClassPathResource("config/data/portal-menu-seed.json");
         assertTrue(seedResource.exists(), "portal-menu-seed.json must exist");
 
         Map<String, Object> seed = objectMapper.readValue(seedResource.getInputStream(), new TypeReference<Map<String, Object>>() {});
         List<Map<String, Object>> roots = listOfMaps(seed.get("portalNavSections"));
         Map<String, Object> resourceRoot = roots.stream().filter(node -> "resource".equals(node.get("key"))).findFirst().orElse(null);
-        Map<String, Object> portalRoot = roots.stream().filter(node -> "portal".equals(node.get("key"))).findFirst().orElse(null);
+        Map<String, Object> governanceRoot = roots.stream().filter(node -> "governance".equals(node.get("key"))).findFirst().orElse(null);
         assertNotNull(resourceRoot, "数据集成 root menu must exist");
-        assertNotNull(portalRoot, "数据资产 root menu must exist");
+        assertNotNull(governanceRoot, "数据治理 root menu must exist");
 
         Map<String, Object> sourceStructure = listOfMaps(resourceRoot.get("children"))
             .stream()
@@ -123,7 +131,14 @@ class PortalMenuSeedDefaultsContractTest {
         assertEquals("数据源结构采集", sourceStructure.get("title"));
         assertEquals("/catalog/metadata", sourceStructure.get("externalLink"));
 
-        Map<String, Object> metadataManagement = listOfMaps(portalRoot.get("children"))
+        Map<String, Object> assetsGroup = listOfMaps(governanceRoot.get("children"))
+            .stream()
+            .filter(node -> "assets".equals(node.get("key")))
+            .findFirst()
+            .orElse(null);
+        assertNotNull(assetsGroup, "数据治理 must expose 数据地图与资产 group");
+
+        Map<String, Object> metadataManagement = listOfMaps(assetsGroup.get("children"))
             .stream()
             .filter(node -> "metadata-management".equals(node.get("key")))
             .findFirst()
@@ -149,32 +164,68 @@ class PortalMenuSeedDefaultsContractTest {
     }
 
     @Test
-    void lowCodeDevelopmentSeedStaysInDataDevelopmentAndKeepsAdvancedEntrypoints() throws Exception {
+    void dataModelingSeedFollowsPlanningStandardsDimensionMetricsOrder() throws Exception {
         ClassPathResource seedResource = new ClassPathResource("config/data/portal-menu-seed.json");
         assertTrue(seedResource.exists(), "portal-menu-seed.json must exist");
 
         Map<String, Object> seed = objectMapper.readValue(seedResource.getInputStream(), new TypeReference<Map<String, Object>>() {});
         List<Map<String, Object>> roots = listOfMaps(seed.get("portalNavSections"));
         Map<String, Object> studioRoot = roots.stream().filter(node -> "studio".equals(node.get("key"))).findFirst().orElse(null);
-        Map<String, Object> metricRoot = roots.stream().filter(node -> "metric-modeling".equals(node.get("key"))).findFirst().orElse(null);
-        assertNotNull(studioRoot, "数据开发 root menu must exist");
-        assertNotNull(metricRoot, "指标建模 root menu must stay separate");
+        assertNotNull(studioRoot, "数据开发与运维 root menu must exist");
+        assertEquals("数据开发与运维", studioRoot.get("title"));
 
-        List<Map<String, Object>> studioChildren = listOfMaps(studioRoot.get("children"));
-        assertEquals("low-code-development", studioChildren.get(0).get("key"), "低代码开发向导 should be the first data development entry");
-        Map<String, Object> lowCode = studioChildren
+        Map<String, Object> modeling = listOfMaps(studioRoot.get("children"))
+            .stream()
+            .filter(node -> "modeling".equals(node.get("key")))
+            .findFirst()
+            .orElse(null);
+        assertNotNull(modeling, "数据开发与运维 must expose 数据建模");
+
+        List<Map<String, Object>> modelingChildren = listOfMaps(modeling.get("children"));
+        assertEquals("warehouse-planning", modelingChildren.get(0).get("key"), "数仓规划 should be the first modeling entry");
+        assertEquals("standards", modelingChildren.get(1).get("key"), "数据标准 should follow 数仓规划");
+        assertEquals("dimensional-modeling", modelingChildren.get(2).get("key"), "维度建模 should follow 数据标准");
+        assertEquals("data-metrics", modelingChildren.get(3).get("key"), "数据指标 should follow 维度建模");
+
+        Map<String, Object> dimensionalModeling = modelingChildren
+            .stream()
+            .filter(node -> "dimensional-modeling".equals(node.get("key")))
+            .findFirst()
+            .orElse(null);
+        assertNotNull(dimensionalModeling, "数据建模 must expose 维度建模");
+
+        List<Map<String, Object>> dimensionChildren = listOfMaps(dimensionalModeling.get("children"));
+        Map<String, Object> lowCode = dimensionChildren
             .stream()
             .filter(node -> "low-code-development".equals(node.get("key")))
             .findFirst()
             .orElse(null);
-        assertNotNull(lowCode, "数据开发 must expose 低代码开发向导");
+        assertNotNull(lowCode, "维度建模 must expose 低代码开发向导");
         assertEquals("sys.nav.portal.studioLowCodeDevelopment", lowCode.get("titleKey"));
         assertEquals("低代码开发向导", lowCode.get("title"));
         assertEquals("/studio/low-code-development", lowCode.get("externalLink"));
-        assertTrue(containsTitleKey(studioChildren, "sys.nav.portal.studioSqlModeling"), "SQL modeling must stay available");
-        assertTrue(containsTitleKey(studioChildren, "sys.nav.portal.studioScripts"), "script development must stay available");
-        assertTrue(containsTitleKey(studioChildren, "sys.nav.portal.studioOrchestration"), "orchestration must stay available");
-        assertFalse(containsTitleKey(studioChildren, "sys.nav.portal.studioMetricWorkbench"), "metric workbench must stay in metric modeling");
+        assertTrue(containsTitleKey(dimensionChildren, "sys.nav.portal.studioSqlModeling"), "SQL modeling must stay available");
+
+        Map<String, Object> dataMetrics = modelingChildren
+            .stream()
+            .filter(node -> "data-metrics".equals(node.get("key")))
+            .findFirst()
+            .orElse(null);
+        assertNotNull(dataMetrics, "数据建模 must expose 数据指标");
+        assertTrue(containsTitleKey(listOfMaps(dataMetrics.get("children")), "sys.nav.portal.studioMetricWorkbench"));
+        assertFalse(containsTitleKey(dimensionChildren, "sys.nav.portal.studioMetricWorkbench"), "metric workbench must stay in 数据指标");
+
+        Map<String, Object> dataStudio = listOfMaps(studioRoot.get("children"))
+            .stream()
+            .filter(node -> "data-studio".equals(node.get("key")))
+            .findFirst()
+            .orElse(null);
+        assertNotNull(dataStudio, "数据开发与运维 must expose Data Studio");
+        assertTrue(containsTitleKey(listOfMaps(dataStudio.get("children")), "sys.nav.portal.studioScripts"), "script development must stay available");
+        assertTrue(
+            containsTitleKey(listOfMaps(dataStudio.get("children")), "sys.nav.portal.studioOrchestration"),
+            "orchestration must stay available"
+        );
 
         ClassPathResource defaultsResource = new ClassPathResource("config/data/role-menu-defaults.json");
         List<Map<String, Object>> defaults = objectMapper.readValue(

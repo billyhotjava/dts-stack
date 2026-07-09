@@ -22,7 +22,8 @@ const ZH_LOCALE = readFileSync(new URL("../../../locales/lang/zh_CN/sys.json", i
 const EN_LOCALE = readFileSync(new URL("../../../locales/lang/en_US/sys.json", import.meta.url), "utf8");
 
 const PLATFORM_METRIC_KEYS = [
-	"studioMetricModeling",
+	"studioDataModeling",
+	"dataMetrics",
 	"studioMetricWorkbench",
 	"studioSemanticObjects",
 	"studioSemanticMetrics",

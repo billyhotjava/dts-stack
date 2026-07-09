@@ -14,6 +14,7 @@ import {
 } from "./dataManagementThemeModel";
 
 const { Text } = Typography;
+const E2E_DATA_PRODUCT_JOURNEY = "e2e-data-product";
 
 const TONE_COLOR: Record<DataManagementTone, string> = {
 	default: "default",
@@ -24,6 +25,13 @@ const TONE_COLOR: Record<DataManagementTone, string> = {
 };
 
 const statusTag = (label: string, tone: DataManagementTone) => <Tag color={TONE_COLOR[tone]}>{label}</Tag>;
+
+const withE2EJourney = (route: string) => {
+	const [path, query = ""] = route.split("?");
+	const params = new URLSearchParams(query);
+	params.set("journey", E2E_DATA_PRODUCT_JOURNEY);
+	return `${path}?${params.toString()}`;
+};
 
 const firstReportAcceptanceItems = ["连接成功", "任务可运行", "报表可查看", "证据可追溯"];
 
@@ -57,6 +65,145 @@ const firstReportJourneySteps = [
 		desc: "到运行概览确认任务成功率、告警和补数记录。",
 		route: "/ops/overview",
 		action: "查看运行证据",
+	},
+];
+
+type ProductJourneyStage = {
+	key: string;
+	title: string;
+	desc: string;
+	result: string;
+	evidence: string;
+	owner: string;
+	gap: string;
+	nextStep: string;
+	route: string;
+	action: string;
+	supportingRoute: string;
+	supportingAction: string;
+	tagColor: string;
+};
+
+const productJourneyStages: ProductJourneyStage[] = [
+	{
+		key: "integration",
+		title: "数据集成",
+		desc: "接入业务系统或文件，完成连接、结构探测和同步任务。",
+		result: "拿到可运行的数据链路",
+		evidence: "连接测试、字段探测、同步预检",
+		owner: "数据工程师",
+		gap: "未选择数据源或同步任务未预检",
+		nextStep: "选择业务系统并完成连接测试",
+		route: "/foundation/data-sources",
+		action: "配置数据源",
+		supportingRoute: "/explore/etl/transform",
+		supportingAction: "生成同步任务",
+		tagColor: "blue",
+	},
+	{
+		key: "planning",
+		title: "数仓规划",
+		desc: "定义主题域、分层、数据域和业务过程，决定数据进仓后的组织方式。",
+		result: "确认数据应该落到哪个业务主题",
+		evidence: "主题域、业务过程、资产归属",
+		owner: "数据架构师",
+		gap: "ODS/DWD/DWS/ADS 分层草稿待确认",
+		nextStep: "确认主题域、业务过程和分层策略",
+		route: "/governance/subjects",
+		action: "确认数仓规划",
+		supportingRoute: "/catalog/metadata-management",
+		supportingAction: "核对资产目录",
+		tagColor: "purple",
+	},
+	{
+		key: "standards",
+		title: "数据标准",
+		desc: "把业务术语、数据元、码表和标准模板绑定到字段。",
+		result: "让字段命名、类型和口径可复用",
+		evidence: "标准包、数据元、落标覆盖率",
+		owner: "数据管家",
+		gap: "标准包、数据元或码表覆盖率待补齐",
+		nextStep: "套用标准包并生成字段落标草稿",
+		route: "/foundation/standard-package",
+		action: "套用标准包",
+		supportingRoute: "/governance/standards/elements",
+		supportingAction: "维护数据元",
+		tagColor: "cyan",
+	},
+	{
+		key: "modeling",
+		title: "维度建模",
+		desc: "从标准字段生成模型草稿，再在低代码或 SQL 建模里微调。",
+		result: "形成事实、维度和汇总模型",
+		evidence: "模型字段、血缘、校验结果",
+		owner: "建模工程师",
+		gap: "模型草稿未创建或字段标准未应用",
+		nextStep: "进入低代码建模并生成 SQL 草稿",
+		route: "/studio/low-code-development",
+		action: "进入低代码建模",
+		supportingRoute: "/studio/sql-modeling",
+		supportingAction: "高级建模",
+		tagColor: "geekblue",
+	},
+	{
+		key: "metrics",
+		title: "数据指标",
+		desc: "基于模型定义原子指标、派生指标和口径说明。",
+		result: "把业务问题沉淀为指标资产",
+		evidence: "指标口径、计算逻辑、责任人",
+		owner: "业务分析师",
+		gap: "指标口径、粒度或责任人待绑定",
+		nextStep: "基于模型字段设计指标口径",
+		route: "/modeling/metric-workbench",
+		action: "设计指标",
+		supportingRoute: "/modeling/semantic/metrics",
+		supportingAction: "查看指标库",
+		tagColor: "green",
+	},
+	{
+		key: "development",
+		title: "数据开发",
+		desc: "把同步、清洗、模型生成和指标汇总编排成可运行任务。",
+		result: "让数据产品能按调度稳定产出",
+		evidence: "任务 DAG、运行日志、补数记录",
+		owner: "数据开发工程师",
+		gap: "脚本、调度或补数策略待确认",
+		nextStep: "编排开发任务并执行编译测试",
+		route: "/explore/etl/scripts",
+		action: "编排数据开发",
+		supportingRoute: "/explore/etl/orchestration",
+		supportingAction: "查看调度",
+		tagColor: "orange",
+	},
+	{
+		key: "service",
+		title: "数据服务",
+		desc: "把可信资产发布为报表、API 或数据产品，纳入权限和消费验收。",
+		result: "交付业务可用的数据消费入口",
+		evidence: "API、报表、授权记录",
+		owner: "服务发布人",
+		gap: "API、报表或数据产品入口未发布",
+		nextStep: "选择消费目标并配置授权",
+		route: "/services/apis",
+		action: "发布数据 API",
+		supportingRoute: "/bi/dashboards",
+		supportingAction: "创建报表",
+		tagColor: "magenta",
+	},
+	{
+		key: "evidence",
+		title: "运行证据",
+		desc: "回看任务、质量、服务调用和告警，把交付状态变成客户可验收证据。",
+		result: "证明链路持续可用",
+		evidence: "实例、告警、质量检查、服务日志",
+		owner: "运维与数据管家",
+		gap: "运行、质量、权限或审计证据未汇总",
+		nextStep: "查看实例日志并形成验收证据",
+		route: "/ops/instances",
+		action: "查看运行证据",
+		supportingRoute: "/ops/overview",
+		supportingAction: "运行概览",
+		tagColor: "red",
 	},
 ];
 
@@ -131,23 +278,28 @@ export default function Page({
 	const nextAction = selectedTheme?.nextAction || selectedTheme?.primaryAction.label;
 	const evidenceRefs = selectedTheme?.evidenceRefs || [];
 	const isConsumptionFocus = focus === "consumption";
-	const sectionTitle = isConsumptionFocus ? "消费发布" : "数据管理";
+	const sectionTitle = isConsumptionFocus ? "消费发布" : "端到端数据产品";
 	const sectionDescription = isConsumptionFocus
 		? "从数据产品、资产授权、报表/API 发布到客户验收的消费闭环。"
-		: "从数据源、黄金链路、治理阻断到消费发布的现场配置闭环。";
+		: "从集成、数仓规划、标准、建模、指标、开发到服务发布的现场配置闭环。";
 	const headerActions = (
 		<Space wrap>
-			<Button onClick={() => router.push("/foundation/data-sources")}>配置数据源</Button>
-			<Button type={blockedThemes.length > 0 ? "primary" : "default"} onClick={() => router.push("/workbench/todo")}>
+			<Button onClick={() => router.push(withE2EJourney("/foundation/data-sources"))}>配置数据源</Button>
+			<Button onClick={() => router.push(withE2EJourney("/governance/subjects"))}>数仓规划</Button>
+			<Button onClick={() => router.push(withE2EJourney("/foundation/standard-package"))}>标准包</Button>
+			<Button onClick={() => router.push(withE2EJourney("/studio/low-code-development"))}>低代码建模</Button>
+			<Button onClick={() => router.push(withE2EJourney("/modeling/metric-workbench"))}>指标设计</Button>
+			<Button onClick={() => router.push(withE2EJourney("/explore/etl/scripts"))}>数据开发</Button>
+			<Button type={blockedThemes.length > 0 ? "primary" : "default"} onClick={() => router.push(withE2EJourney("/workbench/todo"))}>
 				处理阻断项
 			</Button>
-			<Button onClick={() => router.push("/governance/quality")}>治理检查</Button>
-			<Button onClick={() => router.push("/catalog/assets")}>查看资产</Button>
-			<Button onClick={() => router.push("/catalog/lineage/graph")}>查看血缘</Button>
-			<Button onClick={() => router.push("/governance/standards/reference")}>字典管理</Button>
-			<Button onClick={() => router.push("/bi/dashboards")}>创建报表</Button>
-			<Button onClick={() => router.push("/services/apis")}>发布数据 API</Button>
-			<Button onClick={() => router.push("/ops/overview")}>查看运行</Button>
+			<Button onClick={() => router.push(withE2EJourney("/governance/quality"))}>治理检查</Button>
+			<Button onClick={() => router.push(withE2EJourney("/catalog/assets"))}>查看资产</Button>
+			<Button onClick={() => router.push(withE2EJourney("/catalog/lineage/graph"))}>查看血缘</Button>
+			<Button onClick={() => router.push(withE2EJourney("/governance/standards/reference"))}>字典管理</Button>
+			<Button onClick={() => router.push(withE2EJourney("/bi/dashboards"))}>创建报表</Button>
+			<Button onClick={() => router.push(withE2EJourney("/services/apis"))}>发布数据 API</Button>
+			<Button onClick={() => router.push(withE2EJourney("/ops/overview"))}>查看运行</Button>
 		</Space>
 	);
 
@@ -164,7 +316,7 @@ export default function Page({
 					{headerActions}
 				</div>
 			) : (
-				<PageHeader title="数据管理工作台" actions={headerActions} />
+				<PageHeader title="端到端数据产品工作台" actions={headerActions} />
 			)}
 
 			{isConsumptionFocus && (
@@ -186,6 +338,89 @@ export default function Page({
 				message={blockedThemes.length > 0 ? "存在需要处理的主题" : themeSummary}
 				description="业务主题需在客户现场按组织、报表和资产口径定义，产品不内置演示场景；配置完成后再展示数据可用、治理状态、消费状态和运行健康。"
 			/>
+
+			<Card
+				title="端到端数据产品工作台"
+				extra={
+					<Space wrap>
+						<Tag color="blue">统一旅程</Tag>
+						<Tag>已有页面承接</Tag>
+					</Space>
+				}
+				data-testid="end-to-end-data-product-journey"
+			>
+				<div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+					<div className="max-w-3xl">
+						<Typography.Title level={5} style={{ margin: 0 }}>
+							从一张业务表到可交付数据服务
+						</Typography.Title>
+						<Text type="secondary">
+							客户不需要在菜单里猜下一步；每个阶段都给出业务目标、验收证据和下一步动作，专业页面只作为当前阶段的工作台。
+						</Text>
+					</div>
+					<Space wrap>
+						<Button
+							type="primary"
+							data-testid="end-to-end-journey-continue"
+							onClick={() => router.push(withE2EJourney(productJourneyStages[0].route))}
+						>
+							开始接入
+						</Button>
+						<Button onClick={() => router.push(withE2EJourney("/ops/instances"))}>查看运行证据</Button>
+					</Space>
+				</div>
+				<div className="grid gap-3 2xl:grid-cols-4 xl:grid-cols-3 md:grid-cols-2">
+					{productJourneyStages.map((stage, index) => (
+						<div
+							key={stage.key}
+							className="flex min-h-[336px] flex-col justify-between rounded border border-gray-200 p-3"
+							data-testid={`end-to-end-stage-${stage.key}`}
+						>
+							<div className="space-y-2">
+								<div className="flex items-center justify-between gap-2">
+									<Tag color={stage.tagColor}>{String(index + 1).padStart(2, "0")}</Tag>
+									<Text type="secondary">{stage.title}</Text>
+								</div>
+								<div className="text-base font-medium">{stage.result}</div>
+								<Text type="secondary">{stage.desc}</Text>
+								<div className="rounded border border-dashed border-gray-200 p-2 text-sm">
+									<div className="font-medium">验收证据</div>
+									<Text type="secondary">{stage.evidence}</Text>
+								</div>
+								<div className="grid gap-2 text-sm">
+									<div>
+										<div className="text-muted-foreground">负责角色</div>
+										<Text>{stage.owner}</Text>
+									</div>
+									<div>
+										<div className="text-muted-foreground">当前缺口</div>
+										<Text type="secondary">{stage.gap}</Text>
+									</div>
+									<div>
+										<div className="text-muted-foreground">下一步</div>
+										<Text type="secondary">{stage.nextStep}</Text>
+									</div>
+								</div>
+							</div>
+							<Space wrap className="mt-3">
+								<Button
+									type={index === 0 ? "primary" : "default"}
+									data-testid={`end-to-end-stage-${stage.key}-primary`}
+									onClick={() => router.push(withE2EJourney(stage.route))}
+								>
+									{stage.action}
+								</Button>
+								<Button
+									data-testid={`end-to-end-stage-${stage.key}-secondary`}
+									onClick={() => router.push(withE2EJourney(stage.supportingRoute))}
+								>
+									{stage.supportingAction}
+								</Button>
+							</Space>
+						</div>
+					))}
+				</div>
+			</Card>
 
 			<Card
 				title={firstReportActive ? "当前首单：接入业务表生成报表" : "新手首单：接入业务表生成报表"}
@@ -278,7 +513,7 @@ export default function Page({
 					<EmptyState
 						compact
 						title="待现场定义业务主题"
-						description="数据管理工作台不内置演示场景。请在客户现场确认主题口径，并完成数据源、资产和交付链路配置后再展示主题卡片。"
+						description="端到端数据产品工作台不内置演示场景。请在客户现场确认主题口径，并完成数据源、资产和交付链路配置后再展示主题卡片。"
 						actions={
 							<Space wrap>
 								<Button type="primary" onClick={() => router.push("/foundation/data-sources")}>

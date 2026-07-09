@@ -42,6 +42,7 @@ import {
 	saveSqlModelStandardBindings,
 	generateSqlModelSchemaYml,
 	checkSqlModelStandardGate,
+	getStandardBindingDraftSnapshot,
 	createSqlModel,
 	updateSqlModel,
 	batchDeleteSqlModels,
@@ -103,6 +104,14 @@ import {
 	buildTruncateOutputRelationPreview,
 	buildRebuildOutputRelationPreview,
 } from "./sqlModelOutputAction.helpers";
+import {
+	buildModelNameFromStandardBindingDraft,
+	buildSqlFromStandardBindingDraft,
+	buildStandardBindingsFromDraft,
+	getStandardBindingDraft,
+	isBackendStandardBindingDraftId,
+	type StandardBindingDraft,
+} from "./standardBindingDraft";
 import {
 	applyBatchDeletedModelSelection,
 	applyDeletedModelSelection,
@@ -334,6 +343,8 @@ export default function SqlModelingPage() {
 	const [standardGateChecking, setStandardGateChecking] = useState(false);
 	const [standardGateResult, setStandardGateResult] = useState<SqlModelStandardGateResult | null>(null);
 	const [standardAutoMatching, setStandardAutoMatching] = useState(false);
+	const [standardBindingDraft, setStandardBindingDraft] = useState<StandardBindingDraft | null>(null);
+	const [standardDraftApplying, setStandardDraftApplying] = useState(false);
 	const [schemaYmlGenerating, setSchemaYmlGenerating] = useState(false);
 	const [bottomTab, setBottomTab] = useState("preview");
 	const [opsSubTab, setOpsSubTab] = useState("compile");
@@ -395,6 +406,33 @@ export default function SqlModelingPage() {
 	const selectedOdsSourceDataSourceId = Form.useWatch("sourceDataSourceId", odsGenerateForm);
 	const dbtSourcesReqSeqRef = useRef(0);
 	const buildPollAbortRef = useRef<AbortController | null>(null);
+
+	useEffect(() => {
+		if (typeof window === "undefined") return;
+		const draftId = new URLSearchParams(window.location.search).get("standardDraftId");
+		let cancelled = false;
+		const sessionDraft = getStandardBindingDraft(draftId);
+		const loadDraft = async () => {
+			if (!draftId) {
+				setStandardBindingDraft(null);
+				return;
+			}
+			if (!isBackendStandardBindingDraftId(draftId)) {
+				setStandardBindingDraft(sessionDraft);
+				return;
+			}
+			try {
+				const draft = (await getStandardBindingDraftSnapshot(draftId)) as StandardBindingDraft;
+				if (!cancelled) setStandardBindingDraft(draft || sessionDraft);
+			} catch {
+				if (!cancelled) setStandardBindingDraft(sessionDraft);
+			}
+		};
+		void loadDraft();
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 
 	const loadConfig = useCallback(async () => {
 		setConfigLoading(true);
@@ -1677,6 +1715,56 @@ export default function SqlModelingPage() {
 			sql: "select\n  *\nfrom {{ source('ods', 'your_table') }}\n",
 		});
 		setModelDrawerOpen(true);
+	};
+
+	const openCreateModelFromStandardDraft = () => {
+		if (!standardBindingDraft) {
+			toast.error("未找到字段落标草稿");
+			return;
+		}
+		const draftSql = buildSqlFromStandardBindingDraft(standardBindingDraft);
+		setEditingModel(null);
+		modelForm.resetFields();
+		modelForm.setFieldsValue({
+			planId: activeSpace?.id || undefined,
+			layer: "DWD",
+			name: buildModelNameFromStandardBindingDraft(standardBindingDraft),
+			alias: standardBindingDraft.title,
+			sourceDataSourceId: recommendedDataSourceId || dataSources[0]?.id || undefined,
+			materialized: "table",
+			enabled: true,
+			status: "DRAFT",
+			description: `${standardBindingDraft.title} 生成的模型草稿，字段标准来自数据标准落标结果。`,
+			semanticContract: "",
+			sql: draftSql,
+		});
+		setModelDrawerOpen(true);
+	};
+
+	const applyStandardDraftToActiveModel = async () => {
+		if (!standardBindingDraft) {
+			toast.error("未找到字段落标草稿");
+			return;
+		}
+		if (!activeModel?.id) {
+			toast.error("请先选择一个 SQL 模型，或先创建模型草稿");
+			return;
+		}
+		setStandardDraftApplying(true);
+		try {
+			const bindings = buildStandardBindingsFromDraft(standardBindingDraft);
+			const saved = (await saveSqlModelStandardBindings(activeModel.id, { bindings })) as SqlModelStandardBindingResult;
+			setStandardBindingResult(saved || null);
+			setStandardGateResult(null);
+			if (!normalizeText(sqlDraft)) {
+				setSqlDraft(buildSqlFromStandardBindingDraft(standardBindingDraft));
+			}
+			toast.success(`已应用 ${saved?.mappedColumns ?? bindings.length} 个字段标准到当前模型`);
+		} catch (err: any) {
+			toast.error(err?.message || "应用字段落标草稿失败");
+		} finally {
+			setStandardDraftApplying(false);
+		}
 	};
 
 	const openImportModel = () => {
@@ -3009,6 +3097,36 @@ export default function SqlModelingPage() {
 															{contractImpactLoading ? "计算中..." : (contractImpact?.fieldCount ?? modelColumns.length)}
 														</span>
 													</div>
+													{standardBindingDraft ? (
+														<div
+															className="rounded border border-blue-200 bg-blue-50/60 px-2 py-2"
+															data-testid="platform-sql-modeling-standard-draft"
+														>
+															<div className="mb-1 flex items-center justify-between gap-2">
+																<span className="font-medium text-blue-700">标准落标草稿</span>
+																<Tag color="blue">{standardBindingDraft.fields.length} 字段</Tag>
+															</div>
+															<div className="text-[11px] leading-5 text-muted-foreground">
+																{standardBindingDraft.title} 已从标准管理传入，可创建模型草稿，也可应用到当前模型并生成可微调 SQL。
+															</div>
+															<Space size={4} wrap className="mt-2">
+																<Button size="small" type="primary" onClick={openCreateModelFromStandardDraft}>
+																	创建模型草稿
+																</Button>
+																<Button
+																	size="small"
+																	loading={standardDraftApplying}
+																	disabled={!activeModel?.id}
+																	onClick={applyStandardDraftToActiveModel}
+																>
+																	应用到当前模型
+																</Button>
+																<Button size="small" disabled={!activeModel} onClick={() => setSqlDraft(buildSqlFromStandardBindingDraft(standardBindingDraft))}>
+																	填入 SQL 草稿
+																</Button>
+															</Space>
+														</div>
+													) : null}
 													<div
 														className="rounded border border-border bg-muted/20 px-2 py-2"
 														data-testid="platform-sql-modeling-standard-readiness"

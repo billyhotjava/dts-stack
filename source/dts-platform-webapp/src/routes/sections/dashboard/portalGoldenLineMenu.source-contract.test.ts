@@ -25,7 +25,7 @@ const LIQUIBASE_MASTER = readFileSync(
 );
 const GOLDEN_LINE_REPARENT = readFileSync(
 	new URL(
-		"../../../../../dts-admin/src/main/resources/config/liquibase/changelog/20260630-02_golden_line_portal_menu_reparent.xml",
+		"../../../../../dts-admin/src/main/resources/config/liquibase/changelog/20260709-01_dataworks_portal_menu_reparent.xml",
 		import.meta.url,
 	),
 	"utf8",
@@ -50,21 +50,11 @@ const child = (node: MenuNode, key: string) => {
 	return found;
 };
 
-test("portal menu follows the golden line information architecture", () => {
+test("portal menu follows the DataWorks-style modeling information architecture", () => {
 	assert.deepEqual(
 		MENU_SEED.portalNavSections.map((item) => item.key),
-		["workbench", "data-foundation", "resource", "studio", "metric-modeling", "portal", "consumption", "governance", "ops"],
+		["workbench", "resource", "studio", "governance", "consumption"],
 	);
-
-	assert.equal(section("data-foundation").title, "数据基础");
-	assert.deepEqual(section("data-foundation").children?.map((item) => item.key), ["subjects", "standards", "templates"]);
-	assert.equal(child(section("data-foundation"), "subjects").externalLink, "/governance/subjects");
-	assert.deepEqual(child(section("data-foundation"), "standards").children?.map((item) => item.key), [
-		"glossary",
-		"elements",
-		"reference",
-		"standard-package",
-	]);
 
 	assert.equal(section("resource").title, "数据集成");
 	assert.deepEqual(section("resource").children?.map((item) => item.key), [
@@ -76,50 +66,86 @@ test("portal menu follows the golden line information architecture", () => {
 		"changes",
 	]);
 
-	assert.equal(section("studio").title, "数据开发");
-	assert.doesNotMatch(JSON.stringify(section("studio")), /metric-modeling|studioMetricModeling/);
+	assert.equal(section("studio").title, "数据开发与运维");
 	assert.deepEqual(section("studio").children?.map((item) => item.key), [
+		"modeling",
+		"data-studio",
+		"ops-center",
+	]);
+
+	const modeling = child(section("studio"), "modeling");
+	assert.equal(modeling.title, "数据建模");
+	assert.deepEqual(modeling.children?.map((item) => item.key), [
+		"warehouse-planning",
+		"standards",
+		"dimensional-modeling",
+		"data-metrics",
+	]);
+	assert.deepEqual(child(modeling, "warehouse-planning").children?.map((item) => item.key), ["subjects", "projects"]);
+	assert.equal(child(child(modeling, "warehouse-planning"), "subjects").externalLink, "/governance/subjects");
+	assert.deepEqual(child(modeling, "standards").children?.map((item) => item.key), [
+		"standard-package",
+		"glossary",
+		"elements",
+		"reference",
+		"templates",
+	]);
+	assert.deepEqual(child(modeling, "dimensional-modeling").children?.map((item) => item.key), [
 		"low-code-development",
-		"projects",
 		"sql",
-		"scripts",
-		"orchestration",
-		"adhoc",
+		"semantic-objects",
+		"semantic-models",
 		"dbt-files",
 	]);
-
-	assert.deepEqual(section("metric-modeling").children?.map((item) => item.key), [
+	assert.deepEqual(child(modeling, "data-metrics").children?.map((item) => item.key), [
 		"metric-workbench",
-		"semantic-objects",
 		"semantic-metrics",
-		"semantic-models",
 		"semantic-publish",
 	]);
-	assert.doesNotMatch(JSON.stringify(section("metric-modeling")), /semantic-subjects|semantic-runs|\/modeling\/semantic\/subjects|\/modeling\/semantic\/runs/);
+	assert.doesNotMatch(JSON.stringify(modeling), /semantic-subjects|semantic-runs|\/modeling\/semantic\/subjects|\/modeling\/semantic\/runs/);
 
-	assert.equal(section("portal").title, "数据资产");
-	assert.deepEqual(section("consumption").children?.map((item) => item.key), ["services", "bi-apps", "screens"]);
+	assert.deepEqual(child(section("studio"), "data-studio").children?.map((item) => item.key), ["scripts", "orchestration", "adhoc"]);
+	assert.deepEqual(child(section("studio"), "ops-center").children?.map((item) => item.key), [
+		"overview",
+		"instances",
+		"alerts",
+		"backfill",
+	]);
+
+	assert.equal(section("governance").title, "数据治理");
+	assert.deepEqual(section("governance").children?.map((item) => item.key), ["assets", "qualityRules", "qualityReport", "classification"]);
+	assert.deepEqual(child(section("governance"), "assets").children?.map((item) => item.key), [
+		"map",
+		"search",
+		"metadata-management",
+		"detail",
+		"lineage",
+		"permission",
+	]);
+
+	assert.equal(section("consumption").title, "数据分析与服务");
+	assert.deepEqual(section("consumption").children?.map((item) => item.key), ["bi-apps", "screens", "services"]);
 	assert.equal(child(child(section("consumption"), "services"), "api").externalLink, "/services/apis");
 	assert.equal(child(child(child(section("consumption"), "bi-apps"), "bi"), "dashboards").externalLink, "/bi/dashboards");
 	assert.equal(child(section("consumption"), "screens").externalLink, "/bi/screens");
-
-	assert.equal(section("governance").title, "治理运营");
-	assert.deepEqual(section("governance").children?.map((item) => item.key), ["qualityRules", "qualityReport", "classification"]);
-	assert.doesNotMatch(JSON.stringify(section("governance")), /governanceSubjects|governanceStandards|governanceTemplates/);
-	assert.equal(section("ops").title, "运维与监控");
+	assert.equal(child(child(section("consumption"), "services"), "products").externalLink, "/catalog/data-products");
 });
 
 test("golden line section titles have locale coverage and role routes stay canonical", () => {
 	for (const key of [
-		"dataFoundation",
 		"dataIntegration",
 		"studioCenter",
+		"studioDataModeling",
+		"studioDataStudio",
+		"studioOpsCenter",
+		"warehousePlanning",
+		"dataStandards",
+		"dimensionalModeling",
+		"dataMetrics",
 		"studioLowCodeDevelopment",
-		"studioMetricModeling",
-		"dataPortal",
+		"governanceAssets",
 		"dataConsumption",
 		"governanceOperations",
-		"opsCenter",
 	]) {
 		assert.match(ZH_LOCALE, new RegExp(`"${key}"`));
 		assert.match(EN_LOCALE, new RegExp(`"${key}"`));
@@ -131,6 +157,7 @@ test("golden line section titles have locale coverage and role routes stay canon
 		"/foundation/data-sources",
 		"/modeling/metric-workbench",
 		"/services/apis",
+		"/catalog/data-products",
 		"/bi/dashboards",
 		"/bi/screens",
 		"/ops/instances",
@@ -140,12 +167,17 @@ test("golden line section titles have locale coverage and role routes stay canon
 });
 
 test("admin liquibase reparents persisted menus without deleting bindings", () => {
-	assert.match(LIQUIBASE_MASTER, /20260630-02_golden_line_portal_menu_reparent\.xml/);
-	assert.match(GOLDEN_LINE_REPARENT, /golden-line-portal-menu-reparent/);
-	assert.match(GOLDEN_LINE_REPARENT, /parent_id = data_foundation_id/);
+	assert.match(LIQUIBASE_MASTER, /20260709-01_dataworks_portal_menu_reparent\.xml/);
+	assert.match(GOLDEN_LINE_REPARENT, /dataworks-portal-menu-reparent/);
+	assert.match(GOLDEN_LINE_REPARENT, /studio_id/);
+	assert.match(GOLDEN_LINE_REPARENT, /modeling_id/);
+	assert.match(GOLDEN_LINE_REPARENT, /warehouse_planning_id/);
+	assert.match(GOLDEN_LINE_REPARENT, /standards_id/);
+	assert.match(GOLDEN_LINE_REPARENT, /dimensional_modeling_id/);
+	assert.match(GOLDEN_LINE_REPARENT, /data_metrics_id/);
+	assert.match(GOLDEN_LINE_REPARENT, /ops_center_id/);
 	assert.match(GOLDEN_LINE_REPARENT, /parent_id = consumption_id/);
-	assert.match(GOLDEN_LINE_REPARENT, /parent_id = NULL/);
-	assert.match(GOLDEN_LINE_REPARENT, /metric-modeling/);
+	assert.match(GOLDEN_LINE_REPARENT, /parent_id = governance_id/);
 	assert.match(GOLDEN_LINE_REPARENT, /sys\.nav\.portal\.serviceCenter/);
 	assert.match(GOLDEN_LINE_REPARENT, /sys\.nav\.portal\.businessIntelligenceApps/);
 	assert.doesNotMatch(GOLDEN_LINE_REPARENT, /DELETE FROM portal_menu_visibility|DELETE FROM portal_menu/);
@@ -157,5 +189,5 @@ test("retired metric run monitor menu is removed while compatibility route stays
 	assert.match(RUNS_MENU_CLEANUP, /\/modeling\/semantic\/runs/);
 	assert.match(RUNS_MENU_CLEANUP, /DELETE FROM portal_menu_visibility/);
 	assert.match(RUNS_MENU_CLEANUP, /DELETE FROM portal_menu m/);
-	assert.doesNotMatch(JSON.stringify(section("metric-modeling")), /studioSemanticRuns|\/modeling\/semantic\/runs/);
+	assert.doesNotMatch(JSON.stringify(section("studio")), /studioSemanticRuns|\/modeling\/semantic\/runs/);
 });

@@ -459,6 +459,12 @@ export default function StandardPackagePage() {
 							<Button key="again" onClick={resetWizard}>
 								再导入一个
 							</Button>,
+							<Button
+								key="binding-draft"
+								onClick={() => navigate("/governance/standards/elements?from=standard-package&bindingDraft=1")}
+							>
+								查看数据元并生成落标草稿
+							</Button>,
 							<Button key="history" type="primary" onClick={() => setActiveTab("history")}>
 								查看导入历史
 							</Button>,

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Breadcrumb, Button, Card, Descriptions, Divider, Drawer, Form, Input, List, Modal, Select, Space, Spin, Tag, Typography } from "antd";
+import { Alert, Breadcrumb, Button, Card, Descriptions, Divider, Drawer, Form, Input, List, Modal, Select, Space, Spin, Tag, Typography } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { DownloadOutlined, ImportOutlined } from "@ant-design/icons";
@@ -8,8 +8,10 @@ import { useNavigate, useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { PageHeader } from "@/components/page-header";
+import { createStandardBindingDraft, type StandardBindingDraftInput } from "@/pages/modeling/standardBindingDraft";
 import {
 	createMetadataStandard,
+	createStandardBindingDraftSnapshot,
 	deleteMetadataStandard,
 	downloadDataStandardPackageTemplate,
 	getMetadataStandardReferences,
@@ -64,6 +66,7 @@ export default function ElementsPage() {
 	const navigate = useNavigate();
 	const [searchParams, setSearchParams] = useSearchParams();
 	const [keyword, setKeyword] = useState(searchParams.get("keyword") || "");
+	const bindingDraftRequested = searchParams.get("bindingDraft") === "1";
 	const [pageNum, setPageNum] = useState(parseIntOr(searchParams.get("page"), 0));
 	const [pageSize, setPageSize] = useState(parseIntOr(searchParams.get("size"), 10) || 10);
 	const [data, setData] = useState<PagedPayload<MetadataStandard> | null>(null);
@@ -77,6 +80,7 @@ export default function ElementsPage() {
 	const [references, setReferences] = useState<AssetReferencePayload | null>(null);
 	const [codeOptions, setCodeOptions] = useState<ReferenceCodeDirectory[]>([]);
 	const [templateDownloading, setTemplateDownloading] = useState(false);
+	const [draftCreating, setDraftCreating] = useState(false);
 	const [form] = Form.useForm();
 	const canManage = useGovernanceManageAccess();
 
@@ -340,6 +344,56 @@ export default function ElementsPage() {
 
 	const content = data?.content ?? [];
 
+	const buildFieldBindingDraftPayload = (): StandardBindingDraftInput => ({
+		source: "metadata-elements",
+		title: normalizeText(keyword) ? `数据元字段落标草稿：${normalizeText(keyword)}` : "数据元字段落标草稿",
+		fields: content.map((row) => ({
+			columnName: row.fieldNameEn,
+			standardId: row.id,
+			standardCode: row.fieldNameEn,
+			standardName: row.fieldNameCn,
+			dataType: row.dataType,
+			nullable: row.nullable,
+			codeSet: row.codeSet,
+			securityLevel: row.securityLevel,
+			description: row.description,
+			domain: row.domain,
+			sourceSystem: row.sourceSystem,
+			isPk: row.isPk,
+		})),
+		metadata: {
+			totalFields: content.length,
+			keyword: normalizeText(keyword) || undefined,
+		},
+	});
+
+	const createFieldBindingDraft = async () => {
+		if (!canManage) {
+			toast.error("当前账号无治理维护权限");
+			return;
+		}
+		if (!content.length) {
+			toast.error("当前列表没有可输出的数据元");
+			return;
+		}
+		const payload = buildFieldBindingDraftPayload();
+		setDraftCreating(true);
+		try {
+			const draft = (await createStandardBindingDraftSnapshot(payload)) as { id?: string };
+			if (!draft?.id) {
+				throw new Error("missing_draft_id");
+			}
+			toast.success(`已保存字段落标快照：${content.length} 个数据元`);
+			navigate(`/studio/low-code-development?standardDraftId=${encodeURIComponent(draft.id)}&standardBindingSource=elements`);
+		} catch (err: any) {
+			const draft = createStandardBindingDraft(payload);
+			toast.warning("后端快照保存失败，已使用浏览器会话草稿继续建模");
+			navigate(`/studio/low-code-development?standardDraftId=${encodeURIComponent(draft.id)}&standardBindingSource=elements`);
+		} finally {
+			setDraftCreating(false);
+		}
+	};
+
 	return (
 		<div className="space-y-4">
 			<Breadcrumb items={[{ title: "数据治理中心" }, { title: "标准管理" }, { title: "数据元" }]} />
@@ -364,6 +418,14 @@ export default function ElementsPage() {
 						>
 							导入标准包
 						</Button>
+						<Button
+							onClick={createFieldBindingDraft}
+							loading={draftCreating}
+							disabled={!canManage || content.length === 0}
+							data-testid="governance-elements-standard-binding-draft"
+						>
+							生成字段落标草稿
+						</Button>
 						<Button type="primary" onClick={() => openModal()} disabled={!canManage} data-testid="governance-elements-create">
 							+ 新增数据元
 						</Button>
@@ -373,6 +435,14 @@ export default function ElementsPage() {
 			<div className="rounded-md border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
 				数据元是 SQL 模型字段的标准来源；通过引用关系查看模型字段引用，避免标准只停留在治理台账。
 			</div>
+			{bindingDraftRequested ? (
+				<Alert
+					type="success"
+					showIcon
+					message="标准包已应用"
+					description="请筛选或确认本批数据元，点击“生成字段落标草稿”后进入低代码建模，草稿会继续传递到 SQL 建模并生成可微调 SQL。"
+				/>
+			) : null}
 
 			<Card>
 				<Space className="mb-4">

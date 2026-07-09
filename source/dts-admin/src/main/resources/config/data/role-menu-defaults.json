@@ -48,9 +48,9 @@
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.studioLowCodeDevelopment",
-    "title": "低代码开发向导",
-    "route": "/studio/low-code-development",
+    "code": "sys.nav.portal.governanceSubjects",
+    "title": "主题域管理",
+    "route": "/governance/subjects",
     "requiredRoles": []
   },
   {
@@ -60,69 +60,9 @@
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.studioSqlModeling",
-    "title": "逻辑建模（SQL）",
-    "route": "/studio/sql-modeling",
-    "requiredRoles": []
-  },
-  {
-    "code": "sys.nav.portal.studioMetricWorkbench",
-    "title": "指标工作台",
-    "route": "/modeling/metric-workbench",
-    "requiredRoles": []
-  },
-  {
-    "code": "sys.nav.portal.studioSemanticObjects",
-    "title": "业务对象",
-    "route": "/modeling/semantic/objects",
-    "requiredRoles": []
-  },
-  {
-    "code": "sys.nav.portal.studioSemanticMetrics",
-    "title": "指标管理",
-    "route": "/modeling/semantic/metrics",
-    "requiredRoles": []
-  },
-  {
-    "code": "sys.nav.portal.studioSemanticModels",
-    "title": "模型管理",
-    "route": "/modeling/semantic/models",
-    "requiredRoles": []
-  },
-  {
-    "code": "sys.nav.portal.studioSemanticPublish",
-    "title": "发布审核",
-    "route": "/modeling/semantic/publish",
-    "requiredRoles": []
-  },
-  {
-    "code": "sys.nav.portal.studioScripts",
-    "title": "脚本开发（Python/Spark）",
-    "route": "/explore/etl/transform",
-    "requiredRoles": []
-  },
-  {
-    "code": "sys.nav.portal.studioOrchestration",
-    "title": "任务编排",
-    "route": "/explore/etl/orchestration",
-    "requiredRoles": []
-  },
-  {
-    "code": "sys.nav.portal.studioAdhoc",
-    "title": "即席查询",
-    "route": "/explore/workbench",
-    "requiredRoles": []
-  },
-  {
-    "code": "sys.nav.portal.studioDbtFiles",
-    "title": "项目文件浏览",
-    "route": "/modeling/dbt-files",
-    "requiredRoles": []
-  },
-  {
-    "code": "sys.nav.portal.governanceSubjects",
-    "title": "主题域管理",
-    "route": "/governance/subjects",
+    "code": "sys.nav.portal.governanceStandardPackage",
+    "title": "标准包导入",
+    "route": "/foundation/standard-package",
     "requiredRoles": []
   },
   {
@@ -150,21 +90,93 @@
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.governanceQualityRules",
-    "title": "质量管控",
-    "route": "/governance/rules",
+    "code": "sys.nav.portal.studioLowCodeDevelopment",
+    "title": "低代码开发向导",
+    "route": "/studio/low-code-development",
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.governanceQualityReport",
-    "title": "质量报告",
-    "route": "/governance/quality",
+    "code": "sys.nav.portal.studioSqlModeling",
+    "title": "逻辑建模（SQL）",
+    "route": "/studio/sql-modeling",
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.governanceClassification",
-    "title": "分级分类",
-    "route": "/security/data-security",
+    "code": "sys.nav.portal.studioSemanticObjects",
+    "title": "业务对象",
+    "route": "/modeling/semantic/objects",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.studioSemanticModels",
+    "title": "模型管理",
+    "route": "/modeling/semantic/models",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.studioDbtFiles",
+    "title": "项目文件浏览",
+    "route": "/modeling/dbt-files",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.studioMetricWorkbench",
+    "title": "指标工作台",
+    "route": "/modeling/metric-workbench",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.studioSemanticMetrics",
+    "title": "指标管理",
+    "route": "/modeling/semantic/metrics",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.studioSemanticPublish",
+    "title": "发布审核",
+    "route": "/modeling/semantic/publish",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.studioScripts",
+    "title": "脚本开发（Python/Spark）",
+    "route": "/explore/etl/scripts",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.studioOrchestration",
+    "title": "任务编排",
+    "route": "/explore/etl/orchestration",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.studioAdhoc",
+    "title": "即席查询",
+    "route": "/explore/workbench",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.opsOverview",
+    "title": "运行概览",
+    "route": "/ops/overview",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.opsInstances",
+    "title": "任务实例监控",
+    "route": "/ops/instances",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.opsAlerts",
+    "title": "告警记录",
+    "route": "/ops/alerts",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.opsBackfill",
+    "title": "补数管理",
+    "route": "/ops/backfill",
     "requiredRoles": []
   },
   {
@@ -186,15 +198,9 @@
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.dataPortalProducts",
-    "title": "数据产品",
-    "route": "/catalog/data-products",
-    "requiredRoles": []
-  },
-  {
     "code": "sys.nav.portal.dataPortalDetail",
     "title": "资产台账",
-    "route": "/catalog/assets?view=table",
+    "route": "/catalog/assets/ledger",
     "requiredRoles": []
   },
   {
@@ -240,51 +246,21 @@
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.opsOverview",
-    "title": "运行概览",
-    "route": "/ops/overview",
+    "code": "sys.nav.portal.governanceQualityRules",
+    "title": "质量管控",
+    "route": "/governance/rules",
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.opsInstances",
-    "title": "任务实例监控",
-    "route": "/ops/instances",
+    "code": "sys.nav.portal.governanceQualityReport",
+    "title": "质量报告",
+    "route": "/governance/quality",
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.opsAlerts",
-    "title": "告警记录",
-    "route": "/ops/alerts",
-    "requiredRoles": []
-  },
-  {
-    "code": "sys.nav.portal.opsBackfill",
-    "title": "补数管理",
-    "route": "/ops/backfill",
-    "requiredRoles": []
-  },
-  {
-    "code": "sys.nav.portal.serviceApi",
-    "title": "数据 API 管理",
-    "route": "/services/apis",
-    "requiredRoles": []
-  },
-  {
-    "code": "sys.nav.portal.serviceOutbound",
-    "title": "数据推送",
-    "route": "/services/products",
-    "requiredRoles": []
-  },
-  {
-    "code": "sys.nav.portal.serviceExchange",
-    "title": "共享交换",
-    "route": "/services/tokens",
-    "requiredRoles": []
-  },
-  {
-    "code": "sys.nav.portal.biScreens",
-    "title": "数据大屏",
-    "route": "/bi/screens",
+    "code": "sys.nav.portal.governanceClassification",
+    "title": "分级分类",
+    "route": "/security/data-security",
     "requiredRoles": []
   },
   {
@@ -303,6 +279,36 @@
     "code": "sys.nav.portal.biData",
     "title": "BI 数据集",
     "route": "/bi/data",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.biScreens",
+    "title": "数据大屏",
+    "route": "/bi/screens",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.serviceApi",
+    "title": "数据 API 管理",
+    "route": "/services/apis",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.dataPortalProducts",
+    "title": "数据产品",
+    "route": "/catalog/data-products",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.serviceOutbound",
+    "title": "数据推送",
+    "route": "/services/products",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.serviceExchange",
+    "title": "共享交换",
+    "route": "/services/tokens",
     "requiredRoles": []
   }
 ]

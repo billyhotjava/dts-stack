@@ -1,0 +1,17 @@
+- generic [ref=e6] [box=0,0,1366,768]:
+  - generic [box=0,0,1366,0]:
+    - region "Notifications alt+T" [box=0,0,1366,0]
+  - generic [ref=e8] [box=0,0,1366,768]:
+    - img "科技氛围大数据平台插画" [ref=e10] [box=0,0,683,768]
+    - generic [ref=e11] [box=683,0,683,768]:
+      - generic [ref=e13] [box=723,40,92,32]:
+        - img [ref=e14] [box=723,40,32,32]
+        - generic [ref=e16] [box=767,41,48,30]: 机密
+      - generic [ref=e20] [box=865,354,320,108]:
+        - generic [ref=e21] [box=865,354,320,56]:
+          - heading "BI数智平台" [level=1] [ref=e22] [box=964,354,121,32]
+          - paragraph [ref=e23] [box=999,390,50,20]: (业务端)
+        - button "证书登录" [ref=e24] [box=865,426,320,36]
+    - generic [ref=e25] [box=1218,8,140,36]:
+      - button "简体中文" [ref=e26] [box=1218,8,80,36]
+      - button "设置" [ref=e27] [box=1306,8,52,36]

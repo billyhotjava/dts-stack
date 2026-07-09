@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Card, Space, Tag, Typography } from "antd";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -14,6 +15,13 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { useRouter } from "@/routes/hooks";
+import { getStandardBindingDraftSnapshot } from "@/api/platformApi";
+import {
+	getStandardBindingDraft,
+	isBackendStandardBindingDraftId,
+	type StandardBindingDraft,
+	withStandardDraftRoute,
+} from "./standardBindingDraft";
 
 const { Text } = Typography;
 
@@ -132,6 +140,37 @@ const ADVANCED_LINKS = [
 
 export default function LowCodeDevelopmentPage() {
 	const router = useRouter();
+	const standardDraftId = useMemo(() => {
+		if (typeof window === "undefined") return "";
+		return new URLSearchParams(window.location.search).get("standardDraftId") || "";
+	}, []);
+	const [standardDraft, setStandardDraft] = useState<StandardBindingDraft | null>(() => getStandardBindingDraft(standardDraftId));
+	const routeWithStandardDraft = (route: string) => withStandardDraftRoute(route, standardDraftId);
+
+	useEffect(() => {
+		let cancelled = false;
+		const loadDraft = async () => {
+			if (!standardDraftId) {
+				setStandardDraft(null);
+				return;
+			}
+			const sessionDraft = getStandardBindingDraft(standardDraftId);
+			if (!isBackendStandardBindingDraftId(standardDraftId)) {
+				setStandardDraft(sessionDraft);
+				return;
+			}
+			try {
+				const draft = (await getStandardBindingDraftSnapshot(standardDraftId)) as StandardBindingDraft;
+				if (!cancelled) setStandardDraft(draft || sessionDraft);
+			} catch {
+				if (!cancelled) setStandardDraft(sessionDraft);
+			}
+		};
+		void loadDraft();
+		return () => {
+			cancelled = true;
+		};
+	}, [standardDraftId]);
 
 	return (
 		<div className="space-y-5 px-6 py-5" data-testid="low-code-development-page">
@@ -157,6 +196,25 @@ export default function LowCodeDevelopmentPage() {
 				message="从业务表到指标和报表数据集"
 				description="低代码入口负责表达业务意图和串联状态；连接配置、基础明细模型发布和复杂关联仍由专业用户审核。"
 			/>
+			{standardDraft ? (
+				<Alert
+					type="success"
+					showIcon
+					data-testid="low-code-standard-binding-draft-ready"
+					message="标准落标草稿已接入"
+					description={`已接收 ${standardDraft.fields.length} 个字段标准，后续建模会携带字段名、标准类型、码表和密级，进入 SQL 建模后可生成模型草稿和可微调 SQL。`}
+					action={
+						<Space wrap>
+							<Button size="small" type="primary" onClick={() => router.push(routeWithStandardDraft("/studio/sql-modeling"))}>
+								进入 SQL 建模
+							</Button>
+							<Button size="small" onClick={() => router.push(routeWithStandardDraft("/modeling/semantic/models?journey=low-code-development"))}>
+								查看模型候选
+							</Button>
+						</Space>
+					}
+				/>
+			) : null}
 
 			<div className="grid gap-3 md:grid-cols-3">
 				<Card size="small" className="rounded-lg">
@@ -217,12 +275,12 @@ export default function LowCodeDevelopmentPage() {
 									{step.owner}
 								</Tag>
 								<div className="mt-auto flex flex-wrap gap-2">
-									<Button type="primary" onClick={() => router.push(step.primaryRoute)}>
+									<Button type="primary" onClick={() => router.push(routeWithStandardDraft(step.primaryRoute))}>
 										{step.primaryAction}
 										<ArrowRight size={14} />
 									</Button>
 									{step.secondaryRoute && step.secondaryAction ? (
-										<Button onClick={() => router.push(step.secondaryRoute!)}>{step.secondaryAction}</Button>
+										<Button onClick={() => router.push(routeWithStandardDraft(step.secondaryRoute!))}>{step.secondaryAction}</Button>
 									) : null}
 								</div>
 							</div>
@@ -234,7 +292,7 @@ export default function LowCodeDevelopmentPage() {
 			<Card title="消费目标" className="rounded-lg">
 				<div className="grid gap-3 md:grid-cols-4">
 					{CONSUMPTION_TARGETS.map((target) => (
-						<Button key={target.title} className="h-auto justify-start py-3" onClick={() => router.push(target.route)}>
+						<Button key={target.title} className="h-auto justify-start py-3" onClick={() => router.push(routeWithStandardDraft(target.route))}>
 							<div className="text-left">
 								<div className="font-medium">{target.title}</div>
 								<div className="text-xs text-gray-500">{target.desc}</div>
@@ -247,7 +305,7 @@ export default function LowCodeDevelopmentPage() {
 			<Card title="高级开发入口" className="rounded-lg" data-testid="advanced-development-links">
 				<Space wrap>
 					{ADVANCED_LINKS.map((item) => (
-						<Button key={item.route} onClick={() => router.push(item.route)}>
+						<Button key={item.route} onClick={() => router.push(routeWithStandardDraft(item.route))}>
 							{item.title}
 						</Button>
 					))}
