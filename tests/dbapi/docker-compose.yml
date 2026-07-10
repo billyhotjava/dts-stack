@@ -1,0 +1,15 @@
+services:
+  dbapi:
+    build: .
+    container_name: dts-dbapi-test
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${DBAPI_EXTERNAL_PORT:-8081}:8000"
+    networks:
+      - mysql_api_network
+
+networks:
+  mysql_api_network:
+    external: true
+    name: ${MYSQL_DOCKER_NETWORK:-mysql_api_app_mysql_api_network}

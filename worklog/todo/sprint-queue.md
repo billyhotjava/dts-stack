@@ -48,3 +48,16 @@
 **目录**: `worklog/todo/sprint-62-202607-journey-trust-and-gate-evidence/`
 
 **来源**: 对 sprint-61 旅程重构的三视角 review（DataWorks 成熟产品 / dbt 门禁语义 / 客户无正规开发）；缺口分析见 sprint 目录 `assets/gap-analysis.md`。依赖：browser 证据挂靠 sprint-61 F9。
+
+## Sprint-63: 数仓规划、数据标准与维度建模闭环 (202607)
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-数仓规划上下文与主题域入口 | 3 | READY |
+| F2-规划上下文到数据标准与字段草稿 | 3 | READY |
+| F3-标准草稿到维度建模候选 | 3 | READY |
+| F4-规划-标准-建模闭环验证 | 3 | READY |
+
+**统计**: READY=12, IN_PROGRESS=0, DONE=0, BLOCKED=0
+
+**目录**: `worklog/todo/sprint-63-202607-warehouse-planning-standard-dimension-loop/`
