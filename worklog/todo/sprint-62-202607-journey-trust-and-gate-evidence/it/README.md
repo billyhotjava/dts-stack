@@ -5,7 +5,7 @@
 - [x] `JourneySnapshot.source-contract.test.ts`：快照写入/读取/版本不匹配丢弃/清除；恢复 URL 与中断前参数一致。
 - [x] `JourneyArtifactValidation.source-contract.test.ts`：三态契约、七参数 API 缺口标注、注入式草稿清单、异常不抛出。
 - [x] `JourneyStageState` 扩展用例：invalid→blocked+恢复动作、valid→done+verified、unknown→done+unverified、复数解析器透传、不传 validations 行为不变。
-- [ ] `GateEvidence.source-contract.test.ts`：四项 checks 的 ready/missing/blocked 组合与聚合 verdict；缺 API 时 apiName 必填。
+- [x] `GateEvidence.source-contract.test.ts`：四项 checks 结构、API 缺口标注、校验联动、barrel 导出。
 - [ ] `DataProductAcceptancePackage` 扩展用例：按 checks 聚合、missing 项计数、markdown 导出含门禁明细。
 - [ ] `JourneyContextBar` 扩展用例：joinable 模式渲染、关闭后会话内不再出现、journey 模式下不显示 joinable。
 - [ ] 路由一致性用例：STAGE_CONFIG 全部 route 在应用路由表中存在。
@@ -78,3 +78,9 @@
 - GREEN：`node --test` 契约 0 fail（新增 Bar 校验呈现契约、workbench/LowCode 真实校验源接线契约）。
 - GREEN：`pnpm build` 通过。
 - 交付说明：workbench 阶段卡 done+unverified 显示"待确认"金标、invalid 阶段给"清除无效参数"按钮（保 journey 清单参）；JourneyContextBar 新增可选 validations 注入，invalid 上下文红标可关闭清除；LowCodeDevelopmentPage 作为 Bar 校验接线样板（真实 standardBindingDraft 清单）。F2 整体 DONE：手改 URL 塞假 standardDraftId 时对应阶段 blocked，不再显示纯绿。
+
+### F3-T01 门禁证据数据模型（2026-07-10）
+
+- GREEN：`pnpm vitest run .../gateEvidence.test.ts` 5/5（verdict 优先级 blocked>missing>ready、参数推导四项 check、证据 URL 保 journey 上下文、invalid artifact→blocked→fail、非 ready 项 apiName 规则）。
+- GREEN：`node --test` 契约套件 0 fail；`pnpm build` 通过。
+- 设计说明：四项 check 对齐 dbt build 语义（落标约束/编译/测试/运行）；test 项接口未接入前恒 missing 并标注 `GET /api/dbt/test-results`，不伪装；与 F2 校验联动——invalid 对象使对应 check blocked、verdict fail。

@@ -25,6 +25,16 @@ export {
 	type StandardDraftLookup,
 } from "./journeyArtifactValidation";
 export {
+	buildGateEvidence,
+	resolveGateVerdict,
+	type GateCheck,
+	type GateCheckKey,
+	type GateCheckStatus,
+	type GateEvidence,
+	type GateEvidenceOptions,
+	type GateVerdict,
+} from "./gateEvidence";
+export {
 	JOURNEY_SNAPSHOT_STORAGE_KEY,
 	JOURNEY_SNAPSHOT_VERSION,
 	buildSnapshotResumeUrl,
