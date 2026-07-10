@@ -43,3 +43,10 @@
 - GREEN：`node --test src/components/journey/JourneySnapshot.source-contract.test.ts` 4/4 通过（导出契约、可注入 storage、API 缺口标注、barrel 导出）。
 - GREEN：`pnpm build`（tsc + vite legacy）通过。
 - GitNexus detect_changes：本任务仅新增 journeySnapshot 模块与 index.ts 追加导出；检出的 medium 风险项均属 sprint 外既有未提交改动（API 数据源连通性），与本任务无交集。
+
+### F1-T02 上下文变化自动保存快照（2026-07-10）
+
+- GREEN：`pnpm vitest run src/components/journey/journeySnapshot.test.ts` 10/10（新增：enabled 才持久化、同上下文去重、stage/参数漂移判定六组合）。
+- GREEN：`node --test src/components/journey/*.source-contract.test.ts` 全套 0 fail（新增 hook 自动持久化契约用例）。
+- GREEN：`pnpm build` 通过。
+- 影响面：gitnexus impact 对 useDataProductJourneyContext 无索引记录（新文件晚于索引），grep 确认唯一消费方为 JourneyContextBar，纯增量 effect，向后兼容。

@@ -5,6 +5,7 @@ import test from "node:test";
 const snapshotUrl = new URL("./journeySnapshot.ts", import.meta.url);
 const indexUrl = new URL("./index.ts", import.meta.url);
 const behaviorTestUrl = new URL("./journeySnapshot.test.ts", import.meta.url);
+const hookUrl = new URL("./useDataProductJourneyContext.ts", import.meta.url);
 
 test("journey snapshot module persists, restores and clears journey instances", () => {
 	assert.equal(existsSync(snapshotUrl), true, `${snapshotUrl.pathname} should exist`);
@@ -39,6 +40,19 @@ test("journey snapshot storage is injectable and degrades silently", () => {
 test("journey snapshot marks the backend instance api gap explicitly", () => {
 	const source = readFileSync(snapshotUrl, "utf8");
 	assert.match(source, /api\/journey\/instances/);
+});
+
+test("journey context hook persists snapshots automatically inside the journey", () => {
+	const hookSource = readFileSync(hookUrl, "utf8");
+
+	assert.match(hookSource, /persistJourneyContextSnapshot/);
+	assert.match(hookSource, /useEffect/);
+
+	const snapshotSource = readFileSync(snapshotUrl, "utf8");
+	assert.match(snapshotSource, /export const shouldPersistSnapshot/);
+	assert.match(snapshotSource, /export const persistJourneyContextSnapshot/);
+	// 去重：与已存快照一致时不重复写入
+	assert.match(snapshotSource, /shouldPersistSnapshot\(context, loadJourneySnapshot\(storage\)\)/);
 });
 
 test("journey snapshot is exported from the journey barrel and has behavior tests", () => {

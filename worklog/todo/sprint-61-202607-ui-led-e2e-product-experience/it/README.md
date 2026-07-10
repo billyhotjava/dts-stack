@@ -9,7 +9,7 @@
 - [x] `JourneyContextBar.source-contract.test.ts` 覆盖子页面上下文条、返回工作台和继续下一步。
 - [x] `JourneyStageState.source-contract.test.ts` 覆盖阶段状态、缺口、blocker 和下一步动作。
 - [x] `DataProductAcceptancePackage.source-contract.test.ts` 覆盖客户验收包证据分组和缺失项。
-- [ ] API 数据源 normalizer、已保存连接测试和新建表单 source config 的一致性测试。
+- [x] API 数据源 normalizer、已保存连接测试和新建表单 source config 的一致性测试。
 
 ## Browser Smoke
 
@@ -100,3 +100,14 @@
 - 静态检查：`git diff --check` 通过。
 - GitNexus：`detect_changes(scope=all)` 为 `medium`，变更集中在 UI 页面符号，受影响执行流为 `SqlModelingPage -> NormalizeText` 与 `SqlModelingPage -> Get_key`，未出现 HIGH/CRITICAL。
 - 待补：可登录 Playwright 点击复制/下载、验收包截图和 Chrome 95/narrow viewport 证据，归入 F9 回归基线。
+
+## 2026-07-10 F2-T04 API 运行配置一致性证据
+
+- RED：先补充 normalizer、已保存连接测试和新建表单 source-contract 断言，分别验证嵌套 `api/readerConfig` 配置未被提升时的失败行为。
+- GREEN：`./mvnw -q -pl dts-ingestion -Dtest=ApiSourceConfigNormalizerTest,ApiHttpSourceConnectorTest,ApiConnectorContractResourceTest -DtrimStackTrace=true test` 通过；扩展回归包含 `IngestionSourceResolverTest,IngestionTaskResourceTest`，通过。
+- Platform：`./mvnw -q -pl dts-platform -Dtest=IngestionTaskProxyResourceTest,IngestionServiceClientTest -Dmaven.compiler.proc=none -DtrimStackTrace=true test` 通过。
+- Frontend：`DataSourcesPage.source-contract.test.ts` 覆盖新建表单完整 source config 传递；与旅程相关 source-contract 合并 28/28 通过；`pnpm exec tsc --noEmit` 通过。
+- Build：`LEGACY_USE_HOST_MAVEN=1 PREBUILD_JARS=1 SAVE_IMAGE_TARS=false ./builds/dts-build.sh --image dts-ingestion dts-platform dts-platform-webapp --no-save` 通过；三项容器重建后均运行，新镜像创建时间为 2026-07-10 12:28。
+- Runtime：容器内调用 `POST /api/ingestion/api/test-connection`，使用 `X-DTS-Service: dts-platform`，探测同网络 `dts-platform` 的 `/management/health`，返回 `connected=true`、`httpStatus=200`、`sampleCount=1`、`recordPathResolved=true`。
+- Governance：未显式设置 `allowHttp/allowedHosts` 时内网 HTTP 被正确拒绝为 `API_RUNTIME_BLOCKED_URL`；显式策略后测试通过，说明治理限制和可操作配置同时生效。
+- Known issue：ingestion 自动重试队列的历史失败任务在容器启动后仍报告 `UnexpectedRollbackException`，需作为独立运行治理任务处理；本 T04 不修改该行为。

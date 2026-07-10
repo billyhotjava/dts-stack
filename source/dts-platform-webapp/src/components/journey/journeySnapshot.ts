@@ -3,7 +3,9 @@
 // 当前仅落地 localStorage；接口就绪后由同一契约切换存储实现。
 import {
 	E2E_DATA_PRODUCT_JOURNEY,
+	JOURNEY_CONTEXT_PARAM_KEYS,
 	buildJourneyUrl,
+	type DataProductJourneyContext,
 	type DataProductJourneyContextParams,
 	type DataProductJourneyStageKey,
 } from "./journeyContext";
@@ -103,6 +105,27 @@ export const loadJourneySnapshot = (
 		clearJourneySnapshot(storage);
 		return null;
 	}
+};
+
+export type JourneySnapshotContextInput = Pick<DataProductJourneyContext, "enabled" | "stage" | "params">;
+
+export const shouldPersistSnapshot = (
+	context: JourneySnapshotContextInput,
+	existing: JourneySnapshot | null,
+): boolean => {
+	if (!context.enabled) return false;
+	if (!existing) return true;
+	if (existing.stage !== context.stage) return true;
+	return JOURNEY_CONTEXT_PARAM_KEYS.some((key) => existing.params[key] !== context.params[key]);
+};
+
+export const persistJourneyContextSnapshot = (
+	context: JourneySnapshotContextInput,
+	storage: JourneySnapshotStorage | undefined = resolveDefaultStorage(),
+): boolean => {
+	if (!storage) return false;
+	if (!shouldPersistSnapshot(context, loadJourneySnapshot(storage))) return false;
+	return saveJourneySnapshot(createJourneySnapshot(context.stage, context.params), storage);
 };
 
 export const buildSnapshotResumeUrl = (snapshot: JourneySnapshot): string => {

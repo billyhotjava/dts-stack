@@ -16,8 +16,11 @@ export {
 	clearJourneySnapshot,
 	createJourneySnapshot,
 	loadJourneySnapshot,
+	persistJourneyContextSnapshot,
 	saveJourneySnapshot,
+	shouldPersistSnapshot,
 	type JourneySnapshot,
+	type JourneySnapshotContextInput,
 	type JourneySnapshotStorage,
 } from "./journeySnapshot";
 export {

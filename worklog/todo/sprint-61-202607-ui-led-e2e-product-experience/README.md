@@ -46,7 +46,7 @@
 | F8 | 客户验收包与证据聚合 | 3 | IN_PROGRESS | P1 |
 | F9 | 可登录浏览器验收与回归基线 | 3 | READY | P0 |
 
-**统计**: READY=17, IN_PROGRESS=4, DONE=7, BLOCKED=0
+**统计**: READY=17, IN_PROGRESS=3, DONE=8, BLOCKED=0
 
 ## 下一阶段实施顺序
 

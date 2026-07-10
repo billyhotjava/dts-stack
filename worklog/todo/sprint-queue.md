@@ -30,7 +30,7 @@
 | F8-客户验收包与证据聚合 | 3 | IN_PROGRESS |
 | F9-可登录浏览器验收与回归基线 | 3 | READY |
 
-**统计**: READY=17, IN_PROGRESS=4, DONE=7, BLOCKED=0
+**统计**: READY=17, IN_PROGRESS=3, DONE=8, BLOCKED=0
 
 **目录**: `worklog/todo/sprint-61-202607-ui-led-e2e-product-experience/`
 
@@ -43,7 +43,7 @@
 | F3-dbt式门禁证据结构化 | 3 | READY |
 | F4-菜单直达旅程感知与验收包打印 | 3 | READY |
 
-**统计**: READY=11, IN_PROGRESS=1, DONE=1, BLOCKED=0
+**统计**: READY=10, IN_PROGRESS=1, DONE=2, BLOCKED=0
 
 **目录**: `worklog/todo/sprint-62-202607-journey-trust-and-gate-evidence/`
 

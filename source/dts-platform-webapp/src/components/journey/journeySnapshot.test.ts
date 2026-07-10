@@ -6,7 +6,9 @@ import {
 	clearJourneySnapshot,
 	createJourneySnapshot,
 	loadJourneySnapshot,
+	persistJourneyContextSnapshot,
 	saveJourneySnapshot,
+	shouldPersistSnapshot,
 	type JourneySnapshotStorage,
 } from "./journeySnapshot";
 
@@ -110,6 +112,44 @@ describe("journey snapshot persistence", () => {
 		expect(saveJourneySnapshot(createJourneySnapshot("integration", {}), undefined)).toBe(false);
 		expect(loadJourneySnapshot(undefined)).toBeNull();
 		expect(() => clearJourneySnapshot(undefined)).not.toThrow();
+	});
+
+	it("only persists enabled journey contexts", () => {
+		const storage = createMemoryStorage();
+
+		expect(persistJourneyContextSnapshot({ enabled: false, stage: "modeling", params: { modelId: "m-1" } }, storage)).toBe(
+			false,
+		);
+		expect(storage.data.size).toBe(0);
+
+		expect(persistJourneyContextSnapshot({ enabled: true, stage: "modeling", params: { modelId: "m-1" } }, storage)).toBe(
+			true,
+		);
+		expect(loadJourneySnapshot(storage)?.params).toEqual({ modelId: "m-1" });
+	});
+
+	it("dedupes persistence when stage and params are unchanged", () => {
+		const storage = createMemoryStorage();
+		const context = { enabled: true, stage: "metrics", params: { modelId: "m-1", metricId: "k-2" } } as const;
+
+		expect(persistJourneyContextSnapshot(context, storage)).toBe(true);
+		expect(persistJourneyContextSnapshot(context, storage)).toBe(false);
+
+		expect(persistJourneyContextSnapshot({ ...context, params: { ...context.params, metricId: "k-3" } }, storage)).toBe(
+			true,
+		);
+		expect(loadJourneySnapshot(storage)?.params.metricId).toBe("k-3");
+	});
+
+	it("decides persistence from stage or param drift against the stored snapshot", () => {
+		const existing = createJourneySnapshot("modeling", { modelId: "m-1" });
+
+		expect(shouldPersistSnapshot({ enabled: true, stage: "modeling", params: { modelId: "m-1" } }, existing)).toBe(false);
+		expect(shouldPersistSnapshot({ enabled: true, stage: "metrics", params: { modelId: "m-1" } }, existing)).toBe(true);
+		expect(shouldPersistSnapshot({ enabled: true, stage: "modeling", params: { modelId: "m-2" } }, existing)).toBe(true);
+		expect(shouldPersistSnapshot({ enabled: true, stage: "modeling", params: {} }, existing)).toBe(true);
+		expect(shouldPersistSnapshot({ enabled: false, stage: "modeling", params: { modelId: "m-1" } }, existing)).toBe(false);
+		expect(shouldPersistSnapshot({ enabled: true, stage: "modeling", params: { modelId: "m-1" } }, null)).toBe(true);
 	});
 
 	it("builds a resume url with the journey flag and all saved params", () => {
