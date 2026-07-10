@@ -138,6 +138,17 @@ export const buildJourneyUrl = (
 	return `${path}?${params.toString()}`;
 };
 
+export type JourneyBarMode = "journey" | "joinable" | "hidden";
+
+// 上下文条渲染模式：旅程内=journey；菜单直达（无 journey 参数）且未被关闭=joinable 提示；关闭后=hidden。
+export const resolveJourneyBarMode = (enabled: boolean, dismissed: boolean): JourneyBarMode => {
+	if (enabled) return "journey";
+	return dismissed ? "hidden" : "joinable";
+};
+
+export const journeyJoinDismissStorageKey = (stage: DataProductJourneyStageKey) =>
+	`dts.journey.join-dismissed.${stage}`;
+
 export const extractJourneyContextParams = (searchParams: URLSearchParams): DataProductJourneyContextParams =>
 	JOURNEY_CONTEXT_PARAM_KEYS.reduce<DataProductJourneyContextParams>((acc, key) => {
 		const value = searchParams.get(key);

@@ -109,3 +109,14 @@ test("journey context bar surfaces artifact verification and invalid param recov
 	assert.match(barSource, /待确认/);
 	assert.match(barSource, /（无效）/);
 });
+
+test("journey context bar offers a dismissible join hint on menu-direct visits", () => {
+	const barSource = readFileSync(new URL("./JourneyContextBar.tsx", import.meta.url), "utf8");
+
+	assert.match(barSource, /resolveJourneyBarMode/);
+	assert.match(barSource, /journey-join-hint/);
+	assert.match(barSource, /journey-join-enter/);
+	assert.match(barSource, /journey-join-dismiss/);
+	assert.match(barSource, /sessionStorage/);
+	assert.match(barSource, /进入旅程/);
+});

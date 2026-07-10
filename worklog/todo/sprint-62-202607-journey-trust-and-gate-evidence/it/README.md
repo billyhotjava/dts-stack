@@ -7,7 +7,7 @@
 - [x] `JourneyStageState` 扩展用例：invalid→blocked+恢复动作、valid→done+verified、unknown→done+unverified、复数解析器透传、不传 validations 行为不变。
 - [x] `GateEvidence.source-contract.test.ts`：四项 checks 结构、API 缺口标注、校验联动、barrel 导出。
 - [x] `DataProductAcceptancePackage` 扩展用例：门禁组前置、verdict→状态映射、invalid→blocked、markdown/json 门禁明细、原九组保留。
-- [ ] `JourneyContextBar` 扩展用例：joinable 模式渲染、关闭后会话内不再出现、journey 模式下不显示 joinable。
+- [x] `JourneyContextBar` 扩展用例：joinable 提示、进入/关闭动作、sessionStorage 记忆、模式判定纯函数四态。
 - [ ] 路由一致性用例：STAGE_CONFIG 全部 route 在应用路由表中存在。
 
 ## 命令
@@ -96,3 +96,8 @@
 
 - GREEN：vitest 9/9（验收包 4 + 门禁 5）；`node --test` 契约 31/31；`pnpm build` 通过。
 - 交付说明：验收包新增"发布门禁"组（verdict pass→ready/warn→missing/fail→blocked，缺项明细进 missingReason）；包级新增 gateEvidence 结构字段；markdown 导出含门禁明细表（状态/说明/证据或待补接口）；workbench 传入 F2 校验结果，验收包与门禁与校验三方联动。F3 整体 DONE。
+
+### F4-T01 加入旅程提示（2026-07-10）
+
+- GREEN：vitest journeyContext 4/4（新增 resolveJourneyBarMode 四态、关闭记忆按 stage 隔离）；`node --test` 契约 32/32；`pnpm build` 通过。
+- 交付说明：JourneyContextBar 三模式（journey/joinable/hidden）——菜单直达时显示单行浅底提示"此页面是数据产品旅程的第 N 步"+进入旅程/关闭；关闭记忆入 sessionStorage（按 stage 隔离，storage 异常静默降级）；journey 模式行为零变化。8 个已接入页面自动获得该能力，无需改页面。

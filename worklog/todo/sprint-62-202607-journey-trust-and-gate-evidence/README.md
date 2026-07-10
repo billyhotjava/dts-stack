@@ -21,9 +21,9 @@ Sprint-61 已交付旅程上下文（journeyContext）、阶段状态机（journ
 | F1 | 旅程实例持久化与恢复 | 3 | DONE | P0 |
 | F2 | 阶段真实性校验 | 3 | DONE | P0 |
 | F3 | dbt式门禁证据结构化 | 3 | DONE | P0 |
-| F4 | 菜单直达旅程感知与验收包打印 | 3 | READY | P1 |
+| F4 | 菜单直达旅程感知与验收包打印 | 3 | IN_PROGRESS | P1 |
 
-**统计**: READY=3, IN_PROGRESS=0, DONE=9, BLOCKED=0
+**统计**: READY=2, IN_PROGRESS=0, DONE=10, BLOCKED=0
 
 ## 实施顺序
 
