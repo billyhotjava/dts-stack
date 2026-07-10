@@ -68,6 +68,9 @@ export {
 } from "./journeyStageState";
 export {
 	ACCEPTANCE_EVIDENCE_GROUPS,
+	ACCEPTANCE_SIGN_COLUMNS,
+	buildAcceptancePrintMeta,
+	type AcceptancePrintMeta,
 	buildAcceptancePackageJson,
 	buildAcceptancePackageMarkdown,
 	buildDataProductAcceptancePackage,

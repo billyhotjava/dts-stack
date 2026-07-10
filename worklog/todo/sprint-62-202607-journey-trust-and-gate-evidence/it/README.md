@@ -101,3 +101,8 @@
 
 - GREEN：vitest journeyContext 4/4（新增 resolveJourneyBarMode 四态、关闭记忆按 stage 隔离）；`node --test` 契约 32/32；`pnpm build` 通过。
 - 交付说明：JourneyContextBar 三模式（journey/joinable/hidden）——菜单直达时显示单行浅底提示"此页面是数据产品旅程的第 N 步"+进入旅程/关闭；关闭记忆入 sessionStorage（按 stage 隔离，storage 异常静默降级）；journey 模式行为零变化。8 个已接入页面自动获得该能力，无需改页面。
+
+### F4-T02 验收包打印友好视图（2026-07-10）
+
+- GREEN：vitest 6/6（新增打印元信息：上下文摘要/时间戳/三签字栏、空上下文降级文案）；`node --test` 契约 33/33；`pnpm build` 通过。
+- 交付说明：验收包卡片标记 data-print-root，"打印视图"按钮直接 window.print()；@media print 用 visibility 方案隐藏应用壳（Chrome 95 兼容，无现代打印 API）、按钮不打印、分组卡防跨页断裂；打印头（标题/摘要/上下文/生成时间）与签字栏（数据管理岗/业务验收人/技术支持方）为 print-only 元素。Chrome 95 打印预览截图挂靠 F9。

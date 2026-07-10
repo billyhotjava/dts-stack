@@ -226,3 +226,31 @@ export const buildAcceptancePackageMarkdown = (acceptancePackage: DataProductAcc
 
 export const buildAcceptancePackageJson = (acceptancePackage: DataProductAcceptancePackage) =>
 	JSON.stringify(acceptancePackage, null, 2);
+
+// 打印视图签字栏：三方签认，落实"验收包是可归档材料"的定位。
+export const ACCEPTANCE_SIGN_COLUMNS = ["数据管理岗", "业务验收人", "技术支持方"] as const;
+
+export type AcceptancePrintMeta = {
+	title: string;
+	generatedAt: string;
+	summary: string;
+	contextSummary: string;
+	signColumns: readonly string[];
+};
+
+export const buildAcceptancePrintMeta = (
+	acceptancePackage: DataProductAcceptancePackage,
+	now: Date = new Date(),
+): AcceptancePrintMeta => {
+	const contextSummary = acceptancePackage.groups
+		.filter((group) => group.paramValue)
+		.map((group) => `${group.title} ${group.paramValue}`)
+		.join(" · ");
+	return {
+		title: acceptancePackage.title,
+		generatedAt: now.toLocaleString("zh-CN", { hour12: false }),
+		summary: acceptancePackage.summary,
+		contextSummary: contextSummary || "尚未积累上下文对象",
+		signColumns: ACCEPTANCE_SIGN_COLUMNS,
+	};
+};

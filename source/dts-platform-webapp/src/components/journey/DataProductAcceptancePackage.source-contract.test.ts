@@ -101,3 +101,22 @@ test("acceptance package aggregates structured gate evidence", () => {
 	const behaviorTestUrl = new URL("./dataProductAcceptancePackage.test.ts", import.meta.url);
 	assert.equal(existsSync(behaviorTestUrl), true, "dataProductAcceptancePackage.test.ts (vitest) should exist");
 });
+
+test("workbench provides a chrome95-safe print view for the acceptance package", () => {
+	const workbenchSource = readFileSync(
+		new URL("../../pages/workbench/DataManagementWorkbenchPage.tsx", import.meta.url),
+		"utf8",
+	);
+
+	assert.match(workbenchSource, /data-print-root/);
+	assert.match(workbenchSource, /acceptance-print-view/);
+	assert.match(workbenchSource, /acceptance-print-header/);
+	assert.match(workbenchSource, /acceptance-print-signoff/);
+	assert.match(workbenchSource, /@media print/);
+	assert.match(workbenchSource, /journey-print-only/);
+	assert.match(workbenchSource, /window\.print\(\)/);
+
+	const packageSource = readFileSync(new URL("./dataProductAcceptancePackage.ts", import.meta.url), "utf8");
+	assert.match(packageSource, /ACCEPTANCE_SIGN_COLUMNS/);
+	assert.match(packageSource, /buildAcceptancePrintMeta/);
+});

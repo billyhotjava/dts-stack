@@ -6,6 +6,7 @@ import {
 	E2E_DATA_PRODUCT_JOURNEY,
 	buildAcceptancePackageJson,
 	buildAcceptancePackageMarkdown,
+	buildAcceptancePrintMeta,
 	buildDataProductAcceptancePackage,
 	GateEvidenceSummary,
 	buildGateEvidence,
@@ -260,6 +261,10 @@ export default function Page({
 		const content = buildAcceptancePackageMarkdown(acceptancePackage);
 		await navigator.clipboard?.writeText(content);
 	};
+	const printAcceptancePackage = () => {
+		if (typeof window !== "undefined") window.print();
+	};
+	const acceptancePrintMeta = buildAcceptancePrintMeta(acceptancePackage);
 	const downloadAcceptancePackage = () => {
 		const blob = new Blob([buildAcceptancePackageJson(acceptancePackage)], {
 			type: "application/json;charset=utf-8",
@@ -473,6 +478,7 @@ export default function Page({
 			<Card
 				title="客户验收包"
 				data-testid="data-product-acceptance-package"
+				data-print-root="true"
 				extra={
 					<Space wrap>
 						<Tag color="green">已具备 {acceptancePackage.readyCount}</Tag>
@@ -494,7 +500,17 @@ export default function Page({
 					<Space wrap>
 						<Button onClick={copyAcceptancePackage}>复制验收摘要</Button>
 						<Button onClick={downloadAcceptancePackage}>下载 JSON</Button>
+						<Button data-testid="acceptance-print-view" onClick={printAcceptancePackage}>
+							打印视图
+						</Button>
 					</Space>
+				</div>
+				<div className="journey-print-only" style={{ display: "none" }} data-testid="acceptance-print-header">
+					<h2 style={{ margin: 0 }}>{acceptancePrintMeta.title}</h2>
+					<div>{acceptancePrintMeta.summary}</div>
+					<div>上下文：{acceptancePrintMeta.contextSummary}</div>
+					<div>生成时间：{acceptancePrintMeta.generatedAt}</div>
+					<hr />
 				</div>
 				<div className="grid gap-3 xl:grid-cols-3 md:grid-cols-2">
 					{acceptancePackage.groups.map((group) => (
@@ -526,6 +542,30 @@ export default function Page({
 						</div>
 					))}
 				</div>
+				<div className="journey-print-only" style={{ display: "none" }} data-testid="acceptance-print-signoff">
+					<hr />
+					<table style={{ width: "100%", borderCollapse: "collapse", marginTop: 12 }}>
+						<tbody>
+							<tr>
+								{acceptancePrintMeta.signColumns.map((column) => (
+									<td key={column} style={{ border: "1px solid #999", padding: "24px 8px 8px", width: `${100 / acceptancePrintMeta.signColumns.length}%` }}>
+										{column}（签字/日期）：
+									</td>
+								))}
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<style>{`
+					@media print {
+						body * { visibility: hidden !important; }
+						[data-print-root], [data-print-root] * { visibility: visible !important; }
+						[data-print-root] { position: absolute !important; left: 0; top: 0; width: 100%; }
+						[data-print-root] button { display: none !important; }
+						.journey-print-only { display: block !important; }
+						[data-print-root] .rounded { page-break-inside: avoid; }
+					}
+				`}</style>
 			</Card>
 
 			<Card

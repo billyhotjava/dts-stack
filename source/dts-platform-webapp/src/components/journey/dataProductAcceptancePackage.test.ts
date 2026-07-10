@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { resolveArtifactValidations, type ArtifactValidator } from "./journeyArtifactValidation";
 import {
+	ACCEPTANCE_SIGN_COLUMNS,
 	buildAcceptancePackageJson,
 	buildAcceptancePackageMarkdown,
+	buildAcceptancePrintMeta,
 	buildDataProductAcceptancePackage,
 } from "./dataProductAcceptancePackage";
 
@@ -45,5 +47,24 @@ describe("acceptance package with structured gate evidence", () => {
 		const pkg = buildDataProductAcceptancePackage({});
 		expect(pkg.groups).toHaveLength(10);
 		expect(pkg.groups.map((group) => group.key)).toContain("audit");
+	});
+});
+
+describe("acceptance print meta", () => {
+	it("builds a printable header with context, timestamp and three sign columns", () => {
+		const pkg = buildDataProductAcceptancePackage({ modelId: "m-1", serviceId: "svc-9" });
+		const meta = buildAcceptancePrintMeta(pkg, new Date("2026-07-10T10:30:00"));
+
+		expect(meta.title).toBe("客户验收包");
+		expect(meta.contextSummary).toContain("m-1");
+		expect(meta.contextSummary).toContain("svc-9");
+		expect(meta.generatedAt).toContain("2026");
+		expect(meta.signColumns).toEqual(ACCEPTANCE_SIGN_COLUMNS);
+		expect(meta.signColumns).toHaveLength(3);
+	});
+
+	it("falls back to a friendly context summary when empty", () => {
+		const meta = buildAcceptancePrintMeta(buildDataProductAcceptancePackage({}));
+		expect(meta.contextSummary).toBe("尚未积累上下文对象");
 	});
 });
