@@ -14,6 +14,7 @@ import {
 	ShieldCheck,
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { JourneyContextBar } from "@/components/journey";
 import { useRouter } from "@/routes/hooks";
 import { getStandardBindingDraftSnapshot } from "@/api/platformApi";
 import {
@@ -189,6 +190,7 @@ export default function LowCodeDevelopmentPage() {
 					</Space>
 				}
 			/>
+			<JourneyContextBar stage="modeling" />
 
 			<Alert
 				type="info"

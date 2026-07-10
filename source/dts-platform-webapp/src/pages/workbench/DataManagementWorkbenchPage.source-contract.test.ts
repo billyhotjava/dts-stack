@@ -5,6 +5,10 @@ import test from "node:test";
 const PAGE_URL = new URL("./DataManagementWorkbenchPage.tsx", import.meta.url);
 const MODEL_URL = new URL("./dataManagementThemeModel.ts", import.meta.url);
 const SERVICE_URL = new URL("../../api/services/goldenChainService.ts", import.meta.url);
+const JOURNEY_STAGE_STATE = readFileSync(
+	new URL("../../components/journey/journeyStageState.ts", import.meta.url),
+	"utf8",
+);
 const STATIC_ROUTES = readFileSync(
 	new URL("../../routes/sections/dashboard/static-routes.tsx", import.meta.url),
 	"utf8",
@@ -73,6 +77,7 @@ test("data management workbench waits for onsite business theme definition", () 
 test("workbench exposes the end-to-end data product journey from integration to service evidence", () => {
 	assert.equal(existsSync(PAGE_URL), true);
 	const source = readFileSync(PAGE_URL, "utf8");
+	const journeySource = `${source}\n${JOURNEY_STAGE_STATE}`;
 
 	assert.match(source, /data-testid="end-to-end-data-product-journey"/);
 	assert.match(source, /productJourneyStages/);
@@ -80,19 +85,20 @@ test("workbench exposes the end-to-end data product journey from integration to 
 	assert.match(source, /withE2EJourney/);
 	assert.match(source, /journey", E2E_DATA_PRODUCT_JOURNEY/);
 	assert.match(source, /data-testid="end-to-end-journey-continue"/);
-	assert.match(source, /配置数据源/);
-	assert.match(source, /确认数仓规划/);
-	assert.match(source, /套用标准包/);
-	assert.match(source, /进入低代码建模/);
-	assert.match(source, /设计指标/);
-	assert.match(source, /编排数据开发/);
-	assert.match(source, /发布数据 API/);
-	assert.match(source, /查看运行证据/);
+	assert.match(source, /resolveDataProductJourneyStageStates/);
+	assert.match(journeySource, /配置数据源/);
+	assert.match(journeySource, /确认数仓规划/);
+	assert.match(journeySource, /套用标准包/);
+	assert.match(journeySource, /进入低代码建模/);
+	assert.match(journeySource, /设计指标/);
+	assert.match(journeySource, /编排数据开发/);
+	assert.match(journeySource, /发布数据 API/);
+	assert.match(journeySource, /查看运行证据/);
 	for (const label of ["负责角色", "当前缺口", "下一步"]) {
 		assert.match(source, new RegExp(label));
 	}
 	for (const label of ["数据集成", "数仓规划", "数据标准", "维度建模", "数据指标", "数据开发", "数据服务", "运行证据"]) {
-		assert.match(source, new RegExp(label));
+		assert.match(journeySource, new RegExp(label));
 	}
 	for (const route of [
 		"/foundation/data-sources",
@@ -112,14 +118,14 @@ test("workbench exposes the end-to-end data product journey from integration to 
 		"/ops/instances",
 		"/ops/overview",
 	]) {
-		assert.match(source, new RegExp(route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+		assert.match(journeySource, new RegExp(route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 		assert.ok(
 			DYNAMIC_RESOLVER.includes(`"${route}"`) || STATIC_ROUTES.includes(`path: "${route.slice(1)}"`),
 			`${route} should resolve to a registered page`,
 		);
 	}
 	for (const key of ["integration", "planning", "standards", "modeling", "metrics", "development", "service", "evidence"]) {
-		assert.match(source, new RegExp(key));
+		assert.match(journeySource, new RegExp(key));
 	}
 	assert.match(source, /data-testid=\{`end-to-end-stage-\$\{stage\.key\}-primary`\}/);
 	assert.match(source, /data-testid=\{`end-to-end-stage-\$\{stage\.key\}-secondary`\}/);

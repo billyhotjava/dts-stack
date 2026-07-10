@@ -8,6 +8,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { PageHeader } from "@/components/page-header";
+import { JourneyContextBar } from "@/components/journey";
 import { createStandardBindingDraft, type StandardBindingDraftInput } from "@/pages/modeling/standardBindingDraft";
 import {
 	createMetadataStandard,
@@ -432,6 +433,7 @@ export default function ElementsPage() {
 					</Space>
 				}
 			/>
+			<JourneyContextBar stage="standards" />
 			<div className="rounded-md border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
 				数据元是 SQL 模型字段的标准来源；通过引用关系查看模型字段引用，避免标准只停留在治理台账。
 			</div>

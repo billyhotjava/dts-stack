@@ -15,6 +15,7 @@ import {
     type SemanticMetric,
     type SemanticModel,
 } from "@/api/semanticModelingApi";
+import { JourneyContextBar } from "@/components/journey";
 import { SemanticWorkspaceFrame } from "./semantic-workspace/SemanticWorkspaceFrame";
 import { MetricCanvas } from "./metric-workbench/MetricCanvas";
 import { MetricDetailPanel } from "./metric-workbench/MetricDetailPanel";
@@ -255,6 +256,7 @@ export default function MetricWorkbenchPage() {
                 </Button>
             }
         >
+            <JourneyContextBar stage="metrics" />
             {lowCodeContext ? (
                 <Alert
                     className="mb-4"

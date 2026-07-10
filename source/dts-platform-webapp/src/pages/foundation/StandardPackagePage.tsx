@@ -7,6 +7,7 @@ import type { ColumnsType } from "antd/es/table";
 import { CompactTable } from "@/components/table";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
+import { JourneyContextBar } from "@/components/journey";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import {
 	applyStandardPackageImport,
@@ -568,6 +569,7 @@ export default function StandardPackagePage() {
 					) : null
 				}
 			/>
+			<JourneyContextBar stage="standards" />
 			<div className="rounded-md border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
 				下载模板 → 填写业务术语/数据元/公共码表 → 上传校验 → 确认应用，支持整包回滚。
 			</div>

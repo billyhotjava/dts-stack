@@ -17,6 +17,7 @@ import {
 } from "antd";
 import { CompactTable } from "@/components/table";
 import { PageHeader } from "@/components/page-header";
+import { JourneyContextBar } from "@/components/journey";
 import { CheckCircleOutlined, CloseCircleOutlined, SearchOutlined } from "@ant-design/icons";
 import dataSourcesService, {
 	type ConnectionTestResult,
@@ -814,6 +815,7 @@ export default function DataSourcesPage() {
 				</Space>
 				}
 			/>
+			<JourneyContextBar stage="integration" />
 			<Card title="数据源连接">
 			{listError ? (
 				<Alert

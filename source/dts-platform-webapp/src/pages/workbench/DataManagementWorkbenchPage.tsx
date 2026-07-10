@@ -2,7 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Card, Progress, Space, Spin, Tag, Typography } from "antd";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
-import { useRouter } from "@/routes/hooks";
+import {
+	E2E_DATA_PRODUCT_JOURNEY,
+	buildAcceptancePackageJson,
+	buildAcceptancePackageMarkdown,
+	buildDataProductAcceptancePackage,
+	resolveDataProductJourneyStageStates,
+} from "@/components/journey";
+import { useRouter, useSearchParams } from "@/routes/hooks";
 import goldenChainService, {
 	type GoldenChainDetail,
 	type GoldenChainSummary,
@@ -14,7 +21,6 @@ import {
 } from "./dataManagementThemeModel";
 
 const { Text } = Typography;
-const E2E_DATA_PRODUCT_JOURNEY = "e2e-data-product";
 
 const TONE_COLOR: Record<DataManagementTone, string> = {
 	default: "default",
@@ -25,6 +31,34 @@ const TONE_COLOR: Record<DataManagementTone, string> = {
 };
 
 const statusTag = (label: string, tone: DataManagementTone) => <Tag color={TONE_COLOR[tone]}>{label}</Tag>;
+
+const JOURNEY_STATUS_COLOR: Record<string, string> = {
+	not_started: "default",
+	blocked: "orange",
+	ready: "blue",
+	in_progress: "geekblue",
+	done: "green",
+};
+
+const JOURNEY_STATUS_LABEL: Record<string, string> = {
+	not_started: "未开始",
+	blocked: "有缺口",
+	ready: "可开始",
+	in_progress: "进行中",
+	done: "已就绪",
+};
+
+const ACCEPTANCE_STATUS_COLOR: Record<string, string> = {
+	ready: "green",
+	missing: "orange",
+	blocked: "red",
+};
+
+const ACCEPTANCE_STATUS_LABEL: Record<string, string> = {
+	ready: "已具备",
+	missing: "缺失项",
+	blocked: "阻断项",
+};
 
 const withE2EJourney = (route: string) => {
 	const [path, query = ""] = route.split("?");
@@ -68,145 +102,6 @@ const firstReportJourneySteps = [
 	},
 ];
 
-type ProductJourneyStage = {
-	key: string;
-	title: string;
-	desc: string;
-	result: string;
-	evidence: string;
-	owner: string;
-	gap: string;
-	nextStep: string;
-	route: string;
-	action: string;
-	supportingRoute: string;
-	supportingAction: string;
-	tagColor: string;
-};
-
-const productJourneyStages: ProductJourneyStage[] = [
-	{
-		key: "integration",
-		title: "数据集成",
-		desc: "接入业务系统或文件，完成连接、结构探测和同步任务。",
-		result: "拿到可运行的数据链路",
-		evidence: "连接测试、字段探测、同步预检",
-		owner: "数据工程师",
-		gap: "未选择数据源或同步任务未预检",
-		nextStep: "选择业务系统并完成连接测试",
-		route: "/foundation/data-sources",
-		action: "配置数据源",
-		supportingRoute: "/explore/etl/transform",
-		supportingAction: "生成同步任务",
-		tagColor: "blue",
-	},
-	{
-		key: "planning",
-		title: "数仓规划",
-		desc: "定义主题域、分层、数据域和业务过程，决定数据进仓后的组织方式。",
-		result: "确认数据应该落到哪个业务主题",
-		evidence: "主题域、业务过程、资产归属",
-		owner: "数据架构师",
-		gap: "ODS/DWD/DWS/ADS 分层草稿待确认",
-		nextStep: "确认主题域、业务过程和分层策略",
-		route: "/governance/subjects",
-		action: "确认数仓规划",
-		supportingRoute: "/catalog/metadata-management",
-		supportingAction: "核对资产目录",
-		tagColor: "purple",
-	},
-	{
-		key: "standards",
-		title: "数据标准",
-		desc: "把业务术语、数据元、码表和标准模板绑定到字段。",
-		result: "让字段命名、类型和口径可复用",
-		evidence: "标准包、数据元、落标覆盖率",
-		owner: "数据管家",
-		gap: "标准包、数据元或码表覆盖率待补齐",
-		nextStep: "套用标准包并生成字段落标草稿",
-		route: "/foundation/standard-package",
-		action: "套用标准包",
-		supportingRoute: "/governance/standards/elements",
-		supportingAction: "维护数据元",
-		tagColor: "cyan",
-	},
-	{
-		key: "modeling",
-		title: "维度建模",
-		desc: "从标准字段生成模型草稿，再在低代码或 SQL 建模里微调。",
-		result: "形成事实、维度和汇总模型",
-		evidence: "模型字段、血缘、校验结果",
-		owner: "建模工程师",
-		gap: "模型草稿未创建或字段标准未应用",
-		nextStep: "进入低代码建模并生成 SQL 草稿",
-		route: "/studio/low-code-development",
-		action: "进入低代码建模",
-		supportingRoute: "/studio/sql-modeling",
-		supportingAction: "高级建模",
-		tagColor: "geekblue",
-	},
-	{
-		key: "metrics",
-		title: "数据指标",
-		desc: "基于模型定义原子指标、派生指标和口径说明。",
-		result: "把业务问题沉淀为指标资产",
-		evidence: "指标口径、计算逻辑、责任人",
-		owner: "业务分析师",
-		gap: "指标口径、粒度或责任人待绑定",
-		nextStep: "基于模型字段设计指标口径",
-		route: "/modeling/metric-workbench",
-		action: "设计指标",
-		supportingRoute: "/modeling/semantic/metrics",
-		supportingAction: "查看指标库",
-		tagColor: "green",
-	},
-	{
-		key: "development",
-		title: "数据开发",
-		desc: "把同步、清洗、模型生成和指标汇总编排成可运行任务。",
-		result: "让数据产品能按调度稳定产出",
-		evidence: "任务 DAG、运行日志、补数记录",
-		owner: "数据开发工程师",
-		gap: "脚本、调度或补数策略待确认",
-		nextStep: "编排开发任务并执行编译测试",
-		route: "/explore/etl/scripts",
-		action: "编排数据开发",
-		supportingRoute: "/explore/etl/orchestration",
-		supportingAction: "查看调度",
-		tagColor: "orange",
-	},
-	{
-		key: "service",
-		title: "数据服务",
-		desc: "把可信资产发布为报表、API 或数据产品，纳入权限和消费验收。",
-		result: "交付业务可用的数据消费入口",
-		evidence: "API、报表、授权记录",
-		owner: "服务发布人",
-		gap: "API、报表或数据产品入口未发布",
-		nextStep: "选择消费目标并配置授权",
-		route: "/services/apis",
-		action: "发布数据 API",
-		supportingRoute: "/bi/dashboards",
-		supportingAction: "创建报表",
-		tagColor: "magenta",
-	},
-	{
-		key: "evidence",
-		title: "运行证据",
-		desc: "回看任务、质量、服务调用和告警，把交付状态变成客户可验收证据。",
-		result: "证明链路持续可用",
-		evidence: "实例、告警、质量检查、服务日志",
-		owner: "运维与数据管家",
-		gap: "运行、质量、权限或审计证据未汇总",
-		nextStep: "查看实例日志并形成验收证据",
-		route: "/ops/instances",
-		action: "查看运行证据",
-		supportingRoute: "/ops/overview",
-		supportingAction: "运行概览",
-		tagColor: "red",
-	},
-];
-
 export type DataManagementWorkbenchPageProps = {
 	embedded?: boolean;
 	focus?: "data-management" | "consumption";
@@ -221,6 +116,7 @@ export default function Page({
 	productId = null,
 }: DataManagementWorkbenchPageProps) {
 	const router = useRouter();
+	const searchParams = useSearchParams();
 	const [chains, setChains] = useState<GoldenChainSummary[]>([]);
 	const [detailsByChainKey, setDetailsByChainKey] = useState<Record<string, GoldenChainDetail | undefined>>({});
 	const [selectedThemeKey, setSelectedThemeKey] = useState<string>("");
@@ -273,6 +169,14 @@ export default function Page({
 	);
 
 	const hasThemes = themes.length > 0;
+	const productJourneyStages = useMemo(
+		() => resolveDataProductJourneyStageStates(searchParams),
+		[searchParams],
+	);
+	const acceptancePackage = useMemo(
+		() => buildDataProductAcceptancePackage(searchParams),
+		[searchParams],
+	);
 	const themeSummary = hasThemes ? "已加载现场配置主题" : "待现场定义业务主题";
 	const failureReason = selectedTheme?.failureReason || "";
 	const nextAction = selectedTheme?.nextAction || selectedTheme?.primaryAction.label;
@@ -302,6 +206,21 @@ export default function Page({
 			<Button onClick={() => router.push(withE2EJourney("/ops/overview"))}>查看运行</Button>
 		</Space>
 	);
+	const copyAcceptancePackage = async () => {
+		const content = buildAcceptancePackageMarkdown(acceptancePackage);
+		await navigator.clipboard?.writeText(content);
+	};
+	const downloadAcceptancePackage = () => {
+		const blob = new Blob([buildAcceptancePackageJson(acceptancePackage)], {
+			type: "application/json;charset=utf-8",
+		});
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement("a");
+		link.href = url;
+		link.download = "dts-data-product-acceptance-package.json";
+		link.click();
+		URL.revokeObjectURL(url);
+	};
 
 	return (
 		<div className="space-y-6" data-testid={isConsumptionFocus ? "data-consumption-workbench-section" : "data-management-workbench-section"}>
@@ -379,7 +298,10 @@ export default function Page({
 							<div className="space-y-2">
 								<div className="flex items-center justify-between gap-2">
 									<Tag color={stage.tagColor}>{String(index + 1).padStart(2, "0")}</Tag>
-									<Text type="secondary">{stage.title}</Text>
+									<Space size={4} wrap>
+										<Text type="secondary">{stage.title}</Text>
+										<Tag color={JOURNEY_STATUS_COLOR[stage.status]}>{JOURNEY_STATUS_LABEL[stage.status]}</Tag>
+									</Space>
 								</div>
 								<div className="text-base font-medium">{stage.result}</div>
 								<Text type="secondary">{stage.desc}</Text>
@@ -395,10 +317,15 @@ export default function Page({
 									<div>
 										<div className="text-muted-foreground">当前缺口</div>
 										<Text type="secondary">{stage.gap}</Text>
+										{stage.blocker ? (
+											<div>
+												<Tag color="orange">{stage.blocker.reason}</Tag>
+											</div>
+										) : null}
 									</div>
 									<div>
 										<div className="text-muted-foreground">下一步</div>
-										<Text type="secondary">{stage.nextStep}</Text>
+										<Text type="secondary">{stage.nextAction.description || stage.nextStep}</Text>
 									</div>
 								</div>
 							</div>
@@ -406,7 +333,7 @@ export default function Page({
 								<Button
 									type={index === 0 ? "primary" : "default"}
 									data-testid={`end-to-end-stage-${stage.key}-primary`}
-									onClick={() => router.push(withE2EJourney(stage.route))}
+									onClick={() => router.push(stage.nextAction.url || withE2EJourney(stage.route))}
 								>
 									{stage.action}
 								</Button>
@@ -416,6 +343,64 @@ export default function Page({
 								>
 									{stage.supportingAction}
 								</Button>
+							</Space>
+						</div>
+					))}
+				</div>
+			</Card>
+
+			<Card
+				title="客户验收包"
+				data-testid="data-product-acceptance-package"
+				extra={
+					<Space wrap>
+						<Tag color="green">已具备 {acceptancePackage.readyCount}</Tag>
+						<Tag color={acceptancePackage.missingCount > 0 ? "orange" : "default"}>
+							缺失项 {acceptancePackage.missingCount}
+						</Tag>
+						<Tag color={acceptancePackage.blockedCount > 0 ? "red" : "default"}>
+							阻断项 {acceptancePackage.blockedCount}
+						</Tag>
+					</Space>
+				}
+			>
+				<div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+					<div className="max-w-3xl">
+						<Text type="secondary">
+							{acceptancePackage.summary}
+						</Text>
+					</div>
+					<Space wrap>
+						<Button onClick={copyAcceptancePackage}>复制验收摘要</Button>
+						<Button onClick={downloadAcceptancePackage}>下载 JSON</Button>
+					</Space>
+				</div>
+				<div className="grid gap-3 xl:grid-cols-3 md:grid-cols-2">
+					{acceptancePackage.groups.map((group) => (
+						<div
+							key={group.key}
+							className="flex min-h-[148px] flex-col justify-between rounded border border-gray-200 p-3"
+							data-testid={`acceptance-package-group-${group.key}`}
+						>
+							<div className="space-y-2">
+								<div className="flex flex-wrap items-center justify-between gap-2">
+									<div className="font-medium">{group.title}</div>
+									<Tag color={ACCEPTANCE_STATUS_COLOR[group.status]}>
+										{ACCEPTANCE_STATUS_LABEL[group.status]}
+									</Tag>
+								</div>
+								<Text type="secondary">{group.description}</Text>
+								{group.missingReason ? (
+									<div className="text-sm text-orange-600">缺失项：{group.missingReason}</div>
+								) : (
+									<div className="text-sm text-green-600">证据上下文：{group.paramValue || "可直接查看"}</div>
+								)}
+							</div>
+							<Space wrap className="mt-3">
+								<Button size="small" onClick={() => router.push(group.url)}>
+									查看证据
+								</Button>
+								{group.status !== "ready" ? <Tag>{group.recoveryLabel}</Tag> : null}
 							</Space>
 						</div>
 					))}
