@@ -49,6 +49,19 @@ describe("dimension candidate gate", () => {
 		expect(result.repairRoute).toContain("/governance/subjects");
 	});
 
+	it("propagates a URL and session mismatch blocker even when artifacts are present", () => {
+		const result = resolveDimensionCandidateGate({
+			planningContext,
+			planningSource: "session",
+			planningBlockedReason: "URL 规划参数与 session 草稿不一致",
+			standardDraftId: "draft-1",
+			standardFieldCount: 3,
+		});
+
+		expect(result.status).toBe("blocked");
+		expect(result.reason).toContain("不一致");
+	});
+
 	it("marks a missing standard draft and points to data elements", () => {
 		const result = resolveDimensionCandidateGate({
 			planningContext: { ...planningContext, standardDraftId: undefined },
