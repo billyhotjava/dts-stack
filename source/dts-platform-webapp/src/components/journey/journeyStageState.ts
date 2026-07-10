@@ -4,8 +4,12 @@ import {
 	type DataProductJourneyStageKey,
 	type JourneyContextParamKey,
 } from "./journeyContext";
+import type { ArtifactValidationMap, ArtifactValidationResult } from "./journeyArtifactValidation";
 
 export type DataProductJourneyStageStatus = "not_started" | "blocked" | "ready" | "in_progress" | "done";
+
+// artifact 验真状态：verified=对象已验真；invalid=对象确认无效；unverified=无校验能力或无对象可验。
+export type JourneyArtifactVerification = "verified" | "invalid" | "unverified";
 
 type JourneyStageTone = "default" | "processing" | "success" | "warning";
 
@@ -43,6 +47,7 @@ export type DataProductJourneyStageState = {
 	evidenceRefs: DataProductJourneyEvidenceRef[];
 	blocker?: DataProductJourneyBlocker;
 	status: DataProductJourneyStageStatus;
+	verification: JourneyArtifactVerification;
 	tone: JourneyStageTone;
 	route: string;
 	action: string;
@@ -277,15 +282,40 @@ export const resolveJourneyNextAction = (
 	description: gap,
 });
 
+const toValidationMap = (
+	validations?: ArtifactValidationMap | ArtifactValidationResult[],
+): ArtifactValidationMap => {
+	if (!validations) return {};
+	if (Array.isArray(validations)) {
+		return validations.reduce<ArtifactValidationMap>((acc, result) => {
+			acc[result.key] = result;
+			return acc;
+		}, {});
+	}
+	return validations;
+};
+
 export const resolveDataProductJourneyStageState = (
 	stageKey: DataProductJourneyStageKey,
 	input?: URLSearchParams | DataProductJourneyContextParams,
+	validations?: ArtifactValidationMap | ArtifactValidationResult[],
 ): DataProductJourneyStageState => {
 	const params = toParams(input);
 	const definition =
 		DATA_PRODUCT_JOURNEY_STAGE_DEFINITIONS.find((item) => item.stageKey === stageKey) ||
 		DATA_PRODUCT_JOURNEY_STAGE_DEFINITIONS[0];
 	const missingParams = missingRequiredParams(definition, params);
+	const validationMap = toValidationMap(validations);
+	const artifactValue = definition.artifactParam ? params[definition.artifactParam] : undefined;
+	const artifactValidation = definition.artifactParam && artifactValue ? validationMap[definition.artifactParam] : undefined;
+	const invalidArtifact = artifactValidation?.status === "invalid";
+	const verification: JourneyArtifactVerification = artifactValue
+		? artifactValidation?.status === "valid"
+			? "verified"
+			: invalidArtifact
+				? "invalid"
+				: "unverified"
+		: "unverified";
 	const blocker =
 		missingParams.length > 0
 			? {
@@ -293,14 +323,22 @@ export const resolveDataProductJourneyStageState = (
 					apiName: "前端上下文参数",
 					recoveryAction: "回到上游阶段补齐上下文",
 				}
-			: definition.apiRequiredForCompletion && definition.apiName && definition.artifactParam && !params[definition.artifactParam]
+			: invalidArtifact && definition.artifactParam
 				? {
-						reason: "API 缺口",
-						apiName: definition.apiName,
-						recoveryAction: "补充验收包聚合接口或先查看运行实例",
+						reason: `上下文对象无效：${PARAM_LABELS[definition.artifactParam]}`,
+						apiName: artifactValidation?.apiName ?? "前端上下文参数",
+						recoveryAction: "清除该参数并重新选择",
 					}
-				: undefined;
-	const hasArtifact = definition.artifactParam ? Boolean(params[definition.artifactParam]) : missingParams.length === 0;
+				: definition.apiRequiredForCompletion && definition.apiName && definition.artifactParam && !params[definition.artifactParam]
+					? {
+							reason: "API 缺口",
+							apiName: definition.apiName,
+							recoveryAction: "补充验收包聚合接口或先查看运行实例",
+						}
+					: undefined;
+	const hasArtifact = definition.artifactParam
+		? Boolean(artifactValue) && !invalidArtifact
+		: missingParams.length === 0;
 	const status: DataProductJourneyStageStatus = blocker
 		? BLOCKED_STATUS_STATE.status
 		: hasArtifact
@@ -310,7 +348,7 @@ export const resolveDataProductJourneyStageState = (
 				: "in_progress";
 	const tone: JourneyStageTone =
 		status === "blocked" ? BLOCKED_STATUS_STATE.tone : status === "done" ? "success" : status === "in_progress" ? "processing" : "default";
-	const gap = resolveJourneyGap(definition, params, missingParams);
+	const gap = invalidArtifact && artifactValidation?.reason ? artifactValidation.reason : resolveJourneyGap(definition, params, missingParams);
 	const nextAction = resolveJourneyNextAction(definition, params, gap);
 
 	return {
@@ -333,6 +371,7 @@ export const resolveDataProductJourneyStageState = (
 		],
 		blocker: blocker,
 		status,
+		verification,
 		tone,
 		route: definition.route,
 		action: definition.action,
@@ -342,7 +381,10 @@ export const resolveDataProductJourneyStageState = (
 	};
 };
 
-export const resolveDataProductJourneyStageStates = (input?: URLSearchParams | DataProductJourneyContextParams) =>
+export const resolveDataProductJourneyStageStates = (
+	input?: URLSearchParams | DataProductJourneyContextParams,
+	validations?: ArtifactValidationMap | ArtifactValidationResult[],
+) =>
 	DATA_PRODUCT_JOURNEY_STAGE_DEFINITIONS.map((definition) =>
-		resolveDataProductJourneyStageState(definition.stageKey, input),
+		resolveDataProductJourneyStageState(definition.stageKey, input, validations),
 	);

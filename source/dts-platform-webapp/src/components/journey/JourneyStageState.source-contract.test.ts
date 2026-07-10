@@ -23,6 +23,11 @@ test("journey stage state model defines status, gaps, blockers and next actions"
 	assert.match(source, /resolveJourneyNextAction/);
 	assert.match(source, /resolveDataProductJourneyStageState/);
 	assert.match(source, /resolveDataProductJourneyStageStates/);
+	assert.match(source, /JourneyArtifactVerification/);
+	for (const verification of ["verified", "invalid", "unverified"]) {
+		assert.match(source, new RegExp(verification));
+	}
+	assert.match(source, /上下文对象无效/);
 	assert.match(source, /requiredParams/);
 	assert.match(source, /artifactParam/);
 	assert.match(source, /apiName/);

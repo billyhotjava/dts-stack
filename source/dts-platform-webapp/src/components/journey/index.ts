@@ -50,6 +50,7 @@ export {
 	type DataProductJourneyEvidenceRef,
 	type DataProductJourneyStageState,
 	type DataProductJourneyStageStatus,
+	type JourneyArtifactVerification,
 } from "./journeyStageState";
 export {
 	ACCEPTANCE_EVIDENCE_GROUPS,

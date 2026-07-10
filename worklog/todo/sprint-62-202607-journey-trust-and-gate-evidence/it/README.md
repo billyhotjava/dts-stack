@@ -4,7 +4,7 @@
 
 - [x] `JourneySnapshot.source-contract.test.ts`：快照写入/读取/版本不匹配丢弃/清除；恢复 URL 与中断前参数一致。
 - [x] `JourneyArtifactValidation.source-contract.test.ts`：三态契约、七参数 API 缺口标注、注入式草稿清单、异常不抛出。
-- [ ] `JourneyStageState` 扩展用例：注入 invalid 校验结果后 status=blocked、恢复动作存在、不出现 done。
+- [x] `JourneyStageState` 扩展用例：invalid→blocked+恢复动作、valid→done+verified、unknown→done+unverified、复数解析器透传、不传 validations 行为不变。
 - [ ] `GateEvidence.source-contract.test.ts`：四项 checks 的 ready/missing/blocked 组合与聚合 verdict；缺 API 时 apiName 必填。
 - [ ] `DataProductAcceptancePackage` 扩展用例：按 checks 聚合、missing 项计数、markdown 导出含门禁明细。
 - [ ] `JourneyContextBar` 扩展用例：joinable 模式渲染、关闭后会话内不再出现、journey 模式下不显示 joinable。
@@ -64,3 +64,10 @@
 - GREEN：`node --test` journey 契约套件 0 fail。
 - GREEN：`pnpm build` 通过。
 - 设计说明：standardDraftId 用注入式 StandardDraftLookup 对接 `standardBindingDraft.ts` 的本地草稿清单（页面接线在 T03，避免 components→pages 反向依赖）；其余六类参数如实返回 unknown 并标注待补 API（ARTIFACT_VALIDATION_API_NAMES）。
+
+### F2-T02 阶段状态机接入校验结果（2026-07-10）
+
+- GREEN：`pnpm vitest run` journey 三模块 23/23（新增 journeyStageState.test.ts 5 用例：兼容性/invalid 阻断/verified/unverified/复数透传）。
+- GREEN：`node --test` 契约套件 0 fail——**既有用例零破坏**，第三参可选、默认行为与 sprint-61 基线一致。
+- GREEN：`pnpm build` 通过。
+- 设计说明：新增 verification 字段（verified/invalid/unverified）与 status 解耦——invalid 改变 status（blocked+恢复动作），unknown 不改变 status 只标记"待确认"，供 T03 在 UI 上区分"纯绿"与"绿但未验真"。
