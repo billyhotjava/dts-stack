@@ -7,6 +7,8 @@ import {
 	buildAcceptancePackageJson,
 	buildAcceptancePackageMarkdown,
 	buildDataProductAcceptancePackage,
+	GateEvidenceSummary,
+	buildGateEvidence,
 	buildJourneyParamClearUrl,
 	buildSnapshotResumeUrl,
 	buildJourneyUrl,
@@ -216,6 +218,10 @@ export default function Page({
 		() => resolveDataProductJourneyStageStates(searchParams, artifactValidations),
 		[searchParams, artifactValidations],
 	);
+	const gateEvidence = useMemo(
+		() => buildGateEvidence(journeyContextParams, { validations: artifactValidations }),
+		[journeyContextParams, artifactValidations],
+	);
 	const acceptancePackage = useMemo(
 		() => buildDataProductAcceptancePackage(searchParams),
 		[searchParams],
@@ -386,6 +392,9 @@ export default function Page({
 								<div className="rounded border border-dashed border-gray-200 p-2 text-sm">
 									<div className="font-medium">验收证据</div>
 									<Text type="secondary">{stage.evidence}</Text>
+									{stage.key === "development" || stage.key === "evidence" ? (
+										<GateEvidenceSummary evidence={gateEvidence} compact className="mt-2" />
+									) : null}
 								</div>
 								<div className="grid gap-2 text-sm">
 									<div>

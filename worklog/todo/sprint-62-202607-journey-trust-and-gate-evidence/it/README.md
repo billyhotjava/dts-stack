@@ -84,3 +84,10 @@
 - GREEN：`pnpm vitest run .../gateEvidence.test.ts` 5/5（verdict 优先级 blocked>missing>ready、参数推导四项 check、证据 URL 保 journey 上下文、invalid artifact→blocked→fail、非 ready 项 apiName 规则）。
 - GREEN：`node --test` 契约套件 0 fail；`pnpm build` 通过。
 - 设计说明：四项 check 对齐 dbt build 语义（落标约束/编译/测试/运行）；test 项接口未接入前恒 missing 并标注 `GET /api/dbt/test-results`，不伪装；与 F2 校验联动——invalid 对象使对应 check blocked、verdict fail。
+
+### F3-T02 门禁摘要卡渲染（2026-07-10）
+
+- GREEN：vitest 行为用例 30/30（按行为测试文件运行；vitest 目录模式会误收 node:test 契约文件，契约统一由 node --test 承担）。
+- GREEN：`node --test` 契约 30/30（新增摘要组件与三页接入契约）。
+- GREEN：`pnpm build` 通过（修复一处未使用导入的 tsc 报错）。
+- 交付说明：GateEvidenceSummary（verdict 徽标+四 check 标签，点击跳证据页保 journey 上下文，title 提示待补 API）；workbench development/evidence 阶段卡内嵌 compact 摘要（联动校验结果）；SqlModelingPage/OpsInstancesPage 经 JourneyGateEvidenceSummary 一行接入（仅旅程模式渲染）。

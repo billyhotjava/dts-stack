@@ -1,4 +1,5 @@
 export { JourneyContextBar } from "./JourneyContextBar";
+export { GateEvidenceSummary, JourneyGateEvidenceSummary } from "./GateEvidenceSummary";
 export { useDataProductJourneyContext } from "./useDataProductJourneyContext";
 export {
 	E2E_DATA_PRODUCT_JOURNEY,

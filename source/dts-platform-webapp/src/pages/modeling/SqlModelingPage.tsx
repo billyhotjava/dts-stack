@@ -30,7 +30,7 @@ import { DeleteOutlined, TableOutlined, LinkOutlined, SyncOutlined, CloudUploadO
 import type { UploadFile } from "antd/es/upload/interface";
 import type { ColumnsType } from "antd/es/table";
 import { EmptyState } from "@/components/empty-state";
-import { JourneyContextBar } from "@/components/journey";
+import { JourneyContextBar, JourneyGateEvidenceSummary } from "@/components/journey";
 import {
 	getDbtConfig,
 	listDbtRuns,
@@ -2699,6 +2699,7 @@ export default function SqlModelingPage() {
 				/>
 			)}
 			<JourneyContextBar stage="development" />
+			<JourneyGateEvidenceSummary stage="development" />
 			<div className="flex min-h-[calc(100vh-120px)] flex-col overflow-hidden rounded-[30px] border border-border/70 bg-card shadow-sm">
 			{/* 顶部工具栏 */}
 			<div className="flex h-14 items-center justify-between border-b border-border bg-card px-4">

@@ -4,7 +4,7 @@ import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { useNavigate, useSearchParams } from "react-router";
 import { PageHeader } from "@/components/page-header";
-import { buildJourneyUrl, JourneyContextBar } from "@/components/journey";
+import { buildJourneyUrl, JourneyContextBar, JourneyGateEvidenceSummary } from "@/components/journey";
 import opsService, { type OpsInstance } from "@/api/services/opsService";
 import { useLogPreview } from "@/components/log-preview/LogPreviewContext";
 import { listAirflowTaskInstances, type AirflowTaskInstance } from "@/api/platformApi";
@@ -219,6 +219,7 @@ export default function OpsInstancesPage() {
 		<div className="space-y-6 px-6 py-6">
 			<PageHeader title="任务实例监控" />
 			<JourneyContextBar stage="evidence" />
+			<JourneyGateEvidenceSummary stage="evidence" />
 			<Card
 				extra={
 					<Space>

@@ -43,7 +43,7 @@
 | F3-dbt式门禁证据结构化 | 3 | IN_PROGRESS |
 | F4-菜单直达旅程感知与验收包打印 | 3 | READY |
 
-**统计**: READY=5, IN_PROGRESS=1, DONE=7, BLOCKED=0
+**统计**: READY=4, IN_PROGRESS=1, DONE=8, BLOCKED=0
 
 **目录**: `worklog/todo/sprint-62-202607-journey-trust-and-gate-evidence/`
 

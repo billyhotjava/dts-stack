@@ -37,3 +37,25 @@ test("gate evidence is exported from the barrel and has behavior tests", () => {
 	}
 	assert.equal(existsSync(behaviorTestUrl), true, "gateEvidence.test.ts (vitest) should exist");
 });
+
+test("gate evidence summary renders on workbench, sql modeling and ops instances", () => {
+	const summaryUrl = new URL("./GateEvidenceSummary.tsx", import.meta.url);
+	assert.equal(existsSync(summaryUrl), true, "GateEvidenceSummary.tsx should exist");
+	const summarySource = readFileSync(summaryUrl, "utf8");
+	assert.match(summarySource, /gate-evidence-summary/);
+	assert.match(summarySource, /gate-evidence-verdict/);
+	assert.match(summarySource, /gate-check-/);
+	assert.match(summarySource, /JourneyGateEvidenceSummary/);
+
+	const workbenchSource = readFileSync(
+		new URL("../../pages/workbench/DataManagementWorkbenchPage.tsx", import.meta.url),
+		"utf8",
+	);
+	assert.match(workbenchSource, /GateEvidenceSummary/);
+	assert.match(workbenchSource, /buildGateEvidence/);
+
+	for (const rel of ["../../pages/modeling/SqlModelingPage.tsx", "../../pages/ops/OpsInstancesPage.tsx"]) {
+		const pageSource = readFileSync(new URL(rel, import.meta.url), "utf8");
+		assert.match(pageSource, /JourneyGateEvidenceSummary/);
+	}
+});
