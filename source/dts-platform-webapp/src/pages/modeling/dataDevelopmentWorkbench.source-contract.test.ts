@@ -128,6 +128,23 @@ test("standards can hand field binding drafts to low-code and sql modeling", () 
 	assert.match(sqlModelingPage, /saveSqlModelStandardBindings/);
 });
 
+test("standard binding drafts expose provenance and field gap evidence", () => {
+	assert.match(standardBindingDraft, /buildStandardBindingDraftSummary/);
+	assert.match(standardBindingDraft, /missingStandardCount/);
+	assert.match(lowCodeDevelopmentPage, /标准来源|标准草稿来源/);
+	assert.match(lowCodeDevelopmentPage, /待补标准|缺失标准/);
+	assert.match(sqlModelingPage, /标准来源|标准草稿来源/);
+	assert.match(sqlModelingPage, /待补标准|缺失标准/);
+});
+
+test("sql modeling exposes release gates and routes run evidence back to ops", () => {
+	assert.match(sqlModelingPage, /发布门禁汇总|发布前门禁/);
+	assert.match(sqlModelingPage, /标准门禁/);
+	assert.match(sqlModelingPage, /质量门禁/);
+	assert.match(sqlModelingPage, /权限门禁/);
+	assert.match(sqlModelingPage, /\/ops\/instances\?[^"`]*journey=e2e-data-product/);
+});
+
 test("dbt file browser is a file evidence surface and hands publishing back to SQL modeling", () => {
 	assert.match(dbtFileBrowserPage, /title="DBT 文件工作区"/);
 	assert.match(dbtFileBrowserPage, /data-testid="dbt-file-browser-preview-model"/);

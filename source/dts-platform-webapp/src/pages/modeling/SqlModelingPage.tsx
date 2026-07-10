@@ -109,6 +109,7 @@ import {
 	buildModelNameFromStandardBindingDraft,
 	buildSqlFromStandardBindingDraft,
 	buildStandardBindingsFromDraft,
+	buildStandardBindingDraftSummary,
 	getStandardBindingDraft,
 	isBackendStandardBindingDraftId,
 	type StandardBindingDraft,
@@ -2677,6 +2678,13 @@ export default function SqlModelingPage() {
 	const latestRun = dbtSyncStatus?.latestRun || null;
 	const latestBuildStatus = normalizeUpper(latestRun?.status) || "UNKNOWN";
 	const latestBuildColor = latestBuildStatus === "SUCCESS" ? "green" : latestBuildStatus === "FAILED" ? "red" : "gold";
+	const standardDraftSummary = useMemo(() => buildStandardBindingDraftSummary(standardBindingDraft), [standardBindingDraft]);
+	const buildServiceRoute = (route: string) => {
+		const params = new URLSearchParams(window.location.search);
+		params.set("journey", "e2e-data-product");
+		if (activeModel?.id) params.set("modelId", String(activeModel.id));
+		return `${route}?${params.toString()}`;
+	};
 
 	return (
 		<div className="space-y-6" data-testid="platform-sql-modeling-page">
@@ -2734,6 +2742,20 @@ export default function SqlModelingPage() {
 						</Dropdown>
 					</div>
 						<div className="flex items-center gap-2">
+							<Button
+								onClick={() => router.push(buildServiceRoute("/services/apis"))}
+								disabled={!activeModel}
+								title={activeModel ? "带入当前模型创建数据 API" : "先选择一个模型"}
+							>
+								发布数据 API
+							</Button>
+							<Button
+								onClick={() => router.push(buildServiceRoute("/services/products"))}
+								disabled={!activeModel}
+								title={activeModel ? "带入当前模型创建数据产品" : "先选择一个模型"}
+							>
+								创建数据产品
+							</Button>
 							{createPrimaryModelingActions().map((action) => {
 								if (action.key === "compile") {
 									return (
@@ -3108,9 +3130,12 @@ export default function SqlModelingPage() {
 																<span className="font-medium text-blue-700">标准落标草稿</span>
 																<Tag color="blue">{standardBindingDraft.fields.length} 字段</Tag>
 															</div>
-															<div className="text-[11px] leading-5 text-muted-foreground">
-																{standardBindingDraft.title} 已从标准管理传入，可创建模型草稿，也可应用到当前模型并生成可微调 SQL。
-															</div>
+										<div className="text-[11px] leading-5 text-muted-foreground">
+											{standardBindingDraft.title} 已从标准管理传入，可创建模型草稿，也可应用到当前模型并生成可微调 SQL。
+										</div>
+										<div className="mt-1 text-[11px] leading-5 text-blue-700">
+											标准来源：{standardDraftSummary.sourceLabel} · 字段 {standardDraftSummary.fieldCount} · 待补标准 {standardDraftSummary.missingStandardCount} · 创建时间 {standardDraftSummary.createdAt || "-"}
+										</div>
 															<Space size={4} wrap className="mt-2">
 																<Button size="small" type="primary" onClick={openCreateModelFromStandardDraft}>
 																	创建模型草稿
@@ -3188,8 +3213,24 @@ export default function SqlModelingPage() {
 															</Button>
 														</Space>
 													</div>
-												</div>
-												<Divider className="my-2" />
+								</div>
+								<div className="rounded border border-amber-200 bg-amber-50/60 px-2 py-2" data-testid="platform-sql-modeling-release-gates">
+									<div className="mb-1 flex items-center justify-between gap-2">
+										<span className="font-medium text-amber-800">发布前门禁</span>
+										<Tag color={standardGateResult?.blocking || latestBuildStatus === "FAILED" ? "red" : "gold"}>
+											{standardGateResult?.blocking || latestBuildStatus === "FAILED" ? "存在阻断" : "待检查"}
+										</Tag>
+									</div>
+									<div className="flex flex-wrap gap-1 text-[11px] leading-5">
+										<Tag>标准门禁</Tag>
+										<Tag>质量门禁</Tag>
+										<Tag>权限门禁</Tag>
+									</div>
+									<Button size="small" className="mt-2" disabled={!activeModel?.id} onClick={() => openRun("release")}>
+										打开发布门禁
+									</Button>
+								</div>
+								<Divider className="my-2" />
 												<div className="text-xs font-medium text-muted-foreground mb-2">字段列表</div>
 												{columnsLoading && modelColumns.length === 0 ? (
 													<Skeleton active paragraph={{ rows: 4 }} title={false} />
@@ -3557,14 +3598,21 @@ export default function SqlModelingPage() {
 														<span className="text-muted-foreground">
 															总计 {rr.total ?? 0}，成功 {rr.success ?? 0}，失败 {rr.failed ?? 0}
 														</span>
-														<Button
-															size="small"
-															loading={execLogLoading}
-															disabled={!dagRunId}
-															onClick={() => loadExecLog(dagRunId, rr.dagId)}
-														>
-															加载日志
-														</Button>
+										<Button
+											size="small"
+											loading={execLogLoading}
+											disabled={!dagRunId}
+											onClick={() => loadExecLog(dagRunId, rr.dagId)}
+										>
+											加载日志
+										</Button>
+										<Button
+											size="small"
+											disabled={!dagRunId}
+											onClick={() => router.push(`/ops/instances?entryKey=DBT_RUN&runId=${encodeURIComponent(dagRunId)}&journey=e2e-data-product&modelId=${encodeURIComponent(String(activeModel?.id || ""))}`)}
+										>
+											查看运行实例
+										</Button>
 													</div>
 													{execLogLoading ? (
 														<div className="p-4">

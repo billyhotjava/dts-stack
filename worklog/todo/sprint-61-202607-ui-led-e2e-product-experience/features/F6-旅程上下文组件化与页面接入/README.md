@@ -1,7 +1,7 @@
 # F6: 旅程上下文组件化与页面接入
 
 **优先级**: P0
-**状态**: IN_PROGRESS
+**状态**: DONE
 
 ## 目标
 
@@ -12,7 +12,7 @@
 | ID | Task | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
 | T01 | JourneyContextBar 共享组件与 query 解析 | P0 | DONE | F1/T01 |
-| T02 | 核心页面接入上下文条 | P0 | IN_PROGRESS | T01 |
+| T02 | 核心页面接入上下文条 | P0 | DONE | T01 |
 | T03 | 返回与继续动作的上下文保持 | P0 | DONE | T02 |
 
 ## 完成标准
@@ -22,6 +22,6 @@
 - [x] 页面跳转保留 `sourceId`、`standardDraftId`、`modelId`、`metricId`、`serviceId` 等上下文。
 - [x] 没有 journey 参数时不干扰页面原有使用方式。
 
-## 当前剩余
+## 2026-07-10 收口
 
-- T02 的代码接入和 source-contract 已完成；可登录浏览器 smoke、Chrome 95 窄屏截图仍待 F9 或可登录环境补证据。
+- T02 的核心页面接入和 source-contract 已完成；可登录浏览器 smoke、Chrome 95 窄屏截图仍由 F9 统一补证据。

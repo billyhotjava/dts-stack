@@ -81,3 +81,9 @@ test("standard package page can return to the data element page when launched fr
 	assert.match(PAGE, /返回数据元/);
 	assert.match(PAGE, /\/governance\/standards\/elements/);
 });
+
+test("standard package success continues the end-to-end journey with context", () => {
+	assert.match(PAGE, /journey=e2e-data-product/);
+	assert.match(PAGE, /bindingDraft=1/);
+	assert.match(PAGE, /查看数据元并生成落标草稿/);
+});

@@ -3,8 +3,9 @@ import { toast } from "sonner";
 import { Alert, Button, Card, DatePicker, Form, Input, Modal, Select, Space, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { PageHeader } from "@/components/page-header";
+import { JourneyContextBar, buildJourneyUrl } from "@/components/journey";
 import opsService, { type OpsBackfill } from "@/api/services/opsService";
 import { listAirflowJobs } from "@/api/platformApi";
 import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
@@ -21,6 +22,8 @@ const formatDate = (value?: string) => {
 
 export default function OpsBackfillPage() {
 	const navigate = useNavigate();
+	const [searchParams] = useSearchParams();
+	const journeyRoute = (route: string) => buildJourneyUrl(route, searchParams);
 	const [records, setRecords] = useState<OpsBackfill[]>([]);
 	const [jobs, setJobs] = useState<AirflowJob[]>([]);
 	const [loading, setLoading] = useState(false);
@@ -100,21 +103,21 @@ export default function OpsBackfillPage() {
 					<Button
 						type="link"
 						size="small"
-						onClick={() => navigate(`/explore/etl/orchestration?dagId=${encodeURIComponent(record.dagId || "")}`)}
+						onClick={() => navigate(journeyRoute(`/explore/etl/orchestration?dagId=${encodeURIComponent(record.dagId || "")}`))}
 					>
 						查看源任务
 					</Button>
 					<Button
 						type="link"
 						size="small"
-						onClick={() => navigate(`/ops/instances?runId=${encodeURIComponent(record.externalRunId || record.id)}`)}
+						onClick={() => navigate(journeyRoute(`/ops/instances?runId=${encodeURIComponent(record.externalRunId || record.id)}`))}
 					>
 						查看实例
 					</Button>
 					<Button
 						type="link"
 						size="small"
-						onClick={() => navigate(`/ops/logs?entryKey=AIRFLOW_DAG&runId=${encodeURIComponent(record.externalRunId || record.id)}`)}
+						onClick={() => navigate(journeyRoute(`/ops/logs?entryKey=AIRFLOW_DAG&runId=${encodeURIComponent(record.externalRunId || record.id)}`))}
 					>
 						查看日志
 					</Button>
@@ -127,6 +130,7 @@ export default function OpsBackfillPage() {
 
 	return (
 		<div className="space-y-6 px-6 py-6">
+			<JourneyContextBar stage="evidence" />
 			<PageHeader
 				title="补数管理"
 				actions={

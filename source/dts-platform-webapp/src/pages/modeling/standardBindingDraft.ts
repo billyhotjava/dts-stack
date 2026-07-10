@@ -26,6 +26,13 @@ export type StandardBindingDraft = {
 
 export type StandardBindingDraftInput = Omit<StandardBindingDraft, "id" | "createdAt">;
 
+export type StandardBindingDraftSummary = {
+	fieldCount: number;
+	missingStandardCount: number;
+	sourceLabel: string;
+	createdAt: string;
+};
+
 const MAX_DRAFTS = 12;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -97,6 +104,21 @@ export const getStandardBindingDraft = (draftId?: string | null) => {
 	const normalizedId = normalizeText(draftId);
 	if (!normalizedId) return null;
 	return readDrafts().find((draft) => draft.id === normalizedId) || null;
+};
+
+export const buildStandardBindingDraftSummary = (draft?: StandardBindingDraft | null): StandardBindingDraftSummary => {
+	const fields = draft?.fields || [];
+	return {
+		fieldCount: fields.length,
+		missingStandardCount: fields.filter((field) => !normalizeText(field.standardId) && !normalizeText(field.standardCode)).length,
+		sourceLabel:
+			draft?.source === "standard-package"
+				? "标准包"
+				: draft?.source === "metadata-elements"
+					? "数据元"
+					: normalizeText(draft?.source) || "标准管理",
+		createdAt: normalizeText(draft?.createdAt),
+	};
 };
 
 export const buildStandardBindingsFromDraft = (draft?: StandardBindingDraft | null) => {

@@ -727,7 +727,7 @@ public class ApiHttpEngine {
     }
 
     private void applyAuth(Map<String, Object> headers, Map<String, Object> sourceConfig) {
-        Map<String, Object> auth = safeMap(sourceConfig.get("auth"));
+        Map<String, Object> auth = normalizedAuth(sourceConfig);
         String provider = firstText(auth, "provider");
         if (!StringUtils.hasText(provider) || "none".equalsIgnoreCase(provider)) {
             return;
@@ -778,6 +778,21 @@ public class ApiHttpEngine {
         return new ApiHttpException("API_RUNTIME_AUTH_UNSUPPORTED", "API 鉴权方式暂未开放: " + provider, null, 0);
     }
 
+    private Map<String, Object> normalizedAuth(Map<String, Object> sourceConfig) {
+        Map<String, Object> auth = new LinkedHashMap<>(safeMap(sourceConfig.get("auth")));
+        Map<String, Object> config = safeMap(auth.get("config"));
+        config.forEach(auth::putIfAbsent);
+        Map<String, Object> secretRefs = safeMap(auth.get("secretRefs"));
+        secretRefs.forEach((fieldName, secretRef) -> {
+            if (!StringUtils.hasText(fieldName) || secretRef == null) {
+                return;
+            }
+            String refKey = fieldName.endsWith("Ref") ? fieldName : fieldName + "Ref";
+            auth.putIfAbsent(refKey, secretRef);
+        });
+        return auth;
+    }
+
     private CachedToken resolveJwtToken(Map<String, Object> sourceConfig, Map<String, Object> auth, Map<String, Object> secrets) {
         String loginUrl = firstText(auth, "loginUrl");
         String tokenPath = firstText(auth, "tokenPath");
@@ -796,11 +811,11 @@ public class ApiHttpEngine {
     }
 
     private boolean isJwtLogin(Map<String, Object> sourceConfig) {
-        return "jwtLogin".equalsIgnoreCase(firstText(safeMap(sourceConfig.get("auth")), "provider"));
+        return "jwtLogin".equalsIgnoreCase(firstText(normalizedAuth(sourceConfig), "provider"));
     }
 
     private void invalidateJwtToken(Map<String, Object> sourceConfig) {
-        Map<String, Object> auth = safeMap(sourceConfig.get("auth"));
+        Map<String, Object> auth = normalizedAuth(sourceConfig);
         if (StringUtils.hasText(firstText(auth, "loginUrl")) && StringUtils.hasText(firstText(auth, "tokenPath"))) {
             jwtTokenCache.remove(jwtCacheKey(sourceConfig, auth));
         }
@@ -1035,7 +1050,7 @@ public class ApiHttpEngine {
     }
 
     private Map<String, Object> authQueryParameters(Map<String, Object> sourceConfig) {
-        Map<String, Object> auth = safeMap(sourceConfig.get("auth"));
+        Map<String, Object> auth = normalizedAuth(sourceConfig);
         if (!"apiKey".equalsIgnoreCase(firstText(auth, "provider")) || !"query".equalsIgnoreCase(firstText(auth, "location"))) {
             return Map.of();
         }

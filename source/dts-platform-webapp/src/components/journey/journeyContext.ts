@@ -138,17 +138,31 @@ export const buildJourneyUrl = (
 	return `${path}?${params.toString()}`;
 };
 
+export const extractJourneyContextParams = (searchParams: URLSearchParams): DataProductJourneyContextParams =>
+	JOURNEY_CONTEXT_PARAM_KEYS.reduce<DataProductJourneyContextParams>((acc, key) => {
+		const value = searchParams.get(key);
+		if (value) acc[key] = value;
+		return acc;
+	}, {});
+
+// 生成"清除某个上下文参数后仍留在旅程内"的 URL，用于无效对象的恢复动作。
+export const buildJourneyParamClearUrl = (
+	route: string,
+	current: URLSearchParams | string | Record<string, string | null | undefined> | undefined,
+	keyToClear: JourneyContextParamKey,
+): string => {
+	const params = toSearchParams(current);
+	params.delete(keyToClear);
+	return buildJourneyUrl(route, params);
+};
+
 export const parseDataProductJourneyContext = (
 	searchParams: URLSearchParams,
 	stage: DataProductJourneyStageKey,
 ): DataProductJourneyContext => {
 	const journey = searchParams.get("journey");
 	const config = STAGE_CONFIG[stage];
-	const params = JOURNEY_CONTEXT_PARAM_KEYS.reduce<DataProductJourneyContextParams>((acc, key) => {
-		const value = searchParams.get(key);
-		if (value) acc[key] = value;
-		return acc;
-	}, {});
+	const params = extractJourneyContextParams(searchParams);
 	const contextLabels = JOURNEY_CONTEXT_PARAM_KEYS.flatMap((key) => {
 		const value = params[key];
 		return value ? [{ label: JOURNEY_CONTEXT_PARAM_LABELS[key], value }] : [];

@@ -462,7 +462,7 @@ export default function StandardPackagePage() {
 							</Button>,
 							<Button
 								key="binding-draft"
-								onClick={() => navigate("/governance/standards/elements?from=standard-package&bindingDraft=1")}
+								onClick={() => navigate("/governance/standards/elements?from=standard-package&bindingDraft=1&journey=e2e-data-product")}
 							>
 								查看数据元并生成落标草稿
 							</Button>,

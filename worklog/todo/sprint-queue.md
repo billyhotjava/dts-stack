@@ -20,17 +20,17 @@
 
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
-| F1-端到端旅程工作台与上下文保持 | 3 | IN_PROGRESS |
-| F2-数据集成到数仓规划的首屏引导 | 4 | IN_PROGRESS |
-| F3-标准落标到建模与指标的可见传递 | 3 | READY |
-| F4-数据开发到发布门禁与运行证据 | 3 | READY |
-| F5-数据服务消费闭环与客户验收 | 3 | READY |
-| F6-旅程上下文组件化与页面接入 | 3 | IN_PROGRESS |
-| F7-阶段状态与缺口计算模型 | 3 | IN_PROGRESS |
-| F8-客户验收包与证据聚合 | 3 | IN_PROGRESS |
+| F1-端到端旅程工作台与上下文保持 | 3 | DONE |
+| F2-数据集成到数仓规划的首屏引导 | 4 | DONE |
+| F3-标准落标到建模与指标的可见传递 | 3 | DONE |
+| F4-数据开发到发布门禁与运行证据 | 3 | DONE |
+| F5-数据服务消费闭环与客户验收 | 3 | DONE |
+| F6-旅程上下文组件化与页面接入 | 3 | DONE |
+| F7-阶段状态与缺口计算模型 | 3 | DONE |
+| F8-客户验收包与证据聚合 | 3 | DONE |
 | F9-可登录浏览器验收与回归基线 | 3 | READY |
 
-**统计**: READY=17, IN_PROGRESS=3, DONE=8, BLOCKED=0
+**统计**: READY=3, IN_PROGRESS=0, DONE=25, BLOCKED=0
 
 **目录**: `worklog/todo/sprint-61-202607-ui-led-e2e-product-experience/`
 

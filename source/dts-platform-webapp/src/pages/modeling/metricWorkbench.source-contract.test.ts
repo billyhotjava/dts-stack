@@ -144,6 +144,14 @@ test("semantic workspace frame shows step progress and next action", () => {
 	assert.doesNotMatch(WORKSPACE_FRAME, /oklch|:has\(|@container/);
 });
 
+test("metric workbench receives model and standard context from the end-to-end journey", () => {
+	assert.match(WORKBENCH, /journey !== "e2e-data-product"|const journey = params\.get\("journey"\)/);
+	assert.match(WORKBENCH, /modelId/);
+	assert.match(WORKBENCH, /standardDraftId/);
+	assert.match(WORKBENCH, /data-testid="metric-workbench-e2e-context"/);
+	assert.match(WORKBENCH, /待绑定指标|标准字段/);
+});
+
 test("Semantic modeling pages are real implementations except retired compatibility routes", () => {
 	for (const [name, src] of [
 		["SemanticObjectsPage", OBJECTS],

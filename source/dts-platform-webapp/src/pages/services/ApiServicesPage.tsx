@@ -14,6 +14,7 @@ import {
 import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { } from "@ant-design/icons";
+import { useSearchParams } from "react-router";
 import { PageHeader } from "@/components/page-header";
 import { JourneyContextBar } from "@/components/journey";
 import apiServicesService, {
@@ -37,6 +38,9 @@ const CLASSIFICATION_OPTIONS = [
 ];
 
 export default function Page() {
+	const [searchParams] = useSearchParams();
+	const journeyModelId = searchParams.get("modelId") || "";
+	const journeyMetricId = searchParams.get("metricId") || "";
 	const [services, setServices] = useState<ApiServiceSummary[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [modalOpen, setModalOpen] = useState(false);
@@ -87,7 +91,7 @@ export default function Page() {
 			method: item?.method || "GET",
 			path: item?.path || "",
 			classification: item?.classification || "INTERNAL",
-			datasetId: item?.datasetId || undefined,
+			datasetId: item?.datasetId || searchParams.get("datasetId") || undefined,
 			qpsLimit: item?.qpsLimit || undefined,
 			dailyLimit: item?.dailyLimit || undefined,
 			description: "",
@@ -189,6 +193,15 @@ export default function Page() {
 			/>
 			<JourneyContextBar stage="service" />
 			<Card>
+				{journeyModelId || journeyMetricId ? (
+					<Alert
+						className="mb-4"
+						type="info"
+						showIcon
+						message="来自模型与指标旅程"
+						description={`来源模型：${journeyModelId || "待绑定"} · 来源指标：${journeyMetricId || "待绑定"}；新建服务会优先带入 URL 中的数据集上下文。`}
+					/>
+				) : null}
 				<Alert
 					className="mb-4"
 					type="info"

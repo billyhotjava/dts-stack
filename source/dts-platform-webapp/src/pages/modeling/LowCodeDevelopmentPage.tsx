@@ -15,9 +15,10 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { JourneyContextBar } from "@/components/journey";
-import { useRouter } from "@/routes/hooks";
+import { useRouter, useSearchParams } from "@/routes/hooks";
 import { getStandardBindingDraftSnapshot } from "@/api/platformApi";
 import {
+	buildStandardBindingDraftSummary,
 	getStandardBindingDraft,
 	isBackendStandardBindingDraftId,
 	type StandardBindingDraft,
@@ -141,12 +142,28 @@ const ADVANCED_LINKS = [
 
 export default function LowCodeDevelopmentPage() {
 	const router = useRouter();
+	const searchParams = useSearchParams();
 	const standardDraftId = useMemo(() => {
-		if (typeof window === "undefined") return "";
-		return new URLSearchParams(window.location.search).get("standardDraftId") || "";
-	}, []);
+		return searchParams.get("standardDraftId") || "";
+	}, [searchParams]);
 	const [standardDraft, setStandardDraft] = useState<StandardBindingDraft | null>(() => getStandardBindingDraft(standardDraftId));
 	const routeWithStandardDraft = (route: string) => withStandardDraftRoute(route, standardDraftId);
+	const ingestionReadiness = useMemo(() => {
+		const sourceId = searchParams.get("sourceId") || "";
+		const status = String(searchParams.get("ingestionStatus") || "").toLowerCase();
+		if (!sourceId) return { label: "未接入", description: "请先选择数据源并完成连接测试。", ready: false };
+		if (["success", "succeeded", "ready"].includes(status)) {
+			return { label: "同步成功", description: "数据已具备建模前置条件。", ready: true };
+		}
+		if (["running", "syncing"].includes(status)) {
+			return { label: "同步中", description: "同步任务仍在运行，完成后再生成模型草稿。", ready: false };
+		}
+		if (["failed", "error"].includes(status)) {
+			return { label: "接入失败", description: "请查看运行记录并修复接入后再进入建模。", ready: false };
+		}
+		return { label: "待确认", description: "已选择数据源，请完成一次同步验证。", ready: false };
+	}, [searchParams]);
+	const standardDraftSummary = useMemo(() => buildStandardBindingDraftSummary(standardDraft), [standardDraft]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -217,6 +234,17 @@ export default function LowCodeDevelopmentPage() {
 					}
 				/>
 			) : null}
+			<Card size="small" data-testid="ingestion-readiness" title="建模前置条件">
+				<Space wrap>
+					<Tag color={ingestionReadiness.ready ? "green" : "orange"}>{ingestionReadiness.label}</Tag>
+					<Text type="secondary">{ingestionReadiness.description}</Text>
+					{standardDraft ? (
+						<Text type="secondary">
+							标准来源：{standardDraftSummary.sourceLabel} · 字段 {standardDraftSummary.fieldCount} · 待补标准 {standardDraftSummary.missingStandardCount} · 创建时间 {standardDraftSummary.createdAt || "-"}
+						</Text>
+					) : null}
+				</Space>
+			</Card>
 
 			<div className="grid gap-3 md:grid-cols-3">
 				<Card size="small" className="rounded-lg">
@@ -277,7 +305,12 @@ export default function LowCodeDevelopmentPage() {
 									{step.owner}
 								</Tag>
 								<div className="mt-auto flex flex-wrap gap-2">
-									<Button type="primary" onClick={() => router.push(routeWithStandardDraft(step.primaryRoute))}>
+									<Button
+										type="primary"
+										disabled={step.key === "model_candidate" && !ingestionReadiness.ready}
+										title={step.key === "model_candidate" && !ingestionReadiness.ready ? ingestionReadiness.description : undefined}
+										onClick={() => router.push(routeWithStandardDraft(step.primaryRoute))}
+									>
 										{step.primaryAction}
 										<ArrowRight size={14} />
 									</Button>

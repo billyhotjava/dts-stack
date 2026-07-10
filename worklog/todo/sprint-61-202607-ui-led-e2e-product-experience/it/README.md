@@ -4,7 +4,7 @@
 
 - [x] `DataManagementWorkbenchPage.source-contract.test.ts` 覆盖 8 阶段旅程、下一步、上下文参数。
 - [x] `dataDevelopmentWorkbench.source-contract.test.ts` 覆盖标准草稿在低代码/SQL 建模传递。
-- [ ] 新增或扩展 `e2eDataProductJourney.source-contract.test.ts` 覆盖集成、规划、标准、建模、指标、服务、证据路由。
+- [x] 新增 `dataProductDeliveryJourney.source-contract.test.ts` 覆盖集成、规划、标准、建模、指标、服务、证据路由。
 - [x] `portalGoldenLineMenu.source-contract.test.ts` 确认菜单顺序与 DataWorks-like 旅程一致，但 UI 不依赖频繁菜单跳转。
 - [x] `JourneyContextBar.source-contract.test.ts` 覆盖子页面上下文条、返回工作台和继续下一步。
 - [x] `JourneyStageState.source-contract.test.ts` 覆盖阶段状态、缺口、blocker 和下一步动作。
@@ -26,7 +26,7 @@
 
 ## Build
 
-- [x] `cd source/dts-platform-webapp && node --test ...`
+- [x] `cd source/dts-platform-webapp && node --test` 运行本 Sprint 相关契约
 - [x] `cd source/dts-platform-webapp && pnpm build`
 - [x] `git diff --check`
 - [x] GitNexus `detect_changes`
@@ -111,3 +111,15 @@
 - Runtime：容器内调用 `POST /api/ingestion/api/test-connection`，使用 `X-DTS-Service: dts-platform`，探测同网络 `dts-platform` 的 `/management/health`，返回 `connected=true`、`httpStatus=200`、`sampleCount=1`、`recordPathResolved=true`。
 - Governance：未显式设置 `allowHttp/allowedHosts` 时内网 HTTP 被正确拒绝为 `API_RUNTIME_BLOCKED_URL`；显式策略后测试通过，说明治理限制和可操作配置同时生效。
 - Known issue：ingestion 自动重试队列的历史失败任务在容器启动后仍报告 `UnexpectedRollbackException`，需作为独立运行治理任务处理；本 T04 不修改该行为。
+
+## 2026-07-10 Sprint-61 剩余任务收口证据
+
+- RED：新增模型/指标到服务发布入口契约后，`dataProductDeliveryJourney.source-contract.test.ts` 先因 MetricWorkbenchPage 和 SqlModelingPage 缺少“发布数据 API/创建数据产品”动作失败。
+- GREEN：补齐两个页面的服务发布动作，相关旅程契约、指标契约和数据开发契约 `24/24` 通过；服务路由继续携带 `journey`、`modelId`、`standardDraftId`、`metricId`。
+- 前端契约：本 Sprint 相关 7 个 Node 契约文件 `54/54` 通过。
+- 类型/构建：`pnpm exec tsc --noEmit` 通过；`pnpm build` 通过。
+- 后端回归：`dts-ingestion` API normalizer/HTTP connector/connector resource/source resolver/task resource 测试通过；`dts-platform` ingestion proxy/service client 测试通过。
+- 静态检查：`git diff --check` 通过。
+- GitNexus：`detect_changes(scope=all)` 返回 `medium`，变更共 36 个文件；受影响执行流为 `SqlModelingPage`、`DataSourceFormModal`，未出现 HIGH/CRITICAL。
+- 全量契约扫描边界：仓库部分契约依赖 Vitest 全局运行器，不能直接交给 Node Test Runner；Node 原生全量扫描的 3 个旧失败来自大屏布局、连接器布局和工作台旧标题断言，未触及本次文件，未将其伪装为本 Sprint 通过。
+- Browser/F9：仍被登录守卫重定向到 `#/auth/login`，前端代理解析 `platform.dts.local` 失败；未生成工作台、服务发布或 Chrome 95 视觉通过证据。

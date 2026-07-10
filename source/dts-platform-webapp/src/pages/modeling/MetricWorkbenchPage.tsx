@@ -55,6 +55,17 @@ export default function MetricWorkbenchPage() {
         return null;
     }, [location.search]);
 
+    const e2eContext = useMemo(() => {
+        const params = new URLSearchParams(location.search);
+        const journey = params.get("journey");
+        if (journey !== "e2e-data-product") return null;
+        return {
+            modelId: params.get("modelId") || "",
+            standardDraftId: params.get("standardDraftId") || "",
+            metricId: params.get("metricId") || "",
+        };
+    }, [location.search]);
+
     const load = useCallback(async () => {
         setLoading(true);
         const [d, o, m, modelList] = await Promise.allSettled([
@@ -237,6 +248,15 @@ export default function MetricWorkbenchPage() {
         () => models.filter((model) => model.reviewStatus === "APPROVED").length,
         [models],
     );
+    const buildServiceRoute = (route: string) => {
+        if (!e2eContext) return route;
+        const params = new URLSearchParams();
+        params.set("journey", "e2e-data-product");
+        if (e2eContext.modelId) params.set("modelId", e2eContext.modelId);
+        if (e2eContext.standardDraftId) params.set("standardDraftId", e2eContext.standardDraftId);
+        if (e2eContext.metricId) params.set("metricId", e2eContext.metricId);
+        return `${route}?${params.toString()}`;
+    };
 
     return (
         <SemanticWorkspaceFrame
@@ -250,13 +270,39 @@ export default function MetricWorkbenchPage() {
                 { label: "已审核模型", value: releasedModels, tone: releasedModels > 0 ? "green" : "gray" },
             ]}
             actions={
-                <Button onClick={() => void load()} loading={loading}>
-                    <RefreshCw size={16} />
-                    刷新
-                </Button>
+                <Space wrap>
+                    <Button onClick={() => void load()} loading={loading}>
+                        <RefreshCw size={16} />
+                        刷新
+                    </Button>
+                    <Button onClick={() => navigate(buildServiceRoute("/services/apis"))}>
+                        发布数据 API
+                    </Button>
+                    <Button onClick={() => navigate(buildServiceRoute("/services/products"))}>
+                        创建数据产品
+                    </Button>
+                </Space>
             }
         >
             <JourneyContextBar stage="metrics" />
+            {e2eContext ? (
+                <Alert
+                    className="mb-4"
+                    type={e2eContext.modelId ? "info" : "warning"}
+                    showIcon
+                    data-testid="metric-workbench-e2e-context"
+                    message="来自端到端数据产品旅程"
+                    description={`模型 ${e2eContext.modelId || "待绑定"} · 标准草稿 ${e2eContext.standardDraftId || "待绑定"} · 待绑定指标 ${e2eContext.metricId ? "已选择指标" : "请补充指标口径"}`}
+                    action={
+                        <Space wrap>
+                            <Tag color="blue">标准字段</Tag>
+                            <Button size="small" onClick={() => navigate(`/studio/sql-modeling?journey=e2e-data-product${e2eContext.modelId ? `&modelId=${encodeURIComponent(e2eContext.modelId)}` : ""}${e2eContext.standardDraftId ? `&standardDraftId=${encodeURIComponent(e2eContext.standardDraftId)}` : ""}`)}>
+                                返回模型
+                            </Button>
+                        </Space>
+                    }
+                />
+            ) : null}
             {lowCodeContext ? (
                 <Alert
                     className="mb-4"

@@ -15,7 +15,9 @@ import {
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { } from "@ant-design/icons";
+import { useSearchParams } from "react-router";
 import { PageHeader } from "@/components/page-header";
+import { JourneyContextBar } from "@/components/journey";
 import dataProductsService, {
 	type DataProductDetail,
 	type DataProductSummary,
@@ -40,6 +42,9 @@ const parseJson = (value?: string) => {
 };
 
 export default function Page() {
+	const [searchParams] = useSearchParams();
+	const journeyModelId = searchParams.get("modelId") || "";
+	const journeyMetricId = searchParams.get("metricId") || "";
 	const [products, setProducts] = useState<DataProductSummary[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [modalOpen, setModalOpen] = useState(false);
@@ -94,7 +99,7 @@ export default function Page() {
 			sla: item?.sla || "",
 			refreshFrequency: item?.refreshFrequency || "",
 			description: "",
-			datasets: [],
+			datasets: searchParams.get("datasetId") ? [searchParams.get("datasetId")] : [],
 		});
 		setModalOpen(true);
 	};
@@ -204,6 +209,7 @@ export default function Page() {
 
 	return (
 		<div className="space-y-6">
+			<JourneyContextBar stage="service" />
 			<PageHeader
 				title="数据服务中心 / 数据产品"
 				actions={
@@ -213,6 +219,15 @@ export default function Page() {
 				}
 			/>
 			<Card>
+				{journeyModelId || journeyMetricId ? (
+					<Alert
+						className="mb-4"
+						type="info"
+						showIcon
+						message="来自模型与指标旅程"
+						description={`来源模型：${journeyModelId || "待绑定"} · 来源指标：${journeyMetricId || "待绑定"}；数据产品会优先带入当前数据集。`}
+					/>
+				) : null}
 				<Alert
 					className="mb-4"
 					type="info"

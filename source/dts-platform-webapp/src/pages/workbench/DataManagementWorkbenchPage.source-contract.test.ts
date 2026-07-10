@@ -131,6 +131,16 @@ test("workbench exposes the end-to-end data product journey from integration to 
 	assert.match(source, /data-testid=\{`end-to-end-stage-\$\{stage\.key\}-secondary`\}/);
 });
 
+test("workbench exposes an explicit warehouse layer planning surface", () => {
+	const source = readFileSync(PAGE_URL, "utf8");
+	assert.match(source, /warehouse-layer-planning/);
+	for (const layer of ["ODS_RAW", "ODS_STANDARDIZED", "DWD", "DWS", "ADS"]) {
+		assert.match(source, new RegExp(layer));
+	}
+	assert.match(source, /分层规划/);
+	assert.match(source, /进入低代码建模|进入 SQL 建模/);
+});
+
 test("first report journey can be focused from the workbench entry route", () => {
 	assert.equal(existsSync(PAGE_URL), true);
 	const source = readFileSync(PAGE_URL, "utf8");

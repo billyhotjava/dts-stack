@@ -248,6 +248,63 @@ class ApiConnectorContractResourceTest {
     }
 
     @Test
+    void testConnection_shouldNormalizeSavedNestedRuntimeConfigBeforeExecution() {
+        UUID dataSourceId = UUID.randomUUID();
+        when(sourceResolver.resolveApiInfo(dataSourceId)).thenReturn(
+            new IngestionSourceResolver.ApiConnectionInfo(
+                dataSourceId,
+                "CRM API",
+                "https://crm.example.test",
+                "none",
+                Map.of("provider", "none"),
+                Map.of(),
+                Map.of(
+                    "connectorType",
+                    "api",
+                    "api",
+                    Map.of(
+                        "requestPolicy",
+                        Map.of("allowHttp", true, "readTimeoutMillis", 9000),
+                        "rateLimit",
+                        Map.of("requestsPerSecond", 3),
+                        "tls",
+                        Map.of("verifyTls", false)
+                    ),
+                    "readerConfig",
+                    Map.of(
+                        "resources",
+                        List.of(Map.of("resourceId", "orders", "path", "/v1/orders", "recordPath", "$.data.items"))
+                    )
+                ),
+                Map.of()
+            )
+        );
+        when(apiHttpEngine.execute(any(ExecutionPlan.class))).thenReturn(List.of());
+
+        resource.testConnection(
+            new ApiConnectorContractResource.ApiConnectionTestRequest(dataSourceId, Map.of(), Map.of())
+        );
+
+        ArgumentCaptor<ExecutionPlan> planCaptor = ArgumentCaptor.forClass(ExecutionPlan.class);
+        verify(apiHttpEngine).execute(planCaptor.capture());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> sourceConfig = (Map<String, Object>) planCaptor.getValue().payload().get("sourceConfig");
+        assertThat(sourceConfig)
+            .containsEntry("rateLimit", Map.of("requestsPerSecond", 3))
+            .containsEntry("tls", Map.of("verifyTls", false));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> requestPolicy = (Map<String, Object>) sourceConfig.get("requestPolicy");
+        assertThat(requestPolicy)
+            .containsEntry("allowHttp", true)
+            .containsEntry("readTimeoutMillis", 9000)
+            .containsKey("connectTimeoutMillis");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> resources = (List<Map<String, Object>>) sourceConfig.get("resources");
+        assertThat(resources).hasSize(1);
+        assertThat(resources.get(0)).containsEntry("path", "/v1/orders");
+    }
+
+    @Test
     void testConnection_shouldCallMockApiWithRawConfigAndReturnSample() throws Exception {
         startMockApi(exchange -> {
             if (!"Bearer token-123".equals(exchange.getRequestHeaders().getFirst("Authorization"))) {
@@ -282,6 +339,90 @@ class ApiConnectorContractResourceTest {
             .containsEntry("sampleCount", 1)
             .containsEntry("recordPathResolved", true);
         assertThat((List<?>) body.get("sampleRecords")).hasSize(1);
+    }
+
+    @Test
+    void testConnection_shouldAcceptFrontendNestedApiKeyAuthConfig() throws Exception {
+        startMockApi(exchange -> {
+            if (!"key-123".equals(exchange.getRequestHeaders().getFirst("X-API-Key"))) {
+                write(exchange, 401, "{\"error\":\"missing api key\"}");
+                return;
+            }
+            write(exchange, 200, "{\"data\":{\"items\":[{\"id\":1}]}}");
+        });
+        resource = new ApiConnectorContractResource(new ApiAuthProviderRegistry(), sourceResolver, realHttpEngine());
+
+        Map<String, Object> body = resource
+            .testConnection(
+                new ApiConnectorContractResource.ApiConnectionTestRequest(
+                    null,
+                    Map.<String, Object>of("resourceId", "orders", "path", "/v1/orders", "recordPath", "$.data.items"),
+                    Map.of(),
+                    Map.<String, Object>of(
+                        "baseUrl",
+                        mockApiBaseUrl(),
+                        "auth",
+                        Map.of(
+                            "provider",
+                            "apiKey",
+                            "config",
+                            Map.of("name", "X-API-Key", "location", "header"),
+                            "secretRefs",
+                            Map.of("value", "value")
+                        )
+                    ),
+                    Map.<String, Object>of("value", "key-123")
+                )
+            )
+            .getBody();
+
+        assertThat(body)
+            .containsEntry("connected", true)
+            .containsEntry("httpStatus", 200)
+            .containsEntry("authOk", true)
+            .containsEntry("sampleCount", 1);
+    }
+
+    @Test
+    void testConnection_shouldAcceptFrontendNestedBasicAuthConfig() throws Exception {
+        startMockApi(exchange -> {
+            if (!"Basic YXBpLXVzZXI6YXBpLXBhc3M=".equals(exchange.getRequestHeaders().getFirst("Authorization"))) {
+                write(exchange, 401, "{\"error\":\"missing basic auth\"}");
+                return;
+            }
+            write(exchange, 200, "{\"data\":{\"items\":[{\"id\":1}]}}");
+        });
+        resource = new ApiConnectorContractResource(new ApiAuthProviderRegistry(), sourceResolver, realHttpEngine());
+
+        Map<String, Object> body = resource
+            .testConnection(
+                new ApiConnectorContractResource.ApiConnectionTestRequest(
+                    null,
+                    Map.<String, Object>of("resourceId", "orders", "path", "/v1/orders", "recordPath", "$.data.items"),
+                    Map.of(),
+                    Map.<String, Object>of(
+                        "baseUrl",
+                        mockApiBaseUrl(),
+                        "auth",
+                        Map.of(
+                            "provider",
+                            "basic",
+                            "config",
+                            Map.of("username", "api-user"),
+                            "secretRefs",
+                            Map.of("password", "password")
+                        )
+                    ),
+                    Map.<String, Object>of("password", "api-pass")
+                )
+            )
+            .getBody();
+
+        assertThat(body)
+            .containsEntry("connected", true)
+            .containsEntry("httpStatus", 200)
+            .containsEntry("authOk", true)
+            .containsEntry("sampleCount", 1);
     }
 
     @Test

@@ -9,14 +9,18 @@ import static org.mockito.Mockito.when;
 import com.yuzhi.dts.platform.config.PlatformInboundServiceAuthProperties;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.infra.HiveConnectionTestResult;
 import com.yuzhi.dts.platform.service.infra.InfraManagementService;
 import com.yuzhi.dts.platform.service.infra.JdbcCatalogSyncService;
 import com.yuzhi.dts.platform.service.infra.JdbcConnectionTestService;
 import com.yuzhi.dts.platform.service.infra.OdsGenerationService;
+import com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDto;
+import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
 import com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDetailDto;
 import com.yuzhi.dts.platform.service.services.SvcTokenAuthService;
 import com.yuzhi.dts.platform.service.services.SvcTokenAuthService.TokenPrincipal;
 import com.yuzhi.dts.platform.security.policy.PersonnelLevel;
+import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -51,6 +55,9 @@ class InfraDataSourceResourceTest {
     private OdsGenerationService odsGenerationService;
 
     @Mock
+    private IngestionServiceClient ingestionServiceClient;
+
+    @Mock
     private SvcTokenAuthService svcTokenAuthService;
 
     private PlatformInboundServiceAuthProperties properties;
@@ -66,6 +73,7 @@ class InfraDataSourceResourceTest {
             jdbcConnectionTestService,
             jdbcCatalogSyncService,
             odsGenerationService,
+            ingestionServiceClient,
             properties,
             svcTokenAuthService
         );
@@ -157,6 +165,23 @@ class InfraDataSourceResourceTest {
 
         assertThat(response.secrets()).containsEntry("password", "secret");
         verify(infraManagementService).getDataSourceRuntimeDetail(id);
+    }
+
+    @Test
+    void testApiDataSourceUsesIngestionEngineAndMarksVerified() {
+        UUID id = UUID.randomUUID();
+        when(infraManagementService.getDataSource(id, null)).thenReturn(new InfraDataSourceDto(id, "CRM API", "api", null, null));
+        when(ingestionServiceClient.testApiConnection(Map.of("dataSourceId", id.toString())))
+            .thenReturn(new ApiResponse<>(200, "ok", Map.of("connected", true, "httpStatus", 200, "sampleCount", 2, "elapsedMs", 42)));
+
+        HiveConnectionTestResult result = resource.test(id, null).getData();
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.message()).contains("HTTP 200").contains("样本 2 条");
+        assertThat(result.elapsedMillis()).isEqualTo(42);
+        verify(ingestionServiceClient).testApiConnection(Map.of("dataSourceId", id.toString()));
+        verify(infraManagementService).markDataSourceVerified(id);
+        verify(infraManagementService, never()).getDataSourceRuntimeDetail(id);
     }
 
     private void authenticate(String principal, String authority) {

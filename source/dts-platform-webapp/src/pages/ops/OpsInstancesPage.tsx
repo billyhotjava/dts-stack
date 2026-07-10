@@ -4,7 +4,7 @@ import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { useNavigate, useSearchParams } from "react-router";
 import { PageHeader } from "@/components/page-header";
-import { JourneyContextBar } from "@/components/journey";
+import { buildJourneyUrl, JourneyContextBar } from "@/components/journey";
 import opsService, { type OpsInstance } from "@/api/services/opsService";
 import { useLogPreview } from "@/components/log-preview/LogPreviewContext";
 import { listAirflowTaskInstances, type AirflowTaskInstance } from "@/api/platformApi";
@@ -48,6 +48,9 @@ export default function OpsInstancesPage() {
 	const [searchParams] = useSearchParams();
 	const urlKeyword = searchParams.get("keyword") ?? "";
 	const urlEntryKey = searchParams.get("entryKey") || "ALL";
+	const modelId = searchParams.get("modelId") || "";
+	const journeyRoute = (route: string) =>
+		searchParams.get("journey") === "e2e-data-product" ? buildJourneyUrl(route, searchParams) : route;
 	const [keyword, setKeyword] = useState(urlKeyword);
 	const [status, setStatus] = useState("ALL");
 	const [entryKey, setEntryKey] = useState(urlEntryKey);
@@ -135,7 +138,7 @@ export default function OpsInstancesPage() {
 						<Button
 							type="link"
 							size="small"
-							onClick={() => navigate(resolveSourceTaskPath(record))}
+							onClick={() => navigate(journeyRoute(resolveSourceTaskPath(record)))}
 						>
 							查看源任务
 						</Button>
@@ -158,7 +161,9 @@ export default function OpsInstancesPage() {
 							size="small"
 							onClick={() =>
 								navigate(
-									`/ops/backfill?dagId=${encodeURIComponent(record.dagId || "")}&runId=${encodeURIComponent(record.externalRunId || record.id)}`,
+									journeyRoute(
+										`/ops/backfill?dagId=${encodeURIComponent(record.dagId || "")}&runId=${encodeURIComponent(record.externalRunId || record.id)}${modelId ? `&modelId=${encodeURIComponent(modelId)}` : ""}`,
+									),
 								)
 							}
 						>
@@ -186,7 +191,7 @@ export default function OpsInstancesPage() {
 							size="small"
 							onClick={() =>
 								navigate(
-									`/ops/logs?entryKey=${record.entryKey ?? ""}&runId=${record.externalRunId ?? record.id}`,
+									journeyRoute(`/ops/logs?entryKey=${record.entryKey ?? ""}&runId=${record.externalRunId ?? record.id}`),
 								)
 							}
 						>

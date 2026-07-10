@@ -1,7 +1,7 @@
 # T02: ODS/DWD/DWS/ADS 分层规划卡片
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T01
 
 ## 目标
@@ -22,9 +22,14 @@
 
 ## 验证
 
-- [ ] source-contract 断言分层名称和说明。
+- [x] source-contract 断言分层名称和说明。
 - [ ] Playwright smoke 检查窄屏不溢出。
 
 ## 完成标准
 
-- [ ] 客户能理解数据先规划分层，再进入模型和 SQL 微调。
+- [x] 客户能理解数据先规划分层，再进入模型和 SQL 微调。
+
+## 实施证据
+
+- 工作台展示 ODS_RAW、ODS_STANDARDIZED、DWD、DWS、ADS 五层，并分别回到数据源、标准、低代码、SQL 和指标页面。
+- `DataManagementWorkbenchPage.source-contract.test.ts` 已覆盖分层名称、路由和动作；窄屏证据归入 F9。

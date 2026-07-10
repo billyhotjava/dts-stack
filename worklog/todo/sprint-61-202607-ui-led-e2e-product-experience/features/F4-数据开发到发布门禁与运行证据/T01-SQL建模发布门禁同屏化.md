@@ -1,7 +1,7 @@
 # T01: SQL 建模发布门禁同屏化
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: F3/T02
 
 ## 目标
@@ -22,9 +22,14 @@
 
 ## 验证
 
-- [ ] source-contract 断言发布门禁卡和按钮。
+- [x] source-contract 断言发布门禁卡和按钮。
 - [ ] 单测覆盖 release submit blocked/warning/submitted。
 
 ## 完成标准
 
-- [ ] 用户不用切到多个页面判断模型能否发布。
+- [x] 用户不用切到多个页面判断模型能否发布。
+
+## 实施证据
+
+- SQL 建模页同屏显示标准、质量、权限三类发布门禁，并进入 release run。
+- `dataDevelopmentWorkbench.source-contract.test.ts` 已覆盖门禁卡和发布动作；release 场景的浏览器结果归入 F9。

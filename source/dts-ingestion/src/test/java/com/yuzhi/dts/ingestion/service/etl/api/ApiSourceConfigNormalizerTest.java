@@ -78,4 +78,37 @@ class ApiSourceConfigNormalizerTest {
             )
         );
     }
+
+    @Test
+    void normalize_promotesNestedRuntimePoliciesAndResources() {
+        Map<String, Object> normalized = ApiSourceConfigNormalizer.normalize(
+            Map.of(
+                "api",
+                Map.of(
+                    "requestPolicy",
+                    Map.of("allowHttp", true, "readTimeoutMillis", 9000),
+                    "rateLimit",
+                    Map.of("requestsPerSecond", 3),
+                    "tls",
+                    Map.of("verifyTls", false)
+                ),
+                "readerConfig",
+                Map.of(
+                    "resources",
+                    List.of(Map.of("resourceId", "orders", "path", "/v1/orders", "recordPath", "$.data.items"))
+                )
+            ),
+            UUID.randomUUID(),
+            "crm-api"
+        );
+
+        assertThat(normalized)
+            .containsEntry("requestPolicy", Map.of("allowHttp", true, "readTimeoutMillis", 9000))
+            .containsEntry("rateLimit", Map.of("requestsPerSecond", 3))
+            .containsEntry("tls", Map.of("verifyTls", false));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> resources = (List<Map<String, Object>>) normalized.get("resources");
+        assertThat(resources).hasSize(1);
+        assertThat(resources.get(0)).containsEntry("path", "/v1/orders").containsEntry("recordPath", "$.data.items");
+    }
 }

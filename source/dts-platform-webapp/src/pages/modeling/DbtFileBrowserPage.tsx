@@ -37,6 +37,8 @@ import {
 	uploadDbtArchive,
 } from "@/api/platformApi";
 import { useRouter } from "@/routes/hooks";
+import { useSearchParams } from "react-router";
+import { JourneyContextBar } from "@/components/journey";
 
 configureMonacoLoader();
 
@@ -149,6 +151,9 @@ function collectAllFilePaths(node: FileNode): string[] {
 
 export default function DbtFileBrowserPage() {
 	const router = useRouter();
+	const [searchParams] = useSearchParams();
+	const modelId = searchParams.get("modelId") || "";
+	const sqlModelingRoute = `/studio/sql-modeling?journey=e2e-data-product${modelId ? `&modelId=${encodeURIComponent(modelId)}` : ""}`;
 	// Tree state
 	const [treeData, setTreeData] = useState<FileNode | null>(null);
 	const [treeLoading, setTreeLoading] = useState(false);
@@ -599,12 +604,13 @@ export default function DbtFileBrowserPage() {
 
 	return (
 		<div className="space-y-6">
+			<JourneyContextBar stage="development" />
 			<Card
 				title="DBT 文件工作区"
 				extra={
 					<div className="flex flex-wrap items-center gap-2">
-						<Button className="rounded-2xl" onClick={() => router.push("/modeling/sql")}>
-							回到逻辑建模
+						<Button className="rounded-2xl" onClick={() => router.push(sqlModelingRoute)}>
+							返回 SQL 建模发布门禁
 						</Button>
 						<Button className="rounded-2xl" type="link" onClick={() => router.push("/foundation/data-sources")}>
 							去 ODS 接入

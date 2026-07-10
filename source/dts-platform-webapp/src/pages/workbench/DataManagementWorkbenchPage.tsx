@@ -8,6 +8,7 @@ import {
 	buildAcceptancePackageMarkdown,
 	buildDataProductAcceptancePackage,
 	buildSnapshotResumeUrl,
+	buildJourneyUrl,
 	clearJourneySnapshot,
 	describeJourneySnapshot,
 	loadJourneySnapshot,
@@ -108,6 +109,14 @@ const firstReportJourneySteps = [
 	},
 ];
 
+const WAREHOUSE_LAYER_PLAN = [
+	{ key: "ODS_RAW", title: "ODS_RAW", description: "保留源系统原始记录，保证可追溯和可重放。", route: "/foundation/data-sources", action: "确认接入" },
+	{ key: "ODS_STANDARDIZED", title: "ODS_STANDARDIZED", description: "统一字段类型、命名和技术字段，形成可治理的入湖表。", route: "/governance/standards/elements", action: "查看标准" },
+	{ key: "DWD", title: "DWD", description: "按业务过程沉淀明细事实和维度关联，承接标准字段。", route: "/studio/low-code-development", action: "进入低代码建模" },
+	{ key: "DWS", title: "DWS", description: "围绕主题域和公共粒度形成可复用汇总模型。", route: "/studio/sql-modeling", action: "进入 SQL 建模" },
+	{ key: "ADS", title: "ADS", description: "面向指标、报表和 API 消费交付应用数据集。", route: "/modeling/metric-workbench", action: "绑定指标" },
+];
+
 export type DataManagementWorkbenchPageProps = {
 	embedded?: boolean;
 	focus?: "data-management" | "consumption";
@@ -199,6 +208,7 @@ export default function Page({
 	const failureReason = selectedTheme?.failureReason || "";
 	const nextAction = selectedTheme?.nextAction || selectedTheme?.primaryAction.label;
 	const evidenceRefs = selectedTheme?.evidenceRefs || [];
+	const journeyRoute = (route: string) => buildJourneyUrl(route, searchParams);
 	const isConsumptionFocus = focus === "consumption";
 	const sectionTitle = isConsumptionFocus ? "消费发布" : "端到端数据产品";
 	const sectionDescription = isConsumptionFocus
@@ -391,6 +401,28 @@ export default function Page({
 									{stage.supportingAction}
 								</Button>
 							</Space>
+						</div>
+					))}
+				</div>
+			</Card>
+
+			<Card title="数仓分层规划" data-testid="warehouse-layer-planning">
+				<Alert
+					type="info"
+					showIcon
+					message="先确定数据进入哪一层，再生成模型和 SQL 草稿"
+					description="分层规划只表达当前阶段和下一步，不会在接入未完成时伪造模型已就绪。"
+				/>
+				<div className="mt-4 grid gap-3 xl:grid-cols-5 md:grid-cols-2">
+					{WAREHOUSE_LAYER_PLAN.map((layer) => (
+						<div key={layer.key} className="flex min-h-[168px] flex-col justify-between rounded border border-gray-200 p-3">
+							<div className="space-y-2">
+								<Tag color="blue">{layer.title}</Tag>
+								<div className="font-medium">{layer.description}</div>
+							</div>
+							<Button size="small" onClick={() => router.push(journeyRoute(layer.route))}>
+								{layer.action}
+							</Button>
 						</div>
 					))}
 				</div>

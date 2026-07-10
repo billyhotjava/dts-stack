@@ -11,6 +11,32 @@ import org.springframework.util.StringUtils;
 
 public final class ApiSourceConfigNormalizer {
 
+    private static final List<String> NESTED_RUNTIME_KEYS = List.of(
+        "baseUrl",
+        "baseURL",
+        "authProvider",
+        "auth",
+        "defaultHeaders",
+        "requestPolicy",
+        "rateLimit",
+        "tls",
+        "resource",
+        "resources",
+        "path",
+        "resourceId",
+        "displayName",
+        "method",
+        "query",
+        "bodyTemplate",
+        "recordPath",
+        "pagination",
+        "cursor",
+        "targetTable",
+        "landing",
+        "schemaSnapshot",
+        "stagingFields"
+    );
+
     private ApiSourceConfigNormalizer() {}
 
     public static Map<String, Object> normalize(
@@ -28,6 +54,7 @@ public final class ApiSourceConfigNormalizer {
         String tablePrefix
     ) {
         Map<String, Object> normalized = safeMap(sourceConfig);
+        promoteNestedRuntimeConfig(normalized);
         normalized.put("connectorType", ApiConnectorTypes.CONNECTOR_TYPE);
         normalized.put("readerType", ApiConnectorTypes.DEFAULT_READER_TYPE);
         normalized.put("sourceCategory", ApiConnectorTypes.CONNECTOR_TYPE);
@@ -102,6 +129,23 @@ public final class ApiSourceConfigNormalizer {
             mappings.add(mapping);
         }
         return List.copyOf(mappings);
+    }
+
+    private static void promoteNestedRuntimeConfig(Map<String, Object> sourceConfig) {
+        Map<String, Object> apiNode = asMap(sourceConfig.get("api"));
+        Map<String, Object> readerNode = asMap(sourceConfig.get("readerConfig"));
+        for (String key : NESTED_RUNTIME_KEYS) {
+            if (sourceConfig.containsKey(key) && sourceConfig.get(key) != null) {
+                continue;
+            }
+            Object value = apiNode.get(key);
+            if (value == null) {
+                value = readerNode.get(key);
+            }
+            if (value != null) {
+                sourceConfig.put(key, value);
+            }
+        }
     }
 
     private static Map<String, Object> normalizeResource(Map<String, Object> resource, String sourceKey, String tablePrefix) {

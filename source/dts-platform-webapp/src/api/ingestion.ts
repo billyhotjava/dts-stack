@@ -345,6 +345,7 @@ export interface ApiAuthProviderDescriptorDTO {
 	description?: string;
 	fields?: ApiAuthProviderFieldDTO[];
 	supportsRotation?: boolean;
+	enabled?: boolean;
 }
 
 export interface ApiConnectorContractDTO {

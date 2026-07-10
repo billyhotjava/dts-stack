@@ -3,12 +3,13 @@ import { Button, Space, Tag, Timeline, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import { CheckCircle2, FileSearch, ShieldCheck, Sigma } from "lucide-react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import {
 	PlatformPageHero,
 	PlatformSectionCard,
 	PlatformSummaryCards,
 } from "@/components/console-page";
+import { JourneyContextBar } from "@/components/journey";
 import {
 	getSprint27AuditEvidence,
 	type PlatformEventDto,
@@ -76,6 +77,8 @@ const groupEvidence = (events: PlatformEventDto[]): EvidenceRow[] => {
 
 export default function AuditEvidencePage() {
 	const navigate = useNavigate();
+	const [searchParams] = useSearchParams();
+	const journeyModelId = searchParams.get("modelId") || "";
 	const [loading, setLoading] = useState(false);
 	const [events, setEvents] = useState<PlatformEventDto[]>([]);
 	const [rows, setRows] = useState<EvidenceRow[]>([]);
@@ -162,6 +165,7 @@ export default function AuditEvidencePage() {
 
 	return (
 		<div className="space-y-6">
+			<JourneyContextBar stage="evidence" />
 			<PlatformPageHero
 				title="审计证据链"
 				actions={
@@ -209,7 +213,7 @@ export default function AuditEvidencePage() {
 				</PlatformSectionCard>
 			</div>
 
-			<PlatformSectionCard title="审计动作覆盖" bodyClassName="pt-0">
+			<PlatformSectionCard title={`审计动作覆盖${journeyModelId ? ` · 模型 ${journeyModelId}` : ""}`} bodyClassName="pt-0">
 				<CompactTable<EvidenceRow>
 					rowKey="key"
 					loading={loading}

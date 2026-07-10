@@ -72,3 +72,16 @@ test("metric workbench accepts low-code journey context and returns to the guide
 	assert.match(METRIC_WORKBENCH, /businessObjectId/);
 	assert.match(METRIC_WORKBENCH, /target=report/);
 });
+
+test("low-code development blocks modeling until ingestion readiness is explicit", () => {
+	assert.match(PAGE, /ingestion-readiness/);
+	assert.match(PAGE, /同步成功|同步中|接入失败|未接入/);
+	assert.match(PAGE, /建模前置条件|数据接入就绪/);
+	assert.match(PAGE, /disabled=.*ingestion|ingestion.*disabled/);
+});
+
+test("low-code development exposes standard draft field gaps and provenance", () => {
+	assert.match(PAGE, /标准来源|标准草稿来源/);
+	assert.match(PAGE, /待补标准|缺失标准/);
+	assert.match(PAGE, /createdAt|创建时间/);
+});

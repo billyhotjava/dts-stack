@@ -739,12 +739,20 @@ export default function DataSourcesPage() {
 				key: "action",
 				width: 240,
 				fixed: "right" as const,
-				render: (_: any, record: InfraDataSource) => {
-					const adminManaged = isAdminManagedSource(record);
-					const apiSource = isApiSourceType(record.type);
-					// 高频按钮留在行内；低频操作收进 ⋯ 下拉，把操作列从 540px 压缩到 240px
-					const moreItems = [
-						...(!apiSource
+					render: (_: any, record: InfraDataSource) => {
+						const adminManaged = isAdminManagedSource(record);
+						const apiSource = isApiSourceType(record.type);
+						// 高频按钮留在行内；低频操作收进 ⋯ 下拉，把操作列从 540px 压缩到 240px
+						const moreItems = [
+							{
+								key: "journey-start",
+								label: "开始数据产品旅程",
+							onClick: () =>
+									navigate(
+										`/workbench?section=data-management&journey=e2e-data-product&sourceId=${encodeURIComponent(String(record.id))}`,
+									),
+							},
+							...(!apiSource
 							? [
 									{
 										key: "schema-discover",

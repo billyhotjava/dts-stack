@@ -115,6 +115,46 @@ class ApiHttpSourceConnectorTest {
     }
 
     @Test
+    void buildExecutionPlan_promotesNestedRuntimePoliciesAndResources() {
+        UUID sourceId = UUID.randomUUID();
+        SourceConnectorContext context = new SourceConnectorContext(
+            1L,
+            "api-task",
+            sourceId,
+            "api",
+            Map.of(
+                "api",
+                Map.of(
+                    "requestPolicy",
+                    Map.of("allowHttp", true),
+                    "rateLimit",
+                    Map.of("requestsPerSecond", 2),
+                    "tls",
+                    Map.of("verifyTls", false)
+                ),
+                "readerConfig",
+                Map.of("resources", List.of(Map.of("resourceId", "orders", "path", "/v1/orders")))
+            ),
+            "full_refresh",
+            Map.of(),
+            List.of()
+        );
+
+        ExecutionPlan plan = connector.buildExecutionPlan(context);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> sourceConfig = (Map<String, Object>) plan.payload().get("sourceConfig");
+        assertThat(sourceConfig)
+            .containsEntry("requestPolicy", Map.of("allowHttp", true))
+            .containsEntry("rateLimit", Map.of("requestsPerSecond", 2))
+            .containsEntry("tls", Map.of("verifyTls", false));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> resources = (List<Map<String, Object>>) sourceConfig.get("resources");
+        assertThat(resources).hasSize(1);
+        assertThat(resources.get(0)).containsEntry("path", "/v1/orders");
+    }
+
+    @Test
     void validate_requiresDataSourceId() {
         SourceConnectorContext context = new SourceConnectorContext(
             null,

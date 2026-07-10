@@ -2,7 +2,10 @@ export { JourneyContextBar } from "./JourneyContextBar";
 export { useDataProductJourneyContext } from "./useDataProductJourneyContext";
 export {
 	E2E_DATA_PRODUCT_JOURNEY,
+	JOURNEY_CONTEXT_PARAM_LABELS,
+	buildJourneyParamClearUrl,
 	buildJourneyUrl,
+	extractJourneyContextParams,
 	parseDataProductJourneyContext,
 	type DataProductJourneyContext,
 	type DataProductJourneyContextParams,

@@ -6,6 +6,7 @@ import com.yuzhi.dts.ingestion.service.etl.api.ApiAuthProviderRegistry;
 import com.yuzhi.dts.ingestion.service.etl.api.ApiConnectorTypes;
 import com.yuzhi.dts.ingestion.service.etl.api.ApiHttpEngine;
 import com.yuzhi.dts.ingestion.service.etl.api.ApiHttpException;
+import com.yuzhi.dts.ingestion.service.etl.api.ApiSourceConfigNormalizer;
 import com.yuzhi.dts.ingestion.service.etl.api.ApiSourceContracts;
 import com.yuzhi.dts.ingestion.service.etl.connector.ExecutionPlan;
 import java.time.Duration;
@@ -134,30 +135,32 @@ public class ApiConnectorContractResource {
     }
 
     private Map<String, Object> connectionTestSourceConfig(ApiConnectionTestRequest request) {
+        Map<String, Object> sourceConfig;
         if (request.dataSourceId() != null) {
             com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ApiConnectionInfo apiInfo = sourceResolver.resolveApiInfo(
                 request.dataSourceId()
             );
-            return sourceConfig(apiInfo);
+            sourceConfig = sourceConfig(apiInfo);
+        } else {
+            sourceConfig = new LinkedHashMap<>(safeMap(request.sourceConfig()));
+            Map<String, Object> secrets = new LinkedHashMap<>(safeMap(sourceConfig.get("secrets")));
+            secrets.putAll(safeMap(request.secrets()));
+            if (!secrets.isEmpty()) {
+                sourceConfig.put("secrets", secrets);
+            }
+            Map<String, Object> auth = safeMap(sourceConfig.get("auth"));
+            String authProvider = text(sourceConfig.get("authProvider"));
+            if (!StringUtils.hasText(authProvider)) {
+                authProvider = text(auth.get("provider"));
+            }
+            if (StringUtils.hasText(authProvider)) {
+                sourceConfig.put("authProvider", authProvider);
+            }
+            if (!StringUtils.hasText(text(sourceConfig.get("baseUrl")))) {
+                throw new IllegalArgumentException("sourceConfig.baseUrl 不能为空");
+            }
         }
-        Map<String, Object> sourceConfig = new LinkedHashMap<>(safeMap(request.sourceConfig()));
-        Map<String, Object> secrets = new LinkedHashMap<>(safeMap(sourceConfig.get("secrets")));
-        secrets.putAll(safeMap(request.secrets()));
-        if (!secrets.isEmpty()) {
-            sourceConfig.put("secrets", secrets);
-        }
-        Map<String, Object> auth = safeMap(sourceConfig.get("auth"));
-        String authProvider = text(sourceConfig.get("authProvider"));
-        if (!StringUtils.hasText(authProvider)) {
-            authProvider = text(auth.get("provider"));
-        }
-        if (StringUtils.hasText(authProvider)) {
-            sourceConfig.put("authProvider", authProvider);
-        }
-        if (!StringUtils.hasText(text(sourceConfig.get("baseUrl")))) {
-            throw new IllegalArgumentException("sourceConfig.baseUrl 不能为空");
-        }
-        return sourceConfig;
+        return ApiSourceConfigNormalizer.normalize(sourceConfig, request.dataSourceId(), "connection_test");
     }
 
     private Map<String, Object> sourceConfig(

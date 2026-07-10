@@ -48,6 +48,7 @@ export type DataProductJourneyStageState = {
 	blocker?: DataProductJourneyBlocker;
 	status: DataProductJourneyStageStatus;
 	verification: JourneyArtifactVerification;
+	artifactParam?: JourneyContextParamKey;
 	tone: JourneyStageTone;
 	route: string;
 	action: string;
@@ -372,6 +373,7 @@ export const resolveDataProductJourneyStageState = (
 		blocker: blocker,
 		status,
 		verification,
+		artifactParam: definition.artifactParam,
 		tone,
 		route: definition.route,
 		action: definition.action,

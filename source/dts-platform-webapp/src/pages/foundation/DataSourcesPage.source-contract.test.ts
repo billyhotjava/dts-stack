@@ -6,6 +6,7 @@ const CONNECTOR_REGISTRY_SOURCE = readFileSync(new URL("./ConnectorRegistryPage.
 const DATA_SOURCES_SOURCE = readFileSync(new URL("./DataSourcesPage.tsx", import.meta.url), "utf8");
 const DATA_SOURCE_DETAIL_SOURCE = readFileSync(new URL("./DataSourceDetailPage.tsx", import.meta.url), "utf8");
 const DATA_SOURCE_FORM_SOURCE = readFileSync(new URL("./DataSourceFormModal.tsx", import.meta.url), "utf8");
+const INGESTION_API_SOURCE = readFileSync(new URL("../../api/ingestion.ts", import.meta.url), "utf8");
 const DICTIONARY_SERVICE_SOURCE = readFileSync(
 	new URL("../../api/services/dictionaryService.ts", import.meta.url),
 	"utf8",
@@ -46,6 +47,30 @@ test("data source form reads system types from platform dictionary before fallba
 	assert.match(DATA_SOURCE_FORM_SOURCE, /系统类型字典未接通/);
 	assert.match(DATA_SOURCE_FORM_SOURCE, /router\.push\("\/governance\/standards\/reference"\)/);
 	assert.match(DATA_SOURCE_FORM_SOURCE, /router\.push\("\/foundation\/connectors"\)/);
+});
+
+test("api data source form keeps auth providers aligned with runtime contract", () => {
+	assert.match(INGESTION_API_SOURCE, /enabled\?:\s*boolean/);
+	assert.match(DATA_SOURCE_FORM_SOURCE, /disabled:\s*item\.enabled === false/);
+	assert.match(DATA_SOURCE_FORM_SOURCE, /即将支持/);
+	assert.match(DATA_SOURCE_FORM_SOURCE, /selectedApiDescriptor\?\.enabled === false/);
+});
+
+test("api data source form emits engine-compatible auth references", () => {
+	assert.match(DATA_SOURCE_FORM_SOURCE, /buildApiAuthRefName/);
+	assert.match(DATA_SOURCE_FORM_SOURCE, /authRefConfig\[buildApiAuthRefName\(field\.name\)\]\s*=\s*secretRef/);
+	assert.doesNotMatch(DATA_SOURCE_FORM_SOURCE, /\.\.\.\(authConfig \? \{ config: authConfig \} : \{\}\)/);
+});
+
+test("api connection test submits the complete source config", () => {
+	assert.match(DATA_SOURCE_FORM_SOURCE, /sourceConfig:\s*buildApiProps\(/);
+	assert.doesNotMatch(DATA_SOURCE_FORM_SOURCE, /sourceConfig:\s*asRecord\(\s*[\s\S]*?buildApiProps[\s\S]*?\.readerConfig/);
+});
+
+test("data source rows can start the end-to-end journey with source context", () => {
+	assert.match(DATA_SOURCES_SOURCE, /e2e-data-product/);
+	assert.match(DATA_SOURCES_SOURCE, /sourceId/);
+	assert.match(DATA_SOURCES_SOURCE, /开始数据产品旅程|进入数仓规划/);
 });
 
 test("data source list and detail pages do not expose full-chain rollback", () => {

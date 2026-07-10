@@ -115,6 +115,8 @@ const showImpact = (impact: DataSourceUpdateImpact | null) => {
 	});
 };
 
+const buildApiAuthRefName = (fieldName: string) => `${fieldName}Ref`;
+
 export default function DataSourceFormModal({
 	open,
 	editing,
@@ -472,14 +474,22 @@ export default function DataSourceFormModal({
 			}
 		});
 		const secretRefs = cleanRecord({ ...existingSecretRefs, ...nextSecretRefs });
+		const authRefConfig: Record<string, string> = {};
+		(descriptor?.fields || []).forEach((field) => {
+			if (!field.sensitive || String(field.type || "").toLowerCase() === "secretref") return;
+			const secretRef = secretRefs?.[field.name];
+			if (!secretRef) return;
+			authRefConfig[buildApiAuthRefName(field.name)] = secretRef;
+		});
 		const auth =
 			authProvider === "none"
 				? { provider: "none" }
-				: {
+				: cleanRecord({
 						provider: authProvider,
-						...(authConfig ? { config: authConfig } : {}),
+						...(authConfig || {}),
+						...authRefConfig,
 						...(secretRefs ? { secretRefs } : {}),
-					};
+					}) || { provider: authProvider };
 		const apiNode = {
 			baseUrl,
 			...(defaultHeaders ? { defaultHeaders } : {}),
@@ -528,12 +538,17 @@ export default function DataSourceFormModal({
 			const selectedApiDescriptor = (apiContract?.authProviders || []).find(
 				(item) => String(item.id).toLowerCase() === String(values.apiAuthProvider || "none").toLowerCase(),
 			);
+			if (selectedApiDescriptor?.enabled === false) {
+				message.warning("该鉴权方式即将支持，当前运行时暂未开放");
+				return;
+			}
 			const result = editing?.id
 				? await ingestionTaskAPI.testApiConnection({ dataSourceId: editing.id })
 				: await ingestionTaskAPI.testApiConnection({
-						sourceConfig: asRecord(
-							buildApiProps(values, values.propsJson ? asRecord(parseJson(values.propsJson)) : undefined, selectedApiDescriptor)
-								.readerConfig,
+						sourceConfig: buildApiProps(
+							values,
+							values.propsJson ? asRecord(parseJson(values.propsJson)) : undefined,
+							selectedApiDescriptor,
 						),
 						secrets: buildApiSecrets(values, selectedApiDescriptor),
 					});
@@ -560,6 +575,10 @@ export default function DataSourceFormModal({
 			const selectedApiDescriptor = (apiContract?.authProviders || []).find(
 				(item) => String(item.id).toLowerCase() === String(values.apiAuthProvider || "none").toLowerCase(),
 			);
+			if (apiSourceFlag && selectedApiDescriptor?.enabled === false) {
+				message.warning("该鉴权方式即将支持，当前运行时暂未开放");
+				return;
+			}
 			if (apiSourceFlag) {
 				props = buildApiProps(values, asRecord(props), selectedApiDescriptor);
 			} else if (values.readerType) {
@@ -757,7 +776,7 @@ export default function DataSourceFormModal({
 								showIcon
 								className="mb-4"
 								message="API 数据源配置"
-								description="鉴权机制仍可扩展；敏感值只会写入 secrets，props 中仅保存 provider/config/secretRefs。当前 API 入湖运行时未启用，入湖任务会先保存为草稿。"
+								description="鉴权机制仍可扩展；敏感值只会写入 secrets，props 中保存运行时可读取的 provider 与 Ref 字段，连接测试会复用 API 入湖运行时。"
 							/>
 							<Form.Item
 								name="apiBaseUrl"
@@ -794,7 +813,11 @@ export default function DataSourceFormModal({
 								<Form.Item name="apiAuthProvider" label="鉴权方式" initialValue="none">
 									<Select
 										loading={apiContractLoading}
-										options={apiAuthProviders.map((item) => ({ label: item.label || item.id, value: item.id }))}
+										options={apiAuthProviders.map((item) => ({
+											label: item.enabled === false ? `${item.label || item.id}（即将支持）` : item.label || item.id,
+											value: item.id,
+											disabled: item.enabled === false,
+										}))}
 										placeholder="选择鉴权方式"
 									/>
 								</Form.Item>
