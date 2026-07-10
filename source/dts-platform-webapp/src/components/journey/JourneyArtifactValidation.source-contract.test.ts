@@ -45,3 +45,22 @@ test("artifact validation is exported from the barrel and has behavior tests", (
 	}
 	assert.equal(existsSync(behaviorTestUrl), true, "journeyArtifactValidation.test.ts (vitest) should exist");
 });
+
+test("workbench and low-code page wire the real standard draft lookup into validations", () => {
+	const workbenchSource = readFileSync(
+		new URL("../../pages/workbench/DataManagementWorkbenchPage.tsx", import.meta.url),
+		"utf8",
+	);
+	assert.match(workbenchSource, /createDataProductArtifactValidator/);
+	assert.match(workbenchSource, /resolveArtifactValidations/);
+	assert.match(workbenchSource, /getStandardBindingDraft/);
+	assert.match(workbenchSource, /isBackendStandardBindingDraftId/);
+	assert.match(workbenchSource, /-unverified/);
+	assert.match(workbenchSource, /清除无效参数/);
+
+	const lowCodeSource = readFileSync(
+		new URL("../../pages/modeling/LowCodeDevelopmentPage.tsx", import.meta.url),
+		"utf8",
+	);
+	assert.match(lowCodeSource, /validations=\{resolveArtifactValidations/);
+});

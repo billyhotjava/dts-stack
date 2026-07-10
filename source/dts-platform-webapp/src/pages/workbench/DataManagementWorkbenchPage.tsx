@@ -7,15 +7,20 @@ import {
 	buildAcceptancePackageJson,
 	buildAcceptancePackageMarkdown,
 	buildDataProductAcceptancePackage,
+	buildJourneyParamClearUrl,
 	buildSnapshotResumeUrl,
 	buildJourneyUrl,
 	clearJourneySnapshot,
+	createDataProductArtifactValidator,
 	describeJourneySnapshot,
+	extractJourneyContextParams,
 	loadJourneySnapshot,
+	resolveArtifactValidations,
 	resolveDataProductJourneyStageStates,
 	shouldOfferSnapshotResume,
 	type JourneySnapshot,
 } from "@/components/journey";
+import { getStandardBindingDraft, isBackendStandardBindingDraftId } from "@/pages/modeling/standardBindingDraft";
 import { useRouter, useSearchParams } from "@/routes/hooks";
 import goldenChainService, {
 	type GoldenChainDetail,
@@ -196,9 +201,20 @@ export default function Page({
 		clearJourneySnapshot();
 		setResumeSnapshot(null);
 	};
+	const journeyContextParams = useMemo(() => extractJourneyContextParams(searchParams), [searchParams]);
+	const artifactValidations = useMemo(
+		() =>
+			resolveArtifactValidations(
+				journeyContextParams,
+				createDataProductArtifactValidator({
+					standardDraft: { findDraft: getStandardBindingDraft, isBackendDraftId: isBackendStandardBindingDraftId },
+				}),
+			),
+		[journeyContextParams],
+	);
 	const productJourneyStages = useMemo(
-		() => resolveDataProductJourneyStageStates(searchParams),
-		[searchParams],
+		() => resolveDataProductJourneyStageStates(searchParams, artifactValidations),
+		[searchParams, artifactValidations],
 	);
 	const acceptancePackage = useMemo(
 		() => buildDataProductAcceptancePackage(searchParams),
@@ -358,6 +374,11 @@ export default function Page({
 									<Space size={4} wrap>
 										<Text type="secondary">{stage.title}</Text>
 										<Tag color={JOURNEY_STATUS_COLOR[stage.status]}>{JOURNEY_STATUS_LABEL[stage.status]}</Tag>
+										{stage.status === "done" && stage.verification === "unverified" ? (
+											<Tag color="gold" data-testid={`end-to-end-stage-${stage.key}-unverified`}>
+												待确认
+											</Tag>
+										) : null}
 									</Space>
 								</div>
 								<div className="text-base font-medium">{stage.result}</div>
@@ -375,8 +396,20 @@ export default function Page({
 										<div className="text-muted-foreground">当前缺口</div>
 										<Text type="secondary">{stage.gap}</Text>
 										{stage.blocker ? (
-											<div>
+											<div className="space-y-1">
 												<Tag color="orange">{stage.blocker.reason}</Tag>
+												{stage.verification === "invalid" && stage.artifactParam ? (
+													<Button
+														size="small"
+														danger
+														data-testid={`end-to-end-stage-${stage.key}-clear-invalid`}
+														onClick={() =>
+															router.push(buildJourneyParamClearUrl("/workbench", searchParams, stage.artifactParam as NonNullable<typeof stage.artifactParam>))
+														}
+													>
+														清除无效参数
+													</Button>
+												) : null}
 											</div>
 										) : null}
 									</div>

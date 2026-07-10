@@ -14,7 +14,12 @@ import {
 	ShieldCheck,
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
-import { JourneyContextBar } from "@/components/journey";
+import {
+	JourneyContextBar,
+	createDataProductArtifactValidator,
+	extractJourneyContextParams,
+	resolveArtifactValidations,
+} from "@/components/journey";
 import { useRouter, useSearchParams } from "@/routes/hooks";
 import { getStandardBindingDraftSnapshot } from "@/api/platformApi";
 import {
@@ -207,7 +212,17 @@ export default function LowCodeDevelopmentPage() {
 					</Space>
 				}
 			/>
-			<JourneyContextBar stage="modeling" />
+			<JourneyContextBar
+				stage="modeling"
+				validations={resolveArtifactValidations(
+					extractJourneyContextParams(
+						typeof window === "undefined" ? new URLSearchParams() : new URLSearchParams(window.location.search),
+					),
+					createDataProductArtifactValidator({
+						standardDraft: { findDraft: getStandardBindingDraft, isBackendDraftId: isBackendStandardBindingDraftId },
+					}),
+				)}
+			/>
 
 			<Alert
 				type="info"

@@ -71,3 +71,10 @@
 - GREEN：`node --test` 契约套件 0 fail——**既有用例零破坏**，第三参可选、默认行为与 sprint-61 基线一致。
 - GREEN：`pnpm build` 通过。
 - 设计说明：新增 verification 字段（verified/invalid/unverified）与 status 解耦——invalid 改变 status（blocked+恢复动作），unknown 不改变 status 只标记"待确认"，供 T03 在 UI 上区分"纯绿"与"绿但未验真"。
+
+### F2-T03 工作台与上下文条呈现校验状态（2026-07-10）
+
+- GREEN：`pnpm vitest run src/components/journey/` 25/25（新增 journeyContext.test.ts：参数提取、清参 URL 保 journey）。
+- GREEN：`node --test` 契约 0 fail（新增 Bar 校验呈现契约、workbench/LowCode 真实校验源接线契约）。
+- GREEN：`pnpm build` 通过。
+- 交付说明：workbench 阶段卡 done+unverified 显示"待确认"金标、invalid 阶段给"清除无效参数"按钮（保 journey 清单参）；JourneyContextBar 新增可选 validations 注入，invalid 上下文红标可关闭清除；LowCodeDevelopmentPage 作为 Bar 校验接线样板（真实 standardBindingDraft 清单）。F2 整体 DONE：手改 URL 塞假 standardDraftId 时对应阶段 blocked，不再显示纯绿。

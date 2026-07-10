@@ -98,3 +98,14 @@ test("core pages render the journey context bar with their stage", () => {
 		assert.match(source, new RegExp(`stage="${stage}"`), `${url.pathname} should declare stage ${stage}`);
 	}
 });
+
+test("journey context bar surfaces artifact verification and invalid param recovery", () => {
+	const barSource = readFileSync(new URL("./JourneyContextBar.tsx", import.meta.url), "utf8");
+
+	assert.match(barSource, /validations\?:/);
+	assert.match(barSource, /journey-context-unverified/);
+	assert.match(barSource, /journey-context-invalid-param/);
+	assert.match(barSource, /buildJourneyParamClearUrl/);
+	assert.match(barSource, /待确认/);
+	assert.match(barSource, /（无效）/);
+});
