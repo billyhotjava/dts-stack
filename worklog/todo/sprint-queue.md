@@ -21,11 +21,30 @@
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
 | F1-端到端旅程工作台与上下文保持 | 3 | IN_PROGRESS |
-| F2-数据集成到数仓规划的首屏引导 | 3 | READY |
+| F2-数据集成到数仓规划的首屏引导 | 4 | IN_PROGRESS |
 | F3-标准落标到建模与指标的可见传递 | 3 | READY |
 | F4-数据开发到发布门禁与运行证据 | 3 | READY |
 | F5-数据服务消费闭环与客户验收 | 3 | READY |
+| F6-旅程上下文组件化与页面接入 | 3 | IN_PROGRESS |
+| F7-阶段状态与缺口计算模型 | 3 | IN_PROGRESS |
+| F8-客户验收包与证据聚合 | 3 | IN_PROGRESS |
+| F9-可登录浏览器验收与回归基线 | 3 | READY |
 
-**统计**: READY=14, IN_PROGRESS=0, DONE=1, BLOCKED=0
+**统计**: READY=17, IN_PROGRESS=4, DONE=7, BLOCKED=0
 
 **目录**: `worklog/todo/sprint-61-202607-ui-led-e2e-product-experience/`
+
+## Sprint-62: 旅程可信化与门禁证据结构化 (202607)
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-旅程实例持久化与恢复 | 3 | READY |
+| F2-阶段真实性校验 | 3 | READY |
+| F3-dbt式门禁证据结构化 | 3 | READY |
+| F4-菜单直达旅程感知与验收包打印 | 3 | READY |
+
+**统计**: READY=12, IN_PROGRESS=0, DONE=0, BLOCKED=0
+
+**目录**: `worklog/todo/sprint-62-202607-journey-trust-and-gate-evidence/`
+
+**来源**: 对 sprint-61 旅程重构的三视角 review（DataWorks 成熟产品 / dbt 门禁语义 / 客户无正规开发）；缺口分析见 sprint 目录 `assets/gap-analysis.md`。依赖：browser 证据挂靠 sprint-61 F9。

@@ -1,7 +1,7 @@
 # F2: 数据集成到数仓规划的首屏引导
 
 **优先级**: P0
-**状态**: READY
+**状态**: IN_PROGRESS
 
 ## 目标
 
@@ -14,9 +14,16 @@
 | T01 | 数据源到旅程的开始入口 | P0 | READY | F1/T01 |
 | T02 | ODS/DWD/DWS/ADS 分层规划卡片 | P0 | READY | T01 |
 | T03 | 接入状态到建模就绪度提示 | P1 | READY | T01 |
+| T04 | API 数据源测试与运行配置一致性 | P0 | IN_PROGRESS | T01 |
 
 ## 完成标准
 
 - [ ] 用户从数据源页面能进入数仓规划。
 - [ ] UI 能解释 ODS_RAW、ODS_STANDARDIZED、DWD、DWS、ADS 的下一步。
 - [ ] 接入未完成时不会生成误导性模型草稿。
+
+## T04 说明
+
+- 新建数据源测试、已保存数据源测试和实际 API 入湖共用同一份运行时配置归一化规则。
+- `path/resources/requestPolicy/rateLimit/tls` 等配置不能因页面保存位置不同而失效。
+- 连接测试必须覆盖鉴权、资源路径、策略配置和失败结果回传。
