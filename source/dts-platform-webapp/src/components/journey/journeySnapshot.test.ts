@@ -190,12 +190,23 @@ describe("journey snapshot persistence", () => {
 	});
 
 	it("builds a resume url with the journey flag and all saved params", () => {
-		const snapshot = createJourneySnapshot("metrics", { modelId: "m-7", sourceId: "ds-1" });
+		const snapshot = createJourneySnapshot("metrics", {
+			modelId: "m-7",
+			sourceId: "ds-1",
+			planningId: "p-1",
+			domainId: "d-1",
+			warehouseLayer: "DWD",
+			modelingMode: "dimension",
+		});
 		const url = buildSnapshotResumeUrl(snapshot);
 
 		expect(url.startsWith("/modeling/metric-workbench?")).toBe(true);
 		expect(url).toContain("journey=e2e-data-product");
 		expect(url).toContain("modelId=m-7");
 		expect(url).toContain("sourceId=ds-1");
+		expect(url).toContain("planningId=p-1");
+		expect(url).toContain("domainId=d-1");
+		expect(url).toContain("warehouseLayer=DWD");
+		expect(url).toContain("modelingMode=dimension");
 	});
 });

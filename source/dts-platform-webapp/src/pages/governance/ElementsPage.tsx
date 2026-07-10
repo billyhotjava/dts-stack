@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Alert, Breadcrumb, Button, Card, Descriptions, Divider, Drawer, Form, Input, List, Modal, Select, Space, Spin, Tag, Typography } from "antd";
 import { CompactTable } from "@/components/table";
@@ -21,6 +21,13 @@ import {
 	updateMetadataStandard,
 } from "@/api/platformApi";
 import { normalizeText } from "@/utils/textUtils";
+import {
+	buildPlanningRoute,
+	resolveWarehousePlanningContext,
+	resolveWarehousePlanningStatus,
+	saveWarehousePlanningContext,
+	type WarehousePlanningContext,
+} from "./warehousePlanningContext";
 
 const { Text } = Typography;
 
@@ -84,6 +91,9 @@ export default function ElementsPage() {
 	const [draftCreating, setDraftCreating] = useState(false);
 	const [form] = Form.useForm();
 	const canManage = useGovernanceManageAccess();
+	const planningResolution = useMemo(() => resolveWarehousePlanningContext(searchParams), [searchParams]);
+	const planningContext = planningResolution.context;
+	const hasPlanningContext = Boolean(searchParams.get("planningId") || planningContext);
 
 	const syncQuery = (patch?: { keyword?: string; page?: number; size?: number }) => {
 		const params = new URLSearchParams(searchParams);
@@ -344,6 +354,15 @@ export default function ElementsPage() {
 	];
 
 	const content = data?.content ?? [];
+	const planningStatus = hasPlanningContext
+		? resolveWarehousePlanningStatus(planningContext, {
+				source: planningResolution.source,
+				standardFieldCount: planningContext?.standardDraftId ? content.length : 0,
+			})
+		: null;
+	const planningBlocked = Boolean(
+		hasPlanningContext && (planningResolution.status === "blocked" || planningResolution.source !== "session"),
+	);
 
 	const buildFieldBindingDraftPayload = (): StandardBindingDraftInput => ({
 		source: "metadata-elements",
@@ -365,8 +384,32 @@ export default function ElementsPage() {
 		metadata: {
 			totalFields: content.length,
 			keyword: normalizeText(keyword) || undefined,
+			planningId: planningContext?.planningId,
+			domainId: planningContext?.domainId,
+			domainName: planningContext?.domainName,
+			warehouseLayer: planningContext?.warehouseLayer,
+			modelingMode: planningContext?.modelingMode,
+			sourceId: planningContext?.sourceId,
 		},
 	});
+
+	const continueToModeling = (draftId: string) => {
+		const route = `/studio/low-code-development?standardDraftId=${encodeURIComponent(draftId)}&standardBindingSource=elements`;
+		if (!planningContext || planningResolution.source !== "session") {
+			navigate(route);
+			return;
+		}
+		const nextContext: WarehousePlanningContext = {
+			...planningContext,
+			standardDraftId: draftId,
+			updatedAt: new Date().toISOString(),
+		};
+		if (!saveWarehousePlanningContext(nextContext)) {
+			toast.error("规划草稿更新失败，请重试");
+			return;
+		}
+		navigate(buildPlanningRoute(route, nextContext));
+	};
 
 	const createFieldBindingDraft = async () => {
 		if (!canManage) {
@@ -377,6 +420,10 @@ export default function ElementsPage() {
 			toast.error("当前列表没有可输出的数据元");
 			return;
 		}
+		if (planningBlocked) {
+			toast.error(planningResolution.reason || "规划上下文不可用，请返回主题域重新确认规划");
+			return;
+		}
 		const payload = buildFieldBindingDraftPayload();
 		setDraftCreating(true);
 		try {
@@ -385,11 +432,11 @@ export default function ElementsPage() {
 				throw new Error("missing_draft_id");
 			}
 			toast.success(`已保存字段落标快照：${content.length} 个数据元`);
-			navigate(`/studio/low-code-development?standardDraftId=${encodeURIComponent(draft.id)}&standardBindingSource=elements`);
+			continueToModeling(draft.id);
 		} catch (err: any) {
 			const draft = createStandardBindingDraft(payload);
 			toast.warning("后端快照保存失败，已使用浏览器会话草稿继续建模");
-			navigate(`/studio/low-code-development?standardDraftId=${encodeURIComponent(draft.id)}&standardBindingSource=elements`);
+			continueToModeling(draft.id);
 		} finally {
 			setDraftCreating(false);
 		}
@@ -422,7 +469,7 @@ export default function ElementsPage() {
 						<Button
 							onClick={createFieldBindingDraft}
 							loading={draftCreating}
-							disabled={!canManage || content.length === 0}
+							disabled={!canManage || content.length === 0 || planningBlocked}
 							data-testid="governance-elements-standard-binding-draft"
 						>
 							生成字段落标草稿
@@ -434,6 +481,26 @@ export default function ElementsPage() {
 				}
 			/>
 			<JourneyContextBar stage="standards" />
+			{hasPlanningContext ? (
+				<Alert
+					showIcon
+					data-testid="warehouse-planning-context"
+					type={planningBlocked ? "error" : planningStatus?.status === "ready" ? "success" : "info"}
+					message={planningBlocked ? "规划上下文不可用" : "已接入数仓规划上下文"}
+					description={`主题域：${planningContext?.domainName || planningContext?.domainId || "-"} · 数仓层：${planningContext?.warehouseLayer || "-"} · 建模模式：${planningContext?.modelingMode === "dimension" ? "维度建模" : "-"}${planningResolution.reason ? ` · ${planningResolution.reason}` : ""}`}
+					action={
+						<Button
+							size="small"
+							onClick={() => {
+								const route = `/governance/subjects${planningContext?.domainId ? `?active=${encodeURIComponent(planningContext.domainId)}` : ""}`;
+								navigate(planningContext ? buildPlanningRoute(route, planningContext) : route);
+							}}
+						>
+							返回主题域规划
+						</Button>
+					}
+				/>
+			) : null}
 			<div className="rounded-md border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
 				数据元是 SQL 模型字段的标准来源；通过引用关系查看模型字段引用，避免标准只停留在治理台账。
 			</div>

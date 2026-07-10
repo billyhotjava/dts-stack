@@ -12,6 +12,10 @@ export type DataProductJourneyStageKey =
 
 export const JOURNEY_CONTEXT_PARAM_KEYS = [
 	"sourceId",
+	"planningId",
+	"domainId",
+	"warehouseLayer",
+	"modelingMode",
 	"standardDraftId",
 	"modelId",
 	"metricId",
@@ -104,6 +108,10 @@ const STAGE_CONFIG: Record<DataProductJourneyStageKey, JourneyStageConfig> = {
 
 export const JOURNEY_CONTEXT_PARAM_LABELS: Record<JourneyContextParamKey, string> = {
 	sourceId: "数据源",
+	planningId: "规划",
+	domainId: "主题域",
+	warehouseLayer: "数仓层",
+	modelingMode: "建模模式",
 	standardDraftId: "标准草稿",
 	modelId: "模型",
 	metricId: "指标",

@@ -2,24 +2,24 @@
 
 ## 测试命令（可复制）
 
-- `cd source/dts-platform-webapp && node --test "src/components/journey/*.source-contract.test.ts" "src/pages/governance/*.source-contract.test.ts"`
-- `cd source/dts-platform-webapp && pnpm vitest run src/pages/governance/warehousePlanningContext.test.ts`（行为测试按文件名单，避免 vitest 误收 node:test 契约文件）
+- `cd source/dts-platform-webapp && node --test src/components/journey/*.source-contract.test.ts src/pages/governance/*.source-contract.test.ts src/pages/modeling/*.source-contract.test.ts`
+- `cd source/dts-platform-webapp && pnpm vitest run src/pages/governance/warehousePlanningContext.test.ts src/pages/modeling/dimensionCandidateGate.test.ts src/components/journey/journeyContext.test.ts src/components/journey/journeySnapshot.test.ts src/components/journey/journeyArtifactValidation.test.ts src/components/journey/journeyStageState.test.ts`
 
 ## Source Contract
 
-- [ ] 规划上下文创建、恢复、版本失效和 storage 降级。
-- [ ] 主题域页选中主题域后进入 DWD/维度建模规划。
-- [ ] 数据元页显示规划来源并输出带规划元数据的标准草稿。
-- [ ] 低代码/SQL 建模页显示规划、主题域、标准草稿和维度模式。
-- [ ] 缺少规划或标准时模型候选被阻断。
-- [ ] 旅程条继续/返回/清参与旅程快照透传四个规划参数；快照恢复但 session 草稿失效时正确降级。
+- [x] 规划上下文创建、恢复、版本失效和 storage 降级。
+- [x] 主题域页选中主题域后进入 DWD/维度建模规划。
+- [x] 数据元页显示规划来源并输出带规划元数据的标准草稿。
+- [x] 低代码/SQL 建模页显示规划、主题域、标准草稿和维度模式。
+- [x] 缺少规划或标准时模型候选被阻断。
+- [x] 旅程条继续/返回/清参与旅程快照透传四个规划参数；快照恢复但 session 草稿失效时正确降级。
 
 ## Build
 
-- [ ] `cd source/dts-platform-webapp && pnpm exec tsc --noEmit`
-- [ ] `cd source/dts-platform-webapp && pnpm build`
-- [ ] `git diff --check`
-- [ ] GitNexus `detect_changes`
+- [x] `cd source/dts-platform-webapp && pnpm exec tsc --noEmit`
+- [x] `cd source/dts-platform-webapp && pnpm build`
+- [x] `git diff --check`
+- [x] GitNexus `detect_changes`
 
 ## Browser Smoke
 
@@ -32,4 +32,24 @@
 
 ## 证据记录
 
-实现过程中追加 RED/GREEN、构建结果、GitNexus 风险和已知 blocker。
+### 2026-07-11 F1/F2 RED/GREEN
+
+- RED：主题域/数据元 4 个 source-contract 全部因缺少规划入口、来源条和草稿元数据失败。
+- GREEN：同一组测试 4/4 通过；规划 helper、旅程参数与快照测试 31/31 通过。
+
+### 2026-07-11 F3/F4 RED/GREEN
+
+- RED：维度候选门禁模块不存在；低代码/SQL 页面未消费规划上下文；session 与不同 `planningId` URL 的裁决错误地采信 URL fallback。
+- GREEN：门禁/规划组合矩阵 15/15 通过；旅程与规划行为测试 44/44 通过；source-contract 83/83 通过。
+- 覆盖率（仅本 Sprint 两个新增纯函数）：statements 85.45%，branches 76.85%，functions 90.47%，lines 89.36%。分支覆盖低于 80%，主要为 defensive storage fallback 与非法层/模式分支；核心 ready/missing/blocked、版本失效、storage 异常、URL/session 不一致均已覆盖。
+
+### 2026-07-11 Build / Compatibility
+
+- `pnpm build`：GREEN，legacy browser 构建成功，10,565 modules transformed；仅有 Browserslist 数据过期和既有大 chunk 告警。
+- Chrome 95 静态检查：未引入 `:has()`、新视口单位、`structuredClone`、`toSorted`、`Object.groupBy` 等不兼容能力。
+- Preview：`http://127.0.0.1:4173/` 及三个业务路由返回 200；1366×768、390×844 均能渲染证书登录页，无空白或布局重叠。
+- Browser blocker：未持有证书登录态，业务路由跳转 `#/auth/login`，本地认证资源出现 500；因此四个业务页 smoke 保持未勾选，真实登录/DNS 证据继续挂靠 Sprint-61 F9。
+
+### 2026-07-11 GitNexus
+
+- 页面符号 `SubjectAreasPage`、`ElementsPage`、`LowCodeDevelopmentPage`、`SqlModelingPage` 与 `openCreateModelFromStandardDraft` 上游影响均为 LOW；新增 helper 尚未进入索引，以行为测试和源码契约覆盖。

@@ -53,11 +53,11 @@
 
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
-| F1-数仓规划上下文与主题域入口 | 3 | READY |
-| F2-规划上下文到数据标准与字段草稿 | 3 | READY |
-| F3-标准草稿到维度建模候选 | 3 | READY |
-| F4-规划-标准-建模闭环验证 | 3 | READY |
+| F1-数仓规划上下文与主题域入口 | 3 | DONE |
+| F2-规划上下文到数据标准与字段草稿 | 3 | DONE |
+| F3-标准草稿到维度建模候选 | 3 | DONE |
+| F4-规划-标准-建模闭环验证 | 3 | DONE |
 
-**统计**: READY=12, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=12, BLOCKED=0
 
 **目录**: `worklog/todo/sprint-63-202607-warehouse-planning-standard-dimension-loop/`

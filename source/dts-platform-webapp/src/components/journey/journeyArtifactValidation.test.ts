@@ -63,4 +63,23 @@ describe("journey artifact validation", () => {
 
 		expect(result.status).toBe("unknown");
 	});
+
+	it("names backend gaps for planning context parameters", () => {
+		const validator = createDataProductArtifactValidator();
+		const results = resolveArtifactValidations(
+			{
+				planningId: "p-1",
+				domainId: "d-1",
+				warehouseLayer: "DWD",
+				modelingMode: "dimension",
+			},
+			validator,
+		);
+
+		expect(results).toHaveLength(4);
+		for (const result of results) {
+			expect(result.status).toBe("unknown");
+			expect(result.apiName).toMatch(/^GET \/api\//);
+		}
+	});
 });

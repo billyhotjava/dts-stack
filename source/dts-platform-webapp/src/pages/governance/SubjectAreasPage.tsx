@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
+	Alert,
 	Badge,
 	Button,
 	Card,
@@ -23,6 +24,13 @@ import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { createDomain, deleteDomain, getDomainAssetStats, getDomainIndicatorStats, getDomainTree, updateDomain } from "@/api/platformApi";
 import { useRouter } from "@/routes/hooks";
 import { normalizeText } from "@/utils/textUtils";
+import {
+	buildPlanningRoute,
+	createWarehousePlanningContext,
+	resolveWarehousePlanningContext,
+	resolveWarehousePlanningStatus,
+	saveWarehousePlanningContext,
+} from "./warehousePlanningContext";
 
 const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -183,6 +191,40 @@ export default function SubjectAreasPage() {
 	}, []);
 
 	const activeDomain = selectedKey !== ROOT_KEY ? domainIndex.get(selectedKey) || null : null;
+	const planningResolution = useMemo(() => resolveWarehousePlanningContext(searchParams), [searchParams]);
+	const activePlanningContext =
+		planningResolution.context?.domainId === activeDomain?.id ? planningResolution.context : null;
+	const planningStatus = useMemo(() => {
+		if (!activeDomain?.id) {
+			return { status: "blocked" as const, reason: "请先选择主题域" };
+		}
+		if (planningResolution.status === "blocked" && searchParams.get("planningId")) {
+			return {
+				status: "blocked" as const,
+				reason: planningResolution.reason || "规划上下文不可用，请重新确认规划",
+			};
+		}
+		if (!activePlanningContext) {
+			if (searchParams.get("planningId")) {
+				return {
+					status: "blocked" as const,
+					reason: planningResolution.reason || "规划上下文不可用，请重新确认规划",
+				};
+			}
+			return { status: "draft" as const, reason: "尚未创建 DWD 维度建模规划" };
+		}
+		return resolveWarehousePlanningStatus(activePlanningContext, {
+			source: planningResolution.source,
+			standardFieldCount: activePlanningContext.standardDraftId ? 1 : 0,
+		});
+	}, [
+		activeDomain?.id,
+		activePlanningContext,
+		planningResolution.reason,
+		planningResolution.source,
+		planningResolution.status,
+		searchParams,
+	]);
 
 	useEffect(() => {
 		void loadDomainTree();
@@ -224,6 +266,24 @@ export default function SubjectAreasPage() {
 		];
 	}, [filteredTree]);
 	const activeChildren = activeDomain?.children || [];
+	const continueDimensionPlanning = () => {
+		if (!activeDomain?.id) return;
+		const context =
+			activePlanningContext ||
+			createWarehousePlanningContext({
+				planningId: `warehouse-plan-${activeDomain.id}-${Date.now()}`,
+				domainId: activeDomain.id,
+				domainName: activeDomain.name,
+				warehouseLayer: "DWD",
+				modelingMode: "dimension",
+				sourceId: searchParams.get("sourceId") || planningResolution.context?.sourceId,
+			});
+		if (!saveWarehousePlanningContext(context)) {
+			toast.error("规划草稿保存失败，请检查浏览器会话存储后重试");
+			return;
+		}
+		router.push(buildPlanningRoute("/governance/standards/elements?bindingDraft=1", context));
+	};
 	const openModal = (domain?: DomainNode | null, parentId?: string | null) => {
 		setEditing(domain || null);
 		form.resetFields();
@@ -405,6 +465,32 @@ export default function SubjectAreasPage() {
 							</div>
 
 							<Divider />
+
+							<Alert
+								showIcon
+								data-testid="warehouse-planning-card"
+								type={planningStatus.status === "blocked" ? "error" : planningStatus.status === "ready" ? "success" : "info"}
+								message="数仓规划 · DWD 维度建模"
+								description={
+									<Space direction="vertical" size={4}>
+										<Text>
+											主题域：{activeDomain.name || activeDomain.id} · 数仓层：DWD · 建模模式：维度建模
+										</Text>
+										<Text type="secondary">
+											{planningStatus.reason || "规划、标准草稿与维度模型候选已具备连续上下文"}
+										</Text>
+									</Space>
+								}
+								action={
+									<Button type="primary" onClick={continueDimensionPlanning}>
+										{planningStatus.status === "blocked"
+											? "重新确认规划"
+											: activePlanningContext
+												? "继续标准落标"
+												: "创建规划并落标"}
+									</Button>
+								}
+							/>
 
 							<div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
 								<div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">

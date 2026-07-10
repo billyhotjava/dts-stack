@@ -23,6 +23,11 @@ import {
 import { useRouter, useSearchParams } from "@/routes/hooks";
 import { getStandardBindingDraftSnapshot } from "@/api/platformApi";
 import {
+	buildPlanningRoute,
+	resolveWarehousePlanningContext,
+} from "../governance/warehousePlanningContext";
+import { resolveDimensionCandidateGate } from "./dimensionCandidateGate";
+import {
 	buildStandardBindingDraftSummary,
 	getStandardBindingDraft,
 	isBackendStandardBindingDraftId,
@@ -153,6 +158,13 @@ export default function LowCodeDevelopmentPage() {
 	}, [searchParams]);
 	const [standardDraft, setStandardDraft] = useState<StandardBindingDraft | null>(() => getStandardBindingDraft(standardDraftId));
 	const routeWithStandardDraft = (route: string) => withStandardDraftRoute(route, standardDraftId);
+	const planningResolution = useMemo(() => resolveWarehousePlanningContext(searchParams), [searchParams]);
+	const planningContext = planningResolution.context;
+	const dimensionMode = searchParams.get("modelingMode") === "dimension" || planningContext?.modelingMode === "dimension";
+	const routeWithPlanningContext = (route: string) => {
+		const routeWithDraft = routeWithStandardDraft(route);
+		return planningContext ? buildPlanningRoute(routeWithDraft, planningContext) : routeWithDraft;
+	};
 	const ingestionReadiness = useMemo(() => {
 		const sourceId = searchParams.get("sourceId") || "";
 		const status = String(searchParams.get("ingestionStatus") || "").toLowerCase();
@@ -169,6 +181,18 @@ export default function LowCodeDevelopmentPage() {
 		return { label: "待确认", description: "已选择数据源，请完成一次同步验证。", ready: false };
 	}, [searchParams]);
 	const standardDraftSummary = useMemo(() => buildStandardBindingDraftSummary(standardDraft), [standardDraft]);
+	const candidateGate = useMemo(
+		() =>
+			resolveDimensionCandidateGate({
+				planningContext,
+				planningSource: planningResolution.source,
+				planningBlockedReason: planningResolution.status === "blocked" ? planningResolution.reason : undefined,
+				standardDraftId,
+				standardFieldCount: standardDraft?.fields.length ?? 0,
+			}),
+		[planningContext, planningResolution.reason, planningResolution.source, planningResolution.status, standardDraft, standardDraftId],
+	);
+	const candidateRepairRoute = candidateGate.repairRoute;
 
 	useEffect(() => {
 		let cancelled = false;
@@ -230,6 +254,22 @@ export default function LowCodeDevelopmentPage() {
 				message="从业务表到指标和报表数据集"
 				description="低代码入口负责表达业务意图和串联状态；连接配置、基础明细模型发布和复杂关联仍由专业用户审核。"
 			/>
+			{dimensionMode ? (
+				<Alert
+					showIcon
+					data-testid="dimension-modeling-context"
+					type={candidateGate.status === "ready" ? "success" : candidateGate.status === "blocked" ? "error" : "warning"}
+					message="DWD 维度模型候选"
+					description={`主题域：${planningContext?.domainName || planningContext?.domainId || "-"} · 标准来源：${standardDraft ? standardDraftSummary.sourceLabel : "未接入"} · ${candidateGate.reason}`}
+					action={
+						candidateGate.status !== "ready" && candidateRepairRoute ? (
+							<Button size="small" onClick={() => router.push(candidateRepairRoute)}>
+								修复前置条件
+							</Button>
+						) : undefined
+					}
+				/>
+			) : null}
 			{standardDraft ? (
 				<Alert
 					type="success"
@@ -239,10 +279,10 @@ export default function LowCodeDevelopmentPage() {
 					description={`已接收 ${standardDraft.fields.length} 个字段标准，后续建模会携带字段名、标准类型、码表和密级，进入 SQL 建模后可生成模型草稿和可微调 SQL。`}
 					action={
 						<Space wrap>
-							<Button size="small" type="primary" onClick={() => router.push(routeWithStandardDraft("/studio/sql-modeling"))}>
+							<Button size="small" type="primary" onClick={() => router.push(routeWithPlanningContext("/studio/sql-modeling"))}>
 								进入 SQL 建模
 							</Button>
-							<Button size="small" onClick={() => router.push(routeWithStandardDraft("/modeling/semantic/models?journey=low-code-development"))}>
+							<Button size="small" onClick={() => router.push(routeWithPlanningContext("/modeling/semantic/models?journey=low-code-development"))}>
 								查看模型候选
 							</Button>
 						</Space>
@@ -322,15 +362,23 @@ export default function LowCodeDevelopmentPage() {
 								<div className="mt-auto flex flex-wrap gap-2">
 									<Button
 										type="primary"
-										disabled={step.key === "model_candidate" && !ingestionReadiness.ready}
-										title={step.key === "model_candidate" && !ingestionReadiness.ready ? ingestionReadiness.description : undefined}
-										onClick={() => router.push(routeWithStandardDraft(step.primaryRoute))}
-									>
-										{step.primaryAction}
+									disabled={step.key === "model_candidate" && (!ingestionReadiness.ready || (dimensionMode && candidateGate.status !== "ready"))}
+									title={
+										step.key === "model_candidate"
+											? !ingestionReadiness.ready
+												? ingestionReadiness.description
+												: dimensionMode && candidateGate.status !== "ready"
+													? candidateGate.reason
+													: undefined
+											: undefined
+									}
+									onClick={() => router.push(routeWithPlanningContext(step.primaryRoute))}
+								>
+									{step.key === "model_candidate" && dimensionMode ? "查看维度模型候选" : step.primaryAction}
 										<ArrowRight size={14} />
 									</Button>
 									{step.secondaryRoute && step.secondaryAction ? (
-										<Button onClick={() => router.push(routeWithStandardDraft(step.secondaryRoute!))}>{step.secondaryAction}</Button>
+									<Button onClick={() => router.push(routeWithPlanningContext(step.secondaryRoute!))}>{step.secondaryAction}</Button>
 									) : null}
 								</div>
 							</div>
@@ -342,7 +390,7 @@ export default function LowCodeDevelopmentPage() {
 			<Card title="消费目标" className="rounded-lg">
 				<div className="grid gap-3 md:grid-cols-4">
 					{CONSUMPTION_TARGETS.map((target) => (
-						<Button key={target.title} className="h-auto justify-start py-3" onClick={() => router.push(routeWithStandardDraft(target.route))}>
+						<Button key={target.title} className="h-auto justify-start py-3" onClick={() => router.push(routeWithPlanningContext(target.route))}>
 							<div className="text-left">
 								<div className="font-medium">{target.title}</div>
 								<div className="text-xs text-gray-500">{target.desc}</div>
@@ -355,7 +403,7 @@ export default function LowCodeDevelopmentPage() {
 			<Card title="高级开发入口" className="rounded-lg" data-testid="advanced-development-links">
 				<Space wrap>
 					{ADVANCED_LINKS.map((item) => (
-						<Button key={item.route} onClick={() => router.push(routeWithStandardDraft(item.route))}>
+						<Button key={item.route} onClick={() => router.push(routeWithPlanningContext(item.route))}>
 							{item.title}
 						</Button>
 					))}

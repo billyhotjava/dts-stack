@@ -88,6 +88,10 @@ import SnippetDrawer from "./components/SnippetDrawer";
 import OutputRelationModal from "./components/OutputRelationModal";
 import DbtModelDiagnosticsDrawer from "./components/DbtModelDiagnosticsDrawer";
 import { useRouter } from "@/routes/hooks";
+import {
+	buildPlanningRoute,
+	resolveWarehousePlanningContext,
+} from "../governance/warehousePlanningContext";
 import { buildArchivePayload, collectUnassignedModelIds } from "./sqlModelArchive.helpers";
 import { resolveBatchImportNavigation } from "./batchImportNavigation.helpers";
 import {
@@ -171,6 +175,7 @@ import type {
 	OdsSkippedEntry,
 } from "./sqlModeling.types";
 import { resolveReleaseSubmitOutcome } from "./sqlModelReleaseSubmit.helpers";
+import { resolveDimensionCandidateGate } from "./dimensionCandidateGate";
 
 import { normalizeText, formatDateTime } from "@/utils/textUtils";
 
@@ -293,6 +298,14 @@ const UNASSIGNED_SPACE_KEY = "space-unassigned";
 
 export default function SqlModelingPage() {
 	const router = useRouter();
+	const pageSearchParams = useMemo(
+		() => (typeof window === "undefined" ? new URLSearchParams() : new URLSearchParams(window.location.search)),
+		[],
+	);
+	const standardDraftId = pageSearchParams.get("standardDraftId") || "";
+	const planningResolution = useMemo(() => resolveWarehousePlanningContext(pageSearchParams), [pageSearchParams]);
+	const planningContext = planningResolution.context;
+	const dimensionMode = pageSearchParams.get("modelingMode") === "dimension" || planningContext?.modelingMode === "dimension";
 	const [pageLoadError, setPageLoadError] = useState(false);
 	const [configLoading, setConfigLoading] = useState(false);
 	const [configSaving, setConfigSaving] = useState(false);
@@ -346,6 +359,17 @@ export default function SqlModelingPage() {
 	const [standardGateResult, setStandardGateResult] = useState<SqlModelStandardGateResult | null>(null);
 	const [standardAutoMatching, setStandardAutoMatching] = useState(false);
 	const [standardBindingDraft, setStandardBindingDraft] = useState<StandardBindingDraft | null>(null);
+	const dimensionCandidateGate = useMemo(
+		() =>
+			resolveDimensionCandidateGate({
+				planningContext,
+				planningSource: planningResolution.source,
+				planningBlockedReason: planningResolution.status === "blocked" ? planningResolution.reason : undefined,
+				standardDraftId,
+				standardFieldCount: standardBindingDraft?.fields.length ?? 0,
+			}),
+		[planningContext, planningResolution.reason, planningResolution.source, planningResolution.status, standardBindingDraft, standardDraftId],
+	);
 	const [standardDraftApplying, setStandardDraftApplying] = useState(false);
 	const [schemaYmlGenerating, setSchemaYmlGenerating] = useState(false);
 	const [bottomTab, setBottomTab] = useState("preview");
@@ -410,21 +434,19 @@ export default function SqlModelingPage() {
 	const buildPollAbortRef = useRef<AbortController | null>(null);
 
 	useEffect(() => {
-		if (typeof window === "undefined") return;
-		const draftId = new URLSearchParams(window.location.search).get("standardDraftId");
 		let cancelled = false;
-		const sessionDraft = getStandardBindingDraft(draftId);
+		const sessionDraft = getStandardBindingDraft(standardDraftId);
 		const loadDraft = async () => {
-			if (!draftId) {
+			if (!standardDraftId) {
 				setStandardBindingDraft(null);
 				return;
 			}
-			if (!isBackendStandardBindingDraftId(draftId)) {
+			if (!isBackendStandardBindingDraftId(standardDraftId)) {
 				setStandardBindingDraft(sessionDraft);
 				return;
 			}
 			try {
-				const draft = (await getStandardBindingDraftSnapshot(draftId)) as StandardBindingDraft;
+				const draft = (await getStandardBindingDraftSnapshot(standardDraftId)) as StandardBindingDraft;
 				if (!cancelled) setStandardBindingDraft(draft || sessionDraft);
 			} catch {
 				if (!cancelled) setStandardBindingDraft(sessionDraft);
@@ -434,7 +456,7 @@ export default function SqlModelingPage() {
 		return () => {
 			cancelled = true;
 		};
-	}, []);
+	}, [standardDraftId]);
 
 	const loadConfig = useCallback(async () => {
 		setConfigLoading(true);
@@ -1724,6 +1746,10 @@ export default function SqlModelingPage() {
 			toast.error("未找到字段落标草稿");
 			return;
 		}
+		if (dimensionMode && dimensionCandidateGate.status !== "ready") {
+			toast.error(dimensionCandidateGate.reason);
+			return;
+		}
 		const draftSql = buildSqlFromStandardBindingDraft(standardBindingDraft);
 		setEditingModel(null);
 		modelForm.resetFields();
@@ -1736,7 +1762,7 @@ export default function SqlModelingPage() {
 			materialized: "table",
 			enabled: true,
 			status: "DRAFT",
-			description: `${standardBindingDraft.title} 生成的模型草稿，字段标准来自数据标准落标结果。`,
+			description: `${standardBindingDraft.title} 生成的${dimensionMode ? "维度" : ""}模型草稿，字段标准来自数据标准落标结果。${planningContext ? ` 规划：${planningContext.planningId}，主题域：${planningContext.domainName || planningContext.domainId}。` : ""}`,
 			semanticContract: "",
 			sql: draftSql,
 		});
@@ -2700,6 +2726,30 @@ export default function SqlModelingPage() {
 			)}
 			<JourneyContextBar stage="development" />
 			<JourneyGateEvidenceSummary stage="development" />
+			{dimensionMode ? (
+				<Alert
+					showIcon
+					data-testid="sql-dimension-modeling-context"
+					type={dimensionCandidateGate.status === "ready" ? "success" : dimensionCandidateGate.status === "blocked" ? "error" : "warning"}
+					message="DWD 维度模型草稿"
+					description={`规划：${planningContext?.planningId || "-"} · 主题域：${planningContext?.domainName || planningContext?.domainId || "-"} · 标准草稿：${standardDraftId || "未接入"} · ${dimensionCandidateGate.reason}`}
+					action={
+						<Button
+							size="small"
+							onClick={() =>
+								router.push(
+									dimensionCandidateGate.repairRoute ||
+										(planningContext
+											? buildPlanningRoute("/governance/subjects", planningContext)
+											: "/governance/subjects"),
+								)
+							}
+						>
+							返回规划与标准
+						</Button>
+					}
+				/>
+			) : null}
 			<div className="flex min-h-[calc(100vh-120px)] flex-col overflow-hidden rounded-[30px] border border-border/70 bg-card shadow-sm">
 			{/* 顶部工具栏 */}
 			<div className="flex h-14 items-center justify-between border-b border-border bg-card px-4">
@@ -3137,9 +3187,20 @@ export default function SqlModelingPage() {
 										<div className="mt-1 text-[11px] leading-5 text-blue-700">
 											标准来源：{standardDraftSummary.sourceLabel} · 字段 {standardDraftSummary.fieldCount} · 待补标准 {standardDraftSummary.missingStandardCount} · 创建时间 {standardDraftSummary.createdAt || "-"}
 										</div>
-															<Space size={4} wrap className="mt-2">
-																<Button size="small" type="primary" onClick={openCreateModelFromStandardDraft}>
-																	创建模型草稿
+										{dimensionMode ? (
+											<div className="mt-1 text-[11px] leading-5 text-blue-700">
+												规划来源：{planningContext?.planningId || "-"} · DWD · 主题域 {planningContext?.domainName || planningContext?.domainId || "-"}
+											</div>
+										) : null}
+													<Space size={4} wrap className="mt-2">
+														<Button
+															size="small"
+															type="primary"
+															disabled={dimensionMode && dimensionCandidateGate.status !== "ready"}
+															title={dimensionMode && dimensionCandidateGate.status !== "ready" ? dimensionCandidateGate.reason : undefined}
+															onClick={openCreateModelFromStandardDraft}
+														>
+															{dimensionMode ? "创建维度模型草稿" : "创建模型草稿"}
 																</Button>
 																<Button
 																	size="small"

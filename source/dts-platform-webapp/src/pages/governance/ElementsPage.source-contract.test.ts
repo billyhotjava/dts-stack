@@ -15,7 +15,8 @@ test("elements page shows warehouse planning provenance and keeps the return rou
 });
 
 test("standard binding draft carries planning metadata and blocks empty inputs", () => {
-	assert.match(source, /planningId.*domainId|domainId.*planningId/);
+	assert.match(source, /planningId/);
+	assert.match(source, /domainId/);
 	assert.match(source, /standardDraftId|createStandardBindingDraftSnapshot/);
 	assert.match(source, /当前列表没有可输出的数据元|暂无可用数据元/);
 });

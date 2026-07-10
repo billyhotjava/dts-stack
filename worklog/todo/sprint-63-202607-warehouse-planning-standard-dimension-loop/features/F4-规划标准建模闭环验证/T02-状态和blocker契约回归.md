@@ -1,7 +1,7 @@
 # T02: 状态和 blocker 契约回归
 
 **优先级**: P0  
-**状态**: READY  
+**状态**: DONE
 **依赖**: F3/T03
 
 ## 目标
@@ -20,5 +20,5 @@
 
 ## 验证
 
-- [ ] ready/missing/blocked 组合全部覆盖。
-- [ ] 版本失效和 storage 异常有明确恢复动作。
+- [x] ready/missing/blocked 组合全部覆盖。
+- [x] 版本失效和 storage 异常有明确恢复动作。
