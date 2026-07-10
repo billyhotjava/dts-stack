@@ -1,7 +1,7 @@
 # Sprint-62: 旅程可信化与门禁证据结构化
 
 **时间**: 2026-07
-**状态**: READY
+**状态**: IN_PROGRESS
 **类型**: UI Productization / Journey Trust / Evidence Engineering
 **目标**: 把 sprint-61 建立的旅程从"URL 里的自我声明"升级为"可恢复、可验真、有结构化门禁证据"的可信旅程，让没有正规开发人员的客户中断后能继续、看到的绿色就是真的、验收拿到的是结构化证据而不是一堆链接。
 
@@ -18,12 +18,12 @@ Sprint-61 已交付旅程上下文（journeyContext）、阶段状态机（journ
 
 | ID | Feature | Task 数 | 状态 | 优先级 |
 |----|---------|---------|------|--------|
-| F1 | 旅程实例持久化与恢复 | 3 | READY | P0 |
+| F1 | 旅程实例持久化与恢复 | 3 | IN_PROGRESS | P0 |
 | F2 | 阶段真实性校验 | 3 | READY | P0 |
 | F3 | dbt式门禁证据结构化 | 3 | READY | P0 |
 | F4 | 菜单直达旅程感知与验收包打印 | 3 | READY | P1 |
 
-**统计**: READY=12, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=11, IN_PROGRESS=0, DONE=1, BLOCKED=0
 
 ## 实施顺序
 
