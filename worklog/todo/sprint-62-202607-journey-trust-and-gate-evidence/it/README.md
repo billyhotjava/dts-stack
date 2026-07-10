@@ -19,7 +19,7 @@
 
 ## Browser Smoke（挂靠 sprint-61 F9 可登录基线）
 
-- [ ] `/workbench` 无参数：出现"继续上次旅程"卡（有快照时）。
+- [~] `/workbench` 无参数：恢复卡已实现（journey-resume-card/continue/clear testid 就绪），浏览器截图待 sprint-61 F9 可登录基线。
 - [ ] `/workbench?journey=e2e-data-product&modelId=<无效id>`：modeling 阶段 blocked 且有恢复动作。
 - [ ] `/studio/sql-modeling?journey=...`：门禁摘要卡渲染。
 - [ ] `/foundation/data-sources`（无 journey）：joinable 提示出现且可关闭。
@@ -50,3 +50,10 @@
 - GREEN：`node --test src/components/journey/*.source-contract.test.ts` 全套 0 fail（新增 hook 自动持久化契约用例）。
 - GREEN：`pnpm build` 通过。
 - 影响面：gitnexus impact 对 useDataProductJourneyContext 无索引记录（新文件晚于索引），grep 确认唯一消费方为 JourneyContextBar，纯增量 effect，向后兼容。
+
+### F1-T03 工作台继续上次旅程入口（2026-07-10）
+
+- GREEN：`pnpm vitest run .../journeySnapshot.test.ts` 13/13（新增 shouldOfferSnapshotResume 四态、savedAgo 时间分桶、describeJourneySnapshot 阶段标题+带标签上下文摘要）。
+- GREEN：`node --test` journey 契约套件 + workbench 契约 0 fail（新增 workbench 恢复卡契约：loadJourneySnapshot/resume testid/清除动作）。
+- GREEN：`pnpm build` 通过。
+- F1 整体 DONE：快照存储 → 自动保存 → 工作台恢复三环闭合；旅程中断可恢复目标达成（浏览器实测证据挂靠 F9）。

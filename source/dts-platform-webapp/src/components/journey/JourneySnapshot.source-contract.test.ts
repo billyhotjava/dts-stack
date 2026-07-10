@@ -55,6 +55,20 @@ test("journey context hook persists snapshots automatically inside the journey",
 	assert.match(snapshotSource, /shouldPersistSnapshot\(context, loadJourneySnapshot\(storage\)\)/);
 });
 
+test("workbench offers a resume entry from the stored snapshot", () => {
+	const workbenchUrl = new URL("../../pages/workbench/DataManagementWorkbenchPage.tsx", import.meta.url);
+	const workbenchSource = readFileSync(workbenchUrl, "utf8");
+
+	assert.match(workbenchSource, /loadJourneySnapshot/);
+	assert.match(workbenchSource, /shouldOfferSnapshotResume/);
+	assert.match(workbenchSource, /buildSnapshotResumeUrl/);
+	assert.match(workbenchSource, /clearJourneySnapshot/);
+	assert.match(workbenchSource, /journey-resume-card/);
+	assert.match(workbenchSource, /journey-resume-continue/);
+	assert.match(workbenchSource, /journey-resume-clear/);
+	assert.match(workbenchSource, /继续上次旅程/);
+});
+
 test("journey snapshot is exported from the journey barrel and has behavior tests", () => {
 	const indexSource = readFileSync(indexUrl, "utf8");
 	assert.match(indexSource, /journeySnapshot/);

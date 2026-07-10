@@ -102,7 +102,7 @@ const STAGE_CONFIG: Record<DataProductJourneyStageKey, JourneyStageConfig> = {
 	},
 };
 
-const PARAM_LABELS: Record<JourneyContextParamKey, string> = {
+export const JOURNEY_CONTEXT_PARAM_LABELS: Record<JourneyContextParamKey, string> = {
 	sourceId: "数据源",
 	standardDraftId: "标准草稿",
 	modelId: "模型",
@@ -151,7 +151,7 @@ export const parseDataProductJourneyContext = (
 	}, {});
 	const contextLabels = JOURNEY_CONTEXT_PARAM_KEYS.flatMap((key) => {
 		const value = params[key];
-		return value ? [{ label: PARAM_LABELS[key], value }] : [];
+		return value ? [{ label: JOURNEY_CONTEXT_PARAM_LABELS[key], value }] : [];
 	});
 
 	return {

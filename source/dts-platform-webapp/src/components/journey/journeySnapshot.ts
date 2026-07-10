@@ -4,6 +4,7 @@
 import {
 	E2E_DATA_PRODUCT_JOURNEY,
 	JOURNEY_CONTEXT_PARAM_KEYS,
+	JOURNEY_CONTEXT_PARAM_LABELS,
 	buildJourneyUrl,
 	type DataProductJourneyContext,
 	type DataProductJourneyContextParams,
@@ -133,4 +134,42 @@ export const buildSnapshotResumeUrl = (snapshot: JourneySnapshot): string => {
 		DATA_PRODUCT_JOURNEY_STAGE_DEFINITIONS.find((definition) => definition.stageKey === snapshot.stage)?.route ??
 		"/workbench";
 	return buildJourneyUrl(route, snapshot.params as Record<string, string | null | undefined>);
+};
+
+export const shouldOfferSnapshotResume = (
+	snapshot: JourneySnapshot | null,
+	currentJourneyParam: string | null,
+): snapshot is JourneySnapshot => Boolean(snapshot) && currentJourneyParam !== E2E_DATA_PRODUCT_JOURNEY;
+
+export const formatSnapshotSavedAgo = (savedAt: string, now: number = Date.now()): string => {
+	const savedTs = Date.parse(savedAt);
+	if (Number.isNaN(savedTs)) return "";
+	const minutes = Math.floor(Math.max(0, now - savedTs) / 60_000);
+	if (minutes < 1) return "刚刚";
+	if (minutes < 60) return `${minutes} 分钟前`;
+	const hours = Math.floor(minutes / 60);
+	if (hours < 24) return `${hours} 小时前`;
+	return `${Math.floor(hours / 24)} 天前`;
+};
+
+export type JourneySnapshotDescription = {
+	stageTitle: string;
+	contextSummary: string;
+	savedAgo: string;
+};
+
+export const describeJourneySnapshot = (
+	snapshot: JourneySnapshot,
+	now: number = Date.now(),
+): JourneySnapshotDescription => {
+	const definition = DATA_PRODUCT_JOURNEY_STAGE_DEFINITIONS.find((item) => item.stageKey === snapshot.stage);
+	const contextSummary = JOURNEY_CONTEXT_PARAM_KEYS.flatMap((key) => {
+		const value = snapshot.params[key];
+		return value ? [`${JOURNEY_CONTEXT_PARAM_LABELS[key]} ${value}`] : [];
+	}).join(" · ");
+	return {
+		stageTitle: definition?.title ?? snapshot.stage,
+		contextSummary,
+		savedAgo: formatSnapshotSavedAgo(snapshot.savedAt, now),
+	};
 };

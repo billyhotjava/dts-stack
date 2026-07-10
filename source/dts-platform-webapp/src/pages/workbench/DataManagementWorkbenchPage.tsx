@@ -7,7 +7,13 @@ import {
 	buildAcceptancePackageJson,
 	buildAcceptancePackageMarkdown,
 	buildDataProductAcceptancePackage,
+	buildSnapshotResumeUrl,
+	clearJourneySnapshot,
+	describeJourneySnapshot,
+	loadJourneySnapshot,
 	resolveDataProductJourneyStageStates,
+	shouldOfferSnapshotResume,
+	type JourneySnapshot,
 } from "@/components/journey";
 import { useRouter, useSearchParams } from "@/routes/hooks";
 import goldenChainService, {
@@ -169,6 +175,18 @@ export default function Page({
 	);
 
 	const hasThemes = themes.length > 0;
+	const journeyParam = searchParams.get("journey");
+	const [resumeSnapshot, setResumeSnapshot] = useState<JourneySnapshot | null>(null);
+	useEffect(() => {
+		// 快照读取放在 effect 中，storage 异常时 loadJourneySnapshot 静默返回 null。
+		setResumeSnapshot(loadJourneySnapshot());
+	}, [journeyParam]);
+	const offerResume = shouldOfferSnapshotResume(resumeSnapshot, journeyParam);
+	const resumeDescription = offerResume && resumeSnapshot ? describeJourneySnapshot(resumeSnapshot) : null;
+	const dismissResumeSnapshot = () => {
+		clearJourneySnapshot();
+		setResumeSnapshot(null);
+	};
 	const productJourneyStages = useMemo(
 		() => resolveDataProductJourneyStageStates(searchParams),
 		[searchParams],
@@ -268,6 +286,35 @@ export default function Page({
 				}
 				data-testid="end-to-end-data-product-journey"
 			>
+				{resumeDescription && resumeSnapshot && (
+					<Alert
+						className="mb-4"
+						type="info"
+						showIcon
+						data-testid="journey-resume-card"
+						message={`继续上次旅程：${resumeDescription.stageTitle}`}
+						description={
+							[resumeDescription.contextSummary, resumeDescription.savedAgo && `保存于 ${resumeDescription.savedAgo}`]
+								.filter(Boolean)
+								.join(" · ") || "上次旅程尚未积累上下文参数"
+						}
+						action={
+							<Space>
+								<Button
+									size="small"
+									type="primary"
+									data-testid="journey-resume-continue"
+									onClick={() => router.push(buildSnapshotResumeUrl(resumeSnapshot))}
+								>
+									继续旅程
+								</Button>
+								<Button size="small" data-testid="journey-resume-clear" onClick={dismissResumeSnapshot}>
+									清除
+								</Button>
+							</Space>
+						}
+					/>
+				)}
 				<div className="mb-4 flex flex-wrap items-start justify-between gap-3">
 					<div className="max-w-3xl">
 						<Typography.Title level={5} style={{ margin: 0 }}>

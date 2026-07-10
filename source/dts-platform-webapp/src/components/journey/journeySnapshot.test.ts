@@ -5,9 +5,12 @@ import {
 	buildSnapshotResumeUrl,
 	clearJourneySnapshot,
 	createJourneySnapshot,
+	describeJourneySnapshot,
+	formatSnapshotSavedAgo,
 	loadJourneySnapshot,
 	persistJourneyContextSnapshot,
 	saveJourneySnapshot,
+	shouldOfferSnapshotResume,
 	shouldPersistSnapshot,
 	type JourneySnapshotStorage,
 } from "./journeySnapshot";
@@ -150,6 +153,40 @@ describe("journey snapshot persistence", () => {
 		expect(shouldPersistSnapshot({ enabled: true, stage: "modeling", params: {} }, existing)).toBe(true);
 		expect(shouldPersistSnapshot({ enabled: false, stage: "modeling", params: { modelId: "m-1" } }, existing)).toBe(false);
 		expect(shouldPersistSnapshot({ enabled: true, stage: "modeling", params: { modelId: "m-1" } }, null)).toBe(true);
+	});
+
+	it("offers resume only when a snapshot exists and the journey is not already active", () => {
+		const snapshot = createJourneySnapshot("modeling", { modelId: "m-1" });
+
+		expect(shouldOfferSnapshotResume(snapshot, null)).toBe(true);
+		expect(shouldOfferSnapshotResume(snapshot, "other")).toBe(true);
+		expect(shouldOfferSnapshotResume(snapshot, "e2e-data-product")).toBe(false);
+		expect(shouldOfferSnapshotResume(null, null)).toBe(false);
+	});
+
+	it("formats the saved-ago label across time buckets", () => {
+		const now = Date.parse("2026-07-10T12:00:00.000Z");
+
+		expect(formatSnapshotSavedAgo("2026-07-10T11:59:40.000Z", now)).toBe("刚刚");
+		expect(formatSnapshotSavedAgo("2026-07-10T11:45:00.000Z", now)).toBe("15 分钟前");
+		expect(formatSnapshotSavedAgo("2026-07-10T09:00:00.000Z", now)).toBe("3 小时前");
+		expect(formatSnapshotSavedAgo("2026-07-07T12:00:00.000Z", now)).toBe("3 天前");
+		expect(formatSnapshotSavedAgo("not-a-date", now)).toBe("");
+	});
+
+	it("describes a snapshot with stage title and labelled context summary", () => {
+		const now = Date.parse("2026-07-10T12:00:00.000Z");
+		const snapshot = {
+			...createJourneySnapshot("metrics", { modelId: "m-7", sourceId: "ds-1" }),
+			savedAt: "2026-07-10T11:30:00.000Z",
+		};
+
+		const description = describeJourneySnapshot(snapshot, now);
+
+		expect(description.stageTitle).toBe("数据指标");
+		expect(description.contextSummary).toContain("模型 m-7");
+		expect(description.contextSummary).toContain("数据源 ds-1");
+		expect(description.savedAgo).toBe("30 分钟前");
 	});
 
 	it("builds a resume url with the journey flag and all saved params", () => {

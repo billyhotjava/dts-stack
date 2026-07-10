@@ -15,12 +15,16 @@ export {
 	buildSnapshotResumeUrl,
 	clearJourneySnapshot,
 	createJourneySnapshot,
+	describeJourneySnapshot,
+	formatSnapshotSavedAgo,
 	loadJourneySnapshot,
 	persistJourneyContextSnapshot,
 	saveJourneySnapshot,
+	shouldOfferSnapshotResume,
 	shouldPersistSnapshot,
 	type JourneySnapshot,
 	type JourneySnapshotContextInput,
+	type JourneySnapshotDescription,
 	type JourneySnapshotStorage,
 } from "./journeySnapshot";
 export {
