@@ -223,8 +223,8 @@ export default function Page({
 		[journeyContextParams, artifactValidations],
 	);
 	const acceptancePackage = useMemo(
-		() => buildDataProductAcceptancePackage(searchParams),
-		[searchParams],
+		() => buildDataProductAcceptancePackage(searchParams, { validations: artifactValidations }),
+		[searchParams, artifactValidations],
 	);
 	const themeSummary = hasThemes ? "已加载现场配置主题" : "待现场定义业务主题";
 	const failureReason = selectedTheme?.failureReason || "";

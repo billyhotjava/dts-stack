@@ -6,7 +6,7 @@
 - [x] `JourneyArtifactValidation.source-contract.test.ts`：三态契约、七参数 API 缺口标注、注入式草稿清单、异常不抛出。
 - [x] `JourneyStageState` 扩展用例：invalid→blocked+恢复动作、valid→done+verified、unknown→done+unverified、复数解析器透传、不传 validations 行为不变。
 - [x] `GateEvidence.source-contract.test.ts`：四项 checks 结构、API 缺口标注、校验联动、barrel 导出。
-- [ ] `DataProductAcceptancePackage` 扩展用例：按 checks 聚合、missing 项计数、markdown 导出含门禁明细。
+- [x] `DataProductAcceptancePackage` 扩展用例：门禁组前置、verdict→状态映射、invalid→blocked、markdown/json 门禁明细、原九组保留。
 - [ ] `JourneyContextBar` 扩展用例：joinable 模式渲染、关闭后会话内不再出现、journey 模式下不显示 joinable。
 - [ ] 路由一致性用例：STAGE_CONFIG 全部 route 在应用路由表中存在。
 
@@ -91,3 +91,8 @@
 - GREEN：`node --test` 契约 30/30（新增摘要组件与三页接入契约）。
 - GREEN：`pnpm build` 通过（修复一处未使用导入的 tsc 报错）。
 - 交付说明：GateEvidenceSummary（verdict 徽标+四 check 标签，点击跳证据页保 journey 上下文，title 提示待补 API）；workbench development/evidence 阶段卡内嵌 compact 摘要（联动校验结果）；SqlModelingPage/OpsInstancesPage 经 JourneyGateEvidenceSummary 一行接入（仅旅程模式渲染）。
+
+### F3-T03 验收包接入结构化门禁（2026-07-10）
+
+- GREEN：vitest 9/9（验收包 4 + 门禁 5）；`node --test` 契约 31/31；`pnpm build` 通过。
+- 交付说明：验收包新增"发布门禁"组（verdict pass→ready/warn→missing/fail→blocked，缺项明细进 missingReason）；包级新增 gateEvidence 结构字段；markdown 导出含门禁明细表（状态/说明/证据或待补接口）；workbench 传入 F2 校验结果，验收包与门禁与校验三方联动。F3 整体 DONE。

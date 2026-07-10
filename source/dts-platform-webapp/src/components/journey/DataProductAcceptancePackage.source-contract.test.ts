@@ -88,3 +88,16 @@ test("journey barrel exports acceptance package helpers", () => {
 	assert.match(source, /buildAcceptancePackageMarkdown/);
 	assert.match(source, /buildAcceptancePackageJson/);
 });
+
+test("acceptance package aggregates structured gate evidence", () => {
+	const packageSource = readFileSync(new URL("./dataProductAcceptancePackage.ts", import.meta.url), "utf8");
+
+	assert.match(packageSource, /buildGateEvidence/);
+	assert.match(packageSource, /gateEvidence/);
+	assert.match(packageSource, /发布门禁/);
+	assert.match(packageSource, /门禁未齐/);
+	assert.match(packageSource, /发布门禁明细/);
+
+	const behaviorTestUrl = new URL("./dataProductAcceptancePackage.test.ts", import.meta.url);
+	assert.equal(existsSync(behaviorTestUrl), true, "dataProductAcceptancePackage.test.ts (vitest) should exist");
+});

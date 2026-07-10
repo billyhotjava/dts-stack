@@ -4,8 +4,10 @@ import {
 	type DataProductJourneyContextParams,
 	type JourneyContextParamKey,
 } from "./journeyContext";
+import { buildGateEvidence, type GateEvidence, type GateEvidenceOptions } from "./gateEvidence";
 
 export type DataProductAcceptanceEvidenceGroupKey =
+	| "gate"
 	| "source"
 	| "standards"
 	| "model"
@@ -35,6 +37,7 @@ export type DataProductAcceptancePackage = {
 	title: string;
 	journey: typeof E2E_DATA_PRODUCT_JOURNEY;
 	groups: DataProductAcceptanceEvidenceGroup[];
+	gateEvidence: GateEvidence;
 	readyCount: number;
 	missingCount: number;
 	blockedCount: number;
@@ -146,10 +149,18 @@ const resolveGroupStatus = (
 	return definition.blockerWhenMissing ? "blocked" : "missing";
 };
 
+const GATE_VERDICT_TO_STATUS: Record<GateEvidence["verdict"], DataProductAcceptanceEvidenceStatus> = {
+	pass: "ready",
+	warn: "missing",
+	fail: "blocked",
+};
+
 export const buildDataProductAcceptancePackage = (
 	input?: URLSearchParams | DataProductJourneyContextParams,
+	options: GateEvidenceOptions = {},
 ): DataProductAcceptancePackage => {
 	const params = toParams(input);
+	const gateEvidence = buildGateEvidence(params, options);
 	const groups = ACCEPTANCE_EVIDENCE_GROUPS.map<DataProductAcceptanceEvidenceGroup>((definition) => {
 		const status = resolveGroupStatus(definition, params);
 		return {
@@ -165,18 +176,34 @@ export const buildDataProductAcceptancePackage = (
 			recoveryLabel: status === "ready" ? "查看证据" : "补齐入口",
 		};
 	});
-	const readyCount = groups.filter((group) => group.status === "ready").length;
-	const missingCount = groups.filter((group) => group.status === "missing").length;
-	const blockedCount = groups.filter((group) => group.status === "blocked").length;
+	const gateMissing = gateEvidence.checks.filter((check) => check.status !== "ready");
+	const gateGroup: DataProductAcceptanceEvidenceGroup = {
+		key: "gate",
+		title: "发布门禁",
+		description: "落标覆盖、模型编译、数据测试、运行结果四项门禁。",
+		route: "/studio/sql-modeling",
+		url: buildJourneyUrl("/studio/sql-modeling", params),
+		status: GATE_VERDICT_TO_STATUS[gateEvidence.verdict],
+		missingReason:
+			gateMissing.length > 0
+				? `门禁未齐：${gateMissing.map((check) => `${check.label}(${check.status})`).join("、")}`
+				: undefined,
+		recoveryLabel: gateEvidence.verdict === "pass" ? "查看证据" : "补齐入口",
+	};
+	const allGroups = [gateGroup, ...groups];
+	const readyCount = allGroups.filter((group) => group.status === "ready").length;
+	const missingCount = allGroups.filter((group) => group.status === "missing").length;
+	const blockedCount = allGroups.filter((group) => group.status === "blocked").length;
 
 	return {
 		title: "客户验收包",
 		journey: E2E_DATA_PRODUCT_JOURNEY,
-		groups,
+		groups: allGroups,
+		gateEvidence,
 		readyCount,
 		missingCount,
 		blockedCount,
-		summary: `客户验收包：${readyCount} 项已具备，${missingCount} 项缺失，${blockedCount} 项阻断。`,
+		summary: `客户验收包：${readyCount} 项已具备，${missingCount} 项缺失，${blockedCount} 项阻断；发布门禁 ${gateEvidence.verdict}。`,
 	};
 };
 
@@ -186,6 +213,13 @@ export const buildAcceptancePackageMarkdown = (acceptancePackage: DataProductAcc
 		lines.push(`- ${group.title}: ${group.status}`);
 		lines.push(`  - 证据: ${group.url}`);
 		if (group.missingReason) lines.push(`  - 缺失项: ${group.missingReason}`);
+	}
+	lines.push("", "## 发布门禁明细", "");
+	lines.push("| 门禁项 | 状态 | 说明 | 证据/待补接口 |");
+	lines.push("| --- | --- | --- | --- |");
+	for (const check of acceptancePackage.gateEvidence.checks) {
+		const evidenceCell = check.status === "ready" ? (check.evidenceUrl ?? "") : (check.apiName ?? check.evidenceUrl ?? "");
+		lines.push(`| ${check.label} | ${check.status} | ${check.detail} | ${evidenceCell} |`);
 	}
 	return lines.join("\n");
 };
