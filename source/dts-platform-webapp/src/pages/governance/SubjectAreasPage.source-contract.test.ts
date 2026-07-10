@@ -16,6 +16,7 @@ test("subject areas expose a DWD dimension planning entry", () => {
 test("subject area planning exposes blocked and restore states", () => {
 	assert.match(source, /resolveWarehousePlanningContext/);
 	assert.match(source, /resolveWarehousePlanningStatus/);
+	assert.match(source, /planningResolution\.status\s*===\s*"blocked"/);
 	assert.match(source, /规划草稿已失效|规划上下文不可用|重新确认规划/);
 	assert.match(source, /维度建模/);
 });
