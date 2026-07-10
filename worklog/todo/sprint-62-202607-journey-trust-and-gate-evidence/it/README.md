@@ -3,7 +3,7 @@
 ## Source Contract（node --test）
 
 - [x] `JourneySnapshot.source-contract.test.ts`：快照写入/读取/版本不匹配丢弃/清除；恢复 URL 与中断前参数一致。
-- [ ] `JourneyArtifactValidation.source-contract.test.ts`：有效 id、无效 id、未提供 id、校验器缺失四种输入的状态输出。
+- [x] `JourneyArtifactValidation.source-contract.test.ts`：三态契约、七参数 API 缺口标注、注入式草稿清单、异常不抛出。
 - [ ] `JourneyStageState` 扩展用例：注入 invalid 校验结果后 status=blocked、恢复动作存在、不出现 done。
 - [ ] `GateEvidence.source-contract.test.ts`：四项 checks 的 ready/missing/blocked 组合与聚合 verdict；缺 API 时 apiName 必填。
 - [ ] `DataProductAcceptancePackage` 扩展用例：按 checks 聚合、missing 项计数、markdown 导出含门禁明细。
@@ -57,3 +57,10 @@
 - GREEN：`node --test` journey 契约套件 + workbench 契约 0 fail（新增 workbench 恢复卡契约：loadJourneySnapshot/resume testid/清除动作）。
 - GREEN：`pnpm build` 通过。
 - F1 整体 DONE：快照存储 → 自动保存 → 工作台恢复三环闭合；旅程中断可恢复目标达成（浏览器实测证据挂靠 F9）。
+
+### F2-T01 artifact 校验契约与数据源（2026-07-10）
+
+- GREEN：`pnpm vitest run .../journeyArtifactValidation.test.ts` 5/5（本地草稿验真 valid/invalid/UUID→unknown、无校验源→unknown、reason/apiName 附着规则、valid 无缺口标记、校验器抛错降级 unknown）。
+- GREEN：`node --test` journey 契约套件 0 fail。
+- GREEN：`pnpm build` 通过。
+- 设计说明：standardDraftId 用注入式 StandardDraftLookup 对接 `standardBindingDraft.ts` 的本地草稿清单（页面接线在 T03，避免 components→pages 反向依赖）；其余六类参数如实返回 unknown 并标注待补 API（ARTIFACT_VALIDATION_API_NAMES）。

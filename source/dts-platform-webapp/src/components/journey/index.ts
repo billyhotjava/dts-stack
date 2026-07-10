@@ -10,6 +10,18 @@ export {
 	type JourneyContextParamKey,
 } from "./journeyContext";
 export {
+	ARTIFACT_VALIDATION_API_NAMES,
+	createDataProductArtifactValidator,
+	resolveArtifactValidations,
+	toArtifactValidationMap,
+	type ArtifactValidationMap,
+	type ArtifactValidationResult,
+	type ArtifactValidationStatus,
+	type ArtifactValidator,
+	type DataProductArtifactValidatorDeps,
+	type StandardDraftLookup,
+} from "./journeyArtifactValidation";
+export {
 	JOURNEY_SNAPSHOT_STORAGE_KEY,
 	JOURNEY_SNAPSHOT_VERSION,
 	buildSnapshotResumeUrl,
