@@ -41,9 +41,9 @@
 | F1-旅程实例持久化与恢复 | 3 | DONE |
 | F2-阶段真实性校验 | 3 | DONE |
 | F3-dbt式门禁证据结构化 | 3 | DONE |
-| F4-菜单直达旅程感知与验收包打印 | 3 | IN_PROGRESS |
+| F4-菜单直达旅程感知与验收包打印 | 3 | DONE |
 
-**统计**: READY=1, IN_PROGRESS=1, DONE=11, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=12, BLOCKED=0
 
 **目录**: `worklog/todo/sprint-62-202607-journey-trust-and-gate-evidence/`
 

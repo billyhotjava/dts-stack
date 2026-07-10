@@ -1,7 +1,7 @@
 # Sprint-62: 旅程可信化与门禁证据结构化
 
 **时间**: 2026-07
-**状态**: IN_PROGRESS
+**状态**: DONE
 **类型**: UI Productization / Journey Trust / Evidence Engineering
 **目标**: 把 sprint-61 建立的旅程从"URL 里的自我声明"升级为"可恢复、可验真、有结构化门禁证据"的可信旅程，让没有正规开发人员的客户中断后能继续、看到的绿色就是真的、验收拿到的是结构化证据而不是一堆链接。
 
@@ -21,9 +21,9 @@ Sprint-61 已交付旅程上下文（journeyContext）、阶段状态机（journ
 | F1 | 旅程实例持久化与恢复 | 3 | DONE | P0 |
 | F2 | 阶段真实性校验 | 3 | DONE | P0 |
 | F3 | dbt式门禁证据结构化 | 3 | DONE | P0 |
-| F4 | 菜单直达旅程感知与验收包打印 | 3 | IN_PROGRESS | P1 |
+| F4 | 菜单直达旅程感知与验收包打印 | 3 | DONE | P1 |
 
-**统计**: READY=1, IN_PROGRESS=0, DONE=11, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=12, BLOCKED=0
 
 ## 实施顺序
 
@@ -46,12 +46,12 @@ Browser smoke 依赖 sprint-61 F9 的可登录基线；本 sprint 不重复建�
 
 ## 完成标准
 
-- [ ] 刷新或重开浏览器后，工作台出现"继续上次旅程"入口，恢复后 8 阶段状态与中断前一致。
-- [ ] 携带无效 artifact id 进入旅程时，对应阶段显示 blocked 与恢复动作，不显示 done。
-- [ ] development/evidence 阶段展示结构化门禁卡（落标覆盖率/编译/测试/运行四项），验收包按 checks 聚合并标注缺失 API。
-- [ ] 从菜单直达旅程相关页面时，出现可关闭的"加入旅程"提示，进入后上下文完整。
-- [ ] 验收包提供打印友好视图（Chrome 95 可用）。
-- [ ] 全部新模块有 source-contract 测试；`node --test` 与 `pnpm build` 通过；GitNexus detect_changes 无预期外影响。
+- [x] 刷新或重开浏览器后，工作台出现"继续上次旅程"入口，恢复后 8 阶段状态与中断前一致。
+- [x] 携带无效 artifact id 进入旅程时，对应阶段显示 blocked 与恢复动作，不显示 done。
+- [x] development/evidence 阶段展示结构化门禁卡（落标覆盖率/编译/测试/运行四项），验收包按 checks 聚合并标注缺失 API。
+- [x] 从菜单直达旅程相关页面时，出现可关闭的"加入旅程"提示，进入后上下文完整。
+- [x] 验收包提供打印友好视图（Chrome 95 可用，浏览器截图挂靠 sprint-61 F9）。
+- [x] 全部新模块有 source-contract 测试；`node --test` 与 `pnpm build` 通过；GitNexus detect_changes 无预期外影响。
 
 ## 非目标
 

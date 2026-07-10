@@ -8,7 +8,7 @@
 - [x] `GateEvidence.source-contract.test.ts`：四项 checks 结构、API 缺口标注、校验联动、barrel 导出。
 - [x] `DataProductAcceptancePackage` 扩展用例：门禁组前置、verdict→状态映射、invalid→blocked、markdown/json 门禁明细、原九组保留。
 - [x] `JourneyContextBar` 扩展用例：joinable 提示、进入/关闭动作、sessionStorage 记忆、模式判定纯函数四态。
-- [ ] 路由一致性用例：STAGE_CONFIG 全部 route 在应用路由表中存在。
+- [x] 路由一致性用例：四个 journey 源文件的全部 route（19 个去重）对 static-routes/dynamic-resolver 双源校验。
 
 ## 命令
 
@@ -106,3 +106,15 @@
 
 - GREEN：vitest 6/6（新增打印元信息：上下文摘要/时间戳/三签字栏、空上下文降级文案）；`node --test` 契约 33/33；`pnpm build` 通过。
 - 交付说明：验收包卡片标记 data-print-root，"打印视图"按钮直接 window.print()；@media print 用 visibility 方案隐藏应用壳（Chrome 95 兼容，无现代打印 API）、按钮不打印、分组卡防跨页断裂；打印头（标题/摘要/上下文/生成时间）与签字栏（数据管理岗/业务验收人/技术支持方）为 print-only 元素。Chrome 95 打印预览截图挂靠 F9。
+
+### F4-T03 旅程路由一致性守卫（2026-07-10）
+
+- GREEN：`node --test JourneyRouteConsistency.source-contract.test.ts` 2/2；RED 验证：故意把 data-sources 路由改名后测试失败且错误信息指明断链路由与引用文件，还原后恢复 GREEN。
+- GREEN：全套契约 35/35；`pnpm build` 通过。
+- 交付说明：守卫从 journeyContext/journeyStageState/gateEvidence/acceptancePackage 四个源提取全部 route 字面量，对 static-routes.tsx（path 匹配）与 dynamic-resolver.tsx（完整映射）双源校验；同时断言八个阶段入口路由必被收集，防守卫本身失效。
+
+## Sprint-62 收尾（2026-07-10）
+
+- 12/12 任务 DONE；最终全套：vitest 行为用例（journey 六模块）全绿、node --test 契约 35/35、`pnpm build` 通过。
+- 待办移交：浏览器实测证据（恢复卡/无效参数/门禁卡/joinable 提示/打印预览 Chrome 95 截图）统一挂靠 sprint-61 F9 可登录基线执行。
+- 后端 API 缺口清单（均已在 UI/模型中显式标注）：journey 实例存储、六类 artifact 校验接口（ARTIFACT_VALIDATION_API_NAMES）、dbt 测试结果、运行证据聚合、验收包聚合。
