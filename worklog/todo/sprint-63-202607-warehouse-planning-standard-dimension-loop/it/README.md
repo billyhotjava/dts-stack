@@ -53,3 +53,13 @@
 ### 2026-07-11 GitNexus
 
 - 页面符号 `SubjectAreasPage`、`ElementsPage`、`LowCodeDevelopmentPage`、`SqlModelingPage` 与 `openCreateModelFromStandardDraft` 上游影响均为 LOW；新增 helper 尚未进入索引，以行为测试和源码契约覆盖。
+
+### 2026-07-11 F2/T03 Review Closure
+
+- RED：规划上下文测试新增四类标准缺口契约后，因缺少 `resolveStandardDraftGate` 出现 2 个预期失败；页面源码契约同时要求客户可见 blocker 和修复动作。
+- GREEN：无规划、无数据元、字段未落标、无治理权限均返回稳定原因和修复动作；数据元页可返回主题域规划、直接打开新增数据元或生成字段落标草稿。
+- 覆盖率（`warehousePlanningContext.ts` + `dimensionCandidateGate.ts`）：statements 91.12%，branches 86.5%，functions 91.3%，lines 95.37%；规划 helper branches 84.9%，维度候选门禁 branches 95%。
+- 完整回归：source-contract 85/85、行为测试 51/51、`pnpm exec tsc --noEmit`、`git diff --check` 和 Chrome 95 legacy `pnpm build` 通过；最终构建日志为 `✓ built in 2m 7s`。
+- Preview mock smoke：通过本地开发令牌、规划 session 草稿和 API mock 渲染真实数据元路由；1366×768 的“字段未落标”和 390×844 的“无数据元”均显示修复按钮，控制台与 page error 为 0，窄屏操作组和搜索组可换行且无裁切。
+- 截图：[`assets/screenshots/2026-07-11-elements-field-binding-1366x768.png`](../assets/screenshots/2026-07-11-elements-field-binding-1366x768.png)、[`assets/screenshots/2026-07-11-elements-no-data-390x844.png`](../assets/screenshots/2026-07-11-elements-no-data-390x844.png)。
+- Browser Smoke 仍受证书登录/DNS 外部依赖阻塞，保持第 24-31 行未勾选，不计入 F2/T03 实现完成度。

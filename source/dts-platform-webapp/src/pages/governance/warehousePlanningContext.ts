@@ -35,6 +35,26 @@ export type WarehousePlanningStatusDeps = {
 	standardFieldCount: number;
 };
 
+export type StandardDraftBlocker = "planning" | "data-elements" | "field-binding" | "permission";
+
+export type StandardDraftGateInput = {
+	planningContext: WarehousePlanningContext | null;
+	planningSource: WarehousePlanningSource;
+	planningBlockedReason?: string;
+	canManage: boolean;
+	dataElementCount: number;
+};
+
+export type StandardDraftGateResult = {
+	status: "ready" | "blocked";
+	blocker?: StandardDraftBlocker;
+	title: string;
+	reason: string;
+	repairLabel?: string;
+	repairRoute?: string;
+	canCreateDraft: boolean;
+};
+
 const WAREHOUSE_LAYERS: WarehouseLayer[] = ["ODS_RAW", "ODS_STANDARDIZED", "DWD", "DWS", "ADS"];
 
 const resolveDefaultStorage = (): WarehousePlanningStorage | undefined => {
@@ -246,3 +266,82 @@ export const resolveWarehousePlanningStatus = (
 };
 
 export const getWarehousePlanningRouteParams = (context: WarehousePlanningContext) => planningRouteParams(context);
+
+const buildStandardDraftRepairRoute = (route: string, context: WarehousePlanningContext | null): string =>
+	context ? buildPlanningRoute(route, context) : route;
+
+export const resolveStandardDraftGate = ({
+	planningContext,
+	planningSource,
+	planningBlockedReason,
+	canManage,
+	dataElementCount,
+}: StandardDraftGateInput): StandardDraftGateResult => {
+	if (!planningContext) {
+		return {
+			status: "blocked",
+			blocker: "planning",
+			title: "缺少数仓规划",
+			reason: planningBlockedReason || "缺少数仓规划，请先选择主题域并创建 DWD 维度建模规划",
+			repairLabel: "返回主题域规划",
+			repairRoute: "/governance/subjects",
+			canCreateDraft: false,
+		};
+	}
+	if (planningBlockedReason || planningSource !== "session") {
+		return {
+			status: "blocked",
+			blocker: "planning",
+			title: "规划上下文不可用",
+			reason: planningBlockedReason || "规划草稿不可用，请重新确认规划",
+			repairLabel: "返回主题域规划",
+			repairRoute: buildStandardDraftRepairRoute(
+				`/governance/subjects?active=${encodeURIComponent(planningContext.domainId)}`,
+				planningContext,
+			),
+			canCreateDraft: false,
+		};
+	}
+	if (!canManage) {
+		return {
+			status: "blocked",
+			blocker: "permission",
+			title: "缺少治理维护权限",
+			reason: "当前账号无治理维护权限，请联系管理员授权后再生成字段落标草稿",
+			repairLabel: "返回主题域规划",
+			repairRoute: buildStandardDraftRepairRoute(
+				`/governance/subjects?active=${encodeURIComponent(planningContext.domainId)}`,
+				planningContext,
+			),
+			canCreateDraft: false,
+		};
+	}
+	if (dataElementCount <= 0) {
+		return {
+			status: "blocked",
+			blocker: "data-elements",
+			title: "缺少可落标的数据元",
+			reason: "当前主题域没有可输出的数据元，请先新增数据元规范",
+			repairLabel: "新增数据元",
+			repairRoute: buildStandardDraftRepairRoute("/governance/standards/elements?create=1", planningContext),
+			canCreateDraft: false,
+		};
+	}
+	if (!planningContext.standardDraftId) {
+		return {
+			status: "blocked",
+			blocker: "field-binding",
+			title: "字段尚未落标",
+			reason: "数据元已就绪，请生成字段落标草稿后进入维度建模",
+			repairLabel: "生成字段落标草稿",
+			repairRoute: buildStandardDraftRepairRoute("/governance/standards/elements?bindingDraft=1", planningContext),
+			canCreateDraft: true,
+		};
+	}
+	return {
+		status: "ready",
+		title: "标准草稿已就绪",
+		reason: "规划、治理权限、数据元和字段落标草稿均已就绪",
+		canCreateDraft: true,
+	};
+};

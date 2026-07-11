@@ -79,6 +79,8 @@ def application(environ: dict[str, Any], start_response):
     method = environ.get("REQUEST_METHOD", "GET").upper()
     path = environ.get("PATH_INFO", "/")
     try:
+        if method == "GET" and path == "/":
+            return json_response(start_response, HTTPStatus.OK, envelope({"service": "dbapi", "status": "UP"}))
         if method == "GET" and path == "/health":
             return json_response(start_response, HTTPStatus.OK, envelope({"status": "UP"}))
         if method == "GET" and path == "/api/v1/db/ping":

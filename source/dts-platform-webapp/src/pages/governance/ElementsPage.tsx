@@ -23,6 +23,7 @@ import {
 import { normalizeText } from "@/utils/textUtils";
 import {
 	buildPlanningRoute,
+	resolveStandardDraftGate,
 	resolveWarehousePlanningContext,
 	resolveWarehousePlanningStatus,
 	saveWarehousePlanningContext,
@@ -363,6 +364,13 @@ export default function ElementsPage() {
 	const planningBlocked = Boolean(
 		hasPlanningContext && (planningResolution.status === "blocked" || planningResolution.source !== "session"),
 	);
+	const standardDraftGate = resolveStandardDraftGate({
+		planningContext,
+		planningSource: planningResolution.source,
+		planningBlockedReason: planningResolution.status === "blocked" ? planningResolution.reason : undefined,
+		canManage,
+		dataElementCount: content.length,
+	});
 
 	const buildFieldBindingDraftPayload = (): StandardBindingDraftInput => ({
 		source: "metadata-elements",
@@ -448,7 +456,7 @@ export default function ElementsPage() {
 			<PageHeader
 				title="数据治理中心 · 标准管理 / 数据元"
 				actions={
-					<Space>
+					<Space wrap>
 						<Button
 							icon={<DownloadOutlined />}
 							onClick={downloadStandardPackageTemplate}
@@ -469,7 +477,7 @@ export default function ElementsPage() {
 						<Button
 							onClick={createFieldBindingDraft}
 							loading={draftCreating}
-							disabled={!canManage || content.length === 0 || planningBlocked}
+							disabled={!standardDraftGate.canCreateDraft}
 							data-testid="governance-elements-standard-binding-draft"
 						>
 							生成字段落标草稿
@@ -481,7 +489,7 @@ export default function ElementsPage() {
 				}
 			/>
 			<JourneyContextBar stage="standards" />
-			{hasPlanningContext ? (
+			{hasPlanningContext && standardDraftGate.blocker !== "planning" ? (
 				<Alert
 					showIcon
 					data-testid="warehouse-planning-context"
@@ -501,6 +509,40 @@ export default function ElementsPage() {
 					}
 				/>
 			) : null}
+			{standardDraftGate.status === "blocked" ? (
+				<Alert
+					showIcon
+					data-testid="standard-draft-blocker"
+					type={
+						standardDraftGate.blocker === "planning" || standardDraftGate.blocker === "permission"
+							? "error"
+							: standardDraftGate.blocker === "data-elements"
+								? "warning"
+								: "info"
+					}
+					message={standardDraftGate.title}
+					description={standardDraftGate.reason}
+					action={
+						<Button
+							size="small"
+							data-testid="standard-draft-repair"
+							onClick={() => {
+								if (standardDraftGate.blocker === "data-elements") {
+									openModal();
+									return;
+								}
+								if (standardDraftGate.blocker === "field-binding") {
+									void createFieldBindingDraft();
+									return;
+								}
+								if (standardDraftGate.repairRoute) navigate(standardDraftGate.repairRoute);
+							}}
+						>
+							{standardDraftGate.repairLabel}
+						</Button>
+					}
+				/>
+			) : null}
 			<div className="rounded-md border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
 				数据元是 SQL 模型字段的标准来源；通过引用关系查看模型字段引用，避免标准只停留在治理台账。
 			</div>
@@ -514,7 +556,7 @@ export default function ElementsPage() {
 			) : null}
 
 			<Card>
-				<Space className="mb-4">
+				<Space wrap className="mb-4">
 					<Input.Search
 						placeholder="搜索数据元..."
 						style={{ width: 300 }}

@@ -20,3 +20,17 @@ test("standard binding draft carries planning metadata and blocks empty inputs",
 	assert.match(source, /standardDraftId|createStandardBindingDraftSnapshot/);
 	assert.match(source, /当前列表没有可输出的数据元|暂无可用数据元/);
 });
+
+test("standard draft gaps expose customer-visible reasons and executable repair actions", () => {
+	assert.match(source, /resolveStandardDraftGate/);
+	assert.match(source, /standard-draft-blocker/);
+	assert.match(source, /standard-draft-repair/);
+	assert.match(source, /新增数据元/);
+	assert.match(source, /生成字段落标草稿/);
+	assert.match(source, /返回主题域规划/);
+});
+
+test("data element actions wrap instead of clipping on narrow viewports", () => {
+	assert.match(source, /actions=\{\s*<Space wrap>/);
+	assert.match(source, /<Space wrap className="mb-4">/);
+});

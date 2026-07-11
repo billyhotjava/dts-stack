@@ -251,6 +251,7 @@ export default function DataSourceFormModal({
 		}
 		const props = editing.props || {};
 		const apiSource = isApiSourceType(editing.type);
+		const existingApiRequestPolicy = apiSource ? readApiConfigPart(props, "requestPolicy") : undefined;
 		form.setFieldsValue({
 			name: editing.name,
 			connectorKey: editing.connectorKey || inferConnectorKey(editing.type, props),
@@ -270,6 +271,7 @@ export default function DataSourceFormModal({
 			apiAuthSecretRefs: apiSource ? readApiAuthSecretRefs(props) : undefined,
 			apiDefaultHeadersJson: apiSource ? stringifyJson(readApiConfigPart(props, "defaultHeaders")) : "",
 			apiRequestPolicyJson: apiSource ? stringifyJson(readApiConfigPart(props, "requestPolicy")) : "",
+			apiAllowHttp: apiSource ? existingApiRequestPolicy?.allowHttp === true : false,
 			apiRateLimitJson: apiSource ? stringifyJson(readApiConfigPart(props, "rateLimit")) : "",
 			apiTlsJson: apiSource ? stringifyJson(readApiConfigPart(props, "tls")) : "",
 		});
@@ -439,6 +441,10 @@ export default function DataSourceFormModal({
 		const authProvider = String(values.apiAuthProvider || "none").trim() || "none";
 		const defaultHeaders = parseObjectJson(values.apiDefaultHeadersJson, "默认请求头");
 		const requestPolicy = parseObjectJson(values.apiRequestPolicyJson, "请求策略");
+		const resolvedRequestPolicy = {
+			...(requestPolicy || {}),
+			allowHttp: typeof values.apiAllowHttp === "boolean" ? values.apiAllowHttp : requestPolicy?.allowHttp === true,
+		};
 		const rateLimit = parseObjectJson(values.apiRateLimitJson, "限流策略");
 		const tls = parseObjectJson(values.apiTlsJson, "TLS 策略");
 		const rawAuthConfig = cleanRecord(values.apiAuthConfig);
@@ -493,7 +499,7 @@ export default function DataSourceFormModal({
 		const apiNode = {
 			baseUrl,
 			...(defaultHeaders ? { defaultHeaders } : {}),
-			...(requestPolicy ? { requestPolicy } : {}),
+			requestPolicy: resolvedRequestPolicy,
 			...(rateLimit ? { rateLimit } : {}),
 			...(tls ? { tls } : {}),
 			auth,
@@ -525,6 +531,7 @@ export default function DataSourceFormModal({
 				"apiAuthSecrets",
 				"apiDefaultHeadersJson",
 				"apiRequestPolicyJson",
+				"apiAllowHttp",
 				"apiRateLimitJson",
 				"apiTlsJson",
 				"propsJson",
@@ -800,6 +807,15 @@ export default function DataSourceFormModal({
 								]}
 							>
 								<Input placeholder="https://api.example.com" />
+							</Form.Item>
+							<Form.Item
+								name="apiAllowHttp"
+								label="允许明文 HTTP"
+								valuePropName="checked"
+								initialValue={false}
+								extra="仅建议测试环境开启；编辑已有数据源请先保存，再测试连接；生产环境请优先使用 HTTPS。"
+							>
+								<Switch checkedChildren="允许" unCheckedChildren="禁止" />
 							</Form.Item>
 							<div className="grid gap-4 md:grid-cols-2">
 								<Form.Item

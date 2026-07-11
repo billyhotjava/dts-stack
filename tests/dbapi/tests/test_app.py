@@ -44,6 +44,14 @@ def request(app, method: str, path: str, body: dict | None = None):
 
 
 class DbApiContractTest(TestCase):
+    def test_root_probe_is_a_success_envelope_for_base_url_connection_tests(self):
+        module = load_app()
+
+        status, _, payload = request(module.application, "GET", "/")
+
+        self.assertEqual(status, "200 OK")
+        self.assertEqual(payload, {"code": 0, "message": "success", "data": {"service": "dbapi", "status": "UP"}})
+
     def test_health_response_is_a_success_envelope_without_connection_secret(self):
         module = load_app()
 

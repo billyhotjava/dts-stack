@@ -8,6 +8,7 @@
 
 | Method | Path | 作用 |
 | --- | --- | --- |
+| GET | `/` | Base URL 连接探针，供 DTS 数据源测试连接使用 |
 | GET | `/health` | 进程健康检查，不访问数据库 |
 | GET | `/api/v1/db/ping` | 验证 MySQL 连通性 |
 | GET | `/api/v1/db/tables?schema=mysql` | 列出指定 schema 的表 |

@@ -3,6 +3,7 @@ import {
 	buildPlanningRoute,
 	createWarehousePlanningContext,
 	loadWarehousePlanningContext,
+	resolveStandardDraftGate,
 	resolveWarehousePlanningContext,
 	resolveWarehousePlanningStatus,
 	saveWarehousePlanningContext,
@@ -102,6 +103,32 @@ describe("warehouse planning context", () => {
 		expect(result.reason).toContain("不一致");
 	});
 
+	it("restores an authoritative session draft when route parameters agree", () => {
+		const storage = createStorage();
+		const context = createWarehousePlanningContext(baseInput);
+		saveWarehousePlanningContext(context, storage);
+		const routeParams = new URLSearchParams(
+			"?journey=e2e-data-product&planningId=plan-1&domainId=domain-1&warehouseLayer=DWD&modelingMode=dimension",
+		);
+
+		expect(resolveWarehousePlanningContext(routeParams, storage)).toMatchObject({
+			context,
+			source: "session",
+			status: "draft",
+		});
+	});
+
+	it("distinguishes a missing route from an incomplete URL fallback", () => {
+		const missing = resolveWarehousePlanningContext(new URLSearchParams(), createStorage());
+		const incompleteFallback = resolveWarehousePlanningContext(
+			new URLSearchParams("?planningId=plan-1&warehouseLayer=DWD&modelingMode=dimension"),
+			createStorage(),
+		);
+
+		expect(missing).toMatchObject({ context: null, source: "missing", status: "blocked" });
+		expect(incompleteFallback).toMatchObject({ context: null, source: "url-fallback", status: "blocked" });
+	});
+
 	it("keeps the session draft authoritative when the URL points to another planning id", () => {
 		const storage = createStorage();
 		const context = createWarehousePlanningContext(baseInput);
@@ -162,5 +189,78 @@ describe("warehouse planning context", () => {
 
 		expect(result.status).toBe("blocked");
 		expect(result.reason).toContain("维度建模");
+	});
+
+	it("returns an executable blocker for each standard draft gap", () => {
+		const context = createWarehousePlanningContext(baseInput);
+		const missingPlanning = resolveStandardDraftGate({
+			planningContext: null,
+			planningSource: "missing",
+			canManage: true,
+			dataElementCount: 0,
+		});
+		const missingPermission = resolveStandardDraftGate({
+			planningContext: context,
+			planningSource: "session",
+			canManage: false,
+			dataElementCount: 2,
+		});
+		const missingElements = resolveStandardDraftGate({
+			planningContext: context,
+			planningSource: "session",
+			canManage: true,
+			dataElementCount: 0,
+		});
+		const missingBinding = resolveStandardDraftGate({
+			planningContext: context,
+			planningSource: "session",
+			canManage: true,
+			dataElementCount: 2,
+		});
+
+		expect(missingPlanning).toMatchObject({ blocker: "planning", canCreateDraft: false });
+		expect(missingPlanning.reason).toContain("数仓规划");
+		expect(missingPlanning.repairRoute).toBe("/governance/subjects");
+		expect(missingPermission).toMatchObject({ blocker: "permission", canCreateDraft: false });
+		expect(missingPermission.reason).toContain("治理维护权限");
+		expect(missingPermission.repairRoute).toContain("/governance/subjects");
+		expect(missingElements).toMatchObject({ blocker: "data-elements", canCreateDraft: false });
+		expect(missingElements.reason).toContain("数据元");
+		expect(missingElements.repairRoute).toContain("create=1");
+		expect(missingBinding).toMatchObject({ blocker: "field-binding", canCreateDraft: true });
+		expect(missingBinding.reason).toContain("字段落标草稿");
+		expect(missingBinding.repairRoute).toContain("bindingDraft=1");
+	});
+
+	it("marks the standard draft ready only when planning, permission, elements and binding are present", () => {
+		const context = createWarehousePlanningContext({ ...baseInput, standardDraftId: "draft-1" });
+
+		expect(
+			resolveStandardDraftGate({
+				planningContext: context,
+				planningSource: "session",
+				canManage: true,
+				dataElementCount: 2,
+			}),
+		).toMatchObject({ status: "ready", canCreateDraft: true });
+	});
+
+	it("propagates an untrusted planning reason into the standard draft repair action", () => {
+		const context = createWarehousePlanningContext(baseInput);
+		const result = resolveStandardDraftGate({
+			planningContext: context,
+			planningSource: "url-fallback",
+			planningBlockedReason: "规划草稿已失效",
+			canManage: true,
+			dataElementCount: 2,
+		});
+
+		expect(result).toMatchObject({
+			status: "blocked",
+			blocker: "planning",
+			reason: "规划草稿已失效",
+			canCreateDraft: false,
+		});
+		expect(result.repairRoute).toContain("/governance/subjects");
 	});
 });

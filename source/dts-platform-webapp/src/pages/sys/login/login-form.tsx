@@ -48,7 +48,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
 	const selectedCert = pkiCerts.find((item) => item.id === selectedCertId);
 
-	// 简单开关：默认隐藏账号/密码，仅保留证书登录按钮（仍保留密码登录后端能力）
+	// 简单开关：默认显示账号/密码，同时保留证书登录按钮（仍支持显式隐藏密码登录）
 	const hidePasswordForm: boolean = (() => {
 		// 1) 运行时注入配置（容器 entrypoint 生成的 /runtime-config.js）优先
 		try {
@@ -75,7 +75,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			if (v === "0" || v === "false" || v === "no" || v === "off") return true;
 		}
 		const raw = (import.meta as any)?.env?.VITE_HIDE_PASSWORD_LOGIN;
-		if (raw === undefined || raw === null || String(raw).trim() === "") return true; // 默认隐藏
+		if (raw === undefined || raw === null || String(raw).trim() === "") return false; // 默认显示账号/密码
 		const v = String(raw).trim().toLowerCase();
 		return v !== "0" && v !== "false";
 	})();

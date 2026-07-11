@@ -86,4 +86,28 @@ describe("dimension candidate gate", () => {
 		expect(result.status).toBe("blocked");
 		expect(result.reason).toContain("字段");
 	});
+
+	it("blocks a planning draft without a subject domain", () => {
+		const result = resolveDimensionCandidateGate({
+			planningContext: { ...planningContext, domainId: "" },
+			planningSource: "session",
+			standardDraftId: "draft-1",
+			standardFieldCount: 3,
+		});
+
+		expect(result.status).toBe("blocked");
+		expect(result.reason).toContain("主题域");
+	});
+
+	it("blocks a planning draft outside DWD dimension mode", () => {
+		const result = resolveDimensionCandidateGate({
+			planningContext: { ...planningContext, warehouseLayer: "DWS" },
+			planningSource: "session",
+			standardDraftId: "draft-1",
+			standardFieldCount: 3,
+		});
+
+		expect(result.status).toBe("blocked");
+		expect(result.reason).toContain("DWD");
+	});
 });
