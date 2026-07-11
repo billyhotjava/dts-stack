@@ -61,3 +61,19 @@
 **统计**: READY=0, IN_PROGRESS=0, DONE=12, BLOCKED=0
 
 **目录**: `worklog/todo/sprint-63-202607-warehouse-planning-standard-dimension-loop/`
+
+## Sprint-64: 数仓规划能力升维——业务过程、分层注册、粒度与总线矩阵 (202607)
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-业务过程管理 | 3 | READY |
+| F2-分层注册表与依赖红线 | 3 | READY |
+| F3-粒度声明与建模门禁 | 3 | READY |
+| F4-一致性维度登记与总线矩阵 | 3 | READY |
+| F5-规划升维闭环验证 | 3 | READY |
+
+**统计**: READY=15, IN_PROGRESS=0, DONE=0, BLOCKED=0
+
+**目录**: `worklog/todo/sprint-64-202607-planning-process-layer-grain-busmatrix/`
+
+**来源**: 对标 DataWorks 智能建模四模块的数仓规划差距分析（业务过程/分层设计/概念维度缺失）；设计要点与 API 缺口表见 sprint 目录 `assets/design-notes.md`。依赖：Sprint-63 F1-F3 先行完成。
