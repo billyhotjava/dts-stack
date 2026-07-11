@@ -23,6 +23,8 @@ const elementsPage = readFileSync(new URL("../governance/ElementsPage.tsx", impo
 const standardPackagePage = readFileSync(new URL("../foundation/StandardPackagePage.tsx", import.meta.url), "utf8");
 const referenceCodesPage = readFileSync(new URL("../governance/ReferenceCodesPage.tsx", import.meta.url), "utf8");
 const platformApi = readFileSync(new URL("../../api/platformApi.ts", import.meta.url), "utf8");
+const sprint64Api = readFileSync(new URL("../../api/sprint64GovernanceApi.ts", import.meta.url), "utf8");
+const workbenchPage = readFileSync(new URL("../workbench/DataManagementWorkbenchPage.tsx", import.meta.url), "utf8");
 
 test("data development workbench routes converge on existing pages", () => {
 	assert.match(menuSeed, /"title": "维度建模"[\s\S]*?"externalLink": "\/studio\/low-code-development"/);
@@ -42,6 +44,12 @@ test("data development workbench routes converge on existing pages", () => {
 	assert.match(dynamicResolver, /"\/modeling\/dbt-files": "\/pages\/modeling\/DbtFileBrowserPage"/);
 	assert.match(dynamicResolver, /"\/governance\/standards\/elements": "\/pages\/governance\/ElementsPage"/);
 	assert.match(dynamicResolver, /"\/governance\/standards\/reference": "\/pages\/governance\/ReferenceCodesPage"/);
+});
+
+test("workbench consumes the backend-owned Sprint 64 layer registry", () => {
+	assert.match(sprint64Api, /listWarehouseLayersApi/);
+	assert.match(workbenchPage, /listWarehouseLayersApi/);
+	assert.match(workbenchPage, /WAREHOUSE_LAYER_PLAN/);
 });
 
 test("sql modeling page exposes stable workbench actions for standard and dbt linkage", () => {

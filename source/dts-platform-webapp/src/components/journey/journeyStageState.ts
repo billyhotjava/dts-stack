@@ -87,6 +87,7 @@ const PARAM_LABELS: Record<JourneyContextParamKey, string> = {
 	sourceId: "数据源",
 	planningId: "规划",
 	domainId: "主题域",
+	processId: "业务过程",
 	warehouseLayer: "数仓层",
 	modelingMode: "建模模式",
 	standardDraftId: "标准草稿",

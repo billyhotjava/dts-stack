@@ -170,4 +170,5 @@
     <include file="config/liquibase/changelog/20260702_01_standard_package_import_run.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260702_02_standard_package_import_run_item.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260709_01_standard_binding_draft.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260711_01_sprint64_governance.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

@@ -5,6 +5,7 @@ import {
 	Badge,
 	Button,
 	Card,
+	Checkbox,
 	Divider,
 	Form,
 	Input,
@@ -22,6 +23,16 @@ import { useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { createDomain, deleteDomain, getDomainAssetStats, getDomainIndicatorStats, getDomainTree, updateDomain } from "@/api/platformApi";
+import {
+	createBusinessProcessApi,
+	deleteBusinessProcessApi,
+	listBusMatrixApi,
+	listConformedDimensionsApi,
+	listBusinessProcessesApi,
+	saveBusMatrixLinkApi,
+	type Sprint64BusinessProcess,
+	type Sprint64ConformedDimension,
+} from "@/api/sprint64GovernanceApi";
 import { useRouter } from "@/routes/hooks";
 import { normalizeText } from "@/utils/textUtils";
 import {
@@ -31,6 +42,16 @@ import {
 	resolveWarehousePlanningStatus,
 	saveWarehousePlanningContext,
 } from "./warehousePlanningContext";
+import {
+	BUSINESS_PROCESS_SEEDS,
+	adoptBusinessProcessSeeds,
+	createBusinessProcess,
+	loadBusinessProcesses,
+	removeBusinessProcess,
+	saveBusinessProcesses,
+	type BusinessProcess,
+} from "./businessProcess";
+import { dimensionsForDomain, loadBusMatrix, toggleBusMatrixLink, type BusMatrix, type ConformedDimension } from "./conformedDimensions";
 
 const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -118,6 +139,27 @@ const toTreeNodes = (nodes: DomainNode[]): DataNode[] =>
 		children: node.children ? toTreeNodes(node.children) : undefined,
 	}));
 
+const toBusinessProcess = (item: Sprint64BusinessProcess, domainId: string): BusinessProcess => {
+	const timestamp = item.updatedAt || item.createdAt || new Date().toISOString();
+	return {
+		version: 1,
+		processId: item.processId,
+		domainId: item.domainId || domainId,
+		name: item.name,
+		description: item.description || undefined,
+		createdAt: item.createdAt || timestamp,
+		updatedAt: timestamp,
+	};
+};
+
+const toConformedDimension = (item: Sprint64ConformedDimension): ConformedDimension => ({
+	version: 1,
+	dimensionId: item.dimensionId,
+	name: item.name,
+	sourceModel: item.sourceModel,
+	domainIds: item.domainIds,
+});
+
 export default function SubjectAreasPage() {
 	const [searchParams, setSearchParams] = useSearchParams();
 	const [keyword, setKeyword] = useState(searchParams.get("keyword") || "");
@@ -140,6 +182,12 @@ export default function SubjectAreasPage() {
 		qualityRuleCount: number | null;
 	} | null>(null);
 	const [statsLoading, setStatsLoading] = useState(false);
+	const [businessProcesses, setBusinessProcesses] = useState<BusinessProcess[]>([]);
+	const [processModalOpen, setProcessModalOpen] = useState(false);
+	const [processSaving, setProcessSaving] = useState(false);
+	const [processForm] = Form.useForm();
+	const [busMatrix, setBusMatrix] = useState<BusMatrix | null>(null);
+	const [conformedDimensionCatalog, setConformedDimensionCatalog] = useState<ConformedDimension[]>([]);
 
 	const syncQuery = (patch?: { keyword?: string; active?: string }) => {
 		const params = new URLSearchParams(searchParams);
@@ -251,6 +299,47 @@ export default function SubjectAreasPage() {
 	}, [activeDomain?.id]);
 
 	useEffect(() => {
+		if (!activeDomain?.id) {
+			setBusinessProcesses([]);
+			setBusMatrix(null);
+			setConformedDimensionCatalog([]);
+			return;
+		}
+		let cancelled = false;
+		const domainId = activeDomain.id;
+		const sessionProcesses = loadBusinessProcesses(domainId);
+		setBusinessProcesses(sessionProcesses);
+		setBusMatrix(loadBusMatrix(domainId));
+		setConformedDimensionCatalog(dimensionsForDomain(domainId));
+		void Promise.all([listBusinessProcessesApi(domainId), listConformedDimensionsApi(domainId), listBusMatrixApi(domainId)])
+			.then(([apiProcesses, apiDimensions, apiLinks]) => {
+				if (cancelled) return;
+				const remoteProcesses = Array.isArray(apiProcesses) ? apiProcesses : [];
+				const remoteDimensions = Array.isArray(apiDimensions) ? apiDimensions : [];
+				const remoteLinks = Array.isArray(apiLinks) ? apiLinks : [];
+				if (remoteProcesses.length) {
+					const processes = remoteProcesses.map((item) => toBusinessProcess(item, domainId));
+					setBusinessProcesses(processes);
+					saveBusinessProcesses(domainId, processes);
+				}
+				if (remoteDimensions.length) setConformedDimensionCatalog(remoteDimensions.map((item) => toConformedDimension(item)));
+				if (remoteLinks.length) {
+					const links = remoteLinks.reduce<Record<string, string[]>>((acc, item) => {
+						if (item.enabled) acc[item.processId] = [...(acc[item.processId] || []), item.dimensionId];
+						return acc;
+					}, {});
+					setBusMatrix({ version: 1, domainId, links, updatedAt: new Date().toISOString() });
+				}
+			})
+			.catch(() => {
+				// Session state remains the offline fallback when the platform API is unavailable.
+			});
+		return () => {
+				cancelled = true;
+			};
+	}, [activeDomain?.id]);
+
+	useEffect(() => {
 		syncQuery();
 	}, [keyword, selectedKey]);
 
@@ -266,6 +355,120 @@ export default function SubjectAreasPage() {
 		];
 	}, [filteredTree]);
 	const activeChildren = activeDomain?.children || [];
+	const conformedDimensions = conformedDimensionCatalog;
+	const processDimensionIds = (processId: string) => new Set(busMatrix?.links[processId] || []);
+	const openProcessModal = (preset?: Partial<BusinessProcess>) => {
+		processForm.resetFields();
+		processForm.setFieldsValue({
+			processId: preset?.processId || "",
+			name: preset?.name || "",
+			description: preset?.description || "",
+		});
+		setProcessModalOpen(true);
+	};
+	const adoptSeeds = async () => {
+		if (!activeDomain?.id) return;
+		const domainId = activeDomain.id;
+		const localNext = adoptBusinessProcessSeeds(domainId, businessProcesses);
+		try {
+			const known = new Set(businessProcesses.map((item) => item.processId));
+			await Promise.all(
+				BUSINESS_PROCESS_SEEDS.filter((seed) => !known.has(seed.processId)).map((seed) =>
+					createBusinessProcessApi(domainId, seed),
+				),
+			);
+			const remote = await listBusinessProcessesApi(domainId);
+			const next = remote.length ? remote.map((item) => toBusinessProcess(item, domainId)) : localNext;
+			setBusinessProcesses(next);
+			saveBusinessProcesses(domainId, next);
+		} catch {
+			setBusinessProcesses(localNext);
+		}
+		toast.success(`已采用 ${BUSINESS_PROCESS_SEEDS.length} 条业务过程示例`);
+	};
+	const submitProcess = async () => {
+		if (!canManage || !activeDomain?.id) return;
+		setProcessSaving(true);
+		try {
+			const values = await processForm.validateFields();
+			const processId = normalizeText(values.processId).toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
+			if (businessProcesses.some((item) => item.processId === processId)) throw new Error("业务过程编码已存在");
+			const localProcess = createBusinessProcess({
+				processId,
+				domainId: activeDomain.id,
+				name: normalizeText(values.name),
+				description: normalizeText(values.description) || undefined,
+			});
+			let next = [...businessProcesses, localProcess];
+			try {
+				const saved = await createBusinessProcessApi(activeDomain.id, {
+					processId,
+					name: localProcess.name,
+					description: localProcess.description,
+				});
+				next = [...businessProcesses, toBusinessProcess(saved, activeDomain.id)];
+			} catch {
+				// Keep the session draft usable when the backend is not reachable yet.
+			}
+			if (!saveBusinessProcesses(activeDomain.id, next)) throw new Error("业务过程草稿保存失败");
+			setBusinessProcesses(next);
+			setProcessModalOpen(false);
+			toast.success("业务过程已创建");
+		} catch (err: any) {
+			if (!err?.errorFields) toast.error(err?.message || "业务过程保存失败");
+		} finally {
+			setProcessSaving(false);
+		}
+	};
+	const startProcessPlanning = (process: BusinessProcess) => {
+		if (!activeDomain?.id) return;
+		const context = createWarehousePlanningContext({
+			planningId: `warehouse-plan-${activeDomain.id}-${process.processId}-${Date.now()}`,
+			domainId: activeDomain.id,
+			domainName: activeDomain.name,
+			processId: process.processId,
+			warehouseLayer: "DWD",
+			modelingMode: "dimension",
+			sourceId: searchParams.get("sourceId") || planningResolution.context?.sourceId,
+		});
+		if (!saveWarehousePlanningContext(context)) {
+			toast.error("规划草稿保存失败，请检查浏览器会话存储后重试");
+			return;
+		}
+		router.push(buildPlanningRoute("/governance/standards/elements?bindingDraft=1", context));
+	};
+	const deleteProcess = (process: BusinessProcess) => {
+		if (!activeDomain?.id || !canManage) return;
+		const domainId = activeDomain.id;
+		Modal.confirm({
+			title: "删除业务过程？",
+			content: `删除“${process.name}”后，当前 session 草稿中的矩阵勾选也会失去业务锚点。`,
+			okText: "删除",
+			cancelText: "取消",
+			onOk: async () => {
+				const next = businessProcesses.filter((item) => item.processId !== process.processId);
+				try {
+					await deleteBusinessProcessApi(domainId, process.processId);
+				} catch {
+					// Deleting a local draft is still safe if the remote service is unavailable.
+				}
+				removeBusinessProcess(domainId, process.processId);
+				setBusinessProcesses(next);
+			},
+		});
+	};
+	const toggleMatrix = (processId: string, dimensionId: string) => {
+		if (!activeDomain?.id) return;
+		const next = toggleBusMatrixLink(activeDomain.id, processId, dimensionId);
+		setBusMatrix(next);
+		void saveBusMatrixLinkApi(activeDomain.id, {
+			processId,
+			dimensionId,
+			enabled: next.links[processId]?.includes(dimensionId) || false,
+		}).catch(() => {
+			// Session state remains the immediate UI source of truth during API outages.
+		});
+	};
 	const continueDimensionPlanning = () => {
 		if (!activeDomain?.id) return;
 		const context =
@@ -274,6 +477,7 @@ export default function SubjectAreasPage() {
 				planningId: `warehouse-plan-${activeDomain.id}-${Date.now()}`,
 				domainId: activeDomain.id,
 				domainName: activeDomain.name,
+				processId: searchParams.get("processId") || planningResolution.context?.processId,
 				warehouseLayer: "DWD",
 				modelingMode: "dimension",
 				sourceId: searchParams.get("sourceId") || planningResolution.context?.sourceId,
@@ -487,10 +691,81 @@ export default function SubjectAreasPage() {
 											? "重新确认规划"
 											: activePlanningContext
 												? "继续标准落标"
-												: "创建规划并落标"}
+										: "创建规划并落标"}
 									</Button>
 								}
 							/>
+
+							<Card
+								className="border-slate-200"
+								title="业务过程"
+								extra={
+									<Space>
+										<Button size="small" onClick={adoptSeeds} disabled={!canManage}>
+											{businessProcesses.length ? "补充示例" : "从示例创建"}
+										</Button>
+										<Button size="small" type="primary" onClick={() => openProcessModal()} disabled={!canManage}>
+											新增业务过程
+										</Button>
+									</Space>
+								}
+							>
+								{businessProcesses.length ? (
+									<Space direction="vertical" className="w-full" size="middle">
+										{businessProcesses.map((process) => (
+											<div key={process.processId} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+												<div className="flex flex-wrap items-start justify-between gap-3">
+													<div>
+														<div className="font-semibold text-slate-900">{process.name}</div>
+														<div className="mt-1 text-xs text-slate-500">{process.processId}</div>
+														{process.description ? <div className="mt-1 text-sm text-slate-600">{process.description}</div> : null}
+													</div>
+													<Space size={4}>
+														<Button size="small" type="link" onClick={() => startProcessPlanning(process)}>
+															发起规划
+														</Button>
+														<Button size="small" danger type="link" onClick={() => deleteProcess(process)} disabled={!canManage}>
+															删除
+														</Button>
+													</Space>
+												</div>
+											</div>
+										))}
+									</Space>
+								) : (
+										<EmptyState title="暂无业务过程" description="业务过程是事实建模的锚点，可从 PJM 示例开始。" actions={<Button onClick={adoptSeeds} disabled={!canManage}>从示例创建</Button>} />
+								)}
+							</Card>
+
+							<Card
+								className="border-slate-200"
+								title="总线矩阵"
+								extra={<Text type="secondary">业务过程 × 一致性维度</Text>}
+							>
+								{businessProcesses.length && conformedDimensions.length ? (
+									<div className="overflow-x-auto">
+										<table className="min-w-full text-sm">
+											<thead>
+												<tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+													<th className="px-3 py-2">业务过程</th>
+													{conformedDimensions.map((dimension) => <th key={dimension.dimensionId} className="px-3 py-2 whitespace-nowrap">{dimension.name}</th>)}
+												</tr>
+											</thead>
+											<tbody>
+												{businessProcesses.map((process) => {
+													const selectedDimensions = processDimensionIds(process.processId);
+													return <tr key={process.processId} className="border-b border-slate-100">
+														<td className="px-3 py-2 font-medium text-slate-800">{process.name}</td>
+														{conformedDimensions.map((dimension) => <td key={dimension.dimensionId} className="px-3 py-2"><Checkbox checked={selectedDimensions.has(dimension.dimensionId)} onChange={() => toggleMatrix(process.processId, dimension.dimensionId)} /></td>)}
+													</tr>;
+												})}
+											</tbody>
+										</table>
+									</div>
+								) : (
+									<EmptyState title="矩阵尚未形成" description="先创建业务过程，登记后即可勾选可复用维度。" />
+								)}
+							</Card>
 
 							<div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
 								<div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
@@ -605,6 +880,31 @@ export default function SubjectAreasPage() {
 					</Form.Item>
 					<Form.Item name="description" label="说明">
 						<Input.TextArea rows={3} placeholder="主题域描述" />
+					</Form.Item>
+				</Form>
+			</Modal>
+			<Modal
+				open={processModalOpen}
+				title="新增业务过程"
+				onCancel={() => setProcessModalOpen(false)}
+				onOk={submitProcess}
+				okText="保存过程"
+				cancelText="取消"
+				confirmLoading={processSaving}
+			>
+				<Form layout="vertical" form={processForm}>
+					<Form.Item name="name" label="业务过程名称" rules={[{ required: true, message: "请输入业务过程名称" }]}>
+						<Input placeholder="例如：节点计划闭环" />
+					</Form.Item>
+					<Form.Item
+							name="processId"
+							label="业务过程编码"
+							rules={[{ required: true, message: "请输入业务过程编码" }, { min: 2, max: 64, message: "编码长度为 2-64 位" }, { pattern: /^[a-z0-9][a-z0-9_-]*$/, message: "仅支持小写字母、数字、下划线和连字符，且必须以字母或数字开头" }]}
+					>
+						<Input placeholder="node-plan-loop" />
+					</Form.Item>
+					<Form.Item name="description" label="过程说明">
+						<Input.TextArea rows={3} placeholder="说明过程边界、开始和结束条件" />
 					</Form.Item>
 				</Form>
 			</Modal>

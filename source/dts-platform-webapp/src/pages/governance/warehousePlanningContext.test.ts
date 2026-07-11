@@ -24,6 +24,7 @@ const baseInput = {
 	planningId: "plan-1",
 	domainId: "domain-1",
 	domainName: "客户域",
+	processId: "node-plan-loop",
 	warehouseLayer: "DWD" as const,
 	modelingMode: "dimension" as const,
 };
@@ -36,6 +37,7 @@ describe("warehouse planning context", () => {
 			version: WAREHOUSE_PLANNING_CONTEXT_VERSION,
 			planningId: "plan-1",
 			domainId: "domain-1",
+			processId: "node-plan-loop",
 			warehouseLayer: "DWD",
 			modelingMode: "dimension",
 			createdAt: "2026-07-11T01:00:00.000Z",
@@ -74,6 +76,7 @@ describe("warehouse planning context", () => {
 		expect(params.get("warehouseLayer")).toBe("DWD");
 		expect(params.get("modelingMode")).toBe("dimension");
 		expect(params.get("sourceId")).toBe("source-1");
+		expect(params.get("processId")).toBe("node-plan-loop");
 	});
 
 	it("blocks a URL route when its planning draft is no longer in session storage", () => {

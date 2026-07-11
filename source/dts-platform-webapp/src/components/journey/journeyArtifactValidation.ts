@@ -26,6 +26,7 @@ export const ARTIFACT_VALIDATION_API_NAMES: Record<JourneyContextParamKey, strin
 	sourceId: "GET /api/infra/data-sources/{id}",
 	planningId: "GET /api/governance/warehouse-plannings/{id}",
 	domainId: "GET /api/governance/subject-domains/{id}",
+	processId: "GET /api/governance/subject-domains/{domainId}/processes/{processId}",
 	warehouseLayer: "GET /api/governance/warehouse-plannings/{id}",
 	modelingMode: "GET /api/modeling/models/{id}",
 	standardDraftId: "GET /api/modeling/standard-binding-drafts/{id}",

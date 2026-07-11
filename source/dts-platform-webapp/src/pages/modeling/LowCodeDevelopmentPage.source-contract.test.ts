@@ -85,3 +85,12 @@ test("low-code development exposes standard draft field gaps and provenance", ()
 	assert.match(PAGE, /待补标准|缺失标准/);
 	assert.match(PAGE, /createdAt|创建时间/);
 });
+
+test("low-code dimension modeling exposes process and grain declaration gates", () => {
+	assert.match(PAGE, /processId/);
+	assert.match(PAGE, /grainDeclaration/);
+	assert.match(PAGE, /resolveGrainDeclaration/);
+	assert.match(PAGE, /validateGrainApi/);
+	assert.match(PAGE, /粒度语句/);
+	assert.match(PAGE, /粒度键/);
+});

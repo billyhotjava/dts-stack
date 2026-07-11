@@ -24,6 +24,13 @@ describe("journey context params utilities", () => {
 			modelingMode: "dimension",
 		});
 		expect(JOURNEY_CONTEXT_PARAM_KEYS).toContain("planningId");
+		expect(params.processId).toBeUndefined();
+		expect(JOURNEY_CONTEXT_PARAM_KEYS).toContain("processId");
+	});
+
+	it("preserves process context when building journey routes", () => {
+		const params = extractJourneyContextParams(new URLSearchParams("journey=e2e-data-product&processId=node-plan-loop"));
+		expect(params.processId).toBe("node-plan-loop");
 	});
 
 	it("builds a clear url that drops the target param but keeps the journey and the rest", () => {

@@ -3,6 +3,7 @@ import {
 	type WarehousePlanningContext,
 	type WarehousePlanningSource,
 } from "../governance/warehousePlanningContext";
+import { resolveGrainDeclaration, type GrainDeclaration } from "./grainDeclaration";
 
 export type DimensionCandidateGateStatus = "ready" | "missing" | "blocked";
 
@@ -12,6 +13,9 @@ export type DimensionCandidateGateInput = {
 	planningBlockedReason?: string;
 	standardDraftId?: string | null;
 	standardFieldCount: number;
+	grainRequired?: boolean;
+	grainDeclaration?: GrainDeclaration;
+	grainFieldNames?: string[];
 };
 
 export type DimensionCandidateGateResult = {
@@ -34,6 +38,9 @@ export const resolveDimensionCandidateGate = ({
 	planningBlockedReason,
 	standardDraftId,
 	standardFieldCount,
+	grainRequired = false,
+	grainDeclaration,
+	grainFieldNames = [],
 }: DimensionCandidateGateInput): DimensionCandidateGateResult => {
 	if (planningBlockedReason) {
 		return {
@@ -69,6 +76,16 @@ export const resolveDimensionCandidateGate = ({
 			reason: "当前规划不是 DWD 维度建模模式",
 			repairRoute: planningRepairRoute(planningContext),
 		};
+	}
+	if (grainRequired) {
+		const grainGate = resolveGrainDeclaration(grainDeclaration, grainFieldNames);
+		if (grainGate.status !== "ready") {
+			return {
+				status: grainGate.status,
+				reason: grainGate.reason,
+				repairRoute: planningRepairRoute(planningContext),
+			};
+		}
 	}
 	if (!standardDraftId || !planningContext.standardDraftId) {
 		return {

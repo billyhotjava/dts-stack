@@ -20,3 +20,18 @@ test("subject area planning exposes blocked and restore states", () => {
 	assert.match(source, /规划草稿已失效|规划上下文不可用|重新确认规划/);
 	assert.match(source, /维度建模/);
 });
+
+test("subject area details expose business processes and process planning entry", () => {
+	assert.match(source, /businessProcess/);
+	assert.match(source, /业务过程/);
+	assert.match(source, /从示例创建|采用示例/);
+	assert.match(source, /processId/);
+	assert.match(source, /发起规划/);
+});
+
+test("subject area details expose the process by conformed-dimension bus matrix", () => {
+	assert.match(source, /conformedDimensions/);
+	assert.match(source, /总线矩阵/);
+	assert.match(source, /toggleBusMatrixLink/);
+	assert.match(source, /Checkbox/);
+});

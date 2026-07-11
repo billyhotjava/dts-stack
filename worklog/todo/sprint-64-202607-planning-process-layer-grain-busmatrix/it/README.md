@@ -9,11 +9,11 @@
 
 ## Source Contract
 
-- [ ] 业务过程创建/恢复/降级；processId 旅程透传与快照回归。
-- [ ] 分层注册表结构完整（5 层×职责×allowedUpstream×前缀）；workbench 消费注册表而非硬编码。
-- [ ] 依赖红线校验：合法流向 ready、违规流向（如 ADS←ODS）blocked 且给原因。
-- [ ] grain 门禁：无声明 blocked、声明后 ready；grainKeys 为空视为未声明。
-- [ ] 一致性维度种子 8 项齐全；矩阵勾选可保存恢复；建模页复用推荐渲染。
+- [x] 业务过程创建/恢复/降级；processId 旅程透传与快照回归。
+- [x] 分层注册表结构完整（5 层×职责×allowedUpstream×前缀）；workbench 消费 API 注册表并保留静态回退。
+- [x] 依赖红线校验：合法流向 ready、违规流向（如 ADS←ODS）blocked 且给原因。
+- [x] grain 门禁：无声明 blocked、声明后 ready；grainKeys 为空视为未声明。
+- [x] 一致性维度种子 8 项齐全；矩阵勾选可保存恢复；建模页复用推荐渲染。
 
 ## Browser Smoke（挂靠 Sprint-61 F9）
 
@@ -23,4 +23,7 @@
 
 ## 证据记录
 
-实现过程中按任务追加 RED/GREEN、命令输出摘要与 blocker。
+- RED：新增四个前端契约测试、API 客户端测试、LowCode/SQL/Workbench source-contract 测试，以及 `Sprint64GovernanceContractTest`；均先在缺少实现时失败。
+- GREEN：前端 `node --experimental-strip-types --test` 契约套件通过；Vitest journey/API/dimension gate 共 26+ 测试通过；`LEGACY_BROWSER_BUILD=1 pnpm exec tsc --noEmit` 通过。
+- Backend：`./mvnw -Dtest=Sprint64GovernanceContractTest,Sprint64GovernanceResourceTest test` 通过（4 tests）；Liquibase XML 已通过 `xmllint`。
+- Runtime：API 失败时 UI 保留 session 回退，等待部署环境执行真实迁移与浏览器 smoke。

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Button, Card, Space, Tag, Typography } from "antd";
+import { Alert, Button, Card, Input, Select, Space, Tag, Typography } from "antd";
 import type { LucideIcon } from "lucide-react";
 import {
 	Activity,
@@ -22,11 +22,13 @@ import {
 } from "@/components/journey";
 import { useRouter, useSearchParams } from "@/routes/hooks";
 import { getStandardBindingDraftSnapshot } from "@/api/platformApi";
+import { validateGrainApi } from "@/api/sprint64GovernanceApi";
 import {
 	buildPlanningRoute,
 	resolveWarehousePlanningContext,
 } from "../governance/warehousePlanningContext";
 import { resolveDimensionCandidateGate } from "./dimensionCandidateGate";
+import { resolveGrainDeclaration, type GrainDeclaration } from "./grainDeclaration";
 import {
 	buildStandardBindingDraftSummary,
 	getStandardBindingDraft,
@@ -181,6 +183,16 @@ export default function LowCodeDevelopmentPage() {
 		return { label: "待确认", description: "已选择数据源，请完成一次同步验证。", ready: false };
 	}, [searchParams]);
 	const standardDraftSummary = useMemo(() => buildStandardBindingDraftSummary(standardDraft), [standardDraft]);
+	const processId = planningContext?.processId || searchParams.get("processId") || "";
+	const grainFieldNames = useMemo(
+		() => (standardDraft?.fields || []).map((field) => String(field.columnName || "").trim()).filter(Boolean),
+		[standardDraft],
+	);
+	const [grainStatement, setGrainStatement] = useState("");
+	const [grainKeys, setGrainKeys] = useState<string[]>([]);
+	const [grainValidationMessage, setGrainValidationMessage] = useState("");
+	const grainDeclaration: GrainDeclaration = { statement: grainStatement, grainKeys };
+	const grainGate = useMemo(() => resolveGrainDeclaration(grainDeclaration, grainFieldNames), [grainFieldNames, grainKeys, grainStatement]);
 	const candidateGate = useMemo(
 		() =>
 			resolveDimensionCandidateGate({
@@ -189,10 +201,26 @@ export default function LowCodeDevelopmentPage() {
 				planningBlockedReason: planningResolution.status === "blocked" ? planningResolution.reason : undefined,
 				standardDraftId,
 				standardFieldCount: standardDraft?.fields.length ?? 0,
+				grainRequired: dimensionMode,
+				grainDeclaration,
+				grainFieldNames,
 			}),
-		[planningContext, planningResolution.reason, planningResolution.source, planningResolution.status, standardDraft, standardDraftId],
+		[dimensionMode, grainDeclaration, grainFieldNames, planningContext, planningResolution.reason, planningResolution.source, planningResolution.status, standardDraft, standardDraftId],
 	);
 	const candidateRepairRoute = candidateGate.repairRoute;
+	const dimensionModelReady = candidateGate.status === "ready" && (!dimensionMode || grainGate.status === "ready");
+	const checkGrainDeclaration = async () => {
+		if (!grainFieldNames.length) {
+			setGrainValidationMessage("请先接入标准落标草稿，系统才能校验粒度键。");
+			return;
+		}
+		try {
+			const result = await validateGrainApi({ warehouseLayer: "DWD", statement: grainStatement, grainKeys });
+			setGrainValidationMessage(result.message);
+		} catch {
+			setGrainValidationMessage(grainGate.reason);
+		}
+	};
 
 	useEffect(() => {
 		let cancelled = false;
@@ -269,6 +297,38 @@ export default function LowCodeDevelopmentPage() {
 						) : undefined
 					}
 				/>
+			) : null}
+			{dimensionMode ? (
+				<Card size="small" data-testid="grain-declaration" title="DWD 粒度声明">
+					<Space direction="vertical" className="w-full" size="small">
+						<Text type="secondary">
+							业务过程：{processId || "未绑定"} · 粒度是模型发布的硬门禁，必须说明“一行代表什么”并绑定字段键。
+						</Text>
+						<Input.TextArea
+							rows={2}
+							placeholder="粒度语句，例如：一行代表一个节点在一个计划周期内的当前状态"
+							value={grainStatement}
+							onChange={(event) => setGrainStatement(event.target.value)}
+						/>
+						<Select
+							mode="multiple"
+							className="w-full"
+							placeholder="选择粒度键"
+							value={grainKeys}
+							onChange={setGrainKeys}
+							options={grainFieldNames.map((field) => ({ label: field, value: field }))}
+						/>
+						<Space wrap>
+							<Tag color={grainGate.status === "ready" ? "green" : grainGate.status === "blocked" ? "red" : "orange"}>
+								{grainGate.status === "ready" ? "粒度已声明" : grainGate.reason}
+							</Tag>
+							<Button size="small" onClick={() => void checkGrainDeclaration()}>
+								校验粒度
+							</Button>
+							{grainValidationMessage ? <Text type="secondary">{grainValidationMessage}</Text> : null}
+						</Space>
+					</Space>
+				</Card>
 			) : null}
 			{standardDraft ? (
 				<Alert
@@ -362,13 +422,13 @@ export default function LowCodeDevelopmentPage() {
 								<div className="mt-auto flex flex-wrap gap-2">
 									<Button
 										type="primary"
-									disabled={step.key === "model_candidate" && (!ingestionReadiness.ready || (dimensionMode && candidateGate.status !== "ready"))}
+											disabled={step.key === "model_candidate" && (!ingestionReadiness.ready || (dimensionMode && !dimensionModelReady))}
 									title={
 										step.key === "model_candidate"
 											? !ingestionReadiness.ready
 												? ingestionReadiness.description
-												: dimensionMode && candidateGate.status !== "ready"
-													? candidateGate.reason
+													: dimensionMode && !dimensionModelReady
+														? candidateGate.status !== "ready" ? candidateGate.reason : grainGate.reason
 													: undefined
 											: undefined
 									}

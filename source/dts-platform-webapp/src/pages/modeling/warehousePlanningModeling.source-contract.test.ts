@@ -22,3 +22,9 @@ test("SQL modeling presents a dimension draft with planning provenance and repai
 	assert.match(sqlModeling, /governance\/subjects/);
 	assert.match(sqlModeling, /buildPlanningRoute/);
 });
+
+test("SQL modeling exposes the DWD grain gate", () => {
+	assert.match(sqlModeling, /grainDeclaration/);
+	assert.match(sqlModeling, /validateGrainApi/);
+	assert.match(sqlModeling, /粒度语句/);
+});

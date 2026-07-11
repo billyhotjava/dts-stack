@@ -13,6 +13,7 @@ export type WarehousePlanningContext = {
 	planningId: string;
 	domainId: string;
 	domainName?: string;
+	processId?: string;
 	warehouseLayer: WarehouseLayer;
 	modelingMode: WarehouseModelingMode;
 	sourceId?: string;
@@ -86,8 +87,9 @@ const toContext = (value: Partial<WarehousePlanningContext>): WarehousePlanningC
 		? {
 				version: WAREHOUSE_PLANNING_CONTEXT_VERSION,
 				planningId: String(value.planningId),
-				domainId: String(value.domainId),
-				domainName: value.domainName ? String(value.domainName) : undefined,
+			domainId: String(value.domainId),
+			domainName: value.domainName ? String(value.domainName) : undefined,
+			processId: value.processId ? String(value.processId) : undefined,
 				warehouseLayer: value.warehouseLayer as WarehouseLayer,
 				modelingMode: "dimension",
 				sourceId: value.sourceId ? String(value.sourceId) : undefined,
@@ -110,6 +112,7 @@ export const createWarehousePlanningContext = (
 		planningId: input.planningId,
 		domainId: input.domainId,
 		domainName: input.domainName,
+		processId: input.processId,
 		warehouseLayer: input.warehouseLayer,
 		modelingMode: input.modelingMode,
 		sourceId: input.sourceId,
@@ -167,6 +170,7 @@ export const loadWarehousePlanningContext = (
 const planningRouteParams = (context: WarehousePlanningContext): Record<string, string> => ({
 	planningId: context.planningId,
 	domainId: context.domainId,
+	...(context.processId ? { processId: context.processId } : {}),
 	warehouseLayer: context.warehouseLayer,
 	modelingMode: context.modelingMode,
 	...(context.sourceId ? { sourceId: context.sourceId } : {}),
@@ -178,8 +182,9 @@ export const buildPlanningRoute = (route: string, context: WarehousePlanningCont
 
 const routePlanningParams = (searchParams: URLSearchParams) => ({
 	planningId: searchParams.get("planningId") || "",
-	domainId: searchParams.get("domainId") || "",
-	warehouseLayer: searchParams.get("warehouseLayer") || "",
+		domainId: searchParams.get("domainId") || "",
+		processId: searchParams.get("processId") || undefined,
+		warehouseLayer: searchParams.get("warehouseLayer") || "",
 	modelingMode: searchParams.get("modelingMode") || "",
 	sourceId: searchParams.get("sourceId") || undefined,
 	standardDraftId: searchParams.get("standardDraftId") || undefined,
@@ -190,6 +195,7 @@ const routeMatchesContext = (searchParams: URLSearchParams, context: WarehousePl
 	return (
 		(!route.planningId || route.planningId === context.planningId) &&
 		(!route.domainId || route.domainId === context.domainId) &&
+		(!route.processId || route.processId === context.processId) &&
 		(!route.warehouseLayer || route.warehouseLayer === context.warehouseLayer) &&
 		(!route.modelingMode || route.modelingMode === context.modelingMode)
 	);
@@ -211,6 +217,7 @@ const fallbackContextFromRoute = (searchParams: URLSearchParams): WarehousePlann
 		domainId: route.domainId,
 		warehouseLayer: route.warehouseLayer,
 		modelingMode: "dimension",
+		processId: route.processId,
 		sourceId: route.sourceId,
 		standardDraftId: route.standardDraftId,
 		createdAt: now,

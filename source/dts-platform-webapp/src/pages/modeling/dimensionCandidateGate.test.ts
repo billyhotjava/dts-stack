@@ -110,4 +110,28 @@ describe("dimension candidate gate", () => {
 		expect(result.status).toBe("blocked");
 		expect(result.reason).toContain("DWD");
 	});
+
+	it("requires a declared grain when the caller enables the grain gate", () => {
+		const missing = resolveDimensionCandidateGate({
+			planningContext,
+			planningSource: "session",
+			standardDraftId: "draft-1",
+			standardFieldCount: 3,
+			grainRequired: true,
+			grainFieldNames: ["node_id"],
+		});
+		expect(missing.status).toBe("missing");
+		expect(missing.reason).toContain("粒度");
+
+		const ready = resolveDimensionCandidateGate({
+			planningContext,
+			planningSource: "session",
+			standardDraftId: "draft-1",
+			standardFieldCount: 3,
+			grainRequired: true,
+			grainFieldNames: ["node_id"],
+			grainDeclaration: { statement: "一行代表一个节点", grainKeys: ["node_id"] },
+		});
+		expect(ready.status).toBe("ready");
+	});
 });

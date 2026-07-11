@@ -8,6 +8,7 @@ import {
 	Alert,
 	Badge,
 	Button,
+	Card,
 	Checkbox,
 	Divider,
 	Drawer,
@@ -76,6 +77,7 @@ import {
 	getRollbackAuditLog,
 	listMetadataStandards,
 } from "@/api/platformApi";
+import { validateGrainApi } from "@/api/sprint64GovernanceApi";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
 import BatchImportModal from "./BatchImportModal";
 import BatchDeleteResultModal from "./components/BatchDeleteResultModal";
@@ -176,6 +178,7 @@ import type {
 } from "./sqlModeling.types";
 import { resolveReleaseSubmitOutcome } from "./sqlModelReleaseSubmit.helpers";
 import { resolveDimensionCandidateGate } from "./dimensionCandidateGate";
+import { resolveGrainDeclaration, type GrainDeclaration } from "./grainDeclaration";
 
 import { normalizeText, formatDateTime } from "@/utils/textUtils";
 
@@ -359,6 +362,16 @@ export default function SqlModelingPage() {
 	const [standardGateResult, setStandardGateResult] = useState<SqlModelStandardGateResult | null>(null);
 	const [standardAutoMatching, setStandardAutoMatching] = useState(false);
 	const [standardBindingDraft, setStandardBindingDraft] = useState<StandardBindingDraft | null>(null);
+	const processId = planningContext?.processId || pageSearchParams.get("processId") || "";
+	const grainFieldNames = useMemo(
+		() => (standardBindingDraft?.fields || []).map((field) => String(field.columnName || "").trim()).filter(Boolean),
+		[standardBindingDraft],
+	);
+	const [grainStatement, setGrainStatement] = useState("");
+	const [grainKeys, setGrainKeys] = useState<string[]>([]);
+	const [grainValidationMessage, setGrainValidationMessage] = useState("");
+	const grainDeclaration: GrainDeclaration = { statement: grainStatement, grainKeys };
+	const grainGate = useMemo(() => resolveGrainDeclaration(grainDeclaration, grainFieldNames), [grainFieldNames, grainKeys, grainStatement]);
 	const dimensionCandidateGate = useMemo(
 		() =>
 			resolveDimensionCandidateGate({
@@ -367,9 +380,24 @@ export default function SqlModelingPage() {
 				planningBlockedReason: planningResolution.status === "blocked" ? planningResolution.reason : undefined,
 				standardDraftId,
 				standardFieldCount: standardBindingDraft?.fields.length ?? 0,
+				grainRequired: dimensionMode,
+				grainDeclaration,
+				grainFieldNames,
 			}),
-		[planningContext, planningResolution.reason, planningResolution.source, planningResolution.status, standardBindingDraft, standardDraftId],
+		[dimensionMode, grainDeclaration, grainFieldNames, planningContext, planningResolution.reason, planningResolution.source, planningResolution.status, standardBindingDraft, standardDraftId],
 	);
+	const checkGrainDeclaration = async () => {
+		if (!grainFieldNames.length) {
+			setGrainValidationMessage("请先接入标准落标草稿，系统才能校验粒度键。");
+			return;
+		}
+		try {
+			const result = await validateGrainApi({ warehouseLayer: "DWD", statement: grainStatement, grainKeys });
+			setGrainValidationMessage(result.message);
+		} catch {
+			setGrainValidationMessage(grainGate.reason);
+		}
+	};
 	const [standardDraftApplying, setStandardDraftApplying] = useState(false);
 	const [schemaYmlGenerating, setSchemaYmlGenerating] = useState(false);
 	const [bottomTab, setBottomTab] = useState("preview");
@@ -1750,6 +1778,10 @@ export default function SqlModelingPage() {
 			toast.error(dimensionCandidateGate.reason);
 			return;
 		}
+		if (dimensionMode && grainGate.status !== "ready") {
+			toast.error(grainGate.reason);
+			return;
+		}
 		const draftSql = buildSqlFromStandardBindingDraft(standardBindingDraft);
 		setEditingModel(null);
 		modelForm.resetFields();
@@ -2750,6 +2782,38 @@ export default function SqlModelingPage() {
 					}
 				/>
 			) : null}
+			{dimensionMode ? (
+				<Card size="small" data-testid="sql-grain-declaration" title="DWD 粒度声明" className="mb-4">
+					<Space direction="vertical" className="w-full" size="small">
+						<Text type="secondary">
+							业务过程：{processId || "未绑定"} · 当前模型发布前必须明确一行的业务含义和粒度键。
+						</Text>
+						<Input.TextArea
+							rows={2}
+							placeholder="粒度语句，例如：一行代表一个节点在一个计划周期内的当前状态"
+							value={grainStatement}
+							onChange={(event) => setGrainStatement(event.target.value)}
+						/>
+						<Select
+							mode="multiple"
+							className="w-full"
+							placeholder="选择粒度键"
+							value={grainKeys}
+							onChange={setGrainKeys}
+							options={grainFieldNames.map((field) => ({ label: field, value: field }))}
+						/>
+						<Space wrap>
+							<Tag color={grainGate.status === "ready" ? "green" : grainGate.status === "blocked" ? "red" : "orange"}>
+								{grainGate.status === "ready" ? "粒度已声明" : grainGate.reason}
+							</Tag>
+							<Button size="small" onClick={() => void checkGrainDeclaration()}>
+								校验粒度
+							</Button>
+							{grainValidationMessage ? <Text type="secondary">{grainValidationMessage}</Text> : null}
+						</Space>
+					</Space>
+				</Card>
+			) : null}
 			<div className="flex min-h-[calc(100vh-120px)] flex-col overflow-hidden rounded-[30px] border border-border/70 bg-card shadow-sm">
 			{/* 顶部工具栏 */}
 			<div className="flex h-14 items-center justify-between border-b border-border bg-card px-4">
@@ -3187,17 +3251,17 @@ export default function SqlModelingPage() {
 										<div className="mt-1 text-[11px] leading-5 text-blue-700">
 											标准来源：{standardDraftSummary.sourceLabel} · 字段 {standardDraftSummary.fieldCount} · 待补标准 {standardDraftSummary.missingStandardCount} · 创建时间 {standardDraftSummary.createdAt || "-"}
 										</div>
-										{dimensionMode ? (
-											<div className="mt-1 text-[11px] leading-5 text-blue-700">
-												规划来源：{planningContext?.planningId || "-"} · DWD · 主题域 {planningContext?.domainName || planningContext?.domainId || "-"}
-											</div>
+																		{dimensionMode ? (
+																			<div className="mt-1 text-[11px] leading-5 text-blue-700">
+																					规划来源：{planningContext?.planningId || "-"} · 业务过程 {processId || "-"} · DWD · 主题域 {planningContext?.domainName || planningContext?.domainId || "-"}
+																			</div>
 										) : null}
 													<Space size={4} wrap className="mt-2">
 														<Button
 															size="small"
 															type="primary"
-															disabled={dimensionMode && dimensionCandidateGate.status !== "ready"}
-															title={dimensionMode && dimensionCandidateGate.status !== "ready" ? dimensionCandidateGate.reason : undefined}
+																			disabled={dimensionMode && (dimensionCandidateGate.status !== "ready" || grainGate.status !== "ready")}
+																			title={dimensionMode && dimensionCandidateGate.status !== "ready" ? dimensionCandidateGate.reason : dimensionMode && grainGate.status !== "ready" ? grainGate.reason : undefined}
 															onClick={openCreateModelFromStandardDraft}
 														>
 															{dimensionMode ? "创建维度模型草稿" : "创建模型草稿"}

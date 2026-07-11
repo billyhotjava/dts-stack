@@ -29,6 +29,7 @@ import goldenChainService, {
 	type GoldenChainDetail,
 	type GoldenChainSummary,
 } from "@/api/services/goldenChainService";
+import { listWarehouseLayersApi } from "@/api/sprint64GovernanceApi";
 import {
 	buildDataManagementThemes,
 	type DataManagementThemeState,
@@ -144,6 +145,33 @@ export default function Page({
 	const [detailsByChainKey, setDetailsByChainKey] = useState<Record<string, GoldenChainDetail | undefined>>({});
 	const [selectedThemeKey, setSelectedThemeKey] = useState<string>("");
 	const [loading, setLoading] = useState(false);
+	const [warehouseLayerPlan, setWarehouseLayerPlan] = useState(WAREHOUSE_LAYER_PLAN);
+
+	useEffect(() => {
+		let cancelled = false;
+		void listWarehouseLayersApi()
+			.then((registry) => {
+				if (cancelled || !registry.length) return;
+				const routeMeta = new Map(WAREHOUSE_LAYER_PLAN.map((item) => [item.key, item]));
+				setWarehouseLayerPlan(
+					registry.map((item) => ({
+						...(routeMeta.get(item.code) || {
+							key: item.code,
+							route: "/governance/subjects",
+							action: "查看规划",
+						}),
+						title: item.title || item.code,
+						description: `${item.responsibility} 命名前缀：${item.namingPrefixes.join("、") || "平台默认"}`,
+					})),
+				);
+			})
+			.catch(() => {
+				// Keep the static plan as the offline fallback.
+			});
+		return () => {
+				cancelled = true;
+			};
+	}, []);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -461,7 +489,7 @@ export default function Page({
 					description="分层规划只表达当前阶段和下一步，不会在接入未完成时伪造模型已就绪。"
 				/>
 				<div className="mt-4 grid gap-3 xl:grid-cols-5 md:grid-cols-2">
-					{WAREHOUSE_LAYER_PLAN.map((layer) => (
+					{warehouseLayerPlan.map((layer) => (
 						<div key={layer.key} className="flex min-h-[168px] flex-col justify-between rounded border border-gray-200 p-3">
 							<div className="space-y-2">
 								<Tag color="blue">{layer.title}</Tag>
