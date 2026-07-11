@@ -47,7 +47,9 @@ public final class Sprint64GovernanceContract {
 
     public static boolean isLayerFlowAllowed(String upstream, String target) {
         Optional<WarehouseLayerDto> targetLayer = resolveLayer(target);
-        return targetLayer.isPresent() && resolveLayer(upstream).map(layer -> targetLayer.get().allowedUpstream().contains(layer.code())).orElse(false);
+        return targetLayer
+            .flatMap(targetValue -> resolveLayer(upstream).map(layer -> targetValue.allowedUpstream().contains(layer.code())))
+            .orElse(false);
     }
 
     public static List<ConformedDimensionDto> conformedDimensions() {
