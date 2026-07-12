@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
+import { useNavigate } from "react-router";
 import {
 	listSemanticModels,
 	createSemanticModel,
@@ -26,6 +27,7 @@ const REVIEW_STATUS_COLOR: Record<string, string> = {
 };
 
 export default function SemanticModelsPage() {
+	const navigate = useNavigate();
 	const [models, setModels] = useState<SemanticModel[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [typeFilter, setTypeFilter] = useState<ModelType>("ALL");
@@ -179,6 +181,28 @@ export default function SemanticModelsPage() {
 			}
 		>
 			<div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm" data-testid="semantic-models-page">
+				<div
+					className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-blue-100 bg-blue-50/40 px-3 py-2"
+					data-testid="semantic-model-ledger-links"
+				>
+					<div>
+						<div className="text-sm font-medium text-gray-900">模型台账 · 专业入口</div>
+						<div className="mt-1 text-xs text-gray-500">
+							台账记录模型归属、粒度和状态；字段标准、粒度关系与发布门禁在专业页面维护。
+						</div>
+					</div>
+					<Space size="small" wrap>
+						<Button size="small" onClick={() => navigate("/governance/standards/elements?from=model-ledger")}>
+							字段标准
+						</Button>
+						<Button size="small" onClick={() => navigate("/modeling/semantic/objects?from=model-ledger")}>
+							粒度与关系
+						</Button>
+						<Button size="small" onClick={() => navigate("/modeling/semantic/publish?from=model-ledger")}>
+							发布审核
+						</Button>
+					</Space>
+				</div>
 				<div className="mb-3 flex flex-wrap items-center justify-between gap-3">
 					<Radio.Group
 						value={typeFilter}

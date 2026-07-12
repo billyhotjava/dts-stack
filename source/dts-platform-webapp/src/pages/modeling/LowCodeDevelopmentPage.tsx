@@ -145,7 +145,7 @@ const CONSUMPTION_TARGETS = [
 ];
 
 const ADVANCED_LINKS = [
-	{ title: "项目空间管理", route: "/studio/projects" },
+	{ title: "业务过程管理", route: "/studio/projects" },
 	{ title: "逻辑建模（SQL）", route: "/studio/sql-modeling" },
 	{ title: "脚本开发", route: "/explore/etl/scripts" },
 	{ title: "任务编排", route: "/explore/etl/orchestration" },

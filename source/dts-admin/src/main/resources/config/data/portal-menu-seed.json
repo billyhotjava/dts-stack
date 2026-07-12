@@ -112,11 +112,11 @@
                   "externalLink": "/governance/subjects"
                 },
                 {
-                  "key": "projects",
-                  "path": "projects",
+                  "key": "business-processes",
+                  "path": "business-processes",
                   "icon": "solar:folder-with-files-bold-duotone",
-                  "titleKey": "sys.nav.portal.studioProjects",
-                  "title": "项目空间管理",
+                  "titleKey": "sys.nav.portal.studioBusinessProcesses",
+                  "title": "业务过程管理",
                   "externalLink": "/studio/projects"
                 }
               ]
@@ -178,14 +178,6 @@
               "title": "维度建模",
               "children": [
                 {
-                  "key": "low-code-development",
-                  "path": "low-code-development",
-                  "icon": "solar:magic-stick-3-bold-duotone",
-                  "titleKey": "sys.nav.portal.studioLowCodeDevelopment",
-                  "title": "低代码开发向导",
-                  "externalLink": "/studio/low-code-development"
-                },
-                {
                   "key": "sql",
                   "path": "sql-modeling",
                   "icon": "solar:documents-bold-duotone",
@@ -218,6 +210,14 @@
                   "externalLink": "/modeling/dbt-files"
                 }
               ]
+            },
+            {
+              "key": "low-code-development",
+              "path": "low-code-development",
+              "icon": "solar:magic-stick-3-bold-duotone",
+              "titleKey": "sys.nav.portal.studioLowCodeDevelopment",
+              "title": "低代码开发向导",
+              "externalLink": "/studio/low-code-development"
             },
             {
               "key": "data-metrics",

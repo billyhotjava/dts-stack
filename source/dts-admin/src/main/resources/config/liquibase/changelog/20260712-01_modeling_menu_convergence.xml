@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260712-01-modeling-menu-convergence" author="codex">
+        <preConditions onFail="MARK_RAN" onError="MARK_RAN">
+            <tableExists tableName="portal_menu"/>
+        </preConditions>
+
+        <comment>
+            Keep low-code development as a sibling of dimensional modeling and converge project-space management
+            under the business-process label. Existing menu ids and role bindings are preserved.
+        </comment>
+        <sql dbms="postgresql" splitStatements="false"><![CDATA[
+            DO $do$
+            DECLARE
+                studio_id BIGINT;
+                modeling_id BIGINT;
+                warehouse_planning_id BIGINT;
+                low_code_id BIGINT;
+                business_process_id BIGINT;
+            BEGIN
+                SELECT id INTO studio_id
+                FROM portal_menu
+                WHERE deleted = FALSE
+                  AND (name = 'sys.nav.portal.studioCenter' OR metadata LIKE '%"key":"studio"%')
+                ORDER BY id
+                LIMIT 1;
+
+                SELECT id INTO modeling_id
+                FROM portal_menu
+                WHERE deleted = FALSE
+                  AND (name = 'sys.nav.portal.studioDataModeling' OR metadata LIKE '%"key":"modeling"%')
+                ORDER BY CASE WHEN parent_id = studio_id THEN 0 ELSE 1 END, id
+                LIMIT 1;
+
+                SELECT id INTO warehouse_planning_id
+                FROM portal_menu
+                WHERE deleted = FALSE
+                  AND (name = 'sys.nav.portal.warehousePlanning' OR metadata LIKE '%"key":"warehouse-planning"%')
+                ORDER BY CASE WHEN parent_id = modeling_id THEN 0 ELSE 1 END, id
+                LIMIT 1;
+
+                SELECT id INTO low_code_id
+                FROM portal_menu
+                WHERE deleted = FALSE
+                  AND (name = 'sys.nav.portal.studioLowCodeDevelopment' OR metadata LIKE '%"key":"low-code-development"%')
+                ORDER BY id
+                LIMIT 1;
+
+                SELECT id INTO business_process_id
+                FROM portal_menu
+                WHERE deleted = FALSE
+                  AND (
+                      name IN ('sys.nav.portal.studioProjects', 'sys.nav.portal.studioBusinessProcesses')
+                      OR metadata LIKE '%"key":"projects"%'
+                      OR metadata LIKE '%"key":"business-processes"%'
+                  )
+                ORDER BY id
+                LIMIT 1;
+
+                IF low_code_id IS NOT NULL AND modeling_id IS NOT NULL THEN
+                    UPDATE portal_menu
+                    SET parent_id = modeling_id,
+                        path = 'studio/modeling/low-code-development',
+                        sort_order = 4,
+                        metadata = '{"key":"low-code-development","sectionKey":"studio","entryKey":"low-code-development","titleKey":"sys.nav.portal.studioLowCodeDevelopment","title":"低代码开发向导","icon":"solar:magic-stick-3-bold-duotone","externalLink":"/studio/low-code-development"}',
+                        icon = 'solar:magic-stick-3-bold-duotone',
+                        component = NULL,
+                        deleted = FALSE,
+                        last_modified_by = 'system',
+                        last_modified_date = now()
+                    WHERE id = low_code_id;
+                END IF;
+
+                IF business_process_id IS NOT NULL AND warehouse_planning_id IS NOT NULL THEN
+                    UPDATE portal_menu
+                    SET name = 'sys.nav.portal.studioBusinessProcesses',
+                        parent_id = warehouse_planning_id,
+                        path = 'studio/modeling/warehouse-planning/business-processes',
+                        sort_order = 2,
+                        metadata = '{"key":"business-processes","sectionKey":"studio","entryKey":"business-processes","titleKey":"sys.nav.portal.studioBusinessProcesses","title":"业务过程管理","icon":"solar:folder-with-files-bold-duotone","externalLink":"/studio/projects"}',
+                        icon = 'solar:folder-with-files-bold-duotone',
+                        component = NULL,
+                        deleted = FALSE,
+                        last_modified_by = 'system',
+                        last_modified_date = now()
+                    WHERE id = business_process_id;
+                END IF;
+            END;
+            $do$;
+        ]]></sql>
+    </changeSet>
+</databaseChangeLog>

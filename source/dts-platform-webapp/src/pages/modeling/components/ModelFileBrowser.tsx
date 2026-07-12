@@ -80,7 +80,7 @@ export default function ModelFileBrowser({
 					<Skeleton active paragraph={{ rows: 8 }} />
 				</div>
 			) : treeData.length === 0 ? (
-				<EmptyState title="暂无项目空间" description="请先在项目空间管理中创建项目空间。" />
+			<EmptyState title="暂无业务过程" description="请先在业务过程管理中创建项目空间。" />
 			) : (
 				<>
 					<Tree

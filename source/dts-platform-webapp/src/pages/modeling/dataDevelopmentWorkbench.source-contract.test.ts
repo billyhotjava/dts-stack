@@ -25,9 +25,14 @@ const referenceCodesPage = readFileSync(new URL("../governance/ReferenceCodesPag
 const platformApi = readFileSync(new URL("../../api/platformApi.ts", import.meta.url), "utf8");
 const sprint64Api = readFileSync(new URL("../../api/sprint64GovernanceApi.ts", import.meta.url), "utf8");
 const workbenchPage = readFileSync(new URL("../workbench/DataManagementWorkbenchPage.tsx", import.meta.url), "utf8");
+const projectSpacePage = readFileSync(new URL("./ModelTemplatesPage.tsx", import.meta.url), "utf8");
+const semanticObjectsPage = readFileSync(new URL("./SemanticObjectsPage.tsx", import.meta.url), "utf8");
+const semanticModelsPage = readFileSync(new URL("./SemanticModelsPage.tsx", import.meta.url), "utf8");
 
 test("data development workbench routes converge on existing pages", () => {
-	assert.match(menuSeed, /"title": "维度建模"[\s\S]*?"externalLink": "\/studio\/low-code-development"/);
+	assert.match(menuSeed, /"title": "低代码开发向导"[\s\S]*?"externalLink": "\/studio\/low-code-development"/);
+	assert.match(menuSeed, /"title": "维度建模"[\s\S]*?"title": "逻辑建模（SQL）"/);
+	assert.match(menuSeed, /"key": "business-processes"[\s\S]*?"path": "business-processes"[\s\S]*?"title": "业务过程管理"[\s\S]*?"externalLink": "\/studio\/projects"/);
 	assert.match(menuSeed, /"title": "低代码开发向导"[\s\S]*?"externalLink": "\/studio\/low-code-development"/);
 	assert.match(menuSeed, /"title": "维度建模"[\s\S]*?"externalLink": "\/studio\/sql-modeling"/);
 	assert.match(menuSeed, /"title": "项目文件浏览"[\s\S]*?"externalLink": "\/modeling\/dbt-files"/);
@@ -44,6 +49,23 @@ test("data development workbench routes converge on existing pages", () => {
 	assert.match(dynamicResolver, /"\/modeling\/dbt-files": "\/pages\/modeling\/DbtFileBrowserPage"/);
 	assert.match(dynamicResolver, /"\/governance\/standards\/elements": "\/pages\/governance\/ElementsPage"/);
 	assert.match(dynamicResolver, /"\/governance\/standards\/reference": "\/pages\/governance\/ReferenceCodesPage"/);
+});
+
+test("business process management unifies project spaces and business objects", () => {
+	assert.match(projectSpacePage, /数据开发中心 · 业务过程管理/);
+	assert.match(projectSpacePage, /data-testid="business-process-workspace-nav"/);
+	assert.match(projectSpacePage, /业务过程名称（项目空间）/);
+	assert.match(projectSpacePage, /\/modeling\/semantic\/objects\?from=business-process/);
+	assert.match(semanticObjectsPage, /业务过程管理/);
+	assert.match(semanticObjectsPage, /\/studio\/projects/);
+});
+
+test("model management carries the prototype ledger links without duplicating editors", () => {
+	assert.match(semanticModelsPage, /data-testid="semantic-model-ledger-links"/);
+	assert.match(semanticModelsPage, /字段标准/);
+	assert.match(semanticModelsPage, /粒度与关系/);
+	assert.match(semanticModelsPage, /\/governance\/standards\/elements\?from=model-ledger/);
+	assert.match(semanticModelsPage, /\/modeling\/semantic\/publish\?from=model-ledger/);
 });
 
 test("workbench consumes the backend-owned Sprint 64 layer registry", () => {

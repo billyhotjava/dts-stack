@@ -37,6 +37,13 @@ const RUNS_MENU_CLEANUP = readFileSync(
 	),
 	"utf8",
 );
+const MODELING_MENU_CONVERGENCE = readFileSync(
+	new URL(
+		"../../../../../dts-admin/src/main/resources/config/liquibase/changelog/20260712-01_modeling_menu_convergence.xml",
+		import.meta.url,
+	),
+	"utf8",
+);
 
 const section = (key: string) => {
 	const found = MENU_SEED.portalNavSections.find((item) => item.key === key);
@@ -79,10 +86,13 @@ test("portal menu follows the DataWorks-style modeling information architecture"
 		"warehouse-planning",
 		"standards",
 		"dimensional-modeling",
+		"low-code-development",
 		"data-metrics",
 	]);
-	assert.deepEqual(child(modeling, "warehouse-planning").children?.map((item) => item.key), ["subjects", "projects"]);
+	assert.deepEqual(child(modeling, "warehouse-planning").children?.map((item) => item.key), ["subjects", "business-processes"]);
 	assert.equal(child(child(modeling, "warehouse-planning"), "subjects").externalLink, "/governance/subjects");
+	assert.equal(child(child(modeling, "warehouse-planning"), "business-processes").title, "业务过程管理");
+	assert.equal(child(child(modeling, "warehouse-planning"), "business-processes").externalLink, "/studio/projects");
 	assert.deepEqual(child(modeling, "standards").children?.map((item) => item.key), [
 		"standard-package",
 		"glossary",
@@ -91,12 +101,13 @@ test("portal menu follows the DataWorks-style modeling information architecture"
 		"templates",
 	]);
 	assert.deepEqual(child(modeling, "dimensional-modeling").children?.map((item) => item.key), [
-		"low-code-development",
 		"sql",
 		"semantic-objects",
 		"semantic-models",
 		"dbt-files",
 	]);
+	assert.equal(child(modeling, "low-code-development").title, "低代码开发向导");
+	assert.equal(child(modeling, "low-code-development").externalLink, "/studio/low-code-development");
 	assert.deepEqual(child(modeling, "data-metrics").children?.map((item) => item.key), [
 		"metric-workbench",
 		"semantic-metrics",
@@ -143,6 +154,7 @@ test("golden line section titles have locale coverage and role routes stay canon
 		"dimensionalModeling",
 		"dataMetrics",
 		"studioLowCodeDevelopment",
+		"studioBusinessProcesses",
 		"governanceAssets",
 		"dataConsumption",
 		"governanceOperations",
@@ -181,6 +193,17 @@ test("admin liquibase reparents persisted menus without deleting bindings", () =
 	assert.match(GOLDEN_LINE_REPARENT, /sys\.nav\.portal\.serviceCenter/);
 	assert.match(GOLDEN_LINE_REPARENT, /sys\.nav\.portal\.businessIntelligenceApps/);
 	assert.doesNotMatch(GOLDEN_LINE_REPARENT, /DELETE FROM portal_menu_visibility|DELETE FROM portal_menu/);
+});
+
+test("modeling menu convergence reparents low-code and renames project spaces without deleting bindings", () => {
+	assert.match(LIQUIBASE_MASTER, /20260712-01_modeling_menu_convergence\.xml/);
+	assert.match(MODELING_MENU_CONVERGENCE, /studioLowCodeDevelopment/);
+	assert.match(MODELING_MENU_CONVERGENCE, /studioDataModeling/);
+	assert.match(MODELING_MENU_CONVERGENCE, /studioProjects/);
+	assert.match(MODELING_MENU_CONVERGENCE, /studioBusinessProcesses/);
+	assert.match(MODELING_MENU_CONVERGENCE, /parent_id = modeling_id/);
+	assert.match(MODELING_MENU_CONVERGENCE, /parent_id = warehouse_planning_id/);
+	assert.match(MODELING_MENU_CONVERGENCE, /role_menu|portal_menu/);
 });
 
 test("retired metric run monitor menu is removed while compatibility route stays outside the menu", () => {

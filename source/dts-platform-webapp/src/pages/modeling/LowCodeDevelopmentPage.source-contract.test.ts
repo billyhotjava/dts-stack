@@ -33,6 +33,11 @@ test("low-code development entry is wired into data development without removing
 	assert.match(ROLE_DEFAULTS, /"route": "\/studio\/low-code-development"/);
 });
 
+test("low-code guide is a modeling sibling while business process owns project spaces", () => {
+	assert.match(MENU_SEED, /"key": "low-code-development"[\s\S]*?"title": "低代码开发向导"/);
+	assert.match(MENU_SEED, /"key": "business-processes"[\s\S]*?"title": "业务过程管理"/);
+});
+
 test("low-code development route resolves to a real platform page", () => {
 	assert.match(STATIC_ROUTES, /const LowCodeDevelopmentPage = lazy\(\(\) => import\("@\/pages\/modeling\/LowCodeDevelopmentPage"\)\)/);
 	assert.match(STATIC_ROUTES, /path: "studio\/low-code-development"[\s\S]*<LowCodeDevelopmentPage/);

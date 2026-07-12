@@ -54,8 +54,8 @@
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.studioProjects",
-    "title": "项目空间管理",
+    "code": "sys.nav.portal.studioBusinessProcesses",
+    "title": "业务过程管理",
     "route": "/studio/projects",
     "requiredRoles": []
   },

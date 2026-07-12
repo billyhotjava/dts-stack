@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Drawer, Empty, Form, Input, InputNumber, Select, Space } from "antd";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
+import { useRouter } from "@/routes/hooks";
 import { CompactTable } from "@/components/table";
 import { VisualFlowCanvas } from "@/components/visual-canvas/VisualFlowCanvas";
 import type { ColumnsType } from "antd/es/table";
@@ -30,6 +31,7 @@ type MappingFormValues = {
 };
 
 export default function SemanticObjectsPage() {
+	const router = useRouter();
 	const [domains, setDomains] = useState<SemanticSubjectDomain[]>([]);
 	const [objects, setObjects] = useState<SemanticBusinessObject[]>([]);
 	const [loading, setLoading] = useState(false);
@@ -203,17 +205,20 @@ export default function SemanticObjectsPage() {
 				{ label: "当前映射表", value: selected ? mappings.length : "-", tone: "gray" },
 			]}
 			actions={
-				<Button
-					type="primary"
-					data-testid="semantic-objects-create"
-					onClick={() => {
-						form.resetFields();
-						setCreateOpen(true);
-					}}
-				>
-					<Plus size={16} />
-					新建业务对象
-				</Button>
+				<>
+					<Button onClick={() => router.push("/studio/projects")}>业务过程管理</Button>
+					<Button
+						type="primary"
+						data-testid="semantic-objects-create"
+						onClick={() => {
+							form.resetFields();
+							setCreateOpen(true);
+						}}
+					>
+						<Plus size={16} />
+						新建业务对象
+					</Button>
+				</>
 			}
 		>
 			<div className="grid gap-4 xl:grid-cols-[minmax(520px,1fr)_520px]" data-testid="semantic-objects-page">
