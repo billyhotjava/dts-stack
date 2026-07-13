@@ -20,6 +20,7 @@ export type SemanticSubjectDomain = {
 export type SemanticBusinessObject = {
 	id: string;
 	domainId?: string;
+	processId?: string;
 	code: string;
 	name: string;
 	description?: string;
@@ -74,6 +75,7 @@ export type MetricDerivationValidationResult = {
 export type SemanticModel = {
 	id: string;
 	objectId?: string;
+	processId?: string;
 	type?: "DWS" | "ADS" | string;
 	name: string;
 	tableName?: string;
@@ -180,7 +182,7 @@ export const createSemanticSubjectDomain = (data: Partial<SemanticSubjectDomain>
 export const updateSemanticSubjectDomain = (id: string, data: Partial<SemanticSubjectDomain>) =>
 	api.put<SemanticSubjectDomain>({ url: `/semantic/subject-domains/${encodeURIComponent(id)}`, data });
 
-export const listSemanticBusinessObjects = (params?: { domainId?: string }) =>
+export const listSemanticBusinessObjects = (params?: { domainId?: string; processId?: string }) =>
 	quiet<SemanticBusinessObject[]>({ url: "/semantic/business-objects", params });
 export const createSemanticBusinessObject = (data: Partial<SemanticBusinessObject>) =>
 	api.post<SemanticBusinessObject>({ url: "/semantic/business-objects", data });
@@ -213,7 +215,7 @@ export const validateSemanticMetricDerivation = (data: MetricDerivationValidatio
 		data,
 	});
 
-export const listSemanticModels = (params?: { type?: "DWS" | "ADS" }) =>
+export const listSemanticModels = (params?: { type?: "DWS" | "ADS"; processId?: string }) =>
 	quiet<SemanticModel[]>({ url: "/semantic/models", params });
 export const createSemanticModel = (data: Partial<SemanticModel> & {
 	objectId?: string;

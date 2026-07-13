@@ -117,7 +117,7 @@
                   "icon": "solar:folder-with-files-bold-duotone",
                   "titleKey": "sys.nav.portal.studioBusinessProcesses",
                   "title": "业务过程管理",
-                  "externalLink": "/studio/projects"
+                  "externalLink": "/governance/subjects?focus=business-processes"
                 }
               ]
             },

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Form, Input, Modal, Popconfirm, Radio, Select, Space, Tag } from "antd";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -16,6 +16,9 @@ import {
 	type SemanticModelPreview,
 } from "@/api/semanticModelingApi";
 import { SemanticWorkspaceFrame } from "./semantic-workspace/SemanticWorkspaceFrame";
+import { useSearchParams } from "@/routes/hooks";
+import { resolveWarehousePlanningContext } from "../governance/warehousePlanningContext";
+import { buildBusinessModelingRoute, resolveBusinessModelingContext } from "./businessModelingContext";
 
 type ModelType = "DWS" | "ADS" | "ALL";
 
@@ -28,6 +31,13 @@ const REVIEW_STATUS_COLOR: Record<string, string> = {
 
 export default function SemanticModelsPage() {
 	const navigate = useNavigate();
+	const searchParams = useSearchParams();
+	const planningResolution = useMemo(() => resolveWarehousePlanningContext(searchParams), [searchParams]);
+	const context = useMemo(
+		() => resolveBusinessModelingContext(searchParams, planningResolution.context),
+		[planningResolution.context, searchParams],
+	);
+	const processId = context.processId;
 	const [models, setModels] = useState<SemanticModel[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [typeFilter, setTypeFilter] = useState<ModelType>("ALL");
@@ -37,15 +47,23 @@ export default function SemanticModelsPage() {
 
 	const load = useCallback(async () => {
 		setLoading(true);
+		if (!processId) {
+			setModels([]);
+			setLoading(false);
+			return;
+		}
 		try {
-			const list = await listSemanticModels(typeFilter === "ALL" ? undefined : { type: typeFilter });
+			const list = await listSemanticModels({
+				processId,
+				...(typeFilter === "ALL" ? {} : { type: typeFilter }),
+			});
 			setModels(Array.isArray(list) ? list : []);
 		} catch {
 			/* global interceptor */
 		} finally {
 			setLoading(false);
 		}
-	}, [typeFilter]);
+	}, [processId, typeFilter]);
 
 	useEffect(() => {
 		void load();
@@ -92,7 +110,7 @@ export default function SemanticModelsPage() {
 	const handleCreate = async () => {
 		try {
 			const values = await form.validateFields();
-			await createSemanticModel(values);
+			await createSemanticModel({ ...values, processId });
 			toast.success("模型已创建");
 			setCreateOpen(false);
 			void load();
@@ -160,6 +178,7 @@ export default function SemanticModelsPage() {
 			activeKey="models"
 			title="模型管理"
 			description="管理 DWS/ADS 语义模型、预览、制品生成和运行触发。"
+			context={context}
 			stats={[
 				{ label: "模型", value: models.length, tone: "blue" },
 				{ label: "DWS", value: models.filter((item) => item.type === "DWS").length, tone: "green" },
@@ -172,8 +191,10 @@ export default function SemanticModelsPage() {
 					data-testid="semantic-models-create"
 					onClick={() => {
 						form.resetFields();
+						form.setFieldsValue({ processId });
 						setCreateOpen(true);
 					}}
+					disabled={!processId}
 				>
 					<Plus size={16} />
 					新建模型
@@ -192,13 +213,13 @@ export default function SemanticModelsPage() {
 						</div>
 					</div>
 					<Space size="small" wrap>
-						<Button size="small" onClick={() => navigate("/governance/standards/elements?from=model-ledger")}>
+						<Button size="small" onClick={() => navigate(buildBusinessModelingRoute("/governance/standards/elements?from=model-ledger", context))}>
 							字段标准
 						</Button>
-						<Button size="small" onClick={() => navigate("/modeling/semantic/objects?from=model-ledger")}>
+						<Button size="small" onClick={() => navigate(buildBusinessModelingRoute("/modeling/semantic/objects?from=model-ledger", context))}>
 							粒度与关系
 						</Button>
-						<Button size="small" onClick={() => navigate("/modeling/semantic/publish?from=model-ledger")}>
+						<Button size="small" onClick={() => navigate(buildBusinessModelingRoute("/modeling/semantic/publish?from=model-ledger", context))}>
 							发布审核
 						</Button>
 					</Space>
@@ -254,6 +275,9 @@ export default function SemanticModelsPage() {
 				destroyOnClose
 			>
 				<Form form={form} layout="vertical" className="pt-4">
+					<Form.Item name="processId" hidden>
+						<Input />
+					</Form.Item>
 					<Form.Item name="name" label="名称" rules={[{ required: true }]}>
 						<Input placeholder="月销售汇总" />
 					</Form.Item>

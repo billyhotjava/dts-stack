@@ -161,14 +161,26 @@ public class SemanticModelingService {
 
     @Transactional(readOnly = true)
     public List<BusinessObjectDto> listBusinessObjects(UUID domainId) {
-        String whereClause = domainId == null ? "" : " where domain_id = :domainId";
+        return listBusinessObjects(domainId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<BusinessObjectDto> listBusinessObjects(UUID domainId, String processId) {
+        String normalizedProcessId = trimToNull(processId);
+        List<String> predicates = new ArrayList<>();
+        if (domainId != null) predicates.add("domain_id = :domainId");
+        if (normalizedProcessId != null) predicates.add("process_id = :processId");
+        String whereClause = predicates.isEmpty() ? "" : " where " + String.join(" and ", predicates);
         MapSqlParameterSource queryParams = params();
         if (domainId != null) {
             queryParams.addValue("domainId", domainId);
         }
+        if (normalizedProcessId != null) {
+            queryParams.addValue("processId", normalizedProcessId);
+        }
         return jdbc.query(
             ("""
-            select id, domain_id, code, name, description, primary_key, main_table, status, owner_dept
+            select id, domain_id, process_id, code, name, description, primary_key, main_table, status, owner_dept
             from semantic_business_object
             """ + whereClause + """
             order by name asc, code asc
@@ -177,6 +189,7 @@ public class SemanticModelingService {
             (rs, rowNum) -> new BusinessObjectDto(
                 uuid(rs, "id"),
                 uuid(rs, "domain_id"),
+                rs.getString("process_id"),
                 rs.getString("code"),
                 rs.getString("name"),
                 rs.getString("description"),
@@ -194,13 +207,14 @@ public class SemanticModelingService {
         jdbc.update(
             """
             insert into semantic_business_object
-                (id, domain_id, code, name, description, primary_key, main_table, status, owner_dept, created_date, last_modified_date)
+                (id, domain_id, process_id, code, name, description, primary_key, main_table, status, owner_dept, created_date, last_modified_date)
             values
-                (:id, :domainId, :code, :name, :description, :primaryKey, :mainTable, :status, :ownerDept, :now, :now)
+                (:id, :domainId, :processId, :code, :name, :description, :primaryKey, :mainTable, :status, :ownerDept, :now, :now)
             """,
             params()
                 .addValue("id", id)
                 .addValue("domainId", domainId)
+                .addValue("processId", trimToNull(request.processId()))
                 .addValue("code", required(request.code(), "code"))
                 .addValue("name", required(request.name(), "name"))
                 .addValue("description", trimToNull(request.description()))
@@ -218,6 +232,7 @@ public class SemanticModelingService {
             """
             update semantic_business_object
             set domain_id = :domainId,
+                process_id = :processId,
                 code = :code,
                 name = :name,
                 description = :description,
@@ -231,6 +246,7 @@ public class SemanticModelingService {
             params()
                 .addValue("id", id)
                 .addValue("domainId", domainId)
+                .addValue("processId", trimToNull(request.processId()))
                 .addValue("code", required(request.code(), "code"))
                 .addValue("name", required(request.name(), "name"))
                 .addValue("description", trimToNull(request.description()))
@@ -480,15 +496,27 @@ public class SemanticModelingService {
 
     @Transactional(readOnly = true)
     public List<ModelDto> listModels(String type) {
+        return listModels(type, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ModelDto> listModels(String type, String processId) {
         String normalizedType = trimToNull(type);
-        String whereClause = normalizedType == null ? "" : " where upper(type) = upper(:type)";
+        String normalizedProcessId = trimToNull(processId);
+        List<String> predicates = new ArrayList<>();
+        if (normalizedType != null) predicates.add("upper(type) = upper(:type)");
+        if (normalizedProcessId != null) predicates.add("process_id = :processId");
+        String whereClause = predicates.isEmpty() ? "" : " where " + String.join(" and ", predicates);
         MapSqlParameterSource queryParams = params();
         if (normalizedType != null) {
             queryParams.addValue("type", normalizedType);
         }
+        if (normalizedProcessId != null) {
+            queryParams.addValue("processId", normalizedProcessId);
+        }
         return jdbc.query(
             ("""
-            select id, object_id, type, name, table_name, description, grain, materialization, refresh_cycle, status,
+            select id, object_id, process_id, type, name, table_name, description, grain, materialization, refresh_cycle, status,
                    review_status, submitted_by, submitted_at, reviewed_by, reviewed_at, review_comment, governance_mode
             from semantic_model
             """ + whereClause + """
@@ -498,6 +526,7 @@ public class SemanticModelingService {
             (rs, rowNum) -> new ModelDto(
                 uuid(rs, "id"),
                 uuid(rs, "object_id"),
+                rs.getString("process_id"),
                 rs.getString("type"),
                 rs.getString("name"),
                 rs.getString("table_name"),
@@ -770,9 +799,9 @@ public class SemanticModelingService {
         jdbc.update(
             """
             insert into semantic_model
-                (id, object_id, type, name, table_name, description, grain, materialization, refresh_cycle, status, governance_mode, created_date, last_modified_date)
+                (id, object_id, process_id, type, name, table_name, description, grain, materialization, refresh_cycle, status, governance_mode, created_date, last_modified_date)
             values
-                (:id, :objectId, :type, :name, :tableName, :description, :grain, :materialization, :refreshCycle, :status, :governanceMode, :now, :now)
+                (:id, :objectId, :processId, :type, :name, :tableName, :description, :grain, :materialization, :refreshCycle, :status, :governanceMode, :now, :now)
             """,
             modelParams(id, request)
         );
@@ -837,6 +866,7 @@ public class SemanticModelingService {
             """
             update semantic_model
             set object_id = :objectId,
+                process_id = :processId,
                 type = :type,
                 name = :name,
                 table_name = :tableName,
@@ -1458,9 +1488,9 @@ public class SemanticModelingService {
 
     private BusinessObjectDto getBusinessObject(UUID id) {
         return listOne(
-            "select id, domain_id, code, name, description, primary_key, main_table, status, owner_dept from semantic_business_object where id = :id",
+            "select id, domain_id, process_id, code, name, description, primary_key, main_table, status, owner_dept from semantic_business_object where id = :id",
             params().addValue("id", id),
-            (rs, rowNum) -> new BusinessObjectDto(uuid(rs, "id"), uuid(rs, "domain_id"), rs.getString("code"), rs.getString("name"), rs.getString("description"), rs.getString("primary_key"), rs.getString("main_table"), rs.getString("status"), rs.getString("owner_dept"))
+            (rs, rowNum) -> new BusinessObjectDto(uuid(rs, "id"), uuid(rs, "domain_id"), rs.getString("process_id"), rs.getString("code"), rs.getString("name"), rs.getString("description"), rs.getString("primary_key"), rs.getString("main_table"), rs.getString("status"), rs.getString("owner_dept"))
         );
     }
 
@@ -1483,7 +1513,7 @@ public class SemanticModelingService {
     private ModelDto getModel(UUID id) {
         return listOne(
             """
-            select id, object_id, type, name, table_name, description, grain, materialization, refresh_cycle, status,
+            select id, object_id, process_id, type, name, table_name, description, grain, materialization, refresh_cycle, status,
                    review_status, submitted_by, submitted_at, reviewed_by, reviewed_at, review_comment, governance_mode
             from semantic_model
             where id = :id
@@ -1492,6 +1522,7 @@ public class SemanticModelingService {
             (rs, rowNum) -> new ModelDto(
                 uuid(rs, "id"),
                 uuid(rs, "object_id"),
+                rs.getString("process_id"),
                 rs.getString("type"),
                 rs.getString("name"),
                 rs.getString("table_name"),
@@ -2295,6 +2326,7 @@ public class SemanticModelingService {
         return params()
             .addValue("id", id)
             .addValue("objectId", request.objectId())
+            .addValue("processId", trimToNull(request.processId()))
             .addValue("type", trimToNull(request.type()))
             .addValue("name", required(request.name(), "name"))
             .addValue("tableName", trimToNull(request.tableName()))
@@ -2456,8 +2488,16 @@ public class SemanticModelingService {
         String governanceDomainName
     ) {}
 
-    public record BusinessObjectDto(UUID id, UUID domainId, String code, String name, String description, String primaryKey, String mainTable, String status, String ownerDept) {}
-    public record BusinessObjectRequest(UUID domainId, String code, String name, String description, String primaryKey, String mainTable, String status, String ownerDept) {}
+    public record BusinessObjectDto(UUID id, UUID domainId, String processId, String code, String name, String description, String primaryKey, String mainTable, String status, String ownerDept) {
+        public BusinessObjectDto(UUID id, UUID domainId, String code, String name, String description, String primaryKey, String mainTable, String status, String ownerDept) {
+            this(id, domainId, null, code, name, description, primaryKey, mainTable, status, ownerDept);
+        }
+    }
+    public record BusinessObjectRequest(UUID domainId, String code, String name, String description, String primaryKey, String mainTable, String status, String ownerDept, String processId) {
+        public BusinessObjectRequest(UUID domainId, String code, String name, String description, String primaryKey, String mainTable, String status, String ownerDept) {
+            this(domainId, code, name, description, primaryKey, mainTable, status, ownerDept, null);
+        }
+    }
     public record ObjectTableMappingDto(UUID id, UUID objectId, String tableName, String tableRole, String joinExpression, Integer sortOrder) {}
     public record ObjectTableMappingRequest(String tableName, String tableRole, String joinExpression, Integer sortOrder) {}
     public record ObjectTableMappingSaveRequest(List<ObjectTableMappingRequest> mappings) {}
@@ -2473,6 +2513,7 @@ public class SemanticModelingService {
     public record ModelDto(
         UUID id,
         UUID objectId,
+        String processId,
         String type,
         String name,
         String tableName,
@@ -2488,8 +2529,34 @@ public class SemanticModelingService {
         Instant reviewedAt,
         String reviewComment,
         String governanceMode
-    ) {}
-    public record ModelRequest(UUID objectId, String type, String name, String tableName, String description, String grain, String materialization, String refreshCycle, String status, String governanceMode) {}
+    ) {
+        public ModelDto(
+            UUID id,
+            UUID objectId,
+            String type,
+            String name,
+            String tableName,
+            String description,
+            String grain,
+            String materialization,
+            String refreshCycle,
+            String status,
+            String reviewStatus,
+            String submittedBy,
+            Instant submittedAt,
+            String reviewedBy,
+            Instant reviewedAt,
+            String reviewComment,
+            String governanceMode
+        ) {
+            this(id, objectId, null, type, name, tableName, description, grain, materialization, refreshCycle, status, reviewStatus, submittedBy, submittedAt, reviewedBy, reviewedAt, reviewComment, governanceMode);
+        }
+    }
+    public record ModelRequest(UUID objectId, String type, String name, String tableName, String description, String grain, String materialization, String refreshCycle, String status, String governanceMode, String processId) {
+        public ModelRequest(UUID objectId, String type, String name, String tableName, String description, String grain, String materialization, String refreshCycle, String status, String governanceMode) {
+            this(objectId, type, name, tableName, description, grain, materialization, refreshCycle, status, governanceMode, null);
+        }
+    }
     public record ModelBindingDto(UUID modelId, List<UUID> dimensionIds, List<UUID> metricIds) {}
     public record ModelBindingRequest(List<UUID> dimensionIds, List<UUID> metricIds) {}
     public record ReviewActionRequest(String comment) {}

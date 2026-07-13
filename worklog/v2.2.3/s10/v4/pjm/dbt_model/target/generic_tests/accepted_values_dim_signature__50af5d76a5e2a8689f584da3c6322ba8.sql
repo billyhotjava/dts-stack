@@ -1,0 +1,1 @@
+{{ test_accepted_values(column_name="context", model=get_where_subquery(ref('dim_signature_status_alias')), values=["I_II_no_review","I_II_with_review","III"]) }}{{ config({"severity":"Warn","tags":[]}) }}

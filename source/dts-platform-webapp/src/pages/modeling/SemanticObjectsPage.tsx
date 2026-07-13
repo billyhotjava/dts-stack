@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Drawer, Empty, Form, Input, InputNumber, Select, Space } from "antd";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
-import { useRouter } from "@/routes/hooks";
+import { useRouter, useSearchParams } from "@/routes/hooks";
 import { CompactTable } from "@/components/table";
 import { VisualFlowCanvas } from "@/components/visual-canvas/VisualFlowCanvas";
 import type { ColumnsType } from "antd/es/table";
@@ -18,6 +18,8 @@ import {
 } from "@/api/semanticModelingApi";
 import { SemanticWorkspaceFrame } from "./semantic-workspace/SemanticWorkspaceFrame";
 import { buildSemanticObjectJoinGraph } from "./semanticObjectMappings.helpers";
+import { resolveWarehousePlanningContext } from "../governance/warehousePlanningContext";
+import { buildBusinessModelingRoute, resolveBusinessModelingContext } from "./businessModelingContext";
 
 const TABLE_ROLE_OPTIONS = [
 	{ label: "主表", value: "main" },
@@ -32,6 +34,13 @@ type MappingFormValues = {
 
 export default function SemanticObjectsPage() {
 	const router = useRouter();
+	const searchParams = useSearchParams();
+	const planningResolution = useMemo(() => resolveWarehousePlanningContext(searchParams), [searchParams]);
+	const context = useMemo(
+		() => resolveBusinessModelingContext(searchParams, planningResolution.context),
+		[planningResolution.context, searchParams],
+	);
+	const processId = context.processId;
 	const [domains, setDomains] = useState<SemanticSubjectDomain[]>([]);
 	const [objects, setObjects] = useState<SemanticBusinessObject[]>([]);
 	const [loading, setLoading] = useState(false);
@@ -59,15 +68,20 @@ export default function SemanticObjectsPage() {
 
 	const load = useCallback(async () => {
 		setLoading(true);
+		if (!processId) {
+			setObjects([]);
+			setLoading(false);
+			return;
+		}
 		try {
-			const list = await listSemanticBusinessObjects();
+			const list = await listSemanticBusinessObjects({ processId });
 			setObjects(Array.isArray(list) ? (list as SemanticBusinessObject[]) : []);
 		} catch {
 			/* global interceptor */
 		} finally {
 			setLoading(false);
 		}
-	}, []);
+	}, [processId]);
 
 	useEffect(() => {
 		void load();
@@ -111,7 +125,7 @@ export default function SemanticObjectsPage() {
 	const handleCreate = async () => {
 		try {
 			const values = await form.validateFields();
-			await createSemanticBusinessObject(values);
+			await createSemanticBusinessObject({ ...values, processId });
 			toast.success("业务对象已创建");
 			setCreateOpen(false);
 			void load();
@@ -197,6 +211,7 @@ export default function SemanticObjectsPage() {
 			activeKey="objects"
 			title="业务对象"
 			description="维护业务对象的主表、主键和关联表。"
+			context={context}
 			stats={[
 				{ label: "业务对象", value: objects.length, tone: "blue" },
 				{ label: "治理主题域", value: domains.length, tone: "green" },
@@ -206,14 +221,18 @@ export default function SemanticObjectsPage() {
 			]}
 			actions={
 				<>
-					<Button onClick={() => router.push("/studio/projects")}>业务过程管理</Button>
+					<Button onClick={() => router.push(buildBusinessModelingRoute("/governance/subjects?focus=business-processes", context))}>
+						业务过程目录
+					</Button>
 					<Button
 						type="primary"
 						data-testid="semantic-objects-create"
 						onClick={() => {
 							form.resetFields();
+							form.setFieldsValue({ processId });
 							setCreateOpen(true);
 						}}
+						disabled={!processId}
 					>
 						<Plus size={16} />
 						新建业务对象
@@ -280,6 +299,9 @@ export default function SemanticObjectsPage() {
 				}
 			>
 				<Form form={form} layout="vertical">
+					<Form.Item name="processId" hidden>
+						<Input />
+					</Form.Item>
 					<Form.Item name="code" label="编码" rules={[{ required: true }]}>
 						<Input placeholder="ORDER" />
 					</Form.Item>

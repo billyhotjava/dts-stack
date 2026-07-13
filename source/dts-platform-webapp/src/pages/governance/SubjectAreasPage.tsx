@@ -52,6 +52,7 @@ import {
 	type BusinessProcess,
 } from "./businessProcess";
 import { dimensionsForDomain, loadBusMatrix, toggleBusMatrixLink, type BusMatrix, type ConformedDimension } from "./conformedDimensions";
+import { buildBusinessModelingRoute } from "../modeling/businessModelingContext";
 
 const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -216,6 +217,10 @@ export default function SubjectAreasPage() {
 			setDomainTree(list);
 			setDomainIndex(index);
 			setDomainOptions(flattenDomains(list, []));
+			if (searchParams.get("focus") === "business-processes" && selectedKey === ROOT_KEY) {
+				const firstDomainId = list.find((node) => node.id)?.id;
+				if (firstDomainId) setSelectedKey(String(firstDomainId));
+			}
 			if (selectedKey !== ROOT_KEY && !index.has(selectedKey)) {
 				setSelectedKey(ROOT_KEY);
 			}
@@ -224,7 +229,7 @@ export default function SubjectAreasPage() {
 		} finally {
 			setLoading(false);
 		}
-	}, [selectedKey]);
+	}, [searchParams, selectedKey]);
 
 	const loadAssetStats = useCallback(async (domainId: string) => {
 		setStatsLoading(true);
@@ -435,7 +440,10 @@ export default function SubjectAreasPage() {
 			toast.error("规划草稿保存失败，请检查浏览器会话存储后重试");
 			return;
 		}
-		router.push(buildPlanningRoute("/governance/standards/elements?bindingDraft=1", context));
+		router.push(buildBusinessModelingRoute("/modeling/semantic/objects?from=business-process", {
+			...context,
+			processName: process.name,
+		}));
 	};
 	const deleteProcess = (process: BusinessProcess) => {
 		if (!activeDomain?.id || !canManage) return;
@@ -721,8 +729,8 @@ export default function SubjectAreasPage() {
 														{process.description ? <div className="mt-1 text-sm text-slate-600">{process.description}</div> : null}
 													</div>
 													<Space size={4}>
-														<Button size="small" type="link" onClick={() => startProcessPlanning(process)}>
-															发起规划
+											<Button size="small" type="link" onClick={() => startProcessPlanning(process)}>
+												进入业务建模
 														</Button>
 														<Button size="small" danger type="link" onClick={() => deleteProcess(process)} disabled={!canManage}>
 															删除

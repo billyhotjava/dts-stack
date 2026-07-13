@@ -5,6 +5,9 @@ import type { ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { PageHeader } from "@/components/page-header";
 import { cn } from "@/utils";
+import type { BusinessModelingContext } from "../businessModelingContext";
+import { buildBusinessModelingRoute } from "../businessModelingContext";
+import { BusinessModelingContextBar } from "./BusinessModelingContextBar";
 
 export type SemanticWorkspaceKey = "workbench" | "objects" | "metrics" | "models" | "publish";
 
@@ -70,6 +73,7 @@ export function SemanticWorkspaceFrame({
 	actions,
 	children,
 	className,
+	context,
 }: {
 	activeKey: SemanticWorkspaceKey;
 	title: string;
@@ -78,6 +82,7 @@ export function SemanticWorkspaceFrame({
 	actions?: ReactNode;
 	children: ReactNode;
 	className?: string;
+	context?: BusinessModelingContext;
 }) {
 	const navigate = useNavigate();
 	const activeIndex = Math.max(
@@ -103,6 +108,7 @@ export function SemanticWorkspaceFrame({
 					</div>
 				}
 			/>
+			{context ? <BusinessModelingContextBar context={context} /> : null}
 
 			<div className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
 				<div className="flex flex-wrap items-center justify-between gap-3">
@@ -135,7 +141,7 @@ export function SemanticWorkspaceFrame({
 										size="small"
 										type={active ? "primary" : "default"}
 										aria-current={active ? "step" : undefined}
-										onClick={() => navigate(step.path)}
+											onClick={() => navigate(context ? buildBusinessModelingRoute(step.path, context) : step.path)}
 									>
 										{done ? <CheckCircle2 size={14} /> : active ? <CircleDot size={14} /> : <Icon size={14} />}
 										{step.label}

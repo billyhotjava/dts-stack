@@ -14,7 +14,6 @@ import {
 } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { } from "@ant-design/icons";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { useRouter } from "@/routes/hooks";
@@ -190,10 +189,10 @@ export default function Page() {
 			};
 			if (editMode === "create") {
 				await createModelingPlan(payload);
-				toast.success("业务过程已创建");
+				 toast.success("项目空间已创建");
 			} else if (editing?.id) {
 				await updateModelingPlan(editing.id, payload);
-				toast.success("业务过程已更新");
+			toast.success("项目空间已更新");
 			}
 			setEditOpen(false);
 			setEditing(null);
@@ -224,7 +223,7 @@ export default function Page() {
 				version: normalizeText(values.version),
 				changeSummary: normalizeText(values.changeSummary) || undefined,
 			});
-			toast.success("业务过程已发布");
+			toast.success("项目空间已发布");
 			setPublishOpen(false);
 			setPublishTarget(null);
 			await loadSpaces();
@@ -238,7 +237,7 @@ export default function Page() {
 	const handleArchive = (row: ProjectSpace) => {
 		if (!row.id) return;
 		Modal.confirm({
-						title: "归档业务过程？",
+							 title: "归档项目空间？",
 			content: "归档后将进入只读状态，可随时恢复。",
 			okText: "确认归档",
 			cancelText: "取消",
@@ -257,7 +256,7 @@ export default function Page() {
 	const handleRestore = (row: ProjectSpace) => {
 		if (!row.id) return;
 		Modal.confirm({
-						title: "恢复业务过程？",
+							 title: "恢复项目空间？",
 			okText: "确认恢复",
 			cancelText: "取消",
 			onOk: async () => {
@@ -275,15 +274,15 @@ export default function Page() {
 	const handleDelete = (row: ProjectSpace) => {
 		if (!row.id) return;
 		Modal.confirm({
-						title: "删除业务过程？",
-						content: `确认永久删除「${row.name || "该业务过程"}」？此操作不可恢复。`,
+							 title: "删除项目空间？",
+							 content: `确认永久删除「${row.name || "该项目空间"}」？此操作不可恢复。`,
 			okText: "确认删除",
 			okButtonProps: { danger: true },
 			cancelText: "取消",
 			onOk: async () => {
 				try {
 					await deleteModelingPlan(row.id!);
-					toast.success("业务过程已删除");
+							toast.success("项目空间已删除");
 					await loadSpaces();
 				} catch {
 					// global interceptor handles the error toast
@@ -294,7 +293,7 @@ export default function Page() {
 
 	const columns: ColumnsType<ProjectSpace> = useMemo(
 		() => [
-			{ title: "业务过程 / 项目空间", dataIndex: "name", key: "name", width: 200 , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
+			{ title: "项目空间（可选）", dataIndex: "name", key: "name", width: 200 , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 			{
 				title: "主题域",
 				dataIndex: "domainId",
@@ -355,11 +354,11 @@ export default function Page() {
 	return (
 		<div className="space-y-4">
 			<PageHeader
-				title="数据开发中心 · 业务过程管理"
+				title="数据开发中心 · 项目空间管理"
 				actions={
 					<Space>
-							<Button disabled title="当前业务过程接口未开放批量导入，先通过新建业务过程登记仓库与环境">
-								导入业务过程
+									<Button disabled title="项目空间用于协作登记，当前版本请通过新建项目空间维护仓库与环境">
+										导入项目空间
 						</Button>
 						<Button onClick={() => router.push("/studio/sql-modeling")}>
 							进入 SQL 建模
@@ -368,7 +367,7 @@ export default function Page() {
 							刷新
 						</Button>
 						<Button type="primary" onClick={openCreate}>
-							新建业务过程
+							新建项目空间
 						</Button>
 					</Space>
 				}
@@ -376,16 +375,16 @@ export default function Page() {
 
 			<Card size="small" className="border-blue-100 bg-blue-50/40" data-testid="business-process-workspace-nav">
 				<Space wrap>
-					<Text strong>业务过程管理</Text>
-					<Button type="primary" size="small">项目空间</Button>
-					<Button size="small" onClick={() => router.push("/modeling/semantic/objects?from=business-process")}>业务对象</Button>
-					<Text type="secondary">项目空间定义业务过程边界，业务对象维护主表、主键和关联语义。</Text>
+					<Text strong>项目空间管理（可选）</Text>
+					<Button type="primary" size="small">协作空间</Button>
+					<Button size="small" onClick={() => router.push("/governance/subjects?focus=business-processes")}>业务过程目录</Button>
+					<Text type="secondary">项目空间仅用于成员、仓库、环境和权限协作；业务过程与建模不依赖项目空间。</Text>
 				</Space>
 			</Card>
 
 			<div className="grid gap-4 lg:grid-cols-4">
 				<Card>
-					<div className="text-sm text-gray-500">业务过程总数</div>
+					<div className="text-sm text-gray-500">项目空间总数</div>
 					<div className="mt-2 text-2xl font-semibold">{stats.total}</div>
 				</Card>
 				<Card>
@@ -403,7 +402,7 @@ export default function Page() {
 			</div>
 
 			<Card
-				title="业务过程台账"
+				title="项目空间台账"
 				extra={
 					<Space>
 						<Text>状态</Text>
@@ -420,7 +419,7 @@ export default function Page() {
 			>
 				<Space wrap className="mb-4">
 					<Input
-						placeholder="搜索业务过程/负责人"
+						placeholder="搜索项目空间/负责人"
 						value={keyword}
 						onChange={(e) => setKeyword(e.target.value)}
 						allowClear
@@ -431,7 +430,7 @@ export default function Page() {
 					</Button>
 				</Space>
 				{spaces.length === 0 && !loading ? (
-					<EmptyState title="暂无业务过程" description="先创建一个业务过程（项目空间），配置仓库与环境信息。" />
+					<EmptyState title="暂无项目空间" description="可按需创建协作空间；不创建项目空间也可以正常登记业务过程、业务对象和模型。" />
 				) : (
 					<CompactTable
 						rowKey={(row) => row.id || row.name || Math.random().toString(36)}
@@ -447,12 +446,12 @@ export default function Page() {
 			<Alert
 				type="info"
 				showIcon
-				message="业务过程以项目空间承载，必须绑定治理中心主题域；业务对象从这里进入主表与语义映射。"
+				message="项目空间是可选的技术协作边界；业务过程请在主题域目录登记，未启用项目空间不影响正常建模。"
 			/>
 
 			<Modal
 				open={editOpen}
-				title={editMode === "create" ? "新建业务过程" : "编辑业务过程"}
+				title={editMode === "create" ? "新建项目空间" : "编辑项目空间"}
 				onCancel={() => setEditOpen(false)}
 				onOk={submitEdit}
 				okText="保存"
@@ -462,8 +461,8 @@ export default function Page() {
 			>
 				<Form layout="vertical" form={form}>
 					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="name" label="业务过程名称（项目空间）" rules={[{ required: true, message: "请输入名称" }]}>
-							<Input placeholder="例如：ERP 经营分析" />
+						<Form.Item name="name" label="项目空间名称" rules={[{ required: true, message: "请输入名称" }]}>
+							<Input placeholder="例如：经营分析协作空间" />
 						</Form.Item>
 						<Form.Item name="domainId" label="主题域" rules={[{ required: true, message: "请选择主题域" }]}>
 							<Select
@@ -484,7 +483,7 @@ export default function Page() {
 							message="暂无可选主题域"
 							description={
 								<Space size={4} wrap>
-									<span>请先在数据治理中心创建主题域，再回到这里新建业务过程。</span>
+									<span>请先在数据治理中心创建主题域，再回到这里新建项目空间。</span>
 									<Button type="link" size="small" onClick={() => router.push("/governance/subjects")}>
 										主题域管理
 									</Button>
@@ -493,7 +492,7 @@ export default function Page() {
 						/>
 					) : null}
 					<Form.Item name="scope" label="范围说明">
-							<Input.TextArea rows={2} placeholder="描述该业务过程覆盖的主题、表范围或业务边界" />
+							<Input.TextArea rows={2} placeholder="描述该项目空间覆盖的仓库、环境或协作边界" />
 					</Form.Item>
 					<div className="grid gap-4 md:grid-cols-2">
 						<Form.Item name="owner" label="负责人">
@@ -525,7 +524,7 @@ export default function Page() {
 
 			<Modal
 				open={publishOpen}
-				title="发布业务过程"
+				title="发布项目空间"
 				onCancel={() => setPublishOpen(false)}
 				onOk={submitPublish}
 				okText="发布"

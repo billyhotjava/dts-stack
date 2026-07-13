@@ -1,0 +1,1 @@
+{{ test_accepted_values(column_name="change_category", model=get_where_subquery(ref('biz_dwd_tech_state_v2')), values=["I","II","III"]) }}{{ config({"severity":"Warn","tags":[]}) }}

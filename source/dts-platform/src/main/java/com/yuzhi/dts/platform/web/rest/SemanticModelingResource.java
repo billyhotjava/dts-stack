@@ -119,8 +119,11 @@ public class SemanticModelingResource {
 
     @GetMapping("/business-objects")
     @Transactional(readOnly = true)
-    public ApiResponse<List<BusinessObjectDto>> listBusinessObjects(@RequestParam(required = false) UUID domainId) {
-        List<BusinessObjectDto> data = service.listBusinessObjects(domainId);
+    public ApiResponse<List<BusinessObjectDto>> listBusinessObjects(
+        @RequestParam(required = false) UUID domainId,
+        @RequestParam(required = false) String processId
+    ) {
+        List<BusinessObjectDto> data = service.listBusinessObjects(domainId, processId);
         audit.auditAction("SEMANTIC_BUSINESS_OBJECT_LIST", AuditStage.SUCCESS, "list", Map.of("count", data.size()));
         return ApiResponses.ok(data);
     }
@@ -216,8 +219,11 @@ public class SemanticModelingResource {
 
     @GetMapping("/models")
     @Transactional(readOnly = true)
-    public ApiResponse<List<ModelDto>> listModels(@RequestParam(required = false) String type) {
-        List<ModelDto> data = service.listModels(type);
+    public ApiResponse<List<ModelDto>> listModels(
+        @RequestParam(required = false) String type,
+        @RequestParam(required = false) String processId
+    ) {
+        List<ModelDto> data = service.listModels(type, processId);
         audit.auditAction("SEMANTIC_MODEL_LIST", AuditStage.SUCCESS, "list", Map.of("count", data.size()));
         return ApiResponses.ok(data);
     }

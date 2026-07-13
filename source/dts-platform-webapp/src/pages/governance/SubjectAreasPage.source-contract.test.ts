@@ -26,7 +26,8 @@ test("subject area details expose business processes and process planning entry"
 	assert.match(source, /业务过程/);
 	assert.match(source, /从示例创建|采用示例/);
 	assert.match(source, /processId/);
-	assert.match(source, /发起规划/);
+	assert.match(source, /进入业务建模/);
+	assert.match(source, /modeling\/semantic\/objects/);
 });
 
 test("subject area details expose the process by conformed-dimension bus matrix", () => {

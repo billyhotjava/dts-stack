@@ -92,7 +92,7 @@ test("portal menu follows the DataWorks-style modeling information architecture"
 	assert.deepEqual(child(modeling, "warehouse-planning").children?.map((item) => item.key), ["subjects", "business-processes"]);
 	assert.equal(child(child(modeling, "warehouse-planning"), "subjects").externalLink, "/governance/subjects");
 	assert.equal(child(child(modeling, "warehouse-planning"), "business-processes").title, "业务过程管理");
-	assert.equal(child(child(modeling, "warehouse-planning"), "business-processes").externalLink, "/studio/projects");
+	assert.equal(child(child(modeling, "warehouse-planning"), "business-processes").externalLink, "/governance/subjects?focus=business-processes");
 	assert.deepEqual(child(modeling, "standards").children?.map((item) => item.key), [
 		"standard-package",
 		"glossary",
