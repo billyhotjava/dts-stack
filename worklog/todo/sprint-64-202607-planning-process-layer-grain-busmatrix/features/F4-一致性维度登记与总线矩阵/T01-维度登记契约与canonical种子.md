@@ -10,7 +10,7 @@
 
 ## 技术设计
 
-- 新增 `src/pages/governance/conformedDimensions.ts`：ConformedDimension 契约 + 8 项 canonical 种子常量；矩阵=processId×dimensionId 勾选集合，session 版本化存储。
+- 新增 `src/pages/governance/conformedDimensions.ts`：ConformedDimension 契约 + 8 项 canonical 种子常量；契约增加可选 `objectId` 关联业务对象（一致性维度即业务对象的维度化，与 F1/T04 打通）；矩阵=processId×dimensionId 勾选集合，session 版本化存储。
 - API 缺口：`GET/POST /api/modeling/conformed-dimensions`、`GET/PUT /api/governance/bus-matrix/{domainId}`。
 
 ## 影响范围
