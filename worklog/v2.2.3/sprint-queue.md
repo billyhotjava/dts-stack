@@ -1291,8 +1291,9 @@
 | F4-一致性维度登记与总线矩阵 | P1 | 3 | DONE |
 | F5-规划升维闭环验证 | P0 | 3 | IN_PROGRESS |
 | F6-建模动线与命名收敛 | P0 | 3 | DONE |
+| F7-核心页面精简 | P0 | 1 | IN_PROGRESS |
 
-**统计**: READY=0, IN_PROGRESS=1, DONE=19, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=1, DONE=20, BLOCKED=0
 **执行顺序**: F1 → F2/F3 → F4 → F5；F6 与 F1 并行但必须在发布前完成命名和入口收敛。
 
 ## v2.3 Backlog: 企业级资产与指标增强

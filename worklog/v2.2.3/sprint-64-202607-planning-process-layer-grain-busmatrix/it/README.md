@@ -28,3 +28,10 @@
 - GREEN：本轮前端 source-contract 29/29、治理/建模纯 Node 测试 13/13、建模/API Vitest 7/7 通过；`pnpm exec tsc --noEmit` 与 `pnpm build` 通过；`git diff --check` 与 Liquibase XML 校验通过。
 - Backend：历史证据记录 `Sprint64GovernanceContractTest`/`Sprint64GovernanceResourceTest` 4 tests 通过；本轮普通用户重跑被现有 `source/dts-common/target` root 权限阻断，切换 root 后 Maven 超过 6 分钟无 target 进展，已中止，需在构建机清理 target/依赖缓存后复核。
 - Runtime：API 失败时 UI 保留 session 回退；真实迁移、浏览器 smoke、Chrome 95 视觉证据仍未完成。
+
+### F7-T01 业务对象台账瘦身与编码自动生成（2026-07-16）
+
+- GREEN：`pnpm vitest run src/pages/modeling/businessObjectCode.test.ts` 4/4。
+- GREEN：`node --test SemanticObjectsPage.source-contract.test.ts metricWorkbench.source-contract.test.ts` 18/18。
+- GREEN：`pnpm exec tsc --noEmit` 与 `pnpm build` 通过。
+- 说明：源代码改动与进行中的 vNext 工作区改动同栈，随下一次代码提交入库；本记录先行锁定验证证据。
