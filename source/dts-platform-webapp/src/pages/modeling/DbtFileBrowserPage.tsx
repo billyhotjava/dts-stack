@@ -698,7 +698,7 @@ export default function DbtFileBrowserPage() {
 					<div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
 						<div className="leading-6">
 							<span className="font-semibold text-foreground">工作区说明：</span>
-							在逻辑建模页完成 ODS 一键生成后，这里负责模型微调与运行验证。
+							在高级建模页完成 ODS 一键生成后，这里负责模型微调与运行验证。
 							<span className="ml-2 inline-flex items-center gap-2">
 								<Tag color={latestStatusColor}>{latestStatus}</Tag>
 								{latestRun?.command ? <span>{latestRun.command}</span> : null}

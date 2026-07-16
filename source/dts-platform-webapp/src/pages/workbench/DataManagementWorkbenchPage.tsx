@@ -121,6 +121,7 @@ const firstReportJourneySteps = [
 const WAREHOUSE_LAYER_PLAN = [
 	{ key: "ODS_RAW", title: "ODS_RAW", description: "保留源系统原始记录，保证可追溯和可重放。", route: "/foundation/data-sources", action: "确认接入" },
 	{ key: "ODS_STANDARDIZED", title: "ODS_STANDARDIZED", description: "统一字段类型、命名和技术字段，形成可治理的入湖表。", route: "/governance/standards/elements", action: "查看标准" },
+	{ key: "STG", title: "STG", description: "dbt 技术过渡层：类型转换、重命名、去重和轻量清洗，不承载业务聚合。", route: "/modeling/dbt-files", action: "查看 dbt staging" },
 	{ key: "DWD", title: "DWD", description: "按业务过程沉淀明细事实和维度关联，承接标准字段。", route: "/studio/low-code-development", action: "进入低代码建模" },
 	{ key: "DWS", title: "DWS", description: "围绕主题域和公共粒度形成可复用汇总模型。", route: "/studio/sql-modeling", action: "进入 SQL 建模" },
 	{ key: "ADS", title: "ADS", description: "面向指标、报表和 API 消费交付应用数据集。", route: "/modeling/metric-workbench", action: "绑定指标" },

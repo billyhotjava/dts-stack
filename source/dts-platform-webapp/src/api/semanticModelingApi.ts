@@ -26,6 +26,11 @@ export type SemanticBusinessObject = {
 	description?: string;
 	primaryKey?: string;
 	mainTable?: string;
+	/** vNext metadata retained while the legacy detail shell is reused. */
+	objectKind?: "ENTITY" | "FACT" | "EVENT" | "SNAPSHOT" | "DIMENSION";
+	grain?: string;
+	implementationMode?: "DESIGNER_GENERATED" | "DBT_MANAGED" | "LEGACY_READONLY";
+	status?: string;
 };
 
 export type SemanticObjectTableMapping = {

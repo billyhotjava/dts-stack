@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+	buildConformedDimensionReference,
 	CONFORMED_DIMENSION_SEEDS,
 	loadBusMatrix,
+	recommendDimensionsForProcess,
+	saveConformedDimensionReference,
 	toggleBusMatrixLink,
 } from "./conformedDimensions.ts";
 
@@ -33,4 +36,19 @@ test("bus matrix toggle persists and restores process-dimension links", () => {
 
 	const second = toggleBusMatrixLink("domain-1", "process-1", "dim-status", storage);
 	assert.deepEqual(second.links, {});
+});
+
+test("dimension recommendations prefer dimensions registered for the process", () => {
+	const storage = memoryStorage();
+	toggleBusMatrixLink("domain-1", "process-1", "completion-status", storage);
+	const recommended = recommendDimensionsForProcess("domain-1", "process-1", loadBusMatrix("domain-1", storage));
+	assert.deepEqual(recommended.map((item) => item.dimensionId), ["completion-status"]);
+});
+
+test("dimension reuse writes a process-scoped reference metadata record", () => {
+	const storage = memoryStorage();
+	const dimension = CONFORMED_DIMENSION_SEEDS[0];
+	const reference = buildConformedDimensionReference("domain-1", "process-1", dimension, "2026-07-16T00:00:00.000Z");
+	saveConformedDimensionReference(reference, storage);
+	assert.deepEqual(JSON.parse(storage.getItem("dts.conformed-dimension-reference.v1:domain-1:process-1") || "{}"), reference);
 });

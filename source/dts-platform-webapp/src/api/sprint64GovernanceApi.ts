@@ -18,6 +18,10 @@ export type Sprint64WarehouseLayer = {
 	code: string;
 	title: string;
 	responsibility: string;
+	kind?: "INGESTION" | "TECHNICAL" | "DETAIL" | "SERVICE" | "APPLICATION" | string;
+	optional?: boolean;
+	businessOutput?: boolean;
+	dbtRole?: string;
 	allowedUpstream: string[];
 	namingPrefixes: string[];
 };

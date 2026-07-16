@@ -15,11 +15,12 @@ public final class Sprint64GovernanceContract {
     public static final int VERSION = 1;
 
     private static final List<WarehouseLayerDto> WAREHOUSE_LAYERS = List.of(
-        new WarehouseLayerDto("ODS_RAW", "原始接入层", "保留来源字段与原始语义，不承担业务加工。", List.of(), List.of("ods_raw_", "raw_")),
-        new WarehouseLayerDto("ODS_STANDARDIZED", "标准化接入层", "统一类型、编码、时间与审计字段。", List.of("ODS_RAW"), List.of("ods_", "stg_")),
-        new WarehouseLayerDto("DWD", "明细事实 / 维度层", "按业务过程和声明粒度组织可复用明细。", List.of("ODS_STANDARDIZED", "DWD"), List.of("biz_dwd_", "dwd_", "dim_", "fact_")),
-        new WarehouseLayerDto("DWS", "汇总服务层", "围绕一致性维度形成可复用主题汇总。", List.of("DWD", "DWS"), List.of("biz_dws_", "dws_")),
-        new WarehouseLayerDto("ADS", "应用服务层", "面向报表、服务和数据产品发布。", List.of("DWD", "DWS", "ADS"), List.of("biz_ads_", "ads_"))
+        new WarehouseLayerDto("ODS_RAW", "原始接入层", "保留来源字段与原始语义，不承担业务加工。", "INGESTION", false, false, "dbt source 的原始入口，不做业务加工。", List.of(), List.of("ods_raw_", "raw_")),
+        new WarehouseLayerDto("ODS_STANDARDIZED", "标准化接入层", "统一类型、编码、时间与审计字段。", "INGESTION", false, false, "可作为 source freshness 和基础标准化的输入边界。", List.of("ODS_RAW"), List.of("ods_", "stg_")),
+        new WarehouseLayerDto("STG", "技术过渡层", "承接 dbt source 到业务模型之间的类型转换、重命名、去重和轻量清洗，不承担业务聚合。", "TECHNICAL", true, false, "dbt staging：一张源表对应一个轻量模型，不做业务指标聚合。", List.of("ODS_STANDARDIZED", "STG"), List.of("stg_")),
+        new WarehouseLayerDto("DWD", "明细事实 / 维度层", "按业务过程和声明粒度组织可复用明细。", "DETAIL", false, true, "dbt intermediate/core 的业务明细和维度模型。", List.of("ODS_STANDARDIZED", "STG", "DWD"), List.of("biz_dwd_", "dwd_", "dim_", "fact_")),
+        new WarehouseLayerDto("DWS", "汇总服务层", "围绕一致性维度形成可复用主题汇总。", "SERVICE", true, true, "dbt 汇总模型，复用 DWD 和一致性维度。", List.of("DWD", "DWS"), List.of("biz_dws_", "dws_")),
+        new WarehouseLayerDto("ADS", "应用服务层", "面向报表、服务和数据产品发布。", "APPLICATION", true, true, "dbt 应用模型或面向消费的最终数据集。", List.of("DWD", "DWS", "ADS"), List.of("biz_ads_", "ads_"))
     );
 
     private static final List<ConformedDimensionDto> CONFORMED_DIMENSIONS = List.of(
@@ -62,7 +63,7 @@ public final class Sprint64GovernanceContract {
             return new GrainValidation("blocked", "未识别的数仓层，不能执行粒度校验。", statement, grainKeys == null ? List.of() : List.copyOf(grainKeys));
         }
         boolean required = layer.equals("DWD") || layer.equals("DWS") || layer.equals("ADS");
-        if (!required) return new GrainValidation("not_required", "ODS 层只要求保留来源字段，不强制业务粒度。", statement, grainKeys == null ? List.of() : List.copyOf(grainKeys));
+        if (!required) return new GrainValidation("not_required", "ODS/STG 层只要求保留来源语义或完成技术清洗，不强制业务粒度。", statement, grainKeys == null ? List.of() : List.copyOf(grainKeys));
 
         String normalizedStatement = statement == null ? "" : statement.trim();
         List<String> normalizedKeys = grainKeys == null
@@ -74,7 +75,17 @@ public final class Sprint64GovernanceContract {
         return new GrainValidation("ready", "粒度声明完整。", normalizedStatement, normalizedKeys);
     }
 
-    public record WarehouseLayerDto(String code, String title, String responsibility, List<String> allowedUpstream, List<String> namingPrefixes) {}
+    public record WarehouseLayerDto(
+        String code,
+        String title,
+        String responsibility,
+        String kind,
+        boolean optional,
+        boolean businessOutput,
+        String dbtRole,
+        List<String> allowedUpstream,
+        List<String> namingPrefixes
+    ) {}
 
     public record ConformedDimensionDto(String dimensionId, String name, String sourceModel, List<String> domainIds) {}
 

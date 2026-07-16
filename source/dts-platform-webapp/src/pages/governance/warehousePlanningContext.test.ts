@@ -39,6 +39,10 @@ describe("warehouse planning context", () => {
 			domainId: "domain-1",
 			processId: "node-plan-loop",
 			warehouseLayer: "DWD",
+			layerSchemeId: "standard-lakehouse",
+			layerSchemeVersion: 1,
+			enabledLayers: ["ODS_RAW", "ODS_STANDARDIZED", "STG", "DWD", "DWS", "ADS"],
+			outputLayers: ["DWD", "DWS", "ADS"],
 			modelingMode: "dimension",
 			createdAt: "2026-07-11T01:00:00.000Z",
 			updatedAt: "2026-07-11T01:00:00.000Z",
@@ -59,6 +63,23 @@ describe("warehouse planning context", () => {
 		);
 		expect(loadWarehousePlanningContext(storage)).toBeNull();
 		expect(storage.getItem("dts.warehouse-planning.v1")).toBeNull();
+	});
+
+	it("upgrades a legacy planning draft with the default layer scheme", () => {
+		const storage = createStorage({
+			"dts.warehouse-planning.v1": JSON.stringify({
+				...baseInput,
+				version: 1,
+				createdAt: "2026-07-11T01:00:00.000Z",
+				updatedAt: "2026-07-11T01:00:00.000Z",
+			}),
+		});
+
+		const context = loadWarehousePlanningContext(storage);
+
+		expect(context?.version).toBe(WAREHOUSE_PLANNING_CONTEXT_VERSION);
+		expect(context?.enabledLayers).toContain("STG");
+		expect(context?.outputLayers).toEqual(["DWD", "DWS", "ADS"]);
 	});
 
 	it("builds a journey route with all planning parameters", () => {

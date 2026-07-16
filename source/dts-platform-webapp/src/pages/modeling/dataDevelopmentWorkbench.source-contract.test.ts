@@ -32,7 +32,7 @@ const businessModelingContextBar = readFileSync(new URL("./semantic-workspace/Bu
 
 test("data development workbench routes converge on existing pages", () => {
 	assert.match(menuSeed, /"title": "低代码开发向导"[\s\S]*?"externalLink": "\/studio\/low-code-development"/);
-	assert.match(menuSeed, /"title": "维度建模"[\s\S]*?"title": "逻辑建模（SQL）"/);
+	assert.match(menuSeed, /"title": "维度建模"[\s\S]*?"title": "高级建模（SQL）"/);
 	assert.match(menuSeed, /"key": "business-processes"[\s\S]*?"path": "business-processes"[\s\S]*?"title": "业务过程管理"[\s\S]*?"externalLink": "\/governance\/subjects\?focus=business-processes"/);
 	assert.match(menuSeed, /"title": "低代码开发向导"[\s\S]*?"externalLink": "\/studio\/low-code-development"/);
 	assert.match(menuSeed, /"title": "维度建模"[\s\S]*?"externalLink": "\/studio\/sql-modeling"/);

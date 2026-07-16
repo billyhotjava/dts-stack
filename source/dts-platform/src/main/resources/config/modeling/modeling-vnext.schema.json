@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dts.local/schema/modeling-vnext-contract.json",
+  "title": "DTS Modeling vNext Contract",
+  "type": "object",
+  "required": ["contractVersion", "businessObject", "modelSpec"],
+  "properties": {
+    "contractVersion": { "const": 1 },
+    "businessObject": { "$ref": "#/$defs/businessObject" },
+    "modelSpec": { "$ref": "#/$defs/modelSpec" }
+  },
+  "$defs": {
+    "layer": { "enum": ["ODS", "STG", "DWD", "DWS", "ADS"] },
+    "objectKind": { "enum": ["ENTITY", "FACT", "EVENT", "SNAPSHOT", "DIMENSION"] },
+    "modelType": { "enum": ["FACT", "DIMENSION", "SUMMARY", "APPLICATION"] },
+    "implementationMode": { "enum": ["DESIGNER_GENERATED", "DBT_MANAGED"] },
+    "grain": {
+      "type": "object",
+      "required": ["statement", "keys"],
+      "properties": {
+        "statement": { "type": "string" },
+        "keys": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "sourceRef": {
+      "type": "object",
+      "required": ["kind", "ref", "layer"],
+      "properties": {
+        "kind": { "enum": ["TABLE", "DBT_MODEL", "DATASET"] },
+        "ref": { "type": "string" },
+        "layer": { "$ref": "#/$defs/layer" }
+      },
+      "additionalProperties": false
+    },
+    "standardBinding": {
+      "type": "object",
+      "required": ["fieldName"],
+      "properties": {
+        "fieldName": { "type": "string" },
+        "standardElementId": { "type": "string" },
+        "referenceCode": { "type": "string" },
+        "securityLevel": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "businessObject": {
+      "type": "object",
+      "required": ["id", "code", "name", "objectKind", "processId", "businessKey", "grain", "sourceRefs", "status", "implementationMode"],
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "objectKind": { "$ref": "#/$defs/objectKind" },
+        "processId": { "type": "string" },
+        "businessKey": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "grain": { "$ref": "#/$defs/grain" },
+        "sourceRefs": { "type": "array", "items": { "$ref": "#/$defs/sourceRef" } },
+        "status": { "type": "string" },
+        "implementationMode": { "$ref": "#/$defs/implementationMode" }
+      },
+      "additionalProperties": false
+    },
+    "modelSpec": {
+      "type": "object",
+      "required": ["id", "objectId", "processId", "layer", "modelType", "implementationMode", "name", "grain", "standardBindings", "sourceRefs", "revision"],
+      "properties": {
+        "id": { "type": "string" },
+        "objectId": { "type": "string" },
+        "processId": { "type": "string" },
+        "layer": { "$ref": "#/$defs/layer" },
+        "modelType": { "$ref": "#/$defs/modelType" },
+        "implementationMode": { "$ref": "#/$defs/implementationMode" },
+        "name": { "type": "string" },
+        "grain": { "$ref": "#/$defs/grain" },
+        "standardBindings": { "type": "array", "items": { "$ref": "#/$defs/standardBinding" } },
+        "sourceRefs": { "type": "array", "items": { "$ref": "#/$defs/sourceRef" } },
+        "dimensions": { "type": "array", "items": { "type": "string" } },
+        "metrics": { "type": "array", "items": { "type": "string" } },
+        "materialization": { "type": "string" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "dependsOn": { "type": "array", "items": { "type": "string" } },
+        "legacyRef": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

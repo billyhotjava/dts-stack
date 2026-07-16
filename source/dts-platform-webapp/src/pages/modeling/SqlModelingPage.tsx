@@ -179,6 +179,7 @@ import type {
 import { resolveReleaseSubmitOutcome } from "./sqlModelReleaseSubmit.helpers";
 import { resolveDimensionCandidateGate } from "./dimensionCandidateGate";
 import { resolveGrainDeclaration, type GrainDeclaration } from "./grainDeclaration";
+import { ConformedDimensionRecommendations } from "./semantic-workspace/ConformedDimensionRecommendations";
 
 import { normalizeText, formatDateTime } from "@/utils/textUtils";
 
@@ -2093,7 +2094,7 @@ export default function SqlModelingPage() {
 							<ol style={{ margin: 0, paddingLeft: 20, fontSize: 12 }}>
 								<li>检查模型列表中的命名与分层是否符合预期。</li>
 								<li>进入 dbt 文件浏览器按业务口径微调 SQL 并运行 dbt。</li>
-								<li>完成验证后回到逻辑建模执行"提交变更"。</li>
+								<li>完成验证后回到高级建模执行"提交变更"。</li>
 							</ol>
 						</div>
 					</div>
@@ -2814,12 +2815,19 @@ export default function SqlModelingPage() {
 					</Space>
 				</Card>
 			) : null}
+			{dimensionMode ? (
+				<ConformedDimensionRecommendations
+					domainId={planningContext?.domainId}
+					processId={processId}
+					context={planningContext || undefined}
+				/>
+			) : null}
 			<div className="flex min-h-[calc(100vh-120px)] flex-col overflow-hidden rounded-[30px] border border-border/70 bg-card shadow-sm">
 			{/* 顶部工具栏 */}
 			<div className="flex h-14 items-center justify-between border-b border-border bg-card px-4">
 				<div className="flex items-center gap-4">
 					<div className="flex items-center gap-2">
-						<span className="text-base font-semibold text-foreground">逻辑建模</span>
+						<span className="text-base font-semibold text-foreground">高级建模（SQL）</span>
 						<Badge
 							status={configEnabled ? "success" : "error"}
 							text={

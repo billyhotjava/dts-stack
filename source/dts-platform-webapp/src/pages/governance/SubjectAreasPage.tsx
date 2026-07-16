@@ -41,7 +41,9 @@ import {
 	resolveWarehousePlanningContext,
 	resolveWarehousePlanningStatus,
 	saveWarehousePlanningContext,
+	type WarehousePlanningContext,
 } from "./warehousePlanningContext";
+import { DEFAULT_WAREHOUSE_LAYER_SCHEME, resolveLayer } from "./warehouseLayerRegistry";
 import {
 	BUSINESS_PROCESS_SEEDS,
 	adoptBusinessProcessSeeds,
@@ -245,8 +247,13 @@ export default function SubjectAreasPage() {
 
 	const activeDomain = selectedKey !== ROOT_KEY ? domainIndex.get(selectedKey) || null : null;
 	const planningResolution = useMemo(() => resolveWarehousePlanningContext(searchParams), [searchParams]);
+	const [planningContextOverride, setPlanningContextOverride] = useState<WarehousePlanningContext | null>(null);
 	const activePlanningContext =
-		planningResolution.context?.domainId === activeDomain?.id ? planningResolution.context : null;
+		planningContextOverride?.domainId === activeDomain?.id
+			? planningContextOverride
+			: planningResolution.context?.domainId === activeDomain?.id
+				? planningResolution.context
+				: null;
 	const planningStatus = useMemo(() => {
 		if (!activeDomain?.id) {
 			return { status: "blocked" as const, reason: "请先选择主题域" };
@@ -264,7 +271,7 @@ export default function SubjectAreasPage() {
 					reason: planningResolution.reason || "规划上下文不可用，请重新确认规划",
 				};
 			}
-			return { status: "draft" as const, reason: "尚未创建 DWD 维度建模规划" };
+			return { status: "draft" as const, reason: "尚未创建数仓规划，默认以 DWD 维度建模为首个业务输出" };
 		}
 		return resolveWarehousePlanningStatus(activePlanningContext, {
 			source: planningResolution.source,
@@ -278,6 +285,35 @@ export default function SubjectAreasPage() {
 		planningResolution.status,
 		searchParams,
 	]);
+	const stgLayer = resolveLayer("STG");
+	const enabledPlanningLayers = activePlanningContext?.enabledLayers ?? [...DEFAULT_WAREHOUSE_LAYER_SCHEME.enabledLayers];
+	const outputPlanningLayers = activePlanningContext?.outputLayers ?? [...DEFAULT_WAREHOUSE_LAYER_SCHEME.outputLayers];
+	const updateStgPlanning = (enabled: boolean) => {
+		if (!activeDomain?.id || !canManage) return;
+		const base =
+			activePlanningContext ||
+			createWarehousePlanningContext({
+				planningId: `warehouse-plan-${activeDomain.id}-${Date.now()}`,
+				domainId: activeDomain.id,
+				domainName: activeDomain.name,
+				processId: searchParams.get("processId") || planningResolution.context?.processId,
+				warehouseLayer: "DWD",
+				modelingMode: "dimension",
+			});
+		const next: WarehousePlanningContext = {
+			...base,
+			enabledLayers: enabled
+				? ([...new Set([...base.enabledLayers, "STG" as const])] as WarehousePlanningContext["enabledLayers"])
+				: base.enabledLayers.filter((layer) => layer !== "STG"),
+			updatedAt: new Date().toISOString(),
+		};
+		if (!saveWarehousePlanningContext(next)) {
+			toast.error("分层方案保存失败，请检查浏览器会话存储后重试");
+			return;
+		}
+		setPlanningContextOverride(next);
+		toast.success(enabled ? "已启用 STG 技术过渡层" : "已停用 STG 技术过渡层");
+	};
 
 	useEffect(() => {
 		void loadDomainTree();
@@ -676,17 +712,58 @@ export default function SubjectAreasPage() {
 								</Space>
 							</div>
 
-							<Divider />
+					<Divider />
 
-							<Alert
+					<Card
+						className="border-blue-100 bg-blue-50/30"
+						data-testid="warehouse-layer-plan"
+						title="输出分层方案"
+						extra={<Tag color="blue">标准方案 v{activePlanningContext?.layerSchemeVersion ?? DEFAULT_WAREHOUSE_LAYER_SCHEME.version}</Tag>}
+					>
+						<Space direction="vertical" size={8} className="w-full">
+							<div className="flex flex-wrap items-center gap-2">
+								{enabledPlanningLayers.map((layer, index) => (
+									<span key={layer} className="flex items-center gap-2">
+										<Tag color={layer === "STG" ? "gold" : layer === "DWD" ? "purple" : layer === "DWS" ? "blue" : layer === "ADS" ? "green" : "default"}>
+											{resolveLayer(layer)?.title || layer}
+										</Tag>
+										{index < enabledPlanningLayers.length - 1 ? <Text type="secondary">→</Text> : null}
+									</span>
+								))}
+							</div>
+							<Text type="secondary">
+								业务输出层：{outputPlanningLayers.map((layer) => resolveLayer(layer)?.key || layer).join("、")}；STG 是可选技术过渡层，不产出业务指标。
+							</Text>
+							{stgLayer ? (
+								<div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+									<div className="flex flex-wrap items-center justify-between gap-2">
+										<div>
+											<Text strong>STG · {stgLayer.title}</Text>
+											<div className="mt-1 text-xs text-slate-600">{stgLayer.responsibility}</div>
+											<div className="mt-1 text-xs text-slate-500">{stgLayer.dbtRole}</div>
+										</div>
+										<Checkbox
+											checked={enabledPlanningLayers.includes("STG")}
+											onChange={(event) => updateStgPlanning(event.target.checked)}
+											disabled={!canManage}
+										>
+											启用 STG（dbt 推荐）
+										</Checkbox>
+									</div>
+								</div>
+							) : null}
+						</Space>
+					</Card>
+
+					<Alert
 								showIcon
 								data-testid="warehouse-planning-card"
 								type={planningStatus.status === "blocked" ? "error" : planningStatus.status === "ready" ? "success" : "info"}
-								message="数仓规划 · DWD 维度建模"
+								message="数仓规划 · 分层方案"
 								description={
 									<Space direction="vertical" size={4}>
 										<Text>
-											主题域：{activeDomain.name || activeDomain.id} · 数仓层：DWD · 建模模式：维度建模
+											主题域：{activeDomain.name || activeDomain.id} · 输出层：{outputPlanningLayers.join(" → ")} · 建模模式：维度建模
 										</Text>
 										<Text type="secondary">
 											{planningStatus.reason || "规划、标准草稿与维度模型候选已具备连续上下文"}

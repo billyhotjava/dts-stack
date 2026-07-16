@@ -2,7 +2,9 @@
 
 用于沉淀尚未正式进入版本执行队列的候选 sprint。进入正式开发前，需要再确认分支、当前未提交差异、真实页面/API 状态和验收命令。
 
-## Sprint-60: 标准管理控制面与建模/指标闭环 (202607)
+> 2026-07-16：Sprint-60～Sprint-64 已统一迁移并合并到 `worklog/v2.2.3/`；本文件保留历史状态，正式执行以版本目录和版本队列为准。
+
+## Sprint-60: 标准管理控制面与建模/指标闭环（已合并至 v2.2.3） (202607)
 
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
@@ -12,11 +14,13 @@
 | F4-模板到低代码和发布门禁 | 4 | READY |
 | F5-标准到物理模型生成与SQL微调 | 4 | IN_PROGRESS |
 
-**统计**: READY=17, IN_PROGRESS=2, DONE=0, BLOCKED=0
+**统计**: READY=11, IN_PROGRESS=8, DONE=0, BLOCKED=0
 
-**目录**: `worklog/todo/sprint-60-202607-standards-control-plane/`
+**目录**: `worklog/v2.2.3/sprint-60-202607/`
 
-## Sprint-61: UI 主导的端到端数据产品体验闭环 (202607)
+**迁移说明**: 本轨道已与 `worklog/v2.2.3/sprint-60-202607` 的建模 vNext 轨道合并，标准控制面 Feature 在正式版本目录中以 `S-F1`～`S-F5` 标识。
+
+## Sprint-61: UI 主导的端到端数据产品体验闭环（已迁移至 v2.2.3） (202607)
 
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
@@ -32,9 +36,11 @@
 
 **统计**: READY=3, IN_PROGRESS=0, DONE=25, BLOCKED=0
 
-**目录**: `worklog/todo/sprint-61-202607-ui-led-e2e-product-experience/`
+**目录**: `worklog/v2.2.3/sprint-61-202607-ui-led-e2e-product-experience/`
 
-## Sprint-62: 旅程可信化与门禁证据结构化 (202607)
+**迁移说明**: 已迁移至正式版本目录；当前未完成项为 F9 可登录浏览器验收与回归基线。
+
+## Sprint-62: 旅程可信化与门禁证据结构化（已迁移至 v2.2.3） (202607)
 
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
@@ -45,11 +51,11 @@
 
 **统计**: READY=0, IN_PROGRESS=0, DONE=12, BLOCKED=0
 
-**目录**: `worklog/todo/sprint-62-202607-journey-trust-and-gate-evidence/`
+**目录**: `worklog/v2.2.3/sprint-62-202607-journey-trust-and-gate-evidence/`
 
-**来源**: 对 sprint-61 旅程重构的三视角 review（DataWorks 成熟产品 / dbt 门禁语义 / 客户无正规开发）；缺口分析见 sprint 目录 `assets/gap-analysis.md`。依赖：browser 证据挂靠 sprint-61 F9。
+**来源**: 对 sprint-61 旅程重构的三视角 review（DataWorks 成熟产品 / dbt 门禁语义 / 客户无正规开发）；缺口分析见 `worklog/v2.2.3/sprint-62-202607-journey-trust-and-gate-evidence/assets/gap-analysis.md`。依赖：browser 证据挂靠 sprint-61 F9。
 
-## Sprint-63: 数仓规划、数据标准与维度建模闭环 (202607)
+## Sprint-63: 数仓规划、数据标准与维度建模闭环（已迁移至 v2.2.3） (202607)
 
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
@@ -60,21 +66,21 @@
 
 **统计**: READY=0, IN_PROGRESS=0, DONE=12, BLOCKED=0
 
-**目录**: `worklog/todo/sprint-63-202607-warehouse-planning-standard-dimension-loop/`
+**目录**: `worklog/v2.2.3/sprint-63-202607-warehouse-planning-standard-dimension-loop/`
 
-## Sprint-64: 数仓规划能力升维——业务过程、分层注册、粒度与总线矩阵 (202607)
+## Sprint-64: 数仓规划能力升维——业务过程、分层注册、粒度与总线矩阵（已迁移至 v2.2.3，重点执行） (202607)
 
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
-| F1-业务过程管理 | 4 | READY |
-| F2-分层注册表与依赖红线 | 4 | READY |
-| F3-粒度声明与建模门禁 | 3 | READY |
-| F4-一致性维度登记与总线矩阵 | 3 | READY |
-| F5-规划升维闭环验证 | 3 | READY |
-| F6-建模动线与命名收敛 | 3 | READY |
+| F1-业务过程管理 | 4 | DONE |
+| F2-分层注册表与依赖红线 | 4 | DONE |
+| F3-粒度声明与建模门禁 | 3 | DONE |
+| F4-一致性维度登记与总线矩阵 | 3 | DONE |
+| F5-规划升维闭环验证 | 3 | IN_PROGRESS |
+| F6-建模动线与命名收敛 | 3 | DONE |
 
-**统计**: READY=21, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=1, DONE=19, BLOCKED=0
 
-**目录**: `worklog/todo/sprint-64-202607-planning-process-layer-grain-busmatrix/`
+**目录**: `worklog/v2.2.3/sprint-64-202607-planning-process-layer-grain-busmatrix/`
 
-**来源**: 对标 DataWorks 智能建模四模块的数仓规划差距分析 + 2026-07-11 重构评审四结论（概念三层链/模型管理层级修复/高级建模命名定型/单产物原则），见 `assets/design-notes.md` 第 7 节。依赖：Sprint-63 F1-F3 先行完成。
+**来源**: 对标 DataWorks 智能建模四模块的数仓规划差距分析 + 2026-07-11 重构评审四结论（概念三层链/模型管理层级修复/高级建模命名定型/单产物原则），见 `worklog/v2.2.3/sprint-64-202607-planning-process-layer-grain-busmatrix/assets/design-notes.md` 第 7 节。依赖：Sprint-63 F1-F3 已完成。

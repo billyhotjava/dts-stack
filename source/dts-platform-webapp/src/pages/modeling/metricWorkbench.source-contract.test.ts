@@ -137,9 +137,11 @@ test("MetricDetailPanel exposes edge relation configuration", () => {
 test("semantic workspace frame shows step progress and next action", () => {
 	assert.match(WORKSPACE_FRAME, /semantic-workspace-flow/);
 	assert.match(WORKSPACE_FRAME, /aria-label="指标建模导航"/);
-	assert.match(WORKSPACE_FRAME, /\/governance\/subjects/);
 	assert.doesNotMatch(WORKSPACE_FRAME, /\/modeling\/semantic\/subjects/);
-	assert.match(WORKSPACE_FRAME, /\/ops\/instances\?entryKey=DBT_RUN/);
+	// 2026-07 台账瘦身：frame 不再承载跨模块导航（治理主题域走菜单/概念链，
+	// 任务运维中心入口保留在 MetricDetailPanel，见 "semantic runs route is retired" 用例）。
+	assert.doesNotMatch(WORKSPACE_FRAME, /治理主题域/);
+	assert.doesNotMatch(WORKSPACE_FRAME, /任务运维中心/);
 	assert.doesNotMatch(WORKSPACE_FRAME, /事实源|下一步|完成发布闭环/);
 	assert.doesNotMatch(WORKSPACE_FRAME, /oklch|:has\(|@container/);
 });

@@ -6,6 +6,10 @@ export type BusinessModelingContext = {
 	processId?: string;
 	processName?: string;
 	planningId?: string;
+	planId?: string;
+	objectId?: string;
+	modelSpecId?: string;
+	revision?: string;
 	warehouseLayer?: string;
 	modelingMode?: string;
 	projectSpaceId?: string;
@@ -31,6 +35,10 @@ export const resolveBusinessModelingContext = (
 		processId: value(searchParams.get("processId")) || value(planningContext?.processId),
 		processName: value(searchParams.get("processName")),
 		planningId: value(searchParams.get("planningId")) || value(planningContext?.planningId),
+		planId: value(searchParams.get("planId")) || value(searchParams.get("planningId")) || value(planningContext?.planningId),
+		objectId: value(searchParams.get("objectId")),
+		modelSpecId: value(searchParams.get("modelSpecId")),
+		revision: value(searchParams.get("revision")),
 		warehouseLayer: value(searchParams.get("warehouseLayer")) || value(planningContext?.warehouseLayer),
 		modelingMode: value(searchParams.get("modelingMode")) || value(planningContext?.modelingMode),
 		projectSpaceId: value(searchParams.get("projectSpaceId")),
@@ -53,6 +61,10 @@ export const buildBusinessModelingRoute = (
 		processId: context.processId,
 		processName: context.processName,
 		planningId: context.planningId,
+		planId: context.planId,
+		objectId: context.objectId,
+		modelSpecId: context.modelSpecId,
+		revision: context.revision,
 		warehouseLayer: context.warehouseLayer,
 		modelingMode: context.modelingMode,
 		projectSpaceId: context.projectSpaceId,

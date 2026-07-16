@@ -39,7 +39,7 @@ class Sprint64GovernanceResourceTest {
         when(service.listWarehouseLayers()).thenReturn(Sprint64GovernanceContract.warehouseLayers());
         when(service.listConformedDimensions(any())).thenReturn(Sprint64GovernanceContract.conformedDimensions());
 
-        assertThat(resource.listWarehouseLayers().getData()).hasSize(5);
+        assertThat(resource.listWarehouseLayers().getData()).hasSize(6);
         assertThat(resource.listConformedDimensions(UUID.randomUUID()).getData()).hasSize(8);
     }
 }

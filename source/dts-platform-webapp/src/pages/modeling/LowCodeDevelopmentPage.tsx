@@ -29,6 +29,8 @@ import {
 } from "../governance/warehousePlanningContext";
 import { resolveDimensionCandidateGate } from "./dimensionCandidateGate";
 import { resolveGrainDeclaration, type GrainDeclaration } from "./grainDeclaration";
+import { ConformedDimensionRecommendations } from "./semantic-workspace/ConformedDimensionRecommendations";
+import { ModelingConceptCards } from "./semantic-workspace/ModelingConceptCards";
 import {
 	buildStandardBindingDraftSummary,
 	getStandardBindingDraft,
@@ -146,7 +148,7 @@ const CONSUMPTION_TARGETS = [
 
 const ADVANCED_LINKS = [
 	{ title: "业务过程管理", route: "/governance/subjects?focus=business-processes" },
-	{ title: "逻辑建模（SQL）", route: "/studio/sql-modeling" },
+	{ title: "高级建模（SQL）", route: "/studio/sql-modeling" },
 	{ title: "脚本开发", route: "/explore/etl/scripts" },
 	{ title: "任务编排", route: "/explore/etl/orchestration" },
 	{ title: "项目文件浏览", route: "/modeling/dbt-files" },
@@ -330,6 +332,17 @@ export default function LowCodeDevelopmentPage() {
 					</Space>
 				</Card>
 			) : null}
+			{dimensionMode ? (
+				<ConformedDimensionRecommendations
+					domainId={planningContext?.domainId}
+					processId={processId}
+					context={planningContext || undefined}
+				/>
+			) : null}
+			<ModelingConceptCards context={planningContext || undefined} />
+			<Card size="small" data-testid="modeling-artifact-contract" title="统一产出物">
+			<Text type="secondary">产出物：dbt 模型（SQL + schema.yml）。普通建模生成草稿，高级建模在同一份产物上精加工。</Text>
+			</Card>
 			{standardDraft ? (
 				<Alert
 					type="success"

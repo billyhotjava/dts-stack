@@ -249,6 +249,10 @@ info:
   display-ribbon-on-profiles: 'dev'
 
 dts:
+  modeling:
+    runtime:
+      # Keep first deployment safe; enable after Addax and Airflow endpoints are reachable.
+      enabled: ${DTS_MODELING_RUNTIME_ENABLED:false}
   dbt:
     enabled: ${DTS_DBT_ENABLED:true}
     config-path: ${DTS_DBT_CONFIG_PATH:/opt/dts/upload/dbt-config.json}

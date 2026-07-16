@@ -1,20 +1,29 @@
 import { buildJourneyUrl } from "@/components/journey";
+import {
+	DEFAULT_WAREHOUSE_LAYER_SCHEME,
+	WAREHOUSE_LAYER_REGISTRY,
+	type WarehouseLayer,
+} from "./warehouseLayerRegistry";
 
-export const WAREHOUSE_PLANNING_CONTEXT_VERSION = 1 as const;
+export const WAREHOUSE_PLANNING_CONTEXT_VERSION = 2 as const;
+const LEGACY_WAREHOUSE_PLANNING_CONTEXT_VERSION = 1 as const;
 export const WAREHOUSE_PLANNING_STORAGE_KEY = "dts.warehouse-planning.v1";
 
-export type WarehouseLayer = "ODS_RAW" | "ODS_STANDARDIZED" | "DWD" | "DWS" | "ADS";
 export type WarehouseModelingMode = "dimension";
 export type WarehousePlanningStatus = "draft" | "ready" | "blocked";
 export type WarehousePlanningSource = "session" | "url-fallback" | "missing";
 
 export type WarehousePlanningContext = {
-	version: typeof WAREHOUSE_PLANNING_CONTEXT_VERSION;
+	version: typeof WAREHOUSE_PLANNING_CONTEXT_VERSION | typeof LEGACY_WAREHOUSE_PLANNING_CONTEXT_VERSION;
 	planningId: string;
 	domainId: string;
 	domainName?: string;
 	processId?: string;
 	warehouseLayer: WarehouseLayer;
+	layerSchemeId: string;
+	layerSchemeVersion: number;
+	enabledLayers: WarehouseLayer[];
+	outputLayers: WarehouseLayer[];
 	modelingMode: WarehouseModelingMode;
 	sourceId?: string;
 	standardDraftId?: string;
@@ -56,7 +65,13 @@ export type StandardDraftGateResult = {
 	canCreateDraft: boolean;
 };
 
-const WAREHOUSE_LAYERS: WarehouseLayer[] = ["ODS_RAW", "ODS_STANDARDIZED", "DWD", "DWS", "ADS"];
+const WAREHOUSE_LAYERS = WAREHOUSE_LAYER_REGISTRY.map((layer) => layer.key);
+
+const normalizeLayers = (value: unknown, fallback: readonly WarehouseLayer[]): WarehouseLayer[] => {
+	if (!Array.isArray(value)) return [...fallback];
+	const layers = value.filter((item): item is WarehouseLayer => WAREHOUSE_LAYERS.includes(item as WarehouseLayer));
+	return layers.length ? [...new Set(layers)] : [...fallback];
+};
 
 const resolveDefaultStorage = (): WarehousePlanningStorage | undefined => {
 	try {
@@ -73,7 +88,7 @@ const isDimensionMode = (value: unknown): value is WarehouseModelingMode => valu
 
 const hasRequiredFields = (value: Partial<WarehousePlanningContext>): boolean =>
 	Boolean(
-		value.version === WAREHOUSE_PLANNING_CONTEXT_VERSION &&
+		(value.version === WAREHOUSE_PLANNING_CONTEXT_VERSION || value.version === LEGACY_WAREHOUSE_PLANNING_CONTEXT_VERSION) &&
 			value.planningId &&
 			value.domainId &&
 			isWarehouseLayer(value.warehouseLayer) &&
@@ -87,10 +102,14 @@ const toContext = (value: Partial<WarehousePlanningContext>): WarehousePlanningC
 		? {
 				version: WAREHOUSE_PLANNING_CONTEXT_VERSION,
 				planningId: String(value.planningId),
-			domainId: String(value.domainId),
-			domainName: value.domainName ? String(value.domainName) : undefined,
-			processId: value.processId ? String(value.processId) : undefined,
+				domainId: String(value.domainId),
+				domainName: value.domainName ? String(value.domainName) : undefined,
+				processId: value.processId ? String(value.processId) : undefined,
 				warehouseLayer: value.warehouseLayer as WarehouseLayer,
+				layerSchemeId: value.layerSchemeId ? String(value.layerSchemeId) : DEFAULT_WAREHOUSE_LAYER_SCHEME.id,
+				layerSchemeVersion: Number(value.layerSchemeVersion || DEFAULT_WAREHOUSE_LAYER_SCHEME.version),
+				enabledLayers: normalizeLayers(value.enabledLayers, DEFAULT_WAREHOUSE_LAYER_SCHEME.enabledLayers),
+				outputLayers: normalizeLayers(value.outputLayers, DEFAULT_WAREHOUSE_LAYER_SCHEME.outputLayers),
 				modelingMode: "dimension",
 				sourceId: value.sourceId ? String(value.sourceId) : undefined,
 				standardDraftId: value.standardDraftId ? String(value.standardDraftId) : undefined,
@@ -100,9 +119,13 @@ const toContext = (value: Partial<WarehousePlanningContext>): WarehousePlanningC
 		: null;
 
 export const createWarehousePlanningContext = (
-	input: Omit<WarehousePlanningContext, "version" | "createdAt" | "updatedAt"> & {
+	input: Omit<WarehousePlanningContext, "version" | "createdAt" | "updatedAt" | "layerSchemeId" | "layerSchemeVersion" | "enabledLayers" | "outputLayers"> & {
 		createdAt?: string;
 		updatedAt?: string;
+		layerSchemeId?: string;
+		layerSchemeVersion?: number;
+		enabledLayers?: WarehouseLayer[];
+		outputLayers?: WarehouseLayer[];
 	},
 	now: () => string = () => new Date().toISOString(),
 ): WarehousePlanningContext => {
@@ -114,6 +137,10 @@ export const createWarehousePlanningContext = (
 		domainName: input.domainName,
 		processId: input.processId,
 		warehouseLayer: input.warehouseLayer,
+		layerSchemeId: input.layerSchemeId || DEFAULT_WAREHOUSE_LAYER_SCHEME.id,
+		layerSchemeVersion: input.layerSchemeVersion || DEFAULT_WAREHOUSE_LAYER_SCHEME.version,
+		enabledLayers: normalizeLayers(input.enabledLayers, DEFAULT_WAREHOUSE_LAYER_SCHEME.enabledLayers),
+		outputLayers: normalizeLayers(input.outputLayers, DEFAULT_WAREHOUSE_LAYER_SCHEME.outputLayers),
 		modelingMode: input.modelingMode,
 		sourceId: input.sourceId,
 		standardDraftId: input.standardDraftId,
@@ -172,6 +199,8 @@ const planningRouteParams = (context: WarehousePlanningContext): Record<string, 
 	domainId: context.domainId,
 	...(context.processId ? { processId: context.processId } : {}),
 	warehouseLayer: context.warehouseLayer,
+	layerSchemeId: context.layerSchemeId,
+	layerSchemeVersion: String(context.layerSchemeVersion),
 	modelingMode: context.modelingMode,
 	...(context.sourceId ? { sourceId: context.sourceId } : {}),
 	...(context.standardDraftId ? { standardDraftId: context.standardDraftId } : {}),
@@ -185,6 +214,8 @@ const routePlanningParams = (searchParams: URLSearchParams) => ({
 		domainId: searchParams.get("domainId") || "",
 		processId: searchParams.get("processId") || undefined,
 		warehouseLayer: searchParams.get("warehouseLayer") || "",
+		layerSchemeId: searchParams.get("layerSchemeId") || undefined,
+		layerSchemeVersion: searchParams.get("layerSchemeVersion") || undefined,
 	modelingMode: searchParams.get("modelingMode") || "",
 	sourceId: searchParams.get("sourceId") || undefined,
 	standardDraftId: searchParams.get("standardDraftId") || undefined,
@@ -216,6 +247,8 @@ const fallbackContextFromRoute = (searchParams: URLSearchParams): WarehousePlann
 		planningId: route.planningId,
 		domainId: route.domainId,
 		warehouseLayer: route.warehouseLayer,
+		layerSchemeId: route.layerSchemeId,
+		layerSchemeVersion: route.layerSchemeVersion ? Number(route.layerSchemeVersion) : undefined,
 		modelingMode: "dimension",
 		processId: route.processId,
 		sourceId: route.sourceId,

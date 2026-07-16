@@ -1,5 +1,19 @@
 # Sprint Queue — v2.2.3
 
+## 2026-07-16 Goal 完成度审计
+
+本次审计把“代码实现完成”和“可交付闭环完成”分开判定：必须同时具备实现、测试、构建、数据库迁移、运行容器和浏览器证据，才能称为真正完成。
+
+| Sprint | 代码/契约 | 测试与构建 | 当前运行/验收 | 结论 |
+|---|---|---|---|---|
+| Sprint-60 | F1/F2 已完成；F3～F7 仍有明确未完成标准 | 前端专项契约可运行；后端/dbt/Addax/Airflow 全链路未闭环 | 运行容器健康，但未证明 PJM 全链路与真实租户验收 | **未完成** |
+| Sprint-61 | F1～F8 已完成 | source-contract/build 证据完整 | F9 登录、DNS、Playwright、Chrome95 smoke 未完成 | **未完成** |
+| Sprint-62 | F1～F4 实现完成 | 35/35 journey source-contract 通过 | 浏览器恢复卡、门禁卡、打印视图仍挂靠 Sprint-61/F9 | **实现完成，交付未完成** |
+| Sprint-63 | F1～F4 实现完成 | 规划/门禁/契约证据通过；Node 与 Vitest 需按测试类型运行 | 4 个业务页浏览器 smoke 仍被登录/DNS 阻断 | **实现完成，交付未完成** |
+| Sprint-64 | F1～F4、F6 源码实现完成；F5/T03 未完成 | source-contract 29/29、治理/建模 Node 13/13、Vitest 7/7、tsc/build 通过 | 平台健康、Sprint64 表已迁移；当前容器未应用 20260716 菜单迁移，且未包含本轮概念卡/维度推荐产物，浏览器 smoke 未完成 | **未完成** |
+
+审计证据：`/management/health` 返回 `UP`；平台库存在 `sprint64_*` 与 `modeling_*` 表；`20260711_01_sprint64_governance`、`20260714-01_modeling_vnext` 已执行；`20260716-01_advanced_modeling_menu_label` 尚未执行，运行库菜单仍为“逻辑建模（SQL）”。
+
 ## Sprint-1: 架构加固 -- 高可用、安全、可观测性 (202604)
 **状态**: DONE（代码与 focused 验证完成；现场 smoke 待部署补证）
 **类型**: Design Only（仅设计，不实施）
@@ -1174,6 +1188,112 @@
 - 新增 `/studio/low-code-development` 低代码开发向导和菜单/角色默认项。
 - 指标工作台支持 `journey=low-code-development` 上下文提示和返回向导动作。
 - 验证：前端 source-contract 26/26、`pnpm exec tsc --noEmit`、`pnpm build`、后端 targeted seed test、Playwright smoke 通过。
+
+## Sprint-60: 建模 vNext、标准控制面与 dbt 双模式运行闭环 (202607)
+**状态**: IN_PROGRESS
+**类型**: Architecture / Standards Control Plane / Frontend + API + Backend + dbt + Airflow
+**目标**: 建立全新的 ModelSpec 建模版本，并把标准管理升级为开发与发布控制面；普通建模与高级 dbt SQL 两条路径统一进入 Addax、dbt、Airflow、PostgreSQL 运行链路。
+**设计文档**: `worklog/v2.2.3/sprint-60-202607/README.md`
+**架构说明**: `worklog/v2.2.3/sprint-60-202607/assets/modeling-vnext-architecture.md`
+**PJM 黄金主线**: `worklog/v2.2.3/sprint-60-202607/assets/pjm-golden-path.md`
+**API 矩阵**: `worklog/v2.2.3/sprint-60-202607/assets/modeling-api-contract-matrix.md`
+**集成测试**: `worklog/v2.2.3/sprint-60-202607/it/README.md`
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-建模vNext核心契约与PJM黄金主线 | P0 | 3 | DONE |
+| F2-业务对象模型台账与低代码前端 | P0 | 4 | DONE |
+| F3-建模API契约与兼容入口 | P0 | 4 | IN_PROGRESS |
+| F4-PostgreSQL持久化与后端治理服务 | P0 | 4 | IN_PROGRESS |
+| F5-dbt产物生成与SQL双模式 | P0 | 3 | IN_PROGRESS |
+| F6-AddaxAirflowPostgreSQL运行闭环 | P0 | 4 | IN_PROGRESS |
+| F7-TDDPlaywright与旧资产迁移验收 | P0 | 4 | IN_PROGRESS |
+| S-F1-标准控制面与事实源收敛 | P0 | 3 | READY |
+| S-F2-数据元到逻辑建模强约束 | P0 | 4 | IN_PROGRESS |
+| S-F3-业务术语到指标口径绑定 | P0 | 4 | READY |
+| S-F4-标准模板到低代码和发布门禁 | P1 | 4 | READY |
+| S-F5-标准到物理模型生成与SQL微调 | P0 | 4 | IN_PROGRESS |
+
+**统计**: READY=11, IN_PROGRESS=27, DONE=7, BLOCKED=0
+**关键决策**:
+- 业务对象是业务语义锚点，不等于物理表或 dbt 模型。
+- ModelSpec 驱动普通用户建模，dbt SQL/manifest 驱动高级开发登记；两种模式显式区分，不做无提示双向覆盖。
+- 新 API 采用 `/api/modeling/*`，旧 `/api/semantic/*` 保留兼容，不新增 `/v2` URL 命名空间。
+- Addax 负责 ODS 接入，dbt 负责转换，Airflow 负责编排，PostgreSQL 负责数据与建模元数据。
+- PJM“项目节点计划闭环”只作为黄金主线和回归夹具，不把 PJM 业务字段硬编码进平台。
+
+## Sprint-61: UI 主导的端到端数据产品体验闭环 (202607)
+**状态**: IN_PROGRESS
+**类型**: Frontend Productization / Journey / Playwright
+**目标**: 把数据集成、数仓规划、标准、建模、指标、发布和消费串成可验证的客户旅程。
+**设计文档**: `worklog/v2.2.3/sprint-61-202607-ui-led-e2e-product-experience/README.md`
+**集成测试**: `worklog/v2.2.3/sprint-61-202607-ui-led-e2e-product-experience/it/README.md`
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-端到端旅程工作台与上下文保持 | P0 | 3 | DONE |
+| F2-数据集成到数仓规划的首屏引导 | P0 | 4 | DONE |
+| F3-标准落标到建模与指标的可见传递 | P0 | 3 | DONE |
+| F4-数据开发到发布门禁与运行证据 | P0 | 3 | DONE |
+| F5-数据服务消费闭环与客户验收 | P1 | 3 | DONE |
+| F6-旅程上下文组件化与页面接入 | P0 | 3 | DONE |
+| F7-阶段状态与缺口计算模型 | P0 | 3 | DONE |
+| F8-客户验收包与证据聚合 | P1 | 3 | DONE |
+| F9-可登录浏览器验收与回归基线 | P0 | 3 | READY |
+
+**统计**: READY=3, IN_PROGRESS=0, DONE=25, BLOCKED=0
+
+## Sprint-62: 旅程可信化与门禁证据结构化 (202607)
+**状态**: DONE
+**类型**: Journey Persistence / Gate Evidence / Playwright
+**目标**: 让旅程状态、阶段真实性和 dbt 式门禁证据可持久化、可恢复、可打印。
+**设计文档**: `worklog/v2.2.3/sprint-62-202607-journey-trust-and-gate-evidence/README.md`
+**集成测试**: `worklog/v2.2.3/sprint-62-202607-journey-trust-and-gate-evidence/it/README.md`
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-旅程实例持久化与恢复 | P0 | 3 | DONE |
+| F2-阶段真实性校验 | P0 | 3 | DONE |
+| F3-dbt式门禁证据结构化 | P0 | 3 | DONE |
+| F4-菜单直达旅程感知与验收包打印 | P1 | 3 | DONE |
+
+**统计**: READY=0, IN_PROGRESS=0, DONE=12, BLOCKED=0
+
+## Sprint-63: 数仓规划、数据标准与维度建模闭环 (202607)
+**状态**: DONE
+**类型**: Warehouse Planning / Data Standards / Dimension Modeling
+**目标**: 将数仓规划上下文、数据标准草稿和维度建模候选打通。
+**设计文档**: `worklog/v2.2.3/sprint-63-202607-warehouse-planning-standard-dimension-loop/README.md`
+**集成测试**: `worklog/v2.2.3/sprint-63-202607-warehouse-planning-standard-dimension-loop/it/README.md`
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-数仓规划上下文与主题域入口 | P0 | 3 | DONE |
+| F2-规划上下文到数据标准与字段草稿 | P0 | 3 | DONE |
+| F3-标准草稿到维度建模候选 | P0 | 3 | DONE |
+| F4-规划-标准-建模闭环验证 | P0 | 3 | DONE |
+
+**统计**: READY=0, IN_PROGRESS=0, DONE=12, BLOCKED=0
+
+## Sprint-64: 数仓规划能力升维——业务过程、分层注册、粒度与总线矩阵 (202607)
+**状态**: IN_PROGRESS（当前重点）
+**类型**: Warehouse Planning / Modeling Governance / Frontend + API + Backend
+**目标**: 在 Sprint-63 的规划-标准-建模闭环上，补齐业务过程、分层注册、粒度声明、一致性维度和总线矩阵，让模型管理具备可执行的规划依据。
+**设计文档**: `worklog/v2.2.3/sprint-64-202607-planning-process-layer-grain-busmatrix/README.md`
+**API 契约**: `worklog/v2.2.3/sprint-64-202607-planning-process-layer-grain-busmatrix/assets/api-contract.md`
+**集成测试**: `worklog/v2.2.3/sprint-64-202607-planning-process-layer-grain-busmatrix/it/README.md`
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-业务过程管理 | P0 | 4 | DONE |
+| F2-分层注册表与依赖红线 | P0 | 4 | DONE |
+| F3-粒度声明与建模门禁 | P0 | 3 | DONE |
+| F4-一致性维度登记与总线矩阵 | P1 | 3 | DONE |
+| F5-规划升维闭环验证 | P0 | 3 | IN_PROGRESS |
+| F6-建模动线与命名收敛 | P0 | 3 | DONE |
+
+**统计**: READY=0, IN_PROGRESS=1, DONE=19, BLOCKED=0
+**执行顺序**: F1 → F2/F3 → F4 → F5；F6 与 F1 并行但必须在发布前完成命名和入口收敛。
 
 ## v2.3 Backlog: 企业级资产与指标增强
 

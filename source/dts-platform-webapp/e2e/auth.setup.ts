@@ -27,6 +27,25 @@ function pickToken(obj: Record<string, unknown>, keys: string[]): string {
   return "";
 }
 
+function toStorageCookies(headers: string[], origin: URL) {
+  return headers
+    .map((header) => {
+      const [pair] = header.split(";", 1);
+      const separator = pair.indexOf("=");
+      if (separator <= 0) return null;
+      return {
+        name: pair.slice(0, separator).trim(),
+        value: pair.slice(separator + 1).trim(),
+        domain: origin.hostname,
+        path: "/",
+        httpOnly: true,
+        secure: origin.protocol === "https:",
+        sameSite: "Lax" as const,
+      };
+    })
+    .filter((cookie): cookie is NonNullable<typeof cookie> => cookie !== null);
+}
+
 async function globalSetup(): Promise<void> {
   const loginUrl = `${baseURL}/api/keycloak/auth/login`;
 
@@ -51,10 +70,17 @@ async function globalSetup(): Promise<void> {
     (envelope["data"] as Record<string, unknown>) ?? envelope;
   const accessToken = pickToken(data, ["accessToken", "access_token", "token"]);
   const refreshToken = pickToken(data, ["refreshToken", "refresh_token"]);
+  const authenticated = Boolean(data["authenticated"]);
+  const origin = new URL(baseURL);
+  const cookies = toStorageCookies(res.headers.getSetCookie(), origin);
+  const portalCookie = cookies.find((cookie) => cookie.name === "portal_session");
 
-  if (!accessToken) {
+  // Newer platform deployments keep credentials in an HttpOnly portal_session
+  // cookie and intentionally do not return a JWT. Preserve both auth modes so
+  // the browser test follows the same session contract as the product.
+  if (!accessToken && (!authenticated || !portalCookie)) {
     throw new Error(
-      `Auth setup: login responded OK but no accessToken found.\nBody: ${JSON.stringify(envelope).slice(0, 300)}`,
+      `Auth setup: login responded OK but no accessToken or portal session found.\nBody: ${JSON.stringify(envelope).slice(0, 300)}`,
     );
   }
 
@@ -76,17 +102,17 @@ async function globalSetup(): Promise<void> {
   const storeRecord = {
     state: {
       userInfo,
-      userToken: { accessToken, refreshToken },
+      userToken: accessToken
+        ? { accessToken, refreshToken }
+        : { authenticated: true, tokenExpiresAt: data["portalExpiresAt"] },
     },
     version: 0,
   };
 
   const storeJson = JSON.stringify(storeRecord);
   const now = String(Date.now());
-  const origin = new URL(baseURL).origin;
-
   const storageState = {
-    cookies: [],
+    cookies,
     origins: [
       {
         origin,

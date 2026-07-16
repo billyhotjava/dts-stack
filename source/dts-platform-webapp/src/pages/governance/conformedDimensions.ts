@@ -1,5 +1,6 @@
 export const CONFORMED_DIMENSION_VERSION = 1 as const;
 export const BUS_MATRIX_STORAGE_KEY = "dts.conformed-dimension-bus-matrix.v1";
+export const CONFORMED_DIMENSION_REFERENCE_KEY = "dts.conformed-dimension-reference.v1";
 
 export type ConformedDimension = {
 	version: typeof CONFORMED_DIMENSION_VERSION;
@@ -14,6 +15,16 @@ export type BusMatrix = {
 	domainId: string;
 	links: Record<string, string[]>;
 	updatedAt: string;
+};
+
+export type ConformedDimensionReference = {
+	version: typeof CONFORMED_DIMENSION_VERSION;
+	domainId: string;
+	processId: string;
+	dimensionId: string;
+	name: string;
+	sourceModel?: string;
+	savedAt: string;
 };
 
 export type ConformedDimensionStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
@@ -46,6 +57,48 @@ const emptyMatrix = (domainId: string): BusMatrix => ({
 
 export const dimensionsForDomain = (domainId: string): ConformedDimension[] =>
 	CONFORMED_DIMENSION_SEEDS.filter((item) => item.domainIds.includes("*") || item.domainIds.includes(domainId));
+
+/**
+ * Returns the conformed dimensions already registered for a business process.
+ * An empty result is intentional: callers can render the full catalog as the
+ * next registration action without pretending that a dimension is reusable.
+ */
+export const recommendDimensionsForProcess = (
+	domainId: string,
+	processId: string | undefined,
+	matrix: BusMatrix = loadBusMatrix(domainId),
+): ConformedDimension[] => {
+	if (!processId?.trim()) return [];
+	const registered = new Set(matrix.links[processId] || []);
+	return dimensionsForDomain(domainId).filter((dimension) => registered.has(dimension.dimensionId));
+};
+
+export const buildConformedDimensionReference = (
+	domainId: string,
+	processId: string,
+	dimension: ConformedDimension,
+	now = new Date().toISOString(),
+): ConformedDimensionReference => ({
+	version: CONFORMED_DIMENSION_VERSION,
+	domainId,
+	processId,
+	dimensionId: dimension.dimensionId,
+	name: dimension.name,
+	sourceModel: dimension.sourceModel,
+	savedAt: now,
+});
+
+export const saveConformedDimensionReference = (
+	reference: ConformedDimensionReference,
+	storage: ConformedDimensionStorage | undefined = defaultStorage(),
+): ConformedDimensionReference => {
+	try {
+		storage?.setItem(`${CONFORMED_DIMENSION_REFERENCE_KEY}:${reference.domainId}:${reference.processId}`, JSON.stringify(reference));
+	} catch {
+		// session storage can be unavailable; callers still receive the metadata.
+	}
+	return reference;
+};
 
 export const loadBusMatrix = (
 	domainId: string,

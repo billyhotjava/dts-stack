@@ -1,6 +1,6 @@
 import { Button } from "antd";
 import type { LucideIcon } from "lucide-react";
-import { Activity, BarChart3, Box, CheckCircle2, CircleDot, Database, Layers3, MapPinned, Rocket } from "lucide-react";
+import { BarChart3, Box, CheckCircle2, CircleDot, Database, Layers3, Rocket } from "lucide-react";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { PageHeader } from "@/components/page-header";
@@ -8,6 +8,7 @@ import { cn } from "@/utils";
 import type { BusinessModelingContext } from "../businessModelingContext";
 import { buildBusinessModelingRoute } from "../businessModelingContext";
 import { BusinessModelingContextBar } from "./BusinessModelingContextBar";
+import { ModelingConceptCards } from "./ModelingConceptCards";
 
 export type SemanticWorkspaceKey = "workbench" | "objects" | "metrics" | "models" | "publish";
 
@@ -94,19 +95,7 @@ export function SemanticWorkspaceFrame({
 		<div className={cn("space-y-4 px-6 py-5", className)} data-testid="semantic-workspace-frame">
 			<PageHeader
 				title={title}
-				actions={
-					<div className="flex flex-wrap items-center gap-2">
-						<Button onClick={() => navigate("/governance/subjects")}>
-							<MapPinned size={16} />
-							治理主题域
-						</Button>
-						<Button onClick={() => navigate("/ops/instances?entryKey=DBT_RUN")}>
-							<Activity size={16} />
-							任务运维中心
-						</Button>
-						{actions}
-					</div>
-				}
+				actions={<div className="flex flex-wrap items-center gap-2">{actions}</div>}
 			/>
 			{context ? <BusinessModelingContextBar context={context} /> : null}
 
@@ -152,6 +141,8 @@ export function SemanticWorkspaceFrame({
 					</div>
 				</div>
 			</div>
+
+			<ModelingConceptCards context={context} />
 
 			{children}
 		</div>

@@ -1,33 +1,20 @@
-import assert from "node:assert/strict";
-import test from "node:test";
-import { buildBusinessModelingRoute, resolveBusinessModelingContext } from "./businessModelingContext.ts";
+import { describe, expect, it } from "vitest";
+import { buildBusinessModelingRoute, resolveBusinessModelingContext } from "./businessModelingContext";
 
-test("business modeling context keeps the business process and leaves project space optional", () => {
-	const context = resolveBusinessModelingContext(
-		new URLSearchParams(
-			"domainId=domain-1&domainName=%E8%AE%A2%E5%8D%95%E5%9F%9F&processId=order-fulfillment&processName=%E8%AE%A2%E5%8D%95%E5%B1%A5%E7%BA%A6&planningId=plan-1&warehouseLayer=DWD",
-		),
-	);
+describe("business modeling journey context", () => {
+	it("keeps object, model and revision identifiers across ledger links", () => {
+		const context = resolveBusinessModelingContext(new URLSearchParams("processId=pjm&objectId=obj-1&modelSpecId=model-1&revision=2"));
 
-	assert.equal(context.domainId, "domain-1");
-	assert.equal(context.processId, "order-fulfillment");
-	assert.equal(context.projectSpaceId, undefined);
-	assert.equal(context.projectSpaceMode, "implicit");
-});
-
-test("business modeling links preserve the process context across ledger pages", () => {
-	const route = buildBusinessModelingRoute("/modeling/semantic/models?from=process", {
-		domainId: "domain-1",
-		processId: "order-fulfillment",
-		planningId: "plan-1",
-		warehouseLayer: "DWD",
-		modelingMode: "dimension",
+		expect(context.projectSpaceMode).toBe("implicit");
+		expect(buildBusinessModelingRoute("/modeling/semantic/models", context)).toContain("objectId=obj-1");
+		expect(buildBusinessModelingRoute("/modeling/semantic/models", context)).toContain("modelSpecId=model-1");
+		expect(buildBusinessModelingRoute("/modeling/semantic/models", context)).toContain("revision=2");
 	});
 
-	assert.match(route, /^\/modeling\/semantic\/models\?/);
-	assert.match(route, /from=process/);
-	assert.match(route, /domainId=domain-1/);
-	assert.match(route, /processId=order-fulfillment/);
-	assert.match(route, /planningId=plan-1/);
-	assert.doesNotMatch(route, /projectSpaceId=/);
+	it("does not require a project space for a valid process context", () => {
+		const context = resolveBusinessModelingContext(new URLSearchParams("processId=pjm"));
+
+		expect(context.projectSpaceId).toBeUndefined();
+		expect(context.projectSpaceMode).toBe("implicit");
+	});
 });

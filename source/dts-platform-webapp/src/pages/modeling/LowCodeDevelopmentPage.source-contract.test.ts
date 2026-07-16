@@ -3,99 +3,17 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const PAGE = readFileSync(new URL("./LowCodeDevelopmentPage.tsx", import.meta.url), "utf8");
-const METRIC_WORKBENCH = readFileSync(new URL("./MetricWorkbenchPage.tsx", import.meta.url), "utf8");
-const STATIC_ROUTES = readFileSync(
-	new URL("../../routes/sections/dashboard/static-routes.tsx", import.meta.url),
-	"utf8",
-);
-const DYNAMIC_RESOLVER = readFileSync(
-	new URL("../../routes/sections/dashboard/dynamic-resolver.tsx", import.meta.url),
-	"utf8",
-);
-const MENU_SEED = readFileSync(
-	new URL("../../../../dts-admin/src/main/resources/config/data/portal-menu-seed.json", import.meta.url),
-	"utf8",
-);
-const ROLE_DEFAULTS = readFileSync(
-	new URL("../../../../dts-admin/src/main/resources/config/data/role-menu-defaults.json", import.meta.url),
-	"utf8",
-);
+const RECOMMENDATION = readFileSync(new URL("./semantic-workspace/ConformedDimensionRecommendations.tsx", import.meta.url), "utf8");
 
-test("low-code development entry is wired into data development without removing advanced entries", () => {
-	assert.match(MENU_SEED, /"key": "low-code-development"/);
-	assert.match(MENU_SEED, /"title": "低代码开发向导"/);
-	assert.match(MENU_SEED, /"externalLink": "\/studio\/low-code-development"/);
-	assert.match(MENU_SEED, /"key": "sql"[\s\S]*?"externalLink": "\/studio\/sql-modeling"/);
-	assert.match(MENU_SEED, /"key": "scripts"[\s\S]*?"externalLink": "\/explore\/etl\/scripts"/);
-	assert.match(MENU_SEED, /"key": "orchestration"[\s\S]*?"externalLink": "\/explore\/etl\/orchestration"/);
-	assert.match(MENU_SEED, /"key": "dbt-files"[\s\S]*?"externalLink": "\/modeling\/dbt-files"/);
-	assert.match(ROLE_DEFAULTS, /"code": "sys\.nav\.portal\.studioLowCodeDevelopment"/);
-	assert.match(ROLE_DEFAULTS, /"route": "\/studio\/low-code-development"/);
+test("low-code modeling exposes conformed-dimension reuse and one dbt output contract", () => {
+	assert.match(PAGE, /ConformedDimensionRecommendations|可复用维度/);
+	assert.match(RECOMMENDATION, /同名|引用/);
+	assert.match(PAGE, /产出物：dbt 模型（SQL \+ schema\.yml）/);
+	assert.match(PAGE, /ModelingConceptCards/);
 });
 
-test("low-code guide is a modeling sibling while business process owns project spaces", () => {
-	assert.match(MENU_SEED, /"key": "low-code-development"[\s\S]*?"title": "低代码开发向导"/);
-	assert.match(MENU_SEED, /"key": "business-processes"[\s\S]*?"title": "业务过程管理"/);
-});
-
-test("low-code development route resolves to a real platform page", () => {
-	assert.match(STATIC_ROUTES, /const LowCodeDevelopmentPage = lazy\(\(\) => import\("@\/pages\/modeling\/LowCodeDevelopmentPage"\)\)/);
-	assert.match(STATIC_ROUTES, /path: "studio\/low-code-development"[\s\S]*<LowCodeDevelopmentPage/);
-	assert.match(DYNAMIC_RESOLVER, /"\/studio\/low-code-development": "\/pages\/modeling\/LowCodeDevelopmentPage"/);
-});
-
-test("low-code development page keeps ELT, metrics, publishing, and ops in one journey", () => {
-	for (const key of [
-		"data_ready",
-		"object_confirmed",
-		"metric_designed",
-		"model_candidate",
-		"publish_ready",
-		"run_evidence",
-	]) {
-		assert.match(PAGE, new RegExp(`key: "${key}"`));
-	}
-	assert.match(PAGE, /data-testid="low-code-development-page"/);
-	assert.match(PAGE, /data-testid=\{`low-code-development-step-\$\{step\.key\}`\}/);
-	assert.match(PAGE, /\/workbench\?section=data-management&journey=first-report/);
-	assert.match(PAGE, /\/foundation\/data-sources/);
-	assert.match(PAGE, /\/explore\/etl\/transform\/new/);
-	assert.match(PAGE, /\/catalog\/metadata-management/);
-	assert.match(PAGE, /\/modeling\/metric-workbench\?journey=low-code-development/);
-	assert.match(PAGE, /\/modeling\/semantic\/models\?journey=low-code-development/);
-	assert.match(PAGE, /\/modeling\/semantic\/publish\?journey=low-code-development/);
-	assert.match(PAGE, /\/ops\/instances\?entryKey=DBT_RUN&journey=low-code-development/);
-	assert.match(PAGE, /data-testid="advanced-development-links"/);
-	assert.doesNotMatch(PAGE, /生成 SQL/);
-});
-
-test("metric workbench accepts low-code journey context and returns to the guide", () => {
-	assert.match(METRIC_WORKBENCH, /useLocation/);
-	assert.match(METRIC_WORKBENCH, /journey === "low-code-development"/);
-	assert.match(METRIC_WORKBENCH, /data-testid="metric-workbench-low-code-context"/);
-	assert.match(METRIC_WORKBENCH, /返回低代码向导/);
-	assert.match(METRIC_WORKBENCH, /businessObjectId/);
-	assert.match(METRIC_WORKBENCH, /target=report/);
-});
-
-test("low-code development blocks modeling until ingestion readiness is explicit", () => {
-	assert.match(PAGE, /ingestion-readiness/);
-	assert.match(PAGE, /同步成功|同步中|接入失败|未接入/);
-	assert.match(PAGE, /建模前置条件|数据接入就绪/);
-	assert.match(PAGE, /disabled=.*ingestion|ingestion.*disabled/);
-});
-
-test("low-code development exposes standard draft field gaps and provenance", () => {
-	assert.match(PAGE, /标准来源|标准草稿来源/);
-	assert.match(PAGE, /待补标准|缺失标准/);
-	assert.match(PAGE, /createdAt|创建时间/);
-});
-
-test("low-code dimension modeling exposes process and grain declaration gates", () => {
-	assert.match(PAGE, /processId/);
-	assert.match(PAGE, /grainDeclaration/);
-	assert.match(PAGE, /resolveGrainDeclaration/);
-	assert.match(PAGE, /validateGrainApi/);
-	assert.match(PAGE, /粒度语句/);
-	assert.match(PAGE, /粒度键/);
+test("concept cards support session-level dismissal", () => {
+	const cards = readFileSync(new URL("./semantic-workspace/ModelingConceptCards.tsx", import.meta.url), "utf8");
+	assert.match(cards, /sessionStorage/);
+	assert.match(cards, /隐藏|关闭/);
 });

@@ -15,12 +15,16 @@ import {
 	type SemanticModel,
 	type SemanticModelPreview,
 } from "@/api/semanticModelingApi";
+import { getModelSpecReleaseGate, listModelingModelSpecs, type ModelingReleaseGate } from "@/api/modelingApi";
 import { SemanticWorkspaceFrame } from "./semantic-workspace/SemanticWorkspaceFrame";
 import { useSearchParams } from "@/routes/hooks";
 import { resolveWarehousePlanningContext } from "../governance/warehousePlanningContext";
+import { DEFAULT_WAREHOUSE_LAYER_SCHEME } from "../governance/warehouseLayerRegistry";
 import { buildBusinessModelingRoute, resolveBusinessModelingContext } from "./businessModelingContext";
+import { buildModelLedgerRows, toLegacySemanticModel, type ModelLedgerRow } from "./modelingLedger";
+import type { ModelingLayer } from "./modelingVnextContract";
 
-type ModelType = "DWS" | "ADS" | "ALL";
+type ModelType = ModelingLayer | "ALL";
 
 const REVIEW_STATUS_COLOR: Record<string, string> = {
 	DRAFT: "default",
@@ -33,6 +37,11 @@ export default function SemanticModelsPage() {
 	const navigate = useNavigate();
 	const searchParams = useSearchParams();
 	const planningResolution = useMemo(() => resolveWarehousePlanningContext(searchParams), [searchParams]);
+	const enabledModelLayers = useMemo(() => {
+		const enabled = planningResolution.context?.enabledLayers ?? DEFAULT_WAREHOUSE_LAYER_SCHEME.enabledLayers;
+		const mapped = enabled.map((layer) => (layer === "ODS_RAW" || layer === "ODS_STANDARDIZED" ? "ODS" : layer));
+		return [...new Set(mapped)].filter((layer): layer is ModelingLayer => ["ODS", "STG", "DWD", "DWS", "ADS"].includes(layer));
+	}, [planningResolution.context]);
 	const context = useMemo(
 		() => resolveBusinessModelingContext(searchParams, planningResolution.context),
 		[planningResolution.context, searchParams],
@@ -41,23 +50,60 @@ export default function SemanticModelsPage() {
 	const [models, setModels] = useState<SemanticModel[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [typeFilter, setTypeFilter] = useState<ModelType>("ALL");
+	const [showStg, setShowStg] = useState(false);
 	const [createOpen, setCreateOpen] = useState(false);
 	const [previewData, setPreviewData] = useState<SemanticModelPreview | null>(null);
+	const [releaseGates, setReleaseGates] = useState<Record<string, ModelingReleaseGate>>({});
 	const [form] = Form.useForm();
+	const ledgerRows = useMemo(() => buildModelLedgerRows(models), [models]);
+	const visibleLedgerRows = useMemo(
+		() => (showStg || typeFilter === "STG" ? ledgerRows : ledgerRows.filter((row) => row.layer !== "STG")),
+		[ledgerRows, showStg, typeFilter],
+	);
+	const layerFilterOptions = useMemo(
+		() => [
+			{ label: "全部", value: "ALL" },
+			...enabledModelLayers.map((layer) => ({ label: layer, value: layer })),
+		],
+		[enabledModelLayers],
+	);
 
 	const load = useCallback(async () => {
 		setLoading(true);
 		if (!processId) {
 			setModels([]);
+			setReleaseGates({});
 			setLoading(false);
 			return;
 		}
 		try {
-			const list = await listSemanticModels({
-				processId,
-				...(typeFilter === "ALL" ? {} : { type: typeFilter }),
-			});
-			setModels(Array.isArray(list) ? list : []);
+			try {
+				const vnext = await listModelingModelSpecs({ processId, layer: typeFilter === "ALL" ? undefined : typeFilter });
+				if (Array.isArray(vnext) && vnext.length > 0) {
+					const mapped = vnext.map(toLegacySemanticModel);
+					setModels(mapped);
+					const gateEntries = await Promise.all(
+						mapped.map(async (model) => {
+							try {
+								return [model.id, await getModelSpecReleaseGate(model.id)] as const;
+							} catch {
+								return null;
+							}
+						}),
+					);
+					setReleaseGates(Object.fromEntries(gateEntries.filter((entry): entry is readonly [string, ModelingReleaseGate] => entry !== null)));
+					return;
+				}
+			} catch {
+				// Keep the legacy read path available while a tenant is migrating.
+			}
+				const list = await listSemanticModels({
+					processId,
+					...(typeFilter === "DWS" || typeFilter === "ADS" ? { type: typeFilter } : {}),
+				});
+				setReleaseGates({});
+				const safeList = Array.isArray(list) ? list : [];
+				setModels(typeFilter === "ALL" || typeFilter === "DWS" || typeFilter === "ADS" ? safeList : safeList.filter((item) => item.type === typeFilter));
 		} catch {
 			/* global interceptor */
 		} finally {
@@ -128,20 +174,26 @@ export default function SemanticModelsPage() {
 			width: 120,
 		})) ?? [];
 
-	const columns: ColumnsType<SemanticModel> = [
-		{ title: "名称", dataIndex: "name" },
-		{ title: "表名", dataIndex: "tableName", width: 160 },
+	const columns: ColumnsType<ModelLedgerRow> = [
+		{ title: "模型名称", dataIndex: "name" },
+		{ title: "产物 / 表名", dataIndex: "artifactLabel", width: 180 },
 		{
-			title: "类型",
-			dataIndex: "type",
+			title: "分层",
+			dataIndex: "layer",
 			width: 80,
 			render: (v?: string) => (
-				<Tag color={v === "DWS" ? "blue" : "green"}>{v ?? "-"}</Tag>
+				<Tag color={v === "DWD" ? "purple" : v === "DWS" ? "blue" : v === "ADS" ? "green" : v === "STG" ? "orange" : "default"}>{v ?? "-"}</Tag>
 			),
 		},
 		{ title: "粒度", dataIndex: "grain", width: 100 },
 		{
-			title: "状态",
+			title: "实现模式",
+			dataIndex: "implementationMode",
+			width: 120,
+			render: (v?: string) => v === "DBT_MANAGED" ? "dbt 原生" : v === "LEGACY_READONLY" ? "兼容只读" : "设计器生成",
+		},
+		{
+			title: "审核 / 运行",
 			dataIndex: "reviewStatus",
 			width: 100,
 			render: (v?: string) => (
@@ -149,13 +201,36 @@ export default function SemanticModelsPage() {
 			),
 		},
 		{
+			title: "发布门禁",
+			key: "releaseGate",
+			width: 110,
+			render: (_: unknown, row: ModelLedgerRow) => {
+				const gate = releaseGates[row.id];
+				if (!gate) return <span style={{ color: "#aaa" }}>未接入</span>;
+				return (
+					<Tag color={gate.publishable ? "success" : "error"} title={gate.blockers.join("、") || "parse/test/drift 均通过"}>
+						{gate.publishable ? "可发布" : `阻断 ${gate.blockers.length}`}
+					</Tag>
+				);
+			},
+		},
+		{ title: "下一步", dataIndex: "nextAction", width: 120 },
+		{
 			title: "操作",
 			key: "actions",
 			width: 280,
-			render: (_: unknown, row: SemanticModel) => (
+			render: (_: unknown, row: ModelLedgerRow) => (
 				<Space size="small">
 					<Button type="link" size="small" onClick={() => handlePreview(row.id)}>
 						预览
+					</Button>
+					<Button
+						type="link"
+						size="small"
+						data-testid="semantic-model-dbt-entry"
+						onClick={() => navigate(`/modeling/dbt-files?modelId=${encodeURIComponent(row.id)}&from=model-ledger`)}
+					>
+						高级 dbt SQL
 					</Button>
 					<Button type="link" size="small" onClick={() => handleGenerate(row.id)}>
 						生成制品
@@ -176,13 +251,16 @@ export default function SemanticModelsPage() {
 	return (
 		<SemanticWorkspaceFrame
 			activeKey="models"
-			title="模型管理"
-			description="管理 DWS/ADS 语义模型、预览、制品生成和运行触发。"
+			title="模型台账"
+			description="统一登记 ODS、STG、DWD、DWS、ADS 模型、实现所有权、dbt 产物和运行下一步。"
 			context={context}
 			stats={[
 				{ label: "模型", value: models.length, tone: "blue" },
+				{ label: "ODS", value: models.filter((item) => item.type === "ODS").length, tone: "gray" },
+				{ label: "DWD", value: models.filter((item) => item.type === "DWD").length, tone: "gray" },
 				{ label: "DWS", value: models.filter((item) => item.type === "DWS").length, tone: "green" },
 				{ label: "ADS", value: models.filter((item) => item.type === "ADS").length, tone: "amber" },
+				{ label: "STG", value: models.filter((item) => item.type === "STG").length, tone: "amber" },
 				{ label: "待审核", value: models.filter((item) => item.reviewStatus === "SUBMITTED").length, tone: "red" },
 			]}
 			actions={
@@ -225,22 +303,24 @@ export default function SemanticModelsPage() {
 					</Space>
 				</div>
 				<div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+					<Space wrap>
 					<Radio.Group
+						data-testid="modeling-layer-filter"
 						value={typeFilter}
 						onChange={(e) => setTypeFilter(e.target.value as ModelType)}
 						optionType="button"
 						buttonStyle="solid"
-						options={[
-							{ label: "全部", value: "ALL" },
-							{ label: "DWS", value: "DWS" },
-							{ label: "ADS", value: "ADS" },
-						]}
+					options={layerFilterOptions}
 					/>
+					<Button size="small" onClick={() => setShowStg((value) => !value)}>
+						{showStg ? "折叠 STG" : "展开 STG"}
+					</Button>
+					</Space>
 				</div>
-				<CompactTable<SemanticModel>
+				<CompactTable<ModelLedgerRow>
 					rowKey="id"
 					columns={columns}
-					dataSource={models}
+					dataSource={visibleLedgerRows}
 					loading={loading}
 				/>
 			</div>

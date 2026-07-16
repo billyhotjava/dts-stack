@@ -114,6 +114,7 @@
     <include file="config/liquibase/changelog/20260630-02_golden_line_portal_menu_reparent.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260630-03_remove_metric_modeling_runs_menu.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260709-01_dataworks_portal_menu_reparent.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260716-01_advanced_modeling_menu_label.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260712-01_modeling_menu_convergence.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260712-02_business_process_menu_route.xml" relativeToChangelogFile="false"/>
     <!-- jhipster-needle-liquibase-add-changelog - JHipster will add liquibase changelogs here -->

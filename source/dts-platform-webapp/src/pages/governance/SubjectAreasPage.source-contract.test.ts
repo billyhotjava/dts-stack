@@ -13,6 +13,14 @@ test("subject areas expose a DWD dimension planning entry", () => {
 	assert.match(source, /planningId/);
 });
 
+test("warehouse planning explains STG as an optional dbt technical transition layer", () => {
+	assert.match(source, /输出分层方案/);
+	assert.match(source, /STG/);
+	assert.match(source, /技术过渡层/);
+	assert.match(source, /dbt/);
+	assert.match(source, /可选|启用/);
+});
+
 test("subject area planning exposes blocked and restore states", () => {
 	assert.match(source, /resolveWarehousePlanningContext/);
 	assert.match(source, /resolveWarehousePlanningStatus/);

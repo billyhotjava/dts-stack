@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const baseURL = process.env.E2E_BASE_URL ?? "http://localhost:3001";
+const executablePath = process.env.PLAYWRIGHT_EXECUTABLE_PATH;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -16,6 +17,7 @@ export default defineConfig({
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     ignoreHTTPSErrors: true,
+    ...(executablePath ? { launchOptions: { executablePath } } : {}),
   },
   projects: [
     {

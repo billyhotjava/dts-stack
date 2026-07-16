@@ -182,7 +182,7 @@
                   "path": "sql-modeling",
                   "icon": "solar:documents-bold-duotone",
                   "titleKey": "sys.nav.portal.studioSqlModeling",
-                  "title": "逻辑建模（SQL）",
+                  "title": "高级建模（SQL）",
                   "externalLink": "/studio/sql-modeling"
                 },
                 {
