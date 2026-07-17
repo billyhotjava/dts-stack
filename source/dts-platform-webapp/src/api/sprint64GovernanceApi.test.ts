@@ -10,10 +10,15 @@ const { get, post, put, del } = vi.hoisted(() => ({
 vi.mock("./apiClient", () => ({ default: { get, post, put, delete: del } }));
 
 import {
+	confirmModelingCandidatesApi,
 	createBusinessProcessApi,
+	createConformedDimensionApi,
 	deleteBusinessProcessApi,
+	deleteConformedDimensionApi,
+	installModelingTemplateApi,
 	listBusinessProcessesApi,
 	listConformedDimensionsApi,
+	listModelingTemplatesApi,
 	listWarehouseLayersApi,
 	saveBusMatrixLinkApi,
 	validateGrainApi,
@@ -33,16 +38,22 @@ describe("sprint64 governance API", () => {
 		await deleteBusinessProcessApi("domain-1", "node-plan-loop");
 		await saveBusMatrixLinkApi("domain-1", { processId: "node-plan-loop", dimensionId: "node-type", enabled: true });
 
-		expect(get).toHaveBeenNthCalledWith(1, { url: "/governance/sprint64/domains/domain-1/processes", _skipErrorToast: true });
-		expect(post).toHaveBeenCalledWith({
-		url: "/governance/sprint64/domains/domain-1/processes",
-		data: { processId: "node-plan-loop", name: "节点计划闭环" },
-		_skipErrorToast: true,
+		expect(get).toHaveBeenNthCalledWith(1, {
+			url: "/governance/sprint64/domains/domain-1/processes",
+			_skipErrorToast: true,
 		});
-		expect(del).toHaveBeenCalledWith({ url: "/governance/sprint64/domains/domain-1/processes/node-plan-loop", _skipErrorToast: true });
+		expect(post).toHaveBeenCalledWith({
+			url: "/governance/sprint64/domains/domain-1/processes",
+			data: { processId: "node-plan-loop", name: "节点计划闭环" },
+			_skipErrorToast: true,
+		});
+		expect(del).toHaveBeenCalledWith({
+			url: "/governance/sprint64/domains/domain-1/processes/node-plan-loop",
+			_skipErrorToast: true,
+		});
 		expect(put).toHaveBeenCalledWith({
-		url: "/governance/sprint64/domains/domain-1/bus-matrix",
-		data: { processId: "node-plan-loop", dimensionId: "node-type", enabled: true },
+			url: "/governance/sprint64/domains/domain-1/bus-matrix",
+			data: { processId: "node-plan-loop", dimensionId: "node-type", enabled: true },
 		});
 	});
 
@@ -53,11 +64,57 @@ describe("sprint64 governance API", () => {
 		await listConformedDimensionsApi("domain-1");
 		await validateGrainApi({ warehouseLayer: "DWD", statement: "订单明细", grainKeys: ["order_id"] });
 		expect(get).toHaveBeenCalledWith({ url: "/governance/sprint64/warehouse-layers", _skipErrorToast: true });
-		expect(get).toHaveBeenCalledWith({ url: "/governance/sprint64/domains/domain-1/conformed-dimensions", _skipErrorToast: true });
+		expect(get).toHaveBeenCalledWith({
+			url: "/governance/sprint64/domains/domain-1/conformed-dimensions",
+			_skipErrorToast: true,
+		});
 		expect(post).toHaveBeenCalledWith({
-		url: "/governance/sprint64/grain/validate",
-		data: { warehouseLayer: "DWD", statement: "订单明细", grainKeys: ["order_id"] },
-		_skipErrorToast: true,
+			url: "/governance/sprint64/grain/validate",
+			data: { warehouseLayer: "DWD", statement: "订单明细", grainKeys: ["order_id"] },
+			_skipErrorToast: true,
+		});
+	});
+
+	it("uses explicit routes for dimension lifecycle, candidate confirmation and optional templates", async () => {
+		get.mockResolvedValueOnce([]);
+		post
+			.mockResolvedValueOnce({ dimensionId: "organization" })
+			.mockResolvedValueOnce({ confirmedProcesses: 1, confirmedDimensions: 1 })
+			.mockResolvedValueOnce({ status: "INSTALLED", createdProcesses: 2, createdDimensions: 3 });
+		del.mockResolvedValueOnce(true);
+
+		await createConformedDimensionApi("domain / 1", {
+			dimensionId: "organization",
+			name: "组织机构",
+			sourceModel: "dim_organization",
+		});
+		await deleteConformedDimensionApi("domain / 1", "organization / code");
+		await confirmModelingCandidatesApi("domain / 1", {
+			processIds: ["process-a"],
+			dimensionIds: ["organization"],
+		});
+		await listModelingTemplatesApi();
+		await installModelingTemplateApi("industry / pack", "domain / 1");
+
+		expect(post).toHaveBeenNthCalledWith(1, {
+			url: "/governance/sprint64/domains/domain%20%2F%201/conformed-dimensions",
+			data: { dimensionId: "organization", name: "组织机构", sourceModel: "dim_organization" },
+			_skipErrorToast: true,
+		});
+		expect(del).toHaveBeenCalledWith({
+			url: "/governance/sprint64/domains/domain%20%2F%201/conformed-dimensions/organization%20%2F%20code",
+			_skipErrorToast: true,
+		});
+		expect(post).toHaveBeenNthCalledWith(2, {
+			url: "/governance/sprint64/domains/domain%20%2F%201/modeling-candidates/confirm",
+			data: { processIds: ["process-a"], dimensionIds: ["organization"] },
+			_skipErrorToast: true,
+		});
+		expect(get).toHaveBeenCalledWith({ url: "/governance/modeling-templates", _skipErrorToast: true });
+		expect(post).toHaveBeenNthCalledWith(3, {
+			url: "/governance/modeling-templates/industry%20%2F%20pack/install?domainId=domain%20%2F%201",
+			data: undefined,
+			_skipErrorToast: true,
 		});
 	});
 });

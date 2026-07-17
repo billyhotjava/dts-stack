@@ -427,11 +427,11 @@ export default function DataProductsPage() {
 						label="产品名称"
 						rules={[{ required: true, message: "请输入产品名称" }]}
 					>
-						<Input placeholder="例：项目进度数据产品" />
+						<Input placeholder="例：客户服务数据产品" />
 					</Form.Item>
 					<div className="grid gap-3 md:grid-cols-2">
 						<Form.Item name="code" label="产品代码">
-							<Input placeholder="例：pjm_progress_product（全局唯一）" />
+							<Input placeholder="例：customer_service_product（全局唯一）" />
 						</Form.Item>
 						<Form.Item name="ownerDept" label="负责部门">
 							<Input placeholder="例：数字化部门" />

@@ -1,5 +1,3 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
 import {
 	Alert,
 	Badge,
@@ -7,6 +5,7 @@ import {
 	Card,
 	Checkbox,
 	Divider,
+	Dropdown,
 	Form,
 	Input,
 	Layout,
@@ -17,24 +16,38 @@ import {
 	Tree,
 	Typography,
 } from "antd";
-import { } from "@ant-design/icons";
 import type { DataNode } from "antd/es/tree";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { EmptyState } from "@/components/empty-state";
-import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
-import { createDomain, deleteDomain, getDomainAssetStats, getDomainIndicatorStats, getDomainTree, updateDomain } from "@/api/platformApi";
+import { toast } from "sonner";
 import {
+	createDomain,
+	deleteDomain,
+	getDomainAssetStats,
+	getDomainIndicatorStats,
+	getDomainTree,
+	updateDomain,
+} from "@/api/platformApi";
+import {
+	confirmModelingCandidatesApi,
 	createBusinessProcessApi,
 	deleteBusinessProcessApi,
-	listBusMatrixApi,
-	listConformedDimensionsApi,
 	listBusinessProcessesApi,
-	saveBusMatrixLinkApi,
+	listConformedDimensionsApi,
 	type Sprint64BusinessProcess,
 	type Sprint64ConformedDimension,
 } from "@/api/sprint64GovernanceApi";
+import { EmptyState } from "@/components/empty-state";
+import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { useRouter } from "@/routes/hooks";
 import { normalizeText } from "@/utils/textUtils";
+import { buildBusinessModelingRoute } from "../modeling/businessModelingContext";
+import { buildModelingJourneyRoute, modelingStagePath } from "../modeling/modelingJourneyContext";
+import { ConformedDimensionCatalogCard } from "./ConformedDimensionCatalogCard";
+import { DimensionalModelingAssist } from "./DimensionalModelingAssist";
+import { pendingCandidateCount } from "./modelingCandidates";
+import { type SubjectWorkspaceTab, SubjectWorkspaceTabs } from "./SubjectWorkspaceTabs";
+import { DEFAULT_WAREHOUSE_LAYER_SCHEME, resolveLayer } from "./warehouseLayerRegistry";
 import {
 	buildPlanningRoute,
 	createWarehousePlanningContext,
@@ -43,23 +56,16 @@ import {
 	saveWarehousePlanningContext,
 	type WarehousePlanningContext,
 } from "./warehousePlanningContext";
-import { DEFAULT_WAREHOUSE_LAYER_SCHEME, resolveLayer } from "./warehouseLayerRegistry";
-import {
-	BUSINESS_PROCESS_SEEDS,
-	adoptBusinessProcessSeeds,
-	createBusinessProcess,
-	loadBusinessProcesses,
-	removeBusinessProcess,
-	saveBusinessProcesses,
-	type BusinessProcess,
-} from "./businessProcess";
-import { dimensionsForDomain, loadBusMatrix, toggleBusMatrixLink, type BusMatrix, type ConformedDimension } from "./conformedDimensions";
-import { buildBusinessModelingRoute } from "../modeling/businessModelingContext";
 
 const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
 const ROOT_KEY = "root";
+
+const workspaceTabFrom = (value?: string | null): SubjectWorkspaceTab => {
+	if (value === "details" || value === "governance") return value;
+	return "scope";
+};
 
 type DomainNode = {
 	id?: string;
@@ -119,9 +125,15 @@ const filterDomains = (nodes: DomainNode[], keyword: string): DomainNode[] => {
 		.map((node) => {
 			const childMatches = node.children ? filterDomains(node.children, keyword) : [];
 			const matches =
-				String(node.name || "").toLowerCase().includes(needle) ||
-				String(node.code || "").toLowerCase().includes(needle) ||
-				String(node.owner || "").toLowerCase().includes(needle);
+				String(node.name || "")
+					.toLowerCase()
+					.includes(needle) ||
+				String(node.code || "")
+					.toLowerCase()
+					.includes(needle) ||
+				String(node.owner || "")
+					.toLowerCase()
+					.includes(needle);
 			if (matches || childMatches.length) {
 				return { ...node, children: childMatches };
 			}
@@ -142,34 +154,15 @@ const toTreeNodes = (nodes: DomainNode[]): DataNode[] =>
 		children: node.children ? toTreeNodes(node.children) : undefined,
 	}));
 
-const toBusinessProcess = (item: Sprint64BusinessProcess, domainId: string): BusinessProcess => {
-	const timestamp = item.updatedAt || item.createdAt || new Date().toISOString();
-	return {
-		version: 1,
-		processId: item.processId,
-		domainId: item.domainId || domainId,
-		name: item.name,
-		description: item.description || undefined,
-		createdAt: item.createdAt || timestamp,
-		updatedAt: timestamp,
-	};
-};
-
-const toConformedDimension = (item: Sprint64ConformedDimension): ConformedDimension => ({
-	version: 1,
-	dimensionId: item.dimensionId,
-	name: item.name,
-	sourceModel: item.sourceModel,
-	domainIds: item.domainIds,
-});
-
 export default function SubjectAreasPage() {
 	const [searchParams, setSearchParams] = useSearchParams();
 	const [keyword, setKeyword] = useState(searchParams.get("keyword") || "");
 	const [domainTree, setDomainTree] = useState<DomainNode[]>([]);
 	const [domainIndex, setDomainIndex] = useState<Map<string, DomainNode>>(new Map());
 	const [domainOptions, setDomainOptions] = useState<DomainNode[]>([]);
-	const [selectedKey, setSelectedKey] = useState<string>(searchParams.get("active") || ROOT_KEY);
+	const [selectedKey, setSelectedKey] = useState<string>(
+		searchParams.get("domainId") || searchParams.get("active") || ROOT_KEY,
+	);
 	const [loading, setLoading] = useState(false);
 	const [modalOpen, setModalOpen] = useState(false);
 	const [saving, setSaving] = useState(false);
@@ -177,7 +170,9 @@ export default function SubjectAreasPage() {
 	const [form] = Form.useForm();
 	const canManage = useGovernanceManageAccess();
 	const router = useRouter();
-	const [indicatorStats, setIndicatorStats] = useState<{ total: number; published: number; draft: number } | null>(null);
+	const [indicatorStats, setIndicatorStats] = useState<{ total: number; published: number; draft: number } | null>(
+		null,
+	);
 	const [indicatorStatsLoading, setIndicatorStatsLoading] = useState(false);
 	const [assetStats, setAssetStats] = useState<{
 		datasetCount: number;
@@ -185,29 +180,37 @@ export default function SubjectAreasPage() {
 		qualityRuleCount: number | null;
 	} | null>(null);
 	const [statsLoading, setStatsLoading] = useState(false);
-	const [businessProcesses, setBusinessProcesses] = useState<BusinessProcess[]>([]);
+	const [businessProcesses, setBusinessProcesses] = useState<Sprint64BusinessProcess[]>([]);
 	const [processModalOpen, setProcessModalOpen] = useState(false);
 	const [processSaving, setProcessSaving] = useState(false);
 	const [processForm] = Form.useForm();
-	const [busMatrix, setBusMatrix] = useState<BusMatrix | null>(null);
-	const [conformedDimensionCatalog, setConformedDimensionCatalog] = useState<ConformedDimension[]>([]);
+	const [conformedDimensionCatalog, setConformedDimensionCatalog] = useState<Sprint64ConformedDimension[]>([]);
+	const [modelingFactsLoading, setModelingFactsLoading] = useState(false);
+	const modelingFactsRequest = useRef(0);
 
-	const syncQuery = (patch?: { keyword?: string; active?: string }) => {
-		const params = new URLSearchParams(searchParams);
-		const nextKeyword = patch?.keyword ?? keyword;
-		const nextActive = patch?.active ?? selectedKey;
-		if (nextKeyword?.trim()) {
-			params.set("keyword", nextKeyword.trim());
-		} else {
-			params.delete("keyword");
-		}
-		if (nextActive && nextActive !== ROOT_KEY) {
-			params.set("active", nextActive);
-		} else {
-			params.delete("active");
-		}
-		setSearchParams(params, { replace: true });
-	};
+	const searchParamsValue = searchParams.toString();
+	const syncQuery = useCallback(
+		(patch?: { keyword?: string; active?: string; tab?: SubjectWorkspaceTab }) => {
+			const params = new URLSearchParams(searchParamsValue);
+			const nextKeyword = patch?.keyword ?? keyword;
+			const nextActive = patch?.active ?? selectedKey;
+			if (nextKeyword?.trim()) {
+				params.set("keyword", nextKeyword.trim());
+			} else {
+				params.delete("keyword");
+			}
+			if (nextActive && nextActive !== ROOT_KEY) {
+				params.set("active", nextActive);
+				params.set("domainId", nextActive);
+			} else {
+				params.delete("active");
+				params.delete("domainId");
+			}
+			if (patch?.tab) params.set("tab", patch.tab);
+			if (params.toString() !== searchParamsValue) setSearchParams(params, { replace: true });
+		},
+		[keyword, searchParamsValue, selectedKey, setSearchParams],
+	);
 
 	const loadDomainTree = useCallback(async () => {
 		setLoading(true);
@@ -286,7 +289,9 @@ export default function SubjectAreasPage() {
 		searchParams,
 	]);
 	const stgLayer = resolveLayer("STG");
-	const enabledPlanningLayers = activePlanningContext?.enabledLayers ?? [...DEFAULT_WAREHOUSE_LAYER_SCHEME.enabledLayers];
+	const enabledPlanningLayers = activePlanningContext?.enabledLayers ?? [
+		...DEFAULT_WAREHOUSE_LAYER_SCHEME.enabledLayers,
+	];
 	const outputPlanningLayers = activePlanningContext?.outputLayers ?? [...DEFAULT_WAREHOUSE_LAYER_SCHEME.outputLayers];
 	const updateStgPlanning = (enabled: boolean) => {
 		if (!activeDomain?.id || !canManage) return;
@@ -339,50 +344,43 @@ export default function SubjectAreasPage() {
 			.finally(() => setIndicatorStatsLoading(false));
 	}, [activeDomain?.id]);
 
+	const loadDomainModelingFacts = useCallback(async (domainId: string) => {
+		const requestId = ++modelingFactsRequest.current;
+		setModelingFactsLoading(true);
+		try {
+			const [apiProcesses, apiDimensions] = await Promise.all([
+				listBusinessProcessesApi(domainId),
+				listConformedDimensionsApi(domainId),
+			]);
+			if (requestId !== modelingFactsRequest.current) return;
+			const processes = Array.isArray(apiProcesses) ? apiProcesses : [];
+			const dimensions = Array.isArray(apiDimensions) ? apiDimensions : [];
+			setBusinessProcesses(processes);
+			setConformedDimensionCatalog(dimensions);
+		} catch (error: any) {
+			if (requestId !== modelingFactsRequest.current) return;
+			setBusinessProcesses([]);
+			setConformedDimensionCatalog([]);
+			toast.error(error?.message || "领域建模事实加载失败");
+		} finally {
+			if (requestId === modelingFactsRequest.current) setModelingFactsLoading(false);
+		}
+	}, []);
+
 	useEffect(() => {
 		if (!activeDomain?.id) {
+			modelingFactsRequest.current += 1;
 			setBusinessProcesses([]);
-			setBusMatrix(null);
 			setConformedDimensionCatalog([]);
+			setModelingFactsLoading(false);
 			return;
 		}
-		let cancelled = false;
-		const domainId = activeDomain.id;
-		const sessionProcesses = loadBusinessProcesses(domainId);
-		setBusinessProcesses(sessionProcesses);
-		setBusMatrix(loadBusMatrix(domainId));
-		setConformedDimensionCatalog(dimensionsForDomain(domainId));
-		void Promise.all([listBusinessProcessesApi(domainId), listConformedDimensionsApi(domainId), listBusMatrixApi(domainId)])
-			.then(([apiProcesses, apiDimensions, apiLinks]) => {
-				if (cancelled) return;
-				const remoteProcesses = Array.isArray(apiProcesses) ? apiProcesses : [];
-				const remoteDimensions = Array.isArray(apiDimensions) ? apiDimensions : [];
-				const remoteLinks = Array.isArray(apiLinks) ? apiLinks : [];
-				if (remoteProcesses.length) {
-					const processes = remoteProcesses.map((item) => toBusinessProcess(item, domainId));
-					setBusinessProcesses(processes);
-					saveBusinessProcesses(domainId, processes);
-				}
-				if (remoteDimensions.length) setConformedDimensionCatalog(remoteDimensions.map((item) => toConformedDimension(item)));
-				if (remoteLinks.length) {
-					const links = remoteLinks.reduce<Record<string, string[]>>((acc, item) => {
-						if (item.enabled) acc[item.processId] = [...(acc[item.processId] || []), item.dimensionId];
-						return acc;
-					}, {});
-					setBusMatrix({ version: 1, domainId, links, updatedAt: new Date().toISOString() });
-				}
-			})
-			.catch(() => {
-				// Session state remains the offline fallback when the platform API is unavailable.
-			});
-		return () => {
-				cancelled = true;
-			};
-	}, [activeDomain?.id]);
+		void loadDomainModelingFacts(activeDomain.id);
+	}, [activeDomain?.id, loadDomainModelingFacts]);
 
 	useEffect(() => {
 		syncQuery();
-	}, [keyword, selectedKey]);
+	}, [syncQuery]);
 
 	const filteredTree = useMemo(() => filterDomains(domainTree, keyword), [domainTree, keyword]);
 	const treeData = useMemo(() => {
@@ -396,9 +394,11 @@ export default function SubjectAreasPage() {
 		];
 	}, [filteredTree]);
 	const activeChildren = activeDomain?.children || [];
-	const conformedDimensions = conformedDimensionCatalog;
-	const processDimensionIds = (processId: string) => new Set(busMatrix?.links[processId] || []);
-	const openProcessModal = (preset?: Partial<BusinessProcess>) => {
+	const candidateCount = pendingCandidateCount(businessProcesses, conformedDimensionCatalog);
+	const workspaceTab = workspaceTabFrom(searchParams.get("tab"));
+	const focusBusinessProcesses = searchParams.get("focus") === "business-processes";
+	const setWorkspaceTabAndQuery = (tab: SubjectWorkspaceTab) => syncQuery({ tab });
+	const openProcessModal = (preset?: Partial<Sprint64BusinessProcess>) => {
 		processForm.resetFields();
 		processForm.setFieldsValue({
 			processId: preset?.processId || "",
@@ -407,52 +407,22 @@ export default function SubjectAreasPage() {
 		});
 		setProcessModalOpen(true);
 	};
-	const adoptSeeds = async () => {
-		if (!activeDomain?.id) return;
-		const domainId = activeDomain.id;
-		const localNext = adoptBusinessProcessSeeds(domainId, businessProcesses);
-		try {
-			const known = new Set(businessProcesses.map((item) => item.processId));
-			await Promise.all(
-				BUSINESS_PROCESS_SEEDS.filter((seed) => !known.has(seed.processId)).map((seed) =>
-					createBusinessProcessApi(domainId, seed),
-				),
-			);
-			const remote = await listBusinessProcessesApi(domainId);
-			const next = remote.length ? remote.map((item) => toBusinessProcess(item, domainId)) : localNext;
-			setBusinessProcesses(next);
-			saveBusinessProcesses(domainId, next);
-		} catch {
-			setBusinessProcesses(localNext);
-		}
-		toast.success(`已采用 ${BUSINESS_PROCESS_SEEDS.length} 条业务过程示例`);
-	};
 	const submitProcess = async () => {
 		if (!canManage || !activeDomain?.id) return;
 		setProcessSaving(true);
 		try {
 			const values = await processForm.validateFields();
-			const processId = normalizeText(values.processId).toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
+			const processId = normalizeText(values.processId)
+				.toLowerCase()
+				.replace(/[^a-z0-9_-]+/g, "-");
 			if (businessProcesses.some((item) => item.processId === processId)) throw new Error("业务过程编码已存在");
-			const localProcess = createBusinessProcess({
+			await createBusinessProcessApi(activeDomain.id, {
 				processId,
-				domainId: activeDomain.id,
 				name: normalizeText(values.name),
 				description: normalizeText(values.description) || undefined,
 			});
-			let next = [...businessProcesses, localProcess];
-			try {
-				const saved = await createBusinessProcessApi(activeDomain.id, {
-					processId,
-					name: localProcess.name,
-					description: localProcess.description,
-				});
-				next = [...businessProcesses, toBusinessProcess(saved, activeDomain.id)];
-			} catch {
-				// Keep the session draft usable when the backend is not reachable yet.
-			}
-			if (!saveBusinessProcesses(activeDomain.id, next)) throw new Error("业务过程草稿保存失败");
-			setBusinessProcesses(next);
+			await loadDomainModelingFacts(activeDomain.id);
+			processForm.resetFields();
 			setProcessModalOpen(false);
 			toast.success("业务过程已创建");
 		} catch (err: any) {
@@ -461,7 +431,7 @@ export default function SubjectAreasPage() {
 			setProcessSaving(false);
 		}
 	};
-	const startProcessPlanning = (process: BusinessProcess) => {
+	const startProcessPlanning = (process: Sprint64BusinessProcess) => {
 		if (!activeDomain?.id) return;
 		const context = createWarehousePlanningContext({
 			planningId: `warehouse-plan-${activeDomain.id}-${process.processId}-${Date.now()}`,
@@ -476,42 +446,55 @@ export default function SubjectAreasPage() {
 			toast.error("规划草稿保存失败，请检查浏览器会话存储后重试");
 			return;
 		}
-		router.push(buildBusinessModelingRoute("/modeling/semantic/objects?from=business-process", {
-			...context,
-			processName: process.name,
-		}));
+		router.push(
+			buildBusinessModelingRoute("/modeling/semantic/objects?from=business-process", {
+				...context,
+				processName: process.name,
+			}),
+		);
 	};
-	const deleteProcess = (process: BusinessProcess) => {
+	const deleteProcess = (process: Sprint64BusinessProcess) => {
 		if (!activeDomain?.id || !canManage) return;
 		const domainId = activeDomain.id;
 		Modal.confirm({
 			title: "删除业务过程？",
-			content: `删除“${process.name}”后，当前 session 草稿中的矩阵勾选也会失去业务锚点。`,
+			content: `删除“${process.name}”后将无法继续用于后续建模。`,
 			okText: "删除",
 			cancelText: "取消",
 			onOk: async () => {
-				const next = businessProcesses.filter((item) => item.processId !== process.processId);
 				try {
 					await deleteBusinessProcessApi(domainId, process.processId);
-				} catch {
-					// Deleting a local draft is still safe if the remote service is unavailable.
+					await loadDomainModelingFacts(domainId);
+					toast.success("业务过程已删除");
+				} catch (error: any) {
+					toast.error(error?.message || "业务过程删除失败");
+					throw error;
 				}
-				removeBusinessProcess(domainId, process.processId);
-				setBusinessProcesses(next);
 			},
 		});
 	};
-	const toggleMatrix = (processId: string, dimensionId: string) => {
+	const confirmProcess = async (process: Sprint64BusinessProcess) => {
+		if (!activeDomain?.id || !canManage) return;
+		try {
+			await confirmModelingCandidatesApi(activeDomain.id, {
+				processIds: [process.processId],
+				dimensionIds: [],
+			});
+			await loadDomainModelingFacts(activeDomain.id);
+			toast.success("业务过程候选已确认");
+		} catch (error: any) {
+			toast.error(error?.message || "业务过程确认失败");
+		}
+	};
+	const continueLogicalModel = () => {
 		if (!activeDomain?.id) return;
-		const next = toggleBusMatrixLink(activeDomain.id, processId, dimensionId);
-		setBusMatrix(next);
-		void saveBusMatrixLinkApi(activeDomain.id, {
-			processId,
-			dimensionId,
-			enabled: next.links[processId]?.includes(dimensionId) || false,
-		}).catch(() => {
-			// Session state remains the immediate UI source of truth during API outages.
-		});
+		router.push(
+			buildModelingJourneyRoute(modelingStagePath("LOGICAL"), {
+				domainId: activeDomain.id,
+				domainName: activeDomain.name,
+				stage: "LOGICAL",
+			}),
+		);
 	};
 	const continueDimensionPlanning = () => {
 		if (!activeDomain?.id) return;
@@ -615,18 +598,22 @@ export default function SubjectAreasPage() {
 			<Card
 				title="主题域管理"
 				extra={
-					<Space>
-						<Button onClick={() => openModal(null, null)} disabled={!canManage}>
-							新增根域
+					<Dropdown
+						trigger={["click"]}
+						menu={{
+							items: [
+								{ key: "root", label: "新增根域" },
+								...(activeDomain?.id
+									? [{ key: "child", label: `在 ${activeDomain.name || "当前域"} 下新增子域` }]
+									: []),
+							],
+							onClick: ({ key }) => openModal(null, key === "child" ? activeDomain?.id : null),
+						}}
+					>
+						<Button type="primary" disabled={!canManage}>
+							新增主题域
 						</Button>
-						<Button
-							type="primary"
-							onClick={() => openModal(null, activeDomain?.id || undefined)}
-							disabled={!canManage || !activeDomain?.id}
-						>
-							+ 新增子域
-						</Button>
-					</Space>
+					</Dropdown>
 				}
 			>
 				<div className="mb-3 flex flex-wrap items-center gap-2">
@@ -638,297 +625,382 @@ export default function SubjectAreasPage() {
 						allowClear
 					/>
 				</div>
-				<Layout className="overflow-hidden rounded-[24px] border border-border/70 bg-background">
-					<Sider width={320} theme="light" className="border-r border-slate-200 p-4">
-					<Space direction="vertical" className="w-full" size="middle">
-						<div className="flex items-center justify-between">
-							<Text strong>域目录结构</Text>
-							<Button type="link" size="small" onClick={() => openModal(null, null)} disabled={!canManage}>
-								+ 新增域
-							</Button>
-						</div>
-						<Tree
-							showLine
-							defaultExpandAll
-							selectedKeys={[selectedKey]}
-							treeData={treeData}
-							onSelect={(keys) => {
-								const key = String(keys?.[0] ?? ROOT_KEY);
-								setSelectedKey(key || ROOT_KEY);
-							}}
-						/>
-						{!loading && domainTree.length === 0 ? (
-							<EmptyState title="暂无主题域" description="请先创建主题域。" />
-						) : null}
-					</Space>
-					</Sider>
-					<Content className="p-6">
-					{loading ? (
-						<div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center text-sm text-slate-500">
-							主题域结构加载中...
-						</div>
-					) : !activeDomain ? (
-						<div className="rounded-[24px] border border-slate-200 bg-slate-50 px-6 py-6">
-							<Title level={4}>全域主题视角</Title>
-							<Text type="secondary">请选择左侧主题域查看详情与治理指标。</Text>
-							<Divider />
-							{domainTree.length === 0 ? (
-								<EmptyState title="暂无主题域结构" description="请先创建主题域后再进入详情视图。" />
-							) : (
-								<Space wrap>
-									{domainOptions.slice(0, 12).map((item) => (
-										<Tag key={item.id}>{item.name}</Tag>
-									))}
-									{domainOptions.length > 12 ? <Tag>+{domainOptions.length - 12} 更多</Tag> : null}
-								</Space>
-							)}
-						</div>
-					) : (
-						<div className="space-y-6">
-							<div className="flex items-start justify-between gap-4">
-								<div>
-									<Space size={8} wrap>
-										<Title level={4} style={{ margin: 0 }}>
-											{activeDomain.name || "未命名主题域"}
-										</Title>
-										{activeDomain.code ? <Tag color="blue">{activeDomain.code}</Tag> : null}
-									</Space>
-									<div className="mt-2 text-sm text-slate-500">
-										负责人：{activeDomain.owner || "未指定"} ｜ 子域数：{activeChildren.length} ｜ 资产数：{statsLoading ? "..." : (assetStats?.datasetCount ?? "-")}
-									</div>
-									{activeDomain.description ? (
-										<Text type="secondary" className="block mt-2">
-											{activeDomain.description}
-										</Text>
-									) : null}
-								</div>
-								<Space>
-									<Button onClick={() => openModal(activeDomain, activeDomain.parentId)} disabled={!canManage}>
-										编辑域属性
-									</Button>
-									<Button danger onClick={() => confirmDelete(activeDomain)} disabled={!canManage}>
-										删除域
-									</Button>
-								</Space>
-							</div>
-
-					<Divider />
-
-					<Card
-						className="border-blue-100 bg-blue-50/30"
-						data-testid="warehouse-layer-plan"
-						title="输出分层方案"
-						extra={<Tag color="blue">标准方案 v{activePlanningContext?.layerSchemeVersion ?? DEFAULT_WAREHOUSE_LAYER_SCHEME.version}</Tag>}
+				<Layout className="min-w-0 overflow-hidden rounded-[24px] border border-border/70 bg-background">
+					<Sider
+						width={320}
+						breakpoint="lg"
+						collapsedWidth={0}
+						theme="light"
+						className="overflow-hidden border-r border-slate-200 p-4"
 					>
-						<Space direction="vertical" size={8} className="w-full">
-							<div className="flex flex-wrap items-center gap-2">
-								{enabledPlanningLayers.map((layer, index) => (
-									<span key={layer} className="flex items-center gap-2">
-										<Tag color={layer === "STG" ? "gold" : layer === "DWD" ? "purple" : layer === "DWS" ? "blue" : layer === "ADS" ? "green" : "default"}>
-											{resolveLayer(layer)?.title || layer}
-										</Tag>
-										{index < enabledPlanningLayers.length - 1 ? <Text type="secondary">→</Text> : null}
-									</span>
-								))}
-							</div>
-							<Text type="secondary">
-								业务输出层：{outputPlanningLayers.map((layer) => resolveLayer(layer)?.key || layer).join("、")}；STG 是可选技术过渡层，不产出业务指标。
-							</Text>
-							{stgLayer ? (
-								<div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
-									<div className="flex flex-wrap items-center justify-between gap-2">
-										<div>
-											<Text strong>STG · {stgLayer.title}</Text>
-											<div className="mt-1 text-xs text-slate-600">{stgLayer.responsibility}</div>
-											<div className="mt-1 text-xs text-slate-500">{stgLayer.dbtRole}</div>
-										</div>
-										<Checkbox
-											checked={enabledPlanningLayers.includes("STG")}
-											onChange={(event) => updateStgPlanning(event.target.checked)}
-											disabled={!canManage}
-										>
-											启用 STG（dbt 推荐）
-										</Checkbox>
-									</div>
-								</div>
+						<Space direction="vertical" className="w-full" size="middle">
+							<Text strong>域目录结构</Text>
+							<Tree
+								showLine
+								defaultExpandedKeys={[ROOT_KEY]}
+								selectedKeys={[selectedKey]}
+								treeData={treeData}
+								onSelect={(keys) => {
+									const key = String(keys?.[0] ?? ROOT_KEY);
+									setSelectedKey(key || ROOT_KEY);
+								}}
+							/>
+							{!loading && domainTree.length === 0 ? (
+								<EmptyState title="暂无主题域" description="请先创建主题域。" />
 							) : null}
 						</Space>
-					</Card>
-
-					<Alert
-								showIcon
-								data-testid="warehouse-planning-card"
-								type={planningStatus.status === "blocked" ? "error" : planningStatus.status === "ready" ? "success" : "info"}
-								message="数仓规划 · 分层方案"
-								description={
-									<Space direction="vertical" size={4}>
-										<Text>
-											主题域：{activeDomain.name || activeDomain.id} · 输出层：{outputPlanningLayers.join(" → ")} · 建模模式：维度建模
-										</Text>
-										<Text type="secondary">
-											{planningStatus.reason || "规划、标准草稿与维度模型候选已具备连续上下文"}
-										</Text>
-									</Space>
-								}
-								action={
-									<Button type="primary" onClick={continueDimensionPlanning}>
-										{planningStatus.status === "blocked"
-											? "重新确认规划"
-											: activePlanningContext
-												? "继续标准落标"
-										: "创建规划并落标"}
-									</Button>
-								}
-							/>
-
-							<Card
-								className="border-slate-200"
-								title="业务过程"
-								extra={
-									<Space>
-										<Button size="small" onClick={adoptSeeds} disabled={!canManage}>
-											{businessProcesses.length ? "补充示例" : "从示例创建"}
-										</Button>
-										<Button size="small" type="primary" onClick={() => openProcessModal()} disabled={!canManage}>
-											新增业务过程
-										</Button>
-									</Space>
-								}
-							>
-								{businessProcesses.length ? (
-									<Space direction="vertical" className="w-full" size="middle">
-										{businessProcesses.map((process) => (
-											<div key={process.processId} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-												<div className="flex flex-wrap items-start justify-between gap-3">
-													<div>
-														<div className="font-semibold text-slate-900">{process.name}</div>
-														<div className="mt-1 text-xs text-slate-500">{process.processId}</div>
-														{process.description ? <div className="mt-1 text-sm text-slate-600">{process.description}</div> : null}
-													</div>
-													<Space size={4}>
-											<Button size="small" type="link" onClick={() => startProcessPlanning(process)}>
-												进入业务建模
-														</Button>
-														<Button size="small" danger type="link" onClick={() => deleteProcess(process)} disabled={!canManage}>
-															删除
-														</Button>
-													</Space>
-												</div>
-											</div>
-										))}
-									</Space>
+					</Sider>
+					<Content className="min-w-0 p-3 sm:p-6">
+						{loading ? (
+							<div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center text-sm text-slate-500">
+								主题域结构加载中...
+							</div>
+						) : !activeDomain ? (
+							<div className="rounded-[24px] border border-slate-200 bg-slate-50 px-6 py-6">
+								<Title level={4}>全域主题视角</Title>
+								<Text type="secondary">请选择左侧主题域查看详情与治理指标。</Text>
+								<Divider />
+								{domainTree.length === 0 ? (
+									<EmptyState title="暂无主题域结构" description="请先创建主题域后再进入详情视图。" />
 								) : (
-										<EmptyState title="暂无业务过程" description="业务过程是事实建模的锚点，可从 PJM 示例开始。" actions={<Button onClick={adoptSeeds} disabled={!canManage}>从示例创建</Button>} />
-								)}
-							</Card>
-
-							<Card
-								className="border-slate-200"
-								title="总线矩阵"
-								extra={<Text type="secondary">业务过程 × 一致性维度</Text>}
-							>
-								{businessProcesses.length && conformedDimensions.length ? (
-									<div className="overflow-x-auto">
-										<table className="min-w-full text-sm">
-											<thead>
-												<tr className="border-b border-slate-200 text-left text-xs text-slate-500">
-													<th className="px-3 py-2">业务过程</th>
-													{conformedDimensions.map((dimension) => <th key={dimension.dimensionId} className="px-3 py-2 whitespace-nowrap">{dimension.name}</th>)}
-												</tr>
-											</thead>
-											<tbody>
-												{businessProcesses.map((process) => {
-													const selectedDimensions = processDimensionIds(process.processId);
-													return <tr key={process.processId} className="border-b border-slate-100">
-														<td className="px-3 py-2 font-medium text-slate-800">{process.name}</td>
-														{conformedDimensions.map((dimension) => <td key={dimension.dimensionId} className="px-3 py-2"><Checkbox checked={selectedDimensions.has(dimension.dimensionId)} onChange={() => toggleMatrix(process.processId, dimension.dimensionId)} /></td>)}
-													</tr>;
-												})}
-											</tbody>
-										</table>
-									</div>
-								) : (
-									<EmptyState title="矩阵尚未形成" description="先创建业务过程，登记后即可勾选可复用维度。" />
-								)}
-							</Card>
-
-							<div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-								<div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
-									<div className="mb-3 text-sm font-semibold text-slate-900">关联术语</div>
 									<Space wrap>
-										<Tag>暂无挂载</Tag>
+										{domainOptions.slice(0, 12).map((item) => (
+											<Tag key={item.id}>{item.name}</Tag>
+										))}
+										{domainOptions.length > 12 ? <Tag>+{domainOptions.length - 12} 更多</Tag> : null}
 									</Space>
-									<Button className="mt-3" type="dashed" block disabled>
-										+ 挂载术语
-									</Button>
-								</div>
-								<div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
-									<div className="mb-3 text-sm font-semibold text-slate-900">域级治理指标</div>
-									<div className="flex items-center justify-between py-1">
-										<Text>数据集数</Text>
-										<Text strong>{statsLoading ? "..." : (assetStats?.datasetCount ?? "-")}</Text>
-									</div>
-									<div className="flex items-center justify-between py-1">
-										<Text>指标数</Text>
-										<Text strong>{assetStats?.indicatorCount != null ? assetStats.indicatorCount : "-"}</Text>
-									</div>
-									<div className="flex items-center justify-between py-1">
-										<Text>质量规则数</Text>
-										<Text strong>{assetStats?.qualityRuleCount != null ? assetStats.qualityRuleCount : "-"}</Text>
-									</div>
-								</div>
-								<div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
-									<div className="mb-3 text-sm font-semibold text-slate-900">域级指标统计</div>
-									{indicatorStatsLoading ? (
-										<div className="text-xs text-slate-400">加载中...</div>
-									) : indicatorStats && indicatorStats.total > 0 ? (
-										<div className="space-y-2">
-											<div className="grid grid-cols-3 gap-3 text-center">
-												<div className="rounded border border-slate-100 bg-slate-50 p-2">
-													<div className="text-lg font-bold text-slate-800">{indicatorStats.total}</div>
-													<div className="text-xs text-slate-500">总数</div>
-												</div>
-												<div className="rounded border border-green-100 bg-green-50 p-2">
-													<div className="text-lg font-bold text-green-600">{indicatorStats.published}</div>
-													<div className="text-xs text-slate-500">已发布</div>
-												</div>
-												<div className="rounded border border-orange-100 bg-orange-50 p-2">
-													<div className="text-lg font-bold text-orange-500">{indicatorStats.draft}</div>
-													<div className="text-xs text-slate-500">草稿</div>
-												</div>
-											</div>
-											<a
-												onClick={() => router.push(`/governance/indicator-center?domain=${activeDomain?.code ?? ""}`)}
-												className="cursor-pointer text-xs text-blue-500 hover:underline"
-											>
-												查看该域全部指标 →
-											</a>
+								)}
+							</div>
+						) : (
+							<div className="space-y-6">
+								<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+									<div className="min-w-0">
+										<Space size={8} wrap>
+											<Title level={4} style={{ margin: 0 }}>
+												{activeDomain.name || "未命名主题域"}
+											</Title>
+											{activeDomain.code ? <Tag color="blue">{activeDomain.code}</Tag> : null}
+										</Space>
+										<div className="mt-2 text-sm text-slate-500">
+											负责人：{activeDomain.owner || "未指定"} ｜ 子域数：{activeChildren.length} ｜ 资产数：
+											{statsLoading ? "..." : (assetStats?.datasetCount ?? "-")}
 										</div>
-									) : (
-										<div className="text-xs text-slate-400">暂无指标</div>
-									)}
+										{activeDomain.description ? (
+											<Text type="secondary" className="block mt-2">
+												{activeDomain.description}
+											</Text>
+										) : null}
+									</div>
+									<Dropdown
+										trigger={["click"]}
+										menu={{
+											items: [
+												{ key: "edit", label: "编辑域属性" },
+												{ key: "delete", label: "删除域", danger: true },
+											],
+											onClick: ({ key }) => {
+												if (key === "edit") openModal(activeDomain, activeDomain.parentId);
+												if (key === "delete") confirmDelete(activeDomain);
+											},
+										}}
+									>
+										<Button disabled={!canManage}>更多</Button>
+									</Dropdown>
 								</div>
-							</div>
 
-							<div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
-								<div className="mb-3 text-sm font-semibold text-slate-900">子域列表</div>
-								{activeChildren.length ? (
-									<Space wrap>
-										{activeChildren.map((child) => (
-											<Tag key={child.id || child.name}>
-												{child.name}
-											</Tag>
-										))}
-									</Space>
-								) : (
-									<Space align="center">
-										<Badge status="default" />
-										<Text type="secondary">暂无子域</Text>
-									</Space>
-								)}
+								<Divider />
+								<SubjectWorkspaceTabs
+									activeKey={workspaceTab}
+									onChange={setWorkspaceTabAndQuery}
+									scope={
+										<div className="space-y-4">
+											<div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-4">
+												<div>
+													<div className="font-medium text-slate-900">当前范围：{activeDomain.name}</div>
+													<div className="mt-1 text-sm text-slate-500">
+														从业务对象、数据表和已有模型开始组织逻辑模型。
+													</div>
+												</div>
+												<Button type="primary" onClick={continueLogicalModel}>
+													继续逻辑模型
+												</Button>
+											</div>
+											<div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4">
+												<Text type="secondary">需要一致性维度时再使用维度建模辅助。</Text>
+												<DimensionalModelingAssist candidateCount={candidateCount} openOnMount={focusBusinessProcesses}>
+													<div className="space-y-4">
+														<Card
+															className="border-slate-200"
+															title="业务过程"
+															extra={
+																<Space>
+																	{candidateCount ? <Tag color="gold">待确认候选 {candidateCount}</Tag> : null}
+																	<Button
+																		size="small"
+																		type="primary"
+																		onClick={() => openProcessModal()}
+																		disabled={!canManage}
+																	>
+																		新增业务过程
+																	</Button>
+																</Space>
+															}
+															loading={modelingFactsLoading}
+														>
+															{businessProcesses.length ? (
+																<Space direction="vertical" className="w-full" size="middle">
+																	{businessProcesses.map((process) => (
+																		<div
+																			key={process.processId}
+																			className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3"
+																		>
+																			<div className="flex flex-wrap items-start justify-between gap-3">
+																				<div>
+																					<Space wrap size={6}>
+																						<div className="font-semibold text-slate-900">{process.name}</div>
+																						<Tag color={process.confirmed ? "green" : "gold"}>
+																							{process.confirmed ? "已确认" : "确认后使用"}
+																						</Tag>
+																						<Tag>{process.sourceType === "MANUAL" ? "人工登记" : "候选来源"}</Tag>
+																					</Space>
+																					<div className="mt-1 text-xs text-slate-500">{process.processId}</div>
+																					{process.sourceId ? (
+																						<div className="mt-1 text-xs text-slate-500">
+																							来源：{process.sourceId}
+																							{process.sourceVersion ? ` v${process.sourceVersion}` : ""}
+																						</div>
+																					) : null}
+																					{process.description ? (
+																						<div className="mt-1 text-sm text-slate-600">{process.description}</div>
+																					) : null}
+																				</div>
+																				<Space size={4}>
+																					{process.confirmed ? (
+																						<Button
+																							size="small"
+																							type="link"
+																							onClick={() => startProcessPlanning(process)}
+																						>
+																							进入业务建模
+																						</Button>
+																					) : (
+																						<Button
+																							size="small"
+																							type="link"
+																							onClick={() => void confirmProcess(process)}
+																							disabled={!canManage}
+																						>
+																							确认后使用
+																						</Button>
+																					)}
+																					<Button
+																						size="small"
+																						danger
+																						type="link"
+																						onClick={() => deleteProcess(process)}
+																						disabled={!canManage}
+																					>
+																						删除
+																					</Button>
+																				</Space>
+																			</div>
+																		</div>
+																	))}
+																</Space>
+															) : (
+																<EmptyState
+																	title="暂无业务过程"
+																	description="业务过程是事实建模的锚点，请先按当前主题域的实际业务边界创建。"
+																	actions={
+																		<Button onClick={() => openProcessModal()} disabled={!canManage}>
+																			新增业务过程
+																		</Button>
+																	}
+																/>
+															)}
+														</Card>
+														<ConformedDimensionCatalogCard
+															domainId={activeDomain.id as string}
+															canManage={canManage}
+															processes={businessProcesses}
+															dimensions={conformedDimensionCatalog}
+															onChanged={() => loadDomainModelingFacts(activeDomain.id as string)}
+														/>
+													</div>
+												</DimensionalModelingAssist>
+											</div>
+										</div>
+									}
+									details={
+										<div className="space-y-4">
+											<Card
+												className="border-blue-100 bg-blue-50/30"
+												data-testid="warehouse-layer-plan"
+												title="输出分层方案"
+												extra={
+													<Tag color="blue">
+														标准方案 v
+														{activePlanningContext?.layerSchemeVersion ?? DEFAULT_WAREHOUSE_LAYER_SCHEME.version}
+													</Tag>
+												}
+											>
+												<Space direction="vertical" size={8} className="w-full">
+													<div className="flex flex-wrap items-center gap-2">
+														{enabledPlanningLayers.map((layer, index) => (
+															<span key={layer} className="flex items-center gap-2">
+																<Tag
+																	color={
+																		layer === "STG"
+																			? "gold"
+																			: layer === "DWD"
+																				? "purple"
+																				: layer === "DWS"
+																					? "blue"
+																					: layer === "ADS"
+																						? "green"
+																						: "default"
+																	}
+																>
+																	{resolveLayer(layer)?.title || layer}
+																</Tag>
+																{index < enabledPlanningLayers.length - 1 ? <Text type="secondary">→</Text> : null}
+															</span>
+														))}
+													</div>
+													<Text type="secondary">
+														业务输出层：
+														{outputPlanningLayers.map((layer) => resolveLayer(layer)?.key || layer).join("、")}；STG
+														是可选技术过渡层，不产出业务指标。
+													</Text>
+													{stgLayer ? (
+														<div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+															<div className="flex flex-wrap items-center justify-between gap-2">
+																<div>
+																	<Text strong>STG · {stgLayer.title}</Text>
+																	<div className="mt-1 text-xs text-slate-600">{stgLayer.responsibility}</div>
+																	<div className="mt-1 text-xs text-slate-500">{stgLayer.dbtRole}</div>
+																</div>
+																<Checkbox
+																	checked={enabledPlanningLayers.includes("STG")}
+																	onChange={(event) => updateStgPlanning(event.target.checked)}
+																	disabled={!canManage}
+																>
+																	启用 STG（dbt 推荐）
+																</Checkbox>
+															</div>
+														</div>
+													) : null}
+												</Space>
+											</Card>
+											<Alert
+												showIcon
+												data-testid="warehouse-planning-card"
+												type={
+													planningStatus.status === "blocked"
+														? "error"
+														: planningStatus.status === "ready"
+															? "success"
+															: "info"
+												}
+												message="数仓规划 · 分层方案"
+												description={
+													<Space direction="vertical" size={4}>
+														<Text>
+															主题域：{activeDomain.name || activeDomain.id} · 输出层：
+															{outputPlanningLayers.join(" → ")} · 建模模式：维度建模
+														</Text>
+														<Text type="secondary">
+															{planningStatus.reason || "规划、标准草稿与维度模型候选已具备连续上下文"}
+														</Text>
+													</Space>
+												}
+												action={
+													<Button type="primary" onClick={continueDimensionPlanning}>
+														{planningStatus.status === "blocked"
+															? "重新确认规划"
+															: activePlanningContext
+																? "继续标准落标"
+																: "创建规划并落标"}
+													</Button>
+												}
+											/>
+										</div>
+									}
+									governance={
+										<div className="space-y-4">
+											<div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+												<div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
+													<div className="mb-3 text-sm font-semibold text-slate-900">域级治理指标</div>
+													<div className="flex items-center justify-between py-1">
+														<Text>数据集数</Text>
+														<Text strong>{statsLoading ? "..." : (assetStats?.datasetCount ?? "-")}</Text>
+													</div>
+													<div className="flex items-center justify-between py-1">
+														<Text>指标数</Text>
+														<Text strong>{assetStats?.indicatorCount != null ? assetStats.indicatorCount : "-"}</Text>
+													</div>
+													<div className="flex items-center justify-between py-1">
+														<Text>质量规则数</Text>
+														<Text strong>
+															{assetStats?.qualityRuleCount != null ? assetStats.qualityRuleCount : "-"}
+														</Text>
+													</div>
+												</div>
+												<div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
+													<div className="mb-3 text-sm font-semibold text-slate-900">域级指标统计</div>
+													{indicatorStatsLoading ? (
+														<div className="text-xs text-slate-400">加载中...</div>
+													) : indicatorStats && indicatorStats.total > 0 ? (
+														<div className="space-y-2">
+															<div className="grid grid-cols-3 gap-3 text-center">
+																<div className="rounded border border-slate-100 bg-slate-50 p-2">
+																	<div className="text-lg font-bold text-slate-800">{indicatorStats.total}</div>
+																	<div className="text-xs text-slate-500">总数</div>
+																</div>
+																<div className="rounded border border-green-100 bg-green-50 p-2">
+																	<div className="text-lg font-bold text-green-600">{indicatorStats.published}</div>
+																	<div className="text-xs text-slate-500">已发布</div>
+																</div>
+																<div className="rounded border border-orange-100 bg-orange-50 p-2">
+																	<div className="text-lg font-bold text-orange-500">{indicatorStats.draft}</div>
+																	<div className="text-xs text-slate-500">草稿</div>
+																</div>
+															</div>
+															<Button
+																type="link"
+																size="small"
+																onClick={() =>
+																	router.push(`/governance/indicator-center?domain=${activeDomain?.code ?? ""}`)
+																}
+															>
+																查看该域全部指标 →
+															</Button>
+														</div>
+													) : (
+														<div className="text-xs text-slate-400">暂无指标</div>
+													)}
+												</div>
+											</div>
+											<div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
+												<div className="mb-3 text-sm font-semibold text-slate-900">子域列表</div>
+												{activeChildren.length ? (
+													<Space wrap>
+														{activeChildren.map((child) => (
+															<Tag key={child.id || child.name}>{child.name}</Tag>
+														))}
+													</Space>
+												) : (
+													<Space align="center">
+														<Badge status="default" />
+														<Text type="secondary">暂无子域</Text>
+													</Space>
+												)}
+											</div>
+										</div>
+									}
+								/>
 							</div>
-						</div>
-					)}
+						)}
 					</Content>
 				</Layout>
 			</Card>
@@ -979,14 +1051,21 @@ export default function SubjectAreasPage() {
 			>
 				<Form layout="vertical" form={processForm}>
 					<Form.Item name="name" label="业务过程名称" rules={[{ required: true, message: "请输入业务过程名称" }]}>
-						<Input placeholder="例如：节点计划闭环" />
+						<Input placeholder="例如：业务申请处理" />
 					</Form.Item>
 					<Form.Item
-							name="processId"
-							label="业务过程编码"
-							rules={[{ required: true, message: "请输入业务过程编码" }, { min: 2, max: 64, message: "编码长度为 2-64 位" }, { pattern: /^[a-z0-9][a-z0-9_-]*$/, message: "仅支持小写字母、数字、下划线和连字符，且必须以字母或数字开头" }]}
+						name="processId"
+						label="业务过程编码"
+						rules={[
+							{ required: true, message: "请输入业务过程编码" },
+							{ min: 2, max: 64, message: "编码长度为 2-64 位" },
+							{
+								pattern: /^[a-z0-9][a-z0-9_-]*$/,
+								message: "仅支持小写字母、数字、下划线和连字符，且必须以字母或数字开头",
+							},
+						]}
 					>
-						<Input placeholder="node-plan-loop" />
+						<Input placeholder="application-review" />
 					</Form.Item>
 					<Form.Item name="description" label="过程说明">
 						<Input.TextArea rows={3} placeholder="说明过程边界、开始和结束条件" />

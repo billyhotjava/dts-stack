@@ -97,6 +97,14 @@
           "title": "数据建模",
           "children": [
             {
+              "key": "modeling-workbench",
+              "path": "modeling-workbench",
+              "icon": "solar:layers-minimalistic-bold-duotone",
+              "titleKey": "sys.nav.portal.studioBusinessProcesses",
+              "title": "建模工作台",
+              "externalLink": "/modeling/workbench"
+            },
+            {
               "key": "warehouse-planning",
               "path": "warehouse-planning",
               "icon": "solar:map-point-bold-duotone",
@@ -110,14 +118,6 @@
                   "titleKey": "sys.nav.portal.governanceSubjects",
                   "title": "主题域管理",
                   "externalLink": "/governance/subjects"
-                },
-                {
-                  "key": "business-processes",
-                  "path": "business-processes",
-                  "icon": "solar:folder-with-files-bold-duotone",
-                  "titleKey": "sys.nav.portal.studioBusinessProcesses",
-                  "title": "业务过程管理",
-                  "externalLink": "/governance/subjects?focus=business-processes"
                 }
               ]
             },

@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.yuzhi.dts.platform.security.session.PortalSessionInactivityFilter;
 import com.yuzhi.dts.platform.service.modeling.ModelingVNextApplicationService;
 import com.yuzhi.dts.platform.service.modeling.ModelingVNextContract;
+import com.yuzhi.dts.platform.service.modeling.PjmModelingFixture;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.web.filter.AuditLoggingFilter;
 import java.util.List;
@@ -48,7 +49,7 @@ class ModelingVNextResourceTest {
 
     @Test
     void listsBusinessObjectsUsingTenantAndProcessFilters() throws Exception {
-        ModelingVNextContract.BusinessObject object = ModelingVNextContract.pjmProjectNodeFixture().businessObject();
+        ModelingVNextContract.BusinessObject object = PjmModelingFixture.projectNode().businessObject();
         when(service.listBusinessObjects(eq("tenant-pjm"), eq("project-node-plan-loop"), eq("DRAFT"))).thenReturn(List.of(object));
 
         mockMvc
@@ -62,7 +63,7 @@ class ModelingVNextResourceTest {
 
     @Test
     void createsBusinessObjectAndCarriesRevisionAndIdempotency() throws Exception {
-        ModelingVNextContract.BusinessObject object = ModelingVNextContract.pjmProjectNodeFixture().businessObject();
+        ModelingVNextContract.BusinessObject object = PjmModelingFixture.projectNode().businessObject();
         when(service.saveBusinessObject(eq("tenant-pjm"), eq(object), eq(3), eq("idem-pjm-3"))).thenReturn(object);
 
         mockMvc

@@ -55,8 +55,8 @@
   },
   {
     "code": "sys.nav.portal.studioBusinessProcesses",
-    "title": "业务过程管理",
-    "route": "/studio/projects",
+    "title": "建模工作台",
+    "route": "/modeling/workbench",
     "requiredRoles": []
   },
   {

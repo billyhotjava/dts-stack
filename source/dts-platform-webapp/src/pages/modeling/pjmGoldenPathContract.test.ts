@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildPjmGoldenPathFixture } from "./modelingVnextContract.ts";
+import { buildPjmGoldenPathFixture } from "./pjmModelingFixture.test-support.ts";
 
 test("PJM golden path binds DWD to DWS to ADS and keeps legacy refs read-only", () => {
 	const fixture = buildPjmGoldenPathFixture();

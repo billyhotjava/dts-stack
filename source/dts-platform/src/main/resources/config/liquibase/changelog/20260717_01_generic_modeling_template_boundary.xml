@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260717_01_generic_modeling_template_boundary" author="codex">
+        <addColumn tableName="sprint64_business_process">
+            <column name="source_type" type="varchar(32)" defaultValue="MANUAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_id" type="varchar(128)"/>
+            <column name="source_version" type="varchar(64)"/>
+            <column name="confirmed" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+
+        <createTable tableName="sprint64_conformed_dimension">
+            <column name="domain_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dimension_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_model" type="varchar(256)"/>
+            <column name="source_type" type="varchar(32)" defaultValue="MANUAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_id" type="varchar(128)"/>
+            <column name="source_version" type="varchar(64)"/>
+            <column name="confirmed" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <addPrimaryKey
+            tableName="sprint64_conformed_dimension"
+            columnNames="domain_id, dimension_id"
+            constraintName="pk_sprint64_conformed_dimension"/>
+        <createIndex tableName="sprint64_conformed_dimension" indexName="idx_sprint64_dimension_domain">
+            <column name="domain_id"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="sprint64_conformed_dimension"/>
+            <dropColumn tableName="sprint64_business_process" columnName="confirmed"/>
+            <dropColumn tableName="sprint64_business_process" columnName="source_version"/>
+            <dropColumn tableName="sprint64_business_process" columnName="source_id"/>
+            <dropColumn tableName="sprint64_business_process" columnName="source_type"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-	MODELING_CONTRACT_VERSION,
-	buildPjmProjectNodeFixture,
-	validateModelSpec,
-	type ModelSpec,
-} from "./modelingVnextContract.ts";
+import { MODELING_CONTRACT_VERSION, type ModelSpec, validateModelSpec } from "./modelingVnextContract.ts";
+import { buildPjmProjectNodeFixture } from "./pjmModelingFixture.test-support.ts";
 
 test("PJM fixture declares a reusable project-node fact object and DWD ModelSpec", () => {
 	const fixture = buildPjmProjectNodeFixture();

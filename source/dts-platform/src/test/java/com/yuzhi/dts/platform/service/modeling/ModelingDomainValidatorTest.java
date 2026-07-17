@@ -30,7 +30,7 @@ class ModelingDomainValidatorTest {
 
     @Test
     void rejectsDwdModelWithoutGrainOrBusinessKey() {
-        ModelingVNextContract.BusinessObject fixtureObject = ModelingVNextContract.pjmProjectNodeFixture().businessObject();
+        ModelingVNextContract.BusinessObject fixtureObject = PjmModelingFixture.projectNode().businessObject();
         ModelingVNextContract.BusinessObject object = new ModelingVNextContract.BusinessObject(
             fixtureObject.id(),
             fixtureObject.code(),
@@ -65,7 +65,7 @@ class ModelingDomainValidatorTest {
 
     @Test
     void rejectsModelWhenProcessDoesNotMatchBusinessObject() {
-        ModelingVNextContract.PjmFixture fixture = ModelingVNextContract.pjmProjectNodeFixture();
+        PjmModelingFixture.Fixture fixture = PjmModelingFixture.projectNode();
         ModelingVNextContract.ModelSpec model = new ModelingVNextContract.ModelSpec(
             fixture.modelSpec().id(),
             fixture.modelSpec().objectId(),
@@ -94,7 +94,7 @@ class ModelingDomainValidatorTest {
 
     @Test
     void projectSpaceIsOptionalForNormalModeling() {
-        ModelingVNextContract.PjmFixture fixture = ModelingVNextContract.pjmProjectNodeFixture();
+        PjmModelingFixture.Fixture fixture = PjmModelingFixture.projectNode();
 
         assertThat(ModelingDomainValidator.validateBusinessObject(fixture.businessObject(), "tenant-a")).isEmpty();
         assertThat(ModelingDomainValidator.validateModelSpec(fixture.modelSpec(), fixture.businessObject())).isEmpty();

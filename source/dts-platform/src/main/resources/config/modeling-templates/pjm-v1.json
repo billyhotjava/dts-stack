@@ -1,0 +1,132 @@
+{
+  "contractVersion": 1,
+  "templateId": "pjm",
+  "version": "1",
+  "name": "项目管理示例模板",
+  "description": "面向项目节点、质量问题和风险闭环的可选建模示例。",
+  "industry": "项目管理",
+  "optional": true,
+  "installationMode": "EXPLICIT",
+  "businessProcesses": [
+    {
+      "processId": "node-plan-loop",
+      "name": "节点计划闭环",
+      "description": "从计划提出、执行跟踪到节点验收的业务过程。"
+    },
+    {
+      "processId": "quality-zero",
+      "name": "质量问题归零",
+      "description": "从质量问题发现、处置到验证关闭的业务过程。"
+    },
+    {
+      "processId": "risk-release",
+      "name": "风险提出与释放",
+      "description": "从风险识别、评估到释放或升级的业务过程。"
+    }
+  ],
+  "conformedDimensions": [
+    { "dimensionId": "completion-status", "name": "完成状态", "sourceModel": "dim_completion_status_v2" },
+    { "dimensionId": "node-type", "name": "节点类型", "sourceModel": "dim_node_type_v2" },
+    { "dimensionId": "risk-level", "name": "风险等级", "sourceModel": "dim_risk_level_v2" },
+    { "dimensionId": "quality-zero-status", "name": "质量归零状态", "sourceModel": "dim_quality_zero_status_v2" },
+    { "dimensionId": "quality-reason", "name": "质量原因分类", "sourceModel": "dim_quality_reason_v2" },
+    { "dimensionId": "technical-change-type", "name": "技术状态更改类别", "sourceModel": "dim_technical_change_type_v2" },
+    { "dimensionId": "signing-status", "name": "签署状态", "sourceModel": "dim_signing_status_v2" },
+    { "dimensionId": "risk-category", "name": "风险分类", "sourceModel": "dim_risk_category_v2" }
+  ],
+  "diagnosticRules": [
+    {
+      "modelName": "biz_dws_progress_monthly_v2",
+      "findingsWhenEmpty": [],
+      "findingsWhenEmptyWithNonEmptyUpstream": [
+        "PJM 进度月报依赖 biz_dwd_project_node_v2.plan_year；若 DWD 非空但 DWS 为空，通常是 plan_date 解析失败导致 plan_year 全空",
+        "PJM 进度 DWD 还要求 project_no 和 plan_date 原始文本非空，需先检查 ODS 是否已在导入阶段被过滤"
+      ],
+      "recommendedQueries": [
+        "SELECT COUNT(*) AS dwd_cnt, COUNT(*) FILTER (WHERE plan_year IS NOT NULL) AS dwd_plan_year_ok FROM biz_dwd_project_node_v2;",
+        "SELECT project_no, plan_date, plan_year, actual_date, actual_year FROM biz_dwd_project_node_v2 WHERE plan_year IS NULL LIMIT 50;",
+        "SELECT project_no, plan_date, actual_date, last_update_time FROM ods_project_subject_domain_v2 LIMIT 50;"
+      ]
+    },
+    {
+      "modelName": "biz_dws_quality_monthly_v2",
+      "findingsWhenEmpty": [],
+      "findingsWhenEmptyWithNonEmptyUpstream": [
+        "PJM 质量月报依赖 biz_dwd_quality_issue_v2.issue_year；若 DWD 非空但 DWS 为空，优先检查 issue_date 解析是否全部失败"
+      ],
+      "recommendedQueries": [
+        "SELECT COUNT(*) AS dwd_cnt, COUNT(*) FILTER (WHERE issue_year IS NOT NULL) AS dwd_issue_year_ok FROM biz_dwd_quality_issue_v2;",
+        "SELECT project_no, issue_name, issue_date, issue_year, zero_complete_date FROM biz_dwd_quality_issue_v2 WHERE issue_year IS NULL LIMIT 50;",
+        "SELECT project_no, issue_name, issue_date, zero_complete_date FROM ods_quality_issue_v2 LIMIT 50;"
+      ]
+    },
+    {
+      "modelName": "biz_dws_tech_state_monthly_v2",
+      "findingsWhenEmpty": [],
+      "findingsWhenEmptyWithNonEmptyUpstream": [
+        "PJM 技术状态月报依赖 biz_dwd_tech_state_v2.submit_year；若 DWD 非空但 DWS 为空，优先检查 change_submit_time 解析结果"
+      ],
+      "recommendedQueries": [
+        "SELECT COUNT(*) AS dwd_cnt, COUNT(*) FILTER (WHERE submit_year IS NOT NULL) AS dwd_submit_year_ok FROM biz_dwd_tech_state_v2;",
+        "SELECT project_no, tech_state_name, change_submit_time, submit_year, submit_month FROM biz_dwd_tech_state_v2 WHERE submit_year IS NULL LIMIT 50;",
+        "SELECT project_no, tech_state_name, change_submit_time, file_signature_date FROM ods_tech_state_v2 LIMIT 50;"
+      ]
+    },
+    {
+      "modelName": "biz_dws_risk_monthly_v2",
+      "findingsWhenEmpty": [],
+      "findingsWhenEmptyWithNonEmptyUpstream": [
+        "PJM 风险月报依赖 biz_dwd_risk_info_v2.submit_year；若 DWD 非空但 DWS 为空，优先检查 risk_submit_time 解析结果"
+      ],
+      "recommendedQueries": [
+        "SELECT COUNT(*) AS dwd_cnt, COUNT(*) FILTER (WHERE submit_year IS NOT NULL) AS dwd_submit_year_ok FROM biz_dwd_risk_info_v2;",
+        "SELECT project_no, risk_name, risk_submit_date, submit_year, submit_month FROM biz_dwd_risk_info_v2 WHERE submit_year IS NULL LIMIT 50;",
+        "SELECT project_no, risk_name, risk_submit_time, final_release_time FROM ods_risk_info_v2 LIMIT 50;"
+      ]
+    },
+    {
+      "modelName": "biz_dwd_project_node_v2",
+      "findingsWhenEmpty": [
+        "PJM 进度 DWD 内置过滤 project_no 和 plan_date 原始文本非空，ODS 有脏值时会在进入 DWD 前被直接过滤"
+      ],
+      "findingsWhenEmptyWithNonEmptyUpstream": [],
+      "recommendedQueries": [
+        "SELECT COUNT(*) AS ods_cnt, COUNT(*) FILTER (WHERE btrim(COALESCE(project_no, '')) != '' AND btrim(COALESCE(plan_date, '')) != '') AS ods_pass_filter_cnt FROM ods_project_subject_domain_v2;",
+        "SELECT project_no, subsystem, node_task, plan_date, actual_date FROM ods_project_subject_domain_v2 WHERE btrim(COALESCE(project_no, '')) = '' OR btrim(COALESCE(plan_date, '')) = '' LIMIT 50;"
+      ]
+    },
+    {
+      "modelName": "biz_dwd_quality_issue_v2",
+      "findingsWhenEmpty": [
+        "PJM 质量 DWD 要求 project_no 非空；若 ODS 行数存在但 DWD 为空，优先检查 project_no 占位值和空白字符"
+      ],
+      "findingsWhenEmptyWithNonEmptyUpstream": [],
+      "recommendedQueries": [
+        "SELECT COUNT(*) AS ods_cnt, COUNT(*) FILTER (WHERE btrim(COALESCE(project_no, '')) != '') AS ods_pass_filter_cnt FROM ods_quality_issue_v2;",
+        "SELECT project_no, issue_name, issue_date, dept FROM ods_quality_issue_v2 WHERE btrim(COALESCE(project_no, '')) = '' LIMIT 50;"
+      ]
+    },
+    {
+      "modelName": "biz_dwd_tech_state_v2",
+      "findingsWhenEmpty": [
+        "PJM 技术状态 DWD 要求 project_no 非空；若后续 submit_year 全空，再检查 change_submit_time 的格式归一化"
+      ],
+      "findingsWhenEmptyWithNonEmptyUpstream": [],
+      "recommendedQueries": [
+        "SELECT COUNT(*) AS ods_cnt, COUNT(*) FILTER (WHERE btrim(COALESCE(project_no, '')) != '') AS ods_pass_filter_cnt FROM ods_tech_state_v2;",
+        "SELECT project_no, tech_state_name, change_submit_time, dept FROM ods_tech_state_v2 WHERE btrim(COALESCE(project_no, '')) = '' LIMIT 50;"
+      ]
+    },
+    {
+      "modelName": "biz_dwd_risk_info_v2",
+      "findingsWhenEmpty": [
+        "PJM 风险 DWD 要求 project_no 非空；若后续 submit_year 全空，再检查 risk_submit_time 的格式归一化"
+      ],
+      "findingsWhenEmptyWithNonEmptyUpstream": [],
+      "recommendedQueries": [
+        "SELECT COUNT(*) AS ods_cnt, COUNT(*) FILTER (WHERE btrim(COALESCE(project_no, '')) != '') AS ods_pass_filter_cnt FROM ods_risk_info_v2;",
+        "SELECT project_no, risk_name, risk_submit_time, dept FROM ods_risk_info_v2 WHERE btrim(COALESCE(project_no, '')) = '' LIMIT 50;"
+      ]
+    }
+  ]
+}

@@ -1,14 +1,13 @@
 import { Button } from "antd";
 import type { LucideIcon } from "lucide-react";
-import { BarChart3, Box, CheckCircle2, CircleDot, Database, Layers3, Rocket } from "lucide-react";
+import { Box, Database, Layers3, Rocket } from "lucide-react";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { PageHeader } from "@/components/page-header";
 import { cn } from "@/utils";
 import type { BusinessModelingContext } from "../businessModelingContext";
-import { buildBusinessModelingRoute } from "../businessModelingContext";
+import { buildModelingJourneyRoute, type ModelingStage, modelingStagePath } from "../modelingJourneyContext";
 import { BusinessModelingContextBar } from "./BusinessModelingContextBar";
-import { ModelingConceptCards } from "./ModelingConceptCards";
 
 export type SemanticWorkspaceKey = "workbench" | "objects" | "metrics" | "models" | "publish";
 
@@ -18,45 +17,32 @@ export type SemanticWorkspaceStat = {
 	tone?: "blue" | "green" | "amber" | "red" | "gray";
 };
 
-type SemanticStep = {
-	key: SemanticWorkspaceKey;
+type JourneyStage = {
+	key: ModelingStage;
 	label: string;
 	path: string;
 	icon: LucideIcon;
 };
 
-const STEPS: SemanticStep[] = [
+const JOURNEY_STAGES: JourneyStage[] = [
+	{ key: "SCOPE", label: "范围与来源", path: modelingStagePath("SCOPE"), icon: Layers3 },
+	{ key: "LOGICAL", label: "逻辑模型", path: modelingStagePath("LOGICAL"), icon: Box },
 	{
-		key: "workbench",
-		label: "指标工作台",
-		path: "/modeling/metric-workbench",
-		icon: Layers3,
-	},
-	{
-		key: "objects",
-		label: "业务对象",
-		path: "/modeling/semantic/objects",
-		icon: Box,
-	},
-	{
-		key: "metrics",
-		label: "指标管理",
-		path: "/modeling/semantic/metrics",
-		icon: BarChart3,
-	},
-	{
-		key: "models",
-		label: "模型管理",
-		path: "/modeling/semantic/models",
+		key: "IMPLEMENTATION",
+		label: "实现与验证",
+		path: modelingStagePath("IMPLEMENTATION"),
 		icon: Database,
 	},
-	{
-		key: "publish",
-		label: "发布审核",
-		path: "/modeling/semantic/publish",
-		icon: Rocket,
-	},
+	{ key: "RELEASE", label: "发布与运行", path: modelingStagePath("RELEASE"), icon: Rocket },
 ];
+
+const STAGE_BY_ACTIVE_KEY: Record<SemanticWorkspaceKey, ModelingStage> = {
+	workbench: "LOGICAL",
+	objects: "LOGICAL",
+	metrics: "LOGICAL",
+	models: "IMPLEMENTATION",
+	publish: "RELEASE",
+};
 
 const STAT_TONE_CLASS: Record<NonNullable<SemanticWorkspaceStat["tone"]>, string> = {
 	blue: "border-blue-100 bg-blue-50 text-blue-700",
@@ -86,17 +72,11 @@ export function SemanticWorkspaceFrame({
 	context?: BusinessModelingContext;
 }) {
 	const navigate = useNavigate();
-	const activeIndex = Math.max(
-		0,
-		STEPS.findIndex((step) => step.key === activeKey),
-	);
+	const activeStage = STAGE_BY_ACTIVE_KEY[activeKey];
 
 	return (
 		<div className={cn("space-y-4 px-6 py-5", className)} data-testid="semantic-workspace-frame">
-			<PageHeader
-				title={title}
-				actions={<div className="flex flex-wrap items-center gap-2">{actions}</div>}
-			/>
+			<PageHeader title={title} actions={<div className="flex flex-wrap items-center gap-2">{actions}</div>} />
 			{context ? <BusinessModelingContextBar context={context} /> : null}
 
 			<div className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
@@ -106,33 +86,31 @@ export function SemanticWorkspaceFrame({
 					</div>
 					<div className="flex flex-wrap gap-2">
 						{stats.map((item) => (
-							<div
+							<span
 								key={item.label}
-								className={cn("min-w-[96px] rounded-md border px-3 py-2", STAT_TONE_CLASS[item.tone ?? "gray"])}
+								className={cn("rounded-full border px-3 py-1 text-xs", STAT_TONE_CLASS[item.tone ?? "gray"])}
 							>
-								<div className="text-lg font-semibold leading-5">{item.value}</div>
-								<div className="mt-1 text-xs opacity-80">{item.label}</div>
-							</div>
+								{item.label}：<strong>{item.value}</strong>
+							</span>
 						))}
 					</div>
 				</div>
 
 				<div className="mt-3">
 					<div className="min-w-0" data-testid="semantic-workspace-flow">
-						<nav className="flex flex-wrap items-center gap-2" aria-label="指标建模导航">
-							{STEPS.map((step, index) => {
+						<nav className="flex flex-wrap items-center gap-2" aria-label="通用建模阶段导航">
+							{JOURNEY_STAGES.map((step) => {
 								const Icon = step.icon;
-								const active = step.key === activeKey;
-								const done = index < activeIndex;
+								const active = step.key === activeStage;
 								return (
 									<Button
 										key={step.key}
 										size="small"
 										type={active ? "primary" : "default"}
 										aria-current={active ? "step" : undefined}
-											onClick={() => navigate(context ? buildBusinessModelingRoute(step.path, context) : step.path)}
+										onClick={() => navigate(buildModelingJourneyRoute(step.path, { ...context, stage: step.key }))}
 									>
-										{done ? <CheckCircle2 size={14} /> : active ? <CircleDot size={14} /> : <Icon size={14} />}
+										<Icon size={14} />
 										{step.label}
 									</Button>
 								);
@@ -141,9 +119,6 @@ export function SemanticWorkspaceFrame({
 					</div>
 				</div>
 			</div>
-
-			<ModelingConceptCards context={context} />
-
 			{children}
 		</div>
 	);

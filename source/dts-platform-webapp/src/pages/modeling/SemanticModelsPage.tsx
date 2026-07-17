@@ -1,28 +1,28 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Form, Input, Modal, Popconfirm, Radio, Select, Space, Tag } from "antd";
-import { Plus } from "lucide-react";
-import { toast } from "sonner";
-import { CompactTable } from "@/components/table";
+import { Button, Dropdown, Form, Input, Modal, Radio, Select, Space, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { MoreHorizontal, Plus } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
+import { toast } from "sonner";
+import { getModelSpecReleaseGate, listModelingModelSpecs, type ModelingReleaseGate } from "@/api/modelingApi";
 import {
-	listSemanticModels,
 	createSemanticModel,
-	previewSemanticModelData,
 	generateSemanticModelArtifacts,
-	triggerSemanticModelRun,
-	submitSemanticModelReview,
+	listSemanticModels,
+	previewSemanticModelData,
 	type SemanticModel,
 	type SemanticModelPreview,
+	submitSemanticModelReview,
+	triggerSemanticModelRun,
 } from "@/api/semanticModelingApi";
-import { getModelSpecReleaseGate, listModelingModelSpecs, type ModelingReleaseGate } from "@/api/modelingApi";
-import { SemanticWorkspaceFrame } from "./semantic-workspace/SemanticWorkspaceFrame";
+import { CompactTable } from "@/components/table";
 import { useSearchParams } from "@/routes/hooks";
-import { resolveWarehousePlanningContext } from "../governance/warehousePlanningContext";
 import { DEFAULT_WAREHOUSE_LAYER_SCHEME } from "../governance/warehouseLayerRegistry";
-import { buildBusinessModelingRoute, resolveBusinessModelingContext } from "./businessModelingContext";
-import { buildModelLedgerRows, toLegacySemanticModel, type ModelLedgerRow } from "./modelingLedger";
+import { resolveWarehousePlanningContext } from "../governance/warehousePlanningContext";
+import { resolveBusinessModelingContext } from "./businessModelingContext";
+import { buildModelLedgerRows, type ModelLedgerRow, toLegacySemanticModel } from "./modelingLedger";
 import type { ModelingLayer } from "./modelingVnextContract";
+import { SemanticWorkspaceFrame } from "./semantic-workspace/SemanticWorkspaceFrame";
 
 type ModelType = ModelingLayer | "ALL";
 
@@ -40,7 +40,9 @@ export default function SemanticModelsPage() {
 	const enabledModelLayers = useMemo(() => {
 		const enabled = planningResolution.context?.enabledLayers ?? DEFAULT_WAREHOUSE_LAYER_SCHEME.enabledLayers;
 		const mapped = enabled.map((layer) => (layer === "ODS_RAW" || layer === "ODS_STANDARDIZED" ? "ODS" : layer));
-		return [...new Set(mapped)].filter((layer): layer is ModelingLayer => ["ODS", "STG", "DWD", "DWS", "ADS"].includes(layer));
+		return [...new Set(mapped)].filter((layer): layer is ModelingLayer =>
+			["ODS", "STG", "DWD", "DWS", "ADS"].includes(layer),
+		);
 	}, [planningResolution.context]);
 	const context = useMemo(
 		() => resolveBusinessModelingContext(searchParams, planningResolution.context),
@@ -61,10 +63,7 @@ export default function SemanticModelsPage() {
 		[ledgerRows, showStg, typeFilter],
 	);
 	const layerFilterOptions = useMemo(
-		() => [
-			{ label: "全部", value: "ALL" },
-			...enabledModelLayers.map((layer) => ({ label: layer, value: layer })),
-		],
+		() => [{ label: "全部", value: "ALL" }, ...enabledModelLayers.map((layer) => ({ label: layer, value: layer }))],
 		[enabledModelLayers],
 	);
 
@@ -91,19 +90,27 @@ export default function SemanticModelsPage() {
 							}
 						}),
 					);
-					setReleaseGates(Object.fromEntries(gateEntries.filter((entry): entry is readonly [string, ModelingReleaseGate] => entry !== null)));
+					setReleaseGates(
+						Object.fromEntries(
+							gateEntries.filter((entry): entry is readonly [string, ModelingReleaseGate] => entry !== null),
+						),
+					);
 					return;
 				}
 			} catch {
 				// Keep the legacy read path available while a tenant is migrating.
 			}
-				const list = await listSemanticModels({
-					processId,
-					...(typeFilter === "DWS" || typeFilter === "ADS" ? { type: typeFilter } : {}),
-				});
-				setReleaseGates({});
-				const safeList = Array.isArray(list) ? list : [];
-				setModels(typeFilter === "ALL" || typeFilter === "DWS" || typeFilter === "ADS" ? safeList : safeList.filter((item) => item.type === typeFilter));
+			const list = await listSemanticModels({
+				processId,
+				...(typeFilter === "DWS" || typeFilter === "ADS" ? { type: typeFilter } : {}),
+			});
+			setReleaseGates({});
+			const safeList = Array.isArray(list) ? list : [];
+			setModels(
+				typeFilter === "ALL" || typeFilter === "DWS" || typeFilter === "ADS"
+					? safeList
+					: safeList.filter((item) => item.type === typeFilter),
+			);
 		} catch {
 			/* global interceptor */
 		} finally {
@@ -182,7 +189,13 @@ export default function SemanticModelsPage() {
 			dataIndex: "layer",
 			width: 80,
 			render: (v?: string) => (
-				<Tag color={v === "DWD" ? "purple" : v === "DWS" ? "blue" : v === "ADS" ? "green" : v === "STG" ? "orange" : "default"}>{v ?? "-"}</Tag>
+				<Tag
+					color={
+						v === "DWD" ? "purple" : v === "DWS" ? "blue" : v === "ADS" ? "green" : v === "STG" ? "orange" : "default"
+					}
+				>
+					{v ?? "-"}
+				</Tag>
 			),
 		},
 		{ title: "粒度", dataIndex: "grain", width: 100 },
@@ -190,15 +203,13 @@ export default function SemanticModelsPage() {
 			title: "实现模式",
 			dataIndex: "implementationMode",
 			width: 120,
-			render: (v?: string) => v === "DBT_MANAGED" ? "dbt 原生" : v === "LEGACY_READONLY" ? "兼容只读" : "设计器生成",
+			render: (v?: string) => (v === "DBT_MANAGED" ? "dbt 原生" : v === "LEGACY_READONLY" ? "兼容只读" : "设计器生成"),
 		},
 		{
 			title: "审核 / 运行",
 			dataIndex: "reviewStatus",
 			width: 100,
-			render: (v?: string) => (
-				<Tag color={REVIEW_STATUS_COLOR[v ?? ""] ?? "default"}>{v ?? "DRAFT"}</Tag>
-			),
+			render: (v?: string) => <Tag color={REVIEW_STATUS_COLOR[v ?? ""] ?? "default"}>{v ?? "DRAFT"}</Tag>,
 		},
 		{
 			title: "发布门禁",
@@ -208,7 +219,10 @@ export default function SemanticModelsPage() {
 				const gate = releaseGates[row.id];
 				if (!gate) return <span style={{ color: "#aaa" }}>未接入</span>;
 				return (
-					<Tag color={gate.publishable ? "success" : "error"} title={gate.blockers.join("、") || "parse/test/drift 均通过"}>
+					<Tag
+						color={gate.publishable ? "success" : "error"}
+						title={gate.blockers.join("、") || "parse/test/drift 均通过"}
+					>
 						{gate.publishable ? "可发布" : `阻断 ${gate.blockers.length}`}
 					</Tag>
 				);
@@ -218,31 +232,44 @@ export default function SemanticModelsPage() {
 		{
 			title: "操作",
 			key: "actions",
-			width: 280,
+			width: 180,
 			render: (_: unknown, row: ModelLedgerRow) => (
 				<Space size="small">
 					<Button type="link" size="small" onClick={() => handlePreview(row.id)}>
-						预览
+						查看模型
 					</Button>
-					<Button
-						type="link"
-						size="small"
-						data-testid="semantic-model-dbt-entry"
-						onClick={() => navigate(`/modeling/dbt-files?modelId=${encodeURIComponent(row.id)}&from=model-ledger`)}
+					<Dropdown
+						trigger={["click"]}
+						menu={{
+							items: [
+								{
+									key: "dbt",
+									label: <span data-testid="semantic-model-dbt-entry">高级 dbt SQL</span>,
+								},
+								{ key: "generate", label: "生成制品" },
+								{ key: "run", label: "触发运行" },
+								{ key: "review", label: "提交审核" },
+							],
+							onClick: ({ key }) => {
+								if (key === "dbt") {
+									navigate(`/modeling/dbt-files?modelId=${encodeURIComponent(row.id)}&from=model-ledger`);
+								}
+								if (key === "generate") void handleGenerate(row.id);
+								if (key === "run") void handleTrigger(row.id);
+								if (key === "review") {
+									Modal.confirm({
+										title: "确认提交审核？",
+										onOk: () => handleSubmitReview(row.id),
+									});
+								}
+							},
+						}}
 					>
-						高级 dbt SQL
-					</Button>
-					<Button type="link" size="small" onClick={() => handleGenerate(row.id)}>
-						生成制品
-					</Button>
-					<Button type="link" size="small" onClick={() => handleTrigger(row.id)}>
-						触发运行
-					</Button>
-					<Popconfirm title="确认提交审核？" onConfirm={() => handleSubmitReview(row.id)}>
-						<Button type="link" size="small">
-							提交审核
+						<Button type="text" size="small" aria-label="更多模型操作">
+							<MoreHorizontal size={16} />
+							更多
 						</Button>
-					</Popconfirm>
+					</Dropdown>
 				</Space>
 			),
 		},
@@ -256,12 +283,12 @@ export default function SemanticModelsPage() {
 			context={context}
 			stats={[
 				{ label: "模型", value: models.length, tone: "blue" },
-				{ label: "ODS", value: models.filter((item) => item.type === "ODS").length, tone: "gray" },
-				{ label: "DWD", value: models.filter((item) => item.type === "DWD").length, tone: "gray" },
-				{ label: "DWS", value: models.filter((item) => item.type === "DWS").length, tone: "green" },
-				{ label: "ADS", value: models.filter((item) => item.type === "ADS").length, tone: "amber" },
-				{ label: "STG", value: models.filter((item) => item.type === "STG").length, tone: "amber" },
 				{ label: "待审核", value: models.filter((item) => item.reviewStatus === "SUBMITTED").length, tone: "red" },
+				{
+					label: "发布阻断",
+					value: Object.values(releaseGates).filter((gate) => !gate.publishable).length,
+					tone: "amber",
+				},
 			]}
 			actions={
 				<Button
@@ -280,49 +307,22 @@ export default function SemanticModelsPage() {
 			}
 		>
 			<div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm" data-testid="semantic-models-page">
-				<div
-					className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-blue-100 bg-blue-50/40 px-3 py-2"
-					data-testid="semantic-model-ledger-links"
-				>
-					<div>
-						<div className="text-sm font-medium text-gray-900">模型台账 · 专业入口</div>
-						<div className="mt-1 text-xs text-gray-500">
-							台账记录模型归属、粒度和状态；字段标准、粒度关系与发布门禁在专业页面维护。
-						</div>
-					</div>
-					<Space size="small" wrap>
-						<Button size="small" onClick={() => navigate(buildBusinessModelingRoute("/governance/standards/elements?from=model-ledger", context))}>
-							字段标准
-						</Button>
-						<Button size="small" onClick={() => navigate(buildBusinessModelingRoute("/modeling/semantic/objects?from=model-ledger", context))}>
-							粒度与关系
-						</Button>
-						<Button size="small" onClick={() => navigate(buildBusinessModelingRoute("/modeling/semantic/publish?from=model-ledger", context))}>
-							发布审核
-						</Button>
-					</Space>
-				</div>
 				<div className="mb-3 flex flex-wrap items-center justify-between gap-3">
 					<Space wrap>
-					<Radio.Group
-						data-testid="modeling-layer-filter"
-						value={typeFilter}
-						onChange={(e) => setTypeFilter(e.target.value as ModelType)}
-						optionType="button"
-						buttonStyle="solid"
-					options={layerFilterOptions}
-					/>
-					<Button size="small" onClick={() => setShowStg((value) => !value)}>
-						{showStg ? "折叠 STG" : "展开 STG"}
-					</Button>
+						<Radio.Group
+							data-testid="modeling-layer-filter"
+							value={typeFilter}
+							onChange={(e) => setTypeFilter(e.target.value as ModelType)}
+							optionType="button"
+							buttonStyle="solid"
+							options={layerFilterOptions}
+						/>
+						<Button size="small" onClick={() => setShowStg((value) => !value)}>
+							{showStg ? "折叠 STG" : "展开 STG"}
+						</Button>
 					</Space>
 				</div>
-				<CompactTable<ModelLedgerRow>
-					rowKey="id"
-					columns={columns}
-					dataSource={visibleLedgerRows}
-					loading={loading}
-				/>
+				<CompactTable<ModelLedgerRow> rowKey="id" columns={columns} dataSource={visibleLedgerRows} loading={loading} />
 			</div>
 
 			{/* 数据预览 Modal */}

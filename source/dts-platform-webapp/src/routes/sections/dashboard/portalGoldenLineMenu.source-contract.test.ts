@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 type MenuNode = {
@@ -44,6 +44,10 @@ const MODELING_MENU_CONVERGENCE = readFileSync(
 	),
 	"utf8",
 );
+const GENERIC_MODELING_WORKBENCH_MENU_URL = new URL(
+	"../../../../../dts-admin/src/main/resources/config/liquibase/changelog/20260717-01_generic_modeling_workbench_menu.xml",
+	import.meta.url,
+);
 
 const section = (key: string) => {
 	const found = MENU_SEED.portalNavSections.find((item) => item.key === key);
@@ -57,7 +61,7 @@ const child = (node: MenuNode, key: string) => {
 	return found;
 };
 
-test("portal menu follows the DataWorks-style modeling information architecture", () => {
+test("portal menu starts modeling with the generic workbench", () => {
 	assert.deepEqual(
 		MENU_SEED.portalNavSections.map((item) => item.key),
 		["workbench", "resource", "studio", "governance", "consumption"],
@@ -83,16 +87,17 @@ test("portal menu follows the DataWorks-style modeling information architecture"
 	const modeling = child(section("studio"), "modeling");
 	assert.equal(modeling.title, "数据建模");
 	assert.deepEqual(modeling.children?.map((item) => item.key), [
+		"modeling-workbench",
 		"warehouse-planning",
 		"standards",
 		"dimensional-modeling",
 		"low-code-development",
 		"data-metrics",
 	]);
-	assert.deepEqual(child(modeling, "warehouse-planning").children?.map((item) => item.key), ["subjects", "business-processes"]);
+	assert.equal(child(modeling, "modeling-workbench").title, "建模工作台");
+	assert.equal(child(modeling, "modeling-workbench").externalLink, "/modeling/workbench");
+	assert.deepEqual(child(modeling, "warehouse-planning").children?.map((item) => item.key), ["subjects"]);
 	assert.equal(child(child(modeling, "warehouse-planning"), "subjects").externalLink, "/governance/subjects");
-	assert.equal(child(child(modeling, "warehouse-planning"), "business-processes").title, "业务过程管理");
-	assert.equal(child(child(modeling, "warehouse-planning"), "business-processes").externalLink, "/governance/subjects?focus=business-processes");
 	assert.deepEqual(child(modeling, "standards").children?.map((item) => item.key), [
 		"standard-package",
 		"glossary",
@@ -164,6 +169,7 @@ test("golden line section titles have locale coverage and role routes stay canon
 	}
 
 	for (const route of [
+		"/modeling/workbench",
 		"/governance/subjects",
 		"/governance/standards/elements",
 		"/foundation/data-sources",
@@ -176,6 +182,17 @@ test("golden line section titles have locale coverage and role routes stay canon
 	]) {
 		assert.match(ROLE_DEFAULTS, new RegExp(`"route": "${route.replaceAll("/", "\\/")}`));
 	}
+	assert.match(ZH_LOCALE, /"studioBusinessProcesses": "建模工作台"/);
+	assert.match(EN_LOCALE, /"studioBusinessProcesses": "Modeling workbench"/);
+});
+
+test("generic modeling workbench migration keeps the role-bound menu row", () => {
+	assert.match(LIQUIBASE_MASTER, /20260717-01_generic_modeling_workbench_menu\.xml/);
+	assert.equal(existsSync(GENERIC_MODELING_WORKBENCH_MENU_URL), true);
+	const migration = readFileSync(GENERIC_MODELING_WORKBENCH_MENU_URL, "utf8");
+	assert.match(migration, /studioBusinessProcesses/);
+	assert.match(migration, /\/modeling\/workbench/);
+	assert.doesNotMatch(migration, /DELETE FROM portal_menu_visibility|DELETE FROM portal_menu/);
 });
 
 test("admin liquibase reparents persisted menus without deleting bindings", () => {

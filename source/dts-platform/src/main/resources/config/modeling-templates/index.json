@@ -1,0 +1,10 @@
+{
+  "contractVersion": 1,
+  "templates": [
+    {
+      "templateId": "pjm",
+      "version": "1",
+      "resource": "config/modeling-templates/pjm-v1.json"
+    }
+  ]
+}

@@ -173,4 +173,5 @@
     <include file="config/liquibase/changelog/20260709_01_standard_binding_draft.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260711_01_sprint64_governance.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260714-01_modeling_vnext.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260717_01_generic_modeling_template_boundary.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

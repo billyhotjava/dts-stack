@@ -626,7 +626,7 @@ public class ModelingVNextApplicationService {
 
     /**
      * The UI contract deliberately permits stable semantic ids such as
-     * {@code pjm-project-node}. PostgreSQL keeps UUID foreign keys, so map those
+     * {@code semantic-model-001}. PostgreSQL keeps UUID foreign keys, so map those
      * ids deterministically instead of rejecting a first-use ledger request.
      */
     private static UUID externalUuid(String value) {

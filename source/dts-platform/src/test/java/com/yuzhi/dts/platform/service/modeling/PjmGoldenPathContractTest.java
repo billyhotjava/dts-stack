@@ -11,7 +11,7 @@ class PjmGoldenPathContractTest {
 
     @Test
     void goldenPathHasAnExplicitDwdDwsAdsDependencyChainAndReadOnlyLegacyRefs() {
-        ModelingVNextContract.PjmGoldenPathFixture fixture = ModelingVNextContract.pjmGoldenPathFixture();
+        PjmModelingFixture.GoldenPathFixture fixture = PjmModelingFixture.goldenPath();
         Map<String, ModelingVNextContract.ModelSpec> models = fixture.modelSpecs().stream().collect(Collectors.toMap(ModelingVNextContract.ModelSpec::id, Function.identity()));
 
         assertThat(models.keySet()).containsExactlyInAnyOrder("pjm-project-node-dwd", "pjm-project-node-dws", "pjm-project-node-ads");

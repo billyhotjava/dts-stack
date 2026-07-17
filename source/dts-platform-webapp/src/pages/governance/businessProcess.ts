@@ -7,6 +7,10 @@ export type BusinessProcess = {
 	domainId: string;
 	name: string;
 	description?: string;
+	sourceType?: string;
+	sourceId?: string;
+	sourceVersion?: string;
+	confirmed?: boolean;
 	createdAt: string;
 	updatedAt: string;
 };
@@ -24,12 +28,6 @@ type BusinessProcessStore = {
 	version: typeof BUSINESS_PROCESS_VERSION;
 	items: BusinessProcess[];
 };
-
-export const BUSINESS_PROCESS_SEEDS: Omit<BusinessProcessInput, "domainId">[] = [
-	{ processId: "node-plan-loop", name: "节点计划闭环", description: "从计划提出、执行跟踪到节点验收的业务过程。" },
-	{ processId: "quality-zero", name: "质量问题归零", description: "从质量问题发现、处置到验证关闭的业务过程。" },
-	{ processId: "risk-release", name: "风险提出与释放", description: "从风险识别、评估到释放或升级的业务过程。" },
-];
 
 const defaultStorage = (): BusinessProcessStorage | undefined => {
 	try {
@@ -56,6 +54,10 @@ const normalize = (value: Partial<BusinessProcess>): BusinessProcess | null => {
 		domainId: String(value.domainId).trim(),
 		name: String(value.name).trim(),
 		description: value.description ? String(value.description).trim() : undefined,
+		...(value.sourceType ? { sourceType: String(value.sourceType).trim() } : {}),
+		...(value.sourceId ? { sourceId: String(value.sourceId).trim() } : {}),
+		...(value.sourceVersion ? { sourceVersion: String(value.sourceVersion).trim() } : {}),
+		...(typeof value.confirmed === "boolean" ? { confirmed: value.confirmed } : {}),
 		createdAt: String(value.createdAt),
 		updatedAt: String(value.updatedAt),
 	};
@@ -111,7 +113,10 @@ export const saveBusinessProcesses = (
 	try {
 		storage.setItem(
 			BUSINESS_PROCESS_STORAGE_KEY,
-			JSON.stringify({ version: BUSINESS_PROCESS_VERSION, items: [...current, ...valid] } satisfies BusinessProcessStore),
+			JSON.stringify({
+				version: BUSINESS_PROCESS_VERSION,
+				items: [...current, ...valid],
+			} satisfies BusinessProcessStore),
 		);
 		return true;
 	} catch {
@@ -119,29 +124,13 @@ export const saveBusinessProcesses = (
 	}
 };
 
-export const adoptBusinessProcessSeeds = (
-	domainId: string,
-	existing: BusinessProcess[] = loadBusinessProcesses(domainId),
-	storage: BusinessProcessStorage | undefined = defaultStorage(),
-	): BusinessProcess[] => {
-	const timestamp = new Date().toISOString();
-	const known = new Set(existing.map((item) => item.processId));
-	const next = [
-		...existing,
-		...BUSINESS_PROCESS_SEEDS.filter((seed) => !known.has(seed.processId)).map((seed) => ({
-			...seed,
-			version: BUSINESS_PROCESS_VERSION,
-			domainId,
-			createdAt: timestamp,
-			updatedAt: timestamp,
-		})),
-	];
-	saveBusinessProcesses(domainId, next, storage);
-	return next;
-};
-
 export const removeBusinessProcess = (
 	domainId: string,
 	processId: string,
 	storage: BusinessProcessStorage | undefined = defaultStorage(),
-): boolean => saveBusinessProcesses(domainId, loadBusinessProcesses(domainId, storage).filter((item) => item.processId !== processId), storage);
+): boolean =>
+	saveBusinessProcesses(
+		domainId,
+		loadBusinessProcesses(domainId, storage).filter((item) => item.processId !== processId),
+		storage,
+	);

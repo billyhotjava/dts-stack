@@ -4,7 +4,14 @@ const quietGet = <T>(url: string) => api.get<T>({ url, _skipErrorToast: true } a
 const quietPost = <T>(url: string, data: unknown) => api.post<T>({ url, data, _skipErrorToast: true } as any);
 const quietDelete = <T>(url: string) => api.delete<T>({ url, _skipErrorToast: true } as any);
 
-export type Sprint64BusinessProcess = {
+export type ModelingFactProvenance = {
+	sourceType: "MANUAL" | "TEMPLATE" | "IMPORTED" | "SCANNED" | string;
+	sourceId?: string;
+	sourceVersion?: string;
+	confirmed: boolean;
+};
+
+export type Sprint64BusinessProcess = ModelingFactProvenance & {
 	version: number;
 	processId: string;
 	domainId: string;
@@ -26,11 +33,55 @@ export type Sprint64WarehouseLayer = {
 	namingPrefixes: string[];
 };
 
-export type Sprint64ConformedDimension = {
+export type Sprint64ConformedDimension = ModelingFactProvenance & {
 	dimensionId: string;
 	name: string;
 	sourceModel?: string;
 	domainIds: string[];
+};
+
+export type ModelingCandidateConfirmationRequest = {
+	processIds: string[];
+	dimensionIds: string[];
+};
+
+export type ModelingCandidateConfirmationResult = {
+	confirmedProcesses: number;
+	confirmedDimensions: number;
+};
+
+export type ModelingTemplateBusinessProcess = {
+	processId: string;
+	name: string;
+	description?: string;
+};
+
+export type ModelingTemplateConformedDimension = {
+	dimensionId: string;
+	name: string;
+	sourceModel?: string;
+};
+
+export type ModelingTemplate = {
+	contractVersion: number;
+	templateId: string;
+	version: string;
+	name: string;
+	description?: string;
+	industry?: string;
+	optional: boolean;
+	installationMode: string;
+	businessProcesses: ModelingTemplateBusinessProcess[];
+	conformedDimensions: ModelingTemplateConformedDimension[];
+};
+
+export type ModelingTemplateInstallationResult = {
+	domainId: string;
+	templateId: string;
+	templateVersion: string;
+	status: "INSTALLED" | "ALREADY_INSTALLED" | string;
+	createdProcesses: number;
+	createdDimensions: number;
 };
 
 export type Sprint64BusMatrixLink = {
@@ -66,6 +117,34 @@ export const listConformedDimensionsApi = (domainId: string) =>
 		`/governance/sprint64/domains/${encodeURIComponent(domainId)}/conformed-dimensions`,
 	);
 
+export const createConformedDimensionApi = (
+	domainId: string,
+	data: { dimensionId: string; name: string; sourceModel?: string },
+) =>
+	quietPost<Sprint64ConformedDimension>(
+		`/governance/sprint64/domains/${encodeURIComponent(domainId)}/conformed-dimensions`,
+		data,
+	);
+
+export const deleteConformedDimensionApi = (domainId: string, dimensionId: string) =>
+	quietDelete<boolean>(
+		`/governance/sprint64/domains/${encodeURIComponent(domainId)}/conformed-dimensions/${encodeURIComponent(dimensionId)}`,
+	);
+
+export const confirmModelingCandidatesApi = (domainId: string, data: ModelingCandidateConfirmationRequest) =>
+	quietPost<ModelingCandidateConfirmationResult>(
+		`/governance/sprint64/domains/${encodeURIComponent(domainId)}/modeling-candidates/confirm`,
+		data,
+	);
+
+export const listModelingTemplatesApi = () => quietGet<ModelingTemplate[]>("/governance/modeling-templates");
+
+export const installModelingTemplateApi = (templateId: string, domainId: string) =>
+	quietPost<ModelingTemplateInstallationResult>(
+		`/governance/modeling-templates/${encodeURIComponent(templateId)}/install?domainId=${encodeURIComponent(domainId)}`,
+		undefined,
+	);
+
 export const listBusMatrixApi = (domainId: string) =>
 	quietGet<Sprint64BusMatrixLink[]>(`/governance/sprint64/domains/${encodeURIComponent(domainId)}/bus-matrix`);
 
@@ -75,8 +154,5 @@ export const saveBusMatrixLinkApi = (domainId: string, data: Sprint64BusMatrixLi
 		data,
 	});
 
-export const validateGrainApi = (data: {
-	warehouseLayer: string;
-	statement?: string;
-	grainKeys?: string[];
-}) => quietPost<Sprint64GrainValidation>("/governance/sprint64/grain/validate", data);
+export const validateGrainApi = (data: { warehouseLayer: string; statement?: string; grainKeys?: string[] }) =>
+	quietPost<Sprint64GrainValidation>("/governance/sprint64/grain/validate", data);

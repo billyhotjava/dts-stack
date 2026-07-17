@@ -33,7 +33,7 @@ const businessModelingContextBar = readFileSync(new URL("./semantic-workspace/Bu
 test("data development workbench routes converge on existing pages", () => {
 	assert.match(menuSeed, /"title": "低代码开发向导"[\s\S]*?"externalLink": "\/studio\/low-code-development"/);
 	assert.match(menuSeed, /"title": "维度建模"[\s\S]*?"title": "高级建模（SQL）"/);
-	assert.match(menuSeed, /"key": "business-processes"[\s\S]*?"path": "business-processes"[\s\S]*?"title": "业务过程管理"[\s\S]*?"externalLink": "\/governance\/subjects\?focus=business-processes"/);
+	assert.match(menuSeed, /"key": "modeling-workbench"[\s\S]*?"title": "建模工作台"[\s\S]*?"externalLink": "\/modeling\/workbench"/);
 	assert.match(menuSeed, /"title": "低代码开发向导"[\s\S]*?"externalLink": "\/studio\/low-code-development"/);
 	assert.match(menuSeed, /"title": "维度建模"[\s\S]*?"externalLink": "\/studio\/sql-modeling"/);
 	assert.match(menuSeed, /"title": "项目文件浏览"[\s\S]*?"externalLink": "\/modeling\/dbt-files"/);
@@ -62,12 +62,12 @@ test("business process management unifies project spaces and business objects", 
 	assert.match(semanticObjectsPage, /\/governance\/subjects\?focus=business-processes/);
 });
 
-test("model management carries the prototype ledger links without duplicating editors", () => {
-	assert.match(semanticModelsPage, /data-testid="semantic-model-ledger-links"/);
-	assert.match(semanticModelsPage, /字段标准/);
-	assert.match(semanticModelsPage, /粒度与关系/);
-	assert.match(semanticModelsPage, /\/governance\/standards\/elements\?from=model-ledger/);
-	assert.match(semanticModelsPage, /\/modeling\/semantic\/publish\?from=model-ledger/);
+test("model management keeps specialist actions in the row menu", () => {
+	assert.doesNotMatch(semanticModelsPage, /data-testid="semantic-model-ledger-links"/);
+	assert.match(semanticModelsPage, /Dropdown/);
+	assert.match(semanticModelsPage, /查看模型/);
+	assert.match(semanticModelsPage, /更多/);
+	assert.match(semanticModelsPage, /高级 dbt SQL/);
 	assert.match(semanticModelsPage, /processId/);
 	assert.match(businessModelingContextBar, /项目空间：未启用（默认上下文）/);
 });

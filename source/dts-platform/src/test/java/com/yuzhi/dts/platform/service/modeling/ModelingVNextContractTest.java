@@ -2,20 +2,18 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class ModelingVNextContractTest {
 
     @Test
-    void pjmFixtureUsesTheSameCrossLayerContract() {
-        ModelingVNextContract.PjmFixture fixture = ModelingVNextContract.pjmProjectNodeFixture();
-
-        assertThat(fixture.contractVersion()).isEqualTo(ModelingVNextContract.CONTRACT_VERSION);
-        assertThat(fixture.businessObject().objectKind()).isEqualTo(ModelingVNextContract.ObjectKind.FACT);
-        assertThat(fixture.businessObject().processId()).isEqualTo("project-node-plan-loop");
-        assertThat(fixture.businessObject().businessKey()).containsExactly("project_no", "subsystem", "node_task", "plan_date");
-        assertThat(ModelingVNextContract.validateModelSpec(fixture.modelSpec())).isEmpty();
+    void genericContractDoesNotExposeCustomerSpecificFixtures() {
+        assertThat(Arrays.stream(ModelingVNextContract.class.getDeclaredMethods()).map(method -> method.getName().toLowerCase()))
+            .noneMatch(name -> name.startsWith("pjm"));
+        assertThat(Arrays.stream(ModelingVNextContract.class.getDeclaredClasses()).map(type -> type.getSimpleName().toLowerCase()))
+            .noneMatch(name -> name.startsWith("pjm"));
     }
 
     @Test

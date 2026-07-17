@@ -164,7 +164,7 @@ class PortalMenuSeedDefaultsContractTest {
     }
 
     @Test
-    void dataModelingSeedFollowsPlanningStandardsDimensionMetricsOrder() throws Exception {
+    void dataModelingSeedStartsWithGenericWorkbenchAndKeepsSpecialistEntries() throws Exception {
         ClassPathResource seedResource = new ClassPathResource("config/data/portal-menu-seed.json");
         assertTrue(seedResource.exists(), "portal-menu-seed.json must exist");
 
@@ -182,10 +182,16 @@ class PortalMenuSeedDefaultsContractTest {
         assertNotNull(modeling, "数据开发与运维 must expose 数据建模");
 
         List<Map<String, Object>> modelingChildren = listOfMaps(modeling.get("children"));
-        assertEquals("warehouse-planning", modelingChildren.get(0).get("key"), "数仓规划 should be the first modeling entry");
-        assertEquals("standards", modelingChildren.get(1).get("key"), "数据标准 should follow 数仓规划");
-        assertEquals("dimensional-modeling", modelingChildren.get(2).get("key"), "维度建模 should follow 数据标准");
-        assertEquals("data-metrics", modelingChildren.get(3).get("key"), "数据指标 should follow 维度建模");
+        Map<String, Object> workbench = modelingChildren.get(0);
+        assertEquals("modeling-workbench", workbench.get("key"));
+        assertEquals("sys.nav.portal.studioBusinessProcesses", workbench.get("titleKey"));
+        assertEquals("建模工作台", workbench.get("title"));
+        assertEquals("/modeling/workbench", workbench.get("externalLink"));
+        assertEquals("warehouse-planning", modelingChildren.get(1).get("key"), "数仓规划 should follow the workbench");
+        assertEquals("standards", modelingChildren.get(2).get("key"), "数据标准 should follow 数仓规划");
+        assertEquals("dimensional-modeling", modelingChildren.get(3).get("key"), "维度建模 should follow 数据标准");
+        assertEquals("low-code-development", modelingChildren.get(4).get("key"), "低代码开发 should remain a specialist entry");
+        assertEquals("data-metrics", modelingChildren.get(5).get("key"), "数据指标 should remain available");
 
         Map<String, Object> dimensionalModeling = modelingChildren
             .stream()
@@ -195,12 +201,12 @@ class PortalMenuSeedDefaultsContractTest {
         assertNotNull(dimensionalModeling, "数据建模 must expose 维度建模");
 
         List<Map<String, Object>> dimensionChildren = listOfMaps(dimensionalModeling.get("children"));
-        Map<String, Object> lowCode = dimensionChildren
+        Map<String, Object> lowCode = modelingChildren
             .stream()
             .filter(node -> "low-code-development".equals(node.get("key")))
             .findFirst()
             .orElse(null);
-        assertNotNull(lowCode, "维度建模 must expose 低代码开发向导");
+        assertNotNull(lowCode, "数据建模 must expose 低代码开发向导");
         assertEquals("sys.nav.portal.studioLowCodeDevelopment", lowCode.get("titleKey"));
         assertEquals("低代码开发向导", lowCode.get("title"));
         assertEquals("/studio/low-code-development", lowCode.get("externalLink"));
@@ -232,6 +238,14 @@ class PortalMenuSeedDefaultsContractTest {
             defaultsResource.getInputStream(),
             new TypeReference<List<Map<String, Object>>>() {}
         );
+        Map<String, Object> workbenchDefault = defaults
+            .stream()
+            .filter(rule -> "sys.nav.portal.studioBusinessProcesses".equals(rule.get("code")))
+            .findFirst()
+            .orElse(null);
+        assertNotNull(workbenchDefault, "workbench role default should keep its existing code");
+        assertEquals("建模工作台", workbenchDefault.get("title"));
+        assertEquals("/modeling/workbench", workbenchDefault.get("route"));
         Map<String, Object> lowCodeDefault = defaults
             .stream()
             .filter(rule -> "sys.nav.portal.studioLowCodeDevelopment".equals(rule.get("code")))
@@ -240,6 +254,21 @@ class PortalMenuSeedDefaultsContractTest {
         assertNotNull(lowCodeDefault, "低代码开发向导 role default entry must stay documented");
         assertEquals("/studio/low-code-development", lowCodeDefault.get("route"));
         assertTrue(((List<?>) lowCodeDefault.get("requiredRoles")).isEmpty(), "低代码开发向导 seed must not add default role bindings");
+    }
+
+    @Test
+    void genericModelingWorkbenchMigrationPreservesVisibilityBindings() throws Exception {
+        String changelogFile = "20260717-01_generic_modeling_workbench_menu.xml";
+        ClassPathResource master = new ClassPathResource("config/liquibase/master.xml");
+        String masterXml = master.getContentAsString(StandardCharsets.UTF_8);
+        assertTrue(masterXml.contains(changelogFile));
+
+        ClassPathResource changelog = new ClassPathResource("config/liquibase/changelog/" + changelogFile);
+        assertTrue(changelog.exists(), "generic modeling workbench migration changelog must exist");
+        String xml = changelog.getContentAsString(StandardCharsets.UTF_8);
+        assertTrue(xml.contains("sys.nav.portal.studioBusinessProcesses"));
+        assertTrue(xml.contains("/modeling/workbench"));
+        assertFalse(xml.toLowerCase(Locale.ROOT).contains("delete from portal_menu_visibility"));
     }
 
     @Test

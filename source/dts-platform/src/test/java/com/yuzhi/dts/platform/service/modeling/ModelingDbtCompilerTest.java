@@ -10,7 +10,7 @@ class ModelingDbtCompilerTest {
 
     @Test
     void compilesPjmDwdModelIntoTraceableDbtArtifacts() {
-        ModelingVNextContract.ModelSpec model = ModelingVNextContract.pjmProjectNodeFixture().modelSpec();
+        ModelingVNextContract.ModelSpec model = PjmModelingFixture.projectNode().modelSpec();
 
         ModelingDbtCompiler.CompiledArtifacts artifacts = ModelingDbtCompiler.compile(model);
 
@@ -23,7 +23,7 @@ class ModelingDbtCompilerTest {
 
     @Test
     void usesRefForDbtModelSourcesAndKeepsRevisionInOutputPath() {
-        ModelingVNextContract.PjmGoldenPathFixture fixture = ModelingVNextContract.pjmGoldenPathFixture();
+        PjmModelingFixture.GoldenPathFixture fixture = PjmModelingFixture.goldenPath();
 
         ModelingDbtCompiler.CompiledArtifacts artifacts = ModelingDbtCompiler.compile(fixture.modelSpecs().get(1));
 
@@ -34,7 +34,7 @@ class ModelingDbtCompilerTest {
 
     @Test
     void blocksModelsWithoutGrainOrTraceableSource() {
-        ModelingVNextContract.ModelSpec base = ModelingVNextContract.pjmProjectNodeFixture().modelSpec();
+        ModelingVNextContract.ModelSpec base = PjmModelingFixture.projectNode().modelSpec();
         ModelingVNextContract.ModelSpec invalid = new ModelingVNextContract.ModelSpec(
             "invalid",
             base.objectId(),

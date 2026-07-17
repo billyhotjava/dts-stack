@@ -23,17 +23,6 @@ public final class Sprint64GovernanceContract {
         new WarehouseLayerDto("ADS", "应用服务层", "面向报表、服务和数据产品发布。", "APPLICATION", true, true, "dbt 应用模型或面向消费的最终数据集。", List.of("DWD", "DWS", "ADS"), List.of("biz_ads_", "ads_"))
     );
 
-    private static final List<ConformedDimensionDto> CONFORMED_DIMENSIONS = List.of(
-        new ConformedDimensionDto("completion-status", "完成状态", "dim_completion_status_v2", List.of("*")),
-        new ConformedDimensionDto("node-type", "节点类型", "dim_node_type_v1", List.of("*")),
-        new ConformedDimensionDto("risk-level", "风险等级", "dim_risk_level_v1", List.of("*")),
-        new ConformedDimensionDto("quality-zero-status", "质量归零状态", "dim_quality_zero_status_v1", List.of("*")),
-        new ConformedDimensionDto("quality-reason", "质量问题原因", "dim_quality_reason_v1", List.of("*")),
-        new ConformedDimensionDto("technical-change-type", "技术变更类型", "dim_technical_change_type_v1", List.of("*")),
-        new ConformedDimensionDto("signing-status", "签署状态", "dim_signing_status_v1", List.of("*")),
-        new ConformedDimensionDto("risk-category", "风险分类", "dim_risk_category_v1", List.of("*"))
-    );
-
     private Sprint64GovernanceContract() {}
 
     public static List<WarehouseLayerDto> warehouseLayers() {
@@ -51,10 +40,6 @@ public final class Sprint64GovernanceContract {
         return targetLayer
             .flatMap(targetValue -> resolveLayer(upstream).map(layer -> targetValue.allowedUpstream().contains(layer.code())))
             .orElse(false);
-    }
-
-    public static List<ConformedDimensionDto> conformedDimensions() {
-        return CONFORMED_DIMENSIONS;
     }
 
     public static GrainValidation validateGrain(String warehouseLayer, String statement, List<String> grainKeys) {
@@ -87,7 +72,16 @@ public final class Sprint64GovernanceContract {
         List<String> namingPrefixes
     ) {}
 
-    public record ConformedDimensionDto(String dimensionId, String name, String sourceModel, List<String> domainIds) {}
+    public record ConformedDimensionDto(
+        String dimensionId,
+        String name,
+        String sourceModel,
+        List<String> domainIds,
+        String sourceType,
+        String sourceId,
+        String sourceVersion,
+        boolean confirmed
+    ) {}
 
     public record GrainValidation(String status, String message, String statement, List<String> grainKeys) {}
 }

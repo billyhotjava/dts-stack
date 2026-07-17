@@ -149,9 +149,8 @@ class DbtModelDiagnosticsServiceTest {
         assertThat(result.upstreams()).hasSize(1);
         assertThat(result.upstreams().get(0).stats().rowCount()).isEqualTo(12L);
         assertThat(result.findings()).anyMatch(item -> item.contains("当前模型 0 行"));
-        assertThat(result.findings()).anyMatch(item -> item.contains("plan_year"));
-        assertThat(result.recommendedQueries()).anyMatch(item -> item.contains("FROM biz_dwd_project_node_v2"));
-        assertThat(result.recommendedQueries()).anyMatch(item -> item.contains("FROM ods_project_subject_domain_v2"));
+        assertThat(result.findings()).noneMatch(item -> item.contains("plan_year"));
+        assertThat(result.recommendedQueries()).containsExactly("SELECT COUNT(*) FROM \"public\".\"biz_dwd_project_node_v2\";");
     }
 
     @Test
@@ -222,7 +221,23 @@ class DbtModelDiagnosticsServiceTest {
 
         AirflowClient airflowClient = mock(AirflowClient.class);
         when(airflowClient.listDagRuns("dbt_load", 5)).thenReturn(
-            Optional.of(Map.of("dag_runs", List.of(Map.of("dag_run_id", "manual__1", "state", "failed", "logical_date", "2026-04-08T20:00:00Z"))))
+            Optional.of(
+                Map.of(
+                    "dag_runs",
+                    List.of(
+                        Map.of(
+                            "dag_run_id",
+                            "manual__1",
+                            "state",
+                            "failed",
+                            "logical_date",
+                            "2026-04-08T20:00:00Z",
+                            "conf",
+                            Map.of("models", "biz_dws_progress_monthly_v2")
+                        )
+                    )
+                )
+            )
         );
         when(airflowClient.listTaskInstances("dbt_load", "manual__1")).thenReturn(
             new ObjectMapper().readTree("{\"task_instances\":[{\"task_id\":\"dbt_run\"}]}")
@@ -373,7 +388,7 @@ class DbtModelDiagnosticsServiceTest {
     }
 
     @Test
-    void diagnoseShouldReturnModelSpecificQueriesForQualityDws() throws Exception {
+    void diagnoseShouldReturnOnlyGenericUpstreamQueriesForAnIndustryNamedModel() throws Exception {
         Path targetDir = Files.createDirectories(tempDir.resolve("target"));
         Files.writeString(
             targetDir.resolve("manifest.json"),
@@ -473,8 +488,8 @@ class DbtModelDiagnosticsServiceTest {
         DbtModelDiagnosticsService.ModelDiagnostics result = service.diagnose("biz_dws_quality_monthly_v2");
 
         assertThat(result.success()).isTrue();
-        assertThat(result.findings()).anyMatch(item -> item.contains("issue_year"));
-        assertThat(result.recommendedQueries()).anyMatch(item -> item.contains("FROM biz_dwd_quality_issue_v2"));
-        assertThat(result.recommendedQueries()).anyMatch(item -> item.contains("FROM ods_quality_issue_v2"));
+        assertThat(result.findings()).noneMatch(item -> item.contains("issue_year"));
+        assertThat(result.recommendedQueries()).containsExactly("SELECT COUNT(*) FROM \"public\".\"biz_dwd_quality_issue_v2\";");
     }
+
 }

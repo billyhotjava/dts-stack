@@ -2,8 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
 	BUSINESS_PROCESS_STORAGE_KEY,
-	BUSINESS_PROCESS_SEEDS,
-	adoptBusinessProcessSeeds,
 	createBusinessProcess,
 	loadBusinessProcesses,
 	saveBusinessProcesses,
@@ -45,14 +43,27 @@ test("business process storage is domain-scoped and restores versioned drafts", 
 	assert.ok(storage.getItem(BUSINESS_PROCESS_STORAGE_KEY));
 });
 
-test("seed adoption is idempotent and keeps user-created processes", () => {
+test("saving one domain keeps manually created processes in other domains", () => {
 	const storage = memoryStorage();
-	const custom = createBusinessProcess({ domainId: "domain-1", processId: "custom", name: "自定义过程" });
+	const first = createBusinessProcess({ domainId: "domain-1", processId: "process-one", name: "过程一" });
+	const second = createBusinessProcess({ domainId: "domain-2", processId: "process-two", name: "过程二" });
 
-	const first = adoptBusinessProcessSeeds("domain-1", [custom], storage);
-	const second = adoptBusinessProcessSeeds("domain-1", first, storage);
+	assert.equal(saveBusinessProcesses("domain-1", [first], storage), true);
+	assert.equal(saveBusinessProcesses("domain-2", [second], storage), true);
+	assert.deepEqual(loadBusinessProcesses("domain-1", storage), [first]);
+	assert.deepEqual(loadBusinessProcesses("domain-2", storage), [second]);
+});
 
-	assert.equal(first.length, BUSINESS_PROCESS_SEEDS.length + 1);
-	assert.equal(second.length, first.length);
-	assert.ok(second.some((item) => item.processId === "custom"));
+test("draft storage preserves modeling provenance without promoting a candidate", () => {
+	const storage = memoryStorage();
+	const candidate = {
+		...createBusinessProcess({ domainId: "domain-1", processId: "template-process", name: "模板候选过程" }),
+		sourceType: "TEMPLATE",
+		sourceId: "sample-pack",
+		sourceVersion: "1.0.0",
+		confirmed: false,
+	};
+
+	assert.equal(saveBusinessProcesses("domain-1", [candidate], storage), true);
+	assert.deepEqual(loadBusinessProcesses("domain-1", storage), [candidate]);
 });

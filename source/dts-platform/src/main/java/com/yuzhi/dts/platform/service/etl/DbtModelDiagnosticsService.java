@@ -363,82 +363,15 @@ public class DbtModelDiagnosticsService {
         if (modelNode.path() != null && modelNode.path().contains("/dws/") && currentStats.rowCount() != null && currentStats.rowCount() == 0) {
             findings.add("该模型位于 DWS 层，若 DWD 非空但 DWS 为空，重点检查时间维字段是否全部解析失败");
         }
-        findings.addAll(buildModelSpecificFindings(modelNode, currentStats, upstreams));
         if (findings.isEmpty()) {
             findings.add("未发现明显断链信号，可继续查看上游 relation 行数和最近日志");
         }
         return findings;
     }
 
-    private List<String> buildModelSpecificFindings(ManifestNode modelNode, RelationStats currentStats, List<DependencyDiagnostic> upstreams) {
-        String modelName = modelNode.name();
-        List<String> findings = new ArrayList<>();
-        DependencyDiagnostic primaryUpstream = upstreams.isEmpty() ? null : upstreams.get(0);
-        Long upstreamRowCount = primaryUpstream != null ? primaryUpstream.stats().rowCount() : null;
-        boolean currentEmpty = currentStats.rowCount() != null && currentStats.rowCount() == 0;
-
-        if ("biz_dws_progress_monthly_v2".equals(modelName) && currentEmpty && upstreamRowCount != null && upstreamRowCount > 0) {
-            findings.add("PJM 进度月报依赖 biz_dwd_project_node_v2.plan_year；若 DWD 非空但 DWS 为空，通常是 plan_date 解析失败导致 plan_year 全空");
-            findings.add("PJM 进度 DWD 还要求 project_no 和 plan_date 原始文本非空，需先检查 ODS 是否已在导入阶段被过滤");
-        }
-        if ("biz_dws_quality_monthly_v2".equals(modelName) && currentEmpty && upstreamRowCount != null && upstreamRowCount > 0) {
-            findings.add("PJM 质量月报依赖 biz_dwd_quality_issue_v2.issue_year；若 DWD 非空但 DWS 为空，优先检查 issue_date 解析是否全部失败");
-        }
-        if ("biz_dws_tech_state_monthly_v2".equals(modelName) && currentEmpty && upstreamRowCount != null && upstreamRowCount > 0) {
-            findings.add("PJM 技术状态月报依赖 biz_dwd_tech_state_v2.submit_year；若 DWD 非空但 DWS 为空，优先检查 change_submit_time 解析结果");
-        }
-        if ("biz_dws_risk_monthly_v2".equals(modelName) && currentEmpty && upstreamRowCount != null && upstreamRowCount > 0) {
-            findings.add("PJM 风险月报依赖 biz_dwd_risk_info_v2.submit_year；若 DWD 非空但 DWS 为空，优先检查 risk_submit_time 解析结果");
-        }
-        if ("biz_dwd_project_node_v2".equals(modelName) && currentEmpty) {
-            findings.add("PJM 进度 DWD 内置过滤 project_no 和 plan_date 原始文本非空，ODS 有脏值时会在进入 DWD 前被直接过滤");
-        }
-        if ("biz_dwd_quality_issue_v2".equals(modelName) && currentEmpty) {
-            findings.add("PJM 质量 DWD 要求 project_no 非空；若 ODS 行数存在但 DWD 为空，优先检查 project_no 占位值和空白字符");
-        }
-        if ("biz_dwd_tech_state_v2".equals(modelName) && currentEmpty) {
-            findings.add("PJM 技术状态 DWD 要求 project_no 非空；若后续 submit_year 全空，再检查 change_submit_time 的格式归一化");
-        }
-        if ("biz_dwd_risk_info_v2".equals(modelName) && currentEmpty) {
-            findings.add("PJM 风险 DWD 要求 project_no 非空；若后续 submit_year 全空，再检查 risk_submit_time 的格式归一化");
-        }
-        return findings;
-    }
-
     private List<String> buildRecommendedQueries(ManifestNode modelNode, List<DependencyDiagnostic> upstreams) {
-        String modelName = modelNode.name();
         List<String> queries = new ArrayList<>();
-        if ("biz_dws_progress_monthly_v2".equals(modelName)) {
-            queries.add("SELECT COUNT(*) AS dwd_cnt, COUNT(*) FILTER (WHERE plan_year IS NOT NULL) AS dwd_plan_year_ok FROM biz_dwd_project_node_v2;");
-            queries.add("SELECT project_no, plan_date, plan_year, actual_date, actual_year FROM biz_dwd_project_node_v2 WHERE plan_year IS NULL LIMIT 50;");
-            queries.add("SELECT project_no, plan_date, actual_date, last_update_time FROM ods_project_subject_domain_v2 LIMIT 50;");
-        } else if ("biz_dws_quality_monthly_v2".equals(modelName)) {
-            queries.add("SELECT COUNT(*) AS dwd_cnt, COUNT(*) FILTER (WHERE issue_year IS NOT NULL) AS dwd_issue_year_ok FROM biz_dwd_quality_issue_v2;");
-            queries.add("SELECT project_no, issue_name, issue_date, issue_year, zero_complete_date FROM biz_dwd_quality_issue_v2 WHERE issue_year IS NULL LIMIT 50;");
-            queries.add("SELECT project_no, issue_name, issue_date, zero_complete_date FROM ods_quality_issue_v2 LIMIT 50;");
-        } else if ("biz_dws_tech_state_monthly_v2".equals(modelName)) {
-            queries.add("SELECT COUNT(*) AS dwd_cnt, COUNT(*) FILTER (WHERE submit_year IS NOT NULL) AS dwd_submit_year_ok FROM biz_dwd_tech_state_v2;");
-            queries.add("SELECT project_no, tech_state_name, change_submit_time, submit_year, submit_month FROM biz_dwd_tech_state_v2 WHERE submit_year IS NULL LIMIT 50;");
-            queries.add("SELECT project_no, tech_state_name, change_submit_time, file_signature_date FROM ods_tech_state_v2 LIMIT 50;");
-        } else if ("biz_dws_risk_monthly_v2".equals(modelName)) {
-            queries.add("SELECT COUNT(*) AS dwd_cnt, COUNT(*) FILTER (WHERE submit_year IS NOT NULL) AS dwd_submit_year_ok FROM biz_dwd_risk_info_v2;");
-            queries.add("SELECT project_no, risk_name, risk_submit_date, submit_year, submit_month FROM biz_dwd_risk_info_v2 WHERE submit_year IS NULL LIMIT 50;");
-            queries.add("SELECT project_no, risk_name, risk_submit_time, final_release_time FROM ods_risk_info_v2 LIMIT 50;");
-        } else if ("biz_dwd_project_node_v2".equals(modelName)) {
-            queries.add("SELECT COUNT(*) AS ods_cnt, COUNT(*) FILTER (WHERE btrim(COALESCE(project_no, '')) != '' AND btrim(COALESCE(plan_date, '')) != '') AS ods_pass_filter_cnt FROM ods_project_subject_domain_v2;");
-            queries.add("SELECT project_no, subsystem, node_task, plan_date, actual_date FROM ods_project_subject_domain_v2 WHERE btrim(COALESCE(project_no, '')) = '' OR btrim(COALESCE(plan_date, '')) = '' LIMIT 50;");
-        } else if ("biz_dwd_quality_issue_v2".equals(modelName)) {
-            queries.add("SELECT COUNT(*) AS ods_cnt, COUNT(*) FILTER (WHERE btrim(COALESCE(project_no, '')) != '') AS ods_pass_filter_cnt FROM ods_quality_issue_v2;");
-            queries.add("SELECT project_no, issue_name, issue_date, dept FROM ods_quality_issue_v2 WHERE btrim(COALESCE(project_no, '')) = '' LIMIT 50;");
-        } else if ("biz_dwd_tech_state_v2".equals(modelName)) {
-            queries.add("SELECT COUNT(*) AS ods_cnt, COUNT(*) FILTER (WHERE btrim(COALESCE(project_no, '')) != '') AS ods_pass_filter_cnt FROM ods_tech_state_v2;");
-            queries.add("SELECT project_no, tech_state_name, change_submit_time, dept FROM ods_tech_state_v2 WHERE btrim(COALESCE(project_no, '')) = '' LIMIT 50;");
-        } else if ("biz_dwd_risk_info_v2".equals(modelName)) {
-            queries.add("SELECT COUNT(*) AS ods_cnt, COUNT(*) FILTER (WHERE btrim(COALESCE(project_no, '')) != '') AS ods_pass_filter_cnt FROM ods_risk_info_v2;");
-            queries.add("SELECT project_no, risk_name, risk_submit_time, dept FROM ods_risk_info_v2 WHERE btrim(COALESCE(project_no, '')) = '' LIMIT 50;");
-        }
-
-        if (queries.isEmpty() && !upstreams.isEmpty()) {
+        if (!upstreams.isEmpty()) {
             for (DependencyDiagnostic upstream : upstreams) {
                 queries.add("SELECT COUNT(*) FROM " + upstream.stats().relationName() + ";");
             }

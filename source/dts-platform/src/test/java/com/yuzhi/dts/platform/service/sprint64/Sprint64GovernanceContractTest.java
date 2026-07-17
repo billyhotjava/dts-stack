@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.service.sprint64;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -24,8 +25,9 @@ class Sprint64GovernanceContractTest {
     }
 
     @Test
-    void shipsEightConformedDimensionsAndRequiresGrainForDwdAndAbove() {
-        assertThat(Sprint64GovernanceContract.conformedDimensions()).hasSize(8);
+    void genericContractDoesNotShipCustomerDimensionsAndRequiresGrainForDwdAndAbove() {
+        assertThat(Arrays.stream(Sprint64GovernanceContract.class.getDeclaredMethods()).map(method -> method.getName()))
+            .doesNotContain("conformedDimensions");
 		assertThat(Sprint64GovernanceContract.validateGrain("ODS_RAW", "", List.of()).status()).isEqualTo("not_required");
 		assertThat(Sprint64GovernanceContract.validateGrain("STG", "", List.of()).status()).isEqualTo("not_required");
         assertThat(Sprint64GovernanceContract.validateGrain("UNKNOWN", "", List.of()).status()).isEqualTo("blocked");
