@@ -45,3 +45,25 @@ Key result:
 Non-blocking existing warnings:
 - caniuse-lite browser data is 15 months old.
 - Existing output chunks over 1500 kB remain subject to the configured warning.
+
+Independent review fix round 3
+Completed at: 2026-07-19T00:48:14+08:00
+CWD: /opt/prod/s10/v2.2.3/source/dts-platform-webapp
+
+Command:
+pnpm build
+
+Expanded package command:
+LEGACY_BROWSER_BUILD=1 VITE_CACHE_DIR=.vite-cache tsc && LEGACY_BROWSER_BUILD=1 VITE_CACHE_DIR=.vite-cache vite build
+
+Exit code: 0
+Key result:
+- vite v6.3.3
+- 10586 modules transformed
+- built in 2m 22s
+- TypeScript and the Chrome 95 legacy bundle completed successfully with the
+  TypeScript Compiler AST source-contract guard.
+
+Non-blocking existing warnings:
+- caniuse-lite browser data is 15 months old.
+- Existing output chunks over 1500 kB remain subject to the configured warning.

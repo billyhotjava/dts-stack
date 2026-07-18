@@ -4,6 +4,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { extname, relative, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
 const CONTRACT_URL = new URL("./canonicalModelingLanguage.ts", import.meta.url);
 const LEGACY_MENU_KEY = "semantic-objects";
@@ -150,23 +151,73 @@ type ObjectLabelDeclaration = {
 	column: number;
 };
 
-const OBJECT_LABEL_LITERAL_PATTERN =
-	/\bobjectLabel\s*(?::|=)\s*(?:"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)'|`((?:\\.|[^`\\])*)`)/gu;
+const staticStringValue = (node: ts.Node | undefined): string | undefined => {
+	if (node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))) return node.text;
+	return undefined;
+};
 
-const extractObjectLabelDeclarations = (source: string): ObjectLabelDeclaration[] => {
-	const declarations: ObjectLabelDeclaration[] = [];
-	for (const match of source.matchAll(OBJECT_LABEL_LITERAL_PATTERN)) {
-		const label = match[1] ?? match[2] ?? match[3] ?? "";
-		if (match[3]?.includes("${")) continue;
-		const offset = match.index ?? 0;
-		const sourceBeforeMatch = source.slice(0, offset);
-		const lastLineBreak = sourceBeforeMatch.lastIndexOf("\n");
-		declarations.push({
-			label: label.replace(/\\([\\"'`])/gu, "$1"),
-			line: countOccurrences(sourceBeforeMatch, "\n") + 1,
-			column: offset - lastLineBreak,
-		});
+const isObjectLabelPropertyName = (name: ts.PropertyName | undefined): boolean => {
+	if (!name) return false;
+	if (
+		ts.isIdentifier(name) ||
+		ts.isStringLiteral(name) ||
+		ts.isNumericLiteral(name) ||
+		ts.isNoSubstitutionTemplateLiteral(name)
+	) {
+		return name.text === "objectLabel";
 	}
+	return ts.isComputedPropertyName(name) && staticStringValue(name.expression) === "objectLabel";
+};
+
+const assignmentObjectLabelNode = (left: ts.Expression): ts.Node | undefined => {
+	if (ts.isIdentifier(left) && left.text === "objectLabel") return left;
+	if (ts.isPropertyAccessExpression(left) && left.name.text === "objectLabel") return left.name;
+	if (ts.isElementAccessExpression(left) && staticStringValue(left.argumentExpression) === "objectLabel") {
+		return left.argumentExpression;
+	}
+	return undefined;
+};
+
+const extractObjectLabelDeclarations = (
+	source: string,
+	fileName = "customer-surface.tsx",
+): ObjectLabelDeclaration[] => {
+	const declarations: ObjectLabelDeclaration[] = [];
+	const sourceFile = ts.createSourceFile(
+		fileName,
+		source,
+		ts.ScriptTarget.Latest,
+		true,
+		fileName.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+	);
+	const addDeclaration = (labelNode: ts.Node | undefined, locationNode: ts.Node) => {
+		const label = staticStringValue(labelNode);
+		if (label === undefined) return;
+		const location = sourceFile.getLineAndCharacterOfPosition(locationNode.getStart(sourceFile));
+		declarations.push({
+			label,
+			line: location.line + 1,
+			column: location.character + 1,
+		});
+	};
+	const visit = (node: ts.Node) => {
+		if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === "objectLabel") {
+			addDeclaration(node.initializer, node.name);
+		} else if (ts.isPropertyAssignment(node) && isObjectLabelPropertyName(node.name)) {
+			addDeclaration(node.initializer, node.name);
+		} else if (ts.isJsxAttribute(node) && ts.isIdentifier(node.name) && node.name.text === "objectLabel") {
+			if (node.initializer && ts.isJsxExpression(node.initializer)) {
+				addDeclaration(node.initializer.expression, node.name);
+			} else {
+				addDeclaration(node.initializer, node.name);
+			}
+		} else if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+			const locationNode = assignmentObjectLabelNode(node.left);
+			if (locationNode) addDeclaration(node.right, locationNode);
+		}
+		ts.forEachChild(node, visit);
+	};
+	visit(sourceFile);
 	return declarations;
 };
 
@@ -175,7 +226,7 @@ const assertCanonicalObjectLabelDeclarations = (
 	source: string,
 	isCanonicalObjectLabel: (value: unknown) => boolean,
 ) => {
-	for (const declaration of extractObjectLabelDeclarations(source)) {
+	for (const declaration of extractObjectLabelDeclarations(source, relativePath)) {
 		assert.equal(
 			isCanonicalObjectLabel(declaration.label),
 			true,
@@ -304,14 +355,42 @@ test("objectLabel declarations in top-level and nested customer source accept on
 		),
 	);
 
+	const acceptedSurfaceFixture = `
+		{ const objectLabel: string = "业务分类"; }
+		{ const objectLabel = '数仓分层'; }
+		const quoted = { "objectLabel": "数据标准" };
+		const computed = { ["objectLabel"]: \`维度\` };
+		const jsx = <><Card objectLabel="四类表" /><Card objectLabel={'指标'} /><Card objectLabel={\`业务分类\`} /></>;
+		objectLabel = "数仓分层";
+		card.objectLabel = '数据标准';
+		card["objectLabel"] = \`维度\`;
+	`;
+	assert.deepEqual(
+		extractObjectLabelDeclarations(acceptedSurfaceFixture).map(({ label }) => label),
+		["业务分类", "数仓分层", "数据标准", "维度", "四类表", "指标", "业务分类", "数仓分层", "数据标准", "维度"],
+	);
+
+	const dynamicSurfaceFixture = `
+		const objectLabel = resolveLabel();
+		const card = { objectLabel: currentLabel };
+		const jsx = <Card objectLabel={currentLabel} />;
+		card.objectLabel = resolveLabel();
+		card["objectLabel"] = currentLabel;
+	`;
+	assert.deepEqual(extractObjectLabelDeclarations(dynamicSurfaceFixture), []);
+
 	for (const [fixturePath, forbiddenFixture] of [
 		["top-level-business-activity.tsx", 'const activity = { objectLabel: "业务活动" };'],
 		["nested-detail-table.tsx", 'const card = { nested: { objectLabel: "明细表" } };'],
+		["typed-declaration.tsx", 'const objectLabel: string = "业务活动";'],
+		["quoted-property.tsx", 'const card = { "objectLabel": "明细表" };'],
+		["jsx-expression.tsx", 'const card = <Card objectLabel={"业务活动"} />;'],
+		["element-access-assignment.tsx", 'card["objectLabel"] = "明细表";'],
 	] as const) {
 		assert.throws(
 			() =>
 				assertCanonicalObjectLabelDeclarations(fixturePath, forbiddenFixture, contract.isCanonicalModelingObjectLabel),
-			/non-canonical objectLabel/u,
+			new RegExp(`${fixturePath.replaceAll(".", "\\.")}:1:\\d+ declares non-canonical objectLabel`, "u"),
 		);
 	}
 });

@@ -54,3 +54,28 @@ Replacement-alias command:
 rg -n --glob '!*.test.ts' --glob '!*.test.tsx' --glob '!*.test-support.ts' --glob '!canonicalModelingLanguage.ts' '业务实体|模型对象|数据对象|语义实体' source/dts-platform-webapp/src/pages/modeling source/dts-platform-webapp/src/pages/governance/SubjectAreasPage.tsx
 Exit code: 1
 Key result: zero matches, the expected ripgrep no-match result.
+
+Independent review fix round 3
+Executed at: 2026-07-19T00:48:14+08:00
+
+Static objectLabel guard correction:
+- Replaced the syntax-fragile regular expression with the repository's installed
+  TypeScript 5.6 compiler AST parser.
+- The guard now follows all nested syntax nodes and recognizes static
+  `objectLabel` values on variable declarations, object properties, JSX
+  attributes and assignment expressions, including quoted/computed keys and
+  element access.
+- Only string literals and no-substitution templates are classified; a dynamic
+  expression is not fabricated into a label. Reported violations retain exact
+  file, 1-based line and 1-based column information from the AST source file.
+
+Retired-term inventory rerun:
+rg -o --count-matches --glob '!*.test.ts' --glob '!*.test.tsx' --glob '!*.test-support.ts' --glob '!canonicalModelingLanguage.ts' '业务对象|语义对象|原始指标|二次指标' source/dts-platform-webapp/src/pages/modeling source/dts-platform-webapp/src/pages/governance/SubjectAreasPage.tsx
+Exit code: 0
+Key result: the same exact 37 业务对象 occurrences in the same 12 modeling
+files; SubjectAreasPage.tsx remains at zero and the fingerprint contract passes.
+
+Replacement-alias rerun:
+rg -n --glob '!*.test.ts' --glob '!*.test.tsx' --glob '!*.test-support.ts' --glob '!canonicalModelingLanguage.ts' '业务实体|模型对象|数据对象|语义实体' source/dts-platform-webapp/src/pages/modeling source/dts-platform-webapp/src/pages/governance/SubjectAreasPage.tsx
+Exit code: 1
+Key result: zero matches, the expected ripgrep no-match result.

@@ -57,3 +57,36 @@ Biome command:
 pnpm exec biome check src/pages/modeling/canonicalModelingLanguage.ts src/pages/modeling/canonicalModelingLanguage.source-contract.test.ts src/pages/governance/SubjectAreasPage.tsx
 Exit code: 0
 Key result: Checked 3 files. No fixes applied.
+
+Independent review fix round 3
+Executed at: 2026-07-19T00:48:14+08:00
+
+TDD RED command (new fixtures before replacing the extractor):
+node source/dts-platform-webapp/src/pages/modeling/canonicalModelingLanguage.source-contract.test.ts
+Exit code: 1
+Key result: tests 7; pass 6; fail 1.
+- The typed declaration `const objectLabel: string = "业务活动"` produced
+  `Missing expected exception`, proving the former regular expression skipped a
+  static customer-surface label.
+
+Focused GREEN after the TypeScript Compiler AST implementation:
+node source/dts-platform-webapp/src/pages/modeling/canonicalModelingLanguage.source-contract.test.ts
+Exit code: 0
+Key result: tests 7; pass 7; fail 0.
+- Static extraction covers typed and untyped `objectLabel` variable declarations;
+  identifier, quoted and computed property assignments; direct and expression
+  JSX attributes; and bare, property-access and element-access assignments.
+- String literals and no-substitution templates are checked. Dynamic expressions
+  are deliberately ignored rather than guessed.
+- Negative fixtures cover typed declaration, quoted property, JSX expression and
+  element-access assignment; every diagnostic retains path, line and column.
+
+Adjacent contract command:
+node --test source/dts-platform-webapp/src/pages/modeling/canonicalModelingLanguage.source-contract.test.ts source/dts-platform-webapp/src/routes/sections/dashboard/portalGoldenLineMenu.source-contract.test.ts source/dts-platform-webapp/src/pages/modeling/ModelingWorkbenchPage.source-contract.test.ts source/dts-platform-webapp/src/pages/modeling/WarehousePlanDetailPage.source-contract.test.ts source/dts-platform-webapp/src/pages/modeling/warehousePlanJourneyConvergence.source-contract.test.ts
+Exit code: 0
+Key result: tests 5; pass 5; fail 0.
+
+Biome command:
+pnpm exec biome check src/pages/modeling/canonicalModelingLanguage.ts src/pages/modeling/canonicalModelingLanguage.source-contract.test.ts src/pages/governance/SubjectAreasPage.tsx
+Exit code: 0
+Key result: Checked 3 files. No fixes applied.
