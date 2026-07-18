@@ -254,7 +254,7 @@
 | F5-前端报表块与核心资产块 | 5 | READY |
 | F6-埋点与E2E | 4 | READY |
 
-**统计**: READY=30, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=31, IN_PROGRESS=0, DONE=0, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-15-202604/README.md` + `docs/superpowers/specs/2026-04-24-platform-workbench-leader-overview-design.md`
 
 ## Sprint-17: 大屏访问对接 Leader-Overview (202604)
@@ -615,7 +615,7 @@
 | F5-bmb-baseline-assessment-ledger | P0 | 5 | READY |
 | F6-security-review-it-gate | P0 | 5 | READY |
 
-**统计**: READY=30, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=31, IN_PROGRESS=0, DONE=0, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-36-202606/README.md`
 **差距分析报告**: `worklog/v2.2.3/sprint-36-202606/assets/protocol-gap-analysis-v3.md`（协议 11 模块，13 项 P0 + 29 项 P1）
 **证据底稿**: `worklog/v2.2.3/sprint-36-202606/assets/gap-evidence/M01..M11.md`
@@ -1314,10 +1314,10 @@
 | F4-经典数仓架构与维度模型 | P0 | 4 | READY |
 | F5-黄金主线与数据建设工作台 | P0 | 4 | READY |
 | F6-模型中心与高级dbt分离 | P0 | 4 | READY |
-| F7-菜单路由兼容与旧旅程退役 | P0 | 4 | READY |
+| F7-菜单路由兼容与旧旅程退役 | P0 | 5 | READY |
 | F8-集成验收与交付证据 | P0 | 3 | READY |
 
-**统计**: READY=30, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=31, IN_PROGRESS=0, DONE=0, BLOCKED=0
 **执行顺序**: F1 → F2 → F3 → F4/F5 → F6 → F7 → F8；F7 可提前完成菜单/旧资产盘点，但最终切换必须等待 F3-F6 验收。
 **关键决策**:
 - `modeling_warehouse_plan` 是 canonical 方案级聚合，旧 `modeling_plan*` 迁移后冻结，不新增第三套主计划表，也不在本 Sprint 物理删除。
@@ -1336,3 +1336,19 @@
 | cube cache / cost-based routing | Platform Architecture | Sprint-31 F7 follow-up | BACKLOG |
 | GraphQL / OData / semantic query API | Platform Architecture | Sprint-31/32 consumption follow-up | BACKLOG |
 | differential privacy / k-anonymity | Security Architecture | Sprint-31A X5 follow-up | BACKLOG |
+
+## Sprint-66: BI 大屏通用下钻重构 (202607)
+
+**目录**: `worklog/v2.2.3/sprint-66-202607-bi-board-drilldown-refactoring`（2026-07-18 自误建的 workflow/ 目录归位）
+**状态**: DONE
+**目标**: 在不引入业务领域模型的前提下，将大屏下钻收敛为“点击事件 → 参数映射 → 目标动作 → 状态恢复”的通用交互通道。
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-通用交互契约 | 2 | DONE |
+| F2-运行时交互内核 | 3 | DONE |
+| F3-设计器配置体验 | 3 | DONE |
+| F4-兼容回归与交付 | 3 | DONE |
+
+**统计**: READY=0, IN_PROGRESS=0, DONE=11, BLOCKED=0
+**执行顺序**: F1 → F2 → F3 → F4；F3 可在 F1 契约评审完成后与 F2 后半段并行，但 F4 必须等待 F1-F3 全部通过。

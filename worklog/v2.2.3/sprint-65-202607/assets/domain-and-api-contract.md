@@ -152,3 +152,16 @@ PUBLISHED 修改 -> 新版本/变更评审，不原地回到 DRAFT
 ## 7. 错误和并发
 
 所有错误返回稳定 `code`、客户可读 `message`、可选 `fieldErrors`、`correlationId` 和修复链接。计划和基线写入必须携带 `version` 或 `If-Match`；冲突时不自动覆盖。
+
+### 7.1 锁粒度（2026-07-18 评审增补）
+
+`WarehousePlan` 含八类子集合，业务确认（F3-T02）与资产盘点（F3-T03）是设计上鼓励并行的路径——**乐观锁粒度必须到子资源，不允许整计划一把锁**：
+
+- 计划头字段（name/objective/owner/policy/lifecycle）使用聚合 `optimisticVersion`；
+- `domainBindings/processBindings/sourceBindings/sourceBusinessMappings/metricRequirements` 各自作为子资源提交（`PUT/PATCH /api/modeling/warehouse-plans/{id}/source-bindings` 等），持子表级 version；
+- 不同子集合的并发编辑互不冲突；同一子集合冲突返回 409 + 差异摘要，不自动合并；
+- 状态机转换命令始终校验聚合 version（防止在他人切换生命周期时提交子资源）。
+
+### 7.2 tenantId 语义（2026-07-18 评审增补）
+
+当前交付形态为私有化单租户部署：`tenantId` 固定为部署级常量（配置注入，默认 `default`），不在 UI 暴露、不参与查询过滤逻辑分支；保留该列仅为未来多租户预留，禁止任何代码以 tenantId 分支业务行为。

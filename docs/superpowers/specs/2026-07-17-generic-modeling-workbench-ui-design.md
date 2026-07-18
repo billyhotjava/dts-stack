@@ -1,5 +1,8 @@
 # 通用建模工作台与前端旅程收敛设计
 
+> **状态：SUPERSEDED（2026-07-18）**——顶层骨架决策（四阶段旅程、菜单四入口）已由 `2026-07-18-classic-warehouse-planning-golden-path-design.md` 取代；已实现的四阶段 Frame 按 Sprint-65 退役登记表 R13 处置。本文档的通用模型内核（§4）、状态真实性原则（§10）与客户语言规范（§9.2）被新设计继承，仍可引用。
+
+
 > **状态：已废止（Superseded，2026-07-18）**
 > 本文件保留通用内核和页面审计作为历史输入，但“关系建模/维度建模/dbt 原生建模并列”与四阶段旅程不再是现行方案。现行架构以 [`2026-07-18-classic-warehouse-planning-golden-path-design.md`](./2026-07-18-classic-warehouse-planning-golden-path-design.md) 为准：经典数仓规划为默认主线，关系建模为可选设计视图，dbt 为高级实现工具。
 
