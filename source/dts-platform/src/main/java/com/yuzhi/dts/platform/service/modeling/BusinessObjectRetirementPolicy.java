@@ -334,7 +334,7 @@ public final class BusinessObjectRetirementPolicy {
             new TargetWriteMetadata(
                 legacy.planId(),
                 legacy.targetDomainId(),
-                targetModelSpecId.get(),
+                targetModelSpecId.orElseThrow(),
                 legacy.targetRevision(),
                 legacyRef
             )
