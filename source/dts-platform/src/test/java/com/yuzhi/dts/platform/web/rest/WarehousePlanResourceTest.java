@@ -166,6 +166,60 @@ class WarehousePlanResourceTest {
     }
 
     @Test
+    void rejectsANullInitialSourceWithAStableBadRequest() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("owner-1", "department-1"));
+        when(service.create(eq("server-tenant"), any())).thenThrow(
+            new WarehousePlanException(
+                "WAREHOUSE_PLAN_INITIAL_SOURCE_INVALID",
+                "Initial sources must be unique and complete",
+                null
+            )
+        );
+
+        mockMvc
+            .perform(
+                post("/api/modeling/warehouse-plans")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"name":"Invalid asset plan","onboardingMode":"ASSET_FIRST",
+                         "initialSourceRefs":[null],"idempotencyKey":"request-null-source"}
+                        """
+                    )
+            )
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("WAREHOUSE_PLAN_INITIAL_SOURCE_INVALID"));
+
+        verify(service).create(eq("server-tenant"), any());
+    }
+
+    @Test
+    void mapsCreateIdempotencyConflictToHttp409() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("owner-1", "department-1"));
+        when(service.create(eq("server-tenant"), any())).thenThrow(
+            new WarehousePlanException(
+                "WAREHOUSE_PLAN_IDEMPOTENCY_CONFLICT",
+                "The previous create attempt used different content",
+                null
+            )
+        );
+
+        mockMvc
+            .perform(
+                post("/api/modeling/warehouse-plans")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"name":"Conflicting plan","objective":"Objective","onboardingMode":"BUSINESS_FIRST",
+                         "initialSourceRefs":[],"idempotencyKey":"request-conflict"}
+                        """
+                    )
+            )
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("WAREHOUSE_PLAN_IDEMPOTENCY_CONFLICT"));
+    }
+
+    @Test
     void rejectsForgedOwnerAndMissingAuthenticatedActorBeforeCreating() throws Exception {
         when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("owner-1", "department-1"));
 

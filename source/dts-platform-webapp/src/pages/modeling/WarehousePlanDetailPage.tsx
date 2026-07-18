@@ -36,8 +36,9 @@ const sectionPath: Record<DetailSection, string> = {
 const lifecycleLabel: Record<WarehousePlanHeader["lifecycleStatus"], string> = {
 	DRAFT: "规划中",
 	BASELINE_READY: "基线已确认",
-	MODELING: "建模中",
-	IMPLEMENTING: "实现中",
+	DESIGNING: "设计中",
+	VALIDATING: "验证中",
+	READY_TO_PUBLISH: "待发布",
 	PUBLISHED: "已发布",
 	ARCHIVED: "已归档",
 };
@@ -69,15 +70,31 @@ export default function WarehousePlanDetailPage() {
 	const [failed, setFailed] = useState(false);
 	const [evidenceFailed, setEvidenceFailed] = useState(false);
 	const loadGuard = useMemo(() => createLatestRequestGuard(), []);
+	const evidenceLoadGuard = useMemo(() => createLatestRequestGuard(), []);
 	const activeSection = useMemo(() => resolveSection(location.pathname), [location.pathname]);
 	const requestedBaselineTab = searchParams.get("tab");
 	const baselineTab = requestedBaselineTab === "sources" || requestedBaselineTab === "business-scope"
 		? requestedBaselineTab
 		: plan?.onboardingMode === "ASSET_FIRST" ? "sources" : "business-scope";
 
+	const loadEvidence = useCallback(async () => {
+		if (!planId) return;
+		const isCurrent = evidenceLoadGuard.begin();
+		setEvidenceFailed(false);
+		const [baselineResult, projectionResult] = await Promise.allSettled([
+			getWarehousePlanningBaseline(planId),
+			getWarehousePlanStageProjection(planId),
+		]);
+		if (!isCurrent()) return;
+		setBaseline(baselineResult.status === "fulfilled" ? baselineResult.value : null);
+		setProjection(projectionResult.status === "fulfilled" ? projectionResult.value : null);
+		setEvidenceFailed(baselineResult.status === "rejected" || projectionResult.status === "rejected");
+	}, [evidenceLoadGuard, planId]);
+
 	const load = useCallback(async () => {
 		if (!planId) return;
 		const isCurrent = loadGuard.begin();
+		evidenceLoadGuard.invalidate();
 		setLoading(true);
 		setFailed(false);
 		setEvidenceFailed(false);
@@ -89,26 +106,22 @@ export default function WarehousePlanDetailPage() {
 			if (!isCurrent()) return;
 			setPlan(header);
 			setLoading(false);
-			const [baselineResult, projectionResult] = await Promise.allSettled([
-				getWarehousePlanningBaseline(planId),
-				getWarehousePlanStageProjection(planId),
-			]);
-			if (!isCurrent()) return;
-			setBaseline(baselineResult.status === "fulfilled" ? baselineResult.value : null);
-			setProjection(projectionResult.status === "fulfilled" ? projectionResult.value : null);
-			setEvidenceFailed(baselineResult.status === "rejected" || projectionResult.status === "rejected");
+			await loadEvidence();
 		} catch {
 			if (!isCurrent()) return;
 			setFailed(true);
 		} finally {
 			if (isCurrent()) setLoading(false);
 		}
-	}, [loadGuard, planId]);
+	}, [evidenceLoadGuard, loadEvidence, loadGuard, planId]);
 
 	useEffect(() => {
 		void load();
-		return () => loadGuard.invalidate();
-	}, [load, loadGuard]);
+		return () => {
+			loadGuard.invalidate();
+			evidenceLoadGuard.invalidate();
+		};
+	}, [evidenceLoadGuard, load, loadGuard]);
 
 	const openSpecialist = (route: string) => navigate(withWarehousePlanContext(route, planId));
 	const openSection = (section: DetailSection) => navigate(buildWarehousePlanRoute(planId, section));
@@ -179,7 +192,7 @@ export default function WarehousePlanDetailPage() {
 					showIcon
 					message="部分规划证据暂时不可用"
 					description="计划本身已恢复；基线或阶段状态保持未知，不会误报为完成。"
-					action={<Button onClick={() => void load()}>重新加载证据</Button>}
+					action={<Button onClick={() => void loadEvidence()}>重新加载证据</Button>}
 				/>
 			) : null}
 

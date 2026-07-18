@@ -10,6 +10,7 @@ import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanCon
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.zaxxer.hikari.HikariDataSource;
 import com.yuzhi.dts.platform.IntegrationTest;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService.UpdatePlanHeaderCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService.WarehousePlanException;
@@ -26,16 +27,24 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.S
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBusinessMapping;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.Versioned;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.WarehousePlanHeader;
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @IntegrationTest
+@TestPropertySource(properties = "spring.datasource.hikari.maximum-pool-size=4")
 class WarehousePlanApplicationServiceIT {
 
     @Autowired
@@ -43,6 +52,12 @@ class WarehousePlanApplicationServiceIT {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private DataSource dataSource;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @Test
     void createsListsAndLoadsPlansInsideServerTenantScope() {
@@ -141,10 +156,40 @@ class WarehousePlanApplicationServiceIT {
         String tenant = tenant("concurrent");
         String idempotencyKey = "concurrent-key-" + UUID.randomUUID();
         CreateWarehousePlanCommand command = createCommand(ASSET_FIRST, idempotencyKey);
-        CountDownLatch start = new CountDownLatch(1);
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        String probeTable = "modeling_wp_create_probe_" + suffix;
+        String probeFunction = "modeling_wp_create_probe_fn_" + suffix;
+        String probeTrigger = "modeling_wp_create_probe_trg_" + suffix;
+        CyclicBarrier start = new CyclicBarrier(3);
         var executor = Executors.newFixedThreadPool(2);
 
         try {
+            executeCommitted(
+                "create table " + probeTable + " (tenant_id varchar(255) not null, backend_pid integer not null, tx_id bigint not null)"
+            );
+            executeCommitted(
+                """
+                create function %s() returns trigger language plpgsql as $probe$
+                begin
+                  insert into %s (tenant_id, backend_pid, tx_id) values (NEW.tenant_id, pg_backend_pid(), txid_current());
+                  perform pg_sleep(1.0);
+                  return NEW;
+                end;
+                $probe$
+                """.formatted(probeFunction, probeTable)
+            );
+            executeCommitted(
+                "create trigger " +
+                probeTrigger +
+                " before insert on modeling_warehouse_plan for each row when (NEW.tenant_id = '" +
+                tenant +
+                "') execute function " +
+                probeFunction +
+                "()"
+            );
+
+            HikariDataSource hikari = dataSource.unwrap(HikariDataSource.class);
+            assertThat(hikari.getMaximumPoolSize()).as("the concurrency test needs at least two database connections").isGreaterThanOrEqualTo(2);
             var first = executor.submit(() -> {
                 start.await(10, TimeUnit.SECONDS);
                 return service.create(tenant, command);
@@ -153,10 +198,20 @@ class WarehousePlanApplicationServiceIT {
                 start.await(10, TimeUnit.SECONDS);
                 return service.create(tenant, command);
             });
-            start.countDown();
+            start.await(10, TimeUnit.SECONDS);
+            boolean observedConcurrentConnections = false;
+            long observationDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+            while (System.nanoTime() < observationDeadline) {
+                if (hikari.getHikariPoolMXBean().getActiveConnections() >= 2) {
+                    observedConcurrentConnections = true;
+                    break;
+                }
+                Thread.sleep(10);
+            }
             CreateWarehousePlanResult firstResult = first.get(30, TimeUnit.SECONDS);
             CreateWarehousePlanResult secondResult = second.get(30, TimeUnit.SECONDS);
 
+            assertThat(observedConcurrentConnections).as("two create transactions must overlap in the pool").isTrue();
             assertThat(firstResult.planId()).isEqualTo(secondResult.planId());
             assertThat(List.of(firstResult.replayed(), secondResult.replayed())).containsExactlyInAnyOrder(false, true);
             assertThat(firstResult.initialSourceBindings()).hasSize(1);
@@ -173,8 +228,21 @@ class WarehousePlanApplicationServiceIT {
                 Long.class,
                 tenant
             )).isEqualTo(1L);
+            assertThat(jdbcTemplate.queryForObject(
+                "select count(distinct backend_pid) from " + probeTable + " where tenant_id = ?",
+                Long.class,
+                tenant
+            )).as("the trigger must observe two PostgreSQL sessions").isEqualTo(2L);
+            assertThat(jdbcTemplate.queryForObject(
+                "select count(distinct tx_id) from " + probeTable + " where tenant_id = ?",
+                Long.class,
+                tenant
+            )).as("the trigger must observe two distinct create transactions").isEqualTo(2L);
         } finally {
             executor.shutdownNow();
+            executeCommitted("drop trigger if exists " + probeTrigger + " on modeling_warehouse_plan");
+            executeCommitted("drop function if exists " + probeFunction + "()");
+            executeCommitted("drop table if exists " + probeTable);
             deleteTenant(tenant);
         }
     }
@@ -197,7 +265,7 @@ class WarehousePlanApplicationServiceIT {
         );
 
         try {
-            jdbcTemplate.execute(
+            executeCommitted(
                 "alter table modeling_warehouse_plan_source add constraint " +
                 constraintName +
                 " check (source_id <> '" +
@@ -218,7 +286,7 @@ class WarehousePlanApplicationServiceIT {
                 tenant
             )).isZero();
         } finally {
-            jdbcTemplate.execute("alter table modeling_warehouse_plan_source drop constraint if exists " + constraintName);
+            executeCommitted("alter table modeling_warehouse_plan_source drop constraint if exists " + constraintName);
             deleteTenant(tenant);
         }
     }
@@ -347,13 +415,26 @@ class WarehousePlanApplicationServiceIT {
     }
 
     private void deleteTenant(String tenant) {
-        jdbcTemplate.update("delete from modeling_warehouse_plan_source_mapping where tenant_id = ?", tenant);
-        jdbcTemplate.update("delete from modeling_warehouse_plan_source where tenant_id = ?", tenant);
-        jdbcTemplate.update("delete from modeling_warehouse_plan_metric_need where tenant_id = ?", tenant);
-        jdbcTemplate.update("delete from modeling_warehouse_plan_process where tenant_id = ?", tenant);
-        jdbcTemplate.update("delete from modeling_warehouse_plan_domain where tenant_id = ?", tenant);
-        jdbcTemplate.update("delete from modeling_warehouse_plan_policy where tenant_id = ?", tenant);
-        jdbcTemplate.update("delete from modeling_warehouse_plan where tenant_id = ?", tenant);
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            jdbcTemplate.update("delete from modeling_warehouse_plan_source_mapping where tenant_id = ?", tenant);
+            jdbcTemplate.update("delete from modeling_warehouse_plan_source where tenant_id = ?", tenant);
+            jdbcTemplate.update("delete from modeling_warehouse_plan_metric_need where tenant_id = ?", tenant);
+            jdbcTemplate.update("delete from modeling_warehouse_plan_process where tenant_id = ?", tenant);
+            jdbcTemplate.update("delete from modeling_warehouse_plan_domain where tenant_id = ?", tenant);
+            jdbcTemplate.update("delete from modeling_warehouse_plan_policy where tenant_id = ?", tenant);
+            jdbcTemplate.update("delete from modeling_warehouse_plan where tenant_id = ?", tenant);
+        });
+    }
+
+    private void executeCommitted(String sql) {
+        try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement()) {
+            statement.execute(sql);
+            if (!connection.getAutoCommit()) {
+                connection.commit();
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to execute committed test SQL", exception);
+        }
     }
 
     private static BusinessScope readyScope() {

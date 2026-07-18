@@ -41,6 +41,21 @@ test("detail restores the exact plan independently from baseline and stage evide
 	assert.match(page, /if \(!isCurrent\(\)\) return/);
 });
 
+test("evidence retry clears only failed evidence and keeps the restored plan header", () => {
+	assert.match(page, /const loadEvidence = useCallback/);
+	assert.match(page, /action=\{<Button onClick=\{\(\) => void loadEvidence\(\)\}>重新加载证据<\/Button>\}/);
+	const evidenceLoader = page.match(/const loadEvidence = useCallback\([\s\S]*?\n\t\}, \[[^\]]*\]\);/)?.[0] || "";
+	assert.match(
+		evidenceLoader,
+		/setBaseline\(baselineResult\.status === "fulfilled"\s*\?\s*baselineResult\.value\s*:\s*null\)/,
+	);
+	assert.match(
+		evidenceLoader,
+		/setProjection\(projectionResult\.status === "fulfilled"\s*\?\s*projectionResult\.value\s*:\s*null\)/,
+	);
+	assert.doesNotMatch(evidenceLoader, /getWarehousePlan\(|setPlan\(null\)/);
+});
+
 test("specialist capabilities remain deep links instead of copied forms", () => {
 	for (const route of [
 		"/governance/subjects",

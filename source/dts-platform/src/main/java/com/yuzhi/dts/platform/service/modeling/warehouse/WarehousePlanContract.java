@@ -88,7 +88,9 @@ public final class WarehousePlanContract {
             scope = trimToNull(scope);
             ownerId = trimToNull(ownerId);
             ownerDepartmentId = trimToNull(ownerDepartmentId);
-            initialSourceRefs = immutable(initialSourceRefs);
+            initialSourceRefs = initialSourceRefs == null
+                ? List.of()
+                : java.util.Collections.unmodifiableList(new ArrayList<>(initialSourceRefs));
             idempotencyKey = trimToNull(idempotencyKey);
         }
     }

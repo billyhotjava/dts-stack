@@ -6,7 +6,9 @@ import {
 	EMPTY_WAREHOUSE_PLAN_CREATE_SESSION,
 	hasWarehousePlanCreateAccess,
 	loadRequestedWarehousePlan,
+	mergeWarehousePlanLists,
 	reduceWarehousePlanCreateSession,
+	validateWarehousePlanInitialSources,
 } from "./warehousePlanCreateFlow.ts";
 
 test("uses randomUUID when the browser provides it", () => {
@@ -120,4 +122,49 @@ test("ignores a stale A response after a newer B request has started", async () 
 	await a;
 
 	assert.deepEqual(applied, ["B"]);
+});
+
+test("invalidates an in-flight create response when its dialog session changes", () => {
+	const guard = createLatestRequestGuard();
+	const isCurrentCreate = guard.begin();
+	guard.invalidate();
+
+	assert.equal(isCurrentCreate(), false);
+});
+
+test("validates duplicate and oversized asset-first source references", () => {
+	assert.equal(
+		validateWarehousePlanInitialSources([
+			{ sourceType: "CATALOG_TABLE", sourceId: " asset-1 " },
+			{ sourceType: "CATALOG_TABLE", sourceId: "asset-1" },
+		]),
+		"同一类型和标识的数据来源不能重复",
+	);
+	assert.equal(
+		validateWarehousePlanInitialSources([{ sourceType: "CATALOG_TABLE", sourceId: "a".repeat(257) }]),
+		"来源标识不能超过 256 个字符",
+	);
+	assert.equal(
+		validateWarehousePlanInitialSources([
+			{ sourceType: "CATALOG_TABLE", sourceId: "asset-1", sourceVersion: "v".repeat(129) },
+		]),
+		"来源版本不能超过 128 个字符",
+	);
+	assert.equal(
+		validateWarehousePlanInitialSources([{ sourceType: "CATALOG_TABLE", sourceId: "asset-1", sourceVersion: "v1" }]),
+		null,
+	);
+});
+
+test("merges a refreshed plan list without losing the exact selected plan", () => {
+	const selected = { id: "plan-selected", name: "Selected" };
+	const refreshed = [
+		{ id: "plan-other", name: "Other" },
+		{ id: "plan-selected", name: "Selected refreshed" },
+	];
+
+	assert.deepEqual(mergeWarehousePlanLists([selected], refreshed, selected.id), [
+		selected,
+		{ id: "plan-other", name: "Other" },
+	]);
 });

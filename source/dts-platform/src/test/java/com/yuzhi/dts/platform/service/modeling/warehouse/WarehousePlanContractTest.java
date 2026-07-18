@@ -18,6 +18,7 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.P
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.ProcessBinding;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBinding;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBusinessMapping;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -140,6 +141,26 @@ class WarehousePlanContractTest {
         assertThat(WarehousePlanContract.validateRequestedActor(null, null, null, null))
             .extracting(DomainIssue::code)
             .containsExactly("WAREHOUSE_PLAN_AUTHENTICATED_ACTOR_REQUIRED");
+    }
+
+    @Test
+    void reportsANullInitialSourceAsAStableDomainIssue() {
+        List<InitialSourceRef> sources = new ArrayList<>();
+        sources.add(null);
+        CreateWarehousePlanCommand command = new CreateWarehousePlanCommand(
+            "Asset plan",
+            null,
+            null,
+            "owner-1",
+            null,
+            WarehousePlanContract.OnboardingMode.ASSET_FIRST,
+            sources,
+            "request-null-source"
+        );
+
+        assertThat(WarehousePlanContract.validateCreate(command))
+            .extracting(DomainIssue::code)
+            .containsExactly("WAREHOUSE_PLAN_INITIAL_SOURCE_INVALID");
     }
 
     @Test

@@ -8,8 +8,9 @@ export type WarehousePlanSourceType = "CONNECTION_TABLE" | "CATALOG_TABLE" | "EX
 export type WarehousePlanLifecycleStatus =
 	| "DRAFT"
 	| "BASELINE_READY"
-	| "MODELING"
-	| "IMPLEMENTING"
+	| "DESIGNING"
+	| "VALIDATING"
+	| "READY_TO_PUBLISH"
 	| "PUBLISHED"
 	| "ARCHIVED";
 

@@ -29,6 +29,12 @@ export type LatestRequestGuard = {
 	invalidate: () => void;
 };
 
+export type WarehousePlanInitialSourceCandidate = {
+	sourceType?: unknown;
+	sourceId?: unknown;
+	sourceVersion?: unknown;
+};
+
 const WAREHOUSE_PLAN_MAINTAINER_ROLES = new Set([
 	"ADMIN",
 	"OP_ADMIN",
@@ -62,6 +68,36 @@ export function hasWarehousePlanCreateAccess(roles: unknown[]): boolean {
 				.replace(/^ROLE_/, ""),
 		),
 	);
+}
+
+export function validateWarehousePlanInitialSources(
+	sources: WarehousePlanInitialSourceCandidate[] | null | undefined,
+): string | null {
+	if (!Array.isArray(sources) || sources.length === 0) return "请至少登记一个现有数据来源";
+	const identities = new Set<string>();
+	for (const source of sources) {
+		const sourceType = String(source?.sourceType || "").trim();
+		const sourceId = String(source?.sourceId || "").trim();
+		const sourceVersion = String(source?.sourceVersion || "").trim();
+		if (!sourceType || !sourceId) return "请完整填写数据来源类型和标识";
+		if (sourceId.length > 256) return "来源标识不能超过 256 个字符";
+		if (sourceVersion.length > 128) return "来源版本不能超过 128 个字符";
+		const identity = `${sourceType}\u0000${sourceId}`;
+		if (identities.has(identity)) return "同一类型和标识的数据来源不能重复";
+		identities.add(identity);
+	}
+	return null;
+}
+
+export function mergeWarehousePlanLists<T extends { id: string }>(
+	currentPlans: T[],
+	refreshedPlans: T[],
+	selectedPlanId: string,
+): T[] {
+	const exactPlan = currentPlans.find((plan) => plan.id === selectedPlanId);
+	return exactPlan
+		? [exactPlan, ...refreshedPlans.filter((plan) => plan.id !== exactPlan.id)]
+		: refreshedPlans;
 }
 
 export function reduceWarehousePlanCreateSession(

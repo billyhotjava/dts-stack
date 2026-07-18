@@ -48,6 +48,57 @@ test("warehouse plan create flow is server coded, idempotent, dual-start and act
 	assert.match(entry, /if \(!isCurrent\(\)\) return/);
 });
 
+test("lifecycle labels match the backend contract exactly", () => {
+	for (const status of ["DRAFT", "BASELINE_READY", "DESIGNING", "VALIDATING", "READY_TO_PUBLISH", "PUBLISHED", "ARCHIVED"]) {
+		assert.match(api, new RegExp(`\\|?\\s*"${status}"`));
+		assert.match(entry, new RegExp(`${status}:`));
+	}
+	assert.doesNotMatch(api, /\|\s*"MODELING"|\|\s*"IMPLEMENTING"/);
+});
+
+test("create modal protects its active request session and cannot close while submitting", () => {
+	assert.match(entry, /const createRequestGuard = useMemo\(\(\) => createLatestRequestGuard\(\), \[\]\)/);
+	assert.match(entry, /const isCurrentCreate = createRequestGuard\.begin\(\)/);
+	assert.match(entry, /if \(!isCurrentCreate\(\)\) return/);
+	assert.match(entry, /closable=!\{creating\}|closable=\{!creating\}/);
+	assert.match(entry, /maskClosable=\{!creating\}/);
+	assert.match(entry, /keyboard=\{!creating\}/);
+	assert.match(entry, /cancelButtonProps=\{\{ disabled: creating \}\}/);
+});
+
+test("exact plan restoration degrades list failure separately and retries only the list", () => {
+	assert.match(entry, /useState\(false\).*planListFailed|\[planListFailed, setPlanListFailed\] = useState\(false\)/);
+	assert.match(entry, /setPlanListFailed\(restored\.listFailed\)/);
+	assert.match(entry, /const retryPlanList = useCallback/);
+	assert.match(entry, /data-testid="warehouse-plan-list-recovery"/);
+	assert.match(entry, /mergeWarehousePlanLists/);
+	assert.match(entry, /planListRetryGuard\.invalidate\(\);\s*setRetryingPlanList\(false\)/);
+});
+
+test("failed exact-plan restoration stays recoverable instead of falling through to the create empty state", () => {
+	assert.match(entry, /指定的建设计划不可用/);
+	assert.match(entry, /不存在、无权访问或暂时网络异常/);
+	assert.match(entry, /onClick=\{\(\) => void loadPlans\(\)\}[\s\S]{0,120}重新加载指定计划/);
+	assert.match(entry, /plans\.length === 0 && !requestedPlanFailed/);
+});
+
+test("URL plan selection waits for the exact plan read before projection", () => {
+	assert.match(entry, /const \[selectedPlanId, setSelectedPlanId\] = useState\(""\)/);
+});
+
+test("asset-first inputs enforce the same identity and length limits as the backend", () => {
+	assert.match(entry, /validateWarehousePlanInitialSources/);
+	assert.match(entry, /max:\s*256/);
+	assert.match(entry, /maxLength=\{256\}/);
+	assert.match(entry, /max:\s*128/);
+	assert.match(entry, /maxLength=\{128\}/);
+});
+
+test("idempotency conflict copy stays in customer language", () => {
+	assert.doesNotMatch(entry, /请求标识|幂等/);
+	assert.match(entry, /作为新计划重新提交/);
+});
+
 test("the workbench renders the server-owned nine-stage projection as read-only evidence", () => {
 	assert.match(entry, /WAREHOUSE_STAGE_ORDER/);
 	assert.match(entry, /data-testid="warehouse-plan-nine-stage-track"/);
