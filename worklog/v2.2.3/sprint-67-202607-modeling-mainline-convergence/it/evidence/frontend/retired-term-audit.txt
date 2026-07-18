@@ -22,3 +22,35 @@ Guard interpretation:
 - Existing retired copy may only decrease from the frozen baseline; a new file starts with a zero allowance.
 - Replacement aliases and retired metric terms have no allowance in any customer source.
 - General action labels and explanatory prose are not treated as objectLabel values, avoiding false positives on legitimate UI copy.
+
+Independent review fix round 2
+Executed at: 2026-07-19T00:27:10+08:00
+
+Guard correction:
+- The former per-file maximum-count allowance is removed.
+- All 37 legacy occurrences are frozen as exact fingerprints:
+  webapp-relative path + 1-based line + 1-based column + term + first 16 hex
+  characters of SHA-256(normalized containing line).
+- The line hash normalizes surrounding whitespace only; it does not freeze the
+  whole file. A deletion, insertion, move or contextual rewrite changes the exact
+  fingerprint list and requires an explicit reviewed baseline update.
+- A synthetic contract keeps the occurrence count unchanged while moving the
+  line or rewriting same-column context; both mutations fail exact comparison.
+
+Manifest scope correction:
+- src/pages/governance/SubjectAreasPage.tsx is an explicit additional customer source.
+- Its previous copy "从业务对象、数据表和已有模型开始组织逻辑模型" was replaced by
+  "从业务分类、数据表和已有模型开始设计明细表与维度表".
+- The governance page now has zero retired/replacement term matches and is not
+  granted a migration exception.
+
+Retired-term inventory command:
+rg -o --count-matches --glob '!*.test.ts' --glob '!*.test.tsx' --glob '!*.test-support.ts' --glob '!canonicalModelingLanguage.ts' '业务对象|语义对象|原始指标|二次指标' source/dts-platform-webapp/src/pages/modeling source/dts-platform-webapp/src/pages/governance/SubjectAreasPage.tsx
+Exit code: 0
+Key result: exactly 37 业务对象 matches in the same 12 modeling files;
+SubjectAreasPage.tsx has zero matches and no other retired term matched.
+
+Replacement-alias command:
+rg -n --glob '!*.test.ts' --glob '!*.test.tsx' --glob '!*.test-support.ts' --glob '!canonicalModelingLanguage.ts' '业务实体|模型对象|数据对象|语义实体' source/dts-platform-webapp/src/pages/modeling source/dts-platform-webapp/src/pages/governance/SubjectAreasPage.tsx
+Exit code: 1
+Key result: zero matches, the expected ripgrep no-match result.

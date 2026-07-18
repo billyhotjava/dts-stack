@@ -60,6 +60,7 @@ export const CANONICAL_MODELING_CUSTOMER_SURFACE_MANIFEST = Object.freeze({
 	sourceExtensions: Object.freeze([".ts", ".tsx"] as const),
 	excludedSourceSuffixes: Object.freeze([".test.ts", ".test.tsx", ".test-support.ts", ".test-support.tsx"] as const),
 	definitionFiles: Object.freeze(["canonicalModelingLanguage.ts"] as const),
+	additionalCustomerSources: Object.freeze(["src/pages/governance/SubjectAreasPage.tsx"] as const),
 	objectLabels: CANONICAL_MODELING_OBJECT_LABELS,
 } as const);
 

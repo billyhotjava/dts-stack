@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { extname, relative, resolve } from "node:path";
 import test from "node:test";
@@ -15,10 +16,8 @@ const FORBIDDEN_CUSTOMER_TERMS = [
 	...RETIRED_METRIC_TERMS,
 	...REPLACEMENT_OBJECT_TERMS,
 ] as const;
-const MODELING_SOURCE_ROOT = fileURLToPath(new URL("./", import.meta.url));
+const WEBAPP_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const EXPECTED_OBJECT_LABELS = ["业务分类", "数仓分层", "数据标准", "维度", "四类表", "指标"] as const;
-
-type ForbiddenCustomerTerm = (typeof FORBIDDEN_CUSTOMER_TERMS)[number];
 
 type CustomerSurfaceManifest = {
 	sourceRoot: string;
@@ -26,26 +25,52 @@ type CustomerSurfaceManifest = {
 	sourceExtensions: readonly string[];
 	excludedSourceSuffixes: readonly string[];
 	definitionFiles: readonly string[];
+	additionalCustomerSources: readonly string[];
 	objectLabels: readonly string[];
 };
 
-// Sprint-67 only freezes the existing migration debt. A new customer source gets
-// a zero allowance automatically, and no file receives an allowance for a
-// replacement alias or retired metric term.
-const RETIRED_TERM_MIGRATION_BASELINE = Object.freeze({
-	"LowCodeDevelopmentPage.tsx": { 业务对象: 3 },
-	"MetricWorkbenchPage.tsx": { 业务对象: 7 },
-	"ModelTemplatesPage.tsx": { 业务对象: 1 },
-	"SemanticMetricsPage.tsx": { 业务对象: 4 },
-	"SemanticObjectsPage.tsx": { 业务对象: 9 },
-	"businessObjectCode.ts": { 业务对象: 1 },
-	"metric-workbench/MetricCanvas.tsx": { 业务对象: 3 },
-	"metric-workbench/MetricDetailPanel.tsx": { 业务对象: 2 },
-	"metric-workbench/SubjectBrowserPanel.tsx": { 业务对象: 3 },
-	"metric-workbench/metricCanvas.helpers.ts": { 业务对象: 1 },
-	"semantic-workspace/BusinessModelingContextBar.tsx": { 业务对象: 1 },
-	"semantic-workspace/ModelingConceptCards.tsx": { 业务对象: 2 },
-} satisfies Record<string, Partial<Record<ForbiddenCustomerTerm, number>>>);
+// Each legacy occurrence is frozen by path, line, column, term and a short hash
+// of its normalized source line. This is intentionally narrower than a whole-file
+// hash while still making moves and contextual rewrites explicit baseline changes.
+const RETIRED_TERM_MIGRATION_FINGERPRINTS = Object.freeze([
+	"src/pages/modeling/LowCodeDevelopmentPage.tsx:80:11:业务对象:2dca396e33ae0898",
+	"src/pages/modeling/LowCodeDevelopmentPage.tsx:82:20:业务对象:f85d72f2fa6d2c84",
+	"src/pages/modeling/LowCodeDevelopmentPage.tsx:95:30:业务对象:3ccb568b3501ba6b",
+	"src/pages/modeling/MetricWorkbenchPage.tsx:106:33:业务对象:75a7bcd18b186267",
+	"src/pages/modeling/MetricWorkbenchPage.tsx:113:32:业务对象:a623bcaecd420e77",
+	"src/pages/modeling/MetricWorkbenchPage.tsx:165:32:业务对象:f15254abeac5fb32",
+	"src/pages/modeling/MetricWorkbenchPage.tsx:265:31:业务对象:5f845d46812946c9",
+	"src/pages/modeling/MetricWorkbenchPage.tsx:268:27:业务对象:b38a0959f723f2c1",
+	"src/pages/modeling/MetricWorkbenchPage.tsx:313:41:业务对象:f018c0e3a5012547",
+	"src/pages/modeling/MetricWorkbenchPage.tsx:346:55:业务对象:069bb0cf64afd0a8",
+	"src/pages/modeling/ModelTemplatesPage.tsx:433:75:业务对象:f6a239e836779307",
+	"src/pages/modeling/SemanticMetricsPage.tsx:95:21:业务对象:3cf3be78263ffea2",
+	"src/pages/modeling/SemanticMetricsPage.tsx:123:39:业务对象:bb8f9859a3075c16",
+	"src/pages/modeling/SemanticMetricsPage.tsx:180:57:业务对象:04a40506c5faf173",
+	"src/pages/modeling/SemanticMetricsPage.tsx:183:44:业务对象:fe12f450033fa42e",
+	"src/pages/modeling/SemanticObjectsPage.tsx:142:28:业务对象:fd823455bfd2e014",
+	"src/pages/modeling/SemanticObjectsPage.tsx:157:19:业务对象:0041d995848e9875",
+	"src/pages/modeling/SemanticObjectsPage.tsx:206:10:业务对象:66e065e2f715a93b",
+	"src/pages/modeling/SemanticObjectsPage.tsx:210:12:业务对象:3cf3be78263ffea2",
+	"src/pages/modeling/SemanticObjectsPage.tsx:270:11:业务对象:93e20a7a6106d7cd",
+	"src/pages/modeling/SemanticObjectsPage.tsx:271:17:业务对象:1e63d6f3dadfd385",
+	"src/pages/modeling/SemanticObjectsPage.tsx:274:15:业务对象:469d1d18e2f8f73b",
+	"src/pages/modeling/SemanticObjectsPage.tsx:284:22:业务对象:76bc237c8ac44720",
+	"src/pages/modeling/SemanticObjectsPage.tsx:337:14:业务对象:99feecea38f37e5e",
+	"src/pages/modeling/businessObjectCode.ts:1:4:业务对象:37eb91d7e7338171",
+	"src/pages/modeling/metric-workbench/MetricCanvas.tsx:350:25:业务对象:080a5cdf9227b609",
+	"src/pages/modeling/metric-workbench/MetricCanvas.tsx:350:40:业务对象:080a5cdf9227b609",
+	"src/pages/modeling/metric-workbench/MetricCanvas.tsx:372:31:业务对象:5416b8e64d528c3e",
+	"src/pages/modeling/metric-workbench/MetricDetailPanel.tsx:354:30:业务对象:97c5432cf73ad220",
+	"src/pages/modeling/metric-workbench/MetricDetailPanel.tsx:574:28:业务对象:9a4e919bd2c94b91",
+	"src/pages/modeling/metric-workbench/SubjectBrowserPanel.tsx:104:30:业务对象:e88badccf932da4b",
+	"src/pages/modeling/metric-workbench/SubjectBrowserPanel.tsx:136:63:业务对象:4c244ae573a3a978",
+	"src/pages/modeling/metric-workbench/SubjectBrowserPanel.tsx:166:23:业务对象:72e3c8782a50f3b5",
+	"src/pages/modeling/metric-workbench/metricCanvas.helpers.ts:415:48:业务对象:0b4d15a882556229",
+	"src/pages/modeling/semantic-workspace/BusinessModelingContextBar.tsx:48:19:业务对象:8bea1846601df66a",
+	"src/pages/modeling/semantic-workspace/ModelingConceptCards.tsx:28:11:业务对象:3cf3be78263ffea2",
+	"src/pages/modeling/semantic-workspace/ModelingConceptCards.tsx:56:37:业务对象:d0c4cf16bb229935",
+] as const);
 
 type MenuNode = {
 	key: string;
@@ -67,6 +92,7 @@ const flattenMenu = (nodes: MenuNode[]): MenuNode[] =>
 
 const discoverCustomerSources = (manifest: CustomerSurfaceManifest): string[] => {
 	const discovered: string[] = [];
+	const sourceRoot = resolve(WEBAPP_ROOT, manifest.sourceRoot);
 	const visit = (directory: string) => {
 		for (const entry of readdirSync(directory, { withFileTypes: true })) {
 			const absolutePath = resolve(directory, entry.name);
@@ -74,19 +100,89 @@ const discoverCustomerSources = (manifest: CustomerSurfaceManifest): string[] =>
 				if (manifest.recursive) visit(absolutePath);
 				continue;
 			}
-			const relativePath = relative(MODELING_SOURCE_ROOT, absolutePath).replaceAll("\\", "/");
+			const sourceRootRelativePath = relative(sourceRoot, absolutePath).replaceAll("\\", "/");
+			const webappRelativePath = relative(WEBAPP_ROOT, absolutePath).replaceAll("\\", "/");
 			if (!manifest.sourceExtensions.includes(extname(entry.name))) continue;
 			if (manifest.excludedSourceSuffixes.some((suffix) => entry.name.endsWith(suffix))) continue;
-			if (manifest.definitionFiles.includes(relativePath)) continue;
-			discovered.push(relativePath);
+			if (manifest.definitionFiles.includes(sourceRootRelativePath)) continue;
+			discovered.push(webappRelativePath);
 		}
 	};
 
-	visit(MODELING_SOURCE_ROOT);
-	return discovered.sort();
+	visit(sourceRoot);
+	for (const additionalSource of manifest.additionalCustomerSources ?? []) {
+		assert.equal(
+			existsSync(resolve(WEBAPP_ROOT, additionalSource)),
+			true,
+			`missing additional customer source: ${additionalSource}`,
+		);
+		discovered.push(additionalSource);
+	}
+	return [...new Set(discovered)].sort();
 };
 
 const countOccurrences = (source: string, term: string) => source.split(term).length - 1;
+
+const normalizedSourceLineHash = (line: string): string =>
+	createHash("sha256").update(line.trim().replace(/\s+/gu, " ")).digest("hex").slice(0, 16);
+
+const collectRetiredTermFingerprints = (relativePath: string, source: string): string[] => {
+	const fingerprints: string[] = [];
+	for (const [lineIndex, line] of source.split(/\r?\n/u).entries()) {
+		for (const term of FORBIDDEN_CUSTOMER_TERMS) {
+			let searchFrom = 0;
+			while (searchFrom < line.length) {
+				const termIndex = line.indexOf(term, searchFrom);
+				if (termIndex < 0) break;
+				fingerprints.push(
+					`${relativePath}:${lineIndex + 1}:${termIndex + 1}:${term}:${normalizedSourceLineHash(line)}`,
+				);
+				searchFrom = termIndex + term.length;
+			}
+		}
+	}
+	return fingerprints;
+};
+
+type ObjectLabelDeclaration = {
+	label: string;
+	line: number;
+	column: number;
+};
+
+const OBJECT_LABEL_LITERAL_PATTERN =
+	/\bobjectLabel\s*(?::|=)\s*(?:"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)'|`((?:\\.|[^`\\])*)`)/gu;
+
+const extractObjectLabelDeclarations = (source: string): ObjectLabelDeclaration[] => {
+	const declarations: ObjectLabelDeclaration[] = [];
+	for (const match of source.matchAll(OBJECT_LABEL_LITERAL_PATTERN)) {
+		const label = match[1] ?? match[2] ?? match[3] ?? "";
+		if (match[3]?.includes("${")) continue;
+		const offset = match.index ?? 0;
+		const sourceBeforeMatch = source.slice(0, offset);
+		const lastLineBreak = sourceBeforeMatch.lastIndexOf("\n");
+		declarations.push({
+			label: label.replace(/\\([\\"'`])/gu, "$1"),
+			line: countOccurrences(sourceBeforeMatch, "\n") + 1,
+			column: offset - lastLineBreak,
+		});
+	}
+	return declarations;
+};
+
+const assertCanonicalObjectLabelDeclarations = (
+	relativePath: string,
+	source: string,
+	isCanonicalObjectLabel: (value: unknown) => boolean,
+) => {
+	for (const declaration of extractObjectLabelDeclarations(source)) {
+		assert.equal(
+			isCanonicalObjectLabel(declaration.label),
+			true,
+			`${relativePath}:${declaration.line}:${declaration.column} declares non-canonical objectLabel: ${declaration.label}`,
+		);
+	}
+};
 
 test("canonical modeling language has one exact mapping for six objects, four table types and the mainline", async () => {
 	assert.equal(existsSync(CONTRACT_URL), true, "missing centralized canonical modeling language contract");
@@ -164,6 +260,7 @@ test("canonical customer object labels allow only six groups and business-catego
 			sourceExtensions: [".ts", ".tsx"],
 			excludedSourceSuffixes: [".test.ts", ".test.tsx", ".test-support.ts", ".test-support.tsx"],
 			definitionFiles: ["canonicalModelingLanguage.ts"],
+			additionalCustomerSources: ["src/pages/governance/SubjectAreasPage.tsx"],
 			objectLabels: EXPECTED_OBJECT_LABELS,
 		},
 	);
@@ -183,33 +280,84 @@ test("canonical customer object labels allow only six groups and business-catego
 	}
 });
 
-test("recursively discovered modeling customer sources cannot grow retired terms or introduce replacement aliases", async () => {
+test("objectLabel declarations in top-level and nested customer source accept only canonical labels", async () => {
+	const contract = await import(CONTRACT_URL.href);
+	const acceptedFixture = `
+		const category = { objectLabel: "业务分类" };
+		objectLabel = '数仓分层';
+		const standard = { nested: { objectLabel: \`数据标准\` } };
+		const dimension = { objectLabel: "维度" };
+		const tables = { objectLabel: '四类表' };
+		const metric = { objectLabel: \`指标\` };
+		const domainHelp = { objectLabel: "数据域" };
+		const subjectHelp = { nested: { objectLabel: '主题域' } };
+	`;
+	assert.deepEqual(
+		extractObjectLabelDeclarations(acceptedFixture).map(({ label }) => label),
+		[...EXPECTED_OBJECT_LABELS, "数据域", "主题域"],
+	);
+	assert.doesNotThrow(() =>
+		assertCanonicalObjectLabelDeclarations(
+			"accepted-object-labels.tsx",
+			acceptedFixture,
+			contract.isCanonicalModelingObjectLabel,
+		),
+	);
+
+	for (const [fixturePath, forbiddenFixture] of [
+		["top-level-business-activity.tsx", 'const activity = { objectLabel: "业务活动" };'],
+		["nested-detail-table.tsx", 'const card = { nested: { objectLabel: "明细表" } };'],
+	] as const) {
+		assert.throws(
+			() =>
+				assertCanonicalObjectLabelDeclarations(fixturePath, forbiddenFixture, contract.isCanonicalModelingObjectLabel),
+			/non-canonical objectLabel/u,
+		);
+	}
+});
+
+test("recursively discovered and explicit customer sources match exact retired-term fingerprints", async () => {
 	const contract = await import(CONTRACT_URL.href);
 	const manifest = contract.CANONICAL_MODELING_CUSTOMER_SURFACE_MANIFEST as CustomerSurfaceManifest;
 	const customerSources = discoverCustomerSources(manifest);
 
-	assert.ok(customerSources.includes("ModelingWorkbenchPage.tsx"), "top-level customer pages must be discovered");
 	assert.ok(
-		customerSources.includes("metric-workbench/MetricCanvas.tsx"),
+		customerSources.includes("src/pages/modeling/ModelingWorkbenchPage.tsx"),
+		"top-level customer pages must be discovered",
+	);
+	assert.ok(
+		customerSources.includes("src/pages/modeling/metric-workbench/MetricCanvas.tsx"),
 		"nested customer components must be discovered recursively",
 	);
-	for (const baselinePath of Object.keys(RETIRED_TERM_MIGRATION_BASELINE)) {
-		assert.ok(customerSources.includes(baselinePath), `stale retired-term baseline path: ${baselinePath}`);
-	}
+	assert.ok(
+		customerSources.includes("src/pages/governance/SubjectAreasPage.tsx"),
+		"brief-mandated governance customer page must be included explicitly",
+	);
 
+	const actualFingerprints: string[] = [];
 	for (const relativePath of customerSources) {
-		const source = readFileSync(resolve(MODELING_SOURCE_ROOT, relativePath), "utf8");
-		const baseline = RETIRED_TERM_MIGRATION_BASELINE[relativePath as keyof typeof RETIRED_TERM_MIGRATION_BASELINE] as
-			| Partial<Record<ForbiddenCustomerTerm, number>>
-			| undefined;
-		for (const term of FORBIDDEN_CUSTOMER_TERMS) {
-			const actual = countOccurrences(source, term);
-			const maximum = baseline?.[term] ?? 0;
-			assert.ok(
-				actual <= maximum,
-				`${relativePath} contains ${actual} occurrence(s) of forbidden customer term ${term}; maximum is ${maximum}`,
-			);
-		}
+		const source = readFileSync(resolve(WEBAPP_ROOT, relativePath), "utf8");
+		assertCanonicalObjectLabelDeclarations(relativePath, source, contract.isCanonicalModelingObjectLabel);
+		actualFingerprints.push(...collectRetiredTermFingerprints(relativePath, source));
+	}
+	assert.deepEqual(
+		actualFingerprints,
+		[...RETIRED_TERM_MIGRATION_FINGERPRINTS],
+		"retired-term occurrences changed path, position, context or value; update the reviewed migration baseline explicitly",
+	);
+});
+
+test("exact retired-term fingerprints reject equal-count moves and context rewrites", () => {
+	const fixturePath = "synthetic/legacy-copy.tsx";
+	const baselineSource = 'const item = "业务对象";';
+	const baseline = collectRetiredTermFingerprints(fixturePath, baselineSource);
+	const mutations = [`\n${baselineSource}`, 'const card = "业务对象";'] as const;
+
+	for (const mutation of mutations) {
+		assert.equal(countOccurrences(mutation, "业务对象"), countOccurrences(baselineSource, "业务对象"));
+		assert.throws(() => assert.deepEqual(collectRetiredTermFingerprints(fixturePath, mutation), baseline), {
+			name: "AssertionError",
+		});
 	}
 });
 

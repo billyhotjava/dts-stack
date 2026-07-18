@@ -718,7 +718,7 @@ export default function SubjectAreasPage() {
 												<div>
 													<div className="font-medium text-slate-900">当前范围：{activeDomain.name}</div>
 													<div className="mt-1 text-sm text-slate-500">
-														从业务对象、数据表和已有模型开始组织逻辑模型。
+														从业务分类、数据表和已有模型开始设计明细表与维度表。
 													</div>
 												</div>
 												<Button type="primary" onClick={continueLogicalModel}>
