@@ -3,7 +3,7 @@
 **状态**：IN_PROGRESS
 **周期**：2026-07
 **类型**：Architecture Convergence / Full-stack Refactor / Controlled Retirement
-**总体设计**：[`docs/superpowers/specs/2026-07-18-classic-warehouse-planning-golden-path-design.md`](../../../docs/superpowers/specs/2026-07-18-classic-warehouse-planning-golden-path-design.md)
+**总体设计**：[经典数仓规划内核与平台黄金主线设计](assets/classic-warehouse-planning-golden-path-design.md)
 
 ## 1. Sprint 目标
 
@@ -78,6 +78,9 @@ F1 -> F2 -> F3
 
 ## 6. 主要资产
 
+- [权威总体设计](assets/classic-warehouse-planning-golden-path-design.md)
+- [Sprint-65a WarehousePlan 后端实施计划](assets/implementation-plan-65a-warehouse-plan-foundation.md)
+- [Sprint-65b WarehousePlan 工作台实施计划](assets/implementation-plan-65b-warehouse-plan-workbench.md)
 - [架构与模块边界](assets/architecture-overview.md)
 - [领域与 API 契约](assets/domain-and-api-contract.md)
 - [受控退役登记表](assets/controlled-retirement-register.md)

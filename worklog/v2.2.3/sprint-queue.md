@@ -1301,7 +1301,7 @@
 **类型**: Architecture Convergence / Full-stack Refactor / Controlled Retirement
 **目标**: 以经典数仓规划作为默认主线，建立 BUSINESS_FIRST 与 ASSET_FIRST 双起点、WarehousePlan 单内核和平台黄金主线；将关系建模降为可选设计视图，将 dbt 调整为高级实现工具，并受控退役旧旅程。
 **设计文档**: `worklog/v2.2.3/sprint-65-202607/README.md`
-**总体架构**: `docs/superpowers/specs/2026-07-18-classic-warehouse-planning-golden-path-design.md`
+**总体架构**: `worklog/v2.2.3/sprint-65-202607/assets/classic-warehouse-planning-golden-path-design.md`
 **领域/API 契约**: `worklog/v2.2.3/sprint-65-202607/assets/domain-and-api-contract.md`
 **受控退役登记**: `worklog/v2.2.3/sprint-65-202607/assets/controlled-retirement-register.md`
 **集成测试**: `worklog/v2.2.3/sprint-65-202607/it/README.md`
@@ -1342,6 +1342,7 @@
 **目录**: `worklog/v2.2.3/sprint-66-202607-bi-board-drilldown-refactoring`（2026-07-18 自误建的 workflow/ 目录归位）
 **状态**: DONE
 **目标**: 在不引入业务领域模型的前提下，将大屏下钻收敛为“点击事件 → 参数映射 → 目标动作 → 状态恢复”的通用交互通道。
+**实现提交**: `a33fcd2bc`；**文档归位**: `6091aa657`（均已推送至 `origin/v2.2.3`）
 
 | Feature | Task 数 | 状态 |
 |---------|---------|------|

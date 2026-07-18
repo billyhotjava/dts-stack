@@ -1,6 +1,6 @@
 # 通用建模工作台与前端旅程收敛设计
 
-> **状态：SUPERSEDED by `2026-07-18-classic-warehouse-planning-golden-path-design.md`（2026-07-18）**——顶层骨架决策（四阶段旅程、菜单四入口）已被经典数仓黄金主线与 planId 上下文取代；已实现的四阶段 Frame 按 Sprint-65 退役登记表 R13 处置。本文档的通用模型内核（§4）、状态真实性原则（§10）与客户语言规范（§9.2）被新设计继承，仍可引用。
+> **状态：SUPERSEDED by `worklog/v2.2.3/sprint-65-202607/assets/classic-warehouse-planning-golden-path-design.md`（2026-07-18）**——顶层骨架决策（四阶段旅程、菜单四入口）已被经典数仓黄金主线与 planId 上下文取代；已实现的四阶段 Frame 按 Sprint-65 退役登记表 R13 处置。本文档的通用模型内核（§4）、状态真实性原则（§10）与客户语言规范（§9.2）被新设计继承，仍可引用。
 
 **日期**：2026-07-17
 **状态**：SUPERSEDED，保留继承章节与迁移追溯

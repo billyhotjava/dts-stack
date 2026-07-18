@@ -2,6 +2,8 @@
 
 **Goal:** 让用户从 `/modeling/workbench` 以业务目标或现有数据两个入口创建同一种 canonical WarehousePlan，并用 `planId + StageProjection` 驱动一个主动作、九站状态和六个编辑 Tab。
 
+**Sprint 归属:** [Sprint-65：经典数仓规划内核与黄金主线重构](../README.md)
+
 ## 不变量
 
 - 两个起点只写 `onboardingMode`，不产生两类计划、两套表或两套流程。

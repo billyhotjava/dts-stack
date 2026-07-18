@@ -8,6 +8,12 @@
 
 **Tech Stack:** React 18, TypeScript, Node test runner with `--experimental-strip-types`, existing ScreenConfig v2 JSON, existing data-source adapters, Vite legacy build for Chrome 95.
 
+## 执行归档说明（2026-07-18）
+
+**状态：DONE**。本计划的实现、测试、Chrome 95 验收和交付证据已完成，最终代码统一收敛到提交 `a33fcd2bc`；文档随后由提交 `6091aa657` 从误建的 `workflow/` 目录归位到 `worklog/`。
+
+下方步骤勾选表示对应结果已有 Task 或 IT 证据支撑。计划原设想的逐 Task commit 实际合并为一个交付提交，因此各“Commit”步骤表示内容已进入上述统一提交，不代表存在一一对应的独立 commit。
+
 ## Global Constraints
 
 - Core code and configuration MUST NOT contain project, BOM, voucher, work-order, or other domain-specific branches.
@@ -34,11 +40,11 @@
 - Consumes: existing `DataSourceConfig`, `ComponentInteractionMapping`, `DrillDownConfig`.
 - Produces: generalized `DrillLevel` accepted by Task 2.
 
-- [ ] **Step 1: Run impact analysis before editing**
+- [x] **Step 1: Run impact analysis before editing**
 
 Use GitNexus upstream impact analysis for `DrillLevel`, `DrillDownConfig`, and `validateScreenPayload`. Record callers and risk in F1/T01 and F1/T02 evidence.
 
-- [ ] **Step 2: Write failing Schema tests**
+- [x] **Step 2: Write failing Schema tests**
 
 Create cases that accept a SQL target with mappings and a legacy Card target, then reject an empty generic target:
 
@@ -90,7 +96,7 @@ test('accepts a legacy card drill level', () => {
 });
 ```
 
-- [ ] **Step 3: Run tests and verify red**
+- [x] **Step 3: Run tests and verify red**
 
 Run:
 
@@ -101,7 +107,7 @@ node --test --experimental-strip-types src/analytics/pages/screens/screenSpec.dr
 
 Expected: generic SQL case fails because the current contract requires `cardId` and `paramName`.
 
-- [ ] **Step 4: Implement the minimal type contract**
+- [x] **Step 4: Implement the minimal type contract**
 
 Change the interface to:
 
@@ -128,7 +134,7 @@ const isGeneric = ['api', 'card', 'sql', 'dataset', 'metric'].includes(sourceTyp
 
 Reuse the existing mapping-key, source-path, and transform validation rather than copying divergent rules.
 
-- [ ] **Step 5: Run focused tests and build typecheck**
+- [x] **Step 5: Run focused tests and build typecheck**
 
 ```bash
 node --test --experimental-strip-types src/analytics/pages/screens/screenSpec.drillDown.test.ts
@@ -137,7 +143,7 @@ pnpm exec tsc --noEmit
 
 Expected: all focused tests pass and TypeScript exits 0.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add source/dts-platform-webapp/src/analytics/pages/screens/types.ts \
@@ -159,11 +165,11 @@ git commit -m "feat(F1/T01): generalize screen drilldown contract"
 - Consumes: generalized `DrillLevel`, root `DataSourceConfig`, click payload record.
 - Produces: `NormalizedDrillLevel`, `DrillEntry`, `GenericDrillSnapshot`, `resolveNextDrillEntry`, and hook `DrillState` with `effectiveDataSource`.
 
-- [ ] **Step 1: Run impact analysis before editing**
+- [x] **Step 1: Run impact analysis before editing**
 
 Use GitNexus upstream impact analysis for `useDrillDown` and `DrillState`. Confirm all callers are within screen renderers before proceeding.
 
-- [ ] **Step 2: Write failing pure-function tests**
+- [x] **Step 2: Write failing pure-function tests**
 
 Cover generic mapping, inherited parameters, isolated parameters, missing source path, roll-up, and legacy adaptation:
 
@@ -183,7 +189,7 @@ assert.deepEqual(
 );
 ```
 
-- [ ] **Step 3: Run tests and verify red**
+- [x] **Step 3: Run tests and verify red**
 
 ```bash
 node --test --experimental-strip-types src/analytics/pages/screens/drillRuntime.test.ts
@@ -191,7 +197,7 @@ node --test --experimental-strip-types src/analytics/pages/screens/drillRuntime.
 
 Expected: FAIL because `drillRuntime.ts` does not exist.
 
-- [ ] **Step 4: Implement normalization and state calculation**
+- [x] **Step 4: Implement normalization and state calculation**
 
 Export focused pure functions with these exact signatures:
 
@@ -210,7 +216,7 @@ export function buildDrillSnapshot(
 
 Use a `Map<string,string>` to merge inherited parameters, with later values overwriting earlier keys. Do not use domain-specific fallback fields; legacy adaptation may use only `name`, `data.name`, then `row[0]`.
 
-- [ ] **Step 5: Refactor the hook into a state wrapper**
+- [x] **Step 5: Refactor the hook into a state wrapper**
 
 Change the hook boundary to:
 
@@ -223,7 +229,7 @@ export function useDrillDown(
 
 Expose `handleDrill(clickPayload: Record<string, unknown>)`, `handleRollUp(targetDepth)`, and `reset()`.
 
-- [ ] **Step 6: Run tests**
+- [x] **Step 6: Run tests**
 
 ```bash
 node --test --experimental-strip-types src/analytics/pages/screens/drillRuntime.test.ts
@@ -232,7 +238,7 @@ pnpm exec tsc --noEmit
 
 Expected: all cases pass and no type errors remain.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add source/dts-platform-webapp/src/analytics/pages/screens/drillRuntime.ts \
@@ -253,19 +259,19 @@ git commit -m "feat(F2/T01): add generic drilldown runtime"
 - Consumes: `DrillState.effectiveDataSource`, `DrillState.queryParameters`.
 - Produces: one data-loading path for SQL, API, Card, Dataset, and Metric.
 
-- [ ] **Step 1: Run impact analysis before editing**
+- [x] **Step 1: Run impact analysis before editing**
 
 Use GitNexus upstream impact analysis for `useComponentData` and `useCardDataSource`. Warn before implementation if risk is HIGH or CRITICAL.
 
-- [ ] **Step 2: Add failing five-source matrix tests**
+- [x] **Step 2: Add failing five-source matrix tests**
 
 Build five root/target fixtures that differ only in `DataSourceConfig.type`; assert each snapshot returns the target source and identical `selectedKey=A-01` query parameters.
 
-- [ ] **Step 3: Verify the existing Card gate fails the requirement**
+- [x] **Step 3: Verify the existing Card gate fails the requirement**
 
 Run the matrix test and confirm at least SQL/API/Dataset/Metric cases fail under the existing `rootCardId` path.
 
-- [ ] **Step 4: Replace the Card-only hook input**
+- [x] **Step 4: Replace the Card-only hook input**
 
 Use:
 
@@ -282,7 +288,7 @@ const effectiveDataSource = drillRuntimeEnabled
 
 Pass `effectiveDataSource` and merged parameters to the existing data-source hook. Do not branch by business domain or query content.
 
-- [ ] **Step 5: Run focused tests and TypeScript**
+- [x] **Step 5: Run focused tests and TypeScript**
 
 ```bash
 node --test --experimental-strip-types src/analytics/pages/screens/drillRuntime.test.ts
@@ -291,7 +297,7 @@ pnpm exec tsc --noEmit
 
 Expected: all five source cases pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add source/dts-platform-webapp/src/analytics/pages/screens/renderers/DataLayer.tsx \
@@ -317,11 +323,11 @@ git commit -m "feat(F2/T02): enable drilldown for all screen sources"
 - Consumes: action mappings, click payload, `DrillState.handleDrill`, `runtime.drillView`.
 - Produces: consistent mapped values for variables, drilldown, drill-view, panels, URLs, and intents.
 
-- [ ] **Step 1: Run impact analysis before editing**
+- [x] **Step 1: Run impact analysis before editing**
 
 Use GitNexus upstream impact analysis for `executeComponentActions`, `resolvePreferredDrillValue`, `normalizeScreenActionType`, `ComponentRenderer`, and `TableRenderer`.
 
-- [ ] **Step 2: Write failing action tests**
+- [x] **Step 2: Write failing action tests**
 
 Add assertions that `drill-view` normalizes, mapped values are identical across actions, and no resolver checks a Chinese business key:
 
@@ -335,7 +341,7 @@ assert.deepEqual(
 );
 ```
 
-- [ ] **Step 3: Verify red**
+- [x] **Step 3: Verify red**
 
 ```bash
 node --test --experimental-strip-types src/analytics/pages/screens/renderers/shared/actionUtils.test.ts
@@ -343,7 +349,7 @@ node --test --experimental-strip-types src/analytics/pages/screens/renderers/sha
 
 Expected: `drill-view` normalization fails under the current action set.
 
-- [ ] **Step 4: Implement one action dispatch path**
+- [x] **Step 4: Implement one action dispatch path**
 
 - Add `drill-view` to validation and normalization sets.
 - Compute `mappedValues` exactly once per action.
@@ -354,7 +360,7 @@ Expected: `drill-view` normalization fails under the current action set.
 - Register `map-chart`, `table`, legacy `scroll-board`, `number-card`, `stat-card`, and `gauge-chart` as drill-capable data components while keeping titles, images, shapes, and containers outside data-point drilldown.
 - Ignore legend, axis, blank canvas, table header/scroll/pagination, and map pan/zoom events. While the target query is loading, ignore repeated drill clicks for the same component and depth.
 
-- [ ] **Step 5: Run focused tests and TypeScript**
+- [x] **Step 5: Run focused tests and TypeScript**
 
 ```bash
 node --test --experimental-strip-types \
@@ -364,7 +370,7 @@ pnpm vitest run src/analytics/pages/screens/renderers/InteractionLayer.chartCase
 pnpm exec tsc --noEmit
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add source/dts-platform-webapp/src/analytics/pages/screens/renderers/shared/actionUtils.ts \
@@ -392,11 +398,11 @@ git commit -m "feat(F2/T03): unify mapped screen actions"
 - Consumes: generalized `DrillLevel`, existing data-source editor controls, source-path candidates.
 - Produces: saved generic levels with source, mappings, label, and inheritContext.
 
-- [ ] **Step 1: Run impact analysis before editing**
+- [x] **Step 1: Run impact analysis before editing**
 
 Use GitNexus upstream impact analysis for `renderDrillDownConfig`, `renderActionConfig`, and `PropertyPanel`.
 
-- [ ] **Step 2: Write failing source-contract tests**
+- [x] **Step 2: Write failing source-contract tests**
 
 Assert that the Card-only predicate is absent, generic field labels are present, and a new level does not default to `cardId: 0`:
 
@@ -407,7 +413,7 @@ assert.match(source, /目标参数/);
 assert.match(source, /继承上层筛选/);
 ```
 
-- [ ] **Step 3: Verify red**
+- [x] **Step 3: Verify red**
 
 ```bash
 node --test --experimental-strip-types \
@@ -415,7 +421,7 @@ node --test --experimental-strip-types \
   src/analytics/pages/screens/components/propertyPanel/PropertyPanel.behavior-source.test.ts
 ```
 
-- [ ] **Step 4: Implement the minimum generic editor**
+- [x] **Step 4: Implement the minimum generic editor**
 
 - Show drill configuration for drillable components with any executable DataSourceConfig.
 - Add levels as `{ label: '', dataSource: undefined, mappings: [], inheritContext: true }`.
@@ -424,7 +430,7 @@ node --test --experimental-strip-types \
 - Label fields as `来源字段`, `目标参数`, `值转换`, `继承上层筛选`, and `下一层数据源`.
 - Preserve CardIdPicker rendering when a loaded legacy level contains `cardId`.
 
-- [ ] **Step 5: Run tests, formatting, and TypeScript**
+- [x] **Step 5: Run tests, formatting, and TypeScript**
 
 ```bash
 node --test --experimental-strip-types \
@@ -434,7 +440,7 @@ pnpm exec biome check src/analytics/pages/screens/components/propertyPanel/Behav
 pnpm exec tsc --noEmit
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add source/dts-platform-webapp/src/analytics/pages/screens/components/propertyPanel/BehaviorConfigSection.tsx \
@@ -458,22 +464,22 @@ git commit -m "feat(F3/T02): add generic drilldown editor"
 - Consumes: `runtime.drillView`, generic drill breadcrumbs, configured screen view IDs.
 - Produces: designer target selection plus preview back, roll-up, and reset controls.
 
-- [ ] **Step 1: Run impact analysis before editing**
+- [x] **Step 1: Run impact analysis before editing**
 
 Use GitNexus upstream impact analysis for `ComponentRenderer`, `renderActionConfig`, and `useDrillView`.
 
-- [ ] **Step 2: Add failing source-contract assertions**
+- [x] **Step 2: Add failing source-contract assertions**
 
 Require a `drill-view` option, target view ID field, mapping editor visibility, and reset affordance.
 
-- [ ] **Step 3: Implement the minimal UI**
+- [x] **Step 3: Implement the minimal UI**
 
 - Add `<option value="drill-view">切换内部视图</option>`.
 - Show target-view selection, label, and mappings for drill-view.
 - Add `reset()` to the breadcrumb overlay alongside clickable depth links.
 - Use existing breadcrumb theme tokens; do not add a separate navigation component or menu.
 
-- [ ] **Step 4: Run focused tests and legacy build**
+- [x] **Step 4: Run focused tests and legacy build**
 
 ```bash
 node --test --experimental-strip-types \
@@ -483,7 +489,7 @@ pnpm build
 
 Expected: tests and Chrome 95-targeted build pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add source/dts-platform-webapp/src/analytics/pages/screens/components/propertyPanel/BehaviorConfigSection.tsx \
@@ -502,29 +508,29 @@ git commit -m "feat(F3/T03): complete screen drill navigation"
 - Modify: `source/dts-platform-webapp/src/analytics/pages/screens/screenSpec.drillDown.test.ts`
 - Modify: `source/dts-platform-webapp/src/analytics/pages/screens/ScreenPreviewPage.hooks.test.ts`
 - Modify: `source/dts-platform-webapp/src/analytics/pages/screens/renderers/InteractionLayer.chartCases.test.tsx`
-- Create evidence under: `workflow/v2.2.3/sprint-66-202607-bi-board-drilldown-refactoring/it/evidence/unit/`
+- Create evidence under: `worklog/v2.2.3/sprint-66-202607-bi-board-drilldown-refactoring/it/evidence/unit/`
 
 **Interfaces:**
 - Consumes: completed contract, runtime, action execution, and editor.
 - Produces: automated evidence for legacy compatibility and five-source neutrality.
 
-- [ ] **Step 1: Add legacy fixture tests**
+- [x] **Step 1: Add legacy fixture tests**
 
 Load `{ cardId: 12, paramName: 'selectedKey', label: 'Legacy' }`, drill twice, roll up, and assert effective Card IDs and query parameters match the pre-refactor contract.
 
-- [ ] **Step 2: Add unconfigured-screen tests**
+- [x] **Step 2: Add unconfigured-screen tests**
 
 Render a screen component without actions, interaction, or drillDown and assert no click handler, clickable cursor, breadcrumb, or runtime event is added.
 
-- [ ] **Step 3: Add the five-source table test**
+- [x] **Step 3: Add the five-source table test**
 
 Use neutral `keyA`, `keyB`, `label`, and `amount` fields. Iterate SQL, API, Card, Dataset, and Metric targets through one test body and assert identical mapping results.
 
-- [ ] **Step 4: Add the UI click-event matrix test**
+- [x] **Step 4: Add the UI click-event matrix test**
 
 In `InteractionLayer.chartCases.test.tsx`, parameterize the same neutral click payload across bar, pie, line, scatter, funnel, radar, combo, treemap, sunburst, map, table, and KPI/card cases. Assert one click produces one mapped action and one drill transition. Add negative cases for chart blank area, legend, axis, table header/scroll/pagination, map pan/zoom, repeated clicks while loading, and missing source paths.
 
-- [ ] **Step 5: Run all Sprint-66 focused tests**
+- [x] **Step 5: Run all Sprint-66 focused tests**
 
 ```bash
 node --test --experimental-strip-types \
@@ -539,7 +545,7 @@ pnpm vitest run src/analytics/pages/screens/renderers/InteractionLayer.chartCase
 
 Expected: all tests pass with no skipped cases.
 
-- [ ] **Step 6: Scan production code for domain coupling**
+- [x] **Step 6: Scan production code for domain coupling**
 
 ```bash
 rg -n "项目|BOM|凭证|工单|MES|PLM|ERP|财务|考勤|专利" \
@@ -552,13 +558,13 @@ rg -n "项目|BOM|凭证|工单|MES|PLM|ERP|财务|考勤|专利" \
 
 Expected: no production-code matches introduced by Sprint-66.
 
-- [ ] **Step 7: Save evidence and commit**
+- [x] **Step 7: Save evidence and commit**
 
 Save the command output with date, commit, and exit code under `it/evidence/unit/`, then:
 
 ```bash
 git add source/dts-platform-webapp/src/analytics/pages/screens \
-  workflow/v2.2.3/sprint-66-202607-bi-board-drilldown-refactoring/it/evidence/unit
+  worklog/v2.2.3/sprint-66-202607-bi-board-drilldown-refactoring/it/evidence/unit
 git commit -m "test(F4/T02): prove generic drilldown compatibility"
 ```
 
@@ -567,16 +573,16 @@ git commit -m "test(F4/T02): prove generic drilldown compatibility"
 **Sprint tasks:** F4/T03
 
 **Files:**
-- Modify: `workflow/v2.2.3/sprint-66-202607-bi-board-drilldown-refactoring/it/README.md`
-- Modify status files under: `workflow/v2.2.3/sprint-66-202607-bi-board-drilldown-refactoring/`
-- Modify: `workflow/v2.2.3/sprint-queue.md`
-- Create evidence under: `workflow/v2.2.3/sprint-66-202607-bi-board-drilldown-refactoring/it/evidence/`
+- Modify: `worklog/v2.2.3/sprint-66-202607-bi-board-drilldown-refactoring/it/README.md`
+- Modify status files under: `worklog/v2.2.3/sprint-66-202607-bi-board-drilldown-refactoring/`
+- Modify: `worklog/v2.2.3/sprint-queue.md`
+- Create evidence under: `worklog/v2.2.3/sprint-66-202607-bi-board-drilldown-refactoring/it/evidence/`
 
 **Interfaces:**
 - Consumes: implementation commits and deployed preview.
 - Produces: Go/No-Go result and synchronized Sprint status.
 
-- [ ] **Step 1: Run repository checks**
+- [x] **Step 1: Run repository checks**
 
 ```bash
 cd source/dts-platform-webapp
@@ -588,11 +594,11 @@ git diff --check
 
 Expected: every command exits 0.
 
-- [ ] **Step 2: Run GitNexus change detection**
+- [x] **Step 2: Run GitNexus change detection**
 
 Use GitNexus `detect_changes(scope="all")`. Save changed symbols, affected processes, and risk level under `it/evidence/gitnexus/`. Stop and review any unexpected HIGH or CRITICAL result.
 
-- [ ] **Step 3: Execute Chrome 95 smoke**
+- [x] **Step 3: Execute Chrome 95 smoke**
 
 Using username/password login, verify:
 
@@ -606,18 +612,18 @@ Using username/password login, verify:
 
 Store screenshots, console output, and redacted Network evidence under `it/evidence/chrome95/`.
 
-- [ ] **Step 4: Apply the Go/No-Go gate**
+- [x] **Step 4: Apply the Go/No-Go gate**
 
 Mark No-Go if any condition in `it/README.md` section 6 occurs. Otherwise record environment, date, commit, commands, and final conclusion.
 
-- [ ] **Step 5: Synchronize statuses**
+- [x] **Step 5: Synchronize statuses**
 
 Only after all evidence passes, update 11 Task files, four Feature READMEs, Sprint README, IT README, and sprint queue from READY to DONE with correct counts.
 
-- [ ] **Step 6: Commit delivery evidence**
+- [x] **Step 6: Commit delivery evidence**
 
 ```bash
-git add workflow/v2.2.3/sprint-66-202607-bi-board-drilldown-refactoring \
-  workflow/v2.2.3/sprint-queue.md
+git add worklog/v2.2.3/sprint-66-202607-bi-board-drilldown-refactoring \
+  worklog/v2.2.3/sprint-queue.md
 git commit -m "chore(F4/T03): close generic drilldown sprint evidence"
 ```

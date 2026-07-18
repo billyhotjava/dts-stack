@@ -15,4 +15,4 @@
 - GitNexus 因横切 23 个前端文件判定 HIGH，属于预期范围；没有后端/数据迁移影响。
 - 全量 Biome 会命中仓库既有格式、import 排序及 label 关联等基线诊断；新增 8 个文件已单独清零，本次避免对大文件做无关格式化。
 - 生产构建仍有既有大 chunk 与旧 Browserslist 数据警告，可在独立性能/依赖治理 Sprint 处理。
-- 当前工作树未 commit/push；用户预存的 `AGENTS.md`、`CLAUDE.md` 修改保持原样。
+- Review 执行时 Sprint-66 工作树尚未提交；实现随后统一进入 `a33fcd2bc`，文档归位进入 `6091aa657`，两者均已推送。用户预存的 `AGENTS.md`、`CLAUDE.md` 修改始终未纳入 Sprint-66。

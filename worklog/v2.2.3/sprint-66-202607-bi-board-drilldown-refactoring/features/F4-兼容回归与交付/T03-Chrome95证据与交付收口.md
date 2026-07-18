@@ -18,10 +18,10 @@
 
 ## 影响范围
 
-- `workflow/v2.2.3/sprint-66-202607-bi-board-drilldown-refactoring/it/README.md`
-- `workflow/v2.2.3/sprint-66-202607-bi-board-drilldown-refactoring/it/evidence/`（实施时创建）
-- `workflow/v2.2.3/sprint-66-202607-bi-board-drilldown-refactoring/README.md`
-- `workflow/v2.2.3/sprint-queue.md`
+- `worklog/v2.2.3/sprint-66-202607-bi-board-drilldown-refactoring/it/README.md`
+- `worklog/v2.2.3/sprint-66-202607-bi-board-drilldown-refactoring/it/evidence/`（实施时创建）
+- `worklog/v2.2.3/sprint-66-202607-bi-board-drilldown-refactoring/README.md`
+- `worklog/v2.2.3/sprint-queue.md`
 
 ## 验证
 

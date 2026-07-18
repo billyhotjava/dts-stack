@@ -1,6 +1,6 @@
 # 业务域建模候选确认闭环设计
 
-> **状态：PARTIALLY SUPERSEDED by `2026-07-18-classic-warehouse-planning-golden-path-design.md`（2026-07-18）**——候选必须人工确认、模板不能自动成为业务事实等后台不变量继续 ACTIVE；固定三块页面、总线矩阵主流程和主题域页内工作台等 UI 决策已被现行架构取代。
+> **状态：PARTIALLY SUPERSEDED by `worklog/v2.2.3/sprint-65-202607/assets/classic-warehouse-planning-golden-path-design.md`（2026-07-18）**——候选必须人工确认、模板不能自动成为业务事实等后台不变量继续 ACTIVE；固定三块页面、总线矩阵主流程和主题域页内工作台等 UI 决策已被现行架构取代。
 
 > **历史说明（2026-07-17）**：本文件记录候选确认闭环及其已实现后台不变量。其“固定三块页面/总线矩阵主流程/不重构页面”UI 决策曾由 `2026-07-17-generic-modeling-workbench-ui-design.md` 取代；两份旧设计现均由 2026-07-18 现行架构统一收敛。
 

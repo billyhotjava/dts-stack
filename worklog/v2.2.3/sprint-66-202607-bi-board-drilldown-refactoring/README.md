@@ -4,6 +4,9 @@
 **状态**：DONE
 **类型**：Frontend Refactor / Generic Interaction / Backward Compatibility
 **目标**：将大屏下钻建设为领域无关、数据源无关的交互通道，使新业务接入只需配置字段映射和目标动作，不再开发专用下钻代码。
+**权威目录**：`worklog/v2.2.3/sprint-66-202607-bi-board-drilldown-refactoring/`
+**实现提交**：`a33fcd2bc`（已推送至 `origin/v2.2.3`）
+**文档归位**：`6091aa657`（从误建的 `workflow/` 目录归位，已推送）
 
 ## 1. 背景
 

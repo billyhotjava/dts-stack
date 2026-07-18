@@ -8,6 +8,8 @@
 
 **Tech Stack:** Java 21、Spring Boot/JdbcTemplate、PostgreSQL、Liquibase、JUnit 5、AssertJ、MockMvc。
 
+**Sprint 归属:** [Sprint-65：经典数仓规划内核与黄金主线重构](../README.md)
+
 ## Global Constraints
 
 - `modeling_warehouse_plan` 是唯一 canonical 运行态主表；禁止新增第三张计划主表。
