@@ -82,6 +82,7 @@ F1 -> F2 -> F3
 - [Sprint-65a WarehousePlan 后端实施计划](assets/implementation-plan-65a-warehouse-plan-foundation.md)
 - [Sprint-65b WarehousePlan 工作台实施计划](assets/implementation-plan-65b-warehouse-plan-workbench.md)
 - [架构与模块边界](assets/architecture-overview.md)
+- [建模关键对象单（canonical 词表）](assets/modeling-concept-canon.md)
 - [领域与 API 契约](assets/domain-and-api-contract.md)
 - [受控退役登记表](assets/controlled-retirement-register.md)
 - [Feature/Task 依赖图](assets/feature-dependency-map.md)
