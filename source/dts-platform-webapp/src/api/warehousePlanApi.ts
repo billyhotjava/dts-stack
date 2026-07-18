@@ -4,6 +4,7 @@ import { withModelingRequestTimeout } from "@/api/modelingRequestTimeout";
 const WAREHOUSE_PLAN_RESOURCE = "/modeling/warehouse-plans";
 
 export type WarehousePlanOnboardingMode = "BUSINESS_FIRST" | "ASSET_FIRST";
+export type WarehousePlanSourceType = "CONNECTION_TABLE" | "CATALOG_TABLE" | "EXCEL_FILE" | "DBT_NODE";
 export type WarehousePlanLifecycleStatus =
 	| "DRAFT"
 	| "BASELINE_READY"
@@ -27,13 +28,36 @@ export type WarehousePlanHeader = {
 };
 
 export type CreateWarehousePlanInput = {
-	code: string;
 	name: string;
 	objective?: string;
 	scope?: string;
-	ownerId: string;
+	ownerId?: string;
 	ownerDepartmentId?: string;
 	onboardingMode: WarehousePlanOnboardingMode;
+	initialSourceRefs?: WarehousePlanSourceRef[];
+	idempotencyKey: string;
+};
+
+export type WarehousePlanSourceRef = {
+	sourceType: WarehousePlanSourceType;
+	sourceId: string;
+	sourceVersion?: string;
+};
+
+export type WarehousePlanSourceBinding = WarehousePlanSourceRef & {
+	id: string;
+	confirmationStatus: "CANDIDATE" | "CONFIRMED" | "EXCLUDED";
+	exclusionReason?: string | null;
+};
+
+export type CreateWarehousePlanResult = {
+	planId: string;
+	plan: WarehousePlanHeader;
+	version: number;
+	etag: string;
+	initialSourceBindings: WarehousePlanSourceBinding[];
+	nextAction: string;
+	replayed: boolean;
 };
 
 export type PlanningBaseline = {
@@ -91,7 +115,7 @@ export const getWarehousePlan = (planId: string) =>
 	api.get<WarehousePlanHeader>(withModelingRequestTimeout({ url: `${WAREHOUSE_PLAN_RESOURCE}/${planId}` }));
 
 export const createWarehousePlan = (data: CreateWarehousePlanInput) =>
-	api.post<WarehousePlanHeader>({ url: WAREHOUSE_PLAN_RESOURCE, data });
+	api.post<CreateWarehousePlanResult>({ url: WAREHOUSE_PLAN_RESOURCE, data });
 
 export const getWarehousePlanningBaseline = (planId: string) =>
 	api.get<PlanningBaseline>(

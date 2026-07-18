@@ -18,6 +18,7 @@ import {
 	warehouseStageLabel,
 	withWarehousePlanContext,
 } from "./warehousePlanViewModel";
+import { createLatestRequestGuard } from "./warehousePlanCreateFlow";
 
 const { Paragraph, Text, Title } = Typography;
 
@@ -66,32 +67,48 @@ export default function WarehousePlanDetailPage() {
 	const [projection, setProjection] = useState<WarehousePlanStageProjection | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [failed, setFailed] = useState(false);
+	const [evidenceFailed, setEvidenceFailed] = useState(false);
+	const loadGuard = useMemo(() => createLatestRequestGuard(), []);
 	const activeSection = useMemo(() => resolveSection(location.pathname), [location.pathname]);
-	const baselineTab = searchParams.get("tab") === "sources" ? "sources" : "business-scope";
+	const requestedBaselineTab = searchParams.get("tab");
+	const baselineTab = requestedBaselineTab === "sources" || requestedBaselineTab === "business-scope"
+		? requestedBaselineTab
+		: plan?.onboardingMode === "ASSET_FIRST" ? "sources" : "business-scope";
 
 	const load = useCallback(async () => {
 		if (!planId) return;
+		const isCurrent = loadGuard.begin();
 		setLoading(true);
 		setFailed(false);
+		setEvidenceFailed(false);
+		setPlan(null);
+		setBaseline(null);
+		setProjection(null);
 		try {
-			const [header, planningBaseline, stageProjection] = await Promise.all([
-				getWarehousePlan(planId),
+			const header = await getWarehousePlan(planId);
+			if (!isCurrent()) return;
+			setPlan(header);
+			setLoading(false);
+			const [baselineResult, projectionResult] = await Promise.allSettled([
 				getWarehousePlanningBaseline(planId),
 				getWarehousePlanStageProjection(planId),
 			]);
-			setPlan(header);
-			setBaseline(planningBaseline);
-			setProjection(stageProjection);
+			if (!isCurrent()) return;
+			setBaseline(baselineResult.status === "fulfilled" ? baselineResult.value : null);
+			setProjection(projectionResult.status === "fulfilled" ? projectionResult.value : null);
+			setEvidenceFailed(baselineResult.status === "rejected" || projectionResult.status === "rejected");
 		} catch {
+			if (!isCurrent()) return;
 			setFailed(true);
 		} finally {
-			setLoading(false);
+			if (isCurrent()) setLoading(false);
 		}
-	}, [planId]);
+	}, [loadGuard, planId]);
 
 	useEffect(() => {
 		void load();
-	}, [load]);
+		return () => loadGuard.invalidate();
+	}, [load, loadGuard]);
 
 	const openSpecialist = (route: string) => navigate(withWarehousePlanContext(route, planId));
 	const openSection = (section: DetailSection) => navigate(buildWarehousePlanRoute(planId, section));
@@ -105,7 +122,16 @@ export default function WarehousePlanDetailPage() {
 	if (failed || !plan) {
 		return (
 			<div className="mx-auto max-w-[1180px] p-6">
-				<Alert type="error" showIcon message="计划详情暂时不可用" description="读取失败不会改变计划或阶段状态。" action={<Button onClick={() => void load()}>重新加载</Button>} />
+				<Result
+					data-testid="warehouse-plan-load-recovery"
+					status="warning"
+					title="指定的建设计划不可用"
+					subTitle="该计划可能不存在或当前账号无权访问。系统不会改为展示其他计划。"
+					extra={[
+						<Button key="retry" type="primary" onClick={() => void load()}>重新加载</Button>,
+						<Button key="workbench" onClick={() => navigate("/modeling/workbench")}>返回工作台选择计划</Button>,
+					]}
+				/>
 			</div>
 		);
 	}
@@ -134,7 +160,7 @@ export default function WarehousePlanDetailPage() {
 						<div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-500">
 							<span>计划负责人：{plan.ownerId}</span>
 							<span>开始方式：{plan.onboardingMode === "ASSET_FIRST" ? "从现有数据开始" : "从业务目标开始"}</span>
-							<span>当前阶段：{projection?.currentStage ? warehouseStageLabel(projection.currentStage) : "证据已齐备"}</span>
+							<span>当前阶段：{projection ? (projection.currentStage ? warehouseStageLabel(projection.currentStage) : "全部阶段已完成") : "状态未知"}</span>
 						</div>
 					</div>
 					{projection?.nextAction ? (
@@ -145,6 +171,17 @@ export default function WarehousePlanDetailPage() {
 				</div>
 				<Tabs className="mt-5" activeKey={activeSection} items={tabItems} onChange={(key) => openSection(key as DetailSection)} />
 			</header>
+
+			{evidenceFailed ? (
+				<Alert
+					data-testid="warehouse-plan-evidence-recovery"
+					type="warning"
+					showIcon
+					message="部分规划证据暂时不可用"
+					description="计划本身已恢复；基线或阶段状态保持未知，不会误报为完成。"
+					action={<Button onClick={() => void load()}>重新加载证据</Button>}
+				/>
+			) : null}
 
 			{projection?.primaryBlocker ? (
 				<Alert
@@ -167,8 +204,8 @@ export default function WarehousePlanDetailPage() {
 					<Card title="规划基线">
 						<div className="flex items-center justify-between gap-4">
 							<div>
-								<div className="text-lg font-semibold">{baseline?.ready ? "已具备建模基线" : "仍有基线缺口"}</div>
-								<Text type="secondary">{baseline?.ready ? "业务范围、来源和策略均已确认" : `${baseline?.missingCodes.length || 0} 项待处理`}</Text>
+								<div className="text-lg font-semibold">{baseline ? (baseline.ready ? "已具备建模基线" : "仍有基线缺口") : "基线状态未知"}</div>
+								<Text type="secondary">{baseline ? (baseline.ready ? "业务范围、来源和策略均已确认" : `${baseline.missingCodes.length} 项待处理`) : "请重新加载规划证据"}</Text>
 							</div>
 							<Button onClick={() => openSection("baseline")}>查看基线</Button>
 						</div>

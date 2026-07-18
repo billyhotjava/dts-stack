@@ -27,6 +27,20 @@ test("detail reads the canonical header, baseline and StageProjection", () => {
 	assert.match(page, /nextAction/);
 });
 
+test("detail derives the baseline tab from onboarding mode when the URL has no tab", () => {
+	assert.match(page, /plan\?\.onboardingMode\s*===\s*"ASSET_FIRST"\s*\?\s*"sources"\s*:\s*"business-scope"/);
+	assert.match(page, /data-testid="warehouse-plan-load-recovery"/);
+});
+
+test("detail restores the exact plan independently from baseline and stage evidence", () => {
+	assert.match(page, /const header = await getWarehousePlan\(planId\)/);
+	assert.match(page, /Promise\.allSettled/);
+	assert.match(page, /data-testid="warehouse-plan-evidence-recovery"/);
+	assert.match(page, /"状态未知"/);
+	assert.match(page, /createLatestRequestGuard/);
+	assert.match(page, /if \(!isCurrent\(\)\) return/);
+});
+
 test("specialist capabilities remain deep links instead of copied forms", () => {
 	for (const route of [
 		"/governance/subjects",

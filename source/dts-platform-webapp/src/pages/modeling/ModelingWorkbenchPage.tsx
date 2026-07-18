@@ -1,10 +1,12 @@
 import { Alert, Button, Card, Collapse, Empty, Form, Input, Modal, Radio, Select, Skeleton, Space, Tag, Typography } from "antd";
-import { ArrowRight, CheckCircle2, Circle, Database, Layers3, RefreshCw, ShieldAlert } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { isAxiosError } from "axios";
+import { ArrowRight, CheckCircle2, Circle, Database, Layers3, Plus, RefreshCw, ShieldAlert, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
 	createWarehousePlan,
+	getWarehousePlan,
 	getWarehousePlanStageProjection,
 	listWarehousePlans,
 	type CreateWarehousePlanInput,
@@ -14,6 +16,7 @@ import {
 	type WarehousePlanStageStatus,
 } from "@/api/warehousePlanApi";
 import { useSearchParams } from "@/routes/hooks";
+import { useUserInfo, useUserRoles } from "@/store/userStore";
 import {
 	WAREHOUSE_STAGE_ORDER,
 	buildWarehousePlanRoute,
@@ -24,10 +27,18 @@ import {
 	warehouseStageLabel,
 	withWarehousePlanContext,
 } from "./warehousePlanViewModel";
+import {
+	createWarehousePlanIdempotencyKey,
+	createLatestRequestGuard,
+	EMPTY_WAREHOUSE_PLAN_CREATE_SESSION,
+	hasWarehousePlanCreateAccess,
+	loadRequestedWarehousePlan,
+	reduceWarehousePlanCreateSession,
+} from "./warehousePlanCreateFlow";
 
 const { Paragraph, Text, Title } = Typography;
 
-type CreatePlanForm = Omit<CreateWarehousePlanInput, "code" | "onboardingMode">;
+type CreatePlanForm = Omit<CreateWarehousePlanInput, "idempotencyKey" | "onboardingMode" | "ownerId" | "ownerDepartmentId">;
 
 const lifecycleLabel: Record<WarehousePlanHeader["lifecycleStatus"], string> = {
 	DRAFT: "规划中",
@@ -49,6 +60,9 @@ const statusTone: Record<WarehousePlanStageStatus, { border: string; dot: string
 export default function ModelingWorkbenchPage() {
 	const navigate = useNavigate();
 	const searchParams = useSearchParams();
+	const userRoles = useUserRoles();
+	const canCreatePlan = hasWarehousePlanCreateAccess(userRoles);
+	const userInfo = useUserInfo() as Record<string, unknown>;
 	const requestedPlanId = searchParams.get("planId")?.trim() || "";
 	const [plans, setPlans] = useState<WarehousePlanHeader[]>([]);
 	const [selectedPlanId, setSelectedPlanId] = useState(requestedPlanId);
@@ -56,11 +70,20 @@ export default function ModelingWorkbenchPage() {
 	const [loadingPlans, setLoadingPlans] = useState(true);
 	const [loadingProjection, setLoadingProjection] = useState(false);
 	const [plansFailed, setPlansFailed] = useState(false);
+	const [requestedPlanFailed, setRequestedPlanFailed] = useState(false);
 	const [projectionFailed, setProjectionFailed] = useState(false);
 	const [createOpen, setCreateOpen] = useState(false);
 	const [creating, setCreating] = useState(false);
 	const [onboardingMode, setOnboardingMode] = useState<WarehousePlanOnboardingMode>("BUSINESS_FIRST");
+	const [createSession, dispatchCreateSession] = useReducer(
+		reduceWarehousePlanCreateSession,
+		EMPTY_WAREHOUSE_PLAN_CREATE_SESSION,
+	);
 	const [form] = Form.useForm<CreatePlanForm>();
+	const currentOwner = String(userInfo.username || userInfo.login || userInfo.id || "当前登录用户");
+	const currentDepartment = String(userInfo.deptName || userInfo.deptCode || userInfo.department || "未配置部门");
+	const planLoadGuard = useMemo(() => createLatestRequestGuard(), []);
+	const projectionLoadGuard = useMemo(() => createLatestRequestGuard(), []);
 
 	const selectedPlan = useMemo(
 		() => plans.find((plan) => plan.id === selectedPlanId) ?? null,
@@ -76,70 +99,145 @@ export default function ModelingWorkbenchPage() {
 	);
 
 	const loadPlans = useCallback(async () => {
+		const isCurrent = planLoadGuard.begin();
 		setLoadingPlans(true);
 		setPlansFailed(false);
 		try {
+			if (requestedPlanId) {
+				const restored = await loadRequestedWarehousePlan(
+					requestedPlanId,
+					getWarehousePlan,
+					listWarehousePlans,
+					(requestedPlan) => {
+						if (!isCurrent()) return;
+						setPlans([requestedPlan]);
+						setSelectedPlanId(requestedPlan.id);
+						setRequestedPlanFailed(false);
+						setLoadingPlans(false);
+					},
+					() => {
+						if (!isCurrent()) return;
+						setPlans([]);
+						setSelectedPlanId("");
+						setProjection(null);
+						setRequestedPlanFailed(true);
+						setLoadingPlans(false);
+					},
+				);
+				if (!isCurrent()) return;
+				setPlans(restored.plans);
+				setRequestedPlanFailed(restored.requestedPlanFailed);
+				if (restored.requestedPlan) {
+					setSelectedPlanId(restored.requestedPlan.id);
+				} else {
+					setSelectedPlanId("");
+					setProjection(null);
+				}
+				return;
+			}
+
 			const result = await listWarehousePlans();
+			if (!isCurrent()) return;
 			const safePlans = Array.isArray(result) ? result : [];
 			setPlans(safePlans);
-			const nextPlanId = safePlans.some((plan) => plan.id === requestedPlanId)
-				? requestedPlanId
-				: safePlans.find((plan) => plan.lifecycleStatus !== "ARCHIVED")?.id || safePlans[0]?.id || "";
-			if (nextPlanId && nextPlanId !== selectedPlanId) selectPlan(nextPlanId, true);
-			if (!nextPlanId) {
+			setRequestedPlanFailed(false);
+			const nextPlanId = safePlans.find((plan) => plan.lifecycleStatus !== "ARCHIVED")?.id || safePlans[0]?.id || "";
+			if (nextPlanId) {
+				selectPlan(nextPlanId, true);
+			} else {
 				setSelectedPlanId("");
 				setProjection(null);
 			}
 		} catch {
+			if (!isCurrent()) return;
 			setPlansFailed(true);
 			setPlans([]);
 		} finally {
-			setLoadingPlans(false);
+			if (isCurrent()) setLoadingPlans(false);
 		}
-	}, [requestedPlanId, selectPlan, selectedPlanId]);
+	}, [planLoadGuard, requestedPlanId, selectPlan]);
 
 	const loadProjection = useCallback(async () => {
 		if (!selectedPlanId) return;
+		const isCurrent = projectionLoadGuard.begin();
 		setLoadingProjection(true);
 		setProjectionFailed(false);
 		try {
-			setProjection(await getWarehousePlanStageProjection(selectedPlanId));
+			const result = await getWarehousePlanStageProjection(selectedPlanId);
+			if (!isCurrent()) return;
+			setProjection(result);
 		} catch {
+			if (!isCurrent()) return;
 			setProjection(null);
 			setProjectionFailed(true);
 		} finally {
-			setLoadingProjection(false);
+			if (isCurrent()) setLoadingProjection(false);
 		}
-	}, [selectedPlanId]);
+	}, [projectionLoadGuard, selectedPlanId]);
 
 	useEffect(() => {
 		void loadPlans();
-	}, [loadPlans]);
+		return () => planLoadGuard.invalidate();
+	}, [loadPlans, planLoadGuard]);
 
 	useEffect(() => {
-		if (selectedPlanId) void loadProjection();
-	}, [loadProjection, selectedPlanId]);
+		if (!selectedPlanId) {
+			projectionLoadGuard.invalidate();
+			setLoadingProjection(false);
+			return;
+		}
+		void loadProjection();
+		return () => projectionLoadGuard.invalidate();
+	}, [loadProjection, projectionLoadGuard, selectedPlanId]);
 
 	const openCreate = () => {
+		if (!canCreatePlan) return;
 		setOnboardingMode("BUSINESS_FIRST");
 		form.resetFields();
+		dispatchCreateSession({ type: "OPEN", idempotencyKey: createWarehousePlanIdempotencyKey() });
 		setCreateOpen(true);
 	};
 
+	const cancelCreate = () => {
+		setCreateOpen(false);
+		dispatchCreateSession({ type: "CLEAR" });
+		form.resetFields();
+	};
+
+	const changeOnboardingMode = (mode: WarehousePlanOnboardingMode) => {
+		setOnboardingMode(mode);
+		form.setFieldValue(
+			"initialSourceRefs",
+			mode === "ASSET_FIRST" ? [{ sourceType: "CATALOG_TABLE", sourceId: "" }] : [],
+		);
+	};
+
+	const replaceConflictingIdempotencyKey = () => {
+		dispatchCreateSession({ type: "REPLACE_KEY", idempotencyKey: createWarehousePlanIdempotencyKey() });
+	};
+
 	const submitCreate = async (values: CreatePlanForm) => {
+		if (!canCreatePlan) return;
+		const idempotencyKey = createSession.idempotencyKey;
+		if (!idempotencyKey) {
+			toast.error("创建请求标识已失效，请关闭后重新打开窗口");
+			return;
+		}
 		setCreating(true);
 		try {
 			const created = await createWarehousePlan({
 				...values,
-				code: `warehouse-${Date.now().toString(36)}`,
 				onboardingMode,
+				idempotencyKey,
 			});
-			setPlans((current) => [created, ...current]);
+			setPlans((current) => [created.plan, ...current.filter((plan) => plan.id !== created.planId)]);
 			setCreateOpen(false);
+			dispatchCreateSession({ type: "CLEAR" });
 			toast.success("规划已创建");
-			const tab = onboardingMode === "ASSET_FIRST" ? "sources" : "business-scope";
-			navigate(buildWarehousePlanRoute(created.id, "baseline", { tab }));
-		} catch {
+			navigate(created.nextAction);
+		} catch (error) {
+			const code = isAxiosError(error) ? String((error.response?.data as { code?: string } | undefined)?.code || "") : "";
+			dispatchCreateSession({ type: code === "WAREHOUSE_PLAN_IDEMPOTENCY_CONFLICT" ? "IDEMPOTENCY_CONFLICT" : "REQUEST_FAILED" });
 			// The shared HTTP interceptor presents the actionable server error.
 		} finally {
 			setCreating(false);
@@ -196,11 +294,40 @@ export default function ModelingWorkbenchPage() {
 								options={plans.map((plan) => ({ label: plan.name, value: plan.id }))}
 								onChange={(value) => selectPlan(value)}
 							/>
-							<Button type="link" onClick={openCreate}>新建规划</Button>
+							<Button
+								type="link"
+								disabled={!canCreatePlan}
+								title={canCreatePlan ? undefined : "当前账号没有规划维护权限"}
+								onClick={openCreate}
+							>
+								新建规划
+							</Button>
 						</div>
 					) : null}
 				</div>
 			</header>
+
+			{requestedPlanFailed ? (
+				<Alert
+					data-testid="warehouse-plan-requested-plan-recovery"
+					type="warning"
+					showIcon
+					message="指定的建设计划不可用"
+					description="该计划可能不存在或当前账号无权访问。系统没有替换成其他计划。"
+					action={
+						plans.length > 0 ? (
+							<Button
+								onClick={() => {
+									const fallback = plans.find((plan) => plan.lifecycleStatus !== "ARCHIVED") || plans[0];
+									if (fallback) selectPlan(fallback.id);
+								}}
+							>
+								显式选择最近计划
+							</Button>
+						) : undefined
+					}
+				/>
+			) : null}
 
 			{plans.length === 0 ? (
 				<Card className="border-slate-200" styles={{ body: { padding: "72px 24px" } }}>
@@ -217,6 +344,8 @@ export default function ModelingWorkbenchPage() {
 							type="primary"
 							size="large"
 							data-testid="warehouse-plan-empty-primary-action"
+							disabled={!canCreatePlan}
+							title={canCreatePlan ? undefined : "当前账号没有规划维护权限"}
 							onClick={openCreate}
 						>
 							新建规划
@@ -330,29 +459,82 @@ export default function ModelingWorkbenchPage() {
 				confirmLoading={creating}
 				okText="创建并继续"
 				cancelText="取消"
-				onCancel={() => setCreateOpen(false)}
+				onCancel={cancelCreate}
 				onOk={() => form.submit()}
 				destroyOnClose
 			>
 				<div className="mb-5 grid grid-cols-2 gap-3">
 					<label className={`cursor-pointer rounded-xl border p-4 ${onboardingMode === "BUSINESS_FIRST" ? "border-blue-500 bg-blue-50" : "border-slate-200"}`}>
-						<Radio checked={onboardingMode === "BUSINESS_FIRST"} onChange={() => setOnboardingMode("BUSINESS_FIRST")} />
+						<Radio checked={onboardingMode === "BUSINESS_FIRST"} onChange={() => changeOnboardingMode("BUSINESS_FIRST")} />
 						<div className="mt-3 flex items-center gap-2 font-medium"><Layers3 size={17} />从业务目标开始</div>
-						<div className="mt-1 text-xs leading-5 text-slate-500">先明确建设目标、范围和业务过程。</div>
+						<div className="mt-1 text-xs leading-5 text-slate-500">先说明要解决的问题，再逐步确认业务分类和范围。</div>
 					</label>
 					<label className={`cursor-pointer rounded-xl border p-4 ${onboardingMode === "ASSET_FIRST" ? "border-blue-500 bg-blue-50" : "border-slate-200"}`}>
-						<Radio checked={onboardingMode === "ASSET_FIRST"} onChange={() => setOnboardingMode("ASSET_FIRST")} />
+						<Radio checked={onboardingMode === "ASSET_FIRST"} onChange={() => changeOnboardingMode("ASSET_FIRST")} />
 						<div className="mt-3 flex items-center gap-2 font-medium"><Database size={17} />从现有数据开始</div>
 						<div className="mt-1 text-xs leading-5 text-slate-500">先盘点现有表、文件和 dbt 产物。</div>
 					</label>
 				</div>
+				{createSession.idempotencyConflict ? (
+					<Alert
+						className="mb-4"
+						type="warning"
+						showIcon
+						message="该请求标识已经用于另一份内容"
+						description="表单已保留。确认当前内容后生成新请求标识，再重新提交。"
+						action={<Button onClick={replaceConflictingIdempotencyKey}>生成新请求标识</Button>}
+					/>
+				) : null}
 				<Form<CreatePlanForm> form={form} layout="vertical" onFinish={(values) => void submitCreate(values)}>
-					<Form.Item name="name" label="规划名称" rules={[{ required: true, message: "请输入规划名称" }]}><Input placeholder="例如：经营分析主题数仓" /></Form.Item>
-					<Form.Item name="objective" label="建设目标"><Input.TextArea rows={2} placeholder="这次建设要解决什么业务问题" /></Form.Item>
+					<Form.Item name="name" label="规划名称" rules={[{ required: true, whitespace: true, max: 128, message: "请输入 1-128 个字符的规划名称" }]}><Input maxLength={128} placeholder="例如：经营分析主题数仓" /></Form.Item>
+					<Form.Item
+						name="objective"
+						label="建设目标"
+						rules={onboardingMode === "BUSINESS_FIRST" ? [{ required: true, whitespace: true, message: "请说明这次建设要解决的问题" }] : []}
+					>
+						<Input.TextArea rows={2} placeholder={onboardingMode === "BUSINESS_FIRST" ? "这次建设要解决什么业务问题" : "可稍后补充"} />
+					</Form.Item>
 					<Form.Item name="scope" label="初始范围"><Input placeholder="涉及的业务范围、组织或数据边界" /></Form.Item>
-					<div className="grid grid-cols-2 gap-3">
-						<Form.Item name="ownerId" label="计划负责人" rules={[{ required: true, message: "请输入负责人" }]}><Input /></Form.Item>
-						<Form.Item name="ownerDepartmentId" label="负责部门"><Input /></Form.Item>
+					{onboardingMode === "ASSET_FIRST" ? (
+						<div className="mb-4" data-testid="warehouse-plan-initial-sources">
+							<Form.List
+								name="initialSourceRefs"
+								rules={[{ validator: async (_, sources) => {
+									if (!Array.isArray(sources) || sources.length === 0) throw new Error("请至少登记一个现有数据来源");
+								} }]}
+							>
+								{(fields, { add, remove }, { errors }) => (
+									<div className="space-y-2">
+										<div className="flex items-center justify-between">
+											<Text strong>现有数据来源</Text>
+											<Button type="link" icon={<Plus size={14} />} onClick={() => add({ sourceType: "CATALOG_TABLE", sourceId: "" })}>添加来源</Button>
+										</div>
+										{fields.map((field) => (
+											<div key={field.key} className="grid grid-cols-[150px_1fr_1fr_auto] gap-2">
+												<Form.Item {...field} name={[field.name, "sourceType"]} rules={[{ required: true, message: "选择类型" }]} noStyle>
+													<Select options={[
+														{ value: "CATALOG_TABLE", label: "资产目录表" },
+														{ value: "CONNECTION_TABLE", label: "连接中的表" },
+														{ value: "EXCEL_FILE", label: "Excel 文件" },
+														{ value: "DBT_NODE", label: "dbt 节点" },
+													]} />
+												</Form.Item>
+												<Form.Item {...field} name={[field.name, "sourceId"]} rules={[{ required: true, whitespace: true, message: "填写稳定来源标识" }]} noStyle>
+													<Input placeholder="来源标识" />
+												</Form.Item>
+												<Form.Item {...field} name={[field.name, "sourceVersion"]} noStyle><Input placeholder="版本（可选）" /></Form.Item>
+												<Button aria-label="删除来源" icon={<Trash2 size={14} />} onClick={() => remove(field.name)} />
+											</div>
+										))}
+										<Form.ErrorList errors={errors} />
+									</div>
+								)}
+							</Form.List>
+						</div>
+					) : null}
+					<div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2" data-testid="warehouse-plan-current-owner">
+						<div className="text-xs text-slate-500">当前负责人由登录身份确定，创建后如需转派请走授权流程</div>
+						<div className="mt-1 text-sm font-medium text-slate-900">{currentOwner} · {currentDepartment}</div>
 					</div>
 				</Form>
 			</Modal>

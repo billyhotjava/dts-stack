@@ -1,0 +1,25 @@
+Sprint-67 F2-T01 workbench create-flow verification
+Verified: 2026-07-19 Asia/Shanghai
+Result: PASS
+
+Commands:
+  cd source/dts-platform-webapp
+  node src/pages/modeling/warehousePlanCreateFlow.test.ts
+  node src/pages/modeling/ModelingWorkbenchPage.source-contract.test.ts
+  node src/pages/modeling/WarehousePlanDetailPage.source-contract.test.ts
+  pnpm build
+
+Results:
+- Node helper and source-contract tests: 20 passed, 0 failed.
+- Vite production build: PASS; Chrome 95 legacy target generated successfully (10,587 modules, about 2m10s).
+
+Covered behavior:
+- randomUUID with a getRandomValues RFC 4122 v4 fallback and no time/pseudo-random fallback;
+- reducer behavior verifies one idempotency key per modal lifecycle, retention across errors, explicit replacement after a 409 and clearing on cancel/success;
+- BUSINESS_FIRST and ASSET_FIRST create the same plan type with conditional fields;
+- no client-generated code or Date.now-based identity;
+- authenticated owner context is read-only and the UI uses the same six-role maintainer gate as the backend;
+- success consumes server plan/nextAction; requested plan load failure never silently selects another plan;
+- a requested plan restores before/beside the optional list, and list failure cannot overwrite it;
+- a deferred A/B request-order test and page request guards prevent stale A responses from overwriting B;
+- a missing tab defaults from the persisted onboarding mode; baseline/projection failure remains UNKNOWN instead of making the plan look missing or complete.

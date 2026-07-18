@@ -4,6 +4,7 @@ import test from "node:test";
 
 const entry = readFileSync(new URL("./ModelingWorkbenchPage.tsx", import.meta.url), "utf8");
 const frame = readFileSync(new URL("./semantic-workspace/SemanticWorkspaceFrame.tsx", import.meta.url), "utf8");
+const api = readFileSync(new URL("../../api/warehousePlanApi.ts", import.meta.url), "utf8");
 
 test("modeling workbench is a canonical warehouse planning surface instead of a redirect", () => {
 	assert.match(entry, /listWarehousePlans/);
@@ -28,6 +29,23 @@ test("new planning uses two onboarding modes without creating two plan types", (
 	assert.match(entry, /ASSET_FIRST/);
 	assert.doesNotMatch(entry, /DATA_FIRST/);
 	assert.doesNotMatch(entry, /businessPlan|dataPlan|planType/);
+});
+
+test("warehouse plan create flow is server coded, idempotent, dual-start and actor read-only", () => {
+	assert.doesNotMatch(api, /CreateWarehousePlanInput[\s\S]{0,500}\bcode\s*:/);
+	assert.match(api, /idempotencyKey:\s*string/);
+	assert.match(api, /initialSourceRefs\??:\s*WarehousePlanSourceRef\[\]/);
+	assert.doesNotMatch(entry, /warehouse-\$\{Date\.now/);
+	assert.match(entry, /createWarehousePlanIdempotencyKey/);
+	assert.match(entry, /data-testid="warehouse-plan-current-owner"/);
+	assert.match(entry, /data-testid="warehouse-plan-initial-sources"/);
+	assert.match(entry, /loadRequestedWarehousePlan\(\s*requestedPlanId,\s*getWarehousePlan/);
+	assert.match(entry, /data-testid="warehouse-plan-requested-plan-recovery"/);
+	assert.match(entry, /hasWarehousePlanCreateAccess/);
+	assert.doesNotMatch(entry, /useCatalogManageAccess/);
+	assert.match(entry, /navigate\(created\.nextAction\)/);
+	assert.match(entry, /createLatestRequestGuard/);
+	assert.match(entry, /if \(!isCurrent\(\)\) return/);
 });
 
 test("the workbench renders the server-owned nine-stage projection as read-only evidence", () => {

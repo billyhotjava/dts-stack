@@ -1,0 +1,21 @@
+Sprint-67 F2-T01 warehouse plan create backend verification
+Verified: 2026-07-19 Asia/Shanghai
+Result: PASS
+
+Command:
+  cd source/dts-platform
+  ./mvnw -q -Dmaven.repo.local=/tmp/codex-m2 \
+    -Dtest=WarehousePlanContractTest,WarehousePlanCanonicalLiquibaseTest,WarehousePlanResourceTest,WarehousePlanApplicationServiceIT test
+
+Covered behavior:
+- create request has no client code and validates the dual-start conditional fields;
+- authenticated actor is authoritative and forged owner/department is rejected;
+- response contains planId, plan, version, etag, initialSourceBindings, nextAction and replayed;
+- the forward-only Liquibase change adds tenant-scoped idempotency key/hash/response snapshot and unique constraint;
+- identical tenant/key/request replays the immutable version-1 create aggregate even after header/source edits;
+- conflicting payload returns WAREHOUSE_PLAN_IDEMPOTENCY_CONFLICT;
+- concurrent PostgreSQL inserts produce one plan and one initial-source set;
+- source identifiers/versions are rejected before persistence at their 256/128 database boundaries;
+- a test-only real database CHECK failure on the initial-source INSERT rolls back the already-inserted plan header.
+
+Observed final command exit code: 0
