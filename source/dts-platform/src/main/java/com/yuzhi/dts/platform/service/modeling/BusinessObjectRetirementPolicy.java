@@ -271,6 +271,13 @@ public final class BusinessObjectRetirementPolicy {
         legacy.candidateTargets().forEach(target -> targetsById.computeIfAbsent(target.modelSpecId(), ignored -> new ArrayList<>()).add(target));
         boolean metadataConflict = false;
         for (Map.Entry<String, List<CandidateTarget>> entry : targetsById.entrySet()) {
+            boolean metadataIncomplete = entry
+                .getValue()
+                .stream()
+                .anyMatch(target -> !hasText(target.modelType()) || !hasText(target.domainId()));
+            if (metadataIncomplete) {
+                conflicts.add("TARGET_METADATA_INCOMPLETE:" + entry.getKey());
+            }
             long metadataVariants = entry
                 .getValue()
                 .stream()
@@ -438,7 +445,7 @@ public final class BusinessObjectRetirementPolicy {
     }
 
     private static Optional<String> nonBlank(String value) {
-        return hasText(value) ? Optional.of(value) : Optional.empty();
+        return hasText(value) ? Optional.of(value.trim()) : Optional.empty();
     }
 
     private static boolean hasText(String value) {

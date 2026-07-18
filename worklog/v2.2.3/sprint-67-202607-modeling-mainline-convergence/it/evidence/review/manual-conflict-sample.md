@@ -3,9 +3,9 @@
 Captured on 2026-07-19 from the pure `BusinessObjectRetirementPolicyTest` contract run.
 
 - CWD: `/opt/prod/s10/v2.2.3/source/dts-platform`
-- Command: `./mvnw -q -Dmaven.repo.local=/tmp/codex-m2 '-Dmaven.compiler.testIncludes=**/BusinessObjectRetirementPolicyTest.java' -Dtest=BusinessObjectRetirementPolicyTest test`
+- Command: `./mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -Dtest=BusinessObjectRetirementPolicyTest test`
 - Exit code: `0`
-- Result: `19 tests, 0 failures, 0 errors, 0 skipped`
+- Result: `23 tests, 0 failures, 0 errors, 0 skipped`
 - Production migration executed: **no**
 
 ## Sample A: duplicate source-field identity
@@ -37,3 +37,15 @@ Verified decision:
 An archive candidate with a `JOINED` source lacking alias and explicit join type produces `SOURCE_ALIAS_MISSING` and `SOURCE_JOIN_TYPE_AMBIGUOUS`.
 
 Verified decision: zero consumers is not sufficient; readiness remains `NEEDS_CLASSIFICATION` and `ARCHIVE_ONLY` is not executable.
+
+## Sample D: incomplete FACT target metadata
+
+An otherwise unique compatible FACT target is accompanied by a candidate whose `modelType` or `domainId` is null or blank.
+
+Verified decision:
+
+- conflict: `TARGET_METADATA_INCOMPLETE:<modelSpecId>`;
+- readiness: `NEEDS_CLASSIFICATION`;
+- executable action and target write metadata: absent.
+
+A single incomplete candidate follows the same classification path. Complete non-FACT and different-domain candidates remain provably incompatible and may be filtered without blocking one compatible FACT target.

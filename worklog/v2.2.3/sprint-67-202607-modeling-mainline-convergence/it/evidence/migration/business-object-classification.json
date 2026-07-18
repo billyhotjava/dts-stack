@@ -4,10 +4,10 @@
   "executionMode": "unit-policy-contract",
   "productionMigrationExecuted": false,
   "cwd": "/opt/prod/s10/v2.2.3/source/dts-platform",
-  "command": "./mvnw -q -Dmaven.repo.local=/tmp/codex-m2 '-Dmaven.compiler.testIncludes=**/BusinessObjectRetirementPolicyTest.java' -Dtest=BusinessObjectRetirementPolicyTest test",
+  "command": "./mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -Dtest=BusinessObjectRetirementPolicyTest test",
   "exitCode": 0,
   "testSummary": {
-    "tests": 19,
+    "tests": 23,
     "failures": 0,
     "errors": 0,
     "skipped": 0,
@@ -50,7 +50,10 @@
   "boundaryAssertions": [
     "normalized duplicate fields produce exactly one MANUAL_REVIEW owner and FIELD_DUPLICATE conflict",
     "FACT merge requires exactly one modelType=FACT candidate in targetDomainId",
+    "a null or blank candidate modelType/domainId produces TARGET_METADATA_INCOMPLETE and blocks execution",
+    "complete non-FACT or different-domain candidates remain provably incompatible and do not block one compatible FACT target",
     "same modelSpecId with conflicting metadata cannot be deduplicated into a target",
+    "a DIMENSION proposedModelSpecId is trimmed consistently in Decision and TargetWriteMetadata",
     "archive candidates with domain, field, or source conflicts remain non-executable"
   ]
 }

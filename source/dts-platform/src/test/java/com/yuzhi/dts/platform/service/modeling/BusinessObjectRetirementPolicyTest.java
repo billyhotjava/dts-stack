@@ -46,6 +46,17 @@ class BusinessObjectRetirementPolicyTest {
     }
 
     @Test
+    void dimensionTargetIdentityIsTrimmedConsistentlyAcrossDecisionAndWriteMetadata() {
+        Decision decision = BusinessObjectRetirementPolicy.decide(
+            input().legacyKind("ENTITY").stableKeys("department_id").proposedModelSpecId("  dim-department  ").build()
+        );
+
+        assertThat(decision.readiness()).isEqualTo(Readiness.READY);
+        assertThat(decision.targetModelSpecId()).contains("dim-department");
+        assertThat(decision.targetWriteMetadata()).get().extracting(TargetWriteMetadata::modelSpecId).isEqualTo("dim-department");
+    }
+
+    @Test
     void factMergesOnlyWhenExactlyOneCompatibleTargetExists() {
         LegacyBusinessObject legacy = input()
             .legacyKind("FACT")
@@ -113,6 +124,66 @@ class BusinessObjectRetirementPolicyTest {
         assertThat(decision.targetModelSpecId()).isEmpty();
         assertThat(decision.conflicts()).containsExactly("TARGET_METADATA_CONFLICT:fact-order");
         assertThat(decision.executableAction()).isEmpty();
+    }
+
+    @Test
+    void incompleteTargetMetadataBlocksAnOtherwiseUniqueCompatibleFactTarget() {
+        List<CandidateTarget> incompleteTargets = List.of(
+            new CandidateTarget("fact-missing-type", null, "operations"),
+            new CandidateTarget("fact-blank-type", "  ", "operations"),
+            new CandidateTarget("fact-missing-domain", "FACT", null),
+            new CandidateTarget("fact-blank-domain", "FACT", "  ")
+        );
+
+        incompleteTargets.forEach(incompleteTarget -> {
+            Decision decision = BusinessObjectRetirementPolicy.decide(
+                input().legacyKind("FACT").factSignal(true).candidateTargets(factTarget("fact-order"), incompleteTarget).build()
+            );
+
+            assertThat(decision.readiness()).isEqualTo(Readiness.NEEDS_CLASSIFICATION);
+            assertThat(decision.conflicts()).contains("TARGET_METADATA_INCOMPLETE:" + incompleteTarget.modelSpecId());
+            assertThat(decision.executableAction()).isEmpty();
+            assertThat(decision.targetWriteMetadata()).isEmpty();
+        });
+    }
+
+    @Test
+    void singleIncompleteTargetMetadataNeedsClassificationInsteadOfBeingSilentlyFiltered() {
+        List<CandidateTarget> incompleteTargets = List.of(
+            new CandidateTarget("fact-missing-type", null, "operations"),
+            new CandidateTarget("fact-missing-domain", "FACT", null)
+        );
+
+        incompleteTargets.forEach(incompleteTarget -> {
+            Decision decision = BusinessObjectRetirementPolicy.decide(
+                input().legacyKind("FACT").factSignal(true).candidateTargets(incompleteTarget).build()
+            );
+
+            assertThat(decision.readiness()).isEqualTo(Readiness.NEEDS_CLASSIFICATION);
+            assertThat(decision.conflicts()).containsExactly("TARGET_METADATA_INCOMPLETE:" + incompleteTarget.modelSpecId());
+            assertThat(decision.targetModelSpecId()).isEmpty();
+            assertThat(decision.executableAction()).isEmpty();
+        });
+    }
+
+    @Test
+    void provenIncompatibleTargetsDoNotBlockOneCompatibleFactTarget() {
+        Decision decision = BusinessObjectRetirementPolicy.decide(
+            input()
+                .legacyKind("FACT")
+                .factSignal(true)
+                .candidateTargets(
+                    factTarget("fact-order"),
+                    new CandidateTarget("dim-order", "DIMENSION", "operations"),
+                    new CandidateTarget("fact-finance", "FACT", "finance")
+                )
+                .build()
+        );
+
+        assertThat(decision.readiness()).isEqualTo(Readiness.READY);
+        assertThat(decision.conflicts()).isEmpty();
+        assertThat(decision.targetModelSpecId()).contains("fact-order");
+        assertThat(decision.executableAction()).contains(Disposition.AUTO_FACT_MERGE);
     }
 
     @Test
