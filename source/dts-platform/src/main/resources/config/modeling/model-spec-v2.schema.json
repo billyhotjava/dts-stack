@@ -1,0 +1,314 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dts.local/schema/model-spec-v2.json",
+  "title": "DTS Canonical ModelSpec v2 Contract",
+  "$comment": "x-dtsUniqueBy is a DTS semantic extension. Validators must execute it with trimmed string keys.",
+  "$ref": "#/$defs/createModelSpecCommand",
+  "$defs": {
+    "layer": { "enum": ["ODS", "STG", "DWD", "DWS", "ADS"] },
+    "modelType": { "enum": ["FACT", "DIMENSION", "SUMMARY", "APPLICATION"] },
+    "implementationMode": { "enum": ["DESIGNER_GENERATED", "DBT_MANAGED"] },
+    "factShape": { "enum": ["TRANSACTION", "PERIODIC_SNAPSHOT", "ACCUMULATING_SNAPSHOT"] },
+    "grain": {
+      "type": "object",
+      "required": ["statement", "keys"],
+      "properties": {
+        "statement": { "type": "string", "minLength": 1, "pattern": ".*\\S.*" },
+        "keys": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1, "pattern": ".*\\S.*" } }
+      },
+      "additionalProperties": false
+    },
+    "timeSemantics": {
+      "type": "object",
+      "required": ["type", "fields"],
+      "properties": {
+        "type": { "enum": ["EVENT_TIME", "SNAPSHOT_DATE", "PERIOD", "MILESTONE_DATES"] },
+        "fields": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1, "pattern": ".*\\S.*" } }
+      },
+      "additionalProperties": false
+    },
+    "field": {
+      "type": "object",
+      "required": ["name", "dataType", "nullable", "role"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "pattern": ".*\\S.*" },
+        "dataType": { "type": "string", "minLength": 1, "pattern": ".*\\S.*" },
+        "nullable": { "type": "boolean" },
+        "sourceFieldRef": { "type": ["string", "null"] },
+        "role": { "enum": ["KEY", "ATTRIBUTE", "TIME", "MEASURE"] },
+        "securityLevel": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "sourceRef": {
+      "type": "object",
+      "required": ["kind", "ref", "layer", "role", "sortOrder"],
+      "properties": {
+        "kind": { "enum": ["TABLE", "DBT_MODEL", "DATASET"] },
+        "ref": { "type": "string", "minLength": 1, "pattern": ".*\\S.*" },
+        "layer": { "$ref": "#/$defs/layer" },
+        "role": { "enum": ["PRIMARY", "JOINED"] },
+        "alias": { "type": ["string", "null"] },
+        "joinType": { "enum": ["INNER", "LEFT", "RIGHT", "FULL", null] },
+        "joinExpression": { "type": ["string", "null"] },
+        "sortOrder": { "type": "integer", "minimum": 0, "maximum": 2147483647 }
+      },
+      "additionalProperties": false
+    },
+    "modelRevisionRef": {
+      "type": "object",
+      "required": ["modelSpecId", "revision"],
+      "properties": {
+        "modelSpecId": { "type": "string", "format": "uuid" },
+        "revision": { "type": "integer", "minimum": 1, "maximum": 2147483647 }
+      },
+      "additionalProperties": false
+    },
+    "metricRef": {
+      "type": "object",
+      "required": ["metricId", "version"],
+      "properties": {
+        "metricId": { "type": "string", "minLength": 1, "pattern": ".*\\S.*" },
+        "version": { "type": "integer", "minimum": 1, "maximum": 2147483647 }
+      },
+      "additionalProperties": false
+    },
+    "standardBinding": {
+      "type": "object",
+      "required": ["fieldName"],
+      "properties": {
+        "fieldName": { "type": "string", "minLength": 1, "pattern": ".*\\S.*" },
+        "standardElementId": { "type": ["string", "null"], "format": "uuid" },
+        "standardElementVersion": { "type": ["integer", "null"], "minimum": 1, "maximum": 2147483647 },
+        "referenceCode": { "type": ["string", "null"], "pattern": ".*\\S.*" },
+        "referenceCodeVersion": { "type": ["integer", "null"], "minimum": 1, "maximum": 2147483647 },
+        "measurementUnitId": { "type": ["string", "null"], "format": "uuid" },
+        "measurementUnitVersion": { "type": ["integer", "null"], "minimum": 1, "maximum": 2147483647 },
+        "securityLevel": { "type": ["string", "null"], "pattern": ".*\\S.*" }
+      },
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": ["standardElementId", "standardElementVersion"],
+          "properties": {
+            "standardElementId": { "type": "string", "format": "uuid" },
+            "standardElementVersion": { "type": "integer", "minimum": 1, "maximum": 2147483647 }
+          }
+        },
+        {
+          "required": ["referenceCode", "referenceCodeVersion"],
+          "properties": {
+            "referenceCode": { "type": "string", "pattern": ".*\\S.*" },
+            "referenceCodeVersion": { "type": "integer", "minimum": 1, "maximum": 2147483647 }
+          }
+        },
+        {
+          "required": ["measurementUnitId", "measurementUnitVersion"],
+          "properties": {
+            "measurementUnitId": { "type": "string", "format": "uuid" },
+            "measurementUnitVersion": { "type": "integer", "minimum": 1, "maximum": 2147483647 }
+          }
+        },
+        {
+          "required": ["securityLevel"],
+          "properties": { "securityLevel": { "type": "string", "pattern": ".*\\S.*" } }
+        }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "anyOf": [
+              { "required": ["standardElementId"], "properties": { "standardElementId": { "type": "string" } } },
+              { "required": ["standardElementVersion"], "properties": { "standardElementVersion": { "type": "integer" } } }
+            ]
+          },
+          "then": {
+            "required": ["standardElementId", "standardElementVersion"],
+            "properties": {
+              "standardElementId": { "type": "string", "format": "uuid" },
+              "standardElementVersion": { "type": "integer", "minimum": 1, "maximum": 2147483647 }
+            }
+          }
+        },
+        {
+          "if": {
+            "anyOf": [
+              { "required": ["referenceCode"], "properties": { "referenceCode": { "type": "string" } } },
+              { "required": ["referenceCodeVersion"], "properties": { "referenceCodeVersion": { "type": "integer" } } }
+            ]
+          },
+          "then": {
+            "required": ["referenceCode", "referenceCodeVersion"],
+            "properties": {
+              "referenceCode": { "type": "string", "pattern": ".*\\S.*" },
+              "referenceCodeVersion": { "type": "integer", "minimum": 1, "maximum": 2147483647 }
+            }
+          }
+        },
+        {
+          "if": {
+            "anyOf": [
+              { "required": ["measurementUnitId"], "properties": { "measurementUnitId": { "type": "string" } } },
+              { "required": ["measurementUnitVersion"], "properties": { "measurementUnitVersion": { "type": "integer" } } }
+            ]
+          },
+          "then": {
+            "required": ["measurementUnitId", "measurementUnitVersion"],
+            "properties": {
+              "measurementUnitId": { "type": "string", "format": "uuid" },
+              "measurementUnitVersion": { "type": "integer", "minimum": 1, "maximum": 2147483647 }
+            }
+          }
+        }
+      ]
+    },
+    "generationStrategy": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "minLength": 1, "pattern": ".*\\S.*" },
+        "reference": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "modelTypeSaveBoundaries": {
+      "type": "object",
+      "allOf": [
+        {
+          "if": { "properties": { "modelType": { "const": "FACT" } }, "required": ["modelType"] },
+          "then": {
+            "required": ["grain", "sourceRefs"],
+            "properties": {
+              "grain": { "$ref": "#/$defs/grain" },
+              "sourceRefs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/sourceRef" } }
+            }
+          },
+          "else": {
+            "properties": {
+              "businessActivityRef": {
+                "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^\\s*$" }]
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "modelType": { "enum": ["SUMMARY", "APPLICATION"] } }, "required": ["modelType"] },
+          "then": {
+            "required": ["grain", "dependsOn"],
+            "properties": {
+              "grain": { "$ref": "#/$defs/grain" },
+              "dependsOn": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/modelRevisionRef" } }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "modelType": { "const": "APPLICATION" } }, "required": ["modelType"] },
+          "then": {
+            "required": ["consumptionScenario"],
+            "properties": {
+              "consumptionScenario": { "type": "string", "minLength": 1, "pattern": ".*\\S.*" }
+            }
+          },
+          "else": {
+            "properties": {
+              "consumptionScenario": {
+                "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^\\s*$" }]
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "modelType": { "const": "DIMENSION" } }, "required": ["modelType"] },
+          "then": {
+            "required": ["grain", "fields"],
+            "properties": {
+              "grain": { "$ref": "#/$defs/grain" },
+              "fields": {
+                "type": "array",
+                "contains": {
+                  "type": "object",
+                  "required": ["role"],
+                  "properties": { "role": { "const": "KEY" } }
+                },
+                "items": { "$ref": "#/$defs/field" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "createModelSpecCommand": {
+      "type": "object",
+      "required": ["planId", "domainId", "modelType", "layer", "name", "implementationMode", "idempotencyKey"],
+      "properties": {
+        "planId": { "type": "string", "format": "uuid", "x-dts-requiredIssueCode": "MODEL_SPEC_PLAN_REQUIRED" },
+        "domainId": { "type": "string", "format": "uuid", "x-dts-requiredIssueCode": "MODEL_SPEC_DOMAIN_REQUIRED" },
+        "modelType": { "$ref": "#/$defs/modelType", "x-dts-requiredIssueCode": "MODEL_SPEC_TYPE_REQUIRED" },
+        "layer": { "$ref": "#/$defs/layer", "x-dts-requiredIssueCode": "MODEL_SPEC_LAYER_REQUIRED" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": ".*\\S.*", "x-dts-requiredIssueCode": "MODEL_SPEC_NAME_REQUIRED" },
+        "description": { "type": ["string", "null"] },
+        "implementationMode": { "$ref": "#/$defs/implementationMode", "x-dts-requiredIssueCode": "MODEL_SPEC_IMPLEMENTATION_MODE_REQUIRED" },
+        "materialization": { "type": ["string", "null"] },
+        "businessActivityRef": { "type": ["string", "null"] },
+        "consumptionScenario": { "type": ["string", "null"] },
+        "grain": { "anyOf": [{ "$ref": "#/$defs/grain" }, { "type": "null" }] },
+        "factShape": { "anyOf": [{ "$ref": "#/$defs/factShape" }, { "type": "null" }] },
+        "timeSemantics": { "anyOf": [{ "$ref": "#/$defs/timeSemantics" }, { "type": "null" }] },
+        "fields": { "type": "array", "uniqueItems": true, "x-dtsUniqueBy": ["name"], "items": { "$ref": "#/$defs/field" } },
+        "sourceRefs": { "type": "array", "uniqueItems": true, "x-dtsUniqueBy": ["kind", "ref"], "items": { "$ref": "#/$defs/sourceRef" } },
+        "dependsOn": { "type": "array", "items": { "$ref": "#/$defs/modelRevisionRef" } },
+        "dimensionRefs": { "type": "array", "items": { "$ref": "#/$defs/modelRevisionRef" } },
+        "metricRefs": { "type": "array", "items": { "$ref": "#/$defs/metricRef" } },
+        "standardBindings": { "type": "array", "items": { "$ref": "#/$defs/standardBinding" } },
+        "generationStrategy": { "anyOf": [{ "$ref": "#/$defs/generationStrategy" }, { "type": "null" }] },
+        "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": ".*\\S.*", "x-dts-requiredIssueCode": "MODEL_SPEC_IDEMPOTENCY_KEY_REQUIRED" }
+      },
+      "additionalProperties": false,
+      "allOf": [{ "$ref": "#/$defs/modelTypeSaveBoundaries" }]
+    },
+    "modelSpecView": {
+      "type": "object",
+      "required": ["contractVersion", "id", "planId", "domainId", "modelType", "layer", "name", "implementationMode", "fields", "sourceRefs", "dependsOn", "dimensionRefs", "metricRefs", "standardBindings", "status", "revision", "checksum", "createdAt", "updatedAt", "compatibilityMode"],
+      "properties": {
+        "contractVersion": { "const": 2 },
+        "id": { "type": "string", "format": "uuid" },
+        "planId": { "type": "string", "format": "uuid" },
+        "domainId": { "type": "string", "format": "uuid" },
+        "modelType": { "$ref": "#/$defs/modelType" },
+        "layer": { "$ref": "#/$defs/layer" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "description": { "type": ["string", "null"] },
+        "implementationMode": { "$ref": "#/$defs/implementationMode" },
+        "materialization": { "type": ["string", "null"] },
+        "businessActivityRef": { "type": ["string", "null"] },
+        "consumptionScenario": { "type": ["string", "null"] },
+        "grain": { "anyOf": [{ "$ref": "#/$defs/grain" }, { "type": "null" }] },
+        "factShape": { "anyOf": [{ "$ref": "#/$defs/factShape" }, { "type": "null" }] },
+        "timeSemantics": { "anyOf": [{ "$ref": "#/$defs/timeSemantics" }, { "type": "null" }] },
+        "fields": { "type": "array", "uniqueItems": true, "x-dtsUniqueBy": ["name"], "items": { "$ref": "#/$defs/field" } },
+        "sourceRefs": { "type": "array", "uniqueItems": true, "x-dtsUniqueBy": ["kind", "ref"], "items": { "$ref": "#/$defs/sourceRef" } },
+        "dependsOn": { "type": "array", "items": { "$ref": "#/$defs/modelRevisionRef" } },
+        "dimensionRefs": { "type": "array", "items": { "$ref": "#/$defs/modelRevisionRef" } },
+        "metricRefs": { "type": "array", "items": { "$ref": "#/$defs/metricRef" } },
+        "standardBindings": { "type": "array", "items": { "$ref": "#/$defs/standardBinding" } },
+        "generationStrategy": { "anyOf": [{ "$ref": "#/$defs/generationStrategy" }, { "type": "null" }] },
+        "status": { "enum": ["DRAFT", "DESIGNING", "VALIDATING", "READY_TO_PUBLISH", "PUBLISHED", "ARCHIVED"] },
+        "revision": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "checksum": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "compatibilityMode": { "enum": ["CANONICAL", "LEGACY_READONLY"] }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "compatibilityMode": { "const": "CANONICAL" } },
+            "required": ["compatibilityMode"]
+          },
+          "then": { "$ref": "#/$defs/modelTypeSaveBoundaries" }
+        }
+      ]
+    }
+  }
+}

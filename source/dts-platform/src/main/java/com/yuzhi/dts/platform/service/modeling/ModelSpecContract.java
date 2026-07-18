@@ -1,0 +1,789 @@
+package com.yuzhi.dts.platform.service.modeling;
+
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.function.Predicate;
+
+/** Canonical, cross-industry contract for objectless model specifications. */
+public final class ModelSpecContract {
+
+    public static final int CONTRACT_VERSION = 2;
+
+    public static final Set<String> CREATE_FIELDS = Set.of(
+        "planId",
+        "domainId",
+        "modelType",
+        "layer",
+        "name",
+        "description",
+        "implementationMode",
+        "materialization",
+        "businessActivityRef",
+        "consumptionScenario",
+        "grain",
+        "factShape",
+        "timeSemantics",
+        "fields",
+        "sourceRefs",
+        "dependsOn",
+        "dimensionRefs",
+        "metricRefs",
+        "standardBindings",
+        "generationStrategy",
+        "idempotencyKey"
+    );
+
+    public static final Map<String, String> REQUIRED_FIELD_CODES = Map.of(
+        "planId",
+        "MODEL_SPEC_PLAN_REQUIRED",
+        "domainId",
+        "MODEL_SPEC_DOMAIN_REQUIRED",
+        "modelType",
+        "MODEL_SPEC_TYPE_REQUIRED",
+        "layer",
+        "MODEL_SPEC_LAYER_REQUIRED",
+        "name",
+        "MODEL_SPEC_NAME_REQUIRED",
+        "implementationMode",
+        "MODEL_SPEC_IMPLEMENTATION_MODE_REQUIRED",
+        "idempotencyKey",
+        "MODEL_SPEC_IDEMPOTENCY_KEY_REQUIRED"
+    );
+
+    public static final Set<String> COLLECTION_FIELDS = Set.of(
+        "fields",
+        "sourceRefs",
+        "dependsOn",
+        "dimensionRefs",
+        "metricRefs",
+        "standardBindings"
+    );
+
+    private static final Map<String, Set<String>> NESTED_COLLECTION_FIELDS = Map.of(
+        "fields",
+        Set.of("name", "dataType", "nullable", "sourceFieldRef", "role", "securityLevel"),
+        "sourceRefs",
+        Set.of("kind", "ref", "layer", "role", "alias", "joinType", "joinExpression", "sortOrder"),
+        "dependsOn",
+        Set.of("modelSpecId", "revision"),
+        "dimensionRefs",
+        Set.of("modelSpecId", "revision"),
+        "metricRefs",
+        Set.of("metricId", "version"),
+        "standardBindings",
+        Set.of(
+            "fieldName",
+            "standardElementId",
+            "standardElementVersion",
+            "referenceCode",
+            "referenceCodeVersion",
+            "measurementUnitId",
+            "measurementUnitVersion",
+            "securityLevel"
+        )
+    );
+
+    private static final Map<String, String> NESTED_COLLECTION_ISSUE_CODES = Map.of(
+        "fields",
+        "MODEL_SPEC_FIELD_INVALID",
+        "sourceRefs",
+        "MODEL_SPEC_SOURCE_INVALID",
+        "dependsOn",
+        "MODEL_SPEC_DEPENDENCY_INVALID",
+        "dimensionRefs",
+        "MODEL_SPEC_DIMENSION_REF_INVALID",
+        "metricRefs",
+        "MODEL_SPEC_METRIC_REF_INVALID",
+        "standardBindings",
+        "MODEL_SPEC_STANDARD_BINDING_INVALID"
+    );
+
+    private static final Set<String> LAYERS = enumNames(Layer.values());
+    private static final Set<String> MODEL_TYPES = enumNames(ModelType.values());
+    private static final Set<String> IMPLEMENTATION_MODES = enumNames(ImplementationMode.values());
+    private static final Set<String> FACT_SHAPES = enumNames(FactShape.values());
+    private static final Set<String> TIME_SEMANTICS_TYPES = enumNames(TimeSemanticsType.values());
+    private static final Set<String> FIELD_ROLES = enumNames(FieldRole.values());
+    private static final Set<String> SOURCE_KINDS = enumNames(SourceKind.values());
+    private static final Set<String> SOURCE_ROLES = enumNames(SourceRole.values());
+    private static final Set<String> JOIN_TYPES = enumNames(JoinType.values());
+    private static final Set<String> GRAIN_FIELDS = Set.of("statement", "keys");
+    private static final Set<String> TIME_SEMANTICS_FIELDS = Set.of("type", "fields");
+    private static final Set<String> GENERATION_STRATEGY_FIELDS = Set.of("type", "reference");
+
+    private ModelSpecContract() {}
+
+    public enum Layer {
+        ODS,
+        STG,
+        DWD,
+        DWS,
+        ADS,
+    }
+
+    public enum ModelType {
+        FACT,
+        DIMENSION,
+        SUMMARY,
+        APPLICATION,
+    }
+
+    public enum ImplementationMode {
+        DESIGNER_GENERATED,
+        DBT_MANAGED,
+    }
+
+    public enum FactShape {
+        TRANSACTION,
+        PERIODIC_SNAPSHOT,
+        ACCUMULATING_SNAPSHOT,
+    }
+
+    public enum TimeSemanticsType {
+        EVENT_TIME,
+        SNAPSHOT_DATE,
+        PERIOD,
+        MILESTONE_DATES,
+    }
+
+    public enum FieldRole {
+        KEY,
+        ATTRIBUTE,
+        TIME,
+        MEASURE,
+    }
+
+    public enum SourceKind {
+        TABLE,
+        DBT_MODEL,
+        DATASET,
+    }
+
+    public enum SourceRole {
+        PRIMARY,
+        JOINED,
+    }
+
+    public enum JoinType {
+        INNER,
+        LEFT,
+        RIGHT,
+        FULL,
+    }
+
+    public enum ModelStatus {
+        DRAFT,
+        DESIGNING,
+        VALIDATING,
+        READY_TO_PUBLISH,
+        PUBLISHED,
+        ARCHIVED,
+    }
+
+    public enum CompatibilityMode {
+        CANONICAL,
+        LEGACY_READONLY,
+    }
+
+    public enum IssueSeverity {
+        ERROR,
+        WARNING,
+    }
+
+    public record Grain(String statement, List<String> keys) {
+        public Grain {
+            statement = trimToNull(statement);
+            keys = immutable(keys);
+        }
+    }
+
+    public record TimeSemantics(TimeSemanticsType type, List<String> fields) {
+        public TimeSemantics {
+            fields = immutable(fields);
+        }
+    }
+
+    public record ModelField(
+        String name,
+        String dataType,
+        Boolean nullable,
+        String sourceFieldRef,
+        FieldRole role,
+        String securityLevel
+    ) {
+        public ModelField {
+            name = trimToNull(name);
+            dataType = trimToNull(dataType);
+            sourceFieldRef = trimToNull(sourceFieldRef);
+            securityLevel = trimToNull(securityLevel);
+        }
+    }
+
+    public record SourceRef(
+        SourceKind kind,
+        String ref,
+        Layer layer,
+        SourceRole role,
+        String alias,
+        JoinType joinType,
+        String joinExpression,
+        Integer sortOrder
+    ) {
+        public SourceRef {
+            ref = trimToNull(ref);
+            alias = trimToNull(alias);
+            joinExpression = trimToNull(joinExpression);
+        }
+    }
+
+    public record ModelRevisionRef(UUID modelSpecId, int revision) {}
+
+    public record MetricRef(String metricId, int version) {
+        public MetricRef {
+            metricId = trimToNull(metricId);
+        }
+    }
+
+    public record StandardBinding(
+        String fieldName,
+        UUID standardElementId,
+        Integer standardElementVersion,
+        String referenceCode,
+        Integer referenceCodeVersion,
+        UUID measurementUnitId,
+        Integer measurementUnitVersion,
+        String securityLevel
+    ) {
+        public StandardBinding {
+            fieldName = trimToNull(fieldName);
+            referenceCode = trimToNull(referenceCode);
+            securityLevel = trimToNull(securityLevel);
+        }
+    }
+
+    public record GenerationStrategy(String type, String reference) {
+        public GenerationStrategy {
+            type = trimToNull(type);
+            reference = trimToNull(reference);
+        }
+    }
+
+    public record CreateModelSpecCommand(
+        UUID planId,
+        UUID domainId,
+        ModelType modelType,
+        Layer layer,
+        String name,
+        String description,
+        ImplementationMode implementationMode,
+        String materialization,
+        String businessActivityRef,
+        String consumptionScenario,
+        Grain grain,
+        FactShape factShape,
+        TimeSemantics timeSemantics,
+        List<ModelField> fields,
+        List<SourceRef> sourceRefs,
+        List<ModelRevisionRef> dependsOn,
+        List<ModelRevisionRef> dimensionRefs,
+        List<MetricRef> metricRefs,
+        List<StandardBinding> standardBindings,
+        GenerationStrategy generationStrategy,
+        String idempotencyKey
+    ) {
+        public CreateModelSpecCommand {
+            name = trimToNull(name);
+            description = trimToNull(description);
+            materialization = trimToNull(materialization);
+            businessActivityRef = trimToNull(businessActivityRef);
+            consumptionScenario = trimToNull(consumptionScenario);
+            fields = immutable(fields);
+            sourceRefs = immutable(sourceRefs);
+            dependsOn = immutable(dependsOn);
+            dimensionRefs = immutable(dimensionRefs);
+            metricRefs = immutable(metricRefs);
+            standardBindings = immutable(standardBindings);
+            idempotencyKey = trimToNull(idempotencyKey);
+        }
+    }
+
+    public record ModelSpecView(
+        int contractVersion,
+        UUID id,
+        UUID planId,
+        UUID domainId,
+        ModelType modelType,
+        Layer layer,
+        String name,
+        String description,
+        ImplementationMode implementationMode,
+        String materialization,
+        String businessActivityRef,
+        String consumptionScenario,
+        Grain grain,
+        FactShape factShape,
+        TimeSemantics timeSemantics,
+        List<ModelField> fields,
+        List<SourceRef> sourceRefs,
+        List<ModelRevisionRef> dependsOn,
+        List<ModelRevisionRef> dimensionRefs,
+        List<MetricRef> metricRefs,
+        List<StandardBinding> standardBindings,
+        GenerationStrategy generationStrategy,
+        ModelStatus status,
+        int revision,
+        String checksum,
+        Instant createdAt,
+        Instant updatedAt,
+        CompatibilityMode compatibilityMode
+    ) {}
+
+    public record FieldIssue(String code, String field, IssueSeverity severity, String message) {}
+
+    static List<FieldIssue> validateCreateFieldNames(Set<String> fieldNames) {
+        if (fieldNames == null) return List.of(issue("MODEL_SPEC_REQUEST_INVALID", "$", "Request must be a JSON object"));
+        return fieldNames.stream()
+            .filter(field -> !CREATE_FIELDS.contains(field))
+            .sorted()
+            .map(field -> issue("MODEL_SPEC_FIELD_NOT_ALLOWED", field, "Field is not part of the canonical ModelSpec create contract"))
+            .toList();
+    }
+
+    static List<FieldIssue> validateCreateShape(Map<String, ?> fields) {
+        if (fields == null) return List.of(issue("MODEL_SPEC_REQUEST_INVALID", "$", "Request must be a JSON object"));
+        List<FieldIssue> issues = new ArrayList<>(validateCreateFieldNames(fields.keySet()));
+        COLLECTION_FIELDS.stream()
+            .sorted()
+            .filter(field -> fields.containsKey(field) && !(fields.get(field) instanceof List<?>))
+            .map(field -> issue("MODEL_SPEC_COLLECTION_INVALID", field, "Collection field must be an array when present"))
+            .forEach(issues::add);
+        REQUIRED_FIELD_CODES.forEach((field, code) -> required(fields.get(field), field, code, issues));
+        rawUuid(fields.get("planId"), "MODEL_SPEC_PLAN_INVALID", "planId", issues);
+        rawUuid(fields.get("domainId"), "MODEL_SPEC_DOMAIN_INVALID", "domainId", issues);
+        rawEnum(fields.get("modelType"), MODEL_TYPES, "MODEL_SPEC_TYPE_INVALID", "modelType", issues);
+        rawEnum(fields.get("layer"), LAYERS, "MODEL_SPEC_LAYER_INVALID", "layer", issues);
+        rawText(fields.get("name"), false, "MODEL_SPEC_NAME_INVALID", "name", issues);
+        rawEnum(
+            fields.get("implementationMode"),
+            IMPLEMENTATION_MODES,
+            "MODEL_SPEC_IMPLEMENTATION_MODE_INVALID",
+            "implementationMode",
+            issues
+        );
+        rawText(fields.get("idempotencyKey"), false, "MODEL_SPEC_IDEMPOTENCY_KEY_INVALID", "idempotencyKey", issues);
+        rawText(fields.get("description"), true, "MODEL_SPEC_FIELD_INVALID", "description", issues);
+        rawText(fields.get("materialization"), true, "MODEL_SPEC_FIELD_INVALID", "materialization", issues);
+        rawText(
+            fields.get("businessActivityRef"),
+            true,
+            "MODEL_SPEC_BUSINESS_ACTIVITY_INVALID",
+            "businessActivityRef",
+            issues
+        );
+        rawText(
+            fields.get("consumptionScenario"),
+            true,
+            "MODEL_SPEC_CONSUMPTION_SCENARIO_INVALID",
+            "consumptionScenario",
+            issues
+        );
+        rawEnum(fields.get("factShape"), FACT_SHAPES, "MODEL_SPEC_FACT_SHAPE_INVALID", "factShape", issues);
+
+        if (invalidObject(fields.get("grain"), GRAIN_FIELDS, ModelSpecContract::invalidRawGrain)) {
+            addIssueOnce(issues, "MODEL_SPEC_GRAIN_INVALID", "grain", "Grain requires a statement and non-empty keys");
+        }
+        if (invalidObject(fields.get("timeSemantics"), TIME_SEMANTICS_FIELDS, ModelSpecContract::invalidRawTimeSemantics)) {
+            addIssueOnce(issues, "MODEL_SPEC_TIME_SEMANTICS_INVALID", "timeSemantics", "Time semantics are invalid");
+        }
+        if (
+            invalidObject(
+                fields.get("generationStrategy"),
+                GENERATION_STRATEGY_FIELDS,
+                ModelSpecContract::invalidRawGenerationStrategy
+            )
+        ) {
+            addIssueOnce(
+                issues,
+                "MODEL_SPEC_GENERATION_STRATEGY_INVALID",
+                "generationStrategy",
+                "Generation strategy is invalid"
+            );
+        }
+
+        rawCollection(fields, "fields", ModelSpecContract::invalidRawField, issues);
+        rawCollection(fields, "sourceRefs", ModelSpecContract::invalidRawSource, issues);
+        rawCollection(fields, "dependsOn", ModelSpecContract::invalidRawRevisionRef, issues);
+        rawCollection(fields, "dimensionRefs", ModelSpecContract::invalidRawRevisionRef, issues);
+        rawCollection(fields, "metricRefs", ModelSpecContract::invalidRawMetricRef, issues);
+        rawCollection(fields, "standardBindings", ModelSpecContract::invalidRawStandardBinding, issues);
+        return List.copyOf(issues);
+    }
+
+    static List<FieldIssue> validateCreate(CreateModelSpecCommand command) {
+        if (command == null) return List.of(issue("MODEL_SPEC_REQUEST_INVALID", "$", "ModelSpec create request is required"));
+        List<FieldIssue> issues = new ArrayList<>();
+        required(command.planId(), "planId", REQUIRED_FIELD_CODES.get("planId"), issues);
+        required(command.domainId(), "domainId", REQUIRED_FIELD_CODES.get("domainId"), issues);
+        required(command.modelType(), "modelType", REQUIRED_FIELD_CODES.get("modelType"), issues);
+        required(command.layer(), "layer", REQUIRED_FIELD_CODES.get("layer"), issues);
+        required(command.name(), "name", REQUIRED_FIELD_CODES.get("name"), issues);
+        required(command.implementationMode(), "implementationMode", REQUIRED_FIELD_CODES.get("implementationMode"), issues);
+        required(command.idempotencyKey(), "idempotencyKey", REQUIRED_FIELD_CODES.get("idempotencyKey"), issues);
+        if (command.name() != null && command.name().length() > 256) {
+            issues.add(issue("MODEL_SPEC_NAME_INVALID", "name", "Model name must not exceed 256 characters"));
+        }
+        if (command.idempotencyKey() != null && command.idempotencyKey().length() > 128) {
+            issues.add(issue("MODEL_SPEC_IDEMPOTENCY_KEY_INVALID", "idempotencyKey", "Idempotency key must not exceed 128 characters"));
+        }
+        if (command.businessActivityRef() != null && command.modelType() != ModelType.FACT) {
+            issues.add(issue("MODEL_SPEC_BUSINESS_ACTIVITY_NOT_ALLOWED", "businessActivityRef", "Business activity is optional FACT context only"));
+        }
+        if (command.consumptionScenario() != null && command.modelType() != ModelType.APPLICATION) {
+            issues.add(
+                issue(
+                    "MODEL_SPEC_CONSUMPTION_SCENARIO_NOT_ALLOWED",
+                    "consumptionScenario",
+                    "Consumption scenario belongs to APPLICATION models only"
+                )
+            );
+        }
+        validateNested(command, issues);
+        validateTypeBoundary(command, issues);
+        return List.copyOf(issues);
+    }
+
+    private static void validateNested(CreateModelSpecCommand command, List<FieldIssue> issues) {
+        validateNoNulls(command.fields(), "fields", "MODEL_SPEC_FIELD_INVALID", issues);
+        validateNoNulls(command.sourceRefs(), "sourceRefs", "MODEL_SPEC_SOURCE_INVALID", issues);
+        validateNoNulls(command.dependsOn(), "dependsOn", "MODEL_SPEC_DEPENDENCY_INVALID", issues);
+        validateNoNulls(command.dimensionRefs(), "dimensionRefs", "MODEL_SPEC_DIMENSION_REF_INVALID", issues);
+        validateNoNulls(command.metricRefs(), "metricRefs", "MODEL_SPEC_METRIC_REF_INVALID", issues);
+        validateNoNulls(command.standardBindings(), "standardBindings", "MODEL_SPEC_STANDARD_BINDING_INVALID", issues);
+        Set<String> fieldNames = new HashSet<>();
+        for (ModelField field : command.fields()) {
+            if (field == null) continue;
+            if (
+                field.name() == null ||
+                field.dataType() == null ||
+                field.nullable() == null ||
+                field.role() == null ||
+                !fieldNames.add(field.name())
+            ) {
+                issues.add(issue("MODEL_SPEC_FIELD_INVALID", "fields", "Fields require unique names, data types and roles"));
+            }
+        }
+        Set<String> sourceKeys = new HashSet<>();
+        for (SourceRef source : command.sourceRefs()) {
+            if (source == null) continue;
+            String key = source.kind() + ":" + source.ref();
+            if (
+                source.kind() == null ||
+                source.ref() == null ||
+                source.layer() == null ||
+                source.role() == null ||
+                source.sortOrder() == null ||
+                source.sortOrder() < 0 ||
+                !sourceKeys.add(key)
+            ) {
+                issues.add(issue("MODEL_SPEC_SOURCE_INVALID", "sourceRefs", "Sources require unique kind/ref pairs and complete metadata"));
+            }
+        }
+        validateRevisionRefs(command.dependsOn(), "dependsOn", "MODEL_SPEC_DEPENDENCY_INVALID", issues);
+        validateRevisionRefs(command.dimensionRefs(), "dimensionRefs", "MODEL_SPEC_DIMENSION_REF_INVALID", issues);
+        for (MetricRef metric : command.metricRefs()) {
+            if (metric != null && (metric.metricId() == null || metric.version() < 1)) {
+                issues.add(issue("MODEL_SPEC_METRIC_REF_INVALID", "metricRefs", "Metric references require an id and positive version"));
+            }
+        }
+        for (StandardBinding binding : command.standardBindings()) {
+            if (binding != null && invalidStandardBinding(binding)) {
+                issues.add(
+                    issue(
+                        "MODEL_SPEC_STANDARD_BINDING_INVALID",
+                        "standardBindings",
+                        "Standard bindings require a field and complete positive-version reference pairs"
+                    )
+                );
+            }
+        }
+        if (command.generationStrategy() != null && command.generationStrategy().type() == null) {
+            issues.add(
+                issue(
+                    "MODEL_SPEC_GENERATION_STRATEGY_INVALID",
+                    "generationStrategy",
+                    "Generation strategy requires a type"
+                )
+            );
+        }
+    }
+
+    private static void validateRevisionRefs(
+        List<ModelRevisionRef> refs,
+        String field,
+        String code,
+        List<FieldIssue> issues
+    ) {
+        for (ModelRevisionRef ref : refs) {
+            if (ref != null && (ref.modelSpecId() == null || ref.revision() < 1)) {
+                issues.add(issue(code, field, "Model references require an id and positive revision"));
+            }
+        }
+    }
+
+    private static boolean invalidStandardBinding(StandardBinding binding) {
+        return (
+            binding.fieldName() == null ||
+            incompleteVersionedRef(binding.standardElementId(), binding.standardElementVersion()) ||
+            incompleteVersionedRef(binding.referenceCode(), binding.referenceCodeVersion()) ||
+            incompleteVersionedRef(binding.measurementUnitId(), binding.measurementUnitVersion()) ||
+            (binding.standardElementId() == null &&
+                binding.referenceCode() == null &&
+                binding.measurementUnitId() == null &&
+                binding.securityLevel() == null)
+        );
+    }
+
+    private static boolean incompleteVersionedRef(Object reference, Integer version) {
+        return reference == null ? version != null : version == null || version < 1;
+    }
+
+    private static void validateTypeBoundary(CreateModelSpecCommand command, List<FieldIssue> issues) {
+        if (command.modelType() == null) return;
+        switch (command.modelType()) {
+            case DIMENSION -> {
+                if (!hasGrain(command.grain())) {
+                    issues.add(issue("MODEL_SPEC_GRAIN_REQUIRED", "grain", "Dimension requires a grain statement and keys"));
+                }
+                boolean hasKey = command.fields().stream().anyMatch(field -> field != null && field.role() == FieldRole.KEY);
+                if (!hasKey) {
+                    issues.add(issue("MODEL_SPEC_DIMENSION_KEY_REQUIRED", "fields", "Dimension requires at least one key field"));
+                }
+            }
+            case FACT -> {
+                if (!hasGrain(command.grain())) issues.add(issue("MODEL_SPEC_GRAIN_REQUIRED", "grain", "FACT requires a grain statement and keys"));
+                if (command.sourceRefs().isEmpty()) issues.add(issue("MODEL_SPEC_SOURCE_REQUIRED", "sourceRefs", "FACT requires a source"));
+            }
+            case SUMMARY, APPLICATION -> {
+                if (command.dependsOn().isEmpty()) {
+                    issues.add(issue("MODEL_SPEC_UPSTREAM_REQUIRED", "dependsOn", "Derived models require a revision-pinned upstream model"));
+                }
+                if (!hasGrain(command.grain())) {
+                    issues.add(issue("MODEL_SPEC_GRAIN_REQUIRED", "grain", "Derived models require an output grain"));
+                }
+                if (command.modelType() == ModelType.APPLICATION && command.consumptionScenario() == null) {
+                    issues.add(
+                        issue(
+                            "MODEL_SPEC_CONSUMPTION_SCENARIO_REQUIRED",
+                            "consumptionScenario",
+                            "APPLICATION requires a consumption scenario"
+                        )
+                    );
+                }
+            }
+        }
+    }
+
+    private static boolean hasGrain(Grain grain) {
+        return grain != null && grain.statement() != null && grain.keys().stream().anyMatch(ModelSpecContract::notBlank);
+    }
+
+    private static <T> void validateNoNulls(List<T> values, String field, String code, List<FieldIssue> issues) {
+        if (values.stream().anyMatch(java.util.Objects::isNull)) {
+            issues.add(issue(code, field, "Collection items must not be null"));
+        }
+    }
+
+    private static void rawCollection(
+        Map<String, ?> fields,
+        String field,
+        Predicate<Map<?, ?>> invalidItem,
+        List<FieldIssue> issues
+    ) {
+        Object rawValue = fields.get(field);
+        if (!(rawValue instanceof List<?> values)) return;
+        Set<String> allowedFields = NESTED_COLLECTION_FIELDS.get(field);
+        boolean invalid = values.stream().anyMatch(value -> {
+            if (!(value instanceof Map<?, ?> item)) return true;
+            return !containsOnly(item, allowedFields) || invalidItem.test(item);
+        });
+        if (invalid) {
+            addIssueOnce(
+                issues,
+                NESTED_COLLECTION_ISSUE_CODES.get(field),
+                field,
+                "Collection item is outside the canonical contract"
+            );
+        }
+    }
+
+    private static boolean invalidObject(Object rawValue, Set<String> allowedFields, Predicate<Map<?, ?>> invalidValue) {
+        if (rawValue == null) return false;
+        if (!(rawValue instanceof Map<?, ?> value)) return true;
+        return !containsOnly(value, allowedFields) || invalidValue.test(value);
+    }
+
+    private static boolean containsOnly(Map<?, ?> value, Set<String> allowedFields) {
+        return value.keySet().stream().allMatch(key -> key instanceof String field && allowedFields.contains(field));
+    }
+
+    private static boolean invalidRawGrain(Map<?, ?> grain) {
+        return !isNonBlankText(grain.get("statement")) || !isNonEmptyTextList(grain.get("keys"));
+    }
+
+    private static boolean invalidRawTimeSemantics(Map<?, ?> timeSemantics) {
+        return !isEnumText(timeSemantics.get("type"), TIME_SEMANTICS_TYPES) || !isNonEmptyTextList(timeSemantics.get("fields"));
+    }
+
+    private static boolean invalidRawGenerationStrategy(Map<?, ?> strategy) {
+        return !isNonBlankText(strategy.get("type")) || !isNullableText(strategy.get("reference"));
+    }
+
+    private static boolean invalidRawField(Map<?, ?> field) {
+        return (
+            !isNonBlankText(field.get("name")) ||
+            !isNonBlankText(field.get("dataType")) ||
+            !(field.get("nullable") instanceof Boolean) ||
+            !isEnumText(field.get("role"), FIELD_ROLES) ||
+            !isNullableText(field.get("sourceFieldRef")) ||
+            !isNullableText(field.get("securityLevel"))
+        );
+    }
+
+    private static boolean invalidRawSource(Map<?, ?> source) {
+        Object joinType = source.get("joinType");
+        return (
+            !isEnumText(source.get("kind"), SOURCE_KINDS) ||
+            !isNonBlankText(source.get("ref")) ||
+            !isEnumText(source.get("layer"), LAYERS) ||
+            !isEnumText(source.get("role"), SOURCE_ROLES) ||
+            (joinType != null && !isEnumText(joinType, JOIN_TYPES)) ||
+            !isNullableText(source.get("alias")) ||
+            !isNullableText(source.get("joinExpression")) ||
+            !isNonNegativeInteger(source.get("sortOrder"))
+        );
+    }
+
+    private static boolean invalidRawRevisionRef(Map<?, ?> ref) {
+        return !isUuidText(ref.get("modelSpecId")) || !isPositiveInteger(ref.get("revision"));
+    }
+
+    private static boolean invalidRawMetricRef(Map<?, ?> ref) {
+        return !isNonBlankText(ref.get("metricId")) || !isPositiveInteger(ref.get("version"));
+    }
+
+    private static boolean invalidRawStandardBinding(Map<?, ?> binding) {
+        return (
+            !isNonBlankText(binding.get("fieldName")) ||
+            !isNullableUuidText(binding.get("standardElementId")) ||
+            !isNullablePositiveInteger(binding.get("standardElementVersion")) ||
+            !isNullableText(binding.get("referenceCode")) ||
+            !isNullablePositiveInteger(binding.get("referenceCodeVersion")) ||
+            !isNullableUuidText(binding.get("measurementUnitId")) ||
+            !isNullablePositiveInteger(binding.get("measurementUnitVersion")) ||
+            !isNullableText(binding.get("securityLevel"))
+        );
+    }
+
+    private static void rawEnum(Object value, Set<String> allowed, String code, String field, List<FieldIssue> issues) {
+        if (value != null && !isEnumText(value, allowed)) addIssueOnce(issues, code, field, "Value is not supported");
+    }
+
+    private static void rawUuid(Object value, String code, String field, List<FieldIssue> issues) {
+        if (value instanceof String text && text.isBlank()) return;
+        if (value != null && !isUuidText(value)) addIssueOnce(issues, code, field, "Value must be a UUID");
+    }
+
+    private static void rawText(Object value, boolean nullable, String code, String field, List<FieldIssue> issues) {
+        if (value == null && nullable) return;
+        if (value != null && !(value instanceof String)) addIssueOnce(issues, code, field, "Value must be text or null");
+    }
+
+    private static void addIssueOnce(List<FieldIssue> issues, String code, String field, String message) {
+        if (issues.stream().noneMatch(candidate -> candidate.code().equals(code) && candidate.field().equals(field))) {
+            issues.add(issue(code, field, message));
+        }
+    }
+
+    private static boolean isEnumText(Object value, Set<String> allowed) {
+        return value instanceof String text && allowed.contains(text);
+    }
+
+    private static boolean isNonBlankText(Object value) {
+        return value instanceof String text && !text.isBlank();
+    }
+
+    private static boolean isNullableText(Object value) {
+        return value == null || value instanceof String;
+    }
+
+    private static boolean isUuidText(Object value) {
+        if (!(value instanceof String text)) return false;
+        try {
+            return UUID.fromString(text).toString().equalsIgnoreCase(text);
+        } catch (IllegalArgumentException ignored) {
+            return false;
+        }
+    }
+
+    private static boolean isNullableUuidText(Object value) {
+        return value == null || isUuidText(value);
+    }
+
+    private static boolean isNonEmptyTextList(Object value) {
+        return value instanceof List<?> values && !values.isEmpty() && values.stream().allMatch(ModelSpecContract::isNonBlankText);
+    }
+
+    private static boolean isInteger(Object value) {
+        if (!(value instanceof Number number)) return false;
+        double doubleValue = number.doubleValue();
+        return Double.isFinite(doubleValue) && doubleValue == Math.rint(doubleValue);
+    }
+
+    private static boolean isNonNegativeInteger(Object value) {
+        return isInteger(value) && ((Number) value).doubleValue() >= 0 && ((Number) value).doubleValue() <= Integer.MAX_VALUE;
+    }
+
+    private static boolean isPositiveInteger(Object value) {
+        return isInteger(value) && ((Number) value).doubleValue() >= 1 && ((Number) value).doubleValue() <= Integer.MAX_VALUE;
+    }
+
+    private static boolean isNullablePositiveInteger(Object value) {
+        return value == null || isPositiveInteger(value);
+    }
+
+    private static <E extends Enum<E>> Set<String> enumNames(E[] values) {
+        Set<String> names = new HashSet<>();
+        for (E value : values) names.add(value.name());
+        return Set.copyOf(names);
+    }
+
+    private static void required(Object value, String field, String code, List<FieldIssue> issues) {
+        if (value == null || value instanceof String text && text.isBlank()) {
+            issues.add(issue(code, field, "Required field is missing"));
+        }
+    }
+
+    private static FieldIssue issue(String code, String field, String message) {
+        return new FieldIssue(code, field, IssueSeverity.ERROR, message);
+    }
+
+    private static <T> List<T> immutable(List<T> values) {
+        return values == null ? List.of() : Collections.unmodifiableList(new ArrayList<>(values));
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static boolean notBlank(String value) {
+        return value != null && !value.isBlank();
+    }
+}
