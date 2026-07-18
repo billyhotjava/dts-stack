@@ -1,73 +1,80 @@
-import { useState, useCallback, useMemo } from 'react';
-import type { DrillDownConfig } from '../types';
-
-interface DrillEntry {
-    label: string;
-    clickedValue: string;
-}
-
-interface Breadcrumb {
-    label: string;
-    depth: number;
-}
+import { useCallback, useMemo, useRef, useState } from "react";
+import {
+	buildDrillSnapshot,
+	normalizeDrillLevel,
+	resolveNextDrillEntry,
+	type DrillEntry,
+} from "../drillRuntime";
+import type { DataSourceConfig, DrillDownConfig } from "../types";
 
 export interface DrillState {
-    effectiveCardId: number | undefined;
-    queryParameters: Array<{ name: string; value: string }> | undefined;
-    breadcrumbs: Breadcrumb[];
-    canDrillDown: boolean;
-    handleDrill: (clickedValue: string) => void;
-    handleRollUp: (targetDepth: number) => void;
+	effectiveDataSource: DataSourceConfig | undefined;
+	queryParameters: Array<{ name: string; value: string }>;
+	breadcrumbs: Array<{ label: string; depth: number }>;
+	canDrillDown: boolean;
+	handleDrill: (clickPayload: Record<string, unknown>) => boolean;
+	handleRollUp: (targetDepth: number) => void;
+	reset: () => void;
 }
 
 export function useDrillDown(
-    rootCardId: number | undefined,
-    drillConfig: DrillDownConfig | undefined,
+	rootDataSource: DataSourceConfig | undefined,
+	drillConfig: DrillDownConfig | undefined,
 ): DrillState {
-    const [stack, setStack] = useState<DrillEntry[]>([]);
-    const levels = drillConfig?.levels ?? [];
-    const depth = stack.length;
+	const [stack, setStack] = useState<DrillEntry[]>([]);
+	const pendingDepthRef = useRef<number | null>(null);
+	const levels = useMemo(() => {
+		if (drillConfig?.enabled !== true) return [];
+		const normalized = [];
+		for (const level of drillConfig.levels ?? []) {
+			const next = normalizeDrillLevel(level);
+			if (!next) break;
+			normalized.push(next);
+		}
+		return normalized;
+	}, [drillConfig]);
+	const snapshot = useMemo(
+		() => buildDrillSnapshot(rootDataSource, levels, stack),
+		[rootDataSource, levels, stack],
+	);
+	if (pendingDepthRef.current !== null && pendingDepthRef.current !== snapshot.depth) {
+		pendingDepthRef.current = null;
+	}
+	const canDrillDown = drillConfig?.enabled === true && snapshot.depth < levels.length;
 
-    const effectiveCardId = useMemo(() => {
-        if (!rootCardId || !drillConfig?.enabled) return rootCardId;
-        if (depth === 0) return rootCardId;
-        return levels[depth - 1]?.cardId ?? rootCardId;
-    }, [rootCardId, drillConfig?.enabled, depth, levels]);
+	const handleDrill = useCallback(
+		(clickPayload: Record<string, unknown>) => {
+			if (drillConfig?.enabled !== true || pendingDepthRef.current === snapshot.depth) return false;
+			const level = levels[snapshot.depth];
+			if (!level) return false;
+			const entry = resolveNextDrillEntry(level, clickPayload);
+			if (!entry) return false;
+			pendingDepthRef.current = snapshot.depth;
+			setStack((currentStack) => (
+				currentStack.length === snapshot.depth ? [...currentStack, entry] : currentStack
+			));
+			return true;
+		},
+		[drillConfig?.enabled, levels, snapshot.depth],
+	);
 
-    const queryParameters = useMemo(() => {
-        if (!drillConfig?.enabled || depth === 0) return undefined;
-        const level = levels[depth - 1];
-        const entry = stack[depth - 1];
-        if (!level || !entry) return undefined;
-        return [{ name: level.paramName, value: entry.clickedValue }];
-    }, [drillConfig?.enabled, depth, levels, stack]);
+	const handleRollUp = useCallback((targetDepth: number) => {
+		if (!Number.isFinite(targetDepth) || targetDepth < 0) return;
+		setStack((currentStack) => currentStack.slice(0, Math.floor(targetDepth)));
+	}, []);
 
-    const breadcrumbs = useMemo<Breadcrumb[]>(() => {
-        if (!drillConfig?.enabled || depth === 0) return [];
-        const crumbs: Breadcrumb[] = [{ label: '全部', depth: 0 }];
-        for (let i = 0; i < depth; i++) {
-            const level = levels[i];
-            const entry = stack[i];
-            crumbs.push({
-                label: `${level?.label ?? ''}: ${entry.clickedValue}`,
-                depth: i + 1,
-            });
-        }
-        return crumbs;
-    }, [drillConfig?.enabled, depth, levels, stack]);
+	const reset = useCallback(() => {
+		pendingDepthRef.current = null;
+		setStack([]);
+	}, []);
 
-    const canDrillDown = drillConfig?.enabled === true && depth < levels.length;
-
-    const handleDrill = useCallback((clickedValue: string) => {
-        if (!canDrillDown) return;
-        const level = levels[depth];
-        setStack((prev) => [...prev, { label: level.label, clickedValue }]);
-    }, [canDrillDown, depth, levels]);
-
-    const handleRollUp = useCallback((targetDepth: number) => {
-        if (targetDepth < 0) return;
-        setStack((prev) => prev.slice(0, targetDepth));
-    }, []);
-
-    return { effectiveCardId, queryParameters, breadcrumbs, canDrillDown, handleDrill, handleRollUp };
+	return {
+		effectiveDataSource: snapshot.effectiveDataSource,
+		queryParameters: snapshot.queryParameters,
+		breadcrumbs: snapshot.breadcrumbs,
+		canDrillDown,
+		handleDrill,
+		handleRollUp,
+		reset,
+	};
 }

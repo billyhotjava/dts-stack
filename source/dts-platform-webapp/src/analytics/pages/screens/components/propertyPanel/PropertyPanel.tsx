@@ -429,13 +429,13 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
         }
     };
     const drillDownContent = shouldRenderSection('drill-down', '下钻', 'drill')
-        ? renderDrillDownConfig(selectedComponent, updateComponent, { embedded: true })
+        ? renderDrillDownConfig(selectedComponent, updateComponent, config.globalVariables ?? [], { embedded: true })
         : null;
     const interactionContent = shouldRenderSection('interaction', '联动', '交互', 'interaction', 'jump')
         ? renderInteractionConfig(selectedComponent, config.globalVariables ?? [], updateComponent, { embedded: true })
         : null;
     const actionContent = shouldRenderSection('actions', '动作', '面板', '意图', '跳转')
-        ? renderActionConfig(selectedComponent, updateComponent, { embedded: true })
+        ? renderActionConfig(selectedComponent, updateComponent, config.pages ?? [], { embedded: true })
         : null;
 
     const isStyleTab = activeTab === 'style';

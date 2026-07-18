@@ -92,6 +92,7 @@ const THEMES = new Set<ScreenTheme>([
 	"brand-custom",
 ]);
 const DATA_SOURCE_TYPES = new Set(["static", "api", "card", "sql", "dataset", "metric", "database"]);
+const DRILL_TARGET_DATA_SOURCE_TYPES = new Set(["api", "card", "sql", "dataset", "metric", "database"]);
 const VARIABLE_TYPES = new Set(["string", "number", "date"]);
 const VARIABLE_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_:\.-]{0,63}$/;
 const VISIBILITY_MATCH_MODES = new Set([
@@ -110,6 +111,7 @@ const COMPONENT_ACTION_TYPES = new Set([
 	"set-variable",
 	"drill-down",
 	"drill-up",
+	"drill-view",
 	"jump-url",
 	"open-panel",
 	"emit-intent",
@@ -161,6 +163,40 @@ function validateVisibilityRuleConfig(config: Record<string, unknown> | undefine
 	if (Array.isArray(values) && values.length > 200) {
 		errors.push(`${path}.config.visibilityMatchValues 数量不能超过 200`);
 	}
+}
+
+function validateInteractionMappings(input: unknown, path: string, errors: string[]) {
+	if (!Array.isArray(input)) {
+		errors.push(`${path} 必须是数组`);
+		return;
+	}
+	const seenVariableKeys = new Set<string>();
+	input.forEach((mapping, mappingIdx) => {
+		const mappingPath = `${path}[${mappingIdx}]`;
+		if (!mapping || typeof mapping !== "object") {
+			errors.push(`${mappingPath} 必须是对象`);
+			return;
+		}
+		const mappingRow = mapping as Record<string, unknown>;
+		const variableKey = asTrimmedString(mappingRow.variableKey);
+		const sourcePath = asTrimmedString(mappingRow.sourcePath);
+		if (!variableKey) {
+			errors.push(`${mappingPath}.variableKey 不能为空`);
+		} else if (seenVariableKeys.has(variableKey)) {
+			errors.push(`${mappingPath}.variableKey 重复: ${variableKey}`);
+		} else {
+			seenVariableKeys.add(variableKey);
+		}
+		if (!sourcePath) {
+			errors.push(`${mappingPath}.sourcePath 不能为空`);
+		}
+		const transform = String(mappingRow.transform ?? "raw")
+			.trim()
+			.toLowerCase();
+		if (!INTERACTION_TRANSFORMS.has(transform)) {
+			errors.push(`${mappingPath}.transform 非法: ${transform}`);
+		}
+	});
 }
 
 function normalizeGlobalVariables(input: unknown): ScreenGlobalVariable[] {
@@ -575,11 +611,36 @@ export function validateScreenPayload(input: unknown): { errors: string[]; warni
 	}
 
 	const rawComponents = row.components;
+	const componentEntries: Array<{ item: unknown; path: string }> = [];
 	if (!Array.isArray(rawComponents)) {
 		errors.push("components 必须是数组");
 	} else {
-		rawComponents.forEach((item, idx) => {
-			const path = `components[${idx}]`;
+		rawComponents.forEach((item, idx) => componentEntries.push({ item, path: `components[${idx}]` }));
+	}
+	const rawPages = row.pages;
+	if (rawPages !== undefined && rawPages !== null) {
+		if (!Array.isArray(rawPages)) {
+			errors.push("pages 必须是数组");
+		} else {
+			rawPages.forEach((page, pageIdx) => {
+				const pagePath = `pages[${pageIdx}]`;
+				if (!page || typeof page !== "object" || Array.isArray(page)) {
+					errors.push(`${pagePath} 必须是对象`);
+					return;
+				}
+				const pageComponents = (page as Record<string, unknown>).components;
+				if (!Array.isArray(pageComponents)) {
+					errors.push(`${pagePath}.components 必须是数组`);
+					return;
+				}
+				pageComponents.forEach((item, componentIdx) =>
+					componentEntries.push({ item, path: `${pagePath}.components[${componentIdx}]` }),
+				);
+			});
+		}
+	}
+
+	componentEntries.forEach(({ item, path }) => {
 			if (!item || typeof item !== "object") {
 				errors.push(`${path} 必须是对象`);
 				return;
@@ -634,32 +695,60 @@ export function validateScreenPayload(input: unknown): { errors: string[]; warni
 					const interactionRow = interaction as Record<string, unknown>;
 					const mappings = interactionRow.mappings;
 					if (mappings !== undefined && mappings !== null) {
-						if (!Array.isArray(mappings)) {
-							errors.push(`${path}.interaction.mappings 必须是数组`);
-						} else {
-							mappings.forEach((mapping, mappingIdx) => {
-								const mappingPath = `${path}.interaction.mappings[${mappingIdx}]`;
-								if (!mapping || typeof mapping !== "object") {
-									errors.push(`${mappingPath} 必须是对象`);
-									return;
-								}
-								const mappingRow = mapping as Record<string, unknown>;
-								const variableKey = asTrimmedString(mappingRow.variableKey);
-								const sourcePath = asTrimmedString(mappingRow.sourcePath);
-								if (!variableKey) {
-									errors.push(`${mappingPath}.variableKey 不能为空`);
-								}
-								if (!sourcePath) {
-									errors.push(`${mappingPath}.sourcePath 不能为空`);
-								}
-								const transform = String(mappingRow.transform ?? "raw")
-									.trim()
-									.toLowerCase();
-								if (!INTERACTION_TRANSFORMS.has(transform)) {
-									errors.push(`${mappingPath}.transform 非法: ${transform}`);
-								}
-							});
-						}
+						validateInteractionMappings(mappings, `${path}.interaction.mappings`, errors);
+					}
+				}
+			}
+
+			const drillDown = component.drillDown;
+			if (drillDown !== undefined && drillDown !== null) {
+				if (typeof drillDown !== "object" || Array.isArray(drillDown)) {
+					errors.push(`${path}.drillDown 必须是对象`);
+				} else {
+					const drillDownRow = drillDown as Record<string, unknown>;
+					if (drillDownRow.enabled !== undefined && typeof drillDownRow.enabled !== "boolean") {
+						errors.push(`${path}.drillDown.enabled 必须是布尔值`);
+					}
+					const levels = drillDownRow.levels;
+					if (!Array.isArray(levels)) {
+						errors.push(`${path}.drillDown.levels 必须是数组`);
+					} else {
+						levels.forEach((level, levelIdx) => {
+							const levelPath = `${path}.drillDown.levels[${levelIdx}]`;
+							if (!level || typeof level !== "object" || Array.isArray(level)) {
+								errors.push(`${levelPath} 必须是对象`);
+								return;
+							}
+							const levelRow = level as Record<string, unknown>;
+							if (!asTrimmedString(levelRow.label)) {
+								errors.push(`${levelPath}.label 不能为空`);
+							}
+							if (levelRow.inheritContext !== undefined && typeof levelRow.inheritContext !== "boolean") {
+								errors.push(`${levelPath}.inheritContext 必须是布尔值`);
+							}
+
+							const cardId = Number(levelRow.cardId);
+							const isLegacy = Number.isFinite(cardId) && cardId > 0 && Boolean(asTrimmedString(levelRow.paramName));
+							const levelDataSource = levelRow.dataSource;
+							const levelDataSourceRow =
+								levelDataSource && typeof levelDataSource === "object" && !Array.isArray(levelDataSource)
+									? (levelDataSource as Record<string, unknown>)
+									: undefined;
+							const sourceType = String(levelDataSourceRow?.sourceType ?? levelDataSourceRow?.type ?? "")
+								.trim()
+								.toLowerCase();
+							const hasGenericTarget = DRILL_TARGET_DATA_SOURCE_TYPES.has(sourceType);
+							const hasGenericMappings = Array.isArray(levelRow.mappings) && levelRow.mappings.length > 0;
+							if (!isLegacy && !(hasGenericTarget && hasGenericMappings)) {
+								errors.push(`${levelPath} 必须配置下一层数据源和字段映射，或提供旧版 cardId + paramName`);
+							}
+							if (levelDataSourceRow && sourceType && !DRILL_TARGET_DATA_SOURCE_TYPES.has(sourceType)) {
+								errors.push(`${levelPath}.dataSource.sourceType 非法: ${sourceType}`);
+							}
+							if (levelRow.mappings !== undefined && levelRow.mappings !== null) {
+								validateInteractionMappings(levelRow.mappings, `${levelPath}.mappings`, errors);
+							}
+						});
 					}
 				}
 			}
@@ -682,32 +771,7 @@ export function validateScreenPayload(input: unknown): { errors: string[]; warni
 						}
 						const mappings = actionRow.mappings;
 						if (mappings !== undefined && mappings !== null) {
-							if (!Array.isArray(mappings)) {
-								errors.push(`${actionPath}.mappings 必须是数组`);
-							} else {
-								mappings.forEach((mapping, mappingIdx) => {
-									const mappingPath = `${actionPath}.mappings[${mappingIdx}]`;
-									if (!mapping || typeof mapping !== "object") {
-										errors.push(`${mappingPath} 必须是对象`);
-										return;
-									}
-									const mappingRow = mapping as Record<string, unknown>;
-									const variableKey = asTrimmedString(mappingRow.variableKey);
-									const sourcePath = asTrimmedString(mappingRow.sourcePath);
-									if (!variableKey) {
-										errors.push(`${mappingPath}.variableKey 不能为空`);
-									}
-									if (!sourcePath) {
-										errors.push(`${mappingPath}.sourcePath 不能为空`);
-									}
-									const transform = String(mappingRow.transform ?? "raw")
-										.trim()
-										.toLowerCase();
-									if (!INTERACTION_TRANSFORMS.has(transform)) {
-										errors.push(`${mappingPath}.transform 非法: ${transform}`);
-									}
-								});
-							}
+							validateInteractionMappings(mappings, `${actionPath}.mappings`, errors);
 						}
 						if (actionType === "jump-url") {
 							const template = asTrimmedString(actionRow.jumpUrlTemplate);
@@ -727,6 +791,12 @@ export function validateScreenPayload(input: unknown): { errors: string[]; warni
 								errors.push(`${actionPath}.panelTitle 不能为空`);
 							}
 						}
+						if (actionType === "drill-view") {
+							const drillViewId = asTrimmedString(actionRow.drillViewId);
+							if (!drillViewId) {
+								errors.push(`${actionPath}.drillViewId 不能为空`);
+							}
+						}
 						if (actionType === "emit-intent") {
 							const intentName = asTrimmedString(actionRow.intentName);
 							if (!intentName) {
@@ -736,8 +806,7 @@ export function validateScreenPayload(input: unknown): { errors: string[]; warni
 					});
 				}
 			}
-		});
-	}
+	});
 
 	const rawVariables = row.globalVariables;
 	if (rawVariables !== undefined && rawVariables !== null) {

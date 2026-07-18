@@ -2,6 +2,7 @@ import { message } from 'antd';
 import type {
     CardParameterBinding,
     DataSourceConfig,
+    DataSourceType,
     ScreenComponent,
     ScreenGlobalVariable,
 } from '../../types';
@@ -22,10 +23,12 @@ export function renderDataSourceConfig(
     component: ScreenComponent,
     updateComponent: (id: string, updates: Partial<ScreenComponent>) => void,
     globalVariables: ScreenGlobalVariable[],
+    options?: { allowedTypes?: DataSourceType[] },
 ) {
     const ds = component.dataSource;
     const dsType = resolveDataSourceType(ds);
     const sqlConfig = resolveSqlConfig(ds);
+    const isTypeAllowed = (type: DataSourceType) => !options?.allowedTypes || options.allowedTypes.includes(type);
 
     const cardBindings: CardParameterBinding[] = ds?.type === 'card' ? (ds.cardConfig?.parameterBindings ?? []) : [];
     const metricBindings: CardParameterBinding[] = dsType === 'metric' ? (ds?.metricConfig?.parameterBindings ?? []) : [];
@@ -79,6 +82,7 @@ export function renderDataSourceConfig(
     };
 
     const setType = (nextType: string) => {
+        if (!isTypeAllowed(nextType as DataSourceType)) return;
         if (nextType === 'static') {
             setDataSource(undefined);
             return;
@@ -162,12 +166,12 @@ export function renderDataSourceConfig(
                     value={dsType}
                     onChange={(e) => setType(e.target.value)}
                 >
-                    <option value="static">静态数据</option>
-                    <option value="card">Card 查询</option>
-                    <option value="api">HTTP API</option>
-                    <option value="sql">SQL 模式</option>
-                    <option value="dataset">Dataset 模式</option>
-                    <option value="metric">Metric 语义模式</option>
+                    {isTypeAllowed('static') ? <option value="static">静态数据</option> : null}
+                    {isTypeAllowed('card') ? <option value="card">Card 查询</option> : null}
+                    {isTypeAllowed('api') ? <option value="api">HTTP API</option> : null}
+                    {isTypeAllowed('sql') ? <option value="sql">SQL 模式</option> : null}
+                    {isTypeAllowed('dataset') ? <option value="dataset">Dataset 模式</option> : null}
+                    {isTypeAllowed('metric') ? <option value="metric">Metric 语义模式</option> : null}
                 </select>
             </div>
 

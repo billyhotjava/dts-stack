@@ -131,7 +131,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         executeComponentActions: rawExecuteComponentActions,
         echartsClickHandler: rawEchartsClickHandler,
         filterVariableTimersRef,
-    } = useComponentInteractions(component, mode, runtime, drillState, drillRuntimeEnabled, drillActive);
+    } = useComponentInteractions(component, mode, runtime, drillState, drillRuntimeEnabled, drillActive, cardLoading);
 
     // F1-T05: visual disable when component has no usable interactivity
     const { hasResolvableJump, isResolving: isResolvingJumpStatus } = useResolvableJumpStatus(component, mode);
@@ -1361,6 +1361,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     drillState: drillState as any,
                     drillActive,
                     drillRuntimeEnabled,
+                    drillLoading: cardLoading,
                     componentActions: componentActions as any,
                     executeComponentActions,
                     renderUnavailableState,
@@ -1586,42 +1587,46 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         persistConfigMeta,
     ]);
 
+    const basicClickPayload = {
+        name: component.name,
+        title: typeof effectiveConfig.title === 'string' ? effectiveConfig.title : undefined,
+        text: typeof effectiveConfig.text === 'string' ? effectiveConfig.text : undefined,
+        value: effectiveConfig.value,
+        data: {
+            title: effectiveConfig.title,
+            text: effectiveConfig.text,
+            value: effectiveConfig.value,
+        },
+    };
+    const runBasicInteraction = () => {
+        if (componentActions.length > 0) {
+            executeComponentActions(basicClickPayload);
+            return;
+        }
+        if (!drillActive || !drillState.canDrillDown || cardLoading) return;
+        const accepted = drillState.handleDrill(basicClickPayload);
+        runtime.trackEvent({
+            kind: 'drill-down',
+            key: accepted ? 'drillValue' : 'drillCancelled',
+            value: resolvePreferredDrillValue(basicClickPayload) ?? '',
+            source: `drill:${component.id}`,
+            meta: accepted ? `depth=${drillState.breadcrumbs.length}` : 'missing-mapping-or-duplicate',
+        });
+    };
     const supportsRuntimeActionWrapper = mode === 'preview'
-        && componentActions.length > 0
-        && ['shape', 'title', 'number-card', 'markdown-text'].includes(type);
+        && (componentActions.length > 0 || (drillActive && drillState.canDrillDown))
+        && ['shape', 'title', 'number-card', 'stat-card', 'markdown-text'].includes(type);
     const wrappedContent = supportsRuntimeActionWrapper ? (
         <div
             role="button"
             tabIndex={0}
-            onClick={() => {
-                executeComponentActions({
-                    name: component.name,
-                    title: typeof effectiveConfig.title === 'string' ? effectiveConfig.title : undefined,
-                    text: typeof effectiveConfig.text === 'string' ? effectiveConfig.text : undefined,
-                    value: effectiveConfig.value,
-                    data: {
-                        title: effectiveConfig.title,
-                        text: effectiveConfig.text,
-                        value: effectiveConfig.value,
-                    },
-                });
-            }}
+            onClick={runBasicInteraction}
             onKeyDown={(event) => {
                 if (event.key !== 'Enter' && event.key !== ' ') {
                     return;
                 }
                 event.preventDefault();
-                executeComponentActions({
-                    name: component.name,
-                    title: typeof effectiveConfig.title === 'string' ? effectiveConfig.title : undefined,
-                    text: typeof effectiveConfig.text === 'string' ? effectiveConfig.text : undefined,
-                    value: effectiveConfig.value,
-                    data: {
-                        title: effectiveConfig.title,
-                        text: effectiveConfig.text,
-                        value: effectiveConfig.value,
-                    },
-                });
+                runBasicInteraction();
             }}
             style={{ width: '100%', height: '100%', cursor: 'pointer' }}
         >
@@ -1668,6 +1673,30 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                             </span>
                         );
                     })}
+                    <button
+                        type="button"
+                        aria-label="重置下钻"
+                        onClick={() => {
+                            runtime.trackEvent({
+                                kind: 'drill-up',
+                                key: 'drillDepth',
+                                value: '0',
+                                source: `drill:${component.id}:reset`,
+                            });
+                            drillState.reset();
+                        }}
+                        style={{
+                            marginLeft: 6,
+                            border: 0,
+                            background: 'transparent',
+                            color: t.breadcrumb.linkColor,
+                            cursor: 'pointer',
+                            fontSize: 11,
+                            padding: 0,
+                        }}
+                    >
+                        重置
+                    </button>
                 </div>
             )}
             {/* Card data source loading indicator */}

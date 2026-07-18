@@ -5,6 +5,7 @@ const SCREEN_ACTION_TYPES = new Set<ScreenActionType>([
     'set-variable',
     'drill-down',
     'drill-up',
+    'drill-view',
     'jump-url',
     'open-panel',
     'emit-intent',
@@ -94,9 +95,32 @@ export function resolvePreferredDrillValue(params: Record<string, unknown>): str
     const rowValue = Array.isArray(params.row) ? params.row[0] : undefined;
     return resolveInteractionValue(params, 'name')
         ?? resolveInteractionValue(params, 'data.name')
-        ?? resolveInteractionValue(params, '项目')
         ?? resolveInteractionValue(params, 'row[0]')
         ?? (rowValue == null ? undefined : String(rowValue));
+}
+
+export function normalizeDataPointClickPayload(params: Record<string, unknown>): Record<string, unknown> | null {
+    const componentType = String(params.componentType ?? '').trim().toLowerCase();
+    if (componentType && componentType !== 'series') {
+        return null;
+    }
+    const hasDataItem = params.dataIndex !== undefined
+        || params.name !== undefined
+        || params.value !== undefined
+        || params.data !== undefined;
+    return hasDataItem ? params : null;
+}
+
+export function shouldRunDefaultDrill(options: {
+    drillActive: boolean;
+    canDrillDown: boolean;
+    loading: boolean;
+    actionCount: number;
+}): boolean {
+    return options.drillActive
+        && options.canDrillDown
+        && !options.loading
+        && options.actionCount === 0;
 }
 
 function collapseAnalyticsBase(path: string): string {

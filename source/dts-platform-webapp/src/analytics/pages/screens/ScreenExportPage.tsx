@@ -154,6 +154,7 @@ function resolveExportViewport(screen: ScreenConfig | null): { width: number; he
 export default function ScreenExportPage() {
 	const { id } = useParams<{ id: string }>();
 	const [screen, setScreen] = useState<ScreenConfig | null>(null);
+	const [runtimePageId, setRuntimePageId] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [statusText, setStatusText] = useState('正在准备导出...');
 	const [error, setError] = useState<string | null>(null);
@@ -535,12 +536,18 @@ export default function ScreenExportPage() {
 		canvasRef.current.style.setProperty('--screen-font-family', screenFontFamily);
 	}, [screenTheme, screen?.customTheme, screenFontFamily]);
 	const isDark = screenTheme !== 'glacier';
-	const components = (screen?.components ?? [])
+	const runtimePage = runtimePageId
+		? screen?.pages?.find((page) => page.id === runtimePageId)
+		: undefined;
+	const components = (runtimePage?.components ?? screen?.components ?? [])
 		.filter((item) => item.visible && isVisibleForDevice(item, effectiveDevice))
 		.sort((a, b) => a.zIndex - b.zIndex);
 
 	return (
-		<ScreenRuntimeProvider definitions={screen?.globalVariables ?? []}>
+		<ScreenRuntimeProvider
+			definitions={screen?.globalVariables ?? []}
+			onDrillViewChange={setRuntimePageId}
+		>
 			<div
 				className="min-h-screen p-6 box-border"
 				style={{ ...themeVars(isDark), background: themeBg(isDark), color: themeColor(isDark) }}

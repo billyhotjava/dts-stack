@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 
 import {
@@ -9,10 +9,12 @@ import {
     resolvePreferredDrillValue,
     resolveActionMappingValues,
     resolveActionTemplateText,
+    shouldRunDefaultDrill,
 } from './actionUtils';
 
 test('normalizeScreenActionType keeps known action values', () => {
     assert.equal(normalizeScreenActionType('open-panel'), 'open-panel');
+    assert.equal(normalizeScreenActionType('drill-view'), 'drill-view');
     assert.equal(normalizeScreenActionType(' emit-intent '), 'emit-intent');
     assert.equal(normalizeScreenActionType('unknown-action'), null);
 });
@@ -101,8 +103,33 @@ test('buildActionRuntimeParams merges runtime filters and click params for jump-
 test('resolvePreferredDrillValue picks chart or table drill labels in priority order', () => {
     assert.equal(resolvePreferredDrillValue({ name: '验证' }), '验证');
     assert.equal(resolvePreferredDrillValue({ data: { name: '实施' } }), '实施');
-    assert.equal(resolvePreferredDrillValue({ 项目: 'QMS二期', row: ['QMS二期', '周工'] }), 'QMS二期');
     assert.equal(resolvePreferredDrillValue({ row: ['PLM整合', '李工'] }), 'PLM整合');
+    assert.equal(resolvePreferredDrillValue({ 项目: '不应读取' }), undefined);
+});
+
+test('resolveActionMappingValues uses the same neutral source-path mapping as drilldown', () => {
+    assert.deepEqual(
+        resolveActionMappingValues(
+            { data: { key: 'A-01' } },
+            [{ sourcePath: 'data.key', variableKey: 'selectedKey', transform: 'string' }],
+        ),
+        { selectedKey: 'A-01' },
+    );
+});
+
+test('explicit actions suppress the implicit default drill attempt', () => {
+    assert.equal(shouldRunDefaultDrill({
+        drillActive: true,
+        canDrillDown: true,
+        loading: false,
+        actionCount: 0,
+    }), true);
+    assert.equal(shouldRunDefaultDrill({
+        drillActive: true,
+        canDrillDown: true,
+        loading: false,
+        actionCount: 1,
+    }), false);
 });
 
 test('normalizeRuntimeJumpUrl rewrites duplicate /bi prefixes into hash-friendly app routes', () => {

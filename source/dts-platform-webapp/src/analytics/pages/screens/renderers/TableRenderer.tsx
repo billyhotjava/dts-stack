@@ -26,7 +26,7 @@ import { DelayReasonMatrix } from '../../project-cockpit/components/DelayReasonM
 interface DrillState {
     canDrillDown: boolean;
     breadcrumbs: Array<{ value: string }>;
-    handleDrill: (value: string) => void;
+    handleDrill: (clickPayload: Record<string, unknown>) => boolean;
 }
 
 interface ScreenRuntime {
@@ -52,6 +52,7 @@ export interface TableRendererProps {
     drillState: DrillState;
     drillActive: boolean;
     drillRuntimeEnabled: boolean;
+    drillLoading: boolean;
     componentActions: Array<Record<string, unknown>>;
     executeComponentActions: (params: Record<string, unknown>) => void;
     renderUnavailableState: (title: string, detail?: string) => ReactNode;
@@ -75,6 +76,7 @@ export function renderTable(props: TableRendererProps): ReactNode {
         setTablePage,
         drillState,
         drillRuntimeEnabled,
+        drillLoading,
         componentActions,
         executeComponentActions,
         onConfigMeta,
@@ -86,7 +88,7 @@ export function renderTable(props: TableRendererProps): ReactNode {
         const { header: displayHeader, data: displayData, columnMeta } = resolveBoundTableData(c, { defaultAlign: 'center' });
         const filteredConfig = { ...c, header: displayHeader, data: displayData, _columnMeta: columnMeta };
         const canRunScrollBoardActions = mode === 'preview' && componentActions.length > 0;
-        const canRunScrollBoardDefaultDrill = mode === 'preview' && !canRunScrollBoardActions && drillRuntimeEnabled && drillState.canDrillDown;
+        const canRunScrollBoardDefaultDrill = mode === 'preview' && !canRunScrollBoardActions && drillRuntimeEnabled && drillState.canDrillDown && !drillLoading;
         const handleScrollBoardRowClick = (row: string[]) => {
             const params = buildTableRowActionParams(displayHeader, row);
             if (canRunScrollBoardActions) {
@@ -100,14 +102,14 @@ export function renderTable(props: TableRendererProps): ReactNode {
             if (!clickedValue) {
                 return;
             }
+            const accepted = drillState.handleDrill(params);
             runtime.trackEvent({
                 kind: 'drill-down',
-                key: 'drillValue',
+                key: accepted ? 'drillValue' : 'drillCancelled',
                 value: clickedValue,
                 source: `drill:${component.id}:${sourceTag}`,
-                meta: `depth=${drillState.breadcrumbs.length}`,
+                meta: accepted ? `depth=${drillState.breadcrumbs.length}` : 'missing-mapping-or-duplicate',
             });
-            drillState.handleDrill(clickedValue);
         };
 
         return (
@@ -259,7 +261,7 @@ export function renderTable(props: TableRendererProps): ReactNode {
                 })
                 : 0;
             const canRunTableActions = mode === 'preview' && componentActions.length > 0;
-            const canRunTableDefaultDrill = mode === 'preview' && !canRunTableActions && drillRuntimeEnabled && drillState.canDrillDown;
+            const canRunTableDefaultDrill = mode === 'preview' && !canRunTableActions && drillRuntimeEnabled && drillState.canDrillDown && !drillLoading;
             const canResizeTableColumns = mode === 'designer' && typeof onConfigMeta === 'function';
 
             const handleColumnResizeMouseDown = (event: ReactMouseEvent<HTMLSpanElement>, columnIndex: number) => {
@@ -544,14 +546,14 @@ export function renderTable(props: TableRendererProps): ReactNode {
                                         if (canRunTableDefaultDrill) {
                                             const clickedValue = resolvePreferredDrillValue(params);
                                             if (!clickedValue) return;
+                                            const accepted = drillState.handleDrill(params);
                                             runtime.trackEvent({
                                                 kind: 'drill-down',
-                                                key: 'drillValue',
+                                                key: accepted ? 'drillValue' : 'drillCancelled',
                                                 value: clickedValue,
                                                 source: `drill:${component.id}:table`,
-                                                meta: `depth=${drillState.breadcrumbs.length}`,
+                                                meta: accepted ? `depth=${drillState.breadcrumbs.length}` : 'missing-mapping-or-duplicate',
                                             });
-                                            drillState.handleDrill(clickedValue);
                                         }
                                     }}
                                 >

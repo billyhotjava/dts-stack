@@ -80,9 +80,12 @@ export interface ScreenComponentAction {
 }
 
 export interface DrillLevel {
-	cardId: number;
-	paramName: string;
 	label: string;
+	dataSource?: DataSourceConfig;
+	mappings?: ComponentInteractionMapping[];
+	inheritContext?: boolean;
+	cardId?: number;
+	paramName?: string;
 }
 
 export interface DrillDownConfig {
@@ -130,12 +133,18 @@ export const DRILLABLE_TYPES: Set<ComponentType> = new Set([
 	"line-chart",
 	"bar-chart",
 	"pie-chart",
+	"gauge-chart",
 	"funnel-chart",
 	"scatter-chart",
 	"radar-chart",
 	"combo-chart",
 	"treemap-chart",
 	"sunburst-chart",
+	"map-chart",
+	"table",
+	"scroll-board",
+	"number-card",
+	"stat-card",
 ]);
 
 export interface ScreenComponent {

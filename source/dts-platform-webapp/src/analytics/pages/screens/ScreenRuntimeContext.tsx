@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ScreenGlobalVariable } from './types';
 import { useDrillView, type DrillViewState } from './hooks/useDrillView';
+import './ScreenRuntimeShell.css';
 
 export type RuntimeEventKind = 'variable' | 'filter' | 'interaction' | 'drill-down' | 'drill-up' | 'jump' | 'action' | 'panel' | 'intent';
 
@@ -103,16 +104,21 @@ function inferEventKindBySource(source?: string): RuntimeEventKind {
 export function ScreenRuntimeProvider({
     definitions,
     runtimeMeta,
+    onDrillViewChange,
     children,
 }: {
     definitions?: ScreenGlobalVariable[];
     runtimeMeta?: ScreenRuntimeMeta;
+    onDrillViewChange?: (viewId: string | null) => void;
     children: ReactNode;
 }) {
     const normalizedDefinitions = useMemo(() => normalizeDefinitions(definitions), [definitions]);
     const [values, setValues] = useState<Record<string, string>>({});
     const [events, setEvents] = useState<RuntimeVariableEvent[]>([]);
     const drillView = useDrillView();
+    const onDrillViewChangeRef = useRef(onDrillViewChange);
+    const hasEnteredDrillViewRef = useRef(false);
+    onDrillViewChangeRef.current = onDrillViewChange;
     const [panel, setPanel] = useState<RuntimeActionPanelState>(emptyPanel);
 
     // Phase 1.5: use ref for events so context consumers don't re-render on every event
@@ -129,6 +135,15 @@ export function ScreenRuntimeProvider({
             return next;
         });
     }, [normalizedDefinitions]);
+
+    useEffect(() => {
+        if (drillView.activeViewId !== null) {
+            hasEnteredDrillViewRef.current = true;
+        }
+        if (hasEnteredDrillViewRef.current) {
+            onDrillViewChangeRef.current?.(drillView.activeViewId);
+        }
+    }, [drillView.activeViewId]);
 
     const contextValue = useMemo<ScreenRuntimeContextValue>(() => ({
         definitions: normalizedDefinitions,
@@ -191,7 +206,38 @@ export function ScreenRuntimeProvider({
         },
     }), [drillView, normalizedDefinitions, panel, runtimeMeta, values]); // events removed from deps
 
-    return <ScreenRuntimeContext.Provider value={contextValue}>{children}</ScreenRuntimeContext.Provider>;
+    return (
+        <ScreenRuntimeContext.Provider value={contextValue}>
+            {children}
+            {drillView.depth > 0 ? (
+                <nav className="screen-runtime__drill-view-nav" aria-label="内部视图导航">
+                    <button type="button" onClick={drillView.navigateToRoot}>全部</button>
+                    {drillView.breadcrumbs.map((entry, index) => {
+                        const isLast = index === drillView.breadcrumbs.length - 1;
+                        return (
+                            <span key={`${entry.viewId}-${index}`}>
+                                <span aria-hidden="true">/</span>
+                                {isLast ? (
+                                    <strong>{entry.label}</strong>
+                                ) : (
+                                    <button type="button" onClick={() => drillView.navigateToLevel(index + 1)}>
+                                        {entry.label}
+                                    </button>
+                                )}
+                            </span>
+                        );
+                    })}
+                    <button
+                        type="button"
+                        onClick={() => drillView.navigateToLevel(Math.max(0, drillView.depth - 1))}
+                    >
+                        返回上一层
+                    </button>
+                    <button type="button" onClick={drillView.navigateToRoot}>重置</button>
+                </nav>
+            ) : null}
+        </ScreenRuntimeContext.Provider>
+    );
 }
 
 export function useScreenRuntime() {

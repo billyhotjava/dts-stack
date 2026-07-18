@@ -44,20 +44,29 @@ export function useComponentData(
     const { type, config, dataSource, drillDown } = component;
     const sharedStore = useSharedStore();
 
-    const dataSourceType = useMemo(() => resolveDataSourceType(dataSource), [dataSource]);
+    // Drill state selects the effective source; all source adapters consume the
+    // same mapped query parameters below.
+    const drillRuntimeEnabled = mode === "preview" && drillDown?.enabled === true;
+    const drillActive = drillRuntimeEnabled && DRILLABLE_TYPES.has(type);
+    const drillState = useDrillDown(
+        drillRuntimeEnabled ? dataSource : undefined,
+        drillRuntimeEnabled ? drillDown : undefined,
+    );
+    const effectiveDataSource = drillRuntimeEnabled ? drillState.effectiveDataSource : dataSource;
+    const dataSourceType = useMemo(() => resolveDataSourceType(effectiveDataSource), [effectiveDataSource]);
     const sourceBindings = useMemo(() => {
         if (dataSourceType === "card") {
-            return normalizeParameterBindings(dataSource?.cardConfig?.parameterBindings);
+            return normalizeParameterBindings(effectiveDataSource?.cardConfig?.parameterBindings);
         }
         if (dataSourceType === "metric") {
-            return normalizeParameterBindings(dataSource?.metricConfig?.parameterBindings);
+            return normalizeParameterBindings(effectiveDataSource?.metricConfig?.parameterBindings);
         }
         if (dataSourceType === "sql") {
-            const sqlConfig = dataSource?.sqlConfig ?? dataSource?.databaseConfig;
+            const sqlConfig = effectiveDataSource?.sqlConfig ?? effectiveDataSource?.databaseConfig;
             return normalizeParameterBindings(sqlConfig?.parameterBindings);
         }
         return [];
-    }, [dataSource, dataSourceType]);
+    }, [effectiveDataSource, dataSourceType]);
 
     const bindingParameters = useMemo(() => {
         if (!sourceBindings.length) return [] as Array<{ name: string; value: string }>;
@@ -80,16 +89,6 @@ export function useComponentData(
         return out;
     }, [sourceBindings, runtime.values, sharedStore]);
 
-    // Drill runtime state should remain available for template-defined drill paths
-    // even when the current component is static and only uses breadcrumb/context state.
-    const drillRuntimeEnabled = mode === "preview" && drillDown?.enabled === true;
-    const drillActive = drillRuntimeEnabled && DRILLABLE_TYPES.has(type);
-    const rootCardId = dataSourceType === "card" ? dataSource?.cardConfig?.cardId : undefined;
-    const drillState = useDrillDown(
-        drillRuntimeEnabled ? rootCardId : undefined,
-        drillRuntimeEnabled ? drillDown : undefined,
-    );
-
     const mergedQueryParameters = useMemo(() => {
         const merged = new Map<string, string>();
         for (const item of bindingParameters) {
@@ -97,7 +96,7 @@ export function useComponentData(
             if (!name) continue;
             merged.set(name, String(item.value ?? ""));
         }
-        for (const item of (drillRuntimeEnabled ? (drillState.queryParameters ?? []) : [])) {
+        for (const item of (drillRuntimeEnabled ? drillState.queryParameters : [])) {
             const name = (item.name || "").trim();
             if (!name) continue;
             merged.set(name, String(item.value ?? ""));
@@ -116,10 +115,10 @@ export function useComponentData(
     const visibleByVariableRule = mode !== 'preview'
         || resolveComponentVariableVisibility(config, runtime.values);
 
-    // Card data source hook — pass drill overrides when active
+    // Existing source hook is the unified SQL/API/Card/Dataset/Metric adapter.
     const { data: cardData, loading: cardLoading, error: cardError } = useCardDataSource(
-        visibleByVariableRule ? dataSource : undefined,
-        drillRuntimeEnabled ? drillState.effectiveCardId : undefined,
+        visibleByVariableRule ? effectiveDataSource : undefined,
+        undefined,
         mergedQueryParameters.length > 0 ? mergedQueryParameters : undefined,
         queryContext,
     );

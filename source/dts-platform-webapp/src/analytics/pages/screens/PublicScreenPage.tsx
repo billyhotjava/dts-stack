@@ -169,6 +169,11 @@ export default function PublicScreenPage() {
 	// Multi-page carousel support -- must be called before early returns
 	const carousel = useScreenCarousel(screen?.pages, screen?.components || [], screen?.carouselConfig);
 	const components = carousel.currentPageComponents;
+	const handleDrillViewChange = useCallback((viewId: string | null) => {
+		const pages = screen?.pages ?? [];
+		const targetIndex = viewId === null ? 0 : pages.findIndex((page) => page.id === viewId);
+		if (targetIndex >= 0) carousel.goToPage(targetIndex);
+	}, [carousel.goToPage, screen?.pages]);
 
 	const visibleSortedComponents = useMemo(
 		() => {
@@ -446,6 +451,7 @@ export default function PublicScreenPage() {
 		<ScreenRuntimeProvider
 			definitions={effectiveGlobalVars}
 			runtimeMeta={uuid ? { accessMode: 'public', publicScreenUuid: uuid } : { accessMode: 'public' }}
+			onDrillViewChange={handleDrillViewChange}
 		>
 			<div
 				className={`fixed inset-0 overflow-hidden box-border ${isEmbedMode ? 'p-0' : 'p-0'}`}

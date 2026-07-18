@@ -343,6 +343,7 @@ export function renderSpecialChart(type: string, props: EChartsRendererProps): R
                     if (regionCodeVariableKey && code) {
                         runtime.setVariable(regionCodeVariableKey, code, `map-chart:${component.id}`);
                     }
+                    echartsClickHandler?.click?.(params);
                 };
 
                 // Build mapMode-specific ECharts options
@@ -496,6 +497,14 @@ export function renderSpecialChart(type: string, props: EChartsRendererProps): R
                                         if (regionCodeVariableKey && code) {
                                             runtime.setVariable(regionCodeVariableKey, code, `map-grid:${component.id}`);
                                         }
+                                        echartsClickHandler?.click?.({
+                                            componentType: 'series',
+                                            seriesType: 'map',
+                                            dataIndex: index,
+                                            name,
+                                            value,
+                                            data: item,
+                                        });
                                     }}
                                     style={{
                                         border: '1px solid rgba(148,163,184,0.25)',

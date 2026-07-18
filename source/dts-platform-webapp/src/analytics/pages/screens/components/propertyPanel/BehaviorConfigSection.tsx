@@ -2,13 +2,14 @@ import { Plus, Trash2 } from 'lucide-react';
 import type {
     ComponentInteractionConfig,
     ComponentInteractionMapping,
+    DataSourceConfig,
     DrillDownConfig,
     DrillLevel,
     ScreenComponent,
     ScreenComponentAction,
     ScreenGlobalVariable,
+    ScreenPage,
 } from '../../types';
-import { CardIdPicker } from '../CardIdPicker';
 import {
     ACTION_COMPONENT_TYPES,
     DRILL_CONFIGURABLE_TYPES,
@@ -16,6 +17,237 @@ import {
     getActionSourcePathCandidates,
 } from './helpers';
 import { ScreenJumpPicker } from './ScreenJumpPicker';
+import { renderDataSourceConfig } from './DataSourceConfigSection';
+
+function MappingEditor({
+    keyPrefix,
+    mappings,
+    sourcePathCandidates,
+    onChange,
+}: {
+    keyPrefix: string;
+    mappings: ComponentInteractionMapping[];
+    sourcePathCandidates: string[];
+    onChange: (mappings: ComponentInteractionMapping[]) => void;
+}) {
+    const targetKeyCounts = new Map<string, number>();
+    for (const mapping of mappings) {
+        const targetKey = String(mapping.variableKey ?? '').trim();
+        if (targetKey) targetKeyCounts.set(targetKey, (targetKeyCounts.get(targetKey) ?? 0) + 1);
+    }
+    const duplicateTargetKeys = new Set(
+        Array.from(targetKeyCounts.entries())
+            .filter(([, count]) => count > 1)
+            .map(([targetKey]) => targetKey),
+    );
+
+    return (
+        <>
+            {mappings.length === 0 ? (
+                <div role="alert" style={{ marginBottom: 6, color: '#f59e0b', fontSize: 11 }}>
+                    至少添加一条字段映射
+                </div>
+            ) : null}
+            {mappings.map((mapping, mappingIndex) => (
+                <div
+                    key={`${keyPrefix}-${mappingIndex}`}
+                    className="border border-dashed border-border-default rounded-lg p-2 mb-2"
+                >
+                    <div className="property-row flex items-center mb-3">
+                        <label className="property-label w-20 text-xs text-text-secondary">来源字段</label>
+                        <input
+                            list={`${keyPrefix}-source-path-${mappingIndex}`}
+                            className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
+                            value={mapping.sourcePath || ''}
+                            onChange={(e) => {
+                                const next = [...mappings];
+                                next[mappingIndex] = { ...next[mappingIndex], sourcePath: e.target.value };
+                                onChange(next);
+                            }}
+                            placeholder="name / data.key / row[0]"
+                        />
+                        <datalist id={`${keyPrefix}-source-path-${mappingIndex}`}>
+                            {sourcePathCandidates.map((item) => <option key={item} value={item} />)}
+                        </datalist>
+                    </div>
+                    {!String(mapping.sourcePath ?? '').trim() ? (
+                        <div role="alert" style={{ margin: '-6px 0 8px 80px', color: '#ef4444', fontSize: 11 }}>
+                            来源字段不能为空
+                        </div>
+                    ) : null}
+                    <div className="property-row flex items-center mb-3">
+                        <label className="property-label w-20 text-xs text-text-secondary">目标参数</label>
+                        <input
+                            type="text"
+                            className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
+                            value={mapping.variableKey || ''}
+                            onChange={(e) => {
+                                const next = [...mappings];
+                                next[mappingIndex] = { ...next[mappingIndex], variableKey: e.target.value };
+                                onChange(next);
+                            }}
+                            placeholder="selectedKey"
+                        />
+                    </div>
+                    {!String(mapping.variableKey ?? '').trim() ? (
+                        <div role="alert" style={{ margin: '-6px 0 8px 80px', color: '#ef4444', fontSize: 11 }}>
+                            目标参数不能为空
+                        </div>
+                    ) : duplicateTargetKeys.has(String(mapping.variableKey ?? '').trim()) ? (
+                        <div role="alert" style={{ margin: '-6px 0 8px 80px', color: '#ef4444', fontSize: 11 }}>
+                            目标参数不能重复
+                        </div>
+                    ) : null}
+                    <div className="property-row flex items-center mb-3">
+                        <label className="property-label w-20 text-xs text-text-secondary">值转换</label>
+                        <select
+                            className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
+                            value={String(mapping.transform || 'raw')}
+                            onChange={(e) => {
+                                const next = [...mappings];
+                                next[mappingIndex] = {
+                                    ...next[mappingIndex],
+                                    transform: e.target.value as ComponentInteractionMapping['transform'],
+                                };
+                                onChange(next);
+                            }}
+                        >
+                            <option value="raw">原值</option>
+                            <option value="string">字符串</option>
+                            <option value="number">数值</option>
+                            <option value="lowercase">转小写</option>
+                            <option value="uppercase">转大写</option>
+                        </select>
+                    </div>
+                    <button
+                        type="button"
+                        className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
+                        onClick={() => onChange(mappings.filter((_, index) => index !== mappingIndex))}
+                        style={{ width: '100%', textAlign: 'center', cursor: 'pointer', color: '#ef4444', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                    >
+                        <Trash2 size={13} aria-hidden="true" />
+                        删除映射
+                    </button>
+                </div>
+            ))}
+            <button
+                type="button"
+                className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
+                onClick={() => onChange([
+                    ...mappings,
+                    { variableKey: '', sourcePath: 'name', transform: 'raw', fallbackValue: '' },
+                ])}
+                style={{ width: '100%', textAlign: 'center', cursor: 'pointer', color: '#2563eb', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+            >
+                <Plus size={13} aria-hidden="true" />
+                添加字段映射
+            </button>
+        </>
+    );
+}
+
+const DRILL_TARGET_TYPES: DataSourceConfig['type'][] = ['sql', 'api', 'card', 'dataset', 'metric'];
+
+function DrillLevelEditor({
+    component,
+    level,
+    index,
+    globalVariables,
+    sourcePathCandidates,
+    onChange,
+    onRemove,
+}: {
+    component: ScreenComponent;
+    level: DrillLevel;
+    index: number;
+    globalVariables: ScreenGlobalVariable[];
+    sourcePathCandidates: string[];
+    onChange: (patch: Partial<DrillLevel>) => void;
+    onRemove: () => void;
+}) {
+    const legacyCardId = Number(level.cardId ?? 0);
+    const legacyParamName = String(level.paramName ?? '').trim();
+    const legacyDataSource: DataSourceConfig | undefined = legacyCardId > 0
+        ? { type: 'card', sourceType: 'card', cardConfig: { cardId: legacyCardId } }
+        : undefined;
+    const targetDataSource = level.dataSource ?? legacyDataSource;
+    const mappings = level.mappings ?? (legacyParamName
+        ? [{ sourcePath: 'name', variableKey: legacyParamName, transform: 'string' as const }]
+        : []);
+    const promoteToGeneric = (patch: Partial<DrillLevel>) => onChange({
+        dataSource: targetDataSource,
+        mappings,
+        inheritContext: level.inheritContext ?? (legacyCardId <= 0),
+        cardId: undefined,
+        paramName: undefined,
+        ...patch,
+    });
+
+    return (
+        <div style={{
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 4,
+            padding: 8,
+            marginBottom: 8,
+        }}>
+            <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 4,
+                fontSize: 13,
+                color: 'var(--color-text-secondary)',
+            }}>
+                <span>层级 {index + 1}</span>
+                <button
+                    type="button"
+                    className="property-btn-small inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed"
+                    onClick={onRemove}
+                    style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 13, gap: 4 }}
+                >
+                    <Trash2 size={12} aria-hidden="true" />
+                    删除
+                </button>
+            </div>
+            <div className="property-row flex items-center mb-3">
+                <label className="property-label w-20 text-xs text-text-secondary">导航标签</label>
+                <input
+                    type="text"
+                    className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
+                    value={level.label || ''}
+                    onChange={(e) => onChange({ label: e.target.value })}
+                    placeholder="明细"
+                />
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '8px 0 6px' }}>
+                下一层数据源
+            </div>
+            {renderDataSourceConfig(
+                { ...component, id: `${component.id}__drill_${index}`, dataSource: targetDataSource },
+                (_id, updates) => promoteToGeneric({ dataSource: updates.dataSource }),
+                globalVariables,
+                { allowedTypes: DRILL_TARGET_TYPES },
+            )}
+            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '8px 0 6px' }}>
+                字段映射
+            </div>
+            <MappingEditor
+                keyPrefix={`drill-${component.id}-${index}`}
+                mappings={mappings}
+                sourcePathCandidates={sourcePathCandidates}
+                onChange={(next) => promoteToGeneric({ mappings: next })}
+            />
+            <div className="property-row flex items-center mt-3 mb-1">
+                <label className="property-label w-20 text-xs text-text-secondary">继承上层筛选</label>
+                <input
+                    type="checkbox"
+                    checked={level.inheritContext ?? (legacyCardId <= 0)}
+                    onChange={(e) => promoteToGeneric({ inheritContext: e.target.checked })}
+                />
+            </div>
+        </div>
+    );
+}
 
 export function renderInteractionConfig(
     component: ScreenComponent,
@@ -234,6 +466,7 @@ export function renderInteractionConfig(
 export function renderActionConfig(
     component: ScreenComponent,
     updateComponent: (id: string, updates: Partial<ScreenComponent>) => void,
+    pages: ScreenPage[] = [],
     options?: { embedded?: boolean },
 ) {
     if (!ACTION_COMPONENT_TYPES.has(component.type)) {
@@ -268,7 +501,10 @@ export function renderActionConfig(
             {actions.map((action, index) => {
                 const actionType = action.type || 'set-variable';
                 const mappings = action.mappings ?? [];
-                const showMappings = actionType === 'set-variable' || actionType === 'jump-url' || actionType === 'emit-intent';
+                const showMappings = actionType === 'set-variable'
+                    || actionType === 'jump-url'
+                    || actionType === 'drill-view'
+                    || actionType === 'emit-intent';
                 return (
                     <div
                         key={`action-${index}`}
@@ -295,6 +531,7 @@ export function renderActionConfig(
                                 <option value="set-variable">写入变量</option>
                                 <option value="drill-down">下钻</option>
                                 <option value="drill-up">上卷返回</option>
+                                <option value="drill-view">切换内部视图</option>
                                 <option value="jump-url">页面跳转</option>
                                 <option value="open-panel">打开详情面板</option>
                                 <option value="emit-intent">发出意图事件</option>
@@ -302,87 +539,39 @@ export function renderActionConfig(
                         </div>
 
                         {showMappings ? (
-                            <>
-                                {mappings.map((mapping, mappingIndex) => (
-                                    <div
-                                        key={`action-${index}-mapping-${mappingIndex}`}
-                                        className="border border-dashed border-border-default rounded-lg p-2 mb-2"
-                                    >
-                                        <div className="property-row flex items-center mb-3">
-                                            <label className="property-label w-20 text-xs text-text-secondary">目标变量</label>
-                                            <input
-                                                type="text"
-                                                className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
-                                                value={mapping.variableKey || ''}
-                                                onChange={(e) => {
-                                                    const next = [...mappings];
-                                                    next[mappingIndex] = { ...next[mappingIndex], variableKey: e.target.value };
-                                                    updateMappings(index, next);
-                                                }}
-                                                placeholder="projectId"
-                                            />
-                                        </div>
-                                        <div className="property-row flex items-center mb-3">
-                                            <label className="property-label w-20 text-xs text-text-secondary">取值路径</label>
-                                            <input
-                                                list={`action-source-path-${index}-${mappingIndex}`}
-                                                className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
-                                                value={mapping.sourcePath || ''}
-                                                onChange={(e) => {
-                                                    const next = [...mappings];
-                                                    next[mappingIndex] = { ...next[mappingIndex], sourcePath: e.target.value };
-                                                    updateMappings(index, next);
-                                                }}
-                                                placeholder="name / row[0] / data.owner"
-                                            />
-                                            <datalist id={`action-source-path-${index}-${mappingIndex}`}>
-                                                {sourcePathCandidates.map((item) => (
-                                                    <option key={item} value={item} />
-                                                ))}
-                                            </datalist>
-                                        </div>
-                                        <div className="property-row flex items-center mb-3">
-                                            <label className="property-label w-20 text-xs text-text-secondary">值转换</label>
-                                            <select
-                                                className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
-                                                value={String(mapping.transform || 'raw')}
-                                                onChange={(e) => {
-                                                    const next = [...mappings];
-                                                    next[mappingIndex] = { ...next[mappingIndex], transform: e.target.value as ComponentInteractionMapping['transform'] };
-                                                    updateMappings(index, next);
-                                                }}
-                                            >
-                                                <option value="raw">原值</option>
-                                                <option value="string">字符串</option>
-                                                <option value="number">数值</option>
-                                                <option value="lowercase">转小写</option>
-                                                <option value="uppercase">转大写</option>
-                                            </select>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
-                                            onClick={() => updateMappings(index, mappings.filter((_, i) => i !== mappingIndex))}
-                                            style={{ width: '100%', textAlign: 'center', cursor: 'pointer', color: '#ef4444', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-                                        >
-                                            <Trash2 size={13} aria-hidden="true" />
-                                            删除映射
-                                        </button>
-                                    </div>
-                                ))}
+                            <MappingEditor
+                                keyPrefix={`action-${index}`}
+                                mappings={mappings}
+                                sourcePathCandidates={sourcePathCandidates}
+                                onChange={(next) => updateMappings(index, next)}
+                            />
+                        ) : null}
 
-                                <button
-                                    type="button"
-                                    className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
-                                    onClick={() => updateMappings(index, [
-                                        ...mappings,
-                                        { variableKey: '', sourcePath: 'name', transform: 'raw', fallbackValue: '' },
-                                    ])}
-                                    style={{ width: '100%', textAlign: 'center', cursor: 'pointer', color: '#2563eb', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-                                >
-                                    <Plus size={13} aria-hidden="true" />
-                                    添加变量映射
-                                </button>
+                        {actionType === 'drill-view' ? (
+                            <>
+                                <div className="property-row flex items-center mb-3">
+                                    <label className="property-label w-20 text-xs text-text-secondary">目标视图 ID</label>
+                                    <select
+                                        className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
+                                        value={action.drillViewId || ''}
+                                        onChange={(e) => updateAction(index, { drillViewId: e.target.value })}
+                                    >
+                                        <option value="">-- 请选择当前大屏页面 --</option>
+                                        {pages.map((page) => (
+                                            <option key={page.id} value={page.id}>{page.name || page.id}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="property-row flex items-center mb-3">
+                                    <label className="property-label w-20 text-xs text-text-secondary">导航标签</label>
+                                    <input
+                                        type="text"
+                                        className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
+                                        value={action.drillViewLabel || ''}
+                                        onChange={(e) => updateAction(index, { drillViewLabel: e.target.value })}
+                                        placeholder="明细"
+                                    />
+                                </div>
                             </>
                         ) : null}
 
@@ -415,7 +604,7 @@ export function renderActionConfig(
                                         className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                         value={action.panelTitle || ''}
                                         onChange={(e) => updateAction(index, { panelTitle: e.target.value })}
-                                        placeholder="项目 {{name}}"
+                                        placeholder="{{name}} 明细"
                                     />
                                 </div>
                                 <div className="property-row flex items-center mb-3">
@@ -506,12 +695,16 @@ export function renderActionConfig(
 export function renderDrillDownConfig(
     component: ScreenComponent,
     updateComponent: (id: string, updates: Partial<ScreenComponent>) => void,
+    globalVariables: ScreenGlobalVariable[],
     options?: { embedded?: boolean },
 ) {
     const { type, dataSource, drillDown } = component;
-    const cardId = dataSource?.type === 'card' ? dataSource.cardConfig?.cardId : undefined;
+    const rootSourceType = String(dataSource?.sourceType ?? dataSource?.type ?? '').trim().toLowerCase();
+    const hasExecutableSource = DRILL_TARGET_TYPES.includes(
+        (rootSourceType === 'database' ? 'sql' : rootSourceType) as DataSourceConfig['type'],
+    );
 
-    if (!DRILL_CONFIGURABLE_TYPES.has(type) || dataSource?.type !== 'card' || !cardId || cardId <= 0) {
+    if (!DRILL_CONFIGURABLE_TYPES.has(type) || !hasExecutableSource || !dataSource) {
         return null;
     }
 
@@ -524,9 +717,9 @@ export function renderDrillDownConfig(
         });
     };
 
-    const updateLevel = (index: number, field: keyof DrillLevel, value: string | number) => {
+    const updateLevel = (index: number, patch: Partial<DrillLevel>) => {
         const newLevels = [...levels];
-        newLevels[index] = { ...newLevels[index], [field]: value };
+        newLevels[index] = { ...newLevels[index], ...patch };
         setDrillDown({ levels: newLevels });
     };
 
@@ -535,8 +728,16 @@ export function renderDrillDownConfig(
     };
 
     const addLevel = () => {
-        setDrillDown({ levels: [...levels, { cardId: 0, paramName: '', label: '' }] });
+        setDrillDown({
+            levels: [...levels, {
+                label: '',
+                dataSource,
+                mappings: [],
+                inheritContext: true,
+            }],
+        });
     };
+    const sourcePathCandidates = getActionSourcePathCandidates(type);
 
     const content = (
         <>
@@ -551,64 +752,17 @@ export function renderDrillDownConfig(
 
             {enabled && (
                 <>
-                    {levels.map((level, i) => (
-                        <div key={i} style={{
-                            border: '1px solid rgba(255,255,255,0.1)',
-                            borderRadius: 4,
-                            padding: 8,
-                            marginBottom: 8,
-                        }}>
-                            <div style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                marginBottom: 4,
-                                fontSize: 13,
-                                color: 'var(--color-text-secondary)',
-                            }}>
-                                <span>层级 {i + 1}</span>
-                                <button
-                                    type="button"
-                                    className="property-btn-small inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed"
-                                    onClick={() => removeLevel(i)}
-                                    style={{
-                                        background: 'none', border: 'none',
-                                        color: '#ef4444', cursor: 'pointer', fontSize: 13, gap: 4,
-                                    }}
-                                >
-                                    <Trash2 size={12} aria-hidden="true" />
-                                    删除
-                                </button>
-                            </div>
-                            <div className="property-row flex items-center mb-3">
-                                <label className="property-label w-20 text-xs text-text-secondary">Card</label>
-                                <CardIdPicker
-                                    value={level.cardId || 0}
-                                    onChange={(cardId) => updateLevel(i, 'cardId', cardId)}
-                                    placeholder="-- 下钻目标 --"
-                                />
-                            </div>
-                            <div className="property-row flex items-center mb-3">
-                                <label className="property-label w-20 text-xs text-text-secondary">参数名</label>
-                                <input
-                                    type="text"
-                                    className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
-                                    value={level.paramName}
-                                    onChange={(e) => updateLevel(i, 'paramName', e.target.value)}
-                                    placeholder="如: region"
-                                />
-                            </div>
-                            <div className="property-row flex items-center mb-3">
-                                <label className="property-label w-20 text-xs text-text-secondary">标签</label>
-                                <input
-                                    type="text"
-                                    className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
-                                    value={level.label}
-                                    onChange={(e) => updateLevel(i, 'label', e.target.value)}
-                                    placeholder="如: 地区"
-                                />
-                            </div>
-                        </div>
+                    {levels.map((level, index) => (
+                        <DrillLevelEditor
+                            key={index}
+                            component={component}
+                            level={level}
+                            index={index}
+                            globalVariables={globalVariables}
+                            sourcePathCandidates={sourcePathCandidates}
+                            onChange={(patch) => updateLevel(index, patch)}
+                            onRemove={() => removeLevel(index)}
+                        />
                     ))}
 
                     <button

@@ -192,6 +192,11 @@ export default function ScreenPreviewPage() {
 	// Multi-page carousel support
 	const carousel = useScreenCarousel(screen?.pages, screen?.components || [], screen?.carouselConfig);
 	const components = carousel.currentPageComponents;
+	const handleDrillViewChange = useCallback((viewId: string | null) => {
+		const pages = screen?.pages ?? [];
+		const targetIndex = viewId === null ? 0 : pages.findIndex((page) => page.id === viewId);
+		if (targetIndex >= 0) carousel.goToPage(targetIndex);
+	}, [carousel.goToPage, screen?.pages]);
 
 	const visibleSortedComponents = useMemo(
 		() => {
@@ -477,7 +482,10 @@ export default function ScreenPreviewPage() {
 	const scalePercent = Math.round(scale * 100);
 
 	return (
-		<ScreenRuntimeProvider definitions={screen.globalVariables ?? []}>
+		<ScreenRuntimeProvider
+			definitions={screen.globalVariables ?? []}
+			onDrillViewChange={handleDrillViewChange}
+		>
 		<SharedStoreProvider>
 		<div
 			data-testid="analytics-screen-preview"

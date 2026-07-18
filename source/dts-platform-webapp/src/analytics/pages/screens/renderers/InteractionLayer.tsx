@@ -10,9 +10,11 @@ import {
     buildActionRuntimeParams,
     normalizeRuntimeJumpUrl,
     normalizeScreenActionType,
+    normalizeDataPointClickPayload,
     resolvePreferredDrillValue,
     resolveActionMappingValues,
     resolveActionTemplateText,
+    shouldRunDefaultDrill,
 } from './shared/actionUtils';
 import type { RuntimeEventKind } from '../ScreenRuntimeContext';
 import { resolveRouteForOpen } from '../../../helpers/resolveAnalyticsUrl';
@@ -123,6 +125,9 @@ interface ScreenRuntime {
     setVariable: (key: string, value: string, source?: string) => void;
     trackEvent: (event: { kind: RuntimeEventKind; key: string; value: string; source: string; meta?: string }) => void;
     openPanel: (title: string, body: string, source?: string) => void;
+    drillView: {
+        drillToView: (viewId: string, label: string, params?: Record<string, string>) => void;
+    };
 }
 
 // ---------------------------------------------------------------------------
@@ -136,6 +141,7 @@ export function useComponentInteractions(
     drillState: DrillState,
     drillRuntimeEnabled: boolean,
     drillActive: boolean,
+    drillLoading = false,
 ) {
     const filterVariableTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -249,21 +255,18 @@ export function useComponentInteractions(
                 continue;
             }
             if (actionType === 'drill-down') {
-                if (!drillRuntimeEnabled || !drillState.canDrillDown) {
+                if (!drillRuntimeEnabled || !drillState.canDrillDown || drillLoading) {
                     continue;
                 }
-                const clickedValue = resolvePreferredDrillValue(actionParams);
-                if (!clickedValue) {
-                    continue;
-                }
+                const clickedValue = Object.values(mappedValues)[0] ?? resolvePreferredDrillValue(actionParams) ?? "";
+                const accepted = drillState.handleDrill(actionParams);
                 runtime.trackEvent({
                     kind: 'drill-down',
-                    key: 'drillValue',
+                    key: accepted ? 'drillValue' : 'drillCancelled',
                     value: clickedValue,
                     source: `action:${component.id}`,
-                    meta: action.label || undefined,
+                    meta: accepted ? (action.label || undefined) : 'missing-mapping-or-duplicate',
                 });
-                drillState.handleDrill(clickedValue);
                 continue;
             }
             if (actionType === 'drill-up') {
@@ -279,6 +282,22 @@ export function useComponentInteractions(
                     meta: action.label || undefined,
                 });
                 drillState.handleRollUp(nextDepth);
+                continue;
+            }
+            if (actionType === 'drill-view') {
+                const viewId = String(action.drillViewId ?? '').trim();
+                if (!viewId) {
+                    continue;
+                }
+                const label = String(action.drillViewLabel || action.label || viewId).trim() || viewId;
+                runtime.drillView.drillToView(viewId, label, mappedValues);
+                runtime.trackEvent({
+                    kind: 'drill-down',
+                    key: 'drillViewId',
+                    value: viewId,
+                    source: `action:${component.id}`,
+                    meta: label,
+                });
                 continue;
             }
             if (actionType === 'jump-url') {
@@ -324,6 +343,7 @@ export function useComponentInteractions(
         drillState.canDrillDown,
         drillState.handleDrill,
         drillState.handleRollUp,
+        drillLoading,
         mode,
         navigateToResolvedUrl,
         runtime,
@@ -331,7 +351,15 @@ export function useComponentInteractions(
 
     // ECharts click handler for drill-down + variable interaction
     const echartsClickHandler = useMemo(() => {
-        const canDrill = drillActive && drillState.canDrillDown;
+        // Explicit actions own the click pipeline. This keeps charts aligned
+        // with cards and tables and prevents one click from attempting both an
+        // implicit drill and an explicit drill-down action.
+        const canDrill = shouldRunDefaultDrill({
+            drillActive,
+            canDrillDown: drillState.canDrillDown,
+            loading: drillLoading,
+            actionCount: componentActions.length,
+        });
         const canInteract = interactionMappings.length > 0;
         const canJump = !!interactionJump;
         const canAction = componentActions.length > 0;
@@ -339,25 +367,27 @@ export function useComponentInteractions(
 
         return {
             click: (params: Record<string, unknown>) => {
+                const clickPayload = normalizeDataPointClickPayload(params);
+                if (!clickPayload) {
+                    return;
+                }
                 if (canDrill) {
-                    const value = (params.name as string | undefined)
-                        ?? ((params.data as Record<string, unknown> | undefined)?.name as string | undefined);
-                    if (value) {
-                        const clicked = String(value);
-                        runtime.trackEvent({
-                            kind: 'drill-down',
-                            key: 'drillValue',
-                            value: clicked,
-                            source: `drill:${component.id}`,
-                            meta: `depth=${drillState.breadcrumbs.length}`,
-                        });
-                        drillState.handleDrill(clicked);
-                    }
+                    const clicked = resolvePreferredDrillValue(clickPayload) ?? "";
+                    const accepted = drillState.handleDrill(clickPayload);
+                    runtime.trackEvent({
+                        kind: 'drill-down',
+                        key: accepted ? 'drillValue' : 'drillCancelled',
+                        value: clicked,
+                        source: `drill:${component.id}`,
+                        meta: accepted
+                            ? `depth=${drillState.breadcrumbs.length}`
+                            : 'missing-mapping-or-duplicate',
+                    });
                 }
 
                 if (canInteract) {
                     for (const mapping of interactionMappings) {
-                        const rawNextValue = resolveInteractionValue(params, mapping.sourcePath);
+                        const rawNextValue = resolveInteractionValue(clickPayload, mapping.sourcePath);
                         const nextValue = resolveInteractionMappedValue(rawNextValue, mapping);
                         if (nextValue != null) {
                             runtime.setVariable(mapping.variableKey, nextValue, `interaction:${component.id}`);
@@ -368,7 +398,7 @@ export function useComponentInteractions(
                 if (canJump && interactionJump) {
                     const targetUrl = resolveInteractionUrlTemplate(
                         interactionJump.template,
-                        buildActionRuntimeParams(runtime.values, params),
+                        buildActionRuntimeParams(runtime.values, clickPayload),
                     );
                     if (targetUrl) {
                         navigateToResolvedUrl(targetUrl, interactionJump.openMode, `interaction:${component.id}`);
@@ -376,7 +406,7 @@ export function useComponentInteractions(
                 }
 
                 if (canAction) {
-                    executeComponentActions(params);
+                    executeComponentActions(clickPayload);
                 }
             },
         };
@@ -386,6 +416,7 @@ export function useComponentInteractions(
         drillState.breadcrumbs.length,
         drillState.canDrillDown,
         drillState.handleDrill,
+        drillLoading,
         executeComponentActions,
         interactionJump,
         interactionMappings,
@@ -476,6 +507,7 @@ export function useResolvableJumpStatus(component: ScreenComponent, mode: string
 }
 
 export function hasNonJumpInteractivity(component: ScreenComponent): boolean {
+    if (component.drillDown?.enabled === true) return true;
     const actions = component.actions ?? [];
     const hasOtherAction = actions.some((a) => {
         const t = a?.type;

@@ -19,6 +19,7 @@ test("PropertyPanel delegates behavior config sections to the extracted module",
 	assert.match(behaviorConfigSource, /export function renderInteractionConfig/);
 	assert.match(behaviorConfigSource, /export function renderActionConfig/);
 	assert.match(behaviorConfigSource, /export function renderDrillDownConfig/);
+	assert.match(propertyPanelSource, /renderDrillDownConfig\(selectedComponent, updateComponent, config\.globalVariables \?\? \[\]/);
 });
 
 test("default open-panel action is immediately saveable", async () => {

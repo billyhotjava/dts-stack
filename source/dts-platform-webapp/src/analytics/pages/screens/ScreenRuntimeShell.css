@@ -242,6 +242,58 @@
   font-weight: 600;
 }
 
+.screen-runtime__drill-view-nav {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  z-index: 11020;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100vw - 32px);
+  min-height: 34px;
+  padding: 4px 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--runtime-border, rgba(148, 163, 184, 0.22));
+  border-radius: 8px;
+  background: var(--runtime-control-bg, rgba(22, 32, 50, 0.92));
+  color: var(--runtime-control-text, rgba(255, 255, 255, 0.92));
+  box-shadow: var(--runtime-control-shadow, 0 8px 24px rgba(0, 0, 0, 0.3));
+  font-size: 12px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.screen-runtime__drill-view-nav span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.screen-runtime__drill-view-nav strong {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.screen-runtime__drill-view-nav button {
+  padding: 3px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.screen-runtime__drill-view-nav button:hover,
+.screen-runtime__drill-view-nav button:focus-visible {
+  background: var(--runtime-control-muted, rgba(255, 255, 255, 0.08));
+  outline: none;
+}
+
 .runtime-control-card {
   position: fixed;
   z-index: 11000;
