@@ -1296,6 +1296,36 @@
 **统计**: READY=0, IN_PROGRESS=1, DONE=20, BLOCKED=0
 **执行顺序**: F1 → F2/F3 → F4 → F5；F6 与 F1 并行但必须在发布前完成命名和入口收敛。
 
+## Sprint-65: 经典数仓规划内核与黄金主线重构 (202607)
+**状态**: READY
+**类型**: Architecture Convergence / Full-stack Refactor / Controlled Retirement
+**目标**: 以经典数仓规划作为默认主线，建立 BUSINESS_FIRST 与 ASSET_FIRST 双起点、WarehousePlan 单内核和平台黄金主线；将关系建模降为可选设计视图，将 dbt 调整为高级实现工具，并受控退役旧旅程。
+**设计文档**: `worklog/v2.2.3/sprint-65-202607/README.md`
+**总体架构**: `docs/superpowers/specs/2026-07-18-classic-warehouse-planning-golden-path-design.md`
+**领域/API 契约**: `worklog/v2.2.3/sprint-65-202607/assets/domain-and-api-contract.md`
+**受控退役登记**: `worklog/v2.2.3/sprint-65-202607/assets/controlled-retirement-register.md`
+**集成测试**: `worklog/v2.2.3/sprint-65-202607/it/README.md`
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-架构边界与受控退役 | P0 | 3 | READY |
+| F2-WarehousePlan持久化与API | P0 | 4 | READY |
+| F3-双起点规划基线 | P0 | 4 | READY |
+| F4-经典数仓架构与维度模型 | P0 | 4 | READY |
+| F5-黄金主线与数据建设工作台 | P0 | 4 | READY |
+| F6-模型中心与高级dbt分离 | P0 | 4 | READY |
+| F7-菜单路由兼容与旧旅程退役 | P0 | 4 | READY |
+| F8-集成验收与交付证据 | P0 | 3 | READY |
+
+**统计**: READY=30, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**执行顺序**: F1 → F2 → F3 → F4/F5 → F6 → F7 → F8；F7 可提前完成菜单/旧资产盘点，但最终切换必须等待 F3-F6 验收。
+**关键决策**:
+- `modeling_warehouse_plan` 是 canonical 方案级聚合，旧 `modeling_plan*` 迁移后冻结，不新增第三套主计划表，也不在本 Sprint 物理删除。
+- 两种起点只影响首次编辑顺序，必须汇合于同一个 PlanningBaseline 和发布流程。
+- 平台主线为连接、接入/盘点、规划、标准、模型、构建/质量/发布、资产、指标、服务/运维；阶段完成来自真实证据投影。
+- 模型中心持有事实/维度/关系真值；高级 dbt 只持有 SQL、宏、manifest、compile/test/run 等实现产物，并回写同一证据链。
+- 旧菜单 ID、角色绑定和深链先兼容、再冻结、后移除；PJM 等行业内容只作为示例和回归夹具。
+
 ## v2.3 Backlog: 企业级资产与指标增强
 
 | Item | Owner | 来源 | 状态 |

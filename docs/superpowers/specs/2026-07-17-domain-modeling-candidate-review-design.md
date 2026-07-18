@@ -1,6 +1,9 @@
 # 业务域建模候选确认闭环设计
 
-> **后续架构说明（2026-07-17）**：本文件记录候选确认闭环及其已实现后台不变量。其“固定三块页面/总线矩阵主流程/不重构页面”UI 决策，已由 `2026-07-17-generic-modeling-workbench-ui-design.md` 取代；候选确认能力将迁入“维度建模辅助”，不再决定通用建模旅程。
+> **状态：已废止（Superseded，2026-07-18）**
+> 本文件仅保留候选确认不变量和历史实现依据，不再定义 DTS 的默认建模旅程。现行架构以 [`2026-07-18-classic-warehouse-planning-golden-path-design.md`](./2026-07-18-classic-warehouse-planning-golden-path-design.md) 为准；总线矩阵降为模型关系的派生分析视图。
+
+> **历史说明（2026-07-17）**：本文件记录候选确认闭环及其已实现后台不变量。其“固定三块页面/总线矩阵主流程/不重构页面”UI 决策曾由 `2026-07-17-generic-modeling-workbench-ui-design.md` 取代；两份旧设计现均由 2026-07-18 现行架构统一收敛。
 
 **日期**：2026-07-17
 **范围**：`/governance/subjects`、Sprint-64 治理 API、行业建模模板 API
