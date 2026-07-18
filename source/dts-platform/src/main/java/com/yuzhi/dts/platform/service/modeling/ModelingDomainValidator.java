@@ -12,6 +12,54 @@ public final class ModelingDomainValidator {
 
     public record Issue(String code, String message) {}
 
+    public enum DomainResolution {
+        AVAILABLE,
+        MISSING,
+        ARCHIVED,
+        FORBIDDEN,
+    }
+
+    public enum IssueSeverity {
+        ERROR,
+        WARNING,
+    }
+
+    public record DomainActivityIssue(String code, String field, IssueSeverity severity) {}
+
+    /** Canonical model boundary: category is required; business activity is optional FACT context. */
+    public static List<DomainActivityIssue> validateDomainActivity(
+        ModelingVNextContract.ModelType modelType,
+        String domainId,
+        String businessActivityRef,
+        DomainResolution resolution
+    ) {
+        List<DomainActivityIssue> issues = new ArrayList<>();
+        if (isBlank(domainId)) {
+            issues.add(new DomainActivityIssue("MODEL_DOMAIN_REQUIRED", "domainId", IssueSeverity.ERROR));
+        }
+        if (isBlank(businessActivityRef)) {
+            return List.copyOf(issues);
+        }
+        if (modelType != ModelingVNextContract.ModelType.FACT) {
+            issues.add(
+                new DomainActivityIssue(
+                    "MODEL_BUSINESS_ACTIVITY_NOT_ALLOWED",
+                    "businessActivityRef",
+                    IssueSeverity.ERROR
+                )
+            );
+        } else if (resolution != DomainResolution.AVAILABLE) {
+            issues.add(
+                new DomainActivityIssue(
+                    "MODEL_BUSINESS_ACTIVITY_UNAVAILABLE",
+                    "businessActivityRef",
+                    IssueSeverity.WARNING
+                )
+            );
+        }
+        return List.copyOf(issues);
+    }
+
     public static List<Issue> validateBusinessObject(ModelingVNextContract.BusinessObject object, String tenantId) {
         List<Issue> issues = new ArrayList<>();
         if (object == null) return List.of(new Issue("OBJECT_REQUIRED", "业务对象不能为空"));

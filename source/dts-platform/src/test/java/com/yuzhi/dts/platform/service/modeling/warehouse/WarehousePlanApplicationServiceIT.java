@@ -149,7 +149,7 @@ class WarehousePlanApplicationServiceIT {
 
             PlanningBaseline incomplete = service.getBaseline(tenant, plan.id());
             assertThat(incomplete.ready()).isFalse();
-            assertThat(incomplete.missingCodes()).contains("BUSINESS_SCOPE_INCOMPLETE", "SOURCE_INVENTORY_INCOMPLETE");
+            assertThat(incomplete.missingCodes()).contains("CATEGORY_SCOPE_INCOMPLETE", "SOURCE_INVENTORY_INCOMPLETE");
             assertWarehouseError(
                 () -> service.confirmBaseline(tenant, plan.id(), plan.version()),
                 "WAREHOUSE_PLAN_BASELINE_INCOMPLETE",

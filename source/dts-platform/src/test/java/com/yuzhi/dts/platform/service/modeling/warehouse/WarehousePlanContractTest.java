@@ -47,9 +47,9 @@ class WarehousePlanContractTest {
 
     @Test
     void evaluatesOneBaselineFromConfirmedBusinessAndSourceFacts() {
-        BusinessScope scope = readyScope();
+        BusinessScope scope = readyScopeWithoutProcesses();
         List<SourceBinding> sources = readySources();
-        List<SourceBusinessMapping> mappings = readyMappings();
+        List<SourceBusinessMapping> mappings = readyMappingsWithoutProcess();
         PlanningPolicy policy = readyPolicy();
 
         assertThat(WarehousePlanContract.evaluateBaseline(scope, sources, mappings, policy).ready()).isTrue();
@@ -60,15 +60,62 @@ class WarehousePlanContractTest {
     void returnsStableMissingCodesWithoutTreatingCandidatesAsConfirmed() {
         assertThat(WarehousePlanContract.evaluateBaseline(null, List.of(), List.of(), null).missingCodes())
             .containsExactly(
-                "BUSINESS_SCOPE_INCOMPLETE",
-                "DOMAIN_PROCESS_CONFIRMATION_INCOMPLETE",
+                "CATEGORY_SCOPE_INCOMPLETE",
                 "SOURCE_INVENTORY_INCOMPLETE",
                 "SOURCE_BUSINESS_MAPPING_INCOMPLETE",
                 "PLANNING_POLICY_INCOMPLETE"
             );
 
-        assertThat(WarehousePlanContract.evaluateBaseline(readyScope(), readySources(), List.of(), readyPolicy()).ready()).isFalse();
-        assertThat(WarehousePlanContract.evaluateBaseline(readyScope(), readySources(), List.of(), readyPolicy()).missingCodes())
+        assertThat(WarehousePlanContract.evaluateBaseline(readyScopeWithoutProcesses(), readySources(), List.of(), readyPolicy()).ready())
+            .isFalse();
+        assertThat(
+            WarehousePlanContract.evaluateBaseline(readyScopeWithoutProcesses(), readySources(), List.of(), readyPolicy()).missingCodes()
+        )
+            .containsExactly("SOURCE_BUSINESS_MAPPING_INCOMPLETE");
+    }
+
+    @Test
+    void usesOnlyConfirmedDomainsForCategoryScopeAndSourceMappings() {
+        BusinessScope scope = new BusinessScope(
+            false,
+            List.of(new DomainBinding(DOMAIN_ID, CONFIRMED)),
+            List.of(new ProcessBinding("legacy-process", UUID.randomUUID(), "TRANSACTION", null)),
+            List.of(
+                new MetricRequirement(
+                    UUID.randomUUID(),
+                    "legacy-metric",
+                    "Legacy metric",
+                    "Compatibility-only requirement",
+                    DOMAIN_ID,
+                    "legacy-process",
+                    WarehousePlanContract.ConfirmationStatus.CANDIDATE
+                )
+            )
+        );
+
+        assertThat(WarehousePlanContract.evaluateBaseline(scope, readySources(), readyMappingsWithoutProcess(), readyPolicy()).ready())
+            .isTrue();
+    }
+
+    @Test
+    void rejectsSourceMappingOutsideConfirmedCategory() {
+        SourceBusinessMapping wrongDomainMapping = new SourceBusinessMapping(
+            UUID.randomUUID(),
+            SOURCE_ID,
+            UUID.randomUUID(),
+            null,
+            CONFIRMED,
+            null
+        );
+
+        assertThat(
+            WarehousePlanContract.evaluateBaseline(
+                readyScopeWithoutProcesses(),
+                readySources(),
+                List.of(wrongDomainMapping),
+                readyPolicy()
+            ).missingCodes()
+        )
             .containsExactly("SOURCE_BUSINESS_MAPPING_INCOMPLETE");
     }
 
@@ -88,12 +135,20 @@ class WarehousePlanContractTest {
         );
     }
 
+    private static BusinessScope readyScopeWithoutProcesses() {
+        return new BusinessScope(true, List.of(new DomainBinding(DOMAIN_ID, CONFIRMED)), List.of(), List.<MetricRequirement>of());
+    }
+
     private static List<SourceBinding> readySources() {
         return List.of(new SourceBinding(SOURCE_ID, CATALOG_TABLE, "asset-1", "schema-v1", CONFIRMED, null));
     }
 
     private static List<SourceBusinessMapping> readyMappings() {
         return List.of(new SourceBusinessMapping(UUID.randomUUID(), SOURCE_ID, DOMAIN_ID, "process-1", CONFIRMED, null));
+    }
+
+    private static List<SourceBusinessMapping> readyMappingsWithoutProcess() {
+        return List.of(new SourceBusinessMapping(UUID.randomUUID(), SOURCE_ID, DOMAIN_ID, null, CONFIRMED, null));
     }
 
     private static PlanningPolicy readyPolicy() {

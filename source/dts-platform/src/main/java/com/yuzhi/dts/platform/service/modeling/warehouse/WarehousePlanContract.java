@@ -3,7 +3,6 @@ package com.yuzhi.dts.platform.service.modeling.warehouse;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -12,6 +11,7 @@ public final class WarehousePlanContract {
 
     public static final String BUSINESS_SCOPE_INCOMPLETE = "BUSINESS_SCOPE_INCOMPLETE";
     public static final String DOMAIN_PROCESS_CONFIRMATION_INCOMPLETE = "DOMAIN_PROCESS_CONFIRMATION_INCOMPLETE";
+    public static final String CATEGORY_SCOPE_INCOMPLETE = "CATEGORY_SCOPE_INCOMPLETE";
     public static final String SOURCE_INVENTORY_INCOMPLETE = "SOURCE_INVENTORY_INCOMPLETE";
     public static final String SOURCE_BUSINESS_MAPPING_INCOMPLETE = "SOURCE_BUSINESS_MAPPING_INCOMPLETE";
     public static final String PLANNING_POLICY_INCOMPLETE = "PLANNING_POLICY_INCOMPLETE";
@@ -208,11 +208,8 @@ public final class WarehousePlanContract {
         List<SourceBusinessMapping> mappings = immutable(sourceBusinessMappings);
         List<String> missing = new ArrayList<>(5);
 
-        if (businessScope == null || !businessScope.confirmed()) {
-            missing.add(BUSINESS_SCOPE_INCOMPLETE);
-        }
         if (!confirmedDomainAndProcessScope(businessScope)) {
-            missing.add(DOMAIN_PROCESS_CONFIRMATION_INCOMPLETE);
+            missing.add(CATEGORY_SCOPE_INCOMPLETE);
         }
         if (!confirmedSourceInventory(sources)) {
             missing.add(SOURCE_INVENTORY_INCOMPLETE);
@@ -243,31 +240,14 @@ public final class WarehousePlanContract {
         };
     }
 
+    /** Legacy helper name retained during compatibility; process bindings do not participate in the canonical gate. */
     private static boolean confirmedDomainAndProcessScope(BusinessScope scope) {
-        if (scope == null || scope.domainBindings().isEmpty() || scope.processBindings().isEmpty()) {
+        if (scope == null || scope.domainBindings().isEmpty()) {
             return false;
         }
-        boolean domainsConfirmed = scope.domainBindings().stream().allMatch(binding ->
+        return scope.domainBindings().stream().allMatch(binding ->
             binding != null && binding.domainId() != null && binding.confirmationStatus() == ConfirmationStatus.CONFIRMED
         );
-        Set<UUID> domainIds = scope
-            .domainBindings()
-            .stream()
-            .filter(Objects::nonNull)
-            .filter(binding -> binding.confirmationStatus() == ConfirmationStatus.CONFIRMED)
-            .map(DomainBinding::domainId)
-            .collect(java.util.stream.Collectors.toUnmodifiableSet());
-        boolean processesConfirmed = scope.processBindings().stream().allMatch(binding ->
-            binding != null &&
-            !isBlank(binding.processId()) &&
-            domainIds.contains(binding.domainId()) &&
-            binding.confirmationStatus() == ConfirmationStatus.CONFIRMED
-        );
-        boolean metricsResolved = scope
-            .metricRequirements()
-            .stream()
-            .allMatch(requirement -> requirement != null && requirement.confirmationStatus() != ConfirmationStatus.CANDIDATE);
-        return domainsConfirmed && processesConfirmed && metricsResolved;
     }
 
     private static boolean confirmedSourceInventory(List<SourceBinding> sources) {
@@ -298,11 +278,6 @@ public final class WarehousePlanContract {
             return false;
         }
         Set<UUID> domainIds = scope.domainBindings().stream().map(DomainBinding::domainId).collect(java.util.stream.Collectors.toSet());
-        Set<String> processIds = scope
-            .processBindings()
-            .stream()
-            .map(ProcessBinding::processId)
-            .collect(java.util.stream.Collectors.toSet());
         return sources
             .stream()
             .filter(source -> source.confirmationStatus() == ConfirmationStatus.CONFIRMED)
@@ -310,8 +285,7 @@ public final class WarehousePlanContract {
                 mapping != null &&
                 source.id().equals(mapping.sourceBindingId()) &&
                 mapping.confirmationStatus() == ConfirmationStatus.CONFIRMED &&
-                domainIds.contains(mapping.domainId()) &&
-                processIds.contains(mapping.processId())
+                domainIds.contains(mapping.domainId())
             ));
     }
 

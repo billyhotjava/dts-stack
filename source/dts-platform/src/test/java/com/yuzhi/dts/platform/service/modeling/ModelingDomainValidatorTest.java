@@ -2,10 +2,92 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.yuzhi.dts.platform.service.modeling.ModelingDomainValidator.DomainActivityIssue;
+import com.yuzhi.dts.platform.service.modeling.ModelingDomainValidator.DomainResolution;
+import com.yuzhi.dts.platform.service.modeling.ModelingDomainValidator.IssueSeverity;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class ModelingDomainValidatorTest {
+
+    @Test
+    void requiresDomainForEveryModelType() {
+        for (ModelingVNextContract.ModelType modelType : ModelingVNextContract.ModelType.values()) {
+            assertThat(ModelingDomainValidator.validateDomainActivity(modelType, " ", null, DomainResolution.AVAILABLE))
+                .containsExactly(new DomainActivityIssue("MODEL_DOMAIN_REQUIRED", "domainId", IssueSeverity.ERROR));
+        }
+    }
+
+    @Test
+    void acceptsFactWithoutBusinessActivity() {
+        assertThat(
+            ModelingDomainValidator.validateDomainActivity(
+                ModelingVNextContract.ModelType.FACT,
+                "domain-1",
+                null,
+                DomainResolution.AVAILABLE
+            )
+        )
+            .isEmpty();
+    }
+
+    @Test
+    void warnsWhenFactBusinessActivityIsUnavailable() {
+        for (DomainResolution resolution : List.of(DomainResolution.MISSING, DomainResolution.ARCHIVED, DomainResolution.FORBIDDEN)) {
+            assertThat(
+                ModelingDomainValidator.validateDomainActivity(
+                    ModelingVNextContract.ModelType.FACT,
+                    "domain-1",
+                    "activity-1",
+                    resolution
+                )
+            )
+                .containsExactly(
+                    new DomainActivityIssue(
+                        "MODEL_BUSINESS_ACTIVITY_UNAVAILABLE",
+                        "businessActivityRef",
+                        IssueSeverity.WARNING
+                    )
+                );
+        }
+    }
+
+    @Test
+    void rejectsBusinessActivityForNonFactModels() {
+        for (
+            ModelingVNextContract.ModelType modelType :
+                List.of(
+                    ModelingVNextContract.ModelType.DIMENSION,
+                    ModelingVNextContract.ModelType.SUMMARY,
+                    ModelingVNextContract.ModelType.APPLICATION
+                )
+        ) {
+            assertThat(
+                ModelingDomainValidator.validateDomainActivity(modelType, "domain-1", "activity-1", DomainResolution.AVAILABLE)
+            )
+                .containsExactly(
+                    new DomainActivityIssue(
+                        "MODEL_BUSINESS_ACTIVITY_NOT_ALLOWED",
+                        "businessActivityRef",
+                        IssueSeverity.ERROR
+                    )
+                );
+        }
+    }
+
+    @Test
+    void canonicalDomainActivityRulesDoNotEmitLegacyProcessIssues() {
+        assertThat(
+            ModelingDomainValidator.validateDomainActivity(
+                ModelingVNextContract.ModelType.FACT,
+                "domain-1",
+                "activity-1",
+                DomainResolution.MISSING
+            )
+        )
+            .extracting(DomainActivityIssue::code)
+            .doesNotContain("PROCESS_REQUIRED", "PROCESS_MISMATCH");
+    }
 
     @Test
     void rejectsBusinessObjectWithoutProcessOrGrain() {
