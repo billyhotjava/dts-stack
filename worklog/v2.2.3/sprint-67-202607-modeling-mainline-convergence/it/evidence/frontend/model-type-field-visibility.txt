@@ -1,0 +1,26 @@
+Sprint-67 F1-T03 model-type field visibility evidence
+Date: 2026-07-19
+Status: PENDING - RULE FROZEN, REAL PAGE NOT YET IMPLEMENTED OR ACCEPTED
+
+What this slice proves
+- The shared pure rule states that businessActivityRef is optional context for FACT only.
+- DIMENSION, SUMMARY and APPLICATION reject a supplied businessActivityRef with a stable field-level ERROR.
+- The TypeScript contract compiles in the Chrome 95 production build.
+
+What this slice does not prove
+- No page, drawer, form, menu or route was changed in this repair.
+- No browser test verified conditional field rendering.
+- No browser test verified that FACT shows an optional field in a collapsed business-description area.
+- No browser test verified that DIMENSION, SUMMARY and APPLICATION hide that field.
+- Therefore this file is not UI acceptance evidence and must not be used to mark the page task complete.
+
+Remaining acceptance items (owned by F3/F4)
+- FACT create/edit form shows optional business activity only after modelType=FACT.
+- DIMENSION, SUMMARY and APPLICATION do not render or submit businessActivityRef.
+- Switching FACT to another type clears or diagnoses stale activity metadata without a duplicate warning.
+- Missing or unavailable domain gives the user a repair route.
+- Chrome 95 browser regression captures the actual field visibility and submission payload.
+
+Supporting build only
+- LEGACY_BROWSER_BUILD=1 pnpm build
+- Result: exit 0, 10,586 modules transformed, built in 2m 10s.

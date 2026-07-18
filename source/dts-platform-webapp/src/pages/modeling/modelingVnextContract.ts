@@ -6,8 +6,13 @@ export type ModelingModelType = "FACT" | "DIMENSION" | "SUMMARY" | "APPLICATION"
 export type ModelingImplementationMode = "DESIGNER_GENERATED" | "DBT_MANAGED";
 export type ModelingSourceKind = "TABLE" | "DBT_MODEL" | "DATASET";
 export type DomainResolution = "AVAILABLE" | "MISSING" | "ARCHIVED" | "FORBIDDEN";
+export type BusinessActivityResolution = "AVAILABLE" | "MISSING" | "ARCHIVED" | "FORBIDDEN";
 export type DomainActivityIssue = {
-	code: "MODEL_DOMAIN_REQUIRED" | "MODEL_BUSINESS_ACTIVITY_UNAVAILABLE" | "MODEL_BUSINESS_ACTIVITY_NOT_ALLOWED";
+	code:
+		| "MODEL_DOMAIN_REQUIRED"
+		| "MODEL_DOMAIN_UNAVAILABLE"
+		| "MODEL_BUSINESS_ACTIVITY_UNAVAILABLE"
+		| "MODEL_BUSINESS_ACTIVITY_NOT_ALLOWED";
 	field: "domainId" | "businessActivityRef";
 	severity: "ERROR" | "WARNING";
 };
@@ -85,12 +90,15 @@ export type ModelSpecValidation = {
 export const validateDomainActivity = (
 	modelType: ModelingModelType,
 	domainId: string | null | undefined,
+	domainResolution: DomainResolution | null | undefined,
 	businessActivityRef: string | null | undefined,
-	resolution: DomainResolution,
+	businessActivityResolution: BusinessActivityResolution | null | undefined,
 ): DomainActivityIssue[] => {
 	const issues: DomainActivityIssue[] = [];
 	if (!domainId?.trim()) {
 		issues.push({ code: "MODEL_DOMAIN_REQUIRED", field: "domainId", severity: "ERROR" });
+	} else if (domainResolution !== "AVAILABLE") {
+		issues.push({ code: "MODEL_DOMAIN_UNAVAILABLE", field: "domainId", severity: "ERROR" });
 	}
 	if (!businessActivityRef?.trim()) {
 		return issues;
@@ -101,7 +109,7 @@ export const validateDomainActivity = (
 			field: "businessActivityRef",
 			severity: "ERROR",
 		});
-	} else if (resolution !== "AVAILABLE") {
+	} else if (businessActivityResolution !== "AVAILABLE") {
 		issues.push({
 			code: "MODEL_BUSINESS_ACTIVITY_UNAVAILABLE",
 			field: "businessActivityRef",

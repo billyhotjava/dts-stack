@@ -19,6 +19,13 @@ public final class ModelingDomainValidator {
         FORBIDDEN,
     }
 
+    public enum BusinessActivityResolution {
+        AVAILABLE,
+        MISSING,
+        ARCHIVED,
+        FORBIDDEN,
+    }
+
     public enum IssueSeverity {
         ERROR,
         WARNING,
@@ -30,12 +37,15 @@ public final class ModelingDomainValidator {
     public static List<DomainActivityIssue> validateDomainActivity(
         ModelingVNextContract.ModelType modelType,
         String domainId,
+        DomainResolution domainResolution,
         String businessActivityRef,
-        DomainResolution resolution
+        BusinessActivityResolution businessActivityResolution
     ) {
         List<DomainActivityIssue> issues = new ArrayList<>();
         if (isBlank(domainId)) {
             issues.add(new DomainActivityIssue("MODEL_DOMAIN_REQUIRED", "domainId", IssueSeverity.ERROR));
+        } else if (domainResolution != DomainResolution.AVAILABLE) {
+            issues.add(new DomainActivityIssue("MODEL_DOMAIN_UNAVAILABLE", "domainId", IssueSeverity.ERROR));
         }
         if (isBlank(businessActivityRef)) {
             return List.copyOf(issues);
@@ -48,7 +58,7 @@ public final class ModelingDomainValidator {
                     IssueSeverity.ERROR
                 )
             );
-        } else if (resolution != DomainResolution.AVAILABLE) {
+        } else if (businessActivityResolution != BusinessActivityResolution.AVAILABLE) {
             issues.add(
                 new DomainActivityIssue(
                     "MODEL_BUSINESS_ACTIVITY_UNAVAILABLE",

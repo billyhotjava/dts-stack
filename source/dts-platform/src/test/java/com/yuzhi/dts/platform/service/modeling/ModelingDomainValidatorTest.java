@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.yuzhi.dts.platform.service.modeling.ModelingDomainValidator.BusinessActivityResolution;
 import com.yuzhi.dts.platform.service.modeling.ModelingDomainValidator.DomainActivityIssue;
 import com.yuzhi.dts.platform.service.modeling.ModelingDomainValidator.DomainResolution;
 import com.yuzhi.dts.platform.service.modeling.ModelingDomainValidator.IssueSeverity;
@@ -11,35 +12,69 @@ import org.junit.jupiter.api.Test;
 class ModelingDomainValidatorTest {
 
     @Test
-    void requiresDomainForEveryModelType() {
+    void blankDomainOnlyReportsRequiredForEveryModelType() {
         for (ModelingVNextContract.ModelType modelType : ModelingVNextContract.ModelType.values()) {
-            assertThat(ModelingDomainValidator.validateDomainActivity(modelType, " ", null, DomainResolution.AVAILABLE))
+            assertThat(ModelingDomainValidator.validateDomainActivity(modelType, " ", null, null, null))
                 .containsExactly(new DomainActivityIssue("MODEL_DOMAIN_REQUIRED", "domainId", IssueSeverity.ERROR));
         }
     }
 
     @Test
-    void acceptsFactWithoutBusinessActivity() {
-        assertThat(
-            ModelingDomainValidator.validateDomainActivity(
-                ModelingVNextContract.ModelType.FACT,
-                "domain-1",
-                null,
-                DomainResolution.AVAILABLE
-            )
-        )
-            .isEmpty();
+    void rejectsEveryUnavailableDomainResolutionForAllModelTypes() {
+        for (ModelingVNextContract.ModelType modelType : ModelingVNextContract.ModelType.values()) {
+            for (
+                DomainResolution resolution :
+                new DomainResolution[] { DomainResolution.MISSING, DomainResolution.ARCHIVED, DomainResolution.FORBIDDEN, null }
+            ) {
+                assertThat(ModelingDomainValidator.validateDomainActivity(modelType, "domain-1", resolution, null, null))
+                    .containsExactly(new DomainActivityIssue("MODEL_DOMAIN_UNAVAILABLE", "domainId", IssueSeverity.ERROR));
+            }
+        }
     }
 
     @Test
-    void warnsWhenFactBusinessActivityIsUnavailable() {
-        for (DomainResolution resolution : List.of(DomainResolution.MISSING, DomainResolution.ARCHIVED, DomainResolution.FORBIDDEN)) {
+    void acceptsFactWithoutBusinessActivityRegardlessOfActivityResolution() {
+        for (
+            BusinessActivityResolution activityResolution :
+            new BusinessActivityResolution[] {
+                BusinessActivityResolution.AVAILABLE,
+                BusinessActivityResolution.MISSING,
+                BusinessActivityResolution.ARCHIVED,
+                BusinessActivityResolution.FORBIDDEN,
+                null,
+            }
+        ) {
             assertThat(
                 ModelingDomainValidator.validateDomainActivity(
                     ModelingVNextContract.ModelType.FACT,
                     "domain-1",
+                    DomainResolution.AVAILABLE,
+                    null,
+                    activityResolution
+                )
+            )
+                .isEmpty();
+        }
+    }
+
+    @Test
+    void warnsForEveryUnavailableFactBusinessActivityResolution() {
+        for (
+            BusinessActivityResolution activityResolution :
+            new BusinessActivityResolution[] {
+                BusinessActivityResolution.MISSING,
+                BusinessActivityResolution.ARCHIVED,
+                BusinessActivityResolution.FORBIDDEN,
+                null,
+            }
+        ) {
+            assertThat(
+                ModelingDomainValidator.validateDomainActivity(
+                    ModelingVNextContract.ModelType.FACT,
+                    "domain-1",
+                    DomainResolution.AVAILABLE,
                     "activity-1",
-                    resolution
+                    activityResolution
                 )
             )
                 .containsExactly(
@@ -53,7 +88,24 @@ class ModelingDomainValidatorTest {
     }
 
     @Test
-    void rejectsBusinessActivityForNonFactModels() {
+    void reportsUnavailableDomainAndFactActivityTogether() {
+        assertThat(
+            ModelingDomainValidator.validateDomainActivity(
+                ModelingVNextContract.ModelType.FACT,
+                "domain-1",
+                DomainResolution.ARCHIVED,
+                "activity-1",
+                BusinessActivityResolution.FORBIDDEN
+            )
+        )
+            .containsExactly(
+                new DomainActivityIssue("MODEL_DOMAIN_UNAVAILABLE", "domainId", IssueSeverity.ERROR),
+                new DomainActivityIssue("MODEL_BUSINESS_ACTIVITY_UNAVAILABLE", "businessActivityRef", IssueSeverity.WARNING)
+            );
+    }
+
+    @Test
+    void rejectsBusinessActivityForNonFactModelsWithoutAvailabilityWarning() {
         for (
             ModelingVNextContract.ModelType modelType :
                 List.of(
@@ -62,16 +114,32 @@ class ModelingDomainValidatorTest {
                     ModelingVNextContract.ModelType.APPLICATION
                 )
         ) {
-            assertThat(
-                ModelingDomainValidator.validateDomainActivity(modelType, "domain-1", "activity-1", DomainResolution.AVAILABLE)
-            )
-                .containsExactly(
-                    new DomainActivityIssue(
-                        "MODEL_BUSINESS_ACTIVITY_NOT_ALLOWED",
-                        "businessActivityRef",
-                        IssueSeverity.ERROR
+            for (
+                BusinessActivityResolution activityResolution :
+                new BusinessActivityResolution[] {
+                    BusinessActivityResolution.MISSING,
+                    BusinessActivityResolution.ARCHIVED,
+                    BusinessActivityResolution.FORBIDDEN,
+                    null,
+                }
+            ) {
+                assertThat(
+                    ModelingDomainValidator.validateDomainActivity(
+                        modelType,
+                        "domain-1",
+                        DomainResolution.AVAILABLE,
+                        "activity-1",
+                        activityResolution
                     )
-                );
+                )
+                    .containsExactly(
+                        new DomainActivityIssue(
+                            "MODEL_BUSINESS_ACTIVITY_NOT_ALLOWED",
+                            "businessActivityRef",
+                            IssueSeverity.ERROR
+                        )
+                    );
+            }
         }
     }
 
@@ -81,8 +149,9 @@ class ModelingDomainValidatorTest {
             ModelingDomainValidator.validateDomainActivity(
                 ModelingVNextContract.ModelType.FACT,
                 "domain-1",
+                DomainResolution.AVAILABLE,
                 "activity-1",
-                DomainResolution.MISSING
+                BusinessActivityResolution.MISSING
             )
         )
             .extracting(DomainActivityIssue::code)

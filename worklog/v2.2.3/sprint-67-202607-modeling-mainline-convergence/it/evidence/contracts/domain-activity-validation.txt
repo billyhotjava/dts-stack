@@ -1,0 +1,57 @@
+Sprint-67 F1-T03 domain/activity validation evidence
+Date: 2026-07-19
+Status: PURE RULE CONTRACT VERIFIED
+
+Verified boundary
+- DomainResolution describes only the catalog domain: AVAILABLE, MISSING, ARCHIVED, FORBIDDEN.
+- BusinessActivityResolution independently describes only businessActivityRef with the same four states.
+- Blank domainId emits only MODEL_DOMAIN_REQUIRED / domainId / ERROR.
+- A nonblank domainId whose resolution is not AVAILABLE, including a null runtime value, emits
+  MODEL_DOMAIN_UNAVAILABLE / domainId / ERROR.
+- FACT accepts a blank businessActivityRef. A nonblank unavailable activity emits
+  MODEL_BUSINESS_ACTIVITY_UNAVAILABLE / businessActivityRef / WARNING.
+- DIMENSION, SUMMARY and APPLICATION reject a nonblank activity with
+  MODEL_BUSINESS_ACTIVITY_NOT_ALLOWED / businessActivityRef / ERROR and do not add an activity availability warning.
+- A domain ERROR and FACT activity WARNING can be returned together.
+- Java and TypeScript expose the same five-input rule in this order:
+  modelType, domainId, domainResolution, businessActivityRef, businessActivityResolution.
+
+TDD RED observed
+- Java command:
+  ./mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -DskipITs -Dtest=ModelingDomainValidatorTest test
+- Result: exit 1 at testCompile because BusinessActivityResolution did not exist.
+- TypeScript command:
+  node --experimental-strip-types src/pages/modeling/modelingVnextContract.test.ts
+- Result: exit 1; 6 passed and 3 failed for the expected missing behaviors:
+  unavailable domain, blank FACT activity with independent activity resolution, and concurrent domain/activity diagnostics.
+
+GREEN verification
+- Java focused plus adjacent contracts:
+  ./mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -DskipITs \
+    -Dtest=ModelingDomainValidatorTest,ModelingVNextContractTest,WarehousePlanContractTest,WarehousePlanStageProjectionServiceTest test
+- Result: exit 0, 23 tests total, 0 failures, 0 errors, 0 skipped.
+  ModelingDomainValidatorTest 12; ModelingVNextContractTest 2;
+  WarehousePlanContractTest 6; WarehousePlanStageProjectionServiceTest 3.
+- TypeScript direct rule run:
+  node --experimental-strip-types src/pages/modeling/modelingVnextContract.test.ts
+- Result: exit 0, 9 passed, 0 failed.
+- TypeScript Node test harness:
+  node --test --experimental-strip-types src/pages/modeling/modelingVnextContract.test.ts
+- Result: exit 0.
+- Biome:
+  pnpm exec biome check src/pages/modeling/modelingVnextContract.ts src/pages/modeling/modelingVnextContract.test.ts
+- Result: exit 0, 2 files checked, no fixes.
+- Chrome 95 build:
+  LEGACY_BROWSER_BUILD=1 pnpm build
+- Result: exit 0, 10,586 modules transformed, built in 2m 10s.
+  Existing stale caniuse-lite and large-chunk warnings remain non-blocking.
+
+Impact note
+- Pre-edit GitNexus upstream impact could not find the newly added Java/TypeScript symbols in the current index;
+  it returned UNKNOWN with zero indexed impacted symbols, not HIGH or CRITICAL.
+
+Not accepted by this slice
+- Catalog lifecycle/permission lookup that produces DomainResolution is not wired.
+- Page field visibility and browser interaction are not implemented or accepted here.
+- The legacy processId-to-businessActivityRef API adapter is not implemented or accepted here.
+- Existing validateModelSpec and database/API runtime contracts are intentionally unchanged.

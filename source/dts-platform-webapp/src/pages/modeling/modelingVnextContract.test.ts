@@ -7,8 +7,9 @@ import { buildPjmProjectNodeFixture } from "./pjmModelingFixture.test-support.ts
 type DomainActivityRule = (
 	modelType: "FACT" | "DIMENSION" | "SUMMARY" | "APPLICATION",
 	domainId: string | null | undefined,
+	domainResolution: "AVAILABLE" | "MISSING" | "ARCHIVED" | "FORBIDDEN" | null | undefined,
 	businessActivityRef: string | null | undefined,
-	resolution: "AVAILABLE" | "MISSING" | "ARCHIVED" | "FORBIDDEN",
+	businessActivityResolution: "AVAILABLE" | "MISSING" | "ARCHIVED" | "FORBIDDEN" | null | undefined,
 ) => Array<{ code: string; field: string; severity: "ERROR" | "WARNING" }>;
 
 const domainActivityRule = (): DomainActivityRule => {
@@ -17,28 +18,52 @@ const domainActivityRule = (): DomainActivityRule => {
 	return candidate as DomainActivityRule;
 };
 
-test("all four model types require a business category", () => {
+test("blank domain only reports required for all four model types", () => {
 	for (const modelType of ["FACT", "DIMENSION", "SUMMARY", "APPLICATION"] as const) {
-		assert.deepEqual(domainActivityRule()(modelType, " ", undefined, "AVAILABLE"), [
+		assert.deepEqual(domainActivityRule()(modelType, " ", undefined, undefined, undefined), [
 			{ code: "MODEL_DOMAIN_REQUIRED", field: "domainId", severity: "ERROR" },
 		]);
 	}
 });
 
-test("FACT activity is optional and an unavailable reference only warns", () => {
-	assert.deepEqual(domainActivityRule()("FACT", "domain-1", undefined, "AVAILABLE"), []);
-	for (const resolution of ["MISSING", "ARCHIVED", "FORBIDDEN"] as const) {
-		assert.deepEqual(domainActivityRule()("FACT", "domain-1", "activity-1", resolution), [
+test("all four model types reject every unavailable domain resolution", () => {
+	for (const modelType of ["FACT", "DIMENSION", "SUMMARY", "APPLICATION"] as const) {
+		for (const resolution of ["MISSING", "ARCHIVED", "FORBIDDEN", undefined] as const) {
+			assert.deepEqual(domainActivityRule()(modelType, "domain-1", resolution, undefined, undefined), [
+				{ code: "MODEL_DOMAIN_UNAVAILABLE", field: "domainId", severity: "ERROR" },
+			]);
+		}
+	}
+});
+
+test("FACT activity is optional regardless of activity resolution", () => {
+	for (const activityResolution of ["AVAILABLE", "MISSING", "ARCHIVED", "FORBIDDEN", undefined] as const) {
+		assert.deepEqual(domainActivityRule()("FACT", "domain-1", "AVAILABLE", undefined, activityResolution), []);
+	}
+});
+
+test("FACT warns for every unavailable activity resolution", () => {
+	for (const activityResolution of ["MISSING", "ARCHIVED", "FORBIDDEN", undefined] as const) {
+		assert.deepEqual(domainActivityRule()("FACT", "domain-1", "AVAILABLE", "activity-1", activityResolution), [
 			{ code: "MODEL_BUSINESS_ACTIVITY_UNAVAILABLE", field: "businessActivityRef", severity: "WARNING" },
 		]);
 	}
 });
 
-test("non-FACT models reject business activity metadata", () => {
+test("domain error and FACT activity warning are reported together", () => {
+	assert.deepEqual(domainActivityRule()("FACT", "domain-1", "ARCHIVED", "activity-1", "FORBIDDEN"), [
+		{ code: "MODEL_DOMAIN_UNAVAILABLE", field: "domainId", severity: "ERROR" },
+		{ code: "MODEL_BUSINESS_ACTIVITY_UNAVAILABLE", field: "businessActivityRef", severity: "WARNING" },
+	]);
+});
+
+test("non-FACT models reject business activity without an availability warning", () => {
 	for (const modelType of ["DIMENSION", "SUMMARY", "APPLICATION"] as const) {
-		assert.deepEqual(domainActivityRule()(modelType, "domain-1", "activity-1", "AVAILABLE"), [
-			{ code: "MODEL_BUSINESS_ACTIVITY_NOT_ALLOWED", field: "businessActivityRef", severity: "ERROR" },
-		]);
+		for (const activityResolution of ["MISSING", "ARCHIVED", "FORBIDDEN", undefined] as const) {
+			assert.deepEqual(domainActivityRule()(modelType, "domain-1", "AVAILABLE", "activity-1", activityResolution), [
+				{ code: "MODEL_BUSINESS_ACTIVITY_NOT_ALLOWED", field: "businessActivityRef", severity: "ERROR" },
+			]);
+		}
 	}
 });
 
