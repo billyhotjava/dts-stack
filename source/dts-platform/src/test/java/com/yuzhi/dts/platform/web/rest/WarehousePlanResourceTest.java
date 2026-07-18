@@ -23,8 +23,11 @@ import com.yuzhi.dts.platform.security.session.PortalSessionInactivityFilter;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService.UpdatePlanHeaderCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService.WarehousePlanException;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider.WarehousePlanActor;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.BusinessScope;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.DomainBinding;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CreateWarehousePlanResult;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningBaseline;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicy;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.ProcessBinding;
@@ -79,6 +82,9 @@ class WarehousePlanResourceTest {
     private WarehousePlanStageProjectionService stageProjectionService;
 
     @MockBean
+    private WarehousePlanActorProvider actorProvider;
+
+    @MockBean
     private PortalSessionInactivityFilter portalSessionInactivityFilter;
 
     @MockBean
@@ -87,7 +93,17 @@ class WarehousePlanResourceTest {
     @Test
     void createsListsAndLoadsUsingOnlyTheServerTenant() throws Exception {
         WarehousePlanHeader created = planHeader(1, DRAFT);
-        when(service.create(eq("server-tenant"), any())).thenReturn(created);
+        CreateWarehousePlanResult createResult = new CreateWarehousePlanResult(
+            PLAN_ID,
+            created,
+            1,
+            "\"plan-head:1\"",
+            List.of(),
+            "/modeling/plans/" + PLAN_ID + "/baseline",
+            false
+        );
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("owner-1", "department-1"));
+        when(service.create(eq("server-tenant"), any())).thenReturn(createResult);
         when(service.list("server-tenant", "DRAFT")).thenReturn(List.of(created));
         when(service.get("server-tenant", PLAN_ID)).thenReturn(created);
 
@@ -99,16 +115,19 @@ class WarehousePlanResourceTest {
                     .content(
                         """
                         {
-                          "code":"warehouse-neutral","name":"Neutral warehouse","objective":"Trusted metrics",
-                          "scope":"Initial scope","ownerId":"owner-1","ownerDepartmentId":"department-1",
-                          "onboardingMode":"BUSINESS_FIRST"
+                          "name":"Neutral warehouse","objective":"Trusted metrics","scope":"Initial scope",
+                          "onboardingMode":"BUSINESS_FIRST","initialSourceRefs":[],"idempotencyKey":"request-1"
                         }
                         """
                     )
             )
             .andExpect(status().isCreated())
             .andExpect(header().string("ETag", "\"plan-head:1\""))
-            .andExpect(jsonPath("$.data.tenantId").value("server-tenant"));
+            .andExpect(header().string("Location", "/api/modeling/warehouse-plans/" + PLAN_ID))
+            .andExpect(jsonPath("$.data.planId").value(PLAN_ID.toString()))
+            .andExpect(jsonPath("$.data.plan.tenantId").value("server-tenant"))
+            .andExpect(jsonPath("$.data.nextAction").value("/modeling/plans/" + PLAN_ID + "/baseline"))
+            .andExpect(jsonPath("$.data.replayed").value(false));
 
         mockMvc
             .perform(get("/api/modeling/warehouse-plans").param("lifecycleStatus", "DRAFT"))
@@ -135,13 +154,49 @@ class WarehousePlanResourceTest {
                         """
                         {
                           "tenantId":"body-tenant","code":"warehouse-neutral","name":"Neutral warehouse",
-                          "ownerId":"owner-1","onboardingMode":"BUSINESS_FIRST"
+                          "objective":"Objective","onboardingMode":"BUSINESS_FIRST","idempotencyKey":"request-tenant"
                         }
                         """
                     )
             )
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("WAREHOUSE_PLAN_TENANT_NOT_ACCEPTED"));
+
+        verify(service, never()).create(any(), any());
+    }
+
+    @Test
+    void rejectsForgedOwnerAndMissingAuthenticatedActorBeforeCreating() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("owner-1", "department-1"));
+
+        mockMvc
+            .perform(
+                post("/api/modeling/warehouse-plans")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"name":"Forged","objective":"Objective","ownerId":"owner-2",
+                         "onboardingMode":"BUSINESS_FIRST","idempotencyKey":"request-forged"}
+                        """
+                    )
+            )
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("WAREHOUSE_PLAN_OWNER_FORBIDDEN"));
+
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor(null, null));
+        mockMvc
+            .perform(
+                post("/api/modeling/warehouse-plans")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"name":"Anonymous","objective":"Objective","onboardingMode":"BUSINESS_FIRST",
+                         "idempotencyKey":"request-anonymous"}
+                        """
+                    )
+            )
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("WAREHOUSE_PLAN_AUTHENTICATED_ACTOR_REQUIRED"));
 
         verify(service, never()).create(any(), any());
     }

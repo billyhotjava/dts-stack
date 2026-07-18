@@ -14,9 +14,11 @@ import com.yuzhi.dts.platform.IntegrationTest;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService.UpdatePlanHeaderCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService.WarehousePlanException;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CreateWarehousePlanCommand;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CreateWarehousePlanResult;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.BusinessScope;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.DomainBinding;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.MetricRequirement;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.InitialSourceRef;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningBaseline;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicy;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.ProcessBinding;
@@ -26,6 +28,9 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.V
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.WarehousePlanHeader;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -43,14 +48,16 @@ class WarehousePlanApplicationServiceIT {
     void createsListsAndLoadsPlansInsideServerTenantScope() {
         String tenantA = tenant("scope-a");
         String tenantB = tenant("scope-b");
-        String code = code("scope");
+        String idempotencyKey = "scope-key-" + UUID.randomUUID();
 
         try {
-            WarehousePlanHeader tenantAPlan = service.create(tenantA, createCommand(code, BUSINESS_FIRST));
-            WarehousePlanHeader tenantBPlan = service.create(tenantB, createCommand(code, ASSET_FIRST));
+            WarehousePlanHeader tenantAPlan = service.create(tenantA, createCommand(BUSINESS_FIRST, idempotencyKey)).plan();
+            WarehousePlanHeader tenantBPlan = service.create(tenantB, createCommand(ASSET_FIRST, idempotencyKey)).plan();
 
             assertThat(tenantAPlan.tenantId()).isEqualTo(tenantA);
             assertThat(tenantBPlan.tenantId()).isEqualTo(tenantB);
+            assertThat(tenantAPlan.code()).matches("wp_[0-9a-f]{32}");
+            assertThat(tenantBPlan.code()).matches("wp_[0-9a-f]{32}");
             assertThat(service.list(tenantA, null)).extracting(WarehousePlanHeader::id).contains(tenantAPlan.id()).doesNotContain(tenantBPlan.id());
             assertThat(service.get(tenantA, tenantAPlan.id())).isEqualTo(tenantAPlan);
             assertWarehouseError(() -> service.get(tenantA, tenantBPlan.id()), "WAREHOUSE_PLAN_NOT_FOUND", null);
@@ -61,15 +68,157 @@ class WarehousePlanApplicationServiceIT {
     }
 
     @Test
-    void rejectsTenantScopedDuplicateCode() {
-        String tenant = tenant("duplicate");
-        String code = code("duplicate");
+    void replaysTheSameRequestAndRejectsAChangedPayloadForTheSameTenantKey() {
+        String tenant = tenant("idempotency");
+        String idempotencyKey = "retry-key-" + UUID.randomUUID();
 
         try {
-            service.create(tenant, createCommand(code, BUSINESS_FIRST));
+            CreateWarehousePlanResult created = service.create(tenant, createCommand(BUSINESS_FIRST, idempotencyKey));
+            CreateWarehousePlanResult replayed = service.create(tenant, createCommand(BUSINESS_FIRST, idempotencyKey));
 
-            assertWarehouseError(() -> service.create(tenant, createCommand(code, ASSET_FIRST)), "WAREHOUSE_PLAN_CODE_CONFLICT", null);
+            assertThat(created.replayed()).isFalse();
+            assertThat(replayed.replayed()).isTrue();
+            assertThat(replayed.planId()).isEqualTo(created.planId());
+            assertThat(replayed.etag()).isEqualTo(created.etag());
+            assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from modeling_warehouse_plan where tenant_id = ? and idempotency_key = ?",
+                Long.class,
+                tenant,
+                idempotencyKey
+            )).isEqualTo(1L);
+
+            CreateWarehousePlanCommand changed = new CreateWarehousePlanCommand(
+                "Changed name",
+                "Reusable analysis objective",
+                "Initial business scope",
+                "owner-1",
+                "department-1",
+                BUSINESS_FIRST,
+                List.of(),
+                idempotencyKey
+            );
+            assertWarehouseError(
+                () -> service.create(tenant, changed),
+                "WAREHOUSE_PLAN_IDEMPOTENCY_CONFLICT",
+                null
+            );
         } finally {
+            deleteTenant(tenant);
+        }
+    }
+
+    @Test
+    void replaysTheImmutableCreateSnapshotAfterThePlanAndSourcesChange() {
+        String tenant = tenant("idempotency-snapshot");
+        String idempotencyKey = "snapshot-key-" + UUID.randomUUID();
+        CreateWarehousePlanCommand command = createCommand(ASSET_FIRST, idempotencyKey);
+
+        try {
+            CreateWarehousePlanResult created = service.create(tenant, command);
+            service.updateHeader(
+                tenant,
+                created.planId(),
+                created.version(),
+                new UpdatePlanHeaderCommand("Changed after create", "Changed objective", null, "owner-2", "department-2")
+            );
+            service.saveSources(tenant, created.planId(), 1, readySources());
+
+            CreateWarehousePlanResult replayed = service.create(tenant, command);
+
+            assertThat(replayed.replayed()).isTrue();
+            assertThat(replayed.plan()).isEqualTo(created.plan());
+            assertThat(replayed.version()).isEqualTo(1);
+            assertThat(replayed.etag()).isEqualTo(created.etag());
+            assertThat(replayed.initialSourceBindings()).isEqualTo(created.initialSourceBindings());
+            assertThat(service.get(tenant, created.planId()).name()).isEqualTo("Changed after create");
+        } finally {
+            deleteTenant(tenant);
+        }
+    }
+
+    @Test
+    void atomicallyCreatesAssetFirstSourcesAndConvergesConcurrentRetries() throws Exception {
+        String tenant = tenant("concurrent");
+        String idempotencyKey = "concurrent-key-" + UUID.randomUUID();
+        CreateWarehousePlanCommand command = createCommand(ASSET_FIRST, idempotencyKey);
+        CountDownLatch start = new CountDownLatch(1);
+        var executor = Executors.newFixedThreadPool(2);
+
+        try {
+            var first = executor.submit(() -> {
+                start.await(10, TimeUnit.SECONDS);
+                return service.create(tenant, command);
+            });
+            var second = executor.submit(() -> {
+                start.await(10, TimeUnit.SECONDS);
+                return service.create(tenant, command);
+            });
+            start.countDown();
+            CreateWarehousePlanResult firstResult = first.get(30, TimeUnit.SECONDS);
+            CreateWarehousePlanResult secondResult = second.get(30, TimeUnit.SECONDS);
+
+            assertThat(firstResult.planId()).isEqualTo(secondResult.planId());
+            assertThat(List.of(firstResult.replayed(), secondResult.replayed())).containsExactlyInAnyOrder(false, true);
+            assertThat(firstResult.initialSourceBindings()).hasSize(1);
+            assertThat(secondResult.initialSourceBindings()).hasSize(1);
+            assertThat(firstResult.initialSourceBindings().getFirst().confirmationStatus())
+                .isEqualTo(WarehousePlanContract.ConfirmationStatus.CANDIDATE);
+            assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from modeling_warehouse_plan where tenant_id = ?",
+                Long.class,
+                tenant
+            )).isEqualTo(1L);
+            assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from modeling_warehouse_plan_source where tenant_id = ?",
+                Long.class,
+                tenant
+            )).isEqualTo(1L);
+        } finally {
+            executor.shutdownNow();
+            deleteTenant(tenant);
+        }
+    }
+
+    @Test
+    void rollsBackThePlanHeaderWhenInitialSourcePersistenceFails() {
+        String tenant = tenant("source-rollback");
+        String idempotencyKey = "source-rollback-" + UUID.randomUUID();
+        String rejectedSourceId = "asset-force-rollback-" + UUID.randomUUID();
+        String constraintName = "ck_wp_source_test_" + UUID.randomUUID().toString().replace("-", "");
+        CreateWarehousePlanCommand command = new CreateWarehousePlanCommand(
+            "Source rollback plan",
+            null,
+            null,
+            "owner-1",
+            "department-1",
+            ASSET_FIRST,
+            List.of(new InitialSourceRef(CATALOG_TABLE, rejectedSourceId, "schema-v1")),
+            idempotencyKey
+        );
+
+        try {
+            jdbcTemplate.execute(
+                "alter table modeling_warehouse_plan_source add constraint " +
+                constraintName +
+                " check (source_id <> '" +
+                rejectedSourceId +
+                "')"
+            );
+            assertThatThrownBy(() -> service.create(tenant, command))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+            assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from modeling_warehouse_plan where tenant_id = ? and idempotency_key = ?",
+                Long.class,
+                tenant,
+                idempotencyKey
+            )).isZero();
+            assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from modeling_warehouse_plan_source where tenant_id = ?",
+                Long.class,
+                tenant
+            )).isZero();
+        } finally {
+            jdbcTemplate.execute("alter table modeling_warehouse_plan_source drop constraint if exists " + constraintName);
             deleteTenant(tenant);
         }
     }
@@ -79,7 +228,7 @@ class WarehousePlanApplicationServiceIT {
         String tenant = tenant("version");
 
         try {
-            WarehousePlanHeader created = service.create(tenant, createCommand(code("version"), BUSINESS_FIRST));
+            WarehousePlanHeader created = service.create(tenant, createCommand(BUSINESS_FIRST, "version-" + UUID.randomUUID())).plan();
             WarehousePlanHeader updated = service.updateHeader(
                 tenant,
                 created.id(),
@@ -119,7 +268,7 @@ class WarehousePlanApplicationServiceIT {
         String tenant = tenant("edit-units");
 
         try {
-            WarehousePlanHeader plan = service.create(tenant, createCommand(code("edit_units"), BUSINESS_FIRST));
+            WarehousePlanHeader plan = service.create(tenant, createCommand(BUSINESS_FIRST, "edit-units-" + UUID.randomUUID())).plan();
             BusinessScope scope = readyScope();
             List<SourceBinding> sources = readySources();
 
@@ -145,7 +294,7 @@ class WarehousePlanApplicationServiceIT {
         String tenant = tenant("baseline");
 
         try {
-            WarehousePlanHeader plan = service.create(tenant, createCommand(code("baseline"), ASSET_FIRST));
+            WarehousePlanHeader plan = service.create(tenant, createCommand(ASSET_FIRST, "baseline-" + UUID.randomUUID())).plan();
 
             PlanningBaseline incomplete = service.getBaseline(tenant, plan.id());
             assertThat(incomplete.ready()).isFalse();
@@ -176,15 +325,16 @@ class WarehousePlanApplicationServiceIT {
         }
     }
 
-    private CreateWarehousePlanCommand createCommand(String code, WarehousePlanContract.OnboardingMode mode) {
+    private CreateWarehousePlanCommand createCommand(WarehousePlanContract.OnboardingMode mode, String idempotencyKey) {
         return new CreateWarehousePlanCommand(
-            code,
             "Neutral warehouse plan",
             "Reusable analysis objective",
             "Initial business scope",
             "owner-1",
             "department-1",
-            mode
+            mode,
+            mode == ASSET_FIRST ? List.of(new InitialSourceRef(CATALOG_TABLE, "asset-1", "schema-v1")) : List.of(),
+            idempotencyKey
         );
     }
 
@@ -232,7 +382,4 @@ class WarehousePlanApplicationServiceIT {
         return "it-warehouse-" + prefix + "-" + UUID.randomUUID();
     }
 
-    private static String code(String prefix) {
-        return "warehouse_" + prefix + "_" + UUID.randomUUID().toString().replace("-", "");
-    }
 }

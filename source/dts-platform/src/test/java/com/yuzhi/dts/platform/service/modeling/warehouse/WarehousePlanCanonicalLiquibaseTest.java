@@ -13,6 +13,8 @@ import org.w3c.dom.Document;
 class WarehousePlanCanonicalLiquibaseTest {
 
     private static final String CHANGELOG = "/config/liquibase/changelog/20260718_01_warehouse_plan_canonical.xml";
+    private static final String CREATE_IDEMPOTENCY_CHANGELOG =
+        "/config/liquibase/changelog/20260719_01_warehouse_plan_create_idempotency.xml";
 
     @Test
     void masterIncludesCanonicalWarehousePlanChangelog() throws IOException {
@@ -55,6 +57,26 @@ class WarehousePlanCanonicalLiquibaseTest {
 
         assertThat(document.getElementsByTagName("rollback").getLength()).isGreaterThanOrEqualTo(1);
         assertThat(xml).contains("dropNotNullConstraint").contains("dropUniqueConstraint");
+    }
+
+    @Test
+    void forwardOnlyCreateIdempotencyChangelogAddsTenantScopedKeyWithoutRewritingHistory() throws Exception {
+        String master = read("/config/liquibase/master.xml");
+        String xml = read(CREATE_IDEMPOTENCY_CHANGELOG);
+        Document document = parse(CREATE_IDEMPOTENCY_CHANGELOG);
+
+        assertThat(master).contains("20260719_01_warehouse_plan_create_idempotency.xml");
+        assertThat(xml)
+            .contains("name=\"idempotency_key\"")
+            .contains("type=\"varchar(128)\"")
+            .contains("name=\"idempotency_request_hash\"")
+            .contains("type=\"varchar(64)\"")
+            .contains("name=\"idempotency_response_snapshot\"")
+            .contains("type=\"jsonb\"")
+            .contains("columnNames=\"tenant_id, idempotency_key\"")
+            .contains("uk_modeling_warehouse_plan_tenant_idempotency")
+            .doesNotContain("dropColumn", "dropTable", "renameColumn", "rollback");
+        assertThat(document.getElementsByTagName("changeSet").getLength()).isEqualTo(1);
     }
 
     private static Document parse(String resource) throws Exception {

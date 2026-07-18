@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260719-01-warehouse-plan-create-idempotency" author="codex">
+        <preConditions onFail="HALT">
+            <tableExists tableName="modeling_warehouse_plan"/>
+        </preConditions>
+        <addColumn tableName="modeling_warehouse_plan">
+            <column name="idempotency_key" type="varchar(128)"/>
+            <column name="idempotency_request_hash" type="varchar(64)"/>
+            <column name="idempotency_response_snapshot" type="jsonb"/>
+        </addColumn>
+        <addUniqueConstraint
+            tableName="modeling_warehouse_plan"
+            columnNames="tenant_id, idempotency_key"
+            constraintName="uk_modeling_warehouse_plan_tenant_idempotency"/>
+    </changeSet>
+</databaseChangeLog>

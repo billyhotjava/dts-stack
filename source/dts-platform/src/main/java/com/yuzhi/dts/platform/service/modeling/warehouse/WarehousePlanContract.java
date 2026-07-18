@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.modeling.warehouse;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -64,15 +65,33 @@ public final class WarehousePlanContract {
         DBT_NODE,
     }
 
+    public record InitialSourceRef(SourceType sourceType, String sourceId, String sourceVersion) {
+        public InitialSourceRef {
+            sourceId = trimToNull(sourceId);
+            sourceVersion = trimToNull(sourceVersion);
+        }
+    }
+
     public record CreateWarehousePlanCommand(
-        String code,
         String name,
         String objective,
         String scope,
         String ownerId,
         String ownerDepartmentId,
-        OnboardingMode onboardingMode
-    ) {}
+        OnboardingMode onboardingMode,
+        List<InitialSourceRef> initialSourceRefs,
+        String idempotencyKey
+    ) {
+        public CreateWarehousePlanCommand {
+            name = trimToNull(name);
+            objective = trimToNull(objective);
+            scope = trimToNull(scope);
+            ownerId = trimToNull(ownerId);
+            ownerDepartmentId = trimToNull(ownerDepartmentId);
+            initialSourceRefs = immutable(initialSourceRefs);
+            idempotencyKey = trimToNull(idempotencyKey);
+        }
+    }
 
     public record WarehousePlanHeader(
         UUID id,
@@ -87,6 +106,20 @@ public final class WarehousePlanContract {
         LifecycleStatus lifecycleStatus,
         int version
     ) {}
+
+    public record CreateWarehousePlanResult(
+        UUID planId,
+        WarehousePlanHeader plan,
+        int version,
+        String etag,
+        List<SourceBinding> initialSourceBindings,
+        String nextAction,
+        boolean replayed
+    ) {
+        public CreateWarehousePlanResult {
+            initialSourceBindings = immutable(initialSourceBindings);
+        }
+    }
 
     public record DomainBinding(UUID domainId, ConfirmationStatus confirmationStatus) {}
 
@@ -168,11 +201,10 @@ public final class WarehousePlanContract {
             issues.add(new DomainIssue("WAREHOUSE_PLAN_REQUEST_REQUIRED", "Warehouse plan request is required", null));
             return List.copyOf(issues);
         }
-        if (isBlank(command.code())) {
-            issues.add(new DomainIssue("WAREHOUSE_PLAN_CODE_REQUIRED", "Warehouse plan code is required", "code"));
-        }
         if (isBlank(command.name())) {
             issues.add(new DomainIssue("WAREHOUSE_PLAN_NAME_REQUIRED", "Warehouse plan name is required", "name"));
+        } else if (command.name().length() > 128) {
+            issues.add(new DomainIssue("WAREHOUSE_PLAN_NAME_TOO_LONG", "Warehouse plan name must not exceed 128 characters", "name"));
         }
         if (isBlank(command.ownerId())) {
             issues.add(new DomainIssue("WAREHOUSE_PLAN_OWNER_REQUIRED", "Warehouse plan owner is required", "ownerId"));
@@ -181,8 +213,117 @@ public final class WarehousePlanContract {
             issues.add(
                 new DomainIssue("WAREHOUSE_PLAN_ONBOARDING_MODE_REQUIRED", "Warehouse plan onboarding mode is required", "onboardingMode")
             );
+        } else if (command.onboardingMode() == OnboardingMode.BUSINESS_FIRST && isBlank(command.objective())) {
+            issues.add(
+                new DomainIssue(
+                    "WAREHOUSE_PLAN_OBJECTIVE_REQUIRED",
+                    "A business-first warehouse plan requires an objective",
+                    "objective"
+                )
+            );
+        } else if (command.onboardingMode() == OnboardingMode.ASSET_FIRST && command.initialSourceRefs().isEmpty()) {
+            issues.add(
+                new DomainIssue(
+                    "WAREHOUSE_PLAN_INITIAL_SOURCE_REQUIRED",
+                    "An asset-first warehouse plan requires at least one initial source",
+                    "initialSourceRefs"
+                )
+            );
+        }
+        if (isBlank(command.idempotencyKey())) {
+            issues.add(
+                new DomainIssue(
+                    "WAREHOUSE_PLAN_IDEMPOTENCY_KEY_REQUIRED",
+                    "An idempotency key is required when creating a warehouse plan",
+                    "idempotencyKey"
+                )
+            );
+        } else if (command.idempotencyKey().length() > 128) {
+            issues.add(
+                new DomainIssue(
+                    "WAREHOUSE_PLAN_IDEMPOTENCY_KEY_TOO_LONG",
+                    "The idempotency key must not exceed 128 characters",
+                    "idempotencyKey"
+                )
+            );
+        }
+        Set<String> sourceRefs = new HashSet<>();
+        for (InitialSourceRef source : command.initialSourceRefs()) {
+            if (
+                source == null ||
+                source.sourceType() == null ||
+                isBlank(source.sourceId()) ||
+                !sourceRefs.add(source.sourceType().name() + "\u0000" + source.sourceId())
+            ) {
+                issues.add(
+                    new DomainIssue(
+                        "WAREHOUSE_PLAN_INITIAL_SOURCE_INVALID",
+                        "Initial sources must be unique and complete",
+                        "initialSourceRefs"
+                    )
+                );
+                break;
+            }
+            if (source.sourceId().length() > 256) {
+                issues.add(
+                    new DomainIssue(
+                        "WAREHOUSE_PLAN_INITIAL_SOURCE_ID_TOO_LONG",
+                        "An initial source identifier must not exceed 256 characters",
+                        "initialSourceRefs"
+                    )
+                );
+            }
+            if (source.sourceVersion() != null && source.sourceVersion().length() > 128) {
+                issues.add(
+                    new DomainIssue(
+                        "WAREHOUSE_PLAN_INITIAL_SOURCE_VERSION_TOO_LONG",
+                        "An initial source version must not exceed 128 characters",
+                        "initialSourceRefs"
+                    )
+                );
+            }
         }
         return List.copyOf(issues);
+    }
+
+    public static List<DomainIssue> validateRequestedActor(
+        String requestedOwnerId,
+        String requestedOwnerDepartmentId,
+        String authenticatedOwnerId,
+        String authenticatedOwnerDepartmentId
+    ) {
+        if (isBlank(authenticatedOwnerId)) {
+            return List.of(
+                new DomainIssue(
+                    "WAREHOUSE_PLAN_AUTHENTICATED_ACTOR_REQUIRED",
+                    "An authenticated user is required to create a warehouse plan",
+                    "ownerId"
+                )
+            );
+        }
+        if (!isBlank(requestedOwnerId) && !requestedOwnerId.trim().equals(authenticatedOwnerId.trim())) {
+            return List.of(
+                new DomainIssue(
+                    "WAREHOUSE_PLAN_OWNER_FORBIDDEN",
+                    "The warehouse plan owner must be the current authenticated user",
+                    "ownerId"
+                )
+            );
+        }
+        if (
+            !isBlank(requestedOwnerDepartmentId) &&
+            (isBlank(authenticatedOwnerDepartmentId) ||
+                !requestedOwnerDepartmentId.trim().equals(authenticatedOwnerDepartmentId.trim()))
+        ) {
+            return List.of(
+                new DomainIssue(
+                    "WAREHOUSE_PLAN_OWNER_DEPARTMENT_FORBIDDEN",
+                    "The warehouse plan department must match the authenticated context",
+                    "ownerDepartmentId"
+                )
+            );
+        }
+        return List.of();
     }
 
     public static List<DomainIssue> validateRequestedTenant(String requestedTenantId) {
@@ -298,6 +439,14 @@ public final class WarehousePlanContract {
 
     private static boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private static <T> List<T> immutable(List<T> values) {

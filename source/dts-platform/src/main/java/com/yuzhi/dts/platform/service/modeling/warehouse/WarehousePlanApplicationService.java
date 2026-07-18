@@ -1,13 +1,17 @@
 package com.yuzhi.dts.platform.service.modeling.warehouse;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.BusinessScope;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.ConfirmationStatus;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CreateWarehousePlanResult;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CreateWarehousePlanCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.DomainBinding;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.DomainIssue;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.EditUnit;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.LifecycleStatus;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.MetricRequirement;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.InitialSourceRef;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.OnboardingMode;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningBaseline;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicy;
@@ -19,11 +23,16 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.V
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.WarehousePlanHeader;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,13 +47,15 @@ public class WarehousePlanApplicationService {
         """;
 
     private final JdbcTemplate jdbcTemplate;
+    private final ObjectMapper objectMapper;
 
-    public WarehousePlanApplicationService(JdbcTemplate jdbcTemplate) {
+    public WarehousePlanApplicationService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
         this.jdbcTemplate = jdbcTemplate;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional
-    public WarehousePlanHeader create(String serverTenantId, CreateWarehousePlanCommand command) {
+    public CreateWarehousePlanResult create(String serverTenantId, CreateWarehousePlanCommand command) {
         requireServerTenant(serverTenantId);
         List<DomainIssue> issues = WarehousePlanContract.validateCreate(command);
         if (!issues.isEmpty()) {
@@ -52,40 +63,65 @@ public class WarehousePlanApplicationService {
             throw new WarehousePlanException(issue.code(), issue.message(), null);
         }
 
+        String requestHash = createRequestHash(command);
         UUID id = UUID.randomUUID();
-        try {
-            jdbcTemplate.update(
-                """
-                insert into modeling_warehouse_plan (
-                    id, tenant_id, owner, code, name, objective, scope, owner_id, owner_department_id,
-                    onboarding_mode, lifecycle_status, status, version, business_scope_version,
-                    sources_version, source_mappings_version, policy_version, created_date, last_modified_date
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 1, 1, 1, current_timestamp, current_timestamp)
-                """,
-                id,
-                serverTenantId,
-                command.ownerId(),
-                command.code(),
-                command.name(),
-                command.objective(),
-                command.scope(),
-                command.ownerId(),
-                command.ownerDepartmentId(),
-                command.onboardingMode().name(),
-                LifecycleStatus.DRAFT.name(),
-                LifecycleStatus.DRAFT.name()
-            );
-        } catch (DataIntegrityViolationException exception) {
-            if (isConstraintViolation(exception, "uk_modeling_warehouse_plan_tenant_code")) {
+        String code = "wp_" + id.toString().replace("-", "");
+        int inserted = jdbcTemplate.update(
+            """
+            insert into modeling_warehouse_plan (
+                id, tenant_id, owner, code, name, objective, scope, owner_id, owner_department_id,
+                onboarding_mode, lifecycle_status, status, version, business_scope_version,
+                sources_version, source_mappings_version, policy_version, idempotency_key,
+                idempotency_request_hash, created_date, last_modified_date
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 1, 1, 1, ?, ?, current_timestamp, current_timestamp)
+            on conflict (tenant_id, idempotency_key) do nothing
+            """,
+            id,
+            serverTenantId,
+            command.ownerId(),
+            code,
+            command.name(),
+            command.objective(),
+            command.scope(),
+            command.ownerId(),
+            command.ownerDepartmentId(),
+            command.onboardingMode().name(),
+            LifecycleStatus.DRAFT.name(),
+            LifecycleStatus.DRAFT.name(),
+            command.idempotencyKey(),
+            requestHash
+        );
+        if (inserted == 0) {
+            ExistingCreate existing = findCreateByIdempotencyKey(serverTenantId, command.idempotencyKey());
+            if (!requestHash.equals(existing.requestHash())) {
                 throw new WarehousePlanException(
-                    "WAREHOUSE_PLAN_CODE_CONFLICT",
-                    "Warehouse plan code already exists in the current tenant",
+                    "WAREHOUSE_PLAN_IDEMPOTENCY_CONFLICT",
+                    "The idempotency key was already used for a different warehouse plan request",
                     null
                 );
             }
-            throw exception;
+            return replayCreateResult(existing);
         }
-        return get(serverTenantId, id);
+
+        for (InitialSourceRef source : sortedInitialSourceRefs(command.initialSourceRefs())) {
+            jdbcTemplate.update(
+                """
+                insert into modeling_warehouse_plan_source (
+                    id, tenant_id, plan_id, source_type, source_id, source_version, confirmation_status,
+                    exclusion_reason, created_date, last_modified_date
+                ) values (?, ?, ?, ?, ?, ?, 'CANDIDATE', null, current_timestamp, current_timestamp)
+                """,
+                UUID.randomUUID(),
+                serverTenantId,
+                id,
+                source.sourceType().name(),
+                source.sourceId(),
+                source.sourceVersion()
+            );
+        }
+        CreateWarehousePlanResult result = createResult(serverTenantId, id, false);
+        persistCreateResultSnapshot(serverTenantId, id, result);
+        return result;
     }
 
     @Transactional(readOnly = true)
@@ -763,6 +799,165 @@ public class WarehousePlanApplicationService {
         return new WarehousePlanException("WAREHOUSE_PLAN_EDIT_UNIT_INVALID", message, null, editUnit);
     }
 
+    private CreateWarehousePlanResult createResult(String tenantId, UUID planId, boolean replayed) {
+        WarehousePlanHeader plan = get(tenantId, planId);
+        return new CreateWarehousePlanResult(
+            plan.id(),
+            plan,
+            plan.version(),
+            "\"plan-head:" + plan.version() + "\"",
+            loadSources(tenantId, planId),
+            "/modeling/plans/" + plan.id() + "/baseline",
+            replayed
+        );
+    }
+
+    private List<SourceBinding> loadSources(String tenantId, UUID planId) {
+        return jdbcTemplate.query(
+            """
+            select id, source_type, source_id, source_version, confirmation_status, exclusion_reason
+              from modeling_warehouse_plan_source
+             where tenant_id = ? and plan_id = ?
+             order by source_type, source_id, id
+            """,
+            (row, rowNumber) ->
+                new SourceBinding(
+                    row.getObject("id", UUID.class),
+                    SourceType.valueOf(row.getString("source_type")),
+                    row.getString("source_id"),
+                    row.getString("source_version"),
+                    ConfirmationStatus.valueOf(row.getString("confirmation_status")),
+                    row.getString("exclusion_reason")
+                ),
+            tenantId,
+            planId
+        );
+    }
+
+    private ExistingCreate findCreateByIdempotencyKey(String tenantId, String idempotencyKey) {
+        return jdbcTemplate
+            .query(
+                """
+                select id, idempotency_request_hash, idempotency_response_snapshot::text as idempotency_response_snapshot
+                  from modeling_warehouse_plan
+                 where tenant_id = ? and idempotency_key = ?
+                """,
+                (row, rowNumber) ->
+                    new ExistingCreate(
+                        row.getObject("id", UUID.class),
+                        row.getString("idempotency_request_hash"),
+                        row.getString("idempotency_response_snapshot")
+                    ),
+                tenantId,
+                idempotencyKey
+            )
+            .stream()
+            .findFirst()
+            .orElseThrow(() ->
+                new WarehousePlanException(
+                    "WAREHOUSE_PLAN_IDEMPOTENCY_STATE_INVALID",
+                    "The idempotent warehouse plan could not be reloaded",
+                    null
+                )
+            );
+    }
+
+    private void persistCreateResultSnapshot(String tenantId, UUID planId, CreateWarehousePlanResult result) {
+        String snapshot;
+        try {
+            snapshot = objectMapper.writeValueAsString(result);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Warehouse plan create result could not be serialized", exception);
+        }
+        int updated = jdbcTemplate.update(
+            "update modeling_warehouse_plan set idempotency_response_snapshot = cast(? as jsonb) where tenant_id = ? and id = ?",
+            snapshot,
+            tenantId,
+            planId
+        );
+        if (updated != 1) {
+            throw new WarehousePlanException(
+                "WAREHOUSE_PLAN_IDEMPOTENCY_STATE_INVALID",
+                "The idempotent warehouse plan snapshot could not be stored",
+                null
+            );
+        }
+    }
+
+    private CreateWarehousePlanResult replayCreateResult(ExistingCreate existing) {
+        if (existing.responseSnapshot() == null) {
+            throw new WarehousePlanException(
+                "WAREHOUSE_PLAN_IDEMPOTENCY_STATE_INVALID",
+                "The idempotent warehouse plan snapshot is missing",
+                null
+            );
+        }
+        try {
+            CreateWarehousePlanResult snapshot = objectMapper.readValue(
+                existing.responseSnapshot(),
+                CreateWarehousePlanResult.class
+            );
+            if (!existing.planId().equals(snapshot.planId())) {
+                throw new WarehousePlanException(
+                    "WAREHOUSE_PLAN_IDEMPOTENCY_STATE_INVALID",
+                    "The idempotent warehouse plan snapshot does not match its plan",
+                    null
+                );
+            }
+            return new CreateWarehousePlanResult(
+                snapshot.planId(),
+                snapshot.plan(),
+                snapshot.version(),
+                snapshot.etag(),
+                snapshot.initialSourceBindings(),
+                snapshot.nextAction(),
+                true
+            );
+        } catch (JsonProcessingException exception) {
+            throw new WarehousePlanException(
+                "WAREHOUSE_PLAN_IDEMPOTENCY_STATE_INVALID",
+                "The idempotent warehouse plan snapshot is unreadable",
+                null
+            );
+        }
+    }
+
+    private static String createRequestHash(CreateWarehousePlanCommand command) {
+        StringBuilder canonical = new StringBuilder();
+        appendCanonical(canonical, command.name());
+        appendCanonical(canonical, command.objective());
+        appendCanonical(canonical, command.scope());
+        appendCanonical(canonical, command.onboardingMode().name());
+        appendCanonical(canonical, command.ownerId());
+        appendCanonical(canonical, command.ownerDepartmentId());
+        for (InitialSourceRef source : sortedInitialSourceRefs(command.initialSourceRefs())) {
+            appendCanonical(canonical, source.sourceType().name());
+            appendCanonical(canonical, source.sourceId());
+            appendCanonical(canonical, source.sourceVersion());
+        }
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(canonical.toString().getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is not available", exception);
+        }
+    }
+
+    private static List<InitialSourceRef> sortedInitialSourceRefs(List<InitialSourceRef> sources) {
+        List<InitialSourceRef> sorted = new ArrayList<>(sources == null ? List.of() : sources);
+        sorted.sort(
+            Comparator.comparing((InitialSourceRef source) -> source.sourceType().name())
+                .thenComparing(InitialSourceRef::sourceId)
+                .thenComparing(source -> source.sourceVersion() == null ? "" : source.sourceVersion())
+        );
+        return List.copyOf(sorted);
+    }
+
+    private static void appendCanonical(StringBuilder target, String value) {
+        String normalized = value == null ? "" : value;
+        target.append(normalized.length()).append(':').append(normalized).append('|');
+    }
+
     private List<WarehousePlanHeader> find(String tenantId, UUID planId) {
         return jdbcTemplate.query(
             HEADER_COLUMNS + " where tenant_id = ? and id = ?",
@@ -770,11 +965,6 @@ public class WarehousePlanApplicationService {
             tenantId,
             planId
         );
-    }
-
-    private static boolean isConstraintViolation(DataIntegrityViolationException exception, String constraintName) {
-        Throwable cause = exception.getMostSpecificCause();
-        return cause.getMessage() != null && cause.getMessage().contains(constraintName);
     }
 
     private void resolveWriteFailure(String tenantId, UUID planId, int expectedVersion) {
@@ -834,6 +1024,8 @@ public class WarehousePlanApplicationService {
         String ownerId,
         String ownerDepartmentId
     ) {}
+
+    private record ExistingCreate(UUID planId, String requestHash, String responseSnapshot) {}
 
     public static final class WarehousePlanException extends RuntimeException {
 

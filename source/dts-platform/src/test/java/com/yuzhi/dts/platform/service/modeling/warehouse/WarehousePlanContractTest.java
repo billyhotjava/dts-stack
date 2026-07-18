@@ -12,13 +12,16 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.B
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CreateWarehousePlanCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.DomainBinding;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.DomainIssue;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.InitialSourceRef;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.MetricRequirement;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicy;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.ProcessBinding;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBinding;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBusinessMapping;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
 class WarehousePlanContractTest {
@@ -27,15 +30,28 @@ class WarehousePlanContractTest {
     private static final UUID SOURCE_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
     @Test
+    void createCommandExcludesClientCodeAndCarriesIdempotencyAndInitialSources() {
+        Set<String> components = java.util.Arrays
+            .stream(CreateWarehousePlanCommand.class.getRecordComponents())
+            .map(java.lang.reflect.RecordComponent::getName)
+            .collect(Collectors.toSet());
+
+        assertThat(components)
+            .doesNotContain("code", "planId")
+            .contains("name", "objective", "scope", "ownerId", "ownerDepartmentId", "onboardingMode", "initialSourceRefs", "idempotencyKey");
+    }
+
+    @Test
     void acceptsNeutralCreateCommandAndRejectsRequestOwnedTenant() {
         CreateWarehousePlanCommand command = new CreateWarehousePlanCommand(
-            "warehouse_operations_2026",
             "Operations warehouse",
             "Create reusable operational analysis",
             "First delivery scope",
             "owner-1",
             "department-1",
-            BUSINESS_FIRST
+            BUSINESS_FIRST,
+            List.of(),
+            "request-1"
         );
 
         assertThat(WarehousePlanContract.validateCreate(command)).isEmpty();
@@ -43,6 +59,87 @@ class WarehousePlanContractTest {
         assertThat(WarehousePlanContract.validateRequestedTenant("request-value"))
             .extracting(DomainIssue::code)
             .containsExactly("WAREHOUSE_PLAN_TENANT_NOT_ACCEPTED");
+    }
+
+    @Test
+    void validatesModeSpecificInputsLengthsSourcesAndAuthenticatedOwner() {
+        CreateWarehousePlanCommand businessWithoutObjective = new CreateWarehousePlanCommand(
+            "Business plan",
+            null,
+            null,
+            "owner-1",
+            null,
+            BUSINESS_FIRST,
+            List.of(),
+            "request-business"
+        );
+        CreateWarehousePlanCommand assetWithoutSources = new CreateWarehousePlanCommand(
+            "Asset plan",
+            null,
+            null,
+            "owner-1",
+            null,
+            WarehousePlanContract.OnboardingMode.ASSET_FIRST,
+            List.of(),
+            "request-asset"
+        );
+        InitialSourceRef duplicate = new InitialSourceRef(CATALOG_TABLE, "asset-1", "schema-v1");
+        CreateWarehousePlanCommand duplicateSources = new CreateWarehousePlanCommand(
+            "Asset plan",
+            null,
+            null,
+            "owner-1",
+            null,
+            WarehousePlanContract.OnboardingMode.ASSET_FIRST,
+            List.of(duplicate, new InitialSourceRef(CATALOG_TABLE, " asset-1 ", "schema-v2")),
+            "request-asset-duplicate"
+        );
+
+        assertThat(WarehousePlanContract.validateCreate(businessWithoutObjective))
+            .extracting(DomainIssue::code)
+            .contains("WAREHOUSE_PLAN_OBJECTIVE_REQUIRED");
+        assertThat(WarehousePlanContract.validateCreate(assetWithoutSources))
+            .extracting(DomainIssue::code)
+            .contains("WAREHOUSE_PLAN_INITIAL_SOURCE_REQUIRED");
+        assertThat(WarehousePlanContract.validateCreate(duplicateSources))
+            .extracting(DomainIssue::code)
+            .contains("WAREHOUSE_PLAN_INITIAL_SOURCE_INVALID");
+        CreateWarehousePlanCommand longSourceId = new CreateWarehousePlanCommand(
+            "Asset plan",
+            null,
+            null,
+            "owner-1",
+            null,
+            WarehousePlanContract.OnboardingMode.ASSET_FIRST,
+            List.of(new InitialSourceRef(CATALOG_TABLE, "a".repeat(257), null)),
+            "request-long-source-id"
+        );
+        CreateWarehousePlanCommand longSourceVersion = new CreateWarehousePlanCommand(
+            "Asset plan",
+            null,
+            null,
+            "owner-1",
+            null,
+            WarehousePlanContract.OnboardingMode.ASSET_FIRST,
+            List.of(new InitialSourceRef(CATALOG_TABLE, "asset-1", "v".repeat(129))),
+            "request-long-source-version"
+        );
+        assertThat(WarehousePlanContract.validateCreate(longSourceId))
+            .extracting(DomainIssue::code)
+            .contains("WAREHOUSE_PLAN_INITIAL_SOURCE_ID_TOO_LONG");
+        assertThat(WarehousePlanContract.validateCreate(longSourceVersion))
+            .extracting(DomainIssue::code)
+            .contains("WAREHOUSE_PLAN_INITIAL_SOURCE_VERSION_TOO_LONG");
+        assertThat(WarehousePlanContract.validateRequestedActor(null, null, "owner-1", "department-1")).isEmpty();
+        assertThat(WarehousePlanContract.validateRequestedActor("owner-2", null, "owner-1", "department-1"))
+            .extracting(DomainIssue::code)
+            .containsExactly("WAREHOUSE_PLAN_OWNER_FORBIDDEN");
+        assertThat(WarehousePlanContract.validateRequestedActor(null, "department-2", "owner-1", "department-1"))
+            .extracting(DomainIssue::code)
+            .containsExactly("WAREHOUSE_PLAN_OWNER_DEPARTMENT_FORBIDDEN");
+        assertThat(WarehousePlanContract.validateRequestedActor(null, null, null, null))
+            .extracting(DomainIssue::code)
+            .containsExactly("WAREHOUSE_PLAN_AUTHENTICATED_ACTOR_REQUIRED");
     }
 
     @Test

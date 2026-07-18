@@ -3,11 +3,15 @@ package com.yuzhi.dts.platform.web.rest;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService.UpdatePlanHeaderCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService.WarehousePlanException;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider.WarehousePlanActor;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.BusinessScope;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CreateWarehousePlanCommand;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CreateWarehousePlanResult;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.DomainIssue;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.EditUnit;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.InitialSourceRef;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.OnboardingMode;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningBaseline;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicy;
@@ -47,15 +51,18 @@ public class WarehousePlanResource {
 
     private final WarehousePlanApplicationService service;
     private final WarehousePlanStageProjectionService stageProjectionService;
+    private final WarehousePlanActorProvider actorProvider;
     private final String serverTenantId;
 
     public WarehousePlanResource(
         WarehousePlanApplicationService service,
         WarehousePlanStageProjectionService stageProjectionService,
+        WarehousePlanActorProvider actorProvider,
         @Value("${dts.platform.modeling.default-tenant-id:default}") String serverTenantId
     ) {
         this.service = service;
         this.stageProjectionService = stageProjectionService;
+        this.actorProvider = actorProvider;
         this.serverTenantId = serverTenantId;
     }
 
@@ -66,11 +73,13 @@ public class WarehousePlanResource {
 
     @PostMapping
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ResponseEntity<ApiResponse<WarehousePlanHeader>> create(@RequestBody CreateWarehousePlanRequest request) {
+    public ResponseEntity<ApiResponse<CreateWarehousePlanResult>> create(@RequestBody CreateWarehousePlanRequest request) {
         rejectRequestedTenant(request.tenantId());
-        WarehousePlanHeader result = service.create(serverTenantId, request.toCommand());
-        return ResponseEntity.created(URI.create("/api/modeling/warehouse-plans/" + result.id()))
-            .eTag(etag(EditUnit.PLAN_HEAD, result.version()))
+        WarehousePlanActor actor = actorProvider.currentActor();
+        rejectRequestedActor(request.ownerId(), request.ownerDepartmentId(), actor);
+        CreateWarehousePlanResult result = service.create(serverTenantId, request.toCommand(actor));
+        return ResponseEntity.created(URI.create("/api/modeling/warehouse-plans/" + result.planId()))
+            .header(HttpHeaders.ETAG, result.etag())
             .body(ApiResponses.ok(result));
     }
 
@@ -255,6 +264,23 @@ public class WarehousePlanResource {
         }
     }
 
+    private static void rejectRequestedActor(
+        String requestedOwnerId,
+        String requestedOwnerDepartmentId,
+        WarehousePlanActor actor
+    ) {
+        List<DomainIssue> issues = WarehousePlanContract.validateRequestedActor(
+            requestedOwnerId,
+            requestedOwnerDepartmentId,
+            actor == null ? null : actor.ownerId(),
+            actor == null ? null : actor.ownerDepartmentId()
+        );
+        if (!issues.isEmpty()) {
+            DomainIssue issue = issues.getFirst();
+            throw new WarehousePlanException(issue.code(), issue.message(), null);
+        }
+    }
+
     private static HttpStatus status(String code) {
         if ("WAREHOUSE_PLAN_NOT_FOUND".equals(code)) {
             return HttpStatus.NOT_FOUND;
@@ -262,10 +288,20 @@ public class WarehousePlanResource {
         if ("WAREHOUSE_PLAN_IF_MATCH_REQUIRED".equals(code)) {
             return HttpStatus.PRECONDITION_REQUIRED;
         }
+        if ("WAREHOUSE_PLAN_AUTHENTICATED_ACTOR_REQUIRED".equals(code)) {
+            return HttpStatus.UNAUTHORIZED;
+        }
+        if (
+            "WAREHOUSE_PLAN_OWNER_FORBIDDEN".equals(code) ||
+            "WAREHOUSE_PLAN_OWNER_DEPARTMENT_FORBIDDEN".equals(code)
+        ) {
+            return HttpStatus.FORBIDDEN;
+        }
         if (
             "WAREHOUSE_PLAN_VERSION_CONFLICT".equals(code) ||
             "WAREHOUSE_PLAN_EDIT_UNIT_VERSION_CONFLICT".equals(code) ||
             "WAREHOUSE_PLAN_CODE_CONFLICT".equals(code) ||
+            "WAREHOUSE_PLAN_IDEMPOTENCY_CONFLICT".equals(code) ||
             "WAREHOUSE_PLAN_LIFECYCLE_CONFLICT".equals(code) ||
             "WAREHOUSE_PLAN_BASELINE_INCOMPLETE".equals(code) ||
             "WAREHOUSE_PLAN_SOURCE_IN_USE".equals(code)
@@ -277,23 +313,25 @@ public class WarehousePlanResource {
 
     public record CreateWarehousePlanRequest(
         String tenantId,
-        String code,
         String name,
         String objective,
         String scope,
         String ownerId,
         String ownerDepartmentId,
-        OnboardingMode onboardingMode
+        OnboardingMode onboardingMode,
+        List<InitialSourceRef> initialSourceRefs,
+        String idempotencyKey
     ) {
-        private CreateWarehousePlanCommand toCommand() {
+        private CreateWarehousePlanCommand toCommand(WarehousePlanActor actor) {
             return new CreateWarehousePlanCommand(
-                code,
                 name,
                 objective,
                 scope,
-                ownerId,
-                ownerDepartmentId,
-                onboardingMode
+                actor.ownerId(),
+                actor.ownerDepartmentId(),
+                onboardingMode,
+                initialSourceRefs,
+                idempotencyKey
             );
         }
     }
