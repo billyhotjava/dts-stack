@@ -1,0 +1,38 @@
+Sprint-67 F1-T02 objectId consumer audit
+Captured on: 2026-07-19
+CWD: /opt/prod/s10/v2.2.3
+
+Command (all source and tests):
+  rg -l --glob '!target/**' --glob '!node_modules/**' '\bobjectId\b|businessObjectCode|business_objects' source/dts-platform/src/main source/dts-platform/src/test source/dts-platform-webapp/src source/dts-metrics/src
+Exit code: 0
+Matched files: 47
+
+Command (production source only):
+  rg -n --glob '!target/**' --glob '!node_modules/**' '\bobjectId\b|businessObjectCode|business_objects' source/dts-platform/src/main source/dts-platform-webapp/src source/dts-metrics/src/main
+Exit code: 0
+Matched files: 35
+
+Reviewed consumer groups:
+1. Modeling vNext runtime contract (F3-T01 runtime migration scope)
+   - source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/ModelingVNextContract.java
+   - source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/ModelingVNextApplicationService.java
+   - source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/rest/ModelingVNextResource.java
+   - source/dts-platform/src/main/resources/config/modeling/modeling-vnext.schema.json
+   - source/dts-platform-webapp/src/api/modelingApi.ts
+   - source/dts-platform-webapp/src/pages/modeling/modelingVnextContract.ts
+2. Legacy semantic CRUD, pages, and metric-binding graph (F5 controlled-retirement scope)
+   - source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/SemanticModelingService.java
+   - source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/rest/SemanticModelingResource.java
+   - source/dts-platform-webapp/src/api/semanticModelingApi.ts
+   - source/dts-platform-webapp/src/pages/modeling/SemanticObjectsPage.tsx
+   - source/dts-platform-webapp/src/pages/modeling/metric-workbench/
+3. dts-metrics compatibility consumers (F5 contract migration scope)
+   - MetricPackValidationService still requires the business_objects pack file.
+   - VisualAssetSummary still exposes businessObjectCode.
+4. Excluded homonym, not a modeling business-object dependency
+   - CatalogMetadataChangeLog.objectId and CatalogMetadataChangeLogRepository use a generic catalog audit target ID; they must not be removed by the modeling retirement.
+
+F1-T02 result:
+- TargetWriteMetadata is asserted to contain only planId, domainId, modelSpecId, revision, and legacyRef.
+- This audit records consumers and ownership only. It does not claim that runtime CRUD, schema, UI, or dts-metrics consumers have already been removed.
+- Runtime objectId removal remains gated by F3-T01 and the legacy read/deletion sequence by F5.

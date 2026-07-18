@@ -1,11 +1,14 @@
 package com.yuzhi.dts.platform.service.modeling;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 
 /** Pure migration policy for retiring legacy business objects without creating a replacement entity. */
 public final class BusinessObjectRetirementPolicy {
@@ -87,6 +90,15 @@ public final class BusinessObjectRetirementPolicy {
         }
     }
 
+    /** Minimal migration-time target descriptor; this is not a replacement business-object entity. */
+    public record CandidateTarget(String modelSpecId, String modelType, String domainId) {
+        public CandidateTarget {
+            modelSpecId = required(modelSpecId, "candidateTarget.modelSpecId");
+            modelType = trimmedOrNull(modelType);
+            domainId = trimmedOrNull(domainId);
+        }
+    }
+
     public record LegacyBusinessObject(
         String sourceSystem,
         String sourceId,
@@ -99,7 +111,7 @@ public final class BusinessObjectRetirementPolicy {
         List<String> timeFields,
         List<LegacyField> fields,
         List<LegacySourceRef> sourceRefs,
-        List<String> candidateTargetModelIds,
+        List<CandidateTarget> candidateTargets,
         List<String> consumerRefs,
         boolean archiveRequested,
         String planId,
@@ -114,7 +126,7 @@ public final class BusinessObjectRetirementPolicy {
             timeFields = immutable(timeFields);
             fields = immutable(fields);
             sourceRefs = immutable(sourceRefs);
-            candidateTargetModelIds = immutable(candidateTargetModelIds);
+            candidateTargets = immutable(candidateTargets);
             consumerRefs = immutable(consumerRefs);
         }
     }
@@ -195,7 +207,7 @@ public final class BusinessObjectRetirementPolicy {
 
         Identification identification = identify(legacy);
         Optional<Disposition> recommendation = recommendation(identification);
-        Optional<String> targetModelSpecId = targetModelSpecId(legacy, identification);
+        Optional<String> targetModelSpecId = targetModelSpecId(legacy, identification, conflicts);
         Readiness readiness = readiness(legacy, identification, targetModelSpecId, conflicts);
         Optional<Disposition> executableAction = readiness == Readiness.READY ? recommendation : Optional.empty();
         Optional<TargetWriteMetadata> metadata = targetWriteMetadata(
@@ -247,11 +259,41 @@ public final class BusinessObjectRetirementPolicy {
         };
     }
 
-    private static Optional<String> targetModelSpecId(LegacyBusinessObject legacy, Identification identification) {
+    private static Optional<String> targetModelSpecId(
+        LegacyBusinessObject legacy,
+        Identification identification,
+        List<String> conflicts
+    ) {
         if (identification == Identification.DIMENSION_LIKE) return nonBlank(legacy.proposedModelSpecId());
         if (identification != Identification.FACT_LIKE) return Optional.empty();
-        List<String> targets = legacy.candidateTargetModelIds().stream().filter(BusinessObjectRetirementPolicy::hasText).distinct().toList();
-        return targets.size() == 1 ? Optional.of(targets.get(0)) : Optional.empty();
+
+        Map<String, List<CandidateTarget>> targetsById = new TreeMap<>();
+        legacy.candidateTargets().forEach(target -> targetsById.computeIfAbsent(target.modelSpecId(), ignored -> new ArrayList<>()).add(target));
+        boolean metadataConflict = false;
+        for (Map.Entry<String, List<CandidateTarget>> entry : targetsById.entrySet()) {
+            long metadataVariants = entry
+                .getValue()
+                .stream()
+                .map(target -> new CandidateMetadata(normalized(target.modelType()), target.domainId()))
+                .distinct()
+                .count();
+            if (metadataVariants > 1) {
+                conflicts.add("TARGET_METADATA_CONFLICT:" + entry.getKey());
+                metadataConflict = true;
+            }
+        }
+        if (metadataConflict) return Optional.empty();
+
+        List<String> compatibleTargets = legacy
+            .candidateTargets()
+            .stream()
+            .filter(target -> normalized(target.modelType()).equals("FACT"))
+            .filter(target -> sameDomain(target.domainId(), legacy.targetDomainId()))
+            .map(CandidateTarget::modelSpecId)
+            .distinct()
+            .sorted(Comparator.naturalOrder())
+            .toList();
+        return compatibleTargets.size() == 1 ? Optional.of(compatibleTargets.get(0)) : Optional.empty();
     }
 
     private static Readiness readiness(
@@ -263,9 +305,11 @@ public final class BusinessObjectRetirementPolicy {
         if (identification == Identification.MIXED) return Readiness.NEEDS_SPLIT;
         if (identification == Identification.ARCHIVE_CANDIDATE) {
             if (!legacy.archiveRequested()) return Readiness.NEEDS_CLASSIFICATION;
-            return legacy.consumerRefs().isEmpty() ? Readiness.READY : Readiness.BLOCKED_BY_CONSUMERS;
+            if (!legacy.consumerRefs().isEmpty()) return Readiness.BLOCKED_BY_CONSUMERS;
+            if (!domainsMatch(legacy) || !conflicts.isEmpty()) return Readiness.NEEDS_CLASSIFICATION;
+            return Readiness.READY;
         }
-        if (!hasText(legacy.domainId()) || !Objects.equals(legacy.domainId(), legacy.targetDomainId()) || !conflicts.isEmpty()) {
+        if (!domainsMatch(legacy) || !conflicts.isEmpty()) {
             return Readiness.NEEDS_CLASSIFICATION;
         }
         if (targetModelSpecId.isEmpty()) return Readiness.NEEDS_TARGET;
@@ -291,16 +335,25 @@ public final class BusinessObjectRetirementPolicy {
     }
 
     private static List<FieldDisposition> mapFields(List<LegacyField> fields, List<String> conflicts) {
-        return fields
-            .stream()
-            .map(field -> {
-                FieldOwner owner = field.signals().size() == 1
-                    ? owner(field.signals().iterator().next())
-                    : FieldOwner.MANUAL_REVIEW;
-                if (owner == FieldOwner.MANUAL_REVIEW) conflicts.add("FIELD_OWNER_AMBIGUOUS:" + field.name());
-                return new FieldDisposition(field.name(), owner);
-            })
-            .toList();
+        Map<String, List<LegacyField>> fieldsByIdentity = new TreeMap<>();
+        fields.forEach(field -> fieldsByIdentity.computeIfAbsent(normalizedFieldIdentity(field.name()), ignored -> new ArrayList<>()).add(field));
+
+        List<FieldDisposition> dispositions = new ArrayList<>();
+        for (Map.Entry<String, List<LegacyField>> entry : fieldsByIdentity.entrySet()) {
+            String fieldIdentity = entry.getKey();
+            List<LegacyField> occurrences = entry.getValue();
+            FieldOwner fieldOwner;
+            if (occurrences.size() > 1) {
+                fieldOwner = FieldOwner.MANUAL_REVIEW;
+                conflicts.add("FIELD_DUPLICATE:" + fieldIdentity);
+            } else {
+                Set<FieldSignal> signals = occurrences.get(0).signals();
+                fieldOwner = signals.size() == 1 ? owner(signals.iterator().next()) : FieldOwner.MANUAL_REVIEW;
+                if (fieldOwner == FieldOwner.MANUAL_REVIEW) conflicts.add("FIELD_OWNER_AMBIGUOUS:" + fieldIdentity);
+            }
+            dispositions.add(new FieldDisposition(fieldIdentity, fieldOwner));
+        }
+        return List.copyOf(dispositions);
     }
 
     private static FieldOwner owner(FieldSignal signal) {
@@ -368,6 +421,22 @@ public final class BusinessObjectRetirementPolicy {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
 
+    private static String normalizedFieldIdentity(String value) {
+        return required(value, "field.name").toLowerCase(Locale.ROOT);
+    }
+
+    private static boolean domainsMatch(LegacyBusinessObject legacy) {
+        return hasText(legacy.domainId()) && hasText(legacy.targetDomainId()) && sameDomain(legacy.domainId(), legacy.targetDomainId());
+    }
+
+    private static boolean sameDomain(String first, String second) {
+        return Objects.equals(trimmedOrNull(first), trimmedOrNull(second));
+    }
+
+    private static String trimmedOrNull(String value) {
+        return hasText(value) ? value.trim() : null;
+    }
+
     private static Optional<String> nonBlank(String value) {
         return hasText(value) ? Optional.of(value) : Optional.empty();
     }
@@ -385,4 +454,6 @@ public final class BusinessObjectRetirementPolicy {
     private static <T> List<T> immutable(List<T> values) {
         return values == null ? List.of() : List.copyOf(values);
     }
+
+    private record CandidateMetadata(String modelType, String domainId) {}
 }
