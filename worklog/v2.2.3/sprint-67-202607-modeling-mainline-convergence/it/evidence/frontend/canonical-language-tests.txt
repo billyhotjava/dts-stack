@@ -1,0 +1,23 @@
+Sprint-67 F1-T01 canonical language contract evidence
+Executed at: 2026-07-19T00:06:32+08:00
+CWD: /opt/prod/s10/v2.2.3
+
+Command:
+node --test source/dts-platform-webapp/src/pages/modeling/canonicalModelingLanguage.source-contract.test.ts source/dts-platform-webapp/src/routes/sections/dashboard/portalGoldenLineMenu.source-contract.test.ts source/dts-platform-webapp/src/pages/modeling/ModelingWorkbenchPage.source-contract.test.ts source/dts-platform-webapp/src/pages/modeling/WarehousePlanDetailPage.source-contract.test.ts source/dts-platform-webapp/src/pages/modeling/warehousePlanJourneyConvergence.source-contract.test.ts
+
+Exit code: 0
+Key result:
+- tests 5
+- pass 5
+- fail 0
+- canonicalModelingLanguage source-contract passed together with four adjacent route/page/journey contracts.
+
+Focused TDD result after GREEN:
+Command:
+node source/dts-platform-webapp/src/pages/modeling/canonicalModelingLanguage.source-contract.test.ts
+Exit code: 0
+Key result: tests 5; pass 5; fail 0.
+
+Workspace note:
+- AGENTS.md, CLAUDE.md and concurrent F1-T02/F1-T03 implementation files were already modified by other work.
+- This evidence command reads those files but the F1-T01 change remains limited to the canonical language contract, its source-contract test, and the three evidence files.

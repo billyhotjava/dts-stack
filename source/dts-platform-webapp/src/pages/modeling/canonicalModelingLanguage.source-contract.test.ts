@@ -1,13 +1,51 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { extname, relative, resolve } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 const CONTRACT_URL = new URL("./canonicalModelingLanguage.ts", import.meta.url);
 const LEGACY_MENU_KEY = "semantic-objects";
 const LEGACY_ROUTE = "/modeling/semantic/objects";
 const RETIRED_OBJECT_TERMS = ["业务对象", "语义对象"] as const;
 const RETIRED_METRIC_TERMS = ["原始指标", "二次指标"] as const;
-const FORBIDDEN_CUSTOMER_TERMS = [...RETIRED_OBJECT_TERMS, ...RETIRED_METRIC_TERMS];
+const REPLACEMENT_OBJECT_TERMS = ["业务实体", "模型对象", "数据对象", "语义实体"] as const;
+const FORBIDDEN_CUSTOMER_TERMS = [
+	...RETIRED_OBJECT_TERMS,
+	...RETIRED_METRIC_TERMS,
+	...REPLACEMENT_OBJECT_TERMS,
+] as const;
+const MODELING_SOURCE_ROOT = fileURLToPath(new URL("./", import.meta.url));
+const EXPECTED_OBJECT_LABELS = ["业务分类", "数仓分层", "数据标准", "维度", "四类表", "指标"] as const;
+
+type ForbiddenCustomerTerm = (typeof FORBIDDEN_CUSTOMER_TERMS)[number];
+
+type CustomerSurfaceManifest = {
+	sourceRoot: string;
+	recursive: boolean;
+	sourceExtensions: readonly string[];
+	excludedSourceSuffixes: readonly string[];
+	definitionFiles: readonly string[];
+	objectLabels: readonly string[];
+};
+
+// Sprint-67 only freezes the existing migration debt. A new customer source gets
+// a zero allowance automatically, and no file receives an allowance for a
+// replacement alias or retired metric term.
+const RETIRED_TERM_MIGRATION_BASELINE = Object.freeze({
+	"LowCodeDevelopmentPage.tsx": { 业务对象: 3 },
+	"MetricWorkbenchPage.tsx": { 业务对象: 7 },
+	"ModelTemplatesPage.tsx": { 业务对象: 1 },
+	"SemanticMetricsPage.tsx": { 业务对象: 4 },
+	"SemanticObjectsPage.tsx": { 业务对象: 9 },
+	"businessObjectCode.ts": { 业务对象: 1 },
+	"metric-workbench/MetricCanvas.tsx": { 业务对象: 3 },
+	"metric-workbench/MetricDetailPanel.tsx": { 业务对象: 2 },
+	"metric-workbench/SubjectBrowserPanel.tsx": { 业务对象: 3 },
+	"metric-workbench/metricCanvas.helpers.ts": { 业务对象: 1 },
+	"semantic-workspace/BusinessModelingContextBar.tsx": { 业务对象: 1 },
+	"semantic-workspace/ModelingConceptCards.tsx": { 业务对象: 2 },
+} satisfies Record<string, Partial<Record<ForbiddenCustomerTerm, number>>>);
 
 type MenuNode = {
 	key: string;
@@ -26,6 +64,29 @@ const readSource = (path: string) => readFileSync(new URL(path, import.meta.url)
 
 const flattenMenu = (nodes: MenuNode[]): MenuNode[] =>
 	nodes.flatMap((node) => [node, ...flattenMenu(node.children ?? [])]);
+
+const discoverCustomerSources = (manifest: CustomerSurfaceManifest): string[] => {
+	const discovered: string[] = [];
+	const visit = (directory: string) => {
+		for (const entry of readdirSync(directory, { withFileTypes: true })) {
+			const absolutePath = resolve(directory, entry.name);
+			if (entry.isDirectory()) {
+				if (manifest.recursive) visit(absolutePath);
+				continue;
+			}
+			const relativePath = relative(MODELING_SOURCE_ROOT, absolutePath).replaceAll("\\", "/");
+			if (!manifest.sourceExtensions.includes(extname(entry.name))) continue;
+			if (manifest.excludedSourceSuffixes.some((suffix) => entry.name.endsWith(suffix))) continue;
+			if (manifest.definitionFiles.includes(relativePath)) continue;
+			discovered.push(relativePath);
+		}
+	};
+
+	visit(MODELING_SOURCE_ROOT);
+	return discovered.sort();
+};
+
+const countOccurrences = (source: string, term: string) => source.split(term).length - 1;
 
 test("canonical modeling language has one exact mapping for six objects, four table types and the mainline", async () => {
 	assert.equal(existsSync(CONTRACT_URL), true, "missing centralized canonical modeling language contract");
@@ -86,6 +147,72 @@ test("canonical modeling language has one exact mapping for six objects, four ta
 	);
 });
 
+test("canonical customer object labels allow only six groups and business-category help aliases", async () => {
+	const contract = await import(CONTRACT_URL.href);
+	assert.equal(
+		typeof contract.isCanonicalModelingObjectLabel,
+		"function",
+		"missing canonical customer object-label validator",
+	);
+	assert.deepEqual([...contract.CANONICAL_MODELING_OBJECT_LABELS], EXPECTED_OBJECT_LABELS);
+	assert.deepEqual([...contract.REJECTED_MODELING_OBJECT_REPLACEMENT_TERMS], REPLACEMENT_OBJECT_TERMS);
+	assert.deepEqual(
+		{ ...contract.CANONICAL_MODELING_CUSTOMER_SURFACE_MANIFEST },
+		{
+			sourceRoot: "src/pages/modeling",
+			recursive: true,
+			sourceExtensions: [".ts", ".tsx"],
+			excludedSourceSuffixes: [".test.ts", ".test.tsx", ".test-support.ts", ".test-support.tsx"],
+			definitionFiles: ["canonicalModelingLanguage.ts"],
+			objectLabels: EXPECTED_OBJECT_LABELS,
+		},
+	);
+
+	for (const label of [...EXPECTED_OBJECT_LABELS, "数据域", "主题域"]) {
+		assert.equal(contract.isCanonicalModelingObjectLabel(label), true, `expected canonical object label: ${label}`);
+	}
+	for (const label of [...REPLACEMENT_OBJECT_TERMS, "业务活动", "明细表", "未知对象"]) {
+		assert.equal(contract.isCanonicalModelingObjectLabel(label), false, `unexpected seventh object label: ${label}`);
+	}
+	for (const objectLabel of contract.CANONICAL_MODELING_CUSTOMER_SURFACE_MANIFEST.objectLabels) {
+		assert.equal(
+			contract.isCanonicalModelingObjectLabel(objectLabel),
+			true,
+			`invalid declared objectLabel: ${objectLabel}`,
+		);
+	}
+});
+
+test("recursively discovered modeling customer sources cannot grow retired terms or introduce replacement aliases", async () => {
+	const contract = await import(CONTRACT_URL.href);
+	const manifest = contract.CANONICAL_MODELING_CUSTOMER_SURFACE_MANIFEST as CustomerSurfaceManifest;
+	const customerSources = discoverCustomerSources(manifest);
+
+	assert.ok(customerSources.includes("ModelingWorkbenchPage.tsx"), "top-level customer pages must be discovered");
+	assert.ok(
+		customerSources.includes("metric-workbench/MetricCanvas.tsx"),
+		"nested customer components must be discovered recursively",
+	);
+	for (const baselinePath of Object.keys(RETIRED_TERM_MIGRATION_BASELINE)) {
+		assert.ok(customerSources.includes(baselinePath), `stale retired-term baseline path: ${baselinePath}`);
+	}
+
+	for (const relativePath of customerSources) {
+		const source = readFileSync(resolve(MODELING_SOURCE_ROOT, relativePath), "utf8");
+		const baseline = RETIRED_TERM_MIGRATION_BASELINE[relativePath as keyof typeof RETIRED_TERM_MIGRATION_BASELINE] as
+			| Partial<Record<ForbiddenCustomerTerm, number>>
+			| undefined;
+		for (const term of FORBIDDEN_CUSTOMER_TERMS) {
+			const actual = countOccurrences(source, term);
+			const maximum = baseline?.[term] ?? 0;
+			assert.ok(
+				actual <= maximum,
+				`${relativePath} contains ${actual} occurrence(s) of forbidden customer term ${term}; maximum is ${maximum}`,
+			);
+		}
+	}
+});
+
 test("menu copy permits retired object language only on the single legacy key and route pair", () => {
 	const menuSeed = JSON.parse(
 		readSource("../../../../dts-admin/src/main/resources/config/data/portal-menu-seed.json"),
@@ -101,6 +228,11 @@ test("menu copy permits retired object language only on the single legacy key an
 	assert.ok(compatibilityNodes.length <= 1, "legacy modeling object menu exception must remain unique");
 	for (const node of menuNodes) {
 		const hasRetiredTitle = RETIRED_OBJECT_TERMS.some((term) => node.title?.includes(term));
+		assert.equal(
+			REPLACEMENT_OBJECT_TERMS.some((term) => node.title?.includes(term)),
+			false,
+			`replacement object copy leaked to menu ${node.key}`,
+		);
 		assert.equal(
 			RETIRED_METRIC_TERMS.some((term) => node.title?.includes(term)),
 			false,
@@ -118,6 +250,11 @@ test("menu copy permits retired object language only on the single legacy key an
 	const compatibilityRoleDefaults = roleDefaults.filter((item) => item.route === LEGACY_ROUTE);
 	assert.ok(compatibilityRoleDefaults.length <= 1, "legacy modeling object role default must remain unique");
 	for (const item of roleDefaults) {
+		assert.equal(
+			REPLACEMENT_OBJECT_TERMS.some((term) => item.title.includes(term)),
+			false,
+			`replacement object copy leaked to role menu ${item.code}`,
+		);
 		assert.equal(
 			RETIRED_METRIC_TERMS.some((term) => item.title.includes(term)),
 			false,

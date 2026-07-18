@@ -1,0 +1,24 @@
+Sprint-67 F1-T01 retired and replacement term audit evidence
+Executed at: 2026-07-19T00:10:12+08:00
+CWD: /opt/prod/s10/v2.2.3
+
+Retired-term inventory command:
+rg -o --count-matches --glob '!*.test.ts' --glob '!*.test.tsx' --glob '!*.test-support.ts' --glob '!canonicalModelingLanguage.ts' '业务对象|语义对象|原始指标|二次指标' source/dts-platform-webapp/src/pages/modeling source/dts-platform-webapp/src/routes/sections/dashboard/static-routes.tsx source/dts-platform-webapp/src/routes/sections/dashboard/dynamic-resolver.tsx source/dts-platform-webapp/src/api/modelingApi.ts source/dts-admin/src/main/resources/config/data/portal-menu-seed.json source/dts-admin/src/main/resources/config/data/role-menu-defaults.json
+
+Exit code: 0
+Key result:
+- 37 existing 业务对象 occurrences remain in 12 modeling source files and are frozen as per-file, per-term non-growth migration baselines by the source-contract.
+- One exact legacy menu item remains in portal-menu-seed.json and one matching role default remains in role-menu-defaults.json; both point to /modeling/semantic/objects.
+- No 语义对象, 原始指标 or 二次指标 match occurred in the audited non-test customer sources outside the guard definition.
+
+Replacement-alias command:
+rg -n --glob '!*.test.ts' --glob '!*.test.tsx' --glob '!*.test-support.ts' --glob '!canonicalModelingLanguage.ts' '业务实体|模型对象|数据对象|语义实体' source/dts-platform-webapp/src/pages/modeling source/dts-platform-webapp/src/routes/sections/dashboard/static-routes.tsx source/dts-platform-webapp/src/routes/sections/dashboard/dynamic-resolver.tsx source/dts-platform-webapp/src/api/modelingApi.ts source/dts-admin/src/main/resources/config/data/portal-menu-seed.json source/dts-admin/src/main/resources/config/data/role-menu-defaults.json
+
+Exit code: 1
+Key result: zero matches, which is the expected ripgrep exit code for the replacement-alias denylist.
+
+Guard interpretation:
+- Every non-test .ts/.tsx source under pages/modeling is discovered recursively.
+- Existing retired copy may only decrease from the frozen baseline; a new file starts with a zero allowance.
+- Replacement aliases and retired metric terms have no allowance in any customer source.
+- General action labels and explanatory prose are not treated as objectLabel values, avoiding false positives on legitimate UI copy.

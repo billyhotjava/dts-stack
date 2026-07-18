@@ -1,0 +1,25 @@
+Sprint-67 F1-T01 platform webapp production build evidence
+Completed at: 2026-07-19T00:10:12+08:00
+CWD: /opt/prod/s10/v2.2.3/source/dts-platform-webapp
+
+Command:
+pnpm build
+
+Expanded package command:
+LEGACY_BROWSER_BUILD=1 VITE_CACHE_DIR=.vite-cache tsc && LEGACY_BROWSER_BUILD=1 VITE_CACHE_DIR=.vite-cache vite build
+
+Exit code: 0
+Key result:
+- vite v6.3.3
+- 10586 modules transformed
+- built in 2m 21s
+- TypeScript and the Chrome 95 legacy bundle completed successfully.
+
+Non-blocking existing warnings:
+- caniuse-lite browser data is 15 months old.
+- Several existing output chunks exceed the configured size warning threshold.
+- No F1-T01 compile, type, or bundling error occurred.
+
+Workspace note:
+- The build ran while independent F1-T02/F1-T03 edits were present in the shared worktree.
+- The focused F1-T01 contract and four adjacent contracts were also run independently and passed 5/5.
