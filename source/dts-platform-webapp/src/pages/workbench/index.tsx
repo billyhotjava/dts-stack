@@ -8,6 +8,7 @@ import workbenchService, {
 	type WorkbenchPreferencesResponse,
 } from "@/api/services/workbenchService";
 import { GLOBAL_CONFIG } from "@/global-config";
+import ModelingWorkbenchPage from "@/pages/modeling/ModelingWorkbenchPage";
 import { useUserInfo } from "@/store/userStore";
 import WorkbenchCustomizeDrawer from "./components/WorkbenchCustomizeDrawer";
 import DataManagementWorkbenchPage from "./DataManagementWorkbenchPage";
@@ -153,8 +154,7 @@ export default function WorkbenchPage() {
 		(item) => item.visible && isLeaderOverviewComponentKey(item.key),
 	);
 	const isEmptyWorkbench = visibleComponentKeys.size === 0;
-	const showDataManagementSection =
-		activeSection === "data-management" || activeSection === "consumption" || activeJourney === "first-report";
+	const showLegacyDataProductSection = activeSection === "consumption" || activeJourney === "first-report";
 
 	const handleSave = useCallback(
 		async (items: WorkbenchPreferenceItem[]): Promise<void> => {
@@ -211,6 +211,8 @@ export default function WorkbenchPage() {
 		}
 	}, [preferenceOwner]);
 
+	if (activeSection === "data-management" && activeJourney !== "first-report") return <ModelingWorkbenchPage />;
+
 	return (
 		<div data-testid="platform-workbench-home">
 			<div style={{ padding: "16px 16px 0" }}>
@@ -248,7 +250,7 @@ export default function WorkbenchPage() {
 				</div>
 			)}
 
-			{showDataManagementSection && (
+			{showLegacyDataProductSection && (
 				<div style={{ padding: 16 }}>
 					<DataManagementWorkbenchPage
 						embedded

@@ -33,6 +33,7 @@ const SqlModelingPage = lazy(() => import("@/pages/modeling/SqlModelingPage"));
 const DbtFileBrowserPage = lazy(() => import("@/pages/modeling/DbtFileBrowserPage"));
 const MetricWorkbenchPage = lazy(() => import("@/pages/modeling/MetricWorkbenchPage"));
 const ModelingWorkbenchPage = lazy(() => import("@/pages/modeling/ModelingWorkbenchPage"));
+const WarehousePlanDetailPage = lazy(() => import("@/pages/modeling/WarehousePlanDetailPage"));
 const SemanticSubjectsPage = lazy(() => import("@/pages/modeling/SemanticSubjectsPage"));
 const SemanticObjectsPage = lazy(() => import("@/pages/modeling/SemanticObjectsPage"));
 const SemanticMetricsPage = lazy(() => import("@/pages/modeling/SemanticMetricsPage"));
@@ -135,6 +136,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{ path: "studio/sql-modeling", element: <S><SqlModelingPage /></S> },
 	{ path: "modeling/dbt-files", element: <S><DbtFileBrowserPage /></S> },
 	{ path: "modeling/workbench", element: <S><ModelingWorkbenchPage /></S> },
+	{ path: "modeling/plans/:planId/*", element: <S><WarehousePlanDetailPage /></S> },
 	{ path: "modeling/metric-workbench", element: <S><MetricWorkbenchPage /></S> },
 	{ path: "modeling/semantic/subjects", element: <S><SemanticSubjectsPage /></S> },
 	{ path: "modeling/semantic/objects", element: <S><SemanticObjectsPage /></S> },

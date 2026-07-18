@@ -1,5 +1,7 @@
 # 通用建模内核与行业模板边界设计
 
+> **状态：ACTIVE**——不取代其他主旅程 Spec，也未被经典数仓主线取代；本文定义的行业中立、显式安装、候选确认和空租户不注入示例等后台不变量由 `2026-07-18-classic-warehouse-planning-golden-path-design.md` 继承。
+
 **日期**: 2026-07-17
 **范围**: `dts-platform`、`dts-platform-webapp` 建模规划入口
 **目标**: 保证 DTS 默认安装是行业中立产品，PJM 仅作为可选模板与测试夹具存在。

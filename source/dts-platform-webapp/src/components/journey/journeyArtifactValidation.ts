@@ -24,6 +24,7 @@ export type ArtifactValidationMap = Partial<Record<JourneyContextParamKey, Artif
 
 export const ARTIFACT_VALIDATION_API_NAMES: Record<JourneyContextParamKey, string> = {
 	sourceId: "GET /api/infra/data-sources/{id}",
+	planId: "GET /api/modeling/warehouse-plans/{id}",
 	planningId: "GET /api/governance/warehouse-plannings/{id}",
 	domainId: "GET /api/governance/subject-domains/{id}",
 	processId: "GET /api/governance/subject-domains/{domainId}/processes/{processId}",

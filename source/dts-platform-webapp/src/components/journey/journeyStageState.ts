@@ -85,6 +85,7 @@ const BLOCKED_STATUS_STATE = {
 
 const PARAM_LABELS: Record<JourneyContextParamKey, string> = {
 	sourceId: "数据源",
+	planId: "建设计划",
 	planningId: "规划",
 	domainId: "主题域",
 	processId: "业务过程",

@@ -12,11 +12,12 @@ export type DataProductJourneyStageKey =
 
 export const JOURNEY_CONTEXT_PARAM_KEYS = [
 	"sourceId",
-	"planningId",
+	"planId",
+	"planningId", // @deprecated canonical modeling routes must write planId instead.
 	"domainId",
-	"processId",
-	"warehouseLayer",
-	"modelingMode",
+	"processId", // @deprecated compatibility passthrough; not a journey completion source.
+	"warehouseLayer", // @deprecated compatibility passthrough; not a journey completion source.
+	"modelingMode", // @deprecated compatibility passthrough; not a journey completion source.
 	"standardDraftId",
 	"modelId",
 	"metricId",
@@ -109,6 +110,7 @@ const STAGE_CONFIG: Record<DataProductJourneyStageKey, JourneyStageConfig> = {
 
 export const JOURNEY_CONTEXT_PARAM_LABELS: Record<JourneyContextParamKey, string> = {
 	sourceId: "数据源",
+	planId: "建设计划",
 	planningId: "规划",
 	domainId: "主题域",
 	processId: "业务过程",

@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -87,6 +88,38 @@ class ModelingVNextResourceTest {
             .andExpect(jsonPath("$.data.id").value("pjm-project-node"));
 
         verify(service).saveBusinessObject(eq("tenant-pjm"), eq(object), eq(3), eq("idem-pjm-3"));
+    }
+
+    @Test
+    void legacyPlanResponseCarriesTheCanonicalPlanId() throws Exception {
+        ModelingVNextApplicationService.WarehousePlan plan = new ModelingVNextApplicationService.WarehousePlan(
+            "10000000-0000-0000-0000-000000000001",
+            "10000000-0000-0000-0000-000000000001",
+            null,
+            "risk-resolution",
+            "DWD",
+            "DESIGNER_GENERATED",
+            "one row per risk lifecycle",
+            "DRAFT",
+            1
+        );
+        when(service.savePlan(eq("tenant-pjm"), any(), eq(1), eq("legacy-plan-1"))).thenReturn(plan);
+
+        mockMvc
+            .perform(
+                post("/api/modeling/vnext/plans")
+                    .header("X-Tenant-Id", "tenant-pjm")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"processId":"risk-resolution","layer":"DWD","modelingMode":"DESIGNER_GENERATED",
+                         "targetGrain":"one row per risk lifecycle","status":"DRAFT","revision":1,
+                         "idempotencyKey":"legacy-plan-1"}
+                        """
+                    )
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.planId").value("10000000-0000-0000-0000-000000000001"));
     }
 
     @Test

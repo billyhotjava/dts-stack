@@ -60,6 +60,7 @@ public class ModelingVNextApplicationService {
 
     public record WarehousePlan(
         String id,
+        String planId,
         String domainId,
         String processId,
         String layer,
@@ -169,7 +170,9 @@ public class ModelingVNextApplicationService {
 
     @Transactional(readOnly = true)
     public List<WarehousePlan> listPlans(String tenantId, String processId, String layer) {
-        StringBuilder sql = new StringBuilder("select id, domain_id, process_id, layer, modeling_mode, target_grain, status, version from modeling_warehouse_plan where tenant_id = ?");
+        StringBuilder sql = new StringBuilder(
+            "select id, domain_id, process_id, layer, modeling_mode, target_grain, status, version from modeling_warehouse_plan where tenant_id = ?"
+        );
         List<Object> args = new ArrayList<>();
         args.add(normalizeTenant(tenantId));
         if (notBlank(processId)) {
@@ -180,10 +183,11 @@ public class ModelingVNextApplicationService {
             sql.append(" and layer = ?");
             args.add(layer);
         }
-        sql.append(" order by process_id, layer");
+        sql.append(" order by process_id nulls last, layer nulls last, id");
         return jdbcTemplate.query(sql.toString(), args.toArray(), (rs, row) -> new WarehousePlan(
-            rs.getString("id"), rs.getString("domain_id"), rs.getString("process_id"), rs.getString("layer"),
-            rs.getString("modeling_mode"), rs.getString("target_grain"), rs.getString("status"), rs.getInt("version")
+            rs.getString("id"), rs.getString("id"), rs.getString("domain_id"), rs.getString("process_id"),
+            rs.getString("layer"), rs.getString("modeling_mode"), rs.getString("target_grain"), rs.getString("status"),
+            rs.getInt("version")
         ));
     }
 
@@ -200,16 +204,70 @@ public class ModelingVNextApplicationService {
         Timestamp now = Timestamp.from(Instant.now());
         if (storedVersion == 0) {
             jdbcTemplate.update(
-                "insert into modeling_warehouse_plan (id, tenant_id, owner, domain_id, process_id, layer, modeling_mode, target_grain, status, version, created_date, last_modified_date) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                id, tenant, DEFAULT_OWNER, nullableUuid(plan.domainId()), plan.processId(), plan.layer(), modelingMode, plan.targetGrain(), status, revision, now, now
+                """
+                insert into modeling_warehouse_plan (
+                    id, tenant_id, owner, code, name, objective, scope, owner_id, onboarding_mode, lifecycle_status,
+                    domain_id, process_id, layer, modeling_mode, target_grain, status, version,
+                    business_scope_version, sources_version, source_mappings_version, policy_version,
+                    created_date, last_modified_date
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, 'BUSINESS_FIRST', 'DRAFT', ?, ?, ?, ?, ?, ?, ?, 1, 1, 1, 1, ?, ?)
+                """,
+                id,
+                tenant,
+                DEFAULT_OWNER,
+                "legacy_vnext_" + id.toString().replace("-", ""),
+                legacyPlanName(plan),
+                "Migrated through the modeling vNext compatibility route",
+                plan.targetGrain(),
+                DEFAULT_OWNER,
+                nullableUuid(plan.domainId()),
+                plan.processId(),
+                plan.layer(),
+                modelingMode,
+                plan.targetGrain(),
+                status,
+                revision,
+                now,
+                now
             );
         } else {
             jdbcTemplate.update(
-                "update modeling_warehouse_plan set domain_id = ?, process_id = ?, layer = ?, modeling_mode = ?, target_grain = ?, status = ?, version = ?, last_modified_date = ? where id = ? and tenant_id = ? and version = ?",
-                nullableUuid(plan.domainId()), plan.processId(), plan.layer(), modelingMode, plan.targetGrain(), status, revision, now, id, tenant, revision
+                """
+                update modeling_warehouse_plan
+                   set domain_id = ?, process_id = ?, layer = ?, modeling_mode = ?, target_grain = ?, status = ?,
+                       name = ?, scope = ?, version = ?, last_modified_date = ?
+                 where id = ? and tenant_id = ? and version = ?
+                """,
+                nullableUuid(plan.domainId()),
+                plan.processId(),
+                plan.layer(),
+                modelingMode,
+                plan.targetGrain(),
+                status,
+                legacyPlanName(plan),
+                plan.targetGrain(),
+                revision,
+                now,
+                id,
+                tenant,
+                revision
             );
         }
-        return new WarehousePlan(id.toString(), plan.domainId(), plan.processId(), plan.layer(), modelingMode, plan.targetGrain(), status, revision);
+        return new WarehousePlan(
+            id.toString(),
+            id.toString(),
+            plan.domainId(),
+            plan.processId(),
+            plan.layer(),
+            modelingMode,
+            plan.targetGrain(),
+            status,
+            revision
+        );
+    }
+
+    private static String legacyPlanName(WarehousePlan plan) {
+        return plan.processId() + " / " + plan.layer();
     }
 
     @Transactional(readOnly = true)

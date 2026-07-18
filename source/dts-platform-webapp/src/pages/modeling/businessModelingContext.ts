@@ -3,14 +3,19 @@ import type { WarehousePlanningContext } from "../governance/warehousePlanningCo
 export type BusinessModelingContext = {
 	domainId?: string;
 	domainName?: string;
+	/** @deprecated Compatibility context only. New plan journeys must not require processId. */
 	processId?: string;
 	processName?: string;
+	/** @deprecated Read-only alias migrated into planId. */
 	planningId?: string;
+	/** Canonical WarehousePlan context for all new modeling routes. */
 	planId?: string;
 	objectId?: string;
 	modelSpecId?: string;
 	revision?: string;
+	/** @deprecated Compatibility context only. */
 	warehouseLayer?: string;
+	/** @deprecated Compatibility context only. */
 	modelingMode?: string;
 	projectSpaceId?: string;
 	projectSpaceMode: "implicit" | "project";

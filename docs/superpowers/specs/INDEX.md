@@ -16,7 +16,7 @@
 | 2026-07-18-classic-warehouse-planning-golden-path-design | 经典数仓规划内核、双起点、黄金主线（Sprint-65 总体设计） | 全栈架构 | **ACTIVE（权威）** |
 | 2026-07-17-generic-modeling-workbench-ui-design | 四阶段通用建模工作台 | 前端 IA | SUPERSEDED by 07-18（通用内核 §4 与状态真实性 §10 被继承） |
 | 2026-07-17-generic-modeling-template-boundary-design | 通用内核 vs 行业模板边界、PJM 模板化 | 后端不变量 | ACTIVE（不受 07-18 影响） |
-| 2026-07-17-domain-modeling-candidate-review-design | 模板候选确认闭环 | 后端 API + UI | 后台不变量 ACTIVE；UI 部分 SUPERSEDED by 07-17-workbench-ui（连锁至 07-18） |
+| 2026-07-17-domain-modeling-candidate-review-design | 模板候选确认闭环 | 后端 API + UI | PARTIALLY SUPERSEDED by 07-18；后台候选确认不变量 ACTIVE，UI 骨架已取代 |
 | 2026-07-11-warehouse-planning-standard-dimension-loop-design | 规划-标准-维度闭环（Sprint-63 蓝本） | 前端 UI | IMPLEMENTED；骨架决策已被 07-17/07-18 演进覆盖 |
 
 ## 其他历史 spec

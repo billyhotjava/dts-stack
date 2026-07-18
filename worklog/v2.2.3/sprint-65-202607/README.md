@@ -1,6 +1,6 @@
 # Sprint-65：经典数仓规划内核与黄金主线重构
 
-**状态**：READY
+**状态**：IN_PROGRESS
 **周期**：2026-07
 **类型**：Architecture Convergence / Full-stack Refactor / Controlled Retirement
 **总体设计**：[`docs/superpowers/specs/2026-07-18-classic-warehouse-planning-golden-path-design.md`](../../../docs/superpowers/specs/2026-07-18-classic-warehouse-planning-golden-path-design.md)
@@ -42,15 +42,15 @@ dbt 从“建模模式”调整为高级实现工具；关系建模调整为模�
 | Feature | 优先级 | Task 数 | 状态 | 目标 |
 |---|---:|---:|---|---|
 | [F1-架构边界与受控退役](features/F1-架构边界与受控退役/README.md) | P0 | 3 | READY | 固化唯一概念、所有权和退役护栏 |
-| [F2-WarehousePlan持久化与API](features/F2-WarehousePlan持久化与API/README.md) | P0 | 4 | READY | 建立 canonical 规划聚合和后端契约 |
-| [F3-双起点规划基线](features/F3-双起点规划基线/README.md) | P0 | 4 | READY | 两种入口在同一基线收敛 |
+| [F2-WarehousePlan持久化与API](features/F2-WarehousePlan持久化与API/README.md) | P0 | 4 | IN_PROGRESS | 建立 canonical 规划聚合和后端契约 |
+| [F3-双起点规划基线](features/F3-双起点规划基线/README.md) | P0 | 4 | IN_PROGRESS | 两种入口在同一基线收敛 |
 | [F4-经典数仓架构与维度模型](features/F4-经典数仓架构与维度模型/README.md) | P0 | 4 | READY | 形成默认事实/维度设计闭环 |
-| [F5-黄金主线与数据建设工作台](features/F5-黄金主线与数据建设工作台/README.md) | P0 | 4 | READY | 用真实证据显示当前阻塞和下一步 |
+| [F5-黄金主线与数据建设工作台](features/F5-黄金主线与数据建设工作台/README.md) | P0 | 4 | IN_PROGRESS | 用真实证据显示当前阻塞和下一步 |
 | [F6-模型中心与高级dbt分离](features/F6-模型中心与高级dbt分离/README.md) | P0 | 4 | READY | 分离规划设计和工程实现职责 |
-| [F7-菜单路由兼容与旧旅程退役](features/F7-菜单路由兼容与旧旅程退役/README.md) | P0 | 5 | READY | 无损切换新入口并冻结旧事实源；前端收敛为 planId 单骨架 |
-| [F8-集成验收与交付证据](features/F8-集成验收与交付证据/README.md) | P0 | 3 | READY | 提供可复核的迁移与端到端证据 |
+| [F7-菜单路由兼容与旧旅程退役](features/F7-菜单路由兼容与旧旅程退役/README.md) | P0 | 5 | IN_PROGRESS | 无损切换新入口并冻结旧事实源；前端收敛为 planId + StageProjection 单状态源 |
+| [F8-集成验收与交付证据](features/F8-集成验收与交付证据/README.md) | P0 | 3 | IN_PROGRESS | 提供可复核的迁移与端到端证据 |
 
-**统计**：READY=31，IN_PROGRESS=0，DONE=0，BLOCKED=0
+**Task 统计**：READY=23，IN_PROGRESS=8，DONE=0，BLOCKED=0
 
 ## 4. 推荐执行顺序
 
@@ -74,7 +74,7 @@ F1 -> F2 -> F3
 8. 自动推断产生候选，人工确认后才进入基线、模型或发布门禁。
 9. 旧路由和菜单先兼容、再冻结、后移除；物理删除必须进入后续专项 Sprint。
 10. 核心契约禁止出现客户、行业或示例专属字段。
-11. 前端只允许一套旅程骨架：`planId` 上下文；既有四套上下文与两套阶段导航按退役登记表 R11-R13 收敛，任何页面不得同时渲染两套阶段导航。
+11. 九站 `StageProjection` 是唯一可计算完成度的旅程骨架，`planId` 是唯一新链路上下文；八阶段总览只能映射九站投影，六阶段计划详情只是编辑 Tab。既有四套上下文与阶段导航按 R03、R11-R13 收敛，任何页面不得同时渲染两套阶段导航。
 
 ## 6. 主要资产
 
@@ -86,7 +86,7 @@ F1 -> F2 -> F3
 
 ## 7. Sprint 完成标准
 
-- 30 个 Task 的完成条件全部满足，并链接真实代码、测试或运行证据；
+- 31 个 Task 的完成条件全部满足，并链接真实代码、测试或运行证据；
 - BUSINESS_FIRST、ASSET_FIRST 共用同一套 API、表和计划详情；
 - 空库升级、存量库升级、迁移 dry-run、幂等重跑和回滚全部通过；
 - 新工作台不会跳转到主题域管理，且主屏仅有一个当前动作；
@@ -95,7 +95,7 @@ F1 -> F2 -> F3
 - Chrome 95 端到端覆盖双起点、失败修复、旧深链和权限；
 - `git diff --check`、模块测试、前端 build、GitNexus 变更范围检查通过；
 - 旧资产只进入兼容或冻结状态，不发生未授权删除；
-- R11-R13 前端骨架收敛达成目标状态，单骨架守卫契约在测试基线内长期运行。
+- R03、R11-R13 前端上下文与导航收敛达成目标状态，单状态源守卫契约在测试基线内长期运行。
 
 ## 8. 风险与止损
 
@@ -115,6 +115,6 @@ F1 -> F2 -> F3
 | 期 | 范围 | 出口判据 |
 |---|---|---|
 | 65a（先立后破） | F1 → F2 → F3 + F5-T01（内核、双起点、证据投影后端）；同时冻结旧 `modeling_plan*` 写入 | canonical 聚合可用、双起点同基线、旧写入零增量 |
-| 65b（切换收尾） | F4 / F6 深化 → F7 切换（含 T05 骨架收敛）→ F8 验收 | 单骨架契约 GREEN、迁移与 Chrome95 证据齐备 |
+| 65b（切换收尾） | F4 / F6 深化 → F5-T02/T03/T04 → F7 切换（含 T05 骨架收敛）→ F8 验收 | 九站投影成为唯一状态源、三种视图映射契约 GREEN、迁移与 Chrome95 证据齐备 |
 
 若不分期，至少将 F7-T04（清理）与 F8-T02（Chrome95 全量）降为 P1 可滑项；F5 工作台与既有"端到端数据产品工作台"的关系为：**e2e 旅程保留为跨域总览首页，数据建设工作台是建模域主场，两者通过 planId 互通**（详见 F5 README）。

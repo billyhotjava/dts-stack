@@ -16,6 +16,9 @@ export type ModelingJourneyContext = BusinessModelingContext & {
 	stage: ModelingStage;
 };
 
+// Controlled-retirement rule: planId is inherited from BusinessModelingContext and is the
+// only canonical WarehousePlan identifier. The remaining scope fields are read-only legacy context.
+
 const stageFrom = (value?: string | null): ModelingStage => {
 	switch (value?.trim().toLowerCase()) {
 		case "logical":

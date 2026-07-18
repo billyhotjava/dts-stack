@@ -1,5 +1,7 @@
 # 数仓规划、数据标准与维度建模闭环设计
 
+> **状态：IMPLEMENTED / UI 骨架 SUPERSEDED**——Sprint-63 的规划、标准和维度闭环能力已经实现；本文定义的页面顺序和规划上下文骨架已由 `2026-07-18-classic-warehouse-planning-golden-path-design.md` 取代，历史验收与后台能力继续保留。
+
 **日期**: 2026-07-11  
 **范围**: `dts-platform-webapp` UI-first 端到端闭环  
 **关联 Sprint**: Sprint-63

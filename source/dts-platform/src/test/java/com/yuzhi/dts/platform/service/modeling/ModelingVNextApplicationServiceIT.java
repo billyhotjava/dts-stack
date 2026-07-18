@@ -27,6 +27,46 @@ class ModelingVNextApplicationServiceIT {
     private JdbcTemplate jdbcTemplate;
 
     @Test
+    void legacyPlanRouteWritesOneCanonicalPlanAndReturnsItsPlanId() {
+        String tenant = "it-plan-" + UUID.randomUUID();
+        UUID domainId = UUID.randomUUID();
+        ModelingVNextApplicationService.WarehousePlan request = new ModelingVNextApplicationService.WarehousePlan(
+            null,
+            null,
+            domainId.toString(),
+            "risk-resolution",
+            "DWD",
+            "DESIGNER_GENERATED",
+            "one row per risk lifecycle",
+            "DRAFT",
+            1
+        );
+
+        try {
+            ModelingVNextApplicationService.WarehousePlan saved = service.savePlan(tenant, request, 1, "legacy-plan-1");
+
+            assertThat(saved.planId()).isEqualTo(saved.id()).isNotBlank();
+            assertThat(service.listPlans(tenant, "risk-resolution", "DWD"))
+                .singleElement()
+                .satisfies(plan -> {
+                    assertThat(plan.planId()).isEqualTo(saved.planId());
+                    assertThat(plan.targetGrain()).isEqualTo("one row per risk lifecycle");
+                });
+            assertThat(
+                jdbcTemplate.queryForMap(
+                    "select code, name, onboarding_mode, lifecycle_status from modeling_warehouse_plan where tenant_id = ? and id = ?",
+                    tenant,
+                    UUID.fromString(saved.planId())
+                )
+            )
+                .containsEntry("onboarding_mode", "BUSINESS_FIRST")
+                .containsEntry("lifecycle_status", "DRAFT");
+        } finally {
+            jdbcTemplate.update("delete from modeling_warehouse_plan where tenant_id = ?", tenant);
+        }
+    }
+
+    @Test
     void pjmGoldenPathPersistsCompilesImportsAndQueuesRun() {
         String tenant = "it-" + UUID.randomUUID();
         UUID seed = UUID.randomUUID();

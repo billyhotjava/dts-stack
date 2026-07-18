@@ -28,7 +28,22 @@ Sprint-65 的最高目标状态是 `FROZEN` 或 `REMOVAL_CANDIDATE`，不得直�
 | R10 | 旧建模概念卡/顶部多卡片 | UI | 挤压工作区 | 首次说明折叠、单主动作 | FROZEN | 样式 flag | 可用性验收通过 |
 | R11 | e2e 旅程白名单中的规划四参数（planningId/warehouseLayer/modelingMode/processId）与建模域旅程条 | 前端上下文/导航 | 与 planId 竞争、双阶段导航并存 | `planId` 统一上下文；e2e 旅程条在建模域降级为返回链接 | FROZEN | 白名单参数保留只读透传 | planId 链路两版本稳定且无消费者读取旧参数 |
 | R12 | `businessModelingContext` | 前端上下文 | 第三套上下文事实源 | planId 上下文 + 兼容映射 | FROZEN | 映射函数保留 | 存量深链全部命中兼容映射 |
-| R13 | `modelingJourneyContext` 与 SemanticWorkspaceFrame 四阶段导航（2026-07-17 引入） | 前端上下文/导航 | 与黄金主线九站竞争的骨架 | 数据建设工作台 + planId；Frame 若保留仅作为模型中心内部导航且不再自持上下文 | COMPATIBLE | Frame 保持现状渲染 | F5 工作台上线且建模页单骨架契约通过 |
+| R13 | `modelingJourneyContext` 与 SemanticWorkspaceFrame 四阶段导航（2026-07-17 引入） | 前端上下文/导航 | 与黄金主线九站竞争的骨架 | 数据建设工作台 + planId；Frame 若保留仅作为模型中心内部导航且不再自持上下文 | COMPATIBLE | Frame 保持现状渲染 | F5 工作台上线且建模页单状态源契约通过 |
+
+### 2.1 执行状态追踪
+
+上表“Sprint-65 目标”不是当前完成状态。实际切换必须在下表登记，未附证据时一律视为 `INVENTORY`：
+
+| ID | 当前状态 | 实施责任 | 证据链接 | 最近核验 |
+|---|---|---|---|---|
+| R01-R02 | COMPATIBLE | F7-T01/T02 | `/modeling/workbench` 已成为真实计划工作台；`/workbench?section=data-management` 收敛到同一入口，主题域保留专业深链 | 2026-07-18 |
+| R03 | COMPATIBLE | F7-T03/T05 | 新工作台仅消费 WarehousePlan/StageProjection；旧 context 消费者由 source-contract 冻结，尚未完成存量迁移 | 2026-07-18 |
+| R04-R06 | INVENTORY | F4/F6/F7 | 待实施 | - |
+| R07-R09 | INVENTORY | F2/F7 | 待实施 | - |
+| R10 | COMPATIBLE | F5-T02 | canonical 工作台空态与活跃态各只有一个主动作；旧页面尚待后续收敛 | 2026-07-18 |
+| R11-R13 | COMPATIBLE | F7-T05 | `planId` 已进入统一上下文和深链；旧参数标记 deprecated；新工作台不读取旧完成状态；消费者集合已有回潮守卫 | 2026-07-18 |
+
+状态变化时必须同时更新当前状态、具体责任人、可打开的测试/审计/运行证据和核验日期；只修改目标列不能视为完成。
 
 ## 3. 每个退役项必须附带的证据
 

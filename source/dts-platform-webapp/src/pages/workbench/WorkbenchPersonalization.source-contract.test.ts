@@ -144,16 +144,18 @@ test("workbench local preferences provide a silent per-user fallback", () => {
 	assert.doesNotMatch(source, /后端已升级|暂未启用个人工作台保存|No static resource/);
 });
 
-test("legacy data-management query renders the real data management section inside workbench", () => {
+test("data-management uses the canonical plan workbench while consumption and first-report remain compatible", () => {
 	const indexSource = readFileSync(INDEX_URL, "utf8");
 	const pageSource = readFileSync(new URL("./DataManagementWorkbenchPage.tsx", import.meta.url), "utf8");
 
 	assert.match(indexSource, /DataManagementWorkbenchPage/);
+	assert.match(indexSource, /ModelingWorkbenchPage/);
 	assert.match(indexSource, /searchParams\.get\("section"\)/);
 	assert.match(indexSource, /searchParams\.get\("journey"\)/);
 	assert.match(indexSource, /activeSection === "data-management"/);
 	assert.match(indexSource, /activeJourney === "first-report"/);
-	assert.match(indexSource, /activeSection === "data-management" \|\| activeSection === "consumption" \|\| activeJourney === "first-report"/);
+	assert.match(indexSource, /activeSection === "data-management" && activeJourney !== "first-report"[\s\S]*return <ModelingWorkbenchPage/);
+	assert.match(indexSource, /activeSection === "consumption" \|\| activeJourney === "first-report"/);
 	assert.match(indexSource, /<DataManagementWorkbenchPage[\s\S]*embedded[\s\S]*focus=\{activeSection === "consumption" \? "consumption" : "data-management"\}/);
 	assert.match(indexSource, /firstReportActive=\{activeJourney === "first-report"\}/);
 	assert.match(pageSource, /embedded\?:\s*boolean/);
