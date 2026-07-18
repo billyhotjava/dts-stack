@@ -176,4 +176,5 @@
     <include file="config/liquibase/changelog/20260717_01_generic_modeling_template_boundary.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260718_01_warehouse_plan_canonical.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260719_01_warehouse_plan_create_idempotency.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260719_02_catalog_domain_resolution_facts.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

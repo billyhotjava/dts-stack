@@ -15,9 +15,10 @@ import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
 import com.yuzhi.dts.platform.domain.visualization.BiReportLink;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
-import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.visualization.BiReportLinkRepository;
 import com.yuzhi.dts.platform.repository.visualization.BiReportVisitRepository;
+import com.yuzhi.dts.platform.service.catalog.CatalogDomainVisibilityService;
+import com.yuzhi.dts.platform.service.catalog.CatalogDomainVisibilityService.DomainCodeVisibility;
 import com.yuzhi.dts.platform.service.permission.DashboardAccessGuard;
 import com.yuzhi.dts.platform.service.permission.DashboardAccessGuard.AccessDecision;
 import com.yuzhi.dts.platform.service.permission.DashboardAccessGuard.Caller;
@@ -27,6 +28,8 @@ import com.yuzhi.dts.platform.service.workbench.dto.LeaderOverviewResponse;
 import com.yuzhi.dts.platform.service.workbench.dto.ReportVisitAggregateRow;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,7 +43,7 @@ class WorkbenchLeaderOverviewServiceTest {
     @Mock BiReportLinkRepository reportRepo;
     @Mock BiReportVisitRepository visitRepo;
     @Mock CatalogDatasetRepository datasetRepo;
-    @Mock CatalogDomainRepository catalogDomainRepo;
+    @Mock CatalogDomainVisibilityService catalogDomainVisibilityService;
     @Mock TopReportsFallbackService fallbackService;
     @Mock DashboardAccessGuard dashboardAccessGuard;
     @Mock DashboardCallerResolver dashboardCallerResolver;
@@ -54,7 +57,7 @@ class WorkbenchLeaderOverviewServiceTest {
             reportRepo,
             visitRepo,
             datasetRepo,
-            catalogDomainRepo,
+            catalogDomainVisibilityService,
             new WorkbenchLeaderOverviewProperties(),
             fallbackService,
             dashboardAccessGuard,
@@ -79,7 +82,9 @@ class WorkbenchLeaderOverviewServiceTest {
         lenient().when(datasetRepo.findTopForUser(anyString(), any())).thenReturn(List.of());
         lenient().when(fallbackService.tryFetchFallback(any(), any())).thenReturn(List.of());
         lenient().when(visitRepo.aggregateByBizDomain(any(), any(), any(), any())).thenReturn(List.of());
-        lenient().when(catalogDomainRepo.findAll()).thenReturn(List.of());
+        lenient()
+            .when(catalogDomainVisibilityService.resolveCodes(any()))
+            .thenReturn(new DomainCodeVisibility(Map.of(), Set.of()));
     }
 
     // =========================================================== scope/dept/timerange downgrade (existing wave-1 tests)
@@ -427,8 +432,8 @@ class WorkbenchLeaderOverviewServiceTest {
     }
 
     @Test
-    void computeDomainMatrix_catalog_domain_repo_failure_uses_code() {
-        when(catalogDomainRepo.findAll()).thenThrow(new RuntimeException("db down"));
+    void computeDomainMatrix_catalog_domain_visibility_failure_failsClosed() {
+        when(catalogDomainVisibilityService.resolveCodes(any())).thenThrow(new RuntimeException("db down"));
         when(visitRepo.aggregateByBizDomain(any(), any(), any(), any())).thenReturn(
             List.of(new DomainAggregateRow("finance", 10L))
         );
@@ -436,10 +441,7 @@ class WorkbenchLeaderOverviewServiceTest {
         LeaderOverviewResponse res = service.build(
             "dan", List.of("ROLE_INST_LEADER"), "D001", "ALL", null, null, "MONTH"
         );
-        assertThat(res.domainMatrix()).hasSize(1);
-        // Name falls back to the code when the domain repo is unavailable.
-        assertThat(res.domainMatrix().get(0).domain()).isEqualTo("finance");
-        assertThat(res.domainMatrix().get(0).domainName()).isEqualTo("finance");
+        assertThat(res.domainMatrix()).isEmpty();
     }
 
     @Test
@@ -447,7 +449,8 @@ class WorkbenchLeaderOverviewServiceTest {
         CatalogDomain dom = new CatalogDomain();
         dom.setCode("finance");
         dom.setName("财务");
-        when(catalogDomainRepo.findAll()).thenReturn(List.of(dom));
+        when(catalogDomainVisibilityService.resolveCodes(Set.of("finance")))
+            .thenReturn(new DomainCodeVisibility(Map.of("finance", "财务"), Set.of()));
         when(visitRepo.aggregateByBizDomain(any(), any(), any(), any())).thenReturn(
             List.of(new DomainAggregateRow("finance", 10L))
         );

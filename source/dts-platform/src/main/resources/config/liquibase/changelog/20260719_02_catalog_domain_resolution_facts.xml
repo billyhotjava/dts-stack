@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260719-02-catalog-domain-resolution-facts" author="codex">
+        <comment>Add auditable lifecycle and access facts used by catalog-domain resolution.</comment>
+        <addColumn tableName="catalog_domain">
+            <column name="lifecycle_status" type="varchar(16)"/>
+            <column name="access_policy" type="varchar(16)"/>
+        </addColumn>
+
+        <update tableName="catalog_domain">
+            <column name="lifecycle_status" value="ACTIVE"/>
+            <where>lifecycle_status IS NULL</where>
+        </update>
+        <update tableName="catalog_domain">
+            <column name="access_policy" value="PUBLIC"/>
+            <where>access_policy IS NULL</where>
+        </update>
+
+        <addDefaultValue tableName="catalog_domain" columnName="lifecycle_status" columnDataType="varchar(16)" defaultValue="ACTIVE"/>
+        <addDefaultValue tableName="catalog_domain" columnName="access_policy" columnDataType="varchar(16)" defaultValue="PUBLIC"/>
+        <addNotNullConstraint tableName="catalog_domain" columnName="lifecycle_status" columnDataType="varchar(16)"/>
+        <addNotNullConstraint tableName="catalog_domain" columnName="access_policy" columnDataType="varchar(16)"/>
+
+        <sql dbms="postgresql" splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE catalog_domain
+                ADD CONSTRAINT ck_catalog_domain_lifecycle_status
+                CHECK (lifecycle_status IN ('ACTIVE', 'ARCHIVED'));
+            ALTER TABLE catalog_domain
+                ADD CONSTRAINT ck_catalog_domain_access_policy
+                CHECK (access_policy IN ('PUBLIC', 'RESTRICTED'));
+        ]]></sql>
+
+        <rollback>
+            <sql dbms="postgresql" splitStatements="true" endDelimiter=";"><![CDATA[
+                ALTER TABLE catalog_domain
+                    DROP CONSTRAINT IF EXISTS ck_catalog_domain_lifecycle_status;
+                ALTER TABLE catalog_domain
+                    DROP CONSTRAINT IF EXISTS ck_catalog_domain_access_policy;
+            ]]></sql>
+            <dropColumn tableName="catalog_domain" columnName="lifecycle_status"/>
+            <dropColumn tableName="catalog_domain" columnName="access_policy"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -1,12 +1,12 @@
 package com.yuzhi.dts.platform.service.workbench;
 
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
-import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
 import com.yuzhi.dts.platform.domain.visualization.BiReportLink;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
-import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.visualization.BiReportLinkRepository;
 import com.yuzhi.dts.platform.repository.visualization.BiReportVisitRepository;
+import com.yuzhi.dts.platform.service.catalog.CatalogDomainVisibilityService;
+import com.yuzhi.dts.platform.service.catalog.CatalogDomainVisibilityService.DomainCodeVisibility;
 import com.yuzhi.dts.platform.service.integration.ScreenReportLinkSyncService;
 import com.yuzhi.dts.platform.service.permission.DashboardAccessGuard;
 import com.yuzhi.dts.platform.service.permission.DashboardCallerResolver;
@@ -25,9 +25,11 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -58,7 +60,7 @@ public class WorkbenchLeaderOverviewService {
     private final BiReportLinkRepository reportRepo;
     private final BiReportVisitRepository visitRepo;
     private final CatalogDatasetRepository datasetRepo;
-    private final CatalogDomainRepository catalogDomainRepo;
+    private final CatalogDomainVisibilityService catalogDomainVisibilityService;
     private final WorkbenchLeaderOverviewProperties props;
     private final TopReportsFallbackService fallbackService;
     private final DashboardAccessGuard dashboardAccessGuard;
@@ -69,7 +71,7 @@ public class WorkbenchLeaderOverviewService {
         BiReportLinkRepository reportRepo,
         BiReportVisitRepository visitRepo,
         CatalogDatasetRepository datasetRepo,
-        CatalogDomainRepository catalogDomainRepo,
+        CatalogDomainVisibilityService catalogDomainVisibilityService,
         WorkbenchLeaderOverviewProperties props,
         TopReportsFallbackService fallbackService,
         DashboardAccessGuard dashboardAccessGuard,
@@ -79,7 +81,7 @@ public class WorkbenchLeaderOverviewService {
         this.reportRepo = reportRepo;
         this.visitRepo = visitRepo;
         this.datasetRepo = datasetRepo;
-        this.catalogDomainRepo = catalogDomainRepo;
+        this.catalogDomainVisibilityService = catalogDomainVisibilityService;
         this.props = props;
         this.fallbackService = fallbackService;
         this.dashboardAccessGuard = dashboardAccessGuard;
@@ -343,32 +345,28 @@ public class WorkbenchLeaderOverviewService {
             w.end()
         );
 
-        Map<String, String> domainNames = loadDomainNames();
-
-        List<DomainAggregateRow> sorted = rows
+        Optional<DomainCodeVisibility> domainVisibility = loadDomainVisibility(rows);
+        List<ResolvedDomainRow> sorted = rows
             .stream()
-            .sorted(Comparator.comparingLong(DomainAggregateRow::visits).reversed())
+            .map(row -> resolveDomainRow(row, domainVisibility))
+            .flatMap(Optional::stream)
+            .sorted(Comparator.comparingLong(ResolvedDomainRow::visits).reversed())
             .toList();
 
         int matrixTop = props.getDomainMatrixTop();
-        List<DomainAggregateRow> top = sorted.size() > matrixTop
+        List<ResolvedDomainRow> top = sorted.size() > matrixTop
             ? sorted.subList(0, matrixTop)
             : sorted;
 
         long otherSum = sorted
             .stream()
             .skip(matrixTop)
-            .mapToLong(DomainAggregateRow::visits)
+            .mapToLong(ResolvedDomainRow::visits)
             .sum();
 
         List<DomainCell> cells = new ArrayList<>();
-        for (DomainAggregateRow row : top) {
-            if (row.bizDomain() == null || row.bizDomain().isBlank()) {
-                cells.add(new DomainCell("__UNCATEGORIZED__", "未分类", row.visits()));
-            } else {
-                String name = domainNames.getOrDefault(row.bizDomain(), row.bizDomain());
-                cells.add(new DomainCell(row.bizDomain(), name, row.visits()));
-            }
+        for (ResolvedDomainRow row : top) {
+            cells.add(new DomainCell(row.code(), row.name(), row.visits()));
         }
         if (otherSum > 0) {
             cells.add(new DomainCell("__OTHER__", "其他", otherSum));
@@ -376,22 +374,38 @@ public class WorkbenchLeaderOverviewService {
         return cells;
     }
 
-    private Map<String, String> loadDomainNames() {
+    private Optional<DomainCodeVisibility> loadDomainVisibility(List<DomainAggregateRow> rows) {
         try {
-            return catalogDomainRepo
-                .findAll()
+            Set<String> codes = rows
                 .stream()
-                .filter(d -> d.getCode() != null && !d.getCode().isBlank())
-                .collect(Collectors.toMap(
-                    CatalogDomain::getCode,
-                    d -> d.getName() != null && !d.getName().isBlank() ? d.getName() : d.getCode(),
-                    (a, b) -> a
-                ));
+                .map(DomainAggregateRow::bizDomain)
+                .filter(code -> code != null && !code.isBlank())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+            return Optional.of(catalogDomainVisibilityService.resolveCodes(codes));
         } catch (Exception e) {
-            log.warn("failed to load catalog domains, falling back to code-only labels: {}", e.getMessage());
-            return Map.of();
+            log.warn("failed to resolve visible catalog domains; domain matrix fails closed: {}", e.getMessage());
+            return Optional.empty();
         }
     }
+
+    private static Optional<ResolvedDomainRow> resolveDomainRow(
+        DomainAggregateRow row,
+        Optional<DomainCodeVisibility> domainVisibility
+    ) {
+        if (row.bizDomain() == null || row.bizDomain().isBlank()) {
+            return Optional.of(new ResolvedDomainRow("__UNCATEGORIZED__", "未分类", row.visits()));
+        }
+        if (domainVisibility.isEmpty() || domainVisibility.orElseThrow().isHidden(row.bizDomain())) {
+            return Optional.empty();
+        }
+        String name = domainVisibility
+            .orElseThrow()
+            .visibleName(row.bizDomain())
+            .orElse(row.bizDomain());
+        return Optional.of(new ResolvedDomainRow(row.bizDomain(), name, row.visits()));
+    }
+
+    private record ResolvedDomainRow(String code, String name, long visits) {}
 
     // =============================================================================================
     // Scope / deptCode / time-range resolution (unchanged from first wave)

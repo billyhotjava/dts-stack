@@ -11,6 +11,7 @@ import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogDomainVisibilityService;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -20,7 +21,13 @@ class CatalogDomainResourceAuditTest {
     private final CatalogDomainRepository domainRepository = mock(CatalogDomainRepository.class);
     private final CatalogDatasetRepository datasetRepository = mock(CatalogDatasetRepository.class);
     private final AuditService auditService = mock(AuditService.class);
-    private final CatalogDomainResource resource = new CatalogDomainResource(domainRepository, datasetRepository, auditService);
+    private final CatalogDomainVisibilityService visibilityService = mock(CatalogDomainVisibilityService.class);
+    private final CatalogDomainResource resource = new CatalogDomainResource(
+        domainRepository,
+        datasetRepository,
+        auditService,
+        visibilityService
+    );
 
     @Test
     void createUpdateDeleteAndMoveUseDomainActionCodes() {

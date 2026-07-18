@@ -5,10 +5,10 @@ import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
 import com.yuzhi.dts.platform.domain.iam.IamDatasetPolicy;
 import com.yuzhi.dts.platform.domain.iam.IamSubjectDirectory;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
-import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.iam.IamDatasetPolicyRepository;
 import com.yuzhi.dts.platform.repository.iam.IamSubjectDirectoryRepository;
 import com.yuzhi.dts.platform.repository.iam.IamUserClassificationRepository;
+import com.yuzhi.dts.platform.service.catalog.CatalogDomainVisibilityService;
 import com.yuzhi.dts.platform.service.iam.dto.*;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
@@ -23,20 +23,20 @@ import org.springframework.util.StringUtils;
 @Transactional(readOnly = true)
 public class PolicyService {
 
-    private final CatalogDomainRepository domainRepository;
+    private final CatalogDomainVisibilityService visibilityService;
     private final CatalogDatasetRepository datasetRepository;
     private final IamDatasetPolicyRepository datasetPolicyRepository;
     private final IamSubjectDirectoryRepository subjectDirectoryRepository;
     private final IamUserClassificationRepository userClassificationRepository;
 
     public PolicyService(
-        CatalogDomainRepository domainRepository,
+        CatalogDomainVisibilityService visibilityService,
         CatalogDatasetRepository datasetRepository,
         IamDatasetPolicyRepository datasetPolicyRepository,
         IamSubjectDirectoryRepository subjectDirectoryRepository,
         IamUserClassificationRepository userClassificationRepository
     ) {
-        this.domainRepository = domainRepository;
+        this.visibilityService = visibilityService;
         this.datasetRepository = datasetRepository;
         this.datasetPolicyRepository = datasetPolicyRepository;
         this.subjectDirectoryRepository = subjectDirectoryRepository;
@@ -44,9 +44,13 @@ public class PolicyService {
     }
 
     public List<Map<String, Object>> domainsWithDatasets() {
-        List<CatalogDomain> domains = domainRepository.findAll();
+        List<CatalogDomain> domains = visibilityService.findAllVisible();
         List<CatalogDataset> datasets = datasetRepository.findAll();
-        Map<UUID, List<CatalogDataset>> grouped = datasets.stream().collect(Collectors.groupingBy(ds -> ds.getDomain() != null ? ds.getDomain().getId() : null));
+        Map<UUID, List<CatalogDataset>> grouped = new LinkedHashMap<>();
+        for (CatalogDataset dataset : datasets) {
+            UUID domainId = dataset.getDomain() != null ? dataset.getDomain().getId() : null;
+            grouped.computeIfAbsent(domainId, ignored -> new ArrayList<>()).add(dataset);
+        }
 
         List<Map<String, Object>> result = new ArrayList<>();
         for (CatalogDomain domain : domains) {

@@ -8,13 +8,13 @@ import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import com.yuzhi.dts.platform.repository.catalog.CatalogClassificationMappingRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
-import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogMaskingRuleRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogDbtLineageService;
+import com.yuzhi.dts.platform.service.catalog.CatalogDomainVisibilityService;
 import com.yuzhi.dts.platform.service.catalog.CatalogMetadataService;
 import com.yuzhi.dts.platform.service.openmetadata.OpenMetadataService;
 import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
@@ -39,7 +39,7 @@ import static com.yuzhi.dts.platform.web.rest.catalog.CatalogResourceHelper.CATA
 public class CatalogDatasetResource {
 
     private final CatalogDatasetRepository datasetRepo;
-    private final CatalogDomainRepository domainRepo;
+    private final CatalogDomainVisibilityService domainVisibilityService;
     private final CatalogMaskingRuleRepository maskingRepo;
     private final CatalogClassificationMappingRepository mappingRepo;
     private final CatalogTableSchemaRepository tableSchemaRepo;
@@ -55,7 +55,7 @@ public class CatalogDatasetResource {
 
     public CatalogDatasetResource(
         CatalogDatasetRepository datasetRepo,
-        CatalogDomainRepository domainRepo,
+        CatalogDomainVisibilityService domainVisibilityService,
         CatalogMaskingRuleRepository maskingRepo,
         CatalogClassificationMappingRepository mappingRepo,
         CatalogTableSchemaRepository tableSchemaRepo,
@@ -70,7 +70,7 @@ public class CatalogDatasetResource {
         CatalogDbtLineageService dbtLineageService
     ) {
         this.datasetRepo = datasetRepo;
-        this.domainRepo = domainRepo;
+        this.domainVisibilityService = domainVisibilityService;
         this.maskingRepo = maskingRepo;
         this.mappingRepo = mappingRepo;
         this.tableSchemaRepo = tableSchemaRepo;
@@ -106,7 +106,7 @@ public class CatalogDatasetResource {
     @Transactional(readOnly = true)
     public ApiResponse<Map<String, Object>> summary() {
         Map<String, Object> map = new LinkedHashMap<>();
-        map.put("domains", domainRepo.count());
+        map.put("domains", domainVisibilityService.countVisible());
         map.put("datasets", datasetRepo.count());
         map.put("maskingRules", maskingRepo.count());
         map.put("classificationMappings", mappingRepo.count());

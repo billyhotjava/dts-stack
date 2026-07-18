@@ -7,7 +7,9 @@ import com.yuzhi.dts.platform.repository.permission.AssetOwnershipRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetType;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionAuditService;
+import com.yuzhi.dts.platform.service.permission.AssetPermissionService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -17,11 +19,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/asset-grants")
@@ -41,13 +45,18 @@ public class AssetGrantResource {
     private final AssetGrantRepository grantRepository;
     private final AssetOwnershipRepository ownershipRepository;
     private final AssetPermissionAuditService auditService;
+    private final AssetPermissionService permissionService;
 
-    public AssetGrantResource(AssetGrantRepository grantRepository,
-                               AssetOwnershipRepository ownershipRepository,
-                               AssetPermissionAuditService auditService) {
+    public AssetGrantResource(
+        AssetGrantRepository grantRepository,
+        AssetOwnershipRepository ownershipRepository,
+        AssetPermissionAuditService auditService,
+        AssetPermissionService permissionService
+    ) {
         this.grantRepository = grantRepository;
         this.ownershipRepository = ownershipRepository;
         this.auditService = auditService;
+        this.permissionService = permissionService;
     }
 
     @GetMapping
@@ -55,7 +64,8 @@ public class AssetGrantResource {
     public ResponseEntity<List<AssetGrant>> listByAsset(
             @RequestParam String assetType,
             @RequestParam String assetId) {
-        return ResponseEntity.ok(grantRepository.findByAssetTypeAndAssetId(assetType, assetId));
+        AssetReference reference = requireCatalogDomainManage(assetType, assetId);
+        return ResponseEntity.ok(grantRepository.findByAssetTypeAndAssetId(reference.assetType(), reference.assetId()));
     }
 
     @PostMapping
@@ -67,10 +77,11 @@ public class AssetGrantResource {
                 && request.validTo().isBefore(request.validFrom())) {
             return ResponseEntity.badRequest().body(Map.of("error", "validTo must be after validFrom"));
         }
+        AssetReference reference = requireCatalogDomainManage(request.assetType(), request.assetId());
 
         // Check if cross-department grant (requires inst-level role)
         Optional<AssetOwnership> ownership = ownershipRepository.findByAssetTypeAndAssetId(
-            request.assetType(), request.assetId()
+            reference.assetType(), reference.assetId()
         );
         if (ownership.isPresent() && isCrossDepartment(ownership.orElseThrow())) {
             if (!SecurityUtils.hasCurrentUserAnyOfAuthorities(INST_LEVEL_ROLES.toArray(new String[0]))) {
@@ -80,13 +91,11 @@ public class AssetGrantResource {
             }
         }
 
-        String grantedBy = request.grantedBy() != null && !request.grantedBy().isBlank()
-            ? request.grantedBy().trim()
-            : SecurityUtils.getCurrentUserLogin().orElse("system");
+        String grantedBy = SecurityUtils.getCurrentUserLogin().orElse("system");
 
         AssetGrant grant = new AssetGrant();
-        grant.setAssetType(request.assetType());
-        grant.setAssetId(request.assetId());
+        grant.setAssetType(reference.assetType());
+        grant.setAssetId(reference.assetId());
         grant.setGranteeType(request.granteeType());
         grant.setGranteeId(request.granteeId());
         grant.setPermission(request.permission());
@@ -98,7 +107,7 @@ public class AssetGrantResource {
         grant = grantRepository.save(grant);
 
         auditService.recordGrant(
-            request.assetType(), request.assetId(),
+            reference.assetType(), reference.assetId(),
             request.granteeId(), request.permission(), request.grantReason(),
             grantedBy
         );
@@ -112,10 +121,14 @@ public class AssetGrantResource {
     public ResponseEntity<?> revokeByAsset(
             @RequestParam String assetType,
             @RequestParam String assetId) {
-        List<AssetGrant> grants = grantRepository.findByAssetTypeAndAssetId(assetType.trim(), assetId.trim());
+        AssetReference reference = requireCatalogDomainManage(assetType, assetId);
+        String lookupType = reference.catalogDomain() ? reference.assetType() : assetType.trim();
+        String lookupId = reference.catalogDomain() ? reference.assetId() : assetId.trim();
+        List<AssetGrant> grants = grantRepository.findByAssetTypeAndAssetId(lookupType, lookupId);
         for (AssetGrant grant : grants) {
             auditService.recordRevoke(
-                grant.getAssetType(), grant.getAssetId(),
+                reference.catalogDomain() ? reference.assetType() : grant.getAssetType(),
+                reference.catalogDomain() ? reference.assetId() : grant.getAssetId(),
                 grant.getGranteeId(), grant.getPermission()
             );
         }
@@ -129,9 +142,11 @@ public class AssetGrantResource {
     public ResponseEntity<?> revoke(@PathVariable Long id) {
         return grantRepository.findById(id)
             .map(grant -> {
+                AssetReference reference = requireCatalogDomainManage(grant.getAssetType(), grant.getAssetId());
                 grantRepository.delete(grant);
                 auditService.recordRevoke(
-                    grant.getAssetType(), grant.getAssetId(),
+                    reference.catalogDomain() ? reference.assetType() : grant.getAssetType(),
+                    reference.catalogDomain() ? reference.assetId() : grant.getAssetId(),
                     grant.getGranteeId(), grant.getPermission()
                 );
                 return ResponseEntity.ok(Map.of("deleted", true));
@@ -160,6 +175,34 @@ public class AssetGrantResource {
             .map(currentDept -> !DepartmentUtils.matches(ownership.getOwnerDeptCode(), currentDept))
             .orElse(true);
     }
+
+    private AssetReference requireCatalogDomainManage(String assetType, String assetId) {
+        if (
+            assetType == null ||
+            !CatalogAssetType.CATALOG_DOMAIN.name().equalsIgnoreCase(assetType.trim())
+        ) {
+            return new AssetReference(assetType, assetId, false);
+        }
+        if (assetId == null || assetId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Catalog domain asset id is required");
+        }
+        AssetPermissionService.PermissionResult permission = permissionService.check(
+            SecurityUtils.getCurrentUserLogin().orElse(""),
+            SecurityUtils.getCurrentUserAuthorities(),
+            SecurityUtils.getCurrentUserDept().orElse(null),
+            CatalogAssetType.CATALOG_DOMAIN.name(),
+            assetId.trim()
+        );
+        if (!permission.allowed() || !"MANAGE".equalsIgnoreCase(permission.permission())) {
+            throw new ResponseStatusException(
+                HttpStatus.FORBIDDEN,
+                "Catalog domain grants require MANAGE permission"
+            );
+        }
+        return new AssetReference(CatalogAssetType.CATALOG_DOMAIN.name(), assetId.trim(), true);
+    }
+
+    private record AssetReference(String assetType, String assetId, boolean catalogDomain) {}
 
     public record CreateGrantRequest(
         String assetType, String assetId,

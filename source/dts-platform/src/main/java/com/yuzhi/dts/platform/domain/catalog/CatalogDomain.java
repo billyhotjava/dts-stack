@@ -32,6 +32,24 @@ public class CatalogDomain extends AbstractAuditingEntity<UUID> implements Seria
     @JoinColumn(name = "parent_id")
     private CatalogDomain parent;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "lifecycle_status", length = 16, nullable = false)
+    private CatalogDomainLifecycleStatus lifecycleStatus;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "access_policy", length = 16, nullable = false)
+    private CatalogDomainAccessPolicy accessPolicy;
+
+    @PrePersist
+    void applyCatalogFactDefaults() {
+        if (lifecycleStatus == null) {
+            lifecycleStatus = CatalogDomainLifecycleStatus.ACTIVE;
+        }
+        if (accessPolicy == null) {
+            accessPolicy = CatalogDomainAccessPolicy.PUBLIC;
+        }
+    }
+
     @Override
     public UUID getId() {
         return id;
@@ -79,5 +97,27 @@ public class CatalogDomain extends AbstractAuditingEntity<UUID> implements Seria
 
     public void setParent(CatalogDomain parent) {
         this.parent = parent;
+    }
+
+    public CatalogDomainLifecycleStatus getLifecycleStatus() {
+        return lifecycleStatus;
+    }
+
+    public void setLifecycleStatus(CatalogDomainLifecycleStatus lifecycleStatus) {
+        if (lifecycleStatus == null) {
+            throw new IllegalArgumentException("lifecycleStatus must not be null");
+        }
+        this.lifecycleStatus = lifecycleStatus;
+    }
+
+    public CatalogDomainAccessPolicy getAccessPolicy() {
+        return accessPolicy;
+    }
+
+    public void setAccessPolicy(CatalogDomainAccessPolicy accessPolicy) {
+        if (accessPolicy == null) {
+            throw new IllegalArgumentException("accessPolicy must not be null");
+        }
+        this.accessPolicy = accessPolicy;
     }
 }

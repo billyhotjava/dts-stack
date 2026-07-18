@@ -1,8 +1,8 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
-import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway;
+import com.yuzhi.dts.platform.service.catalog.CatalogDomainVisibilityService;
 import com.yuzhi.dts.platform.security.policy.DataLevel;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -22,14 +22,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class GovernanceIndicatorDependencyResource {
 
     private final AdminDirectoryGateway adminDirectoryGateway;
-    private final CatalogDomainRepository domainRepository;
+    private final CatalogDomainVisibilityService visibilityService;
 
     public GovernanceIndicatorDependencyResource(
         AdminDirectoryGateway adminDirectoryGateway,
-        CatalogDomainRepository domainRepository
+        CatalogDomainVisibilityService visibilityService
     ) {
         this.adminDirectoryGateway = adminDirectoryGateway;
-        this.domainRepository = domainRepository;
+        this.visibilityService = visibilityService;
     }
 
     /**
@@ -44,7 +44,7 @@ public class GovernanceIndicatorDependencyResource {
     ) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("orgTree", adminDirectoryGateway.fetchOrgTree());
-        payload.put("domainTree", buildDomainTree(domainRepository.findAll()));
+        payload.put("domainTree", buildDomainTree(visibilityService.findAllVisible()));
 
         if (includeUsers || StringUtils.hasText(userKeyword)) {
             payload.put("users", adminDirectoryGateway.searchUsers(userKeyword));
@@ -83,6 +83,7 @@ public class GovernanceIndicatorDependencyResource {
                 List<Map<String, Object>> children = (List<Map<String, Object>>) nodeMap.get(parentId).get("children");
                 children.add(node);
             } else {
+                node.put("parentId", null);
                 roots.add(node);
             }
         }

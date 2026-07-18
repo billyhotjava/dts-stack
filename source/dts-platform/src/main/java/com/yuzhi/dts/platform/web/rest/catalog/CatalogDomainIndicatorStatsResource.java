@@ -1,8 +1,8 @@
 package com.yuzhi.dts.platform.web.rest.catalog;
 
 import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
-import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
+import com.yuzhi.dts.platform.service.catalog.CatalogDomainVisibilityService;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
 import java.util.LinkedHashMap;
@@ -17,20 +17,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/catalog/domains")
 public class CatalogDomainIndicatorStatsResource {
 
-    private final CatalogDomainRepository domainRepository;
+    private final CatalogDomainVisibilityService visibilityService;
     private final GovIndicatorDefinitionRepository indicatorRepository;
 
     public CatalogDomainIndicatorStatsResource(
-        CatalogDomainRepository domainRepository,
+        CatalogDomainVisibilityService visibilityService,
         GovIndicatorDefinitionRepository indicatorRepository
     ) {
-        this.domainRepository = domainRepository;
+        this.visibilityService = visibilityService;
         this.indicatorRepository = indicatorRepository;
     }
 
     @GetMapping("/{id}/indicator-stats")
     public ApiResponse<Map<String, Object>> getIndicatorStats(@PathVariable UUID id) {
-        String domainCode = domainRepository.findById(id)
+        String domainCode = visibilityService.findVisibleById(id)
             .map(CatalogDomain::getCode)
             .orElse(null);
 

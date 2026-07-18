@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.service.catalog;
 import java.util.Locale;
 
 public enum CatalogAssetType {
+    CATALOG_DOMAIN,
     DATASET,
     DBT_MODEL,
     BI_DATASET,
