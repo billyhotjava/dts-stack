@@ -16,7 +16,7 @@ public record VisualAssetSummary(
     String name,
     String warehouseLayer,
     String domainCode,
-    String businessObjectCode,
+    String modelRef,
     List<String> grain,
     List<String> primaryKeys,
     List<String> timeColumns,

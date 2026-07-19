@@ -56,8 +56,8 @@ test("journey routes cover the eight stage entry pages", () => {
 	for (const route of [
 		"/foundation/data-sources",
 		"/governance/subjects",
-		"/foundation/standard-package",
-		"/studio/low-code-development",
+		"/governance/standards/elements",
+		"/modeling/models",
 		"/modeling/metric-workbench",
 		"/explore/etl/scripts",
 		"/services/apis",

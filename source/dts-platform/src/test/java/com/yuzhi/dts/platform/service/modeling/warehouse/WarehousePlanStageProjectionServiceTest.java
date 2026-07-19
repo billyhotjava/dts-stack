@@ -27,6 +27,7 @@ import static org.mockito.Mockito.when;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecStandardEvidencePort;
 import com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.AccessContext;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CategoryScopeView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicyView;
@@ -275,7 +276,18 @@ class WarehousePlanStageProjectionServiceTest {
         );
         ModelSpecView model = canonicalModel();
         when(model.standardBindings()).thenReturn(
-            List.of(new ModelSpecContract.StandardBinding("record_id", null, null, null, null, null, null, "INTERNAL"))
+            List.of(
+                new ModelSpecContract.StandardBinding(
+                    "record_id",
+                    null,
+                    null,
+                    null,
+                    null,
+                    UUID.fromString("50000000-0000-0000-0000-000000000001"),
+                    1,
+                    "INTERNAL"
+                )
+            )
         );
         when(modelSpecService.list("tenant-1", PLAN_ID, null, null, null)).thenReturn(List.of(model));
 
@@ -286,9 +298,55 @@ class WarehousePlanStageProjectionServiceTest {
 
         assertThat(stage(projection, DATA_STANDARD).status()).isEqualTo(COMPLETE);
         assertThat(stage(projection, DATA_STANDARD).evidenceCount()).isEqualTo(1);
+        assertThat(stage(projection, WarehousePlanStageProjectionService.StageCode.BUILD_QUALITY_RELEASE).status())
+            .isEqualTo(UNKNOWN);
+        assertThat(stage(projection, WarehousePlanStageProjectionService.StageCode.DATA_ASSET).status()).isEqualTo(UNKNOWN);
         assertThat(projection.currentStage()).isEqualTo(
             WarehousePlanStageProjectionService.StageCode.BUILD_QUALITY_RELEASE
         );
+    }
+
+    @Test
+    void marksFullyBoundDataStandardEvidenceStaleWhenProfessionalOwnerHasDrifted() {
+        WarehousePlanApplicationService planService = mock(WarehousePlanApplicationService.class);
+        ModelSpecApplicationService modelSpecService = mock(ModelSpecApplicationService.class);
+        ModelSpecStandardEvidencePort standards = mock(ModelSpecStandardEvidencePort.class);
+        when(planService.get("tenant-1", PLAN_ID)).thenReturn(plan(ASSET_FIRST));
+        when(planService.getCategoryScope("tenant-1", PLAN_ID)).thenReturn(
+            new Versioned<>(category(WarehousePlanContract.CategoryReadiness.READY), 1)
+        );
+        when(planService.getPlanningPolicy("tenant-1", PLAN_ID)).thenReturn(new Versioned<>(readyPolicy(), 1));
+        when(planService.getSources("tenant-1", PLAN_ID, ACTOR)).thenReturn(
+            sources(WarehousePlanContract.SourceInventoryReadiness.READY, List.of(currentSource()))
+        );
+        ModelSpecView model = canonicalModel();
+        when(model.standardBindings()).thenReturn(
+            List.of(
+                new ModelSpecContract.StandardBinding(
+                    "record_id",
+                    null,
+                    null,
+                    null,
+                    null,
+                    UUID.fromString("50000000-0000-0000-0000-000000000001"),
+                    1,
+                    null
+                )
+            )
+        );
+        when(modelSpecService.list("tenant-1", PLAN_ID, null, null, null)).thenReturn(List.of(model));
+        when(standards.evaluate("tenant-1", model)).thenReturn(ModelSpecStandardEvidencePort.StandardEvidence.STALE);
+
+        WarehousePlanStageProjectionService.StageProjection projection = new WarehousePlanStageProjectionService(
+            planService,
+            modelSpecService,
+            WarehousePlanDownstreamEvidencePort.unavailable(),
+            standards
+        ).project("tenant-1", PLAN_ID, ACTOR);
+
+        assertThat(stage(projection, DATA_STANDARD).status()).isEqualTo(BLOCKED);
+        assertThat(stage(projection, DATA_STANDARD).freshness()).isEqualTo(STALE);
+        assertThat(stage(projection, DATA_STANDARD).blockerCode()).isEqualTo("MODEL_STANDARD_EVIDENCE_STALE");
     }
 
     @Test
@@ -337,7 +395,18 @@ class WarehousePlanStageProjectionServiceTest {
         ModelSpecView fullyBoundModel = canonicalModel();
         when(fullyBoundModel.id()).thenReturn(fullyBoundModelId);
         when(fullyBoundModel.standardBindings()).thenReturn(
-            List.of(new ModelSpecContract.StandardBinding("record_id", null, null, null, null, null, null, "INTERNAL"))
+            List.of(
+                new ModelSpecContract.StandardBinding(
+                    "record_id",
+                    null,
+                    null,
+                    null,
+                    null,
+                    UUID.fromString("50000000-0000-0000-0000-000000000002"),
+                    1,
+                    null
+                )
+            )
         );
         ModelSpecView repairModel = canonicalModel();
         when(repairModel.id()).thenReturn(repairModelId);

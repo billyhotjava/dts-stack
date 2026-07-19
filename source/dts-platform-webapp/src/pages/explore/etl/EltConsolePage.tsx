@@ -141,7 +141,7 @@ export default function EltConsolePage() {
 	const fallbackChainItems = useMemo<ChainItem[]>(
 		() => [
 			{ key: "task", asset: "采集任务", stage: "接入", owner: "dts-ingestion", status: governance.running ? "processing" : "success", path: "/explore/etl/transform" },
-			{ key: "model", asset: "转换模型", stage: "加工", owner: "dts-platform", status: observability.failed ? "warning" : "success", path: "/modeling/dbt-files" },
+			{ key: "model", asset: "转换模型", stage: "加工", owner: "dts-platform", status: observability.failed ? "warning" : "success", path: "/studio/sql-modeling?view=files" },
 			{ key: "metric", asset: "指标口径", stage: "消费", owner: "dts-metrics", status: "success", path: "/metrics/center" },
 			{ key: "bi", asset: "分析看板", stage: "发布", owner: "dts-analytics", status: "success", path: "/bi/project-cockpit" },
 		],

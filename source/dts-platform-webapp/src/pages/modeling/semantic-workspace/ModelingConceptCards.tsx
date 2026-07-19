@@ -24,10 +24,10 @@ const CONCEPTS = [
 		icon: Workflow,
 	},
 	{
-		key: "business-object",
-		title: "业务对象",
-		statement: "涉及谁和什么：承载维度、指标与模型关系。",
-		route: "/modeling/semantic/objects",
+		key: "dimension-catalog",
+		title: "维度目录",
+		statement: "统一查看维度定义、层级、慢变策略和复用范围。",
+		route: "/modeling/dimensions",
 		icon: Boxes,
 	},
 ] as const;

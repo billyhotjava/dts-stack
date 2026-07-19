@@ -402,7 +402,7 @@ export default function ElementsPage() {
 	});
 
 	const continueToModeling = (draftId: string) => {
-		const route = `/studio/low-code-development?standardDraftId=${encodeURIComponent(draftId)}&standardBindingSource=elements`;
+		const route = "/modeling/models?view=guided";
 		if (!planningContext || planningResolution.source !== "session") {
 			navigate(route);
 			return;
@@ -551,7 +551,7 @@ export default function ElementsPage() {
 					type="success"
 					showIcon
 					message="标准包已应用"
-					description="请筛选或确认本批数据元，点击“生成字段落标草稿”后进入低代码建模，草稿会继续传递到 SQL 建模并生成可微调 SQL。"
+					description="请筛选或确认本批数据元，点击“生成字段落标草稿”后进入模型中心；草稿保存在当前规划会话中，供模型字段绑定继续使用。"
 				/>
 			) : null}
 

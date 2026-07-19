@@ -14,7 +14,7 @@ describe("generic modeling journey context", () => {
 		expect(context.method).toBe("DIMENSIONAL");
 	});
 
-	it("keeps generic and legacy identifiers across stage links", () => {
+	it("maps stage links to canonical pages without writing legacy journey keys", () => {
 		const context = resolveModelingJourneyContext(
 			new URLSearchParams("domainId=domain-1&modelSpecId=model-1&scopeKind=model&stage=implementation"),
 		);
@@ -24,8 +24,20 @@ describe("generic modeling journey context", () => {
 		});
 
 		expect(context.scopeKind).toBe("MODEL");
-		expect(route).toContain("domainId=domain-1");
-		expect(route).toContain("modelSpecId=model-1");
-		expect(route).toContain("stage=release");
+		const url = new URL(route, "http://dts.local");
+		expect(url.pathname).toBe("/modeling/models");
+		expect(url.searchParams.get("view")).toBe("release");
+		expect(url.searchParams.get("domainId")).toBe("domain-1");
+		expect(url.searchParams.get("modelSpecId")).toBe("model-1");
+		for (const retired of ["scopeId", "scopeKind", "modelId", "method", "stage", "objectId", "processId"]) {
+			expect(url.searchParams.has(retired)).toBe(false);
+		}
+	});
+
+	it("uses only canonical stage destinations", () => {
+		expect(modelingStagePath("SCOPE")).toBe("/governance/subjects");
+		expect(modelingStagePath("LOGICAL")).toBe("/modeling/dimensions");
+		expect(modelingStagePath("IMPLEMENTATION")).toBe("/studio/sql-modeling");
+		expect(modelingStagePath("RELEASE")).toBe("/modeling/models?view=release");
 	});
 });

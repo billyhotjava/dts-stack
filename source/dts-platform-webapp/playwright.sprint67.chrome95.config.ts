@@ -8,7 +8,7 @@ if (!executablePath) {
 
 export default defineConfig({
 	testDir: "./e2e",
-	testMatch: "sprint67-warehouse-plan.spec.ts",
+	testMatch: ["sprint67-warehouse-plan.spec.ts", "sprint67-f6-lifecycle.spec.ts"],
 	timeout: 60_000,
 	expect: { timeout: 10_000 },
 	retries: 0,

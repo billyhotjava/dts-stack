@@ -241,6 +241,47 @@
       },
       "additionalProperties": false
     },
+    "dimensionLevel": {
+      "type": "object",
+      "required": ["fieldName", "order"],
+      "properties": {
+        "fieldName": { "type": "string", "minLength": 1, "pattern": ".*\\S.*" },
+        "order": { "type": "integer", "minimum": 1, "maximum": 2147483647 }
+      },
+      "additionalProperties": false
+    },
+    "dimensionHierarchy": {
+      "type": "object",
+      "required": ["code", "name", "levels"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1, "pattern": ".*\\S.*" },
+        "name": { "type": "string", "minLength": 1, "pattern": ".*\\S.*" },
+        "levels": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/dimensionLevel" } }
+      },
+      "additionalProperties": false
+    },
+    "scdPolicy": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["NONE", "TYPE1", "TYPE2"] },
+        "effectiveFromField": { "type": ["string", "null"] },
+        "effectiveToField": { "type": ["string", "null"] },
+        "currentFlagField": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "dimensionProfile": {
+      "type": "object",
+      "required": ["dimensionCode", "hierarchies", "scdPolicy", "reuseScope"],
+      "properties": {
+        "dimensionCode": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,63}$" },
+        "hierarchies": { "type": "array", "items": { "$ref": "#/$defs/dimensionHierarchy" } },
+        "scdPolicy": { "$ref": "#/$defs/scdPolicy" },
+        "reuseScope": { "enum": ["PLAN", "DOMAIN", "TENANT"] }
+      },
+      "additionalProperties": false
+    },
     "modelTypeSaveBoundaries": {
       "type": "object",
       "allOf": [
@@ -303,6 +344,11 @@
                 "items": { "$ref": "#/$defs/field" }
               }
             }
+          },
+          "else": {
+            "properties": {
+              "dimensionProfile": { "type": "null" }
+            }
           }
         }
       ]
@@ -331,6 +377,7 @@
         "metricRefs": { "type": "array", "items": { "$ref": "#/$defs/metricRef" } },
         "standardBindings": { "type": "array", "items": { "$ref": "#/$defs/standardBinding" } },
         "generationStrategy": { "anyOf": [{ "$ref": "#/$defs/generationStrategy" }, { "type": "null" }] },
+        "dimensionProfile": { "anyOf": [{ "$ref": "#/$defs/dimensionProfile" }, { "type": "null" }] },
         "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": ".*\\S.*", "x-dts-requiredIssueCode": "MODEL_SPEC_IDEMPOTENCY_KEY_REQUIRED" }
       },
       "additionalProperties": false,
@@ -359,7 +406,8 @@
         "dimensionRefs": { "$ref": "#/$defs/createModelSpecCommand/properties/dimensionRefs" },
         "metricRefs": { "$ref": "#/$defs/createModelSpecCommand/properties/metricRefs" },
         "standardBindings": { "$ref": "#/$defs/createModelSpecCommand/properties/standardBindings" },
-        "generationStrategy": { "$ref": "#/$defs/createModelSpecCommand/properties/generationStrategy" }
+        "generationStrategy": { "$ref": "#/$defs/createModelSpecCommand/properties/generationStrategy" },
+        "dimensionProfile": { "$ref": "#/$defs/createModelSpecCommand/properties/dimensionProfile" }
       },
       "additionalProperties": false,
       "allOf": [{ "$ref": "#/$defs/modelTypeSaveBoundaries" }]
@@ -390,6 +438,7 @@
         "metricRefs": { "type": "array", "items": { "$ref": "#/$defs/metricRef" } },
         "standardBindings": { "type": "array", "items": { "anyOf": [{ "$ref": "#/$defs/standardBinding" }, { "$ref": "#/$defs/legacyStandardBinding" }] } },
         "generationStrategy": { "anyOf": [{ "$ref": "#/$defs/generationStrategy" }, { "type": "null" }] },
+        "dimensionProfile": { "anyOf": [{ "$ref": "#/$defs/dimensionProfile" }, { "type": "null" }] },
         "status": { "enum": ["DRAFT", "DESIGNING", "VALIDATING", "READY_TO_PUBLISH", "PUBLISHED", "ARCHIVED"] },
         "revision": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
         "checksum": { "type": "string", "pattern": "^[0-9a-f]{64}$" },

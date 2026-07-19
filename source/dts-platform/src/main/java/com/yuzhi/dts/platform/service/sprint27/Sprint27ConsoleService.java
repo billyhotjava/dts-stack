@@ -7,7 +7,8 @@ import com.yuzhi.dts.platform.service.event.dto.PlatformEventSummaryDto;
 import com.yuzhi.dts.platform.service.governance.GovernanceOpsMetricsService;
 import com.yuzhi.dts.platform.service.governance.IndicatorObservabilityService;
 import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
-import com.yuzhi.dts.platform.service.modeling.SemanticModelingService;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import com.yuzhi.dts.platform.web.rest.ResultStatus;
 import java.time.Instant;
@@ -19,6 +20,7 @@ import java.util.Objects;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,25 +56,28 @@ public class Sprint27ConsoleService {
 
     private final IngestionServiceClient ingestionClient;
     private final IndicatorObservabilityService indicatorObservabilityService;
-    private final SemanticModelingService semanticModelingService;
+    private final ModelSpecApplicationService modelSpecApplicationService;
     private final PlatformEventOutboxService eventOutboxService;
     private final GovernanceOpsMetricsService governanceOpsMetricsService;
     private final DbtReleaseGateService dbtReleaseGateService;
+    private final String defaultTenantId;
 
     public Sprint27ConsoleService(
         IngestionServiceClient ingestionClient,
         IndicatorObservabilityService indicatorObservabilityService,
-        SemanticModelingService semanticModelingService,
+        ModelSpecApplicationService modelSpecApplicationService,
         PlatformEventOutboxService eventOutboxService,
         GovernanceOpsMetricsService governanceOpsMetricsService,
-        DbtReleaseGateService dbtReleaseGateService
+        DbtReleaseGateService dbtReleaseGateService,
+        @Value("${dts.platform.modeling.default-tenant-id:default}") String defaultTenantId
     ) {
         this.ingestionClient = ingestionClient;
         this.indicatorObservabilityService = indicatorObservabilityService;
-        this.semanticModelingService = semanticModelingService;
+        this.modelSpecApplicationService = modelSpecApplicationService;
         this.eventOutboxService = eventOutboxService;
         this.governanceOpsMetricsService = governanceOpsMetricsService;
         this.dbtReleaseGateService = dbtReleaseGateService;
+        this.defaultTenantId = defaultTenantId;
     }
 
     public Map<String, Object> eltConsole(int days, int hours) {
@@ -108,37 +113,48 @@ public class Sprint27ConsoleService {
     public Map<String, Object> metricOperations(int hours, int bucketHours, String activeDept) {
         SourceResult overview = capture("indicatorOverview", () -> indicatorObservabilityService.overview(hours, activeDept));
         SourceResult trend = capture("indicatorTrend", () -> indicatorObservabilityService.trend(hours, bucketHours, activeDept));
-        SourceResult domains = capture("semanticDomains", semanticModelingService::listSubjectDomains);
-        SourceResult objects = capture("semanticObjects", () -> semanticModelingService.listBusinessObjects(null));
-        SourceResult metrics = capture("semanticMetrics", () -> semanticModelingService.listMetrics(null));
-        SourceResult models = capture("semanticModels", () -> semanticModelingService.listModels(null));
-        List<?> modelList = listOrDefault(models.data());
-        List<Object> runs = new ArrayList<>();
-        for (Object model : modelList.stream().limit(4).toList()) {
-            String id = readId(model);
-            if (id == null) continue;
-            try {
-                runs.addAll(semanticModelingService.listModelRuns(java.util.UUID.fromString(id)));
-            } catch (Exception ignored) {
-                // Keep the aggregate usable even if a single model run lookup fails.
-            }
-        }
+        SourceResult models = capture("canonicalModelSpecs", () -> modelSpecApplicationService.list(defaultTenantId, null, null, null, null));
+        List<ModelSpecView> modelList = models.data() instanceof List<?> values
+            ? values.stream().filter(ModelSpecView.class::isInstance).map(ModelSpecView.class::cast).toList()
+            : List.of();
+        List<Map<String, Object>> domains = modelList
+            .stream()
+            .filter(model -> model.domainId() != null)
+            .collect(java.util.stream.Collectors.toMap(
+                ModelSpecView::domainId,
+                model -> Map.<String, Object>of("domainId", model.domainId(), "source", "MODEL_SPEC"),
+                (left, right) -> left,
+                LinkedHashMap::new
+            ))
+            .values()
+            .stream()
+            .toList();
+        List<Map<String, Object>> metrics = modelList
+            .stream()
+            .flatMap(model -> model.metricRefs().stream().map(metric -> Map.<String, Object>of(
+                "metricId", metric.metricId(),
+                "version", metric.version(),
+                "modelSpecId", model.id(),
+                "modelName", model.name(),
+                "modelType", model.modelType().name(),
+                "status", model.status().name()
+            )))
+            .toList();
+        List<Object> runs = List.of();
         return payload(
             "sources",
             Map.of(
                 "overview", overview.status(),
                 "trend", trend.status(),
-                "domains", domains.status(),
-                "objects", objects.status(),
-                "metrics", metrics.status(),
+                "domains", sourceStatus(domains.isEmpty() ? "EMPTY" : "READY", "modeling_model_spec.domain_id", "canonical projection"),
+                "metrics", sourceStatus(metrics.isEmpty() ? "EMPTY" : "READY", "modeling_model_spec.metric_refs", "canonical projection"),
                 "models", models.status()
             ),
             "overview", overview.dataOr(Map.of()),
             "trendRows", trend.dataOr(List.of()),
-            "domains", domains.dataOr(List.of()),
-            "objects", objects.dataOr(List.of()),
-            "metrics", metrics.dataOr(List.of()),
-            "models", models.dataOr(List.of()),
+            "domains", domains,
+            "metrics", metrics,
+            "models", modelList,
             "runs", runs
         );
     }

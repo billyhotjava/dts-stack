@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { resolveArtifactValidations, type ArtifactValidator } from "./journeyArtifactValidation";
 import { resolveDataProductJourneyStageState, resolveDataProductJourneyStageStates } from "./journeyStageState";
 
-const fullParams = { sourceId: "ds-1", standardDraftId: "std-1", modelId: "m-1" };
+const fullParams = { sourceId: "ds-1", standardDraftId: "std-1", modelSpecId: "m-1" };
 
 describe("journey stage state with artifact validations", () => {
 	it("keeps the legacy behavior when no validations are provided", () => {
@@ -14,7 +14,7 @@ describe("journey stage state with artifact validations", () => {
 	});
 
 	it("blocks a stage whose artifact is confirmed invalid and offers recovery", () => {
-		const invalidModel: ArtifactValidator = (key) => (key === "modelId" ? "invalid" : "unknown");
+		const invalidModel: ArtifactValidator = (key) => (key === "modelSpecId" ? "invalid" : "unknown");
 		const validations = resolveArtifactValidations(fullParams, invalidModel);
 
 		const stage = resolveDataProductJourneyStageState("modeling", fullParams, validations);
@@ -47,7 +47,7 @@ describe("journey stage state with artifact validations", () => {
 	});
 
 	it("propagates validations through the plural resolver", () => {
-		const invalidModel: ArtifactValidator = (key) => (key === "modelId" ? "invalid" : "unknown");
+		const invalidModel: ArtifactValidator = (key) => (key === "modelSpecId" ? "invalid" : "unknown");
 		const validations = resolveArtifactValidations(fullParams, invalidModel);
 
 		const stages = resolveDataProductJourneyStageStates(fullParams, validations);

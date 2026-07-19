@@ -1,4 +1,4 @@
-import type { ModelingModelType } from "./modelingVnextContract.ts";
+import type { ModelSpecType } from "./modelSpecV2Contract.ts";
 
 export const CANONICAL_MODELING_OBJECT_GROUPS = Object.freeze([
 	{
@@ -31,7 +31,7 @@ export const MODEL_TYPE_CUSTOMER_LABELS = Object.freeze({
 	DIMENSION: "维度表",
 	SUMMARY: "汇总表",
 	APPLICATION: "应用表",
-} satisfies Record<ModelingModelType, string>);
+} satisfies Record<ModelSpecType, string>);
 
 export const METRIC_TYPE_CUSTOMER_LABELS = Object.freeze({
 	ATOMIC: "原子指标",

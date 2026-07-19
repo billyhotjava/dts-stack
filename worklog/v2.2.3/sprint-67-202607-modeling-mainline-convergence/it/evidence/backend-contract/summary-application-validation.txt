@@ -1,0 +1,19 @@
+Sprint-67 F3-T04 SUMMARY/APPLICATION 契约证据
+时间：2026-07-19 +08:00
+结果：PASS
+
+已验证：
+- 两类模型都要求 revision-pinned dependsOn 和输出 grain；
+- SUMMARY 的 IMPLEMENTATION_READY 要求 MEASURE 字段或 metricRefs；
+- APPLICATION 要求 consumptionScenario 和非空输出字段；
+- consumptionScenario 只允许 APPLICATION，businessActivityRef 只允许 FACT；
+- 上游不存在、跨计划未发布、不可见或 revision 漂移均由 canonical reference validation/gate 阻断；
+- 指标只保存 metricId + version，不复制指标正文。
+
+聚焦测试包含在本批 Java 55/55 与 TypeScript 33/33 通过结果中。
+
+2026-07-20 复核补证：
+- 直接 SUMMARY 自环和经 SUMMARY 链回到 APPLICATION 的间接环均事务前阻断，错误包含 dependencyPath；
+- dependency graph 保留 pinned revision，同时报告 current revision 与 CURRENT/STALE/UNKNOWN；
+- REST `GET /api/modeling/model-specs/{id}/dependencies` 的 JSON 契约测试 PASS；
+- 页面从该 API 派生三态，Chrome95 桌面/390px 受影响场景 PASS。

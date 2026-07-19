@@ -1,0 +1,22 @@
+{
+  "evidenceType": "revision-pinned-dependency-graph",
+  "verifiedAt": "2026-07-20T01:12:00+08:00",
+  "result": "PASS",
+  "endpoint": "GET /api/modeling/model-specs/{id}/dependencies",
+  "edgeContract": {
+    "source": "dependsOn",
+    "identity": ["modelSpecId", "revision"],
+    "fields": ["fromModelSpecId", "toModelSpecId", "pinnedRevision", "currentRevision", "state"],
+    "states": ["CURRENT", "STALE", "UNKNOWN"],
+    "secondWriteSource": false
+  },
+  "checks": [
+    "direct cycle returns MODEL_SPEC_DEPENDENCY_CYCLE with dependencyPath",
+    "indirect cycle returns MODEL_SPEC_DEPENDENCY_CYCLE with dependencyPath",
+    "pinned revision and current revision are both returned",
+    "restricted nodes expose no name type or status",
+    "resource JSON contract passes",
+    "Chrome95 desktop and 390px projection passes"
+  ],
+  "boundary": "Browser API was intercepted; deployment-backed E2E remains an F6 release gate"
+}

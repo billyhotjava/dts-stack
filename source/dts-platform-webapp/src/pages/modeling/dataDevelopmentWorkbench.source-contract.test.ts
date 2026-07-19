@@ -18,7 +18,7 @@ const standardBindingDraftUrl = new URL("./standardBindingDraft.ts", import.meta
 const standardBindingDraft = existsSync(standardBindingDraftUrl) ? readFileSync(standardBindingDraftUrl, "utf8") : "";
 const sqlModelingPage = readFileSync(new URL("./SqlModelingPage.tsx", import.meta.url), "utf8");
 const dbtFileBrowserPage = readFileSync(new URL("./DbtFileBrowserPage.tsx", import.meta.url), "utf8");
-const lowCodeDevelopmentPage = readFileSync(new URL("./LowCodeDevelopmentPage.tsx", import.meta.url), "utf8");
+const modelCenterPage = readFileSync(new URL("./ModelCenterPage.tsx", import.meta.url), "utf8");
 const elementsPage = readFileSync(new URL("../governance/ElementsPage.tsx", import.meta.url), "utf8");
 const standardPackagePage = readFileSync(new URL("../foundation/StandardPackagePage.tsx", import.meta.url), "utf8");
 const referenceCodesPage = readFileSync(new URL("../governance/ReferenceCodesPage.tsx", import.meta.url), "utf8");
@@ -26,50 +26,35 @@ const platformApi = readFileSync(new URL("../../api/platformApi.ts", import.meta
 const sprint64Api = readFileSync(new URL("../../api/sprint64GovernanceApi.ts", import.meta.url), "utf8");
 const workbenchPage = readFileSync(new URL("../workbench/DataManagementWorkbenchPage.tsx", import.meta.url), "utf8");
 const projectSpacePage = readFileSync(new URL("./ModelTemplatesPage.tsx", import.meta.url), "utf8");
-const semanticObjectsPage = readFileSync(new URL("./SemanticObjectsPage.tsx", import.meta.url), "utf8");
-const semanticModelsPage = readFileSync(new URL("./SemanticModelsPage.tsx", import.meta.url), "utf8");
 const businessModelingContextBar = readFileSync(new URL("./semantic-workspace/BusinessModelingContextBar.tsx", import.meta.url), "utf8");
 
-test("data development workbench routes converge on existing pages", () => {
-	assert.match(menuSeed, /"title": "低代码开发向导"[\s\S]*?"externalLink": "\/studio\/low-code-development"/);
-	assert.match(menuSeed, /"title": "维度建模"[\s\S]*?"title": "高级建模（SQL）"/);
+test("data development workbench routes converge on canonical pages", () => {
+	assert.doesNotMatch(menuSeed, /"key": "low-code-development"|"key": "dbt-files"/);
+	assert.match(menuSeed, /"title": "维度建模"[\s\S]*?"title": "高级建模（SQL\/dbt）"/);
 	assert.match(menuSeed, /"key": "modeling-workbench"[\s\S]*?"title": "建模工作台"[\s\S]*?"externalLink": "\/modeling\/workbench"/);
-	assert.match(menuSeed, /"title": "低代码开发向导"[\s\S]*?"externalLink": "\/studio\/low-code-development"/);
 	assert.match(menuSeed, /"title": "维度建模"[\s\S]*?"externalLink": "\/studio\/sql-modeling"/);
-	assert.match(menuSeed, /"title": "项目文件浏览"[\s\S]*?"externalLink": "\/modeling\/dbt-files"/);
 	assert.match(menuSeed, /"title": "数据标准"[\s\S]*?"externalLink": "\/governance\/standards\/elements"/);
 	assert.match(menuSeed, /"title": "公共码表"[\s\S]*?"externalLink": "\/governance\/standards\/reference"/);
-	assert.match(staticRoutes, /const LowCodeDevelopmentPage = lazy\(\(\) => import\("@\/pages\/modeling\/LowCodeDevelopmentPage"\)\)/);
 	assert.match(staticRoutes, /const SqlModelingPage = lazy\(\(\) => import\("@\/pages\/modeling\/SqlModelingPage"\)\)/);
-	assert.match(staticRoutes, /const DbtFileBrowserPage = lazy\(\(\) => import\("@\/pages\/modeling\/DbtFileBrowserPage"\)\)/);
-	assert.match(staticRoutes, /path: "studio\/low-code-development"[\s\S]*<LowCodeDevelopmentPage/);
+	assert.match(staticRoutes, /const ModelingCompatibilityPage = lazy\(\(\) => import\("@\/pages\/modeling\/ModelingCompatibilityPage"\)\)/);
+	assert.match(staticRoutes, /path: "studio\/low-code-development"[\s\S]*<ModelingCompatibilityPage/);
 	assert.match(staticRoutes, /path: "studio\/sql-modeling"[\s\S]*<SqlModelingPage/);
-	assert.match(staticRoutes, /path: "modeling\/dbt-files"[\s\S]*<DbtFileBrowserPage/);
-	assert.match(dynamicResolver, /"\/studio\/low-code-development": "\/pages\/modeling\/LowCodeDevelopmentPage"/);
+	assert.match(staticRoutes, /path: "modeling\/dbt-files"[\s\S]*<ModelingCompatibilityPage/);
+	assert.match(dynamicResolver, /"\/studio\/low-code-development": "\/pages\/modeling\/ModelingCompatibilityPage"/);
 	assert.match(dynamicResolver, /"\/studio\/sql-modeling": "\/pages\/modeling\/SqlModelingPage"/);
-	assert.match(dynamicResolver, /"\/modeling\/dbt-files": "\/pages\/modeling\/DbtFileBrowserPage"/);
+	assert.match(dynamicResolver, /"\/modeling\/dbt-files": "\/pages\/modeling\/ModelingCompatibilityPage"/);
 	assert.match(dynamicResolver, /"\/governance\/standards\/elements": "\/pages\/governance\/ElementsPage"/);
 	assert.match(dynamicResolver, /"\/governance\/standards\/reference": "\/pages\/governance\/ReferenceCodesPage"/);
 });
 
-test("business process management unifies project spaces and business objects", () => {
+test("business process management converges on canonical category and dimension routes", () => {
 	assert.match(projectSpacePage, /数据开发中心 · 项目空间管理/);
 	assert.match(projectSpacePage, /data-testid="business-process-workspace-nav"/);
 	assert.match(projectSpacePage, /项目空间可选|项目空间仅用于/);
 	assert.match(projectSpacePage, /\/governance\/subjects\?focus=business-processes/);
-	assert.match(semanticObjectsPage, /processId/);
 	assert.match(businessModelingContextBar, /项目空间：未启用（默认上下文）/);
-	assert.match(semanticObjectsPage, /\/governance\/subjects\?focus=business-processes/);
-});
-
-test("model management keeps specialist actions in the row menu", () => {
-	assert.doesNotMatch(semanticModelsPage, /data-testid="semantic-model-ledger-links"/);
-	assert.match(semanticModelsPage, /Dropdown/);
-	assert.match(semanticModelsPage, /查看模型/);
-	assert.match(semanticModelsPage, /更多/);
-	assert.match(semanticModelsPage, /高级 dbt SQL/);
-	assert.match(semanticModelsPage, /processId/);
-	assert.match(businessModelingContextBar, /项目空间：未启用（默认上下文）/);
+	assert.match(staticRoutes, /path: "modeling\/dimensions"/);
+	assert.match(staticRoutes, /path: "modeling\/models"/);
 });
 
 test("workbench consumes the backend-owned Sprint 64 layer registry", () => {
@@ -123,7 +108,7 @@ test("governance standards pages expose stable controls for model field standard
 	assert.match(platformApi, /url: "\/governance\/reference-codes\/seeds"/);
 });
 
-test("standards can hand field binding drafts to low-code and sql modeling", () => {
+test("standards can hand field binding drafts to the model center and sql modeling", () => {
 	assert.match(standardBindingDraft, /STANDARD_BINDING_DRAFT_STORAGE_KEY/);
 	assert.match(standardBindingDraft, /createStandardBindingDraft/);
 	assert.match(standardBindingDraft, /getStandardBindingDraft/);
@@ -143,14 +128,11 @@ test("standards can hand field binding drafts to low-code and sql modeling", () 
 	assert.match(elementsPage, /已保存字段落标快照/);
 	assert.match(elementsPage, /字段落标草稿/);
 	assert.match(elementsPage, /standardDraftId/);
-	assert.match(elementsPage, /\/studio\/low-code-development/);
+	assert.match(elementsPage, /\/modeling\/models\?view=guided/);
 
-	assert.match(lowCodeDevelopmentPage, /getStandardBindingDraft/);
-	assert.match(lowCodeDevelopmentPage, /getStandardBindingDraftSnapshot/);
-	assert.match(lowCodeDevelopmentPage, /data-testid="low-code-standard-binding-draft-ready"/);
-	assert.match(lowCodeDevelopmentPage, /标准落标草稿已接入/);
-	assert.match(lowCodeDevelopmentPage, /withStandardDraftRoute/);
-	assert.match(lowCodeDevelopmentPage, /\/studio\/sql-modeling/);
+	assert.match(modelCenterPage, /data-testid="model-center-page"/);
+	assert.match(modelCenterPage, /旧低代码入口已并入模型中心/);
+	assert.match(modelCenterPage, /ModelSpecCreateDrawer/);
 
 	assert.match(sqlModelingPage, /getStandardBindingDraft/);
 	assert.match(sqlModelingPage, /getStandardBindingDraftSnapshot/);
@@ -165,8 +147,6 @@ test("standards can hand field binding drafts to low-code and sql modeling", () 
 test("standard binding drafts expose provenance and field gap evidence", () => {
 	assert.match(standardBindingDraft, /buildStandardBindingDraftSummary/);
 	assert.match(standardBindingDraft, /missingStandardCount/);
-	assert.match(lowCodeDevelopmentPage, /标准来源|标准草稿来源/);
-	assert.match(lowCodeDevelopmentPage, /待补标准|缺失标准/);
 	assert.match(sqlModelingPage, /标准来源|标准草稿来源/);
 	assert.match(sqlModelingPage, /待补标准|缺失标准/);
 });

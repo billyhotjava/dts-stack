@@ -1,0 +1,75 @@
+{
+  "verifiedAt": "2026-07-20T02:55:00+08:00",
+  "scope": "Sprint-67 F6-T02 local contract, PostgreSQL integration and production-bundle browser verification",
+  "modelIdentity": {
+    "canonicalKey": "modelSpecId",
+    "revisionBound": true,
+    "checksumBound": true,
+    "implementationModes": [
+      "DESIGNER_GENERATED",
+      "DBT_MANAGED"
+    ],
+    "secondModelTruthAllowed": false
+  },
+  "checks": [
+    {
+      "name": "focused-backend-contract-tests",
+      "result": "PASS",
+      "tests": 32,
+      "failures": 0,
+      "errors": 0,
+      "duration": "35.247s"
+    },
+    {
+      "name": "postgresql-lifecycle-integration",
+      "result": "PASS",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "database": "PostgreSQL 17.4 Testcontainers",
+      "duration": "01:15"
+    },
+    {
+      "name": "frontend-source-contract",
+      "result": "PASS",
+      "tests": 4,
+      "failures": 0
+    },
+    {
+      "name": "frontend-production-build",
+      "result": "PASS",
+      "modules": 10587,
+      "duration": "2m 2s"
+    },
+    {
+      "name": "chromium95-lifecycle-navigation",
+      "result": "PASS",
+      "tests": 1,
+      "browser": "Chromium 95.0.4638.0",
+      "viewports": [
+        "1366x768",
+        "390x844"
+      ],
+      "pageErrors": 0,
+      "consoleErrors": 0,
+      "requestFailures": 0,
+      "httpFailures": 0
+    }
+  ],
+  "trace": {
+    "artifact": "same modelSpecId/revision/checksum",
+    "testEvidence": "persisted external-run evidence",
+    "publication": "same revision with step-level audit",
+    "registration": [
+      "catalogDataset",
+      "biDataset",
+      "lineageEdge"
+    ],
+    "failureRepair": "DBT_RUN to exact ModelSpec revision"
+  },
+  "truthBoundary": {
+    "backend": "real Spring service context plus PostgreSQL Testcontainers; Catalog, BI and lineage use persisted in-service adapters",
+    "browser": "production frontend bundle and real Chromium 95 with precise lifecycle API mocks",
+    "notClaimed": "live deployed backend/authentication or external dbt/Airflow/Catalog E2E"
+  }
+}

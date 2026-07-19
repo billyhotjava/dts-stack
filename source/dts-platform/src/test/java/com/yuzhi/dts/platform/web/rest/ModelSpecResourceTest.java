@@ -18,6 +18,10 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.Creat
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.*;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecCreateRequestDecoder;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecException;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.GateStatus;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.GateView;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.Stage;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecUpdateRequestDecoder;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider.WarehousePlanActor;
@@ -60,6 +64,9 @@ class ModelSpecResourceTest {
 
     @MockBean
     private ModelSpecApplicationService service;
+
+    @MockBean
+    private ModelSpecStageGateService stageGateService;
 
     @MockBean
     private WarehousePlanActorProvider actorProvider;
@@ -160,6 +167,71 @@ class ModelSpecResourceTest {
             .andExpect(status().isConflict())
             .andExpect(jsonPath("$.code").value("MODEL_SPEC_REVISION_CONFLICT"))
             .andExpect(jsonPath("$.data.currentRevision").value(2));
+    }
+
+    @Test
+    void returnsServerOwnedStageGateDecisions() throws Exception {
+        when(stageGateService.evaluateAll("server-tenant", MODEL_ID)).thenReturn(
+            List.of(new GateView(MODEL_ID, 1, CHECKSUM, Stage.IMPLEMENTATION_READY, GateStatus.READY, List.of()))
+        );
+
+        mockMvc
+            .perform(get("/api/modeling/model-specs/{id}/stage-gates", MODEL_ID))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data[0].stage").value("IMPLEMENTATION_READY"))
+            .andExpect(jsonPath("$.data[0].status").value("READY"))
+            .andExpect(jsonPath("$.data[0].revision").value(1));
+
+        verify(stageGateService).evaluateAll("server-tenant", MODEL_ID);
+    }
+
+    @Test
+    void returnsRevisionPinnedDependencyGraph() throws Exception {
+        UUID upstreamId = UUID.fromString("40000000-0000-0000-0000-000000000001");
+        when(service.dependencyGraph("server-tenant", MODEL_ID)).thenReturn(
+            new ModelSpecApplicationService.DependencyGraph(
+                MODEL_ID,
+                List.of(
+                    new ModelSpecApplicationService.DependencyNode(
+                        MODEL_ID,
+                        2,
+                        2,
+                        "customer_summary",
+                        ModelType.SUMMARY,
+                        ModelStatus.DRAFT,
+                        false
+                    ),
+                    new ModelSpecApplicationService.DependencyNode(
+                        upstreamId,
+                        3,
+                        4,
+                        "customer_detail",
+                        ModelType.FACT,
+                        ModelStatus.PUBLISHED,
+                        false
+                    )
+                ),
+                List.of(
+                    new ModelSpecApplicationService.DependencyEdge(
+                        MODEL_ID,
+                        upstreamId,
+                        3,
+                        4,
+                        ModelSpecApplicationService.DependencyState.STALE
+                    )
+                )
+            )
+        );
+
+        mockMvc
+            .perform(get("/api/modeling/model-specs/{id}/dependencies", MODEL_ID))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.rootModelSpecId").value(MODEL_ID.toString()))
+            .andExpect(jsonPath("$.data.edges[0].pinnedRevision").value(3))
+            .andExpect(jsonPath("$.data.edges[0].currentRevision").value(4))
+            .andExpect(jsonPath("$.data.edges[0].state").value("STALE"));
+
+        verify(service).dependencyGraph("server-tenant", MODEL_ID);
     }
 
     private static ModelSpecView view() {

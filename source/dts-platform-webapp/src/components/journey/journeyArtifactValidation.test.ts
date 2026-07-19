@@ -24,7 +24,7 @@ describe("journey artifact validation", () => {
 	it("treats artifacts without a validation source as unknown", () => {
 		const validator = createDataProductArtifactValidator();
 
-		expect(validator("modelId", "m-1")).toBe("unknown");
+		expect(validator("modelSpecId", "m-1")).toBe("unknown");
 		expect(validator("sourceId", "ds-1")).toBe("unknown");
 		expect(validator("standardDraftId", "anything")).toBe("unknown");
 	});
@@ -32,7 +32,7 @@ describe("journey artifact validation", () => {
 	it("resolves only provided params and attaches reasons and api names", () => {
 		const validator = createDataProductArtifactValidator({ standardDraft: draftLookup([]) });
 		const results = resolveArtifactValidations(
-			{ standardDraftId: "standard-draft-gone", modelId: "m-1" },
+			{ standardDraftId: "standard-draft-gone", modelSpecId: "m-1" },
 			validator,
 		);
 
@@ -41,8 +41,8 @@ describe("journey artifact validation", () => {
 		expect(byKey.standardDraftId?.status).toBe("invalid");
 		expect(byKey.standardDraftId?.reason).toContain("不存在或已失效");
 		expect(byKey.standardDraftId?.apiName).toBe(ARTIFACT_VALIDATION_API_NAMES.standardDraftId);
-		expect(byKey.modelId?.status).toBe("unknown");
-		expect(byKey.modelId?.apiName).toBe(ARTIFACT_VALIDATION_API_NAMES.modelId);
+		expect(byKey.modelSpecId?.status).toBe("unknown");
+		expect(byKey.modelSpecId?.apiName).toBe(ARTIFACT_VALIDATION_API_NAMES.modelSpecId);
 		expect(byKey.sourceId).toBeUndefined();
 	});
 
@@ -59,7 +59,7 @@ describe("journey artifact validation", () => {
 		const throwing: ArtifactValidator = () => {
 			throw new Error("boom");
 		};
-		const [result] = resolveArtifactValidations({ modelId: "m-1" }, throwing);
+		const [result] = resolveArtifactValidations({ modelSpecId: "m-1" }, throwing);
 
 		expect(result.status).toBe("unknown");
 	});
@@ -68,15 +68,14 @@ describe("journey artifact validation", () => {
 		const validator = createDataProductArtifactValidator();
 		const results = resolveArtifactValidations(
 			{
-				planningId: "p-1",
+				planId: "p-1",
 				domainId: "d-1",
-				warehouseLayer: "DWD",
-				modelingMode: "dimension",
+				modelType: "DIMENSION",
 			},
 			validator,
 		);
 
-		expect(results).toHaveLength(4);
+		expect(results).toHaveLength(3);
 		for (const result of results) {
 			expect(result.status).toBe("unknown");
 			expect(result.apiName).toMatch(/^GET \/api\//);

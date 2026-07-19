@@ -223,7 +223,7 @@ export default function ReleaseGovernancePage() {
 				actual: dbtGate ? String(dbtGate.status ?? dbtGate.result ?? dbtGate.blocking ?? "checked") : "未返回",
 				threshold: "不阻断",
 				severity: "BLOCKER",
-				path: "/modeling/dbt-files",
+				path: "/studio/sql-modeling?view=release",
 			},
 		);
 		return rows;

@@ -245,6 +245,34 @@ test("legacy v2 dimension definition and key mapping remain backward compatible"
 	);
 });
 
+test("dimension profile is canonical but remains optional for legacy v2 drafts", () => {
+	const legacyDimension = minimal("DIMENSION");
+	assert.deepEqual(validateModelSpecCreate(legacyDimension), []);
+	const dimensionProfile = {
+		dimensionCode: "DIM_ORGANIZATION",
+		hierarchies: [
+			{
+				code: "ORG_TREE",
+				name: "组织层级",
+				levels: [
+					{ fieldName: "record_id", order: 1 },
+					{ fieldName: "event_time", order: 2 },
+				],
+			},
+		],
+		scdPolicy: { type: "TYPE1" },
+		reuseScope: "PLAN",
+	};
+	assert.deepEqual(validateModelSpecCreate({ ...valid("DIMENSION"), dimensionProfile } as unknown), []);
+	assert.deepEqual(
+		validateModelSpecCreate({
+			...valid("DIMENSION"),
+			dimensionProfile: { ...dimensionProfile, dimensionCode: "invalid-code" },
+		} as unknown).map((issue) => issue.code),
+		["MODEL_SPEC_DIMENSION_CODE_INVALID"],
+	);
+});
+
 test("FACT draft requires grain and a source but permits fact shape and time semantics to be completed later", () => {
 	const fact = minimal("FACT");
 	assert.equal(fact.factShape, undefined);

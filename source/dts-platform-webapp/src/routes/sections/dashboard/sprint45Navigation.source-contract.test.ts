@@ -13,19 +13,17 @@ const ROLE_DEFAULTS = readFileSync(
 	"utf8",
 );
 
-test("Sprint-45 P0 workbench and studio menu leaves resolve to real platform pages", () => {
+test("Sprint-45 workbench remains and retired studio leaves use Sprint-67 compatibility", () => {
 	assert.match(MENU_SEED, /"externalLink": "\/workbench\/todo"/);
-	assert.match(MENU_SEED, /"externalLink": "\/studio\/low-code-development"/);
-	assert.match(MENU_SEED, /"externalLink": "\/studio\/projects"/);
 	assert.match(MENU_SEED, /"externalLink": "\/studio\/sql-modeling"/);
+	assert.doesNotMatch(MENU_SEED, /"externalLink": "\/studio\/low-code-development"/);
 
 	assert.match(ROLE_DEFAULTS, /"route": "\/workbench\/todo"/);
-	assert.match(ROLE_DEFAULTS, /"route": "\/studio\/low-code-development"/);
-	assert.match(ROLE_DEFAULTS, /"route": "\/studio\/projects"/);
 	assert.match(ROLE_DEFAULTS, /"route": "\/studio\/sql-modeling"/);
+	assert.doesNotMatch(ROLE_DEFAULTS, /"route": "\/studio\/low-code-development"/);
 
 	assert.match(STATIC_ROUTES, /WorkflowCenterPage/);
-	assert.match(STATIC_ROUTES, /LowCodeDevelopmentPage/);
+	assert.match(STATIC_ROUTES, /ModelingCompatibilityPage/);
 	assert.match(STATIC_ROUTES, /StudioProjectsPage/);
 	assert.match(STATIC_ROUTES, /SqlModelingPage/);
 	assert.match(STATIC_ROUTES, /path: "workbench\/todo"/);
@@ -34,7 +32,7 @@ test("Sprint-45 P0 workbench and studio menu leaves resolve to real platform pag
 	assert.match(STATIC_ROUTES, /path: "studio\/sql-modeling"/);
 
 	assert.match(DYNAMIC_RESOLVER, /"\/workbench\/todo": "\/pages\/workbench\/WorkflowCenterPage"/);
-	assert.match(DYNAMIC_RESOLVER, /"\/studio\/low-code-development": "\/pages\/modeling\/LowCodeDevelopmentPage"/);
+	assert.match(DYNAMIC_RESOLVER, /"\/studio\/low-code-development": "\/pages\/modeling\/ModelingCompatibilityPage"/);
 	assert.match(DYNAMIC_RESOLVER, /"\/studio\/projects": "\/pages\/modeling\/ModelTemplatesPage"/);
 	assert.match(DYNAMIC_RESOLVER, /"\/studio\/sql-modeling": "\/pages\/modeling\/SqlModelingPage"/);
 });

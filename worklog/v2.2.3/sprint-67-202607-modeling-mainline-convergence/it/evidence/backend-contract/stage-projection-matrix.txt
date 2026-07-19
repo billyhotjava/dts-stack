@@ -1,0 +1,22 @@
+Sprint-67 F2-T04 nine-stage projection evidence
+Verified: 2026-07-19 Asia/Shanghai
+Result: PASS
+
+Owner evidence mapping:
+- DATA_CONNECTION and SOURCE_INVENTORY: WarehousePlan source resolver.
+- WAREHOUSE_PLANNING: category, planning policy and source-stage rule.
+- MODEL_DESIGN: canonical ModelSpec.
+- DATA_STANDARD: ModelSpec field standard bindings.
+- BUILD_QUALITY_RELEASE: ModelSpec RELEASE_READY gate.
+- DATA_ASSET, METRIC_SYSTEM, DATA_SERVICE_OPERATIONS: latest owner-written stage-evidence ledger rows.
+
+Safety behavior:
+- missing model/provider/ledger evidence becomes UNKNOWN or BLOCKED, never COMPLETE;
+- stale or unavailable evidence cannot be overwritten by page visits;
+- all nine StageView rows are always returned;
+- compute selects at most one currentStage, primaryBlocker and nextAction.
+
+Tests:
+- WarehousePlanStageProjectionServiceTest: 15/15 PASS.
+- WarehousePlanDownstreamEvidenceAdapterTest: 1/1 PASS.
+- real Chrome95 stage projection returned 9 stages with currentStage=MODEL_DESIGN.

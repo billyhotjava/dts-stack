@@ -49,7 +49,7 @@
   },
   {
     "code": "sys.nav.portal.governanceSubjects",
-    "title": "主题域管理",
+    "title": "业务分类",
     "route": "/governance/subjects",
     "requiredRoles": []
   },
@@ -57,12 +57,6 @@
     "code": "sys.nav.portal.studioBusinessProcesses",
     "title": "建模工作台",
     "route": "/modeling/workbench",
-    "requiredRoles": []
-  },
-  {
-    "code": "sys.nav.portal.governanceStandardPackage",
-    "title": "标准包导入",
-    "route": "/foundation/standard-package",
     "requiredRoles": []
   },
   {
@@ -84,20 +78,14 @@
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.governanceTemplates",
-    "title": "标准模板",
-    "route": "/governance/templates",
-    "requiredRoles": []
-  },
-  {
-    "code": "sys.nav.portal.studioLowCodeDevelopment",
-    "title": "低代码开发向导",
-    "route": "/studio/low-code-development",
+    "code": "sys.nav.portal.governanceMeasurementUnits",
+    "title": "计量单位",
+    "route": "/governance/standards/units",
     "requiredRoles": []
   },
   {
     "code": "sys.nav.portal.studioSqlModeling",
-    "title": "高级建模（SQL）",
+    "title": "高级建模（SQL/dbt）",
     "route": "/studio/sql-modeling",
     "requiredRoles": []
   },
@@ -114,27 +102,9 @@
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.studioDbtFiles",
-    "title": "项目文件浏览",
-    "route": "/modeling/dbt-files",
-    "requiredRoles": []
-  },
-  {
     "code": "sys.nav.portal.studioMetricWorkbench",
     "title": "指标工作台",
     "route": "/modeling/metric-workbench",
-    "requiredRoles": []
-  },
-  {
-    "code": "sys.nav.portal.studioSemanticMetrics",
-    "title": "指标管理",
-    "route": "/modeling/semantic/metrics",
-    "requiredRoles": []
-  },
-  {
-    "code": "sys.nav.portal.studioSemanticPublish",
-    "title": "发布审核",
-    "route": "/modeling/semantic/publish",
     "requiredRoles": []
   },
   {

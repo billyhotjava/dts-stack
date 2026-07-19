@@ -1,0 +1,15 @@
+F5 product-consumer audit
+
+Result: new product consumers = 0.
+
+Removed/replaced:
+- MetricWorkbench business-object canvas -> canonical ModelSpec/metric anchors.
+- dts-metrics required business_objects and businessObjectCode -> modelRef/datasetRef/metricRef.
+- Sprint27 console SemanticModelingService object injection -> ModelSpec/metric projection.
+- Legacy semantic object pages/helpers and tests that asserted object creation as the correct path.
+
+Intentionally retained and classified:
+- LegacyObjectMigrationService and SemanticModelingService legacy table access: migration/read-only compatibility.
+- ModelingCompatibilityPage and /modeling/semantic/objects route: audited legacy redirect.
+- /bi/api/semantic and semantic compiler internals: BI query semantics, explicitly outside retirement scope.
+- objectId in catalog metadata or legacy schema fields: unrelated catalog identity or compatibility storage, not a new product prerequisite.

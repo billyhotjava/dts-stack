@@ -78,6 +78,15 @@ import {
 	listMetadataStandards,
 } from "@/api/platformApi";
 import { validateGrainApi } from "@/api/sprint64GovernanceApi";
+import {
+	approveModelReview,
+	claimModelImplementation,
+	compileModelLifecycle,
+	getModelSpec,
+	publishModelLifecycle,
+	recordModelTestEvidence,
+	submitModelReview,
+} from "@/api/modelSpecApi";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
 import BatchImportModal from "./BatchImportModal";
 import BatchDeleteResultModal from "./components/BatchDeleteResultModal";
@@ -180,6 +189,7 @@ import { resolveReleaseSubmitOutcome } from "./sqlModelReleaseSubmit.helpers";
 import { resolveDimensionCandidateGate } from "./dimensionCandidateGate";
 import { resolveGrainDeclaration, type GrainDeclaration } from "./grainDeclaration";
 import { ConformedDimensionRecommendations } from "./semantic-workspace/ConformedDimensionRecommendations";
+import type { CanonicalModelSpecView, ModelSpecCasToken } from "./modelSpecV2Contract";
 
 import { normalizeText, formatDateTime } from "@/utils/textUtils";
 
@@ -302,15 +312,24 @@ const UNASSIGNED_SPACE_KEY = "space-unassigned";
 
 export default function SqlModelingPage() {
 	const router = useRouter();
-	const pageSearchParams = useMemo(
-		() => (typeof window === "undefined" ? new URLSearchParams() : new URLSearchParams(window.location.search)),
-		[],
-	);
+	const pageSearchParams = useMemo(() => {
+		if (typeof window === "undefined") return new URLSearchParams();
+		const hashQueryStart = window.location.hash.indexOf("?");
+		return new URLSearchParams(
+			hashQueryStart >= 0 ? window.location.hash.slice(hashQueryStart + 1) : window.location.search,
+		);
+	}, []);
 	const standardDraftId = pageSearchParams.get("standardDraftId") || "";
+	const requestedModelSpecId = pageSearchParams.get("modelSpecId") || "";
+	const requestedRevision = pageSearchParams.get("revision") || "";
+	const requestedImplementationMode = pageSearchParams.get("implementationMode") || "";
+	const requestedPlanId = pageSearchParams.get("planId") || "";
 	const planningResolution = useMemo(() => resolveWarehousePlanningContext(pageSearchParams), [pageSearchParams]);
 	const planningContext = planningResolution.context;
 	const dimensionMode = pageSearchParams.get("modelingMode") === "dimension" || planningContext?.modelingMode === "dimension";
 	const [pageLoadError, setPageLoadError] = useState(false);
+	const [lifecycleModel, setLifecycleModel] = useState<CanonicalModelSpecView | null>(null);
+	const [lifecycleError, setLifecycleError] = useState("");
 	const [configLoading, setConfigLoading] = useState(false);
 	const [configSaving, setConfigSaving] = useState(false);
 	const [configOpen, setConfigOpen] = useState(false);
@@ -1095,6 +1114,30 @@ export default function SqlModelingPage() {
 	}, [loadInitialData]);
 
 	useEffect(() => {
+		let active = true;
+		setLifecycleModel(null);
+		setLifecycleError("");
+		if (!requestedModelSpecId) return () => { active = false; };
+		void getModelSpec(requestedModelSpecId)
+			.then((model) => {
+				if (!active) return;
+				if (
+					model.compatibilityMode !== "CANONICAL" ||
+					String(model.revision) !== requestedRevision ||
+					model.implementationMode !== requestedImplementationMode
+				) {
+					setLifecycleError("模型版本或实现方式已变化，请返回模型详情重新进入实现。");
+					return;
+				}
+				setLifecycleModel(model);
+			})
+			.catch(() => {
+				if (active) setLifecycleError("无法读取当前 ModelSpec，已阻止证据回写。");
+			});
+		return () => { active = false; };
+	}, [requestedImplementationMode, requestedModelSpecId, requestedRevision]);
+
+	useEffect(() => {
 		if (spaces.length === 0 && sqlModels.every((model) => !!model.planId)) {
 			if (activeSpaceKey) {
 				setActiveSpaceKey(null);
@@ -1112,6 +1155,17 @@ export default function SqlModelingPage() {
 			}
 		}
 	}, [activeSpaceKey, spaces, sqlModels]);
+
+	useEffect(() => {
+		if (!requestedModelSpecId || sqlModels.length === 0) return;
+		const requested = sqlModels.find((model) => String(model.id || "") === requestedModelSpecId);
+		if (!requested) return;
+		setActiveModelKey(resolveModelKey(requested, requestedModelSpecId));
+		setSuppressAutoSelect(false);
+		const planId = String(requested.planId || requestedPlanId || "");
+		const spaceIndex = spaces.findIndex((space) => String(space.id || "") === planId);
+		if (spaceIndex >= 0) setActiveSpaceKey(resolveSpaceKey(spaces[spaceIndex], spaceIndex));
+	}, [requestedModelSpecId, requestedPlanId, spaces, sqlModels]);
 
 	const saveConfig = async () => {
 		setConfigSaving(true);
@@ -1230,6 +1284,48 @@ export default function SqlModelingPage() {
 		},
 		[],
 	);
+
+	const lifecycleToken = (): ModelSpecCasToken | null =>
+		lifecycleModel
+			? { id: lifecycleModel.id, revision: lifecycleModel.revision, checksum: lifecycleModel.checksum }
+			: null;
+
+	const ensureLifecycleOwnership = async () => {
+		const expected = lifecycleToken();
+		if (!requestedModelSpecId) return null;
+		if (!expected) throw new Error(lifecycleError || "ModelSpec lifecycle context is unavailable");
+		if (!activeModel?.id || String(activeModel.id) !== requestedModelSpecId) {
+			throw new Error("当前 SQL 模型与入口 ModelSpec 不一致，已阻止证据回写");
+		}
+		await claimModelImplementation(expected, {
+			ownership: lifecycleModel!.implementationMode,
+			projectKey: requestedPlanId || lifecycleModel!.planId,
+			dbtUniqueId: `model.${normalizeText(activeModel.name) || lifecycleModel!.id}`,
+			idempotencyKey: `owner:r${lifecycleModel!.revision}`,
+		});
+		return expected;
+	};
+
+	const syncLifecycleBuildEvidence = async (
+		operation: "compile" | "test" | "build",
+		run: DbtRunSummary,
+	) => {
+		const expected = await ensureLifecycleOwnership();
+		if (!expected) return;
+		const runKey = normalizeText(run.invocationId || run.dagRunId);
+		if (!runKey) throw new Error("dbt 运行缺少可审计运行标识，未回写 ModelSpec evidence");
+		await compileModelLifecycle(expected, `compile:${runKey}`);
+		if (operation === "test" || operation === "build") {
+			const externalRunId = normalizeText(run.invocationId);
+			if (!externalRunId) throw new Error("dbt 测试缺少 invocationId，未写入测试通过证据");
+			await recordModelTestEvidence(expected, {
+				status: "PASSED",
+				externalRunId,
+				comment: `dbt ${operation} succeeded`,
+				idempotencyKey: `test:${externalRunId}`,
+			});
+		}
+	};
 
 	const submitRun = async () => {
 		if (runSelectedModelIds.length === 0) {
@@ -1359,6 +1455,9 @@ export default function SqlModelingPage() {
 					confirmWarnings,
 				})) as DbtReleaseSubmitResult;
 
+			const lifecycleBaseline = requestedModelSpecId
+				? ((await getDbtSyncStatus(modelsSelector ? { models: modelsSelector } : undefined)) as DbtSyncStatus)
+				: null;
 			let releaseResult = await submitRelease(false);
 			const firstOutcome = resolveReleaseSubmitOutcome(releaseResult);
 			if (firstOutcome === "blocked") {
@@ -1428,7 +1527,45 @@ export default function SqlModelingPage() {
 			toast.success("dbt build 已提交");
 			setRunOpen(false);
 			void loadRuns({ dagId: dagId || undefined, selector: modelsSelector });
+			if (requestedModelSpecId) {
+				const settled = await waitForBuildResult(
+					"build",
+					modelsSelector,
+					dagId || undefined,
+					dagRunId || undefined,
+					lifecycleBaseline?.latestRun || null,
+				);
+				const completed = settled.latestRun || null;
+				if (settled.dagState === "failed" || normalizeUpper(completed?.status) !== "SUCCESS") {
+					throw new Error("dbt build 未成功，ModelSpec 未提交审核或发布");
+				}
+				await syncLifecycleBuildEvidence("build", completed!);
+				const expected = lifecycleToken();
+				if (!expected) throw new Error("ModelSpec lifecycle context is unavailable");
+				const runKey = normalizeText(completed?.invocationId || dagRunId);
+				await submitModelReview(expected, {
+					comment: "dbt build 已通过，提交模型审核",
+					idempotencyKey: `review-submit:${runKey}`,
+				});
+				await approveModelReview(expected, {
+					comment: "高级建模上线审核通过",
+					idempotencyKey: `review-approve:${runKey}`,
+				});
+				const release = await publishModelLifecycle(expected, {
+					comment: "dbt build 与模型门禁均通过",
+					idempotencyKey: `release:${runKey}`,
+				});
+				setLifecycleModel((current) => current ? { ...current, status: "PUBLISHED" } : current);
+				toast[release.status === "PUBLISHED" ? "success" : "warning"](
+					release.status === "PUBLISHED" ? "ModelSpec 已发布并完成资产、BI、血缘注册" : "ModelSpec 已发布，部分外部注册待重试",
+				);
+			}
 		} catch (err: any) {
+			if (requestedModelSpecId) {
+				const message = normalizeText(err?.message) || "ModelSpec 发布链路失败";
+				setLifecycleError(message);
+				toast.error(message);
+			}
 		} finally {
 			setRunSubmitting(false);
 		}
@@ -1545,6 +1682,9 @@ export default function SqlModelingPage() {
 				return;
 			}
 			if (finalStatus === "SUCCESS") {
+				if (operation !== "docs" && resolvedRun) {
+					await syncLifecycleBuildEvidence(operation, resolvedRun);
+				}
 				toast.success(buildOperationCompletedMessage(operation));
 				return;
 			}
@@ -1556,6 +1696,11 @@ export default function SqlModelingPage() {
 				toast.warning(`dbt ${operation} 仍在运行，请稍后刷新结果`);
 			}
 		} catch (err: any) {
+			if (requestedModelSpecId) {
+				const message = normalizeText(err?.message) || "ModelSpec lifecycle evidence 回写失败";
+				setLifecycleError(message);
+				toast.error(message);
+			}
 		} finally {
 			setBuildTriggering(null);
 		}
@@ -2741,7 +2886,7 @@ export default function SqlModelingPage() {
 	const buildServiceRoute = (route: string) => {
 		const params = new URLSearchParams(window.location.search);
 		params.set("journey", "e2e-data-product");
-		if (activeModel?.id) params.set("modelId", String(activeModel.id));
+		if (activeModel?.id) params.set("modelSpecId", String(activeModel.id));
 		return `${route}?${params.toString()}`;
 	};
 
@@ -2759,6 +2904,27 @@ export default function SqlModelingPage() {
 			)}
 			<JourneyContextBar stage="development" />
 			<JourneyGateEvidenceSummary stage="development" />
+			{requestedModelSpecId ? (
+				<Alert
+					showIcon
+					type={lifecycleError ? "error" : activeModel?.id && String(activeModel.id) === requestedModelSpecId ? "success" : "warning"}
+					data-testid="canonical-model-implementation-context"
+					message={`ModelSpec r${requestedRevision || "-"} · ${requestedImplementationMode || "未声明实现方式"}`}
+					description={lifecycleError || `当前高级实现绑定 modelSpecId=${requestedModelSpecId}，构建、测试与运行证据必须回写该模型版本。`}
+					action={
+						<Button
+							size="small"
+							onClick={() =>
+								router.push(
+									`/modeling/models/${encodeURIComponent(requestedModelSpecId)}?tab=design${requestedPlanId ? `&planId=${encodeURIComponent(requestedPlanId)}` : ""}`,
+								)
+							}
+						>
+							返回模型
+						</Button>
+					}
+				/>
+			) : null}
 			{dimensionMode ? (
 				<Alert
 					showIcon
@@ -3743,7 +3909,7 @@ export default function SqlModelingPage() {
 										<Button
 											size="small"
 											disabled={!dagRunId}
-											onClick={() => router.push(`/ops/instances?entryKey=DBT_RUN&runId=${encodeURIComponent(dagRunId)}&journey=e2e-data-product&modelId=${encodeURIComponent(String(activeModel?.id || ""))}`)}
+											onClick={() => router.push(`/ops/instances?entryKey=DBT_RUN&runId=${encodeURIComponent(dagRunId)}&journey=e2e-data-product&modelSpecId=${encodeURIComponent(String(activeModel?.id || ""))}`)}
 										>
 											查看运行实例
 										</Button>

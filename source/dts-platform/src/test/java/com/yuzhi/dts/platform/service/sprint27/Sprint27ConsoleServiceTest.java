@@ -12,7 +12,7 @@ import com.yuzhi.dts.platform.service.event.dto.PlatformEventSummaryDto;
 import com.yuzhi.dts.platform.service.governance.GovernanceOpsMetricsService;
 import com.yuzhi.dts.platform.service.governance.IndicatorObservabilityService;
 import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
-import com.yuzhi.dts.platform.service.modeling.SemanticModelingService;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import com.yuzhi.dts.platform.web.rest.ResultStatus;
 import java.util.List;
@@ -27,13 +27,14 @@ class Sprint27ConsoleServiceTest {
     private PlatformEventOutboxService eventOutboxService;
     private GovernanceOpsMetricsService governanceOpsMetricsService;
     private DbtReleaseGateService dbtReleaseGateService;
+    private ModelSpecApplicationService modelSpecApplicationService;
     private Sprint27ConsoleService service;
 
     @BeforeEach
     void setUp() {
         ingestionClient = mock(IngestionServiceClient.class);
         indicatorObservabilityService = mock(IndicatorObservabilityService.class);
-        SemanticModelingService semanticModelingService = mock(SemanticModelingService.class);
+        modelSpecApplicationService = mock(ModelSpecApplicationService.class);
         eventOutboxService = mock(PlatformEventOutboxService.class);
         governanceOpsMetricsService = mock(GovernanceOpsMetricsService.class);
         dbtReleaseGateService = mock(DbtReleaseGateService.class);
@@ -41,11 +42,24 @@ class Sprint27ConsoleServiceTest {
             new Sprint27ConsoleService(
                 ingestionClient,
                 indicatorObservabilityService,
-                semanticModelingService,
+                modelSpecApplicationService,
                 eventOutboxService,
                 governanceOpsMetricsService,
-                dbtReleaseGateService
+                dbtReleaseGateService,
+                "default"
             );
+    }
+
+    @Test
+    void metricOperationsUsesCanonicalModelProjectionWithoutBusinessObjects() {
+        when(indicatorObservabilityService.overview(168, null)).thenReturn(Map.of());
+        when(indicatorObservabilityService.trend(168, 24, null)).thenReturn(List.of());
+        when(modelSpecApplicationService.list("default", null, null, null, null)).thenReturn(List.of());
+
+        Map<String, Object> result = service.metricOperations(168, 24, null);
+
+        assertThat(result).containsKeys("domains", "metrics", "models", "runs");
+        assertThat(result).doesNotContainKey("objects");
     }
 
     @Test

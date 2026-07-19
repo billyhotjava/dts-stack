@@ -120,20 +120,20 @@ describe("journey snapshot persistence", () => {
 	it("only persists enabled journey contexts", () => {
 		const storage = createMemoryStorage();
 
-		expect(persistJourneyContextSnapshot({ enabled: false, stage: "modeling", params: { modelId: "m-1" } }, storage)).toBe(
+		expect(persistJourneyContextSnapshot({ enabled: false, stage: "modeling", params: { modelSpecId: "m-1" } }, storage)).toBe(
 			false,
 		);
 		expect(storage.data.size).toBe(0);
 
-		expect(persistJourneyContextSnapshot({ enabled: true, stage: "modeling", params: { modelId: "m-1" } }, storage)).toBe(
+		expect(persistJourneyContextSnapshot({ enabled: true, stage: "modeling", params: { modelSpecId: "m-1" } }, storage)).toBe(
 			true,
 		);
-		expect(loadJourneySnapshot(storage)?.params).toEqual({ modelId: "m-1" });
+		expect(loadJourneySnapshot(storage)?.params).toEqual({ modelSpecId: "m-1" });
 	});
 
 	it("dedupes persistence when stage and params are unchanged", () => {
 		const storage = createMemoryStorage();
-		const context = { enabled: true, stage: "metrics", params: { modelId: "m-1", metricId: "k-2" } } as const;
+		const context = { enabled: true, stage: "metrics", params: { modelSpecId: "m-1", metricId: "k-2" } } as const;
 
 		expect(persistJourneyContextSnapshot(context, storage)).toBe(true);
 		expect(persistJourneyContextSnapshot(context, storage)).toBe(false);
@@ -145,18 +145,18 @@ describe("journey snapshot persistence", () => {
 	});
 
 	it("decides persistence from stage or param drift against the stored snapshot", () => {
-		const existing = createJourneySnapshot("modeling", { modelId: "m-1" });
+		const existing = createJourneySnapshot("modeling", { modelSpecId: "m-1" });
 
-		expect(shouldPersistSnapshot({ enabled: true, stage: "modeling", params: { modelId: "m-1" } }, existing)).toBe(false);
-		expect(shouldPersistSnapshot({ enabled: true, stage: "metrics", params: { modelId: "m-1" } }, existing)).toBe(true);
-		expect(shouldPersistSnapshot({ enabled: true, stage: "modeling", params: { modelId: "m-2" } }, existing)).toBe(true);
+		expect(shouldPersistSnapshot({ enabled: true, stage: "modeling", params: { modelSpecId: "m-1" } }, existing)).toBe(false);
+		expect(shouldPersistSnapshot({ enabled: true, stage: "metrics", params: { modelSpecId: "m-1" } }, existing)).toBe(true);
+		expect(shouldPersistSnapshot({ enabled: true, stage: "modeling", params: { modelSpecId: "m-2" } }, existing)).toBe(true);
 		expect(shouldPersistSnapshot({ enabled: true, stage: "modeling", params: {} }, existing)).toBe(true);
-		expect(shouldPersistSnapshot({ enabled: false, stage: "modeling", params: { modelId: "m-1" } }, existing)).toBe(false);
-		expect(shouldPersistSnapshot({ enabled: true, stage: "modeling", params: { modelId: "m-1" } }, null)).toBe(true);
+		expect(shouldPersistSnapshot({ enabled: false, stage: "modeling", params: { modelSpecId: "m-1" } }, existing)).toBe(false);
+		expect(shouldPersistSnapshot({ enabled: true, stage: "modeling", params: { modelSpecId: "m-1" } }, null)).toBe(true);
 	});
 
 	it("offers resume only when a snapshot exists and the journey is not already active", () => {
-		const snapshot = createJourneySnapshot("modeling", { modelId: "m-1" });
+		const snapshot = createJourneySnapshot("modeling", { modelSpecId: "m-1" });
 
 		expect(shouldOfferSnapshotResume(snapshot, null)).toBe(true);
 		expect(shouldOfferSnapshotResume(snapshot, "other")).toBe(true);
@@ -177,7 +177,7 @@ describe("journey snapshot persistence", () => {
 	it("describes a snapshot with stage title and labelled context summary", () => {
 		const now = Date.parse("2026-07-10T12:00:00.000Z");
 		const snapshot = {
-			...createJourneySnapshot("metrics", { modelId: "m-7", sourceId: "ds-1" }),
+			...createJourneySnapshot("metrics", { modelSpecId: "m-7", sourceId: "ds-1" }),
 			savedAt: "2026-07-10T11:30:00.000Z",
 		};
 
@@ -191,22 +191,20 @@ describe("journey snapshot persistence", () => {
 
 	it("builds a resume url with the journey flag and all saved params", () => {
 		const snapshot = createJourneySnapshot("metrics", {
-			modelId: "m-7",
+			modelSpecId: "m-7",
 			sourceId: "ds-1",
-			planningId: "p-1",
+			planId: "p-1",
 			domainId: "d-1",
-			warehouseLayer: "DWD",
-			modelingMode: "dimension",
+			modelType: "DIMENSION",
 		});
 		const url = buildSnapshotResumeUrl(snapshot);
 
 		expect(url.startsWith("/modeling/metric-workbench?")).toBe(true);
 		expect(url).toContain("journey=e2e-data-product");
-		expect(url).toContain("modelId=m-7");
+		expect(url).toContain("modelSpecId=m-7");
 		expect(url).toContain("sourceId=ds-1");
-		expect(url).toContain("planningId=p-1");
+		expect(url).toContain("planId=p-1");
 		expect(url).toContain("domainId=d-1");
-		expect(url).toContain("warehouseLayer=DWD");
-		expect(url).toContain("modelingMode=dimension");
+		expect(url).toContain("modelType=DIMENSION");
 	});
 });

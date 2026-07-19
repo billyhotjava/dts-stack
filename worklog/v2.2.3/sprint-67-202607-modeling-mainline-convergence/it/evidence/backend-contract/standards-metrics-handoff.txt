@@ -1,0 +1,19 @@
+Sprint-67 F6-T01 standards and metrics handoff evidence
+Verified: 2026-07-20
+
+Backend command:
+./mvnw -q -DskipTests=false -Dtest='MetadataStandardServiceTest,MetadataStandardOwnerVersionLiquibaseTest,GovernanceModelSpecStandardEvidenceAdapterTest,StandardPackageApplyServiceTest,ModelSpecMetricReferenceServiceTest,WarehousePlanStageProjectionServiceTest,WarehousePlanDownstreamEvidenceAdapterTest,MeasurementUnitApplicationServiceTest,GovernanceMeasurementUnitResourceTest' test
+
+Result: PASS (exit code 0)
+
+Verified contracts:
+- DataElement uses stable UUID + non-null integer owner version; update/import increments it and rollback restores the before-image version.
+- ReferenceCode uses stable codeTypeId + active status + strict N/vN owner version parsing.
+- MeasurementUnit uses stable UUID, immutable revision ledger, ACTIVE status, strong ETag and reference impact.
+- NamingTerm uses stable UUID, version snapshots, status, department visibility and maintainer-only mutation.
+- StandardEvidence is CURRENT only when every referenced owner is present, active and exact-version; drift/missing is STALE and datastore failure is UNKNOWN.
+- Published FACT/SUMMARY/APPLICATION binds only an exact published indicator version through strong CAS and creates a new immutable ModelSpec revision.
+- Metric stage projection reads the published indicator owner; it does not trust a duplicated local metric-stage ledger.
+
+Boundary:
+- This command is a backend contract/unit batch. Live auth, Liquibase/PostgreSQL and deployed API verification belong to F6-T03.

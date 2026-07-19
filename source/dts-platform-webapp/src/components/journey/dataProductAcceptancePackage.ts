@@ -1,6 +1,7 @@
 import {
 	E2E_DATA_PRODUCT_JOURNEY,
 	buildJourneyUrl,
+	extractJourneyContextParams,
 	type DataProductJourneyContextParams,
 	type JourneyContextParamKey,
 } from "./journeyContext";
@@ -66,17 +67,17 @@ export const ACCEPTANCE_EVIDENCE_GROUPS: AcceptanceEvidenceDefinition[] = [
 	{
 		key: "standards",
 		title: "标准",
-		description: "标准包、数据元、码表和字段落标草稿。",
-		route: "/foundation/standard-package",
+		description: "数据元、码表和字段落标草稿。",
+		route: "/governance/standards/elements",
 		requiredParam: "standardDraftId",
 		missingReason: "缺少标准证据：请导入标准包或生成字段落标草稿。",
 	},
 	{
 		key: "model",
 		title: "模型",
-		description: "低代码/SQL 模型草稿、字段映射和发布门禁。",
+		description: "模型中心/SQL 模型草稿、字段映射和发布门禁。",
 		route: "/studio/sql-modeling",
-		requiredParam: "modelId",
+		requiredParam: "modelSpecId",
 		missingReason: "缺少模型证据：请从标准草稿生成模型候选。",
 	},
 	{
@@ -133,12 +134,7 @@ export const ACCEPTANCE_EVIDENCE_GROUPS: AcceptanceEvidenceDefinition[] = [
 const toParams = (input?: URLSearchParams | DataProductJourneyContextParams): DataProductJourneyContextParams => {
 	if (!input) return {};
 	if (!(input instanceof URLSearchParams)) return input;
-	return Object.fromEntries(
-		["sourceId", "standardDraftId", "modelId", "metricId", "serviceId", "runId", "auditId"].flatMap((key) => {
-			const value = input.get(key);
-			return value ? [[key, value]] : [];
-		}),
-	) as DataProductJourneyContextParams;
+	return extractJourneyContextParams(input);
 };
 
 const resolveGroupStatus = (

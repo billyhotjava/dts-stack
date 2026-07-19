@@ -43,7 +43,10 @@ class ModelingDbtManifestImporterTest {
             "model.pjm.project_progress",
             manifestNode("model.pjm.project_progress", "project_progress", ""),
             "",
-            "idem-pjm-1"
+            "idem-pjm-1",
+            "30000000-0000-0000-0000-000000000001",
+            1,
+            "a".repeat(64)
         )))
             .isInstanceOf(ModelingDbtManifestImporter.ImportException.class)
             .satisfies(error -> assertThat(((ModelingDbtManifestImporter.ImportException) error).code())
@@ -61,7 +64,10 @@ class ModelingDbtManifestImporterTest {
             modelUniqueId,
             manifest,
             "select project_no from source",
-            "idem-pjm-1"
+            "idem-pjm-1",
+            "30000000-0000-0000-0000-000000000001",
+            1,
+            "a".repeat(64)
         );
     }
 

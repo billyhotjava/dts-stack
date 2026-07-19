@@ -120,7 +120,7 @@ export type VisualAssetSummary = {
 	name: string;
 	warehouseLayer: WarehouseLayer;
 	domainCode?: string;
-	businessObjectCode?: string;
+	modelRef?: string;
 	grain?: string[];
 	primaryKeys?: string[];
 	standardCodes?: string[];

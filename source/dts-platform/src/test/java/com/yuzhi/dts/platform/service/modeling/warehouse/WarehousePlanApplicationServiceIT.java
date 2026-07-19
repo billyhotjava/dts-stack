@@ -37,6 +37,7 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.P
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.ProcessBinding;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBinding;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBusinessMapping;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceLocator;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.Versioned;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.WarehousePlanHeader;
 import javax.sql.DataSource;
@@ -68,6 +69,9 @@ class WarehousePlanApplicationServiceIT {
     private CatalogDomainResolutionPort catalogDomainResolutionPort;
 
     @MockBean
+    private SourceReferenceResolver sourceReferenceResolver;
+
+    @MockBean
     private AuditService auditService;
 
     @Autowired
@@ -81,6 +85,8 @@ class WarehousePlanApplicationServiceIT {
 
     @BeforeEach
     void resolveCatalogDomainsAsAvailableByDefault() {
+        when(sourceReferenceResolver.resolve(eq(CATALOG_TABLE), any(SourceLocator.class), any()))
+            .thenReturn(SourceReferenceResolver.ResolvedSource.available("Orders", "schema-v1"));
         when(catalogDomainResolutionPort.resolve(any())).thenAnswer(invocation -> {
             UUID domainId = invocation.getArgument(0);
             return new CatalogDomainResolutionPort.DomainResolution(
@@ -417,7 +423,9 @@ class WarehousePlanApplicationServiceIT {
             service.saveSourceMappings(tenant, plan.id(), 1, mappings);
             service.savePolicy(tenant, plan.id(), 1, policy);
 
-            assertThat(service.getBaseline(tenant, plan.id()).ready()).isTrue();
+            PlanningBaseline ready = service.getBaseline(tenant, plan.id());
+            assertThat(ready.missingCodes()).isEmpty();
+            assertThat(ready.ready()).isTrue();
             assertThat(service.confirmBaseline(tenant, plan.id(), plan.version()).ready()).isTrue();
             WarehousePlanHeader confirmed = service.get(tenant, plan.id());
             assertThat(confirmed.lifecycleStatus()).isEqualTo(BASELINE_READY);
@@ -759,7 +767,7 @@ class WarehousePlanApplicationServiceIT {
     }
 
     private static List<SourceBinding> readySources() {
-        return List.of(new SourceBinding(UUID.randomUUID(), CATALOG_TABLE, "asset-1", "schema-v1", CONFIRMED, null));
+        return List.of(new SourceBinding(UUID.randomUUID(), CATALOG_TABLE, UUID.randomUUID().toString(), "schema-v1", CONFIRMED, null));
     }
 
     private static List<SourceBusinessMapping> readyMappings(UUID sourceId, UUID domainId) {

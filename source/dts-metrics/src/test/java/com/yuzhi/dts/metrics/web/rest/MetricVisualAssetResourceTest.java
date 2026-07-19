@@ -72,6 +72,7 @@ class MetricVisualAssetResourceTest {
 
         VisualAssetSummary asset = (VisualAssetSummary) ((List<?>) result.get("data")).get(0);
         assertThat(asset.permissionDecision()).isEqualTo("PLATFORM_FILTERED");
+        assertThat(asset.modelRef()).isEqualTo("model-spec-dws");
     }
 
     @Test
@@ -106,6 +107,7 @@ class MetricVisualAssetResourceTest {
             item.put("displayName", warehouseLayer + " Order Summary");
             item.put("fqn", "warehouse." + warehouseLayer.toLowerCase() + ".order_summary");
             item.put("warehouseLayer", warehouseLayer);
+            item.put("modelSpecId", "model-spec-" + warehouseLayer.toLowerCase());
             item.put("governanceStatus", "ACTIVE");
             if (assetPermissionDecision != null) {
                 item.put("permissionDecision", assetPermissionDecision);

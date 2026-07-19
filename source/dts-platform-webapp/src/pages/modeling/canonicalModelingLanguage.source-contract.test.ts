@@ -35,42 +35,8 @@ type CustomerSurfaceManifest = {
 // of its normalized source line. This is intentionally narrower than a whole-file
 // hash while still making moves and contextual rewrites explicit baseline changes.
 const RETIRED_TERM_MIGRATION_FINGERPRINTS = Object.freeze([
-	"src/pages/modeling/LowCodeDevelopmentPage.tsx:80:11:业务对象:2dca396e33ae0898",
-	"src/pages/modeling/LowCodeDevelopmentPage.tsx:82:20:业务对象:f85d72f2fa6d2c84",
-	"src/pages/modeling/LowCodeDevelopmentPage.tsx:95:30:业务对象:3ccb568b3501ba6b",
-	"src/pages/modeling/MetricWorkbenchPage.tsx:106:33:业务对象:75a7bcd18b186267",
-	"src/pages/modeling/MetricWorkbenchPage.tsx:113:32:业务对象:a623bcaecd420e77",
-	"src/pages/modeling/MetricWorkbenchPage.tsx:165:32:业务对象:f15254abeac5fb32",
-	"src/pages/modeling/MetricWorkbenchPage.tsx:265:31:业务对象:5f845d46812946c9",
-	"src/pages/modeling/MetricWorkbenchPage.tsx:268:27:业务对象:b38a0959f723f2c1",
-	"src/pages/modeling/MetricWorkbenchPage.tsx:313:41:业务对象:f018c0e3a5012547",
-	"src/pages/modeling/MetricWorkbenchPage.tsx:346:55:业务对象:069bb0cf64afd0a8",
 	"src/pages/modeling/ModelTemplatesPage.tsx:433:75:业务对象:f6a239e836779307",
-	"src/pages/modeling/SemanticMetricsPage.tsx:95:21:业务对象:3cf3be78263ffea2",
-	"src/pages/modeling/SemanticMetricsPage.tsx:123:39:业务对象:bb8f9859a3075c16",
-	"src/pages/modeling/SemanticMetricsPage.tsx:180:57:业务对象:04a40506c5faf173",
-	"src/pages/modeling/SemanticMetricsPage.tsx:183:44:业务对象:fe12f450033fa42e",
-	"src/pages/modeling/SemanticObjectsPage.tsx:142:28:业务对象:fd823455bfd2e014",
-	"src/pages/modeling/SemanticObjectsPage.tsx:157:19:业务对象:0041d995848e9875",
-	"src/pages/modeling/SemanticObjectsPage.tsx:206:10:业务对象:66e065e2f715a93b",
-	"src/pages/modeling/SemanticObjectsPage.tsx:210:12:业务对象:3cf3be78263ffea2",
-	"src/pages/modeling/SemanticObjectsPage.tsx:270:11:业务对象:93e20a7a6106d7cd",
-	"src/pages/modeling/SemanticObjectsPage.tsx:271:17:业务对象:1e63d6f3dadfd385",
-	"src/pages/modeling/SemanticObjectsPage.tsx:274:15:业务对象:469d1d18e2f8f73b",
-	"src/pages/modeling/SemanticObjectsPage.tsx:284:22:业务对象:76bc237c8ac44720",
-	"src/pages/modeling/SemanticObjectsPage.tsx:337:14:业务对象:99feecea38f37e5e",
-	"src/pages/modeling/businessObjectCode.ts:1:4:业务对象:37eb91d7e7338171",
-	"src/pages/modeling/metric-workbench/MetricCanvas.tsx:350:25:业务对象:080a5cdf9227b609",
-	"src/pages/modeling/metric-workbench/MetricCanvas.tsx:350:40:业务对象:080a5cdf9227b609",
-	"src/pages/modeling/metric-workbench/MetricCanvas.tsx:372:31:业务对象:5416b8e64d528c3e",
-	"src/pages/modeling/metric-workbench/MetricDetailPanel.tsx:354:30:业务对象:97c5432cf73ad220",
-	"src/pages/modeling/metric-workbench/MetricDetailPanel.tsx:574:28:业务对象:9a4e919bd2c94b91",
-	"src/pages/modeling/metric-workbench/SubjectBrowserPanel.tsx:104:30:业务对象:e88badccf932da4b",
-	"src/pages/modeling/metric-workbench/SubjectBrowserPanel.tsx:136:63:业务对象:4c244ae573a3a978",
-	"src/pages/modeling/metric-workbench/SubjectBrowserPanel.tsx:166:23:业务对象:72e3c8782a50f3b5",
-	"src/pages/modeling/metric-workbench/metricCanvas.helpers.ts:415:48:业务对象:0b4d15a882556229",
 	"src/pages/modeling/semantic-workspace/BusinessModelingContextBar.tsx:48:19:业务对象:8bea1846601df66a",
-	"src/pages/modeling/semantic-workspace/ModelingConceptCards.tsx:28:11:业务对象:3cf3be78263ffea2",
 	"src/pages/modeling/semantic-workspace/ModelingConceptCards.tsx:56:37:业务对象:d0c4cf16bb229935",
 ] as const);
 
@@ -405,10 +371,7 @@ test("recursively discovered and explicit customer sources match exact retired-t
 		customerSources.includes("src/pages/modeling/ModelingWorkbenchPage.tsx"),
 		"top-level customer pages must be discovered",
 	);
-	assert.ok(
-		customerSources.includes("src/pages/modeling/metric-workbench/MetricCanvas.tsx"),
-		"nested customer components must be discovered recursively",
-	);
+	assert.ok(customerSources.includes("src/pages/modeling/MetricWorkbenchPage.tsx"), "metric workbench must be discovered");
 	assert.ok(
 		customerSources.includes("src/pages/governance/SubjectAreasPage.tsx"),
 		"brief-mandated governance customer page must be included explicitly",
@@ -500,8 +463,8 @@ test("canonical route, page and API copy do not reintroduce retired customer ter
 		"./ModelingWorkbenchPage.tsx",
 		"./WarehousePlanDetailPage.tsx",
 		"./semantic-workspace/SemanticWorkspaceFrame.tsx",
-		"../../api/modelingApi.ts",
-		"./modelingVnextContract.ts",
+		"../../api/modelSpecApi.ts",
+		"./modelSpecV2Contract.ts",
 	] as const;
 
 	for (const path of customerCopySources) {

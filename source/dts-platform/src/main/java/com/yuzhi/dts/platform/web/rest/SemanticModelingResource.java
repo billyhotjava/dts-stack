@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.SemanticModelingService;
@@ -30,6 +31,7 @@ import com.yuzhi.dts.platform.service.modeling.SemanticModelingService.RegisterL
 import com.yuzhi.dts.platform.service.modeling.SemanticModelingService.ReviewActionRequest;
 import com.yuzhi.dts.platform.service.modeling.SemanticModelingService.SubjectDomainDto;
 import com.yuzhi.dts.platform.service.modeling.SemanticModelingService.SubjectDomainRequest;
+import com.yuzhi.dts.platform.service.modeling.migration.LegacyObjectMigrationService;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.event.PlatformEventOutboxService;
 import com.yuzhi.dts.platform.service.event.dto.PlatformEventRequest;
@@ -45,6 +47,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -66,23 +69,27 @@ public class SemanticModelingResource {
     private final SemanticModelingService service;
     private final AuditService audit;
     private final PlatformEventOutboxService eventOutbox;
+    private final LegacyObjectMigrationService legacyRetirement;
 
     public SemanticModelingResource(
         SemanticModelingService service,
         AuditService audit,
-        PlatformEventOutboxService eventOutbox
+        PlatformEventOutboxService eventOutbox,
+        LegacyObjectMigrationService legacyRetirement
     ) {
         this.service = service;
         this.audit = audit;
         this.eventOutbox = eventOutbox;
+        this.legacyRetirement = legacyRetirement;
     }
 
     @GetMapping("/subject-domains")
     @Transactional(readOnly = true)
-    public ApiResponse<List<SubjectDomainDto>> listSubjectDomains() {
+    public ResponseEntity<ApiResponse<List<SubjectDomainDto>>> listSubjectDomains() {
         List<SubjectDomainDto> data = service.listSubjectDomains();
         audit.auditAction("SEMANTIC_SUBJECT_DOMAIN_LIST", AuditStage.SUCCESS, "list", Map.of("count", data.size()));
-        return ApiResponses.ok(data);
+        recordLegacyUsage("/api/semantic/subject-domains", "GET", "LEGACY_READONLY");
+        return LegacyModelingRetirementHttp.deprecated(ApiResponses.ok(data));
     }
 
     @GetMapping("/workbench")
@@ -103,61 +110,82 @@ public class SemanticModelingResource {
 
     @PostMapping("/subject-domains")
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<SubjectDomainDto> createSubjectDomain(@RequestBody SubjectDomainRequest request) {
+    public ResponseEntity<ApiResponse<Object>> createSubjectDomain(@RequestBody SubjectDomainRequest request) {
+        if (legacyRetirement.writeFrozen()) return rejectLegacyWrite("/api/semantic/subject-domains", "POST");
         SubjectDomainDto dto = service.createSubjectDomain(request);
         audit.auditAction("SEMANTIC_SUBJECT_DOMAIN_CREATE", AuditStage.SUCCESS, dto.id().toString(), Map.of("name", dto.name()));
-        return ApiResponses.ok(dto);
+        return ResponseEntity.ok(ApiResponses.ok(dto));
     }
 
     @PutMapping("/subject-domains/{id}")
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<SubjectDomainDto> updateSubjectDomain(@PathVariable UUID id, @RequestBody SubjectDomainRequest request) {
+    public ResponseEntity<ApiResponse<Object>> updateSubjectDomain(@PathVariable UUID id, @RequestBody SubjectDomainRequest request) {
+        if (legacyRetirement.writeFrozen()) return rejectLegacyWrite("/api/semantic/subject-domains/{id}", "PUT");
         SubjectDomainDto dto = service.updateSubjectDomain(id, request);
         audit.auditAction("SEMANTIC_SUBJECT_DOMAIN_UPDATE", AuditStage.SUCCESS, id.toString(), Map.of("name", dto.name()));
-        return ApiResponses.ok(dto);
+        return ResponseEntity.ok(ApiResponses.ok(dto));
+    }
+
+    @PatchMapping("/subject-domains/{id}")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> patchSubjectDomain(@PathVariable UUID id, @RequestBody(required = false) JsonNode ignored) {
+        return rejectLegacyWrite("/api/semantic/subject-domains/{id}", "PATCH");
     }
 
     @GetMapping("/business-objects")
     @Transactional(readOnly = true)
-    public ApiResponse<List<BusinessObjectDto>> listBusinessObjects(
+    public ResponseEntity<ApiResponse<List<JsonNode>>> listBusinessObjects(
         @RequestParam(required = false) UUID domainId,
         @RequestParam(required = false) String processId
     ) {
         List<BusinessObjectDto> data = service.listBusinessObjects(domainId, processId);
         audit.auditAction("SEMANTIC_BUSINESS_OBJECT_LIST", AuditStage.SUCCESS, "list", Map.of("count", data.size()));
-        return ApiResponses.ok(data);
+        recordLegacyUsage("/api/semantic/business-objects", "GET", "LEGACY_READONLY");
+        return LegacyModelingRetirementHttp.deprecated(
+            ApiResponses.ok(legacyRetirement.projectLegacyRead(legacyRetirement.defaultTenantId(), LegacyObjectMigrationService.SEMANTIC_SOURCE, data))
+        );
     }
 
     @PostMapping("/business-objects")
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<BusinessObjectDto> createBusinessObject(@RequestBody BusinessObjectRequest request) {
+    public ResponseEntity<ApiResponse<Object>> createBusinessObject(@RequestBody BusinessObjectRequest request) {
+        if (legacyRetirement.writeFrozen()) return rejectLegacyWrite("/api/semantic/business-objects", "POST");
         BusinessObjectDto dto = service.createBusinessObject(request);
         audit.auditAction("SEMANTIC_BUSINESS_OBJECT_CREATE", AuditStage.SUCCESS, dto.id().toString(), Map.of("name", dto.name()));
-        return ApiResponses.ok(dto);
+        return ResponseEntity.ok(ApiResponses.ok(dto));
     }
 
     @PutMapping("/business-objects/{id}")
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<BusinessObjectDto> updateBusinessObject(@PathVariable UUID id, @RequestBody BusinessObjectRequest request) {
+    public ResponseEntity<ApiResponse<Object>> updateBusinessObject(@PathVariable UUID id, @RequestBody BusinessObjectRequest request) {
+        if (legacyRetirement.writeFrozen()) return rejectLegacyWrite("/api/semantic/business-objects/{id}", "PUT");
         BusinessObjectDto dto = service.updateBusinessObject(id, request);
         audit.auditAction("SEMANTIC_BUSINESS_OBJECT_UPDATE", AuditStage.SUCCESS, id.toString(), Map.of("name", dto.name()));
-        return ApiResponses.ok(dto);
+        return ResponseEntity.ok(ApiResponses.ok(dto));
+    }
+
+    @PatchMapping("/business-objects/{id}")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> patchBusinessObject(@PathVariable UUID id, @RequestBody(required = false) JsonNode ignored) {
+        return rejectLegacyWrite("/api/semantic/business-objects/{id}", "PATCH");
     }
 
     @GetMapping("/business-objects/{id}/table-mappings")
     @Transactional(readOnly = true)
-    public ApiResponse<List<ObjectTableMappingDto>> listObjectTableMappings(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<List<ObjectTableMappingDto>>> listObjectTableMappings(@PathVariable UUID id) {
         List<ObjectTableMappingDto> data = service.listObjectTableMappings(id);
         audit.auditAction("SEMANTIC_OBJECT_TABLE_MAPPING_LIST", AuditStage.SUCCESS, id.toString(), Map.of("count", data.size()));
-        return ApiResponses.ok(data);
+        recordLegacyUsage("/api/semantic/business-objects/{id}/table-mappings", "GET", "LEGACY_READONLY");
+        return LegacyModelingRetirementHttp.deprecated(ApiResponses.ok(data));
     }
 
     @PutMapping("/business-objects/{id}/table-mappings")
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<List<ObjectTableMappingDto>> saveObjectTableMappings(@PathVariable UUID id, @RequestBody ObjectTableMappingSaveRequest request) {
+    public ResponseEntity<ApiResponse<Object>> saveObjectTableMappings(@PathVariable UUID id, @RequestBody ObjectTableMappingSaveRequest request) {
+        if (legacyRetirement.writeFrozen()) return rejectLegacyWrite("/api/semantic/business-objects/{id}/table-mappings", "PUT");
         List<ObjectTableMappingDto> data = service.saveObjectTableMappings(id, request);
         audit.auditAction("SEMANTIC_OBJECT_TABLE_MAPPING_SAVE", AuditStage.SUCCESS, id.toString(), Map.of("count", data.size()));
-        return ApiResponses.ok(data);
+        return ResponseEntity.ok(ApiResponses.ok(data));
     }
 
     @GetMapping("/dimensions")
@@ -422,6 +450,26 @@ public class SemanticModelingResource {
             "SEMANTIC_MODEL_REGISTER_LINEAGE"
         );
         return ApiResponses.ok(result);
+    }
+
+    private ResponseEntity<ApiResponse<Object>> rejectLegacyWrite(String route, String method) {
+        recordLegacyUsage(route, method, "BUSINESS_OBJECT_RETIRED");
+        audit.auditAction(
+            "LEGACY_MODELING_WRITE_REJECTED",
+            AuditStage.FAIL,
+            route,
+            Map.of(
+                "tenantId", legacyRetirement.defaultTenantId(),
+                "route", route,
+                "method", method,
+                "result", "BUSINESS_OBJECT_RETIRED"
+            )
+        );
+        return LegacyModelingRetirementHttp.retired("/modeling/workbench");
+    }
+
+    private void recordLegacyUsage(String route, String method, String result) {
+        legacyRetirement.recordApiUsage(legacyRetirement.defaultTenantId(), currentActor(), route, method, result);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

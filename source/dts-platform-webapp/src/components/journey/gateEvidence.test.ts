@@ -22,7 +22,7 @@ describe("gate evidence", () => {
 	});
 
 	it("derives check states from journey params", () => {
-		const evidence = buildGateEvidence({ standardDraftId: "std-1", modelId: "m-1" });
+		const evidence = buildGateEvidence({ standardDraftId: "std-1", modelSpecId: "m-1" });
 		const byKey = Object.fromEntries(evidence.checks.map((item) => [item.key, item]));
 
 		expect(byKey.standardsCoverage.status).toBe("ready");
@@ -36,16 +36,16 @@ describe("gate evidence", () => {
 	});
 
 	it("keeps evidence urls inside the journey context", () => {
-		const evidence = buildGateEvidence({ modelId: "m-1" });
+		const evidence = buildGateEvidence({ modelSpecId: "m-1" });
 		for (const item of evidence.checks) {
 			expect(item.evidenceUrl).toContain("journey=e2e-data-product");
-			expect(item.evidenceUrl).toContain("modelId=m-1");
+			expect(item.evidenceUrl).toContain("modelSpecId=m-1");
 		}
 	});
 
 	it("marks checks blocked when the backing artifact is confirmed invalid", () => {
-		const invalidModel: ArtifactValidator = (key) => (key === "modelId" ? "invalid" : "unknown");
-		const params = { standardDraftId: "std-1", modelId: "bad-model", runId: "r-1" };
+		const invalidModel: ArtifactValidator = (key) => (key === "modelSpecId" ? "invalid" : "unknown");
+		const params = { standardDraftId: "std-1", modelSpecId: "bad-model", runId: "r-1" };
 		const validations = resolveArtifactValidations(params, invalidModel);
 
 		const evidence = buildGateEvidence(params, { validations });

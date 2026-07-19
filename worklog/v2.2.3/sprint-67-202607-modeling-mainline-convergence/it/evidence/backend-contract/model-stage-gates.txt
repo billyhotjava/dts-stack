@@ -1,0 +1,31 @@
+Sprint-67 F3-T05 ModelSpec 三阶段门禁证据
+时间：2026-07-19 +08:00
+结果：PASS
+
+聚焦命令：
+  cd source/dts-platform
+  ./mvnw -q \
+    -Dtest=ModelSpecContractTest,ModelSpecCreateRequestDecoderTest,ModelSpecSnapshotCodecTest,ModelSpecCompatibilityReaderTest,ModelSpecApplicationServiceTest,ModelSpecStageGateServiceTest,ModelSpecResourceTest \
+    test
+
+结果：55 tests，0 failures，0 errors。
+
+覆盖：
+- DRAFT_SAVE、IMPLEMENTATION_READY、RELEASE_READY 三阶段分别返回状态和 blocker；
+- DIMENSION 的 dimensionProfile、KEY 闭合、层级/SCD、来源或生成策略；
+- FACT 的三类事实形态、时间字段和来源/维度 revision；
+- SUMMARY 的上游 revision 与 measure/metric；
+- APPLICATION 的上游 revision、消费场景和输出字段；
+- 发布证据必须绑定当前 revision/checksum，旧 revision 明确判为 stale；
+- REST `GET /api/modeling/model-specs/{id}/stage-gates` 返回服务端唯一判定。
+
+真实链路补证：
+- opadmin 登录 + 计划 owner 权限 + PostgreSQL + POST/ETag PUT + gate r1→r2：1/1 PASS；
+- 数据库主记录为 contract_version=2、DIMENSION、revision=2，两个 snapshot revision 均保存 dimensionProfile；
+- 当前 checksum 仅与 revision=2 snapshot 一致，证明门禁不能复用 r1 证据。
+
+2026-07-20 复核补证：
+- FACT 合法组合：TRANSACTION/EVENT_TIME、PERIODIC_SNAPSHOT/SNAPSHOT_DATE、PERIODIC_SNAPSHOT/PERIOD、ACCUMULATING_SNAPSHOT/MILESTONE_DATES；
+- 非 TIME 字段被时间语义引用时返回 MODEL_SPEC_TIME_FIELD_INVALID，并给出可直接跳转的 ?tab=fields 修复 URL；
+- security-only binding 不再满足发布标准证据；度量单位 owner 的当前、版本漂移、停用和查询失败均有独立测试；
+- 相关后端目录 86 项统一执行，仅 fixture 字段集合 1 项失败；补齐可空 dimensionProfile 后受影响类 7/7 PASS，其余 85 项及 PostgreSQL 集成已 PASS。

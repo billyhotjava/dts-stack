@@ -22,3 +22,10 @@ Sprint-67 F3-T02 维度草稿闭环前端证据
 - 本切片没有实现 Phase-B `dimensionProfile`、SCD、层级、复用范围或 IMPLEMENTATION_READY 门禁；
 - 本切片没有改动 ModelSpec v2 后端生产契约；历史空 description、重复 grain keys、grain/KEY 不闭合仍保持兼容；
 - WarehousePlan/ModelSpec API 在浏览器验收中由 Playwright 精确拦截，不声称 live backend/live auth E2E。
+
+Phase-B 关闭补证（2026-07-19 18:08 +08:00）：
+- 编辑器已支持 dimensionCode、SCD、复用范围、层级与 TYPE2 字段；
+- 详情页已接入服务端 DRAFT/IMPLEMENTATION/RELEASE blocker panel，保存 revision 后重算；
+- TypeScript 聚焦测试 33/33、production Chrome95 legacy build PASS；
+- `sprint67-f3-real.spec.ts` 不拦截 API，真实登录/权限/后端/PostgreSQL/Chrome95 1/1 PASS；
+- 上述旧“未实现/mock 边界”只描述第一切片，已被本补证关闭。

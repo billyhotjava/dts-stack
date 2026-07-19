@@ -117,7 +117,7 @@ const routeForIssue = (issue?: GoldenChainStageSnapshot) => {
 	if (issue.stage === "SOURCE_READY" || issue.stage === "INGESTION_READY" || issue.stage === "ODS_READY") {
 		return "/explore/etl/transform";
 	}
-	if (issue.stage === "MODEL_READY") return "/modeling/semantic/models";
+	if (issue.stage === "MODEL_READY") return "/modeling/models";
 	if (issue.stage === "GOVERNANCE_READY" || issue.stage === "RELEASE_READY") return "/governance/quality";
 	if (issue.stage === "CONSUMABLE") return "/services/apis";
 	if (issue.stage === "OPERATED") return "/ops/overview";

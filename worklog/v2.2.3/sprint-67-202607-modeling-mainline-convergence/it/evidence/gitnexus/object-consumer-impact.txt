@@ -1,0 +1,12 @@
+F5 GitNexus and consumer impact record
+
+Pre-edit impact checks:
+- SemanticModelingResource legacy write endpoints: LOW risk; callers confined to legacy API/tests.
+- ModelingVNextResource legacy business-object endpoints: LOW risk.
+- Sprint27ConsoleService: LOW risk.
+- VisualAssetSummary: LOW risk.
+- MetricPackValidationService: HIGH risk, 15 direct callers; warned before edit and verified with 19 focused tests.
+
+New migration symbols were not present in the existing GitNexus index, so direct source callers were also inspected. LegacyObjectMigrationService semantic snapshot assembly is called only by dryRun; the null-domain production fix therefore has a local blast radius.
+
+Final source scan classifies all remaining old terms as migration/read-only compatibility, BI semantic internals, catalog object identity, or legacy persisted schema. New customer-facing product consumers: 0.

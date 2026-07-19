@@ -241,6 +241,134 @@ class ModelSpecApplicationServiceTest {
     }
 
     @Test
+    void rejectsDirectSummaryDependencyCycle() {
+        UUID originalUpstreamId = UUID.fromString("30000000-0000-0000-0000-000000000010");
+        CreateModelSpecCommand create = derivedCommand(
+            "summary-direct-cycle",
+            "customer_summary",
+            ModelType.SUMMARY,
+            List.of(new ModelRevisionRef(originalUpstreamId, 1))
+        );
+        ModelSpecView current = codec.toCreatedView(MODEL_ID, create, NOW);
+        StoredModelSpec currentStored = stored(current, null, null);
+        UpdateModelSpecCommand requested = update(
+            derivedCommand(
+                "ignored",
+                "customer_summary",
+                ModelType.SUMMARY,
+                List.of(new ModelRevisionRef(MODEL_ID, 1))
+            )
+        );
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(currentStored));
+        when(repository.findRevision(TENANT, MODEL_ID, 1)).thenReturn(Optional.of(currentStored));
+        when(compatibilityReader.read(currentStored)).thenReturn(current);
+
+        assertThatThrownBy(
+            () -> service.update(TENANT, ACTOR, MODEL_ID, new ExpectedVersion(MODEL_ID, 1, current.checksum()), requested)
+        )
+            .isInstanceOf(ModelSpecException.class)
+            .satisfies(error -> {
+                ModelSpecException cycle = (ModelSpecException) error;
+                assertThat(cycle.code()).isEqualTo("MODEL_SPEC_DEPENDENCY_CYCLE");
+                assertThat(cycle.details()).isEqualTo(
+                    java.util.Map.of("dependencyPath", List.of(MODEL_ID.toString(), MODEL_ID.toString()))
+                );
+            });
+        verify(repository, never()).compareAndSetV2(any(), any(), anyInt(), anyString(), any(), anyString());
+    }
+
+    @Test
+    void rejectsIndirectApplicationDependencyCycle() {
+        UUID originalUpstreamId = UUID.fromString("30000000-0000-0000-0000-000000000010");
+        UUID summaryId = UUID.fromString("30000000-0000-0000-0000-000000000020");
+        CreateModelSpecCommand create = derivedCommand(
+            "application-indirect-cycle",
+            "customer_application",
+            ModelType.APPLICATION,
+            List.of(new ModelRevisionRef(originalUpstreamId, 1))
+        );
+        ModelSpecView current = codec.toCreatedView(MODEL_ID, create, NOW);
+        StoredModelSpec currentStored = stored(current, null, null);
+        ModelSpecView summary = codec.toCreatedView(
+            summaryId,
+            derivedCommand(
+                "summary-upstream",
+                "customer_summary",
+                ModelType.SUMMARY,
+                List.of(new ModelRevisionRef(MODEL_ID, 1))
+            ),
+            NOW
+        );
+        StoredModelSpec summaryStored = stored(summary, null, null);
+        UpdateModelSpecCommand requested = update(
+            derivedCommand(
+                "ignored",
+                "customer_application",
+                ModelType.APPLICATION,
+                List.of(new ModelRevisionRef(summaryId, 1))
+            )
+        );
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(currentStored));
+        when(repository.findRevision(TENANT, summaryId, 1)).thenReturn(Optional.of(summaryStored));
+        when(compatibilityReader.read(currentStored)).thenReturn(current);
+        when(compatibilityReader.read(summaryStored)).thenReturn(summary);
+
+        assertThatThrownBy(
+            () -> service.update(TENANT, ACTOR, MODEL_ID, new ExpectedVersion(MODEL_ID, 1, current.checksum()), requested)
+        )
+            .isInstanceOf(ModelSpecException.class)
+            .satisfies(error -> {
+                ModelSpecException cycle = (ModelSpecException) error;
+                assertThat(cycle.code()).isEqualTo("MODEL_SPEC_DEPENDENCY_CYCLE");
+                assertThat(cycle.details()).isEqualTo(
+                    java.util.Map.of(
+                        "dependencyPath",
+                        List.of(MODEL_ID.toString(), summaryId.toString(), MODEL_ID.toString())
+                    )
+                );
+            });
+        verify(repository, never()).compareAndSetV2(any(), any(), anyInt(), anyString(), any(), anyString());
+    }
+
+    @Test
+    void dependencyGraphKeepsPinnedRevisionAndReportsCurrentRevisionDrift() {
+        UUID upstreamId = UUID.fromString("30000000-0000-0000-0000-000000000030");
+        ModelSpecView root = codec.toCreatedView(
+            MODEL_ID,
+            derivedCommand(
+                "summary-graph",
+                "customer_summary",
+                ModelType.SUMMARY,
+                List.of(new ModelRevisionRef(upstreamId, 3))
+            ),
+            NOW
+        );
+        ModelSpecView upstreamV1 = codec.toCreatedView(upstreamId, command("upstream-v1", "customer_detail"), NOW);
+        ModelSpecView upstreamV2 = codec.toUpdatedView(upstreamV1, update(command("ignored", "customer_detail")), 2, NOW);
+        ModelSpecView upstreamV3 = codec.toUpdatedView(upstreamV2, update(command("ignored", "customer_detail")), 3, NOW);
+        ModelSpecView upstreamV4 = codec.toUpdatedView(upstreamV3, update(command("ignored", "customer_detail")), 4, NOW);
+        StoredModelSpec pinned = stored(upstreamV3, null, null);
+        StoredModelSpec current = stored(upstreamV4, null, null);
+        when(compatibilityReader.get(TENANT, MODEL_ID)).thenReturn(root);
+        when(repository.findRevision(TENANT, upstreamId, 3)).thenReturn(Optional.of(pinned));
+        when(repository.findCurrent(TENANT, upstreamId)).thenReturn(Optional.of(current));
+        when(compatibilityReader.read(pinned)).thenReturn(upstreamV3);
+
+        ModelSpecApplicationService.DependencyGraph graph = service.dependencyGraph(TENANT, MODEL_ID);
+
+        assertThat(graph.rootModelSpecId()).isEqualTo(MODEL_ID);
+        assertThat(graph.nodes()).extracting(ModelSpecApplicationService.DependencyNode::modelSpecId)
+            .containsExactlyInAnyOrder(MODEL_ID, upstreamId);
+        assertThat(graph.edges()).singleElement().satisfies(edge -> {
+            assertThat(edge.fromModelSpecId()).isEqualTo(MODEL_ID);
+            assertThat(edge.toModelSpecId()).isEqualTo(upstreamId);
+            assertThat(edge.pinnedRevision()).isEqualTo(3);
+            assertThat(edge.currentRevision()).isEqualTo(4);
+            assertThat(edge.state()).isEqualTo(ModelSpecApplicationService.DependencyState.STALE);
+        });
+    }
+
+    @Test
     void rejectsSourcesThatAreNotConfirmedExactBindingsOfTheCurrentPlan() {
         CreateModelSpecCommand command = command("source-invalid", "customer_detail");
         when(repository.findByIdempotencyKey(TENANT, "source-invalid")).thenReturn(Optional.empty());
@@ -530,6 +658,37 @@ class ModelSpecApplicationServiceTest {
                 )
             ),
             List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            null,
+            idempotencyKey
+        );
+    }
+
+    private static CreateModelSpecCommand derivedCommand(
+        String idempotencyKey,
+        String name,
+        ModelType modelType,
+        List<ModelRevisionRef> dependsOn
+    ) {
+        return new CreateModelSpecCommand(
+            PLAN_ID,
+            DOMAIN_ID,
+            modelType,
+            modelType == ModelType.SUMMARY ? Layer.DWS : Layer.ADS,
+            name,
+            null,
+            ImplementationMode.DESIGNER_GENERATED,
+            "table",
+            null,
+            modelType == ModelType.APPLICATION ? "customer dashboard" : null,
+            new Grain("one row per customer", List.of("customer_id")),
+            null,
+            null,
+            List.of(new ModelField("customer_id", "varchar", false, null, FieldRole.KEY, null)),
+            List.of(),
+            dependsOn,
             List.of(),
             List.of(),
             List.of(),

@@ -88,8 +88,8 @@ test("workbench exposes the end-to-end data product journey from integration to 
 	assert.match(source, /resolveDataProductJourneyStageStates/);
 	assert.match(journeySource, /配置数据源/);
 	assert.match(journeySource, /确认数仓规划/);
-	assert.match(journeySource, /套用标准包/);
-	assert.match(journeySource, /进入低代码建模/);
+	assert.match(journeySource, /维护数据元/);
+	assert.match(journeySource, /进入模型中心/);
 	assert.match(journeySource, /设计指标/);
 	assert.match(journeySource, /编排数据开发/);
 	assert.match(journeySource, /发布数据 API/);
@@ -105,12 +105,11 @@ test("workbench exposes the end-to-end data product journey from integration to 
 		"/explore/etl/transform",
 		"/governance/subjects",
 		"/catalog/metadata-management",
-		"/foundation/standard-package",
 		"/governance/standards/elements",
-		"/studio/low-code-development",
+		"/governance/standards/reference",
+		"/modeling/models",
 		"/studio/sql-modeling",
 		"/modeling/metric-workbench",
-		"/modeling/semantic/metrics",
 		"/explore/etl/scripts",
 		"/explore/etl/orchestration",
 		"/services/apis",

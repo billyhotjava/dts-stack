@@ -21,6 +21,7 @@ export const MODEL_SPEC_CREATE_FIELDS = [
 	"metricRefs",
 	"standardBindings",
 	"generationStrategy",
+	"dimensionProfile",
 	"idempotencyKey",
 ] as const;
 
@@ -45,6 +46,7 @@ export const MODEL_SPEC_UPDATE_FIELDS = [
 	"metricRefs",
 	"standardBindings",
 	"generationStrategy",
+	"dimensionProfile",
 ] as const;
 
 export const MODEL_SPEC_REQUIRED_FIELD_CODES = {
@@ -77,6 +79,8 @@ export type ModelSpecSourceRole = "PRIMARY" | "JOINED";
 export type ModelSpecJoinType = "INNER" | "LEFT" | "RIGHT" | "FULL";
 export type ModelSpecStatus = "DRAFT" | "DESIGNING" | "VALIDATING" | "READY_TO_PUBLISH" | "PUBLISHED" | "ARCHIVED";
 export type ModelSpecCompatibilityMode = "CANONICAL" | "LEGACY_READONLY";
+export type ModelSpecScdType = "NONE" | "TYPE1" | "TYPE2";
+export type ModelSpecReuseScope = "PLAN" | "DOMAIN" | "TENANT";
 
 export type ModelSpecGrain = { statement: string; keys: string[] };
 export type ModelSpecTimeSemantics = { type: ModelSpecTimeSemanticsType; fields: string[] };
@@ -117,6 +121,24 @@ export type ModelSpecStandardBinding = {
 	securityLevel?: string | null;
 };
 export type ModelSpecGenerationStrategy = { type: string; reference?: string | null };
+export type ModelSpecDimensionLevel = { fieldName: string; order: number };
+export type ModelSpecDimensionHierarchy = {
+	code: string;
+	name: string;
+	levels: ModelSpecDimensionLevel[];
+};
+export type ModelSpecScdPolicy = {
+	type: ModelSpecScdType;
+	effectiveFromField?: string | null;
+	effectiveToField?: string | null;
+	currentFlagField?: string | null;
+};
+export type ModelSpecDimensionProfile = {
+	dimensionCode: string;
+	hierarchies: ModelSpecDimensionHierarchy[];
+	scdPolicy: ModelSpecScdPolicy;
+	reuseScope: ModelSpecReuseScope;
+};
 export type ModelSpecLegacySource = { kind: string | null; ref: string | null; layer: string | null };
 export type ModelSpecLegacyStandard = {
 	fieldName: string | null;
@@ -155,6 +177,7 @@ export type CreateModelSpecCommand = {
 	factShape?: ModelSpecFactShape | null;
 	timeSemantics?: ModelSpecTimeSemantics | null;
 	generationStrategy?: ModelSpecGenerationStrategy | null;
+	dimensionProfile?: ModelSpecDimensionProfile | null;
 	idempotencyKey: string;
 } & Partial<ModelSpecCollections>;
 
@@ -280,6 +303,18 @@ const MODEL_SPEC_JOIN_TYPES = new Set<ModelSpecJoinType>(["INNER", "LEFT", "RIGH
 const GRAIN_FIELDS = new Set(["statement", "keys"]);
 const TIME_SEMANTICS_FIELDS = new Set(["type", "fields"]);
 const GENERATION_STRATEGY_FIELDS = new Set(["type", "reference"]);
+const DIMENSION_PROFILE_FIELDS = new Set(["dimensionCode", "hierarchies", "scdPolicy", "reuseScope"]);
+const DIMENSION_HIERARCHY_FIELDS = new Set(["code", "name", "levels"]);
+const DIMENSION_LEVEL_FIELDS = new Set(["fieldName", "order"]);
+const DIMENSION_SCD_POLICY_FIELDS = new Set([
+	"type",
+	"effectiveFromField",
+	"effectiveToField",
+	"currentFlagField",
+]);
+const MODEL_SPEC_SCD_TYPES = new Set<ModelSpecScdType>(["NONE", "TYPE1", "TYPE2"]);
+const MODEL_SPEC_REUSE_SCOPES = new Set<ModelSpecReuseScope>(["PLAN", "DOMAIN", "TENANT"]);
+const DIMENSION_CODE_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const JAVA_INT_MAX = 2_147_483_647;
 
@@ -389,6 +424,51 @@ const rawModelSpecIssues = (raw: Record<string, unknown>): ModelSpecFieldIssue[]
 	) {
 		add("MODEL_SPEC_GENERATION_STRATEGY_INVALID", "generationStrategy", "Generation strategy is invalid");
 	}
+	if (raw.dimensionProfile != null) {
+		if (!isRecord(raw.dimensionProfile) || !hasOnlyFields(raw.dimensionProfile, DIMENSION_PROFILE_FIELDS)) {
+			add("MODEL_SPEC_DIMENSION_PROFILE_INVALID", "dimensionProfile", "Dimension profile is invalid");
+		} else {
+			const profile = raw.dimensionProfile;
+			if (!isNonBlankString(profile.dimensionCode) || !DIMENSION_CODE_PATTERN.test(profile.dimensionCode.trim())) {
+				add("MODEL_SPEC_DIMENSION_CODE_INVALID", "dimensionProfile", "Dimension code is invalid");
+			}
+			if (!MODEL_SPEC_REUSE_SCOPES.has(profile.reuseScope as ModelSpecReuseScope)) {
+				add("MODEL_SPEC_DIMENSION_REUSE_SCOPE_INVALID", "dimensionProfile.reuseScope", "Reuse scope is invalid");
+			}
+			if (
+				!Array.isArray(profile.hierarchies) ||
+				profile.hierarchies.some(
+					(hierarchy) =>
+						!isRecord(hierarchy) ||
+						!hasOnlyFields(hierarchy, DIMENSION_HIERARCHY_FIELDS) ||
+						!isNonBlankString(hierarchy.code) ||
+						!DIMENSION_CODE_PATTERN.test(hierarchy.code.trim()) ||
+						!isNonBlankString(hierarchy.name) ||
+						!Array.isArray(hierarchy.levels) ||
+						hierarchy.levels.length === 0 ||
+						hierarchy.levels.some(
+							(level) =>
+								!isRecord(level) ||
+								!hasOnlyFields(level, DIMENSION_LEVEL_FIELDS) ||
+								!isNonBlankString(level.fieldName) ||
+								!isIntInRange(level.order, 1),
+						),
+				)
+			) {
+				add("MODEL_SPEC_DIMENSION_HIERARCHY_INVALID", "dimensionProfile.hierarchies", "Hierarchy is invalid");
+			}
+			if (
+				!isRecord(profile.scdPolicy) ||
+				!hasOnlyFields(profile.scdPolicy, DIMENSION_SCD_POLICY_FIELDS) ||
+				!MODEL_SPEC_SCD_TYPES.has(profile.scdPolicy.type as ModelSpecScdType) ||
+				!isNullableString(profile.scdPolicy.effectiveFromField) ||
+				!isNullableString(profile.scdPolicy.effectiveToField) ||
+				!isNullableString(profile.scdPolicy.currentFlagField)
+			) {
+				add("MODEL_SPEC_DIMENSION_SCD_INVALID", "dimensionProfile.scdPolicy", "SCD policy is invalid");
+			}
+		}
+	}
 
 	const invalidCollection = (
 		field: (typeof MODEL_SPEC_COLLECTION_FIELDS)[number],
@@ -472,6 +552,15 @@ export const validateModelSpecCreate = (input: unknown): ModelSpecFieldIssue[] =
 				"MODEL_SPEC_CONSUMPTION_SCENARIO_NOT_ALLOWED",
 				"consumptionScenario",
 				"Consumption scenario belongs to APPLICATION models only",
+			),
+		);
+	}
+	if (command.dimensionProfile != null && command.modelType !== "DIMENSION") {
+		issues.push(
+			issue(
+				"MODEL_SPEC_DIMENSION_PROFILE_NOT_ALLOWED",
+				"dimensionProfile",
+				"Dimension profile belongs to DIMENSION models only",
 			),
 		);
 	}

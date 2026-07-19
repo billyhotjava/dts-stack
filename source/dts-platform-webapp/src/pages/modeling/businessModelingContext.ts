@@ -1,4 +1,5 @@
 import type { WarehousePlanningContext } from "../governance/warehousePlanningContext";
+import { sanitizeModelingReturnTo } from "./modelingCompatibilityRoute.ts";
 
 export type BusinessModelingContext = {
 	domainId?: string;
@@ -13,6 +14,8 @@ export type BusinessModelingContext = {
 	objectId?: string;
 	modelSpecId?: string;
 	revision?: string;
+	modelType?: string;
+	returnTo?: string;
 	/** @deprecated Compatibility context only. */
 	warehouseLayer?: string;
 	/** @deprecated Compatibility context only. */
@@ -44,6 +47,8 @@ export const resolveBusinessModelingContext = (
 		objectId: value(searchParams.get("objectId")),
 		modelSpecId: value(searchParams.get("modelSpecId")),
 		revision: value(searchParams.get("revision")),
+		modelType: value(searchParams.get("modelType")),
+		returnTo: sanitizeModelingReturnTo(searchParams.get("returnTo")),
 		warehouseLayer: value(searchParams.get("warehouseLayer")) || value(planningContext?.warehouseLayer),
 		modelingMode: value(searchParams.get("modelingMode")) || value(planningContext?.modelingMode),
 		projectSpaceId: value(searchParams.get("projectSpaceId")),
@@ -62,17 +67,11 @@ export const buildBusinessModelingRoute = (
 	const params = new URLSearchParams(query);
 	const entries: Record<string, string | undefined> = {
 		domainId: context.domainId,
-		domainName: context.domainName,
-		processId: context.processId,
-		processName: context.processName,
-		planningId: context.planningId,
-		planId: context.planId,
-		objectId: context.objectId,
+		planId: context.planId || context.planningId,
 		modelSpecId: context.modelSpecId,
 		revision: context.revision,
-		warehouseLayer: context.warehouseLayer,
-		modelingMode: context.modelingMode,
-		projectSpaceId: context.projectSpaceId,
+		modelType: context.modelType,
+		returnTo: sanitizeModelingReturnTo(context.returnTo),
 	};
 	for (const [key, nextValue] of Object.entries(entries)) {
 		if (nextValue) params.set(key, nextValue);

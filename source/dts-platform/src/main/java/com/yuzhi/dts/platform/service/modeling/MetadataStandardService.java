@@ -59,6 +59,7 @@ public class MetadataStandardService {
     public MetadataStandardDto update(UUID id, MetadataStandardUpsertRequest request) {
         MetadataStandard entity = repository.findById(id).orElseThrow(() -> new EntityNotFoundException("元数据标准不存在"));
         applyUpsert(entity, request);
+        entity.setVersion(Objects.requireNonNullElse(entity.getVersion(), 0) + 1);
         entity = repository.save(entity);
         return MetadataStandardMapper.toDto(entity);
     }

@@ -217,7 +217,6 @@ export type Sprint27MetricOperations = {
 	overview?: Record<string, any>;
 	trendRows?: any[];
 	domains?: any[];
-	objects?: any[];
 	metrics?: any[];
 	models?: any[];
 	runs?: any[];
@@ -566,6 +565,64 @@ export const downloadDataStandardPackageTemplate = () =>
 	api.get<Blob>({ url: "/modeling/metadata-standards/template", responseType: "blob" });
 export const importMetadataStandards = (formData: FormData) =>
     api.post({ url: "/modeling/metadata-standards/import", data: formData });
+
+// Measurement units (versioned professional owner)
+export type MeasurementUnitStatus = "ACTIVE" | "INACTIVE";
+export type MeasurementUnitCommand = {
+	code: string;
+	name: string;
+	symbol: string;
+	quantityKind: string;
+	conversionFactor: number;
+	baseUnitRef?: string | null;
+	precision: number;
+};
+export type MeasurementUnitView = MeasurementUnitCommand & {
+	id: string;
+	status: MeasurementUnitStatus;
+	version: number;
+	checksum: string;
+	createdAt: string;
+	updatedAt: string;
+};
+export type MeasurementUnitReferenceItem = {
+	resourceType: string;
+	resourceId: string;
+	displayName: string;
+	referencedVersion?: number | null;
+	currentVersion?: number | null;
+	driftStatus: "CURRENT" | "STALE" | "UNKNOWN";
+	repairRoute?: string | null;
+	restricted: boolean;
+};
+export type MeasurementUnitReferenceImpact = {
+	totalReferences: number;
+	restrictedReferences: number;
+	items: MeasurementUnitReferenceItem[];
+};
+const measurementUnitEtag = (unit: Pick<MeasurementUnitView, "id" | "version" | "checksum">) =>
+	`"measurement-unit:${unit.id}:${unit.version}:${unit.checksum}"`;
+export const listMeasurementUnits = (params: Record<string, unknown> = {}) =>
+	api.get<MeasurementUnitView[]>({ url: "/governance/measurement-units", params });
+export const getMeasurementUnit = (id: string) =>
+	api.get<MeasurementUnitView>({ url: `/governance/measurement-units/${id}` });
+export const createMeasurementUnit = (data: MeasurementUnitCommand) =>
+	api.post<MeasurementUnitView>({ url: "/governance/measurement-units", data });
+export const updateMeasurementUnit = (unit: MeasurementUnitView, data: MeasurementUnitCommand) =>
+	api.put<MeasurementUnitView>({
+		url: `/governance/measurement-units/${unit.id}`,
+		headers: { "If-Match": measurementUnitEtag(unit) },
+		data,
+	});
+export const deactivateMeasurementUnit = (unit: MeasurementUnitView) =>
+	api.delete<MeasurementUnitView>({
+		url: `/governance/measurement-units/${unit.id}`,
+		headers: { "If-Match": measurementUnitEtag(unit) },
+	});
+export const listMeasurementUnitVersions = (id: string) =>
+	api.get<MeasurementUnitView[]>({ url: `/governance/measurement-units/${id}/versions` });
+export const getMeasurementUnitReferences = (id: string) =>
+	api.get<MeasurementUnitReferenceImpact>({ url: `/governance/measurement-units/${id}/references` });
 
 // Standard packages (数据元+码表+术语 打包导入管道)
 export const previewStandardPackageImport = (formData: FormData) =>

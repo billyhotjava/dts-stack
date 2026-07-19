@@ -6,6 +6,8 @@ import type {
 	ModelSpecField,
 	ModelSpecImplementationMode,
 	ModelSpecLayer,
+	ModelSpecReuseScope,
+	ModelSpecScdType,
 	ModelSpecMetricRef,
 	ModelSpecRevisionConflictDetails,
 	ModelSpecRevisionRef,
@@ -70,6 +72,12 @@ export type ModelSpecSourceDraft = {
 	joinExpression?: string;
 };
 
+export type ModelSpecDimensionHierarchyDraft = {
+	code: string;
+	name: string;
+	levelFieldsText: string;
+};
+
 export type ModelSpecDraft = {
 	planId: string;
 	domainId: string;
@@ -92,6 +100,13 @@ export type ModelSpecDraft = {
 	consumptionScenario: string;
 	generationStrategyType: string;
 	generationStrategyReference: string;
+	dimensionCode: string;
+	dimensionHierarchies: ModelSpecDimensionHierarchyDraft[];
+	dimensionScdType: ModelSpecScdType;
+	dimensionReuseScope: ModelSpecReuseScope;
+	dimensionEffectiveFromField: string;
+	dimensionEffectiveToField: string;
+	dimensionCurrentFlagField: string;
 	fields: ModelSpecField[];
 	metricRefs: ModelSpecMetricRef[];
 	standardBindings: ModelSpecStandardBinding[];
@@ -131,6 +146,13 @@ export function createEmptyModelSpecDraft(
 		consumptionScenario: "",
 		generationStrategyType: "",
 		generationStrategyReference: "",
+		dimensionCode: "",
+		dimensionHierarchies: [],
+		dimensionScdType: "NONE",
+		dimensionReuseScope: "PLAN",
+		dimensionEffectiveFromField: "",
+		dimensionEffectiveToField: "",
+		dimensionCurrentFlagField: "",
 		fields: [],
 		metricRefs: [],
 		standardBindings: [],
@@ -197,6 +219,7 @@ export function buildModelSpecCreateCommand(
 	const isApplication = draft.modelType === "APPLICATION";
 	const timeFields = isFact ? parseModelFieldNames(draft.timeFieldsText || "") : [];
 	const generationType = optionalText(draft.generationStrategyType);
+	const dimensionCode = draft.modelType === "DIMENSION" ? optionalText(draft.dimensionCode)?.toUpperCase() : undefined;
 	return {
 		planId: draft.planId.trim(),
 		domainId: draft.domainId.trim(),
@@ -230,6 +253,29 @@ export function buildModelSpecCreateCommand(
 		consumptionScenario: isApplication ? optionalText(draft.consumptionScenario) : undefined,
 		generationStrategy: generationType
 			? { type: generationType, reference: optionalText(draft.generationStrategyReference) }
+			: undefined,
+		dimensionProfile: dimensionCode
+			? {
+					dimensionCode,
+					hierarchies: (draft.dimensionHierarchies ?? []).map((hierarchy) => ({
+						code: hierarchy.code.trim().toUpperCase(),
+						name: hierarchy.name.trim(),
+						levels: parseModelFieldNames(hierarchy.levelFieldsText).map((fieldName, index) => ({
+							fieldName,
+							order: index + 1,
+						})),
+					})),
+					scdPolicy:
+						draft.dimensionScdType === "TYPE2"
+							? {
+									type: "TYPE2",
+									effectiveFromField: optionalText(draft.dimensionEffectiveFromField),
+									effectiveToField: optionalText(draft.dimensionEffectiveToField),
+									currentFlagField: optionalText(draft.dimensionCurrentFlagField),
+								}
+							: { type: draft.dimensionScdType },
+					reuseScope: draft.dimensionReuseScope,
+				}
 			: undefined,
 		idempotencyKey,
 	};
@@ -278,6 +324,22 @@ export function modelSpecDraftFromView(view: CanonicalModelSpecView): ModelSpecD
 		consumptionScenario: view.consumptionScenario || "",
 		generationStrategyType: view.generationStrategy?.type || "",
 		generationStrategyReference: view.generationStrategy?.reference || "",
+		dimensionCode: view.dimensionProfile?.dimensionCode || "",
+		dimensionHierarchies:
+			view.dimensionProfile?.hierarchies.map((hierarchy) => ({
+				code: hierarchy.code,
+				name: hierarchy.name,
+				levelFieldsText: hierarchy.levels
+					.slice()
+					.sort((left, right) => left.order - right.order)
+					.map((level) => level.fieldName)
+					.join(", "),
+			})) || [],
+		dimensionScdType: view.dimensionProfile?.scdPolicy.type || "NONE",
+		dimensionReuseScope: view.dimensionProfile?.reuseScope || "PLAN",
+		dimensionEffectiveFromField: view.dimensionProfile?.scdPolicy.effectiveFromField || "",
+		dimensionEffectiveToField: view.dimensionProfile?.scdPolicy.effectiveToField || "",
+		dimensionCurrentFlagField: view.dimensionProfile?.scdPolicy.currentFlagField || "",
 		fields: view.fields,
 		metricRefs: view.metricRefs,
 		standardBindings: view.standardBindings,

@@ -487,6 +487,8 @@ test("model detail deep-link keeps canonical tabs, server plan context and narro
 	const serverPlanId = "10000000-0000-0000-0000-000000000001";
 	const domainId = "20000000-0000-0000-0000-000000000001";
 	const measurementUnitId = "50000000-0000-0000-0000-000000000001";
+	const standardElementId = "51000000-0000-0000-0000-000000000001";
+	let savedAmountBinding: Record<string, unknown> | undefined;
 	const model = {
 		contractVersion: 2,
 		id: modelId,
@@ -542,11 +544,46 @@ test("model detail deep-link keeps canonical tabs, server plan context and narro
 	await page.route("**/api/**", async (route) => {
 		const pathName = new URL(route.request().url()).pathname;
 		if (pathName === `/api/modeling/model-specs/${modelId}`) {
+			if (route.request().method() === "PUT") {
+				const command = route.request().postDataJSON() as { standardBindings?: Record<string, unknown>[] };
+				savedAmountBinding = command.standardBindings?.find((binding) => binding.fieldName === "amount");
+				await fulfill(route, {
+					...model,
+					standardBindings: command.standardBindings || [],
+					revision: 3,
+					checksum: "model-checksum-3",
+				});
+				return;
+			}
 			await fulfill(route, model);
 			return;
 		}
 		if (pathName === "/api/modeling/model-specs") {
 			await fulfill(route, [model]);
+			return;
+		}
+		if (pathName === "/api/modeling/metadata-standards") {
+			await fulfill(route, {
+				content: [{ id: standardElementId, fieldNameCn: "订单金额", fieldNameEn: "order_amount", version: 3 }],
+				total: 1,
+				page: 0,
+				size: 500,
+			});
+			return;
+		}
+		if (pathName === "/api/governance/reference-codes") {
+			await fulfill(route, {
+				content: [{ codeTypeId: "PAYMENT_STATUS", codeTypeName: "支付状态", version: "v4", status: 1 }],
+				total: 1,
+				page: 0,
+				size: 500,
+			});
+			return;
+		}
+		if (pathName === "/api/governance/measurement-units") {
+			await fulfill(route, [
+				{ id: measurementUnitId, code: "CNY", name: "人民币", symbol: "¥", version: 3, status: "ACTIVE" },
+			]);
 			return;
 		}
 		await fulfill(route, []);
@@ -558,8 +595,28 @@ test("model detail deep-link keeps canonical tabs, server plan context and narro
 	await expect(page.getByText(`${measurementUnitId} · v3`, { exact: true })).toBeVisible();
 	await expect(page.getByText("当前显示已保存版本 r2", { exact: true })).toBeVisible();
 	await expect(page.getByText("RESTRICTED", { exact: true })).toBeVisible();
-	await expect(page.getByText("已配置", { exact: true })).toBeVisible();
+	await expect(page.getByText("已关联", { exact: true })).toBeVisible();
 	await expect(page.getByRole("button", { name: "前往数据元" })).toBeVisible();
+	await page.getByRole("button", { name: "配置字段标准" }).nth(1).click();
+	const standardDialog = page.getByRole("dialog", { name: "配置字段标准：amount" });
+	await expect(standardDialog).toBeVisible();
+	await standardDialog.getByRole("combobox").nth(0).click();
+	await page.getByText("订单金额 · v3", { exact: true }).last().click();
+	await standardDialog.getByRole("combobox").nth(1).click();
+	await page.getByText("支付状态 · v4", { exact: true }).last().click();
+	await standardDialog.getByRole("button", { name: /保\s*存\s*绑\s*定/ }).click();
+	await expect(standardDialog).toBeHidden();
+	await expect(page.getByText(`${standardElementId} · v3`, { exact: true })).toBeVisible();
+	await expect(page.getByText("PAYMENT_STATUS · v4", { exact: true })).toBeVisible();
+	expect(savedAmountBinding).toMatchObject({
+		fieldName: "amount",
+		standardElementId,
+		standardElementVersion: 3,
+		referenceCode: "PAYMENT_STATUS",
+		referenceCodeVersion: 4,
+		measurementUnitId,
+		measurementUnitVersion: 3,
+	});
 	await page.screenshot({ path: path.join(evidenceDir, "model-detail-standards.png"), fullPage: true });
 
 	await page.getByRole("tab", { name: "字段设计" }).click();
@@ -585,6 +642,146 @@ test("model detail deep-link keeps canonical tabs, server plan context and narro
 
 	await page.getByRole("button", { name: "返回模型中心" }).click();
 	await expect(page).toHaveURL(new RegExp(`/modeling/models\\?planId=${serverPlanId}$`));
+	assertCleanBrowser(probe);
+});
+
+test("summary detail derives current stale and unavailable upstream states from dependency graph", async ({ page }) => {
+	const probe = installBrowserProbe(page);
+	const modelId = "41000000-0000-0000-0000-000000000001";
+	const currentId = "42000000-0000-0000-0000-000000000001";
+	const staleId = "42000000-0000-0000-0000-000000000002";
+	const unknownId = "42000000-0000-0000-0000-000000000003";
+	const model = {
+		contractVersion: 2,
+		id: modelId,
+		planId: "10000000-0000-0000-0000-000000000001",
+		domainId: "20000000-0000-0000-0000-000000000001",
+		modelType: "SUMMARY",
+		layer: "DWS",
+		name: "订单日汇总",
+		description: "按天汇总订单",
+		implementationMode: "DESIGNER_GENERATED",
+		materialization: "table",
+		businessActivityRef: null,
+		consumptionScenario: null,
+		grain: { statement: "每行代表一天", keys: ["summary_date"] },
+		factShape: null,
+		timeSemantics: null,
+		fields: [
+			{ name: "summary_date", dataType: "date", nullable: false, role: "KEY" },
+			{ name: "order_amount", dataType: "decimal(18,2)", nullable: false, role: "MEASURE" },
+		],
+		sourceRefs: [],
+		dependsOn: [
+			{ modelSpecId: currentId, revision: 2 },
+			{ modelSpecId: staleId, revision: 3 },
+			{ modelSpecId: unknownId, revision: 1 },
+		],
+		dimensionRefs: [],
+		metricRefs: [],
+		standardBindings: [],
+		generationStrategy: null,
+		dimensionProfile: null,
+		status: "DRAFT",
+		revision: 4,
+		checksum: "c".repeat(64),
+		createdAt: "2026-07-20T00:00:00Z",
+		updatedAt: "2026-07-20T00:00:00Z",
+		compatibilityMode: "CANONICAL",
+		legacyRefs: null,
+	};
+
+	await page.route("**/api/**", async (route) => {
+		const pathName = new URL(route.request().url()).pathname;
+		if (pathName === `/api/modeling/model-specs/${modelId}/dependencies`) {
+			await fulfill(route, {
+				rootModelSpecId: modelId,
+				nodes: [
+					{
+						modelSpecId: modelId,
+						pinnedRevision: 4,
+						currentRevision: 4,
+						name: model.name,
+						modelType: "SUMMARY",
+						status: "DRAFT",
+						restricted: false,
+					},
+					{
+						modelSpecId: currentId,
+						pinnedRevision: 2,
+						currentRevision: 2,
+						name: "订单明细",
+						modelType: "FACT",
+						status: "PUBLISHED",
+						restricted: false,
+					},
+					{
+						modelSpecId: staleId,
+						pinnedRevision: 3,
+						currentRevision: 5,
+						name: "客户维度",
+						modelType: "DIMENSION",
+						status: "PUBLISHED",
+						restricted: false,
+					},
+					{
+						modelSpecId: unknownId,
+						pinnedRevision: 1,
+						currentRevision: null,
+						name: null,
+						modelType: null,
+						status: null,
+						restricted: true,
+					},
+				],
+				edges: [
+					{
+						fromModelSpecId: modelId,
+						toModelSpecId: currentId,
+						pinnedRevision: 2,
+						currentRevision: 2,
+						state: "CURRENT",
+					},
+					{ fromModelSpecId: modelId, toModelSpecId: staleId, pinnedRevision: 3, currentRevision: 5, state: "STALE" },
+					{
+						fromModelSpecId: modelId,
+						toModelSpecId: unknownId,
+						pinnedRevision: 1,
+						currentRevision: null,
+						state: "UNKNOWN",
+					},
+				],
+			});
+			return;
+		}
+		if (pathName === `/api/modeling/model-specs/${modelId}`) {
+			await fulfill(route, model);
+			return;
+		}
+		if (pathName === "/api/modeling/model-specs") {
+			await fulfill(route, [model]);
+			return;
+		}
+		await fulfill(route, []);
+	});
+
+	await page.goto(`/#/modeling/models/${modelId}?tab=design`);
+	await expect(page.getByTestId("model-spec-dependency-panel")).toBeVisible();
+	await expect(page.getByText("当前版本", { exact: true })).toBeVisible();
+	await expect(page.getByText("版本漂移", { exact: true })).toBeVisible();
+	await expect(page.getByText("引用不可用", { exact: true })).toBeVisible();
+	await expect(page.getByText("受限上游", { exact: true })).toBeVisible();
+	await page.screenshot({ path: path.join(evidenceDir, "model-detail-dependencies.png"), fullPage: true });
+
+	await page.setViewportSize({ width: 390, height: 844 });
+	const viewportMetrics = await page.evaluate(() => ({
+		innerWidth: window.innerWidth,
+		documentWidth: document.documentElement.scrollWidth,
+		bodyWidth: document.body.scrollWidth,
+	}));
+	expect(viewportMetrics.documentWidth).toBeLessThanOrEqual(viewportMetrics.innerWidth);
+	expect(viewportMetrics.bodyWidth).toBeLessThanOrEqual(viewportMetrics.innerWidth);
+	await page.screenshot({ path: path.join(evidenceDir, "model-detail-dependencies-narrow.png"), fullPage: true });
 	assertCleanBrowser(probe);
 });
 
@@ -683,6 +880,7 @@ test("dimension draft journey stays object-free, saves with CAS and returns with
 	await page.getByLabel("维度定义").fill("统一组织机构分析口径");
 	await page.getByLabel("每行代表什么").fill("每行代表一个组织机构");
 	await page.getByLabel("维度键").fill("organization_id");
+	await page.getByLabel("维度编码").fill("DIM_ORGANIZATION");
 	await expect
 		.poll(
 			async () => {
@@ -716,6 +914,12 @@ test("dimension draft journey stays object-free, saves with CAS and returns with
 		modelType: "DIMENSION",
 		description: "统一组织机构分析口径",
 		grain: { statement: "每行代表一个组织机构", keys: ["organization_id"] },
+		dimensionProfile: {
+			dimensionCode: "DIM_ORGANIZATION",
+			hierarchies: [],
+			scdPolicy: { type: "NONE" },
+			reuseScope: "PLAN",
+		},
 	});
 	expect((createBody?.fields || []) as unknown[]).toContainEqual({
 		name: "organization_id",
@@ -839,4 +1043,217 @@ test("dimension catalog keeps model-list failure distinct from empty state and r
 	await expect(page.getByText("重试后维度", { exact: true })).toBeVisible();
 	expect(modelListCalls).toBe(2);
 	assertCleanBrowser(probe, [{ status: 503, includes: "/modeling/model-specs" }]);
+});
+
+test("measurement-unit owner exposes version and reference entry points with safe model return", async ({ page }) => {
+	const probe = installBrowserProbe(page);
+	const modelId = "40000000-0000-0000-0000-000000000081";
+	const unitId = "50000000-0000-0000-0000-000000000081";
+	const unit = {
+		id: unitId,
+		code: "CNY",
+		name: "人民币",
+		symbol: "¥",
+		quantityKind: "CURRENCY",
+		conversionFactor: 1,
+		baseUnitRef: null,
+		precision: 2,
+		status: "ACTIVE",
+		version: 3,
+		checksum: "d".repeat(64),
+		createdAt: "2026-07-20T00:00:00Z",
+		updatedAt: "2026-07-20T01:00:00Z",
+	};
+	await page.route("**/api/**", async (route) => {
+		const pathName = new URL(route.request().url()).pathname;
+		if (pathName === "/api/governance/measurement-units") {
+			await fulfill(route, [unit]);
+			return;
+		}
+		if (pathName === `/api/governance/measurement-units/${unitId}/versions`) {
+			await fulfill(route, [unit, { ...unit, version: 2, checksum: "c".repeat(64) }]);
+			return;
+		}
+		if (pathName === `/api/governance/measurement-units/${unitId}/references`) {
+			await fulfill(route, {
+				totalReferences: 1,
+				restrictedReferences: 0,
+				items: [
+					{
+						resourceType: "MODEL_SPEC_FIELD",
+						resourceId: modelId,
+						displayName: "订单事实.amount",
+						referencedVersion: 2,
+						currentVersion: 3,
+						driftStatus: "STALE",
+						repairRoute: `/modeling/models/${modelId}?tab=standards`,
+						restricted: false,
+					},
+				],
+			});
+			return;
+		}
+		await fulfill(route, []);
+	});
+
+	const returnTo = `/modeling/models/${modelId}?tab=standards`;
+	await page.goto(`/#/governance/standards/units?modelSpecId=${modelId}&returnTo=${encodeURIComponent(returnTo)}`);
+	await expect(page.getByTestId("measurement-units-page")).toBeVisible();
+	await expect(page.getByText("人民币", { exact: true })).toBeVisible();
+	await page.getByRole("button", { name: /版\s*本/ }).click();
+	await expect(page.getByRole("dialog", { name: "版本历史" })).toBeVisible();
+	await page.getByRole("button", { name: "Close" }).click();
+	await page.getByRole("button", { name: /引\s*用/ }).click();
+	await expect(page.getByText("订单事实.amount", { exact: true })).toBeVisible();
+	await expect(page.getByText("STALE", { exact: true })).toBeVisible();
+	await page.screenshot({ path: path.join(evidenceDir, "f6-measurement-unit-owner-chromium95.png"), fullPage: true });
+
+	await page.setViewportSize({ width: 390, height: 844 });
+	const viewportMetrics = await page.evaluate(() => ({
+		innerWidth: window.innerWidth,
+		documentWidth: document.documentElement.scrollWidth,
+		bodyWidth: document.body.scrollWidth,
+	}));
+	expect(viewportMetrics.documentWidth).toBeLessThanOrEqual(viewportMetrics.innerWidth);
+	expect(viewportMetrics.bodyWidth).toBeLessThanOrEqual(viewportMetrics.innerWidth);
+	await page.screenshot({
+		path: path.join(evidenceDir, "f6-measurement-unit-owner-chromium95-narrow.png"),
+		fullPage: true,
+	});
+	assertCleanBrowser(probe);
+});
+
+test("published metric model creates field-anchored draft and binds exact owner version", async ({ page }) => {
+	const probe = installBrowserProbe(page);
+	const modelId = "40000000-0000-0000-0000-000000000082";
+	const unitId = "50000000-0000-0000-0000-000000000082";
+	const indicatorId = "60000000-0000-0000-0000-000000000082";
+	const draftIndicatorId = "60000000-0000-0000-0000-000000000083";
+	const publishedModel = {
+		contractVersion: 2,
+		id: modelId,
+		planId: "10000000-0000-0000-0000-000000000082",
+		domainId: "20000000-0000-0000-0000-000000000082",
+		modelType: "FACT",
+		layer: "DWD",
+		name: "订单事实",
+		description: "已发布订单事实",
+		implementationMode: "DESIGNER_GENERATED",
+		materialization: "table",
+		businessActivityRef: "ORDER_CREATED",
+		consumptionScenario: null,
+		grain: { statement: "每行一笔订单", keys: ["order_id"] },
+		factShape: "TRANSACTION",
+		timeSemantics: { type: "EVENT_TIME", fields: ["created_at"] },
+		fields: [
+			{ name: "order_id", dataType: "string", nullable: false, role: "KEY" },
+			{ name: "created_at", dataType: "timestamp", nullable: false, role: "TIME" },
+			{ name: "amount", dataType: "decimal(18,2)", nullable: false, role: "MEASURE" },
+		],
+		sourceRefs: [],
+		dependsOn: [],
+		dimensionRefs: [],
+		metricRefs: [],
+		standardBindings: [{ fieldName: "amount", measurementUnitId: unitId, measurementUnitVersion: 3 }],
+		generationStrategy: null,
+		dimensionProfile: null,
+		status: "PUBLISHED",
+		revision: 5,
+		checksum: "e".repeat(64),
+		createdAt: "2026-07-20T00:00:00Z",
+		updatedAt: "2026-07-20T01:00:00Z",
+		compatibilityMode: "CANONICAL",
+		legacyRefs: null,
+	};
+	const publishedIndicator = {
+		id: indicatorId,
+		code: "ORDER_AMOUNT",
+		name: "订单金额",
+		status: "PUBLISHED",
+		version: "v2",
+	};
+	let referenceBody: Record<string, unknown> | null = null;
+	let metricIfMatch = "";
+
+	await page.route("**/api/**", async (route) => {
+		const request = route.request();
+		const pathName = new URL(request.url()).pathname;
+		if (request.method() === "GET" && pathName === "/api/modeling/model-specs") {
+			await fulfill(route, [publishedModel]);
+			return;
+		}
+		if (request.method() === "GET" && pathName === "/api/governance/indicators") {
+			await fulfill(route, { content: [publishedIndicator], total: 1, page: 0, size: 200, totalPages: 1 });
+			return;
+		}
+		if (request.method() === "GET" && pathName === "/api/governance/measurement-units") {
+			await fulfill(route, [
+				{
+					id: unitId,
+					code: "CNY",
+					name: "人民币",
+					symbol: "¥",
+					quantityKind: "CURRENCY",
+					conversionFactor: 1,
+					baseUnitRef: null,
+					precision: 2,
+					status: "ACTIVE",
+					version: 3,
+					checksum: "f".repeat(64),
+					createdAt: "2026-07-20T00:00:00Z",
+					updatedAt: "2026-07-20T01:00:00Z",
+				},
+			]);
+			return;
+		}
+		if (request.method() === "POST" && pathName === "/api/governance/indicators") {
+			await fulfill(route, {
+				id: draftIndicatorId,
+				code: "ORDER_AMOUNT_DRAFT",
+				name: "订单事实-amount",
+				status: "DRAFT",
+				version: "v1",
+			});
+			return;
+		}
+		if (request.method() === "POST" && pathName === `/api/governance/indicators/${draftIndicatorId}/references`) {
+			referenceBody = request.postDataJSON() as Record<string, unknown>;
+			await fulfill(route, { id: "reference-1" });
+			return;
+		}
+		if (request.method() === "PUT" && pathName === `/api/modeling/model-specs/${modelId}/metric-refs`) {
+			metricIfMatch = request.headers()["if-match"] || "";
+			await fulfill(route, {
+				...publishedModel,
+				metricRefs: [{ metricId: indicatorId, version: 2 }],
+				revision: 6,
+				checksum: "a".repeat(64),
+			});
+			return;
+		}
+		await fulfill(route, []);
+	});
+
+	await page.goto(`/#/modeling/metric-workbench?modelSpecId=${modelId}`);
+	await expect(page.getByText("人民币 (¥) v3", { exact: false })).toBeVisible();
+	await page.getByRole("button", { name: "创建原子指标草稿" }).click();
+	await page.getByRole("button", { name: /确\s*定/ }).click();
+	await expect(page).toHaveURL(/governance\/indicators\/dictionary/);
+	expect(referenceBody).toMatchObject({
+		refType: "MODEL_SPEC_FIELD",
+		refTarget: `${modelId}@5#amount`,
+	});
+	const notes = JSON.parse(String(referenceBody?.notes || "{}"));
+	expect(notes).toMatchObject({ measurementUnitId: unitId, measurementUnitVersion: 3 });
+
+	await page.goto(`/#/modeling/metric-workbench?modelSpecId=${modelId}`);
+	await page.getByRole("button", { name: "关联已发布指标" }).click();
+	await page.getByRole("dialog", { name: "关联已发布指标版本" }).locator(".ant-select-selector").click();
+	await page.getByText("订单金额 · v2", { exact: true }).click();
+	await page.getByRole("button", { name: /确\s*定/ }).click();
+	await expect(page.getByRole("dialog", { name: "关联已发布指标版本" })).toBeHidden();
+	await expect(page.getByText("当前", { exact: true }).first()).toBeVisible();
+	expect(metricIfMatch).toBe(`"model-spec:${modelId}:5:${"e".repeat(64)}"`);
+	await page.screenshot({ path: path.join(evidenceDir, "f6-model-metric-handoff-chromium95.png"), fullPage: true });
+	assertCleanBrowser(probe);
 });

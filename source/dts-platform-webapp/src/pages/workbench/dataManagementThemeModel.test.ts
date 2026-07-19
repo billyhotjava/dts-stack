@@ -123,7 +123,7 @@ describe("data management theme model", () => {
 			}),
 		);
 
-		expect(themes["chain-model"].primaryAction.route).toBe("/modeling/semantic/models");
+		expect(themes["chain-model"].primaryAction.route).toBe("/modeling/models");
 	});
 
 	it("marks a theme as published and healthy only when consumption and operations are ready", () => {

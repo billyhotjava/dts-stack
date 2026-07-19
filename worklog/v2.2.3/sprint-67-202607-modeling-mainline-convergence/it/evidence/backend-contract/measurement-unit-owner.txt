@@ -1,0 +1,21 @@
+Sprint-67 F6-T01 measurement-unit owner evidence
+Verified: 2026-07-20
+
+Owner API:
+- POST /api/governance/measurement-units
+- PUT /api/governance/measurement-units/{id}
+- POST /api/governance/measurement-units/{id}/deactivate
+- GET /api/governance/measurement-units/{id}/versions
+- GET /api/governance/measurement-units/{id}/references
+
+Contract:
+- Stable UUID and code; quantity kind, symbol, base-unit reference, conversion factor and precision remain owner facts.
+- Every mutation writes the next immutable revision and requires a strong If-Match token.
+- Referenced units are not hard-deleted; deactivation preserves history and exposes downstream drift/repair evidence.
+- Mutations require the governance maintainer authority; reads retain the existing authenticated governance boundary.
+
+Verification:
+- MeasurementUnitApplicationServiceTest: PASS
+- GovernanceMeasurementUnitResourceTest: PASS
+- MeasurementUnitOwnerLiquibaseTest: passed in the earlier F6 focused batch
+- Chrome 95 owner desktop/narrow scenarios: PASS (mock API)

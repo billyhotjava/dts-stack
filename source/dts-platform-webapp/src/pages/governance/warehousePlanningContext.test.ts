@@ -82,7 +82,7 @@ describe("warehouse planning context", () => {
 		expect(context?.outputLayers).toEqual(["DWD", "DWS", "ADS"]);
 	});
 
-	it("builds a journey route with all planning parameters", () => {
+	it("builds a journey route with canonical planning parameters only", () => {
 		const context = createWarehousePlanningContext({
 			...baseInput,
 			sourceId: "source-1",
@@ -92,12 +92,20 @@ describe("warehouse planning context", () => {
 		const params = new URL(route, "http://dts.local").searchParams;
 
 		expect(params.get("journey")).toBe("e2e-data-product");
-		expect(params.get("planningId")).toBe("plan-1");
+		expect(params.get("planId")).toBe("plan-1");
 		expect(params.get("domainId")).toBe("domain-1");
-		expect(params.get("warehouseLayer")).toBe("DWD");
-		expect(params.get("modelingMode")).toBe("dimension");
-		expect(params.get("sourceId")).toBe("source-1");
-		expect(params.get("processId")).toBe("node-plan-loop");
+		for (const retired of [
+			"planningId",
+			"warehouseLayer",
+			"modelingMode",
+			"sourceId",
+			"processId",
+			"layerSchemeId",
+			"layerSchemeVersion",
+			"standardDraftId",
+		]) {
+			expect(params.has(retired)).toBe(false);
+		}
 	});
 
 	it("blocks a URL route when its planning draft is no longer in session storage", () => {

@@ -106,7 +106,6 @@ class MetricPackResourceTest {
             tenant_namespace: demo
             files:
               domains: domains.yml
-              business_objects: business-objects.yml
               dimensions: dimensions.yml
               metrics: metrics.yml
               models: models.yml

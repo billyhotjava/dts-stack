@@ -67,6 +67,9 @@ public class MetadataStandard extends AbstractAuditingEntity<UUID> implements Se
     @Column(name = "security_level", length = 32, nullable = false)
     private DataSecurityLevel securityLevel = DataSecurityLevel.INTERNAL;
 
+    @Column(name = "version", nullable = false)
+    private Integer version = 1;
+
     @Override
     public UUID getId() {
         return id;
@@ -186,5 +189,13 @@ public class MetadataStandard extends AbstractAuditingEntity<UUID> implements Se
 
     public void setSecurityLevel(DataSecurityLevel securityLevel) {
         this.securityLevel = securityLevel;
+    }
+
+    public Integer getVersion() {
+        return version;
+    }
+
+    public void setVersion(Integer version) {
+        this.version = version;
     }
 }

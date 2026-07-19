@@ -1,0 +1,17 @@
+Sprint-67 F2-T02 category and policy frontend evidence
+Verified: 2026-07-19 Asia/Shanghai
+Result: PASS
+
+- Focused TypeScript/source-contract batch: 88/88 PASS.
+- Biome check for the new F2 API/source-contract/E2E files: PASS.
+- Chrome95 legacy production build: PASS (10602 modules transformed, built in 2m 8s).
+- Real Chrome95 E2E: 1/1 PASS.
+
+The plan detail exposes one category save action and one policy save action.
+Successful writes refresh server baseline and StageProjection. Conflict handling uses
+the response currentVersion and retains the form draft. The page does not collect
+business object or mandatory process input.
+
+Screenshots:
+- chrome95/f2-real-category-policy-chromium95.png
+- chrome95/f2-real-category-policy-chromium95-narrow.png

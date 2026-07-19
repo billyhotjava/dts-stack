@@ -9,9 +9,8 @@ const indexUrl = new URL("./index.ts", import.meta.url);
 
 const pageSources = [
 	["integration", new URL("../../pages/foundation/DataSourcesPage.tsx", import.meta.url)],
-	["standards", new URL("../../pages/foundation/StandardPackagePage.tsx", import.meta.url)],
 	["standards", new URL("../../pages/governance/ElementsPage.tsx", import.meta.url)],
-	["modeling", new URL("../../pages/modeling/LowCodeDevelopmentPage.tsx", import.meta.url)],
+	["modeling", new URL("../../pages/modeling/ModelCenterPage.tsx", import.meta.url)],
 	["development", new URL("../../pages/modeling/SqlModelingPage.tsx", import.meta.url)],
 	["metrics", new URL("../../pages/modeling/MetricWorkbenchPage.tsx", import.meta.url)],
 	["service", new URL("../../pages/services/ApiServicesPage.tsx", import.meta.url)],
@@ -32,7 +31,7 @@ test("journey context model keeps stage, return, next, evidence and context para
 	assert.match(source, /DataProductJourneyContext/);
 	assert.match(source, /buildJourneyUrl/);
 	assert.match(source, /parseDataProductJourneyContext/);
-	for (const key of ["sourceId", "standardDraftId", "modelId", "metricId", "serviceId", "runId", "auditId"]) {
+	for (const key of ["sourceId", "standardDraftId", "modelSpecId", "metricId", "serviceId", "runId", "auditId"]) {
 		assert.match(source, new RegExp(key));
 	}
 	for (const stage of ["integration", "planning", "standards", "modeling", "metrics", "development", "service", "evidence"]) {
@@ -41,8 +40,8 @@ test("journey context model keeps stage, return, next, evidence and context para
 	for (const route of [
 		"/workbench",
 		"/foundation/data-sources",
-		"/foundation/standard-package",
-		"/studio/low-code-development",
+		"/governance/standards/elements",
+		"/modeling/models",
 		"/studio/sql-modeling",
 		"/modeling/metric-workbench",
 		"/services/apis",

@@ -21,6 +21,7 @@ public class MetadataStandardDto {
     private String defaultValue;
     private Boolean isPk;
     private DataSecurityLevel securityLevel;
+    private Integer version;
     private Instant createdDate;
     private Instant lastModifiedDate;
 
@@ -142,6 +143,14 @@ public class MetadataStandardDto {
 
     public void setSecurityLevel(DataSecurityLevel securityLevel) {
         this.securityLevel = securityLevel;
+    }
+
+    public Integer getVersion() {
+        return version;
+    }
+
+    public void setVersion(Integer version) {
+        this.version = version;
     }
 
     public Instant getCreatedDate() {

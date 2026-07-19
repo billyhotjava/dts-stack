@@ -475,6 +475,8 @@ public class StandardPackageApplyService {
                 element.setIsPk(asBoolean(before.get("isPk")));
                 String securityLevel = asString(before.get("securityLevel"));
                 element.setSecurityLevel(StringUtils.hasText(securityLevel) ? DataSecurityLevel.valueOf(securityLevel) : null);
+                Integer beforeVersion = asInteger(before.get("version"));
+                element.setVersion(beforeVersion != null ? beforeVersion : element.getVersion());
                 metadataStandardRepository.save(element);
             }
             case TYPE_CODE_DIRECTORY -> {

@@ -1,0 +1,11 @@
+Sprint-67 F4 GitNexus change-scope audit — 2026-07-19
+
+scope: all uncommitted Sprint-67 changes (shared F2/F3/F4 worktree)
+risk: medium
+changed symbols: 259
+changed files recognized by index: 85
+affected execution flows: 2
+- SqlModelingPage -> NormalizeText
+- SqlModelingPage -> Get_key
+
+No HIGH or CRITICAL result was reported. The two affected flows originate at the expected SqlModelingPage navigation/context edits. AGENTS.md and CLAUDE.md are pre-existing user changes and were not modified by this implementation.

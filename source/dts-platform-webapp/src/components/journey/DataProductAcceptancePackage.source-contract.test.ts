@@ -10,7 +10,7 @@ const dynamicResolver = readFileSync(new URL("../../routes/sections/dashboard/dy
 
 const routes = [
 	"/foundation/data-sources",
-	"/foundation/standard-package",
+	"/governance/standards/elements",
 	"/studio/sql-modeling",
 	"/modeling/metric-workbench",
 	"/services/apis",
@@ -41,7 +41,7 @@ test("acceptance package model defines nine evidence groups and export builders"
 	for (const status of ["ready", "missing", "blocked"]) {
 		assert.match(source, new RegExp(status));
 	}
-	for (const param of ["sourceId", "standardDraftId", "modelId", "metricId", "serviceId", "runId", "auditId"]) {
+	for (const param of ["sourceId", "standardDraftId", "modelSpecId", "metricId", "serviceId", "runId", "auditId"]) {
 		assert.match(source, new RegExp(param));
 	}
 });

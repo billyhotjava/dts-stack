@@ -1,0 +1,20 @@
+Sprint-67 F2-T03 Phase-B model candidate evidence
+Verified: 2026-07-19 Asia/Shanghai
+Result: PASS
+
+Endpoints:
+- GET /api/modeling/warehouse-plans/{planId}/model-candidates/preview
+- POST /api/modeling/warehouse-plans/{planId}/model-candidates/confirm
+
+Properties verified:
+- preview candidate IDs are deterministic and source-version bound;
+- preview has no persistence side effect and no second candidate ledger exists;
+- confirm revalidates the current source inventory;
+- changed sources return MODEL_CANDIDATE_STALE;
+- client-supplied sourceRefs are rejected;
+- server reconstructs the canonical sourceRef and calls only ModelSpecApplicationService.create;
+- planId and maintainer authorization remain server-scoped.
+
+Tests:
+- WarehousePlanModelCandidateServiceTest: 3/3 PASS.
+- warehousePlanCandidate.source-contract.test.ts: PASS in the 88/88 F2 frontend batch.

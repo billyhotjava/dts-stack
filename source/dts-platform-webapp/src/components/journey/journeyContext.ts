@@ -13,13 +13,11 @@ export type DataProductJourneyStageKey =
 export const JOURNEY_CONTEXT_PARAM_KEYS = [
 	"sourceId",
 	"planId",
-	"planningId", // @deprecated canonical modeling routes must write planId instead.
 	"domainId",
-	"processId", // @deprecated compatibility passthrough; not a journey completion source.
-	"warehouseLayer", // @deprecated compatibility passthrough; not a journey completion source.
-	"modelingMode", // @deprecated compatibility passthrough; not a journey completion source.
 	"standardDraftId",
-	"modelId",
+	"modelSpecId",
+	"revision",
+	"modelType",
 	"metricId",
 	"serviceId",
 	"runId",
@@ -61,20 +59,20 @@ const STAGE_CONFIG: Record<DataProductJourneyStageKey, JourneyStageConfig> = {
 		label: "数仓规划",
 		nextLabel: "继续到数据标准",
 		currentRoute: "/governance/subjects",
-		nextRoute: "/foundation/standard-package",
+		nextRoute: "/governance/standards/elements",
 		evidenceRoute: "/catalog/metadata-management",
 	},
 	standards: {
 		label: "数据标准",
 		nextLabel: "继续到维度建模",
-		currentRoute: "/foundation/standard-package",
-		nextRoute: "/studio/low-code-development",
-		evidenceRoute: "/governance/standards/elements",
+		currentRoute: "/governance/standards/elements",
+		nextRoute: "/modeling/models?view=guided",
+		evidenceRoute: "/governance/standards/reference",
 	},
 	modeling: {
 		label: "维度建模",
 		nextLabel: "继续到指标设计",
-		currentRoute: "/studio/low-code-development",
+		currentRoute: "/modeling/models",
 		nextRoute: "/modeling/metric-workbench",
 		evidenceRoute: "/studio/sql-modeling",
 	},
@@ -83,7 +81,7 @@ const STAGE_CONFIG: Record<DataProductJourneyStageKey, JourneyStageConfig> = {
 		nextLabel: "继续到数据开发",
 		currentRoute: "/modeling/metric-workbench",
 		nextRoute: "/studio/sql-modeling",
-		evidenceRoute: "/modeling/semantic/metrics",
+		evidenceRoute: "/modeling/models?view=release",
 	},
 	development: {
 		label: "数据开发",
@@ -111,13 +109,11 @@ const STAGE_CONFIG: Record<DataProductJourneyStageKey, JourneyStageConfig> = {
 export const JOURNEY_CONTEXT_PARAM_LABELS: Record<JourneyContextParamKey, string> = {
 	sourceId: "数据源",
 	planId: "建设计划",
-	planningId: "规划",
 	domainId: "主题域",
-	processId: "业务过程",
-	warehouseLayer: "数仓层",
-	modelingMode: "建模模式",
 	standardDraftId: "标准草稿",
-	modelId: "模型",
+	modelSpecId: "模型",
+	revision: "模型版本",
+	modelType: "模型类型",
 	metricId: "指标",
 	serviceId: "服务",
 	runId: "运行",
@@ -144,7 +140,10 @@ export const buildJourneyUrl = (
 	const currentParams = toSearchParams(current);
 	params.set("journey", E2E_DATA_PRODUCT_JOURNEY);
 	for (const key of JOURNEY_CONTEXT_PARAM_KEYS) {
-		const value = currentParams.get(key);
+		const value =
+			currentParams.get(key) ||
+			(key === "planId" ? currentParams.get("planningId") : null) ||
+			(key === "modelSpecId" ? currentParams.get("modelId") : null);
 		if (value && !params.has(key)) params.set(key, value);
 	}
 	return `${path}?${params.toString()}`;
@@ -161,12 +160,16 @@ export const resolveJourneyBarMode = (enabled: boolean, dismissed: boolean): Jou
 export const journeyJoinDismissStorageKey = (stage: DataProductJourneyStageKey) =>
 	`dts.journey.join-dismissed.${stage}`;
 
-export const extractJourneyContextParams = (searchParams: URLSearchParams): DataProductJourneyContextParams =>
-	JOURNEY_CONTEXT_PARAM_KEYS.reduce<DataProductJourneyContextParams>((acc, key) => {
+export const extractJourneyContextParams = (searchParams: URLSearchParams): DataProductJourneyContextParams => {
+	const params = JOURNEY_CONTEXT_PARAM_KEYS.reduce<DataProductJourneyContextParams>((acc, key) => {
 		const value = searchParams.get(key);
 		if (value) acc[key] = value;
 		return acc;
 	}, {});
+	params.planId ||= searchParams.get("planningId") || undefined;
+	params.modelSpecId ||= searchParams.get("modelId") || undefined;
+	return params;
+};
 
 // 生成"清除某个上下文参数后仍留在旅程内"的 URL，用于无效对象的恢复动作。
 export const buildJourneyParamClearUrl = (

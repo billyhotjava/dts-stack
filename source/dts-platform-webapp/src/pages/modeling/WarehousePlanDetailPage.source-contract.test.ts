@@ -166,7 +166,6 @@ test("specialist capabilities remain deep links instead of copied forms", () => 
 		"/catalog/metadata-management",
 		"/modeling/models",
 		"/studio/sql-modeling",
-		"/modeling/dbt-files",
 		"/catalog/assets",
 		"/modeling/metric-workbench",
 		"/ops/instances",

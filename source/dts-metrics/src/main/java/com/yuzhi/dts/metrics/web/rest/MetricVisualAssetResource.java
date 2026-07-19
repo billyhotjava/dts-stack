@@ -120,7 +120,7 @@ public class MetricVisualAssetResource {
             firstText(item.get("displayName"), item.get("table"), item.get("fqn"), id),
             firstText(item.get("warehouseLayer"), layer),
             text(item.get("domainId")),
-            firstText(item.get("table"), item.get("displayName"), id),
+            firstText(item.get("modelRef"), item.get("modelSpecId"), id),
             List.of(),
             List.of(),
             List.of(),

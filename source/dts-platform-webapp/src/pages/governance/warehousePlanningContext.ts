@@ -195,27 +195,20 @@ export const loadWarehousePlanningContext = (
 };
 
 const planningRouteParams = (context: WarehousePlanningContext): Record<string, string> => ({
-	planningId: context.planningId,
+	planId: context.planningId,
 	domainId: context.domainId,
-	...(context.processId ? { processId: context.processId } : {}),
-	warehouseLayer: context.warehouseLayer,
-	layerSchemeId: context.layerSchemeId,
-	layerSchemeVersion: String(context.layerSchemeVersion),
-	modelingMode: context.modelingMode,
-	...(context.sourceId ? { sourceId: context.sourceId } : {}),
-	...(context.standardDraftId ? { standardDraftId: context.standardDraftId } : {}),
 });
 
 export const buildPlanningRoute = (route: string, context: WarehousePlanningContext): string =>
 	buildJourneyUrl(route, planningRouteParams(context));
 
 const routePlanningParams = (searchParams: URLSearchParams) => ({
-	planningId: searchParams.get("planningId") || "",
-		domainId: searchParams.get("domainId") || "",
-		processId: searchParams.get("processId") || undefined,
-		warehouseLayer: searchParams.get("warehouseLayer") || "",
-		layerSchemeId: searchParams.get("layerSchemeId") || undefined,
-		layerSchemeVersion: searchParams.get("layerSchemeVersion") || undefined,
+	planningId: searchParams.get("planId") || searchParams.get("planningId") || "",
+	domainId: searchParams.get("domainId") || "",
+	processId: searchParams.get("processId") || undefined,
+	warehouseLayer: searchParams.get("warehouseLayer") || "",
+	layerSchemeId: searchParams.get("layerSchemeId") || undefined,
+	layerSchemeVersion: searchParams.get("layerSchemeVersion") || undefined,
 	modelingMode: searchParams.get("modelingMode") || "",
 	sourceId: searchParams.get("sourceId") || undefined,
 	standardDraftId: searchParams.get("standardDraftId") || undefined,
@@ -263,7 +256,7 @@ export const resolveWarehousePlanningContext = (
 	storage: WarehousePlanningStorage | undefined = resolveDefaultStorage(),
 ): WarehousePlanningResolution => {
 	const sessionContext = loadWarehousePlanningContext(storage);
-	const routePlanningId = searchParams.get("planningId");
+	const routePlanningId = searchParams.get("planId") || searchParams.get("planningId");
 	if (sessionContext) {
 		if (!routeMatchesContext(searchParams, sessionContext)) {
 			return {

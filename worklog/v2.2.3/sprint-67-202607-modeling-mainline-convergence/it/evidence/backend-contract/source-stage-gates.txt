@@ -39,6 +39,15 @@ Verified Phase-A behavior:
 - BUSINESS_FIRST without sources is NOT_REQUIRED_YET and proceeds only when conceptual design is explicitly allowed;
 - plan switching invalidates pending source mutations, and 409 keeps the local draft for an explicit retry.
 
-Evidence boundary:
-- model-candidate preview/confirm and four-model-type implementation/release source gates are Phase B and are not claimed here;
-- the static frontend contracts plus tsc/build do not replace the later Chrome 95 acceptance journey.
+Phase-B closure (2026-07-19):
+- deterministic preview reads only CONFIRMED + CURRENT + AVAILABLE owner sources;
+- candidateId covers inference version, tenant, plan, sourcesVersion, binding identity, source type/id and resolved version;
+- preview performs no ModelSpec write and creates no candidate table;
+- confirm re-previews and returns MODEL_CANDIDATE_STALE after source drift;
+- confirm rejects client sourceRefs, reconstructs the sourceRef on the server and calls canonical ModelSpec create;
+- F3 DRAFT_SAVE / IMPLEMENTATION_READY / RELEASE_READY gates cover all four model types, including DIMENSION conceptual-design deferral without implementation/release bypass.
+
+Focused result:
+- WarehousePlanModelCandidateServiceTest: 3/3 PASS.
+- ModelSpecStageGateServiceTest: 5/5 PASS.
+- warehousePlanCandidate.source-contract.test.ts included in the 88/88 frontend F2 batch.

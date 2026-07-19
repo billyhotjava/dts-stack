@@ -81,7 +81,7 @@ class ModelingVNextApplicationServiceIT {
         );
         ModelingVNextContract.ModelSpec model = new ModelingVNextContract.ModelSpec(
             modelKey, objectKey, object.processId(), ModelingVNextContract.Layer.DWD,
-            ModelingVNextContract.ModelType.FACT, ModelingVNextContract.ImplementationMode.DESIGNER_GENERATED,
+            ModelingVNextContract.ModelType.FACT, ModelingVNextContract.ImplementationMode.DBT_MANAGED,
             "project_node_detail_" + seed.toString().substring(0, 8), object.grain(),
             List.of(new ModelingVNextContract.StandardBinding("project_no", "std.project.code", null, null)),
             object.sourceRefs(), List.of(), List.of("node_count"), "table", 1
@@ -126,10 +126,32 @@ class ModelingVNextApplicationServiceIT {
             Map<String, Object> manifest = Map.of("nodes", Map.of("model.legacy.project_node", node));
             DbtModelingContract.ImportResult imported = service.importDbt(
                 tenant,
-                new DbtModelingContract.ManifestImportRequest("legacy-pjm", "1.7", "model.legacy.project_node", manifest, null, "import-" + modelKey)
+                new DbtModelingContract.ManifestImportRequest(
+                    "legacy-pjm",
+                    "1.7",
+                    "model.legacy.project_node",
+                    manifest,
+                    null,
+                    "import-" + modelKey,
+                    savedModel.id(),
+                    savedModel.revision(),
+                    jdbcTemplate.queryForObject(
+                        "select content_checksum from modeling_model_spec_revision where model_spec_id = ? and revision = ?",
+                        String.class,
+                        UUID.fromString(savedModel.id()),
+                        savedModel.revision()
+                    )
+                )
             );
-            assertThat(imported.status()).isEqualTo("LEGACY_READONLY");
+            assertThat(imported.modelSpecId()).isEqualTo(savedModel.id());
+            assertThat(imported.status()).isEqualTo("COMPILED");
             assertThat(service.artifacts(tenant, savedModel.id())).isNotEmpty();
+
+            jdbcTemplate.update(
+                "update modeling_model_spec set status = 'PUBLISHED' where tenant_id = ? and id = ?",
+                tenant,
+                UUID.fromString(savedModel.id())
+            );
 
             ModelingRunRequestContract.RunRequest runRequest = new ModelingRunRequestContract.RunRequest(
                 savedModel.id(), 1, "run-" + modelKey,
@@ -137,6 +159,9 @@ class ModelingVNextApplicationServiceIT {
             );
             ModelingVNextApplicationService.RunView run = service.createRun(tenant, runRequest);
             assertThat(run.state()).isEqualTo(ModelingRunStateMachine.RunState.QUEUED.name());
+            assertThat(run.revision()).isEqualTo(savedModel.revision());
+            assertThat(run.modelChecksum()).isNotBlank();
+            assertThat(run.repairPath()).contains(savedModel.id());
             assertThat(service.getRun(tenant, run.id()).dbtSelector()).isEqualTo("model.project_node_detail");
             ModelingVNextApplicationService.RunView running = service.callbackRun(
                 tenant,

@@ -52,7 +52,6 @@ class MetricArtifactGenerationServiceTest {
                   multiply: 100
             files:
               domains: domains.yml
-              business_objects: business-objects.yml
               dimensions: dimensions.yml
               metrics: metrics.yml
               models: models.yml
@@ -168,7 +167,6 @@ class MetricArtifactGenerationServiceTest {
                   field: contract_amount
             files:
               domains: domains.yml
-              business_objects: business-objects.yml
               dimensions: dimensions.yml
               metrics: metrics.yml
               models: models.yml
@@ -261,7 +259,6 @@ class MetricArtifactGenerationServiceTest {
                   field: contract_amount
             files:
               domains: domains.yml
-              business_objects: business-objects.yml
               dimensions: dimensions.yml
               metrics: metrics.yml
               models: models.yml
@@ -321,7 +318,6 @@ class MetricArtifactGenerationServiceTest {
                   field: contract_amount
             files:
               domains: domains.yml
-              business_objects: business-objects.yml
               dimensions: dimensions.yml
               metrics: metrics.yml
               models: models.yml
@@ -363,7 +359,6 @@ class MetricArtifactGenerationServiceTest {
                   field: contract_amount
             files:
               domains: domains.yml
-              business_objects: business-objects.yml
               dimensions: dimensions.yml
               metrics: metrics.yml
               models: models.yml
@@ -408,7 +403,6 @@ class MetricArtifactGenerationServiceTest {
                   field: contract_amount
             files:
               domains: domains.yml
-              business_objects: business-objects.yml
               dimensions: dimensions.yml
               metrics: metrics.yml
               models: models.yml
@@ -498,7 +492,6 @@ class MetricArtifactGenerationServiceTest {
                   field: contract_amount
             files:
               domains: domains.yml
-              business_objects: business-objects.yml
               dimensions: dimensions.yml
               metrics: metrics.yml
               models: models.yml
@@ -568,7 +561,6 @@ class MetricArtifactGenerationServiceTest {
                   field: contract_amount
             files:
               domains: domains.yml
-              business_objects: business-objects.yml
               dimensions: dimensions.yml
               metrics: metrics.yml
               models: models.yml
@@ -629,7 +621,6 @@ class MetricArtifactGenerationServiceTest {
                   field: contract_amount
             files:
               domains: domains.yml
-              business_objects: business-objects.yml
               dimensions: dimensions.yml
               metrics: metrics.yml
               models: models.yml
@@ -904,7 +895,6 @@ class MetricArtifactGenerationServiceTest {
                   field: contract_amount
             files:
               domains: domains.yml
-              business_objects: business-objects.yml
               dimensions: dimensions.yml
               metrics: metrics.yml
               models: models.yml

@@ -1,5 +1,10 @@
 import api from "@/api/apiClient";
 import { withModelingRequestTimeout } from "@/api/modelingRequestTimeout";
+import type {
+	CanonicalModelSpecView,
+	CreateModelSpecCommand,
+	ModelSpecType,
+} from "@/pages/modeling/modelSpecV2Contract";
 
 const WAREHOUSE_PLAN_RESOURCE = "/modeling/warehouse-plans";
 
@@ -202,6 +207,23 @@ export type WarehousePlanStageProjection = {
 	computedAt: string;
 };
 
+export type WarehousePlanModelCandidate = {
+	candidateId: string;
+	sourceBindingId: string;
+	sourceType: WarehousePlanSourceType;
+	sourceId: string;
+	resolvedVersion: string;
+	suggestedModelType: ModelSpecType;
+	suggestedName: string;
+};
+
+export type WarehousePlanModelCandidatePreview = {
+	planId: string;
+	sourcesVersion: number;
+	inferenceVersion: string;
+	candidates: WarehousePlanModelCandidate[];
+};
+
 export const listWarehousePlans = (lifecycleStatus?: WarehousePlanLifecycleStatus) =>
 	api.get<WarehousePlanHeader[]>(
 		withModelingRequestTimeout({
@@ -285,3 +307,18 @@ export const getWarehousePlanStageProjection = (planId: string) =>
 	api.get<WarehousePlanStageProjection>(
 		withModelingRequestTimeout({ url: `${WAREHOUSE_PLAN_RESOURCE}/${planId}/stage-projection` }),
 	);
+
+export const previewWarehousePlanModelCandidates = (planId: string) =>
+	api.get<WarehousePlanModelCandidatePreview>(
+		withModelingRequestTimeout({ url: `${WAREHOUSE_PLAN_RESOURCE}/${planId}/model-candidates/preview` }),
+	);
+
+export const confirmWarehousePlanModelCandidate = (
+	planId: string,
+	candidateId: string,
+	modelSpec: CreateModelSpecCommand,
+) =>
+	api.post<CanonicalModelSpecView>({
+		url: `${WAREHOUSE_PLAN_RESOURCE}/${planId}/model-candidates/confirm`,
+		data: { candidateId, modelSpec },
+	});

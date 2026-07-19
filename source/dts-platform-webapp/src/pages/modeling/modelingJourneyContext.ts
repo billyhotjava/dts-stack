@@ -63,10 +63,10 @@ const methodFrom = (value?: string | null, modelingMode?: string): ModelingMetho
 
 export const modelingStagePath = (stage: ModelingStage): string =>
 	({
-		SCOPE: "/governance/subjects?tab=scope",
-		LOGICAL: "/modeling/semantic/objects",
-		IMPLEMENTATION: "/modeling/semantic/models",
-		RELEASE: "/modeling/semantic/publish",
+		SCOPE: "/governance/subjects",
+		LOGICAL: "/modeling/dimensions",
+		IMPLEMENTATION: "/studio/sql-modeling",
+		RELEASE: "/modeling/models?view=release",
 	})[stage];
 
 export const resolveModelingJourneyContext = (searchParams: URLSearchParams): ModelingJourneyContext => {
@@ -92,14 +92,8 @@ export const resolveModelingJourneyContext = (searchParams: URLSearchParams): Mo
 };
 
 export const buildModelingJourneyRoute = (route: string, context: Partial<ModelingJourneyContext>): string => {
-	const legacyRoute = buildBusinessModelingRoute(route, context);
-	const [path, query = ""] = legacyRoute.split("?");
-	const params = new URLSearchParams(query);
-	if (context.domainId) params.set("domainId", context.domainId);
-	if (context.scopeId) params.set("scopeId", context.scopeId);
-	if (context.scopeKind) params.set("scopeKind", context.scopeKind.toLowerCase());
-	if (context.modelId) params.set("modelId", context.modelId);
-	if (context.method) params.set("method", context.method.toLowerCase());
-	if (context.stage) params.set("stage", context.stage.toLowerCase());
-	return params.toString() ? `${path}?${params.toString()}` : path;
+	return buildBusinessModelingRoute(route, {
+		...context,
+		modelSpecId: context.modelSpecId || context.modelId,
+	});
 };

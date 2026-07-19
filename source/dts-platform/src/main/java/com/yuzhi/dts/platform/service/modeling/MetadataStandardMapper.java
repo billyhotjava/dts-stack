@@ -24,6 +24,7 @@ final class MetadataStandardMapper {
         dto.setDefaultValue(entity.getDefaultValue());
         dto.setIsPk(entity.getIsPk());
         dto.setSecurityLevel(entity.getSecurityLevel());
+        dto.setVersion(entity.getVersion());
         dto.setCreatedDate(entity.getCreatedDate());
         dto.setLastModifiedDate(entity.getLastModifiedDate());
         return dto;

@@ -6,6 +6,9 @@ const helperUrl = new URL("./modelSpecDetailNavigation.ts", import.meta.url);
 const pageUrl = new URL("./ModelSpecDetailPage.tsx", import.meta.url);
 const fieldsUrl = new URL("./components/ModelSpecFieldsTab.tsx", import.meta.url);
 const standardsUrl = new URL("./components/ModelSpecStandardsTab.tsx", import.meta.url);
+const dependenciesUrl = new URL("./components/ModelSpecDependencyPanel.tsx", import.meta.url);
+const platformApiUrl = new URL("../../api/platformApi.ts", import.meta.url);
+const modelSpecApiUrl = new URL("../../api/modelSpecApi.ts", import.meta.url);
 const read = (url: URL) => readFileSync(url, "utf8");
 
 test("model detail accepts only the three canonical tabs and builds encoded routes", async () => {
@@ -37,13 +40,18 @@ test("model detail accepts only the three canonical tabs and builds encoded rout
 test("model detail separates design fields and standards without trusting query plan context", () => {
 	assert.equal(existsSync(fieldsUrl), true, "model fields tab is missing");
 	assert.equal(existsSync(standardsUrl), true, "model standards tab is missing");
+	assert.equal(existsSync(dependenciesUrl), true, "model dependency panel is missing");
 	const page = read(pageUrl);
 	const fields = read(fieldsUrl);
 	const standards = read(standardsUrl);
+	const dependencies = read(dependenciesUrl);
+	const platformApi = read(platformApiUrl);
+	const modelSpecApi = read(modelSpecApiUrl);
 
 	assert.match(page, /<Tabs/);
 	assert.match(page, /ModelSpecFieldsTab/);
 	assert.match(page, /ModelSpecStandardsTab/);
+	assert.match(page, /ModelSpecDependencyPanel/);
 	assert.equal(
 		page.match(/forceRender:\s*true/g)?.length,
 		2,
@@ -59,6 +67,14 @@ test("model detail separates design fields and standards without trusting query 
 	assert.match(fields, /Form\.List[\s\S]*name="fields"/);
 	assert.match(standards, /standardBindings/);
 	assert.match(standards, /前往数据元/);
-	assert.doesNotMatch(standards, />关联字段标准</);
+	assert.match(standards, /配置字段标准/);
+	assert.match(standards, /listMeasurementUnits/);
+	assert.match(page, /onSaveStandardBindings/);
+	assert.match(page, /canEdit=\{canEdit\}/);
+	assert.match(platformApi, /\/governance\/measurement-units/);
+	assert.match(modelSpecApi, /\/dependencies/);
+	assert.match(dependencies, /当前版本/);
+	assert.match(dependencies, /版本漂移/);
+	assert.match(dependencies, /引用不可用/);
 	assert.doesNotMatch(standards, /(standardElementVersion|referenceCodeVersion|measurementUnitVersion)\s*:\s*1/);
 });

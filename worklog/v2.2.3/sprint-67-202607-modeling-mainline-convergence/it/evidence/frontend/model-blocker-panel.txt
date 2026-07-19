@@ -1,0 +1,20 @@
+Sprint-67 F3-T05 服务端 blocker panel 前端证据
+时间：2026-07-19 +08:00
+结果：PASS
+
+验证：
+- 面板只调用 `GET /api/modeling/model-specs/{id}/stage-gates`，不在前端重算 READY/BLOCKED；
+- 展示草稿可保存、可进入实现、可发布三阶段及 revision；
+- blocker 使用服务端 message 和 repairRoute；
+- 草稿 CAS 更新成功后重新加载 gate，真实 E2E 已观察 r1→r2；
+- gate API 临时失败只降级为可重试提示，不丢失草稿编辑状态。
+
+结果：
+- TypeScript 契约/workbench：33/33 PASS；
+- production Chrome95 legacy build：PASS；
+- mock Chrome95 受影响布局回归：3/3 PASS；
+- live auth/backend/PostgreSQL Chrome95：1/1 PASS，零非预期 HTTP、pageerror、requestfailed。
+
+2026-07-20 复核补证：
+- 标准编辑弹窗在 Chrome95 production bundle 可打开；保存契约由 source-contract 覆盖强 ETag CAS 与 gate reload；
+- 当前运行容器尚未包含本次新增 owner 校验与依赖图接口，部署后的真实浏览器联动归入 F6，本文不以 mock 替代该门禁。

@@ -1,7 +1,7 @@
 # F2：规划输入与分阶段门禁
 
 **优先级**：P0
-**状态**：IN_PROGRESS
+**状态**：DONE
 **依赖**：F1
 **目标**：把 WarehousePlan 从“缺口提示壳”变成可编辑规划基线，按阶段验证业务分类、分层、来源和模型条件，不再用业务对象或业务过程作为全局门禁。
 
@@ -10,14 +10,21 @@
 | Task | 优先级 | 状态 | 依赖 | 输出 |
 |---|---|---|---|---|
 | [T01-明确双起点计划创建输入](T01-明确双起点计划创建输入.md) | P0 | DONE | F1-T03 | WarehousePlan 创建/恢复契约 |
-| [T02-实现业务分类与分层基线](T02-实现业务分类与分层基线.md) | P0 | IN_PROGRESS | T01 | category/policy 可编辑基线 |
-| [T03-实现来源盘点与分阶段门禁](T03-实现来源盘点与分阶段门禁.md) | P0 | IN_PROGRESS | T02 | source inventory 与模型类型门禁 |
-| [T04-重算阶段投影与唯一下一步](T04-重算阶段投影与唯一下一步.md) | P0 | IN_PROGRESS | T02/T03 | StageProjection 和 nextAction |
+| [T02-实现业务分类与分层基线](T02-实现业务分类与分层基线.md) | P0 | DONE | T01 | category/policy 可编辑基线 |
+| [T03-实现来源盘点与分阶段门禁](T03-实现来源盘点与分阶段门禁.md) | P0 | DONE | T02 | source inventory 与模型类型门禁 |
+| [T04-重算阶段投影与唯一下一步](T04-重算阶段投影与唯一下一步.md) | P0 | DONE | T02/T03 | StageProjection 和 nextAction |
 
 ## 完成标准
 
-- [ ] 计划详情可以真实保存业务分类、分层策略和来源，不只是跳专业页面。
-- [ ] 业务目标和资产起点共用同一 DTO、表和详情页。
-- [ ] 进入模型设计不需要 objectId/processId。
-- [ ] 各阶段缺口有稳定 blockerCode、字段和修复路由。
-- [ ] 工作台与计划详情只显示一个由后台证据计算的下一步。
+- [x] 计划详情可以真实保存业务分类、分层策略和来源，不只是跳专业页面。
+- [x] 业务目标和资产起点共用同一 DTO、表和详情页。
+- [x] 进入模型设计不需要 objectId/processId。
+- [x] 各阶段缺口有稳定 blockerCode、字段和修复路由。
+- [x] 工作台与计划详情只显示一个由后台证据计算的下一步。
+
+## 2026-07-19 收口证据
+
+- 后端相关单元测试 60/60、PostgreSQL 集成测试 20/20；旧基线夹具已按 canonical UUID 来源契约校正。
+- 前端相关契约测试 88/88，Biome 与 Chrome95 legacy production build 通过。
+- 真实 `Chromium 95.0.4638.0` 在 `https://bi.yuzhicloud.com` 以 `opadmin` 完成分类、策略、旧 ETag 409、九阶段投影、桌面与 390px 窄屏验收，1/1 PASS。
+- 验收计划与子记录已按固定 UUID 清理，数据库残留计数为 0。

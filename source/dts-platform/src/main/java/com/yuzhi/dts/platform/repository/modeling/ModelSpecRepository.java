@@ -184,13 +184,13 @@ public class ModelSpecRepository {
                 materialization, status, revision, version, created_date, last_modified_date,
                 contract_version, domain_id, business_activity_ref, description, consumption_scenario,
                 fact_shape, grain_json, time_semantics, fields, source_refs, depends_on, dimension_refs,
-                metric_refs, standard_bindings, generation_strategy, current_checksum, idempotency_key,
+                metric_refs, standard_bindings, generation_strategy, dimension_profile, current_checksum, idempotency_key,
                 idempotency_request_hash, idempotency_response_snapshot
             ) values (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?,
                 2, ?, ?, ?, ?, ?, cast(? as jsonb), cast(? as jsonb), cast(? as jsonb), cast(? as jsonb),
                 cast(? as jsonb), cast(? as jsonb), cast(? as jsonb), cast(? as jsonb), cast(? as jsonb),
-                ?, ?, ?, cast(? as jsonb)
+                cast(? as jsonb), ?, ?, ?, cast(? as jsonb)
             )
             on conflict (tenant_id, idempotency_key)
             where contract_version = 2 and idempotency_key is not null
@@ -223,6 +223,7 @@ public class ModelSpecRepository {
             json(view.metricRefs()),
             json(view.standardBindings()),
             jsonOrNull(view.generationStrategy()),
+            jsonOrNull(view.dimensionProfile()),
             view.checksum(),
             command.idempotencyKey(),
             requestHash,
@@ -247,6 +248,7 @@ public class ModelSpecRepository {
                    time_semantics = cast(? as jsonb), fields = cast(? as jsonb), source_refs = cast(? as jsonb),
                    depends_on = cast(? as jsonb), dimension_refs = cast(? as jsonb), metric_refs = cast(? as jsonb),
                    standard_bindings = cast(? as jsonb), generation_strategy = cast(? as jsonb),
+                   dimension_profile = cast(? as jsonb),
                    current_checksum = ?, revision = ?, version = version + 1, last_modified_date = ?
              where tenant_id = ? and id = ? and contract_version = 2
                and revision = ? and current_checksum = ?
@@ -271,6 +273,7 @@ public class ModelSpecRepository {
             json(replacement.metricRefs()),
             json(replacement.standardBindings()),
             jsonOrNull(replacement.generationStrategy()),
+            jsonOrNull(replacement.dimensionProfile()),
             replacement.checksum(),
             replacement.revision(),
             Timestamp.from(replacement.updatedAt()),
@@ -279,6 +282,120 @@ public class ModelSpecRepository {
             expectedRevision,
             expectedChecksum
         );
+    }
+
+    public int compareAndSetPublishedMetricRefs(
+        String tenantId,
+        String actorId,
+        int expectedRevision,
+        String expectedChecksum,
+        ModelSpecView replacement,
+        String snapshot
+    ) {
+        return jdbcTemplate.update(
+            """
+            update modeling_model_spec
+               set metric_refs = cast(? as jsonb), current_checksum = ?, revision = ?, version = version + 1,
+                   last_modified_by = ?, last_modified_date = ?
+             where tenant_id = ? and id = ? and contract_version = 2
+               and revision = ? and current_checksum = ? and status = 'PUBLISHED'
+            """,
+            json(replacement.metricRefs()),
+            replacement.checksum(),
+            replacement.revision(),
+            actorId,
+            Timestamp.from(replacement.updatedAt()),
+            tenantId,
+            replacement.id(),
+            expectedRevision,
+            expectedChecksum
+        );
+    }
+
+    public int compareAndSetLifecycle(
+        String tenantId,
+        String actorId,
+        int expectedRevision,
+        String expectedChecksum,
+        ModelStatus expectedStatus,
+        ModelSpecView replacement
+    ) {
+        return jdbcTemplate.update(
+            """
+            update modeling_model_spec
+               set status = ?, revision = ?, current_checksum = ?, version = version + 1,
+                   last_modified_by = ?, last_modified_date = ?
+             where tenant_id = ? and id = ? and contract_version = 2
+               and revision = ? and current_checksum = ? and status = ?
+            """,
+            replacement.status().name(),
+            replacement.revision(),
+            replacement.checksum(),
+            actorId,
+            Timestamp.from(replacement.updatedAt()),
+            tenantId,
+            replacement.id(),
+            expectedRevision,
+            expectedChecksum,
+            expectedStatus.name()
+        );
+    }
+
+    public int updateV2RevisionLifecycle(
+        String tenantId,
+        String actorId,
+        ModelStatus expectedStatus,
+        ModelSpecView replacement,
+        String snapshot
+    ) {
+        return jdbcTemplate.update(
+            """
+            update modeling_model_spec_revision
+               set status = ?, snapshot_json = cast(? as jsonb), last_modified_date = ?, created_by = coalesce(created_by, ?)
+             where tenant_id = ? and model_spec_id = ? and contract_version = 2
+               and revision = ? and content_checksum = ? and status = ?
+            """,
+            replacement.status().name(),
+            snapshot,
+            Timestamp.from(replacement.updatedAt()),
+            actorId,
+            tenantId,
+            replacement.id(),
+            replacement.revision(),
+            replacement.checksum(),
+            expectedStatus.name()
+        );
+    }
+
+    public boolean hasCompiledArtifact(String tenantId, UUID modelSpecId, int revision, String artifactType) {
+        return hasCompiledArtifact(tenantId, modelSpecId, revision, null, artifactType);
+    }
+
+    public boolean hasCompiledArtifact(
+        String tenantId,
+        UUID modelSpecId,
+        int revision,
+        String modelChecksum,
+        String artifactType
+    ) {
+        Integer count = jdbcTemplate.queryForObject(
+            """
+            select count(*)
+              from modeling_dbt_artifact a
+              join modeling_model_spec s on s.id = a.model_spec_id
+             where s.tenant_id = ? and a.model_spec_id = ? and a.revision = ?
+               and (? is null or a.model_checksum = ?)
+               and a.artifact_type = ? and a.status = 'COMPILED'
+            """,
+            Integer.class,
+            tenantId,
+            modelSpecId,
+            revision,
+            modelChecksum,
+            modelChecksum,
+            artifactType
+        );
+        return count != null && count > 0;
     }
 
     public void insertV2Revision(String tenantId, String actorId, ModelSpecView view, String snapshot) {

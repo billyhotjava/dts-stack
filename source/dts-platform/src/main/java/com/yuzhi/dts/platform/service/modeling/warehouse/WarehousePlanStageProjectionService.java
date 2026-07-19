@@ -3,6 +3,8 @@ package com.yuzhi.dts.platform.service.modeling.warehouse;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecStandardEvidencePort;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecStandardEvidencePort.StandardEvidence;
 import com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.AccessContext;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CategoryReadiness;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CategoryScopeView;
@@ -23,6 +25,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /** Computes the only completion-state projection for the nine-stage data-building journey. */
@@ -31,13 +34,40 @@ public class WarehousePlanStageProjectionService {
 
     private final WarehousePlanApplicationService warehousePlanService;
     private final ModelSpecApplicationService modelSpecService;
+    private final WarehousePlanDownstreamEvidencePort downstreamEvidence;
+    private final ModelSpecStandardEvidencePort standardEvidence;
+
+    @Autowired
+    public WarehousePlanStageProjectionService(
+        WarehousePlanApplicationService warehousePlanService,
+        ModelSpecApplicationService modelSpecService,
+        WarehousePlanDownstreamEvidencePort downstreamEvidence,
+        ModelSpecStandardEvidencePort standardEvidence
+    ) {
+        this.warehousePlanService = warehousePlanService;
+        this.modelSpecService = modelSpecService;
+        this.downstreamEvidence = downstreamEvidence;
+        this.standardEvidence = standardEvidence;
+    }
+
+    public WarehousePlanStageProjectionService(
+        WarehousePlanApplicationService warehousePlanService,
+        ModelSpecApplicationService modelSpecService,
+        WarehousePlanDownstreamEvidencePort downstreamEvidence
+    ) {
+        this(warehousePlanService, modelSpecService, downstreamEvidence, (tenantId, modelSpec) -> StandardEvidence.CURRENT);
+    }
 
     public WarehousePlanStageProjectionService(
         WarehousePlanApplicationService warehousePlanService,
         ModelSpecApplicationService modelSpecService
     ) {
-        this.warehousePlanService = warehousePlanService;
-        this.modelSpecService = modelSpecService;
+        this(
+            warehousePlanService,
+            modelSpecService,
+            WarehousePlanDownstreamEvidencePort.unavailable(),
+            (tenantId, modelSpec) -> StandardEvidence.CURRENT
+        );
     }
 
     public StageProjection project(String tenantId, UUID planId, AccessContext accessContext) {
@@ -52,13 +82,51 @@ public class WarehousePlanStageProjectionService {
         evidence.add(sourceInventoryEvidence(sources));
         evidence.add(warehousePlanningEvidence(plan.onboardingMode(), category, policy, sources));
         evidence.add(modelDesignEvidence(planId, models));
-        evidence.add(dataStandardEvidence(planId, models));
+        evidence.add(dataStandardEvidence(tenantId, planId, models));
+        evidence.addAll(downstreamEvidence(models, tenantId, planId));
         return compute(
             planId,
             plan.onboardingMode(),
             evidence,
             Instant.now(),
             new RepairContext(standardRepairModelId(planId, models))
+        );
+    }
+
+    private List<StageEvidence> downstreamEvidence(OwnerRead<List<ModelSpecView>> models, String tenantId, UUID planId) {
+        if (!models.available() || models.value() == null) {
+            return downstreamUnknownEvidence();
+        }
+        try {
+            Map<StageCode, StageEvidence> provided = new EnumMap<>(StageCode.class);
+            List<StageEvidence> read = downstreamEvidence.read(tenantId, planId, models.value());
+            if (read != null) {
+                for (StageEvidence item : read) {
+                    if (item != null && downstreamStages().contains(item.stageCode())) provided.put(item.stageCode(), item);
+                }
+            }
+            return downstreamStages()
+                .stream()
+                .map(stage -> provided.getOrDefault(stage, unknownEvidence(stage, stage.name() + "_EVIDENCE_UNAVAILABLE")))
+                .toList();
+        } catch (RuntimeException exception) {
+            return downstreamUnknownEvidence();
+        }
+    }
+
+    private static List<StageEvidence> downstreamUnknownEvidence() {
+        return downstreamStages()
+            .stream()
+            .map(stage -> unknownEvidence(stage, stage.name() + "_EVIDENCE_UNAVAILABLE"))
+            .toList();
+    }
+
+    private static List<StageCode> downstreamStages() {
+        return List.of(
+            StageCode.BUILD_QUALITY_RELEASE,
+            StageCode.DATA_ASSET,
+            StageCode.METRIC_SYSTEM,
+            StageCode.DATA_SERVICE_OPERATIONS
         );
     }
 
@@ -299,7 +367,7 @@ public class WarehousePlanStageProjectionService {
         return completeEvidence(StageCode.MODEL_DESIGN, Math.toIntExact(validModels));
     }
 
-    private static StageEvidence dataStandardEvidence(UUID planId, OwnerRead<List<ModelSpecView>> models) {
+    private StageEvidence dataStandardEvidence(String tenantId, UUID planId, OwnerRead<List<ModelSpecView>> models) {
         if (!models.available() || models.value() == null) {
             return unknownEvidence(StageCode.DATA_STANDARD, "DATA_STANDARD_EVIDENCE_UNAVAILABLE");
         }
@@ -326,6 +394,7 @@ public class WarehousePlanStageProjectionService {
                     model
                         .standardBindings()
                         .stream()
+                        .filter(WarehousePlanStageProjectionService::hasCompleteStandardReference)
                         .map(ModelSpecContract.StandardBinding::fieldName)
                         .filter(fieldNames::contains)
                         .distinct()
@@ -334,7 +403,31 @@ public class WarehousePlanStageProjectionService {
             })
             .sum();
         if (boundFields == declaredFields) {
-            return completeEvidence(StageCode.DATA_STANDARD, boundFields);
+            boolean unknown = false;
+            for (ModelSpecView model : validModels) {
+                StandardEvidence ownerEvidence;
+                try {
+                    ownerEvidence = standardEvidence.evaluate(tenantId, model);
+                } catch (RuntimeException exception) {
+                    ownerEvidence = StandardEvidence.UNKNOWN;
+                }
+                if (ownerEvidence == StandardEvidence.STALE) {
+                    return new StageEvidence(
+                        StageCode.DATA_STANDARD,
+                        StageStatus.BLOCKED,
+                        EvidenceFreshness.STALE,
+                        boundFields,
+                        "MODEL_STANDARD_EVIDENCE_STALE",
+                        "A saved data-standard reference no longer matches its professional owner version",
+                        null,
+                        null
+                    );
+                }
+                if (ownerEvidence != StandardEvidence.CURRENT) unknown = true;
+            }
+            return unknown
+                ? unknownEvidence(StageCode.DATA_STANDARD, "MODEL_STANDARD_EVIDENCE_UNAVAILABLE")
+                : completeEvidence(StageCode.DATA_STANDARD, boundFields);
         }
         if (boundFields == 0) {
             return blockedEvidence(
@@ -400,10 +493,20 @@ public class WarehousePlanStageProjectionService {
         Set<String> boundFields = model
             .standardBindings()
             .stream()
+            .filter(WarehousePlanStageProjectionService::hasCompleteStandardReference)
             .map(ModelSpecContract.StandardBinding::fieldName)
             .filter(Objects::nonNull)
             .collect(java.util.stream.Collectors.toSet());
         return model.fields().stream().map(ModelSpecContract.ModelField::name).anyMatch(field -> !boundFields.contains(field));
+    }
+
+    private static boolean hasCompleteStandardReference(ModelSpecContract.StandardBinding binding) {
+        if (binding == null || binding.fieldName() == null) return false;
+        return (
+            (binding.standardElementId() != null && binding.standardElementVersion() != null) ||
+            (binding.referenceCode() != null && !binding.referenceCode().isBlank() && binding.referenceCodeVersion() != null) ||
+            (binding.measurementUnitId() != null && binding.measurementUnitVersion() != null)
+        );
     }
 
     private static StageEvidence completeEvidence(StageCode stageCode, int count) {

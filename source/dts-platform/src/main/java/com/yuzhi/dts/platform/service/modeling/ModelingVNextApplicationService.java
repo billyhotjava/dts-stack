@@ -82,7 +82,21 @@ public class ModelingVNextApplicationService {
         int revision
     ) {}
 
-    public record Artifact(String artifactType, String path, String checksum, String status) {}
+    public record Artifact(
+        String modelSpecId,
+        String planId,
+        int revision,
+        String modelChecksum,
+        String ownership,
+        String artifactType,
+        String path,
+        String checksum,
+        String status
+    ) {
+        public Artifact(String artifactType, String path, String checksum, String status) {
+            this(null, null, 0, null, null, artifactType, path, checksum, status);
+        }
+    }
 
     public record CompileResult(String modelSpecId, int revision, String status, List<Artifact> artifacts, List<String> issues) {}
 
@@ -103,7 +117,54 @@ public class ModelingVNextApplicationService {
         String dbtSelector,
         String targetTable,
         String message,
-        String logUrl
+        String logUrl,
+        String planId,
+        String modelChecksum,
+        String repairPath
+    ) {
+        public RunView(
+            String id,
+            String modelSpecId,
+            int revision,
+            String state,
+            String sourceBatchId,
+            String addaxTaskId,
+            String airflowDagId,
+            String airflowRunId,
+            String dbtRunId,
+            String dbtSelector,
+            String targetTable,
+            String message,
+            String logUrl
+        ) {
+            this(
+                id,
+                modelSpecId,
+                revision,
+                state,
+                sourceBatchId,
+                addaxTaskId,
+                airflowDagId,
+                airflowRunId,
+                dbtRunId,
+                dbtSelector,
+                targetTable,
+                message,
+                logUrl,
+                null,
+                null,
+                null
+            );
+        }
+    }
+
+    private record ModelIdentity(
+        UUID id,
+        UUID planId,
+        int revision,
+        String modelChecksum,
+        String implementationMode,
+        String status
     ) {}
 
     public record LineageView(
@@ -399,6 +460,7 @@ public class ModelingVNextApplicationService {
         ModelingVNextContract.ModelSpec model = findModelSpec(tenantId, id);
         if (model == null) throw new DomainException("MODEL_OBJECT_NOT_FOUND", "ModelSpec 不存在");
         if (model.revision() != revision) throw new DomainException("MODEL_REVISION_CONFLICT", "ModelSpec revision 不匹配");
+        ModelIdentity identity = requireIdentity(tenantId, id, revision, null);
         try {
             ModelingDbtCompiler.CompiledArtifacts artifacts = ModelingDbtCompiler.compile(model);
             List<Artifact> persisted = new ArrayList<>();
@@ -406,11 +468,32 @@ public class ModelingVNextApplicationService {
                 String type = artifactType(entry.getKey());
                 String path = artifacts.outputDirectory() + "/" + entry.getKey();
                 String content = entry.getValue();
-                jdbcTemplate.update(
-                    "insert into modeling_dbt_artifact (id, model_spec_id, project_key, dbt_unique_id, artifact_type, path, content_checksum, content, status, revision, created_date, last_modified_date) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) on conflict (project_key, dbt_unique_id) do update set path = excluded.path, content_checksum = excluded.content_checksum, content = excluded.content, status = excluded.status, revision = excluded.revision, last_modified_date = excluded.last_modified_date",
-                    UUID.randomUUID(), externalUuid(model.id()), "dts-modeling", "model." + model.id() + "." + entry.getKey(), type, path, checksum(content), content, "COMPILED", model.revision(), Timestamp.from(Instant.now()), Timestamp.from(Instant.now())
+                int changed = jdbcTemplate.update(
+                    """
+                    insert into modeling_dbt_artifact (
+                        id, model_spec_id, plan_id, project_key, dbt_unique_id, artifact_type, path,
+                        content_checksum, content, status, revision, model_checksum, ownership,
+                        idempotency_key, created_date, last_modified_date
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'COMPILED', ?, ?, ?, ?, ?, ?)
+                    on conflict (model_spec_id, revision, dbt_unique_id) do update
+                       set path = excluded.path, content_checksum = excluded.content_checksum,
+                           content = excluded.content, status = excluded.status,
+                           model_checksum = excluded.model_checksum, ownership = excluded.ownership,
+                           idempotency_key = excluded.idempotency_key,
+                           last_modified_date = excluded.last_modified_date
+                     where modeling_dbt_artifact.model_checksum = excluded.model_checksum
+                    """,
+                    UUID.randomUUID(), identity.id(), identity.planId(), "dts-modeling", "model." + model.id() + "." + entry.getKey(),
+                    type, path, checksum(content), content, model.revision(), identity.modelChecksum(), identity.implementationMode(),
+                    idempotencyKey, Timestamp.from(Instant.now()), Timestamp.from(Instant.now())
                 );
-                persisted.add(new Artifact(type, path, checksum(content), "COMPILED"));
+                if (changed == 0) {
+                    throw new DomainException("MODEL_ARTIFACT_REVISION_CONFLICT", "Artifact ownership or checksum changed");
+                }
+                persisted.add(new Artifact(
+                    identity.id().toString(), nullableString(identity.planId()), identity.revision(), identity.modelChecksum(),
+                    identity.implementationMode(), type, path, checksum(content), "COMPILED"
+                ));
             }
             return new CompileResult(model.id(), model.revision(), "COMPILED", List.copyOf(persisted), List.of());
         } catch (ModelingDbtCompiler.CompileException exception) {
@@ -421,18 +504,66 @@ public class ModelingVNextApplicationService {
     public DbtModelingContract.ImportResult importDbt(String tenantId, DbtModelingContract.ManifestImportRequest request) {
         ModelingDbtManifestImporter.ImportSummary summary = ModelingDbtManifestImporter.importModel(request);
         ModelingDbtManifestImporter.ImportedModel model = summary.models().getFirst();
-        jdbcTemplate.update(
-            "insert into modeling_dbt_artifact (id, model_spec_id, project_key, dbt_unique_id, artifact_type, path, content_checksum, content, status, revision, created_date, last_modified_date) values (?, null, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) on conflict (project_key, dbt_unique_id) do update set content_checksum = excluded.content_checksum, content = excluded.content, status = excluded.status, last_modified_date = excluded.last_modified_date",
-            UUID.randomUUID(), request.projectId(), model.uniqueId(), "SQL", null, model.contentChecksum(), model.sql(), "LEGACY_READONLY", 1, Timestamp.from(Instant.now()), Timestamp.from(Instant.now())
+        ModelIdentity identity = requireIdentity(tenantId, request.modelSpecId(), request.revision(), request.modelChecksum());
+        if (!"DBT_MANAGED".equals(identity.implementationMode())) {
+            throw new DomainException("MODEL_IMPLEMENTATION_OWNERSHIP_MISMATCH", "dbt import requires a DBT_MANAGED ModelSpec");
+        }
+        Boolean ownedElsewhere = jdbcTemplate.queryForObject(
+            """
+            select exists (
+                select 1 from modeling_dbt_artifact
+                 where project_key = ? and dbt_unique_id = ? and model_spec_id <> ?
+            )
+            """,
+            Boolean.class,
+            request.projectId(),
+            model.uniqueId(),
+            identity.id()
         );
-        return new DbtModelingContract.ImportResult(model.uniqueId(), model.uniqueId(), "LEGACY_READONLY", 1);
+        if (Boolean.TRUE.equals(ownedElsewhere)) {
+            throw new DomainException("MODEL_IMPLEMENTATION_DBT_CONFLICT", "dbt node is already owned by another ModelSpec");
+        }
+        Instant now = Instant.now();
+        int changed = jdbcTemplate.update(
+            """
+            insert into modeling_dbt_artifact (
+                id, model_spec_id, plan_id, project_key, dbt_unique_id, artifact_type, path,
+                content_checksum, content, status, revision, model_checksum, ownership,
+                idempotency_key, created_date, last_modified_date
+            ) values (?, ?, ?, ?, ?, 'SQL', ?, ?, ?, 'COMPILED', ?, ?, 'DBT_MANAGED', ?, ?, ?)
+            on conflict (model_spec_id, revision, dbt_unique_id) do update
+               set content_checksum = excluded.content_checksum, content = excluded.content,
+                   status = excluded.status, model_checksum = excluded.model_checksum,
+                   ownership = excluded.ownership, idempotency_key = excluded.idempotency_key,
+                   last_modified_date = excluded.last_modified_date
+             where modeling_dbt_artifact.model_checksum = excluded.model_checksum
+               and modeling_dbt_artifact.ownership = 'DBT_MANAGED'
+            """,
+            UUID.randomUUID(), identity.id(), identity.planId(), request.projectId(), model.uniqueId(),
+            model.uniqueId() + ".sql", model.contentChecksum(), model.sql(), identity.revision(), identity.modelChecksum(),
+            request.idempotencyKey(), Timestamp.from(now), Timestamp.from(now)
+        );
+        if (changed == 0) {
+            throw new DomainException("MODEL_ARTIFACT_REVISION_CONFLICT", "dbt artifact ownership or checksum changed");
+        }
+        return new DbtModelingContract.ImportResult(identity.id().toString(), model.uniqueId(), "COMPILED", 1);
     }
 
     @Transactional(readOnly = true)
     public List<Artifact> artifacts(String tenantId, String modelSpecId) {
         return jdbcTemplate.query(
-            "select a.artifact_type, a.path, a.content_checksum, a.status from modeling_dbt_artifact a join modeling_model_spec s on s.id = a.model_spec_id where s.tenant_id = ? and a.model_spec_id = ? order by a.artifact_type, a.path",
-            (rs, row) -> new Artifact(rs.getString("artifact_type"), rs.getString("path"), rs.getString("content_checksum"), rs.getString("status")),
+            """
+            select a.model_spec_id, a.plan_id, a.revision, a.model_checksum, a.ownership,
+                   a.artifact_type, a.path, a.content_checksum, a.status
+              from modeling_dbt_artifact a join modeling_model_spec s on s.id = a.model_spec_id
+             where s.tenant_id = ? and a.model_spec_id = ?
+             order by a.revision desc, a.artifact_type, a.path
+            """,
+            (rs, row) -> new Artifact(
+                rs.getString("model_spec_id"), rs.getString("plan_id"), rs.getInt("revision"), rs.getString("model_checksum"),
+                rs.getString("ownership"), rs.getString("artifact_type"), rs.getString("path"),
+                rs.getString("content_checksum"), rs.getString("status")
+            ),
             normalizeTenant(tenantId), externalUuid(modelSpecId)
         );
     }
@@ -441,6 +572,7 @@ public class ModelingVNextApplicationService {
     public DriftView drift(String tenantId, String modelSpecId) {
         ModelingVNextContract.ModelSpec model = findModelSpec(tenantId, modelSpecId);
         if (model == null) throw new DomainException("MODEL_OBJECT_NOT_FOUND", "ModelSpec 不存在");
+        ModelIdentity identity = requireIdentity(tenantId, modelSpecId, model.revision(), null);
         List<String> issues = new ArrayList<>();
         try {
             ModelingDbtCompiler.CompiledArtifacts compiled = ModelingDbtCompiler.compile(model);
@@ -448,10 +580,17 @@ public class ModelingVNextApplicationService {
             String actualChecksum = null;
             try {
                 actualChecksum = jdbcTemplate.queryForObject(
-                    "select a.content_checksum from modeling_dbt_artifact a join modeling_model_spec s on s.id = a.model_spec_id where s.tenant_id = ? and a.model_spec_id = ? and a.artifact_type = 'SQL' and a.status = 'COMPILED'",
+                    """
+                    select a.content_checksum from modeling_dbt_artifact a
+                    join modeling_model_spec s on s.id = a.model_spec_id
+                    where s.tenant_id = ? and a.model_spec_id = ? and a.revision = ?
+                      and a.model_checksum = ? and a.artifact_type = 'SQL' and a.status = 'COMPILED'
+                    """,
                     String.class,
                     normalizeTenant(tenantId),
-                    externalUuid(modelSpecId)
+                    identity.id(),
+                    identity.revision(),
+                    identity.modelChecksum()
                 );
             } catch (EmptyResultDataAccessException ignored) {
                 // A missing generated SQL artifact is drift, not a server error.
@@ -478,6 +617,7 @@ public class ModelingVNextApplicationService {
     public ReleaseGateView releaseGate(String tenantId, String modelSpecId) {
         ModelingVNextContract.ModelSpec model = findModelSpec(tenantId, modelSpecId);
         if (model == null) throw new DomainException("MODEL_OBJECT_NOT_FOUND", "ModelSpec 不存在");
+        ModelIdentity identity = requireIdentity(tenantId, modelSpecId, model.revision(), null);
         List<ModelingDriftGate.DriftKind> driftKinds = drift(tenantId, modelSpecId).issues().stream()
             .map(this::driftKind)
             .filter(java.util.Objects::nonNull)
@@ -485,8 +625,8 @@ public class ModelingVNextApplicationService {
         boolean registered = isCanonicalModelSpec(tenantId, modelSpecId)
             ? canonicalRegistrationValid(tenantId, modelSpecId)
             : findBusinessObject(tenantId, model.objectId()) != null;
-        boolean parsePassed = hasArtifact(tenantId, modelSpecId, "SCHEMA", "COMPILED");
-        boolean testsPassed = hasArtifact(tenantId, modelSpecId, "TEST", "COMPILED");
+        boolean parsePassed = hasArtifact(tenantId, modelSpecId, identity.revision(), identity.modelChecksum(), "SCHEMA", "COMPILED");
+        boolean testsPassed = hasArtifact(tenantId, modelSpecId, identity.revision(), identity.modelChecksum(), "TEST", "COMPILED");
         String checksum = null;
         try {
             checksum = checksum(ModelingDbtCompiler.compile(model).files().get(model.name() + ".sql"));
@@ -538,15 +678,23 @@ public class ModelingVNextApplicationService {
         List<ModelingRunRequestContract.Issue> issues = ModelingRunRequestContract.validate(request, knownSourceBatches);
         if (!issues.isEmpty()) throw new DomainException(issues.getFirst().code().name(), issues.getFirst().message());
         UUID modelSpecId = externalUuid(request.modelSpecId());
+        ModelIdentity identity = requireIdentity(tenantId, request.modelSpecId(), request.revision(), null);
+        if (!"PUBLISHED".equals(identity.status())) {
+            throw new DomainException("MODEL_RUN_PUBLISHED_REQUIRED", "Only a published ModelSpec can run");
+        }
         try {
-            return jdbcTemplate.queryForObject(
-                "select id, model_spec_id, status, source_batch_id, addax_task_id, airflow_dag_id, airflow_run_id, dbt_run_id, dbt_selector, target, message, version from modeling_pipeline_run where tenant_id = ? and model_spec_id = ? and idempotency_key = ?",
+            RunView replay = jdbcTemplate.queryForObject(
+                runSelect() + " where tenant_id = ? and model_spec_id = ? and idempotency_key = ?",
                 runRowMapper(), normalizeTenant(tenantId), modelSpecId, request.idempotencyKey()
             );
+            if (replay != null && replay.revision() != request.revision()) {
+                throw new DomainException("MODEL_RUN_IDEMPOTENCY_CONFLICT", "Run idempotency key belongs to another ModelSpec revision");
+            }
+            return replay;
         } catch (EmptyResultDataAccessException ignored) {
             UUID id = UUID.randomUUID();
             ModelingRunRequestContract.ExternalContext context = request.externalContext();
-            boolean compiled = hasCompiledArtifacts(tenantId, modelSpecId, request.revision());
+            boolean compiled = hasCompiledArtifacts(tenantId, modelSpecId, request.revision(), identity.modelChecksum());
             ModelingRuntimeSubmissionService.SubmissionResult submission = runtimeSubmissionService == null
                 ? new ModelingRuntimeSubmissionService.SubmissionResult("QUEUED", context.addaxTaskId(), context.airflowRunId(), "RUNTIME_DISABLED")
                 : runtimeSubmissionService.submit(
@@ -559,8 +707,18 @@ public class ModelingVNextApplicationService {
                 ? ModelingRunStateMachine.RunState.QUEUED.name()
                 : submission.state();
             jdbcTemplate.update(
-                "insert into modeling_pipeline_run (id, tenant_id, model_spec_id, idempotency_key, status, source_batch_id, addax_task_id, airflow_dag_id, airflow_run_id, dbt_run_id, dbt_selector, target, message, version, created_date, last_modified_date) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                id, normalizeTenant(tenantId), modelSpecId, request.idempotencyKey(), persistedState, context.sourceBatchId(), submission.addaxTaskId(), context.airflowDagId(), submission.airflowRunId(), context.dbtRunId(), context.dbtSelector(), context.targetTable(), submission.message(), request.revision(), Timestamp.from(Instant.now()), Timestamp.from(Instant.now())
+                """
+                insert into modeling_pipeline_run (
+                    id, tenant_id, model_spec_id, plan_id, model_revision, model_checksum,
+                    repair_path, idempotency_key, status, source_batch_id, addax_task_id,
+                    airflow_dag_id, airflow_run_id, dbt_run_id, dbt_selector, target,
+                    message, version, created_date, last_modified_date
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                """,
+                id, normalizeTenant(tenantId), modelSpecId, identity.planId(), identity.revision(), identity.modelChecksum(),
+                repairPath(identity), request.idempotencyKey(), persistedState, context.sourceBatchId(), submission.addaxTaskId(),
+                context.airflowDagId(), submission.airflowRunId(), context.dbtRunId(), context.dbtSelector(), context.targetTable(),
+                submission.message(), Timestamp.from(Instant.now()), Timestamp.from(Instant.now())
             );
             return getRun(tenantId, id.toString());
         }
@@ -570,7 +728,7 @@ public class ModelingVNextApplicationService {
     public RunView getRun(String tenantId, String id) {
         try {
             return jdbcTemplate.queryForObject(
-                "select id, model_spec_id, status, source_batch_id, addax_task_id, airflow_dag_id, airflow_run_id, dbt_run_id, dbt_selector, target, message, version from modeling_pipeline_run where tenant_id = ? and id = ?",
+                runSelect() + " where tenant_id = ? and id = ?",
                 runRowMapper(), normalizeTenant(tenantId), nullableUuid(id)
             );
         } catch (EmptyResultDataAccessException exception) {
@@ -702,28 +860,106 @@ public class ModelingVNextApplicationService {
 
     private RowMapper<RunView> runRowMapper() {
         return (rs, row) -> new RunView(
-            rs.getString("id"), rs.getString("model_spec_id"), rs.getInt("version"), rs.getString("status"), rs.getString("source_batch_id"),
-            rs.getString("addax_task_id"), rs.getString("airflow_dag_id"), rs.getString("airflow_run_id"), rs.getString("dbt_run_id"), rs.getString("dbt_selector"), rs.getString("target"), rs.getString("message"), null
+            rs.getString("id"), rs.getString("model_spec_id"), rs.getInt("model_revision"), rs.getString("status"), rs.getString("source_batch_id"),
+            rs.getString("addax_task_id"), rs.getString("airflow_dag_id"), rs.getString("airflow_run_id"), rs.getString("dbt_run_id"),
+            rs.getString("dbt_selector"), rs.getString("target"), rs.getString("message"), null,
+            rs.getString("plan_id"), rs.getString("model_checksum"), rs.getString("repair_path")
         );
     }
 
-    private boolean hasCompiledArtifacts(String tenantId, UUID modelSpecId, int revision) {
+    private static String runSelect() {
+        return """
+            select id, model_spec_id, plan_id, model_revision, model_checksum, repair_path,
+                   status, source_batch_id, addax_task_id, airflow_dag_id, airflow_run_id,
+                   dbt_run_id, dbt_selector, target, message, version
+              from modeling_pipeline_run
+            """;
+    }
+
+    private boolean hasCompiledArtifacts(String tenantId, UUID modelSpecId, int revision, String modelChecksum) {
         Integer count = jdbcTemplate.queryForObject(
-            "select count(*) from modeling_dbt_artifact a join modeling_model_spec s on s.id = a.model_spec_id where s.tenant_id = ? and a.model_spec_id = ? and a.revision = ? and a.status = 'COMPILED'",
+            "select count(*) from modeling_dbt_artifact a join modeling_model_spec s on s.id = a.model_spec_id where s.tenant_id = ? and a.model_spec_id = ? and a.revision = ? and a.model_checksum = ? and a.status = 'COMPILED'",
             Integer.class,
             normalizeTenant(tenantId),
             modelSpecId,
-            revision
+            revision,
+            modelChecksum
         );
         return count != null && count > 0;
     }
 
-    private boolean hasArtifact(String tenantId, String modelSpecId, String artifactType, String status) {
+    private boolean hasArtifact(
+        String tenantId,
+        String modelSpecId,
+        int revision,
+        String modelChecksum,
+        String artifactType,
+        String status
+    ) {
         Integer count = jdbcTemplate.queryForObject(
-            "select count(*) from modeling_dbt_artifact a join modeling_model_spec s on s.id = a.model_spec_id where s.tenant_id = ? and a.model_spec_id = ? and a.artifact_type = ? and a.status = ?",
-            Integer.class, normalizeTenant(tenantId), externalUuid(modelSpecId), artifactType, status
+            """
+            select count(*) from modeling_dbt_artifact a
+            join modeling_model_spec s on s.id = a.model_spec_id
+            where s.tenant_id = ? and a.model_spec_id = ? and a.revision = ?
+              and a.model_checksum = ? and a.artifact_type = ? and a.status = ?
+            """,
+            Integer.class,
+            normalizeTenant(tenantId),
+            externalUuid(modelSpecId),
+            revision,
+            modelChecksum,
+            artifactType,
+            status
         );
         return count != null && count > 0;
+    }
+
+    private ModelIdentity requireIdentity(String tenantId, String modelSpecId, int revision, String expectedChecksum) {
+        ModelIdentity identity;
+        try {
+            identity = jdbcTemplate.queryForObject(
+                """
+                select s.id, s.plan_id, s.revision,
+                       coalesce(s.current_checksum, r.content_checksum) as model_checksum,
+                       s.implementation_mode, s.status
+                  from modeling_model_spec s
+                  join modeling_model_spec_revision r
+                    on r.model_spec_id = s.id and r.revision = s.revision
+                 where s.tenant_id = ? and s.id = ?
+                """,
+                (row, number) -> new ModelIdentity(
+                    row.getObject("id", UUID.class),
+                    row.getObject("plan_id", UUID.class),
+                    row.getInt("revision"),
+                    row.getString("model_checksum"),
+                    row.getString("implementation_mode"),
+                    row.getString("status")
+                ),
+                normalizeTenant(tenantId),
+                externalUuid(modelSpecId)
+            );
+        } catch (EmptyResultDataAccessException exception) {
+            throw new DomainException("MODEL_OBJECT_NOT_FOUND", "ModelSpec 不存在");
+        }
+        if (identity == null || identity.revision() != revision) {
+            throw new DomainException("MODEL_REVISION_CONFLICT", "ModelSpec revision 不匹配");
+        }
+        if (identity.modelChecksum() == null || identity.modelChecksum().isBlank()) {
+            throw new DomainException("MODEL_CHECKSUM_REQUIRED", "ModelSpec checksum 不存在");
+        }
+        if (expectedChecksum != null && !expectedChecksum.equals(identity.modelChecksum())) {
+            throw new DomainException("MODEL_CHECKSUM_CONFLICT", "ModelSpec checksum 不匹配");
+        }
+        return identity;
+    }
+
+    private static String repairPath(ModelIdentity identity) {
+        String path = "/modeling/models/" + identity.id() + "?tab=design";
+        return identity.planId() == null ? path : path + "&planId=" + identity.planId();
+    }
+
+    private static String nullableString(UUID value) {
+        return value == null ? null : value.toString();
     }
 
     private ModelingDriftGate.DriftKind driftKind(String value) {

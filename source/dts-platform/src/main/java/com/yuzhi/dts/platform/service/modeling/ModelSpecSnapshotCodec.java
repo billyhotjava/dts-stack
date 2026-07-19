@@ -68,6 +68,45 @@ public class ModelSpecSnapshotCodec {
         );
     }
 
+    public ModelSpecView toLifecycleView(ModelSpecView current, ModelStatus status, int revision, Instant now) {
+        return toView(
+            current.id(),
+            asCreate(current),
+            status,
+            revision,
+            contentChecksum(current),
+            current.createdAt(),
+            now
+        );
+    }
+
+    private static CreateModelSpecCommand asCreate(ModelSpecView view) {
+        return new CreateModelSpecCommand(
+            view.planId(),
+            view.domainId(),
+            view.modelType(),
+            view.layer(),
+            view.name(),
+            view.description(),
+            view.implementationMode(),
+            view.materialization(),
+            view.businessActivityRef(),
+            view.consumptionScenario(),
+            view.grain(),
+            view.factShape(),
+            view.timeSemantics(),
+            view.fields(),
+            view.sourceRefs(),
+            view.dependsOn(),
+            view.dimensionRefs(),
+            view.metricRefs(),
+            view.standardBindings(),
+            view.generationStrategy(),
+            view.dimensionProfile(),
+            null
+        );
+    }
+
     public String write(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -136,6 +175,7 @@ public class ModelSpecSnapshotCodec {
             command.metricRefs(),
             command.standardBindings(),
             command.generationStrategy(),
+            command.dimensionProfile(),
             status,
             revision,
             checksum,
@@ -167,7 +207,8 @@ public class ModelSpecSnapshotCodec {
             command.dimensionRefs(),
             command.metricRefs(),
             command.standardBindings(),
-            command.generationStrategy()
+            command.generationStrategy(),
+            command.dimensionProfile()
         );
     }
 
@@ -192,7 +233,8 @@ public class ModelSpecSnapshotCodec {
             view.dimensionRefs(),
             view.metricRefs(),
             view.standardBindings(),
-            view.generationStrategy()
+            view.generationStrategy(),
+            view.dimensionProfile()
         );
     }
 
@@ -226,6 +268,7 @@ public class ModelSpecSnapshotCodec {
         java.util.List<ModelSpecContract.ModelRevisionRef> dimensionRefs,
         java.util.List<ModelSpecContract.MetricRef> metricRefs,
         java.util.List<ModelSpecContract.StandardBinding> standardBindings,
-        ModelSpecContract.GenerationStrategy generationStrategy
+        ModelSpecContract.GenerationStrategy generationStrategy,
+        @JsonInclude(JsonInclude.Include.NON_NULL) ModelSpecContract.DimensionProfile dimensionProfile
     ) {}
 }

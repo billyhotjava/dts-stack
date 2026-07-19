@@ -72,6 +72,10 @@ test("DIMENSION command creates key fields without requiring business activity",
 			sources: [],
 			generationStrategyType: "REFERENCE",
 			generationStrategyReference: "组织主数据",
+			dimensionCode: "DIM_ORGANIZATION",
+			dimensionHierarchies: [],
+			dimensionScdType: "TYPE1",
+			dimensionReuseScope: "PLAN",
 			businessActivityRef: "must-not-leak",
 		}),
 		[],
@@ -81,6 +85,12 @@ test("DIMENSION command creates key fields without requiring business activity",
 	assert.equal(command.modelType, "DIMENSION");
 	assert.deepEqual(command.fields, [{ name: "organization_id", dataType: "string", nullable: false, role: "KEY" }]);
 	assert.deepEqual(command.generationStrategy, { type: "REFERENCE", reference: "组织主数据" });
+	assert.deepEqual(command.dimensionProfile, {
+		dimensionCode: "DIM_ORGANIZATION",
+		hierarchies: [],
+		scdPolicy: { type: "TYPE1" },
+		reuseScope: "PLAN",
+	});
 	assert.equal(command.businessActivityRef, undefined);
 });
 

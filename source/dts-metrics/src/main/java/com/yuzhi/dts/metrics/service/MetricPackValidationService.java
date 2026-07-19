@@ -32,7 +32,7 @@ public class MetricPackValidationService {
         "SEMANTIC_MODEL",
         "GLOSSARY_TERM"
     );
-    private static final List<String> REQUIRED_FILES = List.of("domains", "business_objects", "dimensions", "metrics", "models", "datasets");
+    private static final List<String> REQUIRED_FILES = List.of("domains", "dimensions", "metrics", "models", "datasets");
 
     private final ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
 

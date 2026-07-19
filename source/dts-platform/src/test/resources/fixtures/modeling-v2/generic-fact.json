@@ -55,5 +55,6 @@
   "metricRefs": [],
   "standardBindings": [],
   "generationStrategy": null,
+  "dimensionProfile": null,
   "idempotencyKey": "generic-fact-fixture-v2"
 }

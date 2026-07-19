@@ -25,7 +25,8 @@ test("canonical planId is preserved by the cross-module journey context", () => 
 	assert.ok(JOURNEY_CONTEXT_PARAM_KEYS.includes("planId"));
 	const route = buildJourneyUrl("/ops/instances", new URLSearchParams({ planId: "plan-65" }));
 	assert.equal(new URL(route, "http://dts.local").searchParams.get("planId"), "plan-65");
-	assert.match(journeyContextSource, /planningId.*@deprecated|@deprecated.*planningId/s);
+	assert.ok(!JOURNEY_CONTEXT_PARAM_KEYS.includes("planningId"));
+	assert.match(journeyContextSource, /searchParams\.get\("planningId"\)/);
 });
 
 test("legacy planning parameters only map into canonical planId", () => {
@@ -53,17 +54,12 @@ test("legacy context consumer sets are frozen during controlled retirement", () 
 	assert.deepEqual(productionConsumers("warehousePlanningContext"), [
 		"pages/governance/ElementsPage.tsx",
 		"pages/governance/SubjectAreasPage.tsx",
-		"pages/modeling/LowCodeDevelopmentPage.tsx",
-		"pages/modeling/SemanticModelsPage.tsx",
-		"pages/modeling/SemanticObjectsPage.tsx",
 		"pages/modeling/SqlModelingPage.tsx",
 		"pages/modeling/businessModelingContext.ts",
 		"pages/modeling/dimensionCandidateGate.ts",
 	]);
 	assert.deepEqual(productionConsumers("businessModelingContext"), [
 		"pages/governance/SubjectAreasPage.tsx",
-		"pages/modeling/SemanticModelsPage.tsx",
-		"pages/modeling/SemanticObjectsPage.tsx",
 		"pages/modeling/modelingJourneyContext.ts",
 		"pages/modeling/semantic-workspace/BusinessModelingContextBar.tsx",
 		"pages/modeling/semantic-workspace/ConformedDimensionRecommendations.tsx",

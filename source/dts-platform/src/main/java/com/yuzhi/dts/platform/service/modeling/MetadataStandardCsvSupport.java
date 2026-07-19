@@ -166,6 +166,7 @@ public final class MetadataStandardCsvSupport {
         image.put("defaultValue", element.getDefaultValue());
         image.put("isPk", element.getIsPk());
         image.put("securityLevel", element.getSecurityLevel() == null ? null : element.getSecurityLevel().name());
+        image.put("version", element.getVersion());
         return image;
     }
 

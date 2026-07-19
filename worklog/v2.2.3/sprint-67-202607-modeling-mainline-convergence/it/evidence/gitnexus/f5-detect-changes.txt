@@ -1,0 +1,14 @@
+GitNexus final uncommitted-change analysis
+
+Scope: all
+Repository: s10-stack
+Risk: MEDIUM
+Changed symbols: 342
+Changed files: 104
+Affected indexed processes: 2
+
+Affected processes:
+- SqlModelingPage -> NormalizeText
+- SqlModelingPage -> Get_key
+
+Assessment: both affected flows originate from the Sprint-67 SqlModelingPage convergence work. GitNexus reports no additional indexed execution flow introduced by F5 retirement. Newly added migration classes are not yet in the existing index and were covered by focused tests plus direct caller inspection.

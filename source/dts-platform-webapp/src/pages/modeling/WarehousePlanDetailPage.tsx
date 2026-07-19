@@ -21,7 +21,6 @@ import {
 	Database,
 	FileCheck2,
 	Network,
-	PackageCheck,
 	Plus,
 	Trash2,
 	Waypoints,
@@ -859,8 +858,7 @@ export default function WarehousePlanDetailPage() {
 					title="实现与验证"
 					description="在模型设计稳定后进入 SQL、dbt、测试和发布门禁。"
 					actions={[
-						{ label: "高级建模（SQL）", route: "/studio/sql-modeling", icon: <FileCheck2 size={17} /> },
-						{ label: "高级 dbt", route: "/modeling/dbt-files", icon: <PackageCheck size={17} /> },
+						{ label: "高级建模（SQL/dbt）", route: "/studio/sql-modeling", icon: <FileCheck2 size={17} /> },
 					]}
 					onOpen={openSpecialist}
 				/>

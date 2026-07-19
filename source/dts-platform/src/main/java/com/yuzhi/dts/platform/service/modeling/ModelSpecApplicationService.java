@@ -16,9 +16,13 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolution
 import com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolutionPort.DomainResolution;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -129,9 +133,17 @@ public class ModelSpecApplicationService {
         requireCanonicalWriteEnabled();
         validateWriteContext(serverTenantId, actorId, command.planId(), command.domainId());
         validateSources(serverTenantId, command.planId(), command.sourceRefs());
-        validateReferences(serverTenantId, command.planId(), command.dependsOn(), command.dimensionRefs());
+        UUID modelSpecId = idGenerator.get();
+        validateReferences(
+            serverTenantId,
+            command.planId(),
+            modelSpecId,
+            command.modelType(),
+            command.dependsOn(),
+            command.dimensionRefs()
+        );
         Instant now = clock.instant();
-        ModelSpecView view = codec.toCreatedView(idGenerator.get(), command, now);
+        ModelSpecView view = codec.toCreatedView(modelSpecId, command, now);
         String responseSnapshot = codec.write(view);
         int inserted;
         try {
@@ -217,8 +229,25 @@ public class ModelSpecApplicationService {
                 Map.of("status", current.status())
             );
         }
+        String currentDimensionCode = current.dimensionProfile() == null ? null : current.dimensionProfile().dimensionCode();
+        String replacementDimensionCode = command.dimensionProfile() == null ? null : command.dimensionProfile().dimensionCode();
+        if (currentDimensionCode != null && !Objects.equals(currentDimensionCode, replacementDimensionCode)) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_DIMENSION_CODE_IMMUTABLE",
+                "Dimension code cannot be changed after creation",
+                ModelSpecException.Kind.UNPROCESSABLE,
+                List.of(fieldIssue("dimensionProfile", "Dimension code is immutable after creation"))
+            );
+        }
         validateSources(serverTenantId, command.planId(), command.sourceRefs());
-        validateReferences(serverTenantId, command.planId(), command.dependsOn(), command.dimensionRefs());
+        validateReferences(
+            serverTenantId,
+            command.planId(),
+            modelSpecId,
+            command.modelType(),
+            command.dependsOn(),
+            command.dimensionRefs()
+        );
         String replacementChecksum = codec.contentChecksum(command);
         if (replacementChecksum.equals(current.checksum())) return current;
 
@@ -278,6 +307,75 @@ public class ModelSpecApplicationService {
         return view;
     }
 
+    @Transactional(readOnly = true)
+    public DependencyGraph dependencyGraph(String serverTenantId, UUID modelSpecId) {
+        ModelSpecView root = get(serverTenantId, modelSpecId);
+        LinkedHashMap<String, DependencyNode> nodes = new LinkedHashMap<>();
+        List<DependencyEdge> edges = new ArrayList<>();
+        Set<ModelSpecContract.ModelRevisionRef> visited = new HashSet<>();
+        nodes.put(
+            nodeKey(root.id(), root.revision()),
+            new DependencyNode(
+                root.id(),
+                root.revision(),
+                root.revision(),
+                root.name(),
+                root.modelType(),
+                root.status(),
+                false
+            )
+        );
+        collectDependencyGraph(serverTenantId, root, nodes, edges, visited);
+        return new DependencyGraph(root.id(), List.copyOf(nodes.values()), List.copyOf(edges));
+    }
+
+    private void collectDependencyGraph(
+        String tenantId,
+        ModelSpecView owner,
+        LinkedHashMap<String, DependencyNode> nodes,
+        List<DependencyEdge> edges,
+        Set<ModelSpecContract.ModelRevisionRef> visited
+    ) {
+        for (ModelSpecContract.ModelRevisionRef reference : owner.dependsOn()) {
+            StoredModelSpec pinned = repository.findRevision(tenantId, reference.modelSpecId(), reference.revision()).orElse(null);
+            StoredModelSpec current = repository.findCurrent(tenantId, reference.modelSpecId()).orElse(null);
+            Integer currentRevision = current == null ? null : current.revision();
+            DependencyState state = pinned == null || current == null
+                ? DependencyState.UNKNOWN
+                : current.revision() == reference.revision() ? DependencyState.CURRENT : DependencyState.STALE;
+            ModelSpecView referenced = pinned == null ? null : compatibilityReader.read(pinned);
+            boolean restricted = referenced == null || !canRead(referenced);
+            nodes.putIfAbsent(
+                nodeKey(reference.modelSpecId(), reference.revision()),
+                new DependencyNode(
+                    reference.modelSpecId(),
+                    reference.revision(),
+                    currentRevision,
+                    restricted ? null : referenced.name(),
+                    restricted ? null : referenced.modelType(),
+                    restricted ? null : referenced.status(),
+                    restricted
+                )
+            );
+            edges.add(
+                new DependencyEdge(
+                    owner.id(),
+                    reference.modelSpecId(),
+                    reference.revision(),
+                    currentRevision,
+                    restricted ? DependencyState.UNKNOWN : state
+                )
+            );
+            if (!restricted && visited.add(reference)) {
+                collectDependencyGraph(tenantId, referenced, nodes, edges, visited);
+            }
+        }
+    }
+
+    private static String nodeKey(UUID modelSpecId, int revision) {
+        return modelSpecId + "@" + revision;
+    }
+
     public boolean canonicalReadEnabled() {
         return featureFlags.canonicalReadEnabled();
     }
@@ -285,11 +383,59 @@ public class ModelSpecApplicationService {
     private void validateReferences(
         String tenantId,
         UUID planId,
+        UUID modelSpecId,
+        ModelType modelType,
         List<ModelSpecContract.ModelRevisionRef> dependencies,
         List<ModelSpecContract.ModelRevisionRef> dimensions
     ) {
         validateReferenceSet(tenantId, planId, dependencies, false);
         validateReferenceSet(tenantId, planId, dimensions, true);
+        validateNoDependencyCycle(tenantId, modelSpecId, modelType, dependencies);
+    }
+
+    private void validateNoDependencyCycle(
+        String tenantId,
+        UUID modelSpecId,
+        ModelType modelType,
+        List<ModelSpecContract.ModelRevisionRef> dependencies
+    ) {
+        if (modelType != ModelType.SUMMARY && modelType != ModelType.APPLICATION) return;
+        List<String> path = new ArrayList<>();
+        path.add(modelSpecId.toString());
+        Set<UUID> activeModelIds = new HashSet<>();
+        activeModelIds.add(modelSpecId);
+        Set<ModelSpecContract.ModelRevisionRef> visitedRevisions = new HashSet<>();
+        for (ModelSpecContract.ModelRevisionRef dependency : dependencies) {
+            traverseDependency(tenantId, dependency, activeModelIds, visitedRevisions, path);
+        }
+    }
+
+    private void traverseDependency(
+        String tenantId,
+        ModelSpecContract.ModelRevisionRef reference,
+        Set<UUID> activeModelIds,
+        Set<ModelSpecContract.ModelRevisionRef> visitedRevisions,
+        List<String> path
+    ) {
+        UUID referencedModelId = reference.modelSpecId();
+        path.add(referencedModelId.toString());
+        if (!activeModelIds.add(referencedModelId)) throw dependencyCycle(path);
+        if (!visitedRevisions.add(reference)) {
+            activeModelIds.remove(referencedModelId);
+            path.remove(path.size() - 1);
+            return;
+        }
+
+        StoredModelSpec stored = repository
+            .findRevision(tenantId, referencedModelId, reference.revision())
+            .orElseThrow(ModelSpecApplicationService::referenceNotFound);
+        ModelSpecView referenced = compatibilityReader.read(stored);
+        if (!canRead(referenced)) throw referenceNotFound();
+        for (ModelSpecContract.ModelRevisionRef dependency : referenced.dependsOn()) {
+            traverseDependency(tenantId, dependency, activeModelIds, visitedRevisions, path);
+        }
+        activeModelIds.remove(referencedModelId);
+        path.remove(path.size() - 1);
     }
 
     private void validateSources(String tenantId, UUID planId, List<ModelSpecContract.SourceRef> sourceRefs) {
@@ -518,6 +664,15 @@ public class ModelSpecApplicationService {
         );
     }
 
+    private static ModelSpecException dependencyCycle(List<String> path) {
+        return new ModelSpecException(
+            "MODEL_SPEC_DEPENDENCY_CYCLE",
+            "ModelSpec dependencies cannot contain a cycle",
+            ModelSpecException.Kind.UNPROCESSABLE,
+            Map.of("dependencyPath", List.copyOf(path))
+        );
+    }
+
     private static ModelSpecException sourceBindingInvalid() {
         return new ModelSpecException(
             "MODEL_SPEC_SOURCE_BINDING_INVALID",
@@ -533,6 +688,13 @@ public class ModelSpecApplicationService {
             return new ModelSpecException(
                 "MODEL_SPEC_NAME_CONFLICT",
                 "A ModelSpec with this name already exists in the warehouse plan",
+                ModelSpecException.Kind.CONFLICT
+            );
+        }
+        if (message.contains("uk_model_spec_v2_dimension_code")) {
+            return new ModelSpecException(
+                "MODEL_SPEC_DIMENSION_CODE_CONFLICT",
+                "A dimension with this stable code already exists in the tenant",
                 ModelSpecException.Kind.CONFLICT
             );
         }
@@ -600,4 +762,30 @@ public class ModelSpecApplicationService {
     public record CreateResult(ModelSpecView modelSpec, boolean replayed) {}
 
     public record ExpectedVersion(UUID modelSpecId, int revision, String checksum) {}
+
+    public record DependencyGraph(UUID rootModelSpecId, List<DependencyNode> nodes, List<DependencyEdge> edges) {}
+
+    public record DependencyNode(
+        UUID modelSpecId,
+        int pinnedRevision,
+        Integer currentRevision,
+        String name,
+        ModelType modelType,
+        ModelStatus status,
+        boolean restricted
+    ) {}
+
+    public record DependencyEdge(
+        UUID fromModelSpecId,
+        UUID toModelSpecId,
+        int pinnedRevision,
+        Integer currentRevision,
+        DependencyState state
+    ) {}
+
+    public enum DependencyState {
+        CURRENT,
+        STALE,
+        UNKNOWN,
+    }
 }

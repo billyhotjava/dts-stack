@@ -43,8 +43,8 @@ test("journey stage model covers the eight product journey stages", () => {
 	for (const route of [
 		"/foundation/data-sources",
 		"/governance/subjects",
-		"/foundation/standard-package",
-		"/studio/low-code-development",
+		"/governance/standards/elements",
+		"/modeling/models",
 		"/modeling/metric-workbench",
 		"/studio/sql-modeling",
 		"/services/apis",

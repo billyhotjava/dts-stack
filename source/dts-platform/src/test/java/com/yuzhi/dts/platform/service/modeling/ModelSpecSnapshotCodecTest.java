@@ -44,6 +44,19 @@ class ModelSpecSnapshotCodecTest {
         assertThat(codec.readView(codec.write(view))).isEqualTo(view);
     }
 
+    @Test
+    void omitsAbsentDimensionProfileFromLegacyCompatibleSnapshotsAndHashes() {
+        CreateModelSpecCommand command = command("legacy-compatible");
+        ModelSpecView view = codec.toCreatedView(
+            UUID.fromString("30000000-0000-0000-0000-000000000001"),
+            command,
+            Instant.EPOCH
+        );
+
+        assertThat(codec.write(view)).doesNotContain("\"dimensionProfile\"");
+        assertThat(codec.contentChecksum(view)).isEqualTo(codec.contentChecksum(command));
+    }
+
     private static CreateModelSpecCommand command(String idempotencyKey) {
         return new CreateModelSpecCommand(
             UUID.fromString("10000000-0000-0000-0000-000000000001"),

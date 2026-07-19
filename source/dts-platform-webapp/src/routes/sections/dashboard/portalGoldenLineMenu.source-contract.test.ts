@@ -66,6 +66,10 @@ const GENERIC_MODELING_WORKBENCH_MENU_URL = new URL(
 	"../../../../../dts-admin/src/main/resources/config/liquibase/changelog/20260717-01_generic_modeling_workbench_menu.xml",
 	import.meta.url,
 );
+const SPRINT67_MODELING_MENU_URL = new URL(
+	"../../../../../dts-admin/src/main/resources/config/liquibase/changelog/20260719-01_sprint67_modeling_menu_convergence.xml",
+	import.meta.url,
+);
 
 const section = (key: string) => {
 	const found = MENU_SEED.portalNavSections.find((item) => item.key === key);
@@ -109,33 +113,30 @@ test("portal menu starts modeling with the generic workbench", () => {
 		"warehouse-planning",
 		"standards",
 		"dimensional-modeling",
-		"low-code-development",
 		"data-metrics",
 	]);
 	assert.equal(child(modeling, "modeling-workbench").title, "建模工作台");
 	assert.equal(child(modeling, "modeling-workbench").externalLink, "/modeling/workbench");
 	assert.deepEqual(child(modeling, "warehouse-planning").children?.map((item) => item.key), ["subjects"]);
+	assert.equal(child(child(modeling, "warehouse-planning"), "subjects").title, "业务分类");
 	assert.equal(child(child(modeling, "warehouse-planning"), "subjects").externalLink, "/governance/subjects");
 	assert.deepEqual(child(modeling, "standards").children?.map((item) => item.key), [
-		"standard-package",
 		"glossary",
 		"elements",
 		"reference",
-		"templates",
 	]);
 	assert.deepEqual(child(modeling, "dimensional-modeling").children?.map((item) => item.key), [
-		"sql",
 		"semantic-objects",
 		"semantic-models",
-		"dbt-files",
+		"sql",
 	]);
-	assert.equal(child(modeling, "low-code-development").title, "低代码开发向导");
-	assert.equal(child(modeling, "low-code-development").externalLink, "/studio/low-code-development");
-	assert.deepEqual(child(modeling, "data-metrics").children?.map((item) => item.key), [
-		"metric-workbench",
-		"semantic-metrics",
-		"semantic-publish",
-	]);
+	assert.equal(child(child(modeling, "dimensional-modeling"), "sql").title, "高级建模（SQL/dbt）");
+	assert.equal(child(child(modeling, "dimensional-modeling"), "sql").externalLink, "/studio/sql-modeling");
+	assert.deepEqual(child(modeling, "data-metrics").children?.map((item) => item.key), ["metric-workbench"]);
+	assert.doesNotMatch(
+		JSON.stringify(modeling),
+		/low-code-development|dbt-files|semantic-metrics|semantic-publish|standard-package|governanceTemplates/,
+	);
 	assert.doesNotMatch(JSON.stringify(modeling), /semantic-subjects|semantic-runs|\/modeling\/semantic\/subjects|\/modeling\/semantic\/runs/);
 
 	assert.deepEqual(child(section("studio"), "data-studio").children?.map((item) => item.key), ["scripts", "orchestration", "adhoc"]);
@@ -195,6 +196,32 @@ test("dimension modeling menu converges on the canonical dimension catalog and m
 	assert.equal(EN_PORTAL_LOCALE.studioSemanticModels, "Model center");
 });
 
+test("canonical role defaults contain only visible modeling leaves", () => {
+	const roleDefaultByCode = new Map(ROLE_DEFAULT_ENTRIES.map((entry) => [entry.code, entry]));
+	assert.deepEqual(roleDefaultByCode.get("sys.nav.portal.governanceSubjects"), {
+		code: "sys.nav.portal.governanceSubjects",
+		title: "业务分类",
+		route: "/governance/subjects",
+		requiredRoles: [],
+	});
+	assert.deepEqual(roleDefaultByCode.get("sys.nav.portal.studioSqlModeling"), {
+		code: "sys.nav.portal.studioSqlModeling",
+		title: "高级建模（SQL/dbt）",
+		route: "/studio/sql-modeling",
+		requiredRoles: [],
+	});
+	for (const retired of [
+		"sys.nav.portal.governanceStandardPackage",
+		"sys.nav.portal.governanceTemplates",
+		"sys.nav.portal.studioLowCodeDevelopment",
+		"sys.nav.portal.studioDbtFiles",
+		"sys.nav.portal.studioSemanticMetrics",
+		"sys.nav.portal.studioSemanticPublish",
+	]) {
+		assert.equal(roleDefaultByCode.has(retired), false, `${retired} must not be rebound for a new installation`);
+	}
+});
+
 test("golden line section titles have locale coverage and role routes stay canonical", () => {
 	for (const key of [
 		"dataIntegration",
@@ -240,6 +267,23 @@ test("generic modeling workbench migration keeps the role-bound menu row", () =>
 	const migration = readFileSync(GENERIC_MODELING_WORKBENCH_MENU_URL, "utf8");
 	assert.match(migration, /studioBusinessProcesses/);
 	assert.match(migration, /\/modeling\/workbench/);
+	assert.doesNotMatch(migration, /DELETE FROM portal_menu_visibility|DELETE FROM portal_menu/);
+});
+
+test("Sprint-67 menu migration soft-deletes duplicates and preserves role visibility", () => {
+	assert.match(LIQUIBASE_MASTER, /20260719-01_sprint67_modeling_menu_convergence\.xml/);
+	assert.equal(existsSync(SPRINT67_MODELING_MENU_URL), true);
+	const migration = readFileSync(SPRINT67_MODELING_MENU_URL, "utf8");
+	for (const code of [
+		"studioDbtFiles",
+		"studioLowCodeDevelopment",
+		"studioSemanticMetrics",
+		"studioSemanticPublish",
+	]) {
+		assert.match(migration, new RegExp(code));
+	}
+	assert.match(migration, /deleted = TRUE/);
+	assert.match(migration, /高级建模（SQL\/dbt）/);
 	assert.doesNotMatch(migration, /DELETE FROM portal_menu_visibility|DELETE FROM portal_menu/);
 });
 

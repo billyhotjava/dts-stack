@@ -10,7 +10,7 @@ import {
 
 describe("acceptance package with structured gate evidence", () => {
 	it("prepends a gate group whose status follows the verdict", () => {
-		const pkg = buildDataProductAcceptancePackage({ standardDraftId: "std-1", modelId: "m-1" });
+		const pkg = buildDataProductAcceptancePackage({ standardDraftId: "std-1", modelSpecId: "m-1" });
 		const gateGroup = pkg.groups[0];
 
 		expect(gateGroup.key).toBe("gate");
@@ -21,8 +21,8 @@ describe("acceptance package with structured gate evidence", () => {
 	});
 
 	it("turns the gate group blocked when an artifact is confirmed invalid", () => {
-		const invalidModel: ArtifactValidator = (key) => (key === "modelId" ? "invalid" : "unknown");
-		const params = { standardDraftId: "std-1", modelId: "bad" };
+		const invalidModel: ArtifactValidator = (key) => (key === "modelSpecId" ? "invalid" : "unknown");
+		const params = { standardDraftId: "std-1", modelSpecId: "bad" };
 		const validations = resolveArtifactValidations(params, invalidModel);
 
 		const pkg = buildDataProductAcceptancePackage(params, { validations });
@@ -32,7 +32,7 @@ describe("acceptance package with structured gate evidence", () => {
 	});
 
 	it("exports gate details in markdown and json", () => {
-		const pkg = buildDataProductAcceptancePackage({ standardDraftId: "std-1", modelId: "m-1", runId: "r-1" });
+		const pkg = buildDataProductAcceptancePackage({ standardDraftId: "std-1", modelSpecId: "m-1", runId: "r-1" });
 		const markdown = buildAcceptancePackageMarkdown(pkg);
 
 		expect(markdown).toContain("## 发布门禁明细");
@@ -52,7 +52,7 @@ describe("acceptance package with structured gate evidence", () => {
 
 describe("acceptance print meta", () => {
 	it("builds a printable header with context, timestamp and three sign columns", () => {
-		const pkg = buildDataProductAcceptancePackage({ modelId: "m-1", serviceId: "svc-9" });
+		const pkg = buildDataProductAcceptancePackage({ modelSpecId: "m-1", serviceId: "svc-9" });
 		const meta = buildAcceptancePrintMeta(pkg, new Date("2026-07-10T10:30:00"));
 
 		expect(meta.title).toBe("客户验收包");

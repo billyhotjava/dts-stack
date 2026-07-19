@@ -35,6 +35,15 @@ test("canonical pages expose one customer-facing primary action and no fake rele
 	assert.doesNotMatch(`${dimensions}\n${models}\n${detail}`, /getModelSpecReleaseGate|可发布|发布模型/);
 });
 
+test("model center handles compatibility views without restoring retired pages", () => {
+	const models = read("./ModelCenterPage.tsx");
+	assert.match(models, /searchParams\.get\("view"\)/);
+	assert.match(models, /compatibilityView === "guided"/);
+	assert.match(models, /setCreateOpen\(true\)/);
+	assert.match(models, /compatibilityView === "release"/);
+	assert.doesNotMatch(models, /LowCodeDevelopmentPage|SemanticPublishPage/);
+});
+
 test("static and dynamic routing resolve canonical list and detail pages to the same targets", () => {
 	const staticRoutes = read("../../routes/sections/dashboard/static-routes.tsx");
 	const dynamicRoutes = read("../../routes/sections/dashboard/dynamic-resolver.tsx");

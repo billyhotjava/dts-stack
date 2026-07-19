@@ -11,6 +11,8 @@ import com.yuzhi.dts.platform.service.modeling.ModelingRunCallbackContract;
 import com.yuzhi.dts.platform.service.modeling.ModelingRunRequestContract;
 import com.yuzhi.dts.platform.service.modeling.ModelingVNextApplicationService;
 import com.yuzhi.dts.platform.service.modeling.ModelingVNextContract;
+import com.yuzhi.dts.platform.service.modeling.migration.LegacyObjectMigrationService;
+import com.yuzhi.dts.platform.security.SecurityUtils;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -39,50 +42,81 @@ public class ModelingVNextResource {
     private final ModelingVNextApplicationService service;
     private final ObjectMapper objectMapper;
     private final AuditService audit;
+    private final LegacyObjectMigrationService legacyRetirement;
 
     public ModelingVNextResource(ModelingVNextApplicationService service, ObjectMapper objectMapper) {
-        this(service, objectMapper, null);
+        this(service, objectMapper, null, null);
     }
 
     @Autowired
-    public ModelingVNextResource(ModelingVNextApplicationService service, ObjectMapper objectMapper, AuditService audit) {
+    public ModelingVNextResource(
+        ModelingVNextApplicationService service,
+        ObjectMapper objectMapper,
+        AuditService audit,
+        LegacyObjectMigrationService legacyRetirement
+    ) {
         this.service = service;
         this.objectMapper = objectMapper;
         this.audit = audit;
+        this.legacyRetirement = legacyRetirement;
     }
 
     @GetMapping("/business-objects")
-    public ApiResponse<List<ModelingVNextContract.BusinessObject>> listBusinessObjects(
+    public ResponseEntity<ApiResponse<List<JsonNode>>> listBusinessObjects(
         @RequestHeader(value = "X-Tenant-Id", defaultValue = "default") String tenantId,
         @RequestParam(required = false) String processId,
         @RequestParam(required = false) String status
     ) {
-        return ApiResponses.ok(service.listBusinessObjects(tenantId, processId, status));
+        List<ModelingVNextContract.BusinessObject> values = service.listBusinessObjects(tenantId, processId, status);
+        boolean compatibilityProjectionEnabled = legacyRetirement != null && legacyRetirement.legacyReadEnabled();
+        List<JsonNode> projected = compatibilityProjectionEnabled
+            ? legacyRetirement.projectLegacyRead(tenantId, LegacyObjectMigrationService.MODELING_VNEXT_SOURCE, values)
+            : values.stream().map(value -> (JsonNode) objectMapper.valueToTree(value)).toList();
+        if (compatibilityProjectionEnabled) {
+            legacyRetirement.recordApiUsage(tenantId, currentActor(), "/api/modeling/vnext/business-objects", "GET", "LEGACY_READONLY");
+        }
+        return LegacyModelingRetirementHttp.deprecated(ApiResponses.ok(projected));
     }
 
     @PostMapping("/business-objects")
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<ModelingVNextContract.BusinessObject> createBusinessObject(
+    public ResponseEntity<ApiResponse<Object>> createBusinessObject(
         @RequestHeader(value = "X-Tenant-Id", defaultValue = "default") String tenantId,
         @RequestBody JsonNode body
     ) {
+        if (legacyRetirement != null && legacyRetirement.writeFrozen()) {
+            return rejectLegacyWrite(tenantId, "/api/modeling/vnext/business-objects", "POST");
+        }
         ModelingVNextContract.BusinessObject result = service.saveBusinessObject(tenantId, read(body, ModelingVNextContract.BusinessObject.class), revision(body), idempotencyKey(body));
         auditSuccess("MODELING_VNEXT_BUSINESS_OBJECT_SAVE", result.id(), Map.of("tenantId", valueOrEmpty(tenantId), "revision", revision(body)));
-        return ApiResponses.ok(result);
+        return ResponseEntity.ok(ApiResponses.ok(result));
     }
 
     @PutMapping("/business-objects/{id}")
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<ModelingVNextContract.BusinessObject> updateBusinessObject(
+    public ResponseEntity<ApiResponse<Object>> updateBusinessObject(
         @RequestHeader(value = "X-Tenant-Id", defaultValue = "default") String tenantId,
         @PathVariable String id,
         @RequestBody JsonNode body
     ) {
+        if (legacyRetirement != null && legacyRetirement.writeFrozen()) {
+            return rejectLegacyWrite(tenantId, "/api/modeling/vnext/business-objects/{id}", "PUT");
+        }
         ObjectNode payload = objectNode(body);
         if (!payload.has("id") || payload.get("id").isNull()) payload.put("id", id);
         ModelingVNextContract.BusinessObject result = service.saveBusinessObject(tenantId, read(payload, ModelingVNextContract.BusinessObject.class), revision(payload), idempotencyKey(payload));
         auditSuccess("MODELING_VNEXT_BUSINESS_OBJECT_SAVE", result.id(), Map.of("tenantId", valueOrEmpty(tenantId), "revision", revision(payload)));
-        return ApiResponses.ok(result);
+        return ResponseEntity.ok(ApiResponses.ok(result));
+    }
+
+    @PatchMapping("/business-objects/{id}")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> patchBusinessObject(
+        @RequestHeader(value = "X-Tenant-Id", defaultValue = "default") String tenantId,
+        @PathVariable String id,
+        @RequestBody(required = false) JsonNode ignored
+    ) {
+        return rejectLegacyWrite(tenantId, "/api/modeling/vnext/business-objects/{id}", "PATCH");
     }
 
     @GetMapping("/plans")
@@ -303,6 +337,25 @@ public class ModelingVNextResource {
         if (body == null || !body.hasNonNull(name)) return null;
         String value = body.get(name).asText();
         return value.isBlank() ? null : value;
+    }
+
+    private ResponseEntity<ApiResponse<Object>> rejectLegacyWrite(String tenantId, String route, String method) {
+        if (legacyRetirement != null) {
+            legacyRetirement.recordApiUsage(tenantId, currentActor(), route, method, "BUSINESS_OBJECT_RETIRED");
+        }
+        if (audit != null) {
+            audit.auditAction(
+                "LEGACY_MODELING_WRITE_REJECTED",
+                AuditStage.FAIL,
+                route,
+                Map.of("tenantId", valueOrEmpty(tenantId), "route", route, "method", method, "result", "BUSINESS_OBJECT_RETIRED")
+            );
+        }
+        return LegacyModelingRetirementHttp.retired("/modeling/workbench");
+    }
+
+    private static String currentActor() {
+        return SecurityUtils.getCurrentUserLogin().orElse("system");
     }
 
     private void auditSuccess(String action, String resourceId, Object payload) {

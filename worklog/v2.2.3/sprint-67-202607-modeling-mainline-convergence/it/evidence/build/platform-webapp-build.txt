@@ -46,6 +46,64 @@ Non-blocking existing warnings:
 - caniuse-lite browser data is 15 months old.
 - Existing output chunks over 1500 kB remain subject to the configured warning.
 
+F2 final unified build and deploy verification
+Completed at: 2026-07-19T18:42:00+08:00
+
+Commands:
+- focused F2 dts-platform Maven test batch after all F2 code changes
+- `pnpm build` in source/dts-platform-webapp
+- build `dts-platform:1.0.0` with the prebuilt boot JAR and `ENABLE_MAVEN_BUILD=false`
+- build `dts-platform-webapp:1.0.0`
+- recreate only dts-platform and dts-platform-webapp
+
+Result:
+- Java related unit tests: 60/60 PASS.
+- PostgreSQL integration tests: 20/20 PASS.
+- TypeScript focused contracts: 88/88 PASS.
+- Chrome95 legacy production bundle: PASS, 10602 modules transformed, built in 2m 8s.
+- dts-platform healthy; dts-platform-webapp running.
+- live Chrome95 auth/backend/PostgreSQL E2E: 1/1 PASS.
+
+Known unrelated gate:
+- The repo-wide Maven modernizer gate still reports the pre-existing
+  `MeasurementUnitApplicationService.java:261 Prefer Optional.orElseThrow` violation.
+  F2 did not modify that symbol; F2 verification passed with `-Dmodernizer.skip=true`.
+
+F3 final unified build and deploy verification
+Completed at: 2026-07-19T18:08:00+08:00
+
+Commands:
+- `pnpm build` in source/dts-platform-webapp
+- focused dts-platform Maven test batch after all F3 code changes
+- PostgreSQL Testcontainers ModelSpecRepositoryIT
+- build `dts-platform:1.0.0` and `dts-platform-webapp:1.0.0`
+- recreate only dts-platform, then dts-platform-webapp
+
+Result:
+- Java focused contracts/resources/gates: 55/55 PASS.
+- RepositoryIT including full Liquibase chain: PASS.
+- TypeScript focused contracts/workbench: 33/33 PASS.
+- Chrome95 legacy production bundle: PASS.
+- dts-platform healthy; changeset 20260719-04-model-spec-dimension-profile applied.
+- live Chrome95 auth/backend/PostgreSQL E2E: 1/1 PASS.
+
+Known unrelated gate:
+- The repo-wide Maven modernizer gate still reports the pre-existing
+  `MeasurementUnitApplicationService.java:261 Prefer Optional.orElseThrow` violation.
+  F3 did not modify that symbol; the focused F3 tests and produced boot JAR passed.
+
+F6-T01 standards and metrics handoff production bundle
+Completed: 2026-07-20
+
+Command:
+pnpm build
+
+Result:
+- Exit code 0.
+- TypeScript and Chrome95 legacy production bundle PASS.
+- 10,587 modules transformed; built in 2m05s.
+- Existing Browserslist age and chunk-size warnings only.
+
 F3-T02 dimension draft final production bundle
 Completed at: 2026-07-19T17:06:00+08:00
 CWD: /opt/prod/s10/v2.2.3/source/dts-platform-webapp

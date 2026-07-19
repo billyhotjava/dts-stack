@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260719-04-model-spec-dimension-profile" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT">
+            <tableExists tableName="modeling_model_spec"/>
+            <columnExists tableName="modeling_model_spec" columnName="contract_version"/>
+        </preConditions>
+        <comment>Add the DIMENSION-specific profile to the canonical ModelSpec ledger without tightening historical v2 rows.</comment>
+        <addColumn tableName="modeling_model_spec">
+            <column name="dimension_profile" type="jsonb"/>
+        </addColumn>
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_model_spec
+                ADD CONSTRAINT ck_model_spec_dimension_profile
+                CHECK (
+                    dimension_profile IS NULL
+                    OR (
+                        contract_version = 2
+                        AND model_type = 'DIMENSION'
+                        AND jsonb_typeof(dimension_profile) = 'object'
+                    )
+                );
+            CREATE UNIQUE INDEX uk_model_spec_v2_dimension_code
+                ON modeling_model_spec (tenant_id, lower(dimension_profile ->> 'dimensionCode'))
+                WHERE contract_version = 2 AND model_type = 'DIMENSION' AND dimension_profile IS NOT NULL;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    IF EXISTS (SELECT 1 FROM modeling_model_spec WHERE dimension_profile IS NOT NULL) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_DIMENSION_PROFILE_DATA_EXISTS';
+                    END IF;
+                END $$;
+            ]]></sql>
+            <sql splitStatements="true" endDelimiter=";"><![CDATA[
+                DROP INDEX IF EXISTS uk_model_spec_v2_dimension_code;
+                ALTER TABLE modeling_model_spec DROP CONSTRAINT IF EXISTS ck_model_spec_dimension_profile;
+            ]]></sql>
+            <dropColumn tableName="modeling_model_spec" columnName="dimension_profile"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

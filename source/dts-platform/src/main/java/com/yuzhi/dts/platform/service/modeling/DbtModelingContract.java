@@ -13,6 +13,7 @@ public final class DbtModelingContract {
         DBT_MANIFEST_INVALID,
         DBT_MODEL_NOT_FOUND,
         DBT_ARTIFACT_UNREADABLE,
+        DBT_MODEL_OWNER_REQUIRED,
     }
 
     public record ManifestImportRequest(
@@ -21,7 +22,10 @@ public final class DbtModelingContract {
         String modelUniqueId,
         Map<String, Object> manifest,
         String sql,
-        String idempotencyKey
+        String idempotencyKey,
+        String modelSpecId,
+        int revision,
+        String modelChecksum
     ) {}
 
     public record ImportResult(String modelSpecId, String dbtUniqueId, String status, int artifactCount) {}
@@ -42,6 +46,14 @@ public final class DbtModelingContract {
         }
         if (request == null || blank(request.modelUniqueId()) || !request.modelUniqueId().startsWith("model.")) {
             issues.add(ErrorCode.DBT_MODEL_NOT_FOUND.name());
+        }
+        if (
+            request == null ||
+            blank(request.modelSpecId()) ||
+            request.revision() < 1 ||
+            blank(request.modelChecksum())
+        ) {
+            issues.add(ErrorCode.DBT_MODEL_OWNER_REQUIRED.name());
         }
         return List.copyOf(issues);
     }

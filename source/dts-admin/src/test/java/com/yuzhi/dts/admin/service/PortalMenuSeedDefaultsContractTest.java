@@ -164,7 +164,7 @@ class PortalMenuSeedDefaultsContractTest {
     }
 
     @Test
-    void dataModelingSeedStartsWithGenericWorkbenchAndKeepsSpecialistEntries() throws Exception {
+    void dataModelingSeedKeepsOnlySprint67CanonicalEntries() throws Exception {
         ClassPathResource seedResource = new ClassPathResource("config/data/portal-menu-seed.json");
         assertTrue(seedResource.exists(), "portal-menu-seed.json must exist");
 
@@ -190,8 +190,7 @@ class PortalMenuSeedDefaultsContractTest {
         assertEquals("warehouse-planning", modelingChildren.get(1).get("key"), "数仓规划 should follow the workbench");
         assertEquals("standards", modelingChildren.get(2).get("key"), "数据标准 should follow 数仓规划");
         assertEquals("dimensional-modeling", modelingChildren.get(3).get("key"), "维度建模 should follow 数据标准");
-        assertEquals("low-code-development", modelingChildren.get(4).get("key"), "低代码开发 should remain a specialist entry");
-        assertEquals("data-metrics", modelingChildren.get(5).get("key"), "数据指标 should remain available");
+        assertEquals("data-metrics", modelingChildren.get(4).get("key"), "数据指标 should remain available");
 
         Map<String, Object> dimensionalModeling = modelingChildren
             .stream()
@@ -201,16 +200,17 @@ class PortalMenuSeedDefaultsContractTest {
         assertNotNull(dimensionalModeling, "数据建模 must expose 维度建模");
 
         List<Map<String, Object>> dimensionChildren = listOfMaps(dimensionalModeling.get("children"));
-        Map<String, Object> lowCode = modelingChildren
-            .stream()
-            .filter(node -> "low-code-development".equals(node.get("key")))
-            .findFirst()
-            .orElse(null);
-        assertNotNull(lowCode, "数据建模 must expose 低代码开发向导");
-        assertEquals("sys.nav.portal.studioLowCodeDevelopment", lowCode.get("titleKey"));
-        assertEquals("低代码开发向导", lowCode.get("title"));
-        assertEquals("/studio/low-code-development", lowCode.get("externalLink"));
+        assertEquals(3, dimensionChildren.size(), "dimension modeling must expose one entry per canonical capability");
+        assertEquals("sys.nav.portal.studioSemanticObjects", dimensionChildren.get(0).get("titleKey"));
+        assertEquals("sys.nav.portal.studioSemanticModels", dimensionChildren.get(1).get("titleKey"));
+        assertEquals("sys.nav.portal.studioSqlModeling", dimensionChildren.get(2).get("titleKey"));
+        assertEquals("高级建模（SQL/dbt）", dimensionChildren.get(2).get("title"));
         assertTrue(containsTitleKey(dimensionChildren, "sys.nav.portal.studioSqlModeling"), "SQL modeling must stay available");
+        assertFalse(containsTitleKey(dimensionChildren, "sys.nav.portal.studioDbtFiles"), "dbt files must be a compatibility route only");
+        assertFalse(
+            modelingChildren.stream().anyMatch(node -> "low-code-development".equals(node.get("key"))),
+            "low-code development must not remain visible"
+        );
 
         Map<String, Object> dataMetrics = modelingChildren
             .stream()
@@ -218,7 +218,9 @@ class PortalMenuSeedDefaultsContractTest {
             .findFirst()
             .orElse(null);
         assertNotNull(dataMetrics, "数据建模 must expose 数据指标");
-        assertTrue(containsTitleKey(listOfMaps(dataMetrics.get("children")), "sys.nav.portal.studioMetricWorkbench"));
+        List<Map<String, Object>> metricChildren = listOfMaps(dataMetrics.get("children"));
+        assertEquals(1, metricChildren.size(), "指标工作台 must be the only metric menu leaf");
+        assertTrue(containsTitleKey(metricChildren, "sys.nav.portal.studioMetricWorkbench"));
         assertFalse(containsTitleKey(dimensionChildren, "sys.nav.portal.studioMetricWorkbench"), "metric workbench must stay in 数据指标");
 
         Map<String, Object> dataStudio = listOfMaps(studioRoot.get("children"))
@@ -246,14 +248,18 @@ class PortalMenuSeedDefaultsContractTest {
         assertNotNull(workbenchDefault, "workbench role default should keep its existing code");
         assertEquals("建模工作台", workbenchDefault.get("title"));
         assertEquals("/modeling/workbench", workbenchDefault.get("route"));
-        Map<String, Object> lowCodeDefault = defaults
+        Map<String, Object> sqlDefault = defaults
             .stream()
-            .filter(rule -> "sys.nav.portal.studioLowCodeDevelopment".equals(rule.get("code")))
+            .filter(rule -> "sys.nav.portal.studioSqlModeling".equals(rule.get("code")))
             .findFirst()
             .orElse(null);
-        assertNotNull(lowCodeDefault, "低代码开发向导 role default entry must stay documented");
-        assertEquals("/studio/low-code-development", lowCodeDefault.get("route"));
-        assertTrue(((List<?>) lowCodeDefault.get("requiredRoles")).isEmpty(), "低代码开发向导 seed must not add default role bindings");
+        assertNotNull(sqlDefault, "advanced modeling role default must stay documented");
+        assertEquals("高级建模（SQL/dbt）", sqlDefault.get("title"));
+        assertEquals("/studio/sql-modeling", sqlDefault.get("route"));
+        assertFalse(
+            defaults.stream().anyMatch(rule -> "sys.nav.portal.studioLowCodeDevelopment".equals(rule.get("code"))),
+            "retired low-code default must not be rebound on a new installation"
+        );
     }
 
     @Test
@@ -269,6 +275,21 @@ class PortalMenuSeedDefaultsContractTest {
         assertTrue(xml.contains("sys.nav.portal.studioBusinessProcesses"));
         assertTrue(xml.contains("/modeling/workbench"));
         assertFalse(xml.toLowerCase(Locale.ROOT).contains("delete from portal_menu_visibility"));
+    }
+
+    @Test
+    void sprint67ModelingMenuMigrationSoftDeletesWithoutRemovingVisibilityBindings() throws Exception {
+        String changelogFile = "20260719-01_sprint67_modeling_menu_convergence.xml";
+        ClassPathResource master = new ClassPathResource("config/liquibase/master.xml");
+        assertTrue(master.getContentAsString(StandardCharsets.UTF_8).contains(changelogFile));
+
+        ClassPathResource changelog = new ClassPathResource("config/liquibase/changelog/" + changelogFile);
+        assertTrue(changelog.exists(), "Sprint-67 menu convergence changelog must exist");
+        String xml = changelog.getContentAsString(StandardCharsets.UTF_8);
+        assertTrue(xml.contains("deleted = TRUE"));
+        assertTrue(xml.contains("高级建模（SQL/dbt）"));
+        assertFalse(xml.toLowerCase(Locale.ROOT).contains("delete from portal_menu_visibility"));
+        assertFalse(xml.toLowerCase(Locale.ROOT).contains("delete from portal_menu "));
     }
 
     @Test

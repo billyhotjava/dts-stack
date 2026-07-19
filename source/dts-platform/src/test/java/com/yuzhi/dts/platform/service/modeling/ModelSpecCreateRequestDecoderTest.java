@@ -78,6 +78,23 @@ class ModelSpecCreateRequestDecoderTest {
     }
 
     @Test
+    void decoderAcceptsCanonicalDimensionProfileWithoutTighteningLegacyDrafts() throws Exception {
+        ObjectNode candidate = genericDimension();
+        candidate.put("description", "Organization analysis dimension");
+        ObjectNode profile = candidate.putObject("dimensionProfile");
+        profile.put("dimensionCode", "DIM_ORGANIZATION");
+        profile.putArray("hierarchies");
+        profile.putObject("scdPolicy").put("type", "TYPE1");
+        profile.put("reuseScope", "PLAN");
+
+        ModelSpecCreateRequestDecoder.DecodeResult result = decoder.decode(candidate);
+
+        assertThat(result.issues()).isEmpty();
+        assertThat(result.command()).isNotNull();
+        assertThat(result.command().dimensionProfile().dimensionCode()).isEqualTo("DIM_ORGANIZATION");
+    }
+
+    @Test
     void decoderReturnsTheCommandOnlyWhenWireShapeAndSemanticsAreValid() throws Exception {
         ModelSpecCreateRequestDecoder.DecodeResult result = decoder.decode(genericFact());
 

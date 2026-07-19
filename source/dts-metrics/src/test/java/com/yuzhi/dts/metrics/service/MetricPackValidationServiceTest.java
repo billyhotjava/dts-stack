@@ -22,7 +22,6 @@ class MetricPackValidationServiceTest {
               apply_rls: true
             files:
               domains: domains.yml
-              business_objects: business-objects.yml
               dimensions: dimensions.yml
               metrics: metrics.yml
               models: models.yml
@@ -36,6 +35,7 @@ class MetricPackValidationServiceTest {
 
         assertThat(result.valid()).isTrue();
         assertThat(result.summary()).containsEntry("packId", "flower-rental");
+        assertThat(result.errors()).noneMatch(error -> error.contains("business_objects"));
     }
 
     @Test
@@ -51,7 +51,6 @@ class MetricPackValidationServiceTest {
               apply_rls: false
             files:
               domains: domains.yml
-              business_objects: business-objects.yml
               dimensions: dimensions.yml
               metrics: metrics.yml
               models: models.yml
@@ -80,7 +79,6 @@ class MetricPackValidationServiceTest {
               apply_rls: true
             files:
               domains: domains.yml
-              business_objects: business-objects.yml
               dimensions: dimensions.yml
               metrics: metrics.yml
               models: models.yml
@@ -108,7 +106,6 @@ class MetricPackValidationServiceTest {
               apply_rls: true
             files:
               domains: ../domains.yml
-              business_objects: business-objects.yml
               dimensions: dimensions.yml
               metrics: metrics.yml
               models: models.yml
@@ -142,7 +139,6 @@ class MetricPackValidationServiceTest {
               apply_rls: true
             files:
               domains: domains.yml
-              business_objects: business-objects.yml
               dimensions: dimensions.yml
               metrics: metrics.yml
               models: models.yml
@@ -170,7 +166,6 @@ class MetricPackValidationServiceTest {
               apply_rls: true
             files:
               domains: domains.yml
-              business_objects: business-objects.yml
               dimensions: dimensions.yml
               metrics: metrics.yml
               models: models.yml
@@ -209,7 +204,6 @@ class MetricPackValidationServiceTest {
               apply_rls: true
             files:
               domains: domains.yml
-              business_objects: business-objects.yml
               dimensions: dimensions.yml
               metrics: metrics.yml
               models: models.yml
@@ -239,7 +233,6 @@ class MetricPackValidationServiceTest {
               apply_rls: true
             files:
               domains: domains.yml
-              business_objects: business-objects.yml
               dimensions: dimensions.yml
               metrics: metrics.yml
               models: models.yml
@@ -276,7 +269,6 @@ class MetricPackValidationServiceTest {
                   field: contract_amount
             files:
               domains: domains.yml
-              business_objects: business-objects.yml
               dimensions: dimensions.yml
               metrics: metrics.yml
               models: models.yml
@@ -313,7 +305,6 @@ class MetricPackValidationServiceTest {
                   field: contract_amount
             files:
               domains: domains.yml
-              business_objects: business-objects.yml
               dimensions: dimensions.yml
               metrics: metrics.yml
               models: models.yml
@@ -350,7 +341,6 @@ class MetricPackValidationServiceTest {
                   field: contract_amount
             files:
               domains: domains.yml
-              business_objects: business-objects.yml
               dimensions: dimensions.yml
               metrics: metrics.yml
               models: models.yml
@@ -376,7 +366,6 @@ class MetricPackValidationServiceTest {
             edition_required: professional
             files:
               domains: domains.yml
-              business_objects: business-objects.yml
               dimensions: dimensions.yml
               metrics: metrics.yml
               models: models.yml
@@ -410,7 +399,6 @@ class MetricPackValidationServiceTest {
               apply_rls: true
             files:
               domains: domains.yml
-              business_objects: business-objects.yml
               dimensions: dimensions.yml
               metrics: metrics.yml
               models: models.yml

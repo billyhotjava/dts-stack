@@ -116,7 +116,7 @@
                   "path": "subjects",
                   "icon": "solar:map-point-bold-duotone",
                   "titleKey": "sys.nav.portal.governanceSubjects",
-                  "title": "主题域管理",
+                  "title": "业务分类",
                   "externalLink": "/governance/subjects"
                 }
               ]
@@ -128,14 +128,6 @@
               "titleKey": "sys.nav.portal.dataStandards",
               "title": "数据标准",
               "children": [
-                {
-                  "key": "standard-package",
-                  "path": "standard-package",
-                  "icon": "solar:import-bold-duotone",
-                  "titleKey": "sys.nav.portal.governanceStandardPackage",
-                  "title": "标准包导入",
-                  "externalLink": "/foundation/standard-package"
-                },
                 {
                   "key": "glossary",
                   "path": "glossary",
@@ -161,12 +153,12 @@
                   "externalLink": "/governance/standards/reference"
                 },
                 {
-                  "key": "templates",
-                  "path": "templates",
-                  "icon": "solar:folder-with-files-bold-duotone",
-                  "titleKey": "sys.nav.portal.governanceTemplates",
-                  "title": "标准模板",
-                  "externalLink": "/governance/templates"
+                  "key": "units",
+                  "path": "units",
+                  "icon": "solar:ruler-cross-pen-bold-duotone",
+                  "titleKey": "sys.nav.portal.governanceMeasurementUnits",
+                  "title": "计量单位",
+                  "externalLink": "/governance/standards/units"
                 }
               ]
             },
@@ -177,14 +169,6 @@
               "titleKey": "sys.nav.portal.dimensionalModeling",
               "title": "维度建模",
               "children": [
-                {
-                  "key": "sql",
-                  "path": "sql-modeling",
-                  "icon": "solar:documents-bold-duotone",
-                  "titleKey": "sys.nav.portal.studioSqlModeling",
-                  "title": "高级建模（SQL）",
-                  "externalLink": "/studio/sql-modeling"
-                },
                 {
                   "key": "semantic-objects",
                   "path": "objects",
@@ -202,22 +186,14 @@
                   "externalLink": "/modeling/models"
                 },
                 {
-                  "key": "dbt-files",
-                  "path": "dbt-files",
-                  "icon": "solar:folder-2-bold-duotone",
-                  "titleKey": "sys.nav.portal.studioDbtFiles",
-                  "title": "项目文件浏览",
-                  "externalLink": "/modeling/dbt-files"
+                  "key": "sql",
+                  "path": "sql-modeling",
+                  "icon": "solar:documents-bold-duotone",
+                  "titleKey": "sys.nav.portal.studioSqlModeling",
+                  "title": "高级建模（SQL/dbt）",
+                  "externalLink": "/studio/sql-modeling"
                 }
               ]
-            },
-            {
-              "key": "low-code-development",
-              "path": "low-code-development",
-              "icon": "solar:magic-stick-3-bold-duotone",
-              "titleKey": "sys.nav.portal.studioLowCodeDevelopment",
-              "title": "低代码开发向导",
-              "externalLink": "/studio/low-code-development"
             },
             {
               "key": "data-metrics",
@@ -233,22 +209,6 @@
                   "titleKey": "sys.nav.portal.studioMetricWorkbench",
                   "title": "指标工作台",
                   "externalLink": "/modeling/metric-workbench"
-                },
-                {
-                  "key": "semantic-metrics",
-                  "path": "metrics",
-                  "icon": "solar:chart-bold-duotone",
-                  "titleKey": "sys.nav.portal.studioSemanticMetrics",
-                  "title": "指标管理",
-                  "externalLink": "/modeling/semantic/metrics"
-                },
-                {
-                  "key": "semantic-publish",
-                  "path": "publish",
-                  "icon": "solar:rocket-bold-duotone",
-                  "titleKey": "sys.nav.portal.studioSemanticPublish",
-                  "title": "发布审核",
-                  "externalLink": "/modeling/semantic/publish"
                 }
               ]
             }

@@ -1,10 +1,11 @@
 import { Alert, Button, Card, Empty, Input, Select, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Plus, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { createModelSpec, listModelSpecs } from "@/api/modelSpecApi";
 import { listWarehousePlans, type WarehousePlanHeader } from "@/api/warehousePlanApi";
+import { JourneyContextBar } from "@/components/journey";
 import { CompactTable } from "@/components/table";
 import { useCatalogDomainOptions } from "@/hooks/useCatalogDomainOptions";
 import { useSearchParams } from "@/routes/hooks";
@@ -32,6 +33,7 @@ export default function ModelCenterPage() {
 	const canEdit = hasWarehousePlanCreateAccess(userRoles);
 	const planId = searchParams.get("planId")?.trim() || "";
 	const domainId = searchParams.get("domainId")?.trim() || "";
+	const compatibilityView = searchParams.get("view")?.trim() || "";
 	const initialType = requestedModelType(searchParams.get("modelType")) || "FACT";
 	const [models, setModels] = useState<ModelSpecView[]>([]);
 	const [candidateModels, setCandidateModels] = useState<ModelSpecView[]>([]);
@@ -44,6 +46,7 @@ export default function ModelCenterPage() {
 	);
 	const [createType, setCreateType] = useState<ModelSpecType>(initialType);
 	const [createOpen, setCreateOpen] = useState(false);
+	const guidedViewOpened = useRef(false);
 	const { labelByKey } = useCatalogDomainOptions();
 
 	const load = useCallback(async () => {
@@ -75,6 +78,13 @@ export default function ModelCenterPage() {
 	useEffect(() => {
 		void load();
 	}, [load]);
+
+	useEffect(() => {
+		if (compatibilityView === "guided" && canEdit && !guidedViewOpened.current) {
+			guidedViewOpened.current = true;
+			setCreateOpen(true);
+		}
+	}, [canEdit, compatibilityView]);
 
 	const planNameById = useMemo(() => new Map(plans.map((plan) => [plan.id, plan.name])), [plans]);
 	const canonicalModels = useMemo(
@@ -167,6 +177,26 @@ export default function ModelCenterPage() {
 					新建模型
 				</Button>
 			</div>
+			<JourneyContextBar stage="modeling" />
+
+			{compatibilityView === "guided" ? (
+				<Alert
+					className="mb-3"
+					type="info"
+					showIcon
+					message="旧低代码入口已并入模型中心"
+					description="请选择维度表、明细表、汇总表或应用表，按统一表单直接创建模型。"
+				/>
+			) : null}
+			{compatibilityView === "release" ? (
+				<Alert
+					className="mb-3"
+					type="info"
+					showIcon
+					message="发布审核已归入模型详情"
+					description="请选择目标模型，在详情页核对实现与发布门禁。"
+				/>
+			) : null}
 
 			{planId ? (
 				<Alert className="mb-3" type="info" showIcon message="已锁定当前建设计划；新建模型时只需选择计划内业务分类" />

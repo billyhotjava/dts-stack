@@ -1,0 +1,12 @@
+{
+  "verifiedAt": "2026-07-19",
+  "pages": [
+    { "route": "/modeling/workbench", "primaryAction": "新建规划", "output": "WarehousePlan", "next": "后端 StageProjection.nextAction" },
+    { "route": "/governance/subjects", "primaryAction": "维护业务分类", "output": "domainId", "next": "/modeling/dimensions" },
+    { "route": "/modeling/dimensions", "primaryAction": "登记维度", "output": "DIMENSION ModelSpec", "next": "模型详情" },
+    { "route": "/modeling/models", "primaryAction": "新建模型", "output": "四类 ModelSpec", "next": "模型详情" },
+    { "route": "/studio/sql-modeling", "primaryAction": "按当前模型状态执行", "output": "SQL/dbt 实现证据", "next": "/ops/instances" },
+    { "route": "/modeling/metric-workbench", "primaryAction": "按指标状态维护", "output": "指标口径", "next": "服务或数据产品" }
+  ],
+  "guard": "canonicalModelingPages.source-contract.test.ts and active route convergence tests"
+}

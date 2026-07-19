@@ -118,6 +118,8 @@
     <include file="config/liquibase/changelog/20260712-01_modeling_menu_convergence.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260712-02_business_process_menu_route.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260717-01_generic_modeling_workbench_menu.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260719-01_sprint67_modeling_menu_convergence.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260720-01_sprint67_measurement_unit_menu.xml" relativeToChangelogFile="false"/>
     <!-- jhipster-needle-liquibase-add-changelog - JHipster will add liquibase changelogs here -->
     <!-- jhipster-needle-liquibase-add-constraints-changelog - JHipster will add liquibase constraints changelogs here -->
     <!-- jhipster-needle-liquibase-add-incremental-changelog - JHipster will add incremental liquibase changelogs here -->

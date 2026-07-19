@@ -453,7 +453,7 @@ export default function SubjectAreasPage() {
 			return;
 		}
 		router.push(
-			buildBusinessModelingRoute("/modeling/semantic/objects?from=business-process", {
+			buildBusinessModelingRoute("/modeling/dimensions", {
 				...context,
 				processName: process.name,
 			}),

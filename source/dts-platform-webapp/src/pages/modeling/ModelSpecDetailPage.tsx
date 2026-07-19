@@ -2,10 +2,18 @@ import { Alert, Button, Card, Descriptions, Form, Modal, Space, Spin, Tabs, Tag,
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { getModelSpec, listModelSpecs, updateModelSpec } from "@/api/modelSpecApi";
+import {
+	getModelSpec,
+	getModelSpecStageGates,
+	listModelSpecs,
+	type ModelSpecStageGate,
+	updateModelSpec,
+} from "@/api/modelSpecApi";
 import { useCatalogDomainOptions } from "@/hooks/useCatalogDomainOptions";
 import { useParams } from "@/routes/hooks";
 import { useUserRoles } from "@/store/userStore";
+import { ModelSpecBlockerPanel } from "./components/ModelSpecBlockerPanel";
+import { ModelSpecDependencyPanel } from "./components/ModelSpecDependencyPanel";
 import { ModelSpecEditorFields, type ModelSpecSelectOption } from "./components/ModelSpecEditorFields";
 import { ModelSpecFieldsTab } from "./components/ModelSpecFieldsTab";
 import { ModelSpecStandardsTab } from "./components/ModelSpecStandardsTab";
@@ -14,6 +22,7 @@ import {
 	type CanonicalModelSpecView,
 	type ModelSpecCasToken,
 	type ModelSpecRevisionConflictDetails,
+	type ModelSpecStandardBinding,
 	type ModelSpecView,
 	validateModelSpecUpdate,
 } from "./modelSpecV2Contract";
@@ -39,6 +48,7 @@ const issueField = (field: string): keyof ModelSpecDraft => {
 	if (field === "dependsOn") return "upstreamIds";
 	if (field === "dimensionRefs") return "dimensionRefIds";
 	if (field === "timeSemantics") return "timeSemanticsType";
+	if (field === "dimensionProfile") return "dimensionCode";
 	return field as keyof ModelSpecDraft;
 };
 
@@ -52,6 +62,9 @@ export default function ModelSpecDetailPage() {
 	const [form] = Form.useForm<ModelSpecDraft>();
 	const [model, setModel] = useState<ModelSpecView | null>(null);
 	const [availableModels, setAvailableModels] = useState<CanonicalModelSpecView[]>([]);
+	const [stageGates, setStageGates] = useState<ModelSpecStageGate[]>([]);
+	const [gateLoading, setGateLoading] = useState(false);
+	const [gateError, setGateError] = useState("");
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [loadError, setLoadError] = useState("");
@@ -65,6 +78,25 @@ export default function ModelSpecDetailPage() {
 	const statusAllowsEdit = canonicalModel?.status === "DRAFT";
 	const canEdit = Boolean(canonicalModel && statusAllowsEdit && roleAllowsEdit && !writeDenied && !statusChanged);
 	const activeTab = useMemo(() => resolveModelSpecDetailTab(searchParams), [searchParams]);
+	const implementationReady = stageGates.some(
+		(gate) => gate.stage === "IMPLEMENTATION_READY" && gate.status === "READY",
+	);
+	const implementationPath = canonicalModel
+		? `/studio/sql-modeling?planId=${encodeURIComponent(canonicalModel.planId)}&modelSpecId=${encodeURIComponent(canonicalModel.id)}&revision=${canonicalModel.revision}&implementationMode=${encodeURIComponent(canonicalModel.implementationMode)}`
+		: "";
+
+	const loadStageGates = useCallback(async () => {
+		setGateLoading(true);
+		setGateError("");
+		try {
+			setStageGates(await getModelSpecStageGates(modelSpecId));
+		} catch {
+			setStageGates([]);
+			setGateError("暂时无法读取服务端门禁结果，不影响继续编辑草稿");
+		} finally {
+			setGateLoading(false);
+		}
+	}, [modelSpecId]);
 
 	const load = useCallback(async () => {
 		const requestId = ++loadRequestRef.current;
@@ -73,10 +105,17 @@ export default function ModelSpecDetailPage() {
 		setSaveError("");
 		setConflict(null);
 		setStatusChanged(false);
+		setStageGates([]);
+		setGateError("");
 		try {
-			const detail = await getModelSpec(modelSpecId);
+			const [detail, gates] = await Promise.all([
+				getModelSpec(modelSpecId),
+				getModelSpecStageGates(modelSpecId).catch(() => null),
+			]);
 			if (requestId !== loadRequestRef.current) return;
 			setModel(detail);
+			if (gates) setStageGates(gates);
+			else setGateError("暂时无法读取服务端门禁结果，不影响继续编辑草稿");
 			setWriteDenied(false);
 			if (detail.compatibilityMode === "CANONICAL") {
 				form.setFieldsValue(modelSpecDraftFromView(detail));
@@ -156,6 +195,7 @@ export default function ModelSpecDetailPage() {
 			);
 			setModel(updated);
 			form.setFieldsValue(modelSpecDraftFromView(updated));
+			void loadStageGates();
 			setConflict(null);
 			setStatusChanged(false);
 			setSaveError("");
@@ -178,6 +218,45 @@ export default function ModelSpecDetailPage() {
 	const retryConflict = () => {
 		if (!canonicalModel || !conflict) return;
 		void save({ id: canonicalModel.id, revision: conflict.currentRevision, checksum: conflict.currentChecksum });
+	};
+
+	const onSaveStandardBindings = async (standardBindings: ModelSpecStandardBinding[]) => {
+		if (!canonicalModel || !canEdit) return false;
+		setSaveError("");
+		try {
+			const command = buildModelSpecUpdateCommand(
+				{ ...modelSpecDraftFromView(canonicalModel), standardBindings },
+				selectableModels,
+			);
+			const issues = validateModelSpecUpdate(command);
+			if (issues.length > 0) {
+				setSaveError(issues.map((issue) => modelSpecIssueMessage(issue.code)).join("；"));
+				return false;
+			}
+			setSaving(true);
+			const updated = await updateModelSpec(
+				{ id: canonicalModel.id, revision: canonicalModel.revision, checksum: canonicalModel.checksum },
+				command,
+			);
+			setModel(updated);
+			form.setFieldsValue(modelSpecDraftFromView(updated));
+			setConflict(null);
+			setStatusChanged(false);
+			void loadStageGates();
+			return true;
+		} catch (error) {
+			const latest = modelSpecRevisionConflict(error);
+			if (latest) setConflict(latest);
+			if ((error as { response?: { status?: number } })?.response?.status === 403) setWriteDenied(true);
+			if (isModelSpecStatusReadonly(error)) {
+				setStatusChanged(true);
+			} else {
+				setSaveError(modelSpecErrorMessage(error));
+			}
+			return false;
+		} finally {
+			setSaving(false);
+		}
 	};
 
 	const discardAndReload = () => {
@@ -258,11 +337,22 @@ export default function ModelSpecDetailPage() {
 						<Text type="secondary">版本 r{model.revision}</Text>
 					</Space>
 				</div>
-				{canEdit && activeTab !== "standards" ? (
-					<Button type="primary" loading={saving} onClick={() => void save()}>
-						保存草稿
-					</Button>
-				) : null}
+				<Space wrap>
+					{canonicalModel && implementationReady ? (
+						<Button
+							type={canEdit && activeTab !== "standards" ? "default" : "primary"}
+							data-testid="model-spec-enter-implementation"
+							onClick={() => navigate(implementationPath)}
+						>
+							进入 SQL/dbt 实现
+						</Button>
+					) : null}
+					{canEdit && activeTab !== "standards" ? (
+						<Button type="primary" loading={saving} onClick={() => void save()}>
+							保存草稿
+						</Button>
+					) : null}
+				</Space>
 			</div>
 
 			{model.compatibilityMode === "LEGACY_READONLY" ? (
@@ -318,6 +408,15 @@ export default function ModelSpecDetailPage() {
 			) : null}
 
 			{canonicalModel ? (
+				<ModelSpecBlockerPanel
+					gates={stageGates}
+					loading={gateLoading}
+					error={gateError}
+					onReload={() => void loadStageGates()}
+				/>
+			) : null}
+
+			{canonicalModel ? (
 				<Card>
 					<Form form={form} layout="vertical" requiredMark={false} disabled={saving}>
 						<Tabs
@@ -329,17 +428,22 @@ export default function ModelSpecDetailPage() {
 									label: "模型设计",
 									forceRender: true,
 									children: (
-										<ModelSpecEditorFields
-											form={form}
-											planOptions={planOptions}
-											domainOptions={domainOptions}
-											upstreamOptions={upstreamOptions}
-											dimensionOptions={dimensionOptions}
-											lockPlan
-											lockDomain
-											lockModelType
-											readOnly={!canEdit}
-										/>
+										<>
+											<ModelSpecEditorFields
+												form={form}
+												planOptions={planOptions}
+												domainOptions={domainOptions}
+												upstreamOptions={upstreamOptions}
+												dimensionOptions={dimensionOptions}
+												lockPlan
+												lockDomain
+												lockModelType
+												readOnly={!canEdit}
+											/>
+											{canonicalModel.modelType === "SUMMARY" || canonicalModel.modelType === "APPLICATION" ? (
+												<ModelSpecDependencyPanel modelSpecId={canonicalModel.id} revision={canonicalModel.revision} />
+											) : null}
+										</>
 									),
 								},
 								{
@@ -356,7 +460,14 @@ export default function ModelSpecDetailPage() {
 								{
 									key: "standards",
 									label: "字段标准",
-									children: <ModelSpecStandardsTab model={canonicalModel} />,
+									children: (
+										<ModelSpecStandardsTab
+											model={canonicalModel}
+											canEdit={canEdit}
+											saving={saving}
+											onSaveStandardBindings={onSaveStandardBindings}
+										/>
+									),
 								},
 							]}
 						/>

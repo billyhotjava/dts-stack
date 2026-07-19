@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -13,6 +14,7 @@ import com.yuzhi.dts.platform.security.session.PortalSessionInactivityFilter;
 import com.yuzhi.dts.platform.service.modeling.ModelingVNextApplicationService;
 import com.yuzhi.dts.platform.service.modeling.ModelingVNextContract;
 import com.yuzhi.dts.platform.service.modeling.PjmModelingFixture;
+import com.yuzhi.dts.platform.service.modeling.migration.LegacyObjectMigrationService;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.web.filter.AuditLoggingFilter;
 import java.util.List;
@@ -41,6 +43,9 @@ class ModelingVNextResourceTest {
 
     @MockBean
     private AuditService auditService;
+
+    @MockBean
+    private LegacyObjectMigrationService legacyObjectMigrationService;
 
     @MockBean
     private PortalSessionInactivityFilter portalSessionInactivityFilter;
@@ -88,6 +93,22 @@ class ModelingVNextResourceTest {
             .andExpect(jsonPath("$.data.id").value("pjm-project-node"));
 
         verify(service).saveBusinessObject(eq("tenant-pjm"), eq(object), eq(3), eq("idem-pjm-3"));
+    }
+
+    @Test
+    void rejectsRetiredBusinessObjectWritesWithStableHeadersAndCode() throws Exception {
+        when(legacyObjectMigrationService.writeFrozen()).thenReturn(true);
+
+        mockMvc
+            .perform(post("/api/modeling/vnext/business-objects")
+                .header("X-Tenant-Id", "tenant-pjm")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+            .andExpect(status().isGone())
+            .andExpect(header().string("Deprecation", "true"))
+            .andExpect(header().string("Sunset", "Thu, 31 Dec 2026 23:59:59 GMT"))
+            .andExpect(header().string("Link", "</api/modeling/model-specs>; rel=\"successor-version\""))
+            .andExpect(jsonPath("$.code").value("BUSINESS_OBJECT_RETIRED"));
     }
 
     @Test

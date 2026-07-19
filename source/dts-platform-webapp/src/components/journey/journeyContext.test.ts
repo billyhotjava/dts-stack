@@ -16,49 +16,46 @@ describe("journey context params utilities", () => {
 		);
 
 		expect(params).toEqual({
-			modelId: "m-1",
+			modelSpecId: "m-1",
 			sourceId: "ds-1",
-			planningId: "p-1",
+			planId: "p-1",
 			domainId: "d-1",
-			warehouseLayer: "DWD",
-			modelingMode: "dimension",
 		});
-		expect(JOURNEY_CONTEXT_PARAM_KEYS).toContain("planningId");
-		expect(params.processId).toBeUndefined();
-		expect(JOURNEY_CONTEXT_PARAM_KEYS).toContain("processId");
+		expect(JOURNEY_CONTEXT_PARAM_KEYS).not.toContain("planningId");
+		expect(JOURNEY_CONTEXT_PARAM_KEYS).not.toContain("processId");
 	});
 
-	it("preserves process context when building journey routes", () => {
+	it("does not carry retired context when building journey routes", () => {
 		const params = extractJourneyContextParams(new URLSearchParams("journey=e2e-data-product&processId=node-plan-loop"));
-		expect(params.processId).toBe("node-plan-loop");
+		expect(params).toEqual({});
 	});
 
 	it("builds a clear url that drops the target param but keeps the journey and the rest", () => {
 		const url = buildJourneyParamClearUrl(
 			"/workbench",
-			new URLSearchParams("journey=e2e-data-product&modelId=bad-id&sourceId=ds-1"),
-			"modelId",
+			new URLSearchParams("journey=e2e-data-product&modelSpecId=bad-id&sourceId=ds-1"),
+			"modelSpecId",
 		);
 
 		expect(url.startsWith("/workbench?")).toBe(true);
 		expect(url).toContain("journey=e2e-data-product");
 		expect(url).toContain("sourceId=ds-1");
-		expect(url).not.toContain("modelId");
+		expect(url).not.toContain("modelSpecId");
 	});
 
 	it("keeps planning context when clearing an unrelated artifact", () => {
 		const url = buildJourneyParamClearUrl(
 			"/workbench",
 			new URLSearchParams(
-				"journey=e2e-data-product&planningId=p-1&domainId=d-1&warehouseLayer=DWD&modelingMode=dimension&modelId=bad-id",
+				"journey=e2e-data-product&planningId=p-1&domainId=d-1&warehouseLayer=DWD&modelingMode=dimension&modelSpecId=bad-id",
 			),
-			"modelId",
+			"modelSpecId",
 		);
 
-		expect(url).toContain("planningId=p-1");
+		expect(url).toContain("planId=p-1");
 		expect(url).toContain("domainId=d-1");
-		expect(url).toContain("warehouseLayer=DWD");
-		expect(url).toContain("modelingMode=dimension");
+		expect(url).not.toContain("warehouseLayer");
+		expect(url).not.toContain("modelingMode");
 	});
 });
 

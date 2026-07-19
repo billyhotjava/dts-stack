@@ -58,6 +58,7 @@ export function ModelSpecEditorFields({
 }: Props) {
 	const modelType = (Form.useWatch("modelType", form) || "FACT") as ModelSpecType;
 	const selectedPlanId = Form.useWatch("planId", form);
+	const dimensionScdType = Form.useWatch("dimensionScdType", form);
 	const editorCopy = modelSpecEditorCopy(modelType);
 
 	return (
@@ -152,31 +153,137 @@ export function ModelSpecEditorFields({
 			</Row>
 
 			{modelType === "DIMENSION" ? (
-				<Row gutter={12}>
-					<Col xs={24} md={8}>
-						<Form.Item name="keyDataType" label="键字段类型">
-							<Input disabled={readOnly} placeholder="string" />
-						</Form.Item>
-					</Col>
-					<Col xs={24} md={8}>
-						<Form.Item name="generationStrategyType" label="生成策略">
-							<Select
-								allowClear
-								disabled={readOnly}
-								options={[
-									{ value: "REFERENCE", label: "复用主数据或参考数据" },
-									{ value: "DERIVED", label: "由模型生成" },
-									{ value: "MANUAL", label: "人工维护" },
+				<Space direction="vertical" size={12} className="w-full">
+					<Row gutter={12}>
+						<Col xs={24} md={8}>
+							<Form.Item
+								name="dimensionCode"
+								label="维度编码"
+								rules={[
+									{ required: true, whitespace: true, message: "请输入稳定的维度编码" },
+									{ pattern: /^[A-Z][A-Z0-9_]{0,63}$/, message: "使用 1-64 位大写字母、数字或下划线" },
 								]}
-							/>
-						</Form.Item>
-					</Col>
-					<Col xs={24} md={8}>
-						<Form.Item name="generationStrategyReference" label="策略来源">
-							<Input disabled={readOnly} placeholder="例如：组织主数据" />
-						</Form.Item>
-					</Col>
-				</Row>
+							>
+								<Input disabled={readOnly} placeholder="例如：DIM_ORGANIZATION" />
+							</Form.Item>
+						</Col>
+						<Col xs={24} md={8}>
+							<Form.Item name="dimensionScdType" label="历史保留策略" rules={[{ required: true }]}>
+								<Select
+									disabled={readOnly}
+									options={[
+										{ value: "NONE", label: "不保留历史" },
+										{ value: "TYPE1", label: "覆盖更新（TYPE1）" },
+										{ value: "TYPE2", label: "保留历史（TYPE2）" },
+									]}
+								/>
+							</Form.Item>
+						</Col>
+						<Col xs={24} md={8}>
+							<Form.Item name="dimensionReuseScope" label="复用范围" rules={[{ required: true }]}>
+								<Select
+									disabled={readOnly}
+									options={[
+										{ value: "PLAN", label: "当前建设计划" },
+										{ value: "DOMAIN", label: "当前业务分类" },
+										{ value: "TENANT", label: "全租户" },
+									]}
+								/>
+							</Form.Item>
+						</Col>
+					</Row>
+
+					{dimensionScdType === "TYPE2" ? (
+						<Row gutter={12}>
+							<Col xs={24} md={8}>
+								<Form.Item name="dimensionEffectiveFromField" label="生效时间字段" rules={[{ required: true }]}>
+									<Input disabled={readOnly} placeholder="effective_from" />
+								</Form.Item>
+							</Col>
+							<Col xs={24} md={8}>
+								<Form.Item name="dimensionEffectiveToField" label="失效时间字段" rules={[{ required: true }]}>
+									<Input disabled={readOnly} placeholder="effective_to" />
+								</Form.Item>
+							</Col>
+							<Col xs={24} md={8}>
+								<Form.Item name="dimensionCurrentFlagField" label="当前记录标志" rules={[{ required: true }]}>
+									<Input disabled={readOnly} placeholder="is_current" />
+								</Form.Item>
+							</Col>
+						</Row>
+					) : null}
+
+					<div className="rounded-lg border border-gray-200 p-3">
+						<div className="mb-3 flex items-center justify-between gap-3">
+							<div>
+								<Text strong>分析层级</Text>
+								<Text type="secondary" className="ml-2 text-xs">可选；字段顺序即层级顺序</Text>
+							</div>
+						</div>
+						<Form.List name="dimensionHierarchies">
+							{(fields, { add, remove }) => (
+								<Space direction="vertical" className="w-full">
+									{fields.map((field, index) => (
+										<Row key={field.key} gutter={10} align="middle">
+											<Col xs={24} md={6}>
+												<Form.Item name={[field.name, "code"]} label={`层级 ${index + 1} 编码`} rules={[{ required: true }]}>
+													<Input disabled={readOnly} placeholder="ORG_TREE" />
+												</Form.Item>
+											</Col>
+											<Col xs={24} md={6}>
+												<Form.Item name={[field.name, "name"]} label="层级名称" rules={[{ required: true }]}>
+													<Input disabled={readOnly} placeholder="组织层级" />
+												</Form.Item>
+											</Col>
+											<Col xs={24} md={10}>
+												<Form.Item name={[field.name, "levelFieldsText"]} label="层级字段" rules={[{ required: true }]}>
+													<Input disabled={readOnly} placeholder="group_id, department_id, team_id" />
+												</Form.Item>
+											</Col>
+											<Col xs={24} md={2}>
+												<Button type="text" danger disabled={readOnly} aria-label={`移除层级 ${index + 1}`} onClick={() => remove(field.name)}>
+													<Trash2 size={15} />
+												</Button>
+											</Col>
+										</Row>
+									))}
+									{!readOnly ? (
+										<Button type="dashed" block onClick={() => add({ code: "", name: "", levelFieldsText: "" })}>
+											<Plus size={15} />
+											添加分析层级
+										</Button>
+									) : null}
+								</Space>
+							)}
+						</Form.List>
+					</div>
+
+					<Row gutter={12}>
+						<Col xs={24} md={8}>
+							<Form.Item name="keyDataType" label="键字段类型">
+								<Input disabled={readOnly} placeholder="string" />
+							</Form.Item>
+						</Col>
+						<Col xs={24} md={8}>
+							<Form.Item name="generationStrategyType" label="生成策略">
+								<Select
+									allowClear
+									disabled={readOnly}
+									options={[
+										{ value: "REFERENCE", label: "复用主数据或参考数据" },
+										{ value: "DERIVED", label: "由模型生成" },
+										{ value: "MANUAL", label: "人工维护" },
+									]}
+								/>
+							</Form.Item>
+						</Col>
+						<Col xs={24} md={8}>
+							<Form.Item name="generationStrategyReference" label="策略来源">
+								<Input disabled={readOnly} placeholder="例如：组织主数据" />
+							</Form.Item>
+						</Col>
+					</Row>
+				</Space>
 			) : null}
 
 			{modelType === "FACT" ? (

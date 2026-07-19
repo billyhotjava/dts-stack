@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260719-07a-legacy-object-migration-ledger" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT">
+            <tableExists tableName="semantic_business_object"/>
+            <tableExists tableName="modeling_business_object"/>
+            <tableExists tableName="modeling_model_spec"/>
+        </preConditions>
+        <comment>Add the forward-only decision ledger used before any legacy object retirement.</comment>
+
+        <createTable tableName="modeling_legacy_object_migration_batch">
+            <column name="batch_id" type="varchar(128)"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_legacy_object_migration_batch"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_legacy_object_migration_batch"/></column>
+            <column name="source_checksum" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="source_counts" type="jsonb"><constraints nullable="false"/></column>
+            <column name="target_counts" type="jsonb"><constraints nullable="false"/></column>
+            <column name="orphan_report" type="jsonb"><constraints nullable="false"/></column>
+            <column name="started_by" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="created_date" type="timestamp"><constraints nullable="false"/></column>
+            <column name="last_modified_date" type="timestamp"><constraints nullable="false"/></column>
+        </createTable>
+
+        <createTable tableName="modeling_legacy_object_migration">
+            <column name="batch_id" type="varchar(128)"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_legacy_object_migration"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_legacy_object_migration"/></column>
+            <column name="legacy_source" type="varchar(32)"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_legacy_object_migration"/></column>
+            <column name="legacy_id" type="${uuidType}"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_legacy_object_migration"/></column>
+            <column name="legacy_code" type="varchar(256)"/>
+            <column name="classification" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="decision_status" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="catalog_domain_id" type="${uuidType}"/>
+            <column name="target_plan_id" type="${uuidType}"/>
+            <column name="target_model_spec_id" type="${uuidType}"/>
+            <column name="target_type" type="varchar(32)"/>
+            <column name="target_ref" type="varchar(512)"/>
+            <column name="source_checksum" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="details" type="jsonb"><constraints nullable="false"/></column>
+            <column name="created_date" type="timestamp"><constraints nullable="false"/></column>
+            <column name="last_modified_date" type="timestamp"><constraints nullable="false"/></column>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="modeling_legacy_object_migration"
+            baseColumnNames="batch_id,tenant_id"
+            constraintName="fk_legacy_object_migration_batch"
+            referencedTableName="modeling_legacy_object_migration_batch"
+            referencedColumnNames="batch_id,tenant_id"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_legacy_object_migration"
+            baseColumnNames="catalog_domain_id"
+            constraintName="fk_legacy_object_migration_domain"
+            referencedTableName="catalog_domain"
+            referencedColumnNames="id"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_legacy_object_migration"
+            baseColumnNames="target_model_spec_id"
+            constraintName="fk_legacy_object_migration_model_spec"
+            referencedTableName="modeling_model_spec"
+            referencedColumnNames="id"/>
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_legacy_object_migration_batch
+                ADD CONSTRAINT ck_legacy_object_batch_checksum CHECK (source_checksum ~ '^[0-9a-f]{64}$');
+            ALTER TABLE modeling_legacy_object_migration
+                ADD CONSTRAINT ck_legacy_object_item_checksum CHECK (source_checksum ~ '^[0-9a-f]{64}$');
+            ALTER TABLE modeling_legacy_object_migration
+                ADD CONSTRAINT ck_legacy_object_classification CHECK (
+                    classification IN ('AUTO_DIMENSION','AUTO_FACT_MERGE','MANUAL_SPLIT','ARCHIVE_ONLY','NEEDS_CLASSIFICATION')
+                );
+            ALTER TABLE modeling_legacy_object_migration
+                ADD CONSTRAINT ck_legacy_object_decision_status CHECK (
+                    decision_status IN ('ISOLATED','ARCHIVED_READONLY','READY_FOR_APPROVAL','MIGRATED','FAILED')
+                );
+            CREATE INDEX idx_legacy_object_migration_lookup
+                ON modeling_legacy_object_migration (tenant_id, legacy_source, legacy_id, last_modified_date DESC);
+            CREATE INDEX idx_legacy_object_migration_gate
+                ON modeling_legacy_object_migration (tenant_id, decision_status, classification);
+        ]]></sql>
+
+        <rollback>
+            <dropTable tableName="modeling_legacy_object_migration"/>
+            <dropTable tableName="modeling_legacy_object_migration_batch"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="20260719-07b-legacy-api-usage-ledger" author="codex" dbms="postgresql">
+        <comment>Record metadata-only usage evidence for read compatibility and rejected writes.</comment>
+        <createTable tableName="modeling_legacy_api_usage">
+            <column name="id" type="${uuidType}"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_modeling_legacy_api_usage"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="caller_id" type="varchar(128)"/>
+            <column name="route" type="varchar(512)"><constraints nullable="false"/></column>
+            <column name="http_method" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="result" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="occurred_at" type="timestamp"><constraints nullable="false"/></column>
+        </createTable>
+        <createIndex tableName="modeling_legacy_api_usage" indexName="idx_legacy_api_usage_exit_gate">
+            <column name="tenant_id"/>
+            <column name="occurred_at"/>
+            <column name="route"/>
+        </createIndex>
+        <rollback>
+            <dropTable tableName="modeling_legacy_api_usage"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

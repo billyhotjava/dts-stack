@@ -1,0 +1,11 @@
+F5 BI semantic exclusion/regression evidence
+
+- Retirement changes did not delete or redirect /bi/api/semantic.
+- Semantic metric derivation/compiler endpoints remain in SemanticModelingResource.
+- ControlledMetricDslCompiler remains independent of retired customer-facing business-object CRUD.
+- Focused platform tests: 15/15 PASS.
+- Focused metrics tests: 19/19 PASS.
+- Platform package: BUILD SUCCESS with modernizer skipped only for the pre-existing unrelated MeasurementUnitApplicationService Optional rule.
+- Frontend Chrome 95 legacy production build: PASS.
+
+Scope statement: this evidence proves the code/test/build exclusion boundary; full live BI Journey remains part of F6 integration acceptance.

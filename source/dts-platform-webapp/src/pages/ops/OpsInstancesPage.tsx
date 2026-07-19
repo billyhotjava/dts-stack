@@ -37,7 +37,7 @@ const resolveSourceTaskPath = (record: OpsInstance) => {
 		return `/explore/etl/orchestration?dagId=${encodeURIComponent(record.dagId || record.artifactId || "")}`;
 	}
 	if (record.entryKey === "DBT_RUN") {
-		return `/modeling/dbt-files?runId=${encodeURIComponent(record.externalRunId || record.id)}`;
+		return "/studio/sql-modeling?view=runs";
 	}
 	return `/explore/etl/transform?taskId=${encodeURIComponent(record.artifactId || record.id)}`;
 };
@@ -48,7 +48,8 @@ export default function OpsInstancesPage() {
 	const [searchParams] = useSearchParams();
 	const urlKeyword = searchParams.get("keyword") ?? "";
 	const urlEntryKey = searchParams.get("entryKey") || "ALL";
-	const modelId = searchParams.get("modelId") || "";
+	const modelSpecId = searchParams.get("modelSpecId") || searchParams.get("modelId") || "";
+	const planId = searchParams.get("planId") || "";
 	const journeyRoute = (route: string) =>
 		searchParams.get("journey") === "e2e-data-product" ? buildJourneyUrl(route, searchParams) : route;
 	const [keyword, setKeyword] = useState(urlKeyword);
@@ -129,10 +130,11 @@ export default function OpsInstancesPage() {
 			dataIndex: "actions",
 			width: 420,
 			fixed: "right",
-			render: (_: unknown, record: OpsInstance) => {
+				render: (_: unknown, record: OpsInstance) => {
 				const isDbt =
 					record.entryKey === "DBT_RUN" ||
 					(record.entryKey === "AIRFLOW_DAG" && record.dagId?.includes("dbt"));
+				const failed = ["FAILED", "ERROR", "TIMED_OUT"].includes(String(record.status || "").toUpperCase());
 				return (
 					<Space size="small" wrap>
 						<Button
@@ -162,13 +164,27 @@ export default function OpsInstancesPage() {
 							onClick={() =>
 								navigate(
 									journeyRoute(
-										`/ops/backfill?dagId=${encodeURIComponent(record.dagId || "")}&runId=${encodeURIComponent(record.externalRunId || record.id)}${modelId ? `&modelId=${encodeURIComponent(modelId)}` : ""}`,
+										`/ops/backfill?dagId=${encodeURIComponent(record.dagId || "")}&runId=${encodeURIComponent(record.externalRunId || record.id)}${modelSpecId ? `&modelSpecId=${encodeURIComponent(modelSpecId)}` : ""}`,
 									),
 								)
 							}
 						>
 							补数
 						</Button>
+						{isDbt && failed && modelSpecId ? (
+							<Button
+								type="link"
+								size="small"
+								data-testid="ops-return-model-repair"
+								onClick={() =>
+									navigate(
+										`/modeling/models/${encodeURIComponent(modelSpecId)}?tab=design${planId ? `&planId=${encodeURIComponent(planId)}` : ""}`,
+									)
+								}
+							>
+								返回模型修复
+							</Button>
+						) : null}
 						{isDbt && record.externalRunId && (
 							<Button
 								type="link"

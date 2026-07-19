@@ -1,0 +1,71 @@
+{
+  "capturedAt": "2026-07-20T00:04:13+08:00",
+  "tenantId": "default",
+  "batchId": "legacy-objects-608ba1f186f04890",
+  "sourceChecksum": "608ba1f186f0489041e6db22b49c73f6c0170a8383802657383e2a9bee540d24",
+  "status": "COMPLETED_ACCOUNTED",
+  "sourceCounts": {
+    "catalogDomain": 6,
+    "semanticSubjectDomain": 7,
+    "semanticBusinessObject": 5,
+    "semanticModel": 4,
+    "semanticTableMapping": 9,
+    "semanticDimension": 4,
+    "semanticMetric": 5,
+    "semanticArtifact": 13,
+    "semanticRun": 2,
+    "semanticReview": 2,
+    "modelingBusinessObject": 0,
+    "modelingModelSpec": 0
+  },
+  "orphanReport": {
+    "objectWithoutSubjectDomain": 0,
+    "modelWithoutObject": 0,
+    "mappingWithoutObject": 0,
+    "dimensionWithoutObject": 0,
+    "metricWithoutObject": 0,
+    "artifactWithoutModel": 0,
+    "runWithoutModel": 0,
+    "reviewWithoutModel": 0,
+    "legacyModelSpecWithoutObject": 0
+  },
+  "classificationCounts": {
+    "NEEDS_CLASSIFICATION": 4,
+    "ARCHIVE_ONLY": 1,
+    "AUTO_DIMENSION": 0,
+    "AUTO_FACT_MERGE": 0,
+    "MANUAL_SPLIT": 0
+  },
+  "decisions": [
+    {
+      "legacyObjectId": "c776c411-b2bc-46af-ac3d-34e4567569f0",
+      "classification": "NEEDS_CLASSIFICATION",
+      "blockers": ["DOMAIN_CLASSIFICATION_REQUIRED", "SOURCE_JOIN_REVIEW_REQUIRED", "GRAIN_REVIEW_REQUIRED"],
+      "relatedCounts": {"models": 1, "mappings": 2, "dimensions": 1, "metrics": 1, "artifacts": 0, "runs": 0, "reviews": 0}
+    },
+    {
+      "legacyObjectId": "d4ad27e8-75c3-464a-8ad6-c672123a36a2",
+      "classification": "NEEDS_CLASSIFICATION",
+      "blockers": ["DOMAIN_CLASSIFICATION_REQUIRED", "GRAIN_REVIEW_REQUIRED"],
+      "relatedCounts": {"models": 1, "mappings": 2, "dimensions": 1, "metrics": 2, "artifacts": 5, "runs": 2, "reviews": 2}
+    },
+    {
+      "legacyObjectId": "de6bf195-7f17-442c-bbc3-b3c2705d8a5d",
+      "classification": "ARCHIVE_ONLY",
+      "blockers": [],
+      "relatedCounts": {"models": 0, "mappings": 1, "dimensions": 0, "metrics": 0, "artifacts": 0, "runs": 0, "reviews": 0}
+    },
+    {
+      "legacyObjectId": "12957b5f-6551-4471-8a27-cd009c1f5872",
+      "classification": "NEEDS_CLASSIFICATION",
+      "blockers": ["DOMAIN_CLASSIFICATION_REQUIRED", "GRAIN_REVIEW_REQUIRED"],
+      "relatedCounts": {"models": 1, "mappings": 2, "dimensions": 1, "metrics": 1, "artifacts": 3, "runs": 0, "reviews": 0}
+    },
+    {
+      "legacyObjectId": "69454ba7-8eeb-4f5b-8f14-79ab3979bb23",
+      "classification": "NEEDS_CLASSIFICATION",
+      "blockers": ["DOMAIN_CLASSIFICATION_REQUIRED", "GRAIN_REVIEW_REQUIRED"],
+      "relatedCounts": {"models": 1, "mappings": 2, "dimensions": 1, "metrics": 1, "artifacts": 5, "runs": 0, "reviews": 0}
+    }
+  ]
+}

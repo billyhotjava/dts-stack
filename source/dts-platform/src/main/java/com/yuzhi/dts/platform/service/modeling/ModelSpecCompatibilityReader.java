@@ -138,6 +138,7 @@ public class ModelSpecCompatibilityReader {
             List.of(),
             legacyBindings(legacy.standardBindings()),
             null,
+            null,
             stored.status(),
             stored.revision(),
             normalizedChecksum(stored.checksum(), stored.legacySpecJson()),

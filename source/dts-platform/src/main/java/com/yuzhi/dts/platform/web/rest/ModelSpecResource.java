@@ -9,6 +9,8 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecCreateRequestDecoder;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecException;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.GateView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecUpdateRequestDecoder;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
 import java.net.URI;
@@ -45,6 +47,7 @@ public class ModelSpecResource {
     private final ModelSpecApplicationService service;
     private final ModelSpecCreateRequestDecoder createDecoder;
     private final ModelSpecUpdateRequestDecoder updateDecoder;
+    private final ModelSpecStageGateService stageGates;
     private final WarehousePlanActorProvider actorProvider;
     private final String serverTenantId;
 
@@ -52,12 +55,14 @@ public class ModelSpecResource {
         ModelSpecApplicationService service,
         ModelSpecCreateRequestDecoder createDecoder,
         ModelSpecUpdateRequestDecoder updateDecoder,
+        ModelSpecStageGateService stageGates,
         WarehousePlanActorProvider actorProvider,
         @Value("${dts.platform.modeling.default-tenant-id:default}") String serverTenantId
     ) {
         this.service = service;
         this.createDecoder = createDecoder;
         this.updateDecoder = updateDecoder;
+        this.stageGates = stageGates;
         this.actorProvider = actorProvider;
         this.serverTenantId = serverTenantId;
     }
@@ -90,6 +95,16 @@ public class ModelSpecResource {
     public ResponseEntity<ApiResponse<ModelSpecView>> get(@PathVariable UUID id) {
         ModelSpecView view = service.get(serverTenantId, id);
         return ResponseEntity.ok().eTag(ModelSpecApplicationService.etag(view)).body(ApiResponses.ok(view));
+    }
+
+    @GetMapping("/{id}/stage-gates")
+    public ApiResponse<List<GateView>> stageGates(@PathVariable UUID id) {
+        return ApiResponses.ok(stageGates.evaluateAll(serverTenantId, id));
+    }
+
+    @GetMapping("/{id}/dependencies")
+    public ApiResponse<ModelSpecApplicationService.DependencyGraph> dependencies(@PathVariable UUID id) {
+        return ApiResponses.ok(service.dependencyGraph(serverTenantId, id));
     }
 
     @PutMapping("/{id}")
