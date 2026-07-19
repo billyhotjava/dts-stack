@@ -5,11 +5,11 @@
     xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
 
     <changeSet id="20260719-06-measurement-unit-owner" author="codex" dbms="postgresql">
-        <comment>Create the stable measurement-unit head and immutable revision ledger.</comment>
         <preConditions onFail="HALT">
             <not><tableExists tableName="governance_measurement_unit"/></not>
             <not><tableExists tableName="governance_measurement_unit_revision"/></not>
         </preConditions>
+        <comment>Create the stable measurement-unit head and immutable revision ledger.</comment>
 
         <createTable tableName="governance_measurement_unit">
             <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>

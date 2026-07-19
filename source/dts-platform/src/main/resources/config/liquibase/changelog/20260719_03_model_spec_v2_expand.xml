@@ -5,13 +5,13 @@
     xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
 
     <changeSet id="20260719-03a-model-spec-v2-columns" author="codex" dbms="postgresql">
-        <comment>Expand the existing ModelSpec ledger for the objectless canonical v2 contract.</comment>
         <preConditions onFail="HALT">
             <tableExists tableName="modeling_model_spec"/>
             <tableExists tableName="modeling_model_spec_revision"/>
             <tableExists tableName="modeling_warehouse_plan"/>
             <tableExists tableName="catalog_domain"/>
         </preConditions>
+        <comment>Expand the existing ModelSpec ledger for the objectless canonical v2 contract.</comment>
 
         <dropNotNullConstraint tableName="modeling_model_spec" columnName="object_id" columnDataType="${uuidType}"/>
         <dropNotNullConstraint tableName="modeling_model_spec" columnName="process_id" columnDataType="varchar(128)"/>

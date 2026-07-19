@@ -5,10 +5,6 @@
     xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
 
     <changeSet id="20260719-05-warehouse-plan-source-inventory" author="codex">
-        <comment>
-            Add structured source locators and server-owned resolution evidence. Keep legacy source identity,
-            source version and source-business-mapping structures intact for compatibility.
-        </comment>
         <preConditions onFail="HALT">
             <tableExists tableName="modeling_warehouse_plan_source"/>
             <tableExists tableName="modeling_warehouse_plan_policy"/>
@@ -21,6 +17,10 @@
                 <columnExists tableName="modeling_warehouse_plan_policy" columnName="conceptual_design_allowed"/>
             </not>
         </preConditions>
+        <comment>
+            Add structured source locators and server-owned resolution evidence. Keep legacy source identity,
+            source version and source-business-mapping structures intact for compatibility.
+        </comment>
 
         <addColumn tableName="modeling_warehouse_plan_source">
             <column name="locator_json" type="jsonb"/>

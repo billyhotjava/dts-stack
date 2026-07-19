@@ -5,10 +5,6 @@
     xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
 
     <changeSet id="20260719-04-warehouse-plan-category-policy-draft" author="codex">
-        <comment>
-            Persist category validation evidence and allow planning policy drafts to reach model-design readiness
-            before implementation-only policy fields are supplied.
-        </comment>
         <preConditions onFail="HALT">
             <tableExists tableName="modeling_warehouse_plan_domain"/>
             <tableExists tableName="modeling_warehouse_plan_policy"/>
@@ -16,6 +12,10 @@
             <columnExists tableName="modeling_warehouse_plan_policy" columnName="history_policy"/>
             <columnExists tableName="modeling_warehouse_plan_policy" columnName="default_time_zone"/>
         </preConditions>
+        <comment>
+            Persist category validation evidence and allow planning policy drafts to reach model-design readiness
+            before implementation-only policy fields are supplied.
+        </comment>
 
         <addColumn tableName="modeling_warehouse_plan_domain">
             <column name="last_validated_at" type="timestamp"/>
