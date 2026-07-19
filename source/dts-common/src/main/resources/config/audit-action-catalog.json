@@ -1085,6 +1085,68 @@
       "title": "治理与质量",
       "entries": [
         {
+          "key": "governance.measurementUnits",
+          "title": "度量单位",
+          "actions": [
+            {
+              "code": "GOV_MEASUREMENT_UNIT_LIST",
+              "display": "查看度量单位列表",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "GOV_MEASUREMENT_UNIT_VIEW",
+              "display": "查看度量单位详情",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "GOV_MEASUREMENT_UNIT_VERSION_VIEW",
+              "display": "查看度量单位版本",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "GOV_MEASUREMENT_UNIT_REFERENCE_VIEW",
+              "display": "查看度量单位引用",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "GOV_MEASUREMENT_UNIT_CREATE",
+              "display": "创建度量单位",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "GOV_MEASUREMENT_UNIT_UPDATE",
+              "display": "更新度量单位",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "GOV_MEASUREMENT_UNIT_DEACTIVATE",
+              "display": "停用度量单位",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            }
+          ]
+        },
+        {
           "key": "governance.indicators",
           "title": "指标管理",
           "actions": [

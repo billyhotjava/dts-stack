@@ -180,4 +180,5 @@
     <include file="config/liquibase/changelog/20260719_03_model_spec_v2_expand.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260719_04_warehouse_plan_category_policy_draft.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260719_05_warehouse_plan_source_inventory.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260719_06_measurement_unit_owner.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>
