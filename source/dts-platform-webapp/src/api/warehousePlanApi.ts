@@ -51,6 +51,52 @@ export type WarehousePlanSourceBinding = WarehousePlanSourceRef & {
 	exclusionReason?: string | null;
 };
 
+export type WarehousePlanSourceLocator = {
+	assetId?: string | null;
+	fileId?: string | null;
+	projectKey?: string | null;
+	uniqueId?: string | null;
+	connectionId?: string | null;
+	namespace?: string | null;
+	objectName?: string | null;
+};
+
+export type WarehousePlanSourceBindingInput = {
+	bindingId?: string | null;
+	sourceType?: WarehousePlanSourceType | null;
+	locator?: WarehousePlanSourceLocator | null;
+	confirmationStatus: WarehousePlanConfirmationStatus;
+	exclusionReason?: string | null;
+};
+
+export type WarehousePlanSourceResolutionStatus = "AVAILABLE" | "MISSING" | "FORBIDDEN" | "PROVIDER_ERROR";
+export type WarehousePlanSourceFreshness = "CURRENT" | "STALE" | "UNKNOWN";
+export type WarehousePlanSourceInventoryReadiness = "DRAFT" | "READY" | "BLOCKED" | "NOT_REQUIRED_YET";
+
+export type WarehousePlanSourceBindingView = {
+	bindingId: string;
+	sourceType: WarehousePlanSourceType;
+	locator: WarehousePlanSourceLocator | null;
+	sourceId?: string | null;
+	confirmationStatus: WarehousePlanConfirmationStatus;
+	exclusionReason?: string | null;
+	displayName?: string | null;
+	confirmedVersion?: string | null;
+	resolvedVersion?: string | null;
+	resolutionStatus: WarehousePlanSourceResolutionStatus;
+	freshness: WarehousePlanSourceFreshness;
+	lastValidatedAt?: string | null;
+};
+
+export type WarehousePlanSourceInventoryView = {
+	bindings: WarehousePlanSourceBindingView[];
+	readiness: WarehousePlanSourceInventoryReadiness;
+	issues: WarehousePlanIssue[];
+	version: number;
+	etag: string;
+	checkedAt: string;
+};
+
 export type CreateWarehousePlanResult = {
 	planId: string;
 	plan: WarehousePlanHeader;
@@ -110,6 +156,7 @@ export type WarehousePlanPolicyInput = {
 	namingPolicy: WarehousePlanNamingPolicy | null;
 	historyPolicy: WarehousePlanHistoryPolicy | null;
 	defaultTimeZone?: string | null;
+	conceptualDesignAllowed: boolean;
 };
 
 export type WarehousePlanPolicyView = WarehousePlanPolicyInput & {
@@ -190,6 +237,28 @@ export const saveWarehousePlanCategories = (
 			url: `${WAREHOUSE_PLAN_RESOURCE}/${planId}/baseline/categories`,
 			headers: { "If-Match": `"category-scope:${version}"` },
 			data: { domainBindings },
+			_skipErrorToast: true,
+		}),
+	);
+
+export const getWarehousePlanSources = (planId: string) =>
+	api.get<WarehousePlanSourceInventoryView>(
+		withModelingRequestTimeout({
+			url: `${WAREHOUSE_PLAN_RESOURCE}/${planId}/baseline/sources`,
+			_skipErrorToast: true,
+		}),
+	);
+
+export const saveWarehousePlanSources = (
+	planId: string,
+	version: number,
+	bindings: WarehousePlanSourceBindingInput[],
+) =>
+	api.put<WarehousePlanSourceInventoryView>(
+		withModelingRequestTimeout({
+			url: `${WAREHOUSE_PLAN_RESOURCE}/${planId}/baseline/sources`,
+			headers: { "If-Match": `"sources:${version}"` },
+			data: { bindings },
 			_skipErrorToast: true,
 		}),
 	);

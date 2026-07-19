@@ -551,35 +551,49 @@ public class WarehousePlanApplicationService {
         List<ResolvedSourceWrite> writes = new ArrayList<>();
         Set<UUID> retainedIds = new HashSet<>();
         for (SourceBindingCommand binding : command.bindings()) {
-            String sourceId = WarehousePlanContract.canonicalSourceId(binding.sourceType(), binding.locator());
-            SourceRow existing = binding.bindingId() == null
-                ? existingByIdentity.get(sourceKey(binding.sourceType(), sourceId))
-                : existingById.get(binding.bindingId());
+            SourceRow existing = binding.bindingId() == null ? null : existingById.get(binding.bindingId());
             if (binding.bindingId() != null && existing == null) {
                 throw invalidSourceInventory("SOURCE_BINDING_NOT_FOUND", "bindingId does not belong to this warehouse plan");
             }
+
+            boolean identityProvided = binding.sourceType() != null || binding.locator() != null;
+            SourceType sourceType;
+            SourceLocator locator;
+            String sourceId;
+            if (identityProvided) {
+                sourceType = binding.sourceType();
+                locator = binding.locator();
+                sourceId = WarehousePlanContract.canonicalSourceId(sourceType, locator);
+                if (existing == null) {
+                    existing = existingByIdentity.get(sourceKey(sourceType, sourceId));
+                }
+            } else {
+                sourceType = existing.sourceType();
+                locator = readLocator(existing);
+                sourceId = existing.sourceId();
+            }
             if (
                 existing != null &&
-                (existing.sourceType() != binding.sourceType() || !existing.sourceId().equals(sourceId))
+                (existing.sourceType() != sourceType || !existing.sourceId().equals(sourceId))
             ) {
                 throw invalidSourceInventory("SOURCE_BINDING_IDENTITY_IMMUTABLE", "A binding cannot be reassigned to another source");
             }
 
             UUID bindingId = existing == null ? UUID.randomUUID() : existing.bindingId();
-            retainedIds.add(bindingId);
-            SourceReferenceResolver.ResolvedSource resolution = resolveSource(
-                binding.sourceType(),
-                binding.locator(),
-                serverContext
-            );
+            if (!retainedIds.add(bindingId)) {
+                throw invalidSourceInventory("SOURCE_BINDING_DUPLICATE", "A source binding may only appear once");
+            }
+            SourceReferenceResolver.ResolvedSource resolution = locator == null
+                ? SourceReferenceResolver.ResolvedSource.providerError()
+                : resolveSource(sourceType, locator, serverContext);
             String confirmedVersion = resolution.status() == SourceReferenceResolver.ResolutionStatus.AVAILABLE
                 ? resolution.resolvedVersion()
                 : existing == null ? null : existing.sourceVersion();
             writes.add(
                 new ResolvedSourceWrite(
                     bindingId,
-                    binding.sourceType(),
-                    binding.locator(),
+                    sourceType,
+                    locator,
                     sourceId,
                     binding.confirmationStatus(),
                     binding.exclusionReason(),
@@ -598,11 +612,12 @@ public class WarehousePlanApplicationService {
 
         casEditUnit(serverTenantId, planId, expectedVersion, EditUnit.SOURCES);
         for (ResolvedSourceWrite write : writes) {
-            String locatorJson = writeLocator(write.locator());
+            String locatorJson = write.locator() == null ? null : writeLocator(write.locator());
             int updated = jdbcTemplate.update(
                 """
                 update modeling_warehouse_plan_source
-                   set source_type = ?, source_id = ?, source_version = ?, locator_json = cast(? as jsonb),
+                   set source_type = ?, source_id = ?, source_version = ?,
+                       locator_json = coalesce(cast(? as jsonb), locator_json),
                        confirmation_status = ?, exclusion_reason = ?, resolution_status = ?, last_validated_at = ?,
                        last_modified_date = current_timestamp
                  where tenant_id = ? and plan_id = ? and id = ?
@@ -1230,19 +1245,16 @@ public class WarehousePlanApplicationService {
                 SourceReferenceResolver.ResolvedSource resolution = locator == null
                     ? SourceReferenceResolver.ResolvedSource.providerError()
                     : resolveSource(row.sourceType(), locator, serverContext);
-                return new SourceBindingView(
+                return projectSourceBinding(
                     row.bindingId(),
                     row.sourceType(),
                     locator,
                     row.sourceId(),
                     row.confirmationStatus(),
                     row.exclusionReason(),
-                    resolution.displayName(),
                     row.sourceVersion(),
-                    resolution.resolvedVersion(),
-                    resolution.status(),
-                    freshness(row.sourceVersion(), resolution),
-                    checkedAt
+                    checkedAt,
+                    resolution
                 );
             })
             .toList();
@@ -1278,19 +1290,44 @@ public class WarehousePlanApplicationService {
     }
 
     private SourceBindingView toSourceBindingView(ResolvedSourceWrite write) {
-        return new SourceBindingView(
+        return projectSourceBinding(
             write.bindingId(),
             write.sourceType(),
             write.locator(),
             write.sourceId(),
             write.confirmationStatus(),
             write.exclusionReason(),
-            write.resolution().displayName(),
             write.confirmedVersion(),
-            write.resolution().resolvedVersion(),
-            write.resolution().status(),
-            freshness(write.confirmedVersion(), write.resolution()),
-            write.checkedAt()
+            write.checkedAt(),
+            write.resolution()
+        );
+    }
+
+    private SourceBindingView projectSourceBinding(
+        UUID bindingId,
+        SourceType sourceType,
+        SourceLocator locator,
+        String sourceId,
+        ConfirmationStatus confirmationStatus,
+        String exclusionReason,
+        String confirmedVersion,
+        Instant checkedAt,
+        SourceReferenceResolver.ResolvedSource resolution
+    ) {
+        boolean identityVisible = resolution.status() == SourceReferenceResolver.ResolutionStatus.AVAILABLE;
+        return new SourceBindingView(
+            bindingId,
+            sourceType,
+            identityVisible ? locator : null,
+            identityVisible ? sourceId : null,
+            confirmationStatus,
+            exclusionReason,
+            identityVisible ? resolution.displayName() : null,
+            identityVisible ? confirmedVersion : null,
+            identityVisible ? resolution.resolvedVersion() : null,
+            resolution.status(),
+            freshness(confirmedVersion, resolution),
+            checkedAt
         );
     }
 

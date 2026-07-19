@@ -1,7 +1,11 @@
 package com.yuzhi.dts.platform.service.modeling.warehouse;
 
 import static com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.ResolutionStatus.AVAILABLE;
+import static com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.ResolutionStatus.FORBIDDEN;
+import static com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.ResolutionStatus.MISSING;
+import static com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.ResolutionStatus.PROVIDER_ERROR;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.ConfirmationStatus.CONFIRMED;
+import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.ConfirmationStatus.EXCLUDED;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.OnboardingMode.BUSINESS_FIRST;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceFreshness.STALE;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceInventoryReadiness.NOT_REQUIRED_YET;
@@ -30,6 +34,7 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.S
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceLocator;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.WarehousePlanHeader;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -118,7 +123,22 @@ class WarehousePlanSourceInventoryApplicationServiceIT {
                 .thenReturn(ResolvedSource.missing());
             SourceInventoryView deleted = service.getSources(tenant, plan.id(), ACCESS);
             assertThat(deleted.bindings().getFirst().freshness()).isEqualTo(STALE);
+            assertThat(deleted.bindings().getFirst().resolutionStatus()).isEqualTo(MISSING);
+            assertThat(deleted.bindings().getFirst().sourceId()).isNull();
+            assertThat(deleted.bindings().getFirst().locator()).isNull();
             assertThat(deleted.bindings().getFirst().displayName()).isNull();
+            assertThat(deleted.bindings().getFirst().confirmedVersion()).isNull();
+            assertThat(deleted.bindings().getFirst().resolvedVersion()).isNull();
+
+            when(sourceReferenceResolver.resolve(eq(CATALOG_TABLE), any(SourceLocator.class), any(AccessContext.class)))
+                .thenReturn(ResolvedSource.providerError());
+            SourceInventoryView unavailable = service.getSources(tenant, plan.id(), ACCESS);
+            assertThat(unavailable.bindings().getFirst().resolutionStatus()).isEqualTo(PROVIDER_ERROR);
+            assertThat(unavailable.bindings().getFirst().sourceId()).isNull();
+            assertThat(unavailable.bindings().getFirst().locator()).isNull();
+            assertThat(unavailable.bindings().getFirst().displayName()).isNull();
+            assertThat(unavailable.bindings().getFirst().confirmedVersion()).isNull();
+            assertThat(unavailable.bindings().getFirst().resolvedVersion()).isNull();
 
             assertThatThrownBy(() -> service.getSources(otherTenant, plan.id(), ACCESS))
                 .isInstanceOfSatisfying(WarehousePlanException.class, error ->
@@ -146,6 +166,73 @@ class WarehousePlanSourceInventoryApplicationServiceIT {
         } finally {
             deleteTenant(tenant);
             deleteTenant(otherTenant);
+        }
+    }
+
+    @Test
+    void forbiddenSourcesExposeOnlyTheOpaqueBindingAndStillAllowAnExplicitExclusion() {
+        String tenant = tenant("source-forbidden");
+        try {
+            WarehousePlanHeader plan = service.create(tenant, createCommand()).plan();
+            SourceInventoryView saved = service.saveSources(
+                tenant,
+                plan.id(),
+                1,
+                new SourceInventoryCommand(
+                    List.of(
+                        new SourceBindingCommand(
+                            null,
+                            CATALOG_TABLE,
+                            new SourceLocator(ASSET_ID, null, null, null, null, null, null),
+                            CONFIRMED,
+                            null
+                        )
+                    )
+                ),
+                ACCESS
+            );
+            UUID bindingId = saved.bindings().getFirst().bindingId();
+
+            when(sourceReferenceResolver.resolve(eq(CATALOG_TABLE), any(SourceLocator.class), any(AccessContext.class)))
+                .thenReturn(ResolvedSource.forbidden());
+            SourceInventoryView forbidden = service.getSources(tenant, plan.id(), ACCESS);
+
+            assertThat(forbidden.bindings().getFirst().bindingId()).isEqualTo(bindingId);
+            assertThat(forbidden.bindings().getFirst().resolutionStatus()).isEqualTo(FORBIDDEN);
+            assertThat(forbidden.bindings().getFirst().sourceId()).isNull();
+            assertThat(forbidden.bindings().getFirst().locator()).isNull();
+            assertThat(forbidden.bindings().getFirst().displayName()).isNull();
+            assertThat(forbidden.bindings().getFirst().confirmedVersion()).isNull();
+            assertThat(forbidden.bindings().getFirst().resolvedVersion()).isNull();
+
+            SourceInventoryView excluded = service.saveSources(
+                tenant,
+                plan.id(),
+                2,
+                new SourceInventoryCommand(
+                    List.of(new SourceBindingCommand(bindingId, null, null, EXCLUDED, "access revoked"))
+                ),
+                ACCESS
+            );
+
+            assertThat(excluded.version()).isEqualTo(3);
+            assertThat(excluded.bindings().getFirst().confirmationStatus()).isEqualTo(EXCLUDED);
+            assertThat(excluded.bindings().getFirst().sourceId()).isNull();
+            Map<String, Object> stored = jdbcTemplate.queryForMap(
+                """
+                select source_type, source_id, source_version, locator_json::text as locator_json
+                  from modeling_warehouse_plan_source
+                 where tenant_id = ? and plan_id = ?
+                """,
+                tenant,
+                plan.id()
+            );
+            assertThat(stored.get("source_type")).isEqualTo(CATALOG_TABLE.name());
+            assertThat(stored.get("source_id")).isEqualTo(ASSET_ID.toString());
+            assertThat(stored.get("source_version")).isEqualTo("schema-v1");
+            assertThat(String.valueOf(stored.get("locator_json"))).contains(ASSET_ID.toString());
+        } finally {
+            deleteTenant(tenant);
         }
     }
 

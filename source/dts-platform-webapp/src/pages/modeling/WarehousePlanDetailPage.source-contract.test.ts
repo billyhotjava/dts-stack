@@ -21,6 +21,31 @@ test("six tabs organize editing without becoming a second completion state", () 
 	assert.doesNotMatch(page, /setTabComplete|completedTabs|tabProgress|markComplete/);
 });
 
+test("editing follows the backend maintainer-role gate as well as lifecycle", () => {
+	assert.match(page, /useUserRoles/);
+	assert.match(page, /hasWarehousePlanCreateAccess\(userRoles\)/);
+	assert.match(page, /planEditable\s*=\s*canMaintainPlan\s*&&/);
+});
+
+test("category and policy mutations are plan-scoped before form validation", () => {
+	assert.match(page, /const categoryMutationGuard\s*=\s*useMemo\(\(\) => createLatestRequestGuard\(\)/);
+	assert.match(page, /const policyMutationGuard\s*=\s*useMemo\(\(\) => createLatestRequestGuard\(\)/);
+	for (const [mutationName, guardName] of [
+		["saveCategories", "categoryMutationGuard"],
+		["savePolicy", "policyMutationGuard"],
+	] as const) {
+		const mutation = page.match(new RegExp(`const ${mutationName}[\\s\\S]*?\\n\\t};`))?.[0] || "";
+		assert.ok(
+			mutation.indexOf(`${guardName}.begin()`) < mutation.indexOf("validateFields()"),
+			`${mutationName} must claim its plan-scoped mutation before async form validation`,
+		);
+		assert.match(mutation, /if \(!isCurrent\(\)\) return/);
+	}
+	const planEffect = page.match(/useEffect\(\(\) => \{[\s\S]*?void load\(\);[\s\S]*?\}, \[[\s\S]*?\]\);/)?.[0] || "";
+	assert.match(planEffect, /categoryMutationGuard\.invalidate\(\)/);
+	assert.match(planEffect, /policyMutationGuard\.invalidate\(\)/);
+});
+
 test("detail reads the canonical header, baseline and StageProjection", () => {
 	assert.match(page, /getWarehousePlan/);
 	assert.match(page, /getWarehousePlanningBaseline/);
@@ -139,7 +164,7 @@ test("specialist capabilities remain deep links instead of copied forms", () => 
 	for (const route of [
 		"/governance/subjects",
 		"/catalog/metadata-management",
-		"/modeling/semantic/models",
+		"/modeling/models",
 		"/studio/sql-modeling",
 		"/modeling/dbt-files",
 		"/catalog/assets",

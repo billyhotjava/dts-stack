@@ -9,6 +9,7 @@ import {
 	Select,
 	Skeleton,
 	Space,
+	Switch,
 	Tabs,
 	Tag,
 	Typography,
@@ -47,7 +48,9 @@ import {
 	type WarehousePlanStageProjection,
 } from "@/api/warehousePlanApi";
 import { useSearchParams } from "@/routes/hooks";
-import { createLatestRequestGuard } from "./warehousePlanCreateFlow";
+import { useUserRoles } from "@/store/userStore";
+import { WarehousePlanSourcesTab } from "./WarehousePlanSourcesTab";
+import { createLatestRequestGuard, hasWarehousePlanCreateAccess } from "./warehousePlanCreateFlow";
 import {
 	buildBusinessCategoryManagementRoute,
 	buildWarehouseCategoryOptions,
@@ -122,6 +125,8 @@ export default function WarehousePlanDetailPage() {
 	const location = useLocation();
 	const navigate = useNavigate();
 	const searchParams = useSearchParams();
+	const userRoles = useUserRoles();
+	const canMaintainPlan = hasWarehousePlanCreateAccess(userRoles);
 	const [plan, setPlan] = useState<WarehousePlanHeader | null>(null);
 	const [baseline, setBaseline] = useState<PlanningBaseline | null>(null);
 	const [projection, setProjection] = useState<WarehousePlanStageProjection | null>(null);
@@ -149,6 +154,8 @@ export default function WarehousePlanDetailPage() {
 	const loadGuard = useMemo(() => createLatestRequestGuard(), []);
 	const evidenceLoadGuard = useMemo(() => createLatestRequestGuard(), []);
 	const baselineInputsLoadGuard = useMemo(() => createLatestRequestGuard(), []);
+	const categoryMutationGuard = useMemo(() => createLatestRequestGuard(), []);
+	const policyMutationGuard = useMemo(() => createLatestRequestGuard(), []);
 	const activeSection = useMemo(() => resolveSection(location.pathname), [location.pathname]);
 	const requestedBaselineTab = searchParams.get("tab");
 	const baselineTab: BaselineTab =
@@ -212,6 +219,7 @@ export default function WarehousePlanDetailPage() {
 					namingPolicy: policyResult.value.value.namingPolicy,
 					historyPolicy: policyResult.value.value.historyPolicy,
 					defaultTimeZone: policyResult.value.value.defaultTimeZone || null,
+					conceptualDesignAllowed: policyResult.value.value.conceptualDesignAllowed,
 				});
 				setPolicyDirty(false);
 				setPolicyConflictVersion(null);
@@ -241,6 +249,8 @@ export default function WarehousePlanDetailPage() {
 		const isCurrent = loadGuard.begin();
 		evidenceLoadGuard.invalidate();
 		baselineInputsLoadGuard.invalidate();
+		categoryMutationGuard.invalidate();
+		policyMutationGuard.invalidate();
 		setLoading(true);
 		setFailed(false);
 		setEvidenceFailed(false);
@@ -254,6 +264,8 @@ export default function WarehousePlanDetailPage() {
 		setPolicyDirty(false);
 		setCategoryConflictVersion(null);
 		setPolicyConflictVersion(null);
+		setCategorySaving(false);
+		setPolicySaving(false);
 		categoryForm.resetFields();
 		policyForm.resetFields();
 		try {
@@ -271,9 +283,11 @@ export default function WarehousePlanDetailPage() {
 	}, [
 		baselineInputsLoadGuard,
 		categoryForm,
+		categoryMutationGuard,
 		evidenceLoadGuard,
 		loadGuard,
 		planId,
+		policyMutationGuard,
 		policyForm,
 		refreshBaselineWorkspace,
 		setCategoryDirty,
@@ -286,13 +300,17 @@ export default function WarehousePlanDetailPage() {
 			loadGuard.invalidate();
 			evidenceLoadGuard.invalidate();
 			baselineInputsLoadGuard.invalidate();
+			categoryMutationGuard.invalidate();
+			policyMutationGuard.invalidate();
 		};
-	}, [baselineInputsLoadGuard, evidenceLoadGuard, load, loadGuard]);
+	}, [baselineInputsLoadGuard, categoryMutationGuard, evidenceLoadGuard, load, loadGuard, policyMutationGuard]);
 
 	const saveCategories = async (expectedVersion?: number) => {
 		if (!categoryScope) return;
+		const isCurrent = categoryMutationGuard.begin();
 		try {
 			const values = await categoryForm.validateFields();
+			if (!isCurrent()) return;
 			const bindings = values.domainBindings || [];
 			if (new Set(bindings.map((item) => item.domainId)).size !== bindings.length) {
 				categoryForm.setFields([{ name: "domainBindings", errors: ["同一业务分类不能重复添加"] }]);
@@ -300,11 +318,13 @@ export default function WarehousePlanDetailPage() {
 			}
 			setCategorySaving(true);
 			await saveWarehousePlanCategories(planId, expectedVersion ?? categoryScope.version, bindings);
+			if (!isCurrent()) return;
 			setCategoryDirty(false);
 			setCategoryConflictVersion(null);
 			toast.success("业务分类已保存");
 			await refreshBaselineWorkspace("categories");
 		} catch (error: any) {
+			if (!isCurrent()) return;
 			if (error?.errorFields) return;
 			const currentVersion = resolveWarehousePlanConflictVersion(error);
 			if (currentVersion != null) {
@@ -313,26 +333,32 @@ export default function WarehousePlanDetailPage() {
 				toast.error(warehousePlanMutationErrorMessage(error, "业务分类保存失败"));
 			}
 		} finally {
-			setCategorySaving(false);
+			if (isCurrent()) setCategorySaving(false);
 		}
 	};
 
 	const savePolicy = async (expectedVersion?: number) => {
 		if (!planningPolicy) return;
+		const isCurrent = policyMutationGuard.begin();
 		try {
 			const values = await policyForm.validateFields();
+			if (!isCurrent()) return;
 			setPolicySaving(true);
-			await saveWarehousePlanPolicy(planId, expectedVersion ?? planningPolicy.version, {
+			const savedPolicy = await saveWarehousePlanPolicy(planId, expectedVersion ?? planningPolicy.version, {
 				layerScheme: values.layerScheme,
 				namingPolicy: values.namingPolicy || null,
 				historyPolicy: values.historyPolicy || null,
 				defaultTimeZone: values.defaultTimeZone?.trim() || null,
+				conceptualDesignAllowed: values.conceptualDesignAllowed,
 			});
+			if (!isCurrent()) return;
+			setPlanningPolicy(savedPolicy);
 			setPolicyDirty(false);
 			setPolicyConflictVersion(null);
 			toast.success("数仓分层策略已保存");
 			await refreshBaselineWorkspace("policy");
 		} catch (error: any) {
+			if (!isCurrent()) return;
 			if (error?.errorFields) return;
 			const currentVersion = resolveWarehousePlanConflictVersion(error);
 			if (currentVersion != null) {
@@ -341,7 +367,7 @@ export default function WarehousePlanDetailPage() {
 				toast.error(warehousePlanMutationErrorMessage(error, "数仓分层策略保存失败"));
 			}
 		} finally {
-			setPolicySaving(false);
+			if (isCurrent()) setPolicySaving(false);
 		}
 	};
 
@@ -393,7 +419,7 @@ export default function WarehousePlanDetailPage() {
 		{ key: "implementation", label: "实现与验证" },
 		{ key: "deliverables", label: "发布成果" },
 	];
-	const planEditable = plan.lifecycleStatus !== "PUBLISHED" && plan.lifecycleStatus !== "ARCHIVED";
+	const planEditable = canMaintainPlan && plan.lifecycleStatus !== "PUBLISHED" && plan.lifecycleStatus !== "ARCHIVED";
 	const nextAction = projection?.nextAction || null;
 	const categorySelectOptions = buildWarehouseCategoryOptions(
 		domainOptions.filter((item): item is DomainOptionNode & { id: string } => Boolean(item.id)),
@@ -575,7 +601,7 @@ export default function WarehousePlanDetailPage() {
 											<Form
 												form={categoryForm}
 												layout="vertical"
-												disabled={categorySaving}
+												disabled={categorySaving || !planEditable}
 												onValuesChange={() => setCategoryDirty(true)}
 												onFinish={() => void saveCategories()}
 											>
@@ -723,7 +749,7 @@ export default function WarehousePlanDetailPage() {
 											<Form
 												form={policyForm}
 												layout="vertical"
-												disabled={policySaving}
+												disabled={policySaving || !planEditable}
 												onValuesChange={() => setPolicyDirty(true)}
 												onFinish={() => void savePolicy()}
 											>
@@ -735,6 +761,14 @@ export default function WarehousePlanDetailPage() {
 													<Select
 														options={[{ value: "CLASSIC_ODS_DWD_DWS_ADS", label: "经典数仓：ODS → DWD → DWS → ADS" }]}
 													/>
+												</Form.Item>
+												<Form.Item
+													name="conceptualDesignAllowed"
+													label="来源未齐时允许概念设计"
+													valuePropName="checked"
+													extra="开启后可先设计事实、维度与粒度；生成模型或进入实现前仍必须补齐来源。"
+												>
+													<Switch checkedChildren="允许" unCheckedChildren="不允许" />
 												</Form.Item>
 												<div className="grid gap-4 md:grid-cols-2">
 													<Form.Item name="namingPolicy" label="命名规则（进入实现前补齐）">
@@ -781,20 +815,14 @@ export default function WarehousePlanDetailPage() {
 								key: "sources",
 								label: "来源盘点",
 								children: (
-									<div className="max-w-3xl rounded-xl border border-slate-200 p-5">
-										<Title level={5}>数据从哪里来</Title>
-										<Paragraph type="secondary">
-											{plan.onboardingMode === "ASSET_FIRST"
-												? "核对已选数据并确认是否纳入本计划。"
-												: "业务目标可以先进入概念设计，在生成或实现模型前补齐数据来源。"}
-										</Paragraph>
-										<Button
-											icon={<Database size={16} />}
-											onClick={() => openSpecialist("/catalog/metadata-management")}
-										>
-											盘点现有数据
-										</Button>
-									</div>
+									<WarehousePlanSourcesTab
+										planId={planId}
+										onboardingMode={plan.onboardingMode}
+										conceptualDesignAllowed={planningPolicy?.value.conceptualDesignAllowed === true}
+										editable={planEditable}
+										onOpenCatalog={() => openSpecialist("/catalog/metadata-management")}
+										onSaved={loadEvidence}
+									/>
 								),
 							},
 						]}
@@ -818,7 +846,7 @@ export default function WarehousePlanDetailPage() {
 				<SpecialistSection
 					title="事实与维度"
 					description="维护模型台账、粒度、时间语义和关系；计划详情只提供上下文和入口。"
-					actions={[{ label: "进入模型中心", route: "/modeling/semantic/models", icon: <Boxes size={17} /> }]}
+					actions={[{ label: "进入模型中心", route: "/modeling/models", icon: <Boxes size={17} /> }]}
 					onOpen={openSpecialist}
 				/>
 			) : null}

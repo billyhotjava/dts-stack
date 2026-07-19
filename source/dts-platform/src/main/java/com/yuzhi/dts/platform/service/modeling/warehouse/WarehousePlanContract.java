@@ -482,20 +482,31 @@ public final class WarehousePlanContract {
         for (int index = 0; index < command.bindings().size(); index++) {
             SourceBindingCommand binding = command.bindings().get(index);
             String field = "bindings[" + index + "]";
-            if (binding == null || binding.sourceType() == null || binding.confirmationStatus() == null) {
+            if (binding == null || binding.confirmationStatus() == null) {
                 issues.add(new DomainIssue("SOURCE_BINDING_INVALID", "Source bindings must be complete", field));
-                continue;
-            }
-            if (!validLocator(binding.sourceType(), binding.locator())) {
-                issues.add(new DomainIssue("SOURCE_LOCATOR_INVALID", "Source locator does not match sourceType", field + ".locator"));
                 continue;
             }
             if (binding.bindingId() != null && !bindingIds.add(binding.bindingId())) {
                 issues.add(new DomainIssue("SOURCE_BINDING_DUPLICATE", "bindingId must be unique", field + ".bindingId"));
             }
-            String sourceId = canonicalSourceId(binding.sourceType(), binding.locator());
-            if (!identities.add(binding.sourceType().name() + "\u0000" + sourceId)) {
-                issues.add(new DomainIssue("SOURCE_REFERENCE_DUPLICATE", "Source references must be unique", field + ".locator"));
+            boolean identityProvided = binding.sourceType() != null || binding.locator() != null;
+            if (binding.bindingId() == null && !identityProvided) {
+                issues.add(new DomainIssue("SOURCE_BINDING_INVALID", "New source bindings require an identity", field));
+                continue;
+            }
+            if (identityProvided) {
+                if (!validLocator(binding.sourceType(), binding.locator())) {
+                    issues.add(
+                        new DomainIssue("SOURCE_LOCATOR_INVALID", "Source locator does not match sourceType", field + ".locator")
+                    );
+                    continue;
+                }
+                String sourceId = canonicalSourceId(binding.sourceType(), binding.locator());
+                if (!identities.add(binding.sourceType().name() + "\u0000" + sourceId)) {
+                    issues.add(
+                        new DomainIssue("SOURCE_REFERENCE_DUPLICATE", "Source references must be unique", field + ".locator")
+                    );
+                }
             }
             if (binding.confirmationStatus() == ConfirmationStatus.EXCLUDED && isBlank(binding.exclusionReason())) {
                 issues.add(
@@ -680,8 +691,10 @@ public final class WarehousePlanContract {
                 source == null ||
                 source.bindingId() == null ||
                 source.sourceType() == null ||
-                source.locator() == null ||
-                source.confirmationStatus() == null
+                source.confirmationStatus() == null ||
+                source.resolutionStatus() == null ||
+                source.freshness() == null ||
+                (source.resolutionStatus() == SourceReferenceResolver.ResolutionStatus.AVAILABLE && source.locator() == null)
             ) {
                 blocked = true;
                 allResolved = false;

@@ -61,6 +61,33 @@ class WarehousePlanSourceInventoryContractTest {
     }
 
     @Test
+    void existingBindingsMayUpdateTheirDecisionWithoutRepostingARestrictedLocator() {
+        SourceBindingCommand decisionOnly = new SourceBindingCommand(
+            BINDING_ID,
+            null,
+            null,
+            EXCLUDED,
+            "access revoked"
+        );
+        SourceBindingCommand incompleteNewBinding = new SourceBindingCommand(
+            null,
+            null,
+            null,
+            CONFIRMED,
+            null
+        );
+
+        assertThat(
+            WarehousePlanContract.validateSourceInventoryCommand(new SourceInventoryCommand(List.of(decisionOnly)))
+        ).isEmpty();
+        assertThat(
+            WarehousePlanContract.validateSourceInventoryCommand(new SourceInventoryCommand(List.of(incompleteNewBinding)))
+        )
+            .extracting(WarehousePlanContract.DomainIssue::code)
+            .containsExactly("SOURCE_BINDING_INVALID");
+    }
+
+    @Test
     void requiresAllIncludedSourcesToBeConfirmedAndCurrent() {
         SourceBindingView current = source(CONFIRMED, AVAILABLE, CURRENT, null);
         SourceBindingView excludedMissing = source(EXCLUDED, MISSING, STALE, "not used");
