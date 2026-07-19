@@ -1,0 +1,24 @@
+Sprint-67 F3-T02 维度草稿闭环前端证据
+时间：2026-07-19 17:06 +08:00
+结果：PASS
+
+覆盖范围：
+- `/modeling/dimensions` 直接创建 `modelType=DIMENSION` 的 canonical ModelSpec；
+- 新 UI 要求填写“维度定义”，但未原地收紧 contractVersion=2 的历史兼容边界；
+- 创建请求包含 planId/domainId、description、grain 和 KEY field，不包含业务对象、语义对象或业务过程字段；
+- 折叠区未挂载时，先校验可见字段，再以 `getFieldsValue(true)` 读取完整表单状态，避免漏掉默认 implementationMode；
+- 只有 DRAFT 可编辑；状态并发变化进入只读恢复，并提供“加载最新状态”；
+- 创建使用受已加载计划/已确认分类候选约束、并由后端鉴权的表单上下文；详情更新与返回目录使用服务端 ModelSpec 的 planId/domainId，不信任伪造查询参数；
+- 目录加载失败与真实空目录分离，失败时隐藏伪空表并提供重试；
+- 390x844 抽屉宽度受视口约束，等待进入动画稳定后无 document/body 横向溢出。
+
+定向测试：
+- 5 个 TypeScript test files，36 个测试定义：PASS；
+- 最终根因修复后复验受影响的 2 个 test files，11 个测试定义：PASS；
+- `pnpm build`（Chrome 95 legacy production bundle）：PASS，10,601 modules transformed，built in 2m 3s；
+- Chrome 95：未受最终表单读取修复影响的 7 个场景已通过；最终 bundle 上受影响的维度草稿场景 1/1 PASS。
+
+边界：
+- 本切片没有实现 Phase-B `dimensionProfile`、SCD、层级、复用范围或 IMPLEMENTATION_READY 门禁；
+- 本切片没有改动 ModelSpec v2 后端生产契约；历史空 description、重复 grain keys、grain/KEY 不闭合仍保持兼容；
+- WarehousePlan/ModelSpec API 在浏览器验收中由 Playwright 精确拦截，不声称 live backend/live auth E2E。

@@ -3,7 +3,7 @@ import { Alert, Button, Col, Collapse, Form, Input, Radio, Row, Select, Space, T
 import { Plus, Trash2 } from "lucide-react";
 import type { ModelSpecLayer, ModelSpecType } from "../modelSpecV2Contract";
 import type { ModelSpecDraft } from "../modelSpecWorkbench";
-import { MODEL_TYPE_DESCRIPTIONS, MODEL_TYPE_LABELS } from "../modelSpecWorkbench";
+import { MODEL_TYPE_DESCRIPTIONS, MODEL_TYPE_LABELS, modelSpecEditorCopy } from "../modelSpecWorkbench";
 
 const { Text } = Typography;
 
@@ -58,6 +58,7 @@ export function ModelSpecEditorFields({
 }: Props) {
 	const modelType = (Form.useWatch("modelType", form) || "FACT") as ModelSpecType;
 	const selectedPlanId = Form.useWatch("planId", form);
+	const editorCopy = modelSpecEditorCopy(modelType);
 
 	return (
 		<Space direction="vertical" size={16} className="w-full">
@@ -106,15 +107,23 @@ export function ModelSpecEditorFields({
 
 			<Form.Item
 				name="name"
-				label="模型名称"
+				label={editorCopy.nameLabel}
 				rules={[
-					{ required: true, whitespace: true, message: "请输入模型名称" },
+					{ required: true, whitespace: true, message: editorCopy.nameRequiredMessage },
 					{ max: 256, message: "模型名称不能超过 256 个字符" },
 				]}
 			>
 				<Input disabled={readOnly} placeholder="例如：客户事件明细" />
 			</Form.Item>
-			<Form.Item name="description" label="用途说明">
+			<Form.Item
+				name="description"
+				label={editorCopy.descriptionLabel}
+				rules={
+					editorCopy.descriptionRequiredMessage
+						? [{ required: true, whitespace: true, message: editorCopy.descriptionRequiredMessage }]
+						: undefined
+				}
+			>
 				<Input.TextArea disabled={readOnly} rows={2} placeholder="说明这张表解决什么分析或使用问题" />
 			</Form.Item>
 

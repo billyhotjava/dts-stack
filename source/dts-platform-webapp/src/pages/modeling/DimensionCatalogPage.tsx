@@ -10,6 +10,7 @@ import { useCatalogDomainOptions } from "@/hooks/useCatalogDomainOptions";
 import { useSearchParams } from "@/routes/hooks";
 import { useUserRoles } from "@/store/userStore";
 import { ModelSpecCreateDrawer } from "./components/ModelSpecCreateDrawer";
+import { dimensionCatalogEmptyText } from "./dimensionCatalogViewState";
 import type { CanonicalModelSpecView, ModelSpecView } from "./modelSpecV2Contract";
 import { MODEL_STATUS_LABELS } from "./modelSpecWorkbench";
 import { hasWarehousePlanCreateAccess } from "./warehousePlanCreateFlow";
@@ -70,6 +71,12 @@ export default function DimensionCatalogPage() {
 		() => dimensions.filter((model): model is CanonicalModelSpecView => model.compatibilityMode === "CANONICAL"),
 		[dimensions],
 	);
+	const emptyText = dimensionCatalogEmptyText({
+		totalCount: dimensions.length,
+		visibleCount: visibleDimensions.length,
+		search,
+		canEdit,
+	});
 
 	const columns: ColumnsType<ModelSpecView> = [
 		{
@@ -165,24 +172,26 @@ export default function DimensionCatalogPage() {
 				/>
 			) : null}
 
-			<Card>
-				<div className="mb-3 flex justify-end">
-					<Input.Search
-						allowClear
-						className="max-w-xs"
-						placeholder="搜索维度名称或每行含义"
-						value={search}
-						onChange={(event) => setSearch(event.target.value)}
+			{!loadError ? (
+				<Card>
+					<div className="mb-3 flex justify-end">
+						<Input.Search
+							allowClear
+							className="max-w-xs"
+							placeholder="搜索维度名称或每行含义"
+							value={search}
+							onChange={(event) => setSearch(event.target.value)}
+						/>
+					</div>
+					<CompactTable<ModelSpecView>
+						rowKey="id"
+						loading={loading}
+						columns={columns}
+						dataSource={visibleDimensions}
+						locale={{ emptyText: <Empty description={emptyText} /> }}
 					/>
-				</div>
-				<CompactTable<ModelSpecView>
-					rowKey="id"
-					loading={loading}
-					columns={columns}
-					dataSource={visibleDimensions}
-					locale={{ emptyText: <Empty description="还没有维度，点击“登记维度”开始" /> }}
-				/>
-			</Card>
+				</Card>
+			) : null}
 
 			<ModelSpecCreateDrawer
 				open={createOpen}

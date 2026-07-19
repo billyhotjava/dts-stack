@@ -1,9 +1,9 @@
 # Sprint-67 Chrome 95 浏览器证据
 
-验证时间：2026-07-19 15:26 +08:00
+验证时间：2026-07-19 17:06 +08:00
 浏览器：`Chromium 95.0.4638.0`
 视口：1366x768 和 390x844
-结果：5 passed, 0 failed
+覆盖结论：8 个场景均已得到 GREEN 证据。完整运行中 7 个不受最终修复影响的场景通过；修复折叠表单完整取值后，仅复验受影响场景并 1/1 通过，未重复运行无关 7 个场景。
 
 ## 命令
 
@@ -28,6 +28,7 @@ CHROME95_EXECUTABLE_PATH=/tmp/dts-chrome95-ttQJ8k/chrome-linux/chrome \
 - `model-detail-standards-narrow.png`：模型详情在 390x844 下保持可用且无 document/body 水平溢出。
 - `dimension-catalog-entry-desktop.png`：规划页按“维度目录 → 模型中心”展示入口，点击后精确透传 planId 并进入 canonical 维度目录。
 - `dimension-catalog-entry-narrow.png`：维度目录在 390x844 下无 document/body 水平溢出。
+- `dimension-draft-create-narrow.png`：390x844 下登记维度，抽屉进入动画稳定后宽度不超过视口，定义、粒度与维度键可直接保存。
 
 ## 边界
 
@@ -37,5 +38,6 @@ CHROME95_EXECUTABLE_PATH=/tmp/dts-chrome95-ttQJ8k/chrome-linux/chrome \
 
 - `GET /api/modeling/warehouse-plans` -> 503，随后列表独立重试成功；
 - `GET /api/modeling/warehouse-plans/plan-exact/baseline` -> 503，随后证据独立重试成功。
+- `GET /api/modeling/model-specs` -> 503，随后维度目录重试成功且失败态不显示伪空表。
 
 除上述预期 503 外，断言为 0 pageerror、0 传输失败、0 非预期 HTTP >=400 与 0 非预期 console.error。

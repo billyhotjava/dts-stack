@@ -395,6 +395,57 @@
     "schemaValid": false
   },
   {
+    "name": "legacy-v2-dimension-description-remains-optional",
+    "overrides": {
+      "modelType": "DIMENSION",
+      "description": null,
+      "factShape": null,
+      "timeSemantics": null,
+      "sourceRefs": []
+    },
+    "expectedIssueCodes": [],
+    "schemaValid": true
+  },
+  {
+    "name": "legacy-v2-dimension-trim-equivalent-grain-keys-remain-readable",
+    "overrides": {
+      "modelType": "DIMENSION",
+      "factShape": null,
+      "timeSemantics": null,
+      "grain": { "statement": "one row per record", "keys": ["record_id", " record_id "] },
+      "sourceRefs": []
+    },
+    "expectedIssueCodes": [],
+    "schemaValid": true
+  },
+  {
+    "name": "legacy-v2-dimension-duplicate-grain-keys-remain-readable",
+    "overrides": {
+      "modelType": "DIMENSION",
+      "factShape": null,
+      "timeSemantics": null,
+      "grain": { "statement": "one row per record", "keys": ["record_id", "record_id"] },
+      "sourceRefs": []
+    },
+    "expectedIssueCodes": [],
+    "schemaValid": true
+  },
+  {
+    "name": "legacy-v2-dimension-grain-key-mismatch-remains-readable",
+    "overrides": {
+      "modelType": "DIMENSION",
+      "factShape": null,
+      "timeSemantics": null,
+      "grain": { "statement": "one row per record", "keys": ["record_id"] },
+      "fields": [
+        { "name": "dimension_id", "dataType": "varchar", "nullable": false, "role": "KEY" }
+      ],
+      "sourceRefs": []
+    },
+    "expectedIssueCodes": [],
+    "schemaValid": true
+  },
+  {
     "name": "minimal-dimension-request",
     "request": {
       "planId": "10000000-0000-0000-0000-000000000001",

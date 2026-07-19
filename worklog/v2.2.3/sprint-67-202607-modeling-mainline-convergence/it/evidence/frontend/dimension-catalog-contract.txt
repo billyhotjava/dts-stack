@@ -23,3 +23,9 @@ TDD：
 边界：
 - 本证据不宣称维度 code、hierarchy、SCD、复用范围或实现门禁已完成。
 - dts-admin 定向 Java 测试在当前主机因 Mockito/ByteBuddy attach 被禁止而未形成 GREEN；该失败发生在 mock 初始化阶段，不是菜单断言失败。
+
+2026-07-19 维度草稿闭环增补：
+- 目录空态、搜索空态和加载失败态已分离，失败时不再伪装成“暂无维度”；
+- 登记维度直接保存 canonical DIMENSION ModelSpec，折叠区默认值通过完整表单状态进入命令；
+- DRAFT 可编辑，PUBLISHED 只读，状态并发变化可加载最新状态恢复；
+- 详细证据见 `dimension-draft-journey.txt` 与 Chrome 95 README。

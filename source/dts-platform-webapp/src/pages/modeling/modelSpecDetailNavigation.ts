@@ -1,3 +1,5 @@
+import type { ModelSpecType } from "./modelSpecV2Contract";
+
 export const MODEL_SPEC_DETAIL_TABS = ["design", "fields", "standards"] as const;
 
 export type ModelSpecDetailTab = (typeof MODEL_SPEC_DETAIL_TABS)[number];
@@ -22,4 +24,18 @@ export const modelSpecPlanModelsPath = (planId?: string | null): string => {
 	if (!normalizedPlanId) return "/modeling/models";
 	const params = new URLSearchParams({ planId: normalizedPlanId });
 	return `/modeling/models?${params.toString()}`;
+};
+
+export const modelSpecCatalogPath = (
+	modelType: ModelSpecType,
+	planId?: string | null,
+	domainId?: string | null,
+): string => {
+	const basePath = modelType === "DIMENSION" ? "/modeling/dimensions" : "/modeling/models";
+	const normalizedPlanId = planId?.trim();
+	if (!normalizedPlanId) return basePath;
+	const params = new URLSearchParams({ planId: normalizedPlanId });
+	const normalizedDomainId = domainId?.trim();
+	if (modelType === "DIMENSION" && normalizedDomainId) params.set("domainId", normalizedDomainId);
+	return `${basePath}?${params.toString()}`;
 };

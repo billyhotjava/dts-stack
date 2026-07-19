@@ -112,6 +112,7 @@ export function ModelSpecCreateDrawer({
 			} catch {
 				if (requestId !== domainRequestRef.current) return;
 				setDomainOptions([]);
+				form.setFieldValue("domainId", "");
 				setContextError("业务分类加载失败，当前表单已保留，请稍后重试");
 			} finally {
 				if (requestId === domainRequestRef.current) setLoadingDomains(false);
@@ -199,7 +200,8 @@ export function ModelSpecCreateDrawer({
 	const submit = async () => {
 		setSubmitError("");
 		try {
-			const values = await form.validateFields();
+			await form.validateFields();
+			const values = form.getFieldsValue(true);
 			const command = buildModelSpecCreateCommand(values, selectableModels, idempotencyKeyRef.current);
 			const issues = validateModelSpecCreate(command);
 			if (issues.length > 0) {
@@ -228,9 +230,10 @@ export function ModelSpecCreateDrawer({
 	return (
 		<Drawer
 			title={initialModelType === "DIMENSION" && lockModelType ? "登记维度" : "新建模型"}
+			aria-label={initialModelType === "DIMENSION" && lockModelType ? "登记维度" : "新建模型"}
 			open={open}
 			onClose={onClose}
-			width={760}
+			width={"min(760px, 100vw)"}
 			maskClosable={!saving}
 			footer={
 				<div className="flex justify-end">
@@ -238,7 +241,12 @@ export function ModelSpecCreateDrawer({
 						<Button onClick={onClose} disabled={saving}>
 							取消
 						</Button>
-						<Button type="primary" loading={saving} onClick={() => void submit()}>
+						<Button
+							type="primary"
+							loading={saving}
+							disabled={loadingPlans || loadingDomains}
+							onClick={() => void submit()}
+						>
 							保存草稿
 						</Button>
 					</Space>

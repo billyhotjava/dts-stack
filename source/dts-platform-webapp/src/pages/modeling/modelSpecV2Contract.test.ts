@@ -223,6 +223,28 @@ test("dimension draft requires grain and a KEY but not a source or generation st
 	);
 });
 
+test("legacy v2 dimension definition and key mapping remain backward compatible", () => {
+	const dimension = minimal("DIMENSION");
+	assert.deepEqual(
+		validateModelSpecCreate({ ...dimension, description: "   " }).map((item) => item.code),
+		[],
+	);
+	assert.deepEqual(
+		validateModelSpecCreate({
+			...dimension,
+			grain: { statement: "one row per record", keys: [" record_id", "record_id "] },
+		}).map((item) => item.code),
+		[],
+	);
+	assert.deepEqual(
+		validateModelSpecCreate({
+			...dimension,
+			grain: { statement: "one row per record", keys: ["other_id"] },
+		}).map((item) => item.code),
+		[],
+	);
+});
+
 test("FACT draft requires grain and a source but permits fact shape and time semantics to be completed later", () => {
 	const fact = minimal("FACT");
 	assert.equal(fact.factShape, undefined);

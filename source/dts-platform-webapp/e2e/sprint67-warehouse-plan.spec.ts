@@ -40,6 +40,52 @@ const plan = (id: string, mode: PlanMode, name: string) => ({
 	version: 1,
 });
 
+const DIMENSION_CHECKSUM_V1 = "a".repeat(64);
+const DIMENSION_CHECKSUM_V2 = "b".repeat(64);
+
+const dimension = (
+	overrides: Partial<{
+		id: string;
+		planId: string;
+		domainId: string;
+		name: string;
+		description: string;
+		status: "DRAFT" | "PUBLISHED";
+		revision: number;
+		checksum: string;
+	}> = {},
+) => ({
+	contractVersion: 2,
+	id: overrides.id || "40000000-0000-0000-0000-000000000067",
+	planId: overrides.planId || "10000000-0000-0000-0000-000000000067",
+	domainId: overrides.domainId || "20000000-0000-0000-0000-000000000067",
+	modelType: "DIMENSION",
+	layer: "DWD",
+	name: overrides.name || "组织维度",
+	description: overrides.description || "统一组织机构分析口径",
+	implementationMode: "DESIGNER_GENERATED",
+	materialization: "table",
+	businessActivityRef: null,
+	consumptionScenario: null,
+	grain: { statement: "每行代表一个组织机构", keys: ["organization_id"] },
+	factShape: null,
+	timeSemantics: null,
+	generationStrategy: null,
+	fields: [{ name: "organization_id", dataType: "string", nullable: false, role: "KEY" }],
+	sourceRefs: [],
+	dependsOn: [],
+	dimensionRefs: [],
+	metricRefs: [],
+	standardBindings: [],
+	status: overrides.status || "DRAFT",
+	revision: overrides.revision || 1,
+	checksum: overrides.checksum || DIMENSION_CHECKSUM_V1,
+	createdAt: "2026-07-19T03:00:00Z",
+	updatedAt: "2026-07-19T04:00:00Z",
+	compatibilityMode: "CANONICAL",
+	legacyRefs: null,
+});
+
 const stageProjection = (planId: string) => ({
 	planId,
 	currentStage: "WAREHOUSE_PLANNING",
@@ -540,4 +586,257 @@ test("model detail deep-link keeps canonical tabs, server plan context and narro
 	await page.getByRole("button", { name: "返回模型中心" }).click();
 	await expect(page).toHaveURL(new RegExp(`/modeling/models\\?planId=${serverPlanId}$`));
 	assertCleanBrowser(probe);
+});
+
+test("dimension draft journey stays object-free, saves with CAS and returns with server context on narrow screens", async ({
+	page,
+}) => {
+	const probe = installBrowserProbe(page);
+	const planId = "10000000-0000-0000-0000-000000000067";
+	const domainId = "20000000-0000-0000-0000-000000000067";
+	const modelId = "40000000-0000-0000-0000-000000000067";
+	const modelingPlan = plan(planId, "BUSINESS_FIRST", "通用维度建模计划");
+	let currentModel = dimension({ id: modelId, planId, domainId });
+	let createBody: Record<string, unknown> | null = null;
+	let updateBody: Record<string, unknown> | null = null;
+	let updateIfMatch = "";
+
+	await page.route("**/api/**", async (route) => {
+		const request = route.request();
+		const pathName = new URL(request.url()).pathname;
+		if (request.method() === "GET" && pathName === "/api/catalog/domains/tree") {
+			await fulfill(route, [{ key: domainId, name: "项目管理" }]);
+			return;
+		}
+		if (request.method() === "GET" && pathName === PLAN_RESOURCE) {
+			await fulfill(route, [modelingPlan]);
+			return;
+		}
+		if (request.method() === "GET" && pathName === `${PLAN_RESOURCE}/${planId}/baseline/categories`) {
+			await fulfill(route, {
+				value: {
+					domainBindings: [
+						{
+							domainId,
+							confirmationStatus: "CONFIRMED",
+							resolutionStatus: "AVAILABLE",
+							name: "项目管理",
+							code: "PM",
+						},
+					],
+					readiness: "READY",
+					issues: [],
+				},
+				version: 1,
+			});
+			return;
+		}
+		if (pathName === "/api/modeling/model-specs" && request.method() === "GET") {
+			await fulfill(route, createBody ? [currentModel] : []);
+			return;
+		}
+		if (pathName === "/api/modeling/model-specs" && request.method() === "POST") {
+			createBody = request.postDataJSON() as Record<string, unknown>;
+			const createViewFields = { ...createBody };
+			delete createViewFields.idempotencyKey;
+			currentModel = {
+				...currentModel,
+				...createViewFields,
+				id: modelId,
+				status: "DRAFT",
+				revision: 1,
+				checksum: DIMENSION_CHECKSUM_V1,
+				compatibilityMode: "CANONICAL",
+				legacyRefs: null,
+			};
+			await fulfill(route, currentModel);
+			return;
+		}
+		if (pathName === `/api/modeling/model-specs/${modelId}` && request.method() === "GET") {
+			await fulfill(route, currentModel);
+			return;
+		}
+		if (pathName === `/api/modeling/model-specs/${modelId}` && request.method() === "PUT") {
+			updateBody = request.postDataJSON() as Record<string, unknown>;
+			updateIfMatch = request.headers()["if-match"] || "";
+			currentModel = {
+				...currentModel,
+				...updateBody,
+				revision: 2,
+				checksum: DIMENSION_CHECKSUM_V2,
+				updatedAt: "2026-07-19T05:00:00Z",
+			};
+			await fulfill(route, currentModel);
+			return;
+		}
+		await fulfill(route, []);
+	});
+
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.goto(`/#/modeling/dimensions?planId=${planId}&domainId=${domainId}`);
+	await expect(page.getByTestId("dimension-catalog-page")).toBeVisible();
+	await page.getByRole("button", { name: "登记维度" }).click();
+	const drawer = page.getByRole("dialog", { name: "登记维度" });
+	await expect(drawer).toBeVisible();
+	await expect(drawer.locator(".ant-select-selection-item").filter({ hasText: "项目管理" })).toBeVisible();
+	await page.getByLabel("维度名称").fill("组织维度");
+	await page.getByLabel("维度定义").fill("统一组织机构分析口径");
+	await page.getByLabel("每行代表什么").fill("每行代表一个组织机构");
+	await page.getByLabel("维度键").fill("organization_id");
+	await expect
+		.poll(
+			async () => {
+				const box = await drawer.boundingBox();
+				return box ? box.x + box.width : Number.POSITIVE_INFINITY;
+			},
+			{ message: "dimension drawer finishes its entrance motion inside the viewport" },
+		)
+		.toBeLessThanOrEqual(390);
+	const narrowMetrics = await page.evaluate(() => {
+		return {
+			innerWidth: window.innerWidth,
+			documentWidth: document.documentElement.scrollWidth,
+			bodyWidth: document.body.scrollWidth,
+		};
+	});
+	await page.screenshot({ path: path.join(evidenceDir, "dimension-draft-create-narrow.png"), fullPage: true });
+	const drawerBox = await drawer.boundingBox();
+	expect(drawerBox, "dimension drawer bounding box").not.toBeNull();
+	expect(drawerBox?.x || 0).toBeGreaterThanOrEqual(0);
+	expect((drawerBox?.x || 0) + (drawerBox?.width || 0)).toBeLessThanOrEqual(390);
+	expect(narrowMetrics.documentWidth).toBeLessThanOrEqual(narrowMetrics.innerWidth);
+	expect(narrowMetrics.bodyWidth).toBeLessThanOrEqual(narrowMetrics.innerWidth);
+	await page.getByRole("button", { name: "保存草稿" }).click();
+
+	await expect(page).toHaveURL(new RegExp(`/modeling/models/${modelId}$`));
+	await expect(page.getByTestId("model-spec-detail-page")).toBeVisible();
+	expect(createBody).toMatchObject({
+		planId,
+		domainId,
+		modelType: "DIMENSION",
+		description: "统一组织机构分析口径",
+		grain: { statement: "每行代表一个组织机构", keys: ["organization_id"] },
+	});
+	expect((createBody?.fields || []) as unknown[]).toContainEqual({
+		name: "organization_id",
+		dataType: "string",
+		nullable: false,
+		role: "KEY",
+	});
+	for (const retiredField of [
+		"businessObjectId",
+		"semanticObjectId",
+		"objectId",
+		"businessProcessId",
+		"processId",
+		"businessActivityRef",
+	]) {
+		expect(createBody).not.toHaveProperty(retiredField);
+	}
+
+	await expect(page.getByRole("button", { name: "保存草稿" })).toBeVisible();
+	await page.getByLabel("维度定义").fill("统一组织机构分析口径（已复核）");
+	await page.getByRole("button", { name: "保存草稿" }).click();
+	await expect(page.getByText("版本 r2", { exact: true })).toBeVisible();
+	expect(updateIfMatch).toBe(`"model-spec:${modelId}:1:${DIMENSION_CHECKSUM_V1}"`);
+	expect(updateBody).toMatchObject({
+		description: "统一组织机构分析口径（已复核）",
+		grain: { statement: "每行代表一个组织机构", keys: ["organization_id"] },
+	});
+	expect(updateBody).not.toHaveProperty("idempotencyKey");
+
+	await page.getByRole("button", { name: "返回维度目录" }).click();
+	await expect(page).toHaveURL(new RegExp(`/modeling/dimensions\\?planId=${planId}&domainId=${domainId}$`));
+	await expect(page.getByText("组织维度", { exact: true })).toBeVisible();
+	assertCleanBrowser(probe);
+});
+
+test("published dimension is read-only and ignores forged catalog context", async ({ page }) => {
+	const probe = installBrowserProbe(page);
+	const modelId = "40000000-0000-0000-0000-000000000068";
+	const planId = "10000000-0000-0000-0000-000000000068";
+	const domainId = "20000000-0000-0000-0000-000000000068";
+	const published = dimension({
+		id: modelId,
+		planId,
+		domainId,
+		name: "已发布组织维度",
+		status: "PUBLISHED",
+		revision: 7,
+		checksum: "c".repeat(64),
+	});
+	let writes = 0;
+
+	await page.route("**/api/**", async (route) => {
+		const request = route.request();
+		const pathName = new URL(request.url()).pathname;
+		if (request.method() === "PUT" || request.method() === "POST") writes += 1;
+		if (pathName === `/api/modeling/model-specs/${modelId}`) {
+			await fulfill(route, published);
+			return;
+		}
+		if (pathName === "/api/modeling/model-specs") {
+			await fulfill(route, [published]);
+			return;
+		}
+		if (pathName === "/api/catalog/domains/tree") {
+			await fulfill(route, [{ key: domainId, name: "服务端业务分类" }]);
+			return;
+		}
+		if (pathName === PLAN_RESOURCE) {
+			await fulfill(route, [plan(planId, "BUSINESS_FIRST", "服务端建设计划")]);
+			return;
+		}
+		await fulfill(route, []);
+	});
+
+	await page.goto(`/#/modeling/models/${modelId}?planId=forged-plan&domainId=forged-domain`);
+	await expect(page.getByTestId("model-spec-detail-page")).toBeVisible();
+	await expect(page.getByText("当前状态为已发布；只有草稿可编辑", { exact: true })).toBeVisible();
+	await expect(page.getByRole("button", { name: "保存草稿" })).toHaveCount(0);
+	await expect(page.getByLabel("维度名称")).toBeDisabled();
+	await expect(page.getByLabel("维度定义")).toBeDisabled();
+	await page.getByRole("button", { name: "返回维度目录" }).click();
+	await expect(page).toHaveURL(new RegExp(`/modeling/dimensions\\?planId=${planId}&domainId=${domainId}$`));
+	expect(writes).toBe(0);
+	assertCleanBrowser(probe);
+});
+
+test("dimension catalog keeps model-list failure distinct from empty state and retries", async ({ page }) => {
+	const probe = installBrowserProbe(page);
+	const planId = "10000000-0000-0000-0000-000000000069";
+	const domainId = "20000000-0000-0000-0000-000000000069";
+	const existing = dimension({ id: "40000000-0000-0000-0000-000000000069", planId, domainId, name: "重试后维度" });
+	let modelListCalls = 0;
+
+	await page.route("**/api/**", async (route) => {
+		const pathName = new URL(route.request().url()).pathname;
+		if (pathName === "/api/modeling/model-specs") {
+			modelListCalls += 1;
+			if (modelListCalls === 1) {
+				await fulfill(route, { httpStatus: 503, body: { status: 503, message: "维度目录暂时不可用" } });
+				return;
+			}
+			await fulfill(route, [existing]);
+			return;
+		}
+		if (pathName === PLAN_RESOURCE) {
+			await fulfill(route, [plan(planId, "BUSINESS_FIRST", "目录恢复计划")]);
+			return;
+		}
+		if (pathName === "/api/catalog/domains/tree") {
+			await fulfill(route, [{ key: domainId, name: "项目管理" }]);
+			return;
+		}
+		await fulfill(route, []);
+	});
+
+	await page.goto(`/#/modeling/dimensions?planId=${planId}&domainId=${domainId}`);
+	await expect(page.getByText("维度目录加载失败，请稍后重试", { exact: true })).toBeVisible();
+	await expect(page.getByText("还没有维度，点击“登记维度”开始", { exact: true })).toHaveCount(0);
+	await expect(page.locator(".ant-table")).toHaveCount(0);
+	await page.getByRole("button", { name: "重试" }).click();
+	await expect(page.getByText("重试后维度", { exact: true })).toBeVisible();
+	expect(modelListCalls).toBe(2);
+	assertCleanBrowser(probe, [{ status: 503, includes: "/modeling/model-specs" }]);
 });

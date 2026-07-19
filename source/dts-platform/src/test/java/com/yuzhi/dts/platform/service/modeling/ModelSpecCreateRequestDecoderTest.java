@@ -66,6 +66,18 @@ class ModelSpecCreateRequestDecoderTest {
     }
 
     @Test
+    void decoderKeepsLegacyV2DimensionDefinitionAndKeyMappingCompatible() throws Exception {
+        ObjectNode candidate = genericDimension();
+        candidate.putNull("description");
+        ((ObjectNode) candidate.get("grain")).putArray("keys").add("missing_dimension_key");
+
+        ModelSpecCreateRequestDecoder.DecodeResult result = decoder.decode(candidate);
+
+        assertThat(result.command()).isNotNull();
+        assertThat(result.issues()).isEmpty();
+    }
+
+    @Test
     void decoderReturnsTheCommandOnlyWhenWireShapeAndSemanticsAreValid() throws Exception {
         ModelSpecCreateRequestDecoder.DecodeResult result = decoder.decode(genericFact());
 
@@ -97,5 +109,16 @@ class ModelSpecCreateRequestDecoderTest {
             assertThat(stream).isNotNull();
             return (ObjectNode) lenientMapper.readTree(stream);
         }
+    }
+
+    private ObjectNode genericDimension() throws Exception {
+        ObjectNode candidate = genericFact();
+        candidate.put("modelType", "DIMENSION");
+        candidate.put("name", "generic_dimension");
+        candidate.putNull("description");
+        candidate.putNull("factShape");
+        candidate.putNull("timeSemantics");
+        candidate.putArray("sourceRefs");
+        return candidate;
     }
 }

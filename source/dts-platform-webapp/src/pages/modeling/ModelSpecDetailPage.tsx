@@ -9,7 +9,7 @@ import { useUserRoles } from "@/store/userStore";
 import { ModelSpecEditorFields, type ModelSpecSelectOption } from "./components/ModelSpecEditorFields";
 import { ModelSpecFieldsTab } from "./components/ModelSpecFieldsTab";
 import { ModelSpecStandardsTab } from "./components/ModelSpecStandardsTab";
-import { modelSpecDetailPath, modelSpecPlanModelsPath, resolveModelSpecDetailTab } from "./modelSpecDetailNavigation";
+import { modelSpecCatalogPath, modelSpecDetailPath, resolveModelSpecDetailTab } from "./modelSpecDetailNavigation";
 import {
 	type CanonicalModelSpecView,
 	type ModelSpecCasToken,
@@ -19,6 +19,7 @@ import {
 } from "./modelSpecV2Contract";
 import {
 	buildModelSpecUpdateCommand,
+	isModelSpecStatusReadonly,
 	MODEL_STATUS_LABELS,
 	MODEL_TYPE_LABELS,
 	type ModelSpecDraft,
@@ -56,11 +57,13 @@ export default function ModelSpecDetailPage() {
 	const [loadError, setLoadError] = useState("");
 	const [saveError, setSaveError] = useState("");
 	const [writeDenied, setWriteDenied] = useState(false);
+	const [statusChanged, setStatusChanged] = useState(false);
 	const [conflict, setConflict] = useState<ModelSpecRevisionConflictDetails | null>(null);
 	const loadRequestRef = useRef(0);
 	const { labelByKey } = useCatalogDomainOptions();
 	const canonicalModel = model?.compatibilityMode === "CANONICAL" ? model : null;
-	const canEdit = Boolean(canonicalModel && roleAllowsEdit && !writeDenied);
+	const statusAllowsEdit = canonicalModel?.status === "DRAFT";
+	const canEdit = Boolean(canonicalModel && statusAllowsEdit && roleAllowsEdit && !writeDenied && !statusChanged);
 	const activeTab = useMemo(() => resolveModelSpecDetailTab(searchParams), [searchParams]);
 
 	const load = useCallback(async () => {
@@ -69,6 +72,7 @@ export default function ModelSpecDetailPage() {
 		setLoadError("");
 		setSaveError("");
 		setConflict(null);
+		setStatusChanged(false);
 		try {
 			const detail = await getModelSpec(modelSpecId);
 			if (requestId !== loadRequestRef.current) return;
@@ -153,13 +157,19 @@ export default function ModelSpecDetailPage() {
 			setModel(updated);
 			form.setFieldsValue(modelSpecDraftFromView(updated));
 			setConflict(null);
+			setStatusChanged(false);
 			setSaveError("");
 		} catch (error) {
 			if (error && typeof error === "object" && "errorFields" in error) return;
 			const latest = modelSpecRevisionConflict(error);
 			if (latest) setConflict(latest);
 			if ((error as { response?: { status?: number } })?.response?.status === 403) setWriteDenied(true);
-			setSaveError(modelSpecErrorMessage(error));
+			if (isModelSpecStatusReadonly(error)) {
+				setStatusChanged(true);
+				setSaveError("");
+			} else {
+				setSaveError(modelSpecErrorMessage(error));
+			}
 		} finally {
 			setSaving(false);
 		}
@@ -226,9 +236,13 @@ export default function ModelSpecDetailPage() {
 		<div className="p-4" data-testid="model-spec-detail-page">
 			<div className="mb-4 flex flex-wrap items-start justify-between gap-3">
 				<div>
-					<Button type="link" className="!px-0" onClick={() => navigate(modelSpecPlanModelsPath(model.planId))}>
+					<Button
+						type="link"
+						className="!px-0"
+						onClick={() => navigate(modelSpecCatalogPath(model.modelType, model.planId, model.domainId))}
+					>
 						<ArrowLeft size={15} />
-						返回模型中心
+						{model.modelType === "DIMENSION" ? "返回维度目录" : "返回模型中心"}
 					</Button>
 					<Title level={3} className="!mb-1 !mt-1">
 						{model.name}
@@ -261,6 +275,27 @@ export default function ModelSpecDetailPage() {
 			) : null}
 			{!roleAllowsEdit || writeDenied ? (
 				<Alert className="mb-3" type="info" showIcon message="当前账号为只读浏览；编辑需要计划维护权限" />
+			) : null}
+			{statusChanged ? (
+				<Alert
+					className="mb-3"
+					type="warning"
+					showIcon
+					message="模型状态已变化，当前输入已保留；请加载最新状态后继续"
+					action={
+						<Button size="small" onClick={() => void load()}>
+							加载最新状态
+						</Button>
+					}
+				/>
+			) : null}
+			{canonicalModel && !statusAllowsEdit ? (
+				<Alert
+					className="mb-3"
+					type="info"
+					showIcon
+					message={`当前状态为${MODEL_STATUS_LABELS[canonicalModel.status] || canonicalModel.status}；只有草稿可编辑`}
+				/>
 			) : null}
 			{saveError ? <Alert className="mb-3" type="error" showIcon message={saveError} /> : null}
 			{conflict ? (

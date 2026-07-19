@@ -46,6 +46,24 @@ Non-blocking existing warnings:
 - caniuse-lite browser data is 15 months old.
 - Existing output chunks over 1500 kB remain subject to the configured warning.
 
+F3-T02 dimension draft final production bundle
+Completed at: 2026-07-19T17:06:00+08:00
+CWD: /opt/prod/s10/v2.2.3/source/dts-platform-webapp
+
+Command:
+pnpm build
+
+Exit code: 0
+Key result:
+- vite v6.3.3
+- 10601 modules transformed
+- built in 2m 3s
+- TypeScript and Chrome 95 legacy production bundle completed successfully.
+
+Non-blocking existing warnings:
+- caniuse-lite browser data is 15 months old.
+- Existing output chunks over 1500 kB remain subject to the configured warning.
+
 Independent review fix round 3
 Completed at: 2026-07-19T00:48:14+08:00
 CWD: /opt/prod/s10/v2.2.3/source/dts-platform-webapp

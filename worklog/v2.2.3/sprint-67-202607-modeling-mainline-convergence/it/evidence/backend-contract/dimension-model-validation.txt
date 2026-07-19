@@ -1,0 +1,22 @@
+Sprint-67 F3-T02 DIMENSION ModelSpec v2 兼容边界证据
+时间：2026-07-19 +08:00
+结果：PASS
+
+验证命令：
+  cd source/dts-platform
+  ./mvnw -q -Dmaven.repo.local=/tmp/codex-m2 \
+    -Dtest=ModelSpecContractTest,ModelSpecCreateRequestDecoderTest,ModelSpecRequestDecoderTest,ModelSpecV2FixtureTest,ModelSpecApplicationServiceTest,ModelSpecCompatibilityReaderTest,ModelSpecCompilerProjectionTest,ModelSpecSnapshotCodecTest,ModelSpecDomainWriteAccessAdapterTest,ModelSpecPlanWriteAccessAdapterTest,ModelSpecResourceTest,ModelingVNextCanonicalProjectionTest,ModelingVNextCanonicalReleaseGateTest,ModelingVNextWriterCompatibilityContractTest \
+    test
+
+Surefire：65 passed，0 failures，0 errors，0 skipped。
+
+新增兼容断言：
+- contractVersion=2 的 DIMENSION description 继续允许 null/blank；
+- 旧 v2 的重复 grain keys 继续可读和可重放；
+- 旧 v2 的 grain key 与 KEY field 未闭合继续保持兼容；
+- JSON Schema、请求 decoder 和 Java contract 对上述边界结论一致。
+
+产品裁决：
+- “维度定义”是新 UI 的旅程必填，不回写为 v2 API 的破坏性全局必填；
+- 更严格的 dimensionProfile/KEY 闭合只能通过新 contract version 或独立实现门禁引入；
+- 本切片仅增加回归测试和 fixture，没有修改后端生产实现。

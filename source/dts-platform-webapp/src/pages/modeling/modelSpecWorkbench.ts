@@ -41,6 +41,23 @@ export const MODEL_STATUS_LABELS: Record<string, string> = {
 	ARCHIVED: "已归档",
 };
 
+export function modelSpecEditorCopy(modelType: ModelSpecType) {
+	if (modelType === "DIMENSION") {
+		return {
+			nameLabel: "维度名称",
+			nameRequiredMessage: "请输入维度名称",
+			descriptionLabel: "维度定义",
+			descriptionRequiredMessage: "请输入维度定义",
+		};
+	}
+	return {
+		nameLabel: "模型名称",
+		nameRequiredMessage: "请输入模型名称",
+		descriptionLabel: "用途说明",
+		descriptionRequiredMessage: undefined,
+	};
+}
+
 export type ModelSpecSourceDraft = {
 	kind: ModelSpecSourceKind;
 	ref: string;
@@ -125,7 +142,7 @@ export function createEmptyModelSpecDraft(
 const optionalText = (value: string | null | undefined) => value?.trim() || undefined;
 
 const buildFields = (draft: ModelSpecDraft, grainKeys: string[]): ModelSpecField[] => {
-	const fields = [...draft.fields];
+	const fields = [...(draft.fields ?? [])];
 	const names = new Set(fields.map((field) => field.name.trim()).filter(Boolean));
 	for (const key of grainKeys) {
 		if (!names.has(key)) {
@@ -178,7 +195,7 @@ export function buildModelSpecCreateCommand(
 	const isFact = draft.modelType === "FACT";
 	const isDerived = draft.modelType === "SUMMARY" || draft.modelType === "APPLICATION";
 	const isApplication = draft.modelType === "APPLICATION";
-	const timeFields = parseModelFieldNames(draft.timeFieldsText);
+	const timeFields = isFact ? parseModelFieldNames(draft.timeFieldsText || "") : [];
 	const generationType = optionalText(draft.generationStrategyType);
 	return {
 		planId: draft.planId.trim(),
@@ -194,11 +211,16 @@ export function buildModelSpecCreateCommand(
 				? { statement: draft.grainStatement.trim(), keys: grainKeys }
 				: undefined,
 		fields: buildFields(draft, grainKeys),
-		sourceRefs: draft.modelType === "SUMMARY" || draft.modelType === "APPLICATION" ? [] : buildSources(draft.sources),
-		dependsOn: isDerived ? pinSelectedModels(draft.upstreamIds, candidates, draft.existingUpstreamPins) : [],
-		dimensionRefs: isFact ? pinSelectedModels(draft.dimensionRefIds, candidates, draft.existingDimensionPins) : [],
-		metricRefs: draft.metricRefs,
-		standardBindings: draft.standardBindings,
+		sourceRefs:
+			draft.modelType === "SUMMARY" || draft.modelType === "APPLICATION" ? [] : buildSources(draft.sources ?? []),
+		dependsOn: isDerived
+			? pinSelectedModels(draft.upstreamIds ?? [], candidates, draft.existingUpstreamPins ?? [])
+			: [],
+		dimensionRefs: isFact
+			? pinSelectedModels(draft.dimensionRefIds ?? [], candidates, draft.existingDimensionPins ?? [])
+			: [],
+		metricRefs: draft.metricRefs ?? [],
+		standardBindings: draft.standardBindings ?? [],
 		businessActivityRef: isFact ? optionalText(draft.businessActivityRef) : undefined,
 		factShape: isFact ? draft.factShape : undefined,
 		timeSemantics:
@@ -288,6 +310,11 @@ export function modelSpecRevisionConflict(error: unknown): ModelSpecRevisionConf
 	return data as ModelSpecRevisionConflictDetails;
 }
 
+export function isModelSpecStatusReadonly(error: unknown): boolean {
+	const candidate = error as ErrorLike;
+	return candidate?.response?.status === 409 && candidate.response.data?.code === "MODEL_SPEC_STATUS_READONLY";
+}
+
 export function modelSpecErrorMessage(error: unknown): string {
 	const candidate = error as ErrorLike;
 	const status = candidate?.response?.status;
@@ -296,6 +323,9 @@ export function modelSpecErrorMessage(error: unknown): string {
 	if (status === 404) return "模型或其计划上下文已不存在，请返回模型中心刷新列表";
 	if (status === 409 && code === "MODEL_SPEC_REVISION_CONFLICT") {
 		return "模型已被其他人更新，请选择保留当前输入重试或加载最新版本";
+	}
+	if (status === 409 && code === "MODEL_SPEC_STATUS_READONLY") {
+		return "模型状态已变化，当前输入已保留；请加载最新状态后继续";
 	}
 	if (status === 409) return "当前名称或请求标识已被占用，请调整后重试";
 	if (status === 422 || status === 400) return "请检查标红字段；当前输入已保留";

@@ -5,6 +5,7 @@ import {
 	buildModelSpecCreateCommand,
 	buildModelSpecUpdateCommand,
 	createEmptyModelSpecDraft,
+	isModelSpecStatusReadonly,
 	type ModelSpecDraft,
 	modelSpecDraftFromView,
 	modelSpecErrorMessage,
@@ -81,6 +82,49 @@ test("DIMENSION command creates key fields without requiring business activity",
 	assert.deepEqual(command.fields, [{ name: "organization_id", dataType: "string", nullable: false, role: "KEY" }]);
 	assert.deepEqual(command.generationStrategy, { type: "REFERENCE", reference: "组织主数据" });
 	assert.equal(command.businessActivityRef, undefined);
+});
+
+test("DIMENSION command normalizes optional values omitted by conditional form fields", () => {
+	const sparseFormValues = {
+		...baseDraft({
+			modelType: "DIMENSION",
+			layer: "DWD",
+			name: "organization_dimension",
+			grainStatement: "一行代表一个组织机构",
+			grainKeysText: "organization_id",
+			sources: [],
+		}),
+		timeFieldsText: undefined,
+		fields: undefined,
+		metricRefs: undefined,
+		standardBindings: undefined,
+		existingUpstreamPins: undefined,
+		existingDimensionPins: undefined,
+	} as unknown as ModelSpecDraft;
+
+	const command = buildModelSpecCreateCommand(sparseFormValues, [], "create-dimension-sparse-form");
+
+	assert.deepEqual(command.fields, [{ name: "organization_id", dataType: "string", nullable: false, role: "KEY" }]);
+	assert.deepEqual(command.metricRefs, []);
+	assert.deepEqual(command.standardBindings, []);
+	assert.equal(command.timeSemantics, undefined);
+});
+
+test("DIMENSION editor uses business wording and requires its definition", async () => {
+	const workbench = await import("./modelSpecWorkbench.ts");
+	assert.equal(typeof workbench.modelSpecEditorCopy, "function");
+	assert.deepEqual(workbench.modelSpecEditorCopy?.("DIMENSION"), {
+		nameLabel: "维度名称",
+		nameRequiredMessage: "请输入维度名称",
+		descriptionLabel: "维度定义",
+		descriptionRequiredMessage: "请输入维度定义",
+	});
+	assert.deepEqual(workbench.modelSpecEditorCopy?.("FACT"), {
+		nameLabel: "模型名称",
+		nameRequiredMessage: "请输入模型名称",
+		descriptionLabel: "用途说明",
+		descriptionRequiredMessage: undefined,
+	});
 });
 
 test("command parsing trims and deduplicates grain and time field names across supported separators", () => {
@@ -221,6 +265,9 @@ test("customer errors describe recovery without exposing backend text", () => {
 		modelSpecErrorMessage({ response: { status: 409, data: { code: "MODEL_SPEC_REVISION_CONFLICT" } } }),
 		"模型已被其他人更新，请选择保留当前输入重试或加载最新版本",
 	);
+	const statusReadonlyError = { response: { status: 409, data: { code: "MODEL_SPEC_STATUS_READONLY" } } };
+	assert.equal(isModelSpecStatusReadonly(statusReadonlyError), true);
+	assert.equal(modelSpecErrorMessage(statusReadonlyError), "模型状态已变化，当前输入已保留；请加载最新状态后继续");
 	assert.equal(
 		modelSpecErrorMessage(new Error("SQLSTATE 23505 technical detail")),
 		"操作未完成，当前输入已保留，请稍后重试",

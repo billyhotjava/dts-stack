@@ -117,6 +117,27 @@ class ModelSpecContractTest {
     }
 
     @Test
+    void legacyV2DimensionDefinitionAndKeyMappingRemainCompatible() {
+        CreateModelSpecCommand dimensionWithoutDefinition = copyDescription(validCommand(ModelType.DIMENSION, null), "   ");
+        CreateModelSpecCommand duplicateGrainKeys = copyDimension(
+            dimensionWithoutDefinition,
+            new ModelSpecContract.Grain("one row per record", List.of("record_id", "record_id")),
+            dimensionWithoutDefinition.fields(),
+            null
+        );
+        CreateModelSpecCommand mismatchedKeyMapping = copyDimension(
+            dimensionWithoutDefinition,
+            new ModelSpecContract.Grain("one row per record", List.of("legacy_record_id")),
+            dimensionWithoutDefinition.fields(),
+            null
+        );
+
+        assertThat(ModelSpecContract.validateCreate(dimensionWithoutDefinition)).isEmpty();
+        assertThat(ModelSpecContract.validateCreate(duplicateGrainKeys)).isEmpty();
+        assertThat(ModelSpecContract.validateCreate(mismatchedKeyMapping)).isEmpty();
+    }
+
+    @Test
     void jacksonRequiredScalarsUseBoxedTypesSoMissingValuesCannotBecomeFalseOrZero() {
         assertThat(Arrays.stream(ModelField.class.getRecordComponents()).filter(component -> component.getName().equals("nullable")))
             .extracting(RecordComponent::getType)
@@ -361,6 +382,32 @@ class ModelSpecContractTest {
             List.of(),
             List.of(),
             generationStrategy,
+            base.idempotencyKey()
+        );
+    }
+
+    private static CreateModelSpecCommand copyDescription(CreateModelSpecCommand base, String description) {
+        return new CreateModelSpecCommand(
+            base.planId(),
+            base.domainId(),
+            base.modelType(),
+            base.layer(),
+            base.name(),
+            description,
+            base.implementationMode(),
+            base.materialization(),
+            base.businessActivityRef(),
+            base.consumptionScenario(),
+            base.grain(),
+            base.factShape(),
+            base.timeSemantics(),
+            base.fields(),
+            base.sourceRefs(),
+            base.dependsOn(),
+            base.dimensionRefs(),
+            base.metricRefs(),
+            base.standardBindings(),
+            base.generationStrategy(),
             base.idempotencyKey()
         );
     }

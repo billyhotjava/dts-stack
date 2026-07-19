@@ -87,6 +87,31 @@ class ModelSpecV2FixtureTest {
     }
 
     @Test
+    void schemaKeepsLegacyV2DimensionDefinitionAndGrainKeysCompatible() throws Exception {
+        JsonNode schema = resourceJson("/config/modeling/model-spec-v2.schema.json");
+        JsonNode dimensionBoundary = java.util.stream.StreamSupport.stream(
+            schema.path("$defs").path("modelTypeSaveBoundaries").path("allOf").spliterator(),
+            false
+        )
+            .filter(boundary ->
+                "DIMENSION".equals(
+                    boundary.path("if").path("properties").path("modelType").path("const").asText()
+                )
+            )
+            .findFirst()
+            .orElseThrow();
+        Set<String> required = java.util.stream.StreamSupport.stream(
+            dimensionBoundary.path("then").path("required").spliterator(),
+            false
+        )
+            .map(JsonNode::asText)
+            .collect(Collectors.toSet());
+        assertThat(required).doesNotContain("description");
+        assertThat(schema.path("$defs").path("grain").path("properties").path("keys").path("uniqueItems").asBoolean())
+            .isFalse();
+    }
+
+    @Test
     void schemaContainsNoDuplicateJsonObjectKeys() throws Exception {
         ObjectMapper duplicateDetectingMapper = new ObjectMapper(
             JsonFactory.builder().enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION).build()
