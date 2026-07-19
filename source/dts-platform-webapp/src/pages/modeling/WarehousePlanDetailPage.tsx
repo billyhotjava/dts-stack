@@ -846,7 +846,10 @@ export default function WarehousePlanDetailPage() {
 				<SpecialistSection
 					title="事实与维度"
 					description="维护模型台账、粒度、时间语义和关系；计划详情只提供上下文和入口。"
-					actions={[{ label: "进入模型中心", route: "/modeling/models", icon: <Boxes size={17} /> }]}
+					actions={[
+						{ label: "维度目录", route: "/modeling/dimensions", icon: <Waypoints size={17} /> },
+						{ label: "模型中心", route: "/modeling/models", icon: <Boxes size={17} /> },
+					]}
 					onOpen={openSpecialist}
 				/>
 			) : null}

@@ -65,11 +65,11 @@ Sprint-65 已建立 `WarehousePlan`、`ModelSpec` 和数据建设工作台，但
 | [F1](features/F1-关键对象与主线契约/README.md) | 关键对象与主线契约 | 3 | READY | 固化唯一词表、业务对象处置和业务活动边界 |
 | [F2](features/F2-规划输入与分阶段门禁/README.md) | 规划输入与分阶段门禁 | 4 | IN_PROGRESS | 明确计划、分类、分层、来源和阶段门禁 |
 | [F3](features/F3-维度与四类表直接建模/README.md) | 维度与四类表直接建模 | 5 | IN_PROGRESS | 以 ModelSpec 直接承载维度和四类表 |
-| [F4](features/F4-菜单页面与跳转收敛/README.md) | 菜单页面与跳转收敛 | 4 | READY | 确立菜单、页面输入输出和唯一下一步 |
+| [F4](features/F4-菜单页面与跳转收敛/README.md) | 菜单页面与跳转收敛 | 4 | IN_PROGRESS | 确立菜单、页面输入输出和唯一下一步 |
 | [F5](features/F5-业务对象迁移与受控退役/README.md) | 业务对象迁移与受控退役 | 4 | READY | 迁移旧数据、冻结旧写入并清理消费者 |
 | [F6](features/F6-专业模块交接与集成验收/README.md) | 专业模块交接与集成验收 | 4 | READY | 接通标准、指标、构建发布和端到端证据 |
 
-**统计**：READY=19，IN_PROGRESS=3，DONE=2，BLOCKED=0
+**统计**：READY=17，IN_PROGRESS=5，DONE=2，BLOCKED=0
 
 ## 6. 依赖与执行顺序
 

@@ -1,0 +1,25 @@
+Sprint-67 F3-T02 维度目录入口契约证据
+时间：2026-07-19 15:26 +08:00
+
+范围：
+- 维度目录直接读取 modelType=DIMENSION 的 canonical ModelSpec。
+- 登记维度不依赖业务过程或业务对象 API。
+- 规划详情按“维度目录 → 模型中心”展示入口，统一透传 planId。
+- 旧 SemanticObjectsPage 与兼容路由未删除，等待 F5 数据迁移。
+
+TDD：
+- RED：菜单仍显示“业务对象”并指向 /modeling/semantic/objects；规划详情缺少“维度目录”入口。
+- GREEN：相关 source-contract 27/27 通过。
+
+验证：
+- portalGoldenLineMenu.source-contract.test.ts：7/7 PASS
+- metricsServiceEmbedding.source-contract.test.ts：4/4 PASS
+- canonicalModelingPages.source-contract.test.ts：4/4 PASS
+- warehousePlanJourneyConvergence.source-contract.test.ts：5/5 PASS
+- canonicalModelingLanguage.source-contract.test.ts：7/7 PASS
+- pnpm build（Chrome 95 legacy target）：PASS
+- Playwright + Chromium 95.0.4638.0：5/5 PASS（含桌面与 390x844）
+
+边界：
+- 本证据不宣称维度 code、hierarchy、SCD、复用范围或实现门禁已完成。
+- dts-admin 定向 Java 测试在当前主机因 Mockito/ByteBuddy attach 被禁止而未形成 GREEN；该失败发生在 mock 初始化阶段，不是菜单断言失败。

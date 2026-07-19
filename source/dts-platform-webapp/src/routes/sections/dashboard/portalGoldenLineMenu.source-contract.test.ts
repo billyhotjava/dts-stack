@@ -10,6 +10,21 @@ type MenuNode = {
 	children?: MenuNode[];
 };
 
+type RoleMenuDefault = {
+	code: string;
+	title: string;
+	route: string;
+	requiredRoles: string[];
+};
+
+type PortalLocale = {
+	sys: {
+		nav: {
+			portal: Record<string, string>;
+		};
+	};
+};
+
 const MENU_SEED = JSON.parse(
 	readFileSync(new URL("../../../../../dts-admin/src/main/resources/config/data/portal-menu-seed.json", import.meta.url), "utf8"),
 ) as { portalNavSections: MenuNode[] };
@@ -19,6 +34,9 @@ const ROLE_DEFAULTS = readFileSync(
 );
 const ZH_LOCALE = readFileSync(new URL("../../../locales/lang/zh_CN/sys.json", import.meta.url), "utf8");
 const EN_LOCALE = readFileSync(new URL("../../../locales/lang/en_US/sys.json", import.meta.url), "utf8");
+const ROLE_DEFAULT_ENTRIES = JSON.parse(ROLE_DEFAULTS) as RoleMenuDefault[];
+const ZH_PORTAL_LOCALE = (JSON.parse(ZH_LOCALE) as PortalLocale).sys.nav.portal;
+const EN_PORTAL_LOCALE = (JSON.parse(EN_LOCALE) as PortalLocale).sys.nav.portal;
 const LIQUIBASE_MASTER = readFileSync(
 	new URL("../../../../../dts-admin/src/main/resources/config/liquibase/master.xml", import.meta.url),
 	"utf8",
@@ -145,6 +163,36 @@ test("portal menu starts modeling with the generic workbench", () => {
 	assert.equal(child(child(child(section("consumption"), "bi-apps"), "bi"), "dashboards").externalLink, "/bi/dashboards");
 	assert.equal(child(section("consumption"), "screens").externalLink, "/bi/screens");
 	assert.equal(child(child(section("consumption"), "services"), "products").externalLink, "/catalog/data-products");
+});
+
+test("dimension modeling menu converges on the canonical dimension catalog and model center", () => {
+	const dimensionalModeling = child(child(section("studio"), "modeling"), "dimensional-modeling");
+	const dimensionCatalog = child(dimensionalModeling, "semantic-objects");
+	const modelCenter = child(dimensionalModeling, "semantic-models");
+
+	assert.equal(dimensionCatalog.title, "维度目录");
+	assert.equal(dimensionCatalog.externalLink, "/modeling/dimensions");
+	assert.equal(modelCenter.title, "模型中心");
+	assert.equal(modelCenter.externalLink, "/modeling/models");
+
+	const roleDefaultByCode = new Map(ROLE_DEFAULT_ENTRIES.map((entry) => [entry.code, entry]));
+	assert.deepEqual(roleDefaultByCode.get("sys.nav.portal.studioSemanticObjects"), {
+		code: "sys.nav.portal.studioSemanticObjects",
+		title: "维度目录",
+		route: "/modeling/dimensions",
+		requiredRoles: [],
+	});
+	assert.deepEqual(roleDefaultByCode.get("sys.nav.portal.studioSemanticModels"), {
+		code: "sys.nav.portal.studioSemanticModels",
+		title: "模型中心",
+		route: "/modeling/models",
+		requiredRoles: [],
+	});
+
+	assert.equal(ZH_PORTAL_LOCALE.studioSemanticObjects, "维度目录");
+	assert.equal(ZH_PORTAL_LOCALE.studioSemanticModels, "模型中心");
+	assert.equal(EN_PORTAL_LOCALE.studioSemanticObjects, "Dimension catalog");
+	assert.equal(EN_PORTAL_LOCALE.studioSemanticModels, "Model center");
 });
 
 test("golden line section titles have locale coverage and role routes stay canonical", () => {

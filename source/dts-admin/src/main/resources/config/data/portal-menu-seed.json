@@ -190,16 +190,16 @@
                   "path": "objects",
                   "icon": "solar:box-bold-duotone",
                   "titleKey": "sys.nav.portal.studioSemanticObjects",
-                  "title": "业务对象",
-                  "externalLink": "/modeling/semantic/objects"
+                  "title": "维度目录",
+                  "externalLink": "/modeling/dimensions"
                 },
                 {
                   "key": "semantic-models",
                   "path": "models",
                   "icon": "solar:database-bold-duotone",
                   "titleKey": "sys.nav.portal.studioSemanticModels",
-                  "title": "模型管理",
-                  "externalLink": "/modeling/semantic/models"
+                  "title": "模型中心",
+                  "externalLink": "/modeling/models"
                 },
                 {
                   "key": "dbt-files",

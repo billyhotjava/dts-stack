@@ -9,6 +9,7 @@ import ts from "typescript";
 const CONTRACT_URL = new URL("./canonicalModelingLanguage.ts", import.meta.url);
 const LEGACY_MENU_KEY = "semantic-objects";
 const LEGACY_ROUTE = "/modeling/semantic/objects";
+const DIMENSION_CATALOG_ROUTE = "/modeling/dimensions";
 const RETIRED_OBJECT_TERMS = ["业务对象", "语义对象"] as const;
 const RETIRED_METRIC_TERMS = ["原始指标", "二次指标"] as const;
 const REPLACEMENT_OBJECT_TERMS = ["业务实体", "模型对象", "数据对象", "语义实体"] as const;
@@ -440,7 +441,7 @@ test("exact retired-term fingerprints reject equal-count moves and context rewri
 	}
 });
 
-test("menu copy permits retired object language only on the single legacy key and route pair", () => {
+test("menu keeps the legacy binding key while customer copy routes to the dimension catalog", () => {
 	const menuSeed = JSON.parse(
 		readSource("../../../../dts-admin/src/main/resources/config/data/portal-menu-seed.json"),
 	) as { portalNavSections: MenuNode[] };
@@ -448,11 +449,10 @@ test("menu copy permits retired object language only on the single legacy key an
 		readSource("../../../../dts-admin/src/main/resources/config/data/role-menu-defaults.json"),
 	) as RoleMenuDefault[];
 	const menuNodes = flattenMenu(menuSeed.portalNavSections);
-	const compatibilityNodes = menuNodes.filter(
-		(node) => node.key === LEGACY_MENU_KEY || node.externalLink === LEGACY_ROUTE,
-	);
-
-	assert.ok(compatibilityNodes.length <= 1, "legacy modeling object menu exception must remain unique");
+	const compatibilityNodes = menuNodes.filter((node) => node.key === LEGACY_MENU_KEY);
+	assert.equal(compatibilityNodes.length, 1, "the existing role-bound menu key must remain unique");
+	assert.equal(compatibilityNodes[0]?.title, "维度目录");
+	assert.equal(compatibilityNodes[0]?.externalLink, DIMENSION_CATALOG_ROUTE);
 	for (const node of menuNodes) {
 		const hasRetiredTitle = RETIRED_OBJECT_TERMS.some((term) => node.title?.includes(term));
 		assert.equal(
@@ -465,17 +465,14 @@ test("menu copy permits retired object language only on the single legacy key an
 			false,
 			`retired metric copy leaked to menu ${node.key}`,
 		);
-		const hasRetiredKeyOrRoute =
-			/(?:business|semantic)[-/]?objects?/i.test(node.key) ||
-			/(?:business|semantic)[-/]?objects?/i.test(node.externalLink ?? "");
-		if (hasRetiredTitle || hasRetiredKeyOrRoute) {
-			assert.equal(node.key, LEGACY_MENU_KEY, `unexpected retired modeling menu key: ${node.key}`);
-			assert.equal(node.externalLink, LEGACY_ROUTE, `unexpected retired modeling menu route: ${node.externalLink}`);
-		}
+		assert.equal(hasRetiredTitle, false, `retired object copy leaked to menu ${node.key}`);
+		assert.notEqual(node.externalLink, LEGACY_ROUTE, `legacy object route leaked to menu ${node.key}`);
 	}
 
-	const compatibilityRoleDefaults = roleDefaults.filter((item) => item.route === LEGACY_ROUTE);
-	assert.ok(compatibilityRoleDefaults.length <= 1, "legacy modeling object role default must remain unique");
+	const compatibilityRoleDefaults = roleDefaults.filter((item) => item.code === "sys.nav.portal.studioSemanticObjects");
+	assert.equal(compatibilityRoleDefaults.length, 1, "the existing role-default code must remain unique");
+	assert.equal(compatibilityRoleDefaults[0]?.title, "维度目录");
+	assert.equal(compatibilityRoleDefaults[0]?.route, DIMENSION_CATALOG_ROUTE);
 	for (const item of roleDefaults) {
 		assert.equal(
 			REPLACEMENT_OBJECT_TERMS.some((term) => item.title.includes(term)),
@@ -487,9 +484,12 @@ test("menu copy permits retired object language only on the single legacy key an
 			false,
 			`retired metric copy leaked to role menu ${item.code}`,
 		);
-		if (RETIRED_OBJECT_TERMS.some((term) => item.title.includes(term))) {
-			assert.equal(item.route, LEGACY_ROUTE, `retired role-menu copy leaked to ${item.route}`);
-		}
+		assert.equal(
+			RETIRED_OBJECT_TERMS.some((term) => item.title.includes(term)),
+			false,
+			`retired object copy leaked to role menu ${item.code}`,
+		);
+		assert.notEqual(item.route, LEGACY_ROUTE, `legacy object route leaked to role menu ${item.code}`);
 	}
 });
 

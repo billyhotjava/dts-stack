@@ -103,14 +103,14 @@
   },
   {
     "code": "sys.nav.portal.studioSemanticObjects",
-    "title": "业务对象",
-    "route": "/modeling/semantic/objects",
+    "title": "维度目录",
+    "route": "/modeling/dimensions",
     "requiredRoles": []
   },
   {
     "code": "sys.nav.portal.studioSemanticModels",
-    "title": "模型管理",
-    "route": "/modeling/semantic/models",
+    "title": "模型中心",
+    "route": "/modeling/models",
     "requiredRoles": []
   },
   {

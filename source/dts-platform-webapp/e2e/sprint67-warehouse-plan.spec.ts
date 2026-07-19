@@ -392,6 +392,49 @@ test("exact plan survives list failure, refresh, evidence retry, detail return a
 	]);
 });
 
+test("plan modeling section starts with the dimension catalog and keeps the exact plan context", async ({ page }) => {
+	const probe = installBrowserProbe(page);
+	const modelingPlan = plan("plan-modeling", "BUSINESS_FIRST", "维度建模计划");
+	await installWarehousePlanApi(page, {
+		list: () => [modelingPlan],
+		getPlan: () => modelingPlan,
+		baseline: () => ({ ready: true, missingCodes: [] }),
+		projection: (planId) => stageProjection(planId),
+	});
+
+	await page.goto(`/#/modeling/plans/${modelingPlan.id}/models`);
+	const modelingSection = page
+		.getByRole("heading", { name: "事实与维度" })
+		.locator("xpath=ancestor::div[contains(@class, 'ant-card')][1]");
+	await expect(modelingSection.getByRole("button")).toHaveText(["维度目录", "模型中心"]);
+	await modelingSection.getByRole("button", { name: "维度目录" }).click();
+	await expect(page).toHaveURL(new RegExp(`/modeling/dimensions\\?planId=${modelingPlan.id}$`));
+	await expect(page.getByTestId("dimension-catalog-page")).toBeVisible();
+	await expect(
+		page.getByText("已锁定当前建设计划；登记时可在计划已确认的业务分类内选择", { exact: true }),
+	).toBeVisible();
+	await page.screenshot({ path: path.join(evidenceDir, "dimension-catalog-entry-desktop.png"), fullPage: true });
+	await page.goBack();
+	await expect(page).toHaveURL(new RegExp(`/modeling/plans/${modelingPlan.id}/models$`));
+	await page.getByRole("button", { name: "模型中心" }).click();
+	await expect(page).toHaveURL(new RegExp(`/modeling/models\\?planId=${modelingPlan.id}$`));
+	await expect(page.getByTestId("model-center-page")).toBeVisible();
+	await page.goBack();
+	await page.getByRole("button", { name: "维度目录" }).click();
+	await expect(page.getByTestId("dimension-catalog-page")).toBeVisible();
+
+	await page.setViewportSize({ width: 390, height: 844 });
+	const viewportMetrics = await page.evaluate(() => ({
+		innerWidth: window.innerWidth,
+		documentWidth: document.documentElement.scrollWidth,
+		bodyWidth: document.body.scrollWidth,
+	}));
+	expect(viewportMetrics.documentWidth).toBeLessThanOrEqual(viewportMetrics.innerWidth);
+	expect(viewportMetrics.bodyWidth).toBeLessThanOrEqual(viewportMetrics.innerWidth);
+	await page.screenshot({ path: path.join(evidenceDir, "dimension-catalog-entry-narrow.png"), fullPage: true });
+	assertCleanBrowser(probe);
+});
+
 test("model detail deep-link keeps canonical tabs, server plan context and narrow standard table", async ({ page }) => {
 	const probe = installBrowserProbe(page);
 	const modelId = "40000000-0000-0000-0000-000000000001";

@@ -44,10 +44,11 @@ test("legacy metrics bridge redirects to platform modeling instead of embedding 
 
 test("metrics menu entries target platform modeling routes", () => {
 	assert.match(MENU_SEED, /"externalLink": "\/modeling\/metric-workbench"/);
-	assert.match(MENU_SEED, /"externalLink": "\/modeling\/semantic\/objects"/);
+	assert.match(MENU_SEED, /"externalLink": "\/modeling\/dimensions"/);
 	assert.match(MENU_SEED, /"externalLink": "\/modeling\/semantic\/metrics"/);
-	assert.match(MENU_SEED, /"externalLink": "\/modeling\/semantic\/models"/);
+	assert.match(MENU_SEED, /"externalLink": "\/modeling\/models"/);
 	assert.match(MENU_SEED, /"externalLink": "\/modeling\/semantic\/publish"/);
+	assert.doesNotMatch(MENU_SEED, /"externalLink": "\/modeling\/semantic\/(?:objects|models)"/);
 	assert.doesNotMatch(MENU_SEED, /"externalLink": "\/modeling\/semantic\/subjects"/);
 	assert.doesNotMatch(MENU_SEED, /"externalLink": "\/modeling\/semantic\/runs"/);
 	assert.match(MENU_SEED, /"externalLink": "\/governance\/subjects"/);
@@ -56,10 +57,11 @@ test("metrics menu entries target platform modeling routes", () => {
 	assert.doesNotMatch(MENU_SEED, /"externalLink": "\/metrics\//);
 
 	assert.match(ROLE_DEFAULTS, /"route": "\/modeling\/metric-workbench"/);
-	assert.match(ROLE_DEFAULTS, /"route": "\/modeling\/semantic\/objects"/);
+	assert.match(ROLE_DEFAULTS, /"route": "\/modeling\/dimensions"/);
 	assert.match(ROLE_DEFAULTS, /"route": "\/modeling\/semantic\/metrics"/);
-	assert.match(ROLE_DEFAULTS, /"route": "\/modeling\/semantic\/models"/);
+	assert.match(ROLE_DEFAULTS, /"route": "\/modeling\/models"/);
 	assert.match(ROLE_DEFAULTS, /"route": "\/modeling\/semantic\/publish"/);
+	assert.doesNotMatch(ROLE_DEFAULTS, /"route": "\/modeling\/semantic\/(?:objects|models)"/);
 	assert.doesNotMatch(ROLE_DEFAULTS, /"route": "\/modeling\/semantic\/subjects"/);
 	assert.doesNotMatch(ROLE_DEFAULTS, /"route": "\/modeling\/semantic\/runs"/);
 	assert.match(ROLE_DEFAULTS, /"route": "\/governance\/subjects"/);

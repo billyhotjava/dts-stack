@@ -50,3 +50,14 @@ test("static and dynamic routing resolve canonical list and detail pages to the 
 		/directOverridePath &&[\s\S]*pathname !== resolvedPath[\s\S]*Component\(directOverridePath\)/,
 	);
 });
+
+test("warehouse plan facts and dimensions section opens both canonical catalogs with plan context", () => {
+	const planDetail = read("./WarehousePlanDetailPage.tsx");
+
+	assert.match(
+		planDetail,
+		/const openSpecialist = \(route: string\) => navigate\(withWarehousePlanContext\(route, planId\)\)/,
+	);
+	assert.match(planDetail, /label: "维度目录", route: "\/modeling\/dimensions"/);
+	assert.match(planDetail, /label: "模型中心", route: "\/modeling\/models"/);
+});

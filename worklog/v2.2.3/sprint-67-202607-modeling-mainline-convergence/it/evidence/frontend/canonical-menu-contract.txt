@@ -1,0 +1,22 @@
+Sprint-67 F4-T01 canonical 建模菜单证据
+时间：2026-07-19 15:26 +08:00
+
+已收敛映射：
+- key=semantic-objects，titleKey=sys.nav.portal.studioSemanticObjects（保留）
+  title=维度目录，target=/modeling/dimensions
+- key=semantic-models，titleKey=sys.nav.portal.studioSemanticModels（保留）
+  title=模型中心，target=/modeling/models
+
+角色兼容：
+- role-menu-default code 与 requiredRoles 保持不变。
+- PortalMenuService 在 seed hash 变化后执行非破坏性 metadata upsert；不会 deleteAll portal_menu_visibility。
+- 旧 /modeling/semantic/objects 和 /modeling/semantic/models 只保留路由兼容，不再作为菜单 target。
+
+验证：
+- canonical/metrics/language/menu source-contract 合计 27/27 PASS。
+- production legacy build PASS。
+- 真实 Chrome 95 中维度目录、模型中心均携带精确 planId；维度目录桌面与 390px 验收 PASS。
+
+待完成：
+- SQL/dbt、低代码、指标等其余重复菜单收敛。
+- 真实运行库 menu ID/portal_menu_visibility 差异导出与三角色验收。
