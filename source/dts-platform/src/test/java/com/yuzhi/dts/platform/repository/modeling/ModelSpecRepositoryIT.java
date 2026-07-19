@@ -28,7 +28,7 @@ class ModelSpecRepositoryIT {
     private ObjectMapper objectMapper;
 
     @Test
-    void convergesIdempotentInsertAndUsesRevisionChecksumCas() {
+    void convergesIdempotentInsertAndUsesRevisionChecksumCas() throws Exception {
         String tenant = "model-spec-it-" + UUID.randomUUID();
         String actor = "owner-1";
         UUID planId = UUID.randomUUID();
@@ -53,10 +53,8 @@ class ModelSpecRepositoryIT {
         repository.insertV2Revision(tenant, actor, second, secondSnapshot);
         assertThat(repository.compareAndSetV2(tenant, actor, 1, first.checksum(), second, secondSnapshot)).isZero();
         assertThat(repository.findCurrent(tenant, first.id())).get().extracting(ModelSpecRepository.StoredModelSpec::revision).isEqualTo(2);
-        assertThat(repository.findRevision(tenant, first.id(), 1))
-            .get()
-            .extracting(ModelSpecRepository.StoredModelSpec::currentSnapshot)
-            .isEqualTo(firstSnapshot);
+        String persistedFirstSnapshot = repository.findRevision(tenant, first.id(), 1).orElseThrow().currentSnapshot();
+        assertThat(objectMapper.readTree(persistedFirstSnapshot)).isEqualTo(objectMapper.readTree(firstSnapshot));
         assertThat(repository.findCurrent("another-tenant", first.id())).isEmpty();
         assertThat(repository.findSourceBinding(tenant, planId, sourceBindingId))
             .get()

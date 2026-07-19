@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.service.modeling;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
@@ -132,10 +133,6 @@ class ModelSpecApplicationServiceTest {
         ModelSpecView original = codec.toCreatedView(MODEL_ID, command, NOW);
         when(repository.findByIdempotencyKey(TENANT, "replay-after-state-change"))
             .thenReturn(Optional.of(stored(original, codec.requestHash(command), codec.write(original))));
-        when(repository.lockPlan(TENANT, PLAN_ID)).thenReturn(Optional.of(new PlanState(PLAN_ID, "ARCHIVED")));
-        when(repository.lockDomainBinding(TENANT, PLAN_ID, DOMAIN_ID)).thenReturn(Optional.empty());
-        when(domainResolution.resolve(DOMAIN_ID))
-            .thenReturn(new DomainResolution(DOMAIN_ID, CatalogDomainResolutionPort.ResolutionStatus.ARCHIVED, "Customers", "CUSTOMER", null, null));
 
         ModelSpecApplicationService.CreateResult replay = service.create(TENANT, ACTOR, command);
 
@@ -176,7 +173,7 @@ class ModelSpecApplicationServiceTest {
         );
 
         assertThat(result).isEqualTo(current);
-        verify(repository, never()).compareAndSetV2(any(), any(), any(), anyString(), any(), anyString());
+        verify(repository, never()).compareAndSetV2(any(), any(), anyInt(), anyString(), any(), anyString());
         verify(repository, never()).insertV2Revision(any(), any(), any(), any());
     }
 

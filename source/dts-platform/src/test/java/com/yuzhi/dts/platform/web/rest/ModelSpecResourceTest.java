@@ -223,6 +223,14 @@ class ModelSpecResourceTest {
     }
 
     private static String updateJson() {
-        return createJson().replace(",\n             \"idempotencyKey\":\"create-1\"", "");
+        return """
+            {"planId":"10000000-0000-0000-0000-000000000001",
+             "domainId":"20000000-0000-0000-0000-000000000001",
+             "modelType":"FACT","layer":"DWD","name":"customer_detail",
+             "implementationMode":"DESIGNER_GENERATED",
+             "grain":{"statement":"one row per customer event","keys":["customer_id"]},
+             "sourceRefs":[{"kind":"TABLE","ref":"ods.customer","layer":"ODS","role":"PRIMARY","sortOrder":0,
+                            "sourceBindingId":"50000000-0000-0000-0000-000000000001","resolvedVersion":"v1"}]}
+            """;
     }
 }

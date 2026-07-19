@@ -1,7 +1,7 @@
 # Sprint-67：建模主线与业务对象退役收敛
 
 **时间**：2026-07
-**状态**：READY
+**状态**：IN_PROGRESS
 **类型**：Product Journey / Modeling Contract / UI Convergence / Controlled Migration
 **目标**：以“业务分类（数据域）→ 数仓分层与标准 → 维度和四类表 → 指标与发布”为唯一对外主线，删除“业务对象”这一重复中间产物，并明确每个页面的输入、输出、下一步和验收证据。
 
@@ -63,13 +63,13 @@ Sprint-65 已建立 `WarehousePlan`、`ModelSpec` 和数据建设工作台，但
 | ID | Feature | Task 数 | 状态 | 交付重点 |
 |---|---|---:|---|---|
 | [F1](features/F1-关键对象与主线契约/README.md) | 关键对象与主线契约 | 3 | READY | 固化唯一词表、业务对象处置和业务活动边界 |
-| [F2](features/F2-规划输入与分阶段门禁/README.md) | 规划输入与分阶段门禁 | 4 | READY | 明确计划、分类、分层、来源和阶段门禁 |
-| [F3](features/F3-维度与四类表直接建模/README.md) | 维度与四类表直接建模 | 5 | READY | 以 ModelSpec 直接承载维度和四类表 |
+| [F2](features/F2-规划输入与分阶段门禁/README.md) | 规划输入与分阶段门禁 | 4 | IN_PROGRESS | 明确计划、分类、分层、来源和阶段门禁 |
+| [F3](features/F3-维度与四类表直接建模/README.md) | 维度与四类表直接建模 | 5 | IN_PROGRESS | 以 ModelSpec 直接承载维度和四类表 |
 | [F4](features/F4-菜单页面与跳转收敛/README.md) | 菜单页面与跳转收敛 | 4 | READY | 确立菜单、页面输入输出和唯一下一步 |
 | [F5](features/F5-业务对象迁移与受控退役/README.md) | 业务对象迁移与受控退役 | 4 | READY | 迁移旧数据、冻结旧写入并清理消费者 |
 | [F6](features/F6-专业模块交接与集成验收/README.md) | 专业模块交接与集成验收 | 4 | READY | 接通标准、指标、构建发布和端到端证据 |
 
-**统计**：READY=24，IN_PROGRESS=0，DONE=0，BLOCKED=0
+**统计**：READY=21，IN_PROGRESS=1，DONE=2，BLOCKED=0
 
 ## 6. 依赖与执行顺序
 

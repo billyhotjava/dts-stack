@@ -1,7 +1,7 @@
 # F3：维度与四类表直接建模
 
 **优先级**：P0
-**状态**：READY
+**状态**：IN_PROGRESS
 **依赖**：F1、F2-T02
 **目标**：让用户不经过业务对象即可登记维度并直接创建明细表、维度表、汇总表和应用表，ModelSpec 成为唯一模型事实源。
 
@@ -9,7 +9,7 @@
 
 | Task | 优先级 | 状态 | 依赖 | 输出 |
 |---|---|---|---|---|
-| [T01-建立无业务对象的ModelSpec契约](T01-建立无业务对象的ModelSpec契约.md) | P0 | READY | F1-T02/T03 | ModelSpec v2/API/持久化契约 |
+| [T01-建立无业务对象的ModelSpec契约](T01-建立无业务对象的ModelSpec契约.md) | P0 | DONE | F1-T02/T03 | ModelSpec v2/API/持久化契约 |
 | [T02-设计维度目录与维度表](T02-设计维度目录与维度表.md) | P0 | READY | T01 | DIMENSION 目录与编辑流 |
 | [T03-设计明细表与粒度时间语义](T03-设计明细表与粒度时间语义.md) | P0 | READY | T01、F2-T03 | FACT 编辑流 |
 | [T04-设计汇总表与应用表](T04-设计汇总表与应用表.md) | P0 | READY | T01/T03 | SUMMARY/APPLICATION 编辑流 |
@@ -17,7 +17,7 @@
 
 ## 完成标准
 
-- [ ] ModelSpec 新写契约不存在 objectId 硬依赖。
+- [x] ModelSpec 新写契约不存在 objectId 硬依赖。
 - [ ] 维度目录的数据源是 DIMENSION ModelSpec，不是业务对象表。
 - [ ] 四类表各有独立必填规则、默认层级和产物说明。
 - [ ] 标准、来源、维度关系和指标只保存稳定引用。
