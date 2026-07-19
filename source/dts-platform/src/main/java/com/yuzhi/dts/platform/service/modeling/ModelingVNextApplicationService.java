@@ -13,6 +13,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,20 +43,31 @@ public class ModelingVNextApplicationService {
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final ModelingRuntimeSubmissionService runtimeSubmissionService;
+    private final ModelSpecApplicationService canonicalModelSpecService;
 
     public ModelingVNextApplicationService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
-        this(jdbcTemplate, objectMapper, null);
+        this(jdbcTemplate, objectMapper, null, null);
+    }
+
+    public ModelingVNextApplicationService(
+        JdbcTemplate jdbcTemplate,
+        ObjectMapper objectMapper,
+        ModelingRuntimeSubmissionService runtimeSubmissionService
+    ) {
+        this(jdbcTemplate, objectMapper, runtimeSubmissionService, null);
     }
 
     @Autowired
     public ModelingVNextApplicationService(
         JdbcTemplate jdbcTemplate,
         ObjectMapper objectMapper,
-        ModelingRuntimeSubmissionService runtimeSubmissionService
+        ModelingRuntimeSubmissionService runtimeSubmissionService,
+        ModelSpecApplicationService canonicalModelSpecService
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
         this.runtimeSubmissionService = runtimeSubmissionService;
+        this.canonicalModelSpecService = canonicalModelSpecService;
     }
 
     public record WarehousePlan(
@@ -272,9 +284,10 @@ public class ModelingVNextApplicationService {
 
     @Transactional(readOnly = true)
     public List<ModelingVNextContract.ModelSpec> listModelSpecs(String tenantId, String objectId, String processId, String layer) {
-        StringBuilder sql = new StringBuilder("select spec_json from modeling_model_spec_revision r join modeling_model_spec s on s.id = r.model_spec_id where s.tenant_id = ? and r.revision = s.revision");
+        String tenant = normalizeTenant(tenantId);
+        StringBuilder sql = new StringBuilder("select spec_json from modeling_model_spec_revision r join modeling_model_spec s on s.id = r.model_spec_id where s.tenant_id = ? and r.revision = s.revision and s.contract_version = 1");
         List<Object> args = new ArrayList<>();
-        args.add(normalizeTenant(tenantId));
+        args.add(tenant);
         if (notBlank(objectId)) {
             sql.append(" and s.object_id = ?");
             args.add(externalUuid(objectId));
@@ -288,7 +301,36 @@ public class ModelingVNextApplicationService {
             args.add(layer);
         }
         sql.append(" order by s.name");
-        return jdbcTemplate.query(sql.toString(), args.toArray(), (rs, row) -> readJson(rs.getString("spec_json"), ModelingVNextContract.ModelSpec.class));
+        List<ModelingVNextContract.ModelSpec> models = new ArrayList<>(
+            jdbcTemplate.query(
+                sql.toString(),
+                args.toArray(),
+                (rs, row) -> readJson(rs.getString("spec_json"), ModelingVNextContract.ModelSpec.class)
+            )
+        );
+        if (
+            canonicalModelSpecService != null &&
+            canonicalModelSpecService.canonicalReadEnabled() &&
+            !notBlank(objectId)
+        ) {
+            ModelSpecContract.Layer canonicalLayer = null;
+            if (notBlank(layer)) {
+                try {
+                    canonicalLayer = ModelSpecContract.Layer.valueOf(layer);
+                } catch (IllegalArgumentException ignored) {
+                    return List.copyOf(models);
+                }
+            }
+            canonicalModelSpecService
+                .list(tenant, null, null, null, canonicalLayer)
+                .stream()
+                .filter(view -> view.contractVersion() == ModelSpecContract.CONTRACT_VERSION)
+                .filter(view -> !notBlank(processId) || processId.equals(view.businessActivityRef()))
+                .map(view -> projectCanonical(tenant, view))
+                .forEach(models::add);
+        }
+        models.sort(Comparator.comparing(ModelingVNextContract.ModelSpec::name, Comparator.nullsLast(String::compareTo)));
+        return List.copyOf(models);
     }
 
     public ModelingVNextContract.ModelSpec saveModelSpec(
@@ -313,24 +355,40 @@ public class ModelingVNextApplicationService {
         String specJson = writeJson(withId(model, id.toString()));
         if (storedVersion == 0) {
             jdbcTemplate.update(
-                "insert into modeling_model_spec (id, tenant_id, object_id, process_id, layer, model_type, implementation_mode, name, grain_statement, dimensions, metrics, materialization, status, revision, legacy_ref, version, created_date, last_modified_date) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "insert into modeling_model_spec (id, tenant_id, object_id, process_id, layer, model_type, implementation_mode, name, grain_statement, dimensions, metrics, materialization, status, revision, legacy_ref, version, created_date, last_modified_date, contract_version) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
                 id, tenant, externalUuid(model.objectId()), model.processId(), model.layer().name(), model.modelType().name(), model.implementationMode().name(), model.name(), writeJson(model.grain()), writeJson(model.dimensions()), writeJson(model.metrics()), model.materialization(), "DRAFT", revision, model.legacyRef(), revision, now, now
             );
         } else {
-            jdbcTemplate.update(
-                "update modeling_model_spec set process_id = ?, layer = ?, model_type = ?, implementation_mode = ?, name = ?, grain_statement = ?, dimensions = ?, metrics = ?, materialization = ?, revision = ?, legacy_ref = ?, version = ?, last_modified_date = ? where id = ? and tenant_id = ? and version = ?",
+            int updated = jdbcTemplate.update(
+                "update modeling_model_spec set process_id = ?, layer = ?, model_type = ?, implementation_mode = ?, name = ?, grain_statement = ?, dimensions = ?, metrics = ?, materialization = ?, revision = ?, legacy_ref = ?, version = ?, last_modified_date = ? where id = ? and tenant_id = ? and version = ? and contract_version = 1",
                 model.processId(), model.layer().name(), model.modelType().name(), model.implementationMode().name(), model.name(), writeJson(model.grain()), writeJson(model.dimensions()), writeJson(model.metrics()), model.materialization(), revision, model.legacyRef(), revision, now, id, tenant, revision
             );
+            if (updated == 0) {
+                throw new DomainException("MODEL_SPEC_LEGACY_READONLY", "Canonical ModelSpec rows cannot be changed through the vNext writer");
+            }
         }
-        jdbcTemplate.update(
-            "insert into modeling_model_spec_revision (id, model_spec_id, revision, spec_json, status, content_checksum, created_date, last_modified_date) values (?, ?, ?, ?, ?, ?, ?, ?) on conflict (model_spec_id, revision) do update set spec_json = excluded.spec_json, last_modified_date = excluded.last_modified_date",
-            UUID.randomUUID(), id, revision, specJson, "DRAFT", checksum(specJson), now, now
+        int revisionWritten = jdbcTemplate.update(
+            "insert into modeling_model_spec_revision (id, model_spec_id, revision, tenant_id, contract_version, spec_json, status, content_checksum, created_date, last_modified_date) values (?, ?, ?, ?, 1, ?, ?, ?, ?, ?) on conflict (model_spec_id, revision) do update set spec_json = excluded.spec_json, last_modified_date = excluded.last_modified_date where modeling_model_spec_revision.contract_version = 1",
+            UUID.randomUUID(), id, revision, tenant, specJson, "DRAFT", checksum(specJson), now, now
         );
+        if (revisionWritten == 0) {
+            throw new DomainException("MODEL_SPEC_LEGACY_READONLY", "Canonical ModelSpec revisions are append-only");
+        }
         return withId(model, id.toString());
     }
 
     @Transactional(readOnly = true)
     public List<ModelingVNextContract.ModelSpec> dependencies(String tenantId, String id) {
+        String tenant = normalizeTenant(tenantId);
+        ModelSpecContract.ModelSpecView canonical = findCanonicalModelSpec(tenant, id);
+        if (canonical != null) {
+            return canonical
+                .dependsOn()
+                .stream()
+                .map(reference -> canonicalRevision(tenant, reference))
+                .map(view -> projectCanonical(tenant, view))
+                .toList();
+        }
         ModelingVNextContract.ModelSpec model = findModelSpec(tenantId, id);
         if (model == null || model.dependsOn() == null || model.dependsOn().isEmpty()) return List.of();
         return model.dependsOn().stream().map(dep -> findModelSpec(tenantId, dep)).filter(java.util.Objects::nonNull).toList();
@@ -424,7 +482,9 @@ public class ModelingVNextApplicationService {
             .map(this::driftKind)
             .filter(java.util.Objects::nonNull)
             .toList();
-        boolean registered = findBusinessObject(tenantId, model.objectId()) != null;
+        boolean registered = isCanonicalModelSpec(tenantId, modelSpecId)
+            ? canonicalRegistrationValid(tenantId, modelSpecId)
+            : findBusinessObject(tenantId, model.objectId()) != null;
         boolean parsePassed = hasArtifact(tenantId, modelSpecId, "SCHEMA", "COMPILED");
         boolean testsPassed = hasArtifact(tenantId, modelSpecId, "TEST", "COMPILED");
         String checksum = null;
@@ -439,6 +499,38 @@ public class ModelingVNextApplicationService {
         );
         ModelingDriftGate.ReleaseGateResult result = ModelingDriftGate.evaluate(snapshot, driftKinds);
         return new ReleaseGateView(modelSpecId, result.publishable(), result.status(), result.blockers());
+    }
+
+    private boolean isCanonicalModelSpec(String tenantId, String modelSpecId) {
+        Boolean canonical = jdbcTemplate.queryForObject(
+            "select contract_version = 2 from modeling_model_spec where tenant_id = ? and id = ?",
+            Boolean.class,
+            normalizeTenant(tenantId),
+            externalUuid(modelSpecId)
+        );
+        return Boolean.TRUE.equals(canonical);
+    }
+
+    private boolean canonicalRegistrationValid(String tenantId, String modelSpecId) {
+        Boolean registered = jdbcTemplate.queryForObject(
+            """
+            select exists (
+                select 1
+                  from modeling_model_spec s
+                  join modeling_warehouse_plan p
+                    on p.tenant_id = s.tenant_id and p.id = s.plan_id
+                  join modeling_warehouse_plan_domain d
+                    on d.tenant_id = s.tenant_id and d.plan_id = s.plan_id and d.domain_id = s.domain_id
+                 where s.tenant_id = ? and s.id = ? and s.contract_version = 2
+                   and s.plan_id is not null and s.domain_id is not null
+                   and d.confirmation_status = 'CONFIRMED'
+            )
+            """,
+            Boolean.class,
+            normalizeTenant(tenantId),
+            externalUuid(modelSpecId)
+        );
+        return Boolean.TRUE.equals(registered);
     }
 
     public RunView createRun(String tenantId, ModelingRunRequestContract.RunRequest request) {
@@ -549,13 +641,52 @@ public class ModelingVNextApplicationService {
 
     private ModelingVNextContract.ModelSpec findModelSpec(String tenantId, String id) {
         if (!notBlank(id)) return null;
+        String tenant = normalizeTenant(tenantId);
         try {
             return jdbcTemplate.queryForObject(
-                "select r.spec_json from modeling_model_spec_revision r join modeling_model_spec s on s.id = r.model_spec_id where s.tenant_id = ? and s.id = ? and r.revision = s.revision",
-                (rs, row) -> readJson(rs.getString("spec_json"), ModelingVNextContract.ModelSpec.class), normalizeTenant(tenantId), externalUuid(id)
+                "select r.spec_json from modeling_model_spec_revision r join modeling_model_spec s on s.id = r.model_spec_id where s.tenant_id = ? and s.id = ? and r.revision = s.revision and s.contract_version = 1",
+                (rs, row) -> readJson(rs.getString("spec_json"), ModelingVNextContract.ModelSpec.class), tenant, externalUuid(id)
             );
         } catch (EmptyResultDataAccessException exception) {
-            return null;
+            ModelSpecContract.ModelSpecView canonical = findCanonicalModelSpec(tenant, id);
+            return canonical == null ? null : projectCanonical(tenant, canonical);
+        }
+    }
+
+    private ModelSpecContract.ModelSpecView findCanonicalModelSpec(String tenantId, String id) {
+        if (
+            canonicalModelSpecService == null ||
+            !canonicalModelSpecService.canonicalReadEnabled() ||
+            !notBlank(id)
+        ) return null;
+        try {
+            ModelSpecContract.ModelSpecView view = canonicalModelSpecService.get(tenantId, externalUuid(id));
+            return view.contractVersion() == ModelSpecContract.CONTRACT_VERSION ? view : null;
+        } catch (ModelSpecException canonicalError) {
+            if (canonicalError.kind() == ModelSpecException.Kind.NOT_FOUND) return null;
+            throw new DomainException(canonicalError.code(), canonicalError.getMessage());
+        }
+    }
+
+    private ModelSpecContract.ModelSpecView canonicalRevision(
+        String tenantId,
+        ModelSpecContract.ModelRevisionRef reference
+    ) {
+        try {
+            return canonicalModelSpecService.revision(tenantId, reference);
+        } catch (ModelSpecException canonicalError) {
+            throw new DomainException(canonicalError.code(), canonicalError.getMessage());
+        }
+    }
+
+    private ModelingVNextContract.ModelSpec projectCanonical(String tenantId, ModelSpecContract.ModelSpecView view) {
+        try {
+            return ModelSpecCompilerProjection.project(
+                view,
+                reference -> canonicalModelSpecService.revision(tenantId, reference)
+            );
+        } catch (ModelSpecException canonicalError) {
+            throw new DomainException(canonicalError.code(), canonicalError.getMessage());
         }
     }
 

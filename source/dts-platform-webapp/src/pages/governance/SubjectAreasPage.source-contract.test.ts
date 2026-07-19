@@ -62,7 +62,7 @@ test("selected domain exposes one primary continuation action", () => {
 });
 
 test("subject administration converges into one create action and one overflow menu", () => {
-	assert.match(source, /<Dropdown[\s\S]*?新增主题域[\s\S]*?<\/Dropdown>/);
+	assert.match(source, /<Dropdown[\s\S]*?新增业务分类[\s\S]*?<\/Dropdown>/);
 	assert.match(source, /key:\s*"edit"[\s\S]*?key:\s*"delete"/);
 	assert.doesNotMatch(source, /<Button[^>]*>\s*编辑域属性\s*<\/Button>/);
 });
@@ -70,6 +70,24 @@ test("subject administration converges into one create action and one overflow m
 test("selected domain resumes from the generic modeling context", () => {
 	assert.match(source, /searchParams\.get\("domainId"\)\s*\|\|\s*searchParams\.get\("active"\)/);
 	assert.match(source, /params\.set\("domainId", nextActive\)/);
+});
+
+test("business category administration only returns to a whitelisted plan baseline", () => {
+	assert.match(source, /resolveWarehousePlanReturnTo/);
+	assert.match(source, /searchParams\.get\("returnTo"\)/);
+	assert.match(source, /searchParams\.get\("planId"\)/);
+	assert.match(source, /返回建设计划/);
+	assert.doesNotMatch(source, /window\.location\s*=|location\.href\s*=/);
+});
+
+test("subject administration primary surfaces use business category language", () => {
+	assert.match(source, /title="业务分类"/);
+	assert.match(source, />\s*新增业务分类\s*</);
+	assert.match(source, /placeholder="搜索业务分类/);
+	assert.match(source, /title="暂无业务分类"/);
+	assert.match(source, /label="业务分类名称"/);
+	assert.match(source, /label="上级业务分类"/);
+	assert.doesNotMatch(source, /title="主题域管理"|>\s*新增主题域\s*<|placeholder="搜索主题域/);
 });
 
 test("subject area modeling facts use the backend as the only saved source of truth", () => {

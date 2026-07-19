@@ -43,6 +43,7 @@ import { useRouter } from "@/routes/hooks";
 import { normalizeText } from "@/utils/textUtils";
 import { buildBusinessModelingRoute } from "../modeling/businessModelingContext";
 import { buildModelingJourneyRoute, modelingStagePath } from "../modeling/modelingJourneyContext";
+import { resolveWarehousePlanReturnTo } from "../modeling/warehousePlanViewModel";
 import { ConformedDimensionCatalogCard } from "./ConformedDimensionCatalogCard";
 import { DimensionalModelingAssist } from "./DimensionalModelingAssist";
 import { pendingCandidateCount } from "./modelingCandidates";
@@ -147,7 +148,7 @@ const toTreeNodes = (nodes: DomainNode[]): DataNode[] =>
 		key: node.id || Math.random().toString(36),
 		title: (
 			<Space size={6}>
-				<span>{node.name || "未命名主题域"}</span>
+				<span>{node.name || "未命名业务分类"}</span>
 				{node.code ? <Tag color="blue">{node.code}</Tag> : null}
 			</Space>
 		),
@@ -189,6 +190,11 @@ export default function SubjectAreasPage() {
 	const modelingFactsRequest = useRef(0);
 
 	const searchParamsValue = searchParams.toString();
+	const returnPlanId = searchParams.get("planId") || "";
+	const safeReturnTo = useMemo(
+		() => resolveWarehousePlanReturnTo(searchParams.get("returnTo"), returnPlanId),
+		[returnPlanId, searchParams],
+	);
 	const syncQuery = useCallback(
 		(patch?: { keyword?: string; active?: string; tab?: SubjectWorkspaceTab }) => {
 			const params = new URLSearchParams(searchParamsValue);
@@ -230,7 +236,7 @@ export default function SubjectAreasPage() {
 				setSelectedKey(ROOT_KEY);
 			}
 		} catch (err: any) {
-			toast.error(err?.message || "加载主题域失败");
+			toast.error(err?.message || "加载业务分类失败");
 		} finally {
 			setLoading(false);
 		}
@@ -259,7 +265,7 @@ export default function SubjectAreasPage() {
 				: null;
 	const planningStatus = useMemo(() => {
 		if (!activeDomain?.id) {
-			return { status: "blocked" as const, reason: "请先选择主题域" };
+			return { status: "blocked" as const, reason: "请先选择业务分类" };
 		}
 		if (planningResolution.status === "blocked" && searchParams.get("planningId")) {
 			return {
@@ -388,7 +394,7 @@ export default function SubjectAreasPage() {
 		return [
 			{
 				key: ROOT_KEY,
-				title: "全域主题 (Root)",
+				title: "全部业务分类",
 				children,
 			},
 		];
@@ -546,13 +552,13 @@ export default function SubjectAreasPage() {
 			} as any;
 			if (editing?.id) {
 				if (editing.id === parentId) {
-					throw new Error("上级主题域不能选择自身");
+					throw new Error("上级业务分类不能选择自身");
 				}
 				await updateDomain(editing.id, payload);
-				toast.success("主题域已更新");
+				toast.success("业务分类已更新");
 			} else {
 				await createDomain(payload);
-				toast.success("主题域已创建");
+				toast.success("业务分类已创建");
 			}
 			setModalOpen(false);
 			setEditing(null);
@@ -571,14 +577,14 @@ export default function SubjectAreasPage() {
 		}
 		if (!domain?.id) return;
 		Modal.confirm({
-			title: "删除主题域？",
-			content: "删除后无法恢复，请确认该域下没有关联资产。",
+			title: "删除业务分类？",
+			content: "删除后无法恢复，请确认该分类下没有关联资产。",
 			okText: "删除",
 			cancelText: "取消",
 			onOk: async () => {
 				try {
 					await deleteDomain(domain.id as string);
-					toast.success("主题域已删除");
+					toast.success("业务分类已删除");
 					setSelectedKey(ROOT_KEY);
 					await loadDomainTree();
 				} catch (err: any) {
@@ -596,29 +602,32 @@ export default function SubjectAreasPage() {
 	return (
 		<div className="space-y-4">
 			<Card
-				title="主题域管理"
+				title="业务分类"
 				extra={
-					<Dropdown
-						trigger={["click"]}
-						menu={{
-							items: [
-								{ key: "root", label: "新增根域" },
-								...(activeDomain?.id
-									? [{ key: "child", label: `在 ${activeDomain.name || "当前域"} 下新增子域` }]
-									: []),
-							],
-							onClick: ({ key }) => openModal(null, key === "child" ? activeDomain?.id : null),
-						}}
-					>
-						<Button type="primary" disabled={!canManage}>
-							新增主题域
-						</Button>
-					</Dropdown>
+					<Space wrap>
+						{safeReturnTo ? <Button onClick={() => router.push(safeReturnTo)}>返回建设计划</Button> : null}
+						<Dropdown
+							trigger={["click"]}
+							menu={{
+								items: [
+									{ key: "root", label: "新增一级分类" },
+									...(activeDomain?.id
+										? [{ key: "child", label: `在 ${activeDomain.name || "当前分类"} 下新增子分类` }]
+										: []),
+								],
+								onClick: ({ key }) => openModal(null, key === "child" ? activeDomain?.id : null),
+							}}
+						>
+							<Button type="primary" disabled={!canManage}>
+								新增业务分类
+							</Button>
+						</Dropdown>
+					</Space>
 				}
 			>
 				<div className="mb-3 flex flex-wrap items-center gap-2">
 					<Input.Search
-						placeholder="搜索主题域..."
+						placeholder="搜索业务分类..."
 						style={{ width: 400 }}
 						value={keyword}
 						onChange={(e) => setKeyword(e.target.value)}
@@ -634,7 +643,7 @@ export default function SubjectAreasPage() {
 						className="overflow-hidden border-r border-slate-200 p-4"
 					>
 						<Space direction="vertical" className="w-full" size="middle">
-							<Text strong>域目录结构</Text>
+							<Text strong>业务分类目录</Text>
 							<Tree
 								showLine
 								defaultExpandedKeys={[ROOT_KEY]}
@@ -646,22 +655,22 @@ export default function SubjectAreasPage() {
 								}}
 							/>
 							{!loading && domainTree.length === 0 ? (
-								<EmptyState title="暂无主题域" description="请先创建主题域。" />
+								<EmptyState title="暂无业务分类" description="请先创建业务分类。" />
 							) : null}
 						</Space>
 					</Sider>
 					<Content className="min-w-0 p-3 sm:p-6">
 						{loading ? (
 							<div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center text-sm text-slate-500">
-								主题域结构加载中...
+								业务分类加载中...
 							</div>
 						) : !activeDomain ? (
 							<div className="rounded-[24px] border border-slate-200 bg-slate-50 px-6 py-6">
-								<Title level={4}>全域主题视角</Title>
-								<Text type="secondary">请选择左侧主题域查看详情与治理指标。</Text>
+								<Title level={4}>全部业务分类</Title>
+								<Text type="secondary">请选择左侧业务分类查看详情与治理指标。</Text>
 								<Divider />
 								{domainTree.length === 0 ? (
-									<EmptyState title="暂无主题域结构" description="请先创建主题域后再进入详情视图。" />
+									<EmptyState title="暂无业务分类结构" description="请先创建业务分类后再进入详情视图。" />
 								) : (
 									<Space wrap>
 										{domainOptions.slice(0, 12).map((item) => (
@@ -677,12 +686,12 @@ export default function SubjectAreasPage() {
 									<div className="min-w-0">
 										<Space size={8} wrap>
 											<Title level={4} style={{ margin: 0 }}>
-												{activeDomain.name || "未命名主题域"}
+												{activeDomain.name || "未命名业务分类"}
 											</Title>
 											{activeDomain.code ? <Tag color="blue">{activeDomain.code}</Tag> : null}
 										</Space>
 										<div className="mt-2 text-sm text-slate-500">
-											负责人：{activeDomain.owner || "未指定"} ｜ 子域数：{activeChildren.length} ｜ 资产数：
+											负责人：{activeDomain.owner || "未指定"} ｜ 子分类数：{activeChildren.length} ｜ 资产数：
 											{statsLoading ? "..." : (assetStats?.datasetCount ?? "-")}
 										</div>
 										{activeDomain.description ? (
@@ -695,8 +704,8 @@ export default function SubjectAreasPage() {
 										trigger={["click"]}
 										menu={{
 											items: [
-												{ key: "edit", label: "编辑域属性" },
-												{ key: "delete", label: "删除域", danger: true },
+												{ key: "edit", label: "编辑分类信息" },
+												{ key: "delete", label: "删除分类", danger: true },
 											],
 											onClick: ({ key }) => {
 												if (key === "edit") openModal(activeDomain, activeDomain.parentId);
@@ -906,7 +915,7 @@ export default function SubjectAreasPage() {
 												description={
 													<Space direction="vertical" size={4}>
 														<Text>
-															主题域：{activeDomain.name || activeDomain.id} · 输出层：
+															业务分类：{activeDomain.name || activeDomain.id} · 输出层：
 															{outputPlanningLayers.join(" → ")} · 建模模式：维度建模
 														</Text>
 														<Text type="secondary">
@@ -973,7 +982,7 @@ export default function SubjectAreasPage() {
 																	router.push(`/governance/indicator-center?domain=${activeDomain?.code ?? ""}`)
 																}
 															>
-																查看该域全部指标 →
+																查看该分类全部指标 →
 															</Button>
 														</div>
 													) : (
@@ -982,7 +991,7 @@ export default function SubjectAreasPage() {
 												</div>
 											</div>
 											<div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
-												<div className="mb-3 text-sm font-semibold text-slate-900">子域列表</div>
+												<div className="mb-3 text-sm font-semibold text-slate-900">子分类列表</div>
 												{activeChildren.length ? (
 													<Space wrap>
 														{activeChildren.map((child) => (
@@ -992,7 +1001,7 @@ export default function SubjectAreasPage() {
 												) : (
 													<Space align="center">
 														<Badge status="default" />
-														<Text type="secondary">暂无子域</Text>
+														<Text type="secondary">暂无子分类</Text>
 													</Space>
 												)}
 											</div>
@@ -1007,7 +1016,7 @@ export default function SubjectAreasPage() {
 
 			<Modal
 				open={modalOpen}
-				title={editing ? "编辑主题域" : "新增主题域"}
+				title={editing ? "编辑业务分类" : "新增业务分类"}
 				onCancel={() => setModalOpen(false)}
 				onOk={submit}
 				okText="保存"
@@ -1016,27 +1025,27 @@ export default function SubjectAreasPage() {
 				okButtonProps={{ disabled: !canManage }}
 			>
 				<Form layout="vertical" form={form}>
-					<Form.Item name="name" label="主题域名称" rules={[{ required: true, message: "请输入主题域名称" }]}>
-						<Input placeholder="例如：财务域" />
+					<Form.Item name="name" label="业务分类名称" rules={[{ required: true, message: "请输入业务分类名称" }]}>
+						<Input placeholder="例如：财务管理" />
 					</Form.Item>
-					<Form.Item name="code" label="主题域编码">
+					<Form.Item name="code" label="业务分类编码">
 						<Input placeholder="FINANCE" />
 					</Form.Item>
 					<Form.Item name="owner" label="负责人">
 						<Input placeholder="负责人姓名" />
 					</Form.Item>
-					<Form.Item name="parentId" label="上级主题域">
+					<Form.Item name="parentId" label="上级业务分类">
 						<Select
 							allowClear
-							placeholder="无上级主题域"
+							placeholder="无上级业务分类"
 							options={parentOptions.map((item) => ({
-								label: item.name || item.code || "未命名主题域",
+								label: item.name || item.code || "未命名业务分类",
 								value: item.id,
 							}))}
 						/>
 					</Form.Item>
 					<Form.Item name="description" label="说明">
-						<Input.TextArea rows={3} placeholder="主题域描述" />
+						<Input.TextArea rows={3} placeholder="业务分类说明" />
 					</Form.Item>
 				</Form>
 			</Modal>

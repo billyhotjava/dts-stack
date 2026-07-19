@@ -1353,3 +1353,32 @@
 
 **统计**: READY=0, IN_PROGRESS=0, DONE=11, BLOCKED=0
 **执行顺序**: F1 → F2 → F3 → F4；F3 可在 F1 契约评审完成后与 F2 后半段并行，但 F4 必须等待 F1-F3 全部通过。
+
+## Sprint-67: 建模主线与业务对象退役收敛 (202607)
+
+**目录**: `worklog/v2.2.3/sprint-67-202607-modeling-mainline-convergence`
+**状态**: READY
+**类型**: Product Journey / Modeling Contract / UI Convergence / Controlled Migration
+**目标**: 保留数据域作为业务分类，删除业务对象这一重复中间产物，使用户从建设计划和业务分类直接登记维度、创建明细/维度/汇总/应用四类表，并用明确的页面输入、输出和跳转形成唯一建模主线。
+**依赖**: 复用 Sprint-65 已落地的 WarehousePlan、ModelSpec、planId、StageProjection 和 canonical 词表（commit `24103098a`）；不建立新的规划聚合或前端状态源。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-关键对象与主线契约 | P0 | 3 | READY |
+| F2-规划输入与分阶段门禁 | P0 | 4 | READY |
+| F3-维度与四类表直接建模 | P0 | 5 | READY |
+| F4-菜单页面与跳转收敛 | P0 | 4 | READY |
+| F5-业务对象迁移与受控退役 | P0 | 4 | READY |
+| F6-专业模块交接与集成验收 | P0 | 4 | READY |
+
+**统计**: READY=24, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**执行顺序**: F1 → F2/F3 → F4 → F5 → F6；F2 与 F3 在概念契约冻结后可并行，F4 默认入口切换等待目标页面可用，F5 冻结旧写等待新写路径通过，F6 负责 Go/No-Go。
+
+**关键决策**:
+
+- 数据域/主题域对外收敛为“业务分类”，内部复用唯一 `catalog_domain/domainId`。
+- 业务对象不再是登记实体、菜单入口、模型创建条件、指标锚点或发布门禁；旧页面不能只换名为维度目录。
+- 维度性质旧对象迁入 DIMENSION ModelSpec；事实性质的键、粒度、来源和 JOIN 迁入四类表 ModelSpec；歧义记录进入人工清单。
+- 业务活动降为明细表的可选来源说明，不作为四类表的全局前置门禁。
+- 新 ModelSpec 不要求 `objectId`；旧 API/表先冻结写入和迁移，消费者归零并对账后再物理删除。
+- 数据标准在模型字段设计时引用，指标锚定已发布模型/字段；SQL/dbt、发布、运行、资产和血缘回写同一 modelSpecId/revision。

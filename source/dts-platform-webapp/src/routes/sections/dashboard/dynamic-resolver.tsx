@@ -94,6 +94,9 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	"/services/products": "/pages/services/DataProductsPage",
 	"/services/tokens": "/pages/services/TokensPage",
 	"/modeling/dbt-files": "/pages/modeling/DbtFileBrowserPage",
+	"/modeling/dimensions": "/pages/modeling/DimensionCatalogPage",
+	"/modeling/models": "/pages/modeling/ModelCenterPage",
+	"/modeling/models/:modelSpecId": "/pages/modeling/ModelSpecDetailPage",
 	"/modeling/metric-workbench": "/pages/modeling/MetricWorkbenchPage",
 	"/modeling/semantic/subjects": "/pages/modeling/SemanticSubjectsPage",
 	"/modeling/semantic/objects": "/pages/modeling/SemanticObjectsPage",
@@ -140,6 +143,7 @@ const isWithinBase = (pathname: string, normalizedBase?: string) => {
 
 const directOverrideParentPath = (pathname: string) => {
 	if (pathname.startsWith("/catalog/datasets/")) return "/catalog/assets";
+	if (pathname.startsWith("/modeling/models/")) return "/modeling/models";
 	return "";
 };
 
@@ -210,6 +214,15 @@ export function DynamicMenuResolver({ base }: Props) {
 	const componentPath = typeof match.component === "string" ? match.component.trim() : "";
 	const overridePath =
 		resolvedPath && !isExternalPath(resolvedPath) ? resolveDashboardComponentOverride(resolvedPath) : "";
+	if (
+		directOverridePath &&
+		overrideParentPath &&
+		directOverrideParent &&
+		pathname !== resolvedPath &&
+		directOverridePath !== (overridePath || componentPath)
+	) {
+		return <>{Component(directOverridePath)}</>;
+	}
 	if (componentPath || overridePath) {
 		return <>{Component(overridePath || componentPath)}</>;
 	}

@@ -8,7 +8,10 @@ import {
 	MODEL_SPEC_CONTRACT_VERSION,
 	MODEL_SPEC_CREATE_FIELDS,
 	MODEL_SPEC_REQUIRED_FIELD_CODES,
+	MODEL_SPEC_UPDATE_FIELDS,
+	toModelSpecEtag,
 	validateModelSpecCreate,
+	validateModelSpecUpdate,
 } from "./modelSpecV2Contract.ts";
 
 const UUID_FORMAT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -92,7 +95,17 @@ const valid = (modelType: CreateModelSpecCommand["modelType"]): CreateModelSpecC
 	sourceRefs:
 		modelType === "SUMMARY" || modelType === "APPLICATION"
 			? []
-			: [{ kind: "TABLE", ref: "catalog.dataset.source", layer: "ODS", role: "PRIMARY", sortOrder: 0 }],
+			: [
+					{
+						kind: "TABLE",
+						ref: "catalog.dataset.source",
+						layer: "ODS",
+						role: "PRIMARY",
+						sortOrder: 0,
+						sourceBindingId: "50000000-0000-0000-0000-000000000001",
+						resolvedVersion: "v1",
+					},
+				],
 	dependsOn:
 		modelType === "SUMMARY" || modelType === "APPLICATION"
 			? [{ modelSpecId: "30000000-0000-0000-0000-000000000001", revision: 1 }]
@@ -125,6 +138,8 @@ const minimal = (modelType: CreateModelSpecCommand["modelType"]): CreateModelSpe
 						layer: "ODS" as const,
 						role: "PRIMARY" as const,
 						sortOrder: 0,
+						sourceBindingId: "50000000-0000-0000-0000-000000000001",
+						resolvedVersion: "v1",
 					},
 				],
 			}
@@ -151,6 +166,32 @@ test("canonical create fields exclude client-owned and retired metadata", () => 
 	]) {
 		assert.equal((MODEL_SPEC_CREATE_FIELDS as readonly string[]).includes(forbidden), false, forbidden);
 	}
+});
+
+test("canonical update is a full replacement without create-only or retired metadata", () => {
+	assert.equal((MODEL_SPEC_UPDATE_FIELDS as readonly string[]).includes("idempotencyKey"), false);
+	const { idempotencyKey: _idempotencyKey, ...update } = valid("FACT");
+	assert.deepEqual(validateModelSpecUpdate(update), []);
+	for (const forbidden of ["idempotencyKey", "objectId", "processId", "legacyRef", "legacyRefs"]) {
+		assert.deepEqual(
+			validateModelSpecUpdate({ ...update, [forbidden]: "forbidden" })
+				.filter((item) => item.code === "MODEL_SPEC_FIELD_NOT_ALLOWED")
+				.map((item) => item.field),
+			[forbidden],
+			forbidden,
+		);
+	}
+});
+
+test("canonical CAS token produces the backend strong ETag exactly", () => {
+	assert.equal(
+		toModelSpecEtag({
+			id: "40000000-0000-0000-0000-000000000001",
+			revision: 7,
+			checksum: "a".repeat(64),
+		}),
+		`"model-spec:40000000-0000-0000-0000-000000000001:7:${"a".repeat(64)}"`,
+	);
 });
 
 test("all four model types satisfy their deterministic save boundary", () => {
@@ -308,7 +349,17 @@ test("shared fixtures keep Java and TypeScript validation issue codes aligned", 
 test("nested references reject incomplete ids and non-positive versions", () => {
 	const input = {
 		...valid("SUMMARY"),
-		sourceRefs: [{ kind: "TABLE", ref: "catalog.dataset.source", layer: "ODS", role: "PRIMARY", sortOrder: -1 }],
+		sourceRefs: [
+			{
+				kind: "TABLE",
+				ref: "catalog.dataset.source",
+				layer: "ODS",
+				role: "PRIMARY",
+				sortOrder: -1,
+				sourceBindingId: "50000000-0000-0000-0000-000000000001",
+				resolvedVersion: "v1",
+			},
+		],
 		dependsOn: [{ modelSpecId: "", revision: 0 }],
 		dimensionRefs: [{ modelSpecId: "", revision: -1 }],
 		metricRefs: [{ metricId: "", version: 0 }],
@@ -349,6 +400,7 @@ test("JSON Schema accepts canonical view and rejects client-only or unknown view
 		createdAt: "2026-07-19T00:00:00Z",
 		updatedAt: "2026-07-19T00:00:00Z",
 		compatibilityMode: "CANONICAL",
+		legacyRefs: null,
 	};
 
 	assert.equal(validate(view), true, JSON.stringify(validate.errors));
@@ -356,6 +408,24 @@ test("JSON Schema accepts canonical view and rejects client-only or unknown view
 	assert.equal(validate({ ...view, futureGuess: true }), false);
 	assert.equal(validate({ ...view, id: "not-a-uuid" }), false);
 	assert.equal(validate({ ...view, createdAt: "2026-02-30T25:61:61Z" }), false);
+});
+
+test("JSON Schema update payload is a strict full replacement without create-only or legacy fields", () => {
+	const schema = JSON.parse(
+		readFileSync(
+			new URL("../../../../dts-platform/src/main/resources/config/modeling/model-spec-v2.schema.json", import.meta.url),
+			"utf8",
+		),
+	);
+	const ajv = createContractAjv();
+	ajv.addSchema(schema);
+	const validate = ajv.getSchema(`${schema.$id}#/$defs/updateModelSpecCommand`);
+	assert.ok(validate);
+	const { idempotencyKey: _idempotencyKey, ...update } = valid("FACT");
+	assert.equal(validate(update), true, JSON.stringify(validate.errors));
+	for (const forbidden of ["idempotencyKey", "objectId", "processId", "legacyRef", "legacyRefs"]) {
+		assert.equal(validate({ ...update, [forbidden]: "forbidden" }), false, forbidden);
+	}
 });
 
 test("JSON Schema directly accepts the generic wire fixture including explicit null optionals", () => {
@@ -392,7 +462,7 @@ test("JSON Schema declares executable trim-aware uniqueness for fields and sourc
 	assert.deepEqual(sourceRefs["x-dtsUniqueBy"], ["kind", "ref"]);
 });
 
-test("CANONICAL views reuse all four save boundaries while LEGACY_READONLY views stay readable", () => {
+test("model views are a strict contract-version and compatibility-mode discriminated union", () => {
 	const schema = JSON.parse(
 		readFileSync(
 			new URL("../../../../dts-platform/src/main/resources/config/modeling/model-spec-v2.schema.json", import.meta.url),
@@ -422,14 +492,39 @@ test("CANONICAL views reuse all four save boundaries while LEGACY_READONLY views
 			createdAt: "2026-07-19T00:00:00Z",
 			updatedAt: "2026-07-19T00:00:00Z",
 			compatibilityMode: "CANONICAL",
+			legacyRefs: null,
 		};
 
 		assert.equal(validate(invalidBoundary), false, `${modelType} canonical: ${JSON.stringify(validate.errors)}`);
-		assert.equal(
-			validate({ ...invalidBoundary, compatibilityMode: "LEGACY_READONLY" }),
-			true,
-			`${modelType} legacy: ${JSON.stringify(validate.errors)}`,
-		);
+		const legacyView = {
+			...invalidBoundary,
+			contractVersion: 1,
+			planId: null,
+			domainId: null,
+			sourceRefs: invalidBoundary.sourceRefs.map((source) => ({
+				...source,
+				sourceBindingId: null,
+				resolvedVersion: null,
+			})),
+			compatibilityMode: "LEGACY_READONLY",
+			legacyRefs: {
+				legacyModelRef: "legacy-model-ref",
+				unresolvedDependencyRefs: ["legacy-upstream-id"],
+				unresolvedSourceRefs: [{ kind: "LEGACY_FILE", ref: "legacy/customer.csv", layer: "ODS" }],
+				unresolvedStandardRefs: [
+					{
+						fieldName: "record_id",
+						standardElementId: "legacy.standard.id",
+						referenceCode: null,
+						securityLevel: null,
+					},
+				],
+			},
+		};
+		assert.equal(validate(legacyView), true, `${modelType} legacy: ${JSON.stringify(validate.errors)}`);
+		assert.equal(validate({ ...legacyView, contractVersion: 2 }), false, "v2 cannot claim LEGACY_READONLY");
+		assert.equal(validate({ ...legacyView, compatibilityMode: "CANONICAL" }), false, "v1 cannot claim CANONICAL");
+		assert.equal(validate({ ...legacyView, legacyRefs: null }), false, "legacy read must preserve legacyRefs");
 	}
 });
 

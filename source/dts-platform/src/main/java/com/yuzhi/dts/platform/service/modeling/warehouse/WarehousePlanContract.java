@@ -1,5 +1,8 @@
 package com.yuzhi.dts.platform.service.modeling.warehouse;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.EnumSet;
@@ -14,7 +17,6 @@ public final class WarehousePlanContract {
     public static final String DOMAIN_PROCESS_CONFIRMATION_INCOMPLETE = "DOMAIN_PROCESS_CONFIRMATION_INCOMPLETE";
     public static final String CATEGORY_SCOPE_INCOMPLETE = "CATEGORY_SCOPE_INCOMPLETE";
     public static final String SOURCE_INVENTORY_INCOMPLETE = "SOURCE_INVENTORY_INCOMPLETE";
-    public static final String SOURCE_BUSINESS_MAPPING_INCOMPLETE = "SOURCE_BUSINESS_MAPPING_INCOMPLETE";
     public static final String PLANNING_POLICY_INCOMPLETE = "PLANNING_POLICY_INCOMPLETE";
 
     private WarehousePlanContract() {}
@@ -37,6 +39,7 @@ public final class WarehousePlanContract {
     public enum EditUnit {
         PLAN_HEAD("plan-head"),
         BUSINESS_SCOPE("business-scope"),
+        CATEGORY_SCOPE("category-scope"),
         SOURCES("sources"),
         SOURCE_MAPPINGS("source-mappings"),
         POLICY("policy");
@@ -58,11 +61,68 @@ public final class WarehousePlanContract {
         EXCLUDED,
     }
 
+    public enum CategoryReadiness {
+        DRAFT,
+        READY,
+        BLOCKED,
+    }
+
+    public enum LayerScheme {
+        CLASSIC_ODS_DWD_DWS_ADS,
+    }
+
+    public enum NamingPolicy {
+        CLASSIC_LOWER_SNAKE,
+        CLASSIC_UPPER_SNAKE,
+    }
+
+    public enum HistoryPolicy {
+        PRESERVE_BUSINESS_HISTORY,
+        LATEST_STATE_ONLY,
+    }
+
+    public enum PlanningPolicyReadiness {
+        DRAFT,
+        MODEL_DESIGN_READY,
+        IMPLEMENTATION_READY,
+    }
+
+    public enum SourceFreshness {
+        CURRENT,
+        STALE,
+        UNKNOWN,
+    }
+
+    public enum SourceInventoryReadiness {
+        DRAFT,
+        READY,
+        BLOCKED,
+        NOT_REQUIRED_YET,
+    }
+
     public enum SourceType {
         CONNECTION_TABLE,
         CATALOG_TABLE,
         EXCEL_FILE,
         DBT_NODE,
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+    public record SourceLocator(
+        UUID assetId,
+        UUID fileId,
+        String projectKey,
+        String uniqueId,
+        UUID connectionId,
+        String namespace,
+        String objectName
+    ) {
+        public SourceLocator {
+            projectKey = trimToNull(projectKey);
+            uniqueId = trimToNull(uniqueId);
+            namespace = trimToNull(namespace);
+            objectName = trimToNull(objectName);
+        }
     }
 
     public record InitialSourceRef(SourceType sourceType, String sourceId, String sourceVersion) {
@@ -123,7 +183,36 @@ public final class WarehousePlanContract {
         }
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = false)
     public record DomainBinding(UUID domainId, ConfirmationStatus confirmationStatus) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+    public record CategoryScopeCommand(List<DomainBinding> domainBindings) {
+        public CategoryScopeCommand {
+            domainBindings = immutable(domainBindings);
+        }
+    }
+
+    public record CategoryBindingView(
+        UUID domainId,
+        ConfirmationStatus confirmationStatus,
+        CatalogDomainResolutionPort.ResolutionStatus resolutionStatus,
+        String name,
+        String code,
+        Instant lastValidatedAt
+    ) {}
+
+    public record CategoryScopeView(
+        List<CategoryBindingView> domainBindings,
+        CategoryReadiness readiness,
+        List<DomainIssue> issues,
+        Instant lastValidatedAt
+    ) {
+        public CategoryScopeView {
+            domainBindings = immutable(domainBindings);
+            issues = immutable(issues);
+        }
+    }
 
     public record ProcessBinding(
         String processId,
@@ -164,6 +253,55 @@ public final class WarehousePlanContract {
         String exclusionReason
     ) {}
 
+    @JsonIgnoreProperties(ignoreUnknown = false)
+    public record SourceBindingCommand(
+        UUID bindingId,
+        SourceType sourceType,
+        SourceLocator locator,
+        ConfirmationStatus confirmationStatus,
+        String exclusionReason
+    ) {
+        public SourceBindingCommand {
+            exclusionReason = trimToNull(exclusionReason);
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+    public record SourceInventoryCommand(List<SourceBindingCommand> bindings) {
+        public SourceInventoryCommand {
+            bindings = immutable(bindings);
+        }
+    }
+
+    public record SourceBindingView(
+        UUID bindingId,
+        SourceType sourceType,
+        SourceLocator locator,
+        String sourceId,
+        ConfirmationStatus confirmationStatus,
+        String exclusionReason,
+        String displayName,
+        String confirmedVersion,
+        String resolvedVersion,
+        SourceReferenceResolver.ResolutionStatus resolutionStatus,
+        SourceFreshness freshness,
+        Instant lastValidatedAt
+    ) {}
+
+    public record SourceInventoryView(
+        List<SourceBindingView> bindings,
+        SourceInventoryReadiness readiness,
+        List<DomainIssue> issues,
+        int version,
+        String etag,
+        Instant checkedAt
+    ) {
+        public SourceInventoryView {
+            bindings = immutable(bindings);
+            issues = immutable(issues);
+        }
+    }
+
     public record SourceBusinessMapping(
         UUID id,
         UUID sourceBindingId,
@@ -179,6 +317,52 @@ public final class WarehousePlanContract {
         String historyPolicy,
         String defaultTimeZone
     ) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = false)
+    public record PlanningPolicyCommand(
+        String layerScheme,
+        String namingPolicy,
+        String historyPolicy,
+        String defaultTimeZone,
+        Boolean conceptualDesignAllowed
+    ) {
+        public PlanningPolicyCommand(String layerScheme, String namingPolicy, String historyPolicy, String defaultTimeZone) {
+            this(layerScheme, namingPolicy, historyPolicy, defaultTimeZone, false);
+        }
+
+        public PlanningPolicyCommand {
+            layerScheme = trimToNull(layerScheme);
+            namingPolicy = trimToNull(namingPolicy);
+            historyPolicy = trimToNull(historyPolicy);
+            defaultTimeZone = trimToNull(defaultTimeZone);
+            conceptualDesignAllowed = Boolean.TRUE.equals(conceptualDesignAllowed);
+        }
+    }
+
+    public record PlanningPolicyView(
+        LayerScheme layerScheme,
+        NamingPolicy namingPolicy,
+        HistoryPolicy historyPolicy,
+        String defaultTimeZone,
+        boolean conceptualDesignAllowed,
+        PlanningPolicyReadiness readiness,
+        List<DomainIssue> issues
+    ) {
+        public PlanningPolicyView(
+            LayerScheme layerScheme,
+            NamingPolicy namingPolicy,
+            HistoryPolicy historyPolicy,
+            String defaultTimeZone,
+            PlanningPolicyReadiness readiness,
+            List<DomainIssue> issues
+        ) {
+            this(layerScheme, namingPolicy, historyPolicy, defaultTimeZone, false, readiness, issues);
+        }
+
+        public PlanningPolicyView {
+            issues = immutable(issues);
+        }
+    }
 
     public record PlanningBaseline(boolean ready, List<String> missingCodes) {
         public PlanningBaseline {
@@ -288,6 +472,57 @@ public final class WarehousePlanContract {
         return List.copyOf(issues);
     }
 
+    public static List<DomainIssue> validateSourceInventoryCommand(SourceInventoryCommand command) {
+        if (command == null) {
+            return List.of(new DomainIssue("SOURCE_INVENTORY_REQUIRED", "Source inventory is required", null));
+        }
+        List<DomainIssue> issues = new ArrayList<>();
+        Set<UUID> bindingIds = new HashSet<>();
+        Set<String> identities = new HashSet<>();
+        for (int index = 0; index < command.bindings().size(); index++) {
+            SourceBindingCommand binding = command.bindings().get(index);
+            String field = "bindings[" + index + "]";
+            if (binding == null || binding.sourceType() == null || binding.confirmationStatus() == null) {
+                issues.add(new DomainIssue("SOURCE_BINDING_INVALID", "Source bindings must be complete", field));
+                continue;
+            }
+            if (!validLocator(binding.sourceType(), binding.locator())) {
+                issues.add(new DomainIssue("SOURCE_LOCATOR_INVALID", "Source locator does not match sourceType", field + ".locator"));
+                continue;
+            }
+            if (binding.bindingId() != null && !bindingIds.add(binding.bindingId())) {
+                issues.add(new DomainIssue("SOURCE_BINDING_DUPLICATE", "bindingId must be unique", field + ".bindingId"));
+            }
+            String sourceId = canonicalSourceId(binding.sourceType(), binding.locator());
+            if (!identities.add(binding.sourceType().name() + "\u0000" + sourceId)) {
+                issues.add(new DomainIssue("SOURCE_REFERENCE_DUPLICATE", "Source references must be unique", field + ".locator"));
+            }
+            if (binding.confirmationStatus() == ConfirmationStatus.EXCLUDED && isBlank(binding.exclusionReason())) {
+                issues.add(
+                    new DomainIssue(
+                        "SOURCE_EXCLUSION_REASON_REQUIRED",
+                        "Excluded sources require a reason",
+                        field + ".exclusionReason"
+                    )
+                );
+            }
+        }
+        return List.copyOf(issues);
+    }
+
+    public static String canonicalSourceId(SourceType sourceType, SourceLocator locator) {
+        if (!validLocator(sourceType, locator)) {
+            throw new IllegalArgumentException("Source locator does not match sourceType");
+        }
+        return switch (sourceType) {
+            case CATALOG_TABLE -> locator.assetId().toString();
+            case EXCEL_FILE -> locator.fileId().toString();
+            case DBT_NODE -> locator.projectKey() + ":" + locator.uniqueId();
+            case CONNECTION_TABLE ->
+                locator.connectionId() + ":" + locator.namespace() + "." + locator.objectName();
+        };
+    }
+
     public static List<DomainIssue> validateRequestedActor(
         String requestedOwnerId,
         String requestedOwnerDepartmentId,
@@ -348,8 +583,7 @@ public final class WarehousePlanContract {
         PlanningPolicy planningPolicy
     ) {
         List<SourceBinding> sources = immutable(sourceBindings);
-        List<SourceBusinessMapping> mappings = immutable(sourceBusinessMappings);
-        List<String> missing = new ArrayList<>(5);
+        List<String> missing = new ArrayList<>(3);
 
         if (!confirmedDomainAndProcessScope(businessScope)) {
             missing.add(CATEGORY_SCOPE_INCOMPLETE);
@@ -357,13 +591,271 @@ public final class WarehousePlanContract {
         if (!confirmedSourceInventory(sources)) {
             missing.add(SOURCE_INVENTORY_INCOMPLETE);
         }
-        if (!confirmedSourceMappings(businessScope, sources, mappings)) {
-            missing.add(SOURCE_BUSINESS_MAPPING_INCOMPLETE);
-        }
         if (!completePolicy(planningPolicy)) {
             missing.add(PLANNING_POLICY_INCOMPLETE);
         }
         return new PlanningBaseline(missing.isEmpty(), missing);
+    }
+
+    public static PlanningBaseline evaluateBaseline(
+        CategoryScopeView categoryScope,
+        List<SourceBinding> sourceBindings,
+        List<SourceBusinessMapping> sourceBusinessMappings,
+        PlanningPolicyView planningPolicy
+    ) {
+        List<SourceBinding> sources = immutable(sourceBindings);
+        List<String> missing = new ArrayList<>(3);
+
+        if (categoryScope == null || categoryScope.readiness() != CategoryReadiness.READY) {
+            missing.add(CATEGORY_SCOPE_INCOMPLETE);
+        }
+        if (!confirmedSourceInventory(sources)) {
+            missing.add(SOURCE_INVENTORY_INCOMPLETE);
+        }
+        if (
+            planningPolicy == null ||
+            (planningPolicy.readiness() != PlanningPolicyReadiness.MODEL_DESIGN_READY &&
+                planningPolicy.readiness() != PlanningPolicyReadiness.IMPLEMENTATION_READY)
+        ) {
+            missing.add(PLANNING_POLICY_INCOMPLETE);
+        }
+        return new PlanningBaseline(missing.isEmpty(), missing);
+    }
+
+    public static PlanningBaseline evaluateBaseline(
+        CategoryScopeView categoryScope,
+        SourceInventoryView sourceInventory,
+        PlanningPolicyView planningPolicy,
+        OnboardingMode onboardingMode
+    ) {
+        List<String> missing = new ArrayList<>(3);
+        if (categoryScope == null || categoryScope.readiness() != CategoryReadiness.READY) {
+            missing.add(CATEGORY_SCOPE_INCOMPLETE);
+        }
+        boolean sourceReady = sourceInventory != null && sourceInventory.readiness() == SourceInventoryReadiness.READY;
+        boolean conceptualSourceDeferral =
+            onboardingMode == OnboardingMode.BUSINESS_FIRST &&
+            sourceInventory != null &&
+            sourceInventory.readiness() == SourceInventoryReadiness.NOT_REQUIRED_YET &&
+            planningPolicy != null &&
+            planningPolicy.conceptualDesignAllowed();
+        if (!sourceReady && !conceptualSourceDeferral) {
+            missing.add(SOURCE_INVENTORY_INCOMPLETE);
+        }
+        if (
+            planningPolicy == null ||
+            (planningPolicy.readiness() != PlanningPolicyReadiness.MODEL_DESIGN_READY &&
+                planningPolicy.readiness() != PlanningPolicyReadiness.IMPLEMENTATION_READY)
+        ) {
+            missing.add(PLANNING_POLICY_INCOMPLETE);
+        }
+        return new PlanningBaseline(missing.isEmpty(), missing);
+    }
+
+    public static SourceInventoryView evaluateSourceInventory(
+        List<SourceBindingView> bindings,
+        OnboardingMode onboardingMode,
+        int version,
+        Instant checkedAt
+    ) {
+        List<SourceBindingView> sources = immutable(bindings);
+        List<DomainIssue> issues = new ArrayList<>();
+        if (sources.isEmpty()) {
+            SourceInventoryReadiness readiness = onboardingMode == OnboardingMode.BUSINESS_FIRST
+                ? SourceInventoryReadiness.NOT_REQUIRED_YET
+                : SourceInventoryReadiness.DRAFT;
+            if (readiness == SourceInventoryReadiness.DRAFT) {
+                issues.add(new DomainIssue("SOURCE_INVENTORY_REQUIRED", "At least one source is required", "bindings"));
+            }
+            return new SourceInventoryView(sources, readiness, issues, version, sourceEtag(version), checkedAt);
+        }
+
+        boolean blocked = false;
+        boolean allResolved = true;
+        boolean anyConfirmedCurrent = false;
+        for (int index = 0; index < sources.size(); index++) {
+            SourceBindingView source = sources.get(index);
+            String field = "bindings[" + index + "]";
+            if (
+                source == null ||
+                source.bindingId() == null ||
+                source.sourceType() == null ||
+                source.locator() == null ||
+                source.confirmationStatus() == null
+            ) {
+                blocked = true;
+                allResolved = false;
+                issues.add(new DomainIssue("SOURCE_BINDING_INVALID", "Source binding is incomplete", field));
+                continue;
+            }
+            if (source.confirmationStatus() == ConfirmationStatus.EXCLUDED) {
+                if (isBlank(source.exclusionReason())) {
+                    blocked = true;
+                    issues.add(
+                        new DomainIssue(
+                            "SOURCE_EXCLUSION_REASON_REQUIRED",
+                            "Excluded sources require a reason",
+                            field + ".exclusionReason"
+                        )
+                    );
+                }
+                continue;
+            }
+            if (source.confirmationStatus() != ConfirmationStatus.CONFIRMED) {
+                allResolved = false;
+                issues.add(
+                    new DomainIssue(
+                        "SOURCE_CONFIRMATION_REQUIRED",
+                        "Included sources must be confirmed",
+                        field + ".confirmationStatus"
+                    )
+                );
+                continue;
+            }
+            if (source.freshness() == SourceFreshness.STALE) {
+                blocked = true;
+                issues.add(new DomainIssue("SOURCE_STALE", "The source changed or was deleted", field));
+            } else if (
+                source.freshness() == SourceFreshness.UNKNOWN ||
+                source.resolutionStatus() == SourceReferenceResolver.ResolutionStatus.FORBIDDEN ||
+                source.resolutionStatus() == SourceReferenceResolver.ResolutionStatus.PROVIDER_ERROR
+            ) {
+                blocked = true;
+                issues.add(new DomainIssue("SOURCE_UNKNOWN", "The source cannot be verified", field));
+            } else if (
+                source.freshness() == SourceFreshness.CURRENT &&
+                source.resolutionStatus() == SourceReferenceResolver.ResolutionStatus.AVAILABLE
+            ) {
+                anyConfirmedCurrent = true;
+            } else {
+                blocked = true;
+                issues.add(new DomainIssue("SOURCE_UNKNOWN", "The source cannot be verified", field));
+            }
+        }
+
+        SourceInventoryReadiness readiness = blocked
+            ? SourceInventoryReadiness.BLOCKED
+            : allResolved && anyConfirmedCurrent
+                ? SourceInventoryReadiness.READY
+                : SourceInventoryReadiness.DRAFT;
+        return new SourceInventoryView(sources, readiness, issues, version, sourceEtag(version), checkedAt);
+    }
+
+    public static CategoryScopeView evaluateCategoryScope(List<CategoryBindingView> bindings, Instant lastValidatedAt) {
+        List<CategoryBindingView> categories = immutable(bindings);
+        List<DomainIssue> issues = new ArrayList<>();
+        boolean blocked = false;
+        boolean anyIncluded = false;
+        boolean anyConfirmedAvailable = false;
+        boolean allIncludedConfirmedAvailable = true;
+
+        for (int index = 0; index < categories.size(); index++) {
+            CategoryBindingView binding = categories.get(index);
+            String field = "domainBindings[" + index + "]";
+            if (binding == null || binding.domainId() == null || binding.confirmationStatus() == null) {
+                blocked = true;
+                allIncludedConfirmedAvailable = false;
+                issues.add(new DomainIssue("CATEGORY_BINDING_INVALID", "Category bindings must be complete", field));
+                continue;
+            }
+            if (binding.confirmationStatus() == ConfirmationStatus.EXCLUDED) {
+                continue;
+            }
+            anyIncluded = true;
+            if (binding.resolutionStatus() != CatalogDomainResolutionPort.ResolutionStatus.AVAILABLE) {
+                blocked = true;
+                allIncludedConfirmedAvailable = false;
+                issues.add(categoryResolutionIssue(binding.resolutionStatus(), field));
+                continue;
+            }
+            if (binding.confirmationStatus() != ConfirmationStatus.CONFIRMED) {
+                allIncludedConfirmedAvailable = false;
+                issues.add(
+                    new DomainIssue(
+                        "CATEGORY_CONFIRMATION_REQUIRED",
+                        "An included category must be confirmed before model design",
+                        field + ".confirmationStatus"
+                    )
+                );
+                continue;
+            }
+            anyConfirmedAvailable = true;
+        }
+
+        if (!anyIncluded) {
+            issues.add(new DomainIssue("CATEGORY_SCOPE_REQUIRED", "At least one business category is required", "domainBindings"));
+        }
+        CategoryReadiness readiness = blocked
+            ? CategoryReadiness.BLOCKED
+            : anyIncluded && anyConfirmedAvailable && allIncludedConfirmedAvailable
+                ? CategoryReadiness.READY
+                : CategoryReadiness.DRAFT;
+        return new CategoryScopeView(categories, readiness, issues, lastValidatedAt);
+    }
+
+    public static PlanningPolicyView evaluatePlanningPolicy(PlanningPolicyCommand command) {
+        PlanningPolicyCommand value = command == null ? new PlanningPolicyCommand(null, null, null, null) : command;
+        List<DomainIssue> issues = new ArrayList<>();
+        LayerScheme layerScheme = parseEnum(
+            LayerScheme.class,
+            value.layerScheme(),
+            "LAYER_SCHEME_REQUIRED",
+            "LAYER_SCHEME_UNSUPPORTED",
+            "layerScheme",
+            issues
+        );
+        NamingPolicy namingPolicy = parseEnum(
+            NamingPolicy.class,
+            value.namingPolicy(),
+            "NAMING_POLICY_REQUIRED",
+            "NAMING_POLICY_UNSUPPORTED",
+            "namingPolicy",
+            issues
+        );
+        HistoryPolicy historyPolicy = parseEnum(
+            HistoryPolicy.class,
+            value.historyPolicy(),
+            "HISTORY_POLICY_REQUIRED",
+            "HISTORY_POLICY_UNSUPPORTED",
+            "historyPolicy",
+            issues
+        );
+        boolean validTimeZone = validZoneId(value.defaultTimeZone());
+        if (!validTimeZone) {
+            issues.add(
+                new DomainIssue(
+                    "DEFAULT_TIME_ZONE_INVALID",
+                    "defaultTimeZone must be a valid IANA ZoneId when supplied",
+                    "defaultTimeZone"
+                )
+            );
+        }
+
+        PlanningPolicyReadiness readiness = layerScheme == null
+            ? PlanningPolicyReadiness.DRAFT
+            : namingPolicy != null && historyPolicy != null && validTimeZone
+                ? PlanningPolicyReadiness.IMPLEMENTATION_READY
+                : PlanningPolicyReadiness.MODEL_DESIGN_READY;
+        return new PlanningPolicyView(
+            layerScheme,
+            namingPolicy,
+            historyPolicy,
+            value.defaultTimeZone(),
+            Boolean.TRUE.equals(value.conceptualDesignAllowed()),
+            readiness,
+            issues
+        );
+    }
+
+    public static boolean hasInvalidPolicyValues(PlanningPolicyView policy) {
+        if (policy == null) {
+            return false;
+        }
+        return policy
+            .issues()
+            .stream()
+            .map(DomainIssue::code)
+            .anyMatch(code -> code.endsWith("_UNSUPPORTED") || code.endsWith("_INVALID"));
     }
 
     public static boolean canTransition(LifecycleStatus current, LifecycleStatus target) {
@@ -412,31 +904,100 @@ public final class WarehousePlanContract {
         return anyConfirmed && allResolved;
     }
 
-    private static boolean confirmedSourceMappings(
-        BusinessScope scope,
-        List<SourceBinding> sources,
-        List<SourceBusinessMapping> mappings
-    ) {
-        if (!confirmedDomainAndProcessScope(scope) || !confirmedSourceInventory(sources)) {
+    private static boolean completePolicy(PlanningPolicy policy) {
+        if (policy == null || isBlank(policy.layerPolicyCode())) {
             return false;
         }
-        Set<UUID> domainIds = scope.domainBindings().stream().map(DomainBinding::domainId).collect(java.util.stream.Collectors.toSet());
-        return sources
-            .stream()
-            .filter(source -> source.confirmationStatus() == ConfirmationStatus.CONFIRMED)
-            .allMatch(source -> mappings.stream().anyMatch(mapping ->
-                mapping != null &&
-                source.id().equals(mapping.sourceBindingId()) &&
-                mapping.confirmationStatus() == ConfirmationStatus.CONFIRMED &&
-                domainIds.contains(mapping.domainId())
-            ));
+        try {
+            LayerScheme.valueOf(policy.layerPolicyCode().trim());
+            return true;
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
     }
 
-    private static boolean completePolicy(PlanningPolicy policy) {
-        return policy != null &&
-        !isBlank(policy.layerPolicyCode()) &&
-        !isBlank(policy.historyPolicy()) &&
-        !isBlank(policy.defaultTimeZone());
+    private static DomainIssue categoryResolutionIssue(
+        CatalogDomainResolutionPort.ResolutionStatus status,
+        String field
+    ) {
+        if (status == CatalogDomainResolutionPort.ResolutionStatus.ARCHIVED) {
+            return new DomainIssue("CATEGORY_DOMAIN_ARCHIVED", "The business category is archived and must be replaced", field);
+        }
+        if (status == CatalogDomainResolutionPort.ResolutionStatus.FORBIDDEN) {
+            return new DomainIssue("CATEGORY_DOMAIN_FORBIDDEN", "The business category is no longer accessible", field);
+        }
+        return new DomainIssue("CATEGORY_DOMAIN_MISSING", "The business category no longer exists", field);
+    }
+
+    private static <E extends Enum<E>> E parseEnum(
+        Class<E> type,
+        String value,
+        String requiredCode,
+        String unsupportedCode,
+        String field,
+        List<DomainIssue> issues
+    ) {
+        if (isBlank(value)) {
+            issues.add(new DomainIssue(requiredCode, field + " is required for this readiness level", field));
+            return null;
+        }
+        try {
+            return Enum.valueOf(type, value);
+        } catch (IllegalArgumentException exception) {
+            issues.add(new DomainIssue(unsupportedCode, "Unsupported " + field, field));
+            return null;
+        }
+    }
+
+    private static boolean validZoneId(String value) {
+        if (isBlank(value)) {
+            return true;
+        }
+        return ZoneId.getAvailableZoneIds().contains(value);
+    }
+
+    private static String sourceEtag(int version) {
+        return "\"sources:" + version + "\"";
+    }
+
+    private static boolean validLocator(SourceType sourceType, SourceLocator locator) {
+        if (sourceType == null || locator == null) {
+            return false;
+        }
+        return switch (sourceType) {
+            case CATALOG_TABLE ->
+                locator.assetId() != null &&
+                locator.fileId() == null &&
+                locator.connectionId() == null &&
+                isBlank(locator.projectKey()) &&
+                isBlank(locator.uniqueId()) &&
+                isBlank(locator.namespace()) &&
+                isBlank(locator.objectName());
+            case EXCEL_FILE ->
+                locator.fileId() != null &&
+                locator.assetId() == null &&
+                locator.connectionId() == null &&
+                isBlank(locator.projectKey()) &&
+                isBlank(locator.uniqueId()) &&
+                isBlank(locator.namespace()) &&
+                isBlank(locator.objectName());
+            case DBT_NODE ->
+                !isBlank(locator.projectKey()) &&
+                !isBlank(locator.uniqueId()) &&
+                locator.assetId() == null &&
+                locator.fileId() == null &&
+                locator.connectionId() == null &&
+                isBlank(locator.namespace()) &&
+                isBlank(locator.objectName());
+            case CONNECTION_TABLE ->
+                locator.connectionId() != null &&
+                !isBlank(locator.namespace()) &&
+                !isBlank(locator.objectName()) &&
+                locator.assetId() == null &&
+                locator.fileId() == null &&
+                isBlank(locator.projectKey()) &&
+                isBlank(locator.uniqueId());
+        };
     }
 
     private static boolean isBlank(String value) {

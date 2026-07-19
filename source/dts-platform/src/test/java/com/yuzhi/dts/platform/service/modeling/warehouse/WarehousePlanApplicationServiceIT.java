@@ -6,22 +6,34 @@ import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanCon
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.OnboardingMode.BUSINESS_FIRST;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.ConfirmationStatus.CONFIRMED;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.EditUnit.BUSINESS_SCOPE;
+import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.EditUnit.CATEGORY_SCOPE;
+import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.EditUnit.POLICY;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceType.CATALOG_TABLE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.zaxxer.hikari.HikariDataSource;
 import com.yuzhi.dts.platform.IntegrationTest;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService.UpdatePlanHeaderCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService.WarehousePlanException;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CreateWarehousePlanCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CreateWarehousePlanResult;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.BusinessScope;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CategoryScopeCommand;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CategoryReadiness;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.DomainBinding;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.MetricRequirement;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.InitialSourceRef;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningBaseline;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicy;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicyCommand;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicyReadiness;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.ProcessBinding;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBinding;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBusinessMapping;
@@ -37,9 +49,11 @@ import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -50,6 +64,12 @@ class WarehousePlanApplicationServiceIT {
     @Autowired
     private WarehousePlanApplicationService service;
 
+    @MockBean
+    private CatalogDomainResolutionPort catalogDomainResolutionPort;
+
+    @MockBean
+    private AuditService auditService;
+
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
@@ -58,6 +78,21 @@ class WarehousePlanApplicationServiceIT {
 
     @Autowired
     private PlatformTransactionManager transactionManager;
+
+    @BeforeEach
+    void resolveCatalogDomainsAsAvailableByDefault() {
+        when(catalogDomainResolutionPort.resolve(any())).thenAnswer(invocation -> {
+            UUID domainId = invocation.getArgument(0);
+            return new CatalogDomainResolutionPort.DomainResolution(
+                domainId,
+                CatalogDomainResolutionPort.ResolutionStatus.AVAILABLE,
+                "Domain " + domainId,
+                "DOMAIN",
+                "owner",
+                "description"
+            );
+        });
+    }
 
     @Test
     void createsListsAndLoadsPlansInsideServerTenantScope() {
@@ -101,7 +136,6 @@ class WarehousePlanApplicationServiceIT {
                 tenant,
                 idempotencyKey
             )).isEqualTo(1L);
-
             CreateWarehousePlanCommand changed = new CreateWarehousePlanCommand(
                 "Changed name",
                 "Reusable analysis objective",
@@ -390,6 +424,283 @@ class WarehousePlanApplicationServiceIT {
             assertThat(confirmed.version()).isEqualTo(2);
         } finally {
             deleteTenant(tenant);
+        }
+    }
+
+    @Test
+    void categoryScopeReplacesOnlyDomainRowsAndSharesCasWithLegacyBusinessScope() {
+        String tenant = tenant("category-cas");
+        UUID oldDomainId = UUID.randomUUID();
+        UUID newDomainId = UUID.randomUUID();
+
+        try {
+            WarehousePlanHeader plan = service.create(tenant, createCommand(BUSINESS_FIRST, "category-cas-" + UUID.randomUUID())).plan();
+            BusinessScope legacy = new BusinessScope(
+                true,
+                List.of(new DomainBinding(oldDomainId, CONFIRMED)),
+                List.of(new ProcessBinding("legacy-process", oldDomainId, "TRANSACTION", CONFIRMED)),
+                List.of(
+                    new MetricRequirement(
+                        UUID.randomUUID(),
+                        "legacy-metric",
+                        "Legacy metric",
+                        "Must survive category editing",
+                        oldDomainId,
+                        "legacy-process",
+                        CONFIRMED
+                    )
+                )
+            );
+            service.saveBusinessScope(tenant, plan.id(), 1, legacy);
+
+            Versioned<WarehousePlanContract.CategoryScopeView> saved = service.saveCategoryScope(
+                tenant,
+                plan.id(),
+                2,
+                new CategoryScopeCommand(List.of(new DomainBinding(newDomainId, CONFIRMED)))
+            );
+
+            assertThat(saved.version()).isEqualTo(3);
+            assertThat(saved.value().readiness()).isEqualTo(CategoryReadiness.READY);
+            assertThat(saved.value().domainBindings().getFirst().lastValidatedAt()).isEqualTo(saved.value().lastValidatedAt());
+            verify(catalogDomainResolutionPort).resolve(newDomainId);
+            assertThat(jdbcTemplate.queryForList(
+                "select domain_id from modeling_warehouse_plan_domain where tenant_id = ? and plan_id = ?",
+                UUID.class,
+                tenant,
+                plan.id()
+            )).containsExactly(newDomainId);
+            assertThat(jdbcTemplate.queryForObject(
+                "select last_validated_at is not null from modeling_warehouse_plan_domain where tenant_id = ? and plan_id = ?",
+                Boolean.class,
+                tenant,
+                plan.id()
+            )).isTrue();
+            assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from modeling_warehouse_plan_process where tenant_id = ? and plan_id = ?",
+                Long.class,
+                tenant,
+                plan.id()
+            )).isEqualTo(1L);
+            assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from modeling_warehouse_plan_metric_need where tenant_id = ? and plan_id = ?",
+                Long.class,
+                tenant,
+                plan.id()
+            )).isEqualTo(1L);
+            verify(auditService).auditAction(
+                eq("MODELING_WAREHOUSE_CATEGORY_SCOPE_SAVE"),
+                eq(AuditStage.SUCCESS),
+                eq(plan.id().toString()),
+                any()
+            );
+
+            assertThatThrownBy(() -> service.saveBusinessScope(tenant, plan.id(), 2, legacy))
+                .isInstanceOfSatisfying(WarehousePlanException.class, error -> {
+                    assertThat(error.code()).isEqualTo("WAREHOUSE_PLAN_EDIT_UNIT_VERSION_CONFLICT");
+                    assertThat(error.currentVersion()).isEqualTo(3);
+                    assertThat(error.editUnit()).isEqualTo(BUSINESS_SCOPE);
+                });
+            assertThatThrownBy(() ->
+                service.saveCategoryScope(
+                    tenant,
+                    plan.id(),
+                    2,
+                    new CategoryScopeCommand(List.of(new DomainBinding(newDomainId, CONFIRMED)))
+                )
+            ).isInstanceOfSatisfying(WarehousePlanException.class, error -> {
+                assertThat(error.currentVersion()).isEqualTo(3);
+                assertThat(error.editUnit()).isEqualTo(CATEGORY_SCOPE);
+            });
+        } finally {
+            deleteTenant(tenant);
+        }
+    }
+
+    @Test
+    void categoryAndPolicyKeepIndependentVersionsAndPolicyAllowsAModelDesignDraft() {
+        String tenant = tenant("category-policy-versions");
+        UUID domainId = UUID.randomUUID();
+
+        try {
+            WarehousePlanHeader plan = service.create(
+                tenant,
+                createCommand(BUSINESS_FIRST, "category-policy-versions-" + UUID.randomUUID())
+            ).plan();
+            Versioned<WarehousePlanContract.CategoryScopeView> category = service.saveCategoryScope(
+                tenant,
+                plan.id(),
+                1,
+                new CategoryScopeCommand(List.of(new DomainBinding(domainId, CONFIRMED)))
+            );
+            Versioned<WarehousePlanContract.PlanningPolicyView> policy = service.savePlanningPolicy(
+                tenant,
+                plan.id(),
+                1,
+                new PlanningPolicyCommand("CLASSIC_ODS_DWD_DWS_ADS", null, null, null)
+            );
+
+            assertThat(category.version()).isEqualTo(2);
+            assertThat(policy.version()).isEqualTo(2);
+            assertThat(policy.value().readiness()).isEqualTo(PlanningPolicyReadiness.MODEL_DESIGN_READY);
+            assertThat(service.getCategoryScope(tenant, plan.id()).version()).isEqualTo(2);
+            assertThat(service.getPlanningPolicy(tenant, plan.id()).version()).isEqualTo(2);
+            verify(auditService).auditAction(
+                eq("MODELING_WAREHOUSE_POLICY_SAVE"),
+                eq(AuditStage.SUCCESS),
+                eq(plan.id().toString()),
+                any()
+            );
+
+            service.saveCategoryScope(
+                tenant,
+                plan.id(),
+                2,
+                new CategoryScopeCommand(List.of(new DomainBinding(domainId, WarehousePlanContract.ConfirmationStatus.CANDIDATE)))
+            );
+            assertThat(service.getCategoryScope(tenant, plan.id()).version()).isEqualTo(3);
+            assertThat(service.getPlanningPolicy(tenant, plan.id()).version()).isEqualTo(2);
+        } finally {
+            deleteTenant(tenant);
+        }
+    }
+
+    @Test
+    void stalePolicyVersionReturnsTheCurrentVersionAndLeavesTheStoredDraftUnchanged() {
+        String tenant = tenant("policy-cas");
+
+        try {
+            WarehousePlanHeader plan = service.create(
+                tenant,
+                createCommand(BUSINESS_FIRST, "policy-cas-" + UUID.randomUUID())
+            ).plan();
+            service.savePlanningPolicy(
+                tenant,
+                plan.id(),
+                1,
+                new PlanningPolicyCommand("CLASSIC_ODS_DWD_DWS_ADS", null, null, null)
+            );
+
+            assertThatThrownBy(() ->
+                service.savePlanningPolicy(
+                    tenant,
+                    plan.id(),
+                    1,
+                    new PlanningPolicyCommand(
+                        "CLASSIC_ODS_DWD_DWS_ADS",
+                        "CLASSIC_UPPER_SNAKE",
+                        "LATEST_STATE_ONLY",
+                        "Asia/Shanghai"
+                    )
+                )
+            ).isInstanceOfSatisfying(WarehousePlanException.class, error -> {
+                assertThat(error.code()).isEqualTo("WAREHOUSE_PLAN_EDIT_UNIT_VERSION_CONFLICT");
+                assertThat(error.currentVersion()).isEqualTo(2);
+                assertThat(error.editUnit()).isEqualTo(POLICY);
+            });
+
+            Versioned<WarehousePlanContract.PlanningPolicyView> stored = service.getPlanningPolicy(tenant, plan.id());
+            assertThat(stored.version()).isEqualTo(2);
+            assertThat(stored.value().namingPolicy()).isNull();
+            assertThat(stored.value().historyPolicy()).isNull();
+            assertThat(stored.value().defaultTimeZone()).isNull();
+        } finally {
+            deleteTenant(tenant);
+        }
+    }
+
+    @Test
+    void categoryResolutionIsLiveRedactedAndForbiddenWritesAreZeroMutation() {
+        String tenant = tenant("category-resolution");
+        UUID domainId = UUID.randomUUID();
+
+        try {
+            WarehousePlanHeader plan = service.create(
+                tenant,
+                createCommand(BUSINESS_FIRST, "category-resolution-" + UUID.randomUUID())
+            ).plan();
+            service.saveCategoryScope(
+                tenant,
+                plan.id(),
+                1,
+                new CategoryScopeCommand(List.of(new DomainBinding(domainId, CONFIRMED)))
+            );
+            when(catalogDomainResolutionPort.resolve(domainId)).thenReturn(
+                new CatalogDomainResolutionPort.DomainResolution(
+                    domainId,
+                    CatalogDomainResolutionPort.ResolutionStatus.FORBIDDEN,
+                    null,
+                    null,
+                    null,
+                    null
+                )
+            );
+
+            Versioned<WarehousePlanContract.CategoryScopeView> forbidden = service.getCategoryScope(tenant, plan.id());
+            assertThat(forbidden.value().readiness()).isEqualTo(CategoryReadiness.BLOCKED);
+            assertThat(forbidden.value().domainBindings().getFirst().name()).isNull();
+            assertThat(forbidden.value().domainBindings().getFirst().code()).isNull();
+
+            assertThatThrownBy(() ->
+                service.saveCategoryScope(
+                    tenant,
+                    plan.id(),
+                    2,
+                    new CategoryScopeCommand(List.of(new DomainBinding(domainId, CONFIRMED)))
+                )
+            ).isInstanceOfSatisfying(WarehousePlanException.class, error ->
+                assertThat(error.code()).isEqualTo("WAREHOUSE_PLAN_CATEGORY_FORBIDDEN")
+            );
+            assertThat(service.getCategoryScope(tenant, plan.id()).version()).isEqualTo(2);
+        } finally {
+            deleteTenant(tenant);
+        }
+    }
+
+    @Test
+    void categoryAndPolicyWritesRespectTenantLifecycleAndValidateBeforeCas() {
+        String tenant = tenant("category-policy-guard");
+        String anotherTenant = tenant("category-policy-other");
+        UUID domainId = UUID.randomUUID();
+
+        try {
+            WarehousePlanHeader plan = service.create(
+                tenant,
+                createCommand(BUSINESS_FIRST, "category-policy-guard-" + UUID.randomUUID())
+            ).plan();
+            assertThatThrownBy(() ->
+                service.savePlanningPolicy(
+                    tenant,
+                    plan.id(),
+                    1,
+                    new PlanningPolicyCommand("CLASSIC_ODS_DWD_DWS_ADS", "CLASSIC_LOWER_SNAKE", "LATEST_STATE_ONLY", "UTC+8")
+                )
+            ).isInstanceOfSatisfying(WarehousePlanException.class, error ->
+                assertThat(error.code()).isEqualTo("WAREHOUSE_PLAN_POLICY_INVALID")
+            );
+            assertThat(service.getPlanningPolicy(tenant, plan.id()).version()).isEqualTo(1);
+            assertThatThrownBy(() -> service.getCategoryScope(anotherTenant, plan.id()))
+                .isInstanceOfSatisfying(WarehousePlanException.class, error ->
+                    assertThat(error.code()).isEqualTo("WAREHOUSE_PLAN_NOT_FOUND")
+                );
+
+            WarehousePlanHeader archived = service.archive(tenant, plan.id(), plan.version());
+            assertThat(archived.lifecycleStatus()).isEqualTo(ARCHIVED);
+            assertThatThrownBy(() ->
+                service.saveCategoryScope(
+                    tenant,
+                    plan.id(),
+                    1,
+                    new CategoryScopeCommand(List.of(new DomainBinding(domainId, CONFIRMED)))
+                )
+            ).isInstanceOfSatisfying(WarehousePlanException.class, error -> {
+                assertThat(error.code()).isEqualTo("WAREHOUSE_PLAN_LIFECYCLE_CONFLICT");
+                assertThat(error.currentVersion()).isEqualTo(1);
+                assertThat(error.editUnit()).isEqualTo(CATEGORY_SCOPE);
+            });
+        } finally {
+            deleteTenant(tenant);
+            deleteTenant(anotherTenant);
         }
     }
 

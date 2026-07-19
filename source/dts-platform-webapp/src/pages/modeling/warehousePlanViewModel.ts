@@ -1,8 +1,12 @@
 import type {
+	WarehousePlanCategoryBindingView,
 	WarehousePlanEvidenceFreshness,
 	WarehousePlanStageCode,
 	WarehousePlanStageStatus,
 } from "@/api/warehousePlanApi";
+
+export type WarehouseCategoryOptionSource = { id: string; name?: string | null; code?: string | null };
+export type WarehouseCategoryOption = { value: string; label: string };
 
 export const WAREHOUSE_STAGE_ORDER: readonly WarehousePlanStageCode[] = [
 	"DATA_CONNECTION",
@@ -41,13 +45,42 @@ const STAGE_ACTION_LABELS: Record<WarehousePlanStageCode, string> = {
 };
 
 const BLOCKER_MESSAGES: Record<string, string> = {
-	BUSINESS_SCOPE_INCOMPLETE: "业务范围尚未确认",
-	DOMAIN_PROCESS_CONFIRMATION_INCOMPLETE: "主题域和业务过程尚未全部确认",
+	CATEGORY_SCOPE_INCOMPLETE: "业务分类尚未确认",
+	BUSINESS_SCOPE_INCOMPLETE: "业务分类尚未确认",
+	DOMAIN_PROCESS_CONFIRMATION_INCOMPLETE: "业务分类尚未确认",
 	SOURCE_INVENTORY_INCOMPLETE: "来源盘点尚未完成",
-	SOURCE_BUSINESS_MAPPING_INCOMPLETE: "来源与业务范围尚未全部映射或排除",
-	PLANNING_POLICY_INCOMPLETE: "分层、命名或历史策略尚未补齐",
+	SOURCE_BUSINESS_MAPPING_INCOMPLETE: "来源关联尚未完成",
+	PLANNING_POLICY_INCOMPLETE: "数仓分层尚未确认",
 	EVIDENCE_STALE: "完成证据已过期，需要重新核验",
 	EVIDENCE_UNAVAILABLE: "完成证据暂时不可用",
+};
+
+const PLANNING_ISSUE_MESSAGES: Record<string, string> = {
+	CATEGORY_BINDING_INVALID: "业务分类信息不完整，请重新选择",
+	CATEGORY_SCOPE_REQUIRED: "请至少添加一个业务分类",
+	CATEGORY_CONFIRMATION_REQUIRED: "请确认该业务分类是否纳入本计划",
+	CATEGORY_DOMAIN_ARCHIVED: "该业务分类已归档，请替换",
+	CATEGORY_DOMAIN_FORBIDDEN: "当前账号已无法访问该业务分类，请替换或申请权限",
+	CATEGORY_DOMAIN_MISSING: "该业务分类已删除，请替换",
+	LAYER_SCHEME_REQUIRED: "请选择数仓分层方案",
+	LAYER_SCHEME_UNSUPPORTED: "当前分层方案不受支持，请重新选择",
+	NAMING_POLICY_REQUIRED: "进入模型实现前请选择命名规则",
+	NAMING_POLICY_UNSUPPORTED: "当前命名规则不受支持，请重新选择",
+	HISTORY_POLICY_REQUIRED: "进入模型实现前请选择历史保留策略",
+	HISTORY_POLICY_UNSUPPORTED: "当前历史保留策略不受支持，请重新选择",
+	DEFAULT_TIME_ZONE_INVALID: "请输入有效的 IANA 时区名称",
+};
+
+const PLANNING_MUTATION_ERROR_MESSAGES: Record<string, string> = {
+	WAREHOUSE_PLAN_CATEGORY_FORBIDDEN: "当前账号不能使用所选业务分类，请替换或申请权限",
+	WAREHOUSE_PLAN_CATEGORY_INVALID: "业务分类设置无效，请检查后重试",
+	WAREHOUSE_PLAN_POLICY_INVALID: "数仓分层设置无效，请检查后重试",
+	WAREHOUSE_PLAN_LIFECYCLE_CONFLICT: "当前计划已不可编辑，请重新加载计划状态",
+	WAREHOUSE_PLAN_NOT_FOUND: "当前计划不存在或已不可访问",
+	WAREHOUSE_PLAN_IF_MATCH_INVALID: "规划版本信息无效，请重新加载后重试",
+	WAREHOUSE_PLAN_IF_MATCH_REQUIRED: "缺少规划版本信息，请重新加载后重试",
+	WAREHOUSE_PLAN_EDIT_UNIT_VERSION_CONFLICT: "规划内容已被其他用户更新，请选择保留输入重试或加载最新版",
+	WAREHOUSE_PLAN_VERSION_CONFLICT: "规划内容已被其他用户更新，请选择保留输入重试或加载最新版",
 };
 
 export const warehouseStageLabel = (code: WarehousePlanStageCode): string => STAGE_LABELS[code];
@@ -62,6 +95,55 @@ export const warehouseBlockerMessage = (code: string, fallback?: string | null):
 	if (code.endsWith("_BLOCKED")) return "本阶段存在尚未处理的阻塞";
 	if (fallback && /[\u3400-\u9fff]/.test(fallback)) return fallback;
 	return "本阶段存在尚未处理的阻塞";
+};
+
+export const warehousePlanIssueMessage = (code: string, fallback?: string | null): string => {
+	if (PLANNING_ISSUE_MESSAGES[code]) return PLANNING_ISSUE_MESSAGES[code];
+	if (fallback && /[\u3400-\u9fff]/.test(fallback)) return fallback;
+	return "请检查当前规划设置";
+};
+
+export const warehousePlanMutationErrorMessage = (error: unknown, fallback: string): string => {
+	if (!error || typeof error !== "object") return fallback;
+	const responseData = (error as { response?: { data?: unknown } }).response?.data;
+	if (!responseData || typeof responseData !== "object") return fallback;
+	const code = (responseData as { code?: unknown }).code;
+	return typeof code === "string" && PLANNING_MUTATION_ERROR_MESSAGES[code]
+		? PLANNING_MUTATION_ERROR_MESSAGES[code]
+		: fallback;
+};
+
+export const buildWarehouseCategoryOptions = (
+	availableCategories: WarehouseCategoryOptionSource[],
+	bindings: WarehousePlanCategoryBindingView[],
+): WarehouseCategoryOption[] => {
+	const options = new Map<string, WarehouseCategoryOption>();
+	for (const category of availableCategories) {
+		options.set(category.id, { value: category.id, label: category.name || category.code || category.id });
+	}
+	for (const binding of bindings) {
+		const current = options.get(binding.domainId);
+		if (binding.resolutionStatus === "FORBIDDEN") {
+			options.set(binding.domainId, { value: binding.domainId, label: "不可访问分类" });
+			continue;
+		}
+		if (binding.resolutionStatus === "MISSING") {
+			options.set(binding.domainId, { value: binding.domainId, label: "已删除分类" });
+			continue;
+		}
+		if (binding.resolutionStatus === "ARCHIVED") {
+			const label = binding.name || binding.code || current?.label || "分类";
+			options.set(binding.domainId, { value: binding.domainId, label: `${label}（已归档）` });
+			continue;
+		}
+		if (!current) {
+			options.set(binding.domainId, {
+				value: binding.domainId,
+				label: binding.name || binding.code || binding.domainId,
+			});
+		}
+	}
+	return [...options.values()];
 };
 
 export const stageStatusLabel = (
@@ -105,4 +187,42 @@ export const withWarehousePlanContext = (route: string, planId: string): string 
 	const params = new URLSearchParams(query);
 	params.set("planId", planId);
 	return `${path}?${params.toString()}`;
+};
+
+export const buildBusinessCategoryManagementRoute = (planId: string): string => {
+	const returnTo = buildWarehousePlanRoute(planId, "baseline", { tab: "categories" });
+	const params = new URLSearchParams({ planId, returnTo });
+	return `/governance/subjects?${params.toString()}`;
+};
+
+const WAREHOUSE_PLAN_RETURN_ORIGIN = "http://dts.local";
+const WAREHOUSE_PLAN_BASELINE_TABS = new Set(["categories", "layers", "sources"]);
+
+export const resolveWarehousePlanReturnTo = (rawReturnTo: string | null | undefined, planId: string): string | null => {
+	if (!rawReturnTo || !planId || !rawReturnTo.startsWith("/") || rawReturnTo.startsWith("//")) return null;
+	if (rawReturnTo.includes("\\")) return null;
+	try {
+		const target = new URL(rawReturnTo, WAREHOUSE_PLAN_RETURN_ORIGIN);
+		const expectedPath = `/modeling/plans/${encodeURIComponent(planId)}/baseline`;
+		if (target.origin !== WAREHOUSE_PLAN_RETURN_ORIGIN || target.pathname !== expectedPath || target.hash) return null;
+		if (target.searchParams.getAll("planId").length !== 1 || target.searchParams.get("planId") !== planId) return null;
+		if (target.searchParams.getAll("tab").length !== 1) return null;
+		if (!WAREHOUSE_PLAN_BASELINE_TABS.has(target.searchParams.get("tab") || "")) return null;
+		for (const key of target.searchParams.keys()) {
+			if (key !== "planId" && key !== "tab") return null;
+		}
+		return `${target.pathname}?${target.searchParams.toString()}`;
+	} catch {
+		return null;
+	}
+};
+
+export const resolveWarehousePlanConflictVersion = (error: unknown): number | null => {
+	if (!error || typeof error !== "object") return null;
+	const response = (error as { response?: { status?: unknown; data?: unknown } }).response;
+	if (response?.status !== 409 || !response.data || typeof response.data !== "object") return null;
+	const bodyData = (response.data as { data?: unknown }).data;
+	if (!bodyData || typeof bodyData !== "object") return null;
+	const currentVersion = Number((bodyData as { currentVersion?: unknown }).currentVersion);
+	return Number.isInteger(currentVersion) && currentVersion > 0 ? currentVersion : null;
 };

@@ -14,8 +14,8 @@
     "name": "duplicate-source-reference",
     "overrides": {
       "sourceRefs": [
-        { "kind": "TABLE", "ref": "catalog.dataset.source", "layer": "ODS", "role": "PRIMARY", "sortOrder": 0 },
-        { "kind": "TABLE", "ref": "catalog.dataset.source", "layer": "ODS", "role": "JOINED", "sortOrder": 1 }
+        { "kind": "TABLE", "ref": "catalog.dataset.source", "layer": "ODS", "role": "PRIMARY", "sortOrder": 0, "sourceBindingId": "50000000-0000-0000-0000-000000000001", "resolvedVersion": "v1" },
+        { "kind": "TABLE", "ref": "catalog.dataset.source", "layer": "ODS", "role": "JOINED", "sortOrder": 1, "sourceBindingId": "50000000-0000-0000-0000-000000000001", "resolvedVersion": "v1" }
       ]
     },
     "expectedIssueCodes": ["MODEL_SPEC_SOURCE_INVALID"],
@@ -33,7 +33,7 @@
     "name": "integer-max-value-is-inclusive",
     "overrides": {
       "sourceRefs": [
-        { "kind": "TABLE", "ref": "catalog.dataset.source", "layer": "ODS", "role": "PRIMARY", "sortOrder": 2147483647 }
+        { "kind": "TABLE", "ref": "catalog.dataset.source", "layer": "ODS", "role": "PRIMARY", "sortOrder": 2147483647, "sourceBindingId": "50000000-0000-0000-0000-000000000001", "resolvedVersion": "v1" }
       ],
       "dependsOn": [{ "modelSpecId": "30000000-0000-0000-0000-000000000001", "revision": 2147483647 }],
       "dimensionRefs": [{ "modelSpecId": "30000000-0000-0000-0000-000000000002", "revision": 2147483647 }],
@@ -57,7 +57,7 @@
     "name": "source-sort-order-exceeds-java-int",
     "overrides": {
       "sourceRefs": [
-        { "kind": "TABLE", "ref": "catalog.dataset.source", "layer": "ODS", "role": "PRIMARY", "sortOrder": 2147483648 }
+        { "kind": "TABLE", "ref": "catalog.dataset.source", "layer": "ODS", "role": "PRIMARY", "sortOrder": 2147483648, "sourceBindingId": "50000000-0000-0000-0000-000000000001", "resolvedVersion": "v1" }
       ]
     },
     "expectedIssueCodes": ["MODEL_SPEC_SOURCE_INVALID"],
@@ -221,8 +221,8 @@
         { "name": "record_id", "dataType": "varchar", "nullable": false, "role": "ATTRIBUTE" }
       ],
       "sourceRefs": [
-        { "kind": "TABLE", "ref": " catalog.dataset.source ", "layer": "ODS", "role": "PRIMARY", "sortOrder": 0 },
-        { "kind": "TABLE", "ref": "catalog.dataset.source", "layer": "ODS", "role": "JOINED", "sortOrder": 1 }
+        { "kind": "TABLE", "ref": " catalog.dataset.source ", "layer": "ODS", "role": "PRIMARY", "sortOrder": 0, "sourceBindingId": "50000000-0000-0000-0000-000000000001", "resolvedVersion": "v1" },
+        { "kind": "TABLE", "ref": "catalog.dataset.source", "layer": "ODS", "role": "JOINED", "sortOrder": 1, "sourceBindingId": "50000000-0000-0000-0000-000000000001", "resolvedVersion": "v1" }
       ]
     },
     "expectedIssueCodes": ["MODEL_SPEC_FIELD_INVALID", "MODEL_SPEC_SOURCE_INVALID"],
@@ -255,7 +255,15 @@
   {
     "name": "source-missing-sort-order",
     "overrides": {
-      "sourceRefs": [{ "kind": "TABLE", "ref": "catalog.dataset.source", "layer": "ODS", "role": "PRIMARY" }]
+      "sourceRefs": [{ "kind": "TABLE", "ref": "catalog.dataset.source", "layer": "ODS", "role": "PRIMARY", "sourceBindingId": "50000000-0000-0000-0000-000000000001", "resolvedVersion": "v1" }]
+    },
+    "expectedIssueCodes": ["MODEL_SPEC_SOURCE_INVALID"],
+    "schemaValid": false
+  },
+  {
+    "name": "source-missing-binding-and-resolved-version",
+    "overrides": {
+      "sourceRefs": [{ "kind": "TABLE", "ref": "catalog.dataset.source", "layer": "ODS", "role": "PRIMARY", "sortOrder": 0 }]
     },
     "expectedIssueCodes": ["MODEL_SPEC_SOURCE_INVALID"],
     "schemaValid": false
@@ -283,7 +291,7 @@
       "factShape": "EVENT",
       "timeSemantics": { "type": "CLOCK_TIME", "fields": ["event_time"] },
       "fields": [{ "name": "record_id", "dataType": "varchar", "nullable": false, "role": "IDENTIFIER" }],
-      "sourceRefs": [{ "kind": "FILE", "ref": "catalog.dataset.source", "layer": "RAW", "role": "LOOKUP", "joinType": "CROSS", "sortOrder": 0 }]
+      "sourceRefs": [{ "kind": "FILE", "ref": "catalog.dataset.source", "layer": "RAW", "role": "LOOKUP", "joinType": "CROSS", "sortOrder": 0, "sourceBindingId": "50000000-0000-0000-0000-000000000001", "resolvedVersion": "v1" }]
     },
     "expectedIssueCodes": [
       "MODEL_SPEC_TYPE_INVALID",
@@ -305,7 +313,7 @@
       "timeSemantics": ["event_time"],
       "generationStrategy": "generated",
       "fields": [{ "name": 7, "dataType": "varchar", "nullable": false, "role": "KEY" }],
-      "sourceRefs": [{ "kind": "TABLE", "ref": 9, "layer": "ODS", "role": "PRIMARY", "sortOrder": 0 }]
+      "sourceRefs": [{ "kind": "TABLE", "ref": 9, "layer": "ODS", "role": "PRIMARY", "sortOrder": 0, "sourceBindingId": "50000000-0000-0000-0000-000000000001", "resolvedVersion": "v1" }]
     },
     "expectedIssueCodes": [
       "MODEL_SPEC_NAME_INVALID",
@@ -345,7 +353,7 @@
         { "name": "record_id", "dataType": "varchar", "nullable": false, "sourceFieldRef": null, "role": "KEY", "securityLevel": null }
       ],
       "sourceRefs": [
-        { "kind": "TABLE", "ref": "catalog.dataset.source", "layer": "ODS", "role": "PRIMARY", "alias": null, "joinType": null, "joinExpression": null, "sortOrder": 0 }
+        { "kind": "TABLE", "ref": "catalog.dataset.source", "layer": "ODS", "role": "PRIMARY", "alias": null, "joinType": null, "joinExpression": null, "sortOrder": 0, "sourceBindingId": "50000000-0000-0000-0000-000000000001", "resolvedVersion": "v1" }
       ],
       "standardBindings": [
         {
@@ -412,7 +420,7 @@
       "name": "minimal_fact",
       "implementationMode": "DESIGNER_GENERATED",
       "grain": { "statement": "one row per event", "keys": ["record_id"] },
-      "sourceRefs": [{ "kind": "TABLE", "ref": "catalog.dataset.source", "layer": "ODS", "role": "PRIMARY", "sortOrder": 0 }],
+      "sourceRefs": [{ "kind": "TABLE", "ref": "catalog.dataset.source", "layer": "ODS", "role": "PRIMARY", "sortOrder": 0, "sourceBindingId": "50000000-0000-0000-0000-000000000001", "resolvedVersion": "v1" }],
       "idempotencyKey": "minimal-fact"
     },
     "expectedIssueCodes": [],

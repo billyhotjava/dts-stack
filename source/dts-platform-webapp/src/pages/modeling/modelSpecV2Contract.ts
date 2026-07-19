@@ -24,6 +24,29 @@ export const MODEL_SPEC_CREATE_FIELDS = [
 	"idempotencyKey",
 ] as const;
 
+export const MODEL_SPEC_UPDATE_FIELDS = [
+	"planId",
+	"domainId",
+	"modelType",
+	"layer",
+	"name",
+	"description",
+	"implementationMode",
+	"materialization",
+	"businessActivityRef",
+	"consumptionScenario",
+	"grain",
+	"factShape",
+	"timeSemantics",
+	"fields",
+	"sourceRefs",
+	"dependsOn",
+	"dimensionRefs",
+	"metricRefs",
+	"standardBindings",
+	"generationStrategy",
+] as const;
+
 export const MODEL_SPEC_REQUIRED_FIELD_CODES = {
 	planId: "MODEL_SPEC_PLAN_REQUIRED",
 	domainId: "MODEL_SPEC_DOMAIN_REQUIRED",
@@ -74,6 +97,12 @@ export type ModelSpecSourceRef = {
 	joinType?: ModelSpecJoinType | null;
 	joinExpression?: string | null;
 	sortOrder: number;
+	sourceBindingId: string;
+	resolvedVersion: string;
+};
+export type ModelSpecLegacySourceRef = Omit<ModelSpecSourceRef, "sourceBindingId" | "resolvedVersion"> & {
+	sourceBindingId: null;
+	resolvedVersion: null;
 };
 export type ModelSpecRevisionRef = { modelSpecId: string; revision: number };
 export type ModelSpecMetricRef = { metricId: string; version: number };
@@ -88,6 +117,19 @@ export type ModelSpecStandardBinding = {
 	securityLevel?: string | null;
 };
 export type ModelSpecGenerationStrategy = { type: string; reference?: string | null };
+export type ModelSpecLegacySource = { kind: string | null; ref: string | null; layer: string | null };
+export type ModelSpecLegacyStandard = {
+	fieldName: string | null;
+	standardElementId: string | null;
+	referenceCode: string | null;
+	securityLevel: string | null;
+};
+export type ModelSpecLegacyRefs = {
+	legacyModelRef: string | null;
+	unresolvedDependencyRefs: string[];
+	unresolvedSourceRefs: ModelSpecLegacySource[];
+	unresolvedStandardRefs: ModelSpecLegacyStandard[];
+};
 
 export type ModelSpecCollections = {
 	fields: ModelSpecField[];
@@ -116,17 +158,51 @@ export type CreateModelSpecCommand = {
 	idempotencyKey: string;
 } & Partial<ModelSpecCollections>;
 
-export type ModelSpecView = Omit<CreateModelSpecCommand, "idempotencyKey" | keyof ModelSpecCollections> &
+export type UpdateModelSpecCommand = Omit<CreateModelSpecCommand, "idempotencyKey">;
+
+type ModelSpecViewBase = Omit<
+	CreateModelSpecCommand,
+	"idempotencyKey" | "planId" | "domainId" | keyof ModelSpecCollections
+> & {
+	id: string;
+	status: ModelSpecStatus;
+	revision: number;
+	checksum: string;
+	createdAt: string;
+	updatedAt: string;
+};
+
+export type CanonicalModelSpecView = ModelSpecViewBase &
 	ModelSpecCollections & {
 		contractVersion: typeof MODEL_SPEC_CONTRACT_VERSION;
-		id: string;
-		status: ModelSpecStatus;
-		revision: number;
-		checksum: string;
-		createdAt: string;
-		updatedAt: string;
-		compatibilityMode: ModelSpecCompatibilityMode;
+		planId: string;
+		domainId: string;
+		compatibilityMode: "CANONICAL";
+		legacyRefs: null;
 	};
+
+export type LegacyModelSpecView = ModelSpecViewBase &
+	Omit<ModelSpecCollections, "sourceRefs"> & {
+		contractVersion: 1;
+		planId: string | null;
+		domainId: string | null;
+		sourceRefs: ModelSpecLegacySourceRef[];
+		compatibilityMode: "LEGACY_READONLY";
+		legacyRefs: ModelSpecLegacyRefs;
+	};
+
+export type ModelSpecView = CanonicalModelSpecView | LegacyModelSpecView;
+
+export type ModelSpecCasToken = Pick<CanonicalModelSpecView, "id" | "revision" | "checksum">;
+
+export type ModelSpecRevisionConflictDetails = {
+	currentRevision: number;
+	currentChecksum: string;
+	currentEtag: string;
+};
+
+export const toModelSpecEtag = ({ id, revision, checksum }: ModelSpecCasToken) =>
+	`"model-spec:${id}:${revision}:${checksum}"`;
 
 export type ModelSpecFieldIssue = {
 	code: string;
@@ -147,7 +223,18 @@ const MODEL_SPEC_NESTED_COLLECTION_FIELDS: Record<
 	ReadonlySet<string>
 > = {
 	fields: new Set(["name", "dataType", "nullable", "sourceFieldRef", "role", "securityLevel"]),
-	sourceRefs: new Set(["kind", "ref", "layer", "role", "alias", "joinType", "joinExpression", "sortOrder"]),
+	sourceRefs: new Set([
+		"kind",
+		"ref",
+		"layer",
+		"role",
+		"alias",
+		"joinType",
+		"joinExpression",
+		"sortOrder",
+		"sourceBindingId",
+		"resolvedVersion",
+	]),
 	dependsOn: new Set(["modelSpecId", "revision"]),
 	dimensionRefs: new Set(["modelSpecId", "revision"]),
 	metricRefs: new Set(["metricId", "version"]),
@@ -338,7 +425,9 @@ const rawModelSpecIssues = (raw: Record<string, unknown>): ModelSpecFieldIssue[]
 			(item.joinType != null && !MODEL_SPEC_JOIN_TYPES.has(item.joinType as ModelSpecJoinType)) ||
 			!isNullableString(item.alias) ||
 			!isNullableString(item.joinExpression) ||
-			!isIntInRange(item.sortOrder, 0),
+			!isIntInRange(item.sortOrder, 0) ||
+			!isUuid(item.sourceBindingId) ||
+			!isNonBlankString(item.resolvedVersion),
 	);
 	const invalidRevisionRef = (item: Record<string, unknown>) =>
 		!isUuid(item.modelSpecId) || !isIntInRange(item.revision, 1);
@@ -435,6 +524,8 @@ export const validateModelSpecCreate = (input: unknown): ModelSpecFieldIssue[] =
 			!source.layer ||
 			!source.role ||
 			!isIntInRange(source.sortOrder, 0) ||
+			!isUuid(source.sourceBindingId) ||
+			!isNonBlankString(source.resolvedVersion) ||
 			sourceKeys.has(key) ||
 			!sourceKeys.add(key)
 		);
@@ -533,4 +624,22 @@ export const validateModelSpecCreate = (input: unknown): ModelSpecFieldIssue[] =
 			break;
 	}
 	return issues;
+};
+
+export const validateModelSpecUpdate = (input: unknown): ModelSpecFieldIssue[] => {
+	if (!isRecord(input)) {
+		return [issue("MODEL_SPEC_REQUEST_INVALID", "$", "ModelSpec update request is required")];
+	}
+	const allowed = new Set<string>(MODEL_SPEC_UPDATE_FIELDS);
+	const fieldIssues = Object.keys(input)
+		.filter((field) => !allowed.has(field))
+		.sort()
+		.map((field) =>
+			issue("MODEL_SPEC_FIELD_NOT_ALLOWED", field, "Field is not part of the canonical ModelSpec update contract"),
+		);
+	const createShape: Record<string, unknown> = { idempotencyKey: "__model_spec_update__" };
+	for (const field of MODEL_SPEC_UPDATE_FIELDS) {
+		if (Object.hasOwn(input, field)) createShape[field] = input[field];
+	}
+	return [...fieldIssues, ...validateModelSpecCreate(createShape)];
 };

@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.web.rest;
 
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.ConfirmationStatus.CONFIRMED;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.EditUnit.BUSINESS_SCOPE;
+import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.EditUnit.CATEGORY_SCOPE;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.LifecycleStatus.ARCHIVED;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.LifecycleStatus.DRAFT;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.OnboardingMode.BUSINESS_FIRST;
@@ -25,14 +26,31 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicatio
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService.WarehousePlanException;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider.WarehousePlanActor;
+import com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolutionPort;
+import com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.AccessContext;
+import com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.ResolutionStatus;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.BusinessScope;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CategoryBindingView;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CategoryReadiness;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CategoryScopeCommand;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CategoryScopeView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.DomainBinding;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CreateWarehousePlanResult;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningBaseline;
-import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicy;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicyCommand;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicyReadiness;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicyView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.ProcessBinding;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBinding;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBindingCommand;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBindingView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBusinessMapping;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceFreshness;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceInventoryCommand;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceInventoryReadiness;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceInventoryView;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceLocator;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.Versioned;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.WarehousePlanHeader;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanStageProjectionService;
@@ -289,15 +307,57 @@ class WarehousePlanResourceTest {
     @Test
     void savesAllBaselineEditUnitsWithIndependentEtagsAndConfirmsTheBaseline() throws Exception {
         BusinessScope scope = scope();
-        List<SourceBinding> sources = sources();
+        SourceLocator sourceLocator = new SourceLocator(SOURCE_ID, null, null, null, null, null, null);
+        SourceInventoryCommand sourceCommand = new SourceInventoryCommand(
+            List.of(new SourceBindingCommand(null, CATALOG_TABLE, sourceLocator, CONFIRMED, null))
+        );
+        SourceInventoryView sourceInventory = new SourceInventoryView(
+            List.of(
+                new SourceBindingView(
+                    SOURCE_ID,
+                    CATALOG_TABLE,
+                    sourceLocator,
+                    SOURCE_ID.toString(),
+                    CONFIRMED,
+                    null,
+                    "Orders",
+                    "schema-v1",
+                    "schema-v1",
+                    ResolutionStatus.AVAILABLE,
+                    SourceFreshness.CURRENT,
+                    Instant.parse("2026-07-19T00:00:00Z")
+                )
+            ),
+            SourceInventoryReadiness.READY,
+            List.of(),
+            2,
+            "\"sources:2\"",
+            Instant.parse("2026-07-19T00:00:00Z")
+        );
         List<SourceBusinessMapping> mappings = mappings();
-        PlanningPolicy policy = policy();
+        PlanningPolicyCommand policy = policyCommand();
+        PlanningPolicyView policyView = implementationReadyPolicyView();
         PlanningBaseline ready = new PlanningBaseline(true, List.of());
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("owner-1", "department-1"));
         when(service.saveBusinessScope("server-tenant", PLAN_ID, 1, scope)).thenReturn(new Versioned<>(scope, 2));
-        when(service.saveSources("server-tenant", PLAN_ID, 1, sources)).thenReturn(new Versioned<>(sources, 2));
+        when(
+            service.saveSources(
+                "server-tenant",
+                PLAN_ID,
+                1,
+                sourceCommand,
+                new AccessContext("server-tenant", "owner-1", "department-1")
+            )
+        ).thenReturn(sourceInventory);
         when(service.saveSourceMappings("server-tenant", PLAN_ID, 1, mappings)).thenReturn(new Versioned<>(mappings, 2));
-        when(service.savePolicy("server-tenant", PLAN_ID, 1, policy)).thenReturn(new Versioned<>(policy, 2));
-        when(service.getBaseline("server-tenant", PLAN_ID)).thenReturn(ready);
+        when(service.savePlanningPolicy("server-tenant", PLAN_ID, 1, policy)).thenReturn(new Versioned<>(policyView, 2));
+        when(
+            service.getBaseline(
+                "server-tenant",
+                PLAN_ID,
+                new AccessContext("server-tenant", "owner-1", "department-1")
+            )
+        ).thenReturn(ready);
         when(service.confirmBaseline("server-tenant", PLAN_ID, 1)).thenReturn(ready);
 
         mockMvc
@@ -324,13 +384,16 @@ class WarehousePlanResourceTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
                         """
-                        [{"id":"30000000-0000-0000-0000-000000000001","sourceType":"CATALOG_TABLE",
-                          "sourceId":"asset-1","sourceVersion":"schema-v1","confirmationStatus":"CONFIRMED"}]
+                        {"bindings":[{"sourceType":"CATALOG_TABLE",
+                          "locator":{"assetId":"30000000-0000-0000-0000-000000000001"},
+                          "confirmationStatus":"CONFIRMED"}]}
                         """
                     )
             )
             .andExpect(status().isOk())
-            .andExpect(header().string("ETag", "\"sources:2\""));
+            .andExpect(header().string("ETag", "\"sources:2\""))
+            .andExpect(jsonPath("$.data.readiness").value("READY"))
+            .andExpect(jsonPath("$.data.bindings[0].resolvedVersion").value("schema-v1"));
 
         mockMvc
             .perform(
@@ -356,13 +419,15 @@ class WarehousePlanResourceTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
                         """
-                        {"layerPolicyCode":"CLASSIC_ODS_DWD_DWS_ADS","namingPolicyRef":"naming-1",
+                        {"layerScheme":"CLASSIC_ODS_DWD_DWS_ADS","namingPolicy":"CLASSIC_LOWER_SNAKE",
                          "historyPolicy":"PRESERVE_BUSINESS_HISTORY","defaultTimeZone":"Asia/Shanghai"}
                         """
                     )
             )
             .andExpect(status().isOk())
-            .andExpect(header().string("ETag", "\"policy:2\""));
+            .andExpect(header().string("ETag", "\"policy:2\""))
+            .andExpect(jsonPath("$.data.version").value(2))
+            .andExpect(jsonPath("$.data.value.readiness").value("IMPLEMENTATION_READY"));
 
         mockMvc
             .perform(get("/api/modeling/warehouse-plans/{id}/baseline", PLAN_ID))
@@ -419,6 +484,113 @@ class WarehousePlanResourceTest {
             .andExpect(status().isConflict())
             .andExpect(header().string("ETag", "\"business-scope:3\""))
             .andExpect(jsonPath("$.code").value("WAREHOUSE_PLAN_EDIT_UNIT_VERSION_CONFLICT"));
+    }
+
+    @Test
+    void getsAndSavesCanonicalCategoriesWithBodyVersionAndCategoryEtag() throws Exception {
+        CategoryScopeView view = readyCategoryScope();
+        CategoryScopeCommand command = new CategoryScopeCommand(List.of(new DomainBinding(DOMAIN_ID, CONFIRMED)));
+        when(service.getCategoryScope("server-tenant", PLAN_ID)).thenReturn(new Versioned<>(view, 4));
+        when(service.saveCategoryScope("server-tenant", PLAN_ID, 4, command)).thenReturn(new Versioned<>(view, 5));
+
+        mockMvc
+            .perform(get("/api/modeling/warehouse-plans/{id}/baseline/categories", PLAN_ID))
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag", "\"category-scope:4\""))
+            .andExpect(jsonPath("$.data.version").value(4))
+            .andExpect(jsonPath("$.data.value.readiness").value("READY"))
+            .andExpect(jsonPath("$.data.value.domainBindings[0].resolutionStatus").value("AVAILABLE"));
+
+        mockMvc
+            .perform(
+                put("/api/modeling/warehouse-plans/{id}/baseline/categories", PLAN_ID)
+                    .header("If-Match", "\"category-scope:4\"")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"domainBindings":[{"domainId":"20000000-0000-0000-0000-000000000001",
+                          "confirmationStatus":"CONFIRMED"}]}
+                        """
+                    )
+            )
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag", "\"category-scope:5\""))
+            .andExpect(jsonPath("$.data.version").value(5))
+            .andExpect(jsonPath("$.data.value.domainBindings[0].name").value("Projects"));
+    }
+
+    @Test
+    void getsCanonicalPolicyAndReturnsItsVersionInTheBody() throws Exception {
+        PlanningPolicyView view = implementationReadyPolicyView();
+        when(service.getPlanningPolicy("server-tenant", PLAN_ID)).thenReturn(new Versioned<>(view, 3));
+
+        mockMvc
+            .perform(get("/api/modeling/warehouse-plans/{id}/baseline/policy", PLAN_ID))
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag", "\"policy:3\""))
+            .andExpect(jsonPath("$.data.version").value(3))
+            .andExpect(jsonPath("$.data.value.layerScheme").value("CLASSIC_ODS_DWD_DWS_ADS"))
+            .andExpect(jsonPath("$.data.value.readiness").value("IMPLEMENTATION_READY"));
+    }
+
+    @Test
+    void categoryWriteRequiresIfMatchAndReturnsStructuredConflictWithoutLosingTheDraftVersion() throws Exception {
+        CategoryScopeCommand command = new CategoryScopeCommand(List.of(new DomainBinding(DOMAIN_ID, CONFIRMED)));
+        when(service.saveCategoryScope("server-tenant", PLAN_ID, 1, command)).thenThrow(
+            new WarehousePlanException("WAREHOUSE_PLAN_EDIT_UNIT_VERSION_CONFLICT", "changed", 6, CATEGORY_SCOPE)
+        );
+
+        String payload =
+            "{\"domainBindings\":[{\"domainId\":\"20000000-0000-0000-0000-000000000001\",\"confirmationStatus\":\"CONFIRMED\"}]}";
+        mockMvc
+            .perform(
+                put("/api/modeling/warehouse-plans/{id}/baseline/categories", PLAN_ID)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(payload)
+            )
+            .andExpect(status().isPreconditionRequired())
+            .andExpect(jsonPath("$.code").value("WAREHOUSE_PLAN_IF_MATCH_REQUIRED"));
+
+        mockMvc
+            .perform(
+                put("/api/modeling/warehouse-plans/{id}/baseline/categories", PLAN_ID)
+                    .header("If-Match", "\"category-scope:1\"")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(payload)
+            )
+            .andExpect(status().isConflict())
+            .andExpect(header().string("ETag", "\"category-scope:6\""))
+            .andExpect(jsonPath("$.data.editUnit").value("CATEGORY_SCOPE"))
+            .andExpect(jsonPath("$.data.currentVersion").value(6));
+    }
+
+    @Test
+    void categoryForbiddenIsAStable403AndCanonicalPayloadRejectsLegacyFields() throws Exception {
+        CategoryScopeCommand command = new CategoryScopeCommand(List.of(new DomainBinding(DOMAIN_ID, CONFIRMED)));
+        when(service.saveCategoryScope("server-tenant", PLAN_ID, 1, command)).thenThrow(
+            new WarehousePlanException("WAREHOUSE_PLAN_CATEGORY_FORBIDDEN", "forbidden", null, CATEGORY_SCOPE)
+        );
+
+        mockMvc
+            .perform(
+                put("/api/modeling/warehouse-plans/{id}/baseline/categories", PLAN_ID)
+                    .header("If-Match", "\"category-scope:1\"")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        "{\"domainBindings\":[{\"domainId\":\"20000000-0000-0000-0000-000000000001\",\"confirmationStatus\":\"CONFIRMED\"}]}"
+                    )
+            )
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("WAREHOUSE_PLAN_CATEGORY_FORBIDDEN"));
+
+        mockMvc
+            .perform(
+                put("/api/modeling/warehouse-plans/{id}/baseline/categories", PLAN_ID)
+                    .header("If-Match", "\"category-scope:1\"")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"domainBindings\":[],\"processBindings\":[]}")
+            )
+            .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -501,7 +673,42 @@ class WarehousePlanResourceTest {
         );
     }
 
-    private static PlanningPolicy policy() {
-        return new PlanningPolicy("CLASSIC_ODS_DWD_DWS_ADS", "naming-1", "PRESERVE_BUSINESS_HISTORY", "Asia/Shanghai");
+    private static PlanningPolicyCommand policyCommand() {
+        return new PlanningPolicyCommand(
+            "CLASSIC_ODS_DWD_DWS_ADS",
+            "CLASSIC_LOWER_SNAKE",
+            "PRESERVE_BUSINESS_HISTORY",
+            "Asia/Shanghai"
+        );
+    }
+
+    private static PlanningPolicyView implementationReadyPolicyView() {
+        return new PlanningPolicyView(
+            WarehousePlanContract.LayerScheme.CLASSIC_ODS_DWD_DWS_ADS,
+            WarehousePlanContract.NamingPolicy.CLASSIC_LOWER_SNAKE,
+            WarehousePlanContract.HistoryPolicy.PRESERVE_BUSINESS_HISTORY,
+            "Asia/Shanghai",
+            PlanningPolicyReadiness.IMPLEMENTATION_READY,
+            List.of()
+        );
+    }
+
+    private static CategoryScopeView readyCategoryScope() {
+        Instant validatedAt = Instant.parse("2026-07-19T00:00:00Z");
+        return new CategoryScopeView(
+            List.of(
+                new CategoryBindingView(
+                    DOMAIN_ID,
+                    CONFIRMED,
+                    CatalogDomainResolutionPort.ResolutionStatus.AVAILABLE,
+                    "Projects",
+                    "PROJECT",
+                    validatedAt
+                )
+            ),
+            CategoryReadiness.READY,
+            List.of(),
+            validatedAt
+        );
     }
 }

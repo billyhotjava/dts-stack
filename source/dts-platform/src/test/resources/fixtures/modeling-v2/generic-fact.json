@@ -45,7 +45,9 @@
       "alias": null,
       "joinType": null,
       "joinExpression": null,
-      "sortOrder": 0
+      "sortOrder": 0,
+      "sourceBindingId": "50000000-0000-0000-0000-000000000001",
+      "resolvedVersion": "v1"
     }
   ],
   "dependsOn": [],

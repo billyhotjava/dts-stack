@@ -177,7 +177,18 @@ class ModelSpecContractTest {
             base.timeSemantics(),
             base.fields(),
             List.of(
-                new SourceRef(SourceKind.TABLE, "catalog.dataset.source", Layer.ODS, SourceRole.PRIMARY, null, null, null, -1)
+                new SourceRef(
+                    SourceKind.TABLE,
+                    "catalog.dataset.source",
+                    Layer.ODS,
+                    SourceRole.PRIMARY,
+                    null,
+                    null,
+                    null,
+                    -1,
+                    UUID.fromString("50000000-0000-0000-0000-000000000001"),
+                    "v1"
+                )
             ),
             List.of(new ModelSpecContract.ModelRevisionRef(null, 0)),
             List.of(new ModelSpecContract.ModelRevisionRef(null, -1)),
@@ -204,7 +215,18 @@ class ModelSpecContractTest {
             new ModelField("event_time", "timestamp", false, "source.event_time", FieldRole.TIME, null)
         );
         List<SourceRef> sources = List.of(
-            new SourceRef(SourceKind.TABLE, "catalog.dataset.source", Layer.ODS, SourceRole.PRIMARY, null, null, null, 0)
+            new SourceRef(
+                SourceKind.TABLE,
+                "catalog.dataset.source",
+                Layer.ODS,
+                SourceRole.PRIMARY,
+                null,
+                null,
+                null,
+                0,
+                UUID.fromString("50000000-0000-0000-0000-000000000001"),
+                "v1"
+            )
         );
         List<ModelSpecContract.ModelRevisionRef> dependencies = type == ModelType.SUMMARY || type == ModelType.APPLICATION
             ? List.of(new ModelSpecContract.ModelRevisionRef(UUID.fromString("30000000-0000-0000-0000-000000000001"), 1))

@@ -6,15 +6,26 @@ import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanCon
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.LifecycleStatus.PUBLISHED;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.OnboardingMode.BUSINESS_FIRST;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceType.CATALOG_TABLE;
+import static com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolutionPort.ResolutionStatus.ARCHIVED;
+import static com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolutionPort.ResolutionStatus.AVAILABLE;
+import static com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolutionPort.ResolutionStatus.FORBIDDEN;
+import static com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolutionPort.ResolutionStatus.MISSING;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.BusinessScope;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CategoryBindingView;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CategoryReadiness;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CategoryScopeView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CreateWarehousePlanCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.DomainBinding;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.DomainIssue;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.InitialSourceRef;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.MetricRequirement;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicy;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicyCommand;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicyReadiness;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicyView;
+import java.time.Instant;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.ProcessBinding;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBinding;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBusinessMapping;
@@ -176,20 +187,21 @@ class WarehousePlanContractTest {
 
     @Test
     void returnsStableMissingCodesWithoutTreatingCandidatesAsConfirmed() {
-        assertThat(WarehousePlanContract.evaluateBaseline(null, List.of(), List.of(), null).missingCodes())
+        assertThat(
+            WarehousePlanContract.evaluateBaseline((BusinessScope) null, List.of(), List.of(), (PlanningPolicy) null).missingCodes()
+        )
             .containsExactly(
                 "CATEGORY_SCOPE_INCOMPLETE",
                 "SOURCE_INVENTORY_INCOMPLETE",
-                "SOURCE_BUSINESS_MAPPING_INCOMPLETE",
                 "PLANNING_POLICY_INCOMPLETE"
             );
 
         assertThat(WarehousePlanContract.evaluateBaseline(readyScopeWithoutProcesses(), readySources(), List.of(), readyPolicy()).ready())
-            .isFalse();
+            .isTrue();
         assertThat(
             WarehousePlanContract.evaluateBaseline(readyScopeWithoutProcesses(), readySources(), List.of(), readyPolicy()).missingCodes()
         )
-            .containsExactly("SOURCE_BUSINESS_MAPPING_INCOMPLETE");
+            .isEmpty();
     }
 
     @Test
@@ -216,7 +228,7 @@ class WarehousePlanContractTest {
     }
 
     @Test
-    void rejectsSourceMappingOutsideConfirmedCategory() {
+    void ignoresLegacySourceMappingWhenEvaluatingCanonicalBaseline() {
         SourceBusinessMapping wrongDomainMapping = new SourceBusinessMapping(
             UUID.randomUUID(),
             SOURCE_ID,
@@ -234,7 +246,103 @@ class WarehousePlanContractTest {
                 readyPolicy()
             ).missingCodes()
         )
-            .containsExactly("SOURCE_BUSINESS_MAPPING_INCOMPLETE");
+            .isEmpty();
+    }
+
+    @Test
+    void evaluatesCategoryDraftReadyAndBlockedFromLiveCatalogFactsOnly() {
+        Instant validatedAt = Instant.parse("2026-07-19T00:00:00Z");
+        CategoryScopeView draft = WarehousePlanContract.evaluateCategoryScope(
+            List.of(category(DOMAIN_ID, WarehousePlanContract.ConfirmationStatus.CANDIDATE, AVAILABLE, "Projects", "PROJECT")),
+            validatedAt
+        );
+        CategoryScopeView ready = WarehousePlanContract.evaluateCategoryScope(
+            List.of(category(DOMAIN_ID, CONFIRMED, AVAILABLE, "Projects", "PROJECT")),
+            validatedAt
+        );
+
+        assertThat(draft.readiness()).isEqualTo(CategoryReadiness.DRAFT);
+        assertThat(draft.issues()).extracting(DomainIssue::code).containsExactly("CATEGORY_CONFIRMATION_REQUIRED");
+        assertThat(ready.readiness()).isEqualTo(CategoryReadiness.READY);
+        assertThat(ready.issues()).isEmpty();
+        assertThat(ready.lastValidatedAt()).isEqualTo(validatedAt);
+
+        for (var status : List.of(MISSING, ARCHIVED, FORBIDDEN)) {
+            CategoryScopeView blocked = WarehousePlanContract.evaluateCategoryScope(
+                List.of(category(DOMAIN_ID, CONFIRMED, status, null, null)),
+                validatedAt
+            );
+            assertThat(blocked.readiness()).isEqualTo(CategoryReadiness.BLOCKED);
+            assertThat(blocked.issues()).hasSize(1);
+        }
+    }
+
+    @Test
+    void ignoresExcludedCategoriesButRequiresOneConfirmedAvailableCategory() {
+        Instant validatedAt = Instant.parse("2026-07-19T00:00:00Z");
+        CategoryScopeView onlyExcluded = WarehousePlanContract.evaluateCategoryScope(
+            List.of(category(DOMAIN_ID, WarehousePlanContract.ConfirmationStatus.EXCLUDED, MISSING, null, null)),
+            validatedAt
+        );
+        CategoryScopeView readyWithExcluded = WarehousePlanContract.evaluateCategoryScope(
+            List.of(
+                category(DOMAIN_ID, CONFIRMED, AVAILABLE, "Projects", "PROJECT"),
+                category(UUID.randomUUID(), WarehousePlanContract.ConfirmationStatus.EXCLUDED, FORBIDDEN, null, null)
+            ),
+            validatedAt
+        );
+
+        assertThat(onlyExcluded.readiness()).isEqualTo(CategoryReadiness.DRAFT);
+        assertThat(onlyExcluded.issues()).extracting(DomainIssue::code).containsExactly("CATEGORY_SCOPE_REQUIRED");
+        assertThat(readyWithExcluded.readiness()).isEqualTo(CategoryReadiness.READY);
+        assertThat(readyWithExcluded.issues()).isEmpty();
+    }
+
+    @Test
+    void evaluatesPlanningPolicyAtModelDesignAndImplementationBoundaries() {
+        PlanningPolicyView draft = WarehousePlanContract.evaluatePlanningPolicy(
+            new PlanningPolicyCommand(null, null, null, null)
+        );
+        PlanningPolicyView modelReady = WarehousePlanContract.evaluatePlanningPolicy(
+            new PlanningPolicyCommand("CLASSIC_ODS_DWD_DWS_ADS", null, null, null)
+        );
+        PlanningPolicyView implementationReady = WarehousePlanContract.evaluatePlanningPolicy(
+            new PlanningPolicyCommand(
+                "CLASSIC_ODS_DWD_DWS_ADS",
+                "CLASSIC_LOWER_SNAKE",
+                "PRESERVE_BUSINESS_HISTORY",
+                "Asia/Shanghai"
+            )
+        );
+
+        assertThat(draft.readiness()).isEqualTo(PlanningPolicyReadiness.DRAFT);
+        assertThat(modelReady.readiness()).isEqualTo(PlanningPolicyReadiness.MODEL_DESIGN_READY);
+        assertThat(modelReady.issues())
+            .extracting(DomainIssue::code)
+            .containsExactly("NAMING_POLICY_REQUIRED", "HISTORY_POLICY_REQUIRED");
+        assertThat(implementationReady.readiness()).isEqualTo(PlanningPolicyReadiness.IMPLEMENTATION_READY);
+        assertThat(implementationReady.issues()).isEmpty();
+    }
+
+    @Test
+    void rejectsUnsupportedPolicyEnumsAndInvalidNonBlankZoneIdWithoutInventingADefault() {
+        PlanningPolicyView invalid = WarehousePlanContract.evaluatePlanningPolicy(
+            new PlanningPolicyCommand("LAKEHOUSE", "CAMEL_CASE", "OVERWRITE_ALL", "UTC+8")
+        );
+
+        assertThat(invalid.readiness()).isEqualTo(PlanningPolicyReadiness.DRAFT);
+        assertThat(invalid.defaultTimeZone()).isEqualTo("UTC+8");
+        assertThat(invalid.issues())
+            .extracting(DomainIssue::code)
+            .containsExactly(
+                "LAYER_SCHEME_UNSUPPORTED",
+                "NAMING_POLICY_UNSUPPORTED",
+                "HISTORY_POLICY_UNSUPPORTED",
+                "DEFAULT_TIME_ZONE_INVALID"
+            );
+        assertThat(WarehousePlanContract.evaluatePlanningPolicy(
+            new PlanningPolicyCommand("CLASSIC_ODS_DWD_DWS_ADS", "CLASSIC_UPPER_SNAKE", "LATEST_STATE_ONLY", null)
+        ).readiness()).isEqualTo(PlanningPolicyReadiness.IMPLEMENTATION_READY);
     }
 
     @Test
@@ -271,5 +379,15 @@ class WarehousePlanContractTest {
 
     private static PlanningPolicy readyPolicy() {
         return new PlanningPolicy("CLASSIC_ODS_DWD_DWS_ADS", "naming-policy-1", "PRESERVE_BUSINESS_HISTORY", "Asia/Shanghai");
+    }
+
+    private static CategoryBindingView category(
+        UUID domainId,
+        WarehousePlanContract.ConfirmationStatus confirmationStatus,
+        CatalogDomainResolutionPort.ResolutionStatus resolutionStatus,
+        String name,
+        String code
+    ) {
+        return new CategoryBindingView(domainId, confirmationStatus, resolutionStatus, name, code, null);
     }
 }

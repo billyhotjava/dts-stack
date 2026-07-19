@@ -2,7 +2,12 @@ package com.yuzhi.dts.platform.service.modeling.warehouse;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.BusinessScope;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CategoryBindingView;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CategoryScopeCommand;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CategoryScopeView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.ConfirmationStatus;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CreateWarehousePlanResult;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CreateWarehousePlanCommand;
@@ -15,24 +20,38 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.I
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.OnboardingMode;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningBaseline;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicy;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicyCommand;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicyView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.ProcessBinding;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBinding;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBindingCommand;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBindingView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBusinessMapping;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceFreshness;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceInventoryCommand;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceInventoryView;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceLocator;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceType;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.Versioned;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.WarehousePlanHeader;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.time.Instant;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,10 +67,22 @@ public class WarehousePlanApplicationService {
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
+    private final CatalogDomainResolutionPort catalogDomainResolutionPort;
+    private final SourceReferenceResolver sourceReferenceResolver;
+    private final AuditService auditService;
 
-    public WarehousePlanApplicationService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+    public WarehousePlanApplicationService(
+        JdbcTemplate jdbcTemplate,
+        ObjectMapper objectMapper,
+        CatalogDomainResolutionPort catalogDomainResolutionPort,
+        SourceReferenceResolver sourceReferenceResolver,
+        AuditService auditService
+    ) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
+        this.catalogDomainResolutionPort = catalogDomainResolutionPort;
+        this.sourceReferenceResolver = sourceReferenceResolver;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -220,6 +251,169 @@ public class WarehousePlanApplicationService {
         return get(serverTenantId, planId);
     }
 
+    @Transactional(readOnly = true)
+    public Versioned<CategoryScopeView> getCategoryScope(String serverTenantId, UUID planId) {
+        requireServerTenant(serverTenantId);
+        get(serverTenantId, planId);
+        int version = readEditUnitVersion(serverTenantId, planId, EditUnit.CATEGORY_SCOPE);
+        return new Versioned<>(resolveCategoryScope(loadDomainBindings(serverTenantId, planId)), version);
+    }
+
+    @Transactional
+    public Versioned<CategoryScopeView> saveCategoryScope(
+        String serverTenantId,
+        UUID planId,
+        int expectedVersion,
+        CategoryScopeCommand command
+    ) {
+        requireServerTenant(serverTenantId);
+        get(serverTenantId, planId);
+        List<DomainBinding> bindings = validateCategoryScope(command);
+        CategoryScopeView validated = resolveCategoryScope(bindings);
+        if (
+            validated
+                .domainBindings()
+                .stream()
+                .anyMatch(binding ->
+                    binding.confirmationStatus() != ConfirmationStatus.EXCLUDED &&
+                    binding.resolutionStatus() == CatalogDomainResolutionPort.ResolutionStatus.FORBIDDEN
+                )
+        ) {
+            throw new WarehousePlanException(
+                "WAREHOUSE_PLAN_CATEGORY_FORBIDDEN",
+                "A requested business category is not accessible",
+                null,
+                EditUnit.CATEGORY_SCOPE
+            );
+        }
+        if (
+            validated
+                .domainBindings()
+                .stream()
+                .anyMatch(binding ->
+                    binding.confirmationStatus() != ConfirmationStatus.EXCLUDED &&
+                    (binding.resolutionStatus() == CatalogDomainResolutionPort.ResolutionStatus.MISSING ||
+                        binding.resolutionStatus() == CatalogDomainResolutionPort.ResolutionStatus.ARCHIVED)
+                )
+        ) {
+            throw new WarehousePlanException(
+                "WAREHOUSE_PLAN_CATEGORY_INVALID",
+                "A requested business category is missing or archived",
+                null,
+                EditUnit.CATEGORY_SCOPE
+            );
+        }
+
+        casEditUnit(serverTenantId, planId, expectedVersion, EditUnit.CATEGORY_SCOPE);
+        jdbcTemplate.update(
+            "delete from modeling_warehouse_plan_domain where tenant_id = ? and plan_id = ?",
+            serverTenantId,
+            planId
+        );
+        for (DomainBinding binding : bindings) {
+            jdbcTemplate.update(
+                """
+                insert into modeling_warehouse_plan_domain
+                    (id, tenant_id, plan_id, domain_id, confirmation_status, last_validated_at,
+                     created_date, last_modified_date)
+                values (?, ?, ?, ?, ?, ?, current_timestamp, current_timestamp)
+                """,
+                UUID.randomUUID(),
+                serverTenantId,
+                planId,
+                binding.domainId(),
+                binding.confirmationStatus().name(),
+                Timestamp.from(validated.lastValidatedAt())
+            );
+        }
+        auditService.auditAction(
+            "MODELING_WAREHOUSE_CATEGORY_SCOPE_SAVE",
+            AuditStage.SUCCESS,
+            planId.toString(),
+            Map.of(
+                "version",
+                expectedVersion + 1,
+                "bindingCount",
+                bindings.size(),
+                "readiness",
+                validated.readiness().name(),
+                "lastValidatedAt",
+                validated.lastValidatedAt().toString()
+            )
+        );
+        return new Versioned<>(validated, expectedVersion + 1);
+    }
+
+    @Transactional(readOnly = true)
+    public Versioned<PlanningPolicyView> getPlanningPolicy(String serverTenantId, UUID planId) {
+        requireServerTenant(serverTenantId);
+        get(serverTenantId, planId);
+        int version = readEditUnitVersion(serverTenantId, planId, EditUnit.POLICY);
+        return new Versioned<>(WarehousePlanContract.evaluatePlanningPolicy(loadPlanningPolicyCommand(serverTenantId, planId)), version);
+    }
+
+    @Transactional
+    public Versioned<PlanningPolicyView> savePlanningPolicy(
+        String serverTenantId,
+        UUID planId,
+        int expectedVersion,
+        PlanningPolicyCommand command
+    ) {
+        requireServerTenant(serverTenantId);
+        get(serverTenantId, planId);
+        PlanningPolicyView view = WarehousePlanContract.evaluatePlanningPolicy(command);
+        if (WarehousePlanContract.hasInvalidPolicyValues(view)) {
+            throw new WarehousePlanException(
+                "WAREHOUSE_PLAN_POLICY_INVALID",
+                view.issues().stream().map(DomainIssue::code).collect(java.util.stream.Collectors.joining(",")),
+                null,
+                EditUnit.POLICY
+            );
+        }
+
+        casEditUnit(serverTenantId, planId, expectedVersion, EditUnit.POLICY);
+        int updated = jdbcTemplate.update(
+            """
+            update modeling_warehouse_plan_policy
+               set layer_policy_code = ?, naming_policy_ref = ?, history_policy = ?, default_time_zone = ?,
+                   conceptual_design_allowed = ?,
+                   last_modified_date = current_timestamp
+             where tenant_id = ? and plan_id = ?
+            """,
+            enumName(view.layerScheme()),
+            enumName(view.namingPolicy()),
+            enumName(view.historyPolicy()),
+            view.defaultTimeZone(),
+            view.conceptualDesignAllowed(),
+            serverTenantId,
+            planId
+        );
+        if (updated == 0) {
+            jdbcTemplate.update(
+                """
+                insert into modeling_warehouse_plan_policy
+                    (plan_id, tenant_id, layer_policy_code, naming_policy_ref, history_policy, default_time_zone,
+                     conceptual_design_allowed, created_date, last_modified_date)
+                values (?, ?, ?, ?, ?, ?, ?, current_timestamp, current_timestamp)
+                """,
+                planId,
+                serverTenantId,
+                enumName(view.layerScheme()),
+                enumName(view.namingPolicy()),
+                enumName(view.historyPolicy()),
+                view.defaultTimeZone(),
+                view.conceptualDesignAllowed()
+            );
+        }
+        auditService.auditAction(
+            "MODELING_WAREHOUSE_POLICY_SAVE",
+            AuditStage.SUCCESS,
+            planId.toString(),
+            Map.of("version", expectedVersion + 1, "readiness", view.readiness().name())
+        );
+        return new Versioned<>(view, expectedVersion + 1);
+    }
+
     @Transactional
     public Versioned<BusinessScope> saveBusinessScope(
         String serverTenantId,
@@ -305,6 +499,176 @@ public class WarehousePlanApplicationService {
         return new Versioned<>(value, expectedVersion + 1);
     }
 
+    @Transactional(readOnly = true)
+    public SourceInventoryView getSources(
+        String serverTenantId,
+        UUID planId,
+        SourceReferenceResolver.AccessContext accessContext
+    ) {
+        requireServerTenant(serverTenantId);
+        WarehousePlanHeader plan = get(serverTenantId, planId);
+        int version = readEditUnitVersion(serverTenantId, planId, EditUnit.SOURCES);
+        return resolveSourceInventory(
+            serverTenantId,
+            plan,
+            loadSourceRows(serverTenantId, planId),
+            version,
+            accessContext
+        );
+    }
+
+    @Transactional
+    public SourceInventoryView saveSources(
+        String serverTenantId,
+        UUID planId,
+        int expectedVersion,
+        SourceInventoryCommand command,
+        SourceReferenceResolver.AccessContext accessContext
+    ) {
+        requireServerTenant(serverTenantId);
+        WarehousePlanHeader plan = get(serverTenantId, planId);
+        List<DomainIssue> issues = WarehousePlanContract.validateSourceInventoryCommand(command);
+        if (!issues.isEmpty()) {
+            DomainIssue issue = issues.getFirst();
+            throw new WarehousePlanException(
+                "WAREHOUSE_PLAN_SOURCE_INVENTORY_INVALID",
+                issue.code() + ": " + issue.message(),
+                null,
+                EditUnit.SOURCES
+            );
+        }
+
+        List<SourceRow> existingRows = loadSourceRows(serverTenantId, planId);
+        Map<UUID, SourceRow> existingById = new HashMap<>();
+        Map<String, SourceRow> existingByIdentity = new HashMap<>();
+        for (SourceRow row : existingRows) {
+            existingById.put(row.bindingId(), row);
+            existingByIdentity.put(sourceKey(row.sourceType(), row.sourceId()), row);
+        }
+
+        Instant checkedAt = Instant.now();
+        SourceReferenceResolver.AccessContext serverContext = serverAccessContext(serverTenantId, accessContext);
+        List<ResolvedSourceWrite> writes = new ArrayList<>();
+        Set<UUID> retainedIds = new HashSet<>();
+        for (SourceBindingCommand binding : command.bindings()) {
+            String sourceId = WarehousePlanContract.canonicalSourceId(binding.sourceType(), binding.locator());
+            SourceRow existing = binding.bindingId() == null
+                ? existingByIdentity.get(sourceKey(binding.sourceType(), sourceId))
+                : existingById.get(binding.bindingId());
+            if (binding.bindingId() != null && existing == null) {
+                throw invalidSourceInventory("SOURCE_BINDING_NOT_FOUND", "bindingId does not belong to this warehouse plan");
+            }
+            if (
+                existing != null &&
+                (existing.sourceType() != binding.sourceType() || !existing.sourceId().equals(sourceId))
+            ) {
+                throw invalidSourceInventory("SOURCE_BINDING_IDENTITY_IMMUTABLE", "A binding cannot be reassigned to another source");
+            }
+
+            UUID bindingId = existing == null ? UUID.randomUUID() : existing.bindingId();
+            retainedIds.add(bindingId);
+            SourceReferenceResolver.ResolvedSource resolution = resolveSource(
+                binding.sourceType(),
+                binding.locator(),
+                serverContext
+            );
+            String confirmedVersion = resolution.status() == SourceReferenceResolver.ResolutionStatus.AVAILABLE
+                ? resolution.resolvedVersion()
+                : existing == null ? null : existing.sourceVersion();
+            writes.add(
+                new ResolvedSourceWrite(
+                    bindingId,
+                    binding.sourceType(),
+                    binding.locator(),
+                    sourceId,
+                    binding.confirmationStatus(),
+                    binding.exclusionReason(),
+                    confirmedVersion,
+                    resolution,
+                    checkedAt
+                )
+            );
+        }
+        if (existingRows.stream().anyMatch(row -> !retainedIds.contains(row.bindingId()))) {
+            throw invalidSourceInventory(
+                "SOURCE_REMOVAL_REQUIRES_EXCLUSION",
+                "Existing sources must be retained and marked EXCLUDED to preserve audit history"
+            );
+        }
+
+        casEditUnit(serverTenantId, planId, expectedVersion, EditUnit.SOURCES);
+        for (ResolvedSourceWrite write : writes) {
+            String locatorJson = writeLocator(write.locator());
+            int updated = jdbcTemplate.update(
+                """
+                update modeling_warehouse_plan_source
+                   set source_type = ?, source_id = ?, source_version = ?, locator_json = cast(? as jsonb),
+                       confirmation_status = ?, exclusion_reason = ?, resolution_status = ?, last_validated_at = ?,
+                       last_modified_date = current_timestamp
+                 where tenant_id = ? and plan_id = ? and id = ?
+                """,
+                write.sourceType().name(),
+                write.sourceId(),
+                write.confirmedVersion(),
+                locatorJson,
+                write.confirmationStatus().name(),
+                write.exclusionReason(),
+                write.resolution().status().name(),
+                Timestamp.from(write.checkedAt()),
+                serverTenantId,
+                planId,
+                write.bindingId()
+            );
+            if (updated == 0) {
+                jdbcTemplate.update(
+                    """
+                    insert into modeling_warehouse_plan_source
+                        (id, tenant_id, plan_id, source_type, source_id, source_version, locator_json,
+                         confirmation_status, exclusion_reason, resolution_status, last_validated_at,
+                         created_date, last_modified_date)
+                    values (?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?, current_timestamp, current_timestamp)
+                    """,
+                    write.bindingId(),
+                    serverTenantId,
+                    planId,
+                    write.sourceType().name(),
+                    write.sourceId(),
+                    write.confirmedVersion(),
+                    locatorJson,
+                    write.confirmationStatus().name(),
+                    write.exclusionReason(),
+                    write.resolution().status().name(),
+                    Timestamp.from(write.checkedAt())
+                );
+            }
+        }
+
+        SourceInventoryView result = WarehousePlanContract.evaluateSourceInventory(
+            writes.stream().map(this::toSourceBindingView).toList(),
+            plan.onboardingMode(),
+            expectedVersion + 1,
+            checkedAt
+        );
+        auditService.auditAction(
+            "MODELING_WAREHOUSE_SOURCE_INVENTORY_SAVE",
+            AuditStage.SUCCESS,
+            planId.toString(),
+            Map.of(
+                "version",
+                result.version(),
+                "bindingCount",
+                result.bindings().size(),
+                "readiness",
+                result.readiness().name(),
+                "checkedAt",
+                result.checkedAt().toString()
+            )
+        );
+        return result;
+    }
+
+    /** Legacy application boundary retained until F5; canonical REST no longer calls this method. */
+    @Deprecated(forRemoval = false)
     @Transactional
     public Versioned<List<SourceBinding>> saveSources(
         String serverTenantId,
@@ -476,8 +840,23 @@ public class WarehousePlanApplicationService {
     @Transactional(readOnly = true)
     public PlanningBaseline getBaseline(String serverTenantId, UUID planId) {
         requireServerTenant(serverTenantId);
-        get(serverTenantId, planId);
-        return loadBaseline(serverTenantId, planId);
+        WarehousePlanHeader plan = get(serverTenantId, planId);
+        return loadBaseline(
+            serverTenantId,
+            plan,
+            new SourceReferenceResolver.AccessContext(serverTenantId, plan.ownerId(), plan.ownerDepartmentId())
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public PlanningBaseline getBaseline(
+        String serverTenantId,
+        UUID planId,
+        SourceReferenceResolver.AccessContext accessContext
+    ) {
+        requireServerTenant(serverTenantId);
+        WarehousePlanHeader plan = get(serverTenantId, planId);
+        return loadBaseline(serverTenantId, plan, accessContext);
     }
 
     @Transactional
@@ -491,7 +870,11 @@ public class WarehousePlanApplicationService {
                 current.version()
             );
         }
-        PlanningBaseline baseline = loadBaseline(serverTenantId, planId);
+        PlanningBaseline baseline = loadBaseline(
+            serverTenantId,
+            current,
+            new SourceReferenceResolver.AccessContext(serverTenantId, current.ownerId(), current.ownerDepartmentId())
+        );
         if (!baseline.ready()) {
             throw new WarehousePlanException(
                 "WAREHOUSE_PLAN_BASELINE_INCOMPLETE",
@@ -632,20 +1015,20 @@ public class WarehousePlanApplicationService {
 
     private void resolveEditUnitFailure(String tenantId, UUID planId, int expectedVersion, EditUnit editUnit) {
         WarehousePlanHeader current = find(tenantId, planId).stream().findFirst().orElseThrow(WarehousePlanApplicationService::notFound);
-        if (current.lifecycleStatus() == LifecycleStatus.PUBLISHED || current.lifecycleStatus() == LifecycleStatus.ARCHIVED) {
-            throw new WarehousePlanException(
-                "WAREHOUSE_PLAN_LIFECYCLE_CONFLICT",
-                "Warehouse plan lifecycle does not allow this operation",
-                expectedVersion,
-                editUnit
-            );
-        }
         Integer currentVersion = jdbcTemplate.queryForObject(
             "select " + versionColumn(editUnit) + " from modeling_warehouse_plan where tenant_id = ? and id = ?",
             Integer.class,
             tenantId,
             planId
         );
+        if (current.lifecycleStatus() == LifecycleStatus.PUBLISHED || current.lifecycleStatus() == LifecycleStatus.ARCHIVED) {
+            throw new WarehousePlanException(
+                "WAREHOUSE_PLAN_LIFECYCLE_CONFLICT",
+                "Warehouse plan lifecycle does not allow this operation",
+                currentVersion,
+                editUnit
+            );
+        }
         throw new WarehousePlanException(
             "WAREHOUSE_PLAN_EDIT_UNIT_VERSION_CONFLICT",
             "Warehouse plan edit unit was changed by another operation",
@@ -654,15 +1037,27 @@ public class WarehousePlanApplicationService {
         );
     }
 
-    private PlanningBaseline loadBaseline(String tenantId, UUID planId) {
-        Boolean scopeConfirmed = jdbcTemplate.queryForObject(
-            "select business_scope_confirmed from modeling_warehouse_plan where tenant_id = ? and id = ?",
-            Boolean.class,
+    private int readEditUnitVersion(String tenantId, UUID planId, EditUnit editUnit) {
+        Integer version = jdbcTemplate.queryForObject(
+            "select " + versionColumn(editUnit) + " from modeling_warehouse_plan where tenant_id = ? and id = ?",
+            Integer.class,
             tenantId,
             planId
         );
-        List<DomainBinding> domains = jdbcTemplate.query(
-            "select domain_id, confirmation_status from modeling_warehouse_plan_domain where tenant_id = ? and plan_id = ? order by id",
+        if (version == null) {
+            throw notFound();
+        }
+        return version;
+    }
+
+    private List<DomainBinding> loadDomainBindings(String tenantId, UUID planId) {
+        return jdbcTemplate.query(
+            """
+            select domain_id, confirmation_status
+              from modeling_warehouse_plan_domain
+             where tenant_id = ? and plan_id = ?
+             order by domain_id
+            """,
             (row, rowNumber) ->
                 new DomainBinding(
                     row.getObject("domain_id", UUID.class),
@@ -671,99 +1066,102 @@ public class WarehousePlanApplicationService {
             tenantId,
             planId
         );
-        List<ProcessBinding> processes = jdbcTemplate.query(
-            "select process_id, domain_id, process_shape, confirmation_status from modeling_warehouse_plan_process where tenant_id = ? and plan_id = ? order by id",
-            (row, rowNumber) ->
-                new ProcessBinding(
-                    row.getString("process_id"),
-                    row.getObject("domain_id", UUID.class),
-                    row.getString("process_shape"),
-                    ConfirmationStatus.valueOf(row.getString("confirmation_status"))
-                ),
+    }
+
+    private List<DomainBinding> validateCategoryScope(CategoryScopeCommand command) {
+        if (command == null) {
+            throw invalidEditUnit(EditUnit.CATEGORY_SCOPE, "Category scope is required");
+        }
+        List<DomainBinding> bindings = command.domainBindings();
+        Set<UUID> domainIds = new HashSet<>();
+        for (DomainBinding binding : bindings) {
+            if (
+                binding == null ||
+                binding.domainId() == null ||
+                binding.confirmationStatus() == null ||
+                !domainIds.add(binding.domainId())
+            ) {
+                throw invalidEditUnit(EditUnit.CATEGORY_SCOPE, "Category bindings must be unique and complete");
+            }
+        }
+        return bindings;
+    }
+
+    private CategoryScopeView resolveCategoryScope(List<DomainBinding> bindings) {
+        Instant validatedAt = Instant.now();
+        List<CategoryBindingView> resolved = bindings
+            .stream()
+            .map(binding -> resolveCategoryBinding(binding, validatedAt))
+            .toList();
+        return WarehousePlanContract.evaluateCategoryScope(resolved, validatedAt);
+    }
+
+    private CategoryBindingView resolveCategoryBinding(DomainBinding binding, Instant validatedAt) {
+        CatalogDomainResolutionPort.DomainResolution resolution = catalogDomainResolutionPort.resolve(binding.domainId());
+        if (resolution == null) {
+            return new CategoryBindingView(
+                binding.domainId(),
+                binding.confirmationStatus(),
+                CatalogDomainResolutionPort.ResolutionStatus.MISSING,
+                null,
+                null,
+                validatedAt
+            );
+        }
+        boolean redact = resolution.status() == CatalogDomainResolutionPort.ResolutionStatus.FORBIDDEN;
+        return new CategoryBindingView(
+            binding.domainId(),
+            binding.confirmationStatus(),
+            resolution.status() == null ? CatalogDomainResolutionPort.ResolutionStatus.MISSING : resolution.status(),
+            redact ? null : resolution.name(),
+            redact ? null : resolution.code(),
+            validatedAt
+        );
+    }
+
+    private PlanningPolicyCommand loadPlanningPolicyCommand(String tenantId, UUID planId) {
+        return jdbcTemplate
+            .query(
+                """
+                select layer_policy_code, naming_policy_ref, history_policy, default_time_zone,
+                       conceptual_design_allowed
+                  from modeling_warehouse_plan_policy
+                 where tenant_id = ? and plan_id = ?
+                """,
+                (row, rowNumber) ->
+                    new PlanningPolicyCommand(
+                        row.getString("layer_policy_code"),
+                        row.getString("naming_policy_ref"),
+                        row.getString("history_policy"),
+                        row.getString("default_time_zone"),
+                        row.getBoolean("conceptual_design_allowed")
+                    ),
+                tenantId,
+                planId
+            )
+            .stream()
+            .findFirst()
+            .orElseGet(() -> new PlanningPolicyCommand(null, null, null, null));
+    }
+
+    private PlanningBaseline loadBaseline(
+        String tenantId,
+        WarehousePlanHeader plan,
+        SourceReferenceResolver.AccessContext accessContext
+    ) {
+        CategoryScopeView categoryScope = resolveCategoryScope(loadDomainBindings(tenantId, plan.id()));
+        int sourceVersion = readEditUnitVersion(tenantId, plan.id(), EditUnit.SOURCES);
+        SourceInventoryView sourceInventory = resolveSourceInventory(
             tenantId,
-            planId
+            plan,
+            loadSourceRows(tenantId, plan.id()),
+            sourceVersion,
+            accessContext
         );
-        List<MetricRequirement> metrics = jdbcTemplate.query(
-            """
-            select id, metric_ref, name, definition, domain_id, process_id, confirmation_status
-              from modeling_warehouse_plan_metric_need
-             where tenant_id = ? and plan_id = ?
-             order by id
-            """,
-            (row, rowNumber) ->
-                new MetricRequirement(
-                    row.getObject("id", UUID.class),
-                    row.getString("metric_ref"),
-                    row.getString("name"),
-                    row.getString("definition"),
-                    row.getObject("domain_id", UUID.class),
-                    row.getString("process_id"),
-                    ConfirmationStatus.valueOf(row.getString("confirmation_status"))
-                ),
-            tenantId,
-            planId
+        PlanningPolicyView planningPolicy = WarehousePlanContract.evaluatePlanningPolicy(
+            loadPlanningPolicyCommand(tenantId, plan.id())
         );
-        List<SourceBinding> sources = jdbcTemplate.query(
-            """
-            select id, source_type, source_id, source_version, confirmation_status, exclusion_reason
-              from modeling_warehouse_plan_source
-             where tenant_id = ? and plan_id = ?
-             order by id
-            """,
-            (row, rowNumber) ->
-                new SourceBinding(
-                    row.getObject("id", UUID.class),
-                    SourceType.valueOf(row.getString("source_type")),
-                    row.getString("source_id"),
-                    row.getString("source_version"),
-                    ConfirmationStatus.valueOf(row.getString("confirmation_status")),
-                    row.getString("exclusion_reason")
-                ),
-            tenantId,
-            planId
-        );
-        List<SourceBusinessMapping> mappings = jdbcTemplate.query(
-            """
-            select id, source_binding_id, domain_id, process_id, mapping_status, notes
-              from modeling_warehouse_plan_source_mapping
-             where tenant_id = ? and plan_id = ?
-             order by id
-            """,
-            (row, rowNumber) ->
-                new SourceBusinessMapping(
-                    row.getObject("id", UUID.class),
-                    row.getObject("source_binding_id", UUID.class),
-                    row.getObject("domain_id", UUID.class),
-                    row.getString("process_id"),
-                    ConfirmationStatus.valueOf(row.getString("mapping_status")),
-                    row.getString("notes")
-                ),
-            tenantId,
-            planId
-        );
-        List<PlanningPolicy> policies = jdbcTemplate.query(
-            """
-            select layer_policy_code, naming_policy_ref, history_policy, default_time_zone
-              from modeling_warehouse_plan_policy
-             where tenant_id = ? and plan_id = ?
-            """,
-            (row, rowNumber) ->
-                new PlanningPolicy(
-                    row.getString("layer_policy_code"),
-                    row.getString("naming_policy_ref"),
-                    row.getString("history_policy"),
-                    row.getString("default_time_zone")
-                ),
-            tenantId,
-            planId
-        );
-        BusinessScope businessScope = new BusinessScope(
-            Boolean.TRUE.equals(scopeConfirmed),
-            domains,
-            processes,
-            metrics
-        );
-        return WarehousePlanContract.evaluateBaseline(businessScope, sources, mappings, policies.isEmpty() ? null : policies.getFirst());
+        return WarehousePlanContract.evaluateBaseline(categoryScope, sourceInventory, planningPolicy, plan.onboardingMode());
     }
 
     private WarehousePlanHeader lockPlan(String tenantId, UUID planId) {
@@ -776,7 +1174,7 @@ public class WarehousePlanApplicationService {
 
     private static String versionColumn(EditUnit editUnit) {
         return switch (editUnit) {
-            case BUSINESS_SCOPE -> "business_scope_version";
+            case BUSINESS_SCOPE, CATEGORY_SCOPE -> "business_scope_version";
             case SOURCES -> "sources_version";
             case SOURCE_MAPPINGS -> "source_mappings_version";
             case POLICY -> "policy_version";
@@ -789,6 +1187,10 @@ public class WarehousePlanApplicationService {
         !isBlank(policy.layerPolicyCode()) &&
         !isBlank(policy.historyPolicy()) &&
         !isBlank(policy.defaultTimeZone());
+    }
+
+    private static String enumName(Enum<?> value) {
+        return value == null ? null : value.name();
     }
 
     private static boolean isBlank(String value) {
@@ -809,6 +1211,185 @@ public class WarehousePlanApplicationService {
             loadSources(tenantId, planId),
             "/modeling/plans/" + plan.id() + "/baseline",
             replayed
+        );
+    }
+
+    private SourceInventoryView resolveSourceInventory(
+        String tenantId,
+        WarehousePlanHeader plan,
+        List<SourceRow> rows,
+        int version,
+        SourceReferenceResolver.AccessContext accessContext
+    ) {
+        Instant checkedAt = Instant.now();
+        SourceReferenceResolver.AccessContext serverContext = serverAccessContext(tenantId, accessContext);
+        List<SourceBindingView> bindings = rows
+            .stream()
+            .map(row -> {
+                SourceLocator locator = readLocator(row);
+                SourceReferenceResolver.ResolvedSource resolution = locator == null
+                    ? SourceReferenceResolver.ResolvedSource.providerError()
+                    : resolveSource(row.sourceType(), locator, serverContext);
+                return new SourceBindingView(
+                    row.bindingId(),
+                    row.sourceType(),
+                    locator,
+                    row.sourceId(),
+                    row.confirmationStatus(),
+                    row.exclusionReason(),
+                    resolution.displayName(),
+                    row.sourceVersion(),
+                    resolution.resolvedVersion(),
+                    resolution.status(),
+                    freshness(row.sourceVersion(), resolution),
+                    checkedAt
+                );
+            })
+            .toList();
+        return WarehousePlanContract.evaluateSourceInventory(bindings, plan.onboardingMode(), version, checkedAt);
+    }
+
+    private List<SourceRow> loadSourceRows(String tenantId, UUID planId) {
+        return jdbcTemplate.query(
+            """
+            select id, source_type, source_id, source_version, locator_json::text as locator_json,
+                   confirmation_status, exclusion_reason, resolution_status, last_validated_at
+              from modeling_warehouse_plan_source
+             where tenant_id = ? and plan_id = ?
+             order by source_type, source_id, id
+            """,
+            (row, rowNumber) ->
+                new SourceRow(
+                    row.getObject("id", UUID.class),
+                    SourceType.valueOf(row.getString("source_type")),
+                    row.getString("source_id"),
+                    row.getString("source_version"),
+                    row.getString("locator_json"),
+                    ConfirmationStatus.valueOf(row.getString("confirmation_status")),
+                    row.getString("exclusion_reason"),
+                    row.getString("resolution_status"),
+                    row.getTimestamp("last_validated_at") == null
+                        ? null
+                        : row.getTimestamp("last_validated_at").toInstant()
+                ),
+            tenantId,
+            planId
+        );
+    }
+
+    private SourceBindingView toSourceBindingView(ResolvedSourceWrite write) {
+        return new SourceBindingView(
+            write.bindingId(),
+            write.sourceType(),
+            write.locator(),
+            write.sourceId(),
+            write.confirmationStatus(),
+            write.exclusionReason(),
+            write.resolution().displayName(),
+            write.confirmedVersion(),
+            write.resolution().resolvedVersion(),
+            write.resolution().status(),
+            freshness(write.confirmedVersion(), write.resolution()),
+            write.checkedAt()
+        );
+    }
+
+    private SourceReferenceResolver.ResolvedSource resolveSource(
+        SourceType sourceType,
+        SourceLocator locator,
+        SourceReferenceResolver.AccessContext accessContext
+    ) {
+        try {
+            SourceReferenceResolver.ResolvedSource result = sourceReferenceResolver.resolve(sourceType, locator, accessContext);
+            if (result == null || result.status() == null) {
+                return SourceReferenceResolver.ResolvedSource.providerError();
+            }
+            if (
+                result.status() == SourceReferenceResolver.ResolutionStatus.AVAILABLE &&
+                !isBlank(result.resolvedVersion())
+            ) {
+                return result;
+            }
+            return switch (result.status()) {
+                case AVAILABLE, PROVIDER_ERROR -> SourceReferenceResolver.ResolvedSource.providerError();
+                case MISSING -> SourceReferenceResolver.ResolvedSource.missing();
+                case FORBIDDEN -> SourceReferenceResolver.ResolvedSource.forbidden();
+            };
+        } catch (RuntimeException exception) {
+            return SourceReferenceResolver.ResolvedSource.providerError();
+        }
+    }
+
+    private SourceLocator readLocator(SourceRow row) {
+        if (!isBlank(row.locatorJson())) {
+            try {
+                return objectMapper.readValue(row.locatorJson(), SourceLocator.class);
+            } catch (JsonProcessingException exception) {
+                return null;
+            }
+        }
+        try {
+            return switch (row.sourceType()) {
+                case CATALOG_TABLE -> new SourceLocator(UUID.fromString(row.sourceId()), null, null, null, null, null, null);
+                case EXCEL_FILE -> new SourceLocator(null, UUID.fromString(row.sourceId()), null, null, null, null, null);
+                case DBT_NODE -> legacyDbtLocator(row.sourceId());
+                case CONNECTION_TABLE -> null;
+            };
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
+    }
+
+    private static SourceLocator legacyDbtLocator(String sourceId) {
+        int separator = sourceId == null ? -1 : sourceId.indexOf(':');
+        if (separator <= 0 || separator == sourceId.length() - 1) {
+            return null;
+        }
+        return new SourceLocator(null, null, sourceId.substring(0, separator), sourceId.substring(separator + 1), null, null, null);
+    }
+
+    private String writeLocator(SourceLocator locator) {
+        try {
+            return objectMapper.writeValueAsString(locator);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Source locator could not be serialized", exception);
+        }
+    }
+
+    private static SourceFreshness freshness(
+        String confirmedVersion,
+        SourceReferenceResolver.ResolvedSource resolution
+    ) {
+        return switch (resolution.status()) {
+            case MISSING -> SourceFreshness.STALE;
+            case FORBIDDEN, PROVIDER_ERROR -> SourceFreshness.UNKNOWN;
+            case AVAILABLE -> Objects.equals(confirmedVersion, resolution.resolvedVersion())
+                ? SourceFreshness.CURRENT
+                : SourceFreshness.STALE;
+        };
+    }
+
+    private static SourceReferenceResolver.AccessContext serverAccessContext(
+        String tenantId,
+        SourceReferenceResolver.AccessContext requestContext
+    ) {
+        return new SourceReferenceResolver.AccessContext(
+            tenantId,
+            requestContext == null ? null : requestContext.actorId(),
+            requestContext == null ? null : requestContext.actorDepartmentId()
+        );
+    }
+
+    private static String sourceKey(SourceType sourceType, String sourceId) {
+        return sourceType.name() + "\u0000" + sourceId;
+    }
+
+    private static WarehousePlanException invalidSourceInventory(String code, String message) {
+        return new WarehousePlanException(
+            "WAREHOUSE_PLAN_SOURCE_INVENTORY_INVALID",
+            code + ": " + message,
+            null,
+            EditUnit.SOURCES
         );
     }
 
@@ -1026,6 +1607,30 @@ public class WarehousePlanApplicationService {
     ) {}
 
     private record ExistingCreate(UUID planId, String requestHash, String responseSnapshot) {}
+
+    private record SourceRow(
+        UUID bindingId,
+        SourceType sourceType,
+        String sourceId,
+        String sourceVersion,
+        String locatorJson,
+        ConfirmationStatus confirmationStatus,
+        String exclusionReason,
+        String resolutionStatus,
+        Instant lastValidatedAt
+    ) {}
+
+    private record ResolvedSourceWrite(
+        UUID bindingId,
+        SourceType sourceType,
+        SourceLocator locator,
+        String sourceId,
+        ConfirmationStatus confirmationStatus,
+        String exclusionReason,
+        String confirmedVersion,
+        SourceReferenceResolver.ResolvedSource resolution,
+        Instant checkedAt
+    ) {}
 
     public static final class WarehousePlanException extends RuntimeException {
 

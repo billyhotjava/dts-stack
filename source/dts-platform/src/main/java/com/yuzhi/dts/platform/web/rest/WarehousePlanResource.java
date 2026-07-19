@@ -1,5 +1,9 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService.UpdatePlanHeaderCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService.WarehousePlanException;
@@ -7,6 +11,8 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvi
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider.WarehousePlanActor;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.BusinessScope;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CategoryScopeCommand;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CategoryScopeView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CreateWarehousePlanCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CreateWarehousePlanResult;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.DomainIssue;
@@ -14,13 +20,18 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.E
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.InitialSourceRef;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.OnboardingMode;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningBaseline;
-import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicy;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicyCommand;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicyView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBinding;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceInventoryCommand;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceInventoryView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBusinessMapping;
+import com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.AccessContext;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.Versioned;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.WarehousePlanHeader;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanStageProjectionService;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanStageProjectionService.StageProjection;
+import java.io.IOException;
 import java.net.URI;
 import java.util.List;
 import java.util.UUID;
@@ -52,17 +63,20 @@ public class WarehousePlanResource {
     private final WarehousePlanApplicationService service;
     private final WarehousePlanStageProjectionService stageProjectionService;
     private final WarehousePlanActorProvider actorProvider;
+    private final ObjectMapper objectMapper;
     private final String serverTenantId;
 
     public WarehousePlanResource(
         WarehousePlanApplicationService service,
         WarehousePlanStageProjectionService stageProjectionService,
         WarehousePlanActorProvider actorProvider,
+        ObjectMapper objectMapper,
         @Value("${dts.platform.modeling.default-tenant-id:default}") String serverTenantId
     ) {
         this.service = service;
         this.stageProjectionService = stageProjectionService;
         this.actorProvider = actorProvider;
+        this.objectMapper = objectMapper;
         this.serverTenantId = serverTenantId;
     }
 
@@ -114,7 +128,7 @@ public class WarehousePlanResource {
 
     @GetMapping("/{id}/baseline")
     public ApiResponse<PlanningBaseline> baseline(@PathVariable UUID id) {
-        return ApiResponses.ok(service.getBaseline(serverTenantId, id));
+        return ApiResponses.ok(service.getBaseline(serverTenantId, id, sourceAccessContext()));
     }
 
     @GetMapping("/{id}/stage-projection")
@@ -138,24 +152,56 @@ public class WarehousePlanResource {
         return versioned(result, EditUnit.BUSINESS_SCOPE);
     }
 
-    @PutMapping("/{id}/baseline/sources")
+    @GetMapping("/{id}/baseline/categories")
+    public ResponseEntity<ApiResponse<Versioned<CategoryScopeView>>> categories(@PathVariable UUID id) {
+        Versioned<CategoryScopeView> result = service.getCategoryScope(serverTenantId, id);
+        return canonicalVersioned(result, EditUnit.CATEGORY_SCOPE);
+    }
+
+    @PutMapping("/{id}/baseline/categories")
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ResponseEntity<ApiResponse<List<SourceBinding>>> saveSources(
+    public ResponseEntity<ApiResponse<Versioned<CategoryScopeView>>> saveCategories(
         @PathVariable UUID id,
         @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
-        @RequestBody List<SourceBinding> request
+        @RequestBody JsonNode request
     ) {
-        Versioned<List<SourceBinding>> result = service.saveSources(
+        Versioned<CategoryScopeView> result = service.saveCategoryScope(
             serverTenantId,
             id,
-            parseIfMatch(ifMatch, EditUnit.SOURCES),
-            request
+            parseIfMatch(ifMatch, EditUnit.CATEGORY_SCOPE),
+            decode(request, CategoryScopeCommand.class, EditUnit.CATEGORY_SCOPE)
         );
-        return versioned(result, EditUnit.SOURCES);
+        return canonicalVersioned(result, EditUnit.CATEGORY_SCOPE);
+    }
+
+    @GetMapping("/{id}/baseline/sources")
+    public ResponseEntity<ApiResponse<SourceInventoryView>> sources(@PathVariable UUID id) {
+        SourceInventoryView result = service.getSources(serverTenantId, id, sourceAccessContext());
+        return sourceInventoryResponse(result);
+    }
+
+    @PutMapping("/{id}/baseline/sources")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<SourceInventoryView>> saveSources(
+        @PathVariable UUID id,
+        @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
+        @RequestBody JsonNode request
+    ) {
+        int expectedVersion = parseIfMatch(ifMatch, EditUnit.SOURCES);
+        SourceInventoryCommand command = decode(request, SourceInventoryCommand.class, EditUnit.SOURCES);
+        SourceInventoryView result = service.saveSources(
+            serverTenantId,
+            id,
+            expectedVersion,
+            command,
+            sourceAccessContext()
+        );
+        return sourceInventoryResponse(result);
     }
 
     @PutMapping("/{id}/baseline/source-mappings")
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    @Deprecated(forRemoval = false)
     public ResponseEntity<ApiResponse<List<SourceBusinessMapping>>> saveSourceMappings(
         @PathVariable UUID id,
         @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
@@ -170,20 +216,26 @@ public class WarehousePlanResource {
         return versioned(result, EditUnit.SOURCE_MAPPINGS);
     }
 
+    @GetMapping("/{id}/baseline/policy")
+    public ResponseEntity<ApiResponse<Versioned<PlanningPolicyView>>> policy(@PathVariable UUID id) {
+        Versioned<PlanningPolicyView> result = service.getPlanningPolicy(serverTenantId, id);
+        return canonicalVersioned(result, EditUnit.POLICY);
+    }
+
     @PutMapping("/{id}/baseline/policy")
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ResponseEntity<ApiResponse<PlanningPolicy>> savePolicy(
+    public ResponseEntity<ApiResponse<Versioned<PlanningPolicyView>>> savePolicy(
         @PathVariable UUID id,
         @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
-        @RequestBody PlanningPolicy request
+        @RequestBody JsonNode request
     ) {
-        Versioned<PlanningPolicy> result = service.savePolicy(
+        Versioned<PlanningPolicyView> result = service.savePlanningPolicy(
             serverTenantId,
             id,
             parseIfMatch(ifMatch, EditUnit.POLICY),
-            request
+            decode(request, PlanningPolicyCommand.class, EditUnit.POLICY)
         );
-        return versioned(result, EditUnit.POLICY);
+        return canonicalVersioned(result, EditUnit.POLICY);
     }
 
     @PostMapping("/{id}/baseline/confirm")
@@ -198,18 +250,58 @@ public class WarehousePlanResource {
     }
 
     @ExceptionHandler(WarehousePlanException.class)
-    public ResponseEntity<ApiResponse<Void>> handleWarehousePlanError(WarehousePlanException exception) {
+    public ResponseEntity<ApiResponse<?>> handleWarehousePlanError(WarehousePlanException exception) {
         HttpStatus status = status(exception.code());
         ResponseEntity.BodyBuilder response = ResponseEntity.status(status);
+        WriteConflictDetails details = null;
         if (exception.currentVersion() != null) {
             EditUnit editUnit = exception.editUnit() == null ? EditUnit.PLAN_HEAD : exception.editUnit();
             response.header(HttpHeaders.ETAG, etag(editUnit, exception.currentVersion()));
+            details = new WriteConflictDetails(editUnit, exception.currentVersion());
         }
-        return response.body(ApiResponses.error(exception.code(), exception.getMessage()));
+        return response.body(
+            new ApiResponse<>(ResultStatus.ERROR.getCode(), exception.getMessage(), exception.code(), details)
+        );
     }
 
     private static <T> ResponseEntity<ApiResponse<T>> versioned(Versioned<T> result, EditUnit editUnit) {
         return ResponseEntity.ok().eTag(etag(editUnit, result.version())).body(ApiResponses.ok(result.value()));
+    }
+
+    private static <T> ResponseEntity<ApiResponse<Versioned<T>>> canonicalVersioned(
+        Versioned<T> result,
+        EditUnit editUnit
+    ) {
+        return ResponseEntity.ok().eTag(etag(editUnit, result.version())).body(ApiResponses.ok(result));
+    }
+
+    private static ResponseEntity<ApiResponse<SourceInventoryView>> sourceInventoryResponse(SourceInventoryView result) {
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, result.etag()).body(ApiResponses.ok(result));
+    }
+
+    private AccessContext sourceAccessContext() {
+        WarehousePlanActor actor = actorProvider.currentActor();
+        return new AccessContext(
+            serverTenantId,
+            actor == null ? null : actor.ownerId(),
+            actor == null ? null : actor.ownerDepartmentId()
+        );
+    }
+
+    private <T> T decode(JsonNode request, Class<T> type, EditUnit editUnit) {
+        try (JsonParser parser = request.traverse(objectMapper)) {
+            return objectMapper
+                .readerFor(type)
+                .with(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                .readValue(parser);
+        } catch (IOException | IllegalArgumentException exception) {
+            throw new WarehousePlanException(
+                "WAREHOUSE_PLAN_REQUEST_INVALID",
+                "Warehouse plan request shape is invalid",
+                null,
+                editUnit
+            );
+        }
     }
 
     private static int parseIfMatch(String ifMatch, EditUnit editUnit) {
@@ -293,7 +385,8 @@ public class WarehousePlanResource {
         }
         if (
             "WAREHOUSE_PLAN_OWNER_FORBIDDEN".equals(code) ||
-            "WAREHOUSE_PLAN_OWNER_DEPARTMENT_FORBIDDEN".equals(code)
+            "WAREHOUSE_PLAN_OWNER_DEPARTMENT_FORBIDDEN".equals(code) ||
+            "WAREHOUSE_PLAN_CATEGORY_FORBIDDEN".equals(code)
         ) {
             return HttpStatus.FORBIDDEN;
         }
@@ -348,4 +441,6 @@ public class WarehousePlanResource {
             return new UpdatePlanHeaderCommand(name, objective, scope, ownerId, ownerDepartmentId);
         }
     }
+
+    public record WriteConflictDetails(EditUnit editUnit, int currentVersion) {}
 }

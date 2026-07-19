@@ -18,6 +18,7 @@ class AuditActionCatalogResourceTest {
         assertThat(catalog)
             .contains("\"code\": \"MODELING_WAREHOUSE_CATEGORY_SCOPE_SAVE\"")
             .contains("\"code\": \"MODELING_WAREHOUSE_POLICY_SAVE\"")
+            .contains("\"code\": \"MODELING_WAREHOUSE_SOURCE_INVENTORY_SAVE\"")
             .contains("\"key\": \"modeling.plan\"");
     }
 }

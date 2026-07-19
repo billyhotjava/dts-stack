@@ -33,7 +33,18 @@ class ModelSpecV2FixtureTest {
             .collect(Collectors.toSet());
 
         assertThat(schema.path("$defs").path("createModelSpecCommand").path("additionalProperties").asBoolean()).isFalse();
-        assertThat(schema.path("$defs").path("modelSpecView").path("properties").path("contractVersion").path("const").asInt()).isEqualTo(2);
+        assertThat(
+            java.util.stream.StreamSupport.stream(
+                schema
+                    .path("$defs")
+                    .path("modelSpecView")
+                    .path("properties")
+                    .path("contractVersion")
+                    .path("enum")
+                    .spliterator(),
+                false
+            ).map(JsonNode::asInt)
+        ).containsExactly(1, 2);
         assertThat(schemaFields).containsExactlyInAnyOrderElementsOf(javaFields);
         assertThat(fixtureFields).containsExactlyInAnyOrderElementsOf(javaFields);
         assertThat(decoder.decode(fixture).issues()).isEmpty();

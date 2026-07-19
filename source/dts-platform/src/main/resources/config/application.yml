@@ -250,6 +250,9 @@ info:
 
 dts:
   modeling:
+    # Independent rollback switches: v1 rows remain readable and v2 ledger rows are never deleted.
+    canonical-read-enabled: ${DTS_MODELING_CANONICAL_READ_ENABLED:true}
+    canonical-write-enabled: ${DTS_MODELING_CANONICAL_WRITE_ENABLED:true}
     runtime:
       # Keep first deployment safe; enable after Addax and Airflow endpoints are reachable.
       enabled: ${DTS_MODELING_RUNTIME_ENABLED:false}

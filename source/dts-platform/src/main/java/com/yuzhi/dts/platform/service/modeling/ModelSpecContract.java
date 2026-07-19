@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -39,6 +40,29 @@ public final class ModelSpecContract {
         "idempotencyKey"
     );
 
+    public static final Set<String> UPDATE_FIELDS = Set.of(
+        "planId",
+        "domainId",
+        "modelType",
+        "layer",
+        "name",
+        "description",
+        "implementationMode",
+        "materialization",
+        "businessActivityRef",
+        "consumptionScenario",
+        "grain",
+        "factShape",
+        "timeSemantics",
+        "fields",
+        "sourceRefs",
+        "dependsOn",
+        "dimensionRefs",
+        "metricRefs",
+        "standardBindings",
+        "generationStrategy"
+    );
+
     public static final Map<String, String> REQUIRED_FIELD_CODES = Map.of(
         "planId",
         "MODEL_SPEC_PLAN_REQUIRED",
@@ -69,7 +93,18 @@ public final class ModelSpecContract {
         "fields",
         Set.of("name", "dataType", "nullable", "sourceFieldRef", "role", "securityLevel"),
         "sourceRefs",
-        Set.of("kind", "ref", "layer", "role", "alias", "joinType", "joinExpression", "sortOrder"),
+        Set.of(
+            "kind",
+            "ref",
+            "layer",
+            "role",
+            "alias",
+            "joinType",
+            "joinExpression",
+            "sortOrder",
+            "sourceBindingId",
+            "resolvedVersion"
+        ),
         "dependsOn",
         Set.of("modelSpecId", "revision"),
         "dimensionRefs",
@@ -196,6 +231,30 @@ public final class ModelSpecContract {
         WARNING,
     }
 
+    public record LegacySourceRef(String kind, String ref, String layer) {}
+
+    public record LegacyStandardRef(
+        String fieldName,
+        String standardElementId,
+        String referenceCode,
+        String securityLevel
+    ) {}
+
+    /** Read-only preservation bucket; it is never accepted by create/update decoders. */
+    public record LegacyRefs(
+        String legacyModelRef,
+        List<String> unresolvedDependencyRefs,
+        List<LegacySourceRef> unresolvedSourceRefs,
+        List<LegacyStandardRef> unresolvedStandardRefs
+    ) {
+        public LegacyRefs {
+            legacyModelRef = trimToNull(legacyModelRef);
+            unresolvedDependencyRefs = immutable(unresolvedDependencyRefs);
+            unresolvedSourceRefs = immutable(unresolvedSourceRefs);
+            unresolvedStandardRefs = immutable(unresolvedStandardRefs);
+        }
+    }
+
     public record Grain(String statement, List<String> keys) {
         public Grain {
             statement = trimToNull(statement);
@@ -233,12 +292,15 @@ public final class ModelSpecContract {
         String alias,
         JoinType joinType,
         String joinExpression,
-        Integer sortOrder
+        Integer sortOrder,
+        UUID sourceBindingId,
+        String resolvedVersion
     ) {
         public SourceRef {
             ref = trimToNull(ref);
             alias = trimToNull(alias);
             joinExpression = trimToNull(joinExpression);
+            resolvedVersion = trimToNull(resolvedVersion);
         }
     }
 
@@ -313,6 +375,44 @@ public final class ModelSpecContract {
         }
     }
 
+    /** Full replacement payload for a CAS update. Server-managed and create-only fields are intentionally absent. */
+    public record UpdateModelSpecCommand(
+        UUID planId,
+        UUID domainId,
+        ModelType modelType,
+        Layer layer,
+        String name,
+        String description,
+        ImplementationMode implementationMode,
+        String materialization,
+        String businessActivityRef,
+        String consumptionScenario,
+        Grain grain,
+        FactShape factShape,
+        TimeSemantics timeSemantics,
+        List<ModelField> fields,
+        List<SourceRef> sourceRefs,
+        List<ModelRevisionRef> dependsOn,
+        List<ModelRevisionRef> dimensionRefs,
+        List<MetricRef> metricRefs,
+        List<StandardBinding> standardBindings,
+        GenerationStrategy generationStrategy
+    ) {
+        public UpdateModelSpecCommand {
+            name = trimToNull(name);
+            description = trimToNull(description);
+            materialization = trimToNull(materialization);
+            businessActivityRef = trimToNull(businessActivityRef);
+            consumptionScenario = trimToNull(consumptionScenario);
+            fields = immutable(fields);
+            sourceRefs = immutable(sourceRefs);
+            dependsOn = immutable(dependsOn);
+            dimensionRefs = immutable(dimensionRefs);
+            metricRefs = immutable(metricRefs);
+            standardBindings = immutable(standardBindings);
+        }
+    }
+
     public record ModelSpecView(
         int contractVersion,
         UUID id,
@@ -341,7 +441,8 @@ public final class ModelSpecContract {
         String checksum,
         Instant createdAt,
         Instant updatedAt,
-        CompatibilityMode compatibilityMode
+        CompatibilityMode compatibilityMode,
+        LegacyRefs legacyRefs
     ) {}
 
     public record FieldIssue(String code, String field, IssueSeverity severity, String message) {}
@@ -425,6 +526,25 @@ public final class ModelSpecContract {
         return List.copyOf(issues);
     }
 
+    static List<FieldIssue> validateUpdateShape(Map<String, ?> fields) {
+        if (fields == null) return List.of(issue("MODEL_SPEC_REQUEST_INVALID", "$", "Request must be a JSON object"));
+        List<FieldIssue> issues = fields
+            .keySet()
+            .stream()
+            .filter(field -> !UPDATE_FIELDS.contains(field))
+            .sorted()
+            .map(field -> issue("MODEL_SPEC_FIELD_NOT_ALLOWED", field, "Field is not part of the canonical ModelSpec update contract"))
+            .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        Map<String, Object> createShape = new LinkedHashMap<>();
+        fields.forEach(createShape::put);
+        createShape.put("idempotencyKey", "__model_spec_update__");
+        validateCreateShape(createShape)
+            .stream()
+            .filter(issue -> !"MODEL_SPEC_FIELD_NOT_ALLOWED".equals(issue.code()))
+            .forEach(issues::add);
+        return List.copyOf(issues);
+    }
+
     static List<FieldIssue> validateCreate(CreateModelSpecCommand command) {
         if (command == null) return List.of(issue("MODEL_SPEC_REQUEST_INVALID", "$", "ModelSpec create request is required"));
         List<FieldIssue> issues = new ArrayList<>();
@@ -458,6 +578,37 @@ public final class ModelSpecContract {
         return List.copyOf(issues);
     }
 
+    static List<FieldIssue> validateUpdate(UpdateModelSpecCommand command) {
+        if (command == null) return List.of(issue("MODEL_SPEC_REQUEST_INVALID", "$", "ModelSpec update request is required"));
+        return validateCreate(asCreate(command));
+    }
+
+    static CreateModelSpecCommand asCreate(UpdateModelSpecCommand command) {
+        return new CreateModelSpecCommand(
+            command.planId(),
+            command.domainId(),
+            command.modelType(),
+            command.layer(),
+            command.name(),
+            command.description(),
+            command.implementationMode(),
+            command.materialization(),
+            command.businessActivityRef(),
+            command.consumptionScenario(),
+            command.grain(),
+            command.factShape(),
+            command.timeSemantics(),
+            command.fields(),
+            command.sourceRefs(),
+            command.dependsOn(),
+            command.dimensionRefs(),
+            command.metricRefs(),
+            command.standardBindings(),
+            command.generationStrategy(),
+            "__model_spec_update__"
+        );
+    }
+
     private static void validateNested(CreateModelSpecCommand command, List<FieldIssue> issues) {
         validateNoNulls(command.fields(), "fields", "MODEL_SPEC_FIELD_INVALID", issues);
         validateNoNulls(command.sourceRefs(), "sourceRefs", "MODEL_SPEC_SOURCE_INVALID", issues);
@@ -489,6 +640,8 @@ public final class ModelSpecContract {
                 source.role() == null ||
                 source.sortOrder() == null ||
                 source.sortOrder() < 0 ||
+                source.sourceBindingId() == null ||
+                source.resolvedVersion() == null ||
                 !sourceKeys.add(key)
             ) {
                 issues.add(issue("MODEL_SPEC_SOURCE_INVALID", "sourceRefs", "Sources require unique kind/ref pairs and complete metadata"));
@@ -665,7 +818,9 @@ public final class ModelSpecContract {
             (joinType != null && !isEnumText(joinType, JOIN_TYPES)) ||
             !isNullableText(source.get("alias")) ||
             !isNullableText(source.get("joinExpression")) ||
-            !isNonNegativeInteger(source.get("sortOrder"))
+            !isNonNegativeInteger(source.get("sortOrder")) ||
+            !isUuidText(source.get("sourceBindingId")) ||
+            !isNonBlankText(source.get("resolvedVersion"))
         );
     }
 

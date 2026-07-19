@@ -903,6 +903,14 @@
                 "SUCCESS"
               ],
               "supportsFlow": false
+            },
+            {
+              "code": "MODELING_WAREHOUSE_SOURCE_INVENTORY_SAVE",
+              "display": "保存建设计划来源盘点",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
             }
           ]
         },
