@@ -617,7 +617,9 @@ class WarehousePlanResourceTest {
             stages,
             Instant.parse("2026-07-18T00:00:00Z")
         );
-        when(stageProjectionService.project("server-tenant", PLAN_ID)).thenReturn(projection);
+        AccessContext actorContext = new AccessContext("server-tenant", "owner-1", "department-1");
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("owner-1", "department-1"));
+        when(stageProjectionService.project("server-tenant", PLAN_ID, actorContext)).thenReturn(projection);
 
         mockMvc
             .perform(get("/api/modeling/warehouse-plans/{id}/stage-projection", PLAN_ID))
@@ -625,7 +627,7 @@ class WarehousePlanResourceTest {
             .andExpect(jsonPath("$.data.currentStage").value("DATA_CONNECTION"))
             .andExpect(jsonPath("$.data.stages.length()").value(9));
 
-        verify(stageProjectionService).project("server-tenant", PLAN_ID);
+        verify(stageProjectionService).project("server-tenant", PLAN_ID, actorContext);
     }
 
     private static WarehousePlanHeader planHeader(

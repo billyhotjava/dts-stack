@@ -133,7 +133,7 @@ public class WarehousePlanResource {
 
     @GetMapping("/{id}/stage-projection")
     public ApiResponse<StageProjection> stageProjection(@PathVariable UUID id) {
-        return ApiResponses.ok(stageProjectionService.project(serverTenantId, id));
+        return ApiResponses.ok(stageProjectionService.project(serverTenantId, id, sourceAccessContext()));
     }
 
     @PutMapping("/{id}/baseline/business-scope")
