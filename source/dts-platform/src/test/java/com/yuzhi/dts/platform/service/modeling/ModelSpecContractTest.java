@@ -209,6 +209,80 @@ class ModelSpecContractTest {
             );
     }
 
+    @Test
+    void rejectsStandardReferencesToMissingFields() {
+        CreateModelSpecCommand base = validCommand(ModelType.FACT, null);
+        CreateModelSpecCommand command = new CreateModelSpecCommand(
+            base.planId(),
+            base.domainId(),
+            base.modelType(),
+            base.layer(),
+            base.name(),
+            base.description(),
+            base.implementationMode(),
+            base.materialization(),
+            base.businessActivityRef(),
+            base.consumptionScenario(),
+            base.grain(),
+            base.factShape(),
+            base.timeSemantics(),
+            base.fields(),
+            base.sourceRefs(),
+            base.dependsOn(),
+            base.dimensionRefs(),
+            base.metricRefs(),
+            List.of(new ModelSpecContract.StandardBinding("missing_standard_field", null, null, null, null, null, null, "INTERNAL")),
+            base.generationStrategy(),
+            base.idempotencyKey()
+        );
+
+        assertThat(ModelSpecContract.validateCreate(command))
+            .extracting(ModelSpecContract.FieldIssue::code)
+            .contains("MODEL_SPEC_STANDARD_BINDING_INVALID");
+    }
+
+    @Test
+    void rejectsMultipleStandardBindingsForTheSameField() {
+        CreateModelSpecCommand base = validCommand(ModelType.FACT, null);
+        ModelSpecContract.StandardBinding binding = new ModelSpecContract.StandardBinding(
+            "record_id",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "INTERNAL"
+        );
+        CreateModelSpecCommand command = new CreateModelSpecCommand(
+            base.planId(),
+            base.domainId(),
+            base.modelType(),
+            base.layer(),
+            base.name(),
+            base.description(),
+            base.implementationMode(),
+            base.materialization(),
+            base.businessActivityRef(),
+            base.consumptionScenario(),
+            base.grain(),
+            base.factShape(),
+            base.timeSemantics(),
+            base.fields(),
+            base.sourceRefs(),
+            base.dependsOn(),
+            base.dimensionRefs(),
+            base.metricRefs(),
+            List.of(binding, binding),
+            base.generationStrategy(),
+            base.idempotencyKey()
+        );
+
+        assertThat(ModelSpecContract.validateCreate(command))
+            .extracting(ModelSpecContract.FieldIssue::code)
+            .contains("MODEL_SPEC_STANDARD_BINDING_INVALID");
+    }
+
     private static CreateModelSpecCommand validCommand(ModelType type, String activity) {
         List<ModelField> fields = List.of(
             new ModelField("record_id", "varchar", false, "source.record_id", FieldRole.KEY, null),

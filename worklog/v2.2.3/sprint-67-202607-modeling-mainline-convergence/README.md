@@ -69,7 +69,7 @@ Sprint-65 已建立 `WarehousePlan`、`ModelSpec` 和数据建设工作台，但
 | [F5](features/F5-业务对象迁移与受控退役/README.md) | 业务对象迁移与受控退役 | 4 | READY | 迁移旧数据、冻结旧写入并清理消费者 |
 | [F6](features/F6-专业模块交接与集成验收/README.md) | 专业模块交接与集成验收 | 4 | READY | 接通标准、指标、构建发布和端到端证据 |
 
-**统计**：READY=20，IN_PROGRESS=2，DONE=2，BLOCKED=0
+**统计**：READY=19，IN_PROGRESS=3，DONE=2，BLOCKED=0
 
 ## 6. 依赖与执行顺序
 

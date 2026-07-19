@@ -17,6 +17,7 @@ import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanSta
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanStageProjectionService.StageCode.WAREHOUSE_PLANNING;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanStageProjectionService.StageStatus.BLOCKED;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanStageProjectionService.StageStatus.COMPLETE;
+import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanStageProjectionService.StageStatus.IN_PROGRESS;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanStageProjectionService.StageStatus.NOT_STARTED;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanStageProjectionService.StageStatus.UNKNOWN;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -255,8 +256,106 @@ class WarehousePlanStageProjectionServiceTest {
         assertThat(stage(projection, SOURCE_INVENTORY).status()).isEqualTo(COMPLETE);
         assertThat(stage(projection, WAREHOUSE_PLANNING).status()).isEqualTo(COMPLETE);
         assertThat(stage(projection, MODEL_DESIGN).status()).isEqualTo(COMPLETE);
-        assertThat(stage(projection, DATA_STANDARD).status()).isEqualTo(NOT_STARTED);
+        assertThat(stage(projection, DATA_STANDARD).status()).isEqualTo(BLOCKED);
+        assertThat(stage(projection, DATA_STANDARD).blockerCode()).isEqualTo("MODEL_STANDARD_BINDING_REQUIRED");
         assertThat(projection.currentStage()).isEqualTo(DATA_STANDARD);
+    }
+
+    @Test
+    void completesDataStandardOnlyWhenEveryDeclaredFieldHasSavedBindingEvidence() {
+        WarehousePlanApplicationService planService = mock(WarehousePlanApplicationService.class);
+        ModelSpecApplicationService modelSpecService = mock(ModelSpecApplicationService.class);
+        when(planService.get("tenant-1", PLAN_ID)).thenReturn(plan(ASSET_FIRST));
+        when(planService.getCategoryScope("tenant-1", PLAN_ID)).thenReturn(
+            new Versioned<>(category(WarehousePlanContract.CategoryReadiness.READY), 1)
+        );
+        when(planService.getPlanningPolicy("tenant-1", PLAN_ID)).thenReturn(new Versioned<>(readyPolicy(), 1));
+        when(planService.getSources("tenant-1", PLAN_ID, ACTOR)).thenReturn(
+            sources(WarehousePlanContract.SourceInventoryReadiness.READY, List.of(currentSource()))
+        );
+        ModelSpecView model = canonicalModel();
+        when(model.standardBindings()).thenReturn(
+            List.of(new ModelSpecContract.StandardBinding("record_id", null, null, null, null, null, null, "INTERNAL"))
+        );
+        when(modelSpecService.list("tenant-1", PLAN_ID, null, null, null)).thenReturn(List.of(model));
+
+        WarehousePlanStageProjectionService.StageProjection projection = new WarehousePlanStageProjectionService(
+            planService,
+            modelSpecService
+        ).project("tenant-1", PLAN_ID, ACTOR);
+
+        assertThat(stage(projection, DATA_STANDARD).status()).isEqualTo(COMPLETE);
+        assertThat(stage(projection, DATA_STANDARD).evidenceCount()).isEqualTo(1);
+        assertThat(projection.currentStage()).isEqualTo(
+            WarehousePlanStageProjectionService.StageCode.BUILD_QUALITY_RELEASE
+        );
+    }
+
+    @Test
+    void doesNotCompleteModelDesignFromAnIncompleteModelShell() {
+        WarehousePlanApplicationService planService = mock(WarehousePlanApplicationService.class);
+        ModelSpecApplicationService modelSpecService = mock(ModelSpecApplicationService.class);
+        when(planService.get("tenant-1", PLAN_ID)).thenReturn(plan(ASSET_FIRST));
+        when(planService.getCategoryScope("tenant-1", PLAN_ID)).thenReturn(
+            new Versioned<>(category(WarehousePlanContract.CategoryReadiness.READY), 1)
+        );
+        when(planService.getPlanningPolicy("tenant-1", PLAN_ID)).thenReturn(new Versioned<>(readyPolicy(), 1));
+        when(planService.getSources("tenant-1", PLAN_ID, ACTOR)).thenReturn(
+            sources(WarehousePlanContract.SourceInventoryReadiness.READY, List.of(currentSource()))
+        );
+        ModelSpecView incompleteModel = incompleteModelShell();
+        when(modelSpecService.list("tenant-1", PLAN_ID, null, null, null)).thenReturn(List.of(incompleteModel));
+
+        WarehousePlanStageProjectionService.StageProjection projection = new WarehousePlanStageProjectionService(
+            planService,
+            modelSpecService
+        ).project("tenant-1", PLAN_ID, ACTOR);
+
+        assertThat(stage(projection, MODEL_DESIGN).status()).isEqualTo(BLOCKED);
+        assertThat(stage(projection, MODEL_DESIGN).blockerCode()).isEqualTo("MODEL_SPEC_REQUIRED");
+        assertThat(projection.currentStage()).isEqualTo(MODEL_DESIGN);
+    }
+
+    @Test
+    void routesDataStandardToAServerOwnedModelStandardsTab() {
+        UUID emptyModelId = UUID.fromString("40000000-0000-0000-0000-000000000000");
+        UUID fullyBoundModelId = UUID.fromString("40000000-0000-0000-0000-000000000001");
+        UUID repairModelId = UUID.fromString("40000000-0000-0000-0000-000000000002");
+        WarehousePlanApplicationService planService = mock(WarehousePlanApplicationService.class);
+        ModelSpecApplicationService modelSpecService = mock(ModelSpecApplicationService.class);
+        when(planService.get("tenant-1", PLAN_ID)).thenReturn(plan(ASSET_FIRST));
+        when(planService.getCategoryScope("tenant-1", PLAN_ID)).thenReturn(
+            new Versioned<>(category(WarehousePlanContract.CategoryReadiness.READY), 1)
+        );
+        when(planService.getPlanningPolicy("tenant-1", PLAN_ID)).thenReturn(new Versioned<>(readyPolicy(), 1));
+        when(planService.getSources("tenant-1", PLAN_ID, ACTOR)).thenReturn(
+            sources(WarehousePlanContract.SourceInventoryReadiness.READY, List.of(currentSource()))
+        );
+        ModelSpecView emptyModel = canonicalModel();
+        when(emptyModel.id()).thenReturn(emptyModelId);
+        when(emptyModel.fields()).thenReturn(List.of());
+        ModelSpecView fullyBoundModel = canonicalModel();
+        when(fullyBoundModel.id()).thenReturn(fullyBoundModelId);
+        when(fullyBoundModel.standardBindings()).thenReturn(
+            List.of(new ModelSpecContract.StandardBinding("record_id", null, null, null, null, null, null, "INTERNAL"))
+        );
+        ModelSpecView repairModel = canonicalModel();
+        when(repairModel.id()).thenReturn(repairModelId);
+        when(modelSpecService.list("tenant-1", PLAN_ID, null, null, null)).thenReturn(
+            List.of(emptyModel, fullyBoundModel, repairModel)
+        );
+
+        WarehousePlanStageProjectionService.StageProjection projection = new WarehousePlanStageProjectionService(
+            planService,
+            modelSpecService
+        ).project("tenant-1", PLAN_ID, ACTOR);
+
+        assertThat(stage(projection, DATA_STANDARD).status()).isEqualTo(IN_PROGRESS);
+        assertThat(stage(projection, DATA_STANDARD).evidenceCount()).isEqualTo(1);
+        assertThat(stage(projection, DATA_STANDARD).blockerCode()).isEqualTo("MODEL_STANDARD_BINDING_INCOMPLETE");
+        assertThat(stage(projection, DATA_STANDARD).actionPath())
+            .isEqualTo("/modeling/models/" + repairModelId + "?tab=standards&planId=" + PLAN_ID);
+        assertThat(projection.nextAction().path()).isEqualTo(stage(projection, DATA_STANDARD).actionPath());
     }
 
     @Test
@@ -302,7 +401,7 @@ class WarehousePlanStageProjectionServiceTest {
         ).project("tenant-1", PLAN_ID, ACTOR);
 
         assertThat(stage(projection, MODEL_DESIGN).status()).isEqualTo(UNKNOWN);
-        assertThat(stage(projection, DATA_STANDARD).status()).isEqualTo(NOT_STARTED);
+        assertThat(stage(projection, DATA_STANDARD).status()).isEqualTo(UNKNOWN);
         assertThat(projection.currentStage()).isEqualTo(MODEL_DESIGN);
     }
 
@@ -401,6 +500,31 @@ class WarehousePlanStageProjectionServiceTest {
     }
 
     private static ModelSpecView canonicalModel() {
+        ModelSpecView model = mock(ModelSpecView.class);
+        when(model.contractVersion()).thenReturn(ModelSpecContract.CONTRACT_VERSION);
+        when(model.id()).thenReturn(UUID.fromString("40000000-0000-0000-0000-000000000099"));
+        when(model.planId()).thenReturn(PLAN_ID);
+        when(model.domainId()).thenReturn(UUID.fromString("20000000-0000-0000-0000-000000000001"));
+        when(model.modelType()).thenReturn(ModelSpecContract.ModelType.DIMENSION);
+        when(model.layer()).thenReturn(ModelSpecContract.Layer.DWD);
+        when(model.name()).thenReturn("generic_dimension");
+        when(model.implementationMode()).thenReturn(ModelSpecContract.ImplementationMode.DESIGNER_GENERATED);
+        when(model.grain()).thenReturn(new ModelSpecContract.Grain("one row per record", List.of("record_id")));
+        when(model.fields()).thenReturn(
+            List.of(new ModelSpecContract.ModelField("record_id", "varchar", false, null, ModelSpecContract.FieldRole.KEY, null))
+        );
+        when(model.sourceRefs()).thenReturn(List.of());
+        when(model.dependsOn()).thenReturn(List.of());
+        when(model.dimensionRefs()).thenReturn(List.of());
+        when(model.metricRefs()).thenReturn(List.of());
+        when(model.standardBindings()).thenReturn(List.of());
+        when(model.status()).thenReturn(ModelSpecContract.ModelStatus.DRAFT);
+        when(model.revision()).thenReturn(1);
+        when(model.compatibilityMode()).thenReturn(ModelSpecContract.CompatibilityMode.CANONICAL);
+        return model;
+    }
+
+    private static ModelSpecView incompleteModelShell() {
         ModelSpecView model = mock(ModelSpecView.class);
         when(model.contractVersion()).thenReturn(ModelSpecContract.CONTRACT_VERSION);
         when(model.planId()).thenReturn(PLAN_ID);

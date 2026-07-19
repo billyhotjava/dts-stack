@@ -152,10 +152,44 @@ async function installWarehousePlanApi(page: Page, scenario: ApiScenario) {
 		}
 
 		const suffix = pathName.slice(`${PLAN_RESOURCE}/`.length);
-		const [planId, child] = suffix.split("/");
+		const [planId, ...childSegments] = suffix.split("/");
+		const child = childSegments.join("/");
 		if (child === "baseline") {
 			calls.baseline += 1;
 			await fulfill(route, scenario.baseline(planId, calls.baseline));
+			return;
+		}
+		if (child === "baseline/categories") {
+			await fulfill(route, {
+				value: { domainBindings: [], readiness: "DRAFT", issues: [] },
+				version: 0,
+			});
+			return;
+		}
+		if (child === "baseline/policy") {
+			await fulfill(route, {
+				value: {
+					layerScheme: null,
+					namingPolicy: null,
+					historyPolicy: null,
+					defaultTimeZone: null,
+					conceptualDesignAllowed: false,
+					readiness: "DRAFT",
+					issues: [],
+				},
+				version: 0,
+			});
+			return;
+		}
+		if (child === "baseline/sources") {
+			await fulfill(route, {
+				bindings: [],
+				readiness: "DRAFT",
+				issues: [],
+				version: 0,
+				etag: '"sources:0"',
+				checkedAt: "2026-07-19T03:30:00+08:00",
+			});
 			return;
 		}
 		if (child === "stage-projection") {
@@ -163,6 +197,7 @@ async function installWarehousePlanApi(page: Page, scenario: ApiScenario) {
 			await fulfill(route, scenario.projection(planId, calls.projection));
 			return;
 		}
+		if (child) throw new Error(`Unexpected GET ${pathName}`);
 		calls.getPlan += 1;
 		await fulfill(route, scenario.getPlan(planId, calls.getPlan));
 	});
@@ -216,7 +251,7 @@ test("business-first creates once under repeated clicks and follows the server n
 				version: 1,
 				etag: '"1"',
 				initialSourceBindings: [],
-				nextAction: `/modeling/plans/${createdPlan.id}/baseline?tab=business-scope`,
+				nextAction: `/modeling/plans/${createdPlan.id}/baseline`,
 				replayed: false,
 			};
 		},
@@ -234,9 +269,9 @@ test("business-first creates once under repeated clicks and follows the server n
 	await submit.click();
 	await expect(submit).toHaveClass(/ant-btn-loading/);
 	await submit.evaluate((button: HTMLButtonElement) => button.click());
-	await expect(page).toHaveURL(/\/modeling\/plans\/plan-business\/baseline\?tab=business-scope$/);
+	await expect(page).toHaveURL(/\/modeling\/plans\/plan-business\/baseline$/);
 	await expect(page.getByText("经营分析主题数仓", { exact: true })).toBeVisible();
-	await expect(page.getByText("业务范围", { exact: true })).toBeVisible();
+	await expect(page.getByRole("tab", { name: "业务分类" })).toHaveAttribute("aria-selected", "true");
 	expect(calls.create).toBe(1);
 	expect(submitted?.onboardingMode).toBe("BUSINESS_FIRST");
 	expect(submitted).not.toHaveProperty("code");
@@ -261,7 +296,7 @@ test("asset-first uses the same create endpoint and carries an initial source", 
 				version: 1,
 				etag: '"1"',
 				initialSourceBindings: [],
-				nextAction: `/modeling/plans/${createdPlan.id}/baseline?tab=sources`,
+				nextAction: `/modeling/plans/${createdPlan.id}/baseline`,
 				replayed: false,
 			};
 		},
@@ -274,8 +309,8 @@ test("asset-first uses the same create endpoint and carries an initial source", 
 	await page.getByPlaceholder("来源标识").fill("catalog.sales.orders");
 	await page.screenshot({ path: path.join(evidenceDir, "desktop-asset-first-form.png"), fullPage: true });
 	await page.getByRole("button", { name: "创建并继续" }).click();
-	await expect(page).toHaveURL(/\/modeling\/plans\/plan-asset\/baseline\?tab=sources$/);
-	await expect(page.getByText("来源盘点", { exact: true })).toBeVisible();
+	await expect(page).toHaveURL(/\/modeling\/plans\/plan-asset\/baseline$/);
+	await expect(page.getByRole("tab", { name: "来源盘点" })).toHaveAttribute("aria-selected", "true");
 	expect(calls.create).toBe(1);
 	expect(submitted?.onboardingMode).toBe("ASSET_FIRST");
 	expect(submitted?.initialSourceRefs).toEqual([{ sourceType: "CATALOG_TABLE", sourceId: "catalog.sales.orders" }]);
@@ -355,4 +390,111 @@ test("exact plan survives list failure, refresh, evidence retry, detail return a
 		{ status: 503, includes: "/modeling/warehouse-plans" },
 		{ status: 503, includes: "/baseline" },
 	]);
+});
+
+test("model detail deep-link keeps canonical tabs, server plan context and narrow standard table", async ({ page }) => {
+	const probe = installBrowserProbe(page);
+	const modelId = "40000000-0000-0000-0000-000000000001";
+	const serverPlanId = "10000000-0000-0000-0000-000000000001";
+	const domainId = "20000000-0000-0000-0000-000000000001";
+	const measurementUnitId = "50000000-0000-0000-0000-000000000001";
+	const model = {
+		contractVersion: 2,
+		id: modelId,
+		planId: serverPlanId,
+		domainId,
+		modelType: "FACT",
+		layer: "DWD",
+		name: "订单明细",
+		description: "记录订单事实",
+		implementationMode: "DESIGNER_GENERATED",
+		materialization: "table",
+		businessActivityRef: null,
+		consumptionScenario: null,
+		grain: { statement: "一行代表一笔订单", keys: ["order_id"] },
+		factShape: "TRANSACTION",
+		timeSemantics: { type: "EVENT_TIME", fields: ["created_at"] },
+		fields: [
+			{ name: "order_id", dataType: "string", nullable: false, role: "KEY", securityLevel: "RESTRICTED" },
+			{ name: "amount", dataType: "decimal(18,2)", nullable: false, role: "MEASURE" },
+		],
+		sourceRefs: [
+			{
+				kind: "TABLE",
+				ref: "ods.orders",
+				layer: "ODS",
+				role: "PRIMARY",
+				sortOrder: 0,
+				sourceBindingId: "30000000-0000-0000-0000-000000000001",
+				resolvedVersion: "v1",
+			},
+		],
+		dependsOn: [],
+		dimensionRefs: [],
+		metricRefs: [],
+		standardBindings: [
+			{
+				fieldName: "amount",
+				measurementUnitId,
+				measurementUnitVersion: 3,
+				securityLevel: "INTERNAL",
+			},
+		],
+		generationStrategy: null,
+		status: "DRAFT",
+		revision: 2,
+		checksum: "model-checksum-2",
+		createdAt: "2026-07-19T03:00:00Z",
+		updatedAt: "2026-07-19T04:00:00Z",
+		compatibilityMode: "CANONICAL",
+		legacyRefs: null,
+	};
+
+	await page.route("**/api/**", async (route) => {
+		const pathName = new URL(route.request().url()).pathname;
+		if (pathName === `/api/modeling/model-specs/${modelId}`) {
+			await fulfill(route, model);
+			return;
+		}
+		if (pathName === "/api/modeling/model-specs") {
+			await fulfill(route, [model]);
+			return;
+		}
+		await fulfill(route, []);
+	});
+
+	await page.goto(`/#/modeling/models/${modelId}?tab=standards&planId=forged-plan`);
+	await expect(page.getByTestId("model-spec-detail-page")).toBeVisible();
+	await expect(page.getByRole("tab", { name: "字段标准" })).toHaveAttribute("aria-selected", "true");
+	await expect(page.getByText(`${measurementUnitId} · v3`, { exact: true })).toBeVisible();
+	await expect(page.getByText("当前显示已保存版本 r2", { exact: true })).toBeVisible();
+	await expect(page.getByText("RESTRICTED", { exact: true })).toBeVisible();
+	await expect(page.getByText("已配置", { exact: true })).toBeVisible();
+	await expect(page.getByRole("button", { name: "前往数据元" })).toBeVisible();
+	await page.screenshot({ path: path.join(evidenceDir, "model-detail-standards.png"), fullPage: true });
+
+	await page.getByRole("tab", { name: "字段设计" }).click();
+	await expect(page).toHaveURL(new RegExp(`tab=fields&planId=${serverPlanId}$`));
+	await expect(page.locator("#fields_0_name")).toBeDisabled();
+	await expect(page.getByRole("button", { name: "删除字段 1" })).toBeDisabled();
+	await page.getByRole("button", { name: "添加字段" }).click();
+	await page.getByPlaceholder("例如：customer_id").last().fill("discount_amount");
+	await page.getByRole("tab", { name: "模型设计" }).click();
+	await page.getByRole("tab", { name: "字段设计" }).click();
+	await expect(page.locator('input[value="discount_amount"]')).toBeVisible();
+
+	await page.getByRole("tab", { name: "字段标准" }).click();
+	await page.setViewportSize({ width: 390, height: 844 });
+	const viewportMetrics = await page.evaluate(() => ({
+		innerWidth: window.innerWidth,
+		documentWidth: document.documentElement.scrollWidth,
+		bodyWidth: document.body.scrollWidth,
+	}));
+	expect(viewportMetrics.documentWidth).toBeLessThanOrEqual(viewportMetrics.innerWidth);
+	expect(viewportMetrics.bodyWidth).toBeLessThanOrEqual(viewportMetrics.innerWidth);
+	await page.screenshot({ path: path.join(evidenceDir, "model-detail-standards-narrow.png"), fullPage: true });
+
+	await page.getByRole("button", { name: "返回模型中心" }).click();
+	await expect(page).toHaveURL(new RegExp(`/modeling/models\\?planId=${serverPlanId}$`));
+	assertCleanBrowser(probe);
 });

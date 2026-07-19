@@ -563,11 +563,17 @@ export const validateModelSpecCreate = (input: unknown): ModelSpecFieldIssue[] =
 		const normalizedReference = typeof reference === "string" ? reference.trim() || null : reference;
 		return normalizedReference == null ? version != null : !isIntInRange(version, 1);
 	};
+	const standardBindingFieldNames = standardBindings
+		.map((binding) => binding?.fieldName?.trim())
+		.filter((fieldName): fieldName is string => Boolean(fieldName));
+	const hasDuplicateStandardBinding = new Set(standardBindingFieldNames).size !== standardBindingFieldNames.length;
 	if (
+		hasDuplicateStandardBinding ||
 		standardBindings.some(
 			(binding) =>
 				!binding ||
 				!binding.fieldName?.trim() ||
+				!fieldNames.has(binding.fieldName.trim()) ||
 				incompleteVersionedRef(binding.standardElementId, binding.standardElementVersion) ||
 				incompleteVersionedRef(binding.referenceCode, binding.referenceCodeVersion) ||
 				incompleteVersionedRef(binding.measurementUnitId, binding.measurementUnitVersion) ||

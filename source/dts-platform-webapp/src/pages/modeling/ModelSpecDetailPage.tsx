@@ -1,12 +1,15 @@
-import { Alert, Button, Card, Descriptions, Empty, Form, Modal, Space, Spin, Tag, Typography } from "antd";
+import { Alert, Button, Card, Descriptions, Form, Modal, Space, Spin, Tabs, Tag, Typography } from "antd";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { getModelSpec, listModelSpecs, updateModelSpec } from "@/api/modelSpecApi";
 import { useCatalogDomainOptions } from "@/hooks/useCatalogDomainOptions";
 import { useParams } from "@/routes/hooks";
 import { useUserRoles } from "@/store/userStore";
 import { ModelSpecEditorFields, type ModelSpecSelectOption } from "./components/ModelSpecEditorFields";
+import { ModelSpecFieldsTab } from "./components/ModelSpecFieldsTab";
+import { ModelSpecStandardsTab } from "./components/ModelSpecStandardsTab";
+import { modelSpecDetailPath, modelSpecPlanModelsPath, resolveModelSpecDetailTab } from "./modelSpecDetailNavigation";
 import {
 	type CanonicalModelSpecView,
 	type ModelSpecCasToken,
@@ -40,6 +43,7 @@ const issueField = (field: string): keyof ModelSpecDraft => {
 
 export default function ModelSpecDetailPage() {
 	const navigate = useNavigate();
+	const [searchParams] = useSearchParams();
 	const params = useParams();
 	const modelSpecId = String(params.modelSpecId || "").trim();
 	const userRoles = useUserRoles();
@@ -57,6 +61,7 @@ export default function ModelSpecDetailPage() {
 	const { labelByKey } = useCatalogDomainOptions();
 	const canonicalModel = model?.compatibilityMode === "CANONICAL" ? model : null;
 	const canEdit = Boolean(canonicalModel && roleAllowsEdit && !writeDenied);
+	const activeTab = useMemo(() => resolveModelSpecDetailTab(searchParams), [searchParams]);
 
 	const load = useCallback(async () => {
 		const requestId = ++loadRequestRef.current;
@@ -126,7 +131,8 @@ export default function ModelSpecDetailPage() {
 		if (!canonicalModel || !canEdit) return;
 		setSaveError("");
 		try {
-			const values = await form.validateFields();
+			await form.validateFields();
+			const values = form.getFieldsValue(true);
 			const command = buildModelSpecUpdateCommand(values, selectableModels);
 			const issues = validateModelSpecUpdate(command);
 			if (issues.length > 0) {
@@ -174,6 +180,12 @@ export default function ModelSpecDetailPage() {
 		});
 	};
 
+	const changeTab = (key: string) => {
+		if (!canonicalModel) return;
+		const tab = resolveModelSpecDetailTab(new URLSearchParams({ tab: key }));
+		navigate(modelSpecDetailPath(canonicalModel.id, tab, canonicalModel.planId), { replace: true });
+	};
+
 	if (loading) {
 		return (
 			<div className="flex min-h-[360px] items-center justify-center">
@@ -214,7 +226,7 @@ export default function ModelSpecDetailPage() {
 		<div className="p-4" data-testid="model-spec-detail-page">
 			<div className="mb-4 flex flex-wrap items-start justify-between gap-3">
 				<div>
-					<Button type="link" className="!px-0" onClick={() => navigate("/modeling/models")}>
+					<Button type="link" className="!px-0" onClick={() => navigate(modelSpecPlanModelsPath(model.planId))}>
 						<ArrowLeft size={15} />
 						返回模型中心
 					</Button>
@@ -232,7 +244,7 @@ export default function ModelSpecDetailPage() {
 						<Text type="secondary">版本 r{model.revision}</Text>
 					</Space>
 				</div>
-				{canEdit ? (
+				{canEdit && activeTab !== "standards" ? (
 					<Button type="primary" loading={saving} onClick={() => void save()}>
 						保存草稿
 					</Button>
@@ -273,16 +285,45 @@ export default function ModelSpecDetailPage() {
 			{canonicalModel ? (
 				<Card>
 					<Form form={form} layout="vertical" requiredMark={false} disabled={saving}>
-						<ModelSpecEditorFields
-							form={form}
-							planOptions={planOptions}
-							domainOptions={domainOptions}
-							upstreamOptions={upstreamOptions}
-							dimensionOptions={dimensionOptions}
-							lockPlan
-							lockDomain
-							lockModelType
-							readOnly={!canEdit}
+						<Tabs
+							activeKey={activeTab}
+							onChange={changeTab}
+							items={[
+								{
+									key: "design",
+									label: "模型设计",
+									forceRender: true,
+									children: (
+										<ModelSpecEditorFields
+											form={form}
+											planOptions={planOptions}
+											domainOptions={domainOptions}
+											upstreamOptions={upstreamOptions}
+											dimensionOptions={dimensionOptions}
+											lockPlan
+											lockDomain
+											lockModelType
+											readOnly={!canEdit}
+										/>
+									),
+								},
+								{
+									key: "fields",
+									label: "字段设计",
+									forceRender: true,
+									children: (
+										<ModelSpecFieldsTab
+											readOnly={!canEdit}
+											persistedFieldNames={canonicalModel.fields.map((field) => field.name)}
+										/>
+									),
+								},
+								{
+									key: "standards",
+									label: "字段标准",
+									children: <ModelSpecStandardsTab model={canonicalModel} />,
+								},
+							]}
 						/>
 					</Form>
 				</Card>
@@ -298,22 +339,6 @@ export default function ModelSpecDetailPage() {
 					</Descriptions>
 				</Card>
 			)}
-
-			{canonicalModel && canonicalModel.fields.length > 0 ? (
-				<Card className="mt-3" size="small" title="字段摘要">
-					<Space wrap>
-						{canonicalModel.fields.map((field) => (
-							<Tag key={field.name}>
-								{field.name} · {field.dataType} · {field.role}
-							</Tag>
-						))}
-					</Space>
-				</Card>
-			) : canonicalModel ? (
-				<Card className="mt-3" size="small">
-					<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="字段设计将在关联标准时继续完善" />
-				</Card>
-			) : null}
 		</div>
 	);
 }

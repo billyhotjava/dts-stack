@@ -83,6 +83,27 @@ test("DIMENSION command creates key fields without requiring business activity",
 	assert.equal(command.businessActivityRef, undefined);
 });
 
+test("command parsing trims and deduplicates grain and time field names across supported separators", () => {
+	const command = buildModelSpecCreateCommand(
+		baseDraft({
+			grainKeysText: " customer_id， event_id\ncustomer_id ",
+			fields: [{ name: "customer_id", dataType: "string", nullable: false, role: "KEY" }],
+			factShape: "TRANSACTION",
+			timeSemanticsType: "EVENT_TIME",
+			timeFieldsText: " event_time，created_at\nevent_time ",
+		}),
+		[],
+		"create-fact-shared-parser",
+	);
+
+	assert.deepEqual(command.grain?.keys, ["customer_id", "event_id"]);
+	assert.deepEqual(command.timeSemantics?.fields, ["event_time", "created_at"]);
+	assert.deepEqual(
+		command.fields?.map((field) => field.name),
+		["customer_id", "event_id"],
+	);
+});
+
 test("SUMMARY and APPLICATION pin selected upstream revisions and keep their own grain", () => {
 	const upstream = [{ id: UPSTREAM_ID, revision: 7, modelType: "FACT" as const }];
 	const summary = buildModelSpecCreateCommand(
@@ -170,6 +191,25 @@ test("editing rebuilds a complete update command while immutable context stays u
 	assert.equal(update.modelType, "FACT");
 	assert.equal(update.name, "customer_event_detail_v2");
 	assert.equal("idempotencyKey" in update, false);
+});
+
+test("duplicate field drafts remain visible to contract validation instead of being silently merged", () => {
+	const update = buildModelSpecUpdateCommand(
+		baseDraft({
+			grainKeysText: "event_id",
+			fields: [
+				{ name: "event_id", dataType: "string", nullable: false, role: "KEY" },
+				{ name: "event_id", dataType: "bigint", nullable: false, role: "ATTRIBUTE" },
+			],
+		}),
+		[],
+	);
+
+	assert.equal(update.fields?.length, 2);
+	assert.deepEqual(
+		update.fields?.map((field) => field.name),
+		["event_id", "event_id"],
+	);
 });
 
 test("customer errors describe recovery without exposing backend text", () => {

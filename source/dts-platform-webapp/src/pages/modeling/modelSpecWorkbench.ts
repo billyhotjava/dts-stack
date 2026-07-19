@@ -1,3 +1,4 @@
+import { parseModelFieldNames } from "./modelSpecFieldRules.ts";
 import type {
 	CanonicalModelSpecView,
 	CreateModelSpecCommand,
@@ -121,29 +122,23 @@ export function createEmptyModelSpecDraft(
 	};
 }
 
-const splitNames = (value: string): string[] => {
-	const seen = new Set<string>();
-	return value
-		.split(/[,，\n]/)
-		.map((item) => item.trim())
-		.filter((item) => Boolean(item) && !seen.has(item) && Boolean(seen.add(item)));
-};
-
 const optionalText = (value: string | null | undefined) => value?.trim() || undefined;
 
 const buildFields = (draft: ModelSpecDraft, grainKeys: string[]): ModelSpecField[] => {
-	const byName = new Map(draft.fields.map((field) => [field.name.trim(), field]));
+	const fields = [...draft.fields];
+	const names = new Set(fields.map((field) => field.name.trim()).filter(Boolean));
 	for (const key of grainKeys) {
-		if (!byName.has(key)) {
-			byName.set(key, {
+		if (!names.has(key)) {
+			fields.push({
 				name: key,
 				dataType: draft.keyDataType.trim() || "string",
 				nullable: false,
 				role: "KEY",
 			});
+			names.add(key);
 		}
 	}
-	return [...byName.values()];
+	return fields;
 };
 
 const buildSources = (sources: ModelSpecSourceDraft[]): ModelSpecSourceRef[] =>
@@ -179,11 +174,11 @@ export function buildModelSpecCreateCommand(
 	candidates: ModelSpecRevisionCandidate[],
 	idempotencyKey: string,
 ): CreateModelSpecCommand {
-	const grainKeys = splitNames(draft.grainKeysText);
+	const grainKeys = parseModelFieldNames(draft.grainKeysText);
 	const isFact = draft.modelType === "FACT";
 	const isDerived = draft.modelType === "SUMMARY" || draft.modelType === "APPLICATION";
 	const isApplication = draft.modelType === "APPLICATION";
-	const timeFields = splitNames(draft.timeFieldsText);
+	const timeFields = parseModelFieldNames(draft.timeFieldsText);
 	const generationType = optionalText(draft.generationStrategyType);
 	return {
 		planId: draft.planId.trim(),

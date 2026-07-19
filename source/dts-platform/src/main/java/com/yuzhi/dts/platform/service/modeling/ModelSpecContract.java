@@ -583,6 +583,34 @@ public final class ModelSpecContract {
         return validateCreate(asCreate(command));
     }
 
+    public static List<FieldIssue> validateView(ModelSpecView view) {
+        if (view == null) return List.of(issue("MODEL_SPEC_REQUEST_INVALID", "$", "ModelSpec view is required"));
+        return validateUpdate(
+            new UpdateModelSpecCommand(
+                view.planId(),
+                view.domainId(),
+                view.modelType(),
+                view.layer(),
+                view.name(),
+                view.description(),
+                view.implementationMode(),
+                view.materialization(),
+                view.businessActivityRef(),
+                view.consumptionScenario(),
+                view.grain(),
+                view.factShape(),
+                view.timeSemantics(),
+                view.fields(),
+                view.sourceRefs(),
+                view.dependsOn(),
+                view.dimensionRefs(),
+                view.metricRefs(),
+                view.standardBindings(),
+                view.generationStrategy()
+            )
+        );
+    }
+
     static CreateModelSpecCommand asCreate(UpdateModelSpecCommand command) {
         return new CreateModelSpecCommand(
             command.planId(),
@@ -654,14 +682,26 @@ public final class ModelSpecContract {
                 issues.add(issue("MODEL_SPEC_METRIC_REF_INVALID", "metricRefs", "Metric references require an id and positive version"));
             }
         }
+        Set<String> standardBindingFields = new HashSet<>();
         for (StandardBinding binding : command.standardBindings()) {
-            if (binding != null && invalidStandardBinding(binding)) {
-                issues.add(
-                    issue(
-                        "MODEL_SPEC_STANDARD_BINDING_INVALID",
-                        "standardBindings",
-                        "Standard bindings require a field and complete positive-version reference pairs"
-                    )
+            if (
+                binding != null &&
+                (invalidStandardBinding(binding) ||
+                    (binding.fieldName() != null && !standardBindingFields.add(binding.fieldName())))
+            ) {
+                addIssueOnce(
+                    issues,
+                    "MODEL_SPEC_STANDARD_BINDING_INVALID",
+                    "standardBindings",
+                    "Standard bindings require one unique binding per field and complete positive-version reference pairs"
+                );
+            }
+            if (binding != null && binding.fieldName() != null && !fieldNames.contains(binding.fieldName())) {
+                addIssueOnce(
+                    issues,
+                    "MODEL_SPEC_STANDARD_BINDING_INVALID",
+                    "standardBindings",
+                    "Standard bindings must reference declared fields"
                 );
             }
         }

@@ -230,6 +230,31 @@ test("FACT draft requires grain and a source but permits fact shape and time sem
 	assert.deepEqual(validateModelSpecCreate(fact), []);
 });
 
+test("standard bindings must resolve to declared fields", () => {
+	const fact = valid("FACT");
+	const issues = validateModelSpecCreate({
+		...fact,
+		standardBindings: [{ fieldName: "missing_standard_field", securityLevel: "INTERNAL" }],
+	});
+	assert.deepEqual(
+		issues.map((item) => item.code),
+		["MODEL_SPEC_STANDARD_BINDING_INVALID"],
+	);
+});
+
+test("a field accepts only one standard binding", () => {
+	const fact = valid("FACT");
+	const binding = { fieldName: "record_id", securityLevel: "INTERNAL" };
+	const issues = validateModelSpecCreate({
+		...fact,
+		standardBindings: [binding, binding],
+	});
+	assert.deepEqual(
+		issues.map((item) => item.code),
+		["MODEL_SPEC_STANDARD_BINDING_INVALID"],
+	);
+});
+
 test("APPLICATION requires a consumption scenario and other model types reject one", () => {
 	const application = minimal("APPLICATION");
 	assert.deepEqual(validateModelSpecCreate(application), []);

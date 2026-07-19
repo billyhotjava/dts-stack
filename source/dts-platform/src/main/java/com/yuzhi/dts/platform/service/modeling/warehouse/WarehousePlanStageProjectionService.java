@@ -20,6 +20,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
@@ -51,7 +52,14 @@ public class WarehousePlanStageProjectionService {
         evidence.add(sourceInventoryEvidence(sources));
         evidence.add(warehousePlanningEvidence(plan.onboardingMode(), category, policy, sources));
         evidence.add(modelDesignEvidence(planId, models));
-        return compute(planId, plan.onboardingMode(), evidence, Instant.now());
+        evidence.add(dataStandardEvidence(planId, models));
+        return compute(
+            planId,
+            plan.onboardingMode(),
+            evidence,
+            Instant.now(),
+            new RepairContext(standardRepairModelId(planId, models))
+        );
     }
 
     public static StageProjection compute(
@@ -60,9 +68,20 @@ public class WarehousePlanStageProjectionService {
         List<StageEvidence> evidence,
         Instant computedAt
     ) {
+        return compute(planId, onboardingMode, evidence, computedAt, RepairContext.empty());
+    }
+
+    private static StageProjection compute(
+        UUID planId,
+        OnboardingMode onboardingMode,
+        List<StageEvidence> evidence,
+        Instant computedAt,
+        RepairContext repairContext
+    ) {
         Objects.requireNonNull(planId, "planId is required");
         Objects.requireNonNull(onboardingMode, "onboardingMode is required");
         Objects.requireNonNull(computedAt, "computedAt is required");
+        Objects.requireNonNull(repairContext, "repairContext is required");
 
         Map<StageCode, StageEvidence> byStage = new EnumMap<>(StageCode.class);
         if (evidence != null) {
@@ -75,7 +94,7 @@ public class WarehousePlanStageProjectionService {
 
         List<StageView> stages = new ArrayList<>(StageCode.values().length);
         for (StageCode stageCode : StageCode.values()) {
-            stages.add(toView(planId, stageCode, byStage.get(stageCode)));
+            stages.add(toView(planId, stageCode, byStage.get(stageCode), repairContext));
         }
 
         StageView current = selectCurrent(onboardingMode, stages);
@@ -272,16 +291,119 @@ public class WarehousePlanStageProjectionService {
             .value()
             .stream()
             .filter(Objects::nonNull)
-            .filter(model -> model.contractVersion() == ModelSpecContract.CONTRACT_VERSION)
-            .filter(model -> Objects.equals(planId, model.planId()))
-            .filter(model -> model.modelType() != null)
-            .filter(model -> model.compatibilityMode() == ModelSpecContract.CompatibilityMode.CANONICAL)
-            .filter(model -> model.status() != null && model.status() != ModelSpecContract.ModelStatus.ARCHIVED)
+            .filter(model -> isValidCanonicalModel(planId, model))
             .count();
         if (validModels == 0) {
             return blockedEvidence(StageCode.MODEL_DESIGN, "MODEL_SPEC_REQUIRED", "Create at least one valid model");
         }
         return completeEvidence(StageCode.MODEL_DESIGN, Math.toIntExact(validModels));
+    }
+
+    private static StageEvidence dataStandardEvidence(UUID planId, OwnerRead<List<ModelSpecView>> models) {
+        if (!models.available() || models.value() == null) {
+            return unknownEvidence(StageCode.DATA_STANDARD, "DATA_STANDARD_EVIDENCE_UNAVAILABLE");
+        }
+        List<ModelSpecView> validModels = models
+            .value()
+            .stream()
+            .filter(Objects::nonNull)
+            .filter(model -> isValidCanonicalModel(planId, model))
+            .toList();
+        if (validModels.isEmpty()) {
+            return blockedEvidence(StageCode.DATA_STANDARD, "MODEL_SPEC_REQUIRED", "Create at least one valid model");
+        }
+
+        int declaredFields = validModels.stream().mapToInt(model -> model.fields().size()).sum();
+        int boundFields = validModels
+            .stream()
+            .mapToInt(model -> {
+                Set<String> fieldNames = model
+                    .fields()
+                    .stream()
+                    .map(ModelSpecContract.ModelField::name)
+                    .collect(java.util.stream.Collectors.toSet());
+                return Math.toIntExact(
+                    model
+                        .standardBindings()
+                        .stream()
+                        .map(ModelSpecContract.StandardBinding::fieldName)
+                        .filter(fieldNames::contains)
+                        .distinct()
+                        .count()
+                );
+            })
+            .sum();
+        if (boundFields == declaredFields) {
+            return completeEvidence(StageCode.DATA_STANDARD, boundFields);
+        }
+        if (boundFields == 0) {
+            return blockedEvidence(
+                StageCode.DATA_STANDARD,
+                "MODEL_STANDARD_BINDING_REQUIRED",
+                "Bind a saved data standard or security level to every model field"
+            );
+        }
+        return new StageEvidence(
+            StageCode.DATA_STANDARD,
+            StageStatus.IN_PROGRESS,
+            EvidenceFreshness.CURRENT,
+            boundFields,
+            "MODEL_STANDARD_BINDING_INCOMPLETE",
+            "Some model fields do not have saved data-standard evidence",
+            null,
+            null
+        );
+    }
+
+    private static UUID standardRepairModelId(UUID planId, OwnerRead<List<ModelSpecView>> models) {
+        if (!models.available() || models.value() == null) return null;
+        return models
+            .value()
+            .stream()
+            .filter(Objects::nonNull)
+            .filter(model -> isValidCanonicalModel(planId, model))
+            .filter(WarehousePlanStageProjectionService::hasUnboundStandardField)
+            .map(ModelSpecView::id)
+            .sorted()
+            .findFirst()
+            .orElse(null);
+    }
+
+    private static boolean isValidCanonicalModel(UUID planId, ModelSpecView model) {
+        return (
+            model.contractVersion() == ModelSpecContract.CONTRACT_VERSION &&
+            Objects.equals(planId, model.planId()) &&
+            model.id() != null &&
+            model.revision() > 0 &&
+            model.compatibilityMode() == ModelSpecContract.CompatibilityMode.CANONICAL &&
+            model.status() != null &&
+            model.status() != ModelSpecContract.ModelStatus.ARCHIVED &&
+            ModelSpecContract.validateView(model).isEmpty() &&
+            hasResolvedModelFieldReferences(model)
+        );
+    }
+
+    private static boolean hasResolvedModelFieldReferences(ModelSpecView model) {
+        if (model.fields() == null || model.fields().isEmpty()) return false;
+        Set<String> fieldNames = model
+            .fields()
+            .stream()
+            .filter(Objects::nonNull)
+            .map(ModelSpecContract.ModelField::name)
+            .filter(Objects::nonNull)
+            .collect(java.util.stream.Collectors.toSet());
+        if (model.grain() == null || !fieldNames.containsAll(model.grain().keys())) return false;
+        return model.timeSemantics() == null || fieldNames.containsAll(model.timeSemantics().fields());
+    }
+
+    private static boolean hasUnboundStandardField(ModelSpecView model) {
+        Set<String> boundFields = model
+            .standardBindings()
+            .stream()
+            .map(ModelSpecContract.StandardBinding::fieldName)
+            .filter(Objects::nonNull)
+            .collect(java.util.stream.Collectors.toSet());
+        return model.fields().stream().map(ModelSpecContract.ModelField::name).anyMatch(field -> !boundFields.contains(field));
     }
 
     private static StageEvidence completeEvidence(StageCode stageCode, int count) {
@@ -336,9 +458,14 @@ public class WarehousePlanStageProjectionService {
         }
     }
 
-    private static StageView toView(UUID planId, StageCode stageCode, StageEvidence evidence) {
+    private static StageView toView(
+        UUID planId,
+        StageCode stageCode,
+        StageEvidence evidence,
+        RepairContext repairContext
+    ) {
         if (evidence == null) {
-            Action action = defaultAction(planId, stageCode, repairTarget(stageCode, null));
+            Action action = defaultAction(planId, stageCode, repairTarget(stageCode, null), repairContext);
             return new StageView(
                 stageCode,
                 StageStatus.NOT_STARTED,
@@ -364,7 +491,7 @@ public class WarehousePlanStageProjectionService {
             blockerCode = stageCode.name() + "_" + effectiveStatus.name();
             blockerMessage = "This stage has not produced current completion evidence";
         }
-        Action action = defaultAction(planId, stageCode, repairTarget(stageCode, blockerCode));
+        Action action = defaultAction(planId, stageCode, repairTarget(stageCode, blockerCode), repairContext);
         return new StageView(
             stageCode,
             effectiveStatus,
@@ -381,7 +508,12 @@ public class WarehousePlanStageProjectionService {
         return new PrimaryBlocker(stage.code(), stage.blockerCode(), stage.blockerMessage());
     }
 
-    private static Action defaultAction(UUID planId, StageCode stageCode, RepairTarget repairTarget) {
+    private static Action defaultAction(
+        UUID planId,
+        StageCode stageCode,
+        RepairTarget repairTarget,
+        RepairContext repairContext
+    ) {
         String planRoot = "/modeling/plans/" + planId;
         String planQuery = "?planId=" + planId;
         return switch (stageCode) {
@@ -391,7 +523,12 @@ public class WarehousePlanStageProjectionService {
                 "Complete warehouse planning",
                 planRoot + "/baseline?tab=" + planningTab(repairTarget)
             );
-            case DATA_STANDARD -> new Action("Bind data standards", "/modeling/models" + planQuery);
+            case DATA_STANDARD -> repairContext.standardsModelSpecId() == null
+                ? new Action("Bind data standards", "/modeling/models" + planQuery)
+                : new Action(
+                    "Bind data standards",
+                    "/modeling/models/" + repairContext.standardsModelSpecId() + "?tab=standards&planId=" + planId
+                );
             case MODEL_DESIGN -> new Action("Continue model design", "/modeling/models" + planQuery);
             case BUILD_QUALITY_RELEASE -> new Action("Review build and quality gates", planRoot + "/implementation");
             case DATA_ASSET -> new Action("Review registered assets", "/catalog/assets" + planQuery);
@@ -515,6 +652,12 @@ public class WarehousePlanStageProjectionService {
     }
 
     private record Action(String label, String path) {}
+
+    private record RepairContext(UUID standardsModelSpecId) {
+        private static RepairContext empty() {
+            return new RepairContext(null);
+        }
+    }
 
     private record OwnerRead<T>(boolean available, T value) {
         private static <T> OwnerRead<T> available(T value) {

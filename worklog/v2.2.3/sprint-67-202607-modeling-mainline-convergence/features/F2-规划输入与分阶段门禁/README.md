@@ -12,7 +12,7 @@
 | [T01-明确双起点计划创建输入](T01-明确双起点计划创建输入.md) | P0 | DONE | F1-T03 | WarehousePlan 创建/恢复契约 |
 | [T02-实现业务分类与分层基线](T02-实现业务分类与分层基线.md) | P0 | IN_PROGRESS | T01 | category/policy 可编辑基线 |
 | [T03-实现来源盘点与分阶段门禁](T03-实现来源盘点与分阶段门禁.md) | P0 | IN_PROGRESS | T02 | source inventory 与模型类型门禁 |
-| [T04-重算阶段投影与唯一下一步](T04-重算阶段投影与唯一下一步.md) | P0 | READY | T02/T03 | StageProjection 和 nextAction |
+| [T04-重算阶段投影与唯一下一步](T04-重算阶段投影与唯一下一步.md) | P0 | IN_PROGRESS | T02/T03 | StageProjection 和 nextAction |
 
 ## 完成标准
 
