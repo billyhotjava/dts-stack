@@ -257,8 +257,12 @@ public class MeasurementUnitApplicationService {
     }
 
     private void rejectDuplicateCode(String code, UUID currentId) {
-        Optional<StoredUnit> duplicate = repository.findByCode(code);
-        if (duplicate.isPresent() && !Objects.equals(duplicate.get().id(), currentId)) throw duplicateCode();
+        repository
+            .findByCode(code)
+            .filter(duplicate -> !Objects.equals(duplicate.id(), currentId))
+            .ifPresent(duplicate -> {
+                throw duplicateCode();
+            });
     }
 
     private void validateBase(UUID unitId, String quantityKind, UUID baseUnitRef) {

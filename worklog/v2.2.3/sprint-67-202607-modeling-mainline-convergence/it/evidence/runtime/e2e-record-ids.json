@@ -1,0 +1,90 @@
+{
+  "verifiedAt": "2026-07-20T04:48:23+08:00",
+  "environment": {
+    "baseUrl": "https://bi.yuzhicloud.com",
+    "browser": "Chromium 95.0.4638.0",
+    "actor": "opadmin",
+    "apiMocked": false,
+    "database": "deployed PostgreSQL"
+  },
+  "browserResult": {
+    "tests": 3,
+    "passed": 3,
+    "viewports": ["1440x960", "390x844"],
+    "pageErrors": 0,
+    "requestFailures": 0,
+    "unexpectedHttpFailures": 0
+  },
+  "journeyA": {
+    "startMode": "BUSINESS_FIRST",
+    "planId": "4da42b8e-612b-492a-ad9b-8861e337554e",
+    "domainId": "cf71c12f-60a3-4012-8ece-43d8fe0bc3df",
+    "sourceAssetId": "a127121e-a547-4864-8038-72aae7e15533",
+    "sourceBindingId": "1d11c30e-183e-4452-ab7d-ba9a535b70ff",
+    "dimensionModelId": "8ac6f4a3-c867-4459-a348-8fd6094f2615",
+    "factModel": {
+      "id": "33030d7c-d3a5-459b-a3ba-facdbfaf920f",
+      "revision": 3,
+      "checksum": "215901de70c1b0538115484e96d1c534636bb9b3537223dbb4c79bc514ed8446",
+      "status": "PUBLISHED"
+    },
+    "measurementUnitIds": {
+      "identifier": "f6c91dc5-6daf-48e5-94f7-852e55a73b59",
+      "timestamp": "ee08f604-ec03-4baa-a55c-966bbf666e80",
+      "count": "6458d88e-35c6-4782-975d-3869e49c2773"
+    },
+    "metricRef": {"metricId": "29000000-0000-4000-8000-000000000029", "version": 1},
+    "releaseEventId": "8dec01e3-d93d-4ded-a5a4-b876a37936a3",
+    "registrationIds": [
+      "1c28022b-cef6-4b21-bdb2-f6766ddd05c1",
+      "0b4f157a-8c01-45c1-8324-7bf82a08a3f4",
+      "ee90b998-5aa5-495f-9813-a1581bc1cabd"
+    ],
+    "compileEventId": "2da17e91-e0cd-4762-9558-7f0d88c63ee3",
+    "runId": "184a0a8c-12ae-4428-9f2b-cf667271cf23"
+  },
+  "journeyB": {
+    "startMode": "ASSET_FIRST",
+    "planId": "5f9cdf61-8598-42cd-952f-127c645c9cd7",
+    "sourceBindingId": "caa91b6d-89dd-4c7d-a733-a4c6c312fc6c",
+    "models": {
+      "dimension": "114bd91c-2b24-4208-a5c3-8386eea5064c",
+      "fact": "6e4b9090-cba3-4f11-8d10-e51c3407f5c4",
+      "summary": "08686fb2-33f7-4540-8b88-8acd995cf325",
+      "application": "4c1f7394-c5b1-453d-bb20-1bd0a3684ae7"
+    },
+    "publishedFact": {
+      "revision": 2,
+      "checksum": "6da48b42888b9b0a763a3853922ed518bd8735d0e3c6b2544fd5ed2966d5e82f",
+      "releaseEventId": "332408f2-107a-4b32-8031-e9cdcb0594e0",
+      "registrationIds": [
+        "d01fe9f0-a198-4a0f-834c-e79cd1f17691",
+        "3d7690c5-9d28-4afa-af6f-d020b3d1fd0d",
+        "774c7b21-0d6c-44c6-955b-22d467a88ff8"
+      ],
+      "runId": "e5232db5-1062-4c27-957c-911fedb2d7e6"
+    },
+    "amountUnitId": "feed73a3-1641-4a46-b912-eea9eabd1309"
+  },
+  "journeyC": {
+    "legacyObjectId": "c776016d-855d-47e1-a974-f37deb401df5",
+    "routeOutcome": "NEEDS_CLASSIFICATION",
+    "legacyWriteStatus": 410,
+    "legacyWriteCode": "BUSINESS_OBJECT_RETIRED",
+    "latestDryRunBatchId": "legacy-objects-362a74d9939f84fb",
+    "appliedReconciliationBatchId": "legacy-objects-608ba1f186f04890",
+    "legacyCalls30d": 4,
+    "exitDecision": "NO-DROP",
+    "unresolvedRecords": 5,
+    "blockers": [
+      "LEGACY_RECORDS_STILL_READONLY",
+      "LEGACY_CONSUMERS_NOT_ZERO",
+      "BACKUP_APPROVAL_REQUIRED"
+    ]
+  },
+  "truthBoundary": {
+    "externalRunSubmission": "RUNTIME_DISABLED",
+    "verified": ["deployed auth", "Spring API", "PostgreSQL records", "Chrome95 desktop/narrow"],
+    "pending": ["readonly login", "cross-tenant login", "legacy auto-map fixture", "real failure injection"]
+  }
+}

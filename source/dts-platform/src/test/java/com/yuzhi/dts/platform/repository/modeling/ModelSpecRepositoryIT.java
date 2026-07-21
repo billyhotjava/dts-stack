@@ -53,6 +53,16 @@ class ModelSpecRepositoryIT {
         repository.insertV2Revision(tenant, actor, second, secondSnapshot);
         assertThat(repository.compareAndSetV2(tenant, actor, 1, first.checksum(), second, secondSnapshot)).isZero();
         assertThat(repository.findCurrent(tenant, first.id())).get().extracting(ModelSpecRepository.StoredModelSpec::revision).isEqualTo(2);
+
+        ModelSpecView published = codec.toLifecycleView(second, ModelStatus.PUBLISHED, second.revision(), now.plusSeconds(120));
+        String publishedSnapshot = codec.write(published);
+        assertThat(repository.compareAndSetLifecycle(tenant, actor, 2, second.checksum(), ModelStatus.DRAFT, published)).isEqualTo(1);
+        assertThat(repository.updateV2RevisionLifecycle(tenant, actor, ModelStatus.DRAFT, published, publishedSnapshot)).isEqualTo(1);
+        assertThat(repository.compareAndSetPublishedMetricRefs(tenant, actor, 2, published.checksum(), published, publishedSnapshot))
+            .isEqualTo(1);
+        assertThat(repository.findCurrent(tenant, first.id())).get().extracting(ModelSpecRepository.StoredModelSpec::status)
+            .isEqualTo(ModelStatus.PUBLISHED);
+
         String persistedFirstSnapshot = repository.findRevision(tenant, first.id(), 1).orElseThrow().currentSnapshot();
         assertThat(objectMapper.readTree(persistedFirstSnapshot)).isEqualTo(objectMapper.readTree(firstSnapshot));
         assertThat(repository.findCurrent("another-tenant", first.id())).isEmpty();

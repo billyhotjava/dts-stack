@@ -1,6 +1,6 @@
 # Sprint-67 IT 与交付证据计划
 
-**状态**：IN_PROGRESS（F2-F5、F6-T01/T02 已关闭；F1 契约评审与 F6-T03/T04 尚未关闭）
+**状态**：DONE（24/24 Task 已关闭；受控发布 GO，物理删除与外部运行成功声明除外）
 
 ## 1. 验收旅程
 
@@ -69,6 +69,10 @@
 实现阶段在 `it/evidence/` 下按 `contracts/`、`api/`、`migration/`、`frontend/`、`chrome95/`、`build/`、`gitnexus/` 分类保存。README 只索引真实文件；未产生证据的检查不得标记 DONE。
 
 F6-T02 已集中完成一次后端契约批次、一次 PostgreSQL Testcontainers 集成、一次前端 production build 和一次 Chromium 95 定点回归。对应证据为 `backend-contract/model-lifecycle.txt`、`runtime/compile-test-publish-run.json`、`runtime/failure-repair-loop.md` 和 `chrome95/README.md`；真实部署 E2E 不由 mock 浏览器证据替代。
+
+F6-T03 已在部署环境完成 BUSINESS_FIRST 发布与指标回绑、ASSET_FIRST 四类模型与 FACT 发布、旧深链未分类恢复和旧写 410，真实 Chrome95 结果 3/3 PASS。权限通过真实 Spring Security filter chain，跨租户/自动映射/幂等通过 PostgreSQL Testcontainers，失败恢复由后端门禁测试和 Chrome95 UI 故障注入分层验证；记录 ID 与真实性边界见 `runtime/e2e-record-ids.json` 和 `backend-contract/f6-t03-boundaries.txt`。
+
+F6-T04 已完成最终候选构建、受控镜像回滚/恢复、容器健康检查、数据库前后对账和 Go/No-Go 评审。发布主线为 GO；旧结构物理删除仍为 NO-GO，外部 Airflow/dbt 在 `RUNTIME_DISABLED` 环境下不声明成功。最终索引见 `review/final-go-no-go.md`、`review/completion-layer-matrix.md`、`build/final-verification.txt` 和 `migration/final-rollback-drill.md`。
 
 ## 6. 发布决策
 

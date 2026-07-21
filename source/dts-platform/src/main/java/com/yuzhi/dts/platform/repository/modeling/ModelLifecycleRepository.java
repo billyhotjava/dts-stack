@@ -20,6 +20,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 /** PostgreSQL store for revision-bound implementation and lifecycle evidence. */
 @Repository
@@ -254,6 +256,7 @@ public class ModelLifecycleRepository {
         return queryEvents(" where tenant_id = ? and id = ?", tenantId, eventId).stream().findFirst();
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void updateEventStatus(UUID eventId, String status, Map<String, Object> details) {
         jdbcTemplate.update(
             "update modeling_model_lifecycle_event set status = ?, details_json = cast(? as jsonb) where id = ?",
@@ -304,6 +307,7 @@ public class ModelLifecycleRepository {
         );
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public RegistrationStepView startRegistration(
         UUID releaseEventId,
         RegistrationStep step,
@@ -329,6 +333,7 @@ public class ModelLifecycleRepository {
         return listRegistrations(releaseEventId).stream().filter(item -> item.step() == step).findFirst().orElseThrow();
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public RegistrationStepView completeRegistration(
         UUID releaseEventId,
         RegistrationStep step,

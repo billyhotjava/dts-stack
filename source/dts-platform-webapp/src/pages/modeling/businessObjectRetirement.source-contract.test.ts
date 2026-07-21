@@ -38,7 +38,7 @@ test("canonical customer pages use model and metric references only", () => {
 test("old deep links remain isolated in one read-only compatibility page", () => {
 	const routes = read("../../routes/sections/dashboard/static-routes.tsx");
 	const compatibility = read("./ModelingCompatibilityPage.tsx");
-	assert.match(routes, /path: "modeling\/semantic\/objects"[^\n]*ModelingCompatibilityPage/);
+	assert.match(routes, /path: "modeling\/semantic\/objects"[\s\S]{0,200}<ModelingCompatibilityPage \/>/);
 	assert.match(compatibility, /listModelSpecs/);
 	assert.doesNotMatch(compatibility, /post\(|put\(|createSemantic|updateSemantic/);
 });

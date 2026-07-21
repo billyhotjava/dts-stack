@@ -124,6 +124,7 @@ test("portal menu starts modeling with the generic workbench", () => {
 		"glossary",
 		"elements",
 		"reference",
+		"units",
 	]);
 	assert.deepEqual(child(modeling, "dimensional-modeling").children?.map((item) => item.key), [
 		"semantic-objects",

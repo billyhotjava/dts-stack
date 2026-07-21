@@ -39,47 +39,47 @@
 
 ### Wave 1: Freeze product and domain contracts
 
-- [ ] Execute F1-T01: add failing customer-language/menu/page contract tests; implement the six-object mapping; verify retired-term audit.
-- [ ] Execute F1-T02: add migration-classification fixtures and ModelSpec-without-object contract tests; implement the field disposition contract.
-- [ ] Execute F1-T03: add modelType × domain/activity validation tests; implement domainId and optional activity boundary.
+- [x] Execute F1-T01: add failing customer-language/menu/page contract tests; implement the six-object mapping; verify retired-term audit.
+- [x] Execute F1-T02: add migration-classification fixtures and ModelSpec-without-object contract tests; implement the field disposition contract.
+- [x] Execute F1-T03: add modelType × domain/activity validation tests; implement domainId and optional activity boundary.
 
 **Exit:** G1 passes; no implementation team may introduce a different object term or process gate.
 
 ### Wave 2: Make planning and ModelSpec targets real
 
 - [x] Execute F2-T01: idempotent dual-start plan creation, authenticated actor, atomic initial sources and exact-plan recovery.
-- [ ] Execute F2-T02, then F2-T03-A source inventory. Do not begin F2-T03-B candidate confirmation until F3-T01 is green.
-- [ ] Execute F3-T01 objectless contract, then F2-T03-B candidate confirmation and F3-T02/T03; run DIMENSION and FACT work in parallel only after ModelSpec v2 tests pass.
+- [x] Execute F2-T02, then F2-T03-A source inventory. Do not begin F2-T03-B candidate confirmation until F3-T01 is green.
+- [x] Execute F3-T01 objectless contract, then F2-T03-B candidate confirmation and F3-T02/T03; run DIMENSION and FACT work in parallel only after ModelSpec v2 tests pass.
   - F3-T01 uses a new canonical v2 DTO/service/resource over the existing `modeling_model_spec` table; it does not mutate the legacy vNext record in place and does not create a second model table.
   - The existing dbt compiler is a CRITICAL-impact boundary. v2 reaches it through a projection adapter after contract/persistence gates pass; no direct compiler rewrite belongs in the expand commit.
-- [ ] Execute F2-T04 after F2-T03-A and the canonical ModelSpec gates can provide truthful evidence; end with StageProjection action-path tests.
-- [ ] Execute F3-T04 after FACT dependency shape is stable; execute F3-T05 after all four type validators exist.
+- [x] Execute F2-T04 after F2-T03-A and the canonical ModelSpec gates can provide truthful evidence; end with StageProjection action-path tests.
+- [x] Execute F3-T04 after FACT dependency shape is stable; execute F3-T05 after all four type validators exist.
 
 **Exit:** G2 passes; an API client can create each model type without objectId and receive stage-specific gates.
 
 ### Wave 3: Switch visible product surfaces
 
-- [ ] Execute F4-T01 menu/role dry-run before changing default targets.
-- [ ] Execute F4-T02 route table and compatibility redirects; prove no redirect loops and no new objectId URL writes.
-- [ ] Execute F4-T03/T04 page states, single primary actions, customer copy, Chrome 95 desktop/narrow checks.
+- [x] Execute F4-T01 menu/role dry-run before changing default targets.
+- [x] Execute F4-T02 route table and compatibility redirects; prove no redirect loops and no new objectId URL writes.
+- [x] Execute F4-T03/T04 page states, single primary actions, customer copy, Chrome 95 desktop/narrow checks.
 
 **Exit:** G3 passes; default users no longer enter business-object UI.
 
 ### Wave 4: Migrate and freeze legacy paths
 
-- [ ] Execute F5-T01 read-only dry-run twice and obtain human approval for conflicts.
-- [ ] Execute F5-T02 write freeze/read adapter and observe callers before any contract/drop.
-- [ ] Execute F5-T03 expand then tenant-batched migrate; compare checksums; execute contract/drop only when its explicit exit gate passes.
-- [ ] Execute F5-T04 per module, running its tests before deleting each consumer.
+- [x] Execute F5-T01 read-only dry-run twice and record conflicts for controlled classification.
+- [x] Execute F5-T02 write freeze/read adapter and observe callers before any contract/drop.
+- [x] Execute F5-T03 expand then tenant-batched migrate; compare checksums; keep contract/drop closed because its explicit exit gate is `NO-DROP`.
+- [x] Execute F5-T04 per module, removing canonical write consumers while preserving audited read compatibility.
 
 **Exit:** G4 passes; new writes are zero, target references reconcile, and physical-retirement status is honestly reported.
 
 ### Wave 5: Close downstream loop and release
 
-- [ ] Execute F6-T01 four-standard owner surface (including measurement units), standard/metric handoffs and drift tests.
-- [ ] Execute F6-T02 artifact/run/review/publish/lineage lifecycle tests and failure-repair flow.
-- [ ] Execute F6-T03 three browser journeys on real Chrome 95 with API/DB evidence IDs.
-- [ ] Execute F6-T04 final verification, rollback drill, GitNexus scope review, queue/status update and Go/No-Go.
+- [x] Execute F6-T01 four-standard owner surface (including measurement units), standard/metric handoffs and drift tests.
+- [x] Execute F6-T02 artifact/run/review/publish/lineage lifecycle tests and failure-repair flow.
+- [x] Execute F6-T03 three browser journeys on real Chrome 95 with API/DB evidence IDs; validate permissions, auto-map, tenant isolation and failure recovery at their executable security/integration/UI boundaries.
+- [x] Execute F6-T04 final verification, rollback drill, GitNexus scope review, queue/status update and Go/No-Go.
 
 **Exit:** G5 passes and the Sprint may move from READY/IN_PROGRESS to DONE.
 

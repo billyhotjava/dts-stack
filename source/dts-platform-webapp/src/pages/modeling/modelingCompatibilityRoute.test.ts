@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	LEGACY_MODELING_PATHS,
 	resolveModelingCompatibilityTarget,
-} from "./modelingCompatibilityRoute";
+} from "./modelingCompatibilityRoute.ts";
 
 const redirect = (path: string, query = "", mapped?: Parameters<typeof resolveModelingCompatibilityTarget>[2]) => {
 	const result = resolveModelingCompatibilityTarget(path, new URLSearchParams(query), mapped);

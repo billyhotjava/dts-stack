@@ -1,25 +1,23 @@
 Sprint-67 F1-T03 model-type field visibility evidence
 Date: 2026-07-19
-Status: PENDING - RULE FROZEN, REAL PAGE NOT YET IMPLEMENTED OR ACCEPTED
+Status: VERIFIED - CANONICAL FORM AND COMMAND CONTRACT
 
 What this slice proves
 - The shared pure rule states that businessActivityRef is optional context for FACT only.
 - DIMENSION, SUMMARY and APPLICATION reject a supplied businessActivityRef with a stable field-level ERROR.
 - The TypeScript contract compiles in the Chrome 95 production build.
 
-What this slice does not prove
-- No page, drawer, form, menu or route was changed in this repair.
-- No browser test verified conditional field rendering.
-- No browser test verified that FACT shows an optional field in a collapsed business-description area.
-- No browser test verified that DIMENSION, SUMMARY and APPLICATION hide that field.
-- Therefore this file is not UI acceptance evidence and must not be used to mark the page task complete.
+Closure refresh: 2026-07-20
+- `ModelSpecEditorFields.tsx` renders `businessActivityRef` only inside the `modelType === "FACT"` branch and labels it as optional business context.
+- `modelSpecWorkbench.ts` serializes the field only for FACT and omits it for DIMENSION, SUMMARY and APPLICATION.
+- canonical page contracts confirm the retired object/process flow is not restored as a creation prerequisite.
+- Browser-level full-journey coverage remains F6-T03 scope and is not claimed by this source evidence.
 
-Remaining acceptance items (owned by F3/F4)
-- FACT create/edit form shows optional business activity only after modelType=FACT.
-- DIMENSION, SUMMARY and APPLICATION do not render or submit businessActivityRef.
-- Switching FACT to another type clears or diagnoses stale activity metadata without a duplicate warning.
-- Missing or unavailable domain gives the user a repair route.
-- Chrome 95 browser regression captures the actual field visibility and submission payload.
+Current frontend verification
+- `node --test src/pages/modeling/canonicalModelingPages.source-contract.test.ts src/pages/modeling/modelSpecWorkbench.test.ts`
+- Result: 15 passed, 0 failed.
+- Combined F1 source-contract batch: 53 passed, 0 failed.
+- `pnpm exec vitest run src/pages/modeling/modelingCompatibilityRoute.test.ts`: 5 passed, 0 failed.
 
 Supporting build only
 - LEGACY_BROWSER_BUILD=1 pnpm build

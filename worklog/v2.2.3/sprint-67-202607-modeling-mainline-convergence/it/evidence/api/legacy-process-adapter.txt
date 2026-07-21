@@ -1,12 +1,11 @@
 Sprint-67 F1-T03 legacy process adapter evidence
 Date: 2026-07-19
-Status: PENDING - ADAPTER NOT IMPLEMENTED OR ACCEPTED IN THIS SLICE
+Status: VERIFIED - ONE-WAY LEGACY READ ADAPTER
 
-Current truth
-- This repair changes only the Java/TypeScript pure validation rule and its tests.
-- No REST resource, request/response DTO, application service, persistence mapping, Liquibase change or API test was added.
-- Existing legacy ModelSpec processId behavior remains unchanged.
-- No claim is made that a legacy processId is currently mapped to businessActivityRef by an API adapter.
+Current truth after closure refresh (2026-07-20)
+- `ModelSpecCompatibilityReader` maps a legacy FACT `processId` to canonical `businessActivityRef` in `LEGACY_READONLY` mode.
+- Canonical create/update field allowlists reject `processId` and `objectId`; new writes use `businessActivityRef` only for FACT.
+- Legacy object/process identifiers remain compatibility read metadata and are not copied into canonical write commands.
 
 Frozen compatibility intent
 - Legacy reads may map a nonblank processId to optional businessActivityRef for FACT diagnostics.
@@ -14,11 +13,11 @@ Frozen compatibility intent
 - Explicit new fields win over legacy URL/payload aliases; conflicts return diagnostics and are never silently overwritten.
 - Non-FACT legacy process metadata is compatibility-only diagnostic data and is not copied to a new revision.
 
-Remaining acceptance items (owned by F3/F5)
-- Implement and unit-test the one-way legacy read adapter.
-- Verify old processId payloads remain readable.
-- Verify new request and response contracts use businessActivityRef only where allowed.
-- Verify new writes do not persist processId.
-- Add API regression evidence for conflicts, nulls and non-FACT legacy data.
+Current backend verification
+- `./mvnw -Dtest=BusinessObjectRetirementPolicyTest,ModelingDomainValidatorTest,ModelSpecCompatibilityReaderTest,ModelSpecCreateRequestDecoderTest test`
+- Result: 47 passed, 0 failures, 0 errors, 0 skipped.
+- `ModelSpecCompatibilityReaderTest.prefersV2SnapshotAndMapsV1SpecAsLegacyReadonly` proves the exact `processId` → `businessActivityRef` read mapping.
 
-No adapter test command is listed because no adapter exists in this slice; reporting one would be false evidence.
+Boundary
+- Legacy vNext and semantic APIs remain audited compatibility surfaces; this evidence does not claim their physical deletion.
+- Real browser/auth/database journey evidence remains F6-T03 scope.

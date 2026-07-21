@@ -296,14 +296,13 @@ public class ModelSpecRepository {
             """
             update modeling_model_spec
                set metric_refs = cast(? as jsonb), current_checksum = ?, revision = ?, version = version + 1,
-                   last_modified_by = ?, last_modified_date = ?
+                   last_modified_date = ?
              where tenant_id = ? and id = ? and contract_version = 2
                and revision = ? and current_checksum = ? and status = 'PUBLISHED'
             """,
             json(replacement.metricRefs()),
             replacement.checksum(),
             replacement.revision(),
-            actorId,
             Timestamp.from(replacement.updatedAt()),
             tenantId,
             replacement.id(),
@@ -324,14 +323,13 @@ public class ModelSpecRepository {
             """
             update modeling_model_spec
                set status = ?, revision = ?, current_checksum = ?, version = version + 1,
-                   last_modified_by = ?, last_modified_date = ?
+                   last_modified_date = ?
              where tenant_id = ? and id = ? and contract_version = 2
                and revision = ? and current_checksum = ? and status = ?
             """,
             replacement.status().name(),
             replacement.revision(),
             replacement.checksum(),
-            actorId,
             Timestamp.from(replacement.updatedAt()),
             tenantId,
             replacement.id(),

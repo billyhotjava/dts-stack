@@ -41,6 +41,9 @@ test("F4 legacy links normalize context and recover unmapped objects", async ({ 
 		"/#/modeling/semantic/models?planningId=legacy-plan&modelId=legacy-model&revision=3&returnTo=%2Fworkbench&junk=x",
 	);
 	await expect(page.getByTestId("model-center-page")).toBeVisible();
+	await expect
+		.poll(() => page.evaluate(() => new URL(window.location.hash.slice(1), window.location.origin).pathname))
+		.toBe("/modeling/models");
 	const redirected = await page.evaluate(() => new URL(window.location.hash.slice(1), "https://bi.yuzhicloud.com"));
 	expect(redirected.pathname).toBe("/modeling/models");
 	expect(redirected.searchParams.get("planId")).toBe("legacy-plan");
@@ -51,6 +54,14 @@ test("F4 legacy links normalize context and recover unmapped objects", async ({ 
 
 	await page.goto("/#/modeling/semantic/models?returnTo=https%3A%2F%2Fevil.example");
 	await expect(page.getByTestId("model-center-page")).toBeVisible();
+	await expect
+		.poll(() =>
+			page.evaluate(() => {
+				const current = new URL(window.location.hash.slice(1), window.location.origin);
+				return `${current.pathname}|${current.searchParams.has("returnTo")}`;
+			}),
+		)
+		.toBe("/modeling/models|false");
 	const safeRedirect = await page.evaluate(() => new URL(window.location.hash.slice(1), "https://bi.yuzhicloud.com"));
 	expect(safeRedirect.searchParams.has("returnTo")).toBe(false);
 
@@ -58,6 +69,11 @@ test("F4 legacy links normalize context and recover unmapped objects", async ({ 
 	await expect(page.getByTestId("modeling-compatibility-recovery")).toBeVisible();
 	await expect(page.getByText("NEEDS_CLASSIFICATION", { exact: true })).toBeVisible();
 	await page.setViewportSize({ width: 390, height: 844 });
+	await expect
+		.poll(() =>
+			page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth)),
+		)
+		.toBeLessThanOrEqual(390);
 	const overflow = await page.evaluate(() => ({
 		viewport: window.innerWidth,
 		document: document.documentElement.scrollWidth,

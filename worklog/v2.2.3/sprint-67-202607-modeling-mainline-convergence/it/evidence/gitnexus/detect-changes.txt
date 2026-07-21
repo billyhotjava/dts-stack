@@ -1,0 +1,22 @@
+Sprint-67 F6-T04 final GitNexus detect_changes
+verifiedAt=2026-07-20
+repo=s10-stack
+scope=all
+changedSymbols=46
+changedFiles=21
+affectedProcesses=0
+risk=LOW
+
+Expected production symbols:
+- ModelSpecRepository lifecycle/metric CAS persistence correction
+- ModelLifecycleRepository registration transaction boundary
+- MeasurementUnitApplicationService duplicate/base validation modernization
+
+Expected test/evidence scope:
+- focused repository/source-contract tests
+- Sprint-67 Chrome95 configuration and real A/B/C spec
+- Sprint-67 status/evidence documents and queue entry
+
+AGENTS.md and CLAUDE.md are pre-existing unrelated workspace changes and are excluded from Sprint-67 delivery staging.
+
+Conclusion: GitNexus reports no affected execution flow and LOW aggregate risk. No HIGH or CRITICAL process impact was detected. Permissions, auto-map, tenant isolation and failure-recovery boundaries are recorded in backend-contract/f6-t03-boundaries.txt.

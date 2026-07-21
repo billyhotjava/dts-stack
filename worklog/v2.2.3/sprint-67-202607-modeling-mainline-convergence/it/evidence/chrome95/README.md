@@ -174,3 +174,19 @@ pnpm exec playwright test e2e/sprint67-f6-lifecycle.spec.ts \
 - `f6-model-repair-chromium95-narrow.png`：390x844 失败运行回链证据。
 
 本轮真实发现并修复 HashRouter production 查询参数读取缺陷，重新构建后定点复验通过。边界：浏览器 API 为精确 mock；真实 Spring/PostgreSQL 事实由 F6-T02 Testcontainers IT 证明。部署环境、真实认证和外部 dbt/Airflow/Catalog E2E 保留给 F6-T03。
+
+## F6-T03 第一批真实 A/B/C 旅程
+
+验证时间：2026-07-20 04:47 +08:00
+
+浏览器：`Chromium 95.0.4638.0`
+
+环境：`https://bi.yuzhicloud.com`，真实 `opadmin` 门户会话、部署 Spring API、Liquibase/PostgreSQL，无 Playwright API route mock。
+
+结果：3/3 PASS（7.6s）。覆盖 BUSINESS_FIRST 已发布 FACT 与稳定指标版本、ASSET_FIRST 同计划四类表和已发布 FACT、旧深链 `NEEDS_CLASSIFICATION`、旧写 410/退役响应头、1440x960 与 390x844。pageerror、requestfailed 和非预期 HTTP >=400 均为 0。
+
+- `journey-a/business-first-metric-owner-chromium95.png`、`business-first-metric-owner-chromium95-narrow.png`
+- `journey-b/asset-first-four-models-chromium95.png`、`asset-first-four-models-chromium95-narrow.png`
+- `journey-c/legacy-recovery-and-freeze-chromium95.png`、`legacy-recovery-and-freeze-chromium95-narrow.png`
+
+真实性边界：A/B 的编译、测试、评审、发布和 catalog/BI/lineage 注册均有持久化记录；运行入口也保存了 run/event，但部署配置返回 `RUNTIME_DISABLED`，不代表外部 Airflow/dbt 已提交。C 的退出门禁为 `NO-DROP`。只读/跨租户账号、自动映射旧对象和故障注入尚未验证，T03 因此保持 IN_PROGRESS。完整 ID 见 `../runtime/e2e-record-ids.json`。
