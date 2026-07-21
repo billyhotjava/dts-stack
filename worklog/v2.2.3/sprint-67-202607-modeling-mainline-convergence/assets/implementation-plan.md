@@ -83,6 +83,15 @@
 
 **Exit:** G5 passes and the Sprint may move from READY/IN_PROGRESS to DONE.
 
+### Wave 6: Reopen from first-use manual testing
+
+- [ ] Execute F2-T05 after the original 24-Task release evidence: add the canonical `/modeling/plans` ledger, reusable plan-header editor, archive action, menu/workbench/detail entry points, and plan-head ETag conflict recovery.
+- [ ] Keep the old `/api/modeling/plans` project-space ledger isolated; add a source-contract guard proving the new page consumes only `/api/modeling/warehouse-plans`.
+- [ ] Run focused frontend/backend tests while developing, then one production build and one real Chrome 95 desktop/narrow acceptance batch after the whole Task is implemented.
+- [ ] Update the manual, incremental evidence and Go/No-Go before returning Sprint-67 to DONE.
+
+**Exit:** G6 passes; a first-time user can correct a newly created plan and manage multiple plans without losing planId context.
+
 ## 3. Required verification commands
 
 Implementation owners must resolve exact test selectors from current package scripts before editing and record them in the Task evidence. Minimum module commands are:

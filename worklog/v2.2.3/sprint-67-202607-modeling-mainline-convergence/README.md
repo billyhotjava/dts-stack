@@ -1,7 +1,7 @@
 # Sprint-67：建模主线与业务对象退役收敛
 
 **时间**：2026-07
-**状态**：DONE
+**状态**：IN_PROGRESS
 **类型**：Product Journey / Modeling Contract / UI Convergence / Controlled Migration
 **目标**：以“业务分类（数据域）→ 数仓分层与标准 → 维度和四类表 → 指标与发布”为唯一对外主线，删除“业务对象”这一重复中间产物，并明确每个页面的输入、输出、下一步和验收证据。
 
@@ -63,13 +63,17 @@ Sprint-65 已建立 `WarehousePlan`、`ModelSpec` 和数据建设工作台，但
 | ID | Feature | Task 数 | 状态 | 交付重点 |
 |---|---|---:|---|---|
 | [F1](features/F1-关键对象与主线契约/README.md) | 关键对象与主线契约 | 3 | DONE | 固化唯一词表、业务对象处置和业务活动边界 |
-| [F2](features/F2-规划输入与分阶段门禁/README.md) | 规划输入与分阶段门禁 | 4 | DONE | 明确计划、分类、分层、来源和阶段门禁 |
+| [F2](features/F2-规划输入与分阶段门禁/README.md) | 规划输入与分阶段门禁 | 5 | IN_PROGRESS | 明确计划、台账、分类、分层、来源和阶段门禁 |
 | [F3](features/F3-维度与四类表直接建模/README.md) | 维度与四类表直接建模 | 5 | DONE | 以 ModelSpec 直接承载维度和四类表 |
 | [F4](features/F4-菜单页面与跳转收敛/README.md) | 菜单页面与跳转收敛 | 4 | DONE | 确立菜单、页面输入输出和唯一下一步 |
 | [F5](features/F5-业务对象迁移与受控退役/README.md) | 业务对象迁移与受控退役 | 4 | DONE | 迁移旧数据、冻结旧写入并清理消费者 |
 | [F6](features/F6-专业模块交接与集成验收/README.md) | 专业模块交接与集成验收 | 4 | DONE | 接通标准、指标、构建发布和端到端证据 |
 
-**统计**：READY=0，IN_PROGRESS=0，DONE=24，BLOCKED=0
+**统计**：READY=0，IN_PROGRESS=1，DONE=24，BLOCKED=0
+
+### 2026-07-21 人工测试重开
+
+Sprint-67 曾按 24/24 Task 完成受控发布评审。首次人工操作发现 canonical WarehousePlan 只有创建、选择和查看入口，缺少计划台账以及创建后的编辑/归档入口。该问题使新用户无法修正计划头输入，也无法管理多个计划，因此 Sprint 重新进入 IN_PROGRESS，并在 F2 新增 P0 T05；原 24 个 Task 的历史证据不回写、不作废，最终 Go/No-Go 在 T05 完成后增量复评。
 
 ## 6. 依赖与执行顺序
 
@@ -86,6 +90,7 @@ F2 与 F3 可在 F1 契约评审通过后并行；F4 可先完成静态 IA，但
 ## 7. 权威资产
 
 - [主线与关键对象设计](assets/modeling-mainline-design.md)
+- [建设规划台账与计划头编辑设计](assets/warehouse-plan-ledger-design.md)
 - [页面输入、输出与跳转矩阵](assets/page-input-output-navigation-matrix.md)
 - [领域、API 与迁移契约](assets/domain-api-migration-contract.md)
 - [预期产物与所有权](assets/expected-artifact-ownership.md)
@@ -99,14 +104,15 @@ F2 与 F3 可在 F1 契约评审通过后并行；F4 可先完成静态 IA，但
 - [x] 用户从建模工作台开始，不经过业务对象页面即可创建维度表、明细表、汇总表和应用表。
 - [x] 数据域/主题域在 UI 中收敛为一个“业务分类”概念，内部仍使用唯一 `domainId`。
 - [x] 数据元、公共码表、度量单位和命名词典均由标准模块持有正文，模型字段只保存稳定引用与版本。
-- [x] 所有页面均有可测试的进入条件、必填输入、输出产物、阻塞码和唯一主动作。
+- [ ] 所有页面均有可测试的进入条件、必填输入、输出产物、阻塞码和唯一主动作；新增建设规划台账待 T05 验收。
 - [x] 新 ModelSpec 写路径不需要 `objectId`，业务活动只在明细表中作为可选说明。
 - [x] `/modeling/semantic/objects` 不再是菜单或主线入口，旧深链命中可审计兼容跳转。
 - [x] 维度性质旧对象迁为 DIMENSION ModelSpec；事实性质旧对象并入明细表粒度和来源；无法判定记录进入人工清单。
 - [x] 数据标准、指标、dbt、运行、发布、血缘和资产引用均继续消费同一 ModelSpec/planId。
-- [x] 24 个 Task 均提供真实测试、构建、迁移或浏览器证据，不以页面截图代替后端事实。
-- [x] Chrome 95 覆盖业务目标起点、资产起点、旧深链、失败恢复和窄屏；权限在真实 Spring Security 边界验证。
-- [x] `git diff --check`、模块测试、前端构建和 GitNexus 变更范围审计通过。
+- [ ] 25 个 Task 均提供真实测试、构建、迁移或浏览器证据，不以页面截图代替后端事实。
+- [ ] 用户可以在 canonical 建设规划台账中查找、编辑和归档计划，也可以从当前计划直接修改计划头。
+- [ ] Chrome 95 在既有场景基础上补齐建设规划台账、编辑、409、归档、只读与窄屏；权限在真实 Spring Security 边界验证。
+- [ ] T05 完成后重新执行 `git diff --check`、定向模块测试、一次前端构建和 GitNexus 变更范围审计。
 
 ## 9. 明确不做
 

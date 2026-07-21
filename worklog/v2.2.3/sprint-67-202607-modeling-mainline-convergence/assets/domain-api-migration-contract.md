@@ -120,7 +120,7 @@ AND (SOURCE_INVENTORY_CONFIRMED OR CONCEPTUAL_DESIGN_ALLOWED)
 
 | 能力 | 目标 API | 旧 API 处置 |
 |---|---|---|
-| 计划与基线 | `/api/modeling/warehouse-plans` | 保留并改门禁 |
+| 计划台账、计划头与基线 | `/api/modeling/warehouse-plans`（list/get/create/PATCH/archive/baseline） | canonical 保留；前端不得复用旧项目空间 `/api/modeling/plans` |
 | 业务分类 | `/api/catalog/domains` | 复用，不再另建 semantic subject domain |
 | 维度目录 | `/api/modeling/model-specs?modelType=DIMENSION` | 替代 semantic/modeling business objects |
 | 四类表 | `/api/modeling/model-specs` | 从 vNext 路径提升为 canonical |
@@ -129,6 +129,8 @@ AND (SOURCE_INVENTORY_CONFIRMED OR CONCEPTUAL_DESIGN_ALLOWED)
 | 指标 | `/api/governance/indicators` / dts-metrics owner API | semantic metric 只做迁移来源 |
 
 兼容期 `/api/modeling/vnext` 可继续存在，但新前端只消费一组 canonical 客户端。`/api/semantic/business-objects` 和 `/api/modeling/vnext/business-objects` 切换为只读/410 写入拒绝，并记录调用方。
+
+计划头修改和归档使用 `If-Match: "plan-head:{version}"`。PATCH 只接受 `name/objective/scope/ownerId/ownerDepartmentId`；`code/onboardingMode/lifecycleStatus/tenantId/version` 不允许由前端回写。canonical 规划不提供前端物理删除，归档是默认退出动作。
 
 ## 5. 数据迁移
 
