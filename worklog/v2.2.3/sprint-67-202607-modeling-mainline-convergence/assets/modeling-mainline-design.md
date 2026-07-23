@@ -22,13 +22,29 @@
 | 表类型 | 客户语言 | 创建时必填 | 创建时可选 | 实现/发布前补齐 |
 |---|---|---|---|---|
 | DIMENSION | 维度表 | 新 UI：planId、domainId、名称、description（维度定义）、维度键说明、目标层、实现方式；Phase-B 再增加 dimensionCode | 属性、层级、来源、generationStrategy | 实现前补 KEY 字段闭合、scdPolicy、来源或 generationStrategy 至少一个；发布前补标准/质量/权限 |
-| FACT | 明细表 | planId、domainId、名称、粒度声明、粒度键、至少一个来源、目标层 | 业务活动、维度引用 | 时间语义、标准绑定、质量规则 |
+| FACT | 明细表 | planId、domainId、名称、粒度声明、粒度键、目标层 | 物理来源、锁定 revision 的上游模型、业务活动、维度引用 | 实现前补时间语义，并满足有效物理来源或上游模型至少一种；发布前补标准/质量/权限 |
 | SUMMARY | 汇总表 | planId、domainId、名称、上游模型、聚合粒度、目标层 | 周期、维度引用、指标引用 | 聚合表达式、刷新策略、质量规则 |
 | APPLICATION | 应用表 | planId、domainId、名称、消费场景、上游模型、目标层 | 服务/报表引用、刷新周期 | 输出字段契约、权限、发布目标 |
 
 `processId` 不再出现在通用创建门禁中。兼容期允许 FACT 的 `businessActivityRef` 映射旧 `processId`，但为空时不得阻止保存或进入下一步。
 
-### 3.1 DIMENSION Phase-B 目标契约（尚未实现）
+FACT 的“目标数仓分层”描述当前 ModelSpec 未来产物所在层；`sourceRefs` 的“上游来源分层”描述已有输入所在层。两者不得根据表名或彼此自动推导。DRAFT 允许 `sourceRefs=[]` 且 `dependsOn=[]`；`IMPLEMENTATION_READY` 使用 inclusive OR，要求 CURRENT 物理来源或锁定 revision 且当前可用的上游 ModelSpec 至少一种。若两类同时提供，则全部引用都必须通过权限、版本、重复和循环依赖检查。
+
+### 3.1 模型类型、目标层与允许上游
+
+| 类型/产物 | 归属 | 目标层 | 允许上游 |
+|---|---|---|---|
+| ODS 原始表 | 数据接入/元数据目录 | ODS_RAW | 外部源 |
+| ODS 标准化表 | 数据接入/转换任务 | ODS_STANDARDIZED | 外部源或 ODS_RAW |
+| 临时技术节点 | SQL/dbt/调度实现 | STG | ODS_RAW/ODS_STANDARDIZED |
+| DIMENSION | 四类 ModelSpec | DWD | ODS_RAW/ODS_STANDARDIZED/STG，或当前计划已确认的存量或外部管理 DWD `sourceRefs`；也可使用受控 `generationStrategy` |
+| FACT | 四类 ModelSpec | DWD | ODS_RAW/ODS_STANDARDIZED/STG，或当前计划已确认的存量或外部管理 DWD `sourceRefs`；也可锁定 FACT@DWD revision `dependsOn`，维度另走 `dimensionRefs` |
+| SUMMARY | 四类 ModelSpec | DWS | 锁定 revision 的 DIMENSION/FACT@DWD 或 SUMMARY@DWS `dependsOn` |
+| APPLICATION | 四类 ModelSpec | ADS | 锁定 revision 的任意合法 DWD/DWS/ADS 四类 ModelSpec `dependsOn` |
+
+ODS_RAW、ODS_STANDARDIZED、STG 是接入/技术层，不是第五、第六类业务模型。四类表的目标层由模型类型自动确定并只读展示；来源层仍属于输入引用。旧 `layer=ODS|STG` ModelSpec 的专属分类、只读查询和显式迁移入口是 F3-T07 后续目标，当前尚未完成对应 UI/迁移闭环。
+
+### 3.2 DIMENSION Phase-B 目标契约（尚未实现）
 
 DIMENSION 在同一 ModelSpec 内增加类型专属 `dimensionProfile`，不新增维度主表：
 
@@ -59,13 +75,15 @@ definition 复用 canonical `description`，新 DIMENSION UI 在创建和编辑�
 - 数仓分层策略已确认；
 - 允许先登记概念维度；
 - 不要求业务对象，不要求业务活动，不要求全部来源完成业务映射。
+- 四类模型目标层必须满足 DIMENSION/FACT→DWD、SUMMARY→DWS、APPLICATION→ADS；ODS/STG 建设从数据接入或技术实现入口开始。
 
 ### 4.3 进入实现
 
 - ModelSpec 的角色必填字段完整；
-- FACT 必须有粒度、时间语义和来源；
+- FACT 必须有粒度和时间语义，并满足有效物理来源或锁定 revision 的上游 ModelSpec 至少一种；
 - DIMENSION 必须有 dimensionCode、KEY 字段闭合、scdPolicy，并满足有效来源或 generationStrategy 至少一个；两者可组合；
-- SUMMARY/APPLICATION 必须有已发布或当前计划内可用的上游模型。
+- SUMMARY 必须有锁定 revision、CURRENT、无环的 DIMENSION/FACT@DWD 或 SUMMARY@DWS 上游；APPLICATION 必须有满足相同条件的任意合法 DWD/DWS/ADS 四类上游；
+- 所有 sourceRefs/dependsOn 必须满足类型允许的上游层，禁止 DWD 反向依赖 DWS/ADS。
 
 ### 4.4 进入发布
 
@@ -88,6 +106,8 @@ Phase-B expand 前必须先用失败测试固定历史 v2 snapshot、checksum/ET
 ### 5.3 模型中心
 
 目标路由 `/modeling/models`，按维度表、明细表、汇总表、应用表四类视图展示同一 ModelSpec 台账。新建按钮直接选择表类型，不先打开业务对象抽屉。
+
+FACT 草稿先描述目标模型，不要求目标物理表已经存在。需要直接物理输入时，从当前计划已确认的来源盘点中选已有表；需要模型到模型转换时，选择锁定 revision 的上游 ModelSpec。目标表由后续 SQL/dbt 实现、构建和运行产生，不在来源选择器中反向选择自身。
 
 ### 5.4 高级实现
 

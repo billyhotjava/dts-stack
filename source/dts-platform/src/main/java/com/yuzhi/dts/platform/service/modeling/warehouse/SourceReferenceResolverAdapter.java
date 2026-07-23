@@ -115,7 +115,7 @@ public class SourceReferenceResolverAdapter implements SourceReferenceResolver {
         if (!departmentAllowed(connection.getOwnerDept(), accessContext)) {
             return ResolvedSource.forbidden();
         }
-        if (!"ACTIVE".equalsIgnoreCase(connection.getStatus())) {
+        if (!"ACTIVE".equalsIgnoreCase(connection.getStatus()) || connection.getLastVerifiedAt() == null) {
             return ResolvedSource.providerError();
         }
         CatalogDataset dataset = datasetRepository
@@ -176,14 +176,19 @@ public class SourceReferenceResolverAdapter implements SourceReferenceResolver {
     private boolean canRead(CatalogDataset dataset, AccessContext accessContext) {
         return dataset != null &&
         accessChecker.canRead(dataset) &&
-        accessChecker.departmentAllowed(dataset, accessContext == null ? null : accessContext.actorDepartmentId());
+        accessChecker.departmentAllowedExact(dataset, accessContext == null ? null : accessContext.actorDepartmentId());
     }
 
     private static boolean departmentAllowed(String ownerDepartmentId, AccessContext accessContext) {
         if (isBlank(ownerDepartmentId)) {
             return true;
         }
-        return accessContext != null && DepartmentUtils.matches(ownerDepartmentId, accessContext.actorDepartmentId());
+        if (accessContext == null) {
+            return false;
+        }
+        String canonicalOwner = DepartmentUtils.normalize(ownerDepartmentId);
+        String canonicalActor = DepartmentUtils.normalize(accessContext.actorDepartmentId());
+        return !canonicalOwner.isEmpty() && canonicalOwner.equals(canonicalActor);
     }
 
     private String schemaFingerprint(CatalogTableSchema table) {

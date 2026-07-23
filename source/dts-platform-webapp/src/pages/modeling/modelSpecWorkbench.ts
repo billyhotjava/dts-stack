@@ -6,11 +6,11 @@ import type {
 	ModelSpecField,
 	ModelSpecImplementationMode,
 	ModelSpecLayer,
-	ModelSpecReuseScope,
-	ModelSpecScdType,
 	ModelSpecMetricRef,
+	ModelSpecReuseScope,
 	ModelSpecRevisionConflictDetails,
 	ModelSpecRevisionRef,
+	ModelSpecScdType,
 	ModelSpecSourceKind,
 	ModelSpecSourceRef,
 	ModelSpecSourceRole,
@@ -202,11 +202,21 @@ const pinSelectedModels = (
 	const candidateById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
 	const existingById = new Map(existing.map((reference) => [reference.modelSpecId, reference]));
 	return ids.map((id) => {
+		const pinned = existingById.get(id);
+		if (pinned) return pinned;
 		const candidate = candidateById.get(id);
 		if (candidate) return { modelSpecId: candidate.id, revision: candidate.revision };
-		return existingById.get(id) || { modelSpecId: id, revision: 0 };
+		return { modelSpecId: id, revision: 0 };
 	});
 };
+
+export function adoptCurrentUpstreamRevisions(
+	existing: ModelSpecRevisionRef[],
+	modelSpecIds: readonly string[],
+): ModelSpecRevisionRef[] {
+	const adoptedIds = new Set(modelSpecIds);
+	return existing.filter((reference) => !adoptedIds.has(reference.modelSpecId));
+}
 
 export function buildModelSpecCreateCommand(
 	draft: ModelSpecDraft,
@@ -216,6 +226,7 @@ export function buildModelSpecCreateCommand(
 	const grainKeys = parseModelFieldNames(draft.grainKeysText);
 	const isFact = draft.modelType === "FACT";
 	const isDerived = draft.modelType === "SUMMARY" || draft.modelType === "APPLICATION";
+	const acceptsUpstreamModels = isFact || isDerived;
 	const isApplication = draft.modelType === "APPLICATION";
 	const timeFields = isFact ? parseModelFieldNames(draft.timeFieldsText || "") : [];
 	const generationType = optionalText(draft.generationStrategyType);
@@ -236,7 +247,7 @@ export function buildModelSpecCreateCommand(
 		fields: buildFields(draft, grainKeys),
 		sourceRefs:
 			draft.modelType === "SUMMARY" || draft.modelType === "APPLICATION" ? [] : buildSources(draft.sources ?? []),
-		dependsOn: isDerived
+		dependsOn: acceptsUpstreamModels
 			? pinSelectedModels(draft.upstreamIds ?? [], candidates, draft.existingUpstreamPins ?? [])
 			: [],
 		dimensionRefs: isFact
@@ -398,14 +409,17 @@ export function modelSpecErrorMessage(error: unknown): string {
 const MODEL_SPEC_ISSUE_MESSAGES: Record<string, string> = {
 	MODEL_SPEC_PLAN_REQUIRED: "请选择建设计划",
 	MODEL_SPEC_DOMAIN_REQUIRED: "请选择业务分类",
-	MODEL_SPEC_TYPE_REQUIRED: "请选择表类型",
+	MODEL_SPEC_TYPE_REQUIRED: "请选择模型类别（四类表）",
 	MODEL_SPEC_LAYER_REQUIRED: "请选择数仓分层",
+	MODEL_SPEC_TYPE_LAYER_MISMATCH: "模型类别与目标分层不一致，请按系统固定分层保存",
 	MODEL_SPEC_NAME_REQUIRED: "请输入模型名称",
 	MODEL_SPEC_GRAIN_REQUIRED: "请说明一行数据代表什么，并填写粒度键",
 	MODEL_SPEC_GRAIN_INVALID: "请完整填写一行含义和粒度键",
 	MODEL_SPEC_DIMENSION_KEY_REQUIRED: "请至少填写一个稳定的维度键",
 	MODEL_SPEC_SOURCE_REQUIRED: "请至少选择一个已确认的数据来源",
-	MODEL_SPEC_SOURCE_INVALID: "请完整填写来源引用、登记 ID 和版本",
+	MODEL_SPEC_SOURCE_INVALID: "请选择当前计划中已确认且版本有效的来源",
+	MODEL_SPEC_UPSTREAM_LAYER_NOT_ALLOWED: "所选上游模型或物理来源分层不符合当前模型类别的依赖规则",
+	MODEL_SPEC_INPUT_KIND_NOT_ALLOWED: "生成策略仅适用于维度表，请重新选择模型类别",
 	MODEL_SPEC_UPSTREAM_REQUIRED: "请至少选择一个上游模型",
 	MODEL_SPEC_DEPENDENCY_INVALID: "请选择带有效版本的上游模型",
 	MODEL_SPEC_CONSUMPTION_SCENARIO_REQUIRED: "请说明应用表服务的报表、接口或业务场景",

@@ -183,6 +183,30 @@ public final class ModelSpecContract {
         APPLICATION,
     }
 
+    static Layer targetLayer(ModelType modelType) {
+        if (modelType == null) return null;
+        return switch (modelType) {
+            case DIMENSION, FACT -> Layer.DWD;
+            case SUMMARY -> Layer.DWS;
+            case APPLICATION -> Layer.ADS;
+        };
+    }
+
+    static boolean matchesTargetLayer(ModelType modelType, Layer layer) {
+        return modelType != null && layer != null && targetLayer(modelType) == layer;
+    }
+
+    static boolean allowsUpstreamModel(ModelType ownerType, ModelType upstreamType, Layer upstreamLayer) {
+        if (ownerType == null || upstreamType == null || upstreamLayer == null) return false;
+        if (!matchesTargetLayer(upstreamType, upstreamLayer)) return false;
+        return switch (ownerType) {
+            case DIMENSION -> false;
+            case FACT -> upstreamType == ModelType.FACT;
+            case SUMMARY -> upstreamType != ModelType.APPLICATION;
+            case APPLICATION -> true;
+        };
+    }
+
     public enum ImplementationMode {
         DESIGNER_GENERATED,
         DBT_MANAGED,
@@ -997,6 +1021,63 @@ public final class ModelSpecContract {
 
     private static void validateTypeBoundary(CreateModelSpecCommand command, List<FieldIssue> issues) {
         if (command.modelType() == null) return;
+        if (command.layer() != null && !matchesTargetLayer(command.modelType(), command.layer())) {
+            issues.add(
+                issue(
+                    "MODEL_SPEC_TYPE_LAYER_MISMATCH",
+                    "layer",
+                    "Four-table models use DIMENSION/FACT DWD, SUMMARY DWS and APPLICATION ADS; ODS/STG belong to ingestion"
+                )
+            );
+        }
+        boolean acceptsPhysicalSources = command.modelType() == ModelType.DIMENSION || command.modelType() == ModelType.FACT;
+        boolean acceptsModelDependencies = command.modelType() != ModelType.DIMENSION;
+        boolean acceptsGenerationStrategy = command.modelType() == ModelType.DIMENSION;
+        if (!acceptsPhysicalSources && !command.sourceRefs().isEmpty()) {
+            issues.add(
+                issue(
+                    "MODEL_SPEC_INPUT_KIND_NOT_ALLOWED",
+                    "sourceRefs",
+                    "SUMMARY and APPLICATION models must use revision-pinned upstream ModelSpecs"
+                )
+            );
+        }
+        if (!acceptsModelDependencies && !command.dependsOn().isEmpty()) {
+            issues.add(
+                issue(
+                    "MODEL_SPEC_INPUT_KIND_NOT_ALLOWED",
+                    "dependsOn",
+                    "DIMENSION uses physical sources or a generation strategy instead of model dependencies"
+                )
+            );
+        }
+        if (!acceptsGenerationStrategy && command.generationStrategy() != null) {
+            issues.add(
+                issue(
+                    "MODEL_SPEC_INPUT_KIND_NOT_ALLOWED",
+                    "generationStrategy",
+                    "Generation strategy belongs to DIMENSION models only"
+                )
+            );
+        }
+        if (
+            acceptsPhysicalSources &&
+            command
+                .sourceRefs()
+                .stream()
+                .filter(java.util.Objects::nonNull)
+                .map(SourceRef::layer)
+                .filter(java.util.Objects::nonNull)
+                .anyMatch(layer -> layer != Layer.ODS && layer != Layer.STG && layer != Layer.DWD)
+        ) {
+            issues.add(
+                issue(
+                    "MODEL_SPEC_UPSTREAM_LAYER_NOT_ALLOWED",
+                    "sourceRefs",
+                    "DWD dimensions and facts may only consume ODS, STG or DWD physical inputs"
+                )
+            );
+        }
         switch (command.modelType()) {
             case DIMENSION -> {
                 if (!hasGrain(command.grain())) {
@@ -1012,7 +1093,6 @@ public final class ModelSpecContract {
                     issues.add(issue("MODEL_SPEC_DIMENSION_PROFILE_NOT_ALLOWED", "dimensionProfile", "Dimension profile belongs to DIMENSION models only"));
                 }
                 if (!hasGrain(command.grain())) issues.add(issue("MODEL_SPEC_GRAIN_REQUIRED", "grain", "FACT requires a grain statement and keys"));
-                if (command.sourceRefs().isEmpty()) issues.add(issue("MODEL_SPEC_SOURCE_REQUIRED", "sourceRefs", "FACT requires a source"));
             }
             case SUMMARY, APPLICATION -> {
                 if (command.dimensionProfile() != null) {

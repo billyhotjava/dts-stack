@@ -14,6 +14,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,6 +32,8 @@ public class AdminDirectoryGateway {
     private static final ParameterizedTypeReference<AdminGatewayEnvelope<List<OrgNode>>> ORG_TREE_ENVELOPE =
         new ParameterizedTypeReference<>() {};
     private static final ParameterizedTypeReference<AdminGatewayEnvelope<List<PlatformUser>>> PLATFORM_USER_LIST =
+        new ParameterizedTypeReference<>() {};
+    private static final ParameterizedTypeReference<AdminGatewayEnvelope<PlatformUser>> PLATFORM_USER =
         new ParameterizedTypeReference<>() {};
     private static final ParameterizedTypeReference<AdminGatewayEnvelope<List<PlatformRole>>> PLATFORM_ROLE_LIST =
         new ParameterizedTypeReference<>() {};
@@ -136,6 +139,36 @@ public class AdminDirectoryGateway {
             }
         }
         return result;
+    }
+
+    public Optional<UserSummary> findUserByPrincipalKey(String principalKey) {
+        if (!properties.isEnabled() || !StringUtils.hasText(principalKey)) {
+            return Optional.empty();
+        }
+        String key = principalKey.trim();
+        try {
+            PlatformUser user = transport.exchangeEnvelopeData(
+                AdminGatewayTarget.API,
+                HttpMethod.GET,
+                buildQuerySuffix("/platform/directory/users/resolve", "principalKey", key),
+                null,
+                PLATFORM_USER,
+                AdminGatewayRequestOptions.defaults()
+            );
+            UserSummary summary = normalizePlatformUsers(user == null ? List.of() : List.of(user)).stream().findFirst().orElse(null);
+            if (matchesPrincipalKey(summary, key)) {
+                return Optional.of(summary);
+            }
+        } catch (AdminGatewayException ex) {
+            LOG.debug("Authoritative directory user lookup failed for principal key {}: {}", key, ex.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    private boolean matchesPrincipalKey(UserSummary summary, String principalKey) {
+        return summary != null &&
+        ((StringUtils.hasText(summary.id()) && summary.id().equals(principalKey)) ||
+            (StringUtils.hasText(summary.username()) && summary.username().equalsIgnoreCase(principalKey)));
     }
 
     public List<RoleSummary> listRoles() {

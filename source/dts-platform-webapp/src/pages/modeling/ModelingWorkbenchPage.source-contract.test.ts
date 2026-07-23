@@ -14,6 +14,23 @@ test("modeling workbench is a canonical warehouse planning surface instead of a 
 	assert.doesNotMatch(entry, /resolveDataProductJourneyStageStates|JourneyContextBar/);
 });
 
+test("workbench links to the canonical ledger and reuses the shared header editor", () => {
+	assert.match(entry, /WarehousePlanHeaderEditor/);
+	assert.match(entry, /全部规划/);
+	assert.match(entry, /navigate\("\/modeling\/plans"\)/);
+	assert.match(entry, /编辑规划/);
+	assert.match(entry, /canEditWarehousePlanHeader/);
+	assert.match(entry, /replaceWarehousePlanHeader/);
+});
+
+test("ledger create handoff opens the existing create flow without creating a second form", () => {
+	assert.match(entry, /searchParams\.get\("create"\)/);
+	assert.match(entry, /requestedCreate/);
+	assert.match(entry, /createRouteHandledRef/);
+	assert.match(entry, /openCreate\(\)/);
+	assert.doesNotMatch(entry, /WarehousePlanLedgerPage/);
+});
+
 test("empty and active plans each expose one unambiguous primary action", () => {
 	assert.match(entry, /data-testid="warehouse-plan-empty-primary-action"/);
 	assert.match(entry, /data-testid="warehouse-plan-next-action"/);

@@ -9,7 +9,7 @@
   "domainId": "uuid",
   "businessActivityRef": "optional-string",
   "modelType": "FACT|DIMENSION|SUMMARY|APPLICATION",
-  "layer": "ODS|STG|DWD|DWS|ADS",
+  "layer": "DWD|DWS|ADS",
   "name": "string",
   "description": "string|null；新 DIMENSION UI 将其作为维度定义必填，历史 v2 允许为空",
   "dimensionProfile": {
@@ -27,7 +27,7 @@
   "factShape": "TRANSACTION|PERIODIC_SNAPSHOT|ACCUMULATING_SNAPSHOT|null",
   "timeSemantics": { "type": "EVENT_TIME|SNAPSHOT_DATE|PERIOD|MILESTONE_DATES", "fields": ["field"] },
   "fields": [{ "name": "string", "dataType": "string", "nullable": true, "sourceFieldRef": "optional-string", "role": "KEY|ATTRIBUTE|TIME|MEASURE", "securityLevel": "optional-string" }],
-  "sourceRefs": [{ "kind": "TABLE|DBT_MODEL|DATASET", "ref": "string", "layer": "ODS", "role": "PRIMARY|JOINED", "alias": "optional-string", "joinType": "INNER|LEFT|RIGHT|FULL|null", "joinExpression": "optional-string", "sortOrder": 0, "sourceBindingId": "uuid", "resolvedVersion": "string" }],
+  "sourceRefs": [{ "kind": "TABLE|DBT_MODEL|DATASET", "ref": "string", "layer": "ODS_RAW|ODS_STANDARDIZED|STG|DWD", "role": "PRIMARY|JOINED", "alias": "optional-string", "joinType": "INNER|LEFT|RIGHT|FULL|null", "joinExpression": "optional-string", "sortOrder": 0, "sourceBindingId": "uuid", "resolvedVersion": "string" }],
   "generationStrategy": { "type": "string", "reference": "optional-string" },
   "dependsOn": [{ "modelSpecId": "uuid", "revision": 3 }],
   "dimensionRefs": [{ "modelSpecId": "uuid", "revision": 3 }],
@@ -56,10 +56,12 @@
 
 | 类型 | 保存门禁 | 实现门禁 | 发布门禁 |
 |---|---|---|---|
-| DIMENSION | 新 UI：planId、domainId、layer、implementationMode、名称、description（维度定义）、维度键说明；Phase-B 再增加 dimensionCode | KEY 字段闭合、scdPolicy；有效 sourceRefs 或 generationStrategy 至少一个（允许同时存在） | 标准、质量、权限 |
-| FACT | domainId、名称、grain.statement、grain.keys、sourceRefs | factShape、timeSemantics、来源字段映射 | 标准、质量、依赖、权限 |
-| SUMMARY | domainId、名称、dependsOn、聚合粒度 | 聚合表达式、刷新策略 | 上游版本、质量、权限 |
-| APPLICATION | domainId、名称、dependsOn、消费场景 | 输出字段和刷新策略 | 上游版本、服务/报表权限 |
+| DIMENSION → DWD | 新 UI：planId、domainId、implementationMode、名称、description（维度定义）、维度键说明；目标层由类型确定；Phase-B 再增加 dimensionCode | KEY 字段闭合、scdPolicy；ODS_RAW/ODS_STANDARDIZED/STG，或当前计划已确认的存量或外部管理 DWD sourceRefs；或 generationStrategy 至少一个（允许同时存在） | 标准、质量、权限、当前 revision 产物 |
+| FACT → DWD | domainId、名称、grain.statement、grain.keys；目标层由类型确定；sourceRefs/dependsOn 可均为空 | factShape、timeSemantics；技术层 sourceRefs 或锁定 revision 的 FACT@DWD dependsOn 至少一个（同时存在时全部校验）；DIMENSION 另走 dimensionRefs | 标准、质量、依赖、权限、当前 revision 产物 |
+| SUMMARY → DWS | domainId、名称、锁定 revision 的 DIMENSION/FACT@DWD 或 SUMMARY@DWS dependsOn、聚合粒度；目标层由类型确定 | 聚合表达式、刷新策略、上游 CURRENT 且无环 | 上游版本、质量、权限、当前 revision 产物 |
+| APPLICATION → ADS | domainId、名称、锁定 revision 的任意合法 DWD/DWS/ADS 四类模型 dependsOn、消费场景；目标层由类型确定 | 输出字段、刷新策略/SLA、上游 CURRENT 且无环 | 上游版本、服务/报表权限、当前 revision 产物 |
+
+`ODS_RAW`、`ODS_STANDARDIZED`、`STG` 不进入 `ModelSpec.layer` 新写枚举：前两者由接入/目录与 SourceBinding 持有，后者由 SQL/dbt/调度产物持有。历史 `layer=ODS|STG` 的专属分类/UI 尚待实现；目标行为是由兼容 reader 返回并标记只读，写拒绝复用现有 `MODEL_SPEC_LEGACY_READONLY`，不新增同义 code。
 
 门禁返回结构统一为：
 
@@ -97,7 +99,7 @@ AND PLANNING_POLICY_CONFIRMED
 AND (SOURCE_INVENTORY_CONFIRMED OR CONCEPTUAL_DESIGN_ALLOWED)
 ```
 
-`CONCEPTUAL_DESIGN_ALLOWED` 只允许创建/编辑候选 DIMENSION ModelSpec；进入实现前仍必须满足有效来源或 generationStrategy 至少一个，允许两者同时存在。
+`CONCEPTUAL_DESIGN_ALLOWED` 只控制 WarehousePlan 的提前设计投影，不得反向收紧 canonical ModelSpec DRAFT：DIMENSION 仍可先做概念设计，FACT 具备粒度即可保存无输入草稿。进入实现前，DIMENSION 必须满足有效来源或 generationStrategy，FACT 必须满足有效 `sourceRefs OR dependsOn`；组合输入全部参与校验。
 
 退役 blocker：
 
@@ -115,6 +117,13 @@ AND (SOURCE_INVENTORY_CONFIRMED OR CONCEPTUAL_DESIGN_ALLOWED)
 - `MODEL_DIMENSION_KEY_REQUIRED`
 - `MODEL_UPSTREAM_REQUIRED`
 - `MODEL_REVISION_DRIFT`
+- `MODEL_SPEC_TYPE_LAYER_MISMATCH`
+- `MODEL_SPEC_INPUT_KIND_NOT_ALLOWED`
+- `MODEL_SPEC_UPSTREAM_LAYER_NOT_ALLOWED`
+- `MODEL_SPEC_FACT_INPUT_REQUIRED`
+- `MODEL_SPEC_DIMENSION_INPUT_REQUIRED`
+
+上述 blocker 在 DRAFT/IMPLEMENTATION/RELEASE 使用同一 code，不因页面不同改名。`MODEL_SPEC_TYPE_LAYER_MISMATCH`、`MODEL_SPEC_INPUT_KIND_NOT_ALLOWED` 和 `MODEL_SPEC_UPSTREAM_LAYER_NOT_ALLOWED` 已与实现统一；不得保留无 `SPEC` 前缀的同义 code。前端下拉过滤不是安全边界。ODS 技术入口和历史 ODS/STG 专属迁移分类/UI 尚待实现；完成分类后兼容写拒绝复用现有 `MODEL_SPEC_LEGACY_READONLY`。
 
 ## 4. API 目标面
 

@@ -4,6 +4,7 @@ import test from "node:test";
 import Ajv2020 from "ajv/dist/2020.js";
 import {
 	type CreateModelSpecCommand,
+	isModelSpecUpstreamAllowed,
 	MODEL_SPEC_COLLECTION_FIELDS,
 	MODEL_SPEC_CONTRACT_VERSION,
 	MODEL_SPEC_CREATE_FIELDS,
@@ -200,6 +201,74 @@ test("all four model types satisfy their deterministic save boundary", () => {
 	}
 });
 
+test("all four model categories reject target layers outside their fixed output layer", () => {
+	const mismatches = [
+		["DIMENSION", "ODS"],
+		["FACT", "STG"],
+		["SUMMARY", "ADS"],
+		["APPLICATION", "DWS"],
+	] as const;
+	for (const [modelType, layer] of mismatches) {
+		assert.deepEqual(
+			validateModelSpecCreate({ ...valid(modelType), layer })
+				.filter((item) => item.code === "MODEL_SPEC_TYPE_LAYER_MISMATCH")
+				.map((item) => ({ code: item.code, field: item.field })),
+			[{ code: "MODEL_SPEC_TYPE_LAYER_MISMATCH", field: "layer" }],
+			`${modelType} must not target ${layer}`,
+		);
+	}
+});
+
+test("upstream model candidates follow the four-category dependency matrix", () => {
+	const dimension = { modelType: "DIMENSION", layer: "DWD" } as const;
+	const fact = { modelType: "FACT", layer: "DWD" } as const;
+	const summary = { modelType: "SUMMARY", layer: "DWS" } as const;
+	const application = { modelType: "APPLICATION", layer: "ADS" } as const;
+
+	assert.equal(isModelSpecUpstreamAllowed("DIMENSION", fact), false);
+	assert.equal(isModelSpecUpstreamAllowed("FACT", fact), true);
+	assert.equal(isModelSpecUpstreamAllowed("FACT", dimension), false);
+	assert.equal(isModelSpecUpstreamAllowed("SUMMARY", dimension), true);
+	assert.equal(isModelSpecUpstreamAllowed("SUMMARY", fact), true);
+	assert.equal(isModelSpecUpstreamAllowed("SUMMARY", summary), true);
+	assert.equal(isModelSpecUpstreamAllowed("SUMMARY", application), false);
+	assert.equal(isModelSpecUpstreamAllowed("APPLICATION", dimension), true);
+	assert.equal(isModelSpecUpstreamAllowed("APPLICATION", fact), true);
+	assert.equal(isModelSpecUpstreamAllowed("APPLICATION", summary), true);
+	assert.equal(isModelSpecUpstreamAllowed("APPLICATION", application), true);
+	assert.equal(isModelSpecUpstreamAllowed("APPLICATION", { modelType: "FACT", layer: "ADS" }), false);
+});
+
+test("direct physical inputs are limited to ODS, STG or DWD", () => {
+	for (const modelType of ["DIMENSION", "FACT"] as const) {
+		const command = valid(modelType);
+		const issues = validateModelSpecCreate({
+			...command,
+			sourceRefs: command.sourceRefs?.map((source) => ({ ...source, layer: "DWS" })),
+		});
+		assert.deepEqual(
+			issues.map((item) => ({ code: item.code, field: item.field })),
+			[{ code: "MODEL_SPEC_UPSTREAM_LAYER_NOT_ALLOWED", field: "sourceRefs" }],
+			modelType,
+		);
+	}
+});
+
+test("generation strategy is dimension-only input", () => {
+	for (const modelType of ["FACT", "SUMMARY", "APPLICATION"] as const) {
+		assert.deepEqual(
+			validateModelSpecCreate({
+				...valid(modelType),
+				generationStrategy: { type: "REFERENCE", reference: "legacy-dimension-input" },
+			})
+				.filter((item) => item.code === "MODEL_SPEC_INPUT_KIND_NOT_ALLOWED")
+				.map((item) => ({ code: item.code, field: item.field })),
+			[{ code: "MODEL_SPEC_INPUT_KIND_NOT_ALLOWED", field: "generationStrategy" }],
+			modelType,
+		);
+	}
+});
+
 test("all four model types accept their minimal request with unrelated collections absent", () => {
 	for (const modelType of ["DIMENSION", "FACT", "SUMMARY", "APPLICATION"] as const) {
 		assert.deepEqual(validateModelSpecCreate(minimal(modelType)), [], modelType);
@@ -273,8 +342,8 @@ test("dimension profile is canonical but remains optional for legacy v2 drafts",
 	);
 });
 
-test("FACT draft requires grain and a source but permits fact shape and time semantics to be completed later", () => {
-	const fact = minimal("FACT");
+test("FACT draft requires grain but may defer both physical sources and upstream models", () => {
+	const fact = { ...minimal("FACT"), sourceRefs: [], dependsOn: [] };
 	assert.equal(fact.factShape, undefined);
 	assert.equal(fact.timeSemantics, undefined);
 	assert.deepEqual(validateModelSpecCreate(fact), []);
@@ -556,7 +625,7 @@ test("model views are a strict contract-version and compatibility-mode discrimin
 			...(modelType === "DIMENSION"
 				? { fields: [{ name: "label", dataType: "varchar", nullable: true, role: "ATTRIBUTE" }] }
 				: {}),
-			...(modelType === "FACT" ? { sourceRefs: [] } : {}),
+			...(modelType === "FACT" ? { grain: undefined } : {}),
 			...(modelType === "SUMMARY" ? { dependsOn: [] } : {}),
 			...(modelType === "APPLICATION" ? { consumptionScenario: null } : {}),
 			contractVersion: 2,
@@ -617,6 +686,11 @@ test("JSON Schema enforces all four model-type save boundaries", () => {
 		assert.equal(validate(valid(modelType)), true, `${modelType}: ${JSON.stringify(validate.errors)}`);
 		assert.equal(validate(minimal(modelType)), true, `minimal ${modelType}: ${JSON.stringify(validate.errors)}`);
 	}
+	assert.equal(
+		validate({ ...minimal("FACT"), sourceRefs: [], dependsOn: [] }),
+		true,
+		`source-free FACT draft: ${JSON.stringify(validate.errors)}`,
+	);
 	assert.equal(validate({ ...valid("FACT"), grain: undefined }), false);
 	assert.equal(validate({ ...valid("FACT"), name: "   " }), false);
 	assert.equal(validate({ ...valid("FACT"), idempotencyKey: "   " }), false);

@@ -52,8 +52,6 @@ test("the personal workbench data-management entry converges on the canonical pl
 
 test("legacy context consumer sets are frozen during controlled retirement", () => {
 	assert.deepEqual(productionConsumers("warehousePlanningContext"), [
-		"pages/governance/ElementsPage.tsx",
-		"pages/governance/SubjectAreasPage.tsx",
 		"pages/modeling/SqlModelingPage.tsx",
 		"pages/modeling/businessModelingContext.ts",
 		"pages/modeling/dimensionCandidateGate.ts",

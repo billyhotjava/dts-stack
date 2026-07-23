@@ -1,5 +1,29 @@
 # Sprint-67 Chrome 95 浏览器证据
 
+## F2-T05 建设规划台账增量
+
+验证时间：2026-07-21 15:53 +08:00
+
+浏览器：真实 `Chromium 95.0.4638.0`
+
+产物：2026-07-21 `pnpm build` 的 production bundle
+
+```bash
+CHROME95_EXECUTABLE_PATH=/tmp/dts-chrome95-ttQJ8k/chrome-linux/chrome \
+E2E_BASE_URL=http://127.0.0.1:4173 \
+pnpm exec playwright test --config=playwright.sprint67.chrome95.config.ts \
+  --grep 'warehouse plan ledger preserves edits across 409 and archives with fresh CAS'
+```
+
+结果：台账 3 个分层场景均有 PASS 证据。最终 production build 完成后，仅定点复验受编辑器状态同步影响的编辑/归档场景，1/1 PASS（5.8s）；未重复运行此前已通过且不受本轮修改影响的只读和失败恢复场景。
+
+覆盖：计划头编辑、旧 ETag 409、输入保留并基于最新版重试、归档旧 ETag 409、二次确认、已归档筛选、只读账号零 mutation、列表 503 恢复、projection 独立失败、1366px 与 390x844、document/body 零水平溢出、零非预期 pageerror/requestfailed/HTTP/console error。
+
+- `warehouse-plan-ledger-desktop.png`：归档筛选、计划行与台账主动作。
+- `warehouse-plan-ledger-narrow.png`：390x844 筛选堆叠、行操作与内部表格滚动。
+
+真实性边界：本节使用真实 Chrome 95 和真实 production bundle，但 WarehousePlan/目录 API 由 Playwright 精确拦截。它不替代部署后的真实登录、Spring API、目录和 PostgreSQL 联动；后端权限/CAS/数据库事实见 `../backend-contract/warehouse-plan-header-lifecycle.txt`。
+
 验证时间：2026-07-19 17:06 +08:00
 浏览器：`Chromium 95.0.4638.0`
 视口：1366x768 和 390x844

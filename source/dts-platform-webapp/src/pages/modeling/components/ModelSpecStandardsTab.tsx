@@ -239,9 +239,10 @@ export function ModelSpecStandardsTab({ model, canEdit, saving, onSaveStandardBi
 		const returnTo = modelSpecDetailPath(model.id, "standards", model.planId);
 		const params = new URLSearchParams({
 			modelSpecId: model.id,
-			modelRevision: String(model.revision),
+			revision: String(model.revision),
 			returnTo,
 		});
+		if (model.planId) params.set("planId", model.planId);
 		navigate(`/governance/standards/elements?${params.toString()}`);
 	};
 

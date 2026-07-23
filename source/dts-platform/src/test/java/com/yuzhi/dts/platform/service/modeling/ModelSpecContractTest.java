@@ -93,6 +93,121 @@ class ModelSpecContractTest {
     }
 
     @Test
+    void fourTableModelsRejectTargetLayersOwnedByIngestionOrAnotherModelType() {
+        for (ModelType type : ModelType.values()) {
+            CreateModelSpecCommand valid = validCommand(type, null);
+            for (Layer layer : Layer.values()) {
+                CreateModelSpecCommand candidate = copyLayer(valid, layer);
+                if (layer == valid.layer()) {
+                    assertThat(ModelSpecContract.validateCreate(candidate)).as(type + " -> " + layer).isEmpty();
+                } else {
+                    assertThat(ModelSpecContract.validateCreate(candidate))
+                        .as(type + " -> " + layer)
+                        .extracting(ModelSpecContract.FieldIssue::code, ModelSpecContract.FieldIssue::field)
+                        .contains(org.assertj.core.groups.Tuple.tuple("MODEL_SPEC_TYPE_LAYER_MISMATCH", "layer"));
+                }
+            }
+        }
+    }
+
+    @Test
+    void upstreamModelMatrixOnlyAcceptsCanonicalTypeLayerPairs() {
+        for (ModelType ownerType : ModelType.values()) {
+            for (ModelType upstreamType : ModelType.values()) {
+                for (Layer upstreamLayer : Layer.values()) {
+                    boolean expected = ModelSpecContract.matchesTargetLayer(upstreamType, upstreamLayer) &&
+                        switch (ownerType) {
+                            case DIMENSION -> false;
+                            case FACT -> upstreamType == ModelType.FACT;
+                            case SUMMARY -> upstreamType != ModelType.APPLICATION;
+                            case APPLICATION -> true;
+                        };
+
+                    assertThat(ModelSpecContract.allowsUpstreamModel(ownerType, upstreamType, upstreamLayer))
+                        .as("%s <- %s@%s", ownerType, upstreamType, upstreamLayer)
+                        .isEqualTo(expected);
+                }
+            }
+        }
+    }
+
+    @Test
+    void inputKindsAndPhysicalUpstreamLayersFollowTheFourTablePolicy() {
+        CreateModelSpecCommand factFromAds = copyInputs(
+            validCommand(ModelType.FACT, null),
+            List.of(
+                new SourceRef(
+                    SourceKind.TABLE,
+                    "ads.customer_dashboard",
+                    Layer.ADS,
+                    SourceRole.PRIMARY,
+                    null,
+                    null,
+                    null,
+                    0,
+                    UUID.fromString("50000000-0000-0000-0000-000000000002"),
+                    "v1"
+                )
+            ),
+            List.of(),
+            null
+        );
+        assertThat(ModelSpecContract.validateCreate(factFromAds))
+            .extracting(ModelSpecContract.FieldIssue::code)
+            .contains("MODEL_SPEC_UPSTREAM_LAYER_NOT_ALLOWED");
+
+        CreateModelSpecCommand summaryWithPhysicalSource = copyInputs(
+            validCommand(ModelType.SUMMARY, null),
+            validCommand(ModelType.FACT, null).sourceRefs(),
+            validCommand(ModelType.SUMMARY, null).dependsOn(),
+            null
+        );
+        assertThat(ModelSpecContract.validateCreate(summaryWithPhysicalSource))
+            .extracting(ModelSpecContract.FieldIssue::code)
+            .contains("MODEL_SPEC_INPUT_KIND_NOT_ALLOWED");
+
+        CreateModelSpecCommand dimensionWithModelDependency = copyInputs(
+            validCommand(ModelType.DIMENSION, null),
+            List.of(),
+            List.of(new ModelSpecContract.ModelRevisionRef(UUID.fromString("30000000-0000-0000-0000-000000000001"), 1)),
+            null
+        );
+        assertThat(ModelSpecContract.validateCreate(dimensionWithModelDependency))
+            .extracting(ModelSpecContract.FieldIssue::code)
+            .contains("MODEL_SPEC_INPUT_KIND_NOT_ALLOWED");
+    }
+
+    @Test
+    void factDraftCanDescribeItsGrainBeforePhysicalSourceMapping() {
+        CreateModelSpecCommand base = validCommand(ModelType.FACT, null);
+        CreateModelSpecCommand draft = new CreateModelSpecCommand(
+            base.planId(),
+            base.domainId(),
+            base.modelType(),
+            base.layer(),
+            base.name(),
+            base.description(),
+            base.implementationMode(),
+            base.materialization(),
+            base.businessActivityRef(),
+            base.consumptionScenario(),
+            base.grain(),
+            base.factShape(),
+            base.timeSemantics(),
+            base.fields(),
+            List.of(),
+            List.of(),
+            base.dimensionRefs(),
+            base.metricRefs(),
+            base.standardBindings(),
+            base.generationStrategy(),
+            base.idempotencyKey()
+        );
+
+        assertThat(ModelSpecContract.validateCreate(draft)).isEmpty();
+    }
+
+    @Test
     void dimensionDraftRequiresGrainAndKeyButNotSourceOrGenerationStrategy() {
         CreateModelSpecCommand dimension = validCommand(ModelType.DIMENSION, null);
 
@@ -381,6 +496,63 @@ class ModelSpecContractTest {
             List.of(),
             List.of(),
             List.of(),
+            generationStrategy,
+            base.idempotencyKey()
+        );
+    }
+
+    private static CreateModelSpecCommand copyLayer(CreateModelSpecCommand base, Layer layer) {
+        return new CreateModelSpecCommand(
+            base.planId(),
+            base.domainId(),
+            base.modelType(),
+            layer,
+            base.name(),
+            base.description(),
+            base.implementationMode(),
+            base.materialization(),
+            base.businessActivityRef(),
+            base.consumptionScenario(),
+            base.grain(),
+            base.factShape(),
+            base.timeSemantics(),
+            base.fields(),
+            base.sourceRefs(),
+            base.dependsOn(),
+            base.dimensionRefs(),
+            base.metricRefs(),
+            base.standardBindings(),
+            base.generationStrategy(),
+            base.idempotencyKey()
+        );
+    }
+
+    private static CreateModelSpecCommand copyInputs(
+        CreateModelSpecCommand base,
+        List<SourceRef> sources,
+        List<ModelSpecContract.ModelRevisionRef> dependencies,
+        ModelSpecContract.GenerationStrategy generationStrategy
+    ) {
+        return new CreateModelSpecCommand(
+            base.planId(),
+            base.domainId(),
+            base.modelType(),
+            base.layer(),
+            base.name(),
+            base.description(),
+            base.implementationMode(),
+            base.materialization(),
+            base.businessActivityRef(),
+            base.consumptionScenario(),
+            base.grain(),
+            base.factShape(),
+            base.timeSemantics(),
+            base.fields(),
+            sources,
+            dependencies,
+            base.dimensionRefs(),
+            base.metricRefs(),
+            base.standardBindings(),
             generationStrategy,
             base.idempotencyKey()
         );

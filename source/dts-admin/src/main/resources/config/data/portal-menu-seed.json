@@ -112,6 +112,14 @@
               "title": "数仓规划",
               "children": [
                 {
+                  "key": "warehouse-plans",
+                  "path": "warehouse-plans",
+                  "icon": "solar:clipboard-list-bold-duotone",
+                  "titleKey": "sys.nav.portal.warehousePlans",
+                  "title": "建设规划",
+                  "externalLink": "/modeling/plans"
+                },
+                {
                   "key": "subjects",
                   "path": "subjects",
                   "icon": "solar:map-point-bold-duotone",

@@ -1,0 +1,51 @@
+Sprint-67 F3-T07 — 模型类型、目标分层与上游依赖矩阵
+Date: 2026-07-23
+
+Implemented contract
+- ODS/STG 是数据接入或技术处理层，不是四类 ModelSpec 的目标类型。
+- DIMENSION/FACT 固定生成 DWD，SUMMARY 固定生成 DWS，APPLICATION 固定生成 ADS。
+- DIMENSION/FACT 物理 sourceRefs 仅允许 ODS/STG/DWD；DWD 只表示当前计划已确认的存量或外部管理资产。
+- FACT dependsOn 仅允许 FACT@DWD；SUMMARY 允许 DIMENSION/FACT@DWD 或 SUMMARY@DWS；APPLICATION 允许任意 canonical DWD/DWS/ADS 四类模型。
+- 非 DIMENSION 禁止 generationStrategy；SUMMARY/APPLICATION 禁止直接 sourceRefs；DIMENSION 禁止 dependsOn。
+- 历史错层 canonical 记录可读但不可编辑；update 先校验当前计划/分类权限和 ETag，再返回 MODEL_SPEC_LEGACY_READONLY。
+- 依赖 revision 普通保存保持既有 pin；只有用户显式点击“采用所选上游当前版本”才锁定新 revision。
+
+Backend TDD and focused verification
+Commands:
+  cd source/dts-platform
+  ./mvnw -q -Dspotless.check.skip=true -Dspotless.apply.skip=true \
+    -Dtest=ModelSpecContractTest,ModelSpecStageGateServiceTest,ModelSpecApplicationServiceTest test
+  ./mvnw -q -Dspotless.check.skip=true -Dspotless.apply.skip=true \
+    -Dtest=ModelSpecV2FixtureTest test
+Results:
+  EXPECTED RED after matrix review: tests=62, failures=3. The failures reproduced a broad SUMMARY matrix, editable historical wrong-layer rows and accepted historical wrong-layer upstreams.
+  PASS after implementation: ModelSpecContract=16/16, ModelSpecStageGateService=18/18, ModelSpecApplicationService=28/28.
+  EXPECTED RED after update-order review: ModelSpecApplicationService tests=30, failures=3. Original FACT@ODS payloads were rejected before authorization/ETag/read-only handling.
+  PASS after ordering fix: ModelSpecApplicationService=30/30.
+  PASS shared fixture parity: ModelSpecV2Fixture=7/7.
+
+Frontend TDD and focused verification
+Commands:
+  cd source/dts-platform-webapp
+  node --experimental-strip-types --test <focused ModelSpec contract/workbench/source-contract tests>
+  pnpm exec tsc --noEmit --pretty false
+  pnpm exec biome check <8 touched ModelSpec files>
+Results:
+  Initial target-layer contract RED=3 followed by GREEN=54/54.
+  Candidate/layer/history hardening RED=5 followed by GREEN=59/59.
+  Final regression after hidden-input, dependency-load, revision-pin and explicit-upgrade reviews: PASS=66/66.
+  TypeScript exit=0; Biome checked 8 files with no diagnostics; scoped git diff --check passed.
+
+Review
+- Java final review: APPROVE; no HIGH/CRITICAL blocker.
+- Frontend general code review after revision-pin fix: APPROVE; no HIGH/MEDIUM blocker.
+- Final TypeScript and cross-stack review are required before this evidence can support task closure.
+
+Not executed in this increment
+- No full Maven verify or frontend production build was run; the requested strategy is to batch full compilation after the feature is complete.
+- No container rebuild, deployment, authenticated Chrome 95, real API or PostgreSQL E2E is claimed.
+- ODS_RAW/ODS_STANDARDIZED classification, dedicated ingestion navigation and historical ODS/STG migration report/UI remain pending.
+
+Current boundary
+- Backend and frontend now enforce the same four-type target-layer and upstream dependency matrix in focused tests.
+- F3-T07 remains IN_PROGRESS until the pending production build, deployed E2E, migration evidence and incremental Go/No-Go are complete.

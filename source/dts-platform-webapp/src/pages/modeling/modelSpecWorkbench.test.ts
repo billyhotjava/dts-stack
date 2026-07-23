@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { CanonicalModelSpecView } from "./modelSpecV2Contract.ts";
 import {
+	adoptCurrentUpstreamRevisions,
 	buildModelSpecCreateCommand,
 	buildModelSpecUpdateCommand,
 	createEmptyModelSpecDraft,
@@ -16,6 +17,7 @@ const PLAN_ID = "10000000-0000-0000-0000-000000000001";
 const DOMAIN_ID = "20000000-0000-0000-0000-000000000001";
 const SOURCE_BINDING_ID = "50000000-0000-0000-0000-000000000001";
 const UPSTREAM_ID = "30000000-0000-0000-0000-000000000001";
+const NEW_UPSTREAM_ID = "30000000-0000-0000-0000-000000000002";
 const DIMENSION_ID = "40000000-0000-0000-0000-000000000001";
 
 const baseDraft = (overrides: Partial<ModelSpecDraft> = {}): ModelSpecDraft => ({
@@ -58,6 +60,24 @@ test("FACT command keeps grain, source, optional time semantics and optional act
 	assert.equal(command.businessActivityRef, "客户事件处理");
 	assert.equal("objectId" in command, false);
 	assert.equal("processId" in command, false);
+});
+
+test("FACT draft may defer input mapping or pin an upstream model revision", () => {
+	const withoutInput = buildModelSpecCreateCommand(
+		baseDraft({ sources: [], upstreamIds: [] }),
+		[],
+		"create-fact-without-input",
+	);
+	assert.deepEqual(withoutInput.sourceRefs, []);
+	assert.deepEqual(withoutInput.dependsOn, []);
+
+	const withUpstream = buildModelSpecCreateCommand(
+		baseDraft({ sources: [], upstreamIds: [UPSTREAM_ID] }),
+		[{ id: UPSTREAM_ID, revision: 7, modelType: "FACT" }],
+		"create-fact-with-upstream",
+	);
+	assert.deepEqual(withUpstream.sourceRefs, []);
+	assert.deepEqual(withUpstream.dependsOn, [{ modelSpecId: UPSTREAM_ID, revision: 7 }]);
 });
 
 test("DIMENSION command creates key fields without requiring business activity", () => {
@@ -135,6 +155,22 @@ test("DIMENSION editor uses business wording and requires its definition", async
 		descriptionLabel: "用途说明",
 		descriptionRequiredMessage: undefined,
 	});
+});
+
+test("fixed target-layer validation has a business-readable issue message", () => {
+	assert.equal(
+		modelSpecIssueMessage("MODEL_SPEC_TYPE_LAYER_MISMATCH"),
+		"模型类别与目标分层不一致，请按系统固定分层保存",
+	);
+	assert.equal(modelSpecIssueMessage("MODEL_SPEC_TYPE_REQUIRED"), "请选择模型类别（四类表）");
+	assert.equal(
+		modelSpecIssueMessage("MODEL_SPEC_UPSTREAM_LAYER_NOT_ALLOWED"),
+		"所选上游模型或物理来源分层不符合当前模型类别的依赖规则",
+	);
+	assert.equal(
+		modelSpecIssueMessage("MODEL_SPEC_INPUT_KIND_NOT_ALLOWED"),
+		"生成策略仅适用于维度表，请重新选择模型类别",
+	);
 });
 
 test("command parsing trims and deduplicates grain and time field names across supported separators", () => {
@@ -245,6 +281,62 @@ test("editing rebuilds a complete update command while immutable context stays u
 	assert.equal(update.modelType, "FACT");
 	assert.equal(update.name, "customer_event_detail_v2");
 	assert.equal("idempotencyKey" in update, false);
+});
+
+test("editing unrelated fields preserves an existing upstream revision pin", () => {
+	const update = buildModelSpecUpdateCommand(
+		baseDraft({
+			sources: [],
+			upstreamIds: [UPSTREAM_ID],
+			existingUpstreamPins: [{ modelSpecId: UPSTREAM_ID, revision: 3 }],
+		}),
+		[{ id: UPSTREAM_ID, revision: 4, modelType: "FACT" }],
+	);
+
+	assert.deepEqual(update.dependsOn, [{ modelSpecId: UPSTREAM_ID, revision: 3 }]);
+});
+
+test("editing dependencies removes deselected pins and pins newly selected models at their current revision", () => {
+	const withoutExisting = buildModelSpecUpdateCommand(
+		baseDraft({
+			sources: [],
+			upstreamIds: [],
+			existingUpstreamPins: [{ modelSpecId: UPSTREAM_ID, revision: 3 }],
+		}),
+		[{ id: UPSTREAM_ID, revision: 4, modelType: "FACT" }],
+	);
+	assert.deepEqual(withoutExisting.dependsOn, []);
+
+	const withNewSelection = buildModelSpecUpdateCommand(
+		baseDraft({
+			sources: [],
+			upstreamIds: [NEW_UPSTREAM_ID],
+			existingUpstreamPins: [{ modelSpecId: UPSTREAM_ID, revision: 3 }],
+		}),
+		[{ id: NEW_UPSTREAM_ID, revision: 5, modelType: "FACT" }],
+	);
+	assert.deepEqual(withNewSelection.dependsOn, [{ modelSpecId: NEW_UPSTREAM_ID, revision: 5 }]);
+});
+
+test("explicitly adopting the current revision upgrades the same selected upstream id", () => {
+	const remainingPins = adoptCurrentUpstreamRevisions(
+		[
+			{ modelSpecId: UPSTREAM_ID, revision: 3 },
+			{ modelSpecId: NEW_UPSTREAM_ID, revision: 2 },
+		],
+		[UPSTREAM_ID],
+	);
+	assert.deepEqual(remainingPins, [{ modelSpecId: NEW_UPSTREAM_ID, revision: 2 }]);
+
+	const update = buildModelSpecUpdateCommand(
+		baseDraft({
+			sources: [],
+			upstreamIds: [UPSTREAM_ID],
+			existingUpstreamPins: remainingPins,
+		}),
+		[{ id: UPSTREAM_ID, revision: 4, modelType: "FACT" }],
+	);
+	assert.deepEqual(update.dependsOn, [{ modelSpecId: UPSTREAM_ID, revision: 4 }]);
 });
 
 test("duplicate field drafts remain visible to contract validation instead of being silently merged", () => {

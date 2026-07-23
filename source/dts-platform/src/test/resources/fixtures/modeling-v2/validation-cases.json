@@ -343,6 +343,7 @@
   {
     "name": "explicit-null-wire-optionals",
     "overrides": {
+      "modelType": "DIMENSION",
       "description": null,
       "materialization": null,
       "businessActivityRef": null,

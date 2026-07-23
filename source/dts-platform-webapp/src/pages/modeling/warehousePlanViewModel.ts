@@ -1,12 +1,79 @@
 import type {
 	WarehousePlanCategoryBindingView,
 	WarehousePlanEvidenceFreshness,
+	WarehousePlanHeader,
+	WarehousePlanLifecycleStatus,
 	WarehousePlanStageCode,
 	WarehousePlanStageStatus,
 } from "@/api/warehousePlanApi";
 
 export type WarehouseCategoryOptionSource = { id: string; name?: string | null; code?: string | null };
 export type WarehouseCategoryOption = { value: string; label: string };
+export type WarehousePlanLedgerLifecycleFilter = WarehousePlanLifecycleStatus | "ACTIVE" | "ALL";
+export type WarehousePlanLedgerFilters = {
+	keyword?: string;
+	lifecycleStatus?: WarehousePlanLedgerLifecycleFilter;
+	ownerId?: string;
+};
+
+const WAREHOUSE_PLAN_LIFECYCLE_LABELS: Record<WarehousePlanLifecycleStatus, string> = {
+	DRAFT: "规划中",
+	BASELINE_READY: "基线已确认",
+	DESIGNING: "设计中",
+	VALIDATING: "验证中",
+	READY_TO_PUBLISH: "待发布",
+	PUBLISHED: "已发布",
+	ARCHIVED: "已归档",
+};
+
+export const warehousePlanLifecycleLabel = (status: WarehousePlanLifecycleStatus): string =>
+	WAREHOUSE_PLAN_LIFECYCLE_LABELS[status];
+
+export const canEditWarehousePlanHeader = (canMaintainPlan: boolean, status: WarehousePlanLifecycleStatus): boolean =>
+	canMaintainPlan && status !== "PUBLISHED" && status !== "ARCHIVED";
+
+export const canArchiveWarehousePlan = (canMaintainPlan: boolean, status: WarehousePlanLifecycleStatus): boolean =>
+	canMaintainPlan && status !== "ARCHIVED";
+
+export const filterWarehousePlans = <T extends WarehousePlanHeader>(
+	plans: readonly T[],
+	filters: WarehousePlanLedgerFilters = {},
+): T[] => {
+	const lifecycleStatus = filters.lifecycleStatus || "ACTIVE";
+	const keyword = String(filters.keyword || "")
+		.trim()
+		.toLocaleLowerCase();
+	const ownerId = String(filters.ownerId || "").trim();
+	return plans.filter((plan) => {
+		if (lifecycleStatus === "ACTIVE" && plan.lifecycleStatus === "ARCHIVED") return false;
+		if (lifecycleStatus !== "ACTIVE" && lifecycleStatus !== "ALL" && plan.lifecycleStatus !== lifecycleStatus) {
+			return false;
+		}
+		if (ownerId && plan.ownerId !== ownerId) return false;
+		if (!keyword) return true;
+		return [plan.name, plan.code, plan.objective, plan.scope, plan.ownerId, plan.ownerDepartmentId].some((value) =>
+			String(value || "")
+				.toLocaleLowerCase()
+				.includes(keyword),
+		);
+	});
+};
+
+export const replaceWarehousePlanHeader = <T extends WarehousePlanHeader>(plans: readonly T[], updated: T): T[] => {
+	const found = plans.some((plan) => plan.id === updated.id);
+	return found ? plans.map((plan) => (plan.id === updated.id ? updated : plan)) : [updated, ...plans];
+};
+
+export const mergeWarehousePlanHeadersMonotonic = <T extends WarehousePlanHeader>(
+	current: readonly T[],
+	incoming: readonly T[],
+): T[] => {
+	const currentById = new Map(current.map((plan) => [plan.id, plan]));
+	return incoming.map((plan) => {
+		const observed = currentById.get(plan.id);
+		return observed && observed.version > plan.version ? observed : plan;
+	});
+};
 
 export const WAREHOUSE_STAGE_ORDER: readonly WarehousePlanStageCode[] = [
 	"DATA_CONNECTION",
@@ -72,6 +139,9 @@ const PLANNING_ISSUE_MESSAGES: Record<string, string> = {
 };
 
 const PLANNING_MUTATION_ERROR_MESSAGES: Record<string, string> = {
+	WAREHOUSE_PLAN_HEADER_INVALID: "请检查规划名称和负责人",
+	WAREHOUSE_PLAN_OWNER_FORBIDDEN: "当前账号不能转派给所选负责人",
+	WAREHOUSE_PLAN_OWNER_DEPARTMENT_FORBIDDEN: "当前账号不能转派到所选负责部门",
 	WAREHOUSE_PLAN_CATEGORY_FORBIDDEN: "当前账号不能使用所选业务分类，请替换或申请权限",
 	WAREHOUSE_PLAN_CATEGORY_INVALID: "业务分类设置无效，请检查后重试",
 	WAREHOUSE_PLAN_POLICY_INVALID: "数仓分层设置无效，请检查后重试",
@@ -168,18 +238,26 @@ export const isWarehouseStageComplete = (
 	freshness: WarehousePlanEvidenceFreshness,
 ): boolean => status === "COMPLETE" && freshness === "CURRENT";
 
+const CANONICAL_WAREHOUSE_PLAN_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const normalizeCanonicalWarehousePlanId = (value: string | null | undefined): string => {
+	const planId = value?.trim() || "";
+	return CANONICAL_WAREHOUSE_PLAN_ID.test(planId) ? planId : "";
+};
+
 export const buildWarehousePlanRoute = (
 	planId: string,
 	section?: "overview" | "baseline" | "architecture" | "models" | "implementation" | "deliverables",
 	query: Record<string, string | null | undefined> = {},
 ): string => {
 	const suffix = !section || section === "overview" ? "" : `/${section}`;
+	const encodedPlanId = encodeURIComponent(planId);
 	const params = new URLSearchParams();
 	for (const [key, value] of Object.entries(query)) {
 		if (value) params.set(key, value);
 	}
 	params.set("planId", planId);
-	return `/modeling/plans/${planId}${suffix}?${params.toString()}`;
+	return `/modeling/plans/${encodedPlanId}${suffix}?${params.toString()}`;
 };
 
 export const withWarehousePlanContext = (route: string, planId: string): string => {
@@ -217,10 +295,31 @@ export const resolveWarehousePlanReturnTo = (rawReturnTo: string | null | undefi
 	}
 };
 
+export type WarehousePlanPageContext = { planId: string; returnTo: string | null };
+
+export const resolveWarehousePlanPageContext = (searchParams: URLSearchParams): WarehousePlanPageContext | null => {
+	const planValues = searchParams.getAll("planId");
+	if (planValues.length !== 1) return null;
+	const planId = normalizeCanonicalWarehousePlanId(planValues[0]);
+	if (!planId) return null;
+
+	const returnValues = searchParams.getAll("returnTo");
+	if (returnValues.length > 1) return null;
+	if (returnValues.length === 1) {
+		const returnTo = resolveWarehousePlanReturnTo(returnValues[0], planId);
+		return returnTo ? { planId, returnTo } : null;
+	}
+	return { planId, returnTo: null };
+};
+
 export const resolveWarehousePlanConflictVersion = (error: unknown): number | null => {
 	if (!error || typeof error !== "object") return null;
 	const response = (error as { response?: { status?: unknown; data?: unknown } }).response;
 	if (response?.status !== 409 || !response.data || typeof response.data !== "object") return null;
+	const code = (response.data as { code?: unknown }).code;
+	if (code !== "WAREHOUSE_PLAN_VERSION_CONFLICT" && code !== "WAREHOUSE_PLAN_EDIT_UNIT_VERSION_CONFLICT") {
+		return null;
+	}
 	const bodyData = (response.data as { data?: unknown }).data;
 	if (!bodyData || typeof bodyData !== "object") return null;
 	const currentVersion = Number((bodyData as { currentVersion?: unknown }).currentVersion);

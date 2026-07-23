@@ -48,6 +48,12 @@
     "requiredRoles": []
   },
   {
+    "code": "sys.nav.portal.warehousePlans",
+    "title": "建设规划",
+    "route": "/modeling/plans",
+    "requiredRoles": []
+  },
+  {
     "code": "sys.nav.portal.governanceSubjects",
     "title": "业务分类",
     "route": "/governance/subjects",

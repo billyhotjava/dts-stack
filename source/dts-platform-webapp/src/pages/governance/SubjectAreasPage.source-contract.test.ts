@@ -5,29 +5,24 @@ import test from "node:test";
 const source = readFileSync(new URL("./SubjectAreasPage.tsx", import.meta.url), "utf8");
 const tabsSource = readFileSync(new URL("./SubjectWorkspaceTabs.tsx", import.meta.url), "utf8");
 
-test("subject areas expose a DWD dimension planning entry", () => {
-	assert.match(source, /warehousePlanningContext/);
-	assert.match(source, /warehouse-planning-card/);
-	assert.match(source, /warehouseLayer.*DWD|DWD.*warehouseLayer/);
-	assert.match(source, /modelingMode.*dimension|dimension.*modelingMode/);
-	assert.ok(source.includes("governance/standards/elements"));
-	assert.match(source, /planningId/);
+test("subject areas remain a global catalog and never create a browser-only warehouse plan", () => {
+	assert.match(source, /getDomainTree/);
+	assert.match(source, /buildWarehousePlanRoute/);
+	assert.doesNotMatch(source, /warehousePlanningContext|saveWarehousePlanningContext/);
+	assert.doesNotMatch(source, /warehouse-plan-.*Date\.now|governance\/standards\/elements\?bindingDraft=1/);
 });
 
-test("warehouse planning explains STG as an optional dbt technical transition layer", () => {
-	assert.match(source, /输出分层方案/);
-	assert.match(source, /STG/);
-	assert.match(source, /技术过渡层/);
-	assert.match(source, /dbt/);
-	assert.match(source, /可选|启用/);
+test("category planning actions return to the canonical plan baseline", () => {
+	assert.match(source, /buildWarehousePlanRoute\(returnPlanId, "baseline", \{ tab: "categories" \}\)/);
+	assert.match(source, /业务分类是全局目录/);
+	assert.match(source, /前往建设规划|返回建设计划/);
 });
 
-test("subject area planning exposes blocked and restore states", () => {
-	assert.match(source, /resolveWarehousePlanningContext/);
-	assert.match(source, /resolveWarehousePlanningStatus/);
-	assert.match(source, /planningResolution\.status\s*===\s*"blocked"/);
-	assert.match(source, /规划草稿已失效|规划上下文不可用|重新确认规划/);
-	assert.match(source, /维度建模/);
+test("business modeling never invents a plan when no canonical planId exists", () => {
+	assert.match(source, /\/modeling\/plans/);
+	assert.match(source, /resolveWarehousePlanPageContext/);
+	assert.match(source, /planId: returnPlanId/);
+	assert.doesNotMatch(source, /planningId:|warehouseLayer:|modelingMode:/);
 });
 
 test("subject area details expose business processes and process planning entry", () => {
@@ -37,7 +32,8 @@ test("subject area details expose business processes and process planning entry"
 	assert.doesNotMatch(source, /从示例创建|采用示例|补充示例/);
 	assert.match(source, /processId/);
 	assert.match(source, /进入业务建模/);
-	assert.match(source, /modeling\/semantic\/objects/);
+	assert.match(source, /modeling\/dimensions/);
+	assert.doesNotMatch(source, /modeling\/semantic\/objects/);
 });
 
 test("subject areas separate modeling scope, domain details and governance overview", () => {
@@ -73,9 +69,7 @@ test("selected domain resumes from the generic modeling context", () => {
 });
 
 test("business category administration only returns to a whitelisted plan baseline", () => {
-	assert.match(source, /resolveWarehousePlanReturnTo/);
-	assert.match(source, /searchParams\.get\("returnTo"\)/);
-	assert.match(source, /searchParams\.get\("planId"\)/);
+	assert.match(source, /resolveWarehousePlanPageContext\(searchParams\)/);
 	assert.match(source, /返回建设计划/);
 	assert.doesNotMatch(source, /window\.location\s*=|location\.href\s*=/);
 });

@@ -1366,12 +1366,12 @@
 |---------|--------|---------|------|
 | F1-关键对象与主线契约 | P0 | 3 | DONE |
 | F2-规划输入与分阶段门禁 | P0 | 5 | IN_PROGRESS |
-| F3-维度与四类表直接建模 | P0 | 5 | DONE |
+| F3-维度与四类表直接建模 | P0 | 7 | IN_PROGRESS |
 | F4-菜单页面与跳转收敛 | P0 | 4 | DONE |
 | F5-业务对象迁移与受控退役 | P0 | 4 | DONE |
-| F6-专业模块交接与集成验收 | P0 | 4 | DONE |
+| F6-专业模块交接与集成验收 | P0 | 7 | IN_PROGRESS |
 
-**统计**: READY=0, IN_PROGRESS=1, DONE=24, BLOCKED=0
+**统计**: READY=1, IN_PROGRESS=5, DONE=24, BLOCKED=0；当前已关闭 24/30 Task
 **执行顺序**: F1 → F2/F3 → F4 → F5 → F6；F2 与 F3 在概念契约冻结后可并行，F4 默认入口切换等待目标页面可用，F5 冻结旧写等待新写路径通过，F6 负责 Go/No-Go。
 
 **关键决策**:
@@ -1382,3 +1382,37 @@
 - 业务活动降为明细表的可选来源说明，不作为四类表的全局前置门禁。
 - 新 ModelSpec 不要求 `objectId`；旧 API/表先冻结写入和迁移，消费者归零并对账后再物理删除。
 - 数据标准在模型字段设计时引用，指标锚定已发布模型/字段；SQL/dbt、发布、运行、资产和血缘回写同一 modelSpecId/revision。
+- 2026-07-21：新增 F2-T05 建设规划台账已完成代码、分层后端测试、production build 与 Chrome 95 mock-API 验收；Sprint 保持 24/25、IN_PROGRESS，等待部署后真实认证/API/PostgreSQL 联动及增量 Go/No-Go。
+- 2026-07-21：新增 F6-T05 收敛全局数据元/业务分类与正式规划上下文；移除 session 伪计划和数据元 page-wide 草稿门禁，字段落标回归 ModelSpec。代码、定向测试和生产构建已完成；Sprint 当前 24/26、IN_PROGRESS，等待真实 Chrome 95/API 联动和增量 Go/No-Go。
+- 2026-07-22：新增 F6-T06 收敛模型来源和系统编码；来源按当前计划的业务名称查询选择，`bindingId/ref/kind/version` 自动关联，维度/层级唯一码自动生成只读，后端提交时实时复验并 fail closed。建模前需元数据同步和计划来源确认，不需要先完成 ETL/ELT；Sprint 当前 24/27、IN_PROGRESS，真实 Chrome 95/API/PostgreSQL 尚待验收。
+- 2026-07-22：F6 实际含 T01-T07，其中 T07 为 READY；新增 F3-T06 纠正 FACT 输入语义。FACT DRAFT 可不绑定输入，IMPLEMENTATION_READY 接受有效物理 `sourceRefs` 或锁定 revision 的上游 `dependsOn`，两类同时存在时全部校验；目标模型与上游来源分层分开。Sprint 当前 24/29、IN_PROGRESS。
+- 2026-07-23：新增 F3-T07 冻结模型类型与分层依赖矩阵。ODS_RAW/ODS_STANDARDIZED/STG 属于接入/技术层，不走四类 ModelSpec；DIMENSION/FACT→DWD、SUMMARY→DWS、APPLICATION→ADS，并按类型限制 `sourceRefs/dependsOn/generationStrategy`。历史 ODS/STG ModelSpec 的专属只读分类和迁移 UI 尚待实现。Sprint 当前 24/30、IN_PROGRESS。
+
+## Sprint-68: DTS 标准内容库与通用基线产品化 (202607)
+
+**目录**: `worklog/v2.2.3/sprint-68-202607-standard-content-library`
+**状态**: READY
+**类型**: Content Platform / Data Governance / Safe Upgrade / Offline Delivery
+**目标**: 把 Sprint-57 标准包管道升级为可版本化、可追溯、可安全升级的 DTS 标准内容库，使新部署客户可直接安装通用基线并只做少量本地调整；PJM/dbt 资产仅在通过严格准入后进入可选项目管理扩展包。
+**依赖**: 复用 Sprint-57 `preview/apply/rollback/runs/builtin` 单一管道、当前计量单位 owner 和 Sprint-50/67 的标准稳定引用边界；PJM 候选来源限定为 `worklog/v2.2.3/s10/v4/pjm/dbt_model` 的受控元数据/SQL，不读取测试数据行。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-标准内容契约与来源治理 | P0 | 4 | READY |
+| F2-客户覆盖层与安全升级 | P0 | 4 | READY |
+| F3-PJM候选审计与准入 | P0 | 4 | READY |
+| F4-通用基线与内容仓库 | P0 | 5 | READY |
+| F5-安装更新与部署体验 | P0 | 4 | READY |
+| F6-验证发布与证据闭环 | P0 | 4 | READY |
+
+**统计**: READY=25, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**执行顺序**: F1 → F2/F3 → F4 → F5 → F6；F3 只能产出候选和准入报告，F4 只消费来源许可与六道门禁均通过的内容，F6 是最终 Go/No-Go 出口。
+
+**关键决策**:
+
+- 采用“外置版本化内容仓库 + 离线签名包 + DTS 基线/客户扩展/本地改写三层模型”，不继续以 classpath 大 CSV 作为长期升级边界。
+- 未完成客户覆盖保护前，不批量推送大规模内置内容；升级冲突必须 fail closed。
+- 首批目录目标为 10～12 个包，包含通用码表、SI/常用计量单位、300～500 个通用数据元和 150～300 个参考术语；条目数量不能替代来源与质量证据。
+- 通用术语默认 REFERENCE/DRAFT，不伪装成客户正式 ACTIVE 口径；`source_system` 与标准内容来源分离。
+- PJM `models.tsv` 当前仍为 DRAFT，关键 dbt tests 多为 warn；只有晋升、阻断测试、血缘、去重、适用性和内容审查全部通过的记录才可进入可选项目管理包。
+- PJM `target/logs/test/BI/ZIP/.bak`、ODS/测试数据行、DWS/ADS 指标公式和有损/上下文丢失 alias 映射均不得进入 DTS 通用基线。

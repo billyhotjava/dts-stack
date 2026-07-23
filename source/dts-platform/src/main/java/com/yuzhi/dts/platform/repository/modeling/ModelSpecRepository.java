@@ -146,20 +146,39 @@ public class ModelSpecRepository {
     }
 
     public Optional<SourceBindingState> findSourceBinding(String tenantId, UUID planId, UUID sourceBindingId) {
+        return querySourceBinding(tenantId, planId, sourceBindingId, false);
+    }
+
+    public Optional<SourceBindingState> lockSourceBinding(String tenantId, UUID planId, UUID sourceBindingId) {
+        return querySourceBinding(tenantId, planId, sourceBindingId, true);
+    }
+
+    private Optional<SourceBindingState> querySourceBinding(
+        String tenantId,
+        UUID planId,
+        UUID sourceBindingId,
+        boolean lock
+    ) {
         return jdbcTemplate
             .query(
                 """
-                select id, source_type, source_id, source_version, confirmation_status
-                  from modeling_warehouse_plan_source
-                 where tenant_id = ? and plan_id = ? and id = ?
-                """,
+                select s.id, s.source_type, s.source_id, s.source_version, s.confirmation_status,
+                       s.locator_json::text as locator_json,
+                       p.owner_id as plan_owner_id, p.owner_department_id as plan_owner_department_id
+                  from modeling_warehouse_plan_source s
+                  join modeling_warehouse_plan p on p.tenant_id = s.tenant_id and p.id = s.plan_id
+                 where s.tenant_id = ? and s.plan_id = ? and s.id = ?
+                """ + (lock ? " for share" : ""),
                 (row, rowNumber) ->
                     new SourceBindingState(
                         row.getObject("id", UUID.class),
                         row.getString("source_type"),
                         row.getString("source_id"),
                         row.getString("source_version"),
-                        row.getString("confirmation_status")
+                        row.getString("confirmation_status"),
+                        row.getString("locator_json"),
+                        row.getString("plan_owner_id"),
+                        row.getString("plan_owner_department_id")
                     ),
                 tenantId,
                 planId,
@@ -544,6 +563,9 @@ public class ModelSpecRepository {
         String sourceType,
         String sourceId,
         String sourceVersion,
-        String confirmationStatus
+        String confirmationStatus,
+        String locatorJson,
+        String planOwnerId,
+        String planOwnerDepartmentId
     ) {}
 }

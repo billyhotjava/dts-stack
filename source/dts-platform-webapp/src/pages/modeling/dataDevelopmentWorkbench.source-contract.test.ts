@@ -108,9 +108,8 @@ test("governance standards pages expose stable controls for model field standard
 	assert.match(platformApi, /url: "\/governance\/reference-codes\/seeds"/);
 });
 
-test("standards can hand field binding drafts to the model center and sql modeling", () => {
+test("model fields own canonical standards while legacy SQL drafts remain read-only compatible", () => {
 	assert.match(standardBindingDraft, /STANDARD_BINDING_DRAFT_STORAGE_KEY/);
-	assert.match(standardBindingDraft, /createStandardBindingDraft/);
 	assert.match(standardBindingDraft, /getStandardBindingDraft/);
 	assert.match(standardBindingDraft, /isBackendStandardBindingDraftId/);
 	assert.match(standardBindingDraft, /buildSqlFromStandardBindingDraft/);
@@ -119,16 +118,11 @@ test("standards can hand field binding drafts to the model center and sql modeli
 	assert.match(platformApi, /url: `\/modeling\/standard-binding-drafts\/\$\{id\}`/);
 
 	assert.match(standardPackagePage, /标准包已应用/);
-	assert.match(standardPackagePage, /查看数据元并生成落标草稿/);
-	assert.match(standardPackagePage, /\/governance\/standards\/elements\?from=standard-package&bindingDraft=1/);
+	assert.match(standardPackagePage, /buildDataElementReturnRoute/);
+	assert.doesNotMatch(standardPackagePage, /查看数据元并生成落标草稿|bindingDraft=1/);
 
-	assert.match(elementsPage, /createStandardBindingDraft/);
-	assert.match(elementsPage, /createStandardBindingDraftSnapshot/);
-	assert.match(elementsPage, /data-testid="governance-elements-standard-binding-draft"/);
-	assert.match(elementsPage, /已保存字段落标快照/);
-	assert.match(elementsPage, /字段落标草稿/);
-	assert.match(elementsPage, /standardDraftId/);
-	assert.match(elementsPage, /\/modeling\/models\?view=guided/);
+	assert.doesNotMatch(elementsPage, /createStandardBindingDraft|createStandardBindingDraftSnapshot/);
+	assert.doesNotMatch(elementsPage, /standardDraftId|warehousePlanningContext/);
 
 	assert.match(modelCenterPage, /data-testid="model-center-page"/);
 	assert.match(modelCenterPage, /旧低代码入口已并入模型中心/);

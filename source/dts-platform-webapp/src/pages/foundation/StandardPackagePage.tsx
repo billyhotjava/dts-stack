@@ -7,7 +7,6 @@ import type { ColumnsType } from "antd/es/table";
 import { CompactTable } from "@/components/table";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
-import { JourneyContextBar } from "@/components/journey";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import {
 	applyStandardPackageImport,
@@ -18,6 +17,7 @@ import {
 	previewStandardPackageImport,
 	rollbackStandardPackageRun,
 } from "@/api/platformApi";
+import { buildDataElementReturnRoute } from "../governance/standardOwnerNavigation";
 
 const { Text } = Typography;
 
@@ -120,6 +120,11 @@ export default function StandardPackagePage() {
 	const navigate = useNavigate();
 	const [searchParams] = useSearchParams();
 	const fromSource = searchParams.get("from");
+	const dataElementReturnRoute = useMemo(() => buildDataElementReturnRoute(searchParams), [searchParams]);
+	const appliedDataElementReturnRoute = useMemo(
+		() => buildDataElementReturnRoute(searchParams, { applied: true }),
+		[searchParams],
+	);
 	const [activeTab, setActiveTab] = useState("wizard");
 
 	// wizard state
@@ -461,10 +466,10 @@ export default function StandardPackagePage() {
 								再导入一个
 							</Button>,
 							<Button
-								key="binding-draft"
-								onClick={() => navigate("/governance/standards/elements?from=standard-package&bindingDraft=1&journey=e2e-data-product")}
+								key="return-elements"
+								onClick={() => navigate(appliedDataElementReturnRoute)}
 							>
-								查看数据元并生成落标草稿
+								返回数据元
 							</Button>,
 							<Button key="history" type="primary" onClick={() => setActiveTab("history")}>
 								查看导入历史
@@ -561,7 +566,7 @@ export default function StandardPackagePage() {
 					fromSource === "elements" ? (
 						<Button
 							icon={<ArrowLeftOutlined />}
-							onClick={() => navigate("/governance/standards/elements")}
+							onClick={() => navigate(dataElementReturnRoute)}
 							data-testid="standard-package-return-elements"
 						>
 							返回数据元
@@ -569,7 +574,6 @@ export default function StandardPackagePage() {
 					) : null
 				}
 			/>
-			<JourneyContextBar stage="standards" />
 			<div className="rounded-md border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
 				下载模板 → 填写业务术语/数据元/公共码表 → 上传校验 → 确认应用，支持整包回滚。
 			</div>

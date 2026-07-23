@@ -53,16 +53,14 @@ class ModelSpecCreateRequestDecoderTest {
     }
 
     @Test
-    void decoderReturnsSemanticIssuesAfterSuccessfulStrictBinding() throws Exception {
+    void decoderAcceptsAFactDraftBeforeItsPhysicalSourceIsMapped() throws Exception {
         ObjectNode candidate = genericFact();
         candidate.putArray("sourceRefs");
 
         ModelSpecCreateRequestDecoder.DecodeResult result = decoder.decode(candidate);
 
-        assertThat(result.command()).isNull();
-        assertThat(result.issues())
-            .extracting(ModelSpecContract.FieldIssue::code, ModelSpecContract.FieldIssue::field)
-            .containsExactly(tuple("MODEL_SPEC_SOURCE_REQUIRED", "sourceRefs"));
+        assertThat(result.command()).isNotNull();
+        assertThat(result.issues()).isEmpty();
     }
 
     @Test

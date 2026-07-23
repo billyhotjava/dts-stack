@@ -78,12 +78,14 @@ test("standard package page can return to the data element page when launched fr
 	assert.match(PAGE, /useSearchParams/);
 	assert.match(PAGE, /useNavigate/);
 	assert.match(PAGE, /fromSource === "elements"/);
+	assert.match(PAGE, /buildDataElementReturnRoute/);
 	assert.match(PAGE, /返回数据元/);
-	assert.match(PAGE, /\/governance\/standards\/elements/);
 });
 
-test("standard package success continues the end-to-end journey with context", () => {
-	assert.match(PAGE, /journey=e2e-data-product/);
-	assert.match(PAGE, /bindingDraft=1/);
-	assert.match(PAGE, /查看数据元并生成落标草稿/);
+test("standard package success returns to the global owner without creating a session draft", () => {
+	assert.match(PAGE, /buildDataElementReturnRoute/);
+	assert.match(PAGE, /applied:\s*true/);
+	assert.match(PAGE, /返回数据元/);
+	assert.doesNotMatch(PAGE, /JourneyContextBar/);
+	assert.doesNotMatch(PAGE, /bindingDraft=1|查看数据元并生成落标草稿/);
 });

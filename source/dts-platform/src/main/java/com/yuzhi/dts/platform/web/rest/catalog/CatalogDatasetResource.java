@@ -11,6 +11,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogMaskingRuleRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
+import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogDbtLineageService;
@@ -318,7 +319,7 @@ public class CatalogDatasetResource {
         @RequestParam(value = "sourceId", required = false) UUID sourceId,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        String effDept = activeDept != null ? activeDept : helper.claim("dept_code");
+        String effDept = resolveMetadataActiveDept(activeDept);
         OpenMetadataService.OpenMetadataTablePage localPage = catalogMetadataService.listLocalTables(keyword, size, effDept, sourceId);
         boolean sourceScoped = sourceId != null;
         boolean useLocal = sourceScoped || (localPage != null && localPage.items() != null && !localPage.items().isEmpty());
@@ -352,7 +353,7 @@ public class CatalogDatasetResource {
         @RequestParam("fqn") String fqn,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        String effDept = activeDept != null ? activeDept : helper.claim("dept_code");
+        String effDept = resolveMetadataActiveDept(activeDept);
         OpenMetadataService.OpenMetadataResult result;
         boolean useLocal = catalogMetadataService.isLocalFqn(fqn);
         if (useLocal) {
@@ -375,6 +376,17 @@ public class CatalogDatasetResource {
         auditPayload.put("source", result != null ? result.metadataSource() : (useLocal ? "catalog" : (disabled ? "disabled" : "openmetadata")));
         audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, "tech-metadata-detail", auditPayload);
         return ApiResponses.ok(result);
+    }
+
+    private String resolveMetadataActiveDept(String requestedActiveDept) {
+        if (
+            SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES) &&
+            requestedActiveDept != null &&
+            !requestedActiveDept.isBlank()
+        ) {
+            return requestedActiveDept.trim();
+        }
+        return SecurityUtils.getCurrentUserDept().orElseGet(() -> helper.claim("dept_code"));
     }
 
     @GetMapping("/datasets/{id}/lineage")

@@ -62,7 +62,7 @@ public class CatalogMetadataService {
             if (!accessChecker.canRead(dataset)) {
                 continue;
             }
-            if (!accessChecker.departmentAllowed(dataset, activeDept)) {
+            if (!accessChecker.departmentAllowedExact(dataset, activeDept)) {
                 continue;
             }
             if (sourceId != null && !Objects.equals(sourceId, dataset.getSourceId())) {
@@ -173,7 +173,7 @@ public class CatalogMetadataService {
                 "元数据已失效，请重新采集"
             );
         }
-        if (!accessChecker.canRead(dataset) || !accessChecker.departmentAllowed(dataset, activeDept)) {
+        if (!accessChecker.canRead(dataset) || !accessChecker.departmentAllowedExact(dataset, activeDept)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在或无权访问");
         }
 

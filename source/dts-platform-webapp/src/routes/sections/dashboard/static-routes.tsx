@@ -32,6 +32,7 @@ const SqlModelingPage = lazy(() => import("@/pages/modeling/SqlModelingPage"));
 const ModelingCompatibilityPage = lazy(() => import("@/pages/modeling/ModelingCompatibilityPage"));
 const MetricWorkbenchPage = lazy(() => import("@/pages/modeling/MetricWorkbenchPage"));
 const ModelingWorkbenchPage = lazy(() => import("@/pages/modeling/ModelingWorkbenchPage"));
+const WarehousePlanLedgerPage = lazy(() => import("@/pages/modeling/WarehousePlanLedgerPage"));
 const WarehousePlanDetailPage = lazy(() => import("@/pages/modeling/WarehousePlanDetailPage"));
 const DimensionCatalogPage = lazy(() => import("@/pages/modeling/DimensionCatalogPage"));
 const ModelCenterPage = lazy(() => import("@/pages/modeling/ModelCenterPage"));
@@ -401,6 +402,14 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		element: (
 			<S>
 				<ModelingWorkbenchPage />
+			</S>
+		),
+	},
+	{
+		path: "modeling/plans",
+		element: (
+			<S>
+				<WarehousePlanLedgerPage />
 			</S>
 		),
 	},

@@ -16,6 +16,7 @@ import com.yuzhi.dts.platform.repository.infra.InfraConnectorRepository;
 import com.yuzhi.dts.platform.repository.service.InfraConnectionTestLogRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataStorageRepository;
+import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
@@ -43,6 +44,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
 class InfraManagementServiceTest {
@@ -162,6 +166,50 @@ class InfraManagementServiceTest {
     }
 
     @Test
+    void deptMaintainerCannotUseActiveDeptHeaderToCrossAuthoritativeClaimScope() {
+        authenticateJwt(AuthoritiesConstants.DEPT_DATA_OWNER, Map.of("dept_code", "dept-a"));
+        InfraDataSource global = dataSource("Global Lake", null);
+        InfraDataSource deptA = dataSource("Dept A Lake", "dept-a");
+        InfraDataSource deptB = dataSource("Dept B Lake", "dept-b");
+        when(dataSourceRepository.findAll()).thenReturn(List.of(global, deptA, deptB));
+        when(adminInfraClient.fetchDefaultDataLake()).thenReturn(Optional.empty());
+
+        List<InfraDataSourceDto> result = service.listDataSources("dept-b");
+
+        assertThat(result).extracting(InfraDataSourceDto::name).containsExactly("Global Lake", "Dept A Lake");
+        when(dataSourceRepository.findById(deptB.getId())).thenReturn(Optional.of(deptB));
+        assertThatThrownBy(() -> service.getDataSource(deptB.getId(), "dept-b"))
+            .isInstanceOfSatisfying(
+                ResponseStatusException.class,
+                ex -> assertThat(ex.getStatusCode().value()).isEqualTo(403)
+            );
+    }
+
+    @Test
+    void deptMaintainerWithoutAuthoritativeDeptCannotUseHeaderToReadDepartmentSource() {
+        authenticateJwt(AuthoritiesConstants.DEPT_DATA_OWNER, Map.of());
+        InfraDataSource deptB = dataSource("Dept B Lake", "dept-b");
+        when(dataSourceRepository.findById(deptB.getId())).thenReturn(Optional.of(deptB));
+
+        assertThatThrownBy(() -> service.getDataSource(deptB.getId(), "dept-b"))
+            .isInstanceOfSatisfying(
+                ResponseStatusException.class,
+                ex -> assertThat(ex.getStatusCode().value()).isEqualTo(403)
+            );
+    }
+
+    @Test
+    void instituteMaintainerCanStillReadExplicitDepartmentScope() {
+        authenticateJwt(AuthoritiesConstants.INST_DATA_OWNER, Map.of());
+        InfraDataSource deptB = dataSource("Dept B Lake", "dept-b");
+        when(dataSourceRepository.findById(deptB.getId())).thenReturn(Optional.of(deptB));
+
+        InfraDataSourceDto result = service.getDataSource(deptB.getId(), "dept-b");
+
+        assertThat(result.name()).isEqualTo("Dept B Lake");
+    }
+
+    @Test
     void createDataSource_deptDataOwnerKeepsOwnerDeptEmptyWhenNoDeptIsSelected() {
         SecurityContextHolder
             .getContext()
@@ -251,6 +299,48 @@ class InfraManagementServiceTest {
         );
 
         assertThat(impact.dataSource().ownerDept()).isNull();
+    }
+
+    @Test
+    void updateDataSource_invalidatesSuccessfulVerificationWhenConnectionSettingsChange() {
+        UUID id = UUID.randomUUID();
+        Instant verifiedAt = Instant.parse("2026-07-22T03:19:40Z");
+        InfraDataSource existing = new InfraDataSource();
+        existing.setId(id);
+        existing.setName("报表库");
+        existing.setType("POSTGRESQL");
+        existing.setConnectorKey("postgresql");
+        existing.setJdbcUrl("jdbc:postgresql://old-db:5432/report");
+        existing.setUsername("report");
+        existing.setStatus("ACTIVE");
+        existing.setLastVerifiedAt(verifiedAt);
+
+        when(dataSourceRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(connectorRepository.findByConnectorKeyIgnoreCase("postgresql")).thenReturn(Optional.of(postgresConnector()));
+        when(dataSourceRepository.findAll()).thenReturn(List.of(existing));
+        when(secretService.readSecrets(existing)).thenReturn(Map.of("password", "secret"));
+        when(dataSourceRepository.save(org.mockito.ArgumentMatchers.any(InfraDataSource.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        InfraManagementService.DataSourceUpdateImpact impact = service.updateDataSourceWithImpact(
+            id,
+            new DataSourceRequest(
+                "报表库",
+                "POSTGRESQL",
+                "postgresql",
+                "jdbc:postgresql://new-db:5432/report",
+                "report",
+                "更新连接地址",
+                null,
+                Map.of(),
+                Map.of("password", "secret")
+            ),
+            "operator",
+            null
+        );
+
+        assertThat(impact.connectionChanged()).isTrue();
+        assertThat(existing.getLastVerifiedAt()).isNull();
+        assertThat(impact.dataSource().lastVerifiedAt()).isNull();
     }
 
     @Test
@@ -579,5 +669,28 @@ class InfraManagementServiceTest {
         connector.setCategory("api");
         connector.setDefaultEngine("api-http");
         return connector;
+    }
+
+    private InfraDataSource dataSource(String name, String ownerDept) {
+        InfraDataSource source = new InfraDataSource();
+        source.setId(UUID.randomUUID());
+        source.setName(name);
+        source.setType("postgresql");
+        source.setStatus("ACTIVE");
+        source.setOwnerDept(ownerDept);
+        return source;
+    }
+
+    private void authenticateJwt(String authority, Map<String, Object> claims) {
+        Jwt.Builder builder = Jwt
+            .withTokenValue("test-token")
+            .header("alg", "none")
+            .subject("asset-manager")
+            .claim("roles", List.of(authority));
+        claims.forEach(builder::claim);
+        Jwt jwt = builder.build();
+        SecurityContextHolder
+            .getContext()
+            .setAuthentication(new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority(authority))));
     }
 }

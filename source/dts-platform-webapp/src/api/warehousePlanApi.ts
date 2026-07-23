@@ -44,6 +44,14 @@ export type CreateWarehousePlanInput = {
 	idempotencyKey: string;
 };
 
+export type UpdateWarehousePlanInput = {
+	name: string;
+	objective?: string | null;
+	scope?: string | null;
+	ownerId: string;
+	ownerDepartmentId?: string | null;
+};
+
 export type WarehousePlanSourceRef = {
 	sourceType: WarehousePlanSourceType;
 	sourceId: string;
@@ -237,6 +245,25 @@ export const getWarehousePlan = (planId: string) =>
 
 export const createWarehousePlan = (data: CreateWarehousePlanInput) =>
 	api.post<CreateWarehousePlanResult>({ url: WAREHOUSE_PLAN_RESOURCE, data });
+
+export const updateWarehousePlan = (planId: string, version: number, data: UpdateWarehousePlanInput) =>
+	api.patch<WarehousePlanHeader>(
+		withModelingRequestTimeout({
+			url: `${WAREHOUSE_PLAN_RESOURCE}/${planId}`,
+			headers: { "If-Match": `"plan-head:${version}"` },
+			data,
+			_skipErrorToast: true,
+		}),
+	);
+
+export const archiveWarehousePlan = (planId: string, version: number) =>
+	api.post<WarehousePlanHeader>(
+		withModelingRequestTimeout({
+			url: `${WAREHOUSE_PLAN_RESOURCE}/${planId}/archive`,
+			headers: { "If-Match": `"plan-head:${version}"` },
+			_skipErrorToast: true,
+		}),
+	);
 
 export const getWarehousePlanningBaseline = (planId: string) =>
 	api.get<PlanningBaseline>(withModelingRequestTimeout({ url: `${WAREHOUSE_PLAN_RESOURCE}/${planId}/baseline` }));

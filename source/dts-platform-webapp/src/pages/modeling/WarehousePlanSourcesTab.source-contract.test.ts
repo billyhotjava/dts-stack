@@ -5,8 +5,10 @@ import test from "node:test";
 const readSource = (url: URL): string => (existsSync(url) ? readFileSync(url, "utf8") : "");
 
 const component = readSource(new URL("./WarehousePlanSourcesTab.tsx", import.meta.url));
+const registration = readSource(new URL("./warehousePlanSourceRegistration.ts", import.meta.url));
 const parent = readSource(new URL("./WarehousePlanDetailPage.tsx", import.meta.url));
 const api = readSource(new URL("../../api/warehousePlanApi.ts", import.meta.url));
+const platformApi = readSource(new URL("../../api/platformApi.ts", import.meta.url));
 
 test("source inventory API uses the canonical body version and a narrow PUT command", () => {
 	assert.match(api, /type WarehousePlanSourceInventoryView[\s\S]*?version:\s*number[\s\S]*?etag:\s*string/);
@@ -69,13 +71,16 @@ test("source save serializes confirmation, exclusion and reason without forged r
 	assert.doesNotMatch(component, /业务对象|业务过程|objectId|processId/);
 });
 
-test("409 keeps the draft and offers only reload or an explicit latest-version confirmation", () => {
+test("409 keeps the draft and rebases it onto a freshly loaded inventory exactly once", () => {
 	assert.match(component, /resolveWarehousePlanConflictVersion/);
 	assert.match(component, /当前草稿已保留/);
 	assert.match(component, /系统没有自动覆盖/);
 	assert.match(component, /重新加载服务端最新版/);
-	assert.match(component, /确认保留当前草稿并基于版本/);
-	assert.doesNotMatch(component, /自动重试/);
+	assert.match(component, /加载最新版、合并并重试/);
+	assert.match(component, /rebaseWarehousePlanSourceDrafts/);
+	assert.match(component, /await getWarehousePlanSources\(planId\)/);
+	assert.match(component, /latestInventory\.version/);
+	assert.doesNotMatch(component, /registerConnectionTable\(conflictVersion\)/);
 });
 
 test("successful source writes refresh source, baseline and stage projection", () => {
@@ -95,10 +100,32 @@ test("an empty inventory can register a real catalog asset without leaving the p
 	assert.match(component, /选择数据集/);
 	assert.match(component, /选择数据表/);
 	assert.match(component, /登记目录资产/);
-	assert.match(component, /sourceType:\s*"CATALOG_TABLE"/);
-	assert.match(component, /locator:\s*\{\s*assetId/);
+	assert.match(registration, /sourceType:\s*"CATALOG_TABLE"/);
+	assert.match(registration, /locator:\s*\{\s*assetId:\s*normalizedAssetId\s*\}/);
 	assert.match(component, /saveWarehousePlanSources/);
 	assert.doesNotMatch(component, /尚未登记来源[\s\S]{0,500}打开来源目录/);
+});
+
+test("verified connections lead to schema and concrete catalog tables in the current plan", () => {
+	assert.match(component, /dataSourcesService/);
+	assert.match(component, /getTechMetadataTables/);
+	assert.match(component, /已验证连接/);
+	assert.match(component, /选择 Schema/);
+	assert.match(component, /选择具体表/);
+	assert.match(component, /加入当前规划并确认/);
+	assert.match(component, /mergeConfirmedConnectionTableSource/);
+	assert.match(registration, /appendConfirmedConnectionTableSource/);
+	assert.match(registration, /sourceType:\s*"CONNECTION_TABLE"/);
+	assert.match(component, /连接测试只验证网络和凭据/);
+	assert.match(component, /尚未同步出可用表/);
+	assert.match(platformApi, /export type TechMetadataTablePage/);
+	assert.match(platformApi, /api\.get<TechMetadataTablePage>/);
+	assert.doesNotMatch(component, /const result:\s*any\s*=\s*await getTechMetadataTables/);
+	assert.match(component, /filterOption=\{false\}/);
+	assert.match(component, /onSearch=/);
+	assert.match(component, /keyword:/);
+	assert.match(component, /catalogSchemaOptions\(items\)\.length\s*===\s*0/);
+	assert.doesNotMatch(component, /catch\s*\(error:\s*any\)/);
 });
 
 test("source mutations are invalidated when planId changes and never publish stale state", () => {
@@ -106,8 +133,8 @@ test("source mutations are invalidated when planId changes and never publish sta
 	const planEffect =
 		component.match(/useEffect\(\(\) => \{[\s\S]*?void loadSources\(true\);[\s\S]*?\}, \[[\s\S]*?\]\);/)?.[0] || "";
 	assert.match(planEffect, /mutationGuard\.invalidate\(\)/);
-	assert.match(planEffect, /setSaving\(false\)/);
-	for (const mutationName of ["saveSources", "registerCatalogAsset"]) {
+	assert.match(planEffect, /setSavingState\(false\)/);
+	for (const mutationName of ["saveSources", "registerCatalogAsset", "registerConnectionTable"]) {
 		const mutation = component.match(new RegExp(`const ${mutationName}[\\s\\S]*?\\n\\t};`))?.[0] || "";
 		assert.match(mutation, /const isCurrent\s*=\s*mutationGuard\.begin\(\)/);
 		assert.ok(
@@ -115,7 +142,7 @@ test("source mutations are invalidated when planId changes and never publish sta
 			`${mutationName} must claim its plan-scoped mutation before async form validation`,
 		);
 		assert.match(mutation, /if \(!isCurrent\(\)\) return/);
-		assert.match(mutation, /finally[\s\S]*?if \(isCurrent\(\)\) setSaving\(false\)/);
+		assert.match(mutation, /finally[\s\S]*?if \(isCurrent\(\)\) setSavingState\(false\)/);
 	}
 });
 
@@ -126,6 +153,9 @@ test("switching planId clears every catalog selection and pending conflict", () 
 	assert.match(planEffect, /setSelectedAssetId\(null\)/);
 	assert.match(planEffect, /setPendingCatalogAssetId\(null\)/);
 	assert.match(planEffect, /setCatalogOptions\(\[\]\)/);
+	assert.match(planEffect, /setSelectedConnectionId\(null\)/);
+	assert.match(planEffect, /setSelectedConnectionSchema\(null\)/);
+	assert.match(planEffect, /setSelectedConnectionTableId\(null\)/);
 });
 
 test("planning policy preserves the explicit conceptual-design decision", () => {

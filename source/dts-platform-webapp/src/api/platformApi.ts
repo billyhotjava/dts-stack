@@ -49,8 +49,31 @@ export const batchDatasetQuality = (ids: string[]) =>
 	api.post({ url: "/catalog/quality/batch", data: { ids } });
 export const getCatalogReconciliation = (sampleLimit = 20) =>
 	api.get({ url: "/catalog/ops/reconciliation", params: { sampleLimit } });
+export type TechMetadataTableSummary = {
+	id?: string | null;
+	name?: string | null;
+	fqn?: string | null;
+	service?: string | null;
+	database?: string | null;
+	schema?: string | null;
+	owner?: string | null;
+	domain?: string | null;
+	tags?: string | null;
+	description?: string | null;
+	columnCount?: number | null;
+};
+export type TechMetadataTablePage = {
+	enabled: boolean;
+	items: TechMetadataTableSummary[];
+	total: number;
+	keyword?: string | null;
+	searched: boolean;
+	message?: string | null;
+	metadataSource?: string | null;
+	fallbackReason?: string | null;
+};
 export const getTechMetadataTables = (params?: { keyword?: string; size?: number; sourceId?: string }) =>
-	api.get({ url: "/catalog/metadata/tables", params });
+	api.get<TechMetadataTablePage>({ url: "/catalog/metadata/tables", params });
 export const getTechMetadataTableDetail = (fqn: string) =>
 	api.get({ url: "/catalog/metadata/tables/detail", params: { fqn } });
 export type CatalogAssetV2Query = {

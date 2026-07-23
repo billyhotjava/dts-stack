@@ -408,7 +408,12 @@ class WarehousePlanApplicationServiceIT {
             assertThat(incomplete.ready()).isFalse();
             assertThat(incomplete.missingCodes()).contains("CATEGORY_SCOPE_INCOMPLETE", "SOURCE_INVENTORY_INCOMPLETE");
             assertWarehouseError(
-                () -> service.confirmBaseline(tenant, plan.id(), plan.version()),
+                () -> service.confirmBaseline(
+                    tenant,
+                    plan.id(),
+                    plan.version(),
+                    new SourceReferenceResolver.AccessContext(tenant, plan.ownerId(), plan.ownerDepartmentId())
+                ),
                 "WAREHOUSE_PLAN_BASELINE_INCOMPLETE",
                 null
             );
@@ -426,7 +431,14 @@ class WarehousePlanApplicationServiceIT {
             PlanningBaseline ready = service.getBaseline(tenant, plan.id());
             assertThat(ready.missingCodes()).isEmpty();
             assertThat(ready.ready()).isTrue();
-            assertThat(service.confirmBaseline(tenant, plan.id(), plan.version()).ready()).isTrue();
+            assertThat(
+                service.confirmBaseline(
+                    tenant,
+                    plan.id(),
+                    plan.version(),
+                    new SourceReferenceResolver.AccessContext(tenant, plan.ownerId(), plan.ownerDepartmentId())
+                ).ready()
+            ).isTrue();
             WarehousePlanHeader confirmed = service.get(tenant, plan.id());
             assertThat(confirmed.lifecycleStatus()).isEqualTo(BASELINE_READY);
             assertThat(confirmed.version()).isEqualTo(2);

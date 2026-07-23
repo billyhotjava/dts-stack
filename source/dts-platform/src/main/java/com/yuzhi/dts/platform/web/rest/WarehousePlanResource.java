@@ -9,6 +9,7 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicatio
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService.WarehousePlanException;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider.WarehousePlanActor;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanAuthorizationGuard;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.BusinessScope;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CategoryScopeCommand;
@@ -63,6 +64,7 @@ public class WarehousePlanResource {
     private final WarehousePlanApplicationService service;
     private final WarehousePlanStageProjectionService stageProjectionService;
     private final WarehousePlanActorProvider actorProvider;
+    private final WarehousePlanAuthorizationGuard authorizationGuard;
     private final ObjectMapper objectMapper;
     private final String serverTenantId;
 
@@ -70,19 +72,26 @@ public class WarehousePlanResource {
         WarehousePlanApplicationService service,
         WarehousePlanStageProjectionService stageProjectionService,
         WarehousePlanActorProvider actorProvider,
+        WarehousePlanAuthorizationGuard authorizationGuard,
         ObjectMapper objectMapper,
         @Value("${dts.platform.modeling.default-tenant-id:default}") String serverTenantId
     ) {
         this.service = service;
         this.stageProjectionService = stageProjectionService;
         this.actorProvider = actorProvider;
+        this.authorizationGuard = authorizationGuard;
         this.objectMapper = objectMapper;
         this.serverTenantId = serverTenantId;
     }
 
     @GetMapping
     public ApiResponse<List<WarehousePlanHeader>> list(@RequestParam(required = false) String lifecycleStatus) {
-        return ApiResponses.ok(service.list(serverTenantId, lifecycleStatus));
+        WarehousePlanActor actor = actorProvider.currentActor();
+        return ApiResponses.ok(
+            service.list(serverTenantId, lifecycleStatus).stream()
+                .filter(plan -> authorizationGuard.canReadPlan(plan, actor))
+                .toList()
+        );
     }
 
     @PostMapping
@@ -100,6 +109,7 @@ public class WarehousePlanResource {
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<WarehousePlanHeader>> get(@PathVariable UUID id) {
         WarehousePlanHeader result = service.get(serverTenantId, id);
+        authorizationGuard.requirePlanRead(result, actorProvider.currentActor());
         return ResponseEntity.ok().eTag(etag(EditUnit.PLAN_HEAD, result.version())).body(ApiResponses.ok(result));
     }
 
@@ -112,6 +122,13 @@ public class WarehousePlanResource {
     ) {
         rejectRequestedTenant(request.tenantId());
         int expectedVersion = parseIfMatch(ifMatch, EditUnit.PLAN_HEAD);
+        WarehousePlanHeader current = service.get(serverTenantId, id);
+        authorizationGuard.validateHeaderUpdate(
+            current,
+            request.ownerId(),
+            request.ownerDepartmentId(),
+            actorProvider.currentActor()
+        );
         WarehousePlanHeader result = service.updateHeader(serverTenantId, id, expectedVersion, request.toCommand());
         return ResponseEntity.ok().eTag(etag(EditUnit.PLAN_HEAD, result.version())).body(ApiResponses.ok(result));
     }
@@ -122,18 +139,22 @@ public class WarehousePlanResource {
         @PathVariable UUID id,
         @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch
     ) {
-        WarehousePlanHeader result = service.archive(serverTenantId, id, parseIfMatch(ifMatch, EditUnit.PLAN_HEAD));
+        int expectedVersion = parseIfMatch(ifMatch, EditUnit.PLAN_HEAD);
+        requirePlanMaintenance(id);
+        WarehousePlanHeader result = service.archive(serverTenantId, id, expectedVersion);
         return ResponseEntity.ok().eTag(etag(EditUnit.PLAN_HEAD, result.version())).body(ApiResponses.ok(result));
     }
 
     @GetMapping("/{id}/baseline")
     public ApiResponse<PlanningBaseline> baseline(@PathVariable UUID id) {
-        return ApiResponses.ok(service.getBaseline(serverTenantId, id, sourceAccessContext()));
+        WarehousePlanActor actor = requirePlanRead(id);
+        return ApiResponses.ok(service.getBaseline(serverTenantId, id, sourceAccessContext(actor)));
     }
 
     @GetMapping("/{id}/stage-projection")
     public ApiResponse<StageProjection> stageProjection(@PathVariable UUID id) {
-        return ApiResponses.ok(stageProjectionService.project(serverTenantId, id, sourceAccessContext()));
+        WarehousePlanActor actor = requirePlanRead(id);
+        return ApiResponses.ok(stageProjectionService.project(serverTenantId, id, sourceAccessContext(actor)));
     }
 
     @PutMapping("/{id}/baseline/business-scope")
@@ -143,10 +164,12 @@ public class WarehousePlanResource {
         @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
         @RequestBody BusinessScope request
     ) {
+        int expectedVersion = parseIfMatch(ifMatch, EditUnit.BUSINESS_SCOPE);
+        requirePlanMaintenance(id);
         Versioned<BusinessScope> result = service.saveBusinessScope(
             serverTenantId,
             id,
-            parseIfMatch(ifMatch, EditUnit.BUSINESS_SCOPE),
+            expectedVersion,
             request
         );
         return versioned(result, EditUnit.BUSINESS_SCOPE);
@@ -154,6 +177,7 @@ public class WarehousePlanResource {
 
     @GetMapping("/{id}/baseline/categories")
     public ResponseEntity<ApiResponse<Versioned<CategoryScopeView>>> categories(@PathVariable UUID id) {
+        requirePlanRead(id);
         Versioned<CategoryScopeView> result = service.getCategoryScope(serverTenantId, id);
         return canonicalVersioned(result, EditUnit.CATEGORY_SCOPE);
     }
@@ -165,10 +189,12 @@ public class WarehousePlanResource {
         @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
         @RequestBody JsonNode request
     ) {
+        int expectedVersion = parseIfMatch(ifMatch, EditUnit.CATEGORY_SCOPE);
+        requirePlanMaintenance(id);
         Versioned<CategoryScopeView> result = service.saveCategoryScope(
             serverTenantId,
             id,
-            parseIfMatch(ifMatch, EditUnit.CATEGORY_SCOPE),
+            expectedVersion,
             decode(request, CategoryScopeCommand.class, EditUnit.CATEGORY_SCOPE)
         );
         return canonicalVersioned(result, EditUnit.CATEGORY_SCOPE);
@@ -176,7 +202,8 @@ public class WarehousePlanResource {
 
     @GetMapping("/{id}/baseline/sources")
     public ResponseEntity<ApiResponse<SourceInventoryView>> sources(@PathVariable UUID id) {
-        SourceInventoryView result = service.getSources(serverTenantId, id, sourceAccessContext());
+        WarehousePlanActor actor = requirePlanRead(id);
+        SourceInventoryView result = service.getSources(serverTenantId, id, sourceAccessContext(actor));
         return sourceInventoryResponse(result);
     }
 
@@ -188,13 +215,14 @@ public class WarehousePlanResource {
         @RequestBody JsonNode request
     ) {
         int expectedVersion = parseIfMatch(ifMatch, EditUnit.SOURCES);
+        WarehousePlanActor actor = requirePlanMaintenance(id);
         SourceInventoryCommand command = decode(request, SourceInventoryCommand.class, EditUnit.SOURCES);
         SourceInventoryView result = service.saveSources(
             serverTenantId,
             id,
             expectedVersion,
             command,
-            sourceAccessContext()
+            sourceAccessContext(actor)
         );
         return sourceInventoryResponse(result);
     }
@@ -207,10 +235,12 @@ public class WarehousePlanResource {
         @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
         @RequestBody List<SourceBusinessMapping> request
     ) {
+        int expectedVersion = parseIfMatch(ifMatch, EditUnit.SOURCE_MAPPINGS);
+        requirePlanMaintenance(id);
         Versioned<List<SourceBusinessMapping>> result = service.saveSourceMappings(
             serverTenantId,
             id,
-            parseIfMatch(ifMatch, EditUnit.SOURCE_MAPPINGS),
+            expectedVersion,
             request
         );
         return versioned(result, EditUnit.SOURCE_MAPPINGS);
@@ -218,6 +248,7 @@ public class WarehousePlanResource {
 
     @GetMapping("/{id}/baseline/policy")
     public ResponseEntity<ApiResponse<Versioned<PlanningPolicyView>>> policy(@PathVariable UUID id) {
+        requirePlanRead(id);
         Versioned<PlanningPolicyView> result = service.getPlanningPolicy(serverTenantId, id);
         return canonicalVersioned(result, EditUnit.POLICY);
     }
@@ -229,10 +260,12 @@ public class WarehousePlanResource {
         @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
         @RequestBody JsonNode request
     ) {
+        int expectedVersion = parseIfMatch(ifMatch, EditUnit.POLICY);
+        requirePlanMaintenance(id);
         Versioned<PlanningPolicyView> result = service.savePlanningPolicy(
             serverTenantId,
             id,
-            parseIfMatch(ifMatch, EditUnit.POLICY),
+            expectedVersion,
             decode(request, PlanningPolicyCommand.class, EditUnit.POLICY)
         );
         return canonicalVersioned(result, EditUnit.POLICY);
@@ -245,7 +278,17 @@ public class WarehousePlanResource {
         @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch
     ) {
         int expectedVersion = parseIfMatch(ifMatch, EditUnit.PLAN_HEAD);
-        PlanningBaseline result = service.confirmBaseline(serverTenantId, id, expectedVersion);
+        WarehousePlanActor actor = requirePlanMaintenance(id);
+        PlanningBaseline result = service.confirmBaseline(
+            serverTenantId,
+            id,
+            expectedVersion,
+            new AccessContext(
+                serverTenantId,
+                actor == null ? null : actor.ownerId(),
+                actor == null ? null : actor.ownerDepartmentId()
+            )
+        );
         return ResponseEntity.ok().eTag(etag(EditUnit.PLAN_HEAD, expectedVersion + 1)).body(ApiResponses.ok(result));
     }
 
@@ -279,13 +322,24 @@ public class WarehousePlanResource {
         return ResponseEntity.ok().header(HttpHeaders.ETAG, result.etag()).body(ApiResponses.ok(result));
     }
 
-    private AccessContext sourceAccessContext() {
-        WarehousePlanActor actor = actorProvider.currentActor();
+    private AccessContext sourceAccessContext(WarehousePlanActor actor) {
         return new AccessContext(
             serverTenantId,
             actor == null ? null : actor.ownerId(),
             actor == null ? null : actor.ownerDepartmentId()
         );
+    }
+
+    private WarehousePlanActor requirePlanMaintenance(UUID planId) {
+        WarehousePlanActor actor = actorProvider.currentActor();
+        authorizationGuard.requirePlanMaintenance(service.get(serverTenantId, planId), actor);
+        return actor;
+    }
+
+    private WarehousePlanActor requirePlanRead(UUID planId) {
+        WarehousePlanActor actor = actorProvider.currentActor();
+        authorizationGuard.requirePlanRead(service.get(serverTenantId, planId), actor);
+        return actor;
     }
 
     private <T> T decode(JsonNode request, Class<T> type, EditUnit editUnit) {

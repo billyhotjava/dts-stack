@@ -187,6 +187,37 @@ public class AccessChecker {
         return false;
     }
 
+    /**
+     * Department gate for security-sensitive flows that require canonical equality.
+     *
+     * <p>The legacy {@link #departmentAllowed(CatalogDataset, String)} comparison is intentionally
+     * left unchanged for its existing consumers. This variant preserves explicit grants,
+     * institute/super-admin access and root visibility, but never treats a textual or numeric
+     * suffix as the same department.</p>
+     */
+    public boolean departmentAllowedExact(CatalogDataset dataset, String activeDept) {
+        if (dataset == null) return false;
+        if (dataset.getId() != null && isExplicitlyGranted(dataset)) {
+            return true;
+        }
+        if (isSuperAdmin() || SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES)) {
+            return true;
+        }
+        if (!SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.DEPARTMENT_PRIVILEGED_ROLES)) {
+            return false;
+        }
+        String ownerDept = dataset.getOwnerDept();
+        if (!StringUtils.hasText(ownerDept) || organizationVisibilityService.isRoot(ownerDept)) {
+            return true;
+        }
+        String normalizedOwner = DepartmentUtils.normalize(ownerDept);
+        if (normalizedOwner.isEmpty()) {
+            return true;
+        }
+        String normalizedContext = DepartmentUtils.normalize(activeDept);
+        return !normalizedContext.isEmpty() && normalizedOwner.equals(normalizedContext);
+    }
+
     public DataLevel resolveHighestDataLevel() {
         PersonnelLevel personnel = extractPersonnelLevelFromJwt();
         if (personnel != null) {

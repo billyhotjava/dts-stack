@@ -8,7 +8,9 @@ import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanCon
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.OnboardingMode.BUSINESS_FIRST;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceType.CATALOG_TABLE;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -26,6 +28,7 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicatio
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService.WarehousePlanException;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider.WarehousePlanActor;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanAuthorizationGuard;
 import com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolutionPort;
 import com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.AccessContext;
 import com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.ResolutionStatus;
@@ -103,6 +106,9 @@ class WarehousePlanResourceTest {
     private WarehousePlanActorProvider actorProvider;
 
     @MockBean
+    private WarehousePlanAuthorizationGuard authorizationGuard;
+
+    @MockBean
     private PortalSessionInactivityFilter portalSessionInactivityFilter;
 
     @MockBean
@@ -121,6 +127,7 @@ class WarehousePlanResourceTest {
             false
         );
         when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("owner-1", "department-1"));
+        when(authorizationGuard.canReadPlan(created, new WarehousePlanActor("owner-1", "department-1"))).thenReturn(true);
         when(service.create(eq("server-tenant"), any())).thenReturn(createResult);
         when(service.list("server-tenant", "DRAFT")).thenReturn(List.of(created));
         when(service.get("server-tenant", PLAN_ID)).thenReturn(created);
@@ -160,6 +167,47 @@ class WarehousePlanResourceTest {
         verify(service).create(eq("server-tenant"), any());
         verify(service).list("server-tenant", "DRAFT");
         verify(service).get("server-tenant", PLAN_ID);
+    }
+
+    @Test
+    void filtersThePlanLedgerAndRejectsUnauthorizedSourceReadsBeforeLoadingPayload() throws Exception {
+        WarehousePlanActor actor = new WarehousePlanActor("owner-1", "department-1");
+        WarehousePlanHeader visible = planHeader(1, DRAFT);
+        UUID hiddenId = UUID.fromString("10000000-0000-0000-0000-000000000002");
+        WarehousePlanHeader hidden = new WarehousePlanHeader(
+            hiddenId,
+            "server-tenant",
+            "warehouse-hidden",
+            "Hidden warehouse",
+            "Hidden objective",
+            null,
+            "owner-2",
+            "department-2",
+            BUSINESS_FIRST,
+            DRAFT,
+            1
+        );
+        when(actorProvider.currentActor()).thenReturn(actor);
+        when(service.list("server-tenant", null)).thenReturn(List.of(visible, hidden));
+        when(authorizationGuard.canReadPlan(visible, actor)).thenReturn(true);
+        when(authorizationGuard.canReadPlan(hidden, actor)).thenReturn(false);
+        when(service.get("server-tenant", hiddenId)).thenReturn(hidden);
+        doThrow(new WarehousePlanException("WAREHOUSE_PLAN_NOT_FOUND", "Warehouse plan not found", null))
+            .when(authorizationGuard)
+            .requirePlanRead(hidden, actor);
+
+        mockMvc
+            .perform(get("/api/modeling/warehouse-plans"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.length()").value(1))
+            .andExpect(jsonPath("$.data[0].id").value(PLAN_ID.toString()));
+
+        mockMvc
+            .perform(get("/api/modeling/warehouse-plans/{id}/baseline/sources", hiddenId))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.code").value("WAREHOUSE_PLAN_NOT_FOUND"));
+
+        verify(service, never()).getSources(eq("server-tenant"), eq(hiddenId), any());
     }
 
     @Test
@@ -305,6 +353,62 @@ class WarehousePlanResourceTest {
     }
 
     @Test
+    void rejectsUnauthorizedPlanAndBaselineWritesBeforeWriting() throws Exception {
+        WarehousePlanHeader current = planHeader(1, DRAFT);
+        WarehousePlanActor actor = new WarehousePlanActor("department-owner", "department-2");
+        WarehousePlanException forbidden = new WarehousePlanException(
+            "WAREHOUSE_PLAN_OWNER_DEPARTMENT_FORBIDDEN",
+            "forbidden",
+            null
+        );
+        when(service.get("server-tenant", PLAN_ID)).thenReturn(current);
+        when(actorProvider.currentActor()).thenReturn(actor);
+        doThrow(forbidden).when(authorizationGuard).validateHeaderUpdate(current, "owner-2", "department-2", actor);
+        doThrow(forbidden).when(authorizationGuard).requirePlanMaintenance(current, actor);
+
+        mockMvc
+            .perform(
+                patch("/api/modeling/warehouse-plans/{id}", PLAN_ID)
+                    .header("If-Match", "\"plan-head:1\"")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"name\":\"Renamed\",\"ownerId\":\"owner-2\",\"ownerDepartmentId\":\"department-2\"}")
+            )
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("WAREHOUSE_PLAN_OWNER_DEPARTMENT_FORBIDDEN"));
+
+        mockMvc
+            .perform(post("/api/modeling/warehouse-plans/{id}/archive", PLAN_ID).header("If-Match", "\"plan-head:1\""))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("WAREHOUSE_PLAN_OWNER_DEPARTMENT_FORBIDDEN"));
+
+        expectForbiddenPut("/api/modeling/warehouse-plans/{id}/baseline/business-scope", "business-scope", "{}");
+        expectForbiddenPut("/api/modeling/warehouse-plans/{id}/baseline/categories", "category-scope", "{}");
+        expectForbiddenPut("/api/modeling/warehouse-plans/{id}/baseline/sources", "sources", "{}");
+        expectForbiddenPut("/api/modeling/warehouse-plans/{id}/baseline/source-mappings", "source-mappings", "[]");
+        expectForbiddenPut("/api/modeling/warehouse-plans/{id}/baseline/policy", "policy", "{}");
+
+        verify(service, never()).updateHeader(any(), any(), anyInt(), any());
+        verify(service, never()).archive(any(), any(), anyInt());
+        verify(service, never()).saveBusinessScope(any(), any(), anyInt(), any());
+        verify(service, never()).saveCategoryScope(any(), any(), anyInt(), any());
+        verify(service, never()).saveSources(any(), any(), anyInt(), any(), any());
+        verify(service, never()).saveSourceMappings(any(), any(), anyInt(), any());
+        verify(service, never()).savePlanningPolicy(any(), any(), anyInt(), any());
+    }
+
+    private void expectForbiddenPut(String path, String editUnit, String body) throws Exception {
+        mockMvc
+            .perform(
+                put(path, PLAN_ID)
+                    .header("If-Match", "\"" + editUnit + ":1\"")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body)
+            )
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("WAREHOUSE_PLAN_OWNER_DEPARTMENT_FORBIDDEN"));
+    }
+
+    @Test
     void savesAllBaselineEditUnitsWithIndependentEtagsAndConfirmsTheBaseline() throws Exception {
         BusinessScope scope = scope();
         SourceLocator sourceLocator = new SourceLocator(SOURCE_ID, null, null, null, null, null, null);
@@ -358,7 +462,14 @@ class WarehousePlanResourceTest {
                 new AccessContext("server-tenant", "owner-1", "department-1")
             )
         ).thenReturn(ready);
-        when(service.confirmBaseline("server-tenant", PLAN_ID, 1)).thenReturn(ready);
+        when(
+            service.confirmBaseline(
+                "server-tenant",
+                PLAN_ID,
+                1,
+                new AccessContext("server-tenant", "owner-1", "department-1")
+            )
+        ).thenReturn(ready);
 
         mockMvc
             .perform(

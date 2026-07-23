@@ -1,0 +1,38 @@
+Sprint-67 F2-T05 WarehousePlan 计划头与生命周期后端证据
+时间：2026-07-21 +08:00
+
+单元/资源层命令：
+cd source/dts-platform
+./mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -Dskip.installnodenpm -Dskip.npm \
+  -Dtest='WarehousePlanAuthorizationGuardTest,AdminDirectoryGatewayTest,WarehousePlanResourceTest' test
+
+结果：退出码 0。
+覆盖：plan-head If-Match、PATCH/archive、403/404/409 映射、负责人目录精确解析、部门内转派、跨部门拒绝、机构级转派、归档对象权限、认证 actor 的 baseline AccessContext。
+
+目录与来源权限收口命令：
+cd source/dts-admin
+./mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -Dskip.installnodenpm -Dskip.npm \
+  -Dtest=PlatformDirectoryResourceTest test
+
+cd source/dts-platform
+./mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -Dskip.installnodenpm -Dskip.npm \
+  -Dtest='AccessCheckerTest,SourceReferenceResolverAdapterTest' test
+./mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -Dskip.installnodenpm -Dskip.npm \
+  -Dtest=AdminDirectoryGatewayTest test
+
+结果：dts-admin 1/1、dts-platform 9/9 + 5/5 PASS，failures=0，errors=0。
+
+PostgreSQL Testcontainers 命令：
+./mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -Dskip.installnodenpm -Dskip.npm \
+  -Dit.test='WarehousePlanApplicationServiceIT#detectsStaleHeaderVersionAndArchivesWithoutDeleting+blocksIncompleteBaselineAndConfirmsReadyBaselineAtomically' \
+  failsafe:integration-test failsafe:verify
+
+结果：2/2 PASS，failures=0，errors=0，skipped=0，suite 34.129s。
+
+安全收口：
+- 部门维护角色只能维护本部门计划并转派给本部门目录用户；机构维护角色可跨部门，但目标用户和部门必须与目录一致。
+- PATCH、archive、baseline confirm 复用对象权限检查；baseline 来源权限使用认证调用者，不再信任可编辑计划头部门。
+- 规划来源解析使用 canonical department equality，`dept-a/dept-ba` 与 `10/10010` 均不能通过；显式授权、机构角色和 root 可见性保持。
+- 负责人按 Keycloak ID 或严格 username 走 dts-admin 权威解析，并统一应用 AdminUserService 部门覆盖；目录不可用或目标身份不存在时失败关闭，不回退 raw Keycloak 部门。
+
+真实性边界：资源测试关闭了 HTTP filter chain，但对象授权 guard 使用真实 SecurityContext 角色判定；本证据不是部署后的真实认证 E2E。部署后仍须用只读、部门 A、部门 B 和机构级账号复验。

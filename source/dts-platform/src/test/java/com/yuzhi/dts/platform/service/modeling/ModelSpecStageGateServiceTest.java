@@ -10,6 +10,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.*;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.GateEvidence;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.GateStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.GateView;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.EvidenceState;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.Stage;
 import java.time.Instant;
 import java.util.List;
@@ -78,6 +79,136 @@ class ModelSpecStageGateServiceTest {
         )
             .extracting(ModelSpecStageGateService.GateBlocker::code)
             .containsExactly("MODEL_SPEC_FACT_TIME_SHAPE_MISMATCH");
+    }
+
+    @Test
+    void factDraftWithoutInputIsSavableButImplementationExplainsTheMissingInput() {
+        ModelSpecView model = view(
+            ModelType.FACT,
+            null,
+            FactShape.TRANSACTION,
+            new TimeSemantics(TimeSemanticsType.EVENT_TIME, List.of("event_time")),
+            List.of(),
+            List.of(),
+            List.of(),
+            null
+        );
+
+        assertThat(ModelSpecStageGateService.evaluate(model, Stage.DRAFT_SAVE, GateEvidence.currentFor(model)).status())
+            .isEqualTo(GateStatus.READY);
+        assertThat(
+            ModelSpecStageGateService.evaluate(model, Stage.IMPLEMENTATION_READY, GateEvidence.currentFor(model)).blockers()
+        )
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .containsExactly("MODEL_SPEC_FACT_INPUT_REQUIRED");
+    }
+
+    @Test
+    void legacyOdsFactRemainsReadableButEveryNewGateExplainsTheLayerMismatch() {
+        ModelSpecView odsFact = withLayer(
+            view(
+                ModelType.FACT,
+                null,
+                FactShape.TRANSACTION,
+                new TimeSemantics(TimeSemanticsType.EVENT_TIME, List.of("event_time")),
+                sources(),
+                List.of(),
+                List.of(),
+                null
+            ),
+            Layer.ODS
+        );
+
+        assertThat(ModelSpecStageGateService.evaluate(odsFact, Stage.DRAFT_SAVE, GateEvidence.currentFor(odsFact)).blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .contains("MODEL_SPEC_TYPE_LAYER_MISMATCH");
+        assertThat(
+            ModelSpecStageGateService.evaluate(odsFact, Stage.IMPLEMENTATION_READY, GateEvidence.currentFor(odsFact)).blockers()
+        )
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .contains("MODEL_SPEC_TYPE_LAYER_MISMATCH");
+    }
+
+    @Test
+    void factImplementationAcceptsARevisionPinnedUpstreamInsteadOfADirectPhysicalSource() {
+        ModelRevisionRef upstream = new ModelRevisionRef(UUID.fromString("40000000-0000-0000-0000-000000000001"), 3);
+        ModelSpecView model = view(
+            ModelType.FACT,
+            null,
+            FactShape.TRANSACTION,
+            new TimeSemantics(TimeSemanticsType.EVENT_TIME, List.of("event_time")),
+            List.of(),
+            List.of(upstream),
+            List.of(),
+            null
+        );
+
+        assertThat(ModelSpecStageGateService.evaluate(model, Stage.IMPLEMENTATION_READY, GateEvidence.currentFor(model)).status())
+            .isEqualTo(GateStatus.READY);
+    }
+
+    @Test
+    void factImplementationRejectsAStaleRevisionPinnedUpstream() {
+        ModelRevisionRef upstream = new ModelRevisionRef(UUID.fromString("40000000-0000-0000-0000-000000000001"), 3);
+        ModelSpecView model = view(
+            ModelType.FACT,
+            null,
+            FactShape.TRANSACTION,
+            new TimeSemantics(TimeSemanticsType.EVENT_TIME, List.of("event_time")),
+            List.of(),
+            List.of(upstream),
+            List.of(),
+            null
+        );
+        GateEvidence current = GateEvidence.currentFor(model);
+        GateEvidence staleUpstream = new GateEvidence(
+            current.revision(),
+            current.checksum(),
+            current.sources(),
+            EvidenceState.STALE,
+            current.dimensions(),
+            current.standards(),
+            current.quality(),
+            current.permissions(),
+            current.build(),
+            current.tests()
+        );
+
+        assertThat(ModelSpecStageGateService.evaluate(model, Stage.IMPLEMENTATION_READY, staleUpstream).blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .containsExactly("MODEL_SPEC_UPSTREAM_EVIDENCE_STALE");
+    }
+
+    @Test
+    void factImplementationValidatesEveryProvidedInputInsteadOfMaskingAStaleSource() {
+        ModelRevisionRef upstream = new ModelRevisionRef(UUID.fromString("40000000-0000-0000-0000-000000000001"), 3);
+        ModelSpecView model = view(
+            ModelType.FACT,
+            null,
+            FactShape.TRANSACTION,
+            new TimeSemantics(TimeSemanticsType.EVENT_TIME, List.of("event_time")),
+            sources(),
+            List.of(upstream),
+            List.of(),
+            null
+        );
+        GateEvidence current = GateEvidence.currentFor(model);
+        GateEvidence staleSource = new GateEvidence(
+            current.revision(),
+            current.checksum(),
+            EvidenceState.STALE,
+            current.dependencies(),
+            current.dimensions(),
+            current.standards(),
+            current.quality(),
+            current.permissions(),
+            current.build(),
+            current.tests()
+        );
+
+        assertThat(ModelSpecStageGateService.evaluate(model, Stage.IMPLEMENTATION_READY, staleSource).blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .containsExactly("MODEL_SPEC_SOURCE_EVIDENCE_STALE");
     }
 
     @ParameterizedTest
@@ -172,6 +303,37 @@ class ModelSpecStageGateServiceTest {
         assertThat(release.blockers())
             .extracting(ModelSpecStageGateService.GateBlocker::code)
             .contains("MODEL_SPEC_STANDARD_EVIDENCE_STALE");
+    }
+
+    @Test
+    void implementationGateUsesLiveSourceEvidenceAndFailsClosedWhenItIsUnavailable() {
+        ModelSpecView model = view(
+            ModelType.FACT,
+            null,
+            FactShape.TRANSACTION,
+            new TimeSemantics(TimeSemanticsType.EVENT_TIME, List.of("event_time")),
+            sources(),
+            List.of(),
+            List.of(),
+            null
+        );
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository repository = mock(ModelSpecRepository.class);
+        ModelSpecStandardEvidencePort standards = mock(ModelSpecStandardEvidencePort.class);
+        ModelSpecSourceValidationPort sourceValidation = mock(ModelSpecSourceValidationPort.class);
+        when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
+        when(sourceValidation.isCurrentBindingForGate("tenant-a", model.planId(), model.sourceRefs().getFirst())).thenReturn(false);
+
+        GateView implementation = new ModelSpecStageGateService(modelSpecs, repository, standards, null, sourceValidation)
+            .evaluateAll("tenant-a", MODEL_ID)
+            .stream()
+            .filter(gate -> gate.stage() == Stage.IMPLEMENTATION_READY)
+            .findFirst()
+            .orElseThrow();
+
+        assertThat(implementation.blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .containsExactly("MODEL_SPEC_SOURCE_EVIDENCE_STALE");
     }
 
     @Test
@@ -326,6 +488,41 @@ class ModelSpecStageGateServiceTest {
             model.dimensionRefs(),
             model.metricRefs(),
             bindings,
+            model.generationStrategy(),
+            model.dimensionProfile(),
+            model.status(),
+            model.revision(),
+            model.checksum(),
+            model.createdAt(),
+            model.updatedAt(),
+            model.compatibilityMode(),
+            model.legacyRefs()
+        );
+    }
+
+    private static ModelSpecView withLayer(ModelSpecView model, Layer layer) {
+        return new ModelSpecView(
+            model.contractVersion(),
+            model.id(),
+            model.planId(),
+            model.domainId(),
+            model.modelType(),
+            layer,
+            model.name(),
+            model.description(),
+            model.implementationMode(),
+            model.materialization(),
+            model.businessActivityRef(),
+            model.consumptionScenario(),
+            model.grain(),
+            model.factShape(),
+            model.timeSemantics(),
+            model.fields(),
+            model.sourceRefs(),
+            model.dependsOn(),
+            model.dimensionRefs(),
+            model.metricRefs(),
+            model.standardBindings(),
             model.generationStrategy(),
             model.dimensionProfile(),
             model.status(),

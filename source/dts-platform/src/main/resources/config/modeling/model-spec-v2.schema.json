@@ -288,10 +288,9 @@
         {
           "if": { "properties": { "modelType": { "const": "FACT" } }, "required": ["modelType"] },
           "then": {
-            "required": ["grain", "sourceRefs"],
+            "required": ["grain"],
             "properties": {
-              "grain": { "$ref": "#/$defs/grain" },
-              "sourceRefs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/sourceRef" } }
+              "grain": { "$ref": "#/$defs/grain" }
             }
           },
           "else": {

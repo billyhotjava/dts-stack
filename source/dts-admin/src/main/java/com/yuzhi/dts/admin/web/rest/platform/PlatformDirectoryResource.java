@@ -18,6 +18,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -115,8 +116,25 @@ public class PlatformDirectoryResource {
     @GetMapping("/users")
     public ResponseEntity<ApiResponse<List<UserSummary>>> listUsers(@RequestParam(name = "keyword", required = false) String keyword) {
         List<KeycloakUserDTO> raw = searchUsers(keyword);
+        return ResponseEntity.ok(ApiResponse.ok(summarizeUsers(raw)));
+    }
+
+    @GetMapping("/users/resolve")
+    public ResponseEntity<ApiResponse<UserSummary>> resolveUser(@RequestParam(name = "principalKey") String principalKey) {
+        Optional<KeycloakUserDTO> raw = findExactUser(principalKey);
         if (raw.isEmpty()) {
-            return ResponseEntity.ok(ApiResponse.ok(List.of()));
+            return ResponseEntity.notFound().build();
+        }
+        List<UserSummary> summaries = summarizeUsers(normalizeCandidates(List.of(raw.orElseThrow()), principalKey));
+        if (summaries.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(ApiResponse.ok(summaries.getFirst()));
+    }
+
+    private List<UserSummary> summarizeUsers(List<KeycloakUserDTO> raw) {
+        if (raw.isEmpty()) {
+            return List.of();
         }
         LinkedHashMap<String, UserSummary> summaries = new LinkedHashMap<>();
         for (KeycloakUserDTO user : raw) {
@@ -177,7 +195,7 @@ public class PlatformDirectoryResource {
                 )
             );
         }
-        return ResponseEntity.ok(ApiResponse.ok(result));
+        return result;
     }
 
     @GetMapping("/roles")
@@ -216,6 +234,27 @@ public class PlatformDirectoryResource {
         }
         normalized = fallbackFromStore(query);
         return normalized;
+    }
+
+    private Optional<KeycloakUserDTO> findExactUser(String principalKey) {
+        if (!StringUtils.hasText(principalKey)) {
+            return Optional.empty();
+        }
+        String key = principalKey.trim();
+        try {
+            String token = adminAccessToken();
+            Optional<KeycloakUserDTO> byId = keycloakAdminClient.findById(key, token);
+            if (byId.isPresent()) {
+                return byId;
+            }
+            return keycloakAdminClient
+                .findByUsernameStrict(key, token)
+                .filter(user -> StringUtils.hasText(user.getUsername()) && user.getUsername().trim().equalsIgnoreCase(key));
+        } catch (Exception ex) {
+            LOG.warn("Platform directory exact user lookup failed: {}", ex.getMessage());
+            LOG.debug("Platform directory exact user lookup stack", ex);
+            return Optional.empty();
+        }
     }
 
     private UserSummary toSummary(KeycloakUserDTO user) {

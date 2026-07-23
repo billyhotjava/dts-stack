@@ -9,6 +9,7 @@ import {
 	type ModelSpecStageGate,
 	updateModelSpec,
 } from "@/api/modelSpecApi";
+import { getWarehousePlanSources, type WarehousePlanSourceInventoryView } from "@/api/warehousePlanApi";
 import { useCatalogDomainOptions } from "@/hooks/useCatalogDomainOptions";
 import { useParams } from "@/routes/hooks";
 import { useUserRoles } from "@/store/userStore";
@@ -16,10 +17,22 @@ import { ModelSpecBlockerPanel } from "./components/ModelSpecBlockerPanel";
 import { ModelSpecDependencyPanel } from "./components/ModelSpecDependencyPanel";
 import { ModelSpecEditorFields, type ModelSpecSelectOption } from "./components/ModelSpecEditorFields";
 import { ModelSpecFieldsTab } from "./components/ModelSpecFieldsTab";
+import { ModelSpecSourceInventoryModal } from "./components/ModelSpecSourceInventoryModal";
 import { ModelSpecStandardsTab } from "./components/ModelSpecStandardsTab";
 import { modelSpecCatalogPath, modelSpecDetailPath, resolveModelSpecDetailTab } from "./modelSpecDetailNavigation";
 import {
+	type ModelSpecSourceChoice,
+	modelSpecSourceInventoryState,
+	modelSpecSourcePermissionDenied,
+	modelSpecSourcesAreCurrent,
+	selectableModelSpecSources,
+	withPinnedExistingSources,
+} from "./modelSpecSourceSelection";
+import {
 	type CanonicalModelSpecView,
+	isModelSpecDirectInputLayerAllowed,
+	isModelSpecUpstreamAllowed,
+	MODEL_SPEC_TARGET_LAYER_BY_TYPE,
 	type ModelSpecCasToken,
 	type ModelSpecRevisionConflictDetails,
 	type ModelSpecStandardBinding,
@@ -49,6 +62,7 @@ const issueField = (field: string): keyof ModelSpecDraft => {
 	if (field === "dimensionRefs") return "dimensionRefIds";
 	if (field === "timeSemantics") return "timeSemanticsType";
 	if (field === "dimensionProfile") return "dimensionCode";
+	if (field === "generationStrategy") return "generationStrategyType";
 	return field as keyof ModelSpecDraft;
 };
 
@@ -62,9 +76,15 @@ export default function ModelSpecDetailPage() {
 	const [form] = Form.useForm<ModelSpecDraft>();
 	const [model, setModel] = useState<ModelSpecView | null>(null);
 	const [availableModels, setAvailableModels] = useState<CanonicalModelSpecView[]>([]);
+	const [dependencyMetadataLoaded, setDependencyMetadataLoaded] = useState(false);
 	const [stageGates, setStageGates] = useState<ModelSpecStageGate[]>([]);
+	const [sourceOptions, setSourceOptions] = useState<ModelSpecSourceChoice[]>([]);
 	const [gateLoading, setGateLoading] = useState(false);
+	const [sourceLoading, setSourceLoading] = useState(false);
 	const [gateError, setGateError] = useState("");
+	const [sourceError, setSourceError] = useState("");
+	const [sourcePermissionDenied, setSourcePermissionDenied] = useState(false);
+	const [sourceInventoryOpen, setSourceInventoryOpen] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [loadError, setLoadError] = useState("");
@@ -72,11 +92,56 @@ export default function ModelSpecDetailPage() {
 	const [writeDenied, setWriteDenied] = useState(false);
 	const [statusChanged, setStatusChanged] = useState(false);
 	const [conflict, setConflict] = useState<ModelSpecRevisionConflictDetails | null>(null);
+	const selectedSources = Form.useWatch("sources", form) || [];
+	const sourceVerificationPending = sourceLoading && selectedSources.length > 0;
 	const loadRequestRef = useRef(0);
+	const sourceRequestRef = useRef(0);
 	const { labelByKey } = useCatalogDomainOptions();
 	const canonicalModel = model?.compatibilityMode === "CANONICAL" ? model : null;
 	const statusAllowsEdit = canonicalModel?.status === "DRAFT";
-	const canEdit = Boolean(canonicalModel && statusAllowsEdit && roleAllowsEdit && !writeDenied && !statusChanged);
+	const targetLayerMismatch = Boolean(
+		canonicalModel && MODEL_SPEC_TARGET_LAYER_BY_TYPE[canonicalModel.modelType] !== canonicalModel.layer,
+	);
+	const directInputLayerMismatch = Boolean(
+		canonicalModel &&
+			(canonicalModel.modelType === "DIMENSION" || canonicalModel.modelType === "FACT") &&
+			canonicalModel.sourceRefs.some((source) => !isModelSpecDirectInputLayerAllowed(source.layer)),
+	);
+	const derivedSourceContractMismatch = Boolean(
+		canonicalModel &&
+			(canonicalModel.modelType === "SUMMARY" || canonicalModel.modelType === "APPLICATION") &&
+			canonicalModel.sourceRefs.length > 0,
+	);
+	const dimensionDependencyContractMismatch = Boolean(
+		canonicalModel && canonicalModel.modelType === "DIMENSION" && canonicalModel.dependsOn.length > 0,
+	);
+	const nonDimensionGenerationStrategyMismatch = Boolean(
+		canonicalModel && canonicalModel.modelType !== "DIMENSION" && canonicalModel.generationStrategy != null,
+	);
+	const upstreamDependencyMismatch = Boolean(
+		dependencyMetadataLoaded &&
+			canonicalModel?.dependsOn.some((reference) => {
+				const candidate = availableModels.find((item) => item.id === reference.modelSpecId);
+				if (!candidate) return true;
+				if (candidate.planId !== canonicalModel.planId && candidate.status !== "PUBLISHED") return true;
+				return !isModelSpecUpstreamAllowed(canonicalModel.modelType, candidate);
+			}),
+	);
+	const dependencyContractMismatch =
+		targetLayerMismatch ||
+		directInputLayerMismatch ||
+		derivedSourceContractMismatch ||
+		dimensionDependencyContractMismatch ||
+		nonDimensionGenerationStrategyMismatch ||
+		upstreamDependencyMismatch;
+	const canEdit = Boolean(
+		canonicalModel &&
+			statusAllowsEdit &&
+			roleAllowsEdit &&
+			!writeDenied &&
+			!statusChanged &&
+			!dependencyContractMismatch,
+	);
 	const activeTab = useMemo(() => resolveModelSpecDetailTab(searchParams), [searchParams]);
 	const implementationReady = stageGates.some(
 		(gate) => gate.stage === "IMPLEMENTATION_READY" && gate.status === "READY",
@@ -98,6 +163,54 @@ export default function ModelSpecDetailPage() {
 		}
 	}, [modelSpecId]);
 
+	const loadSources = useCallback(
+		async (
+			planId: string,
+			existingSources: ModelSpecDraft["sources"],
+		): Promise<WarehousePlanSourceInventoryView | null> => {
+			const requestId = ++sourceRequestRef.current;
+			setSourceLoading(true);
+			setSourceError("");
+			setSourcePermissionDenied(false);
+			try {
+				const inventory = await getWarehousePlanSources(planId);
+				if (requestId !== sourceRequestRef.current) return null;
+				const choices = selectableModelSpecSources(inventory.bindings);
+				const currentSources =
+					(form.getFieldValue("sources") as ModelSpecDraft["sources"] | undefined) ?? existingSources;
+				setSourceOptions(withPinnedExistingSources(choices, currentSources));
+				const state = modelSpecSourceInventoryState(inventory.bindings);
+				if (state === "EMPTY") {
+					setSourceError(
+						"当前计划尚未登记具体来源，不影响保存草稿。可锁定上游模型；或点击“在当前表单登记来源”，按已验证连接 → Schema → 具体表确认纳入；若没有可选表再执行元数据同步",
+					);
+				} else if (state === "FORBIDDEN") {
+					setSourcePermissionDenied(true);
+					setSourceError("当前账号无权核验规划来源，请联系计划负责人或管理员授权");
+				} else if (state === "UNAVAILABLE") {
+					setSourceError("当前计划已有来源，但尚未确认、已失效或版本需要刷新，请先完善来源盘点");
+				}
+				return inventory;
+			} catch (error) {
+				if (requestId !== sourceRequestRef.current) return null;
+				const currentSources =
+					(form.getFieldValue("sources") as ModelSpecDraft["sources"] | undefined) ?? existingSources;
+				setSourceOptions(withPinnedExistingSources([], currentSources));
+				const denied = modelSpecSourcePermissionDenied(error);
+				setSourcePermissionDenied(denied);
+				setSourceError(
+					denied
+						? "当前账号无权核验规划来源，请联系计划负责人或管理员授权"
+						: "规划来源暂时无法核验；已保存来源仅供诊断，当前输入不会被清空",
+				);
+				return null;
+			} finally {
+				if (requestId === sourceRequestRef.current) setSourceLoading(false);
+			}
+		},
+		[form],
+	);
+
 	const load = useCallback(async () => {
 		const requestId = ++loadRequestRef.current;
 		setLoading(true);
@@ -107,6 +220,12 @@ export default function ModelSpecDetailPage() {
 		setStatusChanged(false);
 		setStageGates([]);
 		setGateError("");
+		setAvailableModels([]);
+		setDependencyMetadataLoaded(false);
+		setSourceOptions([]);
+		setSourceError("");
+		setSourcePermissionDenied(false);
+		setSourceInventoryOpen(false);
 		try {
 			const [detail, gates] = await Promise.all([
 				getModelSpec(modelSpecId),
@@ -118,19 +237,24 @@ export default function ModelSpecDetailPage() {
 			else setGateError("暂时无法读取服务端门禁结果，不影响继续编辑草稿");
 			setWriteDenied(false);
 			if (detail.compatibilityMode === "CANONICAL") {
-				form.setFieldsValue(modelSpecDraftFromView(detail));
+				const draft = modelSpecDraftFromView(detail);
+				form.setFieldsValue(draft);
+				void loadSources(detail.planId, draft.sources);
 			}
 			try {
 				const list = await listModelSpecs();
 				if (requestId !== loadRequestRef.current) return;
-				setAvailableModels(
-					(Array.isArray(list) ? list : []).filter(
-						(candidate): candidate is CanonicalModelSpecView =>
-							candidate.compatibilityMode === "CANONICAL" && candidate.id !== modelSpecId,
-					),
+				const candidates = (Array.isArray(list) ? list : []).filter(
+					(candidate): candidate is CanonicalModelSpecView =>
+						candidate.compatibilityMode === "CANONICAL" && candidate.id !== modelSpecId,
 				);
+				setAvailableModels(candidates);
+				setDependencyMetadataLoaded(true);
 			} catch {
-				if (requestId === loadRequestRef.current) setAvailableModels([]);
+				if (requestId === loadRequestRef.current) {
+					setAvailableModels([]);
+					setDependencyMetadataLoaded(false);
+				}
 			}
 		} catch (error) {
 			if (requestId !== loadRequestRef.current) return;
@@ -139,12 +263,13 @@ export default function ModelSpecDetailPage() {
 		} finally {
 			if (requestId === loadRequestRef.current) setLoading(false);
 		}
-	}, [form, modelSpecId]);
+	}, [form, loadSources, modelSpecId]);
 
 	useEffect(() => {
 		void load();
 		return () => {
 			loadRequestRef.current += 1;
+			sourceRequestRef.current += 1;
 		};
 	}, [load]);
 
@@ -156,11 +281,18 @@ export default function ModelSpecDetailPage() {
 	}, [availableModels, canonicalModel]);
 	const upstreamOptions = useMemo<ModelSpecSelectOption[]>(
 		() =>
-			selectableModels.map((candidate) => ({
-				value: candidate.id,
-				label: `${candidate.name} · ${MODEL_TYPE_LABELS[candidate.modelType]} · r${candidate.revision}`,
-			})),
-		[selectableModels],
+			selectableModels.map((candidate) => {
+				const allowed = isModelSpecUpstreamAllowed(canonicalModel?.modelType || "FACT", candidate);
+				return {
+					value: candidate.id,
+					label: `${candidate.name} · ${MODEL_TYPE_LABELS[candidate.modelType]} · ${candidate.layer} · r${
+						candidate.revision
+					}${allowed ? "" : "（不符合当前模型依赖）"}`,
+					disabled: !allowed,
+					revision: candidate.revision,
+				};
+			}),
+		[canonicalModel?.modelType, selectableModels],
 	);
 	const dimensionOptions = useMemo<ModelSpecSelectOption[]>(
 		() =>
@@ -169,9 +301,14 @@ export default function ModelSpecDetailPage() {
 				.map((candidate) => ({ value: candidate.id, label: `${candidate.name} · r${candidate.revision}` })),
 		[selectableModels],
 	);
+	const persistedSourcesCurrent = useMemo(() => {
+		if (!canonicalModel) return false;
+		return modelSpecSourcesAreCurrent(sourceOptions, modelSpecDraftFromView(canonicalModel).sources);
+	}, [canonicalModel, sourceOptions]);
+	const persistedSourceVerificationPending = sourceLoading && (canonicalModel?.sourceRefs.length ?? 0) > 0;
 
 	const save = async (override?: ModelSpecCasToken) => {
-		if (!canonicalModel || !canEdit) return;
+		if (!canonicalModel || !canEdit || sourceVerificationPending) return;
 		setSaveError("");
 		try {
 			await form.validateFields();
@@ -194,7 +331,9 @@ export default function ModelSpecDetailPage() {
 				command,
 			);
 			setModel(updated);
-			form.setFieldsValue(modelSpecDraftFromView(updated));
+			const updatedDraft = modelSpecDraftFromView(updated);
+			form.setFieldsValue(updatedDraft);
+			void loadSources(updated.planId, updatedDraft.sources);
 			void loadStageGates();
 			setConflict(null);
 			setStatusChanged(false);
@@ -221,7 +360,7 @@ export default function ModelSpecDetailPage() {
 	};
 
 	const onSaveStandardBindings = async (standardBindings: ModelSpecStandardBinding[]) => {
-		if (!canonicalModel || !canEdit) return false;
+		if (!canonicalModel || !canEdit || persistedSourceVerificationPending || !persistedSourcesCurrent) return false;
 		setSaveError("");
 		try {
 			const command = buildModelSpecUpdateCommand(
@@ -239,7 +378,9 @@ export default function ModelSpecDetailPage() {
 				command,
 			);
 			setModel(updated);
-			form.setFieldsValue(modelSpecDraftFromView(updated));
+			const updatedDraft = modelSpecDraftFromView(updated);
+			form.setFieldsValue(updatedDraft);
+			void loadSources(updated.planId, updatedDraft.sources);
 			setConflict(null);
 			setStatusChanged(false);
 			void loadStageGates();
@@ -348,8 +489,8 @@ export default function ModelSpecDetailPage() {
 						</Button>
 					) : null}
 					{canEdit && activeTab !== "standards" ? (
-						<Button type="primary" loading={saving} onClick={() => void save()}>
-							保存草稿
+						<Button type="primary" loading={saving} disabled={sourceVerificationPending} onClick={() => void save()}>
+							{sourceVerificationPending ? "正在核验来源" : "保存草稿"}
 						</Button>
 					) : null}
 				</Space>
@@ -361,6 +502,15 @@ export default function ModelSpecDetailPage() {
 					type="warning"
 					showIcon
 					message="这是迁移期历史模型，可浏览但不能在 canonical 页面修改"
+				/>
+			) : null}
+			{dependencyContractMismatch ? (
+				<Alert
+					className="mb-3"
+					type="warning"
+					showIcon
+					message="历史模型的类别、目标分层或上游依赖不符合当前四类表规则，仅支持查看"
+					description="请通过迁移任务重新登记为 DWD 维度/明细、DWS 汇总或 ADS 应用模型；系统不会静默改写历史 revision。"
 				/>
 			) : null}
 			{!roleAllowsEdit || writeDenied ? (
@@ -435,12 +585,25 @@ export default function ModelSpecDetailPage() {
 												domainOptions={domainOptions}
 												upstreamOptions={upstreamOptions}
 												dimensionOptions={dimensionOptions}
+												sourceOptions={sourceOptions}
+												sourceLoading={sourceLoading}
+												upstreamValidationAvailable={dependencyMetadataLoaded}
+												sourceError={sourceError}
+												sourcePermissionDenied={sourcePermissionDenied}
 												lockPlan
 												lockDomain
 												lockModelType
 												readOnly={!canEdit}
+												onReloadSources={() => {
+													const currentSources =
+														(form.getFieldValue("sources") as ModelSpecDraft["sources"] | undefined) || [];
+													void loadSources(canonicalModel.planId, currentSources);
+												}}
+												onManageSources={canEdit ? () => setSourceInventoryOpen(true) : undefined}
 											/>
-											{canonicalModel.modelType === "SUMMARY" || canonicalModel.modelType === "APPLICATION" ? (
+											{canonicalModel.modelType === "FACT" ||
+											canonicalModel.modelType === "SUMMARY" ||
+											canonicalModel.modelType === "APPLICATION" ? (
 												<ModelSpecDependencyPanel modelSpecId={canonicalModel.id} revision={canonicalModel.revision} />
 											) : null}
 										</>
@@ -461,12 +624,22 @@ export default function ModelSpecDetailPage() {
 									key: "standards",
 									label: "字段标准",
 									children: (
-										<ModelSpecStandardsTab
-											model={canonicalModel}
-											canEdit={canEdit}
-											saving={saving}
-											onSaveStandardBindings={onSaveStandardBindings}
-										/>
+										<>
+											{!sourceLoading && !persistedSourcesCurrent ? (
+												<Alert
+													className="mb-3"
+													type="warning"
+													showIcon
+													message={sourceError || "来源版本已变化，请先在“模型设计”中明确采用当前版本并保存草稿"}
+												/>
+											) : null}
+											<ModelSpecStandardsTab
+												model={canonicalModel}
+												canEdit={canEdit && !persistedSourceVerificationPending && persistedSourcesCurrent}
+												saving={saving}
+												onSaveStandardBindings={onSaveStandardBindings}
+											/>
+										</>
 									),
 								},
 							]}
@@ -485,6 +658,18 @@ export default function ModelSpecDetailPage() {
 					</Descriptions>
 				</Card>
 			)}
+			{canonicalModel ? (
+				<ModelSpecSourceInventoryModal
+					open={sourceInventoryOpen}
+					planId={canonicalModel.planId}
+					roleAllowsPlanMaintenance={roleAllowsEdit}
+					onClose={() => setSourceInventoryOpen(false)}
+					onSaved={async () => {
+						const currentSources = (form.getFieldValue("sources") as ModelSpecDraft["sources"] | undefined) || [];
+						return loadSources(canonicalModel.planId, currentSources);
+					}}
+				/>
+			) : null}
 		</div>
 	);
 }

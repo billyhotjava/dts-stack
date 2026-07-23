@@ -17,6 +17,13 @@ type ApiScenario = {
 	baseline: (planId: string, call: number) => unknown | { httpStatus: number; body: unknown };
 	projection: (planId: string, call: number) => unknown | { httpStatus: number; body: unknown };
 	create?: (body: Record<string, unknown>, call: number) => Promise<unknown> | unknown;
+	update?: (
+		planId: string,
+		body: Record<string, unknown>,
+		headers: Record<string, string>,
+		call: number,
+	) => Promise<unknown> | unknown;
+	archive?: (planId: string, headers: Record<string, string>, call: number) => Promise<unknown> | unknown;
 };
 
 type BrowserProbe = {
@@ -173,7 +180,7 @@ function installBrowserProbe(page: Page): BrowserProbe {
 }
 
 async function installWarehousePlanApi(page: Page, scenario: ApiScenario) {
-	const calls = { list: 0, getPlan: 0, baseline: 0, projection: 0, create: 0 };
+	const calls = { list: 0, getPlan: 0, baseline: 0, projection: 0, create: 0, update: 0, archive: 0 };
 	await page.route("**/api/**", async (route) => {
 		const request = route.request();
 		const url = new URL(request.url());
@@ -190,6 +197,30 @@ async function installWarehousePlanApi(page: Page, scenario: ApiScenario) {
 			return;
 		}
 
+		const suffix = pathName.startsWith(`${PLAN_RESOURCE}/`) ? pathName.slice(`${PLAN_RESOURCE}/`.length) : "";
+		const [planId, ...childSegments] = suffix.split("/");
+		const child = childSegments.join("/");
+		if (request.method() === "PATCH" && planId && !child) {
+			calls.update += 1;
+			if (!scenario.update) throw new Error("Unexpected update request");
+			await fulfill(
+				route,
+				await scenario.update(
+					planId,
+					request.postDataJSON() as Record<string, unknown>,
+					request.headers(),
+					calls.update,
+				),
+			);
+			return;
+		}
+		if (request.method() === "POST" && planId && child === "archive") {
+			calls.archive += 1;
+			if (!scenario.archive) throw new Error("Unexpected archive request");
+			await fulfill(route, await scenario.archive(planId, request.headers(), calls.archive));
+			return;
+		}
+
 		if (request.method() !== "GET") throw new Error(`Unexpected ${request.method()} ${pathName}`);
 		if (pathName === PLAN_RESOURCE) {
 			calls.list += 1;
@@ -197,9 +228,6 @@ async function installWarehousePlanApi(page: Page, scenario: ApiScenario) {
 			return;
 		}
 
-		const suffix = pathName.slice(`${PLAN_RESOURCE}/`.length);
-		const [planId, ...childSegments] = suffix.split("/");
-		const child = childSegments.join("/");
 		if (child === "baseline") {
 			calls.baseline += 1;
 			await fulfill(route, scenario.baseline(planId, calls.baseline));
@@ -273,6 +301,153 @@ test.beforeAll(() => fs.mkdirSync(evidenceDir, { recursive: true }));
 
 test.beforeEach(async ({ page }) => {
 	await installAuthenticatedChrome95Session(page);
+});
+
+test("warehouse plan ledger preserves edits across 409 and archives with fresh CAS", async ({ page }) => {
+	const probe = installBrowserProbe(page);
+	const draft = plan("plan-ledger-draft", "BUSINESS_FIRST", "经营分析建设规划");
+	const published = {
+		...plan("plan-ledger-published", "ASSET_FIRST", "已发布资产规划"),
+		lifecycleStatus: "PUBLISHED" as const,
+		version: 3,
+	};
+	let serverDraft = draft;
+	const updateEtags: string[] = [];
+	const archiveEtags: string[] = [];
+	const calls = await installWarehousePlanApi(page, {
+		list: () => [serverDraft, published],
+		getPlan: () => serverDraft,
+		baseline: () => ({ ready: false, missingCodes: ["PLANNING_POLICY_INCOMPLETE"] }),
+		projection: (planId) => stageProjection(planId),
+		update: (_planId, body, headers, call) => {
+			updateEtags.push(headers["if-match"]);
+			if (call === 1) {
+				serverDraft = { ...serverDraft, version: 2 };
+				return {
+					httpStatus: 409,
+					body: {
+						code: "WAREHOUSE_PLAN_EDIT_UNIT_VERSION_CONFLICT",
+						data: { currentVersion: 2 },
+					},
+				};
+			}
+			serverDraft = { ...serverDraft, ...body, version: 3 } as typeof draft;
+			return serverDraft;
+		},
+		archive: (_planId, headers, call) => {
+			archiveEtags.push(headers["if-match"]);
+			if (call === 1) {
+				serverDraft = { ...serverDraft, version: 4 };
+				return {
+					httpStatus: 409,
+					body: {
+						code: "WAREHOUSE_PLAN_EDIT_UNIT_VERSION_CONFLICT",
+						data: { currentVersion: 4 },
+					},
+				};
+			}
+			serverDraft = { ...serverDraft, lifecycleStatus: "ARCHIVED", version: 5 };
+			return serverDraft;
+		},
+	});
+
+	await page.goto("/#/modeling/plans");
+	await expect(page.getByTestId("warehouse-plan-ledger")).toBeVisible();
+	const draftRow = page.getByRole("row").filter({ hasText: "经营分析建设规划" });
+	const publishedRow = page.getByRole("row").filter({ hasText: "已发布资产规划" });
+	await expect(draftRow).toBeVisible();
+	await expect(publishedRow.getByRole("button", { name: "编辑" })).toHaveCount(0);
+
+	await draftRow.getByRole("button", { name: "编辑" }).click();
+	const editor = page.getByTestId("warehouse-plan-header-editor");
+	await expect(editor).toBeVisible();
+	await editor.getByLabel("规划名称").fill("经营分析建设规划（修订）");
+	await page.getByRole("button", { name: "保存规划" }).click();
+	await expect(editor.getByText("规划已被其他用户更新")).toBeVisible();
+	await expect(editor.getByLabel("规划名称")).toHaveValue("经营分析建设规划（修订）");
+	await editor.getByRole("button", { name: "保留当前输入并基于版本 2 重试" }).click();
+	await expect(editor).not.toBeVisible();
+	await expect(page.getByText("经营分析建设规划（修订）", { exact: true })).toBeVisible();
+	expect(updateEtags).toEqual(['"plan-head:1"', '"plan-head:2"']);
+
+	const revisedRow = page.getByRole("row").filter({ hasText: "经营分析建设规划（修订）" });
+	await revisedRow.getByRole("button", { name: "归档" }).click();
+	await page.getByRole("button", { name: "确认归档" }).click();
+	await expect(page.getByText("规划已变化，请重新确认归档")).toBeVisible();
+	await page.getByRole("button", { name: "基于最新版归档" }).click();
+	await expect(page.getByText("经营分析建设规划（修订）", { exact: true })).not.toBeVisible();
+	await expect(page.getByRole("dialog")).toHaveCount(0);
+	expect(archiveEtags).toEqual(['"plan-head:3"', '"plan-head:4"']);
+	expect(calls.update).toBe(2);
+	expect(calls.archive).toBe(2);
+
+	const lifecycleFilter = page.getByRole("combobox", { name: "生命周期" });
+	await lifecycleFilter.focus();
+	await lifecycleFilter.press("ArrowDown");
+	const archivedOption = page.getByTitle("已归档");
+	await expect(archivedOption).toBeVisible();
+	await archivedOption.click();
+	await expect(page.getByText("经营分析建设规划（修订）", { exact: true })).toBeVisible();
+	await page.screenshot({ path: path.join(evidenceDir, "warehouse-plan-ledger-desktop.png"), fullPage: true });
+	await page.setViewportSize({ width: 390, height: 844 });
+	const viewportMetrics = await page.evaluate(() => ({
+		innerWidth: window.innerWidth,
+		documentWidth: document.documentElement.scrollWidth,
+		bodyWidth: document.body.scrollWidth,
+	}));
+	expect(viewportMetrics.documentWidth).toBeLessThanOrEqual(viewportMetrics.innerWidth);
+	expect(viewportMetrics.bodyWidth).toBeLessThanOrEqual(viewportMetrics.innerWidth);
+	await page.screenshot({ path: path.join(evidenceDir, "warehouse-plan-ledger-narrow.png"), fullPage: true });
+	assertCleanBrowser(probe, [{ status: 409, includes: "/warehouse-plans/plan-ledger-draft" }]);
+});
+
+test("warehouse plan ledger keeps read-only users away from mutations", async ({ page }) => {
+	await page.addInitScript(() => {
+		const raw = localStorage.getItem("dts.platform.userStore");
+		if (!raw) return;
+		const stored = JSON.parse(raw);
+		stored.state.userInfo.roles = [];
+		localStorage.setItem("dts.platform.userStore", JSON.stringify(stored));
+	});
+	const probe = installBrowserProbe(page);
+	const readonlyPlan = plan("plan-ledger-readonly", "BUSINESS_FIRST", "只读建设规划");
+	const calls = await installWarehousePlanApi(page, {
+		list: () => [readonlyPlan],
+		getPlan: () => readonlyPlan,
+		baseline: () => ({ ready: false, missingCodes: [] }),
+		projection: (planId) => stageProjection(planId),
+	});
+
+	await page.goto("/#/modeling/plans");
+	await expect(page.getByTestId("warehouse-plan-ledger")).toBeVisible();
+	const row = page.getByRole("row").filter({ hasText: "只读建设规划" });
+	await expect(row.getByRole("button", { name: "查看" })).toBeVisible();
+	await expect(row.getByRole("button", { name: "编辑" })).toHaveCount(0);
+	await expect(row.getByRole("button", { name: "归档" })).toHaveCount(0);
+	await expect(page.getByTestId("warehouse-plan-ledger-primary-action")).toBeDisabled();
+	expect(calls.update).toBe(0);
+	expect(calls.archive).toBe(0);
+	assertCleanBrowser(probe);
+});
+
+test("warehouse plan ledger distinguishes load and projection failures from an empty ledger", async ({ page }) => {
+	const probe = installBrowserProbe(page);
+	const recoveredPlan = plan("plan-ledger-recovery", "ASSET_FIRST", "恢复后的建设规划");
+	const calls = await installWarehousePlanApi(page, {
+		list: (call) => (call === 1 ? { httpStatus: 503, body: { code: "SERVICE_UNAVAILABLE" } } : [recoveredPlan]),
+		getPlan: () => recoveredPlan,
+		baseline: () => ({ ready: false, missingCodes: [] }),
+		projection: () => ({ httpStatus: 503, body: { code: "PROJECTION_UNAVAILABLE" } }),
+	});
+
+	await page.goto("/#/modeling/plans");
+	await expect(page.getByTestId("warehouse-plan-ledger-load-error")).toBeVisible();
+	await expect(page.getByTestId("warehouse-plan-ledger-empty")).toHaveCount(0);
+	await page.getByRole("button", { name: "重新加载" }).click();
+	await expect(page.getByText("恢复后的建设规划", { exact: true })).toBeVisible();
+	await expect(page.getByText("证据未知", { exact: true })).toBeVisible();
+	expect(calls.list).toBe(2);
+	assertCleanBrowser(probe, [{ status: 503, includes: "/warehouse-plans" }]);
 });
 
 test("business-first creates once under repeated clicks and follows the server nextAction", async ({

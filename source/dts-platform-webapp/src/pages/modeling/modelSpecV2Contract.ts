@@ -70,6 +70,27 @@ export const MODEL_SPEC_COLLECTION_FIELDS = [
 
 export type ModelSpecLayer = "ODS" | "STG" | "DWD" | "DWS" | "ADS";
 export type ModelSpecType = "FACT" | "DIMENSION" | "SUMMARY" | "APPLICATION";
+export const MODEL_SPEC_TARGET_LAYER_BY_TYPE: Readonly<Record<ModelSpecType, ModelSpecLayer>> = {
+	DIMENSION: "DWD",
+	FACT: "DWD",
+	SUMMARY: "DWS",
+	APPLICATION: "ADS",
+};
+const MODEL_SPEC_DIRECT_INPUT_LAYERS = new Set<ModelSpecLayer>(["ODS", "STG", "DWD"]);
+
+export const isModelSpecDirectInputLayerAllowed = (layer: ModelSpecLayer): boolean =>
+	MODEL_SPEC_DIRECT_INPUT_LAYERS.has(layer);
+
+export const isModelSpecUpstreamAllowed = (
+	targetType: ModelSpecType,
+	candidate: Pick<CreateModelSpecCommand, "modelType" | "layer">,
+): boolean => {
+	if (MODEL_SPEC_TARGET_LAYER_BY_TYPE[candidate.modelType] !== candidate.layer) return false;
+	if (targetType === "FACT") return candidate.modelType === "FACT" && candidate.layer === "DWD";
+	if (targetType === "SUMMARY") return candidate.layer === "DWD" || candidate.layer === "DWS";
+	if (targetType === "APPLICATION") return ["DWD", "DWS", "ADS"].includes(candidate.layer);
+	return false;
+};
 export type ModelSpecImplementationMode = "DESIGNER_GENERATED" | "DBT_MANAGED";
 export type ModelSpecFactShape = "TRANSACTION" | "PERIODIC_SNAPSHOT" | "ACCUMULATING_SNAPSHOT";
 export type ModelSpecTimeSemanticsType = "EVENT_TIME" | "SNAPSHOT_DATE" | "PERIOD" | "MILESTONE_DATES";
@@ -306,12 +327,7 @@ const GENERATION_STRATEGY_FIELDS = new Set(["type", "reference"]);
 const DIMENSION_PROFILE_FIELDS = new Set(["dimensionCode", "hierarchies", "scdPolicy", "reuseScope"]);
 const DIMENSION_HIERARCHY_FIELDS = new Set(["code", "name", "levels"]);
 const DIMENSION_LEVEL_FIELDS = new Set(["fieldName", "order"]);
-const DIMENSION_SCD_POLICY_FIELDS = new Set([
-	"type",
-	"effectiveFromField",
-	"effectiveToField",
-	"currentFlagField",
-]);
+const DIMENSION_SCD_POLICY_FIELDS = new Set(["type", "effectiveFromField", "effectiveToField", "currentFlagField"]);
 const MODEL_SPEC_SCD_TYPES = new Set<ModelSpecScdType>(["NONE", "TYPE1", "TYPE2"]);
 const MODEL_SPEC_REUSE_SCOPES = new Set<ModelSpecReuseScope>(["PLAN", "DOMAIN", "TENANT"]);
 const DIMENSION_CODE_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
@@ -537,6 +553,15 @@ export const validateModelSpecCreate = (input: unknown): ModelSpecFieldIssue[] =
 	const issues = rawModelSpecIssues(raw);
 	if (issues.length > 0) return issues;
 	const command = raw as Partial<CreateModelSpecCommand>;
+	if (command.modelType && command.layer && MODEL_SPEC_TARGET_LAYER_BY_TYPE[command.modelType] !== command.layer) {
+		issues.push(
+			issue(
+				"MODEL_SPEC_TYPE_LAYER_MISMATCH",
+				"layer",
+				`${command.modelType} models must target ${MODEL_SPEC_TARGET_LAYER_BY_TYPE[command.modelType]}`,
+			),
+		);
+	}
 	if (isNonBlankString(command.businessActivityRef) && command.modelType !== "FACT") {
 		issues.push(
 			issue(
@@ -561,6 +586,15 @@ export const validateModelSpecCreate = (input: unknown): ModelSpecFieldIssue[] =
 				"MODEL_SPEC_DIMENSION_PROFILE_NOT_ALLOWED",
 				"dimensionProfile",
 				"Dimension profile belongs to DIMENSION models only",
+			),
+		);
+	}
+	if (command.generationStrategy != null && command.modelType !== "DIMENSION") {
+		issues.push(
+			issue(
+				"MODEL_SPEC_INPUT_KIND_NOT_ALLOWED",
+				"generationStrategy",
+				"Generation strategy belongs to DIMENSION models only",
 			),
 		);
 	}
@@ -627,6 +661,18 @@ export const validateModelSpecCreate = (input: unknown): ModelSpecFieldIssue[] =
 				"Sources require complete metadata and a non-negative sort order",
 			),
 		);
+	if (
+		(command.modelType === "DIMENSION" || command.modelType === "FACT") &&
+		sources.some((source) => source?.layer && !isModelSpecDirectInputLayerAllowed(source.layer))
+	) {
+		issues.push(
+			issue(
+				"MODEL_SPEC_UPSTREAM_LAYER_NOT_ALLOWED",
+				"sourceRefs",
+				"Direct physical inputs must come from ODS, STG or DWD",
+			),
+		);
+	}
 	const invalidRevisionRef = (ref: ModelSpecRevisionRef | null | undefined) =>
 		!ref || !ref.modelSpecId?.trim() || !isIntInRange(ref.revision, 1);
 	if (dependencies.some(invalidRevisionRef)) {
@@ -697,8 +743,6 @@ export const validateModelSpecCreate = (input: unknown): ModelSpecFieldIssue[] =
 		case "FACT":
 			if (!hasGrain)
 				issues.push(issue("MODEL_SPEC_GRAIN_REQUIRED", "grain", "FACT requires a grain statement and keys"));
-			if (sources.length === 0)
-				issues.push(issue("MODEL_SPEC_SOURCE_REQUIRED", "sourceRefs", "FACT requires a source"));
 			break;
 		case "SUMMARY":
 		case "APPLICATION":

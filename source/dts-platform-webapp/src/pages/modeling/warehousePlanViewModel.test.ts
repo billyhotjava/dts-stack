@@ -5,12 +5,20 @@ import {
 	buildBusinessCategoryManagementRoute,
 	buildWarehouseCategoryOptions,
 	buildWarehousePlanRoute,
+	canArchiveWarehousePlan,
+	canEditWarehousePlanHeader,
+	filterWarehousePlans,
+	mergeWarehousePlanHeadersMonotonic,
+	normalizeCanonicalWarehousePlanId,
+	replaceWarehousePlanHeader,
 	resolveWarehousePlanConflictVersion,
+	resolveWarehousePlanPageContext,
 	resolveWarehousePlanReturnTo,
 	stageStatusLabel,
 	WAREHOUSE_STAGE_ORDER,
 	warehouseBlockerMessage,
 	warehousePlanIssueMessage,
+	warehousePlanLifecycleLabel,
 	warehousePlanMutationErrorMessage,
 	warehouseStageActionLabel,
 	warehouseStageLabel,
@@ -72,10 +80,67 @@ test("warehouse plan returnTo rejects external, protocol-relative and cross-plan
 	}
 });
 
+test("warehouse plan page context rejects malformed, duplicate and mismatched plan context", () => {
+	const planId = "10000000-0000-0000-0000-000000000001";
+	const returnTo = `/modeling/plans/${planId}/baseline?tab=categories&planId=${planId}`;
+	assert.deepEqual(resolveWarehousePlanPageContext(new URLSearchParams({ planId, returnTo })), {
+		planId,
+		returnTo,
+	});
+	assert.deepEqual(resolveWarehousePlanPageContext(new URLSearchParams({ planId })), {
+		planId,
+		returnTo: null,
+	});
+
+	assert.equal(
+		resolveWarehousePlanPageContext(
+			new URLSearchParams({
+				planId,
+				returnTo:
+					"/modeling/plans/20000000-0000-0000-0000-000000000002/baseline?tab=categories&planId=20000000-0000-0000-0000-000000000002",
+			}),
+		),
+		null,
+	);
+	assert.equal(resolveWarehousePlanPageContext(new URLSearchParams({ planId: "../../ops/instances?ignored=" })), null);
+	const duplicate = new URLSearchParams({ planId });
+	duplicate.append("planId", "20000000-0000-0000-0000-000000000002");
+	assert.equal(resolveWarehousePlanPageContext(duplicate), null);
+	assert.equal(normalizeCanonicalWarehousePlanId(` ${planId} `), planId);
+	assert.equal(normalizeCanonicalWarehousePlanId("plan-1"), "");
+});
+
+test("warehouse plan route encodes the plan path segment", () => {
+	const unsafePlanId = "../../ops/instances?ignored=";
+	const route = buildWarehousePlanRoute(unsafePlanId, "baseline", { tab: "categories" });
+	const parsed = new URL(route, "http://dts.local");
+	assert.notEqual(parsed.pathname, "/ops/instances");
+	assert.equal(parsed.pathname, "/modeling/plans/..%2F..%2Fops%2Finstances%3Fignored%3D/baseline");
+	assert.equal(parsed.searchParams.get("planId"), unsafePlanId);
+});
+
 test("warehouse plan conflicts read the server currentVersion without guessing", () => {
 	assert.equal(
-		resolveWarehousePlanConflictVersion({ response: { status: 409, data: { data: { currentVersion: 7 } } } }),
+		resolveWarehousePlanConflictVersion({
+			response: {
+				status: 409,
+				data: { code: "WAREHOUSE_PLAN_EDIT_UNIT_VERSION_CONFLICT", data: { currentVersion: 7 } },
+			},
+		}),
 		7,
+	);
+	assert.equal(
+		resolveWarehousePlanConflictVersion({
+			response: {
+				status: 409,
+				data: { code: "WAREHOUSE_PLAN_LIFECYCLE_CONFLICT", data: { currentVersion: 7 } },
+			},
+		}),
+		null,
+	);
+	assert.equal(
+		resolveWarehousePlanConflictVersion({ response: { status: 409, data: { data: { currentVersion: 7 } } } }),
+		null,
 	);
 	assert.equal(resolveWarehousePlanConflictVersion({ response: { status: 409, data: { currentVersion: 8 } } }), null);
 	assert.equal(
@@ -145,6 +210,20 @@ test("mutation errors map stable response codes and never expose technical detai
 		),
 		"数仓分层策略保存失败",
 	);
+	assert.equal(
+		warehousePlanMutationErrorMessage(
+			{ response: { data: { code: "WAREHOUSE_PLAN_HEADER_INVALID", message: "internal validation detail" } } },
+			"规划保存失败",
+		),
+		"请检查规划名称和负责人",
+	);
+	assert.equal(
+		warehousePlanMutationErrorMessage(
+			{ response: { data: { code: "WAREHOUSE_PLAN_OWNER_FORBIDDEN", message: "internal ACL detail" } } },
+			"规划保存失败",
+		),
+		"当前账号不能转派给所选负责人",
+	);
 });
 
 test("unknown and stale evidence remain visibly non-complete", () => {
@@ -172,4 +251,80 @@ test("typed API uses only the canonical warehouse plan resource", () => {
 	assert.match(apiSource, /\/stage-projection/);
 	assert.match(apiSource, /\/baseline/);
 	assert.doesNotMatch(apiSource, /sessionStorage|localStorage|\/modeling\/plans/);
+});
+
+const warehousePlans = [
+	{
+		id: "plan-active",
+		tenantId: "tenant-1",
+		code: "PLAN_SALES",
+		name: "经营分析数仓",
+		objective: "统一销售分析",
+		scope: "华东区域",
+		ownerId: "alice",
+		ownerDepartmentId: "sales",
+		onboardingMode: "BUSINESS_FIRST" as const,
+		lifecycleStatus: "DESIGNING" as const,
+		version: 2,
+	},
+	{
+		id: "plan-archived",
+		tenantId: "tenant-1",
+		code: "PLAN_HISTORY",
+		name: "历史供应链规划",
+		objective: "留档",
+		scope: null,
+		ownerId: "bob",
+		ownerDepartmentId: null,
+		onboardingMode: "ASSET_FIRST" as const,
+		lifecycleStatus: "ARCHIVED" as const,
+		version: 5,
+	},
+];
+
+test("warehouse plan ledger defaults to active plans and filters customer-visible fields", () => {
+	assert.deepEqual(
+		filterWarehousePlans(warehousePlans, { lifecycleStatus: "ACTIVE" }).map((plan) => plan.id),
+		["plan-active"],
+	);
+	assert.deepEqual(
+		filterWarehousePlans(warehousePlans, { lifecycleStatus: "ALL", keyword: "plan_history" }).map((plan) => plan.id),
+		["plan-archived"],
+	);
+	assert.deepEqual(
+		filterWarehousePlans(warehousePlans, { lifecycleStatus: "ARCHIVED", ownerId: "bob" }).map((plan) => plan.id),
+		["plan-archived"],
+	);
+});
+
+test("late list snapshots never replace a locally observed newer plan header", () => {
+	const current = [{ ...warehousePlans[0], name: "已保存的新名称", version: 4 }];
+	const staleList = [{ ...warehousePlans[0], name: "旧名称", version: 3 }, warehousePlans[1]];
+	assert.deepEqual(mergeWarehousePlanHeadersMonotonic(current, staleList), [current[0], warehousePlans[1]]);
+	assert.deepEqual(mergeWarehousePlanHeadersMonotonic(current, [{ ...warehousePlans[0], version: 5 }]), [
+		{ ...warehousePlans[0], version: 5 },
+	]);
+});
+
+test("warehouse plan lifecycle and write actions are derived from permission and server status", () => {
+	assert.equal(warehousePlanLifecycleLabel("READY_TO_PUBLISH"), "待发布");
+	assert.equal(warehousePlanLifecycleLabel("ARCHIVED"), "已归档");
+	assert.equal(canEditWarehousePlanHeader(true, "DRAFT"), true);
+	assert.equal(canEditWarehousePlanHeader(true, "PUBLISHED"), false);
+	assert.equal(canEditWarehousePlanHeader(true, "ARCHIVED"), false);
+	assert.equal(canEditWarehousePlanHeader(false, "DRAFT"), false);
+	assert.equal(canArchiveWarehousePlan(true, "PUBLISHED"), true);
+	assert.equal(canArchiveWarehousePlan(true, "ARCHIVED"), false);
+	assert.equal(canArchiveWarehousePlan(false, "DESIGNING"), false);
+});
+
+test("archiving replaces the canonical header so archived filters can reveal it", () => {
+	const archived = { ...warehousePlans[0], lifecycleStatus: "ARCHIVED" as const, version: 3 };
+	const replaced = replaceWarehousePlanHeader(warehousePlans, archived);
+	assert.equal(replaced.length, 2);
+	assert.equal(replaced[0], archived);
+	assert.deepEqual(
+		filterWarehousePlans(replaced, { lifecycleStatus: "ARCHIVED" }).map((plan) => plan.id),
+		["plan-active", "plan-archived"],
+	);
 });

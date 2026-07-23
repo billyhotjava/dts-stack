@@ -14,6 +14,8 @@
 - UI customer language is limited to the six canonical object groups in Sprint-67 F1.
 - New write flows use planId/domainId/modelSpecId/revision and never require objectId.
 - Business activity is optional FACT context and is not a global model gate.
+- FACT draft input is optional; implementation requires valid physical sourceRefs or revision-pinned upstream ModelSpec dependsOn, and both must be valid when both are present.
+- ODS_RAW/ODS_STANDARDIZED/STG are ingestion/technical layers, not four-table ModelSpec targets; modelType fixes target layer as DIMENSION/FACT→DWD, SUMMARY→DWS, APPLICATION→ADS.
 - Database changes are forward-only Liquibase expand-migrate-contract changesets.
 - Chrome 95 is a release target.
 - Every code task starts with failing tests and ends with scoped verification and a Conventional Commit.
@@ -91,6 +93,46 @@
 - [ ] Update the manual, incremental evidence and Go/No-Go before returning Sprint-67 to DONE.
 
 **Exit:** G6 passes; a first-time user can correct a newly created plan and manage multiple plans without losing planId context.
+
+### Wave 7: Reconcile global owners with canonical planning context
+
+- [x] Execute F6-T05 source changes: remove the Elements page-wide planning/draft gate, preserve safe model/plan returns through standard-package import, and remove SubjectAreas browser-only WarehousePlan creation.
+- [x] Prove with failing-then-passing focused tests that global data elements/categories remain usable without planId and new modeling routes carry only canonical planId.
+- [x] Run one production build and GitNexus changed-scope review after all code and documentation changes are complete.
+- [ ] Validate direct global entry, model-owner round trip, plan baseline return, failure recovery and 390px in the real deployed Chrome 95/API environment; then update incremental Go/No-Go.
+
+**Exit:** G7 passes; global professional catalogs remain globally maintainable, while plan readiness and field bindings have exactly one backend-owned source of truth.
+
+### Wave 8: Replace manual source identities and unique codes
+
+- [x] Execute F6-T06 frontend changes: query the selected WarehousePlan source inventory, allow only complete `CONFIRMED + CURRENT + AVAILABLE` bindings, select by business-readable label, and auto-associate `bindingId/ref/kind/resolvedVersion`.
+- [x] Generate dimension and hierarchy system codes once and render them read-only; keep business names, source layer/role and JOIN semantics as explicit user choices.
+- [x] Prove the source filtering, type mapping, plan-switch clearing, stale diagnostics, automatic association and generated-code contract with an 11-assertion RED batch followed by the expanded focused regression (59/59 GREEN); the 10-file core Biome check also passes.
+- [ ] Run the existing backend submit-time resolver regression, focused lint, one final TypeScript check, one production build and GitNexus changed-scope review after the whole Task is implemented.
+- [ ] Validate real-login create/edit, plan switching, empty/error recovery, stale/version-drift and forged-value rejection in deployed Chrome 95/API/PostgreSQL, including 390px.
+
+**Exit:** G8 passes; users choose business sources rather than entering internal IDs, generated unique codes remain stable, and backend truth still rejects any stale, cross-plan or forged source identity.
+
+### Wave 9: Separate upstream input from the FACT target
+
+- [ ] Execute F3-T06 backend RED→GREEN: allow source-free FACT drafts, require `sourceRefs OR dependsOn` at implementation, validate every provided reference, and extend cycle detection to FACT.
+- [ ] Execute F3-T06 frontend RED→GREEN: remove the draft-only physical-source blocker, expose the upstream ModelSpec alternative, distinguish target layer from upstream layer, and keep source inventory failures local to physical-source selection.
+- [ ] Update schema, manual and stage-gate evidence without rewriting the original F3-T01-T05 historical closure.
+- [ ] After the whole Task is implemented, run the focused backend/frontend regressions, one final TypeScript check, one production build and GitNexus changed-scope review.
+- [ ] Validate source-free draft save, direct physical input, upstream-model input, mixed stale evidence and cycle rejection in deployed Chrome 95/API/PostgreSQL.
+
+**Exit:** G9 passes; users no longer select the target table as its own source, while implementation still fails closed unless at least one valid upstream-input path exists.
+
+### Wave 10: Enforce model-type and layer dependency matrix
+
+- [ ] Execute F3-T07 backend RED→GREEN: centralize the `modelType → targetLayer → allowed upstream layers` matrix, reject API bypass with stable blockers, and keep legacy ODS/STG ModelSpec reads explicitly read-only.
+- [ ] Execute F3-T07 frontend RED→GREEN: derive a read-only target layer from modelType, vary sourceRefs/dependsOn/generationStrategy inputs by type, and route ODS creation to data ingestion/source inventory with safe plan return.
+- [ ] Preserve F3-T06 semantics: FACT DRAFT remains source-free, but implementation accepts only technical-layer sourceRefs or revision-pinned FACT@DWD dependsOn; DIMENSION uses dimensionRefs, and no valid input may mask a filled invalid input.
+- [ ] Add dry-run coverage for historical `layer=ODS|STG`; classify physical tables as catalog/SourceBinding, technical SQL/dbt nodes as artifacts, and ambiguous business-grain records for manual split.
+- [ ] After the whole Task is implemented, run focused Java/TypeScript regression, one final TypeScript check, one production build, GitNexus scope review and `git diff --check`.
+- [ ] Validate all allowed/forbidden combinations, the two ODS entry paths, revision drift, API bypass, database invariants and legacy read-only behavior in deployed Chrome 95/API/PostgreSQL.
+
+**Exit:** G10 passes; ingestion and business modeling have distinct entry points, target layers cannot conflict with model types, and every upstream dependency is explainable and fail-closed.
 
 ## 3. Required verification commands
 

@@ -3,7 +3,6 @@ import {
 	Badge,
 	Button,
 	Card,
-	Checkbox,
 	Divider,
 	Dropdown,
 	Form,
@@ -43,20 +42,11 @@ import { useRouter } from "@/routes/hooks";
 import { normalizeText } from "@/utils/textUtils";
 import { buildBusinessModelingRoute } from "../modeling/businessModelingContext";
 import { buildModelingJourneyRoute, modelingStagePath } from "../modeling/modelingJourneyContext";
-import { resolveWarehousePlanReturnTo } from "../modeling/warehousePlanViewModel";
+import { buildWarehousePlanRoute, resolveWarehousePlanPageContext } from "../modeling/warehousePlanViewModel";
 import { ConformedDimensionCatalogCard } from "./ConformedDimensionCatalogCard";
 import { DimensionalModelingAssist } from "./DimensionalModelingAssist";
 import { pendingCandidateCount } from "./modelingCandidates";
 import { type SubjectWorkspaceTab, SubjectWorkspaceTabs } from "./SubjectWorkspaceTabs";
-import { DEFAULT_WAREHOUSE_LAYER_SCHEME, resolveLayer } from "./warehouseLayerRegistry";
-import {
-	buildPlanningRoute,
-	createWarehousePlanningContext,
-	resolveWarehousePlanningContext,
-	resolveWarehousePlanningStatus,
-	saveWarehousePlanningContext,
-	type WarehousePlanningContext,
-} from "./warehousePlanningContext";
 
 const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -190,11 +180,14 @@ export default function SubjectAreasPage() {
 	const modelingFactsRequest = useRef(0);
 
 	const searchParamsValue = searchParams.toString();
-	const returnPlanId = searchParams.get("planId") || "";
-	const safeReturnTo = useMemo(
-		() => resolveWarehousePlanReturnTo(searchParams.get("returnTo"), returnPlanId),
-		[returnPlanId, searchParams],
+	const planPageContext = useMemo(() => resolveWarehousePlanPageContext(searchParams), [searchParams]);
+	const returnPlanId = planPageContext?.planId || "";
+	const safeReturnTo = planPageContext?.returnTo || null;
+	const planBaselineRoute = useMemo(
+		() => (returnPlanId ? buildWarehousePlanRoute(returnPlanId, "baseline", { tab: "categories" }) : null),
+		[returnPlanId],
 	);
+	const planningReturnRoute = safeReturnTo || planBaselineRoute;
 	const syncQuery = useCallback(
 		(patch?: { keyword?: string; active?: string; tab?: SubjectWorkspaceTab }) => {
 			const params = new URLSearchParams(searchParamsValue);
@@ -255,77 +248,6 @@ export default function SubjectAreasPage() {
 	}, []);
 
 	const activeDomain = selectedKey !== ROOT_KEY ? domainIndex.get(selectedKey) || null : null;
-	const planningResolution = useMemo(() => resolveWarehousePlanningContext(searchParams), [searchParams]);
-	const [planningContextOverride, setPlanningContextOverride] = useState<WarehousePlanningContext | null>(null);
-	const activePlanningContext =
-		planningContextOverride?.domainId === activeDomain?.id
-			? planningContextOverride
-			: planningResolution.context?.domainId === activeDomain?.id
-				? planningResolution.context
-				: null;
-	const planningStatus = useMemo(() => {
-		if (!activeDomain?.id) {
-			return { status: "blocked" as const, reason: "请先选择业务分类" };
-		}
-		if (planningResolution.status === "blocked" && searchParams.get("planningId")) {
-			return {
-				status: "blocked" as const,
-				reason: planningResolution.reason || "规划上下文不可用，请重新确认规划",
-			};
-		}
-		if (!activePlanningContext) {
-			if (searchParams.get("planningId")) {
-				return {
-					status: "blocked" as const,
-					reason: planningResolution.reason || "规划上下文不可用，请重新确认规划",
-				};
-			}
-			return { status: "draft" as const, reason: "尚未创建数仓规划，默认以 DWD 维度建模为首个业务输出" };
-		}
-		return resolveWarehousePlanningStatus(activePlanningContext, {
-			source: planningResolution.source,
-			standardFieldCount: activePlanningContext.standardDraftId ? 1 : 0,
-		});
-	}, [
-		activeDomain?.id,
-		activePlanningContext,
-		planningResolution.reason,
-		planningResolution.source,
-		planningResolution.status,
-		searchParams,
-	]);
-	const stgLayer = resolveLayer("STG");
-	const enabledPlanningLayers = activePlanningContext?.enabledLayers ?? [
-		...DEFAULT_WAREHOUSE_LAYER_SCHEME.enabledLayers,
-	];
-	const outputPlanningLayers = activePlanningContext?.outputLayers ?? [...DEFAULT_WAREHOUSE_LAYER_SCHEME.outputLayers];
-	const updateStgPlanning = (enabled: boolean) => {
-		if (!activeDomain?.id || !canManage) return;
-		const base =
-			activePlanningContext ||
-			createWarehousePlanningContext({
-				planningId: `warehouse-plan-${activeDomain.id}-${Date.now()}`,
-				domainId: activeDomain.id,
-				domainName: activeDomain.name,
-				processId: searchParams.get("processId") || planningResolution.context?.processId,
-				warehouseLayer: "DWD",
-				modelingMode: "dimension",
-			});
-		const next: WarehousePlanningContext = {
-			...base,
-			enabledLayers: enabled
-				? ([...new Set([...base.enabledLayers, "STG" as const])] as WarehousePlanningContext["enabledLayers"])
-				: base.enabledLayers.filter((layer) => layer !== "STG"),
-			updatedAt: new Date().toISOString(),
-		};
-		if (!saveWarehousePlanningContext(next)) {
-			toast.error("分层方案保存失败，请检查浏览器会话存储后重试");
-			return;
-		}
-		setPlanningContextOverride(next);
-		toast.success(enabled ? "已启用 STG 技术过渡层" : "已停用 STG 技术过渡层");
-	};
-
 	useEffect(() => {
 		void loadDomainTree();
 	}, [loadDomainTree]);
@@ -437,25 +359,17 @@ export default function SubjectAreasPage() {
 			setProcessSaving(false);
 		}
 	};
-	const startProcessPlanning = (process: Sprint64BusinessProcess) => {
+	const startProcessPlanning = (_process: Sprint64BusinessProcess) => {
 		if (!activeDomain?.id) return;
-		const context = createWarehousePlanningContext({
-			planningId: `warehouse-plan-${activeDomain.id}-${process.processId}-${Date.now()}`,
-			domainId: activeDomain.id,
-			domainName: activeDomain.name,
-			processId: process.processId,
-			warehouseLayer: "DWD",
-			modelingMode: "dimension",
-			sourceId: searchParams.get("sourceId") || planningResolution.context?.sourceId,
-		});
-		if (!saveWarehousePlanningContext(context)) {
-			toast.error("规划草稿保存失败，请检查浏览器会话存储后重试");
+		if (!returnPlanId) {
+			toast.info("请先创建或选择建设规划，再进入业务建模");
+			router.push("/modeling/plans");
 			return;
 		}
 		router.push(
 			buildBusinessModelingRoute("/modeling/dimensions", {
-				...context,
-				processName: process.name,
+				planId: returnPlanId,
+				domainId: activeDomain.id,
 			}),
 		);
 	};
@@ -494,33 +408,21 @@ export default function SubjectAreasPage() {
 	};
 	const continueLogicalModel = () => {
 		if (!activeDomain?.id) return;
+		if (!returnPlanId) {
+			toast.info("请先创建或选择建设规划，再继续逻辑模型");
+			router.push("/modeling/plans");
+			return;
+		}
 		router.push(
 			buildModelingJourneyRoute(modelingStagePath("LOGICAL"), {
+				planId: returnPlanId,
 				domainId: activeDomain.id,
 				domainName: activeDomain.name,
 				stage: "LOGICAL",
 			}),
 		);
 	};
-	const continueDimensionPlanning = () => {
-		if (!activeDomain?.id) return;
-		const context =
-			activePlanningContext ||
-			createWarehousePlanningContext({
-				planningId: `warehouse-plan-${activeDomain.id}-${Date.now()}`,
-				domainId: activeDomain.id,
-				domainName: activeDomain.name,
-				processId: searchParams.get("processId") || planningResolution.context?.processId,
-				warehouseLayer: "DWD",
-				modelingMode: "dimension",
-				sourceId: searchParams.get("sourceId") || planningResolution.context?.sourceId,
-			});
-		if (!saveWarehousePlanningContext(context)) {
-			toast.error("规划草稿保存失败，请检查浏览器会话存储后重试");
-			return;
-		}
-		router.push(buildPlanningRoute("/governance/standards/elements?bindingDraft=1", context));
-	};
+	const returnToPlanning = () => router.push(planningReturnRoute || "/modeling/plans");
 	const openModal = (domain?: DomainNode | null, parentId?: string | null) => {
 		setEditing(domain || null);
 		form.resetFields();
@@ -605,7 +507,7 @@ export default function SubjectAreasPage() {
 				title="业务分类"
 				extra={
 					<Space wrap>
-						{safeReturnTo ? <Button onClick={() => router.push(safeReturnTo)}>返回建设计划</Button> : null}
+						{planningReturnRoute ? <Button onClick={returnToPlanning}>返回建设计划</Button> : null}
 						<Dropdown
 							trigger={["click"]}
 							menu={{
@@ -841,99 +743,23 @@ export default function SubjectAreasPage() {
 										</div>
 									}
 									details={
-										<div className="space-y-4">
-											<Card
-												className="border-blue-100 bg-blue-50/30"
-												data-testid="warehouse-layer-plan"
-												title="输出分层方案"
-												extra={
-													<Tag color="blue">
-														标准方案 v
-														{activePlanningContext?.layerSchemeVersion ?? DEFAULT_WAREHOUSE_LAYER_SCHEME.version}
-													</Tag>
-												}
-											>
-												<Space direction="vertical" size={8} className="w-full">
-													<div className="flex flex-wrap items-center gap-2">
-														{enabledPlanningLayers.map((layer, index) => (
-															<span key={layer} className="flex items-center gap-2">
-																<Tag
-																	color={
-																		layer === "STG"
-																			? "gold"
-																			: layer === "DWD"
-																				? "purple"
-																				: layer === "DWS"
-																					? "blue"
-																					: layer === "ADS"
-																						? "green"
-																						: "default"
-																	}
-																>
-																	{resolveLayer(layer)?.title || layer}
-																</Tag>
-																{index < enabledPlanningLayers.length - 1 ? <Text type="secondary">→</Text> : null}
-															</span>
-														))}
-													</div>
-													<Text type="secondary">
-														业务输出层：
-														{outputPlanningLayers.map((layer) => resolveLayer(layer)?.key || layer).join("、")}；STG
-														是可选技术过渡层，不产出业务指标。
-													</Text>
-													{stgLayer ? (
-														<div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
-															<div className="flex flex-wrap items-center justify-between gap-2">
-																<div>
-																	<Text strong>STG · {stgLayer.title}</Text>
-																	<div className="mt-1 text-xs text-slate-600">{stgLayer.responsibility}</div>
-																	<div className="mt-1 text-xs text-slate-500">{stgLayer.dbtRole}</div>
-																</div>
-																<Checkbox
-																	checked={enabledPlanningLayers.includes("STG")}
-																	onChange={(event) => updateStgPlanning(event.target.checked)}
-																	disabled={!canManage}
-																>
-																	启用 STG（dbt 推荐）
-																</Checkbox>
-															</div>
-														</div>
-													) : null}
-												</Space>
-											</Card>
+										<Card data-testid="canonical-plan-handoff" title="建设规划归属">
 											<Alert
 												showIcon
-												data-testid="warehouse-planning-card"
-												type={
-													planningStatus.status === "blocked"
-														? "error"
-														: planningStatus.status === "ready"
-															? "success"
-															: "info"
-												}
-												message="数仓规划 · 分层方案"
+												type="info"
+												message="业务分类是全局目录"
 												description={
-													<Space direction="vertical" size={4}>
-														<Text>
-															业务分类：{activeDomain.name || activeDomain.id} · 输出层：
-															{outputPlanningLayers.join(" → ")} · 建模模式：维度建模
-														</Text>
-														<Text type="secondary">
-															{planningStatus.reason || "规划、标准草稿与维度模型候选已具备连续上下文"}
-														</Text>
-													</Space>
+													returnPlanId
+														? "此处只维护分类正文；分类是否纳入建设范围、确认状态和数仓分层由当前建设规划统一管理。"
+														: "此处只维护分类正文。使用分类进入模型设计前，请先创建或选择建设规划。"
 												}
 												action={
-													<Button type="primary" onClick={continueDimensionPlanning}>
-														{planningStatus.status === "blocked"
-															? "重新确认规划"
-															: activePlanningContext
-																? "继续标准落标"
-																: "创建规划并落标"}
+													<Button type="primary" onClick={returnToPlanning}>
+														{returnPlanId ? "返回建设计划" : "前往建设规划"}
 													</Button>
 												}
 											/>
-										</div>
+										</Card>
 									}
 									governance={
 										<div className="space-y-4">

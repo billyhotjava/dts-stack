@@ -48,12 +48,14 @@ import {
 } from "@/api/warehousePlanApi";
 import { useSearchParams } from "@/routes/hooks";
 import { useUserRoles } from "@/store/userStore";
+import { WarehousePlanHeaderEditor } from "./components/WarehousePlanHeaderEditor";
 import { WarehousePlanSourcesTab } from "./WarehousePlanSourcesTab";
 import { createLatestRequestGuard, hasWarehousePlanCreateAccess } from "./warehousePlanCreateFlow";
 import {
 	buildBusinessCategoryManagementRoute,
 	buildWarehouseCategoryOptions,
 	buildWarehousePlanRoute,
+	canEditWarehousePlanHeader,
 	resolveWarehousePlanConflictVersion,
 	warehouseBlockerMessage,
 	warehousePlanIssueMessage,
@@ -146,6 +148,7 @@ export default function WarehousePlanDetailPage() {
 	const [policyConflictVersion, setPolicyConflictVersion] = useState<number | null>(null);
 	const [categoryDirty, setCategoryDirtyValue] = useState(false);
 	const [policyDirty, setPolicyDirtyValue] = useState(false);
+	const [editorOpen, setEditorOpen] = useState(false);
 	const categoryDirtyRef = useRef(false);
 	const policyDirtyRef = useRef(false);
 	const [categoryForm] = Form.useForm<CategoryFormValue>();
@@ -457,12 +460,17 @@ export default function WarehousePlanDetailPage() {
 							</span>
 						</div>
 					</div>
-					{activeSection !== "baseline" && nextAction ? (
-						<Button type="primary" size="large" onClick={() => openSpecialist(nextAction.path)}>
-							{projection?.currentStage ? warehouseStageActionLabel(projection.currentStage) : nextAction.label}
-							<ArrowRight size={16} />
-						</Button>
-					) : null}
+					<Space wrap>
+						{canEditWarehousePlanHeader(canMaintainPlan, plan.lifecycleStatus) ? (
+							<Button onClick={() => setEditorOpen(true)}>编辑规划</Button>
+						) : null}
+						{activeSection !== "baseline" && nextAction ? (
+							<Button type="primary" size="large" onClick={() => openSpecialist(nextAction.path)}>
+								{projection?.currentStage ? warehouseStageActionLabel(projection.currentStage) : nextAction.label}
+								<ArrowRight size={16} />
+							</Button>
+						) : null}
+					</Space>
 				</div>
 				<Tabs
 					className="mt-5"
@@ -876,6 +884,15 @@ export default function WarehousePlanDetailPage() {
 					onOpen={openSpecialist}
 				/>
 			) : null}
+
+			<WarehousePlanHeaderEditor
+				open={editorOpen}
+				plan={plan}
+				canMaintainPlan={canMaintainPlan}
+				onClose={() => setEditorOpen(false)}
+				onPlanChange={setPlan}
+				onUnavailable={() => navigate("/modeling/plans")}
+			/>
 		</div>
 	);
 }

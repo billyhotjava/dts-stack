@@ -24,6 +24,7 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicatio
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService.WarehousePlanException;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider.WarehousePlanActor;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanAuthorizationGuard;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBindingCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBindingView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceInventoryCommand;
@@ -62,6 +63,7 @@ class WarehousePlanSourceInventoryResourceTest {
             service,
             stageProjectionService,
             actorProvider,
+            mock(WarehousePlanAuthorizationGuard.class),
             objectMapper,
             "server-tenant"
         );

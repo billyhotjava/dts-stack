@@ -37,6 +37,7 @@ const EN_LOCALE = readFileSync(new URL("../../../locales/lang/en_US/sys.json", i
 const ROLE_DEFAULT_ENTRIES = JSON.parse(ROLE_DEFAULTS) as RoleMenuDefault[];
 const ZH_PORTAL_LOCALE = (JSON.parse(ZH_LOCALE) as PortalLocale).sys.nav.portal;
 const EN_PORTAL_LOCALE = (JSON.parse(EN_LOCALE) as PortalLocale).sys.nav.portal;
+const STATIC_ROUTES = readFileSync(new URL("./static-routes.tsx", import.meta.url), "utf8");
 const LIQUIBASE_MASTER = readFileSync(
 	new URL("../../../../../dts-admin/src/main/resources/config/liquibase/master.xml", import.meta.url),
 	"utf8",
@@ -117,7 +118,9 @@ test("portal menu starts modeling with the generic workbench", () => {
 	]);
 	assert.equal(child(modeling, "modeling-workbench").title, "建模工作台");
 	assert.equal(child(modeling, "modeling-workbench").externalLink, "/modeling/workbench");
-	assert.deepEqual(child(modeling, "warehouse-planning").children?.map((item) => item.key), ["subjects"]);
+	assert.deepEqual(child(modeling, "warehouse-planning").children?.map((item) => item.key), ["warehouse-plans", "subjects"]);
+	assert.equal(child(child(modeling, "warehouse-planning"), "warehouse-plans").title, "建设规划");
+	assert.equal(child(child(modeling, "warehouse-planning"), "warehouse-plans").externalLink, "/modeling/plans");
 	assert.equal(child(child(modeling, "warehouse-planning"), "subjects").title, "业务分类");
 	assert.equal(child(child(modeling, "warehouse-planning"), "subjects").externalLink, "/governance/subjects");
 	assert.deepEqual(child(modeling, "standards").children?.map((item) => item.key), [
@@ -199,6 +202,12 @@ test("dimension modeling menu converges on the canonical dimension catalog and m
 
 test("canonical role defaults contain only visible modeling leaves", () => {
 	const roleDefaultByCode = new Map(ROLE_DEFAULT_ENTRIES.map((entry) => [entry.code, entry]));
+	assert.deepEqual(roleDefaultByCode.get("sys.nav.portal.warehousePlans"), {
+		code: "sys.nav.portal.warehousePlans",
+		title: "建设规划",
+		route: "/modeling/plans",
+		requiredRoles: [],
+	});
 	assert.deepEqual(roleDefaultByCode.get("sys.nav.portal.governanceSubjects"), {
 		code: "sys.nav.portal.governanceSubjects",
 		title: "业务分类",
@@ -231,6 +240,7 @@ test("golden line section titles have locale coverage and role routes stay canon
 		"studioDataStudio",
 		"studioOpsCenter",
 		"warehousePlanning",
+		"warehousePlans",
 		"dataStandards",
 		"dimensionalModeling",
 		"dataMetrics",
@@ -246,6 +256,7 @@ test("golden line section titles have locale coverage and role routes stay canon
 
 	for (const route of [
 		"/modeling/workbench",
+		"/modeling/plans",
 		"/governance/subjects",
 		"/governance/standards/elements",
 		"/foundation/data-sources",
@@ -260,6 +271,17 @@ test("golden line section titles have locale coverage and role routes stay canon
 	}
 	assert.match(ZH_LOCALE, /"studioBusinessProcesses": "建模工作台"/);
 	assert.match(EN_LOCALE, /"studioBusinessProcesses": "Modeling workbench"/);
+	assert.equal(ZH_PORTAL_LOCALE.warehousePlans, "建设规划");
+	assert.equal(EN_PORTAL_LOCALE.warehousePlans, "Warehouse plans");
+});
+
+test("canonical warehouse plan ledger route is exact and precedes the planId wildcard", () => {
+	assert.match(STATIC_ROUTES, /const WarehousePlanLedgerPage = lazy/);
+	assert.match(STATIC_ROUTES, /path: "modeling\/plans"[\s\S]*<WarehousePlanLedgerPage/);
+	assert.ok(
+		STATIC_ROUTES.indexOf('path: "modeling/plans"') < STATIC_ROUTES.indexOf('path: "modeling/plans/:planId/*"'),
+		"exact ledger route must precede the plan detail wildcard",
+	);
 });
 
 test("generic modeling workbench migration keeps the role-bound menu row", () => {

@@ -14,6 +14,14 @@ test("warehouse plan detail is registered as a stable planId wildcard route", ()
 	assert.match(page, /planId/);
 });
 
+test("detail title reuses the shared plan header editor without resetting evidence or route context", () => {
+	assert.match(page, /WarehousePlanHeaderEditor/);
+	assert.match(page, /编辑规划/);
+	assert.match(page, /canEditWarehousePlanHeader/);
+	assert.match(page, /onPlanChange=\{setPlan\}/);
+	assert.doesNotMatch(page, /onPlanChange=.*load\(/);
+});
+
 test("six tabs organize editing without becoming a second completion state", () => {
 	for (const label of ["规划概览", "规划基线", "数仓架构", "事实与维度", "实现与验证", "发布成果"]) {
 		assert.match(page, new RegExp(label));

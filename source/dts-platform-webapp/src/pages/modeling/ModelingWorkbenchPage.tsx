@@ -1,7 +1,7 @@
 import { Alert, Button, Card, Collapse, Empty, Form, Input, Modal, Radio, Select, Skeleton, Space, Tag, Typography } from "antd";
 import { isAxiosError } from "axios";
 import { ArrowRight, CheckCircle2, Circle, Database, Layers3, Plus, RefreshCw, ShieldAlert, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
@@ -17,10 +17,13 @@ import {
 } from "@/api/warehousePlanApi";
 import { useSearchParams } from "@/routes/hooks";
 import { useUserInfo, useUserRoles } from "@/store/userStore";
+import { WarehousePlanHeaderEditor } from "./components/WarehousePlanHeaderEditor";
 import {
 	WAREHOUSE_STAGE_ORDER,
 	buildWarehousePlanRoute,
+	canEditWarehousePlanHeader,
 	isWarehouseStageComplete,
+	replaceWarehousePlanHeader,
 	stageStatusLabel,
 	warehouseBlockerMessage,
 	warehouseStageActionLabel,
@@ -67,6 +70,7 @@ export default function ModelingWorkbenchPage() {
 	const canCreatePlan = hasWarehousePlanCreateAccess(userRoles);
 	const userInfo = useUserInfo() as Record<string, unknown>;
 	const requestedPlanId = searchParams.get("planId")?.trim() || "";
+	const requestedCreate = searchParams.get("create") === "1";
 	const [plans, setPlans] = useState<WarehousePlanHeader[]>([]);
 	const [selectedPlanId, setSelectedPlanId] = useState("");
 	const [projection, setProjection] = useState<WarehousePlanStageProjection | null>(null);
@@ -79,6 +83,7 @@ export default function ModelingWorkbenchPage() {
 	const [projectionFailed, setProjectionFailed] = useState(false);
 	const [createOpen, setCreateOpen] = useState(false);
 	const [creating, setCreating] = useState(false);
+	const [editorOpen, setEditorOpen] = useState(false);
 	const [onboardingMode, setOnboardingMode] = useState<WarehousePlanOnboardingMode>("BUSINESS_FIRST");
 	const [createSession, dispatchCreateSession] = useReducer(
 		reduceWarehousePlanCreateSession,
@@ -91,6 +96,7 @@ export default function ModelingWorkbenchPage() {
 	const planListRetryGuard = useMemo(() => createLatestRequestGuard(), []);
 	const projectionLoadGuard = useMemo(() => createLatestRequestGuard(), []);
 	const createRequestGuard = useMemo(() => createLatestRequestGuard(), []);
+	const createRouteHandledRef = useRef(false);
 
 	const selectedPlan = useMemo(
 		() => plans.find((plan) => plan.id === selectedPlanId) ?? null,
@@ -159,8 +165,10 @@ export default function ModelingWorkbenchPage() {
 			setPlanListFailed(false);
 			setRequestedPlanFailed(false);
 			const nextPlanId = safePlans.find((plan) => plan.lifecycleStatus !== "ARCHIVED")?.id || safePlans[0]?.id || "";
-			if (nextPlanId) {
+			if (nextPlanId && !requestedCreate) {
 				selectPlan(nextPlanId, true);
+			} else if (nextPlanId) {
+				setSelectedPlanId(nextPlanId);
 			} else {
 				setSelectedPlanId("");
 				setProjection(null);
@@ -172,7 +180,7 @@ export default function ModelingWorkbenchPage() {
 		} finally {
 			if (isCurrent()) setLoadingPlans(false);
 		}
-	}, [planListRetryGuard, planLoadGuard, requestedPlanId, selectPlan]);
+	}, [planListRetryGuard, planLoadGuard, requestedCreate, requestedPlanId, selectPlan]);
 
 	const retryPlanList = useCallback(async () => {
 		const isCurrent = planListRetryGuard.begin();
@@ -226,7 +234,7 @@ export default function ModelingWorkbenchPage() {
 
 	useEffect(() => () => createRequestGuard.invalidate(), [createRequestGuard]);
 
-	const openCreate = () => {
+	const openCreate = useCallback(() => {
 		if (!canCreatePlan) return;
 		createRequestGuard.invalidate();
 		setCreating(false);
@@ -234,7 +242,17 @@ export default function ModelingWorkbenchPage() {
 		form.resetFields();
 		dispatchCreateSession({ type: "OPEN", idempotencyKey: createWarehousePlanIdempotencyKey() });
 		setCreateOpen(true);
-	};
+	}, [canCreatePlan, createRequestGuard, form]);
+
+	useEffect(() => {
+		if (!requestedCreate) {
+			createRouteHandledRef.current = false;
+			return;
+		}
+		if (loadingPlans || !canCreatePlan || createRouteHandledRef.current) return;
+		createRouteHandledRef.current = true;
+		openCreate();
+	}, [canCreatePlan, loadingPlans, openCreate, requestedCreate]);
 
 	const cancelCreate = () => {
 		if (creating) return;
@@ -242,6 +260,11 @@ export default function ModelingWorkbenchPage() {
 		setCreateOpen(false);
 		dispatchCreateSession({ type: "CLEAR" });
 		form.resetFields();
+		if (requestedCreate) {
+			navigate(selectedPlanId ? `/modeling/workbench?planId=${encodeURIComponent(selectedPlanId)}` : "/modeling/workbench", {
+				replace: true,
+			});
+		}
 	};
 
 	const changeOnboardingMode = (mode: WarehousePlanOnboardingMode) => {
@@ -329,8 +352,9 @@ export default function ModelingWorkbenchPage() {
 							围绕一个建设计划查看真实证据、首要阻塞和下一步。专业配置仍在各自模块完成。
 						</Paragraph>
 					</div>
-					{plans.length > 0 ? (
-						<div className="flex flex-wrap items-center gap-2">
+					<div className="flex flex-wrap items-center gap-2">
+						{plans.length > 0 ? (
+							<>
 							<Select
 								aria-label="当前建设计划"
 								value={selectedPlanId || undefined}
@@ -346,10 +370,16 @@ export default function ModelingWorkbenchPage() {
 							>
 								新建规划
 							</Button>
-						</div>
-					) : null}
+							</>
+						) : null}
+						<Button type="link" onClick={() => navigate("/modeling/plans")}>全部规划</Button>
+					</div>
 				</div>
 			</header>
+
+			{requestedCreate && !canCreatePlan ? (
+				<Alert type="info" showIcon message="当前账号没有规划维护权限" description="可以查看已有规划，但不能新建或修改规划。" />
+			) : null}
 
 			{requestedPlanFailed ? (
 				<Alert
@@ -467,7 +497,12 @@ export default function ModelingWorkbenchPage() {
 								<div><div className="text-slate-500">建设目标</div><div className="mt-1 text-slate-900">{selectedPlan.objective || "待补充"}</div></div>
 								<div><div className="text-slate-500">建设范围</div><div className="mt-1 text-slate-900">{selectedPlan.scope || "待补充"}</div></div>
 								<div><div className="text-slate-500">开始方式</div><div className="mt-1 text-slate-900">{selectedPlan.onboardingMode === "ASSET_FIRST" ? "从现有数据开始" : "从业务目标开始"}</div></div>
-								<Button block onClick={() => navigate(buildWarehousePlanRoute(selectedPlan.id))}>查看计划详情</Button>
+								<Space direction="vertical" className="w-full" size={8}>
+									<Button block onClick={() => navigate(buildWarehousePlanRoute(selectedPlan.id))}>查看计划详情</Button>
+									{canEditWarehousePlanHeader(canCreatePlan, selectedPlan.lifecycleStatus) ? (
+										<Button block onClick={() => setEditorOpen(true)}>编辑规划</Button>
+									) : null}
+								</Space>
 							</div>
 						</Card>
 					</section>
@@ -594,11 +629,20 @@ export default function ModelingWorkbenchPage() {
 						</div>
 					) : null}
 					<div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2" data-testid="warehouse-plan-current-owner">
-						<div className="text-xs text-slate-500">当前负责人由登录身份确定，创建后如需转派请走授权流程</div>
+						<div className="text-xs text-slate-500">当前负责人由登录身份确定；创建后可在“建设规划”中按权限转派</div>
 						<div className="mt-1 text-sm font-medium text-slate-900">{currentOwner} · {currentDepartment}</div>
 					</div>
 				</Form>
 			</Modal>
+
+			<WarehousePlanHeaderEditor
+				open={editorOpen}
+				plan={selectedPlan}
+				canMaintainPlan={canCreatePlan}
+				onClose={() => setEditorOpen(false)}
+				onPlanChange={(updated) => setPlans((current) => replaceWarehousePlanHeader(current, updated))}
+				onUnavailable={() => navigate("/modeling/plans")}
+			/>
 		</div>
 	);
 }

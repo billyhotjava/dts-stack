@@ -586,6 +586,12 @@ public class WarehousePlanApplicationService {
             SourceReferenceResolver.ResolvedSource resolution = locator == null
                 ? SourceReferenceResolver.ResolvedSource.providerError()
                 : resolveSource(sourceType, locator, serverContext);
+            if (existing == null && resolution.status() != SourceReferenceResolver.ResolutionStatus.AVAILABLE) {
+                throw invalidSourceInventory(
+                    "SOURCE_NOT_AVAILABLE",
+                    "Source cannot be registered until it is available"
+                );
+            }
             String confirmedVersion = resolution.status() == SourceReferenceResolver.ResolutionStatus.AVAILABLE
                 ? resolution.resolvedVersion()
                 : existing == null ? null : existing.sourceVersion();
@@ -875,7 +881,12 @@ public class WarehousePlanApplicationService {
     }
 
     @Transactional
-    public PlanningBaseline confirmBaseline(String serverTenantId, UUID planId, int expectedPlanHeadVersion) {
+    public PlanningBaseline confirmBaseline(
+        String serverTenantId,
+        UUID planId,
+        int expectedPlanHeadVersion,
+        SourceReferenceResolver.AccessContext accessContext
+    ) {
         requireServerTenant(serverTenantId);
         WarehousePlanHeader current = lockPlan(serverTenantId, planId);
         if (current.version() != expectedPlanHeadVersion) {
@@ -885,11 +896,7 @@ public class WarehousePlanApplicationService {
                 current.version()
             );
         }
-        PlanningBaseline baseline = loadBaseline(
-            serverTenantId,
-            current,
-            new SourceReferenceResolver.AccessContext(serverTenantId, current.ownerId(), current.ownerDepartmentId())
-        );
+        PlanningBaseline baseline = loadBaseline(serverTenantId, current, accessContext);
         if (!baseline.ready()) {
             throw new WarehousePlanException(
                 "WAREHOUSE_PLAN_BASELINE_INCOMPLETE",

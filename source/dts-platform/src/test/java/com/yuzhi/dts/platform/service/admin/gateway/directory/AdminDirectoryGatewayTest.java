@@ -99,6 +99,37 @@ class AdminDirectoryGatewayTest {
     }
 
     @Test
+    void findUserByPrincipalKeyShouldPreferTheAuthoritativePlatformDirectory() {
+        server
+            .expect(requestTo("http://dts-admin.test:8081/api/platform/directory/users/resolve?principalKey=u-100"))
+            .andExpect(method(GET))
+            .andRespond(
+                withSuccess(
+                    """
+                    {"status":"SUCCESS","data":
+                      {"id":"u-100","username":"alice","displayName":"Alice","deptCode":"authoritative-1001"}
+                    }
+                    """,
+                    MediaType.APPLICATION_JSON
+                )
+            );
+
+        assertThat(gateway.findUserByPrincipalKey("u-100"))
+            .contains(new AdminDirectoryGateway.UserSummary("u-100", "alice", "Alice", "authoritative-1001", null));
+    }
+
+    @Test
+    void findUserByPrincipalKeyFailsClosedWhenTheAuthoritativeDirectoryIsUnavailable() {
+        server
+            .expect(requestTo("http://dts-admin.test:8081/api/platform/directory/users/resolve?principalKey=u-100"))
+            .andExpect(method(GET))
+            .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+
+        assertThat(gateway.findUserByPrincipalKey("u-100")).isEmpty();
+        server.verify();
+    }
+
+    @Test
     void listRolesShouldFallbackToLegacyEndpointWhenPlatformDirectoryIsUnavailable() {
         server
             .expect(requestTo("http://dts-admin.test:8081/api/platform/directory/roles"))

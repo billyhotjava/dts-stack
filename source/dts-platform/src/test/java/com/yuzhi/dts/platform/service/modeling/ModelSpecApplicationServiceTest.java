@@ -15,7 +15,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.DomainBindingState;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.PlanState;
-import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.SourceBindingState;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.StoredModelSpec;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.ExpectedVersion;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.*;
@@ -60,6 +59,9 @@ class ModelSpecApplicationServiceTest {
     private ModelSpecPlanWriteAccessPort planWriteAccess;
 
     @Mock
+    private ModelSpecSourceValidationPort sourceValidation;
+
+    @Mock
     private ModelSpecCompatibilityReader compatibilityReader;
 
     private ModelSpecSnapshotCodec codec;
@@ -75,6 +77,7 @@ class ModelSpecApplicationServiceTest {
             domainWriteAccess,
             domainReadAccess,
             planWriteAccess,
+            sourceValidation,
             compatibilityReader,
             Clock.fixed(NOW, ZoneOffset.UTC),
             () -> MODEL_ID
@@ -82,10 +85,7 @@ class ModelSpecApplicationServiceTest {
         lenient().when(repository.lockPlan(TENANT, PLAN_ID)).thenReturn(Optional.of(new PlanState(PLAN_ID, "DRAFT")));
         lenient().when(repository.lockDomainBinding(TENANT, PLAN_ID, DOMAIN_ID))
             .thenReturn(Optional.of(new DomainBindingState(DOMAIN_ID, "CONFIRMED")));
-        lenient().when(repository.findSourceBinding(TENANT, PLAN_ID, SOURCE_BINDING_ID))
-            .thenReturn(
-                Optional.of(new SourceBindingState(SOURCE_BINDING_ID, "CATALOG_TABLE", "ods.customer", "v1", "CONFIRMED"))
-            );
+        lenient().when(sourceValidation.isCurrentBinding(eq(TENANT), eq(PLAN_ID), eq(ACTOR), any())).thenReturn(true);
         lenient().when(domainResolution.resolve(DOMAIN_ID))
             .thenReturn(new DomainResolution(DOMAIN_ID, CatalogDomainResolutionPort.ResolutionStatus.AVAILABLE, "Customers", "CUSTOMER", "owner", null));
         lenient().when(domainWriteAccess.canMaintain(DOMAIN_ID)).thenReturn(true);
@@ -105,6 +105,20 @@ class ModelSpecApplicationServiceTest {
         assertThat(result.modelSpec().id()).isEqualTo(MODEL_ID);
         assertThat(result.modelSpec().contractVersion()).isEqualTo(2);
         assertThat(result.modelSpec().compatibilityMode()).isEqualTo(CompatibilityMode.CANONICAL);
+        verify(repository).insertV2Revision(eq(TENANT), eq(ACTOR), eq(result.modelSpec()), anyString());
+    }
+
+    @Test
+    void createsAFactDraftWithoutResolvingAnUnmappedPhysicalSource() {
+        CreateModelSpecCommand command = withInputs(command("fact-source-pending", "customer_detail_pending"), List.of(), List.of());
+        when(repository.findByIdempotencyKey(TENANT, "fact-source-pending")).thenReturn(Optional.empty());
+        when(repository.insertV2(eq(TENANT), eq(ACTOR), eq(command), any(), anyString(), anyString())).thenReturn(1);
+
+        ModelSpecApplicationService.CreateResult result = service.create(TENANT, ACTOR, command);
+
+        assertThat(result.replayed()).isFalse();
+        assertThat(result.modelSpec().sourceRefs()).isEmpty();
+        verify(sourceValidation, never()).isCurrentBinding(any(), any(), any(), any());
         verify(repository).insertV2Revision(eq(TENANT), eq(ACTOR), eq(result.modelSpec()), anyString());
     }
 
@@ -207,6 +221,78 @@ class ModelSpecApplicationServiceTest {
     }
 
     @Test
+    void refusesUpdatesToHistoricalCanonicalRowsWithNonCanonicalTargetLayers() {
+        CreateModelSpecCommand historicalCommand = withLayer(command("historical-ods", "customer_detail"), Layer.ODS);
+        ModelSpecView historical = codec.toCreatedView(MODEL_ID, historicalCommand, NOW);
+        StoredModelSpec stored = stored(historical, null, null);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored));
+        when(compatibilityReader.read(stored)).thenReturn(historical);
+
+        assertThatThrownBy(
+            () ->
+                service.update(
+                    TENANT,
+                    ACTOR,
+                    MODEL_ID,
+                    new ExpectedVersion(MODEL_ID, 1, historical.checksum()),
+                    update(historicalCommand)
+                )
+        )
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_SPEC_LEGACY_READONLY");
+
+        verify(repository, never()).compareAndSetV2(any(), any(), anyInt(), anyString(), any(), anyString());
+    }
+
+    @Test
+    void checksAuthorizationBeforeReportingHistoricalWrongLayerRowsAsReadOnly() {
+        CreateModelSpecCommand historicalCommand = withLayer(command("historical-ods-forbidden", "customer_detail"), Layer.ODS);
+        ModelSpecView historical = codec.toCreatedView(MODEL_ID, historicalCommand, NOW);
+        StoredModelSpec stored = stored(historical, null, null);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored));
+        when(compatibilityReader.read(stored)).thenReturn(historical);
+        when(planWriteAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(false);
+
+        assertThatThrownBy(
+            () ->
+                service.update(
+                    TENANT,
+                    ACTOR,
+                    MODEL_ID,
+                    new ExpectedVersion(MODEL_ID, 1, historical.checksum()),
+                    update(historicalCommand)
+                )
+        )
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_SPEC_PLAN_FORBIDDEN");
+    }
+
+    @Test
+    void checksEtagBeforeReportingHistoricalWrongLayerRowsAsReadOnly() {
+        CreateModelSpecCommand historicalCommand = withLayer(command("historical-ods-stale", "customer_detail"), Layer.ODS);
+        ModelSpecView historical = codec.toCreatedView(MODEL_ID, historicalCommand, NOW);
+        StoredModelSpec stored = stored(historical, null, null);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored));
+        when(compatibilityReader.read(stored)).thenReturn(historical);
+
+        assertThatThrownBy(
+            () ->
+                service.update(
+                    TENANT,
+                    ACTOR,
+                    MODEL_ID,
+                    new ExpectedVersion(MODEL_ID, 1, "b".repeat(64)),
+                    update(historicalCommand)
+                )
+        )
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_SPEC_REVISION_CONFLICT");
+    }
+
+    @Test
     void hidesCanonicalReadsWhenTheCurrentActorCannotReadTheDomain() {
         ModelSpecView current = codec.toCreatedView(MODEL_ID, command("create-1", "customer_detail"), NOW);
         when(compatibilityReader.get(TENANT, MODEL_ID)).thenReturn(current);
@@ -275,6 +361,109 @@ class ModelSpecApplicationServiceTest {
                 );
             });
         verify(repository, never()).compareAndSetV2(any(), any(), anyInt(), anyString(), any(), anyString());
+    }
+
+    @Test
+    void rejectsDirectFactDependencyCycleWhenAnUpstreamModelSuppliesItsInput() {
+        UUID originalUpstreamId = UUID.fromString("30000000-0000-0000-0000-000000000010");
+        CreateModelSpecCommand create = withInputs(
+            command("fact-direct-cycle", "customer_detail"),
+            List.of(),
+            List.of(new ModelRevisionRef(originalUpstreamId, 1))
+        );
+        ModelSpecView current = codec.toCreatedView(MODEL_ID, create, NOW);
+        StoredModelSpec currentStored = stored(current, null, null);
+        UpdateModelSpecCommand requested = update(
+            withInputs(command("ignored", "customer_detail"), List.of(), List.of(new ModelRevisionRef(MODEL_ID, 1)))
+        );
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(currentStored));
+        when(repository.findRevision(TENANT, MODEL_ID, 1)).thenReturn(Optional.of(currentStored));
+        when(compatibilityReader.read(currentStored)).thenReturn(current);
+
+        assertThatThrownBy(
+            () -> service.update(TENANT, ACTOR, MODEL_ID, new ExpectedVersion(MODEL_ID, 1, current.checksum()), requested)
+        )
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_SPEC_DEPENDENCY_CYCLE");
+        verify(repository, never()).compareAndSetV2(any(), any(), anyInt(), anyString(), any(), anyString());
+    }
+
+    @Test
+    void rejectsFactDependencyOnAHigherLayerApplicationModelBeforeWrite() {
+        UUID upstreamId = UUID.fromString("30000000-0000-0000-0000-000000000040");
+        CreateModelSpecCommand requested = withInputs(
+            command("fact-higher-layer-upstream", "customer_detail"),
+            List.of(),
+            List.of(new ModelRevisionRef(upstreamId, 1))
+        );
+        ModelSpecView application = codec.toCreatedView(
+            upstreamId,
+            derivedCommand("application-upstream", "customer_application", ModelType.APPLICATION, List.of()),
+            NOW
+        );
+        StoredModelSpec applicationStored = stored(application, null, null);
+        when(repository.findByIdempotencyKey(TENANT, requested.idempotencyKey())).thenReturn(Optional.empty());
+        when(repository.findRevision(TENANT, upstreamId, 1)).thenReturn(Optional.of(applicationStored));
+        when(compatibilityReader.read(applicationStored)).thenReturn(application);
+
+        assertThatThrownBy(() -> service.create(TENANT, ACTOR, requested))
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_SPEC_UPSTREAM_LAYER_NOT_ALLOWED");
+        verify(repository, never()).insertV2(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void rejectsHistoricalWrongLayerUpstreamModelsBeforeWrite() {
+        UUID upstreamId = UUID.fromString("30000000-0000-0000-0000-000000000041");
+        CreateModelSpecCommand requested = derivedCommand(
+            "summary-wrong-layer-upstream",
+            "customer_summary",
+            ModelType.SUMMARY,
+            List.of(new ModelRevisionRef(upstreamId, 1))
+        );
+        ModelSpecView wrongLayerFact = codec.toCreatedView(
+            upstreamId,
+            withLayer(command("historical-fact-dws", "historical_fact"), Layer.DWS),
+            NOW
+        );
+        StoredModelSpec upstreamStored = stored(wrongLayerFact, null, null);
+        when(repository.findByIdempotencyKey(TENANT, requested.idempotencyKey())).thenReturn(Optional.empty());
+        when(repository.findRevision(TENANT, upstreamId, 1)).thenReturn(Optional.of(upstreamStored));
+        when(compatibilityReader.read(upstreamStored)).thenReturn(wrongLayerFact);
+
+        assertThatThrownBy(() -> service.create(TENANT, ACTOR, requested))
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_SPEC_UPSTREAM_LAYER_NOT_ALLOWED");
+        verify(repository, never()).insertV2(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void hidesUnreadableInvalidUpstreamModelsBeforeReportingTheirPolicyViolation() {
+        UUID upstreamId = UUID.fromString("30000000-0000-0000-0000-000000000042");
+        CreateModelSpecCommand requested = withInputs(
+            command("fact-unreadable-upstream", "customer_detail"),
+            List.of(),
+            List.of(new ModelRevisionRef(upstreamId, 1))
+        );
+        ModelSpecView application = codec.toCreatedView(
+            upstreamId,
+            derivedCommand("unreadable-application", "customer_application", ModelType.APPLICATION, List.of()),
+            NOW
+        );
+        StoredModelSpec upstreamStored = stored(application, null, null);
+        when(repository.findByIdempotencyKey(TENANT, requested.idempotencyKey())).thenReturn(Optional.empty());
+        when(repository.findRevision(TENANT, upstreamId, 1)).thenReturn(Optional.of(upstreamStored));
+        when(compatibilityReader.read(upstreamStored)).thenReturn(application);
+        when(domainReadAccess.canRead(DOMAIN_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.create(TENANT, ACTOR, requested))
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_SPEC_REFERENCE_NOT_FOUND");
+        verify(repository, never()).insertV2(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -369,11 +558,10 @@ class ModelSpecApplicationServiceTest {
     }
 
     @Test
-    void rejectsSourcesThatAreNotConfirmedExactBindingsOfTheCurrentPlan() {
+    void rejectsUnavailableSourceBindingsBeforeAnyModelWrite() {
         CreateModelSpecCommand command = command("source-invalid", "customer_detail");
         when(repository.findByIdempotencyKey(TENANT, "source-invalid")).thenReturn(Optional.empty());
-        when(repository.findSourceBinding(TENANT, PLAN_ID, SOURCE_BINDING_ID))
-            .thenReturn(Optional.empty());
+        when(sourceValidation.isCurrentBinding(TENANT, PLAN_ID, ACTOR, command.sourceRefs().getFirst())).thenReturn(false);
 
         assertThatThrownBy(() -> service.create(TENANT, ACTOR, command))
             .isInstanceOf(ModelSpecException.class)
@@ -382,26 +570,28 @@ class ModelSpecApplicationServiceTest {
                 assertThat(invalid.code()).isEqualTo("MODEL_SPEC_SOURCE_BINDING_INVALID");
                 assertThat(invalid.details()).isInstanceOf(List.class);
             });
-
-        when(repository.findSourceBinding(TENANT, PLAN_ID, SOURCE_BINDING_ID))
-            .thenReturn(
-                Optional.of(new SourceBindingState(SOURCE_BINDING_ID, "CATALOG_TABLE", "ods.customer", "v2", "CONFIRMED"))
-            );
-
-        assertThatThrownBy(() -> service.create(TENANT, ACTOR, command))
-            .isInstanceOf(ModelSpecException.class)
-            .extracting(error -> ((ModelSpecException) error).code())
-            .isEqualTo("MODEL_SPEC_SOURCE_BINDING_INVALID");
-
-        when(repository.findSourceBinding(TENANT, PLAN_ID, SOURCE_BINDING_ID))
-            .thenReturn(
-                Optional.of(new SourceBindingState(SOURCE_BINDING_ID, "EXCEL_FILE", "ods.customer", "v1", "CONFIRMED"))
-            );
-        assertThatThrownBy(() -> service.create(TENANT, ACTOR, command))
-            .isInstanceOf(ModelSpecException.class)
-            .extracting(error -> ((ModelSpecException) error).code())
-            .isEqualTo("MODEL_SPEC_SOURCE_BINDING_INVALID");
         verify(repository, never()).insertV2(any(), any(), any(), any(), any(), any());
+        verify(repository, never()).insertV2Revision(any(), any(), any(), any());
+    }
+
+    @Test
+    void rejectsUnavailableSourceBindingsBeforeAnyModelUpdate() {
+        CreateModelSpecCommand create = command("create-1", "customer_detail");
+        ModelSpecView current = codec.toCreatedView(MODEL_ID, create, NOW);
+        UpdateModelSpecCommand update = update(create);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored(current, null, null)));
+        when(compatibilityReader.read(any())).thenReturn(current);
+        when(sourceValidation.isCurrentBinding(TENANT, PLAN_ID, ACTOR, update.sourceRefs().getFirst())).thenReturn(false);
+
+        assertThatThrownBy(
+            () -> service.update(TENANT, ACTOR, MODEL_ID, new ExpectedVersion(MODEL_ID, 1, current.checksum()), update)
+        )
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_SPEC_SOURCE_BINDING_INVALID");
+
+        verify(repository, never()).compareAndSetV2(any(), any(), anyInt(), anyString(), any(), anyString());
+        verify(repository, never()).insertV2Revision(any(), any(), any(), any());
     }
 
     @Test
@@ -554,6 +744,7 @@ class ModelSpecApplicationServiceTest {
             domainWriteAccess,
             domainReadAccess,
             planWriteAccess,
+            sourceValidation,
             compatibilityReader,
             new ModelSpecFeatureFlags(false, false),
             Clock.fixed(NOW, ZoneOffset.UTC),
@@ -694,6 +885,62 @@ class ModelSpecApplicationServiceTest {
             List.of(),
             null,
             idempotencyKey
+        );
+    }
+
+    private static CreateModelSpecCommand withInputs(
+        CreateModelSpecCommand command,
+        List<SourceRef> sourceRefs,
+        List<ModelRevisionRef> dependsOn
+    ) {
+        return new CreateModelSpecCommand(
+            command.planId(),
+            command.domainId(),
+            command.modelType(),
+            command.layer(),
+            command.name(),
+            command.description(),
+            command.implementationMode(),
+            command.materialization(),
+            command.businessActivityRef(),
+            command.consumptionScenario(),
+            command.grain(),
+            command.factShape(),
+            command.timeSemantics(),
+            command.fields(),
+            sourceRefs,
+            dependsOn,
+            command.dimensionRefs(),
+            command.metricRefs(),
+            command.standardBindings(),
+            command.generationStrategy(),
+            command.idempotencyKey()
+        );
+    }
+
+    private static CreateModelSpecCommand withLayer(CreateModelSpecCommand command, Layer layer) {
+        return new CreateModelSpecCommand(
+            command.planId(),
+            command.domainId(),
+            command.modelType(),
+            layer,
+            command.name(),
+            command.description(),
+            command.implementationMode(),
+            command.materialization(),
+            command.businessActivityRef(),
+            command.consumptionScenario(),
+            command.grain(),
+            command.factShape(),
+            command.timeSemantics(),
+            command.fields(),
+            command.sourceRefs(),
+            command.dependsOn(),
+            command.dimensionRefs(),
+            command.metricRefs(),
+            command.standardBindings(),
+            command.generationStrategy(),
+            command.idempotencyKey()
         );
     }
 

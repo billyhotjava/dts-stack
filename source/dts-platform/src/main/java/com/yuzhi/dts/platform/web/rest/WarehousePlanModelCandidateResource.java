@@ -4,8 +4,11 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.Creat
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecException;
 import com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.AccessContext;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService.WarehousePlanException;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider.WarehousePlanActor;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanAuthorizationGuard;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanModelCandidateService;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanModelCandidateService.CandidatePreview;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanModelCandidateService.ConfirmCandidateCommand;
@@ -33,22 +36,29 @@ public class WarehousePlanModelCandidateResource {
 
     private final WarehousePlanModelCandidateService service;
     private final WarehousePlanActorProvider actorProvider;
+    private final WarehousePlanApplicationService planService;
+    private final WarehousePlanAuthorizationGuard authorizationGuard;
     private final String serverTenantId;
 
     public WarehousePlanModelCandidateResource(
         WarehousePlanModelCandidateService service,
         WarehousePlanActorProvider actorProvider,
+        WarehousePlanApplicationService planService,
+        WarehousePlanAuthorizationGuard authorizationGuard,
         @Value("${dts.platform.modeling.default-tenant-id:default}") String serverTenantId
     ) {
         this.service = service;
         this.actorProvider = actorProvider;
+        this.planService = planService;
+        this.authorizationGuard = authorizationGuard;
         this.serverTenantId = serverTenantId;
     }
 
     @GetMapping("/preview")
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ApiResponse<CandidatePreview> preview(@PathVariable UUID planId) {
-        return ApiResponses.ok(service.preview(serverTenantId, planId, accessContext()));
+        WarehousePlanActor actor = requirePlanRead(planId);
+        return ApiResponses.ok(service.preview(serverTenantId, planId, accessContext(actor)));
     }
 
     @PostMapping("/confirm")
@@ -57,7 +67,7 @@ public class WarehousePlanModelCandidateResource {
         @PathVariable UUID planId,
         @RequestBody ConfirmCandidateCommand command
     ) {
-        WarehousePlanActor actor = actorProvider.currentActor();
+        WarehousePlanActor actor = requirePlanMaintenance(planId);
         CreateResult result = service.confirm(
             serverTenantId,
             actor == null ? null : actor.ownerId(),
@@ -84,8 +94,29 @@ public class WarehousePlanModelCandidateResource {
         );
     }
 
-    private AccessContext accessContext() {
-        return accessContext(actorProvider.currentActor());
+    @ExceptionHandler(WarehousePlanException.class)
+    public ResponseEntity<ApiResponse<Object>> handleWarehousePlanError(WarehousePlanException exception) {
+        HttpStatus status = switch (exception.code()) {
+            case "WAREHOUSE_PLAN_NOT_FOUND" -> HttpStatus.NOT_FOUND;
+            case "WAREHOUSE_PLAN_AUTHENTICATED_ACTOR_REQUIRED" -> HttpStatus.UNAUTHORIZED;
+            case "WAREHOUSE_PLAN_OWNER_FORBIDDEN", "WAREHOUSE_PLAN_OWNER_DEPARTMENT_FORBIDDEN" -> HttpStatus.FORBIDDEN;
+            default -> HttpStatus.BAD_REQUEST;
+        };
+        return ResponseEntity.status(status).body(
+            new ApiResponse<>(ResultStatus.ERROR.getCode(), exception.getMessage(), exception.code(), null)
+        );
+    }
+
+    private WarehousePlanActor requirePlanRead(UUID planId) {
+        WarehousePlanActor actor = actorProvider.currentActor();
+        authorizationGuard.requirePlanRead(planService.get(serverTenantId, planId), actor);
+        return actor;
+    }
+
+    private WarehousePlanActor requirePlanMaintenance(UUID planId) {
+        WarehousePlanActor actor = actorProvider.currentActor();
+        authorizationGuard.requirePlanMaintenance(planService.get(serverTenantId, planId), actor);
+        return actor;
     }
 
     private AccessContext accessContext(WarehousePlanActor actor) {

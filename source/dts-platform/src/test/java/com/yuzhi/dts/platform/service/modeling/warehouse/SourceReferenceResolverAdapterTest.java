@@ -26,6 +26,7 @@ import com.yuzhi.dts.platform.service.security.AccessChecker;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -72,7 +73,7 @@ class SourceReferenceResolverAdapterTest {
         when(tableRepository.findById(TABLE_ID)).thenReturn(Optional.of(table));
         when(columnRepository.findByTable(table)).thenReturn(List.of(column(table, "order_id", "uuid", false)));
         when(accessChecker.canRead(dataset)).thenReturn(true);
-        when(accessChecker.departmentAllowed(dataset, "D01")).thenReturn(true);
+        when(accessChecker.departmentAllowedExact(dataset, "D01")).thenReturn(true);
 
         ResolvedSource result = resolver.resolve(
             SourceType.CATALOG_TABLE,
@@ -119,6 +120,7 @@ class SourceReferenceResolverAdapterTest {
         connection.setName("ERP");
         connection.setOwnerDept("D01");
         connection.setStatus("ACTIVE");
+        connection.setLastVerifiedAt(Instant.parse("2026-07-22T03:19:40Z"));
         CatalogDataset dataset = dataset("orders");
         dataset.setSourceId(CONNECTION_ID);
         dataset.setHiveDatabase("public");
@@ -130,7 +132,7 @@ class SourceReferenceResolverAdapterTest {
         when(tableRepository.findByDataset(dataset)).thenReturn(List.of(table));
         when(columnRepository.findByTable(table)).thenReturn(List.of(column(table, "order_id", "uuid", false)));
         when(accessChecker.canRead(dataset)).thenReturn(true);
-        when(accessChecker.departmentAllowed(dataset, "D01")).thenReturn(true);
+        when(accessChecker.departmentAllowedExact(dataset, "D01")).thenReturn(true);
 
         ResolvedSource result = resolver.resolve(
             SourceType.CONNECTION_TABLE,
@@ -141,6 +143,16 @@ class SourceReferenceResolverAdapterTest {
         assertThat(result.status()).isEqualTo(AVAILABLE);
         assertThat(result.displayName()).isEqualTo("ERP / public.orders");
         assertThat(result.resolvedVersion()).hasSize(64);
+
+        connection.setLastVerifiedAt(null);
+        assertThat(
+            resolver.resolve(
+                SourceType.CONNECTION_TABLE,
+                new SourceLocator(null, null, null, null, CONNECTION_ID, "public", "orders"),
+                ACCESS
+            ).status()
+        ).isEqualTo(PROVIDER_ERROR);
+        connection.setLastVerifiedAt(Instant.parse("2026-07-22T03:19:40Z"));
 
         when(tableRepository.findByDataset(dataset)).thenReturn(List.of());
         assertThat(
@@ -179,6 +191,55 @@ class SourceReferenceResolverAdapterTest {
         assertThat(current.displayName()).isEqualTo("orders");
         assertThat(current.resolvedVersion()).hasSize(64);
         assertThat(unsupported.status()).isEqualTo(PROVIDER_ERROR);
+    }
+
+    @Test
+    void rejectsDepartmentSuffixCollisionsAcrossCatalogFileAndConnectionSources() {
+        AccessContext departmentA = new AccessContext("tenant-a", "user-a", "dept-a");
+        CatalogDataset catalogDataset = dataset("orders");
+        catalogDataset.setOwnerDept("dept-ba");
+        CatalogTableSchema catalogTable = table(catalogDataset, TABLE_ID, "orders");
+        when(tableRepository.findById(TABLE_ID)).thenReturn(Optional.of(catalogTable));
+        when(accessChecker.canRead(catalogDataset)).thenReturn(true);
+        when(accessChecker.departmentAllowedExact(catalogDataset, "dept-a")).thenReturn(false);
+
+        InfraExternalExchangeFile file = new InfraExternalExchangeFile();
+        file.setId(FILE_ID);
+        file.setFileName("budget.xlsx");
+        file.setChecksum("sha256:abc");
+        file.setEnabled(true);
+        file.setOwnerDept("10010");
+        when(fileRepository.findById(FILE_ID)).thenReturn(Optional.of(file));
+
+        InfraDataSource connection = new InfraDataSource();
+        connection.setId(CONNECTION_ID);
+        connection.setName("ERP");
+        connection.setOwnerDept("dept-ba");
+        connection.setStatus("ACTIVE");
+        connection.setLastVerifiedAt(Instant.parse("2026-07-22T03:19:40Z"));
+        when(dataSourceRepository.findById(CONNECTION_ID)).thenReturn(Optional.of(connection));
+
+        assertThat(
+            resolver.resolve(
+                SourceType.CATALOG_TABLE,
+                new SourceLocator(TABLE_ID, null, null, null, null, null, null),
+                departmentA
+            ).status()
+        ).isEqualTo(FORBIDDEN);
+        assertThat(
+            resolver.resolve(
+                SourceType.EXCEL_FILE,
+                new SourceLocator(null, FILE_ID, null, null, null, null, null),
+                new AccessContext("tenant-a", "user-a", "10")
+            ).status()
+        ).isEqualTo(FORBIDDEN);
+        assertThat(
+            resolver.resolve(
+                SourceType.CONNECTION_TABLE,
+                new SourceLocator(null, null, null, null, CONNECTION_ID, "public", "orders"),
+                departmentA
+            ).status()
+        ).isEqualTo(FORBIDDEN);
     }
 
     private static CatalogDataset dataset(String name) {

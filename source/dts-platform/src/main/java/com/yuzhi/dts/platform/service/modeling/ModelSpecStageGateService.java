@@ -2,7 +2,6 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import com.yuzhi.dts.platform.repository.modeling.ModelLifecycleRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
-import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.SourceBindingState;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.StoredModelSpec;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.DimensionHierarchy;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.DimensionLevel;
@@ -15,7 +14,6 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ScdPolicy;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ScdType;
-import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceKind;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.StandardBinding;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.TimeSemanticsType;
@@ -40,13 +38,14 @@ public class ModelSpecStageGateService {
     private final ModelSpecRepository repository;
     private final ModelSpecStandardEvidencePort standardEvidence;
     private final ModelLifecycleRepository lifecycle;
+    private final ModelSpecSourceValidationPort sourceValidation;
 
     public ModelSpecStageGateService(
         ModelSpecApplicationService modelSpecs,
         ModelSpecRepository repository,
         ModelSpecStandardEvidencePort standardEvidence
     ) {
-        this(modelSpecs, repository, standardEvidence, null);
+        this(modelSpecs, repository, standardEvidence, null, null);
     }
 
     @Autowired
@@ -54,12 +53,14 @@ public class ModelSpecStageGateService {
         ModelSpecApplicationService modelSpecs,
         ModelSpecRepository repository,
         ModelSpecStandardEvidencePort standardEvidence,
-        ModelLifecycleRepository lifecycle
+        ModelLifecycleRepository lifecycle,
+        ModelSpecSourceValidationPort sourceValidation
     ) {
         this.modelSpecs = modelSpecs;
         this.repository = repository;
         this.standardEvidence = standardEvidence;
         this.lifecycle = lifecycle;
+        this.sourceValidation = sourceValidation;
     }
 
     @Transactional(readOnly = true)
@@ -138,15 +139,14 @@ public class ModelSpecStageGateService {
     }
 
     private boolean currentSources(String tenantId, ModelSpecView view) {
+        if (view.sourceRefs().isEmpty()) return true;
+        if (sourceValidation == null) return false;
         for (SourceRef source : view.sourceRefs()) {
-            SourceBindingState binding = repository.findSourceBinding(tenantId, view.planId(), source.sourceBindingId()).orElse(null);
-            if (
-                binding == null ||
-                !"CONFIRMED".equals(binding.confirmationStatus()) ||
-                !sourceKindMatches(source.kind(), binding.sourceType()) ||
-                !Objects.equals(source.ref(), binding.sourceId()) ||
-                !Objects.equals(source.resolvedVersion(), binding.sourceVersion())
-            ) return false;
+            try {
+                if (!sourceValidation.isCurrentBindingForGate(tenantId, view.planId(), source)) return false;
+            } catch (RuntimeException unavailable) {
+                return false;
+            }
         }
         return true;
     }
@@ -162,16 +162,6 @@ public class ModelSpecStageGateService {
             }
         }
         return true;
-    }
-
-    private static boolean sourceKindMatches(SourceKind kind, String sourceType) {
-        if (kind == null || sourceType == null) return false;
-        return switch (sourceType) {
-            case "CONNECTION_TABLE", "CATALOG_TABLE" -> kind == SourceKind.TABLE;
-            case "EXCEL_FILE" -> kind == SourceKind.DATASET;
-            case "DBT_NODE" -> kind == SourceKind.DBT_MODEL;
-            default -> false;
-        };
     }
 
     private static void implementationBlockers(
@@ -227,6 +217,20 @@ public class ModelSpecStageGateService {
         GateEvidence evidence,
         LinkedHashMap<String, GateBlocker> blockers
     ) {
+        boolean hasDirectSources = !view.sourceRefs().isEmpty();
+        boolean hasUpstreamModels = !view.dependsOn().isEmpty();
+        if (!hasDirectSources && !hasUpstreamModels) {
+            add(
+                blockers,
+                blocker(
+                    view,
+                    "MODEL_SPEC_FACT_INPUT_REQUIRED",
+                    "sourceRefs",
+                    "请至少选择已确认的上游输入来源或锁定上游模型",
+                    "design"
+                )
+            );
+        }
         if (view.factShape() == null) {
             add(blockers, blocker(view, "MODEL_SPEC_FACT_SHAPE_REQUIRED", "factShape", "请选择事实形态", "design"));
         }
@@ -249,7 +253,12 @@ public class ModelSpecStageGateService {
                 add(blockers, blocker(view, "MODEL_SPEC_TIME_FIELD_INVALID", "timeSemantics", "业务时间必须引用 TIME 字段", "fields"));
             }
         }
-        referenceEvidence(view, evidence.sources(), "MODEL_SPEC_SOURCE_EVIDENCE", "明细表来源已失效或版本漂移", blockers);
+        if (hasDirectSources) {
+            referenceEvidence(view, evidence.sources(), "MODEL_SPEC_SOURCE_EVIDENCE", "明细表来源已失效或版本漂移", blockers);
+        }
+        if (hasUpstreamModels) {
+            referenceEvidence(view, evidence.dependencies(), "MODEL_SPEC_UPSTREAM_EVIDENCE", "上游模型版本已变化", blockers);
+        }
         referenceEvidence(view, evidence.dimensions(), "MODEL_SPEC_DIMENSION_EVIDENCE", "维度引用已失效或版本漂移", blockers);
     }
 

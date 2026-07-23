@@ -44,6 +44,29 @@ class ModelSpecCompilerProjectionTest {
     }
 
     @Test
+    void resolvesPinnedUpstreamNamesForFactWithoutADirectPhysicalSource() {
+        UUID upstreamId = UUID.fromString("40000000-0000-0000-0000-000000000001");
+        ModelRevisionRef ref = new ModelRevisionRef(upstreamId, 3);
+        ModelSpecView fact = view(ModelType.FACT, List.of(ref), List.of());
+        ModelSpecView upstream = new ModelSpecView(
+            2, upstreamId, fact.planId(), fact.domainId(), ModelType.FACT, Layer.DWD, "staged_customer_event", null,
+            ImplementationMode.DESIGNER_GENERATED, "table", null, null, fact.grain(), null, null,
+            fact.fields(), List.of(), List.of(), List.of(), List.of(), List.of(), null, ModelStatus.DRAFT, 3,
+            "a".repeat(64), Instant.EPOCH, Instant.EPOCH, CompatibilityMode.CANONICAL, null
+        );
+
+        ModelingVNextContract.ModelSpec projected = ModelSpecCompilerProjection.project(
+            fact,
+            candidate -> candidate.equals(ref) ? upstream : null
+        );
+
+        assertThat(projected.sourceRefs()).singleElement().satisfies(source -> {
+            assertThat(source.kind()).isEqualTo("DBT_MODEL");
+            assertThat(source.ref()).isEqualTo("staged_customer_event");
+        });
+    }
+
+    @Test
     void validatesPinnedReferencesEvenWhenDirectSourcesExist() {
         UUID upstreamId = UUID.fromString("40000000-0000-0000-0000-000000000001");
         ModelRevisionRef ref = new ModelRevisionRef(upstreamId, 3);

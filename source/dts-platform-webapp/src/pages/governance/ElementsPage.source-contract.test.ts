@@ -4,30 +4,28 @@ import test from "node:test";
 
 const source = readFileSync(new URL("./ElementsPage.tsx", import.meta.url), "utf8");
 
-test("elements page shows warehouse planning provenance and keeps the return route", () => {
-	assert.match(source, /resolveWarehousePlanningContext/);
-	assert.match(source, /warehouse-planning-context/);
-	assert.match(source, /主题域|数仓层|维度建模/);
-	assert.match(source, /planningId/);
-	assert.match(source, /warehouseLayer/);
-	assert.match(source, /modelingMode/);
-	assert.match(source, /governance\/subjects/);
-});
-
-test("standard binding draft carries planning metadata and blocks empty inputs", () => {
-	assert.match(source, /planningId/);
-	assert.match(source, /domainId/);
-	assert.match(source, /standardDraftId|createStandardBindingDraftSnapshot/);
-	assert.match(source, /当前列表没有可输出的数据元|暂无可用数据元/);
-});
-
-test("standard draft gaps expose customer-visible reasons and executable repair actions", () => {
-	assert.match(source, /resolveStandardDraftGate/);
-	assert.match(source, /standard-draft-blocker/);
-	assert.match(source, /standard-draft-repair/);
+test("elements page is a global standard owner and does not require a planning session", () => {
+	assert.match(source, /listMetadataStandards/);
 	assert.match(source, /新增数据元/);
-	assert.match(source, /生成字段落标草稿/);
-	assert.match(source, /返回主题域规划/);
+	assert.match(source, /导入标准包/);
+	assert.doesNotMatch(source, /warehousePlanningContext|sessionStorage|standard-draft-blocker/);
+	assert.doesNotMatch(source, /缺少数仓规划|缺少数仓规划上下文/);
+	assert.doesNotMatch(source, /JourneyContextBar/);
+	assert.match(source, /loadError && content\.length === 0/);
+});
+
+test("elements page preserves a safe model or plan return chain", () => {
+	assert.match(source, /resolveStandardOwnerReturnTo/);
+	assert.match(source, /standard-owner-context/);
+	assert.match(source, /返回模型字段标准|returnTarget\.label/);
+	assert.match(source, /buildStandardPackageImportRoute/);
+});
+
+test("field standards are bound by ModelSpec instead of a page-wide draft", () => {
+	assert.match(source, /模型字段.*稳定 ID.*版本|稳定 ID.*版本.*模型字段/);
+	assert.doesNotMatch(source, /createStandardBindingDraft|createStandardBindingDraftSnapshot/);
+	assert.doesNotMatch(source, /standardDraftId|生成字段落标草稿|bindingDraft/);
+	assert.match(source, /searchParams\.get\("applied"\) === "1"/);
 });
 
 test("data element actions wrap instead of clipping on narrow viewports", () => {

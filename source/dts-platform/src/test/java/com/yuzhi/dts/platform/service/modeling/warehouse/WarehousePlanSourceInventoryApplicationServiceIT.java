@@ -237,6 +237,59 @@ class WarehousePlanSourceInventoryApplicationServiceIT {
     }
 
     @Test
+    void rejectsUnavailableNewSourcesWithoutPersistingOrAdvancingTheVersion() {
+        List<ResolvedSource> unavailableSources = List.of(
+            ResolvedSource.missing(),
+            ResolvedSource.forbidden(),
+            ResolvedSource.providerError()
+        );
+
+        for (ResolvedSource unavailableSource : unavailableSources) {
+            String tenant = tenant("source-unavailable");
+            try {
+                WarehousePlanHeader plan = service.create(tenant, createCommand()).plan();
+                when(sourceReferenceResolver.resolve(eq(CATALOG_TABLE), any(SourceLocator.class), any(AccessContext.class)))
+                    .thenReturn(unavailableSource);
+
+                assertThatThrownBy(() ->
+                    service.saveSources(
+                        tenant,
+                        plan.id(),
+                        1,
+                        new SourceInventoryCommand(
+                            List.of(
+                                new SourceBindingCommand(
+                                    null,
+                                    CATALOG_TABLE,
+                                    new SourceLocator(ASSET_ID, null, null, null, null, null, null),
+                                    CONFIRMED,
+                                    null
+                                )
+                            )
+                        ),
+                        ACCESS
+                    )
+                ).isInstanceOfSatisfying(WarehousePlanException.class, error -> {
+                    assertThat(error.code()).isEqualTo("WAREHOUSE_PLAN_SOURCE_INVENTORY_INVALID");
+                    assertThat(error.getMessage()).contains("SOURCE_NOT_AVAILABLE");
+                    assertThat(error.getMessage()).doesNotContain(unavailableSource.status().name());
+                });
+                assertThat(service.getSources(tenant, plan.id(), ACCESS).version()).isEqualTo(1);
+                assertThat(
+                    jdbcTemplate.queryForObject(
+                        "select count(*) from modeling_warehouse_plan_source where tenant_id = ? and plan_id = ?",
+                        Long.class,
+                        tenant,
+                        plan.id()
+                    )
+                ).isZero();
+            } finally {
+                deleteTenant(tenant);
+            }
+        }
+    }
+
+    @Test
     void businessFirstConceptualDesignCanProceedWithoutSourcesOrLegacyMappings() {
         String tenant = tenant("conceptual");
         try {

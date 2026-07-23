@@ -31,7 +31,7 @@
 1. Journey A 从 BUSINESS_FIRST 创建计划、分类、维度、FACT、标准、实现、发布、指标。
 2. Journey B 从 ASSET_FIRST 选择表/dbt，确认候选四类表并完成发布。
 3. Journey C 访问旧 object route，分别验证自动映射、NEEDS_CLASSIFICATION、无权限和旧写拒绝。
-4. 单独验证 DIMENSION 无 activityRef、FACT 有/无可选 activityRef 均可保存，核心门禁仍为粒度/来源。
+4. 单独验证 DIMENSION 无 activityRef、FACT 有/无可选 activityRef 均可保存；FACT 草稿核心门禁为粒度，进入实现前再校验物理来源或锁定 revision 的上游模型。
 5. 模拟 API 失败、revision 冲突、来源失效、标准漂移、发布部分失败和刷新/后退。
 6. Chrome 95 在 1280×720 与 390×844 验证主动作、Tabs、表单和返回链。
 

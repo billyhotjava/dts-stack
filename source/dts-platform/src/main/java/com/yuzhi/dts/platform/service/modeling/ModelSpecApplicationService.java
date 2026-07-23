@@ -3,7 +3,6 @@ package com.yuzhi.dts.platform.service.modeling;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.DomainBindingState;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.PlanState;
-import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.SourceBindingState;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.StoredModelSpec;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.CreateModelSpecCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldIssue;
@@ -40,6 +39,7 @@ public class ModelSpecApplicationService {
     private final ModelSpecDomainWriteAccessPort domainWriteAccess;
     private final ModelSpecDomainReadAccessPort domainReadAccess;
     private final ModelSpecPlanWriteAccessPort planWriteAccess;
+    private final ModelSpecSourceValidationPort sourceValidation;
     private final ModelSpecCompatibilityReader compatibilityReader;
     private final ModelSpecFeatureFlags featureFlags;
     private final Clock clock;
@@ -53,6 +53,7 @@ public class ModelSpecApplicationService {
         ModelSpecDomainWriteAccessPort domainWriteAccess,
         ModelSpecDomainReadAccessPort domainReadAccess,
         ModelSpecPlanWriteAccessPort planWriteAccess,
+        ModelSpecSourceValidationPort sourceValidation,
         ModelSpecCompatibilityReader compatibilityReader,
         ModelSpecFeatureFlags featureFlags
     ) {
@@ -63,6 +64,7 @@ public class ModelSpecApplicationService {
             domainWriteAccess,
             domainReadAccess,
             planWriteAccess,
+            sourceValidation,
             compatibilityReader,
             featureFlags,
             Clock.systemUTC(),
@@ -77,6 +79,7 @@ public class ModelSpecApplicationService {
         ModelSpecDomainWriteAccessPort domainWriteAccess,
         ModelSpecDomainReadAccessPort domainReadAccess,
         ModelSpecPlanWriteAccessPort planWriteAccess,
+        ModelSpecSourceValidationPort sourceValidation,
         ModelSpecCompatibilityReader compatibilityReader,
         Clock clock,
         Supplier<UUID> idGenerator
@@ -88,6 +91,7 @@ public class ModelSpecApplicationService {
             domainWriteAccess,
             domainReadAccess,
             planWriteAccess,
+            sourceValidation,
             compatibilityReader,
             ModelSpecFeatureFlags.enabled(),
             clock,
@@ -102,6 +106,7 @@ public class ModelSpecApplicationService {
         ModelSpecDomainWriteAccessPort domainWriteAccess,
         ModelSpecDomainReadAccessPort domainReadAccess,
         ModelSpecPlanWriteAccessPort planWriteAccess,
+        ModelSpecSourceValidationPort sourceValidation,
         ModelSpecCompatibilityReader compatibilityReader,
         ModelSpecFeatureFlags featureFlags,
         Clock clock,
@@ -113,6 +118,7 @@ public class ModelSpecApplicationService {
         this.domainWriteAccess = domainWriteAccess;
         this.domainReadAccess = domainReadAccess;
         this.planWriteAccess = planWriteAccess;
+        this.sourceValidation = sourceValidation;
         this.compatibilityReader = compatibilityReader;
         this.featureFlags = featureFlags;
         this.clock = clock;
@@ -132,7 +138,7 @@ public class ModelSpecApplicationService {
 
         requireCanonicalWriteEnabled();
         validateWriteContext(serverTenantId, actorId, command.planId(), command.domainId());
-        validateSources(serverTenantId, command.planId(), command.sourceRefs());
+        validateSources(serverTenantId, actorId, command.planId(), command.sourceRefs());
         UUID modelSpecId = idGenerator.get();
         validateReferences(
             serverTenantId,
@@ -177,7 +183,6 @@ public class ModelSpecApplicationService {
     ) {
         requireServerContext(serverTenantId, actorId);
         requireCanonicalWriteEnabled();
-        rejectIssues(ModelSpecContract.validateUpdate(command));
         if (modelSpecId == null) throw notFound(null);
         if (expected == null) {
             throw new ModelSpecException(
@@ -205,6 +210,14 @@ public class ModelSpecApplicationService {
         ModelSpecView current = compatibilityReader.read(stored);
         validateWriteContext(serverTenantId, actorId, current.planId(), current.domainId());
         requireExpected(current, expected);
+        if (!ModelSpecContract.matchesTargetLayer(current.modelType(), current.layer())) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_LEGACY_READONLY",
+                "Historical ModelSpec rows with non-canonical target layers are read-only",
+                ModelSpecException.Kind.CONFLICT
+            );
+        }
+        rejectIssues(ModelSpecContract.validateUpdate(command));
         if (!Objects.equals(current.planId(), command.planId())) {
             throw new ModelSpecException(
                 "MODEL_SPEC_PLAN_IMMUTABLE",
@@ -239,7 +252,7 @@ public class ModelSpecApplicationService {
                 List.of(fieldIssue("dimensionProfile", "Dimension code is immutable after creation"))
             );
         }
-        validateSources(serverTenantId, command.planId(), command.sourceRefs());
+        validateSources(serverTenantId, actorId, command.planId(), command.sourceRefs());
         validateReferences(
             serverTenantId,
             command.planId(),
@@ -388,8 +401,8 @@ public class ModelSpecApplicationService {
         List<ModelSpecContract.ModelRevisionRef> dependencies,
         List<ModelSpecContract.ModelRevisionRef> dimensions
     ) {
-        validateReferenceSet(tenantId, planId, dependencies, false);
-        validateReferenceSet(tenantId, planId, dimensions, true);
+        validateReferenceSet(tenantId, planId, dependencies, false, modelType);
+        validateReferenceSet(tenantId, planId, dimensions, true, null);
         validateNoDependencyCycle(tenantId, modelSpecId, modelType, dependencies);
     }
 
@@ -399,7 +412,7 @@ public class ModelSpecApplicationService {
         ModelType modelType,
         List<ModelSpecContract.ModelRevisionRef> dependencies
     ) {
-        if (modelType != ModelType.SUMMARY && modelType != ModelType.APPLICATION) return;
+        if (modelType != ModelType.FACT && modelType != ModelType.SUMMARY && modelType != ModelType.APPLICATION) return;
         List<String> path = new ArrayList<>();
         path.add(modelSpecId.toString());
         Set<UUID> activeModelIds = new HashSet<>();
@@ -438,39 +451,18 @@ public class ModelSpecApplicationService {
         path.remove(path.size() - 1);
     }
 
-    private void validateSources(String tenantId, UUID planId, List<ModelSpecContract.SourceRef> sourceRefs) {
+    private void validateSources(String tenantId, String actorId, UUID planId, List<ModelSpecContract.SourceRef> sourceRefs) {
         for (ModelSpecContract.SourceRef sourceRef : sourceRefs) {
-            SourceBindingState binding = repository
-                .findSourceBinding(tenantId, planId, sourceRef.sourceBindingId())
-                .orElseThrow(ModelSpecApplicationService::sourceBindingInvalid);
-            // TODO(sprint-67/F2): compare ref with the resolver-owned canonical locator once that fact is persisted;
-            // source_id is only the current compatibility identity and must not become a second locator owner.
-            if (
-                !"CONFIRMED".equals(binding.confirmationStatus()) ||
-                !sourceKindMatches(sourceRef.kind(), binding.sourceType()) ||
-                !Objects.equals(sourceRef.ref(), binding.sourceId()) ||
-                !Objects.equals(sourceRef.resolvedVersion(), binding.sourceVersion())
-            ) {
-                throw sourceBindingInvalid();
-            }
+            if (!sourceValidation.isCurrentBinding(tenantId, planId, actorId, sourceRef)) throw sourceBindingInvalid();
         }
-    }
-
-    private static boolean sourceKindMatches(ModelSpecContract.SourceKind kind, String sourceType) {
-        if (kind == null || sourceType == null) return false;
-        return switch (sourceType) {
-            case "CONNECTION_TABLE", "CATALOG_TABLE" -> kind == ModelSpecContract.SourceKind.TABLE;
-            case "EXCEL_FILE" -> kind == ModelSpecContract.SourceKind.DATASET;
-            case "DBT_NODE" -> kind == ModelSpecContract.SourceKind.DBT_MODEL;
-            default -> false;
-        };
     }
 
     private void validateReferenceSet(
         String tenantId,
         UUID planId,
         List<ModelSpecContract.ModelRevisionRef> references,
-        boolean dimensionOnly
+        boolean dimensionOnly,
+        ModelType ownerType
     ) {
         for (ModelSpecContract.ModelRevisionRef reference : references) {
             StoredModelSpec stored = repository
@@ -484,6 +476,14 @@ public class ModelSpecApplicationService {
                     "Dimension references must point to DIMENSION ModelSpecs",
                     ModelSpecException.Kind.UNPROCESSABLE,
                     List.of(fieldIssue("dimensionRefs", "Referenced model is not a dimension"))
+                );
+            }
+            if (!dimensionOnly && !ModelSpecContract.allowsUpstreamModel(ownerType, referenced.modelType(), referenced.layer())) {
+                throw new ModelSpecException(
+                    "MODEL_SPEC_UPSTREAM_LAYER_NOT_ALLOWED",
+                    "Upstream ModelSpec type or layer is not allowed for the target model",
+                    ModelSpecException.Kind.UNPROCESSABLE,
+                    List.of(fieldIssue("dependsOn", "Choose an upstream model from an allowed lower or same warehouse layer"))
                 );
             }
             if (!Objects.equals(planId, referenced.planId()) && referenced.status() != ModelStatus.PUBLISHED) {

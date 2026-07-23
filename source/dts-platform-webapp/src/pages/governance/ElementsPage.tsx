@@ -3,16 +3,13 @@ import { toast } from "sonner";
 import { Alert, Breadcrumb, Button, Card, Descriptions, Divider, Drawer, Form, Input, List, Modal, Select, Space, Spin, Tag, Typography } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { DownloadOutlined, ImportOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, DownloadOutlined, ImportOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { PageHeader } from "@/components/page-header";
-import { JourneyContextBar } from "@/components/journey";
-import { createStandardBindingDraft, type StandardBindingDraftInput } from "@/pages/modeling/standardBindingDraft";
 import {
 	createMetadataStandard,
-	createStandardBindingDraftSnapshot,
 	deleteMetadataStandard,
 	downloadDataStandardPackageTemplate,
 	getMetadataStandardReferences,
@@ -21,14 +18,7 @@ import {
 	updateMetadataStandard,
 } from "@/api/platformApi";
 import { normalizeText } from "@/utils/textUtils";
-import {
-	buildPlanningRoute,
-	resolveStandardDraftGate,
-	resolveWarehousePlanningContext,
-	resolveWarehousePlanningStatus,
-	saveWarehousePlanningContext,
-	type WarehousePlanningContext,
-} from "./warehousePlanningContext";
+import { buildStandardPackageImportRoute, resolveStandardOwnerReturnTo } from "./standardOwnerNavigation";
 
 const { Text } = Typography;
 
@@ -74,10 +64,13 @@ const parseIntOr = (value: string | null, fallback: number) => {
 export default function ElementsPage() {
 	const navigate = useNavigate();
 	const [searchParams, setSearchParams] = useSearchParams();
-	const [keyword, setKeyword] = useState(searchParams.get("keyword") || "");
-	const bindingDraftRequested = searchParams.get("bindingDraft") === "1";
-	const [pageNum, setPageNum] = useState(parseIntOr(searchParams.get("page"), 0));
-	const [pageSize, setPageSize] = useState(parseIntOr(searchParams.get("size"), 10) || 10);
+	const searchParamsValue = searchParams.toString();
+	const keyword = searchParams.get("keyword") || "";
+	const standardPackageApplied = searchParams.get("applied") === "1";
+	const returnTarget = useMemo(() => resolveStandardOwnerReturnTo(searchParams), [searchParams]);
+	const ownerModelSpecId = searchParams.get("modelSpecId")?.trim();
+	const pageNum = parseIntOr(searchParams.get("page"), 0);
+	const pageSize = parseIntOr(searchParams.get("size"), 10) || 10;
 	const [data, setData] = useState<PagedPayload<MetadataStandard> | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [modalOpen, setModalOpen] = useState(false);
@@ -89,15 +82,12 @@ export default function ElementsPage() {
 	const [references, setReferences] = useState<AssetReferencePayload | null>(null);
 	const [codeOptions, setCodeOptions] = useState<ReferenceCodeDirectory[]>([]);
 	const [templateDownloading, setTemplateDownloading] = useState(false);
-	const [draftCreating, setDraftCreating] = useState(false);
+	const [loadError, setLoadError] = useState("");
 	const [form] = Form.useForm();
 	const canManage = useGovernanceManageAccess();
-	const planningResolution = useMemo(() => resolveWarehousePlanningContext(searchParams), [searchParams]);
-	const planningContext = planningResolution.context;
-	const hasPlanningContext = Boolean(searchParams.get("planningId") || planningContext);
 
 	const syncQuery = (patch?: { keyword?: string; page?: number; size?: number }) => {
-		const params = new URLSearchParams(searchParams);
+		const params = new URLSearchParams(searchParamsValue);
 		const nextKeyword = patch?.keyword ?? keyword;
 		const nextPage = patch?.page ?? pageNum;
 		const nextSize = patch?.size ?? pageSize;
@@ -116,11 +106,12 @@ export default function ElementsPage() {
 		} else {
 			params.delete("size");
 		}
-		setSearchParams(params, { replace: true });
+		if (params.toString() !== searchParamsValue) setSearchParams(params, { replace: true });
 	};
 
 	const loadElements = useCallback(async () => {
 		setLoading(true);
+		setLoadError("");
 		try {
 			const resp = (await listMetadataStandards({
 				page: pageNum,
@@ -129,7 +120,9 @@ export default function ElementsPage() {
 			})) as PagedPayload<MetadataStandard>;
 			setData(resp || null);
 		} catch (err: any) {
-			toast.error(err?.message || "加载数据元失败");
+			const message = err?.message || "加载数据元失败";
+			setLoadError(message);
+			toast.error(message);
 		} finally {
 			setLoading(false);
 		}
@@ -138,10 +131,6 @@ export default function ElementsPage() {
 	useEffect(() => {
 		void loadElements();
 	}, [loadElements]);
-
-	useEffect(() => {
-		syncQuery();
-	}, [keyword, pageNum, pageSize]);
 
 	useEffect(() => {
 		const loadCodeOptions = async () => {
@@ -355,100 +344,6 @@ export default function ElementsPage() {
 	];
 
 	const content = data?.content ?? [];
-	const planningStatus = hasPlanningContext
-		? resolveWarehousePlanningStatus(planningContext, {
-				source: planningResolution.source,
-				standardFieldCount: planningContext?.standardDraftId ? content.length : 0,
-			})
-		: null;
-	const planningBlocked = Boolean(
-		hasPlanningContext && (planningResolution.status === "blocked" || planningResolution.source !== "session"),
-	);
-	const standardDraftGate = resolveStandardDraftGate({
-		planningContext,
-		planningSource: planningResolution.source,
-		planningBlockedReason: planningResolution.status === "blocked" ? planningResolution.reason : undefined,
-		canManage,
-		dataElementCount: content.length,
-	});
-
-	const buildFieldBindingDraftPayload = (): StandardBindingDraftInput => ({
-		source: "metadata-elements",
-		title: normalizeText(keyword) ? `数据元字段落标草稿：${normalizeText(keyword)}` : "数据元字段落标草稿",
-		fields: content.map((row) => ({
-			columnName: row.fieldNameEn,
-			standardId: row.id,
-			standardCode: row.fieldNameEn,
-			standardName: row.fieldNameCn,
-			dataType: row.dataType,
-			nullable: row.nullable,
-			codeSet: row.codeSet,
-			securityLevel: row.securityLevel,
-			description: row.description,
-			domain: row.domain,
-			sourceSystem: row.sourceSystem,
-			isPk: row.isPk,
-		})),
-		metadata: {
-			totalFields: content.length,
-			keyword: normalizeText(keyword) || undefined,
-			planningId: planningContext?.planningId,
-			domainId: planningContext?.domainId,
-			domainName: planningContext?.domainName,
-			warehouseLayer: planningContext?.warehouseLayer,
-			modelingMode: planningContext?.modelingMode,
-			sourceId: planningContext?.sourceId,
-		},
-	});
-
-	const continueToModeling = (draftId: string) => {
-		const route = "/modeling/models?view=guided";
-		if (!planningContext || planningResolution.source !== "session") {
-			navigate(route);
-			return;
-		}
-		const nextContext: WarehousePlanningContext = {
-			...planningContext,
-			standardDraftId: draftId,
-			updatedAt: new Date().toISOString(),
-		};
-		if (!saveWarehousePlanningContext(nextContext)) {
-			toast.error("规划草稿更新失败，请重试");
-			return;
-		}
-		navigate(buildPlanningRoute(route, nextContext));
-	};
-
-	const createFieldBindingDraft = async () => {
-		if (!canManage) {
-			toast.error("当前账号无治理维护权限");
-			return;
-		}
-		if (!content.length) {
-			toast.error("当前列表没有可输出的数据元");
-			return;
-		}
-		if (planningBlocked) {
-			toast.error(planningResolution.reason || "规划上下文不可用，请返回主题域重新确认规划");
-			return;
-		}
-		const payload = buildFieldBindingDraftPayload();
-		setDraftCreating(true);
-		try {
-			const draft = (await createStandardBindingDraftSnapshot(payload)) as { id?: string };
-			if (!draft?.id) {
-				throw new Error("missing_draft_id");
-			}
-			toast.success(`已保存字段落标快照：${content.length} 个数据元`);
-			continueToModeling(draft.id);
-		} catch (err: any) {
-			const draft = createStandardBindingDraft(payload);
-			toast.warning("后端快照保存失败，已使用浏览器会话草稿继续建模");
-			continueToModeling(draft.id);
-		} finally {
-			setDraftCreating(false);
-		}
-	};
 
 	return (
 		<div className="space-y-4">
@@ -457,6 +352,11 @@ export default function ElementsPage() {
 				title="数据治理中心 · 标准管理 / 数据元"
 				actions={
 					<Space wrap>
+						{returnTarget ? (
+							<Button icon={<ArrowLeftOutlined />} onClick={() => navigate(returnTarget.href)}>
+								{returnTarget.label}
+							</Button>
+						) : null}
 						<Button
 							icon={<DownloadOutlined />}
 							onClick={downloadStandardPackageTemplate}
@@ -468,19 +368,11 @@ export default function ElementsPage() {
 						</Button>
 						<Button
 							icon={<ImportOutlined />}
-							onClick={() => navigate("/foundation/standard-package?from=elements")}
+							onClick={() => navigate(buildStandardPackageImportRoute(searchParams))}
 							disabled={!canManage}
 							data-testid="governance-elements-standard-package-import"
 						>
 							导入标准包
-						</Button>
-						<Button
-							onClick={createFieldBindingDraft}
-							loading={draftCreating}
-							disabled={!standardDraftGate.canCreateDraft}
-							data-testid="governance-elements-standard-binding-draft"
-						>
-							生成字段落标草稿
 						</Button>
 						<Button type="primary" onClick={() => openModal()} disabled={!canManage} data-testid="governance-elements-create">
 							+ 新增数据元
@@ -488,70 +380,38 @@ export default function ElementsPage() {
 					</Space>
 				}
 			/>
-			<JourneyContextBar stage="standards" />
-			{hasPlanningContext && standardDraftGate.blocker !== "planning" ? (
+			{returnTarget ? (
 				<Alert
 					showIcon
-					data-testid="warehouse-planning-context"
-					type={planningBlocked ? "error" : planningStatus?.status === "ready" ? "success" : "info"}
-					message={planningBlocked ? "规划上下文不可用" : "已接入数仓规划上下文"}
-					description={`主题域：${planningContext?.domainName || planningContext?.domainId || "-"} · 数仓层：${planningContext?.warehouseLayer || "-"} · 建模模式：${planningContext?.modelingMode === "dimension" ? "维度建模" : "-"}${planningResolution.reason ? ` · ${planningResolution.reason}` : ""}`}
+					data-testid="standard-owner-context"
+					type="info"
+					message={ownerModelSpecId ? "正在维护模型字段引用的数据元" : "正在维护建设规划引用的数据元"}
+					description="数据元是全局标准正文，不归属于单个建设规划。完成维护后返回原模型字段，由模型保存稳定 ID 和版本引用。"
 					action={
-						<Button
-							size="small"
-							onClick={() => {
-								const route = `/governance/subjects${planningContext?.domainId ? `?active=${encodeURIComponent(planningContext.domainId)}` : ""}`;
-								navigate(planningContext ? buildPlanningRoute(route, planningContext) : route);
-							}}
-						>
-							返回主题域规划
+						<Button size="small" onClick={() => navigate(returnTarget.href)}>
+							{returnTarget.label}
 						</Button>
 					}
 				/>
 			) : null}
-			{standardDraftGate.status === "blocked" ? (
+			{loadError ? (
 				<Alert
 					showIcon
-					data-testid="standard-draft-blocker"
-					type={
-						standardDraftGate.blocker === "planning" || standardDraftGate.blocker === "permission"
-							? "error"
-							: standardDraftGate.blocker === "data-elements"
-								? "warning"
-								: "info"
-					}
-					message={standardDraftGate.title}
-					description={standardDraftGate.reason}
-					action={
-						<Button
-							size="small"
-							data-testid="standard-draft-repair"
-							onClick={() => {
-								if (standardDraftGate.blocker === "data-elements") {
-									openModal();
-									return;
-								}
-								if (standardDraftGate.blocker === "field-binding") {
-									void createFieldBindingDraft();
-									return;
-								}
-								if (standardDraftGate.repairRoute) navigate(standardDraftGate.repairRoute);
-							}}
-						>
-							{standardDraftGate.repairLabel}
-						</Button>
-					}
+					type="error"
+					message="数据元加载失败"
+					description={loadError}
+					action={<Button size="small" onClick={() => void loadElements()}>重新加载</Button>}
 				/>
 			) : null}
 			<div className="rounded-md border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-				数据元是 SQL 模型字段的标准来源；通过引用关系查看模型字段引用，避免标准只停留在治理台账。
+				数据元是模型字段的全局标准正文；模型字段只保存稳定 ID 和版本引用，通过引用关系可以查看实际使用位置。
 			</div>
-			{bindingDraftRequested ? (
+			{standardPackageApplied ? (
 				<Alert
 					type="success"
 					showIcon
 					message="标准包已应用"
-					description="请筛选或确认本批数据元，点击“生成字段落标草稿”后进入模型中心；草稿保存在当前规划会话中，供模型字段绑定继续使用。"
+					description="数据元目录已刷新。若从模型字段进入，请核对标准正文后返回模型完成稳定 ID 和版本绑定。"
 				/>
 			) : null}
 
@@ -562,25 +422,26 @@ export default function ElementsPage() {
 						style={{ width: 300 }}
 						value={keyword}
 						onChange={(e) => {
-							setKeyword(e.target.value);
-							setPageNum(0);
+							syncQuery({ keyword: e.target.value, page: 0 });
 						}}
 						onSearch={(value) => {
-							setKeyword(value || "");
-							setPageNum(0);
+							syncQuery({ keyword: value || "", page: 0 });
 						}}
 						allowClear
 					/>
 					<Button
 						onClick={() => {
-							setKeyword("");
-							setPageNum(0);
+							syncQuery({ keyword: "", page: 0 });
 						}}
 					>
 						重置
 					</Button>
 				</Space>
-				{content.length === 0 && !loading ? (
+				{loadError && content.length === 0 ? (
+					<div className="rounded-md border border-dashed border-red-200 bg-red-50 px-4 py-8 text-center text-sm text-red-700">
+						数据元加载失败，请使用上方“重新加载”恢复列表。
+					</div>
+				) : content.length === 0 && !loading ? (
 					<EmptyState title="暂无数据元" description="请先新增数据元规范。" />
 				) : (
 					<CompactTable
@@ -596,8 +457,7 @@ export default function ElementsPage() {
 							pageSizeOptions: [10, 20, 50, 100],
 							showTotal: (total) => `共 ${total} 条`,
 							onChange: (page, size) => {
-								setPageNum(size !== pageSize ? 0 : page - 1);
-								setPageSize(size);
+								syncQuery({ page: size !== pageSize ? 0 : page - 1, size });
 							},
 						}}
 					/>

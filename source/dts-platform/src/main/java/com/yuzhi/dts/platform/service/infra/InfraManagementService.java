@@ -405,22 +405,25 @@ public class InfraManagementService {
         Map<String, Object> beforeSecrets = secretService.readSecrets(entity);
         applyDataSource(entity, request, username);
         applyOwnerDept(entity, request);
-        InfraDataSource saved = dataSourceRepository.save(entity);
-        syncCatalogIfEnabled(saved, request, username);
-        Map<String, Object> afterProps = readProps(saved.getProps());
-        Map<String, Object> afterSecrets = secretService.readSecrets(saved);
+        Map<String, Object> afterProps = readProps(entity.getProps());
+        Map<String, Object> afterSecrets = secretService.readSecrets(entity);
         ConnectionChange change = buildConnectionChange(
             beforeType,
             beforeJdbcUrl,
             beforeUsername,
             beforeProps,
             beforeSecrets,
-            saved.getType(),
-            saved.getJdbcUrl(),
-            saved.getUsername(),
+            entity.getType(),
+            entity.getJdbcUrl(),
+            entity.getUsername(),
             afterProps,
             afterSecrets
         );
+        if (change.changed()) {
+            entity.setLastVerifiedAt(null);
+        }
+        InfraDataSource saved = dataSourceRepository.save(entity);
+        syncCatalogIfEnabled(saved, request, username);
         ImpactResult impact = change.changed()
             ? notifyIngestionTasks(saved, change, username)
             : ImpactResult.empty();
@@ -1312,10 +1315,13 @@ public class InfraManagementService {
         if (entity == null) return;
         if (isInstituteMaintainer()) return;
 
-        String dept = normalizeDept(resolveActiveDept(activeDeptHeader));
         String owner = normalizeDept(entity.getOwnerDept());
-        if (dept.isEmpty() || owner.isEmpty()) {
+        if (owner.isEmpty()) {
             return;
+        }
+        String dept = normalizeDept(resolveActiveDept(activeDeptHeader));
+        if (dept.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "缺少可信部门上下文，无法查看部门数据源");
         }
         if (!owner.equalsIgnoreCase(dept)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权限查看其他部门的数据源");
@@ -1334,9 +1340,8 @@ public class InfraManagementService {
     }
 
     private String resolveActiveDept(String activeDeptHeader) {
-        String candidate = StringUtils.hasText(activeDeptHeader) ? activeDeptHeader.trim() : null;
-        if (StringUtils.hasText(candidate)) {
-            return candidate;
+        if (isInstituteMaintainer() && StringUtils.hasText(activeDeptHeader)) {
+            return activeDeptHeader.trim();
         }
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         try {
