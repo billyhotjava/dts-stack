@@ -91,6 +91,11 @@ export const isModelSpecUpstreamAllowed = (
 	if (targetType === "APPLICATION") return ["DWD", "DWS", "ADS"].includes(candidate.layer);
 	return false;
 };
+
+export const isModelSpecDimensionRefAllowed = (
+	candidate: Pick<CreateModelSpecCommand, "modelType" | "layer">,
+): boolean => candidate.modelType === "DIMENSION" && candidate.layer === MODEL_SPEC_TARGET_LAYER_BY_TYPE.DIMENSION;
+
 export type ModelSpecImplementationMode = "DESIGNER_GENERATED" | "DBT_MANAGED";
 export type ModelSpecFactShape = "TRANSACTION" | "PERIODIC_SNAPSHOT" | "ACCUMULATING_SNAPSHOT";
 export type ModelSpecTimeSemanticsType = "EVENT_TIME" | "SNAPSHOT_DATE" | "PERIOD" | "MILESTONE_DATES";
@@ -204,6 +209,36 @@ export type CreateModelSpecCommand = {
 
 export type UpdateModelSpecCommand = Omit<CreateModelSpecCommand, "idempotencyKey">;
 
+export const hasModelSpecTypeBoundaryMismatch = (
+	model: Pick<
+		CreateModelSpecCommand,
+		| "modelType"
+		| "factShape"
+		| "timeSemantics"
+		| "businessActivityRef"
+		| "consumptionScenario"
+		| "sourceRefs"
+		| "dependsOn"
+		| "dimensionRefs"
+		| "generationStrategy"
+		| "dimensionProfile"
+	>,
+): boolean => {
+	const acceptsPhysicalSources = model.modelType === "DIMENSION" || model.modelType === "FACT";
+	const acceptsModelDependencies = model.modelType !== "DIMENSION";
+	return (
+		(!acceptsPhysicalSources && Boolean(model.sourceRefs?.length)) ||
+		(!acceptsModelDependencies && Boolean(model.dependsOn?.length)) ||
+		(model.dimensionRefs != null && model.modelType !== "FACT" && model.dimensionRefs.length > 0) ||
+		(model.modelType !== "DIMENSION" && model.generationStrategy != null) ||
+		(model.modelType !== "DIMENSION" && model.dimensionProfile != null) ||
+		(model.modelType !== "FACT" && model.factShape != null) ||
+		(model.modelType !== "FACT" && model.timeSemantics != null) ||
+		(model.modelType !== "FACT" && isNonBlankString(model.businessActivityRef)) ||
+		(model.modelType !== "APPLICATION" && isNonBlankString(model.consumptionScenario))
+	);
+};
+
 type ModelSpecViewBase = Omit<
 	CreateModelSpecCommand,
 	"idempotencyKey" | "planId" | "domainId" | keyof ModelSpecCollections
@@ -236,6 +271,28 @@ export type LegacyModelSpecView = ModelSpecViewBase &
 	};
 
 export type ModelSpecView = CanonicalModelSpecView | LegacyModelSpecView;
+
+export const isCanonicalModelSpecReferenceTarget = (candidate: ModelSpecView): candidate is CanonicalModelSpecView =>
+	candidate.contractVersion === MODEL_SPEC_CONTRACT_VERSION &&
+	candidate.compatibilityMode === "CANONICAL" &&
+	MODEL_SPEC_TARGET_LAYER_BY_TYPE[candidate.modelType] === candidate.layer &&
+	candidate.sourceRefs.every((source) => isModelSpecDirectInputLayerAllowed(source.layer)) &&
+	!hasModelSpecTypeBoundaryMismatch(candidate);
+
+export const isModelSpecReferenceTargetAllowed = (
+	owner: Pick<CanonicalModelSpecView, "modelType" | "planId">,
+	candidate: ModelSpecView,
+	kind: "DEPENDENCY" | "DIMENSION",
+): boolean => {
+	if (!isCanonicalModelSpecReferenceTarget(candidate)) return false;
+	if (candidate.planId !== owner.planId && candidate.status !== "PUBLISHED") return false;
+	return kind === "DIMENSION"
+		? isModelSpecDimensionRefAllowed(candidate)
+		: isModelSpecUpstreamAllowed(owner.modelType, candidate);
+};
+
+export const modelSpecRevisionRefKey = (reference: ModelSpecRevisionRef): string =>
+	`${reference.modelSpecId}@${reference.revision}`;
 
 export type ModelSpecCasToken = Pick<CanonicalModelSpecView, "id" | "revision" | "checksum">;
 
@@ -336,7 +393,9 @@ const JAVA_INT_MAX = 2_147_483_647;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	value !== null && typeof value === "object" && !Array.isArray(value);
-const isNonBlankString = (value: unknown): value is string => typeof value === "string" && Boolean(value.trim());
+function isNonBlankString(value: unknown): value is string {
+	return typeof value === "string" && Boolean(value.trim());
+}
 const isNullableString = (value: unknown) => value == null || typeof value === "string";
 const isUuid = (value: unknown): value is string => typeof value === "string" && UUID_PATTERN.test(value);
 const isIntInRange = (value: unknown, minimum: number) =>
@@ -612,6 +671,41 @@ export const validateModelSpecCreate = (input: unknown): ModelSpecFieldIssue[] =
 	const dimensionRefs = Array.isArray(command.dimensionRefs) ? command.dimensionRefs : [];
 	const metricRefs = Array.isArray(command.metricRefs) ? command.metricRefs : [];
 	const standardBindings = Array.isArray(command.standardBindings) ? command.standardBindings : [];
+	if ((command.modelType === "SUMMARY" || command.modelType === "APPLICATION") && sources.length > 0) {
+		issues.push(
+			issue(
+				"MODEL_SPEC_INPUT_KIND_NOT_ALLOWED",
+				"sourceRefs",
+				"SUMMARY and APPLICATION models must use revision-pinned upstream models",
+			),
+		);
+	}
+	if (command.modelType === "DIMENSION" && dependencies.length > 0) {
+		issues.push(
+			issue(
+				"MODEL_SPEC_INPUT_KIND_NOT_ALLOWED",
+				"dependsOn",
+				"DIMENSION uses physical sources or a generation strategy instead of model dependencies",
+			),
+		);
+	}
+	if (command.modelType !== "FACT" && dimensionRefs.length > 0) {
+		issues.push(
+			issue(
+				"MODEL_SPEC_INPUT_KIND_NOT_ALLOWED",
+				"dimensionRefs",
+				"Analysis dimension references belong to FACT models only",
+			),
+		);
+	}
+	if (command.modelType !== "FACT" && command.factShape != null) {
+		issues.push(issue("MODEL_SPEC_INPUT_KIND_NOT_ALLOWED", "factShape", "Fact shape belongs to FACT models only"));
+	}
+	if (command.modelType !== "FACT" && command.timeSemantics != null) {
+		issues.push(
+			issue("MODEL_SPEC_INPUT_KIND_NOT_ALLOWED", "timeSemantics", "Time semantics belongs to FACT models only"),
+		);
+	}
 	const fieldNames = new Set<string>();
 	if (
 		fields.some((field) => {

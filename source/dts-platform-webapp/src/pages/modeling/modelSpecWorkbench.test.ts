@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { CanonicalModelSpecView } from "./modelSpecV2Contract.ts";
 import {
+	adoptCurrentDimensionRevisions,
 	adoptCurrentUpstreamRevisions,
 	buildModelSpecCreateCommand,
 	buildModelSpecUpdateCommand,
@@ -169,7 +170,7 @@ test("fixed target-layer validation has a business-readable issue message", () =
 	);
 	assert.equal(
 		modelSpecIssueMessage("MODEL_SPEC_INPUT_KIND_NOT_ALLOWED"),
-		"生成策略仅适用于维度表，请重新选择模型类别",
+		"当前模型类别不支持此类输入，请移除不适用的来源、依赖或类型专属字段",
 	);
 });
 
@@ -337,6 +338,35 @@ test("explicitly adopting the current revision upgrades the same selected upstre
 		[{ id: UPSTREAM_ID, revision: 4, modelType: "FACT" }],
 	);
 	assert.deepEqual(update.dependsOn, [{ modelSpecId: UPSTREAM_ID, revision: 4 }]);
+});
+
+test("dimension revisions stay pinned until the user selectively adopts the current revision", () => {
+	const ordinaryUpdate = buildModelSpecUpdateCommand(
+		baseDraft({
+			dimensionRefIds: [DIMENSION_ID],
+			existingDimensionPins: [{ modelSpecId: DIMENSION_ID, revision: 2 }],
+		}),
+		[{ id: DIMENSION_ID, revision: 4, modelType: "DIMENSION" }],
+	);
+	assert.deepEqual(ordinaryUpdate.dimensionRefs, [{ modelSpecId: DIMENSION_ID, revision: 2 }]);
+
+	const remainingPins = adoptCurrentDimensionRevisions(
+		[
+			{ modelSpecId: DIMENSION_ID, revision: 2 },
+			{ modelSpecId: NEW_UPSTREAM_ID, revision: 3 },
+		],
+		[DIMENSION_ID],
+	);
+	assert.deepEqual(remainingPins, [{ modelSpecId: NEW_UPSTREAM_ID, revision: 3 }]);
+
+	const explicitUpdate = buildModelSpecUpdateCommand(
+		baseDraft({
+			dimensionRefIds: [DIMENSION_ID],
+			existingDimensionPins: remainingPins,
+		}),
+		[{ id: DIMENSION_ID, revision: 4, modelType: "DIMENSION" }],
+	);
+	assert.deepEqual(explicitUpdate.dimensionRefs, [{ modelSpecId: DIMENSION_ID, revision: 4 }]);
 });
 
 test("duplicate field drafts remain visible to contract validation instead of being silently merged", () => {

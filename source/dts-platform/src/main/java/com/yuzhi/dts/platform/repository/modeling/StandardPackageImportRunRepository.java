@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.repository.modeling;
 
 import com.yuzhi.dts.platform.domain.modeling.StandardPackageImportRun;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -10,6 +11,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface StandardPackageImportRunRepository extends JpaRepository<StandardPackageImportRun, UUID> {
     Page<StandardPackageImportRun> findAllByOrderByCreatedDateDesc(Pageable pageable);
+
+    List<StandardPackageImportRun> findByStatusOrderByCreatedDateDesc(String status);
 
     boolean existsByPackageNameAndSourceAndStatus(String packageName, String source, String status);
 }

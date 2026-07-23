@@ -11,6 +11,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldRole;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelField;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ScdPolicy;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ScdType;
@@ -104,8 +105,12 @@ public class ModelSpecStageGateService {
 
     private GateEvidence evidence(String tenantId, ModelSpecView view) {
         EvidenceState sources = currentSources(tenantId, view) ? EvidenceState.CURRENT : EvidenceState.STALE;
-        EvidenceState dependencies = currentReferences(tenantId, view.dependsOn(), false) ? EvidenceState.CURRENT : EvidenceState.STALE;
-        EvidenceState dimensions = currentReferences(tenantId, view.dimensionRefs(), true) ? EvidenceState.CURRENT : EvidenceState.STALE;
+        EvidenceState dependencies = currentReferences(tenantId, view, view.dependsOn(), false)
+            ? EvidenceState.CURRENT
+            : EvidenceState.STALE;
+        EvidenceState dimensions = currentReferences(tenantId, view, view.dimensionRefs(), true)
+            ? EvidenceState.CURRENT
+            : EvidenceState.STALE;
         EvidenceState standards = standardsComplete(view)
             ? switch (standardEvidence.evaluate(tenantId, view)) {
                 case CURRENT -> EvidenceState.CURRENT;
@@ -151,14 +156,36 @@ public class ModelSpecStageGateService {
         return true;
     }
 
-    private boolean currentReferences(String tenantId, List<ModelRevisionRef> references, boolean dimensionOnly) {
+    private boolean currentReferences(
+        String tenantId,
+        ModelSpecView owner,
+        List<ModelRevisionRef> references,
+        boolean dimensionOnly
+    ) {
         for (ModelRevisionRef reference : references) {
-            StoredModelSpec revision = repository.findRevision(tenantId, reference.modelSpecId(), reference.revision()).orElse(null);
-            StoredModelSpec current = repository.findCurrent(tenantId, reference.modelSpecId()).orElse(null);
-            if (revision == null || current == null || current.revision() != reference.revision()) return false;
-            if (dimensionOnly) {
+            try {
                 ModelSpecView target = modelSpecs.revision(tenantId, reference);
-                if (target.modelType() != ModelType.DIMENSION) return false;
+                StoredModelSpec current = repository.findCurrent(tenantId, reference.modelSpecId()).orElse(null);
+                if (
+                    target == null ||
+                    current == null ||
+                    !Objects.equals(target.id(), reference.modelSpecId()) ||
+                    target.revision() != reference.revision() ||
+                    current.revision() != reference.revision() ||
+                    !ModelSpecContract.isCanonicalReferenceTarget(target)
+                ) {
+                    return false;
+                }
+                if (!Objects.equals(owner.planId(), target.planId()) && target.status() != ModelStatus.PUBLISHED) {
+                    return false;
+                }
+                if (dimensionOnly) {
+                    if (!ModelSpecContract.isCanonicalDimension(target)) return false;
+                } else if (!ModelSpecContract.allowsUpstreamModel(owner.modelType(), target.modelType(), target.layer())) {
+                    return false;
+                }
+            } catch (RuntimeException unavailable) {
+                return false;
             }
         }
         return true;

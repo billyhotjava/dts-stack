@@ -246,6 +246,203 @@ class ModelSpecApplicationServiceTest {
     }
 
     @Test
+    void refusesUpdatesToCanonicalRowsWithHistoricalTypeBoundaryPollution() {
+        ModelSpecView base = codec.toCreatedView(MODEL_ID, command("historical-boundary", "customer_detail"), NOW);
+        DimensionProfile profile = new DimensionProfile(
+            "DIM_LEGACY",
+            List.of(),
+            new ScdPolicy(ScdType.TYPE1, null, null, null),
+            ReuseScope.PLAN
+        );
+        ModelRevisionRef dependency = new ModelRevisionRef(
+            UUID.fromString("40000000-0000-0000-0000-000000000090"),
+            1
+        );
+        SourceRef dwsSource = withLayer(base.sourceRefs().getFirst(), Layer.DWS);
+        List<ModelSpecView> historicalRows = List.of(
+            copyModel(
+                base,
+                2,
+                ModelType.FACT,
+                Layer.DWD,
+                null,
+                null,
+                base.sourceRefs(),
+                List.of(),
+                null,
+                profile,
+                CompatibilityMode.CANONICAL
+            ),
+            copyModel(
+                base,
+                2,
+                ModelType.DIMENSION,
+                Layer.DWD,
+                "legacy-activity",
+                null,
+                base.sourceRefs(),
+                List.of(),
+                null,
+                null,
+                CompatibilityMode.CANONICAL
+            ),
+            withFactOnlyFields(
+                copyModel(
+                    base,
+                    2,
+                    ModelType.DIMENSION,
+                    Layer.DWD,
+                    null,
+                    null,
+                    base.sourceRefs(),
+                    List.of(),
+                    null,
+                    null,
+                    CompatibilityMode.CANONICAL
+                ),
+                null,
+                null,
+                List.of(dependency)
+            ),
+            withFactOnlyFields(
+                copyModel(
+                    base,
+                    2,
+                    ModelType.SUMMARY,
+                    Layer.DWS,
+                    null,
+                    null,
+                    List.of(),
+                    List.of(dependency),
+                    null,
+                    null,
+                    CompatibilityMode.CANONICAL
+                ),
+                FactShape.TRANSACTION,
+                null,
+                List.of()
+            ),
+            withFactOnlyFields(
+                copyModel(
+                    base,
+                    2,
+                    ModelType.APPLICATION,
+                    Layer.ADS,
+                    null,
+                    "legacy-consumer",
+                    List.of(),
+                    List.of(dependency),
+                    null,
+                    null,
+                    CompatibilityMode.CANONICAL
+                ),
+                null,
+                new TimeSemantics(TimeSemanticsType.EVENT_TIME, List.of("customer_id")),
+                List.of()
+            ),
+            copyModel(
+                base,
+                2,
+                ModelType.FACT,
+                Layer.DWD,
+                null,
+                "legacy-consumer",
+                base.sourceRefs(),
+                List.of(),
+                null,
+                null,
+                CompatibilityMode.CANONICAL
+            ),
+            copyModel(
+                base,
+                2,
+                ModelType.SUMMARY,
+                Layer.DWS,
+                null,
+                null,
+                base.sourceRefs(),
+                List.of(dependency),
+                new GenerationStrategy("REFERENCE", "legacy-summary"),
+                null,
+                CompatibilityMode.CANONICAL
+            ),
+            copyModel(
+                base,
+                2,
+                ModelType.DIMENSION,
+                Layer.DWD,
+                null,
+                null,
+                base.sourceRefs(),
+                List.of(dependency),
+                null,
+                null,
+                CompatibilityMode.CANONICAL
+            ),
+            copyModel(
+                base,
+                2,
+                ModelType.FACT,
+                Layer.DWD,
+                null,
+                null,
+                List.of(dwsSource),
+                List.of(),
+                null,
+                null,
+                CompatibilityMode.CANONICAL
+            )
+        );
+
+        for (ModelSpecView historical : historicalRows) {
+            StoredModelSpec stored = stored(historical, null, null);
+            when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored));
+            when(compatibilityReader.read(stored)).thenReturn(historical);
+
+            assertThatThrownBy(
+                () ->
+                    service.update(
+                        TENANT,
+                        ACTOR,
+                        MODEL_ID,
+                        new ExpectedVersion(MODEL_ID, historical.revision(), historical.checksum()),
+                        update(historical)
+                    )
+            )
+                .as(historical.modelType() + " historical type-boundary pollution")
+                .isInstanceOf(ModelSpecException.class)
+                .extracting(error -> ((ModelSpecException) error).code())
+                .isEqualTo("MODEL_SPEC_LEGACY_READONLY");
+        }
+
+        verify(repository, never()).compareAndSetV2(any(), any(), anyInt(), anyString(), any(), anyString());
+    }
+
+    @Test
+    void keepsCanonicalDraftsWithImplementationGapsEditable() {
+        CreateModelSpecCommand incompleteDraft = withInputs(
+            command("incomplete-draft", "customer_detail"),
+            List.of(),
+            List.of()
+        );
+        ModelSpecView current = codec.toCreatedView(MODEL_ID, incompleteDraft, NOW);
+        StoredModelSpec stored = stored(current, null, null);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored));
+        when(compatibilityReader.read(stored)).thenReturn(current);
+
+        ModelSpecView result = service.update(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            new ExpectedVersion(MODEL_ID, current.revision(), current.checksum()),
+            update(current)
+        );
+
+        assertThat(result).isEqualTo(current);
+        verify(repository, never()).compareAndSetV2(any(), any(), anyInt(), anyString(), any(), anyString());
+    }
+
+    @Test
     void checksAuthorizationBeforeReportingHistoricalWrongLayerRowsAsReadOnly() {
         CreateModelSpecCommand historicalCommand = withLayer(command("historical-ods-forbidden", "customer_detail"), Layer.ODS);
         ModelSpecView historical = codec.toCreatedView(MODEL_ID, historicalCommand, NOW);
@@ -319,6 +516,122 @@ class ModelSpecApplicationServiceTest {
         when(repository.findRevision(TENANT, dimensionId, 2)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(TENANT, ACTOR, withMissingDimension))
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_SPEC_REFERENCE_NOT_FOUND");
+
+        verify(repository, never()).insertV2(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void rejectsDimensionReferencesUnlessTheyResolveToCanonicalDimensionsAtDwd() {
+        UUID dimensionId = UUID.fromString("40000000-0000-0000-0000-000000000002");
+        ModelRevisionRef dimensionRef = new ModelRevisionRef(dimensionId, 1);
+        CreateModelSpecCommand requested = withDimensionRefs(
+            command("dimension-contract", "customer_detail"),
+            List.of(dimensionRef)
+        );
+        ModelSpecView base = codec.toCreatedView(
+            dimensionId,
+            command("dimension-target", "dimension_target"),
+            NOW
+        );
+        List<ModelSpecView> invalidDimensions = List.of(
+            copyModel(
+                base,
+                2,
+                ModelType.DIMENSION,
+                Layer.ODS,
+                null,
+                null,
+                base.sourceRefs(),
+                List.of(),
+                null,
+                null,
+                CompatibilityMode.CANONICAL
+            ),
+            copyModel(
+                base,
+                1,
+                ModelType.DIMENSION,
+                Layer.DWD,
+                null,
+                null,
+                base.sourceRefs(),
+                List.of(),
+                null,
+                null,
+                CompatibilityMode.LEGACY_READONLY
+            ),
+            withFactOnlyFields(
+                copyModel(
+                    base,
+                    2,
+                    ModelType.DIMENSION,
+                    Layer.DWD,
+                    null,
+                    null,
+                    base.sourceRefs(),
+                    List.of(),
+                    null,
+                    null,
+                    CompatibilityMode.CANONICAL
+                ),
+                FactShape.TRANSACTION,
+                null,
+                List.of()
+            )
+        );
+        when(repository.findByIdempotencyKey(TENANT, requested.idempotencyKey())).thenReturn(Optional.empty());
+
+        for (ModelSpecView invalidDimension : invalidDimensions) {
+            StoredModelSpec stored = stored(invalidDimension, null, null);
+            when(repository.findRevision(TENANT, dimensionId, 1)).thenReturn(Optional.of(stored));
+            when(compatibilityReader.read(stored)).thenReturn(invalidDimension);
+
+            assertThatThrownBy(() -> service.create(TENANT, ACTOR, requested))
+                .as(invalidDimension.contractVersion() + ":" + invalidDimension.modelType() + "@" + invalidDimension.layer())
+                .isInstanceOf(ModelSpecException.class)
+                .extracting(error -> ((ModelSpecException) error).code())
+                .isEqualTo("MODEL_SPEC_DIMENSION_REF_TYPE_INVALID");
+        }
+
+        verify(repository, never()).insertV2(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void hidesUnreadableInvalidDimensionReferencesBeforeReportingTheirContractViolation() {
+        UUID dimensionId = UUID.fromString("40000000-0000-0000-0000-000000000003");
+        ModelRevisionRef dimensionRef = new ModelRevisionRef(dimensionId, 1);
+        CreateModelSpecCommand requested = withDimensionRefs(
+            command("unreadable-dimension", "customer_detail"),
+            List.of(dimensionRef)
+        );
+        ModelSpecView base = codec.toCreatedView(
+            dimensionId,
+            command("unreadable-dimension-target", "dimension_target"),
+            NOW
+        );
+        ModelSpecView invalidDimension = copyModel(
+            base,
+            1,
+            ModelType.DIMENSION,
+            Layer.DWD,
+            null,
+            null,
+            base.sourceRefs(),
+            List.of(),
+            null,
+            null,
+            CompatibilityMode.LEGACY_READONLY
+        );
+        StoredModelSpec stored = stored(invalidDimension, null, null);
+        when(repository.findByIdempotencyKey(TENANT, requested.idempotencyKey())).thenReturn(Optional.empty());
+        when(repository.findRevision(TENANT, dimensionId, 1)).thenReturn(Optional.of(stored));
+        when(compatibilityReader.read(stored)).thenReturn(invalidDimension);
+        when(domainReadAccess.canRead(DOMAIN_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.create(TENANT, ACTOR, requested))
             .isInstanceOf(ModelSpecException.class)
             .extracting(error -> ((ModelSpecException) error).code())
             .isEqualTo("MODEL_SPEC_REFERENCE_NOT_FOUND");
@@ -432,6 +745,50 @@ class ModelSpecApplicationServiceTest {
         when(repository.findByIdempotencyKey(TENANT, requested.idempotencyKey())).thenReturn(Optional.empty());
         when(repository.findRevision(TENANT, upstreamId, 1)).thenReturn(Optional.of(upstreamStored));
         when(compatibilityReader.read(upstreamStored)).thenReturn(wrongLayerFact);
+
+        assertThatThrownBy(() -> service.create(TENANT, ACTOR, requested))
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_SPEC_UPSTREAM_LAYER_NOT_ALLOWED");
+        verify(repository, never()).insertV2(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void rejectsCanonicalLayerUpstreamsThatStillCarryHistoricalTypePollution() {
+        UUID upstreamId = UUID.fromString("30000000-0000-0000-0000-000000000043");
+        CreateModelSpecCommand requested = derivedCommand(
+            "summary-polluted-upstream",
+            "customer_summary",
+            ModelType.SUMMARY,
+            List.of(new ModelRevisionRef(upstreamId, 1))
+        );
+        ModelSpecView base = codec.toCreatedView(
+            upstreamId,
+            command("polluted-fact", "polluted_fact"),
+            NOW
+        );
+        ModelSpecView pollutedFact = copyModel(
+            base,
+            2,
+            ModelType.FACT,
+            Layer.DWD,
+            null,
+            null,
+            base.sourceRefs(),
+            List.of(),
+            null,
+            new DimensionProfile(
+                "DIM_POLLUTION",
+                List.of(),
+                new ScdPolicy(ScdType.TYPE1, null, null, null),
+                ReuseScope.PLAN
+            ),
+            CompatibilityMode.CANONICAL
+        );
+        StoredModelSpec upstreamStored = stored(pollutedFact, null, null);
+        when(repository.findByIdempotencyKey(TENANT, requested.idempotencyKey())).thenReturn(Optional.empty());
+        when(repository.findRevision(TENANT, upstreamId, 1)).thenReturn(Optional.of(upstreamStored));
+        when(compatibilityReader.read(upstreamStored)).thenReturn(pollutedFact);
 
         assertThatThrownBy(() -> service.create(TENANT, ACTOR, requested))
             .isInstanceOf(ModelSpecException.class)
@@ -918,6 +1275,35 @@ class ModelSpecApplicationServiceTest {
         );
     }
 
+    private static CreateModelSpecCommand withDimensionRefs(
+        CreateModelSpecCommand command,
+        List<ModelRevisionRef> dimensionRefs
+    ) {
+        return new CreateModelSpecCommand(
+            command.planId(),
+            command.domainId(),
+            command.modelType(),
+            command.layer(),
+            command.name(),
+            command.description(),
+            command.implementationMode(),
+            command.materialization(),
+            command.businessActivityRef(),
+            command.consumptionScenario(),
+            command.grain(),
+            command.factShape(),
+            command.timeSemantics(),
+            command.fields(),
+            command.sourceRefs(),
+            command.dependsOn(),
+            dimensionRefs,
+            command.metricRefs(),
+            command.standardBindings(),
+            command.generationStrategy(),
+            command.idempotencyKey()
+        );
+    }
+
     private static CreateModelSpecCommand withLayer(CreateModelSpecCommand command, Layer layer) {
         return new CreateModelSpecCommand(
             command.planId(),
@@ -944,6 +1330,21 @@ class ModelSpecApplicationServiceTest {
         );
     }
 
+    private static SourceRef withLayer(SourceRef source, Layer layer) {
+        return new SourceRef(
+            source.kind(),
+            source.ref(),
+            layer,
+            source.role(),
+            source.alias(),
+            source.joinType(),
+            source.joinExpression(),
+            source.sortOrder(),
+            source.sourceBindingId(),
+            source.resolvedVersion()
+        );
+    }
+
     private static UpdateModelSpecCommand update(CreateModelSpecCommand command) {
         return new UpdateModelSpecCommand(
             command.planId(),
@@ -966,6 +1367,119 @@ class ModelSpecApplicationServiceTest {
             command.metricRefs(),
             command.standardBindings(),
             command.generationStrategy()
+        );
+    }
+
+    private static UpdateModelSpecCommand update(ModelSpecView view) {
+        return new UpdateModelSpecCommand(
+            view.planId(),
+            view.domainId(),
+            view.modelType(),
+            view.layer(),
+            view.name(),
+            view.description(),
+            view.implementationMode(),
+            view.materialization(),
+            view.businessActivityRef(),
+            view.consumptionScenario(),
+            view.grain(),
+            view.factShape(),
+            view.timeSemantics(),
+            view.fields(),
+            view.sourceRefs(),
+            view.dependsOn(),
+            view.dimensionRefs(),
+            view.metricRefs(),
+            view.standardBindings(),
+            view.generationStrategy(),
+            view.dimensionProfile()
+        );
+    }
+
+    private static ModelSpecView copyModel(
+        ModelSpecView base,
+        int contractVersion,
+        ModelType modelType,
+        Layer layer,
+        String businessActivityRef,
+        String consumptionScenario,
+        List<SourceRef> sourceRefs,
+        List<ModelRevisionRef> dependsOn,
+        GenerationStrategy generationStrategy,
+        DimensionProfile dimensionProfile,
+        CompatibilityMode compatibilityMode
+    ) {
+        return new ModelSpecView(
+            contractVersion,
+            base.id(),
+            base.planId(),
+            base.domainId(),
+            modelType,
+            layer,
+            base.name(),
+            base.description(),
+            base.implementationMode(),
+            base.materialization(),
+            businessActivityRef,
+            consumptionScenario,
+            base.grain(),
+            base.factShape(),
+            base.timeSemantics(),
+            base.fields(),
+            sourceRefs,
+            dependsOn,
+            base.dimensionRefs(),
+            base.metricRefs(),
+            base.standardBindings(),
+            generationStrategy,
+            dimensionProfile,
+            base.status(),
+            base.revision(),
+            base.checksum(),
+            base.createdAt(),
+            base.updatedAt(),
+            compatibilityMode,
+            base.legacyRefs()
+        );
+    }
+
+    private static ModelSpecView withFactOnlyFields(
+        ModelSpecView base,
+        FactShape factShape,
+        TimeSemantics timeSemantics,
+        List<ModelRevisionRef> dimensionRefs
+    ) {
+        return new ModelSpecView(
+            base.contractVersion(),
+            base.id(),
+            base.planId(),
+            base.domainId(),
+            base.modelType(),
+            base.layer(),
+            base.name(),
+            base.description(),
+            base.implementationMode(),
+            base.materialization(),
+            base.businessActivityRef(),
+            base.consumptionScenario(),
+            base.grain(),
+            factShape,
+            timeSemantics,
+            base.fields(),
+            base.sourceRefs(),
+            base.dependsOn(),
+            dimensionRefs,
+            base.metricRefs(),
+            base.standardBindings(),
+            base.generationStrategy(),
+            base.dimensionProfile(),
+            base.status(),
+            base.revision(),
+            base.checksum(),
+            base.createdAt(),
+            base.updatedAt(),
+            base.compatibilityMode(),
+            base.legacyRefs()
         );
     }
 

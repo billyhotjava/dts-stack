@@ -3,13 +3,19 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import Ajv2020 from "ajv/dist/2020.js";
 import {
+	type CanonicalModelSpecView,
 	type CreateModelSpecCommand,
+	hasModelSpecTypeBoundaryMismatch,
+	isCanonicalModelSpecReferenceTarget,
+	isModelSpecDimensionRefAllowed,
+	isModelSpecReferenceTargetAllowed,
 	isModelSpecUpstreamAllowed,
 	MODEL_SPEC_COLLECTION_FIELDS,
 	MODEL_SPEC_CONTRACT_VERSION,
 	MODEL_SPEC_CREATE_FIELDS,
 	MODEL_SPEC_REQUIRED_FIELD_CODES,
 	MODEL_SPEC_UPDATE_FIELDS,
+	modelSpecRevisionRefKey,
 	toModelSpecEtag,
 	validateModelSpecCreate,
 	validateModelSpecUpdate,
@@ -152,6 +158,23 @@ const minimal = (modelType: CreateModelSpecCommand["modelType"]): CreateModelSpe
 	idempotencyKey: `minimal-${modelType.toLowerCase()}`,
 });
 
+const canonicalView = (overrides: Partial<CanonicalModelSpecView> = {}): CanonicalModelSpecView => {
+	const { idempotencyKey: _idempotencyKey, ...command } = valid("FACT");
+	return {
+		...command,
+		contractVersion: 2,
+		id: "30000000-0000-0000-0000-000000000001",
+		status: "DRAFT",
+		revision: 3,
+		checksum: "a".repeat(64),
+		createdAt: "2026-07-23T00:00:00Z",
+		updatedAt: "2026-07-23T00:00:00Z",
+		compatibilityMode: "CANONICAL",
+		legacyRefs: null,
+		...overrides,
+	} as CanonicalModelSpecView;
+};
+
 test("canonical create fields exclude client-owned and retired metadata", () => {
 	assert.equal(MODEL_SPEC_CONTRACT_VERSION, 2);
 	assert.equal(new Set(MODEL_SPEC_CREATE_FIELDS).size, MODEL_SPEC_CREATE_FIELDS.length);
@@ -239,6 +262,138 @@ test("upstream model candidates follow the four-category dependency matrix", () 
 	assert.equal(isModelSpecUpstreamAllowed("APPLICATION", { modelType: "FACT", layer: "ADS" }), false);
 });
 
+test("analysis dimensions accept canonical DWD dimension models only", () => {
+	assert.equal(isModelSpecDimensionRefAllowed({ modelType: "DIMENSION", layer: "DWD" }), true);
+	assert.equal(isModelSpecDimensionRefAllowed({ modelType: "DIMENSION", layer: "DWS" }), false);
+	assert.equal(isModelSpecDimensionRefAllowed({ modelType: "FACT", layer: "DWD" }), false);
+});
+
+test("reference targets require an exact canonical unpolluted revision and the owner relationship matrix", () => {
+	const owner = canonicalView();
+	const samePlanFact = canonicalView({ id: "30000000-0000-0000-0000-000000000002" });
+	assert.equal(isCanonicalModelSpecReferenceTarget(samePlanFact), true);
+	assert.equal(isModelSpecReferenceTargetAllowed(owner, samePlanFact, "DEPENDENCY"), true);
+	assert.equal(modelSpecRevisionRefKey({ modelSpecId: samePlanFact.id, revision: 2 }), `${samePlanFact.id}@2`);
+
+	assert.equal(isCanonicalModelSpecReferenceTarget({ ...samePlanFact, layer: "ADS" }), false);
+	assert.equal(
+		isCanonicalModelSpecReferenceTarget({
+			...samePlanFact,
+			sourceRefs: samePlanFact.sourceRefs.map((source) => ({ ...source, layer: "DWS" })),
+		}),
+		false,
+	);
+	assert.equal(
+		isCanonicalModelSpecReferenceTarget({
+			...samePlanFact,
+			dimensionProfile: {
+				dimensionCode: "POLLUTED_FACT",
+				hierarchies: [],
+				scdPolicy: { type: "NONE" },
+				reuseScope: "PLAN",
+			},
+		}),
+		false,
+	);
+	assert.equal(
+		isCanonicalModelSpecReferenceTarget({
+			...samePlanFact,
+			contractVersion: 1,
+			compatibilityMode: "LEGACY_READONLY",
+		} as unknown as CanonicalModelSpecView),
+		false,
+	);
+
+	const crossPlanDraft = canonicalView({
+		id: "30000000-0000-0000-0000-000000000003",
+		planId: "10000000-0000-0000-0000-000000000099",
+	});
+	assert.equal(isModelSpecReferenceTargetAllowed(owner, crossPlanDraft, "DEPENDENCY"), false);
+	assert.equal(
+		isModelSpecReferenceTargetAllowed(owner, { ...crossPlanDraft, status: "PUBLISHED" }, "DEPENDENCY"),
+		true,
+	);
+
+	const dimension = canonicalView({
+		id: "40000000-0000-0000-0000-000000000001",
+		modelType: "DIMENSION",
+		layer: "DWD",
+		factShape: null,
+		timeSemantics: null,
+		sourceRefs: [],
+		generationStrategy: { type: "REFERENCE" },
+	});
+	assert.equal(isModelSpecReferenceTargetAllowed(owner, dimension, "DIMENSION"), true);
+	assert.equal(isModelSpecReferenceTargetAllowed(owner, samePlanFact, "DIMENSION"), false);
+});
+
+test("exact pinned reference rejects historical targets whose physical inputs use derived layers", () => {
+	const owner = canonicalView();
+	for (const layer of ["DWS", "ADS"] as const) {
+		const historicalTarget = canonicalView({
+			id: `30000000-0000-0000-0000-00000000000${layer === "DWS" ? "4" : "5"}`,
+			revision: 2,
+			sourceRefs: owner.sourceRefs.map((source) => ({ ...source, layer })),
+		});
+		const reference = { modelSpecId: historicalTarget.id, revision: historicalTarget.revision };
+
+		assert.equal(modelSpecRevisionRefKey(reference), `${historicalTarget.id}@2`);
+		assert.equal(isCanonicalModelSpecReferenceTarget(historicalTarget), false);
+		assert.equal(isModelSpecReferenceTargetAllowed(owner, historicalTarget, "DEPENDENCY"), false);
+	}
+});
+
+test("persisted fields hidden by the current model type are type-boundary mismatches", () => {
+	const fact = valid("FACT");
+	assert.equal(hasModelSpecTypeBoundaryMismatch(fact), false);
+	assert.equal(
+		hasModelSpecTypeBoundaryMismatch({
+			...fact,
+			dimensionProfile: {
+				dimensionCode: "DIM_CUSTOMER",
+				hierarchies: [],
+				scdPolicy: { type: "NONE" },
+				reuseScope: "PLAN",
+			},
+		}),
+		true,
+	);
+	assert.equal(
+		hasModelSpecTypeBoundaryMismatch({ ...valid("SUMMARY"), businessActivityRef: "historical activity" }),
+		true,
+	);
+	assert.equal(hasModelSpecTypeBoundaryMismatch({ ...valid("SUMMARY"), businessActivityRef: "" }), false);
+	assert.equal(hasModelSpecTypeBoundaryMismatch({ ...valid("SUMMARY"), businessActivityRef: "   " }), false);
+	assert.equal(
+		hasModelSpecTypeBoundaryMismatch({ ...valid("DIMENSION"), consumptionScenario: "historical report" }),
+		true,
+	);
+	assert.equal(hasModelSpecTypeBoundaryMismatch({ ...valid("DIMENSION"), consumptionScenario: "" }), false);
+	assert.equal(hasModelSpecTypeBoundaryMismatch({ ...valid("DIMENSION"), consumptionScenario: "   " }), false);
+	assert.equal(hasModelSpecTypeBoundaryMismatch({ ...valid("DIMENSION"), factShape: "TRANSACTION" }), true);
+	assert.equal(
+		hasModelSpecTypeBoundaryMismatch({
+			...valid("APPLICATION"),
+			timeSemantics: { type: "EVENT_TIME", fields: ["event_time"] },
+		}),
+		true,
+	);
+	assert.equal(
+		hasModelSpecTypeBoundaryMismatch({
+			...valid("SUMMARY"),
+			dimensionRefs: [{ modelSpecId: "40000000-0000-0000-0000-000000000001", revision: 2 }],
+		}),
+		true,
+	);
+	assert.equal(
+		hasModelSpecTypeBoundaryMismatch({
+			...valid("DIMENSION"),
+			dependsOn: [{ modelSpecId: "30000000-0000-0000-0000-000000000001", revision: 2 }],
+		}),
+		true,
+	);
+});
+
 test("direct physical inputs are limited to ODS, STG or DWD", () => {
 	for (const modelType of ["DIMENSION", "FACT"] as const) {
 		const command = valid(modelType);
@@ -265,6 +420,55 @@ test("generation strategy is dimension-only input", () => {
 				.map((item) => ({ code: item.code, field: item.field })),
 			[{ code: "MODEL_SPEC_INPUT_KIND_NOT_ALLOWED", field: "generationStrategy" }],
 			modelType,
+		);
+	}
+});
+
+test("all model input kinds follow the same four-table type boundary as the backend", () => {
+	const physicalSources = valid("FACT").sourceRefs;
+	for (const modelType of ["SUMMARY", "APPLICATION"] as const) {
+		assert.deepEqual(
+			validateModelSpecCreate({ ...valid(modelType), sourceRefs: physicalSources })
+				.filter((item) => item.code === "MODEL_SPEC_INPUT_KIND_NOT_ALLOWED")
+				.map((item) => ({ code: item.code, field: item.field })),
+			[{ code: "MODEL_SPEC_INPUT_KIND_NOT_ALLOWED", field: "sourceRefs" }],
+			`${modelType} sourceRefs`,
+		);
+	}
+	assert.deepEqual(
+		validateModelSpecCreate({
+			...valid("DIMENSION"),
+			dependsOn: [{ modelSpecId: "30000000-0000-0000-0000-000000000001", revision: 2 }],
+		})
+			.filter((item) => item.code === "MODEL_SPEC_INPUT_KIND_NOT_ALLOWED")
+			.map((item) => ({ code: item.code, field: item.field })),
+		[{ code: "MODEL_SPEC_INPUT_KIND_NOT_ALLOWED", field: "dependsOn" }],
+	);
+	for (const modelType of ["DIMENSION", "SUMMARY", "APPLICATION"] as const) {
+		const dimensionRefs = [{ modelSpecId: "40000000-0000-0000-0000-000000000001", revision: 2 }];
+		assert.deepEqual(
+			validateModelSpecCreate({ ...valid(modelType), dimensionRefs })
+				.filter((item) => item.code === "MODEL_SPEC_INPUT_KIND_NOT_ALLOWED")
+				.map((item) => ({ code: item.code, field: item.field })),
+			[{ code: "MODEL_SPEC_INPUT_KIND_NOT_ALLOWED", field: "dimensionRefs" }],
+			`${modelType} dimensionRefs`,
+		);
+		assert.deepEqual(
+			validateModelSpecCreate({ ...valid(modelType), factShape: "TRANSACTION" })
+				.filter((item) => item.code === "MODEL_SPEC_INPUT_KIND_NOT_ALLOWED")
+				.map((item) => ({ code: item.code, field: item.field })),
+			[{ code: "MODEL_SPEC_INPUT_KIND_NOT_ALLOWED", field: "factShape" }],
+			`${modelType} factShape`,
+		);
+		assert.deepEqual(
+			validateModelSpecCreate({
+				...valid(modelType),
+				timeSemantics: { type: "EVENT_TIME", fields: ["event_time"] },
+			})
+				.filter((item) => item.code === "MODEL_SPEC_INPUT_KIND_NOT_ALLOWED")
+				.map((item) => ({ code: item.code, field: item.field })),
+			[{ code: "MODEL_SPEC_INPUT_KIND_NOT_ALLOWED", field: "timeSemantics" }],
+			`${modelType} timeSemantics`,
 		);
 	}
 });
@@ -387,6 +591,14 @@ test("APPLICATION requires a consumption scenario and other model types reject o
 		),
 		["MODEL_SPEC_CONSUMPTION_SCENARIO_NOT_ALLOWED"],
 	);
+	assert.deepEqual(
+		validateModelSpecCreate({ ...minimal("FACT"), consumptionScenario: "" } as unknown).map((item) => item.code),
+		[],
+	);
+	assert.deepEqual(
+		validateModelSpecCreate({ ...minimal("FACT"), consumptionScenario: "   " } as unknown).map((item) => item.code),
+		[],
+	);
 });
 
 test("only FACT accepts optional business activity", () => {
@@ -394,6 +606,14 @@ test("only FACT accepts optional business activity", () => {
 		assert.deepEqual(
 			validateModelSpecCreate({ ...valid(modelType), businessActivityRef: "activity-ref" }).map((issue) => issue.code),
 			["MODEL_SPEC_BUSINESS_ACTIVITY_NOT_ALLOWED"],
+		);
+		assert.deepEqual(
+			validateModelSpecCreate({ ...valid(modelType), businessActivityRef: "" }).map((issue) => issue.code),
+			[],
+		);
+		assert.deepEqual(
+			validateModelSpecCreate({ ...valid(modelType), businessActivityRef: "   " }).map((issue) => issue.code),
+			[],
 		);
 	}
 	assert.deepEqual(validateModelSpecCreate({ ...valid("FACT"), businessActivityRef: "activity-ref" }), []);

@@ -175,6 +175,24 @@ class ModelSpecContractTest {
         assertThat(ModelSpecContract.validateCreate(dimensionWithModelDependency))
             .extracting(ModelSpecContract.FieldIssue::code)
             .contains("MODEL_SPEC_INPUT_KIND_NOT_ALLOWED");
+
+        for (ModelType nonFactType : List.of(ModelType.DIMENSION, ModelType.SUMMARY, ModelType.APPLICATION)) {
+            CreateModelSpecCommand nonFactWithFactOnlyInputs = copyFactOnlyInputs(
+                validCommand(nonFactType, null),
+                FactShape.TRANSACTION,
+                new TimeSemantics(TimeSemanticsType.EVENT_TIME, List.of("event_time")),
+                List.of(new ModelSpecContract.ModelRevisionRef(UUID.fromString("30000000-0000-0000-0000-000000000002"), 1))
+            );
+
+            assertThat(ModelSpecContract.validateCreate(nonFactWithFactOnlyInputs))
+                .as(nonFactType + " with FACT-only inputs")
+                .extracting(ModelSpecContract.FieldIssue::code, ModelSpecContract.FieldIssue::field)
+                .contains(
+                    org.assertj.core.groups.Tuple.tuple("MODEL_SPEC_INPUT_KIND_NOT_ALLOWED", "dimensionRefs"),
+                    org.assertj.core.groups.Tuple.tuple("MODEL_SPEC_INPUT_KIND_NOT_ALLOWED", "factShape"),
+                    org.assertj.core.groups.Tuple.tuple("MODEL_SPEC_INPUT_KIND_NOT_ALLOWED", "timeSemantics")
+                );
+        }
     }
 
     @Test
@@ -554,6 +572,37 @@ class ModelSpecContractTest {
             base.metricRefs(),
             base.standardBindings(),
             generationStrategy,
+            base.idempotencyKey()
+        );
+    }
+
+    private static CreateModelSpecCommand copyFactOnlyInputs(
+        CreateModelSpecCommand base,
+        FactShape factShape,
+        TimeSemantics timeSemantics,
+        List<ModelSpecContract.ModelRevisionRef> dimensionRefs
+    ) {
+        return new CreateModelSpecCommand(
+            base.planId(),
+            base.domainId(),
+            base.modelType(),
+            base.layer(),
+            base.name(),
+            base.description(),
+            base.implementationMode(),
+            base.materialization(),
+            base.businessActivityRef(),
+            base.consumptionScenario(),
+            base.grain(),
+            factShape,
+            timeSemantics,
+            base.fields(),
+            base.sourceRefs(),
+            base.dependsOn(),
+            dimensionRefs,
+            base.metricRefs(),
+            base.standardBindings(),
+            base.generationStrategy(),
             base.idempotencyKey()
         );
     }

@@ -6,7 +6,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.domain.modeling.StandardPackageImportRun;
@@ -17,6 +19,8 @@ import com.yuzhi.dts.platform.repository.modeling.ModelingGlossaryTermRepository
 import com.yuzhi.dts.platform.repository.modeling.StandardPackageImportRunRepository;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,7 +65,8 @@ class StandardPackageImportServiceTest {
             codeDirectoryRepository,
             codeValueRepository,
             runRepository,
-            new ObjectMapper()
+            new ObjectMapper(),
+            new StandardPackageManifestContract(new ObjectMapper())
         );
         lenient().when(glossaryTermRepository.findByCodeLowerIn(anyCollection())).thenReturn(List.of());
         lenient().when(codeDirectoryRepository.findByCodeTypeCodeIgnoreCase(anyString())).thenReturn(Optional.empty());
@@ -75,6 +80,7 @@ class StandardPackageImportServiceTest {
                 run.setId(UUID.randomUUID());
                 return run;
             });
+        lenient().when(runRepository.findByStatusOrderByCreatedDateDesc("APPLIED")).thenReturn(List.of());
     }
 
     @Test
@@ -180,6 +186,189 @@ class StandardPackageImportServiceTest {
         assertThatThrownBy(() -> service.previewZip(zip, "tester"))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("未找到标准包 CSV");
+    }
+
+    @Test
+    void preview_v2Package_returnsManifestSummaryAndPersistsIt() {
+        byte[] terms = "term_code,term_name\nBT_PERSON,人员\n".getBytes(StandardCharsets.UTF_8);
+        Map<String, byte[]> files = new LinkedHashMap<>();
+        files.put("manifest.json", manifestJson("dts-core-person", "1.0.0", "01-business-terms.csv", sha256(terms)));
+        files.put("01-business-terms.csv", terms);
+
+        Map<String, Object> preview = service.preview(files, "person.zip", "UPLOAD", "tester");
+
+        assertThat(preview)
+            .containsEntry("packageCode", "dts-core-person")
+            .containsEntry("packageVersion", "1.0.0")
+            .containsEntry("compatibilityMode", "V2")
+            .containsKey("contentChecksum");
+        verify(runRepository).save(
+            org.mockito.ArgumentMatchers.argThat(run ->
+                run.getPayloadJson().contains("\"packageCode\":\"dts-core-person\"") &&
+                run.getPayloadJson().contains("\"compatibilityMode\":\"V2\"")
+            )
+        );
+    }
+
+    @Test
+    void preview_legacyPackage_remainsSupportedAndIsExplicit() {
+        Map<String, byte[]> files = Map.of(
+            "01-business-terms.csv",
+            "term_code,term_name\nBT_PERSON,人员\n".getBytes(StandardCharsets.UTF_8)
+        );
+
+        Map<String, Object> preview = service.preview(files, "legacy-upload.zip", "UPLOAD", "tester");
+
+        assertThat(preview)
+            .containsEntry("packageCode", "legacy-upload")
+            .containsEntry("packageVersion", "1.0.0")
+            .containsEntry("compatibilityMode", "LEGACY_V1");
+    }
+
+    @Test
+    void preview_v2Package_rejectsChecksumMismatchBeforeRunPersistence() {
+        byte[] terms = "term_code,term_name\nBT_PERSON,人员\n".getBytes(StandardCharsets.UTF_8);
+        Map<String, byte[]> files = new LinkedHashMap<>();
+        files.put("manifest.json", manifestJson("dts-core-person", "1.0.0", "01-business-terms.csv", sha256("different")));
+        files.put("01-business-terms.csv", terms);
+
+        assertThatThrownBy(() -> service.preview(files, "person.zip", "UPLOAD", "tester"))
+            .isInstanceOfSatisfying(
+                StandardPackageContractException.class,
+                error -> assertThat(error.code()).isEqualTo("MANIFEST_CHECKSUM_MISMATCH")
+            );
+        verify(runRepository, never()).save(any());
+    }
+
+    @Test
+    void previewZip_v2Package_rejectsUndeclaredFile() throws Exception {
+        byte[] terms = "term_code,term_name\nBT_PERSON,人员\n".getBytes(StandardCharsets.UTF_8);
+        Map<String, String> files = new LinkedHashMap<>();
+        files.put(
+            "manifest.json",
+            new String(manifestJson("dts-core-person", "1.0.0", "01-business-terms.csv", sha256(terms)), StandardCharsets.UTF_8)
+        );
+        files.put("01-business-terms.csv", new String(terms, StandardCharsets.UTF_8));
+        files.put("unexpected.txt", "undeclared");
+
+        assertThatThrownBy(() -> service.previewZip(zipOf(files), "tester"))
+            .isInstanceOfSatisfying(
+                StandardPackageContractException.class,
+                error -> assertThat(error.code()).isEqualTo("MANIFEST_FILE_UNDECLARED")
+            );
+        verify(runRepository, never()).save(any());
+    }
+
+    @Test
+    void preview_v2Package_rejectsMissingInstalledDependencyBeforeRunPersistence() {
+        byte[] terms = "term_code,term_name\nBT_PERSON,人员\n".getBytes(StandardCharsets.UTF_8);
+        Map<String, byte[]> files = new LinkedHashMap<>();
+        files.put(
+            "manifest.json",
+            manifestJson(
+                "dts-core-person",
+                "1.0.0",
+                "01-business-terms.csv",
+                sha256(terms),
+                """
+                [{"packageCode":"gbt-2261-gender","minimumVersion":"1.0.0"}]
+                """
+            )
+        );
+        files.put("01-business-terms.csv", terms);
+
+        assertThatThrownBy(() -> service.preview(files, "person.zip", "UPLOAD", "tester"))
+            .isInstanceOfSatisfying(
+                StandardPackageContractException.class,
+                error -> assertThat(error.code()).isEqualTo("MANIFEST_DEPENDENCY_MISSING")
+            );
+        verify(runRepository, never()).save(any());
+    }
+
+    @Test
+    void preview_v2Package_rejectsVersionRollback() {
+        when(runRepository.findByStatusOrderByCreatedDateDesc("APPLIED"))
+            .thenReturn(List.of(appliedRun("dts-core-person", "2.0.0", "a".repeat(64))));
+        byte[] terms = "term_code,term_name\nBT_PERSON,人员\n".getBytes(StandardCharsets.UTF_8);
+        Map<String, byte[]> files = new LinkedHashMap<>();
+        files.put("manifest.json", manifestJson("dts-core-person", "1.0.0", "01-business-terms.csv", sha256(terms)));
+        files.put("01-business-terms.csv", terms);
+
+        assertThatThrownBy(() -> service.preview(files, "person.zip", "UPLOAD", "tester"))
+            .isInstanceOfSatisfying(
+                StandardPackageContractException.class,
+                error -> assertThat(error.code()).isEqualTo("MANIFEST_VERSION_ROLLBACK")
+            );
+        verify(runRepository, never()).save(any());
+    }
+
+    @Test
+    void preview_v2Package_rejectsCorruptedInstalledState() {
+        StandardPackageImportRun corrupted = new StandardPackageImportRun();
+        corrupted.setId(UUID.randomUUID());
+        corrupted.setPackageName("dts-core-person");
+        corrupted.setStatus("APPLIED");
+        corrupted.setPreviewJson("{not-json");
+        when(runRepository.findByStatusOrderByCreatedDateDesc("APPLIED")).thenReturn(List.of(corrupted));
+        byte[] terms = "term_code,term_name\nBT_PERSON,人员\n".getBytes(StandardCharsets.UTF_8);
+        Map<String, byte[]> files = new LinkedHashMap<>();
+        files.put("manifest.json", manifestJson("dts-core-person", "2.0.0", "01-business-terms.csv", sha256(terms)));
+        files.put("01-business-terms.csv", terms);
+
+        assertThatThrownBy(() -> service.preview(files, "person.zip", "UPLOAD", "tester"))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("已安装标准包状态解析失败");
+        verify(runRepository, never()).save(any());
+    }
+
+    private byte[] manifestJson(String packageCode, String version, String fileName, String checksum) {
+        return manifestJson(packageCode, version, fileName, checksum, "[]");
+    }
+
+    private byte[] manifestJson(String packageCode, String version, String fileName, String checksum, String dependencies) {
+        return """
+        {
+          "schemaVersion": "2.0",
+          "packageCode": "%s",
+          "packageName": "人员基础标准",
+          "packageVersion": "%s",
+          "category": "通用基础",
+          "industry": "COMMON",
+          "releasedAt": "2026-07-23T00:00:00Z",
+          "effectiveFrom": "2026-07-23",
+          "dependencies": %s,
+          "replaces": [],
+          "deprecated": false,
+          "sourceRegisterRef": "SOURCE-REGISTER.json#%s",
+          "licenseConclusion": "REVIEW_REQUIRED",
+          "files": {"%s": "%s"}
+        }
+        """.formatted(packageCode, version, dependencies, packageCode, fileName, checksum)
+            .getBytes(StandardCharsets.UTF_8);
+    }
+
+    private StandardPackageImportRun appliedRun(String packageCode, String packageVersion, String contentChecksum) {
+        StandardPackageImportRun run = new StandardPackageImportRun();
+        run.setPackageName(packageCode);
+        run.setStatus("APPLIED");
+        run.setPreviewJson(
+            """
+            {"packageCode":"%s","packageVersion":"%s","contentChecksum":"%s"}
+            """.formatted(packageCode, packageVersion, contentChecksum)
+        );
+        return run;
+    }
+
+    private String sha256(String content) {
+        return sha256(content.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private String sha256(byte[] content) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
+        } catch (Exception ex) {
+            throw new IllegalStateException(ex);
+        }
     }
 
     private MockMultipartFile zipOf(Map<String, String> files) throws Exception {

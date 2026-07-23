@@ -210,10 +210,10 @@ public class ModelSpecApplicationService {
         ModelSpecView current = compatibilityReader.read(stored);
         validateWriteContext(serverTenantId, actorId, current.planId(), current.domainId());
         requireExpected(current, expected);
-        if (!ModelSpecContract.matchesTargetLayer(current.modelType(), current.layer())) {
+        if (ModelSpecContract.hasHistoricalTypeBoundaryViolation(current)) {
             throw new ModelSpecException(
                 "MODEL_SPEC_LEGACY_READONLY",
-                "Historical ModelSpec rows with non-canonical target layers are read-only",
+                "Historical ModelSpec rows with non-canonical type boundaries are read-only",
                 ModelSpecException.Kind.CONFLICT
             );
         }
@@ -470,15 +470,21 @@ public class ModelSpecApplicationService {
                 .orElseThrow(ModelSpecApplicationService::referenceNotFound);
             ModelSpecView referenced = compatibilityReader.read(stored);
             if (!canRead(referenced)) throw referenceNotFound();
-            if (dimensionOnly && referenced.modelType() != ModelType.DIMENSION) {
+            if (dimensionOnly && !ModelSpecContract.isCanonicalDimension(referenced)) {
                 throw new ModelSpecException(
                     "MODEL_SPEC_DIMENSION_REF_TYPE_INVALID",
-                    "Dimension references must point to DIMENSION ModelSpecs",
+                    "Dimension references must point to canonical DIMENSION ModelSpecs at DWD",
                     ModelSpecException.Kind.UNPROCESSABLE,
-                    List.of(fieldIssue("dimensionRefs", "Referenced model is not a dimension"))
+                    List.of(fieldIssue("dimensionRefs", "Choose a canonical DIMENSION model at DWD"))
                 );
             }
-            if (!dimensionOnly && !ModelSpecContract.allowsUpstreamModel(ownerType, referenced.modelType(), referenced.layer())) {
+            if (
+                !dimensionOnly &&
+                (
+                    !ModelSpecContract.isCanonicalReferenceTarget(referenced) ||
+                    !ModelSpecContract.allowsUpstreamModel(ownerType, referenced.modelType(), referenced.layer())
+                )
+            ) {
                 throw new ModelSpecException(
                     "MODEL_SPEC_UPSTREAM_LAYER_NOT_ALLOWED",
                     "Upstream ModelSpec type or layer is not allowed for the target model",

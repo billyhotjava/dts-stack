@@ -218,6 +218,14 @@ export function adoptCurrentUpstreamRevisions(
 	return existing.filter((reference) => !adoptedIds.has(reference.modelSpecId));
 }
 
+export function adoptCurrentDimensionRevisions(
+	existing: ModelSpecRevisionRef[],
+	modelSpecIds: readonly string[],
+): ModelSpecRevisionRef[] {
+	const adoptedIds = new Set(modelSpecIds);
+	return existing.filter((reference) => !adoptedIds.has(reference.modelSpecId));
+}
+
 export function buildModelSpecCreateCommand(
 	draft: ModelSpecDraft,
 	candidates: ModelSpecRevisionCandidate[],
@@ -419,7 +427,7 @@ const MODEL_SPEC_ISSUE_MESSAGES: Record<string, string> = {
 	MODEL_SPEC_SOURCE_REQUIRED: "请至少选择一个已确认的数据来源",
 	MODEL_SPEC_SOURCE_INVALID: "请选择当前计划中已确认且版本有效的来源",
 	MODEL_SPEC_UPSTREAM_LAYER_NOT_ALLOWED: "所选上游模型或物理来源分层不符合当前模型类别的依赖规则",
-	MODEL_SPEC_INPUT_KIND_NOT_ALLOWED: "生成策略仅适用于维度表，请重新选择模型类别",
+	MODEL_SPEC_INPUT_KIND_NOT_ALLOWED: "当前模型类别不支持此类输入，请移除不适用的来源、依赖或类型专属字段",
 	MODEL_SPEC_UPSTREAM_REQUIRED: "请至少选择一个上游模型",
 	MODEL_SPEC_DEPENDENCY_INVALID: "请选择带有效版本的上游模型",
 	MODEL_SPEC_CONSUMPTION_SCENARIO_REQUIRED: "请说明应用表服务的报表、接口或业务场景",

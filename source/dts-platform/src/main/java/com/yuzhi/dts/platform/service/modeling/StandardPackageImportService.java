@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.service.modeling;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.domain.governance.StdCodeDirectory;
 import com.yuzhi.dts.platform.domain.governance.StdCodeValue;
@@ -46,6 +47,7 @@ public class StandardPackageImportService {
     public static final String FILE_CODE_DIRECTORIES = "03-reference-code-directories.csv";
     public static final String FILE_CODE_ITEMS = "04-reference-code-items.csv";
     public static final String FILE_CODE_MAPPINGS = "05-reference-code-mappings.csv";
+    public static final String FILE_MANIFEST = "manifest.json";
 
     public static final String STATUS_PREVIEWED = "PREVIEWED";
     public static final String SOURCE_UPLOAD = "UPLOAD";
@@ -55,7 +57,8 @@ public class StandardPackageImportService {
         FILE_ELEMENTS,
         FILE_CODE_DIRECTORIES,
         FILE_CODE_ITEMS,
-        FILE_CODE_MAPPINGS
+        FILE_CODE_MAPPINGS,
+        FILE_MANIFEST
     );
 
     private static final int MAX_ENTRIES = 64;
@@ -68,6 +71,7 @@ public class StandardPackageImportService {
     private final StdCodeValueRepository codeValueRepository;
     private final StandardPackageImportRunRepository runRepository;
     private final ObjectMapper objectMapper;
+    private final StandardPackageManifestContract manifestContract;
 
     public StandardPackageImportService(
         MetadataStandardRepository metadataStandardRepository,
@@ -75,7 +79,8 @@ public class StandardPackageImportService {
         StdCodeDirectoryRepository codeDirectoryRepository,
         StdCodeValueRepository codeValueRepository,
         StandardPackageImportRunRepository runRepository,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        StandardPackageManifestContract manifestContract
     ) {
         this.metadataStandardRepository = metadataStandardRepository;
         this.glossaryTermRepository = glossaryTermRepository;
@@ -83,6 +88,7 @@ public class StandardPackageImportService {
         this.codeValueRepository = codeValueRepository;
         this.runRepository = runRepository;
         this.objectMapper = objectMapper;
+        this.manifestContract = manifestContract;
     }
 
     public Map<String, Object> previewZip(MultipartFile file, String actor) {
@@ -105,6 +111,14 @@ public class StandardPackageImportService {
      * 通用入口：entries 为「包内文件名 → CSV 内容」。内置包安装（classpath 来源）复用此入口，免 zip 环节。
      */
     public Map<String, Object> preview(Map<String, byte[]> entries, String packageName, String source, String actor) {
+        StandardPackageManifestContract.Manifest manifest = entries.containsKey(FILE_MANIFEST)
+            ? manifestContract.parsePackage(entries.get(FILE_MANIFEST))
+            : manifestContract.adaptLegacyPackage(packageName, packageName, source, entries);
+        manifestContract.verifyFiles(manifest, entries);
+        if (StandardPackageManifestContract.SCHEMA_V2.equals(manifest.schemaVersion())) {
+            manifestContract.requireInstallable(manifest, installedPackages());
+        }
+
         Map<String, ParsedCsv> parsed = new LinkedHashMap<>();
         for (String known : List.of(FILE_TERMS, FILE_ELEMENTS, FILE_CODE_DIRECTORIES, FILE_CODE_ITEMS, FILE_CODE_MAPPINGS)) {
             byte[] content = entries.get(known);
@@ -136,19 +150,28 @@ public class StandardPackageImportService {
         }
 
         Map<String, Object> preview = new LinkedHashMap<>();
-        preview.put("packageName", packageName);
+        Map<String, Object> manifestSummary = manifestContract.summary(manifest);
+        preview.put("packageCode", manifest.packageCode());
+        preview.put("packageName", manifest.packageName());
+        preview.put("packageVersion", manifest.packageVersion());
+        preview.put("contentChecksum", manifest.contentChecksum());
+        preview.put("compatibilityMode", manifestSummary.get("compatibilityMode"));
+        preview.put("manifest", manifestSummary);
+        preview.put("uploadName", packageName);
         preview.put("source", source);
         preview.put("files", fileReports);
         preview.put("totalErrors", totalErrors);
         preview.put("blocking", totalErrors > 0);
 
         StandardPackageImportRun run = new StandardPackageImportRun();
-        run.setPackageName(packageName);
+        run.setPackageName(manifest.packageCode());
         run.setSource(source);
         run.setStatus(STATUS_PREVIEWED);
         run.setSummary("标准包导入预检：" + summarize(fileReports, totalErrors));
         run.setPreviewJson(writeJson(preview));
-        run.setPayloadJson(writeJson(payload.toJsonMap()));
+        Map<String, Object> payloadMap = payload.toJsonMap();
+        payloadMap.put("manifest", manifestSummary);
+        run.setPayloadJson(writeJson(payloadMap));
         run.setCreatedBy(StringUtils.hasText(actor) ? actor : "system");
         runRepository.save(run);
         preview.put("runId", run.getId().toString());
@@ -176,8 +199,11 @@ public class StandardPackageImportService {
                     throw new IllegalArgumentException("压缩包包含非法路径：" + rawName);
                 }
                 String baseName = rawName.substring(rawName.lastIndexOf('/') + 1).toLowerCase(Locale.ROOT);
-                if (!KNOWN_FILES.contains(baseName)) {
-                    continue;
+                if (!StringUtils.hasText(baseName)) {
+                    throw new IllegalArgumentException("压缩包包含空文件名");
+                }
+                if (entries.containsKey(baseName)) {
+                    throw new IllegalArgumentException("压缩包包含重复文件名：" + baseName);
                 }
                 ByteArrayOutputStream buffer = new ByteArrayOutputStream();
                 byte[] chunk = new byte[8192];
@@ -196,6 +222,9 @@ public class StandardPackageImportService {
                 }
                 entries.put(baseName, buffer.toByteArray());
             }
+        }
+        if (!entries.containsKey(FILE_MANIFEST)) {
+            entries.keySet().removeIf(fileName -> !KNOWN_FILES.contains(fileName));
         }
         return entries;
     }
@@ -552,6 +581,37 @@ public class StandardPackageImportService {
     }
 
     // ---------- helpers ----------
+
+    private Map<String, StandardPackageManifestContract.InstalledPackage> installedPackages() {
+        Map<String, StandardPackageManifestContract.InstalledPackage> installed = new LinkedHashMap<>();
+        for (StandardPackageImportRun run : runRepository.findByStatusOrderByCreatedDateDesc(StandardPackageApplyService.STATUS_APPLIED)) {
+            String packageCode = run.getPackageName();
+            String packageVersion = "1.0.0";
+            String contentChecksum = null;
+            if (StringUtils.hasText(run.getPreviewJson())) {
+                try {
+                    JsonNode preview = objectMapper.readTree(run.getPreviewJson());
+                    packageCode = textOrDefault(preview, "packageCode", packageCode);
+                    packageVersion = textOrDefault(preview, "packageVersion", packageVersion);
+                    contentChecksum = textOrDefault(preview, "contentChecksum", null);
+                } catch (Exception ex) {
+                    throw new IllegalStateException("已安装标准包状态解析失败：" + run.getId(), ex);
+                }
+            }
+            if (StringUtils.hasText(packageCode)) {
+                installed.putIfAbsent(
+                    packageCode,
+                    new StandardPackageManifestContract.InstalledPackage(packageCode, packageVersion, contentChecksum)
+                );
+            }
+        }
+        return Map.copyOf(installed);
+    }
+
+    private String textOrDefault(JsonNode node, String field, String defaultValue) {
+        JsonNode value = node == null ? null : node.get(field);
+        return value != null && value.isTextual() && StringUtils.hasText(value.asText()) ? value.asText() : defaultValue;
+    }
 
     private boolean resolvesDirectory(String codeTypeCode, PackagePayload payload) {
         String normalized = codeTypeCode.toLowerCase(Locale.ROOT);

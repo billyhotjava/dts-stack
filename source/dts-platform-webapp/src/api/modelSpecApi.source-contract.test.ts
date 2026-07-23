@@ -11,6 +11,11 @@ test("canonical ModelSpec client owns one non-vnext CRUD surface and strong CAS 
 	assert.doesNotMatch(source, /\/modeling\/vnext\/model-specs/);
 	assert.match(source, /export const listModelSpecs/);
 	assert.match(source, /export const getModelSpec/);
+	assert.match(source, /export const getModelSpecRevision/);
+	assert.match(
+		source,
+		/`\$\{MODEL_SPEC_RESOURCE\}\/\$\{encodeURIComponent\(id\)\}\/revisions\/\$\{encodeURIComponent\(String\(revision\)\)\}`/,
+	);
 	assert.match(source, /export const createModelSpec/);
 	assert.match(source, /export const updateModelSpec/);
 	assert.match(source, /headers: \{ "If-Match": toModelSpecEtag\(expected\) \}/);

@@ -2,13 +2,16 @@ Sprint-67 F3-T07 — 模型类型、目标分层与上游依赖矩阵
 Date: 2026-07-23
 
 Implemented contract
-- ODS/STG 是数据接入或技术处理层，不是四类 ModelSpec 的目标类型。
+- ODS/STG 是数据接入或技术处理层，不是四类 ModelSpec 的目标类型。建设 ODS 时明确的是外部源表/文件/API 与 ODS 目标映射，不需要一张上游 ODS 表。
 - DIMENSION/FACT 固定生成 DWD，SUMMARY 固定生成 DWS，APPLICATION 固定生成 ADS。
-- DIMENSION/FACT 物理 sourceRefs 仅允许 ODS/STG/DWD；DWD 只表示当前计划已确认的存量或外部管理资产。
-- FACT dependsOn 仅允许 FACT@DWD；SUMMARY 允许 DIMENSION/FACT@DWD 或 SUMMARY@DWS；APPLICATION 允许任意 canonical DWD/DWS/ADS 四类模型。
-- 非 DIMENSION 禁止 generationStrategy；SUMMARY/APPLICATION 禁止直接 sourceRefs；DIMENSION 禁止 dependsOn。
-- 历史错层 canonical 记录可读但不可编辑；update 先校验当前计划/分类权限和 ETag，再返回 MODEL_SPEC_LEGACY_READONLY。
-- 依赖 revision 普通保存保持既有 pin；只有用户显式点击“采用所选上游当前版本”才锁定新 revision。
+- DIMENSION/FACT 物理 sourceRefs 仅允许 ODS/STG/DWD。当前自动化已校验 DWD SourceBinding 确认/解析/版本，但尚未强制外部管理所有权标志和 canonical 产物防绕过。
+- FACT dependsOn 仅允许 FACT@DWD；SUMMARY 允许 DIMENSION/FACT@DWD 或 SUMMARY@DWS；APPLICATION 允许任意合法 canonical DWD/DWS/ADS 四类模型。
+- FACT 的分析维度通过 dimensionRefs 引用 canonical DIMENSION@DWD；非 FACT 禁止 dimensionRefs/factShape/timeSemantics。
+- 非 DIMENSION 禁止 generationStrategy/dimensionProfile；SUMMARY/APPLICATION 禁止直接 sourceRefs；DIMENSION 禁止 dependsOn；类型专属文本字段仅在非空白时视为输入，空白与后端 `trimToNull` 一致视为未填写。
+- 引用目标必须是精确 id+revision、当前可读、目标层合法且无历史类型污染；跨计划引用必须 PUBLISHED。StageGate 对无权、漂移、污染或解析异常统一 fail closed 为 STALE。
+- 历史错层/类型污染记录可读但不可编辑；update 先校验当前计划/分类权限和 ETag，再返回 MODEL_SPEC_LEGACY_READONLY。
+- 普通保存保持已锁定的上游和维度 revision；只有用户显式点击“采用所选上游/维度当前版本”才升级 pin。
+- 新增只读 GET /api/modeling/model-specs/{id}/revisions/{revision}，复用 service.revision 的精确版本、canRead 及统一 404 契约，ETag 来自该 revision 自身 checksum。
 
 Backend TDD and focused verification
 Commands:
@@ -16,36 +19,40 @@ Commands:
   ./mvnw -q -Dspotless.check.skip=true -Dspotless.apply.skip=true \
     -Dtest=ModelSpecContractTest,ModelSpecStageGateServiceTest,ModelSpecApplicationServiceTest test
   ./mvnw -q -Dspotless.check.skip=true -Dspotless.apply.skip=true \
-    -Dtest=ModelSpecV2FixtureTest test
+    -Dtest=ModelSpecResourceTest test
 Results:
-  EXPECTED RED after matrix review: tests=62, failures=3. The failures reproduced a broad SUMMARY matrix, editable historical wrong-layer rows and accepted historical wrong-layer upstreams.
-  PASS after implementation: ModelSpecContract=16/16, ModelSpecStageGateService=18/18, ModelSpecApplicationService=28/28.
-  EXPECTED RED after update-order review: ModelSpecApplicationService tests=30, failures=3. Original FACT@ODS payloads were rejected before authorization/ETag/read-only handling.
-  PASS after ordering fix: ModelSpecApplicationService=30/30.
-  PASS shared fixture parity: ModelSpecV2Fixture=7/7.
+  Matrix/order baseline RED→GREEN previously recorded: 62 tests / 3 expected failures, then 62/62; update ordering 30 tests / 3 expected failures, then 30/30.
+  Type-boundary/reference hardening RED reproduced wrong-layer dimensions, hidden fields, permissions, StageGate matrix and historical-pollution acceptance.
+  Final contract/application/stage-gate GREEN: 74/74 (Contract 16, Application 35, StageGate 23).
+  Revision REST resource GREEN: ModelSpecResourceTest 8/8, including exact pin + own ETag, hidden/missing no-leak 404 and invalid path values.
+  A later resource-test rerun was blocked before the target class by concurrent Sprint-68 StandardPackageImportServiceTest testCompile errors; the successful focused surefire result above remains the evidence for this endpoint.
 
 Frontend TDD and focused verification
 Commands:
   cd source/dts-platform-webapp
   node --experimental-strip-types --test <focused ModelSpec contract/workbench/source-contract tests>
   pnpm exec tsc --noEmit --pretty false
-  pnpm exec biome check <8 touched ModelSpec files>
+  pnpm exec biome check <10 touched ModelSpec/API files>
 Results:
-  Initial target-layer contract RED=3 followed by GREEN=54/54.
-  Candidate/layer/history hardening RED=5 followed by GREEN=59/59.
-  Final regression after hidden-input, dependency-load, revision-pin and explicit-upgrade reviews: PASS=66/66.
-  TypeScript exit=0; Biome checked 8 files with no diagnostics; scoped git diff --check passed.
+  Initial target-layer/candidate/history/revision-pin cycles: GREEN 54/54, 59/59 and 66/66.
+  Hidden-input, dimension-pin and matrix hardening: GREEN 73/73.
+  Exact id@revision loading, canonical target, save/error race guards, retryable verification copy and blank-text parity: GREEN 77/77.
+  TypeScript exit=0; Biome checked 10 files with no diagnostics; scoped git diff --check passed.
 
 Review
-- Java final review: APPROVE; no HIGH/CRITICAL blocker.
-- Frontend general code review after revision-pin fix: APPROVE; no HIGH/MEDIUM blocker.
-- Final TypeScript and cross-stack review are required before this evidence can support task closure.
+- Java contract/application/stage-gate final review: APPROVE; no CRITICAL/HIGH/MEDIUM.
+- Java REST revision endpoint review: APPROVE; no CRITICAL/HIGH/MEDIUM. Anonymous 401 and negative/int-overflow path cases remain LOW test suggestions.
+- Final TypeScript rereview: APPROVE; no CRITICAL/HIGH/MEDIUM/LOW. Confirmed exact pin, candidate parity, save success/error/finally race guards, retryable verification state and trimToNull parity.
+- Final cross-stack rereview: APPROVE; no CRITICAL/HIGH/MEDIUM/LOW. Confirmed backend, REST, frontend, StageGate and stated pending boundaries are consistent.
+- Final GitNexus unstaged scan: LOW risk, 31 shared-worktree files / 238 changed symbols, 0 affected processes. The scan includes concurrent Sprint-68/AGENTS/CLAUDE edits; F3-T07 paths separately passed scoped diff-check.
 
 Not executed in this increment
-- No full Maven verify or frontend production build was run; the requested strategy is to batch full compilation after the feature is complete.
+- No full Maven verify or frontend production build was run; the agreed strategy is to batch full compilation after the feature is complete.
 - No container rebuild, deployment, authenticated Chrome 95, real API or PostgreSQL E2E is claimed.
-- ODS_RAW/ODS_STANDARDIZED classification, dedicated ingestion navigation and historical ODS/STG migration report/UI remain pending.
+- ODS_RAW/ODS_STANDARDIZED classification, dedicated ingestion/safe-return navigation and historical ODS/STG migration report/UI remain pending.
+- DWD physical-source ownership and canonical-product anti-bypass enforcement remain pending; current checks cover confirmed/resolvable/current SourceBindings only.
+- Concurrent Sprint-68/AGENTS/CLAUDE worktree edits were preserved and excluded from scoped checks.
 
 Current boundary
-- Backend and frontend now enforce the same four-type target-layer and upstream dependency matrix in focused tests.
-- F3-T07 remains IN_PROGRESS until the pending production build, deployed E2E, migration evidence and incremental Go/No-Go are complete.
+- Backend, REST and frontend now implement the same four-type target-layer and exact-revision upstream dependency matrix in focused tests.
+- F3-T07 remains IN_PROGRESS until production build, deployed E2E, DWD ownership/anti-bypass and ODS/historical migration evidence, and incremental Go/No-Go are complete.

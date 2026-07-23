@@ -6,6 +6,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,6 +21,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -36,19 +40,27 @@ class StandardPackageBuiltinServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new StandardPackageBuiltinService(importService, applyService, runRepository, new ObjectMapper());
+        ObjectMapper objectMapper = new ObjectMapper();
+        service = new StandardPackageBuiltinService(
+            importService,
+            applyService,
+            runRepository,
+            objectMapper,
+            new StandardPackageManifestContract(objectMapper)
+        );
+        lenient().when(runRepository.findByStatusOrderByCreatedDateDesc("APPLIED")).thenReturn(List.of());
     }
 
     @Test
     @DisplayName("listBuiltin：清单含 4 个国标包且条目计数与资源一致")
     void listBuiltin_returnsManifestWithCounts() {
-        when(runRepository.existsByPackageNameAndSourceAndStatus(anyString(), eq("BUILTIN"), eq("APPLIED"))).thenReturn(false);
-
         List<Map<String, Object>> packages = service.listBuiltin();
 
         assertThat(packages).hasSize(4);
         Map<String, Object> gender = packages.stream().filter(p -> "gbt-2261-gender".equals(p.get("code"))).findFirst().orElseThrow();
         assertThat(gender.get("standardNo")).isEqualTo("GB/T 2261.1-2003");
+        assertThat(gender.get("packageVersion")).isEqualTo("1.0.0");
+        assertThat(gender.get("contentChecksum")).isNotNull();
         assertThat(gender.get("installed")).isEqualTo(false);
         @SuppressWarnings("unchecked")
         Map<String, Integer> counts = (Map<String, Integer>) gender.get("entryCounts");
@@ -58,6 +70,10 @@ class StandardPackageBuiltinServiceTest {
         @SuppressWarnings("unchecked")
         Map<String, Integer> regionCounts = (Map<String, Integer>) region.get("entryCounts");
         assertThat(regionCounts.get("04-reference-code-items.csv")).isEqualTo(34);
+
+        Map<String, Object> common = packages.stream().filter(p -> "common-data-elements".equals(p.get("code"))).findFirst().orElseThrow();
+        assertThat(common).containsEntry("dependencyReady", false).containsKey("installedVersion");
+        assertThat(packages.get(packages.size() - 1).get("code")).isEqualTo("common-data-elements");
     }
 
     @Test
@@ -73,6 +89,15 @@ class StandardPackageBuiltinServiceTest {
         assertThat(result.get("applied")).isEqualTo(true);
         assertThat(result.get("status")).isEqualTo("APPLIED");
         assertThat(result.get("packageName")).isEqualTo("性别代码");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, byte[]>> entries = ArgumentCaptor.forClass(Map.class);
+        verify(importService).preview(entries.capture(), eq("gbt-2261-gender"), eq("BUILTIN"), eq("tester"));
+        assertThat(entries.getValue()).containsKey("manifest.json");
+        StandardPackageManifestContract.Manifest manifest = new StandardPackageManifestContract(new ObjectMapper())
+            .parsePackage(entries.getValue().get("manifest.json"));
+        assertThat(manifest.packageCode()).isEqualTo("gbt-2261-gender");
+        assertThat(manifest.files()).containsKeys("03-reference-code-directories.csv", "04-reference-code-items.csv");
     }
 
     @Test
@@ -81,6 +106,17 @@ class StandardPackageBuiltinServiceTest {
         assertThatThrownBy(() -> service.install("../etc/passwd", "tester"))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("内置标准包不存在");
+    }
+
+    @Test
+    @DisplayName("install：依赖包未安装时在 preview 前拒绝")
+    void install_missingDependencies_rejectsBeforePreview() {
+        assertThatThrownBy(() -> service.install("common-data-elements", "tester"))
+            .isInstanceOfSatisfying(
+                StandardPackageContractException.class,
+                error -> assertThat(error.code()).isEqualTo("MANIFEST_DEPENDENCY_MISSING")
+            );
+        verify(importService, never()).preview(anyMap(), anyString(), anyString(), anyString());
     }
 
     @Test

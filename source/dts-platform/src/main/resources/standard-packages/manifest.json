@@ -1,32 +1,97 @@
 {
+  "schemaVersion": "2.0",
   "packages": [
     {
-      "code": "gbt-2261-gender",
-      "name": "性别代码",
+      "schemaVersion": "2.0",
+      "packageCode": "gbt-2261-gender",
+      "packageName": "性别代码",
+      "packageVersion": "1.0.0",
       "standardNo": "GB/T 2261.1-2003",
       "category": "公共码表",
-      "description": "个人基本信息分类与代码 第1部分：人的性别代码。含未知/男性/女性/未说明共 4 个码值。"
+      "industry": "COMMON",
+      "releasedAt": "2026-07-23T00:00:00Z",
+      "effectiveFrom": "2026-07-23",
+      "dependencies": [],
+      "replaces": [],
+      "deprecated": false,
+      "sourceRegisterRef": "SOURCE-REGISTER.json#gbt-2261-gender",
+      "licenseConclusion": "REVIEW_REQUIRED",
+      "description": "个人基本信息分类与代码第1部分：人的性别代码。含未知、男性、女性、未说明共4个码值。",
+      "files": {
+        "03-reference-code-directories.csv": "fa2f302d1b3c0b724ff281d72784f15f361b3ffe4943cdce0e86828a3cf484fa",
+        "04-reference-code-items.csv": "333d50fd357a99b9dc5c6a4d02ec13bce4db0a6e19aff14a4c4b01aa6f634661"
+      },
+      "contentChecksum": "21b5da1b33865a6572d3c1357f24e63d91a385468c180eb0ac732b2f444910d8"
     },
     {
-      "code": "gbt-4658-education",
-      "name": "学历代码",
+      "schemaVersion": "2.0",
+      "packageCode": "gbt-4658-education",
+      "packageName": "学历代码",
+      "packageVersion": "1.0.0",
       "standardNo": "GB/T 4658-2006",
       "category": "公共码表",
-      "description": "学历代码常用节选：研究生/本科/专科/中职/高中/初中/小学等大类及常用毕业代码，共 16 个码值。"
+      "industry": "COMMON",
+      "releasedAt": "2026-07-23T00:00:00Z",
+      "effectiveFrom": "2026-07-23",
+      "dependencies": [],
+      "replaces": [],
+      "deprecated": false,
+      "sourceRegisterRef": "SOURCE-REGISTER.json#gbt-4658-education",
+      "licenseConclusion": "REVIEW_REQUIRED",
+      "description": "学历代码常用节选：研究生、本科、专科、中职、高中、初中、小学等大类及常用毕业代码，共16个码值。",
+      "files": {
+        "03-reference-code-directories.csv": "0ee8ea30c4289ee7629507cc8fcb1ecce0f91974465f72f327ae9ebfe11825e4",
+        "04-reference-code-items.csv": "7dd838b3230d638d8767a463adf05ab3d74961e357af9de399c99a938327be24"
+      },
+      "contentChecksum": "a19e7a4ab5e0c8d0c1dde4580e8fb9cb1c1ec779b3bb4e8c5006a9895dda9aad"
     },
     {
-      "code": "gbt-2260-region",
-      "name": "行政区划代码（省级）",
+      "schemaVersion": "2.0",
+      "packageCode": "gbt-2260-region",
+      "packageName": "行政区划代码（省级）",
+      "packageVersion": "1.0.0",
       "standardNo": "GB/T 2260",
       "category": "公共码表",
-      "description": "中华人民共和国行政区划代码省级节选（34 个省级行政区，6 位数字代码）。地市级及以下建议按需通过标准包上传扩充。"
+      "industry": "COMMON",
+      "releasedAt": "2026-07-23T00:00:00Z",
+      "effectiveFrom": "2026-07-23",
+      "dependencies": [],
+      "replaces": [],
+      "deprecated": false,
+      "sourceRegisterRef": "SOURCE-REGISTER.json#gbt-2260-region",
+      "licenseConclusion": "REVIEW_REQUIRED",
+      "description": "中华人民共和国行政区划代码省级节选（34个省级行政区，6位数字代码）。地市级及以下建议按需扩充。",
+      "files": {
+        "03-reference-code-directories.csv": "93eaf36df7a888f6e4fb199b4253ee0808c09f21b4d0bfea9327c1ffed0170a0",
+        "04-reference-code-items.csv": "f88949bc175def84b939b0f9824b81e8c0c795a89508dfeb1ef7a46629184928"
+      },
+      "contentChecksum": "ae00436632578835a1acbcaf6e348b2470e7d35a4d6aebbff3e36b54213b83a9"
     },
     {
-      "code": "common-data-elements",
-      "name": "常用数据元",
+      "schemaVersion": "2.0",
+      "packageCode": "common-data-elements",
+      "packageName": "常用数据元",
+      "packageVersion": "1.0.0",
       "standardNo": "参照 GB/T 18391",
       "category": "数据元",
-      "description": "身份证号、姓名、手机号、邮箱、统一社会信用代码、金额等常用数据元定义，性别/学历/行政区划字段关联对应国标码表。依赖以上三个码表包，建议先安装码表包。"
+      "industry": "COMMON",
+      "releasedAt": "2026-07-23T00:00:00Z",
+      "effectiveFrom": "2026-07-23",
+      "dependencies": [
+        {"packageCode": "gbt-2260-region", "minimumVersion": "1.0.0"},
+        {"packageCode": "gbt-2261-gender", "minimumVersion": "1.0.0"},
+        {"packageCode": "gbt-4658-education", "minimumVersion": "1.0.0"}
+      ],
+      "replaces": [],
+      "deprecated": false,
+      "sourceRegisterRef": "SOURCE-REGISTER.json#common-data-elements",
+      "licenseConclusion": "REVIEW_REQUIRED",
+      "description": "身份证号、姓名、手机号、邮箱、统一社会信用代码、金额等常用数据元，性别、学历、行政区划字段关联对应国标码表。",
+      "files": {
+        "01-business-terms.csv": "8e5c85a5e62fc213bc207f6b9c73fb02cbd310d984c0317cd72f268a8043f661",
+        "02-data-elements.csv": "998d3878445868f176de1ae58f03af04545a45a510c371a2319def11dd0e38c0"
+      },
+      "contentChecksum": "279daff8db336b6536ec5389a8164b7a1a559980f2747b37f52aefd7257e9807"
     }
   ]
 }

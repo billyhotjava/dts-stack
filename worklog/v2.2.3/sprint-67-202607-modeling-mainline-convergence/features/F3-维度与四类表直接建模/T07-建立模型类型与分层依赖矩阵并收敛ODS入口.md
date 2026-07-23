@@ -15,6 +15,8 @@
 
 因此，“创建 ODS”不从四类模型表单开始。已有 ODS 表通过连接、元数据同步和 WarehousePlan 来源盘点登记；尚未产生的 ODS 表通过接入映射/同步任务创建。完成 ETL/ELT 不是保存 DWD 逻辑草稿的前置条件，但进入实现前必须具备本 Task 规定的有效上游证据。
 
+创建 ODS 时仍必须明确“外部输入对象 + ODS 目标映射”，但不需要再指定一张“上游 ODS 表”：MySQL/达梦源表、文件或 API 才是它的上游，待创建的 ODS 表是接入任务的目标。连接测试成功只证明可连通，还需选择具体源对象并保存字段/增量/目标映射。
+
 ## 问题来源
 
 2026-07-23 人工测试发现，四类模型新建表单仍可把当前模型的目标层选为 ODS，同时来源区又要求选择 ODS 表。这产生了两个相互冲突的问题：
@@ -44,7 +46,7 @@ F3-T06 已拆分“目标模型”和“上游输入”，本 Task 继续冻结�
 4. `DIMENSION@DWD` 通过 `dimensionRefs` 参与分析维度关系，不作为 FACT 的 `dependsOn`；SUMMARY 可在 `dependsOn` 中消费 DIMENSION/FACT@DWD 或 SUMMARY@DWS，APPLICATION 可消费任意合法 DWD/DWS/ADS 四类模型。
 5. 旧来源若只有模糊 `ODS` 标签，不自动猜成 `ODS_RAW` 或 `ODS_STANDARDIZED`；来源盘点必须显式分类后才能作为实现证据。
 6. `generationStrategy` 只解决 DIMENSION 的受控生成，不把 ODS/STG 重新包装成业务 ModelSpec。
-7. `sourceRefs.layer=DWD` 只表示当前计划来源盘点中已确认的存量或外部管理物理资产；若上游已有 canonical ModelSpec，必须优先使用锁定 revision 的 `dependsOn`/`dimensionRefs`，不得用物理表引用规避版本和血缘门禁。
+7. `sourceRefs.layer=DWD` 目标语义只允许当前计划来源盘点中已确认的存量或外部管理物理资产；若上游已有 canonical ModelSpec，必须优先使用锁定 revision 的 `dependsOn`/`dimensionRefs`。当前自动化只能校验 SourceBinding 已确认、可解析且版本一致；“外部管理”所有权标志和与 canonical 产物的去重/防绕过仍是本 Task 待实现门禁。
 
 ## 分阶段依赖门禁
 
@@ -71,7 +73,7 @@ F3-T06 已拆分“目标模型”和“上游输入”，本 Task 继续冻结�
 
 blocker code 是 API、页面诊断和 E2E 的稳定契约。页面可以翻译客户语言，但不得按页面自造另一套 code。
 
-服务端按以下顺序返回首要 blocker，保证同一请求在创建、详情和发布页得到一致诊断：业务模型类型/目标层不匹配 → 输入种类不允许 → 上游 revision 缺失/漂移 → 上游层不允许 → 类型专属输入缺失。其余 blocker 仍可作为完整诊断列表返回。
+服务端返回完整的稳定 issue/blocker code 列表，API 顶层仍使用统一校验失败 code。页面按 `field + code` 定位修复入口，不得依赖 issues 数组的首项或顺序推断“首要 blocker”；若后续需要统一主 blocker，必须新增显式契约并同步创建、详情与发布页。
 
 当前代码已使用上表 `MODEL_SPEC_*` code；不得再增加无 `SPEC` 前缀的同义 code。ODS 技术入口导航、历史 ODS/STG 专属迁移分类及其只读 UI 仍是本 Task 后续实现项，不得把设计目标描述为当前运行态已具备；兼容写拒绝完成分类后复用现有 `MODEL_SPEC_LEGACY_READONLY`。
 
@@ -92,7 +94,8 @@ blocker code 是 API、页面诊断和 E2E 的稳定契约。页面可以翻译�
 
 ```text
 数据连接
-  → 接入映射/同步任务
+  → 选择具体外部源表/文件/API
+  → 配置字段、增量和 ODS 目标映射
   → 目标技术层 ODS_RAW 或 ODS_STANDARDIZED
   → 执行并完成元数据同步
   → 加入 WarehousePlan 来源盘点并确认
@@ -124,6 +127,7 @@ STG 由 SQL/dbt/调度实现按需生成并随产物追踪，不提供独立业�
 4. 选择器只展示矩阵允许且当前可访问、版本可验证的候选；服务端仍独立验证，不能把下拉过滤当安全边界。
 5. 空态必须解释“草稿能否保存、实现前缺什么、去哪里补”，不得只显示“请选择来源”。
 6. ODS 技术入口和历史 ODS/STG 专属只读/迁移 UI 当前尚待实现，验收前不得按文档目标宣称页面已存在。
+7. 表单中的“上游来源分层 = ODS”表示所选输入已处于 ODS，不表示当前正在创建 ODS 模型；当前模型目标层仍由 `modelType` 固定。
 
 ## 影响范围
 
@@ -168,6 +172,7 @@ Mock API 截图只能证明布局和文案，不得替代后端矩阵、权限�
 - [x] 后端以单一矩阵校验四类 ModelSpec 的目标层、上游层和 revision，返回稳定 blocker。
 - [x] 前端按模型类型自动投影只读目标层，并只展示允许的输入方式和候选。
 - [ ] ODS_RAW/ODS_STANDARDIZED/STG 从四类模型入口移除，并提供数据接入/来源盘点修复路径。
+- [ ] DWD 物理来源具备存量/外部管理所有权标志，并能防止用 sourceRef 绕过已有 canonical ModelSpec 的 revision/血缘门禁。
 - [ ] 历史 ODS/STG ModelSpec 只读兼容、迁移报告和回滚边界通过验证。
 - [ ] 聚焦 Java/TypeScript 契约测试、一次最终 production build 和 GitNexus 范围审计通过。
 - [ ] 真实 Chrome 95/API/PostgreSQL 完成允许/禁止组合、ODS 双入口和旧记录只读 E2E。

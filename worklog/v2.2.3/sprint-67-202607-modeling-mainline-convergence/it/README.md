@@ -144,7 +144,7 @@ F6-T06 已用首轮 11 项 TDD RED、前端扩展 focused GREEN 59/59 和 10 文
 
 F3-T06 已完成需求与验收矩阵纠偏，自动化实现和证据正在补齐。只有聚焦 Java/TypeScript 回归、一次最终 production build、GitNexus 变更范围审计及部署后 Journey F 全部通过，才可补充证据并关闭 Task；原 F3-T01-T05 的历史证据不能替代本次新增验收。
 
-F3-T07 当前只完成需求矩阵和 Sprint 文档冻结，尚无代码、自动化、构建或真实联动证据。只有目标层强制、按类型上游过滤、ODS 双入口、旧 ODS/STG 只读、稳定 blocker 及部署后 Journey G 全部通过，才可关闭 Task。
+F3-T07 已完成目标层强制、按类型上游过滤、历史类型边界只读、revision 显式升级及前后端聚焦契约测试。ODS 专用接入/安全返回、旧 ODS/STG 迁移 UI，以及最终 production build 和部署后 Journey G 仍未完成，因此 Task 保持 `IN_PROGRESS`。
 
 ## 6. 发布决策
 

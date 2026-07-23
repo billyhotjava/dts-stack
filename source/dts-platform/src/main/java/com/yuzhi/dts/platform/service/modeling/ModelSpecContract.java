@@ -196,6 +196,19 @@ public final class ModelSpecContract {
         return modelType != null && layer != null && targetLayer(modelType) == layer;
     }
 
+    static boolean isCanonicalModel(ModelSpecView view) {
+        return (
+            view != null &&
+            view.contractVersion() == CONTRACT_VERSION &&
+            view.compatibilityMode() == CompatibilityMode.CANONICAL &&
+            matchesTargetLayer(view.modelType(), view.layer())
+        );
+    }
+
+    static boolean isCanonicalDimension(ModelSpecView view) {
+        return isCanonicalReferenceTarget(view) && view.modelType() == ModelType.DIMENSION && view.layer() == Layer.DWD;
+    }
+
     static boolean allowsUpstreamModel(ModelType ownerType, ModelType upstreamType, Layer upstreamLayer) {
         if (ownerType == null || upstreamType == null || upstreamLayer == null) return false;
         if (!matchesTargetLayer(upstreamType, upstreamLayer)) return false;
@@ -205,6 +218,28 @@ public final class ModelSpecContract {
             case SUMMARY -> upstreamType != ModelType.APPLICATION;
             case APPLICATION -> true;
         };
+    }
+
+    static boolean hasHistoricalTypeBoundaryViolation(ModelSpecView view) {
+        if (!isCanonicalModel(view)) return true;
+        return validateView(view)
+            .stream()
+            .map(FieldIssue::code)
+            .anyMatch(code ->
+                switch (code) {
+                    case "MODEL_SPEC_TYPE_LAYER_MISMATCH",
+                        "MODEL_SPEC_BUSINESS_ACTIVITY_NOT_ALLOWED",
+                        "MODEL_SPEC_CONSUMPTION_SCENARIO_NOT_ALLOWED",
+                        "MODEL_SPEC_DIMENSION_PROFILE_NOT_ALLOWED",
+                        "MODEL_SPEC_INPUT_KIND_NOT_ALLOWED",
+                        "MODEL_SPEC_UPSTREAM_LAYER_NOT_ALLOWED" -> true;
+                    default -> false;
+                }
+            );
+    }
+
+    static boolean isCanonicalReferenceTarget(ModelSpecView view) {
+        return isCanonicalModel(view) && !hasHistoricalTypeBoundaryViolation(view);
     }
 
     public enum ImplementationMode {
@@ -1057,6 +1092,34 @@ public final class ModelSpecContract {
                     "MODEL_SPEC_INPUT_KIND_NOT_ALLOWED",
                     "generationStrategy",
                     "Generation strategy belongs to DIMENSION models only"
+                )
+            );
+        }
+        boolean acceptsFactInputs = command.modelType() == ModelType.FACT;
+        if (!acceptsFactInputs && !command.dimensionRefs().isEmpty()) {
+            issues.add(
+                issue(
+                    "MODEL_SPEC_INPUT_KIND_NOT_ALLOWED",
+                    "dimensionRefs",
+                    "Dimension references belong to FACT models only"
+                )
+            );
+        }
+        if (!acceptsFactInputs && command.factShape() != null) {
+            issues.add(
+                issue(
+                    "MODEL_SPEC_INPUT_KIND_NOT_ALLOWED",
+                    "factShape",
+                    "Fact shape belongs to FACT models only"
+                )
+            );
+        }
+        if (!acceptsFactInputs && command.timeSemantics() != null) {
+            issues.add(
+                issue(
+                    "MODEL_SPEC_INPUT_KIND_NOT_ALLOWED",
+                    "timeSemantics",
+                    "Business time semantics belong to FACT models only"
                 )
             );
         }

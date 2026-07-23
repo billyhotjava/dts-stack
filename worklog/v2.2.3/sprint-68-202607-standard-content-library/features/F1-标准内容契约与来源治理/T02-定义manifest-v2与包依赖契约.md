@@ -1,7 +1,7 @@
 # T02：定义 manifest v2 与包依赖契约
 
 **优先级**：P0  
-**状态**：READY  
+**状态**：DONE
 **依赖**：T01
 
 ## 目标
@@ -25,11 +25,22 @@
 
 ## 验证
 
-- [ ] v1 兼容样例可读取。
-- [ ] v2 有效包通过 schema 和依赖校验。
-- [ ] 缺依赖、循环、版本回退、checksum 错误稳定失败。
+- [x] v1 兼容样例可读取。
+- [x] v2 有效包通过 schema 和依赖校验。
+- [x] 缺依赖、循环、版本回退、checksum 错误稳定失败。
 
 ## 完成标准
 
-- [ ] 包版本和依赖不再依赖目录名或人工安装顺序。
-- [ ] manifest 字段语义、错误码和兼容策略写入权威契约。
+- [x] 包版本和依赖不再依赖目录名或人工安装顺序。
+- [x] manifest 字段语义、错误码和兼容策略写入权威契约。
+
+## 实现与证据
+
+- 权威契约：[Manifest v2 契约](../../assets/manifest-v2-contract.md)。
+- 后端实现：`StandardPackageManifestContract`、`StandardPackageImportService`、`StandardPackageBuiltinService`。
+- 内置目录：4 个现有包已升级为 v2，使用真实 CSV SHA-256，`common-data-elements` 显式依赖 3 个公共码表包。
+- 已安装版本从所有 `APPLIED` 记录读取；Sprint-57 历史记录按 legacy `1.0.0` 兼容。
+- 定向回归：
+  `./mvnw -Dtest=StandardPackageBuiltinServiceTest,StandardPackageImportServiceTest,StandardPackageManifestContractTest,StandardPackageApplyServiceTest test`
+  —— 40 tests，0 failures，0 errors。
+- Maven 仍报告仓库既有的 compiler plugin 重复声明、POI dependency convergence 和 JaCoCo 历史执行数据告警；均未导致本任务测试失败。

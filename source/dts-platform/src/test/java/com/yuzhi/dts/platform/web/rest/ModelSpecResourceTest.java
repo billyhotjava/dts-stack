@@ -234,6 +234,68 @@ class ModelSpecResourceTest {
         verify(service).dependencyGraph("server-tenant", MODEL_ID);
     }
 
+    @Test
+    void returnsTheExactReadablePinnedRevisionWithItsOwnEtag() throws Exception {
+        ModelRevisionRef reference = new ModelRevisionRef(MODEL_ID, 1);
+        ModelSpecView pinned = view();
+        when(service.revision("server-tenant", reference)).thenReturn(pinned);
+
+        mockMvc
+            .perform(get("/api/modeling/model-specs/{id}/revisions/{revision}", MODEL_ID, 1))
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag", ETAG))
+            .andExpect(jsonPath("$.data.id").value(MODEL_ID.toString()))
+            .andExpect(jsonPath("$.data.revision").value(1))
+            .andExpect(jsonPath("$.data.checksum").value(CHECKSUM));
+
+        verify(service).revision("server-tenant", reference);
+    }
+
+    @Test
+    void mapsHiddenAndMissingPinnedRevisionsToTheSameNotFoundContract() throws Exception {
+        ModelSpecException hiddenOrMissing = new ModelSpecException(
+            "MODEL_SPEC_NOT_FOUND",
+            "ModelSpec not found",
+            ModelSpecException.Kind.NOT_FOUND
+        );
+        when(service.revision("server-tenant", new ModelRevisionRef(MODEL_ID, 2))).thenThrow(hiddenOrMissing);
+        when(service.revision("server-tenant", new ModelRevisionRef(MODEL_ID, 3))).thenThrow(hiddenOrMissing);
+
+        for (int revision : List.of(2, 3)) {
+            mockMvc
+                .perform(get("/api/modeling/model-specs/{id}/revisions/{revision}", MODEL_ID, revision))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("MODEL_SPEC_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("ModelSpec not found"));
+        }
+
+        verify(service).revision("server-tenant", new ModelRevisionRef(MODEL_ID, 2));
+        verify(service).revision("server-tenant", new ModelRevisionRef(MODEL_ID, 3));
+    }
+
+    @Test
+    void rejectsInvalidPinnedRevisionPathValuesWithoutResolvingARevision() throws Exception {
+        ModelRevisionRef invalid = new ModelRevisionRef(MODEL_ID, 0);
+        when(service.revision("server-tenant", invalid)).thenThrow(
+            new ModelSpecException(
+                "MODEL_SPEC_REVISION_REF_INVALID",
+                "ModelSpec revision reference is invalid",
+                ModelSpecException.Kind.BAD_REQUEST
+            )
+        );
+
+        mockMvc
+            .perform(get("/api/modeling/model-specs/{id}/revisions/{revision}", MODEL_ID, 0))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("MODEL_SPEC_REVISION_REF_INVALID"));
+        mockMvc
+            .perform(get("/api/modeling/model-specs/{id}/revisions/{revision}", MODEL_ID, "not-a-number"))
+            .andExpect(status().isBadRequest());
+
+        verify(service).revision("server-tenant", invalid);
+        verify(service, never()).revision("server-tenant", new ModelRevisionRef(MODEL_ID, -1));
+    }
+
     private static ModelSpecView view() {
         return new ModelSpecView(
             2,

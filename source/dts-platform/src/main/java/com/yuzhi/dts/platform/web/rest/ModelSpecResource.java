@@ -5,6 +5,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.CreateResult;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.ExpectedVersion;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecCreateRequestDecoder;
@@ -94,6 +95,15 @@ public class ModelSpecResource {
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<ModelSpecView>> get(@PathVariable UUID id) {
         ModelSpecView view = service.get(serverTenantId, id);
+        return ResponseEntity.ok().eTag(ModelSpecApplicationService.etag(view)).body(ApiResponses.ok(view));
+    }
+
+    @GetMapping("/{id}/revisions/{revision}")
+    public ResponseEntity<ApiResponse<ModelSpecView>> revision(
+        @PathVariable UUID id,
+        @PathVariable int revision
+    ) {
+        ModelSpecView view = service.revision(serverTenantId, new ModelRevisionRef(id, revision));
         return ResponseEntity.ok().eTag(ModelSpecApplicationService.etag(view)).body(ApiResponses.ok(view));
     }
 

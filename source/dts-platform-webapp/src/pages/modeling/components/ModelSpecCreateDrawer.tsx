@@ -19,7 +19,7 @@ import {
 } from "../modelSpecSourceSelection";
 import { createDimensionSystemCode } from "../modelSpecSystemCode";
 import type { CanonicalModelSpecView, CreateModelSpecCommand, ModelSpecType } from "../modelSpecV2Contract";
-import { isModelSpecUpstreamAllowed, validateModelSpecCreate } from "../modelSpecV2Contract";
+import { isModelSpecReferenceTargetAllowed, validateModelSpecCreate } from "../modelSpecV2Contract";
 import {
 	buildModelSpecCreateCommand,
 	createEmptyModelSpecDraft,
@@ -253,7 +253,11 @@ export function ModelSpecCreateDrawer({
 	const upstreamOptions = useMemo<ModelSpecSelectOption[]>(
 		() =>
 			selectableModels.map((model) => {
-				const allowed = isModelSpecUpstreamAllowed(selectedModelType, model);
+				const allowed = isModelSpecReferenceTargetAllowed(
+					{ modelType: selectedModelType, planId: selectedPlanId },
+					model,
+					"DEPENDENCY",
+				);
 				return {
 					value: model.id,
 					label: `${model.name} · ${model.modelType} · ${model.layer} · r${model.revision}${
@@ -263,14 +267,24 @@ export function ModelSpecCreateDrawer({
 					revision: model.revision,
 				};
 			}),
-		[selectableModels, selectedModelType],
+		[selectableModels, selectedModelType, selectedPlanId],
 	);
 	const dimensionOptions = useMemo<ModelSpecSelectOption[]>(
 		() =>
 			selectableModels
-				.filter((model) => model.modelType === "DIMENSION")
-				.map((model) => ({ value: model.id, label: `${model.name} · r${model.revision}` })),
-		[selectableModels],
+				.filter((model) =>
+					isModelSpecReferenceTargetAllowed(
+						{ modelType: selectedModelType, planId: selectedPlanId },
+						model,
+						"DIMENSION",
+					),
+				)
+				.map((model) => ({
+					value: model.id,
+					label: `${model.name} · DIMENSION · DWD · r${model.revision}`,
+					revision: model.revision,
+				})),
+		[selectableModels, selectedModelType, selectedPlanId],
 	);
 
 	const changePlan = (planId: string) => {

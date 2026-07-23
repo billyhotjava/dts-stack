@@ -2,9 +2,11 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
+import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.StoredModelSpec;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecStandardEvidencePort.StandardEvidence;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.*;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.GateEvidence;
@@ -14,6 +16,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.Evidenc
 import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.Stage;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -337,6 +340,247 @@ class ModelSpecStageGateServiceTest {
     }
 
     @Test
+    void implementationGateLoadsPinnedDependenciesAndRejectsAnInvalidOwnerMatrix() {
+        UUID upstreamId = UUID.fromString("40000000-0000-0000-0000-000000000010");
+        ModelRevisionRef upstreamRef = new ModelRevisionRef(upstreamId, 3);
+        ModelSpecView owner = view(
+            ModelType.FACT,
+            null,
+            FactShape.TRANSACTION,
+            new TimeSemantics(TimeSemanticsType.EVENT_TIME, List.of("event_time")),
+            List.of(),
+            List.of(upstreamRef),
+            List.of(),
+            null
+        );
+        ModelSpecView application = withId(
+            view(ModelType.APPLICATION, null, null, null, List.of(), List.of(upstreamRef), List.of(), "dashboard"),
+            upstreamId
+        );
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository repository = mock(ModelSpecRepository.class);
+        ModelSpecStandardEvidencePort standards = mock(ModelSpecStandardEvidencePort.class);
+        StoredModelSpec pinned = mock(StoredModelSpec.class);
+        StoredModelSpec current = mock(StoredModelSpec.class);
+        when(current.revision()).thenReturn(3);
+        when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(owner);
+        when(modelSpecs.revision("tenant-a", upstreamRef)).thenReturn(application);
+        when(repository.findRevision("tenant-a", upstreamId, 3)).thenReturn(Optional.of(pinned));
+        when(repository.findCurrent("tenant-a", upstreamId)).thenReturn(Optional.of(current));
+
+        GateView implementation = new ModelSpecStageGateService(modelSpecs, repository, standards)
+            .evaluateAll("tenant-a", MODEL_ID)
+            .stream()
+            .filter(gate -> gate.stage() == Stage.IMPLEMENTATION_READY)
+            .findFirst()
+            .orElseThrow();
+
+        assertThat(implementation.blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .containsExactly("MODEL_SPEC_UPSTREAM_EVIDENCE_STALE");
+        verify(modelSpecs).revision("tenant-a", upstreamRef);
+    }
+
+    @Test
+    void implementationGateRejectsCanonicalLayerUpstreamsWithHistoricalTypePollution() {
+        UUID upstreamId = UUID.fromString("40000000-0000-0000-0000-000000000014");
+        ModelRevisionRef upstreamRef = new ModelRevisionRef(upstreamId, 2);
+        ModelSpecView owner = view(
+            ModelType.SUMMARY,
+            null,
+            null,
+            null,
+            List.of(),
+            List.of(upstreamRef),
+            List.of(),
+            null
+        );
+        DimensionProfile pollution = new DimensionProfile(
+            "DIM_POLLUTION",
+            List.of(),
+            new ScdPolicy(ScdType.TYPE1, null, null, null),
+            ReuseScope.PLAN
+        );
+        ModelSpecView pollutedFact = withId(
+            view(
+                ModelType.FACT,
+                pollution,
+                FactShape.TRANSACTION,
+                new TimeSemantics(TimeSemanticsType.EVENT_TIME, List.of("event_time")),
+                sources(),
+                List.of(),
+                List.of(),
+                null
+            ),
+            upstreamId
+        );
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository repository = mock(ModelSpecRepository.class);
+        ModelSpecStandardEvidencePort standards = mock(ModelSpecStandardEvidencePort.class);
+        StoredModelSpec current = mock(StoredModelSpec.class);
+        when(current.revision()).thenReturn(2);
+        when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(owner);
+        when(modelSpecs.revision("tenant-a", upstreamRef)).thenReturn(pollutedFact);
+        when(repository.findCurrent("tenant-a", upstreamId)).thenReturn(Optional.of(current));
+
+        GateView implementation = new ModelSpecStageGateService(modelSpecs, repository, standards)
+            .evaluateAll("tenant-a", MODEL_ID)
+            .stream()
+            .filter(gate -> gate.stage() == Stage.IMPLEMENTATION_READY)
+            .findFirst()
+            .orElseThrow();
+
+        assertThat(implementation.blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .contains("MODEL_SPEC_UPSTREAM_EVIDENCE_STALE");
+    }
+
+    @Test
+    void implementationGateRejectsNonCanonicalDimensionTargetsAtThePinnedRevision() {
+        UUID dimensionId = UUID.fromString("40000000-0000-0000-0000-000000000011");
+        ModelRevisionRef dimensionRef = new ModelRevisionRef(dimensionId, 2);
+        ModelSpecView owner = withReferences(
+            view(
+                ModelType.FACT,
+                null,
+                FactShape.TRANSACTION,
+                new TimeSemantics(TimeSemanticsType.EVENT_TIME, List.of("event_time")),
+                List.of(),
+                List.of(),
+                List.of(),
+                null
+            ),
+            List.of(),
+            List.of(dimensionRef)
+        );
+        ModelSpecView wrongLayerDimension = withId(
+            withLayer(dimension(null, List.of(), new GenerationStrategy("REFERENCE", "organization-master")), Layer.ODS),
+            dimensionId
+        );
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository repository = mock(ModelSpecRepository.class);
+        ModelSpecStandardEvidencePort standards = mock(ModelSpecStandardEvidencePort.class);
+        StoredModelSpec pinned = mock(StoredModelSpec.class);
+        StoredModelSpec current = mock(StoredModelSpec.class);
+        when(current.revision()).thenReturn(2);
+        when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(owner);
+        when(modelSpecs.revision("tenant-a", dimensionRef)).thenReturn(wrongLayerDimension);
+        when(repository.findRevision("tenant-a", dimensionId, 2)).thenReturn(Optional.of(pinned));
+        when(repository.findCurrent("tenant-a", dimensionId)).thenReturn(Optional.of(current));
+
+        GateView implementation = new ModelSpecStageGateService(modelSpecs, repository, standards)
+            .evaluateAll("tenant-a", MODEL_ID)
+            .stream()
+            .filter(gate -> gate.stage() == Stage.IMPLEMENTATION_READY)
+            .findFirst()
+            .orElseThrow();
+
+        assertThat(implementation.blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .contains("MODEL_SPEC_DIMENSION_EVIDENCE_STALE");
+    }
+
+    @Test
+    void referencedModelLookupFailuresBecomeStaleEvidenceInsteadOfEscapingTheGateApi() {
+        UUID dimensionId = UUID.fromString("40000000-0000-0000-0000-000000000012");
+        ModelRevisionRef dimensionRef = new ModelRevisionRef(dimensionId, 2);
+        ModelSpecView owner = withReferences(
+            view(
+                ModelType.FACT,
+                null,
+                FactShape.TRANSACTION,
+                new TimeSemantics(TimeSemanticsType.EVENT_TIME, List.of("event_time")),
+                List.of(),
+                List.of(),
+                List.of(),
+                null
+            ),
+            List.of(),
+            List.of(dimensionRef)
+        );
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository repository = mock(ModelSpecRepository.class);
+        ModelSpecStandardEvidencePort standards = mock(ModelSpecStandardEvidencePort.class);
+        StoredModelSpec pinned = mock(StoredModelSpec.class);
+        StoredModelSpec current = mock(StoredModelSpec.class);
+        when(current.revision()).thenReturn(2);
+        when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(owner);
+        when(modelSpecs.revision("tenant-a", dimensionRef)).thenThrow(new IllegalStateException("reference hidden"));
+        when(repository.findRevision("tenant-a", dimensionId, 2)).thenReturn(Optional.of(pinned));
+        when(repository.findCurrent("tenant-a", dimensionId)).thenReturn(Optional.of(current));
+
+        GateView implementation = new ModelSpecStageGateService(modelSpecs, repository, standards)
+            .evaluateAll("tenant-a", MODEL_ID)
+            .stream()
+            .filter(gate -> gate.stage() == Stage.IMPLEMENTATION_READY)
+            .findFirst()
+            .orElseThrow();
+
+        assertThat(implementation.blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .contains("MODEL_SPEC_DIMENSION_EVIDENCE_STALE");
+    }
+
+    @Test
+    void crossPlanReferencesMustRemainPublishedToCountAsCurrentGateEvidence() {
+        UUID upstreamId = UUID.fromString("40000000-0000-0000-0000-000000000013");
+        UUID upstreamPlanId = UUID.fromString("10000000-0000-0000-0000-000000000099");
+        ModelRevisionRef upstreamRef = new ModelRevisionRef(upstreamId, 2);
+        ModelSpecView owner = view(
+            ModelType.APPLICATION,
+            null,
+            null,
+            null,
+            List.of(),
+            List.of(upstreamRef),
+            List.of(),
+            "dashboard"
+        );
+        ModelSpecView target = withId(
+            view(
+                ModelType.FACT,
+                null,
+                FactShape.TRANSACTION,
+                new TimeSemantics(TimeSemanticsType.EVENT_TIME, List.of("event_time")),
+                sources(),
+                List.of(),
+                List.of(),
+                null
+            ),
+            upstreamId
+        );
+        ModelSpecView crossPlanDraft = withPlanAndStatus(target, upstreamPlanId, ModelStatus.DRAFT);
+        ModelSpecView crossPlanPublished = withPlanAndStatus(target, upstreamPlanId, ModelStatus.PUBLISHED);
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository repository = mock(ModelSpecRepository.class);
+        ModelSpecStandardEvidencePort standards = mock(ModelSpecStandardEvidencePort.class);
+        StoredModelSpec current = mock(StoredModelSpec.class);
+        when(current.revision()).thenReturn(2);
+        when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(owner);
+        when(repository.findCurrent("tenant-a", upstreamId)).thenReturn(Optional.of(current));
+        when(modelSpecs.revision("tenant-a", upstreamRef)).thenReturn(crossPlanDraft, crossPlanPublished);
+
+        ModelSpecStageGateService gates = new ModelSpecStageGateService(modelSpecs, repository, standards);
+        GateView draftGate = gates
+            .evaluateAll("tenant-a", MODEL_ID)
+            .stream()
+            .filter(gate -> gate.stage() == Stage.IMPLEMENTATION_READY)
+            .findFirst()
+            .orElseThrow();
+        GateView publishedGate = gates
+            .evaluateAll("tenant-a", MODEL_ID)
+            .stream()
+            .filter(gate -> gate.stage() == Stage.IMPLEMENTATION_READY)
+            .findFirst()
+            .orElseThrow();
+
+        assertThat(draftGate.blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .contains("MODEL_SPEC_UPSTREAM_EVIDENCE_STALE");
+        assertThat(publishedGate.status()).isEqualTo(GateStatus.READY);
+    }
+
+    @Test
     void releaseGateUsesProfessionalOwnerEvidenceForVersionedBindings() {
         DimensionProfile profile = new DimensionProfile(
             "DIM_ORGANIZATION",
@@ -526,6 +770,119 @@ class ModelSpecStageGateServiceTest {
             model.generationStrategy(),
             model.dimensionProfile(),
             model.status(),
+            model.revision(),
+            model.checksum(),
+            model.createdAt(),
+            model.updatedAt(),
+            model.compatibilityMode(),
+            model.legacyRefs()
+        );
+    }
+
+    private static ModelSpecView withId(ModelSpecView model, UUID modelSpecId) {
+        return new ModelSpecView(
+            model.contractVersion(),
+            modelSpecId,
+            model.planId(),
+            model.domainId(),
+            model.modelType(),
+            model.layer(),
+            model.name(),
+            model.description(),
+            model.implementationMode(),
+            model.materialization(),
+            model.businessActivityRef(),
+            model.consumptionScenario(),
+            model.grain(),
+            model.factShape(),
+            model.timeSemantics(),
+            model.fields(),
+            model.sourceRefs(),
+            model.dependsOn(),
+            model.dimensionRefs(),
+            model.metricRefs(),
+            model.standardBindings(),
+            model.generationStrategy(),
+            model.dimensionProfile(),
+            model.status(),
+            model.revision(),
+            model.checksum(),
+            model.createdAt(),
+            model.updatedAt(),
+            model.compatibilityMode(),
+            model.legacyRefs()
+        );
+    }
+
+    private static ModelSpecView withReferences(
+        ModelSpecView model,
+        List<ModelRevisionRef> dependsOn,
+        List<ModelRevisionRef> dimensionRefs
+    ) {
+        return new ModelSpecView(
+            model.contractVersion(),
+            model.id(),
+            model.planId(),
+            model.domainId(),
+            model.modelType(),
+            model.layer(),
+            model.name(),
+            model.description(),
+            model.implementationMode(),
+            model.materialization(),
+            model.businessActivityRef(),
+            model.consumptionScenario(),
+            model.grain(),
+            model.factShape(),
+            model.timeSemantics(),
+            model.fields(),
+            model.sourceRefs(),
+            dependsOn,
+            dimensionRefs,
+            model.metricRefs(),
+            model.standardBindings(),
+            model.generationStrategy(),
+            model.dimensionProfile(),
+            model.status(),
+            model.revision(),
+            model.checksum(),
+            model.createdAt(),
+            model.updatedAt(),
+            model.compatibilityMode(),
+            model.legacyRefs()
+        );
+    }
+
+    private static ModelSpecView withPlanAndStatus(
+        ModelSpecView model,
+        UUID planId,
+        ModelStatus status
+    ) {
+        return new ModelSpecView(
+            model.contractVersion(),
+            model.id(),
+            planId,
+            model.domainId(),
+            model.modelType(),
+            model.layer(),
+            model.name(),
+            model.description(),
+            model.implementationMode(),
+            model.materialization(),
+            model.businessActivityRef(),
+            model.consumptionScenario(),
+            model.grain(),
+            model.factShape(),
+            model.timeSemantics(),
+            model.fields(),
+            model.sourceRefs(),
+            model.dependsOn(),
+            model.dimensionRefs(),
+            model.metricRefs(),
+            model.standardBindings(),
+            model.generationStrategy(),
+            model.dimensionProfile(),
+            status,
             model.revision(),
             model.checksum(),
             model.createdAt(),

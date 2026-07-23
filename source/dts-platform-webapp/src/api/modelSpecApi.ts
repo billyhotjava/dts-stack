@@ -142,6 +142,12 @@ export const getModelSpec = (id: string) =>
 		_skipErrorToast: true,
 	} as any);
 
+export const getModelSpecRevision = (id: string, revision: number) =>
+	api.get<ModelSpecView>({
+		url: `${MODEL_SPEC_RESOURCE}/${encodeURIComponent(id)}/revisions/${encodeURIComponent(String(revision))}`,
+		_skipErrorToast: true,
+	} as any);
+
 export const getModelSpecStageGates = (id: string) =>
 	api.get<ModelSpecStageGate[]>({
 		url: `${MODEL_SPEC_RESOURCE}/${encodeURIComponent(id)}/stage-gates`,
@@ -173,8 +179,7 @@ export const bindModelSpecMetricRef = (expected: ModelSpecCasToken, data: { metr
 		_skipErrorToast: true,
 	} as any);
 
-const lifecycleUrl = (id: string, suffix = "") =>
-	`${MODEL_SPEC_RESOURCE}/${encodeURIComponent(id)}/lifecycle${suffix}`;
+const lifecycleUrl = (id: string, suffix = "") => `${MODEL_SPEC_RESOURCE}/${encodeURIComponent(id)}/lifecycle${suffix}`;
 const lifecycleHeaders = (expected: ModelSpecCasToken) => ({ "If-Match": toModelSpecEtag(expected) });
 
 export const claimModelImplementation = (
@@ -194,7 +199,11 @@ export const claimModelImplementation = (
 	} as any);
 
 export const compileModelLifecycle = (expected: ModelSpecCasToken, idempotencyKey: string) =>
-	api.post<{ implementation: ModelImplementationOwner; event: ModelLifecycleEvent; artifacts: ModelLifecycleArtifact[] }>({
+	api.post<{
+		implementation: ModelImplementationOwner;
+		event: ModelLifecycleEvent;
+		artifacts: ModelLifecycleArtifact[];
+	}>({
 		url: lifecycleUrl(expected.id, "/compile"),
 		headers: lifecycleHeaders(expected),
 		data: { idempotencyKey },
@@ -212,10 +221,7 @@ export const recordModelTestEvidence = (
 		_skipErrorToast: true,
 	} as any);
 
-export const submitModelReview = (
-	expected: ModelSpecCasToken,
-	data: { comment?: string; idempotencyKey: string },
-) =>
+export const submitModelReview = (expected: ModelSpecCasToken, data: { comment?: string; idempotencyKey: string }) =>
 	api.post<ModelLifecycleEvent>({
 		url: lifecycleUrl(expected.id, "/reviews"),
 		headers: lifecycleHeaders(expected),
@@ -223,10 +229,7 @@ export const submitModelReview = (
 		_skipErrorToast: true,
 	} as any);
 
-export const approveModelReview = (
-	expected: ModelSpecCasToken,
-	data: { comment?: string; idempotencyKey: string },
-) =>
+export const approveModelReview = (expected: ModelSpecCasToken, data: { comment?: string; idempotencyKey: string }) =>
 	api.post<ModelLifecycleEvent>({
 		url: lifecycleUrl(expected.id, "/reviews/approve"),
 		headers: lifecycleHeaders(expected),

@@ -89,11 +89,12 @@ test("the editor fixes each of the four model categories to its product layer an
 });
 
 test("upstream choices enforce the type-layer matrix before a create or update request", () => {
-	assert.match(drawer, /isModelSpecUpstreamAllowed/);
-	assert.match(drawer, /isModelSpecUpstreamAllowed\(selectedModelType,\s*model\)/);
+	assert.match(drawer, /isModelSpecReferenceTargetAllowed/);
+	assert.match(drawer, /modelType:\s*selectedModelType,\s*planId:\s*selectedPlanId/);
+	assert.match(drawer, /"DEPENDENCY"/);
 	assert.match(drawer, /disabled:\s*!allowed/);
-	assert.match(detail, /isModelSpecUpstreamAllowed/);
-	assert.match(detail, /isModelSpecUpstreamAllowed\(canonicalModel\?\.modelType \|\| "FACT",\s*candidate\)/);
+	assert.match(detail, /isModelSpecReferenceTargetAllowed/);
+	assert.match(detail, /isModelSpecReferenceTargetAllowed\(canonicalModel,\s*candidate,\s*"DEPENDENCY"\)/);
 	assert.match(detail, /disabled:\s*!allowed/);
 	assert.match(editor, /存在不符合当前模型类别依赖规则的上游模型/);
 	assert.match(editor, /optionById\.get\(id\)\?\.disabled !== false/);
@@ -107,16 +108,11 @@ test("physical input layers exclude DWS and ADS from the source mapping selector
 test("historical canonical models outside the fixed target-layer matrix are explicit read-only records", () => {
 	assert.match(detail, /targetLayerMismatch/);
 	assert.match(detail, /MODEL_SPEC_TARGET_LAYER_BY_TYPE\[canonicalModel\.modelType\]\s*!==\s*canonicalModel\.layer/);
-	assert.match(detail, /derivedSourceContractMismatch/);
-	assert.match(detail, /canonicalModel\.modelType === "SUMMARY" \|\| canonicalModel\.modelType === "APPLICATION"/);
-	assert.match(detail, /canonicalModel\.sourceRefs\.length > 0/);
-	assert.match(detail, /dimensionDependencyContractMismatch/);
-	assert.match(detail, /canonicalModel\.modelType === "DIMENSION" && canonicalModel\.dependsOn\.length > 0/);
-	assert.match(detail, /nonDimensionGenerationStrategyMismatch/);
-	assert.match(detail, /canonicalModel\.modelType !== "DIMENSION" && canonicalModel\.generationStrategy != null/);
+	assert.match(detail, /typeBoundaryMismatch/);
+	assert.match(detail, /hasModelSpecTypeBoundaryMismatch\(canonicalModel\)/);
 	assert.match(detail, /dependencyContractMismatch/);
 	assert.match(detail, /!dependencyContractMismatch/);
-	assert.match(detail, /历史模型的类别、目标分层或上游依赖不符合当前四类表规则，仅支持查看/);
+	assert.match(detail, /类型专属字段或输入依赖不符合当前四类表规则，仅支持查看/);
 });
 
 test("switching away from DIMENSION clears generation-only input and maps validation back to its visible field", () => {
@@ -131,11 +127,10 @@ test("dependency metadata outages defer client-side dependency classification to
 	assert.match(detail, /dependencyMetadataLoaded/);
 	assert.match(detail, /setDependencyMetadataLoaded\(false\)/);
 	assert.match(detail, /setDependencyMetadataLoaded\(true\)/);
-	assert.match(detail, /dependencyMetadataLoaded\s*&&[\s\S]{0,180}canonicalModel\?\.dependsOn\.some/);
-	assert.match(detail, /candidate\.planId !== canonicalModel\.planId && candidate\.status !== "PUBLISHED"/);
 	assert.match(detail, /upstreamValidationAvailable=\{dependencyMetadataLoaded\}/);
 	assert.match(editor, /upstreamValidationAvailable = true/);
 	assert.match(editor, /if \(!upstreamValidationAvailable\) return/);
+	assert.match(detail, /referenceMetadataLoaded\s*&&[\s\S]{0,180}canonicalModel\?\.dependsOn\.some/);
 });
 
 test("revision-pinned upstreams require an explicit action before adopting a newer revision", () => {
@@ -144,6 +139,92 @@ test("revision-pinned upstreams require an explicit action before adopting a new
 	assert.match(editor, /adoptCurrentUpstreamRevisions/);
 	assert.match(editor, /采用所选上游当前版本/);
 	assert.match(editor, /form\.setFieldValue\("existingUpstreamPins"/);
+});
+
+test("analysis-dimension candidates are canonical DWD dimensions and historical bad refs are read-only", () => {
+	assert.match(contract, /isModelSpecDimensionRefAllowed/);
+	assert.match(contract, /isCanonicalModelSpecReferenceTarget/);
+	assert.match(contract, /!hasModelSpecTypeBoundaryMismatch\(candidate\)/);
+	assert.match(contract, /candidate\.sourceRefs\.every\(.*isModelSpecDirectInputLayerAllowed/);
+	assert.match(drawer, /isModelSpecReferenceTargetAllowed/);
+	assert.match(detail, /isModelSpecReferenceTargetAllowed/);
+	assert.match(drawer, /isModelSpecReferenceTargetAllowed\([\s\S]{0,180}"DIMENSION"/);
+	assert.match(detail, /isModelSpecReferenceTargetAllowed\([\s\S]{0,180}"DIMENSION"/);
+	assert.match(drawer, /revision:\s*model\.revision/);
+	assert.match(detail, /revision:\s*candidate\.revision/);
+	assert.match(detail, /dimensionReferenceMismatch/);
+	assert.match(detail, /canonicalModel\?\.dimensionRefs\.some/);
+});
+
+test("detail validates existing references against their exact pinned revisions and fails closed", () => {
+	assert.match(detail, /getModelSpecRevision/);
+	assert.match(detail, /modelSpecRevisionRefKey/);
+	assert.match(detail, /const resolveModelSpecReferenceTargets/);
+	assert.match(detail, /resolveModelSpecReferenceTargets\(detail\)/);
+	assert.match(detail, /resolveModelSpecReferenceTargets\(updated\)/);
+	assert.equal(
+		detail.match(/refreshReferenceTargetsAfterSave\(updated,\s*pageRequestId\)/g)?.length,
+		2,
+		"both draft and standard-binding saves must refresh exact reference pins",
+	);
+	assert.equal(
+		detail.match(
+			/const updated = await updateModelSpec\([\s\S]*?\);\s*if \(pageRequestId !== loadRequestRef\.current\) return(?: false)?;\s*setModel\(updated\);/g,
+		)?.length,
+		2,
+		"both save responses must be rejected before any stale model state is written",
+	);
+	assert.equal(
+		detail.match(/if \(pageRequestId !== loadRequestRef\.current\) return(?: false)?;/g)?.length,
+		4,
+		"both success and error responses must be rejected after navigation",
+	);
+	assert.equal(
+		detail.match(/if \(pageRequestId === loadRequestRef\.current\) setSaving\(false\);/g)?.length,
+		2,
+		"stale saves must not clear a newer page's saving state",
+	);
+	assert.match(
+		detail,
+		/const load = useCallback\(async \(\) => \{[\s\S]{0,220}setSaving\(false\)/,
+		"a newly loaded model must reset saving state after invalidating the prior request",
+	);
+	assert.match(detail, /referenceTargets/);
+	assert.match(detail, /referenceMetadataLoaded/);
+	assert.match(detail, /referenceRequestRef/);
+	assert.match(detail, /target\.id !== reference\.modelSpecId \|\| target\.revision !== reference\.revision/);
+	assert.match(detail, /setReferenceTargets/);
+	assert.match(detail, /setReferenceMetadataLoaded\(false\)/);
+	assert.match(detail, /setReferenceMetadataLoaded\(true\)/);
+	assert.match(detail, /isModelSpecReferenceTargetAllowed\(canonicalModel,\s*target,\s*"DEPENDENCY"\)/);
+	assert.match(detail, /isModelSpecReferenceTargetAllowed\(canonicalModel,\s*target,\s*"DIMENSION"\)/);
+	assert.doesNotMatch(detail, /availableModels\.find\(\(item\) => item\.id === reference\.modelSpecId\)/);
+});
+
+test("exact-reference transport failures stay read-only with a direct retry and are not mislabeled as migrations", () => {
+	assert.match(detail, /referenceResolutionFailed/);
+	assert.match(detail, /!referenceResolutionFailed[\s\S]{0,120}canonicalModel\?\.dependsOn\.some/);
+	assert.match(detail, /暂时无法核验已锁定上游版本，页面已只读，请重试/);
+	assert.match(detail, /onClick=\{\(\) => void load\(\)\}/);
+	assert.match(detail, /referenceMetadataLoaded[\s\S]{0,120}!referenceResolutionFailed/);
+});
+
+test("persisted type-specific hidden fields force read-only instead of silent normalization", () => {
+	assert.match(contract, /hasModelSpecTypeBoundaryMismatch/);
+	assert.match(contract, /model\.modelType !== "DIMENSION" && model\.dimensionProfile != null/);
+	assert.match(contract, /model\.modelType !== "FACT" && model\.factShape != null/);
+	assert.match(contract, /model\.modelType !== "FACT" && model\.timeSemantics != null/);
+	assert.match(contract, /model\.modelType !== "FACT" && isNonBlankString\(model\.businessActivityRef\)/);
+	assert.match(contract, /model\.modelType !== "APPLICATION" && isNonBlankString\(model\.consumptionScenario\)/);
+	assert.match(contract, /model\.modelType !== "FACT" && model\.dimensionRefs\.length > 0/);
+	assert.match(detail, /typeBoundaryMismatch/);
+	assert.match(detail, /类型专属字段或输入依赖不符合当前四类表规则，仅支持查看/);
+});
+
+test("revision-pinned dimension refs require a per-item explicit adoption action", () => {
+	assert.match(editor, /adoptCurrentDimensionRevisions/);
+	assert.match(editor, /采用所选维度当前版本/);
+	assert.match(editor, /form\.setFieldValue\("existingDimensionPins"/);
 });
 
 test("the embedded source manager uses authoritative plan lifecycle and policy with an unknown-plan deny default", () => {

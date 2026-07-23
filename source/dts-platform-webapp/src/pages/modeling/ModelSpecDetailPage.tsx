@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
 	getModelSpec,
+	getModelSpecRevision,
 	getModelSpecStageGates,
 	listModelSpecs,
 	type ModelSpecStageGate,
@@ -30,13 +31,16 @@ import {
 } from "./modelSpecSourceSelection";
 import {
 	type CanonicalModelSpecView,
+	hasModelSpecTypeBoundaryMismatch,
+	isCanonicalModelSpecReferenceTarget,
 	isModelSpecDirectInputLayerAllowed,
-	isModelSpecUpstreamAllowed,
+	isModelSpecReferenceTargetAllowed,
 	MODEL_SPEC_TARGET_LAYER_BY_TYPE,
 	type ModelSpecCasToken,
 	type ModelSpecRevisionConflictDetails,
 	type ModelSpecStandardBinding,
 	type ModelSpecView,
+	modelSpecRevisionRefKey,
 	validateModelSpecUpdate,
 } from "./modelSpecV2Contract";
 import {
@@ -66,6 +70,43 @@ const issueField = (field: string): keyof ModelSpecDraft => {
 	return field as keyof ModelSpecDraft;
 };
 
+type ModelSpecReferenceResolution = {
+	targets: Record<string, ModelSpecView | null>;
+	failed: boolean;
+};
+
+const resolveModelSpecReferenceTargets = async (model: ModelSpecView): Promise<ModelSpecReferenceResolution> => {
+	const references =
+		model.compatibilityMode === "CANONICAL"
+			? Array.from(
+					new Map(
+						[...model.dependsOn, ...model.dimensionRefs].map((reference) => [
+							modelSpecRevisionRefKey(reference),
+							reference,
+						]),
+					).values(),
+				)
+			: [];
+	const resolved = await Promise.all(
+		references.map(async (reference) => {
+			const key = modelSpecRevisionRefKey(reference);
+			try {
+				const target = await getModelSpecRevision(reference.modelSpecId, reference.revision);
+				if (target.id !== reference.modelSpecId || target.revision !== reference.revision) {
+					return { key, target: null, failed: true };
+				}
+				return { key, target, failed: false };
+			} catch {
+				return { key, target: null, failed: true };
+			}
+		}),
+	);
+	return {
+		targets: Object.fromEntries(resolved.map(({ key, target }) => [key, target])),
+		failed: resolved.some((item) => item.failed),
+	};
+};
+
 export default function ModelSpecDetailPage() {
 	const navigate = useNavigate();
 	const [searchParams] = useSearchParams();
@@ -77,6 +118,9 @@ export default function ModelSpecDetailPage() {
 	const [model, setModel] = useState<ModelSpecView | null>(null);
 	const [availableModels, setAvailableModels] = useState<CanonicalModelSpecView[]>([]);
 	const [dependencyMetadataLoaded, setDependencyMetadataLoaded] = useState(false);
+	const [referenceTargets, setReferenceTargets] = useState<Record<string, ModelSpecView | null>>({});
+	const [referenceMetadataLoaded, setReferenceMetadataLoaded] = useState(false);
+	const [referenceResolutionFailed, setReferenceResolutionFailed] = useState(false);
 	const [stageGates, setStageGates] = useState<ModelSpecStageGate[]>([]);
 	const [sourceOptions, setSourceOptions] = useState<ModelSpecSourceChoice[]>([]);
 	const [gateLoading, setGateLoading] = useState(false);
@@ -95,6 +139,7 @@ export default function ModelSpecDetailPage() {
 	const selectedSources = Form.useWatch("sources", form) || [];
 	const sourceVerificationPending = sourceLoading && selectedSources.length > 0;
 	const loadRequestRef = useRef(0);
+	const referenceRequestRef = useRef(0);
 	const sourceRequestRef = useRef(0);
 	const { labelByKey } = useCatalogDomainOptions();
 	const canonicalModel = model?.compatibilityMode === "CANONICAL" ? model : null;
@@ -107,39 +152,39 @@ export default function ModelSpecDetailPage() {
 			(canonicalModel.modelType === "DIMENSION" || canonicalModel.modelType === "FACT") &&
 			canonicalModel.sourceRefs.some((source) => !isModelSpecDirectInputLayerAllowed(source.layer)),
 	);
-	const derivedSourceContractMismatch = Boolean(
-		canonicalModel &&
-			(canonicalModel.modelType === "SUMMARY" || canonicalModel.modelType === "APPLICATION") &&
-			canonicalModel.sourceRefs.length > 0,
-	);
-	const dimensionDependencyContractMismatch = Boolean(
-		canonicalModel && canonicalModel.modelType === "DIMENSION" && canonicalModel.dependsOn.length > 0,
-	);
-	const nonDimensionGenerationStrategyMismatch = Boolean(
-		canonicalModel && canonicalModel.modelType !== "DIMENSION" && canonicalModel.generationStrategy != null,
-	);
+	const typeBoundaryMismatch = Boolean(canonicalModel && hasModelSpecTypeBoundaryMismatch(canonicalModel));
 	const upstreamDependencyMismatch = Boolean(
-		dependencyMetadataLoaded &&
+		referenceMetadataLoaded &&
+			!referenceResolutionFailed &&
 			canonicalModel?.dependsOn.some((reference) => {
-				const candidate = availableModels.find((item) => item.id === reference.modelSpecId);
-				if (!candidate) return true;
-				if (candidate.planId !== canonicalModel.planId && candidate.status !== "PUBLISHED") return true;
-				return !isModelSpecUpstreamAllowed(canonicalModel.modelType, candidate);
+				const target = referenceTargets[modelSpecRevisionRefKey(reference)];
+				if (!target) return true;
+				return !isModelSpecReferenceTargetAllowed(canonicalModel, target, "DEPENDENCY");
+			}),
+	);
+	const dimensionReferenceMismatch = Boolean(
+		referenceMetadataLoaded &&
+			!referenceResolutionFailed &&
+			canonicalModel?.dimensionRefs.some((reference) => {
+				const target = referenceTargets[modelSpecRevisionRefKey(reference)];
+				if (!target) return true;
+				return !isModelSpecReferenceTargetAllowed(canonicalModel, target, "DIMENSION");
 			}),
 	);
 	const dependencyContractMismatch =
 		targetLayerMismatch ||
 		directInputLayerMismatch ||
-		derivedSourceContractMismatch ||
-		dimensionDependencyContractMismatch ||
-		nonDimensionGenerationStrategyMismatch ||
-		upstreamDependencyMismatch;
+		typeBoundaryMismatch ||
+		upstreamDependencyMismatch ||
+		dimensionReferenceMismatch;
 	const canEdit = Boolean(
 		canonicalModel &&
 			statusAllowsEdit &&
 			roleAllowsEdit &&
 			!writeDenied &&
 			!statusChanged &&
+			referenceMetadataLoaded &&
+			!referenceResolutionFailed &&
 			!dependencyContractMismatch,
 	);
 	const activeTab = useMemo(() => resolveModelSpecDetailTab(searchParams), [searchParams]);
@@ -214,6 +259,7 @@ export default function ModelSpecDetailPage() {
 	const load = useCallback(async () => {
 		const requestId = ++loadRequestRef.current;
 		setLoading(true);
+		setSaving(false);
 		setLoadError("");
 		setSaveError("");
 		setConflict(null);
@@ -222,6 +268,10 @@ export default function ModelSpecDetailPage() {
 		setGateError("");
 		setAvailableModels([]);
 		setDependencyMetadataLoaded(false);
+		setReferenceTargets({});
+		setReferenceMetadataLoaded(false);
+		setReferenceResolutionFailed(false);
+		const referenceRequestId = ++referenceRequestRef.current;
 		setSourceOptions([]);
 		setSourceError("");
 		setSourcePermissionDenied(false);
@@ -241,20 +291,24 @@ export default function ModelSpecDetailPage() {
 				form.setFieldsValue(draft);
 				void loadSources(detail.planId, draft.sources);
 			}
-			try {
-				const list = await listModelSpecs();
-				if (requestId !== loadRequestRef.current) return;
+			const [list, referenceResolution] = await Promise.all([
+				listModelSpecs().catch(() => null),
+				resolveModelSpecReferenceTargets(detail),
+			]);
+			if (requestId !== loadRequestRef.current || referenceRequestId !== referenceRequestRef.current) return;
+			setReferenceTargets(referenceResolution.targets);
+			setReferenceResolutionFailed(referenceResolution.failed);
+			setReferenceMetadataLoaded(true);
+			if (list) {
 				const candidates = (Array.isArray(list) ? list : []).filter(
 					(candidate): candidate is CanonicalModelSpecView =>
-						candidate.compatibilityMode === "CANONICAL" && candidate.id !== modelSpecId,
+						isCanonicalModelSpecReferenceTarget(candidate) && candidate.id !== modelSpecId,
 				);
 				setAvailableModels(candidates);
 				setDependencyMetadataLoaded(true);
-			} catch {
-				if (requestId === loadRequestRef.current) {
-					setAvailableModels([]);
-					setDependencyMetadataLoaded(false);
-				}
+			} else {
+				setAvailableModels([]);
+				setDependencyMetadataLoaded(false);
 			}
 		} catch (error) {
 			if (requestId !== loadRequestRef.current) return;
@@ -269,9 +323,26 @@ export default function ModelSpecDetailPage() {
 		void load();
 		return () => {
 			loadRequestRef.current += 1;
+			referenceRequestRef.current += 1;
 			sourceRequestRef.current += 1;
 		};
 	}, [load]);
+
+	const refreshReferenceTargetsAfterSave = async (
+		updated: CanonicalModelSpecView,
+		pageRequestId: number,
+	): Promise<boolean> => {
+		const referenceRequestId = ++referenceRequestRef.current;
+		setReferenceTargets({});
+		setReferenceMetadataLoaded(false);
+		setReferenceResolutionFailed(false);
+		const referenceResolution = await resolveModelSpecReferenceTargets(updated);
+		if (pageRequestId !== loadRequestRef.current || referenceRequestId !== referenceRequestRef.current) return false;
+		setReferenceTargets(referenceResolution.targets);
+		setReferenceResolutionFailed(referenceResolution.failed);
+		setReferenceMetadataLoaded(true);
+		return true;
+	};
 
 	const selectableModels = useMemo(() => {
 		if (!canonicalModel) return [];
@@ -282,7 +353,9 @@ export default function ModelSpecDetailPage() {
 	const upstreamOptions = useMemo<ModelSpecSelectOption[]>(
 		() =>
 			selectableModels.map((candidate) => {
-				const allowed = isModelSpecUpstreamAllowed(canonicalModel?.modelType || "FACT", candidate);
+				const allowed = canonicalModel
+					? isModelSpecReferenceTargetAllowed(canonicalModel, candidate, "DEPENDENCY")
+					: false;
 				return {
 					value: candidate.id,
 					label: `${candidate.name} · ${MODEL_TYPE_LABELS[candidate.modelType]} · ${candidate.layer} · r${
@@ -292,14 +365,20 @@ export default function ModelSpecDetailPage() {
 					revision: candidate.revision,
 				};
 			}),
-		[canonicalModel?.modelType, selectableModels],
+		[canonicalModel, selectableModels],
 	);
 	const dimensionOptions = useMemo<ModelSpecSelectOption[]>(
 		() =>
 			selectableModels
-				.filter((candidate) => candidate.modelType === "DIMENSION")
-				.map((candidate) => ({ value: candidate.id, label: `${candidate.name} · r${candidate.revision}` })),
-		[selectableModels],
+				.filter((candidate) =>
+					canonicalModel ? isModelSpecReferenceTargetAllowed(canonicalModel, candidate, "DIMENSION") : false,
+				)
+				.map((candidate) => ({
+					value: candidate.id,
+					label: `${candidate.name} · DIMENSION · DWD · r${candidate.revision}`,
+					revision: candidate.revision,
+				})),
+		[canonicalModel, selectableModels],
 	);
 	const persistedSourcesCurrent = useMemo(() => {
 		if (!canonicalModel) return false;
@@ -309,6 +388,7 @@ export default function ModelSpecDetailPage() {
 
 	const save = async (override?: ModelSpecCasToken) => {
 		if (!canonicalModel || !canEdit || sourceVerificationPending) return;
+		const pageRequestId = loadRequestRef.current;
 		setSaveError("");
 		try {
 			await form.validateFields();
@@ -330,16 +410,19 @@ export default function ModelSpecDetailPage() {
 				override || { id: canonicalModel.id, revision: canonicalModel.revision, checksum: canonicalModel.checksum },
 				command,
 			);
+			if (pageRequestId !== loadRequestRef.current) return;
 			setModel(updated);
 			const updatedDraft = modelSpecDraftFromView(updated);
 			form.setFieldsValue(updatedDraft);
 			void loadSources(updated.planId, updatedDraft.sources);
+			if (!(await refreshReferenceTargetsAfterSave(updated, pageRequestId))) return;
 			void loadStageGates();
 			setConflict(null);
 			setStatusChanged(false);
 			setSaveError("");
 		} catch (error) {
 			if (error && typeof error === "object" && "errorFields" in error) return;
+			if (pageRequestId !== loadRequestRef.current) return;
 			const latest = modelSpecRevisionConflict(error);
 			if (latest) setConflict(latest);
 			if ((error as { response?: { status?: number } })?.response?.status === 403) setWriteDenied(true);
@@ -350,7 +433,7 @@ export default function ModelSpecDetailPage() {
 				setSaveError(modelSpecErrorMessage(error));
 			}
 		} finally {
-			setSaving(false);
+			if (pageRequestId === loadRequestRef.current) setSaving(false);
 		}
 	};
 
@@ -361,6 +444,7 @@ export default function ModelSpecDetailPage() {
 
 	const onSaveStandardBindings = async (standardBindings: ModelSpecStandardBinding[]) => {
 		if (!canonicalModel || !canEdit || persistedSourceVerificationPending || !persistedSourcesCurrent) return false;
+		const pageRequestId = loadRequestRef.current;
 		setSaveError("");
 		try {
 			const command = buildModelSpecUpdateCommand(
@@ -377,15 +461,18 @@ export default function ModelSpecDetailPage() {
 				{ id: canonicalModel.id, revision: canonicalModel.revision, checksum: canonicalModel.checksum },
 				command,
 			);
+			if (pageRequestId !== loadRequestRef.current) return false;
 			setModel(updated);
 			const updatedDraft = modelSpecDraftFromView(updated);
 			form.setFieldsValue(updatedDraft);
 			void loadSources(updated.planId, updatedDraft.sources);
+			if (!(await refreshReferenceTargetsAfterSave(updated, pageRequestId))) return false;
 			setConflict(null);
 			setStatusChanged(false);
 			void loadStageGates();
 			return true;
 		} catch (error) {
+			if (pageRequestId !== loadRequestRef.current) return false;
 			const latest = modelSpecRevisionConflict(error);
 			if (latest) setConflict(latest);
 			if ((error as { response?: { status?: number } })?.response?.status === 403) setWriteDenied(true);
@@ -396,7 +483,7 @@ export default function ModelSpecDetailPage() {
 			}
 			return false;
 		} finally {
-			setSaving(false);
+			if (pageRequestId === loadRequestRef.current) setSaving(false);
 		}
 	};
 
@@ -509,8 +596,22 @@ export default function ModelSpecDetailPage() {
 					className="mb-3"
 					type="warning"
 					showIcon
-					message="历史模型的类别、目标分层或上游依赖不符合当前四类表规则，仅支持查看"
+					message="历史模型的类别、目标分层、类型专属字段或输入依赖不符合当前四类表规则，仅支持查看"
 					description="请通过迁移任务重新登记为 DWD 维度/明细、DWS 汇总或 ADS 应用模型；系统不会静默改写历史 revision。"
+				/>
+			) : null}
+			{referenceResolutionFailed ? (
+				<Alert
+					className="mb-3"
+					type="warning"
+					showIcon
+					message="暂时无法核验已锁定上游版本，页面已只读，请重试"
+					description="已保存内容与版本锁定关系均已保留；重新核验成功前不会把临时读取失败误判为历史模型迁移问题。"
+					action={
+						<Button size="small" icon={<RefreshCw size={14} />} onClick={() => void load()}>
+							重新核验
+						</Button>
+					}
 				/>
 			) : null}
 			{!roleAllowsEdit || writeDenied ? (

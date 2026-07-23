@@ -10,6 +10,7 @@ import { nextDimensionHierarchyCode } from "../modelSpecSystemCode";
 import { MODEL_SPEC_TARGET_LAYER_BY_TYPE, type ModelSpecLayer, type ModelSpecType } from "../modelSpecV2Contract";
 import type { ModelSpecDraft } from "../modelSpecWorkbench";
 import {
+	adoptCurrentDimensionRevisions,
 	adoptCurrentUpstreamRevisions,
 	MODEL_TYPE_DESCRIPTIONS,
 	MODEL_TYPE_LABELS,
@@ -119,6 +120,10 @@ export function ModelSpecEditorFields({
 	const adoptCurrentUpstreamRevision = (modelSpecId: string) => {
 		const existingPins = (form.getFieldValue("existingUpstreamPins") || []) as ModelSpecDraft["existingUpstreamPins"];
 		form.setFieldValue("existingUpstreamPins", adoptCurrentUpstreamRevisions(existingPins, [modelSpecId]));
+	};
+	const adoptCurrentDimensionRevision = (modelSpecId: string) => {
+		const existingPins = (form.getFieldValue("existingDimensionPins") || []) as ModelSpecDraft["existingDimensionPins"];
+		form.setFieldValue("existingDimensionPins", adoptCurrentDimensionRevisions(existingPins, [modelSpecId]));
 	};
 	const sourceInventoryPath = selectedPlanId
 		? buildWarehousePlanRoute(selectedPlanId, "baseline", { tab: "sources" })
@@ -445,6 +450,56 @@ export function ModelSpecEditorFields({
 							disabled={readOnly}
 							placeholder="选择用于分类、筛选和汇总分析的维度（可选）"
 						/>
+					</Form.Item>
+					<Form.Item noStyle shouldUpdate>
+						{() => {
+							const selectedIds = (form.getFieldValue("dimensionRefIds") || []) as string[];
+							const existingPins = (form.getFieldValue("existingDimensionPins") ||
+								[]) as ModelSpecDraft["existingDimensionPins"];
+							const optionById = new Map(dimensionOptions.map((option) => [option.value, option]));
+							const driftedDimensions = selectedIds.flatMap((modelSpecId) => {
+								const pinned = existingPins.find((reference) => reference.modelSpecId === modelSpecId);
+								const option = optionById.get(modelSpecId);
+								if (
+									!pinned ||
+									!option ||
+									option.disabled === true ||
+									typeof option.revision !== "number" ||
+									option.revision === pinned.revision
+								) {
+									return [];
+								}
+								return [{ modelSpecId, option, pinnedRevision: pinned.revision }];
+							});
+							if (driftedDimensions.length === 0) return null;
+							return (
+								<Alert
+									type="warning"
+									showIcon
+									message="所选分析维度已有新版本"
+									description={
+										<Space direction="vertical" size={4} className="w-full">
+											<Text type="secondary">普通保存仍保留已锁定版本；只有点击对应维度的操作才会升级。</Text>
+											{driftedDimensions.map(({ modelSpecId, option, pinnedRevision }) => (
+												<div key={modelSpecId} className="flex items-center justify-between gap-3">
+													<Text>
+														{option.label}：已锁定 r{pinnedRevision}，当前 r{option.revision}
+													</Text>
+													<Button
+														type="link"
+														size="small"
+														disabled={readOnly}
+														onClick={() => adoptCurrentDimensionRevision(modelSpecId)}
+													>
+														采用所选维度当前版本
+													</Button>
+												</div>
+											))}
+										</Space>
+									}
+								/>
+							);
+						}}
 					</Form.Item>
 					<Collapse
 						size="small"

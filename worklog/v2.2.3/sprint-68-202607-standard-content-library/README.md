@@ -1,7 +1,7 @@
 # Sprint-68：DTS 标准内容库与通用基线产品化
 
 **时间**：2026-07  
-**状态**：READY  
+**状态**：IN_PROGRESS
 **类型**：Content Platform / Data Governance / Safe Upgrade / Offline Delivery  
 **目标**：把 Sprint-57 已有标准包管道升级为可版本化、可追溯、可安全升级的 DTS 标准内容库，使新部署客户可直接安装通用基线并只做少量本地调整；PJM/dbt 资产仅在通过严格准入后进入可选项目管理扩展包。
 
@@ -73,14 +73,14 @@ Sprint-57 已完成标准包 `preview → apply → rollback`、内置包安装�
 
 | ID | Feature | Task 数 | 状态 | 交付重点 |
 |---|---|---:|---|---|
-| [F1](features/F1-标准内容契约与来源治理/README.md) | 标准内容契约与来源治理 | 4 | READY | manifest v2、记录溯源、来源许可和包依赖 |
+| [F1](features/F1-标准内容契约与来源治理/README.md) | 标准内容契约与来源治理 | 4 | IN_PROGRESS | manifest v2、记录溯源、来源许可和包依赖 |
 | [F2](features/F2-客户覆盖层与安全升级/README.md) | 客户覆盖层与安全升级 | 4 | READY | 三层生效视图、三方 diff、冲突与审计 |
 | [F3](features/F3-PJM候选审计与准入/README.md) | PJM 候选审计与准入 | 4 | READY | 排除垃圾产物、六道门禁、可选项目管理包 |
 | [F4](features/F4-通用基线与内容仓库/README.md) | 通用基线与内容仓库 | 5 | READY | 10～12 个基线包、计量单位、离线签名制品 |
 | [F5](features/F5-安装更新与部署体验/README.md) | 安装更新与部署体验 | 4 | READY | 内容目录、部署画像、冲突预览和本地改写 |
 | [F6](features/F6-验证发布与证据闭环/README.md) | 验证发布与证据闭环 | 4 | READY | 内容 CI、真实数据库、Chrome 95 和 Go/No-Go |
 
-**统计**：READY=25，IN_PROGRESS=0，DONE=0，BLOCKED=0
+**统计**：READY=23，IN_PROGRESS=0，DONE=2，BLOCKED=0
 
 ## 7. 依赖与执行顺序
 
@@ -120,6 +120,7 @@ F1 先冻结包和记录级契约；F3 可在 F1-T01/T02 完成后开始候选�
 ## 10. 权威资产
 
 - [标准内容库设计](assets/standard-content-library-design.md)
+- [Manifest v2 契约](assets/manifest-v2-contract.md)
 - [PJM 候选准入矩阵](assets/pjm-candidate-admission-matrix.md)
 - [首批内容包目录](assets/initial-content-pack-catalog.md)
 - [Feature/Task 依赖图](assets/feature-dependency-map.md)

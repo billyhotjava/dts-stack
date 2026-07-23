@@ -1391,21 +1391,21 @@
 ## Sprint-68: DTS 标准内容库与通用基线产品化 (202607)
 
 **目录**: `worklog/v2.2.3/sprint-68-202607-standard-content-library`
-**状态**: READY
+**状态**: IN_PROGRESS
 **类型**: Content Platform / Data Governance / Safe Upgrade / Offline Delivery
 **目标**: 把 Sprint-57 标准包管道升级为可版本化、可追溯、可安全升级的 DTS 标准内容库，使新部署客户可直接安装通用基线并只做少量本地调整；PJM/dbt 资产仅在通过严格准入后进入可选项目管理扩展包。
 **依赖**: 复用 Sprint-57 `preview/apply/rollback/runs/builtin` 单一管道、当前计量单位 owner 和 Sprint-50/67 的标准稳定引用边界；PJM 候选来源限定为 `worklog/v2.2.3/s10/v4/pjm/dbt_model` 的受控元数据/SQL，不读取测试数据行。
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
-| F1-标准内容契约与来源治理 | P0 | 4 | READY |
+| F1-标准内容契约与来源治理 | P0 | 4 | IN_PROGRESS |
 | F2-客户覆盖层与安全升级 | P0 | 4 | READY |
 | F3-PJM候选审计与准入 | P0 | 4 | READY |
 | F4-通用基线与内容仓库 | P0 | 5 | READY |
 | F5-安装更新与部署体验 | P0 | 4 | READY |
 | F6-验证发布与证据闭环 | P0 | 4 | READY |
 
-**统计**: READY=25, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=23, IN_PROGRESS=0, DONE=2, BLOCKED=0
 **执行顺序**: F1 → F2/F3 → F4 → F5 → F6；F3 只能产出候选和准入报告，F4 只消费来源许可与六道门禁均通过的内容，F6 是最终 Go/No-Go 出口。
 
 **关键决策**:
