@@ -192,6 +192,110 @@ class ModelSpecApplicationServiceTest {
     }
 
     @Test
+    void treatsEquivalentPinnedDimensionPutAsANoOpWithTheCurrentImmutableContent() {
+        CreateModelSpecCommand create = pinnedDimensionCommand("dimension-noop", legacyDimensionProfile());
+        ModelSpecView current = codec.toCreatedView(MODEL_ID, create, NOW);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored(current, null, null)));
+        when(compatibilityReader.read(any())).thenReturn(current);
+
+        ModelSpecView result = service.update(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            new ExpectedVersion(MODEL_ID, 1, current.checksum()),
+            canonicalDimensionUpdate(current, current.name())
+        );
+
+        assertThat(result).isEqualTo(current);
+        verify(repository, never()).compareAndSetV2(any(), any(), anyInt(), anyString(), any(), anyString());
+        verify(repository, never()).insertV2Revision(any(), any(), any(), any());
+    }
+
+    @Test
+    void rejectsChangingAPinnedDimensionToANonDimensionBeforePersistence() {
+        CreateModelSpecCommand create = pinnedDimensionCommand("dimension-type-change", null);
+        ModelSpecView current = codec.toCreatedView(MODEL_ID, create, NOW);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored(current, null, null)));
+        when(compatibilityReader.read(any())).thenReturn(current);
+        UpdateModelSpecCommand factReplacement = new UpdateModelSpecCommand(
+            current.planId(),
+            current.domainId(),
+            ModelType.FACT,
+            Layer.DWD,
+            current.name(),
+            current.description(),
+            current.implementationMode(),
+            current.materialization(),
+            null,
+            null,
+            current.grain(),
+            null,
+            null,
+            current.fields(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            null,
+            null
+        );
+
+        assertThatThrownBy(
+            () ->
+                service.update(
+                    TENANT,
+                    ACTOR,
+                    MODEL_ID,
+                    new ExpectedVersion(MODEL_ID, 1, current.checksum()),
+                    factReplacement
+                )
+        )
+            .isInstanceOf(ModelSpecException.class)
+            .satisfies(error -> {
+                ModelSpecException validation = (ModelSpecException) error;
+                assertThat(validation.code()).isEqualTo("MODEL_SPEC_VALIDATION_FAILED");
+                assertThat((List<?>) validation.details())
+                    .extracting(
+                        issue -> ((FieldIssue) issue).code(),
+                        issue -> ((FieldIssue) issue).field()
+                    )
+                    .contains(
+                        org.assertj.core.groups.Tuple.tuple(
+                            "MODEL_SPEC_DIMENSION_DEFINITION_NOT_ALLOWED",
+                            "dimensionDefinitionRef"
+                        )
+                    );
+            });
+        verify(repository, never()).compareAndSetV2(any(), any(), anyInt(), anyString(), any(), anyString());
+        verify(repository, never()).insertV2Revision(any(), any(), any(), any());
+    }
+
+    @Test
+    void preservesLegacyDimensionIdentityFieldsOnTheFirstCanonicalUpdate() {
+        CreateModelSpecCommand create = pinnedDimensionCommand("dimension-legacy-update", legacyDimensionProfile());
+        ModelSpecView current = codec.toCreatedView(MODEL_ID, create, NOW);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored(current, null, null)));
+        when(compatibilityReader.read(any())).thenReturn(current);
+        when(repository.compareAndSetV2(eq(TENANT), eq(ACTOR), eq(1), eq(current.checksum()), any(), anyString()))
+            .thenReturn(1);
+
+        ModelSpecView result = service.update(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            new ExpectedVersion(MODEL_ID, 1, current.checksum()),
+            canonicalDimensionUpdate(current, "customer_dimension_v2")
+        );
+
+        assertThat(result.revision()).isEqualTo(2);
+        assertThat(result.dimensionDefinitionRef()).isEqualTo(current.dimensionDefinitionRef());
+        assertThat(result.dimensionProfile().dimensionCode()).isEqualTo("DIM_CUSTOMER");
+        assertThat(result.dimensionProfile().reuseScope()).isEqualTo(ReuseScope.DOMAIN);
+        verify(repository).insertV2Revision(TENANT, ACTOR, result, codec.write(result));
+    }
+
+    @Test
     void refusesUpdatesToLegacyRowsWithoutConsultingBusinessObjects() {
         StoredModelSpec legacy = new StoredModelSpec(
             1,
@@ -1393,6 +1497,76 @@ class ModelSpecApplicationServiceTest {
             view.standardBindings(),
             view.generationStrategy(),
             view.dimensionProfile()
+        );
+    }
+
+    private static CreateModelSpecCommand pinnedDimensionCommand(
+        String idempotencyKey,
+        DimensionProfile dimensionProfile
+    ) {
+        return new CreateModelSpecCommand(
+            PLAN_ID,
+            DOMAIN_ID,
+            ModelType.DIMENSION,
+            Layer.DWD,
+            "customer_dimension",
+            null,
+            ImplementationMode.DESIGNER_GENERATED,
+            "table",
+            null,
+            null,
+            new Grain("one row per customer", List.of("customer_id")),
+            null,
+            null,
+            List.of(new ModelField("customer_id", "varchar", false, null, FieldRole.KEY, null)),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            null,
+            dimensionProfile,
+            new DimensionDefinitionRef(UUID.fromString("60000000-0000-0000-0000-000000000001"), 1),
+            idempotencyKey
+        );
+    }
+
+    private static DimensionProfile legacyDimensionProfile() {
+        return new DimensionProfile(
+            "DIM_CUSTOMER",
+            List.of(),
+            new ScdPolicy(ScdType.TYPE1, null, null, null),
+            ReuseScope.DOMAIN
+        );
+    }
+
+    private static UpdateModelSpecCommand canonicalDimensionUpdate(ModelSpecView current, String name) {
+        DimensionProfile currentProfile = current.dimensionProfile();
+        DimensionProfile canonicalProfile = currentProfile == null
+            ? null
+            : new DimensionProfile(null, currentProfile.hierarchies(), currentProfile.scdPolicy(), null);
+        return new UpdateModelSpecCommand(
+            current.planId(),
+            current.domainId(),
+            current.modelType(),
+            current.layer(),
+            name,
+            current.description(),
+            current.implementationMode(),
+            current.materialization(),
+            current.businessActivityRef(),
+            current.consumptionScenario(),
+            current.grain(),
+            current.factShape(),
+            current.timeSemantics(),
+            current.fields(),
+            current.sourceRefs(),
+            current.dependsOn(),
+            current.dimensionRefs(),
+            current.metricRefs(),
+            current.standardBindings(),
+            current.generationStrategy(),
+            canonicalProfile
         );
     }
 

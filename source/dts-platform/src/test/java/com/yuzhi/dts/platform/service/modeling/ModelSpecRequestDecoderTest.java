@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.modeling;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.groups.Tuple.tuple;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -36,6 +37,19 @@ class ModelSpecRequestDecoderTest {
         assertThat(updateDecoder.decode(objectMapper.readTree(validCreateJson())).issues())
             .extracting(ModelSpecContract.FieldIssue::code)
             .containsExactly("MODEL_SPEC_FIELD_NOT_ALLOWED");
+    }
+
+    @Test
+    void rejectsDimensionDefinitionReferenceOnUpdateBecauseTheCreationPinIsImmutable() throws Exception {
+        ObjectNode update = (ObjectNode) objectMapper.readTree(validCreateJson());
+        update.remove("idempotencyKey");
+        update.putObject("dimensionDefinitionRef")
+            .put("dimensionDefinitionId", "60000000-0000-0000-0000-000000000001")
+            .put("revision", 3);
+
+        assertThat(updateDecoder.decode(update).issues())
+            .extracting(ModelSpecContract.FieldIssue::code, ModelSpecContract.FieldIssue::field)
+            .containsExactly(tuple("MODEL_SPEC_FIELD_NOT_ALLOWED", "dimensionDefinitionRef"));
     }
 
     private static String validCreateJson() {

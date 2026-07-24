@@ -8,6 +8,8 @@ import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.CompatibilityMode;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.CreateModelSpecCommand;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.DimensionDefinitionRef;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.DimensionProfile;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.UpdateModelSpecCommand;
@@ -53,18 +55,20 @@ public class ModelSpecSnapshotCodec {
     }
 
     public ModelSpecView toCreatedView(UUID id, CreateModelSpecCommand command, Instant now) {
-        return toView(id, command, ModelStatus.DRAFT, 1, contentChecksum(command), now, now);
+        return toView(id, command, ModelStatus.DRAFT, 1, contentChecksum(command), now, now, command.dimensionDefinitionRef());
     }
 
     public ModelSpecView toUpdatedView(ModelSpecView current, UpdateModelSpecCommand command, int revision, Instant now) {
+        CreateModelSpecCommand updatedContent = asCreate(command, current);
         return toView(
             current.id(),
-            ModelSpecContract.asCreate(command),
+            updatedContent,
             current.status(),
             revision,
-            contentChecksum(command),
+            contentChecksum(updatedContent),
             current.createdAt(),
-            now
+            now,
+            current.dimensionDefinitionRef()
         );
     }
 
@@ -76,7 +80,8 @@ public class ModelSpecSnapshotCodec {
             revision,
             contentChecksum(current),
             current.createdAt(),
-            now
+            now,
+            current.dimensionDefinitionRef()
         );
     }
 
@@ -103,8 +108,78 @@ public class ModelSpecSnapshotCodec {
             view.standardBindings(),
             view.generationStrategy(),
             view.dimensionProfile(),
+            view.dimensionDefinitionRef(),
             null
         );
+    }
+
+    private static CreateModelSpecCommand asCreate(UpdateModelSpecCommand command, DimensionDefinitionRef dimensionDefinitionRef) {
+        return new CreateModelSpecCommand(
+            command.planId(),
+            command.domainId(),
+            command.modelType(),
+            command.layer(),
+            command.name(),
+            command.description(),
+            command.implementationMode(),
+            command.materialization(),
+            command.businessActivityRef(),
+            command.consumptionScenario(),
+            command.grain(),
+            command.factShape(),
+            command.timeSemantics(),
+            command.fields(),
+            command.sourceRefs(),
+            command.dependsOn(),
+            command.dimensionRefs(),
+            command.metricRefs(),
+            command.standardBindings(),
+            command.generationStrategy(),
+            command.dimensionProfile(),
+            dimensionDefinitionRef,
+            null
+        );
+    }
+
+    private static CreateModelSpecCommand asCreate(UpdateModelSpecCommand command, ModelSpecView current) {
+        DimensionProfile updatedProfile = command.dimensionProfile();
+        DimensionProfile currentProfile = current.dimensionProfile();
+        if (
+            currentProfile != null &&
+            (currentProfile.dimensionCode() != null || currentProfile.reuseScope() != null)
+        ) {
+            DimensionProfile logicalProfile = updatedProfile == null ? currentProfile : updatedProfile;
+            updatedProfile = new DimensionProfile(
+                currentProfile.dimensionCode(),
+                logicalProfile.hierarchies(),
+                logicalProfile.scdPolicy(),
+                currentProfile.reuseScope()
+            );
+        }
+        UpdateModelSpecCommand effectiveCommand = new UpdateModelSpecCommand(
+            command.planId(),
+            command.domainId(),
+            command.modelType(),
+            command.layer(),
+            command.name(),
+            command.description(),
+            command.implementationMode(),
+            command.materialization(),
+            command.businessActivityRef(),
+            command.consumptionScenario(),
+            command.grain(),
+            command.factShape(),
+            command.timeSemantics(),
+            command.fields(),
+            command.sourceRefs(),
+            command.dependsOn(),
+            command.dimensionRefs(),
+            command.metricRefs(),
+            command.standardBindings(),
+            command.generationStrategy(),
+            updatedProfile
+        );
+        return asCreate(effectiveCommand, current.dimensionDefinitionRef());
     }
 
     public String write(Object value) {
@@ -150,7 +225,8 @@ public class ModelSpecSnapshotCodec {
         int revision,
         String checksum,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        DimensionDefinitionRef dimensionDefinitionRef
     ) {
         return new ModelSpecView(
             ModelSpecContract.CONTRACT_VERSION,
@@ -176,6 +252,7 @@ public class ModelSpecSnapshotCodec {
             command.standardBindings(),
             command.generationStrategy(),
             command.dimensionProfile(),
+            dimensionDefinitionRef,
             status,
             revision,
             checksum,
@@ -208,7 +285,8 @@ public class ModelSpecSnapshotCodec {
             command.metricRefs(),
             command.standardBindings(),
             command.generationStrategy(),
-            command.dimensionProfile()
+            command.dimensionProfile(),
+            command.dimensionDefinitionRef()
         );
     }
 
@@ -234,7 +312,8 @@ public class ModelSpecSnapshotCodec {
             view.metricRefs(),
             view.standardBindings(),
             view.generationStrategy(),
-            view.dimensionProfile()
+            view.dimensionProfile(),
+            view.dimensionDefinitionRef()
         );
     }
 
@@ -269,6 +348,7 @@ public class ModelSpecSnapshotCodec {
         java.util.List<ModelSpecContract.MetricRef> metricRefs,
         java.util.List<ModelSpecContract.StandardBinding> standardBindings,
         ModelSpecContract.GenerationStrategy generationStrategy,
-        @JsonInclude(JsonInclude.Include.NON_NULL) ModelSpecContract.DimensionProfile dimensionProfile
+        @JsonInclude(JsonInclude.Include.NON_NULL) ModelSpecContract.DimensionProfile dimensionProfile,
+        @JsonInclude(JsonInclude.Include.NON_NULL) DimensionDefinitionRef dimensionDefinitionRef
     ) {}
 }

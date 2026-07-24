@@ -66,6 +66,9 @@ class ModelSpecCreateRequestDecoderTest {
     @Test
     void decoderKeepsLegacyV2DimensionDefinitionAndKeyMappingCompatible() throws Exception {
         ObjectNode candidate = genericDimension();
+        candidate.putObject("dimensionDefinitionRef")
+            .put("dimensionDefinitionId", "60000000-0000-0000-0000-000000000001")
+            .put("revision", 3);
         candidate.putNull("description");
         ((ObjectNode) candidate.get("grain")).putArray("keys").add("missing_dimension_key");
 
@@ -76,20 +79,59 @@ class ModelSpecCreateRequestDecoderTest {
     }
 
     @Test
-    void decoderAcceptsCanonicalDimensionProfileWithoutTighteningLegacyDrafts() throws Exception {
+    void decoderAcceptsLogicalDimensionProfileWithoutLegacyIdentityFields() throws Exception {
         ObjectNode candidate = genericDimension();
-        candidate.put("description", "Organization analysis dimension");
+        candidate.putObject("dimensionDefinitionRef")
+            .put("dimensionDefinitionId", "60000000-0000-0000-0000-000000000001")
+            .put("revision", 3);
         ObjectNode profile = candidate.putObject("dimensionProfile");
-        profile.put("dimensionCode", "DIM_ORGANIZATION");
         profile.putArray("hierarchies");
         profile.putObject("scdPolicy").put("type", "TYPE1");
-        profile.put("reuseScope", "PLAN");
 
         ModelSpecCreateRequestDecoder.DecodeResult result = decoder.decode(candidate);
 
         assertThat(result.issues()).isEmpty();
         assertThat(result.command()).isNotNull();
-        assertThat(result.command().dimensionProfile().dimensionCode()).isEqualTo("DIM_ORGANIZATION");
+        assertThat(result.command().dimensionProfile().scdPolicy().type()).isEqualTo(ModelSpecContract.ScdType.TYPE1);
+    }
+
+    @Test
+    void decoderPinsDimensionDefinitionsAndRejectsTheReferenceForEveryOtherModelType() throws Exception {
+        ObjectNode dimension = genericDimension();
+        dimension.putObject("dimensionDefinitionRef")
+            .put("dimensionDefinitionId", "60000000-0000-0000-0000-000000000001")
+            .put("revision", 3);
+
+        assertThat(decoder.decode(dimension).issues()).isEmpty();
+
+        for (String modelType : Set.of("FACT", "SUMMARY", "APPLICATION")) {
+            ObjectNode candidate = genericFact();
+            candidate.put("modelType", modelType);
+            candidate.putObject("dimensionDefinitionRef")
+                .put("dimensionDefinitionId", "60000000-0000-0000-0000-000000000001")
+                .put("revision", 3);
+
+            assertThat(decoder.decode(candidate).issues())
+                .as(modelType)
+                .extracting(ModelSpecContract.FieldIssue::code, ModelSpecContract.FieldIssue::field)
+                .contains(tuple("MODEL_SPEC_DIMENSION_DEFINITION_NOT_ALLOWED", "dimensionDefinitionRef"));
+        }
+    }
+
+    @Test
+    void decoderRejectsLegacyDimensionIdentityFieldsButKeepsLogicalDesignFields() throws Exception {
+        ObjectNode legacyProfile = genericDimension();
+        legacyProfile.putObject("dimensionDefinitionRef")
+            .put("dimensionDefinitionId", "60000000-0000-0000-0000-000000000001")
+            .put("revision", 3);
+        legacyProfile.putObject("dimensionProfile")
+            .put("dimensionCode", "DIM_ORGANIZATION")
+            .put("reuseScope", "PLAN")
+            .putArray("hierarchies");
+
+        assertThat(decoder.decode(legacyProfile).issues())
+            .extracting(ModelSpecContract.FieldIssue::code, ModelSpecContract.FieldIssue::field)
+            .containsExactly(tuple("MODEL_SPEC_DIMENSION_PROFILE_INVALID", "dimensionProfile"));
     }
 
     @Test

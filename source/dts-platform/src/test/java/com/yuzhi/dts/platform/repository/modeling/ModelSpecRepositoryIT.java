@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.IntegrationTest;
+import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.*;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecSnapshotCodec;
 import java.time.Instant;
@@ -20,6 +21,9 @@ class ModelSpecRepositoryIT {
 
     @Autowired
     private ModelSpecRepository repository;
+
+    @Autowired
+    private DimensionDefinitionRepository dimensionDefinitionRepository;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -71,6 +75,154 @@ class ModelSpecRepositoryIT {
             .extracting(ModelSpecRepository.SourceBindingState::sourceVersion)
             .isEqualTo("v1");
         assertThat(repository.findSourceBinding("another-tenant", planId, sourceBindingId)).isEmpty();
+    }
+
+    @Test
+    void persistsPinnedDimensionDefinitionAcrossHeadAndRevisionsWhileHistoricalNullRowsRemainReadable() {
+        String tenant = "model-spec-pin-it-" + UUID.randomUUID();
+        String actor = "owner-1";
+        UUID planId = UUID.randomUUID();
+        UUID domainId = UUID.randomUUID();
+        UUID sourceBindingId = UUID.randomUUID();
+        UUID definitionId = UUID.randomUUID();
+        seedContext(tenant, actor, planId, domainId, sourceBindingId);
+        Instant now = Instant.parse("2026-07-24T00:00:00Z");
+        DimensionDefinitionContract.CreateCommand definitionCommand = new DimensionDefinitionContract.CreateCommand(
+            domainId,
+            "Customer",
+            "Reusable customer dimension",
+            actor,
+            DimensionDefinitionContract.ReuseScope.DOMAIN,
+            List.of(),
+            "model-spec-pin-definition"
+        );
+        DimensionDefinitionContract.View definition = new DimensionDefinitionContract.View(
+            definitionId,
+            "dim_" + definitionId.toString().replace("-", ""),
+            domainId,
+            definitionCommand.name(),
+            definitionCommand.definition(),
+            definitionCommand.ownerId(),
+            definitionCommand.reuseScope(),
+            definitionCommand.hierarchies(),
+            DimensionDefinitionContract.Status.DRAFT,
+            1,
+            "a".repeat(64),
+            0,
+            now,
+            now
+        );
+        assertThat(dimensionDefinitionRepository.insert(tenant, actor, definitionCommand, definition, "b".repeat(64)))
+            .isEqualTo(1);
+
+        ModelSpecSnapshotCodec codec = new ModelSpecSnapshotCodec(objectMapper);
+        CreateModelSpecCommand create = dimensionCommand(
+            planId,
+            domainId,
+            new DimensionDefinitionRef(definitionId, 1),
+            "repository-it-pinned",
+            "customer_dimension"
+        );
+        ModelSpecView first = codec.toCreatedView(UUID.randomUUID(), create, now);
+        String firstSnapshot = codec.write(first);
+        assertThat(repository.insertV2(tenant, actor, create, first, codec.requestHash(create), firstSnapshot)).isEqualTo(1);
+        repository.insertV2Revision(tenant, actor, first, firstSnapshot);
+
+        UpdateModelSpecCommand update = update(create, "customer_dimension_v2");
+        ModelSpecView second = codec.toUpdatedView(first, update, 2, now.plusSeconds(60));
+        String secondSnapshot = codec.write(second);
+        assertThat(repository.compareAndSetV2(tenant, actor, 1, first.checksum(), second, secondSnapshot)).isEqualTo(1);
+        repository.insertV2Revision(tenant, actor, second, secondSnapshot);
+
+        assertThat(
+            jdbcTemplate.queryForObject(
+                "select dimension_definition_id from modeling_model_spec where tenant_id = ? and id = ?",
+                UUID.class,
+                tenant,
+                first.id()
+            )
+        ).isEqualTo(definitionId);
+        assertThat(
+            jdbcTemplate.queryForObject(
+                "select dimension_definition_revision from modeling_model_spec where tenant_id = ? and id = ?",
+                Integer.class,
+                tenant,
+                first.id()
+            )
+        ).isEqualTo(1);
+        for (int revision : List.of(1, 2)) {
+            assertThat(
+                jdbcTemplate.queryForObject(
+                    """
+                    select dimension_definition_id
+                      from modeling_model_spec_revision
+                     where tenant_id = ? and model_spec_id = ? and revision = ?
+                    """,
+                    UUID.class,
+                    tenant,
+                    first.id(),
+                    revision
+                )
+            ).isEqualTo(definitionId);
+            assertThat(
+                jdbcTemplate.queryForObject(
+                    """
+                    select dimension_definition_revision
+                      from modeling_model_spec_revision
+                     where tenant_id = ? and model_spec_id = ? and revision = ?
+                    """,
+                    Integer.class,
+                    tenant,
+                    first.id(),
+                    revision
+                )
+            ).isEqualTo(1);
+        }
+
+        CreateModelSpecCommand historicalCreate = dimensionCommand(
+            planId,
+            domainId,
+            null,
+            "repository-it-historical-null",
+            "historical_customer_dimension"
+        );
+        ModelSpecView historical = codec.toCreatedView(UUID.randomUUID(), historicalCreate, now);
+        String historicalSnapshot = codec.write(historical);
+        assertThat(
+            repository.insertV2(
+                tenant,
+                actor,
+                historicalCreate,
+                historical,
+                codec.requestHash(historicalCreate),
+                historicalSnapshot
+            )
+        ).isEqualTo(1);
+        repository.insertV2Revision(tenant, actor, historical, historicalSnapshot);
+        assertThat(
+            jdbcTemplate.queryForObject(
+                """
+                select dimension_definition_id is null and dimension_definition_revision is null
+                  from modeling_model_spec
+                 where tenant_id = ? and id = ?
+                """,
+                Boolean.class,
+                tenant,
+                historical.id()
+            )
+        ).isTrue();
+        assertThat(
+            jdbcTemplate.queryForObject(
+                """
+                select dimension_definition_id is null and dimension_definition_revision is null
+                  from modeling_model_spec_revision
+                 where tenant_id = ? and model_spec_id = ? and revision = 1
+                """,
+                Boolean.class,
+                tenant,
+                historical.id()
+            )
+        ).isTrue();
     }
 
     private void seedContext(String tenant, String actor, UUID planId, UUID domainId, UUID sourceBindingId) {
@@ -148,6 +300,40 @@ class ModelSpecRepositoryIT {
             command.implementationMode(), command.materialization(), command.businessActivityRef(), command.consumptionScenario(),
             command.grain(), command.factShape(), command.timeSemantics(), command.fields(), command.sourceRefs(),
             command.dependsOn(), command.dimensionRefs(), command.metricRefs(), command.standardBindings(), command.generationStrategy()
+        );
+    }
+
+    private static CreateModelSpecCommand dimensionCommand(
+        UUID planId,
+        UUID domainId,
+        DimensionDefinitionRef definitionRef,
+        String idempotencyKey,
+        String name
+    ) {
+        return new CreateModelSpecCommand(
+            planId,
+            domainId,
+            ModelType.DIMENSION,
+            Layer.DWD,
+            name,
+            null,
+            ImplementationMode.DESIGNER_GENERATED,
+            "table",
+            null,
+            null,
+            new Grain("one row per customer", List.of("customer_id")),
+            null,
+            null,
+            List.of(new ModelField("customer_id", "varchar", false, null, FieldRole.KEY, null)),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            null,
+            null,
+            definitionRef,
+            idempotencyKey
         );
     }
 }

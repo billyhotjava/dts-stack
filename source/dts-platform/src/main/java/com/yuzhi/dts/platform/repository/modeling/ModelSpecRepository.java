@@ -204,12 +204,13 @@ public class ModelSpecRepository {
                 contract_version, domain_id, business_activity_ref, description, consumption_scenario,
                 fact_shape, grain_json, time_semantics, fields, source_refs, depends_on, dimension_refs,
                 metric_refs, standard_bindings, generation_strategy, dimension_profile, current_checksum, idempotency_key,
-                idempotency_request_hash, idempotency_response_snapshot
+                idempotency_request_hash, idempotency_response_snapshot, dimension_definition_id, dimension_definition_revision
             ) values (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?,
                 2, ?, ?, ?, ?, ?, cast(? as jsonb), cast(? as jsonb), cast(? as jsonb), cast(? as jsonb),
                 cast(? as jsonb), cast(? as jsonb), cast(? as jsonb), cast(? as jsonb), cast(? as jsonb),
                 cast(? as jsonb), ?, ?, ?, cast(? as jsonb)
+                , ?, ?
             )
             on conflict (tenant_id, idempotency_key)
             where contract_version = 2 and idempotency_key is not null
@@ -246,7 +247,9 @@ public class ModelSpecRepository {
             view.checksum(),
             command.idempotencyKey(),
             requestHash,
-            responseSnapshot
+            responseSnapshot,
+            view.dimensionDefinitionRef() == null ? null : view.dimensionDefinitionRef().dimensionDefinitionId(),
+            view.dimensionDefinitionRef() == null ? null : view.dimensionDefinitionRef().revision()
         );
     }
 
@@ -421,7 +424,8 @@ public class ModelSpecRepository {
             insert into modeling_model_spec_revision (
                 id, model_spec_id, revision, status, content_checksum, created_date, last_modified_date,
                 tenant_id, contract_version, snapshot_json, created_by
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, 2, cast(? as jsonb), ?)
+                , dimension_definition_id, dimension_definition_revision
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, 2, cast(? as jsonb), ?, ?, ?)
             """,
             UUID.randomUUID(),
             view.id(),
@@ -432,7 +436,9 @@ public class ModelSpecRepository {
             Timestamp.from(view.updatedAt()),
             tenantId,
             snapshot,
-            actorId
+            actorId,
+            view.dimensionDefinitionRef() == null ? null : view.dimensionDefinitionRef().dimensionDefinitionId(),
+            view.dimensionDefinitionRef() == null ? null : view.dimensionDefinitionRef().revision()
         );
     }
 

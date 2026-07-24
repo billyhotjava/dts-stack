@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.CompatibilityMode;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.CreateModelSpecCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FactShape;
@@ -11,6 +12,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelField;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.UpdateModelSpecCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceKind;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceRole;
@@ -46,6 +48,104 @@ class ModelSpecContractTest {
         );
         assertThat(Arrays.stream(SourceRef.class.getRecordComponents()).map(RecordComponent::getName))
             .doesNotContain("legacyRef", "legacyRawRole");
+    }
+
+    @Test
+    void canonicalDimensionCreationRequiresAPinnedDimensionDefinitionReference() {
+        assertThat(ModelSpecContract.CREATE_FIELDS).contains("dimensionDefinitionRef");
+        assertThat(ModelSpecContract.UPDATE_FIELDS).doesNotContain("dimensionDefinitionRef");
+
+        CreateModelSpecCommand existingDimension = validCommand(ModelType.DIMENSION, null);
+        CreateModelSpecCommand missingReference = new CreateModelSpecCommand(
+            existingDimension.planId(),
+            existingDimension.domainId(),
+            existingDimension.modelType(),
+            existingDimension.layer(),
+            existingDimension.name(),
+            existingDimension.description(),
+            existingDimension.implementationMode(),
+            existingDimension.materialization(),
+            existingDimension.businessActivityRef(),
+            existingDimension.consumptionScenario(),
+            existingDimension.grain(),
+            existingDimension.factShape(),
+            existingDimension.timeSemantics(),
+            existingDimension.fields(),
+            existingDimension.sourceRefs(),
+            existingDimension.dependsOn(),
+            existingDimension.dimensionRefs(),
+            existingDimension.metricRefs(),
+            existingDimension.standardBindings(),
+            existingDimension.generationStrategy(),
+            existingDimension.dimensionProfile(),
+            null,
+            existingDimension.idempotencyKey()
+        );
+
+        assertThat(ModelSpecContract.validateCreate(missingReference))
+            .extracting(ModelSpecContract.FieldIssue::code, ModelSpecContract.FieldIssue::field)
+            .contains(org.assertj.core.groups.Tuple.tuple("MODEL_SPEC_DIMENSION_DEFINITION_REQUIRED", "dimensionDefinitionRef"));
+    }
+
+    @Test
+    void dimensionUpdatesDoNotRevalidateTheImmutableCreationPin() {
+        CreateModelSpecCommand dimension = validCommand(ModelType.DIMENSION, null);
+        UpdateModelSpecCommand update = new UpdateModelSpecCommand(
+            dimension.planId(), dimension.domainId(), dimension.modelType(), dimension.layer(), "updated_dimension", dimension.description(),
+            dimension.implementationMode(), dimension.materialization(), dimension.businessActivityRef(), dimension.consumptionScenario(),
+            dimension.grain(), dimension.factShape(), dimension.timeSemantics(), dimension.fields(), dimension.sourceRefs(),
+            dimension.dependsOn(), dimension.dimensionRefs(), dimension.metricRefs(), dimension.standardBindings(),
+            dimension.generationStrategy(), dimension.dimensionProfile()
+        );
+
+        assertThat(ModelSpecContract.validateUpdate(update)).isEmpty();
+    }
+
+    @Test
+    void validateViewRequiresTheCreationPinForDimensions() {
+        ModelSpecView pinned = view(validCommand(ModelType.DIMENSION, null));
+
+        assertThat(ModelSpecContract.validateView(withDimensionDefinitionRef(pinned, null)))
+            .extracting(ModelSpecContract.FieldIssue::code, ModelSpecContract.FieldIssue::field)
+            .contains(org.assertj.core.groups.Tuple.tuple("MODEL_SPEC_DIMENSION_DEFINITION_REQUIRED", "dimensionDefinitionRef"));
+    }
+
+    @Test
+    void validateViewRejectsInvalidDimensionPins() {
+        ModelSpecView pinned = view(validCommand(ModelType.DIMENSION, null));
+
+        assertThat(
+            ModelSpecContract.validateView(
+                withDimensionDefinitionRef(pinned, new ModelSpecContract.DimensionDefinitionRef(null, 1))
+            )
+        )
+            .extracting(ModelSpecContract.FieldIssue::code, ModelSpecContract.FieldIssue::field)
+            .contains(org.assertj.core.groups.Tuple.tuple("MODEL_SPEC_DIMENSION_DEFINITION_INVALID", "dimensionDefinitionRef"));
+        assertThat(
+            ModelSpecContract.validateView(
+                withDimensionDefinitionRef(
+                    pinned,
+                    new ModelSpecContract.DimensionDefinitionRef(UUID.fromString("60000000-0000-0000-0000-000000000001"), 0)
+                )
+            )
+        )
+            .extracting(ModelSpecContract.FieldIssue::code, ModelSpecContract.FieldIssue::field)
+            .contains(org.assertj.core.groups.Tuple.tuple("MODEL_SPEC_DIMENSION_DEFINITION_INVALID", "dimensionDefinitionRef"));
+    }
+
+    @Test
+    void validateViewRejectsDimensionPinsForEveryNonDimensionType() {
+        ModelSpecContract.DimensionDefinitionRef ref = new ModelSpecContract.DimensionDefinitionRef(
+            UUID.fromString("60000000-0000-0000-0000-000000000001"),
+            1
+        );
+
+        for (ModelType type : List.of(ModelType.FACT, ModelType.SUMMARY, ModelType.APPLICATION)) {
+            assertThat(ModelSpecContract.validateView(withDimensionDefinitionRef(view(validCommand(type, null)), ref)))
+                .as(type.name())
+                .extracting(ModelSpecContract.FieldIssue::code, ModelSpecContract.FieldIssue::field)
+                .contains(org.assertj.core.groups.Tuple.tuple("MODEL_SPEC_DIMENSION_DEFINITION_NOT_ALLOWED", "dimensionDefinitionRef"));
+        }
     }
 
     @Test
@@ -484,6 +584,10 @@ class ModelSpecContractTest {
             List.of(),
             List.of(),
             null,
+            null,
+            type == ModelType.DIMENSION
+                ? new ModelSpecContract.DimensionDefinitionRef(UUID.fromString("60000000-0000-0000-0000-000000000001"), 1)
+                : null,
             "model-spec-contract-test-" + type.name().toLowerCase()
         );
     }
@@ -515,6 +619,8 @@ class ModelSpecContractTest {
             List.of(),
             List.of(),
             generationStrategy,
+            null,
+            base.dimensionDefinitionRef(),
             base.idempotencyKey()
         );
     }
@@ -541,6 +647,8 @@ class ModelSpecContractTest {
             base.metricRefs(),
             base.standardBindings(),
             base.generationStrategy(),
+            null,
+            base.dimensionDefinitionRef(),
             base.idempotencyKey()
         );
     }
@@ -572,6 +680,8 @@ class ModelSpecContractTest {
             base.metricRefs(),
             base.standardBindings(),
             generationStrategy,
+            null,
+            base.dimensionDefinitionRef(),
             base.idempotencyKey()
         );
     }
@@ -603,6 +713,8 @@ class ModelSpecContractTest {
             base.metricRefs(),
             base.standardBindings(),
             base.generationStrategy(),
+            null,
+            base.dimensionDefinitionRef(),
             base.idempotencyKey()
         );
     }
@@ -629,7 +741,53 @@ class ModelSpecContractTest {
             base.metricRefs(),
             base.standardBindings(),
             base.generationStrategy(),
+            null,
+            base.dimensionDefinitionRef(),
             base.idempotencyKey()
+        );
+    }
+
+    private static ModelSpecView view(CreateModelSpecCommand command) {
+        return new ModelSpecSnapshotCodec(new ObjectMapper().findAndRegisterModules())
+            .toCreatedView(UUID.randomUUID(), command, Instant.EPOCH);
+    }
+
+    private static ModelSpecView withDimensionDefinitionRef(
+        ModelSpecView base,
+        ModelSpecContract.DimensionDefinitionRef dimensionDefinitionRef
+    ) {
+        return new ModelSpecView(
+            base.contractVersion(),
+            base.id(),
+            base.planId(),
+            base.domainId(),
+            base.modelType(),
+            base.layer(),
+            base.name(),
+            base.description(),
+            base.implementationMode(),
+            base.materialization(),
+            base.businessActivityRef(),
+            base.consumptionScenario(),
+            base.grain(),
+            base.factShape(),
+            base.timeSemantics(),
+            base.fields(),
+            base.sourceRefs(),
+            base.dependsOn(),
+            base.dimensionRefs(),
+            base.metricRefs(),
+            base.standardBindings(),
+            base.generationStrategy(),
+            base.dimensionProfile(),
+            dimensionDefinitionRef,
+            base.status(),
+            base.revision(),
+            base.checksum(),
+            base.createdAt(),
+            base.updatedAt(),
+            base.compatibilityMode(),
+            base.legacyRefs()
         );
     }
 }

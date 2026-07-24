@@ -40,6 +40,7 @@ public final class ModelSpecContract {
         "standardBindings",
         "generationStrategy",
         "dimensionProfile",
+        "dimensionDefinitionRef",
         "idempotencyKey"
     );
 
@@ -155,7 +156,8 @@ public final class ModelSpecContract {
     private static final Set<String> GRAIN_FIELDS = Set.of("statement", "keys");
     private static final Set<String> TIME_SEMANTICS_FIELDS = Set.of("type", "fields");
     private static final Set<String> GENERATION_STRATEGY_FIELDS = Set.of("type", "reference");
-    private static final Set<String> DIMENSION_PROFILE_FIELDS = Set.of("dimensionCode", "hierarchies", "scdPolicy", "reuseScope");
+    private static final Set<String> DIMENSION_PROFILE_FIELDS = Set.of("hierarchies", "scdPolicy");
+    private static final Set<String> DIMENSION_DEFINITION_REF_FIELDS = Set.of("dimensionDefinitionId", "revision");
     private static final Set<String> DIMENSION_HIERARCHY_FIELDS = Set.of("code", "name", "levels");
     private static final Set<String> DIMENSION_LEVEL_FIELDS = Set.of("fieldName", "order");
     private static final Set<String> SCD_POLICY_FIELDS = Set.of(
@@ -460,6 +462,8 @@ public final class ModelSpecContract {
         }
     }
 
+    public record DimensionDefinitionRef(UUID dimensionDefinitionId, int revision) {}
+
     public record CreateModelSpecCommand(
         UUID planId,
         UUID domainId,
@@ -482,8 +486,41 @@ public final class ModelSpecContract {
         List<StandardBinding> standardBindings,
         GenerationStrategy generationStrategy,
         @JsonInclude(JsonInclude.Include.NON_NULL) DimensionProfile dimensionProfile,
+        @JsonInclude(JsonInclude.Include.NON_NULL) DimensionDefinitionRef dimensionDefinitionRef,
         String idempotencyKey
     ) {
+        /** Compatibility constructor for callers that predate the revision-pinned dimension definition reference. */
+        public CreateModelSpecCommand(
+            UUID planId,
+            UUID domainId,
+            ModelType modelType,
+            Layer layer,
+            String name,
+            String description,
+            ImplementationMode implementationMode,
+            String materialization,
+            String businessActivityRef,
+            String consumptionScenario,
+            Grain grain,
+            FactShape factShape,
+            TimeSemantics timeSemantics,
+            List<ModelField> fields,
+            List<SourceRef> sourceRefs,
+            List<ModelRevisionRef> dependsOn,
+            List<ModelRevisionRef> dimensionRefs,
+            List<MetricRef> metricRefs,
+            List<StandardBinding> standardBindings,
+            GenerationStrategy generationStrategy,
+            DimensionProfile dimensionProfile,
+            String idempotencyKey
+        ) {
+            this(
+                planId, domainId, modelType, layer, name, description, implementationMode, materialization,
+                businessActivityRef, consumptionScenario, grain, factShape, timeSemantics, fields, sourceRefs,
+                dependsOn, dimensionRefs, metricRefs, standardBindings, generationStrategy, dimensionProfile, null, idempotencyKey
+            );
+        }
+
         /** Compatibility constructor for callers that predate the optional Phase-B dimension profile. */
         public CreateModelSpecCommand(
             UUID planId,
@@ -529,6 +566,7 @@ public final class ModelSpecContract {
                 metricRefs,
                 standardBindings,
                 generationStrategy,
+                null,
                 null,
                 idempotencyKey
             );
@@ -661,6 +699,7 @@ public final class ModelSpecContract {
         List<StandardBinding> standardBindings,
         GenerationStrategy generationStrategy,
         @JsonInclude(JsonInclude.Include.NON_NULL) DimensionProfile dimensionProfile,
+        @JsonInclude(JsonInclude.Include.NON_NULL) DimensionDefinitionRef dimensionDefinitionRef,
         ModelStatus status,
         int revision,
         String checksum,
@@ -669,6 +708,47 @@ public final class ModelSpecContract {
         CompatibilityMode compatibilityMode,
         LegacyRefs legacyRefs
     ) {
+        /** Compatibility constructor for callers and fixtures created before the dimension definition reference. */
+        public ModelSpecView(
+            int contractVersion,
+            UUID id,
+            UUID planId,
+            UUID domainId,
+            ModelType modelType,
+            Layer layer,
+            String name,
+            String description,
+            ImplementationMode implementationMode,
+            String materialization,
+            String businessActivityRef,
+            String consumptionScenario,
+            Grain grain,
+            FactShape factShape,
+            TimeSemantics timeSemantics,
+            List<ModelField> fields,
+            List<SourceRef> sourceRefs,
+            List<ModelRevisionRef> dependsOn,
+            List<ModelRevisionRef> dimensionRefs,
+            List<MetricRef> metricRefs,
+            List<StandardBinding> standardBindings,
+            GenerationStrategy generationStrategy,
+            DimensionProfile dimensionProfile,
+            ModelStatus status,
+            int revision,
+            String checksum,
+            Instant createdAt,
+            Instant updatedAt,
+            CompatibilityMode compatibilityMode,
+            LegacyRefs legacyRefs
+        ) {
+            this(
+                contractVersion, id, planId, domainId, modelType, layer, name, description, implementationMode,
+                materialization, businessActivityRef, consumptionScenario, grain, factShape, timeSemantics, fields,
+                sourceRefs, dependsOn, dimensionRefs, metricRefs, standardBindings, generationStrategy, dimensionProfile,
+                null, status, revision, checksum, createdAt, updatedAt, compatibilityMode, legacyRefs
+            );
+        }
+
         /** Compatibility constructor for callers and fixtures created before Phase-B dimension metadata. */
         public ModelSpecView(
             int contractVersion,
@@ -724,6 +804,7 @@ public final class ModelSpecContract {
                 metricRefs,
                 standardBindings,
                 generationStrategy,
+                null,
                 null,
                 status,
                 revision,
@@ -809,6 +890,20 @@ public final class ModelSpecContract {
         }
         if (
             invalidObject(
+                fields.get("dimensionDefinitionRef"),
+                DIMENSION_DEFINITION_REF_FIELDS,
+                ModelSpecContract::invalidRawDimensionDefinitionRef
+            )
+        ) {
+            addIssueOnce(
+                issues,
+                "MODEL_SPEC_DIMENSION_DEFINITION_INVALID",
+                "dimensionDefinitionRef",
+                "Dimension definition references require an id and positive revision"
+            );
+        }
+        if (
+            invalidObject(
                 fields.get("dimensionProfile"),
                 DIMENSION_PROFILE_FIELDS,
                 ModelSpecContract::invalidRawDimensionProfile
@@ -879,19 +974,31 @@ public final class ModelSpecContract {
             );
         }
         validateNested(command, issues);
+        validateDimensionDefinitionRef(command, issues);
         validateTypeBoundary(command, issues);
         return List.copyOf(issues);
     }
 
     static List<FieldIssue> validateUpdate(UpdateModelSpecCommand command) {
         if (command == null) return List.of(issue("MODEL_SPEC_REQUEST_INVALID", "$", "ModelSpec update request is required"));
-        return validateCreate(asCreate(command));
+        return validateCreate(asCreate(command))
+            .stream()
+            .filter(issue -> !"MODEL_SPEC_DIMENSION_DEFINITION_REQUIRED".equals(issue.code()))
+            .toList();
     }
 
     public static List<FieldIssue> validateView(ModelSpecView view) {
         if (view == null) return List.of(issue("MODEL_SPEC_REQUEST_INVALID", "$", "ModelSpec view is required"));
-        return validateUpdate(
-            new UpdateModelSpecCommand(
+        DimensionProfile viewProfile = view.dimensionProfile() == null
+            ? null
+            : new DimensionProfile(
+                null,
+                view.dimensionProfile().hierarchies(),
+                view.dimensionProfile().scdPolicy(),
+                null
+            );
+        return validateCreate(
+            new CreateModelSpecCommand(
                 view.planId(),
                 view.domainId(),
                 view.modelType(),
@@ -912,7 +1019,9 @@ public final class ModelSpecContract {
                 view.metricRefs(),
                 view.standardBindings(),
                 view.generationStrategy(),
-                view.dimensionProfile()
+                viewProfile,
+                view.dimensionDefinitionRef(),
+                "__model_spec_view__"
             )
         );
     }
@@ -940,6 +1049,7 @@ public final class ModelSpecContract {
             command.standardBindings(),
             command.generationStrategy(),
             command.dimensionProfile(),
+            null,
             "__model_spec_update__"
         );
     }
@@ -1022,6 +1132,37 @@ public final class ModelSpecContract {
             );
         }
         validateDimensionProfile(command.dimensionProfile(), issues);
+    }
+
+    private static void validateDimensionDefinitionRef(CreateModelSpecCommand command, List<FieldIssue> issues) {
+        DimensionDefinitionRef ref = command.dimensionDefinitionRef();
+        if (command.modelType() == ModelType.DIMENSION) {
+            if (ref == null) {
+                issues.add(
+                    issue(
+                        "MODEL_SPEC_DIMENSION_DEFINITION_REQUIRED",
+                        "dimensionDefinitionRef",
+                        "DIMENSION models require a revision-pinned dimension definition"
+                    )
+                );
+            } else if (ref.dimensionDefinitionId() == null || ref.revision() < 1) {
+                issues.add(
+                    issue(
+                        "MODEL_SPEC_DIMENSION_DEFINITION_INVALID",
+                        "dimensionDefinitionRef",
+                        "Dimension definition references require an id and positive revision"
+                    )
+                );
+            }
+        } else if (ref != null) {
+            issues.add(
+                issue(
+                    "MODEL_SPEC_DIMENSION_DEFINITION_NOT_ALLOWED",
+                    "dimensionDefinitionRef",
+                    "Dimension definition references belong to DIMENSION models only"
+                )
+            );
+        }
     }
 
     private static void validateRevisionRefs(
@@ -1236,10 +1377,6 @@ public final class ModelSpecContract {
     }
 
     private static boolean invalidRawDimensionProfile(Map<?, ?> profile) {
-        if (!isNonBlankText(profile.get("dimensionCode"))) return true;
-        String code = ((String) profile.get("dimensionCode")).trim();
-        if (!DIMENSION_CODE.matcher(code).matches()) return true;
-        if (!isEnumText(profile.get("reuseScope"), enumNames(ReuseScope.values()))) return true;
         Object hierarchies = profile.get("hierarchies");
         if (!(hierarchies instanceof List<?> values)) return true;
         if (
@@ -1263,13 +1400,22 @@ public final class ModelSpecContract {
         );
     }
 
+    private static boolean invalidRawDimensionDefinitionRef(Map<?, ?> ref) {
+        return !isUuidText(ref.get("dimensionDefinitionId")) || !isPositiveInteger(ref.get("revision"));
+    }
+
     private static void validateDimensionProfile(DimensionProfile profile, List<FieldIssue> issues) {
         if (profile == null) return;
-        if (profile.dimensionCode() == null || !DIMENSION_CODE.matcher(profile.dimensionCode()).matches()) {
-            addIssueOnce(issues, "MODEL_SPEC_DIMENSION_CODE_INVALID", "dimensionProfile", "Dimension code must be stable uppercase ASCII");
+        if (profile.dimensionCode() != null || profile.reuseScope() != null) {
+            addIssueOnce(
+                issues,
+                "MODEL_SPEC_DIMENSION_PROFILE_INVALID",
+                "dimensionProfile",
+                "Dimension code and reuse scope are legacy read fields, not canonical write inputs"
+            );
         }
-        if (profile.reuseScope() == null || profile.scdPolicy() == null || profile.scdPolicy().type() == null) {
-            addIssueOnce(issues, "MODEL_SPEC_DIMENSION_PROFILE_INVALID", "dimensionProfile", "Dimension profile requires reuse scope and SCD policy");
+        if (profile.scdPolicy() == null || profile.scdPolicy().type() == null) {
+            addIssueOnce(issues, "MODEL_SPEC_DIMENSION_PROFILE_INVALID", "dimensionProfile", "Dimension profile requires an SCD policy");
         }
         Set<String> hierarchyCodes = new HashSet<>();
         for (DimensionHierarchy hierarchy : profile.hierarchies()) {

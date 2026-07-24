@@ -242,16 +242,8 @@ public class ModelSpecApplicationService {
                 Map.of("status", current.status())
             );
         }
-        String currentDimensionCode = current.dimensionProfile() == null ? null : current.dimensionProfile().dimensionCode();
-        String replacementDimensionCode = command.dimensionProfile() == null ? null : command.dimensionProfile().dimensionCode();
-        if (currentDimensionCode != null && !Objects.equals(currentDimensionCode, replacementDimensionCode)) {
-            throw new ModelSpecException(
-                "MODEL_SPEC_DIMENSION_CODE_IMMUTABLE",
-                "Dimension code cannot be changed after creation",
-                ModelSpecException.Kind.UNPROCESSABLE,
-                List.of(fieldIssue("dimensionProfile", "Dimension code is immutable after creation"))
-            );
-        }
+        ModelSpecView replacement = codec.toUpdatedView(current, command, current.revision() + 1, clock.instant());
+        rejectIssues(ModelSpecContract.validateView(replacement));
         validateSources(serverTenantId, actorId, command.planId(), command.sourceRefs());
         validateReferences(
             serverTenantId,
@@ -261,10 +253,7 @@ public class ModelSpecApplicationService {
             command.dependsOn(),
             command.dimensionRefs()
         );
-        String replacementChecksum = codec.contentChecksum(command);
-        if (replacementChecksum.equals(current.checksum())) return current;
-
-        ModelSpecView replacement = codec.toUpdatedView(current, command, current.revision() + 1, clock.instant());
+        if (replacement.checksum().equals(current.checksum())) return current;
         String snapshot = codec.write(replacement);
         int updated;
         try {

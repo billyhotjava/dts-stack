@@ -57,6 +57,75 @@ class ModelSpecSnapshotCodecTest {
         assertThat(codec.contentChecksum(view)).isEqualTo(codec.contentChecksum(command));
     }
 
+    @Test
+    void readsPinnedDimensionDefinitionSnapshotsWhileKeepingHistoricalNullReferencesOutOfJson() throws Exception {
+        ModelSpecView historical = codec.toCreatedView(
+            UUID.fromString("30000000-0000-0000-0000-000000000001"),
+            command("legacy-snapshot"),
+            Instant.EPOCH
+        );
+        String historicalSnapshot = codec.write(historical);
+        var pinnedSnapshot = new ObjectMapper().readTree(historicalSnapshot);
+        ((com.fasterxml.jackson.databind.node.ObjectNode) pinnedSnapshot)
+            .putObject("dimensionDefinitionRef")
+            .put("dimensionDefinitionId", "60000000-0000-0000-0000-000000000001")
+            .put("revision", 3);
+
+        assertThat(codec.readView(pinnedSnapshot.toString())).isNotNull();
+        assertThat(codec.write(codec.readView(historicalSnapshot))).doesNotContain("\"dimensionDefinitionRef\"");
+        assertThat(codec.contentChecksum(codec.readView(historicalSnapshot))).isEqualTo(codec.contentChecksum(historical));
+    }
+
+    @Test
+    void keepsThePinnedDimensionDefinitionInTheUpdatedContentChecksum() {
+        CreateModelSpecCommand create = pinnedDimensionCommand();
+        ModelSpecView current = codec.toCreatedView(UUID.randomUUID(), create, Instant.EPOCH);
+        UpdateModelSpecCommand update = new UpdateModelSpecCommand(
+            create.planId(), create.domainId(), create.modelType(), create.layer(), "customer_dimension_v2", create.description(),
+            create.implementationMode(), create.materialization(), create.businessActivityRef(), create.consumptionScenario(),
+            create.grain(), create.factShape(), create.timeSemantics(), create.fields(), create.sourceRefs(), create.dependsOn(),
+            create.dimensionRefs(), create.metricRefs(), create.standardBindings(), create.generationStrategy(), create.dimensionProfile()
+        );
+
+        ModelSpecView replacement = codec.toUpdatedView(current, update, 2, Instant.EPOCH.plusSeconds(60));
+
+        assertThat(replacement.dimensionDefinitionRef()).isEqualTo(create.dimensionDefinitionRef());
+        assertThat(replacement.checksum()).isEqualTo(codec.contentChecksum(replacement));
+        assertThat(ModelSpecContract.validateView(replacement)).isEmpty();
+    }
+
+    @Test
+    void preservesLegacyDimensionIdentityFieldsWhenCanonicalUpdatesOmitThem() {
+        DimensionProfile legacyProfile = new DimensionProfile(
+            "DIM_CUSTOMER",
+            List.of(),
+            new ScdPolicy(ScdType.TYPE1, null, null, null),
+            ReuseScope.DOMAIN
+        );
+        CreateModelSpecCommand create = withDimensionProfile(pinnedDimensionCommand(), legacyProfile);
+        ModelSpecView current = codec.toCreatedView(UUID.randomUUID(), create, Instant.EPOCH);
+        DimensionProfile canonicalProfile = new DimensionProfile(
+            null,
+            legacyProfile.hierarchies(),
+            legacyProfile.scdPolicy(),
+            null
+        );
+        UpdateModelSpecCommand update = new UpdateModelSpecCommand(
+            create.planId(), create.domainId(), create.modelType(), create.layer(), create.name(), create.description(),
+            create.implementationMode(), create.materialization(), create.businessActivityRef(), create.consumptionScenario(),
+            create.grain(), create.factShape(), create.timeSemantics(), create.fields(), create.sourceRefs(), create.dependsOn(),
+            create.dimensionRefs(), create.metricRefs(), create.standardBindings(), create.generationStrategy(), canonicalProfile
+        );
+
+        ModelSpecView replacement = codec.toUpdatedView(current, update, 2, Instant.EPOCH.plusSeconds(60));
+
+        assertThat(replacement.dimensionProfile().dimensionCode()).isEqualTo("DIM_CUSTOMER");
+        assertThat(replacement.dimensionProfile().reuseScope()).isEqualTo(ReuseScope.DOMAIN);
+        assertThat(replacement.dimensionDefinitionRef()).isEqualTo(current.dimensionDefinitionRef());
+        assertThat(replacement.checksum()).isEqualTo(current.checksum());
+        assertThat(ModelSpecContract.validateView(replacement)).isEmpty();
+    }
+
     private static CreateModelSpecCommand command(String idempotencyKey) {
         return new CreateModelSpecCommand(
             UUID.fromString("10000000-0000-0000-0000-000000000001"),
@@ -93,6 +162,66 @@ class ModelSpecSnapshotCodecTest {
             List.of(),
             null,
             idempotencyKey
+        );
+    }
+
+    private static CreateModelSpecCommand pinnedDimensionCommand() {
+        CreateModelSpecCommand base = command("pinned-dimension");
+        return new CreateModelSpecCommand(
+            base.planId(),
+            base.domainId(),
+            ModelType.DIMENSION,
+            Layer.DWD,
+            "customer_dimension",
+            base.description(),
+            base.implementationMode(),
+            base.materialization(),
+            null,
+            null,
+            base.grain(),
+            null,
+            null,
+            base.fields(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            null,
+            null,
+            new DimensionDefinitionRef(UUID.fromString("60000000-0000-0000-0000-000000000001"), 3),
+            base.idempotencyKey()
+        );
+    }
+
+    private static CreateModelSpecCommand withDimensionProfile(
+        CreateModelSpecCommand base,
+        DimensionProfile dimensionProfile
+    ) {
+        return new CreateModelSpecCommand(
+            base.planId(),
+            base.domainId(),
+            base.modelType(),
+            base.layer(),
+            base.name(),
+            base.description(),
+            base.implementationMode(),
+            base.materialization(),
+            base.businessActivityRef(),
+            base.consumptionScenario(),
+            base.grain(),
+            base.factShape(),
+            base.timeSemantics(),
+            base.fields(),
+            base.sourceRefs(),
+            base.dependsOn(),
+            base.dimensionRefs(),
+            base.metricRefs(),
+            base.standardBindings(),
+            base.generationStrategy(),
+            dimensionProfile,
+            base.dimensionDefinitionRef(),
+            base.idempotencyKey()
         );
     }
 }
