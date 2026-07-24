@@ -12,8 +12,12 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -59,10 +63,26 @@ public class DimensionDefinitionRepository {
             .findFirst();
     }
 
-    public List<StoredDimensionDefinition> listCurrent(String tenantId, UUID domainId, Status status) {
+    public List<StoredDimensionDefinition> listCurrent(
+        String tenantId,
+        UUID domainId,
+        Status status,
+        Set<UUID> visibleDomainIds,
+        int offset,
+        int limit
+    ) {
+        if (visibleDomainIds.isEmpty()) {
+            return List.of();
+        }
         StringBuilder sql = new StringBuilder(CURRENT_COLUMNS).append(" where d.tenant_id = ?");
-        java.util.ArrayList<Object> arguments = new java.util.ArrayList<>();
+        ArrayList<Object> arguments = new ArrayList<>();
         arguments.add(tenantId);
+        List<UUID> orderedVisibleDomainIds = visibleDomainIds.stream().sorted().toList();
+        sql
+            .append(" and d.domain_id in (")
+            .append(String.join(", ", java.util.Collections.nCopies(orderedVisibleDomainIds.size(), "?")))
+            .append(")");
+        arguments.addAll(orderedVisibleDomainIds);
         if (domainId != null) {
             sql.append(" and d.domain_id = ?");
             arguments.add(domainId);
@@ -71,7 +91,9 @@ public class DimensionDefinitionRepository {
             sql.append(" and d.status = ?");
             arguments.add(status.name());
         }
-        sql.append(" order by d.name, d.id");
+        sql.append(" order by d.name, d.id limit ? offset ?");
+        arguments.add(limit);
+        arguments.add(offset);
         return jdbcTemplate.query(sql.toString(), this::mapStored, arguments.toArray());
     }
 
@@ -278,6 +300,37 @@ public class DimensionDefinitionRepository {
             id
         );
         return count == null ? 0 : count;
+    }
+
+    public Map<UUID, Long> usageCounts(String tenantId, List<UUID> ids) {
+        List<UUID> distinctIds = ids.stream().distinct().toList();
+        if (distinctIds.isEmpty()) {
+            return Map.of();
+        }
+        String placeholders = String.join(", ", java.util.Collections.nCopies(distinctIds.size(), "?"));
+        ArrayList<Object> arguments = new ArrayList<>(distinctIds.size() + 1);
+        arguments.add(tenantId);
+        arguments.addAll(distinctIds);
+        return jdbcTemplate.query(
+            """
+            select dimension_definition_id, count(*) as usage_count
+              from modeling_model_spec
+             where tenant_id = ?
+               and dimension_definition_id in (%s)
+             group by dimension_definition_id
+            """.formatted(placeholders),
+            resultSet -> {
+                Map<UUID, Long> counts = new LinkedHashMap<>();
+                while (resultSet.next()) {
+                    counts.put(
+                        resultSet.getObject("dimension_definition_id", UUID.class),
+                        resultSet.getLong("usage_count")
+                    );
+                }
+                return Map.copyOf(counts);
+            },
+            arguments.toArray()
+        );
     }
 
     private String json(Object value) {

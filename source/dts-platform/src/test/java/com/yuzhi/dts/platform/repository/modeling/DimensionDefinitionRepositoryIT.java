@@ -13,6 +13,7 @@ import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.View;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -60,7 +61,9 @@ class DimensionDefinitionRepositoryIT {
         StoredDimensionDefinition storedFirst = repository.findCurrent(tenant, definitionId).orElseThrow();
         assertThat(storedFirst.toView(0)).usingRecursiveComparison().isEqualTo(first);
         assertThat(repository.findByIdempotencyKey(tenant, command.idempotencyKey())).contains(storedFirst);
-        assertThat(repository.listCurrent(tenant, domainId, Status.DRAFT)).containsExactly(storedFirst);
+        assertThat(repository.listCurrent(tenant, domainId, Status.DRAFT, Set.of(domainId), 0, 1))
+            .containsExactly(storedFirst);
+        assertThat(repository.listCurrent(tenant, domainId, Status.DRAFT, Set.of(domainId), 1, 1)).isEmpty();
 
         View retired = view(
             definitionId,
@@ -95,6 +98,43 @@ class DimensionDefinitionRepositoryIT {
             .extracting(StoredDimensionDefinition::name, StoredDimensionDefinition::checksum)
             .containsExactly("Customer retired", retired.checksum());
         assertThat(repository.findCurrent("another-tenant", definitionId)).isEmpty();
+    }
+
+    @Test
+    void filtersInvisibleDomainsBeforeApplyingTheListWindow() {
+        String tenant = tenant("visible-page");
+        UUID hiddenDomainId = UUID.randomUUID();
+        UUID visibleDomainId = UUID.randomUUID();
+        UUID hiddenId = UUID.randomUUID();
+        UUID visibleId = UUID.randomUUID();
+        Instant now = Instant.parse("2026-07-24T00:00:00Z");
+        View hidden = view(
+            hiddenId,
+            hiddenDomainId,
+            systemCode(hiddenId),
+            "A hidden",
+            Status.DRAFT,
+            1,
+            hash('a'),
+            now
+        );
+        View visible = view(
+            visibleId,
+            visibleDomainId,
+            systemCode(visibleId),
+            "B visible",
+            Status.DRAFT,
+            1,
+            hash('b'),
+            now
+        );
+        repository.insert(tenant, "owner-1", command(hiddenDomainId, "hidden"), hidden, hash('1'));
+        repository.insert(tenant, "owner-1", command(visibleDomainId, "visible"), visible, hash('2'));
+
+        assertThat(repository.listCurrent(tenant, null, Status.DRAFT, Set.of(visibleDomainId), 0, 1))
+            .singleElement()
+            .extracting(StoredDimensionDefinition::id)
+            .isEqualTo(visibleId);
     }
 
     @Test
@@ -481,6 +521,8 @@ class DimensionDefinitionRepositoryIT {
         )).isEqualTo(1);
 
         assertThat(repository.usageCount(tenant, first.id())).isEqualTo(1);
+        assertThat(repository.usageCounts(tenant, List.of(first.id(), UUID.randomUUID())))
+            .containsExactlyEntriesOf(java.util.Map.of(first.id(), 1L));
         assertThat(repository.findCurrent(tenant, first.id())).get().extracting(StoredDimensionDefinition::status).isEqualTo(Status.RETIRED);
         assertThat(
             jdbcTemplate.queryForObject(
@@ -659,6 +701,10 @@ class DimensionDefinitionRepositoryIT {
 
     private static String hash(char value) {
         return String.valueOf(value).repeat(64);
+    }
+
+    private static String systemCode(UUID id) {
+        return "dim_" + id.toString().replace("-", "");
     }
 
     private static CreateCommand command(UUID domainId, String idempotencyKey) {

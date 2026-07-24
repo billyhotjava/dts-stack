@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.service.catalog.CatalogDomainVisibilityService;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -48,5 +49,17 @@ class ModelSpecDomainWriteAccessAdapterTest {
 
         assertThat(adapter.canRead(id)).isTrue();
         assertThat(adapter.canRead(UUID.randomUUID())).isFalse();
+    }
+
+    @Test
+    void suppliesOnlyPersistedVisibleDomainIdsForRepositoryFiltering() {
+        UUID id = UUID.randomUUID();
+        CatalogDomain domain = new CatalogDomain();
+        domain.setId(id);
+        when(visibilityService.findAllVisible()).thenReturn(List.of(domain));
+
+        ModelSpecDomainReadAccessAdapter adapter = new ModelSpecDomainReadAccessAdapter(repository, visibilityService);
+
+        assertThat(adapter.visibleDomainIds()).containsExactly(id);
     }
 }
