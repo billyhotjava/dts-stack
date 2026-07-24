@@ -1,7 +1,7 @@
 # 业务维度、逻辑模型、实现与物理资产四层最小闭环设计
 
 **日期**：2026-07-24
-**状态**：待书面评审
+**状态**：已确认
 **适用范围**：Sprint-67 F3-T02/T08/T09/T10、F6-T08
 **替代边界**：替代此前“维度目录直接以 `DIMENSION ModelSpec` 同时承载概念维度、逻辑维度表和实现输入”的设计；旧实现和证据保留用于迁移与回归，不再作为目标架构。
 
@@ -127,6 +127,40 @@ API Connection
 4. API 响应结构漂移时不得静默改写已锁定元数据 revision；实现进入 STALE 并引导重新试跑、登记新 revision 和更新映射。
 5. 建模模块不感知认证、分页和 HTTP 细节，只消费 Landing 资产版本。
 
+## 7.1 普通模式与 dbt 高级模式的 STG
+
+STG 是模型物化过程中的 `ImplementationArtifact`，不是业务维度、第五类 ModelSpec 或规划必填对象。
+
+普通模式：
+
+1. 用户只维护来源、字段映射、过滤、JOIN、类型转换和去重等业务可理解配置。
+2. 编译器按当前 ModelImplementation revision 自动生成 system-managed STG。
+3. 首期固定使用 `EPHEMERAL`，编译为 CTE 或 dbt ephemeral node，不创建物理 STG 表。
+4. ephemeral STG 不进入模型中心、规划来源或物理资产台账，但作为技术节点进入编译证据和运行血缘。
+5. STG 名称、编码和生命周期由系统生成并绑定当前实现 revision，用户不填写。
+6. 需要自定义复杂 SQL、持久化中间表或单独性能调优时，引导转换到 dbt 高级模式。
+
+dbt 高级模式：
+
+1. 用户可显式创建和维护 `stg_*` 节点，并选择 `ephemeral`、`view`、`table` 或 `incremental`。
+2. STG 始终登记为实现产物；只有真实落库的 view/table/incremental 才登记技术型 `PhysicalAssetRevision(layer=STG)`。
+3. 目标 dbt 节点必须明确绑定原 modelSpecId/revision，不能创建第二个逻辑模型台账。
+4. dbt DAG 必须无环，目标节点唯一，所有依赖满足 F3-T07 的分层矩阵。
+
+模式切换：
+
+- 普通模式转高级模式时，系统从当前实现 revision 生成初始 STG/目标 SQL/schema tests，并创建新的高级实现 revision；逻辑 ModelSpec 和业务维度引用不变。
+- 用户开始编辑 dbt 文件后，普通表单不得再次自动覆盖。
+- 高级模式不能静默降级为普通模式；只能显式放弃自定义实现并创建新的普通实现 revision。
+
+API 的 Landing/ODS 是可追溯物理输入，不等同于 STG：
+
+```text
+API → Landing/ODS PhysicalAssetRevision
+      → system-managed ephemeral STG
+      → DWD/DWS/ADS PhysicalAssetRevision
+```
+
 ## 8. 前端信息架构
 
 ### 8.1 维度目录
@@ -157,6 +191,8 @@ API Connection
 1. `逻辑设计`：粒度、字段、业务键、维度引用、SCD 逻辑策略；
 2. `数据实现`：选择物理资产、上游模型或生成器，维护字段映射和实现参数；
 3. `物理资产`：目标库表、编译/测试、部署状态、资产与血缘。
+
+普通模式在“数据实现”中只读展示折叠的“系统预处理”摘要，不要求用户创建 STG。高级模式展示完整 dbt DAG、显式 STG 节点和物化方式。物理资产阶段只展示真正落库的 STG；ephemeral STG 仅出现在编译和血缘证据中。
 
 唯一主动作依次为：
 
@@ -226,6 +262,7 @@ API Connection
 - 三阶段页面字段和主动作互斥；
 - API 未落地、来源漂移、网络失败和安全返回可恢复；
 - 系统编码和稳定引用不可手工编辑。
+- 普通模式只读展示 system-managed ephemeral STG，高级模式才允许显式维护 STG 和物化方式。
 
 ### G4 真实联动 Journey
 
@@ -233,6 +270,7 @@ API Connection
 2. 数据库表完成连接、元数据同步、规划确认、模型实现和目标资产登记；
 3. API 完成试跑、Landing 表登记、规划确认、模型实现、目标资产和全链路血缘；
 4. FACT → SUMMARY → APPLICATION 使用锁定模型 revision，漂移后正确阻塞并可修复。
+5. 普通实现生成 ephemeral STG 且不登记虚假物理表；转高级 dbt 后保留同一逻辑模型并可登记真实物化 STG。
 
 ### G5 一次性最终验证
 

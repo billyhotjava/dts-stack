@@ -97,6 +97,7 @@
 5. 验证 FACT → SUMMARY → APPLICATION 只使用合法资产或锁定模型 revision，漂移后阻塞并可恢复；
 6. 验证轻量新建、逻辑设计/数据实现/物理资产三阶段详情、受控 returnTo、失败恢复和 Chrome 95 390px；
 7. 对存量 DIMENSION 执行 dry-run、迁移、计数对账和回滚，旧深链保持可读且无新混合写入。
+8. 普通模式生成 ephemeral STG 且物理资产表无虚假记录；转换 dbt 高级模式后保留原逻辑模型，真实 STG view/table 登记为技术资产并进入血缘。
 
 ## 2. 自动化矩阵
 

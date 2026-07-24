@@ -19,6 +19,7 @@
 - Dimension catalogs do not use DIMENSION ModelSpec as the business-dimension truth; ModelSpec references `DimensionDefinition`.
 - Model implementation accepts only physical assets, revision-pinned upstream models or controlled generators.
 - API sources enter modeling only after the existing ingestion path creates and registers a Landing physical asset.
+- STG belongs to ModelImplementation: normal mode generates system-managed ephemeral nodes; dbt advanced mode may explicitly materialize technical STG assets.
 - Database changes are forward-only Liquibase expand-migrate-contract changesets.
 - Chrome 95 is a release target.
 - Every code task starts with failing tests and ends with scoped verification and a Conventional Commit.

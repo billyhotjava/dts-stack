@@ -23,6 +23,8 @@ FACT 表单中的“目标数仓分层”属于当前模型产物；“上游来
 
 维度目录不再读取 DIMENSION ModelSpec，也不展示来源、目标层、SCD 实现或物化字段。模型新建只创建最小 DRAFT；粒度和字段属于逻辑设计，物理资产/上游模型/生成器属于数据实现，目标表和运行血缘属于物理资产阶段。API 必须先由采集任务生成并登记 Landing 物理资产，再从当前计划来源中选择。
 
+STG 只属于物化实现：普通模式由系统生成 ephemeral STG，并在“数据实现”折叠区和血缘中只读展示；不创建物理 STG 表，也不进入模型中心。dbt 高级模式可以显式维护 STG，只有真实落库的 view/table/incremental 才进入物理资产阶段。普通模式转高级模式创建新的实现 revision，用户编辑后不得被普通表单覆盖。
+
 类型与目标层不再自由组合：DIMENSION/FACT 自动投影 DWD，SUMMARY 自动投影 DWS，APPLICATION 自动投影 ADS。ODS_RAW/ODS_STANDARDIZED/STG 不在四类模型目标层下拉中；“建设 ODS”目标入口为数据接入，已有 ODS 表则从元数据同步/来源盘点纳入，该入口 UI 尚待 F3-T07 实现。上游选择器按类型过滤：FACT dependsOn 仅 FACT@DWD，维度另走 dimensionRefs；SUMMARY 为 DIMENSION/FACT@DWD 或 SUMMARY@DWS；APPLICATION 为任意合法 DWD/DWS/ADS 四类模型。服务端按同一矩阵复验。
 
 ## 2. 每页状态契约

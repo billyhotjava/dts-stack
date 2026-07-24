@@ -15,6 +15,9 @@
 - 数据库同步表和 API Landing 表统一解析为当前计划已确认物理资产 revision；
 - API 试跑成功后登记 Landing 元数据、采集任务 revision、checkpoint 和来源血缘；
 - 目标 DDL、编译/测试、部署和物理资产回写关联同一 modelSpecId/revision；
+- 普通模式生成绑定实现 revision 的 system-managed ephemeral STG，不登记虚假物理表；
+- dbt 高级模式显式管理 STG，并只为真实物化节点登记技术型物理资产；
+- 普通模式可单向转换为新的 dbt 高级实现 revision，禁止自动覆盖用户 SQL 或静默降级；
 - SUMMARY/APPLICATION 禁止直接物理来源，模型循环、自引用和版本漂移 fail closed。
 
 ## 不做
@@ -31,6 +34,9 @@
 - [ ] API 未试跑或未登记 Landing 时返回 `API_LANDING_NOT_READY`；
 - [ ] API Landing 登记后可被计划确认并用于模型实现；
 - [ ] 日期维度通过 `GENERATED` 实现，无需上游表；
+- [ ] 普通模式生成 ephemeral STG、编译证据和完整血缘，但物理资产台账不存在虚假 STG 表；
+- [ ] 转换 dbt 高级模式后保留 modelSpecId/revision，真实 STG view/table 可登记技术资产；
+- [ ] 高级实现不能被普通表单覆盖，回到普通模式必须显式创建新实现 revision；
 - [ ] SUMMARY/APPLICATION 只接受锁定 revision 的 `UPSTREAM_MODEL`；
 - [ ] 漂移、跨计划、跨部门、循环和目标自引用均拒绝；
 - [ ] 部署后可从目标资产反查模型、Landing、采集任务和原始连接。

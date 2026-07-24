@@ -16,6 +16,7 @@
 4. FACT → SUMMARY → APPLICATION 使用锁定模型 revision，漂移后阻塞并可修复；
 5. 存量 DIMENSION 迁移、旧深链、旧 API、回滚和计数对账；
 6. 轻量新建和三阶段详情在 Chrome 95 桌面/390px、刷新、失败和只读场景通过。
+7. 普通模式生成 ephemeral STG 而不创建虚假物理表；转换 dbt 高级模式后保留逻辑模型并登记真实物化 STG。
 
 ## 一次性验证批次
 
