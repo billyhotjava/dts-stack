@@ -36,8 +36,9 @@ class DimensionDefinitionLiquibaseTest {
             .contains("ck_dimension_definition_reuse_scope")
             .contains("ck_dimension_definition_revision_snapshot")
             .contains("ck_dimension_definition_legacy_classification")
-            .contains("type=\"${datetimeType}\"")
-            .doesNotContain("type=\"timestamp\"");
+            .contains("CHECK (system_code ~ '^dim_[0-9a-f]{32}$')")
+            .doesNotContain("type=\"${datetimeType}\"");
+        assertThat(xml.split("type=\"timestamptz\"", -1)).hasSize(5);
     }
 
     @Test

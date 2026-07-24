@@ -29,8 +29,8 @@
             <column name="idempotency_response_snapshot" type="jsonb"><constraints nullable="false"/></column>
             <column name="created_by" type="varchar(128)"><constraints nullable="false"/></column>
             <column name="last_modified_by" type="varchar(128)"><constraints nullable="false"/></column>
-            <column name="created_date" type="${datetimeType}"><constraints nullable="false"/></column>
-            <column name="last_modified_date" type="${datetimeType}"><constraints nullable="false"/></column>
+            <column name="created_date" type="timestamptz"><constraints nullable="false"/></column>
+            <column name="last_modified_date" type="timestamptz"><constraints nullable="false"/></column>
         </createTable>
         <addUniqueConstraint
             tableName="modeling_dimension_definition"
@@ -53,7 +53,7 @@
             <column name="content_checksum" type="varchar(64)"><constraints nullable="false"/></column>
             <column name="snapshot_json" type="jsonb"><constraints nullable="false"/></column>
             <column name="created_by" type="varchar(128)"><constraints nullable="false"/></column>
-            <column name="created_date" type="${datetimeType}"><constraints nullable="false"/></column>
+            <column name="created_date" type="timestamptz"><constraints nullable="false"/></column>
         </createTable>
         <addUniqueConstraint
             tableName="modeling_dimension_definition_revision"
@@ -81,7 +81,7 @@
             <column name="migration_batch_id" type="varchar(128)"><constraints nullable="false"/></column>
             <column name="classification" type="varchar(32)"><constraints nullable="false"/></column>
             <column name="created_by" type="varchar(128)"><constraints nullable="false"/></column>
-            <column name="created_date" type="${datetimeType}"><constraints nullable="false"/></column>
+            <column name="created_date" type="timestamptz"><constraints nullable="false"/></column>
         </createTable>
         <addUniqueConstraint
             tableName="modeling_dimension_definition_legacy_map"
@@ -103,7 +103,7 @@
         <sql splitStatements="true" endDelimiter=";"><![CDATA[
             ALTER TABLE modeling_dimension_definition
                 ADD CONSTRAINT ck_dimension_definition_system_code
-                CHECK (system_code ~ '^[A-Z][A-Z0-9_]{0,63}$');
+                CHECK (system_code ~ '^dim_[0-9a-f]{32}$');
             ALTER TABLE modeling_dimension_definition
                 ADD CONSTRAINT ck_dimension_definition_status
                 CHECK (status IN ('DRAFT', 'CURRENT', 'RETIRED'));

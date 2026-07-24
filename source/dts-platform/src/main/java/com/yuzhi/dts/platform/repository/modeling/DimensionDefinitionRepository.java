@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -119,22 +120,16 @@ public class DimensionDefinitionRepository {
         String snapshot = json(view);
         Integer inserted = jdbcTemplate.queryForObject(
             """
-            with matching_replay as materialized (
-                select 1
-                  from modeling_dimension_definition
-                 where tenant_id = ?
-                   and idempotency_key = ?
-                   and idempotency_request_hash = ?
-            ),
-            inserted_head as (
+            with inserted_head as (
                 insert into modeling_dimension_definition (
                     id, tenant_id, system_code, domain_id, name, definition, owner_id, reuse_scope,
                     hierarchies_json, status, revision, current_checksum, idempotency_key,
                     idempotency_request_hash, idempotency_response_snapshot, created_by, last_modified_by,
                     created_date, last_modified_date
+                ) values (
+                    ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, 1, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?
                 )
-                select ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, 1, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?
-                 where not exists (select 1 from matching_replay)
+                on conflict (tenant_id, idempotency_key) do nothing
                 returning tenant_id, id
             ),
             inserted_revision as (
@@ -151,9 +146,6 @@ public class DimensionDefinitionRepository {
             select count(*)::int from inserted_revision
             """,
             Integer.class,
-            tenantId,
-            command.idempotencyKey(),
-            requestHash,
             view.id(),
             tenantId,
             view.systemCode(),
@@ -186,7 +178,25 @@ public class DimensionDefinitionRepository {
             actorId,
             Timestamp.from(view.updatedAt())
         );
-        return inserted == null ? 0 : inserted;
+        if (inserted == null || inserted == 0) {
+            String committedRequestHash = jdbcTemplate.queryForObject(
+                """
+                select idempotency_request_hash
+                  from modeling_dimension_definition
+                 where tenant_id = ? and idempotency_key = ?
+                """,
+                String.class,
+                tenantId,
+                command.idempotencyKey()
+            );
+            if (requestHash.equals(committedRequestHash)) {
+                return 0;
+            }
+            throw new DataIntegrityViolationException(
+                "Dimension definition idempotency key was already used with a different request hash"
+            );
+        }
+        return inserted;
     }
 
     public int compareAndSet(String tenantId, String actorId, ExpectedVersion expected, View replacement) {
@@ -204,6 +214,7 @@ public class DimensionDefinitionRepository {
                    set name = ?, definition = ?, owner_id = ?, reuse_scope = ?, hierarchies_json = cast(? as jsonb),
                        status = ?, revision = ?, current_checksum = ?, last_modified_by = ?, last_modified_date = ?
                  where tenant_id = ? and id = ? and revision = ? and current_checksum = ?
+                   and system_code = ? and domain_id = ? and created_date = ?
                 returning tenant_id, id
             ),
             inserted_revision as (
@@ -234,6 +245,9 @@ public class DimensionDefinitionRepository {
             expected.id(),
             expected.revision(),
             expected.checksum(),
+            replacement.systemCode(),
+            replacement.domainId(),
+            Timestamp.from(replacement.createdAt()),
             UUID.randomUUID(),
             replacement.revision(),
             replacement.systemCode(),
