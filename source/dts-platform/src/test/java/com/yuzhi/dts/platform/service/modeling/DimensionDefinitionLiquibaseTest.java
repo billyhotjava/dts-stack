@@ -31,10 +31,13 @@ class DimensionDefinitionLiquibaseTest {
             .contains("constraintName=\"uk_dimension_definition_revision\"")
             .contains("CREATE UNIQUE INDEX uk_dimension_definition_tenant_system_code")
             .contains("CREATE UNIQUE INDEX uk_dimension_definition_idempotency")
+            .contains("CREATE INDEX idx_dimension_definition_legacy_revision")
             .contains("ck_dimension_definition_status")
             .contains("ck_dimension_definition_reuse_scope")
             .contains("ck_dimension_definition_revision_snapshot")
-            .contains("ck_dimension_definition_legacy_classification");
+            .contains("ck_dimension_definition_legacy_classification")
+            .contains("type=\"${datetimeType}\"")
+            .doesNotContain("type=\"timestamp\"");
     }
 
     @Test
@@ -49,6 +52,9 @@ class DimensionDefinitionLiquibaseTest {
             .contains("baseColumnNames=\"tenant_id, legacy_model_spec_id\"")
             .contains("baseColumnNames=\"tenant_id, dimension_definition_id, dimension_definition_revision\"")
             .contains("referencedColumnNames=\"tenant_id, dimension_definition_id, revision\"")
+            .contains("baseTableName=\"modeling_dimension_definition\"")
+            .contains("baseColumnNames=\"tenant_id, id, revision\"")
+            .contains("constraintName=\"fk_dimension_definition_current_revision\"")
             .doesNotContain("onDelete=\"CASCADE\"")
             .doesNotContain("cascadeConstraints=\"true\"");
     }
@@ -81,6 +87,16 @@ class DimensionDefinitionLiquibaseTest {
             .contains(
                 "<include file=\"config/liquibase/changelog/20260724_01_dimension_definition.xml\" relativeToChangelogFile=\"false\"/>"
             );
+    }
+
+    @Test
+    void explicitlyRejectsRollbackForBothForwardOnlyChangesets() throws Exception {
+        String xml = read(CHANGELOG);
+
+        assertThat(xml)
+            .contains("ROLLBACK_BLOCKED_DIMENSION_DEFINITION_LEDGER_FORWARD_ONLY")
+            .contains("ROLLBACK_BLOCKED_MODEL_SPEC_DIMENSION_REFERENCE_FORWARD_ONLY")
+            .contains("Recovery requires a new forward changeset");
     }
 
     private String read(String resource) throws Exception {

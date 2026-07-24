@@ -29,8 +29,8 @@
             <column name="idempotency_response_snapshot" type="jsonb"><constraints nullable="false"/></column>
             <column name="created_by" type="varchar(128)"><constraints nullable="false"/></column>
             <column name="last_modified_by" type="varchar(128)"><constraints nullable="false"/></column>
-            <column name="created_date" type="timestamp"><constraints nullable="false"/></column>
-            <column name="last_modified_date" type="timestamp"><constraints nullable="false"/></column>
+            <column name="created_date" type="${datetimeType}"><constraints nullable="false"/></column>
+            <column name="last_modified_date" type="${datetimeType}"><constraints nullable="false"/></column>
         </createTable>
         <addUniqueConstraint
             tableName="modeling_dimension_definition"
@@ -53,7 +53,7 @@
             <column name="content_checksum" type="varchar(64)"><constraints nullable="false"/></column>
             <column name="snapshot_json" type="jsonb"><constraints nullable="false"/></column>
             <column name="created_by" type="varchar(128)"><constraints nullable="false"/></column>
-            <column name="created_date" type="timestamp"><constraints nullable="false"/></column>
+            <column name="created_date" type="${datetimeType}"><constraints nullable="false"/></column>
         </createTable>
         <addUniqueConstraint
             tableName="modeling_dimension_definition_revision"
@@ -65,6 +65,12 @@
             constraintName="fk_dimension_definition_revision_head"
             referencedTableName="modeling_dimension_definition"
             referencedColumnNames="tenant_id, id"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_dimension_definition"
+            baseColumnNames="tenant_id, id, revision"
+            constraintName="fk_dimension_definition_current_revision"
+            referencedTableName="modeling_dimension_definition_revision"
+            referencedColumnNames="tenant_id, dimension_definition_id, revision"/>
 
         <createTable tableName="modeling_dimension_definition_legacy_map">
             <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
@@ -75,7 +81,7 @@
             <column name="migration_batch_id" type="varchar(128)"><constraints nullable="false"/></column>
             <column name="classification" type="varchar(32)"><constraints nullable="false"/></column>
             <column name="created_by" type="varchar(128)"><constraints nullable="false"/></column>
-            <column name="created_date" type="timestamp"><constraints nullable="false"/></column>
+            <column name="created_date" type="${datetimeType}"><constraints nullable="false"/></column>
         </createTable>
         <addUniqueConstraint
             tableName="modeling_dimension_definition_legacy_map"
@@ -138,7 +144,18 @@
                 ON modeling_dimension_definition_revision (tenant_id, dimension_definition_id, revision DESC);
             CREATE INDEX idx_dimension_definition_legacy_batch
                 ON modeling_dimension_definition_legacy_map (tenant_id, migration_batch_id, classification);
+            CREATE INDEX idx_dimension_definition_legacy_revision
+                ON modeling_dimension_definition_legacy_map
+                   (tenant_id, dimension_definition_id, dimension_definition_revision);
         ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_DIMENSION_DEFINITION_LEDGER_FORWARD_ONLY: Recovery requires a new forward changeset';
+                END $$;
+            ]]></sql>
+        </rollback>
     </changeSet>
 
     <changeSet id="20260724-01b-model-spec-dimension-definition-ref" author="codex" dbms="postgresql">
@@ -195,5 +212,13 @@
                 ON modeling_model_spec_revision (tenant_id, dimension_definition_id, dimension_definition_revision)
                 WHERE dimension_definition_id IS NOT NULL;
         ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_SPEC_DIMENSION_REFERENCE_FORWARD_ONLY: Recovery requires a new forward changeset';
+                END $$;
+            ]]></sql>
+        </rollback>
     </changeSet>
 </databaseChangeLog>

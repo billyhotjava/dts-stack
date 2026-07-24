@@ -112,19 +112,48 @@ public class DimensionDefinitionRepository {
     }
 
     public int insert(String tenantId, String actorId, CreateCommand command, View view, String requestHash) {
+        if (view.revision() != 1) {
+            throw new IllegalArgumentException("Initial dimension definition revision must be 1");
+        }
+
         String snapshot = json(view);
-        return jdbcTemplate.update(
+        Integer inserted = jdbcTemplate.queryForObject(
             """
-            insert into modeling_dimension_definition (
-                id, tenant_id, system_code, domain_id, name, definition, owner_id, reuse_scope,
-                hierarchies_json, status, revision, current_checksum, idempotency_key,
-                idempotency_request_hash, idempotency_response_snapshot, created_by, last_modified_by,
-                created_date, last_modified_date
-            ) values (
-                ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?
+            with matching_replay as materialized (
+                select 1
+                  from modeling_dimension_definition
+                 where tenant_id = ?
+                   and idempotency_key = ?
+                   and idempotency_request_hash = ?
+            ),
+            inserted_head as (
+                insert into modeling_dimension_definition (
+                    id, tenant_id, system_code, domain_id, name, definition, owner_id, reuse_scope,
+                    hierarchies_json, status, revision, current_checksum, idempotency_key,
+                    idempotency_request_hash, idempotency_response_snapshot, created_by, last_modified_by,
+                    created_date, last_modified_date
+                )
+                select ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, 1, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?
+                 where not exists (select 1 from matching_replay)
+                returning tenant_id, id
+            ),
+            inserted_revision as (
+                insert into modeling_dimension_definition_revision (
+                    id, tenant_id, dimension_definition_id, revision, system_code, domain_id, name,
+                    definition, owner_id, reuse_scope, hierarchies_json, status, content_checksum,
+                    snapshot_json, created_by, created_date
+                )
+                select ?, inserted_head.tenant_id, inserted_head.id, 1, ?, ?, ?, ?, ?, ?,
+                       cast(? as jsonb), ?, ?, cast(? as jsonb), ?, ?
+                  from inserted_head
+                returning 1
             )
-            on conflict (tenant_id, idempotency_key) do nothing
+            select count(*)::int from inserted_revision
             """,
+            Integer.class,
+            tenantId,
+            command.idempotencyKey(),
+            requestHash,
             view.id(),
             tenantId,
             view.systemCode(),
@@ -135,7 +164,6 @@ public class DimensionDefinitionRepository {
             view.reuseScope().name(),
             json(view.hierarchies()),
             view.status().name(),
-            view.revision(),
             view.checksum(),
             command.idempotencyKey(),
             requestHash,
@@ -143,18 +171,55 @@ public class DimensionDefinitionRepository {
             actorId,
             actorId,
             Timestamp.from(view.createdAt()),
+            Timestamp.from(view.updatedAt()),
+            UUID.randomUUID(),
+            view.systemCode(),
+            view.domainId(),
+            view.name(),
+            view.definition(),
+            view.ownerId(),
+            view.reuseScope().name(),
+            json(view.hierarchies()),
+            view.status().name(),
+            view.checksum(),
+            snapshot,
+            actorId,
             Timestamp.from(view.updatedAt())
         );
+        return inserted == null ? 0 : inserted;
     }
 
     public int compareAndSet(String tenantId, String actorId, ExpectedVersion expected, View replacement) {
-        return jdbcTemplate.update(
+        if (!replacement.id().equals(expected.id())) {
+            throw new IllegalArgumentException("Replacement dimension definition ID must match the expected ID");
+        }
+        if (replacement.revision() != expected.revision() + 1) {
+            throw new IllegalArgumentException("Replacement revision must immediately follow the expected revision");
+        }
+
+        Integer updated = jdbcTemplate.queryForObject(
             """
-            update modeling_dimension_definition
-               set name = ?, definition = ?, owner_id = ?, reuse_scope = ?, hierarchies_json = cast(? as jsonb),
-                   status = ?, revision = ?, current_checksum = ?, last_modified_by = ?, last_modified_date = ?
-             where tenant_id = ? and id = ? and revision = ? and current_checksum = ?
+            with updated_head as (
+                update modeling_dimension_definition
+                   set name = ?, definition = ?, owner_id = ?, reuse_scope = ?, hierarchies_json = cast(? as jsonb),
+                       status = ?, revision = ?, current_checksum = ?, last_modified_by = ?, last_modified_date = ?
+                 where tenant_id = ? and id = ? and revision = ? and current_checksum = ?
+                returning tenant_id, id
+            ),
+            inserted_revision as (
+                insert into modeling_dimension_definition_revision (
+                    id, tenant_id, dimension_definition_id, revision, system_code, domain_id, name,
+                    definition, owner_id, reuse_scope, hierarchies_json, status, content_checksum,
+                    snapshot_json, created_by, created_date
+                )
+                select ?, updated_head.tenant_id, updated_head.id, ?, ?, ?, ?, ?, ?, ?,
+                       cast(? as jsonb), ?, ?, cast(? as jsonb), ?, ?
+                  from updated_head
+                returning 1
+            )
+            select count(*)::int from inserted_revision
             """,
+            Integer.class,
             replacement.name(),
             replacement.definition(),
             replacement.ownerId(),
@@ -168,38 +233,23 @@ public class DimensionDefinitionRepository {
             tenantId,
             expected.id(),
             expected.revision(),
-            expected.checksum()
-        );
-    }
-
-    public int appendRevision(String tenantId, String actorId, View view) {
-        return jdbcTemplate.update(
-            """
-            insert into modeling_dimension_definition_revision (
-                id, tenant_id, dimension_definition_id, revision, system_code, domain_id, name,
-                definition, owner_id, reuse_scope, hierarchies_json, status, content_checksum,
-                snapshot_json, created_by, created_date
-            ) values (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, cast(? as jsonb), ?, ?
-            )
-            """,
+            expected.checksum(),
             UUID.randomUUID(),
-            tenantId,
-            view.id(),
-            view.revision(),
-            view.systemCode(),
-            view.domainId(),
-            view.name(),
-            view.definition(),
-            view.ownerId(),
-            view.reuseScope().name(),
-            json(view.hierarchies()),
-            view.status().name(),
-            view.checksum(),
-            json(view),
+            replacement.revision(),
+            replacement.systemCode(),
+            replacement.domainId(),
+            replacement.name(),
+            replacement.definition(),
+            replacement.ownerId(),
+            replacement.reuseScope().name(),
+            json(replacement.hierarchies()),
+            replacement.status().name(),
+            replacement.checksum(),
+            json(replacement),
             actorId,
-            Timestamp.from(view.updatedAt())
+            Timestamp.from(replacement.updatedAt())
         );
+        return updated == null ? 0 : updated;
     }
 
     public long usageCount(String tenantId, UUID id) {
