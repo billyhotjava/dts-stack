@@ -60,6 +60,14 @@ public final class DimensionDefinitionContract {
     public enum Status { DRAFT, CURRENT, RETIRED }
     public enum ReuseScope { PLAN, DOMAIN, TENANT }
 
+    public record HierarchyLevelSemantic(String code, String name, int order) {}
+    public record HierarchySemantic(
+        String code,
+        String name,
+        List<HierarchyLevelSemantic> levels
+    ) {}
+    public record FieldIssue(String field, String code, String message) {}
+
     public record CreateCommand(
         UUID domainId,
         String name,
@@ -97,12 +105,26 @@ public final class DimensionDefinitionContract {
 }
 ```
 
-`systemCode` is generated only by the service as `dim_` plus a UUID without hyphens. Create/update request fields never include it. The contract must reject source, target-layer, SCD, materialization, SQL and dbt properties.
+The contract exposes `CREATE_FIELDS` and `UPDATE_FIELDS` allowlists matching the record input fields, plus `validateCreate(CreateCommand)` and `validateUpdate(UpdateCommand)`. Validation returns these stable issue codes:
+
+```text
+DIMENSION_DEFINITION_DOMAIN_REQUIRED
+DIMENSION_DEFINITION_NAME_REQUIRED
+DIMENSION_DEFINITION_DEFINITION_REQUIRED
+DIMENSION_DEFINITION_OWNER_REQUIRED
+DIMENSION_DEFINITION_REUSE_SCOPE_REQUIRED
+DIMENSION_DEFINITION_IDEMPOTENCY_KEY_REQUIRED
+DIMENSION_DEFINITION_HIERARCHY_INVALID
+```
+
+Hierarchy codes and level codes use `^[A-Z][A-Z0-9_]{0,63}$`; names are non-blank; each hierarchy contains at least one level; level order starts at 1 and is contiguous; codes and orders are unique within their parent. Hierarchies carry business labels only and contain no ModelSpec field reference.
+
+`systemCode` is generated only by the service as `dim_` plus a UUID without hyphens. Create/update request fields never include it. The allowlists exclude source, target-layer, SCD, materialization, SQL and dbt properties; JSON unknown-field rejection is implemented at the REST decoder boundary in Task 2.3, not guessed by this pure record.
 
 **Steps**
 
 - [ ] Run GitNexus impact for the nearest reference contract `ModelSpecContract` and record that this task creates a separate low-coupling type.
-- [ ] Write tests for valid create/update, unknown fields, blank business properties and absence of implementation properties.
+- [ ] Write tests for valid create/update, exact allowlists, blank business properties, hierarchy invariants and absence of implementation properties.
 - [ ] Run the focused test and capture the expected compilation failure:
 
 ```bash
