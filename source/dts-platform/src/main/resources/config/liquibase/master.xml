@@ -185,4 +185,5 @@
     <include file="config/liquibase/changelog/20260719_07_legacy_object_retirement.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260720_01_metadata_standard_owner_version.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260720_02_model_spec_lifecycle.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260724_01_dimension_definition.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

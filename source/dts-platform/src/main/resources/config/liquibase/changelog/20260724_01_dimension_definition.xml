@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260724-01a-dimension-definition-ledger" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT">
+            <tableExists tableName="modeling_model_spec"/>
+            <tableExists tableName="modeling_model_spec_revision"/>
+        </preConditions>
+        <comment>Create the tenant-scoped current head and immutable revision ledger for reusable business dimensions.</comment>
+
+        <createTable tableName="modeling_dimension_definition">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="system_code" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="domain_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="name" type="varchar(256)"><constraints nullable="false"/></column>
+            <column name="definition" type="text"><constraints nullable="false"/></column>
+            <column name="owner_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="reuse_scope" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="hierarchies_json" type="jsonb"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="revision" type="int"><constraints nullable="false"/></column>
+            <column name="current_checksum" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="idempotency_key" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="idempotency_request_hash" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="idempotency_response_snapshot" type="jsonb"><constraints nullable="false"/></column>
+            <column name="created_by" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="last_modified_by" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="created_date" type="timestamp"><constraints nullable="false"/></column>
+            <column name="last_modified_date" type="timestamp"><constraints nullable="false"/></column>
+        </createTable>
+        <addUniqueConstraint
+            tableName="modeling_dimension_definition"
+            columnNames="tenant_id, id"
+            constraintName="uk_dimension_definition_tenant_id"/>
+
+        <createTable tableName="modeling_dimension_definition_revision">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="dimension_definition_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="revision" type="int"><constraints nullable="false"/></column>
+            <column name="system_code" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="domain_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="name" type="varchar(256)"><constraints nullable="false"/></column>
+            <column name="definition" type="text"><constraints nullable="false"/></column>
+            <column name="owner_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="reuse_scope" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="hierarchies_json" type="jsonb"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="content_checksum" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="snapshot_json" type="jsonb"><constraints nullable="false"/></column>
+            <column name="created_by" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="created_date" type="timestamp"><constraints nullable="false"/></column>
+        </createTable>
+        <addUniqueConstraint
+            tableName="modeling_dimension_definition_revision"
+            columnNames="tenant_id, dimension_definition_id, revision"
+            constraintName="uk_dimension_definition_revision"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_dimension_definition_revision"
+            baseColumnNames="tenant_id, dimension_definition_id"
+            constraintName="fk_dimension_definition_revision_head"
+            referencedTableName="modeling_dimension_definition"
+            referencedColumnNames="tenant_id, id"/>
+
+        <createTable tableName="modeling_dimension_definition_legacy_map">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="legacy_model_spec_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="dimension_definition_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="dimension_definition_revision" type="int"><constraints nullable="false"/></column>
+            <column name="migration_batch_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="classification" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="created_by" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="created_date" type="timestamp"><constraints nullable="false"/></column>
+        </createTable>
+        <addUniqueConstraint
+            tableName="modeling_dimension_definition_legacy_map"
+            columnNames="tenant_id, legacy_model_spec_id"
+            constraintName="uk_dimension_definition_legacy_model"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_dimension_definition_legacy_map"
+            baseColumnNames="tenant_id, legacy_model_spec_id"
+            constraintName="fk_dimension_definition_legacy_model"
+            referencedTableName="modeling_model_spec"
+            referencedColumnNames="tenant_id, id"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_dimension_definition_legacy_map"
+            baseColumnNames="tenant_id, dimension_definition_id, dimension_definition_revision"
+            constraintName="fk_dimension_definition_legacy_revision"
+            referencedTableName="modeling_dimension_definition_revision"
+            referencedColumnNames="tenant_id, dimension_definition_id, revision"/>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_dimension_definition
+                ADD CONSTRAINT ck_dimension_definition_system_code
+                CHECK (system_code ~ '^[A-Z][A-Z0-9_]{0,63}$');
+            ALTER TABLE modeling_dimension_definition
+                ADD CONSTRAINT ck_dimension_definition_status
+                CHECK (status IN ('DRAFT', 'CURRENT', 'RETIRED'));
+            ALTER TABLE modeling_dimension_definition
+                ADD CONSTRAINT ck_dimension_definition_reuse_scope
+                CHECK (reuse_scope IN ('PLAN', 'DOMAIN', 'TENANT'));
+            ALTER TABLE modeling_dimension_definition
+                ADD CONSTRAINT ck_dimension_definition_payload
+                CHECK (
+                    revision > 0
+                    AND current_checksum ~ '^[0-9a-f]{64}$'
+                    AND btrim(idempotency_key) <> ''
+                    AND idempotency_request_hash ~ '^[0-9a-f]{64}$'
+                    AND jsonb_typeof(hierarchies_json) = 'array'
+                    AND jsonb_typeof(idempotency_response_snapshot) = 'object'
+                );
+            ALTER TABLE modeling_dimension_definition_revision
+                ADD CONSTRAINT ck_dimension_definition_revision_snapshot
+                CHECK (
+                    revision > 0
+                    AND content_checksum ~ '^[0-9a-f]{64}$'
+                    AND status IN ('DRAFT', 'CURRENT', 'RETIRED')
+                    AND reuse_scope IN ('PLAN', 'DOMAIN', 'TENANT')
+                    AND jsonb_typeof(hierarchies_json) = 'array'
+                    AND jsonb_typeof(snapshot_json) = 'object'
+                );
+            ALTER TABLE modeling_dimension_definition_legacy_map
+                ADD CONSTRAINT ck_dimension_definition_legacy_classification
+                CHECK (btrim(classification) <> '' AND btrim(migration_batch_id) <> '');
+
+            CREATE UNIQUE INDEX uk_dimension_definition_tenant_system_code
+                ON modeling_dimension_definition (tenant_id, lower(system_code));
+            CREATE UNIQUE INDEX uk_dimension_definition_idempotency
+                ON modeling_dimension_definition (tenant_id, idempotency_key);
+            CREATE INDEX idx_dimension_definition_current
+                ON modeling_dimension_definition (tenant_id, domain_id, status, name);
+            CREATE INDEX idx_dimension_definition_revision_lookup
+                ON modeling_dimension_definition_revision (tenant_id, dimension_definition_id, revision DESC);
+            CREATE INDEX idx_dimension_definition_legacy_batch
+                ON modeling_dimension_definition_legacy_map (tenant_id, migration_batch_id, classification);
+        ]]></sql>
+    </changeSet>
+
+    <changeSet id="20260724-01b-model-spec-dimension-definition-ref" author="codex" dbms="postgresql">
+        <comment>Add nullable, revision-pinned dimension references without rewriting historical ModelSpec rows.</comment>
+
+        <addColumn tableName="modeling_model_spec">
+            <column name="dimension_definition_id" type="${uuidType}"/>
+            <column name="dimension_definition_revision" type="int"/>
+        </addColumn>
+        <addColumn tableName="modeling_model_spec_revision">
+            <column name="dimension_definition_id" type="${uuidType}"/>
+            <column name="dimension_definition_revision" type="int"/>
+        </addColumn>
+
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_spec"
+            baseColumnNames="tenant_id, dimension_definition_id, dimension_definition_revision"
+            constraintName="fk_model_spec_dimension_definition_revision"
+            referencedTableName="modeling_dimension_definition_revision"
+            referencedColumnNames="tenant_id, dimension_definition_id, revision"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_spec_revision"
+            baseColumnNames="tenant_id, dimension_definition_id, dimension_definition_revision"
+            constraintName="fk_model_spec_revision_dimension_definition_revision"
+            referencedTableName="modeling_dimension_definition_revision"
+            referencedColumnNames="tenant_id, dimension_definition_id, revision"/>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_model_spec
+                ADD CONSTRAINT ck_model_spec_dimension_definition_ref
+                CHECK (
+                    (dimension_definition_id IS NULL AND dimension_definition_revision IS NULL)
+                    OR (
+                        dimension_definition_id IS NOT NULL
+                        AND dimension_definition_revision IS NOT NULL
+                        AND model_type = 'DIMENSION'
+                    )
+                );
+            ALTER TABLE modeling_model_spec_revision
+                ADD CONSTRAINT ck_model_spec_revision_dimension_definition_ref
+                CHECK (
+                    (dimension_definition_id IS NULL AND dimension_definition_revision IS NULL)
+                    OR (
+                        dimension_definition_id IS NOT NULL
+                        AND dimension_definition_revision IS NOT NULL
+                        AND contract_version = 2
+                        AND coalesce(snapshot_json ->> 'modelType', '') = 'DIMENSION'
+                    )
+                );
+            CREATE INDEX idx_model_spec_dimension_definition
+                ON modeling_model_spec (tenant_id, dimension_definition_id, dimension_definition_revision)
+                WHERE dimension_definition_id IS NOT NULL;
+            CREATE INDEX idx_model_spec_revision_dimension_definition
+                ON modeling_model_spec_revision (tenant_id, dimension_definition_id, dimension_definition_revision)
+                WHERE dimension_definition_id IS NOT NULL;
+        ]]></sql>
+    </changeSet>
+</databaseChangeLog>
