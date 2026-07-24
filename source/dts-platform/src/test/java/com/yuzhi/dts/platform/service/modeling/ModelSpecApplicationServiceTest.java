@@ -7,11 +7,14 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository;
+import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository.StoredDimensionDefinition;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.DomainBindingState;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.PlanState;
@@ -47,6 +50,9 @@ class ModelSpecApplicationServiceTest {
     private ModelSpecRepository repository;
 
     @Mock
+    private DimensionDefinitionRepository dimensionDefinitions;
+
+    @Mock
     private CatalogDomainResolutionPort domainResolution;
 
     @Mock
@@ -72,6 +78,7 @@ class ModelSpecApplicationServiceTest {
         codec = new ModelSpecSnapshotCodec(new ObjectMapper().findAndRegisterModules());
         service = new ModelSpecApplicationService(
             repository,
+            dimensionDefinitions,
             codec,
             domainResolution,
             domainWriteAccess,
@@ -91,6 +98,15 @@ class ModelSpecApplicationServiceTest {
         lenient().when(domainWriteAccess.canMaintain(DOMAIN_ID)).thenReturn(true);
         lenient().when(domainReadAccess.canRead(DOMAIN_ID)).thenReturn(true);
         lenient().when(planWriteAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+        StoredDimensionDefinition defaultDefinition = definition(
+            UUID.fromString("60000000-0000-0000-0000-000000000001"),
+            DOMAIN_ID,
+            1,
+            DimensionDefinitionContract.Status.CURRENT
+        );
+        lenient().when(dimensionDefinitions.findRevision(eq(TENANT), any(), anyInt())).thenReturn(Optional.of(defaultDefinition));
+        lenient().when(dimensionDefinitions.findCurrent(eq(TENANT), any())).thenReturn(Optional.of(defaultDefinition));
+        lenient().when(dimensionDefinitions.findCurrentForShare(eq(TENANT), any())).thenReturn(Optional.of(defaultDefinition));
     }
 
     @Test
@@ -120,6 +136,132 @@ class ModelSpecApplicationServiceTest {
         assertThat(result.modelSpec().sourceRefs()).isEmpty();
         verify(sourceValidation, never()).isCurrentBinding(any(), any(), any(), any());
         verify(repository).insertV2Revision(eq(TENANT), eq(ACTOR), eq(result.modelSpec()), anyString());
+    }
+
+    @Test
+    void createsADimensionOnlyWhenItsPinnedDefinitionIsTheVisibleCurrentHead() {
+        CreateModelSpecCommand command = pinnedDimensionCommand("dimension-current", null);
+        DimensionDefinitionRef ref = command.dimensionDefinitionRef();
+        StoredDimensionDefinition pinned = definition(ref.dimensionDefinitionId(), DOMAIN_ID, ref.revision(), DimensionDefinitionContract.Status.CURRENT);
+        when(repository.findByIdempotencyKey(TENANT, command.idempotencyKey())).thenReturn(Optional.empty());
+        when(dimensionDefinitions.findRevision(TENANT, ref.dimensionDefinitionId(), ref.revision())).thenReturn(Optional.of(pinned));
+        when(dimensionDefinitions.findCurrentForShare(TENANT, ref.dimensionDefinitionId())).thenReturn(Optional.of(pinned));
+        when(repository.insertV2(eq(TENANT), eq(ACTOR), eq(command), any(), anyString(), anyString())).thenReturn(1);
+
+        ModelSpecApplicationService.CreateResult result = service.create(TENANT, ACTOR, command);
+
+        assertThat(result.modelSpec().dimensionDefinitionRef()).isEqualTo(ref);
+        verify(dimensionDefinitions).findRevision(TENANT, ref.dimensionDefinitionId(), ref.revision());
+        verify(dimensionDefinitions).findCurrentForShare(TENANT, ref.dimensionDefinitionId());
+        verify(dimensionDefinitions, never()).findCurrent(TENANT, ref.dimensionDefinitionId());
+        verify(domainReadAccess).canRead(DOMAIN_ID);
+    }
+
+    @Test
+    void returnsTheRequiredDimensionDefinitionCodeWhenADimensionCreateOmitsItsPin() {
+        CreateModelSpecCommand command = withoutDimensionDefinitionRef(pinnedDimensionCommand("dimension-required", null));
+
+        assertThatThrownBy(() -> service.create(TENANT, ACTOR, command))
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("DIMENSION_DEFINITION_REQUIRED");
+
+        verify(repository, never()).findByIdempotencyKey(any(), any());
+        verify(repository, never()).insertV2(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void rejectsADimensionCreationWhenItsPinnedDefinitionRevisionDoesNotExist() {
+        CreateModelSpecCommand command = pinnedDimensionCommand("dimension-missing-revision", null);
+        DimensionDefinitionRef ref = command.dimensionDefinitionRef();
+        when(repository.findByIdempotencyKey(TENANT, command.idempotencyKey())).thenReturn(Optional.empty());
+        when(dimensionDefinitions.findRevision(TENANT, ref.dimensionDefinitionId(), ref.revision())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.create(TENANT, ACTOR, command))
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("DIMENSION_DEFINITION_NOT_CURRENT");
+
+        verify(repository, never()).insertV2(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void rejectsADimensionCreationWhenThePinnedDefinitionDomainIsNotVisible() {
+        CreateModelSpecCommand command = pinnedDimensionCommand("dimension-hidden", null);
+        DimensionDefinitionRef ref = command.dimensionDefinitionRef();
+        StoredDimensionDefinition pinned = definition(ref.dimensionDefinitionId(), DOMAIN_ID, ref.revision(), DimensionDefinitionContract.Status.CURRENT);
+        when(repository.findByIdempotencyKey(TENANT, command.idempotencyKey())).thenReturn(Optional.empty());
+        when(dimensionDefinitions.findRevision(TENANT, ref.dimensionDefinitionId(), ref.revision())).thenReturn(Optional.of(pinned));
+        when(domainReadAccess.canRead(DOMAIN_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.create(TENANT, ACTOR, command))
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("DIMENSION_DEFINITION_NOT_CURRENT");
+
+        verify(repository, never()).insertV2(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void rejectsADimensionCreationWhenThePinnedDefinitionRevisionIsNoLongerTheCurrentHead() {
+        CreateModelSpecCommand command = pinnedDimensionCommand("dimension-stale", null);
+        DimensionDefinitionRef ref = command.dimensionDefinitionRef();
+        StoredDimensionDefinition pinned = definition(ref.dimensionDefinitionId(), DOMAIN_ID, 1, DimensionDefinitionContract.Status.CURRENT);
+        StoredDimensionDefinition current = definition(ref.dimensionDefinitionId(), DOMAIN_ID, 2, DimensionDefinitionContract.Status.CURRENT);
+        when(repository.findByIdempotencyKey(TENANT, command.idempotencyKey())).thenReturn(Optional.empty());
+        when(dimensionDefinitions.findRevision(TENANT, ref.dimensionDefinitionId(), ref.revision())).thenReturn(Optional.of(pinned));
+        when(dimensionDefinitions.findCurrentForShare(TENANT, ref.dimensionDefinitionId())).thenReturn(Optional.of(current));
+
+        assertThatThrownBy(() -> service.create(TENANT, ACTOR, command))
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("DIMENSION_DEFINITION_NOT_CURRENT");
+
+        verify(repository, never()).insertV2(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void rejectsADimensionCreationWhenTheDefinitionIsRetired() {
+        CreateModelSpecCommand command = pinnedDimensionCommand("dimension-retired", null);
+        DimensionDefinitionRef ref = command.dimensionDefinitionRef();
+        StoredDimensionDefinition pinned = definition(ref.dimensionDefinitionId(), DOMAIN_ID, ref.revision(), DimensionDefinitionContract.Status.CURRENT);
+        StoredDimensionDefinition retired = definition(ref.dimensionDefinitionId(), DOMAIN_ID, ref.revision(), DimensionDefinitionContract.Status.RETIRED);
+        when(repository.findByIdempotencyKey(TENANT, command.idempotencyKey())).thenReturn(Optional.empty());
+        when(dimensionDefinitions.findRevision(TENANT, ref.dimensionDefinitionId(), ref.revision())).thenReturn(Optional.of(pinned));
+        when(dimensionDefinitions.findCurrentForShare(TENANT, ref.dimensionDefinitionId())).thenReturn(Optional.of(retired));
+
+        assertThatThrownBy(() -> service.create(TENANT, ACTOR, command))
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("DIMENSION_DEFINITION_NOT_CURRENT");
+
+        verify(repository, never()).insertV2(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void keepsTheOriginalPinnedRevisionWhenTheDefinitionAdvancesBeforeADimensionUpdate() {
+        CreateModelSpecCommand create = pinnedDimensionCommand("dimension-update", null);
+        ModelSpecView current = codec.toCreatedView(MODEL_ID, create, NOW);
+        StoredModelSpec stored = stored(current, null, null);
+        DimensionDefinitionRef ref = current.dimensionDefinitionRef();
+        StoredDimensionDefinition pinned = definition(ref.dimensionDefinitionId(), DOMAIN_ID, 1, DimensionDefinitionContract.Status.CURRENT);
+        StoredDimensionDefinition advancedHead = definition(ref.dimensionDefinitionId(), DOMAIN_ID, 2, DimensionDefinitionContract.Status.CURRENT);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored));
+        when(compatibilityReader.read(stored)).thenReturn(current);
+        when(dimensionDefinitions.findRevision(TENANT, ref.dimensionDefinitionId(), ref.revision())).thenReturn(Optional.of(pinned));
+        when(dimensionDefinitions.findCurrent(TENANT, ref.dimensionDefinitionId())).thenReturn(Optional.of(advancedHead));
+        when(repository.compareAndSetV2(eq(TENANT), eq(ACTOR), eq(1), eq(current.checksum()), any(), anyString())).thenReturn(1);
+
+        ModelSpecView replacement = service.update(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            new ExpectedVersion(MODEL_ID, 1, current.checksum()),
+            canonicalDimensionUpdate(current, "customer_dimension_v2")
+        );
+
+        assertThat(replacement.dimensionDefinitionRef()).isEqualTo(ref);
+        assertThat(replacement.revision()).isEqualTo(2);
     }
 
     @Test
@@ -1531,6 +1673,34 @@ class ModelSpecApplicationServiceTest {
         );
     }
 
+    private static CreateModelSpecCommand withoutDimensionDefinitionRef(CreateModelSpecCommand command) {
+        return new CreateModelSpecCommand(
+            command.planId(),
+            command.domainId(),
+            command.modelType(),
+            command.layer(),
+            command.name(),
+            command.description(),
+            command.implementationMode(),
+            command.materialization(),
+            command.businessActivityRef(),
+            command.consumptionScenario(),
+            command.grain(),
+            command.factShape(),
+            command.timeSemantics(),
+            command.fields(),
+            command.sourceRefs(),
+            command.dependsOn(),
+            command.dimensionRefs(),
+            command.metricRefs(),
+            command.standardBindings(),
+            command.generationStrategy(),
+            command.dimensionProfile(),
+            null,
+            command.idempotencyKey()
+        );
+    }
+
     private static DimensionProfile legacyDimensionProfile() {
         return new DimensionProfile(
             "DIM_CUSTOMER",
@@ -1538,6 +1708,20 @@ class ModelSpecApplicationServiceTest {
             new ScdPolicy(ScdType.TYPE1, null, null, null),
             ReuseScope.DOMAIN
         );
+    }
+
+    private static StoredDimensionDefinition definition(
+        UUID id,
+        UUID domainId,
+        int revision,
+        DimensionDefinitionContract.Status status
+    ) {
+        StoredDimensionDefinition definition = mock(StoredDimensionDefinition.class);
+        lenient().when(definition.id()).thenReturn(id);
+        lenient().when(definition.domainId()).thenReturn(domainId);
+        lenient().when(definition.revision()).thenReturn(revision);
+        lenient().when(definition.status()).thenReturn(status);
+        return definition;
     }
 
     private static UpdateModelSpecCommand canonicalDimensionUpdate(ModelSpecView current, String name) {

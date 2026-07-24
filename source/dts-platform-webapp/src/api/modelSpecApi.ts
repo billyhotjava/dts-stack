@@ -1,4 +1,6 @@
 import api from "@/api/apiClient";
+import type { ModelImplementationCasToken, ModelImplementationView } from "@/pages/modeling/modelImplementationContract";
+import { toModelImplementationEtag } from "@/pages/modeling/modelImplementationContract";
 import type {
 	CanonicalModelSpecView,
 	CreateModelSpecCommand,
@@ -88,17 +90,7 @@ export type ModelLifecycleEvent = {
 	details: Record<string, unknown>;
 	createdAt: string;
 };
-export type ModelImplementationOwner = {
-	id: string;
-	modelSpecId: string;
-	planId: string;
-	revision: number;
-	modelChecksum: string;
-	ownership: CanonicalModelSpecView["implementationMode"];
-	projectKey: string;
-	dbtUniqueId: string;
-	status: string;
-};
+export type ModelImplementationOwner = ModelImplementationView;
 export type ModelLifecycleArtifact = {
 	id: string;
 	modelSpecId: string;
@@ -110,6 +102,10 @@ export type ModelLifecycleArtifact = {
 	path: string;
 	checksum: string;
 	status: string;
+	implementationRevision: number;
+	nodeKind: string;
+	materialization: string;
+	physicalAssetRef?: string | null;
 };
 export type ModelLifecycleTimeline = {
 	implementation: ModelImplementationOwner | null;
@@ -181,9 +177,14 @@ export const bindModelSpecMetricRef = (expected: ModelSpecCasToken, data: { metr
 
 const lifecycleUrl = (id: string, suffix = "") => `${MODEL_SPEC_RESOURCE}/${encodeURIComponent(id)}/lifecycle${suffix}`;
 const lifecycleHeaders = (expected: ModelSpecCasToken) => ({ "If-Match": toModelSpecEtag(expected) });
+const lifecycleWriteHeaders = (expected: ModelSpecCasToken, implementation: ModelImplementationCasToken | null) => ({
+	...lifecycleHeaders(expected),
+	"If-Match-Implementation": implementation ? toModelImplementationEtag(implementation) : "*",
+});
 
 export const claimModelImplementation = (
 	expected: ModelSpecCasToken,
+	implementation: ModelImplementationCasToken | null,
 	data: {
 		ownership: CanonicalModelSpecView["implementationMode"];
 		projectKey: string;
@@ -193,57 +194,71 @@ export const claimModelImplementation = (
 ) =>
 	api.put<ModelImplementationOwner>({
 		url: `${MODEL_SPEC_RESOURCE}/${encodeURIComponent(expected.id)}/implementation`,
-		headers: lifecycleHeaders(expected),
+		headers: lifecycleWriteHeaders(expected, implementation),
 		data,
 		_skipErrorToast: true,
 	} as any);
 
-export const compileModelLifecycle = (expected: ModelSpecCasToken, idempotencyKey: string) =>
+export const compileModelLifecycle = (
+	expected: ModelSpecCasToken,
+	implementation: ModelImplementationCasToken,
+	idempotencyKey: string,
+) =>
 	api.post<{
 		implementation: ModelImplementationOwner;
 		event: ModelLifecycleEvent;
 		artifacts: ModelLifecycleArtifact[];
 	}>({
 		url: lifecycleUrl(expected.id, "/compile"),
-		headers: lifecycleHeaders(expected),
+		headers: lifecycleWriteHeaders(expected, implementation),
 		data: { idempotencyKey },
 		_skipErrorToast: true,
 	} as any);
 
 export const recordModelTestEvidence = (
 	expected: ModelSpecCasToken,
+	implementation: ModelImplementationCasToken,
 	data: { status?: "PASSED" | "FAILED"; externalRunId: string; comment?: string; idempotencyKey: string },
 ) =>
 	api.post<ModelLifecycleEvent>({
 		url: lifecycleUrl(expected.id, "/tests"),
-		headers: lifecycleHeaders(expected),
+		headers: lifecycleWriteHeaders(expected, implementation),
 		data,
 		_skipErrorToast: true,
 	} as any);
 
-export const submitModelReview = (expected: ModelSpecCasToken, data: { comment?: string; idempotencyKey: string }) =>
+export const submitModelReview = (
+	expected: ModelSpecCasToken,
+	implementation: ModelImplementationCasToken,
+	data: { comment?: string; idempotencyKey: string },
+) =>
 	api.post<ModelLifecycleEvent>({
 		url: lifecycleUrl(expected.id, "/reviews"),
-		headers: lifecycleHeaders(expected),
+		headers: lifecycleWriteHeaders(expected, implementation),
 		data,
 		_skipErrorToast: true,
 	} as any);
 
-export const approveModelReview = (expected: ModelSpecCasToken, data: { comment?: string; idempotencyKey: string }) =>
+export const approveModelReview = (
+	expected: ModelSpecCasToken,
+	implementation: ModelImplementationCasToken,
+	data: { comment?: string; idempotencyKey: string },
+) =>
 	api.post<ModelLifecycleEvent>({
 		url: lifecycleUrl(expected.id, "/reviews/approve"),
-		headers: lifecycleHeaders(expected),
+		headers: lifecycleWriteHeaders(expected, implementation),
 		data,
 		_skipErrorToast: true,
 	} as any);
 
 export const publishModelLifecycle = (
 	expected: ModelSpecCasToken,
+	implementation: ModelImplementationCasToken,
 	data: { comment?: string; idempotencyKey: string },
 ) =>
 	api.post<ModelLifecycleRelease>({
 		url: lifecycleUrl(expected.id, "/publish"),
-		headers: lifecycleHeaders(expected),
+		headers: lifecycleWriteHeaders(expected, implementation),
 		data,
 		_skipErrorToast: true,
 	} as any);
@@ -296,5 +311,275 @@ export const runModelLifecycle = (
 export const getModelLifecycle = (modelSpecId: string) =>
 	api.get<ModelLifecycleTimeline>({
 		url: lifecycleUrl(modelSpecId),
+		_skipErrorToast: true,
+	} as any);
+
+export type ReleaseCandidateDeliveryStatus =
+	| "DRAFT"
+	| "BUILDING"
+	| "BUILD_FAILED"
+	| "BUILT"
+	| "QUALITY_RUNNING"
+	| "QUALITY_FAILED"
+	| "QUALITY_PASSED"
+	| "REVIEW_PENDING"
+	| "REJECTED"
+	| "APPROVED"
+	| "PUBLISHING"
+	| "PARTIAL"
+	| "PUBLISHED"
+	| "ROLLED_BACK"
+	| "STALE";
+
+export type ReleaseCandidateLifecycleAction =
+	| "START_BUILD"
+	| "RETRY_BUILD"
+	| "RUN_QUALITY"
+	| "SUBMIT_REVIEW"
+	| "APPROVE"
+	| "REJECT"
+	| "CREATE_REPLACEMENT_CANDIDATE"
+	| "PUBLISH"
+	| "RETRY_REGISTRATION"
+	| "ROLLBACK";
+
+export type ReleaseCandidateWorkspaceAction =
+	| "CREATE_CANDIDATE"
+	| "UPDATE_SCOPE"
+	| "REFRESH_CANDIDATE"
+	| ReleaseCandidateLifecycleAction;
+
+export type ReleaseCandidateEvidenceType =
+	| "ARTIFACT"
+	| "BUILD_RUN"
+	| "QUALITY_RUN"
+	| "REVIEW"
+	| "PUBLICATION"
+	| "REGISTRATION"
+	| "ROLLBACK";
+
+export type ReleaseCandidateEvidenceState = "UNAVAILABLE" | "RUNNING" | "PASSED" | "FAILED" | "STALE";
+export type ReleaseCandidateWorkbenchState = "EMPTY" | "READY" | "BLOCKED" | "STALE";
+
+export type ReleaseCandidateScopeEntryInput = {
+	modelSpecId: string;
+	sortOrder: number;
+	selectedReason?: string | null;
+};
+
+export type ReleaseCandidateEntry = {
+	id: string;
+	tenantId: string;
+	candidateId: string;
+	planId: string;
+	modelSpecId: string;
+	revision: number;
+	checksum: string;
+	implementationId?: string | null;
+	implementationMode: CanonicalModelSpecView["implementationMode"];
+	status: ReleaseCandidateDeliveryStatus;
+	sortOrder: number;
+	selectedReason?: string | null;
+};
+
+export type ReleaseCandidateAudit = {
+	createdBy: string;
+	createdAt: string;
+	submittedBy?: string | null;
+	submittedAt?: string | null;
+	approvedBy?: string | null;
+	approvedAt?: string | null;
+	publishedBy?: string | null;
+	publishedAt?: string | null;
+};
+
+export type ReleaseCandidate = {
+	id: string;
+	tenantId: string;
+	planId: string;
+	environment: string;
+	status: ReleaseCandidateDeliveryStatus;
+	version: number;
+	idempotencyKey?: string | null;
+	requestHash?: string | null;
+	audit: ReleaseCandidateAudit;
+	lastModifiedBy: string;
+	lastModifiedAt: string;
+	entries: ReleaseCandidateEntry[];
+};
+
+export type ReleaseCandidateEvidenceSummary = {
+	type: ReleaseCandidateEvidenceType;
+	state: ReleaseCandidateEvidenceState;
+	code?: string | null;
+	message?: string | null;
+};
+
+export type ReleaseCandidateBlocker = {
+	code: string;
+	message: string;
+};
+
+export type ReleaseCandidateWorkbench = {
+	planId: string;
+	state: ReleaseCandidateWorkbenchState;
+	candidate: ReleaseCandidate | null;
+	evidence: ReleaseCandidateEvidenceSummary[];
+	primaryBlocker: ReleaseCandidateBlocker | null;
+	allowedActions: ReleaseCandidateWorkspaceAction[];
+	etag: string | null;
+};
+
+export type ReleaseCandidateDriftReason = {
+	modelSpecId: string;
+	lockedRevision: number;
+	lockedChecksum: string;
+	currentRevision?: number | null;
+	currentChecksum?: string | null;
+	code: string;
+	message: string;
+};
+
+export type ReleaseCandidateCommandResult = {
+	candidate: ReleaseCandidate;
+	replayed: boolean;
+	driftReasons: ReleaseCandidateDriftReason[];
+	allowedActions: ReleaseCandidateLifecycleAction[];
+};
+
+export type ReleaseCandidateCasToken = {
+	id: string;
+	version: number;
+};
+
+/**
+ * Transport and server state remain separate so the workbench never treats a 403 or failed request as an empty plan.
+ */
+export type ReleaseCandidateWorkbenchScreenState =
+	| { kind: "loading" }
+	| { kind: "empty"; data: ReleaseCandidateWorkbench }
+	| { kind: "forbidden"; code: string; message: string }
+	| { kind: "error"; code: string; message: string }
+	| { kind: "ready"; data: ReleaseCandidateWorkbench };
+
+export const toReleaseCandidateEtag = (expected: ReleaseCandidateCasToken) =>
+	`"release-candidate:${expected.id}:${expected.version}"`;
+
+export const toReleaseCandidateWorkbenchScreenState = (
+	data: ReleaseCandidateWorkbench,
+): ReleaseCandidateWorkbenchScreenState =>
+	data.state === "EMPTY" ? { kind: "empty", data } : { kind: "ready", data };
+
+export const releaseCandidateWorkbenchLoading = (): ReleaseCandidateWorkbenchScreenState => ({ kind: "loading" });
+
+export const releaseCandidateWorkbenchForbidden = (
+	code: string,
+	message: string,
+): ReleaseCandidateWorkbenchScreenState => ({ kind: "forbidden", code, message });
+
+export const releaseCandidateWorkbenchError = (
+	code: string,
+	message: string,
+): ReleaseCandidateWorkbenchScreenState => ({ kind: "error", code, message });
+
+const releaseCandidateResource = (planId: string) =>
+	`/modeling/plans/${encodeURIComponent(planId)}/release-candidates`;
+
+const releaseCandidateItemUrl = (planId: string, candidateId: string, suffix = "") =>
+	`${releaseCandidateResource(planId)}/${encodeURIComponent(candidateId)}${suffix}`;
+
+const releaseCandidateWriteHeaders = (idempotencyKey: string, expected?: ReleaseCandidateCasToken) => ({
+	"Idempotency-Key": idempotencyKey,
+	...(expected ? { "If-Match": toReleaseCandidateEtag(expected) } : {}),
+});
+
+export const getReleaseCandidateWorkbench = (planId: string) =>
+	api.get<ReleaseCandidateWorkbench>({
+		url: `${releaseCandidateResource(planId)}/workspace`,
+		_skipErrorToast: true,
+	} as any);
+
+export const createReleaseCandidate = (
+	planId: string,
+	idempotencyKey: string,
+	data: {
+		environment: string;
+		entries: ReleaseCandidateScopeEntryInput[];
+		reason: string;
+	},
+) =>
+	api.post<ReleaseCandidateCommandResult>({
+		url: releaseCandidateResource(planId),
+		headers: releaseCandidateWriteHeaders(idempotencyKey),
+		data,
+		_skipErrorToast: true,
+	} as any);
+
+export const updateReleaseCandidateScope = (
+	planId: string,
+	expected: ReleaseCandidateCasToken,
+	idempotencyKey: string,
+	data: { entries: ReleaseCandidateScopeEntryInput[]; reason: string },
+) =>
+	api.put<ReleaseCandidateCommandResult>({
+		url: releaseCandidateItemUrl(planId, expected.id, "/scope"),
+		headers: releaseCandidateWriteHeaders(idempotencyKey, expected),
+		data,
+		_skipErrorToast: true,
+	} as any);
+
+export const lockReleaseCandidate = (
+	planId: string,
+	expected: ReleaseCandidateCasToken,
+	idempotencyKey: string,
+	reason: string,
+) =>
+	api.post<ReleaseCandidateCommandResult>({
+		url: releaseCandidateItemUrl(planId, expected.id, "/lock"),
+		headers: releaseCandidateWriteHeaders(idempotencyKey, expected),
+		data: { reason },
+		_skipErrorToast: true,
+	} as any);
+
+export const retryReleaseCandidate = (
+	planId: string,
+	expected: ReleaseCandidateCasToken,
+	idempotencyKey: string,
+	reason: string,
+) =>
+	api.post<ReleaseCandidateCommandResult>({
+		url: releaseCandidateItemUrl(planId, expected.id, "/retry"),
+		headers: releaseCandidateWriteHeaders(idempotencyKey, expected),
+		data: { reason },
+		_skipErrorToast: true,
+	} as any);
+
+export const refreshReleaseCandidate = (
+	planId: string,
+	expected: ReleaseCandidateCasToken,
+	idempotencyKey: string,
+	reason: string,
+) =>
+	api.post<ReleaseCandidateCommandResult>({
+		url: releaseCandidateItemUrl(planId, expected.id, "/refresh"),
+		headers: releaseCandidateWriteHeaders(idempotencyKey, expected),
+		data: { reason },
+		_skipErrorToast: true,
+	} as any);
+
+export const createReplacementReleaseCandidate = (
+	planId: string,
+	expected: ReleaseCandidateCasToken,
+	idempotencyKey: string,
+	data: {
+		environment: string;
+		entries: ReleaseCandidateScopeEntryInput[];
+		reason: string;
+	},
+) =>
+	api.post<ReleaseCandidateCommandResult>({
+		url: releaseCandidateItemUrl(planId, expected.id, "/replacement"),
+		headers: releaseCandidateWriteHeaders(idempotencyKey, expected),
+		data,
 		_skipErrorToast: true,
 	} as any);

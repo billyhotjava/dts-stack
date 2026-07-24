@@ -11,7 +11,7 @@ import { useCatalogDomainOptions } from "@/hooks/useCatalogDomainOptions";
 import { useSearchParams } from "@/routes/hooks";
 import { useUserRoles } from "@/store/userStore";
 import { ModelSpecCreateDrawer } from "./components/ModelSpecCreateDrawer";
-import type { CanonicalModelSpecView, ModelSpecType, ModelSpecView } from "./modelSpecV2Contract";
+import type { ModelSpecType, ModelSpecView } from "./modelSpecV2Contract";
 import { MODEL_STATUS_LABELS, MODEL_TYPE_LABELS } from "./modelSpecWorkbench";
 import { hasWarehousePlanCreateAccess } from "./warehousePlanCreateFlow";
 
@@ -34,9 +34,9 @@ export default function ModelCenterPage() {
 	const planId = searchParams.get("planId")?.trim() || "";
 	const domainId = searchParams.get("domainId")?.trim() || "";
 	const compatibilityView = searchParams.get("view")?.trim() || "";
+	const lightweightCreate = searchParams.get("create") === "lightweight";
 	const initialType = requestedModelType(searchParams.get("modelType")) || "FACT";
 	const [models, setModels] = useState<ModelSpecView[]>([]);
-	const [candidateModels, setCandidateModels] = useState<ModelSpecView[]>([]);
 	const [plans, setPlans] = useState<WarehousePlanHeader[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [loadError, setLoadError] = useState("");
@@ -53,23 +53,11 @@ export default function ModelCenterPage() {
 		setLoading(true);
 		setLoadError("");
 		const modelRequest = listModelSpecs({ ...(planId ? { planId } : {}), ...(domainId ? { domainId } : {}) });
-		const candidateRequest = planId || domainId ? listModelSpecs() : modelRequest;
-		const [modelResult, planResult, candidateResult] = await Promise.allSettled([
-			modelRequest,
-			listWarehousePlans(),
-			candidateRequest,
-		]);
+		const [modelResult, planResult] = await Promise.allSettled([modelRequest, listWarehousePlans()]);
 		if (modelResult.status === "fulfilled") setModels(Array.isArray(modelResult.value) ? modelResult.value : []);
 		else {
 			setModels([]);
 			setLoadError("模型中心加载失败，请稍后重试");
-		}
-		if (candidateResult.status === "fulfilled") {
-			setCandidateModels(Array.isArray(candidateResult.value) ? candidateResult.value : []);
-		} else {
-			setCandidateModels(
-				modelResult.status === "fulfilled" && Array.isArray(modelResult.value) ? modelResult.value : [],
-			);
 		}
 		if (planResult.status === "fulfilled") setPlans(Array.isArray(planResult.value) ? planResult.value : []);
 		setLoading(false);
@@ -80,17 +68,13 @@ export default function ModelCenterPage() {
 	}, [load]);
 
 	useEffect(() => {
-		if (compatibilityView === "guided" && canEdit && !guidedViewOpened.current) {
+		if ((compatibilityView === "guided" || lightweightCreate) && canEdit && !guidedViewOpened.current) {
 			guidedViewOpened.current = true;
 			setCreateOpen(true);
 		}
-	}, [canEdit, compatibilityView]);
+	}, [canEdit, compatibilityView, lightweightCreate]);
 
 	const planNameById = useMemo(() => new Map(plans.map((plan) => [plan.id, plan.name])), [plans]);
-	const canonicalModels = useMemo(
-		() => candidateModels.filter((model): model is CanonicalModelSpecView => model.compatibilityMode === "CANONICAL"),
-		[candidateModels],
-	);
 	const visibleModels = useMemo(() => {
 		const keyword = search.trim().toLowerCase();
 		return models.filter((model) => {
@@ -249,10 +233,11 @@ export default function ModelCenterPage() {
 				initialModelType={createType}
 				lockedPlanId={planId || undefined}
 				initialDomainId={domainId || undefined}
-				availableModels={canonicalModels}
+				initialDimensionDefinitionId={searchParams.get("dimensionDefinitionId")?.trim() || undefined}
+				initialDimensionDefinitionRevision={Number(searchParams.get("dimensionDefinitionRevision")) || undefined}
 				createCommand={createModelSpec}
 				onClose={() => setCreateOpen(false)}
-				onCreated={(model) => navigate(`/modeling/models/${encodeURIComponent(model.id)}`)}
+				onCreated={(model) => navigate(`/modeling/models/${encodeURIComponent(model.id)}?activeStage=logical`)}
 			/>
 		</div>
 	);

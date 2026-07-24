@@ -2,10 +2,13 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import com.yuzhi.dts.platform.domain.modeling.ModelingSqlModel;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
+import com.yuzhi.dts.platform.repository.modeling.ModelLifecycleRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
 import com.yuzhi.dts.platform.service.infra.AdminInfraClient;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelDto;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -48,17 +51,20 @@ public class ModelFileService {
     private final ModelingSqlModelRepository repo;
     private final InfraDataSourceRepository dataSourceRepository;
     private final AdminInfraClient adminInfraClient;
+    private final ModelLifecycleRepository lifecycleRepository;
 
     public ModelFileService(
         DbtConfigService dbtConfigService,
         ModelingSqlModelRepository repo,
         InfraDataSourceRepository dataSourceRepository,
-        AdminInfraClient adminInfraClient
+        AdminInfraClient adminInfraClient,
+        ModelLifecycleRepository lifecycleRepository
     ) {
         this.dbtConfigService = dbtConfigService;
         this.repo = repo;
         this.dataSourceRepository = dataSourceRepository;
         this.adminInfraClient = adminInfraClient;
+        this.lifecycleRepository = lifecycleRepository;
     }
 
     public void writeModelFile(ModelingSqlModel model) {
@@ -450,14 +456,47 @@ public class ModelFileService {
 
     String buildSqlContent(ModelingSqlModel model, String sourceTag) {
         String body = trimToEmpty(model.getSqlText());
-        if (body.contains("{{ config") || body.contains("{{config")) {
-            return body + "\n";
+        String configLine = body.contains("{{ config") || body.contains("{{config")
+            ? null
+            : buildConfigLine(model, sourceTag);
+        String lifecycleConfig = buildLifecycleConfigLine(model);
+        String prefix = StringUtils.hasText(configLine) ? configLine + "\n\n" : "";
+        String suffix = StringUtils.hasText(lifecycleConfig) ? "\n\n" + lifecycleConfig : "";
+        return prefix + body + suffix + "\n";
+    }
+
+    private String buildLifecycleConfigLine(ModelingSqlModel model) {
+        if (model == null || model.getModelSpecId() == null) {
+            return null;
         }
-        String configLine = buildConfigLine(model, sourceTag);
-        if (!StringUtils.hasText(configLine)) {
-            return body + "\n";
+        if (!StringUtils.hasText(model.getOwnerDept())) {
+            throw new IllegalStateException("绑定 ModelSpec 的 SQL 模型缺少租户信息");
         }
-        return configLine + "\n\n" + body + "\n";
+        ImplementationView implementation = lifecycleRepository
+            .findImplementation(model.getOwnerDept(), model.getModelSpecId())
+            .orElseThrow(() -> new IllegalStateException("绑定 ModelSpec 的当前 implementation 不存在"));
+        if (
+            implementation.ownership() != ImplementationMode.DBT_MANAGED ||
+            !model.getModelSpecId().equals(implementation.modelSpecId()) ||
+            !java.util.Objects.equals(model.getPlanId(), implementation.planId()) ||
+            !StringUtils.hasText(implementation.projectKey()) ||
+            !StringUtils.hasText(implementation.dbtUniqueId())
+        ) {
+            throw new IllegalStateException("SQL 工作区只能绑定当前 DBT_MANAGED implementation");
+        }
+        return "{{ config(meta={"
+            + "'tenantId':'" + jinjaString(model.getOwnerDept()) + "',"
+            + "'modelSpecId':'" + model.getModelSpecId() + "',"
+            + "'revision':" + implementation.revision() + ","
+            + "'modelChecksum':'" + jinjaString(implementation.modelChecksum()) + "',"
+            + "'implementationRevision':" + implementation.implementationRevision() + ","
+            + "'implementationChecksum':'" + jinjaString(implementation.implementationChecksum()) + "',"
+            + "'projectKey':'" + jinjaString(implementation.projectKey()) + "'"
+            + "}) }}";
+    }
+
+    private static String jinjaString(String value) {
+        return value == null ? "" : value.replace("\\", "\\\\").replace("'", "\\'");
     }
 
     private String buildConfigLine(ModelingSqlModel model, String sourceTag) {

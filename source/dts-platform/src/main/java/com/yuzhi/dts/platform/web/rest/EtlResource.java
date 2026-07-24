@@ -656,8 +656,26 @@ public class EtlResource {
         Map<String, Object> vars,
         String gitRef,
         String commitSha,
-        String buildInvocationId
-    ) {}
+        String buildInvocationId,
+        String modelSpecId,
+        Integer implementationRevision,
+        String implementationChecksum,
+        String projectKey,
+        String dbtUniqueId
+    ) {
+        public DbtRunRequest(
+            String models,
+            String dagSelector,
+            String target,
+            String operation,
+            Map<String, Object> vars,
+            String gitRef,
+            String commitSha,
+            String buildInvocationId
+        ) {
+            this(models, dagSelector, target, operation, vars, gitRef, commitSha, buildInvocationId, null, null, null, null, null);
+        }
+    }
     public record DbtArtifactSyncRequest(String projectDir, Boolean syncManifest) {}
     public record DbtOutputRelationRequest(java.util.UUID modelId, String target, Map<String, Object> vars) {}
     public record DbtQualityGateRequest(String models) {}
@@ -739,6 +757,7 @@ public class EtlResource {
         if (StringUtils.hasText(request == null ? null : request.buildInvocationId())) {
             conf.put("buildInvocationId", request.buildInvocationId().trim());
         }
+        putLifecycleRunContext(conf, request);
         Map<String, Object> payload = Map.of("conf", conf, "logical_date", Instant.now().toString());
         Map<String, Object> result = new LinkedHashMap<>(triggerAirflowDagOrThrow(dagId, payload));
         result.putIfAbsent("dagId", dagId);
@@ -748,6 +767,37 @@ public class EtlResource {
             // best-effort sync
         }
         return ApiResponses.ok(result);
+    }
+
+    private void putLifecycleRunContext(Map<String, Object> conf, DbtRunRequest request) {
+        if (request == null) return;
+        boolean present =
+            StringUtils.hasText(request.modelSpecId()) ||
+            request.implementationRevision() != null ||
+            StringUtils.hasText(request.implementationChecksum()) ||
+            StringUtils.hasText(request.projectKey()) ||
+            StringUtils.hasText(request.dbtUniqueId());
+        if (!present) return;
+        if (
+            !StringUtils.hasText(request.modelSpecId()) ||
+            request.implementationRevision() == null ||
+            request.implementationRevision() < 1 ||
+            !StringUtils.hasText(request.implementationChecksum()) ||
+            !StringUtils.hasText(request.projectKey()) ||
+            !StringUtils.hasText(request.dbtUniqueId())
+        ) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ModelSpec lifecycle run context is incomplete");
+        }
+        try {
+            java.util.UUID.fromString(request.modelSpecId().trim());
+        } catch (IllegalArgumentException invalid) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "modelSpecId must be UUID", invalid);
+        }
+        conf.put("modelSpecId", request.modelSpecId().trim());
+        conf.put("implementationRevision", request.implementationRevision());
+        conf.put("implementationChecksum", request.implementationChecksum().trim());
+        conf.put("projectKey", request.projectKey().trim());
+        conf.put("dbtUniqueId", request.dbtUniqueId().trim());
     }
 
     private ApiResponse<Map<String, Object>> triggerDbtMacroOperation(

@@ -1,25 +1,16 @@
-import { Alert, Button, Drawer, Form, Space } from "antd";
+import { Alert, Button, Drawer, Form, Input, Select, Space } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { listDimensionDefinitions } from "@/api/dimensionDefinitionApi";
 import {
 	getWarehousePlanCategories,
-	getWarehousePlanSources,
 	listWarehousePlans,
 	type WarehousePlanCategoryBindingView,
 	type WarehousePlanHeader,
-	type WarehousePlanSourceInventoryView,
 } from "@/api/warehousePlanApi";
-import { useUserRoles } from "@/store/userStore";
-import {
-	type ModelSpecSourceChoice,
-	modelSpecSourceInventoryState,
-	modelSpecSourcePermissionDenied,
-	selectableModelSpecSources,
-	withPinnedExistingSources,
-} from "../modelSpecSourceSelection";
-import { createDimensionSystemCode } from "../modelSpecSystemCode";
-import type { CanonicalModelSpecView, CreateModelSpecCommand, ModelSpecType } from "../modelSpecV2Contract";
-import { isModelSpecReferenceTargetAllowed, validateModelSpecCreate } from "../modelSpecV2Contract";
+import type { DimensionDefinitionView } from "../dimensionDefinitionContract";
+import type { CreateModelSpecCommand, ModelSpecType } from "../modelSpecV2Contract";
+import { validateModelSpecCreate } from "../modelSpecV2Contract";
 import {
 	buildModelSpecCreateCommand,
 	createEmptyModelSpecDraft,
@@ -28,9 +19,6 @@ import {
 	modelSpecErrorMessage,
 	modelSpecIssueMessage,
 } from "../modelSpecWorkbench";
-import { hasWarehousePlanCreateAccess } from "../warehousePlanCreateFlow";
-import { ModelSpecEditorFields, type ModelSpecSelectOption, modelTypeDefaultLayer } from "./ModelSpecEditorFields";
-import { ModelSpecSourceInventoryModal } from "./ModelSpecSourceInventoryModal";
 
 type Props = {
 	open: boolean;
@@ -38,34 +26,32 @@ type Props = {
 	lockModelType?: boolean;
 	lockedPlanId?: string;
 	initialDomainId?: string;
-	availableModels: CanonicalModelSpecView[];
-	createCommand: (command: CreateModelSpecCommand) => Promise<CanonicalModelSpecView>;
+	initialDimensionDefinitionId?: string;
+	initialDimensionDefinitionRevision?: number;
+	createCommand: (command: CreateModelSpecCommand) => Promise<{ id: string; name: string }>;
 	onClose: () => void;
-	onCreated: (model: CanonicalModelSpecView) => void;
+	onCreated: (model: { id: string; name: string }) => void;
 };
 
-const confirmedCategoryOptions = (bindings: WarehousePlanCategoryBindingView[]): ModelSpecSelectOption[] =>
+type SelectOption = { value: string; label: string };
+
+const modelTypeOptions: SelectOption[] = [
+	{ value: "DIMENSION", label: "维度表" },
+	{ value: "FACT", label: "明细表" },
+	{ value: "SUMMARY", label: "汇总表" },
+	{ value: "APPLICATION", label: "应用表" },
+];
+
+const confirmedCategoryOptions = (bindings: WarehousePlanCategoryBindingView[]): SelectOption[] =>
 	bindings
 		.filter((binding) => binding.confirmationStatus === "CONFIRMED" && binding.resolutionStatus === "AVAILABLE")
 		.map((binding) => ({
 			value: binding.domainId,
-			label: binding.name
-				? binding.code
-					? `${binding.name}（${binding.code}）`
-					: binding.name
-				: binding.code || binding.domainId,
+			label: binding.name ? (binding.code ? `${binding.name}（${binding.code}）` : binding.name) : binding.code || binding.domainId,
 		}));
 
-const issueField = (field: string): keyof ModelSpecDraft => {
-	if (field === "grain") return "grainStatement";
-	if (field === "fields") return "grainKeysText";
-	if (field === "sourceRefs") return "sources";
-	if (field === "dependsOn") return "upstreamIds";
-	if (field === "dimensionRefs") return "dimensionRefIds";
-	if (field === "timeSemantics") return "timeSemanticsType";
-	if (field === "generationStrategy") return "generationStrategyType";
-	return field as keyof ModelSpecDraft;
-};
+const issueField = (field: string): keyof ModelSpecDraft =>
+	field === "dimensionDefinitionRef" ? "dimensionDefinitionRef" : (field as keyof ModelSpecDraft);
 
 export function ModelSpecCreateDrawer({
 	open,
@@ -73,39 +59,38 @@ export function ModelSpecCreateDrawer({
 	lockModelType = false,
 	lockedPlanId,
 	initialDomainId,
-	availableModels,
+	initialDimensionDefinitionId,
+	initialDimensionDefinitionRevision,
 	createCommand,
 	onClose,
 	onCreated,
 }: Props) {
 	const [form] = Form.useForm<ModelSpecDraft>();
 	const [plans, setPlans] = useState<WarehousePlanHeader[]>([]);
-	const [domainOptions, setDomainOptions] = useState<ModelSpecSelectOption[]>([]);
-	const [sourceOptions, setSourceOptions] = useState<ModelSpecSourceChoice[]>([]);
+	const [domainOptions, setDomainOptions] = useState<SelectOption[]>([]);
+	const [dimensionDefinitions, setDimensionDefinitions] = useState<DimensionDefinitionView[]>([]);
 	const [loadingPlans, setLoadingPlans] = useState(false);
 	const [loadingDomains, setLoadingDomains] = useState(false);
-	const [loadingSources, setLoadingSources] = useState(false);
-	const [saving, setSaving] = useState(false);
+	const [loadingDefinitions, setLoadingDefinitions] = useState(false);
 	const [contextError, setContextError] = useState("");
-	const [sourceError, setSourceError] = useState("");
-	const [sourcePermissionDenied, setSourcePermissionDenied] = useState(false);
-	const [sourceInventoryOpen, setSourceInventoryOpen] = useState(false);
+	const [definitionError, setDefinitionError] = useState("");
 	const [submitError, setSubmitError] = useState("");
+	const [saving, setSaving] = useState(false);
 	const idempotencyKeyRef = useRef("");
 	const planRequestRef = useRef(0);
 	const domainRequestRef = useRef(0);
-	const sourceRequestRef = useRef(0);
+	const definitionRequestRef = useRef(0);
 	const selectedPlanId = Form.useWatch("planId", form) || "";
+	const selectedDomainId = Form.useWatch("domainId", form) || "";
 	const selectedModelType = Form.useWatch("modelType", form) || initialModelType;
-	const selectedSources = Form.useWatch("sources", form) || [];
-	const userRoles = useUserRoles();
-	const roleAllowsPlanMaintenance = hasWarehousePlanCreateAccess(userRoles);
+	const selectedDimensionDefinitionRef = Form.useWatch("dimensionDefinitionRef", form);
 
 	const loadDomains = useCallback(
-		async (planId: string, keepDomainId?: string) => {
+		async (planId: string, preferredDomainId?: string) => {
 			const requestId = ++domainRequestRef.current;
 			if (!planId) {
 				setDomainOptions([]);
+				setContextError("请先选择建设计划。创建模型需要明确建设计划，系统不会自动猜测。");
 				return;
 			}
 			setLoadingDomains(true);
@@ -115,21 +100,21 @@ export function ModelSpecCreateDrawer({
 				if (requestId !== domainRequestRef.current) return;
 				const options = confirmedCategoryOptions(result.value.domainBindings);
 				setDomainOptions(options);
-				const currentDomainId = keepDomainId || String(form.getFieldValue("domainId") || "");
+				const currentDomainId = preferredDomainId || String(form.getFieldValue("domainId") || "");
 				if (currentDomainId && !options.some((option) => option.value === currentDomainId)) {
 					form.setFieldValue("domainId", "");
-				}
-				if (!form.getFieldValue("domainId") && options.length === 1) {
-					form.setFieldValue("domainId", options[0].value);
+					setContextError("当前业务分类不属于所选建设计划。请重新选择已确认的业务分类后再创建。");
+				} else if (!currentDomainId) {
+					setContextError("请从当前建设计划中选择业务分类。系统不会自动猜测模型归属。");
 				}
 				if (options.length === 0) {
-					setContextError("当前计划还没有可用于建模的已确认业务分类，请先完善规划基线");
+					setContextError("当前建设计划还没有可用于建模的已确认业务分类。请先在规划基线中确认业务分类后返回。");
 				}
 			} catch {
 				if (requestId !== domainRequestRef.current) return;
 				setDomainOptions([]);
 				form.setFieldValue("domainId", "");
-				setContextError("业务分类加载失败，当前表单已保留，请稍后重试");
+				setContextError("业务分类加载失败。请稍后重试，或返回建设计划确认分类后再创建。");
 			} finally {
 				if (requestId === domainRequestRef.current) setLoadingDomains(false);
 			}
@@ -137,79 +122,66 @@ export function ModelSpecCreateDrawer({
 		[form],
 	);
 
-	const loadSources = useCallback(
-		async (planId: string): Promise<WarehousePlanSourceInventoryView | null> => {
-			const requestId = ++sourceRequestRef.current;
-			if (!planId) {
-				setSourceOptions([]);
-				setSourceError("");
-				setSourcePermissionDenied(false);
-				setLoadingSources(false);
-				return null;
+	const loadDimensionDefinitions = useCallback(
+		async (domainId: string) => {
+			const requestId = ++definitionRequestRef.current;
+			if (!domainId || selectedModelType !== "DIMENSION") {
+				setDimensionDefinitions([]);
+				setDefinitionError("");
+				return;
 			}
-			setLoadingSources(true);
-			setSourceError("");
-			setSourcePermissionDenied(false);
+			setLoadingDefinitions(true);
+			setDefinitionError("");
 			try {
-				const inventory = await getWarehousePlanSources(planId);
-				if (requestId !== sourceRequestRef.current) return null;
-				const choices = selectableModelSpecSources(inventory.bindings);
-				const currentSources = (form.getFieldValue("sources") as ModelSpecDraft["sources"] | undefined) || [];
-				setSourceOptions(withPinnedExistingSources(choices, currentSources));
-				const state = modelSpecSourceInventoryState(inventory.bindings);
-				if (state === "EMPTY") {
-					setSourceError(
-						"当前计划尚未登记具体来源，不影响保存草稿。可锁定上游模型；或点击“在当前表单登记来源”，按已验证连接 → Schema → 具体表确认纳入；若没有可选表再执行元数据同步",
-					);
-				} else if (state === "FORBIDDEN") {
-					setSourcePermissionDenied(true);
-					setSourceError("当前账号无权读取计划来源，请联系计划负责人或管理员授权");
-				} else if (state === "UNAVAILABLE") {
-					setSourceError("当前计划已有来源，但尚未确认、已失效或版本需要刷新，请先完善来源盘点");
+				const result = await listDimensionDefinitions({ domainId, status: "CURRENT" });
+				if (requestId !== definitionRequestRef.current) return;
+				const definitions = Array.isArray(result) ? result : [];
+				setDimensionDefinitions(definitions);
+				const requested = initialDimensionDefinitionId
+					? definitions.find(
+						(definition) =>
+							definition.id === initialDimensionDefinitionId &&
+							definition.revision === initialDimensionDefinitionRevision,
+					)
+					: undefined;
+				if (requested) {
+					form.setFieldValue("dimensionDefinitionRef", {
+						dimensionDefinitionId: requested.id,
+						revision: requested.revision,
+					});
+				} else if (initialDimensionDefinitionId) {
+					form.setFieldValue("dimensionDefinitionRef", undefined);
+					setDefinitionError("请求的业务维度不是当前分类下的现行版本。请返回维度目录选择现行维度后重新创建维度表。");
+				} else if (definitions.length === 0) {
+					setDefinitionError("当前业务分类没有现行业务维度。请先在维度目录登记并确认维度，再创建维度表。");
 				}
-				return inventory;
-			} catch (error) {
-				if (requestId !== sourceRequestRef.current) return null;
-				const currentSources = (form.getFieldValue("sources") as ModelSpecDraft["sources"] | undefined) || [];
-				setSourceOptions(withPinnedExistingSources([], currentSources));
-				const denied = modelSpecSourcePermissionDenied(error);
-				setSourcePermissionDenied(denied);
-				setSourceError(
-					denied
-						? "当前账号无权读取计划来源，请联系计划负责人或管理员授权"
-						: "规划来源加载失败，当前表单已保留；请稍后重试",
-				);
-				return null;
+			} catch {
+				if (requestId !== definitionRequestRef.current) return;
+				setDimensionDefinitions([]);
+				form.setFieldValue("dimensionDefinitionRef", undefined);
+				setDefinitionError("现行业务维度加载失败。请稍后重试，或返回维度目录确认维度状态后再创建。");
 			} finally {
-				if (requestId === sourceRequestRef.current) setLoadingSources(false);
+				if (requestId === definitionRequestRef.current) setLoadingDefinitions(false);
 			}
 		},
-		[form],
+		[form, initialDimensionDefinitionId, initialDimensionDefinitionRevision, selectedModelType],
 	);
 
 	useEffect(() => {
 		if (!open) {
 			planRequestRef.current += 1;
 			domainRequestRef.current += 1;
-			sourceRequestRef.current += 1;
-			setSourceInventoryOpen(false);
+			definitionRequestRef.current += 1;
 			return;
 		}
 		const requestId = ++planRequestRef.current;
-		const draft = createEmptyModelSpecDraft(initialModelType, {
-			planId: lockedPlanId,
-			domainId: initialDomainId,
-		});
-		if (initialModelType === "DIMENSION") draft.dimensionCode = createDimensionSystemCode();
 		form.resetFields();
-		form.setFieldsValue(draft);
+		form.setFieldsValue(createEmptyModelSpecDraft(initialModelType, { planId: lockedPlanId, domainId: initialDomainId }));
 		idempotencyKeyRef.current = createModelSpecIdempotencyKey();
 		setSubmitError("");
 		setContextError("");
-		setSourceError("");
-		setSourcePermissionDenied(false);
-		setSourceOptions([]);
-		setLoadingSources(false);
+		setDefinitionError("");
+		setDimensionDefinitions([]);
 		setLoadingPlans(true);
 		void listWarehousePlans()
 			.then((result) => {
@@ -219,105 +191,64 @@ export function ModelSpecCreateDrawer({
 			.catch(() => {
 				if (requestId !== planRequestRef.current) return;
 				setPlans([]);
-				setContextError("建设计划加载失败，当前表单已保留，请稍后重试");
+				setContextError("建设计划加载失败。请稍后重试后选择建设计划。");
 			})
 			.finally(() => {
 				if (requestId === planRequestRef.current) setLoadingPlans(false);
 			});
-		const planId = lockedPlanId?.trim() || "";
-		if (planId) {
-			void loadDomains(planId, initialDomainId);
-			void loadSources(planId);
+		if (lockedPlanId?.trim()) {
+			void loadDomains(lockedPlanId.trim(), initialDomainId);
 		} else {
 			setDomainOptions([]);
-			setSourceOptions([]);
+			setContextError("请先选择建设计划。创建模型需要明确建设计划，系统不会自动猜测。");
 		}
 		return () => {
 			planRequestRef.current += 1;
 			domainRequestRef.current += 1;
-			sourceRequestRef.current += 1;
+			definitionRequestRef.current += 1;
 		};
-	}, [form, initialDomainId, initialModelType, loadDomains, loadSources, lockedPlanId, open]);
+	}, [form, initialDomainId, initialModelType, loadDomains, lockedPlanId, open]);
 
-	const planOptions = useMemo<ModelSpecSelectOption[]>(() => {
+	useEffect(() => {
+		void loadDimensionDefinitions(selectedDomainId);
+	}, [loadDimensionDefinitions, selectedDomainId]);
+
+	const planOptions = useMemo<SelectOption[]>(() => {
 		const options = plans.map((plan) => ({ value: plan.id, label: `${plan.name}（${plan.code}）` }));
 		if (lockedPlanId && !options.some((option) => option.value === lockedPlanId)) {
 			return [{ value: lockedPlanId, label: `当前计划（${lockedPlanId}）` }, ...options];
 		}
 		return options;
 	}, [lockedPlanId, plans]);
-	const selectableModels = useMemo(
-		() => availableModels.filter((model) => model.planId === selectedPlanId || model.status === "PUBLISHED"),
-		[availableModels, selectedPlanId],
-	);
-	const upstreamOptions = useMemo<ModelSpecSelectOption[]>(
-		() =>
-			selectableModels.map((model) => {
-				const allowed = isModelSpecReferenceTargetAllowed(
-					{ modelType: selectedModelType, planId: selectedPlanId },
-					model,
-					"DEPENDENCY",
-				);
-				return {
-					value: model.id,
-					label: `${model.name} · ${model.modelType} · ${model.layer} · r${model.revision}${
-						allowed ? "" : "（不符合当前模型依赖）"
-					}`,
-					disabled: !allowed,
-					revision: model.revision,
-				};
-			}),
-		[selectableModels, selectedModelType, selectedPlanId],
-	);
-	const dimensionOptions = useMemo<ModelSpecSelectOption[]>(
-		() =>
-			selectableModels
-				.filter((model) =>
-					isModelSpecReferenceTargetAllowed(
-						{ modelType: selectedModelType, planId: selectedPlanId },
-						model,
-						"DIMENSION",
-					),
-				)
-				.map((model) => ({
-					value: model.id,
-					label: `${model.name} · DIMENSION · DWD · r${model.revision}`,
-					revision: model.revision,
-				})),
-		[selectableModels, selectedModelType, selectedPlanId],
+	const dimensionOptions = useMemo<SelectOption[]>(
+		() => dimensionDefinitions.map((definition) => ({ value: definition.id, label: `${definition.name} · r${definition.revision}` })),
+		[dimensionDefinitions],
 	);
 
 	const changePlan = (planId: string) => {
-		domainRequestRef.current += 1;
-		sourceRequestRef.current += 1;
-		form.setFieldValue("domainId", "");
-		form.setFieldValue("sources", []);
-		setDomainOptions([]);
-		setSourceOptions([]);
-		setSourceError("");
-		setSourcePermissionDenied(false);
-		setSourceInventoryOpen(false);
+		definitionRequestRef.current += 1;
+		form.setFieldsValue({ domainId: "", dimensionDefinitionRef: undefined });
+		setDimensionDefinitions([]);
+		setDefinitionError("");
 		void loadDomains(planId);
-		void loadSources(planId);
+	};
+
+	const changeDomain = () => {
+		form.setFieldValue("dimensionDefinitionRef", undefined);
+		setDefinitionError("");
 	};
 
 	const changeModelType = (modelType: ModelSpecType) => {
-		form.setFieldsValue({
-			modelType,
-			layer: modelTypeDefaultLayer(modelType),
-			factShape: undefined,
-			timeSemanticsType: undefined,
-			timeFieldsText: "",
-			businessActivityRef: "",
-			upstreamIds: [],
-			dimensionRefIds: [],
-			consumptionScenario: "",
-			sources: [],
-			generationStrategyType: "",
-			generationStrategyReference: "",
-			dimensionCode: modelType === "DIMENSION" ? createDimensionSystemCode() : "",
-			dimensionHierarchies: [],
-		});
+		form.setFieldsValue({ modelType, dimensionDefinitionRef: undefined });
+		setDefinitionError("");
+	};
+
+	const selectDimensionDefinition = (definitionId: string) => {
+		const definition = dimensionDefinitions.find((candidate) => candidate.id === definitionId);
+		form.setFieldValue(
+			"dimensionDefinitionRef",
+			definition ? { dimensionDefinitionId: definition.id, revision: definition.revision } : undefined,
+		);
 	};
 
 	const submit = async () => {
@@ -325,15 +256,14 @@ export function ModelSpecCreateDrawer({
 		try {
 			await form.validateFields();
 			const values = form.getFieldsValue(true);
-			const command = buildModelSpecCreateCommand(values, selectableModels, idempotencyKeyRef.current);
+			if (values.modelType === "DIMENSION" && !values.dimensionDefinitionRef) {
+				setSubmitError("请选择已确认的现行业务维度后再保存");
+				return;
+			}
+			const command = buildModelSpecCreateCommand(values, [], idempotencyKeyRef.current);
 			const issues = validateModelSpecCreate(command);
 			if (issues.length > 0) {
-				form.setFields(
-					issues.map((issue) => ({
-						name: issueField(issue.field),
-						errors: [modelSpecIssueMessage(issue.code)],
-					})),
-				);
+				form.setFields(issues.map((issue) => ({ name: issueField(issue.field), errors: [modelSpecIssueMessage(issue.code)] })));
 				setSubmitError("请补齐标红字段后再保存");
 				return;
 			}
@@ -351,69 +281,83 @@ export function ModelSpecCreateDrawer({
 	};
 
 	return (
-		<>
-			<Drawer
-				title={initialModelType === "DIMENSION" && lockModelType ? "登记维度" : "新建模型"}
-				aria-label={initialModelType === "DIMENSION" && lockModelType ? "登记维度" : "新建模型"}
-				open={open}
-				onClose={onClose}
-				width={"min(760px, 100vw)"}
-				maskClosable={!saving}
-				footer={
-					<div className="flex justify-end">
-						<Space>
-							<Button onClick={onClose} disabled={saving}>
-								取消
-							</Button>
-							<Button
-								type="primary"
-								loading={saving}
-								disabled={loadingPlans || loadingDomains || (loadingSources && selectedSources.length > 0)}
-								onClick={() => void submit()}
-							>
-								保存草稿
-							</Button>
-						</Space>
-					</div>
-				}
-			>
-				<Space direction="vertical" size={12} className="w-full">
-					{contextError ? <Alert type="warning" showIcon message={contextError} /> : null}
-					{submitError ? <Alert type="error" showIcon message={submitError} /> : null}
-					<Form form={form} layout="vertical" requiredMark={false} disabled={saving}>
-						<ModelSpecEditorFields
-							form={form}
-							planOptions={planOptions}
-							domainOptions={domainOptions}
-							upstreamOptions={upstreamOptions}
-							dimensionOptions={dimensionOptions}
-							sourceOptions={sourceOptions}
-							planLoading={loadingPlans}
-							domainLoading={loadingDomains}
-							sourceLoading={loadingSources}
-							sourceError={sourceError}
-							sourcePermissionDenied={sourcePermissionDenied}
-							lockPlan={Boolean(lockedPlanId)}
-							lockModelType={lockModelType}
-							onPlanChange={changePlan}
-							onModelTypeChange={changeModelType}
-							onReloadSources={() => void loadSources(selectedPlanId)}
-							onManageSources={
-								roleAllowsPlanMaintenance && selectedPlanId ? () => setSourceInventoryOpen(true) : undefined
-							}
+		<Drawer
+			title="新建模型"
+			aria-label="新建模型"
+			open={open}
+			onClose={onClose}
+			width={540}
+			maskClosable={!saving}
+			footer={
+				<div className="flex justify-end">
+					<Space>
+						<Button onClick={onClose} disabled={saving}>
+							取消
+						</Button>
+						<Button
+							type="primary"
+							loading={saving}
+							disabled={loadingPlans || loadingDomains || (selectedModelType === "DIMENSION" && loadingDefinitions)}
+							onClick={() => void submit()}
+						>
+							保存草稿
+						</Button>
+					</Space>
+				</div>
+			}
+		>
+			<Space direction="vertical" size={12} className="w-full">
+				{contextError ? <Alert type="warning" showIcon message={contextError} /> : null}
+				{definitionError ? <Alert type="warning" showIcon message={definitionError} /> : null}
+				{submitError ? <Alert type="error" showIcon message={submitError} /> : null}
+				<Form form={form} layout="vertical" requiredMark="optional" disabled={saving}>
+					<Form.Item name="planId" label="建设计划" rules={[{ required: true, message: "请选择建设计划" }]}>
+						<Select
+							showSearch
+							optionFilterProp="label"
+							placeholder="选择模型所属的建设计划"
+							options={planOptions}
+							loading={loadingPlans}
+							disabled={Boolean(lockedPlanId) || loadingPlans}
+							onChange={changePlan}
 						/>
-					</Form>
-				</Space>
-			</Drawer>
-			<ModelSpecSourceInventoryModal
-				open={sourceInventoryOpen}
-				planId={selectedPlanId}
-				roleAllowsPlanMaintenance={roleAllowsPlanMaintenance}
-				onClose={() => setSourceInventoryOpen(false)}
-				onSaved={async () => {
-					return loadSources(selectedPlanId);
-				}}
-			/>
-		</>
+					</Form.Item>
+					<Form.Item name="domainId" label="业务分类" rules={[{ required: true, message: "请选择业务分类" }]}>
+						<Select
+							showSearch
+							optionFilterProp="label"
+							placeholder="从当前建设计划中选择已确认业务分类"
+							options={domainOptions}
+							loading={loadingDomains}
+							disabled={!selectedPlanId || loadingDomains}
+							onChange={changeDomain}
+						/>
+					</Form.Item>
+					<Form.Item name="modelType" label="模型类型" rules={[{ required: true, message: "请选择模型类型" }]}>
+						<Select options={modelTypeOptions} disabled={lockModelType} onChange={(value) => changeModelType(value as ModelSpecType)} />
+					</Form.Item>
+					{selectedModelType === "DIMENSION" ? (
+						<Form.Item label="业务维度" required>
+							<Select
+								showSearch
+								optionFilterProp="label"
+								placeholder="选择当前业务分类下的现行业务维度"
+								options={dimensionOptions}
+								value={selectedDimensionDefinitionRef?.dimensionDefinitionId}
+								loading={loadingDefinitions}
+								disabled={!selectedDomainId || loadingDefinitions}
+								onChange={selectDimensionDefinition}
+							/>
+						</Form.Item>
+					) : null}
+					<Form.Item name="name" label="模型名称" rules={[{ required: true, whitespace: true, message: "请输入模型名称" }]}>
+						<Input autoFocus maxLength={128} placeholder="例如：客户订单明细" />
+					</Form.Item>
+					<Form.Item name="description" label="用途说明（可选）">
+						<Input.TextArea rows={3} maxLength={2000} showCount placeholder="说明此模型支持的业务分析或应用场景" />
+					</Form.Item>
+				</Form>
+			</Space>
+		</Drawer>
 	);
 }

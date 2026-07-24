@@ -18,9 +18,12 @@ import com.yuzhi.dts.platform.service.security.AccessChecker;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.springframework.stereotype.Component;
 
 /** Resolves planning references without copying source-system metadata into WarehousePlan. */
@@ -212,7 +215,117 @@ public class SourceReferenceResolverAdapter implements SourceReferenceResolver {
                 .append('\u0000')
                 .append(safe(column.getStatus()));
         }
+        String apiEvidence = apiFingerprintEvidence(table);
+        if (apiEvidence != null) {
+            canonical.append('\u0000').append(apiEvidence);
+        }
         return sha256(canonical.toString());
+    }
+
+    private String apiFingerprintEvidence(CatalogTableSchema table) {
+        if (table == null) {
+            return null;
+        }
+        Map<String, String> tableTags = tagValues(table.getTags());
+        Map<String, String> datasetTags = table.getDataset() == null ? Map.of() : tagValues(table.getDataset().getTags());
+        String origin = consistentEvidenceValue("origin", tableTags, datasetTags);
+        if (!"API".equalsIgnoreCase(origin)) {
+            return null;
+        }
+        CatalogDataset dataset = table.getDataset();
+        if (dataset == null || !Boolean.TRUE.equals(dataset.getEnabled()) || "STALE".equalsIgnoreCase(dataset.getLifecycleStatus())) {
+            throw new IllegalStateException("API landing catalog asset is not current");
+        }
+        String connectionId = requiredApiEvidence("connectionId", tableTags, datasetTags);
+        String taskId = requiredApiEvidence("taskId", tableTags, datasetTags);
+        String taskRevision = requiredApiEvidence("taskRevision", tableTags, datasetTags);
+        String resourceId = requiredApiEvidence("resourceId", tableTags, datasetTags);
+        String executionSequence = requiredApiEvidence("executionSequence", tableTags, datasetTags);
+        String executionId = requiredApiEvidence("executionId", tableTags, datasetTags);
+        String executionStatus = requiredApiEvidence("executionStatus", tableTags, datasetTags);
+        String landingTruth = requiredApiEvidence("landingTruth", tableTags, datasetTags);
+        String landingStatus = requiredApiEvidence("landingStatus", tableTags, datasetTags);
+        String configChecksum = requiredApiEvidence("configChecksum", tableTags, datasetTags);
+        String fieldSnapshotChecksum = requiredApiEvidence("fieldSnapshotChecksum", tableTags, datasetTags);
+        UUID evidenceConnectionId;
+        try {
+            evidenceConnectionId = UUID.fromString(connectionId);
+            Instant.parse(taskRevision);
+            if (Long.parseLong(executionSequence) < 0) {
+                throw new IllegalArgumentException("negative sequence");
+            }
+        } catch (RuntimeException exception) {
+            throw new IllegalStateException("API landing evidence has invalid task or execution ordering", exception);
+        }
+        if (
+            (dataset.getSourceId() != null && !dataset.getSourceId().equals(evidenceConnectionId)) ||
+            !"SUCCESS".equalsIgnoreCase(executionStatus) ||
+            !"VERIFIED".equalsIgnoreCase(landingTruth) ||
+            !"SUCCESS".equalsIgnoreCase(landingStatus)
+        ) {
+            throw new IllegalStateException("API landing evidence is not verified successful");
+        }
+        return String.join(
+            "\u0000",
+            "api-connection=" + connectionId,
+            "api-task=" + taskId,
+            "api-task-revision=" + taskRevision,
+            "api-resource=" + resourceId,
+            "api-execution-sequence=" + executionSequence,
+            "api-execution=" + executionId,
+            "api-execution-status=SUCCESS",
+            "api-landing-status=SUCCESS",
+            "api-config=" + configChecksum,
+            "api-field-snapshot=" + fieldSnapshotChecksum
+        );
+    }
+
+    private String requiredApiEvidence(String key, Map<String, String> tableTags, Map<String, String> datasetTags) {
+        String value = consistentEvidenceValue(key, tableTags, datasetTags);
+        if (isBlank(value)) {
+            throw new IllegalStateException("API landing evidence is missing " + key);
+        }
+        return value;
+    }
+
+    private String consistentEvidenceValue(String key, Map<String, String> tableTags, Map<String, String> datasetTags) {
+        String tableValue = tableTags.get(key);
+        String datasetValue = datasetTags.get(key);
+        if (!isBlank(tableValue) && !isBlank(datasetValue) && !tableValue.equals(datasetValue)) {
+            throw new IllegalStateException("API landing evidence conflicts for " + key);
+        }
+        return firstNonBlank(tableValue, datasetValue);
+    }
+
+    private Map<String, String> tagValues(String tags) {
+        if (isBlank(tags)) {
+            return Map.of();
+        }
+        Map<String, String> values = new java.util.LinkedHashMap<>();
+        for (String entry : tags.split(";")) {
+            int separator = entry.indexOf('=');
+            if (separator <= 0) {
+                continue;
+            }
+            String key = entry.substring(0, separator).trim();
+            String value = entry.substring(separator + 1).trim();
+            if (!key.isEmpty() && !value.isEmpty()) {
+                values.put(key, value);
+            }
+        }
+        return values;
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (!isBlank(value)) {
+                return value.trim();
+            }
+        }
+        return null;
     }
 
     private static String sha256(String value) {

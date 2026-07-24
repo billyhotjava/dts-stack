@@ -167,6 +167,17 @@ public class ModelingVNextApplicationService {
         String status
     ) {}
 
+    private record DbtImplementationIdentity(
+        UUID id,
+        int modelRevision,
+        String modelChecksum,
+        int implementationRevision,
+        String implementationChecksum,
+        String projectKey,
+        String dbtUniqueId,
+        String materialization
+    ) {}
+
     public record LineageView(
         String modelSpecId,
         List<Map<String, String>> nodes,
@@ -461,31 +472,59 @@ public class ModelingVNextApplicationService {
         if (model == null) throw new DomainException("MODEL_OBJECT_NOT_FOUND", "ModelSpec 不存在");
         if (model.revision() != revision) throw new DomainException("MODEL_REVISION_CONFLICT", "ModelSpec revision 不匹配");
         ModelIdentity identity = requireIdentity(tenantId, id, revision, null);
+        if ("DBT_MANAGED".equals(identity.implementationMode())) {
+            return new CompileResult(
+                model.id(),
+                model.revision(),
+                "FAILED",
+                List.of(),
+                List.of("DBT_MANAGED_ARTIFACT_REQUIRED")
+            );
+        }
         try {
             ModelingDbtCompiler.CompiledArtifacts artifacts = ModelingDbtCompiler.compile(model);
             List<Artifact> persisted = new ArrayList<>();
+            String dbtUniqueId = "model.dts_modeling.model_" + identity.id().toString().replace("-", "_");
             for (Map.Entry<String, String> entry : artifacts.files().entrySet()) {
                 String type = artifactType(entry.getKey());
                 String path = artifacts.outputDirectory() + "/" + entry.getKey();
                 String content = entry.getValue();
+                String artifactKey = type + ":" + path;
                 int changed = jdbcTemplate.update(
                     """
                     insert into modeling_dbt_artifact (
-                        id, model_spec_id, plan_id, project_key, dbt_unique_id, artifact_type, path,
+                        id, model_spec_id, plan_id, project_key, dbt_unique_id, artifact_key, artifact_type, path,
                         content_checksum, content, status, revision, model_checksum, ownership,
-                        idempotency_key, created_date, last_modified_date
-                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'COMPILED', ?, ?, ?, ?, ?, ?)
-                    on conflict (model_spec_id, revision, dbt_unique_id) do update
+                        idempotency_key, implementation_revision, node_kind, materialization, created_date, last_modified_date
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'COMPILED', ?, ?, ?, ?, 1, 'MODEL', ?, ?, ?)
+                    on conflict (model_spec_id, revision, artifact_key) do update
                        set path = excluded.path, content_checksum = excluded.content_checksum,
                            content = excluded.content, status = excluded.status,
                            model_checksum = excluded.model_checksum, ownership = excluded.ownership,
                            idempotency_key = excluded.idempotency_key,
+                           dbt_unique_id = excluded.dbt_unique_id,
+                           node_kind = excluded.node_kind,
+                           materialization = excluded.materialization,
                            last_modified_date = excluded.last_modified_date
                      where modeling_dbt_artifact.model_checksum = excluded.model_checksum
                     """,
-                    UUID.randomUUID(), identity.id(), identity.planId(), "dts-modeling", "model." + model.id() + "." + entry.getKey(),
-                    type, path, checksum(content), content, model.revision(), identity.modelChecksum(), identity.implementationMode(),
-                    idempotencyKey, Timestamp.from(Instant.now()), Timestamp.from(Instant.now())
+                    UUID.randomUUID(),
+                    identity.id(),
+                    identity.planId(),
+                    "dts-modeling",
+                    dbtUniqueId,
+                    artifactKey,
+                    type,
+                    path,
+                    checksum(content),
+                    content,
+                    model.revision(),
+                    identity.modelChecksum(),
+                    identity.implementationMode(),
+                    idempotencyKey,
+                    model.materialization(),
+                    Timestamp.from(Instant.now()),
+                    Timestamp.from(Instant.now())
                 );
                 if (changed == 0) {
                     throw new DomainException("MODEL_ARTIFACT_REVISION_CONFLICT", "Artifact ownership or checksum changed");
@@ -508,14 +547,26 @@ public class ModelingVNextApplicationService {
         if (!"DBT_MANAGED".equals(identity.implementationMode())) {
             throw new DomainException("MODEL_IMPLEMENTATION_OWNERSHIP_MISMATCH", "dbt import requires a DBT_MANAGED ModelSpec");
         }
+        DbtImplementationIdentity implementation = requireDbtImplementation(
+            tenantId,
+            identity,
+            request,
+            model.uniqueId()
+        );
         Boolean ownedElsewhere = jdbcTemplate.queryForObject(
             """
             select exists (
-                select 1 from modeling_dbt_artifact
-                 where project_key = ? and dbt_unique_id = ? and model_spec_id <> ?
+                select 1
+                  from modeling_dbt_artifact a
+                  join modeling_model_spec s on s.id = a.model_spec_id
+                 where s.tenant_id = ?
+                   and a.project_key = ?
+                   and a.dbt_unique_id = ?
+                   and a.model_spec_id <> ?
             )
             """,
             Boolean.class,
+            normalizeTenant(tenantId),
             request.projectId(),
             model.uniqueId(),
             identity.id()
@@ -523,30 +574,117 @@ public class ModelingVNextApplicationService {
         if (Boolean.TRUE.equals(ownedElsewhere)) {
             throw new DomainException("MODEL_IMPLEMENTATION_DBT_CONFLICT", "dbt node is already owned by another ModelSpec");
         }
-        Instant now = Instant.now();
-        int changed = jdbcTemplate.update(
-            """
-            insert into modeling_dbt_artifact (
-                id, model_spec_id, plan_id, project_key, dbt_unique_id, artifact_type, path,
-                content_checksum, content, status, revision, model_checksum, ownership,
-                idempotency_key, created_date, last_modified_date
-            ) values (?, ?, ?, ?, ?, 'SQL', ?, ?, ?, 'COMPILED', ?, ?, 'DBT_MANAGED', ?, ?, ?)
-            on conflict (model_spec_id, revision, dbt_unique_id) do update
-               set content_checksum = excluded.content_checksum, content = excluded.content,
-                   status = excluded.status, model_checksum = excluded.model_checksum,
-                   ownership = excluded.ownership, idempotency_key = excluded.idempotency_key,
-                   last_modified_date = excluded.last_modified_date
-             where modeling_dbt_artifact.model_checksum = excluded.model_checksum
-               and modeling_dbt_artifact.ownership = 'DBT_MANAGED'
-            """,
-            UUID.randomUUID(), identity.id(), identity.planId(), request.projectId(), model.uniqueId(),
-            model.uniqueId() + ".sql", model.contentChecksum(), model.sql(), identity.revision(), identity.modelChecksum(),
-            request.idempotencyKey(), Timestamp.from(now), Timestamp.from(now)
+        String schema = writeJson(
+            Map.of(
+                "manifestVersion",
+                request.manifestVersion(),
+                "dbtUniqueId",
+                model.uniqueId(),
+                "modelName",
+                model.name(),
+                "fields",
+                model.fields()
+            )
         );
-        if (changed == 0) {
-            throw new DomainException("MODEL_ARTIFACT_REVISION_CONFLICT", "dbt artifact ownership or checksum changed");
+        List<Map<String, String>> artifacts = List.of(
+            Map.of("type", "SQL", "path", model.name() + ".sql", "content", model.sql(), "checksum", model.contentChecksum()),
+            Map.of("type", "SCHEMA", "path", model.name() + ".schema.json", "content", schema, "checksum", checksum(schema))
+        );
+        Instant now = Instant.now();
+        for (Map<String, String> artifact : artifacts) {
+            String artifactKey = artifact.get("type") + ":" + artifact.get("path");
+            int changed = jdbcTemplate.update(
+                """
+                insert into modeling_dbt_artifact (
+                    id, model_spec_id, plan_id, project_key, dbt_unique_id, artifact_key, artifact_type, path,
+                    content_checksum, content, status, revision, model_checksum, ownership,
+                    idempotency_key, implementation_revision, node_kind, materialization,
+                    created_date, last_modified_date
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'COMPILED', ?, ?, 'DBT_MANAGED', ?, ?, 'MODEL', ?, ?, ?)
+                on conflict (model_spec_id, revision, artifact_key) do update
+                   set idempotency_key = excluded.idempotency_key,
+                       last_modified_date = excluded.last_modified_date
+                 where modeling_dbt_artifact.model_checksum = excluded.model_checksum
+                   and modeling_dbt_artifact.ownership = 'DBT_MANAGED'
+                   and modeling_dbt_artifact.implementation_revision = excluded.implementation_revision
+                   and modeling_dbt_artifact.dbt_unique_id = excluded.dbt_unique_id
+                   and modeling_dbt_artifact.content_checksum = excluded.content_checksum
+                   and modeling_dbt_artifact.content = excluded.content
+                   and modeling_dbt_artifact.node_kind = excluded.node_kind
+                   and modeling_dbt_artifact.materialization = excluded.materialization
+                """,
+                UUID.randomUUID(),
+                identity.id(),
+                identity.planId(),
+                implementation.projectKey(),
+                implementation.dbtUniqueId(),
+                artifactKey,
+                artifact.get("type"),
+                artifact.get("path"),
+                artifact.get("checksum"),
+                artifact.get("content"),
+                identity.revision(),
+                identity.modelChecksum(),
+                request.idempotencyKey(),
+                implementation.implementationRevision(),
+                implementation.materialization(),
+                Timestamp.from(now),
+                Timestamp.from(now)
+            );
+            if (changed == 0) {
+                throw new DomainException("MODEL_ARTIFACT_REVISION_CONFLICT", "dbt artifact ownership or checksum changed");
+            }
         }
-        return new DbtModelingContract.ImportResult(identity.id().toString(), model.uniqueId(), "COMPILED", 1);
+        return new DbtModelingContract.ImportResult(identity.id().toString(), model.uniqueId(), "COMPILED", artifacts.size());
+    }
+
+    private DbtImplementationIdentity requireDbtImplementation(
+        String tenantId,
+        ModelIdentity model,
+        DbtModelingContract.ManifestImportRequest request,
+        String dbtUniqueId
+    ) {
+        DbtImplementationIdentity implementation;
+        try {
+            implementation = jdbcTemplate.queryForObject(
+                """
+                select id, model_revision, model_checksum, implementation_revision,
+                       current_implementation_checksum, project_key, dbt_unique_id, materialization
+                  from modeling_model_implementation
+                 where tenant_id = ? and model_spec_id = ? and status = 'ACTIVE'
+                 for share
+                """,
+                (row, number) -> new DbtImplementationIdentity(
+                    row.getObject("id", UUID.class),
+                    row.getInt("model_revision"),
+                    row.getString("model_checksum"),
+                    row.getInt("implementation_revision"),
+                    row.getString("current_implementation_checksum"),
+                    row.getString("project_key"),
+                    row.getString("dbt_unique_id"),
+                    row.getString("materialization")
+                ),
+                normalizeTenant(tenantId),
+                model.id()
+            );
+        } catch (EmptyResultDataAccessException exception) {
+            throw new DomainException("MODEL_IMPLEMENTATION_REQUIRED", "DBT-managed implementation must be claimed before import");
+        }
+        if (
+            implementation == null ||
+            implementation.modelRevision() != model.revision() ||
+            !model.modelChecksum().equals(implementation.modelChecksum()) ||
+            implementation.implementationRevision() != request.implementationRevision() ||
+            !implementation.implementationChecksum().equals(request.implementationChecksum()) ||
+            !implementation.projectKey().equals(request.projectId()) ||
+            !implementation.dbtUniqueId().equals(dbtUniqueId)
+        ) {
+            throw new DomainException(
+                "MODEL_IMPLEMENTATION_REVISION_CONFLICT",
+                "DBT import does not match the current claimed implementation"
+            );
+        }
+        return implementation;
     }
 
     @Transactional(readOnly = true)

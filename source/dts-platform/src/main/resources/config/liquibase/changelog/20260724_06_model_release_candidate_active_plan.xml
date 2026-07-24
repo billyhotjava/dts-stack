@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260724-06-model-release-candidate-active-plan" author="codex" dbms="postgresql">
+        <preConditions
+            onFail="HALT"
+            onFailMessage="Duplicate active release candidates must be resolved before applying the active-plan constraint">
+            <tableExists tableName="modeling_model_release_candidate"/>
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT count(*)
+                  FROM (
+                        SELECT tenant_id, plan_id
+                          FROM modeling_model_release_candidate
+                         WHERE status NOT IN ('REJECTED', 'ROLLED_BACK', 'STALE')
+                         GROUP BY tenant_id, plan_id
+                        HAVING count(*) > 1
+                       ) duplicate_active_plan
+            ]]></sqlCheck>
+        </preConditions>
+        <comment>Allow at most one non-terminal release candidate per tenant and warehouse plan.</comment>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            CREATE UNIQUE INDEX uk_model_release_candidate_active_plan
+                ON modeling_model_release_candidate (tenant_id, plan_id)
+                WHERE status NOT IN ('REJECTED', 'ROLLED_BACK', 'STALE');
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    LOCK TABLE modeling_model_release_candidate IN ACCESS EXCLUSIVE MODE;
+                    IF EXISTS (SELECT 1 FROM modeling_model_release_candidate) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_RELEASE_CANDIDATE_DATA_EXISTS';
+                    END IF;
+                END $$;
+            ]]></sql>
+            <dropIndex
+                tableName="modeling_model_release_candidate"
+                indexName="uk_model_release_candidate_active_plan"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

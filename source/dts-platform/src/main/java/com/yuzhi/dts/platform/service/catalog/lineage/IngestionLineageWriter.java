@@ -14,6 +14,7 @@ import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetGovernancePolicy;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,6 +30,7 @@ import org.springframework.util.StringUtils;
 public class IngestionLineageWriter {
 
     public static final String RELATION_ADDAX = "ADDAX";
+    public static final String RELATION_API = "API";
     public static final String STATUS_DECLARED = "DECLARED";
     public static final String STATUS_VERIFIED = "VERIFIED";
     public static final String STATUS_KNOWN_UNVERIFIED = "KNOWN_UNVERIFIED";
@@ -102,30 +104,47 @@ public class IngestionLineageWriter {
 
     @Transactional
     public LineageWriteResult writeAddaxLineage(InfraOdsTableMapping mapping, LineageObservation observation) {
+        return writeIngestionLineage(mapping, observation, RELATION_ADDAX);
+    }
+
+    @Transactional
+    public LineageWriteResult writeIngestionLineage(
+        InfraOdsTableMapping mapping,
+        LineageObservation observation,
+        String origin
+    ) {
         if (!isWritable(mapping)) {
             return LineageWriteResult.skipped("invalid-mapping");
         }
+        String effectiveOrigin = normalizeOrigin(origin);
         LineageObservation effectiveObservation = observation == null ? LineageObservation.declared() : observation;
+        if (RELATION_API.equals(effectiveOrigin) && !isVerifiedSuccessfulApiObservation(effectiveObservation)) {
+            return LineageWriteResult.skipped("api-execution-unverified");
+        }
         InfraDataSource source = mapping.getConnectionId() == null
             ? null
             : dataSourceRepository.findById(mapping.getConnectionId()).orElse(null);
-        DatasetResolveResult sourceDataset = ensureSourceDataset(mapping, source);
-        DatasetResolveResult odsDataset = ensureOdsDataset(mapping, source);
+        DatasetResolveResult sourceDataset = RELATION_API.equals(effectiveOrigin)
+            ? ensureApiSourceDataset(mapping, source)
+            : ensureSourceDataset(mapping, source, effectiveOrigin);
+        DatasetResolveResult odsDataset = RELATION_API.equals(effectiveOrigin)
+            ? ensureApiOdsDataset(mapping, source)
+            : ensureOdsDataset(mapping, source, effectiveOrigin);
         if (sourceDataset.dataset() == null || sourceDataset.dataset().getId() == null || odsDataset.dataset() == null || odsDataset.dataset().getId() == null) {
             return LineageWriteResult.skipped("dataset-unresolved");
         }
         if (sourceDataset.dataset().getId().equals(odsDataset.dataset().getId())) {
             return LineageWriteResult.skipped("same-dataset");
         }
-        CatalogLineageJob lineageJob = upsertAddaxJob(mapping, source, effectiveObservation);
+        CatalogLineageJob lineageJob = upsertIngestionJob(mapping, source, effectiveObservation, effectiveOrigin);
         Optional<CatalogDatasetLineage> existing = lineageRepository.findFirstByUpstreamDatasetIdAndDownstreamDatasetIdAndRelationTypeIgnoreCaseAndValidToIsNull(
             sourceDataset.dataset().getId(),
             odsDataset.dataset().getId(),
-            RELATION_ADDAX
+            effectiveOrigin
         );
         if (existing.isPresent()) {
             CatalogDatasetLineage link = existing.orElseThrow();
-            link.setNotes(buildNotes(mapping, source, effectiveObservation, sourceDataset.dataset(), odsDataset.dataset()));
+            link.setNotes(buildNotes(mapping, source, effectiveObservation, sourceDataset.dataset(), odsDataset.dataset(), effectiveOrigin));
             link.setUpstreamAssetType("EXTERNAL_TABLE");
             link.setDownstreamAssetType("DATASET");
             link.setDirection("UPSTREAM_TO_DOWNSTREAM");
@@ -141,7 +160,7 @@ public class IngestionLineageWriter {
         CatalogDatasetLineage link = new CatalogDatasetLineage();
         link.setUpstreamDatasetId(sourceDataset.dataset().getId());
         link.setDownstreamDatasetId(odsDataset.dataset().getId());
-        link.setRelationType(RELATION_ADDAX);
+        link.setRelationType(effectiveOrigin);
         link.setUpstreamAssetType("EXTERNAL_TABLE");
         link.setDownstreamAssetType("DATASET");
         link.setDirection("UPSTREAM_TO_DOWNSTREAM");
@@ -149,13 +168,141 @@ public class IngestionLineageWriter {
         if (lineageJob != null) {
             link.setLineageJobId(lineageJob.getId());
         }
-        link.setNotes(buildNotes(mapping, source, effectiveObservation, sourceDataset.dataset(), odsDataset.dataset()));
+        link.setNotes(buildNotes(mapping, source, effectiveObservation, sourceDataset.dataset(), odsDataset.dataset(), effectiveOrigin));
         applyObservation(link, effectiveObservation);
         if (link.getValidFrom() == null) {
             link.setValidFrom(effectiveObservation.observedAt() == null ? Instant.now() : effectiveObservation.observedAt());
         }
         lineageRepository.save(link);
         return new LineageWriteResult(1, 0, 0, sourceDataset.created() + odsDataset.created(), 1, "created");
+    }
+
+    private boolean isVerifiedSuccessfulApiObservation(LineageObservation observation) {
+        return (
+            observation != null &&
+            STATUS_VERIFIED.equalsIgnoreCase(observation.verificationStatus()) &&
+            "SUCCESS".equalsIgnoreCase(observation.executionStatus()) &&
+            StringUtils.hasText(observation.executionId())
+        );
+    }
+
+    private DatasetResolveResult ensureApiSourceDataset(InfraOdsTableMapping mapping, InfraDataSource source) {
+        ApiAssetIdentity identity = apiAssetIdentity(mapping);
+        if (identity == null) {
+            return new DatasetResolveResult(null, 0);
+        }
+        UUID datasetId = apiSourceDatasetId(identity);
+        CatalogDataset dataset = datasetRepository.findById(datasetId).orElse(null);
+        boolean created = dataset == null;
+        if (dataset == null) {
+            dataset = new CatalogDataset();
+            dataset.setId(datasetId);
+        } else if (!matchesApiSourceBinding(dataset, identity)) {
+            return new DatasetResolveResult(null, 0);
+        }
+        dataset.setName(truncate(sourceLabel(mapping, source), 128));
+        dataset.setType("EXTERNAL_TABLE");
+        dataset.setSourceId(identity.connectionId());
+        dataset.setHiveDatabase(identity.namespace());
+        dataset.setHiveTable(identity.resourceId());
+        dataset.setWarehouseLayer(LAYER_SOURCE);
+        if (!StringUtils.hasText(dataset.getLifecycleStatus())) {
+            dataset.setLifecycleStatus(CatalogAssetGovernancePolicy.lifecycleForDiscoveredAsset());
+        }
+        dataset.setOwner(mapping.getOwner());
+        dataset.setOwnerDept(firstNonBlank(mapping.getOwnerDept(), source != null ? source.getOwnerDept() : null));
+        dataset.setDescription(
+            truncate("API landing source: " + physicalName(identity.namespace(), identity.resourceId()), 2048)
+        );
+        dataset.setSnapshotTime(Instant.now());
+        return new DatasetResolveResult(datasetRepository.save(dataset), created ? 1 : 0);
+    }
+
+    private DatasetResolveResult ensureApiOdsDataset(InfraOdsTableMapping mapping, InfraDataSource source) {
+        ApiAssetIdentity identity = apiAssetIdentity(mapping);
+        if (identity == null) {
+            return new DatasetResolveResult(null, 0);
+        }
+        UUID datasetId = apiOdsDatasetId(identity);
+        if (mapping.getDatasetId() != null && !datasetId.equals(mapping.getDatasetId())) {
+            return new DatasetResolveResult(null, 0);
+        }
+        CatalogDataset dataset = datasetRepository.findById(datasetId).orElse(null);
+        boolean created = dataset == null;
+        if (dataset == null) {
+            dataset = new CatalogDataset();
+            dataset.setId(datasetId);
+        } else if (!matchesApiOdsBinding(dataset, mapping, identity)) {
+            return new DatasetResolveResult(null, 0);
+        }
+        dataset.setName(truncate(mapping.getOdsTable(), 128));
+        dataset.setType("DATASET");
+        dataset.setSourceId(identity.connectionId());
+        dataset.setHiveDatabase(defaultIfBlank(mapping.getOdsSchema(), "ods"));
+        dataset.setHiveTable(mapping.getOdsTable());
+        dataset.setWarehouseLayer(LAYER_ODS);
+        if (!StringUtils.hasText(dataset.getLifecycleStatus())) {
+            dataset.setLifecycleStatus(CatalogAssetGovernancePolicy.lifecycleForDiscoveredAsset());
+        }
+        dataset.setOwner(mapping.getOwner());
+        dataset.setOwnerDept(firstNonBlank(mapping.getOwnerDept(), source != null ? source.getOwnerDept() : null));
+        if (!StringUtils.hasText(dataset.getDescription())) {
+            dataset.setDescription(
+                truncate("ODS table loaded by API landing: " + physicalName(mapping.getOdsSchema(), mapping.getOdsTable()), 2048)
+            );
+        }
+        dataset.setSnapshotTime(Instant.now());
+        return new DatasetResolveResult(datasetRepository.save(dataset), created ? 1 : 0);
+    }
+
+    private ApiAssetIdentity apiAssetIdentity(InfraOdsTableMapping mapping) {
+        if (mapping == null || mapping.getConnectionId() == null || !StringUtils.hasText(mapping.getStreamName())) {
+            return null;
+        }
+        String namespace = defaultIfBlank(mapping.getStreamNamespace(), "");
+        if (!namespace.startsWith("api:") || namespace.length() <= "api:".length()) {
+            return null;
+        }
+        String taskId = namespace.substring("api:".length()).trim();
+        if (!StringUtils.hasText(taskId)) {
+            return null;
+        }
+        return new ApiAssetIdentity(mapping.getConnectionId(), taskId, namespace, mapping.getStreamName().trim());
+    }
+
+    private boolean matchesApiSourceBinding(CatalogDataset dataset, ApiAssetIdentity identity) {
+        return (
+            dataset != null &&
+            apiSourceDatasetId(identity).equals(dataset.getId()) &&
+            (dataset.getSourceId() == null || identity.connectionId().equals(dataset.getSourceId())) &&
+            (!StringUtils.hasText(dataset.getHiveDatabase()) || identity.namespace().equalsIgnoreCase(dataset.getHiveDatabase())) &&
+            (!StringUtils.hasText(dataset.getHiveTable()) || identity.resourceId().equalsIgnoreCase(dataset.getHiveTable()))
+        );
+    }
+
+    private boolean matchesApiOdsBinding(CatalogDataset dataset, InfraOdsTableMapping mapping, ApiAssetIdentity identity) {
+        String schema = defaultIfBlank(mapping.getOdsSchema(), "ods");
+        return (
+            dataset != null &&
+            apiOdsDatasetId(identity).equals(dataset.getId()) &&
+            (dataset.getSourceId() == null || identity.connectionId().equals(dataset.getSourceId())) &&
+            (!StringUtils.hasText(dataset.getHiveDatabase()) || schema.equalsIgnoreCase(dataset.getHiveDatabase())) &&
+            (!StringUtils.hasText(dataset.getHiveTable()) || mapping.getOdsTable().equalsIgnoreCase(dataset.getHiveTable()))
+        );
+    }
+
+    private UUID apiSourceDatasetId(ApiAssetIdentity identity) {
+        return deterministicApiAssetId("api-source-dataset", identity);
+    }
+
+    private UUID apiOdsDatasetId(ApiAssetIdentity identity) {
+        return deterministicApiAssetId("api-landing-dataset", identity);
+    }
+
+    private UUID deterministicApiAssetId(String prefix, ApiAssetIdentity identity) {
+        String value =
+            prefix + ":" + identity.connectionId() + ":api:" + identity.taskId() + ":" + identity.resourceId();
+        return UUID.nameUUIDFromBytes(value.getBytes(StandardCharsets.UTF_8));
     }
 
     @Transactional
@@ -182,23 +329,28 @@ public class IngestionLineageWriter {
         return 1;
     }
 
-    private CatalogLineageJob upsertAddaxJob(InfraOdsTableMapping mapping, InfraDataSource source, LineageObservation observation) {
-        String jobKey = addaxJobKey(mapping);
+    private CatalogLineageJob upsertIngestionJob(
+        InfraOdsTableMapping mapping,
+        InfraDataSource source,
+        LineageObservation observation,
+        String origin
+    ) {
+        String jobKey = ingestionJobKey(mapping, origin);
         if (!StringUtils.hasText(jobKey)) {
             return null;
         }
         CatalogLineageJob job = lineageJobRepository.findByJobKey(jobKey).orElseGet(CatalogLineageJob::new);
         job.setJobKey(jobKey);
         job.setName(truncate(defaultIfBlank(resolveTaskName(mapping), mappingLabel(mapping)), 256));
-        job.setJobType("ADDAX_TASK");
-        job.setEngine(RELATION_ADDAX);
-        job.setRelationType(RELATION_ADDAX);
+        job.setJobType(RELATION_API.equals(origin) ? "API_TASK" : "ADDAX_TASK");
+        job.setEngine(origin);
+        job.setRelationType(origin);
         job.setProjectName(resolveTaskName(mapping));
         job.setSourceId(mapping.getConnectionId());
         job.setOwnerDept(firstNonBlank(mapping.getOwnerDept(), source != null ? source.getOwnerDept() : null));
         job.setExternalId(mapping.getId() != null ? mapping.getId().toString() : null);
         applyJobObservation(job, observation);
-        job.setDetailPayload(buildJobDetail(mapping, source));
+        job.setDetailPayload(buildJobDetail(mapping, source, origin));
         return lineageJobRepository.save(job);
     }
 
@@ -233,9 +385,9 @@ public class IngestionLineageWriter {
         }
     }
 
-    private String buildJobDetail(InfraOdsTableMapping mapping, InfraDataSource source) {
+    private String buildJobDetail(InfraOdsTableMapping mapping, InfraDataSource source, String origin) {
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("engine", RELATION_ADDAX);
+        data.put("engine", origin);
         data.put("mappingId", mapping.getId() != null ? mapping.getId().toString() : null);
         data.put("sourceDataSourceId", mapping.getConnectionId() != null ? mapping.getConnectionId().toString() : null);
         data.put("sourceName", source != null ? source.getName() : null);
@@ -245,7 +397,7 @@ public class IngestionLineageWriter {
         return data.toString();
     }
 
-    private DatasetResolveResult ensureSourceDataset(InfraOdsTableMapping mapping, InfraDataSource source) {
+    private DatasetResolveResult ensureSourceDataset(InfraOdsTableMapping mapping, InfraDataSource source, String origin) {
         Optional<CatalogDataset> existing = findSourceDataset(mapping);
         if (existing.isPresent()) {
             return new DatasetResolveResult(existing.orElseThrow(), 0);
@@ -260,12 +412,19 @@ public class IngestionLineageWriter {
         dataset.setLifecycleStatus(CatalogAssetGovernancePolicy.lifecycleForDiscoveredAsset());
         dataset.setOwner(mapping.getOwner());
         dataset.setOwnerDept(firstNonBlank(mapping.getOwnerDept(), source != null ? source.getOwnerDept() : null));
-        dataset.setDescription(truncate("External source table imported from Addax mapping: " + physicalName(mapping.getStreamNamespace(), mapping.getStreamName()), 2048));
+        dataset.setDescription(
+            truncate(
+                RELATION_API.equals(origin)
+                    ? "API landing source: " + physicalName(mapping.getStreamNamespace(), mapping.getStreamName())
+                    : "External source table imported from Addax mapping: " + physicalName(mapping.getStreamNamespace(), mapping.getStreamName()),
+                2048
+            )
+        );
         dataset.setSnapshotTime(Instant.now());
         return new DatasetResolveResult(datasetRepository.save(dataset), 1);
     }
 
-    private DatasetResolveResult ensureOdsDataset(InfraOdsTableMapping mapping, InfraDataSource source) {
+    private DatasetResolveResult ensureOdsDataset(InfraOdsTableMapping mapping, InfraDataSource source, String origin) {
         Optional<CatalogDataset> existing = findOdsDataset(mapping);
         if (existing.isPresent()) {
             CatalogDataset dataset = existing.orElseThrow();
@@ -299,7 +458,14 @@ public class IngestionLineageWriter {
         dataset.setLifecycleStatus(CatalogAssetGovernancePolicy.lifecycleForDiscoveredAsset());
         dataset.setOwner(mapping.getOwner());
         dataset.setOwnerDept(firstNonBlank(mapping.getOwnerDept(), source != null ? source.getOwnerDept() : null));
-        dataset.setDescription(truncate("ODS table loaded by Addax mapping: " + physicalName(mapping.getOdsSchema(), mapping.getOdsTable()), 2048));
+        dataset.setDescription(
+            truncate(
+                RELATION_API.equals(origin)
+                    ? "ODS table loaded by API landing: " + physicalName(mapping.getOdsSchema(), mapping.getOdsTable())
+                    : "ODS table loaded by Addax mapping: " + physicalName(mapping.getOdsSchema(), mapping.getOdsTable()),
+                2048
+            )
+        );
         dataset.setSnapshotTime(Instant.now());
         return new DatasetResolveResult(datasetRepository.save(dataset), 1);
     }
@@ -381,10 +547,14 @@ public class IngestionLineageWriter {
         InfraDataSource source,
         LineageObservation observation,
         CatalogDataset sourceDataset,
-        CatalogDataset targetDataset
+        CatalogDataset targetDataset,
+        String origin
     ) {
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("engine", RELATION_ADDAX);
+        data.put("engine", origin);
+        if (RELATION_API.equals(origin)) {
+            data.put("origin", RELATION_API);
+        }
         data.put("mappingId", mapping.getId() != null ? mapping.getId().toString() : null);
         data.put("sourceDataSourceId", mapping.getConnectionId() != null ? mapping.getConnectionId().toString() : null);
         data.put("sourceName", source != null ? source.getName() : null);
@@ -450,20 +620,28 @@ public class IngestionLineageWriter {
         return source + " -> " + target;
     }
 
-    private String addaxJobKey(InfraOdsTableMapping mapping) {
+    private String ingestionJobKey(InfraOdsTableMapping mapping, String origin) {
         if (mapping == null) {
             return null;
         }
         if (mapping.getId() != null) {
-            return "ADDAX:" + mapping.getId();
+            return origin + ":" + mapping.getId();
         }
         return truncate(
-            "ADDAX:" +
+            origin + ":" +
             safeKeyPart(mapping.getConnectionId() != null ? mapping.getConnectionId().toString() : "unknown") + ":" +
             safeKeyPart(physicalName(mapping.getStreamNamespace(), mapping.getStreamName())) + "->" +
             safeKeyPart(physicalName(mapping.getOdsSchema(), mapping.getOdsTable())),
             256
         );
+    }
+
+    private String addaxJobKey(InfraOdsTableMapping mapping) {
+        return ingestionJobKey(mapping, RELATION_ADDAX);
+    }
+
+    private String normalizeOrigin(String origin) {
+        return RELATION_API.equalsIgnoreCase(origin) ? RELATION_API : RELATION_ADDAX;
     }
 
     private String safeKeyPart(String value) {
@@ -507,6 +685,8 @@ public class IngestionLineageWriter {
     }
 
     private record DatasetResolveResult(CatalogDataset dataset, int created) {}
+
+    private record ApiAssetIdentity(UUID connectionId, String taskId, String namespace, String resourceId) {}
 
     public record LineageObservation(
         String verificationStatus,

@@ -17,12 +17,17 @@ import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ArtifactVi
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.EventType;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.LifecycleEventView;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.GeneratedInput;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.InputMode;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.SaveImplementationCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.RegistrationStep;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.RegistrationStepView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.TestEvidenceCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.ExpectedVersion;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ExpectedImplementationVersion;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -39,6 +44,60 @@ class ModelLifecycleServiceTest {
     private static final UUID PLAN_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
     private static final String CHECKSUM = "a".repeat(64);
     private static final Instant NOW = Instant.parse("2026-07-20T08:00:00Z");
+
+    @Test
+    void validationReturnsStableInputKindErrorBeforeSaving() {
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository modelSpecRepository = mock(ModelSpecRepository.class);
+        ModelLifecycleRepository lifecycle = mock(ModelLifecycleRepository.class);
+        ModelSpecPlanWriteAccessPort writeAccess = mock(ModelSpecPlanWriteAccessPort.class);
+        ModelSpecView model = mock(ModelSpecView.class);
+        when(model.id()).thenReturn(MODEL_ID);
+        when(model.planId()).thenReturn(PLAN_ID);
+        when(model.revision()).thenReturn(7);
+        when(model.checksum()).thenReturn(CHECKSUM);
+        when(model.modelType()).thenReturn(ModelType.FACT);
+        when(model.implementationMode()).thenReturn(ImplementationMode.DESIGNER_GENERATED);
+        when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
+        when(modelSpecRepository.lockPlan("tenant-a", PLAN_ID)).thenReturn(Optional.of(new PlanState(PLAN_ID, "DRAFT")));
+        when(writeAccess.canMaintain("tenant-a", PLAN_ID, "alice")).thenReturn(true);
+        ModelImplementationCompatibilityAdapter adapter = new ModelImplementationCompatibilityAdapter(
+            modelSpecs, modelSpecRepository, lifecycle, mock(ModelSpecSourceValidationPort.class)
+        );
+        ModelLifecycleService service = new ModelLifecycleService(
+            modelSpecs,
+            modelSpecRepository,
+            lifecycle,
+            mock(ModelSpecStageGateService.class),
+            writeAccess,
+            mock(ModelLifecycleCompilerPort.class),
+            mock(ModelReleaseRegistrationPort.class),
+            mock(ModelLifecycleTestEvidencePort.class),
+            mock(ModelLifecyclePublicationService.class),
+            mock(ModelingVNextApplicationService.class),
+            adapter,
+            Clock.fixed(NOW, ZoneOffset.UTC)
+        );
+
+        ModelLifecycleService.ImplementationValidationView result = service.validateImplementation(
+            "tenant-a",
+            "alice",
+            MODEL_ID,
+            new ExpectedVersion(MODEL_ID, 7, CHECKSUM),
+            new SaveImplementationCommand(
+                InputMode.GENERATED,
+                List.of(new GeneratedInput("DATE_DIMENSION", Map.of())),
+                List.of(),
+                Map.of(),
+                ImplementationMode.DESIGNER_GENERATED,
+                "table",
+                "validate-fact-generated"
+            )
+        );
+
+        assertThat(result).extracting(ModelLifecycleService.ImplementationValidationView::code)
+            .isEqualTo("MODEL_IMPLEMENTATION_INPUT_KIND_NOT_ALLOWED");
+    }
 
     @Test
     void recordsTestStatusFromPersistedDbtRunInsteadOfClientAssertion() {
@@ -74,13 +133,26 @@ class ModelLifecycleServiceTest {
         when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
         when(modelSpecRepository.lockPlan("tenant-a", PLAN_ID)).thenReturn(Optional.of(new PlanState(PLAN_ID, "DRAFT")));
         when(writeAccess.canMaintain("tenant-a", PLAN_ID, "alice")).thenReturn(true);
-        when(lifecycle.findImplementation("tenant-a", MODEL_ID)).thenReturn(Optional.of(
-            new ImplementationView(UUID.randomUUID(), MODEL_ID, PLAN_ID, 7, CHECKSUM, ImplementationMode.DBT_MANAGED, "pjm", "model.pjm.fact", "ACTIVE")
-        ));
+        ImplementationView owner = new ImplementationView(
+            UUID.randomUUID(), MODEL_ID, PLAN_ID, 7, CHECKSUM, ImplementationMode.DBT_MANAGED, "pjm", "model.pjm.fact", "ACTIVE"
+        );
+        when(lifecycle.findImplementation("tenant-a", MODEL_ID)).thenReturn(Optional.of(owner));
+        when(lifecycle.lockImplementation("tenant-a", MODEL_ID, owner)).thenReturn(true);
         when(lifecycle.listArtifacts("tenant-a", MODEL_ID, 7)).thenReturn(List.of(
             artifact("SQL"), artifact("SCHEMA"), artifact("TEST")
         ));
-        when(testEvidence.verify("dbt-run-7")).thenReturn(
+        when(lifecycle.hasPassedEvidence("tenant-a", MODEL_ID, 7, 1, CHECKSUM, EventType.COMPILE)).thenReturn(true);
+        ModelLifecycleTestEvidencePort.VerificationRequest verification =
+            new ModelLifecycleTestEvidencePort.VerificationRequest(
+                "dbt-run-7",
+                "tenant-a",
+                MODEL_ID,
+                1,
+                CHECKSUM,
+                "pjm",
+                "model.pjm.fact"
+            );
+        when(testEvidence.verify(verification)).thenReturn(
             new ModelLifecycleTestEvidencePort.TestEvidence("dbt-run-7", "PASSED", "dbt test succeeded")
         );
         LifecycleEventView persisted = new LifecycleEventView(
@@ -89,7 +161,7 @@ class ModelLifecycleServiceTest {
         );
         when(lifecycle.recordEvent(
             "tenant-a", "alice", model, EventType.TEST, "PASSED", "test-7", "verified", "dbt-run-7",
-            Map.of("artifactRevision", 7), NOW
+            Map.of("artifactRevision", 7), owner, NOW
         )).thenReturn(persisted);
 
         LifecycleEventView result = service.recordTest(
@@ -97,11 +169,12 @@ class ModelLifecycleServiceTest {
             "alice",
             MODEL_ID,
             new ExpectedVersion(MODEL_ID, 7, CHECKSUM),
+            new ExpectedImplementationVersion(MODEL_ID, 1, CHECKSUM),
             new TestEvidenceCommand("PASSED", "dbt-run-7", "verified", "test-7")
         );
 
         assertThat(result.externalRef()).isEqualTo("dbt-run-7");
-        verify(testEvidence).verify("dbt-run-7");
+        verify(testEvidence).verify(verification);
     }
 
     @Test
@@ -168,6 +241,8 @@ class ModelLifecycleServiceTest {
                 eq("alice"),
                 eq(releaseId),
                 eq(model),
+                eq(1),
+                eq(CHECKSUM),
                 anyList(),
                 nullable(String.class)
             )
@@ -191,6 +266,8 @@ class ModelLifecycleServiceTest {
             eq("alice"),
             eq(releaseId),
             eq(model),
+            eq(1),
+            eq(CHECKSUM),
             anyList(),
             nullable(String.class)
         );
@@ -225,7 +302,7 @@ class ModelLifecycleServiceTest {
             "alice",
             "release",
             null,
-            Map.of(),
+            Map.of("implementationRevision", 1, "implementationChecksum", CHECKSUM),
             NOW
         );
     }

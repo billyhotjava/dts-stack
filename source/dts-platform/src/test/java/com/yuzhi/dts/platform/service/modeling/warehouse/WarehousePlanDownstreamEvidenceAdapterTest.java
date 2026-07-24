@@ -11,10 +11,6 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.MetricRef;
-import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService;
-import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.GateStatus;
-import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.GateView;
-import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.Stage;
 import com.yuzhi.dts.platform.domain.governance.GovIndicatorDefinition;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
 import java.util.Optional;
@@ -28,20 +24,15 @@ class WarehousePlanDownstreamEvidenceAdapterTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void buildStageConsumesCurrentReleaseGateInsteadOfAVisitedPageFlag() {
+    void buildStageRequiresAReleaseCandidateRegardlessOfTheModelLifecycleGate() {
         UUID modelId = UUID.fromString("40000000-0000-0000-0000-000000000067");
         ModelSpecView model = mock(ModelSpecView.class);
         when(model.id()).thenReturn(modelId);
-        when(model.status()).thenReturn(ModelStatus.DRAFT);
-        ModelSpecStageGateService gates = mock(ModelSpecStageGateService.class);
-        when(gates.evaluateAll("tenant-1", modelId)).thenReturn(
-            List.of(new GateView(modelId, 2, "a".repeat(64), Stage.RELEASE_READY, GateStatus.READY, List.of()))
-        );
+        when(model.status()).thenReturn(ModelStatus.PUBLISHED);
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         GovIndicatorDefinitionRepository indicators = mock(GovIndicatorDefinitionRepository.class);
         when(jdbc.query(anyString(), any(RowMapper.class), any(), any())).thenReturn(List.of());
         WarehousePlanDownstreamEvidenceAdapter adapter = new WarehousePlanDownstreamEvidenceAdapter(
-            gates,
             indicators,
             jdbc,
             new ObjectMapper()
@@ -55,9 +46,31 @@ class WarehousePlanDownstreamEvidenceAdapterTest {
 
         assertThat(evidence).filteredOn(item -> item.stageCode() == WarehousePlanStageProjectionService.StageCode.BUILD_QUALITY_RELEASE).singleElement().satisfies(item -> {
             assertThat(item.stageCode()).isEqualTo(WarehousePlanStageProjectionService.StageCode.BUILD_QUALITY_RELEASE);
-            assertThat(item.status()).isEqualTo(WarehousePlanStageProjectionService.StageStatus.COMPLETE);
-            assertThat(item.evidenceCount()).isEqualTo(1);
+            assertThat(item.status()).isEqualTo(WarehousePlanStageProjectionService.StageStatus.BLOCKED);
+            assertThat(item.blockerCode()).isEqualTo("MODEL_RELEASE_EVIDENCE_REQUIRED");
         });
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void buildStageRequiresAModelBeforeReleaseEvidenceCanBeRecorded() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.query(anyString(), any(RowMapper.class), any(), any())).thenReturn(List.of());
+        WarehousePlanDownstreamEvidenceAdapter adapter = new WarehousePlanDownstreamEvidenceAdapter(
+            mock(GovIndicatorDefinitionRepository.class),
+            jdbc,
+            new ObjectMapper()
+        );
+
+        var evidence = adapter.read("tenant-1", UUID.fromString("10000000-0000-0000-0000-000000000069"), List.of());
+
+        assertThat(evidence)
+            .filteredOn(item -> item.stageCode() == WarehousePlanStageProjectionService.StageCode.BUILD_QUALITY_RELEASE)
+            .singleElement()
+            .satisfies(item -> {
+                assertThat(item.status()).isEqualTo(WarehousePlanStageProjectionService.StageStatus.BLOCKED);
+                assertThat(item.blockerCode()).isEqualTo("MODEL_SPEC_REQUIRED");
+            });
     }
 
     @Test
@@ -70,10 +83,6 @@ class WarehousePlanDownstreamEvidenceAdapterTest {
         when(model.status()).thenReturn(ModelStatus.PUBLISHED);
         when(model.modelType()).thenReturn(ModelType.FACT);
         when(model.metricRefs()).thenReturn(List.of(new MetricRef(indicatorId.toString(), 1)));
-        ModelSpecStageGateService gates = mock(ModelSpecStageGateService.class);
-        when(gates.evaluateAll("tenant-1", modelId)).thenReturn(
-            List.of(new GateView(modelId, 2, "a".repeat(64), Stage.RELEASE_READY, GateStatus.READY, List.of()))
-        );
         GovIndicatorDefinition indicator = new GovIndicatorDefinition();
         indicator.setId(indicatorId);
         indicator.setStatus("PUBLISHED");
@@ -83,7 +92,6 @@ class WarehousePlanDownstreamEvidenceAdapterTest {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.query(anyString(), any(RowMapper.class), any(), any())).thenReturn(List.of());
         WarehousePlanDownstreamEvidenceAdapter adapter = new WarehousePlanDownstreamEvidenceAdapter(
-            gates,
             indicators,
             jdbc,
             new ObjectMapper()

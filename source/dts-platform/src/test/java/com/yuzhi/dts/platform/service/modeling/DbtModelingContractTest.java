@@ -18,7 +18,9 @@ class DbtModelingContractTest {
             "idem-dbt-1",
             "30000000-0000-0000-0000-000000000001",
             3,
-            "a".repeat(64)
+            "a".repeat(64),
+            2,
+            "b".repeat(64)
         );
 
         assertThat(DbtModelingContract.validateManifestImport(request)).isEmpty();
@@ -33,6 +35,8 @@ class DbtModelingContractTest {
             Map.of(),
             null,
             "idem-dbt-2",
+            null,
+            0,
             null,
             0,
             null

@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.modeling;
 
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ArtifactWrite;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -15,16 +16,43 @@ import org.springframework.stereotype.Component;
 public class CanonicalModelLifecycleCompilerAdapter implements ModelLifecycleCompilerPort {
 
     private final ModelSpecApplicationService modelSpecs;
+    private final ModelSpecSourceValidationPort sourceValidation;
 
-    public CanonicalModelLifecycleCompilerAdapter(ModelSpecApplicationService modelSpecs) {
+    public CanonicalModelLifecycleCompilerAdapter(
+        ModelSpecApplicationService modelSpecs,
+        ModelSpecSourceValidationPort sourceValidation
+    ) {
         this.modelSpecs = modelSpecs;
+        this.sourceValidation = sourceValidation;
     }
 
     @Override
-    public List<ArtifactWrite> compile(String tenantId, ModelSpecView model) {
-        ModelingVNextContract.ModelSpec projection = ModelSpecCompilerProjection.project(
+    public List<ArtifactWrite> compile(String tenantId, ModelSpecView model, ImplementationView implementation) {
+        if (implementation.ownership() == ModelSpecContract.ImplementationMode.DBT_MANAGED) {
+            throw new ModelSpecException(
+                "MODEL_DBT_IMPORT_REQUIRED",
+                "DBT-managed implementations must be verified through the dedicated import path",
+                ModelSpecException.Kind.CONFLICT
+            );
+        }
+        ModelSpecCompilerProjection.ImplementationProjection projection = ModelSpecCompilerProjection.project(
             model,
-            reference -> modelSpecs.revision(tenantId, reference)
+            implementation,
+            reference -> modelSpecs.revision(tenantId, reference),
+            tenantId,
+            input -> {
+                if (sourceValidation == null) {
+                    return model.sourceRefs()
+                        .stream()
+                        .filter(source -> input.sourceBindingId().equals(source.sourceBindingId()))
+                        .filter(source -> input.resolvedVersion().equals(source.resolvedVersion()))
+                        .findFirst()
+                        .orElse(null);
+                }
+                return sourceValidation
+                    .resolveCurrentBindingForCompiler(tenantId, model.planId(), input.sourceBindingId(), input.resolvedVersion())
+                    .orElse(null);
+            }
         );
         ModelingDbtCompiler.CompiledArtifacts compiled = ModelingDbtCompiler.compile(projection);
         List<ArtifactWrite> result = new ArrayList<>();
@@ -34,7 +62,10 @@ public class CanonicalModelLifecycleCompilerAdapter implements ModelLifecycleCom
                     artifactType(file.getKey()),
                     compiled.outputDirectory() + "/" + file.getKey(),
                     checksum(file.getValue()),
-                    file.getValue()
+                    file.getValue(),
+                    nodeKind(file.getKey()),
+                    materialization(file.getKey(), implementation),
+                    physicalAssetRef(implementation)
                 )
             );
         }
@@ -42,10 +73,29 @@ public class CanonicalModelLifecycleCompilerAdapter implements ModelLifecycleCom
     }
 
     private static String artifactType(String path) {
+        if (path.startsWith("stg_") && path.endsWith(".sql")) return "STG_SQL";
         if (path.endsWith(".tests.yml")) return "TEST";
         if (path.endsWith(".yml") || path.endsWith(".yaml")) return "SCHEMA";
         if (path.endsWith(".sql")) return "SQL";
         return "DOC";
+    }
+
+    private static String nodeKind(String path) {
+        return path.startsWith("stg_") && path.endsWith(".sql") ? "STG" : "MODEL";
+    }
+
+    private static String materialization(String path, ImplementationView implementation) {
+        return path.startsWith("stg_") && path.endsWith(".sql") ? "ephemeral" : implementation.materialization();
+    }
+
+    private static java.util.UUID physicalAssetRef(ImplementationView implementation) {
+        if (implementation.inputMode() != ModelLifecycleContract.InputMode.PHYSICAL_ASSET) return null;
+        return implementation.inputs().stream()
+            .filter(ModelLifecycleContract.PhysicalAssetInput.class::isInstance)
+            .map(ModelLifecycleContract.PhysicalAssetInput.class::cast)
+            .map(ModelLifecycleContract.PhysicalAssetInput::sourceBindingId)
+            .findFirst()
+            .orElse(null);
     }
 
     private static String checksum(String value) {

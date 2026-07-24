@@ -186,6 +186,7 @@ class IngestionTaskServiceTest {
             Long id = inv.getArgument(0);
             return Optional.ofNullable(savedExecutions.get(id));
         });
+        org.mockito.Mockito.lenient().when(platformInfraClient.syncIngestionExecutionLineage(any(), any())).thenReturn(true);
     }
 
     @AfterEach
@@ -713,7 +714,9 @@ class IngestionTaskServiceTest {
             assertThat(saved.getRowsRead()).isEqualTo(3L);
             assertThat(saved.getRowsWritten()).isEqualTo(3L);
         });
-        verify(platformInfraClient).emitIngestionOpenLineageEvent(eq(task), any(IngestionExecution.class));
+        org.mockito.InOrder lineageOrder = org.mockito.Mockito.inOrder(platformInfraClient);
+        lineageOrder.verify(platformInfraClient).syncIngestionExecutionLineage(eq(task), any(IngestionExecution.class));
+        lineageOrder.verify(platformInfraClient).emitIngestionOpenLineageEvent(eq(task), any(IngestionExecution.class));
     }
 
     @Test

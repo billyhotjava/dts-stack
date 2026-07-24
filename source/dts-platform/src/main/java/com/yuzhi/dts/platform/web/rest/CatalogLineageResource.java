@@ -1130,9 +1130,14 @@ public class CatalogLineageResource {
     @PostMapping("/ingestion-executions")
     @PreAuthorize("(" + CATALOG_MAINTAINER_EXPRESSION + ") or (" + INGESTION_SERVICE_EXPRESSION + ")")
     public ApiResponse<OdsTableMappingSyncService.SyncResult> syncIngestionExecutionLineage(@RequestBody Map<String, Object> payload) {
+        Map<String, Object> task = payloadMap(payload == null ? null : payload.get("task"));
         Map<String, Object> execution = payloadMap(payload == null ? null : payload.get("execution"));
+        if (isApiTaskPayload(task)) {
+            requireIngestionServiceCaller();
+            validateApiLandingEvidence(task, execution);
+        }
         String status = stringValue(execution.get("status"));
-        String executionId = defaultString(execution.get("id"), defaultString(execution.get("executionId"), "unknown"));
+        String executionId = defaultString(execution.get("executionId"), defaultString(execution.get("id"), "unknown"));
         String batchId = stringValue(execution.get("batchId"));
         Instant observedAt = parseInstant(defaultString(execution.get("endTime"), stringValue(execution.get("startTime"))));
         IngestionLineageWriter.LineageObservation observation = IngestionLineageWriter.LineageObservation.fromExecution(
@@ -1142,6 +1147,9 @@ public class CatalogLineageResource {
             observedAt
         );
         OdsTableMappingSyncService.SyncResult result = odsTableMappingSyncService.syncFromIngestionPayload(payload, observation);
+        if (isApiTaskPayload(task) && !result.synced()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, result.message());
+        }
         audit.auditAction(
             "LINEAGE_INGEST_EXECUTION_SYNC",
             AuditStage.SUCCESS,
@@ -1162,6 +1170,102 @@ public class CatalogLineageResource {
             )
         );
         return ApiResponses.ok(result);
+    }
+
+    private boolean isApiTaskPayload(Map<String, Object> task) {
+        String sourceKind = stringValue(task == null ? null : task.get("sourceKind"));
+        if ("API".equalsIgnoreCase(sourceKind)) {
+            return true;
+        }
+        String sourceType = stringValue(task == null ? null : task.get("sourceType"));
+        if (!StringUtils.hasText(sourceType)) {
+            return false;
+        }
+        return Set.of("api", "http", "https", "http_api", "api_http", "rest", "rest_api", "httpreader")
+            .contains(sourceType.trim().toLowerCase(Locale.ROOT));
+    }
+
+    private void requireIngestionServiceCaller() {
+        org.springframework.security.core.Authentication authentication =
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        boolean authenticatedService = authentication != null &&
+            authentication.isAuthenticated() &&
+            "service:dts-ingestion".equals(authentication.getName()) &&
+            authentication.getAuthorities().stream().anyMatch(authority -> AuthoritiesConstants.SERVICE_INTERNAL.equals(authority.getAuthority()));
+        if (!authenticatedService) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "API landing evidence requires dts-ingestion service authentication");
+        }
+    }
+
+    private void validateApiLandingEvidence(Map<String, Object> task, Map<String, Object> execution) {
+        requireEvidenceText(task, "id");
+        String connectionId = requireEvidenceText(task, "sourceDataSourceId");
+        if (parseUuid(connectionId) == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "sourceDataSourceId must be a UUID");
+        }
+        String taskRevision = requireEvidenceText(task, "taskRevision");
+        if (parseInstant(taskRevision) == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "taskRevision must be an ISO-8601 instant");
+        }
+        requireEvidenceText(execution, "id");
+        requireEvidenceText(execution, "executionSequence");
+        String executionId = requireEvidenceText(execution, "executionId");
+        if (!"SUCCESS".equalsIgnoreCase(requireEvidenceText(execution, "status"))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "API landing execution status must be SUCCESS");
+        }
+        String observedAt = requireEvidenceText(execution, "endTime");
+        if (parseInstant(observedAt) == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "endTime must be an ISO-8601 instant");
+        }
+        Object rawTargets = execution.get("targetTables");
+        if (!(rawTargets instanceof Iterable<?> targets)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "targetTables are required");
+        }
+        int targetCount = 0;
+        for (Object rawTarget : targets) {
+            Map<String, Object> target = payloadMap(rawTarget);
+            targetCount++;
+            requireEvidenceText(target, "resourceId");
+            requireEvidenceText(target, "qualifiedName");
+            requireEvidenceText(target, "configChecksum");
+            requireEvidenceText(target, "fieldSnapshotChecksum");
+            String targetExecutionId = requireEvidenceText(target, "executionId");
+            if (!executionId.equals(targetExecutionId)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "target executionId does not match authoritative execution");
+            }
+            if (!"SUCCESS".equalsIgnoreCase(requireEvidenceText(target, "landingStatus"))) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "target landingStatus must be SUCCESS");
+            }
+            if (!target.containsKey("rowsWritten") || parseLong(target.get("rowsWritten")) == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "target rowsWritten evidence is required");
+            }
+        }
+        if (targetCount == 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "targetTables are required");
+        }
+    }
+
+    private String requireEvidenceText(Map<String, Object> values, String field) {
+        String value = stringValue(values == null ? null : values.get(field));
+        if (!StringUtils.hasText(value)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, field + " is required");
+        }
+        return value;
+    }
+
+    private Long parseLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        String text = stringValue(value);
+        if (!StringUtils.hasText(text)) {
+            return null;
+        }
+        try {
+            return Long.parseLong(text);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     @DeleteMapping("/{id}")

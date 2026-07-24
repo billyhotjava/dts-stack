@@ -3,9 +3,14 @@ package com.yuzhi.dts.platform.service.modeling;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.FieldMapping;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.GeneratedInput;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.InputMode;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.*;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -80,6 +85,77 @@ class ModelSpecCompilerProjectionTest {
             .isInstanceOf(ModelSpecException.class)
             .extracting(error -> ((ModelSpecException) error).code())
             .isEqualTo("MODEL_SPEC_UPSTREAM_REVISION_MISSING");
+    }
+
+    @Test
+    void projectsTheExactImplementationRevisionAndCanonicalSettings() {
+        ModelSpecView view = view(ModelType.DIMENSION, List.of(), List.of());
+        ImplementationView implementation = new ImplementationView(
+            UUID.fromString("60000000-0000-0000-0000-000000000001"),
+            view.id(),
+            view.planId(),
+            view.revision(),
+            view.checksum(),
+            ImplementationMode.DESIGNER_GENERATED,
+            "warehouse",
+            "model.warehouse.customer_detail",
+            "ACTIVE",
+            4,
+            "c".repeat(64),
+            InputMode.GENERATED,
+            List.of(new GeneratedInput("DATE_DIMENSION", Map.of("end", "2030-12-31"))),
+            List.of(new FieldMapping("calendar_date", "customer_id")),
+            Map.of("deduplicateBy", List.of("customer_id")),
+            "table"
+        );
+
+        ModelSpecCompilerProjection.ImplementationProjection projected = ModelSpecCompilerProjection.project(view, implementation, ignored -> null);
+
+        assertThat(projected.model().sourceRefs()).isEmpty();
+        assertThat(projected.implementationRevision()).isEqualTo(4);
+        assertThat(projected.inputMode()).isEqualTo(InputMode.GENERATED);
+        assertThat(projected.fieldMappings()).containsExactly(new FieldMapping("calendar_date", "customer_id"));
+        assertThat(projected.settings().keySet()).containsExactly("deduplicateBy");
+    }
+
+    @Test
+    void rejectsAnUpstreamInputWhenItsPinnedChecksumNoLongerMatches() {
+        UUID upstreamId = UUID.fromString("40000000-0000-0000-0000-000000000001");
+        ModelRevisionRef logicalRef = new ModelRevisionRef(upstreamId, 3);
+        ModelSpecView derived = view(ModelType.SUMMARY, List.of(logicalRef), List.of());
+        ModelSpecView upstream = new ModelSpecView(
+            2, upstreamId, derived.planId(), derived.domainId(), ModelType.FACT, Layer.DWD, "customer_detail", null,
+            ImplementationMode.DESIGNER_GENERATED, "table", null, null, derived.grain(), null, null,
+            derived.fields(), List.of(), List.of(), List.of(), List.of(), List.of(), null, ModelStatus.DRAFT, 3,
+            "a".repeat(64), Instant.EPOCH, Instant.EPOCH, CompatibilityMode.CANONICAL, null
+        );
+        ImplementationView implementation = new ImplementationView(
+            UUID.fromString("60000000-0000-0000-0000-000000000001"),
+            derived.id(),
+            derived.planId(),
+            derived.revision(),
+            derived.checksum(),
+            ImplementationMode.DESIGNER_GENERATED,
+            "warehouse",
+            "model.warehouse.customer_summary",
+            "ACTIVE",
+            2,
+            "c".repeat(64),
+            InputMode.UPSTREAM_MODEL,
+            List.of(new ModelLifecycleContract.UpstreamModelInput(upstreamId, 3, "b".repeat(64))),
+            List.of(),
+            Map.of(),
+            "table"
+        );
+
+        assertThatThrownBy(() -> ModelSpecCompilerProjection.project(
+            derived,
+            implementation,
+            candidate -> candidate.equals(logicalRef) ? upstream : null
+        ))
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_IMPLEMENTATION_INPUT_STALE");
     }
 
     private static ModelSpecView view(ModelType type, List<ModelRevisionRef> dependsOn, List<SourceRef> sources) {

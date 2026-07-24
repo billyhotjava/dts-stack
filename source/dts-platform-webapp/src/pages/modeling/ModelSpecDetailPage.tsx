@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Descriptions, Form, Modal, Space, Spin, Tabs, Tag, Typography } from "antd";
+import { Alert, Button, Card, Descriptions, Form, Modal, Space, Spin, Tag, Typography } from "antd";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
@@ -6,7 +6,10 @@ import {
 	getModelSpec,
 	getModelSpecRevision,
 	getModelSpecStageGates,
+	getModelLifecycle,
 	listModelSpecs,
+	retryModelReleaseRegistration,
+	type ModelLifecycleTimeline,
 	type ModelSpecStageGate,
 	updateModelSpec,
 } from "@/api/modelSpecApi";
@@ -15,17 +18,16 @@ import { useCatalogDomainOptions } from "@/hooks/useCatalogDomainOptions";
 import { useParams } from "@/routes/hooks";
 import { useUserRoles } from "@/store/userStore";
 import { ModelSpecBlockerPanel } from "./components/ModelSpecBlockerPanel";
-import { ModelSpecDependencyPanel } from "./components/ModelSpecDependencyPanel";
-import { ModelSpecEditorFields, type ModelSpecSelectOption } from "./components/ModelSpecEditorFields";
-import { ModelSpecFieldsTab } from "./components/ModelSpecFieldsTab";
+import { ModelSpecImplementationStage, type ModelSpecImplementationStageActionRef } from "./components/ModelSpecImplementationStage";
+import { ModelSpecLogicalDesignStage, type ModelSpecSelectOption } from "./components/ModelSpecLogicalDesignStage";
+import { ModelSpecPhysicalAssetStage } from "./components/ModelSpecPhysicalAssetStage";
 import { ModelSpecSourceInventoryModal } from "./components/ModelSpecSourceInventoryModal";
-import { ModelSpecStandardsTab } from "./components/ModelSpecStandardsTab";
-import { modelSpecCatalogPath, modelSpecDetailPath, resolveModelSpecDetailTab } from "./modelSpecDetailNavigation";
+import { modelSpecCatalogPath, modelSpecDetailPath, resolveModelSpecDetailStage } from "./modelSpecDetailNavigation";
+import { getModelSpecDetailStageProjection } from "./modelSpecDetailStageProjection";
 import {
 	type ModelSpecSourceChoice,
 	modelSpecSourceInventoryState,
 	modelSpecSourcePermissionDenied,
-	modelSpecSourcesAreCurrent,
 	selectableModelSpecSources,
 	withPinnedExistingSources,
 } from "./modelSpecSourceSelection";
@@ -57,6 +59,18 @@ import {
 import { hasWarehousePlanCreateAccess } from "./warehousePlanCreateFlow";
 
 const { Text, Title } = Typography;
+
+const stableFormValue = (value: unknown): unknown => {
+	if (Array.isArray(value)) return value.map(stableFormValue);
+	if (value && typeof value === "object") {
+		return Object.fromEntries(
+			Object.entries(value as Record<string, unknown>)
+				.sort(([left], [right]) => left.localeCompare(right))
+				.map(([key, item]) => [key, stableFormValue(item)]),
+		);
+	}
+	return value;
+};
 
 const issueField = (field: string): keyof ModelSpecDraft => {
 	if (field === "grain") return "grainStatement";
@@ -115,6 +129,7 @@ export default function ModelSpecDetailPage() {
 	const userRoles = useUserRoles();
 	const roleAllowsEdit = hasWarehousePlanCreateAccess(userRoles);
 	const [form] = Form.useForm<ModelSpecDraft>();
+	const logicalFormValues = Form.useWatch([], { form, preserve: true });
 	const [model, setModel] = useState<ModelSpecView | null>(null);
 	const [availableModels, setAvailableModels] = useState<CanonicalModelSpecView[]>([]);
 	const [dependencyMetadataLoaded, setDependencyMetadataLoaded] = useState(false);
@@ -136,13 +151,33 @@ export default function ModelSpecDetailPage() {
 	const [writeDenied, setWriteDenied] = useState(false);
 	const [statusChanged, setStatusChanged] = useState(false);
 	const [conflict, setConflict] = useState<ModelSpecRevisionConflictDetails | null>(null);
-	const selectedSources = Form.useWatch("sources", form) || [];
-	const sourceVerificationPending = sourceLoading && selectedSources.length > 0;
 	const loadRequestRef = useRef(0);
 	const referenceRequestRef = useRef(0);
 	const sourceRequestRef = useRef(0);
+	const gateRequestRef = useRef(0);
+	const physicalRequestRef = useRef(0);
+	const releaseRetryRequestRef = useRef(0);
+	const implementationActionRef = useRef<ModelSpecImplementationStageActionRef>(null);
+	const [implementationState, setImplementationState] = useState({ configured: false, dirty: false, validated: false });
+	const [physicalTimeline, setPhysicalTimeline] = useState<ModelLifecycleTimeline | null>(null);
+	const [physicalLoading, setPhysicalLoading] = useState(false);
+	const [physicalError, setPhysicalError] = useState("");
 	const { labelByKey } = useCatalogDomainOptions();
 	const canonicalModel = model?.compatibilityMode === "CANONICAL" ? model : null;
+	const persistedLogicalDraft = useMemo(
+		() => (canonicalModel ? modelSpecDraftFromView(canonicalModel) : null),
+		[canonicalModel],
+	);
+	const logicalDirty = useMemo(
+		() =>
+			Boolean(
+				persistedLogicalDraft &&
+				logicalFormValues &&
+				JSON.stringify(stableFormValue(logicalFormValues)) !==
+					JSON.stringify(stableFormValue(persistedLogicalDraft)),
+			),
+		[logicalFormValues, persistedLogicalDraft],
+	);
 	const statusAllowsEdit = canonicalModel?.status === "DRAFT";
 	const targetLayerMismatch = Boolean(
 		canonicalModel && MODEL_SPEC_TARGET_LAYER_BY_TYPE[canonicalModel.modelType] !== canonicalModel.layer,
@@ -187,24 +222,57 @@ export default function ModelSpecDetailPage() {
 			!referenceResolutionFailed &&
 			!dependencyContractMismatch,
 	);
-	const activeTab = useMemo(() => resolveModelSpecDetailTab(searchParams), [searchParams]);
-	const implementationReady = stageGates.some(
-		(gate) => gate.stage === "IMPLEMENTATION_READY" && gate.status === "READY",
+	const activeStage = useMemo(() => resolveModelSpecDetailStage(searchParams), [searchParams]);
+	const currentImplementation = physicalTimeline?.implementation || null;
+	const currentImplementationRevision = currentImplementation?.implementationRevision;
+	const currentImplementationChecksum = currentImplementation?.implementationChecksum;
+	const advancedImplementationReady = Boolean(
+		canonicalModel &&
+		currentImplementation &&
+		currentImplementationRevision &&
+		currentImplementationChecksum &&
+		currentImplementation.modelSpecId === canonicalModel.id &&
+		currentImplementation.planId === canonicalModel.planId &&
+		currentImplementation.revision === canonicalModel.revision &&
+		currentImplementation.modelChecksum === canonicalModel.checksum &&
+		currentImplementation.ownership === canonicalModel.implementationMode,
 	);
-	const implementationPath = canonicalModel
-		? `/studio/sql-modeling?planId=${encodeURIComponent(canonicalModel.planId)}&modelSpecId=${encodeURIComponent(canonicalModel.id)}&revision=${canonicalModel.revision}&implementationMode=${encodeURIComponent(canonicalModel.implementationMode)}`
+	const implementationPath = advancedImplementationReady && canonicalModel
+		? `/studio/sql-modeling?planId=${encodeURIComponent(canonicalModel.planId)}&modelSpecId=${encodeURIComponent(canonicalModel.id)}&revision=${canonicalModel.revision}&implementationRevision=${currentImplementationRevision}&implementationChecksum=${encodeURIComponent(currentImplementationChecksum || "")}&implementationMode=${encodeURIComponent(canonicalModel.implementationMode)}`
 		: "";
+	const implementationRecoveryMessage = "当前实现绑定缺失或已不是此 ModelSpec 的当前版本；请返回数据实现阶段刷新并保存新的实现 revision。";
 
 	const loadStageGates = useCallback(async () => {
+		const requestId = ++gateRequestRef.current;
 		setGateLoading(true);
 		setGateError("");
 		try {
-			setStageGates(await getModelSpecStageGates(modelSpecId));
+			const gates = await getModelSpecStageGates(modelSpecId);
+			if (requestId !== gateRequestRef.current) return;
+			setStageGates(gates);
 		} catch {
+			if (requestId !== gateRequestRef.current) return;
 			setStageGates([]);
 			setGateError("暂时无法读取服务端门禁结果，不影响继续编辑草稿");
 		} finally {
-			setGateLoading(false);
+			if (requestId === gateRequestRef.current) setGateLoading(false);
+		}
+	}, [modelSpecId]);
+
+	const loadPhysicalTimeline = useCallback(async () => {
+		const requestId = ++physicalRequestRef.current;
+		setPhysicalLoading(true);
+		setPhysicalError("");
+		try {
+			const timeline = await getModelLifecycle(modelSpecId);
+			if (requestId !== physicalRequestRef.current) return;
+			setPhysicalTimeline(timeline);
+		} catch {
+			if (requestId !== physicalRequestRef.current) return;
+			// A transient physical read must not erase earlier logical or implementation state.
+			setPhysicalError("物理资产与运行证据暂时无法读取；此前已显示的阶段数据仍被保留。");
+		} finally {
+			if (requestId === physicalRequestRef.current) setPhysicalLoading(false);
 		}
 	}, [modelSpecId]);
 
@@ -272,10 +340,15 @@ export default function ModelSpecDetailPage() {
 		setReferenceMetadataLoaded(false);
 		setReferenceResolutionFailed(false);
 		const referenceRequestId = ++referenceRequestRef.current;
+		gateRequestRef.current += 1;
 		setSourceOptions([]);
 		setSourceError("");
 		setSourcePermissionDenied(false);
 		setSourceInventoryOpen(false);
+		physicalRequestRef.current += 1;
+		setPhysicalTimeline(null);
+		setPhysicalLoading(false);
+		setPhysicalError("");
 		try {
 			const [detail, gates] = await Promise.all([
 				getModelSpec(modelSpecId),
@@ -287,9 +360,8 @@ export default function ModelSpecDetailPage() {
 			else setGateError("暂时无法读取服务端门禁结果，不影响继续编辑草稿");
 			setWriteDenied(false);
 			if (detail.compatibilityMode === "CANONICAL") {
-				const draft = modelSpecDraftFromView(detail);
-				form.setFieldsValue(draft);
-				void loadSources(detail.planId, draft.sources);
+				form.resetFields();
+				form.setFieldsValue(modelSpecDraftFromView(detail));
 			}
 			const [list, referenceResolution] = await Promise.all([
 				listModelSpecs().catch(() => null),
@@ -317,7 +389,7 @@ export default function ModelSpecDetailPage() {
 		} finally {
 			if (requestId === loadRequestRef.current) setLoading(false);
 		}
-	}, [form, loadSources, modelSpecId]);
+	}, [form, modelSpecId]);
 
 	useEffect(() => {
 		void load();
@@ -325,8 +397,21 @@ export default function ModelSpecDetailPage() {
 			loadRequestRef.current += 1;
 			referenceRequestRef.current += 1;
 			sourceRequestRef.current += 1;
+			gateRequestRef.current += 1;
+			physicalRequestRef.current += 1;
+			releaseRetryRequestRef.current += 1;
 		};
 	}, [load]);
+
+	useEffect(() => {
+		if (!canonicalModel || activeStage !== "implementation") return;
+		const currentSources = (form.getFieldValue("sources") as ModelSpecDraft["sources"] | undefined) || [];
+		void loadSources(canonicalModel.planId, currentSources);
+	}, [activeStage, canonicalModel, form, loadSources]);
+
+	useEffect(() => {
+		if (activeStage !== "logical") void loadPhysicalTimeline();
+	}, [activeStage, loadPhysicalTimeline]);
 
 	const refreshReferenceTargetsAfterSave = async (
 		updated: CanonicalModelSpecView,
@@ -363,6 +448,25 @@ export default function ModelSpecDetailPage() {
 					}${allowed ? "" : "（不符合当前模型依赖）"}`,
 					disabled: !allowed,
 					revision: candidate.revision,
+					checksum: candidate.checksum,
+				};
+			}),
+		[canonicalModel, selectableModels],
+	);
+	const implementationUpstreamOptions = useMemo<ModelSpecSelectOption[]>(
+		() =>
+			selectableModels.map((candidate) => {
+				const allowed =
+					canonicalModel?.modelType === "DIMENSION" ||
+					Boolean(canonicalModel && isModelSpecReferenceTargetAllowed(canonicalModel, candidate, "DEPENDENCY"));
+				return {
+					value: candidate.id,
+					label: `${candidate.name} · ${MODEL_TYPE_LABELS[candidate.modelType]} · ${candidate.layer} · r${
+						candidate.revision
+					}${allowed ? "" : "（不符合当前模型实现输入）"}`,
+					disabled: !allowed,
+					revision: candidate.revision,
+					checksum: candidate.checksum,
 				};
 			}),
 		[canonicalModel, selectableModels],
@@ -380,14 +484,8 @@ export default function ModelSpecDetailPage() {
 				})),
 		[canonicalModel, selectableModels],
 	);
-	const persistedSourcesCurrent = useMemo(() => {
-		if (!canonicalModel) return false;
-		return modelSpecSourcesAreCurrent(sourceOptions, modelSpecDraftFromView(canonicalModel).sources);
-	}, [canonicalModel, sourceOptions]);
-	const persistedSourceVerificationPending = sourceLoading && (canonicalModel?.sourceRefs.length ?? 0) > 0;
-
 	const save = async (override?: ModelSpecCasToken) => {
-		if (!canonicalModel || !canEdit || sourceVerificationPending) return;
+		if (!canonicalModel || !canEdit) return;
 		const pageRequestId = loadRequestRef.current;
 		setSaveError("");
 		try {
@@ -412,9 +510,8 @@ export default function ModelSpecDetailPage() {
 			);
 			if (pageRequestId !== loadRequestRef.current) return;
 			setModel(updated);
-			const updatedDraft = modelSpecDraftFromView(updated);
-			form.setFieldsValue(updatedDraft);
-			void loadSources(updated.planId, updatedDraft.sources);
+			form.resetFields();
+			form.setFieldsValue(modelSpecDraftFromView(updated));
 			if (!(await refreshReferenceTargetsAfterSave(updated, pageRequestId))) return;
 			void loadStageGates();
 			setConflict(null);
@@ -443,7 +540,7 @@ export default function ModelSpecDetailPage() {
 	};
 
 	const onSaveStandardBindings = async (standardBindings: ModelSpecStandardBinding[]) => {
-		if (!canonicalModel || !canEdit || persistedSourceVerificationPending || !persistedSourcesCurrent) return false;
+		if (!canonicalModel || !canEdit) return false;
 		const pageRequestId = loadRequestRef.current;
 		setSaveError("");
 		try {
@@ -463,9 +560,8 @@ export default function ModelSpecDetailPage() {
 			);
 			if (pageRequestId !== loadRequestRef.current) return false;
 			setModel(updated);
-			const updatedDraft = modelSpecDraftFromView(updated);
-			form.setFieldsValue(updatedDraft);
-			void loadSources(updated.planId, updatedDraft.sources);
+			form.resetFields();
+			form.setFieldsValue(modelSpecDraftFromView(updated));
 			if (!(await refreshReferenceTargetsAfterSave(updated, pageRequestId))) return false;
 			setConflict(null);
 			setStatusChanged(false);
@@ -497,11 +593,38 @@ export default function ModelSpecDetailPage() {
 		});
 	};
 
-	const changeTab = (key: string) => {
+	const changeStage = (stage: "logical" | "implementation" | "physical") => {
 		if (!canonicalModel) return;
-		const tab = resolveModelSpecDetailTab(new URLSearchParams({ tab: key }));
-		navigate(modelSpecDetailPath(canonicalModel.id, tab, canonicalModel.planId), { replace: true });
+		navigate(modelSpecDetailPath(canonicalModel.id, stage, canonicalModel.planId), { replace: true });
 	};
+
+	const retryReleaseRegistration = useCallback(
+		async (releaseId: string) => {
+			const requestId = ++releaseRetryRequestRef.current;
+			const pageRequestId = loadRequestRef.current;
+			setPhysicalError("");
+			try {
+				await retryModelReleaseRegistration(modelSpecId, releaseId);
+				if (
+					requestId !== releaseRetryRequestRef.current ||
+					pageRequestId !== loadRequestRef.current
+				) {
+					return;
+				}
+				await loadPhysicalTimeline();
+			} catch {
+				if (
+					requestId !== releaseRetryRequestRef.current ||
+					pageRequestId !== loadRequestRef.current
+				) {
+					return;
+				}
+				setPhysicalError("发布登记重试失败；服务端状态未被本地覆盖，请稍后重试。");
+				throw new Error("MODEL_RELEASE_REGISTRATION_RETRY_FAILED");
+			}
+		},
+		[loadPhysicalTimeline, modelSpecId],
+	);
 
 	if (loading) {
 		return (
@@ -538,6 +661,29 @@ export default function ModelSpecDetailPage() {
 	const domainOptions: ModelSpecSelectOption[] = model.domainId
 		? [{ value: model.domainId, label: labelByKey[model.domainId] || "当前业务分类" }]
 		: [];
+	const stageProjection = canonicalModel
+		? getModelSpecDetailStageProjection({
+				stage: activeStage,
+				logicalDirty,
+				implementationConfigured: implementationState.configured,
+				implementationDirty: implementationState.dirty,
+				implementationValidated: implementationState.validated,
+				canEdit,
+				lifecycleStatus: canonicalModel.status,
+			})
+		: null;
+	const runPrimaryAction = async () => {
+		if (!stageProjection || !canonicalModel || stageProjection.primaryAction.disabled) return;
+		if (stageProjection.primaryAction.recoveryStage !== activeStage) {
+			changeStage(stageProjection.primaryAction.recoveryStage);
+			return;
+		}
+		if (stageProjection.primaryAction.label === "保存逻辑设计") await save();
+		else if (stageProjection.primaryAction.label === "配置数据实现") await implementationActionRef.current?.save();
+		else if (stageProjection.primaryAction.label === "验证实现") await implementationActionRef.current?.validate();
+		else if (advancedImplementationReady) navigate(implementationPath);
+		else changeStage("implementation");
+	};
 
 	return (
 		<div className="p-4" data-testid="model-spec-detail-page">
@@ -565,22 +711,7 @@ export default function ModelSpecDetailPage() {
 						<Text type="secondary">版本 r{model.revision}</Text>
 					</Space>
 				</div>
-				<Space wrap>
-					{canonicalModel && implementationReady ? (
-						<Button
-							type={canEdit && activeTab !== "standards" ? "default" : "primary"}
-							data-testid="model-spec-enter-implementation"
-							onClick={() => navigate(implementationPath)}
-						>
-							进入 SQL/dbt 实现
-						</Button>
-					) : null}
-					{canEdit && activeTab !== "standards" ? (
-						<Button type="primary" loading={saving} disabled={sourceVerificationPending} onClick={() => void save()}>
-							{sourceVerificationPending ? "正在核验来源" : "保存草稿"}
-						</Button>
-					) : null}
-				</Space>
+				{stageProjection ? <Button type="primary" loading={saving} disabled={stageProjection.primaryAction.disabled || (stageProjection.primaryAction.label === "生成并发布" && !advancedImplementationReady)} title={stageProjection.primaryAction.recoveryMessage || (stageProjection.primaryAction.label === "生成并发布" && !advancedImplementationReady ? implementationRecoveryMessage : undefined)} onClick={() => void runPrimaryAction()}>{stageProjection.primaryAction.label}</Button> : null}
 			</div>
 
 			{model.compatibilityMode === "LEGACY_READONLY" ? (
@@ -666,86 +797,28 @@ export default function ModelSpecDetailPage() {
 					onReload={() => void loadStageGates()}
 				/>
 			) : null}
+			{canonicalModel && activeStage === "physical" && !physicalLoading && !advancedImplementationReady ? (
+				<Alert
+					className="mb-3"
+					type="warning"
+					showIcon
+					data-testid="model-spec-advanced-implementation-recovery"
+					message="高级 dbt 入口已锁定"
+					description={implementationRecoveryMessage}
+					action={<Button size="small" onClick={() => changeStage("implementation")}>返回数据实现</Button>}
+				/>
+			) : null}
+			{canonicalModel ? (
+				<div className="mb-3 grid grid-cols-3 gap-2 max-[390px]:grid-cols-1" role="tablist" aria-label="模型阶段">
+					{(["logical", "implementation", "physical"] as const).map((stage) => <Button key={stage} type={activeStage === stage ? "primary" : "default"} onClick={() => changeStage(stage)}>{stage === "logical" ? "逻辑设计" : stage === "implementation" ? "数据实现" : "物理资产"}</Button>)}
+				</div>
+			) : null}
 
 			{canonicalModel ? (
 				<Card>
-					<Form form={form} layout="vertical" requiredMark={false} disabled={saving}>
-						<Tabs
-							activeKey={activeTab}
-							onChange={changeTab}
-							items={[
-								{
-									key: "design",
-									label: "模型设计",
-									forceRender: true,
-									children: (
-										<>
-											<ModelSpecEditorFields
-												form={form}
-												planOptions={planOptions}
-												domainOptions={domainOptions}
-												upstreamOptions={upstreamOptions}
-												dimensionOptions={dimensionOptions}
-												sourceOptions={sourceOptions}
-												sourceLoading={sourceLoading}
-												upstreamValidationAvailable={dependencyMetadataLoaded}
-												sourceError={sourceError}
-												sourcePermissionDenied={sourcePermissionDenied}
-												lockPlan
-												lockDomain
-												lockModelType
-												readOnly={!canEdit}
-												onReloadSources={() => {
-													const currentSources =
-														(form.getFieldValue("sources") as ModelSpecDraft["sources"] | undefined) || [];
-													void loadSources(canonicalModel.planId, currentSources);
-												}}
-												onManageSources={canEdit ? () => setSourceInventoryOpen(true) : undefined}
-											/>
-											{canonicalModel.modelType === "FACT" ||
-											canonicalModel.modelType === "SUMMARY" ||
-											canonicalModel.modelType === "APPLICATION" ? (
-												<ModelSpecDependencyPanel modelSpecId={canonicalModel.id} revision={canonicalModel.revision} />
-											) : null}
-										</>
-									),
-								},
-								{
-									key: "fields",
-									label: "字段设计",
-									forceRender: true,
-									children: (
-										<ModelSpecFieldsTab
-											readOnly={!canEdit}
-											persistedFieldNames={canonicalModel.fields.map((field) => field.name)}
-										/>
-									),
-								},
-								{
-									key: "standards",
-									label: "字段标准",
-									children: (
-										<>
-											{!sourceLoading && !persistedSourcesCurrent ? (
-												<Alert
-													className="mb-3"
-													type="warning"
-													showIcon
-													message={sourceError || "来源版本已变化，请先在“模型设计”中明确采用当前版本并保存草稿"}
-												/>
-											) : null}
-											<ModelSpecStandardsTab
-												model={canonicalModel}
-												canEdit={canEdit && !persistedSourceVerificationPending && persistedSourcesCurrent}
-												saving={saving}
-												onSaveStandardBindings={onSaveStandardBindings}
-											/>
-										</>
-									),
-								},
-							]}
-						/>
-					</Form>
+					{activeStage === "logical" ? <Form form={form} layout="vertical" requiredMark={false} disabled={saving}><ModelSpecLogicalDesignStage form={form} model={canonicalModel} planOptions={planOptions} domainOptions={domainOptions} upstreamOptions={upstreamOptions} dimensionOptions={dimensionOptions} readOnly={!canEdit} saving={saving} persistedFieldNames={canonicalModel.fields.map((field) => field.name)} onSaveStandardBindings={onSaveStandardBindings} /></Form> : null}
+					{activeStage === "implementation" ? <ModelSpecImplementationStage ref={implementationActionRef} model={canonicalModel} expected={{ id: canonicalModel.id, revision: canonicalModel.revision, checksum: canonicalModel.checksum }} implementation={physicalTimeline?.implementation || null} implementationLoading={physicalLoading} sourceOptions={sourceOptions} upstreamOptions={implementationUpstreamOptions} sourceLoading={sourceLoading} sourceError={sourceError} sourcePermissionDenied={sourcePermissionDenied} readOnly={!canEdit} onReloadSources={() => { const currentSources = (form.getFieldValue("sources") as ModelSpecDraft["sources"] | undefined) || []; void loadSources(canonicalModel.planId, currentSources); }} onManageSources={canEdit ? () => setSourceInventoryOpen(true) : undefined} onStateChange={setImplementationState} onImplementationSaved={(implementation) => { if (implementation.modelSpecId !== canonicalModel.id || implementation.revision !== canonicalModel.revision || implementation.modelChecksum !== canonicalModel.checksum) return; setPhysicalTimeline((current) => ({ implementation, artifacts: current?.artifacts || [], events: current?.events || [] })); }} /> : null}
+					{activeStage === "physical" ? <ModelSpecPhysicalAssetStage model={canonicalModel} timeline={physicalTimeline} loading={physicalLoading} error={physicalError} onRetry={() => void loadPhysicalTimeline()} onRetryReleaseRegistration={retryReleaseRegistration} advancedEntryDisabled={!advancedImplementationReady} onReturnToImplementation={() => changeStage("implementation")} onOpenAdvanced={() => navigate(implementationPath)} /> : null}
 				</Card>
 			) : (
 				<Card>

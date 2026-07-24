@@ -11,8 +11,13 @@ import com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier;
 import com.yuzhi.dts.ingestion.service.etl.connector.ExecutionPlan;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -345,7 +350,7 @@ public class ApiIngestionExecutor {
     }
 
     private void applyLineageSnapshot(ExecutionPlan plan, ExecutionContext context, ApiIngestionResult result) {
-        if (context.execution() == null) {
+        if (context.execution() == null || result == null || !result.success()) {
             return;
         }
         Map<String, Object> payload = safeMap(plan == null ? null : plan.payload());
@@ -363,7 +368,7 @@ public class ApiIngestionExecutor {
             if (StringUtils.hasText(source)) {
                 sources.add(apiSourceDataset(source, namespace, payload, context.task(), result));
             }
-            ObjectNode targetNode = targetDataset(target, result);
+            ObjectNode targetNode = targetDataset(target, source, plan, context, result);
             if (targetNode != null) {
                 targets.add(targetNode);
             }
@@ -410,7 +415,13 @@ public class ApiIngestionExecutor {
         return node;
     }
 
-    private ObjectNode targetDataset(String target, ApiIngestionResult result) {
+    private ObjectNode targetDataset(
+        String target,
+        String resourceId,
+        ExecutionPlan plan,
+        ExecutionContext context,
+        ApiIngestionResult result
+    ) {
         if (!StringUtils.hasText(target)) {
             return null;
         }
@@ -431,10 +442,127 @@ public class ApiIngestionExecutor {
         if (StringUtils.hasText(namespace)) {
             node.put("namespace", namespace);
         }
-        if (result != null && result.rowsWritten() != null) {
+        node.put("sourceType", "api");
+        node.put("landingMode", "raw_ods");
+        if (StringUtils.hasText(resourceId)) {
+            node.put("resourceId", resourceId);
+        }
+        ApiSourceContracts.ApiLandingPolicy landingPolicy = ApiSourceContracts.defaultLandingPolicy();
+        node.put("landingStatus", "SUCCESS");
+        node.put("rawRecordColumn", landingPolicy.rawRecordColumn());
+        ArrayNode technicalColumns = node.putArray("technicalColumns");
+        landingPolicy.technicalColumns().forEach(technicalColumns::add);
+        List<Map<String, Object>> fieldSnapshot = landingFieldSnapshot(landingPolicy);
+        ArrayNode fieldSnapshotNode = node.putArray("fieldSnapshot");
+        for (Map<String, Object> field : fieldSnapshot) {
+            ObjectNode fieldNode = fieldSnapshotNode.addObject();
+            fieldNode.put("name", text(field.get("name")));
+            fieldNode.put("type", text(field.get("type")));
+            fieldNode.put("nullable", Boolean.TRUE.equals(field.get("nullable")));
+            fieldNode.put("technical", Boolean.TRUE.equals(field.get("technical")));
+        }
+        node.put("fieldSnapshotChecksum", normalizedChecksum(fieldSnapshot));
+        Map<String, Object> stats = resourceStats(result, resourceId);
+        putText(node, "cursorValue", stats.get("cursorValue"));
+        Long resourceRowsWritten = metricLong(result, resourceId == null ? null : resourceId + ".rowsWritten");
+        if (resourceRowsWritten != null) {
+            node.put("rowsWritten", resourceRowsWritten);
+        } else if (result != null && result.rowsWritten() != null) {
             node.put("rowsWritten", result.rowsWritten());
         }
+        String executionId = executionIdentifier(context);
+        if (StringUtils.hasText(executionId)) {
+            node.put("executionId", executionId);
+        }
+        String configChecksum = normalizedConfigChecksum(plan);
+        if (StringUtils.hasText(configChecksum)) {
+            node.put("configChecksum", configChecksum);
+        }
         return node;
+    }
+
+    private String executionIdentifier(ExecutionContext context) {
+        if (context == null) {
+            return null;
+        }
+        String externalExecutionId = context.execution() == null ? null : text(context.execution().getExecutionId());
+        return StringUtils.hasText(externalExecutionId)
+            ? externalExecutionId
+            : context.executionId() == null ? null : context.executionId().toString();
+    }
+
+    private Long metricLong(ApiIngestionResult result, String key) {
+        if (result == null || result.metrics() == null || !StringUtils.hasText(key)) {
+            return null;
+        }
+        return longObject(result.metrics().get(key));
+    }
+
+    private String normalizedConfigChecksum(ExecutionPlan plan) {
+        if (plan == null) {
+            return null;
+        }
+        return normalizedChecksum(plan.engine(), plan.connectorType(), plan.contractVersion(), plan.payload(), plan.checkpointPolicy());
+    }
+
+    private String normalizedChecksum(Object... values) {
+        StringBuilder normalized = new StringBuilder();
+        if (values != null) {
+            for (Object value : values) {
+                appendNormalizedValue(normalized, value);
+            }
+        }
+        try {
+            return "sha256:" + HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(normalized.toString().getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 不可用", ex);
+        }
+    }
+
+    private List<Map<String, Object>> landingFieldSnapshot(ApiSourceContracts.ApiLandingPolicy policy) {
+        List<Map<String, Object>> fields = new ArrayList<>();
+        fields.add(Map.of("name", policy.rawRecordColumn(), "type", "jsonb", "nullable", false, "technical", false));
+        for (String technicalColumn : policy.technicalColumns()) {
+            fields.add(Map.of("name", technicalColumn, "type", "text", "nullable", true, "technical", true));
+        }
+        return List.copyOf(fields);
+    }
+
+    private void appendNormalizedValue(StringBuilder normalized, Object value) {
+        if (value == null) {
+            normalized.append("null");
+        } else if (value instanceof Map<?, ?> map) {
+            normalized.append('{');
+            map.entrySet()
+                .stream()
+                .filter(entry -> entry.getKey() != null)
+                .sorted(Comparator.comparing(entry -> String.valueOf(entry.getKey())))
+                .forEach(entry -> {
+                    appendNormalizedValue(normalized, String.valueOf(entry.getKey()));
+                    normalized.append(':');
+                    appendNormalizedValue(normalized, entry.getValue());
+                    normalized.append(';');
+                });
+            normalized.append('}');
+        } else if (value instanceof Iterable<?> items) {
+            normalized.append('[');
+            for (Object item : items) {
+                appendNormalizedValue(normalized, item);
+                normalized.append(';');
+            }
+            normalized.append(']');
+        } else if (value instanceof ExecutionPlan.CheckpointPolicy checkpointPolicy) {
+            normalized.append("checkpoint(");
+            appendNormalizedValue(normalized, checkpointPolicy.type());
+            normalized.append(';');
+            appendNormalizedValue(normalized, checkpointPolicy.cursorField());
+            normalized.append(';');
+            appendNormalizedValue(normalized, checkpointPolicy.updateMode());
+            normalized.append(')');
+        } else {
+            normalized.append(value);
+        }
+        normalized.append('|');
     }
 
     private String sourceNamespace(Map<String, Object> payload, IngestionTask task) {

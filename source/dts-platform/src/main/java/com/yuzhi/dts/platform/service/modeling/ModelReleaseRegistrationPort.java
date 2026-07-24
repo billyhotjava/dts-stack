@@ -13,6 +13,8 @@ public interface ModelReleaseRegistrationPort {
         String actorId,
         UUID releaseEventId,
         ModelSpecView model,
+        int implementationRevision,
+        String implementationChecksum,
         List<ArtifactView> artifacts,
         String previousExternalRef
     );

@@ -4,24 +4,9 @@ export const MODEL_SPEC_CREATE_FIELDS = [
 	"planId",
 	"domainId",
 	"modelType",
-	"layer",
 	"name",
 	"description",
-	"implementationMode",
-	"materialization",
-	"businessActivityRef",
-	"consumptionScenario",
-	"grain",
-	"factShape",
-	"timeSemantics",
-	"fields",
-	"sourceRefs",
-	"dependsOn",
-	"dimensionRefs",
-	"metricRefs",
-	"standardBindings",
-	"generationStrategy",
-	"dimensionProfile",
+	"dimensionDefinitionRef",
 	"idempotencyKey",
 ] as const;
 
@@ -53,11 +38,16 @@ export const MODEL_SPEC_REQUIRED_FIELD_CODES = {
 	planId: "MODEL_SPEC_PLAN_REQUIRED",
 	domainId: "MODEL_SPEC_DOMAIN_REQUIRED",
 	modelType: "MODEL_SPEC_TYPE_REQUIRED",
-	layer: "MODEL_SPEC_LAYER_REQUIRED",
 	name: "MODEL_SPEC_NAME_REQUIRED",
-	implementationMode: "MODEL_SPEC_IMPLEMENTATION_MODE_REQUIRED",
 	idempotencyKey: "MODEL_SPEC_IDEMPOTENCY_KEY_REQUIRED",
 } as const;
+
+const MODEL_SPEC_FULL_REQUIRED_FIELD_CODES = {
+	...MODEL_SPEC_REQUIRED_FIELD_CODES,
+	layer: "MODEL_SPEC_LAYER_REQUIRED",
+	implementationMode: "MODEL_SPEC_IMPLEMENTATION_MODE_REQUIRED",
+} as const;
+const MODEL_SPEC_FULL_FIELDS = [...MODEL_SPEC_UPDATE_FIELDS, "idempotencyKey"] as const;
 
 export const MODEL_SPEC_COLLECTION_FIELDS = [
 	"fields",
@@ -83,7 +73,7 @@ export const isModelSpecDirectInputLayerAllowed = (layer: ModelSpecLayer): boole
 
 export const isModelSpecUpstreamAllowed = (
 	targetType: ModelSpecType,
-	candidate: Pick<CreateModelSpecCommand, "modelType" | "layer">,
+	candidate: Pick<UpdateModelSpecCommand, "modelType" | "layer">,
 ): boolean => {
 	if (MODEL_SPEC_TARGET_LAYER_BY_TYPE[candidate.modelType] !== candidate.layer) return false;
 	if (targetType === "FACT") return candidate.modelType === "FACT" && candidate.layer === "DWD";
@@ -93,7 +83,7 @@ export const isModelSpecUpstreamAllowed = (
 };
 
 export const isModelSpecDimensionRefAllowed = (
-	candidate: Pick<CreateModelSpecCommand, "modelType" | "layer">,
+candidate: Pick<UpdateModelSpecCommand, "modelType" | "layer">,
 ): boolean => candidate.modelType === "DIMENSION" && candidate.layer === MODEL_SPEC_TARGET_LAYER_BY_TYPE.DIMENSION;
 
 export type ModelSpecImplementationMode = "DESIGNER_GENERATED" | "DBT_MANAGED";
@@ -165,6 +155,10 @@ export type ModelSpecDimensionProfile = {
 	scdPolicy: ModelSpecScdPolicy;
 	reuseScope: ModelSpecReuseScope;
 };
+export type ModelSpecDimensionDefinitionRef = {
+	dimensionDefinitionId: string;
+	revision: number;
+};
 export type ModelSpecLegacySource = { kind: string | null; ref: string | null; layer: string | null };
 export type ModelSpecLegacyStandard = {
 	fieldName: string | null;
@@ -188,7 +182,29 @@ export type ModelSpecCollections = {
 	standardBindings: ModelSpecStandardBinding[];
 };
 
-export type CreateModelSpecCommand = {
+/**
+ * Create intentionally carries only the user's initial identity and optional DIMENSION definition.
+ * Layer, implementation ownership, sources and logical collections are all server defaults.
+ */
+type CreateModelSpecBase = {
+	planId: string;
+	domainId: string;
+	name: string;
+	description?: string | null;
+	idempotencyKey: string;
+};
+
+export type CreateModelSpecCommand =
+	| (CreateModelSpecBase & {
+			modelType: "DIMENSION";
+			dimensionDefinitionRef: ModelSpecDimensionDefinitionRef;
+		})
+	| (CreateModelSpecBase & {
+			modelType: Exclude<ModelSpecType, "DIMENSION">;
+			dimensionDefinitionRef?: never;
+		});
+
+export type UpdateModelSpecCommand = {
 	planId: string;
 	domainId: string;
 	modelType: ModelSpecType;
@@ -204,14 +220,11 @@ export type CreateModelSpecCommand = {
 	timeSemantics?: ModelSpecTimeSemantics | null;
 	generationStrategy?: ModelSpecGenerationStrategy | null;
 	dimensionProfile?: ModelSpecDimensionProfile | null;
-	idempotencyKey: string;
 } & Partial<ModelSpecCollections>;
-
-export type UpdateModelSpecCommand = Omit<CreateModelSpecCommand, "idempotencyKey">;
 
 export const hasModelSpecTypeBoundaryMismatch = (
 	model: Pick<
-		CreateModelSpecCommand,
+		UpdateModelSpecCommand,
 		| "modelType"
 		| "factShape"
 		| "timeSemantics"
@@ -239,10 +252,8 @@ export const hasModelSpecTypeBoundaryMismatch = (
 	);
 };
 
-type ModelSpecViewBase = Omit<
-	CreateModelSpecCommand,
-	"idempotencyKey" | "planId" | "domainId" | keyof ModelSpecCollections
-> & {
+type ModelSpecViewBase = Omit<UpdateModelSpecCommand, "planId" | "domainId" | keyof ModelSpecCollections> & {
+	dimensionDefinitionRef: ModelSpecDimensionDefinitionRef | null;
 	id: string;
 	status: ModelSpecStatus;
 	revision: number;
@@ -411,7 +422,7 @@ const rawModelSpecIssues = (raw: Record<string, unknown>): ModelSpecFieldIssue[]
 			issues.push(issue(code, field, message));
 		}
 	};
-	const allowed = new Set<string>(MODEL_SPEC_CREATE_FIELDS);
+	const allowed = new Set<string>(MODEL_SPEC_FULL_FIELDS);
 	for (const field of Object.keys(raw)
 		.filter((field) => !allowed.has(field))
 		.sort()) {
@@ -422,9 +433,9 @@ const rawModelSpecIssues = (raw: Record<string, unknown>): ModelSpecFieldIssue[]
 			add("MODEL_SPEC_COLLECTION_INVALID", field, "Collection field must be an array when present");
 		}
 	}
-	for (const [field, code] of Object.entries(MODEL_SPEC_REQUIRED_FIELD_CODES) as [
-		keyof typeof MODEL_SPEC_REQUIRED_FIELD_CODES,
-		(typeof MODEL_SPEC_REQUIRED_FIELD_CODES)[keyof typeof MODEL_SPEC_REQUIRED_FIELD_CODES],
+	for (const [field, code] of Object.entries(MODEL_SPEC_FULL_REQUIRED_FIELD_CODES) as [
+		keyof typeof MODEL_SPEC_FULL_REQUIRED_FIELD_CODES,
+		(typeof MODEL_SPEC_FULL_REQUIRED_FIELD_CODES)[keyof typeof MODEL_SPEC_FULL_REQUIRED_FIELD_CODES],
 	][]) {
 		const value = raw[field];
 		if (value == null || (typeof value === "string" && !value.trim())) {
@@ -605,13 +616,70 @@ const rawModelSpecIssues = (raw: Record<string, unknown>): ModelSpecFieldIssue[]
 };
 
 export const validateModelSpecCreate = (input: unknown): ModelSpecFieldIssue[] => {
+	if (!isRecord(input)) {
+		return [issue("MODEL_SPEC_REQUEST_INVALID", "$", "ModelSpec create request is required")];
+	}
+	const issues: ModelSpecFieldIssue[] = [];
+	const allowed = new Set<string>(MODEL_SPEC_CREATE_FIELDS);
+	for (const field of Object.keys(input).filter((field) => !allowed.has(field)).sort()) {
+		issues.push(issue("MODEL_SPEC_FIELD_NOT_ALLOWED", field, "Field is not part of the minimal ModelSpec create contract"));
+	}
+	for (const [field, code] of Object.entries(MODEL_SPEC_REQUIRED_FIELD_CODES) as [
+		keyof typeof MODEL_SPEC_REQUIRED_FIELD_CODES,
+		(typeof MODEL_SPEC_REQUIRED_FIELD_CODES)[keyof typeof MODEL_SPEC_REQUIRED_FIELD_CODES],
+	][]) {
+		const value = input[field];
+		if (value == null || (typeof value === "string" && !value.trim())) {
+			issues.push(issue(code, field, "Required field is missing"));
+		}
+	}
+	if (input.planId != null && !isMissingText(input.planId) && !isUuid(input.planId))
+		issues.push(issue("MODEL_SPEC_PLAN_INVALID", "planId", "Plan id must be a UUID"));
+	if (input.domainId != null && !isMissingText(input.domainId) && !isUuid(input.domainId))
+		issues.push(issue("MODEL_SPEC_DOMAIN_INVALID", "domainId", "Domain id must be a UUID"));
+	if (input.modelType != null && !MODEL_SPEC_TYPES.has(input.modelType as ModelSpecType))
+		issues.push(issue("MODEL_SPEC_TYPE_INVALID", "modelType", "Model type is not supported"));
+	if (input.name != null && typeof input.name !== "string")
+		issues.push(issue("MODEL_SPEC_NAME_INVALID", "name", "Model name must be text"));
+	if (input.description != null && !isNullableString(input.description))
+		issues.push(issue("MODEL_SPEC_FIELD_INVALID", "description", "Optional text field must be text or null"));
+	if (input.idempotencyKey != null && typeof input.idempotencyKey !== "string")
+		issues.push(issue("MODEL_SPEC_IDEMPOTENCY_KEY_INVALID", "idempotencyKey", "Idempotency key must be text"));
+	const definitionRef = input.dimensionDefinitionRef;
+	const validDefinitionRef =
+		isRecord(definitionRef) &&
+		Object.keys(definitionRef).every((field) => field === "dimensionDefinitionId" || field === "revision") &&
+		isUuid(definitionRef.dimensionDefinitionId) &&
+		isIntInRange(definitionRef.revision, 1);
+	if (input.modelType === "DIMENSION" && !validDefinitionRef) {
+		issues.push(
+			issue(
+				"MODEL_SPEC_DIMENSION_DEFINITION_REQUIRED",
+				"dimensionDefinitionRef",
+				"DIMENSION models require a revision-pinned dimension definition",
+			),
+		);
+	}
+	if (input.modelType != null && input.modelType !== "DIMENSION" && definitionRef != null) {
+		issues.push(
+			issue(
+				"MODEL_SPEC_DIMENSION_DEFINITION_NOT_ALLOWED",
+				"dimensionDefinitionRef",
+				"Dimension definition references belong to DIMENSION models only",
+			),
+		);
+	}
+	return issues;
+};
+
+const validateModelSpecFull = (input: unknown): ModelSpecFieldIssue[] => {
 	if (!input || typeof input !== "object" || Array.isArray(input)) {
 		return [issue("MODEL_SPEC_REQUEST_INVALID", "$", "ModelSpec create request is required")];
 	}
 	const raw = input as Record<string, unknown>;
 	const issues = rawModelSpecIssues(raw);
 	if (issues.length > 0) return issues;
-	const command = raw as Partial<CreateModelSpecCommand>;
+	const command = raw as Partial<UpdateModelSpecCommand> & { idempotencyKey?: string };
 	if (command.modelType && command.layer && MODEL_SPEC_TARGET_LAYER_BY_TYPE[command.modelType] !== command.layer) {
 		issues.push(
 			issue(
@@ -874,5 +942,5 @@ export const validateModelSpecUpdate = (input: unknown): ModelSpecFieldIssue[] =
 	for (const field of MODEL_SPEC_UPDATE_FIELDS) {
 		if (Object.hasOwn(input, field)) createShape[field] = input[field];
 	}
-	return [...fieldIssues, ...validateModelSpecCreate(createShape)];
+	return [...fieldIssues, ...validateModelSpecFull(createShape)];
 };

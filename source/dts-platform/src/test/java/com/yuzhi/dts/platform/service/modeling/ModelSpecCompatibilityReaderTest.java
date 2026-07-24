@@ -3,8 +3,12 @@ package com.yuzhi.dts.platform.service.modeling;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository;
+import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository.LegacyDefinitionRef;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.StoredModelSpec;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.CompatibilityMode;
@@ -23,6 +27,9 @@ class ModelSpecCompatibilityReaderTest {
 
     @Mock
     private ModelSpecRepository repository;
+
+    @Mock
+    private DimensionDefinitionRepository dimensionDefinitions;
 
     @Test
     void reportsMissingModelSpecWithoutFailingWhenTheIdentifierIsNull() {
@@ -155,6 +162,65 @@ class ModelSpecCompatibilityReaderTest {
     }
 
     @Test
+    void projectsTheLegacyMapAsAnEffectivePinnedDimensionReference() throws Exception {
+        ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
+        ModelSpecCompatibilityReader reader = new ModelSpecCompatibilityReader(
+            repository,
+            new ModelSpecSnapshotCodec(mapper),
+            mapper,
+            dimensionDefinitions
+        );
+        UUID id = UUID.fromString("30000000-0000-0000-0000-000000000077");
+        UUID domainId = UUID.fromString("20000000-0000-0000-0000-000000000077");
+        UUID definitionId = UUID.fromString("60000000-0000-0000-0000-000000000077");
+        ModelingVNextContract.ModelSpec legacy = new ModelingVNextContract.ModelSpec(
+            id.toString(),
+            UUID.randomUUID().toString(),
+            null,
+            ModelingVNextContract.Layer.DWD,
+            ModelingVNextContract.ModelType.DIMENSION,
+            ModelingVNextContract.ImplementationMode.DESIGNER_GENERATED,
+            "legacy_customer_dimension",
+            new ModelingVNextContract.Grain("one row per customer", List.of("customer_id")),
+            List.of(),
+            List.of(),
+            List.of("customer_id"),
+            List.of(),
+            "table",
+            1,
+            List.of(),
+            "legacy-customer-dimension"
+        );
+        StoredModelSpec row = new StoredModelSpec(
+            1,
+            "server-tenant",
+            id,
+            UUID.randomUUID(),
+            domainId,
+            ModelStatus.DRAFT,
+            1,
+            "a".repeat(64),
+            null,
+            mapper.writeValueAsString(legacy),
+            null,
+            null,
+            null,
+            Instant.EPOCH,
+            Instant.EPOCH
+        );
+        when(repository.findCurrent("server-tenant", id)).thenReturn(Optional.of(row));
+        when(dimensionDefinitions.findLegacyDefinitionRef("server-tenant", id, domainId))
+            .thenReturn(Optional.of(new LegacyDefinitionRef(definitionId, 3)));
+
+        ModelSpecContract.ModelSpecView view = reader.get("server-tenant", id);
+
+        assertThat(view.dimensionDefinitionRef())
+            .isEqualTo(new ModelSpecContract.DimensionDefinitionRef(definitionId, 3));
+        assertThat(view.compatibilityMode()).isEqualTo(CompatibilityMode.LEGACY_READONLY);
+        verify(dimensionDefinitions).findLegacyDefinitionRef("server-tenant", id, domainId);
+    }
+
+    @Test
     void rejectsCanonicalSnapshotsWhoseDomainDoesNotMatchTheLedgerHead() {
         ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
         ModelSpecSnapshotCodec codec = new ModelSpecSnapshotCodec(mapper);
@@ -196,6 +262,127 @@ class ModelSpecCompatibilityReaderTest {
             .isInstanceOf(ModelSpecException.class)
             .extracting(error -> ((ModelSpecException) error).code())
             .isEqualTo("MODEL_SPEC_SNAPSHOT_INVALID");
+    }
+
+    @Test
+    void projectsAPinnedDefinitionFromAHistoricalRevisionWithoutRewritingTheSnapshot() {
+        ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
+        ModelSpecSnapshotCodec codec = new ModelSpecSnapshotCodec(mapper);
+        ModelSpecCompatibilityReader reader = new ModelSpecCompatibilityReader(repository, codec, mapper);
+        UUID id = UUID.fromString("30000000-0000-0000-0000-000000000088");
+        UUID planId = UUID.fromString("10000000-0000-0000-0000-000000000001");
+        UUID domainId = UUID.fromString("20000000-0000-0000-0000-000000000001");
+        UUID definitionId = UUID.fromString("60000000-0000-0000-0000-000000000001");
+        var command = new ModelSpecContract.CreateModelSpecCommand(
+            planId, domainId, ModelSpecContract.ModelType.DIMENSION, ModelSpecContract.Layer.DWD,
+            "customer_dimension", "Customer dimension", ModelSpecContract.ImplementationMode.DESIGNER_GENERATED, "table",
+            null, null, new ModelSpecContract.Grain("one row per customer", List.of("customer_id")),
+            null, null,
+            List.of(new ModelSpecContract.ModelField("customer_id", "varchar", false, null, ModelSpecContract.FieldRole.KEY, null)),
+            List.of(), List.of(), List.of(), List.of(), List.of(), null, null,
+            new ModelSpecContract.DimensionDefinitionRef(definitionId, 1), "dimension-immutable-snapshot"
+        );
+        ModelSpecContract.ModelSpecView snapshot = codec.toCreatedView(id, command, Instant.EPOCH);
+        String snapshotJson = codec.write(snapshot);
+        StoredModelSpec row = new StoredModelSpec(
+            false, 2, "server-tenant", id, planId, domainId, ModelStatus.DRAFT, 1,
+            null, snapshot.checksum(), snapshotJson, null, command.idempotencyKey(),
+            codec.requestHash(command), snapshotJson, Instant.EPOCH, Instant.EPOCH
+        );
+        when(repository.findRevision("server-tenant", id, 1)).thenReturn(Optional.of(row));
+
+        ModelSpecContract.ModelSpecView result = reader.revision(
+            "server-tenant",
+            new ModelSpecContract.ModelRevisionRef(id, 1)
+        );
+
+        assertThat(result.dimensionDefinitionRef()).isEqualTo(new ModelSpecContract.DimensionDefinitionRef(definitionId, 1));
+        assertThat(row.currentSnapshot()).isEqualTo(snapshotJson);
+        assertThat(row.revisionChecksum()).isEqualTo(snapshot.checksum());
+        verify(repository).findRevision("server-tenant", id, 1);
+        verifyNoMoreInteractions(repository);
+    }
+
+    @Test
+    void overlaysALegacyMapOnCanonicalDimensionSnapshotsThatPredateTheReferenceField() {
+        ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
+        ModelSpecSnapshotCodec codec = new ModelSpecSnapshotCodec(mapper);
+        ModelSpecCompatibilityReader reader = new ModelSpecCompatibilityReader(
+            repository,
+            codec,
+            mapper,
+            dimensionDefinitions
+        );
+        UUID id = UUID.fromString("30000000-0000-0000-0000-000000000099");
+        UUID planId = UUID.fromString("10000000-0000-0000-0000-000000000099");
+        UUID domainId = UUID.fromString("20000000-0000-0000-0000-000000000099");
+        UUID definitionId = UUID.fromString("60000000-0000-0000-0000-000000000099");
+        var legacyCanonicalCommand = new ModelSpecContract.CreateModelSpecCommand(
+            planId,
+            domainId,
+            ModelSpecContract.ModelType.DIMENSION,
+            ModelSpecContract.Layer.DWD,
+            "customer_dimension",
+            "Customer dimension",
+            ModelSpecContract.ImplementationMode.DESIGNER_GENERATED,
+            "table",
+            null,
+            null,
+            new ModelSpecContract.Grain("one row per customer", List.of("customer_id")),
+            null,
+            null,
+            List.of(
+                new ModelSpecContract.ModelField(
+                    "customer_id",
+                    "varchar",
+                    false,
+                    null,
+                    ModelSpecContract.FieldRole.KEY,
+                    null
+                )
+            ),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            null,
+            null,
+            "legacy-canonical-dimension"
+        );
+        ModelSpecContract.ModelSpecView snapshot = codec.toCreatedView(
+            id,
+            legacyCanonicalCommand,
+            Instant.EPOCH
+        );
+        String snapshotJson = codec.write(snapshot);
+        StoredModelSpec row = new StoredModelSpec(
+            2,
+            "server-tenant",
+            id,
+            planId,
+            domainId,
+            ModelStatus.DRAFT,
+            1,
+            snapshot.checksum(),
+            snapshotJson,
+            null,
+            "legacy-canonical-dimension",
+            codec.requestHash(legacyCanonicalCommand),
+            snapshotJson,
+            Instant.EPOCH,
+            Instant.EPOCH
+        );
+        when(repository.findCurrent("server-tenant", id)).thenReturn(Optional.of(row));
+        when(dimensionDefinitions.findLegacyDefinitionRef("server-tenant", id, domainId))
+            .thenReturn(Optional.of(new LegacyDefinitionRef(definitionId, 2)));
+
+        ModelSpecContract.ModelSpecView projected = reader.get("server-tenant", id);
+
+        assertThat(projected.dimensionDefinitionRef())
+            .isEqualTo(new ModelSpecContract.DimensionDefinitionRef(definitionId, 2));
+        assertThat(projected.checksum()).isEqualTo(snapshot.checksum());
+        assertThat(row.currentSnapshot()).isEqualTo(snapshotJson);
     }
 
     @Test

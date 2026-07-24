@@ -2,6 +2,8 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import com.yuzhi.dts.platform.repository.modeling.ModelLifecycleRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
+import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository;
+import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository.StoredDimensionDefinition;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.StoredModelSpec;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.DimensionHierarchy;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.DimensionLevel;
@@ -18,6 +20,8 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ScdType;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.StandardBinding;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.TimeSemanticsType;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.SaveImplementationCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecStandardEvidencePort.StandardEvidence;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -37,16 +41,40 @@ public class ModelSpecStageGateService {
 
     private final ModelSpecApplicationService modelSpecs;
     private final ModelSpecRepository repository;
+    private final DimensionDefinitionRepository dimensionDefinitions;
     private final ModelSpecStandardEvidencePort standardEvidence;
     private final ModelLifecycleRepository lifecycle;
     private final ModelSpecSourceValidationPort sourceValidation;
+    private final ModelSpecDomainReadAccessPort domainReadAccess;
+    private final ModelImplementationCompatibilityAdapter implementationCompatibility;
 
     public ModelSpecStageGateService(
         ModelSpecApplicationService modelSpecs,
         ModelSpecRepository repository,
         ModelSpecStandardEvidencePort standardEvidence
     ) {
-        this(modelSpecs, repository, standardEvidence, null, null);
+        this(modelSpecs, repository, standardEvidence, null, null, null, null, null);
+    }
+
+    public ModelSpecStageGateService(
+        ModelSpecApplicationService modelSpecs,
+        ModelSpecRepository repository,
+        ModelSpecStandardEvidencePort standardEvidence,
+        ModelLifecycleRepository lifecycle,
+        ModelSpecSourceValidationPort sourceValidation
+    ) {
+        this(modelSpecs, repository, standardEvidence, lifecycle, sourceValidation, null, null, null);
+    }
+
+    public ModelSpecStageGateService(
+        ModelSpecApplicationService modelSpecs,
+        ModelSpecRepository repository,
+        ModelSpecStandardEvidencePort standardEvidence,
+        ModelLifecycleRepository lifecycle,
+        ModelSpecSourceValidationPort sourceValidation,
+        DimensionDefinitionRepository dimensionDefinitions
+    ) {
+        this(modelSpecs, repository, standardEvidence, lifecycle, sourceValidation, dimensionDefinitions, null, null);
     }
 
     @Autowired
@@ -55,13 +83,19 @@ public class ModelSpecStageGateService {
         ModelSpecRepository repository,
         ModelSpecStandardEvidencePort standardEvidence,
         ModelLifecycleRepository lifecycle,
-        ModelSpecSourceValidationPort sourceValidation
+        ModelSpecSourceValidationPort sourceValidation,
+        DimensionDefinitionRepository dimensionDefinitions,
+        ModelSpecDomainReadAccessPort domainReadAccess,
+        ModelImplementationCompatibilityAdapter implementationCompatibility
     ) {
         this.modelSpecs = modelSpecs;
         this.repository = repository;
+        this.dimensionDefinitions = dimensionDefinitions;
         this.standardEvidence = standardEvidence;
         this.lifecycle = lifecycle;
         this.sourceValidation = sourceValidation;
+        this.domainReadAccess = domainReadAccess;
+        this.implementationCompatibility = implementationCompatibility;
     }
 
     @Transactional(readOnly = true)
@@ -70,9 +104,112 @@ public class ModelSpecStageGateService {
         GateEvidence evidence = evidence(tenantId, view);
         return List.of(
             evaluate(view, Stage.DRAFT_SAVE, evidence),
-            evaluate(view, Stage.IMPLEMENTATION_READY, evidence),
-            evaluate(view, Stage.RELEASE_READY, evidence)
+            withImplementationInputEvidence(
+                tenantId,
+                view,
+                withDimensionDefinitionEvidence(tenantId, view, evaluate(view, Stage.IMPLEMENTATION_READY, evidence))
+            ),
+            withImplementationInputEvidence(tenantId, view, withDimensionDefinitionEvidence(tenantId, view, evaluate(view, Stage.RELEASE_READY, evidence)))
         );
+    }
+
+    private GateView withImplementationInputEvidence(String tenantId, ModelSpecView view, GateView gate) {
+        if (gate.stage() == Stage.DRAFT_SAVE || implementationCompatibility == null) return gate;
+        ImplementationView implementation = lifecycle == null ? null : lifecycle.findImplementation(tenantId, view.id()).orElse(null);
+        ModelImplementationCompatibilityAdapter.ValidationResult result;
+        if (implementation == null) {
+            result = ModelImplementationCompatibilityAdapter.ValidationResult.invalid("MODEL_IMPLEMENTATION_REQUIRED");
+        } else if (isLegacyClaim(implementation)) {
+            result = ModelImplementationCompatibilityAdapter.ValidationResult.invalid("MODEL_IMPLEMENTATION_INPUT_MIGRATION_REQUIRED");
+        } else {
+            result = implementationCompatibility.validate(
+                tenantId,
+                view,
+                new SaveImplementationCommand(
+                    implementation.inputMode(), implementation.inputs(), implementation.fieldMappings(), implementation.settings(),
+                    implementation.ownership(), implementation.materialization(), "gate-input-evidence"
+                )
+            );
+        }
+        if (result.valid()) return withoutLegacyInputBlockers(view, gate);
+        LinkedHashMap<String, GateBlocker> blockers = new LinkedHashMap<>();
+        for (GateBlocker blocker : gate.blockers()) add(blockers, blocker);
+        add(
+            blockers,
+            blocker(view, result.code(), "implementation.inputs", "实现输入未通过当前来源与依赖校验", "implementation")
+        );
+        List<GateBlocker> values = List.copyOf(blockers.values());
+        return new GateView(view.id(), view.revision(), view.checksum(), gate.stage(), GateStatus.BLOCKED, values);
+    }
+
+    private static GateView withoutLegacyInputBlockers(ModelSpecView view, GateView gate) {
+        Set<String> obsoleteCodes = switch (view.modelType()) {
+            case DIMENSION -> Set.of("MODEL_SPEC_DIMENSION_INPUT_REQUIRED", "MODEL_SPEC_SOURCE_EVIDENCE");
+            case FACT -> Set.of("MODEL_SPEC_FACT_INPUT_REQUIRED", "MODEL_SPEC_SOURCE_EVIDENCE", "MODEL_SPEC_UPSTREAM_EVIDENCE");
+            case SUMMARY, APPLICATION -> Set.of();
+        };
+        if (obsoleteCodes.isEmpty()) return gate;
+        List<GateBlocker> blockers = gate.blockers().stream().filter(blocker -> !obsoleteCodes.contains(blocker.code())).toList();
+        return new GateView(
+            gate.modelSpecId(),
+            gate.revision(),
+            gate.checksum(),
+            gate.stage(),
+            blockers.isEmpty() ? GateStatus.READY : GateStatus.BLOCKED,
+            blockers
+        );
+    }
+
+    private static boolean isLegacyClaim(ImplementationView implementation) {
+        return (
+            implementation.inputMode() == ModelLifecycleContract.InputMode.GENERATED &&
+            implementation.inputs().size() == 1 &&
+            implementation.inputs().get(0) instanceof ModelLifecycleContract.GeneratedInput input &&
+            "LEGACY_CLAIM".equals(input.generatorType())
+        );
+    }
+
+    private GateView withDimensionDefinitionEvidence(String tenantId, ModelSpecView view, GateView gate) {
+        if (view.modelType() != ModelType.DIMENSION || dimensionDefinitionCurrent(tenantId, view)) return gate;
+        LinkedHashMap<String, GateBlocker> blockers = new LinkedHashMap<>();
+        for (GateBlocker blocker : gate.blockers()) add(blockers, blocker);
+        add(
+            blockers,
+            blocker(
+                view,
+                "DIMENSION_DEFINITION_NOT_CURRENT",
+                "dimensionDefinitionRef",
+                "锁定的业务维度定义已删除或退役",
+                "design"
+            )
+        );
+        List<GateBlocker> result = List.copyOf(blockers.values());
+        return new GateView(
+            gate.modelSpecId(),
+            gate.revision(),
+            gate.checksum(),
+            gate.stage(),
+            result.isEmpty() ? GateStatus.READY : GateStatus.BLOCKED,
+            result
+        );
+    }
+
+    private boolean dimensionDefinitionCurrent(String tenantId, ModelSpecView view) {
+        if (dimensionDefinitions == null) return true;
+        ModelSpecContract.DimensionDefinitionRef reference = view.dimensionDefinitionRef();
+        if (reference == null) return false;
+        try {
+            StoredDimensionDefinition pinned = dimensionDefinitions
+                .findRevision(tenantId, reference.dimensionDefinitionId(), reference.revision())
+                .orElse(null);
+            if (pinned == null || (domainReadAccess != null && !domainReadAccess.canRead(pinned.domainId()))) return false;
+            StoredDimensionDefinition current = dimensionDefinitions
+                .findCurrent(tenantId, reference.dimensionDefinitionId())
+                .orElse(null);
+            return current != null && current.status() == DimensionDefinitionContract.Status.CURRENT;
+        } catch (RuntimeException unavailable) {
+            return false;
+        }
     }
 
     public static GateView evaluate(ModelSpecView view, Stage stage, GateEvidence evidence) {
@@ -119,13 +256,27 @@ public class ModelSpecStageGateService {
             }
             : EvidenceState.STALE;
         EvidenceState permissions = permissionsComplete(view) ? EvidenceState.CURRENT : EvidenceState.STALE;
-        EvidenceState build = repository.hasCompiledArtifact(tenantId, view.id(), view.revision(), view.checksum(), "SQL") &&
-            repository.hasCompiledArtifact(tenantId, view.id(), view.revision(), view.checksum(), "SCHEMA")
+        ImplementationView implementation = lifecycle == null ? null : lifecycle.findImplementation(tenantId, view.id()).orElse(null);
+        Set<String> artifactTypes = lifecycle == null || implementation == null
+            ? Set.of()
+            : lifecycle.currentArtifactTypes(tenantId, view.id(), implementation);
+        boolean passedCompile = lifecycle != null && implementation != null && lifecycle.hasPassedEvidence(
+            tenantId,
+            view.id(),
+            view.revision(),
+            implementation.implementationRevision(),
+            implementation.implementationChecksum(),
+            ModelLifecycleContract.EventType.COMPILE
+        );
+        EvidenceState build = artifactTypes.containsAll(Set.of("SQL", "SCHEMA")) && passedCompile
             ? EvidenceState.CURRENT
             : EvidenceState.UNKNOWN;
-        boolean passedTest = lifecycle != null
-            ? lifecycle.hasPassedEvidence(tenantId, view.id(), view.revision(), ModelLifecycleContract.EventType.TEST)
-            : repository.hasCompiledArtifact(tenantId, view.id(), view.revision(), view.checksum(), "TEST");
+        boolean passedTest = lifecycle != null && implementation != null
+            ? lifecycle.hasPassedEvidence(
+                tenantId, view.id(), view.revision(), implementation.implementationRevision(),
+                implementation.implementationChecksum(), ModelLifecycleContract.EventType.TEST
+            )
+            : false;
         EvidenceState tests = passedTest
             ? EvidenceState.CURRENT
             : EvidenceState.UNKNOWN;

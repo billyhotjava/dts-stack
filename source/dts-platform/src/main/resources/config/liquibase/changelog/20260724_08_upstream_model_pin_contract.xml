@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260724-08-upstream-model-pin-contract" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT">
+            <tableExists tableName="modeling_model_implementation"/>
+            <tableExists tableName="modeling_model_implementation_revision"/>
+        </preConditions>
+        <comment>Require the immutable ModelSpec and implementation identity tuple for upstream-model inputs.</comment>
+
+        <sql splitStatements="false"><![CDATA[
+            CREATE FUNCTION modeling_implementation_input_payload_v2_valid(
+                mode varchar,
+                inputs jsonb,
+                mappings jsonb,
+                settings jsonb
+            ) RETURNS boolean
+            LANGUAGE plpgsql
+            IMMUTABLE
+            AS $$
+            DECLARE item jsonb;
+            DECLARE legacy_inputs jsonb;
+            BEGIN
+                IF mode <> 'UPSTREAM_MODEL' THEN
+                    RETURN modeling_implementation_input_payload_valid(mode, inputs, mappings, settings);
+                END IF;
+                IF jsonb_typeof(inputs) <> 'array' OR jsonb_array_length(inputs) = 0 THEN
+                    RETURN false;
+                END IF;
+                FOR item IN SELECT value FROM jsonb_array_elements(inputs) LOOP
+                    IF jsonb_typeof(item) <> 'object'
+                       OR (SELECT count(*) FROM jsonb_object_keys(item)) <> 6
+                       OR NOT (
+                           item ? 'modelSpecId'
+                           AND item ? 'revision'
+                           AND item ? 'checksum'
+                           AND item ? 'implementationRevision'
+                           AND item ? 'implementationChecksum'
+                           AND item ? 'dbtUniqueId'
+                       )
+                       OR jsonb_typeof(item -> 'modelSpecId') <> 'string'
+                       OR jsonb_typeof(item -> 'revision') <> 'number'
+                       OR jsonb_typeof(item -> 'checksum') <> 'string'
+                       OR jsonb_typeof(item -> 'implementationRevision') <> 'number'
+                       OR jsonb_typeof(item -> 'implementationChecksum') <> 'string'
+                       OR jsonb_typeof(item -> 'dbtUniqueId') <> 'string'
+                       OR btrim(item ->> 'modelSpecId') = ''
+                       OR (item ->> 'revision') !~ '^[1-9][0-9]*$'
+                       OR (item ->> 'checksum') !~ '^[0-9a-f]{64}$'
+                       OR (item ->> 'implementationRevision') !~ '^[1-9][0-9]*$'
+                       OR (item ->> 'implementationChecksum') !~ '^[0-9a-f]{64}$'
+                       OR btrim(item ->> 'dbtUniqueId') = '' THEN
+                        RETURN false;
+                    END IF;
+                END LOOP;
+                SELECT jsonb_agg(
+                           value
+                           - 'implementationRevision'
+                           - 'implementationChecksum'
+                           - 'dbtUniqueId'
+                           ORDER BY ordinal
+                       )
+                  INTO legacy_inputs
+                  FROM jsonb_array_elements(inputs) WITH ORDINALITY AS source(value, ordinal);
+                RETURN modeling_implementation_input_payload_valid(mode, legacy_inputs, mappings, settings);
+            END;
+            $$;
+
+            ALTER TABLE modeling_model_implementation
+                DROP CONSTRAINT ck_modeling_implementation_input_payload;
+            ALTER TABLE modeling_model_implementation
+                ADD CONSTRAINT ck_modeling_implementation_input_payload
+                CHECK (
+                    implementation_revision > 0
+                    AND current_implementation_checksum ~ '^[0-9a-f]{64}$'
+                    AND btrim(materialization) <> ''
+                    AND modeling_implementation_input_payload_v2_valid(
+                        input_mode, inputs_json, field_mappings_json, settings_json
+                    )
+                ) NOT VALID;
+
+            ALTER TABLE modeling_model_implementation_revision
+                DROP CONSTRAINT ck_modeling_implementation_revision_payload;
+            ALTER TABLE modeling_model_implementation_revision
+                ADD CONSTRAINT ck_modeling_implementation_revision_payload
+                CHECK (
+                    revision > 0
+                    AND content_checksum ~ '^[0-9a-f]{64}$'
+                    AND btrim(materialization) <> ''
+                    AND modeling_implementation_input_payload_v2_valid(
+                        input_mode, inputs_json, field_mappings_json, settings_json
+                    )
+                ) NOT VALID;
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_UPSTREAM_MODEL_PIN_CONTRACT_FORWARD_ONLY: six-field pins cannot be downgraded safely';
+                END $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -18,14 +18,22 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogLineageJobRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
+import com.yuzhi.dts.platform.repository.modeling.ModelLifecycleRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetGovernancePolicy;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService.ColumnSpec;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ArtifactWrite;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecCompatibilityReader;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -58,6 +66,8 @@ public class DbtAssetSyncService {
     private final CatalogColumnSchemaRepository columnRepository;
     private final CatalogColumnSyncService columnSyncService;
     private final InfraOdsTableMappingRepository mappingRepository;
+    private final ModelLifecycleRepository lifecycleRepository;
+    private final ModelSpecCompatibilityReader modelSpecReader;
     private final AuditService auditService;
 
     public DbtAssetSyncService(
@@ -72,6 +82,8 @@ public class DbtAssetSyncService {
         CatalogColumnSchemaRepository columnRepository,
         CatalogColumnSyncService columnSyncService,
         InfraOdsTableMappingRepository mappingRepository,
+        ModelLifecycleRepository lifecycleRepository,
+        ModelSpecCompatibilityReader modelSpecReader,
         AuditService auditService
     ) {
         this.objectMapper = objectMapper;
@@ -85,6 +97,8 @@ public class DbtAssetSyncService {
         this.columnRepository = columnRepository;
         this.columnSyncService = columnSyncService;
         this.mappingRepository = mappingRepository;
+        this.lifecycleRepository = lifecycleRepository;
+        this.modelSpecReader = modelSpecReader;
         this.auditService = auditService;
     }
 
@@ -125,10 +139,14 @@ public class DbtAssetSyncService {
             Map<String, Object> raw = objectMapper.readValue(manifestFile, new TypeReference<>() {});
             Map<String, Object> nodes = asMap(raw.get("nodes"));
             Map<String, Object> sources = asMap(raw.get("sources"));
+            ManifestEvidence manifestEvidence = manifestEvidence(raw);
+            RunResults runResults = readRunResults(projectDir);
 
             Map<String, UUID> datasetByUniqueId = new HashMap<>();
             Map<String, UUID> datasetByTable = new HashMap<>();
             Map<String, CatalogTableSchema> tableByUniqueId = new HashMap<>();
+            Set<String> retainedOrAcceptedPhysicalAssetKeys = new LinkedHashSet<>();
+            String workspaceKey = dbtWorkspaceKey(projectDir);
 
             SyncStats stats = new SyncStats();
             stats.odsUpdated = syncOdsMappings(datasetByTable, view, stats);
@@ -160,25 +178,57 @@ public class DbtAssetSyncService {
                 if (!"model".equalsIgnoreCase(resourceType)) {
                     continue;
                 }
-                ModelMeta meta = toModelMeta(entry.getKey(), node);
-                if (!StringUtils.hasText(meta.table) || !StringUtils.hasText(meta.schema)) {
+                RunEvidence pairedRunEvidence = pairRunEvidence(
+                    entry.getKey(),
+                    manifestEvidence,
+                    runResults,
+                    runResults.byUniqueId().get(entry.getKey())
+                );
+                ModelMeta meta = toModelMeta(entry.getKey(), node, pairedRunEvidence);
+                modelNodes.put(entry.getKey(), meta);
+                if (!isPhysicalMaterialization(meta)) {
                     continue;
                 }
-                CatalogDataset dataset = upsertDataset(toNodeMeta(meta), view, inferLayer(meta.table), stats);
+                if (!isMaterializedRelation(meta)) {
+                    markMaterializedStale(meta, stats);
+                    if (meta.runEvidence != null && !StringUtils.hasText(meta.runEvidence.staleReason())) {
+                        retainedOrAcceptedPhysicalAssetKeys.add(physicalMaterializationKey(meta));
+                    }
+                    continue;
+                }
+                if (!hasValidImplementationPin(meta)) {
+                    markMaterializedStale(meta, "IMPLEMENTATION_PIN_INVALID", stats);
+                    continue;
+                }
+                importCurrentDbtArtifacts(meta);
+                retainedOrAcceptedPhysicalAssetKeys.add(physicalMaterializationKey(meta));
+                String controlledLayer = resolveControlledLayer(meta);
+                CatalogDataset dataset = upsertDataset(
+                    toNodeMeta(meta),
+                    view,
+                    controlledLayer,
+                    buildMaterializedTags(meta, controlledLayer, manifestEvidence.projectName(), workspaceKey),
+                    stats
+                );
                 CatalogTableSchema table = ensureTable(dataset, meta.table);
                 datasetByUniqueId.put(entry.getKey(), dataset.getId());
-                modelNodes.put(entry.getKey(), meta);
                 tableByUniqueId.put(entry.getKey(), table);
             }
+            reconcileDbtMaterializations(
+                manifestEvidence.projectName(),
+                workspaceKey,
+                retainedOrAcceptedPhysicalAssetKeys,
+                stats
+            );
 
             LineageSyncStats lineageStats = syncLineage(modelNodes, datasetByUniqueId);
             stats.lineageCreated = lineageStats.created();
-            stats.lineageRemoved = lineageStats.removed();
+            stats.lineageRemoved += lineageStats.removed();
             stats.columnsUpdated = syncColumnsForModels(modelNodes, tableByUniqueId, projectDir);
             ColumnLineageSyncStats columnLineageStats = syncColumnLineage(modelNodes, datasetByUniqueId, tableByUniqueId);
             stats.columnLineageCreated = columnLineageStats.created();
             stats.columnLineageUpdated = columnLineageStats.updated();
-            stats.columnLineageRemoved = columnLineageStats.removed();
+            stats.columnLineageRemoved += columnLineageStats.removed();
             auditService.auditAction(
                 "DBT_MODEL_SYNC",
                 AuditStage.SUCCESS,
@@ -246,6 +296,7 @@ public class DbtAssetSyncService {
         int created = 0;
         int removed = 0;
         for (ModelMeta model : modelNodes.values()) {
+            CatalogLineageJob lineageJob = upsertDbtJob(model);
             UUID downstream = datasetByUniqueId.get(model.uniqueId);
             if (downstream == null) {
                 continue;
@@ -257,7 +308,6 @@ public class DbtAssetSyncService {
                     desired.add(upstream);
                 }
             }
-            CatalogLineageJob lineageJob = upsertDbtJob(model);
             List<CatalogDatasetLineage> existing = lineageRepository.findCurrentByDownstreamDatasetIdAndRelationTypeIgnoreCase(downstream, "DBT");
             for (CatalogDatasetLineage link : existing) {
                 UUID upstreamId = link.getUpstreamDatasetId();
@@ -734,6 +784,16 @@ public class DbtAssetSyncService {
     }
 
     private CatalogDataset upsertDataset(NodeMeta meta, DbtConfigService.DbtConfigView view, String layer, SyncStats stats) {
+        return upsertDataset(meta, view, layer, null, stats);
+    }
+
+    private CatalogDataset upsertDataset(
+        NodeMeta meta,
+        DbtConfigService.DbtConfigView view,
+        String layer,
+        String tags,
+        SyncStats stats
+    ) {
         if (!StringUtils.hasText(meta.schema) || !StringUtils.hasText(meta.table)) {
             return null;
         }
@@ -746,7 +806,7 @@ public class DbtAssetSyncService {
         dataset.setName(defaultIfBlank(dataset.getName(), meta.table));
         dataset.setHiveDatabase(defaultIfBlank(dataset.getHiveDatabase(), meta.schema));
         dataset.setHiveTable(defaultIfBlank(dataset.getHiveTable(), meta.table));
-        if (!StringUtils.hasText(dataset.getWarehouseLayer()) && StringUtils.hasText(layer)) {
+        if (StringUtils.hasText(layer)) {
             dataset.setWarehouseLayer(layer);
         }
         if (!StringUtils.hasText(dataset.getLifecycleStatus())) {
@@ -760,6 +820,13 @@ public class DbtAssetSyncService {
         }
         if (!StringUtils.hasText(dataset.getDescription())) {
             dataset.setDescription(defaultIfBlank(meta.description, buildDbtManifestEvidence(meta, layer)));
+        }
+        if (StringUtils.hasText(tags)) {
+            dataset.setTags(tags);
+            dataset.setEnabled(Boolean.TRUE);
+            if ("STALE".equalsIgnoreCase(dataset.getLifecycleStatus())) {
+                dataset.setLifecycleStatus(CatalogAssetGovernancePolicy.lifecycleForDiscoveredAsset());
+            }
         }
         dataset.setSnapshotTime(Instant.now());
         CatalogDataset saved = datasetRepository.save(dataset);
@@ -881,6 +948,10 @@ public class DbtAssetSyncService {
         data.put("database", model.database);
         data.put("schema", model.schema);
         data.put("table", model.table);
+        data.put("materialization", model.materialization);
+        data.put("dependsOn", model.dependsOn);
+        data.put("runStatus", model.runEvidence != null ? model.runEvidence.status : null);
+        data.put("runInvocationId", model.runEvidence != null ? model.runEvidence.invocationId : null);
         data.put("originalFilePath", model.originalFilePath);
         data.values().removeIf(value -> value == null || !StringUtils.hasText(String.valueOf(value)));
         return data.toString();
@@ -913,6 +984,440 @@ public class DbtAssetSyncService {
         return data.toString();
     }
 
+    private String buildMaterializedTags(
+        ModelMeta model,
+        String controlledLayer,
+        String projectName,
+        String workspaceKey
+    ) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("warehouseLayer", controlledLayer);
+        data.put("tenantId", model.meta.get("tenantId"));
+        data.put("modelSpecId", model.meta.get("modelSpecId"));
+        data.put("revision", model.meta.get("revision"));
+        data.put("implementationRevision", model.meta.get("implementationRevision"));
+        data.put("implementationChecksum", model.meta.get("implementationChecksum"));
+        data.put("modelChecksum", model.meta.get("modelChecksum"));
+        data.put("dbtUniqueId", model.uniqueId);
+        data.put("dbtProject", projectName);
+        data.put("dbtWorkspace", workspaceKey);
+        data.put("database", model.database);
+        data.put("schema", model.schema);
+        data.put("identifier", model.table);
+        data.put("materialization", model.materialization);
+        data.put("runStatus", model.runEvidence.status);
+        data.put("runInvocationId", model.runEvidence.invocationId);
+        data.put("runGeneratedAt", model.runEvidence.generatedAt);
+        data.put("materializedTruth", true);
+        data.put("physicalAssetVerified", true);
+        data.put("artifactState", "CURRENT");
+        data.values().removeIf(value -> value == null || !StringUtils.hasText(String.valueOf(value)));
+        try {
+            return objectMapper.writeValueAsString(data);
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("dbt 物化资产标签序列化失败", exception);
+        }
+    }
+
+    private ManifestEvidence manifestEvidence(Map<String, Object> manifest) {
+        Map<String, Object> metadata = asMap(manifest == null ? null : manifest.get("metadata"));
+        return new ManifestEvidence(
+            text(metadata.get("invocation_id")),
+            text(metadata.get("generated_at")),
+            defaultIfBlank(text(metadata.get("project_name")), text(metadata.get("project_id")))
+        );
+    }
+
+    private RunEvidence pairRunEvidence(
+        String uniqueId,
+        ManifestEvidence manifest,
+        RunResults runResults,
+        RunEvidence result
+    ) {
+        if (manifest == null || !StringUtils.hasText(manifest.invocationId())) {
+            return unverifiedRunEvidence(result);
+        }
+        String modelProject = resolveDbtProjectName(uniqueId);
+        if (!StringUtils.hasText(manifest.projectName()) || !manifest.projectName().equals(modelProject)) {
+            return unverifiedRunEvidence(result);
+        }
+        if (
+            runResults == null ||
+            !runResults.filePresent() ||
+            result == null ||
+            !StringUtils.hasText(result.invocationId())
+        ) {
+            return unverifiedRunEvidence(result);
+        }
+        if (
+            StringUtils.hasText(runResults.projectName()) &&
+            (!runResults.projectName().equals(manifest.projectName()) || !runResults.projectName().equals(modelProject))
+        ) {
+            return unverifiedRunEvidence(result);
+        }
+        if (!manifest.invocationId().equals(result.invocationId())) {
+            return unverifiedRunEvidence(result);
+        }
+        if (!"SUCCESS".equals(result.status())) {
+            return isExplicitRunFailure(result.status())
+                ? invalidRunEvidence(result, "RUN_FAILED")
+                : unverifiedRunEvidence(result);
+        }
+        Instant manifestGeneratedAt = parseArtifactInstant(manifest.generatedAt());
+        Instant runGeneratedAt = parseArtifactInstant(result.generatedAt());
+        if (manifestGeneratedAt == null || runGeneratedAt == null) {
+            return unverifiedRunEvidence(result);
+        }
+        if (runGeneratedAt.isBefore(manifestGeneratedAt)) {
+            return unverifiedRunEvidence(result);
+        }
+        return new RunEvidence(result.status(), result.invocationId(), result.generatedAt(), true, null);
+    }
+
+    private RunEvidence unverifiedRunEvidence(RunEvidence result) {
+        return new RunEvidence(
+            result == null ? null : result.status(),
+            result == null ? null : result.invocationId(),
+            result == null ? null : result.generatedAt(),
+            false,
+            result == null ? null : "RUN_EVIDENCE_UNVERIFIED"
+        );
+    }
+
+    private RunEvidence invalidRunEvidence(RunEvidence result, String staleReason) {
+        return new RunEvidence(
+            result == null ? null : result.status(),
+            result == null ? null : result.invocationId(),
+            result == null ? null : result.generatedAt(),
+            false,
+            staleReason
+        );
+    }
+
+    private boolean isExplicitRunFailure(String status) {
+        if (!StringUtils.hasText(status)) {
+            return false;
+        }
+        return switch (status.trim().toUpperCase(Locale.ROOT)) {
+            case "ERROR", "FAIL", "FAILED", "RUNTIME_ERROR" -> true;
+            default -> false;
+        };
+    }
+
+    private Instant parseArtifactInstant(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return Instant.parse(value.trim());
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private boolean isPhysicalMaterialization(ModelMeta model) {
+        if (
+            model == null ||
+            !StringUtils.hasText(model.database) ||
+            !StringUtils.hasText(model.schema) ||
+            !StringUtils.hasText(model.table) ||
+            !StringUtils.hasText(model.materialization)
+        ) {
+            return false;
+        }
+        return switch (model.materialization.trim().toLowerCase(Locale.ROOT)) {
+            case "view", "table", "incremental" -> true;
+            default -> false;
+        };
+    }
+
+    private boolean hasValidImplementationPin(ModelMeta model) {
+        if (model == null || model.meta == null || !StringUtils.hasText(text(model.meta.get("modelSpecId")))) {
+            return true;
+        }
+        String tenantId = text(model.meta.get("tenantId"));
+        String modelChecksum = text(model.meta.get("modelChecksum"));
+        String implementationChecksum = text(model.meta.get("implementationChecksum"));
+        UUID modelSpecId = parseUuid(text(model.meta.get("modelSpecId")));
+        Integer modelRevision = positiveIntegerValue(model.meta.get("revision"));
+        Integer implementationRevision = positiveIntegerValue(model.meta.get("implementationRevision"));
+        if (
+            !StringUtils.hasText(tenantId) ||
+            modelSpecId == null ||
+            modelRevision == null ||
+            implementationRevision == null ||
+            !StringUtils.hasText(modelChecksum) ||
+            !StringUtils.hasText(implementationChecksum)
+        ) {
+            return false;
+        }
+        ImplementationView current = lifecycleRepository.findImplementation(tenantId, modelSpecId).orElse(null);
+        String projectKey = defaultIfBlank(text(model.meta.get("projectKey")), resolveDbtProjectName(model.uniqueId));
+        return (
+            current != null &&
+            modelSpecId.equals(current.modelSpecId()) &&
+            current.revision() == modelRevision &&
+            modelChecksum.equals(current.modelChecksum()) &&
+            current.implementationRevision() == implementationRevision &&
+            implementationChecksum.equals(current.implementationChecksum()) &&
+            StringUtils.hasText(projectKey) &&
+            projectKey.equals(current.projectKey()) &&
+            (!StringUtils.hasText(current.dbtUniqueId()) || model.uniqueId.equals(current.dbtUniqueId())) &&
+            (!StringUtils.hasText(current.materialization()) || model.materialization.equalsIgnoreCase(current.materialization()))
+        );
+    }
+
+    private void importCurrentDbtArtifacts(ModelMeta model) throws com.fasterxml.jackson.core.JsonProcessingException {
+        String tenantId = text(model.meta.get("tenantId"));
+        UUID modelSpecId = parseUuid(text(model.meta.get("modelSpecId")));
+        if (!StringUtils.hasText(tenantId) || modelSpecId == null) {
+            return;
+        }
+        ImplementationView implementation = lifecycleRepository.findImplementation(tenantId, modelSpecId).orElse(null);
+        if (implementation == null || implementation.ownership() != ImplementationMode.DBT_MANAGED) {
+            return;
+        }
+        ModelSpecView modelSpec = modelSpecReader.get(tenantId, modelSpecId);
+        if (
+            modelSpec.implementationMode() != ImplementationMode.DBT_MANAGED ||
+            modelSpec.revision() != implementation.revision() ||
+            !java.util.Objects.equals(modelSpec.checksum(), implementation.modelChecksum()) ||
+            !java.util.Objects.equals(modelSpec.planId(), implementation.planId()) ||
+            !model.uniqueId.equals(implementation.dbtUniqueId()) ||
+            !StringUtils.hasText(model.rawCode)
+        ) {
+            throw new IllegalStateException("dbt manifest artifact does not match the current DBT_MANAGED implementation");
+        }
+        String nodeName = model.uniqueId.substring(model.uniqueId.lastIndexOf('.') + 1);
+        String sqlPath = StringUtils.hasText(model.originalFilePath)
+            ? model.originalFilePath
+            : "models/" + nodeName + ".sql";
+        String schemaPath = sqlPath.endsWith(".sql")
+            ? sqlPath.substring(0, sqlPath.length() - 4) + ".schema.json"
+            : sqlPath + ".schema.json";
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("dbtUniqueId", model.uniqueId);
+        schema.put("database", model.database);
+        schema.put("schema", model.schema);
+        schema.put("identifier", model.table);
+        schema.put("columns", model.columns);
+        String schemaContent = objectMapper.writeValueAsString(schema);
+        lifecycleRepository.saveDbtManagedArtifacts(
+            tenantId,
+            modelSpec,
+            implementation,
+            "dbt-manifest:" + model.runEvidence.invocationId(),
+            List.of(
+                new ArtifactWrite("SQL", sqlPath, sha256(model.rawCode), model.rawCode, "MODEL", model.materialization, null),
+                new ArtifactWrite("SCHEMA", schemaPath, sha256(schemaContent), schemaContent, "MODEL", model.materialization, null)
+            ),
+            Instant.now()
+        );
+    }
+
+    private Integer positiveIntegerValue(Object value) {
+        try {
+            int parsed = value == null ? 0 : Integer.parseInt(String.valueOf(value).trim());
+            return parsed > 0 ? parsed : null;
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private UUID parseUuid(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value.trim());
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private String resolveControlledLayer(ModelMeta model) {
+        if (model == null || model.meta == null) {
+            return null;
+        }
+        String configured = defaultIfBlank(text(model.meta.get("warehouseLayer")), text(model.meta.get("layer")));
+        if (!StringUtils.hasText(configured)) {
+            return null;
+        }
+        String normalized = configured.trim().toUpperCase(Locale.ROOT);
+        return switch (normalized) {
+            case "ODS", "STG", "DWD", "DWS", "ADS" -> normalized;
+            default -> null;
+        };
+    }
+
+    private void markMaterializedStale(ModelMeta model, SyncStats stats) {
+        markMaterializedStale(model, model == null || model.runEvidence == null ? null : model.runEvidence.staleReason(), stats);
+    }
+
+    private void markMaterializedStale(ModelMeta model, String staleReason, SyncStats stats) {
+        if (model == null || !StringUtils.hasText(staleReason)) {
+            return;
+        }
+        CatalogDataset dataset = findDataset(toNodeMeta(model));
+        if (dataset == null) {
+            return;
+        }
+        Map<String, Object> currentTags = jsonTags(dataset.getTags());
+        String currentUniqueId = text(currentTags.get("dbtUniqueId"));
+        if (!model.uniqueId.equals(currentUniqueId)) {
+            return;
+        }
+        currentTags.put("dbtUniqueId", model.uniqueId);
+        currentTags.put("database", model.database);
+        currentTags.put("schema", model.schema);
+        currentTags.put("identifier", model.table);
+        currentTags.put("materialization", model.materialization);
+        currentTags.put("runStatus", model.runEvidence.status());
+        currentTags.put("runInvocationId", model.runEvidence.invocationId());
+        currentTags.put("runGeneratedAt", model.runEvidence.generatedAt());
+        currentTags.put("materializedTruth", false);
+        currentTags.put("physicalAssetVerified", false);
+        currentTags.put("artifactState", "STALE");
+        currentTags.put("staleReason", staleReason);
+        currentTags.values().removeIf(value -> value == null || !StringUtils.hasText(String.valueOf(value)));
+        markDatasetStale(dataset, currentTags, stats);
+    }
+
+    private void reconcileDbtMaterializations(
+        String projectName,
+        String workspaceKey,
+        Set<String> currentPhysicalAssetKeys,
+        SyncStats stats
+    ) {
+        if (
+            !StringUtils.hasText(projectName) ||
+            !StringUtils.hasText(workspaceKey) ||
+            currentPhysicalAssetKeys == null
+        ) {
+            return;
+        }
+        for (CatalogDataset dataset : datasetRepository.findAll()) {
+            if (dataset == null || dataset.getId() == null) {
+                continue;
+            }
+            Map<String, Object> currentTags = jsonTags(dataset.getTags());
+            String uniqueId = text(currentTags.get("dbtUniqueId"));
+            String physicalAssetKey = physicalMaterializationKey(
+                uniqueId,
+                text(currentTags.get("database")),
+                defaultIfBlank(text(currentTags.get("schema")), dataset.getHiveDatabase()),
+                defaultIfBlank(text(currentTags.get("identifier")), dataset.getHiveTable())
+            );
+            if (
+                !projectName.equals(text(currentTags.get("dbtProject"))) ||
+                !workspaceKey.equals(text(currentTags.get("dbtWorkspace"))) ||
+                !projectName.equals(resolveDbtProjectName(uniqueId)) ||
+                currentPhysicalAssetKeys.contains(physicalAssetKey) ||
+                !isCurrentDbtMaterialization(currentTags)
+            ) {
+                continue;
+            }
+            currentTags.put("materializedTruth", false);
+            currentTags.put("physicalAssetVerified", false);
+            currentTags.put("artifactState", "STALE");
+            currentTags.put("staleReason", "MANIFEST_MODEL_REMOVED_OR_NON_PHYSICAL");
+            markDatasetStale(dataset, currentTags, stats);
+        }
+    }
+
+    private String physicalMaterializationKey(ModelMeta model) {
+        if (model == null) return null;
+        return physicalMaterializationKey(model.uniqueId, model.database, model.schema, model.table);
+    }
+
+    private String physicalMaterializationKey(String uniqueId, String database, String schema, String identifier) {
+        return String.join(
+            "|",
+            normalizeKeyPart(uniqueId),
+            normalizeKeyPart(database),
+            normalizeKeyPart(schema),
+            normalizeKeyPart(identifier)
+        );
+    }
+
+    private String normalizeKeyPart(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private boolean isCurrentDbtMaterialization(Map<String, Object> tags) {
+        return (
+            Boolean.parseBoolean(String.valueOf(tags.get("materializedTruth"))) ||
+            Boolean.parseBoolean(String.valueOf(tags.get("physicalAssetVerified")))
+        );
+    }
+
+    private void markDatasetStale(CatalogDataset dataset, Map<String, Object> tags, SyncStats stats) {
+        try {
+            dataset.setTags(objectMapper.writeValueAsString(tags));
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("dbt 失效资产标签序列化失败", exception);
+        }
+        dataset.setEnabled(Boolean.FALSE);
+        dataset.setLifecycleStatus("STALE");
+        dataset.setSnapshotTime(Instant.now());
+        datasetRepository.save(dataset);
+        stats.updated++;
+        stats.manifestEvidenceUpdated++;
+        revokeMaterializedLineage(dataset.getId(), stats);
+    }
+
+    private String dbtWorkspaceKey(String projectDir) {
+        if (!StringUtils.hasText(projectDir)) {
+            return null;
+        }
+        String normalized = Path.of(projectDir).toAbsolutePath().normalize().toString();
+        return UUID.nameUUIDFromBytes(("dbt-workspace:" + normalized).getBytes(StandardCharsets.UTF_8)).toString();
+    }
+
+    private Map<String, Object> jsonTags(String tags) {
+        if (!StringUtils.hasText(tags) || !tags.trim().startsWith("{")) {
+            return new LinkedHashMap<>();
+        }
+        try {
+            return new LinkedHashMap<>(objectMapper.readValue(tags, new TypeReference<Map<String, Object>>() {}));
+        } catch (Exception ignored) {
+            return new LinkedHashMap<>();
+        }
+    }
+
+    private void revokeMaterializedLineage(UUID datasetId, SyncStats stats) {
+        if (datasetId == null) {
+            return;
+        }
+        Instant revokedAt = Instant.now();
+        List<CatalogDatasetLineage> datasetLineage = lineageRepository.findCurrentByDownstreamDatasetIdAndRelationTypeIgnoreCase(
+            datasetId,
+            "DBT"
+        );
+        if (datasetLineage != null) {
+            for (CatalogDatasetLineage lineage : datasetLineage) {
+                if (lineage != null && lineage.getValidTo() == null) {
+                    lineage.setValidTo(revokedAt);
+                    lineageRepository.save(lineage);
+                    stats.lineageRemoved++;
+                }
+            }
+        }
+        List<CatalogColumnLineage> columnLineage = columnLineageRepository.findByDownstreamDatasetIdAndRelationTypeIgnoreCase(
+            datasetId,
+            "DBT"
+        );
+        if (columnLineage != null) {
+            for (CatalogColumnLineage lineage : columnLineage) {
+                if (lineage != null && lineage.getValidTo() == null) {
+                    lineage.setValidTo(revokedAt);
+                    columnLineageRepository.save(lineage);
+                    stats.columnLineageRemoved++;
+                }
+            }
+        }
+    }
+
     private String safeAssetKey(NodeMeta meta) {
         if (meta == null) {
             return null;
@@ -931,18 +1436,41 @@ public class DbtAssetSyncService {
         return null;
     }
 
-    private ModelMeta toModelMeta(String uniqueId, Map<String, Object> node) {
+    private ModelMeta toModelMeta(String uniqueId, Map<String, Object> node, RunEvidence runEvidence) {
         String name = text(node.get("name"));
-        String alias = text(node.get("alias"));
         String database = text(node.get("database"));
         String schema = text(node.get("schema"));
-        String table = StringUtils.hasText(alias) ? alias : name;
+        String identifier = defaultIfBlank(
+            text(node.get("identifier")),
+            defaultIfBlank(text(node.get("alias")), name)
+        );
+        String table = identifier;
         List<String> dependsOn = extractDepends(node.get("depends_on"));
         String description = text(node.get("description"));
         Map<String, Object> columns = asMap(node.get("columns"));
         String filePath = text(node.get("original_file_path"));
-        String compiledCode = defaultIfBlank(text(node.get("compiled_code")), defaultIfBlank(text(node.get("compiled_sql")), text(node.get("raw_code"))));
-        return new ModelMeta(uniqueId, database, schema, table, dependsOn, description, columns, filePath, compiledCode);
+        String rawCode = defaultIfBlank(text(node.get("raw_code")), text(node.get("raw_sql")));
+        String compiledCode = defaultIfBlank(text(node.get("compiled_code")), defaultIfBlank(text(node.get("compiled_sql")), rawCode));
+        Map<String, Object> config = asMap(node.get("config"));
+        Map<String, Object> meta = new LinkedHashMap<>(asMap(config.get("meta")));
+        if (meta.isEmpty()) {
+            meta.putAll(asMap(node.get("meta")));
+        }
+        return new ModelMeta(
+            uniqueId,
+            database,
+            schema,
+            table,
+            text(config.get("materialized")),
+            dependsOn,
+            description,
+            columns,
+            filePath,
+            rawCode,
+            compiledCode,
+            meta,
+            runEvidence
+        );
     }
 
     private NodeMeta toNodeMeta(String uniqueId, Map<String, Object> node) {
@@ -1012,16 +1540,49 @@ public class DbtAssetSyncService {
         return value.substring(0, Math.max(0, maxLength));
     }
 
-    private String inferLayer(String table) {
-        if (!StringUtils.hasText(table)) {
-            return null;
+    private boolean isMaterializedRelation(ModelMeta model) {
+        if (
+            model == null ||
+            model.runEvidence == null ||
+            !model.runEvidence.current() ||
+            !"SUCCESS".equals(model.runEvidence.status)
+        ) {
+            return false;
         }
-        String normalized = table.toLowerCase(Locale.ROOT);
-        if (normalized.startsWith("ods_")) return "ODS";
-        if (normalized.startsWith("dwd_")) return "DWD";
-        if (normalized.startsWith("dws_")) return "DWS";
-        if (normalized.startsWith("ads_")) return "ADS";
-        return null;
+        return isPhysicalMaterialization(model);
+    }
+
+    private RunResults readRunResults(String projectDir) throws java.io.IOException {
+        Path path = Path.of(projectDir, "target", "run_results.json");
+        File file = path.toFile();
+        if (!file.exists()) {
+            return new RunResults(Map.of(), null, null, null, false);
+        }
+        Map<String, Object> raw = objectMapper.readValue(file, new TypeReference<>() {});
+        Map<String, Object> metadata = asMap(raw.get("metadata"));
+        String invocationId = text(metadata.get("invocation_id"));
+        String generatedAt = text(metadata.get("generated_at"));
+        String projectName = defaultIfBlank(text(metadata.get("project_name")), text(metadata.get("project_id")));
+        Map<String, RunEvidence> byUniqueId = new LinkedHashMap<>();
+        Object values = raw.get("results");
+        if (values instanceof List<?> results) {
+            for (Object value : results) {
+                Map<String, Object> result = asMap(value);
+                String uniqueId = text(result.get("unique_id"));
+                if (!StringUtils.hasText(uniqueId)) {
+                    continue;
+                }
+                byUniqueId.put(
+                    uniqueId,
+                    new RunEvidence(normalizeRunStatus(text(result.get("status"))), invocationId, generatedAt, false, null)
+                );
+            }
+        }
+        return new RunResults(Map.copyOf(byUniqueId), invocationId, generatedAt, projectName, true);
+    }
+
+    private String normalizeRunStatus(String status) {
+        return StringUtils.hasText(status) ? status.trim().toUpperCase(Locale.ROOT) : null;
     }
 
     private String tableKey(String schema, String table) {
@@ -1110,12 +1671,39 @@ public class DbtAssetSyncService {
         String database,
         String schema,
         String table,
+        String materialization,
         List<String> dependsOn,
         String description,
         Map<String, Object> columns,
         String originalFilePath,
-        String compiledCode
+        String rawCode,
+        String compiledCode,
+        Map<String, Object> meta,
+        RunEvidence runEvidence
     ) {}
+
+    private static String sha256(String value) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest((value == null ? "" : value).getBytes(StandardCharsets.UTF_8));
+            StringBuilder result = new StringBuilder(digest.length * 2);
+            for (byte item : digest) result.append(String.format("%02x", item));
+            return result.toString();
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
+    }
+
+    private record ManifestEvidence(String invocationId, String generatedAt, String projectName) {}
+
+    private record RunResults(
+        Map<String, RunEvidence> byUniqueId,
+        String invocationId,
+        String generatedAt,
+        String projectName,
+        boolean filePresent
+    ) {}
+
+    private record RunEvidence(String status, String invocationId, String generatedAt, boolean current, String staleReason) {}
 
     private record LineageSyncStats(int created, int removed) {}
 

@@ -3,7 +3,11 @@ package com.yuzhi.dts.platform.service.modeling;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.FieldMapping;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.GeneratedInput;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.InputMode;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class ModelingDbtCompilerTest {
@@ -52,5 +56,196 @@ class ModelingDbtCompilerTest {
         assertThatThrownBy(() -> ModelingDbtCompiler.compile(invalid))
             .isInstanceOf(ModelingDbtCompiler.CompileException.class)
             .hasMessageContaining("GRAIN_REQUIRED");
+    }
+
+    @Test
+    void compilesOrdinaryImplementationThroughADeterministicEphemeralStg() {
+        ModelingVNextContract.ModelSpec model = PjmModelingFixture.projectNode().modelSpec();
+        ModelSpecCompilerProjection.ImplementationProjection implementation = new ModelSpecCompilerProjection.ImplementationProjection(
+            model,
+            "tenant-a",
+            "a".repeat(64),
+            3,
+            "b".repeat(64),
+            "model.pjm.project_node_detail",
+            InputMode.PHYSICAL_ASSET,
+            List.of(),
+            List.of(new FieldMapping("raw_project_no", "project_no")),
+            Map.of(
+                "casts", Map.of("project_no", "string"),
+                "deduplicateBy", List.of("project_no")
+            ),
+            "table"
+        );
+
+        ModelingDbtCompiler.CompiledArtifacts first = ModelingDbtCompiler.compile(implementation);
+        ModelingDbtCompiler.CompiledArtifacts replay = ModelingDbtCompiler.compile(implementation);
+
+        assertThat(first.outputDirectory()).isEqualTo("models/dwd/project_node_detail/v1/i3");
+        assertThat(first.files()).containsOnlyKeys(
+            "stg_project_node_detail.sql",
+            "project_node_detail.sql",
+            "project_node_detail.yml",
+            "project_node_detail.tests.yml"
+        );
+        assertThat(first.files()).isEqualTo(replay.files());
+        assertThat(first.files().get("stg_project_node_detail.sql"))
+            .startsWith("{{ config(materialized='ephemeral') }}")
+            .contains("cast(raw_project_no as string) as project_no")
+            .doesNotContain("left join")
+            .doesNotContain("where is_deleted")
+            .contains("row_number() over (partition by project_no order by project_no)");
+        assertThat(first.files().get("project_node_detail.sql")).contains("{{ ref('stg_project_node_detail') }}");
+    }
+
+    @Test
+    void generatedImplementationDoesNotRequireAPhysicalSource() {
+        ModelingVNextContract.ModelSpec base = PjmModelingFixture.projectNode().modelSpec();
+        ModelingVNextContract.ModelSpec generated = new ModelingVNextContract.ModelSpec(
+            base.id(),
+            base.objectId(),
+            base.processId(),
+            base.layer(),
+            ModelingVNextContract.ModelType.DIMENSION,
+            ModelingVNextContract.ImplementationMode.DESIGNER_GENERATED,
+            "calendar_day",
+            base.grain(),
+            base.standardBindings(),
+            List.of(),
+            base.dimensions(),
+            base.metrics(),
+            "table",
+            base.revision(),
+            List.of(),
+            null
+        );
+
+        ModelingDbtCompiler.CompiledArtifacts artifacts = ModelingDbtCompiler.compile(new ModelSpecCompilerProjection.ImplementationProjection(
+            generated,
+            "tenant-a",
+            "a".repeat(64),
+            1,
+            "b".repeat(64),
+            "model.pjm.calendar_day",
+            InputMode.GENERATED,
+            List.of(new GeneratedInput("DATE_DIMENSION", Map.of())),
+            List.of(),
+            Map.of(),
+            "table"
+        ));
+
+        assertThat(artifacts.files().get("stg_calendar_day.sql")).contains("generated_input");
+    }
+
+    @Test
+    void usesThePinnedTechnicalNodeNameInsteadOfTheBusinessDisplayName() {
+        ModelingVNextContract.ModelSpec base = PjmModelingFixture.projectNode().modelSpec();
+        ModelingVNextContract.ModelSpec localized = new ModelingVNextContract.ModelSpec(
+            base.id(),
+            base.objectId(),
+            base.processId(),
+            base.layer(),
+            base.modelType(),
+            base.implementationMode(),
+            "项目节点明细",
+            base.grain(),
+            base.standardBindings(),
+            base.sourceRefs(),
+            base.dimensions(),
+            base.metrics(),
+            base.materialization(),
+            base.revision(),
+            base.dependsOn(),
+            base.legacyRef()
+        );
+
+        ModelingDbtCompiler.CompiledArtifacts artifacts = ModelingDbtCompiler.compile(new ModelSpecCompilerProjection.ImplementationProjection(
+            localized,
+            "tenant-a",
+            "a".repeat(64),
+            1,
+            "b".repeat(64),
+            "model.plan_123.model_456",
+            InputMode.PHYSICAL_ASSET,
+            List.of(),
+            List.of(new FieldMapping("raw_project_no", "project_no")),
+            Map.of(),
+            "table"
+        ));
+
+        assertThat(artifacts.outputDirectory()).contains("/model_456/");
+        assertThat(artifacts.files()).containsKeys("model_456.sql", "model_456.yml", "model_456.tests.yml");
+        assertThat(artifacts.files().get("model_456.yml")).contains("- name: model_456").doesNotContain("- name: 项目节点明细");
+    }
+
+    @Test
+    void compilesControlledMultiInputJoinsWithStableSystemAliases() {
+        ModelingVNextContract.ModelSpec model = new ModelingVNextContract.ModelSpec(
+            "model-id",
+            null,
+            null,
+            ModelingVNextContract.Layer.DWD,
+            ModelingVNextContract.ModelType.FACT,
+            ModelingVNextContract.ImplementationMode.DESIGNER_GENERATED,
+            "客户事实",
+            new ModelingVNextContract.Grain("one row per customer", List.of("customer_id")),
+            List.of(),
+            List.of(
+                new ModelingVNextContract.SourceRef("TABLE", "ods.customer", ModelingVNextContract.Layer.ODS),
+                new ModelingVNextContract.SourceRef("TABLE", "ods.customer_status", ModelingVNextContract.Layer.ODS)
+            ),
+            List.of("customer_id"),
+            List.of(),
+            "table",
+            1,
+            List.of(),
+            null
+        );
+        ModelSpecCompilerProjection.ImplementationProjection projection = new ModelSpecCompilerProjection.ImplementationProjection(
+            model,
+            "tenant-a",
+            "a".repeat(64),
+            1,
+            "b".repeat(64),
+            "model.plan_123.model_456",
+            InputMode.PHYSICAL_ASSET,
+            List.of(),
+            List.of(new FieldMapping("src_0.customer_id", "customer_id")),
+            Map.of("joins", List.of(Map.of(
+                "inputIndex", 1,
+                "type", "LEFT",
+                "leftField", "src_0.customer_id",
+                "rightField", "src_1.customer_id"
+            ))),
+            "table"
+        );
+
+        String sql = ModelingDbtCompiler.compile(projection).files().get("stg_model_456.sql");
+
+        assertThat(sql)
+            .contains("from source_0 src_0")
+            .contains("LEFT JOIN source_1 src_1 on src_0.customer_id = src_1.customer_id");
+    }
+
+    @Test
+    void rejectsFreeSqlSettingsEvenWhenAProjectionBypassesTheHttpDecoder() {
+        ModelingVNextContract.ModelSpec model = PjmModelingFixture.projectNode().modelSpec();
+        ModelSpecCompilerProjection.ImplementationProjection projection = new ModelSpecCompilerProjection.ImplementationProjection(
+            model,
+            "tenant-a",
+            "a".repeat(64),
+            3,
+            "b".repeat(64),
+            "model.pjm.project_node_detail",
+            InputMode.PHYSICAL_ASSET,
+            List.of(),
+            List.of(new FieldMapping("raw_project_no", "project_no")),
+            Map.of("filter", "is_deleted = false"),
+            "table"
+        );
+
+        assertThatThrownBy(() -> ModelingDbtCompiler.compile(projection))
+            .isInstanceOf(ModelingDbtCompiler.CompileException.class)
+            .hasMessageContaining("IMPLEMENTATION_SETTING_NOT_ALLOWED");
     }
 }

@@ -140,6 +140,13 @@ class ModelingVNextApplicationServiceIT {
                         String.class,
                         UUID.fromString(savedModel.id()),
                         savedModel.revision()
+                    ),
+                    1,
+                    jdbcTemplate.queryForObject(
+                        "select current_implementation_checksum from modeling_model_implementation where tenant_id = ? and model_spec_id = ?",
+                        String.class,
+                        tenant,
+                        UUID.fromString(savedModel.id())
                     )
                 )
             );

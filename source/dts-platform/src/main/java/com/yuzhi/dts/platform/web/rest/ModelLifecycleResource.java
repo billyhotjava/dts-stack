@@ -4,6 +4,13 @@ import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ClaimImple
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.CompileView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.LifecycleEventView;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.FieldMapping;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.GeneratedInput;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationInput;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.InputMode;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.PhysicalAssetInput;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.SaveImplementationCommand;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.UpstreamModelInput;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.PublishCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ReleaseView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ReviewCommand;
@@ -12,11 +19,16 @@ import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.RunCommand
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.TestEvidenceCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.TimelineView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ImplementationValidationView;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ExpectedImplementationVersion;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.ExpectedVersion;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecException;
 import com.yuzhi.dts.platform.service.modeling.ModelingVNextApplicationService.RunView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
 import java.util.UUID;
+import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Value;
@@ -42,6 +54,9 @@ public class ModelLifecycleResource {
     private static final Pattern STRONG_ETAG = Pattern.compile(
         "^\\\"model-spec:([0-9a-fA-F-]{36}):([1-9][0-9]*):([0-9a-f]{64})\\\"$"
     );
+    private static final Pattern IMPLEMENTATION_ETAG = Pattern.compile(
+        "^\\\"model-implementation:([0-9a-fA-F-]{36}):([1-9][0-9]*):([0-9a-f]{64})\\\"$"
+    );
 
     private final ModelLifecycleService service;
     private final WarehousePlanActorProvider actorProvider;
@@ -62,9 +77,54 @@ public class ModelLifecycleResource {
     public ApiResponse<ImplementationView> claim(
         @PathVariable UUID id,
         @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestHeader(value = "If-Match-Implementation", required = false) String implementationIfMatch,
         @RequestBody ClaimImplementationCommand command
     ) {
-        return ApiResponses.ok(service.claim(tenantId, actorId(), id, expected(id, ifMatch), command));
+        return ApiResponses.ok(service.claim(tenantId, actorId(), id, expected(id, ifMatch), expectedImplementation(id, implementationIfMatch), command));
+    }
+
+    @PutMapping("/{id}/implementation/inputs")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<ImplementationView> saveImplementation(
+        @PathVariable UUID id,
+        @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestHeader(value = "If-Match-Implementation", required = false) String implementationIfMatch,
+        @RequestBody ImplementationWriteRequest request
+    ) {
+        SaveImplementationCommand command = decode(request);
+        return ApiResponses.ok(
+            service.saveImplementation(
+                tenantId, actorId(), id, expected(id, ifMatch), expectedImplementation(id, implementationIfMatch),
+                request.projectKey(), request.dbtUniqueId(), command
+            )
+        );
+    }
+
+    @PostMapping("/{id}/implementation/inputs/validate")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<ImplementationValidationView> validateImplementation(
+        @PathVariable UUID id,
+        @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestBody ImplementationWriteRequest request
+    ) {
+        return ApiResponses.ok(service.validateImplementation(tenantId, actorId(), id, expected(id, ifMatch), decode(request)));
+    }
+
+    @PostMapping("/{id}/implementation/convert-to-designer-generated")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<ImplementationView> convertToDesignerGenerated(
+        @PathVariable UUID id,
+        @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestHeader(value = "If-Match-Implementation", required = false) String implementationIfMatch,
+        @RequestBody ImplementationWriteRequest request
+    ) {
+        SaveImplementationCommand command = decode(request);
+        return ApiResponses.ok(
+            service.convertToDesignerGenerated(
+                tenantId, actorId(), id, expected(id, ifMatch), expectedImplementation(id, implementationIfMatch),
+                request.projectKey(), request.dbtUniqueId(), command
+            )
+        );
     }
 
     @PostMapping("/{id}/lifecycle/compile")
@@ -72,9 +132,10 @@ public class ModelLifecycleResource {
     public ApiResponse<CompileView> compile(
         @PathVariable UUID id,
         @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestHeader(value = "If-Match-Implementation", required = false) String implementationIfMatch,
         @RequestBody IdempotencyRequest request
     ) {
-        return ApiResponses.ok(service.compile(tenantId, actorId(), id, expected(id, ifMatch), request.idempotencyKey()));
+        return ApiResponses.ok(service.compile(tenantId, actorId(), id, expected(id, ifMatch), expectedImplementation(id, implementationIfMatch), request.idempotencyKey()));
     }
 
     @PostMapping("/{id}/lifecycle/tests")
@@ -82,9 +143,10 @@ public class ModelLifecycleResource {
     public ApiResponse<LifecycleEventView> test(
         @PathVariable UUID id,
         @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestHeader(value = "If-Match-Implementation", required = false) String implementationIfMatch,
         @RequestBody TestEvidenceCommand command
     ) {
-        return ApiResponses.ok(service.recordTest(tenantId, actorId(), id, expected(id, ifMatch), command));
+        return ApiResponses.ok(service.recordTest(tenantId, actorId(), id, expected(id, ifMatch), expectedImplementation(id, implementationIfMatch), command));
     }
 
     @PostMapping("/{id}/lifecycle/reviews")
@@ -92,9 +154,10 @@ public class ModelLifecycleResource {
     public ApiResponse<LifecycleEventView> submitReview(
         @PathVariable UUID id,
         @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestHeader(value = "If-Match-Implementation", required = false) String implementationIfMatch,
         @RequestBody ReviewCommand command
     ) {
-        return ApiResponses.ok(service.submitReview(tenantId, actorId(), id, expected(id, ifMatch), command));
+        return ApiResponses.ok(service.submitReview(tenantId, actorId(), id, expected(id, ifMatch), expectedImplementation(id, implementationIfMatch), command));
     }
 
     @PostMapping("/{id}/lifecycle/reviews/approve")
@@ -102,9 +165,10 @@ public class ModelLifecycleResource {
     public ApiResponse<LifecycleEventView> approveReview(
         @PathVariable UUID id,
         @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestHeader(value = "If-Match-Implementation", required = false) String implementationIfMatch,
         @RequestBody ReviewCommand command
     ) {
-        return ApiResponses.ok(service.approveReview(tenantId, actorId(), id, expected(id, ifMatch), command));
+        return ApiResponses.ok(service.approveReview(tenantId, actorId(), id, expected(id, ifMatch), expectedImplementation(id, implementationIfMatch), command));
     }
 
     @PostMapping("/{id}/lifecycle/publish")
@@ -112,9 +176,10 @@ public class ModelLifecycleResource {
     public ApiResponse<ReleaseView> publish(
         @PathVariable UUID id,
         @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestHeader(value = "If-Match-Implementation", required = false) String implementationIfMatch,
         @RequestBody PublishCommand command
     ) {
-        return ApiResponses.ok(service.publish(tenantId, actorId(), id, expected(id, ifMatch), command));
+        return ApiResponses.ok(service.publish(tenantId, actorId(), id, expected(id, ifMatch), expectedImplementation(id, implementationIfMatch), command));
     }
 
     @PostMapping("/{id}/lifecycle/releases/{releaseId}/retry")
@@ -194,6 +259,72 @@ public class ModelLifecycleResource {
         return actor == null ? null : actor.ownerId();
     }
 
+    private static ExpectedImplementationVersion expectedImplementation(UUID id, String value) {
+        if (value == null || value.isBlank()) {
+            throw new ModelSpecException(
+                "MODEL_IMPLEMENTATION_IF_MATCH_REQUIRED",
+                "If-Match-Implementation is required; use * only when no implementation exists",
+                ModelSpecException.Kind.PRECONDITION_REQUIRED
+            );
+        }
+        if ("*".equals(value.trim())) return new ExpectedImplementationVersion(id, 0, null);
+        Matcher matcher = IMPLEMENTATION_ETAG.matcher(value.trim());
+        if (!matcher.matches()) throw invalidImplementationEtag();
+        try {
+            ExpectedImplementationVersion expected = new ExpectedImplementationVersion(
+                UUID.fromString(matcher.group(1)), Integer.parseInt(matcher.group(2)), matcher.group(3)
+            );
+            if (!id.equals(expected.modelSpecId())) throw invalidImplementationEtag();
+            return expected;
+        } catch (IllegalArgumentException exception) {
+            throw invalidImplementationEtag();
+        }
+    }
+
+    private static SaveImplementationCommand decode(ImplementationWriteRequest request) {
+        if (request == null || request.inputMode() == null || request.inputMode().isBlank() || request.inputs() == null || request.inputs().isEmpty()) {
+            throw invalidInput("MODEL_IMPLEMENTATION_INPUT_REQUIRED");
+        }
+        try {
+            InputMode mode = InputMode.valueOf(request.inputMode().trim().toUpperCase());
+            ImplementationMode ownership = request.ownership() == null
+                ? null
+                : ImplementationMode.valueOf(request.ownership().trim().toUpperCase());
+            List<ImplementationInput> inputs = request.inputs().stream().map(input -> decodeInput(mode, input)).toList();
+            return new SaveImplementationCommand(
+                mode,
+                inputs,
+                request.fieldMappings() == null ? List.of() : request.fieldMappings(),
+                request.settings() == null ? Map.of() : request.settings(),
+                ownership,
+                request.materialization(),
+                request.idempotencyKey()
+            );
+        } catch (IllegalArgumentException | NullPointerException exception) {
+            throw invalidInput("MODEL_IMPLEMENTATION_INPUT_KIND_NOT_ALLOWED");
+        }
+    }
+
+    private static ImplementationInput decodeInput(InputMode mode, ImplementationInputRequest input) {
+        if (input == null) throw invalidInput("MODEL_IMPLEMENTATION_INPUT_REQUIRED");
+        return switch (mode) {
+            case PHYSICAL_ASSET -> new PhysicalAssetInput(input.sourceBindingId(), input.resolvedVersion());
+            case UPSTREAM_MODEL -> new UpstreamModelInput(
+                input.modelSpecId(),
+                input.revision() == null ? 0 : input.revision(),
+                input.checksum(),
+                input.implementationRevision() == null ? 0 : input.implementationRevision(),
+                input.implementationChecksum(),
+                input.dbtUniqueId()
+            );
+            case GENERATED -> new GeneratedInput(input.generatorType(), input.config() == null ? Map.of() : input.config());
+        };
+    }
+
+    private static ModelSpecException invalidInput(String code) {
+        return new ModelSpecException(code, "Implementation input payload is invalid", ModelSpecException.Kind.UNPROCESSABLE);
+    }
+
     private static ModelSpecException invalidEtag() {
         return new ModelSpecException(
             "MODEL_SPEC_IF_MATCH_INVALID",
@@ -202,5 +333,38 @@ public class ModelLifecycleResource {
         );
     }
 
+    private static ModelSpecException invalidImplementationEtag() {
+        return new ModelSpecException(
+            "MODEL_IMPLEMENTATION_IF_MATCH_INVALID",
+            "If-Match-Implementation must identify the current implementation revision",
+            ModelSpecException.Kind.BAD_REQUEST
+        );
+    }
+
     public record IdempotencyRequest(String idempotencyKey) {}
+
+    public record ImplementationWriteRequest(
+        String projectKey,
+        String dbtUniqueId,
+        String inputMode,
+        List<ImplementationInputRequest> inputs,
+        List<FieldMapping> fieldMappings,
+        Map<String, Object> settings,
+        String ownership,
+        String materialization,
+        String idempotencyKey
+    ) {}
+
+    public record ImplementationInputRequest(
+        UUID sourceBindingId,
+        String resolvedVersion,
+        UUID modelSpecId,
+        Integer revision,
+        String checksum,
+        Integer implementationRevision,
+        String implementationChecksum,
+        String dbtUniqueId,
+        String generatorType,
+        Map<String, Object> config
+    ) {}
 }

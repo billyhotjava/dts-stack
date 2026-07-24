@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.repository.modeling;
 
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -10,15 +11,19 @@ import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.Creat
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.ReuseScope;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.Status;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.View;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -209,6 +214,91 @@ class DimensionDefinitionRepositoryIT {
             executor.shutdownNow();
         }
         assertLedgerCounts(tenant, first.id(), 1, 1);
+    }
+
+    @Test
+    void sharedCurrentHeadLockBlocksRetirementUntilModelSpecCreateValidationCompletes() throws Exception {
+        String tenant = tenant("model-spec-create-lock");
+        UUID domainId = UUID.randomUUID();
+        UUID definitionId = UUID.randomUUID();
+        Instant now = Instant.parse("2026-07-24T00:00:00Z");
+        View current = view(
+            definitionId,
+            domainId,
+            systemCode(definitionId),
+            "Customer",
+            Status.CURRENT,
+            1,
+            hash('a'),
+            now
+        );
+        inNewTransaction(() ->
+            repository.insert(tenant, "owner-1", command(domainId, "model-spec-create-lock"), current, hash('1'))
+        );
+        View retired = view(
+            definitionId,
+            domainId,
+            current.systemCode(),
+            "Customer",
+            Status.RETIRED,
+            2,
+            hash('b'),
+            now.plusSeconds(60)
+        );
+
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch writerStarted = new CountDownLatch(1);
+        AtomicInteger writerPid = new AtomicInteger();
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        Future<StoredDimensionDefinition> createValidation = null;
+        Future<Integer> retirement = null;
+        try {
+            createValidation = executor.submit(() ->
+                inNewTransaction(() -> {
+                    StoredDimensionDefinition lockedHead = repository
+                        .findCurrentForShare(tenant, definitionId)
+                        .orElseThrow();
+                    locked.countDown();
+                    await(release);
+                    return lockedHead;
+                })
+            );
+            assertThat(locked.await(5, SECONDS)).isTrue();
+
+            retirement = executor.submit(() ->
+                inNewTransaction(() -> {
+                    writerPid.set(jdbcTemplate.queryForObject("select pg_backend_pid()", Integer.class));
+                    writerStarted.countDown();
+                    return repository.compareAndSet(
+                        tenant,
+                        "owner-2",
+                        new ExpectedVersion(definitionId, 1, current.checksum()),
+                        retired
+                    );
+                })
+            );
+
+            assertThat(writerStarted.await(5, SECONDS)).isTrue();
+            waitForLockWait(writerPid.get());
+            assertThat(retirement.isDone()).isFalse();
+
+            release.countDown();
+            assertThat(createValidation.get(5, SECONDS))
+                .extracting(StoredDimensionDefinition::revision, StoredDimensionDefinition::status)
+                .containsExactly(1, Status.CURRENT);
+            assertThat(retirement.get(5, SECONDS)).isEqualTo(1);
+            assertThat(repository.findCurrent(tenant, definitionId))
+                .get()
+                .extracting(StoredDimensionDefinition::revision, StoredDimensionDefinition::status)
+                .containsExactly(2, Status.RETIRED);
+        } finally {
+            release.countDown();
+            waitQuietly(createValidation);
+            waitQuietly(retirement);
+            executor.shutdownNow();
+            cleanupDefinition(tenant, definitionId);
+        }
     }
 
     @Test
@@ -534,6 +624,162 @@ class DimensionDefinitionRepositoryIT {
         ).isEqualTo(1);
     }
 
+    @Test
+    void legacyMapParticipatesInReferenceProjectionAndUsageCountsWithoutDoubleCounting() {
+        String tenant = tenant("legacy-usage");
+        UUID domainId = UUID.randomUUID();
+        UUID definitionId = UUID.randomUUID();
+        Instant now = Instant.parse("2026-07-24T00:00:00Z");
+        View definition = view(
+            definitionId,
+            domainId,
+            systemCode(definitionId),
+            "Customer",
+            Status.CURRENT,
+            1,
+            hash('a'),
+            now
+        );
+        repository.insert(
+            tenant,
+            "owner-1",
+            command(domainId, "legacy-usage"),
+            definition,
+            hash('1')
+        );
+        UUID legacyModelSpecId = seedModelHead(tenant, "DIMENSION", null, null);
+        insertLegacyMap(tenant, legacyModelSpecId, definitionId, 1);
+
+        assertThat(repository.findLegacyDefinitionRef(tenant, legacyModelSpecId, domainId))
+            .contains(new DimensionDefinitionRepository.LegacyDefinitionRef(definitionId, 1));
+        assertThat(repository.findLegacyDefinitionRef(tenant, legacyModelSpecId, UUID.randomUUID()))
+            .isEmpty();
+        assertThat(repository.usageCount(tenant, definitionId)).isEqualTo(1);
+        assertThat(repository.usageCounts(tenant, List.of(definitionId)))
+            .containsExactlyEntriesOf(java.util.Map.of(definitionId, 1L));
+    }
+
+    @Test
+    void nameLookupAndDatabaseConstraintUseTheSameTenantDomainCaseInsensitiveKey() {
+        String tenant = tenant("unique-name");
+        UUID domainId = UUID.randomUUID();
+        UUID firstId = UUID.randomUUID();
+        Instant now = Instant.parse("2026-07-24T00:00:00Z");
+        View first = view(
+            firstId,
+            domainId,
+            systemCode(firstId),
+            "Customer",
+            Status.DRAFT,
+            1,
+            hash('a'),
+            now
+        );
+        repository.insert(tenant, "owner-1", command(domainId, "unique-name-1"), first, hash('1'));
+
+        assertThat(repository.existsByDomainAndName(tenant, domainId, "customer", null)).isTrue();
+        assertThat(repository.existsByDomainAndName(tenant, domainId, "CUSTOMER", first.id())).isFalse();
+        assertThat(repository.existsByDomainAndName(tenant, UUID.randomUUID(), "Customer", null)).isFalse();
+
+        UUID secondId = UUID.randomUUID();
+        View duplicate = view(
+            secondId,
+            domainId,
+            systemCode(secondId),
+            "CUSTOMER",
+            Status.DRAFT,
+            1,
+            hash('b'),
+            now
+        );
+        assertThatThrownBy(() ->
+            repository.insert(
+                tenant,
+                "owner-1",
+                new CreateCommand(
+                    domainId,
+                    "CUSTOMER",
+                    "Duplicate customer dimension",
+                    "owner-1",
+                    ReuseScope.DOMAIN,
+                    List.of(),
+                    "unique-name-2"
+                ),
+                duplicate,
+                hash('2')
+            )
+        ).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void databaseConstraintAlsoRejectsCaseInsensitiveRenameConflicts() {
+        String tenant = tenant("unique-rename");
+        UUID domainId = UUID.randomUUID();
+        Instant now = Instant.parse("2026-07-24T00:00:00Z");
+        UUID customerId = UUID.randomUUID();
+        View customer = view(
+            customerId,
+            domainId,
+            systemCode(customerId),
+            "Customer",
+            Status.DRAFT,
+            1,
+            hash('a'),
+            now
+        );
+        repository.insert(
+            tenant,
+            "owner-1",
+            command(domainId, "unique-rename-customer"),
+            customer,
+            hash('1')
+        );
+        UUID accountId = UUID.randomUUID();
+        View account = view(
+            accountId,
+            domainId,
+            systemCode(accountId),
+            "Account",
+            Status.DRAFT,
+            1,
+            hash('c'),
+            now
+        );
+        repository.insert(
+            tenant,
+            "owner-1",
+            new CreateCommand(
+                domainId,
+                "Account",
+                "Account dimension",
+                "owner-1",
+                ReuseScope.DOMAIN,
+                List.of(),
+                "unique-rename-account"
+            ),
+            account,
+            hash('2')
+        );
+        View renamedDuplicate = view(
+            accountId,
+            domainId,
+            account.systemCode(),
+            "customer",
+            Status.DRAFT,
+            2,
+            hash('d'),
+            now.plusSeconds(1)
+        );
+        assertThatThrownBy(() ->
+            repository.compareAndSet(
+                tenant,
+                "owner-1",
+                new ExpectedVersion(accountId, 1, account.checksum()),
+                renamedDuplicate
+            )
+        ).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
     private void assertInvalidModelRevision(
         String tenant,
         UUID modelSpecId,
@@ -693,6 +939,59 @@ class DimensionDefinitionRepositoryIT {
         ready.countDown();
         start.await();
         return inNewTransaction(() -> repository.insert(tenant, "owner-1", command, view, hash('1')));
+    }
+
+    private void cleanupDefinition(String tenant, UUID definitionId) {
+        inNewTransaction(() -> {
+            jdbcTemplate.update(
+                "delete from modeling_dimension_definition_revision where tenant_id = ? and dimension_definition_id = ?",
+                tenant,
+                definitionId
+            );
+            jdbcTemplate.update(
+                "delete from modeling_dimension_definition where tenant_id = ? and id = ?",
+                tenant,
+                definitionId
+            );
+            return null;
+        });
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            if (!latch.await(5, SECONDS)) {
+                throw new IllegalStateException("Timed out while holding the dimension definition head lock");
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while holding the dimension definition head lock", exception);
+        }
+    }
+
+    private static void waitQuietly(Future<?> future) {
+        if (future == null) return;
+        try {
+            future.get(5, SECONDS);
+        } catch (ExecutionException | TimeoutException ignored) {
+            // The primary assertion reports failures; cleanup must still proceed.
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void waitForLockWait(int pid) {
+        org.awaitility.Awaitility.await()
+            .pollInterval(Duration.ofMillis(25))
+            .atMost(5, SECONDS)
+            .until(() ->
+                Boolean.TRUE.equals(
+                    jdbcTemplate.queryForObject(
+                        "select exists (select 1 from pg_stat_activity where pid = ? and wait_event_type = 'Lock')",
+                        Boolean.class,
+                        pid
+                    )
+                )
+            );
     }
 
     private static String tenant(String prefix) {

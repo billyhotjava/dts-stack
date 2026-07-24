@@ -5,8 +5,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.yuzhi.dts.platform.repository.modeling.ModelLifecycleRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.StoredModelSpec;
+import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository;
+import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository.StoredDimensionDefinition;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecStandardEvidencePort.StandardEvidence;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.*;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.GateEvidence;
@@ -30,7 +33,7 @@ class ModelSpecStageGateServiceTest {
 
     @Test
     void separatesLegacyCompatibleDraftSaveFromDimensionImplementationRequirements() {
-        ModelSpecView legacyCompatible = dimension(null, List.of(), null);
+        ModelSpecView legacyCompatible = withDimensionDefinitionRef(dimension(null, List.of(), null), 1);
 
         assertThat(ModelSpecStageGateService.evaluate(legacyCompatible, Stage.DRAFT_SAVE, GateEvidence.currentFor(legacyCompatible)).status())
             .isEqualTo(GateStatus.READY);
@@ -41,6 +44,39 @@ class ModelSpecStageGateServiceTest {
         )
             .extracting(ModelSpecStageGateService.GateBlocker::code)
             .contains("MODEL_SPEC_DIMENSION_PROFILE_REQUIRED", "MODEL_SPEC_DIMENSION_INPUT_REQUIRED");
+    }
+
+    @Test
+    void addsStableImplementationInputBlockerWhenPersistedPhysicalSourceIsNoLongerConfirmed() {
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository repository = mock(ModelSpecRepository.class);
+        ModelSpecSourceValidationPort sourceValidation = mock(ModelSpecSourceValidationPort.class);
+        ModelSpecView model = dimension(
+            new DimensionProfile("organization", List.of(), new ScdPolicy(ScdType.TYPE_1, null, null, null), ReuseScope.LOCAL),
+            sources(),
+            null
+        );
+        when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
+        when(sourceValidation.isCurrentBindingForGate("tenant-a", model.planId(), model.sourceRefs().get(0))).thenReturn(false);
+        ModelImplementationCompatibilityAdapter adapter = new ModelImplementationCompatibilityAdapter(
+            modelSpecs,
+            repository,
+            mock(ModelLifecycleRepository.class),
+            sourceValidation
+        );
+        ModelSpecStageGateService gates = new ModelSpecStageGateService(
+            modelSpecs,
+            repository,
+            mock(ModelSpecStandardEvidencePort.class),
+            null,
+            sourceValidation,
+            null,
+            null,
+            adapter
+        );
+
+        assertThat(implementationGate(gates).blockers()).extracting(ModelSpecStageGateService.GateBlocker::code)
+            .contains("PHYSICAL_ASSET_NOT_CONFIRMED");
     }
 
     @Test
@@ -57,10 +93,112 @@ class ModelSpecStageGateServiceTest {
             new ScdPolicy(ScdType.TYPE1, null, null, null),
             ReuseScope.PLAN
         );
-        ModelSpecView model = dimension(profile, List.of(), new GenerationStrategy("REFERENCE", "organization-master"));
+        ModelSpecView model = withDimensionDefinitionRef(
+            dimension(profile, List.of(), new GenerationStrategy("REFERENCE", "organization-master")),
+            1
+        );
 
         assertThat(ModelSpecStageGateService.evaluate(model, Stage.IMPLEMENTATION_READY, GateEvidence.currentFor(model)).status())
             .isEqualTo(GateStatus.READY);
+    }
+
+    @Test
+    void implementationGateRechecksPinnedDefinitionsWithoutChangingThePinnedRevision() {
+        DimensionProfile profile = new DimensionProfile(
+            "DIM_ORGANIZATION",
+            List.of(),
+            new ScdPolicy(ScdType.TYPE1, null, null, null),
+            ReuseScope.PLAN
+        );
+        ModelSpecView model = withDimensionDefinitionRef(
+            dimension(profile, List.of(), new GenerationStrategy("REFERENCE", "organization-master")),
+            1
+        );
+        DimensionDefinitionRef ref = model.dimensionDefinitionRef();
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository repository = mock(ModelSpecRepository.class);
+        ModelSpecStandardEvidencePort standards = mock(ModelSpecStandardEvidencePort.class);
+        DimensionDefinitionRepository definitions = mock(DimensionDefinitionRepository.class);
+        StoredDimensionDefinition pinned = dimensionDefinition(ref.dimensionDefinitionId(), 1, DimensionDefinitionContract.Status.CURRENT);
+        StoredDimensionDefinition current = dimensionDefinition(ref.dimensionDefinitionId(), 2, DimensionDefinitionContract.Status.CURRENT);
+        StoredDimensionDefinition retired = dimensionDefinition(ref.dimensionDefinitionId(), 2, DimensionDefinitionContract.Status.RETIRED);
+        when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
+        when(definitions.findRevision("tenant-a", ref.dimensionDefinitionId(), ref.revision())).thenReturn(Optional.of(pinned));
+        when(definitions.findCurrent("tenant-a", ref.dimensionDefinitionId())).thenReturn(Optional.of(current));
+        ModelSpecStageGateService gates = new ModelSpecStageGateService(
+            modelSpecs,
+            repository,
+            standards,
+            null,
+            null,
+            definitions
+        );
+
+        GateView ready = implementationGate(gates);
+        when(definitions.findCurrent("tenant-a", ref.dimensionDefinitionId())).thenReturn(Optional.of(retired));
+        GateView retiredGate = implementationGate(gates);
+        when(definitions.findCurrent("tenant-a", ref.dimensionDefinitionId())).thenReturn(Optional.empty());
+        GateView deletedGate = implementationGate(gates);
+
+        assertThat(ready.status()).isEqualTo(GateStatus.READY);
+        assertThat(retiredGate.blockers()).extracting(ModelSpecStageGateService.GateBlocker::code)
+            .contains("DIMENSION_DEFINITION_NOT_CURRENT");
+        assertThat(deletedGate.blockers()).extracting(ModelSpecStageGateService.GateBlocker::code)
+            .contains("DIMENSION_DEFINITION_NOT_CURRENT");
+        assertThat(model.dimensionDefinitionRef()).isEqualTo(ref);
+    }
+
+    @Test
+    void implementationGateFailsClosedWhenThePinnedDefinitionDomainIsNoLongerVisible() {
+        DimensionProfile profile = new DimensionProfile(
+            "DIM_ORGANIZATION",
+            List.of(),
+            new ScdPolicy(ScdType.TYPE1, null, null, null),
+            ReuseScope.PLAN
+        );
+        ModelSpecView model = withDimensionDefinitionRef(
+            dimension(profile, List.of(), new GenerationStrategy("REFERENCE", "organization-master")),
+            1
+        );
+        DimensionDefinitionRef ref = model.dimensionDefinitionRef();
+        UUID definitionDomainId = UUID.fromString("20000000-0000-0000-0000-000000000002");
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository repository = mock(ModelSpecRepository.class);
+        ModelSpecStandardEvidencePort standards = mock(ModelSpecStandardEvidencePort.class);
+        DimensionDefinitionRepository definitions = mock(DimensionDefinitionRepository.class);
+        ModelSpecDomainReadAccessPort domainReadAccess = mock(ModelSpecDomainReadAccessPort.class);
+        StoredDimensionDefinition pinned = dimensionDefinition(
+            ref.dimensionDefinitionId(),
+            1,
+            DimensionDefinitionContract.Status.CURRENT
+        );
+        StoredDimensionDefinition current = dimensionDefinition(
+            ref.dimensionDefinitionId(),
+            2,
+            DimensionDefinitionContract.Status.CURRENT
+        );
+        when(pinned.domainId()).thenReturn(definitionDomainId);
+        when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
+        when(definitions.findRevision("tenant-a", ref.dimensionDefinitionId(), ref.revision())).thenReturn(Optional.of(pinned));
+        when(definitions.findCurrent("tenant-a", ref.dimensionDefinitionId())).thenReturn(Optional.of(current));
+        when(domainReadAccess.canRead(definitionDomainId)).thenReturn(false);
+        ModelSpecStageGateService gates = new ModelSpecStageGateService(
+            modelSpecs,
+            repository,
+            standards,
+            null,
+            null,
+            definitions,
+            domainReadAccess
+        );
+
+        GateView implementation = implementationGate(gates);
+
+        assertThat(implementation.status()).isEqualTo(GateStatus.BLOCKED);
+        assertThat(implementation.blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .contains("DIMENSION_DEFINITION_NOT_CURRENT");
+        verify(domainReadAccess).canRead(definitionDomainId);
     }
 
     @Test
@@ -620,6 +758,27 @@ class ModelSpecStageGateServiceTest {
         return view(ModelType.DIMENSION, profile, null, null, sources, List.of(), List.of(), null, generationStrategy);
     }
 
+    private static GateView implementationGate(ModelSpecStageGateService gates) {
+        return gates
+            .evaluateAll("tenant-a", MODEL_ID)
+            .stream()
+            .filter(gate -> gate.stage() == Stage.IMPLEMENTATION_READY)
+            .findFirst()
+            .orElseThrow();
+    }
+
+    private static StoredDimensionDefinition dimensionDefinition(
+        UUID id,
+        int revision,
+        DimensionDefinitionContract.Status status
+    ) {
+        StoredDimensionDefinition definition = mock(StoredDimensionDefinition.class);
+        when(definition.id()).thenReturn(id);
+        when(definition.revision()).thenReturn(revision);
+        when(definition.status()).thenReturn(status);
+        return definition;
+    }
+
     private static ModelSpecView view(
         ModelType type,
         DimensionProfile profile,
@@ -734,6 +893,42 @@ class ModelSpecStageGateServiceTest {
             bindings,
             model.generationStrategy(),
             model.dimensionProfile(),
+            model.status(),
+            model.revision(),
+            model.checksum(),
+            model.createdAt(),
+            model.updatedAt(),
+            model.compatibilityMode(),
+            model.legacyRefs()
+        );
+    }
+
+    private static ModelSpecView withDimensionDefinitionRef(ModelSpecView model, int revision) {
+        return new ModelSpecView(
+            model.contractVersion(),
+            model.id(),
+            model.planId(),
+            model.domainId(),
+            model.modelType(),
+            model.layer(),
+            model.name(),
+            model.description(),
+            model.implementationMode(),
+            model.materialization(),
+            model.businessActivityRef(),
+            model.consumptionScenario(),
+            model.grain(),
+            model.factShape(),
+            model.timeSemantics(),
+            model.fields(),
+            model.sourceRefs(),
+            model.dependsOn(),
+            model.dimensionRefs(),
+            model.metricRefs(),
+            model.standardBindings(),
+            model.generationStrategy(),
+            model.dimensionProfile(),
+            new DimensionDefinitionRef(UUID.fromString("60000000-0000-0000-0000-000000000001"), revision),
             model.status(),
             model.revision(),
             model.checksum(),

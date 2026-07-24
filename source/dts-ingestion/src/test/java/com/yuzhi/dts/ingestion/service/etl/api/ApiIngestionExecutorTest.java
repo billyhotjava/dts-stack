@@ -271,6 +271,66 @@ class ApiIngestionExecutorTest {
     }
 
     @Test
+    void execute_shouldEmitModelableLandingEvidenceOnlyAfterSuccessfulLanding() {
+        ApiIngestionExecutor executor = new ApiIngestionExecutor(
+            (plan, context) -> ApiIngestionResult.success(
+                5L,
+                4L,
+                Map.of(
+                    "orders.rowsWritten",
+                    4L,
+                    "resourceStats",
+                    List.of(
+                        Map.of(
+                            "resourceId",
+                            "orders",
+                            "rowsRead",
+                            5L,
+                            "cursorValue",
+                            "2026-01-10T00:00:00Z",
+                            "status",
+                            "SUCCESS"
+                        )
+                    )
+                )
+            )
+        );
+        IngestionExecution execution = execution(100L);
+        execution.setExecutionId("api-run-100");
+
+        executor.execute(apiLineagePlan(), task(10L), execution);
+
+        JsonNode target = execution.getTargetTables().get(0);
+        assertThat(target.get("qualifiedName").asText()).isEqualTo("ods.ods_api_crm_orders");
+        assertThat(target.get("resourceId").asText()).isEqualTo("orders");
+        assertThat(target.get("sourceType").asText()).isEqualTo("api");
+        assertThat(target.get("landingMode").asText()).isEqualTo("raw_ods");
+        assertThat(target.get("rawRecordColumn").asText()).isEqualTo(ApiSourceContracts.defaultLandingPolicy().rawRecordColumn());
+        assertThat(target.get("technicalColumns")).hasSize(ApiSourceContracts.defaultLandingPolicy().technicalColumns().size());
+        assertThat(target.get("cursorValue").asText()).isEqualTo("2026-01-10T00:00:00Z");
+        assertThat(target.get("rowsWritten").asLong()).isEqualTo(4L);
+        assertThat(target.get("executionId").asText()).isEqualTo("api-run-100");
+        assertThat(target.get("configChecksum").asText()).startsWith("sha256:");
+        assertThat(target.get("landingStatus").asText()).isEqualTo("SUCCESS");
+        assertThat(target.get("fieldSnapshot")).isNotEmpty();
+        assertThat(target.get("fieldSnapshotChecksum").asText()).matches("^sha256:[0-9a-f]{64}$");
+    }
+
+    @Test
+    void execute_shouldNotEmitModelableEvidenceWhenLandingFails() {
+        ApiIngestionExecutor executor = new ApiIngestionExecutor(
+            (plan, context) -> ApiIngestionResult.failed("orders landing failed", Map.of("orders.error", "ddl failed"))
+        );
+        IngestionExecution execution = execution(100L);
+
+        ApiIngestionResult result = executor.execute(apiLineagePlan(), task(10L), execution);
+
+        assertThat(result.success()).isFalse();
+        assertThat(execution.getSourceTables()).isNull();
+        assertThat(execution.getTargetTables()).isNull();
+    }
+
+    @Test
     void execute_shouldPublishFailureMetricWithFailureCategory() {
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         ApiIngestionExecutor executor = new ApiIngestionExecutor(

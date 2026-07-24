@@ -100,6 +100,7 @@ public class DimensionDefinitionApplicationService {
         }
 
         requireWriteAccess(command.domainId());
+        requireUniqueName(tenantId, command.domainId(), command.name(), null);
         UUID id = idGenerator.get();
         Instant now = databaseInstant();
         View created = checksum(
@@ -124,7 +125,7 @@ public class DimensionDefinitionApplicationService {
         try {
             inserted = repository.insert(tenantId, actorId, command, created, requestHash);
         } catch (DataIntegrityViolationException exception) {
-            throw persistenceConflict(exception);
+            throw persistenceConflict(exception, command.domainId(), command.name());
         }
         if (inserted == 0) {
             StoredDimensionDefinition concurrent = repository
@@ -198,6 +199,7 @@ public class DimensionDefinitionApplicationService {
         if (sameBusinessContent(current, command)) {
             return current;
         }
+        requireUniqueName(tenantId, current.domainId(), command.name(), current.id());
         View replacement = checksum(
             new View(
                 current.id(),
@@ -289,7 +291,7 @@ public class DimensionDefinitionApplicationService {
                 replacement
             );
         } catch (DataIntegrityViolationException exception) {
-            throw persistenceConflict(exception);
+            throw persistenceConflict(exception, replacement.domainId(), replacement.name());
         }
         if (updated == 0) {
             throw revisionConflict(latestVisible(tenantId, current));
@@ -361,6 +363,12 @@ public class DimensionDefinitionApplicationService {
                 "Business category is not available for dimension maintenance",
                 ModelSpecException.Kind.FORBIDDEN
             );
+        }
+    }
+
+    private void requireUniqueName(String tenantId, UUID domainId, String name, UUID excludingDefinitionId) {
+        if (repository.existsByDomainAndName(tenantId, domainId, name, excludingDefinitionId)) {
+            throw duplicateName(domainId, name);
         }
     }
 
@@ -546,7 +554,11 @@ public class DimensionDefinitionApplicationService {
         );
     }
 
-    private static ModelSpecException persistenceConflict(DataIntegrityViolationException exception) {
+    private static ModelSpecException persistenceConflict(
+        DataIntegrityViolationException exception,
+        UUID domainId,
+        String name
+    ) {
         if (rootMessage(exception).contains("idempotency key")) {
             return new ModelSpecException(
                 "DIMENSION_DEFINITION_IDEMPOTENCY_CONFLICT",
@@ -554,10 +566,22 @@ public class DimensionDefinitionApplicationService {
                 ModelSpecException.Kind.CONFLICT
             );
         }
+        if (rootMessage(exception).contains("uk_dimension_definition_tenant_domain_name_ci")) {
+            return duplicateName(domainId, name);
+        }
         return new ModelSpecException(
             "DIMENSION_DEFINITION_PERSISTENCE_CONFLICT",
             "Dimension definition could not be persisted because its references or uniqueness changed",
             ModelSpecException.Kind.CONFLICT
+        );
+    }
+
+    private static ModelSpecException duplicateName(UUID domainId, String name) {
+        return new ModelSpecException(
+            "DIMENSION_DEFINITION_NAME_CONFLICT",
+            "A dimension definition with the same name already exists in this business category",
+            ModelSpecException.Kind.CONFLICT,
+            Map.of("domainId", domainId, "name", name)
         );
     }
 

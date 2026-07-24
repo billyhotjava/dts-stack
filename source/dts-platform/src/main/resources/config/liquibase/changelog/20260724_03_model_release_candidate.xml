@@ -1,0 +1,298 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260724-03-model-release-candidate" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT">
+            <tableExists tableName="modeling_warehouse_plan"/>
+            <tableExists tableName="modeling_model_spec"/>
+            <tableExists tableName="modeling_model_spec_revision"/>
+            <tableExists tableName="modeling_model_implementation"/>
+        </preConditions>
+        <comment>Create tenant-scoped release candidate headers and revision-bound ordered entries.</comment>
+
+        <addUniqueConstraint
+            tableName="modeling_model_spec"
+            columnNames="tenant_id, plan_id, id, implementation_mode"
+            constraintName="uk_model_spec_release_scope"/>
+        <addUniqueConstraint
+            tableName="modeling_model_spec_revision"
+            columnNames="tenant_id, model_spec_id, revision, content_checksum"
+            constraintName="uk_model_spec_revision_release_scope"/>
+        <addUniqueConstraint
+            tableName="modeling_model_implementation"
+            columnNames="tenant_id, id, plan_id, model_spec_id, model_revision, model_checksum, ownership"
+            constraintName="uk_modeling_implementation_release_scope"/>
+
+        <createTable tableName="modeling_model_release_candidate">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="plan_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="environment" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="version" type="int"><constraints nullable="false"/></column>
+            <column name="idempotency_key" type="varchar(128)"/>
+            <column name="request_hash" type="varchar(64)"/>
+            <column name="created_by" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="created_date" type="timestamptz"><constraints nullable="false"/></column>
+            <column name="submitted_by" type="varchar(128)"/>
+            <column name="submitted_date" type="timestamptz"/>
+            <column name="approved_by" type="varchar(128)"/>
+            <column name="approved_date" type="timestamptz"/>
+            <column name="published_by" type="varchar(128)"/>
+            <column name="published_date" type="timestamptz"/>
+            <column name="last_modified_by" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="last_modified_date" type="timestamptz"><constraints nullable="false"/></column>
+        </createTable>
+        <addUniqueConstraint
+            tableName="modeling_model_release_candidate"
+            columnNames="tenant_id, id"
+            constraintName="uk_model_release_candidate_tenant_id"/>
+        <addUniqueConstraint
+            tableName="modeling_model_release_candidate"
+            columnNames="tenant_id, id, plan_id"
+            constraintName="uk_model_release_candidate_scope"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_release_candidate"
+            baseColumnNames="tenant_id, plan_id"
+            constraintName="fk_model_release_candidate_plan"
+            referencedTableName="modeling_warehouse_plan"
+            referencedColumnNames="tenant_id, id"
+            onDelete="RESTRICT"/>
+
+        <createTable tableName="modeling_model_release_candidate_entry">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="candidate_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="plan_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="model_spec_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="revision" type="int"><constraints nullable="false"/></column>
+            <column name="checksum" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="implementation_id" type="${uuidType}"/>
+            <column name="implementation_mode" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="sort_order" type="int"><constraints nullable="false"/></column>
+            <column name="selected_reason" type="text"/>
+        </createTable>
+        <addUniqueConstraint
+            tableName="modeling_model_release_candidate_entry"
+            columnNames="tenant_id, id"
+            constraintName="uk_model_release_candidate_entry_tenant_id"/>
+        <addUniqueConstraint
+            tableName="modeling_model_release_candidate_entry"
+            columnNames="tenant_id, candidate_id, model_spec_id"
+            constraintName="uk_model_release_candidate_entry_model"/>
+        <addUniqueConstraint
+            tableName="modeling_model_release_candidate_entry"
+            columnNames="tenant_id, candidate_id, sort_order"
+            constraintName="uk_model_release_candidate_entry_order"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_release_candidate_entry"
+            baseColumnNames="tenant_id, candidate_id, plan_id"
+            constraintName="fk_model_release_candidate_entry_candidate_scope"
+            referencedTableName="modeling_model_release_candidate"
+            referencedColumnNames="tenant_id, id, plan_id"
+            onDelete="RESTRICT"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_release_candidate_entry"
+            baseColumnNames="tenant_id, plan_id, model_spec_id, implementation_mode"
+            constraintName="fk_model_release_candidate_entry_model_scope"
+            referencedTableName="modeling_model_spec"
+            referencedColumnNames="tenant_id, plan_id, id, implementation_mode"
+            onDelete="RESTRICT"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_release_candidate_entry"
+            baseColumnNames="tenant_id, model_spec_id, revision, checksum"
+            constraintName="fk_model_release_candidate_entry_revision"
+            referencedTableName="modeling_model_spec_revision"
+            referencedColumnNames="tenant_id, model_spec_id, revision, content_checksum"
+            onDelete="RESTRICT"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_release_candidate_entry"
+            baseColumnNames="tenant_id, implementation_id, plan_id, model_spec_id, revision, checksum, implementation_mode"
+            constraintName="fk_model_release_candidate_entry_implementation"
+            referencedTableName="modeling_model_implementation"
+            referencedColumnNames="tenant_id, id, plan_id, model_spec_id, model_revision, model_checksum, ownership"
+            onDelete="RESTRICT"/>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_model_release_candidate
+                ADD CONSTRAINT ck_model_release_candidate_status
+                CHECK (
+                    status IN (
+                        'DRAFT', 'BUILDING', 'BUILD_FAILED', 'BUILT', 'QUALITY_RUNNING',
+                        'QUALITY_FAILED', 'QUALITY_PASSED', 'REVIEW_PENDING', 'REJECTED',
+                        'APPROVED', 'PUBLISHING', 'PARTIAL', 'PUBLISHED', 'ROLLED_BACK', 'STALE'
+                    )
+                );
+            ALTER TABLE modeling_model_release_candidate
+                ADD CONSTRAINT ck_model_release_candidate_identity
+                CHECK (
+                    version > 0
+                    AND btrim(environment) <> ''
+                    AND environment = btrim(environment)
+                    AND btrim(created_by) <> ''
+                    AND created_by = btrim(created_by)
+                    AND btrim(last_modified_by) <> ''
+                    AND last_modified_by = btrim(last_modified_by)
+                    AND (
+                        (idempotency_key IS NULL AND request_hash IS NULL)
+                        OR (
+                            idempotency_key IS NOT NULL
+                            AND btrim(idempotency_key) <> ''
+                            AND idempotency_key = btrim(idempotency_key)
+                            AND request_hash IS NOT NULL
+                            AND request_hash ~ '^[0-9a-f]{64}$'
+                        )
+                    )
+                );
+            ALTER TABLE modeling_model_release_candidate
+                ADD CONSTRAINT ck_model_release_candidate_audit
+                CHECK (
+                    ((submitted_by IS NULL AND submitted_date IS NULL)
+                        OR (
+                            submitted_by IS NOT NULL
+                            AND btrim(submitted_by) <> ''
+                            AND submitted_by = btrim(submitted_by)
+                            AND submitted_date IS NOT NULL
+                        ))
+                    AND ((approved_by IS NULL AND approved_date IS NULL)
+                        OR (
+                            approved_by IS NOT NULL
+                            AND btrim(approved_by) <> ''
+                            AND approved_by = btrim(approved_by)
+                            AND approved_date IS NOT NULL
+                        ))
+                    AND ((published_by IS NULL AND published_date IS NULL)
+                        OR (
+                            published_by IS NOT NULL
+                            AND btrim(published_by) <> ''
+                            AND published_by = btrim(published_by)
+                            AND published_date IS NOT NULL
+                        ))
+                    AND last_modified_date >= created_date
+                    AND (submitted_date IS NULL OR submitted_date >= created_date)
+                    AND (approved_date IS NULL OR (submitted_date IS NOT NULL AND approved_date >= submitted_date))
+                    AND (published_date IS NULL OR (approved_date IS NOT NULL AND published_date >= approved_date))
+                    AND (submitted_by IS NULL OR approved_by IS NULL OR btrim(submitted_by) <> btrim(approved_by))
+                    AND (submitted_by IS NULL OR published_by IS NULL OR btrim(submitted_by) <> btrim(published_by))
+                    AND (submitted_date IS NULL OR last_modified_date >= submitted_date)
+                    AND (approved_date IS NULL OR last_modified_date >= approved_date)
+                    AND (published_date IS NULL OR last_modified_date >= published_date)
+                    AND (
+                        status = 'STALE'
+                        OR status NOT IN (
+                            'REVIEW_PENDING', 'REJECTED', 'APPROVED', 'PUBLISHING',
+                            'PARTIAL', 'PUBLISHED', 'ROLLED_BACK'
+                        )
+                        OR submitted_date IS NOT NULL
+                    )
+                    AND (
+                        status = 'STALE'
+                        OR status NOT IN ('APPROVED', 'PUBLISHING', 'PARTIAL', 'PUBLISHED', 'ROLLED_BACK')
+                        OR approved_date IS NOT NULL
+                    )
+                    AND (
+                        status = 'STALE'
+                        OR status NOT IN ('PARTIAL', 'PUBLISHED', 'ROLLED_BACK')
+                        OR published_date IS NOT NULL
+                    )
+                );
+            ALTER TABLE modeling_model_release_candidate_entry
+                ADD CONSTRAINT ck_model_release_candidate_entry_status
+                CHECK (
+                    status IN (
+                        'DRAFT', 'BUILDING', 'BUILD_FAILED', 'BUILT', 'QUALITY_RUNNING',
+                        'QUALITY_FAILED', 'QUALITY_PASSED', 'REVIEW_PENDING', 'REJECTED',
+                        'APPROVED', 'PUBLISHING', 'PARTIAL', 'PUBLISHED', 'ROLLED_BACK', 'STALE'
+                    )
+                );
+            ALTER TABLE modeling_model_release_candidate_entry
+                ADD CONSTRAINT ck_model_release_candidate_entry_payload
+                CHECK (
+                    revision > 0
+                    AND checksum ~ '^[0-9a-f]{64}$'
+                    AND implementation_mode IN ('DESIGNER_GENERATED', 'DBT_MANAGED')
+                    AND sort_order >= 0
+                    AND (
+                        selected_reason IS NULL
+                        OR octet_length(selected_reason) <= 1024
+                    )
+                );
+        ]]></sql>
+
+        <createIndex
+            tableName="modeling_model_release_candidate"
+            indexName="idx_model_release_candidate_plan_status">
+            <column name="tenant_id"/>
+            <column name="plan_id"/>
+            <column name="status"/>
+            <column name="last_modified_date"/>
+        </createIndex>
+        <createIndex
+            tableName="modeling_model_release_candidate_entry"
+            indexName="idx_model_release_candidate_entry_candidate_scope">
+            <column name="tenant_id"/>
+            <column name="candidate_id"/>
+            <column name="plan_id"/>
+        </createIndex>
+        <createIndex
+            tableName="modeling_model_release_candidate_entry"
+            indexName="idx_model_release_candidate_entry_model_scope">
+            <column name="tenant_id"/>
+            <column name="plan_id"/>
+            <column name="model_spec_id"/>
+            <column name="implementation_mode"/>
+        </createIndex>
+        <createIndex
+            tableName="modeling_model_release_candidate_entry"
+            indexName="idx_model_release_candidate_entry_revision">
+            <column name="tenant_id"/>
+            <column name="model_spec_id"/>
+            <column name="revision"/>
+            <column name="checksum"/>
+        </createIndex>
+        <sql><![CDATA[
+            CREATE UNIQUE INDEX uk_model_release_candidate_idempotency
+                ON modeling_model_release_candidate (tenant_id, idempotency_key)
+                WHERE idempotency_key IS NOT NULL;
+            CREATE INDEX idx_model_release_candidate_history
+                ON modeling_model_release_candidate (tenant_id, plan_id, last_modified_date DESC, id);
+            CREATE INDEX idx_model_release_candidate_entry_implementation
+                ON modeling_model_release_candidate_entry (
+                    tenant_id, implementation_id, plan_id, model_spec_id,
+                    revision, checksum, implementation_mode
+                )
+                WHERE implementation_id IS NOT NULL;
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    LOCK TABLE
+                        modeling_model_release_candidate,
+                        modeling_model_release_candidate_entry
+                    IN ACCESS EXCLUSIVE MODE;
+                    IF EXISTS (SELECT 1 FROM modeling_model_release_candidate_entry)
+                       OR EXISTS (SELECT 1 FROM modeling_model_release_candidate) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_RELEASE_CANDIDATE_DATA_EXISTS';
+                    END IF;
+                END $$;
+            ]]></sql>
+            <dropTable tableName="modeling_model_release_candidate_entry"/>
+            <dropTable tableName="modeling_model_release_candidate"/>
+            <dropUniqueConstraint
+                tableName="modeling_model_implementation"
+                constraintName="uk_modeling_implementation_release_scope"/>
+            <dropUniqueConstraint
+                tableName="modeling_model_spec_revision"
+                constraintName="uk_model_spec_revision_release_scope"/>
+            <dropUniqueConstraint
+                tableName="modeling_model_spec"
+                constraintName="uk_model_spec_release_scope"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

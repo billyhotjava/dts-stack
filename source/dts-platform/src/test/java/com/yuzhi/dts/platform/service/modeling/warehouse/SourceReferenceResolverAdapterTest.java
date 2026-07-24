@@ -87,6 +87,60 @@ class SourceReferenceResolverAdapterTest {
     }
 
     @Test
+    void resolvesCatalogTableWithANewFingerprintWhenApiLandingSnapshotOrConfigChanges() {
+        CatalogDataset dataset = dataset("ods_api_crm_orders");
+        CatalogTableSchema table = table(dataset, TABLE_ID, "ods_api_crm_orders");
+        CatalogColumnSchema original = column(table, "__raw_record", "jsonb", false);
+        table.setTags(apiEvidence("sha256:api-v1", "sha256:fields-v1"));
+        when(tableRepository.findById(TABLE_ID)).thenReturn(Optional.of(table));
+        when(accessChecker.canRead(dataset)).thenReturn(true);
+        when(accessChecker.departmentAllowedExact(dataset, "D01")).thenReturn(true);
+        when(columnRepository.findByTable(table)).thenReturn(List.of(original));
+
+        String originalVersion = resolver.resolve(
+            SourceType.CATALOG_TABLE,
+            new SourceLocator(TABLE_ID, null, null, null, null, null, null),
+            ACCESS
+        ).resolvedVersion();
+
+        table.setTags(apiEvidence("sha256:api-v2", "sha256:fields-v1"));
+        String changedVersion = resolver.resolve(
+            SourceType.CATALOG_TABLE,
+            new SourceLocator(TABLE_ID, null, null, null, null, null, null),
+            ACCESS
+        ).resolvedVersion();
+
+        table.setTags(apiEvidence("sha256:api-v2", "sha256:fields-v2"));
+        String changedSnapshotVersion = resolver.resolve(
+            SourceType.CATALOG_TABLE,
+            new SourceLocator(TABLE_ID, null, null, null, null, null, null),
+            ACCESS
+        ).resolvedVersion();
+
+        assertThat(changedVersion).isNotEqualTo(originalVersion);
+        assertThat(changedSnapshotVersion).isNotEqualTo(changedVersion);
+    }
+
+    @Test
+    void rejectsApiCatalogTableWithoutVerifiedExecutionAndBothChecksums() {
+        CatalogDataset dataset = dataset("ods_api_crm_orders");
+        CatalogTableSchema table = table(dataset, TABLE_ID, "ods_api_crm_orders");
+        table.setTags("origin=API;taskId=10;resourceId=orders;executionStatus=success;configChecksum=sha256:api-v1");
+        when(tableRepository.findById(TABLE_ID)).thenReturn(Optional.of(table));
+        when(accessChecker.canRead(dataset)).thenReturn(true);
+        when(accessChecker.departmentAllowedExact(dataset, "D01")).thenReturn(true);
+        when(columnRepository.findByTable(table)).thenReturn(List.of(column(table, "__raw_record", "jsonb", false)));
+
+        ResolvedSource result = resolver.resolve(
+            SourceType.CATALOG_TABLE,
+            new SourceLocator(TABLE_ID, null, null, null, null, null, null),
+            ACCESS
+        );
+
+        assertThat(result.status()).isEqualTo(PROVIDER_ERROR);
+    }
+
+    @Test
     void resolvesEnabledExcelFromItsChecksumAndHidesForbiddenMetadata() {
         InfraExternalExchangeFile file = new InfraExternalExchangeFile();
         file.setId(FILE_ID);
@@ -269,5 +323,22 @@ class SourceReferenceResolverAdapterTest {
         column.setNullable(nullable);
         column.setStatus("ACTIVE");
         return column;
+    }
+
+    private static String apiEvidence(String configChecksum, String fieldSnapshotChecksum) {
+        return String.join(
+            ";",
+            "origin=API",
+            "connectionId=" + CONNECTION_ID,
+            "taskId=10",
+            "taskRevision=2026-07-24T07:00:00Z",
+            "resourceId=orders",
+            "executionSequence=100",
+            "executionId=api-100",
+            "executionStatus=success",
+            "landingTruth=VERIFIED",
+            "configChecksum=" + configChecksum,
+            "fieldSnapshotChecksum=" + fieldSnapshotChecksum
+        );
     }
 }

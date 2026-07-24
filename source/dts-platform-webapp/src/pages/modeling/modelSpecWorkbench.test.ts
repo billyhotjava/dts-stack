@@ -265,6 +265,7 @@ test("editing rebuilds a complete update command while immutable context stays u
 		metricRefs: [],
 		standardBindings: [],
 		generationStrategy: null,
+		dimensionDefinitionRef: null,
 		status: "DRAFT",
 		revision: 3,
 		checksum: "a".repeat(64),

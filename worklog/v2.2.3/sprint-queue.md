@@ -1371,14 +1371,14 @@
 | F5-业务对象迁移与受控退役 | P0 | 4 | DONE |
 | F6-专业模块交接与集成验收 | P0 | 8 | IN_PROGRESS |
 
-**统计**: READY=4, IN_PROGRESS=7, DONE=23, BLOCKED=0；当前已关闭 23/34 Task
+**统计**: READY=2, IN_PROGRESS=9, DONE=23, BLOCKED=0；当前已关闭 23/34 Task
 **执行顺序**: F1 → F2/F3 → F4 → F5 → F6；F2 与 F3 在概念契约冻结后可并行，F4 默认入口切换等待目标页面可用，F5 冻结旧写等待新写路径通过，F6 负责 Go/No-Go。
 
 **关键决策**:
 
 - 数据域/主题域对外收敛为“业务分类”，内部复用唯一 `catalog_domain/domainId`。
 - 业务对象不再是登记实体、菜单入口、模型创建条件、指标锚点或发布门禁；旧页面不能只换名为维度目录。
-- 维度性质旧对象迁入 DIMENSION ModelSpec；事实性质的键、粒度、来源和 JOIN 迁入四类表 ModelSpec；歧义记录进入人工清单。
+- 维度性质旧对象迁入 `DimensionDefinition` 业务维度正文，DIMENSION ModelSpec 只保存稳定引用；事实性质的键、粒度、来源和 JOIN 迁入四类表 ModelSpec；歧义记录进入人工清单。
 - 业务活动降为明细表的可选来源说明，不作为四类表的全局前置门禁。
 - 新 ModelSpec 不要求 `objectId`；旧 API/表先冻结写入和迁移，消费者归零并对账后再物理删除。
 - 数据标准在模型字段设计时引用，指标锚定已发布模型/字段；SQL/dbt、发布、运行、资产和血缘回写同一 modelSpecId/revision。
@@ -1417,3 +1417,36 @@
 - 通用术语默认 REFERENCE/DRAFT，不伪装成客户正式 ACTIVE 口径；`source_system` 与标准内容来源分离。
 - PJM `models.tsv` 当前仍为 DRAFT，关键 dbt tests 多为 warn；只有晋升、阻断测试、血缘、去重、适用性和内容审查全部通过的记录才可进入可选项目管理包。
 - PJM `target/logs/test/BI/ZIP/.bak`、ODS/测试数据行、DWS/ADS 指标公式和有损/上下文丢失 alias 映射均不得进入 DTS 通用基线。
+
+## Sprint-69: 模型构建、质量与发布交付工作台重构 (202607)
+
+**目录**: `worklog/v2.2.3/sprint-69-202607-build-quality-release-workbench`
+**状态**: IN_PROGRESS
+**类型**: Model Delivery / Quality Gate / Release Governance / UI Refactoring
+**目标**: 把数据建设第六步从跳转卡和零散台账重构为计划级交付工作台，使选定的 ModelSpec revision 能完成可审计的构建、质量、审核、发布、外部注册与回滚闭环，并以真实发布证据驱动 StageProjection。
+**依赖**: 复用 Sprint-67 canonical WarehousePlan/ModelSpec/ModelLifecycle；交付控制面仅消费稳定 `modelSpecId/revision/checksum/implementationMode`，最终 DIMENSION/SCD2 真实 E2E 等待 Sprint-67 四层模型接口稳定。Sprint-68 可并行。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-发布候选与证据真值 | P0 | 4 | IN_PROGRESS |
+| F2-构建运行与版本绑定 | P0 | 4 | READY |
+| F3-结构化质量门禁 | P0 | 4 | READY |
+| F4-审核发布回滚治理 | P0 | 4 | READY |
+| F5-交付工作台UI重构 | P0 | 5 | READY |
+| F6-真实集成验收与发布 | P0 | 4 | READY |
+
+**统计**: READY=21, IN_PROGRESS=3, DONE=1, BLOCKED=0
+**执行顺序**: F1 → F2/F3/F5 壳层 → F4 → F5 完整交互 → F6；F2 与 F3 在候选契约冻结后并行，F5 只读壳层可先行，写动作等待对应 API，F6 是唯一 Go/No-Go 出口。
+
+**关键决策**:
+
+- 新增 ReleaseCandidate 作为本次交付范围和状态控制面，但不复制 WarehousePlan 或 ModelSpec 正文。
+- artifact 与真实 dbt run 分开留证；外部 run 必须由服务端校验 selector、target、revision、checksum 和终态。
+- QualityRun/QualityCheckResult 保存规则版本、阈值、数据快照和规则级结果；旧 TEST 布尔值不满足新门禁。
+- 审核、批准和发布是显式命令，提交人与批准人分离；SQL/dbt 页面不再自动审核发布。
+- Catalog、BI、Lineage 注册允许 PARTIAL 和失败步骤幂等重试；回滚追加事件，不删除历史。
+- `/modeling/plans/:planId/implementation` 重构为唯一计划级交付工作台，不新增一级菜单。
+- StageProjection 第六步只接受当前有效的真实 PUBLISHED 候选，READY、STALE、PARTIAL 和 ROLLED_BACK 均不算完成。
+- mock UI 不能关闭 Sprint；最终必须通过真实 Spring Security、PostgreSQL、dbt target 和 Chrome 95。
+- 25 个 Task 均增加可判定的 UI 完成标准；后端 Task 验证 UI 契约，F5 验证 UI 实现，F6 验证真实 UI，任一层缺证据均不得标记 DONE。
+- 测试采用 Task focused、Feature 组合、Sprint 全量三层节奏；禁止每完成一个小 Task 就重复执行全量测试，F1-F6 全部实现后再统一执行最终门禁。

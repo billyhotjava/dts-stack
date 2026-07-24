@@ -249,7 +249,39 @@ public class DbtReleaseSubmissionService {
         if (StringUtils.hasText(invocationId)) {
             conf.put("buildInvocationId", invocationId);
         }
+        putLifecycleRunContext(conf, request);
         return conf;
+    }
+
+    private void putLifecycleRunContext(Map<String, Object> conf, DbtReleaseSubmitRequest request) {
+        if (request == null) return;
+        boolean present =
+            StringUtils.hasText(request.modelSpecId()) ||
+            request.implementationRevision() != null ||
+            StringUtils.hasText(request.implementationChecksum()) ||
+            StringUtils.hasText(request.projectKey()) ||
+            StringUtils.hasText(request.dbtUniqueId());
+        if (!present) return;
+        if (
+            !StringUtils.hasText(request.modelSpecId()) ||
+            request.implementationRevision() == null ||
+            request.implementationRevision() < 1 ||
+            !StringUtils.hasText(request.implementationChecksum()) ||
+            !StringUtils.hasText(request.projectKey()) ||
+            !StringUtils.hasText(request.dbtUniqueId())
+        ) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ModelSpec lifecycle run context is incomplete");
+        }
+        try {
+            java.util.UUID.fromString(request.modelSpecId().trim());
+        } catch (IllegalArgumentException invalid) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "modelSpecId must be UUID", invalid);
+        }
+        conf.put("modelSpecId", request.modelSpecId().trim());
+        conf.put("implementationRevision", request.implementationRevision());
+        conf.put("implementationChecksum", request.implementationChecksum().trim());
+        conf.put("projectKey", request.projectKey().trim());
+        conf.put("dbtUniqueId", request.dbtUniqueId().trim());
     }
 
     private String resolveDagId(String dagSelector) {
@@ -378,8 +410,26 @@ public class DbtReleaseSubmissionService {
         String gitRef,
         String commitSha,
         Boolean strictMode,
-        Boolean confirmWarnings
-    ) {}
+        Boolean confirmWarnings,
+        String modelSpecId,
+        Integer implementationRevision,
+        String implementationChecksum,
+        String projectKey,
+        String dbtUniqueId
+    ) {
+        public DbtReleaseSubmitRequest(
+            String models,
+            String dagSelector,
+            String target,
+            Map<String, Object> vars,
+            String gitRef,
+            String commitSha,
+            Boolean strictMode,
+            Boolean confirmWarnings
+        ) {
+            this(models, dagSelector, target, vars, gitRef, commitSha, strictMode, confirmWarnings, null, null, null, null, null);
+        }
+    }
 
     public record DbtReleaseSubmitResult(
         String selector,

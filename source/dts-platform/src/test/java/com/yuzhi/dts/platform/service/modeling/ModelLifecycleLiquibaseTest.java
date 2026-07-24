@@ -29,4 +29,22 @@ class ModelLifecycleLiquibaseTest {
             .contains("modeling_model_registration_step")
             .contains("attempt_count");
     }
+
+    @Test
+    void migratesArtifactIdentityWithoutAssumingHistoricalPathsArePresentOrShort() throws Exception {
+        String xml;
+        try (var input = getClass().getResourceAsStream(
+            "/config/liquibase/changelog/20260724_07_model_artifact_identity.xml"
+        )) {
+            assertThat(input).isNotNull();
+            xml = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
+
+        assertThat(xml)
+            .contains("artifact_key")
+            .contains("COALESCE(NULLIF(btrim(path), ''), '__legacy__/' || id::text)")
+            .contains("left(")
+            .contains("md5(")
+            .contains("uk_modeling_dbt_artifact_revision_key");
+    }
 }

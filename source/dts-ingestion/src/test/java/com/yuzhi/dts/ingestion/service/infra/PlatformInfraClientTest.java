@@ -3,6 +3,7 @@ package com.yuzhi.dts.ingestion.service.infra;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.HttpMethod.GET;
 import static org.springframework.http.HttpMethod.POST;
@@ -20,6 +21,7 @@ import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import com.yuzhi.dts.ingestion.config.IngestionOutboundPlatformProperties;
 import java.util.Map;
 import java.util.UUID;
+import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -166,6 +168,8 @@ class PlatformInfraClientTest {
             .andExpect(content().string(allOf(
                 containsString("\"rowsRead\":10"),
                 containsString("\"rowsWritten\":9"),
+                containsString("\"taskRevision\":\"2026-07-24T07:00:00Z\""),
+                containsString("\"executionSequence\":100"),
                 containsString("\"sourceTables\""),
                 containsString("\"targetTables\"")
             )))
@@ -174,6 +178,18 @@ class PlatformInfraClientTest {
         boolean synced = client.syncIngestionExecutionLineage(apiTask(), apiExecution());
 
         assertThat(synced).isTrue();
+        server.verify();
+    }
+
+    @Test
+    void failedLandingDoesNotCallCatalogOrEmitOpenLineageEvidence() {
+        PlatformInfraClient client = buildClient(props("env-runtime-secret"));
+        MockRestServiceServer server = bindServer(client);
+        IngestionExecution failedExecution = apiExecution();
+        failedExecution.setStatus("failed");
+
+        assertThat(client.syncIngestionExecutionLineage(apiTask(), failedExecution)).isFalse();
+        assertThat(client.emitIngestionOpenLineageEvent(apiTask(), failedExecution)).isFalse();
         server.verify();
     }
 
@@ -208,6 +224,7 @@ class PlatformInfraClientTest {
         task.setSourceType("httpreader");
         task.setSourceDataSourceId(DATA_SOURCE_ID);
         task.setDestinationType("postgreswriter");
+        task.setLastModifiedDate(Instant.parse("2026-07-24T07:00:00Z"));
         return task;
     }
 
@@ -219,9 +236,18 @@ class PlatformInfraClientTest {
         execution.setRowsRead(10L);
         execution.setRowsWritten(9L);
         execution.setSourceTables(JsonNodeFactory.instance.arrayNode().add(JsonNodeFactory.instance.objectNode().put("name", "orders")));
-        execution.setTargetTables(
-            JsonNodeFactory.instance.arrayNode().add(JsonNodeFactory.instance.objectNode().put("name", "ods_orders"))
-        );
+        execution.setEndTime(Instant.parse("2026-07-24T08:00:00Z"));
+        execution.setTargetTables(JsonNodeFactory.instance.arrayNode().add(
+            JsonNodeFactory.instance.objectNode()
+                .put("name", "ods_orders")
+                .put("qualifiedName", "ods.ods_orders")
+                .put("resourceId", "orders")
+                .put("executionId", "api-100")
+                .put("landingStatus", "SUCCESS")
+                .put("rowsWritten", 9L)
+                .put("configChecksum", "sha256:" + "a".repeat(64))
+                .put("fieldSnapshotChecksum", "sha256:" + "b".repeat(64))
+        ));
         return execution;
     }
 }

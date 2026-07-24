@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -12,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.yuzhi.dts.platform.security.session.PortalSessionInactivityFilter;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.CompileView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ImplementationValidationView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider.WarehousePlanActor;
 import com.yuzhi.dts.platform.web.filter.AuditLoggingFilter;
@@ -39,6 +41,7 @@ class ModelLifecycleResourceTest {
     private static final UUID MODEL_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
     private static final String CHECKSUM = "a".repeat(64);
     private static final String ETAG = "\"model-spec:" + MODEL_ID + ":7:" + CHECKSUM + "\"";
+    private static final String IMPLEMENTATION_ETAG = "\"model-implementation:" + MODEL_ID + ":1:" + CHECKSUM + "\"";
 
     @Autowired
     private MockMvc mockMvc;
@@ -58,18 +61,19 @@ class ModelLifecycleResourceTest {
     @Test
     void compileUsesServerTenantActorAndStrongRevisionPrecondition() throws Exception {
         when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", "department"));
-        when(service.compile(eq("server-tenant"), eq("alice"), eq(MODEL_ID), any(), eq("compile-7")))
+        when(service.compile(eq("server-tenant"), eq("alice"), eq(MODEL_ID), any(), any(), eq("compile-7")))
             .thenReturn(mock(CompileView.class));
 
         mockMvc.perform(
             post("/api/modeling/model-specs/{id}/lifecycle/compile", MODEL_ID)
                 .header("X-Tenant-Id", "request-tenant-must-not-win")
                 .header("If-Match", ETAG)
+                .header("If-Match-Implementation", IMPLEMENTATION_ETAG)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idempotencyKey\":\"compile-7\"}")
         ).andExpect(status().isOk());
 
-        verify(service).compile(eq("server-tenant"), eq("alice"), eq(MODEL_ID), any(), eq("compile-7"));
+        verify(service).compile(eq("server-tenant"), eq("alice"), eq(MODEL_ID), any(), any(), eq("compile-7"));
     }
 
     @Test
@@ -81,5 +85,41 @@ class ModelLifecycleResourceTest {
         )
             .andExpect(status().isPreconditionRequired())
             .andExpect(jsonPath("$.code").value("MODEL_SPEC_IF_MATCH_REQUIRED"));
+    }
+
+    @Test
+    void validateDecodesOnlyTheDeclaredInputKind() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", "department"));
+        when(service.validateImplementation(eq("server-tenant"), eq("alice"), eq(MODEL_ID), any(), any()))
+            .thenReturn(new ImplementationValidationView(true, null));
+
+        mockMvc.perform(
+            post("/api/modeling/model-specs/{id}/implementation/inputs/validate", MODEL_ID)
+                .header("If-Match", ETAG)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"projectKey":"warehouse","dbtUniqueId":"model.warehouse.customer","inputMode":"PHYSICAL_ASSET",
+                     "inputs":[{"sourceBindingId":"10000000-0000-0000-0000-000000000010","resolvedVersion":"v1"}],
+                     "ownership":"DESIGNER_GENERATED","materialization":"table","idempotencyKey":"validate-1"}
+                    """
+                )
+        ).andExpect(status().isOk()).andExpect(jsonPath("$.data.valid").value(true));
+
+        verify(service).validateImplementation(eq("server-tenant"), eq("alice"), eq(MODEL_ID), any(), any());
+    }
+
+    @Test
+    void rejectsMissingImplementationInputBeforeServiceCall() throws Exception {
+        mockMvc.perform(
+            post("/api/modeling/model-specs/{id}/implementation/inputs/validate", MODEL_ID)
+                .header("If-Match", ETAG)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"inputMode\":\"PHYSICAL_ASSET\",\"inputs\":[]}")
+        )
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.code").value("MODEL_IMPLEMENTATION_INPUT_REQUIRED"));
+
+        verify(service, never()).validateImplementation(any(), any(), any(), any(), any());
     }
 }

@@ -4,7 +4,7 @@ import test from "node:test";
 
 const read = (relativePath: string) => readFileSync(new URL(relativePath, import.meta.url), "utf8");
 
-test("canonical dimension and model pages exist and use only the ModelSpec v2 client", () => {
+test("canonical dimension and model pages exist and stay on their respective API boundaries", () => {
 	for (const file of ["./DimensionCatalogPage.tsx", "./ModelCenterPage.tsx", "./ModelSpecDetailPage.tsx"]) {
 		assert.equal(existsSync(new URL(file, import.meta.url)), true, `${file} is missing`);
 		const source = read(file);
@@ -12,13 +12,13 @@ test("canonical dimension and model pages exist and use only the ModelSpec v2 cl
 		assert.doesNotMatch(source, /\bobjectId\b|\bprocessId\b/);
 	}
 
-	assert.match(read("./DimensionCatalogPage.tsx"), /listModelSpecs/);
-	assert.match(read("./DimensionCatalogPage.tsx"), /modelType:\s*"DIMENSION"/);
+	assert.match(read("./DimensionCatalogPage.tsx"), /listDimensionDefinitions/);
+	assert.doesNotMatch(read("./DimensionCatalogPage.tsx"), /listModelSpecs|ModelSpecCreateDrawer/);
 	assert.match(read("./ModelCenterPage.tsx"), /createModelSpec/);
 	assert.match(
 		read("./ModelCenterPage.tsx"),
-		/listModelSpecs\(\)/,
-		"create drawer must also load the unfiltered candidate set for explicitly allowed published cross-plan upstreams",
+		/listModelSpecs\(/,
+		"model center must load the candidate set with its active plan and domain filters",
 	);
 	assert.match(read("./ModelSpecDetailPage.tsx"), /getModelSpec/);
 	assert.match(read("./ModelSpecDetailPage.tsx"), /updateModelSpec/);
@@ -31,7 +31,7 @@ test("canonical pages expose one customer-facing primary action and no fake rele
 
 	assert.match(dimensions, /type="primary"[\s\S]*登记维度/);
 	assert.match(models, /type="primary"[\s\S]*新建模型/);
-	assert.match(detail, /type="primary"[\s\S]*保存草稿/);
+	assert.match(detail, /type="primary"[\s\S]*保存逻辑设计/);
 	assert.doesNotMatch(`${dimensions}\n${models}\n${detail}`, /getModelSpecReleaseGate|可发布|发布模型/);
 });
 

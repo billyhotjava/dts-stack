@@ -2,19 +2,34 @@ package com.yuzhi.dts.platform.repository.modeling;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
+import com.fasterxml.jackson.databind.MapperFeature;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ArtifactView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ArtifactWrite;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.EventType;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.FieldMapping;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.GeneratedInput;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationInput;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.InputMode;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.LifecycleEventView;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.PhysicalAssetInput;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.RegistrationStep;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.RegistrationStepView;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.SaveImplementationCommand;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.UpstreamModelInput;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,13 +43,23 @@ import org.springframework.transaction.annotation.Transactional;
 public class ModelLifecycleRepository {
 
     private static final TypeReference<Map<String, Object>> DETAILS_TYPE = new TypeReference<>() {};
+    private static final TypeReference<List<FieldMapping>> FIELD_MAPPINGS_TYPE = new TypeReference<>() {};
+    private static final TypeReference<Map<String, Object>> SETTINGS_TYPE = new TypeReference<>() {};
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
+    private final ObjectWriter canonicalWriter;
 
     public ModelLifecycleRepository(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
+        this.canonicalWriter = objectMapper
+            .copy()
+            .setSerializationInclusion(JsonInclude.Include.ALWAYS)
+            .enable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
+            .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+            .disable(SerializationFeature.INDENT_OUTPUT)
+            .writer();
     }
 
     public Optional<ImplementationView> findImplementation(String tenantId, UUID modelSpecId) {
@@ -42,7 +67,9 @@ public class ModelLifecycleRepository {
             .query(
                 """
                 select id, model_spec_id, plan_id, model_revision, model_checksum,
-                       ownership, project_key, dbt_unique_id, status
+                       ownership, project_key, dbt_unique_id, status, implementation_revision,
+                       current_implementation_checksum, input_mode, inputs_json::text,
+                       field_mappings_json::text, settings_json::text, materialization
                   from modeling_model_implementation
                  where tenant_id = ? and model_spec_id = ?
                 """,
@@ -56,13 +83,49 @@ public class ModelLifecycleRepository {
                         ImplementationMode.valueOf(row.getString("ownership")),
                         row.getString("project_key"),
                         row.getString("dbt_unique_id"),
-                        row.getString("status")
+                        row.getString("status"),
+                        row.getInt("implementation_revision"),
+                        row.getString("current_implementation_checksum"),
+                        InputMode.valueOf(row.getString("input_mode")),
+                        readInputs(InputMode.valueOf(row.getString("input_mode")), row.getString("inputs_json")),
+                        readFieldMappings(row.getString("field_mappings_json")),
+                        readSettings(row.getString("settings_json")),
+                        row.getString("materialization")
                     ),
                 tenantId,
                 modelSpecId
             )
             .stream()
             .findFirst();
+    }
+
+    /** Holds a shared row lock until the caller's transaction commits and verifies the exact implementation head. */
+    public boolean lockImplementation(String tenantId, UUID modelSpecId, ImplementationView expected) {
+        if (expected == null) return false;
+        return !jdbcTemplate
+            .queryForList(
+                """
+                select id
+                  from modeling_model_implementation
+                 where tenant_id = ? and model_spec_id = ? and id = ?
+                   and model_revision = ? and model_checksum = ?
+                   and implementation_revision = ? and current_implementation_checksum = ?
+                   and ownership = ? and project_key = ? and dbt_unique_id = ?
+                 for share
+                """,
+                UUID.class,
+                tenantId,
+                modelSpecId,
+                expected.id(),
+                expected.revision(),
+                expected.modelChecksum(),
+                expected.implementationRevision(),
+                expected.implementationChecksum(),
+                expected.ownership().name(),
+                expected.projectKey(),
+                expected.dbtUniqueId()
+            )
+            .isEmpty();
     }
 
     public int claimImplementation(
@@ -75,38 +138,245 @@ public class ModelLifecycleRepository {
         String idempotencyKey,
         Instant now
     ) {
-        return jdbcTemplate.update(
+        return claimImplementation(tenantId, actorId, model, ownership, projectKey, dbtUniqueId, idempotencyKey, -1, null, now);
+    }
+
+    public int claimImplementation(
+        String tenantId,
+        String actorId,
+        ModelSpecView model,
+        ImplementationMode ownership,
+        String projectKey,
+        String dbtUniqueId,
+        String idempotencyKey,
+        int expectedImplementationRevision,
+        String expectedImplementationChecksum,
+        Instant now
+    ) {
+        return saveImplementation(
+            tenantId,
+            actorId,
+            model,
+            projectKey,
+            dbtUniqueId,
+            new SaveImplementationCommand(
+                InputMode.GENERATED,
+                List.of(new GeneratedInput("DBT_MANAGED_CLAIM", Map.of())),
+                List.of(),
+                Map.of(),
+                ownership,
+                model.materialization() == null || model.materialization().isBlank() ? "table" : model.materialization(),
+                idempotencyKey
+            ),
+            expectedImplementationRevision,
+            expectedImplementationChecksum,
+            now
+        );
+    }
+
+    /** Saves a current implementation head and appends a revision only when its input payload changes. */
+    public int saveImplementation(
+        String tenantId,
+        String actorId,
+        ModelSpecView model,
+        String projectKey,
+        String dbtUniqueId,
+        SaveImplementationCommand command,
+        Instant now
+    ) {
+        return saveImplementation(tenantId, actorId, model, projectKey, dbtUniqueId, command, -1, null, now);
+    }
+
+    /** A non-negative expected revision is a compare-and-swap precondition from the lifecycle API. */
+    public int saveImplementation(
+        String tenantId,
+        String actorId,
+        ModelSpecView model,
+        String projectKey,
+        String dbtUniqueId,
+        SaveImplementationCommand command,
+        int expectedImplementationRevision,
+        String expectedImplementationChecksum,
+        Instant now
+    ) {
+        String inputs = implementationJson(command.inputs());
+        String mappings = implementationJson(command.fieldMappings());
+        String settings = implementationJson(command.settings());
+        String checksum = implementationChecksum(command);
+        Integer changed = jdbcTemplate.queryForObject(
             """
+            with saved_head as (
             insert into modeling_model_implementation (
                 id, tenant_id, model_spec_id, plan_id, model_revision, model_checksum,
-                ownership, project_key, dbt_unique_id, status, idempotency_key,
+                ownership, project_key, dbt_unique_id, status, idempotency_key, implementation_revision,
+                current_implementation_checksum, input_mode, inputs_json, field_mappings_json, settings_json, materialization,
                 created_by, created_date, last_modified_date
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?, ?)
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, 1, ?, ?, cast(? as jsonb), cast(? as jsonb), cast(? as jsonb), ?, ?, ?, ?)
             on conflict (tenant_id, model_spec_id) do update
                set plan_id = excluded.plan_id,
                    model_revision = excluded.model_revision,
                    model_checksum = excluded.model_checksum,
                    status = 'ACTIVE',
                    idempotency_key = excluded.idempotency_key,
+                   implementation_revision = case
+                       when modeling_model_implementation.current_implementation_checksum = excluded.current_implementation_checksum
+                       then modeling_model_implementation.implementation_revision
+                       else modeling_model_implementation.implementation_revision + 1
+                   end,
+                   current_implementation_checksum = excluded.current_implementation_checksum,
+                   input_mode = excluded.input_mode,
+                   inputs_json = excluded.inputs_json,
+                   field_mappings_json = excluded.field_mappings_json,
+                   settings_json = excluded.settings_json,
+                   materialization = excluded.materialization,
                    last_modified_date = excluded.last_modified_date
              where modeling_model_implementation.ownership = excluded.ownership
                and modeling_model_implementation.project_key = excluded.project_key
                and modeling_model_implementation.dbt_unique_id = excluded.dbt_unique_id
+               and (? < 0 or (
+                    modeling_model_implementation.implementation_revision = ?
+                    and modeling_model_implementation.current_implementation_checksum = ?
+               ))
+            returning tenant_id, id, implementation_revision, current_implementation_checksum,
+                      input_mode, inputs_json, field_mappings_json, settings_json, ownership, materialization
+            ), inserted_revision as (
+                insert into modeling_model_implementation_revision (
+                    id, tenant_id, implementation_id, revision, content_checksum, input_mode,
+                    inputs_json, field_mappings_json, settings_json, ownership, materialization, created_by, created_date
+                )
+                select ?, tenant_id, id, implementation_revision, current_implementation_checksum, input_mode,
+                       inputs_json, field_mappings_json, settings_json, ownership, materialization, ?, ?
+                  from saved_head
+                on conflict (tenant_id, implementation_id, revision) do nothing
+                returning 1
+            )
+            select count(*)::int from saved_head
             """,
+            Integer.class,
             UUID.randomUUID(),
             tenantId,
             model.id(),
             model.planId(),
             model.revision(),
             model.checksum(),
-            ownership.name(),
+            command.ownership().name(),
             projectKey,
             dbtUniqueId,
-            idempotencyKey,
+            command.idempotencyKey(),
+            checksum,
+            command.inputMode().name(),
+            inputs,
+            mappings,
+            settings,
+            command.materialization(),
             actorId,
             Timestamp.from(now),
+            Timestamp.from(now),
+            expectedImplementationRevision,
+            expectedImplementationRevision,
+            expectedImplementationChecksum,
+            UUID.randomUUID(),
+            actorId,
             Timestamp.from(now)
         );
+        return changed == null ? 0 : changed;
+    }
+
+    /**
+     * Explicitly replaces a DBT-managed implementation head with a designer-owned revision.
+     * Ordinary saves intentionally keep their ownership equality check and cannot use this path.
+     */
+    public int convertImplementationOwnership(
+        String tenantId,
+        String actorId,
+        ModelSpecView model,
+        String projectKey,
+        String dbtUniqueId,
+        SaveImplementationCommand command,
+        Instant now
+    ) {
+        return convertImplementationOwnership(tenantId, actorId, model, projectKey, dbtUniqueId, command, -1, null, now);
+    }
+
+    public int convertImplementationOwnership(
+        String tenantId,
+        String actorId,
+        ModelSpecView model,
+        String projectKey,
+        String dbtUniqueId,
+        SaveImplementationCommand command,
+        int expectedImplementationRevision,
+        String expectedImplementationChecksum,
+        Instant now
+    ) {
+        if (command.ownership() != ImplementationMode.DESIGNER_GENERATED) {
+            throw new IllegalArgumentException("Only designer-generated implementations may replace DBT ownership");
+        }
+        String inputs = implementationJson(command.inputs());
+        String mappings = implementationJson(command.fieldMappings());
+        String settings = implementationJson(command.settings());
+        String checksum = implementationChecksum(command);
+        Integer changed = jdbcTemplate.queryForObject(
+            """
+            with locked_head as (
+                select id
+                  from modeling_model_implementation
+                 where tenant_id = ? and model_spec_id = ? and ownership = 'DBT_MANAGED'
+                 for update
+            ), saved_head as (
+                update modeling_model_implementation implementation
+                   set plan_id = ?, model_revision = ?, model_checksum = ?, ownership = 'DESIGNER_GENERATED',
+                       project_key = ?, dbt_unique_id = ?, status = 'ACTIVE', idempotency_key = ?,
+                       implementation_revision = implementation_revision + 1,
+                       current_implementation_checksum = ?, input_mode = ?, inputs_json = cast(? as jsonb),
+                       field_mappings_json = cast(? as jsonb), settings_json = cast(? as jsonb), materialization = ?,
+                       last_modified_date = ?
+                 from locked_head
+                 where implementation.id = locked_head.id
+                   and (? < 0 or (
+                       implementation.implementation_revision = ?
+                       and implementation.current_implementation_checksum = ?
+                   ))
+                returning implementation.tenant_id, implementation.id, implementation.implementation_revision,
+                          implementation.current_implementation_checksum, implementation.input_mode, implementation.inputs_json,
+                          implementation.field_mappings_json, implementation.settings_json, implementation.ownership,
+                          implementation.materialization
+            ), inserted_revision as (
+                insert into modeling_model_implementation_revision (
+                    id, tenant_id, implementation_id, revision, content_checksum, input_mode,
+                    inputs_json, field_mappings_json, settings_json, ownership, materialization, created_by, created_date
+                )
+                select ?, tenant_id, id, implementation_revision, current_implementation_checksum, input_mode,
+                       inputs_json, field_mappings_json, settings_json, ownership, materialization, ?, ?
+                  from saved_head
+                returning 1
+            )
+            select count(*)::int from saved_head
+            """,
+            Integer.class,
+            tenantId,
+            model.id(),
+            model.planId(),
+            model.revision(),
+            model.checksum(),
+            projectKey,
+            dbtUniqueId,
+            command.idempotencyKey(),
+            checksum,
+            command.inputMode().name(),
+            inputs,
+            mappings,
+            settings,
+            command.materialization(),
+            Timestamp.from(now),
+            expectedImplementationRevision,
+            expectedImplementationRevision,
+            expectedImplementationChecksum,
+            UUID.randomUUID(),
+            actorId,
+            Timestamp.from(now)
+        );
+        return changed == null ? 0 : changed;
     }
 
     public void saveArtifacts(
@@ -117,32 +387,98 @@ public class ModelLifecycleRepository {
         List<ArtifactWrite> artifacts,
         Instant now
     ) {
+        if (implementation.ownership() == ImplementationMode.DBT_MANAGED && !artifacts.isEmpty()) {
+            throw new com.yuzhi.dts.platform.service.modeling.ModelSpecException(
+                "MODEL_ARTIFACT_DBT_WRITE_PATH_REQUIRED",
+                "DBT-managed artifacts may only be updated by the dedicated DBT import path",
+                com.yuzhi.dts.platform.service.modeling.ModelSpecException.Kind.CONFLICT
+            );
+        }
+        saveArtifacts(tenantId, model, implementation, idempotencyKey, artifacts, now, false);
+    }
+
+    /** Dedicated DBT ingestion path; it may only replace artifacts pinned to the same implementation revision. */
+    public void saveDbtManagedArtifacts(
+        String tenantId,
+        ModelSpecView model,
+        ImplementationView implementation,
+        String idempotencyKey,
+        List<ArtifactWrite> artifacts,
+        Instant now
+    ) {
+        if (implementation.ownership() != ImplementationMode.DBT_MANAGED) {
+            throw new IllegalArgumentException("DBT artifact writer requires DBT-managed implementation ownership");
+        }
+        saveArtifacts(tenantId, model, implementation, idempotencyKey, artifacts, now, true);
+    }
+
+    private void saveArtifacts(
+        String tenantId,
+        ModelSpecView model,
+        ImplementationView implementation,
+        String idempotencyKey,
+        List<ArtifactWrite> artifacts,
+        Instant now,
+        boolean dbtWritePath
+    ) {
         for (ArtifactWrite artifact : artifacts) {
-            String uniqueId = implementation.dbtUniqueId() + "." + artifact.artifactType().toLowerCase();
+            if (artifact.physicalAssetRef() != null && !physicalAssetBelongsToTenant(tenantId, model.planId(), artifact.physicalAssetRef())) {
+                throw new com.yuzhi.dts.platform.service.modeling.ModelSpecException(
+                    "MODEL_ARTIFACT_PHYSICAL_ASSET_FORBIDDEN",
+                    "Artifact physical asset must belong to the current tenant and warehouse plan",
+                    com.yuzhi.dts.platform.service.modeling.ModelSpecException.Kind.FORBIDDEN
+                );
+            }
+            String uniqueId = "STG".equals(artifact.nodeKind())
+                ? stagingDbtUniqueId(implementation.dbtUniqueId())
+                : implementation.dbtUniqueId();
+            String artifactKey = artifact.artifactType() + ":" + artifact.path();
             int changed = jdbcTemplate.update(
                 """
                 insert into modeling_dbt_artifact (
-                    id, model_spec_id, plan_id, project_key, dbt_unique_id, artifact_type,
+                    id, model_spec_id, plan_id, project_key, dbt_unique_id, artifact_key, artifact_type,
                     path, content_checksum, content, status, revision, model_checksum,
-                    ownership, idempotency_key, created_date, last_modified_date
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'COMPILED', ?, ?, ?, ?, ?, ?)
-                on conflict (model_spec_id, revision, dbt_unique_id) do update
+                    ownership, idempotency_key, implementation_revision, node_kind, materialization,
+                    physical_asset_ref, created_date, last_modified_date
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'COMPILED', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                on conflict (model_spec_id, revision, artifact_key) do update
                    set path = excluded.path,
+                       dbt_unique_id = excluded.dbt_unique_id,
                        content_checksum = excluded.content_checksum,
                        content = excluded.content,
                        status = excluded.status,
                        model_checksum = excluded.model_checksum,
                        ownership = excluded.ownership,
                        idempotency_key = excluded.idempotency_key,
+                       implementation_revision = excluded.implementation_revision,
+                       node_kind = excluded.node_kind,
+                       materialization = excluded.materialization,
+                       physical_asset_ref = excluded.physical_asset_ref,
                        last_modified_date = excluded.last_modified_date
                  where modeling_dbt_artifact.model_checksum = excluded.model_checksum
                    and modeling_dbt_artifact.ownership = excluded.ownership
+                   and (
+                       excluded.ownership <> 'DBT_MANAGED'
+                       or (
+                           ?
+                           and modeling_dbt_artifact.implementation_revision = excluded.implementation_revision
+                           and modeling_dbt_artifact.project_key = excluded.project_key
+                           and modeling_dbt_artifact.dbt_unique_id = excluded.dbt_unique_id
+                           and modeling_dbt_artifact.path = excluded.path
+                           and modeling_dbt_artifact.content_checksum = excluded.content_checksum
+                           and modeling_dbt_artifact.content = excluded.content
+                           and modeling_dbt_artifact.node_kind = excluded.node_kind
+                           and modeling_dbt_artifact.materialization = excluded.materialization
+                           and modeling_dbt_artifact.physical_asset_ref is not distinct from excluded.physical_asset_ref
+                       )
+                   )
                 """,
                 UUID.randomUUID(),
                 model.id(),
                 model.planId(),
                 implementation.projectKey(),
                 uniqueId,
+                artifactKey,
                 artifact.artifactType(),
                 artifact.path(),
                 artifact.checksum(),
@@ -151,8 +487,15 @@ public class ModelLifecycleRepository {
                 model.checksum(),
                 implementation.ownership().name(),
                 idempotencyKey,
+                implementation.implementationRevision(),
+                artifact.nodeKind() == null || artifact.nodeKind().isBlank() ? artifact.artifactType() : artifact.nodeKind(),
+                artifact.materialization() == null || artifact.materialization().isBlank()
+                    ? implementation.materialization()
+                    : artifact.materialization(),
+                artifact.physicalAssetRef(),
                 Timestamp.from(now),
-                Timestamp.from(now)
+                Timestamp.from(now),
+                dbtWritePath
             );
             if (changed == 0) {
                 throw new com.yuzhi.dts.platform.service.modeling.ModelSpecException(
@@ -164,6 +507,25 @@ public class ModelLifecycleRepository {
         }
     }
 
+    private static String stagingDbtUniqueId(String dbtUniqueId) {
+        int separator = dbtUniqueId == null ? -1 : dbtUniqueId.lastIndexOf('.');
+        if (separator < 0 || separator == dbtUniqueId.length() - 1) {
+            throw new IllegalArgumentException("DBT unique id must identify a model node");
+        }
+        return dbtUniqueId.substring(0, separator + 1) + "stg_" + dbtUniqueId.substring(separator + 1);
+    }
+
+    private boolean physicalAssetBelongsToTenant(String tenantId, UUID planId, UUID physicalAssetRef) {
+        Integer count = jdbcTemplate.queryForObject(
+            "select count(*) from modeling_warehouse_plan_source where tenant_id = ? and plan_id = ? and id = ?",
+            Integer.class,
+            tenantId,
+            planId,
+            physicalAssetRef
+        );
+        return count != null && count == 1;
+    }
+
     public List<ArtifactView> listArtifacts(String tenantId, UUID modelSpecId, Integer revision) {
         String revisionClause = revision == null ? "" : " and a.revision = ?";
         Object[] arguments = revision == null
@@ -172,7 +534,8 @@ public class ModelLifecycleRepository {
         return jdbcTemplate.query(
             """
             select a.id, a.model_spec_id, a.plan_id, a.revision, a.model_checksum,
-                   a.ownership, a.artifact_type, a.path, a.content_checksum, a.status
+                   a.ownership, a.artifact_type, a.path, a.content_checksum, a.status,
+                   a.implementation_revision, a.node_kind, a.materialization, a.physical_asset_ref
               from modeling_dbt_artifact a
               join modeling_model_spec s on s.id = a.model_spec_id
              where s.tenant_id = ? and a.model_spec_id = ?
@@ -188,9 +551,55 @@ public class ModelLifecycleRepository {
                     row.getString("artifact_type"),
                     row.getString("path"),
                     row.getString("content_checksum"),
-                    row.getString("status")
+                    row.getString("status"),
+                    row.getInt("implementation_revision"),
+                    row.getString("node_kind"),
+                    row.getString("materialization"),
+                    row.getObject("physical_asset_ref", UUID.class)
                 ),
             arguments
+        );
+    }
+
+    public java.util.Set<String> currentArtifactTypes(
+        String tenantId,
+        UUID modelSpecId,
+        ImplementationView implementation
+    ) {
+        if (implementation == null) return java.util.Set.of();
+        return java.util.Set.copyOf(
+            jdbcTemplate.queryForList(
+                """
+                select distinct a.artifact_type
+                  from modeling_dbt_artifact a
+                  join modeling_model_spec s
+                    on s.id = a.model_spec_id and s.tenant_id = ?
+                  join modeling_model_implementation_revision ir
+                    on ir.tenant_id = s.tenant_id
+                   and ir.implementation_id = ?
+                   and ir.revision = a.implementation_revision
+                 where a.model_spec_id = ?
+                   and a.revision = ?
+                   and a.model_checksum = ?
+                   and a.ownership = ?
+                   and a.project_key = ?
+                   and a.dbt_unique_id = ?
+                   and a.implementation_revision = ?
+                   and ir.content_checksum = ?
+                   and a.status = 'COMPILED'
+                """,
+                String.class,
+                tenantId,
+                implementation.id(),
+                modelSpecId,
+                implementation.revision(),
+                implementation.modelChecksum(),
+                implementation.ownership().name(),
+                implementation.projectKey(),
+                implementation.dbtUniqueId(),
+                implementation.implementationRevision(),
+                implementation.implementationChecksum()
+            )
         );
     }
 
@@ -206,6 +615,41 @@ public class ModelLifecycleRepository {
         Map<String, Object> details,
         Instant now
     ) {
+        return recordEvent(
+            tenantId,
+            actorId,
+            model,
+            eventType,
+            status,
+            idempotencyKey,
+            comment,
+            externalRef,
+            details,
+            findImplementation(tenantId, model.id()).orElse(null),
+            now
+        );
+    }
+
+    public LifecycleEventView recordEvent(
+        String tenantId,
+        String actorId,
+        ModelSpecView model,
+        EventType eventType,
+        String status,
+        String idempotencyKey,
+        String comment,
+        String externalRef,
+        Map<String, Object> details,
+        ImplementationView implementation,
+        Instant now
+    ) {
+        Map<String, Object> pinnedDetails = new LinkedHashMap<>(details == null ? Map.of() : details);
+        if (implementation != null) {
+            pinnedDetails.put("implementationRevision", implementation.implementationRevision());
+            pinnedDetails.put("implementationChecksum", implementation.implementationChecksum());
+            pinnedDetails.put("implementationOwnership", implementation.ownership().name());
+            pinnedDetails.put("dbtUniqueId", implementation.dbtUniqueId());
+        }
         jdbcTemplate.update(
             """
             insert into modeling_model_lifecycle_event (
@@ -227,10 +671,18 @@ public class ModelLifecycleRepository {
             actorId,
             comment,
             externalRef,
-            json(details),
+            json(pinnedDetails),
             Timestamp.from(now)
         );
-        return findEvent(tenantId, model.id(), eventType, idempotencyKey).orElseThrow();
+        LifecycleEventView persisted = findEvent(tenantId, model.id(), eventType, idempotencyKey).orElseThrow();
+        if (implementation != null && !matchesImplementation(persisted, implementation)) {
+            throw new com.yuzhi.dts.platform.service.modeling.ModelSpecException(
+                "MODEL_LIFECYCLE_IDEMPOTENCY_CONFLICT",
+                "The idempotency key belongs to another implementation revision",
+                com.yuzhi.dts.platform.service.modeling.ModelSpecException.Kind.CONFLICT
+            );
+        }
+        return persisted;
     }
 
     public Optional<LifecycleEventView> findEvent(
@@ -248,6 +700,24 @@ public class ModelLifecycleRepository {
         ).stream().findFirst();
     }
 
+    public static boolean matchesImplementation(LifecycleEventView event, ImplementationView implementation) {
+        if (event == null || implementation == null || event.details() == null) return false;
+        Object revision = event.details().get("implementationRevision");
+        Object checksum = event.details().get("implementationChecksum");
+        int pinnedRevision;
+        try {
+            pinnedRevision = revision instanceof Number number
+                ? number.intValue()
+                : Integer.parseInt(String.valueOf(revision));
+        } catch (NumberFormatException invalid) {
+            return false;
+        }
+        return (
+            pinnedRevision == implementation.implementationRevision() &&
+            java.util.Objects.equals(String.valueOf(checksum), implementation.implementationChecksum())
+        );
+    }
+
     public Optional<LifecycleEventView> findEvent(UUID eventId) {
         return queryEvents(" where id = ?", eventId).stream().findFirst();
     }
@@ -259,7 +729,11 @@ public class ModelLifecycleRepository {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void updateEventStatus(UUID eventId, String status, Map<String, Object> details) {
         jdbcTemplate.update(
-            "update modeling_model_lifecycle_event set status = ?, details_json = cast(? as jsonb) where id = ?",
+            """
+            update modeling_model_lifecycle_event
+               set status = ?, details_json = coalesce(details_json, '{}'::jsonb) || cast(? as jsonb)
+             where id = ?
+            """,
             status,
             json(details),
             eventId
@@ -283,6 +757,33 @@ public class ModelLifecycleRepository {
         ).stream().findFirst();
     }
 
+    public Optional<LifecycleEventView> findLatestEvent(
+        String tenantId,
+        UUID modelSpecId,
+        int revision,
+        int implementationRevision,
+        String implementationChecksum,
+        EventType eventType,
+        String status
+    ) {
+        return queryEvents(
+            """
+             where tenant_id = ? and model_spec_id = ? and model_revision = ?
+               and details_json ->> 'implementationRevision' = ?
+               and details_json ->> 'implementationChecksum' = ?
+               and event_type = ? and status = ?
+             order by created_date desc limit 1
+            """,
+            tenantId,
+            modelSpecId,
+            revision,
+            Integer.toString(implementationRevision),
+            implementationChecksum,
+            eventType.name(),
+            status
+        ).stream().findFirst();
+    }
+
     public boolean hasPassedEvidence(String tenantId, UUID modelSpecId, int revision, EventType eventType) {
         Integer count = jdbcTemplate.queryForObject(
             """
@@ -295,6 +796,34 @@ public class ModelLifecycleRepository {
             modelSpecId,
             revision,
             eventType.name()
+        );
+        return count != null && count > 0;
+    }
+
+    /** Evidence is current only when it was emitted by the same append-only implementation revision. */
+    public boolean hasPassedEvidence(
+        String tenantId,
+        UUID modelSpecId,
+        int revision,
+        int implementationRevision,
+        String implementationChecksum,
+        EventType eventType
+    ) {
+        Integer count = jdbcTemplate.queryForObject(
+            """
+            select count(*) from modeling_model_lifecycle_event
+             where tenant_id = ? and model_spec_id = ? and model_revision = ?
+               and event_type = ? and status = 'PASSED'
+               and details_json ->> 'implementationRevision' = ?
+               and details_json ->> 'implementationChecksum' = ?
+            """,
+            Integer.class,
+            tenantId,
+            modelSpecId,
+            revision,
+            eventType.name(),
+            Integer.toString(implementationRevision),
+            implementationChecksum
         );
         return count != null && count > 0;
     }
@@ -424,6 +953,83 @@ public class ModelLifecycleRepository {
             return objectMapper.readValue(value, DETAILS_TYPE);
         } catch (JsonProcessingException exception) {
             throw new IllegalArgumentException("Lifecycle details cannot be read", exception);
+        }
+    }
+
+    private List<ImplementationInput> readInputs(InputMode inputMode, String value) {
+        if (value == null || value.isBlank()) return List.of();
+        try {
+            return switch (inputMode) {
+                case PHYSICAL_ASSET -> objectMapper
+                    .readValue(value, new TypeReference<List<PhysicalAssetInput>>() {})
+                    .stream()
+                    .map(input -> (ImplementationInput) input)
+                    .toList();
+                case UPSTREAM_MODEL -> objectMapper
+                    .readValue(value, new TypeReference<List<UpstreamModelInput>>() {})
+                    .stream()
+                    .map(input -> (ImplementationInput) input)
+                    .toList();
+                case GENERATED -> objectMapper
+                    .readValue(value, new TypeReference<List<GeneratedInput>>() {})
+                    .stream()
+                    .map(input -> (ImplementationInput) input)
+                    .toList();
+            };
+        } catch (JsonProcessingException | IllegalArgumentException exception) {
+            throw new IllegalArgumentException("Stored implementation input payload is invalid", exception);
+        }
+    }
+
+    private List<FieldMapping> readFieldMappings(String value) {
+        if (value == null || value.isBlank()) return List.of();
+        try {
+            return objectMapper.readValue(value, FIELD_MAPPINGS_TYPE);
+        } catch (JsonProcessingException | IllegalArgumentException exception) {
+            throw new IllegalArgumentException("Stored implementation field mapping payload is invalid", exception);
+        }
+    }
+
+    private Map<String, Object> readSettings(String value) {
+        if (value == null || value.isBlank()) return Map.of();
+        try {
+            return objectMapper.readValue(value, SETTINGS_TYPE);
+        } catch (JsonProcessingException | IllegalArgumentException exception) {
+            throw new IllegalArgumentException("Stored implementation settings payload is invalid", exception);
+        }
+    }
+
+    private String implementationJson(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalArgumentException("Implementation persistence payload cannot be serialized", exception);
+        }
+    }
+
+    private String implementationChecksum(SaveImplementationCommand command) {
+        try {
+            return sha256(canonicalWriter.writeValueAsString(Map.of(
+                "inputMode", command.inputMode(),
+                "inputs", command.inputs(),
+                "fieldMappings", command.fieldMappings(),
+                "settings", command.settings(),
+                "ownership", command.ownership(),
+                "materialization", command.materialization()
+            )));
+        } catch (JsonProcessingException exception) {
+            throw new IllegalArgumentException("Implementation checksum payload cannot be serialized", exception);
+        }
+    }
+
+    private static String sha256(String value) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder result = new StringBuilder(digest.length * 2);
+            for (byte item : digest) result.append(String.format("%02x", item));
+            return result.toString();
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
         }
     }
 }

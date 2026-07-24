@@ -65,6 +65,30 @@ class ApiRawLandingServiceTest {
     }
 
     @Test
+    void land_shouldNotAdvanceCheckpointForFailedResourceWrite() throws Exception {
+        JdbcMetadataService metadataService = mock(JdbcMetadataService.class);
+        PreparedStatement failedInsert = mock(PreparedStatement.class);
+        PreparedStatement checkpoint = mock(PreparedStatement.class);
+        List<String> preparedSql = new ArrayList<>();
+        Connection connection = connectionReturning(failedInsert, checkpoint, preparedSql);
+        when(metadataService.openConnection(any())).thenReturn(connection);
+        doThrow(new SQLException("boom")).when(failedInsert).executeUpdate();
+        ApiRawLandingService service = service(metadataService);
+
+        ApiRawLandingService.LandingResult result = service.land(
+            plan(),
+            task(),
+            execution(),
+            List.of(page("orders", 1, objectMapper.readTree("{\"id\":1,\"updatedAt\":\"2026-01-01T00:00:00Z\"}")))
+        );
+
+        assertThat(result.failedResources()).containsOnly("orders");
+        assertThat(preparedSql).noneSatisfy(sql -> assertThat(sql).contains("dts_api_ingestion_checkpoint", "ON CONFLICT"));
+        verify(checkpoint, never()).executeUpdate();
+        verify(connection).rollback();
+    }
+
+    @Test
     void land_shouldUseHashConflictInsertAndWriteCheckpointForSuccessfulCursorResource() throws Exception {
         JdbcMetadataService metadataService = mock(JdbcMetadataService.class);
         PreparedStatement insert = mock(PreparedStatement.class);

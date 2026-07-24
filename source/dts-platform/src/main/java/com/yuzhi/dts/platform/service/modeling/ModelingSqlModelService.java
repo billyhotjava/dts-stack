@@ -406,6 +406,9 @@ public class ModelingSqlModelService {
     public SqlModelDto update(UUID id, SqlModelRequest request, String activeDeptHeader) {
         ensureWorkspaceWritable();
         ModelingSqlModel model = repo.findById(id).orElseThrow(() -> new EntityNotFoundException("模型不存在"));
+        if (model.getModelSpecId() != null && repo.hasCurrentLifecycleEvidence(model.getModelSpecId())) {
+            throw new IllegalArgumentException("当前高级实现已有构建或审批证据，请先返回数据实现阶段创建新的 implementation revision");
+        }
         String oldPath = model.getModelPath();
         apply(model, request, activeDeptHeader, false);
         ModelingSqlModel saved = repo.save(model);
@@ -423,6 +426,9 @@ public class ModelingSqlModelService {
         ModelingSqlModel model = repo.findById(id).orElseThrow(() -> new EntityNotFoundException("模型不存在"));
         if (!isOwnerDeptVisible(model.getOwnerDept(), activeDept, instituteScope)) {
             throw new IllegalArgumentException("当前账号无权删除该模型");
+        }
+        if (model.getModelSpecId() != null) {
+            throw new IllegalArgumentException("高级实现工作区不能通过普通删除移除，请使用 ModelSpec 退役流程");
         }
         boolean deleteFile = canDeleteModelPathAfterRemoving(model.getModelPath(), model.getId() == null ? Set.of() : Set.of(model.getId()));
         repo.delete(model);
@@ -1157,6 +1163,11 @@ public class ModelingSqlModelService {
         }
 
         model.setPlanId(plan != null ? plan.getId() : null);
+        if (isCreate) {
+            model.setModelSpecId(request.modelSpecId());
+        } else if (request.modelSpecId() != null && !Objects.equals(model.getModelSpecId(), request.modelSpecId())) {
+            throw new IllegalArgumentException("已绑定的 ModelSpec 不允许通过普通编辑切换");
+        }
         model.setName(name);
         model.setAlias(trimToNull(request.alias()));
         model.setLayer(layer);
@@ -1380,7 +1391,7 @@ public class ModelingSqlModelService {
         String dagSelector = defaultText(trimToNull(model.getDagSelector()), resolveDagSelectorValue(model.getTags(), sourceTag));
         ContractMeta meta = extractContractMeta(model.getSemanticContract());
         return new SqlModelDto(
-            model.getId(), model.getPlanId(), plan != null ? plan.getName() : null,
+            model.getId(), model.getPlanId(), model.getModelSpecId(), plan != null ? plan.getName() : null,
             model.getName(), model.getAlias(), model.getLayer(), model.getSourceDataSourceId(),
             source != null ? source.getName() : null, sourceKey, dagSelector, model.getTags(),
             model.getMaterialized(), model.getSchemaName(), model.getDescription(), model.getSqlText(),
@@ -1399,7 +1410,7 @@ public class ModelingSqlModelService {
         String dagSelector = defaultText(trimToNull(model.getDagSelector()), resolveDagSelectorValue(model.getTags(), sourceTag));
         ContractMeta meta = extractContractMeta(model.getSemanticContract());
         return new SqlModelDto(
-            model.getId(), model.getPlanId(), plan != null ? plan.getName() : null,
+            model.getId(), model.getPlanId(), model.getModelSpecId(), plan != null ? plan.getName() : null,
             model.getName(), model.getAlias(), model.getLayer(), model.getSourceDataSourceId(),
             source != null ? source.getName() : null, sourceKey, dagSelector, model.getTags(),
             model.getMaterialized(), model.getSchemaName(), model.getDescription(), model.getSqlText(),
@@ -1528,6 +1539,7 @@ public class ModelingSqlModelService {
 
     public record SqlModelRequest(
         UUID planId,
+        UUID modelSpecId,
         String name,
         String alias,
         String layer,
@@ -1541,11 +1553,47 @@ public class ModelingSqlModelService {
         String status,
         String ownerDept,
         String semanticContract
-    ) {}
+    ) {
+        public SqlModelRequest(
+            UUID planId,
+            String name,
+            String alias,
+            String layer,
+            UUID sourceDataSourceId,
+            String schemaName,
+            String materialized,
+            String tags,
+            String description,
+            String sql,
+            Boolean enabled,
+            String status,
+            String ownerDept,
+            String semanticContract
+        ) {
+            this(
+                planId,
+                null,
+                name,
+                alias,
+                layer,
+                sourceDataSourceId,
+                schemaName,
+                materialized,
+                tags,
+                description,
+                sql,
+                enabled,
+                status,
+                ownerDept,
+                semanticContract
+            );
+        }
+    }
 
     public record SqlModelDto(
         UUID id,
         UUID planId,
+        UUID modelSpecId,
         String planName,
         String name,
         String alias,

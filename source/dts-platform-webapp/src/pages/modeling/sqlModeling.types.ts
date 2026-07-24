@@ -147,6 +147,7 @@ export type DbtModelDiagnostics = {
 
 export type SqlModel = {
 	id?: string;
+	modelSpecId?: string;
 	planId?: string;
 	planName?: string;
 	name?: string;

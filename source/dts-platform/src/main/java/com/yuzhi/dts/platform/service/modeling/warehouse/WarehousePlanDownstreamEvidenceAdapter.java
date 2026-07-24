@@ -6,10 +6,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.MetricRef;
-import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService;
-import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.GateStatus;
-import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.GateView;
-import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.Stage;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryEvidenceErrorCode;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanStageProjectionService.EvidenceFreshness;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanStageProjectionService.StageCode;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanStageProjectionService.StageEvidence;
@@ -32,7 +29,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Uses live ModelSpec gates for build/release and the owner-written integration ledger for later stages. */
+/** Uses model gates for navigation while candidate release evidence remains unavailable. */
 @Component
 @Transactional(readOnly = true)
 public class WarehousePlanDownstreamEvidenceAdapter implements WarehousePlanDownstreamEvidencePort {
@@ -44,18 +41,15 @@ public class WarehousePlanDownstreamEvidenceAdapter implements WarehousePlanDown
         StageCode.DATA_SERVICE_OPERATIONS
     );
 
-    private final ModelSpecStageGateService stageGates;
     private final GovIndicatorDefinitionRepository indicators;
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
 
     public WarehousePlanDownstreamEvidenceAdapter(
-        ModelSpecStageGateService stageGates,
         GovIndicatorDefinitionRepository indicators,
         JdbcTemplate jdbcTemplate,
         ObjectMapper objectMapper
     ) {
-        this.stageGates = stageGates;
         this.indicators = indicators;
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
@@ -64,7 +58,7 @@ public class WarehousePlanDownstreamEvidenceAdapter implements WarehousePlanDown
     @Override
     public List<StageEvidence> read(String tenantId, UUID planId, List<ModelSpecView> models) {
         List<StageEvidence> evidence = new ArrayList<>();
-        evidence.add(buildEvidence(tenantId, models));
+        evidence.add(buildEvidence(models));
         evidence.add(metricEvidence(models));
         Map<StageCode, StageEvidence> recorded = latestRecorded(tenantId, planId);
         for (StageCode stage : RECORDED_STAGES) {
@@ -152,7 +146,7 @@ public class WarehousePlanDownstreamEvidenceAdapter implements WarehousePlanDown
         }
     }
 
-    private StageEvidence buildEvidence(String tenantId, List<ModelSpecView> models) {
+    private StageEvidence buildEvidence(List<ModelSpecView> models) {
         List<ModelSpecView> active = models
             .stream()
             .filter(Objects::nonNull)
@@ -161,28 +155,11 @@ public class WarehousePlanDownstreamEvidenceAdapter implements WarehousePlanDown
         if (active.isEmpty()) {
             return blocked(StageCode.BUILD_QUALITY_RELEASE, "MODEL_SPEC_REQUIRED", "Create a model before build and release");
         }
-        int ready = 0;
-        for (ModelSpecView model : active) {
-            GateView release = stageGates
-                .evaluateAll(tenantId, model.id())
-                .stream()
-                .filter(gate -> gate.stage() == Stage.RELEASE_READY)
-                .findFirst()
-                .orElse(null);
-            if (release == null) {
-                return unknown(StageCode.BUILD_QUALITY_RELEASE, "MODEL_RELEASE_EVIDENCE_UNAVAILABLE");
-            }
-            if (release.status() != GateStatus.READY) {
-                ModelSpecStageGateService.GateBlocker first = release.blockers().stream().findFirst().orElse(null);
-                return blocked(
-                    StageCode.BUILD_QUALITY_RELEASE,
-                    first == null ? "MODEL_RELEASE_NOT_READY" : first.code(),
-                    first == null ? "Build, quality or release evidence is incomplete" : first.message()
-                );
-            }
-            ready++;
-        }
-        return complete(StageCode.BUILD_QUALITY_RELEASE, ready);
+        return blocked(
+            StageCode.BUILD_QUALITY_RELEASE,
+            DeliveryEvidenceErrorCode.MODEL_RELEASE_EVIDENCE_REQUIRED.name(),
+            "Current release evidence is required before completing build, quality and release"
+        );
     }
 
     private Map<StageCode, StageEvidence> latestRecorded(String tenantId, UUID planId) {

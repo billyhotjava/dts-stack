@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import com.yuzhi.dts.platform.repository.modeling.ModelLifecycleRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.EventType;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.LifecycleEventView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.PublishCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
@@ -28,18 +29,30 @@ class ModelLifecyclePublicationServiceTest {
         ModelSpecView draft = model(ModelStatus.DRAFT);
         ModelSpecView published = model(ModelStatus.PUBLISHED);
         LifecycleEventView event = event();
+        ImplementationView implementation = new ImplementationView(
+            UUID.randomUUID(),
+            draft.id(),
+            draft.planId(),
+            7,
+            "a".repeat(64),
+            com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode.DESIGNER_GENERATED,
+            "warehouse",
+            "model.warehouse.customer_detail",
+            "ACTIVE"
+        );
         Instant now = Instant.parse("2026-07-20T08:00:00Z");
+        when(lifecycle.lockImplementation("tenant-a", draft.id(), implementation)).thenReturn(true);
         when(codec.toLifecycleView(draft, ModelStatus.PUBLISHED, 7, now)).thenReturn(published);
         when(codec.write(published)).thenReturn("published-snapshot");
         when(modelSpecs.compareAndSetLifecycle("tenant-a", "alice", 7, "a".repeat(64), ModelStatus.DRAFT, published)).thenReturn(1);
         when(modelSpecs.updateV2RevisionLifecycle("tenant-a", "alice", ModelStatus.DRAFT, published, "published-snapshot")).thenReturn(1);
         when(lifecycle.recordEvent(
             "tenant-a", "alice", published, EventType.RELEASE, "REGISTERING", "release-7", "approved", null,
-            Map.of("approvedRevision", 7), now
+            Map.of("approvedRevision", 7), implementation, now
         )).thenReturn(event);
 
         ModelLifecyclePublicationService.Publication result = service.publish(
-            "tenant-a", "alice", draft, new PublishCommand("approved", "release-7"), now
+            "tenant-a", "alice", draft, implementation, new PublishCommand("approved", "release-7"), now
         );
 
         assertThat(result.model().revision()).isEqualTo(7);

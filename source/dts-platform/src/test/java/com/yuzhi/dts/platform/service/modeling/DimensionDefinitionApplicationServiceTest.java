@@ -486,6 +486,53 @@ class DimensionDefinitionApplicationServiceTest {
             () -> service.create(TENANT, ACTOR, command),
             "DIMENSION_DEFINITION_IDEMPOTENCY_CONFLICT"
         );
+
+        reset(repository);
+        when(repository.findByIdempotencyKey(TENANT, command.idempotencyKey())).thenReturn(Optional.empty());
+        when(repository.insert(eq(TENANT), eq(ACTOR), eq(command), any(), anyString()))
+            .thenThrow(
+                new org.springframework.dao.DataIntegrityViolationException(
+                    "duplicate key violates uk_dimension_definition_tenant_domain_name_ci"
+                )
+            );
+        assertCode(
+            () -> service.create(TENANT, ACTOR, command),
+            "DIMENSION_DEFINITION_NAME_CONFLICT"
+        );
+    }
+
+    @Test
+    void rejectsDuplicateNamesOnCreateAndUpdateUsingTheDatabaseUniquenessKey() {
+        CreateCommand create = createCommand("duplicate-create", "Customer");
+        when(repository.findByIdempotencyKey(TENANT, create.idempotencyKey())).thenReturn(Optional.empty());
+        when(repository.existsByDomainAndName(TENANT, DOMAIN_ID, "Customer", null)).thenReturn(true);
+
+        assertCode(
+            () -> service.create(TENANT, ACTOR, create),
+            "DIMENSION_DEFINITION_NAME_CONFLICT"
+        );
+        verify(repository, never()).insert(any(), any(), any(), any(), any());
+
+        reset(repository);
+        View current = view(Status.DRAFT, 1, "a".repeat(64), NOW, NOW, "Customer");
+        when(repository.findCurrent(TENANT, DEFINITION_ID))
+            .thenReturn(Optional.of(stored(current, null, null)));
+        when(repository.usageCount(TENANT, DEFINITION_ID)).thenReturn(0L);
+        when(repository.existsByDomainAndName(TENANT, DOMAIN_ID, "Account", DEFINITION_ID))
+            .thenReturn(true);
+
+        assertCode(
+            () ->
+                service.update(
+                    TENANT,
+                    ACTOR,
+                    DEFINITION_ID,
+                    expected(current),
+                    updateCommand("Account")
+                ),
+            "DIMENSION_DEFINITION_NAME_CONFLICT"
+        );
+        verify(repository, never()).compareAndSet(any(), any(), any(), any());
     }
 
     private View createPersisted(CreateCommand command) {

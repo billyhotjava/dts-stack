@@ -12,16 +12,15 @@ const sourceManagerUrl = new URL("./components/ModelSpecSourceInventoryModal.tsx
 const sourceManager = existsSync(sourceManagerUrl) ? readFileSync(sourceManagerUrl, "utf8") : "";
 
 test("create and detail forms query the selected plan's canonical source inventory", () => {
-	assert.match(drawer, /getWarehousePlanSources/);
+	assert.doesNotMatch(drawer, /getWarehousePlanSources|selectableModelSpecSources|ModelSpecSourceInventoryModal/);
 	assert.match(detail, /getWarehousePlanSources/);
-	assert.match(drawer, /selectableModelSpecSources/);
 	assert.match(detail, /withPinnedExistingSources/);
 });
 
-test("switching plans invalidates prior source requests and clears selected bindings first", () => {
-	assert.match(drawer, /sourceRequestRef/);
-	assert.match(drawer, /form\.setFieldValue\("sources",\s*\[\]\)/);
-	assert.match(drawer, /loadSources\(planId\)/);
+test("switching plans clears the minimum-draft category context without loading sources", () => {
+	assert.match(drawer, /form\.setFieldsValue\(\{ domainId: "", dimensionDefinitionRef: undefined \}\)/);
+	assert.match(drawer, /loadDomains\(planId\)/);
+	assert.doesNotMatch(drawer, /sourceRequestRef|loadSources\(planId\)|form\.setFieldValue\("sources"/);
 });
 
 test("closing or reopening the drawer invalidates stale plan-list requests", () => {
@@ -50,12 +49,11 @@ test("the editor explains the ingestion boundary and links empty states to the c
 	assert.match(editor, /完善来源盘点/);
 });
 
-test("an empty plan source can be registered in the current model form and refreshes choices after save", () => {
+test("an empty plan source is registered during data implementation, not initial draft creation", () => {
 	assert.match(editor, /onManageSources/);
 	assert.match(editor, /在当前表单登记来源/);
-	assert.match(drawer, /ModelSpecSourceInventoryModal/);
-	assert.match(drawer, /sourceInventoryOpen/);
-	assert.match(drawer, /return loadSources\(selectedPlanId\)/);
+	assert.doesNotMatch(drawer, /ModelSpecSourceInventoryModal|sourceInventoryOpen|loadSources/);
+	assert.match(detail, /ModelSpecSourceInventoryModal/);
 });
 
 test("source management stays reachable after the first source is ready", () => {
@@ -88,11 +86,8 @@ test("the editor fixes each of the four model categories to its product layer an
 	assert.match(editor, /不是四类表之外的第五类模型/);
 });
 
-test("upstream choices enforce the type-layer matrix before a create or update request", () => {
-	assert.match(drawer, /isModelSpecReferenceTargetAllowed/);
-	assert.match(drawer, /modelType:\s*selectedModelType,\s*planId:\s*selectedPlanId/);
-	assert.match(drawer, /"DEPENDENCY"/);
-	assert.match(drawer, /disabled:\s*!allowed/);
+test("upstream choices enforce the type-layer matrix during logical editing, not initial creation", () => {
+	assert.doesNotMatch(drawer, /isModelSpecReferenceTargetAllowed|"DEPENDENCY"|upstreamOptions/);
 	assert.match(detail, /isModelSpecReferenceTargetAllowed/);
 	assert.match(detail, /isModelSpecReferenceTargetAllowed\(canonicalModel,\s*candidate,\s*"DEPENDENCY"\)/);
 	assert.match(detail, /disabled:\s*!allowed/);
@@ -115,10 +110,8 @@ test("historical canonical models outside the fixed target-layer matrix are expl
 	assert.match(detail, /类型专属字段或输入依赖不符合当前四类表规则，仅支持查看/);
 });
 
-test("switching away from DIMENSION clears generation-only input and maps validation back to its visible field", () => {
-	assert.match(drawer, /generationStrategyType:\s*""/);
-	assert.match(drawer, /generationStrategyReference:\s*""/);
-	assert.match(drawer, /field === "generationStrategy"\) return "generationStrategyType"/);
+test("generation-only input remains in logical editing and is absent from initial creation", () => {
+	assert.doesNotMatch(drawer, /generationStrategyType|generationStrategyReference|generationStrategy/);
 	assert.match(detail, /field === "generationStrategy"\) return "generationStrategyType"/);
 	assert.match(contract, /MODEL_SPEC_INPUT_KIND_NOT_ALLOWED/);
 });
@@ -134,7 +127,7 @@ test("dependency metadata outages defer client-side dependency classification to
 });
 
 test("revision-pinned upstreams require an explicit action before adopting a newer revision", () => {
-	assert.match(drawer, /revision:\s*model\.revision/);
+	assert.doesNotMatch(drawer, /upstreamOptions|revision:\s*model\.revision/);
 	assert.match(detail, /revision:\s*candidate\.revision/);
 	assert.match(editor, /adoptCurrentUpstreamRevisions/);
 	assert.match(editor, /采用所选上游当前版本/);
@@ -146,11 +139,9 @@ test("analysis-dimension candidates are canonical DWD dimensions and historical 
 	assert.match(contract, /isCanonicalModelSpecReferenceTarget/);
 	assert.match(contract, /!hasModelSpecTypeBoundaryMismatch\(candidate\)/);
 	assert.match(contract, /candidate\.sourceRefs\.every\(.*isModelSpecDirectInputLayerAllowed/);
-	assert.match(drawer, /isModelSpecReferenceTargetAllowed/);
+	assert.doesNotMatch(drawer, /isModelSpecReferenceTargetAllowed/);
 	assert.match(detail, /isModelSpecReferenceTargetAllowed/);
-	assert.match(drawer, /isModelSpecReferenceTargetAllowed\([\s\S]{0,180}"DIMENSION"/);
 	assert.match(detail, /isModelSpecReferenceTargetAllowed\([\s\S]{0,180}"DIMENSION"/);
-	assert.match(drawer, /revision:\s*model\.revision/);
 	assert.match(detail, /revision:\s*candidate\.revision/);
 	assert.match(detail, /dimensionReferenceMismatch/);
 	assert.match(detail, /canonicalModel\?\.dimensionRefs\.some/);
@@ -245,9 +236,8 @@ test("candidate assets stay in the embedded manager until their inventory decisi
 	assert.match(sourceManager, /refreshParentSources\(result\.requiresFurtherConfirmation\)/);
 	assert.match(sourceManager, /!writeRequiresFurtherConfirmation/);
 	assert.match(sourceManager, /sourceInventoryRequiresFurtherConfirmation\(refreshedInventory\.bindings\)/);
-	assert.match(drawer, /return inventory/);
 	assert.match(detail, /return inventory/);
-	assert.match(drawer, /onSaved=\{async \(\) => \{[\s\S]{0,180}return loadSources\(selectedPlanId\)/);
+	assert.doesNotMatch(drawer, /return inventory|loadSources\(selectedPlanId\)|onSaved=\{async/);
 	assert.match(detail, /onSaved=\{async \(\) => \{[\s\S]{0,300}return loadSources\(canonicalModel\.planId/);
 });
 
@@ -267,8 +257,8 @@ test("parent refresh retries are latest-only and keep the manager busy until aut
 	assert.match(sourceManager, /loading=\{refreshingSources\}/);
 });
 
-test("unique system codes are generated and rendered read-only", () => {
-	assert.match(drawer, /createDimensionSystemCode/);
+test("initial draft creation does not accept or generate system codes", () => {
+	assert.doesNotMatch(drawer, /createDimensionSystemCode|dimensionCode|维度系统编码/);
 	assert.match(editor, /nextDimensionHierarchyCode/);
 	assert.match(editor, /label="维度系统编码"/);
 	assert.match(editor, /系统生成，保存后不可修改/);
@@ -283,28 +273,24 @@ test("source inventory keeps the binding UUID internal now that model forms use 
 test("source drift requires explicit adoption and never silently upgrades another save path", () => {
 	assert.match(editor, /modelSpecSourceMatchesChoice/);
 	assert.match(editor, /采用当前版本/);
-	assert.match(detail, /modelSpecSourcesAreCurrent/);
+	assert.match(detail, /ModelSpecImplementationStage/);
 	assert.doesNotMatch(detail, /reconcileModelSpecSources/);
 	assert.doesNotMatch(drawer, /reconcileModelSpecSources/);
-	assert.match(detail, /const persistedSourceVerificationPending =/);
-	assert.match(detail, /canEdit=\{canEdit && !persistedSourceVerificationPending && persistedSourcesCurrent\}/);
+	assert.doesNotMatch(detail, /persistedSourceVerificationPending/);
 });
 
-test("source verification blocks saves only when the draft actually selected physical sources", () => {
-	assert.match(drawer, /const selectedSources = Form\.useWatch\("sources", form\) \|\| \[\];/);
-	assert.match(drawer, /loadingSources && selectedSources\.length > 0/);
-	assert.match(detail, /const sourceVerificationPending = sourceLoading && selectedSources\.length > 0;/);
-	assert.match(detail, /if \(!canonicalModel \|\| !canEdit \|\| sourceVerificationPending\) return;/);
-	assert.match(detail, /disabled=\{sourceVerificationPending\}/);
+test("source verification belongs to implementation after the first draft is created", () => {
+	assert.doesNotMatch(drawer, /selectedSources|loadingSources|sourceVerification/);
+	assert.doesNotMatch(detail, /sourceVerificationPending/);
+	assert.match(detail, /activeStage !== "implementation"/);
+	assert.doesNotMatch(detail, /if \(!canonicalModel \|\| !canEdit \|\| sourceLoading\) return;/);
+	assert.match(detail, /ModelSpecImplementationStage/);
 });
 
 test("source loading distinguishes empty, forbidden and recoverable provider failures", () => {
-	assert.match(drawer, /modelSpecSourceInventoryState/);
+	assert.doesNotMatch(drawer, /modelSpecSourceInventoryState|modelSpecSourcePermissionDenied|当前账号无权读取计划来源/);
 	assert.match(detail, /modelSpecSourceInventoryState/);
-	assert.match(drawer, /modelSpecSourcePermissionDenied/);
 	assert.match(detail, /modelSpecSourcePermissionDenied/);
-	assert.match(drawer, /当前账号无权读取计划来源/);
 	assert.match(detail, /当前账号无权核验规划来源/);
-	assert.match(drawer, /当前计划尚未登记具体来源.*在当前表单登记来源.*已验证连接/s);
 	assert.match(detail, /当前计划尚未登记具体来源.*在当前表单登记来源.*已验证连接/s);
 });

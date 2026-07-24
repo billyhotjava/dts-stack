@@ -186,4 +186,12 @@
     <include file="config/liquibase/changelog/20260720_01_metadata_standard_owner_version.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260720_02_model_spec_lifecycle.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260724_01_dimension_definition.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260724_02_model_implementation_inputs.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260724_03_model_release_candidate.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260724_04_model_release_candidate_command.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260724_05_dimension_definition_name_uniqueness.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260724_06_model_release_candidate_active_plan.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260724_07_model_artifact_identity.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260724_08_upstream_model_pin_contract.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260724_09_sql_model_spec_binding.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

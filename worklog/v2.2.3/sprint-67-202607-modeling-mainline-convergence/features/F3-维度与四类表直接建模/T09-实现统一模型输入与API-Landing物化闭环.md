@@ -1,7 +1,7 @@
 # T09：实现统一模型输入与 API Landing 物化闭环
 
 **优先级**：P0
-**状态**：READY
+**状态**：IN_PROGRESS
 **依赖**：F3-T06、F3-T07、F3-T08、F6-T06
 
 ## 目标
@@ -47,3 +47,7 @@
 - [ ] PostgreSQL 真实落库和元数据 revision 对账通过；
 - [ ] API checkpoint 连续性和失败重试有真实证据；
 - [ ] F6-T08 真实联动前保持 READY/IN_PROGRESS，不提前关闭。
+
+## 实施状态（2026-07-24）
+
+三种实现输入、revision/checksum CAS、受控编译设置、实现证据失效规则、API Landing 权威成功校验、目录/血缘登记和 dbt 物化节点过滤已落码。当前只等待统一静态复核及一次性测试批次，尚未以未执行的测试替代完成证据。

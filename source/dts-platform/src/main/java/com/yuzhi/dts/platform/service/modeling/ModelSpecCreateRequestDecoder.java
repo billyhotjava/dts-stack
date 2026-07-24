@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -32,9 +33,11 @@ public final class ModelSpecCreateRequestDecoder {
             return rejected(requestIssue("ModelSpec create request must be a JSON object"));
         }
 
+        ObjectNode normalized = ((ObjectNode) request).deepCopy();
+        applyCreateDefaults(normalized);
         Map<String, Object> raw;
         try {
-            raw = objectMapper.convertValue(request, RAW_REQUEST_TYPE);
+            raw = objectMapper.convertValue(normalized, RAW_REQUEST_TYPE);
         } catch (IllegalArgumentException exception) {
             return rejected(requestIssue("ModelSpec create request cannot be decoded"));
         }
@@ -43,7 +46,7 @@ public final class ModelSpecCreateRequestDecoder {
         if (!shapeIssues.isEmpty()) return new DecodeResult(null, shapeIssues);
 
         ModelSpecContract.CreateModelSpecCommand command;
-        try (JsonParser parser = request.traverse(objectMapper)) {
+        try (JsonParser parser = normalized.traverse(objectMapper)) {
             command = strictReader.readValue(parser);
         } catch (IOException | IllegalArgumentException exception) {
             return rejected(requestIssue("ModelSpec create request cannot be decoded"));
@@ -51,6 +54,19 @@ public final class ModelSpecCreateRequestDecoder {
 
         List<ModelSpecContract.FieldIssue> semanticIssues = ModelSpecContract.validateCreate(command);
         return semanticIssues.isEmpty() ? new DecodeResult(command, List.of()) : new DecodeResult(null, semanticIssues);
+    }
+
+    private static void applyCreateDefaults(ObjectNode request) {
+        if (!request.has("implementationMode")) {
+            request.put("implementationMode", ModelSpecContract.ImplementationMode.DESIGNER_GENERATED.name());
+        }
+        if (request.has("layer") || !request.hasNonNull("modelType") || !request.get("modelType").isTextual()) return;
+        try {
+            ModelSpecContract.ModelType modelType = ModelSpecContract.ModelType.valueOf(request.get("modelType").textValue());
+            request.put("layer", ModelSpecContract.targetLayer(modelType).name());
+        } catch (IllegalArgumentException ignored) {
+            // Shape validation below owns the stable invalid-model-type response.
+        }
     }
 
     private static DecodeResult rejected(ModelSpecContract.FieldIssue issue) {

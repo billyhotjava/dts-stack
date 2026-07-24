@@ -100,6 +100,43 @@ class DimensionDefinitionLiquibaseTest {
             .contains("Recovery requires a new forward changeset");
     }
 
+    @Test
+    void addsForwardOnlyCaseInsensitiveTenantDomainNameUniqueness() throws Exception {
+        String xml = read("/config/liquibase/changelog/20260724_05_dimension_definition_name_uniqueness.xml");
+
+        assertThat(xml)
+            .contains("20260724-05a-dimension-definition-tenant-domain-name-unique")
+            .contains("CREATE UNIQUE INDEX uk_dimension_definition_tenant_domain_name_ci")
+            .contains("(tenant_id, domain_id, lower(name))")
+            .contains("DIMENSION_DEFINITION_NAME_CONFLICT_AUDIT_REQUIRED")
+            .contains("HAVING count(*) > 1")
+            .contains("ROLLBACK_BLOCKED_DIMENSION_DEFINITION_NAME_UNIQUENESS_FORWARD_ONLY");
+    }
+
+    @Test
+    void addsAuditableMigrationBatchStateAndRollbackOwnershipMarkers() throws Exception {
+        String xml = read("/config/liquibase/changelog/20260724_05_dimension_definition_name_uniqueness.xml");
+        String master = read("/config/liquibase/master.xml");
+
+        assertThat(xml)
+            .contains("tableName=\"modeling_dimension_definition_migration_batch\"")
+            .contains("name=\"migration_checksum\"")
+            .contains("name=\"dry_run_json\"")
+            .contains("name=\"definition_created_by_batch\"")
+            .contains("constraintName=\"fk_dimension_definition_legacy_batch\"")
+            .contains("baseColumnNames=\"tenant_id, migration_batch_id, migration_checksum\"")
+            .contains("status IN ('DRY_RUN', 'EXECUTED', 'ROLLED_BACK')")
+            .contains("ck_dimension_definition_migration_batch_evidence")
+            .contains("ALTER CONSTRAINT fk_dimension_definition_revision_head")
+            .contains("ALTER CONSTRAINT fk_dimension_definition_current_revision")
+            .contains("DEFERRABLE INITIALLY DEFERRED")
+            .contains("ROLLBACK_BLOCKED_DIMENSION_DEFINITION_MIGRATION_BATCH_FORWARD_ONLY");
+        assertThat(master)
+            .contains(
+                "<include file=\"config/liquibase/changelog/20260724_05_dimension_definition_name_uniqueness.xml\" relativeToChangelogFile=\"false\"/>"
+            );
+    }
+
     private String read(String resource) throws Exception {
         try (var input = getClass().getResourceAsStream(resource)) {
             assertThat(input).as(resource).isNotNull();

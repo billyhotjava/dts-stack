@@ -46,7 +46,9 @@ class ModelingDbtManifestImporterTest {
             "idem-pjm-1",
             "30000000-0000-0000-0000-000000000001",
             1,
-            "a".repeat(64)
+            "a".repeat(64),
+            2,
+            "b".repeat(64)
         )))
             .isInstanceOf(ModelingDbtManifestImporter.ImportException.class)
             .satisfies(error -> assertThat(((ModelingDbtManifestImporter.ImportException) error).code())
@@ -67,7 +69,9 @@ class ModelingDbtManifestImporterTest {
             "idem-pjm-1",
             "30000000-0000-0000-0000-000000000001",
             1,
-            "a".repeat(64)
+            "a".repeat(64),
+            2,
+            "b".repeat(64)
         );
     }
 

@@ -4,15 +4,57 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldRole;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceRef;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.FieldMapping;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationInput;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.InputMode;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.PhysicalAssetInput;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.UpstreamModelInput;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 import java.util.function.Function;
 
 /** Pure compatibility projection. It adapts v2 snapshots without changing the CRITICAL compiler. */
 public final class ModelSpecCompilerProjection {
 
     private ModelSpecCompilerProjection() {}
+
+    /** Immutable compiler view of one append-only implementation revision. */
+    public record ImplementationProjection(
+        ModelingVNextContract.ModelSpec model,
+        String tenantId,
+        String modelChecksum,
+        int implementationRevision,
+        String implementationChecksum,
+        String dbtUniqueId,
+        InputMode inputMode,
+        List<ImplementationInput> inputs,
+        List<FieldMapping> fieldMappings,
+        Map<String, Object> settings,
+        String materialization
+    ) {
+        public ImplementationProjection {
+            Objects.requireNonNull(model, "model is required");
+            if (tenantId == null || tenantId.isBlank()) throw new IllegalArgumentException("tenantId is required");
+            if (modelChecksum == null || !modelChecksum.matches("^[0-9a-f]{64}$")) {
+                throw new IllegalArgumentException("modelChecksum must be SHA-256");
+            }
+            if (implementationRevision < 1) throw new IllegalArgumentException("implementationRevision must be positive");
+            if (implementationChecksum == null || !implementationChecksum.matches("^[0-9a-f]{64}$")) {
+                throw new IllegalArgumentException("implementationChecksum must be SHA-256");
+            }
+            if (dbtUniqueId == null || dbtUniqueId.isBlank()) throw new IllegalArgumentException("dbtUniqueId is required");
+            Objects.requireNonNull(inputMode, "inputMode is required");
+            inputs = List.copyOf(inputs == null ? List.of() : inputs);
+            fieldMappings = List.copyOf(fieldMappings == null ? List.of() : fieldMappings);
+            settings = Map.copyOf(settings == null ? Map.of() : new TreeMap<>(settings));
+            if (materialization == null || materialization.isBlank()) throw new IllegalArgumentException("materialization is required");
+            materialization = materialization.trim();
+        }
+    }
 
     public static ModelingVNextContract.ModelSpec project(
         ModelSpecView view,
@@ -63,6 +105,102 @@ public final class ModelSpecCompilerProjection {
             view.dependsOn().stream().map(ref -> ref.modelSpecId().toString()).toList(),
             null
         );
+    }
+
+    /** Projects the canonical model together with the exact implementation revision that owns compiler input. */
+    public static ImplementationProjection project(
+        ModelSpecView view,
+        ImplementationView implementation,
+        Function<ModelRevisionRef, ModelSpecView> revisionResolver
+    ) {
+        return project(
+            view,
+            implementation,
+            revisionResolver,
+            "unscoped",
+            input -> view.sourceRefs()
+                .stream()
+                .filter(source -> source != null && input.sourceBindingId().equals(source.sourceBindingId()))
+                .filter(source -> input.resolvedVersion().equals(source.resolvedVersion()))
+                .findFirst()
+                .orElse(null)
+        );
+    }
+
+    public static ImplementationProjection project(
+        ModelSpecView view,
+        ImplementationView implementation,
+        Function<ModelRevisionRef, ModelSpecView> revisionResolver,
+        String tenantId,
+        Function<PhysicalAssetInput, SourceRef> physicalResolver
+    ) {
+        if (implementation == null) {
+            throw new ModelSpecException(
+                "MODEL_IMPLEMENTATION_REQUIRED",
+                "A current implementation revision is required before compilation",
+                ModelSpecException.Kind.CONFLICT
+            );
+        }
+        ModelingVNextContract.ModelSpec canonical = project(view, revisionResolver);
+        ModelingVNextContract.ModelSpec implementationBound = new ModelingVNextContract.ModelSpec(
+            canonical.id(), canonical.objectId(), canonical.processId(), canonical.layer(), canonical.modelType(),
+            canonical.implementationMode(), canonical.name(), canonical.grain(), canonical.standardBindings(),
+            projectImplementationSources(implementation, revisionResolver, physicalResolver), canonical.dimensions(), canonical.metrics(),
+            canonical.materialization(), canonical.revision(), canonical.dependsOn(), canonical.legacyRef()
+        );
+        return new ImplementationProjection(
+            implementationBound,
+            tenantId,
+            view.checksum(),
+            implementation.implementationRevision(),
+            implementation.implementationChecksum(),
+            implementation.dbtUniqueId(),
+            implementation.inputMode(),
+            implementation.inputs(),
+            implementation.fieldMappings(),
+            implementation.settings(),
+            implementation.materialization()
+        );
+    }
+
+    /** Compiler inputs are authoritative: canonical sourceRefs are validation evidence only. */
+    private static List<ModelingVNextContract.SourceRef> projectImplementationSources(
+        ImplementationView implementation,
+        Function<ModelRevisionRef, ModelSpecView> revisionResolver,
+        Function<PhysicalAssetInput, SourceRef> physicalResolver
+    ) {
+        return switch (implementation.inputMode()) {
+            case PHYSICAL_ASSET -> implementation.inputs().stream().map(PhysicalAssetInput.class::cast).map(input -> {
+                SourceRef source = physicalResolver.apply(input);
+                if (
+                    source == null ||
+                    !input.sourceBindingId().equals(source.sourceBindingId()) ||
+                    !input.resolvedVersion().equals(source.resolvedVersion())
+                ) {
+                    throw new ModelSpecException(
+                    "MODEL_IMPLEMENTATION_INPUT_STALE", "Physical implementation input is no longer revision-bound", ModelSpecException.Kind.CONFLICT
+                    );
+                }
+                return projectSource(source);
+            }).toList();
+            case UPSTREAM_MODEL -> implementation.inputs().stream().map(UpstreamModelInput.class::cast).map(input -> {
+                ModelSpecView upstream = revisionResolver.apply(new ModelRevisionRef(input.modelSpecId(), input.revision()));
+                if (
+                    upstream == null ||
+                    upstream.revision() != input.revision() ||
+                    !Objects.equals(upstream.checksum(), input.checksum()) ||
+                    !input.implementationPinned()
+                ) {
+                    throw new ModelSpecException(
+                        "MODEL_IMPLEMENTATION_INPUT_STALE", "Pinned upstream implementation input is unavailable", ModelSpecException.Kind.CONFLICT
+                    );
+                }
+                return new ModelingVNextContract.SourceRef(
+                    "DBT_MODEL", dbtResourceName(input.dbtUniqueId()), ModelingVNextContract.Layer.valueOf(upstream.layer().name())
+                );
+            }).toList();
+            case GENERATED -> List.of();
+        };
     }
 
     private static List<ModelingVNextContract.SourceRef> projectSources(
@@ -121,6 +259,18 @@ public final class ModelSpecCompilerProjection {
             source.ref(),
             ModelingVNextContract.Layer.valueOf(source.layer().name())
         );
+    }
+
+    private static String dbtResourceName(String dbtUniqueId) {
+        int separator = dbtUniqueId == null ? -1 : dbtUniqueId.lastIndexOf('.');
+        if (separator < 0 || separator == dbtUniqueId.length() - 1) {
+            throw new ModelSpecException(
+                "MODEL_IMPLEMENTATION_INPUT_STALE",
+                "Pinned upstream dbt node identity is invalid",
+                ModelSpecException.Kind.CONFLICT
+            );
+        }
+        return dbtUniqueId.substring(separator + 1);
     }
 
     private static boolean notBlank(String value) {

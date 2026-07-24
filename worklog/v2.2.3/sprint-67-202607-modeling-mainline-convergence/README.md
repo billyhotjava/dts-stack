@@ -71,7 +71,7 @@ Sprint-65 已建立 `WarehousePlan`、`ModelSpec` 和数据建设工作台，但
 | [F5](features/F5-业务对象迁移与受控退役/README.md) | 业务对象迁移与受控退役 | 4 | DONE | 迁移旧数据、冻结旧写入并清理消费者 |
 | [F6](features/F6-专业模块交接与集成验收/README.md) | 专业模块交接与集成验收 | 8 | IN_PROGRESS | 接通标准、指标、构建发布、API Landing 和端到端证据 |
 
-**统计**：READY=4，IN_PROGRESS=7，DONE=23，BLOCKED=0；当前已关闭 23/34 Task
+**统计**：READY=2，IN_PROGRESS=9，DONE=23，BLOCKED=0；当前已关闭 23/34 Task
 
 ### 2026-07-21 人工测试重开
 
@@ -126,7 +126,7 @@ F2 与 F3 可在 F1 契约评审通过后并行；F4 可先完成静态 IA，但
 - [x] 所有页面均有可测试的进入条件、必填输入、输出产物、阻塞码和唯一主动作；建设规划台账已完成分层自动化验收。
 - [x] 新 ModelSpec 写路径不需要 `objectId`，业务活动只在明细表中作为可选说明。
 - [x] `/modeling/semantic/objects` 不再是菜单或主线入口，旧深链命中可审计兼容跳转。
-- [x] 维度性质旧对象迁为 DIMENSION ModelSpec；事实性质旧对象并入明细表粒度和来源；无法判定记录进入人工清单。
+- [ ] 维度性质旧对象迁入 `DimensionDefinition` 业务维度正文，DIMENSION ModelSpec 只保存稳定引用（原“迁为 DIMENSION ModelSpec”结论随 F3-T02 重开与四层契约作废）；事实性质旧对象并入明细表粒度和来源；无法判定记录进入人工清单。
 - [x] 数据标准、指标、dbt、运行、发布、血缘和资产引用均继续消费同一 ModelSpec/planId。
 - [ ] 34 个 Task 均提供真实测试、构建、迁移或浏览器证据，不以页面截图代替后端事实。
 - [ ] 用户可以在 canonical 建设规划台账中查找、编辑和归档计划，也可以从当前计划直接修改计划头。

@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.service.modeling;
 import com.yuzhi.dts.platform.repository.modeling.ModelLifecycleRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.EventType;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.LifecycleEventView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.PublishCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.RollbackCommand;
@@ -36,9 +37,11 @@ public class ModelLifecyclePublicationService {
         String tenantId,
         String actorId,
         ModelSpecView current,
+        ImplementationView implementation,
         PublishCommand command,
         Instant now
     ) {
+        if (!lifecycle.lockImplementation(tenantId, current.id(), implementation)) throw implementationConflict();
         ModelSpecView published = codec.toLifecycleView(current, ModelStatus.PUBLISHED, current.revision(), now);
         transition(tenantId, actorId, current, ModelStatus.DRAFT, published);
         LifecycleEventView release = lifecycle.recordEvent(
@@ -51,6 +54,7 @@ public class ModelLifecyclePublicationService {
             command.comment(),
             null,
             Map.of("approvedRevision", current.revision()),
+            implementation,
             now
         );
         return new Publication(published, release);
@@ -110,6 +114,14 @@ public class ModelLifecyclePublicationService {
         return new ModelSpecException(
             "MODEL_RELEASE_CONFLICT",
             "ModelSpec changed before the lifecycle transition was committed",
+            ModelSpecException.Kind.CONFLICT
+        );
+    }
+
+    private static ModelSpecException implementationConflict() {
+        return new ModelSpecException(
+            "MODEL_IMPLEMENTATION_REVISION_CONFLICT",
+            "Implementation revision changed before publication was committed",
             ModelSpecException.Kind.CONFLICT
         );
     }

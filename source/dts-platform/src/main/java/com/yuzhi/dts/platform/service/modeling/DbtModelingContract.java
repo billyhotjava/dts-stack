@@ -25,7 +25,9 @@ public final class DbtModelingContract {
         String idempotencyKey,
         String modelSpecId,
         int revision,
-        String modelChecksum
+        String modelChecksum,
+        int implementationRevision,
+        String implementationChecksum
     ) {}
 
     public record ImportResult(String modelSpecId, String dbtUniqueId, String status, int artifactCount) {}
@@ -51,7 +53,9 @@ public final class DbtModelingContract {
             request == null ||
             blank(request.modelSpecId()) ||
             request.revision() < 1 ||
-            blank(request.modelChecksum())
+            blank(request.modelChecksum()) ||
+            request.implementationRevision() < 1 ||
+            blank(request.implementationChecksum())
         ) {
             issues.add(ErrorCode.DBT_MODEL_OWNER_REQUIRED.name());
         }

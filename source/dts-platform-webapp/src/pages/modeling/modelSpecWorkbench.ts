@@ -2,6 +2,7 @@ import { parseModelFieldNames } from "./modelSpecFieldRules.ts";
 import type {
 	CanonicalModelSpecView,
 	CreateModelSpecCommand,
+	ModelSpecDimensionDefinitionRef,
 	ModelSpecFactShape,
 	ModelSpecField,
 	ModelSpecImplementationMode,
@@ -85,6 +86,7 @@ export type ModelSpecDraft = {
 	layer: ModelSpecLayer;
 	name: string;
 	description: string;
+	dimensionDefinitionRef?: ModelSpecDimensionDefinitionRef;
 	implementationMode: ModelSpecImplementationMode;
 	materialization: string;
 	grainStatement: string;
@@ -228,9 +230,31 @@ export function adoptCurrentDimensionRevisions(
 
 export function buildModelSpecCreateCommand(
 	draft: ModelSpecDraft,
-	candidates: ModelSpecRevisionCandidate[],
+	_candidates: ModelSpecRevisionCandidate[],
 	idempotencyKey: string,
 ): CreateModelSpecCommand {
+	const command = {
+		planId: draft.planId.trim(),
+		domainId: draft.domainId.trim(),
+		modelType: draft.modelType,
+		name: draft.name.trim(),
+		description: optionalText(draft.description),
+		idempotencyKey,
+	};
+	if (draft.modelType === "DIMENSION") {
+		if (!draft.dimensionDefinitionRef) {
+			throw new Error("DIMENSION models require a revision-pinned dimension definition");
+		}
+		return { ...command, modelType: "DIMENSION", dimensionDefinitionRef: draft.dimensionDefinitionRef };
+	}
+	return { ...command, modelType: draft.modelType };
+}
+
+const buildModelSpecFullCommand = (
+	draft: ModelSpecDraft,
+	candidates: ModelSpecRevisionCandidate[],
+	idempotencyKey: string,
+): UpdateModelSpecCommand & { idempotencyKey: string } => {
 	const grainKeys = parseModelFieldNames(draft.grainKeysText);
 	const isFact = draft.modelType === "FACT";
 	const isDerived = draft.modelType === "SUMMARY" || draft.modelType === "APPLICATION";
@@ -298,13 +322,13 @@ export function buildModelSpecCreateCommand(
 			: undefined,
 		idempotencyKey,
 	};
-}
+};
 
 export function buildModelSpecUpdateCommand(
 	draft: ModelSpecDraft,
 	candidates: ModelSpecRevisionCandidate[],
 ): UpdateModelSpecCommand {
-	const { idempotencyKey: _idempotencyKey, ...command } = buildModelSpecCreateCommand(
+	const { idempotencyKey: _idempotencyKey, ...command } = buildModelSpecFullCommand(
 		draft,
 		candidates,
 		"model-spec-update",
@@ -318,6 +342,7 @@ export function modelSpecDraftFromView(view: CanonicalModelSpecView): ModelSpecD
 		layer: view.layer,
 		name: view.name,
 		description: view.description || "",
+		dimensionDefinitionRef: view.dimensionDefinitionRef || undefined,
 		implementationMode: view.implementationMode,
 		materialization: view.materialization || "",
 		grainStatement: view.grain?.statement || "",

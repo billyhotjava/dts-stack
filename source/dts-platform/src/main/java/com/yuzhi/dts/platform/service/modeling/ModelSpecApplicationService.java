@@ -1,6 +1,8 @@
 package com.yuzhi.dts.platform.service.modeling;
 
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
+import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository;
+import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository.StoredDimensionDefinition;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.DomainBindingState;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.PlanState;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.StoredModelSpec;
@@ -34,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ModelSpecApplicationService {
 
     private final ModelSpecRepository repository;
+    private final DimensionDefinitionRepository dimensionDefinitions;
     private final ModelSpecSnapshotCodec codec;
     private final CatalogDomainResolutionPort domainResolution;
     private final ModelSpecDomainWriteAccessPort domainWriteAccess;
@@ -48,6 +51,7 @@ public class ModelSpecApplicationService {
     @Autowired
     public ModelSpecApplicationService(
         ModelSpecRepository repository,
+        DimensionDefinitionRepository dimensionDefinitions,
         ModelSpecSnapshotCodec codec,
         CatalogDomainResolutionPort domainResolution,
         ModelSpecDomainWriteAccessPort domainWriteAccess,
@@ -59,6 +63,7 @@ public class ModelSpecApplicationService {
     ) {
         this(
             repository,
+            dimensionDefinitions,
             codec,
             domainResolution,
             domainWriteAccess,
@@ -86,6 +91,7 @@ public class ModelSpecApplicationService {
     ) {
         this(
             repository,
+            null,
             codec,
             domainResolution,
             domainWriteAccess,
@@ -112,7 +118,67 @@ public class ModelSpecApplicationService {
         Clock clock,
         Supplier<UUID> idGenerator
     ) {
+        this(
+            repository,
+            null,
+            codec,
+            domainResolution,
+            domainWriteAccess,
+            domainReadAccess,
+            planWriteAccess,
+            sourceValidation,
+            compatibilityReader,
+            featureFlags,
+            clock,
+            idGenerator
+        );
+    }
+
+    ModelSpecApplicationService(
+        ModelSpecRepository repository,
+        DimensionDefinitionRepository dimensionDefinitions,
+        ModelSpecSnapshotCodec codec,
+        CatalogDomainResolutionPort domainResolution,
+        ModelSpecDomainWriteAccessPort domainWriteAccess,
+        ModelSpecDomainReadAccessPort domainReadAccess,
+        ModelSpecPlanWriteAccessPort planWriteAccess,
+        ModelSpecSourceValidationPort sourceValidation,
+        ModelSpecCompatibilityReader compatibilityReader,
+        Clock clock,
+        Supplier<UUID> idGenerator
+    ) {
+        this(
+            repository,
+            dimensionDefinitions,
+            codec,
+            domainResolution,
+            domainWriteAccess,
+            domainReadAccess,
+            planWriteAccess,
+            sourceValidation,
+            compatibilityReader,
+            ModelSpecFeatureFlags.enabled(),
+            clock,
+            idGenerator
+        );
+    }
+
+    ModelSpecApplicationService(
+        ModelSpecRepository repository,
+        DimensionDefinitionRepository dimensionDefinitions,
+        ModelSpecSnapshotCodec codec,
+        CatalogDomainResolutionPort domainResolution,
+        ModelSpecDomainWriteAccessPort domainWriteAccess,
+        ModelSpecDomainReadAccessPort domainReadAccess,
+        ModelSpecPlanWriteAccessPort planWriteAccess,
+        ModelSpecSourceValidationPort sourceValidation,
+        ModelSpecCompatibilityReader compatibilityReader,
+        ModelSpecFeatureFlags featureFlags,
+        Clock clock,
+        Supplier<UUID> idGenerator
+    ) {
         this.repository = repository;
+        this.dimensionDefinitions = dimensionDefinitions;
         this.codec = codec;
         this.domainResolution = domainResolution;
         this.domainWriteAccess = domainWriteAccess;
@@ -128,6 +194,7 @@ public class ModelSpecApplicationService {
     @Transactional
     public CreateResult create(String serverTenantId, String actorId, CreateModelSpecCommand command) {
         requireServerContext(serverTenantId, actorId);
+        requireDimensionDefinitionRef(command);
         rejectIssues(ModelSpecContract.validateCreate(command));
         String requestHash = codec.requestHash(command);
         StoredModelSpec existing = repository.findByIdempotencyKey(serverTenantId, command.idempotencyKey()).orElse(null);
@@ -139,6 +206,7 @@ public class ModelSpecApplicationService {
         requireCanonicalWriteEnabled();
         validateWriteContext(serverTenantId, actorId, command.planId(), command.domainId());
         validateSources(serverTenantId, actorId, command.planId(), command.sourceRefs());
+        validateDimensionDefinition(serverTenantId, command.modelType(), command.dimensionDefinitionRef(), true);
         UUID modelSpecId = idGenerator.get();
         validateReferences(
             serverTenantId,
@@ -243,8 +311,10 @@ public class ModelSpecApplicationService {
             );
         }
         ModelSpecView replacement = codec.toUpdatedView(current, command, current.revision() + 1, clock.instant());
+        requireDimensionDefinitionRef(replacement);
         rejectIssues(ModelSpecContract.validateView(replacement));
         validateSources(serverTenantId, actorId, command.planId(), command.sourceRefs());
+        validateDimensionDefinition(serverTenantId, replacement.modelType(), replacement.dimensionDefinitionRef(), false);
         validateReferences(
             serverTenantId,
             command.planId(),
@@ -393,6 +463,61 @@ public class ModelSpecApplicationService {
         validateReferenceSet(tenantId, planId, dependencies, false, modelType);
         validateReferenceSet(tenantId, planId, dimensions, true, null);
         validateNoDependencyCycle(tenantId, modelSpecId, modelType, dependencies);
+    }
+
+    private void validateDimensionDefinition(
+        String tenantId,
+        ModelType modelType,
+        ModelSpecContract.DimensionDefinitionRef reference,
+        boolean creation
+    ) {
+        if (modelType != ModelType.DIMENSION || reference == null || dimensionDefinitions == null) return;
+        StoredDimensionDefinition pinned = dimensionDefinitions
+            .findRevision(tenantId, reference.dimensionDefinitionId(), reference.revision())
+            .orElseThrow(() -> dimensionDefinitionNotCurrent(reference));
+        if (!domainReadAccess.canRead(pinned.domainId())) throw dimensionDefinitionNotCurrent(reference);
+        StoredDimensionDefinition current = (
+                creation
+                    ? dimensionDefinitions.findCurrentForShare(tenantId, reference.dimensionDefinitionId())
+                    : dimensionDefinitions.findCurrent(tenantId, reference.dimensionDefinitionId())
+            )
+            .orElseThrow(() -> dimensionDefinitionNotCurrent(reference));
+        if (
+            current.status() != DimensionDefinitionContract.Status.CURRENT ||
+            (creation && current.revision() != reference.revision())
+        ) {
+            throw dimensionDefinitionNotCurrent(reference);
+        }
+    }
+
+    private static void requireDimensionDefinitionRef(CreateModelSpecCommand command) {
+        if (command != null && command.modelType() == ModelType.DIMENSION && command.dimensionDefinitionRef() == null) {
+            throw dimensionDefinitionRequired();
+        }
+    }
+
+    private static void requireDimensionDefinitionRef(ModelSpecView view) {
+        if (view.modelType() == ModelType.DIMENSION && view.dimensionDefinitionRef() == null) {
+            throw dimensionDefinitionRequired();
+        }
+    }
+
+    private static ModelSpecException dimensionDefinitionRequired() {
+        return new ModelSpecException(
+            "DIMENSION_DEFINITION_REQUIRED",
+            "DIMENSION models require a revision-pinned dimension definition",
+            ModelSpecException.Kind.UNPROCESSABLE,
+            List.of(fieldIssue("dimensionDefinitionRef", "DIMENSION models require a revision-pinned dimension definition"))
+        );
+    }
+
+    private static ModelSpecException dimensionDefinitionNotCurrent(ModelSpecContract.DimensionDefinitionRef reference) {
+        return new ModelSpecException(
+            "DIMENSION_DEFINITION_NOT_CURRENT",
+            "The pinned dimension definition is no longer current",
+            ModelSpecException.Kind.UNPROCESSABLE,
+            Map.of("dimensionDefinitionId", reference.dimensionDefinitionId(), "revision", reference.revision())
+        );
     }
 
     private void validateNoDependencyCycle(

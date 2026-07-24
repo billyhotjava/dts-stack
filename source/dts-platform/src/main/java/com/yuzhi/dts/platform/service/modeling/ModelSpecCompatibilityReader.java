@@ -2,6 +2,8 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository;
+import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository.LegacyDefinitionRef;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.ListFilter;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.StoredModelSpec;
@@ -14,6 +16,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,15 +28,27 @@ public class ModelSpecCompatibilityReader {
     private final ModelSpecRepository repository;
     private final ModelSpecSnapshotCodec codec;
     private final ObjectMapper objectMapper;
+    private final DimensionDefinitionRepository dimensionDefinitions;
 
     public ModelSpecCompatibilityReader(
         ModelSpecRepository repository,
         ModelSpecSnapshotCodec codec,
         ObjectMapper objectMapper
     ) {
+        this(repository, codec, objectMapper, null);
+    }
+
+    @Autowired
+    public ModelSpecCompatibilityReader(
+        ModelSpecRepository repository,
+        ModelSpecSnapshotCodec codec,
+        ObjectMapper objectMapper,
+        DimensionDefinitionRepository dimensionDefinitions
+    ) {
         this.repository = repository;
         this.codec = codec;
         this.objectMapper = objectMapper;
+        this.dimensionDefinitions = dimensionDefinitions;
     }
 
     public ModelSpecView get(String tenantId, UUID modelSpecId) {
@@ -97,7 +112,14 @@ public class ModelSpecCompatibilityReader {
         ) {
             throw snapshotConflict("Canonical ModelSpec revision snapshot does not match the ledger head");
         }
-        return view;
+        DimensionDefinitionRef projected = legacyDimensionDefinitionRef(
+            stored,
+            view.modelType(),
+            view.dimensionDefinitionRef()
+        );
+        return projected == view.dimensionDefinitionRef()
+            ? view
+            : withDimensionDefinitionRef(view, projected);
     }
 
     private ModelSpecView readLegacy(StoredModelSpec stored) {
@@ -115,6 +137,7 @@ public class ModelSpecCompatibilityReader {
         Layer layer = Layer.valueOf(legacy.layer().name());
         List<ModelField> fields = legacyFields(legacy);
         List<SourceRef> sources = legacySources(legacy.sourceRefs());
+        DimensionDefinitionRef dimensionDefinitionRef = legacyDimensionDefinitionRef(stored, modelType, null);
         return new ModelSpecView(
             ModelingVNextContract.CONTRACT_VERSION,
             id,
@@ -139,6 +162,7 @@ public class ModelSpecCompatibilityReader {
             legacyBindings(legacy.standardBindings()),
             null,
             null,
+            dimensionDefinitionRef,
             stored.status(),
             stored.revision(),
             normalizedChecksum(stored.checksum(), stored.legacySpecJson()),
@@ -146,6 +170,66 @@ public class ModelSpecCompatibilityReader {
             stored.updatedAt(),
             CompatibilityMode.LEGACY_READONLY,
             legacyRefs(legacy)
+        );
+    }
+
+    private DimensionDefinitionRef legacyDimensionDefinitionRef(
+        StoredModelSpec stored,
+        ModelType modelType,
+        DimensionDefinitionRef existing
+    ) {
+        if (existing != null) return existing;
+        if (
+            modelType != ModelType.DIMENSION ||
+            dimensionDefinitions == null ||
+            stored.domainId() == null
+        ) {
+            return null;
+        }
+        LegacyDefinitionRef reference = dimensionDefinitions
+            .findLegacyDefinitionRef(stored.tenantId(), stored.id(), stored.domainId())
+            .orElse(null);
+        return reference == null
+            ? null
+            : new DimensionDefinitionRef(reference.dimensionDefinitionId(), reference.revision());
+    }
+
+    private static ModelSpecView withDimensionDefinitionRef(
+        ModelSpecView view,
+        DimensionDefinitionRef dimensionDefinitionRef
+    ) {
+        return new ModelSpecView(
+            view.contractVersion(),
+            view.id(),
+            view.planId(),
+            view.domainId(),
+            view.modelType(),
+            view.layer(),
+            view.name(),
+            view.description(),
+            view.implementationMode(),
+            view.materialization(),
+            view.businessActivityRef(),
+            view.consumptionScenario(),
+            view.grain(),
+            view.factShape(),
+            view.timeSemantics(),
+            view.fields(),
+            view.sourceRefs(),
+            view.dependsOn(),
+            view.dimensionRefs(),
+            view.metricRefs(),
+            view.standardBindings(),
+            view.generationStrategy(),
+            view.dimensionProfile(),
+            dimensionDefinitionRef,
+            view.status(),
+            view.revision(),
+            view.checksum(),
+            view.createdAt(),
+            view.updatedAt(),
+            view.compatibilityMode(),
+            view.legacyRefs()
         );
     }
 

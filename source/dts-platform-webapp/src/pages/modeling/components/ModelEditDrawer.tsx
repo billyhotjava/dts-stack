@@ -1,4 +1,4 @@
-import { Button, Drawer, Form, Input, Select, Space, Switch } from "antd";
+import { Alert, Button, Drawer, Form, Input, Select, Space, Switch } from "antd";
 import type { ProjectSpace } from "../sqlModeling.types";
 import type { InfraDataSource } from "@/api/services/dataSourcesService";
 
@@ -12,6 +12,14 @@ export type ModelEditDrawerProps = {
 	dataSources: InfraDataSource[];
 	layers: { layer: string; name: string; description: string }[];
 	form: ReturnType<typeof Form.useForm>[0];
+	advancedImplementation?: {
+		modelSpecId: string;
+		planId: string;
+		implementationRevision: string;
+		ownership?: string;
+		blocked?: boolean;
+		onRecover: () => void;
+	};
 };
 
 export default function ModelEditDrawer({
@@ -24,7 +32,9 @@ export default function ModelEditDrawer({
 	dataSources,
 	layers,
 	form,
+	advancedImplementation,
 }: ModelEditDrawerProps) {
+	const ordinaryOverwriteBlocked = Boolean(advancedImplementation?.blocked);
 	return (
 		<Drawer
 			open={open}
@@ -34,13 +44,28 @@ export default function ModelEditDrawer({
 			footer={
 				<Space>
 					<Button onClick={onClose}>取消</Button>
-					<Button type="primary" onClick={onSubmit} loading={submitting}>
+					<Button type="primary" onClick={onSubmit} loading={submitting} disabled={ordinaryOverwriteBlocked}>
 						保存
 					</Button>
 				</Space>
 			}
 		>
-			<Form layout="vertical" form={form} disabled={submitting}>
+			{advancedImplementation ? (
+				<Alert
+					className="mb-4"
+					type={ordinaryOverwriteBlocked ? "warning" : "info"}
+					showIcon
+					data-testid="dbt-managed-artifact-non-overwrite"
+					message={ordinaryOverwriteBlocked ? "当前实现版本已有证据，不能原地覆盖" : "正在编辑 ModelSpec 的高级实现"}
+					description={
+						ordinaryOverwriteBlocked
+							? `ModelSpec=${advancedImplementation.modelSpecId} · implementationRevision=${advancedImplementation.implementationRevision || "缺失"}。请先在数据实现阶段创建新的 implementation revision。`
+							: `SQL 工作区已绑定 ModelSpec=${advancedImplementation.modelSpecId} · implementationRevision=${advancedImplementation.implementationRevision || "缺失"}；首次构建前可以保存，构建后将自动冻结。`
+					}
+					action={<Button size="small" onClick={advancedImplementation.onRecover}>返回数据实现</Button>}
+				/>
+			) : null}
+			<Form layout="vertical" form={form} disabled={submitting || ordinaryOverwriteBlocked}>
 				{/* 基本信息 */}
 				<div className="mb-4 pb-2 border-b border-border">
 					<div className="text-sm font-semibold text-foreground">基本信息</div>
@@ -116,6 +141,7 @@ export default function ModelEditDrawer({
 								{ label: "table（推荐）", value: "table" },
 								{ label: "view", value: "view" },
 								{ label: "incremental", value: "incremental" },
+								{ label: "ephemeral（仅 STG 临时节点，无物理表）", value: "ephemeral" },
 							]}
 						/>
 					</Form.Item>

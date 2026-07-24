@@ -22,6 +22,9 @@ public class ModelingSqlModel extends AbstractAuditingEntity<UUID> implements Se
     @Column(name = "plan_id", columnDefinition = "uuid")
     private UUID planId;
 
+    @Column(name = "model_spec_id", columnDefinition = "uuid")
+    private UUID modelSpecId;
+
     @Column(name = "name", length = 128, nullable = false)
     private String name;
 
@@ -88,6 +91,14 @@ public class ModelingSqlModel extends AbstractAuditingEntity<UUID> implements Se
 
     public void setPlanId(UUID planId) {
         this.planId = planId;
+    }
+
+    public UUID getModelSpecId() {
+        return modelSpecId;
+    }
+
+    public void setModelSpecId(UUID modelSpecId) {
+        this.modelSpecId = modelSpecId;
     }
 
     public String getName() {

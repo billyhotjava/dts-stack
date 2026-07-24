@@ -28,8 +28,10 @@ test("canonical customer pages use model and metric references only", () => {
 		"./ModelCenterPage.tsx",
 		"./ModelSpecDetailPage.tsx",
 		"../../api/modelSpecApi.ts",
+		"../../api/dimensionDefinitionApi.ts",
 	].map(read).join("\n");
 
+	assert.match(sources, /listDimensionDefinitions/);
 	assert.match(sources, /listModelSpecs/);
 	assert.match(sources, /metricRefs/);
 	assert.doesNotMatch(sources, /businessObjectId|listSemanticBusinessObjects|\/business-objects/);

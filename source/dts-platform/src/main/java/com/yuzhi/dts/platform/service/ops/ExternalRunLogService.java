@@ -128,7 +128,7 @@ public class ExternalRunLogService {
                 null,
                 toJson(metrics),
                 ownerDept,
-                null
+                uuid(conf == null ? null : conf.get("modelSpecId"))
             )
         );
     }
@@ -353,6 +353,16 @@ public class ExternalRunLogService {
 
     private String text(Object value) {
         return value == null ? null : value.toString();
+    }
+
+    private UUID uuid(Object value) {
+        String raw = text(value);
+        if (!StringUtils.hasText(raw)) return null;
+        try {
+            return UUID.fromString(raw.trim());
+        } catch (IllegalArgumentException invalid) {
+            return null;
+        }
     }
 
     private String normalizeOperation(String operation) {

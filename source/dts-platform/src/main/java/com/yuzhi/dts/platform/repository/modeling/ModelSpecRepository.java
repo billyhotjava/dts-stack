@@ -6,6 +6,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceKind;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -151,6 +152,70 @@ public class ModelSpecRepository {
 
     public Optional<SourceBindingState> lockSourceBinding(String tenantId, UUID planId, UUID sourceBindingId) {
         return querySourceBinding(tenantId, planId, sourceBindingId, true);
+    }
+
+    /**
+     * Resolves the executable relation owned by a confirmed plan binding. Stable binding IDs stay
+     * in ModelImplementation; compiler-specific names are always re-derived from authoritative
+     * locator/catalog data instead of being copied from the browser.
+     */
+    public Optional<PhysicalSourceProjection> findCurrentPhysicalSource(
+        String tenantId,
+        UUID planId,
+        UUID sourceBindingId,
+        String resolvedVersion
+    ) {
+        return jdbcTemplate
+            .query(
+                """
+                select s.source_type, s.source_version,
+                       case
+                           when s.source_type = 'CONNECTION_TABLE' then
+                               concat_ws('.', nullif(s.locator_json ->> 'namespace', ''), nullif(s.locator_json ->> 'objectName', ''))
+                           when s.source_type = 'CATALOG_TABLE' then
+                               concat_ws('.', nullif(c.hive_database, ''), nullif(c.hive_table, ''))
+                           when s.source_type = 'DBT_NODE' then
+                               regexp_replace(coalesce(nullif(s.locator_json ->> 'uniqueId', ''), s.source_id), '^.*\\.', '')
+                           else null
+                       end as executable_ref,
+                       case
+                           when s.source_type = 'DBT_NODE' then 'STG'
+                           when s.source_type = 'CATALOG_TABLE' then coalesce(nullif(upper(c.warehouse_layer), ''), 'ODS')
+                           else 'ODS'
+                       end as source_layer
+                  from modeling_warehouse_plan_source s
+                  left join catalog_dataset c
+                    on s.source_type = 'CATALOG_TABLE'
+                   and c.id::text = coalesce(nullif(s.locator_json ->> 'assetId', ''), s.source_id)
+                 where s.tenant_id = ? and s.plan_id = ? and s.id = ?
+                   and s.confirmation_status = 'CONFIRMED' and s.source_version = ?
+                """,
+                (row, rowNumber) -> {
+                    String type = row.getString("source_type");
+                    String ref = row.getString("executable_ref");
+                    if (ref == null || ref.isBlank()) return null;
+                    SourceKind kind = switch (type) {
+                        case "CONNECTION_TABLE", "CATALOG_TABLE" -> SourceKind.TABLE;
+                        case "DBT_NODE" -> SourceKind.DBT_MODEL;
+                        default -> null;
+                    };
+                    if (kind == null) return null;
+                    Layer layer;
+                    try {
+                        layer = Layer.valueOf(row.getString("source_layer"));
+                    } catch (IllegalArgumentException | NullPointerException invalidLayer) {
+                        return null;
+                    }
+                    return new PhysicalSourceProjection(kind, ref, layer, row.getString("source_version"));
+                },
+                tenantId,
+                planId,
+                sourceBindingId,
+                resolvedVersion
+            )
+            .stream()
+            .filter(java.util.Objects::nonNull)
+            .findFirst();
     }
 
     private Optional<SourceBindingState> querySourceBinding(
@@ -574,4 +639,6 @@ public class ModelSpecRepository {
         String planOwnerId,
         String planOwnerDepartmentId
     ) {}
+
+    public record PhysicalSourceProjection(SourceKind kind, String ref, Layer layer, String resolvedVersion) {}
 }

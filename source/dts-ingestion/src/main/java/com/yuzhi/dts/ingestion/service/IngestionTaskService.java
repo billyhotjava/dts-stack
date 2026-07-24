@@ -866,12 +866,6 @@ public class IngestionTaskService {
             return;
         }
         try {
-            if (isApiSourceTask(task)) {
-                boolean emitted = platformInfraClient.emitIngestionOpenLineageEvent(task, execution);
-                if (!emitted) {
-                    log.debug("API OpenLineage event skipped or not emitted for task {} execution {}", task.getId(), execution.getId());
-                }
-            }
             boolean synced = platformInfraClient.syncIngestionExecutionLineage(task, execution);
             if (!synced) {
                 auditService.auditAction(
@@ -880,6 +874,13 @@ public class IngestionTaskService {
                     task.getName(),
                     lineageFailureMeta(task, execution, "platform-sync-returned-false")
                 );
+                return;
+            }
+            if (isApiSourceTask(task)) {
+                boolean emitted = platformInfraClient.emitIngestionOpenLineageEvent(task, execution);
+                if (!emitted) {
+                    log.debug("API OpenLineage event skipped or not emitted for task {} execution {}", task.getId(), execution.getId());
+                }
             }
         } catch (Exception ex) {
             log.warn(

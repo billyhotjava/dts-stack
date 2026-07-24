@@ -3,10 +3,12 @@ package com.yuzhi.dts.platform.service.modeling;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
+import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.PhysicalSourceProjection;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.SourceBindingState;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceKind;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceRef;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceRole;
 import com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver;
 import com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.AccessContext;
 import com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.ResolvedSource;
@@ -17,6 +19,7 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceLocator;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceType;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,6 +82,72 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
         } catch (RuntimeException exception) {
             LOG.warn("ModelSpec gate source validation failed ({})", exception.getClass().getSimpleName());
             return false;
+        }
+    }
+
+    @Override
+    public boolean isCurrentBindingForGate(String tenantId, UUID planId, UUID sourceBindingId, String resolvedVersion) {
+        if (isBlank(tenantId) || planId == null || sourceBindingId == null || isBlank(resolvedVersion)) return false;
+        try {
+            SourceBindingState binding = repository.findSourceBinding(tenantId, planId, sourceBindingId).orElse(null);
+            if (binding == null || isBlank(binding.planOwnerId())) return false;
+            SourceKind kind = sourceKind(binding.sourceType());
+            if (kind == null) return false;
+            SourceRef reference = new SourceRef(
+                kind,
+                binding.sourceId(),
+                null,
+                SourceRole.PRIMARY,
+                null,
+                null,
+                null,
+                null,
+                sourceBindingId,
+                resolvedVersion
+            );
+            return isCurrentResolvedBinding(
+                tenantId,
+                binding.planOwnerId(),
+                binding.planOwnerDepartmentId(),
+                reference,
+                binding
+            );
+        } catch (RuntimeException exception) {
+            LOG.warn("Model implementation source validation failed ({})", exception.getClass().getSimpleName());
+            return false;
+        }
+    }
+
+    @Override
+    public Optional<SourceRef> resolveCurrentBindingForCompiler(
+        String tenantId,
+        UUID planId,
+        UUID sourceBindingId,
+        String resolvedVersion
+    ) {
+        if (!isCurrentBindingForGate(tenantId, planId, sourceBindingId, resolvedVersion)) return Optional.empty();
+        try {
+            PhysicalSourceProjection source = repository
+                .findCurrentPhysicalSource(tenantId, planId, sourceBindingId, resolvedVersion)
+                .orElse(null);
+            if (source == null) return Optional.empty();
+            return Optional.of(
+                new SourceRef(
+                    source.kind(),
+                    source.ref(),
+                    source.layer(),
+                    SourceRole.PRIMARY,
+                    null,
+                    null,
+                    null,
+                    0,
+                    sourceBindingId,
+                    source.resolvedVersion()
+                )
+            );
+        } catch (RuntimeException exception) {
+            LOG.warn("Model implementation compiler source resolution failed ({})", exception.getClass().getSimpleName());
+            return Optional.empty();
         }
     }
 
@@ -186,6 +255,16 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
             case "EXCEL_FILE" -> kind == SourceKind.DATASET;
             case "DBT_NODE" -> kind == SourceKind.DBT_MODEL;
             default -> false;
+        };
+    }
+
+    private static SourceKind sourceKind(String sourceType) {
+        if (sourceType == null) return null;
+        return switch (sourceType) {
+            case "CONNECTION_TABLE", "CATALOG_TABLE" -> SourceKind.TABLE;
+            case "EXCEL_FILE" -> SourceKind.DATASET;
+            case "DBT_NODE" -> SourceKind.DBT_MODEL;
+            default -> null;
         };
     }
 

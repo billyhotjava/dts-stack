@@ -50,6 +50,18 @@ export default function OpsInstancesPage() {
 	const urlEntryKey = searchParams.get("entryKey") || "ALL";
 	const modelSpecId = searchParams.get("modelSpecId") || searchParams.get("modelId") || "";
 	const planId = searchParams.get("planId") || "";
+	const revision = searchParams.get("revision") || "";
+	const implementationRevision = searchParams.get("implementationRevision") || "";
+	const implementationMode = searchParams.get("implementationMode") || "";
+	const modelRepairPath = (() => {
+		if (!modelSpecId) return "";
+		const params = new URLSearchParams({ activeStage: "implementation" });
+		if (planId) params.set("planId", planId);
+		if (revision) params.set("revision", revision);
+		if (implementationRevision) params.set("implementationRevision", implementationRevision);
+		if (implementationMode) params.set("implementationMode", implementationMode);
+		return `/modeling/models/${encodeURIComponent(modelSpecId)}?${params.toString()}`;
+	})();
 	const journeyRoute = (route: string) =>
 		searchParams.get("journey") === "e2e-data-product" ? buildJourneyUrl(route, searchParams) : route;
 	const [keyword, setKeyword] = useState(urlKeyword);
@@ -171,14 +183,14 @@ export default function OpsInstancesPage() {
 						>
 							补数
 						</Button>
-						{isDbt && failed && modelSpecId ? (
+						{isDbt && failed && modelRepairPath ? (
 							<Button
 								type="link"
 								size="small"
 								data-testid="ops-return-model-repair"
 								onClick={() =>
 									navigate(
-										`/modeling/models/${encodeURIComponent(modelSpecId)}?tab=design${planId ? `&planId=${encodeURIComponent(planId)}` : ""}`,
+										modelRepairPath,
 									)
 								}
 							>

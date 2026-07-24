@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.ingestion.config.IngestionOutboundPlatformProperties;
 import com.yuzhi.dts.ingestion.domain.IngestionExecution;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
+import com.yuzhi.dts.ingestion.service.etl.api.ApiConnectorTypes;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
@@ -201,6 +202,10 @@ public class PlatformInfraClient {
         if (task == null || execution == null) {
             return false;
         }
+        boolean apiTask = ApiConnectorTypes.isApiSourceType(task.getSourceType());
+        if (apiTask && (!hasSuccessfulLanding(execution) || !hasCompleteApiLandingEvidence(task, execution))) {
+            return false;
+        }
         URI uri = buildUri("/catalog/lineage/ingestion-executions");
         Map<String, Object> taskPayload = new LinkedHashMap<>();
         taskPayload.put("id", task.getId());
@@ -210,16 +215,23 @@ public class PlatformInfraClient {
         taskPayload.put("destinationType", task.getDestinationType());
         taskPayload.put("destinationConfig", task.getDestinationConfig());
         taskPayload.put("tableMapping", task.getTableMapping());
+        if (apiTask) {
+            taskPayload.put("sourceKind", "API");
+            taskPayload.put("taskRevision", task.getLastModifiedDate() == null ? null : task.getLastModifiedDate().toString());
+        }
 
         Map<String, Object> executionPayload = new LinkedHashMap<>();
         executionPayload.put("id", execution.getId());
-        executionPayload.put("executionId", execution.getExecutionId());
+        executionPayload.put("executionSequence", execution.getId());
+        executionPayload.put("executionId", firstNonBlank(execution.getExecutionId(), execution.getId() == null ? null : execution.getId().toString()));
         executionPayload.put("batchId", execution.getBatchId());
         executionPayload.put("status", execution.getStatus());
         executionPayload.put("startTime", execution.getStartTime() == null ? null : execution.getStartTime().toString());
         executionPayload.put("endTime", execution.getEndTime() == null ? null : execution.getEndTime().toString());
         executionPayload.put("sourceTables", execution.getSourceTables());
-        executionPayload.put("targetTables", execution.getTargetTables());
+        if (hasSuccessfulLanding(execution)) {
+            executionPayload.put("targetTables", execution.getTargetTables());
+        }
         executionPayload.put("rowsRead", execution.getRowsRead());
         executionPayload.put("rowsWritten", execution.getRowsWritten());
 
@@ -248,7 +260,7 @@ public class PlatformInfraClient {
     }
 
     public boolean emitIngestionOpenLineageEvent(IngestionTask task, IngestionExecution execution) {
-        if (task == null || execution == null) {
+        if (task == null || !hasSuccessfulLanding(execution)) {
             return false;
         }
         List<Map<String, Object>> inputs = openLineageDatasets(execution.getSourceTables(), execution.getRowsRead(), "rowsRead");
@@ -290,6 +302,46 @@ public class PlatformInfraClient {
             LOG.warn("Platform OpenLineage emit failed: {}", ex.getMessage());
         }
         return false;
+    }
+
+    private boolean hasSuccessfulLanding(IngestionExecution execution) {
+        return execution != null && "success".equalsIgnoreCase(execution.getStatus());
+    }
+
+    private boolean hasCompleteApiLandingEvidence(IngestionTask task, IngestionExecution execution) {
+        if (
+            task == null ||
+            task.getId() == null ||
+            task.getSourceDataSourceId() == null ||
+            task.getLastModifiedDate() == null ||
+            execution == null ||
+            execution.getId() == null ||
+            execution.getEndTime() == null
+        ) {
+            return false;
+        }
+        String executionId = firstNonBlank(execution.getExecutionId(), execution.getId().toString());
+        JsonNode targets = execution.getTargetTables();
+        if (!StringUtils.hasText(executionId) || targets == null || !targets.isArray() || targets.isEmpty()) {
+            return false;
+        }
+        for (JsonNode target : targets) {
+            if (
+                target == null ||
+                !target.isObject() ||
+                !StringUtils.hasText(text(target.get("resourceId"))) ||
+                !StringUtils.hasText(text(target.get("qualifiedName"))) ||
+                !executionId.equals(text(target.get("executionId"))) ||
+                !"SUCCESS".equalsIgnoreCase(text(target.get("landingStatus"))) ||
+                !StringUtils.hasText(text(target.get("configChecksum"))) ||
+                !StringUtils.hasText(text(target.get("fieldSnapshotChecksum"))) ||
+                !target.has("rowsWritten") ||
+                !target.get("rowsWritten").canConvertToLong()
+            ) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void applyServiceHeaders(HttpHeaders headers) {
