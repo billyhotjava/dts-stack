@@ -16,6 +16,7 @@
 | [T05-统一数据元正式规划上下文与落标草稿门禁](T05-统一数据元正式规划上下文与落标草稿门禁.md) | P0 | IN_PROGRESS | F2-T02、F4-T02/T03/T04、T01 | 全局标准 owner、正式 planId、模型字段落标与安全返回链 |
 | [T06-统一模型来源选择、系统编码与提交时实时复验](T06-统一模型来源选择系统编码与提交时实时复验.md) | P0 | IN_PROGRESS | F2-T03、F3-T03、F3-T05、F4-T03 | 业务名称选来源、系统码自动生成、resolver fail closed |
 | [T07-统一 OpenMetadata 远端元数据部门可见性](T07-统一OpenMetadata远端元数据部门可见性.md) | P1 | READY | F4-T03、T06 | 远端表/FQN 归属映射、认证部门过滤与 fail closed |
+| [T08-完成四层模型与API-Landing真实端到端验收](T08-完成四层模型与API-Landing真实端到端验收.md) | P0 | READY | F3-T08/T09/T10、T02/T03/T06 | 四层模型迁移、物化、API Landing 与真实 E2E |
 
 ## 完成标准
 
@@ -29,3 +30,5 @@
 - [ ] 模型来源只能从当前计划已确认且可解析的来源中选择，系统 ID/版本和维度/层级编码不由用户手工构造。
 - [ ] 提交时后端以当前计划事实重新解析来源，跨计划、未同步、未确认、不可用和版本漂移均 fail closed。
 - [ ] OpenMetadata 远端列表和详情与本地正式目录使用同一认证部门和精确归属规则，缺少映射时 fail closed。
+- [ ] 业务维度、逻辑模型、数据实现和物理资产四层在真实 API/PostgreSQL/Chrome95 中闭环。
+- [ ] API 通过真实采集任务和 Landing 资产进入模型实现，mock 不作为 Sprint DONE 证据。

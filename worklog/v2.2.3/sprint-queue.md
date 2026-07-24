@@ -1366,12 +1366,12 @@
 |---------|--------|---------|------|
 | F1-关键对象与主线契约 | P0 | 3 | DONE |
 | F2-规划输入与分阶段门禁 | P0 | 5 | IN_PROGRESS |
-| F3-维度与四类表直接建模 | P0 | 7 | IN_PROGRESS |
+| F3-维度与四类表直接建模 | P0 | 10 | IN_PROGRESS |
 | F4-菜单页面与跳转收敛 | P0 | 4 | DONE |
 | F5-业务对象迁移与受控退役 | P0 | 4 | DONE |
-| F6-专业模块交接与集成验收 | P0 | 7 | IN_PROGRESS |
+| F6-专业模块交接与集成验收 | P0 | 8 | IN_PROGRESS |
 
-**统计**: READY=1, IN_PROGRESS=5, DONE=24, BLOCKED=0；当前已关闭 24/30 Task
+**统计**: READY=4, IN_PROGRESS=7, DONE=23, BLOCKED=0；当前已关闭 23/34 Task
 **执行顺序**: F1 → F2/F3 → F4 → F5 → F6；F2 与 F3 在概念契约冻结后可并行，F4 默认入口切换等待目标页面可用，F5 冻结旧写等待新写路径通过，F6 负责 Go/No-Go。
 
 **关键决策**:
@@ -1387,6 +1387,7 @@
 - 2026-07-22：新增 F6-T06 收敛模型来源和系统编码；来源按当前计划的业务名称查询选择，`bindingId/ref/kind/version` 自动关联，维度/层级唯一码自动生成只读，后端提交时实时复验并 fail closed。建模前需元数据同步和计划来源确认，不需要先完成 ETL/ELT；Sprint 当前 24/27、IN_PROGRESS，真实 Chrome 95/API/PostgreSQL 尚待验收。
 - 2026-07-22：F6 实际含 T01-T07，其中 T07 为 READY；新增 F3-T06 纠正 FACT 输入语义。FACT DRAFT 可不绑定输入，IMPLEMENTATION_READY 接受有效物理 `sourceRefs` 或锁定 revision 的上游 `dependsOn`，两类同时存在时全部校验；目标模型与上游来源分层分开。Sprint 当前 24/29、IN_PROGRESS。
 - 2026-07-23：新增 F3-T07 冻结模型类型与分层依赖矩阵。ODS_RAW/ODS_STANDARDIZED/STG 属于接入/技术层，不走四类 ModelSpec；DIMENSION/FACT→DWD、SUMMARY→DWS、APPLICATION→ADS，并按类型限制 `sourceRefs/dependsOn/generationStrategy`。历史 ODS/STG ModelSpec 的专属只读分类和迁移 UI 尚待实现。Sprint 当前 24/30、IN_PROGRESS。
+- 2026-07-24：T02 因概念维度、逻辑维度表和实现来源混用而从 DONE 重开；新增 F3-T08/T09/T10 与 F6-T08，采用 `DimensionDefinition → ModelSpecRevision → ModelImplementation → PhysicalAssetRevision` 四层最小闭环，并以现有 API 采集任务生成的 Landing 资产作为统一物理输入。Sprint 当前 23/34、IN_PROGRESS。
 
 ## Sprint-68: DTS 标准内容库与通用基线产品化 (202607)
 

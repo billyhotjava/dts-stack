@@ -12,6 +12,7 @@ Sprint-65 已建立 `WarehousePlan`、`ModelSpec` 和数据建设工作台，但
 1. `BusinessObject` 与 `ModelSpec` 重复保存粒度、来源、维度和指标信息；
 2. DataWorks 式建模主线以业务分类、维度和表为中心，对外并不存在“业务对象台账”这一必经步骤；
 3. 菜单、页面、上下文和门禁仍把 `/modeling/semantic/objects` 当作逻辑建模入口，用户无法判断从哪里开始、完成后去哪里。
+4. 初版维度目录又把概念维度、逻辑维度表、实现来源和物理资产压入同一 DIMENSION ModelSpec，导致来源和 ELT 门禁提前进入概念登记。
 
 本 Sprint 继承 Sprint-65 的 [建模关键对象单](../sprint-65-202607/assets/modeling-concept-canon.md)，但不把“业务对象页面改名”为完成。目标是让业务对象不再成为新增、编辑、发布或导航所需的产品事实。
 
@@ -23,13 +24,13 @@ Sprint-65 已建立 `WarehousePlan`、`ModelSpec` 和数据建设工作台，但
   → 选择业务分类（内部 domainId）
   → 确认数仓分层与来源盘点
   → 维护或引用数据标准（按字段渐进绑定，不设置“必须先建全套标准”的全局门禁）
-  → 登记维度 / 直接创建四类表
+  → 登记业务维度 / 创建四类逻辑模型
        ├─ 维度表：分析角度和维度键
        ├─ 明细表：业务发生了什么，一行代表什么
        ├─ 汇总表：按什么维度和周期聚合
        └─ 应用表：为哪个消费场景提供什么结果
-  → 关联字段标准
-  → 生成或接管 SQL/dbt 实现
+  → 完成逻辑设计并关联字段标准
+  → 选择物理资产、上游模型或生成器并形成实现
   → 构建、质量、审核与发布
   → 创建原子/派生指标并进入资产、服务和运维
 ```
@@ -41,8 +42,9 @@ Sprint-65 已建立 `WarehousePlan`、`ModelSpec` 和数据建设工作台，但
 | 方案 | 结论 | 原因 |
 |---|---|---|
 | A. 只把“业务对象台账”改名为“维度目录” | 不采用 | 旧页面仍混合事实锚、粒度、来源和模型关系，换名后会继续写错误事实源 |
-| B. 对外删除业务对象，维度与四类表直接进入 ModelSpec，旧数据通过适配器迁移 | **采用** | 用户主线最短，复用 Sprint-65 内核，同时保留可审计迁移和回滚能力 |
+| B. 对外删除业务对象，概念维度与四类表全部进入 ModelSpec | 历史采用，现已替代 | 主线虽短，但把概念、逻辑和实现重新压入同一对象 |
 | C. 同一版本物理删除所有旧表、API 和深链 | 不采用 | 当前模型、指标、产物、运行和评审仍依赖旧语义表，无法证明无损迁移 |
+| D. 业务维度、逻辑模型、实现和物理资产四层分离，增量迁移 | **采用** | 每层只有一个所有者，保留现有 ModelSpec/采集/发布能力并最小化重写 |
 
 ## 4. 全局约束
 
@@ -50,7 +52,7 @@ Sprint-65 已建立 `WarehousePlan`、`ModelSpec` 和数据建设工作台，但
 2. “数据域”“主题域”“业务分类”不建立三套实体：UI 主称“业务分类”，内部复用 `catalog_domain/domainId`。
 3. 新建 ModelSpec 不得要求 `objectId`；业务活动不得阻止维度表、汇总表或应用表创建。
 4. `ModelEntity` 若被编译器、图谱或兼容查询使用，只能作为由 ModelSpec 派生的内部投影；不得拥有用户 CRUD、独立菜单或成为保存/发布前置条件。
-5. 模型是建模模块的中心产物；数据标准、指标、资产、调度仍由原专业模块持有正文。
+5. `DimensionDefinition` 是业务维度正文，ModelSpec 是逻辑模型正文，ModelImplementation 是实现正文，物理资产由元数据模块持有；不得跨层复制正文。
 6. 页面必须声明进入条件、必填输入、输出记录、首要阻塞和唯一主动作。
 7. 顶级菜单提供稳定专业入口；黄金主线通过 `planId` 回到同一计划，不新增第二套旅程上下文。
 8. 旧路由只允许兼容跳转和调用审计，不允许继续新增业务对象。
@@ -64,12 +66,12 @@ Sprint-65 已建立 `WarehousePlan`、`ModelSpec` 和数据建设工作台，但
 |---|---|---:|---|---|
 | [F1](features/F1-关键对象与主线契约/README.md) | 关键对象与主线契约 | 3 | DONE | 固化唯一词表、业务对象处置和业务活动边界 |
 | [F2](features/F2-规划输入与分阶段门禁/README.md) | 规划输入与分阶段门禁 | 5 | IN_PROGRESS | 明确计划、台账、分类、分层、来源和阶段门禁 |
-| [F3](features/F3-维度与四类表直接建模/README.md) | 维度与四类表直接建模 | 7 | IN_PROGRESS | 以 ModelSpec 直接承载维度和四类表，拆分目标/上游并收敛类型分层矩阵 |
+| [F3](features/F3-维度与四类表直接建模/README.md) | 维度与四类表直接建模 | 10 | IN_PROGRESS | 拆分业务维度、逻辑模型、数据实现和物理资产并重构 UI |
 | [F4](features/F4-菜单页面与跳转收敛/README.md) | 菜单页面与跳转收敛 | 4 | DONE | 确立菜单、页面输入输出和唯一下一步 |
 | [F5](features/F5-业务对象迁移与受控退役/README.md) | 业务对象迁移与受控退役 | 4 | DONE | 迁移旧数据、冻结旧写入并清理消费者 |
-| [F6](features/F6-专业模块交接与集成验收/README.md) | 专业模块交接与集成验收 | 7 | IN_PROGRESS | 接通标准、指标、构建发布和端到端证据 |
+| [F6](features/F6-专业模块交接与集成验收/README.md) | 专业模块交接与集成验收 | 8 | IN_PROGRESS | 接通标准、指标、构建发布、API Landing 和端到端证据 |
 
-**统计**：READY=1，IN_PROGRESS=5，DONE=24，BLOCKED=0；当前已关闭 24/30 Task
+**统计**：READY=4，IN_PROGRESS=7，DONE=23，BLOCKED=0；当前已关闭 23/34 Task
 
 ### 2026-07-21 人工测试重开
 
@@ -89,6 +91,8 @@ Sprint-67 曾按 24/24 Task 完成受控发布评审。首次人工操作发现 
 
 2026-07-23 继续复核 ODS 建模入口确认，四类模型若仍允许选择 ODS/STG 目标层，就会把接入技术产物与业务模型重新混为一体。F3 新增 P0 T07：`ODS_RAW/ODS_STANDARDIZED/STG` 归数据接入和技术实现所有，不走四类 ModelSpec；四类目标层冻结为 `DIMENSION/FACT→DWD`、`SUMMARY→DWS`、`APPLICATION→ADS`，并按类型限制 `sourceRefs/dependsOn/generationStrategy`。历史 ODS/STG ModelSpec 的专属只读分类和迁移 UI 尚待实现，真实矩阵 E2E 完成前保持 IN_PROGRESS。当前关闭度为 24/30。
 
+2026-07-24 继续复核确认 T02 的对象边界仍不成立：维度目录把分析视角直接写成 DIMENSION ModelSpec，并把逻辑字段、来源和实现塞入同一表单。T02 从 DONE 重开，新增 F3-T08/T09/T10 与 F6-T08，采用 `DimensionDefinition → ModelSpecRevision → ModelImplementation → PhysicalAssetRevision` 四层最小闭环；API 复用既有采集任务生成 Landing 资产，不扩展通用 API 元数据协议。校正后为 23/34，新增实现和真实 E2E 完成前不得恢复原完成结论。
+
 ## 6. 依赖与执行顺序
 
 ```text
@@ -104,6 +108,7 @@ F2 与 F3 可在 F1 契约评审通过后并行；F4 可先完成静态 IA，但
 ## 7. 权威资产
 
 - [主线与关键对象设计](assets/modeling-mainline-design.md)
+- [四层模型最小闭环设计](assets/modeling-four-layer-minimal-loop-design.md)
 - [建设规划台账与计划头编辑设计](assets/warehouse-plan-ledger-design.md)
 - [页面输入、输出与跳转矩阵](assets/page-input-output-navigation-matrix.md)
 - [领域、API 与迁移契约](assets/domain-api-migration-contract.md)
@@ -123,10 +128,10 @@ F2 与 F3 可在 F1 契约评审通过后并行；F4 可先完成静态 IA，但
 - [x] `/modeling/semantic/objects` 不再是菜单或主线入口，旧深链命中可审计兼容跳转。
 - [x] 维度性质旧对象迁为 DIMENSION ModelSpec；事实性质旧对象并入明细表粒度和来源；无法判定记录进入人工清单。
 - [x] 数据标准、指标、dbt、运行、发布、血缘和资产引用均继续消费同一 ModelSpec/planId。
-- [ ] 30 个 Task 均提供真实测试、构建、迁移或浏览器证据，不以页面截图代替后端事实。
+- [ ] 34 个 Task 均提供真实测试、构建、迁移或浏览器证据，不以页面截图代替后端事实。
 - [ ] 用户可以在 canonical 建设规划台账中查找、编辑和归档计划，也可以从当前计划直接修改计划头。
 - [ ] Chrome 95 在既有场景基础上补齐建设规划台账、编辑、409、归档、只读与窄屏；权限在真实 Spring Security 边界验证。
-- [ ] F2-T05、F3-T06、F3-T07、F6-T05、F6-T06、F6-T07 完成后重新执行 `git diff --check`、定向模块测试、一次前端构建和 GitNexus 变更范围审计。
+- [ ] F2-T05、F3-T02/T06/T07/T08/T09/T10、F6-T05/T06/T07/T08 完成后重新执行 `git diff --check`、定向模块测试、一次前端构建和 GitNexus 变更范围审计。
 - [ ] 全局数据元和业务分类不以 planId/sessionStorage 为浏览门禁；模型字段标准只保存 owner 稳定 ID/版本。
 - [ ] 业务分类页不生成临时 WarehousePlan；进入模型或返回规划必须携带真实且同一的 canonical planId。
 - [ ] 模型来源以业务名称查询选择，只消费当前计划已确认/当前/可用来源；系统身份和版本不可人工伪造。
@@ -134,10 +139,13 @@ F2 与 F3 可在 F1 契约评审通过后并行；F4 可先完成静态 IA，但
 - [ ] FACT 草稿不要求目标物理表或具体来源先存在；进入实现前满足有效 `sourceRefs OR dependsOn`，且所有已填写引用都必须有效。
 - [ ] “目标数仓分层”和“上游来源分层”不混用，逻辑建模不以先完成 ETL/ELT 为前置条件。
 - [ ] ODS_RAW/ODS_STANDARDIZED/STG 只从接入/技术入口建设；四类模型严格满足 DIMENSION/FACT→DWD、SUMMARY→DWS、APPLICATION→ADS 及其允许上游矩阵。
+- [ ] 维度目录只管理 `DimensionDefinition`；ModelSpec、ModelImplementation 和物理资产不复制维度正文。
+- [ ] 轻量新建与逻辑设计/数据实现/物理资产三阶段详情形成唯一模型编辑路径。
+- [ ] API 只通过真实采集任务生成的 Landing 资产进入模型实现，并形成 checkpoint、元数据和运行血缘证据。
 
 ## 9. 明确不做
 
-- 不重建第二套业务分类、维度、指标或模型主表。
+- 不在 `DimensionDefinition` 之外重建第二套业务维度正文，也不重建业务分类、指标或模型主表。
 - 不把行业模板字段写入核心契约。
 - 不把业务活动升级为所有模型的必填前置实体。
 - 不把旧业务对象记录静默全部转换为维度。

@@ -1,6 +1,6 @@
 # Sprint-67 IT 与交付证据计划
 
-**状态**：IN_PROGRESS（24/30 Task 已关闭；F2-T05、F3-T06、F3-T07、F6-T05、F6-T06 为 IN_PROGRESS，F6-T07 为 READY）
+**状态**：IN_PROGRESS（23/34 Task 已关闭；F2-T05、F3-T02/T06/T07/T08、F6-T05/T06 为 IN_PROGRESS，F3-T09/T10、F6-T07/T08 为 READY）
 
 ## 0. 人工验收入口
 
@@ -11,6 +11,7 @@
 - 2026-07-22 模型新建人工测试发现来源 ID/版本与维度/层级系统码需要手工填写，已新增 [F6-T06](../features/F6-专业模块交接与集成验收/T06-统一模型来源选择系统编码与提交时实时复验.md)。前端 11 项 TDD RED、扩展 focused GREEN 59/59 和 10 文件 Biome 已记录；后端 resolver、最终类型检查/构建及真实 Chrome 95/API/PostgreSQL 仍待验收。
 - 同日 FACT 创建复核确认，已同步具体表只是可选的直接物理上游，不是当前模型目标表。已新增 [F3-T06](../features/F3-维度与四类表直接建模/T06-拆分上游输入与目标模型并后移来源门禁.md)：草稿可无输入保存；进入实现前满足有效 `sourceRefs OR dependsOn`，两类同时提供时全部引用都要有效。自动化、最终构建和真实联动证据齐备前保持 IN_PROGRESS。
 - 2026-07-23 继续复核发现四类模型仍可选择 ODS/STG 目标层，已新增 [F3-T07](../features/F3-维度与四类表直接建模/T07-建立模型类型与分层依赖矩阵并收敛ODS入口.md)：ODS_RAW/ODS_STANDARDIZED/STG 归接入/技术链，四类目标层固定为 DIMENSION/FACT→DWD、SUMMARY→DWS、APPLICATION→ADS，并按类型限制上游。后端矩阵/历史只读与前端投影/候选/revision 显式升级已完成聚焦自动化，证据见 [f3-t07-model-layer-dependency-matrix.txt](evidence/backend-contract/f3-t07-model-layer-dependency-matrix.txt)；production build、真实联动和迁移证据完成前保持 IN_PROGRESS。
+- 2026-07-24 继续复核确认维度目录仍把概念维度、逻辑维度表和数据实现压入同一 DIMENSION ModelSpec。T02 重新打开，新增 F3-T08/T09/T10 与 [F6-T08](../features/F6-专业模块交接与集成验收/T08-完成四层模型与API-Landing真实端到端验收.md)，权威边界见 [四层模型最小闭环设计](../assets/modeling-four-layer-minimal-loop-design.md)。API 只复用既有采集能力生成 Landing 物理资产，不扩展 OpenAPI/GraphQL/SOAP。
 
 ## 1. 验收旅程
 
@@ -87,6 +88,16 @@
 6. F3-T07 完成专属分类/UI 后，打开历史 ODS/STG ModelSpec，确认审计/血缘可读，编辑、实现、发布复用 `MODEL_SPEC_LEGACY_READONLY`；当前不得把该后续目标记为已有证据；
 7. 以真实 Chrome 95/API/PostgreSQL 记录允许/禁止组合、blocker、revision 和数据库计数，mock 截图不得替代服务端事实。
 
+### Journey H：四层模型、API Landing 与三阶段 UI（F3-T08/T09/T10、F6-T08 增量）
+
+1. 无连接登记业务维度，确认目录记录不包含来源、目标层和物化配置；从该维度创建 DIMENSION 逻辑草稿；
+2. 不选择来源完成逻辑设计，再选择受控生成器物化日期维度，验证目标物理资产和血缘；
+3. 完成数据库连接、具体表元数据同步、规划确认和模型实现，验证连接测试不会自动加入计划；
+4. 创建并试跑真实 API 采集任务，确认 Landing 表、字段、checkpoint 和元数据 revision 后加入规划并完成模型物化；
+5. 验证 FACT → SUMMARY → APPLICATION 只使用合法资产或锁定模型 revision，漂移后阻塞并可恢复；
+6. 验证轻量新建、逻辑设计/数据实现/物理资产三阶段详情、受控 returnTo、失败恢复和 Chrome 95 390px；
+7. 对存量 DIMENSION 执行 dry-run、迁移、计数对账和回滚，旧深链保持可读且无新混合写入。
+
 ## 2. 自动化矩阵
 
 | 层级 | 必测内容 | 证据 |
@@ -145,6 +156,8 @@ F6-T06 已用首轮 11 项 TDD RED、前端扩展 focused GREEN 59/59 和 10 文
 F3-T06 已完成需求与验收矩阵纠偏，自动化实现和证据正在补齐。只有聚焦 Java/TypeScript 回归、一次最终 production build、GitNexus 变更范围审计及部署后 Journey F 全部通过，才可补充证据并关闭 Task；原 F3-T01-T05 的历史证据不能替代本次新增验收。
 
 F3-T07 已完成目标层强制、按类型上游过滤、历史类型边界只读、revision 显式升级及前后端聚焦契约测试。ODS 专用接入/安全返回、旧 ODS/STG 迁移 UI，以及最终 production build 和部署后 Journey G 仍未完成，因此 Task 保持 `IN_PROGRESS`。
+
+F3-T08/T09/T10 和 F6-T08 是 2026-07-24 四层对象纠偏的新增门禁。只有业务维度迁移、统一实现输入、API Landing 资产、三阶段 UI、一次最终构建和真实 Journey H 全部通过，才允许恢复 DIMENSION 主线的完成结论。
 
 ## 6. 发布决策
 

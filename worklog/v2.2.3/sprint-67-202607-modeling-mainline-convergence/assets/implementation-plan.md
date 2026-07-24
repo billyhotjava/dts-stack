@@ -4,7 +4,7 @@
 
 **Goal:** Remove business objects from the public and canonical modeling path while preserving business categories, direct dimension/four-table modeling, migration safety, and downstream model lifecycle evidence.
 
-**Architecture:** Keep WarehousePlan as the planning aggregate and ModelSpec as the only model source of truth. Introduce contract changes through expand-migrate-contract, switch UI/menu/routes only after target APIs work, and retain legacy reads solely for audited migration until zero consumers.
+**Architecture:** Keep WarehousePlan as the planning aggregate. After the 2026-07-24 correction, `DimensionDefinition`, ModelSpec, ModelImplementation and PhysicalAssetRevision are the unique owners of business dimension, logical design, data implementation and physical metadata respectively. Introduce changes through expand-migrate-contract, switch UI only after target APIs work, and retain legacy reads solely for audited migration until zero consumers.
 
 **Tech Stack:** Java 21/Spring Boot/JdbcTemplate/Liquibase, React/TypeScript/Vite/Ant Design, PostgreSQL, pnpm/tsx/Playwright, Docker Compose, GitNexus.
 
@@ -16,6 +16,9 @@
 - Business activity is optional FACT context and is not a global model gate.
 - FACT draft input is optional; implementation requires valid physical sourceRefs or revision-pinned upstream ModelSpec dependsOn, and both must be valid when both are present.
 - ODS_RAW/ODS_STANDARDIZED/STG are ingestion/technical layers, not four-table ModelSpec targets; modelType fixes target layer as DIMENSION/FACT→DWD, SUMMARY→DWS, APPLICATION→ADS.
+- Dimension catalogs do not use DIMENSION ModelSpec as the business-dimension truth; ModelSpec references `DimensionDefinition`.
+- Model implementation accepts only physical assets, revision-pinned upstream models or controlled generators.
+- API sources enter modeling only after the existing ingestion path creates and registers a Landing physical asset.
 - Database changes are forward-only Liquibase expand-migrate-contract changesets.
 - Chrome 95 is a release target.
 - Every code task starts with failing tests and ends with scoped verification and a Conventional Commit.
@@ -133,6 +136,15 @@
 - [ ] Validate all allowed/forbidden combinations, the two ODS entry paths, revision drift, API bypass, database invariants and legacy read-only behavior in deployed Chrome 95/API/PostgreSQL.
 
 **Exit:** G10 passes; ingestion and business modeling have distinct entry points, target layers cannot conflict with model types, and every upstream dependency is explainable and fail-closed.
+
+### Wave 11: Correct the four-layer model and rebuild the primary UI path
+
+- [ ] Execute F3-T08: add `DimensionDefinition`, stable ModelSpec reference and non-destructive DIMENSION migration; keep old revisions and deep links readable.
+- [ ] Execute F3-T09: project legacy input fields into `PHYSICAL_ASSET` / `UPSTREAM_MODEL` / `GENERATED`; register API Landing metadata and close target-asset lineage.
+- [ ] Execute F3-T10: replace the large creation drawer with minimal DRAFT creation and logical-design/data-implementation/physical-asset stages.
+- [ ] Execute F6-T08 only after T08-T10 code is complete: run one backend batch, one production build, one real Chrome95/API/PostgreSQL journey batch, migration reconciliation and GitNexus scope audit.
+
+**Exit:** G11 passes; concept, logical design, implementation and physical asset have separate owners, while database and API sources converge on one materialization path.
 
 ## 3. Required verification commands
 
