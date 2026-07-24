@@ -9,7 +9,7 @@
 
 | Task | 优先级 | 状态 | 依赖 | 输出 |
 |---|---|---|---|---|
-| [T01-接通标准与指标专业模块](T01-接通标准与指标专业模块.md) | P0 | DONE | F3-T05、F5-T04 | 四类标准 owner + standards/metrics reference handoff |
+| [T01-接通标准与指标专业模块](T01-接通标准与指标专业模块.md) | P0 | IN_PROGRESS | F3-T05、F5-T04 | 四类标准 owner + 指标 owner 等价接管 + standards/metrics reference handoff |
 | [T02-接通构建发布运行与血缘证据](T02-接通构建发布运行与血缘证据.md) | P0 | DONE | F3-T05、F4、F5-T03 | artifact/release/run/lineage loop |
 | [T03-完成双起点与兼容Chrome95验收](T03-完成双起点与兼容Chrome95验收.md) | P0 | DONE | T01/T02、F4-T04 | E2E/Chrome95 证据 |
 | [T04-完成发布回滚与最终评审](T04-完成发布回滚与最终评审.md) | P0 | DONE | T03、F5-T04 | Go/No-Go 与退出清单 |
@@ -20,7 +20,7 @@
 
 ## 完成标准
 
-- [x] 标准、指标、资产和运维保存稳定引用，不复制正文。
+- [ ] 标准、指标、资产和运维保存稳定引用，不复制正文；指标 owner 不依赖 legacy `/metrics`。
 - [x] 数据元、公共码表、度量单位、命名词典均有可访问 owner 页面、版本契约和权限证据。
 - [x] ModelSpec revision 可追踪到 artifact、测试、发布、资产、指标和运行。
 - [x] BUSINESS_FIRST/ASSET_FIRST 均不经过业务对象完成真实模型发布链路。
@@ -32,3 +32,4 @@
 - [ ] OpenMetadata 远端列表和详情与本地正式目录使用同一认证部门和精确归属规则，缺少映射时 fail closed。
 - [ ] 业务维度、逻辑模型、数据实现和物理资产四层在真实 API/PostgreSQL/Chrome95 中闭环。
 - [ ] API 通过真实采集任务和 Landing 资产进入模型实现，mock 不作为 Sprint DONE 证据。
+- [ ] 指标工作台可完成原子/派生指标编辑、依赖预检、校验、发布、版本、归档和精确版本回写。

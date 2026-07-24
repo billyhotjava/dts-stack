@@ -1,0 +1,33 @@
+Sprint-67 F6-T01 indicator owner frontend restoration evidence
+Verified: 2026-07-25
+
+Implementation contract:
+- /governance/indicators/dictionary no longer requests /metrics/* and preserves
+  safe query/hash context when redirecting to /modeling/metric-workbench.
+- MetricWorkbenchPage contains the platform indicator owner for draft,
+  published and archived definitions.
+- The owner supports complete-field update, atomic/derived definitions,
+  controlled derivation validation, publish preview, revision publish, archive
+  and immutable version history.
+- Model field draft creation returns directly to the platform owner; dts-metrics,
+  BusinessObject/objectId and semantic_metric writes are not restored.
+- Independent list/detail loading failures do not remove the model anchor or
+  overwrite the selected indicator.
+
+Verification:
+- node --test for indicatorDefinitionContract, indicatorDefinitionWorkflow and
+  metricIndicatorOwner source contracts: PASS; tests=28; failures=0.
+- Targeted Biome check for the 10 non-shared indicator owner files: PASS.
+- pnpm exec tsc --noEmit: PASS.
+- pnpm build: PASS; Chrome95 legacy bundle; modules=10618; duration=3m34s.
+- Code review after fixes: GREEN; CRITICAL=0; HIGH=0.
+
+Commits:
+- RED contract: 6b9ab3f6a
+- owner implementation: 1e44c26be
+
+Boundary:
+- The production build includes the Chrome95 legacy bundle, but no logged-in
+  Chrome 95 journey was executed in this increment.
+- The real model field -> edit -> validate -> publish -> exact ModelSpec version
+  binding journey remains open and must not be inferred from source contracts.

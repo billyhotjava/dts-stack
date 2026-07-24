@@ -1,6 +1,6 @@
 # Sprint-67 IT 与交付证据计划
 
-**状态**：IN_PROGRESS（23/34 Task 已关闭；F2-T05、F3-T02/T06/T07/T08/T09/T10、F6-T05/T06 为 IN_PROGRESS，F6-T07/T08 为 READY）
+**状态**：IN_PROGRESS（22/34 Task 已关闭；F2-T05、F3-T02/T06/T07/T08/T09/T10、F6-T01/T05/T06 为 IN_PROGRESS，F6-T07/T08 为 READY）
 
 ## 0. 人工验收入口
 
@@ -12,6 +12,7 @@
 - 同日 FACT 创建复核确认，已同步具体表只是可选的直接物理上游，不是当前模型目标表。已新增 [F3-T06](../features/F3-维度与四类表直接建模/T06-拆分上游输入与目标模型并后移来源门禁.md)：草稿可无输入保存；进入实现前满足有效 `sourceRefs OR dependsOn`，两类同时提供时全部引用都要有效。自动化、最终构建和真实联动证据齐备前保持 IN_PROGRESS。
 - 2026-07-23 继续复核发现四类模型仍可选择 ODS/STG 目标层，已新增 [F3-T07](../features/F3-维度与四类表直接建模/T07-建立模型类型与分层依赖矩阵并收敛ODS入口.md)：ODS_RAW/ODS_STANDARDIZED/STG 归接入/技术链，四类目标层固定为 DIMENSION/FACT→DWD、SUMMARY→DWS、APPLICATION→ADS，并按类型限制上游。后端矩阵/历史只读与前端投影/候选/revision 显式升级已完成聚焦自动化，证据见 [f3-t07-model-layer-dependency-matrix.txt](evidence/backend-contract/f3-t07-model-layer-dependency-matrix.txt)；production build、真实联动和迁移证据完成前保持 IN_PROGRESS。
 - 2026-07-24 继续复核确认维度目录仍把概念维度、逻辑维度表和数据实现压入同一 DIMENSION ModelSpec。T02 重新打开，新增 F3-T08/T09/T10 与 [F6-T08](../features/F6-专业模块交接与集成验收/T08-完成四层模型与API-Landing真实端到端验收.md)，权威边界见 [四层模型最小闭环设计](../assets/modeling-four-layer-minimal-loop-design.md)。API 只复用既有采集能力生成 Landing 物理资产，不扩展 OpenAPI/GraphQL/SOAP。
+- 2026-07-25 人工回归确认 `/governance/indicators/dictionary` 仍转向默认退役的 `/metrics/*`，导致模型创建指标草稿后只能回到锚点页，无法进入指标正文 owner。已重开 [F6-T01](../features/F6-专业模块交接与集成验收/T01-接通标准与指标专业模块.md)：保持 `dts-metrics` 默认退役，以 `gov_indicator_definition` 和 `/api/governance/indicators` 接管草稿编辑、派生校验、发布修订、归档和版本历史。定向自动化与构建证据完成后仍需真实 Chrome 95/API/PostgreSQL 联动，因此 Task 与 Sprint 保持 IN_PROGRESS。
 
 ## 1. 验收旅程
 
@@ -159,6 +160,8 @@ F3-T06 已完成需求与验收矩阵纠偏，自动化实现和证据正在补�
 F3-T07 已完成目标层强制、按类型上游过滤、历史类型边界只读、revision 显式升级及前后端聚焦契约测试。ODS 专用接入/安全返回、旧 ODS/STG 迁移 UI，以及最终 production build 和部署后 Journey G 仍未完成，因此 Task 保持 `IN_PROGRESS`。
 
 F3-T08/T09/T10 和 F6-T08 是 2026-07-24 四层对象纠偏的新增门禁。只有业务维度迁移、统一实现输入、API Landing 资产、三阶段 UI、一次最终构建和真实 Journey H 全部通过，才允许恢复 DIMENSION 主线的完成结论。
+
+F6-T01 已于 2026-07-25 因指标 owner 回归重开。平台已恢复 legacy dictionary 深链、完整指标正文、原子/派生校验、不可覆盖的发布修订与历史版本；自动化与构建证据分别记录在 `frontend/f6-t01-indicator-owner-restoration.txt` 和 `backend-contract/f6-t01-indicator-owner-lifecycle.txt`。模型创建草稿到精确发布版本回绑的真实登录 Chrome 95/API/PostgreSQL 旅程尚未执行，不得用 source-contract、mock 或编译结果替代，因此本 Task 仍为 IN_PROGRESS。
 
 ## 6. 发布决策
 

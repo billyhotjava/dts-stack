@@ -1,0 +1,47 @@
+Sprint-67 F6-T01 indicator owner backend lifecycle evidence
+Verified: 2026-07-25
+
+Isolated Maven verification:
+- Snapshot: current source copied to /tmp to avoid the unrelated Sprint-70
+  testIncludes override and concurrent shared-target cleanup.
+- Java: release 21.
+- Main compile: PASS; source files=1153.
+- Focused test compile: PASS; test classes=9.
+- Focused tests: PASS; tests=80; failures=0; errors=0; skipped=0.
+- Spotless in isolated snapshot: files=1508; changed=0.
+- Maven result: BUILD SUCCESS; duration=58.541s.
+
+Covered contracts:
+- draft-only publish, next-revision staging, rollback/publish, archive and
+  immutable published snapshots;
+- pessimistic target/full-graph lifecycle locking and optimistic CAS;
+- typed 400/404/409 indicator errors while filesystem, database and dbt
+  failures remain server errors;
+- current validation signature over the complete structured definition and
+  transitive managed dependencies;
+- controlled derived/filter/join/ratio/custom SQL generation with fail-closed
+  JSON and dependency limits;
+- dataset authorization and dbt artifact compile gate before publication;
+- SQL, window SQL, current/previous-domain schema and ownership manifest in one
+  atomic promotion;
+- manifest v1 -> v2 ownership migration, safe pre-manifest adoption, old-domain
+  cleanup, database rollback restoration and cross-process file locking.
+
+Review and scope gates:
+- Frontend review: GREEN; CRITICAL=0; HIGH=0.
+- Lifecycle/resource review: GREEN; CRITICAL=0; HIGH=0.
+- dbt/security delta review: GREEN; CRITICAL=0; HIGH=0.
+- Known non-blocking follow-up: the full-graph pessimistic lifecycle lock
+  serializes mutations and should later move to a dedicated mutex/advisory lock
+  if indicator volume makes contention material.
+- git diff --cached --check: PASS.
+- GitNexus staged scope: risk=LOW; changedFiles=34; affectedProcesses=0.
+
+Commits:
+- RED contract: 6b9ab3f6a
+- owner implementation: 1e44c26be
+
+Boundary:
+- No live API, PostgreSQL, Liquibase, dbt runtime, deployed container or logged-in
+  Chrome95 journey was executed. Those gates remain required before F6-T01 can
+  return to DONE.

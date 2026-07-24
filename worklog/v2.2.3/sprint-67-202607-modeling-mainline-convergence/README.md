@@ -71,7 +71,7 @@ Sprint-65 已建立 `WarehousePlan`、`ModelSpec` 和数据建设工作台，但
 | [F5](features/F5-业务对象迁移与受控退役/README.md) | 业务对象迁移与受控退役 | 4 | DONE | 迁移旧数据、冻结旧写入并清理消费者 |
 | [F6](features/F6-专业模块交接与集成验收/README.md) | 专业模块交接与集成验收 | 8 | IN_PROGRESS | 接通标准、指标、构建发布、API Landing 和端到端证据 |
 
-**统计**：READY=2，IN_PROGRESS=9，DONE=23，BLOCKED=0；当前已关闭 23/34 Task
+**统计**：READY=2，IN_PROGRESS=10，DONE=22，BLOCKED=0；当前已关闭 22/34 Task
 
 ### 2026-07-21 人工测试重开
 
@@ -92,6 +92,8 @@ Sprint-67 曾按 24/24 Task 完成受控发布评审。首次人工操作发现 
 2026-07-23 继续复核 ODS 建模入口确认，四类模型若仍允许选择 ODS/STG 目标层，就会把接入技术产物与业务模型重新混为一体。F3 新增 P0 T07：`ODS_RAW/ODS_STANDARDIZED/STG` 归数据接入和技术实现所有，不走四类 ModelSpec；四类目标层冻结为 `DIMENSION/FACT→DWD`、`SUMMARY→DWS`、`APPLICATION→ADS`，并按类型限制 `sourceRefs/dependsOn/generationStrategy`。历史 ODS/STG ModelSpec 的专属只读分类和迁移 UI 尚待实现，真实矩阵 E2E 完成前保持 IN_PROGRESS。当前关闭度为 24/30。
 
 2026-07-24 继续复核确认 T02 的对象边界仍不成立：维度目录把分析视角直接写成 DIMENSION ModelSpec，并把逻辑字段、来源和实现塞入同一表单。T02 从 DONE 重开，新增 F3-T08/T09/T10 与 F6-T08，采用 `DimensionDefinition → ModelSpecRevision → ModelImplementation → PhysicalAssetRevision` 四层最小闭环；API 复用既有采集任务生成 Landing 资产，不扩展通用 API 元数据协议。校正后为 23/34，新增实现和真实 E2E 完成前不得恢复原完成结论。
+
+2026-07-25 指标人工回归确认：模型字段创建原子指标草稿后，`/governance/indicators/dictionary → /metrics/dictionary → /modeling/metric-workbench` 形成 owner 回跳，且 Sprint-56/57 已交付的编辑、派生关系、预检和发布能力未按新 model/field 锚点等价接管。F6-T01 从 DONE 重开；保持指标工作台为唯一顶级菜单，以 `gov_indicator_definition` 为唯一指标正文补齐平台 owner，不恢复 `dts-metrics` 默认服务、BusinessObject 或旧 semantic metric 写路径。校正后为 22/34。
 
 ## 6. 依赖与执行顺序
 
@@ -127,7 +129,7 @@ F2 与 F3 可在 F1 契约评审通过后并行；F4 可先完成静态 IA，但
 - [x] 新 ModelSpec 写路径不需要 `objectId`，业务活动只在明细表中作为可选说明。
 - [x] `/modeling/semantic/objects` 不再是菜单或主线入口，旧深链命中可审计兼容跳转。
 - [ ] 维度性质旧对象迁入 `DimensionDefinition` 业务维度正文，DIMENSION ModelSpec 只保存稳定引用（原“迁为 DIMENSION ModelSpec”结论随 F3-T02 重开与四层契约作废）；事实性质旧对象并入明细表粒度和来源；无法判定记录进入人工清单。
-- [x] 数据标准、指标、dbt、运行、发布、血缘和资产引用均继续消费同一 ModelSpec/planId。
+- [ ] 数据标准、指标、dbt、运行、发布、血缘和资产引用均继续消费同一 ModelSpec/planId；指标 owner 等价接管和精确版本回写尚待增量验收。
 - [ ] 34 个 Task 均提供真实测试、构建、迁移或浏览器证据，不以页面截图代替后端事实。
 - [ ] 用户可以在 canonical 建设规划台账中查找、编辑和归档计划，也可以从当前计划直接修改计划头。
 - [ ] Chrome 95 在既有场景基础上补齐建设规划台账、编辑、409、归档、只读与窄屏；权限在真实 Spring Security 边界验证。
