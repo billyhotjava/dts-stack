@@ -152,8 +152,11 @@ cd source/dts-platform
 - `modeling_dimension_definition_legacy_map`: unique old ModelSpec-to-definition migration mapping with batch and classification.
 - Nullable `dimension_definition_id` and `dimension_definition_revision` on `modeling_model_spec` and `modeling_model_spec_revision`.
 - Tenant-scoped unique index on system code.
-- Non-cascading foreign keys; retirement never deletes ModelSpec or artifacts.
+- Non-cascading tenant-aware foreign keys; the head has a current-revision FK, so it cannot point at a missing immutable revision; retirement never deletes ModelSpec or artifacts.
+- The legacy-map revision FK has a matching child-side composite index.
+- Audit instants use PostgreSQL `timestamptz`; the project `${datetimeType}` currently resolves to timezone-less `datetime` and is not valid for `Instant` persistence.
 - Database check permits a non-null definition reference only on `model_type='DIMENSION'`; historical DIMENSION rows may remain null until migration.
+- Both changesets are explicitly forward-only: Liquibase rollback fails with a clear message and recovery must be a new forward changeset.
 
 **Repository API**
 
@@ -163,9 +166,14 @@ List<StoredDimensionDefinition> listCurrent(String tenantId, UUID domainId, Stat
 Optional<StoredDimensionDefinition> findByIdempotencyKey(String tenantId, String key);
 int insert(String tenantId, String actorId, CreateCommand command, View view, String requestHash);
 int compareAndSet(String tenantId, String actorId, ExpectedVersion expected, View replacement);
-int appendRevision(String tenantId, String actorId, View view);
 long usageCount(String tenantId, UUID id);
 ```
+
+`insert` uses one PostgreSQL CTE statement with `INSERT ... ON CONFLICT DO NOTHING RETURNING` so only the winning concurrent caller creates the head and revision 1 atomically. A caller that does not insert immediately reads the committed row by tenant/idempotency key: the same request hash returns `0`, while a different hash fails as an idempotency conflict. PostgreSQL conflict handling waits for the competing insert before the follow-up read, so this path needs neither an advisory lock nor system-column heuristics.
+
+`compareAndSet` validates `replacement.id == expected.id`, `replacement.revision == expected.revision + 1`, and requires `systemCode`, `domainId`, and `createdAt` to match the existing head before it writes the CAS head update plus immutable replacement revision in one statement. Any mismatch or revision conflict rolls back the whole statement. There is no public unguarded append method.
+
+The database system-code check is exactly `^dim_[0-9a-f]{32}$`, matching the service-generated `dim_` plus UUID-without-hyphens format.
 
 **Steps**
 
@@ -179,7 +187,7 @@ cd source/dts-platform
 ```
 
 - [ ] Implement the changelog and repository.
-- [ ] Add PostgreSQL integration cases for generated-code uniqueness, CAS, idempotency and non-cascade retirement.
+- [ ] Add PostgreSQL integration cases for generated-code uniqueness, atomic head/revision insert and CAS, immutable code/domain/createdAt, contiguous revision, sequential and concurrent idempotency, and non-cascade retirement. Add negative cases for cross-tenant/missing revisions, both half-null combinations on head and revision rows, non-DIMENSION references, invalid revision snapshots, legacy-map FKs and deleting referenced heads/revisions.
 - [ ] Run only `DimensionDefinitionRepositoryIT` against the existing integration-test profile; expect exit code 0.
 
 ### Task 2.3: Add application and REST lifecycle
