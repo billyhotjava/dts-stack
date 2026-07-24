@@ -36,7 +36,9 @@ public class IndicatorReferenceService {
     public List<Map<String, Object>> list(UUID indicatorId, String activeDept) {
         // Permission check (department + level).
         indicatorService.get(indicatorId, activeDept);
-        GovIndicatorDefinition indicator = indicatorRepository.findById(indicatorId).orElseThrow();
+        GovIndicatorDefinition indicator = indicatorRepository
+            .findById(indicatorId)
+            .orElseThrow(() -> new IndicatorNotFoundException("指标不存在: " + indicatorId));
         return referenceRepository
             .findByIndicatorOrderByCreatedDateAsc(indicator)
             .stream()
@@ -46,17 +48,20 @@ public class IndicatorReferenceService {
 
     public Map<String, Object> create(UUID indicatorId, String activeDept, ReferenceUpsertRequest request) {
         if (request == null) {
-            throw new IllegalArgumentException("Invalid payload");
+            throw new IndicatorRequestException("Invalid payload");
         }
         // Permission check for edit: reuse update rules in IndicatorService (maintainer endpoints are protected in controller).
         IndicatorDto dto = indicatorService.get(indicatorId, activeDept);
-        GovIndicatorDefinition indicator = indicatorRepository.findById(indicatorId).orElseThrow();
+        GovIndicatorDefinition indicator = indicatorRepository
+            .findById(indicatorId)
+            .orElseThrow(() -> new IndicatorNotFoundException("指标不存在: " + indicatorId));
 
         String refType = normalizeRefType(request.refType());
         String refTarget = normalizeText(request.refTarget());
         if (!StringUtils.hasText(refType) || !StringUtils.hasText(refTarget)) {
-            throw new IllegalArgumentException("refType/refTarget 不能为空");
+            throw new IndicatorRequestException("refType/refTarget 不能为空");
         }
+        rejectManagedIndicatorReference(refType);
 
         GovIndicatorReference entity = referenceRepository
             .findFirstByIndicatorAndRefTypeIgnoreCaseAndRefTargetIgnoreCase(indicator, refType, refTarget)
@@ -77,21 +82,27 @@ public class IndicatorReferenceService {
 
     public Map<String, Object> update(UUID indicatorId, UUID referenceId, String activeDept, ReferenceUpsertRequest request) {
         if (referenceId == null) {
-            throw new IllegalArgumentException("referenceId required");
+            throw new IndicatorRequestException("referenceId required");
         }
         if (request == null) {
-            throw new IllegalArgumentException("Invalid payload");
+            throw new IndicatorRequestException("Invalid payload");
         }
         indicatorService.get(indicatorId, activeDept);
-        GovIndicatorDefinition indicator = indicatorRepository.findById(indicatorId).orElseThrow();
+        GovIndicatorDefinition indicator = indicatorRepository
+            .findById(indicatorId)
+            .orElseThrow(() -> new IndicatorNotFoundException("指标不存在: " + indicatorId));
 
-        GovIndicatorReference entity = referenceRepository.findById(referenceId).orElseThrow();
+        GovIndicatorReference entity = referenceRepository
+            .findById(referenceId)
+            .orElseThrow(() -> new IndicatorNotFoundException("指标引用不存在: " + referenceId));
         if (entity.getIndicator() == null || entity.getIndicator().getId() == null || !entity.getIndicator().getId().equals(indicator.getId())) {
-            throw new IllegalArgumentException("reference does not belong to indicator");
+            throw new IndicatorRequestException("reference does not belong to indicator");
         }
 
         String refType = normalizeRefType(request.refType());
         String refTarget = normalizeText(request.refTarget());
+        rejectManagedIndicatorReference(entity.getRefType());
+        rejectManagedIndicatorReference(refType);
         if (StringUtils.hasText(refType)) {
             entity.setRefType(refType);
         }
@@ -107,11 +118,20 @@ public class IndicatorReferenceService {
 
     public void delete(UUID indicatorId, UUID referenceId, String activeDept) {
         indicatorService.get(indicatorId, activeDept);
-        GovIndicatorReference entity = referenceRepository.findById(referenceId).orElseThrow();
+        GovIndicatorReference entity = referenceRepository
+            .findById(referenceId)
+            .orElseThrow(() -> new IndicatorNotFoundException("指标引用不存在: " + referenceId));
         if (entity.getIndicator() == null || entity.getIndicator().getId() == null || !entity.getIndicator().getId().equals(indicatorId)) {
-            throw new IllegalArgumentException("reference does not belong to indicator");
+            throw new IndicatorRequestException("reference does not belong to indicator");
         }
+        rejectManagedIndicatorReference(entity.getRefType());
         referenceRepository.delete(entity);
+    }
+
+    private void rejectManagedIndicatorReference(String refType) {
+        if ("INDICATOR".equalsIgnoreCase(normalizeRefType(refType))) {
+            throw new IndicatorConflictException("指标依赖引用由 dependencyIndicators 自动维护，不能手工修改");
+        }
     }
 
     private Map<String, Object> toDto(GovIndicatorReference entity) {

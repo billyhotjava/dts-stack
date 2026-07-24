@@ -893,8 +893,12 @@ export const createIndicator = (data: any) => api.post({ url: "/governance/indic
 export const updateIndicator = (id: string, data: any) => api.put({ url: `/governance/indicators/${id}`, data });
 export const deleteIndicator = (id: string) => api.delete({ url: `/governance/indicators/${id}` });
 export const publishIndicator = (id: string) => api.post({ url: `/governance/indicators/${id}/publish` });
+export const publishIndicatorRevision = (id: string, data: any) =>
+	api.post({ url: `/governance/indicators/${id}/publish-revision`, data });
 export const archiveIndicator = (id: string) => api.post({ url: `/governance/indicators/${id}/archive` });
 export const validateIndicator = (id: string) => api.post({ url: `/governance/indicators/${id}/validate` });
+export const validateIndicatorDerivation = (id: string) =>
+	api.post({ url: `/governance/indicators/${id}/derivation/validate` });
 export const getIndicatorDependencies = (params: any = {}) => api.get({ url: "/governance/indicators/dependencies", params });
 export const listIndicatorVersions = (id: string) => api.get({ url: `/governance/indicators/${id}/versions` });
 export const getIndicatorVersion = (id: string, version: string) =>

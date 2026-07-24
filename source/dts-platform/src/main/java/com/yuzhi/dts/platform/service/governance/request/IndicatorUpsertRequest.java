@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.governance.request;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 
 public class IndicatorUpsertRequest {
@@ -63,6 +64,7 @@ public class IndicatorUpsertRequest {
     private String icon;
     private Integer displayOrder;
     private UUID templateId;
+    private Instant expectedLastModifiedDate;
 
     public String getCode() {
         return code;
@@ -442,5 +444,13 @@ public class IndicatorUpsertRequest {
 
     public void setTemplateId(UUID templateId) {
         this.templateId = templateId;
+    }
+
+    public Instant getExpectedLastModifiedDate() {
+        return expectedLastModifiedDate;
+    }
+
+    public void setExpectedLastModifiedDate(Instant expectedLastModifiedDate) {
+        this.expectedLastModifiedDate = expectedLastModifiedDate;
     }
 }

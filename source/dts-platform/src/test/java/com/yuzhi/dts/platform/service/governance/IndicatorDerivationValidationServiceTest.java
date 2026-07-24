@@ -70,6 +70,50 @@ class IndicatorDerivationValidationServiceTest {
             .contains("DERIVATION_DEPENDENCY_NOT_PUBLISHED", "DERIVATION_DEPENDENCY_MISSING", "DERIVATION_CYCLE");
     }
 
+    @Test
+    void rejectsExpressionDependencyDriftAndIncompatibleJoinGrain() {
+        GovIndicatorDefinition target = indicator(targetId, "AVG_ORDER", "DRAFT", true);
+        target.setDependencyIndicators("[\"GMV\",\"ORDER_COUNT\"]");
+        target.setExpressionSql("{{metric:GMV}} + 1");
+        target.setDimensionFields("[\"region_code\"]");
+        target.setTimeGrain("MONTH");
+
+        GovIndicatorDefinition gmv = indicator(UUID.randomUUID(), "GMV", "PUBLISHED", false);
+        gmv.setDimensionFields("[\"region_code\"]");
+        gmv.setTimeGrain("MONTH");
+        GovIndicatorDefinition count = indicator(UUID.randomUUID(), "ORDER_COUNT", "PUBLISHED", false);
+        count.setDimensionFields("[\"store_code\"]");
+        count.setTimeGrain("DAY");
+
+        when(repository.findById(targetId)).thenReturn(Optional.of(target));
+        when(repository.findFirstByCodeIgnoreCase("GMV")).thenReturn(Optional.of(gmv));
+        when(repository.findFirstByCodeIgnoreCase("ORDER_COUNT")).thenReturn(Optional.of(count));
+
+        IndicatorDerivationValidationResult result = service.validate(targetId);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.issueCodes())
+            .contains("DERIVATION_EXPRESSION_DEPENDENCY_MISMATCH", "DERIVATION_GRAIN_INCOMPATIBLE");
+    }
+
+    @Test
+    void rejectsDerivedMetricWhoseClassificationIsLowerThanDependency() {
+        GovIndicatorDefinition target = indicator(targetId, "PUBLIC_RATIO", "DRAFT", true);
+        target.setDataLevel("DATA_PUBLIC");
+        target.setDependencyIndicators("[\"SECRET_GMV\"]");
+        target.setExpressionSql("{{metric:SECRET_GMV}}");
+        GovIndicatorDefinition dependency = indicator(UUID.randomUUID(), "SECRET_GMV", "PUBLISHED", false);
+        dependency.setDataLevel("DATA_SECRET");
+
+        when(repository.findById(targetId)).thenReturn(Optional.of(target));
+        when(repository.findFirstByCodeIgnoreCase("SECRET_GMV")).thenReturn(Optional.of(dependency));
+
+        IndicatorDerivationValidationResult result = service.validate(targetId);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.issueCodes()).contains("DERIVATION_CLASSIFICATION_DOWNGRADE");
+    }
+
     private static GovIndicatorDefinition indicator(UUID id, String code, String status, boolean derived) {
         GovIndicatorDefinition value = new GovIndicatorDefinition();
         value.setId(id);

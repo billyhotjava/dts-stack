@@ -6,6 +6,9 @@ import com.yuzhi.dts.platform.domain.governance.GovIndicatorTemplate;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.governance.DimensionService;
 import com.yuzhi.dts.platform.service.governance.IndicatorDashboardService;
+import com.yuzhi.dts.platform.service.governance.IndicatorConflictException;
+import com.yuzhi.dts.platform.service.governance.IndicatorDerivationValidationResult;
+import com.yuzhi.dts.platform.service.governance.IndicatorRequestException;
 import com.yuzhi.dts.platform.service.governance.IndicatorService;
 import com.yuzhi.dts.platform.service.governance.IndicatorPublishPreviewService;
 import com.yuzhi.dts.platform.service.governance.IndicatorReferenceService;
@@ -26,6 +29,7 @@ import com.yuzhi.dts.platform.service.event.PlatformEventOutboxService;
 import com.yuzhi.dts.platform.service.event.dto.PlatformEventRequest;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -402,20 +406,9 @@ public class GovernanceIndicatorResource {
         @PathVariable UUID id,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
+        indicators.lockLifecycleGraphForUpdate();
         Map<String, Object> preview = indicatorPublishPreviewService.preview(id, activeDept);
-        boolean ready = Boolean.TRUE.equals(preview.get("readyToPublish"));
-        if (!ready) {
-            String reasonCode = preview.get("failureReasonCode") != null ? String.valueOf(preview.get("failureReasonCode")) : "IND_PUBLISH_BLOCKED";
-            String message = "发布前预检未通过";
-            Object blocking = preview.get("blockingIssues");
-            if (blocking instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Map<?, ?> issue) {
-                Object text = issue.get("message");
-                if (text != null) {
-                    message = String.valueOf(text);
-                }
-            }
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "[" + reasonCode + "] " + message);
-        }
+        requirePublishReady(preview);
         IndicatorDto saved = indicators.publish(id, activeDept);
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("targetId", id.toString());
@@ -423,6 +416,35 @@ public class GovernanceIndicatorResource {
         detail.put("summary", "发布指标：" + saved.getName());
         audit.auditAction("GOV_INDICATOR_PUBLISH", AuditStage.SUCCESS, id.toString(), detail);
         publishIndicatorEvent("METRIC.INDICATOR.PUBLISHED", "PUBLISH", "SUCCESS", id, saved.getName(), detail, "GOV_INDICATOR_PUBLISH");
+        return ApiResponses.ok(saved);
+    }
+
+    @PostMapping("/indicators/{id}/publish-revision")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<IndicatorDto> publishIndicatorRevision(
+        @PathVariable UUID id,
+        @RequestBody IndicatorUpsertRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        indicators.stageRevision(id, request, activeDept);
+        Map<String, Object> preview = indicatorPublishPreviewService.preview(id, activeDept);
+        requirePublishReady(preview);
+        IndicatorDto saved = indicators.publish(id, activeDept);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("targetId", id.toString());
+        detail.put("targetName", saved.getName());
+        detail.put("version", saved.getVersion());
+        detail.put("summary", "发布指标新版本：" + saved.getName());
+        audit.auditAction("GOV_INDICATOR_PUBLISH_REVISION", AuditStage.SUCCESS, id.toString(), detail);
+        publishIndicatorEvent(
+            "METRIC.INDICATOR.PUBLISHED",
+            "PUBLISH_REVISION",
+            "SUCCESS",
+            id,
+            saved.getName(),
+            detail,
+            "GOV_INDICATOR_PUBLISH_REVISION"
+        );
         return ApiResponses.ok(saved);
     }
 
@@ -438,7 +460,16 @@ public class GovernanceIndicatorResource {
     ) {
         boolean publishAfterRollback = request != null && Boolean.TRUE.equals(request.publishAfterRollback());
         String reason = request != null ? request.reason() : null;
-        Map<String, Object> payload = indicators.rollbackToVersion(id, version, activeDept, reason, publishAfterRollback);
+        Map<String, Object> payload = new LinkedHashMap<>(
+            indicators.rollbackToVersion(id, version, activeDept, reason, false)
+        );
+        if (publishAfterRollback) {
+            Map<String, Object> preview = indicatorPublishPreviewService.preview(id, activeDept);
+            requirePublishReady(preview);
+            IndicatorDto published = indicators.publish(id, activeDept);
+            payload.put("indicator", published);
+            payload.put("published", true);
+        }
         audit.auditAction(
             "GOV_INDICATOR_VERSION_ROLLBACK",
             AuditStage.SUCCESS,
@@ -502,6 +533,32 @@ public class GovernanceIndicatorResource {
         return ApiResponses.ok(result);
     }
 
+    @PostMapping("/indicators/{id}/derivation/validate")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<IndicatorDerivationValidationResult> validateIndicatorDerivation(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        IndicatorDerivationValidationResult result = indicators.validateDerivation(id, activeDept);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("targetId", id.toString());
+        detail.put("summary", "校验派生指标表达式与依赖");
+        detail.put("status", result.valid() ? "SUCCESS" : "FAILED");
+        detail.put("dependencyCodes", result.dependencyCodes());
+        detail.put("issueCodes", result.issueCodes());
+        audit.auditAction("GOV_INDICATOR_DERIVATION_VALIDATE", AuditStage.SUCCESS, id.toString(), detail);
+        publishIndicatorEvent(
+            "METRIC.INDICATOR.DERIVATION_VALIDATED",
+            "VALIDATE_DERIVATION",
+            result.valid() ? "SUCCESS" : "FAILED",
+            id,
+            null,
+            detail,
+            "GOV_INDICATOR_DERIVATION_VALIDATE"
+        );
+        return ApiResponses.ok(result);
+    }
+
     private void publishIndicatorEvent(
         String eventType,
         String action,
@@ -536,6 +593,29 @@ public class GovernanceIndicatorResource {
         } catch (RuntimeException ex) {
             LOG.warn("Failed to publish indicator event {} for {}: {}", eventType, indicatorId, ex.getMessage());
         }
+    }
+
+    private void requirePublishReady(Map<String, Object> preview) {
+        boolean ready = preview != null && Boolean.TRUE.equals(preview.get("readyToPublish"));
+        if (ready) {
+            return;
+        }
+        String reasonCode =
+            preview != null && preview.get("failureReasonCode") != null
+                ? String.valueOf(preview.get("failureReasonCode"))
+                : "IND_PUBLISH_BLOCKED";
+        String message = "发布前预检未通过";
+        Object blocking = preview != null ? preview.get("blockingIssues") : null;
+        if (blocking instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Map<?, ?> issue) {
+            Object text = issue.get("message");
+            if (text != null) {
+                message = String.valueOf(text);
+            }
+        }
+        if ("IND_DBT_COMPILE_FAILED".equals(reasonCode)) {
+            throw new IllegalStateException("[" + reasonCode + "] " + message);
+        }
+        throw new IndicatorConflictException("[" + reasonCode + "] " + message);
     }
 
     @PostMapping("/indicators/{id}/preview")
@@ -828,28 +908,69 @@ public class GovernanceIndicatorResource {
 
     @PostMapping("/indicators/generate")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
-    public ApiResponse<GenerationResult> generateIndicators(@RequestBody Map<String, Object> body) {
-        @SuppressWarnings("unchecked")
-        List<String> idStrings = (List<String>) body.get("indicatorIds");
-        List<UUID> ids = idStrings.stream().map(UUID::fromString).toList();
-        List<String> files = dbtGenerator.generateBatch(ids);
-        dbtGenerator.generateSchemaYml(ids);
-        return ApiResponses.ok(new GenerationResult(ids.size(), files, "READY", null, List.of()));
+    public ApiResponse<GenerationResult> generateIndicators(
+        @RequestBody Map<String, Object> body,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        List<UUID> ids = parseIndicatorIds(body);
+        indicators.validateGenerationAccess(ids, activeDept);
+        GenerationResult generated = dbtGenerator.generateAndRun(ids);
+        return ApiResponses.ok(
+            new GenerationResult(
+                generated.totalIndicators(),
+                generated.generatedFiles(),
+                generated.compileStatus(),
+                null,
+                generated.warnings()
+            )
+        );
     }
 
     @PostMapping("/indicators/generate-and-run")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
-    public ApiResponse<GenerationResult> generateAndRun(@RequestBody Map<String, Object> body) {
-        @SuppressWarnings("unchecked")
-        List<String> idStrings = (List<String>) body.get("indicatorIds");
-        List<UUID> ids = idStrings.stream().map(UUID::fromString).toList();
+    public ApiResponse<GenerationResult> generateAndRun(
+        @RequestBody Map<String, Object> body,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        List<UUID> ids = parseIndicatorIds(body);
+        indicators.validateGenerationAccess(ids, activeDept);
         GenerationResult result = dbtGenerator.generateAndRun(ids);
         return ApiResponses.ok(result);
     }
 
     @PostMapping("/indicators/{id}/preview-sql")
-    public ApiResponse<Map<String, String>> previewIndicatorSql(@PathVariable UUID id) {
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, String>> previewIndicatorSql(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        indicators.validateGenerationAccess(List.of(id), activeDept);
         return ApiResponses.ok(dbtGenerator.previewSql(id));
+    }
+
+    private List<UUID> parseIndicatorIds(Map<String, Object> body) {
+        Object raw = body != null ? body.get("indicatorIds") : null;
+        if (!(raw instanceof List<?> values) || values.isEmpty() || values.size() > 64) {
+            throw new IndicatorRequestException(
+                "indicatorIds 数量必须在 1 到 64 之间；生成目标及含传递依赖的总节点数也不能超过 64"
+            );
+        }
+        LinkedHashSet<UUID> ids = new LinkedHashSet<>();
+        for (Object value : values) {
+            if (!(value instanceof String text) || !StringUtils.hasText(text)) {
+                throw new IndicatorRequestException("indicatorIds 必须全部为有效 UUID");
+            }
+            UUID id;
+            try {
+                id = UUID.fromString(text.trim());
+            } catch (IllegalArgumentException ex) {
+                throw new IndicatorRequestException("indicatorIds 必须全部为有效 UUID", ex);
+            }
+            if (!ids.add(id)) {
+                throw new IndicatorRequestException("indicatorIds 不允许重复");
+            }
+        }
+        return List.copyOf(ids);
     }
 
     // Indicator Subscriptions --------------------------------------------------

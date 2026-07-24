@@ -3,9 +3,11 @@ import test from "node:test";
 import {
 	buildMetricWorkbenchLocation,
 	publishIndicatorWithPreview,
+	resolveIndicatorDetailRequest,
+	rollbackIndicatorAndPublish,
 	runIndicatorPreflight,
-	syncIndicatorDependencyReferences,
-} from "./indicatorDefinitionWorkflow";
+	shouldApplyIndicatorDetailResponse,
+} from "./indicatorDefinitionWorkflow.ts";
 
 test("derived preflight uses the compiler-backed derivation endpoint and exposes compiled output", async () => {
 	let rawValidationCalls = 0;
@@ -99,36 +101,6 @@ test("atomic preflight uses executable-rule validation and normalizes its result
 	});
 });
 
-test("dependency reference synchronization performs the planned delete and create calls", async () => {
-	const calls: string[] = [];
-	const result = await syncIndicatorDependencyReferences(
-		"avg-order",
-		[
-			{ id: "gmv-id", code: "GMV", name: "成交金额" },
-			{ id: "count-id", code: "ORDER_COUNT", name: "订单数" },
-		],
-		{
-			listReferences: async (id) => {
-				assert.equal(id, "avg-order");
-				return [
-					{ id: "keep-model", refType: "MODEL_SPEC_FIELD", refTarget: "model@1#amount" },
-					{ id: "delete-old", refType: "INDICATOR", refTarget: "old-id" },
-					{ id: "keep-gmv", refType: "INDICATOR", refTarget: "gmv-id" },
-				];
-			},
-			deleteReference: async (id, referenceId) => {
-				calls.push(`delete:${id}:${referenceId}`);
-			},
-			createReference: async (id, reference) => {
-				calls.push(`create:${id}:${reference.refTarget}`);
-			},
-		},
-	);
-
-	assert.deepEqual(calls, ["create:avg-order:count-id", "delete:avg-order:delete-old"]);
-	assert.deepEqual(result, { deleted: 1, created: 1 });
-});
-
 test("publish preview blocks publish calls until the backend gate passes", async () => {
 	let publishCalls = 0;
 	await assert.rejects(
@@ -162,4 +134,56 @@ test("legacy dictionary deep links preserve indicatorId, returnTo, other query v
 		"/modeling/metric-workbench?indicatorId=metric-1&returnTo=%2Fmodeling%2Fsql&tab=owner#versions",
 	);
 	assert.equal(buildMetricWorkbenchLocation("", ""), "/modeling/metric-workbench");
+});
+
+test("deep-link detail loading uses the requested id without requiring catalog membership", () => {
+	assert.equal(resolveIndicatorDetailRequest("metric-after-first-500", null), "metric-after-first-500");
+	assert.equal(resolveIndicatorDetailRequest("metric-after-first-500", "metric-after-first-500"), null);
+});
+
+test("detail responses are ignored when a newer request or a form edit wins the race", () => {
+	assert.equal(
+		shouldApplyIndicatorDetailResponse({
+			requestSequence: 3,
+			activeRequestSequence: 3,
+			formRevisionAtRequest: 7,
+			currentFormRevision: 7,
+		}),
+		true,
+	);
+	assert.equal(
+		shouldApplyIndicatorDetailResponse({
+			requestSequence: 2,
+			activeRequestSequence: 3,
+			formRevisionAtRequest: 7,
+			currentFormRevision: 7,
+		}),
+		false,
+	);
+	assert.equal(
+		shouldApplyIndicatorDetailResponse({
+			requestSequence: 3,
+			activeRequestSequence: 3,
+			formRevisionAtRequest: 7,
+			currentFormRevision: 8,
+		}),
+		false,
+	);
+});
+
+test("rollback is one rollback-and-publish action and returns the still-published owner", async () => {
+	const result = await rollbackIndicatorAndPublish("metric-1", "v2", "回滚口径", {
+		rollback: async (id, version, data) => {
+			assert.equal(id, "metric-1");
+			assert.equal(version, "v2");
+			assert.deepEqual(data, { reason: "回滚口径", publishAfterRollback: true });
+			return {
+				published: true,
+				indicator: { id, version: "v4", status: "PUBLISHED" },
+			};
+		},
+	});
+
+	assert.equal(result.status, "PUBLISHED");
+	assert.equal(result.version, "v4");
 });

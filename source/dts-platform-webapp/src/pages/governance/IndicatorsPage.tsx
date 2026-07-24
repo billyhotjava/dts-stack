@@ -1,10 +1,9 @@
-import { useEffect } from "react";
-import { LineLoading } from "@/components/loading";
+import { Navigate, useLocation } from "react-router";
+import { buildMetricWorkbenchLocation } from "../modeling/indicatorDefinitionWorkflow";
 
 export default function IndicatorsPage() {
-	useEffect(() => {
-		window.location.assign("/metrics/dictionary");
-	}, []);
+	const location = useLocation();
+	const target = buildMetricWorkbenchLocation(location.search, location.hash);
 
-	return <LineLoading />;
+	return <Navigate to={target || "/modeling/metric-workbench"} replace />;
 }

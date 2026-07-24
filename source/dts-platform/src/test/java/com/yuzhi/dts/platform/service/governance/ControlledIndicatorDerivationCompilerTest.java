@@ -40,4 +40,22 @@ class ControlledIndicatorDerivationCompilerTest {
         assertThatThrownBy(() -> compiler.compile("{{metric:SECRET}} + 1", List.of("GMV")))
             .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void rejectsWhitelistedFunctionsWithUnsafeArity() {
+        assertThatThrownBy(() -> compiler.compile("abs({{metric:GMV}}, 1)", List.of("GMV")))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> compiler.compile("nullif({{metric:GMV}})", List.of("GMV")))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void rejectsExpressionsThatExceedResourceLimits() {
+        assertThatThrownBy(() -> compiler.compile("1+".repeat(3000) + "1", List.of()))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("长度");
+        assertThatThrownBy(() -> compiler.compile("(".repeat(40) + "1" + ")".repeat(40), List.of()))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("嵌套");
+    }
 }

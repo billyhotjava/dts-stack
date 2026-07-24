@@ -13,6 +13,8 @@ import {
 } from "@/api/platformApi";
 import { JourneyContextBar } from "@/components/journey";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
+import { buildMetricWorkbenchLocation } from "./indicatorDefinitionWorkflow";
+import { IndicatorDefinitionPanel } from "./metric-workbench/IndicatorDefinitionPanel";
 import type { CanonicalModelSpecView, ModelSpecField, ModelSpecType } from "./modelSpecV2Contract";
 import { SemanticWorkspaceFrame } from "./semantic-workspace/SemanticWorkspaceFrame";
 
@@ -78,32 +80,48 @@ export default function MetricWorkbenchPage() {
 
 	const load = useCallback(async () => {
 		setLoading(true);
+		const loadModels = async () => {
+			try {
+				const modelResult = await listModelSpecs();
+				const eligible = (Array.isArray(modelResult) ? modelResult : []).filter(
+					(model): model is CanonicalModelSpecView =>
+						model.compatibilityMode === "CANONICAL" &&
+						METRIC_MODEL_TYPES.includes(model.modelType) &&
+						model.status === "PUBLISHED",
+				);
+				setModels(eligible);
+				setSelectedModelId((current) => {
+					if (eligible.some((model) => model.id === current)) return current;
+					if (eligible.some((model) => model.id === journeyContext.modelSpecId)) return journeyContext.modelSpecId;
+					return eligible[0]?.id || "";
+				});
+			} catch {
+				setModels([]);
+				setSelectedModelId("");
+				toast.error("已发布模型加载失败，请稍后重试");
+			}
+		};
+		const loadIndicators = async () => {
+			try {
+				const indicatorResult = await listIndicators({ status: "PUBLISHED", page: 0, size: 200 });
+				const indicatorPage = indicatorResult as { content?: IndicatorSummary[] } | IndicatorSummary[];
+				setIndicators(Array.isArray(indicatorPage) ? indicatorPage : indicatorPage?.content || []);
+			} catch {
+				setIndicators([]);
+				toast.error("已发布指标加载失败，模型浏览仍可继续");
+			}
+		};
+		const loadUnits = async () => {
+			try {
+				const unitResult = await listMeasurementUnits();
+				setUnits(Array.isArray(unitResult) ? unitResult : []);
+			} catch {
+				setUnits([]);
+				toast.error("计量单位加载失败，指标创建前请稍后重试");
+			}
+		};
 		try {
-			const [modelResult, indicatorResult, unitResult] = await Promise.all([
-				listModelSpecs(),
-				listIndicators({ status: "PUBLISHED", page: 0, size: 200 }),
-				listMeasurementUnits(),
-			]);
-			const eligible = (Array.isArray(modelResult) ? modelResult : []).filter(
-				(model): model is CanonicalModelSpecView =>
-					model.compatibilityMode === "CANONICAL" &&
-					METRIC_MODEL_TYPES.includes(model.modelType) &&
-					model.status === "PUBLISHED",
-			);
-			const indicatorPage = indicatorResult as { content?: IndicatorSummary[] } | IndicatorSummary[];
-			setModels(eligible);
-			setIndicators(Array.isArray(indicatorPage) ? indicatorPage : indicatorPage?.content || []);
-			setUnits(Array.isArray(unitResult) ? unitResult : []);
-			setSelectedModelId((current) => {
-				if (eligible.some((model) => model.id === current)) return current;
-				if (eligible.some((model) => model.id === journeyContext.modelSpecId)) return journeyContext.modelSpecId;
-				return eligible[0]?.id || "";
-			});
-		} catch {
-			setModels([]);
-			setIndicators([]);
-			setUnits([]);
-			toast.error("模型、指标或计量单位加载失败，请稍后重试");
+			await Promise.all([loadModels(), loadIndicators(), loadUnits()]);
 		} finally {
 			setLoading(false);
 		}
@@ -179,9 +197,11 @@ export default function MetricWorkbenchPage() {
 			});
 			setDraftOpen(false);
 			toast.success("原子指标草稿已创建，并保留模型字段与计量单位版本来源");
-			navigate(
-				`/governance/indicators/dictionary?indicatorId=${encodeURIComponent(created.id)}&returnTo=${encodeURIComponent(location.pathname + location.search)}`,
-			);
+			const ownerParams = new URLSearchParams({
+				indicatorId: created.id,
+				returnTo: location.pathname + location.search,
+			});
+			navigate(buildMetricWorkbenchLocation(ownerParams.toString(), ""));
 		} catch (error: any) {
 			toast.error(error?.message || "指标草稿创建失败");
 		} finally {
@@ -248,6 +268,9 @@ export default function MetricWorkbenchPage() {
 					description={`模型 ${journeyContext.modelSpecId || "待选择"} · 标准草稿 ${journeyContext.standardDraftId || "未携带"} · 指标 ${journeyContext.metricId || "待引用"}`}
 				/>
 			) : null}
+			<div className="mb-4" data-testid="metric-indicator-owner">
+				<IndicatorDefinitionPanel />
+			</div>
 			<div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]" data-testid="metric-workbench-page">
 				<section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
 					<div className="mb-3 text-sm font-semibold text-gray-900">已发布模型锚点</div>

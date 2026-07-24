@@ -13,6 +13,7 @@ import com.yuzhi.dts.platform.repository.governance.GovIndicatorReferenceReposit
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorVersionRepository;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorDto;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorValidationResultDto;
+import com.yuzhi.dts.platform.service.security.AccessChecker;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -20,7 +21,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import org.apache.commons.codec.digest.DigestUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -35,6 +35,8 @@ public class IndicatorPublishPreviewService {
     private final CatalogDatasetRepository datasetRepository;
     private final GovDimensionDictionaryRepository dimensionRepository;
     private final IndicatorService indicatorService;
+    private final DbtIndicatorGenerator dbtGenerator;
+    private final AccessChecker accessChecker;
     private final ObjectMapper objectMapper;
 
     public IndicatorPublishPreviewService(
@@ -44,6 +46,8 @@ public class IndicatorPublishPreviewService {
         CatalogDatasetRepository datasetRepository,
         GovDimensionDictionaryRepository dimensionRepository,
         IndicatorService indicatorService,
+        DbtIndicatorGenerator dbtGenerator,
+        AccessChecker accessChecker,
         ObjectMapper objectMapper
     ) {
         this.indicatorRepository = indicatorRepository;
@@ -52,25 +56,32 @@ public class IndicatorPublishPreviewService {
         this.datasetRepository = datasetRepository;
         this.dimensionRepository = dimensionRepository;
         this.indicatorService = indicatorService;
+        this.dbtGenerator = dbtGenerator;
+        this.accessChecker = accessChecker;
         this.objectMapper = objectMapper;
     }
 
     public Map<String, Object> preview(UUID indicatorId, String activeDept) {
-        IndicatorDto indicatorDto = indicatorService.get(indicatorId, activeDept);
-        GovIndicatorDefinition indicator = indicatorRepository.findById(indicatorId).orElseThrow();
+        String trustedActiveDept = indicatorService.resolveTrustedActiveDept(activeDept);
+        IndicatorDto indicatorDto = indicatorService.get(indicatorId, trustedActiveDept);
+        GovIndicatorDefinition indicator = indicatorRepository
+            .findById(indicatorId)
+            .orElseThrow(() -> new IndicatorNotFoundException("指标不存在: " + indicatorId));
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("indicator", indicatorDto);
-        payload.put("activeDept", normalizeText(activeDept));
+        payload.put("activeDept", normalizeText(trustedActiveDept));
         payload.put("currentSignature", computeSignature(indicator));
 
         // Basic config checks
         List<Map<String, Object>> blockingIssues = new ArrayList<>();
         List<Map<String, Object>> warningIssues = new ArrayList<>();
+        boolean derived = Boolean.TRUE.equals(indicator.getIsDerived());
         String datasetIdRaw = normalizeText(indicator.getDatasetId());
         UUID datasetId = parseUuid(datasetIdRaw);
-        payload.put("datasetIdValid", datasetId != null);
-        if (datasetId == null) {
+        payload.put("datasetRequired", !derived);
+        payload.put("datasetIdValid", derived || datasetId != null);
+        if (!derived && datasetId == null) {
             blockingIssues.add(
                 issue(
                     "IND_CFG_DATASET_ID_INVALID",
@@ -81,47 +92,76 @@ public class IndicatorPublishPreviewService {
             );
         }
         if (!StringUtils.hasText(indicator.getExpressionSql())) {
-            blockingIssues.add(issue("IND_CFG_SQL_MISSING", "BLOCKER", "未配置计算SQL", "请先填写计算 SQL"));
-        }
-
-        CatalogDataset dataset = datasetId != null ? datasetRepository.findById(datasetId).orElse(null) : null;
-        if (datasetId != null && dataset == null) {
-            blockingIssues.add(issue("IND_CFG_DATASET_NOT_FOUND", "BLOCKER", "绑定的数据集不存在", "请重新绑定有效数据集"));
-        }
-        if (dataset != null) {
-            payload.put(
-                "dataset",
-                Map.of(
-                    "id",
-                    dataset.getId() != null ? dataset.getId().toString() : null,
-                    "name",
-                    dataset.getName(),
-                    "ownerDept",
-                    dataset.getOwnerDept(),
-                    "classification",
-                    dataset.getClassification(),
-                    "type",
-                    dataset.getType(),
-                    "hiveDatabase",
-                    dataset.getHiveDatabase(),
-                    "hiveTable",
-                    dataset.getHiveTable()
-                )
-            );
-        }
-
-        // Validation: reuse existing compute validation (includes security guard + query gateway)
-        IndicatorValidationResultDto validation = indicatorService.validateComputeRule(indicatorId, activeDept);
-        payload.put("validation", validation);
-        if (validation == null || !"SUCCESS".equalsIgnoreCase(validation.getStatus())) {
             blockingIssues.add(
                 issue(
-                    "IND_VALIDATION_FAILED",
+                    derived ? "IND_CFG_DERIVATION_MISSING" : "IND_CFG_SQL_MISSING",
                     "BLOCKER",
-                    "校验未通过：" + safeText(validation != null ? validation.getMessage() : null, "UNKNOWN"),
-                    "请先修复 SQL、权限或数据集问题后重新校验"
+                    derived ? "未配置派生表达式" : "未配置计算SQL",
+                    derived ? "请先填写受控派生表达式" : "请先填写计算 SQL"
                 )
             );
+        }
+
+        CatalogDataset dataset = !derived && datasetId != null ? datasetRepository.findById(datasetId).orElse(null) : null;
+        if (!derived && datasetId != null && dataset == null) {
+            blockingIssues.add(issue("IND_CFG_DATASET_NOT_FOUND", "BLOCKER", "绑定的数据集不存在", "请重新绑定有效数据集"));
+        }
+        boolean datasetAccessible = dataset == null || datasetAccessible(dataset, trustedActiveDept);
+        if (dataset != null && !datasetAccessible) {
+            blockingIssues.add(
+                issue(
+                    "IND_DATASET_ACCESS_DENIED",
+                    "BLOCKER",
+                    "当前上下文无权预检绑定数据集",
+                    "请切换到有权访问该数据集的部门上下文"
+                )
+            );
+        } else if (dataset != null) {
+            Map<String, Object> datasetPayload = new LinkedHashMap<>();
+            datasetPayload.put("id", dataset.getId() != null ? dataset.getId().toString() : null);
+            datasetPayload.put("name", dataset.getName());
+            datasetPayload.put("ownerDept", dataset.getOwnerDept());
+            datasetPayload.put("classification", dataset.getClassification());
+            datasetPayload.put("type", dataset.getType());
+            datasetPayload.put("hiveDatabase", dataset.getHiveDatabase());
+            datasetPayload.put("hiveTable", dataset.getHiveTable());
+            payload.put("dataset", datasetPayload);
+        }
+
+        if (derived) {
+            IndicatorDerivationValidationResult validation = indicatorService.validateDerivation(indicatorId, trustedActiveDept);
+            payload.put("validation", validation);
+            for (IndicatorDerivationValidationResult.Issue validationIssue : validation.issues()) {
+                blockingIssues.add(
+                    issue(
+                        validationIssue.code(),
+                        "BLOCKER",
+                        validationIssue.message(),
+                        "请修复派生表达式、依赖状态或粒度后重新校验"
+                    )
+                );
+            }
+        } else {
+            // Atomic indicators keep the existing security guard + query-gateway validation.
+            if (dataset != null && !datasetAccessible) {
+                payload.put("validation", null);
+            } else {
+                IndicatorValidationResultDto validation = indicatorService.validateComputeRule(
+                    indicatorId,
+                    trustedActiveDept
+                );
+                payload.put("validation", validation);
+                if (validation == null || !"SUCCESS".equalsIgnoreCase(validation.getStatus())) {
+                    blockingIssues.add(
+                        issue(
+                            "IND_VALIDATION_FAILED",
+                            "BLOCKER",
+                            "校验未通过：" + safeText(validation != null ? validation.getMessage() : null, "UNKNOWN"),
+                            "请先修复 SQL、权限或数据集问题后重新校验"
+                        )
+                    );
+                }
+            }
         }
 
         // Manual references
@@ -152,6 +192,21 @@ public class IndicatorPublishPreviewService {
                         "WARNING",
                         "引用校验不完整：" + refType + " -> " + refTarget,
                         "请检查引用目标格式是否符合约定"
+                    )
+                );
+            }
+        }
+
+        if (blockingIssues.isEmpty()) {
+            try {
+                dbtGenerator.previewSql(indicatorId);
+            } catch (RuntimeException ex) {
+                blockingIssues.add(
+                    issue(
+                        "IND_DBT_COMPILE_FAILED",
+                        "BLOCKER",
+                        "dbt 指标产物编译未通过",
+                        "请检查指标计算配置与依赖后重新预检"
                     )
                 );
             }
@@ -198,7 +253,7 @@ public class IndicatorPublishPreviewService {
             String refType = normalizeType(ref.getRefType());
             String target = normalizeText(ref.getRefTarget());
             if (!StringUtils.hasText(refType) || !StringUtils.hasText(target)) {
-                checks.add(Map.of("refType", refType, "refTarget", target, "status", "UNKNOWN", "message", "引用信息不完整"));
+                checks.add(nullableMap("refType", refType, "refTarget", target, "status", "UNKNOWN", "message", "引用信息不完整"));
                 continue;
             }
             if ("INDICATOR".equals(refType)) {
@@ -213,7 +268,7 @@ public class IndicatorPublishPreviewService {
                 checks.add(checkDatasetRef(target));
                 continue;
             }
-            checks.add(Map.of("refType", refType, "refTarget", target, "status", "SKIPPED"));
+            checks.add(nullableMap("refType", refType, "refTarget", target, "status", "SKIPPED"));
         }
         return checks;
     }
@@ -222,29 +277,29 @@ public class IndicatorPublishPreviewService {
         UUID id = parseUuid(target);
         if (id != null) {
             boolean exists = indicatorRepository.existsById(id);
-            return Map.of("refType", "INDICATOR", "refTarget", target, "status", exists ? "OK" : "MISSING");
+            return nullableMap("refType", "INDICATOR", "refTarget", target, "status", exists ? "OK" : "MISSING");
         }
         boolean exists = indicatorRepository.findFirstByCodeIgnoreCase(target).isPresent();
-        return Map.of("refType", "INDICATOR", "refTarget", target, "status", exists ? "OK" : "MISSING");
+        return nullableMap("refType", "INDICATOR", "refTarget", target, "status", exists ? "OK" : "MISSING");
     }
 
     private Map<String, Object> checkDimensionRef(String target) {
         UUID id = parseUuid(target);
         if (id != null) {
             boolean exists = dimensionRepository.existsById(id);
-            return Map.of("refType", "DIMENSION", "refTarget", target, "status", exists ? "OK" : "MISSING");
+            return nullableMap("refType", "DIMENSION", "refTarget", target, "status", exists ? "OK" : "MISSING");
         }
         boolean exists = dimensionRepository.findFirstByCodeIgnoreCase(target).isPresent();
-        return Map.of("refType", "DIMENSION", "refTarget", target, "status", exists ? "OK" : "MISSING");
+        return nullableMap("refType", "DIMENSION", "refTarget", target, "status", exists ? "OK" : "MISSING");
     }
 
     private Map<String, Object> checkDatasetRef(String target) {
         UUID id = parseUuid(target);
         if (id == null) {
-            return Map.of("refType", "DATASET", "refTarget", target, "status", "UNKNOWN", "message", "数据集引用应使用 UUID");
+            return nullableMap("refType", "DATASET", "refTarget", target, "status", "UNKNOWN", "message", "数据集引用应使用 UUID");
         }
         boolean exists = datasetRepository.existsById(id);
-        return Map.of("refType", "DATASET", "refTarget", target, "status", exists ? "OK" : "MISSING");
+        return nullableMap("refType", "DATASET", "refTarget", target, "status", exists ? "OK" : "MISSING");
     }
 
     private String normalizeType(String value) {
@@ -305,7 +360,7 @@ public class IndicatorPublishPreviewService {
         if (Objects.equals(a, b)) {
             return;
         }
-        diffs.add(Map.of("field", field, "before", b, "after", a, "changed", true));
+        diffs.add(nullableMap("field", field, "before", b, "after", a, "changed", true));
     }
 
     private Map<String, Object> parseJson(String json) {
@@ -320,11 +375,27 @@ public class IndicatorPublishPreviewService {
     }
 
     private String computeSignature(GovIndicatorDefinition entity) {
-        if (entity == null) return null;
-        String datasetId = String.valueOf(entity.getDatasetId() == null ? "" : entity.getDatasetId()).trim();
-        String sql = String.valueOf(entity.getExpressionSql() == null ? "" : entity.getExpressionSql()).trim();
-        String input = datasetId + "\n" + sql;
-        return DigestUtils.sha256Hex(input);
+        try {
+            return IndicatorValidationSignature.compute(entity, objectMapper, indicatorRepository);
+        } catch (IllegalArgumentException ex) {
+            throw new IndicatorConflictException("指标当前配置不合法：" + safeText(ex.getMessage(), "未知配置错误"));
+        }
+    }
+
+    private boolean datasetAccessible(CatalogDataset dataset, String trustedActiveDept) {
+        try {
+            return accessChecker.canRead(dataset) && accessChecker.departmentAllowed(dataset, trustedActiveDept);
+        } catch (RuntimeException ex) {
+            return false;
+        }
+    }
+
+    private Map<String, Object> nullableMap(Object... entries) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (int i = 0; i + 1 < entries.length; i += 2) {
+            result.put(String.valueOf(entries[i]), entries[i + 1]);
+        }
+        return result;
     }
 
     private UUID parseUuid(String value) {

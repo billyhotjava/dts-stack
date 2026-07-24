@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+	buildExistingIndicatorMutationPayload,
+	buildIndicatorFormChanges,
 	buildIndicatorUpsertPayload,
 	nextIndicatorVersion,
+	normalizeIndicatorEditValues,
 	parseIndicatorDependencyCodes,
-	planIndicatorDependencyReferences,
 	validateIndicatorDefinition,
-} from "./indicatorDefinitionContract";
+} from "./indicatorDefinitionContract.ts";
 
 test("dependency codes accept JSON arrays and reject malformed values safely", () => {
 	assert.deepEqual(parseIndicatorDependencyCodes('["GMV","ORDER_COUNT","GMV"]'), ["GMV", "ORDER_COUNT"]);
@@ -80,7 +82,15 @@ test("published indicators move to the next draft version without clearing untou
 		["v1", "v2", "v3"],
 	);
 
-	const { id: _id, createdBy: _createdBy, createdDate: _createdDate, lastModifiedBy: _lastModifiedBy, lastModifiedDate: _lastModifiedDate, lastValidationStatus: _lastValidationStatus, ...upsertFields } = original;
+	const {
+		id: _id,
+		createdBy: _createdBy,
+		createdDate: _createdDate,
+		lastModifiedBy: _lastModifiedBy,
+		lastModifiedDate: _lastModifiedDate,
+		lastValidationStatus: _lastValidationStatus,
+		...upsertFields
+	} = original;
 	assert.deepEqual(payload, {
 		...upsertFields,
 		name: "成交金额（含税）",
@@ -119,25 +129,6 @@ test("version calculation ignores invalid labels", () => {
 	assert.equal(nextIndicatorVersion(["CURRENT", "v2", "V7", "draft"]), "v8");
 });
 
-test("dependency reference plan preserves non-indicator references and converges indicator refs", () => {
-	const plan = planIndicatorDependencyReferences(
-		[
-			{ id: "ref-model", refType: "MODEL_SPEC_FIELD", refTarget: "model@1#amount" },
-			{ id: "ref-old", refType: "INDICATOR", refTarget: "old-id" },
-			{ id: "ref-kept", refType: "INDICATOR", refTarget: "gmv-id" },
-		],
-		[
-			{ id: "gmv-id", code: "GMV", name: "成交金额" },
-			{ id: "count-id", code: "ORDER_COUNT", name: "订单数" },
-		],
-	);
-
-	assert.deepEqual(plan.deleteReferenceIds, ["ref-old"]);
-	assert.deepEqual(plan.createReferences, [
-		{ refType: "INDICATOR", refTarget: "count-id", refName: "订单数", notes: "ORDER_COUNT" },
-	]);
-});
-
 test("definition preflight distinguishes atomic and derived requirements", () => {
 	assert.deepEqual(
 		validateIndicatorDefinition({
@@ -158,5 +149,165 @@ test("definition preflight distinguishes atomic and derived requirements", () =>
 			expressionSql: "",
 		}),
 		["派生指标至少选择一个非自身依赖指标", "派生指标必须填写受控派生表达式或计算 SQL"],
+	);
+});
+
+test("collapsed scope fields stay untouched while an explicit dimension clear is serialized as null", () => {
+	const allValues = {
+		name: "成交金额（含税）",
+		isDerived: false,
+		dimensionCodes: ["shop_id"],
+	};
+	const untouchedChanges = buildIndicatorFormChanges(allValues, new Set(["name"]), [
+		{ name: "shop_id", comment: "门店" },
+	]);
+	assert.equal(Object.hasOwn(untouchedChanges, "dimensionFields"), false);
+	assert.equal(
+		buildIndicatorUpsertPayload(
+			{
+				id: "metric-1",
+				code: "GMV",
+				name: "成交金额",
+				status: "DRAFT",
+				version: "v1",
+				dimensionFields: '[{"field":"shop_id","displayName":"门店"}]',
+			},
+			untouchedChanges,
+			["v1"],
+		).dimensionFields,
+		'[{"field":"shop_id","displayName":"门店"}]',
+	);
+
+	const clearedChanges = buildIndicatorFormChanges({ ...allValues, dimensionCodes: [] }, new Set(["dimensionCodes"]), [
+		{ name: "shop_id", comment: "门店" },
+	]);
+	assert.equal(clearedChanges.dimensionFields, null);
+});
+
+test("explicit edited field names include dependency and dimension values without leaking programmatic fields", () => {
+	const changes = buildIndicatorFormChanges(
+		{
+			name: "程序回灌名称",
+			category: "程序回灌分类",
+			dependencyCodes: ["GMV", "ORDER_COUNT"],
+			dimensionCodes: ["shop_id"],
+		},
+		new Set(["dependencyCodes", "dimensionCodes"]),
+		[{ name: "shop_id", comment: "门店" }],
+	);
+
+	assert.equal(Object.hasOwn(changes, "name"), false);
+	assert.equal(Object.hasOwn(changes, "category"), false);
+	assert.equal(changes.dependencyIndicators, undefined);
+	assert.deepEqual(changes.dependencyCodes, ["GMV", "ORDER_COUNT"]);
+	assert.equal(changes.dimensionFields, '[{"field":"shop_id","displayName":"门店"}]');
+});
+
+test("existing mutations merge only touched values onto latest and carry the baseline CAS token", () => {
+	const baseline = {
+		id: "metric-1",
+		code: "GMV",
+		name: "成交金额",
+		category: "交易",
+		owner: "owner-a",
+		status: "DRAFT",
+		version: "v3",
+		lastModifiedDate: "2026-07-25T10:20:30Z",
+	};
+	const latest = {
+		...baseline,
+		owner: "owner-from-latest",
+	};
+	const payload = buildExistingIndicatorMutationPayload(baseline, latest, { name: "成交金额（含税）" }, [
+		"v1",
+		"v2",
+		"v3",
+	]);
+
+	assert.equal(payload.name, "成交金额（含税）");
+	assert.equal(payload.owner, "owner-from-latest");
+	assert.equal(payload.category, "交易");
+	assert.equal(payload.expectedLastModifiedDate, "2026-07-25T10:20:30Z");
+});
+
+test("existing mutations reject baseline drift before a stale payload can be written", () => {
+	assert.throws(
+		() =>
+			buildExistingIndicatorMutationPayload(
+				{
+					id: "metric-1",
+					code: "GMV",
+					status: "DRAFT",
+					version: "v3",
+					lastModifiedDate: "2026-07-25T10:20:30Z",
+				},
+				{
+					id: "metric-1",
+					code: "GMV",
+					status: "DRAFT",
+					version: "v3",
+					lastModifiedDate: "2026-07-25T10:21:30Z",
+				},
+				{ name: "过期修改" },
+				["v1", "v2", "v3"],
+			),
+		/已被其他用户更新/,
+	);
+});
+
+test("business category remains independent from derived mode and aggregation type", () => {
+	assert.deepEqual(
+		normalizeIndicatorEditValues({
+			code: "AVG_ORDER",
+			name: "客单价",
+			isDerived: true,
+			category: "客户增长",
+			aggregationType: "SUM",
+			datasetId: "dataset-1",
+			measureField: "amount",
+			dependencyCodes: ["GMV", "ORDER_COUNT"],
+		}),
+		{
+			code: "AVG_ORDER",
+			name: "客单价",
+			isDerived: true,
+			category: "客户增长",
+			aggregationType: "DERIVED",
+			datasetId: null,
+			measureField: null,
+			numeratorExpression: null,
+			denominatorExpression: null,
+			dependencyCodes: ["GMV", "ORDER_COUNT"],
+		},
+	);
+	assert.deepEqual(
+		normalizeIndicatorEditValues({
+			code: "ORDER_COUNT",
+			name: "订单数",
+			isDerived: false,
+			category: "复合经营",
+			aggregationType: "DERIVED",
+			measureField: "order_id",
+			dependencyCodes: ["GMV"],
+		}),
+		{
+			code: "ORDER_COUNT",
+			name: "订单数",
+			isDerived: false,
+			category: "复合经营",
+			aggregationType: null,
+			measureField: "order_id",
+			dependencyCodes: [],
+		},
+	);
+	assert.deepEqual(
+		validateIndicatorDefinition({
+			code: "ORDER_COUNT",
+			name: "订单数",
+			isDerived: false,
+			aggregationType: "DERIVED",
+			measureField: "order_id",
+		}),
+		["原子指标聚合方式不能为 DERIVED"],
 	);
 });
