@@ -158,6 +158,57 @@ class ModelSpecCompilerProjectionTest {
             .isEqualTo("MODEL_IMPLEMENTATION_INPUT_STALE");
     }
 
+    @Test
+    void projectsThePinnedUpstreamDbtNodeInsteadOfRecomputingItFromTheModelName() {
+        UUID upstreamId = UUID.fromString("40000000-0000-0000-0000-000000000001");
+        ModelRevisionRef logicalRef = new ModelRevisionRef(upstreamId, 3);
+        ModelSpecView derived = view(ModelType.SUMMARY, List.of(logicalRef), List.of());
+        ModelSpecView upstream = new ModelSpecView(
+            2, upstreamId, derived.planId(), derived.domainId(), ModelType.FACT, Layer.DWD, "customer_detail", null,
+            ImplementationMode.DESIGNER_GENERATED, "table", null, null, derived.grain(), null, null,
+            derived.fields(), List.of(), List.of(), List.of(), List.of(), List.of(), null, ModelStatus.DRAFT, 3,
+            "a".repeat(64), Instant.EPOCH, Instant.EPOCH, CompatibilityMode.CANONICAL, null
+        );
+        ImplementationView implementation = new ImplementationView(
+            UUID.fromString("60000000-0000-0000-0000-000000000001"),
+            derived.id(),
+            derived.planId(),
+            derived.revision(),
+            derived.checksum(),
+            ImplementationMode.DESIGNER_GENERATED,
+            "warehouse",
+            "model.warehouse.customer_summary",
+            "ACTIVE",
+            2,
+            "c".repeat(64),
+            InputMode.UPSTREAM_MODEL,
+            List.of(
+                new ModelLifecycleContract.UpstreamModelInput(
+                    upstreamId,
+                    3,
+                    "a".repeat(64),
+                    5,
+                    "d".repeat(64),
+                    "model.warehouse.renamed_customer_detail"
+                )
+            ),
+            List.of(),
+            Map.of(),
+            "table"
+        );
+
+        ModelSpecCompilerProjection.ImplementationProjection projected = ModelSpecCompilerProjection.project(
+            derived,
+            implementation,
+            candidate -> candidate.equals(logicalRef) ? upstream : null
+        );
+
+        assertThat(projected.model().sourceRefs()).singleElement().satisfies(source -> {
+            assertThat(source.kind()).isEqualTo("DBT_MODEL");
+            assertThat(source.ref()).isEqualTo("renamed_customer_detail");
+        });
+    }
+
     private static ModelSpecView view(ModelType type, List<ModelRevisionRef> dependsOn, List<SourceRef> sources) {
         return new ModelSpecView(
             2,

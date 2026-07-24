@@ -398,6 +398,7 @@ public class ModelLifecycleRepository {
     }
 
     /** Dedicated DBT ingestion path; it may only replace artifacts pinned to the same implementation revision. */
+    @Transactional
     public void saveDbtManagedArtifacts(
         String tenantId,
         ModelSpecView model,
@@ -421,6 +422,61 @@ public class ModelLifecycleRepository {
         Instant now,
         boolean dbtWritePath
     ) {
+        String conflictClause = dbtWritePath
+            ? """
+                on conflict (model_spec_id, revision, implementation_revision, node_kind, artifact_type)
+                    where ownership = 'DBT_MANAGED'
+                do update
+                   set path = excluded.path,
+                       dbt_unique_id = excluded.dbt_unique_id,
+                       content_checksum = excluded.content_checksum,
+                       content = excluded.content,
+                       status = excluded.status,
+                       model_checksum = excluded.model_checksum,
+                       ownership = excluded.ownership,
+                       idempotency_key = excluded.idempotency_key,
+                       materialization = excluded.materialization,
+                       physical_asset_ref = excluded.physical_asset_ref,
+                       last_modified_date = excluded.last_modified_date
+                 where modeling_dbt_artifact.model_checksum = excluded.model_checksum
+                   and modeling_dbt_artifact.ownership = excluded.ownership
+                   and modeling_dbt_artifact.implementation_revision = excluded.implementation_revision
+                   and modeling_dbt_artifact.project_key = excluded.project_key
+                   and modeling_dbt_artifact.dbt_unique_id = excluded.dbt_unique_id
+                   and modeling_dbt_artifact.path = excluded.path
+                   and modeling_dbt_artifact.content_checksum = excluded.content_checksum
+                   and modeling_dbt_artifact.content = excluded.content
+                   and modeling_dbt_artifact.node_kind = excluded.node_kind
+                   and modeling_dbt_artifact.materialization = excluded.materialization
+                   and modeling_dbt_artifact.physical_asset_ref is not distinct from excluded.physical_asset_ref
+                """
+            : """
+                on conflict (model_spec_id, revision, implementation_revision, artifact_key) do update
+                   set path = excluded.path,
+                       dbt_unique_id = excluded.dbt_unique_id,
+                       content_checksum = excluded.content_checksum,
+                       content = excluded.content,
+                       status = excluded.status,
+                       model_checksum = excluded.model_checksum,
+                       ownership = excluded.ownership,
+                       idempotency_key = excluded.idempotency_key,
+                       node_kind = excluded.node_kind,
+                       materialization = excluded.materialization,
+                       physical_asset_ref = excluded.physical_asset_ref,
+                       last_modified_date = excluded.last_modified_date
+                 where modeling_dbt_artifact.model_checksum = excluded.model_checksum
+                   and modeling_dbt_artifact.ownership = excluded.ownership
+                   and modeling_dbt_artifact.ownership <> 'DBT_MANAGED'
+                   and modeling_dbt_artifact.implementation_revision = excluded.implementation_revision
+                   and modeling_dbt_artifact.project_key is not distinct from excluded.project_key
+                   and modeling_dbt_artifact.dbt_unique_id is not distinct from excluded.dbt_unique_id
+                   and modeling_dbt_artifact.path is not distinct from excluded.path
+                   and modeling_dbt_artifact.content_checksum is not distinct from excluded.content_checksum
+                   and modeling_dbt_artifact.content is not distinct from excluded.content
+                   and modeling_dbt_artifact.node_kind is not distinct from excluded.node_kind
+                   and modeling_dbt_artifact.materialization is not distinct from excluded.materialization
+                   and modeling_dbt_artifact.physical_asset_ref is not distinct from excluded.physical_asset_ref
+                """;
         for (ArtifactWrite artifact : artifacts) {
             if (artifact.physicalAssetRef() != null && !physicalAssetBelongsToTenant(tenantId, model.planId(), artifact.physicalAssetRef())) {
                 throw new com.yuzhi.dts.platform.service.modeling.ModelSpecException(
@@ -441,38 +497,7 @@ public class ModelLifecycleRepository {
                     ownership, idempotency_key, implementation_revision, node_kind, materialization,
                     physical_asset_ref, created_date, last_modified_date
                 ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'COMPILED', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                on conflict (model_spec_id, revision, artifact_key) do update
-                   set path = excluded.path,
-                       dbt_unique_id = excluded.dbt_unique_id,
-                       content_checksum = excluded.content_checksum,
-                       content = excluded.content,
-                       status = excluded.status,
-                       model_checksum = excluded.model_checksum,
-                       ownership = excluded.ownership,
-                       idempotency_key = excluded.idempotency_key,
-                       implementation_revision = excluded.implementation_revision,
-                       node_kind = excluded.node_kind,
-                       materialization = excluded.materialization,
-                       physical_asset_ref = excluded.physical_asset_ref,
-                       last_modified_date = excluded.last_modified_date
-                 where modeling_dbt_artifact.model_checksum = excluded.model_checksum
-                   and modeling_dbt_artifact.ownership = excluded.ownership
-                   and (
-                       excluded.ownership <> 'DBT_MANAGED'
-                       or (
-                           ?
-                           and modeling_dbt_artifact.implementation_revision = excluded.implementation_revision
-                           and modeling_dbt_artifact.project_key = excluded.project_key
-                           and modeling_dbt_artifact.dbt_unique_id = excluded.dbt_unique_id
-                           and modeling_dbt_artifact.path = excluded.path
-                           and modeling_dbt_artifact.content_checksum = excluded.content_checksum
-                           and modeling_dbt_artifact.content = excluded.content
-                           and modeling_dbt_artifact.node_kind = excluded.node_kind
-                           and modeling_dbt_artifact.materialization = excluded.materialization
-                           and modeling_dbt_artifact.physical_asset_ref is not distinct from excluded.physical_asset_ref
-                       )
-                   )
-                """,
+                """ + conflictClause,
                 UUID.randomUUID(),
                 model.id(),
                 model.planId(),
@@ -494,8 +519,7 @@ public class ModelLifecycleRepository {
                     : artifact.materialization(),
                 artifact.physicalAssetRef(),
                 Timestamp.from(now),
-                Timestamp.from(now),
-                dbtWritePath
+                Timestamp.from(now)
             );
             if (changed == 0) {
                 throw new com.yuzhi.dts.platform.service.modeling.ModelSpecException(

@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.modeling;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.IntegrationTest;
@@ -67,7 +68,7 @@ class ModelingVNextApplicationServiceIT {
     }
 
     @Test
-    void pjmGoldenPathPersistsCompilesImportsAndQueuesRun() {
+    void pjmGoldenPathRejectsGeneratedCompileImportsPinnedDbtArtifactsAndQueuesRun() {
         String tenant = "it-" + UUID.randomUUID();
         UUID seed = UUID.randomUUID();
         String objectKey = "pjm-project-node-it-" + seed.toString().substring(0, 8);
@@ -92,30 +93,61 @@ class ModelingVNextApplicationServiceIT {
             assertThat(service.listBusinessObjects(tenant, object.processId(), "DRAFT")).extracting(ModelingVNextContract.BusinessObject::id).contains(savedObject.id());
 
             ModelingVNextContract.ModelSpec savedModel = service.saveModelSpec(tenant, model, 1, "model-" + modelKey);
-            ModelingVNextApplicationService.CompileResult compiled = service.compile(tenant, savedModel.id(), 1, "compile-" + modelKey);
-            assertThat(compiled.status()).isEqualTo("COMPILED");
-            assertThat(compiled.artifacts()).extracting(ModelingVNextApplicationService.Artifact::artifactType).contains("SQL", "SCHEMA", "TEST");
-            ModelingVNextApplicationService.ReleaseGateView releaseGate = service.releaseGate(tenant, savedModel.id());
-            assertThat(releaseGate.publishable()).isTrue();
-            assertThat(releaseGate.status()).isEqualTo("RELEASE_READY");
-            assertThat(service.artifacts(tenant, savedModel.id())).filteredOn(a -> "SQL".equals(a.artifactType())).singleElement()
-                .extracting(ModelingVNextApplicationService.Artifact::checksum).isEqualTo(
-                    compiled.artifacts().stream().filter(a -> "SQL".equals(a.artifactType())).findFirst().orElseThrow().checksum()
-                );
-            assertThat(service.artifacts("tenant-other", savedModel.id())).isEmpty();
-            assertThat(service.drift(tenant, savedModel.id()).status()).isEqualTo("CLEAN");
-            jdbcTemplate.update(
-                "update modeling_dbt_artifact set content = ?, content_checksum = ? where model_spec_id = ? and artifact_type = 'SQL'",
-                "select tampered_project_no from ods_project_node",
-                "tampered-checksum",
-                externalUuid(modelKey)
+            ModelingVNextApplicationService.CompileResult refusedCompile = service.compile(
+                tenant,
+                savedModel.id(),
+                1,
+                "compile-" + modelKey
             );
-            assertThat(service.drift(tenant, savedModel.id()).status()).isEqualTo("DRIFTED");
-            assertThat(service.releaseGate(tenant, savedModel.id()).publishable()).isFalse();
-            assertThat(service.releaseGate(tenant, savedModel.id()).blockers()).contains("ARTIFACT_CHECKSUM_DRIFT");
-            ModelingVNextApplicationService.LineageView lineage = service.lineage(tenant, savedModel.id());
-            assertThat(lineage.nodes()).extracting(node -> node.get("id")).contains(savedModel.id(), "ods_project_node");
-            assertThat(lineage.edges()).anyMatch(edge -> savedModel.id().equals(edge.get("to")) && "SOURCE".equals(edge.get("type")));
+            assertThat(refusedCompile.status()).isEqualTo("FAILED");
+            assertThat(refusedCompile.issues()).containsExactly("DBT_MANAGED_ARTIFACT_REQUIRED");
+            assertThat(refusedCompile.artifacts()).isEmpty();
+
+            UUID implementationId = UUID.randomUUID();
+            UUID implementationPlanId = UUID.randomUUID();
+            String modelChecksum = jdbcTemplate.queryForObject(
+                "select content_checksum from modeling_model_spec_revision where model_spec_id = ? and revision = ?",
+                String.class,
+                UUID.fromString(savedModel.id()),
+                savedModel.revision()
+            );
+            String implementationChecksum = "b".repeat(64);
+            jdbcTemplate.update(
+                """
+                with implementation as (
+                    insert into modeling_model_implementation (
+                        id, tenant_id, model_spec_id, plan_id, model_revision, model_checksum, ownership,
+                        project_key, dbt_unique_id, status, idempotency_key, created_by, created_date,
+                        last_modified_date, implementation_revision, current_implementation_checksum,
+                        input_mode, inputs_json, field_mappings_json, settings_json, materialization
+                    ) values (?, ?, ?, ?, ?, ?, 'DBT_MANAGED', 'legacy-pjm', 'model.legacy.project_node',
+                              'ACTIVE', ?, 'integration-test', now(), now(), 1, ?, 'GENERATED',
+                              cast('[{"generatorType":"SQL_WORKSPACE","config":{}}]' as jsonb),
+                              cast('[]' as jsonb), cast('{}' as jsonb), 'table')
+                    returning id, tenant_id, ownership, materialization
+                )
+                insert into modeling_model_implementation_revision (
+                    id, tenant_id, implementation_id, revision, content_checksum, input_mode,
+                    inputs_json, field_mappings_json, settings_json, ownership, materialization,
+                    created_by, created_date
+                )
+                select ?, tenant_id, id, 1, ?, 'GENERATED',
+                       cast('[{"generatorType":"SQL_WORKSPACE","config":{}}]' as jsonb),
+                       cast('[]' as jsonb), cast('{}' as jsonb), ownership, materialization,
+                       'integration-test', now()
+                  from implementation
+                """,
+                implementationId,
+                tenant,
+                UUID.fromString(savedModel.id()),
+                implementationPlanId,
+                savedModel.revision(),
+                modelChecksum,
+                "implementation-" + modelKey,
+                implementationChecksum,
+                UUID.randomUUID(),
+                implementationChecksum
+            );
 
             Map<String, Object> node = new LinkedHashMap<>();
             node.put("resource_type", "model");
@@ -135,24 +167,45 @@ class ModelingVNextApplicationServiceIT {
                     "import-" + modelKey,
                     savedModel.id(),
                     savedModel.revision(),
-                    jdbcTemplate.queryForObject(
-                        "select content_checksum from modeling_model_spec_revision where model_spec_id = ? and revision = ?",
-                        String.class,
-                        UUID.fromString(savedModel.id()),
-                        savedModel.revision()
-                    ),
+                    modelChecksum,
                     1,
-                    jdbcTemplate.queryForObject(
-                        "select current_implementation_checksum from modeling_model_implementation where tenant_id = ? and model_spec_id = ?",
-                        String.class,
-                        tenant,
-                        UUID.fromString(savedModel.id())
-                    )
+                    implementationChecksum
                 )
             );
             assertThat(imported.modelSpecId()).isEqualTo(savedModel.id());
             assertThat(imported.status()).isEqualTo("COMPILED");
-            assertThat(service.artifacts(tenant, savedModel.id())).isNotEmpty();
+            assertThat(service.artifacts(tenant, savedModel.id()))
+                .extracting(ModelingVNextApplicationService.Artifact::artifactType)
+                .containsExactlyInAnyOrder("SQL", "SCHEMA");
+            node.put("raw_code", "select changed_project_no from ods_project_node");
+            assertThatThrownBy(() ->
+                service.importDbt(
+                    tenant,
+                    new DbtModelingContract.ManifestImportRequest(
+                        "legacy-pjm",
+                        "1.7",
+                        "model.legacy.project_node",
+                        manifest,
+                        null,
+                        "import-changed-" + modelKey,
+                        savedModel.id(),
+                        savedModel.revision(),
+                        modelChecksum,
+                        1,
+                        implementationChecksum
+                    )
+                )
+            )
+                .isInstanceOf(ModelingVNextApplicationService.DomainException.class)
+                .extracting(error -> ((ModelingVNextApplicationService.DomainException) error).code())
+                .isEqualTo("MODEL_ARTIFACT_REVISION_CONFLICT");
+            assertThat(service.artifacts("tenant-other", savedModel.id())).isEmpty();
+            ModelingVNextApplicationService.ReleaseGateView releaseGate = service.releaseGate(tenant, savedModel.id());
+            assertThat(releaseGate.publishable()).isFalse();
+            assertThat(releaseGate.blockers()).contains("DBT_TEST_FAILED");
+            ModelingVNextApplicationService.LineageView lineage = service.lineage(tenant, savedModel.id());
+            assertThat(lineage.nodes()).extracting(node -> node.get("id")).contains(savedModel.id(), "ods_project_node");
+            assertThat(lineage.edges()).anyMatch(edge -> savedModel.id().equals(edge.get("to")) && "SOURCE".equals(edge.get("type")));
 
             jdbcTemplate.update(
                 "update modeling_model_spec set status = 'PUBLISHED' where tenant_id = ? and id = ?",
@@ -191,6 +244,19 @@ class ModelingVNextApplicationServiceIT {
             jdbcTemplate.update("delete from modeling_pipeline_run where tenant_id = ?", tenant);
             jdbcTemplate.update("delete from modeling_dbt_artifact where model_spec_id = ?", externalUuid(modelKey));
             jdbcTemplate.update("delete from modeling_dbt_artifact where project_key = ?", "legacy-pjm");
+            jdbcTemplate.update(
+                """
+                with implementation as (
+                    delete from modeling_model_implementation where tenant_id = ? returning id
+                )
+                delete from modeling_model_implementation_revision revision
+                 using implementation
+                 where revision.tenant_id = ?
+                   and revision.implementation_id = implementation.id
+                """,
+                tenant,
+                tenant
+            );
             jdbcTemplate.update("delete from modeling_model_spec_revision where model_spec_id = ?", externalUuid(modelKey));
             jdbcTemplate.update("delete from modeling_model_spec where id = ?", externalUuid(modelKey));
             jdbcTemplate.update("delete from modeling_business_object where id = ?", externalUuid(objectKey));

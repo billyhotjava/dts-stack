@@ -194,4 +194,5 @@
     <include file="config/liquibase/changelog/20260724_07_model_artifact_identity.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260724_08_upstream_model_pin_contract.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260724_09_sql_model_spec_binding.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260724_10_model_artifact_implementation_identity.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

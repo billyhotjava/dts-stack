@@ -26,6 +26,7 @@ type Props = {
 	domainOptions: ModelSpecSelectOption[];
 	upstreamOptions: ModelSpecSelectOption[];
 	dimensionOptions: ModelSpecSelectOption[];
+	upstreamValidationAvailable: boolean;
 	readOnly: boolean;
 	saving: boolean;
 	persistedFieldNames: string[];
@@ -42,6 +43,7 @@ export function ModelSpecLogicalDesignStage({
 	domainOptions,
 	upstreamOptions,
 	dimensionOptions,
+	upstreamValidationAvailable,
 	readOnly,
 	saving,
 	persistedFieldNames,
@@ -52,6 +54,14 @@ export function ModelSpecLogicalDesignStage({
 	const editorCopy = modelSpecEditorCopy(modelType);
 	const targetLayer = MODEL_SPEC_TARGET_LAYER_BY_TYPE[modelType];
 	const upstreamRequired = modelType === "SUMMARY" || modelType === "APPLICATION";
+	const validateUpstreamSelection = async (_: unknown, selectedIds?: string[]) => {
+		if (!upstreamValidationAvailable) return;
+		if (!Array.isArray(selectedIds) || selectedIds.length === 0) return;
+		const optionById = new Map(upstreamOptions.map((option) => [option.value, option]));
+		if (selectedIds.some((id) => optionById.get(id)?.disabled !== false)) {
+			throw new Error("存在不符合当前模型类别依赖规则的上游模型，请移除后重新选择");
+		}
+	};
 
 	return (
 		<div className="min-w-0" data-testid="model-spec-logical-stage">
@@ -113,7 +123,7 @@ export function ModelSpecLogicalDesignStage({
 									</Space>
 								) : null}
 								{modelType === "FACT" ? <><Row gutter={12}><Col xs={24} md={8}><Form.Item name="factShape" label="事实形态"><Select allowClear disabled={readOnly} options={[{ value: "TRANSACTION", label: "事务记录" }, { value: "PERIODIC_SNAPSHOT", label: "周期快照" }, { value: "ACCUMULATING_SNAPSHOT", label: "生命周期快照" }]} /></Form.Item></Col><Col xs={24} md={8}><Form.Item name="timeSemanticsType" label="业务时间"><Select allowClear disabled={readOnly} options={[{ value: "EVENT_TIME", label: "事件时间" }, { value: "SNAPSHOT_DATE", label: "快照日期" }, { value: "PERIOD", label: "统计周期" }, { value: "MILESTONE_DATES", label: "里程碑日期" }]} /></Form.Item></Col><Col xs={24} md={8}><Form.Item name="timeFieldsText" label="时间字段"><Input disabled={readOnly} placeholder="多个用逗号分隔" /></Form.Item></Col></Row><Form.Item name="dimensionRefIds" label="分析维度"><Select mode="multiple" options={dimensionOptions} disabled={readOnly} placeholder="选择用于分类、筛选和汇总分析的维度（可选）" /></Form.Item><Form.Item name="businessActivityRef" label="相关业务活动"><Input disabled={readOnly} placeholder="例如：客户事件处理" /></Form.Item></> : null}
-								{modelType === "FACT" || upstreamRequired ? <Form.Item name="upstreamIds" label="上游逻辑模型" rules={upstreamRequired ? [{ required: true, type: "array", min: 1, message: "请至少选择一个上游模型" }] : undefined}><Select mode="multiple" options={upstreamOptions} disabled={readOnly} placeholder="选择并锁定上游模型版本" /></Form.Item> : null}
+								{modelType === "FACT" || upstreamRequired ? <Form.Item name="upstreamIds" label="上游逻辑模型" rules={[{ validator: validateUpstreamSelection }, ...(upstreamRequired ? [{ required: true, type: "array" as const, min: 1, message: "请至少选择一个上游模型" }] : [])]}><Select mode="multiple" options={upstreamOptions} disabled={readOnly} placeholder="选择并锁定上游模型版本" /></Form.Item> : null}
 								{modelType === "APPLICATION" ? <Form.Item name="consumptionScenario" label="消费场景" rules={[{ required: true, whitespace: true, message: "请说明服务的报表、接口或业务场景" }]}><Input.TextArea disabled={readOnly} rows={2} /></Form.Item> : null}
 							</Space>
 						),

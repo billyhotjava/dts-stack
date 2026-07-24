@@ -678,6 +678,7 @@ class IngestionTaskServiceTest {
         when(apiIngestionExecutor.execute(eq(plan), eq(task), any(IngestionExecution.class))).thenReturn(
             ApiIngestionResult.success(3L, 3L, Map.of("stream", "orders"))
         );
+        when(platformInfraClient.syncIngestionExecutionLineage(eq(task), any(IngestionExecution.class))).thenReturn(true);
 
         IngestionExecutionDTO submitted = ingestionTaskService.executeInternalApi(
             taskId,
@@ -717,6 +718,33 @@ class IngestionTaskServiceTest {
         org.mockito.InOrder lineageOrder = org.mockito.Mockito.inOrder(platformInfraClient);
         lineageOrder.verify(platformInfraClient).syncIngestionExecutionLineage(eq(task), any(IngestionExecution.class));
         lineageOrder.verify(platformInfraClient).emitIngestionOpenLineageEvent(eq(task), any(IngestionExecution.class));
+    }
+
+    @Test
+    void syncExecutionLineage_shouldNotEmitOpenLineageWhenAuthoritativeSyncFails() throws Exception {
+        IngestionTask task = createTestTaskEntity();
+        task.setId(91L);
+        task.setName("api-orders");
+        task.setSourceType("api");
+        IngestionExecution execution = new IngestionExecution();
+        execution.setId(92L);
+        when(platformInfraClient.syncIngestionExecutionLineage(task, execution)).thenReturn(false);
+
+        Method method = IngestionTaskService.class.getDeclaredMethod(
+            "syncExecutionLineageQuietly",
+            IngestionTask.class,
+            IngestionExecution.class
+        );
+        method.setAccessible(true);
+        method.invoke(ingestionTaskService, task, execution);
+
+        verify(platformInfraClient, never()).emitIngestionOpenLineageEvent(any(), any());
+        verify(auditService).auditAction(
+            eq("INGESTION_LINEAGE_SYNC"),
+            eq(AuditStage.FAIL),
+            eq("api-orders"),
+            any(Map.class)
+        );
     }
 
     @Test

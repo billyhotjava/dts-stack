@@ -720,6 +720,39 @@ class ModelingSqlModelServiceTest {
     }
 
     @Test
+    void boundAdvancedWorkspacePreservesModelSpecIdentityAndRequiresNewRevisionAfterEvidence() {
+        UUID sourceId = UUID.randomUUID();
+        UUID modelSpecId = UUID.randomUUID();
+        when(dataSourceRepository.findById(sourceId)).thenReturn(Optional.of(source(sourceId, "ODS-Lake", "postgres")));
+        ModelingSqlModelService.SqlModelRequest request = new ModelingSqlModelService.SqlModelRequest(
+            planId,
+            modelSpecId,
+            "dwd_project_budget",
+            null,
+            "DWD",
+            sourceId,
+            "public",
+            "table",
+            "project-management",
+            "desc",
+            "select 1 as id",
+            true,
+            "DRAFT",
+            "D1",
+            null
+        );
+
+        ModelingSqlModelService.SqlModelDto created = service.create(request, "D1");
+
+        assertThat(created.modelSpecId()).isEqualTo(modelSpecId);
+        assertThat(storedModels).singleElement().satisfies(model -> assertThat(model.getModelSpecId()).isEqualTo(modelSpecId));
+        when(repo.hasCurrentLifecycleEvidence(modelSpecId)).thenReturn(true);
+        assertThatThrownBy(() -> service.update(created.id(), request, "D1"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("implementation revision");
+    }
+
+    @Test
     void update_shouldRejectRenameToDuplicateModelNameWithinSamePlan() {
         UUID sourceId = UUID.randomUUID();
         when(dataSourceRepository.findById(sourceId)).thenReturn(Optional.of(source(sourceId, "ODS-Lake", "postgres")));

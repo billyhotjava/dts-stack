@@ -51,3 +51,13 @@
 ## 实施状态（2026-07-24）
 
 三种实现输入、revision/checksum CAS、受控编译设置、实现证据失效规则、API Landing 权威成功校验、目录/血缘登记和 dbt 物化节点过滤已落码。当前只等待统一静态复核及一次性测试批次，尚未以未执行的测试替代完成证据。
+
+冻结复核继续补齐了实现制品身份和外部证据约束：
+
+- 制品唯一身份包含 `modelSpec revision + implementation revision`，新实现修订不再与历史制品冲突；
+- DBT 同一 `nodeKind + artifactType` 是稳定槽位，改路径或改正文不能绕过不可变校验，SQL/SCHEMA 双制品在同一事务写入；
+- legacy modeling-vNext 写入点同步使用四段身份，生成式编译读取当前 implementation revision，不再固定写入 revision 1；
+- 只有当前绑定的 `dbt test` 或 `dbt build` 成功运行可登记 TEST PASSED，`run/compile` 不能冒充测试证据；
+- DBT compile/release 门禁要求当前 implementation 的制品集合恰好为 `SQL + SCHEMA`，额外或漂移制品均 fail closed。
+
+上述内容尚待用户手工编译与统一真实验收确认，Task 状态不变。

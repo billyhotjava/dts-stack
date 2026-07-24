@@ -163,6 +163,7 @@ public class ModelingVNextApplicationService {
         UUID planId,
         int revision,
         String modelChecksum,
+        int implementationRevision,
         String implementationMode,
         String status
     ) {}
@@ -496,8 +497,8 @@ public class ModelingVNextApplicationService {
                         id, model_spec_id, plan_id, project_key, dbt_unique_id, artifact_key, artifact_type, path,
                         content_checksum, content, status, revision, model_checksum, ownership,
                         idempotency_key, implementation_revision, node_kind, materialization, created_date, last_modified_date
-                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'COMPILED', ?, ?, ?, ?, 1, 'MODEL', ?, ?, ?)
-                    on conflict (model_spec_id, revision, artifact_key) do update
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'COMPILED', ?, ?, ?, ?, ?, 'MODEL', ?, ?, ?)
+                    on conflict (model_spec_id, revision, implementation_revision, artifact_key) do update
                        set path = excluded.path, content_checksum = excluded.content_checksum,
                            content = excluded.content, status = excluded.status,
                            model_checksum = excluded.model_checksum, ownership = excluded.ownership,
@@ -507,6 +508,16 @@ public class ModelingVNextApplicationService {
                            materialization = excluded.materialization,
                            last_modified_date = excluded.last_modified_date
                      where modeling_dbt_artifact.model_checksum = excluded.model_checksum
+                       and modeling_dbt_artifact.ownership = excluded.ownership
+                       and modeling_dbt_artifact.implementation_revision = excluded.implementation_revision
+                       and modeling_dbt_artifact.project_key is not distinct from excluded.project_key
+                       and modeling_dbt_artifact.dbt_unique_id is not distinct from excluded.dbt_unique_id
+                       and modeling_dbt_artifact.path is not distinct from excluded.path
+                       and modeling_dbt_artifact.content_checksum is not distinct from excluded.content_checksum
+                       and modeling_dbt_artifact.content is not distinct from excluded.content
+                       and modeling_dbt_artifact.node_kind is not distinct from excluded.node_kind
+                       and modeling_dbt_artifact.materialization is not distinct from excluded.materialization
+                       and modeling_dbt_artifact.physical_asset_ref is not distinct from excluded.physical_asset_ref
                     """,
                     UUID.randomUUID(),
                     identity.id(),
@@ -522,6 +533,7 @@ public class ModelingVNextApplicationService {
                     identity.modelChecksum(),
                     identity.implementationMode(),
                     idempotencyKey,
+                    identity.implementationRevision(),
                     model.materialization(),
                     Timestamp.from(Instant.now()),
                     Timestamp.from(Instant.now())
@@ -601,13 +613,17 @@ public class ModelingVNextApplicationService {
                     idempotency_key, implementation_revision, node_kind, materialization,
                     created_date, last_modified_date
                 ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'COMPILED', ?, ?, 'DBT_MANAGED', ?, ?, 'MODEL', ?, ?, ?)
-                on conflict (model_spec_id, revision, artifact_key) do update
+                on conflict (model_spec_id, revision, implementation_revision, node_kind, artifact_type)
+                    where ownership = 'DBT_MANAGED'
+                do update
                    set idempotency_key = excluded.idempotency_key,
                        last_modified_date = excluded.last_modified_date
                  where modeling_dbt_artifact.model_checksum = excluded.model_checksum
                    and modeling_dbt_artifact.ownership = 'DBT_MANAGED'
                    and modeling_dbt_artifact.implementation_revision = excluded.implementation_revision
+                   and modeling_dbt_artifact.project_key = excluded.project_key
                    and modeling_dbt_artifact.dbt_unique_id = excluded.dbt_unique_id
+                   and modeling_dbt_artifact.path = excluded.path
                    and modeling_dbt_artifact.content_checksum = excluded.content_checksum
                    and modeling_dbt_artifact.content = excluded.content
                    and modeling_dbt_artifact.node_kind = excluded.node_kind
@@ -1059,10 +1075,13 @@ public class ModelingVNextApplicationService {
                 """
                 select s.id, s.plan_id, s.revision,
                        coalesce(s.current_checksum, r.content_checksum) as model_checksum,
+                       coalesce(i.implementation_revision, 1) as implementation_revision,
                        s.implementation_mode, s.status
                   from modeling_model_spec s
                   join modeling_model_spec_revision r
                     on r.model_spec_id = s.id and r.revision = s.revision
+                  left join modeling_model_implementation i
+                    on i.tenant_id = s.tenant_id and i.model_spec_id = s.id
                  where s.tenant_id = ? and s.id = ?
                 """,
                 (row, number) -> new ModelIdentity(
@@ -1070,6 +1089,7 @@ public class ModelingVNextApplicationService {
                     row.getObject("plan_id", UUID.class),
                     row.getInt("revision"),
                     row.getString("model_checksum"),
+                    row.getInt("implementation_revision"),
                     row.getString("implementation_mode"),
                     row.getString("status")
                 ),

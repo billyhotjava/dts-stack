@@ -31,7 +31,7 @@ class DbtRunLifecycleTestEvidenceAdapterTest {
             """
             {"conf":{"models":"fact","modelSpecId":"30000000-0000-0000-0000-000000000001",
             "implementationRevision":1,"implementationChecksum":"%s","projectKey":"pjm",
-            "dbtUniqueId":"model.pjm.fact"}}
+            "dbtUniqueId":"model.pjm.fact","operation":"test"}}
             """.formatted(CHECKSUM)
         );
         when(repository.findFirstByEntryKeyIgnoreCaseAndExternalRunId(ExternalRunLogService.ENTRY_DBT, "dbt-run-7"))
@@ -67,6 +67,31 @@ class DbtRunLifecycleTestEvidenceAdapterTest {
             .thenReturn(Optional.of(run));
 
         assertThatThrownBy(() -> new DbtRunLifecycleTestEvidenceAdapter(repository, new ObjectMapper()).verify(request("dbt-run-7")))
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_TEST_EXTERNAL_RUN_CONTEXT_MISMATCH");
+    }
+
+    @Test
+    void rejectsSuccessfulRunThatDidNotExecuteDbtTests() {
+        InfraExternalRunLogRepository repository = mock(InfraExternalRunLogRepository.class);
+        InfraExternalRunLog run = new InfraExternalRunLog();
+        run.setExternalRunId("dbt-run-8");
+        run.setStatus("SUCCESS");
+        run.setEnabled(true);
+        run.setOwnerDept("tenant-a");
+        run.setArtifactId(MODEL_ID);
+        run.setMetricsJson(
+            """
+            {"conf":{"models":"fact","modelSpecId":"30000000-0000-0000-0000-000000000001",
+            "implementationRevision":1,"implementationChecksum":"%s","projectKey":"pjm",
+            "dbtUniqueId":"model.pjm.fact","operation":"run"}}
+            """.formatted(CHECKSUM)
+        );
+        when(repository.findFirstByEntryKeyIgnoreCaseAndExternalRunId(ExternalRunLogService.ENTRY_DBT, "dbt-run-8"))
+            .thenReturn(Optional.of(run));
+
+        assertThatThrownBy(() -> new DbtRunLifecycleTestEvidenceAdapter(repository, new ObjectMapper()).verify(request("dbt-run-8")))
             .isInstanceOf(ModelSpecException.class)
             .extracting(error -> ((ModelSpecException) error).code())
             .isEqualTo("MODEL_TEST_EXTERNAL_RUN_CONTEXT_MISMATCH");

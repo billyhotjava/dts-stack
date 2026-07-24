@@ -68,10 +68,67 @@ class ModelLifecycleRepositoryTest {
         verify(jdbcTemplate).update(sql.capture(), arguments.capture());
         assertThat(sql.getValue())
             .contains("implementation_revision, node_kind, materialization")
-            .contains("excluded.ownership <> 'DBT_MANAGED'")
-            .contains("modeling_dbt_artifact.content_checksum = excluded.content_checksum")
-            .contains("modeling_dbt_artifact.content = excluded.content")
-            .contains("modeling_dbt_artifact.dbt_unique_id = excluded.dbt_unique_id");
+            .contains("on conflict (model_spec_id, revision, implementation_revision, artifact_key)")
+            .contains("modeling_dbt_artifact.ownership <> 'DBT_MANAGED'");
         assertThat(arguments.getValue()).containsSequence(6, "STG", "ephemeral", null);
+    }
+
+    @Test
+    void usesTheStableDbtArtifactSlotAndImplementationRevisionAsImmutableIdentity() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(1);
+        ModelLifecycleRepository repository = new ModelLifecycleRepository(jdbcTemplate, new ObjectMapper());
+        UUID modelId = UUID.fromString("30000000-0000-0000-0000-000000000001");
+        UUID planId = UUID.fromString("10000000-0000-0000-0000-000000000001");
+        ModelSpecView model = mock(ModelSpecView.class);
+        when(model.id()).thenReturn(modelId);
+        when(model.planId()).thenReturn(planId);
+        when(model.revision()).thenReturn(2);
+        when(model.checksum()).thenReturn("a".repeat(64));
+        ImplementationView implementation = new ImplementationView(
+            UUID.fromString("60000000-0000-0000-0000-000000000001"),
+            modelId,
+            planId,
+            2,
+            "a".repeat(64),
+            ImplementationMode.DBT_MANAGED,
+            "warehouse",
+            "model.customer_detail",
+            "ACTIVE",
+            7,
+            "b".repeat(64),
+            InputMode.UPSTREAM_MODEL,
+            List.of(),
+            List.of(),
+            Map.of(),
+            "table"
+        );
+
+        repository.saveDbtManagedArtifacts(
+            "tenant-a",
+            model,
+            implementation,
+            "dbt-manifest-7",
+            List.of(
+                new ArtifactWrite(
+                    "SQL",
+                    "models/dwd/customer_detail.sql",
+                    "c".repeat(64),
+                    "select 1",
+                    "MODEL",
+                    "table",
+                    null
+                )
+            ),
+            Instant.parse("2026-07-24T00:00:00Z")
+        );
+
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate).update(sql.capture(), any(Object[].class));
+        assertThat(sql.getValue())
+            .contains("on conflict (model_spec_id, revision, implementation_revision, node_kind, artifact_type)")
+            .contains("where ownership = 'DBT_MANAGED'")
+            .contains("modeling_dbt_artifact.path = excluded.path")
+            .doesNotContain("set implementation_revision = excluded.implementation_revision");
     }
 }

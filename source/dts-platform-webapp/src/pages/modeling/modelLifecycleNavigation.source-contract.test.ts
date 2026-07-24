@@ -37,18 +37,58 @@ test("failed dbt ops returns to the exact implementation revision recovery route
 	assert.doesNotMatch(OPS, /\?tab=design/);
 });
 
-test("ordinary editor cannot overwrite a pinned DBT-managed artifact and exposes explicit STG ephemeral", () => {
+test("advanced SQL workspace binds ModelSpec identity and freezes only after lifecycle evidence", () => {
 	const DRAWER = read(new URL("./components/ModelEditDrawer.tsx", import.meta.url));
 	assert.match(DRAWER, /dbt-managed-artifact-non-overwrite/);
-	assert.match(DRAWER, /DBT 托管用户产物不能由普通编辑模式覆盖/);
-	assert.match(DRAWER, /implementation revision/);
+	assert.match(DRAWER, /当前实现版本已有证据，不能原地覆盖/);
+	assert.match(DRAWER, /implementationRevision/);
 	assert.match(DRAWER, /value: "ephemeral"/);
 	assert.match(DRAWER, /STG 临时节点/);
-	assert.match(SQL, /普通编辑模式不能覆盖/);
-	assert.match(SQL, /普通 SQL 保存不能覆盖/);
+	assert.match(SQL, /model\.modelSpecId.*requestedModelSpecId/);
+	assert.match(SQL, /lifecycleRevisionFrozen/);
+	assert.match(SQL, /await syncDbtModels\(\)/);
+	assert.match(SQL, /await reloadLifecycleContext\(\)/);
+	assert.match(SQL, /ModelSpec lifecycle timeline 未返回本次构建证据/);
+	assert.match(SQL, /modelSpecId: editingModel\?\.modelSpecId \|\| requestedModelSpecId/);
 	const PHYSICAL = read(new URL("./components/ModelSpecPhysicalAssetStage.tsx", import.meta.url));
 	assert.match(PHYSICAL, /advancedEntryDisabled/);
 	assert.match(PHYSICAL, /model-spec-physical-advanced-entry-locked/);
 	assert.match(PHYSICAL, /disabled=\{advancedEntryDisabled\}/);
 	assert.match(PHYSICAL, /onReturnToImplementation/);
+});
+
+test("bound SQL runs wait for one exact model and fail closed before lifecycle evidence", () => {
+	assert.match(SQL, /const ensureLifecycleRunSelection = async/);
+	assert.match(SQL, /已绑定 ModelSpec 的 SQL 模型必须从数据实现阶段进入后再运行/);
+	assert.match(SQL, /selectedModels\.length !== 1/);
+	assert.match(SQL, /selectedModel\?\.modelSpecId \|\| ""\) !== requestedModelSpecId/);
+	assert.match(SQL, /await ensureLifecycleRunSelection\(selectedModels\)/);
+	assert.match(SQL, /await ensureLifecycleRunSelection\(operationModels\)/);
+	assert.match(SQL, /await waitForBuildResult\(/);
+	assert.match(SQL, /settled\.timedOut/);
+	assert.match(SQL, /normalizeUpper\(completed\.status\) !== "SUCCESS"/);
+	assert.match(SQL, /await syncLifecycleBuildEvidence\(operation, completed\)/);
+	assert.match(SQL, /if \(settled\.timedOut\) \{\s*throw new Error\("dbt build 等待超时，ModelSpec 未提交审核或发布"\)/);
+	assert.match(
+		SQL,
+		/if \(settled\.timedOut\) \{\s*toast\.warning\(`dbt \$\{operation\} 仍在运行，请稍后刷新结果`\);\s*return;\s*\}\s*const finalStatus/,
+	);
+});
+
+test("bound SQL drafts require a loaded matching unfrozen lifecycle context", () => {
+	assert.match(SQL, /const lifecycleSaveBlocked =/);
+	assert.match(SQL, /lifecycleLoading/);
+	assert.match(SQL, /lifecycleModel\?\.id !== activeModelSpecId/);
+	assert.match(SQL, /lifecycleImplementation\?\.modelSpecId !== activeModelSpecId/);
+	assert.match(SQL, /lifecycleRevisionFrozen/);
+	assert.match(SQL, /disabled=\{!activeModel \|\| !sqlDirty \|\| !workspaceOk \|\| lifecycleSaveBlocked\}/);
+	assert.match(SQL, /toast\.error\(normalizeText\(err\?\.message\) \|\| "SQL 保存失败"\)/);
+});
+
+test("ops navigation never substitutes a SQL workspace id for ModelSpec identity", () => {
+	assert.match(SQL, /const contextModelSpecId = requestedModelSpecId \|\| activeModelSpecId/);
+	assert.match(SQL, /if \(contextModelSpecId\) \{/);
+	assert.match(SQL, /params\.set\("modelSpecId", contextModelSpecId\)/);
+	assert.doesNotMatch(SQL, /requestedModelSpecId \|\| String\(activeModel\?\.id/);
+	assert.match(SQL, /router\.push\(buildOpsInstanceRoute\(dagRunId\)\)/);
 });

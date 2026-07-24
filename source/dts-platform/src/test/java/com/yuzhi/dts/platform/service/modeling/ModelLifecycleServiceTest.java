@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.modeling;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
@@ -34,6 +35,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
@@ -139,7 +141,7 @@ class ModelLifecycleServiceTest {
         when(lifecycle.findImplementation("tenant-a", MODEL_ID)).thenReturn(Optional.of(owner));
         when(lifecycle.lockImplementation("tenant-a", MODEL_ID, owner)).thenReturn(true);
         when(lifecycle.listArtifacts("tenant-a", MODEL_ID, 7)).thenReturn(List.of(
-            artifact("SQL"), artifact("SCHEMA"), artifact("TEST")
+            artifact("SQL"), artifact("SCHEMA")
         ));
         when(lifecycle.hasPassedEvidence("tenant-a", MODEL_ID, 7, 1, CHECKSUM, EventType.COMPILE)).thenReturn(true);
         ModelLifecycleTestEvidencePort.VerificationRequest verification =
@@ -175,6 +177,84 @@ class ModelLifecycleServiceTest {
 
         assertThat(result.externalRef()).isEqualTo("dbt-run-7");
         verify(testEvidence).verify(verification);
+
+        when(lifecycle.hasPassedEvidence("tenant-a", MODEL_ID, 7, 1, CHECKSUM, EventType.COMPILE)).thenReturn(false);
+        assertThatThrownBy(() ->
+            service.recordTest(
+                "tenant-a",
+                "alice",
+                MODEL_ID,
+                new ExpectedVersion(MODEL_ID, 7, CHECKSUM),
+                new ExpectedImplementationVersion(MODEL_ID, 1, CHECKSUM),
+                new TestEvidenceCommand("PASSED", "dbt-run-8", "verified", "test-8")
+            )
+        )
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_TEST_COMPILE_REQUIRED");
+    }
+
+    @Test
+    void rejectsDbtCompilationWhenTheImportedArtifactSetContainsUnexpectedTypes() {
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository modelSpecRepository = mock(ModelSpecRepository.class);
+        ModelLifecycleRepository lifecycle = mock(ModelLifecycleRepository.class);
+        ModelSpecStageGateService gates = mock(ModelSpecStageGateService.class);
+        ModelSpecPlanWriteAccessPort writeAccess = mock(ModelSpecPlanWriteAccessPort.class);
+        ModelSpecView model = mock(ModelSpecView.class);
+        when(model.id()).thenReturn(MODEL_ID);
+        when(model.planId()).thenReturn(PLAN_ID);
+        when(model.revision()).thenReturn(7);
+        when(model.checksum()).thenReturn(CHECKSUM);
+        when(model.implementationMode()).thenReturn(ImplementationMode.DBT_MANAGED);
+        when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
+        when(modelSpecRepository.lockPlan("tenant-a", PLAN_ID)).thenReturn(Optional.of(new PlanState(PLAN_ID, "DRAFT")));
+        when(writeAccess.canMaintain("tenant-a", PLAN_ID, "alice")).thenReturn(true);
+        ImplementationView owner = new ImplementationView(
+            UUID.randomUUID(), MODEL_ID, PLAN_ID, 7, CHECKSUM, ImplementationMode.DBT_MANAGED, "pjm", "model.pjm.fact", "ACTIVE"
+        );
+        when(lifecycle.findImplementation("tenant-a", MODEL_ID)).thenReturn(Optional.of(owner));
+        when(lifecycle.lockImplementation("tenant-a", MODEL_ID, owner)).thenReturn(true);
+        when(lifecycle.currentArtifactTypes("tenant-a", MODEL_ID, owner)).thenReturn(Set.of("SQL", "SCHEMA", "DOC"));
+        when(gates.evaluateAll("tenant-a", MODEL_ID)).thenReturn(
+            List.of(
+                new ModelSpecStageGateService.GateView(
+                    MODEL_ID,
+                    7,
+                    CHECKSUM,
+                    ModelSpecStageGateService.Stage.IMPLEMENTATION_READY,
+                    ModelSpecStageGateService.GateStatus.READY,
+                    List.of()
+                )
+            )
+        );
+        ModelLifecycleService service = new ModelLifecycleService(
+            modelSpecs,
+            modelSpecRepository,
+            lifecycle,
+            gates,
+            writeAccess,
+            mock(ModelLifecycleCompilerPort.class),
+            mock(ModelReleaseRegistrationPort.class),
+            mock(ModelLifecycleTestEvidencePort.class),
+            mock(ModelLifecyclePublicationService.class),
+            mock(ModelingVNextApplicationService.class),
+            Clock.fixed(NOW, ZoneOffset.UTC)
+        );
+
+        assertThatThrownBy(() ->
+            service.compile(
+                "tenant-a",
+                "alice",
+                MODEL_ID,
+                new ExpectedVersion(MODEL_ID, 7, CHECKSUM),
+                new ExpectedImplementationVersion(MODEL_ID, 1, CHECKSUM),
+                "compile-7"
+            )
+        )
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_DBT_IMPORT_REQUIRED");
     }
 
     @Test

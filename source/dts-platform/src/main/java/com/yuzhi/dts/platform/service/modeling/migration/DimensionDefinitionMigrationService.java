@@ -889,7 +889,7 @@ public class DimensionDefinitionMigrationService {
                 report.checksum()
             );
             if (activeAttempt.isPresent()) {
-                return activeAttempt.get();
+                return activeAttempt.orElseThrow();
             }
 
             long retryAttempt = nextRetryAttempt(tenantId, report.checksum());

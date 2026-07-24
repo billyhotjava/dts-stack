@@ -268,7 +268,12 @@ public class ModelSpecStageGateService {
             implementation.implementationChecksum(),
             ModelLifecycleContract.EventType.COMPILE
         );
-        EvidenceState build = artifactTypes.containsAll(Set.of("SQL", "SCHEMA")) && passedCompile
+        boolean currentArtifacts = implementation != null && (
+            implementation.ownership() == ImplementationMode.DBT_MANAGED
+                ? artifactTypes.equals(Set.of("SQL", "SCHEMA"))
+                : artifactTypes.containsAll(Set.of("SQL", "SCHEMA", "TEST"))
+        );
+        EvidenceState build = currentArtifacts && passedCompile
             ? EvidenceState.CURRENT
             : EvidenceState.UNKNOWN;
         boolean passedTest = lifecycle != null && implementation != null

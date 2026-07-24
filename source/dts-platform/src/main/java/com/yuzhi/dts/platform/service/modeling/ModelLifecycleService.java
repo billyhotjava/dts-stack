@@ -287,7 +287,7 @@ public class ModelLifecycleService {
         int artifactCount;
         if (owner.ownership() == ImplementationMode.DBT_MANAGED) {
             java.util.Set<String> importedTypes = lifecycle.currentArtifactTypes(tenantId, modelSpecId, owner);
-            if (!importedTypes.containsAll(java.util.Set.of("SQL", "SCHEMA"))) {
+            if (!importedTypes.equals(java.util.Set.of("SQL", "SCHEMA"))) {
                 throw conflict(
                     "MODEL_DBT_IMPORT_REQUIRED",
                     "Current DBT-managed SQL and schema artifacts must be imported before compilation can pass"

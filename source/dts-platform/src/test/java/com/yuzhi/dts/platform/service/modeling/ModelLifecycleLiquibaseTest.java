@@ -47,4 +47,23 @@ class ModelLifecycleLiquibaseTest {
             .contains("md5(")
             .contains("uk_modeling_dbt_artifact_revision_key");
     }
+
+    @Test
+    void versionsArtifactIdentityByImplementationAndProtectsDbtSlotsFromPathDrift() throws Exception {
+        String xml;
+        try (var input = getClass().getResourceAsStream(
+            "/config/liquibase/changelog/20260724_10_model_artifact_implementation_identity.xml"
+        )) {
+            assertThat(input).isNotNull();
+            xml = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
+
+        assertThat(xml)
+            .contains("model_spec_id,revision,implementation_revision,artifact_key")
+            .contains("uk_modeling_dbt_artifact_dbt_slot")
+            .contains("node_kind")
+            .contains("artifact_type")
+            .contains("WHERE ownership = 'DBT_MANAGED'")
+            .contains("ROLLBACK_BLOCKED_MODEL_ARTIFACT_IMPLEMENTATION_IDENTITY_FORWARD_ONLY");
+    }
 }

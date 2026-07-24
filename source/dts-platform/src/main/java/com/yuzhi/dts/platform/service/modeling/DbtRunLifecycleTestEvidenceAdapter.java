@@ -62,6 +62,7 @@ public class DbtRunLifecycleTestEvidenceAdapter implements ModelLifecycleTestEvi
             Objects.equals(text(conf, "implementationChecksum"), request.implementationChecksum()) &&
             Objects.equals(text(conf, "projectKey"), request.projectKey()) &&
             Objects.equals(text(conf, "dbtUniqueId"), request.dbtUniqueId()) &&
+            isTestOperation(text(conf, "operation")) &&
             selectorContains(text(conf, "models"), request.dbtUniqueId());
         if (!matches) {
             throw new ModelSpecException(
@@ -96,6 +97,12 @@ public class DbtRunLifecycleTestEvidenceAdapter implements ModelLifecycleTestEvi
             if (token.equals(resourceName) || token.equals(dbtUniqueId)) return true;
         }
         return false;
+    }
+
+    private static boolean isTestOperation(String operation) {
+        if (operation == null) return false;
+        String normalized = operation.trim().toLowerCase(Locale.ROOT);
+        return "test".equals(normalized) || "build".equals(normalized);
     }
 
     private static String trim(String value) {

@@ -10,6 +10,7 @@ import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.StoredModelSpec;
 import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository;
 import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository.StoredDimensionDefinition;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecStandardEvidencePort.StandardEvidence;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.*;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.GateEvidence;
@@ -20,6 +21,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.Stage;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -52,7 +54,7 @@ class ModelSpecStageGateServiceTest {
         ModelSpecRepository repository = mock(ModelSpecRepository.class);
         ModelSpecSourceValidationPort sourceValidation = mock(ModelSpecSourceValidationPort.class);
         ModelSpecView model = dimension(
-            new DimensionProfile("organization", List.of(), new ScdPolicy(ScdType.TYPE_1, null, null, null), ReuseScope.LOCAL),
+            new DimensionProfile("organization", List.of(), new ScdPolicy(ScdType.TYPE1, null, null, null), ReuseScope.PLAN),
             sources(),
             null
         );
@@ -189,7 +191,8 @@ class ModelSpecStageGateServiceTest {
             null,
             null,
             definitions,
-            domainReadAccess
+            domainReadAccess,
+            null
         );
 
         GateView implementation = implementationGate(gates);
@@ -414,6 +417,71 @@ class ModelSpecStageGateServiceTest {
             .containsExactly("MODEL_SPEC_GATE_EVIDENCE_STALE");
         assertThat(ModelSpecStageGateService.evaluate(model, Stage.RELEASE_READY, GateEvidence.currentFor(model)).status())
             .isEqualTo(GateStatus.READY);
+    }
+
+    @Test
+    void dbtReleaseGateRequiresExactlyTheSqlAndSchemaArtifactSlots() {
+        ModelSpecView model = withImplementationMode(releaseReadyFact(), ImplementationMode.DBT_MANAGED);
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository repository = mock(ModelSpecRepository.class);
+        ModelSpecStandardEvidencePort standards = mock(ModelSpecStandardEvidencePort.class);
+        ModelLifecycleRepository lifecycle = mock(ModelLifecycleRepository.class);
+        ModelSpecSourceValidationPort sourceValidation = mock(ModelSpecSourceValidationPort.class);
+        ImplementationView implementation = new ImplementationView(
+            UUID.randomUUID(),
+            model.id(),
+            model.planId(),
+            model.revision(),
+            model.checksum(),
+            ImplementationMode.DBT_MANAGED,
+            "pjm",
+            "model.pjm.fact",
+            "ACTIVE"
+        );
+        when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
+        when(sourceValidation.isCurrentBindingForGate("tenant-a", model.planId(), model.sourceRefs().getFirst())).thenReturn(true);
+        when(lifecycle.findImplementation("tenant-a", MODEL_ID)).thenReturn(Optional.of(implementation));
+        when(lifecycle.hasPassedEvidence(
+            "tenant-a",
+            MODEL_ID,
+            model.revision(),
+            implementation.implementationRevision(),
+            implementation.implementationChecksum(),
+            ModelLifecycleContract.EventType.COMPILE
+        )).thenReturn(true);
+        when(lifecycle.hasPassedEvidence(
+            "tenant-a",
+            MODEL_ID,
+            model.revision(),
+            implementation.implementationRevision(),
+            implementation.implementationChecksum(),
+            ModelLifecycleContract.EventType.TEST
+        )).thenReturn(true);
+        ModelSpecStageGateService gates = new ModelSpecStageGateService(
+            modelSpecs,
+            repository,
+            standards,
+            lifecycle,
+            sourceValidation
+        );
+
+        when(lifecycle.currentArtifactTypes("tenant-a", MODEL_ID, implementation)).thenReturn(Set.of("SQL", "SCHEMA", "DOC"));
+        GateView polluted = gates.evaluateAll("tenant-a", MODEL_ID).stream()
+            .filter(gate -> gate.stage() == Stage.RELEASE_READY)
+            .findFirst()
+            .orElseThrow();
+        when(lifecycle.currentArtifactTypes("tenant-a", MODEL_ID, implementation)).thenReturn(Set.of("SQL", "SCHEMA"));
+        GateView exact = gates.evaluateAll("tenant-a", MODEL_ID).stream()
+            .filter(gate -> gate.stage() == Stage.RELEASE_READY)
+            .findFirst()
+            .orElseThrow();
+
+        assertThat(polluted.blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .contains("MODEL_SPEC_BUILD_EVIDENCE_UNKNOWN");
+        assertThat(exact.blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .doesNotContain("MODEL_SPEC_BUILD_EVIDENCE_UNKNOWN");
     }
 
     @Test
@@ -891,6 +959,41 @@ class ModelSpecStageGateServiceTest {
             model.dimensionRefs(),
             model.metricRefs(),
             bindings,
+            model.generationStrategy(),
+            model.dimensionProfile(),
+            model.status(),
+            model.revision(),
+            model.checksum(),
+            model.createdAt(),
+            model.updatedAt(),
+            model.compatibilityMode(),
+            model.legacyRefs()
+        );
+    }
+
+    private static ModelSpecView withImplementationMode(ModelSpecView model, ImplementationMode implementationMode) {
+        return new ModelSpecView(
+            model.contractVersion(),
+            model.id(),
+            model.planId(),
+            model.domainId(),
+            model.modelType(),
+            model.layer(),
+            model.name(),
+            model.description(),
+            implementationMode,
+            model.materialization(),
+            model.businessActivityRef(),
+            model.consumptionScenario(),
+            model.grain(),
+            model.factShape(),
+            model.timeSemantics(),
+            model.fields(),
+            model.sourceRefs(),
+            model.dependsOn(),
+            model.dimensionRefs(),
+            model.metricRefs(),
+            model.standardBindings(),
             model.generationStrategy(),
             model.dimensionProfile(),
             model.status(),

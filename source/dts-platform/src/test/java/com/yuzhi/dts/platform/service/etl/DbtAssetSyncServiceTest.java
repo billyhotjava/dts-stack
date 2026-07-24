@@ -377,7 +377,7 @@ class DbtAssetSyncServiceTest {
     }
 
     @Test
-    void syncDoesNotRegisterPinnedModelWhenImplementationChecksumIsMissing() throws Exception {
+    void syncMarksExistingPinnedModelStaleWhenImplementationChecksumIsMissing() throws Exception {
         writeArtifacts(
             """
             {"metadata":{"invocation_id":"run-incomplete","generated_at":"2026-07-24T08:00:00Z","project_name":"dts"},"nodes":{"model.dts.orders":{"resource_type":"model","name":"orders","database":"warehouse","schema":"analytics","identifier":"orders_relation","config":{"materialized":"table","meta":{"modelSpecId":"10000000-0000-0000-0000-000000000001","revision":7,"modelChecksum":"sha256:model-v7","implementationRevision":3}},"depends_on":{"nodes":[]}}},"sources":{}}
@@ -386,10 +386,21 @@ class DbtAssetSyncServiceTest {
             {"metadata":{"invocation_id":"run-incomplete","generated_at":"2026-07-24T08:01:00Z"},"results":[{"unique_id":"model.dts.orders","status":"success"}]}
             """
         );
+        CatalogDataset existing = currentDbtDataset("model.dts.orders", "orders_relation", "dts", workspaceKey());
+        when(datasetRepository.findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("analytics", "orders_relation"))
+            .thenReturn(Optional.of(existing));
+        when(datasetRepository.save(existing)).thenReturn(existing);
+        when(lineageRepository.findCurrentByDownstreamDatasetIdAndRelationTypeIgnoreCase(existing.getId(), "DBT"))
+            .thenReturn(List.of());
+        when(columnLineageRepository.findByDownstreamDatasetIdAndRelationTypeIgnoreCase(existing.getId(), "DBT"))
+            .thenReturn(List.of());
 
         service().syncFromManifest(tempDir.toString());
 
-        verify(datasetRepository, never()).save(any(CatalogDataset.class));
+        assertThat(existing.getLifecycleStatus()).isEqualTo("STALE");
+        assertThat(existing.getEnabled()).isFalse();
+        assertThat(existing.getTags()).contains("\"staleReason\":\"IMPLEMENTATION_PIN_INVALID\"");
+        verify(datasetRepository).save(existing);
     }
 
     @Test

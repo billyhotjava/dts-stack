@@ -207,7 +207,6 @@ export const ModelSpecImplementationStage = forwardRef<ModelSpecImplementationSt
 	const [recoveryNotice, setRecoveryNotice] = useState("");
 	const [versionConflict, setVersionConflict] = useState(false);
 	const [configured, setConfigured] = useState(false);
-	const [validated, setValidated] = useState(false);
 	const [implementationCas, setImplementationCas] = useState<ModelImplementationCasToken | null>(null);
 	const [adoptedCurrentPinIds, setAdoptedCurrentPinIds] = useState<string[]>([]);
 	const operationRequestRef = useRef(0);
@@ -402,7 +401,6 @@ export const ModelSpecImplementationStage = forwardRef<ModelSpecImplementationSt
 		form.setFieldsValue(currentImplementation ? persistedDraft(currentImplementation) : defaultDraft(model));
 		setImplementationCas(currentImplementation);
 		setConfigured(Boolean(currentImplementation));
-		setValidated(false);
 		setRebasing(false);
 		setError("");
 		setRecoveryNotice("");
@@ -546,7 +544,6 @@ export const ModelSpecImplementationStage = forwardRef<ModelSpecImplementationSt
 		if (adoptableCurrentInputIds.length === 0) return;
 		setAdoptedCurrentPinIds((current) => Array.from(new Set([...current, ...adoptableCurrentInputIds])));
 		form.setFields([{ name: "inputIds", errors: [] }]);
-		setValidated(false);
 		setRecoveryNotice(
 			inputMode === "UPSTREAM_MODEL"
 				? "已明确选择采用当前上游实现；保存时将移除旧实现 pin，由服务端重新固定当前 implementation。"
@@ -578,7 +575,6 @@ export const ModelSpecImplementationStage = forwardRef<ModelSpecImplementationSt
 			}
 			setImplementationCas(latest);
 			setConfigured(true);
-			setValidated(false);
 			setVersionConflict(false);
 			setRecoveryNotice("已加载最新 implementation CAS，当前表单输入仍保留；请确认差异后再次保存。");
 			onStateChange({ configured: true, dirty: true, validated: false });
@@ -603,7 +599,6 @@ export const ModelSpecImplementationStage = forwardRef<ModelSpecImplementationSt
 			if (requestId !== operationRequestRef.current) return false;
 			setImplementationCas(saved);
 			setConfigured(true);
-			setValidated(false);
 			setVersionConflict(false);
 			setAdoptedCurrentPinIds([]);
 			onImplementationSaved(saved);
@@ -630,7 +625,6 @@ export const ModelSpecImplementationStage = forwardRef<ModelSpecImplementationSt
 			setSaving(true);
 			const result = await validateModelImplementation(expected, command);
 			if (requestId !== operationRequestRef.current) return false;
-			setValidated(result.valid);
 			if (!result.valid) setError(result.code || "当前实现未通过验证，配置已保留。");
 			onStateChange({ configured, dirty: !configured, validated: result.valid });
 			return result.valid;
@@ -680,7 +674,6 @@ export const ModelSpecImplementationStage = forwardRef<ModelSpecImplementationSt
 					if (changedInputIds) {
 						setAdoptedCurrentPinIds((current) => current.filter((id) => changedInputIds.includes(id)));
 					}
-					setValidated(false);
 					setRecoveryNotice("");
 					onStateChange({ configured, dirty: true, validated: false });
 				}}

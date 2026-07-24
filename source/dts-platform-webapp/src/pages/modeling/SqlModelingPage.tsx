@@ -86,6 +86,7 @@ import {
 	publishModelLifecycle,
 	recordModelTestEvidence,
 	submitModelReview,
+	type ModelLifecycleTimeline,
 } from "@/api/modelSpecApi";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
 import BatchImportModal from "./BatchImportModal";
@@ -344,6 +345,7 @@ export default function SqlModelingPage() {
 	} | null>(null);
 	const [lifecycleRevisionFrozen, setLifecycleRevisionFrozen] = useState(false);
 	const [lifecycleError, setLifecycleError] = useState("");
+	const [lifecycleLoading, setLifecycleLoading] = useState(Boolean(requestedModelSpecId));
 	const [configLoading, setConfigLoading] = useState(false);
 	const [configSaving, setConfigSaving] = useState(false);
 	const [configOpen, setConfigOpen] = useState(false);
@@ -494,6 +496,7 @@ export default function SqlModelingPage() {
 	const selectedOdsSourceDataSourceId = Form.useWatch("sourceDataSourceId", odsGenerateForm);
 	const dbtSourcesReqSeqRef = useRef(0);
 	const buildPollAbortRef = useRef<AbortController | null>(null);
+	const lifecycleLoadSequenceRef = useRef(0);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -1127,61 +1130,94 @@ export default function SqlModelingPage() {
 		return () => { buildPollAbortRef.current?.abort(); };
 	}, [loadInitialData]);
 
-	useEffect(() => {
-		let active = true;
+	const reloadLifecycleContext = useCallback(async () => {
+		const sequence = lifecycleLoadSequenceRef.current + 1;
+		lifecycleLoadSequenceRef.current = sequence;
 		setLifecycleModel(null);
 		setLifecycleImplementation(null);
 		setLifecycleRevisionFrozen(false);
 		setLifecycleError("");
-		if (!requestedModelSpecId) return () => { active = false; };
-		if (!requestedPlanId || !requestedRevision || !requestedImplementationRevision || !requestedImplementationChecksum) {
-			setLifecycleError("高级实现上下文缺少 planId、revision 或 implementation 版本校验；已阻止普通模式覆盖，请返回数据实现阶段恢复。");
-			return () => { active = false; };
+		setLifecycleLoading(Boolean(requestedModelSpecId));
+		if (!requestedModelSpecId) {
+			setLifecycleLoading(false);
+			return null;
 		}
-		void Promise.all([getModelSpec(requestedModelSpecId), getModelLifecycle(requestedModelSpecId)])
-			.then(([model, timeline]) => {
-				if (!active) return;
-				const implementation = timeline.implementation;
-				if (
-					model.compatibilityMode !== "CANONICAL" ||
-					model.planId !== requestedPlanId ||
-					String(model.revision) !== requestedRevision ||
-					model.implementationMode !== requestedImplementationMode ||
-					!implementation ||
-					implementation.modelSpecId !== model.id ||
-					implementation.planId !== requestedPlanId ||
-					implementation.revision !== model.revision ||
-					implementation.modelChecksum !== model.checksum ||
-					String(implementation.implementationRevision || "") !== requestedImplementationRevision ||
-					implementation.implementationChecksum !== requestedImplementationChecksum ||
-					implementation.ownership !== requestedImplementationMode
-				) {
-					setLifecycleError("ModelSpec、计划或 implementation revision 已变化，已阻止覆盖；请返回数据实现阶段恢复当前实现。");
-					return;
-				}
-				setLifecycleModel(model);
-				setLifecycleImplementation(implementation);
-				setLifecycleRevisionFrozen(
-					timeline.artifacts.some(
-						(artifact) =>
-							artifact.revision === model.revision &&
-							artifact.modelChecksum === model.checksum &&
-							artifact.implementationRevision === implementation.implementationRevision,
-					) ||
-						timeline.events.some(
-							(event) =>
-								event.revision === model.revision &&
-								event.modelChecksum === model.checksum &&
-								Number(event.details?.implementationRevision) === implementation.implementationRevision &&
-								String(event.details?.implementationChecksum || "") === implementation.implementationChecksum,
-						),
+		if (!requestedPlanId || !requestedRevision || !requestedImplementationRevision || !requestedImplementationChecksum) {
+			const message = "高级实现上下文缺少 planId、revision 或 implementation 版本校验；已阻止普通模式覆盖，请返回数据实现阶段恢复。";
+			setLifecycleError(message);
+			setLifecycleLoading(false);
+			throw new Error(message);
+		}
+		try {
+			const [model, timeline] = await Promise.all([
+				getModelSpec(requestedModelSpecId),
+				getModelLifecycle(requestedModelSpecId),
+			]);
+			if (sequence !== lifecycleLoadSequenceRef.current) return null;
+			const implementation = timeline.implementation;
+			if (
+				model.compatibilityMode !== "CANONICAL" ||
+				model.planId !== requestedPlanId ||
+				String(model.revision) !== requestedRevision ||
+				model.implementationMode !== requestedImplementationMode ||
+				!implementation ||
+				implementation.modelSpecId !== model.id ||
+				implementation.planId !== requestedPlanId ||
+				implementation.revision !== model.revision ||
+				implementation.modelChecksum !== model.checksum ||
+				String(implementation.implementationRevision || "") !== requestedImplementationRevision ||
+				implementation.implementationChecksum !== requestedImplementationChecksum ||
+				implementation.ownership !== requestedImplementationMode
+			) {
+				throw new Error("ModelSpec、计划或 implementation revision 已变化，已阻止覆盖；请返回数据实现阶段恢复当前实现。");
+			}
+			const frozen =
+				timeline.artifacts.some(
+					(artifact) =>
+						artifact.revision === model.revision &&
+						artifact.modelChecksum === model.checksum &&
+						artifact.implementationRevision === implementation.implementationRevision,
+				) ||
+				timeline.events.some(
+					(event) =>
+						event.revision === model.revision &&
+						event.modelChecksum === model.checksum &&
+						Number(event.details?.implementationRevision) === implementation.implementationRevision &&
+						String(event.details?.implementationChecksum || "") === implementation.implementationChecksum,
 				);
-			})
-			.catch(() => {
-				if (active) setLifecycleError("无法读取当前 ModelSpec lifecycle binding，已阻止覆盖与证据回写。");
-			});
-		return () => { active = false; };
-	}, [requestedImplementationChecksum, requestedImplementationMode, requestedImplementationRevision, requestedModelSpecId, requestedPlanId, requestedRevision]);
+			setLifecycleModel(model);
+			setLifecycleImplementation(implementation);
+			setLifecycleRevisionFrozen(frozen);
+			return { model, implementation, timeline: timeline as ModelLifecycleTimeline, frozen };
+		} catch (err: any) {
+			if (sequence === lifecycleLoadSequenceRef.current) {
+				const message =
+					normalizeText(err?.message) ||
+					"无法读取当前 ModelSpec lifecycle binding，已阻止覆盖与证据回写。";
+				setLifecycleModel(null);
+				setLifecycleImplementation(null);
+				setLifecycleRevisionFrozen(false);
+				setLifecycleError(message);
+			}
+			throw err;
+		} finally {
+			if (sequence === lifecycleLoadSequenceRef.current) setLifecycleLoading(false);
+		}
+	}, [
+		requestedImplementationChecksum,
+		requestedImplementationMode,
+		requestedImplementationRevision,
+		requestedModelSpecId,
+		requestedPlanId,
+		requestedRevision,
+	]);
+
+	useEffect(() => {
+		void reloadLifecycleContext().catch(() => undefined);
+		return () => {
+			lifecycleLoadSequenceRef.current += 1;
+		};
+	}, [reloadLifecycleContext]);
 
 	useEffect(() => {
 		if (spaces.length === 0 && sqlModels.every((model) => !!model.planId)) {
@@ -1376,6 +1412,23 @@ export default function SqlModelingPage() {
 		};
 	};
 
+	const ensureLifecycleRunSelection = async (selectedModels: SqlModel[]) => {
+		const containsBoundWorkspace = selectedModels.some((model) => Boolean(normalizeText(model.modelSpecId)));
+		if (!containsBoundWorkspace && !requestedModelSpecId) return;
+		if (!requestedModelSpecId) {
+			throw new Error("已绑定 ModelSpec 的 SQL 模型必须从数据实现阶段进入后再运行");
+		}
+		await ensureLifecycleOwnership();
+		const selectedModel = selectedModels[0];
+		if (
+			selectedModels.length !== 1 ||
+			String(selectedModel?.modelSpecId || "") !== requestedModelSpecId ||
+			String(selectedModel?.id || "") !== String(activeModel?.id || "")
+		) {
+			throw new Error("ModelSpec 实现上下文一次只能运行当前绑定的一个 SQL 模型");
+		}
+	};
+
 	const syncLifecycleBuildEvidence = async (
 		operation: "compile" | "test" | "build",
 		run: DbtRunSummary,
@@ -1388,16 +1441,47 @@ export default function SqlModelingPage() {
 		if (syncResult?.synced === false) {
 			throw new Error(syncResult?.message || "dbt 产物同步失败，未写入 ModelSpec compile evidence");
 		}
-		await compileModelLifecycle(binding.modelSpec, binding.implementation, `compile:${runKey}`);
+		const compileIdempotencyKey = `compile:${runKey}`;
+		await compileModelLifecycle(binding.modelSpec, binding.implementation, compileIdempotencyKey);
+		let testIdempotencyKey = "";
 		if (operation === "test" || operation === "build") {
 			const externalRunId = normalizeText(run.dagRunId);
 			if (!externalRunId) throw new Error("dbt 测试缺少 Airflow 运行 ID，未写入测试通过证据");
+			testIdempotencyKey = `test:${externalRunId}`;
 			await recordModelTestEvidence(binding.modelSpec, binding.implementation, {
 				status: "PASSED",
 				externalRunId,
 				comment: `dbt ${operation} succeeded`,
-				idempotencyKey: `test:${externalRunId}`,
+				idempotencyKey: testIdempotencyKey,
 			});
+		}
+		const refreshed = await reloadLifecycleContext();
+		if (!refreshed || !refreshed.frozen) {
+			throw new Error("ModelSpec lifecycle timeline 刷新失败，当前实现保持只读");
+		}
+		const isCurrentEvidence = (event: ModelLifecycleTimeline["events"][number]) =>
+			event.revision === binding.modelSpec.revision &&
+			event.modelChecksum === binding.modelSpec.checksum &&
+			Number(event.details?.implementationRevision) === binding.implementation.implementationRevision &&
+			String(event.details?.implementationChecksum || "") === binding.implementation.implementationChecksum;
+		const compileRecorded = refreshed.timeline.events.some(
+			(event) =>
+				event.eventType === "COMPILE" &&
+				event.status === "PASSED" &&
+				event.idempotencyKey === compileIdempotencyKey &&
+				isCurrentEvidence(event),
+		);
+		const testRecorded =
+			!testIdempotencyKey ||
+			refreshed.timeline.events.some(
+				(event) =>
+					event.eventType === "TEST" &&
+					event.status === "PASSED" &&
+					event.idempotencyKey === testIdempotencyKey &&
+					isCurrentEvidence(event),
+			);
+		if (!compileRecorded || !testRecorded) {
+			throw new Error("ModelSpec lifecycle timeline 未返回本次构建证据，当前实现保持只读");
 		}
 	};
 
@@ -1415,6 +1499,7 @@ export default function SqlModelingPage() {
 				toast.error("勾选的模型已失效，请重新选择");
 				return;
 			}
+			await ensureLifecycleRunSelection(selectedModels);
 			type Group = { dagSelector?: string; names: string[]; planName?: string };
 			const groupMap = new Map<string, Group>();
 			selectedModels.forEach((m) => {
@@ -1440,6 +1525,14 @@ export default function SqlModelingPage() {
 				let lastDagRunId: string | undefined;
 				let lastSelector = "";
 				const operation = runMode;
+				let lifecycleBaseline: DbtRunSummary | null = null;
+				if (requestedModelSpecId) {
+					const selector = groups[0].names.join(" ");
+					const baselineStatus = (await getDbtSyncStatus(
+						selector ? { models: selector } : undefined,
+					)) as DbtSyncStatus;
+					lifecycleBaseline = baselineStatus?.latestRun || null;
+				}
 				for (const g of groups) {
 					const modelsSelector = g.names.join(" ");
 					let triggerResp: any;
@@ -1494,7 +1587,53 @@ export default function SqlModelingPage() {
 				setExecLog("");
 				setBottomTab("operations");
 				setOpsSubTab(operation === "compile" ? "compile" : operation === "test" ? "test" : "execlog");
-				void loadRuns({ dagId: lastDagId || undefined, selector: lastSelector });
+				if (!requestedModelSpecId) {
+					void loadRuns({ dagId: lastDagId || undefined, selector: lastSelector });
+					return;
+				}
+				const settled = await waitForBuildResult(
+					operation,
+					lastSelector,
+					lastDagId || undefined,
+					lastDagRunId || undefined,
+					lifecycleBaseline,
+				);
+				if (settled.syncStatus) {
+					setDbtSyncStatus(settled.syncStatus);
+				} else {
+					await loadSyncStatus(lastSelector);
+				}
+				await loadRuns({ dagId: lastDagId || undefined, selector: lastSelector });
+				const completed = settled.latestRun
+					? {
+							...settled.latestRun,
+							dagRunId: lastDagRunId || settled.latestRun.dagRunId,
+							dagId: lastDagId || settled.latestRun.dagId,
+						}
+					: null;
+				if (operation === "compile") {
+					setCompileResult(completed || pendingRun);
+				} else if (operation === "test") {
+					setTestResult(completed || pendingRun);
+				} else {
+					setRunResult(completed || pendingRun);
+				}
+				if (settled.dagState === "failed") {
+					if (lastDagRunId) {
+						await loadExecLog(lastDagRunId, lastDagId || undefined);
+						setBottomTab("operations");
+						setOpsSubTab("execlog");
+					}
+					throw new Error(`dbt ${operation} 失败，未回写 ModelSpec lifecycle evidence`);
+				}
+				if (settled.timedOut) {
+					throw new Error(`dbt ${operation} 等待超时，未回写 ModelSpec lifecycle evidence`);
+				}
+				if (!completed || normalizeUpper(completed.status) !== "SUCCESS") {
+					throw new Error(`dbt ${operation} 未返回成功结果，未回写 ModelSpec lifecycle evidence`);
+				}
+				await syncLifecycleBuildEvidence(operation, completed);
+				toast.success(buildOperationCompletedMessage(operation));
 				return;
 			}
 			if (groups.length > 1) {
@@ -1610,10 +1749,13 @@ export default function SqlModelingPage() {
 					"build",
 					modelsSelector,
 					dagId || undefined,
-					dagRunId || undefined,
-					lifecycleBaseline?.latestRun || null,
-				);
-				const completed = settled.latestRun || null;
+						dagRunId || undefined,
+						lifecycleBaseline?.latestRun || null,
+					);
+					if (settled.timedOut) {
+						throw new Error("dbt build 等待超时，ModelSpec 未提交审核或发布");
+					}
+					const completed = settled.latestRun || null;
 				if (settled.dagState === "failed" || normalizeUpper(completed?.status) !== "SUCCESS") {
 					throw new Error("dbt build 未成功，ModelSpec 未提交审核或发布");
 				}
@@ -1641,11 +1783,11 @@ export default function SqlModelingPage() {
 				}
 			}
 		} catch (err: any) {
+			const message = normalizeText(err?.message) || "dbt 运行提交失败";
 			if (requestedModelSpecId) {
-				const message = normalizeText(err?.message) || "ModelSpec 发布链路失败";
 				setLifecycleError(message);
-				toast.error(message);
 			}
+			toast.error(message);
 		} finally {
 			setRunSubmitting(false);
 		}
@@ -1663,7 +1805,9 @@ export default function SqlModelingPage() {
 				checkedIdSet.size > 0
 					? sqlModels.filter((m) => checkedIdSet.has(String(m.id || "").trim()))
 					: [];
+			let operationModels: SqlModel[] = [];
 			if (checkedModels.length > 0) {
+				operationModels = checkedModels;
 				const names = checkedModels
 					.map((m) => normalizeText(m.name))
 					.filter(Boolean) as string[];
@@ -1671,9 +1815,11 @@ export default function SqlModelingPage() {
 				dagSelector =
 					checkedModels.map((m) => normalizeText(m.dagSelector)).find(Boolean) || undefined;
 			} else if (activeModel) {
+				operationModels = [activeModel];
 				selector = normalizeText(activeModel.name) || "all";
 				dagSelector = normalizeText(activeModel.dagSelector) || undefined;
 			} else if (activeSpace && activeSpaceModels.length > 0) {
+				operationModels = activeSpaceModels;
 				const names = activeSpaceModels
 					.map((m) => normalizeText(m.name))
 					.filter(Boolean) as string[];
@@ -1685,6 +1831,7 @@ export default function SqlModelingPage() {
 				selector = "all";
 				dagSelector = undefined;
 			}
+			await ensureLifecycleRunSelection(operationModels);
 			const baselineStatus = (await getDbtSyncStatus(selector ? { models: selector } : undefined)) as DbtSyncStatus;
 			const baselineRun = baselineStatus?.latestRun || null;
 			const payload = {
@@ -1753,35 +1900,36 @@ export default function SqlModelingPage() {
 				setRunResult(resolvedRun || pendingRun);
 			}
 
-			const finalStatus = normalizeUpper(resolvedRun?.status);
-			if (settled.dagState === "failed") {
+				if (settled.dagState === "failed") {
 				if (dagRunId) {
 					await loadExecLog(dagRunId, dagId || undefined);
 					setBottomTab("operations"); setOpsSubTab("execlog");
 				}
-				toast.error(`dbt ${operation} 失败`);
-				return;
-			}
-			if (finalStatus === "SUCCESS") {
+					toast.error(`dbt ${operation} 失败`);
+					return;
+				}
+				if (settled.timedOut) {
+					toast.warning(`dbt ${operation} 仍在运行，请稍后刷新结果`);
+					return;
+				}
+				const finalStatus = normalizeUpper(resolvedRun?.status);
+				if (finalStatus === "SUCCESS") {
 				if (operation !== "docs" && resolvedRun) {
 					await syncLifecycleBuildEvidence(operation, resolvedRun);
 				}
 				toast.success(buildOperationCompletedMessage(operation));
 				return;
 			}
-			if (finalStatus === "SKIPPED") {
-				toast.warning(buildOperationSkippedMessage(operation));
-				return;
-			}
-			if (settled.timedOut) {
-				toast.warning(`dbt ${operation} 仍在运行，请稍后刷新结果`);
-			}
+				if (finalStatus === "SKIPPED") {
+					toast.warning(buildOperationSkippedMessage(operation));
+					return;
+				}
 		} catch (err: any) {
+			const message = normalizeText(err?.message) || "dbt 运行失败";
 			if (requestedModelSpecId) {
-				const message = normalizeText(err?.message) || "ModelSpec lifecycle evidence 回写失败";
 				setLifecycleError(message);
-				toast.error(message);
 			}
+			toast.error(message);
 		} finally {
 			setBuildTriggering(null);
 		}
@@ -2454,10 +2602,30 @@ export default function SqlModelingPage() {
 	};
 
 	const saveSqlDraft = async () => {
-		if (!activeModel?.id) return;
+		if (!activeModel?.id) {
+			toast.error("请先选择一个 SQL 模型");
+			return;
+		}
 		try {
-			if (requestedModelSpecId && activeModel.modelSpecId !== requestedModelSpecId) {
-				throw new Error("当前 SQL 工作区未绑定入口 ModelSpec，已阻止覆盖");
+			const activeModelSpecId = normalizeText(activeModel.modelSpecId);
+			if (activeModelSpecId || requestedModelSpecId) {
+				if (!activeModelSpecId || !requestedModelSpecId || activeModelSpecId !== requestedModelSpecId) {
+					throw new Error("当前 SQL 工作区与入口 ModelSpec 不一致，已阻止覆盖");
+				}
+				if (lifecycleLoading) {
+					throw new Error("ModelSpec lifecycle context 正在加载，暂不能保存");
+				}
+				if (
+					lifecycleError ||
+					lifecycleModel?.id !== activeModelSpecId ||
+					lifecycleImplementation?.modelSpecId !== activeModelSpecId
+				) {
+					throw new Error(lifecycleError || "ModelSpec lifecycle context 不完整，已阻止覆盖");
+				}
+				if (lifecycleRevisionFrozen) {
+					throw new Error("当前 implementation revision 已有构建证据，请先在数据实现阶段创建新版本");
+				}
+				await ensureLifecycleOwnership();
 			}
 			const payload = {
 				modelSpecId: activeModel.modelSpecId,
@@ -2478,6 +2646,7 @@ export default function SqlModelingPage() {
 			toast.success("SQL 已保存");
 			await loadModels();
 		} catch (err: any) {
+			toast.error(normalizeText(err?.message) || "SQL 保存失败");
 		}
 	};
 
@@ -2628,6 +2797,27 @@ export default function SqlModelingPage() {
 		if (!activeModelKey) return null;
 		return modelKeyMap.get(activeModelKey) || null;
 	}, [activeModelKey, modelKeyMap]);
+	const activeModelSpecId = normalizeText(activeModel?.modelSpecId);
+	const lifecycleSaveBlocked =
+		Boolean(activeModelSpecId || requestedModelSpecId) &&
+		(
+			!activeModelSpecId ||
+			!requestedModelSpecId ||
+			activeModelSpecId !== requestedModelSpecId ||
+			lifecycleLoading ||
+			Boolean(lifecycleError) ||
+			lifecycleModel?.id !== activeModelSpecId ||
+			lifecycleImplementation?.modelSpecId !== activeModelSpecId ||
+			lifecycleRevisionFrozen
+		);
+	const lifecycleSaveBlockedReason = lifecycleLoading
+		? "ModelSpec lifecycle context 正在加载"
+		: lifecycleError ||
+			(lifecycleRevisionFrozen
+				? "当前 implementation revision 已有构建证据，请先在数据实现阶段创建新版本"
+				: lifecycleSaveBlocked
+					? "当前 SQL 工作区缺少匹配的 ModelSpec lifecycle context"
+					: undefined);
 
 	const activeRunsSelector = useMemo(
 		() => resolveDbtSelector(activeModel?.dagSelector) || (activeModel?.name ? `model:${activeModel.name}` : undefined),
@@ -2984,6 +3174,24 @@ export default function SqlModelingPage() {
 		if (activeModel?.modelSpecId) params.set("modelSpecId", String(activeModel.modelSpecId));
 		return `${route}?${params.toString()}`;
 	};
+	const buildOpsInstanceRoute = (runId: string) => {
+		const params = new URLSearchParams({
+			entryKey: "DBT_RUN",
+			runId,
+			journey: "e2e-data-product",
+		});
+		const contextModelSpecId = requestedModelSpecId || activeModelSpecId;
+		if (contextModelSpecId) {
+			params.set("modelSpecId", contextModelSpecId);
+			if (requestedPlanId) params.set("planId", requestedPlanId);
+			if (requestedRevision) params.set("revision", requestedRevision);
+			if (requestedImplementationRevision) {
+				params.set("implementationRevision", requestedImplementationRevision);
+			}
+			if (requestedImplementationMode) params.set("implementationMode", requestedImplementationMode);
+		}
+		return `/ops/instances?${params.toString()}`;
+	};
 
 	return (
 		<div className="space-y-6" data-testid="platform-sql-modeling-page">
@@ -3123,8 +3331,8 @@ export default function SqlModelingPage() {
 					{/* 保存按钮 */}
 					<Button
 						onClick={saveSqlDraft}
-						disabled={!activeModel || !sqlDirty || !workspaceOk || lifecycleRevisionFrozen}
-						title={lifecycleRevisionFrozen ? "当前 implementation revision 已有构建证据，请先在数据实现阶段创建新版本" : undefined}
+						disabled={!activeModel || !sqlDirty || !workspaceOk || lifecycleSaveBlocked}
+						title={lifecycleSaveBlockedReason}
 					>
 						保存
 					</Button>
@@ -4017,7 +4225,7 @@ export default function SqlModelingPage() {
 										<Button
 											size="small"
 											disabled={!dagRunId}
-											onClick={() => router.push(`/ops/instances?entryKey=DBT_RUN&runId=${encodeURIComponent(dagRunId)}&journey=e2e-data-product&modelSpecId=${encodeURIComponent(requestedModelSpecId || String(activeModel?.id || ""))}${requestedPlanId ? `&planId=${encodeURIComponent(requestedPlanId)}` : ""}${requestedRevision ? `&revision=${encodeURIComponent(requestedRevision)}` : ""}${requestedImplementationRevision ? `&implementationRevision=${encodeURIComponent(requestedImplementationRevision)}` : ""}${requestedImplementationMode ? `&implementationMode=${encodeURIComponent(requestedImplementationMode)}` : ""}`)}
+											onClick={() => router.push(buildOpsInstanceRoute(dagRunId))}
 										>
 											查看运行实例
 										</Button>
