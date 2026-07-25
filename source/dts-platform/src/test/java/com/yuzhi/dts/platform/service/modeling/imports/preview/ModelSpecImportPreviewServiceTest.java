@@ -57,6 +57,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -165,6 +167,20 @@ class ModelSpecImportPreviewServiceTest {
             assertThat(item.sourceSnapshotJson()).contains("\"freshness\":\"CURRENT\"");
             assertThat(item.proposedImplementationJson()).doesNotContain("select budget_id");
         });
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+        value = LifecycleStatus.class,
+        names = { "DRAFT", "BASELINE_READY", "DESIGNING", "VALIDATING", "READY_TO_PUBLISH" }
+    )
+    void allowsModelPackageImportForEveryMutablePlanLifecycle(LifecycleStatus lifecycleStatus) {
+        stubCurrentContext("source-v1", lifecycleStatus);
+
+        var response = service.preview(request(packageForPreview()));
+
+        assertThat(response.summary().ready()).isEqualTo(1);
+        verify(repository).save(any(PersistedRun.class), any());
     }
 
     @Test
@@ -358,8 +374,12 @@ class ModelSpecImportPreviewServiceTest {
     }
 
     private void stubCurrentContext(String resolvedVersion) {
+        stubCurrentContext(resolvedVersion, LifecycleStatus.DESIGNING);
+    }
+
+    private void stubCurrentContext(String resolvedVersion, LifecycleStatus lifecycleStatus) {
         when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("actor-1", "dept-1"));
-        when(repository.findPlan(TENANT, PLAN_ID)).thenReturn(Optional.of(plan()));
+        when(repository.findPlan(TENANT, PLAN_ID)).thenReturn(Optional.of(plan(lifecycleStatus)));
         when(repository.findDomainBindings(TENANT, PLAN_ID)).thenReturn(
             List.of(new DomainBindingSnapshot(DOMAIN_ID, "CONFIRMED", NOW))
         );
@@ -402,6 +422,10 @@ class ModelSpecImportPreviewServiceTest {
     }
 
     private static PlanSnapshot plan() {
+        return plan(LifecycleStatus.DESIGNING);
+    }
+
+    private static PlanSnapshot plan(LifecycleStatus lifecycleStatus) {
         return new PlanSnapshot(
             PLAN_ID,
             TENANT,
@@ -412,7 +436,7 @@ class ModelSpecImportPreviewServiceTest {
             "actor-1",
             "dept-1",
             OnboardingMode.BUSINESS_FIRST,
-            LifecycleStatus.DESIGNING,
+            lifecycleStatus,
             3,
             4,
             5

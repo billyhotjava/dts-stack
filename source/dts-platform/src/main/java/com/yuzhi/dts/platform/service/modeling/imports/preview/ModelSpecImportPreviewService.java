@@ -96,9 +96,11 @@ public class ModelSpecImportPreviewService {
 
     private static final Duration PREVIEW_TTL = Duration.ofHours(2);
     private static final Set<LifecycleStatus> IMPORTABLE_LIFECYCLES = Set.of(
+        LifecycleStatus.DRAFT,
         LifecycleStatus.BASELINE_READY,
         LifecycleStatus.DESIGNING,
-        LifecycleStatus.VALIDATING
+        LifecycleStatus.VALIDATING,
+        LifecycleStatus.READY_TO_PUBLISH
     );
     private static final Comparator<PreviewIssue> ISSUE_ORDER = Comparator.comparing(
         PreviewIssue::severity
