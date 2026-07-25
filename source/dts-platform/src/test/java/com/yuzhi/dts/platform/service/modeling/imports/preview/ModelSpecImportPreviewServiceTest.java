@@ -184,6 +184,28 @@ class ModelSpecImportPreviewServiceTest {
     }
 
     @Test
+    void acceptsUiMappingsByConfirmedDomainAndSourceBindingIds() {
+        stubCurrentContext("source-v1");
+        var request = new PreviewRequest(
+            objectMapper.valueToTree(packageForPreview()),
+            new PreviewContext(
+                PLAN_ID,
+                Map.of("PROJECT_MANAGEMENT", DOMAIN_ID.toString()),
+                Map.of("source.pjm.budget", BINDING_ID.toString())
+            ),
+            List.of()
+        );
+
+        var response = service.preview(request);
+
+        assertThat(response.summary()).isEqualTo(new PreviewSummary(1, 1, 0, 1, 0, 0, 0));
+        assertThat(response.items()).singleElement().satisfies(item -> {
+            assertThat(item.action()).isEqualTo(Action.CREATE);
+            assertThat(item.issues()).isEmpty();
+        });
+    }
+
+    @Test
     void failsClosedWhenConfirmedSourceVersionHasDrifted() {
         stubCurrentContext("source-v2");
 

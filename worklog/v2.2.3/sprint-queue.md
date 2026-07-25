@@ -1462,18 +1462,18 @@
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
-| F1-模型包契约与转换器 | P0 | 5 | IN_PROGRESS |
+| F1-模型包契约与转换器 | P0 | 6 | IN_PROGRESS |
 | F2-导入预检与差异分析 | P0 | 4 | DONE |
 | F3-canonical模型应用引擎 | P0 | 4 | IN_PROGRESS |
 | F4-建模工作台导入体验 | P0 | 5 | IN_PROGRESS |
 | F5-集成验收与交付 | P0 | 4 | READY |
 
-**统计**: READY=8, IN_PROGRESS=6, DONE=8, BLOCKED=0
+**统计**: READY=8, IN_PROGRESS=7, DONE=8, BLOCKED=0
 **执行顺序**: F1 → F2 → F3 → F4 → F5；F4 页面壳层可在 F2 契约冻结后并行，F1-F4 全部实现后再统一执行一次后端组合测试、一次前端 production build 和一次 Chrome 95 真实验收。
 
 **关键决策**:
 
-- 用户上传 dbt ZIP，服务端读取 `manifest.json + catalog.json + schema.yml/meta.dts + SQL` 并生成内部 `dts.model-package/v1`；兼容 `models.tsv + SQL`，但业务粒度、模型类型和消费场景缺失时不得靠命名或 SQL 猜测后直接写入。
+- 普通和高级模式接收同一个标准 dbt 项目 ZIP；服务端优先读取 artifact，缺失时执行隔离、无数据库写入的解析并生成内部 `dts.model-package/v1`。`models.tsv` 只是可选索引，不能再把完整项目降级成另一种 legacy 产品格式。
 - 转换结果分为 `DESIGNER_GENERATED / DBT_BACKED / BLOCKED`；复杂 SQL 仍创建普通 ModelSpec，但实现所有权保持 DBT_MANAGED。
 - STG/ephemeral 作为技术节点进入依赖和 artifact 图，不创建 ODS/STG 四类 ModelSpec，也不能在导入时丢失。
 - 导入采用 preview/apply 双阶段，preview 零写入；apply 重验 previewHash、来源版本、revision pin、CAS 和幂等键。

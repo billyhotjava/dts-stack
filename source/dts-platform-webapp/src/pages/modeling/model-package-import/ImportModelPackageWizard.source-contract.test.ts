@@ -21,6 +21,8 @@ test("wizard implements the four frozen steps, disabled blockers and durable res
 	for (const label of ["上传 dbt ZIP", "建设上下文", "预检确认", "导入结果"]) assert.match(wizard, new RegExp(label));
 	assert.match(wizard, /isSelectablePreviewItem/);
 	assert.match(wizard, /isPreviewApplicable/);
+	assert.match(wizard, /hasPreviewContext/);
+	assert.match(wizard, /暂时无法映射的项也可先进入预检/);
 	assert.match(wizard, /仅重试失败项/);
 	assert.match(wizard, /查看模型/);
 	assert.match(wizard, /getModelSpecImportPreviewRun/);
@@ -34,12 +36,17 @@ test("wizard accepts a dbt ZIP, inspects it into the internal package, then prev
 	assert.match(wizard, /inspectDbtModelArchive/);
 	assert.match(wizard, /createConvertedModelPackage/);
 	assert.match(wizard, /validateDbtModelPackageArchive/);
-	assert.match(wizard, /上传 dbt ZIP 后，系统会自动解析并转换为内部模型包/);
+	assert.match(wizard, /上传高级建模使用的同一份 dbt 项目 ZIP/);
 	assert.match(wizard, /最大 32 MiB/);
 	assert.match(wizard, /MODEL_IMPORT_ARCHIVE_UNSAFE_PATH/);
 	assert.match(wizard, /MODEL_IMPORT_ARCHIVE_LENGTH_REQUIRED/);
 	assert.match(wizard, /MODEL_IMPORT_ARCHIVE_MANIFEST_MISSING/);
+	assert.match(wizard, /MODEL_IMPORT_ARCHIVE_SOURCE_PROJECT_INVALID/);
 	assert.match(wizard, /MODEL_IMPORT_ARCHIVE_SQL_MISSING/);
+	assert.match(wizard, /源项目安全解析（未执行 SQL）/);
+	assert.match(wizard, /不会把整个项目降级为旧格式/);
+	assert.match(wizard, /sourceProjectStaticPreview/);
+	assert.match(wizard, /该事实会随预检批次保留/);
 	assert.match(wizard, /<Archive/);
 	assert.doesNotMatch(wizard, /accept="\.json,application\/json"/);
 	assert.doesNotMatch(wizard, /file\.text\(\)/);

@@ -40,9 +40,25 @@
       "预算台账明细分析"
     ],
     "field_roles": {
-      "budget_id": "BUSINESS_KEY",
-      "budget_no": "NATURAL_KEY",
-      "source_imported_at": "FACT_TIME"
+      "budget_id": "KEY",
+      "source_row_id": "ATTRIBUTE",
+      "source_table": "ATTRIBUTE",
+      "source_system": "ATTRIBUTE",
+      "source_imported_at": "TIME",
+      "project_no": "ATTRIBUTE",
+      "budget_no": "ATTRIBUTE",
+      "subtopic": "ATTRIBUTE",
+      "research_lab": "ATTRIBUTE",
+      "budget_amount": "MEASURE",
+      "prepaid_amount": "MEASURE",
+      "book_cost_amount": "MEASURE",
+      "payable_amount": "MEASURE",
+      "executed_amount": "MEASURE",
+      "remaining_amount": "MEASURE",
+      "overrun_amount": "MEASURE",
+      "is_overrun": "ATTRIBUTE",
+      "execution_rate_line": "MEASURE",
+      "etl_time": "TIME"
     },
     "override_source": "Sprint-70 PJM budget semantic override",
     "technical_only": false
@@ -57,7 +73,6 @@
         "research_lab"
       ]
     },
-    "fact_shape": "AGGREGATE_SNAPSHOT",
     "domain_code": "PROJECT_MANAGEMENT",
     "source_refs": [
       {
@@ -71,8 +86,17 @@
       "研究室预算执行汇总"
     ],
     "field_roles": {
-      "project_no": "DIMENSION_KEY",
-      "research_lab": "DIMENSION_KEY"
+      "project_no": "KEY",
+      "research_lab": "KEY",
+      "item_cnt": "MEASURE",
+      "budget_amount": "MEASURE",
+      "prepaid_amount": "MEASURE",
+      "book_cost_amount": "MEASURE",
+      "payable_amount": "MEASURE",
+      "executed_amount": "MEASURE",
+      "remaining_amount": "MEASURE",
+      "overrun_amount": "MEASURE",
+      "overrun_item_cnt": "MEASURE"
     },
     "override_source": "Sprint-70 PJM budget semantic override",
     "technical_only": false
@@ -86,7 +110,6 @@
         "item_cnt"
       ]
     },
-    "fact_shape": "AGGREGATE_SNAPSHOT",
     "domain_code": "PROJECT_MANAGEMENT",
     "source_refs": [
       {
@@ -99,7 +122,15 @@
       "预算驾驶舱 KPI"
     ],
     "field_roles": {
-      "item_cnt": "MEASURE"
+      "item_cnt": "MEASURE",
+      "total_budget": "MEASURE",
+      "total_prepaid": "MEASURE",
+      "total_book_cost": "MEASURE",
+      "total_payable": "MEASURE",
+      "total_executed": "MEASURE",
+      "total_remaining": "MEASURE",
+      "overrun_amount": "MEASURE",
+      "overrun_item_cnt": "MEASURE"
     },
     "override_source": "Sprint-70 PJM budget semantic override",
     "technical_only": false
@@ -113,7 +144,6 @@
         "pjm_budg_execution_rate"
       ]
     },
-    "fact_shape": "DERIVED_METRIC_SNAPSHOT",
     "domain_code": "PROJECT_MANAGEMENT",
     "source_refs": [
       {
@@ -126,7 +156,13 @@
       "预算健康度与预警分析"
     ],
     "field_roles": {
-      "pjm_budg_execution_rate": "METRIC"
+      "pjm_budg_execution_rate": "MEASURE",
+      "pjm_budg_book_rate": "MEASURE",
+      "pjm_budg_payable_ratio": "MEASURE",
+      "pjm_budg_remaining_rate": "MEASURE",
+      "pjm_budg_health_score": "MEASURE",
+      "warn_overrun": "ATTRIBUTE",
+      "warn_overrun_items": "ATTRIBUTE"
     },
     "override_source": "Sprint-70 PJM budget semantic override",
     "technical_only": false

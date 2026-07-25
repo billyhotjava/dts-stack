@@ -9,13 +9,14 @@
 
 ## Journey A：PJM 预算模型包成功导入
 
-1. 从 `worklog/v2.2.3/s10/v4/pjm/dbt_model` 生成模型包。
+1. 直接使用现有 `worklog/v2.2.3/s10/v4/pjm/pjm-dbt-model.zip`；不得重新裁剪、注入普通模式专用 JSON 或以 `/tmp` 包替代。
 2. 在当前计划确认 `public.ods_budget_v2` SourceBinding。
 3. 从建模工作台点击“导入已有模型”。
 4. 绑定项目管理业务分类和预算来源。
 5. 预检应显示 STG 为技术节点，DWD/DWS/ADS 为普通 ModelSpec + dbt 实现。
 6. 确认导入后，在模型中心看到 FACT、SUMMARY、APPLICATION。
 7. 打开详情核对粒度、字段、依赖、implementation revision 和 artifact。
+8. 使用同一个 ZIP 回归高级建模导入，确认 SQL/YAML/macro 仍按原工程进入专业 dbt 工作区。
 
 ## Journey B：阻断与修复
 
@@ -47,6 +48,7 @@
 - [ ] `evidence/chrome95/journey-a-import.png`
 - [ ] `evidence/chrome95/journey-b-blocked.png`
 - [ ] `evidence/chrome95/journey-d-result.png`
+- [ ] `evidence/chrome95/same-zip-advanced-import.png`
 - [ ] `evidence/runtime/postgresql-modelspec-evidence.md`
 - [ ] `evidence/go-no-go.md`
 

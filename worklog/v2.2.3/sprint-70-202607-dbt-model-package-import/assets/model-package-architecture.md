@@ -3,11 +3,18 @@
 ## 1. 总体流程
 
 ```text
-dbt ZIP
-  ├─ artifact format: manifest.json + optional catalog.json/schema.yml + SQL
-  └─ legacy format: models.tsv + SQL
+统一 dbt 项目 ZIP
+  ├─ 交付真值: dbt_project.yml + models/**/*.sql + schema YAML + macros
+  ├─ 可选兼容索引: models.tsv
+  └─ 可选解析缓存: target/manifest.json + target/catalog.json
               ↓
        safe archive inspection
+              ↓
+   artifact present ── yes ──→ read artifact
+          │
+          no
+          ↓
+   isolated dbt parse (no run/build, no target-table writes)
               ↓
        server-side DTS package converter
               ↓
@@ -18,9 +25,22 @@ dbt ZIP
        ModelSpec → ModelImplementation → dbt artifact / physical evidence
 ```
 
-ZIP 是面向用户和现有 dbt 项目的交付格式；JSON 是服务端内部标准化契约。CLI 仍可生成 JSON 用于回归夹具和自动化，但普通建模页面不得要求用户手工准备 JSON。
+ZIP 是面向用户和现有 dbt 项目的唯一交付格式；JSON 是服务端内部标准化契约。CLI 仍可生成 JSON 用于回归夹具和自动化，但普通建模页面不得要求用户手工准备 JSON。
 
-artifact ZIP 可在根目录或单层项目目录中保存 `manifest.json`/`target/manifest.json`。旧 `models.tsv + SQL` ZIP 可进入同一检查入口；如果缺少 manifest、依赖或 `meta.dts` 业务语义，转换器必须返回明确 issue/阻断，不能通过命名猜测后写入 canonical 模型。
+普通模式和高级模式不得再定义两套 ZIP。高级模式保存并运行原始 dbt 工程；普通模式从同一工程投影 ModelSpec。artifact 可在根目录或单层项目目录中保存为 `manifest.json`/`target/manifest.json`，但它是解析缓存而不是上传前置条件。缺少 artifact 时，服务端必须在受限临时目录执行 `dbt parse` 或等价的无执行解析，不运行 `dbt run/build/test/docs generate`，也不写目标数据库或高级建模工作区。
+
+`models.tsv` 只作为高级模式既有索引和 artifact 缺失时的项目文件索引，不能使包被降级成另一种 `legacy` 产品格式。结构性事实可以从 dbt graph、`ref()`、`source()`、materialization、tags 和 schema YAML 获取；粒度、SCD、消费场景等业务语义不能从名称或 SQL 直接写入，无法确定时生成逐模型待确认项。
+
+## 1.1 双入口解释
+
+| 同一 ZIP 内容 | 普通模式 | 高级模式 |
+|---|---|---|
+| SQL/YAML/macro | 只读解析并生成 ModelSpec/implementation 候选 | 保存为 dbt 工程并由专业用户编辑、运行 |
+| `models.tsv` | 可选索引，不作为独立格式 | 保持现有批量导入兼容 |
+| manifest/catalog | 有则复用，无则安全补齐 | 可忽略并在运行时重新生成 |
+| 内部 JSON | 服务端临时生成，不暴露为上传要求 | 不需要 |
+
+强制回归包为仓库中现有的 `worklog/v2.2.3/s10/v4/pjm/pjm-dbt-model.zip`。不得用 `/tmp` 裁剪包、手工注入 manifest 或只含预算链的专用包代替双入口验收。
 
 ## 2. 内部包结构
 

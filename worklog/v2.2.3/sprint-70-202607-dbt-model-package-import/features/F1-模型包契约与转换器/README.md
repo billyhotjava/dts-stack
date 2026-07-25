@@ -16,6 +16,7 @@
 | T03 | 实现转换能力分类与技术节点保留 | P0 | DONE | T01/T02 |
 | T04 | 建立 PJM 黄金模型包夹具 | P0 | DONE | T02/T03 |
 | T05 | 接收 dbt ZIP 并转换为内部模型包 | P0 | IN_PROGRESS | T01/T02 |
+| T06 | 统一普通与高级建模 dbt ZIP 契约 | P0 | IN_PROGRESS | T05 |
 
 ## 完成标准
 
@@ -23,4 +24,5 @@
 - [ ] manifest/catalog/schema/meta 的真值边界明确。
 - [ ] STG/ephemeral 不创建 ModelSpec，但依赖不丢失。
 - [ ] PJM 黄金包可重复生成且 checksum 稳定。
-- [ ] 页面上传 artifact/legacy dbt ZIP 后由服务端无副作用转换，JSON 不再是用户输入。
+- [ ] 页面上传统一 dbt 项目 ZIP 后由服务端无副作用转换，JSON 不再是用户输入。
+- [ ] 同一个现有 PJM dbt 项目 ZIP 在普通和高级两个入口均可导入，缺少 artifact 不再被整体降级为 legacy。

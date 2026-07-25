@@ -7,6 +7,7 @@ import {
 	createModelPackageImportState,
 	defaultSelectedUniqueIds,
 	hasCompleteImportContext,
+	hasPreviewContext,
 	isPreviewApplicable,
 	MODEL_IMPORT_GENERIC_DIAGNOSTIC_CODE,
 	reduceModelPackageImportState,
@@ -36,7 +37,39 @@ test("keeps the converted internal package with ZIP metadata only until preview"
 	assert.equal(parsed.metadata.projectName, "demo_project");
 	assert.equal(parsed.metadata.fileName, "demo.zip");
 	assert.equal(parsed.metadata.modelCount, 1);
+	assert.equal(parsed.metadata.inspectionMode, "DBT_ARTIFACT");
 	assert.equal(parsed.modelPackage.sources[0].dbtUniqueId, "source.demo.orders");
+});
+
+test("marks a source-project conversion as static and no-execution", () => {
+	const parsed = createConvertedModelPackage(
+		{
+			...packageJson,
+			dbt: {
+				...packageJson.dbt,
+				manifestVersion: "source-project/v1",
+				adapterType: "static-no-execution",
+			},
+		},
+		"pjm-dbt-model.zip",
+		1024,
+	);
+	assert.equal(parsed.metadata.inspectionMode, "SOURCE_PROJECT_STATIC");
+});
+
+test("marks the old inventory adapter explicitly instead of presenting it as a source project", () => {
+	const parsed = createConvertedModelPackage(
+		{
+			...packageJson,
+			dbt: {
+				...packageJson.dbt,
+				manifestVersion: "legacy-tsv/v1",
+			},
+		},
+		"legacy.zip",
+		1024,
+	);
+	assert.equal(parsed.metadata.inspectionMode, "LEGACY_TSV");
 });
 
 test("archive inspection loading state ends when the converted package is accepted", () => {
@@ -72,6 +105,7 @@ test("context is complete only after plan, domain and confirmed source mappings 
 	assert.equal(state.metadata?.projectName, "demo_project");
 	assert.equal(state.step, 1);
 	assert.equal(hasCompleteImportContext(state), false);
+	assert.equal(hasPreviewContext(state), true);
 	state = reduceModelPackageImportState(state, { type: "DOMAIN_MAPPED", code: "ORDER", domainId: "domain-1" });
 	state = reduceModelPackageImportState(state, {
 		type: "SOURCE_MAPPED",

@@ -14,7 +14,7 @@
 
 本 Sprint 不重写已有 dbt parser，也不把任意 SQL 伪装成普通可视化实现。新增能力聚焦：
 
-1. 接收 dbt ZIP；优先读取 `manifest.json + catalog.json + schema.yml/meta.dts + SQL`，并兼容现有高级建模的 `models.tsv + SQL` ZIP。
+1. 接收统一的 dbt 项目 ZIP：`dbt_project.yml + models/**/*.sql + schema.yml + macros` 是用户交付真值，`models.tsv` 和 `target/manifest.json + catalog.json` 都是可选的兼容索引/缓存，不再划分普通模式包和高级模式包。
 2. 在服务端内存/临时目录中生成版本化 `dts.model-package/v1`，不再要求业务用户制作或上传 JSON。
 3. 将候选分类为 `DESIGNER_GENERATED / DBT_BACKED / BLOCKED`。
 4. 在零写入预检后，按拓扑顺序创建 ModelSpec、锁定来源与上游 revision，并建立 implementation/artifact 绑定。
@@ -40,20 +40,20 @@
 
 | ID | Feature | Task 数 | 状态 |
 |----|---------|---------|------|
-| F1 | 模型包契约与转换器 | 5 | IN_PROGRESS |
+| F1 | 模型包契约与转换器 | 6 | IN_PROGRESS |
 | F2 | 导入预检与差异分析 | 4 | DONE |
 | F3 | canonical 模型应用引擎 | 4 | IN_PROGRESS |
 | F4 | 建模工作台导入体验 | 5 | IN_PROGRESS |
 | F5 | 集成验收与交付 | 4 | READY |
 
-**统计**: READY=8, IN_PROGRESS=6, DONE=8, BLOCKED=0
+**统计**: READY=8, IN_PROGRESS=7, DONE=8, BLOCKED=0
 
 ## 既有能力复用与去重
 
 - 复用 Sprint-60 的 manifest/SQL 解析、漂移和 artifact 导入契约，不再新建第二套 dbt parser。
 - 复用 Sprint-65/67 的 ModelSpec、ModelImplementation、PhysicalAssetRevision 四层边界。
 - 复用现有 ModelSpec 创建、来源版本校验、依赖规则、implementation claim、CAS 和幂等机制。
-- 复用高级建模 `models.tsv + SQL` 的 ZIP 交付习惯，但不调用会直接写旧工作区的 `/batch-import` 服务。
+- 普通模式和高级模式复用同一 dbt 项目 ZIP：普通模式只解析并投影 canonical 模型，高级模式继续管理和运行原始 dbt SQL；普通模式不调用会直接写旧工作区的 `/batch-import` 服务。
 - 旧 `/modeling/sql-models/import`、`/batch-import` 仅作为兼容入口保留，不升级为 canonical 主链。
 - Sprint-69 继续负责构建、质量、发布与回滚；本 Sprint 只交付可进入该工作台的模型与实现绑定。
 
@@ -62,7 +62,7 @@
 ### 本 Sprint 完成
 
 - dbt ZIP 安全检查、无副作用解包、内部模型包转换、JSON Schema、生成器、预检、差异、确认应用、幂等和审计。
-- artifact ZIP 缺少业务语义时在预检中明确阻断；旧 `models.tsv + SQL` ZIP 不通过文件名或 SQL 猜测模型类型、粒度或业务域。
+- ZIP 自带 artifact 时直接解析；缺少 artifact 时在隔离、无数据库执行的解析环境生成 manifest。结构性事实来自 dbt graph、配置、tags 和 schema YAML；仍无法确认的业务语义进入可见的待确认项，不再把整个项目降级为 `legacy` 后统一阻断。
 - 普通 ModelSpec 自动创建，以及 `DESIGNER_GENERATED / DBT_BACKED` 双实现分流。
 - STG/ephemeral 技术节点保留在实现图中，但不创建四类 ModelSpec。
 - 工作台/模型中心双入口和共享导入向导。
@@ -87,6 +87,7 @@
 ## 完成标准
 
 - [ ] 用户上传 dbt ZIP 后，服务端可稳定生成符合 JSON Schema 的内部 `dts.model-package/v1`；页面不要求用户上传 JSON。
+- [ ] 原始 `worklog/v2.2.3/s10/v4/pjm/pjm-dbt-model.zip` 不重新裁剪或注入专用 JSON，即可分别通过普通建模和高级 dbt ZIP 入口。
 - [ ] package checksum 覆盖字段、配置、依赖、SQL 和业务语义覆盖项。
 - [ ] 预检严格零写入，并明确 `CREATE / UPDATE / SKIP / CONFLICT / BLOCKED`。
 - [ ] `source()` 能解析到当前计划已确认、当前版本可用的 SourceBinding。

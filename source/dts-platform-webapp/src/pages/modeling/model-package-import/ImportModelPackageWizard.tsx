@@ -46,7 +46,7 @@ import {
 	canRetryFailedImport,
 	createConvertedModelPackage,
 	createModelPackageImportState,
-	hasCompleteImportContext,
+	hasPreviewContext,
 	isSelectablePreviewItem,
 	isPreviewApplicable,
 	modelPackageDomainCodes,
@@ -99,6 +99,8 @@ const stableImportMessages: Record<string, string> = {
 	MODEL_IMPORT_SOURCE_VERSION_STALE: "规划来源版本已经变化，请刷新来源盘点后重新预检。",
 	MODEL_IMPORT_DEPENDENCY_MISSING: "模型依赖不完整，请补齐上游模型后重新预检。",
 	MODEL_IMPORT_DEPENDENCY_CYCLE: "模型依赖存在循环，暂时不能导入。",
+	MODEL_PACKAGE_SEMANTIC_CONFIRMATION_REQUIRED: "模型结构已识别，但业务模型类型、粒度或消费场景尚未提供；该候选暂不可转换。",
+	DBT_SOURCE_PROJECT_STATIC_ANALYSIS: "系统已从 dbt 源项目安全解析结构；本次没有执行模型 SQL。",
 	MODEL_IMPORT_NODE_ALREADY_OWNED: "目标模型已由其他实现管理，不能直接覆盖。",
 	MODEL_IMPORT_PREVIEW_STALE: "预检依据已经变化，请重新预检。",
 	MODEL_IMPORT_IDEMPOTENCY_CONFLICT: "相同提交标识对应了不同内容，请刷新后重新提交。",
@@ -108,7 +110,8 @@ const stableImportMessages: Record<string, string> = {
 	MODEL_IMPORT_ARCHIVE_TOO_LARGE: "dbt ZIP 压缩包不能超过 32 MiB。",
 	MODEL_IMPORT_ARCHIVE_LENGTH_REQUIRED: "dbt ZIP 上传缺少文件长度，请通过页面重新选择文件后上传。",
 	MODEL_IMPORT_ARCHIVE_UNSAFE_PATH: "dbt ZIP 包含不安全或重复的文件路径，请重新打包后上传。",
-	MODEL_IMPORT_ARCHIVE_MANIFEST_MISSING: "未找到 dbt manifest.json 或 models.tsv，请重新生成 dbt 导入包。",
+	MODEL_IMPORT_ARCHIVE_MANIFEST_MISSING: "未找到 dbt_project.yml、manifest.json 或 models.tsv，请确认上传的是完整 dbt 项目。",
+	MODEL_IMPORT_ARCHIVE_SOURCE_PROJECT_INVALID: "dbt 源项目结构无法安全解析，请检查项目根、models 目录和 SQL 引用。",
 	MODEL_IMPORT_ARCHIVE_SQL_MISSING: "dbt manifest 引用的模型 SQL 不完整，请把对应 SQL 文件一并打包。",
 	MODEL_IMPORT_ARCHIVE_INSPECTION_FAILED: "dbt ZIP 压缩包无法解析，请确认包内 dbt 项目完整后重试。",
 };
@@ -180,6 +183,9 @@ const issueRepairTarget = (issue: ModelSpecImportIssue): "categories" | "sources
 	return null;
 };
 
+const itemIssues = (item: ModelSpecImportPreviewItem): ModelSpecImportIssue[] =>
+	(item.issues || []).filter((issue) => issue.code !== "DBT_SOURCE_PROJECT_STATIC_ANALYSIS");
+
 export function ImportModelPackageWizard({
 	open,
 	lockedPlanId,
@@ -223,6 +229,11 @@ export function ImportModelPackageWizard({
 	const failedCount = failedItems.length;
 	const blockedCount = state.result?.items.filter((item) => item.status === "BLOCKED").length || 0;
 	const previewApplicable = isPreviewApplicable(state.preview);
+	const sourceProjectStaticPreview = Boolean(
+		state.preview?.items.some((item) =>
+			(item.issues || []).some((issue) => issue.code === "DBT_SOURCE_PROJECT_STATIC_ANALYSIS"),
+		),
+	);
 	const retryAllowed = canRetryFailedImport(canEdit, selectedPlanEditable, state.preview, failedCount);
 	const previewNameByUniqueId = useMemo(
 		() =>
@@ -349,10 +360,10 @@ export function ImportModelPackageWizard({
 	};
 
 	const runPreview = async () => {
-		if (!state.modelPackage || !selectedPlanEditable || !hasCompleteImportContext(state)) {
+		if (!state.modelPackage || !selectedPlanEditable || !hasPreviewContext(state)) {
 			dispatch({
 				type: "REQUEST_FAILED",
-				message: "请先选择可编辑计划，并完成全部业务分类和来源映射",
+				message: "请先选择一个可编辑的建设计划",
 				diagnosticCode: "MODEL_IMPORT_CONTEXT_INCOMPLETE",
 			});
 			return;
@@ -519,9 +530,9 @@ export function ImportModelPackageWizard({
 		{
 			title: "问题",
 			render: (_value, item) =>
-				item.issues?.length ? (
+				itemIssues(item).length ? (
 					<div className="space-y-1">
-						{item.issues.slice(0, 2).map((issue) => (
+						{itemIssues(item).slice(0, 2).map((issue) => (
 							<div key={`${issue.code}-${issue.fieldPath || ""}`} className="text-xs text-slate-700">
 								{issueMessage(issue)}
 							</div>
@@ -538,7 +549,7 @@ export function ImportModelPackageWizard({
 			<div className="mb-6">
 				<Title level={4}>上传 dbt ZIP 压缩包</Title>
 				<Paragraph type="secondary">
-					上传 dbt ZIP 后，系统会自动解析并转换为内部模型包，再进入预检。ZIP 内应包含 models 目录及对应 SQL；YAML 可作为附带配置。
+					上传高级建模使用的同一份 dbt 项目 ZIP，系统会读取项目结构并转换为普通模型候选。ZIP 内应包含 dbt_project.yml、models 目录及对应 SQL；manifest 等解析产物可选。
 				</Paragraph>
 			</div>
 			<Dragger
@@ -561,6 +572,13 @@ export function ImportModelPackageWizard({
 					<Descriptions size="small" column={{ xs: 1, sm: 2 }} title={state.metadata.fileName}>
 						<Descriptions.Item label="dbt 项目">{state.metadata.projectName}</Descriptions.Item>
 						<Descriptions.Item label="模型">{state.metadata.modelCount} 个</Descriptions.Item>
+						<Descriptions.Item label="解析方式">
+							{state.metadata.inspectionMode === "SOURCE_PROJECT_STATIC"
+								? "源项目安全解析（未执行 SQL）"
+								: state.metadata.inspectionMode === "DBT_ARTIFACT"
+									? "dbt 解析产物"
+									: "旧 models.tsv 兼容"}
+						</Descriptions.Item>
 					</Descriptions>
 					<Collapse
 						ghost
@@ -580,7 +598,7 @@ export function ImportModelPackageWizard({
 		<div className="mx-auto max-w-4xl py-3">
 			<div className="mb-5">
 				<Title level={4}>确认目标计划与业务上下文</Title>
-				<Paragraph type="secondary">只显示当前计划内已确认、当前可用的业务分类和来源；界面不会要求复制 UUID。</Paragraph>
+				<Paragraph type="secondary">只显示当前计划内已确认、当前可用的业务分类和来源；界面不会要求复制 UUID。暂时无法映射的项也可先进入预检，由系统逐模型说明影响。</Paragraph>
 			</div>
 			<Card className="mb-4 border-slate-200" title="目标建设计划">
 				<Select
@@ -612,6 +630,15 @@ export function ImportModelPackageWizard({
 							children: <Text type="secondary">内部包版本：{state.metadata.schemaVersion} · 包标识：{state.metadata.packageId} · 完整性校验：{state.metadata.checksum}</Text>,
 						}]}
 					/>
+					{state.metadata.inspectionMode === "SOURCE_PROJECT_STATIC" ? (
+						<Alert
+							className="mt-2"
+							type="info"
+							showIcon
+							message="已从 dbt 源项目生成普通模型候选"
+							description="系统只读取 SQL 中显式的 ref/source、分层标签和 models.tsv 清单，不会运行 SQL。无法证明的业务语义会在预检中逐模型列出，不会把整个项目降级为旧格式。"
+						/>
+					) : null}
 				</Card>
 			) : null}
 			{contextLoading ? <Skeleton active paragraph={{ rows: 5 }} /> : null}
@@ -683,6 +710,15 @@ export function ImportModelPackageWizard({
 
 	const previewStep = state.preview ? (
 		<div className="py-2">
+			{sourceProjectStaticPreview ? (
+				<Alert
+					className="mb-4"
+					type="info"
+					showIcon
+					message="本批次来自 dbt 源项目安全解析"
+					description="系统没有执行 dbt 或模型 SQL；该事实会随预检批次保留，恢复页面后仍可核对。"
+				/>
+			) : null}
 			<div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
 				{[
 					["候选", state.preview.summary.total],
@@ -745,7 +781,7 @@ export function ImportModelPackageWizard({
 								<div><Text type="secondary">实现方式</Text><div>{conversionLabels[item.conversionMode]}</div></div>
 								<div>
 									<Text type="secondary">问题与修复</Text>
-									{item.issues?.map((issue) => {
+									{itemIssues(item).map((issue) => {
 										const target = issueRepairTarget(issue);
 										return (
 											<div key={`${issue.code}-${issue.fieldPath || ""}`} className="mt-1">
@@ -765,7 +801,7 @@ export function ImportModelPackageWizard({
 											children: (
 												<div className="space-y-1 text-xs text-slate-600">
 													<div>dbt 节点标识：{item.dbtUniqueId}</div>
-													{item.issues?.map((issue) => (
+													{itemIssues(item).map((issue) => (
 														<div key={`${issue.code}-${issue.fieldPath || ""}`}>
 															问题代码：{issue.code}{issue.fieldPath ? ` · 字段：${issue.fieldPath}` : ""}
 														</div>
@@ -795,9 +831,9 @@ export function ImportModelPackageWizard({
 							<Tag>{proposedValue(item, "layer")}</Tag>
 						</Space>
 						<div className="text-sm">{conversionLabels[item.conversionMode]}</div>
-						{item.issues?.length ? (
+						{itemIssues(item).length ? (
 							<div className="mt-2 space-y-1">
-								{item.issues.map((issue) => (
+								{itemIssues(item).map((issue) => (
 									<div key={`${issue.code}-${issue.fieldPath || ""}`} className="text-xs text-slate-700">
 										{issueMessage(issue)}
 									</div>
@@ -813,7 +849,7 @@ export function ImportModelPackageWizard({
 								children: (
 									<div className="space-y-1 text-xs text-slate-600">
 										<div>dbt 节点标识：{item.dbtUniqueId}</div>
-										{item.issues?.map((issue) => (
+										{itemIssues(item).map((issue) => (
 											<div key={`${issue.code}-${issue.fieldPath || ""}`}>
 												问题代码：{issue.code}{issue.fieldPath ? ` · 字段：${issue.fieldPath}` : ""}
 											</div>
@@ -934,7 +970,7 @@ export function ImportModelPackageWizard({
 		state.busy ||
 		!canEdit ||
 		(state.step === 0 && !state.modelPackage) ||
-		(state.step === 1 && (!selectedPlanEditable || !hasCompleteImportContext(state))) ||
+		(state.step === 1 && (!selectedPlanEditable || !hasPreviewContext(state))) ||
 		(state.step === 2 && (!selectedPlanEditable || !state.preview || !previewApplicable || state.selectedUniqueIds.length === 0));
 
 	const footer = state.step < 3 ? (

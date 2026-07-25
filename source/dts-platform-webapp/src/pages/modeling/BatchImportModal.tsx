@@ -418,7 +418,7 @@ const BatchImportModal = ({
 									</p>
 									<p className="ant-upload-text">点击或拖拽 ZIP 文件到此区域</p>
 									<p className="ant-upload-hint">
-										ZIP 包含 models.tsv 和对应 SQL 文件
+										上传标准 dbt 项目 ZIP（dbt_project.yml、models、YAML、macros）；models.tsv 和 manifest 为可选兼容文件
 									</p>
 								</Upload>
 								<Space style={{ marginTop: 16 }}>

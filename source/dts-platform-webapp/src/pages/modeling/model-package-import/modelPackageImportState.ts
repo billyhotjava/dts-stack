@@ -18,6 +18,7 @@ export type ModelPackageMetadata = {
 	schemaVersion: string;
 	modelCount: number;
 	technicalNodeCount: number;
+	inspectionMode: "DBT_ARTIFACT" | "SOURCE_PROJECT_STATIC" | "LEGACY_TSV";
 };
 
 export type ModelPackageImportState = {
@@ -279,6 +280,13 @@ export const createConvertedModelPackage = (
 	fileSize: number,
 ): { modelPackage: ModelPackageJson; metadata: ModelPackageMetadata } => {
 	validateConvertedModelPackage(modelPackage);
+	const inspectionMode =
+		modelPackage.dbt.adapterType === "static-no-execution" ||
+		modelPackage.dbt.manifestVersion === "source-project/v1"
+			? "SOURCE_PROJECT_STATIC"
+			: modelPackage.dbt.manifestVersion === "legacy-tsv/v1"
+				? "LEGACY_TSV"
+				: "DBT_ARTIFACT";
 	return {
 		modelPackage,
 		metadata: {
@@ -291,6 +299,7 @@ export const createConvertedModelPackage = (
 			schemaVersion: modelPackage.schemaVersion,
 			modelCount: modelPackage.models.length,
 			technicalNodeCount: modelPackage.technicalNodes?.length || 0,
+			inspectionMode,
 		},
 	};
 };
@@ -311,6 +320,9 @@ export const hasCompleteImportContext = (state: ModelPackageImportState): boolea
 	Boolean(state.planId) &&
 	modelPackageDomainCodes(state.modelPackage).every((code) => Boolean(state.domainMappings[code])) &&
 	modelPackageSourceIds(state.modelPackage).every((uniqueId) => Boolean(state.sourceMappings[uniqueId]));
+
+export const hasPreviewContext = (state: ModelPackageImportState): boolean =>
+	Boolean(state.planId && state.modelPackage);
 
 export const isPreviewApplicable = (preview: ModelSpecImportPreview | null, now = Date.now()): boolean => {
 	if (!preview) return false;

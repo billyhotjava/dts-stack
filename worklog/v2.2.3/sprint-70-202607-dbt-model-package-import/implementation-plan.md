@@ -18,7 +18,8 @@ Requirements are the files under `features/F1-模型包契约与转换器/` plus
 `assets/model-package-architecture.md`.
 
 Deliver the versioned internal JSON Schema, deterministic checksum/validation,
-safe dbt ZIP inspection, manifest/catalog/schema and legacy TSV conversion,
+safe dbt ZIP inspection, unified ordinary/advanced project recognition,
+artifact-first conversion and isolated no-execution parse fallback,
 conversion classifier, technical-node preservation, repo-native generator,
 focused tests, and PJM golden fixture. ZIP is the UI input; JSON remains an
 internal/automation contract.
@@ -50,6 +51,10 @@ Center, ZIP upload and server inspection, locked plan context, preview matrix,
 apply confirmation, persistent result view, model navigation, and failed-only
 retry. Do not expose JSON as the user upload contract, add a top-level menu,
 or add a second state implementation.
+
+The fixed dual-entry acceptance artifact is the unmodified
+`worklog/v2.2.3/s10/v4/pjm/pjm-dbt-model.zip`; a reduced `/tmp` package is not
+valid closure evidence.
 
 ## Task 5: F5 integrated verification and delivery
 

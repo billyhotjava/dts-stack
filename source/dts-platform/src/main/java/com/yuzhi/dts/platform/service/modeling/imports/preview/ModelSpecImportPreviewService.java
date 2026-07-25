@@ -872,7 +872,11 @@ public class ModelSpecImportPreviewService {
         String hint = input.domainMappings().getOrDefault(packageDomain, packageDomain);
         List<ResolvedDomain> matches = domains
             .stream()
-            .filter(domain -> sameHint(hint, domain.code()) || sameHint(hint, domain.name()))
+            .filter(domain ->
+                sameHint(hint, domain.domainId().toString()) ||
+                sameHint(hint, domain.code()) ||
+                sameHint(hint, domain.name())
+            )
             .toList();
         if (matches.size() != 1) {
             issues.add(
@@ -942,6 +946,7 @@ public class ModelSpecImportPreviewService {
             List<ResolvedBinding> matches = availableBindings
                 .stream()
                 .filter(binding ->
+                    sameHint(requestedIdentity, binding.bindingId().toString()) ||
                     binding.matches(requestedIdentity == null ? relation.uniqueId() : requestedIdentity) ||
                     binding.matches(requestedIdentity == null ? relation.name() : requestedIdentity)
                 )

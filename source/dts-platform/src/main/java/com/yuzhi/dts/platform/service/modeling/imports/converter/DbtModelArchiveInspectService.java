@@ -37,12 +37,14 @@ public class DbtModelArchiveInspectService {
     private final ObjectMapper objectMapper;
     private final SafeZipExtractor zipExtractor;
     private final ModelPackageValidator packageValidator;
+    private final DbtSourceProjectModelPackageAdapter sourceProjectAdapter;
     private final LegacyTsvModelPackageAdapter legacyAdapter;
 
     public DbtModelArchiveInspectService(ObjectMapper objectMapper, SafeZipExtractor zipExtractor) {
         this.objectMapper = objectMapper;
         this.zipExtractor = zipExtractor;
         this.packageValidator = new ModelPackageValidator(objectMapper);
+        this.sourceProjectAdapter = new DbtSourceProjectModelPackageAdapter();
         this.legacyAdapter = new LegacyTsvModelPackageAdapter();
     }
 
@@ -50,6 +52,12 @@ public class DbtModelArchiveInspectService {
         try (SafeZipExtractor.ExtractedArchive extracted = zipExtractor.extract(archive)) {
             Optional<ProjectArtifacts> locatedProject = locateProject(extracted.root());
             if (locatedProject.isEmpty()) {
+                Optional<ModelPackage> sourceProjectPackage = sourceProjectAdapter.convertIfPresent(extracted.root());
+                if (sourceProjectPackage.isPresent()) {
+                    ModelPackage converted = sourceProjectPackage.orElseThrow();
+                    validateConvertedPackage(converted);
+                    return converted;
+                }
                 ModelPackage legacyPackage = legacyAdapter
                     .convertIfPresent(extracted.root())
                     .orElseThrow(() ->
@@ -85,6 +93,8 @@ public class DbtModelArchiveInspectService {
             throw new ArchiveInspectionException("MODEL_IMPORT_ARCHIVE_" + exception.code(), safeZipMessage(exception.code()));
         } catch (LegacyTsvModelPackageAdapter.LegacyArchiveException exception) {
             throw legacyError(exception);
+        } catch (DbtSourceProjectModelPackageAdapter.SourceProjectException exception) {
+            throw sourceProjectError(exception);
         } catch (ArchiveInspectionException exception) {
             throw exception;
         } catch (Exception exception) {
@@ -355,6 +365,22 @@ public class DbtModelArchiveInspectService {
             return new ArchiveInspectionException("MODEL_IMPORT_ARCHIVE_SQL_MISSING", "legacy dbt ZIP 缺少 models.tsv 引用的 SQL");
         }
         return new ArchiveInspectionException("MODEL_IMPORT_ARCHIVE_INVALID", "legacy dbt ZIP 的 models.tsv 或 SQL 格式无效");
+    }
+
+    private static ArchiveInspectionException sourceProjectError(
+        DbtSourceProjectModelPackageAdapter.SourceProjectException exception
+    ) {
+        String code = exception.code();
+        if (code != null && code.contains("TOO_LARGE")) {
+            return new ArchiveInspectionException("MODEL_IMPORT_ARCHIVE_TOO_LARGE", "dbt 源项目超过允许大小");
+        }
+        if ("SOURCE_PROJECT_EMPTY".equals(code) || "SOURCE_PROJECT_SQL_MISSING".equals(code)) {
+            return new ArchiveInspectionException("MODEL_IMPORT_ARCHIVE_SQL_MISSING", "dbt 源项目缺少可读取的模型 SQL");
+        }
+        return new ArchiveInspectionException(
+            "MODEL_IMPORT_ARCHIVE_SOURCE_PROJECT_INVALID",
+            "dbt 源项目结构无法安全解析，请检查项目根、models 目录和 SQL 引用"
+        );
     }
 
     private static boolean hasText(JsonNode node, String field) {
