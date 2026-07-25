@@ -125,6 +125,20 @@ class ModelSpecApplicationServiceTest {
     }
 
     @Test
+    void createsAnImportedModelWithTheIdCommittedByPreview() {
+        UUID previewedId = UUID.fromString("30000000-0000-0000-0000-000000000070");
+        CreateModelSpecCommand command = command("s70-import-create", "customer_imported");
+        when(repository.findByIdempotencyKey(TENANT, command.idempotencyKey())).thenReturn(Optional.empty());
+        when(repository.insertV2(eq(TENANT), eq(ACTOR), eq(command), any(), anyString(), anyString())).thenReturn(1);
+
+        ModelSpecApplicationService.CreateResult result = service.createImported(TENANT, ACTOR, previewedId, command);
+
+        assertThat(result.replayed()).isFalse();
+        assertThat(result.modelSpec().id()).isEqualTo(previewedId);
+        verify(repository).insertV2Revision(eq(TENANT), eq(ACTOR), eq(result.modelSpec()), anyString());
+    }
+
+    @Test
     void createsAFactDraftWithoutResolvingAnUnmappedPhysicalSource() {
         CreateModelSpecCommand command = withInputs(command("fact-source-pending", "customer_detail_pending"), List.of(), List.of());
         when(repository.findByIdempotencyKey(TENANT, "fact-source-pending")).thenReturn(Optional.empty());

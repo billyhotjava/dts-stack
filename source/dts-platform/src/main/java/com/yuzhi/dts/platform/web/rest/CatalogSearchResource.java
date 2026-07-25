@@ -1,25 +1,35 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
+import com.yuzhi.dts.platform.repository.catalog.CatalogAssetTagRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetTagService;
+import com.yuzhi.dts.platform.service.catalog.dto.AssetRef;
+import com.yuzhi.dts.platform.service.catalog.dto.CatalogTagDto;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import jakarta.persistence.criteria.Predicate;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
@@ -31,35 +41,45 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/catalog")
 @Transactional(readOnly = true)
 public class CatalogSearchResource {
 
+    private static final int TAG_SEARCH_SCAN_PAGE_SIZE = 200;
+    private static final int MAX_TAG_SEARCH_CANDIDATES = 5_000;
+
     private final CatalogDatasetRepository datasetRepo;
     private final CatalogTableSchemaRepository tableRepo;
     private final CatalogColumnSchemaRepository columnRepo;
+    private final CatalogAssetTagRepository assetTagRepository;
     private final AccessChecker accessChecker;
     private final AuditService audit;
+    private final CatalogAssetTagService assetTagService;
 
     public CatalogSearchResource(
         CatalogDatasetRepository datasetRepo,
         CatalogTableSchemaRepository tableRepo,
         CatalogColumnSchemaRepository columnRepo,
+        CatalogAssetTagRepository assetTagRepository,
         AccessChecker accessChecker,
-        AuditService audit
+        AuditService audit,
+        CatalogAssetTagService assetTagService
     ) {
         this.datasetRepo = datasetRepo;
         this.tableRepo = tableRepo;
         this.columnRepo = columnRepo;
+        this.assetTagRepository = assetTagRepository;
         this.accessChecker = accessChecker;
         this.audit = audit;
+        this.assetTagService = assetTagService;
     }
 
     @GetMapping("/search")
     public ApiResponse<Map<String, Object>> search(
-        @RequestParam(name = "keyword") String keyword,
+        @RequestParam(name = "keyword", required = false) String keyword,
         @RequestParam(name = "types", required = false) String types,
         @RequestParam(name = "domainId", required = false) UUID domainId,
         @RequestParam(name = "sourceId", required = false) UUID sourceId,
@@ -69,11 +89,13 @@ public class CatalogSearchResource {
         @RequestParam(name = "exposedBy", required = false) String exposedBy,
         @RequestParam(name = "datasetType", required = false) String datasetType,
         @RequestParam(name = "enabledOnly", required = false, defaultValue = "true") boolean enabledOnly,
+        @RequestParam(name = "tagIds", required = false) List<UUID> tagIds,
         @RequestParam(name = "limit", required = false, defaultValue = "50") int limit,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         String k = trimToNull(keyword);
-        if (k == null) {
+        boolean hasTagFilter = tagIds != null && !tagIds.isEmpty();
+        if (k == null && !hasTagFilter) {
             return ApiResponses.ok(Map.of("datasets", List.of(), "tables", List.of(), "columns", List.of()));
         }
         int safeLimit = Math.max(1, Math.min(limit, 200));
@@ -84,8 +106,31 @@ public class CatalogSearchResource {
         boolean includeColumns = typeSet.isEmpty() || typeSet.contains("COLUMN");
 
         String effDept = resolveActiveDept(activeDept);
-        String needle = k.toLowerCase(Locale.ROOT);
+        String needle = k == null ? null : k.toLowerCase(Locale.ROOT);
 
+        if (hasTagFilter) {
+            return searchByTags(
+                k,
+                typeSet,
+                includeDatasets,
+                includeTables,
+                includeColumns,
+                domainId,
+                sourceId,
+                classification,
+                ownerDept,
+                warehouseLayer,
+                exposedBy,
+                datasetType,
+                enabledOnly,
+                tagIds,
+                safeLimit,
+                effDept,
+                needle
+            );
+        }
+
+        Map<UUID, CatalogDataset> visibleDatasetById = new LinkedHashMap<>();
         Map<UUID, Map<String, Object>> visibleDatasetDtoById = new LinkedHashMap<>();
         if (includeDatasets || includeTables || includeColumns) {
             List<CatalogDataset> datasetScope = datasetRepo.findAll(
@@ -104,7 +149,18 @@ public class CatalogSearchResource {
             for (CatalogDataset ds : datasetScope) {
                 if (!accessChecker.canRead(ds)) continue;
                 if (effDept != null && !accessChecker.departmentAllowed(ds, effDept)) continue;
-                visibleDatasetDtoById.put(ds.getId(), toDatasetDto(ds));
+                visibleDatasetById.put(ds.getId(), ds);
+            }
+            List<AssetRef> visibleRefs = visibleDatasetById
+                .values()
+                .stream()
+                .map(ds -> new AssetRef("DATASET", CatalogAssetKey.dataset(ds)))
+                .toList();
+            Map<AssetRef, List<CatalogTagDto>> tagsByAsset = assetTagService.listAssetTags(visibleRefs);
+            for (Map.Entry<UUID, CatalogDataset> entry : visibleDatasetById.entrySet()) {
+                CatalogDataset dataset = entry.getValue();
+                AssetRef ref = new AssetRef("DATASET", CatalogAssetKey.dataset(dataset));
+                visibleDatasetDtoById.put(entry.getKey(), toDatasetDto(dataset, tagsByAsset.getOrDefault(ref, List.of())));
             }
         }
 
@@ -112,7 +168,10 @@ public class CatalogSearchResource {
         if (includeDatasets) {
             for (Map<String, Object> dto : visibleDatasetDtoById.values()) {
                 if (datasetHits.size() >= safeLimit) break;
-                if (containsAny(dto, needle, "name", "owner", "ownerDept", "tags", "description", "hiveDatabase", "hiveTable")) {
+                if (
+                    needle == null ||
+                    containsAny(dto, needle, "name", "owner", "ownerDept", "tags", "description", "hiveDatabase", "hiveTable")
+                ) {
                     datasetHits.add(dto);
                 }
             }
@@ -132,7 +191,7 @@ public class CatalogSearchResource {
                 if (!includeTables) continue;
                 if (tableHits.size() >= safeLimit) continue;
                 if (datasetId == null || !visibleDatasetDtoById.containsKey(datasetId)) continue;
-                if (matchesTable(table, needle)) {
+                if (needle == null || matchesTable(table, needle)) {
                     tableHits.add(toTableDto(table, visibleDatasetDtoById.get(datasetId)));
                 }
             }
@@ -147,7 +206,7 @@ public class CatalogSearchResource {
                     UUID tableId = col.getTable() != null ? col.getTable().getId() : null;
                     UUID datasetId = tableId != null ? tableIdToDatasetId.get(tableId) : null;
                     if (datasetId == null || !visibleDatasetDtoById.containsKey(datasetId)) return;
-                    if (matchesColumn(col.getName(), col.getTags(), col.getSensitiveTags(), col.getComment(), needle)) {
+                    if (needle == null || matchesColumn(col.getName(), col.getTags(), col.getSensitiveTags(), col.getComment(), needle)) {
                         String tableName = tableId != null ? tableIdToName.get(tableId) : null;
                         columnHits.add(toColumnDto(col, tableId, tableName, visibleDatasetDtoById.get(datasetId)));
                     }
@@ -166,6 +225,7 @@ public class CatalogSearchResource {
         payload.put("exposedBy", trimToNull(exposedBy));
         payload.put("datasetType", trimToNull(datasetType));
         payload.put("enabledOnly", enabledOnly);
+        payload.put("tagIds", tagIds == null ? List.of() : tagIds);
         payload.put("datasets", datasetHits);
         payload.put("tables", tableHits);
         payload.put("columns", columnHits);
@@ -187,6 +247,9 @@ public class CatalogSearchResource {
         putIfHasText(auditPayload, "exposedBy", exposedBy);
         putIfHasText(auditPayload, "datasetType", datasetType);
         auditPayload.put("enabledOnly", enabledOnly);
+        if (hasTagFilter) {
+            auditPayload.put("tagCount", tagIds.stream().distinct().count());
+        }
         auditPayload.put("datasetHits", datasetHits.size());
         auditPayload.put("tableHits", tableHits.size());
         auditPayload.put("columnHits", columnHits.size());
@@ -194,6 +257,292 @@ public class CatalogSearchResource {
 
         return ApiResponses.ok(payload);
     }
+
+    private ApiResponse<Map<String, Object>> searchByTags(
+        String keyword,
+        Set<String> typeSet,
+        boolean includeDatasets,
+        boolean includeTables,
+        boolean includeColumns,
+        UUID domainId,
+        UUID sourceId,
+        String classification,
+        String ownerDept,
+        String warehouseLayer,
+        String exposedBy,
+        String datasetType,
+        boolean enabledOnly,
+        List<UUID> requestedTagIds,
+        int safeLimit,
+        String activeDept,
+        String needle
+    ) {
+        List<UUID> tagIds = normalizeSearchTagIds(requestedTagIds);
+        TaggedSearchScope scope = new TaggedSearchScope(
+            tagIds,
+            domainId,
+            sourceId,
+            trimToNull(classification),
+            trimToNull(ownerDept),
+            trimToNull(warehouseLayer),
+            trimToNull(exposedBy),
+            trimToNull(datasetType),
+            enabledOnly,
+            activeDept,
+            needle,
+            safeLimit
+        );
+
+        List<TaggedSearchHit> datasetEntities = includeDatasets ? scanTaggedCandidates("DATASET", scope) : List.of();
+        List<TaggedSearchHit> tableEntities = includeTables ? scanTaggedCandidates("TABLE", scope) : List.of();
+        List<TaggedSearchHit> columnEntities = includeColumns ? scanTaggedCandidates("COLUMN", scope) : List.of();
+
+        Map<UUID, CatalogDataset> hitDatasets = new LinkedHashMap<>();
+        datasetEntities.forEach(hit -> hitDatasets.putIfAbsent(hit.dataset().getId(), hit.dataset()));
+        tableEntities.forEach(hit -> hitDatasets.putIfAbsent(hit.dataset().getId(), hit.dataset()));
+        columnEntities.forEach(hit -> hitDatasets.putIfAbsent(hit.dataset().getId(), hit.dataset()));
+
+        List<AssetRef> refs = hitDatasets
+            .values()
+            .stream()
+            .map(dataset -> new AssetRef("DATASET", CatalogAssetKey.dataset(dataset)))
+            .toList();
+        Map<AssetRef, List<CatalogTagDto>> tagsByAsset = assetTagService.listAssetTags(refs);
+        Map<UUID, Map<String, Object>> datasetDtoById = new LinkedHashMap<>();
+        for (CatalogDataset dataset : hitDatasets.values()) {
+            AssetRef ref = new AssetRef("DATASET", CatalogAssetKey.dataset(dataset));
+            datasetDtoById.put(dataset.getId(), toDatasetDto(dataset, tagsByAsset.getOrDefault(ref, List.of())));
+        }
+
+        List<Map<String, Object>> datasetHits = datasetEntities
+            .stream()
+            .map(hit -> datasetDtoById.get(hit.dataset().getId()))
+            .filter(Objects::nonNull)
+            .toList();
+        List<Map<String, Object>> tableHits = tableEntities
+            .stream()
+            .map(hit -> toTableDto(hit.table(), datasetDtoById.get(hit.dataset().getId())))
+            .toList();
+        List<Map<String, Object>> columnHits = columnEntities
+            .stream()
+            .map(hit -> {
+                CatalogColumnSchema column = hit.column();
+                CatalogTableSchema table = column != null ? column.getTable() : null;
+                UUID tableId = table != null ? table.getId() : null;
+                String tableName = table != null ? table.getName() : null;
+                return toColumnDto(column, tableId, tableName, datasetDtoById.get(hit.dataset().getId()));
+            })
+            .toList();
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("keyword", keyword);
+        payload.put("types", typeSet.isEmpty() ? List.of("DATASET", "TABLE", "COLUMN") : typeSet.stream().sorted().toList());
+        payload.put("limit", safeLimit);
+        payload.put("domainId", domainId != null ? domainId.toString() : null);
+        payload.put("sourceId", sourceId != null ? sourceId.toString() : null);
+        payload.put("classification", trimToNull(classification));
+        payload.put("ownerDept", trimToNull(ownerDept));
+        payload.put("warehouseLayer", trimToNull(warehouseLayer));
+        payload.put("exposedBy", trimToNull(exposedBy));
+        payload.put("datasetType", trimToNull(datasetType));
+        payload.put("enabledOnly", enabledOnly);
+        payload.put("tagIds", requestedTagIds);
+        payload.put("datasets", datasetHits);
+        payload.put("tables", tableHits);
+        payload.put("columns", columnHits);
+
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "检索元数据");
+        auditPayload.put("keyword", keyword);
+        auditPayload.put("types", payload.get("types"));
+        auditPayload.put("limit", safeLimit);
+        if (domainId != null) {
+            auditPayload.put("domainId", domainId.toString());
+        }
+        if (sourceId != null) {
+            auditPayload.put("sourceId", sourceId.toString());
+        }
+        putIfHasText(auditPayload, "classification", classification);
+        putIfHasText(auditPayload, "ownerDept", ownerDept);
+        putIfHasText(auditPayload, "warehouseLayer", warehouseLayer);
+        putIfHasText(auditPayload, "exposedBy", exposedBy);
+        putIfHasText(auditPayload, "datasetType", datasetType);
+        auditPayload.put("enabledOnly", enabledOnly);
+        auditPayload.put("tagCount", tagIds.size());
+        auditPayload.put("datasetHits", datasetHits.size());
+        auditPayload.put("tableHits", tableHits.size());
+        auditPayload.put("columnHits", columnHits.size());
+        audit.auditAction("CATALOG_SEARCH", AuditStage.SUCCESS, "search", auditPayload);
+
+        return ApiResponses.ok(payload);
+    }
+
+    private List<TaggedSearchHit> scanTaggedCandidates(String entityType, TaggedSearchScope scope) {
+        List<TaggedSearchHit> hits = new ArrayList<>(scope.limit());
+        Map<UUID, Boolean> visibilityByDatasetId = new LinkedHashMap<>();
+        int scanned = 0;
+        int page = 0;
+        while (hits.size() < scope.limit()) {
+            Slice<CatalogAssetTagRepository.CatalogSearchCandidateProjection> candidates =
+                assetTagRepository.findCatalogSearchCandidatesHavingAllTags(
+                    scope.tagIds(),
+                    scope.tagIds().size(),
+                    entityType,
+                    scope.domainId(),
+                    scope.sourceId(),
+                    scope.classification(),
+                    scope.ownerDept(),
+                    scope.warehouseLayer(),
+                    scope.exposedBy(),
+                    scope.datasetType(),
+                    scope.enabledOnly(),
+                    PageRequest.of(page, TAG_SEARCH_SCAN_PAGE_SIZE)
+                );
+            List<CatalogAssetTagRepository.CatalogSearchCandidateProjection> rows = candidates.getContent();
+            scanned += rows.size();
+
+            Map<UUID, CatalogDataset> datasetsById = indexDatasets(
+                datasetRepo.findAllById(rows.stream().map(CatalogAssetTagRepository.CatalogSearchCandidateProjection::getDatasetId).toList())
+            );
+            Map<UUID, CatalogTableSchema> tablesById = "TABLE".equals(entityType)
+                ? indexTables(
+                    tableRepo.findAllById(
+                        rows.stream().map(CatalogAssetTagRepository.CatalogSearchCandidateProjection::getEntityId).toList()
+                    )
+                )
+                : Map.of();
+            Map<UUID, CatalogColumnSchema> columnsById = "COLUMN".equals(entityType)
+                ? indexColumns(
+                    columnRepo.findAllById(
+                        rows.stream().map(CatalogAssetTagRepository.CatalogSearchCandidateProjection::getEntityId).toList()
+                    )
+                )
+                : Map.of();
+
+            for (CatalogAssetTagRepository.CatalogSearchCandidateProjection row : rows) {
+                if (hits.size() >= scope.limit()) {
+                    break;
+                }
+                CatalogDataset dataset = datasetsById.get(row.getDatasetId());
+                if (dataset == null || !CatalogAssetKey.dataset(dataset).equals(row.getAssetKey())) {
+                    continue;
+                }
+                boolean visible = visibilityByDatasetId.computeIfAbsent(
+                    dataset.getId(),
+                    ignored ->
+                        accessChecker.canRead(dataset) &&
+                        (scope.activeDept() == null || accessChecker.departmentAllowed(dataset, scope.activeDept()))
+                );
+                if (!visible) {
+                    continue;
+                }
+                TaggedSearchHit hit = toTaggedSearchHit(entityType, row.getEntityId(), dataset, tablesById, columnsById);
+                if (hit != null && matchesTaggedSearchHit(hit, scope.needle())) {
+                    hits.add(hit);
+                }
+            }
+
+            if (!candidates.hasNext()) {
+                break;
+            }
+            if (scanned >= MAX_TAG_SEARCH_CANDIDATES) {
+                throw new ResponseStatusException(
+                    HttpStatus.UNPROCESSABLE_ENTITY,
+                    "精确标签检索候选超过 5000，请增加检索条件或缩小标签范围"
+                );
+            }
+            page++;
+        }
+        return List.copyOf(hits);
+    }
+
+    private TaggedSearchHit toTaggedSearchHit(
+        String entityType,
+        UUID entityId,
+        CatalogDataset dataset,
+        Map<UUID, CatalogTableSchema> tablesById,
+        Map<UUID, CatalogColumnSchema> columnsById
+    ) {
+        if ("DATASET".equals(entityType)) {
+            return dataset.getId().equals(entityId) ? new TaggedSearchHit(dataset, null, null) : null;
+        }
+        if ("TABLE".equals(entityType)) {
+            CatalogTableSchema table = tablesById.get(entityId);
+            UUID tableDatasetId = table != null && table.getDataset() != null ? table.getDataset().getId() : null;
+            return dataset.getId().equals(tableDatasetId) ? new TaggedSearchHit(dataset, table, null) : null;
+        }
+        CatalogColumnSchema column = columnsById.get(entityId);
+        CatalogTableSchema table = column != null ? column.getTable() : null;
+        UUID columnDatasetId = table != null && table.getDataset() != null ? table.getDataset().getId() : null;
+        return dataset.getId().equals(columnDatasetId) ? new TaggedSearchHit(dataset, null, column) : null;
+    }
+
+    private boolean matchesTaggedSearchHit(TaggedSearchHit hit, String needle) {
+        if (needle == null) {
+            return true;
+        }
+        if (hit.table() != null) {
+            return matchesTable(hit.table(), needle);
+        }
+        if (hit.column() != null) {
+            CatalogColumnSchema column = hit.column();
+            return matchesColumn(column.getName(), column.getTags(), column.getSensitiveTags(), column.getComment(), needle);
+        }
+        CatalogDataset dataset = hit.dataset();
+        return contains(Objects.toString(dataset.getName(), ""), needle)
+            || contains(Objects.toString(dataset.getOwner(), ""), needle)
+            || contains(Objects.toString(dataset.getOwnerDept(), ""), needle)
+            || contains(Objects.toString(dataset.getTags(), ""), needle)
+            || contains(Objects.toString(dataset.getDescription(), ""), needle)
+            || contains(Objects.toString(dataset.getHiveDatabase(), ""), needle)
+            || contains(Objects.toString(dataset.getHiveTable(), ""), needle);
+    }
+
+    private Map<UUID, CatalogDataset> indexDatasets(Iterable<CatalogDataset> datasets) {
+        Map<UUID, CatalogDataset> result = new LinkedHashMap<>();
+        datasets.forEach(dataset -> result.put(dataset.getId(), dataset));
+        return result;
+    }
+
+    private Map<UUID, CatalogTableSchema> indexTables(Iterable<CatalogTableSchema> tables) {
+        Map<UUID, CatalogTableSchema> result = new LinkedHashMap<>();
+        tables.forEach(table -> result.put(table.getId(), table));
+        return result;
+    }
+
+    private Map<UUID, CatalogColumnSchema> indexColumns(Iterable<CatalogColumnSchema> columns) {
+        Map<UUID, CatalogColumnSchema> result = new LinkedHashMap<>();
+        columns.forEach(column -> result.put(column.getId(), column));
+        return result;
+    }
+
+    private List<UUID> normalizeSearchTagIds(List<UUID> tagIds) {
+        if (tagIds == null || tagIds.isEmpty() || tagIds.stream().anyMatch(Objects::isNull)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "标签不能为空");
+        }
+        List<UUID> normalized = List.copyOf(new LinkedHashSet<>(tagIds));
+        if (normalized.size() > CatalogAssetTagService.MAX_SEARCH_TAG_IDS) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "精确标签筛选最多支持 50 个不同标签");
+        }
+        return normalized;
+    }
+
+    private record TaggedSearchScope(
+        List<UUID> tagIds,
+        UUID domainId,
+        UUID sourceId,
+        String classification,
+        String ownerDept,
+        String warehouseLayer,
+        String exposedBy,
+        String datasetType,
+        boolean enabledOnly,
+        String activeDept,
+        String needle,
+        int limit
+    ) {}
+
+    private record TaggedSearchHit(CatalogDataset dataset, CatalogTableSchema table, CatalogColumnSchema column) {}
 
     private String trimToNull(String value) {
         if (!StringUtils.hasText(value)) {
@@ -358,7 +707,7 @@ public class CatalogSearchResource {
         return false;
     }
 
-    private Map<String, Object> toDatasetDto(CatalogDataset ds) {
+    private Map<String, Object> toDatasetDto(CatalogDataset ds, List<CatalogTagDto> assetTags) {
         Map<String, Object> dto = new LinkedHashMap<>();
         if (ds == null) return dto;
         if (ds.getId() != null) dto.put("id", ds.getId().toString());
@@ -379,6 +728,9 @@ public class CatalogSearchResource {
         dto.put("hiveTable", ds.getHiveTable());
         dto.put("warehouseLayer", ds.getWarehouseLayer());
         dto.put("enabled", ds.getEnabled());
+        dto.put("assetType", "DATASET");
+        dto.put("assetKey", CatalogAssetKey.dataset(ds));
+        dto.put("assetTags", assetTags == null ? List.of() : List.copyOf(assetTags));
         return dto;
     }
 
@@ -397,6 +749,8 @@ public class CatalogSearchResource {
             dto.put("datasetOwnerDept", datasetDto.get("ownerDept"));
             dto.put("domainId", datasetDto.get("domainId"));
             dto.put("domainName", datasetDto.get("domainName"));
+            dto.put("datasetAssetKey", datasetDto.get("assetKey"));
+            dto.put("datasetAssetTags", datasetDto.get("assetTags"));
         }
         return dto;
     }
@@ -424,6 +778,8 @@ public class CatalogSearchResource {
             dto.put("datasetOwnerDept", datasetDto.get("ownerDept"));
             dto.put("domainId", datasetDto.get("domainId"));
             dto.put("domainName", datasetDto.get("domainName"));
+            dto.put("datasetAssetKey", datasetDto.get("assetKey"));
+            dto.put("datasetAssetTags", datasetDto.get("assetTags"));
         }
         return dto;
     }

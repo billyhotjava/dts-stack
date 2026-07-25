@@ -54,6 +54,7 @@ dts:
       service-token: ${DTS_METRICS_TO_PLATFORM:${DTS_ADMIN_SERVICE_TOKEN:}}
       connect-timeout-ms: ${DTS_PLATFORM_CONNECT_TIMEOUT_MS:2000}
       read-timeout-ms: ${DTS_PLATFORM_READ_TIMEOUT_MS:5000}
+      taggable-asset-register-enabled: ${DTS_METRICS_TAGGABLE_ASSET_REGISTER_ENABLED:false}
 
 liquibase:
   searchPath: classpath:/config/liquibase

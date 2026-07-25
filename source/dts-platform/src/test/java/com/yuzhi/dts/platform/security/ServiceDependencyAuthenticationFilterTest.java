@@ -189,6 +189,10 @@ class ServiceDependencyAuthenticationFilterTest {
         assertMetricsCanAccess("GET", METRICS_POLICY_INJECTION_AUDIT);
         assertMetricsCanAccess("POST", METRICS_POLICY_INJECTION_AUDIT);
         assertMetricsCanAccess("POST", METRICS_MODEL_VALIDATION);
+        assertMetricsCanAccess(
+            "POST",
+            "/api/internal/catalog/taggable-assets/register"
+        );
         assertMetricsCanAccess("POST", "/api/etl/dbt/release-gate/check");
         assertMetricsCanAccess("POST", "/api/etl/dbt/release/submit");
     }

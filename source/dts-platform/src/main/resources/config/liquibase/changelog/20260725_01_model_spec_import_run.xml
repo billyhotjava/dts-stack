@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260725_01_model_spec_import_run" author="codex">
+        <createTable tableName="modeling_model_spec_import_run">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="tenant_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="plan_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="package_checksum" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="package_schema_version" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="package_json" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="request_json" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="context_snapshot_json" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="apply_payload_json" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="apply_payload_checksum" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="apply_plan_json" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="preview_hash" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="summary_json" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expires_at" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="payload_redacted_at" type="timestamp"/>
+            <column name="created_by" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_modified_by" type="varchar(128)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <createIndex
+            tableName="modeling_model_spec_import_run"
+            indexName="idx_model_spec_import_run_tenant_plan_created">
+            <column name="tenant_id"/>
+            <column name="plan_id"/>
+            <column name="created_date" descending="true"/>
+        </createIndex>
+        <createIndex
+            tableName="modeling_model_spec_import_run"
+            indexName="idx_model_spec_import_run_expires">
+            <column name="expires_at"/>
+        </createIndex>
+
+        <createTable tableName="modeling_model_spec_import_run_item">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="run_id" type="${uuidType}">
+                <constraints
+                    nullable="false"
+                    foreignKeyName="fk_model_spec_import_item_run"
+                    referencedTableName="modeling_model_spec_import_run"
+                    referencedColumnNames="id"/>
+            </column>
+            <column name="seq" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dbt_unique_id" type="varchar(512)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="node_type" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="canonical" type="boolean">
+                <constraints nullable="false"/>
+            </column>
+            <column name="action" type="varchar(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="conversion_mode" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="package_checksum" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="model_spec_checksum" type="varchar(128)"/>
+            <column name="current_model_spec_id" type="${uuidType}"/>
+            <column name="current_revision" type="int"/>
+            <column name="proposed_model_spec_json" type="jsonb"/>
+            <column name="proposed_implementation_json" type="jsonb"/>
+            <column name="dependency_json" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_snapshot_json" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="issues_json" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <addUniqueConstraint
+            tableName="modeling_model_spec_import_run_item"
+            columnNames="run_id, dbt_unique_id"
+            constraintName="uk_model_spec_import_run_item_unique"/>
+        <createIndex
+            tableName="modeling_model_spec_import_run_item"
+            indexName="idx_model_spec_import_run_item_run_seq">
+            <column name="run_id"/>
+            <column name="seq"/>
+        </createIndex>
+
+        <rollback>
+            <sql splitStatements="false">
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_SPEC_IMPORT_RUN_FORWARD_ONLY: Recovery requires a new forward changeset';
+                END $$;
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

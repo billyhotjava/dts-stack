@@ -193,6 +193,38 @@ public class ModelSpecApplicationService {
 
     @Transactional
     public CreateResult create(String serverTenantId, String actorId, CreateModelSpecCommand command) {
+        return createInternal(serverTenantId, actorId, null, command);
+    }
+
+    /**
+     * Internal import boundary that commits the deterministic ID already covered by a preview hash.
+     *
+     * <p>This method is intentionally not exposed by a REST resource. Normal interactive creation
+     * continues to use {@link #create(String, String, CreateModelSpecCommand)} and a random ID.
+     */
+    @Transactional
+    public CreateResult createImported(
+        String serverTenantId,
+        String actorId,
+        UUID previewedModelSpecId,
+        CreateModelSpecCommand command
+    ) {
+        if (previewedModelSpecId == null) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_IMPORT_ID_REQUIRED",
+                "A previewed ModelSpec id is required",
+                ModelSpecException.Kind.BAD_REQUEST
+            );
+        }
+        return createInternal(serverTenantId, actorId, previewedModelSpecId, command);
+    }
+
+    private CreateResult createInternal(
+        String serverTenantId,
+        String actorId,
+        UUID previewedModelSpecId,
+        CreateModelSpecCommand command
+    ) {
         requireServerContext(serverTenantId, actorId);
         requireDimensionDefinitionRef(command);
         rejectIssues(ModelSpecContract.validateCreate(command));
@@ -200,6 +232,13 @@ public class ModelSpecApplicationService {
         StoredModelSpec existing = repository.findByIdempotencyKey(serverTenantId, command.idempotencyKey()).orElse(null);
         if (existing != null) {
             validateReplayAccess(serverTenantId, actorId, existing);
+            if (previewedModelSpecId != null && !previewedModelSpecId.equals(existing.id())) {
+                throw new ModelSpecException(
+                    "MODEL_SPEC_IMPORT_ID_CONFLICT",
+                    "The import idempotency key is already bound to another ModelSpec id",
+                    ModelSpecException.Kind.CONFLICT
+                );
+            }
             return replay(existing, requestHash);
         }
 
@@ -207,7 +246,7 @@ public class ModelSpecApplicationService {
         validateWriteContext(serverTenantId, actorId, command.planId(), command.domainId());
         validateSources(serverTenantId, actorId, command.planId(), command.sourceRefs());
         validateDimensionDefinition(serverTenantId, command.modelType(), command.dimensionDefinitionRef(), true);
-        UUID modelSpecId = idGenerator.get();
+        UUID modelSpecId = previewedModelSpecId == null ? idGenerator.get() : previewedModelSpecId;
         validateReferences(
             serverTenantId,
             command.planId(),
@@ -235,6 +274,13 @@ public class ModelSpecApplicationService {
                         ModelSpecException.Kind.CONFLICT
                     )
                 );
+            if (previewedModelSpecId != null && !previewedModelSpecId.equals(concurrent.id())) {
+                throw new ModelSpecException(
+                    "MODEL_SPEC_IMPORT_ID_CONFLICT",
+                    "The concurrent import winner uses another ModelSpec id",
+                    ModelSpecException.Kind.CONFLICT
+                );
+            }
             return replay(concurrent, requestHash);
         }
         repository.insertV2Revision(serverTenantId, actorId, view, responseSnapshot);

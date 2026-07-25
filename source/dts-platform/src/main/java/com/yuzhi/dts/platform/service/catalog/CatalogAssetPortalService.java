@@ -18,14 +18,19 @@ import com.yuzhi.dts.platform.repository.catalog.OpenMetadataColumnCacheReposito
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataLineageCacheRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.SecurityUtils;
+import com.yuzhi.dts.platform.service.catalog.dto.AssetRef;
+import com.yuzhi.dts.platform.service.catalog.dto.CatalogTagDto;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -41,6 +46,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Transactional(readOnly = true)
 public class CatalogAssetPortalService {
 
+    static final long MAX_TAG_FILTER_CANDIDATES = 5_000;
+
     private final OpenMetadataAssetCacheRepository assetRepository;
     private final OpenMetadataColumnCacheRepository columnRepository;
     private final OpenMetadataLineageCacheRepository lineageRepository;
@@ -50,6 +57,7 @@ public class CatalogAssetPortalService {
     private final CatalogTableSchemaRepository tableSchemaRepository;
     private final CatalogColumnSchemaRepository catalogColumnSchemaRepository;
     private final AccessChecker accessChecker;
+    private final CatalogAssetTagService assetTagService;
 
     public CatalogAssetPortalService(
         OpenMetadataAssetCacheRepository assetRepository,
@@ -60,7 +68,8 @@ public class CatalogAssetPortalService {
         CatalogDatasetRepository datasetRepository,
         CatalogTableSchemaRepository tableSchemaRepository,
         CatalogColumnSchemaRepository catalogColumnSchemaRepository,
-        AccessChecker accessChecker
+        AccessChecker accessChecker,
+        CatalogAssetTagService assetTagService
     ) {
         this.assetRepository = assetRepository;
         this.columnRepository = columnRepository;
@@ -71,6 +80,7 @@ public class CatalogAssetPortalService {
         this.tableSchemaRepository = tableSchemaRepository;
         this.catalogColumnSchemaRepository = catalogColumnSchemaRepository;
         this.accessChecker = accessChecker;
+        this.assetTagService = assetTagService;
     }
 
     /** 资产概览聚合（地图页数据源）：内部翻页复用 listAssets，可见性规则单一来源。 */
@@ -111,6 +121,13 @@ public class CatalogAssetPortalService {
     }
 
     public AssetPage listAssets(AssetQuery query, String activeDept) {
+        if (!query.tagIds().isEmpty()) {
+            return listAssetsByTags(query, activeDept);
+        }
+        return listAssetsWithoutTagFilter(query, activeDept);
+    }
+
+    private AssetPage listAssetsWithoutTagFilter(AssetQuery query, String activeDept) {
         int page = Math.max(0, query.page());
         int size = Math.max(1, Math.min(query.size(), 200));
         var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "lastSyncedAt").and(Sort.by("fqn").ascending()));
@@ -120,9 +137,7 @@ public class CatalogAssetPortalService {
         for (OpenMetadataAssetCache asset : pageData.getContent()) {
             CatalogAssetExtension extension = extensionRepository.findFirstByOmAsset(asset).orElse(null);
             CatalogAssetMapping mapping = mappingRepository.findFirstByFqnIgnoreCase(asset.getFqn()).orElse(null);
-            CatalogDataset legacy = extension != null && extension.getLegacyDatasetId() != null
-                ? datasetRepository.findById(extension.getLegacyDatasetId()).orElse(null)
-                : null;
+            CatalogDataset legacy = resolveContractLegacy(extension, mapping);
             if (!canRead(extension, legacy, activeDept)) {
                 continue;
             }
@@ -136,12 +151,157 @@ public class CatalogAssetPortalService {
         if (!legacyPage.content().isEmpty()) {
             items.addAll(legacyPage.content());
         }
+        items = hydrateAssetTags(items);
         long total = items.size();
         String source = openMetadataReturned > 0 && legacyPage.returned() > 0
             ? "openmetadata-cache+dts-catalog"
             : openMetadataReturned > 0 ? "openmetadata-cache" : "dts-catalog";
         return new AssetPage(items, total, page, size, items.size(), source);
     }
+
+    private AssetPage listAssetsByTags(AssetQuery query, String activeDept) {
+        int page = Math.max(0, query.page());
+        int size = Math.max(1, Math.min(query.size(), 200));
+        Specification<OpenMetadataAssetCache> openMetadataSpec = buildSpec(query);
+        Specification<CatalogDataset> legacySpec = buildLegacySpec(query);
+        long openMetadataCandidates = assetRepository.count(openMetadataSpec);
+        long legacyCandidates = datasetRepository.count(legacySpec);
+        if (
+            openMetadataCandidates > MAX_TAG_FILTER_CANDIDATES ||
+            legacyCandidates > MAX_TAG_FILTER_CANDIDATES - openMetadataCandidates
+        ) {
+            throw new ResponseStatusException(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "标签筛选候选超过 5000，请增加关键词、数据域或其他基础条件"
+            );
+        }
+        var openMetadataSort = Sort.by(Sort.Direction.DESC, "lastSyncedAt")
+            .and(Sort.by("fqn").ascending())
+            .and(Sort.by("id").ascending());
+        var legacySort = Sort.by(Sort.Direction.DESC, "lastModifiedDate")
+            .and(Sort.by(Sort.Direction.DESC, "createdDate"))
+            .and(Sort.by("id").ascending());
+        List<OpenMetadataAssetCache> openMetadataAssets = assetRepository.findAll(openMetadataSpec, openMetadataSort);
+        List<CatalogDataset> legacyAssets = datasetRepository.findAll(legacySpec, legacySort);
+        CandidateMetadata candidateMetadata = loadCandidateMetadata(openMetadataAssets);
+        Map<String, AssetSummary> candidates = new LinkedHashMap<>();
+        for (OpenMetadataAssetCache asset : openMetadataAssets) {
+            CatalogAssetExtension extension = candidateMetadata.extensionsByAssetId().get(asset.getId());
+            CatalogAssetMapping mapping = candidateMetadata.mappingsByFqn().get(normalizedFqn(asset.getFqn()));
+            CatalogDataset legacy = candidateMetadata.legacyById().get(resolveLegacyDatasetId(extension, mapping));
+            if (!canRead(extension, legacy, activeDept)) {
+                continue;
+            }
+            AssetSummary summary = toSummary(asset, extension, mapping, legacy);
+            candidates.putIfAbsent(assetIdentity(summary), summary);
+        }
+        for (CatalogDataset dataset : legacyAssets) {
+            if (!canRead(null, dataset, activeDept)) {
+                continue;
+            }
+            AssetSummary summary = toLegacySummary(dataset);
+            candidates.putIfAbsent(assetIdentity(summary), summary);
+        }
+        Set<String> matchingAssetKeys =
+            assetTagService.findMatchingAssetKeysWithin(
+                "DATASET",
+                candidates
+                    .values()
+                    .stream()
+                    .map(AssetSummary::assetKey)
+                    .toList(),
+                query.tagIds()
+            );
+        if (matchingAssetKeys.isEmpty()) {
+            return new AssetPage(
+                List.of(),
+                0,
+                page,
+                size,
+                0,
+                "openmetadata-cache+dts-catalog"
+            );
+        }
+        candidates
+            .values()
+            .removeIf(summary ->
+                !matchingAssetKeys.contains(summary.assetKey())
+            );
+
+        List<AssetSummary> filtered = new ArrayList<>(candidates.values());
+        filtered.sort(assetSummaryComparator());
+        long offset = (long) page * size;
+        int fromIndex = offset >= filtered.size() ? filtered.size() : (int) offset;
+        int toIndex = Math.min(fromIndex + size, filtered.size());
+        List<AssetSummary> content = hydrateAssetTags(filtered.subList(fromIndex, toIndex));
+        return new AssetPage(
+            content,
+            filtered.size(),
+            page,
+            size,
+            content.size(),
+            resolveMetadataSource(content)
+        );
+    }
+
+    private CandidateMetadata loadCandidateMetadata(List<OpenMetadataAssetCache> assets) {
+        Map<UUID, CatalogAssetExtension> extensionsByAssetId = new LinkedHashMap<>();
+        for (CatalogAssetExtension extension : assets.isEmpty() ? List.<CatalogAssetExtension>of() : extensionRepository.findByOmAssetIn(assets)) {
+            if (extension != null && extension.getOmAsset() != null && extension.getOmAsset().getId() != null) {
+                extensionsByAssetId.putIfAbsent(extension.getOmAsset().getId(), extension);
+            }
+        }
+
+        Set<String> candidateFqns = new LinkedHashSet<>();
+        assets.stream().map(OpenMetadataAssetCache::getFqn).map(this::normalizedFqn).filter(StringUtils::hasText).forEach(candidateFqns::add);
+        Map<String, CatalogAssetMapping> mappingsByFqn = new LinkedHashMap<>();
+        for (
+            CatalogAssetMapping mapping : candidateFqns.isEmpty()
+                ? List.<CatalogAssetMapping>of()
+                : mappingRepository.findByNormalizedFqnIn(candidateFqns)
+        ) {
+            String normalized = mapping == null ? null : normalizedFqn(mapping.getFqn());
+            if (StringUtils.hasText(normalized) && candidateFqns.contains(normalized)) {
+                mappingsByFqn.putIfAbsent(normalized, mapping);
+            }
+        }
+
+        Set<UUID> legacyIds = new LinkedHashSet<>();
+        extensionsByAssetId.values().stream().map(CatalogAssetExtension::getLegacyDatasetId).filter(java.util.Objects::nonNull).forEach(legacyIds::add);
+        mappingsByFqn.values().stream().map(CatalogAssetMapping::getLegacyDatasetId).filter(java.util.Objects::nonNull).forEach(legacyIds::add);
+        Map<UUID, CatalogDataset> legacyById = new LinkedHashMap<>();
+        if (!legacyIds.isEmpty()) {
+            datasetRepository.findAllById(legacyIds).forEach(dataset -> legacyById.put(dataset.getId(), dataset));
+        }
+        return new CandidateMetadata(extensionsByAssetId, mappingsByFqn, legacyById);
+    }
+
+    private UUID resolveLegacyDatasetId(CatalogAssetExtension extension, CatalogAssetMapping mapping) {
+        if (extension != null && extension.getLegacyDatasetId() != null) {
+            return extension.getLegacyDatasetId();
+        }
+        return mapping == null ? null : mapping.getLegacyDatasetId();
+    }
+
+    private String normalizedFqn(String fqn) {
+        return StringUtils.hasText(fqn) ? fqn.trim().toLowerCase(Locale.ROOT) : null;
+    }
+
+    private Comparator<AssetSummary> assetSummaryComparator() {
+        return Comparator
+            .comparing(
+                AssetSummary::lastSyncedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())
+            )
+            .thenComparing(AssetSummary::assetKey, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
+            .thenComparing(summary -> summary.id() == null ? "" : summary.id().toString());
+    }
+
+    private record CandidateMetadata(
+        Map<UUID, CatalogAssetExtension> extensionsByAssetId,
+        Map<String, CatalogAssetMapping> mappingsByFqn,
+        Map<UUID, CatalogDataset> legacyById
+    ) {}
 
     private AssetPage listLegacyAssets(
         AssetQuery query,
@@ -177,14 +337,13 @@ public class CatalogAssetPortalService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "资产不存在"));
         CatalogAssetExtension extension = extensionRepository.findFirstByOmAsset(asset).orElse(null);
         CatalogAssetMapping mapping = mappingRepository.findFirstByFqnIgnoreCase(asset.getFqn()).orElse(null);
-        CatalogDataset legacy = extension != null && extension.getLegacyDatasetId() != null
-            ? datasetRepository.findById(extension.getLegacyDatasetId()).orElse(null)
-            : null;
+        CatalogDataset legacy = resolveContractLegacy(extension, mapping);
         if (!canRead(extension, legacy, activeDept)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "资产不存在或无权访问");
         }
         List<ColumnSummary> columns = columnRepository.findByAssetOrderByOrdinalPositionAsc(asset).stream().map(this::toColumn).toList();
-        return new AssetDetail(toSummary(asset, extension, mapping, legacy), columns, asset.getRawJson(), asset.getProfileJson());
+        AssetSummary summary = hydrateAssetTags(List.of(toSummary(asset, extension, mapping, legacy))).get(0);
+        return new AssetDetail(summary, columns, asset.getRawJson(), asset.getProfileJson());
     }
 
     public CatalogAssetContract getAssetContract(UUID id, String activeDept) {
@@ -302,9 +461,7 @@ public class CatalogAssetPortalService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "资产不存在"));
         CatalogAssetExtension extension = extensionRepository.findFirstByOmAsset(asset).orElseGet(CatalogAssetExtension::new);
         CatalogAssetMapping mapping = mappingRepository.findFirstByFqnIgnoreCase(asset.getFqn()).orElse(null);
-        CatalogDataset legacy = extension.getLegacyDatasetId() != null
-            ? datasetRepository.findById(extension.getLegacyDatasetId()).orElse(null)
-            : null;
+        CatalogDataset legacy = resolveContractLegacy(extension, mapping);
         if (!isSuperAdmin() && !canRead(extension, legacy, activeDept)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "资产不存在或无权访问");
         }
@@ -341,7 +498,8 @@ public class CatalogAssetPortalService {
         extension.setGovernanceStatus(resolveGovernanceStatus(extension));
         extensionRepository.save(extension);
         List<ColumnSummary> columns = columnRepository.findByAssetOrderByOrdinalPositionAsc(asset).stream().map(this::toColumn).toList();
-        return new AssetDetail(toSummary(asset, extension, mapping, legacy), columns, asset.getRawJson(), asset.getProfileJson());
+        AssetSummary summary = hydrateAssetTags(List.of(toSummary(asset, extension, mapping, legacy))).get(0);
+        return new AssetDetail(summary, columns, asset.getRawJson(), asset.getProfileJson());
     }
 
     public LineageView getLineage(UUID id, String activeDept) {
@@ -577,6 +735,7 @@ public class CatalogAssetPortalService {
         CatalogAssetMapping mapping,
         CatalogDataset legacy
     ) {
+        CatalogAssetContract contract = CatalogAssetContractMapper.fromOpenMetadata(asset, extension, mapping, legacy);
         String governanceStatus = extension != null ? extension.getGovernanceStatus() : "PENDING_GOVERNANCE";
         String matchStatus = mapping != null ? mapping.getMatchStatus() : "UNMATCHED";
         return new AssetSummary(
@@ -599,17 +758,21 @@ public class CatalogAssetPortalService {
             governanceStatus,
             matchStatus,
             mapping != null ? mapping.getMatchReason() : null,
-            extension != null ? extension.getLegacyDatasetId() : null,
+            contract.legacyDatasetId(),
             extension != null ? extension.getSecurityPolicyRefs() : null,
             asset.getColumnCount(),
             asset.getSyncStatus(),
             asset.getSyncMessage(),
             asset.getLastSyncedAt(),
-            "openmetadata-cache"
+            "openmetadata-cache",
+            contract.assetType(),
+            contract.assetKey(),
+            List.of()
         );
     }
 
     private AssetSummary toLegacySummary(CatalogDataset dataset) {
+        CatalogAssetContract contract = CatalogAssetContractMapper.fromLegacy(dataset);
         UUID domainId = dataset.getDomain() != null ? dataset.getDomain().getId() : null;
         String governanceStatus = resolveLegacyGovernanceStatus(dataset);
         return new AssetSummary(
@@ -638,8 +801,39 @@ public class CatalogAssetPortalService {
             Boolean.FALSE.equals(dataset.getEnabled()) ? "DISABLED" : "SYNCED",
             null,
             dataset.getLastModifiedDate() != null ? dataset.getLastModifiedDate() : dataset.getCreatedDate(),
-            "dts-catalog"
+            "dts-catalog",
+            contract.assetType(),
+            contract.assetKey(),
+            List.of()
         );
+    }
+
+    private List<AssetSummary> hydrateAssetTags(List<AssetSummary> summaries) {
+        if (summaries == null || summaries.isEmpty()) {
+            return List.of();
+        }
+        List<AssetRef> refs = summaries.stream().map(summary -> new AssetRef(summary.assetType(), summary.assetKey())).toList();
+        Map<AssetRef, List<CatalogTagDto>> tagsByAsset = assetTagService.listAssetTags(refs);
+        return summaries
+            .stream()
+            .map(summary -> {
+                AssetRef ref = new AssetRef(summary.assetType(), summary.assetKey());
+                return summary.withAssetTags(tagsByAsset.getOrDefault(ref, List.of()));
+            })
+            .toList();
+    }
+
+    private String assetIdentity(AssetSummary summary) {
+        return summary.assetType() + "\u0000" + summary.assetKey();
+    }
+
+    private String resolveMetadataSource(List<AssetSummary> summaries) {
+        Set<String> sources = new LinkedHashSet<>();
+        summaries.stream().map(AssetSummary::metadataSource).filter(StringUtils::hasText).forEach(sources::add);
+        if (sources.size() > 1) {
+            return "openmetadata-cache+dts-catalog";
+        }
+        return sources.stream().findFirst().orElse("openmetadata-cache+dts-catalog");
     }
 
     private String buildLegacyFqn(CatalogDataset dataset) {
@@ -780,9 +974,51 @@ public class CatalogAssetPortalService {
         String matchStatus,
         UUID domainId,
         boolean domainUnassigned,
+        List<UUID> tagIds,
         int page,
         int size
-    ) {}
+    ) {
+        public AssetQuery {
+            tagIds = tagIds == null ? List.of() : List.copyOf(tagIds);
+        }
+
+        public AssetQuery(
+            String keyword,
+            String service,
+            String type,
+            String database,
+            String schema,
+            String syncStatus,
+            String classification,
+            String warehouseLayer,
+            String ownerDept,
+            String governanceStatus,
+            String matchStatus,
+            UUID domainId,
+            boolean domainUnassigned,
+            int page,
+            int size
+        ) {
+            this(
+                keyword,
+                service,
+                type,
+                database,
+                schema,
+                syncStatus,
+                classification,
+                warehouseLayer,
+                ownerDept,
+                governanceStatus,
+                matchStatus,
+                domainId,
+                domainUnassigned,
+                List.of(),
+                page,
+                size
+            );
+        }
+    }
 
     public record AssetPage(List<AssetSummary> content, long total, int page, int size, int returned, String metadataSource) {}
 
@@ -812,8 +1048,110 @@ public class CatalogAssetPortalService {
         String syncStatus,
         String syncMessage,
         java.time.Instant lastSyncedAt,
-        String metadataSource
-    ) {}
+        String metadataSource,
+        String assetType,
+        String assetKey,
+        List<CatalogTagDto> assetTags
+    ) {
+        public AssetSummary {
+            assetTags = assetTags == null ? List.of() : List.copyOf(assetTags);
+        }
+
+        public AssetSummary(
+            UUID id,
+            String omEntityId,
+            String fqn,
+            String type,
+            String service,
+            String database,
+            String schema,
+            String table,
+            String displayName,
+            String classification,
+            String warehouseLayer,
+            String ownerDept,
+            String owner,
+            UUID domainId,
+            String lifecycleStatus,
+            String description,
+            String governanceStatus,
+            String matchStatus,
+            String matchReason,
+            UUID legacyDatasetId,
+            String securityPolicyRefs,
+            Integer columnCount,
+            String syncStatus,
+            String syncMessage,
+            java.time.Instant lastSyncedAt,
+            String metadataSource
+        ) {
+            this(
+                id,
+                omEntityId,
+                fqn,
+                type,
+                service,
+                database,
+                schema,
+                table,
+                displayName,
+                classification,
+                warehouseLayer,
+                ownerDept,
+                owner,
+                domainId,
+                lifecycleStatus,
+                description,
+                governanceStatus,
+                matchStatus,
+                matchReason,
+                legacyDatasetId,
+                securityPolicyRefs,
+                columnCount,
+                syncStatus,
+                syncMessage,
+                lastSyncedAt,
+                metadataSource,
+                "DATASET",
+                null,
+                List.of()
+            );
+        }
+
+        public AssetSummary withAssetTags(List<CatalogTagDto> tags) {
+            return new AssetSummary(
+                id,
+                omEntityId,
+                fqn,
+                type,
+                service,
+                database,
+                schema,
+                table,
+                displayName,
+                classification,
+                warehouseLayer,
+                ownerDept,
+                owner,
+                domainId,
+                lifecycleStatus,
+                description,
+                governanceStatus,
+                matchStatus,
+                matchReason,
+                legacyDatasetId,
+                securityPolicyRefs,
+                columnCount,
+                syncStatus,
+                syncMessage,
+                lastSyncedAt,
+                metadataSource,
+                assetType,
+                assetKey,
+                tags
+            );
+        }
+    }
 
     public record ColumnSummary(
         UUID id,

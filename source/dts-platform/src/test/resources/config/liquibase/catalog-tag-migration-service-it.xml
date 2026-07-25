@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="catalog-tag-migration-service-it-dataset" author="test">
+        <createTable tableName="catalog_dataset">
+            <column name="id" type="uuid">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_catalog_dataset"/>
+            </column>
+            <column name="name" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="domain_id" type="uuid"/>
+            <column name="type" type="varchar(32)"/>
+            <column name="source_id" type="uuid"/>
+            <column name="classification" type="varchar(32)"/>
+            <column name="owner_dept" type="varchar(64)"/>
+            <column name="owner" type="varchar(64)"/>
+            <column name="hive_database" type="varchar(128)"/>
+            <column name="hive_table" type="varchar(128)"/>
+            <column name="tags" type="varchar(1024)"/>
+            <column name="description" type="varchar(2048)"/>
+            <column name="warehouse_layer" type="varchar(16)"/>
+            <column name="enabled" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="exposed_by" type="varchar(16)"/>
+            <column name="trino_catalog" type="varchar(64)"/>
+            <column name="lifecycle_status" type="varchar(32)"/>
+            <column name="retention_days" type="int"/>
+            <column name="expires_at" type="timestamp"/>
+            <column name="snapshot_time" type="timestamp"/>
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+    </changeSet>
+
+    <include
+        file="config/liquibase/changelog/20260725_02_catalog_tag.xml"
+        relativeToChangelogFile="false"/>
+    <include
+        file="config/liquibase/changelog/20260725_20_catalog_tag_migration_batch.xml"
+        relativeToChangelogFile="false"/>
+</databaseChangeLog>

@@ -524,6 +524,36 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
+                    <testIncludes>
+                        <testInclude>**/IntegrationTest.java</testInclude>
+                        <testInclude>**/config/AsyncSyncConfiguration.java</testInclude>
+                        <testInclude>**/config/EmbeddedSQL.java</testInclude>
+                        <testInclude>**/config/PostgreSqlTestContainer.java</testInclude>
+                        <testInclude>**/config/SpringBootTestClassOrderer.java</testInclude>
+                        <testInclude>**/config/SqlTestContainer.java</testInclude>
+                        <testInclude>**/config/SqlTestContainersSpringContextCustomizerFactory.java</testInclude>
+                        <testInclude>**/config/TestSecurityConfiguration.java</testInclude>
+                        <testInclude>**/repository/modeling/ModelLifecycleRepositoryTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelingDbtArtifactImportServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelingVNextApplicationServiceIT.java</testInclude>
+                        <testInclude>**/service/modeling/imports/**/*.java</testInclude>
+                        <testInclude>**/web/rest/ModelSpecImport*.java</testInclude>
+                        <testInclude>**/repository/catalog/CatalogAssetTag*.java</testInclude>
+                        <testInclude>**/repository/catalog/CatalogTagLiquibaseIT.java</testInclude>
+                        <testInclude>**/service/catalog/CatalogAssetPortalServicePermissionParityTest.java</testInclude>
+                        <testInclude>**/service/catalog/CatalogAssetPortalTagFilterTest.java</testInclude>
+                        <testInclude>**/service/catalog/CatalogAssetTag*.java</testInclude>
+                        <testInclude>**/service/catalog/CodeAssetGrantWriterTest.java</testInclude>
+                        <testInclude>**/service/catalog/CatalogExternalAssetIdentity*.java</testInclude>
+                        <testInclude>**/service/catalog/CatalogTag*.java</testInclude>
+                        <testInclude>**/security/ServiceDependencyAuthenticationFilterTest.java</testInclude>
+                        <testInclude>**/web/rest/CatalogSearchResourceTagFilterTest.java</testInclude>
+                        <testInclude>**/web/rest/catalog/CatalogAssetPortalResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/catalog/CatalogAssetPortalTagFilterResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/catalog/CatalogAssetTagSearchResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/catalog/CatalogTag*.java</testInclude>
+                        <testInclude>**/web/rest/internal/CatalogExternalAssetIdentity*.java</testInclude>
+                    </testIncludes>
                     <testExcludes>
                         <!-- TODO: restore when cf5ff765 session refactor tests are updated -->
                         <exclude>**/KeycloakAuthResourceTest.java</exclude>

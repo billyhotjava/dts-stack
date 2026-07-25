@@ -1,11 +1,11 @@
+import { ProfileOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Form, Input, Modal, Select, Space, Tabs, Tag, Typography } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Alert, Button, Card, Form, Input, Modal, Select, Space, Tabs, Tag, Typography } from "antd";
-import { CompactTable } from "@/components/table";
-import type { ColumnsType } from "antd/es/table";
-import { ProfileOutlined, } from "@ant-design/icons";
-import { EmptyState } from "@/components/empty-state";
+import type { IndicatorDep } from "@/api/platformApi";
 import {
+	getCatalogAssetV2Contract,
 	getCatalogLineageImpact,
 	getClassificationMaskingLinkage,
 	getDataset,
@@ -17,146 +17,32 @@ import {
 	listDomains,
 	updateDataset,
 } from "@/api/platformApi";
-import type { IndicatorDep } from "@/api/platformApi";
+import { AssetTagPanel } from "@/components/catalog/tags/AssetTagPanel";
+import { EmptyState } from "@/components/empty-state";
+import { CompactTable } from "@/components/table";
 import { useRouter } from "@/routes/hooks";
+import { AssetGovernanceOverview } from "./AssetGovernanceOverview";
+import type {
+	AssetRow,
+	ColumnRow,
+	DatasetSecurityLinkage,
+	GovernanceHealth,
+	GovernanceImpact,
+	TableDetail,
+} from "./assetDetailPage.types";
+import {
+	buildColumnRows,
+	CLASSIFICATION_LABEL,
+	CLASSIFICATION_OPTIONS,
+	DATASET_FILTER_STORAGE_KEY,
+	LAYER_OPTIONS,
+	layerColor,
+	SECURITY_LINKAGE_EVENT,
+	SECURITY_LINKAGE_VERSION_KEY,
+	TYPE_OPTIONS,
+} from "./assetDetailPage.types";
 
 const { Text } = Typography;
-
-type AssetRow = {
-	id: string;
-	name: string;
-	type: string;
-	sourceId?: string;
-	domainId?: string;
-	domain?: string;
-	classification?: string;
-	ownerDept?: string;
-	owner?: string;
-	tags?: string;
-	description?: string;
-	hiveDatabase?: string;
-	hiveTable?: string;
-	warehouseLayer?: string;
-	updatedAt?: string;
-	snapshotTime?: string;
-	lifecycleStatus?: string;
-	status?: string;
-	editable?: boolean;
-};
-
-type TableDetail = {
-	enabled?: boolean;
-	found?: boolean;
-	message?: string;
-	entity?: Record<string, any>;
-};
-
-type ColumnRow = {
-	key: string;
-	name: string;
-	type: string;
-	comment: string;
-	status?: string;
-};
-
-type GovernanceImpact = {
-	grantsCount: number;
-	lineageNodeCount: number;
-	lineageEdgeCount: number;
-};
-
-type DatasetSecurityLinkage = {
-	classification?: string;
-	requiresMasking?: boolean;
-	maskingRuleCount?: number;
-	conflict?: boolean;
-	effectiveRules?: Array<{ id?: string; column?: string; function?: string; args?: string }>;
-	suggestions?: string[];
-};
-
-type GovernanceHealth = {
-	healthScore?: number;
-	healthLevel?: string;
-	quality?: {
-		totalRuns?: number;
-		passRuns?: number;
-		failRuns?: number;
-		runningRuns?: number;
-		latestRunAt?: string;
-		latestStatus?: string;
-		failureTop?: Array<{ category?: string; count?: number }>;
-		trend?: Array<{ date?: string; total?: number; passed?: number; failed?: number }>;
-	};
-	issues?: {
-		total?: number;
-		open?: number;
-		closed?: number;
-		overdue?: number;
-		top?: Array<{ id?: string; title?: string; status?: string; priority?: string; severity?: string; dueAt?: string }>;
-	};
-	links?: {
-		qualityRulesPath?: string;
-		qualityReportPath?: string;
-		issuesPath?: string;
-	};
-};
-
-const TYPE_OPTIONS = [
-	{ label: "全部类型", value: "ALL" },
-	{ label: "Hive", value: "HIVE" },
-	{ label: "JDBC", value: "JDBC" },
-	{ label: "文件", value: "FILE" },
-];
-
-const CLASSIFICATION_OPTIONS = [
-	{ label: "全部密级", value: "ALL" },
-	{ label: "公开", value: "PUBLIC" },
-	{ label: "内部", value: "INTERNAL" },
-	{ label: "秘密", value: "SECRET" },
-	{ label: "机密", value: "CONFIDENTIAL" },
-];
-
-const LAYER_OPTIONS = [
-	{ label: "全部分层", value: "ALL" },
-	{ label: "ODS", value: "ODS" },
-	{ label: "STG", value: "STG" },
-	{ label: "DWD", value: "DWD" },
-	{ label: "DWS", value: "DWS" },
-	{ label: "ADS", value: "ADS" },
-];
-
-const DATASET_FILTER_STORAGE_KEY = "catalog.asset-detail.filter.v1";
-const SECURITY_LINKAGE_VERSION_KEY = "catalog.security.linkage.version";
-const SECURITY_LINKAGE_EVENT = "catalog-security-linkage-updated";
-
-const CLASSIFICATION_LABEL: Record<string, string> = {
-	PUBLIC: "公开",
-	INTERNAL: "内部",
-	SECRET: "秘密",
-	CONFIDENTIAL: "机密",
-};
-
-const layerColor = (layer?: string) => {
-	const key = String(layer || "").toUpperCase();
-	if (key === "ODS") return "default";
-	if (key === "DWD") return "blue";
-	if (key === "DWS") return "cyan";
-	if (key === "ADS") return "green";
-	if (key === "DIM") return "purple";
-	return "processing";
-};
-
-const buildColumnRows = (detail?: TableDetail | null): ColumnRow[] => {
-	if (!detail?.entity) return [];
-	const columns = Array.isArray(detail.entity.columns) ? detail.entity.columns : [];
-	return columns.map((item: any, idx: number) => ({
-		key: String(item?.name || item?.displayName || idx),
-		name: String(item?.name || item?.displayName || "-").trim(),
-		type: String(item?.dataType || item?.dataTypeDisplay || "-").trim(),
-		comment: String(item?.description || item?.comment || "").trim(),
-		status: String(item?.status || "").trim(),
-	}));
-};
 
 export default function AssetDetailPage() {
 	const router = useRouter();
@@ -177,6 +63,7 @@ export default function AssetDetailPage() {
 	const [detailLoading, setDetailLoading] = useState(false);
 	const [detailRow, setDetailRow] = useState<AssetRow | null>(null);
 	const [detailDataset, setDetailDataset] = useState<Record<string, any> | null>(null);
+	const [assetContract, setAssetContract] = useState<Record<string, any> | null>(null);
 	const [tableDetail, setTableDetail] = useState<TableDetail | null>(null);
 	const [impact, setImpact] = useState<GovernanceImpact>({ grantsCount: 0, lineageNodeCount: 0, lineageEdgeCount: 0 });
 	const [securityLinkage, setSecurityLinkage] = useState<DatasetSecurityLinkage | null>(null);
@@ -184,6 +71,7 @@ export default function AssetDetailPage() {
 	const [indicatorDeps, setIndicatorDeps] = useState<IndicatorDep[]>([]);
 	const [savingProfile, setSavingProfile] = useState(false);
 	const requestSeqRef = useRef(0);
+	const detailRequestSeqRef = useRef(0);
 
 	useEffect(() => {
 		try {
@@ -193,8 +81,12 @@ export default function AssetDetailPage() {
 			setKeyword(typeof saved?.keyword === "string" ? saved.keyword : "");
 			setDomain(typeof saved?.domain === "string" && saved.domain ? saved.domain : undefined);
 			setAssetType(typeof saved?.assetType === "string" && saved.assetType ? saved.assetType : "ALL");
-			setClassification(typeof saved?.classification === "string" && saved.classification ? saved.classification : "ALL");
-			setWarehouseLayer(typeof saved?.warehouseLayer === "string" && saved.warehouseLayer ? saved.warehouseLayer : "ALL");
+			setClassification(
+				typeof saved?.classification === "string" && saved.classification ? saved.classification : "ALL",
+			);
+			setWarehouseLayer(
+				typeof saved?.warehouseLayer === "string" && saved.warehouseLayer ? saved.warehouseLayer : "ALL",
+			);
 		} catch {
 			// ignore malformed cache
 		}
@@ -227,10 +119,7 @@ export default function AssetDetailPage() {
 	}, [domains]);
 
 	const domainOptions = useMemo(() => {
-		return [
-			{ label: "全部主题域", value: "ALL" },
-			...domains.map((item) => ({ label: item.name, value: item.id })),
-		];
+		return [{ label: "全部主题域", value: "ALL" }, ...domains.map((item) => ({ label: item.name, value: item.id }))];
 	}, [domains]);
 
 	const loadDomains = async () => {
@@ -286,7 +175,7 @@ export default function AssetDetailPage() {
 					updatedAt: item.lastModifiedDate || item.createdDate || undefined,
 					snapshotTime: item.snapshotTime || undefined,
 					lifecycleStatus: item.lifecycleStatus || undefined,
-					editable: item.editable !== false,
+					editable: item.editable === true,
 				})),
 			);
 			setPageState({
@@ -358,15 +247,19 @@ export default function AssetDetailPage() {
 	}, [detailRow?.id, pageState.page, pageState.size, keyword, domain, assetType, classification, warehouseLayer]);
 
 	const closeDetail = () => {
+		detailRequestSeqRef.current += 1;
 		setDetailOpen(false);
 		setDetailRow(null);
+		setAssetContract(null);
 		setIndicatorDeps([]);
 	};
 
 	const openDetail = async (row: AssetRow) => {
 		if (!row?.id) return;
+		const detailRequestId = ++detailRequestSeqRef.current;
 		setDetailRow(row);
 		setDetailDataset(null);
+		setAssetContract(null);
 		setTableDetail(null);
 		setSecurityLinkage(null);
 		setGovernanceHealth(null);
@@ -375,7 +268,16 @@ export default function AssetDetailPage() {
 		setDetailOpen(true);
 		setDetailLoading(true);
 		try {
-			const [datasetResp, tableResp, grantsResp, lineageResp, linkageResp, governanceResp, indicatorDepsResp] = await Promise.allSettled([
+			const [
+				datasetResp,
+				tableResp,
+				grantsResp,
+				lineageResp,
+				linkageResp,
+				governanceResp,
+				indicatorDepsResp,
+				contractResp,
+			] = await Promise.allSettled([
 				getDataset(row.id),
 				getTechMetadataTableDetail(`catalog:${row.id}`),
 				listDatasetGrants(row.id),
@@ -383,7 +285,9 @@ export default function AssetDetailPage() {
 				getClassificationMaskingLinkage(row.id),
 				getDatasetGovernanceHealth(row.id),
 				getDatasetIndicatorDeps(row.id),
+				getCatalogAssetV2Contract(row.id),
 			]);
+			if (detailRequestId !== detailRequestSeqRef.current) return;
 			if (datasetResp.status === "fulfilled") {
 				const ds: any = datasetResp.value || null;
 				setDetailDataset(ds);
@@ -397,7 +301,8 @@ export default function AssetDetailPage() {
 				setTableDetail(tableResp.value || null);
 			}
 			if (grantsResp.status === "fulfilled" || lineageResp.status === "fulfilled") {
-				const grants = grantsResp.status === "fulfilled" && Array.isArray(grantsResp.value) ? grantsResp.value.length : 0;
+				const grants =
+					grantsResp.status === "fulfilled" && Array.isArray(grantsResp.value) ? grantsResp.value.length : 0;
 				const lineage: any = lineageResp.status === "fulfilled" ? lineageResp.value : {};
 				setImpact({
 					grantsCount: grants,
@@ -413,16 +318,23 @@ export default function AssetDetailPage() {
 			}
 			if (indicatorDepsResp.status === "fulfilled") {
 				const res: any = indicatorDepsResp.value;
-				setIndicatorDeps(Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []));
+				setIndicatorDeps(Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : []);
+			}
+			if (contractResp.status === "fulfilled") {
+				setAssetContract(contractResp.value || null);
 			}
 		} catch {
+			if (detailRequestId !== detailRequestSeqRef.current) return;
 			// error toast handled by global interceptor
 			setTableDetail(null);
 			setDetailDataset(null);
 			setSecurityLinkage(null);
 			setGovernanceHealth(null);
+			setAssetContract(null);
 		} finally {
-			setDetailLoading(false);
+			if (detailRequestId === detailRequestSeqRef.current) {
+				setDetailLoading(false);
+			}
 		}
 	};
 
@@ -451,7 +363,7 @@ export default function AssetDetailPage() {
 
 	const saveProfile = async () => {
 		if (!detailDataset?.id) return;
-		if (detailDataset.editable === false) {
+		if (detailDataset.editable !== true) {
 			toast.warning("当前账号无该资产编辑权限");
 			return;
 		}
@@ -486,7 +398,7 @@ export default function AssetDetailPage() {
 	};
 
 	const columnColumns: ColumnsType<ColumnRow> = [
-		{ title: "字段", dataIndex: "name" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
+		{ title: "字段", dataIndex: "name", sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 		{ title: "类型", dataIndex: "type" },
 		{
 			title: "状态",
@@ -599,9 +511,7 @@ export default function AssetDetailPage() {
 				}
 				extra={
 					<Space wrap>
-						<Button onClick={() => router.push("/catalog/assets")}>
-							资产地图
-						</Button>
+						<Button onClick={() => router.push("/catalog/assets")}>资产地图</Button>
 						<Button onClick={() => void loadDatasets(1, pageState.size)} loading={loading}>
 							刷新
 						</Button>
@@ -708,11 +618,33 @@ export default function AssetDetailPage() {
 											</Tag>
 										</div>
 									</div>
-									<Form form={profileForm} layout="vertical" disabled={detailDataset?.editable === false || detailLoading}>
+									{assetContract?.grantAssetType && assetContract?.assetKey ? (
+										<AssetTagPanel
+											assetType={assetContract.grantAssetType}
+											assetKey={assetContract.assetKey}
+											canEdit={assetContract?.canTag === true}
+										/>
+									) : !detailLoading ? (
+										<Alert
+											type="info"
+											showIcon
+											message="业务数据标签暂不可维护"
+											description="资产身份合同不可用，暂不能维护业务数据标签。"
+										/>
+									) : null}
+									<Form
+										form={profileForm}
+										layout="vertical"
+										disabled={detailDataset?.editable !== true || detailLoading}
+									>
 										<Form.Item label="负责人" name="owner">
 											<Input placeholder="请输入负责人账号或姓名" />
 										</Form.Item>
-										<Form.Item label="标签（逗号分隔）" name="tags">
+										<Form.Item
+											label="历史自由文本标签（兼容字段）"
+											name="tags"
+											extra="该字段仅用于兼容既有数据，不会自动转成业务数据标签。"
+										>
 											<Input placeholder="如：patent,erp,core" />
 										</Form.Item>
 										<Form.Item label="描述" name="description">
@@ -724,11 +656,11 @@ export default function AssetDetailPage() {
 											type="primary"
 											onClick={() => void saveProfile()}
 											loading={savingProfile}
-											disabled={!profileChanged || detailDataset?.editable === false}
+											disabled={!profileChanged || detailDataset?.editable !== true}
 										>
 											保存画像
 										</Button>
-										{detailDataset?.editable === false ? (
+										{detailDataset?.editable !== true ? (
 											<Tag color="orange">当前账号仅可查看</Tag>
 										) : (
 											<Tag color="green">可编辑</Tag>
@@ -774,77 +706,18 @@ export default function AssetDetailPage() {
 							label: "治理状态",
 							children: (
 								<Space direction="vertical" size={12} className="w-full">
-									<div className="grid gap-3 md:grid-cols-3">
-										<Card size="small" title="权限授权">
-											<div className="text-lg font-semibold">{impact.grantsCount}</div>
-										</Card>
-										<Card size="small" title="血缘节点">
-											<div className="text-lg font-semibold">{impact.lineageNodeCount}</div>
-										</Card>
-										<Card size="small" title="血缘关系">
-											<div className="text-lg font-semibold">{impact.lineageEdgeCount}</div>
-										</Card>
-									</div>
-									<Card size="small" title="治理健康">
-										<div className="mb-2 flex items-center gap-2 text-xs text-slate-600">
-											<Tag color={governanceHealth?.healthLevel === "HEALTHY" ? "green" : governanceHealth?.healthLevel === "WARN" ? "gold" : "red"}>
-												{governanceHealth?.healthLevel || "UNKNOWN"}
-											</Tag>
-											<span>健康分 {Number(governanceHealth?.healthScore ?? 0)}</span>
-										</div>
-										<div className="mb-2 text-xs text-slate-600">
-											质量运行：总 {Number(governanceHealth?.quality?.totalRuns ?? 0)} / 成功 {Number(governanceHealth?.quality?.passRuns ?? 0)} / 失败 {Number(governanceHealth?.quality?.failRuns ?? 0)}
-										</div>
-										<div className="mb-2 text-xs text-slate-600">
-											问题工单：总 {Number(governanceHealth?.issues?.total ?? 0)} / 打开 {Number(governanceHealth?.issues?.open ?? 0)} / 逾期 {Number(governanceHealth?.issues?.overdue ?? 0)}
-										</div>
-										<div className="mb-2 flex flex-wrap gap-2">
-											{Array.isArray(governanceHealth?.quality?.failureTop) && governanceHealth?.quality?.failureTop.length > 0 ? (
-												governanceHealth?.quality?.failureTop.map((item, idx) => (
-													<Tag key={`fail-cat-${idx}`}>
-														{item.category || "UNKNOWN"}: {Number(item.count || 0)}
-													</Tag>
-												))
-											) : (
-												<Tag color="green">近期开窗内无失败分类</Tag>
-											)}
-										</div>
-										<Space size={8} wrap>
-											<Button
-												size="small"
-												onClick={() => {
-													if (governanceHealth?.links?.qualityReportPath) {
-														router.push(governanceHealth.links.qualityReportPath);
-													}
-												}}
-											>
-												查看质量报告
-											</Button>
-											<Button
-												size="small"
-												onClick={() => {
-													if (governanceHealth?.links?.qualityRulesPath) {
-														router.push(governanceHealth.links.qualityRulesPath);
-													}
-												}}
-											>
-												查看质量运行
-											</Button>
-											<Button
-												size="small"
-												onClick={() => {
-													if (governanceHealth?.links?.issuesPath) {
-														router.push(governanceHealth.links.issuesPath);
-													}
-												}}
-											>
-												查看问题工单
-											</Button>
-										</Space>
-									</Card>
+									<AssetGovernanceOverview
+										governanceHealth={governanceHealth}
+										impact={impact}
+										onNavigate={(path) => router.push(path)}
+									/>
 									<Card size="small" title="密级与脱敏联动">
 										<div className="mb-2 text-xs text-slate-600">
-											当前密级：{securityLinkage?.classification || detailDataset?.classification || detailRow?.classification || "-"}
+											当前密级：
+											{securityLinkage?.classification ||
+												detailDataset?.classification ||
+												detailRow?.classification ||
+												"-"}
 											{" -> "}生效脱敏策略：
 											{Number(securityLinkage?.maskingRuleCount || 0)} 条
 										</div>
@@ -870,7 +743,9 @@ export default function AssetDetailPage() {
 									) : null}
 									{indicatorDeps.length > 0 && (
 										<div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
-											<div className="mb-3 text-sm font-semibold text-slate-900">关联指标（{indicatorDeps.length}）</div>
+											<div className="mb-3 text-sm font-semibold text-slate-900">
+												关联指标（{indicatorDeps.length}）
+											</div>
 											<Space wrap>
 												{indicatorDeps.map((ind) => (
 													<Tag key={ind.id} color={ind.isDerived ? "purple" : "blue"}>

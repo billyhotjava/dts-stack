@@ -16,9 +16,13 @@ const normalizeRole = (raw: unknown) =>
 		.toUpperCase()
 		.replace(/^ROLE_/, "");
 
-const normalizePermission = (raw: unknown) => String(raw || "").trim().toLowerCase();
+const normalizePermission = (raw: unknown) =>
+	String(raw || "")
+		.trim()
+		.toLowerCase();
 
-const hasMaintainerRole = (roles: unknown[]) => roles.map(normalizeRole).some((role) => MAINTAINER_ROLE_CODES.has(role));
+const hasMaintainerRole = (roles: unknown[]) =>
+	roles.map(normalizeRole).some((role) => MAINTAINER_ROLE_CODES.has(role));
 
 const hasModulePermission = (permissions: unknown[], moduleName: "governance" | "catalog") => {
 	const normalized = new Set(permissions.map(normalizePermission));
@@ -44,3 +48,7 @@ const useModuleManageAccess = (moduleName: "governance" | "catalog") => {
 export const useGovernanceManageAccess = () => useModuleManageAccess("governance");
 export const useCatalogManageAccess = () => useModuleManageAccess("catalog");
 
+export const useCatalogTagGovernanceAccess = () => {
+	const roles = useUserRoles();
+	return useMemo(() => hasMaintainerRole(roles || []), [roles]);
+};

@@ -33,6 +33,8 @@ import org.springframework.web.server.ResponseStatusException;
 public class MetricModelLifecycleService {
 
     private static final Logger LOG = LoggerFactory.getLogger(MetricModelLifecycleService.class);
+    private static final String GRAPH_SNAPSHOT_STATE_KEY =
+        MetricDownstreamRegistrar.GRAPH_SNAPSHOT_STATE_KEY;
 
     private final MetricGraphDraftService graphDraftService;
     private final PlatformContractClient platformContractClient;
@@ -106,6 +108,10 @@ public class MetricModelLifecycleService {
         result.put("graphStatus", preflight.get("status"));
         result.put("diagnostics", preflight.get("diagnostics"));
         result.put("artifacts", artifacts);
+        result.put(
+            GRAPH_SNAPSHOT_STATE_KEY,
+            new LinkedHashMap<>(graph)
+        );
         result.put("appliedPolicySource", policySource);
         result.put("appliedPredicateHash", predicateHash);
         result.put("warnings", List.of("Candidate artifacts must pass platform/dbt validation before review or publish."));
@@ -213,6 +219,25 @@ public class MetricModelLifecycleService {
         if (published != null && MetricLifecycleStatus.PUBLISHED.code().equals(text(published.get("status")))) {
             return published;
         }
+        if (
+            published != null &&
+            MetricLifecycleStatus.PUBLISH_BLOCKED
+                .code()
+                .equals(text(published.get("status")))
+        ) {
+            Map<String, Object> retried = downstreamRegistrar.registerDownstream(
+                modelId,
+                published,
+                registrationGraph(modelId, published)
+            );
+            emitAudit(
+                "metric.model.publish",
+                retried,
+                "PUBLISHED",
+                true
+            );
+            return retried;
+        }
         Map<String, Object> state = requireStatus(
             modelId,
             MetricLifecycleStatus.DBT_VALIDATED.code(),
@@ -220,6 +245,10 @@ public class MetricModelLifecycleService {
             MetricLifecycleStatus.REVIEW_SUBMITTED.code()
         );
         try {
+            Map<String, Object> graphSnapshot = registrationGraph(
+                modelId,
+                state
+            );
             // Remote submit happens OUTSIDE the write tx; the version insert + state update run in a single
             // short tx where the unique(model_id, version) constraint + @Version serialize concurrent
             // publishes (loser maps to 409 metric_version_conflict).
@@ -238,12 +267,32 @@ public class MetricModelLifecycleService {
             Map<String, Object> result = publishWriter.commitPublish(modelId, state, submitted);
             // Close the publish loop: register the version with platform BI Dataset + lineage (F3). When the
             // registration is enabled and fails, the model is persisted as PUBLISH_BLOCKED and a 503 surfaces.
-            result = downstreamRegistrar.registerDownstream(modelId, result);
+            result = downstreamRegistrar.registerDownstream(
+                modelId,
+                result,
+                graphSnapshot
+            );
             emitAudit("metric.model.publish", result, "PUBLISHED", true);
             return result;
         } catch (PlatformContractClient.PlatformContractException e) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, MetricContractErrorCode.PLATFORM_CONTRACT_UNAVAILABLE.code(), e);
         }
+    }
+
+    private Map<String, Object> registrationGraph(
+        String modelId,
+        Map<String, Object> state
+    ) {
+        Map<String, Object> graphSnapshot = object(
+            state.get(GRAPH_SNAPSHOT_STATE_KEY)
+        );
+        if (
+            graphSnapshot.isEmpty() &&
+            downstreamRegistrar.isTaggableAssetRegistrationEnabled()
+        ) {
+            return graphDraftService.graph(modelId);
+        }
+        return graphSnapshot;
     }
 
     @Transactional
@@ -332,6 +381,12 @@ public class MetricModelLifecycleService {
         result.put("artifactRef", state.get("artifactRef"));
         result.put("appliedPolicySource", state.get("appliedPolicySource"));
         result.put("appliedPredicateHash", state.get("appliedPredicateHash"));
+        if (state.get(GRAPH_SNAPSHOT_STATE_KEY) instanceof Map<?, ?>) {
+            result.put(
+                GRAPH_SNAPSHOT_STATE_KEY,
+                state.get(GRAPH_SNAPSHOT_STATE_KEY)
+            );
+        }
         return result;
     }
 

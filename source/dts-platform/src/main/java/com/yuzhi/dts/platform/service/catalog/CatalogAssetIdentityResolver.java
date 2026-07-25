@@ -174,7 +174,8 @@ public class CatalogAssetIdentityResolver {
             return Optional.empty();
         }
         String trimmed = ref.trim();
-        if (trimmed.toLowerCase(Locale.ROOT).contains("/metric-pack:")) {
+        String normalized = trimmed.toLowerCase(Locale.ROOT);
+        if (normalized.contains("/metric-pack:") && normalized.contains("/version:")) {
             return Optional.of(new CatalogAssetIdentity(CatalogAssetType.METRIC_PACK, trimmed, trimmed, "metric-pack-ref"));
         }
         if (isScopedDatasetKey(trimmed)) {

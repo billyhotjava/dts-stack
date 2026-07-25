@@ -103,7 +103,7 @@ class CatalogLineageResourceIngestionExecutionTest {
     void ingestionServiceSubmitsOnlyCompleteSuccessfulApiLandingEvidence() {
         authenticate("service:dts-ingestion", AuthoritiesConstants.SERVICE_INTERNAL);
         when(mappingSyncService.syncFromIngestionPayload(any(), any()))
-            .thenReturn(OdsTableMappingSyncService.SyncResult.success(1, "ok"));
+            .thenReturn(new OdsTableMappingSyncService.SyncResult(true, 1, "ok"));
 
         resource.syncIngestionExecutionLineage(validPayload());
 

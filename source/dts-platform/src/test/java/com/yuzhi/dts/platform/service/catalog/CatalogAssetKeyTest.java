@@ -45,6 +45,20 @@ class CatalogAssetKeyTest {
     }
 
     @Test
+    void scopedMetricKeyIncludesTenantAndPackIdentity() {
+        assertThat(
+            CatalogAssetKey.metric(
+                "Acme North",
+                "Order Summary",
+                "Gross Amount"
+            )
+        )
+            .isEqualTo(
+                "tenant:acme_north/env:prod/dialect:generic/metric-pack:order_summary/metric:gross_amount"
+            );
+    }
+
+    @Test
     void identityUsesAssetIdForGrantWhenPresent() {
         CatalogAssetIdentity identity = new CatalogAssetIdentity(
             CatalogAssetType.DATASET,

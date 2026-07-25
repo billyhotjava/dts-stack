@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { CatalogTagDto } from "@/api/catalogTagsApi";
 
 // DatasetsPage（资产地图/台账）拆分出的共享层：类型、常量、纯工具与指标卡片。
 // 视图组件与页面容器均从此处取用，保持单一事实源。
@@ -24,6 +25,9 @@ export type AssetRow = {
 	hiveTable?: string;
 	updatedAt?: string;
 	snapshotTime?: string;
+	assetType?: string;
+	assetKey?: string;
+	assetTags?: CatalogTagDto[];
 };
 
 export type DomainNode = { id?: string; name?: string; code?: string; children?: DomainNode[] };
@@ -139,12 +143,16 @@ export type LineageFailureRow = GovernanceGapRow & {
 };
 
 export const normalizeLayer = (value?: string) => {
-	const normalized = String(value || "").trim().toUpperCase();
+	const normalized = String(value || "")
+		.trim()
+		.toUpperCase();
 	return normalized && LAYER_META[normalized] ? normalized : "OTHER";
 };
 
 export const classificationText = (value?: string) => {
-	const normalized = String(value || "").trim().toUpperCase();
+	const normalized = String(value || "")
+		.trim()
+		.toUpperCase();
 	return normalized ? CLASSIFICATION_LABEL[normalized] || normalized : "未设定";
 };
 

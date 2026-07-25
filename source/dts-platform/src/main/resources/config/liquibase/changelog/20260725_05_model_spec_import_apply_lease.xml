@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="20260725-05-model-spec-import-apply-lease" author="codex">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_model_spec_import_apply_attempt"/>
+            <not>
+                <columnExists
+                    tableName="modeling_model_spec_import_apply_attempt"
+                    columnName="owner_token"/>
+            </not>
+            <not>
+                <columnExists
+                    tableName="modeling_model_spec_import_apply_attempt"
+                    columnName="lease_expires_at"/>
+            </not>
+        </preConditions>
+
+        <addColumn tableName="modeling_model_spec_import_apply_attempt">
+            <column name="owner_token" type="varchar(128)"/>
+            <column name="lease_expires_at" type="timestamp"/>
+        </addColumn>
+
+        <sql>
+            UPDATE modeling_model_spec_import_apply_attempt
+               SET owner_token = 'migration-orphan-' || id::text,
+                   lease_expires_at = CURRENT_TIMESTAMP
+             WHERE status = 'RUNNING';
+        </sql>
+
+        <createIndex
+            tableName="modeling_model_spec_import_apply_attempt"
+            indexName="idx_model_spec_import_apply_lease">
+            <column name="tenant_id"/>
+            <column name="run_id"/>
+            <column name="status"/>
+            <column name="lease_expires_at"/>
+        </createIndex>
+
+        <sql>
+            ALTER TABLE modeling_model_spec_import_apply_attempt
+                ADD CONSTRAINT ck_model_spec_import_apply_lease
+                CHECK (
+                    (
+                        status = 'RUNNING'
+                        AND owner_token IS NOT NULL
+                        AND lease_expires_at IS NOT NULL
+                    )
+                    OR
+                    (
+                        status &lt;&gt; 'RUNNING'
+                        AND owner_token IS NULL
+                        AND lease_expires_at IS NULL
+                    )
+                );
+        </sql>
+
+        <rollback>
+            <sql splitStatements="false">
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_SPEC_IMPORT_APPLY_LEASE_FORWARD_ONLY: Recovery requires a new forward changeset';
+                END $$;
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

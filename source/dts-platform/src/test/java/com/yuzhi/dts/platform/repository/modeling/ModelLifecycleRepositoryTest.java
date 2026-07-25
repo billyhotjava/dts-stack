@@ -126,7 +126,8 @@ class ModelLifecycleRepositoryTest {
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
         verify(jdbcTemplate).update(sql.capture(), any(Object[].class));
         assertThat(sql.getValue())
-            .contains("on conflict (model_spec_id, revision, implementation_revision, node_kind, artifact_type)")
+            .contains("model_spec_id, revision, implementation_revision,")
+            .contains("project_key, dbt_unique_id, node_kind, artifact_type")
             .contains("where ownership = 'DBT_MANAGED'")
             .contains("modeling_dbt_artifact.path = excluded.path")
             .doesNotContain("set implementation_revision = excluded.implementation_revision");

@@ -10,6 +10,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.DimensionLevel;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.DimensionProfile;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldIssue;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldRole;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelField;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;

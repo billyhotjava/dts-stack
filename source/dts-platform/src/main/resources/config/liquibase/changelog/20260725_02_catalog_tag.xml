@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260725-02-catalog-tag" author="dts">
+        <createTable tableName="catalog_tag_category">
+            <column name="id" type="uuid">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_catalog_tag_category"/>
+            </column>
+            <column name="code" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="parent_id" type="uuid"/>
+            <column name="sort_order" type="int" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="builtin" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="enabled" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="varchar(512)"/>
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addUniqueConstraint
+            tableName="catalog_tag_category"
+            columnNames="code"
+            constraintName="uk_catalog_tag_category_code"/>
+        <addForeignKeyConstraint
+            baseTableName="catalog_tag_category"
+            baseColumnNames="parent_id"
+            referencedTableName="catalog_tag_category"
+            referencedColumnNames="id"
+            constraintName="fk_catalog_tag_category_parent"/>
+        <createIndex tableName="catalog_tag_category" indexName="idx_catalog_tag_category_parent">
+            <column name="parent_id"/>
+        </createIndex>
+
+        <createTable tableName="catalog_tag">
+            <column name="id" type="uuid">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_catalog_tag"/>
+            </column>
+            <column name="category_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="code" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="color" type="varchar(16)"/>
+            <column name="builtin" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="enabled" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="varchar(512)"/>
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addUniqueConstraint tableName="catalog_tag" columnNames="code" constraintName="uk_catalog_tag_code"/>
+        <addForeignKeyConstraint
+            baseTableName="catalog_tag"
+            baseColumnNames="category_id"
+            referencedTableName="catalog_tag_category"
+            referencedColumnNames="id"
+            constraintName="fk_catalog_tag_category"/>
+        <createIndex tableName="catalog_tag" indexName="idx_catalog_tag_category">
+            <column name="category_id"/>
+        </createIndex>
+
+        <createTable tableName="catalog_asset_tag">
+            <column name="id" type="uuid">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_catalog_asset_tag"/>
+            </column>
+            <column name="tag_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="asset_type" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="asset_key" type="varchar(512)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tagged_by" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tagged_at" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="migration_batch" type="varchar(64)"/>
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addUniqueConstraint
+            tableName="catalog_asset_tag"
+            columnNames="tag_id, asset_type, asset_key"
+            constraintName="uk_catalog_asset_tag"/>
+        <addForeignKeyConstraint
+            baseTableName="catalog_asset_tag"
+            baseColumnNames="tag_id"
+            referencedTableName="catalog_tag"
+            referencedColumnNames="id"
+            constraintName="fk_catalog_asset_tag_tag"/>
+        <createIndex tableName="catalog_asset_tag" indexName="idx_catalog_asset_tag_asset">
+            <column name="asset_type"/>
+            <column name="asset_key"/>
+        </createIndex>
+        <createIndex tableName="catalog_asset_tag" indexName="idx_catalog_asset_tag_tag">
+            <column name="tag_id"/>
+        </createIndex>
+        <createIndex tableName="catalog_asset_tag" indexName="idx_catalog_asset_tag_migration_batch">
+            <column name="migration_batch"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet
+        id="20260725-02-clean-invalid-om-asset-cache-canonical-fqn-index"
+        author="codex"
+        dbms="postgresql"
+        runAlways="true"
+        runInTransaction="false">
+        <preConditions onFail="CONTINUE">
+            <sqlCheck expectedResult="1"><![CDATA[
+                SELECT count(*)
+                  FROM pg_catalog.pg_class index_relation
+                  JOIN pg_catalog.pg_index index_state
+                    ON index_state.indexrelid = index_relation.oid
+                  JOIN pg_catalog.pg_namespace index_schema
+                    ON index_schema.oid = index_relation.relnamespace
+                 WHERE index_schema.nspname = current_schema()
+                   AND index_relation.relname = 'idx_om_asset_cache_canonical_fqn'
+                   AND NOT index_state.indisvalid
+            ]]></sqlCheck>
+        </preConditions>
+        <comment>
+            Recover a failed concurrent build before retrying the canonical FQN index. A valid index is never
+            removed.
+        </comment>
+        <sql splitStatements="false">
+            DROP INDEX CONCURRENTLY IF EXISTS idx_om_asset_cache_canonical_fqn
+        </sql>
+    </changeSet>
+
+    <changeSet
+        id="20260725-02-om-asset-cache-canonical-fqn-index"
+        author="codex"
+        dbms="postgresql"
+        runInTransaction="false">
+        <preConditions onFail="CONTINUE">
+            <tableExists tableName="om_asset_cache"/>
+            <columnExists tableName="om_asset_cache" columnName="fqn"/>
+        </preConditions>
+        <comment>
+            Keep the bounded permission lookup indexable while preserving canonical collisions for fail-closed
+            ambiguity detection. This expression must remain identical to CatalogAssetTagPermissionReadAdapter.
+        </comment>
+        <sql splitStatements="false"><![CDATA[
+            CREATE INDEX CONCURRENTLY idx_om_asset_cache_canonical_fqn
+                ON om_asset_cache ((
+                    regexp_replace(
+                        regexp_replace(
+                            regexp_replace(lower(btrim(fqn)), '[^a-z0-9_.:-]+', '_', 'g'),
+                            '_+',
+                            '_',
+                            'g'
+                        ),
+                        '^_+|_+$',
+                        '',
+                        'g'
+                    )
+                ));
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DROP INDEX CONCURRENTLY IF EXISTS idx_om_asset_cache_canonical_fqn;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet
+        id="20260725-02-clean-invalid-catalog-asset-mapping-fqn-ci-index"
+        author="codex"
+        dbms="postgresql"
+        runAlways="true"
+        runInTransaction="false">
+        <preConditions onFail="CONTINUE">
+            <sqlCheck expectedResult="1"><![CDATA[
+                SELECT count(*)
+                  FROM pg_catalog.pg_class index_relation
+                  JOIN pg_catalog.pg_index index_state
+                    ON index_state.indexrelid = index_relation.oid
+                  JOIN pg_catalog.pg_namespace index_schema
+                    ON index_schema.oid = index_relation.relnamespace
+                 WHERE index_schema.nspname = current_schema()
+                   AND index_relation.relname = 'idx_catalog_asset_mapping_fqn_ci'
+                   AND NOT index_state.indisvalid
+            ]]></sqlCheck>
+        </preConditions>
+        <comment>
+            Recover a failed concurrent build before retrying the case-insensitive mapping index. A valid index
+            is never removed.
+        </comment>
+        <sql splitStatements="false">
+            DROP INDEX CONCURRENTLY IF EXISTS idx_catalog_asset_mapping_fqn_ci
+        </sql>
+    </changeSet>
+
+    <changeSet
+        id="20260725-02-catalog-asset-mapping-fqn-ci-index"
+        author="codex"
+        dbms="postgresql"
+        runInTransaction="false">
+        <preConditions onFail="CONTINUE">
+            <tableExists tableName="catalog_asset_mapping"/>
+            <columnExists tableName="catalog_asset_mapping" columnName="fqn"/>
+        </preConditions>
+        <comment>
+            Support the existing case-insensitive OpenMetadata-to-legacy mapping join without changing its
+            compatibility semantics. The index is deliberately non-unique so ambiguous mappings fail closed.
+        </comment>
+        <sql splitStatements="false"><![CDATA[
+            CREATE INDEX CONCURRENTLY idx_catalog_asset_mapping_fqn_ci
+                ON catalog_asset_mapping (lower(fqn));
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DROP INDEX CONCURRENTLY IF EXISTS idx_catalog_asset_mapping_fqn_ci;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

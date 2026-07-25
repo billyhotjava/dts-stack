@@ -36,6 +36,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,12 +61,12 @@ public class ModelReleaseCandidateService {
     private final Clock clock;
     private final Supplier<UUID> idGenerator;
 
+    @Autowired
     public ModelReleaseCandidateService(
         ModelReleaseCandidateRepository repository,
-        ObjectMapper objectMapper,
-        Clock clock
+        ObjectMapper objectMapper
     ) {
-        this(repository, objectMapper, clock, UUID::randomUUID);
+        this(repository, objectMapper, Clock.systemUTC(), UUID::randomUUID);
     }
 
     ModelReleaseCandidateService(

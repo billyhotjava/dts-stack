@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "2.0",
+  "packageCode": "dts-common-catalog-tags",
+  "packageName": "DTS 通用数据治理标签",
+  "packageVersion": "1.0.0",
+  "category": "CATALOG_TAG",
+  "industry": "COMMON",
+  "releasedAt": "2026-07-25T00:00:00Z",
+  "effectiveFrom": "2026-07-25",
+  "dependencies": [],
+  "replaces": [],
+  "deprecated": false,
+  "sourceRegisterRef": "DTS-SPRINT-71-CATALOG-TAGS",
+  "licenseConclusion": "APPROVED",
+  "adapterType": "CATALOG_TAG",
+  "files": {
+    "catalog.json": "d36bda3a1acd2beb946eed2ce9702692d2067f8f4c8cd991b648f576d52e876a"
+  },
+  "contentChecksum": "1e2047bb41701700a66af3c9ab4856bc89c3af0cfdfa46f7ae1d08061d4d0e16"
+}

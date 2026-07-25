@@ -200,6 +200,11 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
 
     private boolean isMetricsDbtPublishGateway(String method, String path) {
         return isPost(method, path, "/api/internal/metrics/model-validation")
+            || isPost(
+                method,
+                path,
+                "/api/internal/catalog/taggable-assets/register"
+            )
             || isPost(method, path, "/api/etl/dbt/release-gate/check")
             || isPost(method, path, "/api/etl/dbt/release/submit");
     }

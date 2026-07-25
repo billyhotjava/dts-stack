@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const SOURCE = readFileSync(new URL("./DatasetDetailPage.tsx", import.meta.url), "utf8");
+const SUPPORT_SOURCE = readFileSync(new URL("./DatasetDetailSupportTabs.tsx", import.meta.url), "utf8");
 
 test("dataset detail page treats assets-v2 as the primary asset workspace", () => {
 	const firstAssetV2Read = SOURCE.indexOf("getCatalogAssetV2(id)");
@@ -19,7 +20,7 @@ test("dataset detail page treats assets-v2 as the primary asset workspace", () =
 
 test("dataset detail page keeps asset identity separate from business description", () => {
 	assert.match(SOURCE, /__fqn: asset\.fqn/);
-	assert.match(SOURCE, /const assetKey = assetContract\?\.assetKey \|\| dataset\.__fqn \|\| dataset\.id \|\| "-"/);
+	assert.match(SOURCE, /const assetKey = String\(assetContract\?\.assetKey \|\| ""\)\.trim\(\)/);
 	assert.doesNotMatch(SOURCE, /assetContract\?\.assetKey \|\| dataset\.description \|\| "-"/);
 });
 
@@ -45,6 +46,32 @@ test("dataset detail page exposes enterprise asset workbench tabs", () => {
 });
 
 test("dataset detail page uses SPA navigation for catalog internal actions", () => {
-	assert.match(SOURCE, /router\.push\("\/catalog\/lineage\/graph"\)/);
-	assert.doesNotMatch(SOURCE, /href=\{`\/catalog\/lineage\/graph`\}/);
+	assert.match(SUPPORT_SOURCE, /router\.push\("\/catalog\/lineage\/graph"\)/);
+	assert.doesNotMatch(`${SOURCE}\n${SUPPORT_SOURCE}`, /href=\{`\/catalog\/lineage\/graph`\}/);
+});
+
+test("dataset detail keeps business tags on the formal asset identity", () => {
+	assert.match(SOURCE, /AssetTagPanel/);
+	assert.match(
+		SOURCE,
+		/<AssetTagPanel assetType=\{grantAssetType\} assetKey=\{assetKey\} canEdit=\{assetContract\?\.canTag === true\}/,
+	);
+	assert.match(SOURCE, /hasFormalTagIdentity/);
+	assert.match(SOURCE, /contractRequestSequence/);
+	assert.doesNotMatch(SOURCE, /<AssetTagPanel[^>]+assetKey=\{grantAssetId\}/);
+	assert.doesNotMatch(
+		SOURCE,
+		/const grantAssetType = assetContract\?\.grantAssetType \|\| \(dataset\.__source[\s\S]*?"TABLE"\)/,
+	);
+});
+
+test("dataset detail visibly separates business, technical and security tags", () => {
+	assert.match(SOURCE, /业务数据标签/);
+	assert.match(SOURCE, /OpenMetadata 技术标签/);
+	assert.match(SOURCE, /密级/);
+	assert.doesNotMatch(SOURCE, /assetTags.*__tags|__tags.*assetTags/s);
+});
+
+test("dataset detail page remains within the repository file-size convention", () => {
+	assert.ok(SOURCE.split(/\r?\n/).length - 1 <= 800, "DatasetDetailPage.tsx must stay at or below 800 lines");
 });

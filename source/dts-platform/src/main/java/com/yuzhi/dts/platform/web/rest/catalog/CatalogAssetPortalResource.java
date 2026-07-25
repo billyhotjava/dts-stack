@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.web.rest.catalog;
 
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.catalog.CatalogAssetResolutionFailure;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetContract;
@@ -10,7 +11,9 @@ import com.yuzhi.dts.platform.service.catalog.CatalogLineageFailureReport;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetOverviewAggregator;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetPortalService;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetTagWriteGuard;
 import com.yuzhi.dts.platform.service.catalog.OpenMetadataAssetSyncService;
+import com.yuzhi.dts.platform.service.catalog.dto.AssetRef;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
 import java.time.Instant;
@@ -42,6 +45,7 @@ public class CatalogAssetPortalResource {
     private final OpenMetadataAssetSyncService syncService;
     private final AuditService audit;
     private final CatalogResourceHelper helper;
+    private final CatalogAssetTagWriteGuard assetTagWriteGuard;
 
     public CatalogAssetPortalResource(
         CatalogAssetPortalService assetPortalService,
@@ -49,7 +53,8 @@ public class CatalogAssetPortalResource {
         CatalogAssetIdentityResolutionAuditService resolutionAuditService,
         OpenMetadataAssetSyncService syncService,
         AuditService audit,
-        CatalogResourceHelper helper
+        CatalogResourceHelper helper,
+        CatalogAssetTagWriteGuard assetTagWriteGuard
     ) {
         this.assetPortalService = assetPortalService;
         this.mappingReportService = mappingReportService;
@@ -57,6 +62,7 @@ public class CatalogAssetPortalResource {
         this.syncService = syncService;
         this.audit = audit;
         this.helper = helper;
+        this.assetTagWriteGuard = assetTagWriteGuard;
     }
 
     @GetMapping
@@ -75,6 +81,7 @@ public class CatalogAssetPortalResource {
         @RequestParam(value = "matchStatus", required = false) String matchStatus,
         @RequestParam(value = "domainId", required = false) UUID domainId,
         @RequestParam(value = "domainUnassigned", required = false, defaultValue = "false") boolean domainUnassigned,
+        @RequestParam(value = "tagIds", required = false) List<UUID> tagIds,
         @RequestParam(value = "page", required = false, defaultValue = "0") int page,
         @RequestParam(value = "size", required = false, defaultValue = "20") int size,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
@@ -95,6 +102,7 @@ public class CatalogAssetPortalResource {
                 matchStatus,
                 domainId,
                 domainUnassigned,
+                tagIds,
                 page,
                 size
             ),
@@ -106,6 +114,9 @@ public class CatalogAssetPortalResource {
         payload.put("total", result.total());
         helper.putIfHasText(payload, "activeDept", effDept);
         helper.putIfHasText(payload, "keyword", keyword);
+        if (tagIds != null && !tagIds.isEmpty()) {
+            payload.put("tagCount", tagIds.stream().distinct().count());
+        }
         audit.auditAction("CATALOG_ASSET_LIST", AuditStage.SUCCESS, "assets-v2", payload);
         return ApiResponses.ok(result);
     }
@@ -266,7 +277,7 @@ public class CatalogAssetPortalResource {
 
     @GetMapping("/{id}/contract")
     @Transactional(readOnly = true)
-    public ApiResponse<CatalogAssetContract> getAssetContract(
+    public ApiResponse<AssetContractResponse> getAssetContract(
         @PathVariable UUID id,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
@@ -279,7 +290,10 @@ public class CatalogAssetPortalResource {
         payload.put("grantAssetId", result.grantAssetId());
         helper.putIfHasText(payload, "activeDept", effDept);
         audit.auditAction("CATALOG_ASSET_CONTRACT_VIEW", AuditStage.SUCCESS, id.toString(), payload);
-        return ApiResponses.ok(result);
+        boolean canTag = assetTagWriteGuard.canTag(
+            new AssetRef(result.grantAssetType(), result.assetKey())
+        );
+        return ApiResponses.ok(new AssetContractResponse(result, canTag));
     }
 
     @GetMapping("/{id}/schema-contract")
@@ -428,4 +442,9 @@ public class CatalogAssetPortalResource {
             );
         }
     }
+
+    public record AssetContractResponse(
+        @JsonUnwrapped CatalogAssetContract contract,
+        boolean canTag
+    ) {}
 }

@@ -40,6 +40,79 @@ class MetricPublishDownstreamTest {
     }
 
     @Test
+    void publishRegistersMetricIdentitiesFromInlineGraphWhenEnabled() {
+        StubPlatformClient client = new StubPlatformClient();
+        MetricModelLifecycleService service = service(
+            client,
+            new DtsMetricsProperties(),
+            true
+        );
+
+        service.validateModel(
+            "order-summary",
+            Map.of("graph", readyDwsGraph())
+        );
+        Map<String, Object> result = service.publish("order-summary");
+
+        assertThat(result)
+            .containsEntry("status", "PUBLISHED")
+            .containsEntry("taggableAssetRegistrationCount", 4)
+            .doesNotContainKeys(
+                "biDatasetReference",
+                "lineageReference"
+            );
+        assertThat(client.taggableRegisterCount).isEqualTo(1);
+        assertThat(client.taggableRequest.assets())
+            .extracting(
+                PlatformContractClient.TaggableAssetRegistration::canonicalAssetKey
+            )
+            .containsExactly(
+                "tenant:default/env:prod/dialect:generic/metric-pack:order-summary/version:v1",
+                "metric:order-summary/order_amount",
+                "metric:order-summary/order_count",
+                "metric:order-summary/avg_order_amount"
+            );
+    }
+
+    @Test
+    void taggableRegistrationFailureBlocksAndRetriesCommittedVersion() {
+        StubPlatformClient client = new StubPlatformClient();
+        client.failTaggableRegister = true;
+        MetricModelLifecycleService service = service(
+            client,
+            new DtsMetricsProperties(),
+            true
+        );
+
+        service.validateModel(
+            "order-summary",
+            Map.of("graph", readyDwsGraph())
+        );
+
+        assertThatThrownBy(() -> service.publish("order-summary"))
+            .isInstanceOf(ResponseStatusException.class)
+            .satisfies(error ->
+                assertThat(
+                    ((ResponseStatusException) error).getStatusCode()
+                ).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE)
+            )
+            .hasMessageContaining("platform_contract_unavailable");
+        assertThat(service.versionHistory("order-summary"))
+            .containsEntry("status", "PUBLISH_BLOCKED");
+
+        client.failTaggableRegister = false;
+        Map<String, Object> retry = service.publish("order-summary");
+
+        assertThat(retry)
+            .containsEntry("status", "PUBLISHED")
+            .containsEntry("version", "v1")
+            .containsEntry("taggableAssetRegistrationCount", 4)
+            .doesNotContainKey("publishBlockReason");
+        assertThat(client.submitCount).isEqualTo(1);
+        assertThat(client.taggableRegisterCount).isEqualTo(2);
+    }
+
+    @Test
     void registrationFailureMarksModelPublishBlocked() {
         StubPlatformClient client = new StubPlatformClient();
         client.failBiRegister = true;
@@ -52,6 +125,15 @@ class MetricPublishDownstreamTest {
             .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE))
             .hasMessageContaining("platform_contract_unavailable");
         assertThat(service.versionHistory("order-summary")).containsEntry("status", "PUBLISH_BLOCKED");
+
+        client.failBiRegister = false;
+        Map<String, Object> retry = service.publish("order-summary");
+
+        assertThat(retry)
+            .containsEntry("status", "PUBLISHED")
+            .containsEntry("version", "v1");
+        assertThat(client.submitCount).isEqualTo(1);
+        assertThat(client.biRegisterCount).isEqualTo(2);
     }
 
     @Test
@@ -65,6 +147,7 @@ class MetricPublishDownstreamTest {
         assertThat(result).containsEntry("status", "PUBLISHED").doesNotContainKeys("biDatasetReference", "lineageReference");
         assertThat(client.biRegisterCount).isZero();
         assertThat(client.lineageRegisterCount).isZero();
+        assertThat(client.taggableRegisterCount).isZero();
     }
 
     @Test
@@ -87,6 +170,14 @@ class MetricPublishDownstreamTest {
     }
 
     private static MetricModelLifecycleService service(StubPlatformClient client, DtsMetricsProperties props) {
+        return service(client, props, false);
+    }
+
+    private static MetricModelLifecycleService service(
+        StubPlatformClient client,
+        DtsMetricsProperties props,
+        boolean taggableAssetRegistrationEnabled
+    ) {
         InMemoryMetricModelStateRepository stateRepository = new InMemoryMetricModelStateRepository();
         InMemoryMetricModelVersionRepository versionRepository = new InMemoryMetricModelVersionRepository();
         InMemoryMetricRollbackEventRepository rollbackRepository = new InMemoryMetricRollbackEventRepository();
@@ -100,7 +191,15 @@ class MetricPublishDownstreamTest {
             versionRepository,
             rollbackRepository,
             new MetricLifecyclePublishWriter(stateRepository, versionRepository),
-            new MetricDownstreamRegistrar(client, props, stateRepository)
+            new MetricDownstreamRegistrar(
+                client,
+                props,
+                stateRepository,
+                new MetricTaggableAssetRegistrar(
+                    client,
+                    taggableAssetRegistrationEnabled
+                )
+            )
         );
     }
 
@@ -124,9 +223,12 @@ class MetricPublishDownstreamTest {
     private static final class StubPlatformClient extends PlatformContractClient {
 
         private boolean failBiRegister = false;
+        private boolean failTaggableRegister = false;
         private int submitCount = 0;
         private int biRegisterCount = 0;
         private int lineageRegisterCount = 0;
+        private int taggableRegisterCount = 0;
+        private TaggableAssetsRegisterRequest taggableRequest;
 
         private StubPlatformClient() {
             super(new DtsMetricsProperties(), RestClient.builder().build());
@@ -166,6 +268,20 @@ class MetricPublishDownstreamTest {
         public Map<String, Object> registerLineage(LineageRegisterRequest request) {
             lineageRegisterCount++;
             return Map.of("lineageReference", "lineage-001");
+        }
+
+        @Override
+        public Map<String, Object> registerTaggableAssets(
+            TaggableAssetsRegisterRequest request
+        ) {
+            taggableRegisterCount++;
+            if (failTaggableRegister) {
+                throw new PlatformContractException(
+                    "taggable register down"
+                );
+            }
+            taggableRequest = request;
+            return Map.of("registered", request.assets().size());
         }
     }
 }

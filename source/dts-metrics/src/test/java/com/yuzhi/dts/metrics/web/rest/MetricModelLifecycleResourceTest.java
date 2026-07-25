@@ -14,6 +14,7 @@ import com.yuzhi.dts.metrics.service.MetricLifecyclePublishWriter;
 import com.yuzhi.dts.metrics.service.MetricModelLifecycleService;
 import com.yuzhi.dts.metrics.service.MetricCandidateArtifactBuilder;
 import com.yuzhi.dts.metrics.service.MetricSecurityPolicyService;
+import com.yuzhi.dts.metrics.service.MetricTaggableAssetRegistrar;
 import com.yuzhi.dts.metrics.service.PlatformContractClient;
 import com.yuzhi.dts.metrics.service.dto.MetricContractErrorCode;
 import com.yuzhi.dts.metrics.service.dto.MetricLifecycleStatus;
@@ -224,7 +225,15 @@ class MetricModelLifecycleResourceTest {
                 versionRepository,
                 rollbackRepository,
                 publishWriter,
-                new MetricDownstreamRegistrar(platformClient, new DtsMetricsProperties(), stateRepository)
+                new MetricDownstreamRegistrar(
+                    platformClient,
+                    new DtsMetricsProperties(),
+                    stateRepository,
+                    new MetricTaggableAssetRegistrar(
+                        platformClient,
+                        false
+                    )
+                )
             )
         );
     }

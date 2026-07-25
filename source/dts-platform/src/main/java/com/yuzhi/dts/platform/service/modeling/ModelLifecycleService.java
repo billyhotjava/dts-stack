@@ -190,6 +190,65 @@ public class ModelLifecycleService {
         return lifecycle.findImplementation(tenantId, modelSpecId).orElseThrow();
     }
 
+    /**
+     * F3 canonical-import writer for one DBT-backed implementation.
+     *
+     * <p>This boundary deliberately bypasses the normal visual-input compatibility adapter, which
+     * continues to reject DBT generator inputs. In exchange it accepts only the converter-owned,
+     * single-input DBT payload and requires both ModelSpec and implementation CAS pins.
+     */
+    @Transactional
+    public ImplementationView saveImportedDbtImplementation(
+        String tenantId,
+        String actorId,
+        UUID modelSpecId,
+        ExpectedVersion expectedModel,
+        ModelStatus expectedModelStatus,
+        ExpectedImplementationVersion expectedImplementation,
+        String projectKey,
+        String dbtUniqueId,
+        SaveImplementationCommand command
+    ) {
+        ModelSpecView model = writableCurrent(tenantId, actorId, modelSpecId, expectedModel);
+        if (expectedModelStatus == null || model.status() != expectedModelStatus) {
+            throw conflict("MODEL_SPEC_STATUS_CONFLICT", "ModelSpec status changed after import preview");
+        }
+        requireImportedDbtCommand(model, projectKey, dbtUniqueId, command);
+        ImplementationView current = lifecycle.findImplementation(tenantId, modelSpecId).orElse(null);
+        requireImplementationPrecondition(modelSpecId, current, expectedImplementation);
+        try {
+            ImplementationView saved = lifecycle
+                .saveImportedDbtImplementation(
+                    tenantId,
+                    actorId,
+                    model,
+                    expectedModelStatus,
+                    projectKey.trim(),
+                    dbtUniqueId.trim(),
+                    command,
+                    expectedImplementation.revision(),
+                    expectedImplementation.checksum(),
+                    clock.instant()
+                )
+                .orElse(null);
+            if (saved != null) return saved;
+        } catch (DataIntegrityViolationException duplicate) {
+            throw conflict("MODEL_IMPLEMENTATION_DBT_CONFLICT", "The dbt node is already owned by another ModelSpec");
+        } catch (IllegalArgumentException invalid) {
+            throw unprocessable("MODEL_IMPORT_IMPLEMENTATION_INVALID", "Imported DBT implementation payload is invalid");
+        }
+
+        ModelSpecView refreshed = modelSpecs.get(tenantId, modelSpecId);
+        if (
+            refreshed.revision() != expectedModel.revision() ||
+            !Objects.equals(refreshed.checksum(), expectedModel.checksum()) ||
+            refreshed.status() != expectedModelStatus
+        ) {
+            throw conflict("MODEL_SPEC_REVISION_CONFLICT", "ModelSpec changed while the imported implementation was being saved");
+        }
+        throw conflict("MODEL_IMPLEMENTATION_REVISION_CONFLICT", "Implementation revision changed; refresh before importing");
+    }
+
     @Transactional
     public ImplementationView convertToDesignerGenerated(
         String tenantId,
@@ -780,6 +839,41 @@ public class ModelLifecycleService {
         if (command == null) throw unprocessable("MODEL_IMPLEMENTATION_INPUT_REQUIRED", "Implementation input is required");
         ModelImplementationCompatibilityAdapter.ValidationResult result = implementationCompatibility.validate(tenantId, model, command);
         if (!result.valid()) throw unprocessable(result.code(), "Implementation input does not satisfy the current ModelSpec");
+    }
+
+    private static void requireImportedDbtCommand(
+        ModelSpecView model,
+        String projectKey,
+        String dbtUniqueId,
+        SaveImplementationCommand command
+    ) {
+        if (
+            model.implementationMode() != ImplementationMode.DBT_MANAGED ||
+            projectKey == null ||
+            projectKey.isBlank() ||
+            dbtUniqueId == null ||
+            dbtUniqueId.isBlank() ||
+            command == null ||
+            command.ownership() != ImplementationMode.DBT_MANAGED ||
+            command.inputMode() != ModelLifecycleContract.InputMode.GENERATED ||
+            command.inputs().size() != 1 ||
+            !(command.inputs().get(0) instanceof ModelLifecycleContract.GeneratedInput input) ||
+            !"DBT".equals(input.generatorType()) ||
+            !command.fieldMappings().isEmpty() ||
+            !command.settings().isEmpty() ||
+            !Objects.equals(input.config().get("projectKey"), projectKey.trim()) ||
+            !Objects.equals(input.config().get("dbtUniqueId"), dbtUniqueId.trim()) ||
+            (
+                model.materialization() != null &&
+                !model.materialization().isBlank() &&
+                !model.materialization().equalsIgnoreCase(command.materialization())
+            )
+        ) {
+            throw unprocessable(
+                "MODEL_IMPORT_IMPLEMENTATION_INVALID",
+                "Imported DBT implementation must use the converter-owned generated input"
+            );
+        }
     }
 
     private static ImplementationValidationView validation(ModelImplementationCompatibilityAdapter.ValidationResult result) {

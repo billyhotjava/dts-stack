@@ -53,3 +53,10 @@ test("data asset portal separates source structure collection from metadata mana
 	assert.match(ROLE_DEFAULTS, /"title": "数据源结构采集"/);
 	assert.match(ROLE_DEFAULTS, /"title": "元数据管理"/);
 });
+
+test("data tags reuse metadata management and do not create another menu entry", () => {
+	assert.doesNotMatch(MENU_SEED, /"title": "数据标签"/);
+	assert.doesNotMatch(ROLE_DEFAULTS, /"title": "数据标签"/);
+	assert.equal([...MENU_SEED.matchAll(/"externalLink": "\/catalog\/assets"/g)].length, 1);
+	assert.match(MENU_SEED, /"externalLink": "\/catalog\/metadata-management"/);
+});

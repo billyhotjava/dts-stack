@@ -48,6 +48,8 @@ class CatalogAssetPortalServicePermissionParityTest {
     private CatalogColumnSchemaRepository catalogColumnSchemaRepository;
     @Mock
     private AccessChecker accessChecker;
+    @Mock
+    private CatalogAssetTagService assetTagService;
 
     private CatalogAssetPortalService service;
 
@@ -63,7 +65,8 @@ class CatalogAssetPortalServicePermissionParityTest {
                 datasetRepository,
                 tableSchemaRepository,
                 catalogColumnSchemaRepository,
-                accessChecker
+                accessChecker,
+                assetTagService
             );
     }
 

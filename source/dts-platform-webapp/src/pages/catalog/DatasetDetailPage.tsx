@@ -1,26 +1,32 @@
-import { useEffect, useMemo, useState } from "react";
+import { Alert, Button, Descriptions, Form, Input, message, Select, Space, Spin, Switch, Tabs, Tag } from "antd";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
-import { Alert, Button, Descriptions, Form, Input, Select, Space, Spin, Switch, Tabs, Tag, message } from "antd";
-import { CompactTable } from "@/components/table";
-import { LineageGraph } from "@/components/lineage";
-import type { ImpactEdge, ImpactNode } from "./lineageShared";
-import { useRouter } from "@/routes/hooks";
 import {
 	getCatalogAssetV2,
 	getCatalogAssetV2Contract,
-	getCatalogAssetV2Lineage,
 	getCatalogAssetV2SchemaContract,
-	getCatalogLineageImpact,
 	getDataset,
-	getDatasetFields,
-	getDatasetGovernanceHealth,
-	getDatasetIndicatorDeps,
-	syncCatalogAssetV2Lineage,
 	updateCatalogAssetV2Governance,
 } from "@/api/platformApi";
+import { AssetTagPanel } from "@/components/catalog/tags/AssetTagPanel";
+import { useRouter } from "@/routes/hooks";
 import { buildAssetGrantUrl, resolveAssetReadiness } from "./assetPortalUx.helpers";
+import {
+	DatasetFieldsTab,
+	DatasetGovernanceTab,
+	DatasetLineageImpactTab,
+	LegacyGovernanceNotice,
+	MetadataJsonBlock,
+} from "./DatasetDetailSupportTabs";
 
-const DETAIL_TAB_KEYS = ["overview", "schema-contract", "governance", "quality-sla", "lineage-impact", "access"] as const;
+const DETAIL_TAB_KEYS = [
+	"overview",
+	"schema-contract",
+	"governance",
+	"quality-sla",
+	"lineage-impact",
+	"access",
+] as const;
 const DETAIL_TAB_ALIASES: Record<string, (typeof DETAIL_TAB_KEYS)[number]> = {
 	fields: "schema-contract",
 	technical: "schema-contract",
@@ -77,23 +83,42 @@ export default function DatasetDetailPage() {
 	const [assetContract, setAssetContract] = useState<Record<string, any> | null>(null);
 	const [schemaContract, setSchemaContract] = useState<Record<string, any> | null>(null);
 	const [contractLoading, setContractLoading] = useState(false);
+	const datasetRequestSequence = useRef(0);
+	const contractRequestSequence = useRef(0);
 
 	useEffect(() => {
-		if (!id) return;
+		const sequence = ++datasetRequestSequence.current;
+		setDataset(null);
+		setAssetContract(null);
+		setSchemaContract(null);
+		if (!id) {
+			setLoading(false);
+			return;
+		}
 		setLoading(true);
-		void getCatalogAssetV2(id)
-			.then((detail: any) => {
-				setDataset(toDatasetFromAssetV2Detail(id, detail));
-			})
-			.catch(async () => {
+		void (async () => {
+			try {
+				const detail = await getCatalogAssetV2(id);
+				if (sequence === datasetRequestSequence.current) {
+					setDataset(toDatasetFromAssetV2Detail(id, detail));
+				}
+			} catch {
+				if (sequence !== datasetRequestSequence.current) return;
 				try {
 					const legacyDataset: any = await getDataset(id);
-					setDataset({ ...legacyDataset, __source: "dts-catalog" });
+					if (sequence === datasetRequestSequence.current) {
+						setDataset({ ...legacyDataset, __source: "dts-catalog" });
+					}
 				} catch {
-					setDataset(null);
+					if (sequence === datasetRequestSequence.current) setDataset(null);
 				}
-			})
-			.finally(() => setLoading(false));
+			}
+		})().finally(() => {
+			if (sequence === datasetRequestSequence.current) setLoading(false);
+		});
+		return () => {
+			if (sequence === datasetRequestSequence.current) datasetRequestSequence.current++;
+		};
 	}, [id]);
 
 	useEffect(() => {
@@ -101,19 +126,28 @@ export default function DatasetDetailPage() {
 	}, [requestedTab]);
 
 	useEffect(() => {
-		if (!id || !dataset) return;
+		const sequence = ++contractRequestSequence.current;
+		setAssetContract(null);
+		setSchemaContract(null);
+		if (!id || !dataset) {
+			setContractLoading(false);
+			return;
+		}
 		const assetId = String(dataset.id || id);
 		setContractLoading(true);
-		void Promise.allSettled([
-			getCatalogAssetV2Contract(assetId),
-			getCatalogAssetV2SchemaContract(assetId),
-		])
+		void Promise.allSettled([getCatalogAssetV2Contract(assetId), getCatalogAssetV2SchemaContract(assetId)])
 			.then(([contractResult, schemaResult]) => {
+				if (sequence !== contractRequestSequence.current) return;
 				setAssetContract(contractResult.status === "fulfilled" ? contractResult.value || null : null);
 				setSchemaContract(schemaResult.status === "fulfilled" ? schemaResult.value || null : null);
 			})
-			.finally(() => setContractLoading(false));
-	}, [id, dataset?.id]);
+			.finally(() => {
+				if (sequence === contractRequestSequence.current) setContractLoading(false);
+			});
+		return () => {
+			if (sequence === contractRequestSequence.current) contractRequestSequence.current++;
+		};
+	}, [id, dataset]);
 
 	if (loading) {
 		return (
@@ -125,9 +159,10 @@ export default function DatasetDetailPage() {
 	if (!dataset) {
 		return <div className="p-8 text-slate-500">数据集不存在或无权访问。</div>;
 	}
-	const grantAssetType = assetContract?.grantAssetType || (dataset.__source === "openmetadata" ? "DATASET" : "TABLE");
-	const grantAssetId = assetContract?.grantAssetId || assetContract?.assetKey || dataset.id || "-";
-	const assetKey = assetContract?.assetKey || dataset.__fqn || dataset.id || "-";
+	const grantAssetType = String(assetContract?.grantAssetType || "").trim();
+	const grantAssetId = String(assetContract?.grantAssetId || assetContract?.assetKey || "-").trim();
+	const assetKey = String(assetContract?.assetKey || "").trim();
+	const hasFormalTagIdentity = Boolean(grantAssetType && assetKey);
 	const contractState = assetContract?.consumable === false ? "不可引用" : assetContract ? "可引用" : "合同读取中";
 	const schemaCount = schemaContract?.columnCount ?? dataset.columnCount ?? "-";
 	const schemaCountLabel = schemaCount === "-" ? "未同步" : `${schemaCount} 个字段`;
@@ -136,7 +171,9 @@ export default function DatasetDetailPage() {
 		<div className="space-y-4 p-4">
 			<div className="space-y-3 border-b border-slate-200 pb-4">
 				<div className="flex flex-wrap items-center gap-3">
-					<Button type="text" onClick={() => router.back()}>← 返回</Button>
+					<Button type="text" onClick={() => router.back()}>
+						← 返回
+					</Button>
 					<div className="min-w-0 flex-1">
 						<div className="text-xs text-slate-500">企业级资产工作台</div>
 						<h2 className="truncate text-xl font-bold text-slate-900">{dataset.name ?? "-"}</h2>
@@ -145,13 +182,21 @@ export default function DatasetDetailPage() {
 						{dataset.__source === "openmetadata" ? "assets-v2" : "legacy dataset"}
 					</Tag>
 					{dataset.warehouseLayer && (
-						<Tag color={
-							dataset.warehouseLayer === "ODS" ? "default" :
-							dataset.warehouseLayer === "STG" ? "gold" :
-							dataset.warehouseLayer === "DWD" ? "blue" :
-							dataset.warehouseLayer === "DWS" ? "cyan" :
-							dataset.warehouseLayer === "ADS" ? "green" : "default"
-						}>
+						<Tag
+							color={
+								dataset.warehouseLayer === "ODS"
+									? "default"
+									: dataset.warehouseLayer === "STG"
+										? "gold"
+										: dataset.warehouseLayer === "DWD"
+											? "blue"
+											: dataset.warehouseLayer === "DWS"
+												? "cyan"
+												: dataset.warehouseLayer === "ADS"
+													? "green"
+													: "default"
+							}
+						>
 							{dataset.warehouseLayer}
 						</Tag>
 					)}
@@ -159,7 +204,9 @@ export default function DatasetDetailPage() {
 				<div className="grid gap-3 md:grid-cols-4">
 					<div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
 						<div className="text-xs text-slate-500">授权资产</div>
-						<div className="mt-1 truncate font-mono text-xs text-slate-800">{grantAssetType}:{grantAssetId}</div>
+						<div className="mt-1 truncate font-mono text-xs text-slate-800">
+							{grantAssetType}:{grantAssetId}
+						</div>
 					</div>
 					<div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
 						<div className="text-xs text-slate-500">资产键</div>
@@ -173,11 +220,23 @@ export default function DatasetDetailPage() {
 						<div className="text-xs text-slate-500">治理状态</div>
 						<div className="mt-1 flex items-center gap-2">
 							<Tag color={assetContract?.consumable === false ? "orange" : "green"}>{contractState}</Tag>
-							<span className="truncate text-xs text-slate-500">{assetContract?.governanceStatus || dataset.governanceStatus || "-"}</span>
+							<span className="truncate text-xs text-slate-500">
+								{assetContract?.governanceStatus || dataset.governanceStatus || "-"}
+							</span>
 						</div>
 					</div>
 				</div>
 			</div>
+			{hasFormalTagIdentity ? (
+				<AssetTagPanel assetType={grantAssetType} assetKey={assetKey} canEdit={assetContract?.canTag === true} />
+			) : (
+				<Alert
+					type="info"
+					showIcon
+					message="业务数据标签暂不可维护"
+					description="资产身份合同尚未就绪，请先完成资产同步或映射。"
+				/>
+			)}
 			<Tabs
 				activeKey={activeTab}
 				onChange={(key) => {
@@ -215,13 +274,14 @@ export default function DatasetDetailPage() {
 					{
 						key: "governance",
 						label: "治理责任",
-						children: dataset.__source === "openmetadata" ? (
-							<OpenMetadataGovernanceTab dataset={dataset} onChanged={setDataset} />
-						) : dataset.__legacyDatasetId ? (
-							<LegacyGovernanceNotice dataset={dataset} />
-						) : (
-							<div className="py-4 text-sm text-slate-500">暂无治理责任数据。</div>
-						),
+						children:
+							dataset.__source === "openmetadata" ? (
+								<OpenMetadataGovernanceTab dataset={dataset} onChanged={setDataset} />
+							) : dataset.__legacyDatasetId ? (
+								<LegacyGovernanceNotice dataset={dataset} />
+							) : (
+								<div className="py-4 text-sm text-slate-500">暂无治理责任数据。</div>
+							),
 					},
 					{
 						key: "quality-sla",
@@ -243,7 +303,9 @@ export default function DatasetDetailPage() {
 					{
 						key: "access",
 						label: "权限申请",
-						children: <AssetAccessTab dataset={dataset} assetContract={assetContract} contractLoading={contractLoading} />,
+						children: (
+							<AssetAccessTab dataset={dataset} assetContract={assetContract} contractLoading={contractLoading} />
+						),
 					},
 				]}
 			/>
@@ -251,7 +313,9 @@ export default function DatasetDetailPage() {
 	);
 }
 
-const resolveProfileSummary = (profileJson?: string): { rowCount?: number; columnCount?: number; profileDate?: string } => {
+const resolveProfileSummary = (
+	profileJson?: string,
+): { rowCount?: number; columnCount?: number; profileDate?: string } => {
 	if (!profileJson) return {};
 	try {
 		const p = JSON.parse(profileJson);
@@ -290,22 +354,27 @@ function DatasetOverviewTab({
 		metadataSource: asset.metadataSource,
 		legacyDatasetId: asset.legacyDatasetId ?? dataset.__legacyDatasetId,
 	});
-	const missingFields = Array.isArray(assetContract?.missingGovernanceFields) ? assetContract?.missingGovernanceFields : [];
+	const missingFields = Array.isArray(assetContract?.missingGovernanceFields)
+		? assetContract?.missingGovernanceFields
+		: [];
 	const tags: any[] = Array.isArray(dataset.__tags) ? dataset.__tags : [];
 	const profile = resolveProfileSummary(dataset.__profileJson);
 
-	const governanceActions = readiness.state === "BLOCKED" || readiness.state === "WARNING" ? (
-		<Space size={4} wrap>
-			<Button size="small" onClick={() => router.push("/governance/quality")}>质量规则</Button>
-			<Button size="small" onClick={() => router.push("/governance/asset-grants")}>授权管理</Button>
-		</Space>
-	) : null;
+	const governanceActions =
+		readiness.state === "BLOCKED" || readiness.state === "WARNING" ? (
+			<Space size={4} wrap>
+				<Button size="small" onClick={() => router.push("/governance/quality")}>
+					质量规则
+				</Button>
+				<Button size="small" onClick={() => router.push("/governance/asset-grants")}>
+					授权管理
+				</Button>
+			</Space>
+		) : null;
 
 	return (
 		<div className="space-y-3 py-2">
-			{dataset.__source === "openmetadata" && (
-				<Tag color="blue">OpenMetadata主目录</Tag>
-			)}
+			{dataset.__source === "openmetadata" && <Tag color="blue">OpenMetadata主目录</Tag>}
 			<Alert
 				type={readiness.state === "BLOCKED" ? "warning" : readiness.state === "READY" ? "success" : "info"}
 				showIcon
@@ -326,12 +395,18 @@ function DatasetOverviewTab({
 				<Descriptions.Item label="所属部门">{dataset.ownerDept ?? "-"}</Descriptions.Item>
 				<Descriptions.Item label="类型">{dataset.type ?? "-"}</Descriptions.Item>
 				<Descriptions.Item label="生命周期">{dataset.lifecycleStatus ?? "-"}</Descriptions.Item>
-				<Descriptions.Item label="技术表">{dataset.hiveDatabase && dataset.hiveTable ? `${dataset.hiveDatabase}.${dataset.hiveTable}` : "-"}</Descriptions.Item>
+				<Descriptions.Item label="技术表">
+					{dataset.hiveDatabase && dataset.hiveTable ? `${dataset.hiveDatabase}.${dataset.hiveTable}` : "-"}
+				</Descriptions.Item>
 				<Descriptions.Item label="主题域">{dataset.domainName ?? dataset.domain ?? "-"}</Descriptions.Item>
 				<Descriptions.Item label="治理状态">{dataset.governanceStatus ?? "-"}</Descriptions.Item>
 				<Descriptions.Item label="映射状态">{dataset.matchStatus ?? "-"}</Descriptions.Item>
-				<Descriptions.Item label="字段合同">{schemaContract?.columnCount ?? dataset.columnCount ?? "-"}</Descriptions.Item>
-				<Descriptions.Item label="资产来源">{assetContract?.metadataSource ?? dataset.__source ?? "-"}</Descriptions.Item>
+				<Descriptions.Item label="字段合同">
+					{schemaContract?.columnCount ?? dataset.columnCount ?? "-"}
+				</Descriptions.Item>
+				<Descriptions.Item label="资产来源">
+					{assetContract?.metadataSource ?? dataset.__source ?? "-"}
+				</Descriptions.Item>
 				{profile.rowCount != null && (
 					<Descriptions.Item label="数据行数">{profile.rowCount.toLocaleString()}</Descriptions.Item>
 				)}
@@ -341,11 +416,16 @@ function DatasetOverviewTab({
 			</Descriptions>
 			{tags.length > 0 && (
 				<div className="flex flex-wrap items-center gap-1">
-					<span className="text-xs text-slate-500 mr-1">标签：</span>
-					{tags.map((t: any, i: number) => {
+					<span className="text-xs text-slate-500 mr-1">OpenMetadata 技术标签：</span>
+					{tags.map((t: any) => {
 						const label = t?.tagFQN ?? t?.name ?? t?.label ?? String(t);
 						const shortLabel = String(label).split(".").pop() ?? label;
-						return <Tag key={i} title={label}>{shortLabel}</Tag>;
+						const tagKey = t?.id ?? t?.tagFQN ?? t?.name ?? JSON.stringify(t);
+						return (
+							<Tag key={String(tagKey)} title={label}>
+								{shortLabel}
+							</Tag>
+						);
 					})}
 				</div>
 			)}
@@ -377,9 +457,12 @@ function DatasetSchemaContractTab({
 	datasetId: string;
 	columns?: any[];
 }) {
-	const missingFields = Array.isArray(assetContract?.missingGovernanceFields) ? assetContract?.missingGovernanceFields : [];
+	const missingFields = Array.isArray(assetContract?.missingGovernanceFields)
+		? assetContract?.missingGovernanceFields
+		: [];
 	const schemaSource = schemaContract?.schemaSource || dataset.__source || "-";
-	const columnCount = schemaContract?.columnCount ?? dataset.columnCount ?? (Array.isArray(columns) ? columns.length : undefined);
+	const columnCount =
+		schemaContract?.columnCount ?? dataset.columnCount ?? (Array.isArray(columns) ? columns.length : undefined);
 	return (
 		<div className="space-y-4 py-2">
 			<Alert
@@ -395,12 +478,24 @@ function DatasetSchemaContractTab({
 				}
 			/>
 			<Descriptions bordered size="small" column={2}>
-				<Descriptions.Item label="合同状态">{assetContract?.consumable === false ? "不可引用" : assetContract ? "可引用" : "读取中"}</Descriptions.Item>
+				<Descriptions.Item label="合同状态">
+					{assetContract?.consumable === false ? "不可引用" : assetContract ? "可引用" : "读取中"}
+				</Descriptions.Item>
 				<Descriptions.Item label="字段来源">{schemaSource}</Descriptions.Item>
 				<Descriptions.Item label="字段数量">{columnCount ?? "未同步"}</Descriptions.Item>
-				<Descriptions.Item label="资产键">{assetContract?.assetKey || dataset.__fqn || dataset.id || "-"}</Descriptions.Item>
-				<Descriptions.Item label="授权资产">{assetContract?.grantAssetType && assetContract?.grantAssetId ? `${assetContract.grantAssetType}:${assetContract.grantAssetId}` : "-"}</Descriptions.Item>
-				<Descriptions.Item label="物理对象">{dataset.hiveDatabase && dataset.hiveTable ? `${dataset.hiveDatabase}.${dataset.hiveTable}` : dataset.__fqn || "-"}</Descriptions.Item>
+				<Descriptions.Item label="资产键">
+					{assetContract?.assetKey || dataset.__fqn || dataset.id || "-"}
+				</Descriptions.Item>
+				<Descriptions.Item label="授权资产">
+					{assetContract?.grantAssetType && assetContract?.grantAssetId
+						? `${assetContract.grantAssetType}:${assetContract.grantAssetId}`
+						: "-"}
+				</Descriptions.Item>
+				<Descriptions.Item label="物理对象">
+					{dataset.hiveDatabase && dataset.hiveTable
+						? `${dataset.hiveDatabase}.${dataset.hiveTable}`
+						: dataset.__fqn || "-"}
+				</Descriptions.Item>
 			</Descriptions>
 			<DatasetFieldsTab datasetId={datasetId} columns={columns} />
 			<DatasetTechnicalTab dataset={dataset} assetContract={assetContract} schemaContract={schemaContract} />
@@ -419,7 +514,14 @@ function DatasetTechnicalTab({
 }) {
 	const metadataRows = [
 		{ key: "assetKey", label: "资产键", value: assetContract?.assetKey },
-		{ key: "grantAsset", label: "授权资产", value: assetContract?.grantAssetType && assetContract?.grantAssetId ? `${assetContract.grantAssetType}:${assetContract.grantAssetId}` : undefined },
+		{
+			key: "grantAsset",
+			label: "授权资产",
+			value:
+				assetContract?.grantAssetType && assetContract?.grantAssetId
+					? `${assetContract.grantAssetType}:${assetContract.grantAssetId}`
+					: undefined,
+		},
 		{ key: "sourceRef", label: "来源引用", value: assetContract?.sourceRef },
 		{ key: "service", label: "Service", value: dataset.service },
 		{ key: "database", label: "Database", value: dataset.hiveDatabase },
@@ -446,27 +548,6 @@ function DatasetTechnicalTab({
 			)}
 			<MetadataJsonBlock title="Profile JSON" value={dataset.__profileJson} />
 			<MetadataJsonBlock title="Raw Metadata JSON" value={dataset.__rawJson} />
-		</div>
-	);
-}
-
-function LegacyGovernanceNotice({ dataset }: { dataset: Record<string, any> }) {
-	return (
-		<div className="space-y-4 py-2">
-			<Alert
-				type="info"
-				showIcon
-				message="这是 DTS 原生资产"
-				description="当前资产未进入 OpenMetadata 主目录扩展编辑链路；基础属性仍由原数据资产台账维护，质量和指标关系请在“质量与SLA”页查看。"
-			/>
-			<Descriptions bordered size="small" column={2}>
-				<Descriptions.Item label="密级">{dataset.classification || "-"}</Descriptions.Item>
-				<Descriptions.Item label="仓库分层">{dataset.warehouseLayer || "-"}</Descriptions.Item>
-				<Descriptions.Item label="负责人">{dataset.owner || "-"}</Descriptions.Item>
-				<Descriptions.Item label="归属部门">{dataset.ownerDept || "-"}</Descriptions.Item>
-				<Descriptions.Item label="生命周期">{dataset.lifecycleStatus || "-"}</Descriptions.Item>
-				<Descriptions.Item label="治理状态">{dataset.governanceStatus || "-"}</Descriptions.Item>
-			</Descriptions>
 		</div>
 	);
 }
@@ -507,17 +588,26 @@ function DatasetQualitySlaTab({
 				</div>
 				<div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
 					<div className="text-xs text-slate-500">字段合同</div>
-					<div className="mt-1 text-sm font-semibold text-slate-900">{schemaContract?.columnCount ?? dataset.columnCount ?? "未同步"}</div>
+					<div className="mt-1 text-sm font-semibold text-slate-900">
+						{schemaContract?.columnCount ?? dataset.columnCount ?? "未同步"}
+					</div>
 				</div>
 				<div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
 					<div className="text-xs text-slate-500">发布前状态</div>
-					<div className="mt-1 text-sm font-semibold text-slate-900">{assetContract?.consumable === false ? "治理阻断" : "待质量校验"}</div>
+					<div className="mt-1 text-sm font-semibold text-slate-900">
+						{assetContract?.consumable === false ? "治理阻断" : "待质量校验"}
+					</div>
 				</div>
 			</div>
 			{hasLegacyDataset ? (
 				<DatasetGovernanceTab datasetId={datasetId} />
 			) : (
-				<Alert type="warning" showIcon message="未映射治理资产" description="请先在治理责任页补齐映射、密级、主题域和负责人，再配置质量规则与 SLA。" />
+				<Alert
+					type="warning"
+					showIcon
+					message="未映射治理资产"
+					description="请先在治理责任页补齐映射、密级、主题域和负责人，再配置质量规则与 SLA。"
+				/>
 			)}
 		</div>
 	);
@@ -580,26 +670,6 @@ function AssetAccessTab({
 				<Button onClick={() => router.push("/my/asset-grants")}>查看我的授权</Button>
 				<Button onClick={() => router.push("/governance/permission-audit")}>查看权限审计</Button>
 			</Space>
-		</div>
-	);
-}
-
-function MetadataJsonBlock({ title, value }: { title: string; value?: string }) {
-	if (!value) {
-		return <Alert type="info" showIcon message={`${title} 未同步`} />;
-	}
-	let text = value;
-	try {
-		text = JSON.stringify(JSON.parse(value), null, 2);
-	} catch {
-		// keep original text
-	}
-	return (
-		<div>
-			<div className="mb-2 text-sm font-medium text-slate-700">{title}</div>
-			<pre className="max-h-72 overflow-auto rounded border border-slate-200 bg-slate-950 p-3 text-xs text-slate-100">
-				{text}
-			</pre>
 		</div>
 	);
 }
@@ -707,287 +777,6 @@ function OpenMetadataGovernanceTab({
 			) : (
 				<Alert type="warning" showIcon message="未映射到 legacy dataset，治理健康和质量规则暂不可用。" />
 			)}
-		</div>
-	);
-}
-
-function DatasetFieldsTab({ datasetId, columns }: { datasetId: string; columns?: any[] }) {
-	const [fields, setFields] = useState<any[]>([]);
-	const [loading, setLoading] = useState(true);
-
-	useEffect(() => {
-		if (Array.isArray(columns)) {
-			setFields(
-				columns.map((item) => ({
-					name: item.name,
-					dataType: item.dataType,
-					comment: item.description,
-					tableName: item.omColumnFqn || item.source,
-				})),
-			);
-			setLoading(false);
-			return;
-		}
-		void getDatasetFields(datasetId)
-			.then((f: any) => setFields(Array.isArray(f) ? f : []))
-			.catch(() => setFields([]))
-			.finally(() => setLoading(false));
-	}, [datasetId, columns]);
-
-	if (loading) return <div className="py-4"><Spin /></div>;
-	if (!fields.length) {
-		return <div className="py-4 text-sm text-slate-500">暂无字段信息（未同步或数据集无表结构）。</div>;
-	}
-
-	return (
-		<CompactTable
-			size="small"
-			rowKey={(_, idx) => String(idx)}
-			dataSource={fields}
-			pagination={false}
-			columns={[
-				{ title: "字段名", dataIndex: "name", render: (v) => <span className="font-mono text-xs">{v}</span> , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
-				{ title: "类型", dataIndex: "dataType", width: 120 },
-				{ title: "描述", dataIndex: "comment", render: (v) => v ?? "-" },
-				{ title: "所属表", dataIndex: "tableName", render: (v) => v ?? "-" , sorter: (a, b) => (a.tableName || "").localeCompare(b.tableName || "") },
-			]}
-		/>
-	);
-}
-
-function DatasetGovernanceTab({ datasetId }: { datasetId: string }) {
-	const [health, setHealth] = useState<Record<string, any> | null>(null);
-	const [loading, setLoading] = useState(true);
-	const [indicators, setIndicators] = useState<any[]>([]);
-
-	useEffect(() => {
-		void Promise.all([
-			getDatasetGovernanceHealth(datasetId)
-				.then((h: any) => setHealth(h ?? null))
-				.catch(() => setHealth(null)),
-			getDatasetIndicatorDeps(datasetId)
-				.then((r: any) => {
-					const list = Array.isArray(r?.data?.data) ? r.data.data
-						: Array.isArray(r?.data) ? r.data
-						: Array.isArray(r) ? r
-						: [];
-					setIndicators(list);
-				})
-				.catch(() => setIndicators([])),
-		]).finally(() => setLoading(false));
-	}, [datasetId]);
-
-	if (loading) return <div className="py-4"><Spin /></div>;
-
-	const score = health?.healthScore ?? health?.quality?.healthScore;
-
-	return (
-		<div className="space-y-4 py-2 text-sm">
-			{score != null && (
-				<div className="flex items-center gap-2">
-					<span className="text-slate-500">健康分：</span>
-					<span className="text-lg font-bold text-blue-600">{score}</span>
-					{health?.healthLevel && <Tag>{health.healthLevel}</Tag>}
-				</div>
-			)}
-			{health?.quality?.totalRuns != null && (
-				<div className="grid grid-cols-3 gap-3">
-					<div><span className="text-slate-500">总运行：</span>{health.quality.totalRuns}</div>
-					<div><span className="text-slate-500">通过：</span><span className="text-green-600">{health.quality.passRuns ?? 0}</span></div>
-					<div><span className="text-slate-500">失败：</span><span className="text-red-500">{health.quality.failRuns ?? 0}</span></div>
-				</div>
-			)}
-			{!score && !health?.quality && <div className="text-slate-500">暂无治理健康数据。</div>}
-			{indicators.length > 0 && (
-				<div>
-					<div className="mb-2 font-medium text-slate-700">关联指标（{indicators.length}）</div>
-					<CompactTable
-						size="small"
-						rowKey={(_, i) => String(i)}
-						dataSource={indicators}
-						pagination={false}
-						columns={[
-							{ title: "指标名称", dataIndex: "name", render: (v: any) => v ?? "-" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
-							{ title: "类型", dataIndex: "type", width: 100, render: (v: any) => v ? <Tag>{v}</Tag> : "-" },
-							{ title: "状态", dataIndex: "status", width: 90, render: (v: any) => v ? <Tag color={v === "PUBLISHED" ? "green" : "default"}>{v}</Tag> : "-" },
-						]}
-					/>
-				</div>
-			)}
-		</div>
-	);
-}
-
-function OpenMetadataLineageTab({ assetId }: { assetId: string }) {
-	const [lineage, setLineage] = useState<any>(null);
-	const [loading, setLoading] = useState(true);
-	const [syncing, setSyncing] = useState(false);
-
-	const loadLineage = async () => {
-		setLoading(true);
-		try {
-			const result = await getCatalogAssetV2Lineage(assetId);
-			setLineage(result || null);
-		} catch {
-			setLineage(null);
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	useEffect(() => {
-		void loadLineage();
-	}, [assetId]);
-
-	const syncLineage = async () => {
-		setSyncing(true);
-		try {
-			await syncCatalogAssetV2Lineage(assetId, { upstreamDepth: 2, downstreamDepth: 2 });
-			await loadLineage();
-		} catch {
-			// global interceptor handles
-		} finally {
-			setSyncing(false);
-		}
-	};
-
-	if (loading) return <div className="py-6"><Spin /></div>;
-
-	const edges = Array.isArray(lineage?.edges) ? lineage.edges : [];
-	if (!edges.length) {
-		return (
-			<div className="space-y-3 py-4 text-sm text-slate-500">
-				<div>暂无OpenMetadata血缘缓存。</div>
-				<Button size="small" onClick={() => void syncLineage()} loading={syncing}>同步OpenMetadata血缘</Button>
-			</div>
-		);
-	}
-	return (
-		<div className="space-y-3 py-2">
-			<div className="flex items-center justify-between">
-				<Tag color="blue">OpenMetadata血缘缓存</Tag>
-				<Button size="small" onClick={() => void syncLineage()} loading={syncing}>同步血缘</Button>
-			</div>
-			<CompactTable
-				size="small"
-				rowKey={(row: any, idx) => row.id || `${row.fromFqn}-${row.toFqn}-${idx}`}
-				dataSource={edges}
-				pagination={{ defaultPageSize: 10 }}
-				columns={[
-					{ title: "上游", dataIndex: "fromFqn", render: (v: any) => <span className="font-mono text-xs">{v || "-"}</span> },
-					{ title: "下游", dataIndex: "toFqn", render: (v: any) => <span className="font-mono text-xs">{v || "-"}</span> },
-					{ title: "来源", dataIndex: "source", width: 140, render: (v: any) => <Tag>{v || "openmetadata"}</Tag> },
-					{ title: "类型", dataIndex: "edgeType", width: 120, render: (v: any) => v || "TABLE" },
-				]}
-			/>
-		</div>
-	);
-}
-
-function DatasetLineageImpactTab({ dataset }: { dataset: Record<string, any> }) {
-	const router = useRouter();
-	const hasOpenMetadataAsset = dataset.__source === "openmetadata" && dataset.id;
-	const hasLegacyDataset = Boolean(dataset.__legacyDatasetId);
-	return (
-		<div className="space-y-4 py-2">
-			<Alert
-				type={hasOpenMetadataAsset || hasLegacyDataset ? "info" : "warning"}
-				showIcon
-				message="血缘与影响用于判断资产变更会影响哪些指标、数据产品和看板"
-				description={
-					hasOpenMetadataAsset && hasLegacyDataset
-						? "当前资产同时具备 OpenMetadata 血缘缓存和 DTS 本地治理资产影响链路。"
-						: hasOpenMetadataAsset
-							? "当前仅有 OpenMetadata 血缘缓存，尚未映射到 DTS 本地治理影响链路。"
-							: hasLegacyDataset
-								? "当前使用 DTS 本地治理资产影响链路。"
-								: "当前资产没有可用血缘证据。"
-				}
-				action={
-					<Button
-						size="small"
-						onClick={() =>
-							dataset.__legacyDatasetId
-								? router.push(`/catalog/lineage/graph?datasetId=${encodeURIComponent(String(dataset.__legacyDatasetId))}`)
-								: router.push("/catalog/lineage/graph")
-						}
-					>
-						血缘图 →
-					</Button>
-				}
-			/>
-			{hasOpenMetadataAsset ? (
-				<div>
-					<div className="mb-2 text-sm font-medium text-slate-700">OpenMetadata 血缘缓存</div>
-					<OpenMetadataLineageTab assetId={String(dataset.id)} />
-				</div>
-			) : null}
-			{hasLegacyDataset ? (
-				<div>
-					<div className="mb-2 text-sm font-medium text-slate-700">DTS 本地影响分析</div>
-					<DatasetLineageTab datasetId={String(dataset.__legacyDatasetId)} />
-				</div>
-			) : null}
-			{!hasOpenMetadataAsset && !hasLegacyDataset ? (
-				<div className="py-4 text-sm text-slate-500">未映射到DTS治理资产，暂无本地血缘图。</div>
-			) : null}
-		</div>
-	);
-}
-
-function DatasetLineageTab({ datasetId }: { datasetId: string }) {
-	const router = useRouter();
-	const [impact, setImpact] = useState<any>(null);
-	const [loading, setLoading] = useState(true);
-
-	useEffect(() => {
-		void getCatalogLineageImpact(datasetId, { direction: "BOTH", depth: 3 })
-			.then((r: any) => setImpact(r ?? null))
-			.catch(() => setImpact(null))
-			.finally(() => setLoading(false));
-	}, [datasetId]);
-
-	const lineageNodes: ImpactNode[] = useMemo(
-		() => (Array.isArray(impact?.nodes) ? (impact.nodes as ImpactNode[]) : []),
-		[impact],
-	);
-
-	const lineageEdges: ImpactEdge[] = useMemo(
-		() => (Array.isArray(impact?.edges) ? (impact.edges as ImpactEdge[]) : []),
-		[impact],
-	);
-
-	if (loading) return <div className="py-6"><Spin /></div>;
-
-	const lineageGraphUrl = `/catalog/lineage/graph?datasetId=${encodeURIComponent(datasetId)}`;
-
-	if (!lineageNodes.length) {
-		return (
-			<div className="py-4 text-sm text-slate-500 space-y-2">
-				<div>暂无血缘数据。</div>
-				<Button type="link" size="small" className="px-0" onClick={() => router.push(lineageGraphUrl)}>
-					前往血缘分析页 →
-				</Button>
-			</div>
-		);
-	}
-
-	return (
-		<div className="space-y-2">
-			<LineageGraph
-				nodes={lineageNodes}
-				edges={lineageEdges}
-				height={400}
-				layoutDirection="LR"
-				showMiniMap={false}
-				showToolbar={false}
-				emptyText="暂无血缘节点"
-			/>
-			<div className="text-right">
-				<Button type="link" size="small" onClick={() => router.push(lineageGraphUrl)}>
-					查看完整血缘分析 →
-				</Button>
-			</div>
 		</div>
 	);
 }

@@ -401,6 +401,95 @@ class PlatformContractClientTest {
     }
 
     @Test
+    void registerTaggableAssetsCallsPlatformInternalContractWithServiceAuth() {
+        DtsMetricsProperties properties = new DtsMetricsProperties();
+        properties.getPlatform().setBaseUrl("http://dts-platform:8081/");
+        properties.getPlatform().setApiPath("/api");
+        properties.getPlatform().setServiceToken("metrics-secret");
+
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder)
+            .build();
+        PlatformContractClient client = new PlatformContractClient(
+            properties,
+            builder.build()
+        );
+
+        server
+            .expect(
+                requestTo(
+                    "http://dts-platform:8081/api/internal/catalog/taggable-assets/register"
+                )
+            )
+            .andExpect(method(HttpMethod.POST))
+            .andExpect(header("X-DTS-Service", "dts-metrics"))
+            .andExpect(
+                header(
+                    "X-DTS-Service-Token",
+                    "metrics-secret"
+                )
+            )
+            .andExpect(
+                content().json(
+                    """
+                    {
+                      "assets": [
+                        {
+                          "assetType": "METRIC_PACK",
+                          "canonicalAssetKey": "tenant:default/env:prod/dialect:generic/metric-pack:orders/version:v1",
+                          "remoteAssetId": "orders:v1",
+                          "ownerDept": "D01"
+                        },
+                        {
+                          "assetType": "METRIC",
+                          "canonicalAssetKey": "metric:orders/revenue",
+                          "remoteAssetId": "orders:revenue",
+                          "ownerDept": "D01"
+                        }
+                      ]
+                    }
+                    """
+                )
+            )
+            .andRespond(
+                withSuccess(
+                    """
+                    {
+                      "registered": 2,
+                      "canonicalAssetKeys": [
+                        "tenant:default/env:prod/dialect:generic/metric-pack:orders/version:v1",
+                        "metric:orders/revenue"
+                      ]
+                    }
+                    """,
+                    MediaType.APPLICATION_JSON
+                )
+            );
+
+        Map<String, Object> result = client.registerTaggableAssets(
+            new PlatformContractClient.TaggableAssetsRegisterRequest(
+                List.of(
+                    new PlatformContractClient.TaggableAssetRegistration(
+                        "METRIC_PACK",
+                        "tenant:default/env:prod/dialect:generic/metric-pack:orders/version:v1",
+                        "orders:v1",
+                        "D01"
+                    ),
+                    new PlatformContractClient.TaggableAssetRegistration(
+                        "METRIC",
+                        "metric:orders/revenue",
+                        "orders:revenue",
+                        "D01"
+                    )
+                )
+            )
+        );
+
+        assertThat(result).containsEntry("registered", 2);
+        server.verify();
+    }
+
+    @Test
     void validateMetricModelCallsPlatformValidationGatewayWithServiceAuth() {
         DtsMetricsProperties properties = new DtsMetricsProperties();
         properties.getPlatform().setBaseUrl("http://dts-platform:8081/");

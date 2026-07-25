@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
@@ -218,6 +219,23 @@ public class PlatformContractClient {
             return result != null ? result : Map.of();
         } catch (RestClientException e) {
             throw new PlatformContractException("platform contract call failed: lineage register", e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> registerTaggableAssets(TaggableAssetsRegisterRequest request) {
+        try {
+            RestClient.RequestBodySpec spec = restClient
+                .post()
+                .uri(internalUrl("/internal/catalog/taggable-assets/register"))
+                .header("X-DTS-Service", properties.getServiceName());
+            if (StringUtils.hasText(properties.getPlatform().getServiceToken())) {
+                spec = spec.header("X-DTS-Service-Token", properties.getPlatform().getServiceToken());
+            }
+            Map<String, Object> result = spec.body(request).retrieve().body(Map.class);
+            return result != null ? result : Map.of();
+        } catch (RestClientException e) {
+            throw new PlatformContractException("platform contract call failed: taggable asset register", e);
         }
     }
 
@@ -570,6 +588,26 @@ public class PlatformContractClient {
         String upstreamAsset,
         String platformPublishReference
     ) {}
+
+    public record TaggableAssetRegistration(
+        String assetType,
+        String canonicalAssetKey,
+        String remoteAssetId,
+        String ownerDept
+    ) {}
+
+    public record TaggableAssetsRegisterRequest(
+        List<TaggableAssetRegistration> assets,
+        String registrationScope,
+        UUID syncRunId,
+        boolean complete
+    ) {
+        public TaggableAssetsRegisterRequest(
+            List<TaggableAssetRegistration> assets
+        ) {
+            this(assets, null, null, false);
+        }
+    }
 
     public static class PlatformContractException extends RuntimeException {
         public PlatformContractException(String message, Throwable cause) {

@@ -195,4 +195,11 @@
     <include file="config/liquibase/changelog/20260724_08_upstream_model_pin_contract.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260724_09_sql_model_spec_binding.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260724_10_model_artifact_implementation_identity.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260725_01_model_spec_import_run.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260725_02_catalog_tag.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260725_03_model_spec_import_apply_plan_checksum.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260725_04_model_spec_import_apply.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260725_05_model_spec_import_apply_lease.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260725_20_catalog_tag_migration_batch.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260725_21_catalog_external_asset_identity.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

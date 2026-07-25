@@ -165,6 +165,17 @@ class CatalogAssetIdentityResolverTest {
     }
 
     @Test
+    void doesNotMisclassifyTenantScopedMetricAsMetricPack() {
+        String key = CatalogAssetKey.metric(
+            "flowerbiz",
+            "flower-rental",
+            "contract_amount"
+        );
+
+        assertThat(resolver.resolveIdentity(key)).isEmpty();
+    }
+
+    @Test
     void resolvesDataStandardByCode() {
         UUID id = UUID.randomUUID();
         DataStandard standard = new DataStandard();

@@ -19,6 +19,7 @@ import type { DataNode } from "antd/es/tree";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { toast } from "sonner";
+import { buildCatalogDomainAssetKey } from "@/api/catalogTagsApi";
 import {
 	createDomain,
 	deleteDomain,
@@ -36,6 +37,7 @@ import {
 	type Sprint64BusinessProcess,
 	type Sprint64ConformedDimension,
 } from "@/api/sprint64GovernanceApi";
+import { GovernedAssetTagPanel } from "@/components/catalog/tags/GovernedAssetTagPanel";
 import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { useRouter } from "@/routes/hooks";
@@ -763,6 +765,19 @@ export default function SubjectAreasPage() {
 									}
 									governance={
 										<div className="space-y-4">
+											{activeDomain.code?.trim() ? (
+												<GovernedAssetTagPanel
+													assetType="CATALOG_DOMAIN"
+													assetKey={buildCatalogDomainAssetKey(activeDomain.code)}
+												/>
+											) : (
+												<Alert
+													showIcon
+													type="warning"
+													message="当前业务分类暂不能维护数据标签"
+													description="请先补充业务分类编码，以建立稳定的资产标识。"
+												/>
+											)}
 											<div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
 												<div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
 													<div className="mb-3 text-sm font-semibold text-slate-900">域级治理指标</div>

@@ -153,7 +153,7 @@ class CanonicalModelLifecycleCompilerAdapterTest {
             List.of(),
             List.of(),
             List.of(),
-            List.of(),
+            null,
             null,
             ModelStatus.DRAFT,
             2,

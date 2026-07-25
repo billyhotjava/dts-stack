@@ -1,0 +1,162 @@
+{
+  "model.pm_analytics_v3.stg_pm__budget_v2": {
+    "model_type": "STG",
+    "layer": "STG",
+    "source_refs": [
+      {
+        "kind": "DBT_SOURCE",
+        "ref": "source.pm_analytics_v3.pm_ods_v2.budget_v2",
+        "layer": "ODS"
+      }
+    ],
+    "override_source": "Sprint-70 PJM budget semantic override",
+    "technical_only": true
+  },
+  "model.pm_analytics_v3.biz_dwd_budget_v2": {
+    "model_type": "FACT",
+    "layer": "DWD",
+    "grain": {
+      "statement": "每行代表一条预算台账当前快照",
+      "keys": [
+        "budget_id"
+      ]
+    },
+    "fact_shape": "PERIODIC_SNAPSHOT",
+    "time_semantics": {
+      "type": "SNAPSHOT_DATE",
+      "fields": [
+        "source_imported_at"
+      ]
+    },
+    "domain_code": "PROJECT_MANAGEMENT",
+    "source_refs": [
+      {
+        "kind": "DBT_MODEL",
+        "ref": "model.pm_analytics_v3.stg_pm__budget_v2",
+        "layer": "STG"
+      }
+    ],
+    "consumption_scenarios": [
+      "预算台账明细分析"
+    ],
+    "field_roles": {
+      "budget_id": "BUSINESS_KEY",
+      "budget_no": "NATURAL_KEY",
+      "source_imported_at": "FACT_TIME"
+    },
+    "override_source": "Sprint-70 PJM budget semantic override",
+    "technical_only": false
+  },
+  "model.pm_analytics_v3.biz_dws_budget_v2": {
+    "model_type": "SUMMARY",
+    "layer": "DWS",
+    "grain": {
+      "statement": "每行代表一个项目与研究室组合的预算当前快照汇总",
+      "keys": [
+        "project_no",
+        "research_lab"
+      ]
+    },
+    "fact_shape": "AGGREGATE_SNAPSHOT",
+    "domain_code": "PROJECT_MANAGEMENT",
+    "source_refs": [
+      {
+        "kind": "DBT_MODEL",
+        "ref": "model.pm_analytics_v3.biz_dwd_budget_v2",
+        "layer": "DWD"
+      }
+    ],
+    "consumption_scenarios": [
+      "项目预算执行汇总",
+      "研究室预算执行汇总"
+    ],
+    "field_roles": {
+      "project_no": "DIMENSION_KEY",
+      "research_lab": "DIMENSION_KEY"
+    },
+    "override_source": "Sprint-70 PJM budget semantic override",
+    "technical_only": false
+  },
+  "model.pm_analytics_v3.biz_ads_budget_kpi_v2": {
+    "model_type": "APPLICATION",
+    "layer": "ADS",
+    "grain": {
+      "statement": "全局单行预算当前快照 KPI",
+      "keys": [
+        "item_cnt"
+      ]
+    },
+    "fact_shape": "AGGREGATE_SNAPSHOT",
+    "domain_code": "PROJECT_MANAGEMENT",
+    "source_refs": [
+      {
+        "kind": "DBT_MODEL",
+        "ref": "model.pm_analytics_v3.biz_dws_budget_v2",
+        "layer": "DWS"
+      }
+    ],
+    "consumption_scenarios": [
+      "预算驾驶舱 KPI"
+    ],
+    "field_roles": {
+      "item_cnt": "MEASURE"
+    },
+    "override_source": "Sprint-70 PJM budget semantic override",
+    "technical_only": false
+  },
+  "model.pm_analytics_v3.biz_ads_budget_derived_v2": {
+    "model_type": "APPLICATION",
+    "layer": "ADS",
+    "grain": {
+      "statement": "全局单行预算当前快照派生指标",
+      "keys": [
+        "pjm_budg_execution_rate"
+      ]
+    },
+    "fact_shape": "DERIVED_METRIC_SNAPSHOT",
+    "domain_code": "PROJECT_MANAGEMENT",
+    "source_refs": [
+      {
+        "kind": "DBT_MODEL",
+        "ref": "model.pm_analytics_v3.biz_ads_budget_kpi_v2",
+        "layer": "ADS"
+      }
+    ],
+    "consumption_scenarios": [
+      "预算健康度与预警分析"
+    ],
+    "field_roles": {
+      "pjm_budg_execution_rate": "METRIC"
+    },
+    "override_source": "Sprint-70 PJM budget semantic override",
+    "technical_only": false
+  },
+  "model.pm_analytics_v3.dim_node_type_v2": {
+    "model_type": "DIMENSION",
+    "layer": "DWD",
+    "grain": {
+      "statement": "每行代表一个节点类型代码",
+      "keys": [
+        "node_type_id"
+      ]
+    },
+    "domain_code": "PROJECT_MANAGEMENT",
+    "source_refs": [
+      {
+        "kind": "STATIC_DEFINITION",
+        "ref": "models/dwd/dim_node_type_v2.sql",
+        "layer": "DWD"
+      }
+    ],
+    "consumption_scenarios": [
+      "项目节点类型标准化"
+    ],
+    "field_roles": {
+      "node_type_id": "DIMENSION_KEY"
+    },
+    "dimension_strategy": "STATIC_DBT_SEED_SQL",
+    "dimension_definition_code": "dim_0123456789abcdef0123456789abcdef",
+    "override_source": "Sprint-70 PJM budget semantic override",
+    "technical_only": false
+  }
+}

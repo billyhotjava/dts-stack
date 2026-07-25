@@ -78,6 +78,7 @@ export const getTechMetadataTableDetail = (fqn: string) =>
 	api.get({ url: "/catalog/metadata/tables/detail", params: { fqn } });
 export type CatalogAssetV2Query = {
 	keyword?: string;
+	tagIds?: string[];
 	service?: string;
 	type?: string;
 	database?: string;
@@ -94,7 +95,11 @@ export type CatalogAssetV2Query = {
 	size?: number;
 };
 export const listCatalogAssetsV2 = (params: CatalogAssetV2Query = {}) =>
-	api.get({ url: "/catalog/assets-v2", params });
+	api.get({
+		url: "/catalog/assets-v2",
+		params,
+		paramsSerializer: { indexes: null },
+	});
 export const getCatalogAssetsOverview = (params: { domainId?: string; domainUnassigned?: boolean } = {}) =>
 	api.get({ url: "/catalog/assets-v2/overview", params });
 export const getCatalogAssetV2 = (id: string) => api.get({ url: `/catalog/assets-v2/${id}` });
@@ -156,7 +161,8 @@ export const updateSchemaDriftPolicy = (id: string, data: { policyMode: string; 
 export const updateSchemaDriftTicket = (id: string, data: { ticketStatus: string; assignee?: string; note?: string }) =>
 	api.post<SchemaDriftEvent>({ url: `/catalog/schema-drift/${id}/ticket`, data });
 export const searchCatalog = (params: {
-	keyword: string;
+	keyword?: string;
+	tagIds?: string[];
 	types?: string;
 	domainId?: string;
 	sourceId?: string;
@@ -168,7 +174,11 @@ export const searchCatalog = (params: {
 	enabledOnly?: boolean;
 	limit?: number;
 }) =>
-	api.get({ url: "/catalog/search", params });
+	api.get({
+		url: "/catalog/search",
+		params,
+		paramsSerializer: { indexes: null },
+	});
 export const getDbtConfig = () => api.get(withModelingRequestTimeout({ url: "/etl/dbt/config" }));
 export const updateDbtConfig = (data: any) => api.put({ url: "/etl/dbt/config", data });
 

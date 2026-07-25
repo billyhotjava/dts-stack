@@ -145,7 +145,7 @@
                 END IF;
                 FOR item IN SELECT value FROM jsonb_array_elements(inputs) LOOP
                     IF jsonb_typeof(item) <> 'object'
-                       OR (SELECT count(*) FROM jsonb_object_keys(item)) <> CASE WHEN mode = 'UPSTREAM_MODEL' THEN 3 ELSE 2 END THEN
+                       OR (SELECT count(*) FROM jsonb_object_keys(item)) <> (CASE WHEN mode = 'UPSTREAM_MODEL' THEN 3 ELSE 2 END) THEN
                         RETURN false;
                     END IF;
                     IF mode = 'PHYSICAL_ASSET' AND (

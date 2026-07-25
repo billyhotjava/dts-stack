@@ -1,6 +1,7 @@
 import { MoreOutlined } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import { Button, Dropdown, Space, Table, Tag } from "antd";
+import { AssetTagChips } from "@/components/catalog/tags/AssetTagChips";
 import { useRouter } from "@/routes/hooks";
 import { resolveAssetReadiness } from "../assetPortalUx.helpers";
 import type { AssetRow } from "./assetPageShared";
@@ -102,94 +103,111 @@ export function AssetLedgerView({
 						onClick: () => router.push(`/catalog/datasets/${row.id}`),
 					})}
 					columns={[
-				{
-					title: "资产",
-					dataIndex: "name",
-					width: 280,
-					render: (value, row) => (
-						<div className="min-w-0">
-							<div className="truncate font-medium text-slate-900">{value || "-"}</div>
-							<div className="truncate font-mono text-[11px] text-slate-500">
-								{row.hiveDatabase && row.hiveTable ? `${row.hiveDatabase}.${row.hiveTable}` : row.description || row.id}
-							</div>
-						</div>
-					),
-				},
-				{
-					title: "类型/分层",
-					width: 150,
-					render: (_, row) => (
-						<Space direction="vertical" size={2}>
-							<Tag>{row.type || "未知"}</Tag>
-							<Tag color={LAYER_META[normalizeLayer(row.warehouseLayer)].color}>{LAYER_META[normalizeLayer(row.warehouseLayer)].label}</Tag>
-						</Space>
-					),
-				},
-				{
-					title: "治理状态",
-					width: 180,
-					render: (_, row) => {
-						const readiness = resolveAssetReadiness(row);
-						return (
-							<Space direction="vertical" size={2}>
-								<Tag color={readiness.color}>{readiness.label}</Tag>
-								<span className="text-xs text-slate-500">{readiness.reasons.slice(0, 2).join(" / ") || row.governanceStatus || "-"}</span>
-							</Space>
-						);
-					},
-				},
-				{
-					title: "密级/主题域",
-					width: 180,
-					render: (_, row) => (
-						<Space direction="vertical" size={2}>
-							<Tag color={row.classification ? "orange" : "default"}>{classificationText(row.classification)}</Tag>
-							<span className="text-xs text-slate-500">{row.domain || (row.domainId ? domainMap.get(row.domainId) : undefined) || "未归域"}</span>
-						</Space>
-					),
-				},
-				{
-					title: "负责人",
-					width: 160,
-					render: (_, row) => row.owner || row.ownerDept || "-",
-				},
-				{
-					title: "更新时间",
-					width: 170,
-					render: (_, row) => formatTime(row.snapshotTime || row.updatedAt),
-				},
-				{
-					title: "操作",
-					width: ASSET_ACTION_COLUMN_WIDTH,
-					fixed: "right",
-					render: (_, row) => (
-						<Space size={[4, 4]} className="catalog-assets-actions" wrap={false} onClick={(event) => event.stopPropagation()}>
-							<Button size="small" onClick={() => router.push(`/security/dataset-access-approval?datasetId=${row.id}`)}>
-								申请权限
-							</Button>
-							<Button size="small" onClick={() => router.push(`/catalog/datasets/${row.id}`)}>
-								详情
-							</Button>
-							<Button size="small" onClick={() => onOpenGovernanceRemediation(row.id)}>
-								治理
-							</Button>
-							<Dropdown
-								trigger={["click"]}
-								menu={{
-									items: overflowActionItems,
-									onClick: ({ key, domEvent }) => {
-										domEvent.stopPropagation();
-										handleOverflowAction(row, String(key));
-									},
-								}}
-							>
-								<Button size="small" icon={<MoreOutlined />}>
-									更多
-								</Button>
-							</Dropdown>
-						</Space>
-					),
-				},
+						{
+							title: "资产",
+							dataIndex: "name",
+							width: 280,
+							render: (value, row) => (
+								<div className="min-w-0">
+									<div className="truncate font-medium text-slate-900">{value || "-"}</div>
+									<div className="truncate font-mono text-[11px] text-slate-500">
+										{row.hiveDatabase && row.hiveTable
+											? `${row.hiveDatabase}.${row.hiveTable}`
+											: row.description || row.id}
+									</div>
+									<AssetTagChips tags={row.assetTags || []} variant="inline" />
+								</div>
+							),
+						},
+						{
+							title: "类型/分层",
+							width: 150,
+							render: (_, row) => (
+								<Space direction="vertical" size={2}>
+									<Tag>{row.type || "未知"}</Tag>
+									<Tag color={LAYER_META[normalizeLayer(row.warehouseLayer)].color}>
+										{LAYER_META[normalizeLayer(row.warehouseLayer)].label}
+									</Tag>
+								</Space>
+							),
+						},
+						{
+							title: "治理状态",
+							width: 180,
+							render: (_, row) => {
+								const readiness = resolveAssetReadiness(row);
+								return (
+									<Space direction="vertical" size={2}>
+										<Tag color={readiness.color}>{readiness.label}</Tag>
+										<span className="text-xs text-slate-500">
+											{readiness.reasons.slice(0, 2).join(" / ") || row.governanceStatus || "-"}
+										</span>
+									</Space>
+								);
+							},
+						},
+						{
+							title: "密级/主题域",
+							width: 180,
+							render: (_, row) => (
+								<Space direction="vertical" size={2}>
+									<Tag color={row.classification ? "orange" : "default"}>{classificationText(row.classification)}</Tag>
+									<span className="text-xs text-slate-500">
+										{row.domain || (row.domainId ? domainMap.get(row.domainId) : undefined) || "未归域"}
+									</span>
+								</Space>
+							),
+						},
+						{
+							title: "负责人",
+							width: 160,
+							render: (_, row) => row.owner || row.ownerDept || "-",
+						},
+						{
+							title: "更新时间",
+							width: 170,
+							render: (_, row) => formatTime(row.snapshotTime || row.updatedAt),
+						},
+						{
+							title: "操作",
+							width: ASSET_ACTION_COLUMN_WIDTH,
+							fixed: "right",
+							render: (_, row) => (
+								<Space
+									size={[4, 4]}
+									className="catalog-assets-actions"
+									wrap={false}
+									onClick={(event) => event.stopPropagation()}
+								>
+									<Button
+										size="small"
+										onClick={() => router.push(`/security/dataset-access-approval?datasetId=${row.id}`)}
+									>
+										申请权限
+									</Button>
+									<Button size="small" onClick={() => router.push(`/catalog/datasets/${row.id}`)}>
+										详情
+									</Button>
+									<Button size="small" onClick={() => onOpenGovernanceRemediation(row.id)}>
+										治理
+									</Button>
+									<Dropdown
+										trigger={["click"]}
+										menu={{
+											items: overflowActionItems,
+											onClick: ({ key, domEvent }) => {
+												domEvent.stopPropagation();
+												handleOverflowAction(row, String(key));
+											},
+										}}
+									>
+										<Button size="small" icon={<MoreOutlined />}>
+											更多
+										</Button>
+									</Dropdown>
+								</Space>
+							),
+						},
 					]}
 				/>
 			</div>

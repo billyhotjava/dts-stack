@@ -1,6 +1,6 @@
-import { Alert, Button, Card, Empty, Input, Select, Tag, Typography } from "antd";
+import { Alert, Button, Card, Empty, Input, Select, Space, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { Plus, RefreshCw } from "lucide-react";
+import { PackageOpen, Plus, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { createModelSpec, listModelSpecs } from "@/api/modelSpecApi";
@@ -11,9 +11,12 @@ import { useCatalogDomainOptions } from "@/hooks/useCatalogDomainOptions";
 import { useSearchParams } from "@/routes/hooks";
 import { useUserRoles } from "@/store/userStore";
 import { ModelSpecCreateDrawer } from "./components/ModelSpecCreateDrawer";
+import { ImportModelPackageWizard } from "./model-package-import/ImportModelPackageWizard";
+import { buildModelPackageImportQuery } from "./model-package-import/modelPackageImportNavigation";
 import type { ModelSpecType, ModelSpecView } from "./modelSpecV2Contract";
 import { MODEL_STATUS_LABELS, MODEL_TYPE_LABELS } from "./modelSpecWorkbench";
 import { hasWarehousePlanCreateAccess } from "./warehousePlanCreateFlow";
+import { canEditWarehousePlanHeader } from "./warehousePlanViewModel";
 
 const { Text, Title } = Typography;
 type ModelTypeFilter = ModelSpecType | "ALL";
@@ -35,6 +38,8 @@ export default function ModelCenterPage() {
 	const domainId = searchParams.get("domainId")?.trim() || "";
 	const compatibilityView = searchParams.get("view")?.trim() || "";
 	const lightweightCreate = searchParams.get("create") === "lightweight";
+	const importOpen = searchParams.get("modelImport") === "open";
+	const importRunId = searchParams.get("importRunId")?.trim() || "";
 	const initialType = requestedModelType(searchParams.get("modelType")) || "FACT";
 	const [models, setModels] = useState<ModelSpecView[]>([]);
 	const [plans, setPlans] = useState<WarehousePlanHeader[]>([]);
@@ -75,6 +80,8 @@ export default function ModelCenterPage() {
 	}, [canEdit, compatibilityView, lightweightCreate]);
 
 	const planNameById = useMemo(() => new Map(plans.map((plan) => [plan.id, plan.name])), [plans]);
+	const lockedImportPlan = useMemo(() => plans.find((plan) => plan.id === planId) || null, [planId, plans]);
+	const canImport = canEdit && (!planId || Boolean(lockedImportPlan && canEditWarehousePlanHeader(true, lockedImportPlan.lifecycleStatus)));
 	const visibleModels = useMemo(() => {
 		const keyword = search.trim().toLowerCase();
 		return models.filter((model) => {
@@ -89,6 +96,17 @@ export default function ModelCenterPage() {
 	const openCreate = () => {
 		setCreateType(typeFilter === "ALL" ? initialType : typeFilter);
 		setCreateOpen(true);
+	};
+
+	const setImportRoute = (open: boolean, runId = importRunId) => {
+		navigate(
+			buildModelPackageImportQuery("/modeling/models", searchParams, {
+				open,
+				planId: planId || undefined,
+				runId: runId || undefined,
+			}),
+			{ replace: !open },
+		);
 	};
 
 	const columns: ColumnsType<ModelSpecView> = [
@@ -156,10 +174,20 @@ export default function ModelCenterPage() {
 					</Title>
 					<Text type="secondary">直接创建维度表、明细表、汇总表和应用表，所有设计保存在同一模型版本中。</Text>
 				</div>
-				<Button type="primary" disabled={!canEdit} onClick={openCreate}>
-					<Plus size={16} />
-					新建模型
-				</Button>
+				<Space wrap>
+					<Button
+						icon={<PackageOpen size={16} />}
+						disabled={!canImport}
+						title={canImport ? "导入 dbt 生成的 DTS 模型包" : "当前计划不可编辑、不可访问或账号没有计划维护权限"}
+						onClick={() => setImportRoute(true)}
+					>
+						导入模型包
+					</Button>
+					<Button type="primary" disabled={!canEdit} onClick={openCreate}>
+						<Plus size={16} />
+						新建模型
+					</Button>
+				</Space>
 			</div>
 			<JourneyContextBar stage="modeling" />
 
@@ -238,6 +266,18 @@ export default function ModelCenterPage() {
 				createCommand={createModelSpec}
 				onClose={() => setCreateOpen(false)}
 				onCreated={(model) => navigate(`/modeling/models/${encodeURIComponent(model.id)}?activeStage=logical`)}
+			/>
+			<ImportModelPackageWizard
+				open={importOpen}
+				lockedPlanId={planId || undefined}
+				initialRunId={importRunId || undefined}
+				plans={plans}
+				canEdit={canImport}
+				returnSurface="model-center"
+				onClose={(runId) => setImportRoute(false, runId)}
+				onRunIdChange={(runId) => setImportRoute(true, runId)}
+				onApplied={() => void load()}
+				onNavigate={navigate}
 			/>
 		</div>
 	);

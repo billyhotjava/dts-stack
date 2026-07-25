@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260725-21-catalog-external-asset-identity" author="dts">
+        <createTable tableName="catalog_external_asset_identity">
+            <column name="id" type="uuid">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_catalog_external_asset_identity"/>
+            </column>
+            <column name="asset_type" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="canonical_asset_key" type="varchar(512)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="remote_asset_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_service" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="registration_scope" type="varchar(512)"/>
+            <column name="sync_run_id" type="uuid"/>
+            <column name="owner_dept" type="varchar(128)"/>
+            <column name="active" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addUniqueConstraint
+            tableName="catalog_external_asset_identity"
+            columnNames="asset_type, canonical_asset_key"
+            constraintName="uk_catalog_external_asset_identity_key"/>
+        <addUniqueConstraint
+            tableName="catalog_external_asset_identity"
+            columnNames="asset_type, remote_asset_id"
+            constraintName="uk_catalog_external_asset_identity_remote"/>
+        <createIndex
+            tableName="catalog_external_asset_identity"
+            indexName="idx_catalog_external_asset_identity_scope">
+            <column name="source_service"/>
+            <column name="registration_scope"/>
+            <column name="active"/>
+        </createIndex>
+        <sql>
+            alter table catalog_external_asset_identity
+            add constraint ck_catalog_external_asset_identity_sync_scope
+            check (
+                (registration_scope is null and sync_run_id is null)
+                or (registration_scope is not null and sync_run_id is not null)
+            )
+        </sql>
+        <sql>
+            alter table catalog_external_asset_identity
+            add constraint ck_catalog_external_asset_identity_type
+            check (asset_type in ('METRIC', 'METRIC_PACK'))
+        </sql>
+
+        <rollback>
+            <dropTable tableName="catalog_external_asset_identity"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

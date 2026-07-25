@@ -1371,7 +1371,7 @@
 | F5-业务对象迁移与受控退役 | P0 | 4 | DONE |
 | F6-专业模块交接与集成验收 | P0 | 8 | IN_PROGRESS |
 
-**统计**: READY=2, IN_PROGRESS=9, DONE=23, BLOCKED=0；当前已关闭 23/34 Task
+**统计**: READY=2, IN_PROGRESS=10, DONE=22, BLOCKED=0；当前已关闭 22/34 Task
 **执行顺序**: F1 → F2/F3 → F4 → F5 → F6；F2 与 F3 在概念契约冻结后可并行，F4 默认入口切换等待目标页面可用，F5 冻结旧写等待新写路径通过，F6 负责 Go/No-Go。
 
 **关键决策**:
@@ -1388,6 +1388,7 @@
 - 2026-07-22：F6 实际含 T01-T07，其中 T07 为 READY；新增 F3-T06 纠正 FACT 输入语义。FACT DRAFT 可不绑定输入，IMPLEMENTATION_READY 接受有效物理 `sourceRefs` 或锁定 revision 的上游 `dependsOn`，两类同时存在时全部校验；目标模型与上游来源分层分开。Sprint 当前 24/29、IN_PROGRESS。
 - 2026-07-23：新增 F3-T07 冻结模型类型与分层依赖矩阵。ODS_RAW/ODS_STANDARDIZED/STG 属于接入/技术层，不走四类 ModelSpec；DIMENSION/FACT→DWD、SUMMARY→DWS、APPLICATION→ADS，并按类型限制 `sourceRefs/dependsOn/generationStrategy`。历史 ODS/STG ModelSpec 的专属只读分类和迁移 UI 尚待实现。Sprint 当前 24/30、IN_PROGRESS。
 - 2026-07-24：T02 因概念维度、逻辑维度表和实现来源混用而从 DONE 重开；新增 F3-T08/T09/T10 与 F6-T08，采用 `DimensionDefinition → ModelSpecRevision → ModelImplementation → PhysicalAssetRevision` 四层最小闭环，并以现有 API 采集任务生成的 Landing 资产作为统一物理输入。Sprint 当前 23/34、IN_PROGRESS。
+- 2026-07-25：F6-T01 因指标 owner 回跳与能力等价缺口从 DONE 重开。默认 `dts-metrics` 继续退役，唯一顶级菜单仍为指标工作台；以治理指标 owner 补齐原子/派生编辑、预检、发布、版本和 ModelSpec 精确版本回写。Sprint 当前 22/34、IN_PROGRESS。
 
 ## Sprint-68: DTS 标准内容库与通用基线产品化 (202607)
 
@@ -1450,3 +1451,61 @@
 - mock UI 不能关闭 Sprint；最终必须通过真实 Spring Security、PostgreSQL、dbt target 和 Chrome 95。
 - 25 个 Task 均增加可判定的 UI 完成标准；后端 Task 验证 UI 契约，F5 验证 UI 实现，F6 验证真实 UI，任一层缺证据均不得标记 DONE。
 - 测试采用 Task focused、Feature 组合、Sprint 全量三层节奏；禁止每完成一个小 Task 就重复执行全量测试，F1-F6 全部实现后再统一执行最终门禁。
+
+## Sprint-70: dbt 模型包转换与普通模型导入闭环 (202607)
+
+**目录**: `worklog/v2.2.3/sprint-70-202607-dbt-model-package-import`
+**状态**: IN_PROGRESS
+**类型**: Model Import / Canonical ModelSpec / UI Journey / Safe Migration
+**目标**: 将已有 dbt 项目转换为可预检、可确认、可幂等导入的 DTS 模型包，在当前建设计划下自动创建四类 canonical ModelSpec，并将无法安全降级的 SQL 保留为受治理的 dbt 实现。
+**依赖**: 复用 Sprint-60 manifest/SQL 解析与 artifact 导入、Sprint-67 四层 ModelSpec 主线和 Sprint-69 构建发布工作台；不新建第二套 dbt parser、模型台账或发布控制面。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-模型包契约与转换器 | P0 | 4 | DONE |
+| F2-导入预检与差异分析 | P0 | 4 | DONE |
+| F3-canonical模型应用引擎 | P0 | 4 | IN_PROGRESS |
+| F4-建模工作台导入体验 | P0 | 5 | READY |
+| F5-集成验收与交付 | P0 | 4 | READY |
+
+**统计**: READY=9, IN_PROGRESS=4, DONE=8, BLOCKED=0
+**执行顺序**: F1 → F2 → F3 → F4 → F5；F4 页面壳层可在 F2 契约冻结后并行，F1-F4 全部实现后再统一执行一次后端组合测试、一次前端 production build 和一次 Chrome 95 真实验收。
+
+**关键决策**:
+
+- 使用 `manifest.json + catalog.json + schema.yml/meta.dts` 生成版本化 `dts-model-package.json`；业务粒度、模型类型和消费场景缺失时不得靠命名或 SQL 猜测后直接写入。
+- 转换结果分为 `DESIGNER_GENERATED / DBT_BACKED / BLOCKED`；复杂 SQL 仍创建普通 ModelSpec，但实现所有权保持 DBT_MANAGED。
+- STG/ephemeral 作为技术节点进入依赖和 artifact 图，不创建 ODS/STG 四类 ModelSpec，也不能在导入时丢失。
+- 导入采用 preview/apply 双阶段，preview 零写入；apply 重验 previewHash、来源版本、revision pin、CAS 和幂等键。
+- 建模工作台当前计划卡片提供主要入口，模型中心提供共享入口；两者使用同一四步向导，不新增一级菜单。
+- 旧 SQL/ZIP 导入和 `/vnext/dbt/import` 保持兼容，但不是 canonical 普通模型导入主线。
+
+## Sprint-71: 数据标签体系与资产打标闭环 (202607)
+
+**目录**: `worklog/v2.2.3/sprint-71-202607-data-tag-governance`
+**状态**: READY
+**类型**: Data Governance / Catalog Capability / Frontend-first Implementation
+**目标**: 把当前的自由文本 `tags` 字段升级为「标签目录 + 预置标签库 + 结构化打标 + 按标签检索」的数据标签管理体系。
+**依据**: 闭合协议 2.3.2.4 数据管理模块 P1 缺口「数据标签管理」，证据见 `sprint-36-202606/assets/gap-evidence/M04-数据管理.md` §3（该缺口自 2026-04 识别以来，sprint-32~70 从未触达）。
+**依赖**: 复用 `CatalogAssetType` + `CatalogAssetKey` 资产标识、sprint-34 审计目录、sprint-68 标准内容库安装管道；不新建第二套资产标识或内容分发机制。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-标签领域模型与目录 | P1 | 3 | READY |
+| F2-打标与检索契约 | P1 | 4 | READY |
+| F3-前端标签管理与打标交互 | P1 | 3 | READY |
+| F4-存量标签迁移与兼容 | P2 | 2 | READY |
+
+**统计**: READY=12, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**执行顺序**: F1 → F2 → F3；F4 依赖 F2 完成后执行，可与 F3 并行。全部 task 采用 TDD（RED→GREEN→REFACTOR）。
+
+**关键决策**:
+
+- 不新增菜单：标签目录管理挂载到既有「数据资产 → 元数据管理」页新增 Tab，遵循 Sprint-48/49「以现有页面为第一事实源」治理规则。
+- 打标锚点复用 `CatalogAssetType`（20 类）+ `CatalogAssetKey`，一套关联表覆盖 dataset/dbt_model/metric/data_product 等全部资产类型，不为 dataset 单造关系表。
+- 标签与密级严格分离：预置标签不含任何密级语义，界面上数据标签 chip 必须与 `ClassificationTag` 视觉可区分，避免污染合规判定面。
+- 预置标签走 Sprint-68 标准内容库管道，以 `code` 为幂等键，升级不覆盖客户改名与停用状态。
+- 存量 `CatalogDataset.tags` 字段保留不删、不双写；F4 提供可 dry-run、可按批次回滚的迁移工具，下线仅做评估不执行。
+- 多标签检索语义明确为 AND（交集），后端与前端一致，界面须明示「同时包含」。
+
+**已知风险**: F3 的浏览器 smoke（IT-09~IT-12）依赖登录/DNS 验证基线，该基线在 Sprint-61~64 长期阻断导致多个 sprint 停留「实现完成、交付未完成」。实施启动时须先确认基线可用，否则应即时标注 BLOCKED。

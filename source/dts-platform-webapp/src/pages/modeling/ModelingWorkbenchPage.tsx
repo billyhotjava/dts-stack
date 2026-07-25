@@ -1,6 +1,6 @@
 import { Alert, Button, Card, Collapse, Empty, Form, Input, Modal, Radio, Select, Skeleton, Space, Tag, Typography } from "antd";
 import { isAxiosError } from "axios";
-import { ArrowRight, CheckCircle2, Circle, Database, Layers3, Plus, RefreshCw, ShieldAlert, Trash2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, Circle, Database, Layers3, PackageOpen, Plus, RefreshCw, ShieldAlert, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -18,6 +18,8 @@ import {
 import { useSearchParams } from "@/routes/hooks";
 import { useUserInfo, useUserRoles } from "@/store/userStore";
 import { WarehousePlanHeaderEditor } from "./components/WarehousePlanHeaderEditor";
+import { ImportModelPackageWizard } from "./model-package-import/ImportModelPackageWizard";
+import { buildModelPackageImportQuery } from "./model-package-import/modelPackageImportNavigation";
 import {
 	WAREHOUSE_STAGE_ORDER,
 	buildWarehousePlanRoute,
@@ -71,6 +73,8 @@ export default function ModelingWorkbenchPage() {
 	const userInfo = useUserInfo() as Record<string, unknown>;
 	const requestedPlanId = searchParams.get("planId")?.trim() || "";
 	const requestedCreate = searchParams.get("create") === "1";
+	const importOpen = searchParams.get("modelImport") === "open";
+	const importRunId = searchParams.get("importRunId")?.trim() || "";
 	const [plans, setPlans] = useState<WarehousePlanHeader[]>([]);
 	const [selectedPlanId, setSelectedPlanId] = useState("");
 	const [projection, setProjection] = useState<WarehousePlanStageProjection | null>(null);
@@ -101,6 +105,23 @@ export default function ModelingWorkbenchPage() {
 	const selectedPlan = useMemo(
 		() => plans.find((plan) => plan.id === selectedPlanId) ?? null,
 		[plans, selectedPlanId],
+	);
+	const canImportModels = Boolean(
+		selectedPlan && canEditWarehousePlanHeader(canCreatePlan, selectedPlan.lifecycleStatus),
+	);
+
+	const setImportRoute = useCallback(
+		(open: boolean, runId = importRunId) => {
+			navigate(
+				buildModelPackageImportQuery("/modeling/workbench", searchParams, {
+					open,
+					planId: selectedPlanId || undefined,
+					runId: runId || undefined,
+				}),
+				{ replace: !open },
+			);
+		},
+		[importRunId, navigate, searchParams, selectedPlanId],
 	);
 
 	const selectPlan = useCallback(
@@ -477,16 +498,27 @@ export default function ModelingWorkbenchPage() {
 												</div>
 											) : null}
 										</div>
-										{projection.nextAction ? (
+										<Space wrap>
 											<Button
-												type="primary"
 												size="large"
-												data-testid="warehouse-plan-next-action"
-												onClick={() => navigate(withWarehousePlanContext(projection.nextAction!.path, selectedPlan.id))}
+												icon={<PackageOpen size={16} />}
+												disabled={!canImportModels}
+												title={canImportModels ? "将 dbt 模型包导入当前建设计划" : "发布中、已发布、已归档或只读计划不能导入"}
+												onClick={() => setImportRoute(true)}
 											>
-												{projection.currentStage ? warehouseStageActionLabel(projection.currentStage) : projection.nextAction.label}<ArrowRight size={16} />
+												导入已有模型
 											</Button>
-										) : null}
+											{projection.nextAction ? (
+												<Button
+													type="primary"
+													size="large"
+													data-testid="warehouse-plan-next-action"
+													onClick={() => navigate(withWarehousePlanContext(projection.nextAction!.path, selectedPlan.id))}
+												>
+													{projection.currentStage ? warehouseStageActionLabel(projection.currentStage) : projection.nextAction.label}<ArrowRight size={16} />
+												</Button>
+											) : null}
+										</Space>
 									</div>
 								) : null}
 							</div>
@@ -642,6 +674,18 @@ export default function ModelingWorkbenchPage() {
 				onClose={() => setEditorOpen(false)}
 				onPlanChange={(updated) => setPlans((current) => replaceWarehousePlanHeader(current, updated))}
 				onUnavailable={() => navigate("/modeling/plans")}
+			/>
+			<ImportModelPackageWizard
+				open={importOpen}
+				lockedPlanId={selectedPlanId || undefined}
+				initialRunId={importRunId || undefined}
+				plans={plans}
+				canEdit={canImportModels}
+				returnSurface="workbench"
+				onClose={(runId) => setImportRoute(false, runId)}
+				onRunIdChange={(runId) => setImportRoute(true, runId)}
+				onApplied={() => void loadProjection()}
+				onNavigate={navigate}
 			/>
 		</div>
 	);

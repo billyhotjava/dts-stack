@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260725_04_model_spec_import_apply" author="codex">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_model_spec_import_run"/>
+            <tableExists tableName="modeling_dbt_artifact"/>
+            <indexExists
+                tableName="modeling_dbt_artifact"
+                indexName="uk_modeling_dbt_artifact_dbt_slot"/>
+            <sqlCheck expectedResult="0">
+                SELECT count(*)
+                  FROM (
+                      SELECT model_spec_id, revision, implementation_revision,
+                             project_key, dbt_unique_id, node_kind, artifact_type
+                        FROM modeling_dbt_artifact
+                       WHERE ownership = 'DBT_MANAGED'
+                       GROUP BY model_spec_id, revision, implementation_revision,
+                                project_key, dbt_unique_id, node_kind, artifact_type
+                      HAVING count(*) &gt; 1
+                  ) duplicate_dbt_slots
+            </sqlCheck>
+        </preConditions>
+
+        <createTable tableName="modeling_model_spec_import_apply_attempt">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="run_id" type="${uuidType}">
+                <constraints
+                    nullable="false"
+                    foreignKeyName="fk_model_spec_import_apply_attempt_run"
+                    referencedTableName="modeling_model_spec_import_run"
+                    referencedColumnNames="id"/>
+            </column>
+            <column name="tenant_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="plan_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="attempt_no" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="retry_source_attempt_id" type="${uuidType}"/>
+            <column name="preview_hash" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="selected_unique_ids" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="selected_closure_json" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="idempotency_key" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="request_hash" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="summary_json" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="completed_at" type="timestamp"/>
+            <column name="created_by" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_modified_by" type="varchar(128)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <addUniqueConstraint
+            tableName="modeling_model_spec_import_apply_attempt"
+            columnNames="tenant_id,run_id,id"
+            constraintName="uk_model_spec_import_apply_attempt_scope"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_spec_import_apply_attempt"
+            baseColumnNames="tenant_id,run_id,retry_source_attempt_id"
+            referencedTableName="modeling_model_spec_import_apply_attempt"
+            referencedColumnNames="tenant_id,run_id,id"
+            constraintName="fk_model_spec_import_apply_attempt_retry"/>
+        <addUniqueConstraint
+            tableName="modeling_model_spec_import_apply_attempt"
+            columnNames="tenant_id,idempotency_key"
+            constraintName="uk_model_spec_import_apply_idempotency"/>
+        <addUniqueConstraint
+            tableName="modeling_model_spec_import_apply_attempt"
+            columnNames="run_id,attempt_no"
+            constraintName="uk_model_spec_import_apply_run_attempt"/>
+        <createIndex
+            tableName="modeling_model_spec_import_apply_attempt"
+            indexName="idx_model_spec_import_apply_latest">
+            <column name="tenant_id"/>
+            <column name="run_id"/>
+            <column name="attempt_no" descending="true"/>
+        </createIndex>
+        <sql>
+            CREATE UNIQUE INDEX uk_model_spec_import_apply_running
+                ON modeling_model_spec_import_apply_attempt (tenant_id, run_id)
+             WHERE status = 'RUNNING';
+        </sql>
+        <sql>
+            ALTER TABLE modeling_model_spec_import_apply_attempt
+                ADD CONSTRAINT ck_model_spec_import_apply_attempt_status
+                CHECK (status IN ('RUNNING', 'SUCCEEDED', 'PARTIAL', 'FAILED')),
+                ADD CONSTRAINT ck_model_spec_import_apply_selection_json
+                CHECK (
+                    jsonb_typeof(selected_unique_ids) = 'array'
+                    AND jsonb_typeof(selected_closure_json) = 'array'
+                    AND jsonb_array_length(selected_closure_json) &gt; 0
+                ),
+                ADD CONSTRAINT ck_model_spec_import_apply_retry_not_self
+                CHECK (retry_source_attempt_id IS NULL OR retry_source_attempt_id &lt;&gt; id);
+        </sql>
+
+        <createTable tableName="modeling_model_spec_import_apply_result">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="attempt_id" type="${uuidType}">
+                <constraints
+                    nullable="false"
+                    foreignKeyName="fk_model_spec_import_apply_result_attempt"
+                    referencedTableName="modeling_model_spec_import_apply_attempt"
+                    referencedColumnNames="id"/>
+            </column>
+            <column name="run_id" type="${uuidType}">
+                <constraints
+                    nullable="false"
+                    foreignKeyName="fk_model_spec_import_apply_result_run"
+                    referencedTableName="modeling_model_spec_import_run"
+                    referencedColumnNames="id"/>
+            </column>
+            <column name="seq" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dbt_unique_id" type="varchar(512)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="candidate_idempotency_key" type="varchar(512)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="candidate_request_hash" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="model_spec_id" type="${uuidType}"/>
+            <column name="model_revision" type="int"/>
+            <column name="model_checksum" type="varchar(128)"/>
+            <column name="implementation_revision" type="int"/>
+            <column name="implementation_checksum" type="varchar(128)"/>
+            <column name="artifact_count" type="int" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="issues_json" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <addUniqueConstraint
+            tableName="modeling_model_spec_import_apply_result"
+            columnNames="attempt_id,dbt_unique_id"
+            constraintName="uk_model_spec_import_apply_result_candidate"/>
+        <addUniqueConstraint
+            tableName="modeling_model_spec_import_apply_result"
+            columnNames="attempt_id,candidate_idempotency_key"
+            constraintName="uk_model_spec_import_apply_result_key"/>
+        <createIndex
+            tableName="modeling_model_spec_import_apply_result"
+            indexName="idx_model_spec_import_apply_result_retry">
+            <column name="attempt_id"/>
+            <column name="status"/>
+            <column name="seq"/>
+        </createIndex>
+        <sql>
+            ALTER TABLE modeling_model_spec_import_apply_result
+                ADD CONSTRAINT ck_model_spec_import_apply_result_status
+                CHECK (status IN ('CREATED', 'UPDATED', 'SKIPPED', 'REPLAYED', 'FAILED', 'BLOCKED')),
+                ADD CONSTRAINT ck_model_spec_import_apply_result_seq
+                CHECK (seq &gt;= 0),
+                ADD CONSTRAINT ck_model_spec_import_apply_result_artifact_count
+                CHECK (artifact_count &gt;= 0),
+                ADD CONSTRAINT ck_model_spec_import_apply_result_issues
+                CHECK (jsonb_typeof(issues_json) = 'array');
+        </sql>
+
+        <dropIndex
+            tableName="modeling_dbt_artifact"
+            indexName="uk_modeling_dbt_artifact_dbt_slot"/>
+        <sql>
+            CREATE UNIQUE INDEX uk_modeling_dbt_artifact_dbt_slot
+                ON modeling_dbt_artifact (
+                    model_spec_id,
+                    revision,
+                    implementation_revision,
+                    project_key,
+                    dbt_unique_id,
+                    node_kind,
+                    artifact_type
+                )
+             WHERE ownership = 'DBT_MANAGED';
+        </sql>
+
+        <rollback>
+            <sql splitStatements="false">
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_SPEC_IMPORT_APPLY_FORWARD_ONLY: Recovery requires a new forward changeset';
+                END $$;
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

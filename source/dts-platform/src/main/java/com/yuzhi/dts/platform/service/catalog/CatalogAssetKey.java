@@ -76,6 +76,12 @@ public final class CatalogAssetKey {
         return "metric:" + segment(firstText(packId, "local")) + "/" + segment(required(metricCode, "metric code"));
     }
 
+    public static String metric(String tenantNamespace, String packId, String metricCode) {
+        return scopePrefix(tenantNamespace, null, null)
+            + "/metric-pack:" + segment(required(packId, "pack id"))
+            + "/metric:" + segment(required(metricCode, "metric code"));
+    }
+
     public static String metricPack(String tenantNamespace, String packId, String version) {
         return scopePrefix(tenantNamespace, null, null)
             + "/metric-pack:" + segment(required(packId, "pack id"))

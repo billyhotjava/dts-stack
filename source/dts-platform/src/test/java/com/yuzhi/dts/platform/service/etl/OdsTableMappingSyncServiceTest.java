@@ -171,8 +171,10 @@ class OdsTableMappingSyncServiceTest {
         verify(datasetRepository, never()).findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(any(), any());
         verify(columnSyncService).upsertColumns(
             any(),
-            org.mockito.ArgumentMatchers.argThat(columns -> columns.stream().map(CatalogColumnSyncService.ColumnSpec::name).toList()
-                .containsExactlyInAnyOrder("order_id", "__raw_record", "_dts_ingested_at", "_dts_cursor")),
+            org.mockito.ArgumentMatchers.argThat(columns -> {
+                List<String> names = columns.stream().map(CatalogColumnSyncService.ColumnSpec::name).toList();
+                return names.size() == 4 && names.containsAll(List.of("order_id", "__raw_record", "_dts_ingested_at", "_dts_cursor"));
+            }),
             org.mockito.ArgumentMatchers.eq(CatalogColumnSyncService.STATUS_ACTIVE)
         );
     }

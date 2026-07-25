@@ -2,11 +2,7 @@ package com.yuzhi.dts.platform.repository.modeling;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectWriter;
-import com.fasterxml.jackson.databind.MapperFeature;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ArtifactView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ArtifactWrite;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.EventType;
@@ -21,11 +17,10 @@ import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.Registrati
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.RegistrationStepView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.SaveImplementationCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.UpstreamModelInput;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationChecksumCodec;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
@@ -48,18 +43,12 @@ public class ModelLifecycleRepository {
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
-    private final ObjectWriter canonicalWriter;
+    private final ModelImplementationChecksumCodec implementationChecksumCodec;
 
     public ModelLifecycleRepository(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
-        this.canonicalWriter = objectMapper
-            .copy()
-            .setSerializationInclusion(JsonInclude.Include.ALWAYS)
-            .enable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
-            .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
-            .disable(SerializationFeature.INDENT_OUTPUT)
-            .writer();
+        this.implementationChecksumCodec = new ModelImplementationChecksumCodec(objectMapper);
     }
 
     public Optional<ImplementationView> findImplementation(String tenantId, UUID modelSpecId) {
@@ -283,6 +272,119 @@ public class ModelLifecycleRepository {
     }
 
     /**
+     * F3 import-only implementation writer.
+     *
+     * <p>The canonical ModelSpec row and, when present, the implementation head are locked at the
+     * exact caller-provided pins before the existing append-only persistence primitive is invoked.
+     * The ordinary implementation writer remains unchanged and is not an alternate DBT import
+     * path.
+     */
+    @Transactional
+    public Optional<ImplementationView> saveImportedDbtImplementation(
+        String tenantId,
+        String actorId,
+        ModelSpecView model,
+        ModelStatus expectedModelStatus,
+        String projectKey,
+        String dbtUniqueId,
+        SaveImplementationCommand command,
+        int expectedImplementationRevision,
+        String expectedImplementationChecksum,
+        Instant now
+    ) {
+        requireImportedDbtCommand(model, expectedModelStatus, projectKey, dbtUniqueId, command);
+        if (
+            expectedImplementationRevision < 0 ||
+            (expectedImplementationRevision == 0 && expectedImplementationChecksum != null) ||
+            (
+                expectedImplementationRevision > 0 &&
+                (expectedImplementationChecksum == null || !expectedImplementationChecksum.matches("^[0-9a-f]{64}$"))
+            )
+        ) {
+            throw new IllegalArgumentException("Invalid imported DBT implementation precondition");
+        }
+
+        boolean modelPinned = !jdbcTemplate
+            .queryForList(
+                """
+                select id
+                  from modeling_model_spec
+                 where tenant_id = ? and id = ? and plan_id = ?
+                   and revision = ? and current_checksum = ? and status = ?
+                 for share
+                """,
+                UUID.class,
+                tenantId,
+                model.id(),
+                model.planId(),
+                model.revision(),
+                model.checksum(),
+                expectedModelStatus.name()
+            )
+            .isEmpty();
+        if (!modelPinned) return Optional.empty();
+
+        List<UUID> currentHeads = jdbcTemplate.queryForList(
+            """
+            select id
+              from modeling_model_implementation
+             where tenant_id = ? and model_spec_id = ?
+            """ +
+            (
+                expectedImplementationRevision == 0
+                    ? ""
+                    : """
+                       and status = 'ACTIVE' and ownership = 'DBT_MANAGED'
+                       and project_key = ? and dbt_unique_id = ?
+                       and model_revision = ? and model_checksum = ?
+                       and implementation_revision = ? and current_implementation_checksum = ?
+                      """
+            ) +
+            " for update",
+            UUID.class,
+            expectedImplementationRevision == 0
+                ? new Object[] { tenantId, model.id() }
+                : new Object[] {
+                    tenantId,
+                    model.id(),
+                    projectKey.trim(),
+                    dbtUniqueId.trim(),
+                    model.revision(),
+                    model.checksum(),
+                    expectedImplementationRevision,
+                    expectedImplementationChecksum,
+                }
+        );
+        if (
+            (expectedImplementationRevision == 0 && !currentHeads.isEmpty()) ||
+            (expectedImplementationRevision > 0 && currentHeads.size() != 1)
+        ) {
+            return Optional.empty();
+        }
+
+        int saved = saveImplementation(
+            tenantId,
+            actorId,
+            model,
+            projectKey.trim(),
+            dbtUniqueId.trim(),
+            command,
+            expectedImplementationRevision,
+            expectedImplementationChecksum,
+            now
+        );
+        if (saved == 0) return Optional.empty();
+        return findImplementation(tenantId, model.id()).filter(current ->
+            current.revision() == model.revision() &&
+            java.util.Objects.equals(current.modelChecksum(), model.checksum()) &&
+            current.ownership() == ImplementationMode.DBT_MANAGED &&
+            "ACTIVE".equals(current.status()) &&
+            java.util.Objects.equals(current.projectKey(), projectKey.trim()) &&
+            java.util.Objects.equals(current.dbtUniqueId(), dbtUniqueId.trim())
+        );
+    }
+
+    /**
      * Explicitly replaces a DBT-managed implementation head with a designer-owned revision.
      * Ordinary saves intentionally keep their ownership equality check and cannot use this path.
      */
@@ -424,7 +526,10 @@ public class ModelLifecycleRepository {
     ) {
         String conflictClause = dbtWritePath
             ? """
-                on conflict (model_spec_id, revision, implementation_revision, node_kind, artifact_type)
+                on conflict (
+                    model_spec_id, revision, implementation_revision,
+                    project_key, dbt_unique_id, node_kind, artifact_type
+                )
                     where ownership = 'DBT_MANAGED'
                 do update
                    set path = excluded.path,
@@ -1032,28 +1137,37 @@ public class ModelLifecycleRepository {
     }
 
     private String implementationChecksum(SaveImplementationCommand command) {
-        try {
-            return sha256(canonicalWriter.writeValueAsString(Map.of(
-                "inputMode", command.inputMode(),
-                "inputs", command.inputs(),
-                "fieldMappings", command.fieldMappings(),
-                "settings", command.settings(),
-                "ownership", command.ownership(),
-                "materialization", command.materialization()
-            )));
-        } catch (JsonProcessingException exception) {
-            throw new IllegalArgumentException("Implementation checksum payload cannot be serialized", exception);
-        }
+        return implementationChecksumCodec.contentChecksum(command);
     }
 
-    private static String sha256(String value) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
-            StringBuilder result = new StringBuilder(digest.length * 2);
-            for (byte item : digest) result.append(String.format("%02x", item));
-            return result.toString();
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
+    private static void requireImportedDbtCommand(
+        ModelSpecView model,
+        ModelStatus expectedModelStatus,
+        String projectKey,
+        String dbtUniqueId,
+        SaveImplementationCommand command
+    ) {
+        if (
+            model == null ||
+            expectedModelStatus == null ||
+            model.status() != expectedModelStatus ||
+            model.implementationMode() != ImplementationMode.DBT_MANAGED ||
+            projectKey == null ||
+            projectKey.isBlank() ||
+            dbtUniqueId == null ||
+            dbtUniqueId.isBlank() ||
+            command == null ||
+            command.ownership() != ImplementationMode.DBT_MANAGED ||
+            command.inputMode() != InputMode.GENERATED ||
+            command.inputs().size() != 1 ||
+            !(command.inputs().get(0) instanceof GeneratedInput input) ||
+            !"DBT".equals(input.generatorType()) ||
+            !command.fieldMappings().isEmpty() ||
+            !command.settings().isEmpty() ||
+            !java.util.Objects.equals(input.config().get("projectKey"), projectKey.trim()) ||
+            !java.util.Objects.equals(input.config().get("dbtUniqueId"), dbtUniqueId.trim())
+        ) {
+            throw new IllegalArgumentException("Imported DBT implementation payload is invalid");
         }
     }
 }

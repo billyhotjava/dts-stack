@@ -1,5 +1,5 @@
 {
-  "version": "2026-04-30",
+  "version": "2026-07-25",
   "description": "System-wide audit action catalog mapped to portal and admin menus. Each action describes human-readable display text, aggregation phases, and flow aggregation hints.",
   "sections": [
     {
@@ -77,6 +77,129 @@
               "display": "维护行级安全字段映射",
               "phases": [
                 "SUCCESS"
+              ],
+              "supportsFlow": false
+            }
+          ]
+        },
+        {
+          "key": "catalog.tags",
+          "title": "数据标签",
+          "actions": [
+            {
+              "code": "CATALOG_TAG_CATEGORY_CREATE",
+              "display": "创建标签分类",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_TAG_CATEGORY_UPDATE",
+              "display": "修改标签分类",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_TAG_CATEGORY_DELETE",
+              "display": "删除标签分类",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_TAG_CREATE",
+              "display": "创建数据标签",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_TAG_UPDATE",
+              "display": "修改数据标签",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_TAG_DELETE",
+              "display": "删除数据标签",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_ASSET_TAG_CREATE",
+              "display": "为资产添加标签",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_ASSET_TAG_DELETE",
+              "display": "移除资产标签",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_ASSET_TAG_BATCH_CREATE",
+              "display": "批量为资产添加标签",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_TAG_BUILTIN_INSTALL",
+              "display": "安装内置标签包",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_TAG_MIGRATION_DRY_RUN",
+              "display": "预检存量标签迁移",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_TAG_MIGRATION_EXECUTE",
+              "display": "执行存量标签迁移",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_TAG_MIGRATION_ROLLBACK",
+              "display": "回滚存量标签迁移",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
               ],
               "supportsFlow": false
             }

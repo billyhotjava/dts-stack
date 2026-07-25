@@ -613,21 +613,37 @@ public class ModelingVNextApplicationService {
                     idempotency_key, implementation_revision, node_kind, materialization,
                     created_date, last_modified_date
                 ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'COMPILED', ?, ?, 'DBT_MANAGED', ?, ?, 'MODEL', ?, ?, ?)
-                on conflict (model_spec_id, revision, implementation_revision, node_kind, artifact_type)
+                on conflict (
+                    model_spec_id, revision, implementation_revision,
+                    project_key, dbt_unique_id, node_kind, artifact_type
+                )
                     where ownership = 'DBT_MANAGED'
                 do update
-                   set idempotency_key = excluded.idempotency_key,
+                   set artifact_key = excluded.artifact_key,
+                       path = excluded.path,
+                       content_checksum = excluded.content_checksum,
+                       content = excluded.content,
+                       status = excluded.status,
+                       idempotency_key = excluded.idempotency_key,
+                       materialization = excluded.materialization,
                        last_modified_date = excluded.last_modified_date
                  where modeling_dbt_artifact.model_checksum = excluded.model_checksum
                    and modeling_dbt_artifact.ownership = 'DBT_MANAGED'
                    and modeling_dbt_artifact.implementation_revision = excluded.implementation_revision
                    and modeling_dbt_artifact.project_key = excluded.project_key
                    and modeling_dbt_artifact.dbt_unique_id = excluded.dbt_unique_id
-                   and modeling_dbt_artifact.path = excluded.path
-                   and modeling_dbt_artifact.content_checksum = excluded.content_checksum
-                   and modeling_dbt_artifact.content = excluded.content
                    and modeling_dbt_artifact.node_kind = excluded.node_kind
-                   and modeling_dbt_artifact.materialization = excluded.materialization
+                   and (
+                       modeling_dbt_artifact.status = 'IMPORTED'
+                       or (
+                           modeling_dbt_artifact.status = 'COMPILED'
+                           and modeling_dbt_artifact.artifact_key = excluded.artifact_key
+                           and modeling_dbt_artifact.path = excluded.path
+                           and modeling_dbt_artifact.content_checksum = excluded.content_checksum
+                           and modeling_dbt_artifact.content = excluded.content
+                           and modeling_dbt_artifact.materialization = excluded.materialization
+                       )
+                   )
                 """,
                 UUID.randomUUID(),
                 identity.id(),

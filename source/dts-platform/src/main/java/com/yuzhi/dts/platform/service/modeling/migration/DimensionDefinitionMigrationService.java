@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -46,6 +47,7 @@ public class DimensionDefinitionMigrationService {
     private final ModelSpecDomainReadAccessPort domainReadAccess;
     private final String defaultTenantId;
 
+    @Autowired
     public DimensionDefinitionMigrationService(
         JdbcTemplate jdbc,
         ObjectMapper objectMapper,

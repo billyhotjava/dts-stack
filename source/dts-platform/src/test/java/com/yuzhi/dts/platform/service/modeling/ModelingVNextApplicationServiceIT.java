@@ -156,6 +156,47 @@ class ModelingVNextApplicationServiceIT {
             node.put("columns", Map.of("project_no", Map.of("name", "project_no")));
             node.put("depends_on", Map.of("nodes", List.of("source.project.ods_project_node")));
             Map<String, Object> manifest = Map.of("nodes", Map.of("model.legacy.project_node", node));
+            UUID artifactPlanId = jdbcTemplate.queryForObject(
+                "select plan_id from modeling_model_spec where id = ?",
+                (row, rowNumber) -> row.getObject(1, UUID.class),
+                UUID.fromString(savedModel.id())
+            );
+            jdbcTemplate.update(
+                """
+                insert into modeling_dbt_artifact (
+                    id, model_spec_id, plan_id, project_key, dbt_unique_id, artifact_key,
+                    artifact_type, path, content_checksum, content, status, revision,
+                    model_checksum, ownership, idempotency_key, implementation_revision,
+                    node_kind, materialization, created_date, last_modified_date
+                ) values
+                    (?, ?, ?, 'legacy-pjm', 'model.legacy.project_node',
+                     'SQL:model.legacy.project_node', 'SQL', 'models/imported-project-node.sql',
+                     ?, 'select imported_project_no from ods_project_node', 'IMPORTED', ?, ?,
+                     'DBT_MANAGED', ?, 1, 'MODEL', 'table', now(), now()),
+                    (?, ?, ?, 'legacy-pjm', 'model.legacy.project_node',
+                     'SCHEMA:model.legacy.project_node', 'SCHEMA', 'models/imported-project-node.sql#schema',
+                     ?, '{"columns":[]}', 'IMPORTED', ?, ?,
+                     'DBT_MANAGED', ?, 1, 'MODEL', 'table', now(), now())
+                """,
+                UUID.randomUUID(),
+                UUID.fromString(savedModel.id()),
+                artifactPlanId,
+                com.yuzhi.dts.platform.service.modeling.imports.checksum.ModelPackageChecksum.sha256Text(
+                    "select imported_project_no from ods_project_node"
+                ),
+                savedModel.revision(),
+                modelChecksum,
+                "imported-sql-" + modelKey,
+                UUID.randomUUID(),
+                UUID.fromString(savedModel.id()),
+                artifactPlanId,
+                com.yuzhi.dts.platform.service.modeling.imports.checksum.ModelPackageChecksum.sha256Text(
+                    "{\"columns\":[]}"
+                ),
+                savedModel.revision(),
+                modelChecksum,
+                "imported-schema-" + modelKey
+            );
             DbtModelingContract.ImportResult imported = service.importDbt(
                 tenant,
                 new DbtModelingContract.ManifestImportRequest(
@@ -177,6 +218,22 @@ class ModelingVNextApplicationServiceIT {
             assertThat(service.artifacts(tenant, savedModel.id()))
                 .extracting(ModelingVNextApplicationService.Artifact::artifactType)
                 .containsExactlyInAnyOrder("SQL", "SCHEMA");
+            assertThat(
+                jdbcTemplate.queryForObject(
+                    """
+                    select count(*)
+                      from modeling_dbt_artifact
+                     where model_spec_id = ? and revision = ? and implementation_revision = 1
+                       and project_key = 'legacy-pjm'
+                       and dbt_unique_id = 'model.legacy.project_node'
+                       and node_kind = 'MODEL' and status = 'COMPILED'
+                    """,
+                    Integer.class,
+                    UUID.fromString(savedModel.id()),
+                    savedModel.revision()
+                )
+            )
+                .isEqualTo(2);
             node.put("raw_code", "select changed_project_no from ods_project_node");
             assertThatThrownBy(() ->
                 service.importDbt(
@@ -204,7 +261,7 @@ class ModelingVNextApplicationServiceIT {
             assertThat(releaseGate.publishable()).isFalse();
             assertThat(releaseGate.blockers()).contains("DBT_TEST_FAILED");
             ModelingVNextApplicationService.LineageView lineage = service.lineage(tenant, savedModel.id());
-            assertThat(lineage.nodes()).extracting(node -> node.get("id")).contains(savedModel.id(), "ods_project_node");
+            assertThat(lineage.nodes()).extracting(lineageNode -> lineageNode.get("id")).contains(savedModel.id(), "ods_project_node");
             assertThat(lineage.edges()).anyMatch(edge -> savedModel.id().equals(edge.get("to")) && "SOURCE".equals(edge.get("type")));
 
             jdbcTemplate.update(

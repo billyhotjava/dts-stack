@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260725_03_model_spec_import_apply_plan_checksum" author="codex">
+        <addColumn tableName="modeling_model_spec_import_run">
+            <column name="apply_plan_checksum" type="varchar(128)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+        <update tableName="modeling_model_spec_import_run">
+            <column name="apply_plan_checksum" value="LEGACY_UNVERIFIED"/>
+            <where>apply_plan_checksum IS NULL</where>
+        </update>
+        <addNotNullConstraint
+            tableName="modeling_model_spec_import_run"
+            columnName="apply_plan_checksum"
+            columnDataType="varchar(128)"/>
+
+        <rollback>
+            <sql splitStatements="false">
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_SPEC_IMPORT_APPLY_PLAN_CHECKSUM_FORWARD_ONLY: Recovery requires a new forward changeset';
+                END $$;
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

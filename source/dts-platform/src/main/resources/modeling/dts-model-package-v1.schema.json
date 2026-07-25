@@ -1,0 +1,257 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dts.local/schemas/modeling/dts-model-package-v1.schema.json",
+  "title": "DTS Model Package v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "packageId",
+    "packageChecksum",
+    "dbt",
+    "defaults",
+    "sources",
+    "technicalNodes",
+    "models",
+    "issues"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "dts.model-package/v1" },
+    "packageId": { "type": "string", "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$" },
+    "packageChecksum": { "$ref": "#/$defs/sha256" },
+    "dbt": { "$ref": "#/$defs/dbtMetadata" },
+    "defaults": { "$ref": "#/$defs/defaults" },
+    "sources": { "type": "array", "items": { "$ref": "#/$defs/source" } },
+    "technicalNodes": { "type": "array", "items": { "$ref": "#/$defs/technicalNode" } },
+    "models": { "type": "array", "items": { "$ref": "#/$defs/model" } },
+    "issues": { "type": "array", "items": { "$ref": "#/$defs/issue" } }
+  },
+  "$defs": {
+    "nullableString": { "type": ["string", "null"] },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "nullableSha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+    "stringArray": { "type": "array", "items": { "type": "string" } },
+    "dbtMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["projectName", "projectVersion", "manifestVersion", "adapterType"],
+      "properties": {
+        "projectName": { "type": "string", "minLength": 1 },
+        "projectVersion": { "$ref": "#/$defs/nullableString" },
+        "manifestVersion": { "type": "string", "minLength": 1 },
+        "adapterType": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["planRef", "domainRef"],
+      "properties": {
+        "planRef": { "$ref": "#/$defs/nullableString" },
+        "domainRef": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "column": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "description", "dataType", "role", "tests"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "$ref": "#/$defs/nullableString" },
+        "dataType": { "$ref": "#/$defs/nullableString" },
+        "role": { "$ref": "#/$defs/nullableString" },
+        "tests": { "$ref": "#/$defs/stringArray" }
+      }
+    },
+    "sql": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": [
+        "rawSql",
+        "rawSqlChecksum",
+        "compiledSql",
+        "compiledSqlChecksum",
+        "effectiveSql",
+        "effectiveSqlChecksum",
+        "effectiveSource"
+      ],
+      "properties": {
+        "rawSql": { "$ref": "#/$defs/nullableString" },
+        "rawSqlChecksum": { "$ref": "#/$defs/nullableSha256" },
+        "compiledSql": { "$ref": "#/$defs/nullableString" },
+        "compiledSqlChecksum": { "$ref": "#/$defs/nullableSha256" },
+        "effectiveSql": { "$ref": "#/$defs/nullableString" },
+        "effectiveSqlChecksum": { "$ref": "#/$defs/nullableSha256" },
+        "effectiveSource": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "conversion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "reasonCodes"],
+      "properties": {
+        "mode": {
+          "enum": ["DESIGNER_GENERATED", "DBT_BACKED", "BLOCKED", "TECHNICAL_ONLY"]
+        },
+        "reasonCodes": { "$ref": "#/$defs/stringArray" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dbtUniqueId", "name", "resourcePath", "columns"],
+      "properties": {
+        "dbtUniqueId": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "resourcePath": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+$" },
+        "columns": { "type": "array", "items": { "$ref": "#/$defs/column" } }
+      }
+    },
+    "technicalNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dbtUniqueId", "name", "resourceType", "resourcePath", "sql", "config", "dependencies", "tags", "conversion"],
+      "properties": {
+        "dbtUniqueId": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "resourceType": { "type": "string", "minLength": 1 },
+        "resourcePath": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+$" },
+        "sql": { "$ref": "#/$defs/sql" },
+        "config": { "type": "object" },
+        "dependencies": { "$ref": "#/$defs/stringArray" },
+        "tags": { "$ref": "#/$defs/stringArray" },
+        "conversion": { "$ref": "#/$defs/conversion" }
+      }
+    },
+    "grain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["statement", "keys"],
+      "properties": {
+        "statement": { "type": "string", "minLength": 1 },
+        "keys": { "$ref": "#/$defs/stringArray" }
+      }
+    },
+    "timeSemantics": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["type", "fields"],
+      "properties": {
+        "type": { "type": "string", "minLength": 1 },
+        "fields": { "$ref": "#/$defs/stringArray" }
+      }
+    },
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "ref", "layer"],
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "ref": { "type": "string", "minLength": 1 },
+        "layer": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "semantics": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": [
+        "modelType",
+        "layer",
+        "grain",
+        "factShape",
+        "timeSemantics",
+        "domainCode",
+        "sourceRefs",
+        "consumptionScenarios",
+        "fieldRoles",
+        "dimensionStrategy",
+        "dimensionDefinitionCode",
+        "overrideSource",
+        "technicalOnly"
+      ],
+      "properties": {
+        "modelType": { "$ref": "#/$defs/nullableString" },
+        "layer": { "$ref": "#/$defs/nullableString" },
+        "grain": { "oneOf": [{ "$ref": "#/$defs/grain" }, { "type": "null" }] },
+        "factShape": { "$ref": "#/$defs/nullableString" },
+        "timeSemantics": { "$ref": "#/$defs/timeSemantics" },
+        "domainCode": { "$ref": "#/$defs/nullableString" },
+        "sourceRefs": { "type": "array", "items": { "$ref": "#/$defs/sourceRef" } },
+        "consumptionScenarios": { "$ref": "#/$defs/stringArray" },
+        "fieldRoles": { "type": "object", "additionalProperties": { "type": "string" } },
+        "dimensionStrategy": { "$ref": "#/$defs/nullableString" },
+        "dimensionDefinitionCode": {
+          "oneOf": [
+            { "type": "string", "pattern": "^dim_[0-9a-f]{32}$" },
+            { "type": "null" }
+          ]
+        },
+        "overrideSource": { "$ref": "#/$defs/nullableString" },
+        "technicalOnly": { "type": "boolean" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "modelType": { "const": "DIMENSION" },
+              "technicalOnly": { "const": false }
+            },
+            "required": ["modelType", "technicalOnly"]
+          },
+          "then": {
+            "properties": {
+              "dimensionDefinitionCode": { "type": "string", "pattern": "^dim_[0-9a-f]{32}$" }
+            }
+          }
+        }
+      ]
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dbtUniqueId",
+        "name",
+        "description",
+        "resourcePath",
+        "sql",
+        "materialization",
+        "config",
+        "tags",
+        "columns",
+        "tests",
+        "dependencies",
+        "semantics",
+        "conversion"
+      ],
+      "properties": {
+        "dbtUniqueId": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "$ref": "#/$defs/nullableString" },
+        "resourcePath": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+$" },
+        "sql": { "$ref": "#/$defs/sql" },
+        "materialization": { "$ref": "#/$defs/nullableString" },
+        "config": { "type": "object" },
+        "tags": { "$ref": "#/$defs/stringArray" },
+        "columns": { "type": "array", "items": { "$ref": "#/$defs/column" } },
+        "tests": { "$ref": "#/$defs/stringArray" },
+        "dependencies": { "$ref": "#/$defs/stringArray" },
+        "semantics": { "$ref": "#/$defs/semantics" },
+        "conversion": { "$ref": "#/$defs/conversion" }
+      }
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "severity", "fieldPath", "modelUniqueId", "message", "recoveryAction"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "severity": { "enum": ["INFO", "WARNING", "ERROR"] },
+        "fieldPath": { "$ref": "#/$defs/nullableString" },
+        "modelUniqueId": { "$ref": "#/$defs/nullableString" },
+        "message": { "type": "string", "minLength": 1 },
+        "recoveryAction": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

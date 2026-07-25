@@ -107,3 +107,10 @@ test("subject area collapses the domain directory at narrow viewports", () => {
 	assert.match(source, /flex flex-col gap-3 sm:flex-row/);
 	assert.match(source, /min-w-0/);
 });
+
+test("selected business category exposes capability-gated CATALOG_DOMAIN data tags", () => {
+	assert.match(source, /GovernedAssetTagPanel/);
+	assert.match(source, /buildCatalogDomainAssetKey/);
+	assert.match(source, /assetType="CATALOG_DOMAIN"/);
+	assert.match(source, /activeDomain\.code/);
+});

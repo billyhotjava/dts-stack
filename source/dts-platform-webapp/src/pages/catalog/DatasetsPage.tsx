@@ -1,9 +1,13 @@
+import {
+	ApartmentOutlined,
+	DatabaseOutlined,
+	SafetyCertificateOutlined,
+	TableOutlined,
+	WarningOutlined,
+} from "@ant-design/icons";
+import { Alert, Button, Card, Collapse, Layout, Pagination, Space, Spin, Tabs, Tree } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Badge, Button, Card, Collapse, Dropdown, Input, Layout, Modal, Pagination, Select, Space, Spin, Tabs, Tag, Tree } from "antd";
-import { ApartmentOutlined, DatabaseOutlined, DownOutlined, FilterOutlined, SafetyCertificateOutlined, SearchOutlined, TableOutlined, WarningOutlined } from "@ant-design/icons";
-import { EmptyState } from "@/components/empty-state";
-import { CompactTable } from "@/components/table";
-import { PageHeader } from "@/components/page-header";
+import { useSearchParams } from "react-router";
 import {
 	getCatalogAssetsV2Diagnostics,
 	getCatalogAssetsV2GovernanceGaps,
@@ -17,31 +21,42 @@ import {
 	syncCatalogAssetsV2,
 	syncCatalogAssetV2Lineage,
 } from "@/api/platformApi";
+import { readTagIds, writeTagIds } from "@/components/catalog/tags/catalogTagUrlState";
+import { EmptyState } from "@/components/empty-state";
+import { PageHeader } from "@/components/page-header";
 import { useRouter } from "@/routes/hooks";
 import { resolveAssetReadiness } from "./assetPortalUx.helpers";
-
+import { AssetLedgerDialogs } from "./assets/AssetLedgerDialogs";
+import { AssetLedgerToolbar } from "./assets/AssetLedgerToolbar";
+import { AssetLedgerView } from "./assets/AssetLedgerView";
+import { AssetReconciliationPanel } from "./assets/AssetReconciliationPanel";
+import type {
+	AssetRow,
+	DomainNode,
+	GovernanceGapRow,
+	LineageFailureRow,
+	ReconciliationResult,
+	ResolutionFailureRow,
+} from "./assets/assetPageShared";
 import {
-	TYPE_OPTIONS,
-	CLASSIFICATION_OPTIONS,
-	GOVERNANCE_OPTIONS,
-	MATCH_OPTIONS,
-	DATASET_FILTER_STORAGE_KEY,
 	ASSET_PORTAL_V2_ENABLED,
-	UNASSIGNED_DOMAIN_KEY,
+	buildTreeNodes,
+	classificationText,
+	DATASET_FILTER_STORAGE_KEY,
+	formatTime,
 	LAYER_META,
 	LAYER_ORDER,
 	LEDGER_PAGE_SIZE,
-	normalizeLayer,
-	classificationText,
-	formatTime,
-	buildTreeNodes,
 	MetricTile,
+	normalizeLayer,
+	UNASSIGNED_DOMAIN_KEY,
 } from "./assets/assetPageShared";
-import type { AssetRow, DomainNode, ReconciliationResult, ResolutionFailureRow, GovernanceGapRow, LineageFailureRow } from "./assets/assetPageShared";
-import { AssetLedgerView } from "./assets/AssetLedgerView";
 
 export default function Page() {
 	const router = useRouter();
+	const [searchParams, setSearchParams] = useSearchParams();
+	const selectedTagIds = useMemo(() => readTagIds(searchParams), [searchParams]);
+	const selectedTagIdsKey = selectedTagIds.join("\u0000");
 	const [keyword, setKeyword] = useState("");
 	const [domain, setDomain] = useState<string | undefined>(() => {
 		try {
@@ -85,24 +100,33 @@ export default function Page() {
 	const [domainTree, setDomainTree] = useState<DomainNode[]>([]);
 	const [treeLoading, setTreeLoading] = useState(false);
 	const requestSeqRef = useRef(0);
+	const pageSizeRef = useRef(LEDGER_PAGE_SIZE);
+	const tagFilterEffectReadyRef = useRef(false);
 
 	useEffect(() => {
 		try {
 			// 地图矩阵下钻等深链显式携带 layer/domain 时，URL 优先于本地缓存的筛选
 			const hasDeepLinkFilters = Boolean(
-				new URLSearchParams(window.location.search).get("layer") || new URLSearchParams(window.location.search).get("domain"),
+				new URLSearchParams(window.location.search).get("layer") ||
+					new URLSearchParams(window.location.search).get("domain"),
 			);
 			const raw = localStorage.getItem(DATASET_FILTER_STORAGE_KEY);
 			if (!raw) return;
 			const saved = JSON.parse(raw);
 			setKeyword(typeof saved?.keyword === "string" ? saved.keyword : "");
 			setAssetType(typeof saved?.assetType === "string" && saved.assetType ? saved.assetType : "ALL");
-			setClassification(typeof saved?.classification === "string" && saved.classification ? saved.classification : "ALL");
-			setGovernanceStatus(typeof saved?.governanceStatus === "string" && saved.governanceStatus ? saved.governanceStatus : "ALL");
+			setClassification(
+				typeof saved?.classification === "string" && saved.classification ? saved.classification : "ALL",
+			);
+			setGovernanceStatus(
+				typeof saved?.governanceStatus === "string" && saved.governanceStatus ? saved.governanceStatus : "ALL",
+			);
 			setMatchStatus(typeof saved?.matchStatus === "string" && saved.matchStatus ? saved.matchStatus : "ALL");
 			if (!hasDeepLinkFilters) {
 				setDomain(undefined);
-				setWarehouseLayer(typeof saved?.warehouseLayer === "string" && saved.warehouseLayer ? saved.warehouseLayer : "ALL");
+				setWarehouseLayer(
+					typeof saved?.warehouseLayer === "string" && saved.warehouseLayer ? saved.warehouseLayer : "ALL",
+				);
 			}
 		} catch {
 			// ignore malformed cache
@@ -134,11 +158,24 @@ export default function Page() {
 
 	useEffect(() => {
 		const timer = window.setTimeout(() => {
-			void loadDatasets(1, pageState.size);
+			void loadDatasets(1, pageSizeRef.current);
 			void loadGovernanceSignals();
 		}, 280);
 		return () => window.clearTimeout(timer);
-	}, [keyword, domain, assetType, classification, warehouseLayer, governanceStatus, matchStatus, pageState.size]);
+	}, [keyword, domain, assetType, classification, warehouseLayer, governanceStatus, matchStatus]);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: tag key intentionally triggers this tag-only reload; stable refs provide the current page size and request function inputs.
+	useEffect(() => {
+		void selectedTagIdsKey;
+		if (!tagFilterEffectReadyRef.current) {
+			tagFilterEffectReadyRef.current = true;
+			return;
+		}
+		const timer = window.setTimeout(() => {
+			void loadDatasets(1, pageSizeRef.current);
+		}, 280);
+		return () => window.clearTimeout(timer);
+	}, [selectedTagIdsKey]);
 
 	useEffect(() => {
 		const payload = {
@@ -181,7 +218,7 @@ export default function Page() {
 		}
 	};
 
-	const buildAssetQuery = (page = 1, size = 18) => ({
+	const buildAssetQuery = (page = 1, size = LEDGER_PAGE_SIZE) => ({
 		page: page - 1,
 		size,
 		keyword: keyword.trim() || undefined,
@@ -192,6 +229,11 @@ export default function Page() {
 		warehouseLayer: warehouseLayer === "ALL" ? undefined : warehouseLayer,
 		governanceStatus: governanceStatus === "ALL" ? undefined : governanceStatus,
 		matchStatus: matchStatus === "ALL" ? undefined : matchStatus,
+	});
+
+	const buildAssetListQuery = (page = 1, size = LEDGER_PAGE_SIZE) => ({
+		...buildAssetQuery(page, size),
+		tagIds: selectedTagIds.length ? selectedTagIds : undefined,
 	});
 
 	const loadGovernanceSignals = async () => {
@@ -210,21 +252,24 @@ export default function Page() {
 		}
 	};
 
-	const loadDatasets = async (page = 1, size = 18) => {
+	const loadDatasets = async (page = 1, size = LEDGER_PAGE_SIZE) => {
+		pageSizeRef.current = size;
 		const reqId = ++requestSeqRef.current;
 		setLoading(true);
 		try {
-			const resp: any = ASSET_PORTAL_V2_ENABLED ? await listCatalogAssetsV2(buildAssetQuery(page, size)) : await listDatasets({
-				page: page - 1,
-				size,
-				keyword: keyword.trim() || undefined,
-				domainId: domain && domain !== "ALL" && domain !== UNASSIGNED_DOMAIN_KEY ? domain : undefined,
-				type: assetType === "ALL" ? undefined : assetType,
-				classification: classification === "ALL" ? undefined : classification,
-				warehouseLayer: warehouseLayer === "ALL" ? undefined : warehouseLayer,
-				sortBy: "lastModifiedDate",
-				sortDir: "desc",
-			});
+			const resp: any = ASSET_PORTAL_V2_ENABLED
+				? await listCatalogAssetsV2(buildAssetListQuery(page, size))
+				: await listDatasets({
+						page: page - 1,
+						size,
+						keyword: keyword.trim() || undefined,
+						domainId: domain && domain !== "ALL" && domain !== UNASSIGNED_DOMAIN_KEY ? domain : undefined,
+						type: assetType === "ALL" ? undefined : assetType,
+						classification: classification === "ALL" ? undefined : classification,
+						warehouseLayer: warehouseLayer === "ALL" ? undefined : warehouseLayer,
+						sortBy: "lastModifiedDate",
+						sortDir: "desc",
+					});
 			if (reqId !== requestSeqRef.current) {
 				return;
 			}
@@ -239,6 +284,9 @@ export default function Page() {
 					classification: item.classification || undefined,
 					warehouseLayer: item.warehouseLayer || undefined,
 					status: item.syncStatus === "ERROR" || item.enabled === false ? "异常" : "启用",
+					assetType: item.assetType || item.grantAssetType || item.type || undefined,
+					assetKey: item.assetKey || undefined,
+					assetTags: Array.isArray(item.assetTags) ? item.assetTags : [],
 					lifecycleStatus: item.lifecycleStatus || undefined,
 					governanceStatus: item.governanceStatus || undefined,
 					matchStatus: item.matchStatus || undefined,
@@ -271,7 +319,8 @@ export default function Page() {
 		}
 	};
 
-	const selectedDomainName = domain === UNASSIGNED_DOMAIN_KEY ? "未归域" : domain ? domainMap.get(domain) || "当前主题域" : "全部主题域";
+	const selectedDomainName =
+		domain === UNASSIGNED_DOMAIN_KEY ? "未归域" : domain ? domainMap.get(domain) || "当前主题域" : "全部主题域";
 
 	const layerTabItems = useMemo(
 		() => [
@@ -287,21 +336,29 @@ export default function Page() {
 
 	const unclassifiedCount = records.filter((row) => !row.classification).length;
 	const missingDomainCount = records.filter((row) => !row.domain && !row.domainId).length;
-	const staleCount = records.filter((row) => String(row.lifecycleStatus || "").toUpperCase() === "STALE" || row.status === "停用").length;
+	const staleCount = records.filter(
+		(row) => String(row.lifecycleStatus || "").toUpperCase() === "STALE" || row.status === "停用",
+	).length;
 	const activeCount = records.filter((row) => row.status === "启用").length;
 	const readinessCounts = records.reduce<Record<string, number>>((acc, row) => {
 		const state = resolveAssetReadiness(row).state;
 		acc[state] = (acc[state] || 0) + 1;
 		return acc;
 	}, {});
-	const governanceCoverage = records.length ? Math.round(((records.length - unclassifiedCount - missingDomainCount) / Math.max(records.length, 1)) * 100) : 0;
+	const governanceCoverage = records.length
+		? Math.round(((records.length - unclassifiedCount - missingDomainCount) / Math.max(records.length, 1)) * 100)
+		: 0;
 	const blockingGapCount = Number(governanceGapReport?.severityCounts?.BLOCKING || 0);
 	const lineageFailureCount = Array.isArray(lineageFailureReport?.content) ? lineageFailureReport.content.length : 0;
 	const pageTitle = "资产台账";
 	const pageSubtitle = "核验登记、权属、密级、治理和消费出口。查看统计概览请返回资产地图。";
 	const ledgerIssueCount = unclassifiedCount + missingDomainCount + blockingGapCount + lineageFailureCount;
-	const governanceGapRows: GovernanceGapRow[] = Array.isArray(governanceGapReport?.content) ? governanceGapReport.content : [];
-	const lineageFailureRows: LineageFailureRow[] = Array.isArray(lineageFailureReport?.content) ? lineageFailureReport.content : [];
+	const governanceGapRows: GovernanceGapRow[] = Array.isArray(governanceGapReport?.content)
+		? governanceGapReport.content
+		: [];
+	const lineageFailureRows: LineageFailureRow[] = Array.isArray(lineageFailureReport?.content)
+		? lineageFailureReport.content
+		: [];
 	const treeData = useMemo(
 		() => [
 			{
@@ -319,59 +376,6 @@ export default function Page() {
 		[domainTree],
 	);
 
-	const failedAssertions = Array.isArray(reconciliation?.assertions)
-		? reconciliation.assertions.filter((item) => item.passed === false)
-		: [];
-
-	const reconciliationContent = reconciliation ? (
-		<Space direction="vertical" size={12} className="w-full">
-			<div className="grid gap-3 md:grid-cols-4">
-				<MetricTile icon={<SafetyCertificateOutlined />} label="断言总数" value={Number(reconciliation.assertionCount || 0)} />
-				<MetricTile icon={<WarningOutlined />} label="失败项" value={Number(reconciliation.failedCount || 0)} tone="text-red-600" />
-				<MetricTile icon={<WarningOutlined />} label="错误级" value={Number(reconciliation.errorCount || 0)} tone="text-red-600" />
-				<MetricTile icon={<WarningOutlined />} label="告警级" value={Number(reconciliation.warningCount || 0)} tone="text-amber-600" />
-			</div>
-			{failedAssertions.length ? (
-				<div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-					{failedAssertions.slice(0, 6).map((item) => (
-						<div key={item.code || item.name}>
-							[{item.code || "-"}] {item.name || "未命名检查"}：{item.detail || "-"}；建议：{item.suggestion || "-"}
-						</div>
-					))}
-				</div>
-			) : (
-				<Alert type="success" showIcon message="一致性断言通过，未发现阻断项。" />
-			)}
-			<div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-				<div className="mb-2 text-sm font-medium text-slate-700">核心页面回归清单</div>
-				<Space direction="vertical" size={6} className="w-full">
-					{Array.isArray(reconciliation.regressionChecklist) && reconciliation.regressionChecklist.length > 0 ? (
-						reconciliation.regressionChecklist.map((item) => (
-							<div key={item.code || item.name} className="flex items-center justify-between gap-3 text-xs text-slate-700">
-								<div className="min-w-0">
-									<span className="font-medium">[{item.code || "-"}] {item.name || "-"}</span>
-									<div className="truncate text-slate-500">{item.description || "-"}</div>
-								</div>
-								<Button
-									size="small"
-									onClick={() => {
-										if (item.route) router.push(item.route);
-									}}
-								>
-									打开页面
-								</Button>
-							</div>
-						))
-					) : (
-						<div className="text-xs text-slate-500">暂无回归清单</div>
-					)}
-				</Space>
-			</div>
-		</Space>
-	) : (
-		<EmptyState title="暂无核对结果" description="当前账号无权限或尚未执行核对。" />
-	);
-
 	const resetFilters = () => {
 		setKeyword("");
 		setDomain(undefined);
@@ -380,6 +384,7 @@ export default function Page() {
 		setWarehouseLayer("ALL");
 		setGovernanceStatus("ALL");
 		setMatchStatus("ALL");
+		setSearchParams(writeTagIds(searchParams, []), { replace: true });
 	};
 
 	const syncOpenMetadataAssets = async () => {
@@ -443,10 +448,10 @@ export default function Page() {
 		}
 	};
 
-
-
 	const [filtersOpen, setFiltersOpen] = useState(false);
-	const activeFilterCount = [assetType, classification, governanceStatus, matchStatus].filter((value) => value && value !== "ALL").length;
+	const activeFilterCount =
+		[assetType, classification, governanceStatus, matchStatus].filter((value) => value && value !== "ALL").length +
+		(selectedTagIds.length > 0 ? 1 : 0);
 
 	const opsItem = (title: string, description: string) => (
 		<div className="py-0.5">
@@ -458,12 +463,31 @@ export default function Page() {
 	const opsMenuItems = [
 		...(ASSET_PORTAL_V2_ENABLED
 			? [
-					{ key: "sync-om", disabled: syncing, label: opsItem(syncing ? "同步 OpenMetadata（进行中…）" : "同步 OpenMetadata", "从元数据平台拉取最新资产清单（耗时较长，完成后自动刷新）") },
-					{ key: "diagnostics", disabled: diagnosticsLoading, label: opsItem("映射诊断", "统计已映射/未匹配/待人工确认数量，结果显示在工具栏下方") },
-					{ key: "resolution-failures", disabled: resolutionFailuresLoading, label: opsItem("解析失败记录", "查看资产身份解析失败明细") },
+					{
+						key: "sync-om",
+						disabled: syncing,
+						label: opsItem(
+							syncing ? "同步 OpenMetadata（进行中…）" : "同步 OpenMetadata",
+							"从元数据平台拉取最新资产清单（耗时较长，完成后自动刷新）",
+						),
+					},
+					{
+						key: "diagnostics",
+						disabled: diagnosticsLoading,
+						label: opsItem("映射诊断", "统计已映射/未匹配/待人工确认数量，结果显示在工具栏下方"),
+					},
+					{
+						key: "resolution-failures",
+						disabled: resolutionFailuresLoading,
+						label: opsItem("解析失败记录", "查看资产身份解析失败明细"),
+					},
 				]
 			: []),
-		{ key: "reconciliation", disabled: reconciliationLoading, label: opsItem("发布前核对", "刷新发布前回归断言结果（页面底部展开查看）") },
+		{
+			key: "reconciliation",
+			disabled: reconciliationLoading,
+			label: opsItem("发布前核对", "刷新发布前回归断言结果（页面底部展开查看）"),
+		},
 	];
 	const handleOpsMenuClick = (key: string) => {
 		if (key === "sync-om") void syncOpenMetadataAssets();
@@ -504,7 +528,6 @@ export default function Page() {
 		link.remove();
 		URL.revokeObjectURL(url);
 	};
-
 
 	const renderAssetTable = () => (
 		<AssetLedgerView
@@ -547,93 +570,37 @@ export default function Page() {
 						}}
 					/>
 				</Spin>
-				</Layout.Sider>
-				<Layout.Content style={{ padding: "0 16px" }}>
-					<div className="space-y-4">
-						<PageHeader title={pageTitle} />
-						<Card
-							className="asset-ledger-toolbar"
-							title={
-								<div className="flex items-start gap-2">
-									<TableOutlined className="mt-1" />
-									<div>
-										<div className="flex flex-wrap items-center gap-2">
-											<span>{pageTitle}</span>
-											<Tag color="geekblue">登记核验</Tag>
-										</div>
-										<div className="mt-1 text-xs font-normal text-slate-500">{pageSubtitle}</div>
-									</div>
-								</div>
-							}
-							extra={
-								<Space wrap>
-									<Button onClick={() => router.push("/catalog/assets")}>
-										返回地图
-									</Button>
-									<Button onClick={() => void loadDatasets(1, pageState.size)} loading={loading}>
-										刷新
-									</Button>
-									<Dropdown menu={{ items: opsMenuItems, onClick: ({ key }) => handleOpsMenuClick(String(key)) }} trigger={["click"]}>
-										<Button data-testid="asset-ops-menu">
-											同步与诊断 <DownOutlined />
-										</Button>
-									</Dropdown>
-								</Space>
-							}
-					>
-						<div className="flex flex-wrap items-center gap-2">
-							<Input
-								prefix={<SearchOutlined />}
-								placeholder="搜索资产名称 / 描述"
-								style={{ width: 280 }}
-								value={keyword}
-								onChange={(event) => setKeyword(event.target.value)}
-								allowClear
-							/>
-							<Badge count={activeFilterCount} size="small">
-								<Button icon={<FilterOutlined />} onClick={() => setFiltersOpen((open) => !open)} data-testid="asset-filters-toggle">
-									{filtersOpen ? "收起筛选" : "筛选"}
-								</Button>
-							</Badge>
-							{activeFilterCount > 0 || keyword.trim() ? <Button onClick={resetFilters}>重置</Button> : null}
-						</div>
-						{filtersOpen ? (
-							<div className="mt-3 flex flex-wrap items-center gap-2">
-								<Select
-								allowClear
-								placeholder="资产类型"
-								style={{ minWidth: 160 }}
-								value={assetType}
-								onChange={(value) => setAssetType(value || "ALL")}
-								options={TYPE_OPTIONS}
-							/>
-							<Select
-								allowClear
-								placeholder="密级"
-								style={{ minWidth: 150 }}
-								value={classification}
-								onChange={(value) => setClassification(value || "ALL")}
-								options={CLASSIFICATION_OPTIONS}
-							/>
-							<Select
-								allowClear
-								placeholder="治理状态"
-								style={{ minWidth: 150 }}
-								value={governanceStatus}
-								onChange={(value) => setGovernanceStatus(value || "ALL")}
-								options={GOVERNANCE_OPTIONS}
-							/>
-							<Select
-								allowClear
-								placeholder="映射状态"
-								style={{ minWidth: 150 }}
-								value={matchStatus}
-								onChange={(value) => setMatchStatus(value || "ALL")}
-								options={MATCH_OPTIONS}
-							/>
-							</div>
-						) : null}
-					</Card>
+			</Layout.Sider>
+			<Layout.Content style={{ padding: "0 16px" }}>
+				<div className="space-y-4">
+					<PageHeader title={pageTitle} />
+					<AssetLedgerToolbar
+						activeFilterCount={activeFilterCount}
+						assetType={assetType}
+						classification={classification}
+						filtersOpen={filtersOpen}
+						governanceStatus={governanceStatus}
+						keyword={keyword}
+						loading={loading}
+						matchStatus={matchStatus}
+						onAssetTypeChange={setAssetType}
+						onClassificationChange={setClassification}
+						onGovernanceStatusChange={setGovernanceStatus}
+						onKeywordChange={setKeyword}
+						onMatchStatusChange={setMatchStatus}
+						onOpsMenuClick={handleOpsMenuClick}
+						onRefresh={() => void loadDatasets(1, pageState.size)}
+						onReset={resetFilters}
+						onReturnToMap={() => router.push("/catalog/assets")}
+						onTagIdsChange={(nextIds) => {
+							setSearchParams(writeTagIds(searchParams, nextIds), { replace: true });
+						}}
+						onToggleFilters={() => setFiltersOpen((open) => !open)}
+						opsMenuItems={opsMenuItems}
+						pageSubtitle={pageSubtitle}
+						pageTitle={pageTitle}
+						selectedTagIds={selectedTagIds}
+					/>
 
 					{diagnostics ? (
 						<Alert
@@ -642,7 +609,10 @@ export default function Page() {
 							message={`OpenMetadata映射诊断：资产 ${Number(diagnostics.assetCount || 0)}，已映射 ${Number(diagnostics.matchedCount || 0)}，未匹配 ${Number(diagnostics.unmatchedCount || 0)}，人工确认 ${Number(diagnostics.manualReviewCount || 0)}`}
 							description={
 								Array.isArray(diagnostics.issues) && diagnostics.issues.length > 0
-									? diagnostics.issues.slice(0, 3).map((item: any) => `${item.fqn || "-"}：${item.matchReason || item.matchStatus || "-"}`).join("；")
+									? diagnostics.issues
+											.slice(0, 3)
+											.map((item: any) => `${item.fqn || "-"}：${item.matchReason || item.matchStatus || "-"}`)
+											.join("；")
 									: undefined
 							}
 						/>
@@ -675,34 +645,50 @@ export default function Page() {
 						/>
 					) : null}
 
-												<div className="grid gap-3 md:grid-cols-5">
-							<MetricTile icon={<DatabaseOutlined />} label="台账总量" value={pageState.total} footnote={selectedDomainName} />
-							<MetricTile icon={<TableOutlined />} label="本页登记" value={records.length} footnote={`启用 ${activeCount} 个`} />
-							<MetricTile icon={<WarningOutlined />} label="待补字段" value={ledgerIssueCount} footnote={`未定密 ${unclassifiedCount} 个 / 未归域 ${missingDomainCount} 个`} tone={ledgerIssueCount > 0 ? "text-amber-600" : "text-green-600"} />
-							<MetricTile
-								icon={<SafetyCertificateOutlined />}
-								label="可消费资产"
-								value={Number(readinessCounts.READY || 0)}
-								footnote={`阻断 ${Number(readinessCounts.BLOCKED || 0)} 个 / 待确认 ${Number(readinessCounts.WARNING || 0)} 个`}
-								tone={Number(readinessCounts.BLOCKED || 0) > 0 ? "text-amber-600" : "text-green-600"}
-							/>
-							<MetricTile
-								icon={<SafetyCertificateOutlined />}
-								label="治理覆盖率"
-								value={`${Math.max(0, governanceCoverage)}%`}
-								footnote={`血缘缺口 ${lineageFailureCount} 个 / 失效 ${staleCount} 个`}
-								tone={governanceCoverage >= 80 ? "text-green-600" : "text-amber-600"}
-							/>
-						</div>
+					<div className="grid gap-3 md:grid-cols-5">
+						<MetricTile
+							icon={<DatabaseOutlined />}
+							label="台账总量"
+							value={pageState.total}
+							footnote={selectedDomainName}
+						/>
+						<MetricTile
+							icon={<TableOutlined />}
+							label="本页登记"
+							value={records.length}
+							footnote={`启用 ${activeCount} 个`}
+						/>
+						<MetricTile
+							icon={<WarningOutlined />}
+							label="待补字段"
+							value={ledgerIssueCount}
+							footnote={`未定密 ${unclassifiedCount} 个 / 未归域 ${missingDomainCount} 个`}
+							tone={ledgerIssueCount > 0 ? "text-amber-600" : "text-green-600"}
+						/>
+						<MetricTile
+							icon={<SafetyCertificateOutlined />}
+							label="可消费资产"
+							value={Number(readinessCounts.READY || 0)}
+							footnote={`阻断 ${Number(readinessCounts.BLOCKED || 0)} 个 / 待确认 ${Number(readinessCounts.WARNING || 0)} 个`}
+							tone={Number(readinessCounts.BLOCKED || 0) > 0 ? "text-amber-600" : "text-green-600"}
+						/>
+						<MetricTile
+							icon={<SafetyCertificateOutlined />}
+							label="治理覆盖率"
+							value={`${Math.max(0, governanceCoverage)}%`}
+							footnote={`血缘缺口 ${lineageFailureCount} 个 / 失效 ${staleCount} 个`}
+							tone={governanceCoverage >= 80 ? "text-green-600" : "text-amber-600"}
+						/>
+					</div>
 
-						<Card
-							className="asset-ledger-card"
-							title={
-								<Space size={8}>
-									<TableOutlined />
-									<span>资产登记台账</span>
-								</Space>
-							}
+					<Card
+						className="asset-ledger-card"
+						title={
+							<Space size={8}>
+								<TableOutlined />
+								<span>资产登记台账</span>
+							</Space>
+						}
 						extra={
 							<Pagination
 								size="small"
@@ -711,36 +697,42 @@ export default function Page() {
 								total={pageState.total}
 								showSizeChanger
 								pageSizeOptions={[10, 20, 50, 100]}
-								onChange={(page, size) => void loadDatasets(page, size)}
+								onChange={(page, size) => {
+									const nextSize = size || LEDGER_PAGE_SIZE;
+									void loadDatasets(nextSize !== pageState.size ? 1 : page, nextSize);
+								}}
 							/>
 						}
 					>
-														<div className="asset-ledger-filter-strip mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-								<div className="mb-2 flex flex-wrap items-center justify-between gap-3">
-									<div>
-										<div className="text-sm font-semibold text-slate-900">资产登记台账</div>
-										<div className="mt-1 text-xs text-slate-500">按登记字段、治理状态、密级和消费动作核验当前资产。</div>
-									</div>
-									<Space size={8}>
-										<Button size="small" onClick={exportLedgerCsv} data-testid="asset-ledger-export">
-											导出 CSV（本页）
-										</Button>
-										<Button size="small" onClick={() => router.push("/catalog/assets")}>
-											返回地图
-										</Button>
-									</Space>
+						<div className="asset-ledger-filter-strip mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+							<div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+								<div>
+									<div className="text-sm font-semibold text-slate-900">资产登记台账</div>
+									<div className="mt-1 text-xs text-slate-500">按登记字段、治理状态、密级和消费动作核验当前资产。</div>
 								</div>
-								<Tabs
-									activeKey={warehouseLayer}
-									onChange={(value) => setWarehouseLayer(value || "ALL")}
-									items={layerTabItems}
-									tabBarStyle={{ marginBottom: 0 }}
-								/>
+								<Space size={8}>
+									<Button size="small" onClick={exportLedgerCsv} data-testid="asset-ledger-export">
+										导出 CSV（本页）
+									</Button>
+									<Button size="small" onClick={() => router.push("/catalog/assets")}>
+										返回地图
+									</Button>
+								</Space>
 							</div>
-							{records.length ? (
+							<Tabs
+								activeKey={warehouseLayer}
+								onChange={(value) => setWarehouseLayer(value || "ALL")}
+								items={layerTabItems}
+								tabBarStyle={{ marginBottom: 0 }}
+							/>
+						</div>
+						{records.length ? (
 							renderAssetTable()
 						) : (
-							<EmptyState title="未发现当前账号可见资产" description="可能还未完成数据源结构采集，也可能当前密级、主题域或资产授权限制了可见范围。" />
+							<EmptyState
+								title="未发现当前账号可见资产"
+								description="可能还未完成数据源结构采集，也可能当前密级、主题域或资产授权限制了可见范围。"
+							/>
 						)}
 					</Card>
 
@@ -762,241 +754,30 @@ export default function Page() {
 										重新核对
 									</Button>
 								),
-								children: reconciliationContent,
+								children: (
+									<AssetReconciliationPanel reconciliation={reconciliation} onNavigate={(path) => router.push(path)} />
+								),
 							},
 						]}
 					/>
 				</div>
 			</Layout.Content>
-			<Modal
-				title="治理缺口处置工作台"
-				open={remediationOpen}
-				onCancel={() => setRemediationOpen(false)}
-				footer={
-					<Space>
-						<Button onClick={() => void loadGovernanceSignals()} loading={signalsLoading}>
-							刷新报告
-						</Button>
-						<Button onClick={() => setRemediationOpen(false)}>关闭</Button>
-					</Space>
-				}
-				width={1120}
-			>
-				<Alert
-					type={governanceGapRows.length || lineageFailureRows.length ? "warning" : "success"}
-					showIcon
-					className="mb-3"
-					message={
-						governanceGapRows.length || lineageFailureRows.length
-							? `当前筛选发现治理缺口 ${governanceGapRows.length} 条、血缘失败 ${lineageFailureRows.length} 条`
-							: "当前筛选没有需要处置的治理缺口"
-					}
-					description="点击补治理字段会进入资产详情的治理扩展页；点击同步血缘会重新拉取当前资产的上下游证据并刷新报告。"
-				/>
-				<Tabs
-					items={[
-						{
-							key: "governance-gaps",
-							label: `治理缺口（${governanceGapRows.length}）`,
-							children: (
-								<CompactTable<GovernanceGapRow>
-									rowKey={(row) => row.id || row.assetKey || row.fqn || row.displayName || "asset"}
-									size="small"
-									loading={signalsLoading}
-									dataSource={governanceGapRows}
-									autoEllipsis={false} pagination={{ defaultPageSize: 10 }}
-									scroll={{ x: 980 }}
-									columns={[
-										{
-											title: "资产",
-											dataIndex: "displayName",
-											width: 220,
-											render: (value, row) => (
-												<div>
-													<div className="font-medium text-slate-900">{value || row.fqn || "-"}</div>
-													<div className="truncate font-mono text-[11px] text-slate-500">{row.assetKey || row.fqn || "-"}</div>
-												</div>
-											),
-										},
-										{
-											title: "严重度",
-											dataIndex: "severity",
-											width: 100,
-											render: (value) => <Tag color={value === "BLOCKING" ? "red" : value === "READY" ? "green" : "orange"}>{value || "-"}</Tag>,
-										},
-										{
-											title: "阻断项",
-											dataIndex: "blockingGaps",
-											width: 220,
-											render: (value: string[]) => value?.length ? value.map((item) => <Tag color="red" key={item}>{item}</Tag>) : "-",
-										},
-										{
-											title: "提示项",
-											dataIndex: "warningGaps",
-											width: 220,
-											render: (value: string[]) => value?.length ? value.map((item) => <Tag color="orange" key={item}>{item}</Tag>) : "-",
-										},
-										{
-											title: "状态",
-											width: 160,
-											render: (_, row) => (
-												<Space direction="vertical" size={2}>
-													<Tag>{row.governanceStatus || "-"}</Tag>
-													<span className="text-xs text-slate-500">{row.lifecycleStatus || "-"}</span>
-												</Space>
-											),
-										},
-										{
-											title: "操作",
-											width: 180,
-											fixed: "right",
-											render: (_, row) => (
-												<Space>
-													<Button size="small" onClick={() => openGovernanceRemediation(row.id)}>
-														补治理字段
-													</Button>
-													<Button size="small" onClick={() => router.push(`/catalog/datasets/${row.id}`)}>
-														详情
-													</Button>
-												</Space>
-											),
-										},
-									]}
-								/>
-							),
-						},
-						{
-							key: "lineage-failures",
-							label: `血缘失败（${lineageFailureRows.length}）`,
-							children: (
-								<CompactTable<LineageFailureRow>
-									rowKey={(row) => row.id || row.assetKey || row.fqn || row.displayName || "asset"}
-									size="small"
-									loading={signalsLoading}
-									dataSource={lineageFailureRows}
-									autoEllipsis={false} pagination={{ defaultPageSize: 10 }}
-									scroll={{ x: 1020 }}
-									columns={[
-										{
-											title: "资产",
-											dataIndex: "displayName",
-											width: 220,
-											render: (value, row) => (
-												<div>
-													<div className="font-medium text-slate-900">{value || row.fqn || "-"}</div>
-													<div className="truncate font-mono text-[11px] text-slate-500">{row.assetKey || row.fqn || "-"}</div>
-												</div>
-											),
-										},
-										{
-											title: "严重度",
-											dataIndex: "severity",
-											width: 100,
-											render: (value, row) => <Tag color={row.blocking ? "red" : "orange"}>{value || "-"}</Tag>,
-										},
-										{
-											title: "原因",
-											dataIndex: "reason",
-											width: 220,
-											render: (value) => value ? <Tag color="orange">{value}</Tag> : "-",
-										},
-										{
-											title: "下一步",
-											dataIndex: "nextAction",
-											width: 220,
-											render: (value) => value || "同步血缘或补齐治理字段",
-										},
-										{
-											title: "证据源",
-											dataIndex: "evidenceSource",
-											width: 160,
-											render: (value) => value || "-",
-										},
-										{
-											title: "操作",
-											width: 220,
-											fixed: "right",
-											render: (_, row) => (
-												<Space>
-													<Button
-														size="small"
-														type="primary"
-														loading={remediationLoading === row.id}
-														onClick={() => void syncLineageForRow(row.id)}
-													>
-														同步血缘
-													</Button>
-													<Button size="small" onClick={() => openGovernanceRemediation(row.id)}>
-														治理
-													</Button>
-													<Button size="small" onClick={() => router.push(`/catalog/datasets/${row.id}?tab=lineage`)}>
-														详情
-													</Button>
-												</Space>
-											),
-										},
-									]}
-								/>
-							),
-						},
-					]}
-				/>
-			</Modal>
-			<Modal
-				title="资产身份解析失败"
-				open={resolutionFailuresOpen}
-				onCancel={() => setResolutionFailuresOpen(false)}
-				footer={<Button onClick={() => setResolutionFailuresOpen(false)}>关闭</Button>}
-				width={920}
-			>
-				<Alert
-					type={resolutionFailures.length ? "warning" : "success"}
-					showIcon
-					className="mb-3"
-					message={resolutionFailures.length ? `最近发现 ${resolutionFailures.length} 条解析失败` : "最近没有资产身份解析失败"}
-					description="请核对 ref 命名、资产类型映射和历史兼容配置。"
-				/>
-				<CompactTable<ResolutionFailureRow>
-					rowKey={(row) => row.id || `${row.ref || "ref"}-${row.requestedAt || "time"}`}
-					size="small"
-					loading={resolutionFailuresLoading}
-					dataSource={resolutionFailures}
-					autoEllipsis={false} pagination={{ defaultPageSize: 10 }}
-					scroll={{ x: 900 }}
-					columns={[
-						{
-							title: "引用",
-							dataIndex: "ref",
-							width: 280,
-							render: (value) => <span className="font-mono text-xs">{value || "-"}</span>,
-						},
-						{
-							title: "类型猜测",
-							dataIndex: "typeHintGuess",
-							width: 120,
-							render: (value) => value ? <Tag>{value}</Tag> : "-",
-						},
-						{
-							title: "原因",
-							dataIndex: "reason",
-							width: 180,
-							render: (value) => value ? <Tag color="orange">{value}</Tag> : "-",
-						},
-						{
-							title: "调用方",
-							dataIndex: "caller",
-							width: 150,
-							render: (value) => value || "-",
-						},
-						{
-							title: "发生时间",
-							dataIndex: "requestedAt",
-							width: 180,
-							render: (value) => formatTime(value),
-						},
-					]}
-				/>
-			</Modal>
+			<AssetLedgerDialogs
+				governanceGapRows={governanceGapRows}
+				lineageFailureRows={lineageFailureRows}
+				onCloseRemediation={() => setRemediationOpen(false)}
+				onCloseResolutionFailures={() => setResolutionFailuresOpen(false)}
+				onNavigate={(path) => router.push(path)}
+				onOpenGovernanceRemediation={openGovernanceRemediation}
+				onRefreshGovernanceSignals={() => void loadGovernanceSignals()}
+				onSyncLineage={(assetId) => void syncLineageForRow(assetId)}
+				remediationLoading={remediationLoading}
+				remediationOpen={remediationOpen}
+				resolutionFailures={resolutionFailures}
+				resolutionFailuresLoading={resolutionFailuresLoading}
+				resolutionFailuresOpen={resolutionFailuresOpen}
+				signalsLoading={signalsLoading}
+			/>
 		</Layout>
 	);
 }
