@@ -60,6 +60,7 @@ final class DbtSourceProjectModelPackageAdapter {
     private static final int MAX_PROJECT_PATHS = 16;
     private static final int MAX_MACRO_DECLARATIONS = 256;
     private static final int MAX_SCAN_DEPTH = 16;
+    private static final int MAX_TSV_DEPTH = 4;
 
     private static final Pattern PROJECT_NAME = Pattern.compile(
         "(?m)^(?:\\uFEFF)?name\\s*:\\s*[\"']?([a-zA-Z0-9_-]+)[\"']?\\s*(?:#.*)?$"
@@ -307,6 +308,7 @@ final class DbtSourceProjectModelPackageAdapter {
 
         TreeMap<String, ModelSeed> scannedByPath = new TreeMap<>();
         scanned.forEach(seed -> scannedByPath.put(seed.resourcePath(), seed));
+        disabledInventoryPaths(projectRoot).forEach(scannedByPath::remove);
         List<ModelSeed> reconciled = new ArrayList<>();
         Set<String> names = new HashSet<>();
         for (PackageModel model : legacyInventory.orElseThrow().models()) {
@@ -345,6 +347,84 @@ final class DbtSourceProjectModelPackageAdapter {
         }
         reconciled.sort(Comparator.comparing(ModelSeed::resourcePath));
         return List.copyOf(reconciled);
+    }
+
+    private static Set<String> disabledInventoryPaths(Path projectRoot) {
+        List<Path> candidates;
+        try (var paths = Files.walk(projectRoot, MAX_TSV_DEPTH)) {
+            candidates = paths
+                .filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+                .filter(path -> "models.tsv".equalsIgnoreCase(path.getFileName().toString()))
+                .sorted(Comparator.comparing(path -> relative(projectRoot, path)))
+                .toList();
+        } catch (IOException exception) {
+            throw new SourceProjectException("SOURCE_PROJECT_READ_FAILED", "无法复核 models.tsv 禁用项", exception);
+        }
+        if (candidates.isEmpty()) {
+            return Set.of();
+        }
+
+        Path tsv = candidates.getFirst();
+        String value = decodeUtf8(
+            readBounded(tsv, LegacyTsvModelPackageAdapter.MAX_TSV_BYTES, "SOURCE_PROJECT_INVENTORY_TOO_LARGE"),
+            "SOURCE_PROJECT_INVENTORY_INVALID",
+            "models.tsv 必须使用 UTF-8 编码"
+        );
+        List<String> lines = value.lines().toList();
+        if (lines.isEmpty() || lines.size() > LegacyTsvModelPackageAdapter.MAX_TSV_LINES) {
+            throw error("SOURCE_PROJECT_INVENTORY_INVALID", "models.tsv 行数无效");
+        }
+        String headerLine = lines.getFirst().startsWith("\uFEFF") ? lines.getFirst().substring(1) : lines.getFirst();
+        String[] header = headerLine.split("\\t", -1);
+        int enabledIndex = columnIndex(header, "enabled");
+        int sqlPathIndex = columnIndex(header, "sql_path");
+        if (enabledIndex < 0 || sqlPathIndex < 0) {
+            return Set.of();
+        }
+
+        TreeSet<String> disabled = new TreeSet<>();
+        for (int index = 1; index < lines.size(); index++) {
+            if (lines.get(index).isBlank()) {
+                continue;
+            }
+            String[] fields = lines.get(index).split("\\t", -1);
+            if (
+                enabledIndex >= fields.length ||
+                sqlPathIndex >= fields.length ||
+                !"false".equalsIgnoreCase(fields[enabledIndex].trim())
+            ) {
+                continue;
+            }
+            String rawSqlPath = fields[sqlPathIndex].trim();
+            if (rawSqlPath.isEmpty()) {
+                continue;
+            }
+            String sqlPath;
+            try {
+                sqlPath = safeProjectRelativePath(rawSqlPath, "models.tsv sql_path");
+            } catch (SourceProjectException ignored) {
+                // Legacy intentionally skips disabled rows before SQL-path validation.
+                continue;
+            }
+            addDisabledPath(projectRoot, tsv.getParent().resolve(sqlPath).normalize(), disabled);
+            addDisabledPath(projectRoot, projectRoot.resolve(sqlPath).normalize(), disabled);
+        }
+        return Set.copyOf(disabled);
+    }
+
+    private static int columnIndex(String[] header, String expected) {
+        for (int index = 0; index < header.length; index++) {
+            if (expected.equalsIgnoreCase(header[index].trim())) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    private static void addDisabledPath(Path projectRoot, Path candidate, Set<String> disabled) {
+        if (candidate.startsWith(projectRoot)) {
+            disabled.add(relative(projectRoot, candidate));
+        }
     }
 
     private static List<ModelSeed> scanModels(Path projectRoot, List<String> modelPaths) {

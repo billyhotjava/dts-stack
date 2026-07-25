@@ -62,7 +62,7 @@
 ### 本 Sprint 完成
 
 - dbt ZIP 安全检查、无副作用解包、内部模型包转换、JSON Schema、生成器、预检、差异、确认应用、幂等和审计。
-- ZIP 自带 artifact 时直接解析；缺少 artifact 时在隔离、无数据库执行的解析环境生成 manifest。结构性事实来自 dbt graph、配置、tags 和 schema YAML；仍无法确认的业务语义进入可见的待确认项，不再把整个项目降级为 `legacy` 后统一阻断。
+- ZIP 自带 artifact 时直接解析；缺少 artifact 时由有资源预算上限的静态解析器读取项目路径、SQL、显式配置、字面量依赖及可选 `models.tsv`，不运行 dbt/SQL。无法证明的 Jinja、宏依赖和业务语义进入可见的待确认项，不再把整个项目降级为 `legacy` 后统一阻断。
 - 普通 ModelSpec 自动创建，以及 `DESIGNER_GENERATED / DBT_BACKED` 双实现分流。
 - STG/ephemeral 技术节点保留在实现图中，但不创建四类 ModelSpec。
 - 工作台/模型中心双入口和共享导入向导。

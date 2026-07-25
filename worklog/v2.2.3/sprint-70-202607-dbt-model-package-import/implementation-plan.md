@@ -19,7 +19,7 @@ Requirements are the files under `features/F1-模型包契约与转换器/` plus
 
 Deliver the versioned internal JSON Schema, deterministic checksum/validation,
 safe dbt ZIP inspection, unified ordinary/advanced project recognition,
-artifact-first conversion and isolated no-execution parse fallback,
+artifact-first conversion and bounded no-execution static fallback,
 conversion classifier, technical-node preservation, repo-native generator,
 focused tests, and PJM golden fixture. ZIP is the UI input; JSON remains an
 internal/automation contract.

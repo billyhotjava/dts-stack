@@ -188,9 +188,12 @@ class DbtModelArchiveInspectServiceTest {
                     """
                     name\tlayer\tsql_path\tmaterialized\ttags\tenabled
                     base\tDWD\twarehouse/base.sql\ttable\tsales,dwd\ttrue
+                    disabled_model\tDWD\twarehouse/disabled_model.sql\ttable\tdwd\tfalse
                     """,
                     "warehouse/base.sql",
                     "select 1 as id",
+                    "warehouse/disabled_model.sql",
+                    "{{ config(tags=['dwd']) }} select 0 as id",
                     "warehouse/consumer.sql",
                     "{{ config(tags=['dwd', 'domain:sales']) }} select * from {{ ref('inventory', 'base') }}",
                     "warehouse/transient.sql",
