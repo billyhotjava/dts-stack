@@ -16,7 +16,7 @@ test("warehouse plan detail is registered as a stable planId wildcard route", ()
 
 test("detail title reuses the shared plan header editor without resetting evidence or route context", () => {
 	assert.match(page, /WarehousePlanHeaderEditor/);
-	assert.match(page, /编辑规划/);
+	assert.match(page, /编辑基本信息/);
 	assert.match(page, /canEditWarehousePlanHeader/);
 	assert.match(page, /onPlanChange=\{setPlan\}/);
 	assert.doesNotMatch(page, /onPlanChange=.*load\(/);
@@ -32,7 +32,10 @@ test("six tabs organize editing without becoming a second completion state", () 
 test("editing follows the backend maintainer-role gate as well as lifecycle", () => {
 	assert.match(page, /useUserRoles/);
 	assert.match(page, /hasWarehousePlanCreateAccess\(userRoles\)/);
-	assert.match(page, /planEditable\s*=\s*canMaintainPlan\s*&&/);
+	assert.match(page, /planEditable\s*=\s*[\s\S]{0,80}!viewOnly\s*&&\s*canMaintainPlan\s*&&/);
+	assert.match(page, /searchParams\.get\("mode"\)\s*===\s*"view"/);
+	assert.match(page, /只读查看/);
+	assert.match(page, /编辑计划内容/);
 });
 
 test("category and policy mutations are plan-scoped before form validation", () => {

@@ -160,6 +160,7 @@ export default function WarehousePlanDetailPage() {
 	const policyMutationGuard = useMemo(() => createLatestRequestGuard(), []);
 	const activeSection = useMemo(() => resolveSection(location.pathname), [location.pathname]);
 	const requestedBaselineTab = searchParams.get("tab");
+	const viewOnly = searchParams.get("mode") === "view";
 	const baselineTab: BaselineTab =
 		requestedBaselineTab === "sources" || requestedBaselineTab === "layers" || requestedBaselineTab === "categories"
 			? requestedBaselineTab
@@ -374,7 +375,8 @@ export default function WarehousePlanDetailPage() {
 	};
 
 	const openSpecialist = (route: string) => navigate(withWarehousePlanContext(route, planId));
-	const openSection = (section: DetailSection) => navigate(buildWarehousePlanRoute(planId, section));
+	const openSection = (section: DetailSection) =>
+		navigate(buildWarehousePlanRoute(planId, section, viewOnly ? { mode: "view" } : {}));
 
 	if (!planId) {
 		return (
@@ -421,7 +423,8 @@ export default function WarehousePlanDetailPage() {
 		{ key: "implementation", label: "实现与验证" },
 		{ key: "deliverables", label: "发布成果" },
 	];
-	const planEditable = canMaintainPlan && plan.lifecycleStatus !== "PUBLISHED" && plan.lifecycleStatus !== "ARCHIVED";
+	const planEditable =
+		!viewOnly && canMaintainPlan && plan.lifecycleStatus !== "PUBLISHED" && plan.lifecycleStatus !== "ARCHIVED";
 	const nextAction = projection?.nextAction || null;
 	const categorySelectOptions = buildWarehouseCategoryOptions(
 		domainOptions.filter((item): item is DomainOptionNode & { id: string } => Boolean(item.id)),
@@ -446,6 +449,7 @@ export default function WarehousePlanDetailPage() {
 								{plan.name}
 							</Title>
 							<Tag color="blue">{lifecycleLabel[plan.lifecycleStatus]}</Tag>
+							{viewOnly ? <Tag>只读查看</Tag> : null}
 						</div>
 						<div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-500">
 							<span>计划负责人：{plan.ownerId}</span>
@@ -461,10 +465,13 @@ export default function WarehousePlanDetailPage() {
 						</div>
 					</div>
 					<Space wrap>
-						{canEditWarehousePlanHeader(canMaintainPlan, plan.lifecycleStatus) ? (
-							<Button onClick={() => setEditorOpen(true)}>编辑规划</Button>
+						{canEditWarehousePlanHeader(canMaintainPlan, plan.lifecycleStatus) && !viewOnly ? (
+							<Button onClick={() => setEditorOpen(true)}>编辑基本信息</Button>
 						) : null}
-						{activeSection !== "baseline" && nextAction ? (
+						{canEditWarehousePlanHeader(canMaintainPlan, plan.lifecycleStatus) && viewOnly ? (
+							<Button onClick={() => navigate(buildWarehousePlanRoute(planId, "baseline"))}>编辑计划内容</Button>
+						) : null}
+						{!viewOnly && activeSection !== "baseline" && nextAction ? (
 							<Button type="primary" size="large" onClick={() => openSpecialist(nextAction.path)}>
 								{projection?.currentStage ? warehouseStageActionLabel(projection.currentStage) : nextAction.label}
 								<ArrowRight size={16} />
@@ -552,7 +559,14 @@ export default function WarehousePlanDetailPage() {
 					) : null}
 					<Tabs
 						activeKey={baselineTab}
-						onChange={(value) => navigate(buildWarehousePlanRoute(planId, "baseline", { tab: value }))}
+						onChange={(value) =>
+							navigate(
+								buildWarehousePlanRoute(planId, "baseline", {
+									tab: value,
+									mode: viewOnly ? "view" : undefined,
+								}),
+							)
+						}
 						items={[
 							{
 								key: "categories",

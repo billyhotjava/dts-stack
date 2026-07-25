@@ -13,7 +13,6 @@ import {
 	type WarehousePlanStageProjection,
 } from "@/api/warehousePlanApi";
 import { useUserRoles } from "@/store/userStore";
-import { WarehousePlanHeaderEditor } from "./components/WarehousePlanHeaderEditor";
 import { createLatestRequestGuard, hasWarehousePlanCreateAccess } from "./warehousePlanCreateFlow";
 import {
 	buildWarehousePlanRoute,
@@ -65,8 +64,6 @@ export default function WarehousePlanLedgerPage() {
 	const [keyword, setKeyword] = useState("");
 	const [lifecycleStatus, setLifecycleStatus] = useState<WarehousePlanLedgerLifecycleFilter>("ACTIVE");
 	const [ownerId, setOwnerId] = useState("");
-	const [editingPlan, setEditingPlan] = useState<WarehousePlanHeader | null>(null);
-	const [editorOpen, setEditorOpen] = useState(false);
 	const [archivingPlanIds, setArchivingPlanIds] = useState<Set<string>>(new Set());
 	const [writeDeniedPlanIds, setWriteDeniedPlanIds] = useState<Set<string>>(new Set());
 	const listGuard = useMemo(() => createLatestRequestGuard(), []);
@@ -159,12 +156,6 @@ export default function WarehousePlanLedgerPage() {
 
 	const updatePlan = useCallback((updated: WarehousePlanHeader) => {
 		setPlans((current) => replaceWarehousePlanHeader(current, updated));
-		setEditingPlan((current) => (current?.id === updated.id ? updated : current));
-	}, []);
-
-	const openEditor = useCallback((plan: WarehousePlanHeader) => {
-		setEditingPlan(plan);
-		setEditorOpen(true);
 	}, []);
 
 	const verifyArchiveResult = useCallback(
@@ -268,7 +259,7 @@ export default function WarehousePlanLedgerPage() {
 						<Button
 							type="link"
 							className="h-auto max-w-full p-0 text-left font-semibold"
-							onClick={() => navigate(buildWarehousePlanRoute(plan.id))}
+							onClick={() => navigate(buildWarehousePlanRoute(plan.id, "overview", { mode: "view" }))}
 						>
 							<span className="block truncate">{plan.name}</span>
 						</Button>
@@ -338,12 +329,17 @@ export default function WarehousePlanLedgerPage() {
 							type="link"
 							size="small"
 							icon={<Eye size={14} />}
-							onClick={() => navigate(buildWarehousePlanRoute(plan.id))}
+							onClick={() => navigate(buildWarehousePlanRoute(plan.id, "overview", { mode: "view" }))}
 						>
 							查看
 						</Button>
 						{canEditWarehousePlanHeader(canMaintainPlan, plan.lifecycleStatus) && !writeDeniedPlanIds.has(plan.id) ? (
-							<Button type="link" size="small" icon={<Edit3 size={14} />} onClick={() => openEditor(plan)}>
+							<Button
+								type="link"
+								size="small"
+								icon={<Edit3 size={14} />}
+								onClick={() => navigate(buildWarehousePlanRoute(plan.id, "baseline"))}
+							>
 								编辑
 							</Button>
 						) : null}
@@ -369,7 +365,6 @@ export default function WarehousePlanLedgerPage() {
 			canMaintainPlan,
 			confirmArchive,
 			navigate,
-			openEditor,
 			projectionFailures,
 			projectionLoading,
 			projections,
@@ -499,19 +494,6 @@ export default function WarehousePlanLedgerPage() {
 					/>
 				)}
 			</Card>
-
-			<WarehousePlanHeaderEditor
-				open={editorOpen}
-				plan={editingPlan}
-				canMaintainPlan={canMaintainPlan}
-				onClose={() => setEditorOpen(false)}
-				onPlanChange={updatePlan}
-				onUnavailable={() => {
-					setEditorOpen(false);
-					if (editingPlan) setPlans((current) => current.filter((plan) => plan.id !== editingPlan.id));
-					void loadPlans(true);
-				}}
-			/>
 		</div>
 	);
 }

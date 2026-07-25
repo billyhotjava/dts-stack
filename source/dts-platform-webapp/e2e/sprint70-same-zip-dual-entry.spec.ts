@@ -31,7 +31,7 @@ test("ordinary modeling statically converts the unmodified PJM ZIP and reaches p
 	await expect(page.getByTestId("warehouse-plan-workbench")).toBeVisible();
 	await page.getByRole("button", { name: "导入已有模型" }).click();
 
-	const drawer = page.getByRole("dialog", { name: /导入已有模型/ });
+	const drawer = page.locator(".ant-drawer-content").filter({ hasText: "导入已有模型" });
 	await expect(drawer).toBeVisible();
 	const inspect = importResponse(page, "POST", "/api/modeling/model-spec-imports/dbt/archive/inspect");
 	await drawer.locator('input[type="file"]').setInputFiles(zipPath);
@@ -72,7 +72,7 @@ test("advanced modeling submits the same unmodified ZIP as the raw archive", asy
 	await page.setViewportSize({ width: 1366, height: 900 });
 	await page.goto("/#/studio/sql-modeling");
 	await expect(page.getByTestId("platform-sql-modeling-page")).toBeVisible();
-	await page.getByRole("button", { name: "模型", exact: true }).click();
+	await page.getByRole("button", { name: /模\s*型/ }).click();
 	await page.getByText("批量导入", { exact: true }).click();
 
 	const modal = page.getByRole("dialog", { name: "批量导入模型" });

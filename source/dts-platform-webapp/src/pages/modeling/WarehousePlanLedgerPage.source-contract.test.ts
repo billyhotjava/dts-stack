@@ -9,7 +9,8 @@ test("warehouse plan ledger reads only the canonical plan aggregate", () => {
 	assert.equal(existsSync(pageUrl), true, "warehouse plan ledger page is missing");
 	assert.match(page, /listWarehousePlans/);
 	assert.match(page, /getWarehousePlanStageProjection/);
-	assert.match(page, /WarehousePlanHeaderEditor/);
+	assert.match(page, /buildWarehousePlanRoute\(plan\.id,\s*"baseline"\)/);
+	assert.doesNotMatch(page, /WarehousePlanHeaderEditor/);
 	assert.doesNotMatch(page, /listModelingPlans|getModelingPlan|updateModelingPlan|deleteModelingPlan/);
 	assert.doesNotMatch(page, /"\/modeling\/plans"|`\/modeling\/plans`/);
 });
@@ -39,6 +40,12 @@ test("ledger exposes one page primary action and lifecycle-aware row actions", (
 	assert.match(page, /canArchiveWarehousePlan/);
 	assert.match(page, /hasWarehousePlanCreateAccess/);
 	assert.doesNotMatch(page, /永久删除|批量归档|复制规划/);
+});
+
+test("ledger edit opens the plan content workspace instead of the header-only editor", () => {
+	assert.match(page, /navigate\(buildWarehousePlanRoute\(plan\.id,\s*"baseline"\)\)/);
+	assert.match(page, /buildWarehousePlanRoute\(plan\.id,\s*"overview",\s*\{\s*mode:\s*"view"\s*\}\)/);
+	assert.doesNotMatch(page, /openEditor\(plan\)/);
 });
 
 test("archive uses confirmation, CAS conflict reload and a second explicit confirmation", () => {

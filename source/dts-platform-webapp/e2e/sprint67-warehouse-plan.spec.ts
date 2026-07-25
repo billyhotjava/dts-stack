@@ -358,7 +358,19 @@ test("warehouse plan ledger preserves edits across 409 and archives with fresh C
 	await expect(draftRow).toBeVisible();
 	await expect(publishedRow.getByRole("button", { name: "编辑" })).toHaveCount(0);
 
-	await draftRow.getByRole("button", { name: "编辑" }).click();
+	await draftRow.getByRole("button", { name: "查看" }).click();
+	await expect(page).toHaveURL(/\/modeling\/plans\/plan-ledger-draft\?mode=view&planId=plan-ledger-draft$/);
+	await expect(page.getByText("只读查看", { exact: true })).toBeVisible();
+	await expect(page.getByRole("button", { name: "编辑基本信息" })).toHaveCount(0);
+	await page.getByRole("tab", { name: "规划基线" }).click();
+	await expect(page).toHaveURL(/\/modeling\/plans\/plan-ledger-draft\/baseline\?mode=view&planId=plan-ledger-draft$/);
+	await expect(page.getByRole("button", { name: "保存业务分类" })).toBeDisabled();
+	await page.goto("/#/modeling/plans");
+
+	const editableDraftRow = page.getByRole("row").filter({ hasText: "经营分析建设规划" });
+	await editableDraftRow.getByRole("button", { name: "编辑" }).click();
+	await expect(page).toHaveURL(/\/modeling\/plans\/plan-ledger-draft\/baseline\?planId=plan-ledger-draft$/);
+	await page.getByRole("button", { name: "编辑基本信息" }).click();
 	const editor = page.getByTestId("warehouse-plan-header-editor");
 	await expect(editor).toBeVisible();
 	await editor.getByLabel("规划名称").fill("经营分析建设规划（修订）");
@@ -370,7 +382,9 @@ test("warehouse plan ledger preserves edits across 409 and archives with fresh C
 	await expect(page.getByText("经营分析建设规划（修订）", { exact: true })).toBeVisible();
 	expect(updateEtags).toEqual(['"plan-head:1"', '"plan-head:2"']);
 
+	await page.goto("/#/modeling/plans");
 	const revisedRow = page.getByRole("row").filter({ hasText: "经营分析建设规划（修订）" });
+	await expect(revisedRow).toBeVisible();
 	await revisedRow.getByRole("button", { name: "归档" }).click();
 	await page.getByRole("button", { name: "确认归档" }).click();
 	await expect(page.getByText("规划已变化，请重新确认归档")).toBeVisible();
@@ -574,7 +588,7 @@ test("exact plan survives list failure, refresh, evidence retry, detail return a
 	expect(probe.requestFailures, "before entering detail").toEqual([]);
 
 	await page.getByRole("button", { name: "查看计划详情" }).click();
-	await expect(page).toHaveURL(/\/modeling\/plans\/plan-exact\?planId=plan-exact$/);
+	await expect(page).toHaveURL(/\/modeling\/plans\/plan-exact\?mode=view&planId=plan-exact$/);
 	await expect(page.getByText("精确恢复计划", { exact: true }).last()).toBeVisible();
 	await expect(page.getByTestId("warehouse-plan-evidence-recovery")).toBeVisible();
 	await expect(page.getByText("基线状态未知", { exact: true })).toBeVisible();

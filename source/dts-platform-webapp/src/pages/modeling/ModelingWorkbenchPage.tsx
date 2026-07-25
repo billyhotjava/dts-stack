@@ -530,9 +530,16 @@ export default function ModelingWorkbenchPage() {
 								<div><div className="text-slate-500">建设范围</div><div className="mt-1 text-slate-900">{selectedPlan.scope || "待补充"}</div></div>
 								<div><div className="text-slate-500">开始方式</div><div className="mt-1 text-slate-900">{selectedPlan.onboardingMode === "ASSET_FIRST" ? "从现有数据开始" : "从业务目标开始"}</div></div>
 								<Space direction="vertical" className="w-full" size={8}>
-									<Button block onClick={() => navigate(buildWarehousePlanRoute(selectedPlan.id))}>查看计划详情</Button>
+									<Button
+										block
+										onClick={() =>
+											navigate(buildWarehousePlanRoute(selectedPlan.id, "overview", { mode: "view" }))
+										}
+									>
+										查看计划详情
+									</Button>
 									{canEditWarehousePlanHeader(canCreatePlan, selectedPlan.lifecycleStatus) ? (
-										<Button block onClick={() => setEditorOpen(true)}>编辑规划</Button>
+										<Button block onClick={() => setEditorOpen(true)}>编辑基本信息</Button>
 									) : null}
 								</Space>
 							</div>
