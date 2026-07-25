@@ -1,16 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { ModelSpecImportPreviewItem } from "@/api/modelSpecImportApi";
+import type { ModelPackageJson, ModelSpecImportPreviewItem } from "@/api/modelSpecImportApi";
 import {
 	canRetryFailedImport,
+	createConvertedModelPackage,
 	createModelPackageImportState,
 	defaultSelectedUniqueIds,
 	hasCompleteImportContext,
 	isPreviewApplicable,
 	MODEL_IMPORT_GENERIC_DIAGNOSTIC_CODE,
-	parseModelPackage,
 	reduceModelPackageImportState,
 	resolveModelPackageImportIdempotencySlot,
+	validateDbtModelPackageArchive,
 } from "./modelPackageImportState";
 
 const packageJson = {
@@ -28,15 +29,40 @@ const packageJson = {
 	],
 };
 
-test("parses only the versioned model package and exposes business metadata", () => {
-	const parsed = parseModelPackage(JSON.stringify(packageJson), "demo.json", 512);
+const convertedPackage = () => createConvertedModelPackage(packageJson, "demo.zip", 512);
+
+test("keeps the converted internal package with ZIP metadata only until preview", () => {
+	const parsed = convertedPackage();
 	assert.equal(parsed.metadata.projectName, "demo_project");
+	assert.equal(parsed.metadata.fileName, "demo.zip");
 	assert.equal(parsed.metadata.modelCount, 1);
 	assert.equal(parsed.modelPackage.sources[0].dbtUniqueId, "source.demo.orders");
 });
 
+test("archive inspection loading state ends when the converted package is accepted", () => {
+	const started = reduceModelPackageImportState(createModelPackageImportState(), { type: "REQUEST_STARTED" });
+	const loaded = reduceModelPackageImportState(started, { type: "PACKAGE_LOADED", ...convertedPackage() });
+	assert.equal(started.busy, true);
+	assert.equal(loaded.busy, false);
+	assert.equal(loaded.step, 1);
+});
+
+test("rejects an incomplete inspection response before it reaches import state", () => {
+	assert.throws(
+		() => createConvertedModelPackage({ ...packageJson, models: null } as unknown as ModelPackageJson, "demo.zip", 512),
+		/内部模型包结构不完整/,
+	);
+});
+
+test("accepts only a non-empty dbt ZIP within the 32 MiB archive limit", () => {
+	assert.doesNotThrow(() => validateDbtModelPackageArchive("demo.zip", 32 * 1024 * 1024));
+	assert.throws(() => validateDbtModelPackageArchive("demo.json", 512), /dbt ZIP/);
+	assert.throws(() => validateDbtModelPackageArchive("empty.zip", 0), /不能为空/);
+	assert.throws(() => validateDbtModelPackageArchive("large.zip", 32 * 1024 * 1024 + 1), /32 MiB/);
+});
+
 test("context is complete only after plan, domain and confirmed source mappings exist", () => {
-	const parsed = parseModelPackage(JSON.stringify(packageJson), "demo.json", 512);
+	const parsed = convertedPackage();
 	let state = reduceModelPackageImportState(createModelPackageImportState(), {
 		type: "PACKAGE_LOADED",
 		...parsed,
@@ -68,7 +94,7 @@ test("context is complete only after plan, domain and confirmed source mappings 
 });
 
 test("preview success drops the raw package, metadata and client mappings", () => {
-	const parsed = parseModelPackage(JSON.stringify(packageJson), "demo.json", 512);
+	const parsed = convertedPackage();
 	let state = reduceModelPackageImportState(createModelPackageImportState("plan-1"), {
 		type: "PACKAGE_LOADED",
 		...parsed,
@@ -96,8 +122,32 @@ test("preview success drops the raw package, metadata and client mappings", () =
 	assert.equal(state.runId, "run-1");
 });
 
+test("restarting after preview returns to ZIP upload without entering a context page missing its package", () => {
+	let state = reduceModelPackageImportState(createModelPackageImportState("plan-1"), {
+		type: "PACKAGE_LOADED",
+		...convertedPackage(),
+	});
+	state = reduceModelPackageImportState(state, {
+		type: "PREVIEW_SUCCEEDED",
+		preview: {
+			runId: "run-1",
+			planId: "plan-1",
+			previewHash: "hash",
+			summary: { total: 0, ready: 0, blocked: 0, create: 0, update: 0, skip: 0, conflict: 0 },
+			items: [],
+		},
+	});
+	state = reduceModelPackageImportState(state, { type: "PREVIEW_INVALIDATED" });
+	assert.equal(state.step, 0);
+	assert.equal(state.planId, "plan-1");
+	assert.equal(state.modelPackage, null);
+	assert.equal(state.metadata, null);
+	assert.deepEqual(state.domainMappings, {});
+	assert.deepEqual(state.sourceMappings, {});
+});
+
 test("switching plan, request failure and explicit close cleanup remove sensitive package payload", () => {
-	const parsed = parseModelPackage(JSON.stringify(packageJson), "demo.json", 512);
+	const parsed = convertedPackage();
 	const loaded = reduceModelPackageImportState(createModelPackageImportState("plan-1"), {
 		type: "PACKAGE_LOADED",
 		...parsed,
@@ -115,7 +165,7 @@ test("switching plan, request failure and explicit close cleanup remove sensitiv
 });
 
 test("same plan selection is idempotent while a real plan switch clears the loaded package", () => {
-	const parsed = parseModelPackage(JSON.stringify(packageJson), "demo.json", 512);
+	const parsed = convertedPackage();
 	const loaded = reduceModelPackageImportState(createModelPackageImportState("plan-1"), {
 		type: "PACKAGE_LOADED",
 		...parsed,

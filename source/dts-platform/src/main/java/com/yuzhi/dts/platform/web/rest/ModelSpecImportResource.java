@@ -5,6 +5,9 @@ import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportAppl
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ModelSpecImportApplyException;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.RetryRequest;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyService;
+import com.yuzhi.dts.platform.service.modeling.imports.converter.DbtModelArchiveInspectService;
+import com.yuzhi.dts.platform.service.modeling.imports.converter.DbtModelArchiveInspectService.ArchiveInspectionException;
+import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.ModelPackage;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewContract.ModelSpecImportPreviewException;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewContract.PreviewRequest;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewContract.PreviewResponse;
@@ -15,6 +18,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -22,7 +26,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 /** REST boundary for recoverable, preview-only dbt model-package imports. */
 @RestController
@@ -37,6 +43,7 @@ public class ModelSpecImportResource {
     private final ModelSpecImportPreviewAudit audit;
     private final ModelSpecImportPreviewAdmissionGate admissionGate;
     private final ModelSpecImportApplyService applyService;
+    private final DbtModelArchiveInspectService archiveInspectService;
 
     public ModelSpecImportResource(
         ModelSpecImportPreviewService service,
@@ -44,7 +51,17 @@ public class ModelSpecImportResource {
         ModelSpecImportPreviewAudit audit,
         ModelSpecImportPreviewAdmissionGate admissionGate
     ) {
-        this(service, requestParser, audit, admissionGate, null);
+        this(service, requestParser, audit, admissionGate, null, null);
+    }
+
+    public ModelSpecImportResource(
+        ModelSpecImportPreviewService service,
+        ModelSpecImportPreviewRequestParser requestParser,
+        ModelSpecImportPreviewAudit audit,
+        ModelSpecImportPreviewAdmissionGate admissionGate,
+        ModelSpecImportApplyService applyService
+    ) {
+        this(service, requestParser, audit, admissionGate, applyService, null);
     }
 
     @Autowired
@@ -53,13 +70,15 @@ public class ModelSpecImportResource {
         ModelSpecImportPreviewRequestParser requestParser,
         ModelSpecImportPreviewAudit audit,
         ModelSpecImportPreviewAdmissionGate admissionGate,
-        ModelSpecImportApplyService applyService
+        ModelSpecImportApplyService applyService,
+        DbtModelArchiveInspectService archiveInspectService
     ) {
         this.service = service;
         this.requestParser = requestParser;
         this.audit = audit;
         this.admissionGate = admissionGate;
         this.applyService = applyService;
+        this.archiveInspectService = archiveInspectService;
     }
 
     @PostMapping("/dbt/preview")
@@ -71,6 +90,14 @@ public class ModelSpecImportResource {
             PreviewResponse response = service.preview(parsed);
             audit.success(response);
             return ApiResponses.ok(response);
+        }
+    }
+
+    @PostMapping(value = "/dbt/archive/inspect", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<ModelPackage> inspectArchive(@RequestPart("archive") MultipartFile archive) {
+        try (ModelSpecImportPreviewAdmissionGate.Admission admission = admissionGate.enter()) {
+            return ApiResponses.ok(archiveInspectService.inspect(archive));
         }
     }
 
@@ -129,6 +156,15 @@ public class ModelSpecImportResource {
         };
         return ResponseEntity.status(status).body(
             new ApiResponse<>(ResultStatus.ERROR.getCode(), exception.getMessage(), exception.code(), exception.details())
+        );
+    }
+
+    @ExceptionHandler(ArchiveInspectionException.class)
+    public ResponseEntity<ApiResponse<Object>> handleArchiveInspectionError(ArchiveInspectionException exception) {
+        audit.rejected(exception.code());
+        HttpStatus status = exception.code().endsWith("TOO_LARGE") ? HttpStatus.PAYLOAD_TOO_LARGE : HttpStatus.BAD_REQUEST;
+        return ResponseEntity.status(status).body(
+            new ApiResponse<>(ResultStatus.ERROR.getCode(), exception.getMessage(), exception.code(), null)
         );
     }
 

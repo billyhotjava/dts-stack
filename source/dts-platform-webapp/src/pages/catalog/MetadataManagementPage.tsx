@@ -7,14 +7,12 @@ import {
 	SafetyCertificateOutlined,
 	TeamOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Card, Input, message, Select, Space, Spin, Tabs, Tag } from "antd";
+import { Alert, Button, Card, Input, message, Select, Space, Spin, Tag } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getCatalogAssetsV2GovernanceGaps, listCatalogAssetsV2, syncCatalogAssetsV2 } from "@/api/platformApi";
-import { TagManagementTab } from "@/components/catalog/tags/TagManagementTab";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { CompactTable } from "@/components/table";
-import { useCatalogTagGovernanceAccess } from "@/hooks/useModuleManageAccess";
 import { useRouter } from "@/routes/hooks";
 import {
 	CLASSIFICATION_OPTIONS,
@@ -81,9 +79,7 @@ const isOpenMetadataUnmapped = (row: MetadataAssetRow) =>
 
 export default function MetadataManagementPage() {
 	const router = useRouter();
-	const canManageCatalog = useCatalogTagGovernanceAccess();
 	const requestSeqRef = useRef(0);
-	const [activeTab, setActiveTab] = useState("asset-metadata");
 	const [keyword, setKeyword] = useState("");
 	const [classification, setClassification] = useState("ALL");
 	const [governanceStatus, setGovernanceStatus] = useState("ALL");
@@ -277,132 +273,111 @@ export default function MetadataManagementPage() {
 			<PageHeader
 				title="元数据管理"
 				actions={
-					activeTab === "asset-metadata" ? (
-						<>
-							<Button icon={<DatabaseOutlined />} onClick={() => router.push("/catalog/metadata")}>
-								数据源结构采集
-							</Button>
-							<Button
-								type="primary"
-								icon={<ReloadOutlined />}
-								loading={syncing}
-								onClick={() => void syncOpenMetadata()}
-							>
-								同步 OpenMetadata
-							</Button>
-						</>
-					) : null
+					<>
+						<Button icon={<DatabaseOutlined />} onClick={() => router.push("/catalog/metadata")}>
+							数据源结构采集
+						</Button>
+						<Button type="primary" icon={<ReloadOutlined />} loading={syncing} onClick={() => void syncOpenMetadata()}>
+							同步 OpenMetadata
+						</Button>
+					</>
 				}
 			/>
-			<Tabs
-				activeKey={activeTab}
-				onChange={setActiveTab}
-				items={[
-					{ key: "asset-metadata", label: "资产元数据" },
-					{ key: "catalog-tags", label: "数据标签" },
-				]}
+			<div className="text-sm text-slate-500">
+				资产语义元数据用于补齐业务描述、权属、密级、主题域、生命周期和标准映射；表/字段结构由数据源结构采集提供。
+			</div>
+
+			<Alert
+				type="info"
+				showIcon
+				message="采集与管理已拆分"
+				description="数据集成负责扫描表、字段和索引；数据资产负责补齐业务含义、权属和可消费前置条件。"
 			/>
-			{activeTab === "asset-metadata" ? (
-				<>
-					<div className="text-sm text-slate-500">
-						资产语义元数据用于补齐业务描述、权属、密级、主题域、生命周期和标准映射；表/字段结构由数据源结构采集提供。
-					</div>
 
-					<Alert
-						type="info"
-						showIcon
-						message="采集与管理已拆分"
-						description="数据集成负责扫描表、字段和索引；数据资产负责补齐业务含义、权属和可消费前置条件。"
-					/>
+			<div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+				<MetricTile
+					icon={<DatabaseOutlined />}
+					label="当前页资产"
+					value={records.length}
+					footnote={`总数 ${pageState.total}`}
+				/>
+				<MetricTile
+					icon={<ExclamationCircleOutlined />}
+					label="待补齐"
+					value={stats.completion}
+					tone="text-amber-600"
+				/>
+				<MetricTile icon={<TeamOutlined />} label="缺负责人" value={stats.missingOwner} tone="text-amber-600" />
+				<MetricTile
+					icon={<SafetyCertificateOutlined />}
+					label="缺密级"
+					value={stats.missingClassification}
+					tone="text-amber-600"
+				/>
+				<MetricTile icon={<LinkOutlined />} label="缺主题域" value={stats.missingDomain} tone="text-amber-600" />
+				<MetricTile
+					icon={<CheckCircleOutlined />}
+					label="OpenMetadata 未映射"
+					value={stats.unmapped}
+					tone="text-red-600"
+				/>
+			</div>
 
-					<div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-						<MetricTile
-							icon={<DatabaseOutlined />}
-							label="当前页资产"
-							value={records.length}
-							footnote={`总数 ${pageState.total}`}
+			<Card>
+				<Space direction="vertical" size={12} className="w-full">
+					<Space wrap>
+						<Input.Search
+							allowClear
+							value={keyword}
+							onChange={(event) => setKeyword(event.target.value)}
+							onSearch={() => void loadAssets(1, pageState.size)}
+							placeholder="搜索资产、表名或业务描述"
+							style={{ width: 280 }}
 						/>
-						<MetricTile
-							icon={<ExclamationCircleOutlined />}
-							label="待补齐"
-							value={stats.completion}
-							tone="text-amber-600"
+						<Select
+							value={classification}
+							onChange={setClassification}
+							options={CLASSIFICATION_OPTIONS}
+							style={{ width: 140 }}
 						/>
-						<MetricTile icon={<TeamOutlined />} label="缺负责人" value={stats.missingOwner} tone="text-amber-600" />
-						<MetricTile
-							icon={<SafetyCertificateOutlined />}
-							label="缺密级"
-							value={stats.missingClassification}
-							tone="text-amber-600"
+						<Select
+							value={governanceStatus}
+							onChange={setGovernanceStatus}
+							options={GOVERNANCE_OPTIONS}
+							style={{ width: 160 }}
 						/>
-						<MetricTile icon={<LinkOutlined />} label="缺主题域" value={stats.missingDomain} tone="text-amber-600" />
-						<MetricTile
-							icon={<CheckCircleOutlined />}
-							label="OpenMetadata 未映射"
-							value={stats.unmapped}
-							tone="text-red-600"
+						<Select value={matchStatus} onChange={setMatchStatus} options={MATCH_OPTIONS} style={{ width: 150 }} />
+						<Button onClick={() => void loadAssets(1, pageState.size)}>刷新</Button>
+					</Space>
+					{stats.blocking ? (
+						<Alert
+							type="warning"
+							showIcon
+							message={`治理阻断 ${stats.blocking} 项`}
+							description="请优先进入治理属性或字段契约补齐阻断项。"
 						/>
-					</div>
-
-					<Card>
-						<Space direction="vertical" size={12} className="w-full">
-							<Space wrap>
-								<Input.Search
-									allowClear
-									value={keyword}
-									onChange={(event) => setKeyword(event.target.value)}
-									onSearch={() => void loadAssets(1, pageState.size)}
-									placeholder="搜索资产、表名或业务描述"
-									style={{ width: 280 }}
-								/>
-								<Select
-									value={classification}
-									onChange={setClassification}
-									options={CLASSIFICATION_OPTIONS}
-									style={{ width: 140 }}
-								/>
-								<Select
-									value={governanceStatus}
-									onChange={setGovernanceStatus}
-									options={GOVERNANCE_OPTIONS}
-									style={{ width: 160 }}
-								/>
-								<Select value={matchStatus} onChange={setMatchStatus} options={MATCH_OPTIONS} style={{ width: 150 }} />
-								<Button onClick={() => void loadAssets(1, pageState.size)}>刷新</Button>
-							</Space>
-							{stats.blocking ? (
-								<Alert
-									type="warning"
-									showIcon
-									message={`治理阻断 ${stats.blocking} 项`}
-									description="请优先进入治理属性或字段契约补齐阻断项。"
-								/>
-							) : null}
-							<Spin spinning={loading || gapLoading}>
-								{records.length ? (
-									<CompactTable
-										rowKey={(row: MetadataAssetRow) => row.id}
-										columns={columns}
-										dataSource={records}
-										scroll={{ x: 1900 }}
-										pagination={{
-											current: pageState.page,
-											pageSize: pageState.size,
-											total: pageState.total,
-											showSizeChanger: true,
-											onChange: (page, size) => void loadAssets(size !== pageState.size ? 1 : page, size),
-										}}
-									/>
-								) : (
-									<EmptyState title="暂无资产元数据" description="请先完成数据源结构采集，或调整当前筛选条件。" />
-								)}
-							</Spin>
-						</Space>
-					</Card>
-				</>
-			) : (
-				<TagManagementTab canManage={canManageCatalog} />
-			)}
+					) : null}
+					<Spin spinning={loading || gapLoading}>
+						{records.length ? (
+							<CompactTable
+								rowKey={(row: MetadataAssetRow) => row.id}
+								columns={columns}
+								dataSource={records}
+								scroll={{ x: 1900 }}
+								pagination={{
+									current: pageState.page,
+									pageSize: pageState.size,
+									total: pageState.total,
+									showSizeChanger: true,
+									onChange: (page, size) => void loadAssets(size !== pageState.size ? 1 : page, size),
+								}}
+							/>
+						) : (
+							<EmptyState title="暂无资产元数据" description="请先完成数据源结构采集，或调整当前筛选条件。" />
+						)}
+					</Spin>
+				</Space>
+			</Card>
 		</div>
 	);
 }

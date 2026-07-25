@@ -1,6 +1,19 @@
 # 预检与应用 API 契约
 
-## 1. 预检
+## 1. ZIP 检查与内部转换
+
+`POST /api/modeling/model-spec-imports/dbt/archive/inspect`
+
+请求使用 `multipart/form-data`，字段 `archive` 只接受单个 dbt ZIP，最大 32 MiB。服务端必须校验 ZIP magic、路径、条目数和解压大小，在临时目录中只读解析并在请求结束后清理。
+
+响应是现有 `dts.model-package/v1` 内部对象，供同源导入向导继续完成上下文映射。它不是要求业务用户制作或上传的公开文件格式。支持：
+
+- dbt artifact ZIP：`manifest.json` 或 `target/manifest.json`，可选 catalog、schema YAML、SQL、macro 和 seed。
+- legacy ZIP：`models.tsv + SQL`。缺少可证明的依赖和业务语义时返回结构化 issue/阻断，禁止猜测后写入。
+
+稳定错误至少覆盖 `MODEL_IMPORT_ARCHIVE_INVALID`、`MODEL_IMPORT_ARCHIVE_TOO_LARGE`、`MODEL_IMPORT_ARCHIVE_UNSAFE_PATH`、`MODEL_IMPORT_ARCHIVE_MANIFEST_MISSING` 和 `MODEL_IMPORT_ARCHIVE_SQL_MISSING`。
+
+## 2. 预检
 
 `POST /api/modeling/model-spec-imports/dbt/preview`
 
@@ -54,7 +67,7 @@
 - 运行 canonical ModelSpec 语义校验、依赖拓扑、所有权和循环检测。
 - 返回结构化 issue code、字段路径、严重度、修复入口。
 
-## 2. 应用
+## 3. 应用
 
 `POST /api/modeling/model-spec-imports/dbt/apply`
 
@@ -103,13 +116,13 @@ apply 必须：
 5. 为每个候选建立独立原子事务；一个失败不得留下半个候选。
 6. 批次返回逐项结果，允许仅重试失败项。
 
-## 3. 查询
+## 4. 查询
 
 - `GET /api/modeling/model-spec-imports/{runId}`：读取预检/应用结果。
 - `POST /api/modeling/model-spec-imports/{runId}/retry`：仅重试失败且输入未漂移的候选。
 - 首版不提供“删除已导入模型”的批量回滚；错误导入按 ModelSpec 生命周期退役，避免破坏下游引用。
 
-## 4. 稳定错误语义
+## 5. 稳定错误语义
 
 至少覆盖：
 

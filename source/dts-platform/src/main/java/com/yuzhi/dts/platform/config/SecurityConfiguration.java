@@ -76,6 +76,9 @@ public class SecurityConfiguration {
                     .requestMatchers(HttpMethod.GET, "/api/infra/screen-fonts/*").permitAll()
                     // Menus must be fetched under authentication so role-based filtering works
                     // Platform has no /api/admin/** endpoints; remove legacy matchers
+                    .requestMatchers(
+                        mvc.pattern(HttpMethod.POST, "/api/modeling/model-spec-imports/dbt/archive/inspect")
+                    ).hasAnyAuthority(AuthoritiesConstants.CATALOG_MAINTAINERS)
                     .requestMatchers(mvc.pattern("/api/**")).authenticated()
                     // Swagger UI + OpenAPI spec: APP_API_DOCS_PUBLIC=true 时匿名可访问；否则需 ROLE_ADMIN。
                     .requestMatchers(

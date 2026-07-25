@@ -16,3 +16,11 @@ test("model import requests opt out of global toast without escaping type checki
 	assert.match(source, /quietRequest/);
 	assert.doesNotMatch(source, /as any/);
 });
+
+test("dbt archive inspection uses the canonical multipart contract before JSON preview", () => {
+	assert.match(source, /inspectDbtModelArchive/);
+	assert.match(source, /new FormData\(\)/);
+	assert.match(source, /data\.append\("archive", archive\)/);
+	assert.match(source, /\/dbt\/archive\/inspect/);
+	assert.match(source, /api\.post<ModelPackageJson>/);
+});

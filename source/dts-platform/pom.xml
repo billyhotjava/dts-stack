@@ -537,8 +537,10 @@
                         <testInclude>**/service/modeling/ModelingDbtArtifactImportServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelingVNextApplicationServiceIT.java</testInclude>
                         <testInclude>**/service/modeling/imports/**/*.java</testInclude>
+                        <testInclude>**/web/filter/ModelArchiveUploadLimitFilterTest.java</testInclude>
                         <testInclude>**/web/rest/ModelSpecImport*.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogAssetTag*.java</testInclude>
+                        <testInclude>**/repository/catalog/CatalogExternalAssetIdentityLiquibaseIT.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogTagLiquibaseIT.java</testInclude>
                         <testInclude>**/service/catalog/CatalogAssetPortalServicePermissionParityTest.java</testInclude>
                         <testInclude>**/service/catalog/CatalogAssetPortalTagFilterTest.java</testInclude>

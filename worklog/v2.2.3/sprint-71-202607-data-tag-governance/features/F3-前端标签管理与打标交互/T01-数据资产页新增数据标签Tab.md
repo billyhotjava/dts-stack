@@ -1,4 +1,4 @@
-# T01: 元数据管理页新增数据标签 Tab
+# T01: 数据资产页新增数据标签 Tab
 
 **优先级**: P1
 **状态**: READY
@@ -6,12 +6,12 @@
 
 ## 目标
 
-在既有「元数据管理」页新增「数据标签」Tab，承载标签目录树与标签 CRUD，不新增菜单项。
+在既有「数据资产 → 资产地图」页新增「数据标签」Tab，承载标签目录树与标签 CRUD，不新增菜单项；元数据管理页不再承载标签字典。
 
 ## 技术设计
 
-改造 `pages/catalog/MetadataManagementPage.tsx`（既有页，已有 source-contract 测试
-`MetadataManagementPage.source-contract.test.ts`，改造须同步更新）。
+改造 `pages/catalog/AssetOverviewPage.tsx`，以 `/catalog/assets?tab=catalog-tags` 作为可分享的标签字典入口；同步更新
+`AssetOverviewPage.source-contract.test.ts` 与 `MetadataManagementPage.source-contract.test.ts`，确保标签字典只出现在数据资产页面。
 
 ### 布局
 
@@ -32,8 +32,9 @@
 
 ## 影响范围
 
-- 修改 `dts-platform-webapp/src/pages/catalog/MetadataManagementPage.tsx`
-- 修改 `MetadataManagementPage.source-contract.test.ts`
+- 修改 `dts-platform-webapp/src/pages/catalog/AssetOverviewPage.tsx`
+- 修改 `MetadataManagementPage.tsx`，移除标签字典 Tab 并保留资产语义元数据能力
+- 修改 `AssetOverviewPage.source-contract.test.ts`、`MetadataManagementPage.source-contract.test.ts`
 - 新增标签管理相关组件与 API client
 - **不修改** dts-admin 菜单种子（不新增菜单项）
 
@@ -45,7 +46,7 @@
 - [ ] builtin 分类/标签的删除按钮为禁用态
 - [ ] 删除保护错误信息正确展示
 - [ ] `npx tsc --noEmit` 与前端 build 通过
-- [ ] 真实浏览器 smoke：登录后进入元数据管理页，完成一次标签新建→编辑→删除，截图存 `it/`
+- [ ] 真实浏览器 smoke：登录后进入数据资产页「数据标签」Tab，完成一次标签新建→编辑→删除，截图存 `it/`
 - [ ] Chrome95 兼容性验证（项目浏览器下限）
 
 ## 完成标准

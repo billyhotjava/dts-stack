@@ -5,6 +5,8 @@
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
 
     <changeSet id="20260725-01-catalog-tag-audit-catalog" author="codex">
+        <validCheckSum>9:5d5429c0a674ff45f1f5ffaec6c941aa</validCheckSum>
+        <validCheckSum>9:46a88431aa8961adb50e8d18510a9a5b</validCheckSum>
         <comment>登记数据标签资源、模块、业务动作与 HTTP 审计映射，避免标签操作落入未分类</comment>
         <sql splitStatements="false" stripComments="false"><![CDATA[
             DO $catalog_tag_audit_guard$

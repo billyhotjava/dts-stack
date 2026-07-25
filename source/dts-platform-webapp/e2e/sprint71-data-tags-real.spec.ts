@@ -16,6 +16,12 @@ const evidenceDir = path.resolve(
 	process.cwd(),
 	"../../worklog/v2.2.3/sprint-71-202607-data-tag-governance/it/evidence/chrome95",
 );
+const ASSET_MAP_API_PATHS = new Set([
+	"/api/catalog/domains",
+	"/api/catalog/domains/tree",
+	"/api/catalog/assets-v2",
+	"/api/catalog/assets-v2/overview",
+]);
 
 type CatalogTagCategory = {
 	id: string;
@@ -78,7 +84,11 @@ function observeFailures(page: Page): BrowserFailures {
 	});
 	page.on("response", (response) => {
 		const url = new URL(response.url());
-		if (url.pathname.startsWith("/api/") && response.status() >= 400) {
+		const expectedLegacyDatasetFallback =
+			response.status() === 404 &&
+			response.request().method() === "GET" &&
+			url.pathname === `/api/catalog/assets-v2/${datasetId}`;
+		if (url.pathname.startsWith("/api/") && response.status() >= 400 && !expectedLegacyDatasetFallback) {
 			failures.httpFailures.push(`${response.status()} ${response.request().method()} ${url.pathname}`);
 		}
 	});
@@ -269,19 +279,30 @@ test("Sprint-71 real data-tag governance closes CRUD, dataset, domain and sharea
 		deletedTagCodes: new Set(),
 	};
 	const failures = observeFailures(page);
+	const assetMapRequests: string[] = [];
+	page.on("request", (request) => {
+		const pathname = new URL(request.url()).pathname;
+		if (ASSET_MAP_API_PATHS.has(pathname)) assetMapRequests.push(pathname);
+	});
 
 	try {
 		await page.setViewportSize({ width: 1366, height: 768 });
-		await page.goto("/#/catalog/metadata-management");
-		await page.getByRole("tab", { name: "数据标签" }).click();
+		const tagDirectoryReady = page.waitForResponse(
+			(response) => new URL(response.url()).pathname === "/api/catalog/tag-categories" && response.status() < 400,
+		);
+		await page.goto("/#/catalog/assets?tab=catalog-tags");
+		await tagDirectoryReady;
+		await expect(page).toHaveURL(/\/#\/catalog\/assets\?tab=catalog-tags$/);
+		await expect(page.getByRole("tab", { name: "数据标签" })).toHaveAttribute("aria-selected", "true");
+		expect(assetMapRequests).toEqual([]);
 
-		await page.getByRole("button", { name: "新建标签分类" }).click();
+		await page.getByRole("button", { name: "新建标签分类", exact: true }).click();
 		let dialog = page.getByRole("dialog").filter({ hasText: "新建标签分类" });
 		await dialog.getByLabel("分类名称").fill(categoryName);
 		await dialog.getByLabel("分类编码").fill(categoryCode);
 		await dialog.getByLabel("分类说明").fill("Sprint-71 Chromium 95 真实验收分类");
 		const categoryCreateResponse = waitForApiMutation(page, "POST", "/api/catalog/tag-categories");
-		await dialog.getByRole("button", { name: "保存", exact: true }).click();
+		await dialog.getByRole("button", { name: /保\s*存/ }).click();
 		const createdCategory = await responseData<CatalogTagCategory>(await categoryCreateResponse);
 		expect(createdCategory.id).toBeTruthy();
 		cleanup.categoryId = createdCategory.id;
@@ -290,16 +311,16 @@ test("Sprint-71 real data-tag governance closes CRUD, dataset, domain and sharea
 		await page.getByRole("button", { name: "编辑分类", exact: true }).click();
 		dialog = page.getByRole("dialog").filter({ hasText: "编辑标签分类" });
 		await dialog.getByLabel("分类名称").fill(updatedCategoryName);
-		await dialog.getByRole("button", { name: "保存", exact: true }).click();
+		await dialog.getByRole("button", { name: /保\s*存/ }).click();
 		await expect(page.getByText(updatedCategoryName, { exact: false }).first()).toBeVisible();
 
-		await page.getByRole("button", { name: "新建标签" }).click();
+		await page.getByRole("button", { name: "新建标签", exact: true }).click();
 		dialog = page.getByRole("dialog").filter({ hasText: "新建业务数据标签" });
 		await dialog.getByLabel("标签名称").fill(firstTagName);
 		await dialog.getByLabel("标签编码").fill(firstTagCode);
 		await dialog.getByLabel("业务说明").fill("验证标签 CRUD、资产打标和精确检索");
 		const firstTagCreateResponse = waitForApiMutation(page, "POST", "/api/catalog/tags");
-		await dialog.getByRole("button", { name: "保存", exact: true }).click();
+		await dialog.getByRole("button", { name: /保\s*存/ }).click();
 		const createdFirstTag = await responseData<CatalogTag>(await firstTagCreateResponse);
 		expect(createdFirstTag.id).toBeTruthy();
 		cleanup.tagIdsByCode[firstTagCode] = createdFirstTag.id;
@@ -309,16 +330,16 @@ test("Sprint-71 real data-tag governance closes CRUD, dataset, domain and sharea
 		await firstRow.getByRole("button", { name: `编辑标签 ${firstTagName}` }).click();
 		dialog = page.getByRole("dialog").filter({ hasText: "编辑业务数据标签" });
 		await dialog.getByLabel("标签名称").fill(updatedFirstTagName);
-		await dialog.getByRole("button", { name: "保存", exact: true }).click();
+		await dialog.getByRole("button", { name: /保\s*存/ }).click();
 		await expect(page.getByText(updatedFirstTagName, { exact: true })).toBeVisible();
 
-		await page.getByRole("button", { name: "新建标签" }).click();
+		await page.getByRole("button", { name: "新建标签", exact: true }).click();
 		dialog = page.getByRole("dialog").filter({ hasText: "新建业务数据标签" });
 		await dialog.getByLabel("标签名称").fill(secondTagName);
 		await dialog.getByLabel("标签编码").fill(secondTagCode);
 		await dialog.getByLabel("业务说明").fill("验证重复 tagIds 分享 URL 的 AND 语义");
 		const secondTagCreateResponse = waitForApiMutation(page, "POST", "/api/catalog/tags");
-		await dialog.getByRole("button", { name: "保存", exact: true }).click();
+		await dialog.getByRole("button", { name: /保\s*存/ }).click();
 		const createdSecondTag = await responseData<CatalogTag>(await secondTagCreateResponse);
 		expect(createdSecondTag.id).toBeTruthy();
 		cleanup.tagIdsByCode[secondTagCode] = createdSecondTag.id;
@@ -419,8 +440,8 @@ test("Sprint-71 real data-tag governance closes CRUD, dataset, domain and sharea
 		await page.goto(`/#/governance/subjects?active=${domainId}&domainId=${domainId}&tab=governance`);
 		await removeBusinessTag(page, updatedFirstTagName);
 
-		await page.goto("/#/catalog/metadata-management");
-		await page.getByRole("tab", { name: "数据标签" }).click();
+		await page.goto("/#/catalog/assets?tab=catalog-tags");
+		await expect(page.getByRole("tab", { name: "数据标签" })).toHaveAttribute("aria-selected", "true");
 		await page.getByText(updatedCategoryName, { exact: false }).first().click();
 		for (const tag of [
 			{ code: firstTagCode, name: updatedFirstTagName },
@@ -429,14 +450,14 @@ test("Sprint-71 real data-tag governance closes CRUD, dataset, domain and sharea
 			const row = page.locator("tr").filter({ hasText: tag.name });
 			await row.getByRole("button", { name: `删除标签 ${tag.name}` }).click();
 			const confirm = page.getByRole("dialog").filter({ hasText: /确认删除(?:已使用的)?标签/ });
-			await confirm.getByRole("button", { name: /^(?:删除|删除标签及关系)$/ }).click();
+			await confirm.getByRole("button", { name: /^(?:删\s*除|删除标签及关系)$/ }).click();
 			await expect(page.getByText(tag.name, { exact: true })).toHaveCount(0);
 			cleanup.deletedTagCodes.add(tag.code);
 			delete cleanup.tagIdsByCode[tag.code];
 		}
 		await page.getByRole("button", { name: "删除分类", exact: true }).click();
 		dialog = page.getByRole("dialog").filter({ hasText: "确认删除标签分类" });
-		await dialog.getByRole("button", { name: "删除", exact: true }).click();
+		await dialog.getByRole("button", { name: /删\s*除/ }).click();
 		await expect(page.getByText(updatedCategoryName, { exact: false })).toHaveCount(0);
 		cleanup.categoryId = "";
 		cleanup.categoryDeleted = true;

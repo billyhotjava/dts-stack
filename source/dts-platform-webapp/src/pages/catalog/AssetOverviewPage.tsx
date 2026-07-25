@@ -1,12 +1,29 @@
+import {
+	ApartmentOutlined,
+	BranchesOutlined,
+	DatabaseOutlined,
+	SafetyCertificateOutlined,
+	TableOutlined,
+	WarningOutlined,
+} from "@ant-design/icons";
+import { Alert, Button, Layout, Spin, Tabs, Tag, Tooltip, Tree } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Button, Layout, Spin, Tag, Tooltip, Tree } from "antd";
-import { ApartmentOutlined, BranchesOutlined, DatabaseOutlined, SafetyCertificateOutlined, TableOutlined, WarningOutlined } from "@ant-design/icons";
-import { PageHeader } from "@/components/page-header";
+import { useSearchParams } from "react-router";
 import { getCatalogAssetsOverview, getDomainTree, listCatalogAssetsV2, listDomains } from "@/api/platformApi";
+import { TagManagementTab } from "@/components/catalog/tags/TagManagementTab";
+import { PageHeader } from "@/components/page-header";
+import { useCatalogTagGovernanceAccess } from "@/hooks/useModuleManageAccess";
 import { useRouter } from "@/routes/hooks";
 import { resolveAssetReadiness } from "./assetPortalUx.helpers";
-import { LAYER_META, LAYER_ORDER, UNASSIGNED_DOMAIN_KEY, MetricTile, buildTreeNodes, normalizeLayer } from "./assets/assetPageShared";
 import type { AssetRow, DomainNode } from "./assets/assetPageShared";
+import {
+	buildTreeNodes,
+	LAYER_META,
+	LAYER_ORDER,
+	MetricTile,
+	normalizeLayer,
+	UNASSIGNED_DOMAIN_KEY,
+} from "./assets/assetPageShared";
 
 type MatrixCell = { layer: string; domainId: string | null; total: number; attention: number };
 
@@ -37,6 +54,11 @@ const GOVERNANCE_STATUS_LABELS: Record<string, string> = {
  */
 export default function AssetOverviewPage() {
 	const router = useRouter();
+	const [searchParams, setSearchParams] = useSearchParams();
+	const canManageCatalog = useCatalogTagGovernanceAccess();
+	const activeTab = searchParams.get("tab") === "catalog-tags" ? "catalog-tags" : "asset-map";
+	const isLegacyLedgerRedirect = searchParams.get("view") === "table";
+	const isAssetMapActive = activeTab === "asset-map" && !isLegacyLedgerRedirect;
 	const [domain, setDomain] = useState<string | undefined>();
 	const [overview, setOverview] = useState<AssetOverview | null>(null);
 	const [overviewLoading, setOverviewLoading] = useState(false);
@@ -47,19 +69,16 @@ export default function AssetOverviewPage() {
 
 	// ?view=table 旧深链兼容：台账已是独立路由
 	useEffect(() => {
-		try {
-			const params = new URLSearchParams(window.location.search);
-			if (params.get("view") === "table") {
-				params.delete("view");
-				const rest = params.toString();
-				router.replace(`/catalog/assets/ledger${rest ? `?${rest}` : ""}`);
-			}
-		} catch {
-			// ignore
-		}
-	}, [router]);
+		if (!isLegacyLedgerRedirect) return;
+		const params = new URLSearchParams(searchParams);
+		params.delete("view");
+		params.delete("tab");
+		const rest = params.toString();
+		router.replace(`/catalog/assets/ledger${rest ? `?${rest}` : ""}`);
+	}, [isLegacyLedgerRedirect, router, searchParams]);
 
 	useEffect(() => {
+		if (!isAssetMapActive) return;
 		void (async () => {
 			try {
 				const resp: any = await listDomains(0, 200, "");
@@ -84,11 +103,12 @@ export default function AssetOverviewPage() {
 				setTreeLoading(false);
 			}
 		})();
-	}, []);
+	}, [isAssetMapActive]);
 
 	const domainMap = useMemo(() => new Map(domains.map((item) => [item.id, item.name])), [domains]);
 
 	const loadOverview = useCallback(async () => {
+		if (!isAssetMapActive) return;
 		setOverviewLoading(true);
 		try {
 			const scope = {
@@ -125,11 +145,12 @@ export default function AssetOverviewPage() {
 		} finally {
 			setOverviewLoading(false);
 		}
-	}, [domain]);
+	}, [domain, isAssetMapActive]);
 
 	useEffect(() => {
+		if (!isAssetMapActive) return;
 		void loadOverview();
-	}, [loadOverview]);
+	}, [isAssetMapActive, loadOverview]);
 
 	const drillToLedger = (layer?: string, domainKey?: string | null) => {
 		const params = new URLSearchParams();
@@ -190,6 +211,44 @@ export default function AssetOverviewPage() {
 		[domainTree],
 	);
 
+	const handleTabChange = (key: string) => {
+		const params = new URLSearchParams(searchParams);
+		if (key === "catalog-tags") {
+			params.set("tab", "catalog-tags");
+		} else {
+			params.delete("tab");
+		}
+		setSearchParams(params);
+	};
+
+	const assetTabs = (
+		<Tabs
+			activeKey={activeTab}
+			onChange={handleTabChange}
+			items={[
+				{ key: "asset-map", label: "资产地图" },
+				{ key: "catalog-tags", label: "数据标签" },
+			]}
+		/>
+	);
+
+	if (isLegacyLedgerRedirect) return null;
+
+	if (activeTab === "catalog-tags") {
+		return (
+			<div className="space-y-4">
+				{assetTabs}
+				<Alert
+					type="info"
+					showIcon
+					message="标签字典用于数据资产打标"
+					description="统一维护标签分类与标签字典，供资产台账和资产详情选择使用。"
+				/>
+				<TagManagementTab canManage={canManageCatalog} />
+			</div>
+		);
+	}
+
 	return (
 		<Layout className="min-h-full bg-transparent">
 			<Layout.Sider width={240} theme="light" className="rounded-lg border border-slate-200 bg-white p-3">
@@ -211,6 +270,7 @@ export default function AssetOverviewPage() {
 				</Spin>
 			</Layout.Sider>
 			<Layout.Content style={{ padding: "0 16px" }}>
+				{assetTabs}
 				<div className="space-y-4">
 					<PageHeader
 						title="资产地图"
@@ -233,7 +293,12 @@ export default function AssetOverviewPage() {
 					) : null}
 
 					<div className="grid gap-3 md:grid-cols-5">
-						<MetricTile icon={<DatabaseOutlined />} label="资产总量" value={overview?.total ?? 0} footnote={domain ? domainMap.get(domain) || "未归域" : "全部主题域"} />
+						<MetricTile
+							icon={<DatabaseOutlined />}
+							label="资产总量"
+							value={overview?.total ?? 0}
+							footnote={domain ? domainMap.get(domain) || "未归域" : "全部主题域"}
+						/>
 						<MetricTile
 							icon={<WarningOutlined />}
 							label="待处置"
@@ -241,9 +306,24 @@ export default function AssetOverviewPage() {
 							footnote="未定密 / 未归域 / 失效 / 待治理"
 							tone={(overview?.attention ?? 0) > 0 ? "text-amber-600" : "text-green-600"}
 						/>
-						<MetricTile icon={<SafetyCertificateOutlined />} label="未定密" value={overview?.unclassified ?? 0} tone={(overview?.unclassified ?? 0) > 0 ? "text-amber-600" : "text-green-600"} />
-						<MetricTile icon={<ApartmentOutlined />} label="未归域" value={overview?.missingDomain ?? 0} tone={(overview?.missingDomain ?? 0) > 0 ? "text-amber-600" : "text-green-600"} />
-						<MetricTile icon={<BranchesOutlined />} label="失效资产" value={overview?.stale ?? 0} tone={(overview?.stale ?? 0) > 0 ? "text-red-600" : "text-green-600"} />
+						<MetricTile
+							icon={<SafetyCertificateOutlined />}
+							label="未定密"
+							value={overview?.unclassified ?? 0}
+							tone={(overview?.unclassified ?? 0) > 0 ? "text-amber-600" : "text-green-600"}
+						/>
+						<MetricTile
+							icon={<ApartmentOutlined />}
+							label="未归域"
+							value={overview?.missingDomain ?? 0}
+							tone={(overview?.missingDomain ?? 0) > 0 ? "text-amber-600" : "text-green-600"}
+						/>
+						<MetricTile
+							icon={<BranchesOutlined />}
+							label="失效资产"
+							value={overview?.stale ?? 0}
+							tone={(overview?.stale ?? 0) > 0 ? "text-red-600" : "text-green-600"}
+						/>
 					</div>
 
 					{governanceChips.length ? (
@@ -261,7 +341,9 @@ export default function AssetOverviewPage() {
 						<div className="mb-3 flex flex-wrap items-center justify-between gap-3">
 							<div>
 								<div className="text-sm font-semibold text-slate-900">分层×主题域矩阵</div>
-								<div className="mt-1 text-xs text-slate-500">格子 = 该分层×主题域下的资产数，点击进入台账查看明细。</div>
+								<div className="mt-1 text-xs text-slate-500">
+									格子 = 该分层×主题域下的资产数，点击进入台账查看明细。
+								</div>
 							</div>
 							<Spin spinning={overviewLoading} size="small" />
 						</div>
@@ -281,12 +363,17 @@ export default function AssetOverviewPage() {
 									<tbody>
 										{[...LAYER_ORDER].map((layer) => (
 											<tr key={layer}>
-												<td className="whitespace-nowrap px-2 py-1 text-xs font-medium text-slate-600">{LAYER_META[layer].label}</td>
+												<td className="whitespace-nowrap px-2 py-1 text-xs font-medium text-slate-600">
+													{LAYER_META[layer].label}
+												</td>
 												{matrixColumns.map((col) => {
 													const cell = matrixCellMap.get(`${layer}|${col.key === null ? "__NULL__" : col.key}`);
 													if (!cell) {
 														return (
-															<td key={String(col.key)} className="rounded bg-slate-50 px-2 py-2 text-center text-xs text-slate-300">
+															<td
+																key={String(col.key)}
+																className="rounded bg-slate-50 px-2 py-2 text-center text-xs text-slate-300"
+															>
 																-
 															</td>
 														);
@@ -299,7 +386,9 @@ export default function AssetOverviewPage() {
 																onClick={() => drillToLedger(layer, col.key)}
 															>
 																{cell.total}
-																{cell.attention > 0 ? <span className="ml-1 text-[10px]">待处置 {cell.attention}</span> : null}
+																{cell.attention > 0 ? (
+																	<span className="ml-1 text-[10px]">待处置 {cell.attention}</span>
+																) : null}
 															</button>
 														</td>
 													);
@@ -310,7 +399,9 @@ export default function AssetOverviewPage() {
 								</table>
 							</div>
 						) : (
-							<div className="py-8 text-center text-xs text-slate-400">{overviewLoading ? "统计加载中…" : "当前范围内暂无资产"}</div>
+							<div className="py-8 text-center text-xs text-slate-400">
+								{overviewLoading ? "统计加载中…" : "当前范围内暂无资产"}
+							</div>
 						)}
 					</div>
 
@@ -348,7 +439,9 @@ export default function AssetOverviewPage() {
 								})}
 							</div>
 						) : (
-							<div className="py-6 text-center text-xs text-slate-400">{overviewLoading ? "加载中…" : "当前范围内没有待处置资产"}</div>
+							<div className="py-6 text-center text-xs text-slate-400">
+								{overviewLoading ? "加载中…" : "当前范围内没有待处置资产"}
+							</div>
 						)}
 					</div>
 				</div>

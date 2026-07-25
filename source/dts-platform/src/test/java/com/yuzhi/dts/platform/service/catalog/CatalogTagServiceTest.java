@@ -352,11 +352,22 @@ class CatalogTagServiceTest {
     }
 
     @Test
+    void listTagsBindsAnEmptyKeywordAsTextForPostgres() {
+        PageRequest pageable = PageRequest.of(0, 10);
+        when(tagRepository.search(null, "", null, pageable))
+            .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        service.listTags(null, "  ", null, pageable);
+
+        verify(tagRepository).search(null, "", null, pageable);
+    }
+
+    @Test
     void listTagsLoadsUsageCountsForTheCurrentPageInOneGroupedQuery() {
         CatalogTag unused = tag("UNUSED", "未使用", false, true);
         CatalogTag popular = tag("POPULAR", "常用", false, true);
         PageRequest pageable = PageRequest.of(0, 10);
-        when(tagRepository.search(null, null, null, pageable))
+        when(tagRepository.search(null, "", null, pageable))
             .thenReturn(new PageImpl<>(List.of(unused, popular), pageable, 2));
         when(assetTagRepository.countGroupedByTagId(List.of(unused.getId(), popular.getId())))
             .thenReturn(List.of(usageCount(popular.getId(), 7)));

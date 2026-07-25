@@ -63,6 +63,20 @@ export type AssetRef = {
 	assetKey: string;
 };
 
+export type AssetRefPage = {
+	content: AssetRef[];
+	total: number;
+	page: number;
+	size: number;
+};
+
+export type AssetTagSearchQuery = {
+	tagIds: string[];
+	assetType?: string;
+	page?: number;
+	size?: number;
+};
+
 export type AssetTagCapability = {
 	canTag: boolean;
 };
@@ -175,6 +189,14 @@ export const deleteCatalogTag = (id: string, force = false) =>
 	});
 
 export const listAssetTags = (params: AssetRef) => quietGet<CatalogTagDto[]>("/catalog/asset-tags", params);
+
+export const searchCatalogAssetsByTags = (params: AssetTagSearchQuery) =>
+	api.get<AssetRefPage>({
+		url: "/catalog/asset-tags/search",
+		params,
+		paramsSerializer: { indexes: null },
+		_skipErrorToast: true,
+	} as any);
 
 export const getAssetTagCapability = (params: AssetRef) =>
 	quietGet<AssetTagCapability>("/catalog/asset-tags/capability", params);

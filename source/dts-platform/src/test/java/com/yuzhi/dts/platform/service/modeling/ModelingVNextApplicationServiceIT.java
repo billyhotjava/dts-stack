@@ -13,6 +13,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** PostgreSQL-backed acceptance of the modeling ledger, dbt artifact and run boundary. */
 @IntegrationTest
@@ -26,6 +28,9 @@ class ModelingVNextApplicationServiceIT {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @Test
     void legacyPlanRouteWritesOneCanonicalPlanAndReturnsItsPlanId() {
@@ -112,9 +117,9 @@ class ModelingVNextApplicationServiceIT {
                 savedModel.revision()
             );
             String implementationChecksum = "b".repeat(64);
-            jdbcTemplate.update(
-                """
-                with implementation as (
+            new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                jdbcTemplate.update(
+                    """
                     insert into modeling_model_implementation (
                         id, tenant_id, model_spec_id, plan_id, model_revision, model_checksum, ownership,
                         project_key, dbt_unique_id, status, idempotency_key, created_by, created_date,
@@ -124,30 +129,33 @@ class ModelingVNextApplicationServiceIT {
                               'ACTIVE', ?, 'integration-test', now(), now(), 1, ?, 'GENERATED',
                               cast('[{"generatorType":"SQL_WORKSPACE","config":{}}]' as jsonb),
                               cast('[]' as jsonb), cast('{}' as jsonb), 'table')
-                    returning id, tenant_id, ownership, materialization
-                )
-                insert into modeling_model_implementation_revision (
-                    id, tenant_id, implementation_id, revision, content_checksum, input_mode,
-                    inputs_json, field_mappings_json, settings_json, ownership, materialization,
-                    created_by, created_date
-                )
-                select ?, tenant_id, id, 1, ?, 'GENERATED',
-                       cast('[{"generatorType":"SQL_WORKSPACE","config":{}}]' as jsonb),
-                       cast('[]' as jsonb), cast('{}' as jsonb), ownership, materialization,
-                       'integration-test', now()
-                  from implementation
-                """,
-                implementationId,
-                tenant,
-                UUID.fromString(savedModel.id()),
-                implementationPlanId,
-                savedModel.revision(),
-                modelChecksum,
-                "implementation-" + modelKey,
-                implementationChecksum,
-                UUID.randomUUID(),
-                implementationChecksum
-            );
+                    """,
+                    implementationId,
+                    tenant,
+                    UUID.fromString(savedModel.id()),
+                    implementationPlanId,
+                    savedModel.revision(),
+                    modelChecksum,
+                    "implementation-" + modelKey,
+                    implementationChecksum
+                );
+                jdbcTemplate.update(
+                    """
+                    insert into modeling_model_implementation_revision (
+                        id, tenant_id, implementation_id, revision, content_checksum, input_mode,
+                        inputs_json, field_mappings_json, settings_json, ownership, materialization,
+                        created_by, created_date
+                    ) values (?, ?, ?, 1, ?, 'GENERATED',
+                              cast('[{"generatorType":"SQL_WORKSPACE","config":{}}]' as jsonb),
+                              cast('[]' as jsonb), cast('{}' as jsonb), 'DBT_MANAGED', 'table',
+                              'integration-test', now())
+                    """,
+                    UUID.randomUUID(),
+                    tenant,
+                    implementationId,
+                    implementationChecksum
+                );
+            });
 
             Map<String, Object> node = new LinkedHashMap<>();
             node.put("resource_type", "model");
@@ -298,25 +306,16 @@ class ModelingVNextApplicationServiceIT {
                 new ModelingRunCallbackContract.Callback("FAILED", null, null, null, "late failure")
             ).state()).isEqualTo(ModelingRunStateMachine.RunState.SUCCEEDED.name());
         } finally {
-            jdbcTemplate.update("delete from modeling_pipeline_run where tenant_id = ?", tenant);
-            jdbcTemplate.update("delete from modeling_dbt_artifact where model_spec_id = ?", externalUuid(modelKey));
-            jdbcTemplate.update("delete from modeling_dbt_artifact where project_key = ?", "legacy-pjm");
-            jdbcTemplate.update(
-                """
-                with implementation as (
-                    delete from modeling_model_implementation where tenant_id = ? returning id
-                )
-                delete from modeling_model_implementation_revision revision
-                 using implementation
-                 where revision.tenant_id = ?
-                   and revision.implementation_id = implementation.id
-                """,
-                tenant,
-                tenant
-            );
-            jdbcTemplate.update("delete from modeling_model_spec_revision where model_spec_id = ?", externalUuid(modelKey));
-            jdbcTemplate.update("delete from modeling_model_spec where id = ?", externalUuid(modelKey));
-            jdbcTemplate.update("delete from modeling_business_object where id = ?", externalUuid(objectKey));
+            new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                jdbcTemplate.update("delete from modeling_pipeline_run where tenant_id = ?", tenant);
+                jdbcTemplate.update("delete from modeling_dbt_artifact where model_spec_id = ?", externalUuid(modelKey));
+                jdbcTemplate.update("delete from modeling_dbt_artifact where project_key = ?", "legacy-pjm");
+                jdbcTemplate.update("delete from modeling_model_implementation_revision where tenant_id = ?", tenant);
+                jdbcTemplate.update("delete from modeling_model_implementation where tenant_id = ?", tenant);
+                jdbcTemplate.update("delete from modeling_model_spec_revision where model_spec_id = ?", externalUuid(modelKey));
+                jdbcTemplate.update("delete from modeling_model_spec where id = ?", externalUuid(modelKey));
+                jdbcTemplate.update("delete from modeling_business_object where id = ?", externalUuid(objectKey));
+            });
         }
     }
 

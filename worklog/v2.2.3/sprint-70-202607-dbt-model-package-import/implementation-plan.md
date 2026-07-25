@@ -17,9 +17,11 @@
 Requirements are the files under `features/F1-模型包契约与转换器/` plus
 `assets/model-package-architecture.md`.
 
-Deliver the versioned JSON Schema, deterministic checksum/validation,
-manifest/catalog/schema conversion, conversion classifier, technical-node
-preservation, repo-native generator, focused tests, and PJM golden fixture.
+Deliver the versioned internal JSON Schema, deterministic checksum/validation,
+safe dbt ZIP inspection, manifest/catalog/schema and legacy TSV conversion,
+conversion classifier, technical-node preservation, repo-native generator,
+focused tests, and PJM golden fixture. ZIP is the UI input; JSON remains an
+internal/automation contract.
 
 ## Task 2: F2 preview and diff control plane
 
@@ -44,9 +46,10 @@ Requirements are the files under `features/F4-建模工作台导入体验/` plus
 `assets/import-ui-flow.md`.
 
 Deliver one shared four-step wizard used by Modeling Workbench and Model
-Center, locked plan context, preview matrix, apply confirmation, persistent
-result view, model navigation, and failed-only retry. Do not add a top-level
-menu or a second state implementation.
+Center, ZIP upload and server inspection, locked plan context, preview matrix,
+apply confirmation, persistent result view, model navigation, and failed-only
+retry. Do not expose JSON as the user upload contract, add a top-level menu,
+or add a second state implementation.
 
 ## Task 5: F5 integrated verification and delivery
 

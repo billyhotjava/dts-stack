@@ -2,13 +2,14 @@ import { Alert, Button, Card, Input, Select, Space, Tabs, Tag } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { toast } from "sonner";
-import type { CatalogTagDto } from "@/api/catalogTagsApi";
+import { type AssetRefPage, type CatalogTagDto, searchCatalogAssetsByTags } from "@/api/catalogTagsApi";
 import { listCatalogAssetsV2, listDomains, searchCatalog } from "@/api/platformApi";
 import { AssetTagChips } from "@/components/catalog/tags/AssetTagChips";
 import { AssetTagFilter } from "@/components/catalog/tags/AssetTagFilter";
 import { readTagIds, writeTagIds } from "@/components/catalog/tags/catalogTagUrlState";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
+import { ASSET_PORTAL_V2_ENABLED } from "./assets/assetPageShared";
 
 type SearchRow = {
 	id: string;
@@ -104,7 +105,8 @@ function readStoredSearchForm(): StoredSearchForm {
 export default function DataSearchPage() {
 	const [searchParams, setSearchParams] = useSearchParams();
 	const selectedTagIds = useMemo(() => readTagIds(searchParams), [searchParams]);
-	const selectedTagIdsKey = selectedTagIds.join("\u0000");
+	const effectiveSelectedTagIds = ASSET_PORTAL_V2_ENABLED ? selectedTagIds : [];
+	const selectedTagIdsKey = effectiveSelectedTagIds.join("\u0000");
 	const [initialSearchForm] = useState(readStoredSearchForm);
 	const [keyword, setKeyword] = useState(initialSearchForm.keyword);
 	const [domain, setDomain] = useState<string | undefined>(initialSearchForm.domain);
@@ -288,27 +290,73 @@ export default function DataSearchPage() {
 		}));
 	};
 
+	const normalizeExactTagRows = (payload: AssetRefPage | undefined): SearchRow[] => {
+		const content = Array.isArray(payload?.content) ? payload.content : [];
+		const rows: SearchRow[] = [];
+		for (const item of content) {
+			const assetType = String(item.assetType || "ASSET")
+				.trim()
+				.toUpperCase();
+			const assetKey = String(item.assetKey || "").trim();
+			if (!assetKey) continue;
+			const keySegments = assetKey.split("/");
+			rows.push({
+				id: `tag-hit-${assetType}-${assetKey}`,
+				name: keySegments[keySegments.length - 1] || assetKey,
+				type: assetType,
+				assetKind: "ASSET",
+				assetType,
+				assetKey,
+				assetTags: [],
+				source: "标签索引",
+			});
+		}
+		return rows;
+	};
+
 	const runSearch = async (notifyWhenEmpty = true) => {
 		const sequence = ++searchRequestSequence.current;
 		const trimmed = keyword.trim();
-		if (!trimmed && selectedTagIds.length === 0) {
+		if (!trimmed && effectiveSelectedTagIds.length === 0) {
 			setResults([]);
 			setSearched(false);
 			setLoading(false);
-			if (notifyWhenEmpty) toast.error("请输入关键词或选择业务数据标签后再搜索");
+			if (notifyWhenEmpty) {
+				toast.error(ASSET_PORTAL_V2_ENABLED ? "请输入关键词或选择业务数据标签后再搜索" : "请输入关键词后再搜索");
+			}
 			return;
 		}
 		setLoading(true);
 		setSearched(true);
 		try {
 			const shouldSearchAssetsV2 =
-				assetType === "ALL" || assetType === "ASSET" || assetType === "DATASET" || assetType === "TABLE";
+				ASSET_PORTAL_V2_ENABLED &&
+				(assetType === "ALL" || assetType === "ASSET" || assetType === "DATASET" || assetType === "TABLE");
 			const shouldSearchLegacyCatalog = assetType !== "ASSET";
-			const [assetsResult, legacyResult] = await Promise.allSettled([
+			const hasExactTagIncompatibleFilters =
+				Boolean(trimmed) ||
+				Boolean(domain && domain !== "ALL") ||
+				datasetType !== "ALL" ||
+				classification !== "ALL" ||
+				warehouseLayer !== "ALL";
+			const exactAssetType = assetType === "DATASET" ? "DATASET" : undefined;
+			const shouldSearchExactTags =
+				effectiveSelectedTagIds.length > 0 &&
+				!hasExactTagIncompatibleFilters &&
+				(assetType === "ALL" || assetType === "ASSET" || assetType === "DATASET");
+			const [tagSearchResult, assetsResult, legacyResult] = await Promise.allSettled([
+				shouldSearchExactTags
+					? searchCatalogAssetsByTags({
+							tagIds: effectiveSelectedTagIds,
+							assetType: exactAssetType,
+							page: 0,
+							size: 100,
+						})
+					: Promise.resolve({ content: [], total: 0, page: 0, size: 100 }),
 				shouldSearchAssetsV2
 					? listCatalogAssetsV2({
 							keyword: trimmed || undefined,
-							tagIds: selectedTagIds,
+							tagIds: effectiveSelectedTagIds,
 							domainId: domain && domain !== "ALL" ? domain : undefined,
 							classification: classification === "ALL" ? undefined : classification,
 							warehouseLayer: warehouseLayer === "ALL" ? undefined : warehouseLayer,
@@ -320,7 +368,7 @@ export default function DataSearchPage() {
 				shouldSearchLegacyCatalog
 					? searchCatalog({
 							keyword: trimmed || undefined,
-							tagIds: selectedTagIds,
+							tagIds: effectiveSelectedTagIds,
 							types: assetType === "ALL" ? undefined : assetType,
 							domainId: domain && domain !== "ALL" ? domain : undefined,
 							classification: classification === "ALL" ? undefined : classification,
@@ -332,9 +380,18 @@ export default function DataSearchPage() {
 					: Promise.resolve({ datasets: [], tables: [], columns: [] }),
 			]);
 			if (sequence !== searchRequestSequence.current) return;
+			const exactTagRows = tagSearchResult.status === "fulfilled" ? normalizeExactTagRows(tagSearchResult.value) : [];
 			const assetRows = assetsResult.status === "fulfilled" ? normalizeAssetRows(assetsResult.value || {}) : [];
 			const legacyRows = legacyResult.status === "fulfilled" ? normalizeRows(legacyResult.value || {}) : [];
-			setResults([...assetRows, ...legacyRows]);
+			const resolvedAssetKeys = new Set(
+				[...assetRows, ...legacyRows]
+					.filter((row) => row.assetKey)
+					.map((row) => `${row.assetType || row.type}\u0000${row.assetKey}`),
+			);
+			const unresolvedExactTagRows = exactTagRows.filter(
+				(row) => !resolvedAssetKeys.has(`${row.assetType || row.type}\u0000${row.assetKey}`),
+			);
+			setResults([...assetRows, ...legacyRows, ...unresolvedExactTagRows]);
 			persistCurrentQuery();
 		} catch {
 			if (sequence !== searchRequestSequence.current) return;
@@ -357,6 +414,15 @@ export default function DataSearchPage() {
 			<PageHeader title="数据资产门户 · 数据搜索" />
 
 			<Card title="搜索条件">
+				{!ASSET_PORTAL_V2_ENABLED ? (
+					<Alert
+						className="mb-3"
+						type="warning"
+						showIcon
+						message="旧版资产门户未启用业务数据标签筛选"
+						description="当前仍可按关键词检索数据集；如需按业务数据标签检索全部资产类型，请启用新版资产门户。"
+					/>
+				) : null}
 				<Space size={12} wrap>
 					<Input.Search
 						placeholder="输入关键词"
@@ -408,6 +474,7 @@ export default function DataSearchPage() {
 					/>
 					<AssetTagFilter
 						value={selectedTagIds}
+						disabled={!ASSET_PORTAL_V2_ENABLED}
 						onChange={(nextIds) => {
 							setSearchParams(writeTagIds(searchParams, nextIds), { replace: true });
 						}}
@@ -430,29 +497,42 @@ export default function DataSearchPage() {
 								label: `资产（${grouped.ASSET.length}）`,
 								children: grouped.ASSET.length ? (
 									<div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-										{grouped.ASSET.map((row) => (
-											<Link
-												key={row.id}
-												to={`/catalog/datasets/${row.id}`}
-												className="cursor-pointer rounded-lg border border-slate-200 bg-white px-4 py-3 text-left transition-all hover:border-blue-300 hover:shadow-sm"
-											>
-												<div className="font-semibold text-sm text-slate-900">{row.name}</div>
-												<div className="mt-1 truncate font-mono text-xs text-slate-500">{row.assetKey || row.id}</div>
-												<div className="mt-2 flex flex-wrap gap-1">
-													<Tag style={{ fontSize: 10 }}>{row.type || "ASSET"}</Tag>
-													<Tag color={row.classification ? "orange" : "default"} style={{ fontSize: 10 }}>
-														{row.classification || "未定密"}
-													</Tag>
-													<Tag color={row.warehouseLayer ? "blue" : "default"} style={{ fontSize: 10 }}>
-														{row.warehouseLayer || "未分层"}
-													</Tag>
-													<Tag color="blue" style={{ fontSize: 10 }}>
-														{row.source || "assets-v2"}
-													</Tag>
+										{grouped.ASSET.map((row) =>
+											row.source === "标签索引" ? (
+												<div key={row.id} className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-left">
+													<div className="font-semibold text-sm text-slate-900">{row.name}</div>
+													<div className="mt-1 truncate font-mono text-xs text-slate-500">{row.assetKey || row.id}</div>
+													<div className="mt-2 flex flex-wrap gap-1">
+														<Tag style={{ fontSize: 10 }}>{row.type || "ASSET"}</Tag>
+														<Tag color="blue" style={{ fontSize: 10 }}>
+															{row.source}
+														</Tag>
+													</div>
 												</div>
-												<AssetTagChips tags={row.assetTags || []} variant="inline" />
-											</Link>
-										))}
+											) : (
+												<Link
+													key={row.id}
+													to={`/catalog/datasets/${row.id}`}
+													className="cursor-pointer rounded-lg border border-slate-200 bg-white px-4 py-3 text-left transition-all hover:border-blue-300 hover:shadow-sm"
+												>
+													<div className="font-semibold text-sm text-slate-900">{row.name}</div>
+													<div className="mt-1 truncate font-mono text-xs text-slate-500">{row.assetKey || row.id}</div>
+													<div className="mt-2 flex flex-wrap gap-1">
+														<Tag style={{ fontSize: 10 }}>{row.type || "ASSET"}</Tag>
+														<Tag color={row.classification ? "orange" : "default"} style={{ fontSize: 10 }}>
+															{row.classification || "未定密"}
+														</Tag>
+														<Tag color={row.warehouseLayer ? "blue" : "default"} style={{ fontSize: 10 }}>
+															{row.warehouseLayer || "未分层"}
+														</Tag>
+														<Tag color="blue" style={{ fontSize: 10 }}>
+															{row.source || "assets-v2"}
+														</Tag>
+													</div>
+													<AssetTagChips tags={row.assetTags || []} variant="inline" />
+												</Link>
+											),
+										)}
 									</div>
 								) : (
 									<Alert

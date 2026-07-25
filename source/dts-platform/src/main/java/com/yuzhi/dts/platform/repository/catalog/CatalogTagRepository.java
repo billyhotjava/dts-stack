@@ -24,7 +24,7 @@ public interface CatalogTagRepository extends JpaRepository<CatalogTag, UUID> {
         select t from CatalogTag t
         where (:categoryId is null or t.categoryId = :categoryId)
           and (:enabled is null or t.enabled = :enabled)
-          and (:keyword is null
+          and (:keyword = ''
             or lower(t.code) like lower(concat('%', :keyword, '%'))
             or lower(t.name) like lower(concat('%', :keyword, '%')))
         """

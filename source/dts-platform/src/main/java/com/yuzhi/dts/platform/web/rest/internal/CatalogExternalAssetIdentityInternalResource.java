@@ -41,10 +41,23 @@ public class CatalogExternalAssetIdentityInternalResource {
                     "registration request is required"
                 );
             }
+            boolean hasBatchIndex = request.batchIndex() != null;
+            boolean hasBatchCount = request.batchCount() != null;
+            if (hasBatchIndex != hasBatchCount) {
+                throw new IllegalArgumentException(
+                    "batch index and count must be provided together"
+                );
+            }
+            boolean legacyUnknownBatchCount =
+                request.registrationScope() != null &&
+                !hasBatchIndex;
             return registry.register(
                 "dts-metrics",
                 request.registrationScope(),
                 request.syncRunId(),
+                hasBatchIndex ? request.batchIndex() : 0,
+                hasBatchCount ? request.batchCount() : 1,
+                legacyUnknownBatchCount,
                 request.complete(),
                 request.assets()
             );
@@ -61,10 +74,12 @@ public class CatalogExternalAssetIdentityInternalResource {
         List<Registration> assets,
         String registrationScope,
         UUID syncRunId,
+        Integer batchIndex,
+        Integer batchCount,
         boolean complete
     ) {
         public RegistrationRequest(List<Registration> assets) {
-            this(assets, null, null, false);
+            this(assets, null, null, 0, 1, false);
         }
     }
 }

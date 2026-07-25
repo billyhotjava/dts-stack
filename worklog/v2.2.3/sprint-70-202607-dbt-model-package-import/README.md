@@ -3,7 +3,7 @@
 **时间**: 2026-07  
 **状态**: IN_PROGRESS  
 **类型**: Model Import / Canonical ModelSpec / UI Journey / Safe Migration  
-**目标**: 将已有 dbt 项目转换为可预检、可确认、可幂等导入的 DTS 模型包，在当前建设计划下自动创建四类 canonical ModelSpec，并将无法安全降级的 SQL 保留为受治理的 dbt 实现。
+**目标**: 允许用户直接上传既有 dbt ZIP 项目包，由服务端安全解析为内部 DTS 模型包，经预检和确认后在当前建设计划下幂等创建四类 canonical ModelSpec，并将无法安全降级的 SQL 保留为受治理的 dbt 实现。
 
 ## 背景
 
@@ -14,16 +14,18 @@
 
 本 Sprint 不重写已有 dbt parser，也不把任意 SQL 伪装成普通可视化实现。新增能力聚焦：
 
-1. 从 `manifest.json + catalog.json + schema.yml/meta.dts` 生成版本化 `dts-model-package.json`。
-2. 将候选分类为 `DESIGNER_GENERATED / DBT_BACKED / BLOCKED`。
-3. 在零写入预检后，按拓扑顺序创建 ModelSpec、锁定来源与上游 revision，并建立 implementation/artifact 绑定。
-4. 在建模工作台和模型中心提供同一个导入向导，形成“计划上下文 → 预检 → 确认 → 结果”的完整路径。
+1. 接收 dbt ZIP；优先读取 `manifest.json + catalog.json + schema.yml/meta.dts + SQL`，并兼容现有高级建模的 `models.tsv + SQL` ZIP。
+2. 在服务端内存/临时目录中生成版本化 `dts.model-package/v1`，不再要求业务用户制作或上传 JSON。
+3. 将候选分类为 `DESIGNER_GENERATED / DBT_BACKED / BLOCKED`。
+4. 在零写入预检后，按拓扑顺序创建 ModelSpec、锁定来源与上游 revision，并建立 implementation/artifact 绑定。
+5. 在建模工作台和模型中心提供同一个导入向导，形成“ZIP 上传 → 计划上下文 → 预检 → 确认 → 结果”的完整路径。
 
 ## 用户路径与 UI 决策
 
 - 建模工作台当前计划卡片提供“导入已有模型”次主按钮；未选择计划时禁用并说明原因。
 - 模型中心标题区提供同一入口；携带 `planId` 时锁定计划，无上下文时先选择建设计划。
-- 两个入口复用同一个四步向导：上传模型包、确认上下文、查看预检矩阵、确认并查看结果。
+- 两个入口复用同一个四步向导：上传 dbt ZIP、确认上下文、查看预检矩阵、确认并查看结果。
+- `dts.model-package/v1` JSON 是服务端标准化中间契约和自动化兼容 API，不是页面要求用户准备的交付物。
 - 高级 SQL/dbt 页面保留专家兼容入口，但不作为首次用户主路径；不新增一级菜单。
 - 导入成功后优先返回模型中心，并提供查看单个 ModelSpec、返回当前计划和仅重试失败项。
 
@@ -38,19 +40,20 @@
 
 | ID | Feature | Task 数 | 状态 |
 |----|---------|---------|------|
-| F1 | 模型包契约与转换器 | 4 | DONE |
+| F1 | 模型包契约与转换器 | 5 | IN_PROGRESS |
 | F2 | 导入预检与差异分析 | 4 | DONE |
 | F3 | canonical 模型应用引擎 | 4 | IN_PROGRESS |
-| F4 | 建模工作台导入体验 | 5 | READY |
+| F4 | 建模工作台导入体验 | 5 | IN_PROGRESS |
 | F5 | 集成验收与交付 | 4 | READY |
 
-**统计**: READY=9, IN_PROGRESS=4, DONE=8, BLOCKED=0
+**统计**: READY=8, IN_PROGRESS=6, DONE=8, BLOCKED=0
 
 ## 既有能力复用与去重
 
 - 复用 Sprint-60 的 manifest/SQL 解析、漂移和 artifact 导入契约，不再新建第二套 dbt parser。
 - 复用 Sprint-65/67 的 ModelSpec、ModelImplementation、PhysicalAssetRevision 四层边界。
 - 复用现有 ModelSpec 创建、来源版本校验、依赖规则、implementation claim、CAS 和幂等机制。
+- 复用高级建模 `models.tsv + SQL` 的 ZIP 交付习惯，但不调用会直接写旧工作区的 `/batch-import` 服务。
 - 旧 `/modeling/sql-models/import`、`/batch-import` 仅作为兼容入口保留，不升级为 canonical 主链。
 - Sprint-69 继续负责构建、质量、发布与回滚；本 Sprint 只交付可进入该工作台的模型与实现绑定。
 
@@ -58,7 +61,8 @@
 
 ### 本 Sprint 完成
 
-- 包契约、JSON Schema、生成器、预检、差异、确认应用、幂等和审计。
+- dbt ZIP 安全检查、无副作用解包、内部模型包转换、JSON Schema、生成器、预检、差异、确认应用、幂等和审计。
+- artifact ZIP 缺少业务语义时在预检中明确阻断；旧 `models.tsv + SQL` ZIP 不通过文件名或 SQL 猜测模型类型、粒度或业务域。
 - 普通 ModelSpec 自动创建，以及 `DESIGNER_GENERATED / DBT_BACKED` 双实现分流。
 - STG/ephemeral 技术节点保留在实现图中，但不创建四类 ModelSpec。
 - 工作台/模型中心双入口和共享导入向导。
@@ -82,7 +86,7 @@
 
 ## 完成标准
 
-- [ ] dbt 项目可稳定生成符合 JSON Schema 的 `dts-model-package.json`。
+- [ ] 用户上传 dbt ZIP 后，服务端可稳定生成符合 JSON Schema 的内部 `dts.model-package/v1`；页面不要求用户上传 JSON。
 - [ ] package checksum 覆盖字段、配置、依赖、SQL 和业务语义覆盖项。
 - [ ] 预检严格零写入，并明确 `CREATE / UPDATE / SKIP / CONFLICT / BLOCKED`。
 - [ ] `source()` 能解析到当前计划已确认、当前版本可用的 SourceBinding。

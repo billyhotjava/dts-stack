@@ -18,7 +18,7 @@ test("workbench and model center reuse one controlled model-package import wizar
 });
 
 test("wizard implements the four frozen steps, disabled blockers and durable result actions", () => {
-	for (const label of ["上传模型包", "建设上下文", "预检确认", "导入结果"]) assert.match(wizard, new RegExp(label));
+	for (const label of ["上传 dbt ZIP", "建设上下文", "预检确认", "导入结果"]) assert.match(wizard, new RegExp(label));
 	assert.match(wizard, /isSelectablePreviewItem/);
 	assert.match(wizard, /isPreviewApplicable/);
 	assert.match(wizard, /仅重试失败项/);
@@ -29,12 +29,35 @@ test("wizard implements the four frozen steps, disabled blockers and durable res
 	assert.match(wizard, /resolveModelPackageImportIdempotencySlot/);
 });
 
+test("wizard accepts a dbt ZIP, inspects it into the internal package, then previews that contract", () => {
+	assert.match(wizard, /accept="\.zip,application\/zip"/);
+	assert.match(wizard, /inspectDbtModelArchive/);
+	assert.match(wizard, /createConvertedModelPackage/);
+	assert.match(wizard, /validateDbtModelPackageArchive/);
+	assert.match(wizard, /上传 dbt ZIP 后，系统会自动解析并转换为内部模型包/);
+	assert.match(wizard, /最大 32 MiB/);
+	assert.match(wizard, /MODEL_IMPORT_ARCHIVE_UNSAFE_PATH/);
+	assert.match(wizard, /MODEL_IMPORT_ARCHIVE_LENGTH_REQUIRED/);
+	assert.match(wizard, /MODEL_IMPORT_ARCHIVE_MANIFEST_MISSING/);
+	assert.match(wizard, /MODEL_IMPORT_ARCHIVE_SQL_MISSING/);
+	assert.match(wizard, /<Archive/);
+	assert.doesNotMatch(wizard, /accept="\.json,application\/json"/);
+	assert.doesNotMatch(wizard, /file\.text\(\)/);
+});
+
 test("raw model package never crosses sessions and is cleared after preview or exit", () => {
 	assert.doesNotMatch(state, /activeModelPackageImportSession|restoreModelPackageImportState/);
 	assert.match(state, /case "PREVIEW_SUCCEEDED"/);
 	assert.match(state, /modelPackage: null/);
 	assert.match(wizard, /SENSITIVE_CLEARED/);
 	assert.match(wizard, /createModelPackageImportState/);
+});
+
+test("a completed preview restarts from ZIP upload instead of returning to a cleared context package", () => {
+	assert.match(wizard, /state\.step === 2 \? \(/);
+	assert.match(wizard, /重新上传并预检/);
+	assert.match(wizard, /onClick=\{invalidatePreview\}/);
+	assert.match(wizard, /type: "PREVIEW_INVALIDATED"/);
 });
 
 test("unknown backend messages are not rendered and technical identifiers stay collapsed", () => {
@@ -54,6 +77,7 @@ test("mobile preview renders sanitized issues and keeps code, field and dbt iden
 });
 
 test("client calls only the canonical preview, apply, query and retry endpoints", () => {
+	assert.match(api, /\/dbt\/archive\/inspect/);
 	assert.match(api, /\/dbt\/preview/);
 	assert.match(api, /\/dbt\/apply/);
 	assert.match(api, /encodeURIComponent\(runId\)/);

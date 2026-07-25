@@ -3,22 +3,26 @@
 ## 1. 总体流程
 
 ```text
-dbt project
-  └─ dbt parse/compile/docs generate
-       ├─ manifest.json
-       ├─ catalog.json
-       └─ schema.yml / meta.dts
+dbt ZIP
+  ├─ artifact format: manifest.json + optional catalog.json/schema.yml + SQL
+  └─ legacy format: models.tsv + SQL
               ↓
-       DTS package generator
+       safe archive inspection
               ↓
-       dts-model-package.json
+       server-side DTS package converter
               ↓
-       preview → human confirmation → apply
+       internal dts.model-package/v1
+              ↓
+       context mapping → preview → human confirmation → apply
               ↓
        ModelSpec → ModelImplementation → dbt artifact / physical evidence
 ```
 
-## 2. 包结构
+ZIP 是面向用户和现有 dbt 项目的交付格式；JSON 是服务端内部标准化契约。CLI 仍可生成 JSON 用于回归夹具和自动化，但普通建模页面不得要求用户手工准备 JSON。
+
+artifact ZIP 可在根目录或单层项目目录中保存 `manifest.json`/`target/manifest.json`。旧 `models.tsv + SQL` ZIP 可进入同一检查入口；如果缺少 manifest、依赖或 `meta.dts` 业务语义，转换器必须返回明确 issue/阻断，不能通过命名猜测后写入 canonical 模型。
+
+## 2. 内部包结构
 
 ```json
 {

@@ -170,7 +170,13 @@ public class CatalogTagService {
         if (pageable.getPageSize() < 1 || pageable.getPageSize() > MAX_PAGE_SIZE) {
             throw badRequest("每页数量 size 必须在 1 到 100 之间");
         }
-        Page<CatalogTag> tags = tagRepository.search(categoryId, trimToNull(keyword), enabled, pageable);
+        String normalizedKeyword = trimToNull(keyword);
+        Page<CatalogTag> tags = tagRepository.search(
+            categoryId,
+            normalizedKeyword == null ? "" : normalizedKeyword,
+            enabled,
+            pageable
+        );
         Map<UUID, Long> usageCounts = usageCounts(tags.getContent().stream().map(CatalogTag::getId).toList());
         return tags.map(tag -> toTagDto(tag, usageCounts.getOrDefault(tag.getId(), 0L)));
     }

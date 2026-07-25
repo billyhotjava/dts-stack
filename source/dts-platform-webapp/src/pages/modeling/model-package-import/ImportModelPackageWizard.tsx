@@ -18,12 +18,13 @@ import {
 	Upload,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { ArrowLeft, CheckCircle2, ExternalLink, FileJson2, PackageOpen, RefreshCw, UploadCloud, Wrench } from "lucide-react";
+import { Archive, ArrowLeft, CheckCircle2, ExternalLink, RefreshCw, Wrench } from "lucide-react";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
 	applyModelSpecImport,
 	getModelSpecImportApplyResult,
 	getModelSpecImportPreviewRun,
+	inspectDbtModelArchive,
 	previewModelSpecImport,
 	retryModelSpecImport,
 	type ModelSpecImportIssue,
@@ -43,16 +44,17 @@ import {
 } from "./modelPackageImportNavigation";
 import {
 	canRetryFailedImport,
+	createConvertedModelPackage,
 	createModelPackageImportState,
 	hasCompleteImportContext,
 	isSelectablePreviewItem,
 	isPreviewApplicable,
 	modelPackageDomainCodes,
 	modelPackageSourceIds,
-	parseModelPackage,
 	reduceModelPackageImportState,
 	resolveModelPackageImportIdempotencySlot,
 	sanitizeModelImportDiagnosticCode,
+	validateDbtModelPackageArchive,
 	type ModelPackageImportIdempotencySlot,
 } from "./modelPackageImportState";
 
@@ -101,13 +103,21 @@ const stableImportMessages: Record<string, string> = {
 	MODEL_IMPORT_PREVIEW_STALE: "预检依据已经变化，请重新预检。",
 	MODEL_IMPORT_IDEMPOTENCY_CONFLICT: "相同提交标识对应了不同内容，请刷新后重新提交。",
 	MODEL_IMPORT_CONVERSION_BLOCKED: "该候选当前无法安全转换为普通模型。",
+	MODEL_IMPORT_ARCHIVE_INVALID: "dbt ZIP 压缩包格式不正确，请重新导出后上传。",
+	MODEL_IMPORT_ARCHIVE_EMPTY: "dbt ZIP 压缩包中没有可导入的模型，请确认 models 目录和对应 SQL 后重试。",
+	MODEL_IMPORT_ARCHIVE_TOO_LARGE: "dbt ZIP 压缩包不能超过 32 MiB。",
+	MODEL_IMPORT_ARCHIVE_LENGTH_REQUIRED: "dbt ZIP 上传缺少文件长度，请通过页面重新选择文件后上传。",
+	MODEL_IMPORT_ARCHIVE_UNSAFE_PATH: "dbt ZIP 包含不安全或重复的文件路径，请重新打包后上传。",
+	MODEL_IMPORT_ARCHIVE_MANIFEST_MISSING: "未找到 dbt manifest.json 或 models.tsv，请重新生成 dbt 导入包。",
+	MODEL_IMPORT_ARCHIVE_SQL_MISSING: "dbt manifest 引用的模型 SQL 不完整，请把对应 SQL 文件一并打包。",
+	MODEL_IMPORT_ARCHIVE_INSPECTION_FAILED: "dbt ZIP 压缩包无法解析，请确认包内 dbt 项目完整后重试。",
 };
 const crossPlanMessage = "该导入批次不属于当前锁定计划，已阻止跨计划恢复。";
 const safeClientPackageMessages = new Set([
-	"请选择 .json 格式的 DTS 模型包",
-	"模型包大小必须在 1 B 到 8 MB 之间",
-	"文件不是有效的 JSON，无法读取模型包",
-	"文件不符合 dts.model-package/v1 基本结构",
+	"请选择 dbt ZIP 压缩包",
+	"dbt ZIP 压缩包不能为空",
+	"dbt ZIP 压缩包不能超过 32 MiB",
+	"转换后的内部模型包结构不完整，无法继续预检",
 ]);
 
 export type ImportModelPackageWizardProps = {
@@ -311,15 +321,28 @@ export function ImportModelPackageWizard({
 		};
 	}, [contextReloadNonce, open, state.planId, state.step]);
 
-	const readPackage = async (file: File) => {
+	const inspectArchive = async (file: File) => {
 		try {
-			const parsed = parseModelPackage(await file.text(), file.name, file.size);
-			dispatch({ type: "PACKAGE_LOADED", ...parsed });
+			validateDbtModelPackageArchive(file.name, file.size);
 		} catch (error) {
 			dispatch({
 				type: "REQUEST_FAILED",
 				message: clientPackageMessage(error),
 				diagnosticCode: "MODEL_PACKAGE_CLIENT_INVALID",
+			});
+			return false;
+		}
+		dispatch({ type: "REQUEST_STARTED" });
+		try {
+			const modelPackage = await inspectDbtModelArchive(file);
+			dispatch({ type: "PACKAGE_LOADED", ...createConvertedModelPackage(modelPackage, file.name, file.size) });
+		} catch (error) {
+			const clientMessage = clientPackageMessage(error);
+			dispatch({
+				type: "REQUEST_FAILED",
+				...(error instanceof Error && safeClientPackageMessages.has(error.message)
+					? { message: clientMessage, diagnosticCode: "MODEL_PACKAGE_CLIENT_INVALID" }
+					: requestFailure(error, "dbt ZIP 压缩包无法转换为内部模型包，请确认包内包含可解析的 dbt 项目后重试。")),
 			});
 		}
 		return false;
@@ -513,34 +536,31 @@ export function ImportModelPackageWizard({
 	const uploadStep = (
 		<div className="mx-auto max-w-3xl py-5">
 			<div className="mb-6">
-				<Title level={4}>上传版本化 DTS 模型包</Title>
+				<Title level={4}>上传 dbt ZIP 压缩包</Title>
 				<Paragraph type="secondary">
-					模型包由 dbt manifest、SQL 与业务语义生成。浏览器只做格式和大小检查，服务端会重新验证版本与完整性。
+					上传 dbt ZIP 后，系统会自动解析并转换为内部模型包，再进入预检。ZIP 内应包含 models 目录及对应 SQL；YAML 可作为附带配置。
 				</Paragraph>
 			</div>
 			<Dragger
-				accept=".json,application/json"
+				accept=".zip,application/zip"
 				showUploadList={false}
 				disabled={state.busy}
 				beforeUpload={(file) => {
-					void readPackage(file as File);
+					void inspectArchive(file as File);
 					return false;
 				}}
 			>
 				<p className="ant-upload-drag-icon">
-					<UploadCloud className="mx-auto text-blue-600" size={42} />
+					<Archive className="mx-auto text-blue-600" size={42} />
 				</p>
-				<p className="ant-upload-text">点击或拖入 dts.model-package/v1 JSON 文件</p>
-				<p className="ant-upload-hint">单文件，最大 8 MB；不会把本地路径作为模型标识</p>
+				<p className="ant-upload-text">点击或拖入 dbt ZIP 压缩包</p>
+				<p className="ant-upload-hint">单文件，最大 32 MiB；系统自动转换，无需用户读取或准备内部 JSON</p>
 			</Dragger>
 			{state.metadata ? (
 				<Card className="mt-5 border-blue-200 bg-blue-50/50" size="small">
 					<Descriptions size="small" column={{ xs: 1, sm: 2 }} title={state.metadata.fileName}>
 						<Descriptions.Item label="dbt 项目">{state.metadata.projectName}</Descriptions.Item>
-						<Descriptions.Item label="项目版本">{state.metadata.projectVersion}</Descriptions.Item>
 						<Descriptions.Item label="模型">{state.metadata.modelCount} 个</Descriptions.Item>
-						<Descriptions.Item label="技术节点">{state.metadata.technicalNodeCount} 个（只作依赖证据）</Descriptions.Item>
-						<Descriptions.Item label="包版本">{state.metadata.schemaVersion}</Descriptions.Item>
 					</Descriptions>
 					<Collapse
 						ghost
@@ -548,7 +568,7 @@ export function ImportModelPackageWizard({
 						items={[{
 							key: "package-technical",
 							label: "技术详情",
-							children: <Text type="secondary">包标识：{state.metadata.packageId} · 完整性校验：{state.metadata.checksum}</Text>,
+							children: <Text type="secondary">内部包版本：{state.metadata.schemaVersion} · 包标识：{state.metadata.packageId} · 完整性校验：{state.metadata.checksum} · 技术节点：{state.metadata.technicalNodeCount} 个</Text>,
 						}]}
 					/>
 				</Card>
@@ -580,7 +600,7 @@ export function ImportModelPackageWizard({
 					<div className="flex flex-wrap items-center justify-between gap-2">
 						<div>
 							<Text strong>{state.metadata.projectName}</Text>
-							<Text className="ml-2" type="secondary">{state.metadata.modelCount} 个模型 · {state.metadata.schemaVersion}</Text>
+							<Text className="ml-2" type="secondary">{state.metadata.fileName} · {state.metadata.modelCount} 个模型</Text>
 						</div>
 					</div>
 					<Collapse
@@ -589,7 +609,7 @@ export function ImportModelPackageWizard({
 						items={[{
 							key: "context-package-technical",
 							label: "技术详情",
-							children: <Text type="secondary">包标识：{state.metadata.packageId} · 完整性校验：{state.metadata.checksum}</Text>,
+							children: <Text type="secondary">内部包版本：{state.metadata.schemaVersion} · 包标识：{state.metadata.packageId} · 完整性校验：{state.metadata.checksum}</Text>,
 						}]}
 					/>
 				</Card>
@@ -919,13 +939,23 @@ export function ImportModelPackageWizard({
 
 	const footer = state.step < 3 ? (
 		<div className="flex items-center justify-between gap-3">
-			<Button
-				disabled={state.busy || state.step === 0}
-				icon={<ArrowLeft size={15} />}
-				onClick={() => dispatch({ type: "BACK" })}
-			>
-				上一步
-			</Button>
+			{state.step === 2 ? (
+				<Button
+					disabled={state.busy}
+					icon={<RefreshCw size={15} />}
+					onClick={invalidatePreview}
+				>
+					重新上传并预检
+				</Button>
+			) : (
+				<Button
+					disabled={state.busy || state.step === 0}
+					icon={<ArrowLeft size={15} />}
+					onClick={() => dispatch({ type: "BACK" })}
+				>
+					上一步
+				</Button>
+			)}
 			<Space>
 				<Button disabled={state.busy} onClick={closeWizard}>稍后继续</Button>
 				{state.step === 0 ? (
@@ -955,11 +985,11 @@ export function ImportModelPackageWizard({
 			closable={!state.busy}
 			title={
 				<div className="flex items-center gap-3">
-					<div className="rounded-lg bg-blue-50 p-2 text-blue-700"><PackageOpen size={20} /></div>
+					<div className="rounded-lg bg-blue-50 p-2 text-blue-700"><Archive size={20} /></div>
 					<div>
 						<div>导入已有模型</div>
 						<div className="text-xs font-normal text-slate-500">
-							{selectedPlan ? `目标计划：${selectedPlan.name}` : "上传 dbt 生成的 DTS 模型包并纳入普通模型主线"}
+							{selectedPlan ? `目标计划：${selectedPlan.name}` : "上传 dbt ZIP，自动转换为内部模型包并纳入普通模型主线"}
 						</div>
 					</div>
 				</div>
@@ -973,7 +1003,7 @@ export function ImportModelPackageWizard({
 				current={state.step}
 				responsive
 				items={[
-					{ title: "上传模型包", icon: <FileJson2 size={16} /> },
+					{ title: "上传 dbt ZIP", icon: <Archive size={16} /> },
 					{ title: "建设上下文" },
 					{ title: "预检确认" },
 					{ title: "导入结果" },

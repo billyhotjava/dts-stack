@@ -696,7 +696,8 @@ public class DbtIndicatorGenerator {
 
 	private String applyVars(String template, Map<String, String> vars) {
 		Matcher matcher = TEMPLATE_PLACEHOLDER.matcher(template);
-		StringBuffer result = new StringBuffer();
+		//StringBuffer result = new StringBuffer();
+		StringBuilder result = new StringBuilder();
 		while (matcher.find()) {
 			String value = vars.get(matcher.group(1));
 			if (value == null) {

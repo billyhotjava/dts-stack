@@ -1,6 +1,6 @@
 import { Alert, Button, Descriptions, Form, Input, message, Select, Space, Spin, Switch, Tabs, Tag } from "antd";
 import { useEffect, useRef, useState } from "react";
-import { useParams, useSearchParams } from "react-router";
+import { useLocation, useParams, useSearchParams } from "react-router";
 import {
 	getCatalogAssetV2,
 	getCatalogAssetV2Contract,
@@ -18,6 +18,7 @@ import {
 	LegacyGovernanceNotice,
 	MetadataJsonBlock,
 } from "./DatasetDetailSupportTabs";
+import { resolveDatasetDetailId } from "./datasetDetailRoute";
 
 const DETAIL_TAB_KEYS = [
 	"overview",
@@ -73,7 +74,9 @@ const toDatasetFromAssetV2Detail = (id: string, detail: any) => {
 };
 
 export default function DatasetDetailPage() {
-	const { id } = useParams<{ id: string }>();
+	const { id: routeId } = useParams<{ id?: string }>();
+	const location = useLocation();
+	const id = resolveDatasetDetailId(routeId, location.pathname);
 	const [searchParams, setSearchParams] = useSearchParams();
 	const router = useRouter();
 	const requestedTab = searchParams.get("tab");

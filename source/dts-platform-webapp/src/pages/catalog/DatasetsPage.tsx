@@ -56,7 +56,8 @@ export default function Page() {
 	const router = useRouter();
 	const [searchParams, setSearchParams] = useSearchParams();
 	const selectedTagIds = useMemo(() => readTagIds(searchParams), [searchParams]);
-	const selectedTagIdsKey = selectedTagIds.join("\u0000");
+	const effectiveSelectedTagIds = ASSET_PORTAL_V2_ENABLED ? selectedTagIds : [];
+	const selectedTagIdsKey = effectiveSelectedTagIds.join("\u0000");
 	const [keyword, setKeyword] = useState("");
 	const [domain, setDomain] = useState<string | undefined>(() => {
 		try {
@@ -233,7 +234,7 @@ export default function Page() {
 
 	const buildAssetListQuery = (page = 1, size = LEDGER_PAGE_SIZE) => ({
 		...buildAssetQuery(page, size),
-		tagIds: selectedTagIds.length ? selectedTagIds : undefined,
+		tagIds: effectiveSelectedTagIds.length ? effectiveSelectedTagIds : undefined,
 	});
 
 	const loadGovernanceSignals = async () => {
@@ -451,7 +452,7 @@ export default function Page() {
 	const [filtersOpen, setFiltersOpen] = useState(false);
 	const activeFilterCount =
 		[assetType, classification, governanceStatus, matchStatus].filter((value) => value && value !== "ALL").length +
-		(selectedTagIds.length > 0 ? 1 : 0);
+		(effectiveSelectedTagIds.length > 0 ? 1 : 0);
 
 	const opsItem = (title: string, description: string) => (
 		<div className="py-0.5">
@@ -599,7 +600,8 @@ export default function Page() {
 						opsMenuItems={opsMenuItems}
 						pageSubtitle={pageSubtitle}
 						pageTitle={pageTitle}
-						selectedTagIds={selectedTagIds}
+						selectedTagIds={effectiveSelectedTagIds}
+						tagFilterEnabled={ASSET_PORTAL_V2_ENABLED}
 					/>
 
 					{diagnostics ? (

@@ -68,9 +68,9 @@ class MetricPublishDownstreamTest {
             )
             .containsExactly(
                 "tenant:default/env:prod/dialect:generic/metric-pack:order-summary/version:v1",
-                "metric:order-summary/order_amount",
-                "metric:order-summary/order_count",
-                "metric:order-summary/avg_order_amount"
+                "tenant:default/env:prod/dialect:generic/metric-pack:order-summary/metric:order_amount",
+                "tenant:default/env:prod/dialect:generic/metric-pack:order-summary/metric:order_count",
+                "tenant:default/env:prod/dialect:generic/metric-pack:order-summary/metric:avg_order_amount"
             );
     }
 

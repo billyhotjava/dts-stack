@@ -42,11 +42,23 @@ test("data search consumes hydrated tags without per-result requests", () => {
 test("data search renders exact tag hits for every backend-supported asset type", () => {
 	assert.match(SOURCE, /searchCatalogAssetsByTags/);
 	assert.match(SOURCE, /normalizeExactTagRows/);
-	assert.match(SOURCE, /assetType:\s*String\(item\.assetType/);
-	assert.match(SOURCE, /assetKey:\s*String\(item\.assetKey/);
+	assert.match(SOURCE, /const assetType = String\(item\.assetType/);
+	assert.match(SOURCE, /const assetKey = String\(item\.assetKey/);
 	assert.match(SOURCE, /source:\s*"标签索引"/);
 	assert.match(SOURCE, /tagSearchResult\.status === "fulfilled"/);
 	assert.doesNotMatch(SOURCE, /SUPPORTED_TAG_ASSET_TYPES|TAG_ASSET_TYPE_ALLOWLIST/);
+});
+
+test("exact tag references do not bypass richer search filters or send legacy table types", () => {
+	assert.match(SOURCE, /const hasExactTagIncompatibleFilters =/);
+	assert.match(SOURCE, /Boolean\(trimmed\)/);
+	assert.match(SOURCE, /datasetType !== "ALL"/);
+	assert.match(SOURCE, /classification !== "ALL"/);
+	assert.match(SOURCE, /warehouseLayer !== "ALL"/);
+	assert.match(SOURCE, /const exactAssetType = assetType === "DATASET" \? "DATASET" : undefined/);
+	assert.match(SOURCE, /const shouldSearchExactTags =/);
+	assert.match(SOURCE, /assetType === "ALL" \|\| assetType === "ASSET" \|\| assetType === "DATASET"/);
+	assert.doesNotMatch(SOURCE, /\["DATASET", "TABLE", "COLUMN"\]\.includes\(assetType\)/);
 });
 
 test("legacy asset portal disables tag filtering with an explicit explanation", () => {

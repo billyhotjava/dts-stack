@@ -10,6 +10,9 @@ import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportAppl
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.AttemptStatus;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.BeginDisposition;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyService;
+import com.yuzhi.dts.platform.service.modeling.imports.ModelPackageFixtures;
+import com.yuzhi.dts.platform.service.modeling.imports.converter.DbtModelArchiveInspectService;
+import com.yuzhi.dts.platform.service.modeling.imports.converter.DbtModelArchiveInspectService.ArchiveInspectionException;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewContract.Kind;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewContract.ModelSpecImportPreviewException;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewContract.PreviewContext;
@@ -29,6 +32,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.mock.web.MockMultipartFile;
 
 @ExtendWith(MockitoExtension.class)
 class ModelSpecImportResourceTest {
@@ -47,6 +51,9 @@ class ModelSpecImportResourceTest {
 
     @Mock
     private ModelSpecImportApplyService applyService;
+
+    @Mock
+    private DbtModelArchiveInspectService archiveInspectService;
 
     @Mock
     private ModelSpecImportPreviewAdmissionGate.Admission admission;
@@ -200,5 +207,52 @@ class ModelSpecImportResourceTest {
         assertThat(resource.apply(httpRequest).getData()).isEqualTo(response);
         verify(requestParser).parseApply(httpRequest);
         verify(applyService).apply(parsed);
+    }
+
+    @Test
+    void inspectArchiveDelegatesToTheDedicatedArchiveService() {
+        ModelSpecImportResource resource = new ModelSpecImportResource(
+            service,
+            requestParser,
+            audit,
+            admissionGate,
+            applyService,
+            archiveInspectService
+        );
+        MockMultipartFile archive = new MockMultipartFile("archive", "existing-dbt.zip", "application/zip", new byte[] { 1, 2 });
+        var modelPackage = ModelPackageFixtures.validPackage();
+        when(admissionGate.enter()).thenReturn(admission);
+        when(archiveInspectService.inspect(archive)).thenReturn(modelPackage);
+
+        assertThat(resource.inspectArchive(archive).getData()).isEqualTo(modelPackage);
+        org.mockito.InOrder inspectionOrder = org.mockito.Mockito.inOrder(
+            admissionGate,
+            archiveInspectService,
+            admission
+        );
+        inspectionOrder.verify(admissionGate).enter();
+        inspectionOrder.verify(archiveInspectService).inspect(archive);
+        inspectionOrder.verify(admission).close();
+    }
+
+    @Test
+    void mapsArchiveInspectionFailuresToStableApiCodesAndPayloadLimit() {
+        ModelSpecImportResource resource = new ModelSpecImportResource(
+            service,
+            requestParser,
+            audit,
+            admissionGate,
+            applyService,
+            archiveInspectService
+        );
+
+        var response = resource.handleArchiveInspectionError(
+            new ArchiveInspectionException("MODEL_IMPORT_ARCHIVE_TOO_LARGE", "dbt ZIP exceeds limit")
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getCode()).isEqualTo("MODEL_IMPORT_ARCHIVE_TOO_LARGE");
+        verify(audit).rejected("MODEL_IMPORT_ARCHIVE_TOO_LARGE");
     }
 }

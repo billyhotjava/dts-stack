@@ -6,7 +6,7 @@ import type {
 } from "@/api/modelSpecImportApi";
 
 export const MODEL_PACKAGE_SCHEMA_VERSION = "dts.model-package/v1";
-export const MODEL_PACKAGE_MAX_BYTES = 8 * 1024 * 1024;
+export const DBT_MODEL_PACKAGE_ARCHIVE_MAX_BYTES = 32 * 1024 * 1024;
 
 export type ModelPackageMetadata = {
 	fileName: string;
@@ -106,6 +106,7 @@ export const reduceModelPackageImportState = (
 				selectedUniqueIds: [],
 				result: null,
 				runId: "",
+				busy: false,
 				error: "",
 				diagnosticCode: "",
 			};
@@ -243,36 +244,41 @@ export const reduceModelPackageImportState = (
 	return next;
 };
 
-const requiredObject = (value: unknown): Record<string, unknown> | null =>
-	value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
-
-export const parseModelPackage = (
-	text: string,
+export const validateDbtModelPackageArchive = (
 	fileName: string,
 	fileSize: number,
-): { modelPackage: ModelPackageJson; metadata: ModelPackageMetadata } => {
-	if (!fileName.toLowerCase().endsWith(".json")) throw new Error("请选择 .json 格式的 DTS 模型包");
-	if (fileSize <= 0 || fileSize > MODEL_PACKAGE_MAX_BYTES) throw new Error("模型包大小必须在 1 B 到 8 MB 之间");
-	let parsed: unknown;
-	try {
-		parsed = JSON.parse(text);
-	} catch {
-		throw new Error("文件不是有效的 JSON，无法读取模型包");
-	}
-	const value = requiredObject(parsed);
-	const dbt = requiredObject(value?.dbt);
+): void => {
+	if (!fileName.toLowerCase().endsWith(".zip")) throw new Error("请选择 dbt ZIP 压缩包");
+	if (fileSize <= 0) throw new Error("dbt ZIP 压缩包不能为空");
+	if (fileSize > DBT_MODEL_PACKAGE_ARCHIVE_MAX_BYTES) throw new Error("dbt ZIP 压缩包不能超过 32 MiB");
+};
+
+const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
+	Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const validateConvertedModelPackage = (modelPackage: ModelPackageJson): void => {
+	const value = modelPackage as unknown;
+	const dbt = isObjectRecord(value) ? value.dbt : null;
 	if (
-		!value ||
+		!isObjectRecord(value) ||
 		value.schemaVersion !== MODEL_PACKAGE_SCHEMA_VERSION ||
 		typeof value.packageId !== "string" ||
 		typeof value.packageChecksum !== "string" ||
-		typeof dbt?.projectName !== "string" ||
+		!isObjectRecord(dbt) ||
+		typeof dbt.projectName !== "string" ||
 		!Array.isArray(value.models) ||
 		!Array.isArray(value.sources)
 	) {
-		throw new Error("文件不符合 dts.model-package/v1 基本结构");
+		throw new Error("转换后的内部模型包结构不完整，无法继续预检");
 	}
-	const modelPackage = parsed as ModelPackageJson;
+};
+
+export const createConvertedModelPackage = (
+	modelPackage: ModelPackageJson,
+	fileName: string,
+	fileSize: number,
+): { modelPackage: ModelPackageJson; metadata: ModelPackageMetadata } => {
+	validateConvertedModelPackage(modelPackage);
 	return {
 		modelPackage,
 		metadata: {

@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260725-22-catalog-external-asset-sync-state" author="dts">
+        <createTable tableName="catalog_external_asset_sync_state">
+            <column name="source_service" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="registration_scope" type="varchar(512)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="active_run_id" type="uuid"/>
+            <column name="next_batch_index" type="integer" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="batch_count" type="integer"/>
+            <column name="last_completed_run_id" type="uuid"/>
+            <column name="last_modified_date" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addPrimaryKey
+            tableName="catalog_external_asset_sync_state"
+            columnNames="source_service, registration_scope"
+            constraintName="pk_catalog_external_asset_sync_state"/>
+        <sql>
+            alter table catalog_external_asset_sync_state
+            add constraint ck_catalog_external_asset_sync_batch
+            check (
+                next_batch_index &gt;= 0
+                and (
+                    (active_run_id is null and batch_count is null and next_batch_index = 0)
+                    or (active_run_id is not null and batch_count is not null and batch_count &gt; 0)
+                )
+            )
+        </sql>
+        <createTable tableName="catalog_external_asset_sync_run">
+            <column name="source_service" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="registration_scope" type="varchar(512)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sync_run_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="batch_count" type="integer">
+                <constraints nullable="false"/>
+            </column>
+            <column name="started_date" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="finished_date" type="timestamp"/>
+            <column name="last_modified_date" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addPrimaryKey
+            tableName="catalog_external_asset_sync_run"
+            columnNames="source_service, registration_scope, sync_run_id"
+            constraintName="pk_catalog_external_asset_sync_run"/>
+        <createIndex
+            tableName="catalog_external_asset_sync_run"
+            indexName="idx_catalog_external_asset_sync_run_status">
+            <column name="status"/>
+            <column name="last_modified_date"/>
+        </createIndex>
+        <sql>
+            alter table catalog_external_asset_sync_run
+            add constraint ck_catalog_external_asset_sync_run_status
+            check (
+                batch_count &gt; 0
+                and (
+                    (status = 'ACTIVE' and finished_date is null)
+                    or (status in ('COMPLETED', 'SUPERSEDED') and finished_date is not null)
+                )
+            )
+        </sql>
+        <createTable tableName="catalog_external_asset_sync_item">
+            <column name="identity_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_service" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="registration_scope" type="varchar(512)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sync_run_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="asset_type" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="canonical_asset_key" type="varchar(512)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="remote_asset_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="owner_dept" type="varchar(128)"/>
+            <column name="created_date" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_modified_date" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addPrimaryKey
+            tableName="catalog_external_asset_sync_item"
+            columnNames="source_service, registration_scope, sync_run_id, asset_type, canonical_asset_key"
+            constraintName="pk_catalog_external_asset_sync_item"/>
+        <addUniqueConstraint
+            tableName="catalog_external_asset_sync_item"
+            columnNames="source_service, registration_scope, sync_run_id, asset_type, remote_asset_id"
+            constraintName="uk_catalog_external_asset_sync_item_remote"/>
+        <sql>
+            alter table catalog_external_asset_sync_item
+            add constraint ck_catalog_external_asset_sync_item_type
+            check (asset_type in ('METRIC', 'METRIC_PACK'))
+        </sql>
+
+        <rollback>
+            <dropTable tableName="catalog_external_asset_sync_item"/>
+            <dropTable tableName="catalog_external_asset_sync_run"/>
+            <dropTable tableName="catalog_external_asset_sync_state"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

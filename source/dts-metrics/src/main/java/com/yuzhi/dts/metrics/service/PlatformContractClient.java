@@ -600,12 +600,14 @@ public class PlatformContractClient {
         List<TaggableAssetRegistration> assets,
         String registrationScope,
         UUID syncRunId,
+        int batchIndex,
+        int batchCount,
         boolean complete
     ) {
         public TaggableAssetsRegisterRequest(
             List<TaggableAssetRegistration> assets
         ) {
-            this(assets, null, null, false);
+            this(assets, null, null, 0, 1, false);
         }
     }
 

@@ -27,6 +27,7 @@ type AssetLedgerToolbarProps = {
 	pageSubtitle: string;
 	pageTitle: string;
 	selectedTagIds: string[];
+	tagFilterEnabled: boolean;
 };
 
 export function AssetLedgerToolbar({
@@ -53,6 +54,7 @@ export function AssetLedgerToolbar({
 	pageSubtitle,
 	pageTitle,
 	selectedTagIds,
+	tagFilterEnabled,
 }: AssetLedgerToolbarProps) {
 	return (
 		<Card
@@ -139,7 +141,14 @@ export function AssetLedgerToolbar({
 						onChange={(value) => onMatchStatusChange(value || "ALL")}
 						options={MATCH_OPTIONS}
 					/>
-					<AssetTagFilter value={selectedTagIds} onChange={onTagIdsChange} />
+					<div>
+						<AssetTagFilter value={selectedTagIds} onChange={onTagIdsChange} disabled={!tagFilterEnabled} />
+						{!tagFilterEnabled ? (
+							<div className="mt-1 text-xs text-amber-700">
+								旧版资产门户不支持业务数据标签筛选，请启用新版资产门户后使用。
+							</div>
+						) : null}
+					</div>
 				</div>
 			) : null}
 		</Card>

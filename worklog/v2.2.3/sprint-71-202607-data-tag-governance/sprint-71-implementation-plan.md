@@ -3,7 +3,7 @@
 ## 全局约束
 
 - 以本目录 `README.md` 及 `features/` 下 12 个 Task 文档为验收事实源。
-- 不新增菜单；标签管理只进入既有元数据管理页「数据标签」Tab。
+- 不新增菜单；标签管理只进入既有数据资产页「数据标签」Tab，规范深链为 `/catalog/assets?tab=catalog-tags`。
 - 资产锚点统一复用 `CatalogAssetType` + `CatalogAssetKey`，不为 dataset 单造关系表。
 - 数据标签与 `classification` / `SecurityLevelCatalog` 严格分离，预置标签不含密级语义。
 - `CatalogDataset.tags` 保留、不删除、不回写；结构化标签与旧模糊检索兼容并存。
@@ -40,7 +40,7 @@
 落实 F3/T01~T03：
 
 - 新增统一标签 API client、标签展示/编辑组件和 `AssetTagPanel`。
-- 元数据管理页增加「数据标签」Tab，完成分类树和标签 CRUD。
+- 数据资产页增加「数据标签」Tab，完成分类树和标签 CRUD；元数据管理页只保留资产语义元数据能力。
 - 资产详情与数据集详情接入可复用打标组件，并与密级标识明显区分。
 - 数据集列表和数据搜索页接入「同时包含」标签筛选、URL-as-state 和行内标签展示。
 - 保持既有工具栏结构，不新增菜单；分页默认 10 条且切换 page size 重置页码。

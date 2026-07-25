@@ -202,4 +202,5 @@
     <include file="config/liquibase/changelog/20260725_05_model_spec_import_apply_lease.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260725_20_catalog_tag_migration_batch.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260725_21_catalog_external_asset_identity.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260725_22_catalog_external_asset_sync_state.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

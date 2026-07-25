@@ -97,15 +97,21 @@ public class MetricTaggableAssetRegistrar {
             );
         }
         int registered = 0;
+        int batchCount =
+            (assets.size() + MAX_REGISTRATIONS - 1) /
+            MAX_REGISTRATIONS;
         for (int start = 0; start < assets.size(); start += MAX_REGISTRATIONS) {
             int end = Math.min(start + MAX_REGISTRATIONS, assets.size());
+            int batchIndex = start / MAX_REGISTRATIONS;
             Map<String, Object> response =
                 platformContractClient.registerTaggableAssets(
                     new TaggableAssetsRegisterRequest(
                         List.copyOf(assets.subList(start, end)),
                         registrationScope,
                         syncRunId,
-                        end == assets.size()
+                        batchIndex,
+                        batchCount,
+                        batchIndex == batchCount - 1
                     )
                 );
             registered += registrationCount(response);

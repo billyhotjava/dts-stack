@@ -2,12 +2,15 @@ package com.yuzhi.dts.platform.web.rest.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 import com.yuzhi.dts.platform.service.catalog.CatalogExternalAssetIdentityRegistry;
 import com.yuzhi.dts.platform.service.catalog.CatalogExternalAssetIdentityRegistry.Registration;
 import com.yuzhi.dts.platform.service.catalog.CodeAssetGrantWriter;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -78,6 +81,61 @@ class CatalogExternalAssetIdentityInternalResourceTest {
                 ),
             "invalid metric asset key"
         );
+    }
+
+    @Test
+    void completedSnapshotRequiresScopeAndRunId() {
+        assertBadRequest(
+            () ->
+                resource.register(
+                    new CatalogExternalAssetIdentityInternalResource.RegistrationRequest(
+                        List.of(),
+                        null,
+                        null,
+                        0,
+                        1,
+                        true
+                    )
+                ),
+            "requires a synchronization scope"
+        );
+    }
+
+    @Test
+    void legacyScopedRequestUsesUnknownCountCompatibilityMode() {
+        UUID syncRunId = UUID.randomUUID();
+        String scope =
+            "tenant:tenant-a/env:prod/dialect:generic/metric-pack:core";
+        CatalogExternalAssetIdentityRegistry mockRegistry = mock(
+            CatalogExternalAssetIdentityRegistry.class
+        );
+        CatalogExternalAssetIdentityInternalResource legacyResource =
+            new CatalogExternalAssetIdentityInternalResource(
+                mockRegistry
+            );
+        var request =
+            new CatalogExternalAssetIdentityInternalResource.RegistrationRequest(
+                List.of(),
+                scope,
+                syncRunId,
+                null,
+                null,
+                false
+            );
+
+        legacyResource.register(request);
+
+        verify(mockRegistry)
+            .register(
+                "dts-metrics",
+                scope,
+                syncRunId,
+                0,
+                1,
+                true,
+                false,
+                List.of()
+            );
     }
 
     @Test

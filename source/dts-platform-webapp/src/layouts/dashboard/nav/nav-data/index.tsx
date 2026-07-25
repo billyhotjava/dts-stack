@@ -39,6 +39,10 @@ const MENU_ICON_OVERRIDES: Record<string, string> = {
 	"explore.workbench": "local:ic-workbench",
 	scripts: "local:ic-scripts",
 	"studio.scripts": "local:ic-scripts",
+	// 维度建模分组：DB 元数据配的 solar:cube-bold-duotone 在离线环境无法从 iconify CDN 加载，
+	// 回退为打包的本地立方体图标，确保菜单始终有图标。
+	"studio.dimensional.modeling": "local:ic-dimension",
+	"dimensional.modeling": "local:ic-dimension",
 	"explore.savedqueries": "local:ic-savedqueries",
 	"explore.saved.queries": "local:ic-savedqueries",
 	savesavedqueries: "local:ic-savedqueries",

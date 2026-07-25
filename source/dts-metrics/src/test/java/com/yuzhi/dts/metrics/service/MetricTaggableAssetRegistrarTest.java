@@ -49,6 +49,8 @@ class MetricTaggableAssetRegistrarTest {
                 "tenant:acme_north/env:prod/dialect:generic/metric-pack:order_summary"
             );
         assertThat(client.request.syncRunId()).isNotNull();
+        assertThat(client.request.batchIndex()).isZero();
+        assertThat(client.request.batchCount()).isEqualTo(1);
         assertThat(client.request.complete()).isTrue();
         assertThat(client.request.assets())
             .containsExactly(
@@ -179,6 +181,12 @@ class MetricTaggableAssetRegistrarTest {
         assertThat(client.requests)
             .extracting(TaggableAssetsRegisterRequest::syncRunId)
             .containsOnly(client.requests.getFirst().syncRunId());
+        assertThat(client.requests)
+            .extracting(TaggableAssetsRegisterRequest::batchIndex)
+            .containsExactly(0, 1);
+        assertThat(client.requests)
+            .extracting(TaggableAssetsRegisterRequest::batchCount)
+            .containsExactly(2, 2);
     }
 
     private static final class CapturingPlatformClient

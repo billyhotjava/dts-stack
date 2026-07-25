@@ -11,12 +11,13 @@ const RECONCILIATION = readFileSync(new URL("./assets/AssetReconciliationPanel.t
 const API = readFileSync(new URL("../../api/platformApi.ts", import.meta.url), "utf8");
 const DATASETS_PAGE_MAX_LINES = 800;
 
-test("asset ledger keeps repeated tag ids in URL state and only adds them to the list query", () => {
+test("asset ledger keeps repeated tag ids in URL state and only adds effective tags to the v2 list query", () => {
 	assert.match(SOURCE, /useSearchParams/);
 	assert.match(SOURCE, /readTagIds\(searchParams\)/);
 	assert.match(SOURCE, /writeTagIds\(searchParams,\s*nextIds\)/);
+	assert.match(SOURCE, /const effectiveSelectedTagIds = ASSET_PORTAL_V2_ENABLED \? selectedTagIds : \[\]/);
 	assert.match(SOURCE, /const buildAssetListQuery/);
-	assert.match(SOURCE, /tagIds:\s*selectedTagIds\.length/);
+	assert.match(SOURCE, /tagIds:\s*effectiveSelectedTagIds\.length/);
 	assert.match(SOURCE, /listCatalogAssetsV2\(buildAssetListQuery\(page,\s*size\)\)/);
 	assert.match(
 		SOURCE,
@@ -29,7 +30,7 @@ test("asset ledger keeps repeated tag ids in URL state and only adds them to the
 
 test("asset ledger uses the shared tag filter, ten-row paging and batch-hydrated tags", () => {
 	assert.match(TOOLBAR, /<AssetTagFilter/);
-	assert.match(SOURCE, /selectedTagIds\.length > 0/);
+	assert.match(SOURCE, /effectiveSelectedTagIds\.length > 0/);
 	assert.match(SOURCE, /assetType:\s*item\.assetType/);
 	assert.match(SOURCE, /assetKey:\s*item\.assetKey/);
 	assert.match(SOURCE, /assetTags:\s*Array\.isArray\(item\.assetTags\)/);
@@ -42,6 +43,14 @@ test("asset ledger uses the shared tag filter, ten-row paging and batch-hydrated
 	assert.match(SHARED, /assetTags\?: CatalogTagDto\[\]/);
 	assert.match(LEDGER, /<AssetTagChips tags=\{row\.assetTags \|\| \[\]\} variant="inline"/);
 	assert.doesNotMatch(LEDGER, /listAssetTags|\/asset-tags/);
+});
+
+test("legacy asset ledger disables unsupported tag filtering with an explicit explanation", () => {
+	assert.match(SOURCE, /tagFilterEnabled=\{ASSET_PORTAL_V2_ENABLED\}/);
+	assert.match(SOURCE, /selectedTagIds=\{effectiveSelectedTagIds\}/);
+	assert.match(TOOLBAR, /tagFilterEnabled:\s*boolean/);
+	assert.match(TOOLBAR, /disabled=\{!tagFilterEnabled\}/);
+	assert.match(TOOLBAR, /旧版资产门户不支持业务数据标签筛选/);
 });
 
 test("asset ledger keeps operational components extracted and the route page below 800 lines", () => {

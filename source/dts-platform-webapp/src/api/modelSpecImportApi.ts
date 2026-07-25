@@ -133,6 +133,16 @@ type QuietAxiosRequestConfig = {
 
 const quietRequest = <T extends QuietAxiosRequestConfig>(config: T): T => config;
 
+export const inspectDbtModelArchive = (archive: File) => {
+	const data = new FormData();
+	data.append("archive", archive);
+	return api.post<ModelPackageJson>(quietRequest({
+		url: `${MODEL_SPEC_IMPORT_RESOURCE}/dbt/archive/inspect`,
+		data,
+		_skipErrorToast: true,
+	}));
+};
+
 export const previewModelSpecImport = (data: ModelSpecImportPreviewRequest) =>
 	api.post<ModelSpecImportPreview>(quietRequest({
 		url: `${MODEL_SPEC_IMPORT_RESOURCE}/dbt/preview`,
