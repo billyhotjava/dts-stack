@@ -1523,13 +1523,13 @@
 | F1-密级事实模型与只升不降内核 | P0 | 4 | 8～10 人日 | IN_PROGRESS |
 | F2-接入定级与首次落盘准入 | P0 | 5 | 11～14 人日 | IN_PROGRESS |
 | F3-血缘传播与建模发布门禁 | P0 | 5 | 12～15 人日 | IN_PROGRESS |
-| F4-生命周期审批归档与销毁 | P0 | 5 | 13～17 人日 | IN_PROGRESS |
+| F4-生命周期审批归档与销毁 | P0 | 6 | 15～20 人日 | IN_PROGRESS |
 | F5-消费资产与服务密级传播 | P0 | 4 | 8～11 人日 | IN_PROGRESS |
 | F6-大屏最高密级自动确定 | P0 | 5 | 10～13 人日 | IN_PROGRESS |
-| F7-资产台账生命周期工作台与监控 | P1 | 4 | 8～10 人日 | IN_PROGRESS |
+| F7-资产台账生命周期工作台与监控 | P1 | 5 | 10～13 人日 | IN_PROGRESS |
 | F8-存量迁移与集成交付 | P0 | 4 | 10～13 人日 | IN_PROGRESS |
 
-**统计**: READY=0, IN_PROGRESS=36, DONE=0, BLOCKED=0；总估算 80～103 人日。
+**统计**: READY=0, IN_PROGRESS=38, DONE=0, BLOCKED=0；总估算 84～109 人日。
 **执行顺序**: F1 → F2 → F3/F4 → F5 → F6 → F7 → F8；F4 可在 F1 完成后并行，但永久销毁必须等待血缘影响分析稳定，F6 必须等待消费资产来源解析契约稳定。
 
 **关键决策**:
@@ -1542,4 +1542,36 @@
 - 大屏解析全部页面、组件、下钻和 card/metric/dataset/SQL/API 数据源；Sprint-24“有原因可降密”路径受控退役。
 - 生命周期统一视图复用既有审批事实；临时销毁可恢复，永久销毁双人复核并只处理 DTS 管理副本，绝不反向 DROP 外部源表。
 - 存量迁移必须 dry-run、分批、幂等、可暂停；任何候选降级均阻断。
-- F1～F8 共 36 个 Task 已完成编码；现在统一执行测试、编译、迁移、容器和浏览器验收，证据齐全前不标记 DONE。
+- F1～F8 共 38 个 Task 已完成编码；本轮新增生命周期时间轴/销毁证明和资产详情升密/审批入口
+  已通过 14/14 定向源码契约、TypeScript 与 Chrome 95 构建。迁移、容器和部署后浏览器验收
+  证据齐全前不标记 DONE。
+
+## Sprint-73: 数据集市规划与维度建模产品化 (202607)
+
+**目录**: `worklog/v2.2.3/sprint-73-202607-dimension-and-data-mart-modeling`
+**状态**: READY（仅 F0/F1 可拉取；运行时 Feature 等待 G0）
+**类型**: Warehouse Planning / Dimension Modeling / Product Convergence / Full-stack
+**目标**: 让建模人员能在同一条主线中管理数据集市、登记业务维度、创建并完善维度表，清楚区分业务归属、应用范围、来源、命名、历史处理和数据保留，并在发布后由资产台账接收真实资产。
+**依赖**: 复用 Sprint-67 的 WarehousePlan/DimensionDefinition/ModelSpec 主线和 Sprint-69 的发布控制面；DataWorks 仅作产品设计参考，不引入新的模型或资产 owner。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F0-交付与生产数据基线 | P0 | 2 | READY |
+| F1-概念关系与契约收敛 | P0 | 2 | READY |
+| F2-数据集市规划闭环 | P0 | 3 | DRAFT |
+| F3-业务维度目录增强 | P0 | 3 | DRAFT |
+| F4-维度表设计体验闭环 | P0 | 3 | DRAFT |
+| F5-实现发布与资产交接 | P0 | 2 | DRAFT |
+
+**统计**: READY=4, DRAFT=11, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**执行顺序**: F0/F1 → F2 → F3 → F4 → F5；F2 数据持久化与 F3 UI 壳层只可在 G0 通过并完成影响分析后按冻结契约并行。
+**关键决策**:
+
+- 数据集市是面向应用/主题/消费场景的规划对象，不是资产台账；复用业务分类页面和计划详情，不新增一级菜单。
+- 业务分类继续由 `catalog_domain` 唯一拥有；DataMart 与业务分类多对多，维度和 ModelSpec 只增加稳定引用。
+- `DimensionDefinition 1 → N DIMENSION ModelSpec`；同一计划、集市范围和 variant 默认只允许一个活动实现。
+- 概念维度和维度表草稿不要求源表；进入实现前必须补齐已确认来源、锁定上游模型或受控生成策略。
+- 保持 `DIMENSION→DWD`，不照搬 DataWorks 的独立 DIM 层；物理表名、装载方式、SCD 和数据保留期限分别管理。
+- 只有 PUBLISHED 物理实现按统一资产键进入资产台账，草稿和概念定义不得提前登记为可消费资产。
+
+**已知风险**: 当前运行实例健康且相关迁移已执行，但真实登录、认证 API、Chrome95、构建链和客户生产数据画像尚未完成；F0 未通过前 F2～F5 保持 DRAFT。

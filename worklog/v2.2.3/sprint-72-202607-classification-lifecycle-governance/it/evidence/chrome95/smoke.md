@@ -1,6 +1,6 @@
 # Chrome 95 兼容构建与浏览器 smoke
 
-生产构建启用 `LEGACY_BROWSER_BUILD=1`，12 条定向源码契约、TypeScript 和 Vite build 均通过。
+生产构建启用 `LEGACY_BROWSER_BUILD=1`，14 条定向源码契约、TypeScript 和 Vite build 均通过。
 
 真实页面结果：
 
@@ -23,3 +23,5 @@
 - `sprint72-screens-effective-classification-1366.png`
 
 尚未完成接入向导和大屏编辑/发布/公开访问的 Chrome 95 全旅程，因此证据域结论仍为 `PARTIAL`。
+本轮新增的生命周期六阶段时间轴、销毁证明详情、资产详情人工密级下限和审批入口尚未进入现网
+容器，需随 Sprint 统一发布后补充 1366×768 与窄屏真实页面 smoke。

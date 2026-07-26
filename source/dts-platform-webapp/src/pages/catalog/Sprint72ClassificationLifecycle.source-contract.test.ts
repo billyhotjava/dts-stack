@@ -4,6 +4,8 @@ import test from "node:test";
 
 const LEDGER = readFileSync(new URL("./assets/AssetLedgerView.tsx", import.meta.url), "utf8");
 const DATASETS = readFileSync(new URL("./DatasetsPage.tsx", import.meta.url), "utf8");
+const DATASET_DETAIL = readFileSync(new URL("./DatasetDetailPage.tsx", import.meta.url), "utf8");
+const GOVERNANCE_EXTENSION = readFileSync(new URL("./OpenMetadataGovernanceTab.tsx", import.meta.url), "utf8");
 const WORKBENCH = readFileSync(new URL("./assets/AssetLifecycleWorkbenchDrawer.tsx", import.meta.url), "utf8");
 const FACTS = readFileSync(new URL("./assets/AssetClassificationFactPanel.tsx", import.meta.url), "utf8");
 const SCREEN_CLASSIFICATION = readFileSync(
@@ -43,6 +45,29 @@ test("Sprint-72 lifecycle workbench closes approval, trash, restoration and proo
 	}
 	assert.match(WORKBENCH, /永久销毁不可恢复/);
 	assert.match(WORKBENCH, /只删除 DTS 管理副本/);
+});
+
+test("Sprint-72 lifecycle workbench exposes the six-stage timeline, events and verifiable destruction proof", () => {
+	for (const label of ["创建", "存储", "使用", "共享", "归档", "销毁"]) {
+		assert.match(WORKBENCH, new RegExp(label));
+	}
+	for (const label of ["生命周期时间轴", "生命周期事件", "第一审批人", "第二审批人", "证明校验和", "外部源未触碰"]) {
+		assert.match(WORKBENCH, new RegExp(label));
+	}
+	assert.match(WORKBENCH, /lifecycle\.stages/);
+	assert.match(WORKBENCH, /lifecycle\.events/);
+	assert.match(WORKBENCH, /objectManifest/);
+});
+
+test("Sprint-72 dataset governance only raises a manual floor and routes lifecycle changes through approval", () => {
+	const governanceSource = `${DATASET_DETAIL}\n${GOVERNANCE_EXTENSION}`;
+	for (const label of ["当前有效密级", "人工密级下限", "密级与生命周期", "生命周期状态只能通过审批动作改变"]) {
+		assert.match(governanceSource, new RegExp(label));
+	}
+	assert.match(governanceSource, /raiseCatalogClassificationManualFloor/);
+	assert.doesNotMatch(governanceSource, /<Form\.Item label="密级" name="classification">/);
+	assert.doesNotMatch(governanceSource, /name="lifecycleStatus"/);
+	assert.doesNotMatch(governanceSource, /name="enabled"/);
 });
 
 test("Sprint-72 migration UI keeps dry-run, batch apply, reconciliation and freeze ordered", () => {

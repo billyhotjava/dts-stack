@@ -10,7 +10,7 @@
 | dts-ingestion | seal guard、task 执行/全量刷新、task service、Airflow DAG 46/46 通过 |
 | dts-metrics | `MetricLifecycleSecurityParityTest` 6/6 通过，production package 通过 |
 | dts-analytics | `ScreenPermissionServiceTest` 32/32、消费密级 5/5、旧公开链接 4/4，共 41/41 通过 |
-| dts-platform-webapp | Sprint-72 与资产详情 source-contract 12/12 通过，`tsc --noEmit` 与 Chrome 95 production build 通过 |
+| dts-platform-webapp | Sprint-72 与资产详情 source-contract 14/14 通过；生命周期六阶段/事件/销毁证明与人工密级下限/审批入口契约均通过，`tsc --noEmit` 与 Chrome 95 production build 通过 |
 
 构建日志只有仓库既有的 Maven 依赖收敛、deprecated API、Browserslist 数据过期和大分块提示，
 没有本 Sprint 引入的编译或测试错误。

@@ -1,17 +1,13 @@
-import { Alert, Button, Descriptions, Form, Input, message, Select, Space, Spin, Switch, Tabs, Tag } from "antd";
+import { Alert, Button, Descriptions, Space, Spin, Tabs, Tag } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useParams, useSearchParams } from "react-router";
-import {
-	getCatalogAssetV2,
-	getCatalogAssetV2Contract,
-	getCatalogAssetV2SchemaContract,
-	getDataset,
-	updateCatalogAssetV2Governance,
-} from "@/api/platformApi";
+import { getCatalogAssetV2, getCatalogAssetV2Contract, getCatalogAssetV2SchemaContract, getDataset } from "@/api/platformApi";
 import { AssetTagPanel } from "@/components/catalog/tags/AssetTagPanel";
 import { useRouter } from "@/routes/hooks";
 import { buildAssetGrantUrl, resolveAssetReadiness } from "./assetPortalUx.helpers";
 import { AssetClassificationFactPanel } from "./assets/AssetClassificationFactPanel";
+import { AssetLifecycleWorkbenchDrawer } from "./assets/AssetLifecycleWorkbenchDrawer";
+import type { AssetRow } from "./assets/assetPageShared";
 import {
 	DatasetFieldsTab,
 	DatasetGovernanceTab,
@@ -20,6 +16,7 @@ import {
 	MetadataJsonBlock,
 } from "./DatasetDetailSupportTabs";
 import { resolveDatasetDetailId } from "./datasetDetailRoute";
+import { OpenMetadataGovernanceTab } from "./OpenMetadataGovernanceTab";
 
 const DETAIL_TAB_KEYS = [
 	"overview",
@@ -90,6 +87,7 @@ export default function DatasetDetailPage() {
 	const [assetContract, setAssetContract] = useState<Record<string, any> | null>(null);
 	const [schemaContract, setSchemaContract] = useState<Record<string, any> | null>(null);
 	const [contractLoading, setContractLoading] = useState(false);
+	const [lifecycleWorkbenchOpen, setLifecycleWorkbenchOpen] = useState(false);
 	const datasetRequestSequence = useRef(0);
 	const contractRequestSequence = useRef(0);
 
@@ -173,6 +171,23 @@ export default function DatasetDetailPage() {
 	const contractState = assetContract?.consumable === false ? "不可引用" : assetContract ? "可引用" : "合同读取中";
 	const schemaCount = schemaContract?.columnCount ?? dataset.columnCount ?? "-";
 	const schemaCountLabel = schemaCount === "-" ? "未同步" : `${schemaCount} 个字段`;
+	const workbenchAsset: AssetRow = {
+		id: String(dataset.id || id),
+		name: String(dataset.name || "-"),
+		type: String(dataset.type || "-"),
+		classification: dataset.classification,
+		warehouseLayer: dataset.warehouseLayer,
+		lifecycleStatus: dataset.lifecycleStatus,
+		owner: dataset.owner,
+		ownerDept: dataset.ownerDept,
+		governanceStatus: dataset.governanceStatus,
+		metadataSource: dataset.__source === "openmetadata" ? "openmetadata" : "dts-catalog",
+		legacyDatasetId: dataset.__legacyDatasetId,
+		description: dataset.description,
+		hiveDatabase: dataset.hiveDatabase,
+		hiveTable: dataset.hiveTable,
+		assetKey,
+	};
 
 	return (
 		<div className="space-y-4 p-4">
@@ -207,6 +222,13 @@ export default function DatasetDetailPage() {
 							{dataset.warehouseLayer}
 						</Tag>
 					)}
+					<Button
+						disabled={!assetKey}
+						title={assetKey ? "查看密级事实、生命周期时间轴和审批记录" : "资产身份合同尚未就绪"}
+						onClick={() => setLifecycleWorkbenchOpen(true)}
+					>
+						密级与生命周期
+					</Button>
 				</div>
 				<div className="grid gap-3 md:grid-cols-4">
 					<div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
@@ -293,7 +315,12 @@ export default function DatasetDetailPage() {
 						label: "治理责任",
 						children:
 							dataset.__source === "openmetadata" ? (
-								<OpenMetadataGovernanceTab dataset={dataset} onChanged={setDataset} />
+								<OpenMetadataGovernanceTab
+									assetKey={assetKey}
+									dataset={dataset}
+									onChanged={setDataset}
+									onOpenLifecycle={() => setLifecycleWorkbenchOpen(true)}
+								/>
 							) : dataset.__legacyDatasetId ? (
 								<LegacyGovernanceNotice dataset={dataset} />
 							) : (
@@ -325,6 +352,15 @@ export default function DatasetDetailPage() {
 						),
 					},
 				]}
+			/>
+			<AssetLifecycleWorkbenchDrawer
+				open={lifecycleWorkbenchOpen}
+				asset={workbenchAsset}
+				onClose={() => setLifecycleWorkbenchOpen(false)}
+				onChanged={() => {
+					setActiveTab("classification-lifecycle");
+					setSearchParams({ tab: "classification-lifecycle" });
+				}}
 			/>
 		</div>
 	);
@@ -687,113 +723,6 @@ function AssetAccessTab({
 				<Button onClick={() => router.push("/my/asset-grants")}>查看我的授权</Button>
 				<Button onClick={() => router.push("/governance/permission-audit")}>查看权限审计</Button>
 			</Space>
-		</div>
-	);
-}
-
-function OpenMetadataGovernanceTab({
-	dataset,
-	onChanged,
-}: {
-	dataset: Record<string, any>;
-	onChanged: (next: Record<string, any>) => void;
-}) {
-	const [form] = Form.useForm();
-	const [saving, setSaving] = useState(false);
-
-	useEffect(() => {
-		form.setFieldsValue({
-			classification: dataset.classification,
-			warehouseLayer: dataset.warehouseLayer,
-			ownerDept: dataset.ownerDept,
-			businessOwner: dataset.owner,
-			lifecycleStatus: dataset.lifecycleStatus,
-			enabled: dataset.lifecycleStatus !== "DISABLED",
-			securityPolicyRefs: dataset.securityPolicyRefs,
-		});
-	}, [dataset, form]);
-
-	const save = async () => {
-		const values = await form.validateFields();
-		setSaving(true);
-		try {
-			const detail: any = await updateCatalogAssetV2Governance(String(dataset.id), values);
-			const asset = detail?.asset || {};
-			onChanged({
-				...dataset,
-				classification: asset.classification,
-				warehouseLayer: asset.warehouseLayer,
-				ownerDept: asset.ownerDept,
-				owner: asset.owner,
-				lifecycleStatus: asset.lifecycleStatus,
-				governanceStatus: asset.governanceStatus,
-				securityPolicyRefs: asset.securityPolicyRefs,
-			});
-			message.success("治理扩展已保存");
-		} finally {
-			setSaving(false);
-		}
-	};
-
-	return (
-		<div className="space-y-4 py-2">
-			<Alert
-				type="info"
-				showIcon
-				message="治理属性保存在 DTS 扩展层"
-				description="OpenMetadata 继续作为技术资产主目录；密级、归属部门、生命周期、权限/脱敏/行过滤引用由 DTS 维护。"
-			/>
-			<Form form={form} layout="vertical">
-				<div className="grid gap-3 md:grid-cols-2">
-					<Form.Item label="密级" name="classification">
-						<Select
-							allowClear
-							options={[
-								{ label: "公开", value: "PUBLIC" },
-								{ label: "内部", value: "INTERNAL" },
-								{ label: "秘密", value: "SECRET" },
-								{ label: "机密", value: "CONFIDENTIAL" },
-							]}
-						/>
-					</Form.Item>
-					<Form.Item label="仓库分层" name="warehouseLayer">
-						<Select
-							allowClear
-							options={["SOURCE", "ODS", "STG", "DWD", "DIM", "DWS", "ADS"].map((value) => ({ label: value, value }))}
-						/>
-					</Form.Item>
-					<Form.Item label="归属部门" name="ownerDept">
-						<Input allowClear />
-					</Form.Item>
-					<Form.Item label="业务负责人" name="businessOwner">
-						<Input allowClear />
-					</Form.Item>
-					<Form.Item label="生命周期" name="lifecycleStatus">
-						<Select
-							allowClear
-							options={[
-								{ label: "启用", value: "ACTIVE" },
-								{ label: "观察", value: "STALE" },
-								{ label: "下线", value: "DISABLED" },
-							]}
-						/>
-					</Form.Item>
-					<Form.Item label="资产启用" name="enabled" valuePropName="checked">
-						<Switch />
-					</Form.Item>
-				</div>
-				<Form.Item label="权限 / 脱敏 / 行过滤引用" name="securityPolicyRefs">
-					<Input.TextArea rows={4} placeholder="例如 grant:<id>, masking:<id>, row-filter:<id>，或 JSON 引用清单" />
-				</Form.Item>
-				<Button type="primary" onClick={() => void save()} loading={saving}>
-					保存治理扩展
-				</Button>
-			</Form>
-			{dataset.__legacyDatasetId ? (
-				<Alert type="info" showIcon message="质量运行、治理健康和关联指标已移到“质量与SLA”页。" />
-			) : (
-				<Alert type="warning" showIcon message="未映射到 legacy dataset，治理健康和质量规则暂不可用。" />
-			)}
 		</div>
 	);
 }

@@ -10,6 +10,7 @@ import {
 	Table,
 	Tabs,
 	Tag,
+	Typography,
 } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -64,6 +65,50 @@ const LIFECYCLE_LABELS: Record<string, string> = {
 	ARCHIVED: "归档",
 	TRASH: "回收站",
 	DESTROYED: "永久销毁",
+};
+
+const LIFECYCLE_STAGE_LABELS: Record<string, string> = {
+	CREATE: "创建",
+	STORAGE: "存储",
+	USE: "使用",
+	SHARE: "共享",
+	ARCHIVE: "归档",
+	DESTROY: "销毁",
+};
+
+const LIFECYCLE_STAGE_ORDER = ["CREATE", "STORAGE", "USE", "SHARE", "ARCHIVE", "DESTROY"];
+
+const LIFECYCLE_STATUS_LABELS: Record<string, string> = {
+	NOT_STARTED: "未开始",
+	REGISTERED: "已登记",
+	ACTIVE: "在用",
+	INACTIVE: "未启用",
+	PENDING: "待审批",
+	SECOND_APPROVAL_PENDING: "待第二人审批",
+	APPROVED: "已批准",
+	REJECTED: "已驳回",
+	EXECUTED: "已执行",
+	ARCHIVED: "已归档",
+	TRASHED: "回收站",
+	RESTORED: "已恢复",
+	DESTRUCTION_CANDIDATE: "待永久销毁",
+	DESTROYED: "已永久销毁",
+	FAILED: "执行失败",
+	EXPIRED: "已过期",
+};
+
+const lifecycleStatusText = (status?: string | null) => {
+	const normalized = String(status || "NOT_STARTED").toUpperCase();
+	return LIFECYCLE_STATUS_LABELS[normalized] || normalized;
+};
+
+const lifecycleStatusColor = (status?: string | null) => {
+	const normalized = String(status || "").toUpperCase();
+	if (!normalized || normalized === "NOT_STARTED") return "default";
+	if (normalized.includes("FAIL") || normalized.includes("BLOCK")) return "red";
+	if (normalized.includes("PENDING") || normalized.includes("REQUEST")) return "gold";
+	if (normalized.includes("DESTROY")) return "purple";
+	return "green";
 };
 
 const digestPayload = async (value: string) => {
@@ -129,6 +174,11 @@ export function AssetLifecycleWorkbenchDrawer({
 	const datasetId = asset?.legacyDatasetId || (asset?.metadataSource === "dts-catalog" ? asset.id : undefined);
 	const subjectKey = asset?.assetKey;
 	const fact = workspace?.classification || classificationFact;
+	const lifecycle = workspace?.lifecycle;
+	const lifecycleStages = lifecycle ? lifecycle.stages || [] : [];
+	const lifecycleEvents = lifecycle ? lifecycle.events || [] : [];
+	const destructionProofs = lifecycle ? lifecycle.destructionProofs || [] : [];
+	const lifecycleStageMap = new Map(lifecycleStages.map((stage) => [String(stage.stage).toUpperCase(), stage]));
 
 	const load = useCallback(async () => {
 		if (!open || !asset) return;
@@ -311,6 +361,41 @@ export function AssetLifecycleWorkbenchDrawer({
 			title={`${asset?.name || "资产"} · 密级与生命周期工作台`}
 			loading={loading}
 		>
+			{lifecycle ? (
+				<div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+					<div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+						<div>
+							<div className="font-semibold text-slate-900">生命周期时间轴</div>
+							<div className="mt-1 text-xs text-slate-500">
+								创建、存储、使用、共享、归档和销毁均绑定当时的密级快照与审批证据。
+							</div>
+						</div>
+						<Space size={6}>
+							<Tag color={lifecycle.enabled === false ? "default" : "green"}>
+								{lifecycle.enabled === false ? "已停用" : "已启用"}
+							</Tag>
+							<Tag color="orange">{classificationText(lifecycle.effectiveLevel)}</Tag>
+						</Space>
+					</div>
+					<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+						{LIFECYCLE_STAGE_ORDER.map((stageCode) => {
+							const stage = lifecycleStageMap.get(stageCode);
+							return (
+								<div key={stageCode} className="min-w-0 rounded border border-slate-200 bg-white px-3 py-2">
+									<div className="flex items-center justify-between gap-2">
+										<span className="font-medium text-slate-900">{LIFECYCLE_STAGE_LABELS[stageCode]}</span>
+										<Tag color={lifecycleStatusColor(stage?.status)}>{lifecycleStatusText(stage?.status)}</Tag>
+									</div>
+									<div className="mt-2 truncate text-xs text-slate-500" title={stage?.actor || ""}>
+										{stage?.actor ? `操作人：${stage.actor}` : "暂无操作人"}
+									</div>
+									<div className="mt-1 text-xs text-slate-500">{formatTime(stage?.occurredAt)}</div>
+								</div>
+							);
+						})}
+					</div>
+				</div>
+			) : null}
 			<Tabs
 				items={[
 					{
@@ -457,14 +542,91 @@ export function AssetLifecycleWorkbenchDrawer({
 										},
 									]}
 								/>
-								{Array.isArray(workspace.lifecycle.destructionProofs) &&
-								workspace.lifecycle.destructionProofs.length > 0 ? (
-									<Alert
-										type="success"
-										showIcon
-										message={`已保留 ${workspace.lifecycle.destructionProofs.length} 份不可变销毁证明`}
-										description="证明仅保留对象清单摘要、校验和、审批人与执行结果，不保留已销毁业务数据。"
+								<div>
+									<div className="mb-2 font-semibold text-slate-900">生命周期事件</div>
+									<Table
+										size="small"
+										rowKey="eventId"
+										pagination={{ pageSize: 8 }}
+										scroll={{ x: 900 }}
+										dataSource={lifecycleEvents}
+										columns={[
+											{
+												title: "阶段",
+												dataIndex: "stage",
+												render: (value) => LIFECYCLE_STAGE_LABELS[value] || value || "-",
+											},
+											{ title: "事件", dataIndex: "eventType" },
+											{
+												title: "状态",
+												dataIndex: "status",
+												render: (value) => <Tag color={lifecycleStatusColor(value)}>{lifecycleStatusText(value)}</Tag>,
+											},
+											{ title: "密级", dataIndex: "effectiveLevel", render: classificationText },
+											{ title: "操作人", dataIndex: "actor", render: (value) => value || "-" },
+											{ title: "来源", dataIndex: "requestSource", render: (value) => value || "-" },
+											{ title: "时间", dataIndex: "occurredAt", render: formatTime },
+										]}
 									/>
+								</div>
+								{destructionProofs.length > 0 ? (
+									<div>
+										<Alert
+											className="mb-2"
+											type="success"
+											showIcon
+											message={`已保留 ${destructionProofs.length} 份不可变销毁证明`}
+											description="证明仅保留对象清单摘要、校验和、审批人与执行结果，不保留已销毁业务数据。"
+										/>
+										<Table
+											size="small"
+											rowKey="id"
+											pagination={false}
+											scroll={{ x: 1180 }}
+											dataSource={destructionProofs}
+											expandable={{
+												expandedRowRender: (proof) => (
+													<div>
+														<div className="mb-1 text-xs font-medium text-slate-700">销毁对象摘要</div>
+														<pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-slate-950 p-3 text-xs text-slate-100">
+															{JSON.stringify(proof.objectManifest || {}, null, 2)}
+														</pre>
+													</div>
+												),
+											}}
+											columns={[
+												{ title: "尝试", dataIndex: "attemptNo", width: 70 },
+												{ title: "适配器", dataIndex: "adapterCode", width: 130 },
+												{
+													title: "结果",
+													dataIndex: "resultStatus",
+													width: 110,
+													render: (value) => <Tag color={value === "SUCCEEDED" ? "green" : "red"}>{value || "-"}</Tag>,
+												},
+												{ title: "第一审批人", dataIndex: "firstApprovedBy", width: 130, render: (value) => value || "-" },
+												{ title: "第二审批人", dataIndex: "secondApprovedBy", width: 130, render: (value) => value || "-" },
+												{ title: "执行人", dataIndex: "executedBy", width: 120, render: (value) => value || "-" },
+												{
+													title: "外部源未触碰",
+													dataIndex: "externalSourceTouched",
+													width: 130,
+													render: (value) => <Tag color={value ? "red" : "green"}>{value ? "否" : "是"}</Tag>,
+												},
+												{
+													title: "证明校验和",
+													dataIndex: "manifestChecksum",
+													width: 210,
+													render: (value) =>
+														value ? (
+															<Typography.Text copyable={{ text: String(value) }} className="font-mono text-xs">
+																{String(value).slice(0, 18)}…
+															</Typography.Text>
+														) : "-",
+												},
+												{ title: "执行时间", dataIndex: "executedAt", width: 170, render: formatTime },
+											]}
+										/>
+									</div>
 								) : null}
 							</div>
 						) : (

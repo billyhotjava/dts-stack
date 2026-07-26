@@ -186,9 +186,66 @@ export type LifecycleActionView = {
 	createdAt?: string;
 };
 
+export type LifecycleStageView = {
+	stage: string;
+	status?: string;
+	requestSource?: string | null;
+	requestRef?: string | null;
+	actor?: string | null;
+	occurredAt?: string | null;
+	evidence?: Record<string, unknown>;
+};
+
+export type LifecycleEventView = {
+	eventId: string;
+	stage?: string;
+	eventType?: string;
+	status?: string;
+	requestSource?: string | null;
+	requestRef?: string | null;
+	sealId?: string | null;
+	sealVersion?: number | null;
+	effectiveLevel?: string | null;
+	dataVolume?: number | null;
+	evidence?: Record<string, unknown>;
+	actor?: string | null;
+	occurredAt?: string | null;
+};
+
+export type DestructionProofView = {
+	id: string;
+	actionId?: string;
+	attemptNo?: number;
+	adapterCode?: string;
+	objectManifest?: Record<string, unknown>;
+	manifestChecksum?: string;
+	firstApprovedBy?: string | null;
+	secondApprovedBy?: string | null;
+	executedBy?: string | null;
+	resultStatus?: string;
+	externalSourceTouched?: boolean;
+	failureMessage?: string | null;
+	executedAt?: string | null;
+};
+
+export type LifecycleProjectionView = {
+	datasetId?: string;
+	datasetName?: string;
+	ownerDept?: string | null;
+	lifecycleStatus?: string | null;
+	enabled?: boolean;
+	sealId?: string | null;
+	sealVersion?: number;
+	effectiveLevel?: string | null;
+	stages?: LifecycleStageView[];
+	events?: LifecycleEventView[];
+	trash?: Record<string, any> | null;
+	destructionProofs?: DestructionProofView[];
+};
+
 export type AssetGovernanceWorkspace = {
 	classification: ClassificationFactView;
-	lifecycle: Record<string, any>;
+	lifecycle: LifecycleProjectionView;
 	actions: LifecycleActionView[];
 	classificationImpact?: {
 		datasetId?: string;
@@ -238,6 +295,30 @@ export const getCatalogClassificationFacts = (
 	api.post<ClassificationFactView[]>({
 		url: "/catalog/governance-workbench/classification-facts",
 		data: subjects,
+	});
+
+export type ClassificationSealReference = {
+	sealId: string;
+	subjectType: string;
+	subjectKey: string;
+	assetType?: string | null;
+	effectiveLevel: string;
+	snapshotVersion: number;
+	checksum?: string;
+	sealedAt?: string;
+	propagationStatus?: string;
+};
+
+export const raiseCatalogClassificationManualFloor = (data: {
+	subjectType: string;
+	subjectKey: string;
+	candidateLevel: string;
+	triggerRef?: string;
+	evidenceJson?: string;
+}) =>
+	api.post<ClassificationSealReference>({
+		url: "/catalog/classifications/manual-floor",
+		data,
 	});
 
 export const getCatalogAssetGovernanceWorkspace = (

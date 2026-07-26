@@ -10,10 +10,10 @@ type Props = {
 };
 
 const fieldRoleOptions = [
-	{ value: "KEY", label: "键" },
+	{ value: "KEY", label: "键（KEY）" },
 	{ value: "ATTRIBUTE", label: "属性" },
-	{ value: "TIME", label: "时间" },
-	{ value: "MEASURE", label: "度量" },
+	{ value: "TIME", label: "时间（TIME）" },
+	{ value: "MEASURE", label: "度量（MEASURE）" },
 ];
 
 export function ModelSpecFieldsTab({ readOnly, persistedFieldNames }: Props) {
@@ -25,7 +25,7 @@ export function ModelSpecFieldsTab({ readOnly, persistedFieldNames }: Props) {
 			<div className="mb-3">
 				<Text strong>字段设计</Text>
 				<Text type="secondary" className="ml-2 text-xs">
-					已保存字段和当前粒度键需先解除引用后再调整名称
+					先定义本模型输出字段及其业务作用；业务时间引用的字段必须选择“时间（TIME）”
 				</Text>
 			</div>
 			<Form.List
@@ -95,7 +95,12 @@ export function ModelSpecFieldsTab({ readOnly, persistedFieldNames }: Props) {
 									</Row>
 									<Row gutter={12}>
 										<Col xs={24} md={12}>
-											<Form.Item name={[field.name, "sourceFieldRef"]} label="来源字段" className="mb-0">
+											<Form.Item
+												name={[field.name, "sourceFieldRef"]}
+												label="来源字段"
+												extra="可选：记录该输出字段对应的输入字段；具体输入表或上游模型在“数据实现”中选择"
+												className="mb-0"
+											>
 												<Input disabled={readOnly} placeholder="可选，例如：ods_customer.id" />
 											</Form.Item>
 										</Col>
