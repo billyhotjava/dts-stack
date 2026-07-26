@@ -192,9 +192,15 @@ const buildFields = (draft: ModelSpecDraft, grainKeys: string[]): ModelSpecField
 	const names = new Set(fields.map((field) => field.name.trim()).filter(Boolean));
 	for (const key of grainKeys) {
 		if (!names.has(key)) {
+			// 系统按粒度声明补齐的主键字段：无来源映射、未定密级、非冗余。
 			fields.push({
 				name: key,
 				dataType: draft.keyDataType.trim() || "string",
+				sourceFieldRef: undefined,
+				securityLevel: undefined,
+				dimensionAttributeCode: undefined,
+				redundant: false,
+				redundancySourceRef: undefined,
 				nullable: false,
 				role: "KEY",
 			});

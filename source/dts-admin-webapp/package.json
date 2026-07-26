@@ -7,8 +7,8 @@
 	"scripts": {
 		"dev": "VITE_CACHE_DIR=.vite-cache vite",
 		"predev": "node ../../builds/dts-admin-webapp/scripts/sync-portal-menus.mjs",
-		"build": "LEGACY_BROWSER_BUILD=1 VITE_CACHE_DIR=.vite-cache sh -c 'tsc & t=$!; vite build & b=$!; wait $t; rt=$?; wait $b; rb=$?; exit $((rt|rb))'",
-		"build:modern": "LEGACY_BROWSER_BUILD=0 VITE_CACHE_DIR=.vite-cache sh -c 'tsc & t=$!; vite build & b=$!; wait $t; rt=$?; wait $b; rb=$?; exit $((rt|rb))'",
+		"build": "LEGACY_BROWSER_BUILD=1 VITE_CACHE_DIR=.vite-cache sh -c 'L=/tmp/tsc-$$.log; tsc >$L 2>&1 & t=$!; vite build & b=$!; wait $t; rt=$?; wait $b; rb=$?; [ $rt -eq 0 ] || { echo; echo \"=== tsc 类型检查失败 ===\"; cat $L; }; rm -f $L; exit $((rt|rb))'",
+		"build:modern": "LEGACY_BROWSER_BUILD=0 VITE_CACHE_DIR=.vite-cache sh -c 'L=/tmp/tsc-$$.log; tsc >$L 2>&1 & t=$!; vite build & b=$!; wait $t; rt=$?; wait $b; rb=$?; [ $rt -eq 0 ] || { echo; echo \"=== tsc 类型检查失败 ===\"; cat $L; }; rm -f $L; exit $((rt|rb))'",
 		"build:analyze": "ANALYZE=1 LEGACY_BROWSER_BUILD=1 VITE_CACHE_DIR=.vite-cache vite build",
 		"prebuild": "node ../../builds/dts-admin-webapp/scripts/sync-portal-menus.mjs",
 		"sync:portal-menus": "node ../../builds/dts-admin-webapp/scripts/sync-portal-menus.mjs",
