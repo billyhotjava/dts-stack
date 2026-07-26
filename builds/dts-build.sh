@@ -24,6 +24,13 @@ OPMANAGER_PACKAGE_MODE=""
 SAVE_IMAGE_TARS="${SAVE_IMAGE_TARS:-true}"
 LEGACY_ONLY="false"
 SAVED_IMAGE_TARS=()
+# Layer cache is ON by default. Dependency layers (pnpm install / apk add / maven deps)
+# only rebuild when their inputs change, since every Dockerfile copies lockfiles before
+# sources. Use --no-cache (or DOCKER_NO_CACHE=1) for a clean-room release build.
+DOCKER_NO_CACHE="${DOCKER_NO_CACHE:-false}"
+if [[ "${DOCKER_NO_CACHE}" == "1" || "${DOCKER_NO_CACHE}" == "yes" ]]; then
+  DOCKER_NO_CACHE="true"
+fi
 
 usage() {
   cat <<USAGE
@@ -45,6 +52,10 @@ Options:
   --image <name...>     Build one or more images. Supports repeated --image or multiple names after one --image.
   --legacy              Build only the legacy image set or legacy variant of a single image.
   --no-save             Build images but skip docker save tarball export (reduces disk pressure).
+  --no-cache            Force a full rebuild with no Docker layer cache (use for release builds).
+                        Default is cache-enabled: unchanged dependency layers (pnpm install,
+                        apk add, maven deps) are reused, which cuts webapp builds by ~85s each.
+                        Can also be set via DOCKER_NO_CACHE=1.
   --pack                Package dts-stack for deployment (excludes source, logs, git, etc.).
   --output <path>       Output path for the package tarball (default: ./dts-stack-<timestamp>.tar.gz).
   --opmanager-output <dir>
@@ -144,6 +155,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-save)
       SAVE_IMAGE_TARS="false"
+      shift
+      ;;
+    --no-cache)
+      DOCKER_NO_CACHE="true"
       shift
       ;;
     --legacy)
@@ -295,7 +310,17 @@ preflight_check() {
   docker image prune -f >/dev/null 2>&1 || true
   # docker builder prune requires BuildKit (Docker >= 18.09 with experimental, or >= 23.0)
   if [[ -n "${DOCKER_BUILDKIT_SUPPORTED}" ]]; then
-    docker builder prune -f --filter "until=24h" >/dev/null 2>&1 || true
+    # Keep a week of layer cache so daily incremental builds still hit the
+    # dependency layers; cap total size so it cannot grow unbounded.
+    docker builder prune -f --filter "until=${BUILD_CACHE_RETENTION:-168h}" \
+      --keep-storage "${BUILD_CACHE_MAX_SIZE:-20GB}" >/dev/null 2>&1 \
+      || docker builder prune -f --filter "until=${BUILD_CACHE_RETENTION:-168h}" >/dev/null 2>&1 \
+      || true
+  fi
+  if [[ "${DOCKER_NO_CACHE}" == "true" ]]; then
+    echo "[dts-build] Layer cache: DISABLED (--no-cache) — full clean rebuild"
+  else
+    echo "[dts-build] Layer cache: enabled — pass --no-cache for a clean-room release build"
   fi
   echo "[dts-build] === Pre-flight OK ==="
 }
@@ -468,8 +493,15 @@ build_image_ctx() {
     injected_runner_jar="true"
   fi
 
-  echo "[dts-build] Building ${name} -> ${tag} (no-cache)"
-  docker build --no-cache -t "$tag" -f "$dockerfile" "${args[@]}" "$context_dir"
+  local cache_args=()
+  local cache_label="cached"
+  if [[ "${DOCKER_NO_CACHE}" == "true" ]]; then
+    cache_args+=(--no-cache)
+    cache_label="no-cache"
+  fi
+
+  echo "[dts-build] Building ${name} -> ${tag} (${cache_label})"
+  docker build "${cache_args[@]}" -t "$tag" -f "$dockerfile" "${args[@]}" "$context_dir"
   save_image "$tag" "$output_dir"
   if [[ "$name" == "dts-addax" && "$injected_runner_jar" == "true" ]]; then
     if [[ -n "${INJECT_ADDAX_RUNNER_BACKUP}" ]]; then

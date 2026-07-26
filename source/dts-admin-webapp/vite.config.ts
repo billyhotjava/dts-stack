@@ -19,6 +19,8 @@ export default defineConfig(({ mode }) => {
 	const env = { ...process.env, ...rawEnv };
 	const base = env.VITE_APP_PUBLIC_PATH || env.VITE_PUBLIC_PATH || "/";
 	const isProduction = mode === "production";
+	const analyzeFlag = String(env.ANALYZE ?? "").trim().toLowerCase();
+	const analyzeEnabled = isProduction && analyzeFlag !== "" && analyzeFlag !== "0" && analyzeFlag !== "false";
 	const legacyFlagRaw =
 		env.LEGACY_BROWSER_BUILD ??
 		rawEnv.LEGACY_BROWSER_BUILD ??
@@ -119,7 +121,10 @@ export default defineConfig(({ mode }) => {
             tsconfigPaths(),
             runtimeConfigPlugin,
 
-            isProduction &&
+            // Opt-in only (`pnpm build:analyze`). gzipSize + brotliSize compress every
+            // chunk twice on top of the real build, which is pure overhead for the
+            // image build that never reads the report.
+            analyzeEnabled &&
                 visualizer({
                     // Avoid auto-opening in CI/Docker to prevent PowerShell/xdg-open errors
                     open: env.VITE_VISUALIZER_OPEN === "true" && !process.env.CI,

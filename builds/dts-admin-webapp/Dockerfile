@@ -2,6 +2,8 @@
 # Alpine tags for Node.js are no longer published under the rolling `20-alpine`.
 # Pin to the current LTS patch to avoid registry lookup failures.
 ARG BASE_IMAGE_NODE=node:20.17.0-alpine3.20
+# Declared here (before the first FROM) so it is in scope for the runtime FROM below.
+ARG BASE_IMAGE_RUNTIME=alpine:3.20
 FROM ${BASE_IMAGE_NODE} AS build
 
 WORKDIR /app
@@ -13,6 +15,12 @@ ARG NPM_HTTPS_PROXY
 ARG NPM_REGISTRY
 ARG PNPM_VERSION=10.8.0
 ARG WEBAPP_BUILD_CMD=build
+
+# Never emit the bundle-analyzer report in image builds. It runs gzip *and* brotli
+# over every chunk, which costs far more than the report is worth here.
+# Use `pnpm build:analyze` locally when the treemap is actually needed.
+ENV VITE_VISUALIZER_OPEN=false
+ENV ANALYZE=false
 
 # Recommended build context: repository root
 #   docker build -t dts-admin-webapp:TAG -f builds/dts-admin-webapp/Dockerfile .
@@ -37,8 +45,14 @@ RUN set -eux; \
     pnpm --version; \
     unset npm_config_registry npm_config_proxy npm_config_https_proxy http_proxy https_proxy
 
+# Keep the pnpm content-addressable store on a BuildKit cache mount. It survives
+# --no-cache (which only invalidates layers, not cache mounts), so even release
+# rebuilds resolve packages from local disk instead of re-downloading them.
+ENV PNPM_STORE_DIR=/pnpm-store
+
 # Install dependencies without running lifecycle scripts (skip Lefthook, etc.)
-RUN set -eux; \
+RUN --mount=type=cache,target=/pnpm-store,sharing=locked \
+    set -eux; \
     if [ -n "${NPM_REGISTRY:-}" ]; then \
         export npm_config_registry="${NPM_REGISTRY}"; \
     fi; \
@@ -48,8 +62,8 @@ RUN set -eux; \
         export npm_config_proxy="${http_proxy}"; \
         export npm_config_https_proxy="${https_proxy}"; \
     fi; \
+    pnpm config set store-dir "${PNPM_STORE_DIR}" --global; \
     pnpm install --frozen-lockfile --ignore-scripts; \
-    rm -rf /root/.pnpm-store/*tmp* 2>/dev/null || true; \
     unset npm_config_registry npm_config_proxy npm_config_https_proxy http_proxy https_proxy
 
 # Copy the remaining project files and build the production bundle
@@ -57,8 +71,12 @@ COPY source/dts-admin-webapp/ ./
 COPY builds/dts-admin-webapp/scripts /builds/dts-admin-webapp/scripts
 RUN pnpm "${WEBAPP_BUILD_CMD}"
 
-ARG BASE_IMAGE_NODE=node:20.17.0-alpine3.20
-FROM ${BASE_IMAGE_NODE} AS runtime
+# Runtime serves static files with nginx and renders runtime-config.js with sh only —
+# no Node.js is involved, so the ~130MB node base is dead weight in every offline
+# image tarball. Plain Alpine keeps the exact same apk packages and the same
+# /etc/nginx/http.d layout the config below expects.
+ARG BASE_IMAGE_RUNTIME=alpine:3.20
+FROM ${BASE_IMAGE_RUNTIME} AS runtime
 
 # Optional proxy for apk downloads; pass via --build-arg APK_HTTP_PROXY=http://host:port (and/or HTTPS)
 ARG APK_HTTP_PROXY

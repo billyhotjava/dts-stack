@@ -121,6 +121,8 @@ export default defineConfig(({ mode }) => {
 	const env = { ...rawEnv, ...process.env } as Record<string, string | undefined>;
 	const base = env.VITE_APP_PUBLIC_PATH || env.VITE_PUBLIC_PATH || "/";
 	const isProduction = mode === "production";
+	const analyzeFlag = String(env.ANALYZE ?? "").trim().toLowerCase();
+	const analyzeEnabled = isProduction && analyzeFlag !== "" && analyzeFlag !== "0" && analyzeFlag !== "false";
 	const runningInContainer = existsSync("/.dockerenv");
 
 	// Default to legacy build (chrome 95+) for both dev and prod so the app loads
@@ -286,7 +288,10 @@ export default defineConfig(({ mode }) => {
 			tsconfigPaths(),
 			runtimeConfigPlugin,
 
-			isProduction &&
+			// Opt-in only (`pnpm build:analyze`). gzipSize + brotliSize compress every
+			// chunk twice on top of the real build, which is pure overhead for the
+			// image build that never reads the report.
+			analyzeEnabled &&
 				visualizer({
 					// Avoid auto-opening in CI/Docker to prevent PowerShell/xdg-open errors
 					open: env.VITE_VISUALIZER_OPEN === "true" && !process.env.CI,
