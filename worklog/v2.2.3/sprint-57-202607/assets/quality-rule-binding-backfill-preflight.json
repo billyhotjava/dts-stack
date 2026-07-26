@@ -1,0 +1,30 @@
+{
+  "checkedAt": "2026-07-26T15:15:38+08:00",
+  "appliedAt": "2026-07-26T15:18:25.618943+08:00",
+  "database": "dts_platform",
+  "versionsWithRuleDataset": 3,
+  "versionsMissingBindings": 3,
+  "insertedBindings": 3,
+  "latestPublishedBindingCountAfterApply": 1,
+  "affectedRules": [
+    {
+      "code": "QRULE-F7647372",
+      "name": "qtest1",
+      "datasetId": "809bef45-5104-4524-a33d-6d3ea6e7a557",
+      "versions": [
+        {
+          "version": 3,
+          "status": "PUBLISHED"
+        },
+        {
+          "version": 2,
+          "status": "ARCHIVED"
+        },
+        {
+          "version": 1,
+          "status": "ARCHIVED"
+        }
+      ]
+    }
+  ]
+}

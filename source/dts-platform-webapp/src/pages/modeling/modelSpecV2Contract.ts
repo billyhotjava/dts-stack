@@ -8,6 +8,9 @@ export const MODEL_SPEC_CREATE_FIELDS = [
 	"description",
 	"dimensionDefinitionRef",
 	"idempotencyKey",
+	"dataMartId",
+	"variantCode",
+	"implementationPolicy",
 ] as const;
 
 export const MODEL_SPEC_UPDATE_FIELDS = [
@@ -32,6 +35,9 @@ export const MODEL_SPEC_UPDATE_FIELDS = [
 	"standardBindings",
 	"generationStrategy",
 	"dimensionProfile",
+	"dataMartId",
+	"variantCode",
+	"implementationPolicy",
 ] as const;
 
 export const MODEL_SPEC_REQUIRED_FIELD_CODES = {
@@ -83,7 +89,7 @@ export const isModelSpecUpstreamAllowed = (
 };
 
 export const isModelSpecDimensionRefAllowed = (
-candidate: Pick<UpdateModelSpecCommand, "modelType" | "layer">,
+	candidate: Pick<UpdateModelSpecCommand, "modelType" | "layer">,
 ): boolean => candidate.modelType === "DIMENSION" && candidate.layer === MODEL_SPEC_TARGET_LAYER_BY_TYPE.DIMENSION;
 
 export type ModelSpecImplementationMode = "DESIGNER_GENERATED" | "DBT_MANAGED";
@@ -97,6 +103,7 @@ export type ModelSpecStatus = "DRAFT" | "DESIGNING" | "VALIDATING" | "READY_TO_P
 export type ModelSpecCompatibilityMode = "CANONICAL" | "LEGACY_READONLY";
 export type ModelSpecScdType = "NONE" | "TYPE1" | "TYPE2";
 export type ModelSpecReuseScope = "PLAN" | "DOMAIN" | "TENANT";
+export type ModelSpecLoadStrategy = "FULL" | "INCREMENTAL" | "SNAPSHOT";
 
 export type ModelSpecGrain = { statement: string; keys: string[] };
 export type ModelSpecTimeSemantics = { type: ModelSpecTimeSemanticsType; fields: string[] };
@@ -107,6 +114,9 @@ export type ModelSpecField = {
 	sourceFieldRef?: string | null;
 	role: ModelSpecFieldRole;
 	securityLevel?: string | null;
+	dimensionAttributeCode?: string | null;
+	redundant?: boolean;
+	redundancySourceRef?: string | null;
 };
 export type ModelSpecSourceRef = {
 	kind: ModelSpecSourceKind;
@@ -159,6 +169,12 @@ export type ModelSpecDimensionDefinitionRef = {
 	dimensionDefinitionId: string;
 	revision: number;
 };
+export type ModelSpecImplementationPolicy = {
+	physicalName?: string | null;
+	loadStrategy: ModelSpecLoadStrategy;
+	retentionDays?: number | null;
+	partitionFields: string[];
+};
 export type ModelSpecLegacySource = { kind: string | null; ref: string | null; layer: string | null };
 export type ModelSpecLegacyStandard = {
 	fieldName: string | null;
@@ -192,17 +208,20 @@ type CreateModelSpecBase = {
 	name: string;
 	description?: string | null;
 	idempotencyKey: string;
+	dataMartId?: string | null;
+	variantCode?: string | null;
+	implementationPolicy?: ModelSpecImplementationPolicy | null;
 };
 
 export type CreateModelSpecCommand =
 	| (CreateModelSpecBase & {
 			modelType: "DIMENSION";
 			dimensionDefinitionRef: ModelSpecDimensionDefinitionRef;
-		})
+	  })
 	| (CreateModelSpecBase & {
 			modelType: Exclude<ModelSpecType, "DIMENSION">;
 			dimensionDefinitionRef?: never;
-		});
+	  });
 
 export type UpdateModelSpecCommand = {
 	planId: string;
@@ -220,6 +239,9 @@ export type UpdateModelSpecCommand = {
 	timeSemantics?: ModelSpecTimeSemantics | null;
 	generationStrategy?: ModelSpecGenerationStrategy | null;
 	dimensionProfile?: ModelSpecDimensionProfile | null;
+	dataMartId?: string | null;
+	variantCode?: string | null;
+	implementationPolicy?: ModelSpecImplementationPolicy | null;
 } & Partial<ModelSpecCollections>;
 
 export const hasModelSpecTypeBoundaryMismatch = (
@@ -334,7 +356,17 @@ const MODEL_SPEC_NESTED_COLLECTION_FIELDS: Record<
 	(typeof MODEL_SPEC_COLLECTION_FIELDS)[number],
 	ReadonlySet<string>
 > = {
-	fields: new Set(["name", "dataType", "nullable", "sourceFieldRef", "role", "securityLevel"]),
+	fields: new Set([
+		"name",
+		"dataType",
+		"nullable",
+		"sourceFieldRef",
+		"role",
+		"securityLevel",
+		"dimensionAttributeCode",
+		"redundant",
+		"redundancySourceRef",
+	]),
 	sourceRefs: new Set([
 		"kind",
 		"ref",
@@ -621,8 +653,12 @@ export const validateModelSpecCreate = (input: unknown): ModelSpecFieldIssue[] =
 	}
 	const issues: ModelSpecFieldIssue[] = [];
 	const allowed = new Set<string>(MODEL_SPEC_CREATE_FIELDS);
-	for (const field of Object.keys(input).filter((field) => !allowed.has(field)).sort()) {
-		issues.push(issue("MODEL_SPEC_FIELD_NOT_ALLOWED", field, "Field is not part of the minimal ModelSpec create contract"));
+	for (const field of Object.keys(input)
+		.filter((field) => !allowed.has(field))
+		.sort()) {
+		issues.push(
+			issue("MODEL_SPEC_FIELD_NOT_ALLOWED", field, "Field is not part of the minimal ModelSpec create contract"),
+		);
 	}
 	for (const [field, code] of Object.entries(MODEL_SPEC_REQUIRED_FIELD_CODES) as [
 		keyof typeof MODEL_SPEC_REQUIRED_FIELD_CODES,

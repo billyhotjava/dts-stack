@@ -248,8 +248,16 @@ public class ModelSpecApplicationService {
 
         requireCanonicalWriteEnabled();
         validateWriteContext(serverTenantId, actorId, command.planId(), command.domainId());
+        validateDataMartContext(serverTenantId, command.planId(), command.domainId(), command.dataMartId());
         validateSources(serverTenantId, actorId, command.planId(), command.sourceRefs());
-        validateDimensionDefinition(serverTenantId, command.modelType(), command.dimensionDefinitionRef(), true);
+        validateDimensionDefinition(
+            serverTenantId,
+            command.modelType(),
+            command.dimensionDefinitionRef(),
+            command.dataMartId(),
+            command.fields(),
+            true
+        );
         UUID modelSpecId = previewedModelSpecId == null ? idGenerator.get() : previewedModelSpecId;
         validateReferences(
             serverTenantId,
@@ -261,6 +269,7 @@ public class ModelSpecApplicationService {
         );
         Instant now = clock.instant();
         ModelSpecView view = codec.toCreatedView(modelSpecId, command, now);
+        requireUniqueDimensionVariant(serverTenantId, view, null);
         String responseSnapshot = codec.write(view);
         int inserted;
         try {
@@ -363,8 +372,22 @@ public class ModelSpecApplicationService {
         ModelSpecView replacement = codec.toUpdatedView(current, command, current.revision() + 1, clock.instant());
         requireDimensionDefinitionRef(replacement);
         rejectIssues(ModelSpecContract.validateView(replacement));
+        requireUniqueDimensionVariant(serverTenantId, replacement, current.id());
+        validateDataMartContext(
+            serverTenantId,
+            replacement.planId(),
+            replacement.domainId(),
+            replacement.dataMartId()
+        );
         validateSources(serverTenantId, actorId, command.planId(), command.sourceRefs());
-        validateDimensionDefinition(serverTenantId, replacement.modelType(), replacement.dimensionDefinitionRef(), false);
+        validateDimensionDefinition(
+            serverTenantId,
+            replacement.modelType(),
+            replacement.dimensionDefinitionRef(),
+            replacement.dataMartId(),
+            replacement.fields(),
+            false
+        );
         validateReferences(
             serverTenantId,
             command.planId(),
@@ -519,6 +542,8 @@ public class ModelSpecApplicationService {
         String tenantId,
         ModelType modelType,
         ModelSpecContract.DimensionDefinitionRef reference,
+        UUID dataMartId,
+        List<ModelSpecContract.ModelField> fields,
         boolean creation
     ) {
         if (modelType != ModelType.DIMENSION || reference == null || dimensionDefinitions == null) return;
@@ -538,6 +563,88 @@ public class ModelSpecApplicationService {
         ) {
             throw dimensionDefinitionNotCurrent(reference);
         }
+        if (
+            pinned.scopeType() == DimensionDefinitionContract.ScopeType.DATA_MART &&
+            !Objects.equals(pinned.dataMartId(), dataMartId)
+        ) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_DATA_MART_SCOPE_MISMATCH",
+                "The model must use the data mart selected by its dimension definition",
+                ModelSpecException.Kind.UNPROCESSABLE,
+                Map.of(
+                    "dimensionDefinitionId",
+                    reference.dimensionDefinitionId(),
+                    "requiredDataMartId",
+                    pinned.dataMartId()
+                )
+            );
+        }
+        Set<String> attributeCodes = pinned
+            .attributes()
+            .stream()
+            .map(DimensionDefinitionContract.AttributeSemantic::code)
+            .filter(Objects::nonNull)
+            .collect(java.util.stream.Collectors.toSet());
+        if (attributeCodes.isEmpty()) return;
+        for (ModelSpecContract.ModelField field : fields == null ? List.<ModelSpecContract.ModelField>of() : fields) {
+            if (
+                field != null &&
+                field.dimensionAttributeCode() != null &&
+                !attributeCodes.contains(field.dimensionAttributeCode())
+            ) {
+                throw new ModelSpecException(
+                    "MODEL_SPEC_DIMENSION_ATTRIBUTE_UNKNOWN",
+                    "A model field references an attribute outside the selected dimension definition",
+                    ModelSpecException.Kind.UNPROCESSABLE,
+                    Map.of(
+                        "fieldName",
+                        field.name(),
+                        "dimensionAttributeCode",
+                        field.dimensionAttributeCode(),
+                        "dimensionDefinitionId",
+                        reference.dimensionDefinitionId()
+                    )
+                );
+            }
+        }
+    }
+
+    private void validateDataMartContext(String tenantId, UUID planId, UUID domainId, UUID dataMartId) {
+        if (dataMartId == null) return;
+        if (!repository.planHasCurrentDataMart(tenantId, planId, dataMartId, domainId)) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_DATA_MART_NOT_IN_PLAN",
+                "Select a confirmed data mart from the current warehouse planning baseline",
+                ModelSpecException.Kind.UNPROCESSABLE,
+                Map.of("planId", planId, "domainId", domainId, "dataMartId", dataMartId)
+            );
+        }
+    }
+
+    private void requireUniqueDimensionVariant(String tenantId, ModelSpecView view, UUID excludingModelSpecId) {
+        if (view.modelType() != ModelType.DIMENSION || view.dimensionDefinitionRef() == null) return;
+        UUID existingId = repository
+            .findActiveDimensionVariant(
+                tenantId,
+                view.planId(),
+                view.dimensionDefinitionRef().dimensionDefinitionId(),
+                view.dataMartId(),
+                view.variantCode(),
+                excludingModelSpecId
+            )
+            .orElse(null);
+        if (existingId == null) return;
+        throw new ModelSpecException(
+            "MODEL_SPEC_DIMENSION_VARIANT_CONFLICT",
+            "An active implementation already exists for this plan, dimension, data mart and variant",
+            ModelSpecException.Kind.CONFLICT,
+            Map.of(
+                "existingModelSpecId",
+                existingId,
+                "repairRoute",
+                "/modeling/models/" + existingId + "?tab=design"
+            )
+        );
     }
 
     private static void requireDimensionDefinitionRef(CreateModelSpecCommand command) {
@@ -865,6 +972,13 @@ public class ModelSpecApplicationService {
             return new ModelSpecException(
                 "MODEL_SPEC_DIMENSION_CODE_CONFLICT",
                 "A dimension with this stable code already exists in the tenant",
+                ModelSpecException.Kind.CONFLICT
+            );
+        }
+        if (message.contains("uk_model_spec_active_dimension_variant")) {
+            return new ModelSpecException(
+                "MODEL_SPEC_DIMENSION_VARIANT_CONFLICT",
+                "An active implementation already exists for this plan, dimension, data mart and variant",
                 ModelSpecException.Kind.CONFLICT
             );
         }

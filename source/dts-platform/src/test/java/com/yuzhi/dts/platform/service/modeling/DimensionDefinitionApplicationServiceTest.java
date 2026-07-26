@@ -417,6 +417,35 @@ class DimensionDefinitionApplicationServiceTest {
     @Test
     void confirmsThenRetiresWithCasAndKeepsRetiredDefinitionReadable() {
         View draft = createPersisted(createCommand("lifecycle", "Customer"));
+        draft = new View(
+            draft.id(),
+            draft.systemCode(),
+            draft.domainId(),
+            draft.name(),
+            draft.definition(),
+            draft.ownerId(),
+            draft.reuseScope(),
+            draft.hierarchies(),
+            draft.status(),
+            draft.revision(),
+            draft.checksum(),
+            draft.usageCount(),
+            draft.createdAt(),
+            draft.updatedAt(),
+            DimensionDefinitionContract.ScopeType.DOMAIN,
+            null,
+            List.of(
+                new DimensionDefinitionContract.AttributeSemantic(
+                    "CUSTOMER_ID",
+                    "Customer id",
+                    "Stable customer business key",
+                    true,
+                    null,
+                    null,
+                    1
+                )
+            )
+        );
         reset(repository);
         when(repository.findCurrent(TENANT, DEFINITION_ID)).thenReturn(Optional.of(stored(draft, null, null)));
         when(repository.usageCount(TENANT, DEFINITION_ID)).thenReturn(2L);
@@ -605,6 +634,9 @@ class DimensionDefinitionApplicationServiceTest {
             view.ownerId(),
             view.reuseScope(),
             view.hierarchies(),
+            view.scopeType(),
+            view.dataMartId(),
+            view.attributes(),
             view.status(),
             view.revision(),
             view.checksum(),

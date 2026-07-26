@@ -1,5 +1,6 @@
 export type DimensionDefinitionStatus = "DRAFT" | "CURRENT" | "RETIRED";
 export type DimensionDefinitionReuseScope = "PLAN" | "DOMAIN" | "TENANT";
+export type DimensionDefinitionScopeType = "DOMAIN" | "DATA_MART";
 
 export type DimensionDefinitionHierarchyLevel = {
 	code: string;
@@ -13,6 +14,16 @@ export type DimensionDefinitionHierarchy = {
 	levels: DimensionDefinitionHierarchyLevel[];
 };
 
+export type DimensionDefinitionAttribute = {
+	code: string;
+	name: string;
+	definition: string;
+	primaryKey: boolean;
+	standardRef?: string | null;
+	standardVersion?: string | null;
+	order: number;
+};
+
 export type CreateDimensionDefinitionCommand = {
 	domainId: string;
 	name: string;
@@ -20,6 +31,9 @@ export type CreateDimensionDefinitionCommand = {
 	ownerId: string;
 	reuseScope: DimensionDefinitionReuseScope;
 	hierarchies?: DimensionDefinitionHierarchy[];
+	scopeType?: DimensionDefinitionScopeType;
+	dataMartId?: string | null;
+	attributes?: DimensionDefinitionAttribute[];
 	idempotencyKey: string;
 };
 
@@ -35,6 +49,9 @@ export type DimensionDefinitionView = {
 	ownerId: string;
 	reuseScope: DimensionDefinitionReuseScope;
 	hierarchies: DimensionDefinitionHierarchy[];
+	scopeType: DimensionDefinitionScopeType;
+	dataMartId: string | null;
+	attributes: DimensionDefinitionAttribute[];
 	status: DimensionDefinitionStatus;
 	revision: number;
 	checksum: string;

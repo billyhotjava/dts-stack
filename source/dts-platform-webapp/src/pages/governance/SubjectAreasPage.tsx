@@ -46,6 +46,7 @@ import { buildBusinessModelingRoute } from "../modeling/businessModelingContext"
 import { buildModelingJourneyRoute, modelingStagePath } from "../modeling/modelingJourneyContext";
 import { buildWarehousePlanRoute, resolveWarehousePlanPageContext } from "../modeling/warehousePlanViewModel";
 import { ConformedDimensionCatalogCard } from "./ConformedDimensionCatalogCard";
+import { DataMartWorkspace } from "./DataMartWorkspace";
 import { DimensionalModelingAssist } from "./DimensionalModelingAssist";
 import { pendingCandidateCount } from "./modelingCandidates";
 import { type SubjectWorkspaceTab, SubjectWorkspaceTabs } from "./SubjectWorkspaceTabs";
@@ -56,7 +57,7 @@ const { Title, Text } = Typography;
 const ROOT_KEY = "root";
 
 const workspaceTabFrom = (value?: string | null): SubjectWorkspaceTab => {
-	if (value === "details" || value === "governance") return value;
+	if (value === "data-marts" || value === "details" || value === "governance") return value;
 	return "scope";
 };
 
@@ -743,6 +744,18 @@ export default function SubjectAreasPage() {
 												</DimensionalModelingAssist>
 											</div>
 										</div>
+									}
+									dataMarts={
+										<DataMartWorkspace
+											domainId={activeDomain.id as string}
+											domainOptions={domainOptions
+												.filter((domain): domain is DomainNode & { id: string } => Boolean(domain.id))
+												.map((domain) => ({
+													value: domain.id,
+													label: `${domain.name || "未命名分类"}${domain.code ? `（${domain.code}）` : ""}`,
+												}))}
+											canManage={canManage}
+										/>
 									}
 									details={
 										<Card data-testid="canonical-plan-handoff" title="建设规划归属">

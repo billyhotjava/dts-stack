@@ -209,4 +209,8 @@
     <include file="config/liquibase/changelog/20260726_04_catalog_lifecycle_governance.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260726_05_consumer_classification_dependency.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260726_06_classification_migration_control.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260727_01_modeling_data_mart.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260727_02_dimension_scope_attributes.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260727_03_model_spec_mart_dimension_fields.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260727_04_quality_rule_binding_backfill.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

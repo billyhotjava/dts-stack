@@ -1,10 +1,10 @@
 import api from "@/api/apiClient";
 import {
-	toDimensionDefinitionEtag,
 	type CreateDimensionDefinitionCommand,
 	type DimensionDefinitionCasToken,
 	type DimensionDefinitionStatus,
 	type DimensionDefinitionView,
+	toDimensionDefinitionEtag,
 	type UpdateDimensionDefinitionCommand,
 } from "@/pages/modeling/dimensionDefinitionContract";
 
@@ -12,6 +12,7 @@ const DIMENSION_DEFINITION_RESOURCE = "/modeling/dimension-definitions";
 
 export type DimensionDefinitionListParams = {
 	domainId?: string;
+	dataMartId?: string;
 	status?: DimensionDefinitionStatus;
 	offset?: number;
 	limit?: number;
@@ -30,10 +31,19 @@ export const getDimensionDefinition = (id: string) =>
 		_skipErrorToast: true,
 	} as any);
 
+export const getDimensionDefinitionRevision = (id: string, revision: number) =>
+	api.get<DimensionDefinitionView>({
+		url: `${DIMENSION_DEFINITION_RESOURCE}/${encodeURIComponent(id)}/revisions/${encodeURIComponent(String(revision))}`,
+		_skipErrorToast: true,
+	} as any);
+
 export const createDimensionDefinition = (data: CreateDimensionDefinitionCommand) =>
 	api.post<DimensionDefinitionView>({ url: DIMENSION_DEFINITION_RESOURCE, data, _skipErrorToast: true } as any);
 
-export const updateDimensionDefinition = (expected: DimensionDefinitionCasToken, data: UpdateDimensionDefinitionCommand) =>
+export const updateDimensionDefinition = (
+	expected: DimensionDefinitionCasToken,
+	data: UpdateDimensionDefinitionCommand,
+) =>
 	api.put<DimensionDefinitionView>({
 		url: `${DIMENSION_DEFINITION_RESOURCE}/${encodeURIComponent(expected.id)}`,
 		headers: versionHeaders(expected),

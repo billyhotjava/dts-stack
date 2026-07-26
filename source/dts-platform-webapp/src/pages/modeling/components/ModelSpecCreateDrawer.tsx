@@ -2,6 +2,7 @@ import { Alert, Button, Drawer, Form, Input, Select, Space } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
+import { getWarehousePlanDataMarts, listDataMarts } from "@/api/dataMartApi";
 import { listDimensionDefinitions } from "@/api/dimensionDefinitionApi";
 import {
 	getWarehousePlanCategories,
@@ -9,6 +10,7 @@ import {
 	type WarehousePlanCategoryBindingView,
 	type WarehousePlanHeader,
 } from "@/api/warehousePlanApi";
+import type { DataMartView } from "../dataMartContract";
 import type { DimensionDefinitionView } from "../dimensionDefinitionContract";
 import type { CreateModelSpecCommand, ModelSpecType } from "../modelSpecV2Contract";
 import { validateModelSpecCreate } from "../modelSpecV2Contract";
@@ -27,6 +29,7 @@ type Props = {
 	lockModelType?: boolean;
 	lockedPlanId?: string;
 	initialDomainId?: string;
+	initialDataMartId?: string;
 	initialDimensionDefinitionId?: string;
 	initialDimensionDefinitionRevision?: number;
 	createCommand: (command: CreateModelSpecCommand) => Promise<{ id: string; name: string }>;
@@ -48,7 +51,11 @@ const confirmedCategoryOptions = (bindings: WarehousePlanCategoryBindingView[]):
 		.filter((binding) => binding.confirmationStatus === "CONFIRMED" && binding.resolutionStatus === "AVAILABLE")
 		.map((binding) => ({
 			value: binding.domainId,
-			label: binding.name ? (binding.code ? `${binding.name}（${binding.code}）` : binding.name) : binding.code || binding.domainId,
+			label: binding.name
+				? binding.code
+					? `${binding.name}（${binding.code}）`
+					: binding.name
+				: binding.code || binding.domainId,
 		}));
 
 const issueField = (field: string): keyof ModelSpecDraft =>
@@ -60,6 +67,7 @@ export function ModelSpecCreateDrawer({
 	lockModelType = false,
 	lockedPlanId,
 	initialDomainId,
+	initialDataMartId,
 	initialDimensionDefinitionId,
 	initialDimensionDefinitionRevision,
 	createCommand,
@@ -71,22 +79,58 @@ export function ModelSpecCreateDrawer({
 	const [plans, setPlans] = useState<WarehousePlanHeader[]>([]);
 	const [domainOptions, setDomainOptions] = useState<SelectOption[]>([]);
 	const [dimensionDefinitions, setDimensionDefinitions] = useState<DimensionDefinitionView[]>([]);
+	const [dataMarts, setDataMarts] = useState<DataMartView[]>([]);
 	const [loadingPlans, setLoadingPlans] = useState(false);
 	const [loadingDomains, setLoadingDomains] = useState(false);
 	const [loadingDefinitions, setLoadingDefinitions] = useState(false);
+	const [loadingDataMarts, setLoadingDataMarts] = useState(false);
 	const [contextError, setContextError] = useState("");
 	const [definitionError, setDefinitionError] = useState("");
 	const [submitError, setSubmitError] = useState("");
+	const [conflictRepairRoute, setConflictRepairRoute] = useState("");
 	const [saving, setSaving] = useState(false);
 	const idempotencyKeyRef = useRef("");
 	const planRequestRef = useRef(0);
 	const domainRequestRef = useRef(0);
 	const definitionRequestRef = useRef(0);
+	const dataMartRequestRef = useRef(0);
 	const initialDefinitionAttemptedRef = useRef(false);
 	const selectedPlanId = Form.useWatch("planId", form) || "";
 	const selectedDomainId = Form.useWatch("domainId", form) || "";
+	const selectedDataMartId = Form.useWatch("dataMartId", form) || "";
 	const selectedModelType = Form.useWatch("modelType", form) || initialModelType;
 	const selectedDimensionDefinitionRef = Form.useWatch("dimensionDefinitionRef", form);
+
+	const loadDataMartOptions = useCallback(
+		async (planId: string, domainId: string, preferredDataMartId?: string) => {
+			const requestId = ++dataMartRequestRef.current;
+			if (!planId || !domainId) {
+				setDataMarts([]);
+				form.setFieldValue("dataMartId", "");
+				return;
+			}
+			setLoadingDataMarts(true);
+			try {
+				const [baseline, current] = await Promise.all([
+					getWarehousePlanDataMarts(planId),
+					listDataMarts({ domainId, status: "CURRENT", offset: 0, limit: 100 }),
+				]);
+				if (requestId !== dataMartRequestRef.current) return;
+				const included = new Set(baseline.dataMartIds);
+				const options = current.filter((item) => included.has(item.id));
+				setDataMarts(options);
+				const preferred = preferredDataMartId || String(form.getFieldValue("dataMartId") || "");
+				form.setFieldValue("dataMartId", preferred && options.some((item) => item.id === preferred) ? preferred : "");
+			} catch {
+				if (requestId !== dataMartRequestRef.current) return;
+				setDataMarts([]);
+				form.setFieldValue("dataMartId", "");
+			} finally {
+				if (requestId === dataMartRequestRef.current) setLoadingDataMarts(false);
+			}
+		},
+		[form],
+	);
 
 	const loadDomains = useCallback(
 		async (planId: string, preferredDomainId?: string) => {
@@ -138,7 +182,12 @@ export function ModelSpecCreateDrawer({
 			try {
 				const result = await listDimensionDefinitions({ domainId, status: "CURRENT" });
 				if (requestId !== definitionRequestRef.current) return;
-				const definitions = Array.isArray(result) ? result : [];
+				const definitions = (Array.isArray(result) ? result : []).filter(
+					(definition) =>
+						!definition.scopeType ||
+						definition.scopeType === "DOMAIN" ||
+						(Boolean(selectedDataMartId) && definition.dataMartId === selectedDataMartId),
+				);
 				setDimensionDefinitions(definitions);
 				const shouldResolveInitialDefinition =
 					Boolean(initialDimensionDefinitionId) && !initialDefinitionAttemptedRef.current;
@@ -147,10 +196,10 @@ export function ModelSpecCreateDrawer({
 				}
 				const requested = shouldResolveInitialDefinition
 					? definitions.find(
-						(definition) =>
-							definition.id === initialDimensionDefinitionId &&
-							definition.revision === initialDimensionDefinitionRevision,
-					)
+							(definition) =>
+								definition.id === initialDimensionDefinitionId &&
+								definition.revision === initialDimensionDefinitionRevision,
+						)
 					: undefined;
 				if (requested) {
 					form.setFieldValue("dimensionDefinitionRef", {
@@ -174,7 +223,7 @@ export function ModelSpecCreateDrawer({
 				if (requestId === definitionRequestRef.current) setLoadingDefinitions(false);
 			}
 		},
-		[form, initialDimensionDefinitionId, initialDimensionDefinitionRevision, selectedModelType],
+		[form, initialDimensionDefinitionId, initialDimensionDefinitionRevision, selectedDataMartId, selectedModelType],
 	);
 
 	useEffect(() => {
@@ -182,13 +231,21 @@ export function ModelSpecCreateDrawer({
 			planRequestRef.current += 1;
 			domainRequestRef.current += 1;
 			definitionRequestRef.current += 1;
+			dataMartRequestRef.current += 1;
 			return;
 		}
 		const requestId = ++planRequestRef.current;
 		form.resetFields();
-		form.setFieldsValue(createEmptyModelSpecDraft(initialModelType, { planId: lockedPlanId, domainId: initialDomainId }));
+		form.setFieldsValue(
+			createEmptyModelSpecDraft(initialModelType, {
+				planId: lockedPlanId,
+				domainId: initialDomainId,
+				dataMartId: initialDataMartId,
+			}),
+		);
 		idempotencyKeyRef.current = createModelSpecIdempotencyKey();
 		setSubmitError("");
+		setConflictRepairRoute("");
 		setContextError("");
 		setDefinitionError("");
 		initialDefinitionAttemptedRef.current = false;
@@ -209,6 +266,7 @@ export function ModelSpecCreateDrawer({
 			});
 		if (lockedPlanId?.trim()) {
 			void loadDomains(lockedPlanId.trim(), initialDomainId);
+			if (initialDomainId) void loadDataMartOptions(lockedPlanId.trim(), initialDomainId, initialDataMartId);
 		} else {
 			setDomainOptions([]);
 			setContextError("请先选择建设计划。创建模型需要明确建设计划，系统不会自动猜测。");
@@ -217,8 +275,18 @@ export function ModelSpecCreateDrawer({
 			planRequestRef.current += 1;
 			domainRequestRef.current += 1;
 			definitionRequestRef.current += 1;
+			dataMartRequestRef.current += 1;
 		};
-	}, [form, initialDomainId, initialModelType, loadDomains, lockedPlanId, open]);
+	}, [
+		form,
+		initialDataMartId,
+		initialDomainId,
+		initialModelType,
+		loadDataMartOptions,
+		loadDomains,
+		lockedPlanId,
+		open,
+	]);
 
 	useEffect(() => {
 		void loadDimensionDefinitions(selectedDomainId);
@@ -232,21 +300,31 @@ export function ModelSpecCreateDrawer({
 		return options;
 	}, [lockedPlanId, plans]);
 	const dimensionOptions = useMemo<SelectOption[]>(
-		() => dimensionDefinitions.map((definition) => ({ value: definition.id, label: `${definition.name} · r${definition.revision}` })),
+		() =>
+			dimensionDefinitions.map((definition) => ({
+				value: definition.id,
+				label: `${definition.name} · r${definition.revision}`,
+			})),
 		[dimensionDefinitions],
+	);
+	const dataMartOptions = useMemo<SelectOption[]>(
+		() => dataMarts.map((item) => ({ value: item.id, label: `${item.name}（${item.code}）` })),
+		[dataMarts],
 	);
 
 	const changePlan = (planId: string) => {
 		definitionRequestRef.current += 1;
-		form.setFieldsValue({ domainId: "", dimensionDefinitionRef: undefined });
+		form.setFieldsValue({ domainId: "", dataMartId: "", dimensionDefinitionRef: undefined });
+		setDataMarts([]);
 		setDimensionDefinitions([]);
 		setDefinitionError("");
 		setSubmitError("");
 		void loadDomains(planId);
 	};
 
-	const changeDomain = () => {
-		form.setFieldValue("dimensionDefinitionRef", undefined);
+	const changeDomain = (domainId: string) => {
+		form.setFieldsValue({ dataMartId: "", dimensionDefinitionRef: undefined });
+		void loadDataMartOptions(selectedPlanId, domainId);
 		setContextError("");
 		setDefinitionError("");
 		setSubmitError("");
@@ -264,6 +342,7 @@ export function ModelSpecCreateDrawer({
 			"dimensionDefinitionRef",
 			definition ? { dimensionDefinitionId: definition.id, revision: definition.revision } : undefined,
 		);
+		if (definition?.dataMartId) form.setFieldValue("dataMartId", definition.dataMartId);
 		setDefinitionError("");
 		setSubmitError("");
 	};
@@ -279,6 +358,7 @@ export function ModelSpecCreateDrawer({
 
 	const submit = async () => {
 		setSubmitError("");
+		setConflictRepairRoute("");
 		try {
 			await form.validateFields();
 			const values = form.getFieldsValue(true);
@@ -289,7 +369,9 @@ export function ModelSpecCreateDrawer({
 			const command = buildModelSpecCreateCommand(values, [], idempotencyKeyRef.current);
 			const issues = validateModelSpecCreate(command);
 			if (issues.length > 0) {
-				form.setFields(issues.map((issue) => ({ name: issueField(issue.field), errors: [modelSpecIssueMessage(issue.code)] })));
+				form.setFields(
+					issues.map((issue) => ({ name: issueField(issue.field), errors: [modelSpecIssueMessage(issue.code)] })),
+				);
 				setSubmitError("请补齐标红字段后再保存");
 				return;
 			}
@@ -300,6 +382,17 @@ export function ModelSpecCreateDrawer({
 			onClose();
 		} catch (error) {
 			if (error && typeof error === "object" && "errorFields" in error) return;
+			const response = (
+				error as {
+					response?: { data?: { code?: string; data?: { repairRoute?: unknown } } };
+				}
+			)?.response;
+			if (
+				response?.data?.code === "MODEL_SPEC_DIMENSION_VARIANT_CONFLICT" &&
+				typeof response.data.data?.repairRoute === "string"
+			) {
+				setConflictRepairRoute(response.data.data.repairRoute);
+			}
 			setSubmitError(modelSpecErrorMessage(error));
 		} finally {
 			setSaving(false);
@@ -323,7 +416,12 @@ export function ModelSpecCreateDrawer({
 						<Button
 							type="primary"
 							loading={saving}
-							disabled={loadingPlans || loadingDomains || (selectedModelType === "DIMENSION" && loadingDefinitions)}
+							disabled={
+								loadingPlans ||
+								loadingDomains ||
+								loadingDataMarts ||
+								(selectedModelType === "DIMENSION" && loadingDefinitions)
+							}
 							onClick={() => void submit()}
 						>
 							保存草稿
@@ -348,7 +446,26 @@ export function ModelSpecCreateDrawer({
 						}
 					/>
 				) : null}
-				{submitError ? <Alert type="error" showIcon message={submitError} /> : null}
+				{submitError ? (
+					<Alert
+						type="error"
+						showIcon
+						message={submitError}
+						action={
+							conflictRepairRoute ? (
+								<Button
+									size="small"
+									onClick={() => {
+										onClose();
+										navigate(conflictRepairRoute);
+									}}
+								>
+									查看已有维度表
+								</Button>
+							) : undefined
+						}
+					/>
+				) : null}
 				<Form form={form} layout="vertical" requiredMark="optional" disabled={saving}>
 					<Form.Item name="planId" label="建设计划" rules={[{ required: true, message: "请选择建设计划" }]}>
 						<Select
@@ -372,8 +489,31 @@ export function ModelSpecCreateDrawer({
 							onChange={changeDomain}
 						/>
 					</Form.Item>
+					<Form.Item
+						name="dataMartId"
+						label="数据集市（可选）"
+						extra="仅显示当前计划已纳入、且包含所选业务分类的数据集市。业务域级概念模型可以暂不选择。"
+					>
+						<Select
+							allowClear
+							showSearch
+							optionFilterProp="label"
+							placeholder="选择模型所属的数据集市"
+							options={dataMartOptions}
+							loading={loadingDataMarts}
+							disabled={!selectedDomainId || loadingDataMarts}
+							onChange={() => {
+								form.setFieldValue("dimensionDefinitionRef", undefined);
+								setDefinitionError("");
+							}}
+						/>
+					</Form.Item>
 					<Form.Item name="modelType" label="模型类型" rules={[{ required: true, message: "请选择模型类型" }]}>
-						<Select options={modelTypeOptions} disabled={lockModelType} onChange={(value) => changeModelType(value as ModelSpecType)} />
+						<Select
+							options={modelTypeOptions}
+							disabled={lockModelType}
+							onChange={(value) => changeModelType(value as ModelSpecType)}
+						/>
 					</Form.Item>
 					{selectedModelType === "DIMENSION" ? (
 						<Form.Item label="业务维度（需已确认）" required>
@@ -390,8 +530,20 @@ export function ModelSpecCreateDrawer({
 							/>
 						</Form.Item>
 					) : null}
-					<Form.Item name="name" label="模型名称" rules={[{ required: true, whitespace: true, message: "请输入模型名称" }]}>
+					<Form.Item
+						name="name"
+						label="模型名称"
+						rules={[{ required: true, whitespace: true, message: "请输入模型名称" }]}
+					>
 						<Input autoFocus maxLength={128} placeholder="例如：客户订单明细" />
+					</Form.Item>
+					<Form.Item
+						name="variantCode"
+						label="实现变体（可选）"
+						extra="同一维度在同一数据集市需要多种实现时填写，例如 CURRENT 或 HISTORY。"
+						rules={[{ pattern: /^[A-Za-z][A-Za-z0-9_]{0,31}$/, message: "使用字母、数字和下划线" }]}
+					>
+						<Input maxLength={32} placeholder="默认实现可留空" />
 					</Form.Item>
 					<Form.Item name="description" label="用途说明（可选）">
 						<Input.TextArea rows={3} maxLength={2000} showCount placeholder="说明此模型支持的业务分析或应用场景" />

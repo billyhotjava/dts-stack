@@ -541,6 +541,12 @@ public class QualityRuleService {
         }
 
         List<QualityRuleBindingRequest> bindings = request.getBindings() != null ? request.getBindings() : Collections.emptyList();
+        if (bindings.isEmpty() && request.getDatasetId() != null) {
+            QualityRuleBindingRequest datasetBinding = new QualityRuleBindingRequest();
+            datasetBinding.setDatasetId(request.getDatasetId());
+            datasetBinding.setScopeType("DATASET");
+            bindings = List.of(datasetBinding);
+        }
         bindings.stream().filter(binding -> binding.getDatasetId() != null).forEach(binding -> {
             defaultLakeDatasetGuard.requireDefaultLakeDataset(binding.getDatasetId());
             GovRuleBinding entity = new GovRuleBinding();

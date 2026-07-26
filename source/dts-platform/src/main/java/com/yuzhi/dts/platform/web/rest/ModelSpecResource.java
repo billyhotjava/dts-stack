@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.CreateResult;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.ExpectedVersion;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldIssue;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
@@ -90,6 +92,14 @@ public class ModelSpecResource {
         @RequestParam(required = false) Layer layer
     ) {
         return ApiResponses.ok(service.list(serverTenantId, planId, domainId, modelType, layer));
+    }
+
+    @PostMapping("/naming/validate")
+    public ApiResponse<NamingValidationView> validatePhysicalName(@RequestBody NamingValidationRequest request) {
+        List<FieldIssue> issues = ModelSpecContract.validatePhysicalName(
+            request == null ? null : request.physicalName()
+        );
+        return ApiResponses.ok(new NamingValidationView(issues.isEmpty(), issues));
     }
 
     @GetMapping("/{id}")
@@ -197,4 +207,8 @@ public class ModelSpecResource {
             issues
         );
     }
+
+    public record NamingValidationRequest(String physicalName) {}
+
+    public record NamingValidationView(boolean valid, List<FieldIssue> issues) {}
 }

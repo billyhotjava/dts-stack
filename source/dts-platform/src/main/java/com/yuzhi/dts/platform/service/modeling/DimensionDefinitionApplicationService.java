@@ -8,10 +8,12 @@ import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository;
 import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository.StoredDimensionDefinition;
+import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.AttributeSemantic;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.CreateCommand;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.FieldIssue;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.HierarchySemantic;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.ReuseScope;
+import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.ScopeType;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.Status;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.UpdateCommand;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.View;
@@ -100,6 +102,8 @@ public class DimensionDefinitionApplicationService {
         }
 
         requireWriteAccess(command.domainId());
+        ScopeType scopeType = effectiveScope(command.scopeType());
+        validateDataMartScope(tenantId, command.domainId(), scopeType, command.dataMartId());
         requireUniqueName(tenantId, command.domainId(), command.name(), null);
         UUID id = idGenerator.get();
         Instant now = databaseInstant();
@@ -118,7 +122,10 @@ public class DimensionDefinitionApplicationService {
                 "",
                 0,
                 now,
-                now
+                now,
+                scopeType,
+                command.dataMartId(),
+                copyAttributes(command.attributes())
             )
         );
         int inserted;
@@ -151,7 +158,36 @@ public class DimensionDefinitionApplicationService {
     }
 
     @Transactional(readOnly = true)
+    public View revision(String tenantId, UUID id, int revision) {
+        requireTenant(tenantId);
+        if (revision < 1) {
+            throw new ModelSpecException(
+                "DIMENSION_DEFINITION_REVISION_INVALID",
+                "Dimension definition revision must be positive",
+                ModelSpecException.Kind.BAD_REQUEST
+            );
+        }
+        StoredDimensionDefinition stored = repository
+            .findRevision(tenantId, id, revision)
+            .orElseThrow(() -> notFound(id));
+        requireReadAccess(stored, id);
+        return stored.toView(repository.usageCount(tenantId, id));
+    }
+
+    @Transactional(readOnly = true)
     public List<View> list(String tenantId, UUID domainId, Status status, int offset, int limit) {
+        return list(tenantId, domainId, null, status, offset, limit);
+    }
+
+    @Transactional(readOnly = true)
+    public List<View> list(
+        String tenantId,
+        UUID domainId,
+        UUID dataMartId,
+        Status status,
+        int offset,
+        int limit
+    ) {
         requireTenant(tenantId);
         requireListWindow(offset, limit);
         Set<UUID> visibleDomainIds;
@@ -164,7 +200,7 @@ public class DimensionDefinitionApplicationService {
             return List.of();
         }
         List<StoredDimensionDefinition> visible = repository
-            .listCurrent(tenantId, domainId, status, visibleDomainIds, offset, limit)
+            .listCurrent(tenantId, domainId, dataMartId, status, visibleDomainIds, offset, limit)
             .stream()
             .filter(stored -> visibleDomainIds.contains(stored.domainId()))
             .toList();
@@ -196,7 +232,15 @@ public class DimensionDefinitionApplicationService {
             );
         }
         rejectIssues(DimensionDefinitionContract.validateUpdate(command));
-        if (sameBusinessContent(current, command)) {
+        ScopeType scopeType = command.scopeType() == null ? current.scopeType() : command.scopeType();
+        UUID dataMartId = scopeType == ScopeType.DATA_MART
+            ? (command.dataMartId() == null ? current.dataMartId() : command.dataMartId())
+            : null;
+        List<AttributeSemantic> attributes = command.attributes() == null
+            ? current.attributes()
+            : copyAttributes(command.attributes());
+        validateDataMartScope(tenantId, current.domainId(), scopeType, dataMartId);
+        if (sameBusinessContent(current, command, scopeType, dataMartId, attributes)) {
             return current;
         }
         requireUniqueName(tenantId, current.domainId(), command.name(), current.id());
@@ -215,7 +259,10 @@ public class DimensionDefinitionApplicationService {
                 "",
                 current.usageCount(),
                 current.createdAt(),
-                databaseInstant()
+                databaseInstant(),
+                scopeType,
+                dataMartId,
+                attributes
             )
         );
         return compareAndSet(tenantId, actorId, current, replacement);
@@ -250,6 +297,18 @@ public class DimensionDefinitionApplicationService {
                 Map.of("currentStatus", current.status(), "requiredStatus", required, "targetStatus", target)
             );
         }
+        if (
+            target == Status.CURRENT &&
+            (current.attributes().isEmpty() ||
+                current.attributes().stream().noneMatch(DimensionDefinitionContract.AttributeSemantic::primaryKey))
+        ) {
+            throw new ModelSpecException(
+                "DIMENSION_DEFINITION_ATTRIBUTES_REQUIRED_FOR_CONFIRMATION",
+                "Add dimension attributes and select one business primary key before confirmation",
+                ModelSpecException.Kind.UNPROCESSABLE,
+                Map.of("dimensionDefinitionId", current.id(), "repairRoute", "/modeling/dimensions?edit=" + current.id())
+            );
+        }
         View replacement = checksum(
             new View(
                 current.id(),
@@ -265,7 +324,10 @@ public class DimensionDefinitionApplicationService {
                 "",
                 current.usageCount(),
                 current.createdAt(),
-                databaseInstant()
+                databaseInstant(),
+                current.scopeType(),
+                current.dataMartId(),
+                current.attributes()
             )
         );
         return compareAndSet(tenantId, actorId, current, replacement);
@@ -399,7 +461,10 @@ public class DimensionDefinitionApplicationService {
             checksum,
             view.usageCount(),
             view.createdAt(),
-            view.updatedAt()
+            view.updatedAt(),
+            view.scopeType(),
+            view.dataMartId(),
+            view.attributes()
         );
     }
 
@@ -417,7 +482,10 @@ public class DimensionDefinitionApplicationService {
                 view.status(),
                 view.revision(),
                 view.createdAt(),
-                view.updatedAt()
+                view.updatedAt(),
+                view.scopeType(),
+                view.dataMartId(),
+                view.attributes()
             )
         );
     }
@@ -431,13 +499,22 @@ public class DimensionDefinitionApplicationService {
         }
     }
 
-    private static boolean sameBusinessContent(View current, UpdateCommand command) {
+    private static boolean sameBusinessContent(
+        View current,
+        UpdateCommand command,
+        ScopeType scopeType,
+        UUID dataMartId,
+        List<AttributeSemantic> attributes
+    ) {
         return (
             Objects.equals(current.name(), command.name()) &&
             Objects.equals(current.definition(), command.definition()) &&
             Objects.equals(current.ownerId(), command.ownerId()) &&
             current.reuseScope() == command.reuseScope() &&
-            Objects.equals(current.hierarchies(), copy(command.hierarchies()))
+            Objects.equals(current.hierarchies(), copy(command.hierarchies())) &&
+            current.scopeType() == scopeType &&
+            Objects.equals(current.dataMartId(), dataMartId) &&
+            Objects.equals(current.attributes(), attributes)
         );
     }
 
@@ -453,6 +530,9 @@ public class DimensionDefinitionApplicationService {
             Objects.equals(response.ownerId(), revision.ownerId()) &&
             response.reuseScope() == revision.reuseScope() &&
             Objects.equals(response.hierarchies(), revision.hierarchies()) &&
+            response.scopeType() == revision.scopeType() &&
+            Objects.equals(response.dataMartId(), revision.dataMartId()) &&
+            Objects.equals(response.attributes(), revision.attributes()) &&
             response.status() == revision.status() &&
             response.revision() == revision.revision() &&
             Objects.equals(response.checksum(), revision.checksum()) &&
@@ -463,6 +543,28 @@ public class DimensionDefinitionApplicationService {
 
     private static List<HierarchySemantic> copy(List<HierarchySemantic> hierarchies) {
         return hierarchies == null ? List.of() : List.copyOf(hierarchies);
+    }
+
+    private static List<AttributeSemantic> copyAttributes(List<AttributeSemantic> attributes) {
+        return attributes == null ? List.of() : List.copyOf(attributes);
+    }
+
+    private static ScopeType effectiveScope(ScopeType scopeType) {
+        return scopeType == null ? ScopeType.DOMAIN : scopeType;
+    }
+
+    private void validateDataMartScope(String tenantId, UUID domainId, ScopeType scopeType, UUID dataMartId) {
+        if (scopeType == ScopeType.DOMAIN) {
+            return;
+        }
+        if (dataMartId == null || !repository.dataMartContainsDomain(tenantId, dataMartId, domainId)) {
+            throw new ModelSpecException(
+                "DIMENSION_DEFINITION_DATA_MART_SCOPE_INVALID",
+                "The selected data mart is not active or does not include this business category",
+                ModelSpecException.Kind.UNPROCESSABLE,
+                Map.of("domainId", domainId, "dataMartId", dataMartId == null ? "" : dataMartId)
+            );
+        }
     }
 
     private static void requireExpected(UUID id, View current, ExpectedVersion expected) {
@@ -629,6 +731,9 @@ public class DimensionDefinitionApplicationService {
         Status status,
         int revision,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        ScopeType scopeType,
+        UUID dataMartId,
+        List<AttributeSemantic> attributes
     ) {}
 }

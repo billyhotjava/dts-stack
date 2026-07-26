@@ -391,7 +391,7 @@ class ModelSpecStageGateServiceTest {
             .blockers()
             .get(0);
         assertThat(blocker.code()).isEqualTo("MODEL_SPEC_TIME_FIELD_INVALID");
-        assertThat(blocker.repairRoute()).isEqualTo("/modeling/models/" + MODEL_ID + "?tab=fields");
+        assertThat(blocker.repairRoute()).isEqualTo("/modeling/models/" + MODEL_ID + "?activeStage=logical&tab=fields");
     }
 
     @Test
@@ -900,13 +900,19 @@ class ModelSpecStageGateServiceTest {
             fields.stream().map(field -> new StandardBinding(field.name(), null, null, null, null, null, null, "INTERNAL")).toList(),
             generationStrategy,
             profile,
+            null,
             ModelStatus.DRAFT,
             2,
             "a".repeat(64),
             Instant.EPOCH,
             Instant.EPOCH,
             CompatibilityMode.CANONICAL,
-            null
+            null,
+            null,
+            null,
+            type == ModelType.DIMENSION
+                ? new ImplementationPolicy("dwd_" + type.name().toLowerCase(), LoadStrategy.FULL, null, List.of())
+                : null
         );
     }
 
@@ -961,13 +967,17 @@ class ModelSpecStageGateServiceTest {
             bindings,
             model.generationStrategy(),
             model.dimensionProfile(),
+            model.dimensionDefinitionRef(),
             model.status(),
             model.revision(),
             model.checksum(),
             model.createdAt(),
             model.updatedAt(),
             model.compatibilityMode(),
-            model.legacyRefs()
+            model.legacyRefs(),
+            model.dataMartId(),
+            model.variantCode(),
+            model.implementationPolicy()
         );
     }
 
@@ -996,13 +1006,17 @@ class ModelSpecStageGateServiceTest {
             model.standardBindings(),
             model.generationStrategy(),
             model.dimensionProfile(),
+            model.dimensionDefinitionRef(),
             model.status(),
             model.revision(),
             model.checksum(),
             model.createdAt(),
             model.updatedAt(),
             model.compatibilityMode(),
-            model.legacyRefs()
+            model.legacyRefs(),
+            model.dataMartId(),
+            model.variantCode(),
+            model.implementationPolicy()
         );
     }
 
@@ -1038,7 +1052,10 @@ class ModelSpecStageGateServiceTest {
             model.createdAt(),
             model.updatedAt(),
             model.compatibilityMode(),
-            model.legacyRefs()
+            model.legacyRefs(),
+            model.dataMartId(),
+            model.variantCode(),
+            model.implementationPolicy()
         );
     }
 
@@ -1067,13 +1084,17 @@ class ModelSpecStageGateServiceTest {
             model.standardBindings(),
             model.generationStrategy(),
             model.dimensionProfile(),
+            model.dimensionDefinitionRef(),
             model.status(),
             model.revision(),
             model.checksum(),
             model.createdAt(),
             model.updatedAt(),
             model.compatibilityMode(),
-            model.legacyRefs()
+            model.legacyRefs(),
+            model.dataMartId(),
+            model.variantCode(),
+            model.implementationPolicy()
         );
     }
 

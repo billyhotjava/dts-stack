@@ -81,7 +81,9 @@ export default function ModelCenterPage() {
 
 	const planNameById = useMemo(() => new Map(plans.map((plan) => [plan.id, plan.name])), [plans]);
 	const lockedImportPlan = useMemo(() => plans.find((plan) => plan.id === planId) || null, [planId, plans]);
-	const canImport = canEdit && (!planId || Boolean(lockedImportPlan && canEditWarehousePlanHeader(true, lockedImportPlan.lifecycleStatus)));
+	const canImport =
+		canEdit &&
+		(!planId || Boolean(lockedImportPlan && canEditWarehousePlanHeader(true, lockedImportPlan.lifecycleStatus)));
 	const visibleModels = useMemo(() => {
 		const keyword = search.trim().toLowerCase();
 		return models.filter((model) => {
@@ -261,6 +263,7 @@ export default function ModelCenterPage() {
 				initialModelType={createType}
 				lockedPlanId={planId || undefined}
 				initialDomainId={domainId || undefined}
+				initialDataMartId={searchParams.get("dataMartId")?.trim() || undefined}
 				initialDimensionDefinitionId={searchParams.get("dimensionDefinitionId")?.trim() || undefined}
 				initialDimensionDefinitionRevision={Number(searchParams.get("dimensionDefinitionRevision")) || undefined}
 				createCommand={createModelSpec}

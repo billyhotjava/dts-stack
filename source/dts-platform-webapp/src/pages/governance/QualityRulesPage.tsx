@@ -350,6 +350,7 @@ export default function Page() {
 				type: values.type,
 				severity: values.severity,
 				datasetId: values.datasetId || undefined,
+				bindings: values.datasetId ? [{ datasetId: values.datasetId, scopeType: "DATASET" }] : [],
 				enabled: values.enabled ?? true,
 				publishNow: values.publishNow ?? true,
 				definition: parsedDefinition || undefined,

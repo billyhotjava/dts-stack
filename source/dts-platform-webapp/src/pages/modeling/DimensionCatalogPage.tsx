@@ -46,7 +46,12 @@ export default function DimensionCatalogPage() {
 	const actionRequestRef = useRef(0);
 	const activeDomainRef = useRef(domainId);
 	activeDomainRef.current = domainId;
-	const { labelByKey, options: domainOptions, loading: domainsLoading, error: domainsError } = useCatalogDomainOptions();
+	const {
+		labelByKey,
+		options: domainOptions,
+		loading: domainsLoading,
+		error: domainsError,
+	} = useCatalogDomainOptions();
 
 	const load = useCallback(async () => {
 		const requestId = ++loadRequestRef.current;
@@ -108,6 +113,7 @@ export default function DimensionCatalogPage() {
 		params.set("domainId", definition.domainId);
 		params.set("dimensionDefinitionId", definition.id);
 		params.set("dimensionDefinitionRevision", String(definition.revision));
+		if (definition.dataMartId) params.set("dataMartId", definition.dataMartId);
 		navigate(`/modeling/models?${params.toString()}`);
 	};
 
@@ -145,6 +151,11 @@ export default function DimensionCatalogPage() {
 	};
 
 	const confirmCurrent = (definition: DimensionDefinitionView) => {
+		const attributes = definition.attributes || [];
+		if (!attributes.length || !attributes.some((attribute) => attribute.primaryKey)) {
+			setActionError("设为现行前，请先编辑维度并至少登记一个业务属性，同时标记一个业务主键。");
+			return;
+		}
 		Modal.confirm({
 			title: "设为现行维度",
 			content: `确认将“${definition.name}”设为现行版本吗？设为现行后，逻辑模型才能引用该版本。`,
@@ -186,6 +197,20 @@ export default function DimensionCatalogPage() {
 			dataIndex: "domainId",
 			width: 210,
 			render: (value: string) => labelByKey[value] || "已绑定业务分类",
+		},
+		{
+			title: "适用范围",
+			key: "scope",
+			width: 150,
+			render: (_value, definition) =>
+				definition.scopeType === "DATA_MART" ? <Tag color="blue">数据集市</Tag> : <Tag>业务分类</Tag>,
+		},
+		{
+			title: "业务属性",
+			key: "attributes",
+			width: 110,
+			align: "right",
+			render: (_value, definition) => (definition.attributes || []).length,
 		},
 		{
 			title: "状态",
@@ -281,7 +306,13 @@ export default function DimensionCatalogPage() {
 					type="error"
 					showIcon
 					message={actionError}
-					action={actionNeedsRefresh ? <Button size="small" onClick={refreshAfterActionConflict}>刷新目录</Button> : undefined}
+					action={
+						actionNeedsRefresh ? (
+							<Button size="small" onClick={refreshAfterActionConflict}>
+								刷新目录
+							</Button>
+						) : undefined
+					}
 					closable
 					onClose={() => {
 						setActionError("");
@@ -318,7 +349,7 @@ export default function DimensionCatalogPage() {
 						loading={loading}
 						columns={columns}
 						dataSource={visibleDimensions}
-						scroll={{ x: 1370 }}
+						scroll={{ x: 1600 }}
 						locale={{ emptyText: <Empty description={emptyText} /> }}
 					/>
 				</Card>

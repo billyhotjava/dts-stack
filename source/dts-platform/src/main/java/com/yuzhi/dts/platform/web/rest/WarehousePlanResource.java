@@ -4,6 +4,11 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldIssue;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.IssueSeverity;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService.UpdatePlanHeaderCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService.WarehousePlanException;
@@ -155,6 +160,39 @@ public class WarehousePlanResource {
     public ApiResponse<StageProjection> stageProjection(@PathVariable UUID id) {
         WarehousePlanActor actor = requirePlanRead(id);
         return ApiResponses.ok(stageProjectionService.project(serverTenantId, id, sourceAccessContext(actor)));
+    }
+
+    @PostMapping("/{id}/naming/validate")
+    public ApiResponse<NamingValidationView> validatePhysicalName(
+        @PathVariable UUID id,
+        @RequestBody NamingValidationRequest request
+    ) {
+        requirePlanRead(id);
+        List<FieldIssue> issues = new java.util.ArrayList<>(
+            ModelSpecContract.validatePhysicalName(request == null ? null : request.physicalName())
+        );
+        if (
+            request == null ||
+            request.modelType() == null ||
+            request.layer() == null ||
+            expectedLayer(request.modelType()) != request.layer()
+        ) {
+            issues.add(
+                new FieldIssue(
+                    "MODEL_SPEC_TYPE_LAYER_MISMATCH",
+                    "layer",
+                    IssueSeverity.ERROR,
+                    "Model type and target layer do not match the planning policy"
+                )
+            );
+        }
+        return ApiResponses.ok(
+            new NamingValidationView(
+                issues.isEmpty(),
+                request == null || request.physicalName() == null ? null : request.physicalName().trim(),
+                List.copyOf(issues)
+            )
+        );
     }
 
     @PutMapping("/{id}/baseline/business-scope")
@@ -330,6 +368,15 @@ public class WarehousePlanResource {
         );
     }
 
+    private static Layer expectedLayer(ModelType modelType) {
+        if (modelType == null) return null;
+        return switch (modelType) {
+            case DIMENSION, FACT -> Layer.DWD;
+            case SUMMARY -> Layer.DWS;
+            case APPLICATION -> Layer.ADS;
+        };
+    }
+
     private WarehousePlanActor requirePlanMaintenance(UUID planId) {
         WarehousePlanActor actor = actorProvider.currentActor();
         authorizationGuard.requirePlanMaintenance(service.get(serverTenantId, planId), actor);
@@ -357,6 +404,10 @@ public class WarehousePlanResource {
             );
         }
     }
+
+    public record NamingValidationRequest(ModelType modelType, Layer layer, String physicalName) {}
+
+    public record NamingValidationView(boolean valid, String normalizedName, List<FieldIssue> issues) {}
 
     private static int parseIfMatch(String ifMatch, EditUnit editUnit) {
         if (ifMatch == null || ifMatch.isBlank()) {

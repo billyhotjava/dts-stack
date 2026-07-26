@@ -269,13 +269,14 @@ public class ModelSpecRepository {
                 contract_version, domain_id, business_activity_ref, description, consumption_scenario,
                 fact_shape, grain_json, time_semantics, fields, source_refs, depends_on, dimension_refs,
                 metric_refs, standard_bindings, generation_strategy, dimension_profile, current_checksum, idempotency_key,
-                idempotency_request_hash, idempotency_response_snapshot, dimension_definition_id, dimension_definition_revision
+                idempotency_request_hash, idempotency_response_snapshot, dimension_definition_id, dimension_definition_revision,
+                data_mart_id, variant_code
             ) values (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?,
                 2, ?, ?, ?, ?, ?, cast(? as jsonb), cast(? as jsonb), cast(? as jsonb), cast(? as jsonb),
                 cast(? as jsonb), cast(? as jsonb), cast(? as jsonb), cast(? as jsonb), cast(? as jsonb),
                 cast(? as jsonb), ?, ?, ?, cast(? as jsonb)
-                , ?, ?
+                , ?, ?, ?, ?
             )
             on conflict (tenant_id, idempotency_key)
             where contract_version = 2 and idempotency_key is not null
@@ -314,7 +315,9 @@ public class ModelSpecRepository {
             requestHash,
             responseSnapshot,
             view.dimensionDefinitionRef() == null ? null : view.dimensionDefinitionRef().dimensionDefinitionId(),
-            view.dimensionDefinitionRef() == null ? null : view.dimensionDefinitionRef().revision()
+            view.dimensionDefinitionRef() == null ? null : view.dimensionDefinitionRef().revision(),
+            view.dataMartId(),
+            view.variantCode()
         );
     }
 
@@ -336,6 +339,7 @@ public class ModelSpecRepository {
                    depends_on = cast(? as jsonb), dimension_refs = cast(? as jsonb), metric_refs = cast(? as jsonb),
                    standard_bindings = cast(? as jsonb), generation_strategy = cast(? as jsonb),
                    dimension_profile = cast(? as jsonb),
+                   data_mart_id = ?, variant_code = ?,
                    current_checksum = ?, revision = ?, version = version + 1, last_modified_date = ?
              where tenant_id = ? and id = ? and contract_version = 2
                and revision = ? and current_checksum = ?
@@ -361,6 +365,8 @@ public class ModelSpecRepository {
             json(replacement.standardBindings()),
             jsonOrNull(replacement.generationStrategy()),
             jsonOrNull(replacement.dimensionProfile()),
+            replacement.dataMartId(),
+            replacement.variantCode(),
             replacement.checksum(),
             replacement.revision(),
             Timestamp.from(replacement.updatedAt()),
@@ -489,8 +495,8 @@ public class ModelSpecRepository {
             insert into modeling_model_spec_revision (
                 id, model_spec_id, revision, status, content_checksum, created_date, last_modified_date,
                 tenant_id, contract_version, snapshot_json, created_by
-                , dimension_definition_id, dimension_definition_revision
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, 2, cast(? as jsonb), ?, ?, ?)
+                , dimension_definition_id, dimension_definition_revision, data_mart_id, variant_code
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, 2, cast(? as jsonb), ?, ?, ?, ?, ?)
             """,
             UUID.randomUUID(),
             view.id(),
@@ -503,8 +509,75 @@ public class ModelSpecRepository {
             snapshot,
             actorId,
             view.dimensionDefinitionRef() == null ? null : view.dimensionDefinitionRef().dimensionDefinitionId(),
-            view.dimensionDefinitionRef() == null ? null : view.dimensionDefinitionRef().revision()
+            view.dimensionDefinitionRef() == null ? null : view.dimensionDefinitionRef().revision(),
+            view.dataMartId(),
+            view.variantCode()
         );
+    }
+
+    public boolean planHasCurrentDataMart(String tenantId, UUID planId, UUID dataMartId, UUID domainId) {
+        Boolean exists = jdbcTemplate.queryForObject(
+            """
+            select exists (
+                select 1
+                  from modeling_warehouse_plan_data_mart p
+                  join modeling_data_mart m
+                    on m.tenant_id = p.tenant_id and m.id = p.data_mart_id
+                  join modeling_data_mart_domain d
+                    on d.tenant_id = m.tenant_id and d.data_mart_id = m.id
+                 where p.tenant_id = ?
+                   and p.plan_id = ?
+                   and p.data_mart_id = ?
+                   and m.status = 'CURRENT'
+                   and d.domain_id = ?
+            )
+            """,
+            Boolean.class,
+            tenantId,
+            planId,
+            dataMartId,
+            domainId
+        );
+        return Boolean.TRUE.equals(exists);
+    }
+
+    public Optional<UUID> findActiveDimensionVariant(
+        String tenantId,
+        UUID planId,
+        UUID dimensionDefinitionId,
+        UUID dataMartId,
+        String variantCode,
+        UUID excludingModelSpecId
+    ) {
+        return jdbcTemplate
+            .query(
+                """
+                select id
+                  from modeling_model_spec
+                 where tenant_id = ?
+                   and plan_id = ?
+                   and contract_version = 2
+                   and model_type = 'DIMENSION'
+                   and dimension_definition_id = ?
+                   and coalesce(data_mart_id, '00000000-0000-0000-0000-000000000000'::uuid)
+                       = coalesce(?::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+                   and coalesce(variant_code, 'DEFAULT') = coalesce(?, 'DEFAULT')
+                   and status <> 'ARCHIVED'
+                   and (?::uuid is null or id <> ?::uuid)
+                 order by created_date, id
+                 limit 1
+                """,
+                (row, rowNumber) -> row.getObject("id", UUID.class),
+                tenantId,
+                planId,
+                dimensionDefinitionId,
+                dataMartId,
+                variantCode,
+                excludingModelSpecId,
+                excludingModelSpecId
+            )
+            .stream()
+            .findFirst();
     }
 
     private String json(Object value) {

@@ -1,4 +1,4 @@
-import { Button, Checkbox, Col, Empty, Form, Input, Row, Select, Space, Typography } from "antd";
+import { AutoComplete, Button, Checkbox, Col, Empty, Form, Input, Row, Select, Space, Typography } from "antd";
 import { Plus, Trash2 } from "lucide-react";
 import { hasDuplicateModelFieldNames, isProtectedModelFieldName } from "../modelSpecFieldRules";
 
@@ -7,6 +7,7 @@ const { Text } = Typography;
 type Props = {
 	readOnly: boolean;
 	persistedFieldNames: readonly string[];
+	dimensionAttributeOptions?: Array<{ value: string; label: string }>;
 };
 
 const fieldRoleOptions = [
@@ -16,10 +17,11 @@ const fieldRoleOptions = [
 	{ value: "MEASURE", label: "度量（MEASURE）" },
 ];
 
-export function ModelSpecFieldsTab({ readOnly, persistedFieldNames }: Props) {
+export function ModelSpecFieldsTab({ readOnly, persistedFieldNames, dimensionAttributeOptions = [] }: Props) {
 	const form = Form.useFormInstance();
 	const fieldValues = Form.useWatch("fields", form) as Array<{ name?: string }> | undefined;
 	const grainKeysText = Form.useWatch("grainKeysText", form) as string | undefined;
+	const modelType = Form.useWatch("modelType", form) as string | undefined;
 	return (
 		<div data-testid="model-spec-fields-tab">
 			<div className="mb-3">
@@ -28,6 +30,11 @@ export function ModelSpecFieldsTab({ readOnly, persistedFieldNames }: Props) {
 					先定义本模型输出字段及其业务作用；业务时间引用的字段必须选择“时间（TIME）”
 				</Text>
 			</div>
+			{modelType === "DIMENSION" ? (
+				<div className="mb-3 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
+					维度表字段可映射到业务维度定义中的属性编码。主键属性应映射到作用为“键（KEY）”的字段。
+				</div>
+			) : null}
 			<Form.List
 				name="fields"
 				rules={[
@@ -120,6 +127,70 @@ export function ModelSpecFieldsTab({ readOnly, persistedFieldNames }: Props) {
 											</Form.Item>
 										</Col>
 									</Row>
+									<Row gutter={12} className="mt-3">
+										<Col xs={24} md={8}>
+											<Form.Item
+												name={[field.name, "dimensionAttributeCode"]}
+												label="维度属性编码"
+												extra={
+													modelType === "DIMENSION"
+														? "填写当前业务维度定义中的属性编码"
+														: "非维度模型可用于标明该字段对应的公共维度属性"
+												}
+												className="mb-0"
+											>
+												<AutoComplete
+													disabled={readOnly}
+													options={dimensionAttributeOptions}
+													placeholder="选择或输入属性编码"
+													filterOption={(input, option) =>
+														String(option?.label || "")
+															.toLowerCase()
+															.includes(input.toLowerCase())
+													}
+												/>
+											</Form.Item>
+										</Col>
+										<Col xs={24} md={5}>
+											<Form.Item
+												name={[field.name, "redundant"]}
+												label="冗余维度字段"
+												valuePropName="checked"
+												className="mb-0"
+											>
+												<Checkbox disabled={readOnly}>是</Checkbox>
+											</Form.Item>
+										</Col>
+										<Col xs={24} md={11}>
+											<Form.Item
+												noStyle
+												shouldUpdate={(previous, current) =>
+													previous?.fields?.[field.name]?.redundant !== current?.fields?.[field.name]?.redundant
+												}
+											>
+												{({ getFieldValue }) => {
+													const redundant = Boolean(getFieldValue(["fields", field.name, "redundant"]));
+													return (
+														<Form.Item
+															name={[field.name, "redundancySourceRef"]}
+															label="冗余来源依据"
+															extra="记录该冗余值来自哪个上游模型或来源字段"
+															rules={[
+																{
+																	required: redundant,
+																	whitespace: true,
+																	message: "请填写冗余字段的来源依据",
+																},
+															]}
+															className="mb-0"
+														>
+															<Input disabled={readOnly || !redundant} placeholder="例如：dim_project.project_code" />
+														</Form.Item>
+													);
+												}}
+											</Form.Item>
+										</Col>
+									</Row>
 								</div>
 							);
 						})}
@@ -127,7 +198,15 @@ export function ModelSpecFieldsTab({ readOnly, persistedFieldNames }: Props) {
 							<Button
 								type="dashed"
 								block
-								onClick={() => add({ name: "", dataType: "string", nullable: true, role: "ATTRIBUTE" })}
+								onClick={() =>
+									add({
+										name: "",
+										dataType: "string",
+										nullable: true,
+										role: "ATTRIBUTE",
+										redundant: false,
+									})
+								}
 							>
 								<Plus size={15} />
 								添加字段

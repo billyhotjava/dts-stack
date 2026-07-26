@@ -1,5 +1,8 @@
 import api from "@/api/apiClient";
-import type { ModelImplementationCasToken, ModelImplementationView } from "@/pages/modeling/modelImplementationContract";
+import type {
+	ModelImplementationCasToken,
+	ModelImplementationView,
+} from "@/pages/modeling/modelImplementationContract";
 import { toModelImplementationEtag } from "@/pages/modeling/modelImplementationContract";
 import type {
 	CanonicalModelSpecView,
@@ -42,6 +45,12 @@ export type ModelSpecStageGate = {
 	stage: ModelSpecStage;
 	status: ModelSpecGateStatus;
 	blockers: ModelSpecGateBlocker[];
+};
+
+export type ModelSpecNamingValidation = {
+	valid: boolean;
+	normalizedName?: string | null;
+	issues: Array<{ field: string; code: string; message: string }>;
 };
 
 export type ModelSpecDependencyState = "CURRENT" | "STALE" | "UNKNOWN";
@@ -158,6 +167,18 @@ export const getModelSpecDependencies = (id: string) =>
 
 export const createModelSpec = (data: CreateModelSpecCommand) =>
 	api.post<CanonicalModelSpecView>({ url: MODEL_SPEC_RESOURCE, data, _skipErrorToast: true } as any);
+
+export const validateModelSpecPhysicalName = (
+	planId: string,
+	modelType: ModelSpecType,
+	layer: ModelSpecLayer,
+	physicalName: string,
+) =>
+	api.post<ModelSpecNamingValidation>({
+		url: `/modeling/warehouse-plans/${encodeURIComponent(planId)}/naming/validate`,
+		data: { modelType, layer, physicalName },
+		_skipErrorToast: true,
+	} as any);
 
 export const updateModelSpec = (expected: ModelSpecCasToken, data: UpdateModelSpecCommand) =>
 	api.put<CanonicalModelSpecView>({
@@ -467,8 +488,7 @@ export const toReleaseCandidateEtag = (expected: ReleaseCandidateCasToken) =>
 
 export const toReleaseCandidateWorkbenchScreenState = (
 	data: ReleaseCandidateWorkbench,
-): ReleaseCandidateWorkbenchScreenState =>
-	data.state === "EMPTY" ? { kind: "empty", data } : { kind: "ready", data };
+): ReleaseCandidateWorkbenchScreenState => (data.state === "EMPTY" ? { kind: "empty", data } : { kind: "ready", data });
 
 export const releaseCandidateWorkbenchLoading = (): ReleaseCandidateWorkbenchScreenState => ({ kind: "loading" });
 
@@ -482,8 +502,7 @@ export const releaseCandidateWorkbenchError = (
 	message: string,
 ): ReleaseCandidateWorkbenchScreenState => ({ kind: "error", code, message });
 
-const releaseCandidateResource = (planId: string) =>
-	`/modeling/plans/${encodeURIComponent(planId)}/release-candidates`;
+const releaseCandidateResource = (planId: string) => `/modeling/plans/${encodeURIComponent(planId)}/release-candidates`;
 
 const releaseCandidateItemUrl = (planId: string, candidateId: string, suffix = "") =>
 	`${releaseCandidateResource(planId)}/${encodeURIComponent(candidateId)}${suffix}`;

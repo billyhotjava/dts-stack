@@ -1575,3 +1575,36 @@
 - 只有 PUBLISHED 物理实现按统一资产键进入资产台账，草稿和概念定义不得提前登记为可消费资产。
 
 **已知风险**: 当前运行实例健康且相关迁移已执行，但真实登录、认证 API、Chrome95、构建链和客户生产数据画像尚未完成；F0 未通过前 F2～F5 保持 DRAFT。
+
+## Sprint-74: 建模创建旅程与阶段边界纠偏 (202607)
+
+**目录**: `worklog/v2.2.3/sprint-74-202607-modeling-creation-journey-correction`
+**状态**: DRAFT（架构复审待用户确认；禁止编码）
+**类型**: Product Journey / Modeling Contract / UI Convergence / Safe Compatibility
+**目标**: 让建模人员先根据业务目的选择正确模型类型，独立完成逻辑设计，再按需选择普通配置或高级 dbt 形成实现，并只在真实发布后查看物理结果；每个阶段只提示当前必须处理的事项。
+**依赖**: 复用 Sprint-67 的四层 canonical 对象、Sprint-69 发布控制面、Sprint-72 密级传播和 Sprint-73 数据集市/维度建模；不新建第二套模型、实现、发布或物理资产台账。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F0-评审与可验收基线 | P0 | 2 | DRAFT |
+| F1-先选对模型再保存草稿 | P0 | 3 | DRAFT |
+| F2-独立完成逻辑模型 | P0 | 3 | DRAFT |
+| F3-实现方式与发布结果解耦 | P0 | 3 | DRAFT |
+| F4-存量纠错治理策略与兼容 | P0 | 3 | DRAFT |
+| F5-集成验收与安全交付 | P0 | 2 | DRAFT |
+
+**统计**: DRAFT=16, READY=0, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**执行顺序**: F0 → F1 → F2 → F3 → F4 → F5；F1 分层策略和 F2 逻辑字段契约冻结后可做有限并行，F5 是唯一 Go/No-Go 出口。
+
+**关键决策**:
+
+- 新建不默认 FACT；先选择“稳定对象/业务事件/聚合结果/消费输出”再确定 DIMENSION/FACT/SUMMARY/APPLICATION。
+- 新增 DESIGNED 门禁；逻辑模型不需要来源、物理名、装载、dbt 或发布证据即可独立完成。
+- `ModelSpecRevision` 只拥有逻辑语义；物理名、装载、分区、保留归 `ModelImplementation.settings`。
+- dbt 是数据实现方式之一，入口从“物理资产”移到“数据实现”；第三阶段对外改为只读“发布结果”。
+- 模型类型与数仓层解耦：经典计划保持 DIMENSION/FACT→DWD；DataWorks 方案显式使用 DIMENSION→DIM，不静默切换存量计划。
+- 该策略局部替代 Sprint-73 的全局 DIMENSION→DWD 硬编码决定，但不改写 Sprint-73 的 DataMart/DimensionDefinition/ModelSpec 关系。
+- 页面默认只显示当前下一道门禁；未来发布要求和可选建议不计入当前待修复数量。
+- 仅 DRAFT 且无实现/生命周期/发布候选时允许预检后追加 revision 改型，适用于当前“财务项目模型”候选纠错。
+
+**已知风险**: 自动化环境尚不能解析 `dts.local`，真实登录/API/Chrome95 基线 BLOCKED；当前工作树有 Sprint-73 在途 `implementationPolicy` 等建模修改，其对象所有权与 Sprint-74 决策冲突，实施前必须完成影响审计且不得回退未知用户修改。

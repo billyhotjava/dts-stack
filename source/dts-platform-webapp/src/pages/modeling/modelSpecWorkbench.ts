@@ -7,6 +7,7 @@ import type {
 	ModelSpecField,
 	ModelSpecImplementationMode,
 	ModelSpecLayer,
+	ModelSpecLoadStrategy,
 	ModelSpecMetricRef,
 	ModelSpecReuseScope,
 	ModelSpecRevisionConflictDetails,
@@ -87,6 +88,8 @@ export type ModelSpecDraft = {
 	name: string;
 	description: string;
 	dimensionDefinitionRef?: ModelSpecDimensionDefinitionRef;
+	dataMartId: string;
+	variantCode: string;
 	implementationMode: ModelSpecImplementationMode;
 	materialization: string;
 	grainStatement: string;
@@ -109,6 +112,10 @@ export type ModelSpecDraft = {
 	dimensionEffectiveFromField: string;
 	dimensionEffectiveToField: string;
 	dimensionCurrentFlagField: string;
+	physicalName: string;
+	loadStrategy: ModelSpecLoadStrategy | "";
+	retentionDays?: number;
+	partitionFieldsText: string;
 	fields: ModelSpecField[];
 	metricRefs: ModelSpecMetricRef[];
 	standardBindings: ModelSpecStandardBinding[];
@@ -126,11 +133,13 @@ const defaultLayer = (modelType: ModelSpecType): ModelSpecLayer => {
 
 export function createEmptyModelSpecDraft(
 	modelType: ModelSpecType,
-	context: { planId?: string; domainId?: string } = {},
+	context: { planId?: string; domainId?: string; dataMartId?: string } = {},
 ): ModelSpecDraft {
 	return {
 		planId: context.planId?.trim() || "",
 		domainId: context.domainId?.trim() || "",
+		dataMartId: context.dataMartId?.trim() || "",
+		variantCode: "",
 		modelType,
 		layer: defaultLayer(modelType),
 		name: "",
@@ -155,6 +164,10 @@ export function createEmptyModelSpecDraft(
 		dimensionEffectiveFromField: "",
 		dimensionEffectiveToField: "",
 		dimensionCurrentFlagField: "",
+		physicalName: "",
+		loadStrategy: "",
+		retentionDays: undefined,
+		partitionFieldsText: "",
 		fields: [],
 		metricRefs: [],
 		standardBindings: [],
@@ -166,7 +179,16 @@ export function createEmptyModelSpecDraft(
 const optionalText = (value: string | null | undefined) => value?.trim() || undefined;
 
 const buildFields = (draft: ModelSpecDraft, grainKeys: string[]): ModelSpecField[] => {
-	const fields = [...(draft.fields ?? [])];
+	const fields = (draft.fields ?? []).map((field) => ({
+		...field,
+		name: field.name.trim(),
+		dataType: field.dataType.trim(),
+		sourceFieldRef: optionalText(field.sourceFieldRef),
+		securityLevel: optionalText(field.securityLevel),
+		dimensionAttributeCode: optionalText(field.dimensionAttributeCode)?.toUpperCase(),
+		redundant: Boolean(field.redundant),
+		redundancySourceRef: field.redundant ? optionalText(field.redundancySourceRef) : undefined,
+	}));
 	const names = new Set(fields.map((field) => field.name.trim()).filter(Boolean));
 	for (const key of grainKeys) {
 		if (!names.has(key)) {
@@ -239,6 +261,8 @@ export function buildModelSpecCreateCommand(
 		modelType: draft.modelType,
 		name: draft.name.trim(),
 		description: optionalText(draft.description),
+		dataMartId: optionalText(draft.dataMartId),
+		variantCode: optionalText(draft.variantCode)?.toUpperCase(),
 		idempotencyKey,
 	};
 	if (draft.modelType === "DIMENSION") {
@@ -320,6 +344,20 @@ const buildModelSpecFullCommand = (
 					reuseScope: draft.dimensionReuseScope,
 				}
 			: undefined,
+		dataMartId: optionalText(draft.dataMartId),
+		variantCode: optionalText(draft.variantCode)?.toUpperCase(),
+		implementationPolicy:
+			draft.loadStrategy ||
+			optionalText(draft.physicalName) ||
+			draft.retentionDays != null ||
+			draft.partitionFieldsText.trim()
+				? {
+						physicalName: optionalText(draft.physicalName),
+						loadStrategy: draft.loadStrategy || "FULL",
+						retentionDays: draft.retentionDays,
+						partitionFields: parseModelFieldNames(draft.partitionFieldsText),
+					}
+				: undefined,
 		idempotencyKey,
 	};
 };
@@ -338,7 +376,11 @@ export function buildModelSpecUpdateCommand(
 
 export function modelSpecDraftFromView(view: CanonicalModelSpecView): ModelSpecDraft {
 	return {
-		...createEmptyModelSpecDraft(view.modelType, { planId: view.planId, domainId: view.domainId }),
+		...createEmptyModelSpecDraft(view.modelType, {
+			planId: view.planId,
+			domainId: view.domainId,
+			dataMartId: view.dataMartId || undefined,
+		}),
 		layer: view.layer,
 		name: view.name,
 		description: view.description || "",
@@ -384,6 +426,11 @@ export function modelSpecDraftFromView(view: CanonicalModelSpecView): ModelSpecD
 		dimensionEffectiveFromField: view.dimensionProfile?.scdPolicy.effectiveFromField || "",
 		dimensionEffectiveToField: view.dimensionProfile?.scdPolicy.effectiveToField || "",
 		dimensionCurrentFlagField: view.dimensionProfile?.scdPolicy.currentFlagField || "",
+		variantCode: view.variantCode || "",
+		physicalName: view.implementationPolicy?.physicalName || "",
+		loadStrategy: view.implementationPolicy?.loadStrategy || "",
+		retentionDays: view.implementationPolicy?.retentionDays ?? undefined,
+		partitionFieldsText: view.implementationPolicy?.partitionFields.join(", ") || "",
 		fields: view.fields,
 		metricRefs: view.metricRefs,
 		standardBindings: view.standardBindings,
@@ -432,6 +479,9 @@ export function modelSpecErrorMessage(error: unknown): string {
 	}
 	if (status === 409 && code === "MODEL_SPEC_STATUS_READONLY") {
 		return "模型状态已变化，当前输入已保留；请加载最新状态后继续";
+	}
+	if (status === 409 && code === "MODEL_SPEC_DIMENSION_VARIANT_CONFLICT") {
+		return "当前计划和数据集市中已存在该业务维度的同名实现变体，请查看已有维度表或更换实现变体";
 	}
 	if (status === 409) return "当前名称或请求标识已被占用，请调整后重试";
 	if (status === 422 || status === 400) return "请检查标红字段；当前输入已保留";

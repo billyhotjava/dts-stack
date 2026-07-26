@@ -1,7 +1,7 @@
 # Sprint-73: 数据集市规划与维度建模产品化
 
 **时间**: 2026-07  
-**状态**: READY（仅 F0/F1 可拉取；运行时 Feature 等待 G0）  
+**状态**: IN_PROGRESS（F1 及 F2～F4 代码已完成；F0、真实运行时验收和 F5 发布交接证据待整体构建/容器环境）
 **类型**: Warehouse Planning / Dimension Modeling / Product Convergence / Full-stack  
 **目标**: 让建模人员能在同一条主线中管理数据集市、登记业务维度、创建并完善维度表，清楚区分业务归属、应用范围、来源、命名、历史处理和数据保留，并在发布后由资产台账接收真实资产。
 
@@ -41,11 +41,11 @@ DataWorks 将“概念维度”和“逻辑维度表”分成两个对象：维�
 | 层 | 契约/落点 | 签名要点 |
 |----|-----------|----------|
 | UI 入口 | `/governance/subjects?tab=data-marts` | 在现有业务分类页管理数据集市；具备空/加载/错误/成功四态 |
-| UI 规划 | `/modeling/plans/:planId/baseline?tab=categories` | “业务范围”同时确认 `domainBindings` 与 `dataMartBindings` |
+| UI 规划 | `/modeling/plans/:planId/baseline?tab=categories|data-marts` | 同一“规划基线”内先确认业务分类，再纳入覆盖这些分类的 DataMart |
 | UI 维度 | `/modeling/dimensions?planId=&domainId=&dataMartId=` | 登记 DOMAIN/DATA_MART 范围的业务维度，维护属性和层级 |
 | UI 维度表 | `/modeling/models` → `/modeling/models/:modelSpecId` | 从业务维度创建维度表草稿，在详情页完善字段、来源、命名、装载、SCD、保留期 |
 | DataMart API | `GET/POST /api/modeling/data-marts`；`GET/PUT /api/modeling/data-marts/{id}`；`POST .../{id}/confirm|retire` | DTO 见 `assets/contract-design.md`；POST 幂等，PUT 使用 ETag/CAS |
-| 计划范围 API | `GET/PUT /api/modeling/warehouse-plans/{planId}/baseline/data-marts` | `{version,etag,bindings:[{dataMartId,confirmationStatus}]}` |
+| 计划范围 API | `GET/PUT /api/modeling/warehouse-plans/{planId}/baseline/data-marts` | `{planId,dataMartIds,version}`；仅 CURRENT DataMart 可纳入并使用 version CAS |
 | 维度 API | 复用 `/api/modeling/dimension-definitions` | 增加 `scopeType/dataMartId/attributes`，现有记录迁移为 `DOMAIN` |
 | ModelSpec API | 复用 `/api/modeling/model-specs` | 增加 `dataMartId` 与维度字段/实现策略契约，不新建第二套模型 API |
 | 命名校验 API | `POST /api/modeling/warehouse-plans/{planId}/naming/validate` | `{modelType,layer,physicalName}` → `{valid,normalizedName,issues[]}` |
@@ -87,8 +87,8 @@ DataWorks 将“概念维度”和“逻辑维度表”分成两个对象：维�
 | G0 | 领域不变量自检 | PASS | ADR-01/02/06/09 | - |
 | G1 | 契约链贯通 | PASS | 本文档 §端到端契约链、`assets/contract-design.md` | - |
 | G1 | 非功能预算 | PASS | `assets/nfr-budget.md` | - |
-| G3 | 发布安全 | PENDING | 实施期 `assets/release-plan.md` | F5/T02 |
-| G4 | 可运维性 | PENDING | 实施期 `assets/runbook.md` | F5/T02 |
+| G3 | 发布安全 | PENDING | `assets/release-plan.md` 已完成，待真实迁移与回滚演练 | F5/T02 |
+| G4 | 可运维性 | PENDING | `assets/runbook.md` 已完成，待容器环境验证 | F5/T02 |
 | G4 | DoD 验收 | PENDING | `it/` | F5/T02 |
 
 ## Feature 列表
@@ -96,14 +96,30 @@ DataWorks 将“概念维度”和“逻辑维度表”分成两个对象：维�
 | ID | Feature | Task 数 | 优先级 | 状态 |
 |----|---------|---------|--------|------|
 | F0 | 交付与生产数据基线 | 2 | P0 | READY |
-| F1 | 概念、关系与契约收敛 | 2 | P0 | READY |
-| F2 | 数据集市规划闭环 | 3 | P0 | DRAFT |
-| F3 | 业务维度目录增强 | 3 | P0 | DRAFT |
-| F4 | 维度表设计体验闭环 | 3 | P0 | DRAFT |
-| F5 | 实现发布与资产交接 | 2 | P0 | DRAFT |
+| F1 | 概念、关系与契约收敛 | 2 | P0 | DONE |
+| F2 | 数据集市规划闭环 | 3 | P0 | IN_PROGRESS（代码完成，IT 待验证） |
+| F3 | 业务维度目录增强 | 3 | P0 | IN_PROGRESS（代码完成，IT 待验证） |
+| F4 | 维度表设计体验闭环 | 3 | P0 | IN_PROGRESS（代码完成，IT 待验证） |
+| F5 | 实现发布与资产交接 | 2 | P0 | IN_PROGRESS（门禁/文档完成，运行时交接待验证） |
 
-**统计**: READY=4, DRAFT=11, IN_PROGRESS=0, DONE=0, BLOCKED=0  
+**Feature 统计**: READY=1, IN_PROGRESS=4, DONE=1, BLOCKED=0
 **依赖顺序**: F0/F1 → F2 → F3 → F4 → F5。F2 数据持久化与 F3 UI 壳层可在 G0 通过后按冻结契约并行。
+
+## 本轮实现与验证（2026-07-26）
+
+| 项目 | 结果 | 说明 |
+|------|------|------|
+| DataMart、计划范围、维度范围/属性、ModelSpec 实现策略 | CODE_COMPLETE | 后端契约、仓储、服务、REST、前端入口和迁移已落地 |
+| 前端定向契约测试 | PASS（11/11） | 数据集市、维度登记、维度表创建与三阶段详情链 |
+| 后端 Sprint-73 定向测试 | PASS（12/12） | DataMart 契约、三份 Liquibase 迁移、维度/ModelSpec 契约 |
+| Java 生产代码编译 | PASS | 定向 Maven 测试过程中完成 1201 个生产源文件编译 |
+| 前端静态检查 | PASS | 本轮 20 个 TypeScript/TSX 文件通过 Biome |
+| 整体前端编译、容器构建、真实 PostgreSQL/API/Chrome95 | PENDING | 按交付安排在全部小问题合并后统一执行 |
+
+已知基线问题：
+
+- 仓库原有 `DimensionDefinitionApplicationServiceTest` 编译产物包含未解析类型字节码，单独纳入该旧测试时会在 Surefire 启动阶段失败。
+- 扩展执行旧 `ModelSpecStageGateServiceTest` 时，仍有两个既有夹具偏差：来源失效用例没有构造持久化实现记录，权限校验用例对一次 `evaluateAll` 只期望一次调用；本轮新增测试与生产代码编译不受影响。
 
 ## 追溯矩阵 (Traceability)
 

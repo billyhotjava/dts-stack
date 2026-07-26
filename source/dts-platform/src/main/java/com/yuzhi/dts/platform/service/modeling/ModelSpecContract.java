@@ -41,7 +41,10 @@ public final class ModelSpecContract {
         "generationStrategy",
         "dimensionProfile",
         "dimensionDefinitionRef",
-        "idempotencyKey"
+        "idempotencyKey",
+        "dataMartId",
+        "variantCode",
+        "implementationPolicy"
     );
 
     public static final Set<String> UPDATE_FIELDS = Set.of(
@@ -65,7 +68,10 @@ public final class ModelSpecContract {
         "metricRefs",
         "standardBindings",
         "generationStrategy",
-        "dimensionProfile"
+        "dimensionProfile",
+        "dataMartId",
+        "variantCode",
+        "implementationPolicy"
     );
 
     public static final Map<String, String> REQUIRED_FIELD_CODES = Map.of(
@@ -96,7 +102,17 @@ public final class ModelSpecContract {
 
     private static final Map<String, Set<String>> NESTED_COLLECTION_FIELDS = Map.of(
         "fields",
-        Set.of("name", "dataType", "nullable", "sourceFieldRef", "role", "securityLevel"),
+        Set.of(
+            "name",
+            "dataType",
+            "nullable",
+            "sourceFieldRef",
+            "role",
+            "securityLevel",
+            "dimensionAttributeCode",
+            "redundant",
+            "redundancySourceRef"
+        ),
         "sourceRefs",
         Set.of(
             "kind",
@@ -172,7 +188,15 @@ public final class ModelSpecContract {
         "effectiveToField",
         "currentFlagField"
     );
+    private static final Set<String> IMPLEMENTATION_POLICY_FIELDS = Set.of(
+        "physicalName",
+        "loadStrategy",
+        "retentionDays",
+        "partitionFields"
+    );
     private static final Pattern DIMENSION_CODE = Pattern.compile("^[A-Z][A-Z0-9_]{0,63}$");
+    private static final Pattern VARIANT_CODE = Pattern.compile("^[A-Z][A-Z0-9_]{0,31}$");
+    private static final Pattern PHYSICAL_NAME = Pattern.compile("^[a-z][a-z0-9_]{0,62}$");
 
     private ModelSpecContract() {}
 
@@ -299,6 +323,12 @@ public final class ModelSpecContract {
         TYPE2,
     }
 
+    public enum LoadStrategy {
+        FULL,
+        INCREMENTAL,
+        SNAPSHOT,
+    }
+
     public enum ReuseScope {
         PLAN,
         DOMAIN,
@@ -367,13 +397,30 @@ public final class ModelSpecContract {
         Boolean nullable,
         String sourceFieldRef,
         FieldRole role,
-        String securityLevel
+        String securityLevel,
+        String dimensionAttributeCode,
+        Boolean redundant,
+        String redundancySourceRef
     ) {
+        public ModelField(
+            String name,
+            String dataType,
+            Boolean nullable,
+            String sourceFieldRef,
+            FieldRole role,
+            String securityLevel
+        ) {
+            this(name, dataType, nullable, sourceFieldRef, role, securityLevel, null, false, null);
+        }
+
         public ModelField {
             name = trimToNull(name);
             dataType = trimToNull(dataType);
             sourceFieldRef = trimToNull(sourceFieldRef);
             securityLevel = trimToNull(securityLevel);
+            dimensionAttributeCode = trimToNull(dimensionAttributeCode);
+            redundant = redundant == null ? Boolean.FALSE : redundant;
+            redundancySourceRef = trimToNull(redundancySourceRef);
         }
     }
 
@@ -456,6 +503,18 @@ public final class ModelSpecContract {
         }
     }
 
+    public record ImplementationPolicy(
+        String physicalName,
+        LoadStrategy loadStrategy,
+        Integer retentionDays,
+        List<String> partitionFields
+    ) {
+        public ImplementationPolicy {
+            physicalName = trimToNull(physicalName);
+            partitionFields = immutable(partitionFields);
+        }
+    }
+
     public record DimensionProfile(
         String dimensionCode,
         List<DimensionHierarchy> hierarchies,
@@ -493,8 +552,45 @@ public final class ModelSpecContract {
         GenerationStrategy generationStrategy,
         @JsonInclude(JsonInclude.Include.NON_NULL) DimensionProfile dimensionProfile,
         @JsonInclude(JsonInclude.Include.NON_NULL) DimensionDefinitionRef dimensionDefinitionRef,
-        String idempotencyKey
+        String idempotencyKey,
+        @JsonInclude(JsonInclude.Include.NON_NULL) UUID dataMartId,
+        String variantCode,
+        @JsonInclude(JsonInclude.Include.NON_NULL) ImplementationPolicy implementationPolicy
     ) {
+        /** Compatibility constructor for callers created before data-mart and implementation policy metadata. */
+        public CreateModelSpecCommand(
+            UUID planId,
+            UUID domainId,
+            ModelType modelType,
+            Layer layer,
+            String name,
+            String description,
+            ImplementationMode implementationMode,
+            String materialization,
+            String businessActivityRef,
+            String consumptionScenario,
+            Grain grain,
+            FactShape factShape,
+            TimeSemantics timeSemantics,
+            List<ModelField> fields,
+            List<SourceRef> sourceRefs,
+            List<ModelRevisionRef> dependsOn,
+            List<ModelRevisionRef> dimensionRefs,
+            List<MetricRef> metricRefs,
+            List<StandardBinding> standardBindings,
+            GenerationStrategy generationStrategy,
+            DimensionProfile dimensionProfile,
+            DimensionDefinitionRef dimensionDefinitionRef,
+            String idempotencyKey
+        ) {
+            this(
+                planId, domainId, modelType, layer, name, description, implementationMode, materialization,
+                businessActivityRef, consumptionScenario, grain, factShape, timeSemantics, fields, sourceRefs,
+                dependsOn, dimensionRefs, metricRefs, standardBindings, generationStrategy, dimensionProfile,
+                dimensionDefinitionRef, idempotencyKey, null, null, null
+            );
+        }
+
         /** Compatibility constructor for callers that predate the revision-pinned dimension definition reference. */
         public CreateModelSpecCommand(
             UUID planId,
@@ -523,7 +619,8 @@ public final class ModelSpecContract {
             this(
                 planId, domainId, modelType, layer, name, description, implementationMode, materialization,
                 businessActivityRef, consumptionScenario, grain, factShape, timeSemantics, fields, sourceRefs,
-                dependsOn, dimensionRefs, metricRefs, standardBindings, generationStrategy, dimensionProfile, null, idempotencyKey
+                dependsOn, dimensionRefs, metricRefs, standardBindings, generationStrategy, dimensionProfile, null,
+                idempotencyKey, null, null, null
             );
         }
 
@@ -574,7 +671,10 @@ public final class ModelSpecContract {
                 generationStrategy,
                 null,
                 null,
-                idempotencyKey
+                idempotencyKey,
+                null,
+                null,
+                null
             );
         }
 
@@ -591,6 +691,7 @@ public final class ModelSpecContract {
             metricRefs = immutable(metricRefs);
             standardBindings = immutable(standardBindings);
             idempotencyKey = trimToNull(idempotencyKey);
+            variantCode = trimToNull(variantCode);
         }
     }
 
@@ -616,8 +717,43 @@ public final class ModelSpecContract {
         List<MetricRef> metricRefs,
         List<StandardBinding> standardBindings,
         GenerationStrategy generationStrategy,
-        @JsonInclude(JsonInclude.Include.NON_NULL) DimensionProfile dimensionProfile
+        @JsonInclude(JsonInclude.Include.NON_NULL) DimensionProfile dimensionProfile,
+        @JsonInclude(JsonInclude.Include.NON_NULL) UUID dataMartId,
+        String variantCode,
+        @JsonInclude(JsonInclude.Include.NON_NULL) ImplementationPolicy implementationPolicy
     ) {
+        /** Compatibility constructor for callers created before data-mart and implementation policy metadata. */
+        public UpdateModelSpecCommand(
+            UUID planId,
+            UUID domainId,
+            ModelType modelType,
+            Layer layer,
+            String name,
+            String description,
+            ImplementationMode implementationMode,
+            String materialization,
+            String businessActivityRef,
+            String consumptionScenario,
+            Grain grain,
+            FactShape factShape,
+            TimeSemantics timeSemantics,
+            List<ModelField> fields,
+            List<SourceRef> sourceRefs,
+            List<ModelRevisionRef> dependsOn,
+            List<ModelRevisionRef> dimensionRefs,
+            List<MetricRef> metricRefs,
+            List<StandardBinding> standardBindings,
+            GenerationStrategy generationStrategy,
+            DimensionProfile dimensionProfile
+        ) {
+            this(
+                planId, domainId, modelType, layer, name, description, implementationMode, materialization,
+                businessActivityRef, consumptionScenario, grain, factShape, timeSemantics, fields, sourceRefs,
+                dependsOn, dimensionRefs, metricRefs, standardBindings, generationStrategy, dimensionProfile,
+                null, null, null
+            );
+        }
+
         /** Compatibility constructor for callers that predate the optional Phase-B dimension profile. */
         public UpdateModelSpecCommand(
             UUID planId,
@@ -662,6 +798,9 @@ public final class ModelSpecContract {
                 metricRefs,
                 standardBindings,
                 generationStrategy,
+                null,
+                null,
+                null,
                 null
             );
         }
@@ -678,6 +817,7 @@ public final class ModelSpecContract {
             dimensionRefs = immutable(dimensionRefs);
             metricRefs = immutable(metricRefs);
             standardBindings = immutable(standardBindings);
+            variantCode = trimToNull(variantCode);
         }
     }
 
@@ -712,8 +852,54 @@ public final class ModelSpecContract {
         Instant createdAt,
         Instant updatedAt,
         CompatibilityMode compatibilityMode,
-        LegacyRefs legacyRefs
+        LegacyRefs legacyRefs,
+        @JsonInclude(JsonInclude.Include.NON_NULL) UUID dataMartId,
+        String variantCode,
+        @JsonInclude(JsonInclude.Include.NON_NULL) ImplementationPolicy implementationPolicy
     ) {
+        /** Compatibility constructor for snapshots created before data-mart and implementation policy metadata. */
+        public ModelSpecView(
+            int contractVersion,
+            UUID id,
+            UUID planId,
+            UUID domainId,
+            ModelType modelType,
+            Layer layer,
+            String name,
+            String description,
+            ImplementationMode implementationMode,
+            String materialization,
+            String businessActivityRef,
+            String consumptionScenario,
+            Grain grain,
+            FactShape factShape,
+            TimeSemantics timeSemantics,
+            List<ModelField> fields,
+            List<SourceRef> sourceRefs,
+            List<ModelRevisionRef> dependsOn,
+            List<ModelRevisionRef> dimensionRefs,
+            List<MetricRef> metricRefs,
+            List<StandardBinding> standardBindings,
+            GenerationStrategy generationStrategy,
+            DimensionProfile dimensionProfile,
+            DimensionDefinitionRef dimensionDefinitionRef,
+            ModelStatus status,
+            int revision,
+            String checksum,
+            Instant createdAt,
+            Instant updatedAt,
+            CompatibilityMode compatibilityMode,
+            LegacyRefs legacyRefs
+        ) {
+            this(
+                contractVersion, id, planId, domainId, modelType, layer, name, description, implementationMode,
+                materialization, businessActivityRef, consumptionScenario, grain, factShape, timeSemantics, fields,
+                sourceRefs, dependsOn, dimensionRefs, metricRefs, standardBindings, generationStrategy, dimensionProfile,
+                dimensionDefinitionRef, status, revision, checksum, createdAt, updatedAt, compatibilityMode, legacyRefs,
+                null, null, null
+            );
+        }
+
         /** Compatibility constructor for callers and fixtures created before the dimension definition reference. */
         public ModelSpecView(
             int contractVersion,
@@ -751,7 +937,7 @@ public final class ModelSpecContract {
                 contractVersion, id, planId, domainId, modelType, layer, name, description, implementationMode,
                 materialization, businessActivityRef, consumptionScenario, grain, factShape, timeSemantics, fields,
                 sourceRefs, dependsOn, dimensionRefs, metricRefs, standardBindings, generationStrategy, dimensionProfile,
-                null, status, revision, checksum, createdAt, updatedAt, compatibilityMode, legacyRefs
+                null, status, revision, checksum, createdAt, updatedAt, compatibilityMode, legacyRefs, null, null, null
             );
         }
 
@@ -818,7 +1004,10 @@ public final class ModelSpecContract {
                 createdAt,
                 updatedAt,
                 compatibilityMode,
-                legacyRefs
+                legacyRefs,
+                null,
+                null,
+                null
             );
         }
     }
@@ -845,6 +1034,7 @@ public final class ModelSpecContract {
         REQUIRED_FIELD_CODES.forEach((field, code) -> required(fields.get(field), field, code, issues));
         rawUuid(fields.get("planId"), "MODEL_SPEC_PLAN_INVALID", "planId", issues);
         rawUuid(fields.get("domainId"), "MODEL_SPEC_DOMAIN_INVALID", "domainId", issues);
+        rawUuid(fields.get("dataMartId"), "MODEL_SPEC_DATA_MART_INVALID", "dataMartId", issues);
         rawEnum(fields.get("modelType"), MODEL_TYPES, "MODEL_SPEC_TYPE_INVALID", "modelType", issues);
         rawEnum(fields.get("layer"), LAYERS, "MODEL_SPEC_LAYER_INVALID", "layer", issues);
         rawText(fields.get("name"), false, "MODEL_SPEC_NAME_INVALID", "name", issues);
@@ -856,6 +1046,7 @@ public final class ModelSpecContract {
             issues
         );
         rawText(fields.get("idempotencyKey"), false, "MODEL_SPEC_IDEMPOTENCY_KEY_INVALID", "idempotencyKey", issues);
+        rawText(fields.get("variantCode"), true, "MODEL_SPEC_VARIANT_CODE_INVALID", "variantCode", issues);
         rawText(fields.get("description"), true, "MODEL_SPEC_FIELD_INVALID", "description", issues);
         rawText(fields.get("materialization"), true, "MODEL_SPEC_FIELD_INVALID", "materialization", issues);
         rawText(
@@ -922,6 +1113,20 @@ public final class ModelSpecContract {
                 "Dimension profile is invalid"
             );
         }
+        if (
+            invalidObject(
+                fields.get("implementationPolicy"),
+                IMPLEMENTATION_POLICY_FIELDS,
+                ModelSpecContract::invalidRawImplementationPolicy
+            )
+        ) {
+            addIssueOnce(
+                issues,
+                "MODEL_SPEC_IMPLEMENTATION_POLICY_INVALID",
+                "implementationPolicy",
+                "Implementation policy is invalid"
+            );
+        }
 
         rawCollection(fields, "fields", ModelSpecContract::invalidRawField, issues);
         rawCollection(fields, "sourceRefs", ModelSpecContract::invalidRawSource, issues);
@@ -967,6 +1172,15 @@ public final class ModelSpecContract {
         if (command.idempotencyKey() != null && command.idempotencyKey().length() > 128) {
             issues.add(issue("MODEL_SPEC_IDEMPOTENCY_KEY_INVALID", "idempotencyKey", "Idempotency key must not exceed 128 characters"));
         }
+        if (command.variantCode() != null && !VARIANT_CODE.matcher(command.variantCode()).matches()) {
+            issues.add(
+                issue(
+                    "MODEL_SPEC_VARIANT_CODE_INVALID",
+                    "variantCode",
+                    "Variant code must use upper-case letters, digits and underscores"
+                )
+            );
+        }
         if (command.businessActivityRef() != null && command.modelType() != ModelType.FACT) {
             issues.add(issue("MODEL_SPEC_BUSINESS_ACTIVITY_NOT_ALLOWED", "businessActivityRef", "Business activity is optional FACT context only"));
         }
@@ -980,6 +1194,7 @@ public final class ModelSpecContract {
             );
         }
         validateNested(command, issues);
+        validateImplementationPolicy(command.implementationPolicy(), command.fields(), issues);
         validateDimensionDefinitionRef(command, issues);
         validateTypeBoundary(command, issues);
         return List.copyOf(issues);
@@ -1038,7 +1253,10 @@ public final class ModelSpecContract {
                 view.generationStrategy(),
                 viewProfile,
                 view.dimensionDefinitionRef(),
-                "__model_spec_view__"
+                "__model_spec_view__",
+                view.dataMartId(),
+                view.variantCode(),
+                view.implementationPolicy()
             )
         );
     }
@@ -1067,7 +1285,10 @@ public final class ModelSpecContract {
             command.generationStrategy(),
             command.dimensionProfile(),
             null,
-            "__model_spec_update__"
+            "__model_spec_update__",
+            command.dataMartId(),
+            command.variantCode(),
+            command.implementationPolicy()
         );
     }
 
@@ -1078,6 +1299,14 @@ public final class ModelSpecContract {
         validateNoNulls(command.dimensionRefs(), "dimensionRefs", "MODEL_SPEC_DIMENSION_REF_INVALID", issues);
         validateNoNulls(command.metricRefs(), "metricRefs", "MODEL_SPEC_METRIC_REF_INVALID", issues);
         validateNoNulls(command.standardBindings(), "standardBindings", "MODEL_SPEC_STANDARD_BINDING_INVALID", issues);
+        if (command.fields().size() > 500) {
+            addIssueOnce(
+                issues,
+                "MODEL_SPEC_FIELD_LIMIT_EXCEEDED",
+                "fields",
+                "A ModelSpec can contain at most 500 fields"
+            );
+        }
         Set<String> fieldNames = new HashSet<>();
         for (ModelField field : command.fields()) {
             if (field == null) continue;
@@ -1089,6 +1318,26 @@ public final class ModelSpecContract {
                 !fieldNames.add(field.name())
             ) {
                 issues.add(issue("MODEL_SPEC_FIELD_INVALID", "fields", "Fields require unique names, data types and roles"));
+            }
+            if (
+                field != null &&
+                Boolean.TRUE.equals(field.redundant()) &&
+                (field.redundancySourceRef() == null || field.dimensionAttributeCode() == null)
+            ) {
+                addIssueOnce(
+                    issues,
+                    "MODEL_SPEC_REDUNDANCY_EVIDENCE_REQUIRED",
+                    "fields",
+                    "Redundant dimension fields require both a dimension attribute code and a source reference"
+                );
+            }
+            if (field != null && !Boolean.TRUE.equals(field.redundant()) && field.redundancySourceRef() != null) {
+                addIssueOnce(
+                    issues,
+                    "MODEL_SPEC_REDUNDANCY_EVIDENCE_NOT_ALLOWED",
+                    "fields",
+                    "Non-redundant fields cannot declare a redundancy source"
+                );
             }
         }
         Set<String> sourceKeys = new HashSet<>();
@@ -1393,6 +1642,19 @@ public final class ModelSpecContract {
         return !isNonBlankText(strategy.get("type")) || !isNullableText(strategy.get("reference"));
     }
 
+    private static boolean invalidRawImplementationPolicy(Map<?, ?> policy) {
+        Object retentionDays = policy.get("retentionDays");
+        Object partitionFields = policy.get("partitionFields");
+        return (
+            !isNullableText(policy.get("physicalName")) ||
+            !isEnumText(policy.get("loadStrategy"), enumNames(LoadStrategy.values())) ||
+            (retentionDays != null &&
+                (!isNonNegativeInteger(retentionDays) || ((Number) retentionDays).longValue() > 36_000)) ||
+            !(partitionFields instanceof List<?> values) ||
+            values.stream().anyMatch(value -> !isNonBlankText(value))
+        );
+    }
+
     private static boolean invalidRawDimensionProfile(Map<?, ?> profile) {
         Object hierarchies = profile.get("hierarchies");
         if (!(hierarchies instanceof List<?> values)) return true;
@@ -1469,6 +1731,68 @@ public final class ModelSpecContract {
         }
     }
 
+    private static void validateImplementationPolicy(
+        ImplementationPolicy policy,
+        List<ModelField> fields,
+        List<FieldIssue> issues
+    ) {
+        if (policy == null) return;
+        if (policy.loadStrategy() == null) {
+            addIssueOnce(
+                issues,
+                "MODEL_SPEC_IMPLEMENTATION_POLICY_INVALID",
+                "implementationPolicy.loadStrategy",
+                "Implementation policy requires a load strategy"
+            );
+        }
+        if (policy.physicalName() != null && !PHYSICAL_NAME.matcher(policy.physicalName()).matches()) {
+            addIssueOnce(
+                issues,
+                "MODEL_SPEC_PHYSICAL_NAME_INVALID",
+                "implementationPolicy.physicalName",
+                "Physical name must use lower-case snake_case and contain at most 63 characters"
+            );
+        }
+        if (policy.retentionDays() != null && (policy.retentionDays() < 0 || policy.retentionDays() > 36_000)) {
+            addIssueOnce(
+                issues,
+                "MODEL_SPEC_RETENTION_INVALID",
+                "implementationPolicy.retentionDays",
+                "Retention days must be between 0 and 36000"
+            );
+        }
+        Set<String> declaredFields = fields
+            .stream()
+            .filter(java.util.Objects::nonNull)
+            .map(ModelField::name)
+            .filter(java.util.Objects::nonNull)
+            .collect(java.util.stream.Collectors.toSet());
+        Set<String> partitionFields = new HashSet<>();
+        for (String field : policy.partitionFields()) {
+            if (field == null || !declaredFields.contains(field) || !partitionFields.add(field)) {
+                addIssueOnce(
+                    issues,
+                    "MODEL_SPEC_PARTITION_FIELD_INVALID",
+                    "implementationPolicy.partitionFields",
+                    "Partition fields must be unique declared model fields"
+                );
+            }
+        }
+    }
+
+    public static List<FieldIssue> validatePhysicalName(String physicalName) {
+        if (physicalName == null || !PHYSICAL_NAME.matcher(physicalName).matches()) {
+            return List.of(
+                issue(
+                    "MODEL_SPEC_PHYSICAL_NAME_INVALID",
+                    "physicalName",
+                    "Physical name must use lower-case snake_case and contain at most 63 characters"
+                )
+            );
+        }
+        return List.of();
+    }
+
     private static boolean invalidRawField(Map<?, ?> field) {
         return (
             !isNonBlankText(field.get("name")) ||
@@ -1476,7 +1800,10 @@ public final class ModelSpecContract {
             !(field.get("nullable") instanceof Boolean) ||
             !isEnumText(field.get("role"), FIELD_ROLES) ||
             !isNullableText(field.get("sourceFieldRef")) ||
-            !isNullableText(field.get("securityLevel"))
+            !isNullableText(field.get("securityLevel")) ||
+            !isNullableText(field.get("dimensionAttributeCode")) ||
+            !(field.get("redundant") == null || field.get("redundant") instanceof Boolean) ||
+            !isNullableText(field.get("redundancySourceRef"))
         );
     }
 

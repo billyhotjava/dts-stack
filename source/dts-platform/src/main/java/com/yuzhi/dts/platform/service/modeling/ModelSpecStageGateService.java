@@ -244,19 +244,23 @@ public class ModelSpecStageGateService {
     }
 
     private GateView withDimensionDefinitionEvidence(String tenantId, ModelSpecView view, GateView gate) {
-        if (view.modelType() != ModelType.DIMENSION || dimensionDefinitionCurrent(tenantId, view)) return gate;
+        if (view.modelType() != ModelType.DIMENSION) return gate;
         LinkedHashMap<String, GateBlocker> blockers = new LinkedHashMap<>();
         for (GateBlocker blocker : gate.blockers()) add(blockers, blocker);
-        add(
-            blockers,
-            blocker(
-                view,
-                "DIMENSION_DEFINITION_NOT_CURRENT",
-                "dimensionDefinitionRef",
-                "锁定的业务维度定义已删除或退役",
-                "design"
-            )
-        );
+        if (!dimensionDefinitionCurrent(tenantId, view)) {
+            add(
+                blockers,
+                blocker(
+                    view,
+                    "DIMENSION_DEFINITION_NOT_CURRENT",
+                    "dimensionDefinitionRef",
+                    "锁定的业务维度定义已删除或退役",
+                    "design"
+                )
+            );
+        } else {
+            addDimensionAttributeMappingBlockers(tenantId, view, blockers);
+        }
         List<GateBlocker> result = List.copyOf(blockers.values());
         return new GateView(
             gate.modelSpecId(),
@@ -266,6 +270,64 @@ public class ModelSpecStageGateService {
             result.isEmpty() ? GateStatus.READY : GateStatus.BLOCKED,
             result
         );
+    }
+
+    private void addDimensionAttributeMappingBlockers(
+        String tenantId,
+        ModelSpecView view,
+        LinkedHashMap<String, GateBlocker> blockers
+    ) {
+        ModelSpecContract.DimensionDefinitionRef reference = view.dimensionDefinitionRef();
+        if (dimensionDefinitions == null || reference == null) return;
+        StoredDimensionDefinition definition = dimensionDefinitions
+            .findRevision(tenantId, reference.dimensionDefinitionId(), reference.revision())
+            .orElse(null);
+        if (definition == null || definition.attributes().isEmpty()) return;
+        Map<String, ModelField> fieldByAttribute = new HashMap<>();
+        for (ModelField field : view.fields()) {
+            if (field != null && field.dimensionAttributeCode() != null) {
+                fieldByAttribute.putIfAbsent(field.dimensionAttributeCode(), field);
+            }
+        }
+        List<String> missing = definition
+            .attributes()
+            .stream()
+            .map(DimensionDefinitionContract.AttributeSemantic::code)
+            .filter(Objects::nonNull)
+            .filter(code -> !fieldByAttribute.containsKey(code))
+            .toList();
+        if (!missing.isEmpty()) {
+            add(
+                blockers,
+                blocker(
+                    view,
+                    "DIMENSION_ATTRIBUTE_MAPPING_INCOMPLETE",
+                    "fields",
+                    "业务维度属性尚未全部映射到模型字段：" + String.join("、", missing),
+                    "fields"
+                )
+            );
+        }
+        boolean primaryKeyMapped = definition
+            .attributes()
+            .stream()
+            .filter(DimensionDefinitionContract.AttributeSemantic::primaryKey)
+            .allMatch(attribute -> {
+                ModelField field = fieldByAttribute.get(attribute.code());
+                return field != null && field.role() == FieldRole.KEY;
+            });
+        if (!primaryKeyMapped) {
+            add(
+                blockers,
+                blocker(
+                    view,
+                    "DIMENSION_PRIMARY_KEY_MAPPING_INVALID",
+                    "fields",
+                    "业务维度主键属性必须映射到作用为“键（KEY）”的模型字段",
+                    "fields"
+                )
+            );
+        }
     }
 
     private boolean dimensionDefinitionCurrent(String tenantId, ModelSpecView view) {
@@ -427,6 +489,43 @@ public class ModelSpecStageGateService {
         LinkedHashMap<String, GateBlocker> blockers
     ) {
         validateKeyClosure(view, blockers);
+        if (view.modelType() == ModelType.DIMENSION && view.implementationPolicy() == null) {
+            add(
+                blockers,
+                blocker(
+                    view,
+                    "MODEL_SPEC_IMPLEMENTATION_POLICY_REQUIRED",
+                    "implementationPolicy",
+                    "请补充物理名称、装载策略和分区策略",
+                    "design"
+                )
+            );
+        } else if (view.modelType() == ModelType.DIMENSION) {
+            if (view.implementationPolicy().physicalName() == null) {
+                add(
+                    blockers,
+                    blocker(
+                        view,
+                        "MODEL_SPEC_PHYSICAL_NAME_REQUIRED",
+                        "implementationPolicy.physicalName",
+                        "请设置实现表的物理名称",
+                        "design"
+                    )
+                );
+            }
+            if (view.implementationPolicy().loadStrategy() == null) {
+                add(
+                    blockers,
+                    blocker(
+                        view,
+                        "MODEL_SPEC_LOAD_STRATEGY_REQUIRED",
+                        "implementationPolicy.loadStrategy",
+                        "请选择全量、增量或快照装载策略",
+                        "design"
+                    )
+                );
+            }
+        }
         switch (view.modelType()) {
             case DIMENSION -> dimensionBlockers(view, evidence, blockers);
             case FACT -> factBlockers(view, evidence, blockers);
@@ -672,12 +771,16 @@ public class ModelSpecStageGateService {
     }
 
     private static GateBlocker blocker(ModelSpecView view, String code, String field, String message, String tab) {
-        return new GateBlocker(code, field, message, "/modeling/models/" + view.id() + "?tab=" + tab);
+        String query = "implementation".equals(tab) || "physical".equals(tab)
+            ? "activeStage=" + tab
+            : "activeStage=logical&tab=" + tab;
+        return new GateBlocker(code, field, message, "/modeling/models/" + view.id() + "?" + query);
     }
 
     private static String repairTab(String field) {
         if ("fields".equals(field)) return "fields";
         if ("standardBindings".equals(field)) return "standards";
+        if (field != null && field.startsWith("implementationPolicy")) return "design";
         return "design";
     }
 

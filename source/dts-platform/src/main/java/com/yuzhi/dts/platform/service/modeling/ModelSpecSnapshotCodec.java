@@ -109,7 +109,10 @@ public class ModelSpecSnapshotCodec {
             view.generationStrategy(),
             view.dimensionProfile(),
             view.dimensionDefinitionRef(),
-            null
+            null,
+            view.dataMartId(),
+            view.variantCode(),
+            view.implementationPolicy()
         );
     }
 
@@ -137,7 +140,10 @@ public class ModelSpecSnapshotCodec {
             command.generationStrategy(),
             command.dimensionProfile(),
             dimensionDefinitionRef,
-            null
+            null,
+            command.dataMartId(),
+            command.variantCode(),
+            command.implementationPolicy()
         );
     }
 
@@ -177,7 +183,10 @@ public class ModelSpecSnapshotCodec {
             command.metricRefs(),
             command.standardBindings(),
             command.generationStrategy(),
-            updatedProfile
+            updatedProfile,
+            command.dataMartId() == null ? current.dataMartId() : command.dataMartId(),
+            command.variantCode() == null ? current.variantCode() : command.variantCode(),
+            command.implementationPolicy() == null ? current.implementationPolicy() : command.implementationPolicy()
         );
         return asCreate(effectiveCommand, current.dimensionDefinitionRef());
     }
@@ -259,11 +268,43 @@ public class ModelSpecSnapshotCodec {
             createdAt,
             updatedAt,
             CompatibilityMode.CANONICAL,
-            null
+            null,
+            command.dataMartId(),
+            command.variantCode(),
+            command.implementationPolicy()
         );
     }
 
-    private static ModelContent content(CreateModelSpecCommand command) {
+    private static Object content(CreateModelSpecCommand command) {
+        if (hasExtendedMetadata(command)) {
+            return new ExtendedModelContent(
+                command.planId(),
+                command.domainId(),
+                command.modelType(),
+                command.layer(),
+                command.name(),
+                command.description(),
+                command.implementationMode(),
+                command.materialization(),
+                command.businessActivityRef(),
+                command.consumptionScenario(),
+                command.grain(),
+                command.factShape(),
+                command.timeSemantics(),
+                command.fields(),
+                command.sourceRefs(),
+                command.dependsOn(),
+                command.dimensionRefs(),
+                command.metricRefs(),
+                command.standardBindings(),
+                command.generationStrategy(),
+                command.dimensionProfile(),
+                command.dimensionDefinitionRef(),
+                command.dataMartId(),
+                command.variantCode(),
+                command.implementationPolicy()
+            );
+        }
         return new ModelContent(
             command.planId(),
             command.domainId(),
@@ -278,7 +319,7 @@ public class ModelSpecSnapshotCodec {
             command.grain(),
             command.factShape(),
             command.timeSemantics(),
-            command.fields(),
+            legacyFields(command.fields()),
             command.sourceRefs(),
             command.dependsOn(),
             command.dimensionRefs(),
@@ -290,7 +331,36 @@ public class ModelSpecSnapshotCodec {
         );
     }
 
-    private static ModelContent content(ModelSpecView view) {
+    private static Object content(ModelSpecView view) {
+        if (hasExtendedMetadata(view)) {
+            return new ExtendedModelContent(
+                view.planId(),
+                view.domainId(),
+                view.modelType(),
+                view.layer(),
+                view.name(),
+                view.description(),
+                view.implementationMode(),
+                view.materialization(),
+                view.businessActivityRef(),
+                view.consumptionScenario(),
+                view.grain(),
+                view.factShape(),
+                view.timeSemantics(),
+                view.fields(),
+                view.sourceRefs(),
+                view.dependsOn(),
+                view.dimensionRefs(),
+                view.metricRefs(),
+                view.standardBindings(),
+                view.generationStrategy(),
+                view.dimensionProfile(),
+                view.dimensionDefinitionRef(),
+                view.dataMartId(),
+                view.variantCode(),
+                view.implementationPolicy()
+            );
+        }
         return new ModelContent(
             view.planId(),
             view.domainId(),
@@ -305,7 +375,7 @@ public class ModelSpecSnapshotCodec {
             view.grain(),
             view.factShape(),
             view.timeSemantics(),
-            view.fields(),
+            legacyFields(view.fields()),
             view.sourceRefs(),
             view.dependsOn(),
             view.dimensionRefs(),
@@ -327,7 +397,88 @@ public class ModelSpecSnapshotCodec {
         }
     }
 
+    private static boolean hasExtendedMetadata(CreateModelSpecCommand command) {
+        return (
+            command.dataMartId() != null ||
+            command.variantCode() != null ||
+            command.implementationPolicy() != null ||
+            command.fields().stream().anyMatch(ModelSpecSnapshotCodec::hasExtendedMetadata)
+        );
+    }
+
+    private static boolean hasExtendedMetadata(ModelSpecView view) {
+        return (
+            view.dataMartId() != null ||
+            view.variantCode() != null ||
+            view.implementationPolicy() != null ||
+            view.fields().stream().anyMatch(ModelSpecSnapshotCodec::hasExtendedMetadata)
+        );
+    }
+
+    private static boolean hasExtendedMetadata(ModelSpecContract.ModelField field) {
+        return (
+            field != null &&
+            (field.dimensionAttributeCode() != null ||
+                Boolean.TRUE.equals(field.redundant()) ||
+                field.redundancySourceRef() != null)
+        );
+    }
+
+    private static java.util.List<LegacyModelField> legacyFields(
+        java.util.List<ModelSpecContract.ModelField> fields
+    ) {
+        return fields
+            .stream()
+            .map(field ->
+                field == null
+                    ? null
+                    : new LegacyModelField(
+                        field.name(),
+                        field.dataType(),
+                        field.nullable(),
+                        field.sourceFieldRef(),
+                        field.role(),
+                        field.securityLevel()
+                    )
+            )
+            .toList();
+    }
+
     private record ModelContent(
+        UUID planId,
+        UUID domainId,
+        ModelSpecContract.ModelType modelType,
+        ModelSpecContract.Layer layer,
+        String name,
+        String description,
+        ModelSpecContract.ImplementationMode implementationMode,
+        String materialization,
+        String businessActivityRef,
+        String consumptionScenario,
+        ModelSpecContract.Grain grain,
+        ModelSpecContract.FactShape factShape,
+        ModelSpecContract.TimeSemantics timeSemantics,
+        java.util.List<LegacyModelField> fields,
+        java.util.List<ModelSpecContract.SourceRef> sourceRefs,
+        java.util.List<ModelSpecContract.ModelRevisionRef> dependsOn,
+        java.util.List<ModelSpecContract.ModelRevisionRef> dimensionRefs,
+        java.util.List<ModelSpecContract.MetricRef> metricRefs,
+        java.util.List<ModelSpecContract.StandardBinding> standardBindings,
+        ModelSpecContract.GenerationStrategy generationStrategy,
+        @JsonInclude(JsonInclude.Include.NON_NULL) ModelSpecContract.DimensionProfile dimensionProfile,
+        @JsonInclude(JsonInclude.Include.NON_NULL) DimensionDefinitionRef dimensionDefinitionRef
+    ) {}
+
+    private record LegacyModelField(
+        String name,
+        String dataType,
+        Boolean nullable,
+        String sourceFieldRef,
+        ModelSpecContract.FieldRole role,
+        String securityLevel
+    ) {}
+
+    private record ExtendedModelContent(
         UUID planId,
         UUID domainId,
         ModelSpecContract.ModelType modelType,
@@ -349,6 +500,9 @@ public class ModelSpecSnapshotCodec {
         java.util.List<ModelSpecContract.StandardBinding> standardBindings,
         ModelSpecContract.GenerationStrategy generationStrategy,
         @JsonInclude(JsonInclude.Include.NON_NULL) ModelSpecContract.DimensionProfile dimensionProfile,
-        @JsonInclude(JsonInclude.Include.NON_NULL) DimensionDefinitionRef dimensionDefinitionRef
+        @JsonInclude(JsonInclude.Include.NON_NULL) DimensionDefinitionRef dimensionDefinitionRef,
+        @JsonInclude(JsonInclude.Include.NON_NULL) UUID dataMartId,
+        String variantCode,
+        @JsonInclude(JsonInclude.Include.NON_NULL) ModelSpecContract.ImplementationPolicy implementationPolicy
     ) {}
 }

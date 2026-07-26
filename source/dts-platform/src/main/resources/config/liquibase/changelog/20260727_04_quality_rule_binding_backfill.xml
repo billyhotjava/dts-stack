@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260727_04_quality_rule_binding_backfill" author="codex">
+        <comment>Backfill version bindings for quality rules created with only the rule-level dataset ID</comment>
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="gov_rule"/>
+            <tableExists tableName="gov_rule_version"/>
+            <tableExists tableName="gov_rule_binding"/>
+        </preConditions>
+
+        <sql>
+            INSERT INTO gov_rule_binding (
+                id,
+                rule_version_id,
+                dataset_id,
+                scope_type,
+                created_by,
+                created_date,
+                last_modified_by,
+                last_modified_date
+            )
+            SELECT
+                gen_random_uuid(),
+                version.id,
+                rule.dataset_id,
+                'DATASET',
+                'liquibase-quality-binding-backfill',
+                CURRENT_TIMESTAMP,
+                'liquibase-quality-binding-backfill',
+                CURRENT_TIMESTAMP
+            FROM gov_rule_version version
+            INNER JOIN gov_rule rule ON rule.id = version.rule_id
+            WHERE rule.dataset_id IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM gov_rule_binding binding
+                  WHERE binding.rule_version_id = version.id
+              );
+        </sql>
+
+        <rollback>
+            <sql>
+                DELETE FROM gov_rule_binding
+                WHERE created_by = 'liquibase-quality-binding-backfill';
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

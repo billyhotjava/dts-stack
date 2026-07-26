@@ -85,11 +85,12 @@ public class DimensionDefinitionResource {
     @GetMapping
     public ApiResponse<List<View>> list(
         @RequestParam(required = false) UUID domainId,
+        @RequestParam(required = false) UUID dataMartId,
         @RequestParam(required = false) Status status,
         @RequestParam(defaultValue = "0") int offset,
         @RequestParam(defaultValue = "" + DimensionDefinitionApplicationService.DEFAULT_LIST_LIMIT) int limit
     ) {
-        return ApiResponses.ok(service.list(serverTenantId, domainId, status, offset, limit));
+        return ApiResponses.ok(service.list(serverTenantId, domainId, dataMartId, status, offset, limit));
     }
 
     @GetMapping("/{id}")
@@ -99,6 +100,11 @@ public class DimensionDefinitionResource {
             .ok()
             .eTag(DimensionDefinitionApplicationService.etag(view))
             .body(ApiResponses.ok(view));
+    }
+
+    @GetMapping("/{id}/revisions/{revision}")
+    public ApiResponse<View> revision(@PathVariable UUID id, @PathVariable int revision) {
+        return ApiResponses.ok(service.revision(serverTenantId, id, revision));
     }
 
     @PutMapping("/{id}")

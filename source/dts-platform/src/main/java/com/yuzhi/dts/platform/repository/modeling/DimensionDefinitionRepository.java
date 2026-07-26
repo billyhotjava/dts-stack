@@ -3,9 +3,11 @@ package com.yuzhi.dts.platform.repository.modeling;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.AttributeSemantic;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.CreateCommand;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.HierarchySemantic;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.ReuseScope;
+import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.ScopeType;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.Status;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.View;
 import java.sql.ResultSet;
@@ -28,10 +30,12 @@ import org.springframework.stereotype.Repository;
 public class DimensionDefinitionRepository {
 
     private static final TypeReference<List<HierarchySemantic>> HIERARCHY_LIST = new TypeReference<>() {};
+    private static final TypeReference<List<AttributeSemantic>> ATTRIBUTE_LIST = new TypeReference<>() {};
 
     private static final String CURRENT_COLUMNS = """
         select true as current_head, d.tenant_id, d.id, d.system_code, d.domain_id, d.name, d.definition,
-               d.owner_id, d.reuse_scope, d.hierarchies_json::text as hierarchies_json, d.status, d.revision,
+               d.owner_id, d.reuse_scope, d.hierarchies_json::text as hierarchies_json,
+               d.scope_type, d.data_mart_id, d.attributes_json::text as attributes_json, d.status, d.revision,
                d.current_checksum, r.content_checksum as revision_checksum, r.snapshot_json::text as current_snapshot,
                d.idempotency_key, d.idempotency_request_hash,
                d.idempotency_response_snapshot::text as idempotency_response_snapshot,
@@ -89,6 +93,18 @@ public class DimensionDefinitionRepository {
         int offset,
         int limit
     ) {
+        return listCurrent(tenantId, domainId, null, status, visibleDomainIds, offset, limit);
+    }
+
+    public List<StoredDimensionDefinition> listCurrent(
+        String tenantId,
+        UUID domainId,
+        UUID dataMartId,
+        Status status,
+        Set<UUID> visibleDomainIds,
+        int offset,
+        int limit
+    ) {
         if (visibleDomainIds.isEmpty()) {
             return List.of();
         }
@@ -104,6 +120,10 @@ public class DimensionDefinitionRepository {
         if (domainId != null) {
             sql.append(" and d.domain_id = ?");
             arguments.add(domainId);
+        }
+        if (dataMartId != null) {
+            sql.append(" and d.data_mart_id = ?");
+            arguments.add(dataMartId);
         }
         if (status != null) {
             sql.append(" and d.status = ?");
@@ -133,7 +153,8 @@ public class DimensionDefinitionRepository {
                 """
                 select false as current_head, r.tenant_id, r.dimension_definition_id as id, r.system_code,
                        r.domain_id, r.name, r.definition, r.owner_id, r.reuse_scope,
-                       r.hierarchies_json::text as hierarchies_json, r.status, r.revision,
+                       r.hierarchies_json::text as hierarchies_json, r.scope_type, r.data_mart_id,
+                       r.attributes_json::text as attributes_json, r.status, r.revision,
                        null as current_checksum, r.content_checksum as revision_checksum,
                        r.snapshot_json::text as current_snapshot, d.idempotency_key, d.idempotency_request_hash,
                        d.idempotency_response_snapshot::text as idempotency_response_snapshot,
@@ -215,6 +236,28 @@ public class DimensionDefinitionRepository {
         return Boolean.TRUE.equals(exists);
     }
 
+    public boolean dataMartContainsDomain(String tenantId, UUID dataMartId, UUID domainId) {
+        Boolean exists = jdbcTemplate.queryForObject(
+            """
+            select exists (
+                select 1
+                  from modeling_data_mart m
+                  join modeling_data_mart_domain d
+                    on d.tenant_id = m.tenant_id and d.data_mart_id = m.id
+                 where m.tenant_id = ?
+                   and m.id = ?
+                   and m.status <> 'RETIRED'
+                   and d.domain_id = ?
+            )
+            """,
+            Boolean.class,
+            tenantId,
+            dataMartId,
+            domainId
+        );
+        return Boolean.TRUE.equals(exists);
+    }
+
     public int insert(String tenantId, String actorId, CreateCommand command, View view, String requestHash) {
         if (view.revision() != 1) {
             throw new IllegalArgumentException("Initial dimension definition revision must be 1");
@@ -226,11 +269,13 @@ public class DimensionDefinitionRepository {
             with inserted_head as (
                 insert into modeling_dimension_definition (
                     id, tenant_id, system_code, domain_id, name, definition, owner_id, reuse_scope,
-                    hierarchies_json, status, revision, current_checksum, idempotency_key,
+                    hierarchies_json, scope_type, data_mart_id, attributes_json,
+                    status, revision, current_checksum, idempotency_key,
                     idempotency_request_hash, idempotency_response_snapshot, created_by, last_modified_by,
                     created_date, last_modified_date
                 ) values (
-                    ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, 1, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?
+                    ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, cast(? as jsonb),
+                    ?, 1, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?
                 )
                 on conflict (tenant_id, idempotency_key) do nothing
                 returning tenant_id, id
@@ -238,11 +283,12 @@ public class DimensionDefinitionRepository {
             inserted_revision as (
                 insert into modeling_dimension_definition_revision (
                     id, tenant_id, dimension_definition_id, revision, system_code, domain_id, name,
-                    definition, owner_id, reuse_scope, hierarchies_json, status, content_checksum,
+                    definition, owner_id, reuse_scope, hierarchies_json, scope_type, data_mart_id,
+                    attributes_json, status, content_checksum,
                     snapshot_json, created_by, created_date
                 )
                 select ?, inserted_head.tenant_id, inserted_head.id, 1, ?, ?, ?, ?, ?, ?,
-                       cast(? as jsonb), ?, ?, cast(? as jsonb), ?, ?
+                       cast(? as jsonb), ?, ?, cast(? as jsonb), ?, ?, cast(? as jsonb), ?, ?
                   from inserted_head
                 returning 1
             )
@@ -258,6 +304,9 @@ public class DimensionDefinitionRepository {
             view.ownerId(),
             view.reuseScope().name(),
             json(view.hierarchies()),
+            view.scopeType().name(),
+            view.dataMartId(),
+            json(view.attributes()),
             view.status().name(),
             view.checksum(),
             command.idempotencyKey(),
@@ -275,6 +324,9 @@ public class DimensionDefinitionRepository {
             view.ownerId(),
             view.reuseScope().name(),
             json(view.hierarchies()),
+            view.scopeType().name(),
+            view.dataMartId(),
+            json(view.attributes()),
             view.status().name(),
             view.checksum(),
             snapshot,
@@ -315,6 +367,7 @@ public class DimensionDefinitionRepository {
             with updated_head as (
                 update modeling_dimension_definition
                    set name = ?, definition = ?, owner_id = ?, reuse_scope = ?, hierarchies_json = cast(? as jsonb),
+                       scope_type = ?, data_mart_id = ?, attributes_json = cast(? as jsonb),
                        status = ?, revision = ?, current_checksum = ?, last_modified_by = ?, last_modified_date = ?
                  where tenant_id = ? and id = ? and revision = ? and current_checksum = ?
                    and system_code = ? and domain_id = ? and created_date = ?
@@ -323,11 +376,12 @@ public class DimensionDefinitionRepository {
             inserted_revision as (
                 insert into modeling_dimension_definition_revision (
                     id, tenant_id, dimension_definition_id, revision, system_code, domain_id, name,
-                    definition, owner_id, reuse_scope, hierarchies_json, status, content_checksum,
+                    definition, owner_id, reuse_scope, hierarchies_json, scope_type, data_mart_id,
+                    attributes_json, status, content_checksum,
                     snapshot_json, created_by, created_date
                 )
                 select ?, updated_head.tenant_id, updated_head.id, ?, ?, ?, ?, ?, ?, ?,
-                       cast(? as jsonb), ?, ?, cast(? as jsonb), ?, ?
+                       cast(? as jsonb), ?, ?, cast(? as jsonb), ?, ?, cast(? as jsonb), ?, ?
                   from updated_head
                 returning 1
             )
@@ -339,6 +393,9 @@ public class DimensionDefinitionRepository {
             replacement.ownerId(),
             replacement.reuseScope().name(),
             json(replacement.hierarchies()),
+            replacement.scopeType().name(),
+            replacement.dataMartId(),
+            json(replacement.attributes()),
             replacement.status().name(),
             replacement.revision(),
             replacement.checksum(),
@@ -360,6 +417,9 @@ public class DimensionDefinitionRepository {
             replacement.ownerId(),
             replacement.reuseScope().name(),
             json(replacement.hierarchies()),
+            replacement.scopeType().name(),
+            replacement.dataMartId(),
+            json(replacement.attributes()),
             replacement.status().name(),
             replacement.checksum(),
             json(replacement),
@@ -453,6 +513,9 @@ public class DimensionDefinitionRepository {
             row.getString("owner_id"),
             ReuseScope.valueOf(row.getString("reuse_scope")),
             hierarchies(row.getString("hierarchies_json")),
+            ScopeType.valueOf(row.getString("scope_type")),
+            row.getObject("data_mart_id", UUID.class),
+            attributes(row.getString("attributes_json")),
             Status.valueOf(row.getString("status")),
             row.getInt("revision"),
             row.getString("current_checksum"),
@@ -471,6 +534,14 @@ public class DimensionDefinitionRepository {
             return value == null ? List.of() : objectMapper.readValue(value, HIERARCHY_LIST);
         } catch (JsonProcessingException exception) {
             throw new IllegalArgumentException("Stored dimension hierarchy payload is invalid", exception);
+        }
+    }
+
+    private List<AttributeSemantic> attributes(String value) {
+        try {
+            return value == null ? List.of() : objectMapper.readValue(value, ATTRIBUTE_LIST);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalArgumentException("Stored dimension attribute payload is invalid", exception);
         }
     }
 
@@ -493,6 +564,9 @@ public class DimensionDefinitionRepository {
         String ownerId,
         ReuseScope reuseScope,
         List<HierarchySemantic> hierarchies,
+        ScopeType scopeType,
+        UUID dataMartId,
+        List<AttributeSemantic> attributes,
         Status status,
         int revision,
         String currentChecksum,
@@ -504,6 +578,55 @@ public class DimensionDefinitionRepository {
         Instant createdAt,
         Instant updatedAt
     ) {
+        public StoredDimensionDefinition(
+            boolean currentHead,
+            String tenantId,
+            UUID id,
+            String systemCode,
+            UUID domainId,
+            String name,
+            String definition,
+            String ownerId,
+            ReuseScope reuseScope,
+            List<HierarchySemantic> hierarchies,
+            Status status,
+            int revision,
+            String currentChecksum,
+            String revisionChecksum,
+            String currentSnapshot,
+            String idempotencyKey,
+            String idempotencyRequestHash,
+            String idempotencyResponseSnapshot,
+            Instant createdAt,
+            Instant updatedAt
+        ) {
+            this(
+                currentHead,
+                tenantId,
+                id,
+                systemCode,
+                domainId,
+                name,
+                definition,
+                ownerId,
+                reuseScope,
+                hierarchies,
+                ScopeType.DOMAIN,
+                null,
+                List.of(),
+                status,
+                revision,
+                currentChecksum,
+                revisionChecksum,
+                currentSnapshot,
+                idempotencyKey,
+                idempotencyRequestHash,
+                idempotencyResponseSnapshot,
+                createdAt,
+                updatedAt
+            );
+        }
+
         public String checksum() {
             return revisionChecksum != null ? revisionChecksum : currentChecksum;
         }
@@ -523,7 +646,10 @@ public class DimensionDefinitionRepository {
                 checksum(),
                 usageCount,
                 createdAt,
-                updatedAt
+                updatedAt,
+                scopeType,
+                dataMartId,
+                attributes
             );
         }
     }

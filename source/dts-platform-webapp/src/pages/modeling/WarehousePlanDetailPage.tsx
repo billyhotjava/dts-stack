@@ -14,17 +14,7 @@ import {
 	Tag,
 	Typography,
 } from "antd";
-import {
-	ArrowLeft,
-	ArrowRight,
-	Boxes,
-	Database,
-	FileCheck2,
-	Network,
-	Plus,
-	Trash2,
-	Waypoints,
-} from "lucide-react";
+import { ArrowLeft, ArrowRight, Boxes, Database, FileCheck2, Network, Plus, Trash2, Waypoints } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
@@ -48,6 +38,7 @@ import {
 } from "@/api/warehousePlanApi";
 import { useSearchParams } from "@/routes/hooks";
 import { useUserRoles } from "@/store/userStore";
+import { WarehousePlanDataMartBaseline } from "./components/WarehousePlanDataMartBaseline";
 import { WarehousePlanHeaderEditor } from "./components/WarehousePlanHeaderEditor";
 import { WarehousePlanSourcesTab } from "./WarehousePlanSourcesTab";
 import { createLatestRequestGuard, hasWarehousePlanCreateAccess } from "./warehousePlanCreateFlow";
@@ -88,7 +79,7 @@ const lifecycleLabel: Record<WarehousePlanHeader["lifecycleStatus"], string> = {
 	ARCHIVED: "已归档",
 };
 
-type BaselineTab = "categories" | "layers" | "sources";
+type BaselineTab = "categories" | "data-marts" | "layers" | "sources";
 type BaselineInputReplace = "none" | "categories" | "policy" | "all";
 type CategoryFormValue = { domainBindings: WarehousePlanCategoryBindingInput[] };
 type PolicyFormValue = WarehousePlanPolicyInput;
@@ -164,7 +155,10 @@ export default function WarehousePlanDetailPage() {
 	const editMode = routeMode === "edit";
 	const headerEditing = editMode && activeSection === "overview";
 	const baselineTab: BaselineTab =
-		requestedBaselineTab === "sources" || requestedBaselineTab === "layers" || requestedBaselineTab === "categories"
+		requestedBaselineTab === "sources" ||
+		requestedBaselineTab === "layers" ||
+		requestedBaselineTab === "data-marts" ||
+		requestedBaselineTab === "categories"
 			? requestedBaselineTab
 			: plan?.onboardingMode === "ASSET_FIRST"
 				? "sources"
@@ -546,9 +540,7 @@ export default function WarehousePlanDetailPage() {
 							open
 							plan={plan}
 							canMaintainPlan={canMaintainPlan}
-							onClose={() =>
-								navigate(buildWarehousePlanRoute(planId, "overview", { mode: "view" }))
-							}
+							onClose={() => navigate(buildWarehousePlanRoute(planId, "overview", { mode: "view" }))}
 							onPlanChange={setPlan}
 							onUnavailable={() => navigate("/modeling/plans")}
 						/>
@@ -575,9 +567,7 @@ export default function WarehousePlanDetailPage() {
 										: "请重新加载规划证据"}
 								</Text>
 							</div>
-							<Button onClick={() => openSection("baseline")}>
-								查看基线
-							</Button>
+							<Button onClick={() => openSection("baseline")}>查看基线</Button>
 						</div>
 					</Card>
 				</div>
@@ -761,6 +751,11 @@ export default function WarehousePlanDetailPage() {
 											</Form>
 										</div>
 									),
+							},
+							{
+								key: "data-marts",
+								label: "数据集市",
+								children: <WarehousePlanDataMartBaseline planId={planId} editable={planEditable} />,
 							},
 							{
 								key: "layers",
@@ -970,9 +965,7 @@ export default function WarehousePlanDetailPage() {
 				<SpecialistSection
 					title="实现与验证"
 					description="在模型设计稳定后进入 SQL、dbt、测试和发布门禁。"
-					actions={[
-						{ label: "高级建模（SQL/dbt）", route: "/studio/sql-modeling", icon: <FileCheck2 size={17} /> },
-					]}
+					actions={[{ label: "高级建模（SQL/dbt）", route: "/studio/sql-modeling", icon: <FileCheck2 size={17} /> }]}
 					onOpen={openSpecialist}
 				/>
 			) : null}
@@ -989,7 +982,6 @@ export default function WarehousePlanDetailPage() {
 					onOpen={openSpecialist}
 				/>
 			) : null}
-
 		</div>
 	);
 }
