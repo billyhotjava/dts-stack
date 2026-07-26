@@ -11,8 +11,9 @@
 
 | 类型 | 契约 | 关键内容 |
 |---|---|---|
-| 架构 | `assets/architecture-review.md` | 四条复审决定全部确认 |
+| 架构 | `assets/architecture-review.md` | 二次复审后的四条冻结决定全部确认 |
 | 环境 | `it/baseline.md` | P1～P8 有真实命令和结果 |
+| 部署 | 当前提交对应镜像与 `databasechangelog` | Sprint-73 前置迁移已落地，GitNexus 与 HEAD 一致 |
 | 数据 | 隔离验收计划 | 四类模型、两种 implementation ownership、至少一条发布结果 |
 | 证据 | `it/` | 真实认证，不用 mock 关闭 Sprint |
 
@@ -24,19 +25,20 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 冻结架构与恢复认证验收链 | P0 | DRAFT | 用户确认 Sprint 复审 |
+| T01 | 冻结架构、部署与认证验收基线 | P0 | DRAFT | 用户确认 Sprint 复审 |
 | T02 | 建立四类模型代表性验收数据 | P0 | DRAFT | T01 |
 
 ## Definition of Ready
 
-- [x] 架构冲突和在途代码风险已定位
+- [x] Sprint-73 已提交的对象所有权冲突和兼容迁移边界已定位
 - [x] DNS/login/API/数据缺口已记录
-- [ ] 用户确认 `assets/architecture-review.md` 四条决定
-- [ ] Sprint-73 owning files 与基线 commit 已冻结
+- [ ] 用户确认修订后的 `assets/architecture-review.md` 四条决定
+- [ ] GitNexus、运行镜像、数据库迁移与当前 HEAD 对齐
+- [ ] Sprint-74 owning files、排除文件与基线 commit 已冻结
 
 ## 完成标准
 
 - [ ] G0 交付基线由 BLOCKED 变为 PASS
+- [ ] 当前提交对应镜像与 Sprint-73 前置迁移可验证
 - [ ] 代表性 fixture 可重复创建和清理
 - [ ] 证据中不包含凭据
-

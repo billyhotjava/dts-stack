@@ -23,7 +23,7 @@
 | # | 不变量 | 强制级别 | 违反后果 | 出处 |
 |---|---|---|---|---|
 | D01 | 先选择业务过程/目的并声明粒度，再确定维度和事实 | 业务规则 | 模型类型与字段角色错误 | Kimball 四步法参考 |
-| D02 | 模型类型和目标数仓层是两个维度 | 架构规则 | DIMENSION 被错误等同 DWD 或 DIM | 当前计划策略 seam |
+| D02 | 模型类型和目标数仓层是两个概念；当前版本经典映射不因此改变 | 架构规则 | DIMENSION 被错误等同为物理层，或为纠正文案而扩大迁移范围 | Sprint-73 决策 + 本 Sprint ADR-74-06 |
 | D03 | 逻辑模型不因没有来源或 dbt 实现而失效 | 业务规则 | 无法进行概念/逻辑评审 | DataWorks 建模与物化分离 |
 | D04 | ModelSpec、ModelImplementation、发布控制面各只有一套 owner | 架构红线 | 产生平行台账和证据漂移 | domain-dts A4 |
 | D05 | 历史 revision 不原地重写 | 数据规则 | checksum、审计和发布证据失真 | Sprint-67 |
@@ -97,11 +97,11 @@ lifecycle=NONE
 
 | 系统/模块 | 契约 | 可用性 | 失败降级 |
 |---|---|---|---|
-| 建设计划 | `WarehousePlanPolicy.layerScheme` | 当前可读写 | 策略不可用时禁止推断目标层 |
+| 建设计划 | 既有 `layerPolicyCode=CLASSIC_ODS_DWD_DWS_ADS` | 当前可读写；本 Sprint 不扩展 | 策略不可用时禁止推断目标层 |
 | 元数据/规划来源 | `WarehousePlanSourceBinding` | 当前样本未绑定 | 不影响 DRAFT/DESIGNED，只阻断实现 |
 | dbt | `DBT_MANAGED ModelImplementation` | 容器存在，真实实现未验证 | 普通配置仍可用；不伪造 dbt 成功 |
 | 发布工作台 | Sprint-69 ReleaseCandidate | 代码/数据链存在，未做本 Sprint 真实验收 | 发布结果保持空态 |
-| 密级传播 | Sprint-72 publish gate | 当前在途实现 | 失败时只阻断 RELEASE_READY |
+| 密级传播 | Sprint-72 publish gate | 已有契约，真实运行验收待 G0 | 失败时只阻断 RELEASE_READY |
 
 ## 5. 合规要求
 
@@ -115,6 +115,7 @@ lifecycle=NONE
 ## 6. 未决与基线缺口
 
 - 自动化环境无法解析 `dts.local`，真实登录/API/Chrome95 需 F0/T01 修复；
+- 当前运行镜像早于 Sprint-73 提交，数据库缺 20260727 前置迁移，需 F0/T01 先对齐部署基线；
 - 现网只有 3 条 v2 草稿，缺 SUMMARY/APPLICATION 和已发布资产样本，需 F0/T02 建立隔离 fixture；
-- 当前工作树有 Sprint-73 在途实现，编码前必须确认其所有权边界，不得覆盖或回退未知修改。
-
+- Sprint-73 已提交 `implementationPolicy`；编码前必须更新 GitNexus、确认各环境 snapshot 现状并冻结兼容迁移边界；
+- 当前工作树另有 Sprint-74 范围外的 Liquibase 用户修改，必须保持原样并从本 Sprint 提交中排除。

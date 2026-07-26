@@ -10,7 +10,7 @@
 
 ## 技术设计（Contract-first）
 
-- **输入契约**：既有 `ModelImplementationWriteCommand`。
+- **输入契约**：既有 `ModelImplementationWriteCommand`；Sprint-73 已提交的 ModelSpec `implementationPolicy` 仅作为兼容读取/迁移输入。
 - **settings 精确字段**：
   - `targetPhysicalName:string`
   - `loadStrategy:"FULL"|"INCREMENTAL"|"SNAPSHOT"`
@@ -22,7 +22,7 @@
 - **数据流**：DESIGNED ModelSpec pin → implementation form → validate → save → IMPLEMENTATION_READY gate。
 - **错误路径**：model revision 漂移 409；旧 implementation CAS 412；输入 stale 422；物理名冲突 409。
 - **复用点**：账本 L13；既有 lifecycle resource/service/checksum/compatibility adapter。
-- **实现方案**：从逻辑 form/save command 移除新实现字段；扩 settings validator 和 projection；不新建 implementation table。
+- **实现方案**：新 UI 从逻辑 form/save command 移除实现字段；扩 settings validator 和 projection；旧 snapshot 保持可读，旧值变化由 F4/T03 迁移契约处理；不新建 implementation table。
 
 ## UI 交互规格
 
@@ -36,7 +36,7 @@ ModelLifecycleContract/Resource/Service、implementation checksum、Implementati
 
 - [ ] settings round-trip/checksum/CAS
 - [ ] target name/partition field/load strategy 边界
-- [ ] ModelSpec snapshot 不含新的 implementationPolicy 写入
+- [ ] 切换后 ModelSpec snapshot 不再新增或修改 implementationPolicy；既有值仍可回读
 - [ ] stale model/implementation fail closed
 
 ## Definition of Done

@@ -5,7 +5,7 @@
 
 ## 目标
 
-让误建草稿可安全改型，让治理要求只在正确阶段生效，并保证旧 revision 与在途 Sprint-73 数据可读、可迁移、可回滚。
+让误建草稿可安全改型，让治理要求只在正确阶段生效，并保证旧 revision 与 Sprint-73 已提交的 `implementationPolicy` 数据可读、可迁移、可回滚。
 
 ## 契约定义
 
@@ -30,14 +30,14 @@
 |---|---|---|---|---|
 | T01 | 实现DRAFT模型改型预检与追加revision | P0 | DRAFT | F1、F2 |
 | T02 | 将治理必填收敛到计划发布策略 | P0 | DRAFT | F2、Sprint-72/69 |
-| T03 | 兼容旧输入与在途implementationPolicy | P0 | DRAFT | F3 |
+| T03 | 迁移已提交implementationPolicy并兼容旧输入 | P0 | DRAFT | F3 |
 
 ## Definition of Ready
 
 - [x] eligibility 和 preview/apply DTO 已钉死
 - [x] 治理阶段边界已钉死
 - [x] compatibility owner 已钉死
-- [ ] Sprint-73 影响审计完成
+- [ ] GitNexus 更新到当前 HEAD，Sprint-73 owning symbols 影响审计完成
 
 ## 完成标准
 
@@ -45,4 +45,3 @@
 - [ ] 有实现/发布证据的模型不可原地改型
 - [ ] 标准/密级/质量不阻断 DESIGNED
 - [ ] IT-09～IT-11 通过
-

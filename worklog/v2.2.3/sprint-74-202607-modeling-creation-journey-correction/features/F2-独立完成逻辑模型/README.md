@@ -47,7 +47,7 @@
 - [x] ModelSpec/Implementation 所有权已钉死
 - [x] 四类 DESIGNED 必填矩阵已写明
 - [x] Gate API 兼容方式已写明
-- [ ] F0 通过且在途 implementationPolicy 已对账
+- [ ] F0 通过且已提交 implementationPolicy 的兼容/迁移契约已冻结
 
 ## 完成标准
 

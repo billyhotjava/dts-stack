@@ -419,6 +419,87 @@ public class ModelSpecApplicationService {
         return replacement;
     }
 
+    @Transactional
+    public void deleteDraft(
+        String serverTenantId,
+        String actorId,
+        UUID modelSpecId,
+        ExpectedVersion expected
+    ) {
+        requireServerContext(serverTenantId, actorId);
+        requireCanonicalWriteEnabled();
+        if (modelSpecId == null) throw notFound(null);
+        if (expected == null) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_IF_MATCH_REQUIRED",
+                "A strong If-Match precondition is required",
+                ModelSpecException.Kind.PRECONDITION_REQUIRED
+            );
+        }
+        if (!modelSpecId.equals(expected.modelSpecId())) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_IF_MATCH_INVALID",
+                "If-Match identifies a different ModelSpec",
+                ModelSpecException.Kind.BAD_REQUEST
+            );
+        }
+
+        StoredModelSpec stored = repository.findCurrent(serverTenantId, modelSpecId).orElseThrow(() -> notFound(modelSpecId));
+        if (stored.contractVersion() != ModelSpecContract.CONTRACT_VERSION) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_LEGACY_READONLY",
+                "Legacy ModelSpec rows are read-only at the canonical boundary",
+                ModelSpecException.Kind.CONFLICT
+            );
+        }
+        ModelSpecView current = compatibilityReader.read(stored);
+        validateWriteContext(serverTenantId, actorId, current.planId(), current.domainId());
+        requireExpected(current, expected);
+        if (current.status() != ModelStatus.DRAFT) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_DELETE_STATUS_INVALID",
+                "Only DRAFT ModelSpecs can be deleted",
+                ModelSpecException.Kind.CONFLICT,
+                Map.of("status", current.status())
+            );
+        }
+        if (repository.hasActiveModelReferences(serverTenantId, modelSpecId)) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_DELETE_REFERENCED",
+                "The draft is referenced by another active ModelSpec",
+                ModelSpecException.Kind.CONFLICT
+            );
+        }
+
+        ModelSpecView archived = codec.toLifecycleView(current, ModelStatus.ARCHIVED, current.revision(), clock.instant());
+        int head = repository.compareAndSetLifecycle(
+            serverTenantId,
+            actorId,
+            current.revision(),
+            current.checksum(),
+            ModelStatus.DRAFT,
+            archived
+        );
+        if (head == 0) {
+            StoredModelSpec latest = repository.findCurrent(serverTenantId, modelSpecId).orElseThrow(() -> notFound(modelSpecId));
+            throw revisionConflict(compatibilityReader.read(latest));
+        }
+        int revision = repository.updateV2RevisionLifecycle(
+            serverTenantId,
+            actorId,
+            ModelStatus.DRAFT,
+            archived,
+            codec.write(archived)
+        );
+        if (revision == 0) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_DELETE_CONFLICT",
+                "ModelSpec changed before the draft deletion was committed",
+                ModelSpecException.Kind.CONFLICT
+            );
+        }
+    }
+
     @Transactional(readOnly = true)
     public ModelSpecView get(String serverTenantId, UUID modelSpecId) {
         requireTenant(serverTenantId);

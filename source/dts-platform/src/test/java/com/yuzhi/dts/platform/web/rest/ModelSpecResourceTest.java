@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -143,6 +144,24 @@ class ModelSpecResourceTest {
 
         verify(service, never()).create(any(), any(), any());
         verify(service, never()).update(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void deletesDraftsOnlyWithAStrongCurrentEtag() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+
+        mockMvc
+            .perform(delete("/api/modeling/model-specs/{id}", MODEL_ID))
+            .andExpect(status().isPreconditionRequired())
+            .andExpect(jsonPath("$.code").value("MODEL_SPEC_IF_MATCH_REQUIRED"));
+
+        mockMvc
+            .perform(delete("/api/modeling/model-specs/{id}", MODEL_ID).header("If-Match", ETAG))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.message").value("OK"));
+
+        verify(service).deleteDraft(eq("server-tenant"), eq("alice"), eq(MODEL_ID), any());
     }
 
     @Test

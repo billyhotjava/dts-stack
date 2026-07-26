@@ -1,9 +1,9 @@
-import { Alert, Button, Card, Empty, Input, Select, Space, Tag, Typography } from "antd";
+import { Alert, App, Button, Card, Empty, Input, Select, Space, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { PackageOpen, Plus, RefreshCw } from "lucide-react";
+import { PackageOpen, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { createModelSpec, listModelSpecs } from "@/api/modelSpecApi";
+import { createModelSpec, deleteModelSpec, listModelSpecs } from "@/api/modelSpecApi";
 import { listWarehousePlans, type WarehousePlanHeader } from "@/api/warehousePlanApi";
 import { JourneyContextBar } from "@/components/journey";
 import { CompactTable } from "@/components/table";
@@ -29,8 +29,19 @@ const modelTypeOptions = [
 const requestedModelType = (value: string | null): ModelSpecType | null =>
 	value && Object.hasOwn(MODEL_TYPE_LABELS, value) ? (value as ModelSpecType) : null;
 
+const deleteErrorMessage = (error: unknown) => {
+	const candidate = error as { response?: { data?: { code?: string; message?: string } }; message?: string };
+	const code = candidate.response?.data?.code;
+	if (code === "MODEL_SPEC_DELETE_REFERENCED") return "该草稿已被其他活动模型引用，请先解除依赖";
+	if (code === "MODEL_SPEC_DELETE_STATUS_INVALID") return "只有草稿模型可以删除";
+	if (code === "MODEL_SPEC_REVISION_CONFLICT") return "模型已被其他人更新，请刷新后重试";
+	if (code === "MODEL_SPEC_PLAN_FORBIDDEN") return "当前账号无权删除此建设计划中的模型";
+	return candidate.response?.data?.message || candidate.message || "草稿模型删除失败，请稍后重试";
+};
+
 export default function ModelCenterPage() {
 	const navigate = useNavigate();
+	const { message: toast, modal } = App.useApp();
 	const searchParams = useSearchParams();
 	const userRoles = useUserRoles();
 	const canEdit = hasWarehousePlanCreateAccess(userRoles);
@@ -45,6 +56,7 @@ export default function ModelCenterPage() {
 	const [plans, setPlans] = useState<WarehousePlanHeader[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [loadError, setLoadError] = useState("");
+	const [actionError, setActionError] = useState("");
 	const [search, setSearch] = useState("");
 	const [typeFilter, setTypeFilter] = useState<ModelTypeFilter>(
 		requestedModelType(searchParams.get("modelType")) || "ALL",
@@ -57,6 +69,7 @@ export default function ModelCenterPage() {
 	const load = useCallback(async () => {
 		setLoading(true);
 		setLoadError("");
+		setActionError("");
 		const modelRequest = listModelSpecs({ ...(planId ? { planId } : {}), ...(domainId ? { domainId } : {}) });
 		const [modelResult, planResult] = await Promise.allSettled([modelRequest, listWarehousePlans()]);
 		if (modelResult.status === "fulfilled") setModels(Array.isArray(modelResult.value) ? modelResult.value : []);
@@ -87,6 +100,7 @@ export default function ModelCenterPage() {
 	const visibleModels = useMemo(() => {
 		const keyword = search.trim().toLowerCase();
 		return models.filter((model) => {
+			if (model.status === "ARCHIVED") return false;
 			if (typeFilter !== "ALL" && model.modelType !== typeFilter) return false;
 			if (!keyword) return true;
 			return [model.name, model.description, model.grain?.statement]
@@ -98,6 +112,26 @@ export default function ModelCenterPage() {
 	const openCreate = () => {
 		setCreateType(typeFilter === "ALL" ? initialType : typeFilter);
 		setCreateOpen(true);
+	};
+
+	const confirmDelete = (model: ModelSpecView) => {
+		modal.confirm({
+			title: "删除草稿模型？",
+			content: `确认删除“${model.name}”吗？删除后模型将从模型中心移除，历史版本仍保留用于审计。`,
+			okText: "删除",
+			cancelText: "取消",
+			okButtonProps: { danger: true },
+			onOk: async () => {
+				setActionError("");
+				try {
+					await deleteModelSpec(model);
+					setModels((current) => current.filter((item) => item.id !== model.id));
+					toast.success("草稿模型已删除");
+				} catch (error) {
+					setActionError(deleteErrorMessage(error));
+				}
+			},
+		});
 	};
 
 	const setImportRoute = (open: boolean, runId = importRunId) => {
@@ -158,11 +192,18 @@ export default function ModelCenterPage() {
 		{
 			title: "操作",
 			dataIndex: "actions",
-			width: 90,
+			width: 150,
 			render: (_value, model) => (
-				<Button type="link" size="small" onClick={() => navigate(`/modeling/models/${encodeURIComponent(model.id)}`)}>
-					查看
-				</Button>
+				<Space size={0}>
+					<Button type="link" size="small" onClick={() => navigate(`/modeling/models/${encodeURIComponent(model.id)}`)}>
+						查看
+					</Button>
+					{canEdit && model.status === "DRAFT" && model.compatibilityMode === "CANONICAL" ? (
+						<Button type="link" danger size="small" icon={<Trash2 size={14} />} onClick={() => confirmDelete(model)}>
+							删除
+						</Button>
+					) : null}
+				</Space>
 			),
 		},
 	];
@@ -232,6 +273,7 @@ export default function ModelCenterPage() {
 					}
 				/>
 			) : null}
+			{actionError ? <Alert className="mb-3" type="error" showIcon message={actionError} closable /> : null}
 
 			<Card>
 				<div className="mb-3 flex flex-wrap items-center justify-between gap-3">

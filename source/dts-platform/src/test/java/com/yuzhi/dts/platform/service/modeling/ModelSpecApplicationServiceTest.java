@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -1439,6 +1440,72 @@ class ModelSpecApplicationServiceTest {
         assertCreateCode("domain-no-edit", "MODEL_SPEC_DOMAIN_FORBIDDEN");
 
         verify(repository, never()).insertV2(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void deletesAnUnreferencedDraftByArchivingItsCanonicalLedgerHead() {
+        ModelSpecView current = codec.toCreatedView(MODEL_ID, command("delete-draft", "customer_detail"), NOW);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored(current, null, null)));
+        when(compatibilityReader.read(any())).thenReturn(current);
+        when(repository.compareAndSetLifecycle(
+                eq(TENANT),
+                eq(ACTOR),
+                eq(current.revision()),
+                eq(current.checksum()),
+                eq(ModelStatus.DRAFT),
+                any()
+            ))
+            .thenReturn(1);
+        when(repository.updateV2RevisionLifecycle(eq(TENANT), eq(ACTOR), eq(ModelStatus.DRAFT), any(), anyString()))
+            .thenReturn(1);
+
+        service.deleteDraft(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            new ExpectedVersion(MODEL_ID, current.revision(), current.checksum())
+        );
+
+        verify(repository).hasActiveModelReferences(TENANT, MODEL_ID);
+        verify(repository).compareAndSetLifecycle(
+            eq(TENANT),
+            eq(ACTOR),
+            eq(current.revision()),
+            eq(current.checksum()),
+            eq(ModelStatus.DRAFT),
+            argThat(archived -> archived.status() == ModelStatus.ARCHIVED && archived.id().equals(MODEL_ID))
+        );
+        verify(repository).updateV2RevisionLifecycle(
+            eq(TENANT),
+            eq(ACTOR),
+            eq(ModelStatus.DRAFT),
+            argThat(archived -> archived.status() == ModelStatus.ARCHIVED),
+            anyString()
+        );
+    }
+
+    @Test
+    void refusesToDeleteDraftsThatAreReferencedByAnotherActiveModel() {
+        ModelSpecView current = codec.toCreatedView(MODEL_ID, command("delete-referenced", "customer_detail"), NOW);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored(current, null, null)));
+        when(compatibilityReader.read(any())).thenReturn(current);
+        when(repository.hasActiveModelReferences(TENANT, MODEL_ID)).thenReturn(true);
+
+        assertThatThrownBy(
+            () ->
+                service.deleteDraft(
+                    TENANT,
+                    ACTOR,
+                    MODEL_ID,
+                    new ExpectedVersion(MODEL_ID, current.revision(), current.checksum())
+                )
+        )
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_SPEC_DELETE_REFERENCED");
+
+        verify(repository, never()).compareAndSetLifecycle(any(), any(), anyInt(), anyString(), any(), any());
+        verify(repository, never()).updateV2RevisionLifecycle(any(), any(), any(), any(), anyString());
     }
 
     private void assertCreateCode(String idempotencyKey, String code) {

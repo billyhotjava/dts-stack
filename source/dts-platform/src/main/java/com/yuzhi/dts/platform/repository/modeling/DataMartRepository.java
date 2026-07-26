@@ -329,11 +329,9 @@ public class DataMartRepository {
             """
             update modeling_warehouse_plan
                set data_marts_version = data_marts_version + 1,
-                   last_modified_by = ?,
                    last_modified_date = ?
              where tenant_id = ? and id = ? and data_marts_version = ?
             """,
-            actorId,
             Timestamp.from(now),
             tenantId,
             planId,

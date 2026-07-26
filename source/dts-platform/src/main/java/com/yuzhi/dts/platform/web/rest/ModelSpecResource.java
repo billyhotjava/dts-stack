@@ -25,6 +25,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -146,6 +147,24 @@ public class ModelSpecResource {
         if (!decoded.valid()) throw invalidRequest(decoded.issues());
         ModelSpecView view = service.update(serverTenantId, actorId(), id, expected, decoded.command());
         return ResponseEntity.ok().eTag(ModelSpecApplicationService.etag(view)).body(ApiResponses.ok(view));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Void>> deleteDraft(
+        @PathVariable UUID id,
+        @RequestHeader(value = "If-Match", required = false) String ifMatch
+    ) {
+        ExpectedVersion expected = parseExpected(ifMatch);
+        if (!id.equals(expected.modelSpecId())) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_IF_MATCH_INVALID",
+                "If-Match identifies a different ModelSpec",
+                ModelSpecException.Kind.BAD_REQUEST
+            );
+        }
+        service.deleteDraft(serverTenantId, actorId(), id, expected);
+        return ResponseEntity.ok(ApiResponses.ok((Void) null));
     }
 
     @ExceptionHandler(ModelSpecException.class)

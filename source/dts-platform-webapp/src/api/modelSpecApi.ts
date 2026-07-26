@@ -188,6 +188,13 @@ export const updateModelSpec = (expected: ModelSpecCasToken, data: UpdateModelSp
 		_skipErrorToast: true,
 	} as any);
 
+export const deleteModelSpec = (expected: ModelSpecCasToken) =>
+	api.delete<void>({
+		url: `${MODEL_SPEC_RESOURCE}/${encodeURIComponent(expected.id)}`,
+		headers: { "If-Match": toModelSpecEtag(expected) },
+		_skipErrorToast: true,
+	} as any);
+
 export const bindModelSpecMetricRef = (expected: ModelSpecCasToken, data: { metricId: string; version: number }) =>
 	api.put<CanonicalModelSpecView>({
 		url: `${MODEL_SPEC_RESOURCE}/${encodeURIComponent(expected.id)}/metric-refs`,

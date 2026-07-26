@@ -55,6 +55,39 @@ public class ModelSpecRepository {
             .findFirst();
     }
 
+    public boolean hasActiveModelReferences(String tenantId, UUID modelSpecId) {
+        Boolean referenced = jdbcTemplate.queryForObject(
+            """
+            select exists (
+                select 1
+                  from modeling_model_spec candidate
+                 where candidate.tenant_id = ?
+                   and candidate.id <> ?
+                   and candidate.contract_version = 2
+                   and candidate.status <> 'ARCHIVED'
+                   and (
+                       exists (
+                           select 1
+                             from jsonb_array_elements(coalesce(candidate.depends_on, '[]'::jsonb)) dependency
+                            where dependency ->> 'modelSpecId' = ?
+                       )
+                       or exists (
+                           select 1
+                             from jsonb_array_elements(coalesce(candidate.dimension_refs, '[]'::jsonb)) dimension_ref
+                            where dimension_ref ->> 'modelSpecId' = ?
+                       )
+                   )
+            )
+            """,
+            Boolean.class,
+            tenantId,
+            modelSpecId,
+            modelSpecId.toString(),
+            modelSpecId.toString()
+        );
+        return Boolean.TRUE.equals(referenced);
+    }
+
     public Optional<StoredModelSpec> findByIdempotencyKey(String tenantId, String idempotencyKey) {
         return jdbcTemplate
             .query(

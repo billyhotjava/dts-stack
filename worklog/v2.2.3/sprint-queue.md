@@ -1579,7 +1579,7 @@
 ## Sprint-74: 建模创建旅程与阶段边界纠偏 (202607)
 
 **目录**: `worklog/v2.2.3/sprint-74-202607-modeling-creation-journey-correction`
-**状态**: DRAFT（架构复审待用户确认；禁止编码）
+**状态**: DRAFT（已按二次复审修订，待再次确认；禁止编码）
 **类型**: Product Journey / Modeling Contract / UI Convergence / Safe Compatibility
 **目标**: 让建模人员先根据业务目的选择正确模型类型，独立完成逻辑设计，再按需选择普通配置或高级 dbt 形成实现，并只在真实发布后查看物理结果；每个阶段只提示当前必须处理的事项。
 **依赖**: 复用 Sprint-67 的四层 canonical 对象、Sprint-69 发布控制面、Sprint-72 密级传播和 Sprint-73 数据集市/维度建模；不新建第二套模型、实现、发布或物理资产台账。
@@ -1594,7 +1594,7 @@
 | F5-集成验收与安全交付 | P0 | 2 | DRAFT |
 
 **统计**: DRAFT=16, READY=0, IN_PROGRESS=0, DONE=0, BLOCKED=0
-**执行顺序**: F0 → F1 → F2 → F3 → F4 → F5；F1 分层策略和 F2 逻辑字段契约冻结后可做有限并行，F5 是唯一 Go/No-Go 出口。
+**执行顺序**: F0 → F1 → F2 → F3 → F4 → F5；F1 类型/目标层边界和 F2 逻辑字段契约冻结后可做有限并行，F5 是唯一 Go/No-Go 出口。
 
 **关键决策**:
 
@@ -1602,9 +1602,9 @@
 - 新增 DESIGNED 门禁；逻辑模型不需要来源、物理名、装载、dbt 或发布证据即可独立完成。
 - `ModelSpecRevision` 只拥有逻辑语义；物理名、装载、分区、保留归 `ModelImplementation.settings`。
 - dbt 是数据实现方式之一，入口从“物理资产”移到“数据实现”；第三阶段对外改为只读“发布结果”。
-- 模型类型与数仓层解耦：经典计划保持 DIMENSION/FACT→DWD；DataWorks 方案显式使用 DIMENSION→DIM，不静默切换存量计划。
-- 该策略局部替代 Sprint-73 的全局 DIMENSION→DWD 硬编码决定，但不改写 Sprint-73 的 DataMart/DimensionDefinition/ModelSpec 关系。
+- 模型类型与目标层分别呈现，但本 Sprint 保持 v2.2.3 经典映射：DIMENSION/FACT→DWD、SUMMARY→DWS、APPLICATION→ADS；不新增 DIM 或 DataWorks 五层策略。
+- DataWorks 仅用于校正产品顺序；若未来确需独立 DIM 层，另立 ADR/Sprint，不在创建旅程纠偏中扩大范围。
 - 页面默认只显示当前下一道门禁；未来发布要求和可选建议不计入当前待修复数量。
 - 仅 DRAFT 且无实现/生命周期/发布候选时允许预检后追加 revision 改型，适用于当前“财务项目模型”候选纠错。
 
-**已知风险**: 自动化环境尚不能解析 `dts.local`，真实登录/API/Chrome95 基线 BLOCKED；当前工作树有 Sprint-73 在途 `implementationPolicy` 等建模修改，其对象所有权与 Sprint-74 决策冲突，实施前必须完成影响审计且不得回退未知用户修改。
+**已知风险**: 自动化环境尚不能解析 `dts.local`；当前镜像/数据库落后 Sprint-73 提交和 20260727 迁移；GitNexus 落后 HEAD 2 个提交。Sprint-73 已提交 `implementationPolicy`，必须按 expand/migrate/contract 迁入唯一 ModelImplementation owner；当前范围外 Liquibase 用户修改不得吸收或回退。

@@ -533,11 +533,14 @@
                         <testInclude>**/config/SqlTestContainer.java</testInclude>
                         <testInclude>**/config/SqlTestContainersSpringContextCustomizerFactory.java</testInclude>
                         <testInclude>**/config/TestSecurityConfiguration.java</testInclude>
+                        <testInclude>**/repository/modeling/DataMartRepositoryTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelLifecycleRepositoryTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelSpecApplicationServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelingDbtArtifactImportServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelingVNextApplicationServiceIT.java</testInclude>
                         <testInclude>**/service/modeling/imports/**/*.java</testInclude>
                         <testInclude>**/web/filter/ModelArchiveUploadLimitFilterTest.java</testInclude>
+                        <testInclude>**/web/rest/ModelSpecResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelSpecImport*.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogAssetTag*.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogExternalAssetIdentityLiquibaseIT.java</testInclude>

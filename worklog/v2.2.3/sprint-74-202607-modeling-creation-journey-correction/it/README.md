@@ -5,7 +5,7 @@
 | ID | Journey | 通过条件 | 证据文件 |
 |---|---|---|---|
 | IT-01 | 新建入口无默认类型 | 打开抽屉时未选任何类型，保存按钮不可完成 | `it-01-create-no-default/` |
-| IT-02 | 四类业务目的决策 | 四张卡均显示“适用/不适用/例子”，选择后提交正确 modelType/layer policy | `it-02-type-decision/` |
+| IT-02 | 四类业务目的决策 | 四张卡均显示“适用/不适用/例子”，选择后提交正确 modelType；服务端按经典规则返回 layer，页面分别展示二者 | `it-02-type-decision/` |
 | IT-03 | 维度逻辑设计 | 无来源、无实现保存 DIMENSION 并达到 DESIGNED | `it-03-dimension-designed/` |
 | IT-04 | 事实逻辑设计 | 业务过程→粒度→TIME 字段→维度引用闭合，错误时间引用被就地提示 | `it-04-fact-designed/` |
 | IT-05 | 当前阶段 blocker | DRAFT 只显示 DESIGNED 缺口；展开后未来项标“以后处理”且不计数 | `it-05-current-gate/` |
@@ -29,4 +29,3 @@
 6. GitNexus `detect_changes` 范围审计。
 
 任何一项缺失，Sprint 不得 DONE。
-

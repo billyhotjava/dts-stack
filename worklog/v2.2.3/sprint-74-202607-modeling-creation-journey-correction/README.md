@@ -1,7 +1,7 @@
 # Sprint-74：建模创建旅程与阶段边界纠偏
 
 **时间**：2026-07  
-**状态**：DRAFT（待本 Sprint 架构复审获批；禁止编码）  
+**状态**：DRAFT（已按二次复审修订，待再次确认；禁止编码）
 **类型**：Product Journey / Modeling Contract / UI Convergence / Safe Compatibility  
 **目标**：让建模人员先根据业务目的选择正确模型类型，独立完成逻辑设计，再按需选择普通配置或高级 dbt 形成实现，并且只在真实发布后查看物理结果；页面在每个阶段只提示当前必须处理的事项。
 
@@ -29,7 +29,7 @@
 
 参考资料用于校正产品顺序，不替换 DTS 已有 canonical 对象与发布控制面。
 
-若本 Sprint 获批，ADR-74-06 将局部替代 Sprint-73“所有 DIMENSION 固定到 DWD”的决定：经典计划仍保持 DWD；只有显式选择 `DATAWORKS_5_LAYER_V1` 的计划使用 DIM。Sprint-73 其他 DataMart/DimensionDefinition/ModelSpec 关系不变。
+2026-07-26 二次复审明确：参考 DataWorks 是为了校正“规划/逻辑设计/实现/发布结果”的顺序，不代表 v2.2.3 必须复制其独立 DIM 层。本 Sprint 保持 Sprint-73 的 `DIMENSION→DWD` 兼容决定，不新增 `DIM` 枚举或五层策略；模型类型与目标层只在概念、契约和 UI 呈现上明确分离。
 
 ## 2. 目标用户旅程
 
@@ -57,9 +57,9 @@
 | ADR-74-01 | 创建时默认模型类型 | 不设置默认值；用户必须先选业务目的和模型类型 | 默认 `FACT` 是本次误建的直接原因 | 创建抽屉、深链参数、契约测试 |
 | ADR-74-02 | 逻辑设计的完成边界 | 新增 `DESIGNED` 门禁；逻辑模型可停留在 DESIGNED，不要求来源、dbt、物理表或发布证据 | 逻辑建模与数据实现是两个可独立完成的工作成果 | 后端门禁、主动作、页面阶段 |
 | ADR-74-03 | canonical 对象所有权 | 延续 `DimensionDefinition → ModelSpecRevision → ModelImplementation → Release/Physical evidence`；禁止平行台账 | 复用 Sprint-67/69 已有 seam | ModelSpec、lifecycle、release candidate |
-| ADR-74-04 | 物理名称、装载、分区、保留期 | 归 `ModelImplementation.settings`，不得作为 `ModelSpecRevision` 的逻辑字段或 DESIGNED 门禁 | 这些内容决定如何生成，不定义业务语义 | Sprint-73 在途 `implementationPolicy` 需在编码前重新对账 |
+| ADR-74-04 | 物理名称、装载、分区、保留期 | canonical 新写归 `ModelImplementation.settings`，不得作为 `ModelSpecRevision` 的逻辑字段或 DESIGNED 门禁；Sprint-73 已提交字段走兼容迁移 | 这些内容决定如何生成，不定义业务语义；历史 snapshot 又必须保持可读 | F3/T01、F4/T03 |
 | ADR-74-05 | dbt 与物理资产关系 | dbt 是实现引擎之一；入口位于“数据实现”。“发布结果”只读展示真实 table/view、DDL、构建、测试、发布和血缘 | 物理资产是结果，不是 dbt 的同义词 | 三阶段 UI、深链、copy |
-| ADR-74-06 | 模型类型与数仓层 | 两个维度分离，由计划 `layerScheme` 解析；经典方案保持 `DIMENSION/FACT→DWD`，新增 DataWorks 方案 `DIMENSION→DIM` | 既支持 DataWorks 语义，又不静默改写存量计划 | `WarehousePlanPolicy`、Layer 枚举、兼容迁移 |
+| ADR-74-06 | 模型类型与数仓层 | 两个概念分离展示，但 v2.2.3 继续使用经典映射：`DIMENSION/FACT→DWD`、`SUMMARY→DWS`、`APPLICATION→ADS`；不新增 DIM/五层策略 | 解决用户认知混淆，同时避免把创建旅程纠偏扩大为全链路分层迁移 | ModelSpec 创建/更新/导入解析、UI copy |
 | ADR-74-07 | 字段标识 | `ModelField.name` 继续作为 ASCII 技术编码，新增 `displayName` 作为业务名称；中文旧 `name` 只读兼容并走预检纠错 | 解决“项目名称”既像业务名又被当物理字段编码的问题 | JSONB 快照、校验、字段 UI |
 | ADR-74-08 | 阶段提示 | 默认只显示当前阶段的下一道门禁；全部门禁放入可展开区。可选建议不得进入 blocker 数量 | 让用户明确“现在必须修什么” | blocker panel、stage projection |
 | ADR-74-09 | 标准、质量和密级 | 标准覆盖由计划策略控制且只在发布阶段执行；质量证据归发布控制面；密级继续复用 Sprint-72 传播门禁，可继承时不要求逐字段手填 | 避免把治理项前置为逻辑草稿必填，同时不降低合规 | plan policy、stage gate、release candidate |
@@ -93,8 +93,8 @@
 | 层 | 契约/落点 | 签名要点 |
 |---|---|---|
 | UI 入口 | `/modeling/models` → “新建模型” | 第一步选择业务目的/模型类型，无默认值；第二步保存 plan/domain/name |
-| 创建 API | `POST /api/modeling/model-specs` | body 保持 v2：`planId, domainId, modelType, name, description?, dimensionDefinitionRef?, idempotencyKey`；`layer` 由服务端按计划策略投影 |
-| 计划策略 API | `PUT /api/modeling/warehouse-plans/{planId}/baseline/policy` | `layerScheme` 扩展 `DATAWORKS_5_LAYER_V1`；保留 CAS `If-Match: "policy:{version}"` |
+| 创建 API | `POST /api/modeling/model-specs` | body 保持 v2：`planId, domainId, modelType, name, description?, dimensionDefinitionRef?, idempotencyKey`；`layer` 由服务端按 v2.2.3 经典映射投影，客户端不可覆盖 |
+| 目标层解析 | `ModelSpecContract.targetLayer(ModelType)` | 提升为公开唯一 resolver，ModelSpec create/update/import 与 WarehousePlan 命名校验共用；映射保持 `DIMENSION/FACT→DWD`、`SUMMARY→DWS`、`APPLICATION→ADS` |
 | 逻辑保存 API | `PUT /api/modeling/model-specs/{id}` | CAS；`fields[].name`=技术编码，`fields[].displayName`=业务名；不得接收新的实现设置写入 |
 | 门禁 API | `GET /api/modeling/model-specs/{id}/stage-gates` | 原数组兼容扩展 `DESIGNED`；顺序固定 `DRAFT_SAVE, DESIGNED, IMPLEMENTATION_READY, RELEASE_READY` |
 | 纠错预检 | `POST /api/modeling/model-specs/{id}/reclassify-preview` | body `{targetType, dimensionDefinitionRef?}`；返回保留/清理字段、目标层、eligibility 和 reasonCodes；零写入 |
@@ -104,21 +104,21 @@
 | 发布 | 复用 Sprint-69 `ReleaseCandidate` 控制面 | 构建、质量、审核、发布和回滚仍由唯一发布 owner 管理 |
 | 发布结果 UI | 模型详情 `activeStage=physical`，对外标签改为“发布结果” | 只读消费 lifecycle/artifacts/registration；无真实结果时只显示解释和返回实现入口 |
 | 数据 | 复用 `modeling_model_spec(_revision)`、`modeling_model_implementation(_revision)`、release candidate/lifecycle 表 | 不新建第二套模型、实现或物理资产台账 |
-| 迁移 | `20260728_01_modeling_layer_policy_and_field_display_name.xml`、`20260728_02_modeling_implementation_policy_projection.xml` | expand/migrate/contract；若序号被并行 Sprint 占用，先更新 Sprint 契约再编码 |
+| 迁移 | `20260728_01_modeling_field_display_name_and_governance_policy.xml`、`20260728_02_modeling_implementation_policy_projection.xml` | expand/migrate/contract；不改 Layer 枚举；若序号被占用，先更新 Sprint 契约再编码 |
 
 ## 7. 精确兼容策略
 
-### 7.1 分层策略
+### 7.1 模型类型与目标层兼容
 
-| `layerScheme` | DIMENSION | FACT | SUMMARY | APPLICATION |
+| 当前 v2.2.3 规则 | DIMENSION | FACT | SUMMARY | APPLICATION |
 |---|---|---|---|---|
 | `CLASSIC_ODS_DWD_DWS_ADS` | DWD | DWD | DWS | ADS |
-| `DATAWORKS_5_LAYER_V1` | DIM | DWD | DWS | ADS |
 
-- 现有计划不自动切换策略；
-- 新建计划必须显式选择；
-- 已有模型的计划切换必须先 preview；存在实现、发布候选或物理结果时 fail closed；
+- 本 Sprint 不新增 `DIM` Layer，不新增 `DATAWORKS_5_LAYER_V1`，不增加建设计划分层切换 UI；
+- `modelType` 描述业务语义，`layer` 描述当前版本的物理分层，两者在页面和 DTO 中分别展示；
+- 创建、更新、导入统一使用服务端经典映射，客户端不得自行推断或覆盖；
 - 历史 revision 的 `layer` 永不批量覆写。
+- 若未来客户明确要求独立 DIM 层，必须另立 ADR/Sprint，单独评估数据库约束、dbt/import/release/存量迁移，不在本 Sprint 预埋半套能力。
 
 ### 7.2 字段名称
 
@@ -130,14 +130,15 @@
 - 纠错 preview 提示用户确认技术编码，不用机器翻译静默生成；
 - 标准绑定、粒度键、时间字段和映射仍以技术 `name` 引用。
 
-### 7.3 Sprint-73 在途字段
+### 7.3 Sprint-73 已提交 implementationPolicy
 
-当前未提交实现正在把 `implementationPolicy.physicalName/loadStrategy/partitionFields/retentionDays` 写入 `ModelSpec` 并纳入逻辑页面。Sprint-74 的目标架构不接受该所有权：
+Sprint-73 提交 `645ea2800` 已把 `implementationPolicy.physicalName/loadStrategy/partitionFields/retentionDays` 加入 `ModelSpec` 契约和逻辑页面。它是已经进入源码的兼容事实，但不是 Sprint-74 的 canonical 新写 owner：
 
-1. 实施前必须先对未提交变更做专项影响审计；
-2. 逻辑快照若已落库，先扩展兼容读取，再投影到 `ModelImplementation.settings`；
-3. 未落库时直接停止扩大该写面；
-4. 不通过删除历史 revision 修正。
+1. 编码前先更新 GitNexus 到当前 HEAD，并对 owning symbols 做专项 impact；
+2. 新 UI 停止在逻辑表单写实现设置，canonical 新写进入 `ModelImplementation.settings`；
+3. 旧 ModelSpec snapshot 保持可读、可原样 round-trip；旧值发生修改时返回明确的“已迁移到数据实现”修复入口；
+4. 无 current ModelImplementation 时，可通过 dry-run/apply 投影为新的 implementation revision；已有 current implementation 时以后者为真值，冲突进入人工清单；
+5. 迁移完成、零旧写和零消费者证据齐备前不删字段，不通过改写历史 revision 修正。
 
 ## 8. 现状勘察账本（Context Ledger）
 
@@ -145,22 +146,24 @@
 |---|---|---|
 | L01 | 模型中心在没有深链类型时默认 `FACT` | `source/dts-platform-webapp/src/pages/modeling/ModelCenterPage.tsx:43-52` |
 | L02 | 创建抽屉已有四类下拉，但没有业务目的判断卡 | `source/dts-platform-webapp/src/pages/modeling/components/ModelSpecCreateDrawer.tsx:42-47,511-517` |
-| L03 | 当前前后端 Layer 均无 `DIM`，DIMENSION/FACT 都硬映射 DWD | `source/dts-platform-webapp/src/pages/modeling/modelSpecV2Contract.ts:67-74` |
-| L04 | 建设计划已有唯一 `layerPolicyCode` seam，当前只支持 `CLASSIC_ODS_DWD_DWS_ADS` | `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/warehouse/WarehousePlanContract.java:70-72,314-349` |
+| L03 | 当前前后端 Layer 均无 `DIM`，DIMENSION/FACT 都映射 DWD；本 Sprint 决定保持该结果并只纠正概念/UI 混淆 | `source/dts-platform-webapp/src/pages/modeling/modelSpecV2Contract.ts:67-74` |
+| L04 | `ModelSpecContract.targetLayer` 已定义经典映射，`WarehousePlanResource.expectedLayer` 又复制了一份；本 Sprint 复用前者并删除重复映射，不扩展 Layer/policy | `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/ModelSpecContract.java:218-230`; `source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/rest/WarehousePlanResource.java:371-378` |
 | L05 | 门禁 API 和 UI 只有 `DRAFT_SAVE/IMPLEMENTATION_READY/RELEASE_READY` | `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/ModelSpecStageGateService.java:795-799`; `source/dts-platform-webapp/src/api/modelSpecApi.ts:33-47` |
 | L06 | `IMPLEMENTATION_READY` 同时执行旧 ModelSpec 输入检查和新 ModelImplementation 输入检查 | `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/ModelSpecStageGateService.java:190-224,563-588` |
 | L07 | 详情页主动作未传入服务端 blocker，逻辑页可直接显示“配置数据实现” | `source/dts-platform-webapp/src/pages/modeling/ModelSpecDetailPage.tsx:664-674` |
 | L08 | 页面在三个阶段上方一次性渲染全部 gate sections | `source/dts-platform-webapp/src/pages/modeling/ModelSpecDetailPage.tsx:792-815`; `source/dts-platform-webapp/src/pages/modeling/components/ModelSpecBlockerPanel.tsx:21-99` |
 | L09 | FACT 时间字段仍是自由文本，而服务端要求命中角色为 TIME 的真实字段 | `source/dts-platform-webapp/src/pages/modeling/components/ModelSpecLogicalDesignStage.tsx:334-371`; `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/ModelSpecStageGateService.java:590-609` |
 | L10 | 字段只有一个 `name`，可输入中文，同时作为粒度、标准、时间和实现映射标识 | `source/dts-platform-webapp/src/pages/modeling/components/ModelSpecFieldsTab.tsx:74-111`; `source/dts-platform-webapp/src/pages/modeling/modelSpecV2Contract.ts:108-120` |
-| L11 | 在途修改把物理表名、装载、保留和分区放在逻辑设计中 | `source/dts-platform-webapp/src/pages/modeling/components/ModelSpecLogicalDesignStage.tsx:420-485`; `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/ModelSpecStageGateService.java:486-528` |
+| L11 | Sprint-73 已提交代码把物理表名、装载、保留和分区放在逻辑设计与实现门禁中，需按 §7.3 做兼容迁移 | `source/dts-platform-webapp/src/pages/modeling/components/ModelSpecLogicalDesignStage.tsx:420-485`; `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/ModelSpecStageGateService.java:486-528` |
 | L12 | 高级 dbt 入口位于“物理资产”，造成对象与实现引擎混淆 | `source/dts-platform-webapp/src/pages/modeling/components/ModelSpecPhysicalAssetStage.tsx:74-84` |
 | L13 | `ModelImplementation` 已有唯一输入/映射/settings/materialization 契约，可承接实现设置 | `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/ModelLifecycleContract.java:348-382`; `source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/rest/ModelLifecycleResource.java:86-110` |
 | L14 | 标准和字段安全等级当前按所有字段判定，且只在 RELEASE_READY 使用 | `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/ModelSpecStageGateService.java:621-636,719-747` |
 | L15 | 现网仅 3 个 v2 模型：2 FACT、1 DIMENSION，全部 DWD/DRAFT；0 个实现、0 个生命周期事件 | `assets/domain-profile.md` 实测 |
 | L16 | “财务项目模型”是 FACT/DWD/DRAFT r4，无实现；时间引用 `TIME` 但字段列表无 TIME 角色字段 | `assets/domain-profile.md` 实测 |
 | L17 | 当前计划策略均为经典四层；“财务规划1”允许概念设计 | `assets/domain-profile.md` 实测 |
-| L18 | 当前 worktree 有 Sprint-73 建模代码在途修改；本 Sprint 只新增文档，不触碰或回退其代码 | 2026-07-26 `git status --short` |
+| L18 | Sprint-73 已提交为 `645ea2800`，当前无 Sprint-73 未提交冲突；工作树另有本 Sprint 范围外的 Liquibase 用户修改，必须排除并保留 | 2026-07-26 `git log`、`git status --short` |
+| L19 | 当前 platform/webapp 镜像创建时间早于 Sprint-73 提交，数据库最新 changeset 停在 20260726 且无 `modeling_data_mart` | 2026-07-26 G0 实测，见 `it/baseline.md` |
+| L20 | GitNexus `s10-stack` 索引落后当前 HEAD 2 个提交 | 2026-07-26 `gitnexus list_repos` |
 
 勘察到此停止。下游 Task 必须引用账本编号，不得重复全仓扫描。
 
@@ -191,7 +194,7 @@
 | F4 | 存量纠错、治理策略与兼容 | 3 | P0 | DRAFT |
 | F5 | 集成验收与安全交付 | 2 | P0 | DRAFT |
 
-**执行顺序**：F0 → F1 → F2 → F3 → F4 → F5。F1/T01 的分层策略和 F2/T01 的逻辑字段契约冻结后，F1/T02 与 F2/T02 可并行；F3 必须等待 `DESIGNED` 契约冻结；F5 是唯一 Go/No-Go 出口。
+**执行顺序**：F0 → F1 → F2 → F3 → F4 → F5。F1/T01 的类型/目标层边界和 F2/T01 的逻辑字段契约冻结后，F1/T02 与 F2/T02 可并行；F3 必须等待 `DESIGNED` 契约冻结；F5 是唯一 Go/No-Go 出口。
 
 ## 11. 追溯矩阵
 
@@ -204,7 +207,7 @@
 | 物理资产不等于 dbt | F3 | F3/T02、F3/T03 | IT-08 |
 | 财务项目模型可安全纠错 | F4 | F4/T01 | IT-09 |
 | 标准/质量/密级不污染草稿门禁 | F4 | F4/T02 | IT-10 |
-| 旧模型与在途字段不丢数据 | F4 | F4/T03 | IT-11 |
+| 旧模型与已提交 implementationPolicy 不丢数据 | F4 | F4/T03 | IT-11 |
 | Chrome95 真实闭环 | F5 | F5/T01 | IT-01～IT-12 |
 | 可迁移、可回滚、可运营 | F5 | F5/T02 | `assets/release-plan.md`、`assets/runbook.md` |
 
@@ -216,13 +219,14 @@
 - [ ] 普通配置和高级 dbt 均写入同一 ModelImplementation 控制面。
 - [ ] “发布结果”只在有真实实现/发布证据时展示资产，不提供 dbt 编辑入口。
 - [ ] “财务项目模型”通过 preview/apply 创建新 revision 完成纠错，旧 r4 可追溯。
-- [ ] 经典四层和 DataWorks 五层按计划策略可判定，历史计划不被静默切换。
-- [ ] 旧中文字段编码、旧 sourceRefs/dependsOn 和在途 implementationPolicy 均有兼容/迁移证据。
+- [ ] 模型类型与目标层分别呈现，四类模型继续使用 v2.2.3 经典映射且历史 layer 不被改写。
+- [ ] 旧中文字段编码、旧 sourceRefs/dependsOn 和已提交 implementationPolicy 均有兼容/迁移证据。
 - [ ] 后端契约、前端 source-contract、生产构建、真实认证 API、PostgreSQL 和 Chrome95 端到端全部有证据。
 
 ## 13. 非目标
 
 - 不复制 DataWorks 的全部产品形态或术语。
+- 不在本 Sprint 新增 `DIM` 层、DataWorks 五层策略或建设计划分层切换；如有真实客户需求，另立 ADR/Sprint。
 - 不新增第二套模型、实现、发布或物理资产台账。
 - 不把 dbt 变成所有客户的必选实现。
 - 不在本 Sprint 重写 Sprint-69 发布工作台或 Sprint-72 密级传播内核。
