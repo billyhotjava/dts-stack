@@ -60,13 +60,15 @@ public class ModelReleaseCandidateService {
     private final ObjectWriter canonicalWriter;
     private final Clock clock;
     private final Supplier<UUID> idGenerator;
+    private final ModelClassificationPublishGate classificationGate;
 
     @Autowired
     public ModelReleaseCandidateService(
         ModelReleaseCandidateRepository repository,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        ModelClassificationPublishGate classificationGate
     ) {
-        this(repository, objectMapper, Clock.systemUTC(), UUID::randomUUID);
+        this(repository, objectMapper, Clock.systemUTC(), UUID::randomUUID, classificationGate);
     }
 
     ModelReleaseCandidateService(
@@ -75,10 +77,21 @@ public class ModelReleaseCandidateService {
         Clock clock,
         Supplier<UUID> idGenerator
     ) {
+        this(repository, objectMapper, clock, idGenerator, null);
+    }
+
+    ModelReleaseCandidateService(
+        ModelReleaseCandidateRepository repository,
+        ObjectMapper objectMapper,
+        Clock clock,
+        Supplier<UUID> idGenerator,
+        ModelClassificationPublishGate classificationGate
+    ) {
         this.repository = Objects.requireNonNull(repository, "repository is required");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper is required");
         this.clock = Objects.requireNonNull(clock, "clock is required");
         this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator is required");
+        this.classificationGate = classificationGate;
         this.canonicalWriter = objectMapper
             .copy()
             .setSerializationInclusion(JsonInclude.Include.ALWAYS)
@@ -355,6 +368,9 @@ public class ModelReleaseCandidateService {
         if (!DeliveryStatus.canTransition(current.status(), target)) {
             throw invalidTransition(current, target);
         }
+        if (target == DeliveryStatus.PUBLISHING && classificationGate != null) {
+            requireClassificationAdmission(tenant, current, command.idempotencyKey());
+        }
 
         Instant now = clock.instant();
         DeliveryAuditView audit = auditForTransition(current.audit(), target, actor, now);
@@ -426,6 +442,41 @@ public class ModelReleaseCandidateService {
             );
         }
         return result;
+    }
+
+    private void requireClassificationAdmission(String tenantId, CandidateView candidate, String triggerRef) {
+        List<Map<String, Object>> blocked = candidate
+            .entries()
+            .stream()
+            .map(entry ->
+                classificationGate.admitAndSeal(
+                    tenantId,
+                    entry.modelSpecId(),
+                    entry.revision(),
+                    entry.checksum(),
+                    triggerRef
+                )
+            )
+            .filter(decision -> !decision.ready())
+            .map(decision ->
+                Map.<String, Object>of(
+                    "modelSpecId",
+                    decision.modelSpecId(),
+                    "revision",
+                    decision.revision(),
+                    "blockers",
+                    decision.blockers()
+                )
+            )
+            .toList();
+        if (!blocked.isEmpty()) {
+            throw new ModelReleaseCandidateException(
+                "MODEL_RELEASE_CLASSIFICATION_BLOCKED",
+                "Release candidate classification evidence is incomplete",
+                Kind.UNPROCESSABLE,
+                Map.of("candidateId", candidate.id(), "models", blocked)
+            );
+        }
     }
 
     @Transactional(readOnly = true)

@@ -14,6 +14,7 @@ import com.yuzhi.dts.analytics.repository.AnalyticsMetricRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsSemanticJoinRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsSemanticModelRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsTableRepository;
+import com.yuzhi.dts.analytics.service.AnalyticsConsumerClassificationService;
 import com.yuzhi.dts.analytics.service.SemanticAuditService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
@@ -50,6 +51,7 @@ public class SemanticPublishResource {
     private final AnalyticsSemanticJoinRepository semanticJoinRepository;
     private final ObjectMapper objectMapper;
     private final SemanticAuditService semanticAuditService;
+    private final AnalyticsConsumerClassificationService classificationService;
 
     public SemanticPublishResource(
         AnalyticsDatabaseRepository databaseRepository,
@@ -59,7 +61,8 @@ public class SemanticPublishResource {
         AnalyticsSemanticModelRepository semanticModelRepository,
         AnalyticsSemanticJoinRepository semanticJoinRepository,
         ObjectMapper objectMapper,
-        SemanticAuditService semanticAuditService
+        SemanticAuditService semanticAuditService,
+        AnalyticsConsumerClassificationService classificationService
     ) {
         this.databaseRepository = databaseRepository;
         this.tableRepository = tableRepository;
@@ -69,6 +72,7 @@ public class SemanticPublishResource {
         this.semanticJoinRepository = semanticJoinRepository;
         this.objectMapper = objectMapper;
         this.semanticAuditService = semanticAuditService;
+        this.classificationService = classificationService;
     }
 
     @PostMapping(path = "/publish", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -361,6 +365,7 @@ public class SemanticPublishResource {
         }
 
         metric = metricRepository.save(metric);
+        classificationService.deriveMetric(metric);
         if (field != null) {
             annotateFieldRole(table.getId(), field, "measure", aggregation, displayName);
         }

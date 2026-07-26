@@ -40,6 +40,14 @@ test("asset ledger exports CSV and follows the 10-per-page pagination convention
 	assert.match(SOURCE, /pageSizeOptions=\{\[10, 20, 50, 100\]\}/);
 });
 
+test("asset ledger renders pagination below the table and aligns it to the right", () => {
+	assert.doesNotMatch(SOURCE, /extra=\{\s*<Pagination/);
+	assert.match(
+		SOURCE,
+		/renderAssetTable\(\)[\s\S]*className="asset-ledger-pagination[^"]*justify-end"[\s\S]*<Pagination/,
+	);
+});
+
 test("asset ledger has its own registration and verification shell", () => {
 	assert.match(TOOLBAR, /asset-ledger-toolbar/);
 	assert.match(SOURCE, /asset-ledger-card/);

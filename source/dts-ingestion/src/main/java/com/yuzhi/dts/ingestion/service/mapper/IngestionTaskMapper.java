@@ -29,6 +29,8 @@ public class IngestionTaskMapper {
         dto.setTableMapping(entity.getTableMapping());
         dto.setSyncConfig(entity.getSyncConfig());
         dto.setGraphDsl(entity.getGraphDsl());
+        dto.setClassificationSeal(entity.getClassificationSeal());
+        dto.setFieldClassifications(entity.getFieldClassifications());
         dto.setAddaxJobPath(entity.getAddaxJobPath());
         dto.setAddaxConfig(entity.getAddaxConfig());
         dto.setAirflowEnabled(entity.getAirflowEnabled());
@@ -70,6 +72,8 @@ public class IngestionTaskMapper {
         entity.setTableMapping(dto.getTableMapping());
         entity.setSyncConfig(dto.getSyncConfig());
         entity.setGraphDsl(dto.getGraphDsl());
+        entity.setClassificationSeal(dto.getClassificationSeal());
+        entity.setFieldClassifications(dto.getFieldClassifications());
         entity.setAddaxJobPath(dto.getAddaxJobPath());
         entity.setAddaxConfig(dto.getAddaxConfig());
         entity.setAirflowEnabled(dto.getAirflowEnabled());
@@ -122,6 +126,12 @@ public class IngestionTaskMapper {
         }
         if (dto.getGraphDsl() != null) {
             entity.setGraphDsl(dto.getGraphDsl());
+        }
+        if (dto.getClassificationSeal() != null) {
+            entity.setClassificationSeal(dto.getClassificationSeal());
+        }
+        if (dto.getFieldClassifications() != null) {
+            entity.setFieldClassifications(dto.getFieldClassifications());
         }
         if (dto.getAddaxConfig() != null) {
             entity.setAddaxConfig(dto.getAddaxConfig());

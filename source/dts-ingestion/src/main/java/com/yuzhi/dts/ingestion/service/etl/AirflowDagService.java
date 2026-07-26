@@ -1,6 +1,7 @@
 package com.yuzhi.dts.ingestion.service.etl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.ingestion.config.AddaxProperties;
 import com.yuzhi.dts.ingestion.config.AirflowProperties;
 import com.yuzhi.dts.ingestion.config.ApiProperties;
@@ -760,9 +761,10 @@ public class AirflowDagService {
         if (tableMapping == null || !tableMapping.isArray() || tableMapping.isEmpty()) {
             return "";
         }
-        List<Map<String, String>> inputs = new ArrayList<>();
-        List<Map<String, String>> outputs = new ArrayList<>();
+        List<Map<String, Object>> inputs = new ArrayList<>();
+        List<Map<String, Object>> outputs = new ArrayList<>();
         String tableFilter = stripQualifier(tableName);
+        Map<String, Object> classificationFacet = lineageClassificationFacet(task);
         for (JsonNode mapping : tableMapping) {
             if (mapping == null || !mapping.isObject()) {
                 continue;
@@ -772,8 +774,8 @@ public class AirflowDagService {
             if (StringUtils.hasText(tableFilter) && !tableFilter.equalsIgnoreCase(stripQualifier(target)) && !tableFilter.equalsIgnoreCase(stripQualifier(source))) {
                 continue;
             }
-            Map<String, String> input = lineageDataset(source, "source");
-            Map<String, String> output = lineageDataset(target, "ods");
+            Map<String, Object> input = lineageDataset(source, "source", classificationFacet);
+            Map<String, Object> output = lineageDataset(target, "ods", classificationFacet);
             if (!input.isEmpty()) {
                 inputs.add(input);
             }
@@ -795,7 +797,11 @@ public class AirflowDagService {
         }
     }
 
-    private Map<String, String> lineageDataset(String qualifiedName, String fallbackNamespace) {
+    private Map<String, Object> lineageDataset(
+        String qualifiedName,
+        String fallbackNamespace,
+        Map<String, Object> classificationFacet
+    ) {
         String value = StringUtils.hasText(qualifiedName) ? qualifiedName.trim() : null;
         if (!StringUtils.hasText(value)) {
             return Map.of();
@@ -807,10 +813,49 @@ public class AirflowDagService {
             namespace = value.substring(0, idx);
             name = value.substring(idx + 1);
         }
-        Map<String, String> dataset = new LinkedHashMap<>();
+        Map<String, Object> dataset = new LinkedHashMap<>();
         dataset.put("namespace", namespace);
         dataset.put("name", name);
+        if (classificationFacet != null && !classificationFacet.isEmpty()) {
+            dataset.put("facets", Map.of("dtsGovernance", classificationFacet));
+        }
         return dataset;
+    }
+
+    private Map<String, Object> lineageClassificationFacet(IngestionTask task) {
+        JsonNode seal = task == null ? null : task.getClassificationSeal();
+        if (seal == null || !seal.isObject()) {
+            return Map.of();
+        }
+        String effectiveLevel;
+        try {
+            effectiveLevel = SecurityLevelCatalog
+                .requireDataLevel(seal.path("effectiveLevel").asText(null))
+                .code();
+        } catch (IllegalArgumentException ex) {
+            return Map.of();
+        }
+        Map<String, Object> facet = new LinkedHashMap<>();
+        facet.put("classification", effectiveLevel);
+        copySealFacet(seal, facet, "sealId");
+        copySealFacet(seal, facet, "subjectKey");
+        copySealFacet(seal, facet, "snapshotVersion");
+        copySealFacet(seal, facet, "checksum");
+        return Map.copyOf(facet);
+    }
+
+    private void copySealFacet(JsonNode seal, Map<String, Object> facet, String field) {
+        JsonNode value = seal.get(field);
+        if (value == null || value.isNull()) {
+            return;
+        }
+        if (value.isIntegralNumber()) {
+            facet.put(field, value.longValue());
+            return;
+        }
+        if (StringUtils.hasText(value.asText())) {
+            facet.put(field, value.asText());
+        }
     }
 
     private String pythonJsonLoads(String json) {

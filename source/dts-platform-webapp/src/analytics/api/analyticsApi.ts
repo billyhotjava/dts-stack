@@ -585,6 +585,11 @@ export type ScreenListItem = {
 	// Sprint-24 F2：后端 toListResponse 已经回吐 classification，
 	// 列表卡片密级 Tag 直接消费。null 表示历史未设密级的大屏。
 	classification?: string | null;
+	manualClassificationFloor?: string | null;
+	classificationSnapshotId?: string | null;
+	classificationSnapshotVersion?: number | null;
+	classificationDerivedAt?: string | null;
+	classificationEvidence?: Record<string, unknown> | null;
 	domainId?: string | null;
 	ownerDeptCode?: string | null;
 };
@@ -1148,6 +1153,10 @@ export type ScreenExportPrepareRequest = {
 export type ScreenExportPrepareResult = {
 	allowed?: boolean;
 	screenId?: number | string;
+	classification?: string;
+	classificationSnapshotId?: string;
+	classificationSnapshotVersion?: number;
+	fileSubjectKey?: string;
 	format?: string;
 	mode?: string;
 	requestedMode?: string;
@@ -2311,17 +2320,14 @@ export const analyticsApi = {
 		body: { granteeType: string; granteeId: string; permission: string; levelOverride?: boolean },
 	) => requestJson<Record<string, unknown>>(`/bi/api/screens/${encodeURIComponent(String(id))}/grants`, "PUT", body),
 	/**
-	 * 原地更新大屏密级（PUBLIC/INTERNAL/SECRET/CONFIDENTIAL）。
-	 * 仅 owner 可调；后端会写一条 screen.classification.update 审计。
-	 *
-	 * Sprint-24 F5：降级（high → low）时 reason 必填（>=10 字符），后端会
-	 * 校验并写入审计 payload；升级 / 同级 reason 可选。
+	 * 设置大屏人工密级下限。有效密级由所有展示数据的最高密级与人工下限共同派生，
+	 * 只能升高，不能降低。
 	 */
-	updateScreenClassification: (id: string | number, classification: string, reason?: string) =>
-		requestJson<{ classification: string; changed: boolean }>(
+	updateScreenClassification: (id: string | number, classification: string) =>
+		requestJson<{ classification: string; manualClassificationFloor?: string; changed: boolean }>(
 			`/bi/api/screens/${encodeURIComponent(String(id))}/classification`,
 			"PATCH",
-			reason ? { classification, reason } : { classification },
+			{ classification },
 		),
 	revokeScreenGrant: (screenId: string | number, grantId: string | number) =>
 		requestJson<void>(

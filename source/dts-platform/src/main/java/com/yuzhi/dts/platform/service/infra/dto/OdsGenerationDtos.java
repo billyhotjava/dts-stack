@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.service.infra.dto;
 
+import com.yuzhi.dts.platform.service.catalog.dto.CatalogClassificationDtos.SealReference;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -16,6 +17,9 @@ public final class OdsGenerationDtos {
         Boolean includeTechnicalColumns,
         Boolean includeRawJson,
         String syncMode,
+        SealReference classificationSeal,
+        Map<String, String> fieldClassifications,
+        Map<String, String> storageApprovalTokens,
         List<OdsSourceTableRequest> tables
     ) {}
 
@@ -39,7 +43,8 @@ public final class OdsGenerationDtos {
         String comment,
         Boolean primaryKey,
         Boolean indexed,
-        Boolean incrementalCandidate
+        Boolean incrementalCandidate,
+        String classification
     ) {}
 
     public record OdsGenerationPreviewResponse(
@@ -48,7 +53,8 @@ public final class OdsGenerationDtos {
         String odsSchema,
         List<OdsTablePlanDto> tables,
         String dbtSourceYaml,
-        List<String> warnings
+        List<String> warnings,
+        SealReference classificationSeal
     ) {}
 
     public record OdsGenerationApplyResult(
@@ -96,6 +102,8 @@ public final class OdsGenerationDtos {
     ) {}
 
     public record OdsTablePlanDto(
+        UUID sourceDatasetId,
+        SealReference sourceClassificationSeal,
         String sourceSchema,
         String sourceTable,
         String odsSchema,
@@ -111,7 +119,8 @@ public final class OdsGenerationDtos {
         String dbtSourceYaml,
         Map<String, Object> addaxJobDraft,
         Map<String, Object> airflowDagDraft,
-        List<String> warnings
+        List<String> warnings,
+        String approvalPayloadChecksum
     ) {}
 
     public record OdsColumnPlanDto(

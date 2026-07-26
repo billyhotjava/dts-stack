@@ -73,6 +73,14 @@ public class IngestionTask extends AbstractAuditingEntity {
     @Column(name = "graph_dsl", columnDefinition = "jsonb")
     private JsonNode graphDsl; // 可视化编排 DSL（仅持久化，执行链路暂不消费）
 
+    @Type(JsonType.class)
+    @Column(name = "classification_seal", columnDefinition = "jsonb")
+    private JsonNode classificationSeal;
+
+    @Type(JsonType.class)
+    @Column(name = "field_classifications", columnDefinition = "jsonb")
+    private JsonNode fieldClassifications;
+
     // Addax配置
     @Size(max = 500)
     @Column(name = "addax_job_path", length = 500)
@@ -226,6 +234,22 @@ public class IngestionTask extends AbstractAuditingEntity {
 
     public void setGraphDsl(JsonNode graphDsl) {
         this.graphDsl = graphDsl;
+    }
+
+    public JsonNode getClassificationSeal() {
+        return classificationSeal;
+    }
+
+    public void setClassificationSeal(JsonNode classificationSeal) {
+        this.classificationSeal = classificationSeal;
+    }
+
+    public JsonNode getFieldClassifications() {
+        return fieldClassifications;
+    }
+
+    public void setFieldClassifications(JsonNode fieldClassifications) {
+        this.fieldClassifications = fieldClassifications;
     }
 
     public String getAddaxJobPath() {

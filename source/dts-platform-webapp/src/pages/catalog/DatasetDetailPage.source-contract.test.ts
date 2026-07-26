@@ -5,13 +5,13 @@ import test from "node:test";
 const SOURCE = readFileSync(new URL("./DatasetDetailPage.tsx", import.meta.url), "utf8");
 const SUPPORT_SOURCE = readFileSync(new URL("./DatasetDetailSupportTabs.tsx", import.meta.url), "utf8");
 
-test("dataset detail page treats assets-v2 as the primary asset workspace", () => {
+test("dataset detail page prefers the route-native dataset API before assets-v2 fallback", () => {
 	const firstAssetV2Read = SOURCE.indexOf("getCatalogAssetV2(id)");
-	const legacyFallbackRead = SOURCE.indexOf("const legacyDataset: any = await getDataset(id)");
+	const routeNativeRead = SOURCE.indexOf("const legacyDataset: any = await getDataset(id)");
 
 	assert.ok(firstAssetV2Read > 0, "expected assets-v2 detail API to be called");
-	assert.ok(legacyFallbackRead > 0, "expected legacy dataset fallback to remain available");
-	assert.ok(firstAssetV2Read < legacyFallbackRead, "assets-v2 must be attempted before legacy dataset fallback");
+	assert.ok(routeNativeRead > 0, "expected route-native dataset API to remain available");
+	assert.ok(routeNativeRead < firstAssetV2Read, "dataset routes must avoid a noisy assets-v2 miss for legacy ids");
 
 	assert.match(SOURCE, /企业级资产工作台/);
 	assert.match(SOURCE, /授权资产/);

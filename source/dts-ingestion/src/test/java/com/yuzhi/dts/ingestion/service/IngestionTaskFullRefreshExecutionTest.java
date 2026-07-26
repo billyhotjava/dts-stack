@@ -110,6 +110,9 @@ class IngestionTaskFullRefreshExecutionTest {
     private ApiIngestionExecutor apiIngestionExecutor;
 
     @Mock
+    private IngestionClassificationSealGuard classificationSealGuard;
+
+    @Mock
     private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private IngestionTaskService service;
@@ -140,6 +143,7 @@ class IngestionTaskFullRefreshExecutionTest {
             platformInfraClient,
             sourceConnectorRegistry,
             apiIngestionExecutor,
+            classificationSealGuard,
             transactionManager,
             Runnable::run
         );

@@ -53,6 +53,7 @@ public class ModelLifecycleService {
     private final ModelLifecyclePublicationService publication;
     private final ModelingVNextApplicationService runtime;
     private final ModelImplementationCompatibilityAdapter implementationCompatibility;
+    private final ModelClassificationPublishGate classificationGate;
     private final Clock clock;
 
     @Autowired
@@ -67,7 +68,8 @@ public class ModelLifecycleService {
         ModelLifecycleTestEvidencePort testEvidence,
         ModelLifecyclePublicationService publication,
         ModelingVNextApplicationService runtime,
-        ModelImplementationCompatibilityAdapter implementationCompatibility
+        ModelImplementationCompatibilityAdapter implementationCompatibility,
+        ModelClassificationPublishGate classificationGate
     ) {
         this(
             modelSpecs,
@@ -81,6 +83,7 @@ public class ModelLifecycleService {
             publication,
             runtime,
             implementationCompatibility,
+            classificationGate,
             Clock.systemUTC()
         );
     }
@@ -110,6 +113,7 @@ public class ModelLifecycleService {
             publication,
             runtime,
             new ModelImplementationCompatibilityAdapter(modelSpecs, modelSpecRepository, lifecycle, null),
+            null,
             clock
         );
     }
@@ -128,6 +132,38 @@ public class ModelLifecycleService {
         ModelImplementationCompatibilityAdapter implementationCompatibility,
         Clock clock
     ) {
+        this(
+            modelSpecs,
+            modelSpecRepository,
+            lifecycle,
+            stageGates,
+            writeAccess,
+            compiler,
+            registrations,
+            testEvidence,
+            publication,
+            runtime,
+            implementationCompatibility,
+            null,
+            clock
+        );
+    }
+
+    ModelLifecycleService(
+        ModelSpecApplicationService modelSpecs,
+        ModelSpecRepository modelSpecRepository,
+        ModelLifecycleRepository lifecycle,
+        ModelSpecStageGateService stageGates,
+        ModelSpecPlanWriteAccessPort writeAccess,
+        ModelLifecycleCompilerPort compiler,
+        ModelReleaseRegistrationPort registrations,
+        ModelLifecycleTestEvidencePort testEvidence,
+        ModelLifecyclePublicationService publication,
+        ModelingVNextApplicationService runtime,
+        ModelImplementationCompatibilityAdapter implementationCompatibility,
+        ModelClassificationPublishGate classificationGate,
+        Clock clock
+    ) {
         this.modelSpecs = modelSpecs;
         this.modelSpecRepository = modelSpecRepository;
         this.lifecycle = lifecycle;
@@ -139,6 +175,7 @@ public class ModelLifecycleService {
         this.publication = publication;
         this.runtime = runtime;
         this.implementationCompatibility = implementationCompatibility;
+        this.classificationGate = classificationGate;
         this.clock = clock;
     }
 
@@ -451,6 +488,7 @@ public class ModelLifecycleService {
         lockCurrentImplementation(tenantId, modelSpecId, owner);
         requireText(command == null ? null : command.idempotencyKey(), "MODEL_REVIEW_IDEMPOTENCY_REQUIRED");
         requireGate(tenantId, modelSpecId, Stage.RELEASE_READY);
+        requireClassificationGate(tenantId, model, false, command.idempotencyKey());
         return lifecycle.recordEvent(
             tenantId,
             actorId,
@@ -533,6 +571,7 @@ public class ModelLifecycleService {
             throw conflict("MODEL_RELEASE_DRAFT_REQUIRED", "Only a reviewed draft can be published");
         }
         requireGate(tenantId, modelSpecId, Stage.RELEASE_READY);
+        requireClassificationGate(tenantId, current, true, command.idempotencyKey());
         if (
             lifecycle
                 .findLatestEvent(
@@ -751,6 +790,43 @@ public class ModelLifecycleService {
                 "ModelSpec lifecycle gate is blocked",
                 ModelSpecException.Kind.UNPROCESSABLE,
                 Map.of("stage", stage.name(), "blockers", gate.blockers())
+            );
+        }
+    }
+
+    private void requireClassificationGate(
+        String tenantId,
+        ModelSpecView model,
+        boolean sealOutput,
+        String triggerRef
+    ) {
+        if (classificationGate == null) {
+            return;
+        }
+        ModelClassificationPublishGate.Decision decision = sealOutput
+            ? classificationGate.admitAndSeal(
+                tenantId,
+                model.id(),
+                model.revision(),
+                model.checksum(),
+                triggerRef
+            )
+            : classificationGate.evaluate(tenantId, model.id(), model.revision(), model.checksum());
+        if (!decision.ready()) {
+            throw new ModelSpecException(
+                "MODEL_CLASSIFICATION_GATE_BLOCKED",
+                "ModelSpec classification evidence is incomplete",
+                ModelSpecException.Kind.UNPROCESSABLE,
+                Map.of(
+                    "modelSpecId",
+                    model.id(),
+                    "revision",
+                    model.revision(),
+                    "outputSubjectKey",
+                    decision.outputSubjectKey(),
+                    "blockers",
+                    decision.blockers()
+                )
             );
         }
     }

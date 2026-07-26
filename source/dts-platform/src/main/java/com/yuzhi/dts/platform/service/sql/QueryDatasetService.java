@@ -18,6 +18,11 @@ import com.yuzhi.dts.platform.service.sql.dto.CreateQueryDatasetVersionRequest;
 import com.yuzhi.dts.platform.service.sql.dto.PublishQueryDatasetRequest;
 import com.yuzhi.dts.platform.service.sql.dto.QueryDatasetResponse;
 import com.yuzhi.dts.platform.service.sql.dto.QueryDatasetVersionResponse;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetType;
+import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService;
+import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.DeriveCommand;
+import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.SubjectRef;
 import java.lang.reflect.Array;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -47,6 +52,7 @@ public class QueryDatasetService {
     private final QueryExecutionRepository executionRepository;
     private final ResultSetRepository resultSetRepository;
     private final ModelingSqlModelRepository modelingSqlModelRepository;
+    private final CatalogConsumerClassificationService consumerClassificationService;
 
     public QueryDatasetService(
         QueryDatasetAssetRepository assetRepository,
@@ -55,11 +61,31 @@ public class QueryDatasetService {
         ResultSetRepository resultSetRepository,
         ModelingSqlModelRepository modelingSqlModelRepository
     ) {
+        this(
+            assetRepository,
+            versionRepository,
+            executionRepository,
+            resultSetRepository,
+            modelingSqlModelRepository,
+            null
+        );
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public QueryDatasetService(
+        QueryDatasetAssetRepository assetRepository,
+        QueryDatasetVersionRepository versionRepository,
+        QueryExecutionRepository executionRepository,
+        ResultSetRepository resultSetRepository,
+        ModelingSqlModelRepository modelingSqlModelRepository,
+        CatalogConsumerClassificationService consumerClassificationService
+    ) {
         this.assetRepository = assetRepository;
         this.versionRepository = versionRepository;
         this.executionRepository = executionRepository;
         this.resultSetRepository = resultSetRepository;
         this.modelingSqlModelRepository = modelingSqlModelRepository;
+        this.consumerClassificationService = consumerClassificationService;
     }
 
     @Transactional(readOnly = true)
@@ -178,6 +204,7 @@ public class QueryDatasetService {
         assertWritable(asset, resolveActiveDept(activeDeptHeader));
 
         QueryDatasetVersion target = resolveTargetVersion(datasetId, request != null ? request.versionNo() : null);
+        requireDerivedClassification(asset, target.getSqlText());
 
         List<QueryDatasetVersion> versions = versionRepository.findByDataset_IdOrderByVersionNoDesc(datasetId);
         for (QueryDatasetVersion version : versions) {
@@ -205,6 +232,45 @@ public class QueryDatasetService {
         assetRepository.save(asset);
 
         return toVersionDto(target);
+    }
+
+    private void requireDerivedClassification(QueryDatasetAsset asset, String sqlText) {
+        if (consumerClassificationService == null) {
+            return;
+        }
+        Map<String, ModelingSqlModel> models = loadModelIndex();
+        Set<String> names = extractReferencedModels(sqlText);
+        List<SubjectRef> upstreams = names
+            .stream()
+            .map(models::get)
+            .filter(Objects::nonNull)
+            .map(model ->
+                new SubjectRef(
+                    "ASSET",
+                    CatalogAssetKey.codeAsset(
+                        CatalogAssetType.MODELING_SQL_MODEL,
+                        "default",
+                        model.getName()
+                    )
+                )
+            )
+            .distinct()
+            .toList();
+        if (names.isEmpty() || upstreams.size() != names.size()) {
+            throw new ResponseStatusException(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "查询数据集存在未解析的模型来源，无法确定发布密级"
+            );
+        }
+        consumerClassificationService.derive(
+            new DeriveCommand(
+                "REPORT",
+                CatalogAssetKey.biDataset(asset.getId()),
+                null,
+                upstreams,
+                "query-dataset:" + asset.getId()
+            )
+        );
     }
 
     public QueryDatasetResponse archive(UUID datasetId, String activeDeptHeader) {

@@ -14,6 +14,9 @@ import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetType;
 import com.yuzhi.dts.platform.service.catalog.CodeAssetLifecycleMapper;
 import com.yuzhi.dts.platform.service.catalog.CodeAssetGrantWriter;
+import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService;
+import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.DeriveCommand;
+import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.SubjectRef;
 import com.yuzhi.dts.platform.service.services.dto.*;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
@@ -45,6 +48,7 @@ public class ApiCatalogService {
     private final CatalogDatasetRepository datasetRepository;
     private final ObjectMapper objectMapper;
     private final CodeAssetGrantWriter codeAssetGrantWriter;
+    private final CatalogConsumerClassificationService consumerClassificationService;
 
     public ApiCatalogService(
         SvcApiRepository apiRepository,
@@ -53,11 +57,24 @@ public class ApiCatalogService {
         ObjectMapper objectMapper,
         CodeAssetGrantWriter codeAssetGrantWriter
     ) {
+        this(apiRepository, metricRepository, datasetRepository, objectMapper, codeAssetGrantWriter, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ApiCatalogService(
+        SvcApiRepository apiRepository,
+        SvcApiMetricHourlyRepository metricRepository,
+        CatalogDatasetRepository datasetRepository,
+        ObjectMapper objectMapper,
+        CodeAssetGrantWriter codeAssetGrantWriter,
+        CatalogConsumerClassificationService consumerClassificationService
+    ) {
         this.apiRepository = apiRepository;
         this.metricRepository = metricRepository;
         this.datasetRepository = datasetRepository;
         this.objectMapper = objectMapper;
         this.codeAssetGrantWriter = codeAssetGrantWriter;
+        this.consumerClassificationService = consumerClassificationService;
     }
 
     public List<ApiServiceSummaryDto> list(String keyword, String method, String status) {
@@ -90,6 +107,7 @@ public class ApiCatalogService {
 
     public ApiTryInvokeResponseDto tryInvoke(UUID id, ApiTryInvokeRequestDto request) {
         SvcApi api = apiRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("API not found"));
+        requireCurrentClassification(api);
         List<ApiFieldDto> outputFields = parseFields(api.getResponseSchemaJson());
         if (outputFields.isEmpty()) {
             return new ApiTryInvokeResponseDto(List.of(), List.of(), List.of(), 0, List.of());
@@ -139,6 +157,7 @@ public class ApiCatalogService {
     @Transactional
     public ApiServiceDetailDto publish(UUID id, String version, String username) {
         SvcApi api = apiRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("API not found"));
+        requireDerivedClassification(api, api.getClassification());
         String resolvedVersion = StringUtils.hasText(version) ? version : nextVersion(api.getLatestVersion());
         api.setLatestVersion(resolvedVersion);
         api.setStatus("PUBLISHED");
@@ -253,6 +272,9 @@ public class ApiCatalogService {
             api.setDatasetId(null);
             api.setDatasetName(null);
         }
+        if (api.getDatasetId() != null) {
+            requireDerivedClassification(api, request.classification());
+        }
 
         api.setPolicyJson(serializeNullable(request.policy()));
         api.setRequestSchemaJson(serializeNullable(request.requestSchema()));
@@ -262,6 +284,38 @@ public class ApiCatalogService {
             api.setCreatedBy(username);
         }
         api.setLastModifiedBy(username);
+    }
+
+    private void requireDerivedClassification(SvcApi api, String manualFloor) {
+        if (consumerClassificationService == null) {
+            return;
+        }
+        if (api.getDatasetId() == null) {
+            throw new IllegalStateException("API publication requires a bound dataset classification source");
+        }
+        CatalogDataset dataset = datasetRepository
+            .findById(api.getDatasetId())
+            .orElseThrow(() -> new IllegalStateException("API dataset does not exist"));
+        var result = consumerClassificationService.derive(
+            new DeriveCommand(
+                "API",
+                CatalogAssetKey.codeAsset(CatalogAssetType.API_SERVICE, "default", api.getCode()),
+                manualFloor,
+                List.of(new SubjectRef("ASSET", CatalogAssetKey.dataset(dataset))),
+                "svc-api:" + api.getCode()
+            )
+        );
+        api.setClassification(result.effectiveLevel());
+    }
+
+    private void requireCurrentClassification(SvcApi api) {
+        if (consumerClassificationService == null) {
+            return;
+        }
+        consumerClassificationService.requireCurrentConsumer(
+            "API",
+            CatalogAssetKey.codeAsset(CatalogAssetType.API_SERVICE, "default", api.getCode())
+        );
     }
 
     private String serializeNullable(Object value) {

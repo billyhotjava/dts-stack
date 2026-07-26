@@ -59,6 +59,7 @@ type WarehousePlanSourcesTabProps = {
 	onOpenCatalog: () => void;
 	onSaved: (result: WarehousePlanSourcesSaveResult) => Promise<void> | void;
 	onSavingChange?: (saving: boolean) => void;
+	registrationOpenByDefault?: boolean;
 };
 
 const SOURCE_TYPE_LABELS: Record<WarehousePlanSourceType, string> = {
@@ -78,7 +79,7 @@ const SOURCE_READINESS_LABELS: Record<WarehousePlanSourceInventoryReadiness, str
 	DRAFT: "待确认",
 	READY: "来源已就绪",
 	BLOCKED: "需要修复来源",
-	NOT_REQUIRED_YET: "NOT_REQUIRED_YET · 当前阶段无需登记",
+	NOT_REQUIRED_YET: "尚未登记来源",
 };
 
 const SOURCE_ISSUE_MESSAGES: Record<string, string> = {
@@ -112,7 +113,7 @@ const freshnessColor = (freshness: WarehousePlanSourceFreshness): string => {
 const readinessColor = (readiness: WarehousePlanSourceInventoryReadiness): string => {
 	if (readiness === "READY") return "green";
 	if (readiness === "BLOCKED") return "red";
-	if (readiness === "NOT_REQUIRED_YET") return "blue";
+	if (readiness === "NOT_REQUIRED_YET") return "gold";
 	return "gold";
 };
 
@@ -146,6 +147,7 @@ export function WarehousePlanSourcesTab({
 	onOpenCatalog,
 	onSaved,
 	onSavingChange,
+	registrationOpenByDefault = false,
 }: WarehousePlanSourcesTabProps) {
 	const [form] = Form.useForm<WarehousePlanSourcesFormValue>();
 	const [inventory, setInventory] = useState<WarehousePlanSourceInventoryView | null>(null);
@@ -154,6 +156,8 @@ export function WarehousePlanSourcesTab({
 	const [saving, setSaving] = useState(false);
 	const [dirty, setDirtyValue] = useState(false);
 	const [conflictVersion, setConflictVersion] = useState<number | null>(null);
+	const [registrationExpanded, setRegistrationExpanded] = useState(registrationOpenByDefault);
+	const [catalogRegistrationOpen, setCatalogRegistrationOpen] = useState(false);
 	const [connectionOptions, setConnectionOptions] = useState<VerifiedConnectionChoice[]>([]);
 	const [connectionCatalogTables, setConnectionCatalogTables] = useState<CatalogTableSummary[]>([]);
 	const [connectionCatalogTotal, setConnectionCatalogTotal] = useState(0);
@@ -380,6 +384,8 @@ export function WarehousePlanSourcesTab({
 		}
 		setInventory(null);
 		setConflictVersion(null);
+		setRegistrationExpanded(registrationOpenByDefault);
+		setCatalogRegistrationOpen(false);
 		setConnectionOptions([]);
 		setConnectionCatalogTables([]);
 		setConnectionCatalogTotal(0);
@@ -402,7 +408,6 @@ export function WarehousePlanSourcesTab({
 		setDirty(false);
 		form.resetFields();
 		void loadSources(true);
-		void loadVerifiedConnections();
 		return () => {
 			if (connectionSearchTimerRef.current) {
 				clearTimeout(connectionSearchTimerRef.current);
@@ -423,8 +428,8 @@ export function WarehousePlanSourcesTab({
 		form,
 		loadGuard,
 		loadSources,
-		loadVerifiedConnections,
 		mutationGuard,
+		registrationOpenByDefault,
 		setDirty,
 		setSavingState,
 	]);
@@ -634,6 +639,21 @@ export function WarehousePlanSourcesTab({
 		}
 	};
 
+	const sourceRegistrationDeferred =
+		onboardingMode === "BUSINESS_FIRST" &&
+		conceptualDesignAllowed &&
+		inventory?.readiness === "NOT_REQUIRED_YET" &&
+		inventory.bindings.length === 0;
+	const showSourceRegistrationControls =
+		registrationOpenByDefault || registrationExpanded || !sourceRegistrationDeferred;
+	const sourceContextDescription = sourceRegistrationDeferred
+		? "先完成业务范围、维度、事实与粒度等逻辑设计；进入模型实现时再补充具体来源。"
+		: onboardingMode === "ASSET_FIRST"
+			? "核对已登记的数据来源，并明确确认或排除。"
+			: conceptualDesignAllowed
+				? "已有来源可在这里核对；新增物理来源只在进入模型实现时需要。"
+				: "请先登记来源，或在数仓分层中显式允许先做概念设计。";
+
 	if (loading && !inventory) {
 		return <Skeleton active paragraph={{ rows: 5 }} />;
 	}
@@ -655,17 +675,17 @@ export function WarehousePlanSourcesTab({
 		<div className="max-w-5xl space-y-4" data-testid="warehouse-plan-sources-tab">
 			<div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 px-4 py-3">
 				<div>
-					<div className="font-medium">数据从哪里来</div>
-					<Text type="secondary">
-						{onboardingMode === "ASSET_FIRST"
-							? "核对已登记的数据来源，并明确确认或排除。"
-							: conceptualDesignAllowed
-								? "当前策略允许先完成概念设计；生成或实现模型前仍需补齐来源。"
-								: "请先登记来源，或在数仓分层中显式允许先做概念设计。"}
-					</Text>
+					<div className="font-medium">
+						{sourceRegistrationDeferred ? "概念设计阶段无需选择数据表" : "确认模型实现的数据来源"}
+					</div>
+					<Text type="secondary">{sourceContextDescription}</Text>
 				</div>
-				<Tag color={inventory ? readinessColor(inventory.readiness) : "default"}>
-					{inventory ? SOURCE_READINESS_LABELS[inventory.readiness] : "状态未知"}
+				<Tag color={sourceRegistrationDeferred ? "blue" : inventory ? readinessColor(inventory.readiness) : "default"}>
+					{sourceRegistrationDeferred
+						? "可先进行概念设计"
+						: inventory
+							? SOURCE_READINESS_LABELS[inventory.readiness]
+							: "状态未知"}
 				</Tag>
 			</div>
 
@@ -716,13 +736,26 @@ export function WarehousePlanSourcesTab({
 
 			{inventory?.readiness === "NOT_REQUIRED_YET" ? (
 				<Alert
-					type="info"
+					type={conceptualDesignAllowed ? "info" : "warning"}
 					showIcon
-					message={conceptualDesignAllowed ? "当前策略允许先做概念设计" : "当前尚未登记来源"}
+					message={conceptualDesignAllowed ? "当前无需登记来源" : "当前尚未登记来源"}
 					description={
 						conceptualDesignAllowed
-							? "这不是完成状态；进入模型生成或实现前仍需登记可核验来源。"
+							? "来源盘点不是概念设计的前置条件；只有模型实现需要使用已有物理数据时，才选择连接和具体表。"
 							: "请先登记来源，或在数仓分层中开启“来源未齐时允许概念设计”。"
+					}
+					action={
+						conceptualDesignAllowed && editable && !registrationOpenByDefault ? (
+							<Button
+								size="small"
+								onClick={() => {
+									setRegistrationExpanded((expanded) => !expanded);
+									setCatalogRegistrationOpen(false);
+								}}
+							>
+								{showSourceRegistrationControls ? "暂不登记" : "提前登记已有来源"}
+							</Button>
+						) : undefined
 					}
 				/>
 			) : null}
@@ -821,17 +854,17 @@ export function WarehousePlanSourcesTab({
 						</div>
 					</div>
 				</Form>
-			) : (
+			) : showSourceRegistrationControls ? (
 				<div className="rounded-xl border border-dashed border-slate-300 p-5">
-					<Title level={5}>尚未登记来源</Title>
+					<Title level={5}>{sourceRegistrationDeferred ? "提前登记已有来源" : "尚未登记来源"}</Title>
 					<Paragraph type="secondary">
-						连接测试只验证网络和凭据，不会自动把全部表加入规划。请在下方选择已验证连接、Schema
-						和具体表；系统将自动关联来源标识和版本。
+						连接测试只验证网络和凭据，不会自动把全部表加入规划。需要使用已有物理数据时，请在下方选择已验证连接、Schema
+						和具体表。
 					</Paragraph>
 				</div>
-			)}
+			) : null}
 
-			{inventory && editable ? (
+			{inventory && editable && showSourceRegistrationControls ? (
 				<div
 					className="rounded-xl border border-blue-200 bg-blue-50/40 p-4"
 					data-testid="verified-connection-source-registration"
@@ -940,59 +973,91 @@ export function WarehousePlanSourcesTab({
 				</div>
 			) : null}
 
-			{inventory && editable ? (
-				<div className="rounded-xl border border-slate-200 p-4" data-testid="catalog-source-registration">
-					<div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-						<div>
-							<div className="font-medium">其他资产目录入口</div>
-							<Text type="secondary">用于没有对应连接的目录资产；登记后再确认是否纳入当前计划。</Text>
+			{inventory && editable && showSourceRegistrationControls ? (
+				catalogRegistrationOpen ? (
+					<div className="rounded-xl border border-slate-200 p-4" data-testid="catalog-source-registration">
+						<div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+							<div>
+								<div className="font-medium">从资产目录选择无连接资产</div>
+								<Text type="secondary">
+									仅用于已在资产目录登记、但确实没有对应数据连接的特殊资产；常规数据库表请使用上方连接路径。
+								</Text>
+							</div>
+							<Space wrap>
+								<Typography.Link onClick={onOpenCatalog}>管理或同步资产目录</Typography.Link>
+								<Button
+									type="link"
+									onClick={() => {
+										setCatalogRegistrationOpen(false);
+										setSelectedCatalogDatasetId(null);
+										setSelectedAssetId(null);
+										setCatalogOptions([]);
+									}}
+								>
+									收起
+								</Button>
+							</Space>
 						</div>
-						<Typography.Link onClick={onOpenCatalog}>管理或同步资产目录</Typography.Link>
+						<div className="grid gap-2 md:grid-cols-[minmax(180px,1fr)_minmax(180px,1fr)_auto]">
+							<Select
+								showSearch
+								optionFilterProp="label"
+								placeholder="1. 选择数据集"
+								value={selectedCatalogDatasetId}
+								options={catalogDatasetOptions}
+								loading={catalogDatasetLoading}
+								notFoundContent={catalogDatasetLoading ? "正在加载…" : "暂无可用数据集"}
+								onDropdownVisibleChange={(open) => {
+									if (open) void loadCatalogDatasets();
+								}}
+								onChange={(datasetId) => {
+									setSelectedCatalogDatasetId(datasetId);
+									setSelectedAssetId(null);
+									setCatalogOptions([]);
+									void loadCatalogTables(datasetId);
+								}}
+							/>
+							<Select
+								showSearch
+								optionFilterProp="label"
+								placeholder="2. 选择数据表"
+								disabled={!selectedCatalogDatasetId}
+								value={selectedAssetId}
+								options={catalogOptions}
+								loading={catalogTableLoading}
+								notFoundContent={catalogTableLoading ? "正在加载…" : "该数据集暂无可登记表"}
+								onDropdownVisibleChange={(open) => {
+									if (open && selectedCatalogDatasetId) void loadCatalogTables(selectedCatalogDatasetId);
+								}}
+								onChange={setSelectedAssetId}
+							/>
+							<Button
+								icon={<Database size={16} />}
+								loading={saving}
+								disabled={!selectedAssetId || conflictVersion != null}
+								onClick={() => void registerCatalogAsset()}
+							>
+								3. 登记目录资产
+							</Button>
+						</div>
 					</div>
-					<div className="grid gap-2 md:grid-cols-[minmax(180px,1fr)_minmax(180px,1fr)_auto]">
-						<Select
-							showSearch
-							optionFilterProp="label"
-							placeholder="1. 选择数据集"
-							value={selectedCatalogDatasetId}
-							options={catalogDatasetOptions}
-							loading={catalogDatasetLoading}
-							notFoundContent={catalogDatasetLoading ? "正在加载…" : "暂无可用数据集"}
-							onDropdownVisibleChange={(open) => {
-								if (open) void loadCatalogDatasets();
-							}}
-							onChange={(datasetId) => {
-								setSelectedCatalogDatasetId(datasetId);
-								setSelectedAssetId(null);
-								setCatalogOptions([]);
-								void loadCatalogTables(datasetId);
-							}}
-						/>
-						<Select
-							showSearch
-							optionFilterProp="label"
-							placeholder="2. 选择数据表"
-							disabled={!selectedCatalogDatasetId}
-							value={selectedAssetId}
-							options={catalogOptions}
-							loading={catalogTableLoading}
-							notFoundContent={catalogTableLoading ? "正在加载…" : "该数据集暂无可登记表"}
-							onDropdownVisibleChange={(open) => {
-								if (open && selectedCatalogDatasetId) void loadCatalogTables(selectedCatalogDatasetId);
-							}}
-							onChange={setSelectedAssetId}
-						/>
+				) : (
+					<div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-slate-200 px-4 py-3">
+						<div>
+							<div className="text-sm font-medium">没有对应数据连接的特殊资产</div>
+							<Text type="secondary">常规数据库表无需使用额外的资产目录选择器。</Text>
+						</div>
 						<Button
-							type="primary"
-							icon={<Database size={16} />}
-							loading={saving}
-							disabled={!selectedAssetId || conflictVersion != null}
-							onClick={() => void registerCatalogAsset()}
+							type="link"
+							onClick={() => {
+								setCatalogRegistrationOpen(true);
+								void loadCatalogDatasets();
+							}}
 						>
-							3. 登记目录资产
+							从资产目录选择
 						</Button>
 					</div>
-				</div>
+				)
 			) : null}
 
 			{loading && inventory ? (

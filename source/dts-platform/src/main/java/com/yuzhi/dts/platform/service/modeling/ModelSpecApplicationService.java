@@ -227,7 +227,11 @@ public class ModelSpecApplicationService {
     ) {
         requireServerContext(serverTenantId, actorId);
         requireDimensionDefinitionRef(command);
-        rejectIssues(ModelSpecContract.validateCreate(command));
+        rejectIssues(
+            previewedModelSpecId == null
+                ? ModelSpecContract.validateInteractiveCreate(command)
+                : ModelSpecContract.validateCreate(command)
+        );
         String requestHash = codec.requestHash(command);
         StoredModelSpec existing = repository.findByIdempotencyKey(serverTenantId, command.idempotencyKey()).orElse(null);
         if (existing != null) {

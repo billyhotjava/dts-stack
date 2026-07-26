@@ -1,6 +1,5 @@
 package com.yuzhi.dts.platform.service.infra;
 
-import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogSchemaDriftEvent;
@@ -47,7 +46,6 @@ public class InceptorCatalogSyncService {
 
     private static final Logger LOG = LoggerFactory.getLogger(InceptorCatalogSyncService.class);
     private static final String DATASET_TYPE = "INCEPTOR";
-    private static final String DEFAULT_CLASSIFICATION = SecurityLevelCatalog.DEFAULT_DATA_SECURITY_LEVEL.code();
     private static final String DEFAULT_OWNER = "system";
     private static final String DEFAULT_EXPOSED_BY = "VIEW";
 
@@ -189,7 +187,6 @@ public class InceptorCatalogSyncService {
             dataset.setSnapshotTime(snapshotTime);
             dataset.setType(DATASET_TYPE);
             dataset.setName(defaultIfBlank(dataset.getName(), tableName));
-            dataset.setClassification(defaultIfBlank(dataset.getClassification(), DEFAULT_CLASSIFICATION));
             dataset.setOwner(defaultIfBlank(dataset.getOwner(), DEFAULT_OWNER));
             dataset.setExposedBy(defaultIfBlank(dataset.getExposedBy(), DEFAULT_EXPOSED_BY));
 
@@ -212,7 +209,9 @@ public class InceptorCatalogSyncService {
 
             boolean isNewTable = tableSchema.getId() == null;
             tableSchema.setOwner(defaultIfBlank(tableSchema.getOwner(), dataset.getOwner()));
-            tableSchema.setClassification(defaultIfBlank(tableSchema.getClassification(), dataset.getClassification()));
+            if (StringUtils.hasText(dataset.getClassification())) {
+                tableSchema.setClassification(defaultIfBlank(tableSchema.getClassification(), dataset.getClassification()));
+            }
             tableSchema = tableRepository.save(tableSchema);
             if (isNewTable) {
                 tablesCreated++;

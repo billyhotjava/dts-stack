@@ -149,14 +149,14 @@ export const normalizeLayer = (value?: string) => {
 	return normalized && LAYER_META[normalized] ? normalized : "OTHER";
 };
 
-export const classificationText = (value?: string) => {
+export const classificationText = (value?: string | null) => {
 	const normalized = String(value || "")
 		.trim()
 		.toUpperCase();
 	return normalized ? CLASSIFICATION_LABEL[normalized] || normalized : "未设定";
 };
 
-export const formatTime = (value?: string) => {
+export const formatTime = (value?: string | null) => {
 	if (!value) return "-";
 	try {
 		return new Date(value).toLocaleString();

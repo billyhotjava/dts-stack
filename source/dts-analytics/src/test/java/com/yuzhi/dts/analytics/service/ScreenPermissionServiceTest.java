@@ -39,6 +39,7 @@ class ScreenPermissionServiceTest {
     private AnalyticsScreen screen(long id) {
         AnalyticsScreen s = new AnalyticsScreen();
         s.setId(id);
+        s.setClassification("PUBLIC");
         return s;
     }
 
@@ -66,7 +67,28 @@ class ScreenPermissionServiceTest {
         assertThat(snap.canRead()).isTrue();
         assertThat(snap.canEdit()).isTrue();
         assertThat(snap.isOwner()).isTrue();
+        assertThat(snap.overrideUsed()).isTrue();
         Mockito.verifyNoInteractions(repo);
+    }
+
+    @Test
+    void superuser_override_writes_strong_audit_event() {
+        ScreenAuditService auditService = Mockito.mock(ScreenAuditService.class);
+        ScreenPermissionService auditedService =
+            new ScreenPermissionService(repo, screenRepository, null, false, true, auditService);
+        AnalyticsUser su = user(1L, true);
+
+        PermissionSnapshot snap = auditedService.snapshot(screenWithLevel(10L, "CONFIDENTIAL"), su, ctx("PUBLIC"));
+
+        assertThat(snap.overrideUsed()).isTrue();
+        verify(auditService).log(
+            eq(10L),
+            eq(1L),
+            eq("screen.classification.superuser_override"),
+            eq(null),
+            any(),
+            eq(null)
+        );
     }
 
     @Test
@@ -128,7 +150,7 @@ class ScreenPermissionServiceTest {
     void no_grant_gets_none() {
         AnalyticsUser u = user(5L, false);
         when(repo.findGrantsForUser(eq(10L), eq("5"), any())).thenReturn(List.of());
-        PermissionSnapshot snap = service.snapshot(screen(10L), u, List.of());
+        PermissionSnapshot snap = service.snapshot(screenWithLevel(10L, "INTERNAL"), u, List.of());
         assertThat(snap.canRead()).isFalse();
         assertThat(snap.canEdit()).isFalse();
         assertThat(snap.isOwner()).isFalse();
@@ -237,7 +259,38 @@ class ScreenPermissionServiceTest {
     }
 
     @Test
-    void platform_mode_creator_keeps_owner_permissions_even_when_platform_returns_read() {
+    void platform_superuser_override_is_marked_and_audited() {
+        PlatformPermissionClient client = Mockito.mock(PlatformPermissionClient.class);
+        ScreenAuditService auditService = Mockito.mock(ScreenAuditService.class);
+        ScreenPermissionService platformService =
+            new ScreenPermissionService(repo, screenRepository, client, true, false, auditService);
+        AnalyticsUser u = user(45L, false);
+        u.setPlatformUsername("opadmin");
+        AnalyticsScreen s = screenWithLevel(10L, "CONFIDENTIAL");
+        when(client.check("opadmin", "ROLE_OP_ADMIN", "D01", "SCREEN", "10", "PUBLIC", "CONFIDENTIAL"))
+            .thenReturn(new PlatformPermissionClient.PermissionResult(true, "MANAGE", "superuser_override"));
+
+        PermissionSnapshot snap = platformService.snapshot(
+            s,
+            u,
+            new PlatformContext("D01", "PUBLIC", "ROLE_OP_ADMIN")
+        );
+
+        assertThat(snap.canRead()).isTrue();
+        assertThat(snap.canEdit()).isTrue();
+        assertThat(snap.overrideUsed()).isTrue();
+        verify(auditService).log(
+            eq(10L),
+            eq(45L),
+            eq("screen.classification.superuser_override"),
+            eq(null),
+            any(),
+            eq(null)
+        );
+    }
+
+    @Test
+    void platform_mode_creator_does_not_bypass_personnel_classification() {
         PlatformPermissionClient client = Mockito.mock(PlatformPermissionClient.class);
         ScreenPermissionService platformService = new ScreenPermissionService(repo, screenRepository, client, true, false);
         AnalyticsUser u = user(44L, false);
@@ -245,15 +298,15 @@ class ScreenPermissionServiceTest {
         AnalyticsScreen s = screenWithLevel(10L, "CONFIDENTIAL");
         s.setCreatorId(44L);
         when(client.check("creator", "ROLE_PTR", "D01", "SCREEN", "10", "PUBLIC", "CONFIDENTIAL"))
-            .thenReturn(new PlatformPermissionClient.PermissionResult(true, "READ", "explicit_grant"));
+            .thenReturn(PlatformPermissionClient.PermissionResult.DENIED);
 
         PermissionSnapshot snap = platformService.snapshot(s, u, new PlatformContext("D01", "PUBLIC", "ROLE_PTR"));
 
-        assertThat(snap.canRead()).isTrue();
-        assertThat(snap.canEdit()).isTrue();
-        assertThat(snap.isOwner()).isTrue();
+        assertThat(snap.canRead()).isFalse();
+        assertThat(snap.canEdit()).isFalse();
+        assertThat(snap.isOwner()).isFalse();
         assertThat(snap.overrideUsed()).isFalse();
-        verify(client, never()).check(any(), any(), any(), any(), any(), any(), any());
+        verify(client).check("creator", "ROLE_PTR", "D01", "SCREEN", "10", "PUBLIC", "CONFIDENTIAL");
         verify(repo, never()).findGrantsForUser(any(), any(), any());
     }
 
@@ -417,43 +470,42 @@ class ScreenPermissionServiceTest {
     }
 
     @Test
-    void owner_grant_bypasses_classification_gate() {
-        // OWNER grant 即便 caller 密级低于 screen 密级也应放行，与既有 bypass 语义一致。
+    void owner_grant_does_not_bypass_classification_gate() {
         AnalyticsUser u = user(18L, false);
         when(repo.findGrantsForUser(eq(10L), eq("18"), any()))
             .thenReturn(List.of(access(10L, "USER", "18", "OWNER")));
 
         PermissionSnapshot snap = service.snapshot(screenWithLevel(10L, "CONFIDENTIAL"), u, ctx("PUBLIC"));
 
-        assertThat(snap.canRead()).isTrue();
-        assertThat(snap.canEdit()).isTrue();
-        assertThat(snap.isOwner()).isTrue();
+        assertThat(snap.canRead()).isFalse();
+        assertThat(snap.canEdit()).isFalse();
+        assertThat(snap.isOwner()).isFalse();
         assertThat(snap.overrideUsed()).isFalse();
     }
 
     @Test
-    void manager_grant_bypasses_classification_gate() {
+    void manager_grant_does_not_bypass_classification_gate() {
         AnalyticsUser u = user(19L, false);
         when(repo.findGrantsForUser(eq(10L), eq("19"), any()))
             .thenReturn(List.of(access(10L, "USER", "19", "MANAGER")));
 
         PermissionSnapshot snap = service.snapshot(screenWithLevel(10L, "CONFIDENTIAL"), u, ctx("PUBLIC"));
 
-        assertThat(snap.canRead()).isTrue();
-        assertThat(snap.canEdit()).isTrue();
+        assertThat(snap.canRead()).isFalse();
+        assertThat(snap.canEdit()).isFalse();
         assertThat(snap.overrideUsed()).isFalse();
     }
 
     @Test
-    void creator_bypasses_classification_gate() {
+    void creator_does_not_bypass_classification_gate() {
         AnalyticsUser u = user(20L, false);
         AnalyticsScreen s = screenWithLevel(10L, "CONFIDENTIAL");
         s.setCreatorId(20L);
 
         PermissionSnapshot snap = service.snapshot(s, u, ctx("PUBLIC"));
 
-        assertThat(snap.canRead()).isTrue();
-        assertThat(snap.isOwner()).isTrue();
+        assertThat(snap.canRead()).isFalse();
+        assertThat(snap.isOwner()).isFalse();
         Mockito.verifyNoInteractions(repo);
     }
 }

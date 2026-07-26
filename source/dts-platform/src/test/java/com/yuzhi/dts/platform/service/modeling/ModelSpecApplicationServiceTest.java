@@ -153,6 +153,39 @@ class ModelSpecApplicationServiceTest {
     }
 
     @Test
+    void createsAnInteractiveFactDraftBeforeLogicalDesignIsFilled() {
+        CreateModelSpecCommand command = withoutLogicalDesign(command("fact-lightweight", "customer_detail_draft"));
+        when(repository.findByIdempotencyKey(TENANT, command.idempotencyKey())).thenReturn(Optional.empty());
+        when(repository.insertV2(eq(TENANT), eq(ACTOR), eq(command), any(), anyString(), anyString())).thenReturn(1);
+
+        ModelSpecApplicationService.CreateResult result = service.create(TENANT, ACTOR, command);
+
+        assertThat(result.modelSpec().grain()).isNull();
+        assertThat(result.modelSpec().fields()).isEmpty();
+        assertThat(result.modelSpec().sourceRefs()).isEmpty();
+        verify(repository).insertV2Revision(eq(TENANT), eq(ACTOR), eq(result.modelSpec()), anyString());
+    }
+
+    @Test
+    void importedModelsStillRequireCompleteLogicalDesign() {
+        CreateModelSpecCommand command = withoutLogicalDesign(command("fact-import-incomplete", "customer_import_incomplete"));
+
+        assertThatThrownBy(() ->
+                service.createImported(
+                    TENANT,
+                    ACTOR,
+                    UUID.fromString("30000000-0000-0000-0000-000000000071"),
+                    command
+                )
+            )
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_SPEC_VALIDATION_FAILED");
+
+        verify(repository, never()).insertV2(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
     void createsADimensionOnlyWhenItsPinnedDefinitionIsTheVisibleCurrentHead() {
         CreateModelSpecCommand command = pinnedDimensionCommand("dimension-current", null);
         DimensionDefinitionRef ref = command.dimensionDefinitionRef();
@@ -1531,6 +1564,34 @@ class ModelSpecApplicationServiceTest {
             command.metricRefs(),
             command.standardBindings(),
             command.generationStrategy(),
+            command.idempotencyKey()
+        );
+    }
+
+    private static CreateModelSpecCommand withoutLogicalDesign(CreateModelSpecCommand command) {
+        return new CreateModelSpecCommand(
+            command.planId(),
+            command.domainId(),
+            command.modelType(),
+            command.layer(),
+            command.name(),
+            command.description(),
+            command.implementationMode(),
+            command.materialization(),
+            command.businessActivityRef(),
+            command.consumptionScenario(),
+            null,
+            command.factShape(),
+            command.timeSemantics(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            command.generationStrategy(),
+            command.dimensionProfile(),
+            command.dimensionDefinitionRef(),
             command.idempotencyKey()
         );
     }

@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.infra.dto;
 
 import java.util.UUID;
+import java.util.Map;
 
 public record ExcelImportParseRequest(
     UUID fileId,
@@ -12,5 +13,7 @@ public record ExcelImportParseRequest(
     Integer previewLimit,
     Boolean skipErrors,
     Boolean fillMerged,
-    String dateFormat
+    String dateFormat,
+    Map<String, String> fieldClassifications,
+    Boolean sealClassification
 ) {}

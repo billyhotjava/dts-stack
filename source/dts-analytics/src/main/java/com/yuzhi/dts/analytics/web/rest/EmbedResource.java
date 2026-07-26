@@ -9,6 +9,7 @@ import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsDashboardCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsDashboardRepository;
+import com.yuzhi.dts.analytics.service.AnalyticsConsumerClassificationService;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.DatasetQueryService;
 import com.yuzhi.dts.analytics.service.EmbedTokenService;
@@ -16,6 +17,7 @@ import com.yuzhi.dts.analytics.service.MbqlToSqlService;
 import com.yuzhi.dts.analytics.service.ScreenComplianceService;
 import com.yuzhi.dts.analytics.service.QueryExecutionFacade;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
+import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
@@ -47,6 +49,7 @@ public class EmbedResource {
     private final MbqlToSqlService mbqlToSqlService;
     private final ScreenComplianceService screenComplianceService;
     private final QueryExecutionFacade queryExecutionFacade;
+    private final AnalyticsConsumerClassificationService classificationService;
     private final ObjectMapper objectMapper;
 
     public EmbedResource(
@@ -59,6 +62,7 @@ public class EmbedResource {
             MbqlToSqlService mbqlToSqlService,
             ScreenComplianceService screenComplianceService,
             QueryExecutionFacade queryExecutionFacade,
+            AnalyticsConsumerClassificationService classificationService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.embedTokenService = embedTokenService;
@@ -69,6 +73,7 @@ public class EmbedResource {
         this.mbqlToSqlService = mbqlToSqlService;
         this.screenComplianceService = screenComplianceService;
         this.queryExecutionFacade = queryExecutionFacade;
+        this.classificationService = classificationService;
         this.objectMapper = objectMapper;
     }
 
@@ -209,6 +214,10 @@ public class EmbedResource {
         if (card == null || card.isArchived()) {
             return ResponseEntity.notFound().build();
         }
+        ResponseEntity<?> classificationDenied = cardClassificationDenied(card.getId(), request);
+        if (classificationDenied != null) {
+            return classificationDenied;
+        }
         return ResponseEntity.ok(toEmbedCard(card, token));
     }
 
@@ -236,7 +245,7 @@ public class EmbedResource {
         if (card == null || card.isArchived()) {
             return ResponseEntity.notFound().build();
         }
-        return runCardDatasetQuery(card, body);
+        return runCardDatasetQuery(card, body, request);
     }
 
     @PostMapping(path = "/embed/pivot/card/{token}/query", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -300,7 +309,7 @@ public class EmbedResource {
         if (dashboardId <= 0) {
             return ResponseEntity.status(404).build();
         }
-        return runDashboardDashcardQuery(dashboardId, dashcardId, cardId, body);
+        return runDashboardDashcardQuery(dashboardId, dashcardId, cardId, body, request);
     }
 
     @PostMapping(
@@ -335,7 +344,12 @@ public class EmbedResource {
         return 0;
     }
 
-    private ResponseEntity<?> runDashboardDashcardQuery(long dashboardId, long dashcardId, long cardId, JsonNode body) {
+    private ResponseEntity<?> runDashboardDashcardQuery(
+            long dashboardId,
+            long dashcardId,
+            long cardId,
+            JsonNode body,
+            HttpServletRequest request) {
         AnalyticsDashboardCard dashcard = dashboardCardRepository.findById(dashcardId).orElse(null);
         if (dashcard == null || dashcard.getDashboardId() == null || dashcard.getDashboardId() != dashboardId || dashcard.getCardId() == null || dashcard.getCardId() != cardId) {
             return ResponseEntity.notFound().build();
@@ -345,10 +359,17 @@ public class EmbedResource {
         if (card == null || card.isArchived()) {
             return ResponseEntity.notFound().build();
         }
-        return runCardDatasetQuery(card, body);
+        return runCardDatasetQuery(card, body, request);
     }
 
-    private ResponseEntity<?> runCardDatasetQuery(AnalyticsCard card, JsonNode body) {
+    private ResponseEntity<?> runCardDatasetQuery(
+            AnalyticsCard card,
+            JsonNode body,
+            HttpServletRequest request) {
+        ResponseEntity<?> classificationDenied = cardClassificationDenied(card.getId(), request);
+        if (classificationDenied != null) {
+            return classificationDenied;
+        }
         JsonNode datasetQuery;
         try {
             datasetQuery = objectMapper.readTree(card.getDatasetQueryJson());
@@ -414,6 +435,26 @@ public class EmbedResource {
             response.put("error", error);
             response.put("via", List.of());
             return ResponseEntity.accepted().body(response);
+        }
+    }
+
+    private ResponseEntity<?> cardClassificationDenied(long cardId, HttpServletRequest request) {
+        try {
+            classificationService.requireCardPersonnelClearance(
+                cardId,
+                PlatformContext.from(request).classification()
+            );
+            return null;
+        } catch (AnalyticsConsumerClassificationService.PersonnelClassificationDeniedException ex) {
+            return ResponseEntity.status(403).body(Map.of(
+                "code", "PERSONNEL_CLASSIFICATION_BLOCKED",
+                "error", ex.getMessage()
+            ));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(409).body(Map.of(
+                "code", "CLASSIFICATION_STALE",
+                "error", "Card classification is missing or awaiting recomputation"
+            ));
         }
     }
 

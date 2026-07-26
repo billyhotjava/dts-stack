@@ -22,6 +22,7 @@ import com.yuzhi.dts.platform.repository.modeling.ModelLifecycleRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetGovernancePolicy;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
+import com.yuzhi.dts.platform.service.catalog.CatalogClassificationPropagationJobService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService.ColumnSpec;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ArtifactWrite;
@@ -69,6 +70,7 @@ public class DbtAssetSyncService {
     private final ModelLifecycleRepository lifecycleRepository;
     private final ModelSpecCompatibilityReader modelSpecReader;
     private final AuditService auditService;
+    private final CatalogClassificationPropagationJobService propagationJobService;
 
     public DbtAssetSyncService(
         ObjectMapper objectMapper,
@@ -84,7 +86,8 @@ public class DbtAssetSyncService {
         InfraOdsTableMappingRepository mappingRepository,
         ModelLifecycleRepository lifecycleRepository,
         ModelSpecCompatibilityReader modelSpecReader,
-        AuditService auditService
+        AuditService auditService,
+        CatalogClassificationPropagationJobService propagationJobService
     ) {
         this.objectMapper = objectMapper;
         this.properties = properties;
@@ -100,6 +103,7 @@ public class DbtAssetSyncService {
         this.lifecycleRepository = lifecycleRepository;
         this.modelSpecReader = modelSpecReader;
         this.auditService = auditService;
+        this.propagationJobService = propagationJobService;
     }
 
     /**
@@ -224,6 +228,7 @@ public class DbtAssetSyncService {
             LineageSyncStats lineageStats = syncLineage(modelNodes, datasetByUniqueId);
             stats.lineageCreated = lineageStats.created();
             stats.lineageRemoved += lineageStats.removed();
+            stats.classificationPropagationEnqueued = lineageStats.propagationEnqueued();
             stats.columnsUpdated = syncColumnsForModels(modelNodes, tableByUniqueId, projectDir);
             ColumnLineageSyncStats columnLineageStats = syncColumnLineage(modelNodes, datasetByUniqueId, tableByUniqueId);
             stats.columnLineageCreated = columnLineageStats.created();
@@ -233,27 +238,18 @@ public class DbtAssetSyncService {
                 "DBT_MODEL_SYNC",
                 AuditStage.SUCCESS,
                 manifestPath.toString(),
-                Map.of(
-                    "summary",
-                    "同步 dbt 模型资产",
-                    "datasetsCreated",
-                    stats.created,
-                    "datasetsUpdated",
-                    stats.updated,
-                    "lineageCreated",
-                    stats.lineageCreated,
-                    "lineageRemoved",
-                    stats.lineageRemoved,
-                    "columnsUpdated",
-                    stats.columnsUpdated,
-                    "manifestEvidenceUpdated",
-                    stats.manifestEvidenceUpdated,
-                    "columnLineageCreated",
-                    stats.columnLineageCreated,
-                    "columnLineageUpdated",
-                    stats.columnLineageUpdated,
-                    "columnLineageRemoved",
-                    stats.columnLineageRemoved
+                Map.ofEntries(
+                    Map.entry("summary", "同步 dbt 模型资产"),
+                    Map.entry("datasetsCreated", stats.created),
+                    Map.entry("datasetsUpdated", stats.updated),
+                    Map.entry("lineageCreated", stats.lineageCreated),
+                    Map.entry("lineageRemoved", stats.lineageRemoved),
+                    Map.entry("classificationPropagationEnqueued", stats.classificationPropagationEnqueued),
+                    Map.entry("columnsUpdated", stats.columnsUpdated),
+                    Map.entry("manifestEvidenceUpdated", stats.manifestEvidenceUpdated),
+                    Map.entry("columnLineageCreated", stats.columnLineageCreated),
+                    Map.entry("columnLineageUpdated", stats.columnLineageUpdated),
+                    Map.entry("columnLineageRemoved", stats.columnLineageRemoved)
                 )
             );
             return DbtAssetSyncResult.success(stats, manifestPath.toString());
@@ -295,6 +291,7 @@ public class DbtAssetSyncService {
     private LineageSyncStats syncLineage(Map<String, ModelMeta> modelNodes, Map<String, UUID> datasetByUniqueId) {
         int created = 0;
         int removed = 0;
+        int propagationEnqueued = 0;
         for (ModelMeta model : modelNodes.values()) {
             CatalogLineageJob lineageJob = upsertDbtJob(model);
             UUID downstream = datasetByUniqueId.get(model.uniqueId);
@@ -352,8 +349,26 @@ public class DbtAssetSyncService {
                 lineageRepository.save(link);
                 created++;
             }
+            if (
+                !desired.isEmpty() &&
+                propagationJobService.enqueue(
+                    downstream,
+                    "DBT",
+                    dbtPropagationTriggerRef(model)
+                )
+            ) {
+                propagationEnqueued++;
+            }
         }
-        return new LineageSyncStats(created, removed);
+        return new LineageSyncStats(created, removed, propagationEnqueued);
+    }
+
+    private String dbtPropagationTriggerRef(ModelMeta model) {
+        String invocationId =
+            model != null && model.runEvidence != null && StringUtils.hasText(model.runEvidence.invocationId())
+                ? model.runEvidence.invocationId()
+                : "manifest";
+        return "dbt:" + model.uniqueId + ":" + invocationId;
     }
 
     private ColumnLineageSyncStats syncColumnLineage(
@@ -1600,6 +1615,7 @@ public class DbtAssetSyncService {
         int columnLineageCreated = 0;
         int columnLineageUpdated = 0;
         int columnLineageRemoved = 0;
+        int classificationPropagationEnqueued = 0;
 
         public int getCreated() {
             return created;
@@ -1639,6 +1655,10 @@ public class DbtAssetSyncService {
 
         public int getColumnLineageRemoved() {
             return columnLineageRemoved;
+        }
+
+        public int getClassificationPropagationEnqueued() {
+            return classificationPropagationEnqueued;
         }
     }
 
@@ -1705,7 +1725,7 @@ public class DbtAssetSyncService {
 
     private record RunEvidence(String status, String invocationId, String generatedAt, boolean current, String staleReason) {}
 
-    private record LineageSyncStats(int created, int removed) {}
+    private record LineageSyncStats(int created, int removed, int propagationEnqueued) {}
 
     private record ColumnLineageSyncStats(int created, int updated, int removed) {}
 }

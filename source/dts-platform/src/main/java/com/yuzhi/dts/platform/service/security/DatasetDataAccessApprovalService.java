@@ -14,6 +14,7 @@ import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.security.policy.DataLevel;
 import com.yuzhi.dts.platform.security.policy.PolicyErrorCodes;
 import com.yuzhi.dts.platform.service.workflow.AdminWorkflowConfigClient;
+import com.yuzhi.dts.platform.service.catalog.CatalogLifecycleUsageRecorder;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -63,6 +64,7 @@ public class DatasetDataAccessApprovalService {
     private final CatalogDatasetAccessRequestRepository requestRepository;
     private final CatalogDatasetAccessTaskRepository taskRepository;
     private final AdminWorkflowConfigClient adminWorkflowConfigClient;
+    private final CatalogLifecycleUsageRecorder lifecycleUsageRecorder;
 
     public DatasetDataAccessApprovalService(
         AccessChecker accessChecker,
@@ -73,6 +75,29 @@ public class DatasetDataAccessApprovalService {
         CatalogDatasetAccessTaskRepository taskRepository,
         AdminWorkflowConfigClient adminWorkflowConfigClient
     ) {
+        this(
+            accessChecker,
+            organizationVisibilityService,
+            datasetRepository,
+            grantRepository,
+            requestRepository,
+            taskRepository,
+            adminWorkflowConfigClient,
+            null
+        );
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public DatasetDataAccessApprovalService(
+        AccessChecker accessChecker,
+        OrganizationVisibilityService organizationVisibilityService,
+        CatalogDatasetRepository datasetRepository,
+        CatalogDatasetGrantRepository grantRepository,
+        CatalogDatasetAccessRequestRepository requestRepository,
+        CatalogDatasetAccessTaskRepository taskRepository,
+        AdminWorkflowConfigClient adminWorkflowConfigClient,
+        CatalogLifecycleUsageRecorder lifecycleUsageRecorder
+    ) {
         this.accessChecker = accessChecker;
         this.organizationVisibilityService = organizationVisibilityService;
         this.datasetRepository = datasetRepository;
@@ -80,6 +105,7 @@ public class DatasetDataAccessApprovalService {
         this.requestRepository = requestRepository;
         this.taskRepository = taskRepository;
         this.adminWorkflowConfigClient = adminWorkflowConfigClient;
+        this.lifecycleUsageRecorder = lifecycleUsageRecorder;
     }
 
     public record Decision(boolean allowed, String code, String message) {
@@ -117,6 +143,12 @@ public class DatasetDataAccessApprovalService {
         if (dataset == null) {
             return Decision.deny(PolicyErrorCodes.RESOURCE_NOT_VISIBLE, "只能查询已登记的数据资产");
         }
+        if (!Boolean.TRUE.equals(dataset.getEnabled()) || lifecycleBlocksAccess(dataset.getLifecycleStatus())) {
+            return Decision.deny(
+                PolicyErrorCodes.RESOURCE_NOT_VISIBLE,
+                "数据资产已归档、进入回收站或永久销毁，当前不可访问"
+            );
+        }
 
         // Layer restriction: do not allow employees to access base layers even if granted.
         if (!isDataMaintainer() && isEmployeeForbiddenLayer(dataset.getWarehouseLayer())) {
@@ -134,6 +166,7 @@ public class DatasetDataAccessApprovalService {
 
         // Data maintainers can query/preview without per-user permit.
         if (isDataMaintainer()) {
+            recordUsage(dataset, action);
             return Decision.allow();
         }
 
@@ -148,7 +181,19 @@ public class DatasetDataAccessApprovalService {
         if (!granted) {
             return Decision.deny(PolicyErrorCodes.TEMP_PERMIT_REQUIRED, "需要审批授权后才能访问数据内容");
         }
+        recordUsage(dataset, action);
         return Decision.allow();
+    }
+
+    private void recordUsage(CatalogDataset dataset, DataAction action) {
+        if (lifecycleUsageRecorder == null) {
+            return;
+        }
+        lifecycleUsageRecorder.record(
+            dataset,
+            action == DataAction.PREVIEW ? "DATA_PREVIEWED" : "DATA_QUERIED",
+            SecurityUtils.getCurrentUserLogin().orElse("system")
+        );
     }
 
     public CatalogDatasetAccessRequest createRequest(
@@ -165,6 +210,9 @@ public class DatasetDataAccessApprovalService {
         String activeDeptHeader
     ) {
         Objects.requireNonNull(dataset, "dataset is required");
+        if (!Boolean.TRUE.equals(dataset.getEnabled()) || lifecycleBlocksAccess(dataset.getLifecycleStatus())) {
+            throw new IllegalStateException("数据资产当前生命周期状态不允许申请访问");
+        }
         if (!canQuery && !canPreview) {
             throw new IllegalArgumentException("至少需要申请一种权限（QUERY/ PREVIEW）");
         }
@@ -218,6 +266,20 @@ public class DatasetDataAccessApprovalService {
         List<CatalogDatasetAccessTask> tasks = buildApprovalTasks(req, dataset);
         taskRepository.saveAll(tasks);
         return req;
+    }
+
+    private static boolean lifecycleBlocksAccess(String lifecycleStatus) {
+        if (!StringUtils.hasText(lifecycleStatus)) {
+            return false;
+        }
+        return List.of(
+            "ARCHIVED",
+            "TRASH_REQUESTED",
+            "TRASHED",
+            "DISPOSE_REQUESTED",
+            "DISPOSED",
+            "DESTROYED"
+        ).contains(lifecycleStatus.trim().toUpperCase(Locale.ROOT));
     }
 
     @Transactional(readOnly = true)

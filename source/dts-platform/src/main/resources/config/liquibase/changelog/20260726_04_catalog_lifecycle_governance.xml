@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260726-04-catalog-lifecycle-governance" author="codex">
+        <sql splitStatements="false"><![CDATA[
+            create table catalog_lifecycle_control_action (
+                id uuid primary key,
+                dataset_id uuid not null references catalog_dataset(id),
+                action_type varchar(32) not null,
+                stage varchar(32) not null,
+                status varchar(32) not null,
+                payload_checksum varchar(64) not null,
+                seal_id uuid not null references catalog_classification_snapshot(id),
+                seal_version bigint not null,
+                effective_level varchar(32) not null,
+                requester varchar(128) not null,
+                requester_dept varchar(128),
+                reason varchar(1024),
+                first_approved_by varchar(128),
+                first_approved_at timestamp,
+                second_approved_by varchar(128),
+                second_approved_at timestamp,
+                decision_notes varchar(1024),
+                expires_at timestamp not null,
+                execution_token_id uuid,
+                executed_by varchar(128),
+                executed_at timestamp,
+                evidence_json jsonb,
+                error_message varchar(2048),
+                record_version bigint not null default 0,
+                created_by varchar(50) not null,
+                created_date timestamp not null,
+                last_modified_by varchar(50),
+                last_modified_date timestamp,
+                constraint ck_catalog_lifecycle_action_type check (
+                    action_type in ('CREATE','STORE','ARCHIVE','TRASH','RESTORE','PERMANENT_DESTROY')
+                ),
+                constraint ck_catalog_lifecycle_action_status check (
+                    status in (
+                        'PENDING','SECOND_APPROVAL_PENDING','APPROVED','REJECTED',
+                        'CANCELLED','EXECUTED','FAILED','EXPIRED'
+                    )
+                )
+            );
+            create index idx_catalog_lifecycle_action_dataset
+                on catalog_lifecycle_control_action(dataset_id, created_date desc);
+            create index idx_catalog_lifecycle_action_pending
+                on catalog_lifecycle_control_action(status, expires_at);
+
+            create table catalog_lifecycle_execution_token (
+                id uuid primary key,
+                action_id uuid not null unique references catalog_lifecycle_control_action(id),
+                token_hash varchar(64) not null unique,
+                dataset_id uuid not null references catalog_dataset(id),
+                action_type varchar(32) not null,
+                payload_checksum varchar(64) not null,
+                seal_id uuid not null references catalog_classification_snapshot(id),
+                seal_version bigint not null,
+                expires_at timestamp not null,
+                consumed_at timestamp,
+                consumed_by varchar(128),
+                revoked_at timestamp,
+                created_by varchar(50) not null,
+                created_date timestamp not null
+            );
+            create index idx_catalog_lifecycle_token_dataset
+                on catalog_lifecycle_execution_token(dataset_id, action_type, expires_at);
+
+            create table catalog_lifecycle_trash_fact (
+                id uuid primary key,
+                dataset_id uuid not null unique references catalog_dataset(id),
+                status varchar(32) not null,
+                trash_action_id uuid not null references catalog_lifecycle_control_action(id),
+                previous_enabled boolean not null,
+                previous_lifecycle_status varchar(32),
+                retain_until timestamp not null,
+                seal_id uuid not null references catalog_classification_snapshot(id),
+                seal_version bigint not null,
+                effective_level varchar(32) not null,
+                restored_action_id uuid references catalog_lifecycle_control_action(id),
+                restored_at timestamp,
+                destroyed_action_id uuid references catalog_lifecycle_control_action(id),
+                destroyed_at timestamp,
+                created_by varchar(50) not null,
+                created_date timestamp not null,
+                last_modified_by varchar(50),
+                last_modified_date timestamp,
+                constraint ck_catalog_lifecycle_trash_status check (
+                    status in ('TRASHED','RESTORE_REQUESTED','RESTORED','DESTRUCTION_CANDIDATE','DESTROYED')
+                )
+            );
+            create index idx_catalog_lifecycle_trash_retention
+                on catalog_lifecycle_trash_fact(status, retain_until);
+
+            create table catalog_destruction_proof (
+                id uuid primary key,
+                action_id uuid not null references catalog_lifecycle_control_action(id),
+                dataset_id uuid not null references catalog_dataset(id),
+                attempt_no int not null,
+                adapter_code varchar(64) not null,
+                object_manifest jsonb not null,
+                manifest_checksum varchar(64) not null,
+                first_approved_by varchar(128) not null,
+                second_approved_by varchar(128) not null,
+                executed_by varchar(128) not null,
+                result_status varchar(32) not null,
+                external_source_touched boolean not null default false,
+                failure_message varchar(2048),
+                executed_at timestamp not null,
+                created_by varchar(50) not null,
+                created_date timestamp not null,
+                constraint uk_catalog_destruction_proof_attempt unique (action_id, attempt_no)
+            );
+            create index idx_catalog_destruction_proof_dataset
+                on catalog_destruction_proof(dataset_id, executed_at desc);
+
+            create table catalog_lifecycle_event (
+                id uuid primary key,
+                dataset_id uuid not null references catalog_dataset(id),
+                stage varchar(32) not null,
+                event_type varchar(64) not null,
+                status varchar(32) not null,
+                request_source varchar(32) not null,
+                request_ref varchar(128),
+                seal_id uuid references catalog_classification_snapshot(id),
+                seal_version bigint,
+                effective_level varchar(32),
+                data_volume bigint,
+                evidence_json jsonb,
+                actor varchar(128) not null,
+                occurred_at timestamp not null,
+                created_by varchar(50) not null,
+                created_date timestamp not null
+            );
+            create index idx_catalog_lifecycle_event_dataset
+                on catalog_lifecycle_event(dataset_id, occurred_at, id);
+
+            create or replace function prevent_catalog_lifecycle_evidence_mutation()
+            returns trigger language plpgsql as $$
+            begin
+                raise exception 'catalog lifecycle evidence is append-only';
+            end;
+            $$;
+            create trigger trg_catalog_lifecycle_event_immutable
+                before update or delete on catalog_lifecycle_event
+                for each row execute function prevent_catalog_lifecycle_evidence_mutation();
+            create trigger trg_catalog_destruction_proof_immutable
+                before update or delete on catalog_destruction_proof
+                for each row execute function prevent_catalog_lifecycle_evidence_mutation();
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                drop trigger if exists trg_catalog_destruction_proof_immutable on catalog_destruction_proof;
+                drop trigger if exists trg_catalog_lifecycle_event_immutable on catalog_lifecycle_event;
+                drop function if exists prevent_catalog_lifecycle_evidence_mutation();
+                drop table if exists catalog_lifecycle_event;
+                drop table if exists catalog_destruction_proof;
+                drop table if exists catalog_lifecycle_trash_fact;
+                drop table if exists catalog_lifecycle_execution_token;
+                drop table if exists catalog_lifecycle_control_action;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

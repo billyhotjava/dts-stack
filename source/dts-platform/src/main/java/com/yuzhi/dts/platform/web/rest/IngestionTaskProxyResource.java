@@ -1,8 +1,16 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
+import com.yuzhi.dts.platform.domain.catalog.CatalogClassificationSnapshot;
+import com.yuzhi.dts.platform.domain.service.InfraDataSource;
+import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogClassificationException;
+import com.yuzhi.dts.platform.service.catalog.CatalogClassificationService;
 import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
 import com.yuzhi.dts.platform.service.infra.DefaultDestinationSyncService;
 import com.yuzhi.dts.platform.service.etl.OdsTableMappingSyncService;
@@ -11,6 +19,10 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
+import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.MediaType;
@@ -40,19 +52,28 @@ public class IngestionTaskProxyResource {
     private final OdsTableMappingSyncService odsTableMappingSyncService;
     private final AuditService auditService;
     private final ExternalRunLogService externalRunLogService;
+    private final InfraDataSourceRepository dataSourceRepository;
+    private final CatalogClassificationService classificationService;
+    private final ObjectMapper objectMapper;
 
     public IngestionTaskProxyResource(
         IngestionServiceClient ingestionClient,
         DefaultDestinationSyncService destinationSyncService,
         OdsTableMappingSyncService odsTableMappingSyncService,
         AuditService auditService,
-        ExternalRunLogService externalRunLogService
+        ExternalRunLogService externalRunLogService,
+        InfraDataSourceRepository dataSourceRepository,
+        CatalogClassificationService classificationService,
+        ObjectMapper objectMapper
     ) {
         this.ingestionClient = ingestionClient;
         this.destinationSyncService = destinationSyncService;
         this.odsTableMappingSyncService = odsTableMappingSyncService;
         this.auditService = auditService;
         this.externalRunLogService = externalRunLogService;
+        this.dataSourceRepository = dataSourceRepository;
+        this.classificationService = classificationService;
+        this.objectMapper = objectMapper;
     }
 
     @GetMapping("/templates")
@@ -85,6 +106,7 @@ public class IngestionTaskProxyResource {
             DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot = resolveDestinationSnapshot(payload);
             resolvedPayload = applyDefaultDestinationPayload(payload, snapshot);
         }
+        resolvedPayload = attachClassificationSeal(resolvedPayload, !draft);
         ApiResponse<Map<String, Object>> response = ingestionClient.createIngestionTask(resolvedPayload);
         String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
         if (response != null && response.getStatus() >= 200 && response.getStatus() < 300) {
@@ -146,6 +168,7 @@ public class IngestionTaskProxyResource {
     ) {
         DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot = resolveDestinationSnapshot(payload);
         Map<String, Object> resolvedPayload = applyDefaultDestinationUpdatePayload(payload, snapshot);
+        resolvedPayload = attachClassificationSeal(resolvedPayload, false);
         // Preserve the existing task's password when the update payload does not include one
         preserveExistingPassword(id, resolvedPayload, payload);
         ApiResponse<Map<String, Object>> response = ingestionClient.updateTask(id, resolvedPayload);
@@ -914,6 +937,435 @@ public class IngestionTaskProxyResource {
             java.util.ArrayList<Object> next = new java.util.ArrayList<>(list);
             next.set(0, connMap);
             config.put("connection", next);
+        }
+    }
+
+    private Map<String, Object> attachClassificationSeal(Map<String, Object> payload, boolean required) {
+        Map<String, Object> resolved = payload == null ? new LinkedHashMap<>() : new LinkedHashMap<>(payload);
+        if (resolved.get("classificationSeal") instanceof Map<?, ?> providedSeal) {
+            return attachProvidedClassificationSeal(
+                resolved,
+                mapValue(providedSeal),
+                resolved.get("fieldClassifications")
+            );
+        }
+        Map<String, Object> source = mapValue(resolved.get("source"));
+        Map<String, Object> sourceConfig = mapValue(source.get("config"));
+        if (sourceConfig.get("classificationSeal") instanceof Map<?, ?> fileSeal) {
+            return attachFileClassificationSeal(
+                resolved,
+                mapValue(fileSeal),
+                sourceConfig.get("fieldClassifications"),
+                required
+            );
+        }
+
+        UUID sourceId = parseUuid(source.get("dataSourceId"));
+        if (sourceId == null) {
+            if (required) {
+                throw new CatalogClassificationException(
+                    "CLASSIFICATION_SEAL_REQUIRED",
+                    "生产接入任务缺少数据源标识，无法生成密级封存"
+                );
+            }
+            return resolved;
+        }
+        InfraDataSource dataSource = dataSourceRepository
+            .findById(sourceId)
+            .orElseThrow(() ->
+                new CatalogClassificationException(
+                    "CLASSIFICATION_SOURCE_NOT_FOUND",
+                    "密级封存引用的数据源不存在: " + sourceId
+                )
+            );
+        Map<String, Object> props = readDataSourceProps(dataSource);
+        Object rawLevel = props.get("classification");
+        String declared;
+        try {
+            declared = SecurityLevelCatalog.requireDataLevel(rawLevel).code();
+        } catch (IllegalArgumentException ex) {
+            if (!required) {
+                return resolved;
+            }
+            throw new CatalogClassificationException(
+                "SOURCE_CLASSIFICATION_REQUIRED",
+                "请先为数据源明确选择密级，再创建生产接入任务"
+            );
+        }
+        Map<String, String> fieldClassifications = mergeFieldClassifications(
+            props.get("fieldClassifications"),
+            props.get("columnClassifications")
+        );
+        String subjectKey = "data-source:" + sourceId;
+        String evidenceSource =
+            subjectKey + ":" + declared + ":" + new java.util.TreeMap<>(fieldClassifications);
+        CatalogClassificationSnapshot snapshot = classificationService.sealOrRaise(
+            new CatalogClassificationService.SealCommand(
+                "ASSET",
+                subjectKey,
+                null,
+                declared,
+                null,
+                null,
+                fieldClassifications.values(),
+                "SOURCE_DECLARATION",
+                subjectKey,
+                sha256(evidenceSource),
+                "{\"sourceId\":\"" +
+                sourceId +
+                "\",\"declaredLevel\":\"" +
+                declared +
+                "\",\"fieldClassifications\":" +
+                toJson(fieldClassifications) +
+                "}"
+            )
+        );
+        Map<String, Object> seal = new LinkedHashMap<>();
+        seal.put("sealId", snapshot.getId());
+        seal.put("subjectType", snapshot.getSubjectType());
+        seal.put("subjectKey", snapshot.getSubjectKey());
+        seal.put("assetType", snapshot.getAssetType());
+        seal.put("effectiveLevel", snapshot.getEffectiveLevel());
+        seal.put("snapshotVersion", snapshot.getRecordVersion() == null ? 0L : snapshot.getRecordVersion());
+        seal.put("checksum", snapshot.getEvidenceChecksum());
+        seal.put("sealedAt", snapshot.getSealedAt());
+        seal.put("propagationStatus", snapshot.getPropagationStatus());
+        resolved.put("classificationSeal", seal);
+        if (!resolved.containsKey("fieldClassifications") && !fieldClassifications.isEmpty()) {
+            resolved.put("fieldClassifications", new LinkedHashMap<>(fieldClassifications));
+        }
+        return resolved;
+    }
+
+    private Map<String, Object> attachProvidedClassificationSeal(
+        Map<String, Object> resolved,
+        Map<String, Object> reference,
+        Object rawFieldClassifications
+    ) {
+        String subjectType = String.valueOf(reference.getOrDefault("subjectType", "")).trim().toUpperCase();
+        String subjectKey = String.valueOf(reference.getOrDefault("subjectKey", "")).trim();
+        if (!StringUtils.hasText(subjectType) || !StringUtils.hasText(subjectKey)) {
+            throw new CatalogClassificationException(
+                "CLASSIFICATION_SEAL_INVALID",
+                "接入密级封存引用无效"
+            );
+        }
+        CatalogClassificationSnapshot sourceSnapshot = classificationService
+            .resolve(subjectType, subjectKey)
+            .orElseThrow(() ->
+                new CatalogClassificationException(
+                    "CLASSIFICATION_SEAL_NOT_FOUND",
+                    "接入密级封存不存在或已失效"
+                )
+            );
+        assertCurrentSeal(reference, sourceSnapshot, "CLASSIFICATION_SEAL_STALE");
+        Map<String, String> fields = normalizeFieldClassifications(rawFieldClassifications);
+        if (fields.isEmpty()) {
+            return resolved;
+        }
+        String fileFloor = reference.get("fileFloor") == null
+            ? null
+            : SecurityLevelCatalog.requireDataLevel(reference.get("fileFloor")).code();
+        if (StringUtils.hasText(fileFloor)) {
+            for (Map.Entry<String, String> entry : fields.entrySet()) {
+                if (SecurityLevelCatalog.isDataDowngrade(fileFloor, entry.getValue())) {
+                    throw new CatalogClassificationException(
+                        "CLASSIFICATION_DOWNGRADE_FORBIDDEN",
+                        "字段 " + entry.getKey() + " 的密级不能低于文件密级 " + fileFloor
+                    );
+                }
+            }
+        }
+        List<String> candidates = new ArrayList<>();
+        candidates.add(SecurityLevelCatalog.requireDataLevel(sourceSnapshot.getEffectiveLevel()).code());
+        candidates.addAll(fields.values());
+        String compositeKey = "ingestion-seal:" + subjectType.toLowerCase() + ":" + subjectKey;
+        String evidenceSource =
+            sourceSnapshot.getId() +
+            ":" +
+            sourceSnapshot.getRecordVersion() +
+            ":" +
+            sourceSnapshot.getEvidenceChecksum() +
+            ":" +
+            new java.util.TreeMap<>(fields);
+        CatalogClassificationSnapshot taskSnapshot = classificationService.sealOrRaise(
+            new CatalogClassificationService.SealCommand(
+                "ASSET",
+                compositeKey,
+                "DATASET",
+                null,
+                null,
+                null,
+                candidates,
+                "UPSTREAM_INHERITANCE",
+                subjectKey,
+                sha256(evidenceSource),
+                toJson(
+                    Map.of(
+                        "sourceSealId",
+                        sourceSnapshot.getId(),
+                        "sourceSubjectType",
+                        subjectType,
+                        "sourceSubjectKey",
+                        subjectKey,
+                        "fieldClassifications",
+                        fields
+                    )
+                )
+            )
+        );
+        Map<String, Object> seal = sealReference(taskSnapshot);
+        if (StringUtils.hasText(fileFloor)) {
+            seal.put("fileFloor", fileFloor);
+        }
+        resolved.put("classificationSeal", seal);
+        resolved.put("fieldClassifications", new LinkedHashMap<>(fields));
+        return resolved;
+    }
+
+    private Map<String, Object> attachFileClassificationSeal(
+        Map<String, Object> resolved,
+        Map<String, Object> fileSeal,
+        Object rawFieldClassifications,
+        boolean required
+    ) {
+        String subjectType = String.valueOf(fileSeal.getOrDefault("subjectType", "")).trim();
+        String subjectKey = String.valueOf(fileSeal.getOrDefault("subjectKey", "")).trim();
+        if (!"FILE".equalsIgnoreCase(subjectType) || !StringUtils.hasText(subjectKey)) {
+            if (!required) {
+                resolved.put("classificationSeal", new LinkedHashMap<>(fileSeal));
+                return resolved;
+            }
+            throw new CatalogClassificationException(
+                "FILE_CLASSIFICATION_SEAL_INVALID",
+                "文件接入密级封存引用无效"
+            );
+        }
+        Map<String, String> fields = normalizeFieldClassifications(rawFieldClassifications);
+        if (required && fields.isEmpty()) {
+            throw new CatalogClassificationException(
+                "CLASSIFICATION_FIELD_SEAL_REQUIRED",
+                "文件接入必须先确认并封存字段密级"
+            );
+        }
+        CatalogClassificationSnapshot sourceSnapshot = classificationService
+            .resolve("FILE", subjectKey)
+            .orElseThrow(() ->
+                new CatalogClassificationException(
+                    "FILE_CLASSIFICATION_SEAL_NOT_FOUND",
+                    "文件密级封存不存在或已失效"
+                )
+            );
+        assertCurrentSeal(fileSeal, sourceSnapshot, "FILE_CLASSIFICATION_SEAL_STALE");
+        String fileFloor = SecurityLevelCatalog
+            .requireDataLevel(sourceSnapshot.getEffectiveLevel())
+            .code();
+        for (Map.Entry<String, String> entry : fields.entrySet()) {
+            if (SecurityLevelCatalog.isDataDowngrade(fileFloor, entry.getValue())) {
+                throw new CatalogClassificationException(
+                    "CLASSIFICATION_DOWNGRADE_FORBIDDEN",
+                    "字段 " + entry.getKey() + " 的密级不能低于文件密级 " + fileFloor
+                );
+            }
+        }
+        String compositeKey = "ingestion-file:" + subjectKey;
+        String evidenceSource =
+            sourceSnapshot.getId() +
+            ":" +
+            sourceSnapshot.getRecordVersion() +
+            ":" +
+            sourceSnapshot.getEvidenceChecksum() +
+            ":" +
+            new java.util.TreeMap<>(fields);
+        CatalogClassificationSnapshot taskSnapshot = classificationService.sealOrRaise(
+            new CatalogClassificationService.SealCommand(
+                "ASSET",
+                compositeKey,
+                "DATASET",
+                fileFloor,
+                null,
+                null,
+                fields.values(),
+                "FILE_DECLARATION",
+                subjectKey,
+                sha256(evidenceSource),
+                toJson(
+                    Map.of(
+                        "fileSealId",
+                        sourceSnapshot.getId(),
+                        "fileSubjectKey",
+                        subjectKey,
+                        "fileFloor",
+                        fileFloor,
+                        "fieldClassifications",
+                        fields
+                    )
+                )
+            )
+        );
+        Map<String, Object> seal = sealReference(taskSnapshot);
+        seal.put("fileFloor", fileFloor);
+        resolved.put("classificationSeal", seal);
+        resolved.put("fieldClassifications", new LinkedHashMap<>(fields));
+        return resolved;
+    }
+
+    private void assertCurrentSeal(
+        Map<String, Object> reference,
+        CatalogClassificationSnapshot snapshot,
+        String errorCode
+    ) {
+        UUID sealId = parseUuid(reference.get("sealId"));
+        Long version = parseLong(reference.get("snapshotVersion"));
+        String checksum = String.valueOf(reference.getOrDefault("checksum", "")).trim();
+        if (
+            sealId == null ||
+            !sealId.equals(snapshot.getId()) ||
+            version == null ||
+            !version.equals(snapshot.getRecordVersion()) ||
+            !StringUtils.hasText(checksum) ||
+            !checksum.equals(snapshot.getEvidenceChecksum())
+        ) {
+            throw new CatalogClassificationException(
+                errorCode,
+                "密级封存已变化，请重新确认后再创建任务"
+            );
+        }
+    }
+
+    private Map<String, Object> sealReference(CatalogClassificationSnapshot snapshot) {
+        Map<String, Object> seal = new LinkedHashMap<>();
+        seal.put("sealId", snapshot.getId());
+        seal.put("subjectType", snapshot.getSubjectType());
+        seal.put("subjectKey", snapshot.getSubjectKey());
+        seal.put("assetType", snapshot.getAssetType());
+        seal.put("effectiveLevel", snapshot.getEffectiveLevel());
+        seal.put("snapshotVersion", snapshot.getRecordVersion() == null ? 0L : snapshot.getRecordVersion());
+        seal.put("checksum", snapshot.getEvidenceChecksum());
+        seal.put("sealedAt", snapshot.getSealedAt());
+        seal.put("propagationStatus", snapshot.getPropagationStatus());
+        return seal;
+    }
+
+    private Map<String, String> normalizeFieldClassifications(Object value) {
+        if (value == null) {
+            return Map.of();
+        }
+        if (!(value instanceof Map<?, ?> fields)) {
+            throw new CatalogClassificationException(
+                "SOURCE_FIELD_CLASSIFICATION_INVALID",
+                "字段密级配置格式无效"
+            );
+        }
+        Map<String, String> normalized = new LinkedHashMap<>();
+        fields.forEach((column, level) -> {
+            if (!StringUtils.hasText(String.valueOf(column))) {
+                throw new CatalogClassificationException(
+                    "SOURCE_FIELD_CLASSIFICATION_INVALID",
+                    "字段密级配置包含空字段名"
+                );
+            }
+            try {
+                normalized.put(
+                    String.valueOf(column).trim(),
+                    SecurityLevelCatalog.requireDataLevel(level).code()
+                );
+            } catch (IllegalArgumentException ex) {
+                throw new CatalogClassificationException(
+                    "SOURCE_FIELD_CLASSIFICATION_INVALID",
+                    "字段 " + column + " 的密级无效"
+                );
+            }
+        });
+        return Map.copyOf(normalized);
+    }
+
+    private Map<String, String> mergeFieldClassifications(Object... values) {
+        Map<String, String> merged = new LinkedHashMap<>();
+        if (values == null) {
+            return Map.of();
+        }
+        for (Object value : values) {
+            normalizeFieldClassifications(value)
+                .forEach((field, level) ->
+                    merged.merge(
+                        field,
+                        level,
+                        (current, candidate) ->
+                            SecurityLevelCatalog.maxDataCode(current, candidate)
+                    )
+                );
+        }
+        return Map.copyOf(merged);
+    }
+
+    private String toJson(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception ex) {
+            throw new CatalogClassificationException(
+                "SOURCE_CLASSIFICATION_INVALID",
+                "无法生成数据源密级证据"
+            );
+        }
+    }
+
+    private Map<String, Object> readDataSourceProps(InfraDataSource dataSource) {
+        if (dataSource == null || !StringUtils.hasText(dataSource.getProps())) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(dataSource.getProps(), new TypeReference<Map<String, Object>>() {});
+        } catch (Exception ex) {
+            throw new CatalogClassificationException(
+                "SOURCE_CLASSIFICATION_INVALID",
+                "数据源扩展配置无法解析，不能生成密级封存"
+            );
+        }
+    }
+
+    private Map<String, Object> mapValue(Object value) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (value instanceof Map<?, ?> map) {
+            map.forEach((key, item) -> result.put(String.valueOf(key), item));
+        }
+        return result;
+    }
+
+    private UUID parseUuid(Object value) {
+        if (value instanceof UUID uuid) {
+            return uuid;
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value.toString().trim());
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
+    private Long parseLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Long.parseLong(value.toString().trim());
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private String sha256(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(String.valueOf(value).getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception ex) {
+            throw new IllegalStateException("无法生成密级证据摘要", ex);
         }
     }
 

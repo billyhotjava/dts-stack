@@ -28,5 +28,6 @@
     <include file="config/liquibase/changelog/20260429_01_ingestion_execution_lineage_tables.xml"/>
     <include file="config/liquibase/changelog/20260430_01_ingestion_execution_backfill_window.xml"/>
     <include file="config/liquibase/changelog/20260505_01_ingestion_task_graph_dsl.xml"/>
+    <include file="config/liquibase/changelog/20260726_01_ingestion_classification_seal.xml"/>
 
 </databaseChangeLog>

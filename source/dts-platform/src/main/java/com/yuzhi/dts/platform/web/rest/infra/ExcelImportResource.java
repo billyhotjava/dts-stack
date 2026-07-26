@@ -38,10 +38,11 @@ public class ExcelImportResource {
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<ExcelImportPrepareResponse> prepare(
         @RequestPart("file") MultipartFile file,
+        @RequestParam("classification") String classification,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
-        ExcelImportPrepareResponse response = excelImportService.prepare(file, operator, activeDept);
+        ExcelImportPrepareResponse response = excelImportService.prepare(file, operator, activeDept, classification);
         return ApiResponses.ok(response);
     }
 

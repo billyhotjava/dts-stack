@@ -14,6 +14,7 @@ import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetGovernancePolicy;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
+import com.yuzhi.dts.platform.service.catalog.CatalogClassificationPropagationJobService;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -43,6 +44,7 @@ public class IngestionLineageWriter {
     private final InfraOdsTableMappingRepository mappingRepository;
     private final InfraDataSourceRepository dataSourceRepository;
     private final AuditService auditService;
+    private final CatalogClassificationPropagationJobService propagationJobService;
 
     public IngestionLineageWriter(
         CatalogDatasetRepository datasetRepository,
@@ -50,7 +52,8 @@ public class IngestionLineageWriter {
         CatalogLineageJobRepository lineageJobRepository,
         InfraOdsTableMappingRepository mappingRepository,
         InfraDataSourceRepository dataSourceRepository,
-        AuditService auditService
+        AuditService auditService,
+        CatalogClassificationPropagationJobService propagationJobService
     ) {
         this.datasetRepository = datasetRepository;
         this.lineageRepository = lineageRepository;
@@ -58,6 +61,7 @@ public class IngestionLineageWriter {
         this.mappingRepository = mappingRepository;
         this.dataSourceRepository = dataSourceRepository;
         this.auditService = auditService;
+        this.propagationJobService = propagationJobService;
     }
 
     @Transactional
@@ -154,6 +158,11 @@ public class IngestionLineageWriter {
             }
             applyObservation(link, effectiveObservation);
             lineageRepository.save(link);
+            propagationJobService.enqueue(
+                odsDataset.dataset().getId(),
+                "INGESTION_LINEAGE",
+                effectiveObservation.executionId()
+            );
             return new LineageWriteResult(0, 1, 0, sourceDataset.created() + odsDataset.created(), 1, "updated");
         }
 
@@ -174,6 +183,11 @@ public class IngestionLineageWriter {
             link.setValidFrom(effectiveObservation.observedAt() == null ? Instant.now() : effectiveObservation.observedAt());
         }
         lineageRepository.save(link);
+        propagationJobService.enqueue(
+            odsDataset.dataset().getId(),
+            "INGESTION_LINEAGE",
+            effectiveObservation.executionId()
+        );
         return new LineageWriteResult(1, 0, 0, sourceDataset.created() + odsDataset.created(), 1, "created");
     }
 

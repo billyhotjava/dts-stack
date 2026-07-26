@@ -26,7 +26,6 @@ public class AssetPermissionService {
 
     private static final String SCREEN_ASSET_TYPE = "SCREEN";
     private static final String SCREEN_CODE_PREFIX = "screen-";
-    private static final String DEFAULT_SCREEN_CLASSIFICATION = "INTERNAL";
     private static final String NO_ROLE_PLACEHOLDER = "__NO_ROLE__";
     private static final List<String> CLASSIFICATION_LADDER = List.of("PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL");
 
@@ -288,7 +287,10 @@ public class AssetPermissionService {
     public Map<String, PermissionResult> batchCheck(String username, List<String> roles, String deptCode,
                                                      List<AssetRef> assets, String userClassification) {
         // Short-circuit for superuser roles (applies to every asset type)
-        if (hasAny(roles, SUPERUSER_ROLES)) {
+        boolean containsScreen = assets != null && assets
+            .stream()
+            .anyMatch(asset -> SCREEN_ASSET_TYPE.equals(normalizeAssetType(asset.type())));
+        if (hasAny(roles, SUPERUSER_ROLES) && !containsScreen) {
             return assets.stream().collect(Collectors.toMap(
                 a -> a.type() + ":" + a.id(),
                 a -> PermissionResult.allowed("MANAGE", "superuser")
@@ -446,11 +448,13 @@ public class AssetPermissionService {
         String userClassification,
         String assetClassification
     ) {
-        if (hasAny(roles, SUPERUSER_ROLES)) {
-            return PermissionResult.allowed("MANAGE", "superuser");
-        }
-
         String classification = screenClassification(assetId, assetClassification);
+        if (classificationRank(classification) < 0) {
+            return PermissionResult.denied("classification_required");
+        }
+        if (hasAny(roles, SUPERUSER_ROLES)) {
+            return PermissionResult.allowed("MANAGE", "superuser_override");
+        }
         if (isPublic(classification)) {
             return PermissionResult.allowed("READ", "public");
         }
@@ -471,9 +475,6 @@ public class AssetPermissionService {
             .map(AssetGrant::getPermission)
             .max(Comparator.comparingInt(p -> PERMISSION_RANK.getOrDefault(p, 0)))
             .orElse("READ");
-        if (PERMISSION_RANK.getOrDefault(highestPermission, 0) >= PERMISSION_RANK.get("EDIT")) {
-            return PermissionResult.allowed(highestPermission, "explicit_grant");
-        }
         if (isClassificationAllowed(userClassification, classification)) {
             return PermissionResult.allowed(highestPermission, "explicit_grant");
         }
@@ -493,7 +494,16 @@ public class AssetPermissionService {
         String userClassification
     ) {
         if (hasAny(roles, SUPERUSER_ROLES)) {
-            return AccessibleAssetsResult.all();
+            Set<String> classifiedIds = new LinkedHashSet<>();
+            if (reportLinkRepository != null) {
+                for (BiReportLink link : reportLinkRepository.findEnabledScreensForPermission()) {
+                    String id = screenAssetIdFromCode(link.getCode());
+                    if (id != null && classificationRank(link.getClassification()) >= 0) {
+                        classifiedIds.add(id);
+                    }
+                }
+            }
+            return paginateScreenIds(classifiedIds, pageable, "SUPERUSER_OVERRIDE");
         }
 
         Set<String> assetIds = new LinkedHashSet<>();
@@ -523,14 +533,7 @@ public class AssetPermissionService {
             }
         }
 
-        List<String> resultList = new ArrayList<>(assetIds);
-        int total = resultList.size();
-        int offset = (int) pageable.getOffset();
-        int size = pageable.getPageSize();
-        if (offset >= total) {
-            return new AccessibleAssetsResult(List.of(), total, "FILTERED");
-        }
-        return new AccessibleAssetsResult(resultList.subList(offset, Math.min(offset + size, total)), total, "FILTERED");
+        return paginateScreenIds(assetIds, pageable, "FILTERED");
     }
 
     private String screenClassification(String assetId, String fallbackClassification) {
@@ -544,7 +547,26 @@ public class AssetPermissionService {
             }
         }
         String fallback = trimToNull(fallbackClassification);
-        return fallback != null ? fallback : DEFAULT_SCREEN_CLASSIFICATION;
+        return fallback;
+    }
+
+    private AccessibleAssetsResult paginateScreenIds(
+        Set<String> assetIds,
+        Pageable pageable,
+        String scope
+    ) {
+        List<String> resultList = new ArrayList<>(assetIds);
+        int total = resultList.size();
+        int offset = (int) pageable.getOffset();
+        int size = pageable.getPageSize();
+        if (offset >= total) {
+            return new AccessibleAssetsResult(List.of(), total, scope);
+        }
+        return new AccessibleAssetsResult(
+            resultList.subList(offset, Math.min(offset + size, total)),
+            total,
+            scope
+        );
     }
 
     private boolean isClassificationAllowed(String callerLevel, String assetLevel) {

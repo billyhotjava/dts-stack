@@ -543,10 +543,12 @@ export default function Page() {
 	);
 
 	return (
-		<Layout className="min-h-full" style={{ background: "transparent" }}>
-			<Layout.Sider
-				width={248}
-				theme="light"
+			<Layout className="min-h-full" style={{ background: "transparent" }}>
+				<Layout.Sider
+					width={248}
+					breakpoint="md"
+					collapsedWidth={0}
+					theme="light"
 				style={{
 					background: "#fff",
 					borderRight: "1px solid #f0f0f0",
@@ -691,20 +693,6 @@ export default function Page() {
 								<span>资产登记台账</span>
 							</Space>
 						}
-						extra={
-							<Pagination
-								size="small"
-								current={pageState.page}
-								pageSize={pageState.size}
-								total={pageState.total}
-								showSizeChanger
-								pageSizeOptions={[10, 20, 50, 100]}
-								onChange={(page, size) => {
-									const nextSize = size || LEDGER_PAGE_SIZE;
-									void loadDatasets(nextSize !== pageState.size ? 1 : page, nextSize);
-								}}
-							/>
-						}
 					>
 						<div className="asset-ledger-filter-strip mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
 							<div className="mb-2 flex flex-wrap items-center justify-between gap-3">
@@ -736,6 +724,22 @@ export default function Page() {
 								description="可能还未完成数据源结构采集，也可能当前密级、主题域或资产授权限制了可见范围。"
 							/>
 						)}
+						{pageState.total > 0 ? (
+							<div className="asset-ledger-pagination mt-4 flex justify-end">
+								<Pagination
+									size="small"
+									current={pageState.page}
+									pageSize={pageState.size}
+									total={pageState.total}
+									showSizeChanger
+									pageSizeOptions={[10, 20, 50, 100]}
+									onChange={(page, size) => {
+										const nextSize = size || LEDGER_PAGE_SIZE;
+										void loadDatasets(nextSize !== pageState.size ? 1 : page, nextSize);
+									}}
+								/>
+							</div>
+						) : null}
 					</Card>
 
 					<Collapse

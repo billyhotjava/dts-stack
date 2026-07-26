@@ -92,14 +92,18 @@ test("successful source writes refresh source, baseline and stage projection", (
 	assert.match(parent, /onSaved=\{loadEvidence\}/);
 });
 
-test("an empty inventory can register a real catalog asset without leaving the plan", () => {
+test("catalog assets without a connection remain available as an explicit secondary path", () => {
 	assert.match(component, /listCatalogAssetsV2/);
 	assert.match(component, /legacyDatasetId/);
 	assert.doesNotMatch(component, /listDatasets/);
 	assert.match(component, /listTablesByDataset/);
+	assert.match(component, /catalogRegistrationOpen/);
+	assert.match(component, /从资产目录选择无连接资产/);
+	assert.match(component, /从资产目录选择/);
 	assert.match(component, /选择数据集/);
 	assert.match(component, /选择数据表/);
 	assert.match(component, /登记目录资产/);
+	assert.doesNotMatch(component, /其他资产目录入口/);
 	assert.match(registration, /sourceType:\s*"CATALOG_TABLE"/);
 	assert.match(registration, /locator:\s*\{\s*assetId:\s*normalizedAssetId\s*\}/);
 	assert.match(component, /saveWarehousePlanSources/);
@@ -152,10 +156,24 @@ test("switching planId clears every catalog selection and pending conflict", () 
 	assert.match(planEffect, /setSelectedCatalogDatasetId\(null\)/);
 	assert.match(planEffect, /setSelectedAssetId\(null\)/);
 	assert.match(planEffect, /setPendingCatalogAssetId\(null\)/);
+	assert.match(planEffect, /setCatalogRegistrationOpen\(false\)/);
+	assert.match(planEffect, /setRegistrationExpanded\(registrationOpenByDefault\)/);
 	assert.match(planEffect, /setCatalogOptions\(\[\]\)/);
 	assert.match(planEffect, /setSelectedConnectionId\(null\)/);
 	assert.match(planEffect, /setSelectedConnectionSchema\(null\)/);
 	assert.match(planEffect, /setSelectedConnectionTableId\(null\)/);
+});
+
+test("business-first conceptual design defers physical source registration until the user asks for it", () => {
+	assert.match(component, /const sourceRegistrationDeferred/);
+	assert.match(component, /onboardingMode\s*===\s*"BUSINESS_FIRST"/);
+	assert.match(component, /inventory\?\.readiness\s*===\s*"NOT_REQUIRED_YET"/);
+	assert.match(component, /概念设计阶段无需选择数据表/);
+	assert.match(component, /来源盘点不是概念设计的前置条件/);
+	assert.match(component, /NOT_REQUIRED_YET:\s*"尚未登记来源"/);
+	assert.match(component, /type=\{conceptualDesignAllowed\s*\?\s*"info"\s*:\s*"warning"\}/);
+	assert.match(component, /showSourceRegistrationControls/);
+	assert.match(component, /提前登记已有来源/);
 });
 
 test("planning policy preserves the explicit conceptual-design decision", () => {

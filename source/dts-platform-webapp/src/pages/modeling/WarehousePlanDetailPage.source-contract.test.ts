@@ -14,12 +14,18 @@ test("warehouse plan detail is registered as a stable planId wildcard route", ()
 	assert.match(page, /planId/);
 });
 
-test("detail title reuses the shared plan header editor without resetting evidence or route context", () => {
+test("plan overview owns inline header editing without opening a second surface", () => {
 	assert.match(page, /WarehousePlanHeaderEditor/);
-	assert.match(page, /编辑基本信息/);
+	assert.match(page, /const routeMode\s*=\s*searchParams\.get\("mode"\)/);
+	assert.match(page, /const editMode\s*=\s*routeMode\s*===\s*"edit"/);
+	assert.match(page, /headerEditing\s*=\s*editMode\s*&&\s*activeSection\s*===\s*"overview"/);
+	assert.match(page, /buildWarehousePlanRoute\(planId,\s*activeSection/);
+	assert.match(page, /编辑规划/);
 	assert.match(page, /canEditWarehousePlanHeader/);
 	assert.match(page, /onPlanChange=\{setPlan\}/);
 	assert.doesNotMatch(page, /onPlanChange=.*load\(/);
+	assert.doesNotMatch(page, /editorOpen|setEditorOpen/);
+	assert.doesNotMatch(page, /disabled:\s*headerEditing|disabled=\{headerEditing\}/);
 });
 
 test("six tabs organize editing without becoming a second completion state", () => {
@@ -33,9 +39,19 @@ test("editing follows the backend maintainer-role gate as well as lifecycle", ()
 	assert.match(page, /useUserRoles/);
 	assert.match(page, /hasWarehousePlanCreateAccess\(userRoles\)/);
 	assert.match(page, /planEditable\s*=\s*[\s\S]{0,80}!viewOnly\s*&&\s*canMaintainPlan\s*&&/);
-	assert.match(page, /searchParams\.get\("mode"\)\s*===\s*"view"/);
+	assert.match(page, /const viewOnly\s*=\s*routeMode\s*===\s*"view"/);
 	assert.match(page, /只读查看/);
-	assert.match(page, /编辑计划内容/);
+	assert.match(page, /headerEditing/);
+	assert.match(page, /完成编辑/);
+});
+
+test("edit mode remains active across plan sections and baseline tabs", () => {
+	const openSection = page.match(/const openSection[\s\S]*?\n\t\t\);/)?.[0] || "";
+	assert.match(openSection, /mode:\s*editMode\s*\?\s*"edit"\s*:\s*viewOnly\s*\?\s*"view"/);
+	assert.match(openSection, /tab:\s*section\s*===\s*"baseline"/);
+	assert.match(page, /tab:\s*value[\s\S]{0,120}mode:\s*editMode\s*\?\s*"edit"\s*:\s*viewOnly\s*\?\s*"view"/);
+	assert.match(page, /items=\{tabItems\}/);
+	assert.doesNotMatch(page, /disabled:\s*headerEditing|disabled=\{headerEditing\}/);
 });
 
 test("category and policy mutations are plan-scoped before form validation", () => {
@@ -79,7 +95,7 @@ test("baseline is a three-step workspace with real category and layer forms", ()
 	assert.match(page, /categoryForm/);
 	assert.match(page, /policyForm/);
 	assert.match(page, /保存业务分类/);
-	assert.match(page, /保存分层策略/);
+	assert.match(page, /保存规划策略/);
 	assert.doesNotMatch(page, /业务过程|业务对象/);
 });
 
@@ -111,7 +127,7 @@ test("business category management uses a plan-bound safe return route", () => {
 test("baseline editing hides the header next action so each form keeps one primary action", () => {
 	assert.match(page, /activeSection\s*!==\s*"baseline"\s*&&\s*nextAction/);
 	assert.match(page, /保存业务分类/);
-	assert.match(page, /保存分层策略/);
+	assert.match(page, /保存规划策略/);
 });
 
 test("conflicts offer explicit current-version retry and discard choices", () => {

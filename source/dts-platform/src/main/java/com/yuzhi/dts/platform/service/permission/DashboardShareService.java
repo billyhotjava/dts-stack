@@ -6,6 +6,8 @@ import com.yuzhi.dts.platform.domain.visualization.BiReportLink;
 import com.yuzhi.dts.platform.repository.permission.AssetGrantRepository;
 import com.yuzhi.dts.platform.repository.visualization.BiReportLinkRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService;
+import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.BindAccessCommand;
 import com.yuzhi.dts.platform.service.permission.dto.AssetGrantDto;
 import com.yuzhi.dts.platform.service.permission.dto.DashboardShareRequest;
 import java.util.List;
@@ -38,6 +40,7 @@ public class DashboardShareService {
     private final DashboardAccessGuard accessGuard;
     private final DashboardCallerResolver callerResolver;
     private final AuditService audit;
+    private final CatalogConsumerClassificationService consumerClassificationService;
 
     public DashboardShareService(
         BiReportLinkRepository reportRepo,
@@ -46,11 +49,24 @@ public class DashboardShareService {
         DashboardCallerResolver callerResolver,
         AuditService audit
     ) {
+        this(reportRepo, grantRepo, accessGuard, callerResolver, audit, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public DashboardShareService(
+        BiReportLinkRepository reportRepo,
+        AssetGrantRepository grantRepo,
+        DashboardAccessGuard accessGuard,
+        DashboardCallerResolver callerResolver,
+        AuditService audit,
+        CatalogConsumerClassificationService consumerClassificationService
+    ) {
         this.reportRepo = reportRepo;
         this.grantRepo = grantRepo;
         this.accessGuard = accessGuard;
         this.callerResolver = callerResolver;
         this.audit = audit;
+        this.consumerClassificationService = consumerClassificationService;
     }
 
     public AssetGrantDto share(UUID reportId, DashboardShareRequest req) {
@@ -76,7 +92,7 @@ public class DashboardShareService {
         if (caller.username() != null && caller.username().equalsIgnoreCase(grantee)) {
             throw new IllegalArgumentException("cannot grant to yourself");
         }
-        // levelOverride 只对 VIEW 有意义（MANAGE 本来就豁免密级）；忽略 caller 误传。
+        // levelOverride 只对 VIEW 有意义；MANAGE 仅提供管理能力，不再豁免人员密级。
         boolean levelOverride = req.levelOverride() && PERM_VIEW.equals(permission);
 
         AssetGrant grant = new AssetGrant();
@@ -89,6 +105,18 @@ public class DashboardShareService {
         grant.setGrantedBy(caller.username() != null ? caller.username() : "system");
         grant.setGrantReason(trimToNull(req.reason()));
         AssetGrant saved = grantRepo.save(grant);
+        if (consumerClassificationService != null && report.getQueryDatasetId() != null) {
+            consumerClassificationService.bindAccess(
+                new BindAccessCommand(
+                    "SHARE_GRANT",
+                    shareBindingKey(saved.getId()),
+                    "REPORT_LINK",
+                    reportConsumerKey(report),
+                    saved.getValidTo()
+                ),
+                caller.username()
+            );
+        }
 
         audit.auditAction(
             "VIS_DASHBOARD_SHARE_GRANT",
@@ -126,6 +154,13 @@ public class DashboardShareService {
         String granteeBefore = target.getGranteeId();
         String permissionBefore = target.getPermission();
         grantRepo.delete(target);
+        if (consumerClassificationService != null) {
+            consumerClassificationService.revokeAccessBinding(
+                "SHARE_GRANT",
+                shareBindingKey(target.getId()),
+                caller.username()
+            );
+        }
 
         audit.auditAction(
             "VIS_DASHBOARD_SHARE_REVOKE",
@@ -166,5 +201,19 @@ public class DashboardShareService {
         if (!StringUtils.hasText(raw)) return null;
         String t = raw.trim();
         return t.isEmpty() ? null : t;
+    }
+
+    private String reportConsumerKey(BiReportLink report) {
+        if (report == null || !StringUtils.hasText(report.getCode())) {
+            throw new IllegalArgumentException("dashboard code required");
+        }
+        return "report-link:" + report.getCode().trim().toLowerCase(Locale.ROOT);
+    }
+
+    static String shareBindingKey(Long grantId) {
+        if (grantId == null) {
+            throw new IllegalArgumentException("saved grant id required");
+        }
+        return "asset-grant:" + grantId;
     }
 }

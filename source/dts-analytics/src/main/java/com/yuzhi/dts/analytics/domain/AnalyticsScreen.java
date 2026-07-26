@@ -63,6 +63,21 @@ public class AnalyticsScreen implements Serializable {
     @Column(name = "classification", length = 32)
     private String classification;
 
+    @Column(name = "manual_classification_floor", length = 32)
+    private String manualClassificationFloor;
+
+    @Column(name = "classification_snapshot_id", length = 36)
+    private String classificationSnapshotId;
+
+    @Column(name = "classification_snapshot_version")
+    private Long classificationSnapshotVersion;
+
+    @Column(name = "classification_derived_at")
+    private Instant classificationDerivedAt;
+
+    @Column(name = "classification_evidence_json", columnDefinition = "text")
+    private String classificationEvidenceJson;
+
     @Column(name = "domain_id", length = 64)
     private String domainId;
 
@@ -191,6 +206,46 @@ public class AnalyticsScreen implements Serializable {
 
     public void setClassification(String classification) {
         this.classification = classification;
+    }
+
+    public String getManualClassificationFloor() {
+        return manualClassificationFloor;
+    }
+
+    public void setManualClassificationFloor(String manualClassificationFloor) {
+        this.manualClassificationFloor = manualClassificationFloor;
+    }
+
+    public String getClassificationSnapshotId() {
+        return classificationSnapshotId;
+    }
+
+    public void setClassificationSnapshotId(String classificationSnapshotId) {
+        this.classificationSnapshotId = classificationSnapshotId;
+    }
+
+    public Long getClassificationSnapshotVersion() {
+        return classificationSnapshotVersion;
+    }
+
+    public void setClassificationSnapshotVersion(Long classificationSnapshotVersion) {
+        this.classificationSnapshotVersion = classificationSnapshotVersion;
+    }
+
+    public Instant getClassificationDerivedAt() {
+        return classificationDerivedAt;
+    }
+
+    public void setClassificationDerivedAt(Instant classificationDerivedAt) {
+        this.classificationDerivedAt = classificationDerivedAt;
+    }
+
+    public String getClassificationEvidenceJson() {
+        return classificationEvidenceJson;
+    }
+
+    public void setClassificationEvidenceJson(String classificationEvidenceJson) {
+        this.classificationEvidenceJson = classificationEvidenceJson;
     }
 
     public String getDomainId() {

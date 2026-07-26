@@ -1,10 +1,12 @@
 package com.yuzhi.dts.analytics.service;
 
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.analytics.domain.AnalyticsPublicLink;
 import com.yuzhi.dts.analytics.repository.AnalyticsPublicLinkRepository;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -19,9 +21,17 @@ public class PublicLinkService {
     public static final String MODEL_SCREEN = "screen";
 
     private final AnalyticsPublicLinkRepository publicLinkRepository;
+    private final AnalyticsConsumerClassificationService classificationService;
+    private final ScreenAuditService screenAuditService;
 
-    public PublicLinkService(AnalyticsPublicLinkRepository publicLinkRepository) {
+    public PublicLinkService(
+        AnalyticsPublicLinkRepository publicLinkRepository,
+        AnalyticsConsumerClassificationService classificationService,
+        ScreenAuditService screenAuditService
+    ) {
         this.publicLinkRepository = publicLinkRepository;
+        this.classificationService = classificationService;
+        this.screenAuditService = screenAuditService;
     }
 
     public Optional<String> publicUuidFor(String model, long modelId) {
@@ -34,15 +44,33 @@ public class PublicLinkService {
 
     public String getOrCreateScoped(String model, long modelId, Long creatorId, String dept, String classification) {
         String normalizedDept = normalizeScopeValue(dept);
-        String normalizedClassification = normalizeScopeValue(classification);
+        String effectiveClassification;
+        if (isClassificationManagedModel(model)) {
+            var derived = classificationService.ensurePublicConsumer(model, modelId);
+            effectiveClassification = normalizeScopeValue(derived.effectiveLevel());
+        } else {
+            // Legacy public-link models (for example explore_session) keep their
+            // existing scoped classification until they receive a canonical
+            // consumer derivation contract of their own.
+            effectiveClassification = normalizeScopeValue(classification);
+        }
 
         Optional<AnalyticsPublicLink> existing = publicLinkRepository.findByModelAndModelId(model, modelId);
         if (existing.isPresent()) {
             AnalyticsPublicLink link = existing.get();
             String linkDept = normalizeScopeValue(link.getDept());
-            String linkClassification = normalizeScopeValue(link.getClassification());
-            if (!scopeMatches(linkDept, normalizedDept) || !scopeMatches(linkClassification, normalizedClassification)) {
+            if (!scopeMatches(linkDept, normalizedDept)) {
                 throw new IllegalStateException("Public link scope mismatch");
+            }
+            link.setClassification(effectiveClassification);
+            publicLinkRepository.save(link);
+            if (isClassificationManagedModel(model)) {
+                classificationService.bindPublicLink(
+                    link.getPublicUuid(),
+                    model,
+                    modelId,
+                    link.getExpireAt()
+                );
             }
             return link.getPublicUuid();
         }
@@ -52,10 +80,19 @@ public class PublicLinkService {
         link.setModelId(modelId);
         link.setCreatorId(creatorId);
         link.setDept(normalizedDept);
-        link.setClassification(normalizedClassification);
+        link.setClassification(effectiveClassification);
         link.setDisabled(false);
         link.setPublicUuid(UUID.randomUUID().toString());
-        return publicLinkRepository.save(link).getPublicUuid();
+        AnalyticsPublicLink saved = publicLinkRepository.save(link);
+        if (isClassificationManagedModel(model)) {
+            classificationService.bindPublicLink(
+                saved.getPublicUuid(),
+                model,
+                modelId,
+                saved.getExpireAt()
+            );
+        }
+        return saved.getPublicUuid();
     }
 
     public void delete(String model, long modelId) {
@@ -88,10 +125,17 @@ public class PublicLinkService {
             return false;
         }
         if (link.isDisabled()) {
-            return false;
+            return deny(link, "DISABLED");
         }
         if (link.getExpireAt() != null && Instant.now().isAfter(link.getExpireAt())) {
-            return false;
+            return deny(link, "EXPIRED");
+        }
+        if (isClassificationManagedModel(link.getModel())) {
+            try {
+                classificationService.requireCurrentPublicLink(link.getPublicUuid());
+            } catch (RuntimeException ex) {
+                return deny(link, "CLASSIFICATION_SNAPSHOT_STALE");
+            }
         }
 
         String linkDept = normalizeScopeValue(link.getDept());
@@ -99,15 +143,18 @@ public class PublicLinkService {
         String normalizedDept = normalizeScopeValue(dept);
         String normalizedClassification = normalizeScopeValue(classification);
 
-        if (!scopeMatches(linkDept, normalizedDept) || !scopeMatches(linkClassification, normalizedClassification)) {
-            return false;
+        if (
+            !scopeMatches(linkDept, normalizedDept) ||
+            !classificationAllows(normalizedClassification, linkClassification)
+        ) {
+            return deny(link, "SCOPE_OR_CLASSIFICATION_BLOCKED");
         }
 
         if (!passwordMatches(link.getPasswordHash(), plainPassword)) {
-            return false;
+            return deny(link, "PASSWORD_BLOCKED");
         }
 
-        return ipAllowed(link.getIpAllowlist(), clientIp);
+        return ipAllowed(link.getIpAllowlist(), clientIp) || deny(link, "IP_BLOCKED");
     }
 
     public static String hashPassword(String plainPassword) {
@@ -179,5 +226,48 @@ public class PublicLinkService {
             return false;
         }
         return stored.equals(current);
+    }
+
+    private static boolean classificationAllows(String caller, String asset) {
+        SecurityLevelCatalog.DataSecurityLevel assetLevel =
+            SecurityLevelCatalog.DataSecurityLevel.parse(asset);
+        if (assetLevel == null) {
+            return false;
+        }
+        if (assetLevel == SecurityLevelCatalog.DataSecurityLevel.PUBLIC) {
+            return true;
+        }
+        SecurityLevelCatalog.DataSecurityLevel callerLevel =
+            SecurityLevelCatalog.parseMaxDataLevel(caller);
+        return callerLevel != null && callerLevel.number() >= assetLevel.number();
+    }
+
+    private static boolean isClassificationManagedModel(String model) {
+        String normalized = model == null ? "" : model.trim().toLowerCase();
+        return MODEL_CARD.equals(normalized) ||
+            MODEL_DASHBOARD.equals(normalized) ||
+            MODEL_SCREEN.equals(normalized);
+    }
+
+    private boolean deny(AnalyticsPublicLink link, String reason) {
+        if (
+            screenAuditService != null &&
+            link != null &&
+            MODEL_SCREEN.equalsIgnoreCase(link.getModel()) &&
+            link.getModelId() != null
+        ) {
+            screenAuditService.log(
+                link.getModelId(),
+                null,
+                "screen.public_link.access.denied",
+                null,
+                Map.of(
+                    "publicUuid", link.getPublicUuid() == null ? "" : link.getPublicUuid(),
+                    "reason", reason
+                ),
+                null
+            );
+        }
+        return false;
     }
 }

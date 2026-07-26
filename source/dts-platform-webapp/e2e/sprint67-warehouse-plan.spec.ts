@@ -361,7 +361,7 @@ test("warehouse plan ledger preserves edits across 409 and archives with fresh C
 	await draftRow.getByRole("button", { name: "查看" }).click();
 	await expect(page).toHaveURL(/\/modeling\/plans\/plan-ledger-draft\?mode=view&planId=plan-ledger-draft$/);
 	await expect(page.getByText("只读查看", { exact: true })).toBeVisible();
-	await expect(page.getByRole("button", { name: "编辑基本信息" })).toHaveCount(0);
+	await expect(page.getByTestId("warehouse-plan-header-editor")).toHaveCount(0);
 	await page.getByRole("tab", { name: "规划基线" }).click();
 	await expect(page).toHaveURL(/\/modeling\/plans\/plan-ledger-draft\/baseline\?mode=view&planId=plan-ledger-draft$/);
 	await expect(page.getByRole("button", { name: "保存业务分类" })).toBeDisabled();
@@ -369,8 +369,7 @@ test("warehouse plan ledger preserves edits across 409 and archives with fresh C
 
 	const editableDraftRow = page.getByRole("row").filter({ hasText: "经营分析建设规划" });
 	await editableDraftRow.getByRole("button", { name: "编辑" }).click();
-	await expect(page).toHaveURL(/\/modeling\/plans\/plan-ledger-draft\/baseline\?planId=plan-ledger-draft$/);
-	await page.getByRole("button", { name: "编辑基本信息" }).click();
+	await expect(page).toHaveURL(/\/modeling\/plans\/plan-ledger-draft\?mode=edit&planId=plan-ledger-draft$/);
 	const editor = page.getByTestId("warehouse-plan-header-editor");
 	await expect(editor).toBeVisible();
 	await editor.getByLabel("规划名称").fill("经营分析建设规划（修订）");

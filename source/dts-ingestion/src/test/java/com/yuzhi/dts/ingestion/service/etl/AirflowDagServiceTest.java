@@ -103,7 +103,7 @@ class AirflowDagServiceTest {
         assertThat(dagSource).contains("Mount(target=\"/decrypted\", source=None, type=\"tmpfs\", read_only=False)");
         assertThat(dagSource).contains("\"TMPDIR\": \"/decrypted\",");
         assertThat(dagSource).contains("\"DTS_INFRA_ENCRYPTION_KEY\": os.environ.get(\"DTS_INFRA_ENCRYPTION_KEY\", \"\"),");
-        assertThat(dagSource).contains("\"DTS_INFRA_KEY_VERSION\": os.environ.get(\"DTS_INFRA_KEY_VERSION\", \"\"),");
+        assertThat(dagSource).contains("\"DTS_INFRA_KEY_VERSION\": os.environ.get(\"DTS_INFRA_KEY_VERSION\", \"v1\"),");
         // docker.types.Mount 的 source 是必填位置参数；任何 Mount(...) 缺 source= 都会在 DAG 导入期抛 TypeError。
         // 该断言守住此不变量（曾因 tmpfs mount 漏写 source 导致现场 AIRFLOW_DAG_NOT_READY_TIMEOUT）。
         assertThatEveryMountHasSource(dagSource);
@@ -196,6 +196,40 @@ class AirflowDagServiceTest {
         assertThat(dag).doesNotContain("dts_api_ingestion_checkpoint");
         assertThat(dag).doesNotContain("_dts_raw_record JSONB");
         assertThat(dag).doesNotContain("_request_json");
+    }
+
+    @Test
+    void shouldCarryImmutableClassificationSealIntoAirflowOpenLineageDatasets() throws Exception {
+        IngestionTask task = task("manual", "task_openlineage_classification");
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        task.setTableMapping(
+            mapper.readTree("[{\"source\":\"public.customer\",\"target\":\"ods.ods_customer\"}]")
+        );
+        task.setClassificationSeal(
+            mapper.readTree(
+                """
+                {
+                  "sealId":"seal-s72",
+                  "subjectType":"ASSET",
+                  "subjectKey":"data-source:s72",
+                  "effectiveLevel":"SECRET",
+                  "snapshotVersion":7,
+                  "checksum":"0123456789abcdef0123456789abcdef",
+                  "sealedAt":"2026-07-26T00:00:00Z"
+                }
+                """
+            )
+        );
+
+        dagService.rebuildDagForTask(task);
+
+        String dag = readDag("task_openlineage_classification");
+        assertThat(dag).contains("make_openlineage_callback(\"COMPLETE\", LINEAGE_DATASETS)");
+        assertThat(dag).contains("\"dtsGovernance\"");
+        assertThat(dag).contains("\"classification\":\"SECRET\"");
+        assertThat(dag).contains("\"sealId\":\"seal-s72\"");
+        assertThat(dag).contains("\"snapshotVersion\":7");
+        assertThat(dag).contains("\"subjectKey\":\"data-source:s72\"");
     }
 
     @Test

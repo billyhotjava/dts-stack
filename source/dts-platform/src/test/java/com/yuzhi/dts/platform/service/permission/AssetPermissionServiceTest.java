@@ -419,6 +419,88 @@ class AssetPermissionServiceTest {
     }
 
     @Test
+    void screenManageGrant_doesNotBypassPersonnelClassification() {
+        AssetPermissionService screenService = new AssetPermissionService(ownershipRepository, grantRepository, reportLinkRepository);
+        when(reportLinkRepository.findEnabledScreenByCode("screen-10"))
+            .thenReturn(Optional.of(screenLink("screen-10", "CONFIDENTIAL")));
+        AssetGrant grant = new AssetGrant();
+        grant.setPermission("MANAGE");
+        when(grantRepository.findActiveGrantsForUser(
+            eq("SCREEN"),
+            eq("10"),
+            eq("ptrdemo"),
+            anyList(),
+            eq("D01"),
+            any(Instant.class)
+        )).thenReturn(List.of(grant));
+
+        PermissionResult result = screenService.check(
+            "ptrdemo",
+            List.of("ROLE_PTR"),
+            "D01",
+            "SCREEN",
+            "10",
+            "SECRET",
+            null
+        );
+
+        assertThat(result.allowed()).isFalse();
+        assertThat(result.reason()).isEqualTo("classification_denied");
+    }
+
+    @Test
+    void screenSuperuserOverride_isExplicitAndCannotBypassMissingClassification() {
+        AssetPermissionService screenService = new AssetPermissionService(ownershipRepository, grantRepository, reportLinkRepository);
+        when(reportLinkRepository.findEnabledScreenByCode("screen-10"))
+            .thenReturn(Optional.of(screenLink("screen-10", "CONFIDENTIAL")));
+        when(reportLinkRepository.findEnabledScreenByCode("screen-11")).thenReturn(Optional.empty());
+
+        PermissionResult classified = screenService.check(
+            "admin",
+            List.of("ROLE_OP_ADMIN"),
+            "D01",
+            "SCREEN",
+            "10",
+            null,
+            null
+        );
+        PermissionResult missing = screenService.check(
+            "admin",
+            List.of("ROLE_OP_ADMIN"),
+            "D01",
+            "SCREEN",
+            "11",
+            null,
+            null
+        );
+
+        assertThat(classified.allowed()).isTrue();
+        assertThat(classified.permission()).isEqualTo("MANAGE");
+        assertThat(classified.reason()).isEqualTo("superuser_override");
+        assertThat(missing.allowed()).isFalse();
+        assertThat(missing.reason()).isEqualTo("classification_required");
+    }
+
+    @Test
+    void screenBatchCheck_doesNotUseGenericSuperuserShortCircuit() {
+        AssetPermissionService screenService = new AssetPermissionService(ownershipRepository, grantRepository, reportLinkRepository);
+        when(reportLinkRepository.findEnabledScreenByCode("screen-10"))
+            .thenReturn(Optional.of(screenLink("screen-10", "SECRET")));
+        when(reportLinkRepository.findEnabledScreenByCode("screen-11")).thenReturn(Optional.empty());
+
+        Map<String, PermissionResult> results = screenService.batchCheck(
+            "admin",
+            List.of("ROLE_OP_ADMIN"),
+            "D01",
+            List.of(new AssetRef("SCREEN", "10"), new AssetRef("SCREEN", "11")),
+            null
+        );
+
+        assertThat(results.get("SCREEN:10").reason()).isEqualTo("superuser_override");
+        assertThat(results.get("SCREEN:11").reason()).isEqualTo("classification_required");
+    }
+
+    @Test
     void screenAccessibleIds_shouldIncludePublicAndAllowedExplicitGrants() {
         AssetPermissionService screenService = new AssetPermissionService(ownershipRepository, grantRepository, reportLinkRepository);
         when(reportLinkRepository.findEnabledScreensForPermission()).thenReturn(List.of(

@@ -203,4 +203,10 @@
     <include file="config/liquibase/changelog/20260725_20_catalog_tag_migration_batch.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260725_21_catalog_external_asset_identity.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260725_22_catalog_external_asset_sync_state.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260726_01_model_spec_lightweight_draft.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260726_02_catalog_classification_lifecycle.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260726_03_catalog_classification_propagation.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260726_04_catalog_lifecycle_governance.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260726_05_consumer_classification_dependency.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260726_06_classification_migration_control.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

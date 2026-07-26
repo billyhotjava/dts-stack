@@ -138,6 +138,8 @@ public class IngestionTaskResource {
         LineageSpec lineage,
         AirflowSpec airflow,
         DbtSpec dbt,
+        Map<String, Object> classificationSeal,
+        Map<String, String> fieldClassifications,
         Boolean runNow,
         Map<String, Object> jobConfig,
         Boolean draft
@@ -349,6 +351,8 @@ public class IngestionTaskResource {
                     new com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO();
                 taskDTO.setName(request.name());
                 taskDTO.setDescription(request.description());
+                taskDTO.setClassificationSeal(toJsonNode(request.classificationSeal()));
+                taskDTO.setFieldClassifications(toJsonNode(request.fieldClassifications()));
                 taskDTO.setSourceType(ApiConnectorTypes.DEFAULT_READER_TYPE);
                 taskDTO.setSourceDataSourceId(request.source().dataSourceId());
                 taskDTO.setSourceConfig(toJsonNode(apiRuntimeConfig));
@@ -433,6 +437,8 @@ public class IngestionTaskResource {
                     new com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO();
                 taskDTO.setName(request.name());
                 taskDTO.setDescription(request.description());
+                taskDTO.setClassificationSeal(toJsonNode(request.classificationSeal()));
+                taskDTO.setFieldClassifications(toJsonNode(request.fieldClassifications()));
                 taskDTO.setSourceType(readerType);
                 taskDTO.setSourceDataSourceId(request.source().dataSourceId());
                 if (!sourceOverrides.isEmpty()) {
@@ -549,6 +555,8 @@ public class IngestionTaskResource {
                 new com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO();
             taskDTO.setName(request.name());
             taskDTO.setDescription(request.description());
+            taskDTO.setClassificationSeal(toJsonNode(request.classificationSeal()));
+            taskDTO.setFieldClassifications(toJsonNode(request.fieldClassifications()));
             taskDTO.setSourceType(readerType);
             taskDTO.setSourceDataSourceId(request.source().dataSourceId());
             if (!sourceOverrides.isEmpty()) {

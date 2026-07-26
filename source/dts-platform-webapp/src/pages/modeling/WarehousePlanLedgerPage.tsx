@@ -338,7 +338,7 @@ export default function WarehousePlanLedgerPage() {
 								type="link"
 								size="small"
 								icon={<Edit3 size={14} />}
-								onClick={() => navigate(buildWarehousePlanRoute(plan.id, "baseline"))}
+								onClick={() => navigate(buildWarehousePlanRoute(plan.id, "overview", { mode: "edit" }))}
 							>
 								编辑
 							</Button>

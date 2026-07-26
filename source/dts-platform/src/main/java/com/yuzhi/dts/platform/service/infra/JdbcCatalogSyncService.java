@@ -16,6 +16,8 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraSchemaDiscoverCacheRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.catalog.CatalogAutoLineageService;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
+import com.yuzhi.dts.platform.service.catalog.CatalogClassificationService;
 import com.yuzhi.dts.platform.service.catalog.SchemaDriftDetector;
 import com.yuzhi.dts.platform.service.infra.dto.SchemaDiscoverDtos.SchemaDiscoverColumnDto;
 import com.yuzhi.dts.platform.service.infra.dto.SchemaDiscoverDtos.SchemaDiscoverDriftDto;
@@ -62,7 +64,6 @@ public class JdbcCatalogSyncService {
 
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String TYPE_INCEPTOR = "INCEPTOR";
-    private static final String DEFAULT_CLASSIFICATION = SecurityLevelCatalog.DEFAULT_DATA_SECURITY_LEVEL.code();
     private static final String DEFAULT_OWNER = "system";
     private static final String DEFAULT_EXPOSED_BY = "VIEW";
     private static final String LIFECYCLE_SYNCED = "SYNCED";
@@ -81,6 +82,7 @@ public class JdbcCatalogSyncService {
     private final CatalogSchemaDriftEventRepository schemaDriftEventRepository;
     private final SchemaDriftDetector schemaDriftDetector;
     private final InfraSchemaDiscoverCacheRepository schemaDiscoverCacheRepository;
+    private final CatalogClassificationService classificationService;
 
     public JdbcCatalogSyncService(
         InfraDataSourceRepository infraDataSourceRepository,
@@ -93,7 +95,8 @@ public class JdbcCatalogSyncService {
         CatalogAutoLineageService autoLineageService,
         CatalogSchemaDriftEventRepository schemaDriftEventRepository,
         SchemaDriftDetector schemaDriftDetector,
-        InfraSchemaDiscoverCacheRepository schemaDiscoverCacheRepository
+        InfraSchemaDiscoverCacheRepository schemaDiscoverCacheRepository,
+        CatalogClassificationService classificationService
     ) {
         this.infraDataSourceRepository = infraDataSourceRepository;
         this.secretService = secretService;
@@ -106,6 +109,7 @@ public class JdbcCatalogSyncService {
         this.schemaDriftEventRepository = schemaDriftEventRepository;
         this.schemaDriftDetector = schemaDriftDetector;
         this.schemaDiscoverCacheRepository = schemaDiscoverCacheRepository;
+        this.classificationService = classificationService;
     }
 
     public List<JdbcSyncResult> synchronizeAllActive() {
@@ -198,6 +202,13 @@ public class JdbcCatalogSyncService {
                 tablesDiscovered += tables.size();
                 for (TableMeta table : tables) {
                     String tableName = table.tableName();
+                    String sourceTableRef = physicalTableName(normalizedSchema, tableName);
+                    String tableDeclaredClassification = resolveDeclaredClassification(
+                        props,
+                        "tableClassifications",
+                        sourceTableRef,
+                        stringProp(props, "classification")
+                    );
                     processedTablesLower.add(tableName.toLowerCase(Locale.ROOT));
 
                     CatalogDataset dataset = datasetRepository
@@ -211,7 +222,11 @@ public class JdbcCatalogSyncService {
                     dataset.setSnapshotTime(snapshotTime);
                     dataset.setType(StringUtils.hasText(source.getType()) ? source.getType().trim().toUpperCase(Locale.ROOT) : "JDBC");
                     dataset.setName(defaultIfBlank(dataset.getName(), tableName));
-                    dataset.setClassification(defaultIfBlank(dataset.getClassification(), DEFAULT_CLASSIFICATION));
+                    if (StringUtils.hasText(tableDeclaredClassification)) {
+                        dataset.setClassification(
+                            SecurityLevelCatalog.maxDataCode(dataset.getClassification(), tableDeclaredClassification)
+                        );
+                    }
                     dataset.setOwner(defaultIfBlank(dataset.getOwner(), defaultOwner(source)));
                     dataset.setExposedBy(defaultIfBlank(dataset.getExposedBy(), DEFAULT_EXPOSED_BY));
                     dataset.setEnabled(Boolean.TRUE);
@@ -231,7 +246,11 @@ public class JdbcCatalogSyncService {
                     tableSchema.setDataset(savedDataset);
                     tableSchema.setName(tableName);
                     tableSchema.setOwner(defaultIfBlank(tableSchema.getOwner(), savedDataset.getOwner()));
-                    tableSchema.setClassification(defaultIfBlank(tableSchema.getClassification(), savedDataset.getClassification()));
+                    if (StringUtils.hasText(savedDataset.getClassification())) {
+                        tableSchema.setClassification(
+                            SecurityLevelCatalog.maxDataCode(tableSchema.getClassification(), savedDataset.getClassification())
+                        );
+                    }
                     tableSchema = tableRepository.save(tableSchema);
                     if (isNewTable) {
                         tablesCreated++;
@@ -264,8 +283,9 @@ public class JdbcCatalogSyncService {
 
                     List<ColumnMeta> columns = listColumns(connection, resolvedCatalog, normalizedSchema, tableName);
                     columnRepository.deleteByTable(tableSchema);
+                    List<CatalogColumnSchema> columnEntities = new ArrayList<>();
                     if (!columns.isEmpty()) {
-                        List<CatalogColumnSchema> columnEntities = new ArrayList<>(columns.size());
+                        columnEntities = new ArrayList<>(columns.size());
                         for (ColumnMeta column : columns) {
                             CatalogColumnSchema entity = new CatalogColumnSchema();
                             entity.setTable(tableSchema);
@@ -300,8 +320,34 @@ public class JdbcCatalogSyncService {
                         }
                         columnEntities.add(entity);
                     }
-                        columnRepository.saveAll(columnEntities);
+                        columnEntities = columnRepository.saveAll(columnEntities);
                         columnsImported += columnEntities.size();
+                    }
+
+                    CatalogClassificationSnapshotResult classificationResult = sealJdbcClassifications(
+                        source,
+                        props,
+                        savedDataset,
+                        tableSchema,
+                        sourceTableRef,
+                        tableDeclaredClassification,
+                        columnEntities
+                    );
+                    if (StringUtils.hasText(classificationResult.effectiveLevel())) {
+                        savedDataset.setClassification(
+                            SecurityLevelCatalog.maxDataCode(
+                                savedDataset.getClassification(),
+                                classificationResult.effectiveLevel()
+                            )
+                        );
+                        datasetRepository.save(savedDataset);
+                        tableSchema.setClassification(
+                            SecurityLevelCatalog.maxDataCode(
+                                tableSchema.getClassification(),
+                                classificationResult.effectiveLevel()
+                            )
+                        );
+                        tableRepository.save(tableSchema);
                     }
 
                     if (!beforeSnapshot.isEmpty() || !columns.isEmpty()) {
@@ -1683,6 +1729,119 @@ public class JdbcCatalogSyncService {
         return DEFAULT_OWNER;
     }
 
+    private CatalogClassificationSnapshotResult sealJdbcClassifications(
+        InfraDataSource source,
+        Map<String, Object> props,
+        CatalogDataset dataset,
+        CatalogTableSchema table,
+        String sourceTableRef,
+        String tableDeclaredLevel,
+        List<CatalogColumnSchema> columns
+    ) {
+        String datasetKey = CatalogAssetKey.dataset(dataset);
+        String originRef = "jdbc:" + source.getId() + ":" + sourceTableRef;
+        List<String> columnLevels = new ArrayList<>();
+        for (CatalogColumnSchema column : columns) {
+            String columnRef = sourceTableRef + "." + column.getName();
+            String columnLevel = resolveDeclaredClassification(
+                props,
+                "columnClassifications",
+                columnRef,
+                tableDeclaredLevel
+            );
+            if (!StringUtils.hasText(columnLevel)) {
+                continue;
+            }
+            String columnKey =
+                datasetKey +
+                "/column:" +
+                column.getName().trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_.:-]+", "_");
+            classificationService.sealOrRaise(
+                new CatalogClassificationService.SealCommand(
+                    "COLUMN",
+                    columnKey,
+                    "DATASET",
+                    columnLevel,
+                    null,
+                    null,
+                    List.of(),
+                    "SOURCE_DECLARATION",
+                    originRef,
+                    sha256(originRef + ":" + column.getName() + ":" + columnLevel),
+                    toJson(
+                        Map.of(
+                            "sourceId",
+                            source.getId(),
+                            "table",
+                            sourceTableRef,
+                            "column",
+                            column.getName(),
+                            "declaredLevel",
+                            columnLevel
+                        )
+                    )
+                )
+            );
+            columnLevels.add(columnLevel);
+        }
+        if (!StringUtils.hasText(tableDeclaredLevel) && columnLevels.isEmpty()) {
+            return new CatalogClassificationSnapshotResult(null);
+        }
+        var snapshot = classificationService.sealOrRaise(
+            new CatalogClassificationService.SealCommand(
+                "ASSET",
+                datasetKey,
+                "DATASET",
+                tableDeclaredLevel,
+                null,
+                null,
+                columnLevels,
+                "SOURCE_DECLARATION",
+                originRef,
+                sha256(originRef + ":" + tableDeclaredLevel + ":" + String.join(",", columnLevels)),
+                toJson(
+                    Map.of(
+                        "sourceId",
+                        source.getId(),
+                        "table",
+                        sourceTableRef,
+                        "tableDeclaredLevel",
+                        tableDeclaredLevel == null ? "" : tableDeclaredLevel,
+                        "columnCount",
+                        columns.size()
+                    )
+                )
+            )
+        );
+        return new CatalogClassificationSnapshotResult(snapshot.getEffectiveLevel());
+    }
+
+    private String resolveDeclaredClassification(
+        Map<String, Object> props,
+        String mappingKey,
+        String reference,
+        String floor
+    ) {
+        Object mappedValue = null;
+        Object rawMappings = props == null ? null : props.get(mappingKey);
+        if (rawMappings instanceof Map<?, ?> mappings) {
+            for (Map.Entry<?, ?> entry : mappings.entrySet()) {
+                if (entry.getKey() != null && reference.equalsIgnoreCase(entry.getKey().toString().trim())) {
+                    mappedValue = entry.getValue();
+                    break;
+                }
+            }
+        }
+        String mapped = mappedValue == null ? null : mappedValue.toString();
+        String normalizedFloor = StringUtils.hasText(floor)
+            ? SecurityLevelCatalog.requireDataLevel(floor).code()
+            : null;
+        String normalizedMapped = StringUtils.hasText(mapped)
+            ? SecurityLevelCatalog.requireDataLevel(mapped).code()
+            : null;
+        return SecurityLevelCatalog.maxDataCode(normalizedFloor, normalizedMapped);
+    }
+
     private Map<String, Object> readProps(String json) {
         if (!StringUtils.hasText(json)) {
             return Collections.emptyMap();
@@ -1877,6 +2036,8 @@ public class JdbcCatalogSyncService {
             return new StaleCleanupStats(0, 0, 0);
         }
     }
+
+    private record CatalogClassificationSnapshotResult(String effectiveLevel) {}
 
     public record JdbcSyncResult(
         UUID sourceId,

@@ -167,6 +167,7 @@ export function ModelSpecSourceInventoryModal({ open, planId, roleAllowsPlanMain
 						onOpenCatalog={() => window.open("/catalog/metadata-management", "_blank", "noopener,noreferrer")}
 						onSaved={handleSaved}
 						onSavingChange={setSourceSaving}
+						registrationOpenByDefault
 					/>
 				</>
 			) : (

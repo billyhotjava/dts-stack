@@ -9,6 +9,8 @@ import com.yuzhi.dts.analytics.repository.AnalyticsBookmarkRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsUserRepository;
 import com.yuzhi.dts.analytics.service.ActivityService;
+import com.yuzhi.dts.analytics.service.AnalyticsClassificationClient;
+import com.yuzhi.dts.analytics.service.AnalyticsConsumerClassificationService;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.DatasetQueryService;
 import com.yuzhi.dts.analytics.service.EntityIdGenerator;
@@ -35,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Propagation;
@@ -66,6 +69,7 @@ public class CardResource {
     private final QueryTraceService queryTraceService;
     private final AssetListFilterService assetListFilterService;
     private final SemanticQueryService semanticQueryService;
+    private final AnalyticsConsumerClassificationService classificationService;
     private final ObjectMapper objectMapper;
 
     public CardResource(
@@ -83,6 +87,7 @@ public class CardResource {
             QueryTraceService queryTraceService,
             AssetListFilterService assetListFilterService,
             SemanticQueryService semanticQueryService,
+            AnalyticsConsumerClassificationService classificationService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.cardRepository = cardRepository;
@@ -98,6 +103,7 @@ public class CardResource {
         this.queryTraceService = queryTraceService;
         this.assetListFilterService = assetListFilterService;
         this.semanticQueryService = semanticQueryService;
+        this.classificationService = classificationService;
         this.objectMapper = objectMapper;
     }
 
@@ -170,6 +176,7 @@ public class CardResource {
         card.setCreatorId(user.get().getId());
 
         card = cardRepository.save(card);
+        classificationService.deriveCard(card);
         revisionService.recordCardRevision(card, user.get().getId(), false);
 
         List<Map<String, Object>> resultMetadata = computeResultMetadata(card, PlatformContext.from(request));
@@ -238,6 +245,7 @@ public class CardResource {
             card.setDatasetQueryJson(datasetQuery.toString());
         }
         cardRepository.save(card);
+        classificationService.deriveCard(card);
         revisionService.recordCardRevision(card, user.get().getId(), false);
 
         boolean favorite = bookmarkRepository.findByUserIdAndModelAndModelId(user.get().getId(), "card", id).isPresent();
@@ -289,6 +297,31 @@ public class CardResource {
                 metricCode = "CARD_NOT_FOUND";
                 metricResult = "rejected";
                 return ResponseEntity.notFound().build();
+            }
+            try {
+                classificationService.requireCardPersonnelClearance(cardId, ctx.classification());
+            } catch (AnalyticsConsumerClassificationService.PersonnelClassificationDeniedException ex) {
+                metricCode = "PERSONNEL_CLASSIFICATION_BLOCKED";
+                metricResult = "rejected";
+                return ResponseEntity.status(403).body(Map.of(
+                    "error",
+                    ex.getMessage(),
+                    "code",
+                    metricCode,
+                    "requestId",
+                    resolveRequestId()
+                ));
+            } catch (RuntimeException ex) {
+                metricCode = "CLASSIFICATION_STALE";
+                metricResult = "rejected";
+                return ResponseEntity.status(409).body(Map.of(
+                    "error",
+                    "Card classification is missing or awaiting recomputation",
+                    "code",
+                    metricCode,
+                    "requestId",
+                    resolveRequestId()
+                ));
             }
 
             JsonNode datasetQuery;
@@ -524,6 +557,25 @@ public class CardResource {
             return;
         }
 
+        String filename = sanitizeFilename(card.getName()) + queryExportService.getFileExtension(format);
+        String fileSubjectKey = "analytics-export:" + UUID.randomUUID() + ":" + filename;
+        AnalyticsClassificationClient.ExportSeal exportSeal;
+        try {
+            exportSeal = classificationService.sealCardExport(
+                cardId,
+                fileSubjectKey,
+                PlatformContext.from(request).classification()
+            );
+        } catch (AnalyticsConsumerClassificationService.PersonnelClassificationDeniedException ex) {
+            response.setStatus(403);
+            response.getWriter().write(ex.getMessage());
+            return;
+        } catch (RuntimeException ex) {
+            response.setStatus(409);
+            response.getWriter().write("Card classification is missing or awaiting recomputation");
+            return;
+        }
+
         JsonNode datasetQuery;
         try {
             datasetQuery = objectMapper.readTree(card.getDatasetQueryJson());
@@ -553,9 +605,10 @@ public class CardResource {
             }
 
             // Set response headers
-            String filename = sanitizeFilename(card.getName()) + queryExportService.getFileExtension(format);
             response.setContentType(queryExportService.getContentType(format));
             response.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+            response.setHeader("X-DTS-Classification", exportSeal.effectiveLevel());
+            response.setHeader("X-DTS-Classification-Snapshot", exportSeal.snapshotId());
 
             // Export based on format
             QueryExportService.ExportOptions options = switch (format) {

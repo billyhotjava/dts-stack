@@ -9,7 +9,7 @@ test("warehouse plan ledger reads only the canonical plan aggregate", () => {
 	assert.equal(existsSync(pageUrl), true, "warehouse plan ledger page is missing");
 	assert.match(page, /listWarehousePlans/);
 	assert.match(page, /getWarehousePlanStageProjection/);
-	assert.match(page, /buildWarehousePlanRoute\(plan\.id,\s*"baseline"\)/);
+	assert.match(page, /buildWarehousePlanRoute\(plan\.id,\s*"overview",\s*\{\s*mode:\s*"edit"\s*\}\)/);
 	assert.doesNotMatch(page, /WarehousePlanHeaderEditor/);
 	assert.doesNotMatch(page, /listModelingPlans|getModelingPlan|updateModelingPlan|deleteModelingPlan/);
 	assert.doesNotMatch(page, /"\/modeling\/plans"|`\/modeling\/plans`/);
@@ -42,8 +42,11 @@ test("ledger exposes one page primary action and lifecycle-aware row actions", (
 	assert.doesNotMatch(page, /永久删除|批量归档|复制规划/);
 });
 
-test("ledger edit opens the plan content workspace instead of the header-only editor", () => {
-	assert.match(page, /navigate\(buildWarehousePlanRoute\(plan\.id,\s*"baseline"\)\)/);
+test("ledger edit keeps the plan overview in edit mode without opening a second surface", () => {
+	assert.match(
+		page,
+		/navigate\(buildWarehousePlanRoute\(plan\.id,\s*"overview",\s*\{\s*mode:\s*"edit"\s*\}\)\)/,
+	);
 	assert.match(page, /buildWarehousePlanRoute\(plan\.id,\s*"overview",\s*\{\s*mode:\s*"view"\s*\}\)/);
 	assert.doesNotMatch(page, /openEditor\(plan\)/);
 });

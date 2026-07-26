@@ -7,6 +7,8 @@ const component = existsSync(componentUrl) ? readFileSync(componentUrl, "utf8") 
 
 test("shared warehouse plan header editor exposes only mutable canonical fields", () => {
 	assert.equal(existsSync(componentUrl), true, "shared warehouse plan header editor is missing");
+	assert.match(component, /<Card title="规划概览"/);
+	assert.doesNotMatch(component, /<Drawer|from "antd"[^;]*\bDrawer\b/);
 	for (const field of ["name", "objective", "scope", "ownerId", "ownerDepartmentId"]) {
 		assert.match(component, new RegExp(`name=[{\"]${field}`));
 	}
@@ -58,7 +60,7 @@ test("an unknown PATCH result blocks every user-triggered retry until GET verifi
 	assert.match(component, /disabled=\{!editable \|\| saving \|\| pendingVerification != null\}/);
 });
 
-test("lifecycle reconciliation keeps the form locked and syncs the latest plan when the drawer closes", () => {
+test("lifecycle reconciliation keeps the form locked and syncs the latest plan when inline editing closes", () => {
 	assert.match(component, /setLockedPlan\(latest\)/);
 	assert.match(component, /if \(lockedPlan\) onPlanChange\(lockedPlan\)/);
 	assert.match(component, /lockedPlan\?\.lifecycleStatus \?\? plan\.lifecycleStatus/);

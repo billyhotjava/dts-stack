@@ -190,6 +190,20 @@ class MetricLifecycleSecurityParityTest {
         }
 
         @Override
+        public Map<String, Object> deriveConsumerClassification(ConsumerClassificationRequest request) {
+            return Map.of(
+                "consumerType",
+                request.consumerType(),
+                "consumerKey",
+                request.consumerKey(),
+                "effectiveLevel",
+                "INTERNAL",
+                "snapshotVersion",
+                1
+            );
+        }
+
+        @Override
         public void recordAuditEvent(AuditEventRequest request) {
             auditEvents.add(request);
         }

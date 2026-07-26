@@ -17,7 +17,6 @@ import {
 } from "@/api/warehousePlanApi";
 import { useSearchParams } from "@/routes/hooks";
 import { useUserInfo, useUserRoles } from "@/store/userStore";
-import { WarehousePlanHeaderEditor } from "./components/WarehousePlanHeaderEditor";
 import { ImportModelPackageWizard } from "./model-package-import/ImportModelPackageWizard";
 import { buildModelPackageImportQuery } from "./model-package-import/modelPackageImportNavigation";
 import {
@@ -25,7 +24,6 @@ import {
 	buildWarehousePlanRoute,
 	canEditWarehousePlanHeader,
 	isWarehouseStageComplete,
-	replaceWarehousePlanHeader,
 	stageStatusLabel,
 	warehouseBlockerMessage,
 	warehouseStageActionLabel,
@@ -87,7 +85,6 @@ export default function ModelingWorkbenchPage() {
 	const [projectionFailed, setProjectionFailed] = useState(false);
 	const [createOpen, setCreateOpen] = useState(false);
 	const [creating, setCreating] = useState(false);
-	const [editorOpen, setEditorOpen] = useState(false);
 	const [onboardingMode, setOnboardingMode] = useState<WarehousePlanOnboardingMode>("BUSINESS_FIRST");
 	const [createSession, dispatchCreateSession] = useReducer(
 		reduceWarehousePlanCreateSession,
@@ -539,7 +536,14 @@ export default function ModelingWorkbenchPage() {
 										查看计划详情
 									</Button>
 									{canEditWarehousePlanHeader(canCreatePlan, selectedPlan.lifecycleStatus) ? (
-										<Button block onClick={() => setEditorOpen(true)}>编辑基本信息</Button>
+										<Button
+											block
+											onClick={() =>
+												navigate(buildWarehousePlanRoute(selectedPlan.id, "overview", { mode: "edit" }))
+											}
+										>
+											编辑规划
+										</Button>
 									) : null}
 								</Space>
 							</div>
@@ -674,14 +678,6 @@ export default function ModelingWorkbenchPage() {
 				</Form>
 			</Modal>
 
-			<WarehousePlanHeaderEditor
-				open={editorOpen}
-				plan={selectedPlan}
-				canMaintainPlan={canCreatePlan}
-				onClose={() => setEditorOpen(false)}
-				onPlanChange={(updated) => setPlans((current) => replaceWarehousePlanHeader(current, updated))}
-				onUnavailable={() => navigate("/modeling/plans")}
-			/>
 			<ImportModelPackageWizard
 				open={importOpen}
 				lockedPlanId={selectedPlanId || undefined}

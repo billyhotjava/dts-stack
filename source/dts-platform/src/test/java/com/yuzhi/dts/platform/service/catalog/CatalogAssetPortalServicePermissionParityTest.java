@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import com.yuzhi.dts.platform.domain.catalog.CatalogAssetExtension;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.OpenMetadataAssetCache;
 import com.yuzhi.dts.platform.repository.catalog.CatalogAssetExtensionRepository;
@@ -16,6 +17,7 @@ import com.yuzhi.dts.platform.repository.catalog.OpenMetadataColumnCacheReposito
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataLineageCacheRepository;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -107,6 +109,95 @@ class CatalogAssetPortalServicePermissionParityTest {
 
         assertThat(result.content()).isEmpty();
         assertThat(result.total()).isZero();
+    }
+
+    @Test
+    void listAssets_shouldKeepTheFilteredTotalWhenTheCurrentPageIsSmaller() {
+        OpenMetadataAssetCache asset = new OpenMetadataAssetCache();
+        asset.setId(UUID.fromString("33333333-3333-3333-3333-333333333333"));
+        asset.setFqn("dwd.customers");
+        asset.setTableName("customers");
+        CatalogAssetExtension extension = new CatalogAssetExtension();
+        extension.setOmAsset(asset);
+        extension.setEnabled(true);
+        extension.setClassification("DATA_INTERNAL");
+
+        when(assetRepository.findAll(any(Specification.class), any(PageRequest.class)))
+            .thenReturn(new PageImpl<>(List.of(asset), PageRequest.of(0, 10), 50));
+        when(extensionRepository.findFirstByOmAsset(asset)).thenReturn(Optional.of(extension));
+        when(mappingRepository.findFirstByFqnIgnoreCase("dwd.customers")).thenReturn(Optional.empty());
+        when(datasetRepository.findAll(any(Specification.class), any(PageRequest.class)))
+            .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+        when(accessChecker.canRead(any(CatalogDataset.class))).thenReturn(true);
+        when(accessChecker.departmentAllowed(any(CatalogDataset.class), any())).thenReturn(true);
+        when(assetTagService.listAssetTags(any())).thenReturn(Map.of());
+
+        CatalogAssetPortalService.AssetPage result = service.listAssets(
+            new CatalogAssetPortalService.AssetQuery(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                0,
+                10
+            ),
+            "D01"
+        );
+
+        assertThat(result.content()).hasSize(1);
+        assertThat(result.total()).isEqualTo(50);
+    }
+
+    @Test
+    void listAssets_shouldKeepTheLegacyFilteredTotalWhenTheCurrentPageIsSmaller() {
+        CatalogDataset dataset = new CatalogDataset();
+        dataset.setId(UUID.fromString("44444444-4444-4444-4444-444444444444"));
+        dataset.setName("Legacy customers");
+        dataset.setHiveDatabase("dwd");
+        dataset.setHiveTable("customers");
+        dataset.setEnabled(true);
+        dataset.setClassification("DATA_INTERNAL");
+
+        when(assetRepository.findAll(any(Specification.class), any(PageRequest.class)))
+            .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+        when(datasetRepository.findAll(any(Specification.class), any(PageRequest.class)))
+            .thenReturn(new PageImpl<>(List.of(dataset), PageRequest.of(0, 10), 50));
+        when(accessChecker.canRead(dataset)).thenReturn(true);
+        when(accessChecker.departmentAllowed(dataset, "D01")).thenReturn(true);
+        when(assetTagService.listAssetTags(any())).thenReturn(Map.of());
+
+        CatalogAssetPortalService.AssetPage result = service.listAssets(
+            new CatalogAssetPortalService.AssetQuery(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                0,
+                10
+            ),
+            "D01"
+        );
+
+        assertThat(result.content()).hasSize(1);
+        assertThat(result.total()).isEqualTo(50);
     }
 
     private CatalogAssetPortalService.AssetQuery query() {

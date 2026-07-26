@@ -1,8 +1,10 @@
 package com.yuzhi.dts.platform.service.permission;
 
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.platform.domain.permission.AssetGrant;
 import com.yuzhi.dts.platform.domain.visualization.BiReportLink;
 import com.yuzhi.dts.platform.repository.permission.AssetGrantRepository;
+import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
@@ -14,14 +16,17 @@ import org.springframework.stereotype.Service;
  * 大屏密级与共享门禁。集中决定一个用户能不能查看 / 管理 / 共享指定大屏。
  *
  * 决策树（canView）：
- *   1. superAdmin / report.createdBy == caller / 持有 MANAGE grant → ALLOW
- *   2. classification=PUBLIC → ALLOW
- *   3. roleOk = roleCodes 为空 OR roleCodes 命中 caller.roles
+ *   1. classification 缺失或未知 → DENY（fail-closed）
+ *   2. superAdmin → ALLOW_OVERRIDE（强审计）
+ *   3. classification=PUBLIC → ALLOW
+ *   4. roleOk = roleCodes 为空 OR roleCodes 命中 caller.roles
  *      deptOk = deptCodes 为空 OR caller.institutePrivileged OR deptCodes 命中 caller.deptCode
- *      baseAccess = ((配置了 role/dept 约束) AND roleOk AND deptOk) OR 持有 VIEW grant
+ *      baseAccess = owner OR 持有 MANAGE grant
+ *                   OR ((配置了 role/dept 约束) AND roleOk AND deptOk)
+ *                   OR 持有 VIEW grant
  *      若 baseAccess=false → DENY (DENY_NO_BASE_ACCESS)
- *   4. 用户人员密级允许 report.classification → ALLOW (BASE_ACCESS_PLUS_LEVEL)
- *   5. 否则若持有 level_override=true 的 VIEW grant → ALLOW (OVERRIDE_USED)
+ *   5. 用户人员密级允许 report.classification → ALLOW (BASE_ACCESS_PLUS_LEVEL)
+ *   6. 否则若持有 level_override=true 的 VIEW grant → ALLOW (OVERRIDE_USED)
  *      否则 DENY (DENY_LEVEL_BLOCKED)
  *
  * 重要：roleCodes/deptCodes 为 null/空字符串时视为"该维度不限制"，但只有公开大屏
@@ -48,27 +53,40 @@ public class DashboardAccessGuard {
     private static final String NO_ROLE_PLACEHOLDER = "__NO_ROLE__";
 
     private final AssetGrantRepository grantRepository;
+    private final CatalogConsumerClassificationService consumerClassificationService;
 
     public DashboardAccessGuard(AssetGrantRepository grantRepository) {
+        this(grantRepository, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public DashboardAccessGuard(
+        AssetGrantRepository grantRepository,
+        CatalogConsumerClassificationService consumerClassificationService
+    ) {
         this.grantRepository = grantRepository;
+        this.consumerClassificationService = consumerClassificationService;
     }
 
     public AccessDecision canView(BiReportLink report, Caller caller) {
         if (caller == null || report == null) {
             return AccessDecision.deny("DENY_INVALID_INPUT");
         }
-        if (caller.superAdmin()) {
-            return AccessDecision.allow("SUPER_ADMIN");
+        String classification = SecurityLevelCatalog.normalizeDataCode(report.getClassification());
+        if (classification == null) {
+            return AccessDecision.deny("DENY_CLASSIFICATION_REQUIRED");
         }
-        if (isOwner(report, caller)) {
-            return AccessDecision.allow("OWNER");
+        if (caller.superAdmin()) {
+            return AccessDecision.allowOverride("SUPER_ADMIN_OVERRIDE");
         }
 
-        List<AssetGrant> grants = activeUserGrants(report, caller);
-        if (hasManageGrant(grants)) {
-            return AccessDecision.allow("MANAGE_GRANT");
-        }
-        if (isPublicClassification(report.getClassification())) {
+        List<AssetGrant> grants = currentClassificationGrants(
+            report,
+            activeUserGrants(report, caller)
+        );
+        boolean owner = isOwner(report, caller);
+        boolean manageGrant = hasManageGrant(grants);
+        if (isPublicClassification(classification)) {
             return AccessDecision.allow("PUBLIC");
         }
 
@@ -78,14 +96,22 @@ public class DashboardAccessGuard {
             || matchDept(report.getDeptCodes(), caller.deptCode());
         boolean viewGrant = hasViewGrant(grants);
         boolean configuredBaseAccess = !isBlank(report.getRoleCodes()) || !isBlank(report.getDeptCodes());
-        boolean baseAccess = isScreenReport(report)
-            ? viewGrant
-            : (configuredBaseAccess && roleOk && deptOk) || viewGrant;
+        boolean baseAccess = owner ||
+            manageGrant ||
+            (isScreenReport(report)
+                ? viewGrant
+                : (configuredBaseAccess && roleOk && deptOk) || viewGrant);
         if (!baseAccess) {
             return AccessDecision.deny("DENY_NO_BASE_ACCESS");
         }
 
-        if (hasLevelClearance(caller.allowedClassifications(), report.getClassification())) {
+        if (hasLevelClearance(caller.allowedClassifications(), classification)) {
+            if (owner) {
+                return AccessDecision.allow("OWNER_PLUS_LEVEL");
+            }
+            if (manageGrant) {
+                return AccessDecision.allow("MANAGE_GRANT_PLUS_LEVEL");
+            }
             return AccessDecision.allow("BASE_ACCESS_PLUS_LEVEL");
         }
 
@@ -99,7 +125,7 @@ public class DashboardAccessGuard {
         if (caller == null || report == null) return false;
         if (caller.superAdmin()) return true;
         if (isOwner(report, caller)) return true;
-        return hasManageGrant(activeUserGrants(report, caller));
+        return hasManageGrant(currentClassificationGrants(report, activeUserGrants(report, caller)));
     }
 
     /**
@@ -121,7 +147,7 @@ public class DashboardAccessGuard {
         if (caller.superAdmin()) return true;
         if (isOwner(report, caller)) return true;
         if (PERM_VIEW.equalsIgnoreCase(target.getPermission())) {
-            return hasManageGrant(activeUserGrants(report, caller));
+            return hasManageGrant(currentClassificationGrants(report, activeUserGrants(report, caller)));
         }
         return false;
     }
@@ -153,6 +179,30 @@ public class DashboardAccessGuard {
             );
         }
         return grantRepository.findActiveUserGrants(ref.assetType(), ref.assetId(), caller.username(), Instant.now());
+    }
+
+    private List<AssetGrant> currentClassificationGrants(BiReportLink report, List<AssetGrant> grants) {
+        if (
+            grants.isEmpty() ||
+            report.getQueryDatasetId() == null ||
+            consumerClassificationService == null
+        ) {
+            return grants;
+        }
+        return grants
+            .stream()
+            .filter(grant -> {
+                try {
+                    consumerClassificationService.requireCurrentAccessBinding(
+                        "SHARE_GRANT",
+                        DashboardShareService.shareBindingKey(grant.getId())
+                    );
+                    return true;
+                } catch (RuntimeException ex) {
+                    return false;
+                }
+            })
+            .toList();
     }
 
     private boolean hasManageGrant(List<AssetGrant> grants) {
@@ -278,15 +328,17 @@ public class DashboardAccessGuard {
     }
 
     /**
-     * Null classification 视同 PUBLIC（不限制）。
      * caller.allowedClassifications 由 ClassificationUtils.currentAllowedClassifications() 注入，
      * 已经融合 personnel_level claim → ROLE_xxx fallback 等三级解析，与原 canAccess 行为一致。
      */
     private boolean hasLevelClearance(Set<String> allowed, String classification) {
-        if (classification == null || classification.isBlank()) return true;
+        String normalized = SecurityLevelCatalog.normalizeDataCode(classification);
+        if (normalized == null) return false;
         if (allowed == null || allowed.isEmpty()) return false;
-        String normalized = classification.trim().toUpperCase(Locale.ROOT);
-        return allowed.contains(normalized);
+        return allowed
+            .stream()
+            .map(SecurityLevelCatalog::normalizeDataCode)
+            .anyMatch(normalized::equals);
     }
 
     // ---------------------------------------------------------------------

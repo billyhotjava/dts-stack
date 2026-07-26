@@ -38,8 +38,8 @@ test("F2 real category and policy baseline keeps CAS and one server-owned next a
 	await categoryForm.getByRole("button", { name: "添加业务分类" }).click();
 	await categoryForm.getByRole("combobox", { name: /业务分类/ }).click();
 	await page.locator(".ant-select-item-option").filter({ hasText: domainName }).click();
-	await categoryForm.locator(".ant-form-item").filter({ hasText: "使用状态" }).locator(".ant-select-selector").click();
-	await page.locator(".ant-select-item-option").filter({ hasText: "已确认" }).click();
+	await categoryForm.locator(".ant-form-item").filter({ hasText: "纳入状态" }).locator(".ant-select-selector").click();
+	await page.locator(".ant-select-item-option").filter({ hasText: "已纳入" }).click();
 
 	const categorySave = page.waitForResponse(
 		(response) =>
@@ -81,10 +81,10 @@ test("F2 real category and policy baseline keeps CAS and one server-owned next a
 	await policyForm.getByLabel("分层方案").click();
 	await page.getByText("经典数仓：ODS → DWD → DWS → ADS", { exact: true }).last().click();
 	await policyForm.getByRole("switch", { name: "来源未齐时允许概念设计" }).click();
-	await policyForm.getByLabel("命名规则（进入实现前补齐）").click();
+	await policyForm.getByLabel("物理对象命名风格（进入实现前补齐）").click();
 	await page.getByText("小写下划线", { exact: true }).last().click();
-	await policyForm.getByLabel("历史保留（进入实现前补齐）").click();
-	await page.getByText("保留业务历史", { exact: true }).last().click();
+	await policyForm.getByLabel("维度历史处理默认策略（进入实现前补齐）").click();
+	await page.getByText("保留历史版本", { exact: true }).last().click();
 	await policyForm.getByLabel("默认时区（可选）").fill("Asia/Shanghai");
 
 	const policySave = page.waitForResponse(
@@ -93,7 +93,7 @@ test("F2 real category and policy baseline keeps CAS and one server-owned next a
 			new URL(response.url()).pathname === `/api/modeling/warehouse-plans/${planId}/baseline/policy` &&
 			response.status() === 200,
 	);
-	await policyForm.getByRole("button", { name: "保存分层策略" }).click();
+	await policyForm.getByRole("button", { name: "保存规划策略" }).click();
 	const policyResponse = await policySave;
 	const policyEnvelope = (await policyResponse.json()) as { data: { version: number; value: { readiness: string } } };
 	expect(policyEnvelope.data.version).toBe(2);

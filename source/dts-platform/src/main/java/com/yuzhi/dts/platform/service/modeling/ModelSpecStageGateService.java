@@ -48,13 +48,14 @@ public class ModelSpecStageGateService {
     private final ModelSpecSourceValidationPort sourceValidation;
     private final ModelSpecDomainReadAccessPort domainReadAccess;
     private final ModelImplementationCompatibilityAdapter implementationCompatibility;
+    private final ModelClassificationPublishGate classificationGate;
 
     public ModelSpecStageGateService(
         ModelSpecApplicationService modelSpecs,
         ModelSpecRepository repository,
         ModelSpecStandardEvidencePort standardEvidence
     ) {
-        this(modelSpecs, repository, standardEvidence, null, null, null, null, null);
+        this(modelSpecs, repository, standardEvidence, null, null, null, null, null, null);
     }
 
     public ModelSpecStageGateService(
@@ -64,7 +65,7 @@ public class ModelSpecStageGateService {
         ModelLifecycleRepository lifecycle,
         ModelSpecSourceValidationPort sourceValidation
     ) {
-        this(modelSpecs, repository, standardEvidence, lifecycle, sourceValidation, null, null, null);
+        this(modelSpecs, repository, standardEvidence, lifecycle, sourceValidation, null, null, null, null);
     }
 
     public ModelSpecStageGateService(
@@ -75,7 +76,30 @@ public class ModelSpecStageGateService {
         ModelSpecSourceValidationPort sourceValidation,
         DimensionDefinitionRepository dimensionDefinitions
     ) {
-        this(modelSpecs, repository, standardEvidence, lifecycle, sourceValidation, dimensionDefinitions, null, null);
+        this(modelSpecs, repository, standardEvidence, lifecycle, sourceValidation, dimensionDefinitions, null, null, null);
+    }
+
+    public ModelSpecStageGateService(
+        ModelSpecApplicationService modelSpecs,
+        ModelSpecRepository repository,
+        ModelSpecStandardEvidencePort standardEvidence,
+        ModelLifecycleRepository lifecycle,
+        ModelSpecSourceValidationPort sourceValidation,
+        DimensionDefinitionRepository dimensionDefinitions,
+        ModelSpecDomainReadAccessPort domainReadAccess,
+        ModelImplementationCompatibilityAdapter implementationCompatibility
+    ) {
+        this(
+            modelSpecs,
+            repository,
+            standardEvidence,
+            lifecycle,
+            sourceValidation,
+            dimensionDefinitions,
+            domainReadAccess,
+            implementationCompatibility,
+            null
+        );
     }
 
     @Autowired
@@ -87,7 +111,8 @@ public class ModelSpecStageGateService {
         ModelSpecSourceValidationPort sourceValidation,
         DimensionDefinitionRepository dimensionDefinitions,
         ModelSpecDomainReadAccessPort domainReadAccess,
-        ModelImplementationCompatibilityAdapter implementationCompatibility
+        ModelImplementationCompatibilityAdapter implementationCompatibility,
+        ModelClassificationPublishGate classificationGate
     ) {
         this.modelSpecs = modelSpecs;
         this.repository = repository;
@@ -97,6 +122,7 @@ public class ModelSpecStageGateService {
         this.sourceValidation = sourceValidation;
         this.domainReadAccess = domainReadAccess;
         this.implementationCompatibility = implementationCompatibility;
+        this.classificationGate = classificationGate;
     }
 
     @Transactional(readOnly = true)
@@ -110,7 +136,54 @@ public class ModelSpecStageGateService {
                 view,
                 withDimensionDefinitionEvidence(tenantId, view, evaluate(view, Stage.IMPLEMENTATION_READY, evidence))
             ),
-            withImplementationInputEvidence(tenantId, view, withDimensionDefinitionEvidence(tenantId, view, evaluate(view, Stage.RELEASE_READY, evidence)))
+            withClassificationEvidence(
+                tenantId,
+                view,
+                withImplementationInputEvidence(
+                    tenantId,
+                    view,
+                    withDimensionDefinitionEvidence(tenantId, view, evaluate(view, Stage.RELEASE_READY, evidence))
+                )
+            )
+        );
+    }
+
+    private GateView withClassificationEvidence(String tenantId, ModelSpecView view, GateView gate) {
+        if (classificationGate == null || gate.stage() != Stage.RELEASE_READY) {
+            return gate;
+        }
+        ModelClassificationPublishGate.Decision decision = classificationGate.evaluate(
+            tenantId,
+            view.id(),
+            view.revision(),
+            view.checksum()
+        );
+        if (decision.ready()) {
+            return gate;
+        }
+        LinkedHashMap<String, GateBlocker> blockers = new LinkedHashMap<>();
+        for (GateBlocker blocker : gate.blockers()) {
+            add(blockers, blocker);
+        }
+        for (ModelClassificationPublishGate.Blocker blocker : decision.blockers()) {
+            add(
+                blockers,
+                blocker(
+                    view,
+                    blocker.code(),
+                    "classification",
+                    blocker.message(),
+                    "governance"
+                )
+            );
+        }
+        return new GateView(
+            view.id(),
+            view.revision(),
+            view.checksum(),
+            gate.stage(),
+            GateStatus.BLOCKED,
+            List.copyOf(blockers.values())
         );
     }
 

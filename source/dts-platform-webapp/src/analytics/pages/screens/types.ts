@@ -254,6 +254,13 @@ export interface DataSourceConfig {
 	 */
 	sourceType?: QuerySourceType;
 	type: DataSourceType;
+	/**
+	 * Canonical classification identity for sources that cannot be resolved from
+	 * an analytics card/metric/table id (notably HTTP API sources).
+	 * Screen publish/export is blocked when an API source has no bound identity.
+	 */
+	classificationSubjectType?: "ASSET" | "DATASET" | "FIELD" | string;
+	classificationSubjectKey?: string;
 	refreshInterval?: number; // 刷新间隔(秒)
 	staticData?: unknown;
 	apiConfig?: {

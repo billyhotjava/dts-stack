@@ -153,6 +153,12 @@ public final class ModelSpecContract {
     private static final Set<String> SOURCE_KINDS = enumNames(SourceKind.values());
     private static final Set<String> SOURCE_ROLES = enumNames(SourceRole.values());
     private static final Set<String> JOIN_TYPES = enumNames(JoinType.values());
+    private static final Set<String> INTERACTIVE_DRAFT_DEFERRED_ISSUE_CODES = Set.of(
+        "MODEL_SPEC_GRAIN_REQUIRED",
+        "MODEL_SPEC_DIMENSION_KEY_REQUIRED",
+        "MODEL_SPEC_UPSTREAM_REQUIRED",
+        "MODEL_SPEC_CONSUMPTION_SCENARIO_REQUIRED"
+    );
     private static final Set<String> GRAIN_FIELDS = Set.of("statement", "keys");
     private static final Set<String> TIME_SEMANTICS_FIELDS = Set.of("type", "fields");
     private static final Set<String> GENERATION_STRATEGY_FIELDS = Set.of("type", "reference");
@@ -977,6 +983,17 @@ public final class ModelSpecContract {
         validateDimensionDefinitionRef(command, issues);
         validateTypeBoundary(command, issues);
         return List.copyOf(issues);
+    }
+
+    /**
+     * The interactive create drawer persists only the initial draft identity. Logical design
+     * completeness remains owned by update validation and the stage gates.
+     */
+    static List<FieldIssue> validateInteractiveCreate(CreateModelSpecCommand command) {
+        return validateCreate(command)
+            .stream()
+            .filter(issue -> !INTERACTIVE_DRAFT_DEFERRED_ISSUE_CODES.contains(issue.code()))
+            .toList();
     }
 
     static List<FieldIssue> validateUpdate(UpdateModelSpecCommand command) {

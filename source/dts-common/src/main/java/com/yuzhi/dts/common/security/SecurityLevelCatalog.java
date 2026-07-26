@@ -53,7 +53,7 @@ public final class SecurityLevelCatalog {
             this.number = number;
             this.code = code;
             this.labelZh = labelZh;
-            this.tokens = buildTokens(code, labelZh, aliases);
+            this.tokens = TokenSupport.buildTokens(code, labelZh, aliases);
         }
 
         public int number() {
@@ -121,7 +121,7 @@ public final class SecurityLevelCatalog {
             this.number = number;
             this.code = code;
             this.labelZh = labelZh;
-            this.tokens = buildTokens(code, labelZh, aliases);
+            this.tokens = TokenSupport.buildTokens(code, labelZh, aliases);
         }
 
         public int number() {
@@ -312,6 +312,79 @@ public final class SecurityLevelCatalog {
         return level == null ? null : level.number();
     }
 
+    /**
+     * Parse a canonical data level without applying a default.
+     *
+     * <p>This method is intended for governance write paths. Unknown values fail closed instead of silently
+     * becoming PUBLIC or INTERNAL.
+     */
+    public static DataSecurityLevel requireDataLevel(Object raw) {
+        DataSecurityLevel level = DataSecurityLevel.parse(raw);
+        if (level == null) {
+            throw new IllegalArgumentException("Unsupported data security level: " + Objects.toString(raw, "null"));
+        }
+        return level;
+    }
+
+    /**
+     * Return the highest non-empty data level. Empty values are treated as absent; an unknown non-empty value
+     * fails closed.
+     */
+    public static DataSecurityLevel maxDataLevel(Object... rawLevels) {
+        if (rawLevels == null) {
+            return null;
+        }
+        DataSecurityLevel highest = null;
+        for (Object rawLevel : rawLevels) {
+            if (normalizeToken(rawLevel) == null) {
+                continue;
+            }
+            DataSecurityLevel candidate = requireDataLevel(rawLevel);
+            if (highest == null || candidate.number() > highest.number()) {
+                highest = candidate;
+            }
+        }
+        return highest;
+    }
+
+    /**
+     * Iterable variant used by lineage propagation where the number of upstream subjects is dynamic.
+     */
+    public static DataSecurityLevel maxDataLevel(Iterable<?> rawLevels) {
+        if (rawLevels == null) {
+            return null;
+        }
+        DataSecurityLevel highest = null;
+        for (Object rawLevel : rawLevels) {
+            if (normalizeToken(rawLevel) == null) {
+                continue;
+            }
+            DataSecurityLevel candidate = requireDataLevel(rawLevel);
+            if (highest == null || candidate.number() > highest.number()) {
+                highest = candidate;
+            }
+        }
+        return highest;
+    }
+
+    public static String maxDataCode(Object... rawLevels) {
+        DataSecurityLevel level = maxDataLevel(rawLevels);
+        return level == null ? null : level.code();
+    }
+
+    public static String maxDataCode(Iterable<?> rawLevels) {
+        DataSecurityLevel level = maxDataLevel(rawLevels);
+        return level == null ? null : level.code();
+    }
+
+    public static boolean isDataDowngrade(Object current, Object candidate) {
+        return requireDataLevel(candidate).number() < requireDataLevel(current).number();
+    }
+
+    public static boolean isDataAtLeast(Object candidate, Object floor) {
+        return requireDataLevel(candidate).number() >= requireDataLevel(floor).number();
+    }
+
     public static Integer maxDataRankForPersonnel(Object raw) {
         PersonnelSecurityLevel personnel = PersonnelSecurityLevel.parse(raw);
         DataSecurityLevel max = maxDataLevelForPersonnel(personnel);
@@ -358,27 +431,36 @@ public final class SecurityLevelCatalog {
         return token.toUpperCase(Locale.ROOT).replace('-', '_').replace(' ', '_');
     }
 
-    private static Set<String> buildTokens(String code, String labelZh, List<String> aliases) {
-        Set<String> tokens = new LinkedHashSet<>();
-        addTokenVariants(tokens, code);
-        addTokenVariants(tokens, labelZh);
-        if (aliases != null) {
-            aliases.forEach(alias -> addTokenVariants(tokens, alias));
-        }
-        return Collections.unmodifiableSet(tokens);
-    }
+    /**
+     * Kept in a nested holder so enum construction never re-enters
+     * {@link SecurityLevelCatalog}'s static initialization.
+     */
+    private static final class TokenSupport {
 
-    private static void addTokenVariants(Set<String> target, String token) {
-        if (token == null || token.isBlank()) {
-            return;
+        private TokenSupport() {}
+
+        private static Set<String> buildTokens(String code, String labelZh, List<String> aliases) {
+            Set<String> tokens = new LinkedHashSet<>();
+            addTokenVariants(tokens, code);
+            addTokenVariants(tokens, labelZh);
+            if (aliases != null) {
+                aliases.forEach(alias -> addTokenVariants(tokens, alias));
+            }
+            return Collections.unmodifiableSet(tokens);
         }
-        String normalized = normalizeCodeToken(token.trim());
-        target.add(normalized);
-        if (normalized.contains("_")) {
-            target.add(normalized.replace('_', '-'));
-        }
-        if (normalized.contains("-")) {
-            target.add(normalized.replace('-', '_'));
+
+        private static void addTokenVariants(Set<String> target, String token) {
+            if (token == null || token.isBlank()) {
+                return;
+            }
+            String normalized = token.trim().toUpperCase(Locale.ROOT).replace('-', '_').replace(' ', '_');
+            target.add(normalized);
+            if (normalized.contains("_")) {
+                target.add(normalized.replace('_', '-'));
+            }
+            if (normalized.contains("-")) {
+                target.add(normalized.replace('-', '_'));
+            }
         }
     }
 }

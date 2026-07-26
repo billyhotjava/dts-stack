@@ -81,12 +81,18 @@ export type ExcelImportPrepareResponse = {
 	fileName: string;
 	batchCode: string;
 	sheets: ExcelSheetInfo[];
+	classification: string;
+	sealId: string;
+	sealVersion: number;
+	sealChecksum: string;
+	sealedAt: string;
 };
 
 export type ExcelColumnSpec = {
 	name: string;
 	dataType?: string;
 	label?: string;
+	classification?: string;
 };
 
 export type ExcelImportParseRequest = {
@@ -100,6 +106,8 @@ export type ExcelImportParseRequest = {
 	skipErrors?: boolean;
 	fillMerged?: boolean;
 	dateFormat?: string;
+	fieldClassifications?: Record<string, string>;
+	sealClassification?: boolean;
 };
 
 export type ExcelImportParseResponse = {
@@ -140,6 +148,7 @@ export type SchemaDiscoverColumn = {
 	primaryKey?: boolean;
 	indexed?: boolean;
 	incrementalCandidate?: boolean;
+	classification?: string;
 };
 
 export type SchemaDiscoverIndex = {
@@ -197,6 +206,7 @@ export type SchemaDiscoverRequest = {
 
 export type OdsSourceColumnRequest = {
 	name: string;
+	classification?: string;
 	include?: boolean;
 	targetName?: string;
 	dataType?: string;
@@ -218,6 +228,18 @@ export type OdsSourceTableRequest = {
 	columns?: OdsSourceColumnRequest[];
 };
 
+export type ClassificationSealReference = {
+	sealId: string;
+	subjectType: string;
+	subjectKey: string;
+	assetType?: string;
+	effectiveLevel: string;
+	snapshotVersion: number;
+	checksum: string;
+	sealedAt: string;
+	propagationStatus: string;
+};
+
 export type OdsGenerationRequest = {
 	odsSchema?: string;
 	systemCode?: string;
@@ -226,6 +248,9 @@ export type OdsGenerationRequest = {
 	includeTechnicalColumns?: boolean;
 	includeRawJson?: boolean;
 	syncMode?: string;
+	classificationSeal?: ClassificationSealReference;
+	fieldClassifications?: Record<string, string>;
+	storageApprovalTokens?: Record<string, string>;
 	tables: OdsSourceTableRequest[];
 };
 
@@ -249,6 +274,8 @@ export type OdsTechnicalColumn = {
 };
 
 export type OdsTablePlan = {
+	sourceDatasetId?: string;
+	sourceClassificationSeal?: ClassificationSealReference;
 	sourceSchema?: string;
 	sourceTable: string;
 	odsSchema: string;
@@ -265,6 +292,7 @@ export type OdsTablePlan = {
 	addaxJobDraft?: Record<string, any>;
 	airflowDagDraft?: Record<string, any>;
 	warnings?: string[];
+	approvalPayloadChecksum?: string;
 };
 
 export type OdsGenerationPreviewResponse = {
@@ -274,6 +302,7 @@ export type OdsGenerationPreviewResponse = {
 	tables?: OdsTablePlan[];
 	dbtSourceYaml?: string;
 	warnings?: string[];
+	classificationSeal?: ClassificationSealReference;
 };
 
 export type OdsGenerationApplyResult = {
@@ -333,9 +362,10 @@ export default {
 		apiClient.put<DataSourceUpdateImpact>({ url: `/infra/data-sources/${id}/impact`, data: payload }),
 	remove: (id: string) => apiClient.delete<void>({ url: `/infra/data-sources/${id}` }),
 	test: (id: string) => apiClient.post<ConnectionTestResult>({ url: `/infra/data-sources/${id}/test` }),
-	excelPrepare: (file: File) => {
+	excelPrepare: (file: File, classification: string) => {
 		const formData = new FormData();
 		formData.append("file", file);
+		formData.append("classification", classification);
 		return apiClient.post<ExcelImportPrepareResponse>({ url: "/infra/excel-import/prepare", data: formData });
 	},
 	excelParse: (payload: ExcelImportParseRequest) =>

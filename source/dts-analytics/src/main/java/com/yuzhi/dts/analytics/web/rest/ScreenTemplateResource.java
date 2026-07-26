@@ -12,6 +12,7 @@ import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenTemplateRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenTemplateVersionRepository;
+import com.yuzhi.dts.analytics.service.AnalyticsConsumerClassificationService;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.ScreenPermissionService;
 import com.yuzhi.dts.analytics.service.ScreenAssetAuditService;
@@ -49,6 +50,7 @@ public class ScreenTemplateResource {
     private final ScreenPermissionService screenPermissionService;
     private final ScreenAssetAuditService screenAssetAuditService;
     private final ScreenTemplateVersionService screenTemplateVersionService;
+    private final AnalyticsConsumerClassificationService classificationService;
     private final ObjectMapper objectMapper;
 
     public ScreenTemplateResource(
@@ -59,6 +61,7 @@ public class ScreenTemplateResource {
             ScreenPermissionService screenPermissionService,
             ScreenAssetAuditService screenAssetAuditService,
             ScreenTemplateVersionService screenTemplateVersionService,
+            AnalyticsConsumerClassificationService classificationService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.screenTemplateRepository = screenTemplateRepository;
@@ -67,6 +70,7 @@ public class ScreenTemplateResource {
         this.screenPermissionService = screenPermissionService;
         this.screenAssetAuditService = screenAssetAuditService;
         this.screenTemplateVersionService = screenTemplateVersionService;
+        this.classificationService = classificationService;
         this.objectMapper = objectMapper;
     }
 
@@ -517,9 +521,11 @@ public class ScreenTemplateResource {
         screen.setTheme(template.getTheme());
         screen.setComponentsJson(defaultJson(template.getComponentsJson(), "[]"));
         screen.setVariablesJson(defaultJson(template.getVariablesJson(), "[]"));
-        if (body != null && body.has("classification")) {
-            screen.setClassification(ScreenResource.normalizeRequiredClassification(body.path("classification").asText(null)));
-        }
+        String manualFloor = body != null && body.has("classification")
+            ? ScreenResource.normalizeRequiredClassification(body.path("classification").asText(null))
+            : "INTERNAL";
+        screen.setClassification(manualFloor);
+        screen.setManualClassificationFloor(manualFloor);
         if (body != null && body.has("domainId")) {
             screen.setDomainId(trimToNull(body.path("domainId").asText(null)));
         }
@@ -527,6 +533,7 @@ public class ScreenTemplateResource {
         screen.setArchived(false);
 
         screen = screenRepository.save(screen);
+        classificationService.deriveScreen(screen);
         Map<String, Object> createScreenAudit = new LinkedHashMap<>();
         createScreenAudit.put("targetScreenId", screen.getId());
         createScreenAudit.put("targetScreenName", screen.getName());

@@ -16,6 +16,7 @@ import com.yuzhi.dts.analytics.repository.AnalyticsDashboardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsFieldRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsTableRepository;
 import com.yuzhi.dts.analytics.service.ActivityService;
+import com.yuzhi.dts.analytics.service.AnalyticsConsumerClassificationService;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.DatasetQueryService;
 import com.yuzhi.dts.analytics.service.EntityIdGenerator;
@@ -69,6 +70,7 @@ public class DashboardResource {
     private final FieldValuesService fieldValuesService;
     private final QueryExecutionFacade queryExecutionFacade;
     private final AssetListFilterService assetListFilterService;
+    private final AnalyticsConsumerClassificationService classificationService;
     private final ObjectMapper objectMapper;
 
     public DashboardResource(
@@ -86,6 +88,7 @@ public class DashboardResource {
             FieldValuesService fieldValuesService,
             QueryExecutionFacade queryExecutionFacade,
             AssetListFilterService assetListFilterService,
+            AnalyticsConsumerClassificationService classificationService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.dashboardRepository = dashboardRepository;
@@ -101,6 +104,7 @@ public class DashboardResource {
         this.fieldValuesService = fieldValuesService;
         this.queryExecutionFacade = queryExecutionFacade;
         this.assetListFilterService = assetListFilterService;
+        this.classificationService = classificationService;
         this.objectMapper = objectMapper;
     }
 
@@ -333,6 +337,7 @@ public class DashboardResource {
         }
 
         List<AnalyticsDashboardCard> dashcards = dashboardCardRepository.findAllByDashboardIdOrderByIdAsc(dashboardId);
+        classificationService.deriveDashboard(dashboardId);
         boolean favorite = bookmarkRepository.findByUserIdAndModelAndModelId(user.get().getId(), "dashboard", dashboardId).isPresent();
         revisionService.recordDashboardRevision(dashboard, dashcards, user.get().getId(), false);
         return ResponseEntity.ok(toDashboardDetail(dashboard, dashcards, favorite));
@@ -406,6 +411,7 @@ public class DashboardResource {
         }
 
         List<AnalyticsDashboardCard> dashcards = dashboardCardRepository.findAllByDashboardIdOrderByIdAsc(copy.getId());
+        classificationService.deriveDashboard(copy.getId());
         return ResponseEntity.ok(toDashboardDetail(copy, dashcards, false));
     }
 
@@ -456,6 +462,7 @@ public class DashboardResource {
         }
 
         dashcard = dashboardCardRepository.save(dashcard);
+        classificationService.deriveDashboard(dashboardId);
         return ResponseEntity.ok(toDashcardResponse(dashcard, true));
     }
 
@@ -742,6 +749,11 @@ public class DashboardResource {
         if (card == null || card.isArchived()) {
             return ResponseEntity.notFound().build();
         }
+        ResponseEntity<?> classificationDenied =
+            dashboardCardClassificationDenied(dashboardId, cardId, request);
+        if (classificationDenied != null) {
+            return classificationDenied;
+        }
 
         JsonNode datasetQuery;
         try {
@@ -809,6 +821,31 @@ public class DashboardResource {
             response.put("error", error);
             response.put("via", List.of());
             return ResponseEntity.accepted().body(response);
+        }
+    }
+
+    private ResponseEntity<?> dashboardCardClassificationDenied(
+            long dashboardId,
+            long cardId,
+            HttpServletRequest request) {
+        String callerClassification = PlatformContext.from(request).classification();
+        try {
+            classificationService.requireDashboardPersonnelClearance(
+                dashboardId,
+                callerClassification
+            );
+            classificationService.requireCardPersonnelClearance(cardId, callerClassification);
+            return null;
+        } catch (AnalyticsConsumerClassificationService.PersonnelClassificationDeniedException ex) {
+            return ResponseEntity.status(403).body(Map.of(
+                "code", "PERSONNEL_CLASSIFICATION_BLOCKED",
+                "error", ex.getMessage()
+            ));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(409).body(Map.of(
+                "code", "CLASSIFICATION_STALE",
+                "error", "Dashboard classification is missing or awaiting recomputation"
+            ));
         }
     }
 

@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.anyMap;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -8,7 +9,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.yuzhi.dts.platform.domain.catalog.CatalogClassificationSnapshot;
+import com.yuzhi.dts.platform.domain.service.InfraDataSource;
+import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogClassificationService;
 import com.yuzhi.dts.platform.service.infra.DefaultDestinationSyncService;
 import com.yuzhi.dts.platform.service.infra.DefaultDestinationSyncService.DefaultDestinationSnapshot;
 import com.yuzhi.dts.platform.service.etl.OdsTableMappingSyncService;
@@ -17,6 +22,7 @@ import com.yuzhi.dts.platform.service.ops.ExternalRunLogService;
 import com.yuzhi.dts.platform.security.session.PortalSessionInactivityFilter;
 import com.yuzhi.dts.platform.web.filter.AuditLoggingFilter;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,6 +62,12 @@ class IngestionTaskProxyResourceTest {
     private ExternalRunLogService externalRunLogService;
 
     @MockBean
+    private InfraDataSourceRepository dataSourceRepository;
+
+    @MockBean
+    private CatalogClassificationService classificationService;
+
+    @MockBean
     private PortalSessionInactivityFilter portalSessionInactivityFilter;
 
     @MockBean
@@ -64,6 +76,7 @@ class IngestionTaskProxyResourceTest {
     @Test
     void createTaskForwardsPayload() throws Exception {
         String platformDataSourceId = "11111111-2222-3333-4444-555555555555";
+        configureClassifiedSource(platformDataSourceId);
         DefaultDestinationSnapshot snapshot = new DefaultDestinationSnapshot(
             "rdbmswriter",
             "lake",
@@ -76,7 +89,11 @@ class IngestionTaskProxyResourceTest {
 
         mockMvc.perform(post("/api/ingestion/tasks")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"name\":\"task\",\"destination\":{\"config\":{\"table\":[\"t1\"]}}}"))
+                .content(
+                    "{\"name\":\"task\",\"source\":{\"dataSourceId\":\"" +
+                    platformDataSourceId +
+                    "\"},\"destination\":{\"config\":{\"table\":[\"t1\"]}}}"
+                ))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(200));
 
@@ -90,12 +107,24 @@ class IngestionTaskProxyResourceTest {
         Map<String, Object> config = (Map<String, Object>) destination.get("config");
         assertThat(((java.util.List<?>) config.get("table")).get(0)).isEqualTo("t1");
         assertThat(config.get("targetDataSourceId")).isEqualTo(platformDataSourceId);
+        Map<String, Object> seal = (Map<String, Object>) payload.get("classificationSeal");
+        assertThat(seal.get("effectiveLevel")).isEqualTo("SECRET");
+        assertThat((Map<String, String>) payload.get("fieldClassifications"))
+            .containsEntry("identity_no", "SECRET");
+        ArgumentCaptor<CatalogClassificationService.SealCommand> command =
+            ArgumentCaptor.forClass(CatalogClassificationService.SealCommand.class);
+        verify(classificationService).sealOrRaise(command.capture());
+        assertThat(command.getValue().declaredLevel()).isEqualTo("INTERNAL");
+        assertThat(command.getValue().upstreamLevels().stream().map(String::valueOf).toList())
+            .containsExactly("SECRET");
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void createTaskUsesSelectedTargetDataSourceWhenProvided() throws Exception {
         String targetDataSourceId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+        String sourceDataSourceId = "11111111-2222-3333-4444-555555555555";
+        configureClassifiedSource(sourceDataSourceId);
         DefaultDestinationSnapshot snapshot = new DefaultDestinationSnapshot(
             "postgresqlwriter",
             "经营分析湖仓",
@@ -111,6 +140,7 @@ class IngestionTaskProxyResourceTest {
                 .content("""
                     {
                       "name":"task",
+                      "source":{"dataSourceId":"11111111-2222-3333-4444-555555555555"},
                       "destination":{
                         "usePlatformDefault":true,
                         "config":{
@@ -131,6 +161,147 @@ class IngestionTaskProxyResourceTest {
         assertThat(config.get("targetDataSourceId")).isEqualTo(targetDataSourceId);
         assertThat(config.get("jdbcUrl")).isEqualTo("jdbc:postgresql://analytics-pg:5432/ads");
         assertThat(config.get("username")).isEqualTo("biadmin");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void fileTaskUsesCompositeSealWithFileFloorAndHighestFieldClassification() throws Exception {
+        DefaultDestinationSnapshot destination = new DefaultDestinationSnapshot(
+            "rdbmswriter",
+            "lake",
+            Map.of("connection", java.util.List.of(Map.of("jdbcUrl", java.util.List.of("jdbc:pg")))),
+            "11111111-2222-3333-4444-555555555555"
+        );
+        when(destinationSyncService.ensureDefaultDestination()).thenReturn(destination);
+        when(ingestionClient.createIngestionTask(anyMap()))
+            .thenReturn(new ApiResponse<>(200, "ok", Map.of("task", "file-demo")));
+
+        UUID fileSealId = UUID.randomUUID();
+        CatalogClassificationSnapshot fileSnapshot = snapshot(
+            fileSealId,
+            "FILE",
+            "external-exchange-file:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "SECRET"
+        );
+        CatalogClassificationSnapshot taskSnapshot = snapshot(
+            UUID.randomUUID(),
+            "ASSET",
+            "ingestion-file:" + fileSnapshot.getSubjectKey(),
+            "CONFIDENTIAL"
+        );
+        when(classificationService.resolve("FILE", fileSnapshot.getSubjectKey()))
+            .thenReturn(java.util.Optional.of(fileSnapshot));
+        when(classificationService.sealOrRaise(any(CatalogClassificationService.SealCommand.class)))
+            .thenReturn(taskSnapshot);
+
+        mockMvc.perform(post("/api/ingestion/tasks")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "name":"file-task",
+                      "source":{"config":{
+                        "classificationSeal":{
+                          "sealId":"%s",
+                          "subjectType":"FILE",
+                          "subjectKey":"%s",
+                          "snapshotVersion":1,
+                          "checksum":"%s"
+                        },
+                        "fieldClassifications":{
+                          "name":"SECRET",
+                          "identity_no":"CONFIDENTIAL"
+                        }
+                      }},
+                      "destination":{"config":{"table":["ods_file"]}}
+                    }
+                    """.formatted(fileSealId, fileSnapshot.getSubjectKey(), fileSnapshot.getEvidenceChecksum())
+                ))
+            .andExpect(status().isOk());
+
+        ArgumentCaptor<Map<String, Object>> payload = ArgumentCaptor.forClass(Map.class);
+        verify(ingestionClient).createIngestionTask(payload.capture());
+        Map<String, Object> seal = (Map<String, Object>) payload.getValue().get("classificationSeal");
+        assertThat(seal)
+            .containsEntry("subjectType", "ASSET")
+            .containsEntry("effectiveLevel", "CONFIDENTIAL")
+            .containsEntry("fileFloor", "SECRET");
+        assertThat((Map<String, String>) payload.getValue().get("fieldClassifications"))
+            .containsEntry("name", "SECRET")
+            .containsEntry("identity_no", "CONFIDENTIAL");
+
+        ArgumentCaptor<CatalogClassificationService.SealCommand> command =
+            ArgumentCaptor.forClass(CatalogClassificationService.SealCommand.class);
+        verify(classificationService).sealOrRaise(command.capture());
+        assertThat(command.getValue().declaredLevel()).isEqualTo("SECRET");
+        assertThat(command.getValue().upstreamLevels().stream().map(String::valueOf).toList())
+            .containsExactlyInAnyOrder("SECRET", "CONFIDENTIAL");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void providedOdsSealIsRevalidatedAndRaisedToTheHighestFieldBeforeForwarding() throws Exception {
+        DefaultDestinationSnapshot destination = new DefaultDestinationSnapshot(
+            "rdbmswriter",
+            "lake",
+            Map.of("connection", java.util.List.of(Map.of("jdbcUrl", java.util.List.of("jdbc:pg")))),
+            "11111111-2222-3333-4444-555555555555"
+        );
+        when(destinationSyncService.ensureDefaultDestination()).thenReturn(destination);
+        when(ingestionClient.createIngestionTask(anyMap()))
+            .thenReturn(new ApiResponse<>(200, "ok", Map.of("task", "ods-demo")));
+
+        CatalogClassificationSnapshot sourceSnapshot = snapshot(
+            UUID.randomUUID(),
+            "ASSET",
+            "data-source:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "INTERNAL"
+        );
+        CatalogClassificationSnapshot taskSnapshot = snapshot(
+            UUID.randomUUID(),
+            "ASSET",
+            "ingestion-seal:asset:" + sourceSnapshot.getSubjectKey(),
+            "SECRET"
+        );
+        when(classificationService.resolve("ASSET", sourceSnapshot.getSubjectKey()))
+            .thenReturn(java.util.Optional.of(sourceSnapshot));
+        when(classificationService.sealOrRaise(any(CatalogClassificationService.SealCommand.class)))
+            .thenReturn(taskSnapshot);
+
+        mockMvc.perform(post("/api/ingestion/tasks")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "name":"ods-task",
+                      "classificationSeal":{
+                        "sealId":"%s",
+                        "subjectType":"ASSET",
+                        "subjectKey":"%s",
+                        "snapshotVersion":1,
+                        "checksum":"%s"
+                      },
+                      "fieldClassifications":{"identity_no":"SECRET"},
+                      "destination":{"config":{"table":["ods_customer"]}}
+                    }
+                    """.formatted(
+                        sourceSnapshot.getId(),
+                        sourceSnapshot.getSubjectKey(),
+                        sourceSnapshot.getEvidenceChecksum()
+                    )
+                ))
+            .andExpect(status().isOk());
+
+        ArgumentCaptor<Map<String, Object>> payload = ArgumentCaptor.forClass(Map.class);
+        verify(ingestionClient).createIngestionTask(payload.capture());
+        assertThat((Map<String, Object>) payload.getValue().get("classificationSeal"))
+            .containsEntry("effectiveLevel", "SECRET")
+            .containsEntry("subjectKey", taskSnapshot.getSubjectKey());
+        ArgumentCaptor<CatalogClassificationService.SealCommand> command =
+            ArgumentCaptor.forClass(CatalogClassificationService.SealCommand.class);
+        verify(classificationService).sealOrRaise(command.capture());
+        assertThat(command.getValue().upstreamLevels().stream().map(String::valueOf).toList())
+            .containsExactlyInAnyOrder("INTERNAL", "SECRET");
     }
 
     @Test
@@ -231,5 +402,46 @@ class IngestionTaskProxyResourceTest {
             .andExpect(jsonPath("$.data.async").value(true));
 
         verify(ingestionClient).retryExecutionAsync(1L, 2L, Map.of("mode", "FAILED_ONLY"));
+    }
+
+    private void configureClassifiedSource(String sourceId) {
+        InfraDataSource source = new InfraDataSource();
+        source.setId(java.util.UUID.fromString(sourceId));
+        source.setName("classified-source");
+        source.setProps(
+            "{\"classification\":\"INTERNAL\",\"columnClassifications\":{\"identity_no\":\"SECRET\"}}"
+        );
+        when(dataSourceRepository.findById(source.getId())).thenReturn(java.util.Optional.of(source));
+
+        CatalogClassificationSnapshot snapshot = new CatalogClassificationSnapshot();
+        snapshot.setId(java.util.UUID.randomUUID());
+        snapshot.setSubjectType("ASSET");
+        snapshot.setSubjectKey("data-source:" + sourceId);
+        snapshot.setEffectiveLevel("SECRET");
+        snapshot.setRecordVersion(1L);
+        snapshot.setEvidenceChecksum("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        snapshot.setSealedAt(java.time.Instant.parse("2026-07-26T00:00:00Z"));
+        snapshot.setPropagationStatus("SEALED");
+        when(classificationService.sealOrRaise(any(CatalogClassificationService.SealCommand.class)))
+            .thenReturn(snapshot);
+    }
+
+    private CatalogClassificationSnapshot snapshot(
+        UUID id,
+        String subjectType,
+        String subjectKey,
+        String effectiveLevel
+    ) {
+        CatalogClassificationSnapshot snapshot = new CatalogClassificationSnapshot();
+        snapshot.setId(id);
+        snapshot.setSubjectType(subjectType);
+        snapshot.setSubjectKey(subjectKey);
+        snapshot.setAssetType("DATASET");
+        snapshot.setEffectiveLevel(effectiveLevel);
+        snapshot.setRecordVersion(1L);
+        snapshot.setEvidenceChecksum("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        snapshot.setSealedAt(java.time.Instant.parse("2026-07-26T00:00:00Z"));
+        snapshot.setPropagationStatus("SEALED");
+        return snapshot;
     }
 }

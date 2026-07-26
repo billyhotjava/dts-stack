@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.infra;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -8,6 +9,7 @@ import com.yuzhi.dts.platform.config.AirflowProperties;
 import com.yuzhi.dts.platform.domain.infra.InfraExternalExchangeFile;
 import com.yuzhi.dts.platform.repository.infra.InfraExternalExchangeFileRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogClassificationService;
 import com.yuzhi.dts.platform.service.infra.dto.ExcelImportParseRequest;
 import java.io.OutputStream;
 import java.nio.file.Files;
@@ -35,6 +37,9 @@ class ExcelImportServiceTest {
     @Mock
     private AuditService auditService;
 
+    @Mock
+    private CatalogClassificationService classificationService;
+
     private ExcelImportService excelImportService;
 
     @TempDir
@@ -44,7 +49,8 @@ class ExcelImportServiceTest {
     void setUp() {
         AirflowProperties airflowProperties = new AirflowProperties();
         airflowProperties.setDagsDir(tempDir.toString());
-        excelImportService = new ExcelImportService(airflowProperties, repository, auditService, new ObjectMapper());
+        excelImportService =
+            new ExcelImportService(airflowProperties, repository, auditService, new ObjectMapper(), classificationService);
     }
 
     @Test
@@ -71,7 +77,7 @@ class ExcelImportServiceTest {
         when(repository.findById(fileId)).thenReturn(Optional.of(file));
 
         var response = excelImportService.parse(
-            new ExcelImportParseRequest(fileId, "sheet1", null, 1, 2, ",", 20, true, true, "yyyy-MM-dd HH:mm:ss"),
+            parseRequest(fileId, Map.of()),
             "tester",
             "信息科",
             true
@@ -105,7 +111,7 @@ class ExcelImportServiceTest {
         when(repository.findById(fileId)).thenReturn(Optional.of(file));
 
         var response = excelImportService.parse(
-            new ExcelImportParseRequest(fileId, "sheet1", null, 1, 2, ",", 20, true, true, "yyyy-MM-dd HH:mm:ss"),
+            parseRequest(fileId, Map.of()),
             "tester",
             "信息科",
             true
@@ -140,7 +146,7 @@ class ExcelImportServiceTest {
         when(repository.findById(fileId)).thenReturn(Optional.of(file));
 
         var response = excelImportService.parse(
-            new ExcelImportParseRequest(fileId, "sheet1", null, 1, 2, ",", 20, true, true, "yyyy-MM-dd HH:mm:ss"),
+            parseRequest(fileId, Map.of()),
             "tester",
             "信息科",
             true
@@ -175,7 +181,7 @@ class ExcelImportServiceTest {
         when(repository.findById(fileId)).thenReturn(Optional.of(file));
 
         var response = excelImportService.parse(
-            new ExcelImportParseRequest(fileId, "sheet1", null, 1, 2, ",", 20, true, true, "yyyy-MM-dd HH:mm:ss"),
+            parseRequest(fileId, Map.of()),
             "tester",
             "信息科",
             true
@@ -208,7 +214,7 @@ class ExcelImportServiceTest {
         when(repository.findById(fileId)).thenReturn(Optional.of(file));
 
         var response = excelImportService.parse(
-            new ExcelImportParseRequest(fileId, "sheet1", null, 1, 2, ",", 20, true, true, "yyyy-MM-dd HH:mm:ss"),
+            parseRequest(fileId, Map.of()),
             "tester",
             "信息科",
             true
@@ -225,6 +231,100 @@ class ExcelImportServiceTest {
             );
     }
 
+    @Test
+    void fileClassificationIsTheFloorForEveryExcelField() throws Exception {
+        UUID fileId = UUID.randomUUID();
+        Path source = writeSimpleWorkbook("classification-floor");
+        InfraExternalExchangeFile file = buildFile(fileId, source, "classification-floor.xlsx");
+        file.setClassification("SECRET");
+        when(repository.findById(fileId)).thenReturn(Optional.of(file));
+
+        var response = excelImportService.parse(
+            parseRequest(fileId, Map.of("col_a", "CONFIDENTIAL")),
+            "tester",
+            "信息科",
+            true
+        );
+
+        assertThat(response.columns())
+            .extracting(column -> column.name() + ":" + column.classification())
+            .containsExactly("col_a:CONFIDENTIAL", "col_b:SECRET");
+    }
+
+    @Test
+    void fieldClassificationCannotBeLowerThanFileClassification() throws Exception {
+        UUID fileId = UUID.randomUUID();
+        Path source = writeSimpleWorkbook("classification-downgrade");
+        InfraExternalExchangeFile file = buildFile(fileId, source, "classification-downgrade.xlsx");
+        file.setClassification("SECRET");
+        when(repository.findById(fileId)).thenReturn(Optional.of(file));
+
+        assertThatThrownBy(() ->
+            excelImportService.parse(
+                parseRequest(fileId, Map.of("col_a", "INTERNAL")),
+                "tester",
+                "信息科",
+                true
+            )
+        )
+            .hasMessageContaining("不能低于文件密级 SECRET");
+    }
+
+    @Test
+    void fileClassificationIsAlsoTheFloorForEveryCsvField() throws Exception {
+        UUID fileId = UUID.randomUUID();
+        Path source = tempDir.resolve("exchange/excel/csv-classification/source.csv");
+        Files.createDirectories(source.getParent());
+        Files.writeString(source, "col_a,col_b\nalpha,beta\n");
+        InfraExternalExchangeFile file = buildFile(fileId, source, "classification.csv");
+        file.setClassification("SECRET");
+        when(repository.findById(fileId)).thenReturn(Optional.of(file));
+
+        var response = excelImportService.parse(
+            parseRequest(fileId, Map.of()),
+            "tester",
+            "信息科",
+            true
+        );
+
+        assertThat(response.columns())
+            .extracting(column -> column.name() + ":" + column.classification())
+            .containsExactly("col_a:SECRET", "col_b:SECRET");
+    }
+
+    private ExcelImportParseRequest parseRequest(UUID fileId, Map<String, String> fieldClassifications) {
+        return new ExcelImportParseRequest(
+            fileId,
+            "sheet1",
+            null,
+            1,
+            2,
+            ",",
+            20,
+            true,
+            true,
+            "yyyy-MM-dd HH:mm:ss",
+            fieldClassifications,
+            false
+        );
+    }
+
+    private Path writeSimpleWorkbook(String directory) throws Exception {
+        Path source = tempDir.resolve("exchange/excel/" + directory + "/source.xlsx");
+        Files.createDirectories(source.getParent());
+        try (XSSFWorkbook workbook = new XSSFWorkbook(); OutputStream out = Files.newOutputStream(source)) {
+            var sheet = workbook.createSheet("sheet1");
+            var header = sheet.createRow(0);
+            header.createCell(0).setCellValue("col_a");
+            header.createCell(1).setCellValue("col_b");
+            var row = sheet.createRow(1);
+            row.createCell(0).setCellValue("a");
+            row.createCell(1).setCellValue("b");
+            workbook.write(out);
+        }
+        return source;
+    }
+
     private InfraExternalExchangeFile buildFile(UUID fileId, Path source, String fileName) {
         InfraExternalExchangeFile file = new InfraExternalExchangeFile();
         file.setId(fileId);
@@ -234,6 +334,7 @@ class ExcelImportServiceTest {
         file.setBatchCode("BATCH-001");
         file.setStatus("RECEIVED");
         file.setEnabled(Boolean.TRUE);
+        file.setClassification("INTERNAL");
         file.setReceivedAt(Instant.now());
         file.setProps(new ObjectMapper().valueToTree(Map.of("format", "xlsx")).toString());
         return file;

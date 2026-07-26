@@ -20,6 +20,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelLifecycleRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogClassificationPropagationJobService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecCompatibilityReader;
@@ -75,6 +76,9 @@ class DbtAssetSyncServiceTest {
     @Mock
     private AuditService auditService;
 
+    @Mock
+    private CatalogClassificationPropagationJobService propagationJobService;
+
     @TempDir
     Path tempDir;
 
@@ -119,7 +123,6 @@ class DbtAssetSyncServiceTest {
             )
         ).thenReturn(Optional.of(implementation));
         ModelSpecContract.ModelSpecView modelSpec = org.mockito.Mockito.mock(ModelSpecContract.ModelSpecView.class);
-        when(modelSpec.id()).thenReturn(implementation.modelSpecId());
         when(modelSpec.planId()).thenReturn(implementation.planId());
         when(modelSpec.revision()).thenReturn(implementation.revision());
         when(modelSpec.checksum()).thenReturn(implementation.modelChecksum());
@@ -160,6 +163,99 @@ class DbtAssetSyncServiceTest {
                         .equals(java.util.Set.of("SQL", "SCHEMA"))
             ),
             org.mockito.ArgumentMatchers.any(java.time.Instant.class)
+        );
+    }
+
+    @Test
+    void successfulDbtManifestLineageEnqueuesClassificationPropagationForTheMaterializedModel() throws Exception {
+        writeArtifacts(
+            """
+            {
+              "metadata":{"invocation_id":"run-classification","generated_at":"2026-07-26T08:00:00Z","project_name":"dts"},
+              "sources":{
+                "source.dts.source_orders":{
+                  "resource_type":"source",
+                  "name":"source_orders",
+                  "database":"warehouse",
+                  "schema":"ods",
+                  "identifier":"source_orders",
+                  "columns":{"id":{"name":"id","data_type":"bigint"}}
+                }
+              },
+              "nodes":{
+                "model.dts.dwd_orders":{
+                  "resource_type":"model",
+                  "name":"dwd_orders",
+                  "database":"warehouse",
+                  "schema":"dwd",
+                  "identifier":"dwd_orders",
+                  "compiled_code":"select id from source_orders",
+                  "columns":{"id":{"name":"id","data_type":"bigint"}},
+                  "config":{"materialized":"table"},
+                  "depends_on":{"nodes":["source.dts.source_orders"]}
+                }
+              }
+            }
+            """,
+            """
+            {
+              "metadata":{"invocation_id":"run-classification","generated_at":"2026-07-26T08:00:00Z"},
+              "results":[{"unique_id":"model.dts.dwd_orders","status":"success"}]
+            }
+            """
+        );
+        when(datasetRepository.findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(any(), any()))
+            .thenReturn(Optional.empty());
+        when(datasetRepository.save(any(CatalogDataset.class))).thenAnswer(invocation -> {
+            CatalogDataset dataset = invocation.getArgument(0);
+            if (dataset.getId() == null) {
+                dataset.setId(java.util.UUID.randomUUID());
+            }
+            return dataset;
+        });
+        when(tableRepository.findFirstByDatasetAndNameIgnoreCase(any(CatalogDataset.class), any()))
+            .thenReturn(Optional.empty());
+        when(tableRepository.save(any(CatalogTableSchema.class))).thenAnswer(invocation -> {
+            CatalogTableSchema table = invocation.getArgument(0);
+            if (table.getId() == null) {
+                table.setId(java.util.UUID.randomUUID());
+            }
+            return table;
+        });
+        when(lineageRepository.findCurrentByDownstreamDatasetIdAndRelationTypeIgnoreCase(any(), any()))
+            .thenReturn(List.of());
+        when(
+            lineageRepository.findFirstByUpstreamDatasetIdAndDownstreamDatasetIdAndRelationTypeIgnoreCaseAndValidToIsNull(
+                any(),
+                any(),
+                org.mockito.ArgumentMatchers.eq("DBT")
+            )
+        ).thenReturn(Optional.empty());
+        when(lineageRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(lineageJobRepository.findByJobKey(any())).thenReturn(Optional.empty());
+        when(lineageJobRepository.save(any())).thenAnswer(invocation -> {
+            var job = (com.yuzhi.dts.platform.domain.catalog.CatalogLineageJob) invocation.getArgument(0);
+            if (job.getId() == null) {
+                job.setId(java.util.UUID.randomUUID());
+            }
+            return job;
+        });
+        when(propagationJobService.enqueue(
+                any(),
+                org.mockito.ArgumentMatchers.eq("DBT"),
+                org.mockito.ArgumentMatchers.eq("dbt:model.dts.dwd_orders:run-classification")
+            ))
+            .thenReturn(true);
+
+        DbtAssetSyncService.DbtAssetSyncResult result = service().syncFromManifest(tempDir.toString());
+
+        assertThat(result.synced()).isTrue();
+        assertThat(result.stats().getLineageCreated()).isEqualTo(1);
+        assertThat(result.stats().getClassificationPropagationEnqueued()).isEqualTo(1);
+        verify(propagationJobService).enqueue(
+            any(),
+            org.mockito.ArgumentMatchers.eq("DBT"),
+            org.mockito.ArgumentMatchers.eq("dbt:model.dts.dwd_orders:run-classification")
         );
     }
 
@@ -451,7 +547,7 @@ class DbtAssetSyncServiceTest {
                 new DbtConfigService.DbtWorkspaceStatus(true, "ok", Map.of())
             )
         );
-        when(mappingRepository.findByEnabledTrueOrderByOdsSchemaAscOdsTableAsc()).thenReturn(List.of());
+        org.mockito.Mockito.lenient().when(mappingRepository.findByEnabledTrueOrderByOdsSchemaAscOdsTableAsc()).thenReturn(List.of());
         return new DbtAssetSyncService(
             new ObjectMapper(),
             properties,
@@ -466,7 +562,8 @@ class DbtAssetSyncServiceTest {
             mappingRepository,
             lifecycleRepository,
             modelSpecReader,
-            auditService
+            auditService,
+            propagationJobService
         );
     }
 

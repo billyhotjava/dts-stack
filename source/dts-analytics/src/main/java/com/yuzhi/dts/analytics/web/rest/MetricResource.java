@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.yuzhi.dts.analytics.domain.AnalyticsMetric;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsMetricRepository;
+import com.yuzhi.dts.analytics.service.AnalyticsConsumerClassificationService;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import jakarta.servlet.http.HttpServletRequest;
@@ -30,11 +31,18 @@ public class MetricResource {
 
     private final AnalyticsSessionService sessionService;
     private final AnalyticsMetricRepository metricRepository;
+    private final AnalyticsConsumerClassificationService classificationService;
     private final ObjectMapper objectMapper;
 
-    public MetricResource(AnalyticsSessionService sessionService, AnalyticsMetricRepository metricRepository, ObjectMapper objectMapper) {
+    public MetricResource(
+        AnalyticsSessionService sessionService,
+        AnalyticsMetricRepository metricRepository,
+        AnalyticsConsumerClassificationService classificationService,
+        ObjectMapper objectMapper
+    ) {
         this.sessionService = sessionService;
         this.metricRepository = metricRepository;
+        this.classificationService = classificationService;
         this.objectMapper = objectMapper;
     }
 
@@ -57,6 +65,10 @@ public class MetricResource {
         if (name == null) {
             return ResponseEntity.badRequest().body(Map.of("errors", Map.of("name", "value must be a non-blank string.")));
         }
+        Long baseTableId = baseTableId(body);
+        if (baseTableId == null) {
+            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("table_id", "metric base table is required")));
+        }
 
         AnalyticsMetric metric = new AnalyticsMetric();
         metric.setName(name);
@@ -64,7 +76,9 @@ public class MetricResource {
         metric.setCreatorId(user.get().getId());
         metric.setArchived(body != null && body.has("archived") && body.path("archived").asBoolean(false));
         metric.setMetricJson(body == null ? "{}" : body.toString());
+        metric.setBaseTableId(baseTableId);
         metric = metricRepository.save(metric);
+        classificationService.deriveMetric(metric);
         return ResponseEntity.ok(toMetricResponse(metric));
     }
 
@@ -107,8 +121,13 @@ public class MetricResource {
         }
         if (body != null) {
             metric.setMetricJson(body.toString());
+            Long baseTableId = baseTableId(body);
+            if (baseTableId != null) {
+                metric.setBaseTableId(baseTableId);
+            }
         }
         metricRepository.save(metric);
+        classificationService.deriveMetric(metric);
         return ResponseEntity.ok(toMetricResponse(metric));
     }
 
@@ -163,5 +182,26 @@ public class MetricResource {
         String trimmed = value.trim();
         return trimmed.isBlank() ? null : trimmed;
     }
-}
 
+    private static Long baseTableId(JsonNode body) {
+        if (body == null || !body.isObject()) {
+            return null;
+        }
+        for (String field : new String[] { "base_table_id", "table_id", "tableId" }) {
+            JsonNode value = body.get(field);
+            if (value != null && value.canConvertToLong() && value.asLong() > 0) {
+                return value.asLong();
+            }
+        }
+        JsonNode definition = body.get("definition");
+        if (definition != null && definition.isObject()) {
+            for (String field : new String[] { "source-table", "source_table", "table_id" }) {
+                JsonNode value = definition.get(field);
+                if (value != null && value.canConvertToLong() && value.asLong() > 0) {
+                    return value.asLong();
+                }
+            }
+        }
+        return null;
+    }
+}

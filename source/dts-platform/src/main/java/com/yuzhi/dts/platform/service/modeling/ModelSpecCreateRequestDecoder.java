@@ -52,7 +52,7 @@ public final class ModelSpecCreateRequestDecoder {
             return rejected(requestIssue("ModelSpec create request cannot be decoded"));
         }
 
-        List<ModelSpecContract.FieldIssue> semanticIssues = ModelSpecContract.validateCreate(command);
+        List<ModelSpecContract.FieldIssue> semanticIssues = ModelSpecContract.validateInteractiveCreate(command);
         return semanticIssues.isEmpty() ? new DecodeResult(command, List.of()) : new DecodeResult(null, semanticIssues);
     }
 

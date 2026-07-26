@@ -13,6 +13,10 @@ import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.integration.ScreenReportLinkSyncService;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
+import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService;
+import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.DeriveCommand;
+import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.SubjectRef;
 import com.yuzhi.dts.platform.service.permission.DashboardAccessGuard;
 import com.yuzhi.dts.platform.service.permission.DashboardCallerResolver;
 import com.yuzhi.dts.platform.service.visualization.dto.BiReportLinkDto;
@@ -52,6 +56,7 @@ public class BiReportLinkService {
     private final DashboardAccessGuard accessGuard;
     private final DashboardCallerResolver callerResolver;
     private final AuditService audit;
+    private final CatalogConsumerClassificationService consumerClassificationService;
 
     public BiReportLinkService(
         BiReportLinkRepository repo,
@@ -62,6 +67,29 @@ public class BiReportLinkService {
         DashboardCallerResolver callerResolver,
         AuditService audit
     ) {
+        this(
+            repo,
+            visitRepo,
+            queryDatasetAssetRepository,
+            classificationUtils,
+            accessGuard,
+            callerResolver,
+            audit,
+            null
+        );
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public BiReportLinkService(
+        BiReportLinkRepository repo,
+        BiReportVisitRepository visitRepo,
+        QueryDatasetAssetRepository queryDatasetAssetRepository,
+        ClassificationUtils classificationUtils,
+        DashboardAccessGuard accessGuard,
+        DashboardCallerResolver callerResolver,
+        AuditService audit,
+        CatalogConsumerClassificationService consumerClassificationService
+    ) {
         this.repo = repo;
         this.visitRepo = visitRepo;
         this.queryDatasetAssetRepository = queryDatasetAssetRepository;
@@ -69,6 +97,7 @@ public class BiReportLinkService {
         this.accessGuard = accessGuard;
         this.callerResolver = callerResolver;
         this.audit = audit;
+        this.consumerClassificationService = consumerClassificationService;
     }
 
     @Transactional(readOnly = true)
@@ -228,6 +257,16 @@ public class BiReportLinkService {
             }
             createdJustNow = true;
         }
+        if (
+            !createdJustNow &&
+            consumerClassificationService != null &&
+            link.getQueryDatasetId() != null
+        ) {
+            consumerClassificationService.requireCurrentConsumer(
+                "REPORT_LINK",
+                "report-link:" + link.getCode().toLowerCase(Locale.ROOT)
+            );
+        }
         // 对已存在的大屏镜像做 Guard 校验。
         // - DENY → 不写 visit，写审计 failure，并向上层报告 DENIED，
         //   便于 controller 把 VIS_OPEN 的 stage 设成 FAIL
@@ -342,6 +381,23 @@ public class BiReportLinkService {
         }
         if (req.getSortOrder() != null) {
             target.setSortOrder(req.getSortOrder());
+        }
+        if (consumerClassificationService != null && target.getQueryDatasetId() != null) {
+            var derived = consumerClassificationService.derive(
+                new DeriveCommand(
+                    "REPORT_LINK",
+                    "report-link:" + code.toLowerCase(Locale.ROOT),
+                    classification,
+                    List.of(
+                        new SubjectRef(
+                            "ASSET",
+                            CatalogAssetKey.biDataset(target.getQueryDatasetId())
+                        )
+                    ),
+                    "bi-report-link:" + code
+                )
+            );
+            target.setClassification(derived.effectiveLevel());
         }
     }
 

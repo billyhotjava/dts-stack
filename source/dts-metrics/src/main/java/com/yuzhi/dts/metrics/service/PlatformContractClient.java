@@ -240,6 +240,23 @@ public class PlatformContractClient {
     }
 
     @SuppressWarnings("unchecked")
+    public Map<String, Object> deriveConsumerClassification(ConsumerClassificationRequest request) {
+        try {
+            RestClient.RequestBodySpec spec = restClient
+                .post()
+                .uri(internalUrl("/catalog/classifications/consumers/derive"))
+                .header("X-DTS-Service", properties.getServiceName());
+            if (StringUtils.hasText(properties.getPlatform().getServiceToken())) {
+                spec = spec.header("X-DTS-Service-Token", properties.getPlatform().getServiceToken());
+            }
+            Map<String, Object> result = spec.body(request).retrieve().body(Map.class);
+            return result != null ? result : Map.of();
+        } catch (RestClientException e) {
+            throw new PlatformContractException("platform contract call failed: consumer classification derive", e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
     public Map<String, Object> validateMetricModel(MetricModelValidationRequest request) {
         try {
             RestClient.RequestBodySpec spec = restClient
@@ -610,6 +627,16 @@ public class PlatformContractClient {
             this(assets, null, null, 0, 1, false);
         }
     }
+
+    public record ConsumerClassificationSubjectRef(String subjectType, String subjectKey) {}
+
+    public record ConsumerClassificationRequest(
+        String consumerType,
+        String consumerKey,
+        String manualFloor,
+        List<ConsumerClassificationSubjectRef> upstreams,
+        String originRef
+    ) {}
 
     public static class PlatformContractException extends RuntimeException {
         public PlatformContractException(String message, Throwable cause) {

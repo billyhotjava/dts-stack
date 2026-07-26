@@ -23,15 +23,18 @@ public class CatalogAutoLineageService {
     private final SqlTableReferenceExtractor extractor;
     private final CatalogDatasetRepository datasetRepository;
     private final CatalogDatasetLineageRepository lineageRepository;
+    private final CatalogClassificationPropagationJobService propagationJobService;
 
     public CatalogAutoLineageService(
         SqlTableReferenceExtractor extractor,
         CatalogDatasetRepository datasetRepository,
-        CatalogDatasetLineageRepository lineageRepository
+        CatalogDatasetLineageRepository lineageRepository,
+        CatalogClassificationPropagationJobService propagationJobService
     ) {
         this.extractor = extractor;
         this.datasetRepository = datasetRepository;
         this.lineageRepository = lineageRepository;
+        this.propagationJobService = propagationJobService;
     }
 
     public AutoLineageResult syncAutoViewLineage(CatalogDataset downstream, String viewSql) {
@@ -47,6 +50,11 @@ public class CatalogAutoLineageService {
         Set<TableRef> refs = extractor.extract(viewSql);
         if (refs.isEmpty()) {
             cleanupAutoEdges(downstream.getId(), Set.of());
+            propagationJobService.enqueue(
+                downstream.getId(),
+                "AUTO_VIEW_LINEAGE_REMOVED",
+                "auto-view:" + downstream.getId()
+            );
             return new AutoLineageResult(0, 0, 0, "no-refs");
         }
 
@@ -100,6 +108,11 @@ public class CatalogAutoLineageService {
             created++;
         }
 
+        propagationJobService.enqueue(
+            downstream.getId(),
+            "AUTO_VIEW_LINEAGE",
+            "auto-view:" + downstream.getId() + ":" + viewSql.hashCode()
+        );
         return new AutoLineageResult(created, retained, removed, "ok");
     }
 

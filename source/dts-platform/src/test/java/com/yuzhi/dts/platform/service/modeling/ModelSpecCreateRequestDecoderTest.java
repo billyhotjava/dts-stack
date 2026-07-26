@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.InputStream;
 import java.lang.reflect.Modifier;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -141,6 +142,40 @@ class ModelSpecCreateRequestDecoderTest {
         assertThat(result.issues()).isEmpty();
         assertThat(result.command()).isNotNull();
         assertThat(result.valid()).isTrue();
+    }
+
+    @Test
+    void decoderAcceptsTheMinimalInteractiveDraftForAllFourTableTypes() {
+        for (String modelType : List.of("DIMENSION", "FACT", "SUMMARY", "APPLICATION")) {
+            ObjectNode candidate = lenientMapper
+                .createObjectNode()
+                .put("planId", "10000000-0000-0000-0000-000000000001")
+                .put("domainId", "20000000-0000-0000-0000-000000000001")
+                .put("modelType", modelType)
+                .put("name", modelType.toLowerCase() + "_draft")
+                .put("idempotencyKey", "minimal-" + modelType.toLowerCase());
+            if ("DIMENSION".equals(modelType)) {
+                candidate
+                    .putObject("dimensionDefinitionRef")
+                    .put("dimensionDefinitionId", "60000000-0000-0000-0000-000000000001")
+                    .put("revision", 1);
+            }
+
+            ModelSpecCreateRequestDecoder.DecodeResult result = decoder.decode(candidate);
+
+            assertThat(result.issues()).as(modelType).isEmpty();
+            assertThat(result.command()).as(modelType).isNotNull();
+            assertThat(result.command().implementationMode()).as(modelType).isEqualTo(ModelSpecContract.ImplementationMode.DESIGNER_GENERATED);
+            assertThat(result.command().layer())
+                .as(modelType)
+                .isEqualTo(
+                    switch (modelType) {
+                        case "SUMMARY" -> ModelSpecContract.Layer.DWS;
+                        case "APPLICATION" -> ModelSpecContract.Layer.ADS;
+                        default -> ModelSpecContract.Layer.DWD;
+                    }
+                );
+        }
     }
 
     @Test

@@ -11,7 +11,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -22,17 +25,20 @@ public class CatalogDbtLineageService {
 	private final CatalogDatasetLineageRepository lineageRepo;
 	private final CatalogLineageJobRepository lineageJobRepo;
 	private final ObjectMapper objectMapper;
+	private final CatalogClassificationPropagationJobService propagationJobService;
 
 	public CatalogDbtLineageService(
 		CatalogDatasetRepository datasetRepo,
 		CatalogDatasetLineageRepository lineageRepo,
 		CatalogLineageJobRepository lineageJobRepo,
-		ObjectMapper objectMapper
+		ObjectMapper objectMapper,
+		CatalogClassificationPropagationJobService propagationJobService
 	) {
 		this.datasetRepo = datasetRepo;
 		this.lineageRepo = lineageRepo;
 		this.lineageJobRepo = lineageJobRepo;
 		this.objectMapper = objectMapper;
+		this.propagationJobService = propagationJobService;
 	}
 
 	@Transactional
@@ -70,6 +76,7 @@ public class CatalogDbtLineageService {
 		int skipped = 0;
 		Set<String> toCreateKeys = new HashSet<>();
 		List<CatalogDatasetLineage> toCreate = new ArrayList<>();
+		Set<UUID> affectedDownstreamIds = new LinkedHashSet<>();
 
 		for (Map.Entry<String, Object> entry : nodes.entrySet()) {
 			String nodeKey = entry.getKey();
@@ -117,6 +124,7 @@ public class CatalogDbtLineageService {
 				}
 
 				String pairKey = upstreamId + ":" + downstreamId;
+				affectedDownstreamIds.add(downstreamId);
 				if (!existingPairs.contains(pairKey) && !toCreateKeys.contains(pairKey)) {
 					CatalogDatasetLineage lineage = new CatalogDatasetLineage();
 					lineage.setUpstreamDatasetId(upstreamId);
@@ -137,7 +145,32 @@ public class CatalogDbtLineageService {
 
 		lineageRepo.saveAll(toCreate);
 		int created = toCreate.size();
-		return Map.of("created", created, "skipped", skipped, "total", nodes.size());
+		String triggerRef = "dbt-manifest:" + sha256(objectMapper.writeValueAsString(manifest));
+		int propagationEnqueued = 0;
+		for (UUID downstreamId : affectedDownstreamIds) {
+			if (propagationJobService.enqueue(downstreamId, "DBT", triggerRef)) {
+				propagationEnqueued++;
+			}
+		}
+		return Map.of(
+			"created",
+			created,
+			"skipped",
+			skipped,
+			"total",
+			nodes.size(),
+			"propagationEnqueued",
+			propagationEnqueued
+		);
+	}
+
+	private String sha256(String value) {
+		try {
+			MessageDigest digest = MessageDigest.getInstance("SHA-256");
+			return HexFormat.of().formatHex(digest.digest(String.valueOf(value).getBytes(StandardCharsets.UTF_8)));
+		} catch (Exception ex) {
+			throw new IllegalStateException("Unable to calculate dbt manifest checksum", ex);
+		}
 	}
 
 	private CatalogLineageJob upsertDbtJob(String nodeKey, String modelName, Map<String, Object> node) {

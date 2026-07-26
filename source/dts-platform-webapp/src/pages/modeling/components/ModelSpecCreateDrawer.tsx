@@ -1,5 +1,6 @@
 import { Alert, Button, Drawer, Form, Input, Select, Space } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { listDimensionDefinitions } from "@/api/dimensionDefinitionApi";
 import {
@@ -65,6 +66,7 @@ export function ModelSpecCreateDrawer({
 	onClose,
 	onCreated,
 }: Props) {
+	const navigate = useNavigate();
 	const [form] = Form.useForm<ModelSpecDraft>();
 	const [plans, setPlans] = useState<WarehousePlanHeader[]>([]);
 	const [domainOptions, setDomainOptions] = useState<SelectOption[]>([]);
@@ -80,6 +82,7 @@ export function ModelSpecCreateDrawer({
 	const planRequestRef = useRef(0);
 	const domainRequestRef = useRef(0);
 	const definitionRequestRef = useRef(0);
+	const initialDefinitionAttemptedRef = useRef(false);
 	const selectedPlanId = Form.useWatch("planId", form) || "";
 	const selectedDomainId = Form.useWatch("domainId", form) || "";
 	const selectedModelType = Form.useWatch("modelType", form) || initialModelType;
@@ -137,7 +140,12 @@ export function ModelSpecCreateDrawer({
 				if (requestId !== definitionRequestRef.current) return;
 				const definitions = Array.isArray(result) ? result : [];
 				setDimensionDefinitions(definitions);
-				const requested = initialDimensionDefinitionId
+				const shouldResolveInitialDefinition =
+					Boolean(initialDimensionDefinitionId) && !initialDefinitionAttemptedRef.current;
+				if (shouldResolveInitialDefinition) {
+					initialDefinitionAttemptedRef.current = true;
+				}
+				const requested = shouldResolveInitialDefinition
 					? definitions.find(
 						(definition) =>
 							definition.id === initialDimensionDefinitionId &&
@@ -149,11 +157,13 @@ export function ModelSpecCreateDrawer({
 						dimensionDefinitionId: requested.id,
 						revision: requested.revision,
 					});
-				} else if (initialDimensionDefinitionId) {
+				} else if (shouldResolveInitialDefinition) {
 					form.setFieldValue("dimensionDefinitionRef", undefined);
 					setDefinitionError("请求的业务维度不是当前分类下的现行版本。请返回维度目录选择现行维度后重新创建维度表。");
 				} else if (definitions.length === 0) {
-					setDefinitionError("当前业务分类没有现行业务维度。请先在维度目录登记并确认维度，再创建维度表。");
+					setDefinitionError(
+						"已选择业务分类，但该分类下还没有已确认的业务维度。请先前往维度目录登记并设为现行，再创建维度表。",
+					);
 				}
 			} catch {
 				if (requestId !== definitionRequestRef.current) return;
@@ -181,6 +191,7 @@ export function ModelSpecCreateDrawer({
 		setSubmitError("");
 		setContextError("");
 		setDefinitionError("");
+		initialDefinitionAttemptedRef.current = false;
 		setDimensionDefinitions([]);
 		setLoadingPlans(true);
 		void listWarehousePlans()
@@ -230,17 +241,21 @@ export function ModelSpecCreateDrawer({
 		form.setFieldsValue({ domainId: "", dimensionDefinitionRef: undefined });
 		setDimensionDefinitions([]);
 		setDefinitionError("");
+		setSubmitError("");
 		void loadDomains(planId);
 	};
 
 	const changeDomain = () => {
 		form.setFieldValue("dimensionDefinitionRef", undefined);
+		setContextError("");
 		setDefinitionError("");
+		setSubmitError("");
 	};
 
 	const changeModelType = (modelType: ModelSpecType) => {
 		form.setFieldsValue({ modelType, dimensionDefinitionRef: undefined });
 		setDefinitionError("");
+		setSubmitError("");
 	};
 
 	const selectDimensionDefinition = (definitionId: string) => {
@@ -249,6 +264,17 @@ export function ModelSpecCreateDrawer({
 			"dimensionDefinitionRef",
 			definition ? { dimensionDefinitionId: definition.id, revision: definition.revision } : undefined,
 		);
+		setDefinitionError("");
+		setSubmitError("");
+	};
+
+	const openDimensionCatalog = () => {
+		const params = new URLSearchParams();
+		if (selectedPlanId) params.set("planId", selectedPlanId);
+		if (selectedDomainId) params.set("domainId", selectedDomainId);
+		const query = params.toString();
+		onClose();
+		navigate(`/modeling/dimensions${query ? `?${query}` : ""}`);
 	};
 
 	const submit = async () => {
@@ -308,7 +334,20 @@ export function ModelSpecCreateDrawer({
 		>
 			<Space direction="vertical" size={12} className="w-full">
 				{contextError ? <Alert type="warning" showIcon message={contextError} /> : null}
-				{definitionError ? <Alert type="warning" showIcon message={definitionError} /> : null}
+				{definitionError ? (
+					<Alert
+						type="warning"
+						showIcon
+						message={definitionError}
+						action={
+							selectedDomainId ? (
+								<Button size="small" onClick={openDimensionCatalog}>
+									前往维度目录
+								</Button>
+							) : undefined
+						}
+					/>
+				) : null}
 				{submitError ? <Alert type="error" showIcon message={submitError} /> : null}
 				<Form form={form} layout="vertical" requiredMark="optional" disabled={saving}>
 					<Form.Item name="planId" label="建设计划" rules={[{ required: true, message: "请选择建设计划" }]}>
@@ -337,11 +376,12 @@ export function ModelSpecCreateDrawer({
 						<Select options={modelTypeOptions} disabled={lockModelType} onChange={(value) => changeModelType(value as ModelSpecType)} />
 					</Form.Item>
 					{selectedModelType === "DIMENSION" ? (
-						<Form.Item label="业务维度" required>
+						<Form.Item label="业务维度（需已确认）" required>
 							<Select
 								showSearch
 								optionFilterProp="label"
 								placeholder="选择当前业务分类下的现行业务维度"
+								notFoundContent={loadingDefinitions ? "正在加载业务维度" : "暂无已确认的业务维度"}
 								options={dimensionOptions}
 								value={selectedDimensionDefinitionRef?.dimensionDefinitionId}
 								loading={loadingDefinitions}

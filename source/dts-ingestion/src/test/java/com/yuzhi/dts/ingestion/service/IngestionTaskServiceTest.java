@@ -130,6 +130,9 @@ class IngestionTaskServiceTest {
     private ApiIngestionExecutor apiIngestionExecutor;
 
     @Mock
+    private IngestionClassificationSealGuard classificationSealGuard;
+
+    @Mock
     private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private IngestionTaskService ingestionTaskService;
@@ -160,6 +163,7 @@ class IngestionTaskServiceTest {
             platformInfraClient,
             sourceConnectorRegistry,
             apiIngestionExecutor,
+            classificationSealGuard,
             transactionManager,
             Runnable::run
         );

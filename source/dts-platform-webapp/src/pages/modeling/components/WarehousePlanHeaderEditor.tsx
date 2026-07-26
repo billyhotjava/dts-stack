@@ -1,4 +1,4 @@
-import { Alert, Button, Descriptions, Drawer, Form, Input, Select, Space, Typography } from "antd";
+import { Alert, Button, Card, Descriptions, Form, Input, Select, Space, Typography } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { searchUsers, type UserDirectoryEntry } from "@/api/services/userDirectoryService";
@@ -363,17 +363,110 @@ export function WarehousePlanHeaderEditor({
 		onClose();
 	};
 
+	if (!open || !plan) return null;
+
 	return (
-		<Drawer
-			title="编辑建设规划"
-			open={open}
-			width="min(560px, 100vw)"
-			onClose={close}
-			closable={!saving}
-			maskClosable={!saving}
-			destroyOnClose
-			footer={
-				<div className="flex justify-end gap-2">
+		<Card title="规划概览" data-testid="warehouse-plan-header-editor">
+			<div className="space-y-4">
+				{!canMaintainPlan ? <Alert type="info" showIcon message="当前账号没有规划维护权限" /> : null}
+				{canMaintainPlan && !canEditWarehousePlanHeader(canMaintainPlan, plan.lifecycleStatus) ? (
+					<Alert type="info" showIcon message="当前生命周期只允许查看规划信息" />
+				) : null}
+				{submitError ? (
+					<Alert
+						type="error"
+						showIcon
+						message={submitError}
+						action={
+							unavailable ? (
+								<Button type="link" onClick={onUnavailable}>
+									返回建设规划台账
+								</Button>
+							) : undefined
+						}
+					/>
+				) : null}
+				{pendingVerification ? (
+					<Alert
+						type="warning"
+						showIcon
+						message="保存结果未知"
+						description="当前输入和原版本已保留。再次提交前必须先 GET 核对服务端状态，避免重复写入。"
+						action={
+							<Button type="link" loading={saving} onClick={() => void verifyPendingUpdate()}>
+								核对服务端状态后重试
+							</Button>
+						}
+					/>
+				) : null}
+				{conflictVersion != null && pendingVerification == null ? (
+					<Alert
+						type="warning"
+						showIcon
+						message="规划已被其他用户更新"
+						description="当前表单已保留。请选择基于服务端最新版重试，或放弃当前输入并加载最新版。"
+						action={
+							<Space direction="vertical" size={4}>
+								<Button type="link" loading={saving} onClick={() => void submit(conflictVersion)}>
+									保留当前输入并基于版本 {conflictVersion} 重试
+								</Button>
+								<Button type="link" disabled={saving} onClick={() => void loadLatest()}>
+									放弃并加载最新版
+								</Button>
+							</Space>
+						}
+					/>
+				) : null}
+
+				<Descriptions size="small" column={1} bordered>
+					<Descriptions.Item label="计划编码">{plan.code}</Descriptions.Item>
+					<Descriptions.Item label="开始方式">{onboardingLabel(plan)}</Descriptions.Item>
+					<Descriptions.Item label="生命周期">
+						{warehousePlanLifecycleLabel(lockedPlan?.lifecycleStatus ?? plan.lifecycleStatus)}
+					</Descriptions.Item>
+				</Descriptions>
+
+				<Form<WarehousePlanHeaderForm>
+					form={form}
+					layout="vertical"
+					disabled={!editable || saving || pendingVerification != null}
+				>
+					<Form.Item
+						name="name"
+						label="规划名称"
+						rules={[{ required: true, whitespace: true, max: 128, message: "请输入 1-128 个字符的规划名称" }]}
+					>
+						<Input maxLength={128} placeholder="请输入规划名称" />
+					</Form.Item>
+					<Form.Item name="objective" label="建设目标">
+						<Input.TextArea rows={3} placeholder="这次建设要解决什么业务问题" />
+					</Form.Item>
+					<Form.Item name="scope" label="建设范围">
+						<Input.TextArea rows={2} placeholder="涉及的业务、组织或数据边界" />
+					</Form.Item>
+					<Form.Item
+						name="ownerId"
+						label="负责人"
+						rules={[{ required: true, message: "请选择负责人" }]}
+						extra={directoryHint || "负责人必须来自人员目录，不能手工填写账号。"}
+					>
+						<Select
+							showSearch
+							filterOption={false}
+							loading={directoryLoading}
+							options={ownerOptions}
+							onSearch={setDirectoryQuery}
+							onChange={changeOwner}
+							placeholder="输入姓名或账号搜索人员目录"
+							notFoundContent={directoryLoading ? "正在查询人员目录" : "未找到可选负责人"}
+						/>
+					</Form.Item>
+					<Form.Item name="ownerDepartmentId" label="负责部门" extra="由所选负责人的目录信息带入">
+						<Input disabled placeholder="人员目录未提供部门" />
+					</Form.Item>
+				</Form>
+				<Text type="secondary">保存不会改变当前计划、页面位置或阶段证据。</Text>
+				<div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
 					<Button disabled={saving} onClick={close}>
 						取消
 					</Button>
@@ -388,110 +481,7 @@ export function WarehousePlanHeaderEditor({
 						</Button>
 					) : null}
 				</div>
-			}
-		>
-			{plan ? (
-				<div className="space-y-4" data-testid="warehouse-plan-header-editor">
-					{!canMaintainPlan ? <Alert type="info" showIcon message="当前账号没有规划维护权限" /> : null}
-					{canMaintainPlan && !canEditWarehousePlanHeader(canMaintainPlan, plan.lifecycleStatus) ? (
-						<Alert type="info" showIcon message="当前生命周期只允许查看规划信息" />
-					) : null}
-					{submitError ? (
-						<Alert
-							type="error"
-							showIcon
-							message={submitError}
-							action={
-								unavailable ? (
-									<Button type="link" onClick={onUnavailable}>
-										返回建设规划台账
-									</Button>
-								) : undefined
-							}
-						/>
-					) : null}
-					{pendingVerification ? (
-						<Alert
-							type="warning"
-							showIcon
-							message="保存结果未知"
-							description="当前输入和原版本已保留。再次提交前必须先 GET 核对服务端状态，避免重复写入。"
-							action={
-								<Button type="link" loading={saving} onClick={() => void verifyPendingUpdate()}>
-									核对服务端状态后重试
-								</Button>
-							}
-						/>
-					) : null}
-					{conflictVersion != null && pendingVerification == null ? (
-						<Alert
-							type="warning"
-							showIcon
-							message="规划已被其他用户更新"
-							description="当前表单已保留。请选择基于服务端最新版重试，或放弃当前输入并加载最新版。"
-							action={
-								<Space direction="vertical" size={4}>
-									<Button type="link" loading={saving} onClick={() => void submit(conflictVersion)}>
-										保留当前输入并基于版本 {conflictVersion} 重试
-									</Button>
-									<Button type="link" disabled={saving} onClick={() => void loadLatest()}>
-										放弃并加载最新版
-									</Button>
-								</Space>
-							}
-						/>
-					) : null}
-
-					<Descriptions size="small" column={1} bordered>
-						<Descriptions.Item label="计划编码">{plan.code}</Descriptions.Item>
-						<Descriptions.Item label="开始方式">{onboardingLabel(plan)}</Descriptions.Item>
-						<Descriptions.Item label="生命周期">
-							{warehousePlanLifecycleLabel(lockedPlan?.lifecycleStatus ?? plan.lifecycleStatus)}
-						</Descriptions.Item>
-					</Descriptions>
-
-					<Form<WarehousePlanHeaderForm>
-						form={form}
-						layout="vertical"
-						disabled={!editable || saving || pendingVerification != null}
-					>
-						<Form.Item
-							name="name"
-							label="规划名称"
-							rules={[{ required: true, whitespace: true, max: 128, message: "请输入 1-128 个字符的规划名称" }]}
-						>
-							<Input maxLength={128} placeholder="请输入规划名称" />
-						</Form.Item>
-						<Form.Item name="objective" label="建设目标">
-							<Input.TextArea rows={3} placeholder="这次建设要解决什么业务问题" />
-						</Form.Item>
-						<Form.Item name="scope" label="建设范围">
-							<Input.TextArea rows={2} placeholder="涉及的业务、组织或数据边界" />
-						</Form.Item>
-						<Form.Item
-							name="ownerId"
-							label="负责人"
-							rules={[{ required: true, message: "请选择负责人" }]}
-							extra={directoryHint || "负责人必须来自人员目录，不能手工填写账号。"}
-						>
-							<Select
-								showSearch
-								filterOption={false}
-								loading={directoryLoading}
-								options={ownerOptions}
-								onSearch={setDirectoryQuery}
-								onChange={changeOwner}
-								placeholder="输入姓名或账号搜索人员目录"
-								notFoundContent={directoryLoading ? "正在查询人员目录" : "未找到可选负责人"}
-							/>
-						</Form.Item>
-						<Form.Item name="ownerDepartmentId" label="负责部门" extra="由所选负责人的目录信息带入">
-							<Input disabled placeholder="人员目录未提供部门" />
-						</Form.Item>
-					</Form>
-					<Text type="secondary">保存不会改变当前计划、页面位置或阶段证据。</Text>
-				</div>
-			) : null}
-		</Drawer>
+			</div>
+		</Card>
 	);
 }

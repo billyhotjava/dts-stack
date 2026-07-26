@@ -24,8 +24,10 @@ test("dimension catalog uses the definition boundary and keeps the six-column bu
 	assert.match(page, />\s*刷新目录\s*</);
 	assert.match(page, /loadRequestRef/);
 	assert.match(page, /actionRequestRef/);
-	assert.match(page, /dimensionDefinitionId: definition\.id/);
-	assert.match(page, /dimensionDefinitionRevision: String\(definition\.revision\)/);
+	assert.match(page, /new URLSearchParams\(searchParams\)/);
+	assert.match(page, /params\.set\("dimensionDefinitionId", definition\.id\)/);
+	assert.match(page, /params\.set\("domainId", definition\.domainId\)/);
+	assert.match(page, /params\.set\("dimensionDefinitionRevision", String\(definition\.revision\)\)/);
 	assert.doesNotMatch(page, /listModelSpecs|createModelSpec|ModelSpecCreateDrawer|listWarehousePlans/);
 	assert.doesNotMatch(page, /planId|grain|DWD|SCD/i);
 	assert.doesNotMatch(page, /["'`](?:source|sql|materialization)["'`]/i);

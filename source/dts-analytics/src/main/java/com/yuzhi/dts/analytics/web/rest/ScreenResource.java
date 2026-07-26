@@ -13,6 +13,8 @@ import com.yuzhi.dts.analytics.repository.AnalyticsScreenRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenAccessRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenVersionRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsUserRepository;
+import com.yuzhi.dts.analytics.service.AnalyticsClassificationClient;
+import com.yuzhi.dts.analytics.service.AnalyticsConsumerClassificationService;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.PublicLinkService;
 import com.yuzhi.dts.analytics.service.ScreenAuditService;
@@ -40,9 +42,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpHeaders;
@@ -57,6 +61,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * REST controller for managing screen designer resources.
@@ -84,6 +89,7 @@ public class ScreenResource {
     private final ScreenServerRenderExportService screenServerRenderExportService;
     private final ScreenSpecValidator screenSpecValidator;
     private final PublicLinkService publicLinkService;
+    private final AnalyticsConsumerClassificationService classificationService;
     private final ObjectMapper objectMapper;
 
     public ScreenResource(
@@ -102,6 +108,7 @@ public class ScreenResource {
             ScreenServerRenderExportService screenServerRenderExportService,
             ScreenSpecValidator screenSpecValidator,
             PublicLinkService publicLinkService,
+            AnalyticsConsumerClassificationService classificationService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.screenRepository = screenRepository;
@@ -118,6 +125,7 @@ public class ScreenResource {
         this.screenServerRenderExportService = screenServerRenderExportService;
         this.screenSpecValidator = screenSpecValidator;
         this.publicLinkService = publicLinkService;
+        this.classificationService = classificationService;
         this.objectMapper = objectMapper;
     }
 
@@ -226,6 +234,10 @@ public class ScreenResource {
             return ResponseEntity.notFound().build();
         }
 
+        boolean usePublished = "published".equalsIgnoreCase(mode) || "preview".equalsIgnoreCase(mode);
+        if (usePublished) {
+            requireCurrentScreenOrConflict(screen.getId());
+        }
         PlatformContext context = PlatformContext.from(request);
         ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
         if (!permissions.canRead()) {
@@ -234,7 +246,6 @@ public class ScreenResource {
 
         AnalyticsScreenVersion publishedVersion =
                 screenVersionRepository.findFirstByScreenIdAndCurrentPublishedTrue(screen.getId()).orElse(null);
-        boolean usePublished = "published".equalsIgnoreCase(mode) || "preview".equalsIgnoreCase(mode);
         if (usePublished) {
             if (publishedVersion != null) {
                 return ResponseEntity.ok(toDetailResponse(screen, publishedVersion, publishedVersion, "published", permissions));
@@ -259,6 +270,7 @@ public class ScreenResource {
             return ResponseEntity.notFound().build();
         }
 
+        requireCurrentScreenOrConflict(screen.getId());
         PlatformContext context = PlatformContext.from(request);
         if (!screenPermissionService.snapshot(screen, user.orElseThrow(), context).canRead()) {
             return forbidden();
@@ -310,6 +322,7 @@ public class ScreenResource {
             return ResponseEntity.notFound().build();
         }
 
+        requireCurrentScreenOrConflict(screen.getId());
         PlatformContext context = PlatformContext.from(request);
         if (!screenPermissionService.snapshot(screen, user.orElseThrow(), context).isOwner()) {
             return forbidden();
@@ -383,6 +396,7 @@ public class ScreenResource {
             return ResponseEntity.notFound().build();
         }
 
+        requireCurrentScreenOrConflict(screen.getId());
         PlatformContext context = PlatformContext.from(request);
         ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
         if (!permissions.canRead()) {
@@ -449,6 +463,10 @@ public class ScreenResource {
                     .body(denied);
         }
 
+        var exportSeal = classificationService.sealScreenExport(
+            screen.getId(),
+            "screen-export:" + UUID.randomUUID() + ":" + format
+        );
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("allowed", true);
         payload.put("screenId", screen.getId());
@@ -462,6 +480,10 @@ public class ScreenResource {
         payload.put("requestId", requestId);
         payload.put("requestedMode", mode);
         payload.put("resolvedMode", resolvedMode);
+        payload.put("classification", exportSeal.effectiveLevel());
+        payload.put("classificationSnapshotId", exportSeal.snapshotId());
+        payload.put("classificationSnapshotVersion", exportSeal.snapshotVersion());
+        payload.put("fileSubjectKey", exportSeal.subjectKey());
         ObjectNode policySnapshot = objectMapper.createObjectNode();
         policySnapshot.put("policyVersion", policy.path("policyVersion").asInt(1));
         policySnapshot.put("exportApprovalRequired", exportApprovalRequired);
@@ -616,6 +638,7 @@ public class ScreenResource {
             return ResponseEntity.notFound().build();
         }
 
+        requireCurrentScreenOrConflict(screen.getId());
         PlatformContext context = PlatformContext.from(request);
         ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
         if (!permissions.canRead()) {
@@ -692,14 +715,18 @@ public class ScreenResource {
         double pixelRatio = normalizeExportPixelRatio(
                 body == null ? Double.NaN : body.path("pixelRatio").asDouble(Double.NaN),
                 format);
+        String ext = "pdf".equals(format) ? "pdf" : "png";
+        String fileName = "screen-" + screen.getId() + "-" + resolvedMode + "." + ext;
+        MediaType contentType = "pdf".equals(format) ? MediaType.APPLICATION_PDF : MediaType.IMAGE_PNG;
 
         try {
+            var exportSeal = classificationService.sealScreenExport(
+                screen.getId(),
+                "screen-export:" + UUID.randomUUID() + ":" + fileName
+            );
             byte[] bytes = "pdf".equals(format)
                     ? screenServerRenderExportService.renderPdf(screenSpec, watermarkEnabled, watermarkText, pixelRatio)
                     : screenServerRenderExportService.renderPng(screenSpec, watermarkEnabled, watermarkText, pixelRatio);
-            String ext = "pdf".equals(format) ? "pdf" : "png";
-            String fileName = "screen-" + screen.getId() + "-" + resolvedMode + "." + ext;
-            MediaType contentType = "pdf".equals(format) ? MediaType.APPLICATION_PDF : MediaType.IMAGE_PNG;
 
             ObjectNode auditPayload = objectMapper.createObjectNode();
             auditPayload.put("screenId", screen.getId());
@@ -722,6 +749,8 @@ public class ScreenResource {
                     .header("X-Screen-Spec-Digest", specDigest == null ? "" : specDigest)
                     .header("X-Screen-Resolved-Mode", resolvedMode)
                     .header("X-Screen-Render-Engine", "server-heuristic-v2")
+                    .header("X-DTS-Classification", exportSeal.effectiveLevel())
+                    .header("X-DTS-Classification-Snapshot", exportSeal.snapshotId())
                     .header("X-Screen-Render-Pixel-Ratio", Double.toString(pixelRatio))
                     .header("X-Screen-Device-Mode", device == null ? "" : device)
                     .header("X-Screen-Hidden-By-Device", Integer.toString(Math.max(0, hiddenByDevice)))
@@ -767,6 +796,7 @@ public class ScreenResource {
         AnalyticsScreen screen = new AnalyticsScreen();
         screen.setName(name);
         screen.setClassification(classificationUpper);
+        screen.setManualClassificationFloor(classificationUpper);
         screen.setDomainId(readOptionalDomainId(body));
         screen.setDescription(body != null && body.has("description") && !body.path("description").isNull()
                 ? body.path("description").asText(null)
@@ -795,6 +825,7 @@ public class ScreenResource {
         screen.setArchived(false);
 
         screen = screenRepository.save(screen);
+        deriveScreenOrConflict(screen);
 
         AnalyticsUser creator = user.orElseThrow();
         String creatorGranteeId = creator.getPlatformUsername() != null && !creator.getPlatformUsername().isBlank()
@@ -908,6 +939,7 @@ public class ScreenResource {
         }
 
         screenRepository.save(screen);
+        deriveScreenOrConflict(screen);
         AnalyticsScreenVersion currentPublished =
                 screenVersionRepository.findFirstByScreenIdAndCurrentPublishedTrue(screen.getId()).orElse(null);
         ObjectNode detail = toDetailResponse(screen, null, currentPublished, "draft", permissions);
@@ -951,9 +983,9 @@ public class ScreenResource {
                 return ResponseEntity.badRequest().contentType(MediaType.APPLICATION_JSON)
                     .body(objectMapper.createObjectNode().put("error", "classification must be PUBLIC, INTERNAL, SECRET, or CONFIDENTIAL"));
             }
-            screen.setClassification(upper);
-            screenRepository.save(screen);
+            screen.setManualClassificationFloor(upper);
         }
+        deriveScreenOrConflict(screen);
 
         AnalyticsScreenVersion beforePublished =
                 screenVersionRepository.findFirstByScreenIdAndCurrentPublishedTrue(screen.getId()).orElse(null);
@@ -1022,6 +1054,7 @@ public class ScreenResource {
 
         applyVersionToScreen(targetVersion, screen);
         screenRepository.save(screen);
+        deriveScreenOrConflict(screen);
 
         screenVersionRepository.clearCurrentPublished(screen.getId());
         targetVersion.setCurrentPublished(true);
@@ -1307,9 +1340,8 @@ public class ScreenResource {
      * classification；publish endpoint 虽然能改 classification 但会触发版本切换，
      * 不适合日常调整。本端点提供轻量原地修改，仅 owner 可调，写审计。
      *
-     * <p>Sprint-24 F5：降级路径（next_rank &lt; before_rank）必须带 reason 字段
-     * （&gt;=10 字符），reason 写入审计 payload，便于合规回溯。升级和同级路径
-     * reason 可选——避免日常操作变重。
+     * <p>Sprint-72：本入口只调整人工密级下限。有效密级由全部展示来源自动派生，
+     * 任何低于当前有效密级的请求直接拒绝，不再允许通过填写理由降密。
      */
     @PatchMapping(path = "/{id}/classification", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> updateClassification(
@@ -1336,37 +1368,28 @@ public class ScreenResource {
                 .body(Map.of("error", "classification must be PUBLIC, INTERNAL, SECRET, or CONFIDENTIAL"));
         }
         String before = screen.getClassification();
-        if (upper.equals(before)) {
+        String beforeFloor = screen.getManualClassificationFloor();
+        if (upper.equals(beforeFloor)) {
             return ResponseEntity.ok(Map.of("classification", upper, "changed", false));
         }
-        // Sprint-24 F5：降级路径强制 reason >=10 字符。
-        // before 为 null（未设密的大屏）时视为最低级 PUBLIC，所以任何修改都不算降级，
-        // 鼓励 owner 尽快补登而不被 reason 流程阻塞。
-        String reason = body == null ? null : trimToNull(body.path("reason").asText(null));
-        boolean isDowngrade = isDowngrade(before, upper);
-        if (isDowngrade) {
-            if (reason == null) {
-                return ResponseEntity
-                    .badRequest()
-                    .body(Map.of("error", "reason is required when downgrading classification (>=10 chars)"));
-            }
-            if (reason.length() < 10) {
-                return ResponseEntity
-                    .badRequest()
-                    .body(Map.of("error", "reason must be at least 10 characters when downgrading"));
-            }
+        if (isDowngrade(before, upper)) {
+            return ResponseEntity.status(409).body(
+                Map.of(
+                    "error",
+                    "effective classification cannot be downgraded",
+                    "effectiveClassification",
+                    before == null ? "" : before
+                )
+            );
         }
 
-        screen.setClassification(upper);
-        screenRepository.save(screen);
+        screen.setManualClassificationFloor(upper);
+        var derived = deriveScreenOrConflict(screen);
 
-        // 审计 payload 含 before / after / reason / direction，便于合规回溯。
         Map<String, Object> auditAfter = new LinkedHashMap<>();
-        auditAfter.put("after", upper);
-        auditAfter.put("direction", isDowngrade ? "DOWNGRADE" : "UPGRADE_OR_SET");
-        if (reason != null) {
-            auditAfter.put("reason", reason);
-        }
+        auditAfter.put("manualFloor", upper);
+        auditAfter.put("effectiveClassification", derived.effectiveLevel());
+        auditAfter.put("direction", "UPGRADE_OR_SET");
         screenAuditService.log(
             screen.getId(),
             user.orElseThrow().getId(),
@@ -1374,7 +1397,16 @@ public class ScreenResource {
             Map.of("before", before == null ? "" : before),
             auditAfter,
             requestIdFrom(request));
-        return ResponseEntity.ok(Map.of("classification", upper, "changed", true));
+        return ResponseEntity.ok(
+            Map.of(
+                "classification",
+                derived.effectiveLevel(),
+                "manualClassificationFloor",
+                upper,
+                "changed",
+                true
+            )
+        );
     }
 
     /**
@@ -1495,7 +1527,7 @@ public class ScreenResource {
         node.put("canManage", permissions.isOwner());
         node.put("canDelete", permissions.isOwner());
         node.put("isOwner", permissions.isOwner());
-        node.put("classification", screen.getClassification());
+        appendClassification(node, screen);
         node.put("domainId", screen.getDomainId());
         node.put("ownerDeptCode", screen.getOwnerDeptCode());
         if (currentPublishedVersion != null) {
@@ -2451,6 +2483,57 @@ public class ScreenResource {
 
     private ResponseEntity<String> forbidden() {
         return ResponseEntity.status(403).contentType(MediaType.TEXT_PLAIN).body("Forbidden");
+    }
+
+    private AnalyticsClassificationClient.ClassificationResult deriveScreenOrConflict(
+        AnalyticsScreen screen
+    ) {
+        try {
+            return classificationService.deriveScreen(screen);
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "大屏密级无法确定，请补全所有数据源的资产身份或等待上游密级传播",
+                ex
+            );
+        }
+    }
+
+    private AnalyticsClassificationClient.ClassificationResult requireCurrentScreenOrConflict(
+        long screenId
+    ) {
+        try {
+            return classificationService.requireCurrentScreen(screenId);
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "大屏密级快照已失效或正在重算，暂时禁止预览和消费",
+                ex
+            );
+        }
+    }
+
+    private void appendClassification(ObjectNode node, AnalyticsScreen screen) {
+        node.put("classification", screen.getClassification());
+        node.put("manualClassificationFloor", screen.getManualClassificationFloor());
+        node.put("classificationSnapshotId", screen.getClassificationSnapshotId());
+        node.putPOJO("classificationSnapshotVersion", screen.getClassificationSnapshotVersion());
+        node.putPOJO("classificationDerivedAt", screen.getClassificationDerivedAt());
+        if (
+            screen.getClassificationEvidenceJson() != null &&
+            !screen.getClassificationEvidenceJson().isBlank()
+        ) {
+            try {
+                node.set(
+                    "classificationEvidence",
+                    objectMapper.readTree(screen.getClassificationEvidenceJson())
+                );
+            } catch (Exception ex) {
+                node.putNull("classificationEvidence");
+            }
+        } else {
+            node.putNull("classificationEvidence");
+        }
     }
 
     /**

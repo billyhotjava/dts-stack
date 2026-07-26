@@ -56,6 +56,7 @@ public class CatalogLifecycleRequestService {
     private final AccessChecker accessChecker;
     private final OrganizationVisibilityService organizationVisibilityService;
     private final AuditService auditService;
+    private final CatalogLifecycleControlService lifecycleControlService;
 
     public CatalogLifecycleRequestService(
         CatalogDatasetRepository datasetRepository,
@@ -64,11 +65,31 @@ public class CatalogLifecycleRequestService {
         OrganizationVisibilityService organizationVisibilityService,
         AuditService auditService
     ) {
+        this(
+            datasetRepository,
+            requestRepository,
+            accessChecker,
+            organizationVisibilityService,
+            auditService,
+            null
+        );
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public CatalogLifecycleRequestService(
+        CatalogDatasetRepository datasetRepository,
+        CatalogLifecycleRequestRepository requestRepository,
+        AccessChecker accessChecker,
+        OrganizationVisibilityService organizationVisibilityService,
+        AuditService auditService,
+        CatalogLifecycleControlService lifecycleControlService
+    ) {
         this.datasetRepository = datasetRepository;
         this.requestRepository = requestRepository;
         this.accessChecker = accessChecker;
         this.organizationVisibilityService = organizationVisibilityService;
         this.auditService = auditService;
+        this.lifecycleControlService = lifecycleControlService;
     }
 
     @Transactional(readOnly = true)
@@ -170,6 +191,16 @@ public class CatalogLifecycleRequestService {
 
         boolean approved = decision != null && Boolean.TRUE.equals(decision.getApproved());
         String notes = decision != null ? StringUtils.trimToNull(decision.getNotes()) : null;
+        String effectiveActor = StringUtils.defaultIfBlank(actor, SecurityUtils.getCurrentUserLogin().orElse("system"));
+        if (
+            approved &&
+            StringUtils.equalsIgnoreCase(
+                StringUtils.trimToNull(request.getCreatedBy()),
+                StringUtils.trimToNull(effectiveActor)
+            )
+        ) {
+            throw new IllegalStateException("申请人不能审批自己的生命周期申请");
+        }
 
         CatalogDataset dataset = request.getDatasetId() != null ? datasetRepository.findById(request.getDatasetId()).orElse(null) : null;
         if (dataset == null) {
@@ -178,13 +209,13 @@ public class CatalogLifecycleRequestService {
         ensureDatasetAllowed(dataset, activeDeptHeader);
 
         if (approved) {
-            applyApprovedChange(request, dataset);
+            applyApprovedChange(request, dataset, effectiveActor);
             request.setStatus(STATUS_APPROVED);
         } else {
             revertDataset(request, dataset);
             request.setStatus(STATUS_REJECTED);
         }
-        request.setDecidedBy(StringUtils.defaultIfBlank(actor, SecurityUtils.getCurrentUserLogin().orElse("system")));
+        request.setDecidedBy(effectiveActor);
         request.setDecidedAt(Instant.now());
         request.setDecisionNotes(notes);
         requestRepository.save(request);
@@ -290,8 +321,22 @@ public class CatalogLifecycleRequestService {
         }
     }
 
-    private void applyApprovedChange(CatalogLifecycleRequest request, CatalogDataset dataset) {
+    private void applyApprovedChange(
+        CatalogLifecycleRequest request,
+        CatalogDataset dataset,
+        String actor
+    ) {
         String type = normalizeRequestType(request.getRequestType());
+        if (TYPE_DISPOSE.equals(type) && lifecycleControlService != null) {
+            lifecycleControlService.recordLegacyTrash(
+                dataset.getId(),
+                request.getId(),
+                StringUtils.defaultIfBlank(request.getCreatedBy(), "system"),
+                actor,
+                request.getRequestedRetentionDays()
+            );
+            return;
+        }
         if (TYPE_ARCHIVE.equals(type) || TYPE_DISPOSE.equals(type)) {
             dataset.setLifecycleStatus(StringUtils.trimToNull(request.getRequestedLifecycleStatus()));
             if (TYPE_DISPOSE.equals(type)) {
@@ -354,7 +399,7 @@ public class CatalogLifecycleRequestService {
             return "ARCHIVED";
         }
         if (TYPE_DISPOSE.equals(requestType)) {
-            return "DISPOSED";
+            return "TRASHED";
         }
         return null;
     }
@@ -364,7 +409,7 @@ public class CatalogLifecycleRequestService {
             return "ARCHIVE_REQUESTED";
         }
         if (TYPE_DISPOSE.equals(requestType)) {
-            return "DISPOSE_REQUESTED";
+            return "TRASH_REQUESTED";
         }
         return null;
     }
@@ -456,4 +501,3 @@ public class CatalogLifecycleRequestService {
         return raw;
     }
 }
-

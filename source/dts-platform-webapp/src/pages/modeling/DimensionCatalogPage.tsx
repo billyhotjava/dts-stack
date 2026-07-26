@@ -102,12 +102,12 @@ export default function DimensionCatalogPage() {
 	});
 
 	const enterDimensionTableCreation = (definition: DimensionDefinitionView) => {
-		const params = new URLSearchParams({
-			modelType: "DIMENSION",
-			create: "lightweight",
-			dimensionDefinitionId: definition.id,
-			dimensionDefinitionRevision: String(definition.revision),
-		});
+		const params = new URLSearchParams(searchParams);
+		params.set("modelType", "DIMENSION");
+		params.set("create", "lightweight");
+		params.set("domainId", definition.domainId);
+		params.set("dimensionDefinitionId", definition.id);
+		params.set("dimensionDefinitionRevision", String(definition.revision));
 		navigate(`/modeling/models?${params.toString()}`);
 	};
 

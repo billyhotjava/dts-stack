@@ -11,6 +11,7 @@ import {
 import { AssetTagPanel } from "@/components/catalog/tags/AssetTagPanel";
 import { useRouter } from "@/routes/hooks";
 import { buildAssetGrantUrl, resolveAssetReadiness } from "./assetPortalUx.helpers";
+import { AssetClassificationFactPanel } from "./assets/AssetClassificationFactPanel";
 import {
 	DatasetFieldsTab,
 	DatasetGovernanceTab,
@@ -22,6 +23,7 @@ import { resolveDatasetDetailId } from "./datasetDetailRoute";
 
 const DETAIL_TAB_KEYS = [
 	"overview",
+	"classification-lifecycle",
 	"schema-contract",
 	"governance",
 	"quality-sla",
@@ -31,6 +33,8 @@ const DETAIL_TAB_KEYS = [
 const DETAIL_TAB_ALIASES: Record<string, (typeof DETAIL_TAB_KEYS)[number]> = {
 	fields: "schema-contract",
 	technical: "schema-contract",
+	classification: "classification-lifecycle",
+	lifecycle: "classification-lifecycle",
 	lineage: "lineage-impact",
 	quality: "quality-sla",
 	sla: "quality-sla",
@@ -98,22 +102,22 @@ export default function DatasetDetailPage() {
 			setLoading(false);
 			return;
 		}
-		setLoading(true);
-		void (async () => {
-			try {
-				const detail = await getCatalogAssetV2(id);
-				if (sequence === datasetRequestSequence.current) {
-					setDataset(toDatasetFromAssetV2Detail(id, detail));
-				}
-			} catch {
-				if (sequence !== datasetRequestSequence.current) return;
+			setLoading(true);
+			void (async () => {
 				try {
 					const legacyDataset: any = await getDataset(id);
 					if (sequence === datasetRequestSequence.current) {
 						setDataset({ ...legacyDataset, __source: "dts-catalog" });
 					}
 				} catch {
-					if (sequence === datasetRequestSequence.current) setDataset(null);
+					if (sequence !== datasetRequestSequence.current) return;
+					try {
+						const detail = await getCatalogAssetV2(id);
+						if (sequence === datasetRequestSequence.current) {
+							setDataset(toDatasetFromAssetV2Detail(id, detail));
+						}
+					} catch {
+						if (sequence === datasetRequestSequence.current) setDataset(null);
 				}
 			}
 		})().finally(() => {
@@ -257,6 +261,16 @@ export default function DatasetDetailPage() {
 								assetContract={assetContract}
 								schemaContract={schemaContract}
 								contractLoading={contractLoading}
+							/>
+						),
+					},
+					{
+						key: "classification-lifecycle",
+						label: "密级事实",
+						children: (
+							<AssetClassificationFactPanel
+								assetKey={assetKey}
+								columns={Array.isArray(schemaContract?.columns) ? schemaContract.columns : dataset.__columns}
 							/>
 						),
 					},

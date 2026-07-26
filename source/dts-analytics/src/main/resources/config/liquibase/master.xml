@@ -53,4 +53,6 @@
     <include file="config/liquibase/changelog/0046_semantic_layer.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0047_screen_access_level_override.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0048_screen_domain_id.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0049_screen_classification_derivation.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0050_consumer_classification_migration.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

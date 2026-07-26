@@ -1,6 +1,9 @@
 package com.yuzhi.dts.platform.service.infra;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.common.security.SecurityLevelCatalog;
+import com.yuzhi.dts.platform.domain.catalog.CatalogClassificationSnapshot;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import com.yuzhi.dts.platform.domain.infra.InfraOdsTableMapping;
@@ -10,6 +13,11 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService.ColumnSpec;
+import com.yuzhi.dts.platform.service.catalog.CatalogClassificationAdmissionService;
+import com.yuzhi.dts.platform.service.catalog.CatalogClassificationException;
+import com.yuzhi.dts.platform.service.catalog.CatalogClassificationService;
+import com.yuzhi.dts.platform.service.catalog.CatalogLifecycleControlService;
+import com.yuzhi.dts.platform.service.catalog.dto.CatalogClassificationDtos.SealReference;
 import com.yuzhi.dts.platform.service.catalog.lineage.IngestionLineageWriter;
 import com.yuzhi.dts.platform.service.etl.DbtSourceService;
 import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsColumnPlanDto;
@@ -24,6 +32,9 @@ import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsSourceTable
 import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsTablePlanDto;
 import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsTechnicalColumnDto;
 import java.time.Instant;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -33,6 +44,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -64,6 +76,10 @@ public class OdsGenerationService {
     private final DbtSourceService dbtSourceService;
     private final IngestionLineageWriter lineageWriter;
     private final OdsPrecheckProbeService precheckProbeService;
+    private final CatalogClassificationService classificationService;
+    private final CatalogClassificationAdmissionService admissionService;
+    private final CatalogLifecycleControlService lifecycleControlService;
+    private final ObjectMapper objectMapper;
 
     public OdsGenerationService(
         InfraOdsTableMappingRepository mappingRepository,
@@ -72,7 +88,39 @@ public class OdsGenerationService {
         CatalogColumnSyncService columnSyncService,
         DbtSourceService dbtSourceService,
         IngestionLineageWriter lineageWriter,
-        OdsPrecheckProbeService precheckProbeService
+        OdsPrecheckProbeService precheckProbeService,
+        CatalogClassificationService classificationService,
+        CatalogClassificationAdmissionService admissionService,
+        ObjectMapper objectMapper
+    ) {
+        this(
+            mappingRepository,
+            datasetRepository,
+            tableRepository,
+            columnSyncService,
+            dbtSourceService,
+            lineageWriter,
+            precheckProbeService,
+            classificationService,
+            admissionService,
+            null,
+            objectMapper
+        );
+    }
+
+    @Autowired
+    public OdsGenerationService(
+        InfraOdsTableMappingRepository mappingRepository,
+        CatalogDatasetRepository datasetRepository,
+        CatalogTableSchemaRepository tableRepository,
+        CatalogColumnSyncService columnSyncService,
+        DbtSourceService dbtSourceService,
+        IngestionLineageWriter lineageWriter,
+        OdsPrecheckProbeService precheckProbeService,
+        CatalogClassificationService classificationService,
+        CatalogClassificationAdmissionService admissionService,
+        CatalogLifecycleControlService lifecycleControlService,
+        ObjectMapper objectMapper
     ) {
         this.mappingRepository = mappingRepository;
         this.datasetRepository = datasetRepository;
@@ -81,9 +129,14 @@ public class OdsGenerationService {
         this.dbtSourceService = dbtSourceService;
         this.lineageWriter = lineageWriter;
         this.precheckProbeService = precheckProbeService;
+        this.classificationService = classificationService;
+        this.admissionService = admissionService;
+        this.lifecycleControlService = lifecycleControlService;
+        this.objectMapper = objectMapper;
     }
 
     public OdsGenerationPreviewResponse preview(InfraDataSource source, OdsGenerationRequest request) {
+        SealReference classificationSeal = ensureSourceSeal(source);
         List<OdsTablePlanDto> plans = buildPlans(source, request);
         String yaml = buildDbtSourceYaml(plans);
         List<String> warnings = plans.stream().flatMap(plan -> plan.warnings().stream()).distinct().toList();
@@ -93,12 +146,16 @@ public class OdsGenerationService {
             resolveOdsSchema(request),
             plans,
             yaml,
-            warnings
+            warnings,
+            classificationSeal
         );
     }
 
     @Transactional
     public OdsGenerationApplyResult apply(InfraDataSource source, OdsGenerationRequest request) {
+        CatalogClassificationSnapshot admitted = admissionService.requireValid(
+            request == null ? null : request.classificationSeal()
+        );
         List<OdsTablePlanDto> plans = buildPlans(source, request);
         int mappingsUpserted = 0;
         int columnsUpserted = 0;
@@ -106,8 +163,9 @@ public class OdsGenerationService {
         int lineageUpdated = 0;
         int lineageSkipped = 0;
         for (OdsTablePlanDto plan : plans) {
+            requireStorageApproval(source, request, plan);
             InfraOdsTableMapping mapping = upsertMapping(source, plan);
-            CatalogDataset dataset = ensureOdsDataset(source, mapping, plan);
+            CatalogDataset dataset = ensureOdsDataset(source, mapping, plan, admitted.getEffectiveLevel());
             mapping.setDatasetId(dataset.getId());
             mapping = mappingRepository.save(mapping);
             CatalogTableSchema table = ensureCatalogTable(dataset, plan);
@@ -157,6 +215,26 @@ public class OdsGenerationService {
 
     private OdsPrecheckResponse precheck(InfraDataSource source, OdsGenerationRequest request, List<OdsTablePlanDto> plans) {
         List<OdsPrecheckRuleResult> rules = new ArrayList<>();
+        boolean classificationSealValid = false;
+        String classificationSealMessage = "密级封存缺失或已过期";
+        try {
+            CatalogClassificationSnapshot admitted = admissionService.requireValid(
+                request == null ? null : request.classificationSeal()
+            );
+            classificationSealValid = true;
+            classificationSealMessage = "密级已封存：" + admitted.getEffectiveLevel();
+        } catch (CatalogClassificationException ex) {
+            classificationSealMessage = ex.getMessage();
+        }
+        addRule(
+            rules,
+            "CLASSIFICATION_SEAL",
+            "ERROR",
+            classificationSealValid,
+            source.getName(),
+            classificationSealMessage,
+            "请先在预览阶段确认来源密级，生成新的 seal 后再执行生产落盘"
+        );
         addRule(
             rules,
             "DATASOURCE_JDBC",
@@ -316,6 +394,141 @@ public class OdsGenerationService {
         );
     }
 
+    private SealReference ensureSourceSeal(InfraDataSource source) {
+        Map<String, Object> props;
+        try {
+            props = objectMapper.readValue(
+                StringUtils.hasText(source.getProps()) ? source.getProps() : "{}",
+                new TypeReference<Map<String, Object>>() {}
+            );
+        } catch (Exception ex) {
+            throw new CatalogClassificationException(
+                "SOURCE_CLASSIFICATION_INVALID",
+                "数据源扩展配置无法解析，不能生成密级封存"
+            );
+        }
+        Object rawClassification = props.get("classification");
+        String declared;
+        try {
+            declared = SecurityLevelCatalog.requireDataLevel(rawClassification).code();
+        } catch (IllegalArgumentException ex) {
+            throw new CatalogClassificationException(
+                "SOURCE_CLASSIFICATION_REQUIRED",
+                "请先在数据源配置中明确选择源数据密级"
+            );
+        }
+        Map<String, String> fieldClassifications = mergeSourceFieldClassifications(
+            props.get("fieldClassifications"),
+            props.get("columnClassifications")
+        );
+        String subjectKey = "data-source:" + source.getId();
+        String evidenceSource = subjectKey + ":" + declared + ":" + new java.util.TreeMap<>(fieldClassifications);
+        CatalogClassificationSnapshot snapshot = classificationService.sealOrRaise(
+            new CatalogClassificationService.SealCommand(
+                "ASSET",
+                subjectKey,
+                null,
+                declared,
+                null,
+                null,
+                fieldClassifications.values(),
+                "SOURCE_DECLARATION",
+                subjectKey,
+                sha256(evidenceSource),
+                "{\"sourceId\":\"" +
+                source.getId() +
+                "\",\"declaredLevel\":\"" +
+                declared +
+                "\",\"fieldClassifications\":" +
+                json(fieldClassifications) +
+                "}"
+            )
+        );
+        return new SealReference(
+            snapshot.getId(),
+            snapshot.getSubjectType(),
+            snapshot.getSubjectKey(),
+            snapshot.getAssetType(),
+            snapshot.getEffectiveLevel(),
+            snapshot.getRecordVersion() == null ? 0L : snapshot.getRecordVersion(),
+            snapshot.getEvidenceChecksum(),
+            snapshot.getSealedAt(),
+            snapshot.getPropagationStatus()
+        );
+    }
+
+    private Map<String, String> normalizeSourceFieldClassifications(Object value) {
+        if (value == null) {
+            return Map.of();
+        }
+        if (!(value instanceof Map<?, ?> fields)) {
+            throw new CatalogClassificationException(
+                "SOURCE_FIELD_CLASSIFICATION_INVALID",
+                "字段密级配置格式无效"
+            );
+        }
+        Map<String, String> normalized = new LinkedHashMap<>();
+        fields.forEach((column, level) -> {
+            if (!StringUtils.hasText(String.valueOf(column))) {
+                throw new CatalogClassificationException(
+                    "SOURCE_FIELD_CLASSIFICATION_INVALID",
+                    "字段密级配置包含空字段名"
+                );
+            }
+            try {
+                normalized.put(
+                    String.valueOf(column).trim(),
+                    SecurityLevelCatalog.requireDataLevel(level).code()
+                );
+            } catch (IllegalArgumentException ex) {
+                throw new CatalogClassificationException(
+                    "SOURCE_FIELD_CLASSIFICATION_INVALID",
+                    "字段 " + column + " 的密级无效"
+                );
+            }
+        });
+        return Map.copyOf(normalized);
+    }
+
+    private Map<String, String> mergeSourceFieldClassifications(Object... values) {
+        Map<String, String> merged = new LinkedHashMap<>();
+        if (values == null) {
+            return Map.of();
+        }
+        for (Object value : values) {
+            normalizeSourceFieldClassifications(value)
+                .forEach((field, level) ->
+                    merged.merge(
+                        field,
+                        level,
+                        (current, candidate) ->
+                            SecurityLevelCatalog.maxDataCode(current, candidate)
+                    )
+                );
+        }
+        return Map.copyOf(merged);
+    }
+
+    private String json(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception ex) {
+            throw new CatalogClassificationException(
+                "SOURCE_CLASSIFICATION_INVALID",
+                "无法生成数据源密级证据"
+            );
+        }
+    }
+
+    private String sha256(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(String.valueOf(value).getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception ex) {
+            throw new IllegalStateException("无法生成密级证据摘要", ex);
+        }
+    }
+
     private List<OdsTablePlanDto> buildPlans(InfraDataSource source, OdsGenerationRequest request) {
         if (source == null || source.getId() == null) {
             throw new IllegalArgumentException("数据源无效");
@@ -402,7 +615,37 @@ public class OdsGenerationService {
         if (columns.isEmpty()) {
             warnings.add("未读取源表字段，ODS 字段需在任务向导中补充");
         }
+        CatalogDataset sourceDataset = datasetRepository
+            .findFirstBySourceIdAndHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(
+                source.getId(),
+                sourceSchema,
+                sourceTable
+            )
+            .orElse(null);
+        SealReference sourceClassificationSeal = sourceDataset == null
+            ? null
+            : classificationService
+                .resolve("ASSET", com.yuzhi.dts.platform.service.catalog.CatalogAssetKey.dataset(sourceDataset))
+                .map(snapshot ->
+                    new SealReference(
+                        snapshot.getId(),
+                        snapshot.getSubjectType(),
+                        snapshot.getSubjectKey(),
+                        snapshot.getAssetType(),
+                        snapshot.getEffectiveLevel(),
+                        snapshot.getRecordVersion() == null ? 0L : snapshot.getRecordVersion(),
+                        snapshot.getEvidenceChecksum(),
+                        snapshot.getSealedAt(),
+                        snapshot.getPropagationStatus()
+                    )
+                )
+                .orElse(null);
+        if (sourceDataset == null || sourceClassificationSeal == null) {
+            warnings.add("源表尚未形成可审批的资产密级事实，生产存储将被阻断");
+        }
         return new OdsTablePlanDto(
+            sourceDataset == null ? null : sourceDataset.getId(),
+            sourceClassificationSeal,
             sourceSchema,
             sourceTable,
             odsSchema,
@@ -418,7 +661,53 @@ public class OdsGenerationService {
             buildTableSourceYaml(odsSchema, odsTable, table, columns, technicalColumns),
             buildAddaxDraft(source, table, odsSchema, odsTable, columns, request),
             buildAirflowDraft(source, table, odsSchema, odsTable),
-            warnings
+            warnings,
+            sha256(
+                source.getId() +
+                ":" +
+                sourceSchema +
+                "." +
+                sourceTable +
+                "->" +
+                odsSchema +
+                "." +
+                odsTable +
+                ":" +
+                columns
+            )
+        );
+    }
+
+    private void requireStorageApproval(
+        InfraDataSource source,
+        OdsGenerationRequest request,
+        OdsTablePlanDto plan
+    ) {
+        if (lifecycleControlService == null) {
+            return;
+        }
+        CatalogDataset sourceDataset = datasetRepository
+            .findFirstBySourceIdAndHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(
+                source.getId(),
+                plan.sourceSchema(),
+                plan.sourceTable()
+            )
+            .orElseThrow(() -> new CatalogClassificationException(
+                "STORAGE_APPROVAL_SOURCE_ASSET_REQUIRED",
+                "Source table must be registered before production storage can be approved"
+            ));
+        String tableKey = plan.sourceSchema() + "." + plan.sourceTable();
+        String token = request == null || request.storageApprovalTokens() == null
+            ? null
+            : request.storageApprovalTokens().get(tableKey);
+        lifecycleControlService.consume(
+            new CatalogLifecycleControlService.ConsumeTokenCommand(
+                token,
+                sourceDataset.getId(),
+                "STORE",
+                plan.approvalPayloadChecksum()
+            ),
+            "ods-generation"
         );
     }
 
@@ -441,7 +730,12 @@ public class OdsGenerationService {
         return mappingRepository.save(mapping);
     }
 
-    private CatalogDataset ensureOdsDataset(InfraDataSource source, InfraOdsTableMapping mapping, OdsTablePlanDto plan) {
+    private CatalogDataset ensureOdsDataset(
+        InfraDataSource source,
+        InfraOdsTableMapping mapping,
+        OdsTablePlanDto plan,
+        String admittedClassification
+    ) {
         CatalogDataset dataset = mapping.getDatasetId() == null
             ? null
             : datasetRepository.findById(mapping.getDatasetId()).orElse(null);
@@ -459,9 +753,9 @@ public class OdsGenerationService {
         dataset.setOwnerDept(source.getOwnerDept());
         dataset.setEnabled(Boolean.TRUE);
         dataset.setSnapshotTime(Instant.now());
-        if (!StringUtils.hasText(dataset.getClassification())) {
-            dataset.setClassification(SecurityLevelCatalog.DEFAULT_DATA_SECURITY_LEVEL.code());
-        }
+        dataset.setClassification(
+            SecurityLevelCatalog.maxDataCode(dataset.getClassification(), admittedClassification)
+        );
         if (!StringUtils.hasText(dataset.getDescription())) {
             dataset.setDescription(truncate("ODS table generated from " + physicalName(plan.sourceSchema(), plan.sourceTable()), 2048));
         }
@@ -549,6 +843,8 @@ public class OdsGenerationService {
         List<OdsTechnicalColumnDto> technicalColumns
     ) {
         OdsTablePlanDto plan = new OdsTablePlanDto(
+            null,
+            null,
             trim(table.schema()),
             trim(table.name()),
             odsSchema,
@@ -564,7 +860,8 @@ public class OdsGenerationService {
             "",
             Map.of(),
             Map.of(),
-            List.of()
+            List.of(),
+            null
         );
         StringBuilder sb = new StringBuilder();
         appendTableYaml(sb, plan, 0);
@@ -732,6 +1029,10 @@ public class OdsGenerationService {
         payload.put("dbt", dbtSpec);
         payload.put("lineage", lineageSpec);
         payload.put("schemaChanges", schemaChanges);
+        if (request != null && request.classificationSeal() != null) {
+            payload.put("classificationSeal", request.classificationSeal());
+            payload.put("fieldClassifications", request.fieldClassifications());
+        }
         payload.put("runNow", Boolean.FALSE);
         return payload;
     }

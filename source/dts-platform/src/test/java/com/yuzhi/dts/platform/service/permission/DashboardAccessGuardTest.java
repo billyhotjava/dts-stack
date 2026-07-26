@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.yuzhi.dts.platform.domain.permission.AssetGrant;
 import com.yuzhi.dts.platform.domain.visualization.BiReportLink;
 import com.yuzhi.dts.platform.repository.permission.AssetGrantRepository;
+import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService;
 import com.yuzhi.dts.platform.service.permission.DashboardAccessGuard.AccessDecision;
 import com.yuzhi.dts.platform.service.permission.DashboardAccessGuard.Caller;
 import java.time.Instant;
@@ -35,11 +36,14 @@ class DashboardAccessGuardTest {
     @Mock
     private AssetGrantRepository grantRepository;
 
+    @Mock
+    private CatalogConsumerClassificationService consumerClassificationService;
+
     private DashboardAccessGuard guard;
 
     @BeforeEach
     void setUp() {
-        guard = new DashboardAccessGuard(grantRepository);
+        guard = new DashboardAccessGuard(grantRepository, consumerClassificationService);
     }
 
     // ---------------------------------------------------------------------
@@ -47,22 +51,36 @@ class DashboardAccessGuardTest {
     // ---------------------------------------------------------------------
 
     @Test
-    @DisplayName("owner 即便密级低也能查看大屏")
-    void owner_canView_evenIfLevelTooLow() {
+    @DisplayName("owner 密级不足且无越级审批时仍被阻断")
+    void owner_withInsufficientLevel_isDenied() {
         BiReportLink report = report("CONFIDENTIAL", null, null, "alice");
         Caller alice = caller("alice", GENERAL_LEVELS, Set.of(), null);
+        when(grantRepository.findActiveUserGrants(any(), any(), any(), any())).thenReturn(List.of());
+
+        AccessDecision decision = guard.canView(report, alice);
+
+        assertThat(decision.allow()).isFalse();
+        assertThat(decision.reason()).isEqualTo("DENY_LEVEL_BLOCKED");
+        assertThat(decision.overrideUsed()).isFalse();
+    }
+
+    @Test
+    @DisplayName("owner 密级达标时可以查看大屏")
+    void owner_withClearance_canView() {
+        BiReportLink report = report("SECRET", null, null, "alice");
+        Caller alice = caller("alice", IMPORTANT_LEVELS, Set.of(), null);
+        when(grantRepository.findActiveUserGrants(any(), any(), any(), any())).thenReturn(List.of());
 
         AccessDecision decision = guard.canView(report, alice);
 
         assertThat(decision.allow()).isTrue();
-        assertThat(decision.reason()).isEqualTo("OWNER");
+        assertThat(decision.reason()).isEqualTo("OWNER_PLUS_LEVEL");
         assertThat(decision.overrideUsed()).isFalse();
-        verifyNoInteractions(grantRepository);
     }
 
     @Test
-    @DisplayName("被授予 MANAGE 的用户可以查看大屏（不受密级影响）")
-    void manageGrant_canView() {
+    @DisplayName("MANAGE grant 只提供基础访问，人员密级不足仍被阻断")
+    void manageGrant_withInsufficientLevel_isDenied() {
         BiReportLink report = report("CONFIDENTIAL", null, null, "alice");
         Caller bob = caller("bob", GENERAL_LEVELS, Set.of(), null);
         when(grantRepository.findActiveUserGrants(eq("DASHBOARD"), eq(CODE), eq("bob"), any(Instant.class)))
@@ -70,8 +88,22 @@ class DashboardAccessGuardTest {
 
         AccessDecision decision = guard.canView(report, bob);
 
+        assertThat(decision.allow()).isFalse();
+        assertThat(decision.reason()).isEqualTo("DENY_LEVEL_BLOCKED");
+    }
+
+    @Test
+    @DisplayName("MANAGE grant 且人员密级达标时允许查看")
+    void manageGrant_withClearance_canView() {
+        BiReportLink report = report("SECRET", null, null, "alice");
+        Caller bob = caller("bob", IMPORTANT_LEVELS, Set.of(), null);
+        when(grantRepository.findActiveUserGrants(eq("DASHBOARD"), eq(CODE), eq("bob"), any(Instant.class)))
+            .thenReturn(List.of(grant("MANAGE", false)));
+
+        AccessDecision decision = guard.canView(report, bob);
+
         assertThat(decision.allow()).isTrue();
-        assertThat(decision.reason()).isEqualTo("MANAGE_GRANT");
+        assertThat(decision.reason()).isEqualTo("MANAGE_GRANT_PLUS_LEVEL");
     }
 
     @Test
@@ -326,17 +358,31 @@ class DashboardAccessGuardTest {
     // ---------------------------------------------------------------------
 
     @Test
-    @DisplayName("classification 为空视同 PUBLIC，无密级阻挡")
-    void nullClassification_treatedAsPublic() {
+    @DisplayName("classification 为空时 fail-closed")
+    void nullClassification_isDenied() {
         BiReportLink report = report(null, null, null, "alice");
         Caller bob = caller("bob", GENERAL_LEVELS, Set.of(), "DEPT_A");
         report.setDeptCodes("DEPT_A");
-        when(grantRepository.findActiveUserGrants(any(), any(), any(), any())).thenReturn(List.of());
 
         AccessDecision decision = guard.canView(report, bob);
 
-        assertThat(decision.allow()).isTrue();
-        assertThat(decision.reason()).isEqualTo("BASE_ACCESS_PLUS_LEVEL");
+        assertThat(decision.allow()).isFalse();
+        assertThat(decision.reason()).isEqualTo("DENY_CLASSIFICATION_REQUIRED");
+        verifyNoInteractions(grantRepository);
+    }
+
+    @Test
+    @DisplayName("未知 classification 即使与用户声明相同也 fail-closed")
+    void unknownClassification_isDenied() {
+        BiReportLink report = report("UNKNOWN_LEVEL", null, null, "alice");
+        Caller bob = caller("bob", Set.of("UNKNOWN_LEVEL"), Set.of(), "DEPT_A");
+        report.setDeptCodes("DEPT_A");
+
+        AccessDecision decision = guard.canView(report, bob);
+
+        assertThat(decision.allow()).isFalse();
+        assertThat(decision.reason()).isEqualTo("DENY_CLASSIFICATION_REQUIRED");
+        verifyNoInteractions(grantRepository);
     }
 
     @Test
@@ -354,15 +400,52 @@ class DashboardAccessGuardTest {
     }
 
     @Test
-    @DisplayName("superAdmin 短路全部检查")
-    void superAdmin_shortCircuits() {
+    @DisplayName("上游升密使共享快照过期后，旧 VIEW grant 不再提供基础访问")
+    void staleShareBinding_isDenied() {
+        BiReportLink report = report("SECRET", null, null, "alice");
+        report.setQueryDatasetId(java.util.UUID.randomUUID());
+        Caller bob = caller("bob", IMPORTANT_LEVELS, Set.of(), null);
+        AssetGrant staleGrant = grant("VIEW", false);
+        staleGrant.setId(77L);
+        when(grantRepository.findActiveUserGrants(any(), any(), any(), any())).thenReturn(List.of(staleGrant));
+        when(
+            consumerClassificationService.requireCurrentAccessBinding(
+                "SHARE_GRANT",
+                DashboardShareService.shareBindingKey(77L)
+            )
+        )
+            .thenThrow(new IllegalStateException("classification snapshot changed"));
+
+        AccessDecision decision = guard.canView(report, bob);
+
+        assertThat(decision.allow()).isFalse();
+        assertThat(decision.reason()).isEqualTo("DENY_NO_BASE_ACCESS");
+    }
+
+    @Test
+    @DisplayName("superAdmin 旁路必须显式标记 override 供强审计")
+    void superAdmin_override_isExplicit() {
         BiReportLink report = report("CONFIDENTIAL", null, null, "alice");
         Caller god = new Caller("god", GENERAL_LEVELS, Set.of(), null, false, true);
 
         AccessDecision decision = guard.canView(report, god);
 
         assertThat(decision.allow()).isTrue();
-        assertThat(decision.reason()).isEqualTo("SUPER_ADMIN");
+        assertThat(decision.reason()).isEqualTo("SUPER_ADMIN_OVERRIDE");
+        assertThat(decision.overrideUsed()).isTrue();
+        verifyNoInteractions(grantRepository);
+    }
+
+    @Test
+    @DisplayName("superAdmin 也不能绕过缺失密级")
+    void superAdmin_cannotBypassMissingClassification() {
+        BiReportLink report = report(null, null, null, "alice");
+        Caller god = new Caller("god", IMPORTANT_LEVELS, Set.of(), null, false, true);
+
+        AccessDecision decision = guard.canView(report, god);
+
+        assertThat(decision.allow()).isFalse();
+        assertThat(decision.reason()).isEqualTo("DENY_CLASSIFICATION_REQUIRED");
         verifyNoInteractions(grantRepository);
     }
 

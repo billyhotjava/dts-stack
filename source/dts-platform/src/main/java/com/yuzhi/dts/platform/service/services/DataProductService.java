@@ -9,6 +9,12 @@ import com.yuzhi.dts.platform.domain.service.SvcDataProductVersion;
 import com.yuzhi.dts.platform.repository.service.SvcDataProductDatasetRepository;
 import com.yuzhi.dts.platform.repository.service.SvcDataProductRepository;
 import com.yuzhi.dts.platform.repository.service.SvcDataProductVersionRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetType;
+import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService;
+import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.DeriveCommand;
+import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.SubjectRef;
 import com.yuzhi.dts.platform.service.services.dto.*;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ValidationException;
@@ -37,6 +43,8 @@ public class DataProductService {
     private final SvcDataProductVersionRepository versionRepository;
     private final SvcDataProductDatasetRepository datasetRepository;
     private final ObjectMapper objectMapper;
+    private final CatalogDatasetRepository catalogDatasetRepository;
+    private final CatalogConsumerClassificationService consumerClassificationService;
 
     public DataProductService(
         SvcDataProductRepository productRepository,
@@ -44,10 +52,24 @@ public class DataProductService {
         SvcDataProductDatasetRepository datasetRepository,
         ObjectMapper objectMapper
     ) {
+        this(productRepository, versionRepository, datasetRepository, objectMapper, null, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public DataProductService(
+        SvcDataProductRepository productRepository,
+        SvcDataProductVersionRepository versionRepository,
+        SvcDataProductDatasetRepository datasetRepository,
+        ObjectMapper objectMapper,
+        CatalogDatasetRepository catalogDatasetRepository,
+        CatalogConsumerClassificationService consumerClassificationService
+    ) {
         this.productRepository = productRepository;
         this.versionRepository = versionRepository;
         this.datasetRepository = datasetRepository;
         this.objectMapper = objectMapper;
+        this.catalogDatasetRepository = catalogDatasetRepository;
+        this.consumerClassificationService = consumerClassificationService;
     }
 
     public List<DataProductSummaryDto> list(String keyword, String type, String status) {
@@ -131,6 +153,8 @@ public class DataProductService {
         applyUpsert(product, request);
         product = productRepository.save(product);
         replaceDatasets(product.getId(), request.datasets());
+        deriveClassification(product, request.classification());
+        productRepository.save(product);
         LOG.info("Data product created by {}: {}", operator, product.getCode());
         return detail(product.getId());
     }
@@ -142,6 +166,8 @@ public class DataProductService {
         applyUpsert(product, request);
         productRepository.save(product);
         replaceDatasets(product.getId(), request.datasets());
+        deriveClassification(product, request.classification());
+        productRepository.save(product);
         LOG.info("Data product updated by {}: {}", operator, product.getCode());
         return detail(product.getId());
     }
@@ -149,6 +175,7 @@ public class DataProductService {
     @Transactional
     public DataProductVersionDto addVersion(UUID productId, DataProductVersionRequest request, String operator) {
         SvcDataProduct product = productRepository.findById(productId).orElseThrow(() -> new EntityNotFoundException("Data product not found"));
+        deriveClassification(product, product.getClassification());
         if (request == null || !StringUtils.hasText(request.version())) {
             throw new ValidationException("version is required");
         }
@@ -314,6 +341,35 @@ public class DataProductService {
         product.setLatencyObjective(resolveText(request.latencyObjective(), product.getLatencyObjective()));
         product.setFailurePolicy(resolveText(request.failurePolicy(), product.getFailurePolicy()));
         product.setDescription(resolveText(request.description(), product.getDescription()));
+    }
+
+    private void deriveClassification(SvcDataProduct product, String manualFloor) {
+        if (consumerClassificationService == null || catalogDatasetRepository == null) {
+            return;
+        }
+        List<SubjectRef> upstreams = datasetRepository
+            .findByProductId(product.getId())
+            .stream()
+            .map(SvcDataProductDataset::getDatasetId)
+            .filter(Objects::nonNull)
+            .map(catalogDatasetRepository::findById)
+            .flatMap(java.util.Optional::stream)
+            .map(dataset -> new SubjectRef("ASSET", CatalogAssetKey.dataset(dataset)))
+            .distinct()
+            .toList();
+        if (upstreams.isEmpty()) {
+            throw new ValidationException("Data product requires at least one classified dataset source");
+        }
+        var result = consumerClassificationService.derive(
+            new DeriveCommand(
+                "DATA_PRODUCT",
+                CatalogAssetKey.codeAsset(CatalogAssetType.DATA_PRODUCT, "default", product.getCode()),
+                manualFloor,
+                upstreams,
+                "svc-data-product:" + product.getCode()
+            )
+        );
+        product.setClassification(result.effectiveLevel());
     }
 
     private void replaceDatasets(UUID productId, List<DataProductUpsertRequest.DataProductDatasetRequest> datasets) {

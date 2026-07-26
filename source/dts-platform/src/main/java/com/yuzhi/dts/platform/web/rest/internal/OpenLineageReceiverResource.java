@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.web.rest.internal;
 
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDatasetLineage;
 import com.yuzhi.dts.platform.domain.catalog.CatalogLineageJob;
@@ -8,6 +9,11 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogLineageJobRepository;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetGovernancePolicy;
+import com.yuzhi.dts.platform.service.catalog.CatalogClassificationService;
+import com.yuzhi.dts.platform.service.catalog.CatalogClassificationPropagationJobService;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -37,15 +43,21 @@ public class OpenLineageReceiverResource {
     private final CatalogDatasetRepository datasetRepository;
     private final CatalogDatasetLineageRepository lineageRepository;
     private final CatalogLineageJobRepository lineageJobRepository;
+    private final CatalogClassificationService classificationService;
+    private final CatalogClassificationPropagationJobService propagationJobService;
 
     public OpenLineageReceiverResource(
         CatalogDatasetRepository datasetRepository,
         CatalogDatasetLineageRepository lineageRepository,
-        CatalogLineageJobRepository lineageJobRepository
+        CatalogLineageJobRepository lineageJobRepository,
+        CatalogClassificationService classificationService,
+        CatalogClassificationPropagationJobService propagationJobService
     ) {
         this.datasetRepository = datasetRepository;
         this.lineageRepository = lineageRepository;
         this.lineageJobRepository = lineageJobRepository;
+        this.classificationService = classificationService;
+        this.propagationJobService = propagationJobService;
     }
 
     @PostMapping("/openlineage")
@@ -65,6 +77,7 @@ public class OpenLineageReceiverResource {
 
         int created = 0;
         int updated = 0;
+        int propagationEnqueued = 0;
         for (DatasetResolution inputResolution : inputs) {
             for (DatasetResolution outputResolution : outputs) {
                 CatalogDataset input = inputResolution.dataset();
@@ -118,6 +131,17 @@ public class OpenLineageReceiverResource {
                 }
             }
         }
+        if ("VERIFIED".equals(verificationStatus(eventType))) {
+            for (DatasetResolution output : outputs) {
+                if (
+                    output.dataset() != null &&
+                    output.dataset().getId() != null &&
+                    propagationJobService.enqueue(output.dataset().getId(), "OPENLINEAGE", runId)
+                ) {
+                    propagationEnqueued++;
+                }
+            }
+        }
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("jobId", job.getId() != null ? job.getId().toString() : null);
@@ -127,6 +151,7 @@ public class OpenLineageReceiverResource {
         result.put("assetEvidence", evidence(inputs, outputs));
         result.put("created", created);
         result.put("updated", updated);
+        result.put("propagationEnqueued", propagationEnqueued);
         result.put("eventType", eventType);
         result.put("runId", runId);
         return ResponseEntity.ok(result);
@@ -163,10 +188,12 @@ public class OpenLineageReceiverResource {
             List<CatalogDataset> matches = datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(name.schema(), name.table());
             if (!matches.isEmpty()) {
                 CatalogDataset dataset = matches.get(0);
+                applyClassificationFacet(dataset, payload, role, runId);
                 result.add(new DatasetResolution(dataset, role, name.namespace(), name.rawName(), safeDatasetKey(dataset), false, "schema_table"));
                 continue;
             }
             CatalogDataset dataset = createDataset(name, payload, role, jobName, runId);
+            applyClassificationFacet(dataset, payload, role, runId);
             result.add(new DatasetResolution(dataset, role, name.namespace(), name.rawName(), safeDatasetKey(dataset), true, "openlineage_discovery"));
         }
         return result;
@@ -182,7 +209,7 @@ public class OpenLineageReceiverResource {
         dataset.setLifecycleStatus(CatalogAssetGovernancePolicy.lifecycleForDiscoveredAsset());
         dataset.setOwner(truncate(ownerFacet(payload), 64));
         dataset.setOwnerDept(truncate(ownerDeptFacet(payload), 64));
-        dataset.setClassification(truncate(classificationFacet(payload), 32));
+        dataset.setClassification(normalizedClassificationFacet(payload));
         dataset.setDescription(
             truncate(
                 "Discovered from OpenLineage namespace=" +
@@ -200,6 +227,64 @@ public class OpenLineageReceiverResource {
         );
         dataset.setSnapshotTime(Instant.now());
         return datasetRepository.save(dataset);
+    }
+
+    private void applyClassificationFacet(
+        CatalogDataset dataset,
+        Map<String, Object> payload,
+        String role,
+        String runId
+    ) {
+        String candidate = normalizedClassificationFacet(payload);
+        if (!StringUtils.hasText(candidate) || dataset == null || dataset.getId() == null) {
+            return;
+        }
+        String assetKey = safeDatasetKey(dataset);
+        String evidence =
+            "{\"source\":\"openlineage\",\"role\":\"" +
+            role +
+            "\",\"runId\":\"" +
+            Objects.toString(runId, "") +
+            "\"}";
+        if (classificationService.resolve("ASSET", assetKey).isPresent()) {
+            classificationService.addDetectedLevel(
+                new CatalogClassificationService.LevelCommand(
+                    "ASSET",
+                    assetKey,
+                    candidate,
+                    runId,
+                    evidence
+                )
+            );
+            return;
+        }
+        classificationService.sealOrRaise(
+            new CatalogClassificationService.SealCommand(
+                "ASSET",
+                assetKey,
+                "DATASET",
+                null,
+                candidate,
+                null,
+                List.of(),
+                "SENSITIVE_DETECTION",
+                "openlineage:" + Objects.toString(runId, "unknown"),
+                sha256(assetKey + ":" + candidate + ":" + Objects.toString(runId, "")),
+                evidence
+            )
+        );
+    }
+
+    private String normalizedClassificationFacet(Map<String, Object> payload) {
+        String raw = classificationFacet(payload);
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        try {
+            return SecurityLevelCatalog.requireDataLevel(raw).code();
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
     private DatasetName datasetName(Map<String, Object> payload) {
@@ -302,6 +387,15 @@ public class OpenLineageReceiverResource {
             stringValue(governance.get("securityLevel")),
             stringValue(payload.get("classification"))
         );
+    }
+
+    private String sha256(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(String.valueOf(value).getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception ex) {
+            throw new IllegalStateException("Unable to calculate OpenLineage classification checksum", ex);
+        }
     }
 
     private String verificationStatus(String eventType) {

@@ -105,6 +105,8 @@ export function renderDataSourceConfig(
             setDataSource({
                 type: 'api',
                 sourceType: 'api',
+                classificationSubjectType: ds?.type === 'api' ? ds.classificationSubjectType : 'ASSET',
+                classificationSubjectKey: ds?.type === 'api' ? ds.classificationSubjectKey : undefined,
                 refreshInterval: ds?.type === 'api' ? ds.refreshInterval : undefined,
                 apiConfig: {
                     url: ds?.type === 'api' ? (ds.apiConfig?.url ?? '') : '',
@@ -270,6 +272,12 @@ export function renderDataSourceConfig(
                                 setDataSource({
                                     type: 'api',
                                     sourceType: 'api',
+                                    classificationSubjectType: ds?.type === 'api'
+                                        ? (ds.classificationSubjectType ?? 'ASSET')
+                                        : 'ASSET',
+                                    classificationSubjectKey: ds?.type === 'api'
+                                        ? ds.classificationSubjectKey
+                                        : undefined,
                                     refreshInterval: ds?.type === 'api' ? ds.refreshInterval : undefined,
                                     apiConfig: {
                                         ...(ds?.type === 'api' ? ds.apiConfig : { method: 'GET' as const }),
@@ -282,6 +290,37 @@ export function renderDataSourceConfig(
                         />
                     </div>
                     <div className="property-row flex items-center mb-3">
+                        <label className="property-label w-20 text-xs text-text-secondary">密级资产键</label>
+                        <input
+                            type="text"
+                            className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
+                            value={ds?.type === 'api' ? (ds.classificationSubjectKey ?? '') : ''}
+                            onChange={(e) => {
+                                setDataSource({
+                                    type: 'api',
+                                    sourceType: 'api',
+                                    classificationSubjectType: ds?.type === 'api'
+                                        ? (ds.classificationSubjectType ?? 'ASSET')
+                                        : 'ASSET',
+                                    classificationSubjectKey: e.target.value.trim() || undefined,
+                                    refreshInterval: ds?.type === 'api' ? ds.refreshInterval : undefined,
+                                    apiConfig: ds?.type === 'api'
+                                        ? {
+                                            ...(ds.apiConfig ?? { method: 'GET' as const, url: '' }),
+                                            method: ds.apiConfig?.method ?? 'GET',
+                                            url: ds.apiConfig?.url ?? '',
+                                        }
+                                        : { method: 'GET', url: '' },
+                                });
+                            }}
+                            placeholder="例如 asset:api:customer-profile"
+                            title="绑定平台资产台账中的规范资产键；未绑定时大屏发布、预览和导出将被阻断"
+                        />
+                    </div>
+                    <div className="mb-3 pl-20 text-[11px] leading-4 text-text-secondary">
+                        HTTP API 必须绑定已有资产的规范键，系统据此继承数据密级；未绑定时禁止发布和导出。
+                    </div>
+                    <div className="property-row flex items-center mb-3">
                         <label className="property-label w-20 text-xs text-text-secondary">方法</label>
                         <select
                             className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
@@ -291,6 +330,12 @@ export function renderDataSourceConfig(
                                 setDataSource({
                                     type: 'api',
                                     sourceType: 'api',
+                                    classificationSubjectType: ds?.type === 'api'
+                                        ? (ds.classificationSubjectType ?? 'ASSET')
+                                        : 'ASSET',
+                                    classificationSubjectKey: ds?.type === 'api'
+                                        ? ds.classificationSubjectKey
+                                        : undefined,
                                     refreshInterval: ds?.type === 'api' ? ds.refreshInterval : undefined,
                                     apiConfig: {
                                         ...(ds?.type === 'api' ? ds.apiConfig : {}),
@@ -314,6 +359,12 @@ export function renderDataSourceConfig(
                                 setDataSource({
                                     type: 'api',
                                     sourceType: 'api',
+                                    classificationSubjectType: ds?.type === 'api'
+                                        ? (ds.classificationSubjectType ?? 'ASSET')
+                                        : 'ASSET',
+                                    classificationSubjectKey: ds?.type === 'api'
+                                        ? ds.classificationSubjectKey
+                                        : undefined,
                                     refreshInterval: ds?.type === 'api' ? ds.refreshInterval : undefined,
                                     apiConfig: {
                                         ...(ds?.type === 'api' ? ds.apiConfig : {}),
@@ -339,6 +390,12 @@ export function renderDataSourceConfig(
                                 setDataSource({
                                     type: 'api',
                                     sourceType: 'api',
+                                    classificationSubjectType: ds?.type === 'api'
+                                        ? (ds.classificationSubjectType ?? 'ASSET')
+                                        : 'ASSET',
+                                    classificationSubjectKey: ds?.type === 'api'
+                                        ? ds.classificationSubjectKey
+                                        : undefined,
                                     refreshInterval: val > 0 ? val : undefined,
                                     apiConfig: ds?.type === 'api'
                                         ? {

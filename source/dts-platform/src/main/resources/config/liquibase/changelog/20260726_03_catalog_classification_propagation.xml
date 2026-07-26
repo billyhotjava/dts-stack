@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260726-03-catalog-classification-propagation" author="codex">
+        <createTable tableName="catalog_classification_propagation_job">
+            <column name="id" type="uuid">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_catalog_classification_propagation_job"/>
+            </column>
+            <column name="idempotency_key" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="target_dataset_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="target_asset_key" type="varchar(512)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="trigger_type" type="varchar(48)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="trigger_ref" type="varchar(512)"/>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="attempts" type="int" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="affected_subjects" type="int" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="next_attempt_at" type="timestamp"/>
+            <column name="last_error" type="varchar(2048)"/>
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addUniqueConstraint
+            tableName="catalog_classification_propagation_job"
+            columnNames="idempotency_key"
+            constraintName="uk_catalog_classification_propagation_job_key"/>
+        <createIndex
+            tableName="catalog_classification_propagation_job"
+            indexName="idx_catalog_classification_propagation_job_poll">
+            <column name="status"/>
+            <column name="next_attempt_at"/>
+        </createIndex>
+        <createIndex
+            tableName="catalog_classification_propagation_job"
+            indexName="idx_catalog_classification_propagation_job_target">
+            <column name="target_dataset_id"/>
+            <column name="created_date"/>
+        </createIndex>
+        <addForeignKeyConstraint
+            baseTableName="catalog_classification_propagation_job"
+            baseColumnNames="target_dataset_id"
+            referencedTableName="catalog_dataset"
+            referencedColumnNames="id"
+            constraintName="fk_catalog_classification_propagation_job_dataset"/>
+        <rollback>
+            <dropTable tableName="catalog_classification_propagation_job"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

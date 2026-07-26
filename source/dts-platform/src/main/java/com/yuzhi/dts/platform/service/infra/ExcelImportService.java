@@ -14,6 +14,8 @@ import com.yuzhi.dts.platform.config.AirflowProperties;
 import com.yuzhi.dts.platform.domain.infra.InfraExternalExchangeFile;
 import com.yuzhi.dts.platform.repository.infra.InfraExternalExchangeFileRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogClassificationService;
+import com.yuzhi.dts.platform.domain.catalog.CatalogClassificationSnapshot;
 import com.yuzhi.dts.platform.service.infra.dto.ExcelColumnSpecDto;
 import com.yuzhi.dts.platform.service.infra.dto.ExcelImportErrorPreviewResponse;
 import com.yuzhi.dts.platform.service.infra.dto.ExcelImportErrorRow;
@@ -86,20 +88,34 @@ public class ExcelImportService {
     private final InfraExternalExchangeFileRepository repository;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final CatalogClassificationService classificationService;
 
     public ExcelImportService(
         AirflowProperties airflowProperties,
         InfraExternalExchangeFileRepository repository,
         AuditService auditService,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        CatalogClassificationService classificationService
     ) {
         this.airflowProperties = airflowProperties;
         this.repository = repository;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
+        this.classificationService = classificationService;
     }
 
-    public ExcelImportPrepareResponse prepare(MultipartFile file, String operator, String ownerDept) {
+    public ExcelImportPrepareResponse prepare(
+        MultipartFile file,
+        String operator,
+        String ownerDept,
+        String classification
+    ) {
+        String declaredLevel;
+        try {
+            declaredLevel = SecurityLevelCatalog.requireDataLevel(classification).code();
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "必须明确选择文件密级");
+        }
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "文件不能为空");
         }
@@ -145,16 +161,62 @@ public class ExcelImportService {
         entity.setReceivedAt(Instant.now());
         entity.setProcessedAt(null);
         entity.setEnabled(Boolean.TRUE);
-        entity.setClassification(SecurityLevelCatalog.DEFAULT_DATA_SECURITY_LEVEL.code());
-        entity.setProps(writeProps(Map.of("format", ext, "sheets", sheets)));
+        entity.setClassification(declaredLevel);
+        Map<String, Object> initialProps = new LinkedHashMap<>();
+        initialProps.put("format", ext);
+        initialProps.put("sheets", sheets);
+        initialProps.put("classification", declaredLevel);
+        initialProps.put("classificationStatus", "FILE_SEALED_FIELDS_PENDING");
+        entity.setProps(writeProps(initialProps));
         InfraExternalExchangeFile saved = repository.save(entity);
+        CatalogClassificationSnapshot seal = classificationService.seal(
+            new CatalogClassificationService.SealCommand(
+                "FILE",
+                fileSubjectKey(saved.getId()),
+                null,
+                declaredLevel,
+                null,
+                null,
+                List.of(),
+                "FILE_DECLARATION",
+                saved.getFilePath(),
+                checksum,
+                writeProps(
+                    Map.of(
+                        "fileId",
+                        saved.getId(),
+                        "fileName",
+                        originalName,
+                        "batchCode",
+                        batchCode,
+                        "operator",
+                        operator
+                    )
+                )
+            )
+        );
+        initialProps.put("classificationSealId", seal.getId());
+        initialProps.put("classificationSealVersion", seal.getRecordVersion());
+        initialProps.put("classificationSealChecksum", seal.getEvidenceChecksum());
+        saved.setProps(writeProps(initialProps));
+        saved = repository.save(saved);
         auditService.auditAction(
             "INFRA_EXCEL_IMPORT",
             AuditStage.SUCCESS,
             saved.getId().toString(),
             Map.of("summary", "上传 Excel/CSV", "file", originalName, "batch", batchCode, "operator", operator)
         );
-        return new ExcelImportPrepareResponse(saved.getId(), originalName, batchCode, sheets);
+        return new ExcelImportPrepareResponse(
+            saved.getId(),
+            originalName,
+            batchCode,
+            sheets,
+            seal.getEffectiveLevel(),
+            seal.getId(),
+            seal.getRecordVersion() == null ? 0L : seal.getRecordVersion(),
+            seal.getEvidenceChecksum(),
+            seal.getSealedAt()
+        );
     }
 
     public ExcelImportParseResponse parse(ExcelImportParseRequest request, String operator, String ownerDept, boolean privileged) {
@@ -193,6 +255,11 @@ public class ExcelImportService {
             parseExcel(path, csvPath, errorPath, ctx, request.sheetName(), request.sheetIndex());
         }
 
+        String fileLevel = SecurityLevelCatalog.requireDataLevel(entity.getClassification()).code();
+        Map<String, String> requestedFieldLevels = request.fieldClassifications() == null
+            ? Map.of()
+            : request.fieldClassifications();
+        boolean sealFields = Boolean.TRUE.equals(request.sealClassification());
         String csvContainerPath = toContainerPath(csvPath);
         List<ExcelColumnSpecDto> columns = new ArrayList<>();
         for (int i = 0; i < ctx.columns.size(); i++) {
@@ -202,7 +269,40 @@ public class ExcelImportService {
             if (!StringUtils.hasText(label)) {
                 label = safeName;
             }
-            columns.add(new ExcelColumnSpecDto(safeName, "string", label));
+            String requestedLevel = requestedFieldLevels.get(safeName);
+            String fieldLevel;
+            try {
+                fieldLevel = SecurityLevelCatalog.maxDataCode(fileLevel, requestedLevel);
+                if (
+                    StringUtils.hasText(requestedLevel) &&
+                    SecurityLevelCatalog.isDataDowngrade(fileLevel, requestedLevel)
+                ) {
+                    throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "字段 " + safeName + " 的密级不能低于文件密级 " + fileLevel
+                    );
+                }
+            } catch (IllegalArgumentException ex) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "字段 " + safeName + " 的密级无效");
+            }
+            if (sealFields) {
+                classificationService.seal(
+                    new CatalogClassificationService.SealCommand(
+                        "COLUMN",
+                        columnSubjectKey(entity.getId(), safeName),
+                        null,
+                        StringUtils.hasText(requestedLevel) ? requestedLevel : null,
+                        null,
+                        null,
+                        List.of(fileLevel),
+                        "FILE_DECLARATION",
+                        fileSubjectKey(entity.getId()),
+                        checksumText(entity.getChecksum() + ":" + safeName + ":" + fieldLevel),
+                        writeProps(Map.of("fileId", entity.getId(), "column", safeName, "fileFloor", fileLevel))
+                    )
+                );
+            }
+            columns.add(new ExcelColumnSpecDto(safeName, "string", label, fieldLevel));
         }
 
         Map<String, Object> props = new LinkedHashMap<>();
@@ -214,12 +314,18 @@ public class ExcelImportService {
         props.put("errorContainerPath", toContainerPath(errorPath));
         props.put("delimiter", ctx.delimiter);
         props.put("columns", columns);
+        props.put("classification", fileLevel);
+        props.put("classificationStatus", sealFields ? "SEALED" : "FIELD_CONFIRMATION_PENDING");
+        props.put(
+            "fieldClassifications",
+            columns.stream().collect(java.util.stream.Collectors.toMap(ExcelColumnSpecDto::name, ExcelColumnSpecDto::classification))
+        );
         props.put("rowCount", ctx.rowCount);
         props.put("errorCount", ctx.errorCount);
         props.put("headerRow", ctx.headerRow);
         props.put("dataStartRow", ctx.dataStartRow);
         entity.setProps(writeProps(props));
-        entity.setStatus("PARSED");
+        entity.setStatus(sealFields ? "PARSED" : "PARSED_PREVIEW");
         entity.setProcessedAt(Instant.now());
         repository.save(entity);
 
@@ -524,6 +630,23 @@ public class ExcelImportService {
         } catch (Exception ex) {
             return null;
         }
+    }
+
+    private String checksumText(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return Base64.getEncoder().encodeToString(digest.digest(String.valueOf(value).getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception ex) {
+            throw new IllegalStateException("无法生成密级证据摘要", ex);
+        }
+    }
+
+    private String fileSubjectKey(UUID fileId) {
+        return "external-exchange-file:" + fileId;
+    }
+
+    private String columnSubjectKey(UUID fileId, String columnName) {
+        return fileSubjectKey(fileId) + "/column:" + columnName.trim().toLowerCase(Locale.ROOT);
     }
 
     private String writeProps(Map<String, Object> props) {

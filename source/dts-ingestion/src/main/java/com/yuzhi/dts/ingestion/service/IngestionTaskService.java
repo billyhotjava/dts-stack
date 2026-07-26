@@ -114,6 +114,7 @@ public class IngestionTaskService {
     private final PlatformInfraClient platformInfraClient;
     private final SourceConnectorRegistry sourceConnectorRegistry;
     private final ApiIngestionExecutor apiIngestionExecutor;
+    private final IngestionClassificationSealGuard classificationSealGuard;
     private final TransactionTemplate txTemplate;
     private final Executor ingestionTaskExecutor;
 
@@ -139,6 +140,7 @@ public class IngestionTaskService {
         PlatformInfraClient platformInfraClient,
         SourceConnectorRegistry sourceConnectorRegistry,
         ApiIngestionExecutor apiIngestionExecutor,
+        IngestionClassificationSealGuard classificationSealGuard,
         PlatformTransactionManager transactionManager,
         @org.springframework.beans.factory.annotation.Qualifier("ingestionTaskExecutor") Executor ingestionTaskExecutor
     ) {
@@ -163,6 +165,7 @@ public class IngestionTaskService {
         this.platformInfraClient = platformInfraClient;
         this.sourceConnectorRegistry = sourceConnectorRegistry;
         this.apiIngestionExecutor = apiIngestionExecutor;
+        this.classificationSealGuard = classificationSealGuard;
         this.txTemplate = new TransactionTemplate(transactionManager);
         this.ingestionTaskExecutor = ingestionTaskExecutor;
     }
@@ -1023,6 +1026,7 @@ public class IngestionTaskService {
         if (!"active".equals(task.getStatus()) && !"draft".equals(task.getStatus())) {
             throw new IllegalStateException("Task is not in executable status: " + task.getStatus());
         }
+        classificationSealGuard.requireProductionSeal(task);
         GovernancePolicy policy = resolveGovernancePolicy(task);
         if (!isWithinExecutionWindow(policy)) {
             throw new IllegalStateException("不在允许执行窗口内，当前策略窗口: " + policy.windowDisplay());

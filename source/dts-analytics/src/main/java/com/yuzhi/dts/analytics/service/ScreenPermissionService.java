@@ -6,10 +6,13 @@ import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenAccessRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenRepository;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
+import com.yuzhi.dts.analytics.web.support.RequestContext;
+import com.yuzhi.dts.analytics.web.support.RequestContextHolder;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,12 +34,13 @@ import org.springframework.stereotype.Service;
  *   <li>non-PUBLIC screen without grant → {@link PermissionSnapshot#none()}</li>
  * </ul>
  *
- * <p>Superuser bypass: {@code analytics_user.superuser = true} → skip table, full access.
- * Original creator bypass: {@code screen.creator_id == user.id} → full access.
- * Both bypasses ignore classification clearance.
+ * <p>Superuser bypass remains available only after the current classification snapshot
+ * is verified and is always returned as {@code overrideUsed=true} plus a strong audit
+ * event. Creator, OWNER and MANAGER identities provide base access/management only;
+ * they never bypass personnel classification clearance.
  *
- * <p>classification gate: callers without OWNER/MANAGER perms also need their
- * personnel-level clearance ≥ {@code screen.classification}. The clearance ladder is
+ * <p>classification gate: all non-superuser callers need their personnel-level clearance
+ * ≥ {@code screen.classification}. The clearance ladder is
  * PUBLIC &lt; INTERNAL &lt; SECRET &lt; CONFIDENTIAL, sourced from the X-DTS-Classification
  * header (see PlatformContext). When clearance is insufficient, only a VIEWER grant with
  * {@code level_override=true} can still let the caller in — that case is reflected via
@@ -64,13 +68,15 @@ public class ScreenPermissionService {
     private final AnalyticsScreenAccessRepository accessRepository;
     private final AnalyticsScreenRepository screenRepository;
     private final PlatformPermissionClient platformClient;
+    private final AnalyticsConsumerClassificationService classificationService;
+    private final ScreenAuditService auditService;
     private final boolean platformSourceEnabled;
     private final boolean localFallbackEnabled;
 
     public ScreenPermissionService(
             AnalyticsScreenAccessRepository accessRepository,
             AnalyticsScreenRepository screenRepository) {
-        this(accessRepository, screenRepository, null, false, true, null);
+        this(accessRepository, screenRepository, null, false, true, null, null);
     }
 
     public ScreenPermissionService(
@@ -79,7 +85,17 @@ public class ScreenPermissionService {
             PlatformPermissionClient platformClient,
             boolean platformSourceEnabled,
             boolean localFallbackEnabled) {
-        this(accessRepository, screenRepository, platformClient, platformSourceEnabled, localFallbackEnabled, null);
+        this(accessRepository, screenRepository, platformClient, platformSourceEnabled, localFallbackEnabled, null, null);
+    }
+
+    public ScreenPermissionService(
+            AnalyticsScreenAccessRepository accessRepository,
+            AnalyticsScreenRepository screenRepository,
+            PlatformPermissionClient platformClient,
+            boolean platformSourceEnabled,
+            boolean localFallbackEnabled,
+            ScreenAuditService auditService) {
+        this(accessRepository, screenRepository, platformClient, platformSourceEnabled, localFallbackEnabled, auditService, null);
     }
 
     @Autowired
@@ -89,10 +105,13 @@ public class ScreenPermissionService {
             PlatformPermissionClient platformClient,
             @Value("${dts.analytics.screen-permission.platform-source-enabled:true}") boolean platformSourceEnabled,
             @Value("${dts.analytics.screen-permission.local-fallback-enabled:true}") boolean localFallbackEnabled,
-            ScreenAuditService auditService) {
+            ScreenAuditService auditService,
+            AnalyticsConsumerClassificationService classificationService) {
         this.accessRepository = accessRepository;
         this.screenRepository = screenRepository;
         this.platformClient = platformClient;
+        this.classificationService = classificationService;
+        this.auditService = auditService;
         this.platformSourceEnabled = platformSourceEnabled;
         this.localFallbackEnabled = localFallbackEnabled;
     }
@@ -103,6 +122,10 @@ public class ScreenPermissionService {
 
         public static PermissionSnapshot all() {
             return new PermissionSnapshot(true, true, true, false);
+        }
+
+        public static PermissionSnapshot allOverride() {
+            return new PermissionSnapshot(true, true, true, true);
         }
 
         /**
@@ -177,11 +200,25 @@ public class ScreenPermissionService {
         if (screen == null || user == null) {
             return PermissionSnapshot.none();
         }
-        if (user.isSuperuser()) {
-            return PermissionSnapshot.all();
+        if (classificationService != null) {
+            try {
+                classificationService.requireCurrentScreen(screen.getId());
+            } catch (RuntimeException ex) {
+                LOG.warn(
+                    "event=screen_classification_guard_denied screenId={} user={} reason={}",
+                    screen.getId(),
+                    resolveUserId(user),
+                    ex.getMessage()
+                );
+                return PermissionSnapshot.none();
+            }
         }
-        if (screen.getCreatorId() != null && screen.getCreatorId().equals(user.getId())) {
-            return PermissionSnapshot.all();
+        if (ladderRank(screen.getClassification()) < 0) {
+            return PermissionSnapshot.none();
+        }
+        if (user.isSuperuser()) {
+            auditSuperuserOverride(screen, user);
+            return PermissionSnapshot.allOverride();
         }
 
         if (platformEnabled()) {
@@ -197,6 +234,9 @@ public class ScreenPermissionService {
                 screen.getClassification()
             );
             if (result.allowed()) {
+                if ("superuser_override".equalsIgnoreCase(result.reason())) {
+                    auditSuperuserOverride(screen, user);
+                }
                 return fromPlatformResult(result);
             }
             if (!localFallbackEnabled) {
@@ -222,9 +262,10 @@ public class ScreenPermissionService {
             AnalyticsUser user,
             List<String> roles,
             String callerClassification) {
-        // Local fallback preserves legacy creator bypass while the migration is active.
+        boolean classificationAllowed =
+            isClassificationAllowed(callerClassification, screen.getClassification());
         if (screen.getCreatorId() != null && screen.getCreatorId().equals(user.getId())) {
-            return PermissionSnapshot.all();
+            return classificationAllowed ? PermissionSnapshot.all() : PermissionSnapshot.none();
         }
 
         String userId = resolveUserId(user);
@@ -236,13 +277,11 @@ public class ScreenPermissionService {
         // Highest permission wins: OWNER > MANAGER > VIEWER
         boolean hasOwner = grants.stream().anyMatch(g -> "OWNER".equalsIgnoreCase(g.getPermission()));
         if (hasOwner) {
-            // OWNER grant is treated like creator: bypass classification gate.
-            return PermissionSnapshot.all();
+            return classificationAllowed ? PermissionSnapshot.all() : PermissionSnapshot.none();
         }
         boolean hasManager = grants.stream().anyMatch(g -> "MANAGER".equalsIgnoreCase(g.getPermission()));
         if (hasManager) {
-            // MANAGER grant also bypasses classification gate (they manage the dashboard).
-            return PermissionSnapshot.managerOnly();
+            return classificationAllowed ? PermissionSnapshot.managerOnly() : PermissionSnapshot.none();
         }
         boolean hasViewer = grants.stream().anyMatch(g -> "VIEWER".equalsIgnoreCase(g.getPermission()));
         if (!hasViewer) {
@@ -250,7 +289,7 @@ public class ScreenPermissionService {
         }
 
         // VIEWER path → classification gate applies.
-        if (isClassificationAllowed(callerClassification, screen.getClassification())) {
+        if (classificationAllowed) {
             return PermissionSnapshot.readOnly();
         }
         // Clearance insufficient — only level_override VIEWER grant lets the caller in.
@@ -278,6 +317,9 @@ public class ScreenPermissionService {
         if (screenRank < 0) {
             return false;
         }
+        if (screenRank == 0) {
+            return true;
+        }
         int callerRank = ladderRank(callerLevel);
         if (callerRank < 0) {
             return false; // unknown caller clearance → conservative deny
@@ -290,6 +332,30 @@ public class ScreenPermissionService {
         String upper = level.trim().toUpperCase(Locale.ROOT);
         if (upper.isEmpty()) return -1;
         return CLASSIFICATION_LADDER.indexOf(upper);
+    }
+
+    private void auditSuperuserOverride(AnalyticsScreen screen, AnalyticsUser user) {
+        if (auditService == null) {
+            LOG.warn(
+                "event=screen_classification_superuser_override_audit_unavailable screenId={} user={}",
+                screen.getId(),
+                resolveUserId(user)
+            );
+            return;
+        }
+        RequestContext requestContext = RequestContextHolder.current();
+        auditService.log(
+            screen.getId(),
+            user.getId(),
+            "screen.classification.superuser_override",
+            null,
+            Map.of(
+                "classification", screen.getClassification(),
+                "overrideUsed", true,
+                "reason", "SUPERUSER_EXPLICIT_OVERRIDE"
+            ),
+            requestContext == null ? null : requestContext.requestId()
+        );
     }
 
     // ---- Accessible screen IDs ----
@@ -417,6 +483,9 @@ public class ScreenPermissionService {
 
     private PermissionSnapshot fromPlatformResult(PlatformPermissionClient.PermissionResult result) {
         String permission = result.permission() == null ? "" : result.permission().trim().toUpperCase(Locale.ROOT);
+        if ("superuser_override".equalsIgnoreCase(result.reason())) {
+            return PermissionSnapshot.allOverride();
+        }
         if ("MANAGE".equals(permission) || "EDIT".equals(permission)) {
             return PermissionSnapshot.managerOnly();
         }

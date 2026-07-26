@@ -23,10 +23,11 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner }: Props) {
 						background: 'var(--color-surface-secondary, rgba(0,0,0,0.02))',
 					}}
 				>
-					<div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>大屏密级</div>
+					<div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>大屏密级继承</div>
 					<ClassificationSelect screenId={screenId} isOwner={isOwner} />
 					<div style={{ fontSize: 12, color: 'var(--color-text-secondary, #6b7280)', marginTop: 8 }}>
-						决定哪些人员密级可访问本大屏；可在下方共享名单对个别用户授予越级共享。
+						有效密级取所有展示数据的最高密级；人工只能提高下限。共享授权绑定当前密级快照，
+						上游密级升高后旧授权自动失效。
 					</div>
 				</div>
 			)}

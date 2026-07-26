@@ -59,6 +59,17 @@ type UploadRequestOption = Parameters<NonNullable<import("antd").UploadProps["cu
 
 const { Text } = Typography;
 
+const CLASSIFICATION_OPTIONS = [
+	{ label: "公开", value: "PUBLIC" },
+	{ label: "内部", value: "INTERNAL" },
+	{ label: "秘密", value: "SECRET" },
+	{ label: "机密", value: "CONFIDENTIAL" },
+];
+
+const CLASSIFICATION_RANK = Object.fromEntries(
+	CLASSIFICATION_OPTIONS.map((option, index) => [option.value, index]),
+) as Record<string, number>;
+
 interface DataSourceFormModalProps {
 	open: boolean;
 	editing: InfraDataSource | null;
@@ -153,6 +164,8 @@ export default function DataSourceFormModal({
 	const [excelSkipErrors, setExcelSkipErrors] = useState(true);
 	const [excelFillMerged, setExcelFillMerged] = useState(false);
 	const [excelParseResult, setExcelParseResult] = useState<ExcelImportParseResponse | null>(null);
+	const [excelClassification, setExcelClassification] = useState<string>();
+	const [excelColumnClassifications, setExcelColumnClassifications] = useState<Record<string, string>>({});
 
 	const loadConnectors = useCallback(async () => {
 		setConnectorsLoading(true);
@@ -274,6 +287,7 @@ export default function DataSourceFormModal({
 			apiAllowHttp: apiSource ? existingApiRequestPolicy?.allowHttp === true : false,
 			apiRateLimitJson: apiSource ? stringifyJson(readApiConfigPart(props, "rateLimit")) : "",
 			apiTlsJson: apiSource ? stringifyJson(readApiConfigPart(props, "tls")) : "",
+			classification: props.classification,
 		});
 		if (apiSource) void loadApiContract();
 	}, [open, editing, form, loadApiContract, initialConnectorKey]);
@@ -591,6 +605,7 @@ export default function DataSourceFormModal({
 			} else if (values.readerType) {
 				props = { ...(props || {}), readerType: values.readerType };
 			}
+			props = { ...(props || {}), classification: String(values.classification).trim().toUpperCase() };
 			const selectedDriver = drivers.find((item) => item.id === values.driverId);
 			const resolvedDriverClass = String(values.driverClass || selectedDriver?.driverClass || "").trim();
 			const resolvedDriverVersion = String(
@@ -637,6 +652,8 @@ export default function DataSourceFormModal({
 		setExcelDateFormat("yyyy-MM-dd HH:mm:ss");
 		setExcelSkipErrors(true);
 		setExcelFillMerged(true);
+		setExcelClassification(undefined);
+		setExcelColumnClassifications({});
 	};
 
 	const openExcelModal = () => {
@@ -647,6 +664,11 @@ export default function DataSourceFormModal({
 	const handleExcelUpload = async (options: UploadRequestOption) => {
 		const file = options.file as File;
 		if (!file) return;
+		if (!excelClassification) {
+			message.warning("请先选择文件密级");
+			options.onError?.(new Error("classification_required"));
+			return;
+		}
 		const maxSize = 200 * 1024 * 1024;
 		if (file.size > maxSize) {
 			message.error("文件超过 200MB 限制");
@@ -655,7 +677,7 @@ export default function DataSourceFormModal({
 		}
 		setExcelUploading(true);
 		try {
-			const resp = await dataSourcesService.excelPrepare(file);
+			const resp = await dataSourcesService.excelPrepare(file, excelClassification);
 			setExcelPrepared(resp);
 			setExcelSheetName(resp.sheets?.[0]?.name);
 			message.success("文件已上传，请选择 Sheet 并解析");
@@ -683,7 +705,29 @@ export default function DataSourceFormModal({
 		};
 		form.setFieldsValue({
 			readerType: "txtfilereader",
-			propsJson: JSON.stringify({ readerConfig }, null, 2),
+			classification: excelPrepared?.classification || excelClassification,
+			propsJson: JSON.stringify(
+				{
+					readerConfig,
+					classification: excelPrepared?.classification || excelClassification,
+					classificationSeal: excelPrepared
+						? {
+								sealId: excelPrepared.sealId,
+								subjectType: "FILE",
+								subjectKey: `external-exchange-file:${excelPrepared.fileId}`,
+								effectiveLevel: excelPrepared.classification,
+								snapshotVersion: excelPrepared.sealVersion,
+								checksum: excelPrepared.sealChecksum,
+								sealedAt: excelPrepared.sealedAt,
+							}
+						: undefined,
+					fieldClassifications: Object.fromEntries(
+						columns.map((column) => [column.name, column.classification || excelClassification]),
+					),
+				},
+				null,
+				2,
+			),
 		});
 	};
 
@@ -704,11 +748,20 @@ export default function DataSourceFormModal({
 				skipErrors: excelSkipErrors,
 				fillMerged: excelFillMerged,
 				dateFormat: excelDateFormat,
+				fieldClassifications: excelColumnClassifications,
+				sealClassification: Boolean(excelParseResult),
 			});
 			setExcelParseResult(resp);
-			applyExcelResultToForm(resp);
-			message.success("解析完成，字段配置已填充");
-			setExcelModalOpen(false);
+			if (!excelParseResult) {
+				setExcelColumnClassifications(
+					Object.fromEntries((resp.columns || []).map((column) => [column.name, column.classification || excelClassification!])),
+				);
+				message.success("字段预览已生成，请确认或升高字段密级");
+			} else {
+				applyExcelResultToForm(resp);
+				message.success("密级已封存，字段配置已填充");
+				setExcelModalOpen(false);
+			}
 		} catch {
 			// handled by global interceptor
 		} finally {
@@ -990,6 +1043,23 @@ export default function DataSourceFormModal({
 							</Space>
 						</Form.Item>
 					)}
+					<Form.Item
+						name="classification"
+						label="源数据密级"
+						rules={[{ required: true, message: "请选择接入数据密级" }]}
+						tooltip="首次接入确认后只能升高，不能降低；派生数据会继承全部上游中的最高密级。"
+					>
+						<Select
+							placeholder="请选择密级"
+							options={CLASSIFICATION_OPTIONS.map((option) => ({
+								...option,
+								disabled:
+									Boolean(editing?.props?.classification) &&
+									CLASSIFICATION_RANK[option.value] <
+										CLASSIFICATION_RANK[String(editing?.props?.classification).toUpperCase()],
+							}))}
+						/>
+					</Form.Item>
 					<Form.Item name="description" label="描述">
 						<Input.TextArea rows={2} placeholder="可选" />
 					</Form.Item>
@@ -1032,12 +1102,34 @@ export default function DataSourceFormModal({
 				open={excelModalOpen}
 				onCancel={() => setExcelModalOpen(false)}
 				onOk={handleExcelParse}
-				okText="解析并应用"
+				okText={excelParseResult ? "确认密级并应用" : "解析字段预览"}
+				okButtonProps={{ disabled: !excelPrepared?.fileId }}
 				confirmLoading={excelParsing}
 				destroyOnClose
 			>
 				<Space direction="vertical" style={{ width: "100%" }}>
-					<Alert type="warning" showIcon message="非密模块禁止上传涉密数据" />
+					<Alert
+						type="info"
+						showIcon
+						message="文件密级将在上传时封存，后续只能升高不能降低"
+						description="文件密级是所有字段的最低密级；字段解析后可对单个字段升密。"
+					/>
+					<Form layout="vertical">
+						<Form.Item label="文件密级" required>
+							<Select
+								value={excelClassification}
+								onChange={(value) => {
+									setExcelClassification(value);
+									setExcelPrepared(null);
+									setExcelParseResult(null);
+									setExcelColumnClassifications({});
+								}}
+								placeholder="上传前必须选择"
+								options={CLASSIFICATION_OPTIONS}
+								disabled={Boolean(excelPrepared)}
+							/>
+						</Form.Item>
+					</Form>
 					<Upload
 						name="file"
 						multiple={false}
@@ -1066,6 +1158,27 @@ export default function DataSourceFormModal({
 									}))}
 								/>
 							</Form.Item>
+						</Form>
+					) : null}
+
+					{excelParseResult?.columns?.length ? (
+						<Form layout="vertical">
+							{excelParseResult.columns.map((column) => (
+								<Form.Item key={column.name} label={`${column.label || column.name}（${column.name}）`}>
+									<Select
+										value={excelColumnClassifications[column.name] || excelClassification}
+										onChange={(value) =>
+											setExcelColumnClassifications((current) => ({ ...current, [column.name]: value }))
+										}
+										options={CLASSIFICATION_OPTIONS.map((option) => ({
+											...option,
+											disabled:
+												CLASSIFICATION_RANK[option.value] <
+												CLASSIFICATION_RANK[excelClassification || "PUBLIC"],
+										}))}
+									/>
+								</Form.Item>
+							))}
 						</Form>
 					) : null}
 

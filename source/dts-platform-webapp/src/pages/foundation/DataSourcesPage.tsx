@@ -51,7 +51,10 @@ const normalizeOdsCode = (value?: string, fallback = "src") => {
 	return /^\d/.test(safe) ? `c_${safe}` : safe;
 };
 
-type OdsColumnOverride = Pick<OdsSourceColumnRequest, "include" | "targetName" | "targetDataType">;
+type OdsColumnOverride = Pick<
+	OdsSourceColumnRequest,
+	"include" | "targetName" | "targetDataType" | "classification"
+>;
 
 type OdsColumnOverrides = Record<string, Record<string, OdsColumnOverride>>;
 
@@ -80,6 +83,7 @@ const toOdsSourceTable = (
 			primaryKey: column.primaryKey,
 			indexed: column.indexed,
 			incrementalCandidate: column.incrementalCandidate,
+			classification: override.classification,
 		};
 	}),
 });
@@ -104,6 +108,17 @@ const ODS_TYPE_OPTIONS = [
 	{ label: "timestamp", value: "timestamp" },
 	{ label: "jsonb", value: "jsonb" },
 ];
+
+const CLASSIFICATION_OPTIONS = [
+	{ label: "公开", value: "PUBLIC" },
+	{ label: "内部", value: "INTERNAL" },
+	{ label: "秘密", value: "SECRET" },
+	{ label: "机密", value: "CONFIDENTIAL" },
+];
+
+const CLASSIFICATION_RANK = Object.fromEntries(
+	CLASSIFICATION_OPTIONS.map((option, index) => [option.value, index]),
+) as Record<string, number>;
 
 const defaultOdsWizardConfig = (record?: InfraDataSource | null): OdsWizardConfig => ({
 	odsSchema: "ods",
@@ -167,6 +182,7 @@ export default function DataSourcesPage() {
 	const [odsPreview, setOdsPreview] = useState<OdsGenerationPreviewResponse | null>(null);
 	const [odsPrecheck, setOdsPrecheck] = useState<OdsPrecheckResponse | null>(null);
 	const [odsRequest, setOdsRequest] = useState<OdsGenerationRequest | null>(null);
+	const [storageApprovalTokens, setStorageApprovalTokens] = useState<Record<string, string>>({});
 	const [odsConfig, setOdsConfig] = useState<OdsWizardConfig>(defaultOdsWizardConfig());
 	const [odsColumnOverrides, setOdsColumnOverrides] = useState<OdsColumnOverrides>({});
 
@@ -289,6 +305,7 @@ export default function DataSourcesPage() {
 		setOdsPreview(null);
 		setOdsPrecheck(null);
 		setOdsRequest(null);
+		setStorageApprovalTokens({});
 		setOdsColumnOverrides({});
 		setSchemaModalOpen(true);
 	};
@@ -321,16 +338,37 @@ export default function DataSourcesPage() {
 		setOdsRequest(null);
 	};
 
-	const buildOdsRequest = (record: InfraDataSource, tables: SchemaDiscoverTable[]): OdsGenerationRequest => ({
-		odsSchema: normalizeOdsCode(odsConfig.odsSchema, "ods"),
-		systemCode: normalizeOdsCode(odsConfig.systemCode || record.connectorKey || record.type || record.name),
-		bizCode: normalizeOdsCode(odsConfig.bizCode || "default", "default"),
-		entityCode: tables.length === 1 && odsConfig.entityCode ? normalizeOdsCode(odsConfig.entityCode, tables[0].name) : undefined,
-		includeTechnicalColumns: true,
-		includeRawJson: true,
-		syncMode: odsConfig.syncMode || "full_refresh",
-		tables: tables.map((table) => toOdsSourceTable(table, odsColumnOverrides[resolveTableKey(table)])),
-	});
+	const buildOdsRequest = (record: InfraDataSource, tables: SchemaDiscoverTable[]): OdsGenerationRequest => {
+		const mappedTables = tables.map((table) =>
+			toOdsSourceTable(table, odsColumnOverrides[resolveTableKey(table)]),
+		);
+		const sourceFloor = String(record.props?.classification || "").toUpperCase();
+		const fieldClassifications = Object.fromEntries(
+			mappedTables.flatMap((table) =>
+				(table.columns || [])
+					.filter((column) => column.include !== false)
+					.map((column) => [
+						`${table.schema || ""}.${table.name}.${column.name}`,
+						column.classification || sourceFloor,
+					]),
+			),
+		);
+		return {
+			odsSchema: normalizeOdsCode(odsConfig.odsSchema, "ods"),
+			systemCode: normalizeOdsCode(odsConfig.systemCode || record.connectorKey || record.type || record.name),
+			bizCode: normalizeOdsCode(odsConfig.bizCode || "default", "default"),
+			entityCode:
+				tables.length === 1 && odsConfig.entityCode
+					? normalizeOdsCode(odsConfig.entityCode, tables[0].name)
+					: undefined,
+			includeTechnicalColumns: true,
+			includeRawJson: true,
+			syncMode: odsConfig.syncMode || "full_refresh",
+			fieldClassifications,
+			storageApprovalTokens,
+			tables: mappedTables,
+		};
+	};
 
 	const resolveCommonIncrementalCandidate = (tables?: OdsGenerationRequest["tables"]) => {
 		if (!tables?.length) return "";
@@ -366,7 +404,12 @@ export default function DataSourcesPage() {
 		setOdsPreviewingKey(key);
 		try {
 			const result = await dataSourcesService.odsPreview(record.id, request);
-			setOdsRequest(request);
+			setStorageApprovalTokens({});
+			setOdsRequest({
+				...request,
+				classificationSeal: result.classificationSeal,
+				storageApprovalTokens: {},
+			});
 			setOdsPreview(result);
 			setOdsPrecheck(null);
 		} catch {
@@ -591,6 +634,32 @@ export default function DataSourcesPage() {
 								render: (_: any, column: SchemaDiscoverColumn) => column.dataType || column.nativeType || "-",
 							},
 							{
+								title: "字段密级",
+								key: "classification",
+								width: 140,
+								render: (_: any, column: SchemaDiscoverColumn) => {
+									const sourceFloor = String(
+										schemaDiscoverSource?.props?.classification || "PUBLIC",
+									).toUpperCase();
+									return (
+										<Select
+											size="small"
+											className="w-full"
+											value={overrides[column.name]?.classification || sourceFloor}
+											options={CLASSIFICATION_OPTIONS.map((option) => ({
+												...option,
+												disabled:
+													CLASSIFICATION_RANK[option.value] <
+													CLASSIFICATION_RANK[sourceFloor],
+											}))}
+											onChange={(value) =>
+												updateOdsColumnOverride(table, column, { classification: value })
+											}
+										/>
+									);
+								},
+							},
+							{
 								title: "说明",
 								dataIndex: "comment",
 								key: "comment",
@@ -617,6 +686,33 @@ export default function DataSourcesPage() {
 			</div>
 			{plan.warnings?.length ? (
 				<Alert type="warning" showIcon className="mb-2" message={plan.warnings.join("；")} />
+			) : null}
+			{plan.sourceDatasetId && plan.approvalPayloadChecksum ? (
+				<div className="mb-2 rounded border border-amber-200 bg-amber-50 p-2">
+					<div className="mb-1 text-xs text-amber-800">
+						生产存储需使用资产 {plan.sourceDatasetId} 的审批令牌；令牌与当前密级快照及本次方案摘要绑定，只能使用一次。
+					</div>
+					<Input.Password
+						size="small"
+						value={
+							storageApprovalTokens[
+								`${plan.sourceSchema || ""}.${plan.sourceTable}`
+							] || ""
+						}
+						placeholder="审批通过后粘贴一次性存储执行令牌"
+						onChange={(event) => {
+							const tableKey = `${plan.sourceSchema || ""}.${plan.sourceTable}`;
+							const next = {
+								...storageApprovalTokens,
+								[tableKey]: event.target.value,
+							};
+							setStorageApprovalTokens(next);
+							setOdsRequest((current) =>
+								current ? { ...current, storageApprovalTokens: next } : current,
+							);
+						}}
+					/>
+				</div>
 			) : null}
 			<div className="mb-2 text-xs text-slate-500">
 				{(plan.columns || [])

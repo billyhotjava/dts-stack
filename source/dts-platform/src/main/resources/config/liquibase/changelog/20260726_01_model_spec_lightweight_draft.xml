@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="20260726-01-model-spec-lightweight-draft" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_model_spec"/>
+            <sqlCheck expectedResult="1">
+                SELECT count(*)
+                  FROM pg_constraint
+                 WHERE conname = 'ck_model_spec_v2_type_context'
+                   AND conrelid = 'modeling_model_spec'::regclass
+            </sqlCheck>
+        </preConditions>
+
+        <sql>
+            ALTER TABLE modeling_model_spec
+                DROP CONSTRAINT ck_model_spec_v2_type_context;
+        </sql>
+        <sql>
+            ALTER TABLE modeling_model_spec
+                ADD CONSTRAINT ck_model_spec_v2_type_context
+                CHECK (
+                    contract_version &lt;&gt; 2 OR (
+                        (model_type = 'FACT' OR business_activity_ref IS NULL)
+                        AND (
+                            model_type &lt;&gt; 'APPLICATION'
+                            OR status = 'DRAFT'
+                            OR (
+                                consumption_scenario IS NOT NULL
+                                AND btrim(consumption_scenario) &lt;&gt; ''
+                            )
+                        )
+                        AND (model_type = 'APPLICATION' OR consumption_scenario IS NULL)
+                        AND (
+                            fact_shape IS NULL
+                            OR fact_shape IN ('TRANSACTION', 'PERIODIC_SNAPSHOT', 'ACCUMULATING_SNAPSHOT')
+                        )
+                    )
+                );
+        </sql>
+
+        <rollback>
+            <sql splitStatements="false">
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_SPEC_LIGHTWEIGHT_DRAFT_FORWARD_ONLY: Existing application drafts may not have a consumption scenario';
+                END $$;
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

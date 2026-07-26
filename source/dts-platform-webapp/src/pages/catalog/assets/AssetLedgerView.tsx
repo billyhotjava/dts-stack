@@ -1,9 +1,15 @@
 import { MoreOutlined } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import { Button, Dropdown, Space, Table, Tag } from "antd";
+import { useEffect, useMemo, useState } from "react";
+import {
+	type ClassificationFactView,
+	getCatalogClassificationFacts,
+} from "@/api/platformApi";
 import { AssetTagChips } from "@/components/catalog/tags/AssetTagChips";
 import { useRouter } from "@/routes/hooks";
 import { resolveAssetReadiness } from "../assetPortalUx.helpers";
+import { AssetLifecycleWorkbenchDrawer } from "./AssetLifecycleWorkbenchDrawer";
 import type { AssetRow } from "./assetPageShared";
 import {
 	ASSET_ACTION_COLUMN_WIDTH,
@@ -35,8 +41,37 @@ export function AssetLedgerView({
 	onOpenGovernanceRemediation,
 }: AssetLedgerViewProps) {
 	const router = useRouter();
+	const [classificationFacts, setClassificationFacts] = useState<ClassificationFactView[]>([]);
+	const [workbenchAsset, setWorkbenchAsset] = useState<AssetRow | null>(null);
+	const classificationFactMap = useMemo(
+		() => new Map(classificationFacts.map((fact) => [fact.subjectKey, fact])),
+		[classificationFacts],
+	);
+
+	useEffect(() => {
+		const subjects = records
+			.filter((row) => Boolean(row.assetKey))
+			.map((row) => ({ subjectType: "ASSET", subjectKey: String(row.assetKey) }));
+		if (subjects.length === 0) {
+			setClassificationFacts([]);
+			return;
+		}
+		let cancelled = false;
+		void getCatalogClassificationFacts(subjects)
+			.then((facts) => {
+				if (!cancelled) setClassificationFacts(Array.isArray(facts) ? facts : []);
+			})
+			.catch(() => {
+				if (!cancelled) setClassificationFacts([]);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [records]);
+
 	const overflowActionItems: MenuProps["items"] = [
 		{ key: "classification", label: "分级分类" },
+		{ key: "lifecycle", label: "密级与生命周期" },
 		{ key: "lineage", label: "查看血缘" },
 		{ key: "report", label: "创建报表" },
 		{ key: "product", label: "生成数据产品" },
@@ -44,6 +79,10 @@ export function AssetLedgerView({
 	];
 
 	const handleOverflowAction = (row: AssetRow, key: string) => {
+		if (key === "lifecycle") {
+			setWorkbenchAsset(row);
+			return;
+		}
 		if (key === "classification") {
 			router.push(`/security/data-security?tab=datasetSecurity&datasetId=${row.id}`);
 			return;
@@ -147,16 +186,28 @@ export function AssetLedgerView({
 							},
 						},
 						{
-							title: "密级/主题域",
-							width: 180,
-							render: (_, row) => (
-								<Space direction="vertical" size={2}>
-									<Tag color={row.classification ? "orange" : "default"}>{classificationText(row.classification)}</Tag>
-									<span className="text-xs text-slate-500">
-										{row.domain || (row.domainId ? domainMap.get(row.domainId) : undefined) || "未归域"}
-									</span>
-								</Space>
-							),
+							title: "有效密级/主题域",
+							width: 200,
+							render: (_, row) => {
+								const fact = row.assetKey ? classificationFactMap.get(row.assetKey) : undefined;
+								const effective = fact?.effectiveLevel || row.classification;
+								return (
+									<Space direction="vertical" size={2}>
+										<div title={`有效密级取来源声明、识别、人工下限和全部上游的最高值；快照 v${fact?.snapshotVersion ?? 0}`}>
+											<Tag color={effective ? "orange" : "red"}>{classificationText(effective)}</Tag>
+											<Tag color={fact?.propagationStatus === "PROPAGATED" ? "green" : "gold"}>
+												{fact?.sealed ? fact.propagationStatus || "已封存" : "待封存"}
+											</Tag>
+										</div>
+										<span className="text-xs text-slate-500">
+											{fact?.highestSourceType ? `最高来源：${fact.highestSourceType}` : "来源待补充"}
+										</span>
+										<span className="text-xs text-slate-500">
+											{row.domain || (row.domainId ? domainMap.get(row.domainId) : undefined) || "未归域"}
+										</span>
+									</Space>
+								);
+							},
 						},
 						{
 							title: "负责人",
@@ -211,6 +262,26 @@ export function AssetLedgerView({
 					]}
 				/>
 			</div>
+			<AssetLifecycleWorkbenchDrawer
+				open={Boolean(workbenchAsset)}
+				asset={workbenchAsset}
+				classificationFact={
+					workbenchAsset?.assetKey
+						? classificationFactMap.get(workbenchAsset.assetKey)
+						: undefined
+				}
+				onClose={() => setWorkbenchAsset(null)}
+				onChanged={() => {
+					const subjects = records
+						.filter((row) => Boolean(row.assetKey))
+						.map((row) => ({ subjectType: "ASSET", subjectKey: String(row.assetKey) }));
+					if (subjects.length > 0) {
+						void getCatalogClassificationFacts(subjects).then((facts) => {
+							setClassificationFacts(Array.isArray(facts) ? facts : []);
+						});
+					}
+				}}
+			/>
 		</div>
 	);
 }

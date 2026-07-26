@@ -148,7 +148,6 @@ export default function WarehousePlanDetailPage() {
 	const [policyConflictVersion, setPolicyConflictVersion] = useState<number | null>(null);
 	const [categoryDirty, setCategoryDirtyValue] = useState(false);
 	const [policyDirty, setPolicyDirtyValue] = useState(false);
-	const [editorOpen, setEditorOpen] = useState(false);
 	const categoryDirtyRef = useRef(false);
 	const policyDirtyRef = useRef(false);
 	const [categoryForm] = Form.useForm<CategoryFormValue>();
@@ -160,7 +159,10 @@ export default function WarehousePlanDetailPage() {
 	const policyMutationGuard = useMemo(() => createLatestRequestGuard(), []);
 	const activeSection = useMemo(() => resolveSection(location.pathname), [location.pathname]);
 	const requestedBaselineTab = searchParams.get("tab");
-	const viewOnly = searchParams.get("mode") === "view";
+	const routeMode = searchParams.get("mode");
+	const viewOnly = routeMode === "view";
+	const editMode = routeMode === "edit";
+	const headerEditing = editMode && activeSection === "overview";
 	const baselineTab: BaselineTab =
 		requestedBaselineTab === "sources" || requestedBaselineTab === "layers" || requestedBaselineTab === "categories"
 			? requestedBaselineTab
@@ -376,7 +378,12 @@ export default function WarehousePlanDetailPage() {
 
 	const openSpecialist = (route: string) => navigate(withWarehousePlanContext(route, planId));
 	const openSection = (section: DetailSection) =>
-		navigate(buildWarehousePlanRoute(planId, section, viewOnly ? { mode: "view" } : {}));
+		navigate(
+			buildWarehousePlanRoute(planId, section, {
+				mode: editMode ? "edit" : viewOnly ? "view" : undefined,
+				tab: section === "baseline" && activeSection === "baseline" ? baselineTab : undefined,
+			}),
+		);
 
 	if (!planId) {
 		return (
@@ -450,6 +457,7 @@ export default function WarehousePlanDetailPage() {
 							</Title>
 							<Tag color="blue">{lifecycleLabel[plan.lifecycleStatus]}</Tag>
 							{viewOnly ? <Tag>只读查看</Tag> : null}
+							{editMode ? <Tag color="processing">编辑中</Tag> : null}
 						</div>
 						<div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-500">
 							<span>计划负责人：{plan.ownerId}</span>
@@ -465,13 +473,37 @@ export default function WarehousePlanDetailPage() {
 						</div>
 					</div>
 					<Space wrap>
-						{canEditWarehousePlanHeader(canMaintainPlan, plan.lifecycleStatus) && !viewOnly ? (
-							<Button onClick={() => setEditorOpen(true)}>编辑基本信息</Button>
+						{canEditWarehousePlanHeader(canMaintainPlan, plan.lifecycleStatus) && !editMode ? (
+							<Button
+								onClick={() =>
+									navigate(
+										buildWarehousePlanRoute(planId, activeSection, {
+											mode: "edit",
+											tab: activeSection === "baseline" ? baselineTab : undefined,
+										}),
+									)
+								}
+							>
+								编辑规划
+							</Button>
 						) : null}
-						{canEditWarehousePlanHeader(canMaintainPlan, plan.lifecycleStatus) && viewOnly ? (
-							<Button onClick={() => navigate(buildWarehousePlanRoute(planId, "baseline"))}>编辑计划内容</Button>
+						{canEditWarehousePlanHeader(canMaintainPlan, plan.lifecycleStatus) &&
+						editMode &&
+						activeSection !== "overview" ? (
+							<Button
+								onClick={() =>
+									navigate(
+										buildWarehousePlanRoute(planId, activeSection, {
+											mode: "view",
+											tab: activeSection === "baseline" ? baselineTab : undefined,
+										}),
+									)
+								}
+							>
+								完成编辑
+							</Button>
 						) : null}
-						{!viewOnly && activeSection !== "baseline" && nextAction ? (
+						{!viewOnly && !editMode && activeSection !== "baseline" && nextAction ? (
 							<Button type="primary" size="large" onClick={() => openSpecialist(nextAction.path)}>
 								{projection?.currentStage ? warehouseStageActionLabel(projection.currentStage) : nextAction.label}
 								<ArrowRight size={16} />
@@ -509,13 +541,26 @@ export default function WarehousePlanDetailPage() {
 
 			{activeSection === "overview" ? (
 				<div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-					<Card title="为什么建设">
-						<Descriptions column={1} size="small">
-							<Descriptions.Item label="建设目标">{plan.objective || "待补充"}</Descriptions.Item>
-							<Descriptions.Item label="初始范围">{plan.scope || "待补充"}</Descriptions.Item>
-							<Descriptions.Item label="负责部门">{plan.ownerDepartmentId || "待补充"}</Descriptions.Item>
-						</Descriptions>
-					</Card>
+					{headerEditing ? (
+						<WarehousePlanHeaderEditor
+							open
+							plan={plan}
+							canMaintainPlan={canMaintainPlan}
+							onClose={() =>
+								navigate(buildWarehousePlanRoute(planId, "overview", { mode: "view" }))
+							}
+							onPlanChange={setPlan}
+							onUnavailable={() => navigate("/modeling/plans")}
+						/>
+					) : (
+						<Card title="为什么建设">
+							<Descriptions column={1} size="small">
+								<Descriptions.Item label="建设目标">{plan.objective || "待补充"}</Descriptions.Item>
+								<Descriptions.Item label="初始范围">{plan.scope || "待补充"}</Descriptions.Item>
+								<Descriptions.Item label="负责部门">{plan.ownerDepartmentId || "待补充"}</Descriptions.Item>
+							</Descriptions>
+						</Card>
+					)}
 					<Card title="规划基线">
 						<div className="flex items-center justify-between gap-4">
 							<div>
@@ -530,7 +575,9 @@ export default function WarehousePlanDetailPage() {
 										: "请重新加载规划证据"}
 								</Text>
 							</div>
-							<Button onClick={() => openSection("baseline")}>查看基线</Button>
+							<Button onClick={() => openSection("baseline")}>
+								查看基线
+							</Button>
 						</div>
 					</Card>
 				</div>
@@ -563,7 +610,7 @@ export default function WarehousePlanDetailPage() {
 							navigate(
 								buildWarehousePlanRoute(planId, "baseline", {
 									tab: value,
-									mode: viewOnly ? "view" : undefined,
+									mode: editMode ? "edit" : viewOnly ? "view" : undefined,
 								}),
 							)
 						}
@@ -651,14 +698,15 @@ export default function WarehousePlanDetailPage() {
 																	<Form.Item
 																		{...field}
 																		name={[field.name, "confirmationStatus"]}
-																		label="使用状态"
-																		rules={[{ required: true, message: "请选择使用状态" }]}
+																		label="纳入状态"
+																		rules={[{ required: true, message: "请选择纳入状态" }]}
+																		extra="表示是否纳入当前建设计划，不影响业务分类自身的可用状态。"
 																		className="mb-0"
 																	>
 																		<Select
 																			options={[
 																				{ value: "CANDIDATE", label: "待确认" },
-																				{ value: "CONFIRMED", label: "已确认" },
+																				{ value: "CONFIRMED", label: "已纳入" },
 																				{ value: "EXCLUDED", label: "不纳入" },
 																			]}
 																		/>
@@ -724,8 +772,8 @@ export default function WarehousePlanDetailPage() {
 										<div className="max-w-3xl space-y-4" data-testid="warehouse-plan-policy-form">
 											<div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 px-4 py-3">
 												<div>
-													<div className="font-medium">数据放在哪一层</div>
-													<Text type="secondary">先确认经典数仓分层；命名与历史策略可在进入实现前补齐。</Text>
+													<div className="font-medium">确定分层与模型实现默认策略</div>
+													<Text type="secondary">先确认数仓分层；命名、历史处理与时区可在进入实现前补齐。</Text>
 												</div>
 												<Tag color={planningPolicy?.value.readiness === "IMPLEMENTATION_READY" ? "green" : "blue"}>
 													{planningPolicy ? policyReadinessLabel[planningPolicy.value.readiness] : "状态未知"}
@@ -735,7 +783,7 @@ export default function WarehousePlanDetailPage() {
 												<Alert
 													type="warning"
 													showIcon
-													message={`分层策略已更新到版本 ${policyConflictVersion}`}
+													message={`规划策略已更新到版本 ${policyConflictVersion}`}
 													description="当前表单已保留，系统没有覆盖你的修改。"
 													action={
 														<Space wrap>
@@ -773,26 +821,50 @@ export default function WarehousePlanDetailPage() {
 												disabled={policySaving || !planEditable}
 												onValuesChange={() => setPolicyDirty(true)}
 												onFinish={() => void savePolicy()}
+												className="space-y-4"
 											>
-												<Form.Item
-													name="layerScheme"
-													label="分层方案"
-													rules={[{ required: true, message: "请选择数仓分层方案" }]}
-												>
-													<Select
-														options={[{ value: "CLASSIC_ODS_DWD_DWS_ADS", label: "经典数仓：ODS → DWD → DWS → ADS" }]}
-													/>
-												</Form.Item>
-												<Form.Item
-													name="conceptualDesignAllowed"
-													label="来源未齐时允许概念设计"
-													valuePropName="checked"
-													extra="开启后可先设计事实、维度与粒度；生成模型或进入实现前仍必须补齐来源。"
-												>
-													<Switch checkedChildren="允许" unCheckedChildren="不允许" />
-												</Form.Item>
-												<div className="grid gap-4 md:grid-cols-2">
-													<Form.Item name="namingPolicy" label="命名规则（进入实现前补齐）">
+												<div className="rounded-xl border border-slate-200 p-4">
+													<div className="mb-4">
+														<div className="font-medium">数仓分层</div>
+														<Text type="secondary">确定当前建设计划采用的数据分层方案。</Text>
+													</div>
+													<Form.Item
+														name="layerScheme"
+														label="分层方案"
+														rules={[{ required: true, message: "请选择数仓分层方案" }]}
+													>
+														<Select
+															options={[
+																{
+																	value: "CLASSIC_ODS_DWD_DWS_ADS",
+																	label: "经典数仓：ODS → DWD → DWS → ADS",
+																},
+															]}
+														/>
+													</Form.Item>
+													<Form.Item
+														name="conceptualDesignAllowed"
+														label="来源未齐时允许概念设计"
+														valuePropName="checked"
+														extra="开启后可先设计事实、维度与粒度；生成模型或进入实现前仍必须补齐来源。"
+														className="mb-0"
+													>
+														<Switch checkedChildren="允许" unCheckedChildren="不允许" />
+													</Form.Item>
+												</div>
+												<div className="rounded-xl border border-slate-200 p-4">
+													<div className="mb-4">
+														<div className="font-medium">实现命名规范</div>
+														<Text type="secondary">
+															为后续新建模型设置默认的英文技术标识风格，已有模型不会自动改名。
+														</Text>
+													</div>
+													<Form.Item
+														name="namingPolicy"
+														label="物理对象命名风格（进入实现前补齐）"
+														extra="适用于模型编码、表名和字段名等技术标识，不是模型的中文显示名称。"
+														className="mb-0"
+													>
 														<Select
 															allowClear
 															options={[
@@ -801,23 +873,42 @@ export default function WarehousePlanDetailPage() {
 															]}
 														/>
 													</Form.Item>
-													<Form.Item name="historyPolicy" label="历史保留（进入实现前补齐）">
+												</div>
+												<div className="rounded-xl border border-slate-200 p-4">
+													<div className="mb-4">
+														<div className="font-medium">维度历史默认策略</div>
+														<Text type="secondary">
+															为后续新建维度模型提供默认建议，最终以各维度模型确认的策略为准。
+														</Text>
+													</div>
+													<Form.Item
+														name="historyPolicy"
+														label="维度历史处理默认策略（进入实现前补齐）"
+														extra="用于确定维度属性变化时是否保留旧版本，不是数据保存期限或备份策略。"
+													>
 														<Select
 															allowClear
 															options={[
-																{ value: "PRESERVE_BUSINESS_HISTORY", label: "保留业务历史" },
-																{ value: "LATEST_STATE_ONLY", label: "仅保留最新状态" },
+																{ value: "PRESERVE_BUSINESS_HISTORY", label: "保留历史版本" },
+																{ value: "LATEST_STATE_ONLY", label: "仅维护最新状态" },
 															]}
 														/>
 													</Form.Item>
 												</div>
-												<Form.Item
-													name="defaultTimeZone"
-													label="默认时区（可选）"
-													extra="使用 IANA 时区名称，不填写则不设默认值。"
-												>
-													<Input placeholder="例如：Asia/Shanghai" />
-												</Form.Item>
+												<div className="rounded-xl border border-slate-200 p-4">
+													<div className="mb-4">
+														<div className="font-medium">其他实现默认值</div>
+														<Text type="secondary">设置模型实现时使用的公共默认值。</Text>
+													</div>
+													<Form.Item
+														name="defaultTimeZone"
+														label="默认时区（可选）"
+														extra="用于日期时间字段的默认处理；使用 IANA 时区名称，不填写则不设默认值。"
+														className="mb-0"
+													>
+														<Input placeholder="例如：Asia/Shanghai" />
+													</Form.Item>
+												</div>
 												<div className="flex justify-end">
 													<Button
 														type="primary"
@@ -825,7 +916,7 @@ export default function WarehousePlanDetailPage() {
 														loading={policySaving}
 														disabled={!planningPolicy || !planEditable || !policyDirty || policyConflictVersion != null}
 													>
-														保存分层策略
+														保存规划策略
 													</Button>
 												</div>
 											</Form>
@@ -899,14 +990,6 @@ export default function WarehousePlanDetailPage() {
 				/>
 			) : null}
 
-			<WarehousePlanHeaderEditor
-				open={editorOpen}
-				plan={plan}
-				canMaintainPlan={canMaintainPlan}
-				onClose={() => setEditorOpen(false)}
-				onPlanChange={setPlan}
-				onUnavailable={() => navigate("/modeling/plans")}
-			/>
 		</div>
 	);
 }

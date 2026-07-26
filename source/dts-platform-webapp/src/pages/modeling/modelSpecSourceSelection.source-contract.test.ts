@@ -225,6 +225,7 @@ test("the embedded source manager uses authoritative plan lifecycle and policy w
 	assert.match(sourceManager, /plan\.lifecycleStatus !== "ARCHIVED"/);
 	assert.match(sourceManager, /Boolean\(plan\)/);
 	assert.match(sourceManager, /policy\?\.value\.conceptualDesignAllowed === true/);
+	assert.match(sourceManager, /registrationOpenByDefault/);
 });
 
 test("candidate assets stay in the embedded manager until their inventory decision is saved", () => {

@@ -152,7 +152,8 @@ public class CatalogAssetPortalService {
             items.addAll(legacyPage.content());
         }
         items = hydrateAssetTags(items);
-        long total = items.size();
+        long hiddenOnCurrentPage = Math.max(0, pageData.getNumberOfElements() - openMetadataReturned);
+        long total = Math.max(0, pageData.getTotalElements() - hiddenOnCurrentPage) + legacyPage.total();
         String source = openMetadataReturned > 0 && legacyPage.returned() > 0
             ? "openmetadata-cache+dts-catalog"
             : openMetadataReturned > 0 ? "openmetadata-cache" : "dts-catalog";
@@ -311,24 +312,26 @@ public class CatalogAssetPortalService {
         List<UUID> excludedIds,
         int remainingSlots
     ) {
-        if (remainingSlots <= 0) {
-            return new AssetPage(List.of(), 0, page, size, 0, "dts-catalog");
-        }
         var pageable = PageRequest.of(
             page,
             size,
             Sort.by(Sort.Direction.DESC, "lastModifiedDate").and(Sort.by(Sort.Direction.DESC, "createdDate"))
         );
         Page<CatalogDataset> legacyPage = datasetRepository.findAll(buildLegacySpec(query), pageable);
-        List<AssetSummary> items = legacyPage
+        List<CatalogDataset> visiblePage = legacyPage
             .getContent()
             .stream()
             .filter(dataset -> dataset.getId() == null || excludedIds == null || !excludedIds.contains(dataset.getId()))
             .filter(dataset -> canRead(null, dataset, activeDept))
-            .limit(remainingSlots)
+            .toList();
+        List<AssetSummary> items = visiblePage
+            .stream()
+            .limit(Math.max(0, remainingSlots))
             .map(this::toLegacySummary)
             .toList();
-        return new AssetPage(items, items.size(), page, size, items.size(), "dts-catalog");
+        long hiddenOnCurrentPage = Math.max(0, legacyPage.getNumberOfElements() - visiblePage.size());
+        long total = Math.max(0, legacyPage.getTotalElements() - hiddenOnCurrentPage);
+        return new AssetPage(items, total, page, size, items.size(), "dts-catalog");
     }
 
     public AssetDetail getAsset(UUID id, String activeDept) {

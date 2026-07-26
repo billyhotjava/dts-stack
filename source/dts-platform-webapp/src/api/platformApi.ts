@@ -131,6 +131,279 @@ export const listCatalogAssetResolutionFailures = (params: { since?: string; lim
 	}>>({ url: "/catalog/assets-v2/resolution-failures", params });
 export const syncCatalogAssetsV2 = (limit?: number) =>
 	api.post({ url: "/catalog/assets-v2/sync", params: limit ? { limit } : undefined });
+
+export type ClassificationEventView = {
+	eventType?: string;
+	previousLevel?: string | null;
+	candidateLevel?: string;
+	resultingLevel?: string;
+	triggerType?: string;
+	triggerRef?: string | null;
+	occurredAt?: string;
+	snapshotVersion?: number;
+};
+
+export type ClassificationFactView = {
+	subjectType: string;
+	subjectKey: string;
+	sealed: boolean;
+	declaredLevel?: string | null;
+	detectedLevel?: string | null;
+	manualFloor?: string | null;
+	effectiveLevel?: string | null;
+	originType?: string | null;
+	originRef?: string | null;
+	highestSourceType?: string | null;
+	highestSourceRef?: string | null;
+	propagationStatus?: string;
+	snapshotVersion?: number;
+	snapshotId?: string | null;
+	sealedAt?: string | null;
+	events?: ClassificationEventView[];
+};
+
+export type LifecycleActionView = {
+	id: string;
+	datasetId: string;
+	actionType: string;
+	stage: string;
+	status: string;
+	payloadChecksum: string;
+	sealId: string;
+	sealVersion: number;
+	effectiveLevel: string;
+	requester?: string;
+	requesterDept?: string | null;
+	reason?: string | null;
+	firstApprovedBy?: string | null;
+	firstApprovedAt?: string | null;
+	secondApprovedBy?: string | null;
+	secondApprovedAt?: string | null;
+	expiresAt?: string;
+	executedBy?: string | null;
+	executedAt?: string | null;
+	errorMessage?: string | null;
+	createdAt?: string;
+};
+
+export type AssetGovernanceWorkspace = {
+	classification: ClassificationFactView;
+	lifecycle: Record<string, any>;
+	actions: LifecycleActionView[];
+	classificationImpact?: {
+		datasetId?: string;
+		upstreamDatasetIds?: string[];
+		downstreamDatasetIds?: string[];
+		cycleDetected?: boolean;
+		blockers?: string[];
+	};
+};
+
+export type LifecycleMetrics = {
+	current?: Array<{
+		lifecycleBucket?: string;
+		effectiveLevel?: string;
+		assetCount?: number;
+		knownDataVolume?: number | null;
+		unknownVolumeCount?: number;
+	}>;
+	trends?: Array<{
+		day?: string;
+		stage?: string;
+		status?: string;
+		effectiveLevel?: string;
+		eventCount?: number;
+		knownDataVolume?: number | null;
+		unknownVolumeCount?: number;
+	}>;
+	days?: number;
+	ownerDept?: string | null;
+	classification?: string | null;
+};
+
+export type GovernanceIssueView = {
+	issueType?: string;
+	status?: string;
+	redactedSubjectRef?: string;
+	errorMessage?: string | null;
+	occurredAt?: string | null;
+	responsibleOwner?: string | null;
+	responsibleDept?: string | null;
+	repairRoute?: string;
+};
+
+export const getCatalogClassificationFacts = (
+	subjects: Array<{ subjectType?: string; subjectKey: string }>,
+) =>
+	api.post<ClassificationFactView[]>({
+		url: "/catalog/governance-workbench/classification-facts",
+		data: subjects,
+	});
+
+export const getCatalogAssetGovernanceWorkspace = (
+	datasetId: string,
+	subjectKey: string,
+) =>
+	api.get<AssetGovernanceWorkspace>({
+		url: `/catalog/governance-workbench/assets/${datasetId}`,
+		params: { subjectKey },
+	});
+
+export const getCatalogLifecycleMetrics = (params: {
+	ownerDept?: string;
+	classification?: string;
+	days?: number;
+} = {}) =>
+	api.get<LifecycleMetrics>({
+		url: "/catalog/governance-workbench/lifecycle-metrics",
+		params,
+	});
+
+export const getCatalogGovernanceIssues = (limit = 100) =>
+	api.get<GovernanceIssueView[]>({
+		url: "/catalog/governance-workbench/issues",
+		params: { limit },
+	});
+
+export const submitCatalogLifecycleAction = (data: {
+	datasetId: string;
+	actionType: string;
+	payloadChecksum: string;
+	sealId: string;
+	sealVersion: number;
+	requesterDept?: string;
+	reason?: string;
+	retentionDays?: number;
+}) => api.post<LifecycleActionView>({ url: "/catalog/lifecycle/governance/actions", data });
+
+export const approveCatalogLifecycleAction = (id: string, notes?: string) =>
+	api.post<{ action?: LifecycleActionView; executionToken?: string | null }>({
+		url: `/catalog/lifecycle/governance/actions/${id}/approve`,
+		data: { notes },
+	});
+
+export const rejectCatalogLifecycleAction = (id: string, notes?: string) =>
+	api.post<LifecycleActionView>({
+		url: `/catalog/lifecycle/governance/actions/${id}/reject`,
+		data: { notes },
+	});
+
+export const retryCatalogLifecycleDestruction = (id: string) =>
+	api.post<LifecycleActionView>({
+		url: `/catalog/lifecycle/governance/actions/${id}/retry-destruction`,
+	});
+
+export type ClassificationMigrationRun = {
+	id: string;
+	idempotencyKey: string;
+	mode: string;
+	status: string;
+	batchSize: number;
+	cursorPosition: number;
+	totalItems: number;
+	eligibleItems: number;
+	blockedItems: number;
+	appliedItems: number;
+	mismatchItems: number;
+	reportChecksum?: string | null;
+	startedAt?: string;
+	completedAt?: string | null;
+	pausedAt?: string | null;
+	lastError?: string | null;
+	recordVersion?: number;
+};
+
+export type ClassificationMigrationItem = {
+	id: string;
+	sequenceNo: number;
+	sourceTable: string;
+	sourceId: string;
+	subjectType: string;
+	subjectKey: string;
+	legacyLevel?: string | null;
+	detectedLevel?: string | null;
+	existingEffectiveLevel?: string | null;
+	computedEffectiveLevel?: string | null;
+	decision: string;
+	decisionReason?: string | null;
+	applyStatus: string;
+	errorMessage?: string | null;
+};
+
+export type ClassificationMigrationReconciliation = {
+	runId: string;
+	totalItems: number;
+	mismatchItems: number;
+	readyToFreeze: boolean;
+	mismatches?: Array<Record<string, any>>;
+};
+
+export type ClassificationWriteFreeze = {
+	sourceTable: string;
+	enabled: boolean;
+	reconciliationRunId?: string | null;
+	frozenBy?: string | null;
+	frozenAt?: string | null;
+	reason?: string | null;
+};
+
+export const createClassificationMigrationDryRun = (data: {
+	idempotencyKey: string;
+	batchSize?: number;
+}) =>
+	api.post<ClassificationMigrationRun>({
+		url: "/catalog/classification-migrations/dry-run",
+		data,
+	});
+
+export const getClassificationMigrationRun = (runId: string) =>
+	api.get<ClassificationMigrationRun>({
+		url: `/catalog/classification-migrations/${runId}`,
+	});
+
+export const listClassificationMigrationItems = (
+	runId: string,
+	params: { decision?: string; limit?: number } = {},
+) =>
+	api.get<ClassificationMigrationItem[]>({
+		url: `/catalog/classification-migrations/${runId}/items`,
+		params,
+	});
+
+export const applyClassificationMigrationBatch = (runId: string, batchSize?: number) =>
+	api.post<ClassificationMigrationRun>({
+		url: `/catalog/classification-migrations/${runId}/apply`,
+		params: batchSize ? { batchSize } : undefined,
+	});
+
+export const pauseClassificationMigration = (runId: string) =>
+	api.post<ClassificationMigrationRun>({
+		url: `/catalog/classification-migrations/${runId}/pause`,
+	});
+
+export const resumeClassificationMigration = (runId: string) =>
+	api.post<ClassificationMigrationRun>({
+		url: `/catalog/classification-migrations/${runId}/resume`,
+	});
+
+export const reconcileClassificationMigration = (runId: string) =>
+	api.get<ClassificationMigrationReconciliation>({
+		url: `/catalog/classification-migrations/${runId}/reconciliation`,
+	});
+
+export const freezeLegacyClassificationWrites = (
+	runId: string,
+	data: { sourceTables?: string[]; reason?: string },
+) =>
+	api.post<ClassificationWriteFreeze[]>({
+		url: `/catalog/classification-migrations/${runId}/freeze`,
+		data,
+	});
+
+export const listClassificationWriteFreezes = () =>
+	api.get<ClassificationWriteFreeze[]>({
+		url: "/catalog/classification-migrations/write-freezes",
+	});
 export type SchemaDriftEvent = {
 	id: string;
 	runId?: string;

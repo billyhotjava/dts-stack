@@ -45,6 +45,10 @@ public class IngestionTaskDTO {
 
     private JsonNode graphDsl;
 
+    private JsonNode classificationSeal;
+
+    private JsonNode fieldClassifications;
+
     private String addaxJobPath;
 
     private JsonNode addaxConfig;
@@ -189,6 +193,22 @@ public class IngestionTaskDTO {
 
     public void setGraphDsl(JsonNode graphDsl) {
         this.graphDsl = graphDsl;
+    }
+
+    public JsonNode getClassificationSeal() {
+        return classificationSeal;
+    }
+
+    public void setClassificationSeal(JsonNode classificationSeal) {
+        this.classificationSeal = classificationSeal;
+    }
+
+    public JsonNode getFieldClassifications() {
+        return fieldClassifications;
+    }
+
+    public void setFieldClassifications(JsonNode fieldClassifications) {
+        this.fieldClassifications = fieldClassifications;
     }
 
     public String getAddaxJobPath() {

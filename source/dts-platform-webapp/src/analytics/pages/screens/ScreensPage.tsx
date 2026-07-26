@@ -1067,14 +1067,14 @@ export default function ScreensPage() {
 											>
 												描述
 											</SortableHeader>
-											{/* Sprint-24 F2/T02：密级列，便于一眼扫到 classification=null 的大屏 */}
+											{/* 展示按所有数据源派生出的有效密级。 */}
 											<SortableHeader
 												sortKey="classification"
 												sortState={sortState}
 												onSort={requestSort}
 												className="font-bold whitespace-nowrap"
 											>
-												密级
+												有效密级
 											</SortableHeader>
 											<SortableHeader
 												sortKey="published"
@@ -1122,9 +1122,20 @@ export default function ScreensPage() {
 															{screen.description || "无描述"}
 														</span>
 													</td>
-													{/* Sprint-24 F2/T02：密级 Tag，null 显示橙色「未设密级」 */}
 													<td className="px-4 py-3 align-top whitespace-nowrap">
-														<ClassificationTag value={screen.classification ?? null} style={{ fontSize: "inherit" }} />
+														<div
+															title={[
+																"有效密级取所有展示数据的最高密级",
+																screen.manualClassificationFloor
+																	? `人工下限：${screen.manualClassificationFloor}`
+																	: "未设置人工下限",
+																screen.classificationSnapshotVersion != null
+																	? `快照版本：${screen.classificationSnapshotVersion}`
+																	: "密级快照待生成",
+															].join("；")}
+														>
+															<ClassificationTag value={screen.classification ?? null} style={{ fontSize: "inherit" }} />
+														</div>
 													</td>
 													<td className="px-4 py-3 align-top whitespace-nowrap">
 														<span className="font-semibold text-text-primary">
