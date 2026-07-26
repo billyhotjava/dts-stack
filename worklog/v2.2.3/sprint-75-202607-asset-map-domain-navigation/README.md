@@ -48,6 +48,8 @@
 | ADR-75-10 | 台账是否升为 tab | **不升**，保持全局菜单一级入口 | `DataAssetPortalMenu.source-contract.test.ts` 断言 `/catalog/assets/ledger` 在 menu seed 中恰好出现一次，且 `role-menu-defaults.json` 按角色控制其可见性；升 tab 会造成第二条路径并绕过角色门 | 导航结构不变 |
 | ADR-75-11 | 0 值的视觉语义 | 0 值原因显示为中性灰，不用绿色对勾 | 现状"未定密 0"配绿色盾牌，在"360 条全部待处置"语境下暗示合规，是误导性正反馈 | 治理缺口面板配色 |
 | ADR-75-12 | 矩阵的退化策略 | 可见域 ≤1 时不画矩阵，退化为单行"分层分布"横条；≥2 域才画表；列改为 top 8 + 静态"其他 N 个域"列（tooltip 列出域名） | 现状单域时仍画 8 行 × 1 列、其中 3 行是"-"；`slice(0, 8)` 静默截断无提示 | 矩阵渲染分支 |
+| ADR-75-13 | 界面语言与枚举值 | 界面不出现英文枚举原值；不逐处补文案，而是建统一字典 + 漏译降级为"未知（原值）"。数仓分层用**中文主 + 代号弱化**（"明细层 DWD"）；`Hive`/`JDBC` 等产品名与技术标准名保持原形 | 逐处补文案会随新枚举再次漏译；分层保留代号是因为 Addax→dbt→Airflow 链路里 `dwd_xxx` 模型名需要对得上 | F5 全部；F3/F4 的新组件须直接用字典 |
+| ADR-75-14 | 失效资产的判定枚举 | `STALE`/`DISABLED` 改为 `DEPRECATED \| ARCHIVED \| BLOCKED` | 前两者不在 `CatalogAssetLifecycleStatus` 中，从未被写入，导致"失效资产"指标结构性恒为 0（L17） | `CatalogAssetOverviewAggregator`、`assetPortalUx.helpers`、`DatasetsPage`；`attention` 数值会上升 |
 
 ## 4. 对象边界
 
@@ -113,6 +115,9 @@ CatalogDomainResource.tree(withStats=true)
 | L14 | 前端无路由级权限 hook，`useModuleManageAccess` 只有模块 manage 粒度 | `hooks/useModuleManageAccess.ts` |
 | L15 | service 层测试脚手架已存在（Mockito + 全 repo mock），无需新建 | `CatalogAssetPortalServicePermissionParityTest`、`CatalogAssetPortalTagFilterTest`、`CatalogAssetOverviewAggregatorTest` |
 | L16 | `MetricTile` 被 4 处复用且被契约测试断言为导出符号 → 不可修改，缺口面板须另建组件 | `assetPageShared.tsx`、`DatasetsPage.asset-map-visual.source-contract.test.ts:14` |
+| L17 | `STALE`/`DISABLED` 不在 `CatalogAssetLifecycleStatus`（9 值）中且从未被写入 → "失效资产"恒为 0，`attention` 的 STALE 分支是死代码 | `CatalogAssetLifecycleStatus.java`、`CatalogAssetOverviewAggregator.java:51`、`assetPortalUx.helpers.ts:37`、`DatasetsPage.tsx:341` |
+| L18 | 治理状态后端实有 8 个值，前端 `GOVERNANCE_STATUS_LABELS` 只收 5 个；已被使用的 `PENDING_GOVERNANCE` 未收录 | `AssetOverviewPage.tsx:43-49`、`assetPortalUx.helpers.ts:52` |
+| L19 | 所有枚举映射均以 `\|\| 原值` 兜底 → 漏译静默存活，无法被测出 | `assetPageShared.tsx:156`、`AssetOverviewPage.tsx:334`、`AssetLedgerView.tsx:166,182` |
 
 ## 8. UI/UX 规格总览
 
@@ -153,9 +158,10 @@ CatalogDomainResource.tree(withStats=true)
 └──────────┘ └──────────────────────────────────────────┘
                        ↑ 每项可点，直达台账对应筛选
 
-┌ 分层分布（当前范围仅未归域，不画矩阵）─────────┐
-│ 来源 1 │ ODS 31 │ STG — │ DWD 1 │ …            │
-└──────────────────────────────────────────────┘
+┌ 分层分布（当前范围仅未归域，不画矩阵）───────────────┐
+│ 来源层 SOURCE 1 │ 贴源层 ODS 31 │ 暂存层 STG — │ …  │
+└────────────────────────────────────────────────────┘
+                    ↑ 中文主 + 代号弱化（ADR-75-13）
 
 ┌ 待处置 Top 5 ────────────────────────────────┐
 │ [卡片] [卡片] [卡片] [卡片] [卡片]            │  卡片本身可点
@@ -177,6 +183,9 @@ CatalogDomainResource.tree(withStats=true)
 | G-75-04 | `/catalog/assets/ledger` 在 menu seed 中仍恰好出现一次 | 既有契约测试，防止 ADR-75-10 被违反 |
 | G-75-05 | `buildTreeNodes` 不再产生 `fallback-` key | 契约测试断言 |
 | G-75-06 | `?domain=` 深链可复现范围（刷新/分享/后退） | 契约测试断言 |
+| G-75-07 | 正常数据下界面不出现英文枚举原值，也不出现"未知（" | 漏译即阻断 |
+| G-75-08 | 前端字典覆盖 `CatalogAssetLifecycleStatus` 全部 9 值 | 后端加枚举而前端未补译即阻断 |
+| G-75-09 | 失效判定命中 `DEPRECATED`/`ARCHIVED`/`BLOCKED`，不再比较不可达值 | 死代码未清除则 F1 不可验收 |
 
 ## 10. Feature 列表
 
@@ -185,8 +194,11 @@ CatalogDomainResource.tree(withStats=true)
 | F0 | 评审与可验收基线 | P0 | DRAFT | — |
 | F1 | 统计口径与可见性单一事实源 | P0 | DRAFT | F0 |
 | F2 | 带统计的主题域树契约 | P0 | DRAFT | F1 |
-| F3 | 主题域范围导航组件 | P0 | DRAFT | F2 |
-| F4 | 地图页信息架构与控件收敛 | P1 | DRAFT | F2、F3 |
+| F3 | 主题域范围导航组件 | P0 | DRAFT | F2、**F5/T01** |
+| F4 | 地图页信息架构与控件收敛 | P1 | DRAFT | F2、F3、**F5/T01** |
+| F5 | 界面中文化与枚举字典 | P0 | DRAFT | F0 |
+
+> F5 编号靠后但**实施靠前**：其 T01（字典模块）是 F3、F4 的前置，新组件必须直接用字典，不得再写第二套映射。
 
 ## 11. 追溯矩阵
 
@@ -196,6 +208,8 @@ CatalogDomainResource.tree(withStats=true)
 | ADR-75-03 | F2 | G-75-01 |
 | ADR-75-04～08 | F3 | G-75-05、G-75-06 |
 | ADR-75-09～12 | F4 | G-75-02、G-75-03、G-75-04 |
+| ADR-75-13 | F5 | G-75-07、G-75-08 |
+| ADR-75-14 | F1/T06 | G-75-09 |
 
 ## 12. 完成标准
 
@@ -207,12 +221,16 @@ CatalogDomainResource.tree(withStats=true)
 6. `truncated` 误报消除，警告文案反映真实原因；
 7. `domainStats` 与台账计数在同一账号/部门上下文下一致；
 8. `overview` 的 N+1 消除，扫描上限提至 5000 档；
-9. 契约测试与单元测试覆盖 G-75-01～06；
-10. `tsc --noEmit` 与前端 build 通过；Java 侧 `mvn test` 相关用例通过。
+9. 界面不出现英文枚举原值；分层以"中文 + 弱化代号"呈现，三处（地图/台账/详情）一致；
+10. "失效资产"指标从结构性恒 0 变为真实计数；
+11. 契约测试与单元测试覆盖 G-75-01～09；
+12. `tsc --noEmit` 与前端 build 通过；Java 侧 `mvn test` 相关用例通过。
 
 ## 13. 非目标
 
-- 不修改 `attention` 的定义与可见性规则（`canRead` / `AccessChecker` 零改动）；
+- 不修改可见性规则（`canRead` / `AccessChecker` 零改动）；
+- `attention` 的**判定维度**不增不减（仍为 未定密 ∨ 未归域 ∨ 失效 ∨ 治理待办），但"失效"一项的判定枚举按 ADR-75-14 修正为可达值。修正后 `attention` 数值上升属预期，验收时不得按"数字变了=改坏了"判定；
+- 中文化只约束**界面**。`worklog/` 下的 spec 文档继续沿用 `P0`/`DRAFT`/`READY`，与 sprint-70～74 的既有惯例保持一致，便于跨 sprint 检索；
 - 不新增菜单、不新增路由、不把台账升为 tab（ADR-75-10）；
 - 不补前端路由级权限门：`drillToLedger` 保持现状的无条件跳转。若某角色有地图权限而无台账权限，点数据会落到无权路由——这是**现存行为**，补它需要接入菜单可见性解析，超出本 Sprint 范围（见 L14）；
 - 不改动台账页自身的筛选、导出、诊断功能，只替换其左侧 Sider；

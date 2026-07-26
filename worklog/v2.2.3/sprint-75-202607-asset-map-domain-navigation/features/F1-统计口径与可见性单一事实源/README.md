@@ -17,7 +17,20 @@
 | 批量加载 | 复用 `loadCandidateMetadata(List<OpenMetadataAssetCache>)` | `overview` 改走批量，替换逐行 `findFirstByOmAsset` + `findFirstByFqnIgnoreCase`（L09、L10） |
 | 域级 rollup | `CatalogAssetOverviewAggregator.AssetOverview.byDomain` | `Map<String, DomainStats>`，由既有 `matrix` 的 domainId 维度归并，**不新增统计口径** |
 | 服务出口 | `CatalogAssetPortalService.domainStats(String activeDept)` | 本 Feature 拥有并暴露；F2 只组合，不自行聚合 |
+| 失效判定 | `rowStale` 的枚举比较 | `"STALE"` → `DEPRECATED \| ARCHIVED \| BLOCKED`（ADR-75-14） |
 | 可见性 | `canRead` / `AccessChecker` | **零改动**（ADR-75-01） |
+
+### 失效判定缺陷（L17）
+
+`CatalogAssetLifecycleStatus` 的合法值为 `DISCOVERED / PENDING_GOVERNANCE / DRAFT_GOVERNANCE / TESTING / ACTIVE / DEPRECATED / ARCHIVED / BLOCKED / PENDING_REVIEW`，**不含 `STALE`，也不含 `DISABLED`**。全仓检索确认 `STALE` 作为 lifecycleStatus 从未被写入，只在三处比较中出现：
+
+- `CatalogAssetOverviewAggregator.java:51`（`rowStale`）
+- `assetPortalUx.helpers.ts:37`（判 `DISABLED`，该值属于治理状态而非生命周期）
+- `DatasetsPage.tsx:341`（判 `STALE`）
+
+后果：地图页"失效资产"指标**结构性恒为 0**，`attention` 中的 STALE 分支是死代码。截图里的"失效资产 0"不是事实陈述，是判定不可达。
+
+修复后 `attention` 的数值会上升（此前被漏计的失效资产开始计入），这是**修正而非回归**，验收时不得按"数字变了=改坏了"判定。
 
 ## 实现约束
 
@@ -35,6 +48,7 @@
 | T03 | overview 切换批量元数据加载并提升扫描上限 | P0 | DRAFT | T01 |
 | T04 | 聚合器新增 byDomain rollup | P0 | DRAFT | T03 |
 | T05 | 暴露 domainStats 服务方法 | P0 | DRAFT | T04 |
+| T06 | 修正失效判定的不可达枚举 | P0 | DRAFT | F0/T01 |
 
 ## Definition of Ready
 
@@ -49,3 +63,4 @@
 - [ ] `CatalogAssetOverviewAggregatorTest` 覆盖 byDomain（含 domainId 为 null 的分支）
 - [ ] service 层测试覆盖 OM + legacy 共存下的 total 不重复计数
 - [ ] `overview` 的查询次数从 O(n) 降至 O(1) 批次（以测试内查询计数或日志断言）
+- [ ] G-75-09 通过：失效判定对 `DEPRECATED`/`ARCHIVED`/`BLOCKED` 三个值均命中，且不再比较不可达的 `STALE`/`DISABLED`
